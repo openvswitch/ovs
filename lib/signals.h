@@ -19,7 +19,7 @@
 
 #include <signal.h>
 #include <stddef.h>
-#include "type-props.h"
+#include "openvswitch/type-props.h"
 
 enum { SIGNAL_NAME_BUFSIZE = 7 + INT_STRLEN(int) + 1 };
 const char *signal_name(int signum, char *namebuf, size_t bufsize);

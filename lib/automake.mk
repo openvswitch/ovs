@@ -257,7 +257,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/token-bucket.c \
 	lib/tun-metadata.c \
 	lib/tun-metadata.h \
-	lib/type-props.h \
 	lib/unaligned.h \
 	lib/unicode.c \
 	lib/unicode.h \

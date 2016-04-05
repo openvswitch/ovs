@@ -23,7 +23,7 @@
 #include <unistd.h>
 #include "poll-loop.h"
 #include "socket-util.h"
-#include "type-props.h"
+#include "openvswitch/type-props.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
 

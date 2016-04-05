@@ -44,7 +44,7 @@
 #include "random.h"
 #include "tun-metadata.h"
 #include "unaligned.h"
-#include "type-props.h"
+#include "openvswitch/type-props.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 #include "bitmap.h"
