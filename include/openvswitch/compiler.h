@@ -17,6 +17,9 @@
 #ifndef OPENVSWITCH_COMPILER_H
 #define OPENVSWITCH_COMPILER_H 1
 
+#include <stddef.h>
+#include <stdbool.h>
+
 #ifndef __has_feature
   #define __has_feature(x) 0
 #endif
