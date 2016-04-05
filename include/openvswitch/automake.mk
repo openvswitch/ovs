@@ -5,6 +5,7 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/flow.h \
 	include/openvswitch/geneve.h \
 	include/openvswitch/list.h \
+	include/openvswitch/netdev.h \
 	include/openvswitch/ofpbuf.h \
 	include/openvswitch/ofp-errors.h \
 	include/openvswitch/ofp-parse.h \
