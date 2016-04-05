@@ -443,4 +443,5 @@ void
 lflow_destroy(void)
 {
     expr_symtab_destroy(&symtab);
+    shash_destroy(&symtab);
 }
