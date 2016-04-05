@@ -29,6 +29,7 @@
 #include "ovn/lib/lex.h"
 #include "ovn/lib/ovn-nb-idl.h"
 #include "ovn/lib/ovn-sb-idl.h"
+#include "packets.h"
 #include "poll-loop.h"
 #include "smap.h"
 #include "stream.h"

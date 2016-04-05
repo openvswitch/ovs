@@ -23,7 +23,7 @@
 #include "colors.h"
 #include "openvswitch/dynamic-string.h"
 #include "multipath.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "nx-match.h"
 #include "openvswitch/ofpbuf.h"
 #include "ofp-actions.h"

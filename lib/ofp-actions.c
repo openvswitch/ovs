@@ -26,7 +26,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "hmap.h"
 #include "learn.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "multipath.h"
 #include "nx-match.h"
 #include "odp-netlink.h"

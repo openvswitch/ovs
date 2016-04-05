@@ -44,6 +44,8 @@
 #include "physical.h"
 #include "pinctrl.h"
 #include "poll-loop.h"
+#include "lib/bitmap.h"
+#include "lib/hash.h"
 #include "smap.h"
 #include "stream-ssl.h"
 #include "stream.h"

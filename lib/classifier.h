@@ -300,7 +300,7 @@
 
 #include "cmap.h"
 #include "openvswitch/match.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "pvector.h"
 #include "rculist.h"
 #include "type-props.h"

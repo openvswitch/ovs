@@ -23,7 +23,7 @@
  * This is a simple lexical analyzer (or tokenizer) for OVN match expressions
  * and ACLs. */
 
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 
 struct ds;
 

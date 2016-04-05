@@ -28,7 +28,7 @@
 #include "classifier.h"
 #include "openvswitch/dynamic-string.h"
 #include "learn.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "multipath.h"
 #include "netdev.h"
 #include "nx-match.h"

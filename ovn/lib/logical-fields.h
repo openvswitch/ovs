@@ -16,7 +16,7 @@
 #ifndef OVN_LOGICAL_FIELDS_H
 #define OVN_LOGICAL_FIELDS_H 1
 
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 
 /* Logical fields.
  *

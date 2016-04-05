@@ -57,7 +57,7 @@
 #include "hmap.h"
 #include "openvswitch/list.h"
 #include "openvswitch/match.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 
 struct ds;
 struct ofpbuf;
