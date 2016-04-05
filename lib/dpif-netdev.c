@@ -986,6 +986,7 @@ dp_netdev_free(struct dp_netdev *dp)
 
     seq_destroy(dp->port_seq);
     cmap_destroy(&dp->ports);
+    ovs_mutex_destroy(&dp->port_mutex);
 
     /* Upcalls must be disabled at this point */
     dp_netdev_destroy_upcall_lock(dp);
