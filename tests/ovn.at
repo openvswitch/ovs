@@ -1158,10 +1158,8 @@ for s in 1 2 3; do
     done
 
     # Broadcast and multicast.
-    # xxx ovn-controller-vtep doesn't handle multicast traffic that is
-    # xxx sourced from the gateway properly.
-    #test_packet $s ffffffffffff f0000000000$s 0${s}ff $bcast             #2
-    #test_packet $s 010000000000 f0000000000$s 0${s}ff $bcast             #2
+    test_packet $s ffffffffffff f0000000000$s 0${s}ff $bcast             #2
+    test_packet $s 010000000000 f0000000000$s 0${s}ff $bcast             #2
 
     test_packet $s f0000000ffff f0000000000$s 0${s}66 $unknown           #3
 done
