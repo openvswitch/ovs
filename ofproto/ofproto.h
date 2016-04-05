@@ -25,7 +25,7 @@
 #include "cfm.h"
 #include "classifier.h"
 #include "flow.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "netflow.h"
 #include "rstp.h"
 #include "smap.h"

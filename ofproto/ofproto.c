@@ -31,7 +31,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "netdev.h"
 #include "nx-match.h"
 #include "ofp-actions.h"

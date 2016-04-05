@@ -34,7 +34,7 @@
 #include "flow.h"
 #include "learn.h"
 #include "multipath.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "netdev.h"
 #include "nx-match.h"
 #include "ofp-actions.h"

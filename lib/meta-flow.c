@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 
 #include <errno.h>
 #include <limits.h>

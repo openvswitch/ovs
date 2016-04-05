@@ -24,7 +24,7 @@
 #include "colors.h"
 #include "openvswitch/dynamic-string.h"
 #include "hmap.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "ofp-actions.h"
 #include "ofp-util.h"
 #include "openvswitch/ofpbuf.h"

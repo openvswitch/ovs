@@ -191,6 +191,10 @@ is_pow2(uintmax_t x)
 #define RDP2_4(X) (RDP2_5(X) | (RDP2_5(X) >> 2))
 #define RDP2_5(X) (      (X) | (      (X) >> 1))
 
+/* Macros for sizing bitmaps */
+#define BITMAP_ULONG_BITS (sizeof(unsigned long) * CHAR_BIT)
+#define BITMAP_N_LONGS(N_BITS) DIV_ROUND_UP(N_BITS, BITMAP_ULONG_BITS)
+
 /* Given ATTR, and TYPE, cast the ATTR to TYPE by first casting ATTR to
  * (void *). This is to suppress the alignment warning issued by clang. */
 #define ALIGNED_CAST(TYPE, ATTR) ((TYPE) (void *) (ATTR))

@@ -63,7 +63,7 @@
 #include "openvswitch/ofp-parse.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "sort.h"
 
 VLOG_DEFINE_THIS_MODULE(ofctl);

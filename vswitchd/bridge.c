@@ -38,7 +38,7 @@
 #include "ovs-lldp.h"
 #include "mac-learning.h"
 #include "mcast-snooping.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "netdev.h"
 #include "nx-match.h"
 #include "ofp-print.h"

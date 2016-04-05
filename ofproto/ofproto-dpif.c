@@ -39,7 +39,7 @@
 #include "learn.h"
 #include "mac-learning.h"
 #include "mcast-snooping.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "multipath.h"
 #include "netdev-vport.h"
 #include "netdev.h"

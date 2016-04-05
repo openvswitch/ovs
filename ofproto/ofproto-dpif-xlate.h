@@ -17,7 +17,7 @@
 
 #include "dp-packet.h"
 #include "flow.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "odp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "ofproto-dpif-mirror.h"

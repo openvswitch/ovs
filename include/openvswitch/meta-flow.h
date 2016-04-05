@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef META_FLOW_H
-#define META_FLOW_H 1
+#ifndef OPENVSWITCH_META_FLOW_H
+#define OPENVSWITCH_META_FLOW_H 1
 
+#include <limits.h>
+#include <stdarg.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <netinet/ip6.h>
-#include "bitmap.h"
-#include "flow.h"
+#include "openvswitch/flow.h"
 #include "openvswitch/ofp-errors.h"
-#include "packets.h"
-#include "util.h"
+#include "openvswitch/packets.h"
+#include "openvswitch/util.h"
 
 struct ds;
 struct match;
