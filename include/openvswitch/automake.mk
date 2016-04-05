@@ -14,6 +14,7 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/tun-metadata.h \
 	include/openvswitch/types.h \
 	include/openvswitch/util.h \
+	include/openvswitch/uuid.h \
 	include/openvswitch/version.h \
 	include/openvswitch/vconn.h \
 	include/openvswitch/vlog.h

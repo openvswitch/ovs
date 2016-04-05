@@ -16,6 +16,7 @@
 
 #include <config.h>
 #undef NDEBUG
+#include "util.h"
 #include "uuid.h"
 #include <stdio.h>
 #include "ovstest.h"

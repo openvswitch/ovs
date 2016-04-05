@@ -50,6 +50,7 @@
 #include "unaligned.h"
 #include "odp-util.h"
 #include "util.h"
+#include "uuid.h"
 
 static void ofp_print_queue_name(struct ds *string, uint32_t port);
 static void ofp_print_error(struct ds *, enum ofperr);

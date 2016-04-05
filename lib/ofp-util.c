@@ -48,6 +48,7 @@
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 #include "bitmap.h"
+#include "uuid.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_util);
 
