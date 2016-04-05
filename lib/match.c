@@ -15,8 +15,9 @@
  */
 
 #include <config.h>
-#include "match.h"
+#include "openvswitch/match.h"
 #include <stdlib.h>
+#include "flow.h"
 #include "byte-order.h"
 #include "colors.h"
 #include "openvswitch/dynamic-string.h"

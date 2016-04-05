@@ -21,7 +21,7 @@
 #include <sys/wait.h>
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "ofp-actions.h"
 #include "openvswitch/ofpbuf.h"
 #include "ovn/lib/actions.h"

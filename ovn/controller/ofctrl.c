@@ -18,7 +18,7 @@
 #include "dirs.h"
 #include "openvswitch/dynamic-string.h"
 #include "hmap.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "ofp-actions.h"
 #include "ofp-msgs.h"
 #include "ofp-print.h"

@@ -21,7 +21,7 @@
 #include "byte-order.h"
 #include "colors.h"
 #include "openvswitch/dynamic-string.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "meta-flow.h"
 #include "nx-match.h"
 #include "ofp-actions.h"

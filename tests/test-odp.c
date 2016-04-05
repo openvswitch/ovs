@@ -20,7 +20,7 @@
 #include <stdio.h>
 #include "openvswitch/dynamic-string.h"
 #include "flow.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "openvswitch/ofpbuf.h"
 #include "ovstest.h"
 #include "util.h"

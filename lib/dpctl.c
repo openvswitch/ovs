@@ -34,7 +34,7 @@
 #include "dpif.h"
 #include "openvswitch/dynamic-string.h"
 #include "flow.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "netdev.h"
 #include "netdev-dpdk.h"
 #include "netlink.h"
