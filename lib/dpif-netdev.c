@@ -3145,7 +3145,7 @@ dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id)
         n_unpinned = ovs_numa_get_n_unpinned_cores_on_numa(numa_id);
         if (!n_unpinned) {
             VLOG_ERR("Cannot create pmd threads due to out of unpinned "
-                     "cores on numa node");
+                     "cores on numa node %d", numa_id);
             return;
         }
 
