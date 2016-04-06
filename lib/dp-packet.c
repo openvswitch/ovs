@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,7 @@ dp_packet_init__(struct dp_packet *b, size_t allocated, enum dp_packet_source so
     b->source = source;
     dp_packet_reset_offsets(b);
     pkt_metadata_init(&b->md, 0);
+    dp_packet_rss_invalidate(b);
 }
 
 static void
@@ -167,6 +168,19 @@ dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
     new_buffer->l3_ofs = buffer->l3_ofs;
     new_buffer->l4_ofs = buffer->l4_ofs;
     new_buffer->md = buffer->md;
+#ifdef DPDK_NETDEV
+    new_buffer->mbuf.ol_flags = buffer->mbuf.ol_flags;
+#else
+    new_buffer->rss_hash_valid = buffer->rss_hash_valid;
+#endif
+
+    if (dp_packet_rss_valid(new_buffer)) {
+#ifdef DPDK_NETDEV
+        new_buffer->mbuf.hash.rss = buffer->mbuf.hash.rss;
+#else
+        new_buffer->rss_hash = buffer->rss_hash;
+#endif
+    }
 
     return new_buffer;
 }
