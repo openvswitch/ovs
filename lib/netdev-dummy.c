@@ -880,7 +880,6 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
     ovs_mutex_unlock(&netdev->mutex);
 
     dp_packet_pad(packet);
-    dp_packet_rss_invalidate(packet);
 
     arr[0] = packet;
     *c = 1;

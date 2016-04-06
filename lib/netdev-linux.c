@@ -1112,7 +1112,6 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
         dp_packet_delete(buffer);
     } else {
         dp_packet_pad(buffer);
-        dp_packet_rss_invalidate(buffer);
         packets[0] = buffer;
         *c = 1;
     }

@@ -644,7 +644,6 @@ netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
         dp_packet_delete(packet);
     } else {
         dp_packet_pad(packet);
-        dp_packet_rss_invalidate(packet);
         packets[0] = packet;
         *c = 1;
     }
