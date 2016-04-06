@@ -2661,21 +2661,22 @@ dpif_netdev_wait(struct dpif *dpif)
 
 static int
 pmd_load_queues(struct dp_netdev_pmd_thread *pmd, struct rxq_poll **ppoll_list)
-    OVS_REQUIRES(pmd->poll_mutex)
 {
     struct rxq_poll *poll_list = *ppoll_list;
     struct rxq_poll *poll;
     int i;
 
+    ovs_mutex_lock(&pmd->poll_mutex);
     poll_list = xrealloc(poll_list, pmd->poll_cnt * sizeof *poll_list);
 
     i = 0;
     LIST_FOR_EACH (poll, node, &pmd->poll_list) {
         poll_list[i++] = *poll;
     }
+    ovs_mutex_unlock(&pmd->poll_mutex);
 
     *ppoll_list = poll_list;
-    return pmd->poll_cnt;
+    return i;
 }
 
 static void *
@@ -2685,6 +2686,7 @@ pmd_thread_main(void *f_)
     unsigned int lc = 0;
     struct rxq_poll *poll_list;
     unsigned int port_seq = PMD_INITIAL_SEQ;
+    bool exiting;
     int poll_cnt;
     int i;
 
@@ -2694,12 +2696,9 @@ pmd_thread_main(void *f_)
     /* Stores the pmd thread's 'pmd' to 'per_pmd_key'. */
     ovsthread_setspecific(pmd->dp->per_pmd_key, pmd);
     pmd_thread_setaffinity_cpu(pmd->core_id);
+    poll_cnt = pmd_load_queues(pmd, &poll_list);
 reload:
     emc_cache_init(&pmd->flow_cache);
-
-    ovs_mutex_lock(&pmd->poll_mutex);
-    poll_cnt = pmd_load_queues(pmd, &poll_list);
-    ovs_mutex_unlock(&pmd->poll_mutex);
 
     /* List port/core affinity */
     for (i = 0; i < poll_cnt; i++) {
@@ -2707,10 +2706,6 @@ reload:
                 pmd->core_id, netdev_get_name(poll_list[i].port->netdev),
                 netdev_rxq_get_queue_id(poll_list[i].rx));
     }
-
-    /* Signal here to make sure the pmd finishes
-     * reloading the updated configuration. */
-    dp_netdev_pmd_reload_done(pmd);
 
     for (;;) {
         for (i = 0; i < poll_cnt; i++) {
@@ -2734,13 +2729,17 @@ reload:
         }
     }
 
+    poll_cnt = pmd_load_queues(pmd, &poll_list);
+    exiting = latch_is_set(&pmd->exit_latch);
+    /* Signal here to make sure the pmd finishes
+     * reloading the updated configuration. */
+    dp_netdev_pmd_reload_done(pmd);
+
     emc_cache_uninit(&pmd->flow_cache);
 
-    if (!latch_is_set(&pmd->exit_latch)){
+    if (!exiting) {
         goto reload;
     }
-
-    dp_netdev_pmd_reload_done(pmd);
 
     free(poll_list);
     return NULL;
