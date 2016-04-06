@@ -56,12 +56,6 @@ in a database.  On one of your machines, with an IP Address of $CENTRAL_IP,
 where you have installed and started Open vSwitch, you will need to start some
 central components.
 
-Begin by making ovsdb-server listen on a TCP port by running:
-
-```
-ovs-appctl -t ovsdb-server ovsdb-server/add-remote ptcp:6640
-```
-
 Start ovn-northd daemon.  This daemon translates networking intent from Docker
 stored in the OVN_Northbound database to logical flows in OVN_Southbound
 database.
@@ -89,8 +83,8 @@ support in upstream Linux.  You can verify whether you have the support in your
 kernel by doing a "lsmod | grep $ENCAP_TYPE".)
 
 ```
-ovs-vsctl set Open_vSwitch . external_ids:ovn-remote="tcp:$CENTRAL_IP:6640" \
-  external_ids:ovn-encap-ip=$LOCAL_IP external_ids:ovn-encap-type="$ENCAP_TYPE"
+ovs-vsctl set Open_vSwitch . external_ids:ovn-remote="tcp:$CENTRAL_IP:6642" \
+  external_ids:ovn-nb="tcp:$CENTRAL_IP:6641" external_ids:ovn-encap-ip=$LOCAL_IP external_ids:ovn-encap-type="$ENCAP_TYPE"
 ```
 
 And finally, start the ovn-controller.  (You need to run the below command

@@ -36,7 +36,7 @@ app = Flask(__name__)
 vlog = ovs.vlog.Vlog("ovn-docker-overlay-driver")
 
 OVN_BRIDGE = "br-int"
-OVN_REMOTE = ""
+OVN_NB = ""
 PLUGIN_DIR = "/etc/docker/plugins"
 PLUGIN_FILE = "/etc/docker/plugins/openvswitch.spec"
 
@@ -64,7 +64,7 @@ def ovs_vsctl(*args):
 
 def ovn_nbctl(*args):
     args_list = list(args)
-    database_option = "%s=%s" % ("--db", OVN_REMOTE)
+    database_option = "%s=%s" % ("--db", OVN_NB)
     args_list.insert(0, database_option)
     return call_prog("ovn-nbctl", args_list)
 
@@ -82,10 +82,10 @@ def ovn_init_overlay():
                   "external_ids:bridge-id=" + OVN_BRIDGE,
                   "other-config:disable-in-band=true", "fail-mode=secure")
 
-    global OVN_REMOTE
-    OVN_REMOTE = ovs_vsctl("get", "Open_vSwitch", ".",
-                           "external_ids:ovn-remote").strip('"')
-    if not OVN_REMOTE:
+    global OVN_NB
+    OVN_NB = ovs_vsctl("get", "Open_vSwitch", ".",
+                           "external_ids:ovn-nb").strip('"')
+    if not OVN_NB:
         sys.exit("OVN central database's ip address not set")
 
     ovs_vsctl("set", "open_vswitch", ".",
