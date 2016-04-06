@@ -181,9 +181,9 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) '50540000000a50
 
 dnl Check this output. We only see the latter two packets, not the first.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN2 (xid=0x0): total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=1,tp_dst=2 udp_csum:0
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=2,tp_dst=1 udp_csum:0
 ])
 
@@ -925,9 +925,9 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) 'e64c473528c9c6
 
 dnl Check this output. We only see the latter two packets, not the first.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=47 ct_state=new|trk,in_port=1 (via action) data_len=47 (unbuffered)
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=47 ct_state=new|trk,in_port=1 (via action) data_len=47 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=e6:4c:47:35:28:c9,dl_dst=c6:f9:4e:cb:72:db,nw_src=172.16.0.1,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=41614,tp_dst=5555 udp_csum:2096
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=75 ct_state=rel|rpl|trk,in_port=2 (via action) data_len=75 (unbuffered)
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=75 ct_state=rel|rpl|trk,in_port=2 (via action) data_len=75 (unbuffered)
 icmp,vlan_tci=0x0000,dl_src=c6:f9:4e:cb:72:db,dl_dst=e6:4c:47:35:28:c9,nw_src=172.16.0.2,nw_dst=172.16.0.1,nw_tos=192,nw_ecn=0,nw_ttl=64,icmp_type=3,icmp_code=3 icmp_csum:553f
 ])
 
