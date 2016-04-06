@@ -22,7 +22,7 @@
 #include <netinet/ip6.h>
 #include "bitmap.h"
 #include "flow.h"
-#include "ofp-errors.h"
+#include "openvswitch/ofp-errors.h"
 #include "packets.h"
 #include "util.h"
 

@@ -15,9 +15,9 @@ init:
 
     Invoke-WebRequest $source -OutFile $destination
 
-    $source = "https://slproweb.com/download/Win32OpenSSL-1_0_2f.exe"
+    $source = "https://slproweb.com/download/Win32OpenSSL-1_0_2g.exe"
 
-    $destination = "C:\ovs-build-downloads\Win32OpenSSL-1_0_2f.exe"
+    $destination = "C:\ovs-build-downloads\Win32OpenSSL-1_0_2g.exe"
 
     Invoke-WebRequest $source -OutFile $destination
 
@@ -27,7 +27,7 @@ init:
 
     cd C:\ovs-build-downloads
 
-    .\Win32OpenSSL-1_0_2f.exe /silent /verysilent /sp- /suppressmsgboxes
+    .\Win32OpenSSL-1_0_2g.exe /silent /verysilent /sp- /suppressmsgboxes
 
     Start-Sleep -s 30
 

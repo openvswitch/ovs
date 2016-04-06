@@ -31,7 +31,7 @@
 #include "odp-util.h"
 #include "ofp-actions.h"
 #include "ofproto.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto-provider.h"
 #include "openflow/openflow.h"
 #include "packets.h"

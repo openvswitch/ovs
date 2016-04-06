@@ -9,7 +9,7 @@ set -e
 
 # If the kernel module is already loaded, we have nothing to do here.
 # A force-reload-kmod should be run manually to use the new kernel module.
-if [ -e /sys/module/openvswitch ] || [ -e /sys/module/openvswitch_mod ]; then
+if [ -e /sys/module/openvswitch ]; then
     exit 0
 fi
 

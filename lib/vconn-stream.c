@@ -22,7 +22,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include "fatal-signal.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "socket-util.h"

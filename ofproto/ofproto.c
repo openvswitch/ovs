@@ -28,18 +28,17 @@
 #include "connectivity.h"
 #include "connmgr.h"
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
 #include "meta-flow.h"
 #include "netdev.h"
 #include "nx-match.h"
 #include "ofp-actions.h"
-#include "ofp-errors.h"
 #include "ofp-msgs.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto-provider.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
@@ -59,6 +58,7 @@
 #include "tun-metadata.h"
 #include "unaligned.h"
 #include "unixctl.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 #include "bundles.h"
 
@@ -556,7 +556,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->tables_version = CLS_MIN_VERSION;
     hindex_init(&ofproto->cookies);
     hmap_init(&ofproto->learned_cookies);
-    list_init(&ofproto->expirable);
+    ovs_list_init(&ofproto->expirable);
     ofproto->connmgr = connmgr_create(ofproto, datapath_name, datapath_name);
     guarded_list_init(&ofproto->rule_executes);
     ofproto->vlan_bitmap = NULL;
@@ -2944,7 +2944,7 @@ static void
 rule_execute_destroy(struct rule_execute *e)
 {
     ofproto_rule_unref(e->rule);
-    list_remove(&e->list_node);
+    ovs_list_remove(&e->list_node);
     free(e);
 }
 
@@ -3014,7 +3014,7 @@ learned_cookies_update_one__(struct ofproto *ofproto,
 
             if (!c->n) {
                 hmap_remove(&ofproto->learned_cookies, &c->u.hmap_node);
-                list_push_back(dead_cookies, &c->u.list_node);
+                ovs_list_push_back(dead_cookies, &c->u.list_node);
             }
 
             return;
@@ -4778,9 +4778,9 @@ replace_rule_create(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     rule->flags = fm->flags & OFPUTIL_FF_STATE;
     *CONST_CAST(const struct rule_actions **, &rule->actions)
         = rule_actions_create(fm->ofpacts, fm->ofpacts_len);
-    list_init(&rule->meter_list_node);
+    ovs_list_init(&rule->meter_list_node);
     rule->eviction_group = NULL;
-    list_init(&rule->expirable);
+    ovs_list_init(&rule->expirable);
     rule->monitor_flags = 0;
     rule->add_seqno = 0;
     rule->modify_seqno = 0;
@@ -5312,8 +5312,8 @@ ofproto_rule_reduce_timeouts(struct rule *rule,
     }
 
     ovs_mutex_lock(&ofproto_mutex);
-    if (list_is_empty(&rule->expirable)) {
-        list_insert(&rule->ofproto->expirable, &rule->expirable);
+    if (ovs_list_is_empty(&rule->expirable)) {
+        ovs_list_insert(&rule->ofproto->expirable, &rule->expirable);
     }
     ovs_mutex_unlock(&ofproto_mutex);
 
@@ -5551,7 +5551,7 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
     fu.ofpacts = actions ? actions->ofpacts : NULL;
     fu.ofpacts_len = actions ? actions->ofpacts_len : 0;
 
-    if (list_is_empty(msgs)) {
+    if (ovs_list_is_empty(msgs)) {
         ofputil_start_flow_update(msgs);
     }
     ofputil_append_flow_update(&fu, msgs);
@@ -5801,7 +5801,7 @@ meter_insert_rule(struct rule *rule)
     uint32_t meter_id = ofpacts_get_meter(a->ofpacts, a->ofpacts_len);
     struct meter *meter = rule->ofproto->meters[meter_id];
 
-    list_insert(&meter->rules, &rule->meter_list_node);
+    ovs_list_insert(&meter->rules, &rule->meter_list_node);
 }
 
 static void
@@ -5824,7 +5824,7 @@ meter_create(const struct ofputil_meter_config *config,
     meter = xzalloc(sizeof *meter);
     meter->provider_meter_id = provider_meter_id;
     meter->created = time_msec();
-    list_init(&meter->rules);
+    ovs_list_init(&meter->rules);
 
     meter_update(meter, config);
 
@@ -5916,7 +5916,7 @@ handle_delete_meter(struct ofconn *ofconn, struct ofputil_meter_mod *mm)
     ovs_mutex_lock(&ofproto_mutex);
     for (meter_id = first; meter_id <= last; ++meter_id) {
         struct meter *meter = ofproto->meters[meter_id];
-        if (meter && !list_is_empty(&meter->rules)) {
+        if (meter && !ovs_list_is_empty(&meter->rules)) {
             struct rule *rule;
 
             LIST_FOR_EACH (rule, meter_list_node, &meter->rules) {
@@ -6060,7 +6060,7 @@ handle_meter_request(struct ofconn *ofconn, const struct ofp_header *request,
             stats.meter_id = meter_id;
 
             /* Provider sets the packet and byte counts, we do the rest. */
-            stats.flow_count = list_size(&meter->rules);
+            stats.flow_count = ovs_list_size(&meter->rules);
             calc_duration(meter->created, time_msec(),
                           &stats.duration_sec, &stats.duration_nsec);
             stats.n_bands = meter->n_bands;
@@ -6400,11 +6400,11 @@ init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
     *CONST_CAST(long long int *, &((*ofgroup)->modified)) = now;
     ovs_refcount_init(&(*ofgroup)->ref_count);
 
-    list_init(&(*ofgroup)->buckets);
+    ovs_list_init(&(*ofgroup)->buckets);
     ofputil_bucket_clone_list(&(*ofgroup)->buckets, &gm->buckets, NULL);
 
     *CONST_CAST(uint32_t *, &(*ofgroup)->n_buckets) =
-        list_size(&(*ofgroup)->buckets);
+        ovs_list_size(&(*ofgroup)->buckets);
 
     memcpy(CONST_CAST(struct ofputil_group_props *, &(*ofgroup)->props),
            &gm->props, sizeof (struct ofputil_group_props));
@@ -6489,7 +6489,7 @@ copy_buckets_for_insert_bucket(const struct ofgroup *ofgroup,
             return OFPERR_OFPGMFC_UNKNOWN_BUCKET;
         }
 
-        if (!list_is_empty(&new_ofgroup->buckets)) {
+        if (!ovs_list_is_empty(&new_ofgroup->buckets)) {
             last = ofputil_bucket_list_back(&new_ofgroup->buckets);
         }
     }
@@ -6503,7 +6503,7 @@ copy_buckets_for_insert_bucket(const struct ofgroup *ofgroup,
 
     /* Rearrange list according to command_bucket_id */
     if (command_bucket_id == OFPG15_BUCKET_LAST) {
-        if (!list_is_empty(&ofgroup->buckets)) {
+        if (!ovs_list_is_empty(&ofgroup->buckets)) {
             struct ofputil_bucket *new_first;
             const struct ofputil_bucket *first;
 
@@ -6511,7 +6511,7 @@ copy_buckets_for_insert_bucket(const struct ofgroup *ofgroup,
             new_first = ofputil_bucket_find(&new_ofgroup->buckets,
                                             first->bucket_id);
 
-            list_splice(new_ofgroup->buckets.next, &new_first->list_node,
+            ovs_list_splice(new_ofgroup->buckets.next, &new_first->list_node,
                         &new_ofgroup->buckets);
         }
     } else if (command_bucket_id <= OFPG15_BUCKET_MAX && last) {
@@ -6520,7 +6520,7 @@ copy_buckets_for_insert_bucket(const struct ofgroup *ofgroup,
         /* Presence of bucket is checked above so after should never be NULL */
         after = ofputil_bucket_find(&new_ofgroup->buckets, command_bucket_id);
 
-        list_splice(after->list_node.next, new_ofgroup->buckets.next,
+        ovs_list_splice(after->list_node.next, new_ofgroup->buckets.next,
                     last->list_node.next);
     }
 
@@ -6543,11 +6543,11 @@ copy_buckets_for_remove_bucket(const struct ofgroup *ofgroup,
     }
 
     if (command_bucket_id == OFPG15_BUCKET_FIRST) {
-        if (!list_is_empty(&ofgroup->buckets)) {
+        if (!ovs_list_is_empty(&ofgroup->buckets)) {
             skip = ofputil_bucket_list_front(&ofgroup->buckets);
         }
     } else if (command_bucket_id == OFPG15_BUCKET_LAST) {
-        if (!list_is_empty(&ofgroup->buckets)) {
+        if (!ovs_list_is_empty(&ofgroup->buckets)) {
             skip = ofputil_bucket_list_back(&ofgroup->buckets);
         }
     } else {
@@ -7846,7 +7846,7 @@ ofproto_rule_insert__(struct ofproto *ofproto, struct rule *rule)
     ovs_assert(rule->removed);
 
     if (rule->hard_timeout || rule->idle_timeout) {
-        list_insert(&ofproto->expirable, &rule->expirable);
+        ovs_list_insert(&ofproto->expirable, &rule->expirable);
     }
     cookies_insert(ofproto, rule);
     eviction_group_add_rule(rule);
@@ -7867,12 +7867,12 @@ ofproto_rule_remove__(struct ofproto *ofproto, struct rule *rule)
     cookies_remove(ofproto, rule);
 
     eviction_group_remove_rule(rule);
-    if (!list_is_empty(&rule->expirable)) {
-        list_remove(&rule->expirable);
+    if (!ovs_list_is_empty(&rule->expirable)) {
+        ovs_list_remove(&rule->expirable);
     }
-    if (!list_is_empty(&rule->meter_list_node)) {
-        list_remove(&rule->meter_list_node);
-        list_init(&rule->meter_list_node);
+    if (!ovs_list_is_empty(&rule->meter_list_node)) {
+        ovs_list_remove(&rule->meter_list_node);
+        ovs_list_init(&rule->meter_list_node);
     }
 
     rule->removed = true;

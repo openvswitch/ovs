@@ -24,8 +24,10 @@ m4_define([OVN_CONTROLLER_VTEP_START],
    done
 
    dnl Start ovsdb-server.
-   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock vswitchd.db vtep.db ovn-nb.db ovn-sb.db], [0], [], [stderr])
-   on_exit "kill `cat ovsdb-server.pid`"
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile=$OVS_RUNDIR/ovsdb-server.pid --log-file --remote=punix:$OVS_RUNDIR/db.sock vswitchd.db vtep.db], [0], [], [stderr])
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile=$OVS_RUNDIR/ovsdb-nb-server.pid --log-file=ovsdb-nb-server.log --remote=punix:$OVS_RUNDIR/ovnnb_db.sock ovn-nb.db], [0], [], [stderr])
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile=$OVS_RUNDIR/ovsdb-sb-server.pid --log-file=ovsdb-sb-server.log --remote=punix:$OVS_RUNDIR/ovnsb_db.sock ovn-sb.db ovn-sb.db], [0], [], [stderr])
+   on_exit "kill `cat ovsdb-server.pid` `cat ovsdb-nb-server.pid` `cat ovsdb-sb-server.pid`"
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d
 /ovsdb_server|INFO|ovsdb-server (Open vSwitch)/d']])
@@ -58,14 +60,14 @@ m4_define([OVN_CONTROLLER_VTEP_START],
 
    dnl Start ovn-northd.
    AT_CHECK([ovn-nbctl lswitch-add br-test])
-   AT_CHECK([ovn-northd --detach --pidfile --log-file --ovnnb-db=unix:$OVS_RUNDIR/db.sock --ovnsb-db=unix:$OVS_RUNDIR/db.sock], [0], [], [stderr])
+   AT_CHECK([ovn-northd --detach --pidfile --log-file], [0], [], [stderr])
    on_exit "kill `cat ovn-northd.pid`"
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d']])
    AT_CAPTURE_FILE([ovn-northd.log])
 
    dnl Start ovn-controllger-vtep.
-   AT_CHECK([ovn-controller-vtep --detach --pidfile --log-file --vtep-db=unix:$OVS_RUNDIR/db.sock --ovnsb-db=unix:$OVS_RUNDIR/db.sock], [0], [], [stderr])
+   AT_CHECK([ovn-controller-vtep --detach --pidfile --log-file --vtep-db=unix:$OVS_RUNDIR/db.sock --ovnsb-db=unix:$OVS_RUNDIR/ovnsb_db.sock], [0], [], [stderr])
    AT_CAPTURE_FILE([ovn-controller-vtep.log])
    on_exit "kill `cat ovn-controller-vtep.pid`"
    AT_CHECK([[sed < stderr '
@@ -87,13 +89,11 @@ m4_define([OVN_CONTROLLER_VTEP_STOP],
    # database will fail with 'Broken pipe' error.
    AT_CHECK([check_logs "$1
 /Broken pipe/d"])
-   AT_CHECK([ovs-appctl -t ovs-vtep exit])
-   AT_CHECK([ovs-appctl -t ovn-northd exit])
-   AT_CHECK([ovs-appctl -t ovn-controller-vtep exit])
-   # makes sure ovn-controller-vtep exits.
-   OVS_WAIT_UNTIL([test ! -f ovn-controller-vtep.pid])
-   AT_CHECK([ovs-appctl -t ovsdb-server exit])
-   AT_CHECK([ovs-appctl -t ovs-vswitchd exit])])
+   OVS_APP_EXIT_AND_WAIT([ovs-vtep])
+   OVS_APP_EXIT_AND_WAIT([ovn-northd])
+   OVS_APP_EXIT_AND_WAIT([ovn-controller-vtep])
+   OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+   OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])])
 
 # Adds logical port for a vtep gateway chassis in ovn-nb database.
 #
@@ -103,6 +103,7 @@ m4_define([OVN_CONTROLLER_VTEP_STOP],
 # $4: logical switch name on vtep gateway chassis
 m4_define([OVN_NB_ADD_VTEP_PORT], [
 AT_CHECK([ovn-nbctl lport-add $1 $2])
+
 AT_CHECK([ovn-nbctl lport-set-type $2 vtep])
 AT_CHECK([ovn-nbctl lport-set-options $2 vtep-physical-switch=$3 vtep-logical-switch=$4])
 ])

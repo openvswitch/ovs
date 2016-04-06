@@ -23,20 +23,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "flow.h"
-#include "ofp-errors.h"
 #include "ofp-msgs.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
 #include "util.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 #include "socket-util.h"
 

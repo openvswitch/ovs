@@ -20,10 +20,10 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "meta-flow.h"
-#include "ofp-errors.h"
 #include "ofp-util.h"
 #include "openflow/openflow.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 
 /* List of OVS abstracted actions.
@@ -970,7 +970,7 @@ OFPACTS
 #undef OFPACT
 
 /* Call after adding the variable-length part to a variable-length action. */
-void ofpact_finish(struct ofpbuf *, struct ofpact *);
+void *ofpact_finish(struct ofpbuf *, struct ofpact *);
 
 /* Additional functions for composing ofpacts. */
 struct ofpact_set_field *ofpact_put_reg_load(struct ofpbuf *ofpacts);

@@ -1,17 +1,21 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.1.0",
-    "cksum": "1223981720 5320",
+    "version": "1.3.0",
+    "cksum": "654726257 5528",
     "tables": {
         "Chassis": {
             "columns": {
                 "name": {"type": "string"},
+                "hostname": {"type": "string"},
                 "encaps": {"type": {"key": {"type": "uuid",
                                             "refTable": "Encap"},
                                     "min": 1, "max": "unlimited"}},
                 "vtep_logical_switches" : {"type": {"key": "string",
                                                     "min": 0,
-                                                    "max": "unlimited"}}},
+                                                    "max": "unlimited"}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
             "isRoot": true,
             "indexes": [["name"]]},
         "Encap": {

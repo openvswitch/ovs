@@ -18,7 +18,7 @@
 #define DB_CTL_BASE_H 1
 
 #include "compiler.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "shash.h"
 
 struct ctl_context;

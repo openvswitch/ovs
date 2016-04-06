@@ -227,7 +227,7 @@ MPLS                  |      3.19      |       YES      |    YES    |   YES   |
 UFID                  |      4.0       |       YES      |    YES    |   NO    |
 Megaflows             |      3.12      |       YES      |    YES    |   NO    |
 Masked set action     |      4.0       |       YES      |    YES    |   NO    |
-Recirculation         |      3.19      |       YES      |    YES    |   NO    |
+Recirculation         |      3.19      |       YES      |    YES    |   YES   |
 TCP flags matching    |      3.13      |       YES      |    YES    |   NO    |
 Validate flow actions |      YES       |       YES      |    N/A    |   NO    |
 Multiple datapaths    |      YES       |       YES      |    YES    |   NO    |
@@ -1596,7 +1596,7 @@ A: This is a Open vSwitch extension to OpenFlow error codes.  Open
    If you want to dissect the extended error message yourself, the
    format is documented in include/openflow/nicira-ext.h in the Open
    vSwitch source distribution.  The extended error codes are
-   documented in lib/ofp-errors.h.
+   documented in include/openvswitch/ofp-errors.h.
 
 Q1: Some of the traffic that I'd expect my OpenFlow controller to see
     doesn't actually appear through the OpenFlow connection, even
@@ -2021,11 +2021,12 @@ A: Add new members for your field to "struct flow" in lib/flow.h, and
    add new enumerations for your new field to "enum mf_field_id" in
    lib/meta-flow.h, following the existing pattern.  Also, add support
    to miniflow_extract() in lib/flow.c for extracting your new field
-   from a packet into struct miniflow.  Then recompile and fix all of
-   the new warnings, implementing new functionality for the new field
-   or header as needed.  (If you configure with --enable-Werror, as
-   described in [INSTALL.md], then it is impossible to miss any
-   warnings.)
+   from a packet into struct miniflow, and to nx_put_raw() in
+   lib/nx-match.c to output your new field in OXM matches.  Then
+   recompile and fix all of the new warnings, implementing new
+   functionality for the new field or header as needed.  (If you
+   configure with --enable-Werror, as described in [INSTALL.md], then
+   it is impossible to miss any warnings.)
 
    If you want kernel datapath support for your new field, you also
    need to modify the kernel module for the operating systems you are

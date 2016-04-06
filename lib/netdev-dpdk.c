@@ -34,7 +34,7 @@
 #include "dp-packet.h"
 #include "dpif-netdev.h"
 #include "fatal-signal.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netdev-dpdk.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
@@ -103,6 +103,9 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 #define NIC_PORT_TX_Q_SIZE 2048  /* Size of Physical NIC TX Queue, Max (n+32<=4096)*/
 
 #define OVS_VHOST_MAX_QUEUE_NUM 1024  /* Maximum number of vHost TX queues. */
+#define OVS_VHOST_QUEUE_MAP_UNKNOWN (-1) /* Mapping not initialized. */
+#define OVS_VHOST_QUEUE_DISABLED    (-2) /* Queue was disabled by guest and not
+                                          * yet mapped to another queue. */
 
 static char *cuse_dev_name = NULL;    /* Character device cuse_dev_name. */
 static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
@@ -455,7 +458,7 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
         VLOG_DBG("Allocated \"%s\" mempool with %u mbufs", mp_name, mp_size );
     }
 
-    list_push_back(&dpdk_mp_list, &dmp->list_node);
+    ovs_list_push_back(&dpdk_mp_list, &dmp->list_node);
     return dmp;
 }
 
@@ -671,7 +674,7 @@ netdev_dpdk_alloc_txq(struct netdev_dpdk *netdev, unsigned int n_txqs)
         }
 
         /* Initialize map for vhost devices. */
-        netdev->tx_q[i].map = -1;
+        netdev->tx_q[i].map = OVS_VHOST_QUEUE_MAP_UNKNOWN;
         rte_spinlock_init(&netdev->tx_q[i].tx_lock);
     }
 }
@@ -733,7 +736,7 @@ netdev_dpdk_init(struct netdev *netdev_, unsigned int port_no,
         netdev_dpdk_alloc_txq(netdev, OVS_VHOST_MAX_QUEUE_NUM);
     }
 
-    list_push_back(&dpdk_list, &netdev->list_node);
+    ovs_list_push_back(&dpdk_list, &netdev->list_node);
 
 unlock:
     if (err) {
@@ -859,7 +862,7 @@ netdev_dpdk_destruct(struct netdev *netdev_)
 
     ovs_mutex_lock(&dpdk_mutex);
     rte_free(dev->tx_q);
-    list_remove(&dev->list_node);
+    ovs_list_remove(&dev->list_node);
     dpdk_mp_put(dev->dpdk_mp);
     ovs_mutex_unlock(&dpdk_mutex);
 }
@@ -869,10 +872,13 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev_)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev_);
 
-    /* Can't remove a port while a guest is attached to it. */
+    /* Guest becomes an orphan if still attached. */
     if (netdev_dpdk_get_virtio(dev) != NULL) {
-        VLOG_ERR("Can not remove port, vhost device still attached");
-                return;
+        VLOG_ERR("Removing port '%s' while vhost device still attached.",
+                 netdev_->name);
+        VLOG_ERR("To restore connectivity after re-adding of port, VM on socket"
+                 " '%s' must be restarted.",
+                 dev->vhost_id);
     }
 
     if (rte_vhost_driver_unregister(dev->vhost_id)) {
@@ -883,7 +889,7 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev_)
 
     ovs_mutex_lock(&dpdk_mutex);
     rte_free(dev->tx_q);
-    list_remove(&dev->list_node);
+    ovs_list_remove(&dev->list_node);
     dpdk_mp_put(dev->dpdk_mp);
     ovs_mutex_unlock(&dpdk_mutex);
 }
@@ -1262,7 +1268,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
 
     qid = vhost_dev->tx_q[qid % vhost_dev->real_n_txq].map;
 
-    if (OVS_UNLIKELY(!is_vhost_running(virtio_dev) || qid == -1)) {
+    if (OVS_UNLIKELY(!is_vhost_running(virtio_dev) || qid < 0)) {
         rte_spinlock_lock(&vhost_dev->stats_lock);
         vhost_dev->stats.tx_dropped+= cnt;
         rte_spinlock_unlock(&vhost_dev->stats_lock);
@@ -2016,7 +2022,7 @@ netdev_dpdk_remap_txqs(struct netdev_dpdk *netdev)
     }
 
     if (n_enabled == 0 && total_txqs != 0) {
-        enabled_queues[0] = -1;
+        enabled_queues[0] = OVS_VHOST_QUEUE_DISABLED;
         n_enabled = 1;
     }
 
@@ -2053,6 +2059,10 @@ netdev_dpdk_vhost_set_queues(struct netdev_dpdk *netdev, struct virtio_net *dev)
     netdev->real_n_rxq = qp_num;
     netdev->real_n_txq = qp_num;
     netdev->txq_needs_locking = true;
+    /* Enable TX queue 0 by default if it wasn't disabled. */
+    if (netdev->tx_q[0].map == OVS_VHOST_QUEUE_MAP_UNKNOWN) {
+        netdev->tx_q[0].map = 0;
+    }
 
     netdev_dpdk_remap_txqs(netdev);
 
@@ -2101,6 +2111,18 @@ new_device(struct virtio_net *dev)
     return 0;
 }
 
+/* Clears mapping for all available queues of vhost interface. */
+static void
+netdev_dpdk_txq_map_clear(struct netdev_dpdk *dev)
+    OVS_REQUIRES(dev->mutex)
+{
+    int i;
+
+    for (i = 0; i < dev->real_n_txq; i++) {
+        dev->tx_q[i].map = OVS_VHOST_QUEUE_MAP_UNKNOWN;
+    }
+}
+
 /*
  * Remove a virtio-net device from the specific vhost port.  Use dev->remove
  * flag to stop any more packets from being sent or received to/from a VM and
@@ -2120,6 +2142,7 @@ destroy_device(volatile struct virtio_net *dev)
             ovs_mutex_lock(&vhost_dev->mutex);
             dev->flags &= ~VIRTIO_DEV_RUNNING;
             ovsrcu_set(&vhost_dev->virtio_dev, NULL);
+            netdev_dpdk_txq_map_clear(vhost_dev);
             exists = true;
             ovs_mutex_unlock(&vhost_dev->mutex);
             break;
@@ -2166,7 +2189,7 @@ vring_state_changed(struct virtio_net *dev, uint16_t queue_id, int enable)
             if (enable) {
                 vhost_dev->tx_q[qid].map = qid;
             } else {
-                vhost_dev->tx_q[qid].map = -1;
+                vhost_dev->tx_q[qid].map = OVS_VHOST_QUEUE_DISABLED;
             }
             netdev_dpdk_remap_txqs(vhost_dev);
             exists = true;
@@ -2314,7 +2337,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
 
     ivshmem->user_port_id = port_no;
     ivshmem->eth_port_id = rte_eth_dev_count() - 1;
-    list_push_back(&dpdk_ring_list, &ivshmem->list_node);
+    ovs_list_push_back(&dpdk_ring_list, &ivshmem->list_node);
 
     *eth_port_id = ivshmem->eth_port_id;
     return 0;
@@ -2641,6 +2664,7 @@ static const struct dpdk_qos_ops egress_policer_ops = {
     GET_CARRIER, GET_STATS, GET_FEATURES, GET_STATUS, RXQ_RECV)          \
 {                                                             \
     NAME,                                                     \
+    true,                       /* is_pmd */                  \
     INIT,                       /* init */                    \
     NULL,                       /* netdev_dpdk_run */         \
     NULL,                       /* netdev_dpdk_wait */        \
@@ -2687,9 +2711,8 @@ static const struct dpdk_qos_ops egress_policer_ops = {
     NULL,                       /* queue_dump_done */         \
     NULL,                       /* dump_queue_stats */        \
                                                               \
-    NULL,                       /* get_in4 */                 \
     NULL,                       /* set_in4 */                 \
-    NULL,                       /* get_in6 */                 \
+    NULL,                       /* get_addr_list */           \
     NULL,                       /* add_router */              \
     NULL,                       /* get_next_hop */            \
     GET_STATUS,                                               \

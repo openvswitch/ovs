@@ -133,6 +133,23 @@ check-pycov: all tests/atconfig tests/atlocal $(TESTSUITE) clean-pycov
 	@echo
 	@COVERAGE_FILE=$(COVERAGE_FILE) $(COVERAGE) report
 
+# lcov support
+# Requires build with --enable-coverage and lcov/genhtml in $PATH
+CLEAN_LOCAL += clean-lcov
+clean-lcov:
+	rm -fr tests/lcov
+
+LCOV_OPTS = -b $(abs_top_builddir) -d $(abs_top_builddir) -q -c --rc lcov_branch_coverage=1
+GENHTML_OPTS = -q --branch-coverage --num-spaces 4
+check-lcov: all tests/atconfig tests/atlocal $(TESTSUITE) $(check_DATA) clean-lcov
+	find . -name '*.gcda' | xargs -n1 rm -f
+	-set $(SHELL) '$(TESTSUITE)' -C tests AUTOTEST_PATH=$(AUTOTEST_PATH) $(TESTSUITEFLAGS); \
+	"$$@" || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
+	mkdir -p tests/lcov
+	lcov $(LCOV_OPTS) -o tests/lcov/coverage.info
+	genhtml $(GENHTML_OPTS) -o tests/lcov tests/lcov/coverage.info
+	@echo "coverage report generated at tests/lcov/index.html"
+
 # valgrind support
 
 valgrind_wrappers = \
@@ -209,7 +226,7 @@ EXTRA_DIST += tests/run-ryu
 
 # Run kmod tests. Assume kernel modules has been installed or linked into the kernel
 check-kernel: all tests/atconfig tests/atlocal $(SYSTEM_KMOD_TESTSUITE)
-	$(SHELL) '$(SYSTEM_KMOD_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' -d $(TESTSUITEFLAGS)
+	$(SHELL) '$(SYSTEM_KMOD_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' -d $(TESTSUITEFLAGS) -j1
 
 # Testing the out of tree Kernel module
 check-kmod: all tests/atconfig tests/atlocal $(SYSTEM_KMOD_TESTSUITE)
@@ -218,7 +235,7 @@ check-kmod: all tests/atconfig tests/atlocal $(SYSTEM_KMOD_TESTSUITE)
 	$(MAKE) check-kernel
 
 check-system-userspace: all tests/atconfig tests/atlocal $(SYSTEM_USERSPACE_TESTSUITE)
-	$(SHELL) '$(SYSTEM_USERSPACE_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' $(TESTSUITEFLAGS)
+	$(SHELL) '$(SYSTEM_USERSPACE_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' $(TESTSUITEFLAGS) -j1
 
 clean-local:
 	test ! -f '$(TESTSUITE)' || $(SHELL) '$(TESTSUITE)' -C tests --clean
@@ -310,6 +327,7 @@ tests_ovstest_SOURCES = \
 	tests/test-ovn.c \
 	tests/test-packets.c \
 	tests/test-random.c \
+	tests/test-rcu.c \
 	tests/test-reconnect.c \
 	tests/test-rstp.c \
 	tests/test-sflow.c \

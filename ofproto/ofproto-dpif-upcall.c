@@ -23,13 +23,13 @@
 #include "coverage.h"
 #include "cmap.h"
 #include "dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fail-open.h"
 #include "guarded-list.h"
 #include "latch.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netlink.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto-dpif-ipfix.h"
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-xlate.h"
@@ -400,7 +400,7 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     udpif->dump_seq = seq_create();
     latch_init(&udpif->exit_latch);
     latch_init(&udpif->pause_latch);
-    list_push_back(&all_udpifs, &udpif->list_node);
+    ovs_list_push_back(&all_udpifs, &udpif->list_node);
     atomic_init(&udpif->enable_ufid, false);
     atomic_init(&udpif->n_flows, 0);
     atomic_init(&udpif->n_flows_timestamp, LLONG_MIN);
@@ -444,7 +444,7 @@ udpif_destroy(struct udpif *udpif)
     free(udpif->ukeys);
     udpif->ukeys = NULL;
 
-    list_remove(&udpif->list_node);
+    ovs_list_remove(&udpif->list_node);
     latch_destroy(&udpif->exit_latch);
     latch_destroy(&udpif->pause_latch);
     seq_destroy(udpif->reval_seq);
@@ -2474,11 +2474,11 @@ upcall_unixctl_dump_wait(struct unixctl_conn *conn,
                          const char *argv[] OVS_UNUSED,
                          void *aux OVS_UNUSED)
 {
-    if (list_is_singleton(&all_udpifs)) {
+    if (ovs_list_is_singleton(&all_udpifs)) {
         struct udpif *udpif = NULL;
         size_t len;
 
-        udpif = OBJECT_CONTAINING(list_front(&all_udpifs), udpif, list_node);
+        udpif = OBJECT_CONTAINING(ovs_list_front(&all_udpifs), udpif, list_node);
         len = (udpif->n_conns + 1) * sizeof *udpif->conns;
         udpif->conn_seq = seq_read(udpif->dump_seq);
         udpif->conns = xrealloc(udpif->conns, len);

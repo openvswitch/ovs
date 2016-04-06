@@ -21,7 +21,7 @@
 
 #include "connectivity.h"
 #include "netdev.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-numa.h"
 #include "packets.h"
 #include "seq.h"
@@ -204,6 +204,9 @@ struct netdev_class {
      * The "system" type corresponds to an existing network device on
      * the system. */
     const char *type;
+
+    /* If 'true' then this netdev should be polled by PMD threads. */
+    bool is_pmd;
 
 /* ## ------------------- ## */
 /* ## Top-Level Functions ## */
@@ -614,20 +617,6 @@ struct netdev_class {
                                        void *aux),
                             void *aux);
 
-    /* If 'netdev' has an assigned IPv4 address, sets '*address' to that
-     * address and '*netmask' to the associated netmask.
-     *
-     * The following error values have well-defined meanings:
-     *
-     *   - EADDRNOTAVAIL: 'netdev' has no assigned IPv4 address.
-     *
-     *   - EOPNOTSUPP: No IPv4 network stack attached to 'netdev'.
-     *
-     * This function may be set to null if it would always return EOPNOTSUPP
-     * anyhow. */
-    int (*get_in4)(const struct netdev *netdev, struct in_addr *address,
-                   struct in_addr *netmask);
-
     /* Assigns 'addr' as 'netdev''s IPv4 address and 'mask' as its netmask.  If
      * 'addr' is INADDR_ANY, 'netdev''s IPv4 address is cleared.
      *
@@ -636,7 +625,11 @@ struct netdev_class {
     int (*set_in4)(struct netdev *netdev, struct in_addr addr,
                    struct in_addr mask);
 
-    /* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address.
+    /* Returns all assigned IP address to  'netdev' and returns 0.
+     * API allocates array of address and masks and set it to
+     * '*addr' and '*mask'.
+     * Otherwise, returns a positive errno value and sets '*addr', '*mask
+     * and '*n_addr' to NULL.
      *
      * The following error values have well-defined meanings:
      *
@@ -644,9 +637,9 @@ struct netdev_class {
      *
      *   - EOPNOTSUPP: No IPv6 network stack attached to 'netdev'.
      *
-     * This function may be set to null if it would always return EOPNOTSUPP
-     * anyhow. */
-    int (*get_in6)(const struct netdev *netdev, struct in6_addr *in6);
+     * 'addr' may be null, in which case the address itself is not reported. */
+    int (*get_addr_list)(const struct netdev *netdev, struct in6_addr **in,
+                         struct in6_addr **mask, int *n_in6);
 
     /* Adds 'router' as a default IP gateway for the TCP/IP stack that
      * corresponds to 'netdev'.

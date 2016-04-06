@@ -27,7 +27,7 @@
 #include "heap.h"
 #include "hmap.h"
 #include "latch.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto-dpif.h"
 #include "ovs-lldp.h"
 #include "ovs-thread.h"

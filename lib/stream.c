@@ -23,12 +23,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "flow.h"
 #include "jsonrpc.h"
 #include "ofp-print.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "ovs-thread.h"

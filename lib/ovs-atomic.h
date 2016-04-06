@@ -596,7 +596,7 @@ ovs_refcount_try_ref_rcu(struct ovs_refcount *refcount)
  *
  * if (stp && ovs_refcount_unref_relaxed(&stp->ref_cnt) == 1) {
  *     ovs_mutex_lock(&mutex);
- *     list_remove(&stp->node);
+ *     ovs_list_remove(&stp->node);
  *     ovs_mutex_unlock(&mutex);
  *     free(stp->name);
  *     free(stp);

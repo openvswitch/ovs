@@ -38,8 +38,8 @@
  * of headers.
  */
 
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
-#include "ofp-errors.h"
 #include "util.h"
 
 struct ovs_list;

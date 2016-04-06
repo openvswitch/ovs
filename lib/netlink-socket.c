@@ -23,13 +23,13 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
 #include "netlink.h"
 #include "netlink-protocol.h"
 #include "odp-netlink.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
 #include "seq.h"

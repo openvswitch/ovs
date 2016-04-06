@@ -32,7 +32,7 @@
 #include <sys/uio.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "ovs-thread.h"
 #include "packets.h"
 #include "poll-loop.h"

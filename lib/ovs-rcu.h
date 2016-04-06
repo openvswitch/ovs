@@ -56,7 +56,8 @@
  *
  *         Brackets a time period during which the current thread is quiescent.
  *
- * A newly created thread is initially active, not quiescent.
+ * A newly created thread is initially active, not quiescent. When a process
+ * becomes multithreaded, the main thread becomes active, not quiescent.
  *
  * When a quiescient state has occurred in every thread, we say that a "grace
  * period" has occurred.  Following a grace period, all of the callbacks

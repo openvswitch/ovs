@@ -16,15 +16,13 @@
 
 #include <config.h>
 
-#include "ofp-parse.h"
-
 #include <ctype.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <netinet/in.h>
 
 #include "byte-order.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "learn.h"
 #include "meta-flow.h"
 #include "multipath.h"
@@ -32,12 +30,13 @@
 #include "nx-match.h"
 #include "ofp-actions.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "ovs-thread.h"
 #include "packets.h"
 #include "simap.h"
 #include "socket-util.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/vconn.h"
 
 /* Parses 'str' as an 8-bit unsigned integer into '*valuep'.
@@ -1399,7 +1398,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
     gm->command = command;
     gm->group_id = OFPG_ANY;
     gm->command_bucket_id = OFPG15_BUCKET_ALL;
-    list_init(&gm->buckets);
+    ovs_list_init(&gm->buckets);
     if (command == OFPGC11_DELETE && string[0] == '\0') {
         gm->group_id = OFPG_ALL;
         return NULL;
@@ -1569,7 +1568,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
             free(bucket);
             goto out;
         }
-        list_push_back(&gm->buckets, &bucket->list_node);
+        ovs_list_push_back(&gm->buckets, &bucket->list_node);
 
         if (gm->type != OFPGT11_SELECT && bucket->weight) {
             error = xstrdup("Only select groups can have bucket weights.");
@@ -1578,7 +1577,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
 
         bkt_str = next_bkt_str;
     }
-    if (gm->type == OFPGT11_INDIRECT && !list_is_short(&gm->buckets)) {
+    if (gm->type == OFPGT11_INDIRECT && !ovs_list_is_short(&gm->buckets)) {
         error = xstrdup("Indirect groups can have at most one bucket.");
         goto out;
     }
@@ -1638,7 +1637,7 @@ parse_ofp_group_mod_file(const char *file_name, uint16_t command,
 
             new_gms = x2nrealloc(*gms, &allocated_gms, sizeof **gms);
             for (i = 0; i < *n_gms; i++) {
-                list_moved(&new_gms[i].buckets, &(*gms)[i].buckets);
+                ovs_list_moved(&new_gms[i].buckets, &(*gms)[i].buckets);
             }
             *gms = new_gms;
         }
@@ -1680,7 +1679,7 @@ parse_ofp_tlv_table_mod_str(struct ofputil_tlv_table_mod *ttm,
     *usable_protocols = OFPUTIL_P_NXM_OXM_ANY;
 
     ttm->command = command;
-    list_init(&ttm->mappings);
+    ovs_list_init(&ttm->mappings);
 
     while (*s) {
         struct ofputil_tlv_map *map = xmalloc(sizeof *map);
@@ -1690,7 +1689,7 @@ parse_ofp_tlv_table_mod_str(struct ofputil_tlv_table_mod *ttm,
             s++;
         }
 
-        list_push_back(&ttm->mappings, &map->list_node);
+        ovs_list_push_back(&ttm->mappings, &map->list_node);
 
         if (!ovs_scan(s, "{class=%"SCNi16",type=%"SCNi8",len=%"SCNi8"}->tun_metadata%"SCNi16"%n",
                       &map->option_class, &map->option_type, &map->option_len,

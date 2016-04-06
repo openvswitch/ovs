@@ -20,6 +20,8 @@
  */
 
 #include "precomp.h"
+
+#include "Actions.h"
 #include "Switch.h"
 #include "Vport.h"
 #include "NetProto.h"
@@ -234,14 +236,14 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
     OvsInitCompletionList(&completionList, switchContext, sendCompleteFlags);
 
     for (curNbl = netBufferLists; curNbl != NULL; curNbl = nextNbl) {
-        POVS_VPORT_ENTRY vport;
-        UINT32 portNo;
+        POVS_VPORT_ENTRY vport = NULL;
+        UINT32 portNo = 0;
         OVS_DATAPATH *datapath = &switchContext->datapath;
-        OVS_PACKET_HDR_INFO layers;
-        OvsFlowKey key;
-        UINT64 hash;
-        PNET_BUFFER curNb;
-        POVS_BUFFER_CONTEXT ctx;
+        OVS_PACKET_HDR_INFO layers = { 0 };
+        OvsFlowKey key = { 0 };
+        UINT64 hash = 0;
+        PNET_BUFFER curNb = NULL;
+        POVS_BUFFER_CONTEXT ctx = NULL;
 
         nextNbl = curNbl->Next;
         curNbl->Next = NULL;

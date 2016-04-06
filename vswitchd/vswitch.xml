@@ -72,6 +72,10 @@
         host as displayed by <code>xe host-list</code>.
       </column>
 
+      <column name="external_ids" key="hostname">
+        The hostname for the host running Open vSwitch.
+      </column>
+
       <column name="other_config" key="stats-update-interval"
               type='{"type": "integer", "minInteger": 5000}'>
         <p>
@@ -1850,7 +1854,7 @@
           <dt><code>geneve</code></dt>
           <dd>
             An Ethernet over Geneve (<code>http://tools.ietf.org/html/draft-ietf-nvo3-geneve-00</code>)
-            IPv4 tunnel.
+            IPv4/IPv6 tunnel.
 
             A description of how to match and set Geneve options can be found
             in the <code>ovs-ofctl</code> manual page.
@@ -1858,13 +1862,13 @@
 
           <dt><code>gre</code></dt>
           <dd>
-            An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4
+            An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4/IPv6
             tunnel.
           </dd>
 
           <dt><code>ipsec_gre</code></dt>
           <dd>
-            An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4
+            An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4/IPv6
             IPsec tunnel.
           </dd>
 
@@ -1951,18 +1955,18 @@
 
         <ul>
           <li>
-            An IPv4 address (not a DNS name), e.g. <code>192.168.0.123</code>.
+            An IPv4 or IPv6 address (not a DNS name), e.g. <code>192.168.0.123</code>.
             Only unicast endpoints are supported.
           </li>
           <li>
             The word <code>flow</code>.  The tunnel accepts packets from any
             remote tunnel endpoint.  To process only packets from a specific
             remote tunnel endpoint, the flow entries may match on the
-            <code>tun_src</code> field.  When sending packets to a
-            <code>remote_ip=flow</code> tunnel, the flow actions must
-            explicitly set the <code>tun_dst</code> field to the IP address of
-            the desired remote tunnel endpoint, e.g. with a
-            <code>set_field</code> action.
+            <code>tun_src</code> or <code>tun_ipv6_src</code>field.  When
+            sending packets to a <code>remote_ip=flow</code> tunnel, the flow
+            actions must explicitly set the <code>tun_dst</code> or
+            <code>tun_ipv6_dst</code> field to the IP address of the desired
+            remote tunnel endpoint, e.g. with a <code>set_field</code> action.
           </li>
         </ul>
 
@@ -1982,18 +1986,18 @@
 
         <ul>
           <li>
-            An IPv4 address (not a DNS name), e.g. <code>192.168.12.3</code>.
+            An IPv4/IPv6 address (not a DNS name), e.g. <code>192.168.12.3</code>.
           </li>
           <li>
             The word <code>flow</code>.  The tunnel accepts packets sent to any
             of the local IP addresses of the system running OVS.  To process
             only packets sent to a specific IP address, the flow entries may
-            match on the <code>tun_dst</code> field.  When sending packets to a
-            <code>local_ip=flow</code> tunnel, the flow actions may
-            explicitly set the <code>tun_src</code> field to the desired IP
-            address, e.g. with a <code>set_field</code> action.  However, while
-            routing the tunneled packet out, the local system may override the
-            specified address with the local IP address configured for the
+            match on the <code>tun_dst</code> or <code>tun_ipv6_dst</code> field.
+            When sending packets to a <code>local_ip=flow</code> tunnel, the flow
+            actions may explicitly set the <code>tun_src</code> or <code>tun_ipv6_src</code>
+            field to the desired IP address, e.g. with a <code>set_field</code> action.
+            However, while routing the tunneled packet out, the local system may
+            override the specified address with the local IP address configured for the
             outgoing system interface.
 
             <p>
@@ -2005,8 +2009,8 @@
 
         <p>
           The tunnel destination IP address for any packet received from a
-          tunnel is available in the <code>tun_dst</code> field for matching in
-          the flow table.
+          tunnel is available in the <code>tun_dst</code> or <code>tun_ipv6_dst</code>
+          field for matching in the flow table.
         </p>
       </column>
 
@@ -2286,7 +2290,7 @@
       </column>
 
       <column name="status" key="source_ip">
-        The source IP address used for an IPv4 tunnel end-point, such as
+        The source IP address used for an IPv4/IPv6 tunnel end-point, such as
         <code>gre</code>.
       </column>
 
@@ -3206,6 +3210,7 @@
         <p>
           The supported fields are: <code>tun_id</code>,
           <code>tun_src</code>, <code>tun_dst</code>,
+          <code>tun_ipv6_src</code>, <code>tun_ipv6_dst</code>,
           <code>nw_src</code>, <code>nw_dst</code> (or aliases
           <code>ip_src</code> and <code>ip_dst</code>),
           <code>ipv6_src</code>, and <code>ipv6_dst</code>.  (Using this

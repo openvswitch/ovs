@@ -28,7 +28,7 @@
 #include "netlink.h"
 #include "netlink-notifier.h"
 #include "netlink-socket.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-router.h"
 #include "packets.h"
 #include "rtnetlink.h"
@@ -276,8 +276,6 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
                 change->rd.rta_gw = nl_attr_get_in6_addr(attrs[RTA_GATEWAY]);
             }
         }
-
-
     } else {
         VLOG_DBG_RL(&rl, "received unparseable rtnetlink route message");
     }
@@ -310,11 +308,11 @@ route_map_clear(void)
 }
 
 bool
-route_table_fallback_lookup(ovs_be32 ip_dst OVS_UNUSED,
-                            char output_bridge[] OVS_UNUSED,
-                            ovs_be32 *gw)
+route_table_fallback_lookup(const struct in6_addr *ip6_dst OVS_UNUSED,
+                            char name[] OVS_UNUSED,
+                            struct in6_addr *gw6)
 {
-    *gw = 0;
+    *gw6 = in6addr_any;
     return false;
 }
 

@@ -129,6 +129,7 @@ m4_foreach(
    [bitwise_zero],
    [bitwise_one],
    [bitwise_is_all_zeros],
+   [bitwise_rscan],
    [ovs_scan]],
   [AT_SETUP([testname[()] function])
    AT_KEYWORDS([testname])
@@ -228,4 +229,8 @@ AT_CLEANUP
 
 AT_SETUP([test ofpbuf module])
 AT_CHECK([ovstest test-ofpbuf], [0], [])
+AT_CLEANUP
+
+AT_SETUP([test rcu])
+AT_CHECK([ovstest test-rcu-quiesce], [0], [])
 AT_CLEANUP

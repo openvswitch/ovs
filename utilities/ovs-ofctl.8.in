@@ -1218,13 +1218,15 @@ For non-tunneled packets, the value is 0.
 .IP
 This field was introduced in Open vSwitch 2.5.
 .
-.IP \fBtun_src=\fIip\fR[\fB/\fInetmask\fR]
-.IQ \fBtun_dst=\fIip\fR[\fB/\fInetmask\fR]
-Matches tunnel IPv4 source (or destination) address \fIip\fR. Only packets
+.IP \fBtun_src=\fIipv4\fR[\fB/\fInetmask\fR]
+.IQ \fBtun_dst=\fIipv4\fR[\fB/\fInetmask\fR]
+.IQ \fBtun_ipv6_src=\fIipv6\fR[\fB/\fInetmask\fR]
+.IQ \fBtun_ipv6_dst=\fIipv6\fR[\fB/\fInetmask\fR]
+Matches tunnel IP source (or destination) address \fIip\fR. Only packets
 that arrive over a tunnel will have nonzero tunnel addresses.
 The address may be specified as an IP address or host name
 (e.g. \fB192.168.1.1\fR or \fBwww.example.com\fR).  The optional
-\fInetmask\fR allows restricting a match to a masked IPv4 address.
+\fInetmask\fR allows restricting a match to a masked IP address.
 The netmask may be specified as a dotted quad
 (e.g. \fB192.168.1.0/255.255.255.0\fR) or as a CIDR block
 (e.g. \fB192.168.1.0/24\fR).
@@ -2968,6 +2970,7 @@ These options currently affect only \fBdump\-flows\fR output.
 .SS "Public Key Infrastructure Options"
 .so lib/ssl.man
 .so lib/vlog.man
+.so lib/colors.man
 .so lib/common.man
 .
 .SH "RUNTIME MANAGEMENT COMMANDS"

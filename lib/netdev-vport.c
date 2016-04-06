@@ -32,11 +32,11 @@
 #include "dirs.h"
 #include "dpif.h"
 #include "dp-packet.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
 #include "hmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netdev-provider.h"
 #include "odp-netlink.h"
 #include "dp-packet.h"
@@ -319,7 +319,7 @@ tunnel_check_status_change__(struct netdev_vport *netdev)
 
     iface[0] = '\0';
     route = &netdev->tnl_cfg.ipv6_dst;
-    if (ovs_router_lookup(route, iface, &gw)) {
+    if (ovs_router_lookup(route, iface, NULL, &gw)) {
         struct netdev *egress_netdev;
 
         if (!netdev_open(iface, "system", &egress_netdev)) {
@@ -504,10 +504,6 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
                           name, node->value);
                 return EINVAL;
             }
-            if (dst_proto == ETH_TYPE_IPV6) {
-                VLOG_WARN("%s: IPv6 'remote_ip' is not supported", name);
-                return EOPNOTSUPP;
-            }
         } else if (!strcmp(node->key, "local_ip")) {
             int err;
             err = parse_tunnel_ip(node->value, true, &tnl_cfg.ip_src_flow,
@@ -516,10 +512,6 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
             case ENOENT:
                 VLOG_WARN("%s: bad %s 'local_ip'", name, type);
                 break;
-            }
-            if (src_proto == ETH_TYPE_IPV6) {
-                VLOG_WARN("%s: IPv6 'local_ip' is not supported", name);
-                return EOPNOTSUPP;
             }
         } else if (!strcmp(node->key, "tos")) {
             if (!strcmp(node->value, "inherit")) {
@@ -1528,9 +1520,8 @@ netdev_vport_range(struct unixctl_conn *conn, int argc,
     NULL,                       /* queue_dump_done */       \
     NULL,                       /* dump_queue_stats */      \
                                                             \
-    NULL,                       /* get_in4 */               \
     NULL,                       /* set_in4 */               \
-    NULL,                       /* get_in6 */               \
+    NULL,                       /* get_addr_list */         \
     NULL,                       /* add_router */            \
     NULL,                       /* get_next_hop */          \
     GET_STATUS,                                             \
@@ -1549,11 +1540,12 @@ netdev_vport_range(struct unixctl_conn *conn, int argc,
 
 #define TUNNEL_CLASS(NAME, DPIF_PORT, BUILD_HEADER, PUSH_HEADER, POP_HEADER)   \
     { DPIF_PORT,                                                               \
-        { NAME, VPORT_FUNCTIONS(get_tunnel_config,                             \
-                                set_tunnel_config,                             \
-                                get_netdev_tunnel_config,                      \
-                                tunnel_get_status,                             \
-                                BUILD_HEADER, PUSH_HEADER, POP_HEADER) }}
+        { NAME, false,                                                         \
+          VPORT_FUNCTIONS(get_tunnel_config,                                   \
+                          set_tunnel_config,                                   \
+                          get_netdev_tunnel_config,                            \
+                          tunnel_get_status,                                   \
+                          BUILD_HEADER, PUSH_HEADER, POP_HEADER) }}
 
 void
 netdev_vport_tunnel_register(void)
@@ -1595,9 +1587,10 @@ netdev_vport_patch_register(void)
 {
     static const struct vport_class patch_class =
         { NULL,
-            { "patch", VPORT_FUNCTIONS(get_patch_config,
-                                       set_patch_config,
-                                       NULL,
-                                       NULL, NULL, NULL, NULL) }};
+            { "patch", false,
+              VPORT_FUNCTIONS(get_patch_config,
+                              set_patch_config,
+                              NULL,
+                              NULL, NULL, NULL, NULL) }};
     netdev_register_provider(&patch_class.netdev_class);
 }

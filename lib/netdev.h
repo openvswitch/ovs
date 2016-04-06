@@ -252,11 +252,11 @@ int netdev_turn_flags_off(struct netdev *, enum netdev_flags,
 void netdev_restore_flags(struct netdev_saved_flags *);
 
 /* TCP/IP stack interface. */
-int netdev_get_in4(const struct netdev *, struct in_addr *address,
-                   struct in_addr *netmask);
 int netdev_set_in4(struct netdev *, struct in_addr addr, struct in_addr mask);
 int netdev_get_in4_by_name(const char *device_name, struct in_addr *in4);
-int netdev_get_in6(const struct netdev *, struct in6_addr *);
+int netdev_get_addr_list(const struct netdev *netdev, struct in6_addr **addr,
+                         struct in6_addr **mask, int *n_in6);
+
 int netdev_add_router(struct netdev *, struct in_addr router);
 int netdev_get_next_hop(const struct netdev *, const struct in_addr *host,
                         struct in_addr *next_hop, char **);
@@ -342,6 +342,12 @@ int netdev_dump_queue_stats(const struct netdev *,
 
 enum { NETDEV_MAX_BURST = 32 }; /* Maximum number packets in a batch. */
 extern struct seq *tnl_conf_seq;
+
+#ifndef _WIN32
+void netdev_get_addrs_list_flush(void);
+int netdev_get_addrs(const char dev[], struct in6_addr **paddr,
+                     struct in6_addr **pmask, int *n_in6);
+#endif
 
 #ifdef  __cplusplus
 }

@@ -723,7 +723,7 @@ Datapath actions: set(ipv6(hlimit=127)),2,set(ipv6(hlimit=126)),3,4
 AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl -P nxt_packet_in monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=111,tos=0,ttl=2,frag=no)' -generate], [0], [stdout])
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=34 in_port=1 (via invalid_ttl) data_len=34 (unbuffered)
 ip,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=111,nw_tos=0,nw_ecn=0,nw_ttl=1
@@ -899,7 +899,7 @@ for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(syn)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=syn tcp_csum:0
@@ -934,7 +934,7 @@ dnl Test that missed packets are droped
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(ack,syn)'
 done
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
@@ -962,7 +962,7 @@ for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(urg|rst)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=rst|urg tcp_csum:0
@@ -998,7 +998,7 @@ for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
 
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
 
@@ -1028,7 +1028,7 @@ for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=10:11:11:11:11:11,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
@@ -1048,7 +1048,7 @@ for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
@@ -1111,7 +1111,7 @@ for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
@@ -1165,7 +1165,7 @@ AT_CHECK([ovs-ofctl monitor br0 65534 -P nxt_packet_in --detach --no-chdir --pid
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
@@ -1195,7 +1195,7 @@ dnl Test that missed packets are droped
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
@@ -1225,7 +1225,7 @@ dnl Test that missed packets are droped
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
@@ -1256,7 +1256,7 @@ dnl Test that missed packets are droped
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 ])
@@ -1381,7 +1381,7 @@ for i in 1 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=20:22:22:22:22:22,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=11),tcp_flags(0x001)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 18])
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0x1 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
@@ -1419,7 +1419,7 @@ for i in 1 ; do
     ovs-appctl netdev-dummy/receive p1 '50 54 00 00 00 07 20 22 22 22 22 22 08 00 45 00 00 1C 00 00 00 00 00 11 00 00 C0 A8 00 01 C0 A8 00 02 00 08 00 0B 00 00 12 34 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 18])
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0x1 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
@@ -1458,7 +1458,7 @@ for i in 1 2 3; do
 done
 
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 18])
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
@@ -1491,7 +1491,7 @@ done
 
 AT_CHECK([ovs-appctl time/warp 1000], [0], [ignore])
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 18])
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0x1 total_len=98 in_port=1 (via action) data_len=98 (unbuffered)
 sctp,vlan_tci=0x0000,dl_src=20:22:22:22:22:22,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=1112,tp_dst=2223 sctp_csum:d9d79157
@@ -1750,7 +1750,7 @@ for i in 1 2 3; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=40:44:44:44:44:49,dst=50:54:00:00:00:07),eth_type(0x8847),mpls(label=10,tc=3,ttl=64,bos=1)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
@@ -2703,7 +2703,7 @@ for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=10:11:11:11:11:11,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=10),tcp_flags(0x002)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
@@ -2743,7 +2743,7 @@ for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=10:11:11:11:11:11,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=10),tcp_flags(0x002)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
@@ -2796,7 +2796,7 @@ for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=10:11:11:11:11:11,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=10),tcp_flags(0x002)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
@@ -2858,7 +2858,7 @@ for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=10:11:11:11:11:11,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=10),tcp_flags(0x002)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
@@ -2905,7 +2905,7 @@ for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=10:11:11:11:11:11,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=10),tcp_flags(0x002)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
@@ -2973,7 +2973,7 @@ for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=10:11:11:11:11:11,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=10),tcp_flags(0x002)'
 done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
@@ -3271,7 +3271,7 @@ for i in 1 2 3; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=40:44:44:44:00:02,dst=50:54:00:00:00:07),eth_type(0x8847),mpls(label=10,tc=0,ttl=64,bos=1)'
 done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
@@ -3647,7 +3647,7 @@ for i in 1 2 3; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=40:44:44:44:54:59,dst=50:54:00:00:00:07),eth_type(0x8100),vlan(vid=88,pcp=7),encap(eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no))'
 done
 OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
-ovs-appctl -t ovs-ofctl exit
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
@@ -5031,7 +5031,7 @@ m4_define([CHECK_SFLOW_SAMPLING_PACKET],
   dnl from each datasource so we can check sequence numbers
   ovs-appctl time/warp 3000 100
   OVS_VSWITCHD_STOP
-  ovs-appctl -t test-sflow exit
+  OVS_APP_EXIT_AND_WAIT([test-sflow])
 
   AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
 	/g']], [0], [dnl
@@ -5353,7 +5353,7 @@ dnl sleep long enough to get the sFlow datagram flushed out (may be delayed for 
 AT_CHECK([ovs-appctl time/warp 2000 100], [0], [ignore])
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 OVS_VSWITCHD_STOP
-ovs-appctl -t test-sflow exit
+OVS_APP_EXIT_AND_WAIT([test-sflow])
 AT_CHECK([[sort sflow.log | $EGREP 'LACPCOUNTERS|ERROR' | head -n 1 | sed 's/ /\
 	/g']], [0], [dnl
 LACPCOUNTERS
@@ -5407,7 +5407,7 @@ for i in `seq 1 30`; do
     ovs-appctl time/warp 100
 done
 
-ovs-appctl -t test-sflow exit
+OVS_APP_EXIT_AND_WAIT([test-sflow])
 
 AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
 	/g']], [0], [dnl
@@ -5476,22 +5476,26 @@ dummy@ovs-dummy: hit:0 missed:0
 ])
 
 dnl set up route to 1.1.2.92 via br0 and action=normal
-AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
-])
-AT_CHECK([ovs-appctl ovs/route/add 192.168.0.0/16 br0], [0], [OK
-])
 AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
 ])
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
 
 dnl Prime ARP Cache for 1.1.2.92
-AT_CHECK([ovs-appctl netdev-dummy/receive br0 'recirc_id(0),in_port(100),eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=1,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive br0 'recirc_id(0),in_port(100),eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00)'])
 
 dnl configure sflow on int-br only
 ovs-vsctl \
    set Bridge int-br sflow=@sf -- \
    --id=@sf create sflow targets=\"127.0.0.1:$SFLOW_PORT\" \
      header=128 sampling=1 polling=0
+
+dnl set up route to 192.168.1.2 via br0
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 192.168.1.1/16], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 192.168.0.0/16 br0], [0], [OK
+])
 
 dnl add rule for int-br to force packet onto tunnel. There is no ifindex
 dnl for this port so the sFlow output will just report that it went to
@@ -5505,7 +5509,7 @@ for i in `seq 1 30`; do
     ovs-appctl time/warp 100
 done
 
-ovs-appctl -t test-sflow exit
+OVS_APP_EXIT_AND_WAIT([test-sflow])
 
 AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
 	/g']], [0], [dnl
@@ -5574,7 +5578,7 @@ for i in `seq 1 30`; do
     ovs-appctl time/warp 100
 done
 
-ovs-appctl -t test-sflow exit
+OVS_APP_EXIT_AND_WAIT([test-sflow])
 
 AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'HEADER|ERROR' | sed 's/ /\
 	/g']], [0], [dnl
@@ -5669,7 +5673,7 @@ m4_define([CHECK_NETFLOW_EXPIRATION],
   ovs-appctl time/warp 6000
   ovs-appctl revalidator/wait
   OVS_VSWITCHD_STOP
-  ovs-appctl -t test-netflow exit
+  OVS_APP_EXIT_AND_WAIT([test-netflow])
 
   AT_CHECK([test `grep "192.168.0.1 > 192.168.0.2, if 1 > 65535, 1 pkts, 60 bytes, ICMP 8:0" netflow.log | wc -l` -eq 1])
 
@@ -5720,7 +5724,7 @@ m4_define([CHECK_NETFLOW_ACTIVE_EXPIRATION],
 
   ovs-appctl revalidator/wait
   OVS_VSWITCHD_STOP
-  ovs-appctl -t test-netflow exit
+  OVS_APP_EXIT_AND_WAIT([test-netflow])
 
   # Count the number of reported packets:
   # - From source to destination before MAC learning kicks in (just one).
@@ -6428,6 +6432,7 @@ m4_define([CHECK_MEGAFLOW_NETFLOW],
 recirc_id=0,icmp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_frag=no,icmp_type=0x8/0xff,icmp_code=0x0/0xff, actions: <del>
 recirc_id=0,icmp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_src=10.0.0.4,nw_dst=10.0.0.3,nw_tos=0,nw_frag=no,icmp_type=0x8/0xff,icmp_code=0x0/0xff, actions: <del>
 ])
+  OVS_APP_EXIT_AND_WAIT([test-netflow])
   OVS_VSWITCHD_STOP])
 
 AT_SETUP([ofproto-dpif megaflow - netflow - IPv4 collector])
@@ -7038,7 +7043,7 @@ for i in 1 2 3; do
 	AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 CONTROLLER controller '50540000000a5054000000091234'])
 done
 
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): total_len=14 in_port=CONTROLLER (via action) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
@@ -7089,7 +7094,7 @@ for i in 1 2 3; do
 	AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 CONTROLLER output:1 '50540000000a5054000000091234'])
 done
 
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=14 in_port=1 (via no_match) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
@@ -7144,7 +7149,7 @@ for i in 1 2 3; do
 done
 
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
@@ -7195,7 +7200,7 @@ for i in 1 2 3; do
 done
 
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
@@ -7241,7 +7246,7 @@ AT_CHECK([ovs-ofctl monitor br0 65534 -P nxt_packet_in --detach --no-chdir --pid
 
 ovs-appctl netdev-dummy/receive p1 '0060970769ea0000860580da86dd6000000000203afffe80000000000000020086fffe0580dafe80000000000000026097fffe0769ea870068bd00000000fe80000000000000026097fffe0769ea01010000860580da'
 
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=86 in_port=1 (via no_match) data_len=86 (unbuffered)
@@ -7262,7 +7267,7 @@ AT_CHECK([ovs-ofctl monitor br0 65534 -P nxt_packet_in --detach --no-chdir --pid
 
 ovs-appctl netdev-dummy/receive p1 '0060970769ea0000860580da86dd6000000000203afffe80000000000000020086fffe0580dafe80000000000000026097fffe0769ea870068bd00000000fe80000000000000026097fffe0769ea01010000860580da'
 
-OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=86 in_port=1 (via action) data_len=86 (unbuffered)
@@ -7400,6 +7405,17 @@ dpif_netdev|DBG|flow_add: recirc_id=0,in_port=1,vlan_tci=0x0000,dl_type=0x1234, 
 dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234)
 dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234), actions:100
 dpif_netdev|DBG|flow_add: recirc_id=0,in_port=1,vlan_tci=0xf063/0x1000,dl_type=0x1234, actions:drop
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - trace (unchanged)])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=1'], [0], [stdout])
+AT_CHECK([grep "Final flow:" stdout], [0], [Final flow: unchanged
+])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(100)'], [0], [stdout])
+AT_CHECK([grep "Final flow:" stdout], [0], [Final flow: unchanged
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

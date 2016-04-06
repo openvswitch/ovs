@@ -1225,7 +1225,7 @@ test_many_rules_in_n_tables(int n_tables)
                                         &tcls);
                     check_tables(&cls, -1, -1, -1, n_invisible_rules, version);
 
-                    list_push_back(&list, &rule->list_node);
+                    ovs_list_push_back(&list, &rule->list_node);
                 } else if (classifier_remove(&cls, &rule->cls_rule)) {
                     ovsrcu_postpone(free_rule, rule);
                 }

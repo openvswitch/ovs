@@ -34,7 +34,7 @@
 
 #include "bitmap.h"
 #include "dpif-provider.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "fat-rwlock.h"
 #include "netdev.h"
@@ -45,7 +45,7 @@
 #include "netlink-socket.h"
 #include "netlink.h"
 #include "odp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"

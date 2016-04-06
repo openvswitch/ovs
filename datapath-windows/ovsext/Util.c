@@ -116,3 +116,19 @@ OvsCompareString(PVOID string1, PVOID string2)
     RtlInitString(&str2, string2);
     return RtlEqualString(&str1, &str2, FALSE);
 }
+
+VOID *
+OvsAllocateMemoryPerCpu(size_t size, ULONG tag)
+{
+    VOID *ptr = NULL;
+    ULONG count = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+
+    ASSERT(KeQueryActiveGroupCount() == 1);
+
+    ptr = OvsAllocateMemoryWithTag(count * size, tag);
+    if (ptr) {
+        RtlZeroMemory(ptr, count * size);
+    }
+
+    return ptr;
+}

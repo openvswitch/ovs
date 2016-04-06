@@ -24,7 +24,7 @@
 
 #include "bitmap.h"
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "json.h"
 #include "jsonrpc.h"
@@ -256,7 +256,7 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
             shash_add_assert(&table->columns, column->name, column);
         }
         hmap_init(&table->rows);
-        list_init(&table->track_list);
+        ovs_list_init(&table->track_list);
         table->change_seqno[OVSDB_IDL_CHANGE_INSERT]
             = table->change_seqno[OVSDB_IDL_CHANGE_MODIFY]
             = table->change_seqno[OVSDB_IDL_CHANGE_DELETE] = 0;
@@ -327,8 +327,8 @@ ovsdb_idl_clear(struct ovsdb_idl *idl)
             /* No need to do anything with dst_arcs: some node has those arcs
              * as forward arcs and will destroy them itself. */
 
-            if (!list_is_empty(&row->track_node)) {
-                list_remove(&row->track_node);
+            if (!ovs_list_is_empty(&row->track_node)) {
+                ovs_list_remove(&row->track_node);
             }
 
             ovsdb_idl_row_destroy(row);
@@ -582,6 +582,15 @@ ovsdb_idl_get_last_error(const struct ovsdb_idl *idl)
         return 0;
     }
 }
+
+/* Sets the "probe interval" for 'idl->session' to 'probe_interval', in
+ * milliseconds.
+ */
+void
+ovsdb_idl_set_probe_interval(const struct ovsdb_idl *idl, int probe_interval)
+{
+    jsonrpc_session_set_probe_interval(idl->session, probe_interval);
+}
 
 static unsigned char *
 ovsdb_idl_get_mode(struct ovsdb_idl *idl,
@@ -782,8 +791,8 @@ ovsdb_idl_track_get_first(const struct ovsdb_idl *idl,
     struct ovsdb_idl_table *table
         = ovsdb_idl_table_from_class(idl, table_class);
 
-    if (!list_is_empty(&table->track_list)) {
-        return CONTAINER_OF(list_front(&table->track_list), struct ovsdb_idl_row, track_node);
+    if (!ovs_list_is_empty(&table->track_list)) {
+        return CONTAINER_OF(ovs_list_front(&table->track_list), struct ovsdb_idl_row, track_node);
     }
     return NULL;
 }
@@ -836,7 +845,7 @@ ovsdb_idl_track_clear(const struct ovsdb_idl *idl)
     for (i = 0; i < idl->class->n_tables; i++) {
         struct ovsdb_idl_table *table = &idl->tables[i];
 
-        if (!list_is_empty(&table->track_list)) {
+        if (!ovs_list_is_empty(&table->track_list)) {
             struct ovsdb_idl_row *row, *next;
 
             LIST_FOR_EACH_SAFE(row, next, track_node, &table->track_list) {
@@ -844,8 +853,8 @@ ovsdb_idl_track_clear(const struct ovsdb_idl *idl)
                     free(row->updated);
                     row->updated = NULL;
                 }
-                list_remove(&row->track_node);
-                list_init(&row->track_node);
+                ovs_list_remove(&row->track_node);
+                ovs_list_init(&row->track_node);
                 if (ovsdb_idl_row_is_orphan(row)) {
                     ovsdb_idl_row_clear_old(row);
                     free(row);
@@ -1367,10 +1376,11 @@ ovsdb_idl_row_change__(struct ovsdb_idl_row *row, const struct json *row_json,
                         = row->table->change_seqno[change]
                         = row->table->idl->change_seqno + 1;
                     if (table->modes[column_idx] & OVSDB_IDL_TRACK) {
-                        if (list_is_empty(&row->track_node)) {
-                            list_push_front(&row->table->track_list,
-                                            &row->track_node);
+                        if (!ovs_list_is_empty(&row->track_node)) {
+                            ovs_list_remove(&row->track_node);
                         }
+                        ovs_list_push_back(&row->table->track_list,
+                                       &row->track_node);
                         if (!row->updated) {
                             row->updated = bitmap_allocate(class->n_columns);
                         }
@@ -1519,15 +1529,15 @@ ovsdb_idl_row_clear_arcs(struct ovsdb_idl_row *row, bool destroy_dsts)
      * freed.
      */
     LIST_FOR_EACH_SAFE (arc, next, src_node, &row->src_arcs) {
-        list_remove(&arc->dst_node);
+        ovs_list_remove(&arc->dst_node);
         if (destroy_dsts
             && ovsdb_idl_row_is_orphan(arc->dst)
-            && list_is_empty(&arc->dst->dst_arcs)) {
+            && ovs_list_is_empty(&arc->dst->dst_arcs)) {
             ovsdb_idl_row_destroy(arc->dst);
         }
         free(arc);
     }
-    list_init(&row->src_arcs);
+    ovs_list_init(&row->src_arcs);
 }
 
 /* Force nodes that reference 'row' to reparse. */
@@ -1560,10 +1570,10 @@ ovsdb_idl_row_create__(const struct ovsdb_idl_table_class *class)
 {
     struct ovsdb_idl_row *row = xzalloc(class->allocation_size);
     class->row_init(row);
-    list_init(&row->src_arcs);
-    list_init(&row->dst_arcs);
+    ovs_list_init(&row->src_arcs);
+    ovs_list_init(&row->dst_arcs);
     hmap_node_nullify(&row->txn_node);
-    list_init(&row->track_node);
+    ovs_list_init(&row->track_node);
     return row;
 }
 
@@ -1588,9 +1598,10 @@ ovsdb_idl_row_destroy(struct ovsdb_idl_row *row)
                 = row->table->change_seqno[OVSDB_IDL_CHANGE_DELETE]
                 = row->table->idl->change_seqno + 1;
         }
-        if (list_is_empty(&row->track_node)) {
-            list_push_front(&row->table->track_list, &row->track_node);
+        if (!ovs_list_is_empty(&row->track_node)) {
+            ovs_list_remove(&row->track_node);
         }
+        ovs_list_push_back(&row->table->track_list, &row->track_node);
     }
 }
 
@@ -1602,12 +1613,12 @@ ovsdb_idl_row_destroy_postprocess(struct ovsdb_idl *idl)
     for (i = 0; i < idl->class->n_tables; i++) {
         struct ovsdb_idl_table *table = &idl->tables[i];
 
-        if (!list_is_empty(&table->track_list)) {
+        if (!ovs_list_is_empty(&table->track_list)) {
             struct ovsdb_idl_row *row, *next;
 
             LIST_FOR_EACH_SAFE(row, next, track_node, &table->track_list) {
                 if (!ovsdb_idl_track_is_set(row->table)) {
-                    list_remove(&row->track_node);
+                    ovs_list_remove(&row->track_node);
                     free(row);
                 }
             }
@@ -1638,7 +1649,7 @@ ovsdb_idl_delete_row(struct ovsdb_idl_row *row)
     ovsdb_idl_row_unparse(row);
     ovsdb_idl_row_clear_arcs(row, true);
     ovsdb_idl_row_clear_old(row);
-    if (list_is_empty(&row->dst_arcs)) {
+    if (ovs_list_is_empty(&row->dst_arcs)) {
         ovsdb_idl_row_destroy(row);
     } else {
         ovsdb_idl_row_reparse_backrefs(row);
@@ -1691,7 +1702,7 @@ may_add_arc(const struct ovsdb_idl_row *src, const struct ovsdb_idl_row *dst)
      * at 'src', since we add all of the arcs from a given source in a clump
      * (in a single call to ovsdb_idl_row_parse()) and new arcs are always
      * added at the front of the dst_arcs list. */
-    if (list_is_empty(&dst->dst_arcs)) {
+    if (ovs_list_is_empty(&dst->dst_arcs)) {
         return true;
     }
     arc = CONTAINER_OF(dst->dst_arcs.next, struct ovsdb_idl_arc, dst_node);
@@ -1740,8 +1751,8 @@ ovsdb_idl_get_row_arc(struct ovsdb_idl_row *src,
             /* The arc *must* be added at the front of the dst_arcs list.  See
              * ovsdb_idl_row_reparse_backrefs() for details. */
             arc = xmalloc(sizeof *arc);
-            list_push_front(&src->src_arcs, &arc->src_node);
-            list_push_front(&dst->dst_arcs, &arc->dst_node);
+            ovs_list_push_front(&src->src_arcs, &arc->src_node);
+            ovs_list_push_front(&dst->dst_arcs, &arc->dst_node);
             arc->src = src;
             arc->dst = dst;
         }

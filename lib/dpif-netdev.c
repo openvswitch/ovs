@@ -39,12 +39,12 @@
 #include "dpif.h"
 #include "dpif-provider.h"
 #include "dummy.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fat-rwlock.h"
 #include "flow.h"
 #include "hmapx.h"
 #include "latch.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "match.h"
 #include "netdev.h"
 #include "netdev-dpdk.h"
@@ -53,7 +53,7 @@
 #include "odp-execute.h"
 #include "odp-util.h"
 #include "ofp-print.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-numa.h"
 #include "ovs-rcu.h"
 #include "packets.h"
@@ -2864,7 +2864,7 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     ovs_mutex_init(&pmd->poll_mutex);
     dpcls_init(&pmd->cls);
     cmap_init(&pmd->flow_table);
-    list_init(&pmd->poll_list);
+    ovs_list_init(&pmd->poll_list);
     /* init the 'flow_cache' since there is no
      * actual thread created for NON_PMD_CORE_ID. */
     if (core_id == NON_PMD_CORE_ID) {
@@ -3017,7 +3017,7 @@ dp_netdev_del_port_from_pmd(struct dp_netdev_port *port,
         if (poll->port == port) {
             found = true;
             port_unref(poll->port);
-            list_remove(&poll->node);
+            ovs_list_remove(&poll->node);
             pmd->poll_cnt--;
             free(poll);
         }
@@ -3076,7 +3076,7 @@ dp_netdev_add_rxq_to_pmd(struct dp_netdev_pmd_thread *pmd,
     poll->port = port;
     poll->rx = rx;
 
-    list_push_back(&pmd->poll_list, &poll->node);
+    ovs_list_push_back(&pmd->poll_list, &poll->node);
     pmd->poll_cnt++;
 }
 

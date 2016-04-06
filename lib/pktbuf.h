@@ -20,7 +20,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#include "ofp-errors.h"
+#include "openvswitch/ofp-errors.h"
 
 struct pktbuf;
 struct dp_packet;

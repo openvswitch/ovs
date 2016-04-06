@@ -173,6 +173,17 @@ static __inline NlAttrTotalSize(UINT32 payloadSize)
     return NLA_ALIGN(NlAttrSize(payloadSize));
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * Returns true if the last attribute is reached.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+static __inline NlAttrIsLast(const PNL_ATTR nla, int rem)
+{
+    return nla->nlaLen == rem;
+}
+
 /* Netlink attribute validation */
 BOOLEAN NlAttrValidate(const PNL_ATTR, const PNL_POLICY);
 

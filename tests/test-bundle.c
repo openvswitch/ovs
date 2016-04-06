@@ -20,7 +20,7 @@
 #include <stdlib.h>
 #include "flow.h"
 #include "ofp-actions.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovstest.h"
 #include "util.h"
 

@@ -19,12 +19,12 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include "compiler.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "expr.h"
 #include "lex.h"
 #include "logical-fields.h"
 #include "ofp-actions.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "simap.h"
 
 /* Context maintained during actions_parse(). */
@@ -288,6 +288,7 @@ action_parse_field(struct action_context *ctx,
                              &prereqs);
     if (error) {
         action_error(ctx, "%s", error);
+        free(error);
         return false;
     }
 

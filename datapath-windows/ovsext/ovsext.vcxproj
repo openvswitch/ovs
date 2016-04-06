@@ -71,6 +71,7 @@
   </ImportGroup>
   <ItemGroup Label="WrappedTaskItems">
     <ClInclude Include="..\include\OvsDpInterfaceExt.h" />
+    <ClInclude Include="Actions.h" />
     <ClInclude Include="Atomic.h" />
     <ClInclude Include="BufferMgmt.h" />
     <ClInclude Include="Datapath.h" />
@@ -93,6 +94,7 @@
     <ClInclude Include="PacketIO.h" />
     <ClInclude Include="PacketParser.h" />
     <ClInclude Include="precomp.h" />
+    <ClInclude Include="Recirc.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Stt.h" />
     <ClInclude Include="Switch.h" />
@@ -193,6 +195,7 @@
       <PreCompiledHeader>Create</PreCompiledHeader>
       <PreCompiledHeaderOutputFile>$(IntDir)\precomp.h.pch</PreCompiledHeaderOutputFile>
     </ClCompile>
+    <ClCompile Include="Recirc.c" />
     <ClCompile Include="Stt.c" />
     <ClCompile Include="Switch.c" />
     <ClCompile Include="Tunnel.c" />

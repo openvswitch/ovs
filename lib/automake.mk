@@ -40,6 +40,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/classifier-private.h \
 	lib/cmap.c \
 	lib/cmap.h \
+	lib/colors.c \
+	lib/colors.h \
 	lib/command-line.c \
 	lib/command-line.h \
 	lib/compiler.h \
@@ -75,7 +77,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/heap.c \
 	lib/heap.h \
 	lib/dynamic-string.c \
-	lib/dynamic-string.h \
 	lib/entropy.c \
 	lib/entropy.h \
 	lib/fat-rwlock.c \
@@ -84,7 +85,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/fatal-signal.h \
 	lib/flow.c \
 	lib/flow.h \
-	lib/geneve.h \
 	lib/guarded-list.c \
 	lib/guarded-list.h \
 	lib/hash.c \
@@ -110,7 +110,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/learn.h \
 	lib/learning-switch.c \
 	lib/learning-switch.h \
-	lib/list.h \
 	lib/lockfile.c \
 	lib/lockfile.h \
 	lib/mac-learning.c \
@@ -143,11 +142,9 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ofp-actions.c \
 	lib/ofp-actions.h \
 	lib/ofp-errors.c \
-	lib/ofp-errors.h \
 	lib/ofp-msgs.c \
 	lib/ofp-msgs.h \
 	lib/ofp-parse.c \
-	lib/ofp-parse.h \
 	lib/ofp-print.c \
 	lib/ofp-print.h \
 	lib/ofp-prop.c \
@@ -157,7 +154,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ofp-version-opt.h \
 	lib/ofp-version-opt.c \
 	lib/ofpbuf.c \
-	lib/ofpbuf.h \
 	lib/ovs-atomic-c11.h \
 	lib/ovs-atomic-clang.h \
 	lib/ovs-atomic-flag-gcc4.7+.h \
@@ -429,6 +425,7 @@ EXTRA_DIST += \
 	lib/db-ctl-base.xml
 
 MAN_FRAGMENTS += \
+	lib/colors.man \
 	lib/common.man \
 	lib/common-syn.man \
 	lib/coverage-unixctl.man \
@@ -492,10 +489,10 @@ lib/ofp-actions.lo: lib/ofp-actions.inc1 lib/ofp-actions.inc2
 CLEANFILES += lib/ofp-actions.inc1 lib/ofp-actions.inc2
 EXTRA_DIST += build-aux/extract-ofp-actions
 
-lib/ofp-errors.inc: lib/ofp-errors.h include/openflow/openflow-common.h \
+lib/ofp-errors.inc: include/openvswitch/ofp-errors.h include/openflow/openflow-common.h \
 	$(srcdir)/build-aux/extract-ofp-errors
 	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/extract-ofp-errors \
-		$(srcdir)/lib/ofp-errors.h \
+		$(srcdir)/include/openvswitch/ofp-errors.h \
 		$(srcdir)/include/openflow/openflow-common.h > $@.tmp && \
 	mv $@.tmp $@
 lib/ofp-errors.lo: lib/ofp-errors.inc

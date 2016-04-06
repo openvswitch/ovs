@@ -33,20 +33,19 @@
 #include "classifier.h"
 #include "command-line.h"
 #include "daemon.h"
+#include "colors.h"
 #include "compiler.h"
 #include "dirs.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "nx-match.h"
 #include "odp-util.h"
 #include "ofp-actions.h"
-#include "ofp-errors.h"
 #include "ofp-msgs.h"
-#include "ofp-parse.h"
 #include "ofp-print.h"
 #include "ofp-util.h"
 #include "ofp-version-opt.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto/ofproto.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
@@ -60,6 +59,8 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "meta-flow.h"
@@ -74,6 +75,9 @@ VLOG_DEFINE_THIS_MODULE(ofctl);
  * parse_options() for details).
  */
 static bool bundle = false;
+
+/* --color: Use color markers. */
+static bool enable_color;
 
 /* --strict: Use strict matching for flow mod commands?  Additionally governs
  * use of nx_pull_match() instead of nx_pull_match_loose() in parse-nx-match.
@@ -170,6 +174,7 @@ parse_options(int argc, char *argv[])
         OPT_RSORT,
         OPT_UNIXCTL,
         OPT_BUNDLE,
+        OPT_COLOR,
         DAEMON_OPTION_ENUMS,
         OFP_VERSION_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
@@ -188,6 +193,7 @@ parse_options(int argc, char *argv[])
         {"help", no_argument, NULL, 'h'},
         {"option", no_argument, NULL, 'o'},
         {"bundle", no_argument, NULL, OPT_BUNDLE},
+        {"color", optional_argument, NULL, OPT_COLOR},
         DAEMON_LONG_OPTIONS,
         OFP_VERSION_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
@@ -289,6 +295,30 @@ parse_options(int argc, char *argv[])
             unixctl_path = optarg;
             break;
 
+        case OPT_COLOR:
+            if (optarg) {
+                if (!strcasecmp(optarg, "always")
+                    || !strcasecmp(optarg, "yes")
+                    || !strcasecmp(optarg, "force")) {
+                    enable_color = true;
+                } else if (!strcasecmp(optarg, "never")
+                           || !strcasecmp(optarg, "no")
+                           || !strcasecmp(optarg, "none")) {
+                    enable_color = false;
+                } else if (!strcasecmp(optarg, "auto")
+                           || !strcasecmp(optarg, "tty")
+                           || !strcasecmp(optarg, "if-tty")) {
+                    /* Determine whether we need colors, i.e. whether standard
+                     * output is a tty. */
+                    enable_color = is_stdout_a_tty();
+                } else {
+                    ovs_fatal(0, "incorrect value `%s' for --color", optarg);
+                }
+            } else {
+                enable_color = is_stdout_a_tty();
+            }
+        break;
+
         DAEMON_OPTION_HANDLERS
         OFP_VERSION_OPTION_HANDLERS
         VLOG_OPTION_HANDLERS
@@ -334,6 +364,8 @@ parse_options(int argc, char *argv[])
     allowed_protocols &= version_protocols;
     mask_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
                                   allowed_protocols));
+
+    colors_init(enable_color);
 }
 
 static void
@@ -417,6 +449,7 @@ usage(void)
            "  --sort[=field]              sort in ascending order\n"
            "  --rsort[=field]             sort in descending order\n"
            "  --unixctl=SOCKET            set control socket name\n"
+           "  --color[=always|never|auto] control use of color in output\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
@@ -639,8 +672,8 @@ transact_noreply(struct vconn *vconn, struct ofpbuf *request)
 {
     struct ovs_list requests;
 
-    list_init(&requests);
-    list_push_back(&requests, &request->list_node);
+    ovs_list_init(&requests);
+    ovs_list_push_back(&requests, &request->list_node);
     transact_multiple_noreply(vconn, &requests);
 }
 
@@ -1318,7 +1351,7 @@ bundle_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
     struct ovs_list requests;
     size_t i;
 
-    list_init(&requests);
+    ovs_list_init(&requests);
 
     /* Bundles need OpenFlow 1.3+. */
     usable_protocols &= OFPUTIL_P_OF13_UP;
@@ -1328,7 +1361,7 @@ bundle_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
         struct ofputil_flow_mod *fm = &fms[i];
         struct ofpbuf *request = ofputil_encode_flow_mod(fm, protocol);
 
-        list_push_back(&requests, &request->list_node);
+        ovs_list_push_back(&requests, &request->list_node);
         free(CONST_CAST(struct ofpact *, fm->ofpacts));
     }
 
@@ -3007,7 +3040,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
     }
 
     ofm = ofputil_encode_flow_mod(&fm, protocol);
-    list_push_back(packets, &ofm->list_node);
+    ovs_list_push_back(packets, &ofm->list_node);
 }
 
 static void
@@ -3029,7 +3062,7 @@ ofctl_replace_flows(struct ovs_cmdl_context *ctx)
 
     read_flows_from_switch(vconn, protocol, &tables, SWITCH_IDX);
 
-    list_init(&requests);
+    ovs_list_init(&requests);
 
     FOR_EACH_TABLE (cls, &tables) {
         /* Delete flows that exist on the switch but not in the file. */

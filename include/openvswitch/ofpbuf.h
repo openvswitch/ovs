@@ -14,14 +14,16 @@
  * limitations under the License.
  */
 
-#ifndef OFPBUF_H
-#define OFPBUF_H 1
+#ifndef OPENVSWITCH_OFPBUF_H
+#define OPENVSWITCH_OFPBUF_H 1
 
 #include <stddef.h>
 #include <stdint.h>
-#include "list.h"
-#include "packets.h"
-#include "util.h"
+#include <stdlib.h>
+#include <string.h>
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/list.h"
+#include "openvswitch/util.h"
 
 #ifdef  __cplusplus
 extern "C" {

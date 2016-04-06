@@ -161,7 +161,7 @@ experimenter IDs), then ERROR_HEADER to obtain OpenFlow error number.
 It outputs a C source file for translating OpenFlow error codes into
 strings.
 
-ERROR_HEADER should point to lib/ofp-errors.h.
+ERROR_HEADER should point to include/openvswitch/ofp-errors.h.
 VENDOR_HEADER should point to include/openflow/openflow-common.h.
 The output is suitable for use as lib/ofp-errors.inc.\
 ''' % {"argv0": argv0})

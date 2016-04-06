@@ -15,10 +15,10 @@
  */
 
 #include <config.h>
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include <stdlib.h>
 #include <string.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "netdev-dpdk.h"
 #include "util.h"
 
@@ -29,7 +29,7 @@ ofpbuf_init__(struct ofpbuf *b, size_t allocated, enum ofpbuf_source source)
     b->source = source;
     b->header = NULL;
     b->msg = NULL;
-    list_poison(&b->list_node);
+    ovs_list_poison(&b->list_node);
 }
 
 static void

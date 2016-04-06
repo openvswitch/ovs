@@ -46,11 +46,23 @@ patch
                     diff -u stdout expout >/dev/null])
 }
 
+# Make sure that the configured bridge mappings in the Open_vSwitch db
+# is mirrored into the Chassis record in the OVN_Southbound db.
+check_bridge_mappings () {
+    local_mappings=$1
+    sysid=$(ovs-vsctl get Open_vSwitch . external_ids:system-id)
+    chassis_mappings=$(ovn-sbctl get Chassis ${sysid} external_ids:ovn-bridge-mappings | sed -e 's/\"//g')
+    echo $local_mappings
+    echo $chassis_mappings
+    AT_CHECK([test "${local_mappings}" = "${chassis_mappings}"])
+}
+
 # Initially there should be no patch ports.
 check_patches
 
 # Configure two ovn-bridge mappings, but no patch ports should be created yet
 AT_CHECK([ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-eth0,physnet2:br-eth1])
+check_bridge_mappings "physnet1:br-eth0,physnet2:br-eth1"
 check_patches
 
 # Create a localnet port, but we should still have no patch ports, as they
@@ -94,6 +106,7 @@ check_patches \
 # Delete the mapping and the ovn-bridge-mapping patch ports should go away;
 # the ones from the logical patch port remain.
 AT_CHECK([ovs-vsctl remove Open_vSwitch . external-ids ovn-bridge-mappings])
+check_bridge_mappings
 check_patches \
     'br-int patch-foo-to-bar patch-bar-to-foo' \
     'br-int patch-bar-to-foo patch-foo-to-bar'
@@ -114,6 +127,17 @@ AT_CHECK([ovn-sbctl \
     -- set Port_Binding baz type='""' options='{}'])
 check_patches
 
-# Gracefully terminate ovn-controller
-ovs-appctl -t ovn-controller exit
+# Gracefully terminate daemons
+as hv
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
 AT_CLEANUP

@@ -22,14 +22,14 @@
 #include <stdlib.h>
 
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fail-open.h"
 #include "in-band.h"
 #include "odp-util.h"
 #include "ofp-actions.h"
 #include "ofp-msgs.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto-provider.h"
 #include "pinsched.h"
 #include "poll-loop.h"
@@ -237,7 +237,7 @@ connmgr_create(struct ofproto *ofproto,
     mgr->local_port_name = xstrdup(local_port_name);
 
     hmap_init(&mgr->controllers);
-    list_init(&mgr->all_conns);
+    ovs_list_init(&mgr->all_conns);
     mgr->master_election_id = 0;
     mgr->master_election_id_defined = false;
 
@@ -1222,13 +1222,13 @@ ofconn_create(struct connmgr *mgr, struct rconn *rconn, enum ofconn_type type,
 
     ofconn = xzalloc(sizeof *ofconn);
     ofconn->connmgr = mgr;
-    list_push_back(&mgr->all_conns, &ofconn->node);
+    ovs_list_push_back(&mgr->all_conns, &ofconn->node);
     ofconn->rconn = rconn;
     ofconn->type = type;
     ofconn->enable_async_msgs = enable_async_msgs;
 
     hmap_init(&ofconn->monitors);
-    list_init(&ofconn->updates);
+    ovs_list_init(&ofconn->updates);
 
     hmap_init(&ofconn->bundles);
 
@@ -1306,7 +1306,7 @@ ofconn_destroy(struct ofconn *ofconn)
     hmap_destroy(&ofconn->bundles);
 
     hmap_destroy(&ofconn->monitors);
-    list_remove(&ofconn->node);
+    ovs_list_remove(&ofconn->node);
     rconn_destroy(ofconn->rconn);
     rconn_packet_counter_destroy(ofconn->packet_in_counter);
     rconn_packet_counter_destroy(ofconn->reply_counter);
@@ -2139,7 +2139,7 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
         }
 
         if (flags) {
-            if (list_is_empty(&ofconn->updates)) {
+            if (ovs_list_is_empty(&ofconn->updates)) {
                 ofputil_start_flow_update(&ofconn->updates);
                 ofconn->sent_abbrev_update = false;
             }
@@ -2225,12 +2225,12 @@ ofmonitor_resume(struct ofconn *ofconn)
         ofmonitor_collect_resume_rules(m, ofconn->monitor_paused, &rules);
     }
 
-    list_init(&msgs);
+    ovs_list_init(&msgs);
     ofmonitor_compose_refresh_updates(&rules, &msgs);
 
     resumed = ofpraw_alloc_xid(OFPRAW_NXT_FLOW_MONITOR_RESUMED, OFP10_VERSION,
                                htonl(0), 0);
-    list_push_back(&msgs, &resumed->list_node);
+    ovs_list_push_back(&msgs, &resumed->list_node);
     ofconn_send_replies(ofconn, &msgs);
 
     ofconn->monitor_paused = 0;

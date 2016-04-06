@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef DYNAMIC_STRING_H
-#define DYNAMIC_STRING_H 1
+#ifndef OPENVSWITCH_DYNAMIC_STRING_H
+#define OPENVSWITCH_DYNAMIC_STRING_H 1
 
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <time.h>
-#include "compiler.h"
+#include "openvswitch/compiler.h"
 
 /* A "dynamic string", that is, a buffer that can be used to construct a
  * string across a series of operations that extend or modify it.

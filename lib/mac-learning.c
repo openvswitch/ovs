@@ -23,7 +23,7 @@
 #include "bitmap.h"
 #include "coverage.h"
 #include "hash.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "poll-loop.h"
 #include "timeval.h"
 #include "unaligned.h"
@@ -101,9 +101,9 @@ mac_entry_set_port(struct mac_learning *ml, struct mac_entry *e, void *port)
 
         if (e->mlport) {
             struct mac_learning_port *mlport = e->mlport;
-            list_remove(&e->port_lru_node);
+            ovs_list_remove(&e->port_lru_node);
 
-            if (list_is_empty(&mlport->port_lrus)) {
+            if (ovs_list_is_empty(&mlport->port_lrus)) {
                 ovs_assert(mlport->heap_node.priority == 1);
                 hmap_remove(&ml->ports_by_ptr, &mlport->hmap_node);
                 heap_remove(&ml->ports_by_usage, &mlport->heap_node);
@@ -126,12 +126,12 @@ mac_entry_set_port(struct mac_learning *ml, struct mac_entry *e, void *port)
                             hash_pointer(port, ml->secret));
                 heap_insert(&ml->ports_by_usage, &mlport->heap_node, 1);
                 mlport->port = port;
-                list_init(&mlport->port_lrus);
+                ovs_list_init(&mlport->port_lrus);
             } else {
                 heap_change(&ml->ports_by_usage, &mlport->heap_node,
                             mlport->heap_node.priority + 1);
             }
-            list_push_back(&mlport->port_lrus, &e->port_lru_node);
+            ovs_list_push_back(&mlport->port_lrus, &e->port_lru_node);
             e->mlport = mlport;
         }
     }
@@ -148,7 +148,7 @@ evict_mac_entry_fairly(struct mac_learning *ml)
 
     mlport = CONTAINER_OF(heap_max(&ml->ports_by_usage),
                           struct mac_learning_port, heap_node);
-    e = CONTAINER_OF(list_front(&mlport->port_lrus),
+    e = CONTAINER_OF(ovs_list_front(&mlport->port_lrus),
                      struct mac_entry, port_lru_node);
     mac_learning_expire(ml, e);
 }
@@ -160,7 +160,7 @@ static bool
 get_lru(struct mac_learning *ml, struct mac_entry **e)
     OVS_REQ_RDLOCK(ml->rwlock)
 {
-    if (!list_is_empty(&ml->lrus)) {
+    if (!ovs_list_is_empty(&ml->lrus)) {
         *e = mac_entry_from_lru_node(ml->lrus.next);
         return true;
     } else {
@@ -186,7 +186,7 @@ mac_learning_create(unsigned int idle_time)
     struct mac_learning *ml;
 
     ml = xmalloc(sizeof *ml);
-    list_init(&ml->lrus);
+    ovs_list_init(&ml->lrus);
     hmap_init(&ml->table);
     ml->secret = random_uint32();
     ml->flood_vlans = NULL;
@@ -321,14 +321,14 @@ mac_learning_insert(struct mac_learning *ml,
         e->mlport = NULL;
         COVERAGE_INC(mac_learning_learned);
     } else {
-        list_remove(&e->lru_node);
+        ovs_list_remove(&e->lru_node);
     }
 
     /* Mark 'e' as recently used. */
-    list_push_back(&ml->lrus, &e->lru_node);
+    ovs_list_push_back(&ml->lrus, &e->lru_node);
     if (e->mlport) {
-        list_remove(&e->port_lru_node);
-        list_push_back(&e->mlport->port_lrus, &e->port_lru_node);
+        ovs_list_remove(&e->port_lru_node);
+        ovs_list_push_back(&e->mlport->port_lrus, &e->port_lru_node);
     }
     e->expires = time_now() + ml->idle_time;
 
@@ -364,7 +364,7 @@ mac_learning_expire(struct mac_learning *ml, struct mac_entry *e)
     ml->need_revalidate = true;
     mac_entry_set_port(ml, e, NULL);
     hmap_remove(&ml->table, &e->hmap_node);
-    list_remove(&e->lru_node);
+    ovs_list_remove(&e->lru_node);
     free(e);
 }
 
@@ -405,7 +405,7 @@ mac_learning_wait(struct mac_learning *ml)
     if (hmap_count(&ml->table) > ml->max_entries
         || ml->need_revalidate) {
         poll_immediate_wake();
-    } else if (!list_is_empty(&ml->lrus)) {
+    } else if (!ovs_list_is_empty(&ml->lrus)) {
         struct mac_entry *e = mac_entry_from_lru_node(ml->lrus.next);
         poll_timer_wait_until(e->expires * 1000LL);
     }

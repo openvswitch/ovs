@@ -26,7 +26,7 @@
 #include <sys/ioctl.h>
 #include <linux/perf_event.h>
 #include <asm/unistd.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "perf-counter.h"
 #include "shash.h"
 #include "util.h"

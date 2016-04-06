@@ -18,13 +18,13 @@
 #undef NDEBUG
 #include "odp-util.h"
 #include <stdio.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "match.h"
-#include "ofp-parse.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovstest.h"
 #include "util.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/vlog.h"
 
 static int

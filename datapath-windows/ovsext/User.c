@@ -22,6 +22,7 @@
 
 #include "precomp.h"
 
+#include "Actions.h"
 #include "Datapath.h"
 #include "Debug.h"
 #include "Event.h"
@@ -382,20 +383,21 @@ _MapNlAttrToOvsPktExec(PNL_ATTR *nlAttrs, PNL_ATTR *keyAttrs,
     execute->actionsLen = NlAttrGetSize(nlAttrs[OVS_PACKET_ATTR_ACTIONS]);
 
     execute->inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
+    execute->keyAttrs = keyAttrs;
 }
 
 NTSTATUS
 OvsExecuteDpIoctl(OvsPacketExecute *execute)
 {
     NTSTATUS                    status = STATUS_SUCCESS;
-    NTSTATUS                    ndisStatus;
+    NTSTATUS                    ndisStatus = STATUS_SUCCESS;
     LOCK_STATE_EX               lockState;
-    PNET_BUFFER_LIST pNbl;
-    PNL_ATTR actions;
+    PNET_BUFFER_LIST            pNbl = NULL;
+    PNL_ATTR                    actions = NULL;
     PNDIS_SWITCH_FORWARDING_DETAIL_NET_BUFFER_LIST_INFO fwdDetail;
-    OvsFlowKey key;
-    OVS_PACKET_HDR_INFO layers;
-    POVS_VPORT_ENTRY vport;
+    OvsFlowKey                  key = { 0 };
+    OVS_PACKET_HDR_INFO         layers = { 0 };
+    POVS_VPORT_ENTRY            vport = NULL;
 
     if (execute->packetLen == 0) {
         status = STATUS_INVALID_PARAMETER;
@@ -428,6 +430,11 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
     }
     // XXX: Figure out if any of the other members of fwdDetail need to be set.
 
+    status = OvsGetFlowMetadata(&key, execute->keyAttrs);
+    if (status != STATUS_SUCCESS) {
+        goto dropit;
+    }
+
     ndisStatus = OvsExtractFlow(pNbl, fwdDetail->SourcePortId, &key, &layers,
                                 NULL);
     if (ndisStatus == NDIS_STATUS_SUCCESS) {
@@ -449,6 +456,7 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
         }
     }
 
+dropit:
     if (pNbl) {
         OvsCompleteNBL(gOvsSwitchContext, pNbl, TRUE);
     }

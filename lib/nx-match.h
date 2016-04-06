@@ -23,7 +23,7 @@
 #include "compiler.h"
 #include "flow.h"
 #include "meta-flow.h"
-#include "ofp-errors.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 
 struct ds;

@@ -156,11 +156,35 @@
     </p>
 
     <column name="name">
-      A chassis name, taken from <ref key="system-id" table="Open_vSwitch"
-      column="external_ids" db="Open_vSwitch"/> in the Open_vSwitch
-      database's <ref table="Open_vSwitch" db="Open_vSwitch"/> table.  OVN does
-      not prescribe a particular format for chassis names.
+      OVN does not prescribe a particular format for chassis names.
+      ovn-controller populates this column using <ref key="system-id"
+      table="Open_vSwitch" column="external_ids" db="Open_vSwitch"/>
+      in the Open_vSwitch database's <ref table="Open_vSwitch"
+      db="Open_vSwitch"/> table.  ovn-controller-vtep populates this
+      column with <ref table="Physical_Switch" column="name"
+      db="hardware_vtep"/> in the hardware_vtep database's
+      <ref table="Physical_Switch" db="hardware_vtep"/> table.
     </column>
+
+    <column name="hostname">
+      The hostname of the chassis, if applicable.  ovn-controller will populate
+      this column with the hostname of the host it is running on.
+      ovn-controller-vtep will leave this column empty.
+    </column>
+
+    <column name="external_ids" key="ovn-bridge-mappings">
+      <code>ovn-controller</code> populates this key with the set of bridge
+      mappings it has been configured to use.  Other applications should treat
+      this key as read-only.  See <code>ovn-controller</code>(8) for more
+      information.
+    </column>
+
+    <group title="Common Columns">
+      The overall purpose of these columns is described under <code>Common
+      Columns</code> at the beginning of this document.
+
+      <column name="external_ids"/>
+    </group>
 
     <group title="Encapsulation Configuration">
       <p>
@@ -916,8 +940,15 @@
 
         <dt><code>ct_commit;</code></dt>
         <dd>
-          Commit the flow to the connection tracking entry associated
-          with it by a previous call to <code>ct_next</code>.
+          <p>
+            Commit the flow to the connection tracking entry associated
+            with it by a previous call to <code>ct_next</code>.
+          </p>
+          <p>
+            Note that if you want processing to continue in the next table,
+            you must execute the <code>next</code> action after
+            <code>ct_commit</code>.
+          </p>
         </dd>
 
         <dt><code>arp { <var>action</var>; </code>...<code> };</code></dt>

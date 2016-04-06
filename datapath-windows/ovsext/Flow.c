@@ -110,9 +110,7 @@ const NL_POLICY nlFlowPolicy[] = {
     [OVS_FLOW_ATTR_PROBE] = {.type = NL_A_FLAG, .optional = TRUE}
 };
 
-/* For Parsing nested OVS_FLOW_ATTR_KEY attributes.
- * Some of the attributes like OVS_KEY_ATTR_RECIRC_ID
- * are not supported yet. */
+/* For Parsing nested OVS_FLOW_ATTR_KEY attributes. */
 
 const NL_POLICY nlFlowKeyPolicy[] = {
     [OVS_KEY_ATTR_ENCAP] = {.type = NL_A_VAR_LEN, .optional = TRUE},
@@ -252,7 +250,7 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                     UINT32 *replyLen)
 {
     NTSTATUS rc = STATUS_SUCCESS;
-    BOOLEAN ok;
+    BOOLEAN ok = FALSE;
     POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
     POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
     PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
@@ -340,6 +338,9 @@ OvsFlowNlCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
          * created or deleted
          */
         nlError = NL_ERROR_NOENT;
+        if (rc == STATUS_DUPLICATE_NAME) {
+            nlError = NL_ERROR_EXIST;
+        }
         goto done;
     }
 
@@ -493,7 +494,7 @@ _FlowNlGetCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         /* Get tunnel keys attributes */
         if ((NlAttrParseNested(nlMsgHdr, tunnelKeyAttrOffset,
                                NlAttrLen(keyAttrs[OVS_KEY_ATTR_TUNNEL]),
-                               nlFlowTunnelKeyPolicy, 
+                               nlFlowTunnelKeyPolicy,
                                ARRAY_SIZE(nlFlowTunnelKeyPolicy),
                                tunnelAttrs, ARRAY_SIZE(tunnelAttrs)))
                                != TRUE) {
@@ -734,6 +735,20 @@ done:
     return rc;
 }
 
+UINT64
+OvsFlowUsedTime(UINT64 flowUsed)
+{
+    UINT64 currentMs, iddleMs;
+    LARGE_INTEGER tickCount;
+
+    KeQueryTickCount(&tickCount);
+    iddleMs =  tickCount.QuadPart - flowUsed;
+    iddleMs *= ovsTimeIncrementPerTick;
+    currentMs = KeQueryPerformanceCounter(&tickCount).QuadPart * 1000 /
+                tickCount.QuadPart;
+    return  currentMs - iddleMs;
+}
+
 /*
  *----------------------------------------------------------------------------
  *  _MapFlowStatsToNlStats --
@@ -749,7 +764,10 @@ _MapFlowStatsToNlStats(PNL_BUFFER nlBuf, OvsFlowStats *flowStats)
     replyStats.n_packets = flowStats->packetCount;
     replyStats.n_bytes = flowStats->byteCount;
 
-    if (!NlMsgPutTailU64(nlBuf, OVS_FLOW_ATTR_USED, flowStats->used)) {
+    if (flowStats->used &&
+        !NlMsgPutTailU64(nlBuf, OVS_FLOW_ATTR_USED,
+                         OvsFlowUsedTime(flowStats->used))
+       ) {
         rc = STATUS_INVALID_BUFFER_SIZE;
         goto done;
     }
@@ -824,6 +842,20 @@ MapFlowKeyToNlKey(PNL_BUFFER nlBuf,
         /* Starting the nested attribute failed. */
         rc = STATUS_UNSUCCESSFUL;
         goto error_nested_start;
+    }
+
+    if (!NlMsgPutTailU32(nlBuf, OVS_KEY_ATTR_RECIRC_ID,
+                         flowKey->recircId)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
+    if (flowKey->dpHash) {
+        if (!NlMsgPutTailU32(nlBuf, OVS_KEY_ATTR_DP_HASH,
+                             flowKey->dpHash)) {
+            rc = STATUS_UNSUCCESSFUL;
+            goto done;
+        }
     }
 
     /* Ethernet header */
@@ -986,8 +1018,8 @@ _MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf, IpKey *ipv4FlowPutKey)
     ipv4Key.ipv4_frag = ipv4FlowPutKey->nwFrag;
 
     if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_IPV4,
-                           (PCHAR)(&ipv4Key),
-                           sizeof(struct ovs_key_ipv4))) {
+                            (PCHAR)(&ipv4Key),
+                            sizeof(struct ovs_key_ipv4))) {
         rc = STATUS_UNSUCCESSFUL;
         goto done;
     }
@@ -998,8 +1030,8 @@ _MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf, IpKey *ipv4FlowPutKey)
             tcpKey.tcp_src = ipv4FlowPutKey->l4.tpSrc;
             tcpKey.tcp_dst = ipv4FlowPutKey->l4.tpDst;
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_TCP,
-                                   (PCHAR)(&tcpKey),
-                                   sizeof(tcpKey))) {
+                                    (PCHAR)(&tcpKey),
+                                    sizeof(tcpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1011,8 +1043,8 @@ _MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf, IpKey *ipv4FlowPutKey)
             udpKey.udp_src = ipv4FlowPutKey->l4.tpSrc;
             udpKey.udp_dst = ipv4FlowPutKey->l4.tpDst;
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_UDP,
-                                   (PCHAR)(&udpKey),
-                                   sizeof(udpKey))) {
+                                    (PCHAR)(&udpKey),
+                                    sizeof(udpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1024,8 +1056,8 @@ _MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf, IpKey *ipv4FlowPutKey)
             sctpKey.sctp_src = ipv4FlowPutKey->l4.tpSrc;
             sctpKey.sctp_dst = ipv4FlowPutKey->l4.tpDst;
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_SCTP,
-                                   (PCHAR)(&sctpKey),
-                                   sizeof(sctpKey))) {
+                                    (PCHAR)(&sctpKey),
+                                    sizeof(sctpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1034,13 +1066,12 @@ _MapFlowIpv4KeyToNlKey(PNL_BUFFER nlBuf, IpKey *ipv4FlowPutKey)
 
         case IPPROTO_ICMP: {
             struct ovs_key_icmp icmpKey;
-            /* XXX: revisit to see if htons is needed */
-            icmpKey.icmp_type = (__u8)(ipv4FlowPutKey->l4.tpSrc);
-            icmpKey.icmp_code = (__u8)(ipv4FlowPutKey->l4.tpDst);
+            icmpKey.icmp_type = (__u8)ntohs(ipv4FlowPutKey->l4.tpSrc);
+            icmpKey.icmp_code = (__u8)ntohs(ipv4FlowPutKey->l4.tpDst);
 
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ICMP,
-                                   (PCHAR)(&icmpKey),
-                                   sizeof(icmpKey))) {
+                                    (PCHAR)(&icmpKey),
+                                    sizeof(icmpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1080,8 +1111,8 @@ _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
     ipv6Key.ipv6_frag = ipv6FlowPutKey->nwFrag;
 
     if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_IPV6,
-                           (PCHAR)(&ipv6Key),
-                           sizeof(ipv6Key))) {
+                            (PCHAR)(&ipv6Key),
+                            sizeof(ipv6Key))) {
         rc = STATUS_UNSUCCESSFUL;
         goto done;
     }
@@ -1092,8 +1123,8 @@ _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
             tcpKey.tcp_src = ipv6FlowPutKey->l4.tpSrc;
             tcpKey.tcp_dst = ipv6FlowPutKey->l4.tpDst;
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_TCP,
-                                   (PCHAR)(&tcpKey),
-                                   sizeof(tcpKey))) {
+                                    (PCHAR)(&tcpKey),
+                                    sizeof(tcpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1105,8 +1136,8 @@ _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
             udpKey.udp_src = ipv6FlowPutKey->l4.tpSrc;
             udpKey.udp_dst = ipv6FlowPutKey->l4.tpDst;
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_UDP,
-                                   (PCHAR)(&udpKey),
-                                   sizeof(udpKey))) {
+                                    (PCHAR)(&udpKey),
+                                    sizeof(udpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1118,8 +1149,8 @@ _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
             sctpKey.sctp_src = ipv6FlowPutKey->l4.tpSrc;
             sctpKey.sctp_dst = ipv6FlowPutKey->l4.tpDst;
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_SCTP,
-                                   (PCHAR)(&sctpKey),
-                                   sizeof(sctpKey))) {
+                                    (PCHAR)(&sctpKey),
+                                    sizeof(sctpKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1130,13 +1161,12 @@ _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
             struct ovs_key_icmpv6 icmpV6Key;
             struct ovs_key_nd ndKey;
 
-            /* XXX: revisit to see if htons is needed */
-            icmpV6Key.icmpv6_type = (__u8)(icmpv6FlowPutKey->l4.tpSrc);
-            icmpV6Key.icmpv6_code = (__u8)(icmpv6FlowPutKey->l4.tpDst);
+            icmpV6Key.icmpv6_type = (__u8)ntohs(icmpv6FlowPutKey->l4.tpSrc);
+            icmpV6Key.icmpv6_code = (__u8)ntohs(icmpv6FlowPutKey->l4.tpDst);
 
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ICMPV6,
-                                   (PCHAR)(&icmpV6Key),
-                                   sizeof(icmpV6Key))) {
+                                    (PCHAR)(&icmpV6Key),
+                                    sizeof(icmpV6Key))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1148,8 +1178,8 @@ _MapFlowIpv6KeyToNlKey(PNL_BUFFER nlBuf, Ipv6Key *ipv6FlowPutKey,
             RtlCopyMemory(&(ndKey.nd_tll), &icmpv6FlowPutKey->arpTha,
                           ETH_ADDR_LEN);
             if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ND,
-                                   (PCHAR)(&ndKey),
-                                   sizeof(ndKey))) {
+                                    (PCHAR)(&ndKey),
+                                    sizeof(ndKey))) {
                 rc = STATUS_UNSUCCESSFUL;
                 goto done;
             }
@@ -1197,8 +1227,8 @@ _MapFlowArpKeyToNlKey(PNL_BUFFER nlBuf, ArpKey *arpFlowPutKey)
     arpKey.arp_op = htons(arpFlowPutKey->nwProto);
 
     if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_ARP,
-                           (PCHAR)(&arpKey),
-                           sizeof(arpKey))) {
+                            (PCHAR)(&arpKey),
+                            sizeof(arpKey))) {
         rc = STATUS_UNSUCCESSFUL;
         goto done;
     }
@@ -1348,6 +1378,14 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
 {
     _MapTunAttrToFlowPut(keyAttrs, tunnelAttrs, destKey);
 
+    if (keyAttrs[OVS_KEY_ATTR_RECIRC_ID]) {
+        destKey->recircId = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_RECIRC_ID]);
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_DP_HASH]) {
+        destKey->dpHash = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_DP_HASH]);
+    }
+
     /* ===== L2 headers ===== */
     destKey->l2.inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
 
@@ -1411,6 +1449,13 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
                 ipv4FlowPutKey->l4.tpDst = sctpKey->sctp_dst;
             }
 
+            if (keyAttrs[OVS_KEY_ATTR_ICMP]) {
+                const struct ovs_key_icmp *icmpKey;
+                icmpKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_ICMP]);
+                ipv4FlowPutKey->l4.tpSrc = htons(icmpKey->icmp_type);
+                ipv4FlowPutKey->l4.tpDst = htons(icmpKey->icmp_code);
+            }
+
             destKey->l2.keyLen += OVS_IP_KEY_SIZE;
         }
         break;
@@ -1462,8 +1507,8 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
 
                 icmpv6Key = NlAttrGet(keyAttrs[OVS_KEY_ATTR_ICMPV6]);
 
-                icmp6FlowPutKey->l4.tpSrc = icmpv6Key->icmpv6_type;
-                icmp6FlowPutKey->l4.tpDst = icmpv6Key->icmpv6_code;
+                icmp6FlowPutKey->l4.tpSrc = htons(icmpv6Key->icmpv6_type);
+                icmp6FlowPutKey->l4.tpDst = htons(icmpv6Key->icmpv6_code);
 
                 if (keyAttrs[OVS_KEY_ATTR_ND]) {
                     const struct ovs_key_nd *ndKey;
@@ -1526,7 +1571,7 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
             mplsFlowPutKey->pad[1] = 0;
             mplsFlowPutKey->pad[2] = 0;
             mplsFlowPutKey->pad[3] = 0;
-            destKey->l2.keyLen += sizeof(MplsKey);
+            destKey->l2.keyLen += OVS_MPLS_KEY_SIZE;
         }
         break;
     }
@@ -1690,7 +1735,7 @@ OvsFlowUsed(OvsFlow *flow,
     LARGE_INTEGER tickCount;
 
     KeQueryTickCount(&tickCount);
-    flow->used = tickCount.QuadPart * ovsTimeIncrementPerTick;
+    flow->used = tickCount.QuadPart;
     flow->packetCount++;
     flow->byteCount += OvsPacketLenNBL(packet);
     flow->tcpFlags |= OvsGetTcpFlags(packet, &flow->key, layers);
@@ -1713,6 +1758,23 @@ DeleteAllFlows(OVS_DATAPATH *datapath)
             RemoveFlow(datapath, &flow);
         }
     }
+}
+
+NDIS_STATUS
+OvsGetFlowMetadata(OvsFlowKey *key,
+                   PNL_ATTR *keyAttrs)
+{
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+
+    if (keyAttrs[OVS_KEY_ATTR_RECIRC_ID]) {
+        key->recircId = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_RECIRC_ID]);
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_DP_HASH]) {
+        key->dpHash = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_DP_HASH]);
+    }
+
+    return status;
 }
 
 /*
@@ -1971,7 +2033,7 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
 }
 
 __inline BOOLEAN
-FlowEqual(UINT64 *src, UINT64 *dst, UINT32 size)
+FlowMemoryEqual(UINT64 *src, UINT64 *dst, UINT32 size)
 {
     UINT32 i;
     ASSERT((size & 0x7) == 0);
@@ -1985,6 +2047,22 @@ FlowEqual(UINT64 *src, UINT64 *dst, UINT32 size)
     return TRUE;
 }
 
+__inline BOOLEAN
+FlowEqual(OvsFlow *srcFlow,
+         const OvsFlowKey *dstKey,
+         UINT8 *dstStart,
+         UINT64 hash,
+         UINT32 offset,
+         UINT16 size)
+{
+    return (srcFlow->hash == hash &&
+            srcFlow->key.l2.val == dstKey->l2.val &&
+            srcFlow->key.recircId == dstKey->recircId &&
+            srcFlow->key.dpHash == dstKey->dpHash &&
+            FlowMemoryEqual((UINT64 *)((UINT8 *)&srcFlow->key + offset),
+                            (UINT64 *) dstStart,
+                            size));
+}
 
 /*
  * ----------------------------------------------------------------------------
@@ -2072,6 +2150,12 @@ OvsLookupFlow(OVS_DATAPATH *datapath,
 
     if (!hashValid) {
         *hash = OvsJhashBytes(start, size, 0);
+        if (key->recircId) {
+            *hash = OvsJhashWords((UINT32*)hash, 1, key->recircId);
+        }
+        if (key->dpHash) {
+            *hash = OvsJhashWords((UINT32*)hash, 1, key->dpHash);
+        }
     }
 
     head = &datapath->flowTable[HASH_BUCKET(*hash)];
@@ -2079,10 +2163,7 @@ OvsLookupFlow(OVS_DATAPATH *datapath,
     while (link != head) {
         OvsFlow *flow = CONTAINING_RECORD(link, OvsFlow, ListEntry);
 
-        if (flow->hash == *hash &&
-            flow->key.l2.val == key->l2.val &&
-            FlowEqual((UINT64 *)((uint8 *)&flow->key + offset),
-                         (UINT64 *)start, size)) {
+        if (FlowEqual(flow, key, start, *hash, offset, size)) {
             return flow;
         }
         link = link->Flink;
@@ -2219,14 +2300,14 @@ ReportFlowInfo(OvsFlow *flow,
     if (getFlags & FLOW_GET_KEY) {
         // always copy the tunnel key part
         RtlCopyMemory(&info->key, &flow->key,
-                            flow->key.l2.keyLen + flow->key.l2.offset);
+                      flow->key.l2.keyLen + flow->key.l2.offset);
     }
 
     if (getFlags & FLOW_GET_STATS) {
         OvsFlowStats *stats = &info->stats;
         stats->packetCount = flow->packetCount;
         stats->byteCount = flow->byteCount;
-        stats->used = (UINT32)flow->used;
+        stats->used = flow->used;
         stats->tcpFlags = flow->tcpFlags;
     }
 
@@ -2238,6 +2319,9 @@ ReportFlowInfo(OvsFlow *flow,
             info->actionsLen = flow->actionsLen;
         }
     }
+
+    info->key.recircId = flow->key.recircId;
+    info->key.dpHash = flow->key.dpHash;
 
     return status;
 }
@@ -2318,22 +2402,24 @@ HandleFlowPut(OvsFlowPut *put,
             return STATUS_UNSUCCESSFUL;
         }
 
+#if DBG
         /* Validate the flow addition */
         {
             UINT64 newHash;
             OvsFlow *flow = OvsLookupFlow(datapath, &put->key, &newHash,
-                                                                    FALSE);
+                                          FALSE);
             ASSERT(flow);
             ASSERT(newHash == hash);
             if (!flow || newHash != hash) {
                 return STATUS_UNSUCCESSFUL;
             }
         }
+#endif
     } else {
         stats->packetCount = KernelFlow->packetCount;
         stats->byteCount = KernelFlow->byteCount;
         stats->tcpFlags = KernelFlow->tcpFlags;
-        stats->used = (UINT32)KernelFlow->used;
+        stats->used = KernelFlow->used;
 
         if (mayModify) {
             OvsFlow *newFlow;
@@ -2342,29 +2428,22 @@ HandleFlowPut(OvsFlowPut *put,
                 return STATUS_UNSUCCESSFUL;
             }
 
-            KernelFlow = OvsLookupFlow(datapath, &put->key, &hash, TRUE);
-            if (KernelFlow)  {
-                if ((put->flags & OVSWIN_FLOW_PUT_CLEAR) == 0) {
-                    newFlow->packetCount = KernelFlow->packetCount;
-                    newFlow->byteCount = KernelFlow->byteCount;
-                    newFlow->tcpFlags = KernelFlow->tcpFlags;
-                }
-                RemoveFlow(datapath, &KernelFlow);
-            }  else  {
-                if ((put->flags & OVSWIN_FLOW_PUT_CLEAR) == 0)  {
-                    newFlow->packetCount = stats->packetCount;
-                    newFlow->byteCount = stats->byteCount;
-                    newFlow->tcpFlags = stats->tcpFlags;
-                }
+            if ((put->flags & OVSWIN_FLOW_PUT_CLEAR) == 0) {
+                newFlow->packetCount = KernelFlow->packetCount;
+                newFlow->byteCount = KernelFlow->byteCount;
+                newFlow->tcpFlags = KernelFlow->tcpFlags;
+                newFlow->used = KernelFlow->used;
             }
+            RemoveFlow(datapath, &KernelFlow);
             status = AddFlow(datapath, newFlow);
             ASSERT(status == STATUS_SUCCESS);
 
+#if DBG
             /* Validate the flow addition */
             {
                 UINT64 newHash;
                 OvsFlow *testflow = OvsLookupFlow(datapath, &put->key,
-                                                            &newHash, FALSE);
+                                                  &newHash, FALSE);
                 ASSERT(testflow);
                 ASSERT(newHash == hash);
                 if (!testflow || newHash != hash) {
@@ -2372,15 +2451,15 @@ HandleFlowPut(OvsFlowPut *put,
                     return STATUS_UNSUCCESSFUL;
                 }
             }
+#endif
         } else {
             if (mayDelete) {
                 if (KernelFlow) {
                     RemoveFlow(datapath, &KernelFlow);
                 }
             } else {
-                /* Return success if an identical flow already exists. */
-                /* XXX: should we return EEXIST in a netlink error? */
-                return STATUS_SUCCESS;
+                /* Return duplicate if an identical flow already exists. */
+                return STATUS_DUPLICATE_NAME;
             }
         }
     }
@@ -2408,7 +2487,7 @@ OvsPrepareFlow(OvsFlow **flow,
         localFlow->actionsLen = put->actionsLen;
         if (put->actionsLen) {
             NdisMoveMemory((PUCHAR)localFlow->actions, put->actions,
-                                       put->actionsLen);
+                           put->actionsLen);
         }
         localFlow->userActionsLen = 0;  // 0 indicate no conversion is made
         localFlow->used = 0;
@@ -2532,7 +2611,7 @@ OvsTunKeyAttrSize(void)
  *----------------------------------------------------------------------------
  *  OvsProbeSupportedFeature --
  *    Verifies if the probed feature is supported.
- * 
+ *
  * Results:
  *   STATUS_SUCCESS if the probed feature is supported.
  *----------------------------------------------------------------------------
@@ -2571,8 +2650,15 @@ OvsProbeSupportedFeature(POVS_MESSAGE msgIn,
             OVS_LOG_ERROR("Wrong ethertype for MPLS attribute.");
             status = STATUS_INVALID_PARAMETER;
         }
+    } else if (keyAttrs[OVS_KEY_ATTR_RECIRC_ID]) {
+        UINT32 recircId = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_RECIRC_ID]);
+
+        if (!recircId) {
+            OVS_LOG_ERROR("Invalid recirculation ID.");
+            status = STATUS_INVALID_PARAMETER;
+        }
     } else {
-        OVS_LOG_ERROR("Probed feature not supported.");
+        OVS_LOG_ERROR("Feature not supported.");
         status = STATUS_INVALID_PARAMETER;
     }
 

@@ -21,7 +21,7 @@
 
 #include "bitmap.h"
 #include "column.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "monitor.h"
 #include "json.h"
 #include "jsonrpc.h"
@@ -254,7 +254,7 @@ ovsdb_jsonrpc_server_add_remote(struct ovsdb_jsonrpc_server *svr,
     remote = xmalloc(sizeof *remote);
     remote->server = svr;
     remote->listener = listener;
-    list_init(&remote->sessions);
+    ovs_list_init(&remote->sessions);
     remote->dscp = options->dscp;
     shash_add(&svr->remotes, name, remote);
 
@@ -298,8 +298,8 @@ ovsdb_jsonrpc_server_get_remote_status(
 
     if (remote->listener) {
         status->bound_port = pstream_get_bound_port(remote->listener);
-        status->is_connected = !list_is_empty(&remote->sessions);
-        status->n_connections = list_size(&remote->sessions);
+        status->is_connected = !ovs_list_is_empty(&remote->sessions);
+        status->n_connections = ovs_list_size(&remote->sessions);
         return true;
     }
 
@@ -427,7 +427,7 @@ ovsdb_jsonrpc_session_create(struct ovsdb_jsonrpc_remote *remote,
     s = xzalloc(sizeof *s);
     ovsdb_session_init(&s->up, &remote->server->up);
     s->remote = remote;
-    list_push_back(&remote->sessions, &s->node);
+    ovs_list_push_back(&remote->sessions, &s->node);
     hmap_init(&s->triggers);
     hmap_init(&s->monitors);
     s->js = js;
@@ -449,7 +449,7 @@ ovsdb_jsonrpc_session_close(struct ovsdb_jsonrpc_session *s)
     hmap_destroy(&s->triggers);
 
     jsonrpc_session_close(s->js);
-    list_remove(&s->node);
+    ovs_list_remove(&s->node);
     s->remote->server->n_sessions--;
     ovsdb_session_destroy(&s->up);
     free(s);
@@ -607,12 +607,12 @@ ovsdb_jsonrpc_active_session_get_status(
     const struct ovs_list *sessions = &remote->sessions;
     const struct ovsdb_jsonrpc_session *s;
 
-    if (list_is_empty(sessions)) {
+    if (ovs_list_is_empty(sessions)) {
         return false;
     }
 
-    ovs_assert(list_is_singleton(sessions));
-    s = CONTAINER_OF(list_front(sessions), struct ovsdb_jsonrpc_session, node);
+    ovs_assert(ovs_list_is_singleton(sessions));
+    s = CONTAINER_OF(ovs_list_front(sessions), struct ovsdb_jsonrpc_session, node);
     ovsdb_jsonrpc_session_get_status(s, status);
     status->n_connections = 1;
 
@@ -1046,7 +1046,7 @@ ovsdb_jsonrpc_trigger_complete_all(struct ovsdb_jsonrpc_session *s)
 static void
 ovsdb_jsonrpc_trigger_complete_done(struct ovsdb_jsonrpc_session *s)
 {
-    while (!list_is_empty(&s->up.completions)) {
+    while (!ovs_list_is_empty(&s->up.completions)) {
         struct ovsdb_jsonrpc_trigger *t
             = CONTAINER_OF(s->up.completions.next,
                            struct ovsdb_jsonrpc_trigger, trigger.node);

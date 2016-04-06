@@ -24,7 +24,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include "dp-packet.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovstest.h"
 #include "packets.h"
 #include "openvswitch/vlog.h"

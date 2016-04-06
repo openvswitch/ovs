@@ -23,7 +23,7 @@
 #include <stdint.h>
 #include <string.h>
 #include "compiler.h"
-#include "geneve.h"
+#include "openvswitch/geneve.h"
 #include "openvswitch/types.h"
 #include "odp-netlink.h"
 #include "random.h"
@@ -984,6 +984,22 @@ in6_addr_solicited_node(struct in6_addr *addr, const struct in6_addr *ip6)
     taddr->be16[5] = htons(0x1);
     taddr->be16[6] = htons(0xff00);
     memcpy(&addr->s6_addr[13], &ip6->s6_addr[13], 3);
+}
+
+/*
+ * Generates ipv6 link local address from the given eth addr
+ * with prefix 'fe80::/64' and stores it in 'lla'
+ */
+static inline void
+in6_generate_lla(struct eth_addr ea, struct in6_addr *lla)
+{
+    union ovs_16aligned_in6_addr *taddr = (void *) lla;
+    memset(taddr->be16, 0, sizeof(taddr->be16));
+    taddr->be16[0] = htons(0xfe80);
+    taddr->be16[4] = htons(((ea.ea[0] ^ 0x02) << 8) | ea.ea[1]);
+    taddr->be16[5] = htons(ea.ea[2] << 8 | 0x00ff);
+    taddr->be16[6] = htons(0xfe << 8 | ea.ea[3]);
+    taddr->be16[7] = ea.be16[2];
 }
 
 static inline void

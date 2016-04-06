@@ -26,7 +26,7 @@
 #include "bundle.h"
 #include "byte-order.h"
 #include "classifier.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "learn.h"
 #include "meta-flow.h"
 #include "multipath.h"
@@ -34,11 +34,10 @@
 #include "nx-match.h"
 #include "id-pool.h"
 #include "ofp-actions.h"
-#include "ofp-errors.h"
 #include "ofp-msgs.h"
 #include "ofp-prop.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/netronome-ext.h"
 #include "packets.h"
 #include "pktbuf.h"
@@ -46,6 +45,7 @@
 #include "tun-metadata.h"
 #include "unaligned.h"
 #include "type-props.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 #include "bitmap.h"
 
@@ -1879,7 +1879,7 @@ void
 ofputil_append_meter_config(struct ovs_list *replies,
                             const struct ofputil_meter_config *mc)
 {
-    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *msg = ofpbuf_from_list(ovs_list_back(replies));
     size_t start_ofs = msg->size;
     struct ofp13_meter_config *reply;
 
@@ -2418,8 +2418,8 @@ ofputil_start_queue_get_config_reply(const struct ofp_header *request,
         OVS_NOT_REACHED();
     }
 
-    list_init(replies);
-    list_push_back(replies, &reply->list_node);
+    ovs_list_init(replies);
+    ovs_list_push_back(replies, &reply->list_node);
 }
 
 static void
@@ -2450,7 +2450,7 @@ ofputil_append_queue_get_config_reply(const struct ofputil_queue_config *qc,
                                       struct ovs_list *replies)
 {
     enum ofp_version ofp_version = ofpmp_version(replies);
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     size_t start_ofs = reply->size;
     size_t len_ofs;
     ovs_be16 *len;
@@ -2995,7 +2995,7 @@ void
 ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
                                 struct ovs_list *replies)
 {
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     size_t start_ofs = reply->size;
     enum ofp_version version = ofpmp_version(replies);
     enum ofpraw raw = ofpmp_decode_raw(replies);
@@ -4535,7 +4535,7 @@ void
 ofputil_append_port_desc_stats_reply(const struct ofputil_phy_port *pp,
                                      struct ovs_list *replies)
 {
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     size_t start_ofs = reply->size;
 
     ofputil_put_phy_port(ofpmp_version(replies), pp, reply);
@@ -5403,7 +5403,7 @@ void
 ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
                                     struct ovs_list *replies)
 {
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     enum ofp_version version = ofpmp_version(replies);
     size_t start_ofs = reply->size;
     struct ofp13_table_features *otf;
@@ -5549,7 +5549,7 @@ ofputil_append_table_desc_reply(const struct ofputil_table_desc *td,
                                 struct ovs_list *replies,
                                 enum ofp_version version)
 {
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     size_t start_otd;
     struct ofp14_table_desc *otd;
 
@@ -6744,8 +6744,8 @@ ofputil_start_flow_update(struct ovs_list *replies)
     msg = ofpraw_alloc_xid(OFPRAW_NXST_FLOW_MONITOR_REPLY, OFP10_VERSION,
                            htonl(0), 1024);
 
-    list_init(replies);
-    list_push_back(replies, &msg->list_node);
+    ovs_list_init(replies);
+    ovs_list_push_back(replies, &msg->list_node);
 }
 
 void
@@ -6757,7 +6757,7 @@ ofputil_append_flow_update(const struct ofputil_flow_update *update,
     struct ofpbuf *msg;
     size_t start_ofs;
 
-    msg = ofpbuf_from_list(list_back(replies));
+    msg = ofpbuf_from_list(ovs_list_back(replies));
     start_ofs = msg->size;
 
     if (update->event == NXFME_ABBREV) {
@@ -7828,7 +7828,7 @@ ofputil_bucket_clone_list(struct ovs_list *dest, const struct ovs_list *src,
         }
 
         new_bucket = ofputil_bucket_clone_data(bucket);
-        list_push_back(dest, &new_bucket->list_node);
+        ovs_list_push_back(dest, &new_bucket->list_node);
     }
 }
 
@@ -7880,7 +7880,7 @@ ofputil_bucket_list_front(const struct ovs_list *buckets)
 {
     static struct ofputil_bucket *bucket;
 
-    ASSIGN_CONTAINER(bucket, list_front(buckets), list_node);
+    ASSIGN_CONTAINER(bucket, ovs_list_front(buckets), list_node);
 
     return bucket;
 }
@@ -7892,7 +7892,7 @@ ofputil_bucket_list_back(const struct ovs_list *buckets)
 {
     static struct ofputil_bucket *bucket;
 
-    ASSIGN_CONTAINER(bucket, list_back(buckets), list_node);
+    ASSIGN_CONTAINER(bucket, ovs_list_back(buckets), list_node);
 
     return bucket;
 }
@@ -8318,7 +8318,7 @@ ofputil_append_ofp11_group_desc_reply(const struct ofputil_group_desc *gds,
                                       struct ovs_list *replies,
                                       enum ofp_version version)
 {
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     struct ofp11_group_desc_stats *ogds;
     struct ofputil_bucket *bucket;
     size_t start_ogds;
@@ -8342,7 +8342,7 @@ ofputil_append_ofp15_group_desc_reply(const struct ofputil_group_desc *gds,
                                       struct ovs_list *replies,
                                       enum ofp_version version)
 {
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     struct ofp15_group_desc_stats *ogds;
     struct ofputil_bucket *bucket;
     size_t start_ogds, start_buckets;
@@ -8406,7 +8406,7 @@ ofputil_pull_ofp11_buckets(struct ofpbuf *msg, size_t buckets_length,
     struct ofp11_bucket *ob;
     uint32_t bucket_id = 0;
 
-    list_init(buckets);
+    ovs_list_init(buckets);
     while (buckets_length > 0) {
         struct ofputil_bucket *bucket;
         struct ofpbuf ofpacts;
@@ -8457,7 +8457,7 @@ ofputil_pull_ofp11_buckets(struct ofpbuf *msg, size_t buckets_length,
 
         bucket->ofpacts = ofpbuf_steal_data(&ofpacts);
         bucket->ofpacts_len = ofpacts.size;
-        list_push_back(buckets, &bucket->list_node);
+        ovs_list_push_back(buckets, &bucket->list_node);
     }
 
     return 0;
@@ -8470,7 +8470,7 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
 {
     struct ofp15_bucket *ob;
 
-    list_init(buckets);
+    ovs_list_init(buckets);
     while (buckets_length > 0) {
         struct ofputil_bucket *bucket = NULL;
         struct ofpbuf ofpacts;
@@ -8570,7 +8570,7 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
 
         bucket->ofpacts = ofpbuf_steal_data(&ofpacts);
         bucket->ofpacts_len = ofpacts.size;
-        list_push_back(buckets, &bucket->list_node);
+        ovs_list_push_back(buckets, &bucket->list_node);
 
         continue;
 
@@ -9042,7 +9042,7 @@ ofputil_pull_ofp11_group_mod(struct ofpbuf *msg, enum ofp_version ofp_version,
     if (!error
         && ofp_version >= OFP13_VERSION
         && gm->command == OFPGC11_DELETE
-        && !list_is_empty(&gm->buckets)) {
+        && !ovs_list_is_empty(&gm->buckets)) {
         error = OFPERR_OFPGMFC_INVALID_GROUP;
     }
 
@@ -9140,7 +9140,8 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
 
     switch (gm->type) {
     case OFPGT11_INDIRECT:
-        if (!list_is_singleton(&gm->buckets)) {
+        if (gm->command != OFPGC11_DELETE
+            && !ovs_list_is_singleton(&gm->buckets) ) {
             return OFPERR_OFPGMFC_INVALID_GROUP;
         }
         break;
@@ -9159,7 +9160,7 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     case OFPGC15_INSERT_BUCKET:
         break;
     case OFPGC15_REMOVE_BUCKET:
-        if (!list_is_empty(&gm->buckets)) {
+        if (!ovs_list_is_empty(&gm->buckets)) {
             return OFPERR_OFPGMFC_BAD_BUCKET;
         }
         break;
@@ -9764,7 +9765,7 @@ static enum ofperr
 decode_tlv_table_mappings(struct ofpbuf *msg, unsigned int max_fields,
                              struct ovs_list *mappings)
 {
-    list_init(mappings);
+    ovs_list_init(mappings);
 
     while (msg->size) {
         struct nx_tlv_map *nx_map;
@@ -9772,7 +9773,7 @@ decode_tlv_table_mappings(struct ofpbuf *msg, unsigned int max_fields,
 
         nx_map = ofpbuf_pull(msg, sizeof *nx_map);
         map = xmalloc(sizeof *map);
-        list_push_back(mappings, &map->list_node);
+        ovs_list_push_back(mappings, &map->list_node);
 
         map->option_class = ntohs(nx_map->option_class);
         map->option_type = nx_map->option_type;

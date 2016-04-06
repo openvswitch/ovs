@@ -16,13 +16,13 @@
 
 /* OpenFlow protocol string to flow parser. */
 
-#ifndef OFP_PARSE_H
-#define OFP_PARSE_H 1
+#ifndef OPENVSWITCH_OFP_PARSE_H
+#define OPENVSWITCH_OFP_PARSE_H 1
 
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "compiler.h"
+#include "openvswitch/compiler.h"
 #include "openvswitch/types.h"
 
 struct flow;

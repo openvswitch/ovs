@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef OFP_ERRORS_H
-#define OFP_ERRORS_H 1
+#ifndef OPENVSWITCH_OFP_ERRORS_H
+#define OPENVSWITCH_OFP_ERRORS_H 1
 
 #include <stdbool.h>
 #include <stddef.h>

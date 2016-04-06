@@ -7,7 +7,7 @@ m4_define([OVN_NBCTL_TEST_START],
    AT_CHECK([ovsdb-tool create ovn-nb.db $abs_top_srcdir/ovn/ovn-nb.ovsschema])
 
    dnl Start ovsdb-server.
-   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock ovn-nb.db], [0], [], [stderr])
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/ovnnb_db.sock ovn-nb.db], [0], [], [stderr])
    on_exit "kill `cat ovsdb-server.pid`"
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d
@@ -26,7 +26,7 @@ m4_define([OVN_NBCTL_TEST_STOP],
    # database will fail with 'Broken pipe' error.
    AT_CHECK([check_logs "$1
 /Broken pipe/d"])
-   AT_CHECK([ovs-appctl -t ovsdb-server exit])])
+   OVS_APP_EXIT_AND_WAIT([ovsdb-server])])
 
 
 AT_SETUP([ovn-nbctl - basic lswitch commands])

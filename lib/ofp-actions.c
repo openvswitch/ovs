@@ -20,21 +20,22 @@
 #include "ofp-actions.h"
 #include "bundle.h"
 #include "byte-order.h"
+#include "colors.h"
 #include "compiler.h"
 #include "dummy.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hmap.h"
 #include "learn.h"
 #include "meta-flow.h"
 #include "multipath.h"
 #include "nx-match.h"
 #include "odp-netlink.h"
-#include "ofp-parse.h"
 #include "ofp-prop.h"
 #include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "unaligned.h"
 #include "util.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_actions);
@@ -560,7 +561,8 @@ static void
 format_OUTPUT(const struct ofpact_output *a, struct ds *s)
 {
     if (ofp_to_u16(a->port) < ofp_to_u16(OFPP_MAX)) {
-        ds_put_format(s, "output:%"PRIu16, a->port);
+        ds_put_format(s, "%soutput:%s%"PRIu16,
+                      colors.special, colors.end, a->port);
     } else {
         ofputil_format_port(a->port, s);
         if (a->port == OFPP_CONTROLLER) {
@@ -601,7 +603,8 @@ parse_GROUP(char *arg, struct ofpbuf *ofpacts,
 static void
 format_GROUP(const struct ofpact_group *a, struct ds *s)
 {
-    ds_put_format(s, "group:%"PRIu32, a->group_id);
+    ds_put_format(s, "%sgroup:%s%"PRIu32,
+                  colors.special, colors.end, a->group_id);
 }
 
 /* Action structure for NXAST_CONTROLLER.
@@ -871,34 +874,37 @@ format_CONTROLLER(const struct ofpact_controller *a, struct ds *s)
 {
     if (a->reason == OFPR_ACTION && !a->controller_id && !a->userdata_len
         && !a->pause) {
-        ds_put_format(s, "CONTROLLER:%"PRIu16, a->max_len);
+        ds_put_format(s, "%sCONTROLLER:%s%"PRIu16,
+                      colors.special, colors.end, a->max_len);
     } else {
         enum ofp_packet_in_reason reason = a->reason;
 
-        ds_put_cstr(s, "controller(");
+        ds_put_format(s, "%scontroller(%s", colors.paren, colors.end);
         if (reason != OFPR_ACTION) {
             char reasonbuf[OFPUTIL_PACKET_IN_REASON_BUFSIZE];
 
-            ds_put_format(s, "reason=%s,",
+            ds_put_format(s, "%sreason=%s%s,", colors.param, colors.end,
                           ofputil_packet_in_reason_to_string(
                               reason, reasonbuf, sizeof reasonbuf));
         }
         if (a->max_len != UINT16_MAX) {
-            ds_put_format(s, "max_len=%"PRIu16",", a->max_len);
+            ds_put_format(s, "%smax_len=%s%"PRIu16",",
+                          colors.param, colors.end, a->max_len);
         }
         if (a->controller_id != 0) {
-            ds_put_format(s, "id=%"PRIu16",", a->controller_id);
+            ds_put_format(s, "%sid=%s%"PRIu16",",
+                          colors.param, colors.end, a->controller_id);
         }
         if (a->userdata_len) {
-            ds_put_cstr(s, "userdata=");
+            ds_put_format(s, "%suserdata=%s", colors.param, colors.end);
             format_hex_arg(s, a->userdata, a->userdata_len);
             ds_put_char(s, ',');
         }
         if (a->pause) {
-            ds_put_cstr(s, "pause,");
+            ds_put_format(s, "%spause%s,", colors.value, colors.end);
         }
         ds_chomp(s, ',');
-        ds_put_char(s, ')');
+        ds_put_format(s, "%s)%s", colors.paren, colors.end);
     }
 }
 
@@ -971,7 +977,7 @@ parse_ENQUEUE(char *arg, struct ofpbuf *ofpacts,
 static void
 format_ENQUEUE(const struct ofpact_enqueue *a, struct ds *s)
 {
-    ds_put_format(s, "enqueue:");
+    ds_put_format(s, "%senqueue:%s", colors.param, colors.end);
     ofputil_format_port(a->port, s);
     ds_put_format(s, ":%"PRIu32, a->queue);
 }
@@ -1114,7 +1120,7 @@ parse_OUTPUT_REG(const char *arg, struct ofpbuf *ofpacts,
 static void
 format_OUTPUT_REG(const struct ofpact_output_reg *a, struct ds *s)
 {
-    ds_put_cstr(s, "output:");
+    ds_put_format(s, "%soutput:%s", colors.special, colors.end);
     mf_format_subfield(&a->src, s);
 }
 
@@ -1256,8 +1262,7 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
         bundle = ofpacts->header;
     }
 
-    ofpact_finish(ofpacts, &bundle->ofpact);
-
+    bundle = ofpact_finish(ofpacts, &bundle->ofpact);
     if (!error) {
         error = bundle_check(bundle, OFPP_MAX, NULL);
     }
@@ -1416,9 +1421,9 @@ parse_SET_VLAN_VID(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SET_VLAN_VID(const struct ofpact_vlan_vid *a, struct ds *s)
 {
-    ds_put_format(s, "%s:%"PRIu16,
+    ds_put_format(s, "%s%s:%s%"PRIu16, colors.param,
                   a->push_vlan_if_needed ? "mod_vlan_vid" : "set_vlan_vid",
-                  a->vlan_vid);
+                  colors.end, a->vlan_vid);
 }
 
 /* Set PCP actions. */
@@ -1506,9 +1511,9 @@ parse_SET_VLAN_PCP(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SET_VLAN_PCP(const struct ofpact_vlan_pcp *a, struct ds *s)
 {
-    ds_put_format(s, "%s:%"PRIu8,
+    ds_put_format(s, "%s%s:%s%"PRIu8, colors.param,
                   a->push_vlan_if_needed ? "mod_vlan_pcp" : "set_vlan_pcp",
-                  a->vlan_pcp);
+                  colors.end, a->vlan_pcp);
 }
 
 /* Strip VLAN actions. */
@@ -1556,9 +1561,10 @@ parse_pop_vlan(struct ofpbuf *ofpacts)
 static void
 format_STRIP_VLAN(const struct ofpact_null *a, struct ds *s)
 {
-    ds_put_cstr(s, (a->ofpact.raw == OFPAT_RAW11_POP_VLAN
-                    ? "pop_vlan"
-                    : "strip_vlan"));
+    ds_put_format(s, (a->ofpact.raw == OFPAT_RAW11_POP_VLAN
+                    ? "%spop_vlan%s"
+                    : "%sstrip_vlan%s"),
+                  colors.value, colors.end);
 }
 
 /* Push VLAN action. */
@@ -1615,7 +1621,8 @@ static void
 format_PUSH_VLAN(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
 {
     /* XXX 802.1AD case*/
-    ds_put_format(s, "push_vlan:%#"PRIx16, ETH_TYPE_VLAN_8021Q);
+    ds_put_format(s, "%spush_vlan:%s%#"PRIx16,
+                  colors.param, colors.end, ETH_TYPE_VLAN_8021Q);
 }
 
 /* Action structure for OFPAT10_SET_DL_SRC/DST and OFPAT11_SET_DL_SRC/DST. */
@@ -1697,13 +1704,15 @@ parse_SET_ETH_DST(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SET_ETH_SRC(const struct ofpact_mac *a, struct ds *s)
 {
-    ds_put_format(s, "mod_dl_src:"ETH_ADDR_FMT, ETH_ADDR_ARGS(a->mac));
+    ds_put_format(s, "%smod_dl_src:%s"ETH_ADDR_FMT,
+                  colors.param, colors.end, ETH_ADDR_ARGS(a->mac));
 }
 
 static void
 format_SET_ETH_DST(const struct ofpact_mac *a, struct ds *s)
 {
-    ds_put_format(s, "mod_dl_dst:"ETH_ADDR_FMT, ETH_ADDR_ARGS(a->mac));
+    ds_put_format(s, "%smod_dl_dst:%s"ETH_ADDR_FMT,
+                  colors.param, colors.end, ETH_ADDR_ARGS(a->mac));
 }
 
 /* Set IPv4 address actions. */
@@ -1773,13 +1782,15 @@ parse_SET_IPV4_DST(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SET_IPV4_SRC(const struct ofpact_ipv4 *a, struct ds *s)
 {
-    ds_put_format(s, "mod_nw_src:"IP_FMT, IP_ARGS(a->ipv4));
+    ds_put_format(s, "%smod_nw_src:%s"IP_FMT,
+                  colors.param, colors.end, IP_ARGS(a->ipv4));
 }
 
 static void
 format_SET_IPV4_DST(const struct ofpact_ipv4 *a, struct ds *s)
 {
-    ds_put_format(s, "mod_nw_dst:"IP_FMT, IP_ARGS(a->ipv4));
+    ds_put_format(s, "%smod_nw_dst:%s"IP_FMT,
+                  colors.param, colors.end, IP_ARGS(a->ipv4));
 }
 
 /* Set IPv4/v6 TOS actions. */
@@ -1831,7 +1842,7 @@ parse_SET_IP_DSCP(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SET_IP_DSCP(const struct ofpact_dscp *a, struct ds *s)
 {
-    ds_put_format(s, "mod_nw_tos:%d", a->dscp);
+    ds_put_format(s, "%smod_nw_tos:%s%d", colors.param, colors.end, a->dscp);
 }
 
 /* Set IPv4/v6 ECN actions. */
@@ -1885,7 +1896,8 @@ parse_SET_IP_ECN(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SET_IP_ECN(const struct ofpact_ecn *a, struct ds *s)
 {
-    ds_put_format(s, "mod_nw_ecn:%d", a->ecn);
+    ds_put_format(s, "%smod_nw_ecn:%s%d",
+                  colors.param, colors.end, a->ecn);
 }
 
 /* Set IPv4/v6 TTL actions. */
@@ -1929,7 +1941,7 @@ parse_SET_IP_TTL(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SET_IP_TTL(const struct ofpact_ip_ttl *a, struct ds *s)
 {
-    ds_put_format(s, "mod_nw_ttl:%d", a->ttl);
+    ds_put_format(s, "%smod_nw_ttl:%s%d", colors.param, colors.end, a->ttl);
 }
 
 /* Set TCP/UDP/SCTP port actions. */
@@ -2012,13 +2024,13 @@ parse_SET_L4_DST_PORT(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SET_L4_SRC_PORT(const struct ofpact_l4_port *a, struct ds *s)
 {
-    ds_put_format(s, "mod_tp_src:%d", a->port);
+    ds_put_format(s, "%smod_tp_src:%s%d", colors.param, colors.end, a->port);
 }
 
 static void
 format_SET_L4_DST_PORT(const struct ofpact_l4_port *a, struct ds *s)
 {
-    ds_put_format(s, "mod_tp_dst:%d", a->port);
+    ds_put_format(s, "%smod_tp_dst:%s%d", colors.param, colors.end, a->port);
 }
 
 /* Action structure for OFPAT_COPY_FIELD. */
@@ -2901,15 +2913,18 @@ format_SET_FIELD(const struct ofpact_set_field *a, struct ds *s)
 
         dst.ofs = dst.n_bits = 0;
         while (next_load_segment(a, &dst, &value)) {
-            ds_put_format(s, "load:%#"PRIx64"->", value);
+            ds_put_format(s, "%sload:%s%#"PRIx64"%s->%s",
+                          colors.special, colors.end, value,
+                          colors.special, colors.end);
             mf_format_subfield(&dst, s);
             ds_put_char(s, ',');
         }
         ds_chomp(s, ',');
     } else {
-        ds_put_cstr(s, "set_field:");
+        ds_put_format(s, "%sset_field:%s", colors.special, colors.end);
         mf_format(a->field, &a->value, &a->mask, s);
-        ds_put_format(s, "->%s", a->field->name);
+        ds_put_format(s, "%s->%s%s",
+                      colors.special, colors.end, a->field->name);
     }
 }
 
@@ -3194,16 +3209,16 @@ format_DEC_TTL(const struct ofpact_cnt_ids *a, struct ds *s)
 {
     size_t i;
 
-    ds_put_cstr(s, "dec_ttl");
+    ds_put_format(s, "%sdec_ttl%s", colors.paren, colors.end);
     if (a->ofpact.raw == NXAST_RAW_DEC_TTL_CNT_IDS) {
-        ds_put_cstr(s, "(");
+        ds_put_format(s, "%s(%s", colors.paren, colors.end);
         for (i = 0; i < a->n_controllers; i++) {
             if (i) {
                 ds_put_cstr(s, ",");
             }
             ds_put_format(s, "%"PRIu16, a->cnt_ids[i]);
         }
-        ds_put_cstr(s, ")");
+        ds_put_format(s, "%s)%s", colors.paren, colors.end);
     }
 }
 
@@ -3247,7 +3262,9 @@ parse_SET_MPLS_LABEL(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SET_MPLS_LABEL(const struct ofpact_mpls_label *a, struct ds *s)
 {
-    ds_put_format(s, "set_mpls_label(%"PRIu32")", ntohl(a->label));
+    ds_put_format(s, "%sset_mpls_label(%s%"PRIu32"%s)%s",
+                  colors.paren, colors.end, ntohl(a->label),
+                  colors.paren, colors.end);
 }
 
 /* Set MPLS TC actions. */
@@ -3289,7 +3306,9 @@ parse_SET_MPLS_TC(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SET_MPLS_TC(const struct ofpact_mpls_tc *a, struct ds *s)
 {
-    ds_put_format(s, "set_mpls_ttl(%"PRIu8")", a->tc);
+    ds_put_format(s, "%sset_mpls_ttl(%s%"PRIu8"%s)%s",
+                  colors.paren, colors.end, a->tc,
+                  colors.paren, colors.end);
 }
 
 /* Set MPLS TTL actions. */
@@ -3332,7 +3351,9 @@ parse_SET_MPLS_TTL(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SET_MPLS_TTL(const struct ofpact_mpls_ttl *a, struct ds *s)
 {
-    ds_put_format(s, "set_mpls_ttl(%"PRIu8")", a->ttl);
+    ds_put_format(s, "%sset_mpls_ttl(%s%"PRIu8"%s)%s",
+                  colors.paren, colors.end, a->ttl,
+                  colors.paren, colors.end);
 }
 
 /* Decrement MPLS TTL actions. */
@@ -3362,7 +3383,7 @@ parse_DEC_MPLS_TTL(char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
 static void
 format_DEC_MPLS_TTL(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
 {
-    ds_put_cstr(s, "dec_mpls_ttl");
+    ds_put_format(s, "%sdec_mpls_ttl%s", colors.value, colors.end);
 }
 
 /* Push MPLS label action. */
@@ -3407,7 +3428,8 @@ parse_PUSH_MPLS(char *arg, struct ofpbuf *ofpacts,
 static void
 format_PUSH_MPLS(const struct ofpact_push_mpls *a, struct ds *s)
 {
-    ds_put_format(s, "push_mpls:0x%04"PRIx16, ntohs(a->ethertype));
+    ds_put_format(s, "%spush_mpls:%s0x%04"PRIx16,
+                  colors.param, colors.end, ntohs(a->ethertype));
 }
 
 /* Pop MPLS label action. */
@@ -3445,7 +3467,8 @@ parse_POP_MPLS(char *arg, struct ofpbuf *ofpacts,
 static void
 format_POP_MPLS(const struct ofpact_pop_mpls *a, struct ds *s)
 {
-    ds_put_format(s, "pop_mpls:0x%04"PRIx16, ntohs(a->ethertype));
+    ds_put_format(s, "%spop_mpls:%s0x%04"PRIx16,
+                  colors.param, colors.end, ntohs(a->ethertype));
 }
 
 /* Set tunnel ID actions. */
@@ -3511,10 +3534,10 @@ parse_SET_TUNNEL(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SET_TUNNEL(const struct ofpact_tunnel *a, struct ds *s)
 {
-    ds_put_format(s, "set_tunnel%s:%#"PRIx64,
+    ds_put_format(s, "%sset_tunnel%s:%s%#"PRIx64, colors.param,
                   (a->tun_id > UINT32_MAX
                    || a->ofpact.raw == NXAST_RAW_SET_TUNNEL64 ? "64" : ""),
-                  a->tun_id);
+                  colors.end, a->tun_id);
 }
 
 /* Set queue action. */
@@ -3545,7 +3568,8 @@ parse_SET_QUEUE(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SET_QUEUE(const struct ofpact_queue *a, struct ds *s)
 {
-    ds_put_format(s, "set_queue:%"PRIu32, a->queue_id);
+    ds_put_format(s, "%sset_queue:%s%"PRIu32,
+                  colors.param, colors.end, a->queue_id);
 }
 
 /* Pop queue action. */
@@ -3575,7 +3599,7 @@ parse_POP_QUEUE(const char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
 static void
 format_POP_QUEUE(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
 {
-    ds_put_cstr(s, "pop_queue");
+    ds_put_format(s, "%spop_queue%s", colors.value, colors.end);
 }
 
 /* Action structure for NXAST_FIN_TIMEOUT.
@@ -3664,15 +3688,17 @@ parse_FIN_TIMEOUT(char *arg, struct ofpbuf *ofpacts,
 static void
 format_FIN_TIMEOUT(const struct ofpact_fin_timeout *a, struct ds *s)
 {
-    ds_put_cstr(s, "fin_timeout(");
+    ds_put_format(s, "%sfin_timeout(%s", colors.paren, colors.end);
     if (a->fin_idle_timeout) {
-        ds_put_format(s, "idle_timeout=%"PRIu16",", a->fin_idle_timeout);
+        ds_put_format(s, "%sidle_timeout=%s%"PRIu16",",
+                      colors.param, colors.end, a->fin_idle_timeout);
     }
     if (a->fin_hard_timeout) {
-        ds_put_format(s, "hard_timeout=%"PRIu16",", a->fin_hard_timeout);
+        ds_put_format(s, "%shard_timeout=%s%"PRIu16",",
+                      colors.param, colors.end, a->fin_hard_timeout);
     }
     ds_chomp(s, ',');
-    ds_put_char(s, ')');
+    ds_put_format(s, "%s)%s", colors.paren, colors.end);
 }
 
 /* Action structures for NXAST_RESUBMIT and NXAST_RESUBMIT_TABLE.
@@ -3823,10 +3849,10 @@ static void
 format_RESUBMIT(const struct ofpact_resubmit *a, struct ds *s)
 {
     if (a->in_port != OFPP_IN_PORT && a->table_id == 255) {
-        ds_put_cstr(s, "resubmit:");
+        ds_put_format(s, "%sresubmit:%s", colors.special, colors.end);
         ofputil_format_port(a->in_port, s);
     } else {
-        ds_put_format(s, "resubmit(");
+        ds_put_format(s, "%sresubmit(%s", colors.paren, colors.end);
         if (a->in_port != OFPP_IN_PORT) {
             ofputil_format_port(a->in_port, s);
         }
@@ -3834,7 +3860,7 @@ format_RESUBMIT(const struct ofpact_resubmit *a, struct ds *s)
         if (a->table_id != 255) {
             ds_put_format(s, "%"PRIu8, a->table_id);
         }
-        ds_put_char(s, ')');
+        ds_put_format(s, "%s)%s", colors.paren, colors.end);
     }
 }
 
@@ -4342,8 +4368,10 @@ encode_CONJUNCTION(const struct ofpact_conjunction *oc,
 static void
 format_CONJUNCTION(const struct ofpact_conjunction *oc, struct ds *s)
 {
-    ds_put_format(s, "conjunction(%"PRIu32",%"PRIu8"/%"PRIu8")",
-                  oc->id, oc->clause + 1, oc->n_clauses);
+    ds_put_format(s, "%sconjunction(%s%"PRIu32",%"PRIu8"/%"PRIu8"%s)%s",
+                  colors.paren, colors.end,
+                  oc->id, oc->clause + 1, oc->n_clauses,
+                  colors.paren, colors.end);
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -4565,7 +4593,7 @@ parse_NOTE(const char *arg, struct ofpbuf *ofpacts,
 static void
 format_NOTE(const struct ofpact_note *a, struct ds *s)
 {
-    ds_put_cstr(s, "note:");
+    ds_put_format(s, "%snote:%s", colors.param, colors.end);
     format_hex_arg(s, a->data, a->length);
 }
 
@@ -4596,7 +4624,7 @@ parse_EXIT(char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
 static void
 format_EXIT(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
 {
-    ds_put_cstr(s, "exit");
+    ds_put_format(s, "%sexit%s", colors.special, colors.end);
 }
 
 /* Unroll xlate action. */
@@ -4620,8 +4648,12 @@ parse_UNROLL_XLATE(char *arg OVS_UNUSED, struct ofpbuf *ofpacts OVS_UNUSED,
 static void
 format_UNROLL_XLATE(const struct ofpact_unroll_xlate *a, struct ds *s)
 {
-    ds_put_format(s, "unroll_xlate(table=%"PRIu8", cookie=%"PRIu64")",
-                  a->rule_table_id, ntohll(a->rule_cookie));
+    ds_put_format(s, "%sunroll_xlate(%s%stable=%s%"PRIu8
+                  ", %scookie=%s%"PRIu64"%s)%s",
+                  colors.paren,   colors.end,
+                  colors.special, colors.end, a->rule_table_id,
+                  colors.param,   colors.end, ntohll(a->rule_cookie),
+                  colors.paren,   colors.end);
 }
 
 /* Action structure for NXAST_SAMPLE.
@@ -4725,10 +4757,16 @@ parse_SAMPLE(char *arg, struct ofpbuf *ofpacts,
 static void
 format_SAMPLE(const struct ofpact_sample *a, struct ds *s)
 {
-    ds_put_format(s, "sample(probability=%"PRIu16",collector_set_id=%"PRIu32
-                  ",obs_domain_id=%"PRIu32",obs_point_id=%"PRIu32")",
-                  a->probability, a->collector_set_id,
-                  a->obs_domain_id, a->obs_point_id);
+    ds_put_format(s, "%ssample(%s%sprobability=%s%"PRIu16
+                  ",%scollector_set_id=%s%"PRIu32
+                  ",%sobs_domain_id=%s%"PRIu32
+                  ",%sobs_point_id=%s%"PRIu32"%s)%s",
+                  colors.paren, colors.end,
+                  colors.param, colors.end, a->probability,
+                  colors.param, colors.end, a->collector_set_id,
+                  colors.param, colors.end, a->obs_domain_id,
+                  colors.param, colors.end, a->obs_point_id,
+                  colors.paren, colors.end);
 }
 
 /* debug_recirc instruction. */
@@ -4771,7 +4809,7 @@ parse_DEBUG_RECIRC(char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
 static void
 format_DEBUG_RECIRC(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
 {
-    ds_put_cstr(s, "debug_recirc");
+    ds_put_format(s, "%sdebug_recirc%s", colors.value, colors.end);
 }
 
 /* Action structure for NXAST_CT.
@@ -4956,7 +4994,7 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
 
     conntrack = ofpbuf_push_uninit(out, sizeof(*conntrack));
     out->header = &conntrack->ofpact;
-    ofpact_finish(out, &conntrack->ofpact);
+    conntrack = ofpact_finish(out, &conntrack->ofpact);
 
     if (conntrack->ofpact.len > sizeof(*conntrack)
         && !(conntrack->flags & NX_CT_F_COMMIT)) {
@@ -5086,9 +5124,9 @@ static void
 format_alg(int port, struct ds *s)
 {
     if (port == IPPORT_FTP) {
-        ds_put_format(s, "alg=ftp,");
+        ds_put_format(s, "%salg=%sftp,", colors.param, colors.end);
     } else if (port) {
-        ds_put_format(s, "alg=%d,", port);
+        ds_put_format(s, "%salg=%s%d,", colors.param, colors.end, port);
     }
 }
 
@@ -5097,19 +5135,21 @@ static void format_NAT(const struct ofpact_nat *a, struct ds *ds);
 static void
 format_CT(const struct ofpact_conntrack *a, struct ds *s)
 {
-    ds_put_cstr(s, "ct(");
+    ds_put_format(s, "%sct(%s", colors.paren, colors.end);
     if (a->flags & NX_CT_F_COMMIT) {
-        ds_put_cstr(s, "commit,");
+        ds_put_format(s, "%scommit%s,", colors.value, colors.end);
     }
     if (a->recirc_table != NX_CT_RECIRC_NONE) {
-        ds_put_format(s, "table=%"PRIu8",", a->recirc_table);
+        ds_put_format(s, "%stable=%s%"PRIu8",",
+                      colors.special, colors.end, a->recirc_table);
     }
     if (a->zone_src.field) {
-        ds_put_format(s, "zone=");
+        ds_put_format(s, "%szone=%s", colors.param, colors.end);
         mf_format_subfield(&a->zone_src, s);
         ds_put_char(s, ',');
     } else if (a->zone_imm) {
-        ds_put_format(s, "zone=%"PRIu16",", a->zone_imm);
+        ds_put_format(s, "%szone=%s%"PRIu16",",
+                      colors.param, colors.end, a->zone_imm);
     }
     /* If the first action is a NAT action, format it outside of the 'exec'
      * envelope. */
@@ -5122,13 +5162,13 @@ format_CT(const struct ofpact_conntrack *a, struct ds *s)
         action = ofpact_next(action);
     }
     if (actions_len) {
-        ds_put_cstr(s, "exec(");
+        ds_put_format(s, "%sexec(%s", colors.paren, colors.end);
         ofpacts_format(action, actions_len, s);
-        ds_put_cstr(s, "),");
+        ds_put_format(s, "%s),%s", colors.paren, colors.end);
     }
     format_alg(a->alg, s);
     ds_chomp(s, ',');
-    ds_put_char(s, ')');
+    ds_put_format(s, "%s)%s", colors.paren, colors.end);
 }
 
 /* NAT action. */
@@ -5304,14 +5344,15 @@ decode_NXAST_RAW_NAT(const struct nx_action_nat *nan,
 static void
 format_NAT(const struct ofpact_nat *a, struct ds *ds)
 {
-    ds_put_cstr(ds, "nat");
+    ds_put_format(ds, "%snat%s", colors.paren, colors.end);
 
     if (a->flags & (NX_NAT_F_SRC | NX_NAT_F_DST)) {
-        ds_put_char(ds, '(');
-        ds_put_cstr(ds, a->flags & NX_NAT_F_SRC ? "src" : "dst");
+        ds_put_format(ds, "%s(%s", colors.paren, colors.end);
+        ds_put_format(ds, a->flags & NX_NAT_F_SRC ? "%ssrc%s" : "%sdst%s",
+                      colors.param, colors.end);
 
         if (a->range_af != AF_UNSPEC) {
-            ds_put_cstr(ds, "=");
+            ds_put_format(ds, "%s=%s", colors.param, colors.end);
 
             if (a->range_af == AF_INET) {
                 ds_put_format(ds, IP_FMT, IP_ARGS(a->range.addr.ipv4.min));
@@ -5345,17 +5386,18 @@ format_NAT(const struct ofpact_nat *a, struct ds *ds)
             ds_put_char(ds, ',');
 
             if (a->flags & NX_NAT_F_PERSISTENT) {
-                ds_put_cstr(ds, "persistent,");
+                ds_put_format(ds, "%spersistent%s,",
+                              colors.value, colors.end);
             }
             if (a->flags & NX_NAT_F_PROTO_HASH) {
-                ds_put_cstr(ds, "hash,");
+                ds_put_format(ds, "%shash%s,", colors.value, colors.end);
             }
             if (a->flags & NX_NAT_F_PROTO_RANDOM) {
-                ds_put_cstr(ds, "random,");
+                ds_put_format(ds, "%srandom%s,", colors.value, colors.end);
             }
         }
         ds_chomp(ds, ',');
-        ds_put_char(ds, ')');
+        ds_put_format(ds, "%s)%s", colors.paren, colors.end);
     }
 }
 
@@ -5493,7 +5535,8 @@ parse_METER(char *arg, struct ofpbuf *ofpacts,
 static void
 format_METER(const struct ofpact_meter *a, struct ds *s)
 {
-    ds_put_format(s, "meter:%"PRIu32, a->meter_id);
+    ds_put_format(s, "%smeter:%s%"PRIu32,
+                  colors.param, colors.end, a->meter_id);
 }
 
 /* Clear-Actions instruction. */
@@ -5519,7 +5562,7 @@ parse_CLEAR_ACTIONS(char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
 static void
 format_CLEAR_ACTIONS(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
 {
-    ds_put_cstr(s, "clear_actions");
+    ds_put_format(s, "%sclear_actions%s", colors.value, colors.end);
 }
 
 /* Write-Actions instruction. */
@@ -5574,9 +5617,9 @@ parse_WRITE_ACTIONS(char *arg, struct ofpbuf *ofpacts,
 static void
 format_WRITE_ACTIONS(const struct ofpact_nest *a, struct ds *s)
 {
-    ds_put_cstr(s, "write_actions(");
+    ds_put_format(s, "%swrite_actions(%s", colors.paren, colors.end);
     ofpacts_format(a->actions, ofpact_nest_get_action_len(a), s);
-    ds_put_char(s, ')');
+    ds_put_format(s, "%s)%s", colors.paren, colors.end);
 }
 
 /* Action structure for NXAST_WRITE_METADATA.
@@ -5658,7 +5701,8 @@ parse_WRITE_METADATA(char *arg, struct ofpbuf *ofpacts,
 static void
 format_WRITE_METADATA(const struct ofpact_metadata *a, struct ds *s)
 {
-    ds_put_format(s, "write_metadata:%#"PRIx64, ntohll(a->metadata));
+    ds_put_format(s, "%swrite_metadata:%s%#"PRIx64,
+                  colors.param, colors.end, ntohll(a->metadata));
     if (a->mask != OVS_BE64_MAX) {
         ds_put_format(s, "/%#"PRIx64, ntohll(a->mask));
     }
@@ -5700,7 +5744,8 @@ parse_GOTO_TABLE(char *arg, struct ofpbuf *ofpacts,
 static void
 format_GOTO_TABLE(const struct ofpact_goto_table *a, struct ds *s)
 {
-    ds_put_format(s, "goto_table:%"PRIu8, a->table_id);
+    ds_put_format(s, "%sgoto_table:%s%"PRIu8,
+                  colors.param, colors.end, a->table_id);
 }
 
 static void
@@ -7357,13 +7402,13 @@ ofpacts_format(const struct ofpact *ofpacts, size_t ofpacts_len,
                struct ds *string)
 {
     if (!ofpacts_len) {
-        ds_put_cstr(string, "drop");
+        ds_put_format(string, "%sdrop%s", colors.drop, colors.end);
     } else {
         const struct ofpact *a;
 
         OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
             if (a != ofpacts) {
-                ds_put_cstr(string, ",");
+                ds_put_char(string, ',');
             }
 
             /* XXX write-actions */
@@ -7397,8 +7442,11 @@ ofpact_init(struct ofpact *ofpact, enum ofpact_type type, size_t len)
 /* Finishes composing a variable-length action (begun using
  * ofpact_put_<NAME>()), by padding the action to a multiple of OFPACT_ALIGNTO
  * bytes and updating its embedded length field.  See the large comment near
- * the end of ofp-actions.h for more information. */
-void
+ * the end of ofp-actions.h for more information.
+ *
+ * May reallocate 'ofpacts'. Callers should consider updating their 'ofpact'
+ * pointer to the return value of this function. */
+void *
 ofpact_finish(struct ofpbuf *ofpacts, struct ofpact *ofpact)
 {
     ptrdiff_t len;
@@ -7408,6 +7456,8 @@ ofpact_finish(struct ofpbuf *ofpacts, struct ofpact *ofpact)
     ovs_assert(len > 0 && len <= UINT16_MAX);
     ofpact->len = len;
     ofpbuf_padto(ofpacts, OFPACT_ALIGN(ofpacts->size));
+
+    return ofpacts->header;
 }
 
 static char * OVS_WARN_UNUSED_RESULT

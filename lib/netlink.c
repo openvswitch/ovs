@@ -23,7 +23,7 @@
 #include "coverage.h"
 #include "flow.h"
 #include "netlink-protocol.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "timeval.h"
 #include "unaligned.h"
 #include "openvswitch/vlog.h"
