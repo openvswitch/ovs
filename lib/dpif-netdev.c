@@ -495,8 +495,6 @@ static void dp_netdev_destroy_all_pmds(struct dp_netdev *dp);
 static void dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id);
 static void dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id);
 static void dp_netdev_pmd_clear_poll_list(struct dp_netdev_pmd_thread *pmd);
-static void dp_netdev_del_port_from_pmd(struct dp_netdev_port *port,
-                                        struct dp_netdev_pmd_thread *pmd);
 static void dp_netdev_del_port_from_all_pmds(struct dp_netdev *dp,
                                              struct dp_netdev_port *port);
 static void
@@ -3012,11 +3010,11 @@ dp_netdev_pmd_clear_poll_list(struct dp_netdev_pmd_thread *pmd)
     ovs_mutex_unlock(&pmd->poll_mutex);
 }
 
-/* Deletes all rx queues of 'port' from poll_list of pmd thread and
- * reloads it if poll_list was changed. */
-static void
-dp_netdev_del_port_from_pmd(struct dp_netdev_port *port,
-                            struct dp_netdev_pmd_thread *pmd)
+/* Deletes all rx queues of 'port' from poll_list of pmd thread.  Returns true
+ * if 'port' was found in 'pmd' (therefore a restart is required). */
+static bool
+dp_netdev_del_port_from_pmd__(struct dp_netdev_port *port,
+                              struct dp_netdev_pmd_thread *pmd)
 {
     struct rxq_poll *poll, *next;
     bool found = false;
@@ -3031,8 +3029,30 @@ dp_netdev_del_port_from_pmd(struct dp_netdev_port *port,
         }
     }
     ovs_mutex_unlock(&pmd->poll_mutex);
-    if (found) {
-        dp_netdev_reload_pmd__(pmd);
+
+    return found;
+}
+
+/* Deletes all rx queues of 'port' from all pmd threads.  The pmd threads that
+ * need to be restarted are inserted in 'to_reload'. */
+static void
+dp_netdev_del_port_from_all_pmds__(struct dp_netdev *dp,
+                                   struct dp_netdev_port *port,
+                                   struct hmapx *to_reload)
+{
+    int numa_id = netdev_get_numa_id(port->netdev);
+    struct dp_netdev_pmd_thread *pmd;
+
+    CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
+        if (pmd->numa_id == numa_id) {
+            bool found;
+
+            found = dp_netdev_del_port_from_pmd__(port, pmd);
+
+            if (found) {
+                hmapx_add(to_reload, pmd);
+            }
+       }
     }
 }
 
@@ -3042,15 +3062,20 @@ static void
 dp_netdev_del_port_from_all_pmds(struct dp_netdev *dp,
                                  struct dp_netdev_port *port)
 {
-    int numa_id = netdev_get_numa_id(port->netdev);
     struct dp_netdev_pmd_thread *pmd;
+    struct hmapx to_reload = HMAPX_INITIALIZER(&to_reload);
+    struct hmapx_node *node;
 
-    CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
-        if (pmd->numa_id == numa_id) {
-            dp_netdev_del_port_from_pmd(port, pmd);
-       }
+    dp_netdev_del_port_from_all_pmds__(dp, port, &to_reload);
+
+    HMAPX_FOR_EACH (node, &to_reload) {
+        pmd = (struct dp_netdev_pmd_thread *) node->data;
+        dp_netdev_reload_pmd__(pmd);
     }
+
+    hmapx_destroy(&to_reload);
 }
+
 
 /* Returns PMD thread from this numa node with fewer rx queues to poll.
  * Returns NULL if there is no PMD threads on this numa node.
@@ -3087,18 +3112,16 @@ dp_netdev_add_rxq_to_pmd(struct dp_netdev_pmd_thread *pmd,
     pmd->poll_cnt++;
 }
 
-/* Distributes all rx queues of 'port' between all PMD threads and reloads
- * them if needed. */
+/* Distributes all rx queues of 'port' between all PMD threads in 'dp'. The
+ * pmd threads that need to be restarted are inserted in 'to_reload'. */
 static void
-dp_netdev_add_port_to_pmds(struct dp_netdev *dp, struct dp_netdev_port *port)
+dp_netdev_add_port_to_pmds__(struct dp_netdev *dp, struct dp_netdev_port *port,
+                             struct hmapx *to_reload)
 {
     int numa_id = netdev_get_numa_id(port->netdev);
     struct dp_netdev_pmd_thread *pmd;
-    struct hmapx to_reload;
-    struct hmapx_node *node;
     int i;
 
-    hmapx_init(&to_reload);
     /* Cannot create pmd threads for invalid numa node. */
     ovs_assert(ovs_numa_numa_id_is_valid(numa_id));
 
@@ -3115,8 +3138,20 @@ dp_netdev_add_port_to_pmds(struct dp_netdev *dp, struct dp_netdev_port *port)
         dp_netdev_add_rxq_to_pmd(pmd, port, port->rxq[i]);
         ovs_mutex_unlock(&pmd->poll_mutex);
 
-        hmapx_add(&to_reload, pmd);
+        hmapx_add(to_reload, pmd);
     }
+}
+
+/* Distributes all rx queues of 'port' between all PMD threads in 'dp' and
+ * reloads them, if needed. */
+static void
+dp_netdev_add_port_to_pmds(struct dp_netdev *dp, struct dp_netdev_port *port)
+{
+    struct dp_netdev_pmd_thread *pmd;
+    struct hmapx to_reload = HMAPX_INITIALIZER(&to_reload);
+    struct hmapx_node *node;
+
+    dp_netdev_add_port_to_pmds__(dp, port, &to_reload);
 
     HMAPX_FOR_EACH (node, &to_reload) {
         pmd = (struct dp_netdev_pmd_thread *) node->data;
