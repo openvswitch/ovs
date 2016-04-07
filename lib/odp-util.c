@@ -2081,10 +2081,9 @@ odp_portno_names_get(const struct hmap *portno_names, odp_port_t port_no)
 void
 odp_portno_names_destroy(struct hmap *portno_names)
 {
-    struct odp_portno_names *odp_portno_names, *odp_portno_names_next;
-    HMAP_FOR_EACH_SAFE (odp_portno_names, odp_portno_names_next,
-                        hmap_node, portno_names) {
-        hmap_remove(portno_names, &odp_portno_names->hmap_node);
+    struct odp_portno_names *odp_portno_names;
+
+    HMAP_FOR_EACH_POP (odp_portno_names, hmap_node, portno_names) {
         free(odp_portno_names->name);
         free(odp_portno_names);
     }

@@ -17,7 +17,7 @@ AT_CLEANUP
 
 AT_SETUP([test hash map])
 AT_KEYWORDS([hmap])
-AT_CHECK([ovstest test-hmap], [0], [.........
+AT_CHECK([ovstest test-hmap], [0], [............
 ])
 AT_CLEANUP
 

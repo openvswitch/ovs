@@ -193,6 +193,26 @@ bool hmap_contains(const struct hmap *, const struct hmap_node *);
          (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)) || (NODE = NULL); \
          ASSIGN_CONTAINER(NODE, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER))
 
+static inline struct hmap_node *
+hmap_pop_helper__(struct hmap *hmap, size_t *bucket) {
+
+    for (; *bucket <= hmap->mask; (*bucket)++) {
+        struct hmap_node *node = hmap->buckets[*bucket];
+
+        if (node) {
+            hmap_remove(hmap, node);
+            return node;
+        }
+    }
+
+    return NULL;
+}
+
+#define HMAP_FOR_EACH_POP(NODE, MEMBER, HMAP)                               \
+    for (size_t bucket__ = 0;                                               \
+         INIT_CONTAINER(NODE, hmap_pop_helper__(HMAP, &bucket__), MEMBER),  \
+         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)) || (NODE = NULL);)
+
 static inline struct hmap_node *hmap_first(const struct hmap *);
 static inline struct hmap_node *hmap_next(const struct hmap *,
                                           const struct hmap_node *);

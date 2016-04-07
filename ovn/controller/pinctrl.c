@@ -478,9 +478,8 @@ wait_put_arps(struct controller_ctx *ctx)
 static void
 flush_put_arps(void)
 {
-    struct put_arp *pa, *next;
-    HMAP_FOR_EACH_SAFE (pa, next, hmap_node, &put_arps) {
-        hmap_remove(&put_arps, &pa->hmap_node);
+    struct put_arp *pa;
+    HMAP_FOR_EACH_POP (pa, hmap_node, &put_arps) {
         free(pa);
     }
 }

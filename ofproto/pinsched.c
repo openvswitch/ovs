@@ -257,10 +257,9 @@ void
 pinsched_destroy(struct pinsched *ps)
 {
     if (ps) {
-        struct pinqueue *q, *next;
+        struct pinqueue *q;
 
-        HMAP_FOR_EACH_SAFE (q, next, node, &ps->queues) {
-            hmap_remove(&ps->queues, &q->node);
+        HMAP_FOR_EACH_POP (q, node, &ps->queues) {
             ofpbuf_list_delete(&q->packets);
             free(q);
         }

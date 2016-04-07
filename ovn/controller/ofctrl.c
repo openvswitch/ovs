@@ -567,9 +567,8 @@ ovn_flow_destroy(struct ovn_flow *f)
 static void
 ovn_flow_table_clear(struct hmap *flow_table)
 {
-    struct ovn_flow *f, *next;
-    HMAP_FOR_EACH_SAFE (f, next, hmap_node, flow_table) {
-        hmap_remove(flow_table, &f->hmap_node);
+    struct ovn_flow *f;
+    HMAP_FOR_EACH_POP (f, hmap_node, flow_table) {
         ovn_flow_destroy(f);
     }
 }

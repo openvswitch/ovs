@@ -941,13 +941,12 @@ dpif_ipfix_get_bridge_exporter_tunnel_sampling(const struct dpif_ipfix *di)
 static void
 dpif_ipfix_clear(struct dpif_ipfix *di) OVS_REQUIRES(mutex)
 {
-    struct dpif_ipfix_flow_exporter_map_node *exp_node, *exp_next;
+    struct dpif_ipfix_flow_exporter_map_node *exp_node;
     struct dpif_ipfix_port *dip, *next;
 
     dpif_ipfix_bridge_exporter_clear(&di->bridge_exporter);
 
-    HMAP_FOR_EACH_SAFE (exp_node, exp_next, node, &di->flow_exporter_map) {
-        hmap_remove(&di->flow_exporter_map, &exp_node->node);
+    HMAP_FOR_EACH_POP (exp_node, node, &di->flow_exporter_map) {
         dpif_ipfix_flow_exporter_destroy(&exp_node->exporter);
         free(exp_node);
     }

@@ -269,11 +269,10 @@ void
 lswitch_destroy(struct lswitch *sw)
 {
     if (sw) {
-        struct lswitch_port *node, *next;
+        struct lswitch_port *node;
 
         rconn_destroy(sw->rconn);
-        HMAP_FOR_EACH_SAFE (node, next, hmap_node, &sw->queue_numbers) {
-            hmap_remove(&sw->queue_numbers, &node->hmap_node);
+        HMAP_FOR_EACH_POP (node, hmap_node, &sw->queue_numbers) {
             free(node);
         }
         shash_destroy(&sw->queue_names);

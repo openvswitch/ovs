@@ -188,9 +188,8 @@ struct tnlid_node {
 static void
 destroy_tnlids(struct hmap *tnlids)
 {
-    struct tnlid_node *node, *next;
-    HMAP_FOR_EACH_SAFE (node, next, hmap_node, tnlids) {
-        hmap_remove(tnlids, &node->hmap_node);
+    struct tnlid_node *node;
+    HMAP_FOR_EACH_POP (node, hmap_node, tnlids) {
         free(node);
     }
     hmap_destroy(tnlids);
@@ -2266,7 +2265,7 @@ ovnsb_db_run(struct northd_context *ctx)
     struct lport_hash_node {
         struct hmap_node node;
         const struct nbrec_logical_port *nb;
-    } *hash_node, *hash_node_next;
+    } *hash_node;
 
     hmap_init(&lports_hmap);
 
@@ -2303,8 +2302,7 @@ ovnsb_db_run(struct northd_context *ctx)
         }
     }
 
-    HMAP_FOR_EACH_SAFE(hash_node, hash_node_next, node, &lports_hmap) {
-        hmap_remove(&lports_hmap, &hash_node->node);
+    HMAP_FOR_EACH_POP(hash_node, node, &lports_hmap) {
         free(hash_node);
     }
     hmap_destroy(&lports_hmap);
