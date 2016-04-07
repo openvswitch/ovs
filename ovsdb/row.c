@@ -341,10 +341,9 @@ ovsdb_row_hash_init(struct ovsdb_row_hash *rh,
 void
 ovsdb_row_hash_destroy(struct ovsdb_row_hash *rh, bool destroy_rows)
 {
-    struct ovsdb_row_hash_node *node, *next;
+    struct ovsdb_row_hash_node *node;
 
-    HMAP_FOR_EACH_SAFE (node, next, hmap_node, &rh->rows) {
-        hmap_remove(&rh->rows, &node->hmap_node);
+    HMAP_FOR_EACH_POP (node, hmap_node, &rh->rows) {
         if (destroy_rows) {
             ovsdb_row_destroy(CONST_CAST(struct ovsdb_row *, node->row));
         }

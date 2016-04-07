@@ -2511,10 +2511,9 @@ expr_to_matches(const struct expr *expr,
 void
 expr_matches_destroy(struct hmap *matches)
 {
-    struct expr_match *m, *n;
+    struct expr_match *m;
 
-    HMAP_FOR_EACH_SAFE (m, n, hmap_node, matches) {
-        hmap_remove(matches, &m->hmap_node);
+    HMAP_FOR_EACH_POP (m, hmap_node, matches) {
         free(m->conjunctions);
         free(m);
     }

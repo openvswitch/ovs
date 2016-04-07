@@ -183,10 +183,9 @@ ovsdb_monitor_json_cache_insert(struct ovsdb_monitor *dbmon,
 static void
 ovsdb_monitor_json_cache_flush(struct ovsdb_monitor *dbmon)
 {
-    struct ovsdb_monitor_json_cache_node *node, *next;
+    struct ovsdb_monitor_json_cache_node *node;
 
-    HMAP_FOR_EACH_SAFE(node, next, hmap_node, &dbmon->json_cache) {
-        hmap_remove(&dbmon->json_cache, &node->hmap_node);
+    HMAP_FOR_EACH_POP(node, hmap_node, &dbmon->json_cache) {
         json_destroy(node->json);
         free(node);
     }

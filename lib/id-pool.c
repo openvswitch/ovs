@@ -69,10 +69,9 @@ id_pool_init(struct id_pool *pool, uint32_t base, uint32_t n_ids)
 static void
 id_pool_uninit(struct id_pool *pool)
 {
-    struct id_node *id_node, *next;
+    struct id_node *id_node;
 
-    HMAP_FOR_EACH_SAFE(id_node, next, node, &pool->map) {
-        hmap_remove(&pool->map, &id_node->node);
+    HMAP_FOR_EACH_POP(id_node, node, &pool->map) {
         free(id_node);
     }
 

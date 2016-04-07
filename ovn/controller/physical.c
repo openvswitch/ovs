@@ -723,9 +723,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
 
     ofpbuf_uninit(&ofpacts);
     simap_destroy(&localvif_to_ofport);
-    struct chassis_tunnel *tun_next;
-    HMAP_FOR_EACH_SAFE (tun, tun_next, hmap_node, &tunnels) {
-        hmap_remove(&tunnels, &tun->hmap_node);
+    HMAP_FOR_EACH_POP (tun, hmap_node, &tunnels) {
         free(tun);
     }
     hmap_destroy(&tunnels);

@@ -3851,10 +3851,9 @@ static void
 htb_tc_destroy(struct tc *tc)
 {
     struct htb *htb = CONTAINER_OF(tc, struct htb, tc);
-    struct htb_class *hc, *next;
+    struct htb_class *hc;
 
-    HMAP_FOR_EACH_SAFE (hc, next, tc_queue.hmap_node, &htb->tc.queues) {
-        hmap_remove(&htb->tc.queues, &hc->tc_queue.hmap_node);
+    HMAP_FOR_EACH_POP (hc, tc_queue.hmap_node, &htb->tc.queues) {
         free(hc);
     }
     tc_destroy(tc);

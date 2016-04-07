@@ -59,9 +59,8 @@ lport_index_destroy(struct lport_index *lports)
     /* Destroy all of the "struct lport"s.
      *
      * We don't have to remove the node from both indexes. */
-    struct lport *port, *next;
-    HMAP_FOR_EACH_SAFE (port, next, name_node, &lports->by_name) {
-        hmap_remove(&lports->by_name, &port->name_node);
+    struct lport *port;
+    HMAP_FOR_EACH_POP (port, name_node, &lports->by_name) {
         free(port);
     }
 
