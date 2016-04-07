@@ -65,7 +65,7 @@ typedef struct _OVS_OPEN_INSTANCE {
 
 NDIS_STATUS OvsCreateDeviceObject(NDIS_HANDLE ovsExtDriverHandle);
 VOID OvsDeleteDeviceObject();
-VOID OvsInit();
+NDIS_STATUS OvsInit();
 VOID OvsCleanup();
 
 POVS_OPEN_INSTANCE OvsGetOpenInstance(PFILE_OBJECT fileObject,

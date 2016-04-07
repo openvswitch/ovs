@@ -18,71 +18,61 @@
 #include "Flow.h"
 #include "Jhash.h"
 
-static POVS_DEFERRED_ACTION_QUEUE ovsDeferredActionQueue = NULL;
-static UINT32* ovsDeferredActionLevel = NULL;
+/*
+ * --------------------------------------------------------------------------
+ * '_OVS_DEFERRED_ACTION_QUEUE' structure is responsible for keeping track of
+ * all deferred actions. The maximum number of deferred actions should not
+ * exceed 'DEFERRED_ACTION_QUEUE_SIZE'.
+ * --------------------------------------------------------------------------
+ */
+typedef struct _OVS_DEFERRED_ACTION_QUEUE {
+    UINT32  head;
+    UINT32  tail;
+    OVS_DEFERRED_ACTION deferredActions[DEFERRED_ACTION_QUEUE_SIZE];
+} OVS_DEFERRED_ACTION_QUEUE, *POVS_DEFERRED_ACTION_QUEUE;
+
+typedef struct _OVS_DEFERRED_ACTION_DATA {
+    OVS_DEFERRED_ACTION_QUEUE   queue;
+    UINT32                      level;
+} OVS_DEFERRED_ACTION_DATA, *POVS_DEFERRED_ACTION_DATA;
+
+static POVS_DEFERRED_ACTION_DATA deferredData = NULL;
 
 /*
  * --------------------------------------------------------------------------
- * OvsDeferredActionsQueueAlloc --
- *     The function allocates per-cpu deferred actions queue.
+ * OvsDeferredActionsInit --
+ *     The function allocates all necessary deferred actions resources.
  * --------------------------------------------------------------------------
  */
-BOOLEAN
-OvsDeferredActionsQueueAlloc()
+NTSTATUS
+OvsDeferredActionsInit()
 {
-    ovsDeferredActionQueue =
-        OvsAllocateMemoryPerCpu(sizeof(*ovsDeferredActionQueue),
-                                OVS_RECIRC_POOL_TAG);
-    if (!ovsDeferredActionQueue) {
-        return FALSE;
+    NTSTATUS status = STATUS_SUCCESS;
+    ULONG count = KeQueryMaximumProcessorCountEx(ALL_PROCESSOR_GROUPS);
+
+    deferredData = OvsAllocateMemoryPerCpu(sizeof(*deferredData),
+                                           count,
+                                           OVS_RECIRC_POOL_TAG);
+    if (!deferredData) {
+        status = NDIS_STATUS_RESOURCES;
     }
-    return TRUE;
+
+    return status;
 }
 
 /*
  * --------------------------------------------------------------------------
- * OvsDeferredActionsQueueFree --
- *     The function frees per-cpu deferred actions queue.
+ * OvsDeferredActionsCleanup --
+ *     The function frees all deferred actions resources.
  * --------------------------------------------------------------------------
  */
 VOID
-OvsDeferredActionsQueueFree()
+OvsDeferredActionsCleanup()
 {
-    OvsFreeMemoryWithTag(ovsDeferredActionQueue,
-                         OVS_RECIRC_POOL_TAG);
-    ovsDeferredActionQueue = NULL;
-}
-
-/*
- * --------------------------------------------------------------------------
- * OvsDeferredActionsLevelAlloc --
- *     The function allocates per-cpu deferred actions execution level.
- * --------------------------------------------------------------------------
- */
-BOOLEAN
-OvsDeferredActionsLevelAlloc()
-{
-    ovsDeferredActionLevel =
-        OvsAllocateMemoryPerCpu(sizeof(*ovsDeferredActionLevel),
-                                OVS_RECIRC_POOL_TAG);
-    if (!ovsDeferredActionLevel) {
-        return FALSE;
+    if (deferredData) {
+        OvsFreeMemoryWithTag(deferredData, OVS_RECIRC_POOL_TAG);
+        deferredData = NULL;
     }
-    return TRUE;
-}
-
-/*
- * --------------------------------------------------------------------------
- * OvsDeferredActionsLevelFree --
- *     The function frees per-cpu deferred actions execution level.
- * --------------------------------------------------------------------------
- */
-VOID
-OvsDeferredActionsLevelFree()
-{
-    OvsFreeMemoryWithTag(ovsDeferredActionLevel,
-                         OVS_RECIRC_POOL_TAG);
-    ovsDeferredActionLevel = NULL;
 }
 
 /*
@@ -104,7 +94,7 @@ OvsDeferredActionsQueueGet()
     }
 
     index = KeGetCurrentProcessorNumberEx(NULL);
-    queue = &ovsDeferredActionQueue[index];
+    queue = &deferredData[index].queue;
 
     if (oldIrql < DISPATCH_LEVEL) {
         KeLowerIrql(oldIrql);
@@ -123,7 +113,7 @@ OvsDeferredActionsQueueGet()
 UINT32
 OvsDeferredActionsLevelGet()
 {
-    UINT32 *level = NULL;
+    UINT32 level = 0;
     ULONG index = 0;
     KIRQL oldIrql = KeGetCurrentIrql();
 
@@ -132,13 +122,13 @@ OvsDeferredActionsLevelGet()
     }
 
     index = KeGetCurrentProcessorNumberEx(NULL);
-    level = &ovsDeferredActionLevel[index];
+    level = deferredData[index].level;
 
     if (oldIrql < DISPATCH_LEVEL) {
         KeLowerIrql(oldIrql);
     }
 
-    return *level;
+    return level;
 }
 
 /*
@@ -151,7 +141,6 @@ OvsDeferredActionsLevelGet()
 VOID
 OvsDeferredActionsLevelInc()
 {
-    UINT32 *level = NULL;
     ULONG index = 0;
     KIRQL oldIrql = KeGetCurrentIrql();
 
@@ -160,8 +149,7 @@ OvsDeferredActionsLevelInc()
     }
 
     index = KeGetCurrentProcessorNumberEx(NULL);
-    level = &ovsDeferredActionLevel[index];
-    (*level)++;
+    deferredData[index].level++;
 
     if (oldIrql < DISPATCH_LEVEL) {
         KeLowerIrql(oldIrql);
@@ -178,7 +166,6 @@ OvsDeferredActionsLevelInc()
 VOID
 OvsDeferredActionsLevelDec()
 {
-    UINT32 *level = NULL;
     ULONG index = 0;
     KIRQL oldIrql = KeGetCurrentIrql();
 
@@ -187,8 +174,7 @@ OvsDeferredActionsLevelDec()
     }
 
     index = KeGetCurrentProcessorNumberEx(NULL);
-    level = &ovsDeferredActionLevel[index];
-    (*level)--;
+    deferredData[index].level--;
 
     if (oldIrql < DISPATCH_LEVEL) {
         KeLowerIrql(oldIrql);
@@ -243,7 +229,7 @@ OvsDeferredActionsQueuePop(POVS_DEFERRED_ACTION_QUEUE queue)
         /* Reset the queue for the next packet. */
         OvsDeferredActionsQueueInit(queue);
     } else {
-        deferredAction = &queue->queue[queue->tail++];
+        deferredAction = &queue->deferredActions[queue->tail++];
     }
 
     if (oldIrql < DISPATCH_LEVEL) {
@@ -271,7 +257,7 @@ OvsDeferredActionsQueuePush(POVS_DEFERRED_ACTION_QUEUE queue)
     }
 
     if (queue->head < DEFERRED_ACTION_QUEUE_SIZE) {
-        deferredAction = &queue->queue[queue->head++];
+        deferredAction = &queue->deferredActions[queue->head++];
     }
 
     if (oldIrql < DISPATCH_LEVEL) {

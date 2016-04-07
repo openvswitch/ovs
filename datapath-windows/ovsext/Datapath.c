@@ -379,26 +379,29 @@ FreeUserDumpState(POVS_OPEN_INSTANCE instance)
     }
 }
 
-VOID
+NDIS_STATUS
 OvsInit()
 {
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+
     gOvsCtrlLock = &ovsCtrlLockObj;
     NdisAllocateSpinLock(gOvsCtrlLock);
     OvsInitEventQueue();
-    OvsDeferredActionsQueueAlloc();
-    OvsDeferredActionsLevelAlloc();
+
+    status = OvsPerCpuDataInit();
+
+    return status;
 }
 
 VOID
 OvsCleanup()
 {
+    OvsPerCpuDataCleanup();
     OvsCleanupEventQueue();
     if (gOvsCtrlLock) {
         NdisFreeSpinLock(gOvsCtrlLock);
         gOvsCtrlLock = NULL;
     }
-    OvsDeferredActionsQueueFree();
-    OvsDeferredActionsLevelFree();
 }
 
 VOID
