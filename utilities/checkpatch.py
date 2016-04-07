@@ -56,6 +56,13 @@ skip_trailing_whitespace_check = False
 skip_block_whitespace_check = False
 skip_signoff_check = False
 
+# Don't enforce character limit on files that include these characters in their
+# name, as they may have legitimate reasons to have longer lines.
+#
+# Python isn't checked as flake8 performs these checks during build.
+line_length_blacklist = ['.am', '.at', 'etc', '.in', '.m4', '.mk', '.patch',
+                         '.py']
+
 
 def is_added_line(line):
     """Returns TRUE if the line in question is an added line.
@@ -99,14 +106,23 @@ def ovs_checkpatch_parse(text):
     co_authors = []
     parse = 0
     current_file = ''
+    previous_file = ''
     scissors = re.compile(r'^[\w]*---[\w]*')
     hunks = re.compile('^(---|\+\+\+) (\S+)')
     is_signature = re.compile(r'((\s*Signed-off-by: )(.*))$',
                               re.I | re.M | re.S)
     is_co_author = re.compile(r'(\s*(Co-authored-by: )(.*))$',
                               re.I | re.M | re.S)
+    skip_line_length_check = False
 
     for line in text.split('\n'):
+        if current_file != previous_file:
+            previous_file = current_file
+            if any([fmt in current_file for fmt in line_length_blacklist]):
+                skip_line_length_check = True
+            else:
+                skip_line_length_check = False
+
         lineno = lineno + 1
         if len(line) <= 0:
             continue
@@ -154,7 +170,7 @@ def ovs_checkpatch_parse(text):
             if trailing_whitespace_or_crlf(line[1:]):
                 print_line = True
                 print_warning("Line has trailing whitespace", lineno)
-            if len(line[1:]) > 79:
+            if len(line[1:]) > 79 and not skip_line_length_check:
                 print_line = True
                 print_warning("Line is greater than 79-characters long",
                               lineno)
