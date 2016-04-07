@@ -41,7 +41,7 @@
 VOID *OvsAllocateMemory(size_t size);
 VOID *OvsAllocateMemoryWithTag(size_t size, ULONG tag);
 VOID *OvsAllocateAlignedMemory(size_t size, UINT16 align);
-VOID *OvsAllocateMemoryPerCpu(size_t size, ULONG tag);
+VOID *OvsAllocateMemoryPerCpu(size_t size, size_t count, ULONG tag);
 VOID OvsFreeMemory(VOID *ptr);
 VOID OvsFreeMemoryWithTag(VOID *ptr, ULONG tag);
 VOID OvsFreeAlignedMemory(VOID *ptr);
@@ -93,5 +93,23 @@ VOID OvsAppendList(PLIST_ENTRY dst, PLIST_ENTRY src);
 #define BIT32(_x)                       ((UINT32)0x1 << (_x))
 
 BOOLEAN OvsCompareString(PVOID string1, PVOID string2);
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsPerCpuDataInit --
+ *     The function allocates necessary per-processor resources.
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsPerCpuDataInit();
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsPerCpuDataCleanup --
+ *     The function frees all per-processor resources.
+ * --------------------------------------------------------------------------
+ */
+VOID
+OvsPerCpuDataCleanup();
 
 #endif /* __UTIL_H_ */

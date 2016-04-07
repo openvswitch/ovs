@@ -30,19 +30,6 @@ typedef struct _OVS_DEFERRED_ACTION {
 
 /*
  * --------------------------------------------------------------------------
- * '_OVS_DEFERRED_ACTION_QUEUE' structure is responsible for keeping track of
- * all deferred actions. The maximum number of deferred actions should not
- * exceed 'DEFERRED_ACTION_QUEUE_SIZE'.
- * --------------------------------------------------------------------------
- */
-typedef struct _OVS_DEFERRED_ACTION_QUEUE {
-    UINT32  head;
-    UINT32  tail;
-    OVS_DEFERRED_ACTION queue[DEFERRED_ACTION_QUEUE_SIZE];
-} OVS_DEFERRED_ACTION_QUEUE, *POVS_DEFERRED_ACTION_QUEUE;
-
-/*
- * --------------------------------------------------------------------------
  * OvsProcessDeferredActions --
  *     This function processes all deferred actions contained in the queue
  *     corresponding to the current CPU.
@@ -69,39 +56,21 @@ OvsAddDeferredActions(PNET_BUFFER_LIST packet,
 
 /*
  * --------------------------------------------------------------------------
- * OvsDeferredActionsQueueAlloc --
- *     The function allocates per-cpu deferred actions queue.
+ * OvsDeferredActionsInit --
+ *     The function allocates all necessary deferred actions resources.
  * --------------------------------------------------------------------------
  */
-BOOLEAN
-OvsDeferredActionsQueueAlloc();
+NTSTATUS
+OvsDeferredActionsInit();
 
 /*
  * --------------------------------------------------------------------------
- * OvsDeferredActionsQueueFree --
- *     The function frees per-cpu deferred actions queue.
+ * OvsDeferredActionsCleanup --
+ *     The function frees all deferred actions resources.
  * --------------------------------------------------------------------------
  */
 VOID
-OvsDeferredActionsQueueFree();
-
-/*
- * --------------------------------------------------------------------------
- * OvsDeferredActionsLevelAlloc --
- *     The function allocates per-cpu deferred actions execution level.
- * --------------------------------------------------------------------------
- */
-BOOLEAN
-OvsDeferredActionsLevelAlloc();
-
-/*
- * --------------------------------------------------------------------------
- * OvsDeferredActionsLevelFree --
- *     The function frees per-cpu deferred actions execution level.
- * --------------------------------------------------------------------------
- */
-VOID
-OvsDeferredActionsLevelFree();
+OvsDeferredActionsCleanup();
 
 /*
  * --------------------------------------------------------------------------
