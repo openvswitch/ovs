@@ -430,8 +430,6 @@ struct dp_netdev_pmd_thread {
     struct latch exit_latch;        /* For terminating the pmd thread. */
     atomic_uint change_seq;         /* For reloading pmd ports. */
     pthread_t thread;
-    int index;                      /* Idx of this pmd thread among pmd*/
-                                    /* threads on same numa node. */
     unsigned core_id;               /* CPU core id of this pmd thread. */
     int numa_id;                    /* numa node id of this pmd thread. */
     atomic_int tx_qid;              /* Queue id used by this pmd thread to
@@ -485,8 +483,8 @@ static void dp_netdev_recirculate(struct dp_netdev_pmd_thread *,
 static void dp_netdev_disable_upcall(struct dp_netdev *);
 static void dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd);
 static void dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd,
-                                    struct dp_netdev *dp, int index,
-                                    unsigned core_id, int numa_id);
+                                    struct dp_netdev *dp, unsigned core_id,
+                                    int numa_id);
 static void dp_netdev_destroy_pmd(struct dp_netdev_pmd_thread *pmd);
 static void dp_netdev_set_nonpmd(struct dp_netdev *dp);
 static struct dp_netdev_pmd_thread *dp_netdev_get_pmd(struct dp_netdev *dp,
@@ -2797,8 +2795,7 @@ dp_netdev_set_nonpmd(struct dp_netdev *dp)
     struct dp_netdev_pmd_thread *non_pmd;
 
     non_pmd = xzalloc(sizeof *non_pmd);
-    dp_netdev_configure_pmd(non_pmd, dp, 0, NON_PMD_CORE_ID,
-                            OVS_NUMA_UNSPEC);
+    dp_netdev_configure_pmd(non_pmd, dp, NON_PMD_CORE_ID, OVS_NUMA_UNSPEC);
 }
 
 /* Caller must have valid pointer to 'pmd'. */
@@ -2839,10 +2836,9 @@ dp_netdev_pmd_get_next(struct dp_netdev *dp, struct cmap_position *pos)
 /* Configures the 'pmd' based on the input argument. */
 static void
 dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
-                        int index, unsigned core_id, int numa_id)
+                        unsigned core_id, int numa_id)
 {
     pmd->dp = dp;
-    pmd->index = index;
     pmd->core_id = core_id;
     pmd->numa_id = numa_id;
     pmd->poll_cnt = 0;
@@ -3150,7 +3146,7 @@ dp_netdev_set_pmds_on_numa(struct dp_netdev *dp, int numa_id)
         for (i = 0; i < can_have; i++) {
             unsigned core_id = ovs_numa_get_unpinned_core_on_numa(numa_id);
             pmds[i] = xzalloc(sizeof **pmds);
-            dp_netdev_configure_pmd(pmds[i], dp, i, core_id, numa_id);
+            dp_netdev_configure_pmd(pmds[i], dp, core_id, numa_id);
         }
 
         /* Distributes rx queues of this numa node between new pmd threads. */
