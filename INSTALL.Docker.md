@@ -150,7 +150,7 @@ ovn-nbctl --db=tcp:$CENTRAL_IP:6640 lswitch-list
 * Docker creates your logical port and attaches it to the logical network
 in a single step.
 
-For e.g., to attach a logical port to network 'foo' inside cotainer busybox,
+For e.g., to attach a logical port to network 'foo' inside container busybox,
 run:
 
 ```
