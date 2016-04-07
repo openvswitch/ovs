@@ -190,7 +190,14 @@ static const char *
 get_chassis_id(const struct ovsdb_idl *ovs_idl)
 {
     const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(ovs_idl);
-    return cfg ? smap_get(&cfg->external_ids, "system-id") : NULL;
+    const char *chassis_id = cfg ? smap_get(&cfg->external_ids, "system-id") : NULL;
+
+    if (!chassis_id) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "'system-id' in Open_vSwitch database is missing.");
+    }
+
+    return chassis_id;
 }
 
 /* Retrieves the OVN Southbound remote location from the
