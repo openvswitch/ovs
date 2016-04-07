@@ -2617,44 +2617,62 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
     }
 }
 
+static int
+port_reconfigure(struct dp_netdev_port *port)
+{
+    struct netdev *netdev = port->netdev;
+    int requested_n_rxq = netdev_requested_n_rxq(netdev);
+    int i, err;
+
+    if (!netdev_is_pmd(port->netdev)
+        || port->latest_requested_n_rxq != requested_n_rxq) {
+        return 0;
+    }
+
+    /* Closes the existing 'rxq's. */
+    for (i = 0; i < port->n_rxq; i++) {
+        netdev_rxq_close(port->rxq[i]);
+        port->rxq[i] = NULL;
+    }
+    port->n_rxq = 0;
+
+    /* Sets the new rx queue config. */
+    err = netdev_set_multiq(port->netdev, ovs_numa_get_n_cores() + 1,
+                            requested_n_rxq);
+    if (err && (err != EOPNOTSUPP)) {
+        VLOG_ERR("Failed to set dpdk interface %s rx_queue to: %u",
+                 netdev_get_name(port->netdev), requested_n_rxq);
+        return err;
+    }
+    /* If the set_multiq() above succeeds, reopens the 'rxq's. */
+    port->rxq = xrealloc(port->rxq, sizeof *port->rxq * netdev_n_rxq(netdev));
+    for (i = 0; i < netdev_n_rxq(netdev); i++) {
+        err = netdev_rxq_open(netdev, &port->rxq[i], i);
+        if (err) {
+            return err;
+        }
+        port->n_rxq++;
+    }
+
+    return 0;
+}
+
 static void
 reconfigure_pmd_threads(struct dp_netdev *dp)
     OVS_REQUIRES(dp->port_mutex)
 {
-    struct dp_netdev_port *port;
+    struct dp_netdev_port *port, *next;
 
     dp_netdev_destroy_all_pmds(dp);
 
-    HMAP_FOR_EACH (port, node, &dp->ports) {
-        struct netdev *netdev = port->netdev;
-        int requested_n_rxq = netdev_requested_n_rxq(netdev);
-        if (netdev_is_pmd(port->netdev)
-            && port->latest_requested_n_rxq != requested_n_rxq) {
-            int i, err;
+    HMAP_FOR_EACH_SAFE (port, next, node, &dp->ports) {
+        int err;
 
-            /* Closes the existing 'rxq's. */
-            for (i = 0; i < port->n_rxq; i++) {
-                netdev_rxq_close(port->rxq[i]);
-                port->rxq[i] = NULL;
-            }
-            port->n_rxq = 0;
-
-            /* Sets the new rx queue config. */
-            err = netdev_set_multiq(port->netdev, ovs_numa_get_n_cores() + 1,
-                                    requested_n_rxq);
-            if (err && (err != EOPNOTSUPP)) {
-                VLOG_ERR("Failed to set dpdk interface %s rx_queue to: %u",
-                         netdev_get_name(port->netdev),
-                         requested_n_rxq);
-                return;
-            }
-            port->latest_requested_n_rxq = requested_n_rxq;
-            /* If the set_multiq() above succeeds, reopens the 'rxq's. */
-            port->n_rxq = netdev_n_rxq(port->netdev);
-            port->rxq = xrealloc(port->rxq, sizeof *port->rxq * port->n_rxq);
-            for (i = 0; i < port->n_rxq; i++) {
-                netdev_rxq_open(port->netdev, &port->rxq[i], i);
-            }
+        err = port_reconfigure(port);
+        if (err) {
+            hmap_remove(&dp->ports, &port->node);
+            seq_change(dp->port_seq);
+            port_destroy(port);
         }
     }
     /* Reconfigures the cpu mask. */
