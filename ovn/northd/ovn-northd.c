@@ -1180,8 +1180,20 @@ build_port_security_nd(struct ovn_port *op, struct hmap *lflows)
             if (ps.n_ipv4_addrs) {
                 ds_put_cstr(&match, " && (");
                 for (size_t i = 0; i < ps.n_ipv4_addrs; i++) {
-                    ds_put_format(&match, "arp.spa == "IP_FMT" || ",
-                                  IP_ARGS(ps.ipv4_addrs[i].addr));
+                    ds_put_cstr(&match, "arp.spa == ");
+                    ovs_be32 mask = be32_prefix_mask(ps.ipv4_addrs[i].plen);
+                    /* When the netmask is applied, if the host portion is
+                     * non-zero, the host can only use the specified
+                     * address in the arp.spa.  If zero, the host is allowed
+                     * to use any address in the subnet. */
+                    if (ps.ipv4_addrs[i].addr & ~mask) {
+                        ds_put_format(&match, IP_FMT,
+                                      IP_ARGS(ps.ipv4_addrs[i].addr));
+                    } else {
+                       ip_format_masked(ps.ipv4_addrs[i].addr & mask, mask,
+                                        &match);
+                    }
+                    ds_put_cstr(&match, " || ");
                 }
                 ds_chomp(&match, ' ');
                 ds_chomp(&match, '|');
@@ -1265,7 +1277,28 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
             }
 
             for (int i = 0; i < ps.n_ipv4_addrs; i++) {
-                ds_put_format(&match, IP_FMT", ", IP_ARGS(ps.ipv4_addrs[i].addr));
+                ovs_be32 mask = be32_prefix_mask(ps.ipv4_addrs[i].plen);
+                /* When the netmask is applied, if the host portion is
+                 * non-zero, the host can only use the specified
+                 * address.  If zero, the host is allowed to use any
+                 * address in the subnet.
+                 * */
+                if (ps.ipv4_addrs[i].addr & ~mask) {
+                    ds_put_format(&match, IP_FMT,
+                                  IP_ARGS(ps.ipv4_addrs[i].addr));
+                    if (pipeline == P_OUT && ps.ipv4_addrs[i].plen != 32) {
+                         /* Host is also allowed to receive packets to the
+                         * broadcast address in the specified subnet.
+                         */
+                        ds_put_format(&match, ", "IP_FMT,
+                                      IP_ARGS(ps.ipv4_addrs[i].addr | ~mask));
+                    }
+                } else {
+                    /* host portion is zero */
+                    ip_format_masked(ps.ipv4_addrs[i].addr & mask, mask,
+                                     &match);
+                }
+                ds_put_cstr(&match, ", ");
             }
 
             /* Replace ", " by "}". */
