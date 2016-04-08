@@ -1930,6 +1930,55 @@ for i in 1 2 3; do
     test_ipv6 ${i}3 f00000000${i}${i}3 f00000000021 $sip $tip
 done
 
+# configure lport13 to send and received IPv4 packets with an address range
+ovn-nbctl lport-set-port-security lp13 "f0:00:00:00:00:13 192.168.0.13 20.0.0.4/24 10.0.0.0/24"
+
+sip=`ip_to_hex 10 0 0 13`
+tip=`ip_to_hex 192 168 0 22`
+# arp packet with inner ip 10.0.0.13 should be allowed for lport13
+test_arp 13 f00000000013 f00000000013 $sip $tip 0 f00000000022
+
+sip=`ip_to_hex 10 0 0 14`
+tip=`ip_to_hex 192 168 0 23`
+# IPv4 packet from lport13 with src ip 10.0.0.14 destined to lport23
+# with dst ip 192.168.0.23 should be allowed
+test_ip 13 f00000000013 f00000000023 $sip $tip 23
+
+sip=`ip_to_hex 192 168 0 33`
+tip=`ip_to_hex 10 0 0 15`
+# IPv4 packet from lport33 with src ip 192.168.0.33 destined to lport13
+# with dst ip 10.0.0.15 should be received by lport13
+test_ip 33 f00000000033 f00000000013 $sip $tip 13
+
+sip=`ip_to_hex 192 168 0 33`
+tip=`ip_to_hex 20 0 0 4`
+# IPv4 packet from lport33 with src ip 192.168.0.33 destined to lport13
+# with dst ip 20.0.0.4 should be received by lport13
+test_ip 33 f00000000033 f00000000013 $sip $tip 13
+
+sip=`ip_to_hex 192 168 0 33`
+tip=`ip_to_hex 20 0 0 5`
+# IPv4 packet from lport33 with src ip 192.168.0.33 destined to lport13
+# with dst ip 20.0.0.5 should not be received by lport13
+test_ip 33 f00000000033 f00000000013 $sip $tip
+
+sip=`ip_to_hex 192 168 0 33`
+tip=`ip_to_hex 20 0 0 255`
+# IPv4 packet from lport33 with src ip 192.168.0.33 destined to lport13
+# with dst ip 20.0.0.255 should be received by lport13
+test_ip 33 f00000000033 f00000000013 $sip $tip 13
+
+sip=`ip_to_hex 192 168 0 33`
+tip=`ip_to_hex 192 168 0 255`
+# IPv4 packet from lport33 with src ip 192.168.0.33 destined to lport13
+# with dst ip 192.168.0.255 should not be received by lport13
+test_ip 33 f00000000033 f00000000013 $sip $tip
+
+sip=`ip_to_hex 192 168 0 33`
+tip=`ip_to_hex 224 0 0 4`
+# IPv4 packet from lport33 with src ip 192.168.0.33 destined to lport13
+# with dst ip 224.0.0.4  should be received by lport13
+test_ip 33 f00000000033 f00000000013 $sip $tip 13
 
 # Allow some time for packet forwarding.
 
