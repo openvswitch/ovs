@@ -708,8 +708,9 @@
         </p>
 
         <p>
-          OpenFlow 1.4 and 1.5 are not enabled by default because their
-          implementations are missing features.
+          OpenFlow 1.4, 1.5, and 1.6 are not enabled by default because their
+          implementations are missing features.  In addition, the OpenFlow 1.6
+          specification is still under development and thus subject to change.
         </p>
       </column>
     </group>

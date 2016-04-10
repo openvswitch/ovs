@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2016 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,6 +55,8 @@ ofperr_domain_from_version(enum ofp_version version)
         return &ofperr_of14;
     case OFP15_VERSION:
         return &ofperr_of15;
+    case OFP16_VERSION:
+        return &ofperr_of16;
     default:
         return NULL;
     }
