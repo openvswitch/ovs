@@ -61,7 +61,7 @@ save_interfaces () {
         if expr "$state" : '.*\bdynamic\b' > /dev/null; then
             linkcmd="$linkcmd dynamic"
         fi
-        if qlen=`expr "$state" : '.*qlen \([0-9]+\)'`; then
+        if qlen=`expr "$state" : '.*qlen \([0-9]\+\)'`; then
             linkcmd="$linkcmd txqueuelen $qlen"
         fi
         if hwaddr=`expr "$state" : '.*link/ether \([^ ]*\)'`; then
@@ -70,7 +70,7 @@ save_interfaces () {
         if brd=`expr "$state" : '.*brd \([^ ]*\)'`; then
             linkcmd="$linkcmd broadcast $brd"
         fi
-        if mtu=`expr "$state" : '.*mtu \([0-9]+\)'`; then
+        if mtu=`expr "$state" : '.*mtu \([0-9]\+\)'`; then
             linkcmd="$linkcmd mtu $mtu"
         fi
         if test -n "$linkcmd"; then
