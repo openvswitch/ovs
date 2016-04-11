@@ -1,4 +1,5 @@
 /* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (C) 2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +50,7 @@ struct ovsdb_idl_column {
     bool mutable;
     void (*parse)(struct ovsdb_idl_row *, const struct ovsdb_datum *);
     void (*unparse)(struct ovsdb_idl_row *);
+    int (*compare)(const void *, const void *); /* Perform a comparison over ovsrec_* */
 };
 
 struct ovsdb_idl_table_class {
@@ -69,6 +71,7 @@ struct ovsdb_idl_table {
     struct hmap rows;        /* Contains "struct ovsdb_idl_row"s. */
     struct ovsdb_idl *idl;   /* Containing idl. */
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
+    struct shash indexes;    /* Contains "struct ovsdb_idl_index"s */
     struct ovs_list track_list; /* Tracked rows (ovsdb_idl_row.track_node). */
 };
 
@@ -76,6 +79,33 @@ struct ovsdb_idl_class {
     const char *database;       /* <db-name> for this database. */
     const struct ovsdb_idl_table_class *tables;
     size_t n_tables;
+};
+
+/*
+ * Contains the configuration per column of the index
+ */
+struct ovsdb_idl_index_column {
+    const struct ovsdb_idl_column *column;
+    column_comparator *comparer;
+    int sorting_order;
+};
+
+/*
+ * Defines a IDL compound index
+ */
+struct ovsdb_idl_index {
+    struct skiplist *skiplist;                  /* Skiplist with pointer to
+                                                 * rows*/
+    struct ovsdb_idl_index_column *columns;     /* Columns configuration */
+    size_t n_columns;                           /* Number of columns in index */
+    size_t alloc_columns;                       /* Size allocated memory for
+                                                 * columns, comparers and
+                                                 * sorting order */
+    bool row_sync;                              /* Determines if the replica
+                                                 * is modifying its content or
+                                                 * not */
+    const struct ovsdb_idl_table *table;        /* Table that owns this index */
+    const char* index_name;                     /* The name of this index */
 };
 
 struct ovsdb_idl_row *ovsdb_idl_get_row_arc(

@@ -8,9 +8,15 @@ import sys
 import ovs.json
 import ovs.db.error
 import ovs.db.schema
+from ovs.db.types import StringType, IntegerType, RealType
 
 argv0 = sys.argv[0]
 
+def isColumnIndexable(column):
+    return not column.type.is_map()  and column.type.key.is_valid() \
+               and (column.type.is_scalar())  and \
+                column.type.key.toAtomicType() in ['OVSDB_TYPE_STRING', 'OVSDB_TYPE_REAL', 'OVSDB_TYPE_INTEGER']
+                
 def parseSchema(filename):
     return ovs.db.schema.IdlSchema.from_json(ovs.json.from_file(filename))
 
@@ -186,6 +192,25 @@ const struct %(s)s *%(s)s_track_get_next(const struct %(s)s *);
              (ROW); \\
              (ROW) = %(s)s_track_get_next(ROW))
 
+int %(s)s_index_compare(struct ovsdb_idl_index_cursor *, const struct %(s)s *, const struct %(s)s *);
+const struct %(s)s *%(s)s_index_first(struct ovsdb_idl_index_cursor *);
+const struct %(s)s *%(s)s_index_next(struct ovsdb_idl_index_cursor *);
+const struct %(s)s *%(s)s_index_find(struct ovsdb_idl_index_cursor *, const struct %(s)s *);
+const struct %(s)s *%(s)s_index_forward_to(struct ovsdb_idl_index_cursor *, const struct %(s)s *);
+const struct %(s)s *%(s)s_index_get_data(const struct ovsdb_idl_index_cursor *);
+#define %(S)s_FOR_EACH_RANGE(ROW, CURSOR, FROM, TO) \\
+        for ((ROW) = %(s)s_index_forward_to(CURSOR, FROM); \\
+             ((ROW) && %(s)s_index_compare(CURSOR, ROW, TO) <= 0); \\
+             (ROW) = %(s)s_index_next(CURSOR))
+#define %(S)s_FOR_EACH_EQUAL(ROW, CURSOR, KEY) \\
+        for ((ROW) = %(s)s_index_find(CURSOR, KEY); \\
+             ((ROW) && %(s)s_index_compare(CURSOR, ROW, KEY) == 0); \\
+             (ROW) = %(s)s_index_next(CURSOR))
+#define %(S)s_FOR_EACH_BYINDEX(ROW, CURSOR) \\
+        for ((ROW) = %(s)s_index_first(CURSOR); \\
+             (ROW); \\
+             (ROW) = %(s)s_index_next(CURSOR))
+
 void %(s)s_init(struct %(s)s *);
 void %(s)s_delete(const struct %(s)s *);
 struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
@@ -215,6 +240,10 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
                 args = ['%(type)s%(name)s' % member for member in members]
             print '%s);' % ', '.join(args)
 
+        print
+        for columnName, column in sorted(table.columns.iteritems()):
+            if isColumnIndexable(column):
+                print 'int %(s)s_index_%(c)s_cmp(const void *, const void *);' % {'s': structName, 'c': columnName}
         print
 
     # Table indexes.
@@ -746,7 +775,90 @@ const struct ovsdb_datum *
                    'S': structName.upper(),
                    'C': columnName.upper()}
             print "}"
+        # Column Index compare functions
+        for columnName, column in sorted(table.columns.iteritems()):
+            type = column.type
+            funcDict = {'OVSDB_TYPE_STRING': 'str', 'OVSDB_TYPE_REAL': 'double', 'OVSDB_TYPE_INTEGER': 'int'}
+            if isColumnIndexable(column):
+                print '''
+/*  Call an internal function defined to compare  "%(f)s" type columns for "%(c)s" columns
+    in "%(s)s" tables.
+    Parameters: void *row1, void * row2. Data to be compared. Must be of type corresponding the record of
+    the table.
+    Return value: 0 if both data values are equal, -1 if first parameter is less than second and 1 otherwise.
+    For internal use only. Not recomended to be called directly. */ ''' % {'s' : structName, 'c' : columnName, 'f': type.key.toAtomicType()}
+                print 'int'
+                print '%(s)s_index_%(c)s_cmp(const void *row1, const void *row2)' % \
+                    {'s': structName, 'c': columnName}
+                print '{'
+                print '    struct %(s)s *data1 = (struct %(s)s *)row1;' % { 's' : structName } 
+                print '    struct %(s)s *data2 = (struct %(s)s *)row2;' % { 's' : structName }
+                print '    return ovsdb_idl_index_%(f)scmp(data1->%(c)s, data2->%(c)s);' % \
+                    {'c': columnName, 'f': funcDict[type.key.toAtomicType()] }
+                print "}"
 
+# Index table related functions
+        print '''
+/*  This function is used to compare "%(s)s" records on table in iterartion loops for compound-index operations.
+    After been called, cursor point to current position in the index
+    Parameters: struct ovsdb_idl_index_cursor *cursor. Cursor used to iterate over the indexed data on this table.
+                const struct "%(s)s" *const_data1,  const struct "%(s)s" *const_data2. Data to be compared.
+    Return value: 0 if both data values are equal, -1 if first parameter is less than second and 1 otherwise. */''' % {'s' : structName}
+        print 'int'
+        print '''%(s)s_index_compare(struct ovsdb_idl_index_cursor *cursor, const struct %(s)s *const_data1,  const struct %(s)s *const_data2)
+{
+    struct %(s)s *data1 = CONST_CAST(struct %(s)s *, const_data1);
+    struct %(s)s *data2 = CONST_CAST(struct %(s)s *, const_data2);
+    return ovsdb_idl_index_compare(cursor, &data1->header_, &data2->header_);
+}''' % { 's' : structName }
+        print '''
+/*  This function is called to position the cursor at the first row in "%(s)s" table on the associated compound-index. 
+    Parameters: struct ovsdb_idl_index_cursor *cursor. Cursor used to iterate over the indexed data on this table.
+    Return value: The first row in the corresponding index. */''' %  {'s' : structName }
+        print '''const struct %(s)s *\n%(s)s_index_first(struct ovsdb_idl_index_cursor *cursor)
+{
+    return %(s)s_cast(ovsdb_idl_index_first(cursor));
+}''' % { 's' : structName }
+        print '''
+/*  This function is called to position the cursor at the next row in "%(s)s" table on the associated compound-index. 
+    Parameters: struct ovsdb_idl_index_cursor *cursor. Cursor used to iterate over the indexed data on this table.
+    Return value: The next row in the corresponding index. */''' %  {'s' : structName, 'c' : columnName }
+        print '''const struct %(s)s *\n%(s)s_index_next(struct ovsdb_idl_index_cursor *cursor)
+{
+    return %(s)s_cast(ovsdb_idl_index_next(cursor));
+}''' % { 's' : structName }
+        print '''
+/*  This function is used to find the data of the row in "%(s)s" table that meet criteria with the requested data
+    associated in the compound-index. 
+    Parameters: struct ovsdb_idl_index_cursor *cursor. Cursor used to iterate over the indexed data on this table.
+                const struct %(s)s *const_data. Data to be searched.
+    Return value: The row in the corresponding index if found or NULL otherwise. */''' %  {'s' : structName }
+        print '''const struct %(s)s *\n%(s)s_index_find(struct ovsdb_idl_index_cursor *cursor, const struct %(s)s *const_data)
+{
+    struct %(s)s *data = CONST_CAST(struct %(s)s *, const_data);
+    return %(s)s_cast(ovsdb_idl_index_find(cursor, &data->header_));
+}''' % { 's' : structName }
+        print '''
+/*  This function is used to set the cursor pointing to the row in "%(s)s" table that meet criteria of the requested data
+    associated in the compound-index. 
+    Parameters: struct ovsdb_idl_index_cursor *cursor. Cursor used to iterate over the indexed data on this table.
+                const struct %(s)s *const_data. Data to be searched.
+    Return value: The row in the corresponding index closest to the criteria. */''' %  {'s' : structName }
+        print '''const struct %(s)s *\n%(s)s_index_forward_to(struct ovsdb_idl_index_cursor *cursor, const struct %(s)s *const_data)
+{
+    struct %(s)s *data = CONST_CAST(struct %(s)s *, const_data);
+    return %(s)s_cast(ovsdb_idl_index_forward_to(cursor, &data->header_));
+}''' % { 's' : structName }
+        print '''
+/*  This function is used to get the data of the row in the current position pointed by the cursor in
+    "%(s)s" table.
+    Parameters: struct ovsdb_idl_index_cursor *cursor. Cursor used to iterate over the indexed data on this table.
+    Return value: The row in the corresponding index if found or NULL otherwise. */''' %  {'s' : structName, 'c' : columnName }
+        print '''const struct %(s)s *\n%(s)s_index_get_data(const struct ovsdb_idl_index_cursor *cursor)
+{
+    return %(s)s_cast(ovsdb_idl_index_data(CONST_CAST(struct ovsdb_idl_index_cursor*, cursor)));
+}''' % { 's' : structName }
+# End Index table related functions
         # Table columns.
         print "\nstruct ovsdb_idl_column %s_columns[%s_N_COLUMNS];" % (
             structName, structName.upper())
@@ -770,6 +882,10 @@ static void\n%s_columns_init(void)
             print "    c->mutable = %s;" % mutable
             print "    c->parse = %(s)s_parse_%(c)s;" % d
             print "    c->unparse = %(s)s_unparse_%(c)s;" % d
+            if isColumnIndexable(column):
+                print '    c->compare = %(s)s_index_%(c)s_cmp;' % d
+            else:
+                print '    c->compare = NULL;'
         print "}"
 
     # Table classes.

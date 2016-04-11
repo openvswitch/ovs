@@ -51,6 +51,17 @@ AT_CHECK([ovstest test-sha1], [0], [.........
 ])
 AT_CLEANUP
 
+AT_SETUP([test skiplist])
+AT_KEYWORDS([skiplist])
+AT_CHECK([ovstest test-skiplist], [0], [skiplist insert
+skiplist delete
+skiplist find
+skiplist forward_to
+skiplist random
+
+])
+AT_CLEANUP
+
 AT_SETUP([test type properties])
 AT_CHECK([test-type-props])
 AT_CLEANUP
