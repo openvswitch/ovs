@@ -310,9 +310,9 @@
 
     <li>
       <dfn>Logical services</dfn> are logical references to virtual network functions 
-      (VNF). Adding a logical service requires adding steering rules to the OVN nb database.
-      These are the only rules necessary to implement traffic steering for VNFs. The section 
-      below "<code>Life Cycle of an inserted VNF</code>" provides more details.
+      (VNF). Adding a logical service requires adding steering rules to the OVN Northbound
+      database. These are the only rules necessary to implement traffic steering for VNFs. 
+      The section below "<code>Life Cycle of an inserted VNF</code>" provides more details.
     </li>
 
   </ul>
@@ -474,9 +474,13 @@
  <p>
    OVN provides an abstraction to enable the insertion of an arbitrary virtual network 
    function (VNF) into the path of traffic to and from an application. A VNF is different 
-   from an application VM in that it acts on traffic between applications. Examples 
-   of VNF's are security, load balancing, and traffic enhancement services; this is 
-   not a complete list. The requirements on the VNF to be inserted are minimal, it must 
+   from an application VM in that it acts on traffic between applications, and im most
+   cases does not terminiate a flow. Proxy functions are an exception as they terminate the
+   flow from the src and create a new flow to the dst. Examples of VNF's are security functions,
+   load balancing, and traffic enhancement services, this is not a complete list. 
+ </p>
+ <p>
+   The requirements on the VNF to be inserted are minimal, it must 
    act as a <code>bump in the wire (BITW)</code> and can have one or two virtual network 
    ports for traffic. If it has two network ports traffic is directed into one and out the other, 
    if it has only one traffic is bi-directional. The requirement for the VNF to act as a 
@@ -484,31 +488,28 @@
    improved agility adn reduces the coupling between OVN and the VNF. 
  </p>
  <p>
-   The insertion is implemented by adding flow rules into the ovn-nb database. The rules 
-   are added into the last table in the ingress path (L2_LKUP). The service insertion rules 
-   have a higher priority than the normal forwarding rules. This means that they do 
-   not interfere with the existing forwarding rules. There are four new rules added for each 
-   insertion. Two ingress and two egress, The first ingress rule sends all traffic destined
-   for the application into teh VNF ingress port and the second rule takes all traffic 
-   destined to the application from the VNF egress port to the application, the priorities are
-   such that the second rule is always cheched first. In the egress direction the rules are similar
-   if the traffic is from the application it is sent to the VNF egress port and if if is from the
-   application and is from the VNF ingress port it is delivered to the destination.
+   The service insertion is implemented by adding 4 new flow rules into the ovn-nb database for 
+   each VNF inserted. The rules are added into the last table in the ingress path (L2_LKUP). 
+   The service insertion rules have a higher priority than the standard forwarding rules. 
+   This means that they override the existing forwarding rules. There are four 
+   new rules added for each insertion. Two ingress and two egress, The first ingress 
+   rule sends all traffic destined for the application into the VNF ingress port and the 
+   second rule takes all traffic destined to the application from the VNF egress port 
+   to the application, the priorities are such that the second rule is always checked 
+   first. In the egress direction the rules are similar if the traffic is from the 
+   application it is sent to the VNF egress port and if if is from the application 
+   and is from the VNF ingress port it is delivered to the destination.
    <!-- Should this be a new table or is it a naturally part of the L2 lookup table ? -->
  </p>
  <p>
-   The steps in this example refer to the details of the OVN Northbound database schema's. 
+   The steps in this example refer to the details of the OVN Northbound database schema. 
    There is a new table in the OVN Northbound database to support service insertion 
    called <code>Services</code> this contains the required information for each new 
    service inserted. The same service can be used for multiple applications, as
-   there is typically a n:1 relationship between applications and VNF's.
+   there is typically a n:1 relationship between applications and VNFs. A
+   single VNF may be part of several service insertions, but each one is logically
+   separate.
  </p>
- <p>
-   A VIF on a hypervisor is a virtual network interface attached either
-   to a VM or a container running directly on that hypervisor (This is
-   different from the interface of a container running inside a VM).
- </p>
-
  <p>
    The steps in this example refer often to details of the OVN and OVN
    Northbound database schemas.  Please see <code>ovn-sb</code>(5) and
@@ -527,10 +528,10 @@
      virtual network function <code>(VNF)</code> using the CMS user 
      interface or API. The CMS administrator creates the logical ports (ingress and egress)
      for the VNF. If the CMS is Openstack this will create a reusable port-pair defining the
-     interface to the VNF. There is also typically a seperate management port but that is not
-     relevant to the service insertion workflow. A single VNF can participate with several
-     applications, either as a security VM, protecting multiple applications or as a load 
-     balancer VM, distributing load across multiple applications.
+     interface to the VNF. There is also typically a seperate management port for the VNF,
+     but that is not relevant to the service insertion workflow. A single VNF can 
+     participate with several applications, either as a security VM, protecting multiple 
+     applications or as a load balancer VM, distributing load across multiple applications.
    </li>
 
    <li>
@@ -549,8 +550,9 @@
      (as is the case with Openstack). Within OVN the creating of a new service insertion 
      is treated as an atomic operation. This enables the easy atomic insertion and deletion of 
      service insertions. This is important as it is envisioned that the number of serivce 
-     insertions can easily number in the hundreds all with separate lifecycles. For each new
-     service insertion operation a new row is added to the OVN Northbound Database.
+     insertions can easily number in the hundreds, all with separate lifecycles. For each new
+     service insertion operation a new row is added to the OVN Northbound Database. The new row is
+     only added to the ovn-nb when the VNF, application and network are enabled by the CMS.
 
      Once the serivce insertion is applied to the ovn-nb database, the ovn-nb controller will be 
      notified of a change and the rules will be pushed down to the specific OVS instances, using
