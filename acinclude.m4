@@ -163,27 +163,50 @@ AC_DEFUN([OVS_CHECK_DPDK], [
               [AC_HELP_STRING([--with-dpdk=/path/to/dpdk],
                               [Specify the DPDK build directory])])
 
-  if test X"$with_dpdk" != X; then
-    RTE_SDK=$with_dpdk
+  AC_MSG_CHECKING([whether dpdk datapath is enabled])
+  if test -z "$with_dpdk" || test "$with_dpdk" = no; then
+    AC_MSG_RESULT([no])
+    DPDKLIB_FOUND=false
+  else
+    AC_MSG_RESULT([yes])
+    case "$with_dpdk" in
+      yes)
+        DPDK_AUTO_DISCOVER="true"
+        DPDK_INCLUDE="/usr/local/include/dpdk -I/usr/include/dpdk"
+        ;;
+      *)
+        DPDK_AUTO_DISCOVER="false"
+        DPDK_INCLUDE="$with_dpdk/include"
+        # If 'with_dpdk' is passed install directory, point to headers
+        # installed in $DESTDIR/$prefix/include/dpdk
+        AC_CHECK_FILE([$DPDK_INCLUDE/rte_config.h], [],
+                      [AC_CHECK_FILE([$DPDK_INCLUDE/dpdk/rte_config.h],
+                                     [DPDK_INCLUDE=$DPDK_INCLUDE/dpdk], [])])
+        DPDK_LIB_DIR="$with_dpdk/lib"
+        ;;
+    esac
 
-    DPDK_INCLUDE=$RTE_SDK/include
-    DPDK_LIB_DIR=$RTE_SDK/lib
     DPDK_LIB="-ldpdk"
     DPDK_EXTRA_LIB=""
-    RTE_SDK_FULL=`readlink -f $RTE_SDK`
-
-    AC_COMPILE_IFELSE(
-      [AC_LANG_PROGRAM([#include <$RTE_SDK_FULL/include/rte_config.h>
-#if !RTE_LIBRTE_VHOST_USER
-#error
-#endif], [])],
-                    [], [AC_DEFINE([VHOST_CUSE], [1], [DPDK vhost-cuse support enabled, vhost-user disabled.])
-                         DPDK_EXTRA_LIB="-lfuse"])
 
     ovs_save_CFLAGS="$CFLAGS"
     ovs_save_LDFLAGS="$LDFLAGS"
-    LDFLAGS="$LDFLAGS -L$DPDK_LIB_DIR"
     CFLAGS="$CFLAGS -I$DPDK_INCLUDE"
+    if test "$DPDK_AUTO_DISCOVER" = "false"; then
+      LDFLAGS="$LDFLAGS -L${DPDK_LIB_DIR}"
+    fi
+
+    AC_COMPILE_IFELSE([
+      AC_LANG_PROGRAM(
+        [
+          #include <rte_config.h>
+#if !RTE_LIBRTE_VHOST_USER
+#error
+#endif
+        ], [])
+      ], [],
+      [AC_DEFINE([VHOST_CUSE], [1], [DPDK vhost-cuse support enabled, vhost-user disabled.])
+       DPDK_EXTRA_LIB="-lfuse"])
 
     # On some systems we have to add -ldl to link with dpdk
     #
@@ -192,7 +215,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     # Before each attempt the search cache must be unset,
     # otherwise autoconf will stick with the old result
 
-    found=false
+    DPDKLIB_FOUND=false
     save_LIBS=$LIBS
     for extras in "" "-ldl"; do
         LIBS="$DPDK_LIB $extras $save_LIBS $DPDK_EXTRA_LIB"
@@ -201,17 +224,25 @@ AC_DEFUN([OVS_CHECK_DPDK], [
                              #include <rte_eal.h>],
                             [int rte_argc; char ** rte_argv;
                              rte_eal_init(rte_argc, rte_argv);])],
-           [found=true])
-        if $found; then
+           [DPDKLIB_FOUND=true])
+        if $DPDKLIB_FOUND; then
             break
         fi
     done
-    if $found; then :; else
-        AC_MSG_ERROR([cannot link with dpdk])
+
+    # If linking unsuccessful
+    if test "$DPDKLIB_FOUND" = "false" ; then
+      if $DPDK_AUTO_DISCOVER; then
+        AC_MSG_ERROR([Could not find DPDK library in default search path, Use --with-dpdk to specify the DPDK library installed in non-standard location])
+      else
+        AC_MSG_ERROR([Could not find DPDK libraries in $DPDK_LIB_DIR])
+      fi
     fi
     CFLAGS="$ovs_save_CFLAGS"
     LDFLAGS="$ovs_save_LDFLAGS"
-    OVS_LDFLAGS="$OVS_LDFLAGS -L$DPDK_LIB_DIR"
+    if test "$DPDK_AUTO_DISCOVER" = "false"; then
+      OVS_LDFLAGS="$OVS_LDFLAGS -L$DPDK_LIB_DIR"
+    fi
     OVS_CFLAGS="$OVS_CFLAGS -I$DPDK_INCLUDE"
     OVS_ENABLE_OPTION([-mssse3])
 
@@ -226,12 +257,9 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     DPDK_vswitchd_LDFLAGS=-Wl,--whole-archive,$DPDK_LIB,--no-whole-archive
     AC_SUBST([DPDK_vswitchd_LDFLAGS])
     AC_DEFINE([DPDK_NETDEV], [1], [System uses the DPDK module.])
-
-  else
-    RTE_SDK=
   fi
 
-  AM_CONDITIONAL([DPDK_NETDEV], test -n "$RTE_SDK")
+  AM_CONDITIONAL([DPDK_NETDEV], test "$DPDKLIB_FOUND" = true)
 ])
 
 dnl OVS_GREP_IFELSE(FILE, REGEX, [IF-MATCH], [IF-NO-MATCH])
