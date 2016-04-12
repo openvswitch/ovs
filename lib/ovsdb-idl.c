@@ -272,6 +272,18 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
     return idl;
 }
 
+/* Changes the remote and creates a new session. */
+void
+ovsdb_idl_set_remote(struct ovsdb_idl *idl, const char *remote,
+                     bool retry)
+{
+    if (idl) {
+        ovs_assert(!idl->txn);
+        idl->session = jsonrpc_session_open(remote, retry);
+        idl->state_seqno = UINT_MAX;
+    }
+}
+
 /* Destroys 'idl' and all of the data structures that it manages. */
 void
 ovsdb_idl_destroy(struct ovsdb_idl *idl)

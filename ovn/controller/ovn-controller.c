@@ -330,6 +330,16 @@ main(int argc, char *argv[])
     /* Main loop. */
     exiting = false;
     while (!exiting) {
+        /* Check OVN SB database. */
+        char *new_ovnsb_remote = get_ovnsb_remote(ovs_idl_loop.idl);
+        if (strcmp(ovnsb_remote, new_ovnsb_remote)) {
+            free(ovnsb_remote);
+            ovnsb_remote = new_ovnsb_remote;
+            ovsdb_idl_set_remote(ovnsb_idl_loop.idl, ovnsb_remote, true);
+        } else {
+            free(new_ovnsb_remote);
+        }
+
         struct controller_ctx ctx = {
             .ovs_idl = ovs_idl_loop.idl,
             .ovs_idl_txn = ovsdb_idl_loop_run(&ovs_idl_loop),
