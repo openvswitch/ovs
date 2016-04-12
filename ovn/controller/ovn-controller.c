@@ -62,6 +62,25 @@ OVS_NO_RETURN static void usage(void);
 
 static char *ovs_remote;
 
+struct local_datapath *
+get_local_datapath(const struct hmap *local_datapaths, uint32_t tunnel_key)
+{
+    struct hmap_node *node = hmap_first_with_hash(local_datapaths, tunnel_key);
+    return (node
+            ? CONTAINER_OF(node, struct local_datapath, hmap_node)
+            : NULL);
+}
+
+struct patched_datapath *
+get_patched_datapath(const struct hmap *patched_datapaths, uint32_t tunnel_key)
+{
+    struct hmap_node *node = hmap_first_with_hash(patched_datapaths,
+                                                  tunnel_key);
+    return (node
+            ? CONTAINER_OF(node, struct patched_datapath, hmap_node)
+            : NULL);
+}
+
 const struct sbrec_chassis *
 get_chassis(struct ovsdb_idl *ovnsb_idl, const char *chassis_id)
 {
