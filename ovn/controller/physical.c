@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -253,12 +253,13 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
          * when a pair of patch ports are added/removed to connect/disconnect
          * large lrouters and lswitches. This need to be studied further.
          */
+        uint32_t dp_key = binding->datapath->tunnel_key;
+        uint32_t port_key = binding->tunnel_key;
         struct hmap_node *ld;
-        ld = hmap_first_with_hash(local_datapaths, binding->datapath->tunnel_key);
+        ld = hmap_first_with_hash(local_datapaths, dp_key);
         if (!ld) {
             struct hmap_node *pd;
-            pd = hmap_first_with_hash(patched_datapaths,
-                                      binding->datapath->tunnel_key);
+            pd = hmap_first_with_hash(patched_datapaths, dp_key);
             if (!pd) {
                 continue;
             }
@@ -306,8 +307,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
 
         const struct chassis_tunnel *tun = NULL;
         const struct sbrec_port_binding *localnet_port =
-            get_localnet_port(local_datapaths,
-                              binding->datapath->tunnel_key);
+            get_localnet_port(local_datapaths, dp_key);
         if (!ofport) {
             /* It is remote port, may be reached by tunnel or localnet port */
             is_remote = true;
@@ -372,10 +372,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             }
 
             /* Set MFF_LOG_DATAPATH and MFF_LOG_INPORT. */
-            put_load(binding->datapath->tunnel_key, MFF_LOG_DATAPATH, 0, 64,
-                     &ofpacts);
-            put_load(binding->tunnel_key, MFF_LOG_INPORT, 0, 32,
-                     &ofpacts);
+            put_load(dp_key, MFF_LOG_DATAPATH, 0, 64, &ofpacts);
+            put_load(port_key, MFF_LOG_INPORT, 0, 32, &ofpacts);
 
             /* Resubmit to first logical ingress pipeline table. */
             put_resubmit(OFTABLE_LOG_INGRESS_PIPELINE, &ofpacts);
@@ -403,9 +401,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             ofpbuf_clear(&ofpacts);
 
             /* Match MFF_LOG_DATAPATH, MFF_LOG_OUTPORT. */
-            match_set_metadata(&match, htonll(binding->datapath->tunnel_key));
-            match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0,
-                          binding->tunnel_key);
+            match_set_metadata(&match, htonll(dp_key));
+            match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
 
             if (zone_id) {
                 put_load(zone_id, MFF_LOG_CT_ZONE, 0, 32, &ofpacts);
@@ -422,9 +419,9 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              * Drop packets whose logical inport and outport are the same. */
             match_init_catchall(&match);
             ofpbuf_clear(&ofpacts);
-            match_set_metadata(&match, htonll(binding->datapath->tunnel_key));
-            match_set_reg(&match, MFF_LOG_INPORT - MFF_REG0, binding->tunnel_key);
-            match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, binding->tunnel_key);
+            match_set_metadata(&match, htonll(dp_key));
+            match_set_reg(&match, MFF_LOG_INPORT - MFF_REG0, port_key);
+            match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
             ofctrl_add_flow(flow_table, OFTABLE_DROP_LOOPBACK, 100,
                             &match, &ofpacts);
 
@@ -434,9 +431,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              * Deliver the packet to the local vif. */
             match_init_catchall(&match);
             ofpbuf_clear(&ofpacts);
-            match_set_metadata(&match, htonll(binding->datapath->tunnel_key));
-            match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0,
-                          binding->tunnel_key);
+            match_set_metadata(&match, htonll(dp_key));
+            match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
             if (tag) {
                 /* For containers sitting behind a local vif, tag the packets
                  * before delivering them. */
@@ -477,9 +473,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             ofpbuf_clear(&ofpacts);
 
             /* Match MFF_LOG_DATAPATH, MFF_LOG_OUTPORT. */
-            match_set_metadata(&match, htonll(binding->datapath->tunnel_key));
-            match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0,
-                          binding->tunnel_key);
+            match_set_metadata(&match, htonll(dp_key));
+            match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
 
             put_load(localnet_port->tunnel_key, MFF_LOG_OUTPORT, 0, 32, &ofpacts);
 
@@ -501,12 +496,11 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             ofpbuf_clear(&ofpacts);
 
             /* Match MFF_LOG_DATAPATH, MFF_LOG_OUTPORT. */
-            match_set_metadata(&match, htonll(binding->datapath->tunnel_key));
-            match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0,
-                          binding->tunnel_key);
+            match_set_metadata(&match, htonll(dp_key));
+            match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
 
             put_encapsulation(mff_ovn_geneve, tun, binding->datapath,
-                              binding->tunnel_key, &ofpacts);
+                              port_key, &ofpacts);
 
             /* Output to tunnel. */
             ofpact_put_OUTPUT(&ofpacts)->port = ofport;
