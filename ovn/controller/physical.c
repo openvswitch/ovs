@@ -138,9 +138,8 @@ put_stack(enum mf_field_id field, struct ofpact_stack *stack)
 static const struct sbrec_port_binding*
 get_localnet_port(struct hmap *local_datapaths, int64_t tunnel_key)
 {
-    struct local_datapath *ld;
-    ld = CONTAINER_OF(hmap_first_with_hash(local_datapaths, tunnel_key),
-                      struct local_datapath, hmap_node);
+    struct local_datapath *ld = get_local_datapath(local_datapaths,
+                                                   tunnel_key);
     return ld ? ld->localnet_port : NULL;
 }
 
@@ -255,14 +254,9 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
          */
         uint32_t dp_key = binding->datapath->tunnel_key;
         uint32_t port_key = binding->tunnel_key;
-        struct hmap_node *ld;
-        ld = hmap_first_with_hash(local_datapaths, dp_key);
-        if (!ld) {
-            struct hmap_node *pd;
-            pd = hmap_first_with_hash(patched_datapaths, dp_key);
-            if (!pd) {
-                continue;
-            }
+        if (!get_local_datapath(local_datapaths, dp_key)
+            && !get_patched_datapath(patched_datapaths, dp_key)) {
+            continue;
         }
 
         /* Find the OpenFlow port for the logical port, as 'ofport'.  This is

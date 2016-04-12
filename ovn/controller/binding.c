@@ -125,8 +125,8 @@ static void
 add_local_datapath(struct hmap *local_datapaths,
         const struct sbrec_port_binding *binding_rec)
 {
-    if (hmap_first_with_hash(local_datapaths,
-                             binding_rec->datapath->tunnel_key)) {
+    if (get_local_datapath(local_datapaths,
+                           binding_rec->datapath->tunnel_key)) {
         return;
     }
 

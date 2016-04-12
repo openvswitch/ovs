@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -176,10 +176,9 @@ add_bridge_mappings(struct controller_ctx *ctx,
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
         if (!strcmp(binding->type, "localnet")) {
-            struct local_datapath *ld;
-            ld = CONTAINER_OF(hmap_first_with_hash(local_datapaths,
-                              binding->datapath->tunnel_key),
-                              struct local_datapath, hmap_node);
+            struct local_datapath *ld
+                = get_local_datapath(local_datapaths,
+                                     binding->datapath->tunnel_key);
             if (!ld) {
                 /* This localnet port is on a datapath with no
                  * logical ports bound to this chassis, so there's no need
@@ -233,7 +232,7 @@ static void
 add_patched_datapath(struct hmap *patched_datapaths,
                      const struct sbrec_port_binding *binding_rec)
 {
-    if (hmap_first_with_hash(patched_datapaths,
+    if (get_patched_datapath(patched_datapaths,
                              binding_rec->datapath->tunnel_key)) {
         return;
     }
