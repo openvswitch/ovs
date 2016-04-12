@@ -459,17 +459,11 @@ OvsCreateDeviceObject(NDIS_HANDLE ovsExtDriverHandle)
                                   &deviceAttributes,
                                   &gOvsDeviceObject,
                                   &gOvsDeviceHandle);
-    if (status != NDIS_STATUS_SUCCESS) {
-        POVS_DEVICE_EXTENSION ovsExt =
-            (POVS_DEVICE_EXTENSION)NdisGetDeviceReservedExtension(gOvsDeviceObject);
-        ASSERT(gOvsDeviceObject != NULL);
-        ASSERT(gOvsDeviceHandle != NULL);
-
-        if (ovsExt) {
-            ovsExt->numberOpenInstance = 0;
-        }
-    } else {
+    if (status == NDIS_STATUS_SUCCESS) {
         OvsRegisterSystemProvider((PVOID)gOvsDeviceObject);
+    } else {
+        OVS_LOG_ERROR("Failed to regiser pseudo device, error: 0x%08x",
+                      status);
     }
 
     OVS_LOG_TRACE("DeviceObject: %p", gOvsDeviceObject);
