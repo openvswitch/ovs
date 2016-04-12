@@ -1401,7 +1401,7 @@ AT_CHECK([ip link set dev br-underlay up])
 
 dnl Set up tunnel endpoints on OVS outside the namespace and with a native
 dnl linux device inside the namespace.
-ADD_OVS_TUNNEL([vxlan], [br0], [at_ns0], [172.31.1.1], [10.1.1.100/24])
+ADD_OVS_TUNNEL([vxlan], [br0], [at_vxlan0], [172.31.1.1], [10.1.1.100/24])
 ADD_NATIVE_TUNNEL([vxlan], [at_vxlan1], [at_ns0], [172.31.1.100], [10.1.1.1/24],
                   [id 0 dstport 4789])
 
@@ -1455,7 +1455,7 @@ AT_CHECK([ip link set dev br-underlay up])
 
 dnl Set up tunnel endpoints on OVS outside the namespace and with a native
 dnl linux device inside the namespace.
-ADD_OVS_TUNNEL([vxlan], [br0], [at_ns0], [172.31.1.1], ["fc00::2/96"])
+ADD_OVS_TUNNEL([vxlan], [br0], [at_vxlan0], [172.31.1.1], ["fc00::2/96"])
 ADD_NATIVE_TUNNEL([vxlan], [at_vxlan1], [at_ns0], [172.31.1.100], ["fc00::1/96"],
                   [id 0 dstport 4789])
 
