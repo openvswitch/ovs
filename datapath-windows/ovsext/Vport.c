@@ -291,7 +291,15 @@ HvDeletePort(POVS_SWITCH_CONTEXT switchContext,
      * delete will delete the vport.
     */
     if (vport) {
+        OVS_EVENT_ENTRY event;
+
+        event.portNo = vport->portNo;
+        event.ovsType = vport->ovsType;
+        event.upcallPid = vport->upcallPid;
+        RtlCopyMemory(&event.ovsName, &vport->ovsName, sizeof event.ovsName);
+        event.type = OVS_EVENT_LINK_DOWN;
         OvsRemoveAndDeleteVport(NULL, switchContext, vport, TRUE, FALSE);
+        OvsPostEvent(&event);
     } else {
         OVS_LOG_WARN("Vport not present.");
     }
