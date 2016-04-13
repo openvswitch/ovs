@@ -205,7 +205,7 @@ finish_controller_op(struct ofpbuf *ofpacts, size_t ofs)
     struct ofpact_controller *oc = ofpbuf_at_assert(ofpacts, ofs, sizeof *oc);
     ofpacts->header = oc;
     oc->userdata_len = ofpacts->size - (ofs + sizeof *oc);
-    ofpact_finish(ofpacts, &oc->ofpact);
+    ofpact_finish_CONTROLLER(ofpacts, &oc);
 }
 
 static void

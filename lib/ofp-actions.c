@@ -668,7 +668,7 @@ decode_NXAST_RAW_CONTROLLER(const struct nx_action_controller *nac,
     oc->max_len = ntohs(nac->max_len);
     oc->controller_id = ntohs(nac->controller_id);
     oc->reason = nac->reason;
-    ofpact_finish(out, &oc->ofpact);
+    ofpact_finish_CONTROLLER(out, &oc);
 
     return 0;
 }
@@ -737,7 +737,7 @@ decode_NXAST_RAW_CONTROLLER2(const struct nx_action_controller2 *nac2,
         }
     }
 
-    ofpact_finish(out, &oc->ofpact);
+    ofpact_finish_CONTROLLER(out, &oc);
 
     return 0;
 }
@@ -852,7 +852,7 @@ parse_CONTROLLER(char *arg, struct ofpbuf *ofpacts,
             controller = ofpacts->header;
             controller->userdata_len = userdata_len;
         }
-        ofpact_finish(ofpacts, &controller->ofpact);
+        ofpact_finish_CONTROLLER(ofpacts, &controller);
     }
 
     return NULL;
@@ -1262,7 +1262,7 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
         bundle = ofpacts->header;
     }
 
-    bundle = ofpact_finish(ofpacts, &bundle->ofpact);
+    ofpact_finish_BUNDLE(ofpacts, &bundle);
     if (!error) {
         error = bundle_check(bundle, OFPP_MAX, NULL);
     }
@@ -3096,7 +3096,7 @@ decode_OFPAT_RAW_DEC_NW_TTL(struct ofpbuf *out)
     ids->n_controllers = 1;
     ofpbuf_put(out, &id, sizeof id);
     ids = out->header;
-    ofpact_finish(out, &ids->ofpact);
+    ofpact_finish_DEC_TTL(out, &ids);
     return error;
 }
 
@@ -3133,7 +3133,7 @@ decode_NXAST_RAW_DEC_TTL_CNT_IDS(const struct nx_action_cnt_ids *nac_ids,
         ids = out->header;
     }
 
-    ofpact_finish(out, &ids->ofpact);
+    ofpact_finish_DEC_TTL(out, &ids);
 
     return 0;
 }
@@ -3172,7 +3172,7 @@ parse_noargs_dec_ttl(struct ofpbuf *ofpacts)
     ofpbuf_put(ofpacts, &id, sizeof id);
     ids = ofpacts->header;
     ids->n_controllers++;
-    ofpact_finish(ofpacts, &ids->ofpact);
+    ofpact_finish_DEC_TTL(ofpacts, &ids);
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -3199,7 +3199,7 @@ parse_DEC_TTL(char *arg, struct ofpbuf *ofpacts,
             return xstrdup("dec_ttl_cnt_ids: expected at least one controller "
                            "id.");
         }
-        ofpact_finish(ofpacts, &ids->ofpact);
+        ofpact_finish_DEC_TTL(ofpacts, &ids);
     }
     return NULL;
 }
@@ -4228,7 +4228,7 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
             get_subfield(spec->n_bits, &p, &spec->dst);
         }
     }
-    ofpact_finish(ofpacts, &learn->ofpact);
+    ofpact_finish_LEARN(ofpacts, &learn);
 
     if (!is_all_zeros(p, (char *) end - (char *) p)) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
@@ -4554,7 +4554,7 @@ decode_NXAST_RAW_NOTE(const struct nx_action_note *nan,
     note = ofpact_put_NOTE(out);
     note->length = length;
     ofpbuf_put(out, nan->note, length);
-    ofpact_finish(out, out->header);
+    ofpact_finish_NOTE(out, &note);
 
     return 0;
 }
@@ -4586,7 +4586,7 @@ parse_NOTE(const char *arg, struct ofpbuf *ofpacts,
     struct ofpact_note *note = ofpbuf_at_assert(ofpacts, start_ofs,
                                                 sizeof *note);
     note->length = ofpacts->size - (start_ofs + sizeof *note);
-    ofpact_finish(ofpacts, &note->ofpact);
+    ofpact_finish_NOTE(ofpacts, &note);
     return NULL;
 }
 
@@ -4994,7 +4994,7 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
 
     conntrack = ofpbuf_push_uninit(out, sizeof(*conntrack));
     out->header = &conntrack->ofpact;
-    conntrack = ofpact_finish(out, &conntrack->ofpact);
+    ofpact_finish_CT(out, &conntrack);
 
     if (conntrack->ofpact.len > sizeof(*conntrack)
         && !(conntrack->flags & NX_CT_F_COMMIT)) {
@@ -5115,7 +5115,7 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
         }
     }
 
-    ofpact_finish(ofpacts, &oc->ofpact);
+    ofpact_finish_CT(ofpacts, &oc);
     ofpbuf_push_uninit(ofpacts, ct_offset);
     return error;
 }
@@ -7419,6 +7419,7 @@ ofpacts_format(const struct ofpact *ofpacts, size_t ofpacts_len,
 
 /* Internal use by helpers. */
 
+/* Implementation of ofpact_put_<ENUM>(). */
 void *
 ofpact_put(struct ofpbuf *ofpacts, enum ofpact_type type, size_t len)
 {
@@ -7430,6 +7431,7 @@ ofpact_put(struct ofpbuf *ofpacts, enum ofpact_type type, size_t len)
     return ofpact;
 }
 
+/* Implementation of ofpact_init_<ENUM>(). */
 void
 ofpact_init(struct ofpact *ofpact, enum ofpact_type type, size_t len)
 {
@@ -7438,8 +7440,10 @@ ofpact_init(struct ofpact *ofpact, enum ofpact_type type, size_t len)
     ofpact->raw = -1;
     ofpact->len = len;
 }
-
-/* Finishes composing a variable-length action (begun using
+
+/* Implementation of ofpact_finish_<ENUM>().
+ *
+ * Finishes composing a variable-length action (begun using
  * ofpact_put_<NAME>()), by padding the action to a multiple of OFPACT_ALIGNTO
  * bytes and updating its embedded length field.  See the large comment near
  * the end of ofp-actions.h for more information.
