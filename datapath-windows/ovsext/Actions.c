@@ -17,6 +17,7 @@
 #include "precomp.h"
 
 #include "Actions.h"
+#include "Conntrack.h"
 #include "Debug.h"
 #include "Event.h"
 #include "Flow.h"
@@ -1783,6 +1784,28 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
 
             OvsExecuteHash(key, (const PNL_ATTR)a);
 
+            break;
+        }
+
+        case OVS_ACTION_ATTR_CT:
+        {
+            if (ovsFwdCtx.destPortsSizeOut > 0
+                || ovsFwdCtx.tunnelTxNic != NULL
+                || ovsFwdCtx.tunnelRxNic != NULL) {
+                status = OvsOutputBeforeSetAction(&ovsFwdCtx);
+                if (status != NDIS_STATUS_SUCCESS) {
+                    dropReason = L"OVS-adding destination failed";
+                    goto dropit;
+                }
+            }
+
+            status = OvsExecuteConntrackAction(ovsFwdCtx.curNbl, layers,
+                                               key, (const PNL_ATTR)a);
+            if (status != NDIS_STATUS_SUCCESS) {
+                OVS_LOG_ERROR("CT Action failed");
+                dropReason = L"OVS-conntrack action failed";
+                goto dropit;
+            }
             break;
         }
 
