@@ -167,6 +167,13 @@ typedef __declspec(align(8)) struct OvsFlowKey {
     };
     UINT32 recircId;             /* Recirculation ID.  */
     UINT32 dpHash;               /* Datapath calculated hash value. */
+    struct {
+        /* Connection tracking fields. */
+        UINT16 zone;
+        UINT32 mark;
+        UINT32 state;
+        struct ovs_key_ct_labels labels;
+    } ct;                        /* Connection Tracking Flags */
 } OvsFlowKey;
 
 #define OVS_WIN_TUNNEL_KEY_SIZE (sizeof (OvsIPv4TunnelKey))

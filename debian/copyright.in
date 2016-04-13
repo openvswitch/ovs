@@ -89,6 +89,7 @@ License:
 
 	lib/getopt_long.c
 	include/windows/getopt.h
+	datapath-windows/ovsext/Conntrack-tcp.c
 
 * The following files are licensed under the 3-clause BSD-license
 

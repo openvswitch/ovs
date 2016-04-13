@@ -172,7 +172,17 @@ const NL_POLICY nlFlowKeyPolicy[] = {
                               .maxLen = 4, .optional = TRUE},
     [OVS_KEY_ATTR_RECIRC_ID] = {.type = NL_A_UNSPEC, .minLen = 4,
                                 .maxLen = 4, .optional = TRUE},
-    [OVS_KEY_ATTR_MPLS] = {.type = NL_A_VAR_LEN, .optional = TRUE}
+    [OVS_KEY_ATTR_MPLS] = {.type = NL_A_VAR_LEN, .optional = TRUE},
+    [OVS_KEY_ATTR_CT_STATE] = {.type = NL_A_UNSPEC, .minLen = 4,
+                               .maxLen = 4, .optional = TRUE},
+    [OVS_KEY_ATTR_CT_ZONE] = {.type = NL_A_UNSPEC, .minLen = 2,
+                              .maxLen = 2, .optional = TRUE},
+    [OVS_KEY_ATTR_CT_MARK] = {.type = NL_A_UNSPEC, .minLen = 4,
+                              .maxLen = 4, .optional = TRUE},
+    [OVS_KEY_ATTR_CT_LABELS] = {.type = NL_A_UNSPEC,
+                                .minLen = sizeof(struct ovs_key_ct_labels),
+                                .maxLen = sizeof(struct ovs_key_ct_labels),
+                                .optional = TRUE}
 };
 const UINT32 nlFlowKeyPolicyLen = ARRAY_SIZE(nlFlowKeyPolicy);
 
@@ -229,7 +239,8 @@ const NL_POLICY nlFlowActionPolicy[] = {
                               .maxLen = sizeof(struct ovs_action_hash),
                               .optional = TRUE},
     [OVS_ACTION_ATTR_SET] = {.type = NL_A_VAR_LEN, .optional = TRUE},
-    [OVS_ACTION_ATTR_SAMPLE] = {.type = NL_A_VAR_LEN, .optional = TRUE}
+    [OVS_ACTION_ATTR_SAMPLE] = {.type = NL_A_VAR_LEN, .optional = TRUE},
+    [OVS_ACTION_ATTR_CT] = {.type = NL_A_VAR_LEN, .optional = TRUE}
 };
 
 /*
@@ -850,6 +861,28 @@ MapFlowKeyToNlKey(PNL_BUFFER nlBuf,
         goto done;
     }
 
+    if (!NlMsgPutTailU32(nlBuf, OVS_KEY_ATTR_CT_STATE,
+                         flowKey->ct.state)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+    if (!NlMsgPutTailU16(nlBuf, OVS_KEY_ATTR_CT_ZONE,
+                         flowKey->ct.zone)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+    if (!NlMsgPutTailU32(nlBuf, OVS_KEY_ATTR_CT_MARK,
+                         flowKey->ct.mark)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+    if (!NlMsgPutTailUnspec(nlBuf, OVS_KEY_ATTR_CT_LABELS,
+                            (PCHAR)(&flowKey->ct.labels),
+                            sizeof(struct ovs_key_ct_labels))) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
     if (flowKey->dpHash) {
         if (!NlMsgPutTailU32(nlBuf, OVS_KEY_ATTR_DP_HASH,
                              flowKey->dpHash)) {
@@ -1386,6 +1419,24 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
         destKey->dpHash = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_DP_HASH]);
     }
 
+    if (keyAttrs[OVS_KEY_ATTR_CT_STATE]) {
+        destKey->ct.state = (NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_CT_STATE]));
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_CT_ZONE]) {
+        destKey->ct.zone = (NlAttrGetU16(keyAttrs[OVS_KEY_ATTR_CT_ZONE]));
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_CT_MARK]) {
+        destKey->ct.mark = (NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_CT_MARK]));
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_CT_LABELS]) {
+        const struct ovs_key_ct_labels *ct_labels;
+        ct_labels = NlAttrGet(keyAttrs[OVS_KEY_ATTR_CT_LABELS]);
+        RtlCopyMemory(&destKey->ct.labels, ct_labels, sizeof(struct ovs_key_ct_labels));
+    }
+
     /* ===== L2 headers ===== */
     destKey->l2.inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
 
@@ -1774,6 +1825,24 @@ OvsGetFlowMetadata(OvsFlowKey *key,
         key->dpHash = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_DP_HASH]);
     }
 
+    if (keyAttrs[OVS_KEY_ATTR_CT_STATE]) {
+        key->ct.state = (NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_CT_STATE]));
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_CT_ZONE]) {
+        key->ct.zone = (NlAttrGetU16(keyAttrs[OVS_KEY_ATTR_CT_ZONE]));
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_CT_MARK]) {
+        key->ct.mark = (NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_CT_MARK]));
+    }
+
+    if (keyAttrs[OVS_KEY_ATTR_CT_LABELS]) {
+        const struct ovs_key_ct_labels *ct_labels;
+        ct_labels = NlAttrGet(keyAttrs[OVS_KEY_ATTR_CT_LABELS]);
+        RtlCopyMemory(&key->ct.labels, ct_labels, sizeof(struct ovs_key_ct_labels));
+    }
+
     return status;
 }
 
@@ -2059,6 +2128,11 @@ FlowEqual(OvsFlow *srcFlow,
             srcFlow->key.l2.val == dstKey->l2.val &&
             srcFlow->key.recircId == dstKey->recircId &&
             srcFlow->key.dpHash == dstKey->dpHash &&
+            srcFlow->key.ct.state == dstKey->ct.state &&
+            srcFlow->key.ct.zone == dstKey->ct.zone &&
+            srcFlow->key.ct.mark == dstKey->ct.mark &&
+            !memcmp(&srcFlow->key.ct.labels, &dstKey->ct.labels,
+                    sizeof(struct ovs_key_ct_labels)) &&
             FlowMemoryEqual((UINT64 *)((UINT8 *)&srcFlow->key + offset),
                             (UINT64 *) dstStart,
                             size));
@@ -2155,6 +2229,21 @@ OvsLookupFlow(OVS_DATAPATH *datapath,
         }
         if (key->dpHash) {
             *hash = OvsJhashWords((UINT32*)hash, 1, key->dpHash);
+        }
+        if (key->ct.state) {
+            *hash = OvsJhashWords((UINT32*)hash, 1, key->ct.state);
+        }
+        if (key->ct.zone) {
+            *hash = OvsJhashWords((UINT32*)hash, 1, key->ct.zone);
+        }
+        if (key->ct.mark) {
+            *hash = OvsJhashWords((UINT32*)hash, 1, key->ct.zone);
+        }
+        if (key->ct.labels.ct_labels) {
+            UINT32 lblHash = OvsJhashBytes(&key->ct.labels,
+                                           sizeof(struct ovs_key_ct_labels),
+                                           0);
+            *hash = OvsJhashWords((UINT32*)hash, 1, lblHash);
         }
     }
 
@@ -2322,6 +2411,12 @@ ReportFlowInfo(OvsFlow *flow,
 
     info->key.recircId = flow->key.recircId;
     info->key.dpHash = flow->key.dpHash;
+    info->key.ct.state = flow->key.ct.state;
+    info->key.ct.zone = flow->key.ct.zone;
+    info->key.ct.mark = flow->key.ct.mark;
+    NdisMoveMemory(&info->key.ct.labels,
+                   &flow->key.ct.labels,
+                   sizeof(struct ovs_key_ct_labels));
 
     return status;
 }
@@ -2578,6 +2673,10 @@ OvsFlowKeyAttrSize(void)
          + NlAttrTotalSize(4)   /* OVS_KEY_ATTR_SKB_MARK */
          + NlAttrTotalSize(4)   /* OVS_KEY_ATTR_DP_HASH */
          + NlAttrTotalSize(4)   /* OVS_KEY_ATTR_RECIRC_ID */
+         + NlAttrTotalSize(4)   /* OVS_KEY_ATTR_CT_STATE */
+         + NlAttrTotalSize(2)   /* OVS_KEY_ATTR_CT_ZONE */
+         + NlAttrTotalSize(4)   /* OVS_KEY_ATTR_CT_MARK */
+         + NlAttrTotalSize(16)  /* OVS_KEY_ATTR_CT_LABELS */
          + NlAttrTotalSize(12)  /* OVS_KEY_ATTR_ETHERNET */
          + NlAttrTotalSize(2)   /* OVS_KEY_ATTR_ETHERTYPE */
          + NlAttrTotalSize(4)   /* OVS_KEY_ATTR_VLAN */
@@ -2655,6 +2754,31 @@ OvsProbeSupportedFeature(POVS_MESSAGE msgIn,
 
         if (!recircId) {
             OVS_LOG_ERROR("Invalid recirculation ID.");
+            status = STATUS_INVALID_PARAMETER;
+        }
+    } else if (keyAttrs[OVS_KEY_ATTR_CT_STATE]) {
+        UINT32 state = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_CT_STATE]);
+        if (state & OVS_CS_F_DST_NAT || state & OVS_CS_F_SRC_NAT) {
+            status = STATUS_INVALID_PARAMETER;
+            OVS_LOG_ERROR("Contrack NAT is not supported:%d", state);
+        }
+    } else if (keyAttrs[OVS_KEY_ATTR_CT_ZONE]) {
+        UINT16 zone = (NlAttrGetU16(keyAttrs[OVS_KEY_ATTR_CT_ZONE]));
+        if (!zone) {
+            OVS_LOG_ERROR("Invalid zone specified.");
+            status = STATUS_INVALID_PARAMETER;
+        }
+    } else if (keyAttrs[OVS_KEY_ATTR_CT_MARK]) {
+        UINT32 mark = (NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_CT_MARK]));
+        if (!mark) {
+            OVS_LOG_ERROR("Invalid ct mark specified.");
+            status = STATUS_INVALID_PARAMETER;
+        }
+    } else if (keyAttrs[OVS_KEY_ATTR_CT_LABELS]) {
+        const struct ovs_key_ct_labels *ct_labels;
+        ct_labels = NlAttrGet(keyAttrs[OVS_KEY_ATTR_CT_LABELS]);
+        if (!ct_labels->ct_labels) {
+            OVS_LOG_ERROR("Invalid ct label specified.");
             status = STATUS_INVALID_PARAMETER;
         }
     } else {
