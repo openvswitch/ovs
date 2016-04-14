@@ -1177,14 +1177,17 @@ ovn-sbctl show
 
 echo "------ hv1 dump ------"
 as hv1 ovs-vsctl show
+as hv1 ovs-ofctl show br-int
 as hv1 ovs-ofctl -O OpenFlow13 dump-flows br-int
 
 echo "------ hv2 dump ------"
 as hv2 ovs-vsctl show
+as hv2 ovs-ofctl show br-int
 as hv2 ovs-ofctl -O OpenFlow13 dump-flows br-int
 
 echo "------ hv3 dump ------"
 as hv3 ovs-vsctl show
+as hv3 ovs-ofctl show br-int
 as hv3 ovs-ofctl -O OpenFlow13 dump-flows br-int
 
 # Now check the packets actually received against the ones expected.
@@ -1993,14 +1996,17 @@ ovn-sbctl dump-flows -- list multicast_group
 
 echo "------ hv1 dump ------"
 as hv1 ovs-vsctl show
+as hv1 ovs-ofctl show br-int
 as hv1 ovs-ofctl -O OpenFlow13 dump-flows br-int
 
 echo "------ hv2 dump ------"
 as hv2 ovs-vsctl show
+as hv2 ovs-ofctl show br-int
 as hv2 ovs-ofctl -O OpenFlow13 dump-flows br-int
 
 echo "------ hv3 dump ------"
 as hv3 ovs-vsctl show
+as hv3 ovs-ofctl show br-int
 as hv3 ovs-ofctl -O OpenFlow13 dump-flows br-int
 
 # Now check the packets actually received against the ones expected.
@@ -2158,8 +2164,10 @@ ovn-sbctl list port_binding
 echo "---------------------"
 
 echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl show br-int
 as hv1 ovs-ofctl dump-flows br-int
 echo "------ hv2 dump ----------"
+as hv2 ovs-ofctl show br-int
 as hv2 ovs-ofctl dump-flows br-int
 
 # Packet to Expect
