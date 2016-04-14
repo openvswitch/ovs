@@ -164,7 +164,7 @@ OvsCtEntryCreate(const TCPHdr *tcp,
 
     state |= OVS_CS_F_NEW;
     if (commit) {
-        entry = OvsNewTcpConntrack(tcp, curNbl, currentTime);
+        entry = OvsConntrackCreateTcpEntry(tcp, curNbl, currentTime);
         NdisMoveMemory(&entry->key, &ctx->key, sizeof (OVS_CT_KEY));
         NdisMoveMemory(&entry->rev_key, &ctx->key, sizeof (OVS_CT_KEY));
         OvsCtKeyReverse(&entry->rev_key);
