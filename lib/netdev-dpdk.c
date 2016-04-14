@@ -1736,33 +1736,33 @@ netdev_dpdk_get_features(const struct netdev *netdev,
     link = dev->link;
     ovs_mutex_unlock(&dev->mutex);
 
-    if (link.link_duplex == ETH_LINK_AUTONEG_DUPLEX) {
-        if (link.link_speed == ETH_LINK_SPEED_AUTONEG) {
-            *current = NETDEV_F_AUTONEG;
-        }
-    } else if (link.link_duplex == ETH_LINK_HALF_DUPLEX) {
-        if (link.link_speed == ETH_LINK_SPEED_10) {
+    if (link.link_duplex == ETH_LINK_HALF_DUPLEX) {
+        if (link.link_speed == ETH_SPEED_NUM_10M) {
             *current = NETDEV_F_10MB_HD;
         }
-        if (link.link_speed == ETH_LINK_SPEED_100) {
+        if (link.link_speed == ETH_SPEED_NUM_100M) {
             *current = NETDEV_F_100MB_HD;
         }
-        if (link.link_speed == ETH_LINK_SPEED_1000) {
+        if (link.link_speed == ETH_SPEED_NUM_1G) {
             *current = NETDEV_F_1GB_HD;
         }
     } else if (link.link_duplex == ETH_LINK_FULL_DUPLEX) {
-        if (link.link_speed == ETH_LINK_SPEED_10) {
+        if (link.link_speed == ETH_SPEED_NUM_10M) {
             *current = NETDEV_F_10MB_FD;
         }
-        if (link.link_speed == ETH_LINK_SPEED_100) {
+        if (link.link_speed == ETH_SPEED_NUM_100M) {
             *current = NETDEV_F_100MB_FD;
         }
-        if (link.link_speed == ETH_LINK_SPEED_1000) {
+        if (link.link_speed == ETH_SPEED_NUM_1G) {
             *current = NETDEV_F_1GB_FD;
         }
-        if (link.link_speed == ETH_LINK_SPEED_10000) {
+        if (link.link_speed == ETH_SPEED_NUM_10G) {
             *current = NETDEV_F_10GB_FD;
         }
+    }
+
+    if (link.link_autoneg) {
+        *current |= NETDEV_F_AUTONEG;
     }
 
     return 0;
@@ -2240,6 +2240,10 @@ static int
 dpdk_vhost_class_init(void)
 {
     rte_vhost_driver_callback_register(&virtio_net_device_ops);
+    rte_vhost_feature_disable(1ULL << VIRTIO_NET_F_HOST_TSO4
+                            | 1ULL << VIRTIO_NET_F_HOST_TSO6
+                            | 1ULL << VIRTIO_NET_F_CSUM);
+
     ovs_thread_create("vhost_thread", start_vhost_loop, NULL);
     return 0;
 }
