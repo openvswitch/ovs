@@ -16,8 +16,8 @@
 
 /* OpenFlow protocol pretty-printer. */
 
-#ifndef OFP_PRINT_H
-#define OFP_PRINT_H 1
+#ifndef OPENVSWITCH_OFP_PRINT_H
+#define OPENVSWITCH_OFP_PRINT_H 1
 
 #include <stdint.h>
 #include <stdio.h>
