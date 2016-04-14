@@ -2418,7 +2418,7 @@
 
       <column name="ingress_policing_burst">
         <p>Maximum burst size for data received on this interface, in kb.  The
-        default burst size if set to <code>0</code> is 1000 kb.  This value
+        default burst size if set to <code>0</code> is 8000 kbit.  This value
         has no effect if <ref column="ingress_policing_rate"/>
         is <code>0</code>.</p>
         <p>
@@ -2426,7 +2426,7 @@
           which is important for protocols like TCP that react severely to
           dropped packets.  The burst size should be at least the size of the
           interface's MTU.  Specifying a value that is numerically at least as
-          large as 10% of <ref column="ingress_policing_rate"/> helps TCP come
+          large as 80% of <ref column="ingress_policing_rate"/> helps TCP come
           closer to achieving the full rate.
         </p>
       </column>

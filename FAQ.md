@@ -1123,7 +1123,7 @@ A: A policing policy can be configured on an interface to drop packets
    generate to 10Mbps:
 
        ovs-vsctl set interface vif1.0 ingress_policing_rate=10000
-       ovs-vsctl set interface vif1.0 ingress_policing_burst=1000
+       ovs-vsctl set interface vif1.0 ingress_policing_burst=8000
 
    Traffic policing can interact poorly with some network protocols and
    can have surprising results.  The "Ingress Policing" section of
