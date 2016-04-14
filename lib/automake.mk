@@ -144,7 +144,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ofp-print.c \
 	lib/ofp-print.h \
 	lib/ofp-prop.c \
-	lib/ofp-prop.h \
 	lib/ofp-util.c \
 	lib/ofp-version-opt.h \
 	lib/ofp-version-opt.c \

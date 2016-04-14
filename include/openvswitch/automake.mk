@@ -13,6 +13,7 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/ofp-errors.h \
 	include/openvswitch/ofp-msgs.h \
 	include/openvswitch/ofp-parse.h \
+	include/openvswitch/ofp-prop.h \
 	include/openvswitch/ofp-util.h \
 	include/openvswitch/packets.h \
 	include/openvswitch/thread.h \
