@@ -16,11 +16,10 @@
 
 #include <config.h>
 
-#include "ofp-prop.h"
-
 #include "byte-order.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-prop.h"
 #include "openvswitch/vlog.h"
 #include "util.h"
 #include "uuid.h"
