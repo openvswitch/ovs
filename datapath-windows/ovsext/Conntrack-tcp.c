@@ -58,13 +58,6 @@ enum {
     TCPOPT_WINDOW = 3,
 };
 
-/* Given POINTER, the address of the given MEMBER in a STRUCT object, returns
-   the STRUCT object. */
-#define CONTAINER_OF(POINTER, STRUCT, MEMBER)                           \
-        ((STRUCT *) (void *) ((char *) (POINTER) - \
-         offsetof (STRUCT, MEMBER)))
-
-
 /* TCP sequence numbers are 32 bit integers operated
  * on with modular arithmetic.  These macros can be
  * used to compare such integers. */
@@ -227,7 +220,7 @@ OvsCastConntrackEntryToTcpEntry(OVS_CT_ENTRY* conn)
 }
 
 enum CT_UPDATE_RES
-OvsConntrackUpdateTcpEntry(struct OVS_CT_ENTRY* conn_,
+OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
                            const TCPHdr *tcp,
                            PNET_BUFFER_LIST nbl,
                            BOOLEAN reply,
@@ -488,9 +481,9 @@ OvsConntrackValidateTcpPacket(const TCPHdr *tcp)
 }
 
 OVS_CT_ENTRY *
-OvsNewTcpConntrack(const TCPHdr *tcp,
-                   PNET_BUFFER_LIST nbl,
-                   UINT64 now)
+OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
+                           PNET_BUFFER_LIST nbl,
+                           UINT64 now)
 {
     struct conn_tcp* newconn = NULL;
     struct tcp_peer *src, *dst;
