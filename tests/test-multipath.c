@@ -16,14 +16,14 @@
 
 #include <config.h>
 #undef NDEBUG
-#include "multipath.h"
 #include <assert.h>
 #include <getopt.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include "flow.h"
-#include "ofp-actions.h"
+#include "multipath.h"
+#include "openvswitch/ofp-actions.h"
 #include "ovstest.h"
 #include "util.h"
 

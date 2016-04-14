@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef OFP_ACTIONS_H
-#define OFP_ACTIONS_H 1
+#ifndef OPENVSWITCH_OFP_ACTIONS_H
+#define OPENVSWITCH_OFP_ACTIONS_H 1
 
 #include <stddef.h>
 #include <stdint.h>
-#include "openvswitch/meta-flow.h"
-#include "openvswitch/ofp-util.h"
 #include "openflow/openflow.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 

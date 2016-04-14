@@ -14,17 +14,17 @@
  */
 
 #include <config.h>
-#include "physical.h"
 #include "byte-order.h"
 #include "flow.h"
 #include "lflow.h"
-#include "openvswitch/match.h"
 #include "ofctrl.h"
-#include "ofp-actions.h"
+#include "openvswitch/match.h"
+#include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "ovn-controller.h"
 #include "ovn/lib/ovn-sb-idl.h"
-#include "openvswitch/vlog.h"
+#include "physical.h"
 #include "shash.h"
 #include "simap.h"
 #include "smap.h"

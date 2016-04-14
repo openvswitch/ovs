@@ -15,15 +15,15 @@
 
 #include <config.h>
 #include "byte-order.h"
-#include "ofctrl.h"
 #include "dirs.h"
 #include "hash.h"
 #include "hmap.h"
-#include "ofp-actions.h"
+#include "ofctrl.h"
 #include "ofp-print.h"
 #include "openflow/openflow.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/match.h"
+#include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"

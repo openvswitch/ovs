@@ -40,7 +40,6 @@
 #include "fatal-signal.h"
 #include "nx-match.h"
 #include "odp-util.h"
-#include "ofp-actions.h"
 #include "ofp-print.h"
 #include "ofp-version-opt.h"
 #include "ofproto/ofproto.h"
@@ -48,6 +47,7 @@
 #include "openflow/openflow.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-util.h"
@@ -59,12 +59,12 @@
 #include "pcap-file.h"
 #include "poll-loop.h"
 #include "random.h"
+#include "sort.h"
 #include "stream-ssl.h"
 #include "socket-util.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
-#include "sort.h"
 
 VLOG_DEFINE_THIS_MODULE(ofctl);
 

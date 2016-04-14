@@ -20,15 +20,15 @@
 
 #include "byte-order.h"
 #include "colors.h"
+#include "nx-match.h"
+#include "openflow/openflow.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/match.h"
 #include "openvswitch/meta-flow.h"
-#include "nx-match.h"
-#include "ofp-actions.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
-#include "openflow/openflow.h"
-#include "openvswitch/ofp-errors.h"
 #include "unaligned.h"
 
 

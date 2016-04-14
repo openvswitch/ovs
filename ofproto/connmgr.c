@@ -15,19 +15,18 @@
  */
 
 #include <config.h>
-
-#include "connmgr.h"
-
 #include <errno.h>
 #include <stdlib.h>
 
+#include "bundles.h"
+#include "connmgr.h"
 #include "coverage.h"
 #include "fail-open.h"
 #include "in-band.h"
 #include "odp-util.h"
-#include "ofp-actions.h"
 #include "ofproto-provider.h"
 #include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
@@ -41,8 +40,6 @@
 #include "simap.h"
 #include "stream.h"
 #include "timeval.h"
-
-#include "bundles.h"
 
 VLOG_DEFINE_THIS_MODULE(connmgr);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
