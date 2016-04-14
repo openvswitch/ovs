@@ -15,7 +15,6 @@
  */
 
 #include <config.h>
-#include "ofp-print.h"
 
 #include <errno.h>
 #include <inttypes.h>
@@ -30,11 +29,13 @@
 #include "byte-order.h"
 #include "colors.h"
 #include "compiler.h"
+#include "dp-packet.h"
 #include "flow.h"
 #include "learn.h"
 #include "multipath.h"
 #include "netdev.h"
 #include "nx-match.h"
+#include "odp-util.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "openvswitch/dynamic-string.h"
@@ -42,13 +43,12 @@
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-print.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/type-props.h"
 #include "packets.h"
-#include "dp-packet.h"
 #include "unaligned.h"
-#include "odp-util.h"
 #include "util.h"
 #include "uuid.h"
 

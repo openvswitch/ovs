@@ -15,7 +15,6 @@
  */
 
 #include <config.h>
-#include "ofp-print.h"
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -23,6 +22,7 @@
 #include <netinet/in.h>
 #include <netinet/icmp6.h>
 #include <stdlib.h>
+#include "bitmap.h"
 #include "bundle.h"
 #include "byte-order.h"
 #include "classifier.h"
@@ -37,6 +37,7 @@
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-print.h"
 #include "openvswitch/ofp-prop.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
@@ -47,7 +48,6 @@
 #include "random.h"
 #include "tun-metadata.h"
 #include "unaligned.h"
-#include "bitmap.h"
 #include "uuid.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_util);

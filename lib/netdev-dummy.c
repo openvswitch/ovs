@@ -22,14 +22,15 @@
 
 #include "dp-packet.h"
 #include "dpif-netdev.h"
-#include "openvswitch/dynamic-string.h"
 #include "flow.h"
-#include "openvswitch/list.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-util.h"
-#include "ofp-print.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/list.h"
+#include "openvswitch/ofp-print.h"
 #include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "ovs-atomic.h"
 #include "packets.h"
 #include "pcap-file.h"
@@ -41,7 +42,6 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "reconnect.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_dummy);
 
