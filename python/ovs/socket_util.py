@@ -17,7 +17,6 @@ import os
 import os.path
 import random
 import socket
-import sys
 
 import six
 from six.moves import range
@@ -85,10 +84,7 @@ def make_unix_socket(style, nonblock, bind_path, connect_path, short=False):
             sock.bind(bind_path)
 
             try:
-                if sys.hexversion >= 0x02060000:
-                    os.fchmod(sock.fileno(), 0o700)
-                else:
-                    os.chmod("/dev/fd/%d" % sock.fileno(), 0o700)
+                os.fchmod(sock.fileno(), 0o700)
             except OSError as e:
                 pass
         if connect_path is not None:
@@ -276,7 +272,7 @@ def write_fully(fd, buf):
     bytes_written = 0
     if len(buf) == 0:
         return 0, 0
-    if sys.version_info[0] >= 3 and not isinstance(buf, six.binary_type):
+    if six.PY3 and not isinstance(buf, six.binary_type):
         buf = six.binary_type(buf, 'utf-8')
     while True:
         try:
