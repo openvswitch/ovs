@@ -22,22 +22,22 @@
 #include <netinet/in.h>
 
 #include "byte-order.h"
-#include "openvswitch/dynamic-string.h"
 #include "learn.h"
-#include "openvswitch/meta-flow.h"
 #include "multipath.h"
 #include "netdev.h"
 #include "nx-match.h"
-#include "ofp-actions.h"
+#include "openflow/openflow.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
-#include "openflow/openflow.h"
+#include "openvswitch/vconn.h"
 #include "ovs-thread.h"
 #include "packets.h"
 #include "simap.h"
 #include "socket-util.h"
-#include "openvswitch/ofp-parse.h"
-#include "openvswitch/vconn.h"
 
 /* Parses 'str' as an 8-bit unsigned integer into '*valuep'.
  *

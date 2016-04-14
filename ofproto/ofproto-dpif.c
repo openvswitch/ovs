@@ -15,10 +15,6 @@
  */
 
 #include <config.h>
-
-#include "ofproto/ofproto-dpif.h"
-#include "ofproto/ofproto-provider.h"
-
 #include <errno.h>
 
 #include "bfd.h"
@@ -29,9 +25,7 @@
 #include "connmgr.h"
 #include "coverage.h"
 #include "cfm.h"
-#include "ovs-lldp.h"
 #include "dpif.h"
-#include "openvswitch/dynamic-string.h"
 #include "fail-open.h"
 #include "guarded-list.h"
 #include "hmapx.h"
@@ -39,7 +33,6 @@
 #include "learn.h"
 #include "mac-learning.h"
 #include "mcast-snooping.h"
-#include "openvswitch/meta-flow.h"
 #include "multipath.h"
 #include "netdev-vport.h"
 #include "netdev.h"
@@ -47,10 +40,9 @@
 #include "nx-match.h"
 #include "odp-util.h"
 #include "odp-execute.h"
-#include "openvswitch/ofp-util.h"
-#include "openvswitch/ofpbuf.h"
-#include "ofp-actions.h"
 #include "ofp-print.h"
+#include "ofproto/ofproto-dpif.h"
+#include "ofproto/ofproto-provider.h"
 #include "ofproto-dpif-ipfix.h"
 #include "ofproto-dpif-mirror.h"
 #include "ofproto-dpif-monitor.h"
@@ -58,9 +50,17 @@
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-upcall.h"
 #include "ofproto-dpif-xlate.h"
-#include "poll-loop.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-parse.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
+#include "ovs-lldp.h"
 #include "ovs-rcu.h"
 #include "ovs-router.h"
+#include "poll-loop.h"
 #include "seq.h"
 #include "simap.h"
 #include "smap.h"
@@ -69,8 +69,6 @@
 #include "unaligned.h"
 #include "unixctl.h"
 #include "vlan-bitmap.h"
-#include "openvswitch/ofp-parse.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif);
 

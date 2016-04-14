@@ -15,26 +15,26 @@
  */
 
 #include <config.h>
-#include "fail-open.h"
 #include <inttypes.h>
 #include <stdlib.h>
 #include "classifier.h"
 #include "connmgr.h"
+#include "dp-packet.h"
+#include "fail-open.h"
 #include "flow.h"
 #include "mac-learning.h"
 #include "odp-util.h"
-#include "openvswitch/ofpbuf.h"
-#include "ofp-actions.h"
+#include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vconn.h"
+#include "openvswitch/vlog.h"
 #include "ofproto.h"
 #include "ofproto-provider.h"
 #include "pktbuf.h"
-#include "dp-packet.h"
 #include "poll-loop.h"
 #include "rconn.h"
 #include "timeval.h"
-#include "openvswitch/vconn.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(fail_open);
 
