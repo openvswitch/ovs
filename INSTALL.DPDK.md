@@ -16,7 +16,7 @@ OVS needs a system with 1GB hugepages support.
 Building and Installing:
 ------------------------
 
-Required: DPDK 2.2
+Required: DPDK 16.04
 Optional (if building with vhost-cuse): `fuse`, `fuse-devel` (`libfuse-dev`
 on Debian/Ubuntu)
 
@@ -24,16 +24,11 @@ on Debian/Ubuntu)
   1. Set `$DPDK_DIR`
 
      ```
-     export DPDK_DIR=/usr/src/dpdk-2.2
+     export DPDK_DIR=/usr/src/dpdk-16.04
      cd $DPDK_DIR
      ```
 
-  2. Update `config/common_linuxapp` so that DPDK generate single lib file.
-     (modification also required for IVSHMEM build)
-
-     `CONFIG_RTE_BUILD_COMBINE_LIBS=y`
-
-     Then run `make install` to build and install the library.
+  2. Then run `make install` to build and install the library.
      For default install without IVSHMEM:
 
      `make install T=x86_64-native-linuxapp-gcc DESTDIR=install`
@@ -496,7 +491,7 @@ the vswitchd.
 DPDK vhost:
 -----------
 
-DPDK 2.2 supports two types of vhost:
+DPDK 16.04 supports two types of vhost:
 
 1. vhost-user
 2. vhost-cuse
@@ -517,7 +512,7 @@ with OVS.
 DPDK vhost-user Prerequisites:
 -------------------------
 
-1. DPDK 2.2 with vhost support enabled as documented in the "Building and
+1. DPDK 16.04 with vhost support enabled as documented in the "Building and
    Installing section"
 
 2. QEMU version v2.1.0+
@@ -635,10 +630,10 @@ with OVS.
 DPDK vhost-cuse Prerequisites:
 -------------------------
 
-1. DPDK 2.2 with vhost support enabled as documented in the "Building and
+1. DPDK 16.04 with vhost support enabled as documented in the "Building and
    Installing section"
    As an additional step, you must enable vhost-cuse in DPDK by setting the
-   following additional flag in `config/common_linuxapp`:
+   following additional flag in `config/common_base`:
 
    `CONFIG_RTE_LIBRTE_VHOST_USER=n`
 
@@ -938,7 +933,7 @@ Restrictions:
     this with smaller page sizes.
 
   Platform and Network Interface:
-  - By default with DPDK 2.2, a maximum of 64 TX queues can be used with an
+  - By default with DPDK 16.04, a maximum of 64 TX queues can be used with an
     Intel XL710 Network Interface on a platform with more than 64 logical
     cores. If a user attempts to add an XL710 interface as a DPDK port type to
     a system as described above, an error will be reported that initialization
