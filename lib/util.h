@@ -591,6 +591,17 @@ ovs_be128_is_zero(const ovs_be128 *val)
     return !(val->be64.hi || val->be64.lo);
 }
 
+static inline ovs_u128
+ovs_u128_and(const ovs_u128 a, const ovs_u128 b)
+{
+    ovs_u128 dst;
+
+    dst.u64.hi = a.u64.hi & b.u64.hi;
+    dst.u64.lo = a.u64.lo & b.u64.lo;
+
+    return dst;
+}
+
 void xsleep(unsigned int seconds);
 
 #ifdef _WIN32

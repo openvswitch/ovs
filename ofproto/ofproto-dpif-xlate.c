@@ -4249,29 +4249,28 @@ recirc_unroll_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
     }
 
 static void
-put_ct_mark(const struct flow *flow, struct flow *base_flow,
-            struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+put_ct_mark(const struct flow *flow, struct ofpbuf *odp_actions,
+            struct flow_wildcards *wc)
 {
     struct {
         uint32_t key;
         uint32_t mask;
     } odp_attr;
 
-    odp_attr.key = flow->ct_mark;
+    odp_attr.key = flow->ct_mark & wc->masks.ct_mark;
     odp_attr.mask = wc->masks.ct_mark;
 
-    if (odp_attr.mask && odp_attr.key != base_flow->ct_mark) {
+    if (odp_attr.mask) {
         nl_msg_put_unspec(odp_actions, OVS_CT_ATTR_MARK, &odp_attr,
                           sizeof(odp_attr));
     }
 }
 
 static void
-put_ct_label(const struct flow *flow, struct flow *base_flow,
-             struct ofpbuf *odp_actions, struct flow_wildcards *wc)
+put_ct_label(const struct flow *flow, struct ofpbuf *odp_actions,
+             struct flow_wildcards *wc)
 {
-    if (!ovs_u128_is_zero(&wc->masks.ct_label)
-        && !ovs_u128_equals(&flow->ct_label, &base_flow->ct_label)) {
+    if (!ovs_u128_is_zero(&wc->masks.ct_label)) {
         struct {
             ovs_u128 key;
             ovs_u128 mask;
@@ -4280,7 +4279,7 @@ put_ct_label(const struct flow *flow, struct flow *base_flow,
         odp_ct_label = nl_msg_put_unspec_uninit(odp_actions,
                                                 OVS_CT_ATTR_LABELS,
                                                 sizeof(*odp_ct_label));
-        odp_ct_label->key = flow->ct_label;
+        odp_ct_label->key = ovs_u128_and(flow->ct_label, wc->masks.ct_label);
         odp_ct_label->mask = wc->masks.ct_label;
     }
 }
@@ -4301,7 +4300,9 @@ static void
 compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
 {
     ovs_u128 old_ct_label = ctx->base_flow.ct_label;
+    ovs_u128 old_ct_label_mask = ctx->wc->masks.ct_label;
     uint32_t old_ct_mark = ctx->base_flow.ct_mark;
+    uint32_t old_ct_mark_mask = ctx->wc->masks.ct_mark;
     size_t ct_offset;
     uint16_t zone;
 
@@ -4310,6 +4311,8 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
     xlate_commit_actions(ctx);
 
     /* Process nested actions first, to populate the key. */
+    ctx->wc->masks.ct_mark = 0;
+    ctx->wc->masks.ct_label.u64.hi = ctx->wc->masks.ct_label.u64.lo = 0;
     do_xlate_actions(ofc->actions, ofpact_ct_get_action_len(ofc), ctx);
 
     if (ofc->zone_src.field) {
@@ -4323,15 +4326,17 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
         nl_msg_put_flag(ctx->odp_actions, OVS_CT_ATTR_COMMIT);
     }
     nl_msg_put_u16(ctx->odp_actions, OVS_CT_ATTR_ZONE, zone);
-    put_ct_mark(&ctx->xin->flow, &ctx->base_flow, ctx->odp_actions, ctx->wc);
-    put_ct_label(&ctx->xin->flow, &ctx->base_flow, ctx->odp_actions, ctx->wc);
+    put_ct_mark(&ctx->xin->flow, ctx->odp_actions, ctx->wc);
+    put_ct_label(&ctx->xin->flow, ctx->odp_actions, ctx->wc);
     put_ct_helper(ctx->odp_actions, ofc);
     nl_msg_end_nested(ctx->odp_actions, ct_offset);
 
     /* Restore the original ct fields in the key. These should only be exposed
      * after recirculation to another table. */
     ctx->base_flow.ct_mark = old_ct_mark;
+    ctx->wc->masks.ct_mark = old_ct_mark_mask;
     ctx->base_flow.ct_label = old_ct_label;
+    ctx->wc->masks.ct_label = old_ct_label_mask;
 
     if (ofc->recirc_table == NX_CT_RECIRC_NONE) {
         /* If we do not recirculate as part of this action, hide the results of
