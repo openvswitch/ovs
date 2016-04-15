@@ -4285,17 +4285,16 @@ static void
 put_ct_mark(const struct flow *flow, struct ofpbuf *odp_actions,
             struct flow_wildcards *wc)
 {
-    struct {
-        uint32_t key;
-        uint32_t mask;
-    } odp_attr;
+    if (wc->masks.ct_mark) {
+        struct {
+            uint32_t key;
+            uint32_t mask;
+        } *odp_ct_mark;
 
-    odp_attr.key = flow->ct_mark & wc->masks.ct_mark;
-    odp_attr.mask = wc->masks.ct_mark;
-
-    if (odp_attr.mask) {
-        nl_msg_put_unspec(odp_actions, OVS_CT_ATTR_MARK, &odp_attr,
-                          sizeof(odp_attr));
+        odp_ct_mark = nl_msg_put_unspec_uninit(odp_actions, OVS_CT_ATTR_MARK,
+                                               sizeof(*odp_ct_mark));
+        odp_ct_mark->key = flow->ct_mark & wc->masks.ct_mark;
+        odp_ct_mark->mask = wc->masks.ct_mark;
     }
 }
 
