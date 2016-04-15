@@ -23,6 +23,7 @@
 #include "netdev.h"
 #include "ovs-thread.h"
 #include "ovstest.h"
+#include "pcap-file.h"
 #include "timeval.h"
 
 static const char payload[] = "50540000000a50540000000908004500001c0000000000"
@@ -145,6 +146,74 @@ test_benchmark(struct ovs_cmdl_context *ctx)
     ovs_barrier_destroy(&barrier);
     free(threads);
 }
+
+static void
+test_pcap(struct ovs_cmdl_context *ctx)
+{
+    size_t total_count, i, batch_size;
+    FILE *pcap;
+    int err;
+
+    pcap = ovs_pcap_open(ctx->argv[1], "rb");
+    if (!pcap) {
+        return;
+    }
+
+    batch_size = 1;
+    if (ctx->argc > 2) {
+        batch_size = strtoul(ctx->argv[2], NULL, 0);
+        if (batch_size == 0 || batch_size > NETDEV_MAX_BURST) {
+            ovs_fatal(0,
+                      "batch_size must be between 1 and NETDEV_MAX_BURST(%u)",
+                      NETDEV_MAX_BURST);
+        }
+    }
+
+    fatal_signal_init();
+
+    conntrack_init(&ct);
+    total_count = 0;
+    for (;;) {
+        struct dp_packet_batch pkt_batch;
+
+        dp_packet_batch_init(&pkt_batch);
+
+        for (i = 0; i < batch_size; i++) {
+            struct flow dummy_flow;
+
+            err = ovs_pcap_read(pcap, &pkt_batch.packets[i], NULL);
+            if (err) {
+                break;
+            }
+            flow_extract(pkt_batch.packets[i], &dummy_flow);
+        }
+
+        pkt_batch.count = i;
+        if (pkt_batch.count == 0) {
+            break;
+        }
+
+        conntrack_execute(&ct, &pkt_batch, true, 0, NULL, NULL, NULL);
+
+        for (i = 0; i < pkt_batch.count; i++) {
+            struct ds ds = DS_EMPTY_INITIALIZER;
+            struct dp_packet *pkt = pkt_batch.packets[i];
+
+            total_count++;
+
+            format_flags(&ds, ct_state_to_string, pkt->md.ct_state, '|');
+            printf("%"PRIuSIZE": %s\n", total_count, ds_cstr(&ds));
+
+            ds_destroy(&ds);
+        }
+
+        dp_packet_delete_batch(&pkt_batch, true);
+        if (err) {
+            break;
+        }
+    }
+    conntrack_destroy(&ct);
+}
 
 static const struct ovs_cmdl_command commands[] = {
     /* Connection tracker tests. */
@@ -154,6 +223,10 @@ static const struct ovs_cmdl_command commands[] = {
      * destination port */
     {"benchmark", "n_threads n_pkts batch_size [change_connection]", 3, 4,
      test_benchmark},
+    /* Reads packets from 'file' and sends them to the connection tracker,
+     * 'batch_size' (1 by default) per call, with the commit flag set.
+     * Prints the ct_state of each packet. */
+    {"pcap", "file [batch_size]", 1, 2, test_pcap},
 
     {NULL, NULL, 0, 0, NULL},
 };
