@@ -44,6 +44,13 @@ m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
    AT_CHECK([:; $2])
   ])
 
+# CONFIGURE_VETH_OFFLOADS([VETH])
+#
+# The kernel datapath has no problem with offloads and veths. Nothing
+# to do here.
+m4_define([CONFIGURE_VETH_OFFLOADS],
+)
+
 # CHECK_CONNTRACK()
 #
 # Perform requirements checks for running conntrack tests, and flush the
