@@ -1933,6 +1933,8 @@ done
 # configure lport13 to send and received IPv4 packets with an address range
 ovn-nbctl lport-set-port-security lp13 "f0:00:00:00:00:13 192.168.0.13 20.0.0.4/24 10.0.0.0/24"
 
+sleep 2
+
 sip=`ip_to_hex 10 0 0 13`
 tip=`ip_to_hex 192 168 0 22`
 # arp packet with inner ip 10.0.0.13 should be allowed for lport13
