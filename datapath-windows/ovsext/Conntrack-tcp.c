@@ -159,7 +159,7 @@ OvsConntrackValidateTcpFlags(const TCPHdr *tcp)
 static __inline uint8_t
 OvsTcpGetWscale(const TCPHdr *tcp)
 {
-    unsigned len = tcp->doff * 4 - sizeof *tcp;
+    int len = tcp->doff * 4 - sizeof *tcp;
     const uint8_t *opt = (const uint8_t *)(tcp + 1);
     uint8_t wscale = 0;
     uint8_t optlen;
@@ -178,7 +178,7 @@ OvsTcpGetWscale(const TCPHdr *tcp)
             wscale |= CT_WSCALE_FLAG;
             /* fall through */
         default:
-            optlen = opt[2];
+            optlen = opt[1];
             if (optlen < 2) {
                 optlen = 2;
             }
