@@ -450,8 +450,7 @@ compare_classifiers(struct classifier *cls, size_t n_invisible_rules,
             assert(tr0->aux == tr1->aux);
 
             /* Make sure the rule should have been visible. */
-            assert(cr0->cls_match);
-            assert(cls_match_visible_in_version(cr0->cls_match, version));
+            assert(cls_rule_visible_in_version(cr0, version));
         }
         cr2 = classifier_lookup(cls, version, &flow, NULL);
         assert(cr2 == cr0);
@@ -611,16 +610,18 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
                 found_rule = classifier_find_rule_exactly(cls, rule->cls_rule,
                                                           rule_version);
                 if (found_rule && found_rule != rule->cls_rule) {
+                    struct cls_match *cls_match;
+                    cls_match = get_cls_match_protected(found_rule);
 
                     assert(found_rule->priority == rule->priority);
 
                     /* Found rule may not have a lower version. */
-                    assert(found_rule->cls_match->add_version >= rule_version);
+                    assert(cls_match->add_version >= rule_version);
 
                     /* This rule must not be visible in the found rule's
                      * version. */
                     assert(!cls_match_visible_in_version(
-                               rule, found_rule->cls_match->add_version));
+                               rule, cls_match->add_version));
                 }
 
                 if (rule->priority == prev_priority) {
@@ -1030,10 +1031,12 @@ test_many_rules_in_one_list (struct ovs_cmdl_context *ctx OVS_UNUSED)
                              version);
 
                 if (versioned && removable_rule) {
+                    struct cls_match *cls_match =
+                        get_cls_match_protected(removable_rule);
+
                     /* Removable rule is no longer visible. */
-                    assert(removable_rule->cls_match);
-                    assert(!cls_match_visible_in_version(
-                               removable_rule->cls_match, version));
+                    assert(cls_match);
+                    assert(!cls_match_visible_in_version(cls_match, version));
                     classifier_remove(&cls, removable_rule);
                     n_invisible_rules--;
                 }
