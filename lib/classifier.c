@@ -172,7 +172,7 @@ cls_rule_init__(struct cls_rule *rule, unsigned int priority)
 {
     rculist_init(&rule->node);
     *CONST_CAST(int *, &rule->priority) = priority;
-    rule->cls_match = NULL;
+    ovsrcu_init(&rule->cls_match, NULL);
 }
 
 /* Initializes 'rule' to match packets specified by 'match' at the given
@@ -230,7 +230,8 @@ void
 cls_rule_destroy(struct cls_rule *rule)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    ovs_assert(!rule->cls_match);   /* Must not be in a classifier. */
+    /* Must not be in a classifier. */
+    ovs_assert(!get_cls_match_protected(rule));
 
     /* Check that the rule has been properly removed from the classifier. */
     ovs_assert(rule->node.prev == RCULIST_POISON
@@ -240,11 +241,12 @@ cls_rule_destroy(struct cls_rule *rule)
     minimatch_destroy(CONST_CAST(struct minimatch *, &rule->match));
 }
 
+/* This may only be called by the exclusive writer. */
 void
 cls_rule_set_conjunctions(struct cls_rule *cr,
                           const struct cls_conjunction *conj, size_t n)
 {
-    struct cls_match *match = cr->cls_match;
+    struct cls_match *match = get_cls_match_protected(cr);
     struct cls_conjunction_set *old
         = ovsrcu_get_protected(struct cls_conjunction_set *, &match->conj_set);
     struct cls_conjunction *old_conj = old ? old->conj : NULL;
@@ -285,23 +287,28 @@ cls_rule_is_catchall(const struct cls_rule *rule)
 /* Makes 'rule' invisible in 'remove_version'.  Once that version is used in
  * lookups, the caller should remove 'rule' via ovsrcu_postpone().
  *
- * 'rule' must be in a classifier. */
+ * 'rule' must be in a classifier.
+ * This may only be called by the exclusive writer. */
 void
 cls_rule_make_invisible_in_version(const struct cls_rule *rule,
                                    cls_version_t remove_version)
 {
-    ovs_assert(remove_version >= rule->cls_match->add_version);
+    struct cls_match *cls_match = get_cls_match_protected(rule);
 
-    cls_match_set_remove_version(rule->cls_match, remove_version);
+    ovs_assert(remove_version >= cls_match->add_version);
+
+    cls_match_set_remove_version(cls_match, remove_version);
 }
 
 /* This undoes the change made by cls_rule_make_invisible_in_version().
  *
- * 'rule' must be in a classifier. */
+ * 'rule' must be in a classifier.
+ * This may only be called by the exclusive writer. */
 void
 cls_rule_restore_visibility(const struct cls_rule *rule)
 {
-    cls_match_set_remove_version(rule->cls_match, CLS_NOT_REMOVED_VERSION);
+    cls_match_set_remove_version(get_cls_match_protected(rule),
+                                 CLS_NOT_REMOVED_VERSION);
 }
 
 /* Return true if 'rule' is visible in 'version'.
@@ -310,7 +317,9 @@ cls_rule_restore_visibility(const struct cls_rule *rule)
 bool
 cls_rule_visible_in_version(const struct cls_rule *rule, cls_version_t version)
 {
-    return cls_match_visible_in_version(rule->cls_match, version);
+    struct cls_match *cls_match = get_cls_match(rule);
+
+    return cls_match && cls_match_visible_in_version(cls_match, version);
 }
 
 /* Initializes 'cls' as a classifier that initially contains no classification
@@ -540,8 +549,7 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
 
     /* 'new' is initially invisible to lookups. */
     new = cls_match_alloc(rule, version, conjs, n_conjs);
-
-    CONST_CAST(struct cls_rule *, rule)->cls_match = new;
+    ovsrcu_set(&CONST_CAST(struct cls_rule *, rule)->cls_match, new);
 
     subtable = find_subtable(cls, rule->match.mask);
     if (!subtable) {
@@ -636,8 +644,9 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
                     ovsrcu_postpone(free, conj_set);
                 }
 
+                ovsrcu_set(&old->cls_match, NULL); /* Marks old rule as removed
+                                                    * from the classifier. */
                 ovsrcu_postpone(cls_match_free_cb, iter);
-                old->cls_match = NULL;
 
                 /* No change in subtable's max priority or max count. */
 
@@ -728,12 +737,12 @@ classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
     size_t n_rules;
     unsigned int i;
 
-    rule = cls_rule->cls_match;
+    rule = get_cls_match_protected(cls_rule);
     if (!rule) {
         return NULL;
     }
     /* Mark as removed. */
-    CONST_CAST(struct cls_rule *, cls_rule)->cls_match = NULL;
+    ovsrcu_set(&CONST_CAST(struct cls_rule *, cls_rule)->cls_match, NULL);
 
     /* Remove 'cls_rule' from the subtable's rules list. */
     rculist_remove(CONST_CAST(struct rculist *, &cls_rule->node));
@@ -1261,7 +1270,7 @@ classifier_rule_overlaps(const struct classifier *cls,
             if (rule->priority == target->priority
                 && miniflow_equal_in_minimask(target->match.flow,
                                               rule->match.flow, &m.mask)
-                && cls_match_visible_in_version(rule->cls_match, version)) {
+                && cls_rule_visible_in_version(rule, version)) {
                 return true;
             }
         }
@@ -1318,7 +1327,7 @@ rule_matches(const struct cls_rule *rule, const struct cls_rule *target,
              cls_version_t version)
 {
     /* Rule may only match a target if it is visible in target's version. */
-    return cls_match_visible_in_version(rule->cls_match, version)
+    return cls_rule_visible_in_version(rule, version)
         && (!target || miniflow_equal_in_minimask(rule->match.flow,
                                                   target->match.flow,
                                                   target->match.mask));

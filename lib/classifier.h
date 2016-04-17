@@ -357,7 +357,8 @@ struct cls_conjunction {
 struct cls_rule {
     struct rculist node;          /* In struct cls_subtable 'rules_list'. */
     const int priority;           /* Larger numbers are higher priorities. */
-    struct cls_match *cls_match;  /* NULL if not in a classifier. */
+    OVSRCU_TYPE(struct cls_match *) cls_match;  /* NULL if not in a
+                                                 * classifier. */
     const struct minimatch match; /* Matching rule. */
 };
 
