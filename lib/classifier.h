@@ -361,6 +361,15 @@ struct cls_rule {
                                                  * classifier. */
     const struct minimatch match; /* Matching rule. */
 };
+
+/* Constructor/destructor.  Must run single-threaded. */
+void classifier_init(struct classifier *, const uint8_t *flow_segments);
+void classifier_destroy(struct classifier *);
+
+/* Modifiers.  Caller MUST exclude concurrent calls from other threads. */
+bool classifier_set_prefix_fields(struct classifier *,
+                                  const enum mf_field_id *trie_fields,
+                                  unsigned int n_trie_fields);
 
 void cls_rule_init(struct cls_rule *, const struct match *, int priority);
 void cls_rule_init_from_minimatch(struct cls_rule *, const struct minimatch *,
@@ -371,25 +380,10 @@ void cls_rule_destroy(struct cls_rule *);
 
 void cls_rule_set_conjunctions(struct cls_rule *,
                                const struct cls_conjunction *, size_t n);
-
-bool cls_rule_equal(const struct cls_rule *, const struct cls_rule *);
-void cls_rule_format(const struct cls_rule *, struct ds *);
-bool cls_rule_is_catchall(const struct cls_rule *);
-bool cls_rule_is_loose_match(const struct cls_rule *rule,
-                             const struct minimatch *criteria);
-bool cls_rule_visible_in_version(const struct cls_rule *, cls_version_t);
 void cls_rule_make_invisible_in_version(const struct cls_rule *,
                                         cls_version_t);
 void cls_rule_restore_visibility(const struct cls_rule *);
 
-/* Constructor/destructor.  Must run single-threaded. */
-void classifier_init(struct classifier *, const uint8_t *flow_segments);
-void classifier_destroy(struct classifier *);
-
-/* Modifiers.  Caller MUST exclude concurrent calls from other threads. */
-bool classifier_set_prefix_fields(struct classifier *,
-                                  const enum mf_field_id *trie_fields,
-                                  unsigned int n_trie_fields);
 void classifier_insert(struct classifier *, const struct cls_rule *,
                        cls_version_t, const struct cls_conjunction *,
                        size_t n_conjunctions);
@@ -419,6 +413,15 @@ const struct cls_rule *classifier_find_match_exactly(const struct classifier *,
                                                      cls_version_t);
 bool classifier_is_empty(const struct classifier *);
 int classifier_count(const struct classifier *);
+
+/* Classifier rule properties.  These are RCU protected and may run
+ * concurrently with modifiers and each other. */
+bool cls_rule_equal(const struct cls_rule *, const struct cls_rule *);
+void cls_rule_format(const struct cls_rule *, struct ds *);
+bool cls_rule_is_catchall(const struct cls_rule *);
+bool cls_rule_is_loose_match(const struct cls_rule *rule,
+                             const struct minimatch *criteria);
+bool cls_rule_visible_in_version(const struct cls_rule *, cls_version_t);
 
 /* Iteration.
  *
