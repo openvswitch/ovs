@@ -9578,6 +9578,7 @@ ofputil_is_bundlable(enum ofptype type)
         /* Minimum required by OpenFlow 1.4. */
     case OFPTYPE_PORT_MOD:
     case OFPTYPE_FLOW_MOD:
+    case OFPTYPE_PACKET_OUT:
         return true;
 
         /* Nice to have later. */
@@ -9585,7 +9586,6 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_GROUP_MOD:
     case OFPTYPE_TABLE_MOD:
     case OFPTYPE_METER_MOD:
-    case OFPTYPE_PACKET_OUT:
     case OFPTYPE_NXT_TLV_TABLE_MOD:
 
         /* Not to be bundlable. */
