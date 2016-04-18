@@ -857,7 +857,7 @@ hypervisors. Please see the tutorial 3 above.
 [ovn-nb(5)]:http://openvswitch.org/support/dist-docs/ovn-nb.5.html
 [ovn-sb(5)]:http://openvswitch.org/support/dist-docs/ovn-sb.5.html
 [vtep(5)]:http://openvswitch.org/support/dist-docs/vtep.5.html
-[ovn-northd(8)]:http://openvswitch.org/support/dist-docs/ovn-northd
+[ovn-northd(8)]:http://openvswitch.org/support/dist-docs/ovn-northd.8.html
 [ovn-controller(8)]:http://openvswitch.org/support/dist-docs/ovn-controller.8.html
 [ovn-controller-vtep(8)]:http://openvswitch.org/support/dist-docs/ovn-controller-vtep.8.html
 [vtep-ctl(8)]:http://openvswitch.org/support/dist-docs/vtep-ctl.8.html
