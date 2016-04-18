@@ -723,7 +723,7 @@ done:
 static NTSTATUS
 _MapFlowInfoToNl(PNL_BUFFER nlBuf, OvsFlowInfo *flowInfo)
 {
-    NTSTATUS rc = STATUS_SUCCESS;
+    NTSTATUS rc;
 
     rc = MapFlowKeyToNlKey(nlBuf, &(flowInfo->key), OVS_FLOW_ATTR_KEY,
                            OVS_KEY_ATTR_TUNNEL);

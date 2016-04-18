@@ -214,7 +214,7 @@ static NTSTATUS
 OvsInjectPacketThroughActions(PNET_BUFFER_LIST pNbl,
                               OVS_TUNNEL_PENDED_PACKET *packet)
 {
-    NTSTATUS status = STATUS_SUCCESS;
+    NTSTATUS status;
     OvsIPv4TunnelKey tunnelKey;
     NET_BUFFER *pNb;
     ULONG sendCompleteFlags = 0;
@@ -225,10 +225,9 @@ OvsInjectPacketThroughActions(PNET_BUFFER_LIST pNbl,
     OvsCompletionList completionList;
     KIRQL irql;
     ULONG SendFlags = NDIS_SEND_FLAGS_SWITCH_DESTINATION_GROUP;
-    OVS_DATAPATH *datapath = NULL;
+    OVS_DATAPATH *datapath = &gOvsSwitchContext->datapath;;
 
     ASSERT(gOvsSwitchContext);
-    datapath = &gOvsSwitchContext->datapath;
 
     /* Fill the tunnel key */
     status = OvsSlowPathDecapVxlan(pNbl, &tunnelKey);

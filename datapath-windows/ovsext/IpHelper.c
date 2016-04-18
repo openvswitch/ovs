@@ -231,7 +231,7 @@ OvsGetIPEntry(NET_LUID interfaceLuid,
     NTSTATUS status;
     UINT32 i;
 
-    if (ipEntry == NULL || ipEntry == NULL) {
+    if (ipEntry == NULL) {
         return STATUS_INVALID_PARAMETER;
     }
 
@@ -1209,7 +1209,7 @@ static VOID
 OvsHandleFwdRequest(POVS_IP_HELPER_REQUEST request)
 {
     SOCKADDR_INET dst, src;
-    NTSTATUS status = STATUS_SUCCESS;
+    NTSTATUS status;
     MIB_IPFORWARD_ROW2 ipRoute;
     MIB_IPNET_ROW2 ipNeigh;
     OVS_FWD_INFO fwdInfo;
