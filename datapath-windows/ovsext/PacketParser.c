@@ -93,7 +93,6 @@ OvsParseIPv6(const NET_BUFFER_LIST *packet,
     UINT32 nextHdr;
     Ipv6Key *flow= &key->ipv6Key;
 
-    ofs = layers->l3Offset;
     nh = OvsGetPacketBytes(packet, sizeof *nh, ofs, &ipv6HdrStorage);
     if (!nh) {
         return NDIS_STATUS_FAILURE;

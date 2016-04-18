@@ -983,7 +983,7 @@ static __inline NDIS_STATUS
 OvsOutputBeforeSetAction(OvsForwardingContext *ovsFwdCtx)
 {
     PNET_BUFFER_LIST newNbl;
-    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    NDIS_STATUS status;
 
     /*
      * Create a copy and work on the copy after this point. The original NBL is
@@ -1142,7 +1142,7 @@ static __inline NDIS_STATUS
 OvsActionMplsPop(OvsForwardingContext *ovsFwdCtx,
                  ovs_be16 ethertype)
 {
-    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    NDIS_STATUS status;
     OVS_PACKET_HDR_INFO *layers = &ovsFwdCtx->layers;
     EthHdr *ethHdr = NULL;
 
@@ -1945,7 +1945,7 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
                   const PNL_ATTR actions,
                   INT actionsLen)
 {
-    NDIS_STATUS status = STATUS_SUCCESS;
+    NDIS_STATUS status;
 
     status = OvsDoExecuteActions(switchContext, completionList, curNbl,
                                  portNo, sendFlags, key, hash, layers,
@@ -1974,8 +1974,8 @@ OvsDoRecirc(POVS_SWITCH_CONTEXT switchContext,
             UINT32 srcPortNo,
             OVS_PACKET_HDR_INFO *layers)
 {
-    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
-    OvsFlow *flow = NULL;
+    NDIS_STATUS status;
+    OvsFlow *flow;
     OvsForwardingContext ovsFwdCtx = { 0 };
     UINT64 hash = 0;
     ASSERT(layers);

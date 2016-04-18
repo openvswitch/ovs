@@ -366,7 +366,7 @@ OvsExtOidRequest(NDIS_HANDLE filterModuleContext,
                  PNDIS_OID_REQUEST oidRequest)
 {
     POVS_SWITCH_CONTEXT switchObject = (POVS_SWITCH_CONTEXT)filterModuleContext;
-    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    NDIS_STATUS status;
     PNDIS_OID_REQUEST clonedOidRequest = NULL;
     struct _METHOD *methodInfo = &(oidRequest->DATA.METHOD_INFORMATION);
     BOOLEAN completeOid = FALSE;
