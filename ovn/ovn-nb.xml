@@ -627,6 +627,13 @@
       IP address to use as default gateway, if any.
     </column>
 
+    <column name="enabled">
+      This column is used to administratively set router state.  If this column
+      is empty or is set to <code>true</code>, the router is enabled.  If this
+      column is set to <code>false</code>, the router is disabled.  A disabled
+      router has all ingress and egress traffic dropped.
+    </column>
+    
     <group title="Common Columns">
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.

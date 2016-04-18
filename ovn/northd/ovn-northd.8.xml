@@ -397,6 +397,13 @@ output;
 
     <h2>Logical Router Datapaths</h2>
 
+    <p>
+      Logical router datapaths will only exist for <ref table="Logical_Router"
+      db="OVN_Northbound"/> rows in the <ref db="OVN_Northbound"/> database
+      that do not have <ref column="enabled" table="Logical_Router"
+      db="OVN_Northbound"/> set to <code>false</code>
+    </p>
+
     <h3>Ingress Table 0: L2 Admission Control</h3>
 
     <p>
