@@ -317,6 +317,12 @@ ovn_datapath_from_sbrec(struct hmap *datapaths,
     return ovn_datapath_find(datapaths, &key);
 }
 
+static bool
+lrouter_is_enabled(const struct nbrec_logical_router *lrouter)
+{
+    return !lrouter->enabled || *lrouter->enabled;
+}
+
 static void
 join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
                struct ovs_list *sb_only, struct ovs_list *nb_only,
@@ -374,6 +380,10 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
 
     const struct nbrec_logical_router *nbr;
     NBREC_LOGICAL_ROUTER_FOR_EACH (nbr, ctx->ovnnb_idl) {
+        if (!lrouter_is_enabled(nbr)) {
+            continue;
+        }
+
         struct ovn_datapath *od = ovn_datapath_find(datapaths,
                                                     &nbr->header_.uuid);
         if (od) {

@@ -2200,3 +2200,147 @@ OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP
+
+
+AT_SETUP([ovn -- 1 HVs, 2 LSs, 1 lport/LS, 1 LR])
+AT_KEYWORDS([router-admin-state])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# One LR - R1 has switch ls1 (191.168.1.0/24) connected to it,
+# and has switch ls2 (172.16.1.0/24) connected to it.
+
+ovn-nbctl create Logical_Router name=R1
+
+ovn-nbctl lswitch-add ls1
+ovn-nbctl lswitch-add ls2
+
+# Connect ls1 to R1
+ovn-nbctl -- --id=@lrp create Logical_Router_port name=ls1 \
+network=192.168.1.1/24 mac=\"00:00:00:01:02:03\" -- add Logical_Router R1 \
+ports @lrp -- lport-add ls1 rp-ls1
+
+ovn-nbctl set Logical_port rp-ls1 type=router options:router-port=ls1 \
+addresses=\"00:00:00:01:02:03\"
+
+# Connect ls2 to R1
+ovn-nbctl -- --id=@lrp create Logical_Router_port name=ls2 \
+network=172.16.1.1/24 mac=\"00:00:00:01:02:04\" -- add Logical_Router R1 \
+ports @lrp -- lport-add ls2 rp-ls2
+
+ovn-nbctl set Logical_port rp-ls2 type=router options:router-port=ls2 \
+addresses=\"00:00:00:01:02:04\"
+
+# Create logical port ls1-lp1 in ls1
+ovn-nbctl lport-add ls1 ls1-lp1 \
+-- lport-set-addresses ls1-lp1 "f0:00:00:01:02:03 192.168.1.2"
+
+# Create logical port ls2-lp1 in ls2
+ovn-nbctl lport-add ls2 ls2-lp1 \
+-- lport-set-addresses ls2-lp1 "f0:00:00:01:02:04 172.16.1.2"
+
+# Create one hypervisor and create OVS ports corresponding to logical ports.
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int vif1 -- \
+    set interface vif1 external-ids:iface-id=ls1-lp1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int vif2 -- \
+    set interface vif2 external-ids:iface-id=ls2-lp1 \
+    options:tx_pcap=hv1/vif2-tx.pcap \
+    options:rxq_pcap=hv1/vif2-rx.pcap \
+    ofport-request=1
+
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+# Send ip packets between the two ports.
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+# Packet to send.
+src_mac="f00000010203"
+dst_mac="000000010203"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 172 16 1 2`
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+as hv1 ovs-appctl netdev-dummy/receive vif1 $packet
+
+
+echo "---------NB dump-----"
+ovn-nbctl show
+echo "---------------------"
+ovn-nbctl list logical_router
+echo "---------------------"
+ovn-nbctl list logical_router_port
+echo "---------------------"
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list logical_flow
+echo "---------------------"
+
+echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl dump-flows br-int
+
+
+#Disable router R1
+ovn-nbctl set Logical_Router R1 enabled=false
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list logical_flow
+echo "---------------------"
+
+echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl dump-flows br-int
+
+as hv1 ovs-appctl netdev-dummy/receive vif1 $packet
+
+# Packet to Expect
+expect_src_mac="000000010204"
+expect_dst_mac="f00000010204"
+expected=${expect_dst_mac}${expect_src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > received.packets
+echo $expected | trim_zeros > expout
+AT_CHECK([cat received.packets], [0], [expout])
+
+
+as hv1
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+AT_CLEANUP
+
+
