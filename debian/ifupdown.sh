@@ -33,6 +33,16 @@ if /etc/init.d/openvswitch-switch status > /dev/null 2>&1; then :; else
     /etc/init.d/openvswitch-switch start
 fi
 
+i=0; while [ $i -lt 10 ] ; do
+  if ovs_vsctl show > /dev/null ; then
+    break
+  else
+    echo "Waiting 3 seconds for working ovs-vsctl"
+    sleep 3
+    i=$((i+1))
+  fi
+done
+
 if [ "${MODE}" = "start" ]; then
     eval OVS_EXTRA=\"${IF_OVS_EXTRA}\"
 
