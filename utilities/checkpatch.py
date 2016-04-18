@@ -47,6 +47,7 @@ __regex_added_line = re.compile(r'^\+{1,2}[^\+][\w\W]*')
 __regex_leading_with_whitespace_at_all = re.compile(r'^\s+')
 __regex_leading_with_spaces = re.compile(r'^ +[\S]+')
 __regex_trailing_whitespace = re.compile(r'[^\S]+$')
+__regex_single_line_feed = re.compile(r'^\f$')
 __regex_for_if_missing_whitespace = re.compile(r'(if|for|while)[\(]')
 __regex_for_if_too_much_whitespace = re.compile(r'(if|for|while)  +[\(]')
 __regex_for_if_parens_whitespace = re.compile(r'(if|for|while) \( +[\s\S]+\)')
@@ -75,8 +76,10 @@ def leading_whitespace_is_spaces(line):
     """
     if skip_leading_whitespace_check:
         return True
-    if __regex_leading_with_whitespace_at_all.search(line) is not None:
+    if (__regex_leading_with_whitespace_at_all.search(line) is not None and
+            __regex_single_line_feed.search(line) is None):
         return __regex_leading_with_spaces.search(line) is not None
+
     return True
 
 
@@ -85,7 +88,8 @@ def trailing_whitespace_or_crlf(line):
     """
     if skip_trailing_whitespace_check:
         return False
-    return __regex_trailing_whitespace.search(line) is not None
+    return (__regex_trailing_whitespace.search(line) is not None and
+            __regex_single_line_feed.search(line) is None)
 
 
 def if_and_for_whitespace_checks(line):
