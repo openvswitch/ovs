@@ -2366,7 +2366,7 @@ format_odp_tun_vxlan_opt(const struct nlattr *attr,
         case OVS_VXLAN_EXT_GBP: {
             uint32_t key = nl_attr_get_u32(a);
             ovs_be16 id, id_mask;
-            uint8_t flags, flags_mask;
+            uint8_t flags, flags_mask = 0;
 
             id = htons(key & 0xFFFF);
             flags = (key >> 16) & 0xFF;
