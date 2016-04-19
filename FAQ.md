@@ -233,6 +233,19 @@ Validate flow actions |      YES       |       YES      |    N/A    |   NO    |
 Multiple datapaths    |      YES       |       YES      |    YES    |   NO    |
 Tunnel TSO - STT      |      N/A       |       YES      |    NO     |   YES   |
 
+### Q: What DPDK version does each Open vSwitch release work with?
+
+A: The following table lists the DPDK version against which the
+   given versions of Open vSwitch will successfully build.
+
+| Open vSwitch | DPDK
+|:------------:|:-----:
+|    2.2.x     | 1.6
+|    2.3.x     | 1.6
+|    2.4.x     | 2.0
+|    2.5.x     | 2.2
+|    2.6.x     | 16.04
+
 ### Q: I get an error like this when I configure Open vSwitch:
 
        configure: error: Linux kernel in <dir> is version <x>, but
