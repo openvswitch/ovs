@@ -329,7 +329,7 @@ Options:\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
-           program_name, program_name, ctl_get_db_cmd_usage(), ctl_default_db());
+           program_name, program_name, ctl_get_db_cmd_usage(), sbctl_default_db());
     vlog_usage();
     printf("\
   --no-syslog             equivalent to --verbose=sbctl:syslog:warn\n");
