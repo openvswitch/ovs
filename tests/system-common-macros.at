@@ -155,3 +155,7 @@ m4_define([NETNS_DAEMONIZE],
 # Do basic check for vxlan functionality, skip the test if it's not there.
 m4_define([OVS_CHECK_VXLAN],
     [AT_SKIP_IF([! ip link add foo type vxlan help 2>&1 | grep dstport >/dev/null])])
+
+# OVS_CHECK_GRE()
+m4_define([OVS_CHECK_GRE],
+    [AT_SKIP_IF([! ip link add foo type gretap help 2>&1 | grep gre >/dev/null])])
