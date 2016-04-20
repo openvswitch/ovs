@@ -159,3 +159,7 @@ m4_define([OVS_CHECK_VXLAN],
 # OVS_CHECK_GRE()
 m4_define([OVS_CHECK_GRE],
     [AT_SKIP_IF([! ip link add foo type gretap help 2>&1 | grep gre >/dev/null])])
+
+# OVS_CHECK_GENEVE()
+m4_define([OVS_CHECK_GENEVE],
+    [AT_SKIP_IF([! ip link add foo type geneve help 2>&1 | grep geneve >/dev/null])])
