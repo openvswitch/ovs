@@ -52,6 +52,10 @@ struct xlate_in {
      * this flow when actions change header fields. */
     struct flow flow;
 
+    /* Pointer to the original flow received during the upcall. xlate_actions()
+     * will never modify this flow. */
+    const struct flow *upcall_flow;
+
     /* The packet corresponding to 'flow', or a null pointer if we are
      * revalidating without a packet to refer to. */
     const struct dp_packet *packet;
@@ -197,6 +201,7 @@ enum xlate_error {
     XLATE_NO_RECIRCULATION_CONTEXT,
     XLATE_RECIRCULATION_CONFLICT,
     XLATE_TOO_MANY_MPLS_LABELS,
+    XLATE_INVALID_TUNNEL_METADATA,
 };
 
 const char *xlate_strerror(enum xlate_error error);

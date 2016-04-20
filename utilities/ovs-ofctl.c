@@ -1902,7 +1902,7 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests,
                     struct ofputil_packet_in pin;
                     struct ofpbuf continuation;
 
-                    error = ofputil_decode_packet_in(b->data, true, &pin,
+                    error = ofputil_decode_packet_in(b->data, true, NULL, &pin,
                                                      NULL, NULL,
                                                      &continuation);
                     if (error) {
@@ -2980,6 +2980,28 @@ struct fte_version {
     uint8_t table_id;
 };
 
+/* A FTE entry that has been queued for later insertion after all
+ * flows have been scanned to correctly allocation tunnel metadata. */
+struct fte_pending {
+    struct match *match;
+    int priority;
+    struct fte_version *version;
+    int index;
+
+    struct ovs_list list_node;
+};
+
+/* Processing state during two stage processing of flow table entries.
+ * Tracks the maximum size seen for each tunnel metadata entry as well
+ * as a list of the pending FTE entries. */
+struct fte_state {
+    int tun_metadata_size[TUN_METADATA_NUM_OPTS];
+    struct ovs_list fte_pending_list;
+
+    /* The final metadata table that we have constructed. */
+    struct tun_table *tun_tab;
+};
+
 /* Frees 'version' and the data that it owns. */
 static void
 fte_version_free(struct fte_version *version)
@@ -3009,7 +3031,8 @@ fte_version_equals(const struct fte_version *a, const struct fte_version *b)
 /* Clears 's', then if 's' has a version 'index', formats 'fte' and version
  * 'index' into 's', followed by a new-line. */
 static void
-fte_version_format(const struct fte *fte, int index, struct ds *s)
+fte_version_format(const struct fte_state *fte_state, const struct fte *fte,
+                   int index, struct ds *s)
 {
     const struct fte_version *version = fte->versions[index];
 
@@ -3021,7 +3044,7 @@ fte_version_format(const struct fte *fte, int index, struct ds *s)
     if (version->table_id) {
         ds_put_format(s, "table=%"PRIu8" ", version->table_id);
     }
-    cls_rule_format(&fte->rule, s);
+    cls_rule_format(&fte->rule, fte_state->tun_tab, s);
     if (version->cookie != htonll(0)) {
         ds_put_format(s, " cookie=0x%"PRIx64, ntohll(version->cookie));
     }
@@ -3103,25 +3126,6 @@ fte_insert(struct flow_tables *tables, const struct match *match,
     }
 }
 
-/* A FTE entry that has been queued for later insertion after all
- * flows have been scanned to correctly allocation tunnel metadata. */
-struct fte_pending {
-    struct match *match;
-    int priority;
-    struct fte_version *version;
-    int index;
-
-    struct ovs_list list_node;
-};
-
-/* Processing state during two stage processing of flow table entries.
- * Tracks the maximum size seen for each tunnel metadata entry as well
- * as a list of the pending FTE entries. */
-struct fte_state {
-    int tun_metadata_size[TUN_METADATA_NUM_OPTS];
-    struct ovs_list fte_pending_list;
-};
-
 /* Given a list of the field sizes for each tunnel metadata entry, install
  * a mapping table for later operations. */
 static void
@@ -3148,7 +3152,7 @@ generate_tun_metadata(struct fte_state *state)
         }
     }
 
-    tun_metadata_table_mod(&ttm);
+    tun_metadata_table_mod(&ttm, NULL, &state->tun_tab);
     ofputil_uninit_tlv_table(&ttm.mappings);
 }
 
@@ -3158,7 +3162,7 @@ generate_tun_metadata(struct fte_state *state)
  * can just read the data from the match and rewrite it. On rewrite, it
  * will use the new table. */
 static void
-remap_match(struct match *match)
+remap_match(struct fte_state *state, struct match *match)
 {
     int i;
 
@@ -3172,6 +3176,9 @@ remap_match(struct match *match)
     memset(&match->wc.masks.tunnel.metadata, 0,
            sizeof match->wc.masks.tunnel.metadata);
     match->tun_md.valid = false;
+
+    match->flow.tunnel.metadata.tab = state->tun_tab;
+    match->wc.masks.tunnel.metadata.tab = match->flow.tunnel.metadata.tab;
 
     ULLONG_FOR_EACH_1 (i, flow_mask.present.map) {
         const struct mf_field *field = mf_from_id(MFF_TUN_METADATA0 + i);
@@ -3220,6 +3227,13 @@ fte_state_init(struct fte_state *state)
     }
 
     ovs_list_init(&state->fte_pending_list);
+    state->tun_tab = NULL;
+}
+
+static void
+fte_state_destroy(struct fte_state *state)
+{
+    tun_metadata_free(state->tun_tab);
 }
 
 /* The first pass of the processing described in the comment about
@@ -3263,7 +3277,7 @@ fte_fill(struct fte_state *state, struct flow_tables *tables)
     flow_tables_defer(tables);
 
     LIST_FOR_EACH_POP(pending, list_node, &state->fte_pending_list) {
-        remap_match(pending->match);
+        remap_match(state, pending->match);
         fte_insert(tables, pending->match, pending->priority, pending->version,
                    pending->index);
         free(pending->match);
@@ -3518,6 +3532,7 @@ ofctl_replace_flows(struct ovs_cmdl_context *ctx)
     vconn_close(vconn);
 
     fte_free_all(&tables);
+    fte_state_destroy(&fte_state);
 }
 
 static void
@@ -3563,8 +3578,8 @@ ofctl_diff_flows(struct ovs_cmdl_context *ctx)
             struct fte_version *b = fte->versions[1];
 
             if (!a || !b || !fte_version_equals(a, b)) {
-                fte_version_format(fte, 0, &a_s);
-                fte_version_format(fte, 1, &b_s);
+                fte_version_format(&fte_state, fte, 0, &a_s);
+                fte_version_format(&fte_state, fte, 1, &b_s);
                 if (strcmp(ds_cstr(&a_s), ds_cstr(&b_s))) {
                     if (a_s.length) {
                         printf("-%s", ds_cstr(&a_s));
@@ -3582,6 +3597,7 @@ ofctl_diff_flows(struct ovs_cmdl_context *ctx)
     ds_destroy(&b_s);
 
     fte_free_all(&tables);
+    fte_state_destroy(&fte_state);
 
     if (differences) {
         exit(2);
@@ -3781,17 +3797,17 @@ ofctl_parse_nxm__(bool oxm, enum ofp_version version)
         /* Convert nx_match to match. */
         if (strict) {
             if (oxm) {
-                error = oxm_pull_match(&nx_match, &match);
+                error = oxm_pull_match(&nx_match, NULL, &match);
             } else {
                 error = nx_pull_match(&nx_match, match_len, &match,
-                                      &cookie, &cookie_mask);
+                                      &cookie, &cookie_mask, NULL);
             }
         } else {
             if (oxm) {
-                error = oxm_pull_match_loose(&nx_match, &match);
+                error = oxm_pull_match_loose(&nx_match, NULL, &match);
             } else {
                 error = nx_pull_match_loose(&nx_match, match_len, &match,
-                                            &cookie, &cookie_mask);
+                                            &cookie, &cookie_mask, NULL);
             }
         }
 
@@ -4201,7 +4217,7 @@ ofctl_check_vlan(struct ovs_cmdl_context *ctx)
     ofpbuf_init(&nxm, 0);
     nxm_match_len = nx_put_match(&nxm, &match, htonll(0), htonll(0));
     nxm_s = nx_match_to_string(nxm.data, nxm_match_len);
-    error = nx_pull_match(&nxm, nxm_match_len, &nxm_match, NULL, NULL);
+    error = nx_pull_match(&nxm, nxm_match_len, &nxm_match, NULL, NULL, NULL);
     printf("NXM: %s -> ", nxm_s);
     if (error) {
         printf("%s\n", ofperr_to_string(error));
@@ -4217,7 +4233,7 @@ ofctl_check_vlan(struct ovs_cmdl_context *ctx)
     ofpbuf_init(&nxm, 0);
     nxm_match_len = oxm_put_match(&nxm, &match, OFP12_VERSION);
     nxm_s = oxm_match_to_string(&nxm, nxm_match_len);
-    error = oxm_pull_match(&nxm, &nxm_match);
+    error = oxm_pull_match(&nxm, NULL, &nxm_match);
     printf("OXM: %s -> ", nxm_s);
     if (error) {
         printf("%s\n", ofperr_to_string(error));

@@ -50,6 +50,7 @@
 #include "openvswitch/shash.h"
 #include "simap.h"
 #include "timeval.h"
+#include "tun-metadata.h"
 #include "versions.h"
 
 struct match;
@@ -122,6 +123,9 @@ struct ofproto {
     struct cmap groups;               /* Contains "struct ofgroup"s. */
     uint32_t n_groups[4] OVS_GUARDED; /* # of existing groups of each type. */
     struct ofputil_group_features ogf;
+
+     /* Tunnel TLV mapping table. */
+     OVSRCU_TYPE(struct tun_table *) metadata_tab;
 };
 
 void ofproto_init_tables(struct ofproto *, int n_tables);
@@ -1961,6 +1965,12 @@ static inline struct rule *
 rule_from_cls_rule(const struct cls_rule *cls_rule)
 {
     return cls_rule ? CONTAINER_OF(cls_rule, struct rule, cr) : NULL;
+}
+
+static inline const struct tun_table *
+ofproto_get_tun_tab(const struct ofproto *ofproto)
+{
+    return ovsrcu_get(struct tun_table *, &ofproto->metadata_tab);
 }
 
 #endif /* ofproto/ofproto-provider.h */

@@ -529,7 +529,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
         ofproto->ogf.max_groups[i] = OFPG_MAX;
         ofproto->ogf.ofpacts[i] = (UINT64_C(1) << N_OFPACTS) - 1;
     }
-    tun_metadata_init();
+    ovsrcu_set(&ofproto->metadata_tab, tun_metadata_alloc(NULL));
 
     error = ofproto->ofproto_class->construct(ofproto);
     if (error) {
@@ -1549,6 +1549,8 @@ ofproto_destroy__(struct ofproto *ofproto)
     cmap_destroy(&ofproto->groups);
 
     hmap_remove(&all_ofprotos, &ofproto->hmap_node);
+    tun_metadata_free(ovsrcu_get_protected(struct tun_table *,
+                                           &ofproto->metadata_tab));
     free(ofproto->name);
     free(ofproto->type);
     free(ofproto->mfr_desc);
@@ -3535,7 +3537,9 @@ handle_nxt_resume(struct ofconn *ofconn, const struct ofp_header *oh)
     struct ofputil_packet_in_private pin;
     enum ofperr error;
 
-    error = ofputil_decode_packet_in_private(oh, false, &pin, NULL, NULL);
+    error = ofputil_decode_packet_in_private(oh, false,
+                                             ofproto_get_tun_tab(ofproto), &pin,
+                                             NULL, NULL);
     if (error) {
         return error;
     }
@@ -4238,7 +4242,8 @@ handle_flow_stats_request(struct ofconn *ofconn,
     struct ovs_list replies;
     enum ofperr error;
 
-    error = ofputil_decode_flow_stats_request(&fsr, request);
+    error = ofputil_decode_flow_stats_request(&fsr, request,
+                                              ofproto_get_tun_tab(ofproto));
     if (error) {
         return error;
     }
@@ -4292,7 +4297,8 @@ handle_flow_stats_request(struct ofconn *ofconn,
         fs.ofpacts_len = actions->ofpacts_len;
 
         fs.flags = flags;
-        ofputil_append_flow_stats_reply(&fs, &replies);
+        ofputil_append_flow_stats_reply(&fs, &replies,
+                                        ofproto_get_tun_tab(ofproto));
     }
 
     rule_collection_unref(&rules);
@@ -4304,7 +4310,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
 }
 
 static void
-flow_stats_ds(struct rule *rule, struct ds *results)
+flow_stats_ds(struct ofproto *ofproto, struct rule *rule, struct ds *results)
 {
     uint64_t packet_count, byte_count;
     const struct rule_actions *actions;
@@ -4324,7 +4330,7 @@ flow_stats_ds(struct rule *rule, struct ds *results)
     ds_put_format(results, "duration=%llds, ", (time_msec() - created) / 1000);
     ds_put_format(results, "n_packets=%"PRIu64", ", packet_count);
     ds_put_format(results, "n_bytes=%"PRIu64", ", byte_count);
-    cls_rule_format(&rule->cr, results);
+    cls_rule_format(&rule->cr, ofproto_get_tun_tab(ofproto), results);
     ds_put_char(results, ',');
 
     ds_put_cstr(results, "actions=");
@@ -4344,7 +4350,7 @@ ofproto_get_all_flows(struct ofproto *p, struct ds *results)
         struct rule *rule;
 
         CLS_FOR_EACH (rule, cr, &table->cls) {
-            flow_stats_ds(rule, results);
+            flow_stats_ds(p, rule, results);
         }
     }
 }
@@ -4401,7 +4407,8 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     struct ofpbuf *reply;
     enum ofperr error;
 
-    error = ofputil_decode_flow_stats_request(&request, oh);
+    error = ofputil_decode_flow_stats_request(&request, oh,
+                                              ofproto_get_tun_tab(ofproto));
     if (error) {
         return error;
     }
@@ -5680,7 +5687,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     error = ofputil_decode_flow_mod(&fm, oh, ofconn_get_protocol(ofconn),
-                                    &ofpacts,
+                                    ofproto_get_tun_tab(ofproto), &ofpacts,
                                     u16_to_ofp(ofproto->max_ports),
                                     ofproto->n_tables);
     if (!error) {
@@ -7680,6 +7687,7 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
 
         error = ofputil_decode_flow_mod(&fm, badd.msg,
                                         ofconn_get_protocol(ofconn),
+                                        ofproto_get_tun_tab(ofproto),
                                         &ofpacts,
                                         u16_to_ofp(ofproto->max_ports),
                                         ofproto->n_tables);
@@ -7720,6 +7728,8 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
 static enum ofperr
 handle_tlv_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 {
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct tun_table *old_tab, *new_tab;
     struct ofputil_tlv_table_mod ttm;
     enum ofperr error;
 
@@ -7733,7 +7743,12 @@ handle_tlv_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    error = tun_metadata_table_mod(&ttm);
+    old_tab = ovsrcu_get_protected(struct tun_table *, &ofproto->metadata_tab);
+    error = tun_metadata_table_mod(&ttm, old_tab, &new_tab);
+    if (!error) {
+        ovsrcu_set(&ofproto->metadata_tab, new_tab);
+        tun_metadata_postpone_free(old_tab);
+    }
 
     ofputil_uninit_tlv_table(&ttm.mappings);
     return error;
@@ -7742,10 +7757,12 @@ handle_tlv_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 static enum ofperr
 handle_tlv_table_request(struct ofconn *ofconn, const struct ofp_header *oh)
 {
+    const struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofputil_tlv_table_reply ttr;
     struct ofpbuf *b;
 
-    tun_metadata_table_request(&ttr);
+    tun_metadata_table_request(ofproto_get_tun_tab(ofproto), &ttr);
+
     b = ofputil_encode_tlv_table_reply(oh, &ttr);
     ofputil_uninit_tlv_table(&ttr.mappings);
 

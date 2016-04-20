@@ -21,6 +21,10 @@ Post-v2.6.0
        release.
      * New unixctl "ofctl/packet-out" command, which can be used to
        instruct a flow monitor to issue OpenFlow packet-out messages.
+   - Tunnels:
+     * TLV mappings for protocols such as Geneve are now segregated on
+       a per-OpenFlow bridge basis rather than globally. (The interface
+       has not changed.)
 
 v2.6.0 - xx xxx xxxx
 ---------------------

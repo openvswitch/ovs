@@ -509,10 +509,6 @@ ovs-ofctl add-flow br0 tun_metadata0=1234,actions=controller
 A mapping should not be changed while it is in active
 use by a flow. The result of doing so is undefined.
 
-Currently, the TLV mapping table is shared between all OpenFlow
-switches in a given instance of Open vSwitch. This restriction will
-be lifted in the future to allow for easier management.
-
 These commands are Nicira extensions to OpenFlow and require Open vSwitch
 2.5 or later.
 

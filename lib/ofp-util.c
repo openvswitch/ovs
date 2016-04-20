@@ -277,8 +277,8 @@ ofputil_match_to_ofp10_match(const struct match *match,
 }
 
 enum ofperr
-ofputil_pull_ofp11_match(struct ofpbuf *buf, struct match *match,
-                         uint16_t *padded_match_len)
+ofputil_pull_ofp11_match(struct ofpbuf *buf, const struct tun_table *tun_table,
+                         struct match *match, uint16_t *padded_match_len)
 {
     struct ofp11_match_header *omh = buf->data;
     uint16_t match_len;
@@ -307,7 +307,7 @@ ofputil_pull_ofp11_match(struct ofpbuf *buf, struct match *match,
         if (padded_match_len) {
             *padded_match_len = ROUND_UP(match_len, 8);
         }
-        return oxm_pull_match(buf, match);
+        return oxm_pull_match(buf, tun_table, match);
 
     default:
         return OFPERR_OFPBMC_BAD_TYPE;
@@ -1570,6 +1570,7 @@ enum ofperr
 ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
                         const struct ofp_header *oh,
                         enum ofputil_protocol protocol,
+                        const struct tun_table *tun_table,
                         struct ofpbuf *ofpacts,
                         ofp_port_t max_port, uint8_t max_table)
 {
@@ -1583,7 +1584,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 
         ofm = ofpbuf_pull(&b, sizeof *ofm);
 
-        error = ofputil_pull_ofp11_match(&b, &fm->match, NULL);
+        error = ofputil_pull_ofp11_match(&b, tun_table, &fm->match, NULL);
         if (error) {
             return error;
         }
@@ -1678,7 +1679,8 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
             /* Dissect the message. */
             nfm = ofpbuf_pull(&b, sizeof *nfm);
             error = nx_pull_match(&b, ntohs(nfm->match_len),
-                                  &fm->match, &fm->cookie, &fm->cookie_mask);
+                                  &fm->match, &fm->cookie, &fm->cookie_mask,
+                                  tun_table);
             if (error) {
                 return error;
             }
@@ -2267,7 +2269,8 @@ ofputil_decode_ofpst10_flow_request(struct ofputil_flow_stats_request *fsr,
 
 static enum ofperr
 ofputil_decode_ofpst11_flow_request(struct ofputil_flow_stats_request *fsr,
-                                    struct ofpbuf *b, bool aggregate)
+                                    struct ofpbuf *b, bool aggregate,
+                                    const struct tun_table *tun_table)
 {
     const struct ofp11_flow_stats_request *ofsr;
     enum ofperr error;
@@ -2282,7 +2285,7 @@ ofputil_decode_ofpst11_flow_request(struct ofputil_flow_stats_request *fsr,
     fsr->out_group = ntohl(ofsr->out_group);
     fsr->cookie = ofsr->cookie;
     fsr->cookie_mask = ofsr->cookie_mask;
-    error = ofputil_pull_ofp11_match(b, &fsr->match, NULL);
+    error = ofputil_pull_ofp11_match(b, tun_table, &fsr->match, NULL);
     if (error) {
         return error;
     }
@@ -2292,14 +2295,15 @@ ofputil_decode_ofpst11_flow_request(struct ofputil_flow_stats_request *fsr,
 
 static enum ofperr
 ofputil_decode_nxst_flow_request(struct ofputil_flow_stats_request *fsr,
-                                 struct ofpbuf *b, bool aggregate)
+                                 struct ofpbuf *b, bool aggregate,
+                                 const struct tun_table *tun_table)
 {
     const struct nx_flow_stats_request *nfsr;
     enum ofperr error;
 
     nfsr = ofpbuf_pull(b, sizeof *nfsr);
     error = nx_pull_match(b, ntohs(nfsr->match_len), &fsr->match,
-                          &fsr->cookie, &fsr->cookie_mask);
+                          &fsr->cookie, &fsr->cookie_mask, tun_table);
     if (error) {
         return error;
     }
@@ -2712,7 +2716,8 @@ ofputil_pull_queue_get_config_reply(struct ofpbuf *msg,
  * successful, otherwise an OpenFlow error code. */
 enum ofperr
 ofputil_decode_flow_stats_request(struct ofputil_flow_stats_request *fsr,
-                                  const struct ofp_header *oh)
+                                  const struct ofp_header *oh,
+                                  const struct tun_table *tun_table)
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     enum ofpraw raw = ofpraw_pull_assert(&b);
@@ -2724,16 +2729,16 @@ ofputil_decode_flow_stats_request(struct ofputil_flow_stats_request *fsr,
         return ofputil_decode_ofpst10_flow_request(fsr, b.data, true);
 
     case OFPRAW_OFPST11_FLOW_REQUEST:
-        return ofputil_decode_ofpst11_flow_request(fsr, &b, false);
+        return ofputil_decode_ofpst11_flow_request(fsr, &b, false, tun_table);
 
     case OFPRAW_OFPST11_AGGREGATE_REQUEST:
-        return ofputil_decode_ofpst11_flow_request(fsr, &b, true);
+        return ofputil_decode_ofpst11_flow_request(fsr, &b, true, tun_table);
 
     case OFPRAW_NXST_FLOW_REQUEST:
-        return ofputil_decode_nxst_flow_request(fsr, &b, false);
+        return ofputil_decode_nxst_flow_request(fsr, &b, false, tun_table);
 
     case OFPRAW_NXST_AGGREGATE_REQUEST:
-        return ofputil_decode_nxst_flow_request(fsr, &b, true);
+        return ofputil_decode_nxst_flow_request(fsr, &b, true, tun_table);
 
     default:
         /* Hey, the caller lied. */
@@ -2877,7 +2882,8 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
             return EINVAL;
         }
 
-        if (ofputil_pull_ofp11_match(msg, &fs->match, &padded_match_len)) {
+        if (ofputil_pull_ofp11_match(msg, NULL, &fs->match,
+                                     &padded_match_len)) {
             VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply bad match");
             return EINVAL;
         }
@@ -2959,7 +2965,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
                          "claims invalid length %"PRIuSIZE, match_len, length);
             return EINVAL;
         }
-        if (nx_pull_match(msg, match_len, &fs->match, NULL, NULL)) {
+        if (nx_pull_match(msg, match_len, &fs->match, NULL, NULL, NULL)) {
             return EINVAL;
         }
         instructions_len = length - sizeof *nfs - ROUND_UP(match_len, 8);
@@ -3015,12 +3021,19 @@ unknown_to_zero(uint64_t count)
  * have been initialized with ofpmp_init(). */
 void
 ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
-                                struct ovs_list *replies)
+                                struct ovs_list *replies,
+                                const struct tun_table *tun_table)
 {
+    struct ofputil_flow_stats *fs_ = CONST_CAST(struct ofputil_flow_stats *,
+                                                fs);
+    const struct tun_table *orig_tun_table;
     struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     size_t start_ofs = reply->size;
     enum ofp_version version = ofpmp_version(replies);
     enum ofpraw raw = ofpmp_decode_raw(replies);
+
+    orig_tun_table = fs->match.flow.tunnel.metadata.tab;
+    fs_->match.flow.tunnel.metadata.tab = tun_table;
 
     if (raw == OFPRAW_OFPST11_FLOW_REPLY || raw == OFPRAW_OFPST13_FLOW_REPLY) {
         struct ofp11_flow_stats *ofs;
@@ -3107,6 +3120,7 @@ ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
     }
 
     ofpmp_postappend(replies, start_ofs);
+    fs_->match.flow.tunnel.metadata.tab = orig_tun_table;
 }
 
 /* Converts abstract ofputil_aggregate_stats 'stats' into an OFPST_AGGREGATE or
@@ -3170,7 +3184,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
 
         ofr = ofpbuf_pull(&b, sizeof *ofr);
 
-        error = ofputil_pull_ofp11_match(&b, &fr->match, NULL);
+        error = ofputil_pull_ofp11_match(&b, NULL, &fr->match, NULL);
         if (error) {
             return error;
         }
@@ -3206,7 +3220,7 @@ ofputil_decode_flow_removed(struct ofputil_flow_removed *fr,
         enum ofperr error;
 
         nfr = ofpbuf_pull(&b, sizeof *nfr);
-        error = nx_pull_match(&b, ntohs(nfr->match_len), &fr->match,
+        error = nx_pull_match(&b, ntohs(nfr->match_len), &fr->match, NULL,
                               NULL, NULL);
         if (error) {
             return error;
@@ -3328,6 +3342,7 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
  * arguments needs to be initialized. */
 static enum ofperr
 decode_nx_packet_in2(const struct ofp_header *oh, bool loose,
+                     const struct tun_table *tun_table,
                      struct ofputil_packet_in *pin,
                      size_t *total_len, uint32_t *buffer_id,
                      struct ofpbuf *continuation)
@@ -3382,7 +3397,7 @@ decode_nx_packet_in2(const struct ofp_header *oh, bool loose,
 
         case NXPINT_METADATA:
             error = oxm_decode_match(payload.msg, ofpbuf_msgsize(&payload),
-                                     &pin->flow_metadata);
+                                     tun_table, &pin->flow_metadata);
             break;
 
         case NXPINT_USERDATA:
@@ -3439,6 +3454,7 @@ decode_nx_packet_in2(const struct ofp_header *oh, bool loose,
  * Returns 0 if successful, otherwise an OpenFlow error code. */
 enum ofperr
 ofputil_decode_packet_in(const struct ofp_header *oh, bool loose,
+                         const struct tun_table *tun_table,
                          struct ofputil_packet_in *pin,
                          size_t *total_lenp, uint32_t *buffer_idp,
                          struct ofpbuf *continuation)
@@ -3459,7 +3475,8 @@ ofputil_decode_packet_in(const struct ofp_header *oh, bool loose,
         const ovs_be64 *cookie = (raw == OFPRAW_OFPT13_PACKET_IN
                                   ? ofpbuf_pull(&b, sizeof *cookie)
                                   : NULL);
-        enum ofperr error = oxm_pull_match_loose(&b, &pin->flow_metadata);
+        enum ofperr error = oxm_pull_match_loose(&b, tun_table,
+                                                 &pin->flow_metadata);
         if (error) {
             return error;
         }
@@ -3518,7 +3535,7 @@ ofputil_decode_packet_in(const struct ofp_header *oh, bool loose,
 
         npi = ofpbuf_pull(&b, sizeof *npi);
         error = nx_pull_match_loose(&b, ntohs(npi->match_len),
-                                    &pin->flow_metadata, NULL, NULL);
+                                    &pin->flow_metadata, NULL, NULL, NULL);
         if (error) {
             return error;
         }
@@ -3537,8 +3554,9 @@ ofputil_decode_packet_in(const struct ofp_header *oh, bool loose,
         pin->packet = b.data;
         pin->packet_len = b.size;
     } else if (raw == OFPRAW_NXT_PACKET_IN2 || raw == OFPRAW_NXT_RESUME) {
-        enum ofperr error = decode_nx_packet_in2(oh, loose, pin, &total_len,
-                                                 &buffer_id, continuation);
+        enum ofperr error = decode_nx_packet_in2(oh, loose, tun_table, pin,
+                                                 &total_len, &buffer_id,
+                                                 continuation);
         if (error) {
             return error;
         }
@@ -4015,6 +4033,7 @@ parse_actions_property(struct ofpbuf *property, enum ofp_version version,
  * ofputil_packet_in_private_destroy() to free this data. */
 enum ofperr
 ofputil_decode_packet_in_private(const struct ofp_header *oh, bool loose,
+                                 const struct tun_table *tun_table,
                                  struct ofputil_packet_in_private *pin,
                                  size_t *total_len, uint32_t *buffer_id)
 {
@@ -4022,8 +4041,8 @@ ofputil_decode_packet_in_private(const struct ofp_header *oh, bool loose,
 
     struct ofpbuf continuation;
     enum ofperr error;
-    error = ofputil_decode_packet_in(oh, loose, &pin->public, total_len,
-                                     buffer_id, &continuation);
+    error = ofputil_decode_packet_in(oh, loose, tun_table, &pin->public,
+                                     total_len, buffer_id, &continuation);
     if (error) {
         return error;
     }
@@ -6588,7 +6607,8 @@ ofputil_decode_flow_monitor_request(struct ofputil_flow_monitor_request *rq,
     rq->out_port = u16_to_ofp(ntohs(nfmr->out_port));
     rq->table_id = nfmr->table_id;
 
-    return nx_pull_match(msg, ntohs(nfmr->match_len), &rq->match, NULL, NULL);
+    return nx_pull_match(msg, ntohs(nfmr->match_len), &rq->match, NULL,
+                         NULL, NULL);
 }
 
 void
@@ -6696,7 +6716,7 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
         update->cookie = nfuf->cookie;
         update->priority = ntohs(nfuf->priority);
 
-        error = nx_pull_match(msg, match_len, update->match, NULL, NULL);
+        error = nx_pull_match(msg, match_len, update->match, NULL, NULL, NULL);
         if (error) {
             return error;
         }

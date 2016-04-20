@@ -150,7 +150,7 @@ odp_set_tunnel_action(const struct nlattr *a, struct flow_tnl *tun_key)
 {
     enum odp_key_fitness fitness;
 
-    fitness = odp_tun_key_from_attr(a, true, tun_key);
+    fitness = odp_tun_key_from_attr(a, tun_key);
     ovs_assert(fitness != ODP_FIT_ERROR);
 }
 

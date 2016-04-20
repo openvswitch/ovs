@@ -268,9 +268,10 @@ cls_rule_equal(const struct cls_rule *a, const struct cls_rule *b)
 
 /* Appends a string describing 'rule' to 's'. */
 void
-cls_rule_format(const struct cls_rule *rule, struct ds *s)
+cls_rule_format(const struct cls_rule *rule, const struct tun_table *tun_table,
+                struct ds *s)
 {
-    minimatch_format(&rule->match, s, rule->priority);
+    minimatch_format(&rule->match, tun_table, s, rule->priority);
 }
 
 /* Returns true if 'rule' matches every packet, false otherwise. */

@@ -803,7 +803,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     }
 
     if (filter) {
-        char *err = parse_ofp_exact_flow(&flow_filter, &wc_filter, filter,
+        char *err = parse_ofp_exact_flow(&flow_filter, &wc_filter, NULL, filter,
                                          &names_portno);
         if (err) {
             dpctl_error(dpctl_p, 0, "Failed to parse filter (%s)", err);
@@ -829,8 +829,7 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
             struct minimatch minimatch;
 
             odp_flow_key_to_flow(f.key, f.key_len, &flow);
-            odp_flow_key_to_mask(f.mask, f.mask_len, f.key, f.key_len,
-                                 &wc, &flow);
+            odp_flow_key_to_mask(f.mask, f.mask_len, &wc, &flow);
             match_init(&match, &flow, &wc);
 
             match_init(&match_filter, &flow_filter, &wc);

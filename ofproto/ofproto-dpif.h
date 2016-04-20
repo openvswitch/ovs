@@ -184,6 +184,7 @@ int ofproto_dpif_delete_internal_flow(struct ofproto_dpif *, struct match *,
                                       int priority);
 
 const struct uuid *ofproto_dpif_get_uuid(const struct ofproto_dpif *);
+const struct tun_table *ofproto_dpif_get_tun_tab(const struct ofproto_dpif *);
 
 /* struct rule_dpif has struct rule as it's first member. */
 #define RULE_CAST(RULE) ((struct rule *)RULE)

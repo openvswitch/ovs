@@ -474,11 +474,13 @@ nx_pull_match_entry(struct ofpbuf *b, bool allow_cookie,
 
 static enum ofperr
 nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
-            struct match *match, ovs_be64 *cookie, ovs_be64 *cookie_mask)
+            struct match *match, ovs_be64 *cookie, ovs_be64 *cookie_mask,
+            const struct tun_table *tun_table)
 {
     ovs_assert((cookie != NULL) == (cookie_mask != NULL));
 
     match_init_catchall(match);
+    match->flow.tunnel.metadata.tab = tun_table;
     if (cookie) {
         *cookie = *cookie_mask = htonll(0);
     }
@@ -529,13 +531,15 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
         }
     }
 
+    match->flow.tunnel.metadata.tab = NULL;
     return 0;
 }
 
 static enum ofperr
 nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
                 struct match *match,
-                ovs_be64 *cookie, ovs_be64 *cookie_mask)
+                ovs_be64 *cookie, ovs_be64 *cookie_mask,
+                const struct tun_table *tun_table)
 {
     uint8_t *p = NULL;
 
@@ -549,7 +553,8 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
         }
     }
 
-    return nx_pull_raw(p, match_len, strict, match, cookie, cookie_mask);
+    return nx_pull_raw(p, match_len, strict, match, cookie, cookie_mask,
+                       tun_table);
 }
 
 /* Parses the nx_match formatted match description in 'b' with length
@@ -562,9 +567,11 @@ nx_pull_match__(struct ofpbuf *b, unsigned int match_len, bool strict,
  * Returns 0 if successful, otherwise an OpenFlow error code. */
 enum ofperr
 nx_pull_match(struct ofpbuf *b, unsigned int match_len, struct match *match,
-              ovs_be64 *cookie, ovs_be64 *cookie_mask)
+              ovs_be64 *cookie, ovs_be64 *cookie_mask,
+              const struct tun_table *tun_table)
 {
-    return nx_pull_match__(b, match_len, true, match, cookie, cookie_mask);
+    return nx_pull_match__(b, match_len, true, match, cookie, cookie_mask,
+                           tun_table);
 }
 
 /* Behaves the same as nx_pull_match(), but skips over unknown NXM headers,
@@ -572,13 +579,16 @@ nx_pull_match(struct ofpbuf *b, unsigned int match_len, struct match *match,
 enum ofperr
 nx_pull_match_loose(struct ofpbuf *b, unsigned int match_len,
                     struct match *match,
-                    ovs_be64 *cookie, ovs_be64 *cookie_mask)
+                    ovs_be64 *cookie, ovs_be64 *cookie_mask,
+                    const struct tun_table *tun_table)
 {
-    return nx_pull_match__(b, match_len, false, match, cookie, cookie_mask);
+    return nx_pull_match__(b, match_len, false, match, cookie, cookie_mask,
+                           tun_table);
 }
 
 static enum ofperr
-oxm_pull_match__(struct ofpbuf *b, bool strict, struct match *match)
+oxm_pull_match__(struct ofpbuf *b, bool strict,
+                 const struct tun_table *tun_table, struct match *match)
 {
     struct ofp11_match_header *omh = b->data;
     uint8_t *p;
@@ -606,7 +616,7 @@ oxm_pull_match__(struct ofpbuf *b, bool strict, struct match *match)
     }
 
     return nx_pull_raw(p + sizeof *omh, match_len - sizeof *omh,
-                       strict, match, NULL, NULL);
+                       strict, match, NULL, NULL, tun_table);
 }
 
 /* Parses the oxm formatted match description preceded by a struct
@@ -616,17 +626,19 @@ oxm_pull_match__(struct ofpbuf *b, bool strict, struct match *match)
  *
  * Returns 0 if successful, otherwise an OpenFlow error code. */
 enum ofperr
-oxm_pull_match(struct ofpbuf *b, struct match *match)
+oxm_pull_match(struct ofpbuf *b, const struct tun_table *tun_table,
+               struct match *match)
 {
-    return oxm_pull_match__(b, true, match);
+    return oxm_pull_match__(b, true, tun_table, match);
 }
 
 /* Behaves the same as oxm_pull_match() with one exception.  Skips over unknown
  * OXM headers instead of failing with an error when they are encountered. */
 enum ofperr
-oxm_pull_match_loose(struct ofpbuf *b, struct match *match)
+oxm_pull_match_loose(struct ofpbuf *b, const struct tun_table *tun_table,
+                     struct match *match)
 {
-    return oxm_pull_match__(b, false, match);
+    return oxm_pull_match__(b, false, tun_table, match);
 }
 
 /* Parses the OXM match description in the 'oxm_len' bytes in 'oxm'.  Stores
@@ -636,9 +648,10 @@ oxm_pull_match_loose(struct ofpbuf *b, struct match *match)
  *
  * Returns 0 if successful, otherwise an OpenFlow error code. */
 enum ofperr
-oxm_decode_match(const void *oxm, size_t oxm_len, struct match *match)
+oxm_decode_match(const void *oxm, size_t oxm_len,
+                 const struct tun_table *tun_table, struct match *match)
 {
-    return nx_pull_raw(oxm, oxm_len, true, match, NULL, NULL);
+    return nx_pull_raw(oxm, oxm_len, true, match, NULL, NULL, tun_table);
 }
 
 /* Verify an array of OXM TLVs treating value of each TLV as a mask,

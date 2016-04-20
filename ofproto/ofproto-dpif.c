@@ -357,6 +357,12 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 /* Initial mappings of port to bridge mappings. */
 static struct shash init_ofp_ports = SHASH_INITIALIZER(&init_ofp_ports);
 
+const struct tun_table *
+ofproto_dpif_get_tun_tab(const struct ofproto_dpif *ofproto)
+{
+    return ofproto_get_tun_tab(&ofproto->up);
+}
+
 /* Initialize 'ofm' for a learn action.  If the rule already existed, reference
  * to that rule is taken, otherwise a new rule is created.  'ofm' keeps the
  * rule reference in both cases. */
@@ -4922,7 +4928,8 @@ struct trace_ctx {
 };
 
 static void
-trace_format_rule(struct ds *result, int level, const struct rule_dpif *rule)
+trace_format_rule(struct ofproto *ofproto, struct ds *result, int level,
+                  const struct rule_dpif *rule)
 {
     const struct rule_actions *actions;
     ovs_be64 cookie;
@@ -4939,7 +4946,7 @@ trace_format_rule(struct ds *result, int level, const struct rule_dpif *rule)
 
     ds_put_format(result, "Rule: table=%"PRIu8" cookie=%#"PRIx64" ",
                   rule ? rule->up.table_id : 0, ntohll(cookie));
-    cls_rule_format(&rule->up.cr, result);
+    cls_rule_format(&rule->up.cr, ofproto_get_tun_tab(ofproto), result);
     ds_put_char(result, '\n');
 
     actions = rule_dpif_get_actions(rule);
@@ -5041,7 +5048,7 @@ trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int indentation)
         trace_format_megaflow(result, indentation, "Resubmitted megaflow",
                               trace);
     }
-    trace_format_rule(result, indentation, rule);
+    trace_format_rule(&xin->ofproto->up, result, indentation, rule);
 }
 
 static void
@@ -5158,24 +5165,47 @@ parse_flow_and_packet(int argc, const char *argv[],
             error = "Invalid datapath flow";
             goto exit;
         }
-    } else {
-        char *err = parse_ofp_exact_flow(flow, NULL, argv[argc - 1], NULL);
 
+        flow->tunnel.metadata.tab = ofproto_dpif_get_tun_tab(*ofprotop);
+
+        /* Convert Geneve options to OpenFlow format now. This isn't actually
+         * required in order to get the right results since the ofproto xlate
+         * actions will handle this for us. However, converting now ensures
+         * that our formatting code will always be able to consistently print
+         * in OpenFlow format, which is what we use here. */
+        if (flow->tunnel.flags & FLOW_TNL_F_UDPIF) {
+            struct flow_tnl tnl;
+            int err;
+
+            memcpy(&tnl, &flow->tunnel, sizeof tnl);
+            err = tun_metadata_from_geneve_udpif(flow->tunnel.metadata.tab,
+                                                 &tnl, &tnl, &flow->tunnel);
+            if (err) {
+                error = "Failed to parse Geneve options";
+                goto exit;
+            }
+        }
+    } else {
+        char *err;
+
+        if (argc != 3) {
+            error = "Must specify bridge name";
+            goto exit;
+        }
+
+        *ofprotop = ofproto_dpif_lookup(argv[1]);
+        if (!*ofprotop) {
+            error = "Unknown bridge name";
+            goto exit;
+        }
+
+        err = parse_ofp_exact_flow(flow, NULL,
+                                   ofproto_dpif_get_tun_tab(*ofprotop),
+                                   argv[argc - 1], NULL);
         if (err) {
             m_err = xasprintf("Bad openflow flow syntax: %s", err);
             free(err);
             goto exit;
-        } else {
-            if (argc != 3) {
-                error = "Must specify bridge name";
-                goto exit;
-            }
-
-            *ofprotop = ofproto_dpif_lookup(argv[1]);
-            if (!*ofprotop) {
-                error = "Unknown bridge name";
-                goto exit;
-            }
         }
     }
 

@@ -163,7 +163,7 @@ parse_filter(char *filter_parse)
         memset(&flow_filter, 0, sizeof(flow_filter));
         memset(&wc_filter, 0, sizeof(wc_filter));
 
-        error = parse_ofp_exact_flow(&flow_filter, &wc_filter, filter,
+        error = parse_ofp_exact_flow(&flow_filter, &wc_filter, NULL, filter,
                                      NULL);
         if (error) {
             ovs_fatal(0, "Failed to parse filter (%s)", error);
@@ -196,8 +196,7 @@ parse_filter(char *filter_parse)
             struct minimatch minimatch;
 
             odp_flow_key_to_flow(odp_key.data, odp_key.size, &flow);
-            odp_flow_key_to_mask(odp_mask.data, odp_mask.size, odp_key.data,
-                                 odp_key.size, &wc, &flow);
+            odp_flow_key_to_mask(odp_mask.data, odp_mask.size, &wc, &flow);
             match_init(&match, &flow, &wc);
 
             match_init(&match_filter, &flow_filter, &wc);

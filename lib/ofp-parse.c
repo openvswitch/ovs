@@ -1225,7 +1225,8 @@ parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
  * problem. */
 char *
 parse_ofp_exact_flow(struct flow *flow, struct flow_wildcards *wc,
-                     const char *s, const struct simap *portno_names)
+                     const struct tun_table *tun_table, const char *s,
+                     const struct simap *portno_names)
 {
     char *pos, *key, *value_s;
     char *error = NULL;
@@ -1235,6 +1236,7 @@ parse_ofp_exact_flow(struct flow *flow, struct flow_wildcards *wc,
     if (wc) {
         memset(wc, 0, sizeof *wc);
     }
+    flow->tunnel.metadata.tab = tun_table;
 
     pos = copy = xstrdup(s);
     while (ofputil_parse_key_value(&pos, &key, &value_s)) {

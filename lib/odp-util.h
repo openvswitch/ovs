@@ -150,11 +150,12 @@ struct odputil_keybuf {
     uint32_t keybuf[DIV_ROUND_UP(ODPUTIL_FLOW_KEY_BYTES, 4)];
 };
 
-enum odp_key_fitness odp_tun_key_from_attr(const struct nlattr *, bool udpif,
+enum odp_key_fitness odp_tun_key_from_attr(const struct nlattr *,
                                            struct flow_tnl *);
 
 int odp_ufid_from_string(const char *s_, ovs_u128 *ufid);
 void odp_format_ufid(const ovs_u128 *ufid, struct ds *);
+
 void odp_flow_format(const struct nlattr *key, size_t key_len,
                      const struct nlattr *mask, size_t mask_len,
                      const struct hmap *portno_names, struct ds *,
@@ -232,19 +233,8 @@ enum odp_key_fitness odp_flow_key_to_flow(const struct nlattr *, size_t,
                                           struct flow *);
 enum odp_key_fitness odp_flow_key_to_mask(const struct nlattr *mask_key,
                                           size_t mask_key_len,
-                                          const struct nlattr *flow_key,
-                                          size_t flow_key_len,
                                           struct flow_wildcards *mask,
                                           const struct flow *flow);
-
-enum odp_key_fitness odp_flow_key_to_flow_udpif(const struct nlattr *, size_t,
-                                                struct flow *);
-enum odp_key_fitness odp_flow_key_to_mask_udpif(const struct nlattr *mask_key,
-                                                size_t mask_key_len,
-                                                const struct nlattr *flow_key,
-                                                size_t flow_key_len,
-                                                struct flow_wildcards *mask,
-                                                const struct flow *flow);
 
 const char *odp_key_fitness_to_string(enum odp_key_fitness);
 

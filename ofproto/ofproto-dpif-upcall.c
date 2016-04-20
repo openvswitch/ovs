@@ -1289,8 +1289,7 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
             memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.ipfix);
 
             if (upcall->out_tun_key) {
-                odp_tun_key_from_attr(upcall->out_tun_key, false,
-                                      &output_tunnel_key);
+                odp_tun_key_from_attr(upcall->out_tun_key, &output_tunnel_key);
             }
             dpif_ipfix_bridge_sample(upcall->ipfix, packet, flow,
                                      flow->in_port.odp_port,
@@ -1309,8 +1308,7 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
             memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.flow_sample);
 
             if (upcall->out_tun_key) {
-                odp_tun_key_from_attr(upcall->out_tun_key, false,
-                                      &output_tunnel_key);
+                odp_tun_key_from_attr(upcall->out_tun_key, &output_tunnel_key);
             }
 
             /* The flow reflects exactly the contents of the packet.
@@ -1932,8 +1930,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
                           odp_actions);
     }
 
-    if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, ukey->key,
-                             ukey->key_len, &dp_mask, &flow)
+    if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, &dp_mask, &flow)
         == ODP_FIT_ERROR) {
         goto exit;
     }

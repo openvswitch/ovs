@@ -412,7 +412,8 @@ int classifier_count(const struct classifier *);
 /* Classifier rule properties.  These are RCU protected and may run
  * concurrently with modifiers and each other. */
 bool cls_rule_equal(const struct cls_rule *, const struct cls_rule *);
-void cls_rule_format(const struct cls_rule *, struct ds *);
+void cls_rule_format(const struct cls_rule *, const struct tun_table *,
+                     struct ds *);
 bool cls_rule_is_catchall(const struct cls_rule *);
 bool cls_rule_is_loose_match(const struct cls_rule *rule,
                              const struct minimatch *criteria);

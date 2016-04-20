@@ -1463,11 +1463,14 @@ minimatch_matches_flow(const struct minimatch *match,
 /* Appends a string representation of 'match' to 's'.  If 'priority' is
  * different from OFP_DEFAULT_PRIORITY, includes it in 's'. */
 void
-minimatch_format(const struct minimatch *match, struct ds *s, int priority)
+minimatch_format(const struct minimatch *match,
+                 const struct tun_table *tun_table,struct ds *s, int priority)
 {
     struct match megamatch;
 
     minimatch_expand(match, &megamatch);
+    megamatch.flow.tunnel.metadata.tab = tun_table;
+
     match_format(&megamatch, s, priority);
 }
 

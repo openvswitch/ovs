@@ -399,6 +399,8 @@ const char *xlate_strerror(enum xlate_error error)
         return "Recirculation conflict";
     case XLATE_TOO_MANY_MPLS_LABELS:
         return "Too many MPLS labels";
+    case XLATE_INVALID_TUNNEL_METADATA:
+        return "Invalid tunnel metadata";
     }
     return "Unknown error";
 }
@@ -2901,6 +2903,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     if (xport->peer) {
         const struct xport *peer = xport->peer;
         struct flow old_flow = ctx->xin->flow;
+        struct flow_tnl old_flow_tnl_wc = ctx->wc->masks.tunnel;
         bool old_conntrack = ctx->conntracked;
         bool old_was_mpls = ctx->was_mpls;
         ovs_version_t old_version = ctx->xin->tables_version;
@@ -2914,6 +2917,8 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         flow->in_port.ofp_port = peer->ofp_port;
         flow->metadata = htonll(0);
         memset(&flow->tunnel, 0, sizeof flow->tunnel);
+        flow->tunnel.metadata.tab = ofproto_dpif_get_tun_tab(peer->xbridge->ofproto);
+        ctx->wc->masks.tunnel.metadata.tab = flow->tunnel.metadata.tab;
         memset(flow->regs, 0, sizeof flow->regs);
         flow->actset_output = OFPP_UNSET;
         ctx->conntracked = false;
@@ -2981,6 +2986,15 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
         /* Restore calling bridge's lookup version. */
         ctx->xin->tables_version = old_version;
+
+        /* Since this packet came in on a patch port (from the perspective of
+         * the peer bridge), it cannot have useful tunnel information. As a
+         * result, any wildcards generated on that tunnel also cannot be valid.
+         * The tunnel wildcards must be restored to their original version since
+         * the peer bridge uses a separate tunnel metadata table and therefore
+         * any generated wildcards will be garbage in the context of our
+         * metadata table. */
+        ctx->wc->masks.tunnel = old_flow_tnl_wc;
 
         /* The peer bridge popping MPLS should have no effect on the original
          * bridge. */
@@ -5047,6 +5061,7 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->ofproto = ofproto;
     xin->tables_version = version;
     xin->flow = *flow;
+    xin->upcall_flow = flow;
     xin->flow.in_port.ofp_port = in_port;
     xin->flow.actset_output = OFPP_UNSET;
     xin->packet = packet;
@@ -5453,6 +5468,27 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         goto exit;
     }
 
+    /* Tunnel metadata in udpif format must be normalized before translation. */
+    if (flow->tunnel.flags & FLOW_TNL_F_UDPIF) {
+        const struct tun_table *tun_tab = ofproto_dpif_get_tun_tab(xin->ofproto);
+        int err;
+
+        err = tun_metadata_from_geneve_udpif(tun_tab, &xin->upcall_flow->tunnel,
+                                             &xin->upcall_flow->tunnel,
+                                             &flow->tunnel);
+        if (err) {
+            XLATE_REPORT_ERROR(&ctx, "Invalid Geneve tunnel metadata");
+            ctx.error = XLATE_INVALID_TUNNEL_METADATA;
+            goto exit;
+        }
+    } else if (!flow->tunnel.metadata.tab) {
+        /* If the original flow did not come in on a tunnel, then it won't have
+         * FLOW_TNL_F_UDPIF set. However, we still need to have a metadata
+         * table in case we generate tunnel actions. */
+        flow->tunnel.metadata.tab = ofproto_dpif_get_tun_tab(xin->ofproto);
+    }
+    ctx.wc->masks.tunnel.metadata.tab = flow->tunnel.metadata.tab;
+
     if (!xin->ofpacts && !ctx.rule) {
         ctx.rule = rule_dpif_lookup_from_table(
             ctx.xbridge->ofproto, ctx.xin->tables_version, flow, ctx.wc,
@@ -5606,9 +5642,48 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
     }
 
+    /* Translate tunnel metadata masks to udpif format if necessary. */
+    if (xin->upcall_flow->tunnel.flags & FLOW_TNL_F_UDPIF) {
+        if (ctx.wc->masks.tunnel.metadata.present.map) {
+            const struct flow_tnl *upcall_tnl = &xin->upcall_flow->tunnel;
+            struct geneve_opt opts[TLV_TOT_OPT_SIZE /
+                                   sizeof(struct geneve_opt)];
+
+            tun_metadata_to_geneve_udpif_mask(&flow->tunnel,
+                                              &ctx.wc->masks.tunnel,
+                                              upcall_tnl->metadata.opts.gnv,
+                                              upcall_tnl->metadata.present.len,
+                                              opts);
+             memset(&ctx.wc->masks.tunnel.metadata, 0,
+                    sizeof ctx.wc->masks.tunnel.metadata);
+             memcpy(&ctx.wc->masks.tunnel.metadata.opts.gnv, opts,
+                    upcall_tnl->metadata.present.len);
+        }
+        ctx.wc->masks.tunnel.metadata.present.len = 0xff;
+        ctx.wc->masks.tunnel.metadata.tab = NULL;
+        ctx.wc->masks.tunnel.flags |= FLOW_TNL_F_UDPIF;
+    } else if (!xin->upcall_flow->tunnel.metadata.tab) {
+        /* If we didn't have options in UDPIF format and didn't have an existing
+         * metadata table, then it means that there were no options at all when
+         * we started processing and any wildcards we picked up were from
+         * action generation. Without options on the incoming packet, wildcards
+         * aren't meaningful. To avoid them possibly getting misinterpreted,
+         * just clear everything. */
+        if (ctx.wc->masks.tunnel.metadata.present.map) {
+            memset(&ctx.wc->masks.tunnel.metadata, 0,
+                   sizeof ctx.wc->masks.tunnel.metadata);
+        } else {
+            ctx.wc->masks.tunnel.metadata.tab = NULL;
+        }
+    }
+
     xlate_wc_finish(&ctx);
 
 exit:
+    /* Reset the table to what it was when we came in. If we only fetched
+     * it locally, then it has no meaning outside of flow translation. */
+    flow->tunnel.metadata.tab = xin->upcall_flow->tunnel.metadata.tab;
+
     ofpbuf_uninit(&ctx.stack);
     ofpbuf_uninit(&ctx.action_set);
     ofpbuf_uninit(&ctx.frozen_actions);

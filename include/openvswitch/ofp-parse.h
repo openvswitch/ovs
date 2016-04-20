@@ -68,7 +68,8 @@ char *parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *,
     OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_exact_flow(struct flow *flow, struct flow_wildcards *wc,
-                           const char *s, const struct simap *portno_names);
+                           const struct tun_table *tun_table, const char *s,
+                           const struct simap *portno_names);
 
 char *parse_ofp_meter_mod_str(struct ofputil_meter_mod *, const char *string,
                               int command,

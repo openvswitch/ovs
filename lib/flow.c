@@ -1298,6 +1298,7 @@ void flow_wildcards_init_for_packet(struct flow_wildcards *wc,
                 wc->masks.tunnel.metadata.present.map =
                                               flow->tunnel.metadata.present.map;
                 WC_MASK_FIELD(wc, tunnel.metadata.opts.u8);
+                WC_MASK_FIELD(wc, tunnel.metadata.tab);
             }
         } else {
             WC_MASK_FIELD(wc, tunnel.metadata.present.len);
