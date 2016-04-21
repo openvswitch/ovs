@@ -3738,8 +3738,23 @@ format_FIN_TIMEOUT(const struct ofpact_fin_timeout *a, struct ds *s)
  *
  * Resubmit actions may be used any number of times within a set of actions.
  *
- * Resubmit actions may nest to an implementation-defined depth.  Beyond this
- * implementation-defined depth, further resubmit actions are simply ignored.
+ * Resubmit actions may nest.  To prevent infinite loops and excessive resource
+ * use, the implementation may limit nesting depth and the total number of
+ * resubmits:
+ *
+ *    - Open vSwitch 1.0.1 and earlier did not support recursion.
+ *
+ *    - Open vSwitch 1.0.2 and 1.0.3 limited recursion to 8 levels.
+ *
+ *    - Open vSwitch 1.1 and 1.2 limited recursion to 16 levels.
+ *
+ *    - Open vSwitch 1.2 through 1.8 limited recursion to 32 levels.
+ *
+ *    - Open vSwitch 1.9 through 2.0 limited recursion to 64 levels.
+ *
+ *    - Open vSwitch 2.1 through 2.5 limited recursion to 64 levels and impose
+ *      a total limit of 4,096 resubmits per flow translation (earlier versions
+ *      did not impose any total limit).
  *
  * NXAST_RESUBMIT ignores 'table' and 'pad'.  NXAST_RESUBMIT_TABLE requires
  * 'pad' to be all-bits-zero.

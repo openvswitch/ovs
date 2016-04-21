@@ -67,14 +67,22 @@ COVERAGE_DEFINE(xlate_actions_too_many_output);
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_xlate);
 
 /* Maximum depth of flow table recursion (due to resubmit actions) in a
- * flow translation. */
-#define MAX_RESUBMIT_RECURSION 64
-#define MAX_INTERNAL_RESUBMITS 1   /* Max resbmits allowed using rules in
-                                      internal table. */
+ * flow translation.
+ *
+ * The goal of limiting the depth of resubmits is to ensure that flow
+ * translation eventually terminates.  Only resubmits to the same table or an
+ * earlier table count against the maximum depth.  This is because resubmits to
+ * strictly monotonically increasing table IDs will eventually terminate, since
+ * any OpenFlow switch has a finite number of tables.  OpenFlow tables are most
+ * commonly traversed in numerically increasing order, so this limit has little
+ * effect on conventionally designed OpenFlow pipelines.
+ *
+ * Outputs to patch ports and to groups also count against the depth limit. */
+#define MAX_DEPTH 64
 
 /* Maximum number of resubmit actions in a flow translation, whether they are
  * recursive or not. */
-#define MAX_RESUBMITS (MAX_RESUBMIT_RECURSION * MAX_RESUBMIT_RECURSION)
+#define MAX_RESUBMITS (MAX_DEPTH * MAX_DEPTH)
 
 struct xbridge {
     struct hmap_node hmap_node;   /* Node in global 'xbridges' map. */
@@ -195,8 +203,31 @@ struct xlate_ctx {
      * wants actions. */
     struct ofpbuf *odp_actions;
 
-    /* Resubmit statistics, via xlate_table_action(). */
-    int indentation;            /* Current resubmit nesting depth. */
+    /* Statistics maintained by xlate_table_action().
+     *
+     * 'indentation' is the nesting level for resubmits.  It is used to indent
+     * the output of resubmit_hook (e.g. for the "ofproto/trace" feature).
+     *
+     * The other statistics limit the amount of work that a single flow
+     * translation can perform.  The goal of the first of these, 'depth', is
+     * primarily to prevent translation from performing an infinite amount of
+     * work.  It counts the current depth of nested "resubmit"s (and a few
+     * other activities); when a resubmit returns, it decreases.  Resubmits to
+     * tables in strictly monotonically increasing order don't contribute to
+     * 'depth' because they cannot cause a flow translation to take an infinite
+     * amount of time (because the number of tables is finite).  Translation
+     * aborts when 'depth' exceeds MAX_DEPTH.
+     *
+     * 'resubmits', on the other hand, prevents flow translation from
+     * performing an extraordinarily large while still finite amount of work.
+     * It counts the total number of resubmits (and a few other activities)
+     * that have been executed.  Returning from a resubmit does not affect this
+     * counter.  Thus, this limits the amount of work that a particular
+     * translation can perform.  Translation aborts when 'resubmits' exceeds
+     * MAX_RESUBMITS (which is much larger than MAX_DEPTH).
+     */
+    int indentation;            /* Indentation level for resubmit_hook. */
+    int depth;                  /* Current resubmit nesting depth. */
     int resubmits;              /* Total number of resubmits. */
     bool in_group;              /* Currently translating ofgroup, if true. */
     bool in_action_set;         /* Currently translating action_set, if true. */
@@ -2805,7 +2836,8 @@ compose_table_xlate(struct xlate_ctx *ctx, const struct xport *out_dev,
 
     return ofproto_dpif_execute_actions__(xbridge->ofproto, &flow, NULL,
                                           &output.ofpact, sizeof output,
-                                          ctx->indentation, ctx->resubmits, packet);
+                                          ctx->indentation, ctx->depth,
+                                          ctx->resubmits, packet);
 }
 
 static void
@@ -3200,7 +3232,7 @@ compose_output_action(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 }
 
 static void
-xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
+xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule, bool deepens)
 {
     struct rule_dpif *old_rule = ctx->rule;
     ovs_be64 old_cookie = ctx->rule_cookie;
@@ -3211,24 +3243,26 @@ xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
     }
 
     ctx->resubmits++;
+
     ctx->indentation++;
+    ctx->depth += deepens;
     ctx->rule = rule;
     ctx->rule_cookie = rule_dpif_get_flow_cookie(rule);
     actions = rule_dpif_get_actions(rule);
     do_xlate_actions(actions->ofpacts, actions->ofpacts_len, ctx);
     ctx->rule_cookie = old_cookie;
     ctx->rule = old_rule;
+    ctx->depth -= deepens;
     ctx->indentation--;
 }
 
 static bool
 xlate_resubmit_resource_check(struct xlate_ctx *ctx)
 {
-    if (ctx->indentation >= MAX_RESUBMIT_RECURSION + MAX_INTERNAL_RESUBMITS) {
-        XLATE_REPORT_ERROR(ctx, "resubmit actions recursed over %d times",
-                           MAX_RESUBMIT_RECURSION);
+    if (ctx->depth >= MAX_DEPTH) {
+        XLATE_REPORT_ERROR(ctx, "over max translation depth %d", MAX_DEPTH);
         ctx->error = XLATE_RECURSION_TOO_DEEP;
-    } else if (ctx->resubmits >= MAX_RESUBMITS + MAX_INTERNAL_RESUBMITS) {
+    } else if (ctx->resubmits >= MAX_RESUBMITS) {
         XLATE_REPORT_ERROR(ctx, "over %d resubmit actions", MAX_RESUBMITS);
         ctx->error = XLATE_TOO_MANY_RESUBMITS;
     } else if (ctx->odp_actions->size > UINT16_MAX) {
@@ -3278,7 +3312,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                 entry->u.rule = rule;
                 rule_dpif_ref(rule);
             }
-            xlate_recursively(ctx, rule);
+            xlate_recursively(ctx, rule, table_id <= old_table_id);
         }
 
         ctx->table_id = old_table_id;
@@ -3313,7 +3347,9 @@ xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket)
 
     ofpacts_execute_action_set(&action_list, &action_set);
     ctx->indentation++;
+    ctx->depth++;
     do_xlate_actions(action_list.data, action_list.size, ctx);
+    ctx->depth--;
     ctx->indentation--;
 
     ofpbuf_uninit(&action_list);
@@ -4818,6 +4854,7 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->report_hook = NULL;
     xin->resubmit_stats = NULL;
     xin->indentation = 0;
+    xin->depth = 0;
     xin->resubmits = 0;
     xin->wc = wc;
     xin->odp_actions = odp_actions;
@@ -5082,6 +5119,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .odp_actions = xin->odp_actions ? xin->odp_actions : &scratch_actions,
 
         .indentation = xin->indentation,
+        .depth = xin->depth,
         .resubmits = xin->resubmits,
         .in_group = false,
         .in_action_set = false,

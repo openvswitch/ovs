@@ -3663,7 +3663,7 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
                                const struct flow *flow,
                                struct rule_dpif *rule,
                                const struct ofpact *ofpacts, size_t ofpacts_len,
-                               int indentation, int resubmits,
+                               int indentation, int depth, int resubmits,
                                struct dp_packet *packet)
 {
     struct dpif_flow_stats stats;
@@ -3689,6 +3689,7 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
     xin.ofpacts_len = ofpacts_len;
     xin.resubmit_stats = &stats;
     xin.indentation = indentation;
+    xin.depth = depth;
     xin.resubmits = resubmits;
     if (xlate_actions(&xin, &xout) != XLATE_OK) {
         error = EINVAL;
@@ -3729,7 +3730,7 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
                              struct dp_packet *packet)
 {
     return ofproto_dpif_execute_actions__(ofproto, flow, rule, ofpacts,
-                                          ofpacts_len, 0, 0, packet);
+                                          ofpacts_len, 0, 0, 0, packet);
 }
 
 void

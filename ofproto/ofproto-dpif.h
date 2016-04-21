@@ -149,7 +149,8 @@ int ofproto_dpif_execute_actions(struct ofproto_dpif *, const struct flow *,
 int ofproto_dpif_execute_actions__(struct ofproto_dpif *, const struct flow *,
                                    struct rule_dpif *, const struct ofpact *,
                                    size_t ofpacts_len, int indentation,
-                                   int resubmits, struct dp_packet *);
+                                   int depth, int resubmits,
+                                   struct dp_packet *);
 void ofproto_dpif_send_async_msg(struct ofproto_dpif *,
                                  struct ofproto_async_msg *);
 bool ofproto_dpif_wants_packet_in_on_miss(struct ofproto_dpif *);
