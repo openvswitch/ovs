@@ -105,18 +105,23 @@ struct xlate_in {
      * calling xlate_in_init(). */
     const struct dpif_flow_stats *resubmit_stats;
 
-    /* Indentation and resubmission levels carried over from a pre-existing
-     * translation of a related flow. An example of when this can occur is
-     * the translation of an ARP packet that was generated as the result of
-     * outputting to a tunnel port. In this case, the original flow going to
-     * the tunnel is the related flow. Since the two flows are different, they
-     * should not use the same xlate_ctx structure. However, we still need
-     * limit the maximum recursion across the entire translation.
+    /* Counters carried over from a pre-existing translation of a related flow.
+     * This can occur due to, e.g., the translation of an ARP packet that was
+     * generated as the result of outputting to a tunnel port.  In that case,
+     * the original flow going to the tunnel is the related flow.  Since the
+     * two flows are different, they should not use the same xlate_ctx
+     * structure.  However, we still need limit the maximum recursion across
+     * the entire translation.
      *
      * These fields are normally set to zero, so the client has to set them
-     * manually after calling xlate_in_init(). In that case, they should be
-     * copied from the same-named fields in the related flow's xlate_ctx. */
+     * manually after calling xlate_in_init().  In that case, they should be
+     * copied from the same-named fields in the related flow's xlate_ctx.
+     *
+     * These fields are really implementation details; the client doesn't care
+     * about what they mean.  See the corresponding fields in xlate_ctx for
+     * real documentation. */
     int indentation;
+    int depth;
     int resubmits;
 
     /* If nonnull, flow translation populates this cache with references to all

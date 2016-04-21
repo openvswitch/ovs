@@ -6973,6 +6973,45 @@ AT_CLEANUP
 
 AT_BANNER([ofproto-dpif - flow translation resource limits])
 
+dnl Resubmits to later tables do not count against the depth limit, so we
+dnl can do 99 of them even though the maximum depth is 64.
+AT_SETUP([ofproto-dpif - forward resubmit])
+OVS_VSWITCHD_START
+(for i in `seq 0 99`; do
+    j=`expr $i + 1`
+    echo "table=$i, actions=resubmit(,$j)"
+ done
+ echo "table=100, actions=local") > flows
+AT_CHECK([ovs-ofctl add-flows br0 flows])
+AT_CHECK([ovs-appctl -vpoll_loop:off ofproto/trace br0 'eth_dst=ff:ff:ff:ff:ff:ff'],
+  [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: 100
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl Resubmits to the same or an earlier table count against the depth limit,
+dnl so only 64 of them are allowed.
+AT_SETUP([ofproto-dpif - backward resubmit])
+OVS_VSWITCHD_START
+(echo "table=0, actions=resubmit(,66)"
+ for i in `seq 2 66`; do
+    j=`expr $i - 1`
+    echo "table=$i, actions=resubmit(,$j)"
+ done
+ echo "table=1, actions=local") > flows
+AT_CHECK([ovs-ofctl add-flows br0 flows])
+AT_CHECK([ovs-appctl -vpoll_loop:off ofproto/trace br0 'eth_dst=ff:ff:ff:ff:ff:ff'],
+  [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Translation failed (Recursion too deep), packet is dropped.
+])
+AT_CHECK([grep -c 'over max translation depth 64' stdout],
+  [0], [1
+])
+OVS_VSWITCHD_STOP(["/resubmit actions recursed/d"])
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - infinite resubmit])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl add-flow br0 actions=resubmit:1,resubmit:2,output:3])
@@ -6981,7 +7020,7 @@ AT_CHECK([ovs-appctl -vpoll_loop:off ofproto/trace br0 'eth_dst=ff:ff:ff:ff:ff:f
 AT_CHECK([tail -1 stdout], [0],
   [Translation failed (Recursion too deep), packet is dropped.
 ])
-AT_CHECK([grep -c 'resubmit actions recursed over 64 times' stdout],
+AT_CHECK([grep -c 'over max translation depth 64' stdout],
   [0], [1
 ])
 OVS_VSWITCHD_STOP(["/resubmit actions recursed/d"])
