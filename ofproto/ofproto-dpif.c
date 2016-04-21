@@ -3663,7 +3663,7 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
                                const struct flow *flow,
                                struct rule_dpif *rule,
                                const struct ofpact *ofpacts, size_t ofpacts_len,
-                               int recurse, int resubmits,
+                               int indentation, int resubmits,
                                struct dp_packet *packet)
 {
     struct dpif_flow_stats stats;
@@ -3688,7 +3688,7 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
     xin.ofpacts = ofpacts;
     xin.ofpacts_len = ofpacts_len;
     xin.resubmit_stats = &stats;
-    xin.recurse = recurse;
+    xin.indentation = indentation;
     xin.resubmits = resubmits;
     if (xlate_actions(&xin, &xout) != XLATE_OK) {
         error = EINVAL;
@@ -4710,62 +4710,63 @@ trace_format_megaflow(struct ds *result, int level, const char *title,
     ds_put_char(result, '\n');
 }
 
-static void trace_report(struct xlate_in *, int recurse,
+static void trace_report(struct xlate_in *, int indentation,
                          const char *format, ...)
     OVS_PRINTF_FORMAT(3, 4);
-static void trace_report_valist(struct xlate_in *, int recurse,
+static void trace_report_valist(struct xlate_in *, int indentation,
                                 const char *format, va_list args)
     OVS_PRINTF_FORMAT(3, 0);
 
 static void
-trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int recurse)
+trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int indentation)
 {
     struct trace_ctx *trace = CONTAINER_OF(xin, struct trace_ctx, xin);
     struct ds *result = trace->result;
 
-    if (!recurse) {
+    if (!indentation) {
         if (rule == xin->ofproto->miss_rule) {
-            trace_report(xin, recurse,
+            trace_report(xin, indentation,
                          "No match, flow generates \"packet in\"s.");
         } else if (rule == xin->ofproto->no_packet_in_rule) {
-            trace_report(xin, recurse, "No match, packets dropped because "
+            trace_report(xin, indentation, "No match, packets dropped because "
                          "OFPPC_NO_PACKET_IN is set on in_port.");
         } else if (rule == xin->ofproto->drop_frags_rule) {
-            trace_report(xin, recurse, "Packets dropped because they are IP "
-                         "fragments and the fragment handling mode is "
-                         "\"drop\".");
+            trace_report(xin, indentation,
+                         "Packets dropped because they are IP fragments and "
+                         "the fragment handling mode is \"drop\".");
         }
     }
 
     ds_put_char(result, '\n');
-    if (recurse) {
-        trace_format_flow(result, recurse, "Resubmitted flow", trace);
-        trace_format_regs(result, recurse, "Resubmitted regs", trace);
-        trace_format_odp(result,  recurse, "Resubmitted  odp", trace);
-        trace_format_megaflow(result, recurse, "Resubmitted megaflow", trace);
+    if (indentation) {
+        trace_format_flow(result, indentation, "Resubmitted flow", trace);
+        trace_format_regs(result, indentation, "Resubmitted regs", trace);
+        trace_format_odp(result,  indentation, "Resubmitted  odp", trace);
+        trace_format_megaflow(result, indentation, "Resubmitted megaflow",
+                              trace);
     }
-    trace_format_rule(result, recurse, rule);
+    trace_format_rule(result, indentation, rule);
 }
 
 static void
-trace_report_valist(struct xlate_in *xin, int recurse,
+trace_report_valist(struct xlate_in *xin, int indentation,
                     const char *format, va_list args)
 {
     struct trace_ctx *trace = CONTAINER_OF(xin, struct trace_ctx, xin);
     struct ds *result = trace->result;
 
-    ds_put_char_multiple(result, '\t', recurse);
+    ds_put_char_multiple(result, '\t', indentation);
     ds_put_format_valist(result, format, args);
     ds_put_char(result, '\n');
 }
 
 static void
-trace_report(struct xlate_in *xin, int recurse, const char *format, ...)
+trace_report(struct xlate_in *xin, int indentation, const char *format, ...)
 {
     va_list args;
 
     va_start(args, format);
-    trace_report_valist(xin, recurse, format, args);
+    trace_report_valist(xin, indentation, format, args);
     va_end(args);
 }
 

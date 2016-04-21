@@ -148,7 +148,7 @@ int ofproto_dpif_execute_actions(struct ofproto_dpif *, const struct flow *,
                                  size_t ofpacts_len, struct dp_packet *);
 int ofproto_dpif_execute_actions__(struct ofproto_dpif *, const struct flow *,
                                    struct rule_dpif *, const struct ofpact *,
-                                   size_t ofpacts_len, int recurse,
+                                   size_t ofpacts_len, int indentation,
                                    int resubmits, struct dp_packet *);
 void ofproto_dpif_send_async_msg(struct ofproto_dpif *,
                                  struct ofproto_async_msg *);
