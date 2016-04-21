@@ -196,7 +196,7 @@ struct xlate_ctx {
     struct ofpbuf *odp_actions;
 
     /* Resubmit statistics, via xlate_table_action(). */
-    int recurse;                /* Current resubmit nesting depth. */
+    int indentation;            /* Current resubmit nesting depth. */
     int resubmits;              /* Total number of resubmits. */
     bool in_group;              /* Currently translating ofgroup, if true. */
     bool in_action_set;         /* Currently translating action_set, if true. */
@@ -583,7 +583,7 @@ xlate_report(struct xlate_ctx *ctx, const char *format, ...)
         va_list args;
 
         va_start(args, format);
-        ctx->xin->report_hook(ctx->xin, ctx->recurse, format, args);
+        ctx->xin->report_hook(ctx->xin, ctx->indentation, format, args);
         va_end(args);
     }
 }
@@ -2805,7 +2805,7 @@ compose_table_xlate(struct xlate_ctx *ctx, const struct xport *out_dev,
 
     return ofproto_dpif_execute_actions__(xbridge->ofproto, &flow, NULL,
                                           &output.ofpact, sizeof output,
-                                          ctx->recurse, ctx->resubmits, packet);
+                                          ctx->indentation, ctx->resubmits, packet);
 }
 
 static void
@@ -3211,20 +3211,20 @@ xlate_recursively(struct xlate_ctx *ctx, struct rule_dpif *rule)
     }
 
     ctx->resubmits++;
-    ctx->recurse++;
+    ctx->indentation++;
     ctx->rule = rule;
     ctx->rule_cookie = rule_dpif_get_flow_cookie(rule);
     actions = rule_dpif_get_actions(rule);
     do_xlate_actions(actions->ofpacts, actions->ofpacts_len, ctx);
     ctx->rule_cookie = old_cookie;
     ctx->rule = old_rule;
-    ctx->recurse--;
+    ctx->indentation--;
 }
 
 static bool
 xlate_resubmit_resource_check(struct xlate_ctx *ctx)
 {
-    if (ctx->recurse >= MAX_RESUBMIT_RECURSION + MAX_INTERNAL_RESUBMITS) {
+    if (ctx->indentation >= MAX_RESUBMIT_RECURSION + MAX_INTERNAL_RESUBMITS) {
         XLATE_REPORT_ERROR(ctx, "resubmit actions recursed over %d times",
                            MAX_RESUBMIT_RECURSION);
         ctx->error = XLATE_RECURSION_TOO_DEEP;
@@ -3263,7 +3263,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                                            may_packet_in, honor_table_miss);
 
         if (OVS_UNLIKELY(ctx->xin->resubmit_hook)) {
-            ctx->xin->resubmit_hook(ctx->xin, rule, ctx->recurse + 1);
+            ctx->xin->resubmit_hook(ctx->xin, rule, ctx->indentation + 1);
         }
 
         if (rule) {
@@ -3312,9 +3312,9 @@ xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket)
     struct flow old_flow = ctx->xin->flow;
 
     ofpacts_execute_action_set(&action_list, &action_set);
-    ctx->recurse++;
+    ctx->indentation++;
     do_xlate_actions(action_list.data, action_list.size, ctx);
-    ctx->recurse--;
+    ctx->indentation--;
 
     ofpbuf_uninit(&action_list);
 
@@ -4817,7 +4817,7 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->resubmit_hook = NULL;
     xin->report_hook = NULL;
     xin->resubmit_stats = NULL;
-    xin->recurse = 0;
+    xin->indentation = 0;
     xin->resubmits = 0;
     xin->wc = wc;
     xin->odp_actions = odp_actions;
@@ -5081,7 +5081,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .wc = xin->wc ? xin->wc : &scratch_wc,
         .odp_actions = xin->odp_actions ? xin->odp_actions : &scratch_actions,
 
-        .recurse = xin->recurse,
+        .indentation = xin->indentation,
         .resubmits = xin->resubmits,
         .in_group = false,
         .in_action_set = false,

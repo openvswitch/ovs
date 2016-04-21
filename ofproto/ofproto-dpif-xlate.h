@@ -83,18 +83,19 @@ struct xlate_in {
      * 'rule' is the rule being submitted into.  It will be null if the
      * resubmit or OFPP_TABLE action didn't find a matching rule.
      *
-     * 'recurse' is the resubmit recursion depth at time of invocation.
+     * 'indentation' is the resubmit recursion depth at time of invocation,
+     * suitable for indenting the output.
      *
      * This is normally null so the client has to set it manually after
      * calling xlate_in_init(). */
     void (*resubmit_hook)(struct xlate_in *, struct rule_dpif *rule,
-                          int recurse);
+                          int indentation);
 
     /* If nonnull, flow translation calls this function to report some
      * significant decision, e.g. to explain why OFPP_NORMAL translation
-     * dropped a packet.  'recurse' is the resubmit recursion depth at time of
-     * invocation. */
-    void (*report_hook)(struct xlate_in *, int recurse,
+     * dropped a packet.  'indentation' is the resubmit recursion depth at time
+     * of invocation, suitable for indenting the output. */
+    void (*report_hook)(struct xlate_in *, int indentation,
                         const char *format, va_list args);
 
     /* If nonnull, flow translation credits the specified statistics to each
@@ -104,7 +105,7 @@ struct xlate_in {
      * calling xlate_in_init(). */
     const struct dpif_flow_stats *resubmit_stats;
 
-    /* Recursion and resubmission levels carried over from a pre-existing
+    /* Indentation and resubmission levels carried over from a pre-existing
      * translation of a related flow. An example of when this can occur is
      * the translation of an ARP packet that was generated as the result of
      * outputting to a tunnel port. In this case, the original flow going to
@@ -115,7 +116,7 @@ struct xlate_in {
      * These fields are normally set to zero, so the client has to set them
      * manually after calling xlate_in_init(). In that case, they should be
      * copied from the same-named fields in the related flow's xlate_ctx. */
-    int recurse;
+    int indentation;
     int resubmits;
 
     /* If nonnull, flow translation populates this cache with references to all
