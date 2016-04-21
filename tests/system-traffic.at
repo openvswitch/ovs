@@ -1495,7 +1495,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 Fragmentation over vxlan])
-AT_SKIP_IF([! ip link help 2>&1 | grep vxlan >/dev/null])
+OVS_CHECK_VXLAN()
 CHECK_CONNTRACK()
 
 OVS_TRAFFIC_VSWITCHD_START()
