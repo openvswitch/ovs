@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -55,7 +55,7 @@ struct tnl_neigh_entry {
     char br_name[IFNAMSIZ];
 };
 
-static struct cmap table;
+static struct cmap table = CMAP_INITIALIZER;
 static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 
 static uint32_t
@@ -312,8 +312,6 @@ tnl_neigh_cache_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 void
 tnl_neigh_cache_init(void)
 {
-    cmap_init(&table);
-
     unixctl_command_register("tnl/arp/show", "", 0, 0, tnl_neigh_cache_show, NULL);
     unixctl_command_register("tnl/arp/set", "BRIDGE IP MAC", 3, 3, tnl_neigh_cache_add, NULL);
     unixctl_command_register("tnl/arp/flush", "", 0, 0, tnl_neigh_cache_flush, NULL);
