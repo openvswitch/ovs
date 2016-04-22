@@ -359,6 +359,7 @@ parse_sockaddr_components(struct sockaddr_storage *ss,
     if (port_s && port_s[0]) {
         if (!str_to_int(port_s, 10, &port) || port < 0 || port > 65535) {
             VLOG_ERR("%s: bad port number \"%s\"", s, port_s);
+            goto exit;
         }
     } else {
         port = default_port;
