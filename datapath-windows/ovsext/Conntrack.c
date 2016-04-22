@@ -186,8 +186,9 @@ OvsCtEntryDelete(POVS_CT_ENTRY entry)
 static __inline BOOLEAN
 OvsCtEntryExpired(POVS_CT_ENTRY entry)
 {
-    if (entry == NULL)
+    if (entry == NULL) {
         return TRUE;
+    }
 
     UINT64 currentTime;
     NdisGetCurrentSystemTime((LARGE_INTEGER *)&currentTime);
