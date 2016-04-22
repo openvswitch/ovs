@@ -176,8 +176,6 @@ struct recirc_id_node {
     struct flow_tnl state_metadata_tunnel;
 };
 
-void recirc_init(void);
-
 /* This is only used for bonds and will go away when bonds implementation is
  * updated to use this mechanism instead of internal rules. */
 uint32_t recirc_alloc_id(struct ofproto_dpif *);

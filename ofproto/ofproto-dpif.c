@@ -861,8 +861,6 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     const char *name;
     int error;
 
-    recirc_init();
-
     backer = shash_find_data(&all_dpif_backers, type);
     if (backer) {
         backer->refcount++;
