@@ -932,14 +932,14 @@ OvsInitVportWithNicParam(POVS_SWITCH_CONTEXT switchContext,
     UNREFERENCED_PARAMETER(switchContext);
 
     RtlCopyMemory(vport->permMacAddress, nicParam->PermanentMacAddress,
-                  sizeof (nicParam->PermanentMacAddress));
+                  sizeof (vport->permMacAddress));
     RtlCopyMemory(vport->currMacAddress, nicParam->CurrentMacAddress,
-                  sizeof (nicParam->CurrentMacAddress));
+                  sizeof (vport->currMacAddress));
 
     if (nicParam->NicType == NdisSwitchNicTypeSynthetic ||
         nicParam->NicType == NdisSwitchNicTypeEmulated) {
         RtlCopyMemory(vport->vmMacAddress, nicParam->VMMacAddress,
-                      sizeof (nicParam->VMMacAddress));
+                      sizeof (vport->vmMacAddress));
         RtlCopyMemory(&vport->vmName, &nicParam->VmName,
                       sizeof (nicParam->VmName));
     } else {
