@@ -99,7 +99,6 @@ odp_set_ipv6(struct dp_packet *packet, const struct ovs_key_ipv6 *key,
 
     packet_set_ipv6(
         packet,
-        key->ipv6_proto,
         mask_ipv6_addr(nh->ip6_src.be32, key->ipv6_src, mask->ipv6_src, sbuf),
         mask_ipv6_addr(nh->ip6_dst.be32, key->ipv6_dst, mask->ipv6_dst, dbuf),
         key->ipv6_tclass | (old_tc & ~mask->ipv6_tclass),
@@ -257,8 +256,7 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
 
     case OVS_KEY_ATTR_IPV6:
         ipv6_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_ipv6));
-        packet_set_ipv6(packet, ipv6_key->ipv6_proto,
-                        ipv6_key->ipv6_src, ipv6_key->ipv6_dst,
+        packet_set_ipv6(packet, ipv6_key->ipv6_src, ipv6_key->ipv6_dst,
                         ipv6_key->ipv6_tclass, ipv6_key->ipv6_label,
                         ipv6_key->ipv6_hlimit);
         break;

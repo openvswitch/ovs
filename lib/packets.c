@@ -701,10 +701,9 @@ packet_set_ipv4_addr(struct dp_packet *packet,
  *
  * This function assumes that L3 and L4 offsets are set in the packet. */
 static bool
-packet_rh_present(struct dp_packet *packet)
+packet_rh_present(struct dp_packet *packet, uint8_t *nexthdr)
 {
     const struct ovs_16aligned_ip6_hdr *nh;
-    int nexthdr;
     size_t len;
     size_t remaining;
     uint8_t *data = dp_packet_l3(packet);
@@ -717,14 +716,14 @@ packet_rh_present(struct dp_packet *packet)
     nh = ALIGNED_CAST(struct ovs_16aligned_ip6_hdr *, data);
     data += sizeof *nh;
     remaining -= sizeof *nh;
-    nexthdr = nh->ip6_nxt;
+    *nexthdr = nh->ip6_nxt;
 
     while (1) {
-        if ((nexthdr != IPPROTO_HOPOPTS)
-                && (nexthdr != IPPROTO_ROUTING)
-                && (nexthdr != IPPROTO_DSTOPTS)
-                && (nexthdr != IPPROTO_AH)
-                && (nexthdr != IPPROTO_FRAGMENT)) {
+        if ((*nexthdr != IPPROTO_HOPOPTS)
+                && (*nexthdr != IPPROTO_ROUTING)
+                && (*nexthdr != IPPROTO_DSTOPTS)
+                && (*nexthdr != IPPROTO_AH)
+                && (*nexthdr != IPPROTO_FRAGMENT)) {
             /* It's either a terminal header (e.g., TCP, UDP) or one we
              * don't understand.  In either case, we're done with the
              * packet, so use it to fill in 'nw_proto'. */
@@ -740,34 +739,34 @@ packet_rh_present(struct dp_packet *packet)
             return false;
         }
 
-        if (nexthdr == IPPROTO_AH) {
+        if (*nexthdr == IPPROTO_AH) {
             /* A standard AH definition isn't available, but the fields
              * we care about are in the same location as the generic
              * option header--only the header length is calculated
              * differently. */
             const struct ip6_ext *ext_hdr = (struct ip6_ext *)data;
 
-            nexthdr = ext_hdr->ip6e_nxt;
+            *nexthdr = ext_hdr->ip6e_nxt;
             len = (ext_hdr->ip6e_len + 2) * 4;
-        } else if (nexthdr == IPPROTO_FRAGMENT) {
+        } else if (*nexthdr == IPPROTO_FRAGMENT) {
             const struct ovs_16aligned_ip6_frag *frag_hdr
                 = ALIGNED_CAST(struct ovs_16aligned_ip6_frag *, data);
 
-            nexthdr = frag_hdr->ip6f_nxt;
+            *nexthdr = frag_hdr->ip6f_nxt;
             len = sizeof *frag_hdr;
-        } else if (nexthdr == IPPROTO_ROUTING) {
+        } else if (*nexthdr == IPPROTO_ROUTING) {
             const struct ip6_rthdr *rh = (struct ip6_rthdr *)data;
 
             if (rh->ip6r_segleft > 0) {
                 return true;
             }
 
-            nexthdr = rh->ip6r_nxt;
+            *nexthdr = rh->ip6r_nxt;
             len = (rh->ip6r_len + 1) * 8;
         } else {
             const struct ip6_ext *ext_hdr = (struct ip6_ext *)data;
 
-            nexthdr = ext_hdr->ip6e_nxt;
+            *nexthdr = ext_hdr->ip6e_nxt;
             len = (ext_hdr->ip6e_len + 1) * 8;
         }
 
@@ -875,11 +874,15 @@ packet_set_ipv4(struct dp_packet *packet, ovs_be32 src, ovs_be32 dst,
  * appropriate. 'packet' must contain a valid IPv6 packet with correctly
  * populated l[34] offsets. */
 void
-packet_set_ipv6(struct dp_packet *packet, uint8_t proto, const ovs_be32 src[4],
+packet_set_ipv6(struct dp_packet *packet, const ovs_be32 src[4],
                 const ovs_be32 dst[4], uint8_t key_tc, ovs_be32 key_fl,
                 uint8_t key_hl)
 {
     struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(packet);
+    uint8_t proto = 0;
+    bool rh_present;
+
+    rh_present = packet_rh_present(packet, &proto);
 
     if (memcmp(&nh->ip6_src, src, sizeof(ovs_be32[4]))) {
         packet_set_ipv6_addr(packet, proto, nh->ip6_src.be32, src, true);
@@ -887,7 +890,7 @@ packet_set_ipv6(struct dp_packet *packet, uint8_t proto, const ovs_be32 src[4],
 
     if (memcmp(&nh->ip6_dst, dst, sizeof(ovs_be32[4]))) {
         packet_set_ipv6_addr(packet, proto, nh->ip6_dst.be32, dst,
-                             !packet_rh_present(packet));
+                             !rh_present);
     }
 
     packet_set_ipv6_tc(&nh->ip6_flow, key_tc);
@@ -1166,7 +1169,7 @@ compose_nd(struct dp_packet *b, const struct eth_addr eth_src,
 
     eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6,
                 IPV6_HEADER_LEN + ICMP6_HEADER_LEN + ND_OPT_LEN);
-    packet_set_ipv6(b, IPPROTO_ICMPV6,
+    packet_set_ipv6(b,
                     ALIGNED_CAST(ovs_be32 *, ipv6_src->s6_addr),
                     ALIGNED_CAST(ovs_be32 *, sn_addr.s6_addr),
                     0, 0, 255);

@@ -1024,7 +1024,7 @@ void *snap_compose(struct dp_packet *, const struct eth_addr eth_dst,
                    unsigned int oui, uint16_t snap_type, size_t size);
 void packet_set_ipv4(struct dp_packet *, ovs_be32 src, ovs_be32 dst, uint8_t tos,
                      uint8_t ttl);
-void packet_set_ipv6(struct dp_packet *, uint8_t proto, const ovs_be32 src[4],
+void packet_set_ipv6(struct dp_packet *, const ovs_be32 src[4],
                      const ovs_be32 dst[4], uint8_t tc,
                      ovs_be32 fl, uint8_t hlmit);
 void packet_set_tcp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
