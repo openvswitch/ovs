@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -499,21 +499,6 @@ static inline ovs_be32 minimatch_get_ports(const struct minimatch *match)
         & MINIFLOW_GET_BE32(&match->mask->masks, tp_src);
 }
 
-static void
-subtable_replace_head_rule(struct classifier *cls OVS_UNUSED,
-                           struct cls_subtable *subtable,
-                           struct cls_match *head, struct cls_match *new,
-                           uint32_t hash, uint32_t ihash[CLS_MAX_INDICES])
-{
-    /* Rule's data is already in the tries. */
-
-    for (int i = 0; i < subtable->n_indices; i++) {
-        cmap_replace(&subtable->indices[i], &head->index_nodes[i],
-                     &new->index_nodes[i], ihash[i]);
-    }
-    cmap_replace(&subtable->rules, &head->cmap_node, &new->cmap_node, hash);
-}
-
 /* Inserts 'rule' into 'cls' in 'version'.  Until 'rule' is removed from 'cls',
  * the caller must not modify or free it.
  *
@@ -587,15 +572,9 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
                                subtable->ports_mask_len);
         }
 
-        /* Add new node to segment indices.
-         *
-         * Readers may find the rule in the indices before the rule is visible
-         * in the subtables 'rules' map.  This may result in us losing the
-         * opportunity to quit lookups earlier, resulting in sub-optimal
-         * wildcarding.  This will be fixed later by revalidation (always
-         * scheduled after flow table changes). */
+        /* Add new node to segment indices. */
         for (i = 0; i < subtable->n_indices; i++) {
-            cmap_insert(&subtable->indices[i], &new->index_nodes[i], ihash[i]);
+            ccmap_inc(&subtable->indices[i], ihash[i]);
         }
         n_rules = cmap_insert(&subtable->rules, &new->cmap_node, hash);
     } else {   /* Equal rules exist in the classifier already. */
@@ -628,8 +607,8 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
             /* Replace the existing head in data structures, if rule is the new
              * head. */
             if (iter == head) {
-                subtable_replace_head_rule(cls, subtable, head, new, hash,
-                                           ihash);
+                cmap_replace(&subtable->rules, &head->cmap_node,
+                             &new->cmap_node, hash);
             }
 
             if (old) {
@@ -780,7 +759,8 @@ classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
      * replace 'rule' in the data structures. */
     next = cls_match_next_protected(rule);
     if (next) {
-        subtable_replace_head_rule(cls, subtable, rule, next, hash, ihash);
+        cmap_replace(&subtable->rules, &rule->cmap_node, &next->cmap_node,
+                     hash);
         goto check_priority;
     }
 
@@ -801,7 +781,7 @@ classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
 
     /* Remove rule node from indices. */
     for (i = 0; i < subtable->n_indices; i++) {
-        cmap_remove(&subtable->indices[i], &rule->index_nodes[i], ihash[i]);
+        ccmap_dec(&subtable->indices[i], ihash[i]);
     }
     n_rules = cmap_remove(&subtable->rules, &rule->cmap_node, hash);
 
@@ -1486,7 +1466,7 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
                                               cls->flow_segments[i]);
         /* Add an index if it adds mask bits. */
         if (!flowmap_is_empty(stage_map)) {
-            cmap_init(&subtable->indices[index]);
+            ccmap_init(&subtable->indices[index]);
             *CONST_CAST(struct flowmap *, &subtable->index_maps[index])
                 = stage_map;
             index++;
@@ -1502,7 +1482,7 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
             /* Remove the last index, as it has the same fields as the rules
              * map. */
             --index;
-            cmap_destroy(&subtable->indices[index]);
+            ccmap_destroy(&subtable->indices[index]);
         }
     }
     *CONST_CAST(uint8_t *, &subtable->n_indices) = index;
@@ -1541,7 +1521,7 @@ destroy_subtable(struct classifier *cls, struct cls_subtable *subtable)
     ovs_assert(rculist_is_empty(&subtable->rules_list));
 
     for (i = 0; i < subtable->n_indices; i++) {
-        cmap_destroy(&subtable->indices[i]);
+        ccmap_destroy(&subtable->indices[i]);
     }
     cmap_destroy(&subtable->rules);
     ovsrcu_postpone(free, subtable);
@@ -1690,7 +1670,7 @@ find_match_wc(const struct cls_subtable *subtable, cls_version_t version,
                                            subtable->index_maps[i],
                                            &mask_offset, &basis);
 
-        if (!cmap_find(&subtable->indices[i], hash)) {
+        if (!ccmap_find(&subtable->indices[i], hash)) {
             goto no_match;
         }
     }
