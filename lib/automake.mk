@@ -38,6 +38,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/classifier.c \
 	lib/classifier.h \
 	lib/classifier-private.h \
+	lib/ccmap.c \
+	lib/ccmap.h \
 	lib/cmap.c \
 	lib/cmap.h \
 	lib/colors.c \
