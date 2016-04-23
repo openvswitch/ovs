@@ -191,9 +191,7 @@ struct xlate_ctx {
 
     /* Flow translation populates this with wildcards relevant in translation.
      * When 'xin->wc' is nonnull, this is the same pointer.  When 'xin->wc' is
-     * null, this is a pointer to uninitialized scratch memory.  This allows
-     * code to blindly write to 'ctx->wc' without worrying about whether the
-     * caller really wants wildcards. */
+     * null, this is a pointer to a temporary buffer. */
     struct flow_wildcards *wc;
 
     /* Output buffer for datapath actions.  When 'xin->odp_actions' is nonnull,
@@ -3291,7 +3289,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
 
         rule = rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
                                            ctx->tables_version,
-                                           &ctx->xin->flow, ctx->xin->wc,
+                                           &ctx->xin->flow, ctx->wc,
                                            ctx->xin->resubmit_stats,
                                            &ctx->table_id, in_port,
                                            may_packet_in, honor_table_miss);
@@ -5104,7 +5102,6 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     union mf_subvalue stack_stub[1024 / sizeof(union mf_subvalue)];
     uint64_t action_set_stub[1024 / 8];
     uint64_t frozen_actions_stub[1024 / 8];
-    struct flow_wildcards scratch_wc;
     uint64_t actions_stub[256 / 8];
     struct ofpbuf scratch_actions = OFPBUF_STUB_INITIALIZER(actions_stub);
     struct xlate_ctx ctx = {
@@ -5115,7 +5112,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .xbridge = xbridge,
         .stack = OFPBUF_STUB_INITIALIZER(stack_stub),
         .rule = xin->rule,
-        .wc = xin->wc ? xin->wc : &scratch_wc,
+        .wc = (xin->wc
+               ? xin->wc
+               : &(struct flow_wildcards) { .masks.dl_type = 0 }),
         .odp_actions = xin->odp_actions ? xin->odp_actions : &scratch_actions,
 
         .indentation = xin->indentation,
@@ -5155,9 +5154,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
     memset(&ctx.base_flow.tunnel, 0, sizeof ctx.base_flow.tunnel);
 
     ofpbuf_reserve(ctx.odp_actions, NL_A_U32_SIZE);
-    if (xin->wc) {
-        xlate_wc_init(&ctx);
-    }
+    xlate_wc_init(&ctx);
 
     COVERAGE_INC(xlate_actions);
 
@@ -5247,7 +5244,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     if (!xin->ofpacts && !ctx.rule) {
         ctx.rule = rule_dpif_lookup_from_table(
-            ctx.xbridge->ofproto, ctx.tables_version, flow, xin->wc,
+            ctx.xbridge->ofproto, ctx.tables_version, flow, ctx.wc,
             ctx.xin->resubmit_stats, &ctx.table_id,
             flow->in_port.ofp_port, true, true);
         if (ctx.xin->resubmit_stats) {
@@ -5398,9 +5395,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         }
     }
 
-    if (xin->wc) {
-        xlate_wc_finish(&ctx);
-    }
+    xlate_wc_finish(&ctx);
 
 exit:
     ofpbuf_uninit(&ctx.stack);
