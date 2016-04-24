@@ -254,6 +254,15 @@ static inline void *skb_gro_remcsum_process(struct sk_buff *skb, void *ptr,
 #endif
 #endif
 
+#if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)
+/* Only required on RHEL 6. */
+#ifdef HAVE_DEV_GET_STATS64
+#define dev_get_stats dev_get_stats64
+#else
+#undef HAVE_RTNL_LINK_STATS64
+#endif
+#endif
+
 #ifndef HAVE_RTNL_LINK_STATS64
 #define dev_get_stats rpl_dev_get_stats
 struct rtnl_link_stats64 *rpl_dev_get_stats(struct net_device *dev,
@@ -266,10 +275,6 @@ struct rtnl_link_stats64 *rpl_dev_get_stats(struct net_device *dev,
 #endif
 #endif
 
-#if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)
-/* Only required on RHEL 6. */
-#define dev_get_stats dev_get_stats64
-#endif
 
 #ifndef netdev_dbg
 #define netdev_dbg(__dev, format, args...)			\

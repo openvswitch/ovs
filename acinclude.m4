@@ -375,6 +375,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_SOCK_CREATE_KERN_NET])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_disable_lro])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_get_stats])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_get_stats64])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_get_by_index_rcu])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [dev_recursion_level])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [__skb_gso_segment])
