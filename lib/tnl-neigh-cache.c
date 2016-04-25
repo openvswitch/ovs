@@ -73,6 +73,10 @@ tnl_neigh_lookup__(const char br_name[IFNAMSIZ], const struct in6_addr *dst)
     hash = tnl_neigh_hash(dst);
     CMAP_FOR_EACH_WITH_HASH (neigh, cmap_node, hash, &table) {
         if (ipv6_addr_equals(&neigh->ip, dst) && !strcmp(neigh->br_name, br_name)) {
+            if (neigh->expires <= time_now()) {
+                return NULL;
+            }
+
             neigh->expires = time_now() + NEIGH_ENTRY_DEFAULT_IDLE_TIME;
             return neigh;
         }
@@ -300,8 +304,12 @@ tnl_neigh_cache_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         need_ws = INET6_ADDRSTRLEN - (ds.length - start_len);
         ds_put_char_multiple(&ds, ' ', need_ws);
 
-        ds_put_format(&ds, ETH_ADDR_FMT"   %s\n",
+        ds_put_format(&ds, ETH_ADDR_FMT"   %s",
                       ETH_ADDR_ARGS(neigh->mac), neigh->br_name);
+        if (neigh->expires <= time_now()) {
+            ds_put_format(&ds, " STALE");
+        }
+        ds_put_char(&ds, '\n');
 
     }
     ovs_mutex_unlock(&mutex);
