@@ -43,6 +43,7 @@ Post-v2.5.0
      * Introduced SELinux policy package.
    - Datapath Linux kernel compatibility.
      * Dropped support for kernel older than 3.10.
+     * Removed VLAN splinters feature.
    - Tunnels:
      * Flow based tunnel match and action can be used for IPv6 address using
        tun_ipv6_src, tun_ipv6_dst fields.

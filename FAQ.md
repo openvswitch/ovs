@@ -1277,7 +1277,7 @@ A: Many drivers in Linux kernels before version 3.3 had VLAN-related
 
    - Use a NIC whose driver does not have VLAN problems.
 
-   - Use "VLAN splinters", a feature in Open vSwitch 1.4 and later
+   - Use "VLAN splinters", a feature in Open vSwitch 1.4 upto 2.5
      that works around bugs in kernel drivers.  To enable VLAN
      splinters on interface eth0, use the command:
 

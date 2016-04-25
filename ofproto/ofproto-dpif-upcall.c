@@ -221,9 +221,6 @@ struct upcall {
     struct dpif_ipfix *ipfix;      /* IPFIX pointer or NULL. */
     struct dpif_sflow *sflow;      /* SFlow pointer or NULL. */
 
-    bool vsp_adjusted;             /* 'packet' and 'flow' were adjusted for
-                                      VLAN splinters if true. */
-
     struct udpif_key *ukey;        /* Revalidator flow cache. */
     bool ukey_persists;            /* Set true to keep 'ukey' beyond the
                                       lifetime of this upcall. */
@@ -791,10 +788,6 @@ recv_upcalls(struct handler *handler)
         upcall->out_tun_key = dupcall->out_tun_key;
         upcall->actions = dupcall->actions;
 
-        if (vsp_adjust_flow(upcall->ofproto, flow, &dupcall->packet)) {
-            upcall->vsp_adjusted = true;
-        }
-
         pkt_metadata_from_flow(&dupcall->packet.md, flow);
         flow_extract(&dupcall->packet, flow);
 
@@ -1037,7 +1030,6 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
     ofpbuf_init(&upcall->put_actions, 0);
 
     upcall->xout_initialized = false;
-    upcall->vsp_adjusted = false;
     upcall->ukey_persists = false;
 
     upcall->ukey = NULL;
@@ -1311,21 +1303,6 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
         struct upcall *upcall = &upcalls[i];
         const struct dp_packet *packet = upcall->packet;
         struct ukey_op *op;
-
-        if (upcall->vsp_adjusted) {
-            /* This packet was received on a VLAN splinter port.  We added a
-             * VLAN to the packet to make the packet resemble the flow, but the
-             * actions were composed assuming that the packet contained no
-             * VLAN.  So, we must remove the VLAN header from the packet before
-             * trying to execute the actions. */
-            if (upcall->odp_actions.size) {
-                eth_pop_vlan(CONST_CAST(struct dp_packet *, upcall->packet));
-            }
-
-            /* Remove the flow vlan tags inserted by vlan splinter logic
-             * to ensure megaflow masks generated match the data path flow. */
-            CONST_CAST(struct flow *, upcall->flow)->vlan_tci = 0;
-        }
 
         /* Do not install a flow into the datapath if:
          *

@@ -58,7 +58,6 @@ TESTSUITE_AT = \
 	tests/dpctl.at \
 	tests/ofproto-dpif.at \
 	tests/bridge.at \
-	tests/vlan-splinters.at \
 	tests/ofproto.at \
 	tests/ovsdb.at \
 	tests/ovsdb-log.at \
