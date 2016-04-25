@@ -189,33 +189,7 @@ struct ofport_dpif {
     /* Queue to DSCP mapping. */
     struct ofproto_port_queue *qdscp;
     size_t n_qdscp;
-
-    /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
-     *
-     * This is deprecated.  It is only for compatibility with broken device
-     * drivers in old versions of Linux that do not properly support VLANs when
-     * VLAN devices are not used.  When broken device drivers are no longer in
-     * widespread use, we will delete these interfaces. */
-    ofp_port_t realdev_ofp_port;
-    int vlandev_vid;
 };
-
-/* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
- *
- * This is deprecated.  It is only for compatibility with broken device drivers
- * in old versions of Linux that do not properly support VLANs when VLAN
- * devices are not used.  When broken device drivers are no longer in
- * widespread use, we will delete these interfaces. */
-struct vlan_splinter {
-    struct hmap_node realdev_vid_node;
-    struct hmap_node vlandev_node;
-    ofp_port_t realdev_ofp_port;
-    ofp_port_t vlandev_ofp_port;
-    int vid;
-};
-
-static void vsp_remove(struct ofport_dpif *);
-static void vsp_add(struct ofport_dpif *, ofp_port_t realdev_ofp_port, int vid);
 
 static odp_port_t ofp_port_to_odp_port(const struct ofproto_dpif *,
                                        ofp_port_t);
@@ -329,11 +303,6 @@ struct ofproto_dpif {
     /* Rapid Spanning Tree. */
     struct rstp *rstp;
     long long int rstp_last_tick;
-
-    /* VLAN splinters. */
-    struct ovs_mutex vsp_mutex;
-    struct hmap realdev_vid_map OVS_GUARDED; /* (realdev,vid) -> vlandev. */
-    struct hmap vlandev_map OVS_GUARDED;     /* vlandev -> (realdev,vid). */
 
     /* Ports. */
     struct sset ports;             /* Set of standard port names. */
@@ -1329,12 +1298,8 @@ construct(struct ofproto *ofproto_)
     ofproto->has_bonded_bundles = false;
     ofproto->lacp_enabled = false;
     ovs_mutex_init_adaptive(&ofproto->stats_mutex);
-    ovs_mutex_init(&ofproto->vsp_mutex);
 
     guarded_list_init(&ofproto->ams);
-
-    hmap_init(&ofproto->vlandev_map);
-    hmap_init(&ofproto->realdev_vid_map);
 
     sset_init(&ofproto->ports);
     sset_init(&ofproto->ghost_ports);
@@ -1487,15 +1452,11 @@ destruct(struct ofproto *ofproto_)
     mac_learning_unref(ofproto->ml);
     mcast_snooping_unref(ofproto->ms);
 
-    hmap_destroy(&ofproto->vlandev_map);
-    hmap_destroy(&ofproto->realdev_vid_map);
-
     sset_destroy(&ofproto->ports);
     sset_destroy(&ofproto->ghost_ports);
     sset_destroy(&ofproto->port_poll_set);
 
     ovs_mutex_destroy(&ofproto->stats_mutex);
-    ovs_mutex_destroy(&ofproto->vsp_mutex);
 
     seq_destroy(ofproto->ams_seq);
 
@@ -1737,8 +1698,6 @@ port_construct(struct ofport *port_)
     port->peer = NULL;
     port->qdscp = NULL;
     port->n_qdscp = 0;
-    port->realdev_ofp_port = 0;
-    port->vlandev_vid = 0;
     port->carrier_seq = netdev_get_carrier_resets(netdev);
     port->is_layer3 = netdev_vport_is_layer3(netdev);
 
@@ -4902,9 +4861,6 @@ parse_flow_and_packet(int argc, const char *argv[],
             error = "Invalid datapath flow";
             goto exit;
         }
-
-        vsp_adjust_flow(*ofprotop, flow, NULL);
-
     } else {
         char *err = parse_ofp_exact_flow(flow, NULL, argv[argc - 1], NULL);
 
@@ -5414,239 +5370,6 @@ table_is_internal(uint8_t table_id)
     return table_id == TBL_INTERNAL;
 }
 
-/* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
- *
- * This is deprecated.  It is only for compatibility with broken device drivers
- * in old versions of Linux that do not properly support VLANs when VLAN
- * devices are not used.  When broken device drivers are no longer in
- * widespread use, we will delete these interfaces. */
-
-static int
-set_realdev(struct ofport *ofport_, ofp_port_t realdev_ofp_port, int vid)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport_->ofproto);
-    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
-
-    if (realdev_ofp_port == ofport->realdev_ofp_port
-        && vid == ofport->vlandev_vid) {
-        return 0;
-    }
-
-    ofproto->backer->need_revalidate = REV_RECONFIGURE;
-
-    if (ofport->realdev_ofp_port) {
-        vsp_remove(ofport);
-    }
-    if (realdev_ofp_port && ofport->bundle) {
-        /* vlandevs are enslaved to their realdevs, so they are not allowed to
-         * themselves be part of a bundle. */
-        bundle_set(ofport_->ofproto, ofport->bundle, NULL);
-    }
-
-    ofport->realdev_ofp_port = realdev_ofp_port;
-    ofport->vlandev_vid = vid;
-
-    if (realdev_ofp_port) {
-        vsp_add(ofport, realdev_ofp_port, vid);
-    }
-
-    return 0;
-}
-
-static uint32_t
-hash_realdev_vid(ofp_port_t realdev_ofp_port, int vid)
-{
-    return hash_2words(ofp_to_u16(realdev_ofp_port), vid);
-}
-
-bool
-ofproto_has_vlan_splinters(const struct ofproto_dpif *ofproto)
-    OVS_EXCLUDED(ofproto->vsp_mutex)
-{
-    /* hmap_is_empty is thread safe. */
-    return !hmap_is_empty(&ofproto->realdev_vid_map);
-}
-
-
-static ofp_port_t
-vsp_realdev_to_vlandev__(const struct ofproto_dpif *ofproto,
-                         ofp_port_t realdev_ofp_port, ovs_be16 vlan_tci)
-    OVS_REQUIRES(ofproto->vsp_mutex)
-{
-    if (!hmap_is_empty(&ofproto->realdev_vid_map)) {
-        int vid = vlan_tci_to_vid(vlan_tci);
-        const struct vlan_splinter *vsp;
-
-        HMAP_FOR_EACH_WITH_HASH (vsp, realdev_vid_node,
-                                 hash_realdev_vid(realdev_ofp_port, vid),
-                                 &ofproto->realdev_vid_map) {
-            if (vsp->realdev_ofp_port == realdev_ofp_port
-                && vsp->vid == vid) {
-                return vsp->vlandev_ofp_port;
-            }
-        }
-    }
-    return realdev_ofp_port;
-}
-
-/* Returns the OFP port number of the Linux VLAN device that corresponds to
- * 'vlan_tci' on the network device with port number 'realdev_ofp_port' in
- * 'struct ofport_dpif'.  For example, given 'realdev_ofp_port' of eth0 and
- * 'vlan_tci' 9, it would return the port number of eth0.9.
- *
- * Unless VLAN splinters are enabled for port 'realdev_ofp_port', this
- * function just returns its 'realdev_ofp_port' argument. */
-ofp_port_t
-vsp_realdev_to_vlandev(const struct ofproto_dpif *ofproto,
-                       ofp_port_t realdev_ofp_port, ovs_be16 vlan_tci)
-    OVS_EXCLUDED(ofproto->vsp_mutex)
-{
-    ofp_port_t ret;
-
-    /* hmap_is_empty is thread safe, see if we can return immediately. */
-    if (hmap_is_empty(&ofproto->realdev_vid_map)) {
-        return realdev_ofp_port;
-    }
-    ovs_mutex_lock(&ofproto->vsp_mutex);
-    ret = vsp_realdev_to_vlandev__(ofproto, realdev_ofp_port, vlan_tci);
-    ovs_mutex_unlock(&ofproto->vsp_mutex);
-    return ret;
-}
-
-static struct vlan_splinter *
-vlandev_find(const struct ofproto_dpif *ofproto, ofp_port_t vlandev_ofp_port)
-{
-    struct vlan_splinter *vsp;
-
-    HMAP_FOR_EACH_WITH_HASH (vsp, vlandev_node,
-                             hash_ofp_port(vlandev_ofp_port),
-                             &ofproto->vlandev_map) {
-        if (vsp->vlandev_ofp_port == vlandev_ofp_port) {
-            return vsp;
-        }
-    }
-
-    return NULL;
-}
-
-/* Returns the OpenFlow port number of the "real" device underlying the Linux
- * VLAN device with OpenFlow port number 'vlandev_ofp_port' and stores the
- * VLAN VID of the Linux VLAN device in '*vid'.  For example, given
- * 'vlandev_ofp_port' of eth0.9, it would return the OpenFlow port number of
- * eth0 and store 9 in '*vid'.
- *
- * Returns 0 and does not modify '*vid' if 'vlandev_ofp_port' is not a Linux
- * VLAN device.  Unless VLAN splinters are enabled, this is what this function
- * always does.*/
-static ofp_port_t
-vsp_vlandev_to_realdev(const struct ofproto_dpif *ofproto,
-                       ofp_port_t vlandev_ofp_port, int *vid)
-    OVS_REQUIRES(ofproto->vsp_mutex)
-{
-    if (!hmap_is_empty(&ofproto->vlandev_map)) {
-        const struct vlan_splinter *vsp;
-
-        vsp = vlandev_find(ofproto, vlandev_ofp_port);
-        if (vsp) {
-            if (vid) {
-                *vid = vsp->vid;
-            }
-            return vsp->realdev_ofp_port;
-        }
-    }
-    return 0;
-}
-
-/* Given 'flow', a flow representing a packet received on 'ofproto', checks
- * whether 'flow->in_port' represents a Linux VLAN device.  If so, changes
- * 'flow->in_port' to the "real" device backing the VLAN device, sets
- * 'flow->vlan_tci' to the VLAN VID, and returns true.  Optionally pushes the
- * appropriate VLAN on 'packet' if provided.  Otherwise (which is always the
- * case unless VLAN splinters are enabled), returns false without making any
- * changes. */
-bool
-vsp_adjust_flow(const struct ofproto_dpif *ofproto, struct flow *flow,
-                struct dp_packet *packet)
-    OVS_EXCLUDED(ofproto->vsp_mutex)
-{
-    ofp_port_t realdev;
-    int vid;
-
-    /* hmap_is_empty is thread safe. */
-    if (hmap_is_empty(&ofproto->vlandev_map)) {
-        return false;
-    }
-
-    ovs_mutex_lock(&ofproto->vsp_mutex);
-    realdev = vsp_vlandev_to_realdev(ofproto, flow->in_port.ofp_port, &vid);
-    ovs_mutex_unlock(&ofproto->vsp_mutex);
-    if (!realdev) {
-        return false;
-    }
-
-    /* Cause the flow to be processed as if it came in on the real device with
-     * the VLAN device's VLAN ID. */
-    flow->in_port.ofp_port = realdev;
-    flow->vlan_tci = htons((vid & VLAN_VID_MASK) | VLAN_CFI);
-
-    if (packet) {
-        /* Make the packet resemble the flow, so that it gets sent to an
-         * OpenFlow controller properly, so that it looks correct for sFlow,
-         * and so that flow_extract() will get the correct vlan_tci if it is
-         * called on 'packet'. */
-        eth_push_vlan(packet, htons(ETH_TYPE_VLAN), flow->vlan_tci);
-    }
-
-    return true;
-}
-
-static void
-vsp_remove(struct ofport_dpif *port)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
-    struct vlan_splinter *vsp;
-
-    ovs_mutex_lock(&ofproto->vsp_mutex);
-    vsp = vlandev_find(ofproto, port->up.ofp_port);
-    if (vsp) {
-        hmap_remove(&ofproto->vlandev_map, &vsp->vlandev_node);
-        hmap_remove(&ofproto->realdev_vid_map, &vsp->realdev_vid_node);
-        free(vsp);
-
-        port->realdev_ofp_port = 0;
-    } else {
-        VLOG_ERR("missing vlan device record");
-    }
-    ovs_mutex_unlock(&ofproto->vsp_mutex);
-}
-
-static void
-vsp_add(struct ofport_dpif *port, ofp_port_t realdev_ofp_port, int vid)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
-
-    ovs_mutex_lock(&ofproto->vsp_mutex);
-    if (!vsp_vlandev_to_realdev(ofproto, port->up.ofp_port, NULL)
-        && (vsp_realdev_to_vlandev__(ofproto, realdev_ofp_port, htons(vid))
-            == realdev_ofp_port)) {
-        struct vlan_splinter *vsp;
-
-        vsp = xmalloc(sizeof *vsp);
-        vsp->realdev_ofp_port = realdev_ofp_port;
-        vsp->vlandev_ofp_port = port->up.ofp_port;
-        vsp->vid = vid;
-
-        port->realdev_ofp_port = realdev_ofp_port;
-
-        hmap_insert(&ofproto->vlandev_map, &vsp->vlandev_node,
-                    hash_ofp_port(port->up.ofp_port));
-        hmap_insert(&ofproto->realdev_vid_map, &vsp->realdev_vid_node,
-                    hash_realdev_vid(realdev_ofp_port, vid));
-    } else {
-        VLOG_ERR("duplicate vlan device record");
-    }
-    ovs_mutex_unlock(&ofproto->vsp_mutex);
-}
 
 static odp_port_t
 ofp_port_to_odp_port(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
@@ -5845,7 +5568,6 @@ const struct ofproto_class ofproto_dpif_class = {
     set_mac_table_config,
     set_mcast_snooping,
     set_mcast_snooping_port,
-    set_realdev,
     NULL,                       /* meter_get_features */
     NULL,                       /* meter_set */
     NULL,                       /* meter_get */

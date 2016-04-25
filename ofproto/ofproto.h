@@ -399,14 +399,6 @@ struct ofproto_bundle_settings {
 
     struct lacp_settings *lacp;              /* Nonnull to enable LACP. */
     struct lacp_slave_settings *lacp_slaves; /* Array of n_slaves elements. */
-
-    /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
-     *
-     * This is deprecated.  It is only for compatibility with broken device
-     * drivers in old versions of Linux that do not properly support VLANs when
-     * VLAN devices are not used.  When broken device drivers are no longer in
-     * widespread use, we will delete these interfaces. */
-    ofp_port_t realdev_ofp_port;/* OpenFlow port number of real device. */
 };
 
 int ofproto_bundle_register(struct ofproto *, void *aux,
@@ -503,18 +495,6 @@ bool ofproto_port_cfm_status_changed(struct ofproto *, ofp_port_t ofp_port);
 int ofproto_port_get_cfm_status(const struct ofproto *,
                                 ofp_port_t ofp_port,
                                 struct cfm_status *);
-
-/* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
- *
- * This is deprecated.  It is only for compatibility with broken device drivers
- * in old versions of Linux that do not properly support VLANs when VLAN
- * devices are not used.  When broken device drivers are no longer in
- * widespread use, we will delete these interfaces. */
-
-void ofproto_get_vlan_usage(struct ofproto *, unsigned long int *vlan_bitmap);
-bool ofproto_has_vlan_usage_changed(const struct ofproto *);
-int ofproto_port_set_realdev(struct ofproto *, ofp_port_t vlandev_ofp_port,
-                             ofp_port_t realdev_ofp_port, int vid);
 
 /* Table configuration */
 

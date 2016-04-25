@@ -37,7 +37,6 @@ void dummy_enable(const char *arg);
 void dpif_dummy_register(enum dummy_level);
 void netdev_dummy_register(enum dummy_level);
 void timeval_dummy_register(void);
-void vlandev_dummy_enable(void);
 void ofpact_dummy_enable(void);
 
 #endif /* dummy.h */
