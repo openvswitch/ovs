@@ -608,6 +608,90 @@ NS_CHECK_EXEC([at_ns1], [wget http://[[fc00::1]] -t 3 -T 1 -v -o wget1.log], [4]
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - IPv4 ping])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,icmp,action=ct(commit),2
+priority=100,in_port=2,icmp,ct_state=-trk,action=ct(table=0)
+priority=100,in_port=2,icmp,ct_state=+trk+est,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Pings from ns0->ns1 should work fine.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0)
+])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+dnl Pings from ns1->ns0 should fail.
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.1.1.1 | FORMAT_PING], [0], [dnl
+7 packets transmitted, 0 received, 100% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - IPv6 ping])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+
+AT_DATA([flows.txt], [dnl
+
+dnl ICMPv6 echo request and reply go to table 1.  The rest of the traffic goes
+dnl through normal action.
+table=0,priority=10,icmp6,icmp_type=128,action=goto_table:1
+table=0,priority=10,icmp6,icmp_type=129,action=goto_table:1
+table=0,priority=1,action=normal
+
+dnl Allow everything from ns0->ns1. Only allow return traffic from ns1->ns0.
+table=1,priority=100,in_port=1,icmp6,action=ct(commit),2
+table=1,priority=100,in_port=2,icmp6,ct_state=-trk,action=ct(table=0)
+table=1,priority=100,in_port=2,icmp6,ct_state=+trk+est,action=1
+table=1,priority=1,action=drop
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
+
+dnl Pings from ns1->ns0 should fail.
+NS_CHECK_EXEC([at_ns1], [ping6 -q -c 3 -i 0.3 -w 2 fc00::1 | FORMAT_PING], [0], [dnl
+7 packets transmitted, 0 received, 100% packet loss, time 0ms
+])
+
+dnl Pings from ns0->ns1 should work fine.
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
+icmpv6,orig=(src=fc00::1,dst=fc00::2,id=<cleared>,type=128,code=0),reply=(src=fc00::2,dst=fc00::1,id=<cleared>,type=129,code=0)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - commit, recirc])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
