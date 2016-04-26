@@ -374,7 +374,7 @@ main(int argc, char *argv[])
 
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
-            pinctrl_run(&ctx, &lports, br_int);
+            pinctrl_run(&ctx, &lports, br_int, chassis_id, &local_datapaths);
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
             lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
