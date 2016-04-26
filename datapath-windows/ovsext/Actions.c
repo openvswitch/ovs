@@ -1557,10 +1557,14 @@ OvsExecuteRecirc(OvsForwardingContext *ovsFwdCtx,
             ovsActionStats.noCopiedNbl++;
             return NDIS_STATUS_SUCCESS;
         }
-        ovsFwdCtx->curNbl = newNbl;
     }
 
-    deferredAction = OvsAddDeferredActions(ovsFwdCtx->curNbl, key, NULL);
+    if (newNbl) {
+        deferredAction = OvsAddDeferredActions(newNbl, key, NULL);
+    } else {
+        deferredAction = OvsAddDeferredActions(ovsFwdCtx->curNbl, key, NULL);
+    }
+
     if (deferredAction) {
         deferredAction->key.recircId = NlAttrGetU32(actions);
     } else {
