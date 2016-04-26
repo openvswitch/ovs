@@ -7269,6 +7269,36 @@ icmp6,vlan_tci=0x0000,dl_src=00:00:86:05:80:da,dl_dst=00:60:97:07:69:ea,ipv6_src
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - ICMPv6 type match])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+
+AT_CHECK([ovs-ofctl add-flow br0 'icmp6,icmp_type=128,actions=2'])
+AT_CHECK([ovs-ofctl add-flow br0 'icmp6,icmp_type=129,actions=3'])
+
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'recirc_id(0),in_port(1),eth(src=f2:49:6e:52:49:0b,dst=02:b7:d7:17:ff:72),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=128)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'recirc_id(0),in_port(1),eth(src=f2:49:6e:52:49:0b,dst=02:b7:d7:17:ff:72),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=128)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'recirc_id(0),in_port(1),eth(src=f2:49:6e:52:49:0b,dst=02:b7:d7:17:ff:72),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=129)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'recirc_id(0),in_port(1),eth(src=f2:49:6e:52:49:0b,dst=02:b7:d7:17:ff:72),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=129)'])
+
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+
+AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
+recirc_id=0,icmp6,in_port=1,vlan_tci=0x0000,nw_frag=no,icmp_type=0x80/0xff, actions:2
+recirc_id=0,icmp6,in_port=1,vlan_tci=0x0000,nw_frag=no,icmp_type=0x81/0xff, actions:3
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ n_packets=2, n_bytes=124, icmp6,icmp_type=128 actions=output:2
+ n_packets=2, n_bytes=124, icmp6,icmp_type=129 actions=output:3
+NXST_FLOW reply:
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - Neighbor Discovery set-field with checksum update])
 OVS_VSWITCHD_START
 add_of_ports br0 1

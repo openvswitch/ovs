@@ -1405,13 +1405,13 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
         FLOWMAP_SET(map, nw_frag);
         FLOWMAP_SET(map, nw_tos);
         FLOWMAP_SET(map, nw_ttl);
+        FLOWMAP_SET(map, tp_src);
+        FLOWMAP_SET(map, tp_dst);
 
         if (OVS_UNLIKELY(flow->nw_proto == IPPROTO_IGMP)) {
             FLOWMAP_SET(map, igmp_group_ip4);
         } else {
             FLOWMAP_SET(map, tcp_flags);
-            FLOWMAP_SET(map, tp_src);
-            FLOWMAP_SET(map, tp_dst);
         }
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         FLOWMAP_SET(map, ipv6_src);
@@ -1421,6 +1421,8 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
         FLOWMAP_SET(map, nw_frag);
         FLOWMAP_SET(map, nw_tos);
         FLOWMAP_SET(map, nw_ttl);
+        FLOWMAP_SET(map, tp_src);
+        FLOWMAP_SET(map, tp_dst);
 
         if (OVS_UNLIKELY(flow->nw_proto == IPPROTO_ICMPV6)) {
             FLOWMAP_SET(map, nd_target);
@@ -1428,8 +1430,6 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
             FLOWMAP_SET(map, arp_tha);
         } else {
             FLOWMAP_SET(map, tcp_flags);
-            FLOWMAP_SET(map, tp_src);
-            FLOWMAP_SET(map, tp_dst);
         }
     } else if (eth_type_mpls(flow->dl_type)) {
         FLOWMAP_SET(map, mpls_lse);
