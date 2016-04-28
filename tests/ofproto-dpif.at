@@ -782,6 +782,16 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl As of OVS-2.5, a note action after 4 set_field actions are likely to
+dnl trigger ofpbuf reallocation during decode (~1KB into ofpacts buffer).
+dnl Using `make check-valgrind' here checks for use-after-free in this
+dnl codepath.
+AT_SETUP([ofproto-dpif - note action deep inside ofpacts])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl add-flow br0 'actions=set_field:0x1->metadata,set_field:0x2->metadata,set_field:0x3->metadata,set_field:0x4->metadata,note:00000000000000000000000000000000,note:00000000000000000000000000000000'])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - output, OFPP_NONE ingress port])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2

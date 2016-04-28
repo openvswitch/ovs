@@ -4554,6 +4554,7 @@ decode_NXAST_RAW_NOTE(const struct nx_action_note *nan,
     note = ofpact_put_NOTE(out);
     note->length = length;
     ofpbuf_put(out, nan->note, length);
+    note = out->header;
     ofpact_finish_NOTE(out, &note);
 
     return 0;
