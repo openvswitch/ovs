@@ -204,6 +204,7 @@ Tunnel - Geneve       |      3.18      |       YES      |    YES    |   NO    |
 QoS - Policing        |      YES       |       YES      |    NO     |   NO    |
 QoS - Shaping         |      YES       |       YES      |    NO     |   NO    |
 sFlow                 |      YES       |       YES      |    YES    |   NO    |
+IPFIX                 |      3.10      |       YES      |    YES    |   NO    |
 Set action            |      YES       |       YES      |    YES    | PARTIAL |
 NIC Bonding           |      YES       |       YES      |    YES    |   NO    |
 Multiple VTEPs        |      YES       |       YES      |    YES    |   NO    |
@@ -322,12 +323,6 @@ A: Tunnel virtual ports are not supported, as described in the
    previous answer.  It is also not possible to use queue-related
    actions.  On Linux kernels before 2.6.39, maximum-sized VLAN packets
    may not be transmitted.
-
-### Q: What Linux kernel versions does IPFIX flow monitoring work with?
-
-A: IPFIX flow monitoring requires the Linux kernel module from Linux
-   3.10 or later, or the out-of-tree module from Open vSwitch version
-   1.10.90 or later.
 
 ### Q: Should userspace or kernel be upgraded first to minimize downtime?
 
