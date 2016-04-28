@@ -180,13 +180,10 @@ A: Open vSwitch supports different datapaths on different platforms.  Each
                        Linux release whose OVS module supports the feature.
 
    * *Linux OVS tree*: The datapath implemented by the Linux kernel module
-                       distributed with the OVS source tree. Some features of
-                       this module rely on functionality not available in older
-                       kernels: in this case the minumum Linux version (against
-                       which the feature can be compiled) is listed.
+                       distributed with the OVS source tree.
 
    * *Userspace*: Also known as DPDK, dpif-netdev or dummy datapath. It is the
-                  only datapath that works on NetBSD and FreeBSD.
+                  only datapath that works on NetBSD, FreeBSD and Mac OSX.
 
    * *Hyper-V*: Also known as the Windows datapath.
 
@@ -195,9 +192,10 @@ A: Open vSwitch supports different datapaths on different platforms.  Each
 
 Feature               | Linux upstream | Linux OVS tree | Userspace | Hyper-V |
 ----------------------|:--------------:|:--------------:|:---------:|:-------:|
-Connection tracking   |      4.3       |       3.10     |    NO     |   NO    |
+NAT                   |      4.6       |       NO       |    NO     |   NO    |
+Connection tracking   |      4.3       |       YES      |    NO     | PARTIAL |
 Tunnel - LISP         |      NO        |       YES      |    NO     |   NO    |
-Tunnel - STT          |      NO        |       3.5      |    NO     |   YES   |
+Tunnel - STT          |      NO        |       YES      |    NO     |   YES   |
 Tunnel - GRE          |      3.11      |       YES      |    YES    |   YES   |
 Tunnel - VXLAN        |      3.12      |       YES      |    YES    |   YES   |
 Tunnel - Geneve       |      3.18      |       YES      |    YES    |   NO    |
