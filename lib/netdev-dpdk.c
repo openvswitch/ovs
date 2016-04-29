@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <getopt.h>
 
 #include "dirs.h"
 #include "dp-packet.h"
@@ -107,7 +108,9 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 #define OVS_VHOST_QUEUE_DISABLED    (-2) /* Queue was disabled by guest and not
                                           * yet mapped to another queue. */
 
+#ifdef VHOST_CUSE
 static char *cuse_dev_name = NULL;    /* Character device cuse_dev_name. */
+#endif
 static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 
 /*
@@ -649,8 +652,15 @@ netdev_dpdk_cast(const struct netdev *netdev)
 static struct netdev *
 netdev_dpdk_alloc(void)
 {
-    struct netdev_dpdk *dev = dpdk_rte_mzalloc(sizeof *dev);
-    return &dev->up;
+    struct netdev_dpdk *dev;
+
+    if (!rte_eal_init_ret) { /* Only after successful initialization */
+        dev = dpdk_rte_mzalloc(sizeof *dev);
+        if (dev) {
+            return &dev->up;
+        }
+    }
+    return NULL;
 }
 
 static void
@@ -783,6 +793,10 @@ netdev_dpdk_vhost_cuse_construct(struct netdev *netdev)
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     int err;
 
+    if (rte_eal_init_ret) {
+        return rte_eal_init_ret;
+    }
+
     ovs_mutex_lock(&dpdk_mutex);
     strncpy(dev->vhost_id, netdev->name, sizeof(dev->vhost_id));
     err = vhost_construct_helper(netdev);
@@ -805,6 +819,10 @@ netdev_dpdk_vhost_user_construct(struct netdev *netdev)
                  "A valid name must not include '/' or '\\'",
                  name);
         return EINVAL;
+    }
+
+    if (rte_eal_init_ret) {
+        return rte_eal_init_ret;
     }
 
     ovs_mutex_lock(&dpdk_mutex);
@@ -2251,28 +2269,12 @@ dpdk_vhost_class_init(void)
 static int
 dpdk_vhost_cuse_class_init(void)
 {
-    int err = -1;
-
-
-    /* Register CUSE device to handle IOCTLs.
-     * Unless otherwise specified on the vswitchd command line, cuse_dev_name
-     * is set to vhost-net.
-     */
-    err = rte_vhost_driver_register(cuse_dev_name);
-
-    if (err != 0) {
-        VLOG_ERR("CUSE device setup failure.");
-        return -1;
-    }
-
-    dpdk_vhost_class_init();
     return 0;
 }
 
 static int
 dpdk_vhost_user_class_init(void)
 {
-    dpdk_vhost_class_init();
     return 0;
 }
 
@@ -2283,7 +2285,6 @@ dpdk_common_init(void)
                              "[netdev] up|down", 1, 2,
                              netdev_dpdk_set_admin_state, NULL);
 
-    ovs_thread_create("dpdk_watchdog", dpdk_watchdog, NULL);
 }
 
 /* Client Rings */
@@ -2732,22 +2733,20 @@ static const struct dpdk_qos_ops egress_policer_ops = {
 
 static int
 process_vhost_flags(char *flag, char *default_val, int size,
-                    char **argv, char **new_val)
+                    const struct smap *ovs_other_config,
+                    char **new_val)
 {
+    const char *val;
     int changed = 0;
 
+    val = smap_get(ovs_other_config, flag);
+
     /* Depending on which version of vhost is in use, process the vhost-specific
-     * flag if it is provided on the vswitchd command line, otherwise resort to
-     * a default value.
-     *
-     * For vhost-user: Process "-vhost_sock_dir" to set the custom location of
-     * the vhost-user socket(s).
-     * For vhost-cuse: Process "-cuse_dev_name" to set the custom name of the
-     * vhost-cuse character device.
+     * flag if it is provided, otherwise resort to default value.
      */
-    if (!strcmp(argv[1], flag) && (strlen(argv[2]) <= size)) {
+    if (val && (strlen(val) <= size)) {
         changed = 1;
-        *new_val = xstrdup(argv[2]);
+        *new_val = xstrdup(val);
         VLOG_INFO("User-provided %s in use: %s", flag, *new_val);
     } else {
         VLOG_INFO("No %s provided - defaulting to %s", flag, default_val);
@@ -2757,68 +2756,185 @@ process_vhost_flags(char *flag, char *default_val, int size,
     return changed;
 }
 
-int
-dpdk_init(int argc, char **argv)
+static char **
+grow_argv(char ***argv, size_t cur_siz, size_t grow_by)
 {
-    int result;
-    int base = 0;
-    char *pragram_name = argv[0];
-    int err;
-    int isset;
-    cpu_set_t cpuset;
+    return xrealloc(*argv, sizeof(char *) * (cur_siz + grow_by));
+}
 
-    if (argc < 2 || strcmp(argv[1], "--dpdk"))
-        return 0;
+static void
+dpdk_option_extend(char ***argv, int argc, const char *option,
+                   const char *value)
+{
+    char **newargv = grow_argv(argv, argc, 2);
+    *argv = newargv;
+    newargv[argc] = xstrdup(option);
+    newargv[argc+1] = xstrdup(value);
+}
 
-    /* Remove the --dpdk argument from arg list.*/
-    argc--;
-    argv++;
+static int
+construct_dpdk_options(const struct smap *ovs_other_config,
+                       char ***argv, const int initial_size)
+{
+    struct dpdk_options_map {
+        const char *ovs_configuration;
+        const char *dpdk_option;
+        bool default_enabled;
+        const char *default_value;
+    } opts[] = {
+        {"dpdk-lcore-mask", "-c", false, NULL},
+        {"dpdk-hugepage-dir", "--huge-dir", false, NULL},
+    };
 
-    /* Reject --user option */
-    int i;
-    for (i = 0; i < argc; i++) {
-        if (!strcmp(argv[i], "--user")) {
-            VLOG_ERR("Can not mix --dpdk and --user options, aborting.");
+    int i, ret = initial_size;
+
+    /*First, construct from the flat-options (non-mutex)*/
+    for (i = 0; i < ARRAY_SIZE(opts); ++i) {
+        const char *lookup = smap_get(ovs_other_config,
+                                      opts[i].ovs_configuration);
+        if (!lookup && opts[i].default_enabled) {
+            lookup = opts[i].default_value;
+        }
+
+        if (lookup) {
+            dpdk_option_extend(argv, ret, opts[i].dpdk_option, lookup);
+            ret += 2;
         }
     }
 
+    return ret;
+}
+
+#define MAX_DPDK_EXCL_OPTS 10
+
+static int
+construct_dpdk_mutex_options(const struct smap *ovs_other_config,
+                             char ***argv, const int initial_size)
+{
+    struct dpdk_exclusive_options_map {
+        const char *category;
+        const char *ovs_dpdk_options[MAX_DPDK_EXCL_OPTS];
+        const char *eal_dpdk_options[MAX_DPDK_EXCL_OPTS];
+        const char *default_value;
+        int default_option;
+    } excl_opts[] = {
+        {"memory type",
+         {"dpdk-alloc-mem", "dpdk-socket-mem", NULL,},
+         {"-m",             "--socket-mem",    NULL,},
+         "1024,0", 1
+        },
+    };
+
+    int i, ret = initial_size;
+    for (i = 0; i < ARRAY_SIZE(excl_opts); ++i) {
+        int found_opts = 0, scan, found_pos = -1;
+        const char *found_value;
+        struct dpdk_exclusive_options_map *popt = &excl_opts[i];
+
+        for (scan = 0; scan < MAX_DPDK_EXCL_OPTS
+                 && popt->ovs_dpdk_options[scan]; ++scan) {
+            const char *lookup = smap_get(ovs_other_config,
+                                          popt->ovs_dpdk_options[scan]);
+            if (lookup && strlen(lookup)) {
+                found_opts++;
+                found_pos = scan;
+                found_value = lookup;
+            }
+        }
+
+        if (!found_opts) {
+            if (popt->default_option) {
+                found_pos = popt->default_option;
+                found_value = popt->default_value;
+            } else {
+                continue;
+            }
+        }
+
+        if (found_opts > 1) {
+            VLOG_ERR("Multiple defined options for %s. Please check your"
+                     " database settings and reconfigure if necessary.",
+                     popt->category);
+        }
+
+        dpdk_option_extend(argv, ret, popt->eal_dpdk_options[found_pos],
+                           found_value);
+        ret += 2;
+    }
+
+    return ret;
+}
+
+static int
+get_dpdk_args(const struct smap *ovs_other_config, char ***argv)
+{
+    int i = construct_dpdk_options(ovs_other_config, argv, 1);
+    i = construct_dpdk_mutex_options(ovs_other_config, argv, i);
+    return i;
+}
+
+static char **dpdk_argv;
+static int dpdk_argc;
+
+static void
+deferred_argv_release(void)
+{
+    int result;
+    for (result = 0; result < dpdk_argc; ++result) {
+        free(dpdk_argv[result]);
+    }
+
+    free(dpdk_argv);
+}
+
+static void
+dpdk_init__(const struct smap *ovs_other_config)
+{
+    char **argv = NULL;
+    int result;
+    int argc;
+    int err;
+    cpu_set_t cpuset;
+
+    if (!smap_get_bool(ovs_other_config, "dpdk-init", false)) {
+        VLOG_INFO("DPDK Disabled - to change this requires a restart.\n");
+        return;
+    }
+
+    VLOG_INFO("DPDK Enabled, initializing");
+
 #ifdef VHOST_CUSE
-    if (process_vhost_flags("-cuse_dev_name", xstrdup("vhost-net"),
-                            PATH_MAX, argv, &cuse_dev_name)) {
+    if (process_vhost_flags("cuse-dev-name", xstrdup("vhost-net"),
+                            PATH_MAX, ovs_other_config, &cuse_dev_name)) {
 #else
-    if (process_vhost_flags("-vhost_sock_dir", xstrdup(ovs_rundir()),
-                            NAME_MAX, argv, &vhost_sock_dir)) {
+    if (process_vhost_flags("vhost-sock-dir", xstrdup(ovs_rundir()),
+                            NAME_MAX, ovs_other_config, &vhost_sock_dir)) {
         struct stat s;
-        int err;
 
         err = stat(vhost_sock_dir, &s);
         if (err) {
-            VLOG_ERR("vHostUser socket DIR '%s' does not exist.",
-                     vhost_sock_dir);
-            return err;
+            VLOG_ERR("vhost-user sock directory '%s' does not exist.",
+                      vhost_sock_dir);
         }
 #endif
-        /* Remove the vhost flag configuration parameters from the argument
-         * list, so that the correct elements are passed to the DPDK
-         * initialization function
-         */
-        argc -= 2;
-        argv += 2;    /* Increment by two to bypass the vhost flag arguments */
-        base = 2;
     }
 
     /* Get the main thread affinity */
     CPU_ZERO(&cpuset);
-    err = pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+    err = pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t),
+                                 &cpuset);
     if (err) {
         VLOG_ERR("Thread getaffinity error %d.", err);
-        return err;
     }
 
-    /* Keep the program name argument as this is needed for call to
-     * rte_eal_init()
-     */
-    argv[0] = pragram_name;
+    argv = grow_argv(&argv, 0, 1);
+    argv[0] = xstrdup(ovs_get_program_name());
+    argc = get_dpdk_args(ovs_other_config, &argv);
+
+    argv = grow_argv(&argv, argc, 1);
+    argv[argc] = NULL;
+
+    optind = 1;
 
     /* Make sure things are initialized ... */
     result = rte_eal_init(argc, argv);
@@ -2827,23 +2943,54 @@ dpdk_init(int argc, char **argv)
     }
 
     /* Set the main thread affinity back to pre rte_eal_init() value */
-    err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-    if (err) {
-        VLOG_ERR("Thread setaffinity error %d", err);
-        return err;
+    if (!err) {
+        err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t),
+                                     &cpuset);
+        if (err) {
+            VLOG_ERR("Thread setaffinity error %d", err);
+        }
     }
+
+    dpdk_argv = argv;
+    dpdk_argc = argc;
+
+    atexit(deferred_argv_release);
 
     rte_memzone_dump(stdout);
     rte_eal_init_ret = 0;
 
-    if (argc > result) {
-        argv[result] = argv[0];
-    }
-
     /* We are called from the main thread here */
     RTE_PER_LCORE(_lcore_id) = NON_PMD_CORE_ID;
 
-    return result + 1 + base;
+    ovs_thread_create("dpdk_watchdog", dpdk_watchdog, NULL);
+
+#ifdef VHOST_CUSE
+    /* Register CUSE device to handle IOCTLs.
+     * Unless otherwise specified, cuse_dev_name is set to vhost-net.
+     */
+    err = rte_vhost_driver_register(cuse_dev_name);
+
+    if (err != 0) {
+        VLOG_ERR("CUSE device setup failure.");
+        return;
+    }
+#endif
+
+    dpdk_vhost_class_init();
+
+    /* Finally, register the dpdk classes */
+    netdev_dpdk_register();
+}
+
+void
+dpdk_init(const struct smap *ovs_other_config)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+
+    if (ovs_other_config && ovsthread_once_start(&once)) {
+        dpdk_init__(ovs_other_config);
+        ovsthread_once_done(&once);
+    }
 }
 
 static const struct netdev_class dpdk_class =
@@ -2905,23 +3052,14 @@ static const struct netdev_class OVS_UNUSED dpdk_vhost_user_class =
 void
 netdev_dpdk_register(void)
 {
-    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
-
-    if (rte_eal_init_ret) {
-        return;
-    }
-
-    if (ovsthread_once_start(&once)) {
-        dpdk_common_init();
-        netdev_register_provider(&dpdk_class);
-        netdev_register_provider(&dpdk_ring_class);
+    dpdk_common_init();
+    netdev_register_provider(&dpdk_class);
+    netdev_register_provider(&dpdk_ring_class);
 #ifdef VHOST_CUSE
-        netdev_register_provider(&dpdk_vhost_cuse_class);
+    netdev_register_provider(&dpdk_vhost_cuse_class);
 #else
-        netdev_register_provider(&dpdk_vhost_user_class);
+    netdev_register_provider(&dpdk_vhost_user_class);
 #endif
-        ovsthread_once_done(&once);
-    }
 }
 
 int

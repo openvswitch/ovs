@@ -34,6 +34,7 @@
 #include "if-notifier.h"
 #include "jsonrpc.h"
 #include "lacp.h"
+#include "lib/netdev-dpdk.h"
 #include "mac-learning.h"
 #include "mcast-snooping.h"
 #include "netdev.h"
@@ -2891,6 +2892,10 @@ bridge_run(void)
         return;
     }
     cfg = ovsrec_open_vswitch_first(idl);
+
+    if (cfg) {
+        dpdk_init(&cfg->other_config);
+    }
 
     /* Initialize the ofproto library.  This only needs to run once, but
      * it must be done after the configuration is set.  If the
