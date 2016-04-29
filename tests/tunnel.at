@@ -114,7 +114,7 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
                     options:key=5 ofport_request=1\
                     -- add-port br0 p2 -- set Interface p2 type=dummy \
-                    ofport_request=2 ofport_request=2])
+                    ofport_request=2])
 AT_DATA([flows.txt], [dnl
 actions=output:1
 ])
