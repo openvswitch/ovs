@@ -2773,6 +2773,17 @@ dpdk_option_extend(char ***argv, int argc, const char *option,
     newargv[argc+1] = xstrdup(value);
 }
 
+static char **
+move_argv(char ***argv, size_t cur_size, char **src_argv, size_t src_argc)
+{
+    char **newargv = grow_argv(argv, cur_size, src_argc);
+    while (src_argc--) {
+        newargv[cur_size+src_argc] = src_argv[src_argc];
+        src_argv[src_argc] = NULL;
+    }
+    return newargv;
+}
+
 static int
 extra_dpdk_args(const char *ovs_extra_config, char ***argv, int argc)
 {
@@ -2790,9 +2801,21 @@ extra_dpdk_args(const char *ovs_extra_config, char ***argv, int argc)
     return ret;
 }
 
+static bool
+argv_contains(char **argv_haystack, const size_t argc_haystack,
+              const char *needle)
+{
+    for (size_t i = 0; i < argc_haystack; ++i) {
+        if (!strcmp(argv_haystack[i], needle))
+            return true;
+    }
+    return false;
+}
+
 static int
 construct_dpdk_options(const struct smap *ovs_other_config,
-                       char ***argv, const int initial_size)
+                       char ***argv, const int initial_size,
+                       char **extra_args, const size_t extra_argc)
 {
     struct dpdk_options_map {
         const char *ovs_configuration;
@@ -2815,8 +2838,13 @@ construct_dpdk_options(const struct smap *ovs_other_config,
         }
 
         if (lookup) {
-            dpdk_option_extend(argv, ret, opts[i].dpdk_option, lookup);
-            ret += 2;
+            if (!argv_contains(extra_args, extra_argc, opts[i].dpdk_option)) {
+                dpdk_option_extend(argv, ret, opts[i].dpdk_option, lookup);
+                ret += 2;
+            } else {
+                VLOG_WARN("Ignoring database defined option '%s' due to "
+                          "dpdk_extras config", opts[i].dpdk_option);
+            }
         }
     }
 
@@ -2827,7 +2855,8 @@ construct_dpdk_options(const struct smap *ovs_other_config,
 
 static int
 construct_dpdk_mutex_options(const struct smap *ovs_other_config,
-                             char ***argv, const int initial_size)
+                             char ***argv, const int initial_size,
+                             char **extra_args, const size_t extra_argc)
 {
     struct dpdk_exclusive_options_map {
         const char *category;
@@ -2875,9 +2904,15 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
                      popt->category);
         }
 
-        dpdk_option_extend(argv, ret, popt->eal_dpdk_options[found_pos],
-                           found_value);
-        ret += 2;
+        if (!argv_contains(extra_args, extra_argc,
+                           popt->eal_dpdk_options[found_pos])) {
+            dpdk_option_extend(argv, ret, popt->eal_dpdk_options[found_pos],
+                               found_value);
+            ret += 2;
+        } else {
+            VLOG_WARN("Ignoring database defined option '%s' due to "
+                      "dpdk_extras config", popt->eal_dpdk_options[found_pos]);
+        }
     }
 
     return ret;
@@ -2888,14 +2923,25 @@ get_dpdk_args(const struct smap *ovs_other_config, char ***argv,
               int argc)
 {
     const char *extra_configuration;
-    int i = construct_dpdk_options(ovs_other_config, argv, argc);
-    i = construct_dpdk_mutex_options(ovs_other_config, argv, i);
+    char **extra_args = NULL;
+    int i;
+    size_t extra_argc = 0;
 
     extra_configuration = smap_get(ovs_other_config, "dpdk-extra");
     if (extra_configuration) {
-        i = extra_dpdk_args(extra_configuration, argv, i);
+        extra_argc = extra_dpdk_args(extra_configuration, &extra_args, 0);
     }
-    return i;
+
+    i = construct_dpdk_options(ovs_other_config, argv, argc, extra_args,
+                               extra_argc);
+    i = construct_dpdk_mutex_options(ovs_other_config, argv, i, extra_args,
+                                     extra_argc);
+
+    if (extra_configuration) {
+        *argv = move_argv(argv, i, extra_args, extra_argc);
+    }
+
+    return i + extra_argc;
 }
 
 static char **dpdk_argv;
