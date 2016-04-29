@@ -445,9 +445,9 @@ A: Yes.  How you configure it depends on what you mean by "promiscuous
 
 A: Firstly, you must have a DPDK-enabled version of Open vSwitch.
 
-   If your version is DPDK-enabled it will support the --dpdk
-   argument on the command line and will display lines with
-   "EAL:..." during startup when --dpdk is supplied.
+   If your version is DPDK-enabled it will support the other-config:dpdk-init
+   configuration in the database and will display lines with "EAL:..."
+   during startup when other_config:dpdk-init is set to 'true'.
 
    Secondly, when adding a DPDK port, unlike a system port, the
    type for the interface must be specified. For example;

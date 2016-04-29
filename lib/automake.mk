@@ -354,6 +354,10 @@ if DPDK_NETDEV
 lib_libopenvswitch_la_SOURCES += \
        lib/netdev-dpdk.c \
        lib/netdev-dpdk.h
+else
+lib_libopenvswitch_la_SOURCES += \
+	lib/netdev-nodpdk.c \
+	lib/netdev-dpdk.h
 endif
 
 if WIN32

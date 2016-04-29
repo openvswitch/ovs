@@ -265,9 +265,11 @@ def run():
     cmd = [build + "/vswitchd/ovs-vswitchd"]
 
     if options.dpdk:
-        cmd.append("--dpdk")
-        cmd.extend(options.dpdk)
-        cmd.append("--")
+        _sh("ovs-vsctl --no-wait set Open_vSwitch %s " \
+            "other_config:dpdk-init=true" % root_uuid)
+    else:
+        _sh("ovs-vsctl --no-wait set Open_vSwitch %s " \
+            "other_config:dpdk-init=false" % root_uuid)
 
     if options.gdb:
         cmd = ["gdb", "--args"] + cmd
@@ -421,9 +423,8 @@ def main():
                      help="run ovs-vswitchd under gdb")
     group.add_option("--valgrind", dest="valgrind", action="store_true",
                      help="run ovs-vswitchd under valgrind")
-    group.add_option("--dpdk", dest="dpdk", action="callback",
-                     callback=parse_subargs,
-                     help="run ovs-vswitchd with dpdk subopts (ended by --)")
+    group.add_option("--dpdk", dest="dpdk", action="store_true",
+                     help="run ovs-vswitchd with dpdk")
     group.add_option("--clang", dest="clang", action="store_true",
                      help="Use binaries built by clang")
     group.add_option("--user", dest="user", action="store", default="",

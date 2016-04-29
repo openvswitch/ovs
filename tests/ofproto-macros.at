@@ -281,7 +281,8 @@ m4_define([_OVS_VSWITCHD_START],
 /reconnect|INFO|/d
 /ofproto|INFO|using datapath ID/d
 /netdev_linux|INFO|.*device has unknown hardware address family/d
-/ofproto|INFO|datapath ID changed to fedcba9876543210/d']])
+/ofproto|INFO|datapath ID changed to fedcba9876543210/d
+/dpdk|INFO|DPDK Disabled - to change this requires a restart./d']])
 ])
 
 # OVS_VSWITCHD_START([vsctl-args], [vsctl-output], [=override])
