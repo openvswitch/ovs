@@ -2895,6 +2895,9 @@ dpdk_init__(const struct smap *ovs_other_config)
     int argc;
     int err;
     cpu_set_t cpuset;
+#ifndef VHOST_CUSE
+    char *sock_dir_subcomponent;
+#endif
 
     if (!smap_get_bool(ovs_other_config, "dpdk-init", false)) {
         VLOG_INFO("DPDK Disabled - to change this requires a restart.\n");
@@ -2907,15 +2910,29 @@ dpdk_init__(const struct smap *ovs_other_config)
     if (process_vhost_flags("cuse-dev-name", xstrdup("vhost-net"),
                             PATH_MAX, ovs_other_config, &cuse_dev_name)) {
 #else
-    if (process_vhost_flags("vhost-sock-dir", xstrdup(ovs_rundir()),
-                            NAME_MAX, ovs_other_config, &vhost_sock_dir)) {
+    if (process_vhost_flags("vhost-sock-dir", xstrdup(""),
+                            NAME_MAX, ovs_other_config,
+                            &sock_dir_subcomponent)) {
         struct stat s;
+        if (!strstr(sock_dir_subcomponent, "..")) {
+            vhost_sock_dir = xasprintf("%s/%s", ovs_rundir(),
+                                       sock_dir_subcomponent);
 
-        err = stat(vhost_sock_dir, &s);
-        if (err) {
-            VLOG_ERR("vhost-user sock directory '%s' does not exist.",
-                      vhost_sock_dir);
+            err = stat(vhost_sock_dir, &s);
+            if (err) {
+                VLOG_ERR("vhost-user sock directory '%s' does not exist.",
+                         vhost_sock_dir);
+            }
+        } else {
+            vhost_sock_dir = xstrdup(ovs_rundir());
+            VLOG_ERR("vhost-user sock directory request '%s/%s' has invalid"
+                     "characters '..' - using %s instead.",
+                     ovs_rundir(), sock_dir_subcomponent, ovs_rundir());
         }
+        free(sock_dir_subcomponent);
+    } else {
+        vhost_sock_dir = xstrdup(ovs_rundir());
+        free(sock_dir_subcomponent);
 #endif
     }
 
