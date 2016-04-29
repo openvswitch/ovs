@@ -2866,9 +2866,10 @@ construct_dpdk_mutex_options(const struct smap *ovs_other_config,
 }
 
 static int
-get_dpdk_args(const struct smap *ovs_other_config, char ***argv)
+get_dpdk_args(const struct smap *ovs_other_config, char ***argv,
+              int argc)
 {
-    int i = construct_dpdk_options(ovs_other_config, argv, 1);
+    int i = construct_dpdk_options(ovs_other_config, argv, argc);
     i = construct_dpdk_mutex_options(ovs_other_config, argv, i);
     return i;
 }
@@ -2892,7 +2893,8 @@ dpdk_init__(const struct smap *ovs_other_config)
 {
     char **argv = NULL;
     int result;
-    int argc;
+    int argc, argc_tmp;
+    bool auto_determine = true;
     int err;
     cpu_set_t cpuset;
 #ifndef VHOST_CUSE
@@ -2945,8 +2947,34 @@ dpdk_init__(const struct smap *ovs_other_config)
     }
 
     argv = grow_argv(&argv, 0, 1);
+    argc = 1;
     argv[0] = xstrdup(ovs_get_program_name());
-    argc = get_dpdk_args(ovs_other_config, &argv);
+    argc_tmp = get_dpdk_args(ovs_other_config, &argv, argc);
+
+    while (argc_tmp != argc) {
+        if (!strcmp("-c", argv[argc]) || !strcmp("-l", argv[argc])) {
+            auto_determine = false;
+            break;
+        }
+        argc++;
+    }
+    argc = argc_tmp;
+
+    /**
+     * NOTE: This is an unsophisticated mechanism for determining the DPDK
+     * lcore for the DPDK Master.
+     */
+    if (auto_determine) {
+        int i;
+        for (i = 0; i < CPU_SETSIZE; i++) {
+            if (CPU_ISSET(i, &cpuset)) {
+                argv = grow_argv(&argv, argc, 2);
+                argv[argc++] = xstrdup("-c");
+                argv[argc++] = xasprintf("0x%08llX", (1ULL<<i));
+                i = CPU_SETSIZE;
+            }
+        }
+    }
 
     argv = grow_argv(&argv, argc, 1);
     argv[argc] = NULL;
@@ -2960,7 +2988,7 @@ dpdk_init__(const struct smap *ovs_other_config)
     }
 
     /* Set the main thread affinity back to pre rte_eal_init() value */
-    if (!err) {
+    if (!auto_determine) {
         err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t),
                                      &cpuset);
         if (err) {
