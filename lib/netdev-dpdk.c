@@ -39,6 +39,7 @@
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-util.h"
+#include "openvswitch/dynamic-string.h"
 #include "openvswitch/list.h"
 #include "openvswitch/ofp-print.h"
 #include "openvswitch/vlog.h"
@@ -2773,6 +2774,23 @@ dpdk_option_extend(char ***argv, int argc, const char *option,
 }
 
 static int
+extra_dpdk_args(const char *ovs_extra_config, char ***argv, int argc)
+{
+    int ret = argc;
+    char *release_tok = xstrdup(ovs_extra_config);
+    char *tok = release_tok, *endptr = NULL;
+
+    for (tok = strtok_r(release_tok, " ", &endptr); tok != NULL;
+         tok = strtok_r(NULL, " ", &endptr)) {
+        char **newarg = grow_argv(argv, ret, 1);
+        *argv = newarg;
+        newarg[ret++] = xstrdup(tok);
+    }
+    free(release_tok);
+    return ret;
+}
+
+static int
 construct_dpdk_options(const struct smap *ovs_other_config,
                        char ***argv, const int initial_size)
 {
@@ -2869,8 +2887,14 @@ static int
 get_dpdk_args(const struct smap *ovs_other_config, char ***argv,
               int argc)
 {
+    const char *extra_configuration;
     int i = construct_dpdk_options(ovs_other_config, argv, argc);
     i = construct_dpdk_mutex_options(ovs_other_config, argv, i);
+
+    extra_configuration = smap_get(ovs_other_config, "dpdk-extra");
+    if (extra_configuration) {
+        i = extra_dpdk_args(extra_configuration, argv, i);
+    }
     return i;
 }
 
@@ -2980,6 +3004,19 @@ dpdk_init__(const struct smap *ovs_other_config)
     argv[argc] = NULL;
 
     optind = 1;
+
+    if (VLOG_IS_INFO_ENABLED()) {
+        struct ds eal_args;
+        int opt;
+        ds_init(&eal_args);
+        ds_put_cstr(&eal_args, "EAL ARGS:");
+        for (opt = 0; opt < argc; ++opt) {
+            ds_put_cstr(&eal_args, " ");
+            ds_put_cstr(&eal_args, argv[opt]);
+        }
+        VLOG_INFO("%s", ds_cstr_ro(&eal_args));
+        ds_destroy(&eal_args);
+    }
 
     /* Make sure things are initialized ... */
     result = rte_eal_init(argc, argv);
