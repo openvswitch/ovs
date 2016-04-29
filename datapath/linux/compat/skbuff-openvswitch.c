@@ -23,11 +23,7 @@ void __skb_warn_lro_forwarding(const struct sk_buff *skb)
 
 static inline bool head_frag(const struct sk_buff *skb)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
 	return skb->head_frag;
-#else
-	return false;
-#endif
 }
 
  /**
@@ -296,9 +292,7 @@ void rpl_skb_scrub_packet(struct sk_buff *skb, bool xnet)
 {
 	skb->tstamp.tv64 = 0;
 	skb->pkt_type = PACKET_HOST;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 	skb->skb_iif = 0;
-#endif
 	skb->ignore_df = 0;
 	skb_dst_drop(skb);
 	secpath_reset(skb);
