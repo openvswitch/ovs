@@ -252,6 +252,12 @@ void ovsdb_idl_txn_write(const struct ovsdb_idl_row *,
 void ovsdb_idl_txn_write_clone(const struct ovsdb_idl_row *,
                                const struct ovsdb_idl_column *,
                                const struct ovsdb_datum *);
+void ovsdb_idl_txn_write_partial_map(const struct ovsdb_idl_row *,
+                                     const struct ovsdb_idl_column *,
+                                     struct ovsdb_datum *);
+void ovsdb_idl_txn_delete_partial_map(const struct ovsdb_idl_row *,
+                                      const struct ovsdb_idl_column *,
+                                      struct ovsdb_datum *);
 void ovsdb_idl_txn_delete(const struct ovsdb_idl_row *);
 const struct ovsdb_idl_row *ovsdb_idl_txn_insert(
     struct ovsdb_idl_txn *, const struct ovsdb_idl_table_class *,
