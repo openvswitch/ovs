@@ -2763,6 +2763,9 @@ dpdk_init(int argc, char **argv)
     int result;
     int base = 0;
     char *pragram_name = argv[0];
+    int err;
+    int isset;
+    cpu_set_t cpuset;
 
     if (argc < 2 || strcmp(argv[1], "--dpdk"))
         return 0;
@@ -2804,6 +2807,14 @@ dpdk_init(int argc, char **argv)
         base = 2;
     }
 
+    /* Get the main thread affinity */
+    CPU_ZERO(&cpuset);
+    err = pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+    if (err) {
+        VLOG_ERR("Thread getaffinity error %d.", err);
+        return err;
+    }
+
     /* Keep the program name argument as this is needed for call to
      * rte_eal_init()
      */
@@ -2813,6 +2824,13 @@ dpdk_init(int argc, char **argv)
     result = rte_eal_init(argc, argv);
     if (result < 0) {
         ovs_abort(result, "Cannot init EAL");
+    }
+
+    /* Set the main thread affinity back to pre rte_eal_init() value */
+    err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+    if (err) {
+        VLOG_ERR("Thread setaffinity error %d", err);
+        return err;
     }
 
     rte_memzone_dump(stdout);
