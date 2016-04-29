@@ -290,7 +290,9 @@
       <column name="other_config" key="vhost-sock-dir"
               type='{"type": "string"}'>
         <p>
-          Specifies the path to the vhost-user unix domain socket files.
+          Specifies the path to the vhost-user unix domain socket files. This
+          path must exist and be a subdirectory tree of the Open vSwitch
+          run directory.
         </p>
         <p>
           Defaults to the working directory of the application. Changing this
