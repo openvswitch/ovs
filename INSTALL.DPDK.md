@@ -169,6 +169,11 @@ Using the DPDK with ovs-vswitchd:
    * dpdk-hugepage-dir
    Directory where hugetlbfs is mounted
 
+   * dpdk-extra
+   Extra arguments to provide to DPDK EAL, as previously specified on the
+   command line. Do not pass '--no-huge' to the system in this way. Support
+   for running the system without hugepages is nonexistent.
+
    * cuse-dev-name
    Option to set the vhost_cuse character device name.
 

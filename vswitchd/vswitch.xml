@@ -275,6 +275,17 @@
         </p>
       </column>
 
+      <column name="other_config" key="dpdk-extra"
+              type='{"type": "string"}'>
+        <p>
+          Specifies additional eal command line arguments for DPDK.
+        </p>
+        <p>
+          The default is empty. Changing this value requires restarting the
+          daemon
+        </p>
+      </column>
+
       <column name="other_config" key="cuse-dev-name"
               type='{"type": "string"}'>
         <p>
