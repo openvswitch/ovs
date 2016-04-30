@@ -208,6 +208,9 @@ EXTRA_DIST += tests/valgrind-wrapper.in
 VALGRIND = valgrind --log-file=valgrind.%p --leak-check=full \
 	--suppressions=$(abs_top_srcdir)/tests/glibc.supp \
 	--suppressions=$(abs_top_srcdir)/tests/openssl.supp --num-callers=20
+HELGRIND = valgrind --log-file=helgrind.%p --tool=helgrind \
+	--suppressions=$(abs_top_srcdir)/tests/glibc.supp \
+	--suppressions=$(abs_top_srcdir)/tests/openssl.supp --num-callers=20
 EXTRA_DIST += tests/glibc.supp tests/openssl.supp
 check-valgrind: all tests/atconfig tests/atlocal $(TESTSUITE) \
                 $(valgrind_wrappers) $(check_DATA)
@@ -216,6 +219,10 @@ check-valgrind: all tests/atconfig tests/atlocal $(TESTSUITE) \
 	@echo '----------------------------------------------------------------------'
 	@echo 'Valgrind output can be found in tests/testsuite.dir/*/valgrind.*'
 	@echo '----------------------------------------------------------------------'
+check-helgrind: all tests/atconfig tests/atlocal $(TESTSUITE) \
+                $(valgrind_wrappers) $(check_DATA)
+	-$(SHELL) '$(TESTSUITE)' -C tests CHECK_VALGRIND=true VALGRIND='$(HELGRIND)' AUTOTEST_PATH='tests/valgrind:$(AUTOTEST_PATH)' -d $(TESTSUITEFLAGS)
+
 
 # OFTest support.
 
