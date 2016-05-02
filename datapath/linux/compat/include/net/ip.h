@@ -116,6 +116,10 @@ static inline int rpl_ip_do_fragment(struct sock *sk, struct sk_buff *skb,
 #define ip_do_fragment rpl_ip_do_fragment
 #endif /* IP_DO_FRAGMENT */
 
+/* If backporting IP defrag, then init/exit functions need to be called from
+ * compat_{in,ex}it() to prepare the backported fragmentation cache. In this
+ * case we declare the functions which are defined in
+ * datapath/linux/compat/ip_fragment.c. */
 int rpl_ip_defrag(struct net *net, struct sk_buff *skb, u32 user);
 #define ip_defrag rpl_ip_defrag
 int __init rpl_ipfrag_init(void);
@@ -139,6 +143,9 @@ static inline int rpl_ip_defrag(struct net *net, struct sk_buff *skb, u32 user)
 #define ip_defrag rpl_ip_defrag
 #endif
 
+/* If we can use upstream defrag then we can rely on the upstream
+ * defrag module to init/exit correctly. In this case the calls in
+ * compat_{in,ex}it() can be no-ops. */
 static inline int rpl_ipfrag_init(void) { return 0; }
 static inline void rpl_ipfrag_fini(void) { }
 #endif /* HAVE_CORRECT_MRU_HANDLING */
