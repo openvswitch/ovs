@@ -16,17 +16,17 @@
 #define OVS_NF_DEFRAG6_BACKPORT 1
 struct sk_buff *rpl_nf_ct_frag6_gather(struct net *net, struct sk_buff *skb,
 				       u32 user);
+#define nf_ct_frag6_gather rpl_nf_ct_frag6_gather
+#endif /* HAVE_NF_CT_FRAG6_CONSUME_ORIG */
+
+#ifdef OVS_NF_DEFRAG6_BACKPORT
 int __init rpl_nf_ct_frag6_init(void);
 void rpl_nf_ct_frag6_cleanup(void);
-void rpl_nf_ct_frag6_consume_orig(struct sk_buff *skb);
-#define nf_ct_frag6_gather rpl_nf_ct_frag6_gather
-#else /* HAVE_NF_CT_FRAG6_CONSUME_ORIG */
+#else /* !OVS_NF_DEFRAG6_BACKPORT */
 static inline int __init rpl_nf_ct_frag6_init(void) { return 0; }
 static inline void rpl_nf_ct_frag6_cleanup(void) { }
-static inline void rpl_nf_ct_frag6_consume_orig(struct sk_buff *skb) { }
-#endif /* HAVE_NF_CT_FRAG6_CONSUME_ORIG */
+#endif /* OVS_NF_DEFRAG6_BACKPORT */
 #define nf_ct_frag6_init rpl_nf_ct_frag6_init
 #define nf_ct_frag6_cleanup rpl_nf_ct_frag6_cleanup
-#define nf_ct_frag6_consume_orig rpl_nf_ct_frag6_consume_orig
 
 #endif /* __NF_DEFRAG_IPV6_WRAPPER_H */
