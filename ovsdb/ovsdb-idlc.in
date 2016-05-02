@@ -216,6 +216,13 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
             print '%s);' % ', '.join(args)
 
         print
+        for columnName, column in sorted(table.columns.iteritems()):
+             if column.type.is_map():
+                print 'void %(s)s_update_%(c)s_setkey(const struct %(s)s *, ' % {'s': structName, 'c': columnName},
+                print '%(coltype)s, %(valtype)s);' % {'coltype':column.type.key.toCType(prefix), 'valtype':column.type.value.toCType(prefix)}
+                print 'void %(s)s_update_%(c)s_delkey(const struct %(s)s *, ' % {'s': structName, 'c': columnName},
+                print '%(coltype)s);' % {'coltype':column.type.key.toCType(prefix)}
+        print
 
     # Table indexes.
     printEnum("%stable_id" % prefix.lower(), ["%sTABLE_%s" % (prefix.upper(), tableName.upper()) for tableName in sorted(schema.tables)] + ["%sN_TABLES" % prefix.upper()])
@@ -746,6 +753,68 @@ const struct ovsdb_datum *
                    'S': structName.upper(),
                    'C': columnName.upper()}
             print "}"
+        # Update/Delete of partial map column functions
+        for columnName, column in sorted(table.columns.iteritems()):
+            type = column.type
+            if type.is_map():
+                print '''
+/* Sets an element of the "%(c)s" map column from the "%(t)s" table in 'row'
+ * to 'new_value' given the key value 'new_key'.
+ *
+ */
+void
+%(s)s_update_%(c)s_setkey(const struct %(s)s *row, %(coltype)snew_key, %(valtype)snew_value)
+{
+    struct ovsdb_datum *datum;
+
+    ovs_assert(inited);
+
+    datum = xmalloc(sizeof *datum);
+    datum->n = 1;
+    datum->keys = xmalloc(datum->n * sizeof *datum->keys);
+    datum->values = xmalloc(datum->n * sizeof *datum->values);
+''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
+        'valtype':column.type.value.toCType(prefix), 'S': structName.upper(),
+        'C': columnName.upper(), 't': tableName}
+
+                print "    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "new_key")
+                print "    "+ type.value.copyCValue("datum->values[0].%s" % type.value.type.to_string(), "new_value")
+                print '''
+    ovsdb_idl_txn_write_partial_map(&row->header_,
+                                    &%(s)s_columns[%(S)s_COL_%(C)s],
+                                    datum);
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
+        'valtype':column.type.value.toCType(prefix), 'S': structName.upper(),
+        'C': columnName.upper()}
+                print '''
+/* Deletes an element of the "%(c)s" map column from the "%(t)s" table in 'row'
+ * given the key value 'delete_key'.
+ *
+ */
+void
+%(s)s_update_%(c)s_delkey(const struct %(s)s *row, %(coltype)sdelete_key)
+{
+    struct ovsdb_datum *datum;
+
+    ovs_assert(inited);
+
+    datum = xmalloc(sizeof *datum);
+    datum->n = 1;
+    datum->keys = xmalloc(datum->n * sizeof *datum->keys);
+    datum->values = NULL;
+''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
+        'valtype':column.type.value.toCType(prefix), 'S': structName.upper(),
+        'C': columnName.upper(), 't': tableName}
+
+                print "    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "delete_key")
+                print '''
+    ovsdb_idl_txn_delete_partial_map(&row->header_,
+                                    &%(s)s_columns[%(S)s_COL_%(C)s],
+                                    datum);
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
+        'valtype':column.type.value.toCType(prefix), 'S': structName.upper(),
+        'C': columnName.upper()}
+        # End Update/Delete of partial maps
 
         # Table columns.
         print "\nstruct ovsdb_idl_column %s_columns[%s_N_COLUMNS];" % (
