@@ -674,11 +674,10 @@ out_fail:
 }
 
 /* Process an incoming IP datagram fragment. */
-int rpl_ip_defrag(struct sk_buff *skb, u32 user)
+int rpl_ip_defrag(struct net *net, struct sk_buff *skb, u32 user)
 {
 	struct net_device *dev = skb->dev ? : skb_dst(skb)->dev;
 	int vif = vrf_master_ifindex_rcu(dev);
-	struct net *net = dev_net(dev);
 	struct ipq *qp;
 
 	IP_INC_STATS_BH(net, IPSTATS_MIB_REASMREQDS);

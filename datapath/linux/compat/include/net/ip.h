@@ -116,7 +116,7 @@ static inline int rpl_ip_do_fragment(struct sock *sk, struct sk_buff *skb,
 #define ip_do_fragment rpl_ip_do_fragment
 #endif /* IP_DO_FRAGMENT */
 
-int rpl_ip_defrag(struct sk_buff *skb, u32 user);
+int rpl_ip_defrag(struct net *net, struct sk_buff *skb, u32 user);
 #define ip_defrag rpl_ip_defrag
 int __init rpl_ipfrag_init(void);
 void rpl_ipfrag_fini(void);
@@ -127,10 +127,14 @@ void rpl_ipfrag_fini(void);
  * ("inet: frag: Always orphan skbs inside ip_defrag()"), but it should be
  * always included in kernels 4.5+. */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
-static inline int rpl_ip_defrag(struct sk_buff *skb, u32 user)
+static inline int rpl_ip_defrag(struct net *net, struct sk_buff *skb, u32 user)
 {
 	skb_orphan(skb);
+#ifndef HAVE_IP_DEFRAG_TAKES_NET
 	return ip_defrag(skb, user);
+#else
+	return ip_defrag(net, skb, user);
+#endif
 }
 #define ip_defrag rpl_ip_defrag
 #endif
