@@ -198,7 +198,11 @@ usage(void)
            "    connect to SERVER and dump the contents of the database\n"
            "    as seen initially by the IDL implementation and after\n"
            "    executing each TRANSACTION.  (Each TRANSACTION must modify\n"
-           "    the database or this command will hang.)\n",
+           "    the database or this command will hang.)\n"
+           "  idl-partial-update-map-column SERVER \n"
+           "    connect to SERVER and executes different operations to\n"
+           "    test the capacity of updating elements inside a map column\n"
+           "    displaying the table information after each operation.\n",
            program_name, program_name);
     vlog_usage();
     printf("\nOther options:\n"
@@ -2179,6 +2183,115 @@ do_idl(struct ovs_cmdl_context *ctx)
     printf("%03d: done\n", step);
 }
 
+static void
+print_idl_row_simple2(const struct idltest_simple2 *s, int step)
+{
+    size_t i;
+    const struct ovsdb_datum *smap, *imap;
+
+    smap = idltest_simple2_get_smap(s, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
+    imap = idltest_simple2_get_imap(s, OVSDB_TYPE_INTEGER, OVSDB_TYPE_STRING);
+    printf("%03d: name=%s smap=[",
+           step, s->name);
+    for (i = 0; i < smap->n; i++) {
+        printf("[%s : %s]%s", smap->keys[i].string, smap->values[i].string,
+                i < smap->n-1? ",": "");
+    }
+    printf("] imap=[");
+    for (i = 0; i < imap->n; i++) {
+        printf("[%"PRId64" : %s]%s", imap->keys[i].integer, imap->values[i].string,
+                i < imap->n-1? ",":"");
+    }
+    printf("]\n");
+}
+
+static void
+dump_simple2(struct ovsdb_idl *idl,
+             const struct idltest_simple2 *myRow,
+             int step)
+{
+    IDLTEST_SIMPLE2_FOR_EACH(myRow, idl) {
+        print_idl_row_simple2(myRow, step);
+    }
+}
+
+
+static void
+do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
+{
+    struct ovsdb_idl *idl;
+    struct ovsdb_idl_txn *myTxn;
+    const struct idltest_simple2 *myRow;
+    const struct ovsdb_datum *smap, *imap OVS_UNUSED;
+    int step = 0;
+    char key_to_delete[100];
+
+    idltest_init();
+    idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, false, true);
+    ovsdb_idl_add_table(idl, &idltest_table_simple2);
+    ovsdb_idl_add_column(idl, &idltest_simple2_col_name);
+    ovsdb_idl_add_column(idl, &idltest_simple2_col_smap);
+    ovsdb_idl_add_column(idl, &idltest_simple2_col_imap);
+    ovsdb_idl_get_initial_snapshot(idl);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    ovsdb_idl_run(idl);
+
+    /* Display original data in table */
+    myRow = NULL;
+    printf("%03d: Getting records\n", step++);
+    dump_simple2(idl, myRow, step++);
+
+    /* Insert new elements in different map columns */
+    myRow = idltest_simple2_first(idl);
+    myTxn = ovsdb_idl_txn_create(idl);
+    smap = idltest_simple2_get_smap(myRow, OVSDB_TYPE_STRING,
+                                    OVSDB_TYPE_STRING);
+    idltest_simple2_update_smap_setkey(myRow, "key1", "myList1");
+    imap = idltest_simple2_get_imap(myRow, OVSDB_TYPE_INTEGER,
+                                    OVSDB_TYPE_STRING);
+    idltest_simple2_update_imap_setkey(myRow, 3, "myids2");
+    idltest_simple2_set_name(myRow, "String2");
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After insert element\n", step++);
+    dump_simple2(idl, myRow, step++);
+
+    /* Insert duplicate element */
+    myTxn = ovsdb_idl_txn_create(idl);
+    idltest_simple2_update_smap_setkey(myRow, "key1", "myList1");
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After insert duplicated element\n", step++);
+    dump_simple2(idl, myRow, step++);
+
+    /* deletes an element of a map column */
+    myRow = idltest_simple2_first(idl);
+    myTxn = ovsdb_idl_txn_create(idl);
+    smap = idltest_simple2_get_smap(myRow, OVSDB_TYPE_STRING,
+                                    OVSDB_TYPE_STRING);
+    strcpy(key_to_delete, smap->keys[0].string);
+    idltest_simple2_update_smap_delkey(myRow, smap->keys[0].string);
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After delete element\n", step++);
+    dump_simple2(idl, myRow, step++);
+
+    /* try to delete a deleted element of a map column */
+    myTxn = ovsdb_idl_txn_create(idl);
+    idltest_simple2_update_smap_delkey(myRow, key_to_delete);
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After trying to delete a deleted element\n", step++);
+    dump_simple2(idl, myRow, step++);
+
+    printf("%03d: End test\n", step);
+    return;
+}
+
 static struct ovs_cmdl_command all_commands[] = {
     { "log-io", NULL, 2, INT_MAX, do_log_io },
     { "default-atoms", NULL, 0, 0, do_default_atoms },
@@ -2207,6 +2320,8 @@ static struct ovs_cmdl_command all_commands[] = {
     { "execute", NULL, 2, INT_MAX, do_execute },
     { "trigger", NULL, 2, INT_MAX, do_trigger },
     { "idl", NULL, 1, INT_MAX, do_idl },
+    { "idl-partial-update-map-column", NULL, 1, INT_MAX,
+                                       do_idl_partial_update_map_column },
     { "help", NULL, 0, INT_MAX, do_help },
     { NULL, NULL, 0, 0, NULL },
 };
