@@ -2237,6 +2237,7 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     ovsdb_idl_run(idl);
 
     /* Display original data in table */
+    myRow = NULL;
     printf("%03d: Getting records\n", step++);
     dump_simple2(idl, myRow, step++);
 
