@@ -80,7 +80,7 @@ map_op_type(const struct map_op *map_op)
 }
 
 struct map_op_list*
-map_op_list_create()
+map_op_list_create(void)
 {
     struct map_op_list *list = xmalloc(sizeof *list);
     hmap_init(&list->hmap);
