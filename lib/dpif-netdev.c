@@ -1443,8 +1443,6 @@ dp_netdev_pmd_remove_flow(struct dp_netdev_pmd_thread *pmd,
     struct cmap_node *node = CONST_CAST(struct cmap_node *, &flow->node);
 
     dpcls_remove(&pmd->cls, &flow->cr);
-    flow->cr.mask = NULL;   /* Accessing rule's mask after this is not safe. */
-
     cmap_remove(&pmd->flow_table, node, dp_netdev_flow_hash(&flow->ufid));
     flow->dead = true;
 
