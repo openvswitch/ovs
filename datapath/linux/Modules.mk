@@ -37,15 +37,11 @@ openvswitch_headers += \
 	linux/compat/include/linux/err.h \
 	linux/compat/include/linux/etherdevice.h \
 	linux/compat/include/linux/flex_array.h \
-	linux/compat/include/linux/icmp.h \
-	linux/compat/include/linux/icmpv6.h \
 	linux/compat/include/linux/if.h \
-	linux/compat/include/linux/if_arp.h \
 	linux/compat/include/linux/if_ether.h \
 	linux/compat/include/linux/if_link.h \
 	linux/compat/include/linux/if_vlan.h \
 	linux/compat/include/linux/in.h \
-	linux/compat/include/linux/ip.h \
 	linux/compat/include/linux/ipv6.h \
 	linux/compat/include/linux/jiffies.h \
 	linux/compat/include/linux/kconfig.h \
@@ -65,13 +61,10 @@ openvswitch_headers += \
 	linux/compat/include/linux/rcupdate.h \
 	linux/compat/include/linux/reciprocal_div.h \
 	linux/compat/include/linux/rtnetlink.h \
-	linux/compat/include/linux/sctp.h \
 	linux/compat/include/linux/skbuff.h \
 	linux/compat/include/linux/stddef.h \
-	linux/compat/include/linux/tcp.h \
 	linux/compat/include/linux/types.h \
 	linux/compat/include/linux/u64_stats_sync.h \
-	linux/compat/include/linux/udp.h \
 	linux/compat/include/linux/workqueue.h \
 	linux/compat/include/net/checksum.h \
 	linux/compat/include/net/dst.h \
