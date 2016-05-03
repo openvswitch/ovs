@@ -375,7 +375,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_defrag.*net],
                   [OVS_DEFINE([HAVE_IP_DEFRAG_TAKES_NET])])
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_do_fragment])
-  OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_is_fragment])
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_skb_dst_mtu])
 
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [IPSKB_FRAG_PMTU],

@@ -2,10 +2,7 @@
 #define _NF_DEFRAG_IPV6_WRAPPER_H
 
 #include <linux/kconfig.h>
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
 #include_next <net/netfilter/ipv6/nf_defrag_ipv6.h>
-#endif
 
 /* Upstream commit 029f7f3b8701 ("netfilter: ipv6: nf_defrag: avoid/free clone
  * operations") changed the semantics of nf_ct_frag6_gather(), so we backport
