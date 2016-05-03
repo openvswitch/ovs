@@ -231,6 +231,11 @@
         A port within an L3 logical router.  Records may be identified by name.
       </dd>
 
+    <dt><code>Logical_Router_Static_Route</code></dt>
+    <dd>
+      A static route belonging to an L3 logical router.
+    </dd>
+
     </dl>
 
     <xi:include href="lib/db-ctl-base.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>

@@ -689,8 +689,9 @@ next;
         </p>
 
         <p>
-          If the route has a gateway, <var>G</var> is the gateway IP address,
-          otherwise it is <code>ip4.dst</code>.
+          If the route has a gateway, <var>G</var> is the gateway IP address.
+          Instead, if the route is from a configured static route, <var>G</var>
+          is the next hop IP address.  Else it is <code>ip4.dst</code>.
         </p>
       </li>
 
