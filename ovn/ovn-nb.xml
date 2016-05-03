@@ -623,6 +623,10 @@
       The router's ports.
     </column>
 
+    <column name="static_routes">
+      One or more static routes for the router.
+    </column>
+
     <column name="default_gw">
       IP address to use as default gateway, if any.
     </column>
@@ -724,4 +728,33 @@
       </column>
     </group>
   </table>
+
+  <table name="Logical_Router_Static_Route" title="Logical router static routes">
+    <p>
+      Each record represents a static route.
+    </p>
+
+    <column name="ip_prefix">
+      <p>
+        IP prefix of this route (e.g. 192.168.100.0/24).
+      </p>
+    </column>
+
+    <column name="nexthop">
+      <p>
+        Nexthop IP address for this route.  Nexthop IP address should be the IP
+        address of a connected router port or the IP address of a logical port.
+      </p>
+    </column>
+
+    <column name="output_port">
+      <p>
+        The name of the <ref table="Logical_router_port"/> via which the packet
+        needs to be sent out.  This is optional and when not specified,
+        OVN will automatically figure this out based on the
+        <ref column="nexthop"/>.
+      </p>
+    </column>
+  </table>
+
 </database>

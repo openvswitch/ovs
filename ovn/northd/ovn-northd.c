@@ -1827,6 +1827,74 @@ add_route(struct hmap *lflows, const struct ovn_port *op,
 }
 
 static void
+build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
+                        struct hmap *ports,
+                        const struct nbrec_logical_router_static_route *route)
+{
+    ovs_be32 prefix, next_hop, mask;
+
+    /* Verify that next hop is an IP address with 32 bits mask. */
+    char *error = ip_parse_masked(route->nexthop, &next_hop, &mask);
+    if (error || mask != OVS_BE32_MAX) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "bad next hop ip address %s", route->nexthop);
+        free(error);
+        return;
+    }
+
+    /* Verify that ip prefix is a valid CIDR address. */
+    error = ip_parse_masked(route->ip_prefix, &prefix, &mask);
+    if (error || !ip_is_cidr(mask)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "bad 'network' in static routes %s",
+                     route->ip_prefix);
+        free(error);
+        return;
+    }
+
+    /* Find the outgoing port. */
+    struct ovn_port *out_port = NULL;
+    if (route->output_port) {
+        out_port = ovn_port_find(ports, route->output_port);
+        if (!out_port) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "Bad out port %s for static route %s",
+                         route->output_port, route->ip_prefix);
+            return;
+        }
+    } else {
+        /* output_port is not specified, find the
+         * router port matching the next hop. */
+        int i;
+        for (i = 0; i < od->nbr->n_ports; i++) {
+            struct nbrec_logical_router_port *lrp = od->nbr->ports[i];
+            out_port = ovn_port_find(ports, lrp->name);
+            if (!out_port) {
+                /* This should not happen. */
+                continue;
+            }
+
+            if (out_port->network
+                && !((out_port->network ^ next_hop) & out_port->mask)) {
+                /* There should be only 1 interface that matches the next hop.
+                 * Otherwise, it's a configuration error, because subnets of
+                 * router's interfaces should NOT overlap. */
+                break;
+            }
+        }
+        if (i == od->nbr->n_ports) {
+            /* There is no matched out port. */
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "No path for static route %s; next hop %s",
+                         route->ip_prefix, route->nexthop);
+            return;
+        }
+    }
+
+    add_route(lflows, out_port, prefix, mask, next_hop);
+}
+
+static void
 build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                     struct hmap *lflows)
 {
@@ -1993,6 +2061,14 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbr) {
             continue;
+        }
+
+        /* Convert the static routes to flows. */
+        for (int i = 0; i < od->nbr->n_static_routes; i++) {
+            const struct nbrec_logical_router_static_route *route;
+
+            route = od->nbr->static_routes[i];
+            build_static_route_flow(lflows, od, ports, route);
         }
 
         if (od->gateway && od->gateway_port) {
