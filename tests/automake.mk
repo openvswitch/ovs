@@ -230,7 +230,7 @@ check-kernel: all tests/atconfig tests/atlocal $(SYSTEM_KMOD_TESTSUITE)
 # Testing the out of tree Kernel module
 check-kmod: all tests/atconfig tests/atlocal $(SYSTEM_KMOD_TESTSUITE)
 	$(MAKE) modules_install
-	modprobe -r openvswitch
+	modprobe -r -a vport-geneve vport-gre vport-lisp vport-stt vport-vxlan openvswitch
 	$(MAKE) check-kernel
 
 check-system-userspace: all tests/atconfig tests/atlocal $(SYSTEM_USERSPACE_TESTSUITE)
