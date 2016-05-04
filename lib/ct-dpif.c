@@ -168,7 +168,7 @@ ct_dpif_format_entry(const struct ct_dpif_entry *entry, struct ds *ds,
     if (entry->mark) {
         ds_put_format(ds, ",mark=%"PRIu32, entry->mark);
     }
-    if (!ovs_u128_is_zero(&entry->labels)) {
+    if (!ovs_u128_is_zero(entry->labels)) {
         ovs_be128 value;
 
         ds_put_cstr(ds, ",labels=");

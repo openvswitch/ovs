@@ -524,7 +524,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         miniflow_push_uint32(mf, ct_mark, md->ct_mark);
         miniflow_pad_to_64(mf, ct_mark);
 
-        if (!ovs_u128_is_zero(&md->ct_label)) {
+        if (!ovs_u128_is_zero(md->ct_label)) {
             miniflow_push_words(mf, ct_label, &md->ct_label,
                                 sizeof md->ct_label / sizeof(uint64_t));
         }
@@ -895,7 +895,7 @@ flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
     if (flow->ct_mark != 0) {
         match_set_ct_mark(flow_metadata, flow->ct_mark);
     }
-    if (!ovs_u128_is_zero(&flow->ct_label)) {
+    if (!ovs_u128_is_zero(flow->ct_label)) {
         match_set_ct_label(flow_metadata, flow->ct_label);
     }
 }
@@ -1206,7 +1206,7 @@ flow_format(struct ds *ds, const struct flow *flow)
     if (!flow->ct_mark) {
         WC_UNMASK_FIELD(wc, ct_mark);
     }
-    if (ovs_u128_is_zero(&flow->ct_label)) {
+    if (ovs_u128_is_zero(flow->ct_label)) {
         WC_UNMASK_FIELD(wc, ct_label);
     }
     for (int i = 0; i < FLOW_N_REGS; i++) {

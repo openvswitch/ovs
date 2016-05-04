@@ -903,7 +903,7 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
                           PMD_ID_NULL, &reply, &flow);
     if (!error
         && (!ufid || (flow.ufid_present
-                      && ovs_u128_equals(ufid, &flow.ufid)))) {
+                      && ovs_u128_equals(*ufid, flow.ufid)))) {
         enable_feature = true;
     }
 

@@ -1391,7 +1391,7 @@ ukey_lookup(struct udpif *udpif, const ovs_u128 *ufid, const unsigned pmd_id)
 
     CMAP_FOR_EACH_WITH_HASH (ukey, cmap_node,
                              get_ukey_hash(ufid, pmd_id), cmap) {
-        if (ovs_u128_equals(&ukey->ufid, ufid)) {
+        if (ovs_u128_equals(ukey->ufid, *ufid)) {
             return ukey;
         }
     }

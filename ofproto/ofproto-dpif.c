@@ -3997,7 +3997,7 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
         || ((ct_state & (CS_SRC_NAT | CS_DST_NAT)) && !support->ct_state_nat)
         || (ct_zone && !support->ct_zone)
         || (ct_mark && !support->ct_mark)
-        || (!ovs_u128_is_zero(&ct_label) && !support->ct_label)) {
+        || (!ovs_u128_is_zero(ct_label) && !support->ct_label)) {
         return OFPERR_OFPBMC_BAD_MASK;
     }
 

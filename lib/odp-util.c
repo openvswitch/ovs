@@ -1492,7 +1492,7 @@ find_end:
             nl_msg_put_unspec(actions, OVS_CT_ATTR_MARK, &ct_mark,
                               sizeof(ct_mark));
         }
-        if (!ovs_u128_is_zero(&ct_label.mask)) {
+        if (!ovs_u128_is_zero(ct_label.mask)) {
             nl_msg_put_unspec(actions, OVS_CT_ATTR_LABELS, &ct_label,
                               sizeof ct_label);
         }
@@ -2950,12 +2950,12 @@ static void
 format_u128(struct ds *ds, const ovs_u128 *key, const ovs_u128 *mask,
             bool verbose)
 {
-    if (verbose || (mask && !ovs_u128_is_zero(mask))) {
+    if (verbose || (mask && !ovs_u128_is_zero(*mask))) {
         ovs_be128 value;
 
         value = hton128(*key);
         ds_put_hex(ds, &value, sizeof value);
-        if (mask && !(ovs_u128_is_ones(mask))) {
+        if (mask && !(ovs_u128_is_ones(*mask))) {
             value = hton128(*mask);
             ds_put_char(ds, '/');
             ds_put_hex(ds, &value, sizeof value);
@@ -4464,7 +4464,7 @@ odp_key_from_pkt_metadata(struct ofpbuf *buf, const struct pkt_metadata *md)
         if (md->ct_mark) {
             nl_msg_put_u32(buf, OVS_KEY_ATTR_CT_MARK, md->ct_mark);
         }
-        if (!ovs_u128_is_zero(&md->ct_label)) {
+        if (!ovs_u128_is_zero(md->ct_label)) {
             nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_LABELS, &md->ct_label,
                               sizeof(md->ct_label));
         }
