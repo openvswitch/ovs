@@ -1819,7 +1819,7 @@ dp_netdev_pmd_find_flow(const struct dp_netdev_pmd_thread *pmd,
     if (ufidp) {
         CMAP_FOR_EACH_WITH_HASH (netdev_flow, node, dp_netdev_flow_hash(ufidp),
                                  &pmd->flow_table) {
-            if (ovs_u128_equals(&netdev_flow->ufid, ufidp)) {
+            if (ovs_u128_equals(netdev_flow->ufid, *ufidp)) {
                 return netdev_flow;
             }
         }
@@ -1965,7 +1965,7 @@ dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
 
     /* Userspace datapath doesn't support conntrack. */
     if (flow->ct_state || flow->ct_zone || flow->ct_mark
-        || !ovs_u128_is_zero(&flow->ct_label)) {
+        || !ovs_u128_is_zero(flow->ct_label)) {
         return EINVAL;
     }
 

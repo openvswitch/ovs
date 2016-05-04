@@ -392,37 +392,37 @@ void bitwise_toggle_bit(void *dst, unsigned int len, unsigned int ofs);
 
 /* Returns non-zero if the parameters have equal value. */
 static inline int
-ovs_u128_equals(const ovs_u128 *a, const ovs_u128 *b)
+ovs_u128_equals(const ovs_u128 a, const ovs_u128 b)
 {
-    return (a->u64.hi == b->u64.hi) && (a->u64.lo == b->u64.lo);
+    return (a.u64.hi == b.u64.hi) && (a.u64.lo == b.u64.lo);
 }
 
 /* Returns true if 'val' is 0. */
 static inline bool
-ovs_u128_is_zero(const ovs_u128 *val)
+ovs_u128_is_zero(const ovs_u128 val)
 {
-    return !(val->u64.hi || val->u64.lo);
+    return !(val.u64.hi || val.u64.lo);
 }
 
 /* Returns true if 'val' is all ones. */
 static inline bool
-ovs_u128_is_ones(const ovs_u128 *val)
+ovs_u128_is_ones(const ovs_u128 val)
 {
-    return ovs_u128_equals(val, &OVS_U128_MAX);
+    return ovs_u128_equals(val, OVS_U128_MAX);
 }
 
 /* Returns non-zero if the parameters have equal value. */
 static inline int
-ovs_be128_equals(const ovs_be128 *a, const ovs_be128 *b)
+ovs_be128_equals(const ovs_be128 a, const ovs_be128 b)
 {
-    return (a->be64.hi == b->be64.hi) && (a->be64.lo == b->be64.lo);
+    return (a.be64.hi == b.be64.hi) && (a.be64.lo == b.be64.lo);
 }
 
 /* Returns true if 'val' is 0. */
 static inline bool
-ovs_be128_is_zero(const ovs_be128 *val)
+ovs_be128_is_zero(const ovs_be128 val)
 {
-    return !(val->be64.hi || val->be64.lo);
+    return !(val.be64.hi || val.be64.lo);
 }
 
 static inline ovs_u128

@@ -4327,7 +4327,7 @@ static void
 put_ct_label(const struct flow *flow, struct ofpbuf *odp_actions,
              struct flow_wildcards *wc)
 {
-    if (!ovs_u128_is_zero(&wc->masks.ct_label)) {
+    if (!ovs_u128_is_zero(wc->masks.ct_label)) {
         struct {
             ovs_u128 key;
             ovs_u128 mask;

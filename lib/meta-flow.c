@@ -232,7 +232,7 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_CT_MARK:
         return !wc->masks.ct_mark;
     case MFF_CT_LABEL:
-        return ovs_u128_is_zero(&wc->masks.ct_label);
+        return ovs_u128_is_zero(wc->masks.ct_label);
     CASE_MFF_REGS:
         return !wc->masks.regs[mf->id - MFF_REG0];
     CASE_MFF_XREGS:
