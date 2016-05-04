@@ -1658,54 +1658,6 @@ find_match(const struct cls_subtable *subtable, cls_version_t version,
     return NULL;
 }
 
-/* Returns true if 'target' satisifies 'flow'/'mask', that is, if each bit
- * for which 'flow', for which 'mask' has a bit set, specifies a particular
- * value has the correct value in 'target'.
- *
- * This function is equivalent to miniflow_and_mask_matches_flow() but this
- * version fills in the mask bits in 'wc'. */
-static inline bool
-miniflow_and_mask_matches_flow_wc(const struct miniflow *flow,
-                                  const struct minimask *mask,
-                                  const struct flow *target,
-                                  struct flow_wildcards *wc)
-{
-    const uint64_t *flowp = miniflow_get_values(flow);
-    const uint64_t *maskp = miniflow_get_values(&mask->masks);
-    const uint64_t *target_u64 = (const uint64_t *)target;
-    uint64_t *wc_u64 = (uint64_t *)&wc->masks;
-    uint64_t diff;
-    size_t idx;
-    map_t map;
-
-    FLOWMAP_FOR_EACH_MAP (map, mask->masks.map) {
-        MAP_FOR_EACH_INDEX(idx, map) {
-            uint64_t msk = *maskp++;
-
-            diff = (*flowp++ ^ target_u64[idx]) & msk;
-            if (diff) {
-                goto out;
-            }
-
-            /* Fill in the bits that were looked at. */
-            wc_u64[idx] |= msk;
-        }
-        target_u64 += MAP_T_BITS;
-        wc_u64 += MAP_T_BITS;
-    }
-    return true;
-
-out:
-    /* Only unwildcard if none of the differing bits is already
-     * exact-matched. */
-    if (!(wc_u64[idx] & diff)) {
-        /* Keep one bit of the difference.  The selected bit may be
-         * different in big-endian v.s. little-endian systems. */
-        wc_u64[idx] |= rightmost_1bit(diff);
-    }
-    return false;
-}
-
 static const struct cls_match *
 find_match_wc(const struct cls_subtable *subtable, cls_version_t version,
               const struct flow *flow, struct trie_ctx trie_ctx[CLS_MAX_TRIES],
@@ -1724,8 +1676,6 @@ find_match_wc(const struct cls_subtable *subtable, cls_version_t version,
 
     /* Try to finish early by checking fields in segments. */
     for (i = 0; i < subtable->n_indices; i++) {
-        const struct cmap_node *inode;
-
         if (check_tries(trie_ctx, n_tries, subtable->trie_plen,
                         subtable->index_maps[i], flow, wc)) {
             /* 'wc' bits for the trie field set, now unwildcard the preceding
@@ -1740,31 +1690,8 @@ find_match_wc(const struct cls_subtable *subtable, cls_version_t version,
                                            subtable->index_maps[i],
                                            &mask_offset, &basis);
 
-        inode = cmap_find(&subtable->indices[i], hash);
-        if (!inode) {
+        if (!cmap_find(&subtable->indices[i], hash)) {
             goto no_match;
-        }
-
-        /* If we have narrowed down to a single rule already, check whether
-         * that rule matches.  Either way, we're done.
-         *
-         * (Rare) hash collisions may cause us to miss the opportunity for this
-         * optimization. */
-        if (!cmap_node_next(inode)) {
-            const struct cls_match *head;
-
-            ASSIGN_CONTAINER(head, inode - i, index_nodes);
-            if (miniflow_and_mask_matches_flow_wc(&head->flow, &subtable->mask,
-                                                  flow, wc)) {
-                /* Return highest priority rule that is visible. */
-                CLS_MATCH_FOR_EACH (rule, head) {
-                    if (OVS_LIKELY(cls_match_visible_in_version(rule,
-                                                                version))) {
-                        return rule;
-                    }
-                }
-            }
-            return NULL;
         }
     }
     /* Trie check for the final range. */
