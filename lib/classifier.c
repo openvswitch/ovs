@@ -25,9 +25,6 @@
 #include "openvswitch/ofp-util.h"
 #include "packets.h"
 #include "util.h"
-#include "openvswitch/vlog.h"
-
-VLOG_DEFINE_THIS_MODULE(classifier);
 
 struct trie_ctx;
 
@@ -2261,7 +2258,6 @@ trie_remove_prefix(rcu_trie_ptr *root, const ovs_be32 *prefix, int mlen)
     }
     /* Cannot go deeper. This should never happen, since only rules
      * that actually exist in the classifier are ever removed. */
-    VLOG_WARN("Trying to remove non-existing rule from a prefix trie.");
 }
 
 
