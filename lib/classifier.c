@@ -1499,11 +1499,11 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
     /* Map for the final stage. */
     *CONST_CAST(struct flowmap *, &subtable->index_maps[index])
         = miniflow_get_map_in_range(&mask->masks, prev, FLOW_U64S);
-    /* Check if the final stage adds any bits,
-     * and remove the last index if it doesn't. */
+    /* Check if the final stage adds any bits. */
     if (index > 0) {
-        if (flowmap_equal(subtable->index_maps[index],
-                          subtable->index_maps[index - 1])) {
+        if (flowmap_is_empty(subtable->index_maps[index])) {
+            /* Remove the last index, as it has the same fields as the rules
+             * map. */
             --index;
             cmap_destroy(&subtable->indices[index]);
         }
