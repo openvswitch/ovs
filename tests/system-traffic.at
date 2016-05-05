@@ -1185,6 +1185,7 @@ AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows1.txt])
 
 NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p1->p0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
@@ -1269,6 +1270,7 @@ dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
@@ -2128,6 +2130,7 @@ AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
@@ -2195,6 +2198,7 @@ table=10 priority=0 action=drop
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
@@ -2294,6 +2298,7 @@ dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
