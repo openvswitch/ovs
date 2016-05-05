@@ -5361,6 +5361,9 @@ get_stats_via_netlink(const struct netdev *netdev_, struct netdev_stats *stats)
     struct ofpbuf *reply;
     int error;
 
+    /* Filtering all counters by default */
+    memset(stats, 0xFF, sizeof(struct netdev_stats));
+
     ofpbuf_init(&request, 0);
     nl_msg_put_nlmsghdr(&request,
                         sizeof(struct ifinfomsg) + NL_ATTR_SIZE(IFNAMSIZ),

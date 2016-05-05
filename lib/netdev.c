@@ -1331,11 +1331,16 @@ netdev_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
     int error;
 
+    /* Statistics are initialized before passing it to particular device
+     * implementation so all values are filtered out by default. */
+    memset(stats, 0xFF, sizeof *stats);
+
     COVERAGE_INC(netdev_get_stats);
     error = (netdev->netdev_class->get_stats
              ? netdev->netdev_class->get_stats(netdev, stats)
              : EOPNOTSUPP);
     if (error) {
+        /* In case of error all statistics are filtered out */
         memset(stats, 0xff, sizeof *stats);
     }
     return error;

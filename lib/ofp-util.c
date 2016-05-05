@@ -43,6 +43,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/type-props.h"
 #include "openvswitch/vlog.h"
+#include "openflow/intel-ext.h"
 #include "packets.h"
 #include "pktbuf.h"
 #include "random.h"
@@ -7513,13 +7514,16 @@ ofputil_append_ofp14_port_stats(const struct ofputil_port_stats *ops,
                                 struct ovs_list *replies)
 {
     struct ofp14_port_stats_prop_ethernet *eth;
+    struct intel_port_stats_rfc2819 *stats_rfc2819;
     struct ofp14_port_stats *ps14;
     struct ofpbuf *reply;
 
-    reply = ofpmp_reserve(replies, sizeof *ps14 + sizeof *eth);
+    reply = ofpmp_reserve(replies, sizeof *ps14 + sizeof *eth +
+                          sizeof *stats_rfc2819);
 
     ps14 = ofpbuf_put_uninit(reply, sizeof *ps14);
-    ps14->length = htons(sizeof *ps14 + sizeof *eth);
+    ps14->length = htons(sizeof *ps14 + sizeof *eth +
+                         sizeof *stats_rfc2819);
     memset(ps14->pad, 0, sizeof ps14->pad);
     ps14->port_no = ofputil_port_to_ofp11(ops->port_no);
     ps14->duration_sec = htonl(ops->duration_sec);
@@ -7538,6 +7542,56 @@ ofputil_append_ofp14_port_stats(const struct ofputil_port_stats *ops,
     eth->rx_over_err = htonll(ops->stats.rx_over_errors);
     eth->rx_crc_err = htonll(ops->stats.rx_crc_errors);
     eth->collisions = htonll(ops->stats.collisions);
+
+    uint64_t prop_type = OFPPROP_EXP(INTEL_VENDOR_ID,
+                                     INTEL_PORT_STATS_RFC2819);
+
+    stats_rfc2819 = ofpprop_put_zeros(reply, prop_type,
+                                      sizeof *stats_rfc2819);
+
+    memset(stats_rfc2819->pad, 0, sizeof stats_rfc2819->pad);
+    stats_rfc2819->rx_1_to_64_packets = htonll(ops->stats.rx_1_to_64_packets);
+    stats_rfc2819->rx_65_to_127_packets =
+        htonll(ops->stats.rx_65_to_127_packets);
+    stats_rfc2819->rx_128_to_255_packets =
+        htonll(ops->stats.rx_128_to_255_packets);
+    stats_rfc2819->rx_256_to_511_packets =
+        htonll(ops->stats.rx_256_to_511_packets);
+    stats_rfc2819->rx_512_to_1023_packets =
+        htonll(ops->stats.rx_512_to_1023_packets);
+    stats_rfc2819->rx_1024_to_1522_packets =
+        htonll(ops->stats.rx_1024_to_1522_packets);
+    stats_rfc2819->rx_1523_to_max_packets =
+        htonll(ops->stats.rx_1523_to_max_packets);
+
+    stats_rfc2819->tx_1_to_64_packets = htonll(ops->stats.tx_1_to_64_packets);
+    stats_rfc2819->tx_65_to_127_packets =
+        htonll(ops->stats.tx_65_to_127_packets);
+    stats_rfc2819->tx_128_to_255_packets =
+        htonll(ops->stats.tx_128_to_255_packets);
+    stats_rfc2819->tx_256_to_511_packets =
+        htonll(ops->stats.tx_256_to_511_packets);
+    stats_rfc2819->tx_512_to_1023_packets =
+        htonll(ops->stats.tx_512_to_1023_packets);
+    stats_rfc2819->tx_1024_to_1522_packets =
+        htonll(ops->stats.tx_1024_to_1522_packets);
+    stats_rfc2819->tx_1523_to_max_packets =
+        htonll(ops->stats.tx_1523_to_max_packets);
+
+    stats_rfc2819->tx_multicast_packets =
+        htonll(ops->stats.tx_multicast_packets);
+    stats_rfc2819->rx_broadcast_packets =
+        htonll(ops->stats.rx_broadcast_packets);
+    stats_rfc2819->tx_broadcast_packets =
+        htonll(ops->stats.tx_broadcast_packets);
+    stats_rfc2819->rx_undersized_errors =
+        htonll(ops->stats.rx_undersized_errors);
+    stats_rfc2819->rx_oversize_errors =
+        htonll(ops->stats.rx_oversize_errors);
+    stats_rfc2819->rx_fragmented_errors =
+        htonll(ops->stats.rx_fragmented_errors);
+    stats_rfc2819->rx_jabber_errors =
+        htonll(ops->stats.rx_jabber_errors);
 }
 
 /* Encode a ports stat for 'ops' and append it to 'replies'. */
@@ -7579,7 +7633,6 @@ static enum ofperr
 ofputil_port_stats_from_ofp10(struct ofputil_port_stats *ops,
                               const struct ofp10_port_stats *ps10)
 {
-    memset(ops, 0, sizeof *ops);
 
     ops->port_no = u16_to_ofp(ntohs(ps10->port_no));
     ops->stats.rx_packets = ntohll(get_32aligned_be64(&ps10->rx_packets));
@@ -7606,7 +7659,6 @@ ofputil_port_stats_from_ofp11(struct ofputil_port_stats *ops,
 {
     enum ofperr error;
 
-    memset(ops, 0, sizeof *ops);
     error = ofputil_port_from_ofp11(ps11->port_no, &ops->port_no);
     if (error) {
         return error;
@@ -7660,6 +7712,68 @@ parse_ofp14_port_stats_ethernet_property(const struct ofpbuf *payload,
 }
 
 static enum ofperr
+parse_intel_port_stats_rfc2819_property(const struct ofpbuf *payload,
+                                        struct ofputil_port_stats *ops)
+{
+    const struct intel_port_stats_rfc2819 *rfc2819 = payload->data;
+
+    if (payload->size != sizeof *rfc2819) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+    ops->stats.rx_1_to_64_packets = ntohll(rfc2819->rx_1_to_64_packets);
+    ops->stats.rx_65_to_127_packets = ntohll(rfc2819->rx_65_to_127_packets);
+    ops->stats.rx_128_to_255_packets = ntohll(rfc2819->rx_128_to_255_packets);
+    ops->stats.rx_256_to_511_packets = ntohll(rfc2819->rx_256_to_511_packets);
+    ops->stats.rx_512_to_1023_packets =
+        ntohll(rfc2819->rx_512_to_1023_packets);
+    ops->stats.rx_1024_to_1522_packets =
+        ntohll(rfc2819->rx_1024_to_1522_packets);
+    ops->stats.rx_1523_to_max_packets =
+        ntohll(rfc2819->rx_1523_to_max_packets);
+
+    ops->stats.tx_1_to_64_packets = ntohll(rfc2819->tx_1_to_64_packets);
+    ops->stats.tx_65_to_127_packets = ntohll(rfc2819->tx_65_to_127_packets);
+    ops->stats.tx_128_to_255_packets = ntohll(rfc2819->tx_128_to_255_packets);
+    ops->stats.tx_256_to_511_packets = ntohll(rfc2819->tx_256_to_511_packets);
+    ops->stats.tx_512_to_1023_packets =
+        ntohll(rfc2819->tx_512_to_1023_packets);
+    ops->stats.tx_1024_to_1522_packets =
+        ntohll(rfc2819->tx_1024_to_1522_packets);
+    ops->stats.tx_1523_to_max_packets =
+        ntohll(rfc2819->tx_1523_to_max_packets);
+
+    ops->stats.tx_multicast_packets = ntohll(rfc2819->tx_multicast_packets);
+    ops->stats.rx_broadcast_packets = ntohll(rfc2819->rx_broadcast_packets);
+    ops->stats.tx_broadcast_packets = ntohll(rfc2819->tx_broadcast_packets);
+    ops->stats.rx_undersized_errors = ntohll(rfc2819->rx_undersized_errors);
+
+    ops->stats.rx_oversize_errors = ntohll(rfc2819->rx_oversize_errors);
+    ops->stats.rx_fragmented_errors = ntohll(rfc2819->rx_fragmented_errors);
+    ops->stats.rx_jabber_errors = ntohll(rfc2819->rx_jabber_errors);
+
+    return 0;
+}
+
+static enum ofperr
+parse_intel_port_stats_property(const struct ofpbuf *payload,
+                                uint32_t exp_type,
+                                struct ofputil_port_stats *ops)
+{
+    enum ofperr error;
+
+    switch (exp_type) {
+    case INTEL_PORT_STATS_RFC2819:
+        error = parse_intel_port_stats_rfc2819_property(payload, ops);
+        break;
+    default:
+        error = OFPERR_OFPBPC_BAD_EXP_TYPE;
+        break;
+    }
+
+    return error;
+}
+
+static enum ofperr
 ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
                               struct ofpbuf *msg)
 {
@@ -7689,28 +7803,28 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
     ops->stats.tx_dropped = ntohll(ps14->tx_dropped);
     ops->stats.rx_errors = ntohll(ps14->rx_errors);
     ops->stats.tx_errors = ntohll(ps14->tx_errors);
-    ops->stats.rx_frame_errors = UINT64_MAX;
-    ops->stats.rx_over_errors = UINT64_MAX;
-    ops->stats.rx_crc_errors = UINT64_MAX;
-    ops->stats.collisions = UINT64_MAX;
+
 
     struct ofpbuf properties = ofpbuf_const_initializer(ofpbuf_pull(msg, len),
                                                         len);
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
-        uint64_t type;
+        uint64_t type = 0;
 
         error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
             return error;
         }
-
         switch (type) {
         case OFPPSPT14_ETHERNET:
             error = parse_ofp14_port_stats_ethernet_property(&payload, ops);
             break;
-
+        case OFPPROP_EXP(INTEL_VENDOR_ID, INTEL_PORT_STATS_RFC2819):
+            error = parse_intel_port_stats_property(&payload,
+                                                    INTEL_PORT_STATS_RFC2819,
+                                                    ops);
+            break;
         default:
             error = OFPPROP_UNKNOWN(true, "port stats", type);
             break;
@@ -7756,6 +7870,8 @@ ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
     enum ofperr error;
     enum ofpraw raw;
 
+    memset(&(ps->stats), 0xFF, sizeof (ps->stats));
+
     error = (msg->header ? ofpraw_decode(&raw, msg->header)
              : ofpraw_pull(&raw, msg));
     if (error) {
@@ -7768,7 +7884,6 @@ ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
         return ofputil_pull_ofp14_port_stats(ps, msg);
     } else if (raw == OFPRAW_OFPST13_PORT_REPLY) {
         const struct ofp13_port_stats *ps13;
-
         ps13 = ofpbuf_try_pull(msg, sizeof *ps13);
         if (!ps13) {
             goto bad_len;

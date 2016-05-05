@@ -2310,18 +2310,39 @@ static void
 iface_refresh_stats(struct iface *iface)
 {
 #define IFACE_STATS                             \
-    IFACE_STAT(rx_packets,      "rx_packets")   \
-    IFACE_STAT(tx_packets,      "tx_packets")   \
-    IFACE_STAT(rx_bytes,        "rx_bytes")     \
-    IFACE_STAT(tx_bytes,        "tx_bytes")     \
-    IFACE_STAT(rx_dropped,      "rx_dropped")   \
-    IFACE_STAT(tx_dropped,      "tx_dropped")   \
-    IFACE_STAT(rx_errors,       "rx_errors")    \
-    IFACE_STAT(tx_errors,       "tx_errors")    \
-    IFACE_STAT(rx_frame_errors, "rx_frame_err") \
-    IFACE_STAT(rx_over_errors,  "rx_over_err")  \
-    IFACE_STAT(rx_crc_errors,   "rx_crc_err")   \
-    IFACE_STAT(collisions,      "collisions")
+    IFACE_STAT(rx_packets,              "rx_packets")               \
+    IFACE_STAT(tx_packets,              "tx_packets")               \
+    IFACE_STAT(rx_bytes,                "rx_bytes")                 \
+    IFACE_STAT(tx_bytes,                "tx_bytes")                 \
+    IFACE_STAT(rx_dropped,              "rx_dropped")               \
+    IFACE_STAT(tx_dropped,              "tx_dropped")               \
+    IFACE_STAT(rx_errors,               "rx_errors")                \
+    IFACE_STAT(tx_errors,               "tx_errors")                \
+    IFACE_STAT(rx_frame_errors,         "rx_frame_err")             \
+    IFACE_STAT(rx_over_errors,          "rx_over_err")              \
+    IFACE_STAT(rx_crc_errors,           "rx_crc_err")               \
+    IFACE_STAT(collisions,              "collisions")               \
+    IFACE_STAT(rx_1_to_64_packets,      "rx_1_to_64_packets")       \
+    IFACE_STAT(rx_65_to_127_packets,    "rx_65_to_127_packets")     \
+    IFACE_STAT(rx_128_to_255_packets,   "rx_128_to_255_packets")    \
+    IFACE_STAT(rx_256_to_511_packets,   "rx_256_to_511_packets")    \
+    IFACE_STAT(rx_512_to_1023_packets,  "rx_512_to_1023_packets")   \
+    IFACE_STAT(rx_1024_to_1522_packets, "rx_1024_to_1518_packets")  \
+    IFACE_STAT(rx_1523_to_max_packets,  "rx_1523_to_max_packets")   \
+    IFACE_STAT(tx_1_to_64_packets,      "tx_1_to_64_packets")       \
+    IFACE_STAT(tx_65_to_127_packets,    "tx_65_to_127_packets")     \
+    IFACE_STAT(tx_128_to_255_packets,   "tx_128_to_255_packets")    \
+    IFACE_STAT(tx_256_to_511_packets,   "tx_256_to_511_packets")    \
+    IFACE_STAT(tx_512_to_1023_packets,  "tx_512_to_1023_packets")   \
+    IFACE_STAT(tx_1024_to_1522_packets, "tx_1024_to_1518_packets")  \
+    IFACE_STAT(tx_1523_to_max_packets,  "tx_1523_to_max_packets")   \
+    IFACE_STAT(tx_multicast_packets,    "tx_multicast_packets")     \
+    IFACE_STAT(rx_broadcast_packets,    "rx_broadcast_packets")     \
+    IFACE_STAT(tx_broadcast_packets,    "tx_broadcast_packets")     \
+    IFACE_STAT(rx_undersized_errors,    "rx_undersized_errors")     \
+    IFACE_STAT(rx_oversize_errors,      "rx_oversize_errors")       \
+    IFACE_STAT(rx_fragmented_errors,    "rx_fragmented_errors")     \
+    IFACE_STAT(rx_jabber_errors,        "rx_jabber_errors")
 
 #define IFACE_STAT(MEMBER, NAME) + 1
     enum { N_IFACE_STATS = IFACE_STATS };

@@ -52,6 +52,33 @@ struct netdev_stats {
     uint64_t tx_fifo_errors;
     uint64_t tx_heartbeat_errors;
     uint64_t tx_window_errors;
+
+    /* Extended statistics based on RFC2819. */
+    uint64_t rx_1_to_64_packets;
+    uint64_t rx_65_to_127_packets;
+    uint64_t rx_128_to_255_packets;
+    uint64_t rx_256_to_511_packets;
+    uint64_t rx_512_to_1023_packets;
+    uint64_t rx_1024_to_1522_packets;
+    uint64_t rx_1523_to_max_packets;
+
+    uint64_t tx_1_to_64_packets;
+    uint64_t tx_65_to_127_packets;
+    uint64_t tx_128_to_255_packets;
+    uint64_t tx_256_to_511_packets;
+    uint64_t tx_512_to_1023_packets;
+    uint64_t tx_1024_to_1522_packets;
+    uint64_t tx_1523_to_max_packets;
+
+    uint64_t tx_multicast_packets;
+
+    uint64_t rx_broadcast_packets;
+    uint64_t tx_broadcast_packets;
+
+    uint64_t rx_undersized_errors;
+    uint64_t rx_oversize_errors;
+    uint64_t rx_fragmented_errors;
+    uint64_t rx_jabber_errors;
 };
 
 /* Features. */

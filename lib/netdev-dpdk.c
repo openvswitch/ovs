@@ -99,6 +99,33 @@ BUILD_ASSERT_DECL(MAX_NB_MBUF % ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF) == 0);
 BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
                   % MP_CACHE_SZ == 0);
 
+/*
+ * DPDK XSTATS Counter names definition
+ */
+#define XSTAT_RX_64_PACKETS              "rx_size_64_packets"
+#define XSTAT_RX_65_TO_127_PACKETS       "rx_size_65_to_127_packets"
+#define XSTAT_RX_128_TO_255_PACKETS      "rx_size_128_to_255_packets"
+#define XSTAT_RX_256_TO_511_PACKETS      "rx_size_256_to_511_packets"
+#define XSTAT_RX_512_TO_1023_PACKETS     "rx_size_512_to_1023_packets"
+#define XSTAT_RX_1024_TO_1522_PACKETS    "rx_size_1024_to_1522_packets"
+#define XSTAT_RX_1523_TO_MAX_PACKETS     "rx_size_1523_to_max_packets"
+
+#define XSTAT_TX_64_PACKETS              "tx_size_64_packets"
+#define XSTAT_TX_65_TO_127_PACKETS       "tx_size_65_to_127_packets"
+#define XSTAT_TX_128_TO_255_PACKETS      "tx_size_128_to_255_packets"
+#define XSTAT_TX_256_TO_511_PACKETS      "tx_size_256_to_511_packets"
+#define XSTAT_TX_512_TO_1023_PACKETS     "tx_size_512_to_1023_packets"
+#define XSTAT_TX_1024_TO_1522_PACKETS    "tx_size_1024_to_1522_packets"
+#define XSTAT_TX_1523_TO_MAX_PACKETS     "tx_size_1523_to_max_packets"
+
+#define XSTAT_TX_MULTICAST_PACKETS       "tx_multicast_packets"
+#define XSTAT_RX_BROADCAST_PACKETS       "rx_broadcast_packets"
+#define XSTAT_TX_BROADCAST_PACKETS       "tx_broadcast_packets"
+#define XSTAT_RX_UNDERSIZED_ERRORS       "rx_undersized_errors"
+#define XSTAT_RX_OVERSIZE_ERRORS         "rx_oversize_errors"
+#define XSTAT_RX_FRAGMENTED_ERRORS       "rx_fragmented_errors"
+#define XSTAT_RX_JABBER_ERRORS           "rx_jabber_errors"
+
 #define SOCKET0              0
 
 #define NIC_PORT_RX_Q_SIZE 2048  /* Size of Physical NIC RX Queue, Max (n+32<=4096)*/
@@ -1143,17 +1170,45 @@ is_vhost_running(struct virtio_net *virtio_dev)
 }
 
 static inline void
+netdev_dpdk_vhost_update_rx_size_counters(struct netdev_stats *stats,
+                                          unsigned int packet_size)
+{
+    /* Hard-coded search for the size bucket. */
+    if (packet_size < 256) {
+        if (packet_size >= 128) {
+            stats->rx_128_to_255_packets++;
+        } else if (packet_size <= 64) {
+            stats->rx_1_to_64_packets++;
+        } else {
+            stats->rx_65_to_127_packets++;
+        }
+    } else {
+        if (packet_size >= 1523) {
+            stats->rx_1523_to_max_packets++;
+        } else if (packet_size >= 1024) {
+            stats->rx_1024_to_1522_packets++;
+        } else if (packet_size < 512) {
+            stats->rx_256_to_511_packets++;
+        } else {
+            stats->rx_512_to_1023_packets++;
+        }
+    }
+}
+
+static inline void
 netdev_dpdk_vhost_update_rx_counters(struct netdev_stats *stats,
                                      struct dp_packet **packets, int count)
 {
     int i;
+    unsigned int packet_size;
     struct dp_packet *packet;
 
     stats->rx_packets += count;
     for (i = 0; i < count; i++) {
         packet = packets[i];
+        packet_size = dp_packet_size(packet);
 
-        if (OVS_UNLIKELY(dp_packet_size(packet) < ETH_HEADER_LEN)) {
+        if (OVS_UNLIKELY(packet_size < ETH_HEADER_LEN)) {
             /* This only protects the following multicast counting from
              * too short packets, but it does not stop the packet from
              * further processing. */
@@ -1162,12 +1217,14 @@ netdev_dpdk_vhost_update_rx_counters(struct netdev_stats *stats,
             continue;
         }
 
+        netdev_dpdk_vhost_update_rx_size_counters(stats, packet_size);
+
         struct eth_header *eh = (struct eth_header *) dp_packet_data(packet);
         if (OVS_UNLIKELY(eth_addr_is_multicast(eh->eth_dst))) {
             stats->multicast++;
         }
 
-        stats->rx_bytes += dp_packet_size(packet);
+        stats->rx_bytes += packet_size;
     }
 }
 
@@ -1659,21 +1716,6 @@ netdev_dpdk_vhost_get_stats(const struct netdev *netdev,
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);
-    memset(stats, 0, sizeof(*stats));
-    /* Unsupported Stats */
-    stats->collisions = UINT64_MAX;
-    stats->rx_crc_errors = UINT64_MAX;
-    stats->rx_fifo_errors = UINT64_MAX;
-    stats->rx_frame_errors = UINT64_MAX;
-    stats->rx_missed_errors = UINT64_MAX;
-    stats->rx_over_errors = UINT64_MAX;
-    stats->tx_aborted_errors = UINT64_MAX;
-    stats->tx_carrier_errors = UINT64_MAX;
-    stats->tx_errors = UINT64_MAX;
-    stats->tx_fifo_errors = UINT64_MAX;
-    stats->tx_heartbeat_errors = UINT64_MAX;
-    stats->tx_window_errors = UINT64_MAX;
-    stats->rx_dropped += UINT64_MAX;
 
     rte_spinlock_lock(&dev->stats_lock);
     /* Supported Stats */
@@ -1685,11 +1727,81 @@ netdev_dpdk_vhost_get_stats(const struct netdev *netdev,
     stats->tx_bytes = dev->stats.tx_bytes;
     stats->rx_errors = dev->stats.rx_errors;
     stats->rx_length_errors = dev->stats.rx_length_errors;
+
+    stats->rx_1_to_64_packets = dev->stats.rx_1_to_64_packets;
+    stats->rx_65_to_127_packets = dev->stats.rx_65_to_127_packets;
+    stats->rx_128_to_255_packets = dev->stats.rx_128_to_255_packets;
+    stats->rx_256_to_511_packets = dev->stats.rx_256_to_511_packets;
+    stats->rx_512_to_1023_packets = dev->stats.rx_512_to_1023_packets;
+    stats->rx_1024_to_1522_packets = dev->stats.rx_1024_to_1522_packets;
+    stats->rx_1523_to_max_packets = dev->stats.rx_1523_to_max_packets;
+
     rte_spinlock_unlock(&dev->stats_lock);
 
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
+}
+
+static void
+netdev_dpdk_convert_xstats(struct netdev_stats *stats,
+                           const struct rte_eth_xstats *xstats,
+                           const unsigned int size)
+{
+    /* XXX Current implementation is simple search through an array
+     * to find hardcoded counter names. In future DPDK release (TBD)
+     * XSTATS API will change so each counter will be represented by
+     * unique ID instead of String. */
+
+    for (unsigned int i = 0; i < size; i++) {
+        if (strcmp(XSTAT_RX_64_PACKETS, xstats[i].name) == 0) {
+            stats->rx_1_to_64_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_RX_65_TO_127_PACKETS, xstats[i].name) == 0) {
+            stats->rx_65_to_127_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_RX_128_TO_255_PACKETS, xstats[i].name) == 0) {
+            stats->rx_128_to_255_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_RX_256_TO_511_PACKETS, xstats[i].name) == 0) {
+            stats->rx_256_to_511_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_RX_512_TO_1023_PACKETS,
+                          xstats[i].name) == 0) {
+            stats->rx_512_to_1023_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_RX_1024_TO_1522_PACKETS,
+                          xstats[i].name) == 0) {
+            stats->rx_1024_to_1522_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_RX_1523_TO_MAX_PACKETS,
+                          xstats[i].name) == 0) {
+            stats->rx_1523_to_max_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_TX_64_PACKETS, xstats[i].name) == 0) {
+            stats->tx_1_to_64_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_TX_65_TO_127_PACKETS, xstats[i].name) == 0) {
+            stats->tx_65_to_127_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_TX_128_TO_255_PACKETS, xstats[i].name) == 0) {
+            stats->tx_128_to_255_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_TX_256_TO_511_PACKETS, xstats[i].name) == 0) {
+            stats->tx_256_to_511_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_TX_512_TO_1023_PACKETS,
+                          xstats[i].name) == 0) {
+            stats->tx_512_to_1023_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_TX_1024_TO_1522_PACKETS,
+                          xstats[i].name) == 0) {
+            stats->tx_1024_to_1522_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_TX_1523_TO_MAX_PACKETS,
+                          xstats[i].name) == 0) {
+            stats->tx_1523_to_max_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_TX_MULTICAST_PACKETS, xstats[i].name) == 0) {
+            stats->tx_multicast_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_RX_BROADCAST_PACKETS, xstats[i].name) == 0) {
+            stats->rx_broadcast_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_TX_BROADCAST_PACKETS, xstats[i].name) == 0) {
+            stats->tx_broadcast_packets = xstats[i].value;
+        } else if (strcmp(XSTAT_RX_UNDERSIZED_ERRORS, xstats[i].name) == 0) {
+            stats->rx_undersized_errors = xstats[i].value;
+        } else if (strcmp(XSTAT_RX_FRAGMENTED_ERRORS, xstats[i].name) == 0) {
+            stats->rx_fragmented_errors = xstats[i].value;
+        } else if (strcmp(XSTAT_RX_JABBER_ERRORS, xstats[i].name) == 0) {
+            stats->rx_jabber_errors = xstats[i].value;
+        }
+    }
 }
 
 static int
@@ -1701,9 +1813,28 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 
     netdev_dpdk_get_carrier(netdev, &gg);
     ovs_mutex_lock(&dev->mutex);
-    rte_eth_stats_get(dev->port_id, &rte_stats);
 
-    memset(stats, 0, sizeof(*stats));
+    struct rte_eth_xstats *rte_xstats;
+    int rte_xstats_len, rte_xstats_ret;
+
+    if (rte_eth_stats_get(dev->port_id, &rte_stats)) {
+        VLOG_ERR("Can't get ETH statistics for port: %i.", dev->port_id);
+        return EPROTO;
+    }
+
+    rte_xstats_len = rte_eth_xstats_get(dev->port_id, NULL, 0);
+    if (rte_xstats_len > 0) {
+        rte_xstats = dpdk_rte_mzalloc(sizeof(*rte_xstats) * rte_xstats_len);
+        memset(rte_xstats, 0xff, sizeof(*rte_xstats) * rte_xstats_len);
+        rte_xstats_ret = rte_eth_xstats_get(dev->port_id, rte_xstats,
+                                            rte_xstats_len);
+        if (rte_xstats_ret > 0 && rte_xstats_ret <= rte_xstats_len) {
+            netdev_dpdk_convert_xstats(stats, rte_xstats, rte_xstats_ret);
+        }
+        rte_free(rte_xstats);
+    } else {
+        VLOG_WARN("Can't get XSTATS counters for port: %i.", dev->port_id);
+    }
 
     stats->rx_packets = rte_stats.ipackets;
     stats->tx_packets = rte_stats.opackets;
@@ -1721,20 +1852,7 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     /* These are the available DPDK counters for packets not received due to
      * local resource constraints in DPDK and NIC respectively. */
     stats->rx_dropped = rte_stats.rx_nombuf + rte_stats.imissed;
-    stats->collisions = UINT64_MAX;
-
-    stats->rx_length_errors = UINT64_MAX;
-    stats->rx_over_errors = UINT64_MAX;
-    stats->rx_crc_errors = UINT64_MAX;
-    stats->rx_frame_errors = UINT64_MAX;
-    stats->rx_fifo_errors = UINT64_MAX;
     stats->rx_missed_errors = rte_stats.imissed;
-
-    stats->tx_aborted_errors = UINT64_MAX;
-    stats->tx_carrier_errors = UINT64_MAX;
-    stats->tx_fifo_errors = UINT64_MAX;
-    stats->tx_heartbeat_errors = UINT64_MAX;
-    stats->tx_window_errors = UINT64_MAX;
 
     ovs_mutex_unlock(&dev->mutex);
 
