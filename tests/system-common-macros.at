@@ -17,6 +17,7 @@ m4_define([ADD_NAMESPACES],
                [DEL_NAMESPACES(ns)
                 AT_CHECK([ip netns add ns || return 77])
                 on_exit 'DEL_NAMESPACES(ns)'
+                ip netns exec ns sysctl -w net.netfilter.nf_conntrack_helper=0
                ])
    ]
 )
