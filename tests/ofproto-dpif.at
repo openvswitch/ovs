@@ -5163,17 +5163,17 @@ IFCOUNTERS
 	status=0
 	in_octets=0
 	in_unicasts=0
-	in_multicasts=0
+	in_multicasts=4294967295
 	in_broadcasts=4294967295
-	in_discards=0
-	in_errors=0
+	in_discards=4294967295
+	in_errors=4294967295
 	in_unknownprotos=4294967295
 	out_octets=120
 	out_unicasts=2
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
-	out_discards=0
-	out_errors=0
+	out_discards=4294967295
+	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
 	dgramSeqNo=2
@@ -5186,17 +5186,17 @@ IFCOUNTERS
 	status=0
 	in_octets=138
 	in_unicasts=3
-	in_multicasts=0
+	in_multicasts=4294967295
 	in_broadcasts=4294967295
-	in_discards=0
-	in_errors=0
+	in_discards=4294967295
+	in_errors=4294967295
 	in_unknownprotos=4294967295
 	out_octets=120
 	out_unicasts=2
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
-	out_discards=0
-	out_errors=0
+	out_discards=4294967295
+	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
 	dgramSeqNo=2
@@ -5209,17 +5209,17 @@ IFCOUNTERS
 	status=0
 	in_octets=84
 	in_unicasts=2
-	in_multicasts=0
+	in_multicasts=4294967295
 	in_broadcasts=4294967295
-	in_discards=0
-	in_errors=0
+	in_discards=4294967295
+	in_errors=4294967295
 	in_unknownprotos=4294967295
 	out_octets=180
 	out_unicasts=3
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
-	out_discards=0
-	out_errors=0
+	out_discards=4294967295
+	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
 	dgramSeqNo=3
@@ -5232,17 +5232,17 @@ IFCOUNTERS
 	status=0
 	in_octets=0
 	in_unicasts=0
-	in_multicasts=0
+	in_multicasts=4294967295
 	in_broadcasts=4294967295
-	in_discards=0
-	in_errors=0
+	in_discards=4294967295
+	in_errors=4294967295
 	in_unknownprotos=4294967295
 	out_octets=120
 	out_unicasts=2
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
-	out_discards=0
-	out_errors=0
+	out_discards=4294967295
+	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
 	dgramSeqNo=3
@@ -5255,17 +5255,17 @@ IFCOUNTERS
 	status=0
 	in_octets=138
 	in_unicasts=3
-	in_multicasts=0
+	in_multicasts=4294967295
 	in_broadcasts=4294967295
-	in_discards=0
-	in_errors=0
+	in_discards=4294967295
+	in_errors=4294967295
 	in_unknownprotos=4294967295
 	out_octets=120
 	out_unicasts=2
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
-	out_discards=0
-	out_errors=0
+	out_discards=4294967295
+	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
 	dgramSeqNo=3
@@ -5278,17 +5278,17 @@ IFCOUNTERS
 	status=0
 	in_octets=84
 	in_unicasts=2
-	in_multicasts=0
+	in_multicasts=4294967295
 	in_broadcasts=4294967295
-	in_discards=0
-	in_errors=0
+	in_discards=4294967295
+	in_errors=4294967295
 	in_unknownprotos=4294967295
 	out_octets=180
 	out_unicasts=3
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
-	out_discards=0
-	out_errors=0
+	out_discards=4294967295
+	out_errors=4294967295
 	promiscuous=0
 OPENFLOWPORT
 	datapath_id=18364758544493064720
@@ -6212,14 +6212,14 @@ skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(101),eth(src=5
 
 AT_CHECK([ovs-ofctl dump-ports br0 pbr0], [0], [dnl
 OFPST_PORT reply (xid=0x4): 1 ports
-  port  1: rx pkts=5, bytes=300, drop=0, errs=0, frame=0, over=0, crc=0
-           tx pkts=10, bytes=600, drop=0, errs=0, coll=0
+  port  1: rx pkts=5, bytes=300, drop=?, errs=?, frame=?, over=?, crc=?
+           tx pkts=10, bytes=600, drop=?, errs=?, coll=?
 ])
 
 AT_CHECK([ovs-ofctl dump-ports br1 pbr1], [0], [dnl
 OFPST_PORT reply (xid=0x4): 1 ports
-  port  1: rx pkts=10, bytes=600, drop=0, errs=0, frame=0, over=0, crc=0
-           tx pkts=5, bytes=300, drop=0, errs=0, coll=0
+  port  1: rx pkts=10, bytes=600, drop=?, errs=?, frame=?, over=?, crc=?
+           tx pkts=5, bytes=300, drop=?, errs=?, coll=?
 ])
 
 OVS_VSWITCHD_STOP

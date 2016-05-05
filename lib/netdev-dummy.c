@@ -1075,7 +1075,11 @@ netdev_dummy_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);
-    *stats = dev->stats;
+    /* Passing only collected counters */
+    stats->tx_packets = dev->stats.tx_packets;
+    stats->tx_bytes = dev->stats.tx_bytes;
+    stats->rx_packets = dev->stats.rx_packets;
+    stats->rx_bytes = dev->stats.rx_bytes;
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
