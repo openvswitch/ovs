@@ -1250,8 +1250,8 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
        *  Match dest is application and source is the inner service port
        *  If a match send to application port
        */
-      service_match = xasprintf("ip4.dst == "IP_FMT" && eth.src == "ETH_ADDR_FMT, \
-				IP_ARGS(app_ip),ETH_ADDR_ARGS(out_ea));
+      service_match = xasprintf("ip4.dst == "IP_FMT" && inport == %s", \
+				IP_ARGS(app_ip),in_port->json_key);
       VLOG_INFO("service match %s\n",service_match);
       service_actions = xasprintf("outport = %s;"" output;",app_port->json_key);
       VLOG_INFO("service action %s\n",service_actions);
@@ -1262,15 +1262,11 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 
       /* 
        * Match if dst is application and the src is not the inner service port
-       If a match send to outer service port
+       * If a match send to outer service port
       */
       VLOG_INFO("Ingress rule 2\n");
       service_match = xasprintf( "ip4.dst == "IP_FMT, IP_ARGS(app_ip));
-      service_actions = xasprintf(
-				  "eth.src = "ETH_ADDR_FMT"; "
-				  "outport = %s;"
-				  " output;",
-				  ETH_ADDR_ARGS(out_ea),
+      service_actions = xasprintf( "outport = %s; output;",
 				  out_port->json_key);
       ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, from_service_priority,
 		    service_match, service_actions);
@@ -1293,39 +1289,21 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
       service_match = xasprintf( "ip4.src == "IP_FMT" && eth.src == "ETH_ADDR_FMT, \
 				 IP_ARGS(app_ip),ETH_ADDR_ARGS(app_ea));
       VLOG_INFO("service match %s\n",service_match);
-      service_actions = xasprintf("eth.src = "ETH_ADDR_FMT"; "
+      service_actions = xasprintf(
 				  "outport = %s;"
 				  " output;",
-				  ETH_ADDR_ARGS(in_ea),
 				  in_port->json_key);
       VLOG_INFO("service actions %s\n",service_actions);
+      ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 225,
+		    service_match, service_actions);
+      
+      free(service_match);
+      free(service_actions);
+      
 
-      ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 225,
-		    service_match, service_actions);
-      
-      free(service_match);
-      free(service_actions);
-      
-#ifdef JUNK
-      /* 
-       * Match src_ip as app_port and src_mac as out_port
-       * Action output to dst_port
-       */
-      VLOG_INFO("Egress rule 2\n");
-      /* Matching on IP */
-      service_match = xasprintf("ip4.src == "IP_FMT" && eth.src =="ETH_ADDR_FMT, \
-      IP_ARGS(app_ip),ETH_ADDR_ARGS(in_ea));
-      VLOG_INFO("service match egress 2 %s\n",service_match);
-      service_actions = xasprintf("eth.src = "ETH_ADDR_FMT"; "
-				   " next ;",ETH_ADDR_ARGS(app_ea));
-      VLOG_INFO("service actions egress 2 %s\n",service_actions);
-      ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 225,
-		    service_match, service_actions);
-      free(service_match);
-      free(service_actions);
-#endif
       /*
-       * Ugly hack to add dest port to all rules - need to fix
+       * Add dest port to all rules - this works for same subnet
+       * Need to figure out how to do it across L3
        */
       HMAP_FOR_EACH (op, key_node, ports) {
 	if (!op->nbs) {
@@ -1338,12 +1316,12 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 	ovs_be32 def_ip;            
 	struct ds service_match, service_actions;
 	/* Only add ports that have IP addresses */
-	if (ovs_scan(op->nbs->addresses[0],  ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
+	  if (ovs_scan(op->nbs->addresses[0],  ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
 		     ETH_ADDR_SCAN_ARGS(def_ea), IP_SCAN_ARGS(&def_ip))) {
 	  VLOG_INFO("Addresses for port: %s\n",op->nbs->addresses[0]);
 	  ds_init(&service_match);
-	  ds_put_format(&service_match, "eth.src == "ETH_ADDR_FMT" && ip4.dst == "IP_FMT, \
-			ETH_ADDR_ARGS(in_ea),IP_ARGS(def_ip));
+	  ds_put_format(&service_match, "inport == %s && ip4.dst == "IP_FMT, \
+			out_port->json_key,IP_ARGS(def_ip));
 	  ds_init(&service_actions);
 	  ds_put_format(&service_actions, "outport = %s; output;", op->json_key);
 	  VLOG_INFO("Match String: %s\n",ds_cstr(&service_match));
