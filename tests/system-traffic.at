@@ -79,9 +79,10 @@ ADD_NAMESPACES(at_ns0, at_ns1)
 ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
 ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
@@ -109,9 +110,10 @@ ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
 ADD_VLAN(p0, at_ns0, 100, "fc00:1::1/96")
 ADD_VLAN(p1, at_ns1, 100, "fc00:1::2/96")
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
@@ -351,9 +353,10 @@ priority=100,in_port=2,ct_state=+trk+est,tcp6,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl HTTP requests from ns0->ns1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py http6]], [http0.pid])
@@ -1260,6 +1263,11 @@ table=1 priority=0, action=drop
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
+dnl "connect: Cannot assign requested address"
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
+
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
 
 dnl FTP requests from p0->p1 should work fine.
@@ -1470,9 +1478,10 @@ priority=100,icmp6,icmp_type=136,action=normal
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl Basic connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
@@ -1517,9 +1526,10 @@ priority=100,icmp6,icmp_type=136,action=normal
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl Basic connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
@@ -1560,9 +1570,10 @@ priority=100,icmp6,icmp_type=136,action=normal
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl Basic connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PING], [0], [dnl
@@ -1668,9 +1679,10 @@ ADD_OVS_TUNNEL([vxlan], [br0], [at_vxlan0], [172.31.1.1], ["fc00::2/96"])
 ADD_NATIVE_TUNNEL([vxlan], [at_vxlan1], [at_ns0], [172.31.1.100], ["fc00::1/96"],
                   [id 0 dstport 4789])
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl First, check the underlay
 NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
@@ -2219,9 +2231,10 @@ priority=200,in_port=2,ct_state=+trk+new,icmp6,icmpv6_code=0,icmpv6_type=135,nd_
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl HTTP requests from ns0->ns1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py http6]], [http0.pid])
@@ -2274,6 +2287,11 @@ table=1 priority=0, action=drop
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
+dnl "connect: Cannot assign requested address"
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
 
