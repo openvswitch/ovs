@@ -3100,7 +3100,7 @@ dpdk_init__(const struct smap *ovs_other_config)
     if (process_vhost_flags("cuse-dev-name", xstrdup("vhost-net"),
                             PATH_MAX, ovs_other_config, &cuse_dev_name)) {
 #else
-    if (process_vhost_flags("vhost-sock-dir", xstrdup(""),
+    if (process_vhost_flags("vhost-sock-dir", xstrdup(ovs_rundir()),
                             NAME_MAX, ovs_other_config,
                             &sock_dir_subcomponent)) {
         struct stat s;
@@ -3121,8 +3121,7 @@ dpdk_init__(const struct smap *ovs_other_config)
         }
         free(sock_dir_subcomponent);
     } else {
-        vhost_sock_dir = xstrdup(ovs_rundir());
-        free(sock_dir_subcomponent);
+        vhost_sock_dir = sock_dir_subcomponent;
 #endif
     }
 
