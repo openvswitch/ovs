@@ -1327,7 +1327,7 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     /* lport commands. */
     { "lport-add", 2, 4, "LSWITCH LPORT [PARENT] [TAG]", NULL, nbctl_lport_add,
       NULL, "", RW },
-    { "lport-del", 1, 1, "LPORT", NULL, nbctl_lport_del, NULL, "", RO },
+    { "lport-del", 1, 1, "LPORT", NULL, nbctl_lport_del, NULL, "", RW },
     { "lport-list", 1, 1, "LSWITCH", NULL, nbctl_lport_list, NULL, "", RO },
     { "lport-get-parent", 1, 1, "LPORT", NULL, nbctl_lport_get_parent, NULL,
       "", RO },
