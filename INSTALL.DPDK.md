@@ -585,12 +585,12 @@ in the names.
      `/usr/local/var/run/openvswitch/vhost-user-1`, which you must provide
      to your VM on the QEMU command line. More instructions on this can be
      found in the next section "DPDK vhost-user VM configuration"
-  - If you wish for the vhost-user sockets to be created in a directory other
-    than `/usr/local/var/run/openvswitch`, you may specify another location
-    in the ovsdb like so:
+  - If you wish for the vhost-user sockets to be created in a sub-directory of
+    `/usr/local/var/run/openvswitch`, you may specify this directory in the
+    ovsdb like so:
 
       `./utilities/ovs-vsctl --no-wait \
-        set Open_vSwitch . other_config:vhost-sock-dir=path`
+        set Open_vSwitch . other_config:vhost-sock-dir=subdir`
 
 DPDK vhost-user VM configuration:
 ---------------------------------
