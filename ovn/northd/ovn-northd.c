@@ -2038,7 +2038,13 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 free(actions);
                 free(match);
             }
-        } else if (op->od->n_router_ports) {
+        } else if (op->od->n_router_ports && strcmp(op->nbs->type, "router")) {
+            /* This is a logical switch port that backs a VM or a container.
+             * Extract its addresses. For each of the address, go through all
+             * the router ports attached to the switch (to which this port
+             * connects) and if the address in question is reachable from the
+             * router port, add an ARP entry in that router's pipeline. */
+
             for (size_t i = 0; i < op->nbs->n_addresses; i++) {
                 struct lport_addresses laddrs;
                 if (!extract_lport_addresses(op->nbs->addresses[i], &laddrs,
@@ -2086,8 +2092,56 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
                 free(laddrs.ipv4_addrs);
             }
+        } else if (!strcmp(op->nbs->type, "router")) {
+            /* This is a logical switch port that connects to a router. */
+
+            /* The peer of this switch port is the router port for which
+             * we need to add logical flows such that it can resolve
+             * ARP entries for all the other router ports connected to
+             * the switch in question. */
+
+            const char *peer_name = smap_get(&op->nbs->options,
+                                             "router-port");
+            if (!peer_name) {
+                continue;
+            }
+
+            struct ovn_port *peer = ovn_port_find(ports, peer_name);
+            if (!peer || !peer->nbr || !peer->ip) {
+                continue;
+            }
+
+            for (size_t j = 0; j < op->od->n_router_ports; j++) {
+                const char *router_port_name = smap_get(
+                                    &op->od->router_ports[j]->nbs->options,
+                                    "router-port");
+                struct ovn_port *router_port = ovn_port_find(ports,
+                                                             router_port_name);
+                if (!router_port || !router_port->nbr || !router_port->ip) {
+                    continue;
+                }
+
+                /* Skip the router port under consideration. */
+                if (router_port == peer) {
+                   continue;
+                }
+
+                if (!router_port->ip) {
+                    continue;
+                }
+                char *match = xasprintf("outport == %s && reg0 == "IP_FMT,
+                                        peer->json_key,
+                                        IP_ARGS(router_port->ip));
+                char *actions = xasprintf("eth.dst = "ETH_ADDR_FMT"; next;",
+                                          ETH_ADDR_ARGS(router_port->mac));
+                ovn_lflow_add(lflows, peer->od, S_ROUTER_IN_ARP_RESOLVE,
+                              100, match, actions);
+                free(actions);
+                free(match);
+            }
         }
     }
+
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbr) {
             continue;

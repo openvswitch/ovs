@@ -2633,3 +2633,240 @@ OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- 2 HVs, 3 LRs connected via LS, static routes])
+AT_KEYWORDS([ovnstaticroutes])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# Three LRs - R1, R2 and R3 that are connected to each other via LS "join"
+# in 20.0.0.0/24 network. R1 has switchess foo (192.168.1.0/24)
+# connected to it. R2 has alice (172.16.1.0/24) and R3 has bob (10.32.1.0/24)
+# connected to it.
+
+ovn-nbctl create Logical_Router name=R1
+ovn-nbctl create Logical_Router name=R2
+ovn-nbctl create Logical_Router name=R3
+
+ovn-nbctl lswitch-add foo
+ovn-nbctl lswitch-add alice
+ovn-nbctl lswitch-add bob
+ovn-nbctl lswitch-add join
+
+# Connect foo to R1
+ovn-nbctl -- --id=@lrp create Logical_Router_port name=foo \
+network=192.168.1.1/24 mac=\"00:00:01:01:02:03\" -- add Logical_Router R1 \
+ports @lrp -- lport-add foo rp-foo
+
+ovn-nbctl set Logical_port rp-foo type=router options:router-port=foo \
+addresses=\"00:00:01:01:02:03\"
+
+# Connect alice to R2
+ovn-nbctl -- --id=@lrp create Logical_Router_port name=alice \
+network=172.16.1.1/24 mac=\"00:00:02:01:02:03\" -- add Logical_Router R2 \
+ports @lrp -- lport-add alice rp-alice
+
+ovn-nbctl set Logical_port rp-alice type=router options:router-port=alice \
+addresses=\"00:00:02:01:02:03\"
+
+# Connect bob to R3
+ovn-nbctl -- --id=@lrp create Logical_Router_port name=bob \
+network=10.32.1.1/24 mac=\"00:00:03:01:02:03\" -- add Logical_Router R3 \
+ports @lrp -- lport-add bob rp-bob
+
+ovn-nbctl set Logical_port rp-bob type=router options:router-port=bob \
+addresses=\"00:00:03:01:02:03\"
+
+# Connect R1 to join
+ovn-nbctl -- --id=@lrp create Logical_Router_port name=R1_join \
+network=20.0.0.1/24 mac=\"00:00:04:01:02:03\" -- add Logical_Router R1 \
+ports @lrp -- lport-add join r1-join
+
+ovn-nbctl set Logical_port r1-join type=router options:router-port=R1_join \
+addresses='"00:00:04:01:02:03"'
+
+# Connect R2 to join
+ovn-nbctl -- --id=@lrp create Logical_Router_port name=R2_join \
+network=20.0.0.2/24 mac=\"00:00:04:01:02:04\" -- add Logical_Router R2 \
+ports @lrp -- lport-add join r2-join
+
+ovn-nbctl set Logical_port r2-join type=router options:router-port=R2_join \
+addresses='"00:00:04:01:02:04"'
+
+
+# Connect R3 to join
+ovn-nbctl -- --id=@lrp create Logical_Router_port name=R3_join \
+network=20.0.0.3/24 mac=\"00:00:04:01:02:05\" -- add Logical_Router R3 \
+ports @lrp -- lport-add join r3-join
+
+ovn-nbctl set Logical_port r3-join type=router options:router-port=R3_join \
+addresses='"00:00:04:01:02:05"'
+
+#install static routes
+ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
+ip_prefix=172.16.1.0/24 nexthop=20.0.0.2 -- add Logical_Router \
+R1 static_routes @lrt
+
+ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
+ip_prefix=10.32.1.0/24 nexthop=20.0.0.3 -- add Logical_Router \
+R1 static_routes @lrt
+
+ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
+ip_prefix=192.168.1.0/24 nexthop=20.0.0.1 -- add Logical_Router \
+R2 static_routes @lrt
+
+ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
+ip_prefix=10.32.1.0/24 nexthop=20.0.0.3 -- add Logical_Router \
+R2 static_routes @lrt
+
+ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
+ip_prefix=192.168.1.0/24 nexthop=20.0.0.1 -- add Logical_Router \
+R3 static_routes @lrt
+
+ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
+ip_prefix=172.16.1.0/24 nexthop=20.0.0.2 -- add Logical_Router \
+R3 static_routes @lrt
+
+# Create logical port foo1 in foo
+ovn-nbctl lport-add foo foo1 \
+-- lport-set-addresses foo1 "f0:00:00:01:02:03 192.168.1.2"
+
+# Create logical port alice1 in alice
+ovn-nbctl lport-add alice alice1 \
+-- lport-set-addresses alice1 "f0:00:00:01:02:04 172.16.1.2"
+
+# Create logical port bob1 in bob
+ovn-nbctl lport-add bob bob1 \
+-- lport-set-addresses bob1 "f0:00:00:01:02:05 10.32.1.2"
+
+# Create two hypervisor and create OVS ports corresponding to logical ports.
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=foo1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int hv1-vif2 -- \
+    set interface hv1-vif2 external-ids:iface-id=alice1 \
+    options:tx_pcap=hv1/vif2-tx.pcap \
+    options:rxq_pcap=hv1/vif2-rx.pcap \
+    ofport-request=2
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+ovs-vsctl -- add-port br-int hv2-vif1 -- \
+    set interface hv2-vif1 external-ids:iface-id=bob1 \
+    options:tx_pcap=hv2/vif1-tx.pcap \
+    options:rxq_pcap=hv2/vif1-rx.pcap \
+    ofport-request=1
+
+
+# Pre-populate the hypervisors' ARP tables so that we don't lose any
+# packets for ARP resolution (native tunneling doesn't queue packets
+# for ARP resolution).
+ovn_populate_arp
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+# Send ip packets between foo1 and alice1
+src_mac="f00000010203"
+dst_mac="000001010203"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 172 16 1 2`
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+as hv1 ovs-appctl ofproto/trace br-int in_port=1 $packet
+
+# Send ip packets between foo1 and bob1
+src_mac="f00000010203"
+dst_mac="000001010203"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 10 32 1 2`
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+
+echo "---------NB dump-----"
+ovn-nbctl show
+echo "---------------------"
+ovn-nbctl list logical_router
+echo "---------------------"
+ovn-nbctl list logical_router_port
+echo "---------------------"
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list port_binding
+echo "---------------------"
+ovn-sbctl dump-flows
+echo "---------------------"
+
+echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl show br-int
+as hv1 ovs-ofctl dump-flows br-int
+echo "------ hv2 dump ----------"
+as hv2 ovs-ofctl show br-int
+as hv2 ovs-ofctl dump-flows br-int
+echo "----------------------------"
+
+# Packet to Expect at bob1
+src_mac="000003010203"
+dst_mac="f00000010205"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 10 32 1 2`
+expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received.packets
+echo $expected | trim_zeros > expout
+AT_CHECK([cat received.packets], [0], [expout])
+
+# Packet to Expect at alice1
+src_mac="000002010203"
+dst_mac="f00000010204"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 172 16 1 2`
+expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > received1.packets
+echo $expected | trim_zeros > expout
+AT_CHECK([cat received1.packets], [0], [expout])
+
+for sim in hv1 hv2; do
+    as $sim
+    OVS_APP_EXIT_AND_WAIT([ovn-controller])
+    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+done
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+AT_CLEANUP

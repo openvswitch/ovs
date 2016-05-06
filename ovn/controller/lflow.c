@@ -215,15 +215,15 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
         if (is_switch(ldp)) {
             /* For a logical switch datapath, local_datapaths tells us if there
              * are any local ports for this datapath.  If not, we can skip
-             * processing logical flows if the flow belongs to egress pipeline
-             * or if that logical switch datapath is not patched to any logical
-             * router.
+             * processing logical flows if that logical switch datapath is not
+             * patched to any logical router.
              *
-             * Otherwise, we still need the ingress pipeline because even if
-             * there are no local ports, we still may need to execute the ingress
-             * pipeline after a packet leaves a logical router.  Further
-             * optimization is possible, but not based on what we know with
-             * local_datapaths right now.
+             * Otherwise, we still need both ingress and egress pipeline
+             * because even if there are no local ports, we still may need to
+             * execute the ingress pipeline after a packet leaves a logical
+             * router and we need to do egress pipeline for a switch that
+             * is connected to only routers.  Further optimization is possible,
+             * but not based on what we know with local_datapaths right now.
              *
              * A better approach would be a kind of "flood fill" algorithm:
              *
@@ -242,9 +242,6 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
              */
 
             if (!get_local_datapath(local_datapaths, ldp->tunnel_key)) {
-                if (!ingress) {
-                    continue;
-                }
                 if (!get_patched_datapath(patched_datapaths,
                                           ldp->tunnel_key)) {
                     continue;

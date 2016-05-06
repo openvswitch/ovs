@@ -154,13 +154,6 @@
           These options apply when <ref column="type"/> is <code>router</code>.
         </p>
 
-        <p>
-          If a given logical switch has multiple <code>router</code> ports, the
-          <ref table="Logical_Router_Port"/> rows that they reference must be
-          all on the same <ref table="Logical_Router"/> (for different
-          subnets).
-        </p>
-
         <column name="options" key="router-port">
           Required.  The <ref column="name"/> of the <ref
           table="Logical_Router_Port"/> to which this logical switch port is
