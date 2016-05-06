@@ -81,11 +81,11 @@ def unixctl_exit(conn, unused_argv, unused_aux):
 
 
 class Logical_Switch(object):
-    def __init__(self, ls_name):
+    def __init__(self, ls_name, ps_name):
         global ls_count
         self.name = ls_name
         ls_count += 1
-        self.short_name = "vtep_ls" + str(ls_count)
+        self.short_name = ps_name + "_vtep_ls" + str(ls_count)
         vlog.info("creating lswitch %s (%s)" % (self.name, self.short_name))
         self.ports = {}
         self.tunnels = {}
@@ -610,7 +610,7 @@ def handle_physical():
         for b in binding_set:
             vlan, ls_name = b.split()
             if ls_name not in Lswitches:
-                Lswitches[ls_name] = Logical_Switch(ls_name)
+                Lswitches[ls_name] = Logical_Switch(ls_name, ps_name)
 
             binding = "%s-%s" % (vlan, pp_name)
             ls = Lswitches[ls_name]
