@@ -357,6 +357,28 @@
         Indicates that an error has occurred in the switch but that no
         more specific information is available.
       </column>
+
+      <column name="switch_fault_status"
+        key="unsupported_source_node_replication">
+        Indicates that the requested source node replication mode cannot be
+        supported by the physical switch;  this specifically means in this
+        context that the physical switch lacks the capability to support
+        source node replication mode.  This error occurs when a controller
+        attempts to set source node replication mode for one of the logical
+        switches that the physical switch is keeping context for.  An NVC
+        that observes this error should take appropriate action (for example
+        reverting the logical switch to service node replication mode).
+        It is recommended that an NVC be proactive and test for support of
+        source node replication by using a test logical switch on vtep
+        physical switch nodes and then trying to change the replication mode
+        to source node on this logical switch, checking for error.  The NVC
+        could remember this capability per vtep physical switch.  Using
+        mixed replication modes on a given logical switch is not recommended.
+        Service node replication mode is considered a basic requirement
+        since it only requires sending a packet to a single transport node,
+        hence it is not expected that a switch should report that service
+        node mode cannot be supported.
+      </column>
     </group>
 
     <group title="Common Column">
@@ -754,6 +776,35 @@
       </column>
     </group>
 
+    <group title="Replication Mode">
+      <p>
+        For handling L2 broadcast, multicast and unknown unicast traffic,
+        packets can be sent to all members of a logical switch referenced by
+        a physical switch.  There are different modes to replicate the
+        packets.  The default mode of replication is to send the traffic to
+        a service node, which can be a hypervisor, server or appliance, and
+        let the service node handle replication to other transport nodes
+        (hypervisors or other VTEP physical switches).  This mode is called
+        service node replication.  An alternate mode of replication, called
+        source node replication involves the source node sending to all
+        other transport nodes.  Hypervisors are always responsible for doing
+        their own replication for locally attached VMs in both modes.
+        Service node replication mode is the default and considered a
+        basic requirement because it only requires sending the packet to
+        a single transport node.
+      </p>
+
+      <column name="replication_mode">
+        <p>
+          This optional column defines the replication mode per
+          <ref table="Logical_Switch"/>.  There are 2 valid values,
+          <code>service_node</code> and <code>source_node</code>.  If the
+          column is not set, the replication mode defaults to service_node.
+        </p>
+
+      </column>
+    </group>
+
     <group title="Identification">
       <column name="name">
         Symbolic name for the logical switch.
@@ -887,8 +938,8 @@
       Multicast packet replication may be handled by a service node,
       in which case the physical locators will be IP addresses of
       service nodes. If the VTEP supports replication onto multiple
-      tunnels, then this may be used to replicate directly onto
-      VTEP-hypervisor tunnels.
+      tunnels, using source node replication, then this may be used to
+      replicate directly onto VTEP-hypervisor or VTEP-VTEP tunnels.
     </p>
 
     <column name="MAC">
@@ -911,9 +962,14 @@
 
     <column name="locator_set">
       The physical locator set to be used to reach this MAC address. In
-      this table, the physical locator set will be either a service node IP
-      address or a set of tunnel IP addresses of hypervisors (and
-      potentially other VTEPs).
+      this table, the physical locator set will be either a set of service
+      nodes when service node replication is used or the set of transport
+      nodes (defined as hypervisors or VTEPs) participating in the associated
+      logical switch, when source node replication is used. When service node
+      replication is used, the VTEP should send packets to one member of the
+      locator set that is known to be healthy and reachable, which could be
+      determined by BFD.  When source node replication is used, the VTEP
+      should send packets to all members of the locator set.
     </column>
 
     <column name="ipaddr">
