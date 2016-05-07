@@ -1,6 +1,6 @@
 {
   "name": "hardware_vtep",
-  "cksum": "770244945 11113",
+  "cksum": "4127261095 11302",
   "tables": {
     "Global": {
       "columns": {
@@ -96,6 +96,11 @@
         "name": {"type": "string"},
         "description": {"type": "string"},
         "tunnel_key": {"type": {"key": "integer", "min": 0, "max": 1}},
+        "replication_mode": {
+          "type": {
+            "key": {
+              "enum": ["set", ["service_node", "source_node"]],
+              "type": "string"},"min": 0, "max": 1}},
         "other_config": {
           "type": {"key": "string", "value": "string",
                    "min": 0, "max": "unlimited"}}},
@@ -296,4 +301,4 @@
           "ephemeral": true}},
       "indexes": [["target"]],
       "isRoot": false}},
-  "version": "1.5.1"}
+  "version": "1.6.0"}

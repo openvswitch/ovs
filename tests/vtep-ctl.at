@@ -318,6 +318,38 @@ CHECK_LSWITCHES([a])
 VTEP_CTL_CLEANUP
 AT_CLEANUP
 
+AT_SETUP([add-ls a, get-replication-mode a])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+  [add-ls a],
+  [get-replication-mode a])],
+  [0], [[(null)]
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ls a, set-replication-mode a source_node])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+  [add-ls a],[set-replication-mode a source_node],
+  [get-replication-mode a])],
+  [0], [source_node
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
+
+AT_SETUP([add-ls a, set-replication-mode a service_node])
+AT_KEYWORDS([vtep-ctl])
+VTEP_CTL_SETUP
+AT_CHECK([RUN_VTEP_CTL(
+  [add-ls a],[set-replication-mode a service_node],
+  [get-replication-mode a])],
+  [0], [service_node
+], [], [VTEP_CTL_CLEANUP])
+VTEP_CTL_CLEANUP
+AT_CLEANUP
 
 dnl ----------------------------------------------------------------------
 AT_BANNER([vtep-ctl unit tests -- logical binding tests])

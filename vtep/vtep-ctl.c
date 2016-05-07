@@ -335,6 +335,8 @@ Logical Switch commands:\n\
   bind-ls PS PORT VLAN LS     bind LS to VLAN on PORT\n\
   unbind-ls PS PORT VLAN      unbind logical switch on VLAN from PORT\n\
   list-bindings PS PORT       list bindings for PORT on PS\n\
+  set-replication-mode LS MODE  set replication mode on LS\n\
+  get-replication-mode LS       get replication mode on LS\n\
 \n\
 Logical Router commands:\n\
   add-lr LR                   create a new logical router named LR\n\
@@ -851,6 +853,8 @@ pre_get_info(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &vteprec_physical_port_col_vlan_bindings);
 
     ovsdb_idl_add_column(ctx->idl, &vteprec_logical_switch_col_name);
+    ovsdb_idl_add_column(ctx->idl,
+                         &vteprec_logical_switch_col_replication_mode);
 
     ovsdb_idl_add_column(ctx->idl, &vteprec_logical_router_col_name);
 
@@ -1521,6 +1525,39 @@ cmd_unbind_ls(struct ctl_context *ctx)
     commit_ls_bindings(port);
 
     vtep_ctl_context_invalidate_cache(ctx);
+}
+
+static void
+cmd_set_replication_mode(struct ctl_context *ctx)
+{
+    struct vtep_ctl_context *vtepctl_ctx = vtep_ctl_context_cast(ctx);
+    struct vtep_ctl_lswitch *ls;
+    const char *ls_name = ctx->argv[1];
+
+    vtep_ctl_context_populate_cache(ctx);
+
+    if (strcmp(ctx->argv[2], "service_node") &&
+        strcmp(ctx->argv[2], "source_node")) {
+        ctl_fatal("Replication mode must be 'service_node' or 'source_node'");
+    }
+
+    ls = find_lswitch(vtepctl_ctx, ls_name, true);
+    vteprec_logical_switch_set_replication_mode(ls->ls_cfg, ctx->argv[2]);
+
+    vtep_ctl_context_invalidate_cache(ctx);
+}
+
+static void
+cmd_get_replication_mode(struct ctl_context *ctx)
+{
+    struct vtep_ctl_context *vtepctl_ctx = vtep_ctl_context_cast(ctx);
+    struct vtep_ctl_lswitch *ls;
+    const char *ls_name = ctx->argv[1];
+
+    vtep_ctl_context_populate_cache(ctx);
+
+    ls = find_lswitch(vtepctl_ctx, ls_name, true);
+    ds_put_format(&ctx->output, "%s\n", ls->ls_cfg->replication_mode);
 }
 
 static struct vtep_ctl_lrouter *
@@ -2459,6 +2496,10 @@ static const struct ctl_command_syntax vtep_commands[] = {
     {"list-bindings", 2, 2, NULL, pre_get_info, cmd_list_bindings, NULL, "", RO},
     {"bind-ls", 4, 4, NULL, pre_get_info, cmd_bind_ls, NULL, "", RO},
     {"unbind-ls", 3, 3, NULL, pre_get_info, cmd_unbind_ls, NULL, "", RO},
+    {"set-replication-mode", 2, 2, "LS MODE", pre_get_info,
+        cmd_set_replication_mode, NULL, "", RW},
+    {"get-replication-mode", 1, 1, "LS", pre_get_info,
+        cmd_get_replication_mode, NULL, "", RO},
 
     /* Logical Router commands. */
     {"add-lr", 1, 1, NULL, pre_get_info, cmd_add_lr, NULL, "--may-exist", RW},
