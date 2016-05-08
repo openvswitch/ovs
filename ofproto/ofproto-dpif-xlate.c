@@ -2388,6 +2388,20 @@ xlate_normal_flood(struct xlate_ctx *ctx, struct xbundle *in_xbundle,
     ctx->nf_output_iface = NF_OUT_FLOOD;
 }
 
+static bool
+is_ip_local_multicast(const struct flow *flow, struct flow_wildcards *wc)
+{
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
+        return ip_is_local_multicast(flow->nw_dst);
+    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+        memset(&wc->masks.ipv6_dst, 0xff, sizeof wc->masks.ipv6_dst);
+        return ipv6_is_all_hosts(&flow->ipv6_dst);
+    } else {
+        return false;
+    }
+}
+
 static void
 xlate_normal(struct xlate_ctx *ctx)
 {
@@ -2471,7 +2485,8 @@ xlate_normal(struct xlate_ctx *ctx)
         struct mcast_snooping *ms = ctx->xbridge->ms;
         struct mcast_group *grp = NULL;
 
-        if (is_igmp(flow)) {
+        if (is_igmp(flow, wc)) {
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
             if (mcast_snooping_is_membership(flow->tp_src) ||
                 mcast_snooping_is_query(flow->tp_src)) {
                 if (ctx->xin->may_learn && ctx->xin->packet) {
@@ -2504,13 +2519,13 @@ xlate_normal(struct xlate_ctx *ctx)
                 xlate_normal_flood(ctx, in_xbundle, vlan);
             }
             return;
-        } else if (is_mld(flow)) {
+        } else if (is_mld(flow, wc)) {
             ctx->xout->slow |= SLOW_ACTION;
             if (ctx->xin->may_learn && ctx->xin->packet) {
                 update_mcast_snooping_table(ctx->xbridge, flow, vlan,
                                             in_xbundle, ctx->xin->packet);
             }
-            if (is_mld_report(flow)) {
+            if (is_mld_report(flow, wc)) {
                 ovs_rwlock_rdlock(&ms->rwlock);
                 xlate_normal_mcast_send_mrouters(ctx, ms, in_xbundle, vlan);
                 xlate_normal_mcast_send_rports(ctx, ms, in_xbundle, vlan);
@@ -2520,10 +2535,7 @@ xlate_normal(struct xlate_ctx *ctx)
                 xlate_normal_flood(ctx, in_xbundle, vlan);
             }
         } else {
-            if ((flow->dl_type == htons(ETH_TYPE_IP)
-                 && ip_is_local_multicast(flow->nw_dst))
-                || (flow->dl_type == htons(ETH_TYPE_IPV6)
-                    && ipv6_is_all_hosts(&flow->ipv6_dst))) {
+            if (is_ip_local_multicast(flow, wc)) {
                 /* RFC4541: section 2.1.2, item 2: Packets with a dst IP
                  * address in the 224.0.0.x range which are not IGMP must
                  * be forwarded on all ports */
@@ -5066,7 +5078,7 @@ xlate_wc_finish(struct xlate_ctx *ctx)
      * Avoid the problem here by making sure that only the low 8 bits of
      * either field can be unwildcarded for ICMP.
      */
-    if (is_icmpv4(&ctx->xin->flow) || is_icmpv6(&ctx->xin->flow)) {
+    if (is_icmpv4(&ctx->xin->flow, NULL) || is_icmpv6(&ctx->xin->flow, NULL)) {
         ctx->wc->masks.tp_src &= htons(UINT8_MAX);
         ctx->wc->masks.tp_dst &= htons(UINT8_MAX);
     }

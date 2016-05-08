@@ -832,41 +832,72 @@ static inline bool is_ip_any(const struct flow *flow)
     return dl_type_is_ip_any(flow->dl_type);
 }
 
-static inline bool is_icmpv4(const struct flow *flow)
+static inline bool is_icmpv4(const struct flow *flow,
+                             struct flow_wildcards *wc)
 {
-    return (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IPPROTO_ICMP);
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        if (wc) {
+            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+        }
+        return flow->nw_proto == IPPROTO_ICMP;
+    }
+    return false;
 }
 
-static inline bool is_icmpv6(const struct flow *flow)
+static inline bool is_icmpv6(const struct flow *flow,
+                             struct flow_wildcards *wc)
 {
-    return (flow->dl_type == htons(ETH_TYPE_IPV6)
-            && flow->nw_proto == IPPROTO_ICMPV6);
+    if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+        if (wc) {
+            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+        }
+        return flow->nw_proto == IPPROTO_ICMPV6;
+    }
+    return false;
 }
 
-static inline bool is_igmp(const struct flow *flow)
+static inline bool is_igmp(const struct flow *flow, struct flow_wildcards *wc)
 {
-    return (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IPPROTO_IGMP);
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        if (wc) {
+            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+        }
+        return flow->nw_proto == IPPROTO_IGMP;
+    }
+    return false;
 }
 
-static inline bool is_mld(const struct flow *flow)
+static inline bool is_mld(const struct flow *flow,
+                          struct flow_wildcards *wc)
 {
-    return is_icmpv6(flow)
-           && (flow->tp_src == htons(MLD_QUERY)
-               || flow->tp_src == htons(MLD_REPORT)
-               || flow->tp_src == htons(MLD_DONE)
-               || flow->tp_src == htons(MLD2_REPORT));
+    if (is_icmpv6(flow, wc)) {
+        if (wc) {
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+        }
+        return (flow->tp_src == htons(MLD_QUERY)
+                || flow->tp_src == htons(MLD_REPORT)
+                || flow->tp_src == htons(MLD_DONE)
+                || flow->tp_src == htons(MLD2_REPORT));
+    }
+    return false;
 }
 
-static inline bool is_mld_query(const struct flow *flow)
+static inline bool is_mld_query(const struct flow *flow,
+                                struct flow_wildcards *wc)
 {
-    return is_icmpv6(flow) && flow->tp_src == htons(MLD_QUERY);
+    if (is_icmpv6(flow, wc)) {
+        if (wc) {
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+        }
+        return flow->tp_src == htons(MLD_QUERY);
+    }
+    return false;
 }
 
-static inline bool is_mld_report(const struct flow *flow)
+static inline bool is_mld_report(const struct flow *flow,
+                                 struct flow_wildcards *wc)
 {
-    return is_mld(flow) && !is_mld_query(flow);
+    return is_mld(flow, wc) && !is_mld_query(flow, wc);
 }
 
 static inline bool is_stp(const struct flow *flow)
