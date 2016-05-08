@@ -82,28 +82,28 @@ AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
 dnl Tunnel CE and encapsulated packet CE
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=3,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: pkt_mark=0,recirc_id=0,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_tos=3,tun_ttl=64,,in_port=1,nw_ecn=3,nw_frag=no
+  [Megaflow: pkt_mark=0,recirc_id=0,tcp,tun_id=0,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_tos=3,tun_ttl=64,,in_port=1,nw_ecn=3,nw_frag=no
 Datapath actions: 2
 ])
 
 dnl Tunnel CE and encapsulated packet ECT(1)
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=1,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: pkt_mark=0,recirc_id=0,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_tos=3,tun_ttl=64,,in_port=1,nw_ecn=1,nw_frag=no
+  [Megaflow: pkt_mark=0,recirc_id=0,tcp,tun_id=0,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_tos=3,tun_ttl=64,,in_port=1,nw_ecn=1,nw_frag=no
 Datapath actions: set(ipv4(tos=0x3/0x3)),2
 ])
 
 dnl Tunnel CE and encapsulated packet ECT(2)
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=2,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: pkt_mark=0,recirc_id=0,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_tos=3,tun_ttl=64,,in_port=1,nw_ecn=2,nw_frag=no
+  [Megaflow: pkt_mark=0,recirc_id=0,tcp,tun_id=0,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_tos=3,tun_ttl=64,,in_port=1,nw_ecn=2,nw_frag=no
 Datapath actions: set(ipv4(tos=0x3/0x3)),2
 ])
 
 dnl Tunnel CE and encapsulated packet Non-ECT
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(src=1.1.1.1,dst=2.2.2.2,tos=0x3,ttl=64,flags()),in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
 AT_CHECK([tail -2 stdout], [0],
-  [Megaflow: pkt_mark=0,recirc_id=0,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_tos=3,tun_ttl=64,,in_port=1,nw_ecn=0,nw_frag=no
+  [Megaflow: pkt_mark=0,recirc_id=0,tcp,tun_id=0,tun_src=1.1.1.1,tun_dst=2.2.2.2,tun_tos=3,tun_ttl=64,,in_port=1,nw_ecn=0,nw_frag=no
 Datapath actions: drop
 ])
 OVS_VSWITCHD_STOP(["/dropping tunnel packet marked ECN CE but is not ECN capable/d"])

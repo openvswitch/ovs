@@ -2193,6 +2193,17 @@ xlate_normal_flood(struct xlate_ctx *ctx, struct xbundle *in_xbundle,
     ctx->xout->nf_output_iface = NF_OUT_FLOOD;
 }
 
+static bool
+is_ip_local_multicast(const struct flow *flow, struct flow_wildcards *wc)
+{
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
+        return ip_is_local_multicast(flow->nw_dst);
+    } else {
+        return false;
+    }
+}
+
 static void
 xlate_normal(struct xlate_ctx *ctx)
 {
@@ -2278,7 +2289,8 @@ xlate_normal(struct xlate_ctx *ctx)
         struct mcast_snooping *ms = ctx->xbridge->ms;
         struct mcast_group *grp;
 
-        if (flow->nw_proto == IPPROTO_IGMP) {
+        if (is_igmp(flow, wc)) {
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
             if (mcast_snooping_is_membership(flow->tp_src) ||
                 mcast_snooping_is_query(flow->tp_src)) {
                 if (ctx->xin->may_learn) {
@@ -2312,7 +2324,7 @@ xlate_normal(struct xlate_ctx *ctx)
             }
             return;
         } else {
-            if (ip_is_local_multicast(flow->nw_dst)) {
+            if (is_ip_local_multicast(flow, wc)) {
                 /* RFC4541: section 2.1.2, item 2: Packets with a dst IP
                  * address in the 224.0.0.x range which are not IGMP must
                  * be forwarded on all ports */
@@ -4765,7 +4777,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             netflow_mask_wc(flow, wc);
         }
     }
-    is_icmp = is_icmpv4(flow) || is_icmpv6(flow);
+    is_icmp = is_icmpv4(flow, wc) || is_icmpv6(flow, wc);
 
     tnl_may_send = tnl_xlate_init(&ctx.base_flow, flow, wc);
 
