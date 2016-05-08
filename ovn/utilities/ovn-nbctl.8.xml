@@ -29,9 +29,10 @@
         Initially the switch will have no ports.
       </dd>
 
-      <dt><code>lswitch-del</code> <var>lswitch</var></dt>
+      <dt>[<code>--if-exists</code>] <code>lswitch-del</code> <var>lswitch</var></dt>
       <dd>
-        Deletes <var>lswitch</var>.
+        Deletes <var>lswitch</var>.  It is an error if <var>lswitch</var> does
+        not exist, unless <code>--if-exists</code> is specified.
       </dd>
 
       <dt><code>lswitch-list</code></dt>
@@ -70,25 +71,46 @@
 
     <h1>Logical Port Commands</h1>
     <dl>
-      <dt><code>lport-add</code> <var>lswitch</var> <var>lport</var></dt>
+      <dt>[<code>--may-exist</code>] <code>lport-add</code> <var>lswitch</var> <var>lport</var></dt>
       <dd>
-        Creates on <var>lswitch</var> a new logical port named
-        <var>lport</var>.
+        <p>
+          Creates on <var>lswitch</var> a new logical port named
+          <var>lport</var>.
+        </p>
+
+        <p>
+          It is an error if a logical port named <var>lport</var> already
+          exists, unless <code>--may-exist</code> is specified.  Regardless of
+          <code>--may-exist</code>, it is an error if the existing port is in
+          some logical switch other than <var>lswitch</var> or if it has a
+          parent port.
+        </p>
       </dd>
 
-      <dt><code>lport-add</code> <var>lswitch</var> <var>lport</var> <var>parent</var> <var>tag</var></dt>
+      <dt>[<code>--may-exist</code>] <code>lport-add</code> <var>lswitch</var> <var>lport</var> <var>parent</var> <var>tag</var></dt>
       <dd>
-        Creates on <var>lswitch</var> a logical port named <var>lport</var>
-        that is a child of <var>parent</var> that is identifed with VLAN ID
-        <var>tag</var>.  This is useful in cases such as virtualized
-        container environments where Open vSwitch does not have a direct
-        connection to the container's port and it must be shared with
-        the virtual machine's port.
+        <p>
+          Creates on <var>lswitch</var> a logical port named <var>lport</var>
+          that is a child of <var>parent</var> that is identifed with VLAN ID
+          <var>tag</var>.  This is useful in cases such as virtualized
+          container environments where Open vSwitch does not have a direct
+          connection to the container's port and it must be shared with
+          the virtual machine's port.
+        </p>
+
+        <p>
+          It is an error if a logical port named <var>lport</var> already
+          exists, unless <code>--may-exist</code> is specified.  Regardless of
+          <code>--may-exist</code>, it is an error if the existing port is not
+          in <var>lswitch</var> or if it does not have the specified
+          <var>parent</var> and <var>tag</var>.
+        </p>
       </dd>
 
-      <dt><code>lport-del</code> <var>lport</var></dt>
+      <dt>[<code>--if-exists</code>] <code>lport-del</code> <var>lport</var></dt>
       <dd>
-        Deletes <var>lport</var>.
+        Deletes <var>lport</var>.  It is an error if <var>lport</var> does
+        not exist, unless <code>--if-exists</code> is specified.
       </dd>
 
       <dt><code>lport-list</code> <var>lswitch</var></dt>
