@@ -23,10 +23,33 @@
     <h1>Logical Switch Commands</h1>
 
     <dl>
-      <dt><code>lswitch-add</code> [<var>lswitch</var>]</dt> <dd> Creates a new logical switch named <var>lswitch</var>.  If
-        <var>lswitch</var> is not provided, the switch will not have a
-        name so other commands must refer to this switch by its UUID.
-        Initially the switch will have no ports.
+      <dt><code>lswitch-add</code></dt>
+      <dd>
+        <p>
+          Creates a new, unnamed logical switch, which initially has no ports.
+          The switch does not have a name, other commands must refer to this
+          switch by its UUID.
+        </p>
+      </dd>
+
+      <dt>[<code>--may-exist</code> | <code>--add-duplicate</code>] <code>lswitch-add</code> <var>lswitch</var></dt> 
+      <dd>
+        <p>
+          Creates a new logical switch named <var>lswitch</var>, which
+          initially has no ports.
+        </p>
+
+        <p>
+          The OVN northbound database schema does not require logical switch
+          names to be unique, but the whole point to the names is to provide an
+          easy way for humans to refer to the switches, making duplicate names
+          unhelpful.  Thus, without any options, this command regards it as an
+          error if <var>lswitch</var> is a duplicate name.  With
+          <code>--may-exist</code>, adding a duplicate name succeeds but does
+          not create a new logical switch.  With <code>--add-duplicate</code>,
+          the command really creates a new logical switch with a duplicate
+          name.  It is an error to specify both options.
+        </p>
       </dd>
 
       <dt>[<code>--if-exists</code>] <code>lswitch-del</code> <var>lswitch</var></dt>
