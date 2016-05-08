@@ -5337,9 +5337,9 @@ commit_set_icmp_action(const struct flow *flow, struct flow *base_flow,
     struct ovs_key_icmp key, mask, base;
     enum ovs_key_attr attr;
 
-    if (is_icmpv4(flow)) {
+    if (is_icmpv4(flow, NULL)) {
         attr = OVS_KEY_ATTR_ICMP;
-    } else if (is_icmpv6(flow)) {
+    } else if (is_icmpv6(flow, NULL)) {
         attr = OVS_KEY_ATTR_ICMPV6;
     } else {
         return 0;

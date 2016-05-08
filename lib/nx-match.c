@@ -852,7 +852,7 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match, enum ofp_version oxm)
                         match->wc.masks.tp_src);
             nxm_put_16m(b, MFF_SCTP_DST, oxm, flow->tp_dst,
                         match->wc.masks.tp_dst);
-        } else if (is_icmpv4(flow)) {
+        } else if (is_icmpv4(flow, NULL)) {
             if (match->wc.masks.tp_src) {
                 nxm_put_8(b, MFF_ICMPV4_TYPE, oxm,
                           ntohs(flow->tp_src));
@@ -861,7 +861,7 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match, enum ofp_version oxm)
                 nxm_put_8(b, MFF_ICMPV4_CODE, oxm,
                           ntohs(flow->tp_dst));
             }
-        } else if (is_icmpv6(flow)) {
+        } else if (is_icmpv6(flow, NULL)) {
             if (match->wc.masks.tp_src) {
                 nxm_put_8(b, MFF_ICMPV6_TYPE, oxm,
                           ntohs(flow->tp_src));
