@@ -53,7 +53,17 @@ AT_CHECK([ovn-nbctl lswitch-add ls0])
 AT_CHECK([ovn-nbctl show ls0 | ${PERL} $srcdir/uuidfilt.pl], [0],
   [    lswitch <0> (ls0)
 ])
-AT_CHECK([ovn-nbctl lswitch-add ls0])
+AT_CHECK([ovn-nbctl lswitch-add ls0], [1], [],
+  [ovn-nbctl: ls0: an lswitch with this name already exists
+])
+AT_CHECK([ovn-nbctl --may-exist lswitch-add ls0])
+AT_CHECK([ovn-nbctl show ls0 | ${PERL} $srcdir/uuidfilt.pl], [0],
+  [    lswitch <0> (ls0)
+])
+AT_CHECK([ovn-nbctl --add-duplicate lswitch-add ls0])
+AT_CHECK([ovn-nbctl --may-exist --add-duplicate lswitch-add ls0], [1], [],
+  [ovn-nbctl: --may-exist and --add-duplicate may not be used together
+])
 AT_CHECK([ovn-nbctl lswitch-del ls0], [1], [],
   [ovn-nbctl: Multiple logical switches named 'ls0'.  Use a UUID.
 ])
@@ -62,6 +72,15 @@ AT_CHECK([ovn-nbctl lswitch-del ls2], [1], [],
   [ovn-nbctl: ls2: lswitch name not found
 ])
 AT_CHECK([ovn-nbctl --if-exists lswitch-del ls2])
+
+AT_CHECK([ovn-nbctl lswitch-add])
+AT_CHECK([ovn-nbctl lswitch-add])
+AT_CHECK([ovn-nbctl --add-duplicate lswitch-add], [1], [],
+  [ovn-nbctl: --add-duplicate requires specifying a name
+])
+AT_CHECK([ovn-nbctl --may-exist lswitch-add], [1], [],
+  [ovn-nbctl: --may-exist requires specifying a name
+])
 
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP

@@ -431,10 +431,37 @@ nbctl_show(struct ctl_context *ctx)
 static void
 nbctl_lswitch_add(struct ctl_context *ctx)
 {
+    const char *lswitch_name = ctx->argc == 2 ? ctx->argv[1] : NULL;
+
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
+    bool add_duplicate = shash_find(&ctx->options, "--add-duplicate") != NULL;
+    if (may_exist && add_duplicate) {
+        ctl_fatal("--may-exist and --add-duplicate may not be used together");
+    }
+
+    if (lswitch_name) {
+        if (!add_duplicate) {
+            const struct nbrec_logical_switch *lswitch;
+            NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->idl) {
+                if (!strcmp(lswitch->name, lswitch_name)) {
+                    if (may_exist) {
+                        return;
+                    }
+                    ctl_fatal("%s: an lswitch with this name already exists",
+                              lswitch_name);
+                }
+            }
+        }
+    } else if (may_exist) {
+        ctl_fatal("--may-exist requires specifying a name");
+    } else if (add_duplicate) {
+        ctl_fatal("--add-duplicate requires specifying a name");
+    }
+
     struct nbrec_logical_switch *lswitch;
     lswitch = nbrec_logical_switch_insert(ctx->txn);
-    if (ctx->argc == 2) {
-        nbrec_logical_switch_set_name(lswitch, ctx->argv[1]);
+    if (lswitch_name) {
+        nbrec_logical_switch_set_name(lswitch, lswitch_name);
     }
 }
 
@@ -1310,7 +1337,7 @@ static const struct ctl_command_syntax nbctl_commands[] = {
 
     /* lswitch commands. */
     { "lswitch-add", 0, 1, "[LSWITCH]", NULL, nbctl_lswitch_add,
-      NULL, "", RW },
+      NULL, "--may-exist,--add-duplicate", RW },
     { "lswitch-del", 1, 1, "LSWITCH", NULL, nbctl_lswitch_del,
       NULL, "--if-exists", RW },
     { "lswitch-list", 0, 0, "", NULL, nbctl_lswitch_list, NULL, "", RO },
