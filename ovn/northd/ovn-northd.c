@@ -690,11 +690,24 @@ ovn_port_update_sbrec(const struct ovn_port *op)
 {
     sbrec_port_binding_set_datapath(op->sb, op->od->sb);
     if (op->nbr) {
-        sbrec_port_binding_set_type(op->sb, "patch");
+        /* If the router is for l3 gateway, it resides on a chassis
+         * and its port type is "gateway". */
+        const char *chassis = smap_get(&op->od->nbr->options, "chassis");
+        if (chassis) {
+            sbrec_port_binding_set_type(op->sb, "gateway");
+        } else {
+            sbrec_port_binding_set_type(op->sb, "patch");
+        }
 
         const char *peer = op->peer ? op->peer->key : "<error>";
-        const struct smap ids = SMAP_CONST1(&ids, "peer", peer);
-        sbrec_port_binding_set_options(op->sb, &ids);
+        struct smap new;
+        smap_init(&new);
+        smap_add(&new, "peer", peer);
+        if (chassis) {
+            smap_add(&new, "gateway-chassis", chassis);
+        }
+        sbrec_port_binding_set_options(op->sb, &new);
+        smap_destroy(&new);
 
         sbrec_port_binding_set_parent_port(op->sb, NULL);
         sbrec_port_binding_set_tag(op->sb, NULL, 0);
@@ -704,15 +717,32 @@ ovn_port_update_sbrec(const struct ovn_port *op)
             sbrec_port_binding_set_type(op->sb, op->nbs->type);
             sbrec_port_binding_set_options(op->sb, &op->nbs->options);
         } else {
-            sbrec_port_binding_set_type(op->sb, "patch");
+            const char *chassis = NULL;
+            if (op->peer && op->peer->od && op->peer->od->nbr) {
+                chassis = smap_get(&op->peer->od->nbr->options, "chassis");
+            }
+
+            /* A switch port connected to a gateway router is also of
+             * type "gateway". */
+            if (chassis) {
+                sbrec_port_binding_set_type(op->sb, "gateway");
+            } else {
+                sbrec_port_binding_set_type(op->sb, "patch");
+            }
 
             const char *router_port = smap_get(&op->nbs->options,
                                                "router-port");
             if (!router_port) {
                 router_port = "<error>";
             }
-            const struct smap ids = SMAP_CONST1(&ids, "peer", router_port);
-            sbrec_port_binding_set_options(op->sb, &ids);
+            struct smap new;
+            smap_init(&new);
+            smap_add(&new, "peer", router_port);
+            if (chassis) {
+                smap_add(&new, "gateway-chassis", chassis);
+            }
+            sbrec_port_binding_set_options(op->sb, &new);
+            smap_destroy(&new);
         }
         sbrec_port_binding_set_parent_port(op->sb, op->nbs->parent_name);
         sbrec_port_binding_set_tag(op->sb, op->nbs->tag, op->nbs->n_tag);

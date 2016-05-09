@@ -200,7 +200,8 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                 }
                 sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
             }
-        } else if (chassis_rec && binding_rec->chassis == chassis_rec) {
+        } else if (chassis_rec && binding_rec->chassis == chassis_rec
+                   && strcmp(binding_rec->type, "gateway")) {
             if (ctx->ovnsb_idl_txn) {
                 VLOG_INFO("Releasing lport %s from this chassis.",
                           binding_rec->logical_port);

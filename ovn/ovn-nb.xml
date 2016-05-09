@@ -630,6 +630,21 @@
       column is set to <code>false</code>, the router is disabled.  A disabled
       router has all ingress and egress traffic dropped.
     </column>
+
+    <group title="Options">
+      <p>
+        Additional options for the logical router.
+      </p>
+
+      <column name="options" key="chassis">
+        If set, indicates that the logical router in question is
+        a Gateway router (which is centralized) and resides in the set
+        chassis.  The same value is also used by <code>ovn-controller</code>
+        to uniquely identify the chassis in the OVN deployment and
+        comes from <code>external_ids:system-id</code> in the
+        <code>Open_vSwitch</code> table of Open_vSwitch database.
+      </column>
+    </group>
     
     <group title="Common Columns">
       <column name="external_ids">

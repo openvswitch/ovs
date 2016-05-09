@@ -364,8 +364,9 @@ main(int argc, char *argv[])
                     &local_datapaths);
         }
 
-        if (br_int) {
-            patch_run(&ctx, br_int, &local_datapaths, &patched_datapaths);
+        if (br_int && chassis_id) {
+            patch_run(&ctx, br_int, chassis_id, &local_datapaths,
+                      &patched_datapaths);
 
             struct lport_index lports;
             struct mcgroup_index mcgroups;
