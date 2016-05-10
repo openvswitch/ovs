@@ -1819,6 +1819,7 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 
     if (rte_eth_stats_get(dev->port_id, &rte_stats)) {
         VLOG_ERR("Can't get ETH statistics for port: %i.", dev->port_id);
+        ovs_mutex_unlock(&dev->mutex);
         return EPROTO;
     }
 
