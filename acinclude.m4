@@ -464,7 +464,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_reset_mac_len])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_unclone])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_orphan_frags])
-  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_get_hash])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_get_hash(],
+                  [OVS_DEFINE([HAVE_SKB_GET_HASH])])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_clear_hash])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [int.skb_zerocopy(],
                   [OVS_DEFINE([HAVE_SKB_ZEROCOPY])])
