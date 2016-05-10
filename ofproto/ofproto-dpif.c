@@ -3656,6 +3656,16 @@ rule_expire(struct rule_dpif *rule)
     }
 }
 
+static void
+ofproto_dpif_set_packet_odp_port(const struct ofproto_dpif *ofproto,
+                                 ofp_port_t in_port, struct dp_packet *packet)
+{
+    if (in_port == OFPP_NONE) {
+        in_port = OFPP_LOCAL;
+    }
+    packet->md.in_port.odp_port = ofp_port_to_odp_port(ofproto, in_port);
+}
+
 int
 ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
                                const struct flow *flow,
@@ -3667,7 +3677,6 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
     struct dpif_flow_stats stats;
     struct xlate_out xout;
     struct xlate_in xin;
-    ofp_port_t in_port;
     struct dpif_execute execute;
     int error;
 
@@ -3704,11 +3713,7 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
     execute.mtu = 0;
 
     /* Fix up in_port. */
-    in_port = flow->in_port.ofp_port;
-    if (in_port == OFPP_NONE) {
-        in_port = OFPP_LOCAL;
-    }
-    execute.packet->md.in_port.odp_port = ofp_port_to_odp_port(ofproto, in_port);
+    ofproto_dpif_set_packet_odp_port(ofproto, flow->in_port.ofp_port, packet);
 
     error = dpif_execute(ofproto->backer->dpif, &execute);
 out:
@@ -4398,6 +4403,13 @@ nxt_resume(struct ofproto *ofproto_,
     struct dp_packet packet;
     dp_packet_init(&packet, pin->public.packet_len);
     dp_packet_put(&packet, pin->public.packet, pin->public.packet_len);
+
+    pkt_metadata_from_flow(&packet.md, &pin->public.flow_metadata.flow);
+
+    /* Fix up in_port. */
+    ofproto_dpif_set_packet_odp_port(ofproto,
+                                     pin->public.flow_metadata.flow.in_port.ofp_port,
+                                     &packet);
 
     struct flow headers;
     flow_extract(&packet, &headers);
