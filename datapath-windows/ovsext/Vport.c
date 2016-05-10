@@ -404,7 +404,6 @@ HvConnectNic(POVS_SWITCH_CONTEXT switchContext,
 {
     LOCK_STATE_EX lockState;
     POVS_VPORT_ENTRY vport;
-    UINT32 portNo;
 
     VPORT_NIC_ENTER(nicParam);
 
@@ -430,7 +429,6 @@ HvConnectNic(POVS_SWITCH_CONTEXT switchContext,
 
     vport->ovsState = OVS_STATE_CONNECTED;
     vport->nicState = NdisSwitchNicStateConnected;
-    portNo = vport->portNo;
 
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
 
@@ -1641,7 +1639,7 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
                                                  OVS_MAX_PORT_NAME_LENGTH);
         if (status != STATUS_SUCCESS) {
             OVS_LOG_INFO("Fail to convert NIC name.");
-            extInfo->vmUUID[0] = 0;
+            extInfo->name[0] = 0;
         }
 
         status = OvsConvertIfCountedStrToAnsiStr(&vport->vmName,
