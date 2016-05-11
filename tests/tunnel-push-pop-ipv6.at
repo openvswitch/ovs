@@ -56,9 +56,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive br0 'in_port(100),eth(src=f8:bc:12:44:
 
 AT_CHECK([ovs-appctl netdev-dummy/receive br0 'in_port(100),eth(src=f8:bc:12:44:34:b7,dst=aa:55:aa:55:00:00),eth_type(0x86dd),ipv6(src=2001:cafe::93,dst=2001:cafe::94,label=0,proto=58,tclass=0,hlimit=255,frag=no),icmpv6(type=136,code=0),nd(target=2001:cafe::93,sll=00:00:00:00:00:00,tll=f8:bc:12:44:34:b7)'])
 
-AT_CHECK([ovs-appctl tnl/arp/show], [0], [dnl
-IP                                            MAC                 Bridge
-==========================================================================
+AT_CHECK([ovs-appctl tnl/arp/show | tail -n+3 | sort], [0], [dnl
 2001:cafe::92                                 f8:bc:12:44:34:b6   br0
 2001:cafe::93                                 f8:bc:12:44:34:b7   br0
 ])

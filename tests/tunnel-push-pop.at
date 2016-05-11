@@ -56,9 +56,7 @@ dnl Check ARP Snoop
 AT_CHECK([ovs-appctl netdev-dummy/receive br0 'recirc_id(0),in_port(100),eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive br0 'recirc_id(0),in_port(100),eth(src=f8:bc:12:44:34:b7,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.93,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b7,tha=00:00:00:00:00:00)'])
 
-AT_CHECK([ovs-appctl tnl/neigh/show], [0], [dnl
-IP                                            MAC                 Bridge
-==========================================================================
+AT_CHECK([ovs-appctl tnl/neigh/show | tail -n+3 | sort], [0], [dnl
 1.1.2.92                                      f8:bc:12:44:34:b6   br0
 1.1.2.93                                      f8:bc:12:44:34:b7   br0
 ])
