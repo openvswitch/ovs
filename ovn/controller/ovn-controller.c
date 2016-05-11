@@ -40,6 +40,7 @@
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-sb-idl.h"
+#include "ovn/lib/ovn-util.h"
 #include "patch.h"
 #include "physical.h"
 #include "pinctrl.h"
@@ -254,29 +255,50 @@ get_ovnsb_remote_probe_interval(struct ovsdb_idl *ovs_idl, int *value)
 }
 
 static void
-update_ct_zones(struct sset *lports, struct simap *ct_zones,
-                unsigned long *ct_zone_bitmap)
+update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
+                struct simap *ct_zones, unsigned long *ct_zone_bitmap)
 {
     struct simap_node *ct_zone, *ct_zone_next;
-    const char *iface_id;
     int scan_start = 1;
+    struct patched_datapath *pd;
+    const char *user;
+    struct sset all_users = SSET_INITIALIZER(&all_users);
 
-    /* xxx This is wasteful to assign a zone to each port--even if no
-     * xxx security policy is applied. */
+    SSET_FOR_EACH(user, lports) {
+        sset_add(&all_users, user);
+    }
 
-    /* Delete any zones that are associated with removed ports. */
+    /* Local patched datapath (gateway routers) need zones assigned. */
+    HMAP_FOR_EACH(pd, hmap_node, patched_datapaths) {
+        if (!pd->local) {
+            continue;
+        }
+
+        char *dnat = alloc_nat_zone_key(pd->port_binding, "dnat");
+        char *snat = alloc_nat_zone_key(pd->port_binding, "snat");
+        sset_add(&all_users, dnat);
+        sset_add(&all_users, snat);
+        free(dnat);
+        free(snat);
+    }
+
+    /* Delete zones that do not exist in above sset. */
     SIMAP_FOR_EACH_SAFE(ct_zone, ct_zone_next, ct_zones) {
-        if (!sset_contains(lports, ct_zone->name)) {
+        if (!sset_contains(&all_users, ct_zone->name)) {
             bitmap_set0(ct_zone_bitmap, ct_zone->data);
             simap_delete(ct_zones, ct_zone);
         }
     }
 
-    /* Assign a unique zone id for each logical port. */
-    SSET_FOR_EACH(iface_id, lports) {
+    /* xxx This is wasteful to assign a zone to each port--even if no
+     * xxx security policy is applied. */
+
+    /* Assign a unique zone id for each logical port and two zones
+     * to a gateway router. */
+    SSET_FOR_EACH(user, &all_users) {
         size_t zone;
 
-        if (simap_contains(ct_zones, iface_id)) {
+        if (simap_contains(ct_zones, user)) {
             continue;
         }
 
@@ -290,12 +312,14 @@ update_ct_zones(struct sset *lports, struct simap *ct_zones,
         scan_start = zone + 1;
 
         bitmap_set1(ct_zone_bitmap, zone);
-        simap_put(ct_zones, iface_id, zone);
+        simap_put(ct_zones, user, zone);
 
         /* xxx We should erase any old entries for this
          * xxx zone, but we need a generic interface to the conntrack
          * xxx table. */
     }
+
+    sset_destroy(&all_users);
 }
 
 int
@@ -423,7 +447,8 @@ main(int argc, char *argv[])
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
             pinctrl_run(&ctx, &lports, br_int, chassis_id, &local_datapaths);
-            update_ct_zones(&all_lports, &ct_zones, ct_zone_bitmap);
+            update_ct_zones(&all_lports, &patched_datapaths, &ct_zones,
+                            ct_zone_bitmap);
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
             lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,

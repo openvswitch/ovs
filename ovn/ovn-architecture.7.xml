@@ -669,12 +669,22 @@
       </p>
     </dd>
 
-    <dt>conntrack zone field</dt>
+    <dt>conntrack zone field for logical ports</dt>
     <dd>
-      A field that denotes the connection tracking zone.  The value only
-      has local significance and is not meaningful between chassis.
-      This is initialized to 0 at the beginning of the logical ingress
-      pipeline.  OVN stores this in Nicira extension register number 5.
+      A field that denotes the connection tracking zone for logical ports.
+      The value only has local significance and is not meaningful between
+      chassis.  This is initialized to 0 at the beginning of the logical
+      ingress pipeline.  OVN stores this in Nicira extension register number 5.
+    </dd>
+
+    <dt>conntrack zone fields for Gateway router</dt>
+    <dd>
+      Fields that denote the connection tracking zones for Gateway routers.
+      These values only have local significance (only on chassis that have
+      Gateway routers instantiated) and is not meaningful between
+      chassis.  OVN stores the zone information for DNATting in Nicira
+      extension register number 3 and zone information for SNATing in Nicira
+      extension register number 4.
     </dd>
 
     <dt>VLAN ID</dt>
