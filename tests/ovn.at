@@ -507,6 +507,23 @@ ip.ttl => Syntax error at end of input expecting `--'.
 ct_next; => actions=ct(table=27,zone=NXM_NX_REG5[0..15]), prereqs=ip
 ct_commit; => actions=ct(commit,zone=NXM_NX_REG5[0..15]), prereqs=ip
 
+# dnat
+ct_dnat; => actions=ct(table=27,zone=NXM_NX_REG3[0..15],nat), prereqs=ip
+ct_dnat(192.168.1.2); => actions=ct(commit,table=27,zone=NXM_NX_REG3[0..15],nat(dst=192.168.1.2)), prereqs=ip
+ct_dnat(192.168.1.2, 192.168.1.3); => Syntax error at `,' expecting `)'.
+ct_dnat(foo); => Syntax error at `foo' invalid ip.
+ct_dnat(foo, bar); => Syntax error at `foo' invalid ip.
+ct_dnat(); => Syntax error at `)' invalid ip.
+
+# snat
+ct_snat; => actions=ct(zone=NXM_NX_REG4[0..15],nat), prereqs=ip
+ct_snat(192.168.1.2); => actions=ct(commit,table=27,zone=NXM_NX_REG4[0..15],nat(src=192.168.1.2)), prereqs=ip
+ct_snat(192.168.1.2, 192.168.1.3); => Syntax error at `,' expecting `)'.
+ct_snat(foo); => Syntax error at `foo' invalid ip.
+ct_snat(foo, bar); => Syntax error at `foo' invalid ip.
+ct_snat(); => Syntax error at `)' invalid ip.
+
+
 # arp
 arp { eth.dst = ff:ff:ff:ff:ff:ff; output; }; => actions=controller(userdata=00.00.00.00.00.00.00.00.00.19.00.10.80.00.06.06.ff.ff.ff.ff.ff.ff.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00), prereqs=ip4
 

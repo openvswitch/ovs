@@ -442,6 +442,85 @@ emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
     add_prerequisite(ctx, "ip");
 }
 
+static void
+parse_ct_nat(struct action_context *ctx, bool snat)
+{
+    const size_t ct_offset = ctx->ofpacts->size;
+    ofpbuf_pull(ctx->ofpacts, ct_offset);
+
+    struct ofpact_conntrack *ct = ofpact_put_CT(ctx->ofpacts);
+
+    if (ctx->ap->cur_ltable < ctx->ap->n_tables) {
+        ct->recirc_table = ctx->ap->first_ptable + ctx->ap->cur_ltable + 1;
+    } else {
+        action_error(ctx,
+                     "\"ct_[sd]nat\" action not allowed in last table.");
+        return;
+    }
+
+    if (snat) {
+        ct->zone_src.field = mf_from_id(MFF_LOG_SNAT_ZONE);
+    } else {
+        ct->zone_src.field = mf_from_id(MFF_LOG_DNAT_ZONE);
+    }
+    ct->zone_src.ofs = 0;
+    ct->zone_src.n_bits = 16;
+    ct->flags = 0;
+    ct->alg = 0;
+
+    add_prerequisite(ctx, "ip");
+
+    struct ofpact_nat *nat;
+    size_t nat_offset;
+    nat_offset = ctx->ofpacts->size;
+    ofpbuf_pull(ctx->ofpacts, nat_offset);
+
+    nat = ofpact_put_NAT(ctx->ofpacts);
+    nat->flags = 0;
+    nat->range_af = AF_UNSPEC;
+
+    int commit = 0;
+    if (lexer_match(ctx->lexer, LEX_T_LPAREN)) {
+        ovs_be32 ip;
+        if (ctx->lexer->token.type == LEX_T_INTEGER
+            && ctx->lexer->token.format == LEX_F_IPV4) {
+            ip = ctx->lexer->token.value.ipv4;
+        } else {
+            action_syntax_error(ctx, "invalid ip");
+            return;
+        }
+
+        nat->range_af = AF_INET;
+        nat->range.addr.ipv4.min = ip;
+        if (snat) {
+            nat->flags |= NX_NAT_F_SRC;
+        } else {
+            nat->flags |= NX_NAT_F_DST;
+        }
+        commit = NX_CT_F_COMMIT;
+        lexer_get(ctx->lexer);
+        if (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
+            action_syntax_error(ctx, "expecting `)'");
+            return;
+        }
+    }
+
+    ctx->ofpacts->header = ofpbuf_push_uninit(ctx->ofpacts, nat_offset);
+    ct = ctx->ofpacts->header;
+    ct->flags |= commit;
+
+    /* XXX: For performance reasons, we try to prevent additional
+     * recirculations.  So far, ct_snat which is used in a gateway router
+     * does not need a recirculation. ct_snat(IP) does need a recirculation.
+     * Should we consider a method to let the actions specify whether a action
+     * needs recirculation if there more use cases?. */
+    if (!commit && snat) {
+        ct->recirc_table = NX_CT_RECIRC_NONE;
+    }
+    ofpact_finish(ctx->ofpacts, &ct->ofpact);
+    ofpbuf_push_uninit(ctx->ofpacts, ct_offset);
+}
+
 static bool
 parse_action(struct action_context *ctx)
 {
@@ -469,6 +548,10 @@ parse_action(struct action_context *ctx)
         emit_ct(ctx, true, false);
     } else if (lexer_match_id(ctx->lexer, "ct_commit")) {
         emit_ct(ctx, false, true);
+    } else if (lexer_match_id(ctx->lexer, "ct_dnat")) {
+        parse_ct_nat(ctx, false);
+    } else if (lexer_match_id(ctx->lexer, "ct_snat")) {
+        parse_ct_nat(ctx, true);
     } else if (lexer_match_id(ctx->lexer, "arp")) {
         parse_arp_action(ctx);
     } else if (lexer_match_id(ctx->lexer, "get_arp")) {
