@@ -1359,7 +1359,7 @@ group_is_alive(const struct xlate_ctx *ctx, uint32_t group_id, int depth)
 
         bucket = group_first_live_bucket(ctx, group, depth);
         group_dpif_unref(group);
-        return bucket == NULL;
+        return bucket != NULL;
     }
 
     return false;
