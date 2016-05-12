@@ -508,6 +508,18 @@ print_human_size(struct dpctl_params *dpctl_p, uint64_t value)
     }
 }
 
+/* qsort comparison function. */
+static int
+compare_port_nos(const void *a_, const void *b_)
+{
+    const odp_port_t *ap = a_;
+    const odp_port_t *bp = b_;
+    uint32_t a = odp_to_u32(*ap);
+    uint32_t b = odp_to_u32(*bp);
+
+    return a < b ? -1 : a > b;
+}
+
 static void
 show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
 {
@@ -531,7 +543,25 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
         }
     }
 
+    odp_port_t *port_nos = NULL;
+    size_t allocated_port_nos = 0, n_port_nos = 0;
     DPIF_PORT_FOR_EACH (&dpif_port, &dump, dpif) {
+        if (n_port_nos >= allocated_port_nos) {
+            port_nos = x2nrealloc(port_nos, &allocated_port_nos,
+                                  sizeof *port_nos);
+        }
+
+        port_nos[n_port_nos] = dpif_port.port_no;
+        n_port_nos++;
+    }
+
+    qsort(port_nos, n_port_nos, sizeof *port_nos, compare_port_nos);
+
+    for (int i = 0; i < n_port_nos; i++) {
+        if (dpif_port_query_by_number(dpif, port_nos[i], &dpif_port)) {
+            continue;
+        }
+
         dpctl_print(dpctl_p, "\tport %u: %s",
                     dpif_port.port_no, dpif_port.name);
 
@@ -580,6 +610,7 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
             if (error) {
                 dpctl_print(dpctl_p, ", open failed (%s)",
                             ovs_strerror(error));
+                dpif_port_destroy(&dpif_port);
                 continue;
             }
             error = netdev_get_stats(netdev, &s);
@@ -612,7 +643,10 @@ show_dpif(struct dpif *dpif, struct dpctl_params *dpctl_p)
                             ovs_strerror(error));
             }
         }
+        dpif_port_destroy(&dpif_port);
     }
+
+    free(port_nos);
 }
 
 typedef void (*dps_for_each_cb)(struct dpif *, struct dpctl_params *);
