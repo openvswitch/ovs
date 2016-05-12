@@ -152,6 +152,10 @@ check-lcov: all tests/atconfig tests/atlocal $(TESTSUITE) $(check_DATA) clean-lc
 # valgrind support
 
 valgrind_wrappers = \
+	tests/valgrind/ovn-controller \
+	tests/valgrind/ovn-nbctl \
+	tests/valgrind/ovn-northd \
+	tests/valgrind/ovn-sbctl \
 	tests/valgrind/ovs-appctl \
 	tests/valgrind/ovs-ofctl \
 	tests/valgrind/ovstest \
