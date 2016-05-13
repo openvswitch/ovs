@@ -323,6 +323,7 @@ main(int argc, char *argv[])
     /* Initialize connection tracking zones. */
     struct simap ct_zones = SIMAP_INITIALIZER(&ct_zones);
     unsigned long ct_zone_bitmap[BITMAP_N_LONGS(MAX_CT_ZONES)];
+    memset(ct_zone_bitmap, 0, sizeof ct_zone_bitmap);
     bitmap_set1(ct_zone_bitmap, 0); /* Zone 0 is reserved. */
     unixctl_command_register("ct-zone-list", "", 0, 0,
                              ct_zone_list, &ct_zones);
