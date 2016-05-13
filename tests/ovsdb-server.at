@@ -270,6 +270,7 @@ AT_CHECK([kill -SEGV `cat ovsdb-server.pid`])
 OVS_WAIT_WHILE([kill -0 `cat old.pid`])
 OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
+OVS_WAIT_UNTIL([ovs-appctl -t ovsdb-server version])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
   [0], [constraints
 ordinals
@@ -301,6 +302,7 @@ AT_CHECK([kill -SEGV `cat ovsdb-server.pid`])
 OVS_WAIT_WHILE([kill -0 `cat old.pid`])
 OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
+OVS_WAIT_UNTIL([ovs-appctl -t ovsdb-server version])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-dbs],
   [0], [ordinals
 ])
@@ -450,6 +452,7 @@ AT_CHECK([kill -SEGV `cat ovsdb-server.pid`])
 OVS_WAIT_WHILE([kill -0 `cat old.pid`])
 OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
+OVS_WAIT_UNTIL([ovs-appctl -t ovsdb-server version])
 OVS_WAIT_UNTIL([test -S socket1])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
@@ -484,6 +487,7 @@ AT_CHECK([kill -SEGV `cat ovsdb-server.pid`])
 OVS_WAIT_WHILE([kill -0 `cat old.pid`])
 OVS_WAIT_UNTIL(
   [test -s ovsdb-server.pid && test `cat ovsdb-server.pid` != `cat old.pid`])
+OVS_WAIT_UNTIL([ovs-appctl -t ovsdb-server version])
 AT_CHECK([test ! -e socket1])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
