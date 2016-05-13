@@ -199,7 +199,7 @@ OVN_NB_ADD_VTEP_PORT([br-test], [br-vtep_lswitch1], [br-vtep], [lswitch1])
 OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Port_Binding | grep -- br-vtep_lswitch1`"])
 # This is allowed, but not recommended, to have two vlan_bindings (to different vtep logical switches)
 # from one vtep gateway physical port in one ovn-nb logical swithch.
-AT_CHECK_UNQUOTED([ovn-sbctl --columns=chassis list Port_Binding | cut -d ':' -f2 | tr -d ' ' | sort -d], [0], [dnl
+AT_CHECK_UNQUOTED([ovn-sbctl --columns=chassis list Port_Binding | cut -d ':' -f2 | tr -d ' ' | sort], [0], [dnl
 
 ${chassis_uuid}
 ${chassis_uuid}
@@ -211,7 +211,7 @@ OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Port_Binding | grep -- br-vtep_lswitch0
 # it is not allowed to have more than one ovn-nb logical port for the same
 # vtep logical switch on a vtep gateway chassis, so should still see only
 # two port_binding entries bound.
-AT_CHECK_UNQUOTED([ovn-sbctl --columns=chassis list Port_Binding | cut -d ':' -f2 | tr -d ' ' | sort -d], [0], [dnl
+AT_CHECK_UNQUOTED([ovn-sbctl --columns=chassis list Port_Binding | cut -d ':' -f2 | tr -d ' ' | sort | sort -d], [0], [dnl
 
 
 [[]]
