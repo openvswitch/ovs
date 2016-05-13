@@ -15,15 +15,17 @@
  */
 
 #include <config.h>
-#include "command-line.h"
 #include <errno.h>
 #include <getopt.h>
 #include <sys/wait.h>
-#include "dynamic-string.h"
+#include "command-line.h"
 #include "fatal-signal.h"
-#include "match.h"
-#include "ofp-actions.h"
-#include "ofpbuf.h"
+#include "flow.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/match.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "ovn/lib/actions.h"
 #include "ovn/lib/expr.h"
 #include "ovn/lib/lex.h"
@@ -32,7 +34,6 @@
 #include "shash.h"
 #include "simap.h"
 #include "util.h"
-#include "openvswitch/vlog.h"
 
 /* --relops: Bitmap of the relational operators to test, in exhaustive test. */
 static unsigned int test_relops;
@@ -238,6 +239,18 @@ create_symtab(struct shash *symtab)
     expr_symtab_add_string(symtab, "big_string", MFF_XREG0, NULL);
 }
 
+static bool
+lookup_port_cb(const void *ports_, const char *port_name, unsigned int *portp)
+{
+    const struct simap *ports = ports_;
+    const struct simap_node *node = simap_find(ports, port_name);
+    if (!node) {
+        return false;
+    }
+    *portp = node->data;
+    return true;
+}
+
 static void
 test_parse_expr__(int steps)
 {
@@ -274,7 +287,7 @@ test_parse_expr__(int steps)
             if (steps > 3) {
                 struct hmap matches;
 
-                expr_to_matches(expr, &ports, &matches);
+                expr_to_matches(expr, lookup_port_cb, &ports, &matches);
                 expr_matches_print(&matches, stdout);
                 expr_matches_destroy(&matches);
             } else {
@@ -829,7 +842,7 @@ build_simple_tree(enum expr_type type, int n, struct expr ***terminalp)
         struct expr *e = expr_create_andor(type);
         for (int i = 0; i < 2; i++) {
             struct expr *sub = make_terminal(terminalp);
-            list_push_back(&e->andor, &sub->node);
+            ovs_list_push_back(&e->andor, &sub->node);
         }
         return e;
     } else if (n == 1) {
@@ -852,7 +865,7 @@ build_tree_shape(enum expr_type type, const struct tree_shape **tsp,
         struct expr *sub = (ts->s[i] > 2
                             ? build_tree_shape(t, tsp, terminalp)
                             : build_simple_tree(t, ts->s[i], terminalp));
-        list_push_back(&e->andor, &sub->node);
+        ovs_list_push_back(&e->andor, &sub->node);
     }
     return e;
 }
@@ -934,7 +947,7 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
             struct expr_match *m;
             struct test_rule *test_rule;
 
-            expr_to_matches(modified, &string_map, &matches);
+            expr_to_matches(modified, lookup_port_cb, &string_map, &matches);
 
             classifier_init(&cls, NULL);
             HMAP_FOR_EACH (m, hmap_node, &matches) {
@@ -1229,13 +1242,15 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
 
         struct action_params ap = {
             .symtab = &symtab,
-            .ports = &ports,
+            .lookup_port = lookup_port_cb,
+            .aux = &ports,
             .ct_zones = &ct_zones,
 
             .n_tables = 16,
             .first_ptable = 16,
             .cur_ltable = 10,
             .output_ptable = 64,
+            .arp_ptable = 65,
         };
         error = actions_parse_string(ds_cstr(&input), &ap, &ofpacts, &prereqs);
         if (!error) {

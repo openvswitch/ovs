@@ -20,14 +20,11 @@
 #include <errno.h>
 #include <netinet/in.h>
 #include "byte-order.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "odp-util.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "packets.h"
 #include "util.h"
-#include "openvswitch/vlog.h"
-
-VLOG_DEFINE_THIS_MODULE(classifier);
 
 struct trie_ctx;
 
@@ -172,7 +169,7 @@ cls_rule_init__(struct cls_rule *rule, unsigned int priority)
 {
     rculist_init(&rule->node);
     *CONST_CAST(int *, &rule->priority) = priority;
-    rule->cls_match = NULL;
+    ovsrcu_init(&rule->cls_match, NULL);
 }
 
 /* Initializes 'rule' to match packets specified by 'match' at the given
@@ -230,7 +227,8 @@ void
 cls_rule_destroy(struct cls_rule *rule)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
-    ovs_assert(!rule->cls_match);   /* Must not be in a classifier. */
+    /* Must not be in a classifier. */
+    ovs_assert(!get_cls_match_protected(rule));
 
     /* Check that the rule has been properly removed from the classifier. */
     ovs_assert(rule->node.prev == RCULIST_POISON
@@ -240,11 +238,12 @@ cls_rule_destroy(struct cls_rule *rule)
     minimatch_destroy(CONST_CAST(struct minimatch *, &rule->match));
 }
 
+/* This may only be called by the exclusive writer. */
 void
 cls_rule_set_conjunctions(struct cls_rule *cr,
                           const struct cls_conjunction *conj, size_t n)
 {
-    struct cls_match *match = cr->cls_match;
+    struct cls_match *match = get_cls_match_protected(cr);
     struct cls_conjunction_set *old
         = ovsrcu_get_protected(struct cls_conjunction_set *, &match->conj_set);
     struct cls_conjunction *old_conj = old ? old->conj : NULL;
@@ -285,23 +284,28 @@ cls_rule_is_catchall(const struct cls_rule *rule)
 /* Makes 'rule' invisible in 'remove_version'.  Once that version is used in
  * lookups, the caller should remove 'rule' via ovsrcu_postpone().
  *
- * 'rule' must be in a classifier. */
+ * 'rule' must be in a classifier.
+ * This may only be called by the exclusive writer. */
 void
 cls_rule_make_invisible_in_version(const struct cls_rule *rule,
                                    cls_version_t remove_version)
 {
-    ovs_assert(remove_version >= rule->cls_match->add_version);
+    struct cls_match *cls_match = get_cls_match_protected(rule);
 
-    cls_match_set_remove_version(rule->cls_match, remove_version);
+    ovs_assert(remove_version >= cls_match->add_version);
+
+    cls_match_set_remove_version(cls_match, remove_version);
 }
 
 /* This undoes the change made by cls_rule_make_invisible_in_version().
  *
- * 'rule' must be in a classifier. */
+ * 'rule' must be in a classifier.
+ * This may only be called by the exclusive writer. */
 void
 cls_rule_restore_visibility(const struct cls_rule *rule)
 {
-    cls_match_set_remove_version(rule->cls_match, CLS_NOT_REMOVED_VERSION);
+    cls_match_set_remove_version(get_cls_match_protected(rule),
+                                 CLS_NOT_REMOVED_VERSION);
 }
 
 /* Return true if 'rule' is visible in 'version'.
@@ -310,7 +314,9 @@ cls_rule_restore_visibility(const struct cls_rule *rule)
 bool
 cls_rule_visible_in_version(const struct cls_rule *rule, cls_version_t version)
 {
-    return cls_match_visible_in_version(rule->cls_match, version);
+    struct cls_match *cls_match = get_cls_match(rule);
+
+    return cls_match && cls_match_visible_in_version(cls_match, version);
 }
 
 /* Initializes 'cls' as a classifier that initially contains no classification
@@ -540,8 +546,7 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
 
     /* 'new' is initially invisible to lookups. */
     new = cls_match_alloc(rule, version, conjs, n_conjs);
-
-    CONST_CAST(struct cls_rule *, rule)->cls_match = new;
+    ovsrcu_set(&CONST_CAST(struct cls_rule *, rule)->cls_match, new);
 
     subtable = find_subtable(cls, rule->match.mask);
     if (!subtable) {
@@ -636,8 +641,9 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
                     ovsrcu_postpone(free, conj_set);
                 }
 
+                ovsrcu_set(&old->cls_match, NULL); /* Marks old rule as removed
+                                                    * from the classifier. */
                 ovsrcu_postpone(cls_match_free_cb, iter);
-                old->cls_match = NULL;
 
                 /* No change in subtable's max priority or max count. */
 
@@ -728,12 +734,12 @@ classifier_remove(struct classifier *cls, const struct cls_rule *cls_rule)
     size_t n_rules;
     unsigned int i;
 
-    rule = cls_rule->cls_match;
+    rule = get_cls_match_protected(cls_rule);
     if (!rule) {
         return NULL;
     }
     /* Mark as removed. */
-    CONST_CAST(struct cls_rule *, cls_rule)->cls_match = NULL;
+    ovsrcu_set(&CONST_CAST(struct cls_rule *, cls_rule)->cls_match, NULL);
 
     /* Remove 'cls_rule' from the subtable's rules list. */
     rculist_remove(CONST_CAST(struct rculist *, &cls_rule->node));
@@ -1261,7 +1267,7 @@ classifier_rule_overlaps(const struct classifier *cls,
             if (rule->priority == target->priority
                 && miniflow_equal_in_minimask(target->match.flow,
                                               rule->match.flow, &m.mask)
-                && cls_match_visible_in_version(rule->cls_match, version)) {
+                && cls_rule_visible_in_version(rule, version)) {
                 return true;
             }
         }
@@ -1318,7 +1324,7 @@ rule_matches(const struct cls_rule *rule, const struct cls_rule *target,
              cls_version_t version)
 {
     /* Rule may only match a target if it is visible in target's version. */
-    return cls_match_visible_in_version(rule->cls_match, version)
+    return cls_rule_visible_in_version(rule, version)
         && (!target || miniflow_equal_in_minimask(rule->match.flow,
                                                   target->match.flow,
                                                   target->match.mask));
@@ -1490,11 +1496,11 @@ insert_subtable(struct classifier *cls, const struct minimask *mask)
     /* Map for the final stage. */
     *CONST_CAST(struct flowmap *, &subtable->index_maps[index])
         = miniflow_get_map_in_range(&mask->masks, prev, FLOW_U64S);
-    /* Check if the final stage adds any bits,
-     * and remove the last index if it doesn't. */
+    /* Check if the final stage adds any bits. */
     if (index > 0) {
-        if (flowmap_equal(subtable->index_maps[index],
-                          subtable->index_maps[index - 1])) {
+        if (flowmap_is_empty(subtable->index_maps[index])) {
+            /* Remove the last index, as it has the same fields as the rules
+             * map. */
             --index;
             cmap_destroy(&subtable->indices[index]);
         }
@@ -1652,54 +1658,6 @@ find_match(const struct cls_subtable *subtable, cls_version_t version,
     return NULL;
 }
 
-/* Returns true if 'target' satisifies 'flow'/'mask', that is, if each bit
- * for which 'flow', for which 'mask' has a bit set, specifies a particular
- * value has the correct value in 'target'.
- *
- * This function is equivalent to miniflow_and_mask_matches_flow() but this
- * version fills in the mask bits in 'wc'. */
-static inline bool
-miniflow_and_mask_matches_flow_wc(const struct miniflow *flow,
-                                  const struct minimask *mask,
-                                  const struct flow *target,
-                                  struct flow_wildcards *wc)
-{
-    const uint64_t *flowp = miniflow_get_values(flow);
-    const uint64_t *maskp = miniflow_get_values(&mask->masks);
-    const uint64_t *target_u64 = (const uint64_t *)target;
-    uint64_t *wc_u64 = (uint64_t *)&wc->masks;
-    uint64_t diff;
-    size_t idx;
-    map_t map;
-
-    FLOWMAP_FOR_EACH_MAP (map, mask->masks.map) {
-        MAP_FOR_EACH_INDEX(idx, map) {
-            uint64_t msk = *maskp++;
-
-            diff = (*flowp++ ^ target_u64[idx]) & msk;
-            if (diff) {
-                goto out;
-            }
-
-            /* Fill in the bits that were looked at. */
-            wc_u64[idx] |= msk;
-        }
-        target_u64 += MAP_T_BITS;
-        wc_u64 += MAP_T_BITS;
-    }
-    return true;
-
-out:
-    /* Only unwildcard if none of the differing bits is already
-     * exact-matched. */
-    if (!(wc_u64[idx] & diff)) {
-        /* Keep one bit of the difference.  The selected bit may be
-         * different in big-endian v.s. little-endian systems. */
-        wc_u64[idx] |= rightmost_1bit(diff);
-    }
-    return false;
-}
-
 static const struct cls_match *
 find_match_wc(const struct cls_subtable *subtable, cls_version_t version,
               const struct flow *flow, struct trie_ctx trie_ctx[CLS_MAX_TRIES],
@@ -1718,8 +1676,6 @@ find_match_wc(const struct cls_subtable *subtable, cls_version_t version,
 
     /* Try to finish early by checking fields in segments. */
     for (i = 0; i < subtable->n_indices; i++) {
-        const struct cmap_node *inode;
-
         if (check_tries(trie_ctx, n_tries, subtable->trie_plen,
                         subtable->index_maps[i], flow, wc)) {
             /* 'wc' bits for the trie field set, now unwildcard the preceding
@@ -1734,31 +1690,8 @@ find_match_wc(const struct cls_subtable *subtable, cls_version_t version,
                                            subtable->index_maps[i],
                                            &mask_offset, &basis);
 
-        inode = cmap_find(&subtable->indices[i], hash);
-        if (!inode) {
+        if (!cmap_find(&subtable->indices[i], hash)) {
             goto no_match;
-        }
-
-        /* If we have narrowed down to a single rule already, check whether
-         * that rule matches.  Either way, we're done.
-         *
-         * (Rare) hash collisions may cause us to miss the opportunity for this
-         * optimization. */
-        if (!cmap_node_next(inode)) {
-            const struct cls_match *head;
-
-            ASSIGN_CONTAINER(head, inode - i, index_nodes);
-            if (miniflow_and_mask_matches_flow_wc(&head->flow, &subtable->mask,
-                                                  flow, wc)) {
-                /* Return highest priority rule that is visible. */
-                CLS_MATCH_FOR_EACH (rule, head) {
-                    if (OVS_LIKELY(cls_match_visible_in_version(rule,
-                                                                version))) {
-                        return rule;
-                    }
-                }
-            }
-            return NULL;
         }
     }
     /* Trie check for the final range. */
@@ -2252,7 +2185,6 @@ trie_remove_prefix(rcu_trie_ptr *root, const ovs_be32 *prefix, int mlen)
     }
     /* Cannot go deeper. This should never happen, since only rules
      * that actually exist in the classifier are ever removed. */
-    VLOG_WARN("Trying to remove non-existing rule from a prefix trie.");
 }
 
 

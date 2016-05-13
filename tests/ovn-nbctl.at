@@ -7,7 +7,7 @@ m4_define([OVN_NBCTL_TEST_START],
    AT_CHECK([ovsdb-tool create ovn-nb.db $abs_top_srcdir/ovn/ovn-nb.ovsschema])
 
    dnl Start ovsdb-server.
-   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/db.sock ovn-nb.db], [0], [], [stderr])
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/ovnnb_db.sock ovn-nb.db], [0], [], [stderr])
    on_exit "kill `cat ovsdb-server.pid`"
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d
@@ -26,7 +26,7 @@ m4_define([OVN_NBCTL_TEST_STOP],
    # database will fail with 'Broken pipe' error.
    AT_CHECK([check_logs "$1
 /Broken pipe/d"])
-   AT_CHECK([ovs-appctl -t ovsdb-server exit])])
+   OVS_APP_EXIT_AND_WAIT([ovsdb-server])])
 
 
 AT_SETUP([ovn-nbctl - basic lswitch commands])
@@ -48,6 +48,40 @@ AT_CHECK([ovn-nbctl lswitch-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (ls1)
 ])
 
+AT_CHECK([ovn-nbctl show ls0])
+AT_CHECK([ovn-nbctl lswitch-add ls0])
+AT_CHECK([ovn-nbctl show ls0 | ${PERL} $srcdir/uuidfilt.pl], [0],
+  [    lswitch <0> (ls0)
+])
+AT_CHECK([ovn-nbctl lswitch-add ls0], [1], [],
+  [ovn-nbctl: ls0: an lswitch with this name already exists
+])
+AT_CHECK([ovn-nbctl --may-exist lswitch-add ls0])
+AT_CHECK([ovn-nbctl show ls0 | ${PERL} $srcdir/uuidfilt.pl], [0],
+  [    lswitch <0> (ls0)
+])
+AT_CHECK([ovn-nbctl --add-duplicate lswitch-add ls0])
+AT_CHECK([ovn-nbctl --may-exist --add-duplicate lswitch-add ls0], [1], [],
+  [ovn-nbctl: --may-exist and --add-duplicate may not be used together
+])
+AT_CHECK([ovn-nbctl lswitch-del ls0], [1], [],
+  [ovn-nbctl: Multiple logical switches named 'ls0'.  Use a UUID.
+])
+
+AT_CHECK([ovn-nbctl lswitch-del ls2], [1], [],
+  [ovn-nbctl: ls2: lswitch name not found
+])
+AT_CHECK([ovn-nbctl --if-exists lswitch-del ls2])
+
+AT_CHECK([ovn-nbctl lswitch-add])
+AT_CHECK([ovn-nbctl lswitch-add])
+AT_CHECK([ovn-nbctl --add-duplicate lswitch-add], [1], [],
+  [ovn-nbctl: --add-duplicate requires specifying a name
+])
+AT_CHECK([ovn-nbctl --may-exist lswitch-add], [1], [],
+  [ovn-nbctl: --may-exist requires specifying a name
+])
+
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP
 
@@ -58,6 +92,10 @@ OVN_NBCTL_TEST_START
 
 AT_CHECK([ovn-nbctl lswitch-add ls0])
 AT_CHECK([ovn-nbctl lport-add ls0 lp0])
+AT_CHECK([ovn-nbctl lport-add ls0 lp0], [1], [],
+  [ovn-nbctl: lp0: an lport with this name already exists
+])
+AT_CHECK([ovn-nbctl --may-exist lport-add ls0 lp0])
 AT_CHECK([ovn-nbctl lport-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lp0)
 ])
@@ -68,9 +106,32 @@ AT_CHECK([ovn-nbctl lport-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <1> (lp1)
 ])
 
+AT_CHECK([ovn-nbctl lswitch-add ls1])
+AT_CHECK([ovn-nbctl lport-add ls0 lp1], [1], [],
+  [ovn-nbctl: lp1: an lport with this name already exists
+])
+AT_CHECK([ovn-nbctl --may-exist lport-add ls1 lp1], [1], [],
+  [ovn-nbctl: lp1: lport already exists but in lswitch ls0
+])
+AT_CHECK([ovn-nbctl --may-exist lport-add ls0 lp1 lp0 5], [1], [],
+  [ovn-nbctl: lp1: lport already exists but has no parent
+])
+
 AT_CHECK([ovn-nbctl lport-del lp1])
 AT_CHECK([ovn-nbctl lport-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lp0)
+])
+
+AT_CHECK([ovn-nbctl lport-add ls0 lp2 lp3 5])
+AT_CHECK([ovn-nbctl --may-exist lport-add ls0 lp2 lp4 5], [1], [],
+  [ovn-nbctl: lp2: lport already exists with different parent lp3
+])
+AT_CHECK([ovn-nbctl --may-exist lport-add ls0 lp2 lp3 10], [1], [],
+  [ovn-nbctl: lp2: lport already exists with different tag 5
+])
+AT_CHECK([ovn-nbctl clear Logical_Port lp2 tag])
+AT_CHECK([ovn-nbctl --may-exist lport-add ls0 lp2 lp3 5], [1], [],
+  [ovn-nbctl: lp2: lport already exists but has no tag
 ])
 
 OVN_NBCTL_TEST_STOP

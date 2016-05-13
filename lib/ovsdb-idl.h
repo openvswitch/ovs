@@ -51,6 +51,7 @@ struct ovsdb_idl *ovsdb_idl_create(const char *remote,
                                    const struct ovsdb_idl_class *,
                                    bool monitor_everything_by_default,
                                    bool retry);
+void ovsdb_idl_set_remote(struct ovsdb_idl *, const char *, bool);
 void ovsdb_idl_destroy(struct ovsdb_idl *);
 
 void ovsdb_idl_run(struct ovsdb_idl *);
@@ -68,6 +69,8 @@ void ovsdb_idl_verify_write_only(struct ovsdb_idl *);
 
 bool ovsdb_idl_is_alive(const struct ovsdb_idl *);
 int ovsdb_idl_get_last_error(const struct ovsdb_idl *);
+
+void ovsdb_idl_set_probe_interval(const struct ovsdb_idl *, int probe_interval);
 
 /* Choosing columns and tables to replicate. */
 
@@ -110,7 +113,20 @@ void ovsdb_idl_add_table(struct ovsdb_idl *,
 void ovsdb_idl_omit(struct ovsdb_idl *, const struct ovsdb_idl_column *);
 void ovsdb_idl_omit_alert(struct ovsdb_idl *, const struct ovsdb_idl_column *);
 
-/* Change tracking. */
+/* Change tracking.
+ *
+ * In OVSDB, change tracking is applied at each client in the IDL layer.  This
+ * means that when a client makes a request to track changes on a particular
+ * table, they are essentially requesting information about the incremental
+ * changes to that table from the point in time that the request is made.  Once
+ * the client clears tracked changes, that information will no longer be
+ * available.
+ *
+ * The implication of the above is that if a client requires replaying
+ * untracked history, it faces the choice of either trying to remember changes
+ * itself (which translates into a memory leak) or of being structured with a
+ * path for processing the full untracked table as well as a path that
+ * processes incremental changes. */
 enum ovsdb_idl_change {
     OVSDB_IDL_CHANGE_INSERT,
     OVSDB_IDL_CHANGE_MODIFY,

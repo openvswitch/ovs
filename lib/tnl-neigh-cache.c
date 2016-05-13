@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +28,7 @@
 #include "cmap.h"
 #include "coverage.h"
 #include "dpif-netdev.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "errno.h"
 #include "flow.h"
 #include "netdev.h"
@@ -55,7 +55,7 @@ struct tnl_neigh_entry {
     char br_name[IFNAMSIZ];
 };
 
-static struct cmap table;
+static struct cmap table = CMAP_INITIALIZER;
 static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 
 static uint32_t
@@ -73,6 +73,10 @@ tnl_neigh_lookup__(const char br_name[IFNAMSIZ], const struct in6_addr *dst)
     hash = tnl_neigh_hash(dst);
     CMAP_FOR_EACH_WITH_HASH (neigh, cmap_node, hash, &table) {
         if (ipv6_addr_equals(&neigh->ip, dst) && !strcmp(neigh->br_name, br_name)) {
+            if (neigh->expires <= time_now()) {
+                return NULL;
+            }
+
             neigh->expires = time_now() + NEIGH_ENTRY_DEFAULT_IDLE_TIME;
             return neigh;
         }
@@ -147,7 +151,9 @@ static int
 tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
               const char name[IFNAMSIZ])
 {
-    if (flow->dl_type != htons(ETH_TYPE_ARP)) {
+    if (flow->dl_type != htons(ETH_TYPE_ARP) ||
+        flow->nw_proto != ARP_OP_REPLY ||
+        eth_addr_is_zero(flow->arp_sha)) {
         return EINVAL;
     }
 
@@ -168,6 +174,15 @@ tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
         flow->nw_proto != IPPROTO_ICMPV6 ||
         flow->tp_dst != htons(0) ||
         flow->tp_src != htons(ND_NEIGHBOR_ADVERT)) {
+        return EINVAL;
+    }
+    /* - RFC4861 says Neighbor Advertisements sent in response to unicast Neighbor
+     *   Solicitations SHOULD include the Target link-layer address. However, Linux
+     *   doesn't. So, the response to Solicitations sent by OVS will include the
+     *   TLL address and other Advertisements not including it can be ignored.
+     * - OVS flow extract can set this field to zero in case of packet parsing errors.
+     *   For details refer miniflow_extract()*/
+    if (eth_addr_is_zero(flow->arp_tha)) {
         return EINVAL;
     }
 
@@ -289,8 +304,12 @@ tnl_neigh_cache_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
         need_ws = INET6_ADDRSTRLEN - (ds.length - start_len);
         ds_put_char_multiple(&ds, ' ', need_ws);
 
-        ds_put_format(&ds, ETH_ADDR_FMT"   %s\n",
+        ds_put_format(&ds, ETH_ADDR_FMT"   %s",
                       ETH_ADDR_ARGS(neigh->mac), neigh->br_name);
+        if (neigh->expires <= time_now()) {
+            ds_put_format(&ds, " STALE");
+        }
+        ds_put_char(&ds, '\n');
 
     }
     ovs_mutex_unlock(&mutex);
@@ -301,8 +320,6 @@ tnl_neigh_cache_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
 void
 tnl_neigh_cache_init(void)
 {
-    cmap_init(&table);
-
     unixctl_command_register("tnl/arp/show", "", 0, 0, tnl_neigh_cache_show, NULL);
     unixctl_command_register("tnl/arp/set", "BRIDGE IP MAC", 3, 3, tnl_neigh_cache_add, NULL);
     unixctl_command_register("tnl/arp/flush", "", 0, 0, tnl_neigh_cache_flush, NULL);

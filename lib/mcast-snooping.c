@@ -26,7 +26,7 @@
 #include "byte-order.h"
 #include "coverage.h"
 #include "hash.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "poll-loop.h"
 #include "timeval.h"
 #include "entropy.h"
@@ -141,7 +141,7 @@ static bool
 group_get_lru(const struct mcast_snooping *ms, struct mcast_group **grp)
     OVS_REQ_RDLOCK(ms->rwlock)
 {
-    if (!list_is_empty(&ms->group_lru)) {
+    if (!ovs_list_is_empty(&ms->group_lru)) {
         *grp = mcast_group_from_lru_node(ms->group_lru.next);
         return true;
     } else {
@@ -168,10 +168,10 @@ mcast_snooping_create(void)
 
     ms = xmalloc(sizeof *ms);
     hmap_init(&ms->table);
-    list_init(&ms->group_lru);
-    list_init(&ms->mrouter_lru);
-    list_init(&ms->fport_list);
-    list_init(&ms->rport_list);
+    ovs_list_init(&ms->group_lru);
+    ovs_list_init(&ms->mrouter_lru);
+    ovs_list_init(&ms->fport_list);
+    ovs_list_init(&ms->rport_list);
     ms->secret = random_uint32();
     ms->idle_time = MCAST_ENTRY_DEFAULT_IDLE_TIME;
     ms->max_entries = MCAST_DEFAULT_MAX_ENTRIES;
@@ -281,15 +281,15 @@ mcast_group_insert_bundle(struct mcast_snooping *ms OVS_UNUSED,
 
     b = mcast_group_bundle_lookup(ms, grp, port);
     if (b) {
-        list_remove(&b->bundle_node);
+        ovs_list_remove(&b->bundle_node);
     } else {
         b = xmalloc(sizeof *b);
-        list_init(&b->bundle_node);
+        ovs_list_init(&b->bundle_node);
         b->port = port;
     }
 
     b->expires = time_now() + idle_time;
-    list_push_back(&grp->bundle_lru, &b->bundle_node);
+    ovs_list_push_back(&grp->bundle_lru, &b->bundle_node);
     return b;
 }
 
@@ -298,7 +298,7 @@ mcast_group_insert_bundle(struct mcast_snooping *ms OVS_UNUSED,
 static bool
 mcast_group_has_bundles(struct mcast_group *grp)
 {
-    return !list_is_empty(&grp->bundle_lru);
+    return !ovs_list_is_empty(&grp->bundle_lru);
 }
 
 /* Delete 'grp' from the 'ms' hash table.
@@ -307,9 +307,9 @@ static void
 mcast_snooping_flush_group__(struct mcast_snooping *ms,
                              struct mcast_group *grp)
 {
-    ovs_assert(list_is_empty(&grp->bundle_lru));
+    ovs_assert(ovs_list_is_empty(&grp->bundle_lru));
     hmap_remove(&ms->table, &grp->hmap_node);
-    list_remove(&grp->group_node);
+    ovs_list_remove(&grp->group_node);
     free(grp);
 }
 
@@ -339,7 +339,7 @@ mcast_group_delete_bundle(struct mcast_snooping *ms OVS_UNUSED,
 
     LIST_FOR_EACH (b, bundle_node, &grp->bundle_lru) {
         if (b->port == port) {
-            list_remove(&b->bundle_node);
+            ovs_list_remove(&b->bundle_node);
             free(b);
             return true;
         }
@@ -364,7 +364,7 @@ mcast_snooping_prune_expired(struct mcast_snooping *ms,
         if (b->expires > timenow) {
             break;
         }
-        list_remove(&b->bundle_node);
+        ovs_list_remove(&b->bundle_node);
         free(b);
         expired++;
     }
@@ -414,17 +414,17 @@ mcast_snooping_add_group(struct mcast_snooping *ms,
         hmap_insert(&ms->table, &grp->hmap_node, hash);
         grp->addr = *addr;
         grp->vlan = vlan;
-        list_init(&grp->bundle_lru);
+        ovs_list_init(&grp->bundle_lru);
         learned = true;
         ms->need_revalidate = true;
         COVERAGE_INC(mcast_snooping_learned);
     } else {
-        list_remove(&grp->group_node);
+        ovs_list_remove(&grp->group_node);
     }
     mcast_group_insert_bundle(ms, grp, port, ms->idle_time);
 
     /* Mark 'grp' as recently used. */
-    list_push_back(&ms->group_lru, &grp->group_node);
+    ovs_list_push_back(&ms->group_lru, &grp->group_node);
     return learned;
 }
 
@@ -617,7 +617,7 @@ mrouter_get_lru(const struct mcast_snooping *ms,
                 struct mcast_mrouter_bundle **m)
     OVS_REQ_RDLOCK(ms->rwlock)
 {
-    if (!list_is_empty(&ms->mrouter_lru)) {
+    if (!ovs_list_is_empty(&ms->mrouter_lru)) {
         *m = mcast_mrouter_from_lru_node(ms->mrouter_lru.next);
         return true;
     } else {
@@ -655,7 +655,7 @@ mcast_snooping_add_mrouter(struct mcast_snooping *ms, uint16_t vlan,
 
     mrouter = mcast_snooping_mrouter_lookup(ms, vlan, port);
     if (mrouter) {
-        list_remove(&mrouter->mrouter_node);
+        ovs_list_remove(&mrouter->mrouter_node);
     } else {
         mrouter = xmalloc(sizeof *mrouter);
         mrouter->vlan = vlan;
@@ -665,14 +665,14 @@ mcast_snooping_add_mrouter(struct mcast_snooping *ms, uint16_t vlan,
     }
 
     mrouter->expires = time_now() + MCAST_MROUTER_PORT_IDLE_TIME;
-    list_push_back(&ms->mrouter_lru, &mrouter->mrouter_node);
+    ovs_list_push_back(&ms->mrouter_lru, &mrouter->mrouter_node);
     return ms->need_revalidate;
 }
 
 static void
 mcast_snooping_flush_mrouter(struct mcast_mrouter_bundle *mrouter)
 {
-    list_remove(&mrouter->mrouter_node);
+    ovs_list_remove(&mrouter->mrouter_node);
     free(mrouter);
 }
 
@@ -690,7 +690,7 @@ static bool
 mcast_snooping_port_get(const struct ovs_list *list,
                         struct mcast_port_bundle **f)
 {
-    if (!list_is_empty(list)) {
+    if (!ovs_list_is_empty(list)) {
         *f = mcast_port_from_list_node(list->next);
         return true;
     } else {
@@ -719,13 +719,13 @@ mcast_snooping_add_port(struct ovs_list *list, void *port)
 
     pbundle = xmalloc(sizeof *pbundle);
     pbundle->port = port;
-    list_insert(list, &pbundle->node);
+    ovs_list_insert(list, &pbundle->node);
 }
 
 static void
 mcast_snooping_flush_port(struct mcast_port_bundle *pbundle)
 {
-    list_remove(&pbundle->node);
+    ovs_list_remove(&pbundle->node);
     free(pbundle);
 }
 
@@ -912,13 +912,13 @@ mcast_snooping_wait__(struct mcast_snooping *ms)
         long long int mrouter_msec;
         long long int msec = 0;
 
-        if (!list_is_empty(&ms->group_lru)) {
+        if (!ovs_list_is_empty(&ms->group_lru)) {
             grp = mcast_group_from_lru_node(ms->group_lru.next);
             bundle = mcast_group_bundle_from_lru_node(grp->bundle_lru.next);
             msec = bundle->expires * 1000LL;
         }
 
-        if (!list_is_empty(&ms->mrouter_lru)) {
+        if (!ovs_list_is_empty(&ms->mrouter_lru)) {
             mrouter = mcast_mrouter_from_lru_node(ms->mrouter_lru.next);
             mrouter_msec = mrouter->expires * 1000LL;
             msec = msec ? MIN(msec, mrouter_msec) : mrouter_msec;

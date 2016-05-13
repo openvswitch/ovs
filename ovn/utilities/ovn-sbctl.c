@@ -28,10 +28,11 @@
 #include <unistd.h>
 
 #include "db-ctl-base.h"
+#include "dirs.h"
 
 #include "command-line.h"
 #include "compiler.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "json.h"
 #include "ovsdb-data.h"
@@ -154,7 +155,7 @@ sbctl_default_db(void)
     if (!def) {
         def = getenv("OVN_SB_DB");
         if (!def) {
-            def = ctl_default_db();
+            def = xasprintf("unix:%s/ovnsb_db.sock", ovs_rundir());
         }
     }
     return def;
@@ -328,7 +329,7 @@ Options:\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
-           program_name, program_name, ctl_get_db_cmd_usage(), ctl_default_db());
+           program_name, program_name, ctl_get_db_cmd_usage(), sbctl_default_db());
     vlog_usage();
     printf("\
   --no-syslog             equivalent to --verbose=sbctl:syslog:warn\n");
@@ -504,8 +505,8 @@ pre_get_info(struct ctl_context *ctx)
 static struct cmd_show_table cmd_show_tables[] = {
     {&sbrec_table_chassis,
      &sbrec_chassis_col_name,
-     {&sbrec_chassis_col_encaps,
-      NULL,
+     {&sbrec_chassis_col_hostname,
+      &sbrec_chassis_col_encaps,
       NULL},
      {&sbrec_table_port_binding,
       &sbrec_port_binding_col_logical_port,
@@ -769,6 +770,10 @@ static const struct ctl_table_class tables[] = {
 
     {&sbrec_table_port_binding,
      {{&sbrec_table_port_binding, &sbrec_port_binding_col_logical_port, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&sbrec_table_mac_binding,
+     {{&sbrec_table_mac_binding, &sbrec_mac_binding_col_logical_port, NULL},
       {NULL, NULL, NULL}}},
 
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}

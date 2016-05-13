@@ -32,7 +32,7 @@
  */
 
 /*
- * Copyright (c) 2008-2014 Nicira, Inc.
+ * Copyright (c) 2008-2015 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,7 +77,8 @@ enum ofp_version {
     OFP12_VERSION = 0x03,
     OFP13_VERSION = 0x04,
     OFP14_VERSION = 0x05,
-    OFP15_VERSION = 0x06
+    OFP15_VERSION = 0x06,
+    OFP16_VERSION = 0x07
 };
 
 /* Vendor (aka experimenter) IDs.
@@ -107,6 +108,7 @@ enum ofp_version {
 #define NTR_COMPAT_VENDOR_ID   0x00001540 /* Incorrect value used in v2.4. */
 #define NX_VENDOR_ID    0x00002320 /* Nicira. */
 #define ONF_VENDOR_ID   0x4f4e4600 /* Open Networking Foundation. */
+#define INTEL_VENDOR_ID 0x0000AA01 /* Intel */
 
 #define OFP_MAX_TABLE_NAME_LEN 32
 #define OFP_MAX_PORT_NAME_LEN  16
@@ -221,6 +223,9 @@ enum ofp_port_features {
 struct ofp_prop_header {
     ovs_be16 type;
     ovs_be16 len;
+    /* Followed by:
+     *     - 'len - 4' bytes of payload.
+     *     - PAD_SIZE(len, 8) bytes of zeros. */
 };
 OFP_ASSERT(sizeof(struct ofp_prop_header) == 4);
 
@@ -234,6 +239,9 @@ struct ofp_prop_experimenter {
     ovs_be32 experimenter;  /* Experimenter ID which takes the same form as
                              * in struct ofp_experimenter_header. */
     ovs_be32 exp_type;      /* Experimenter defined. */
+    /* Followed by:
+     *     - 'len - 12' bytes of payload.
+     *     - PAD_SIZE(len, 8) bytes of zeros. */
 };
 OFP_ASSERT(sizeof(struct ofp_prop_experimenter) == 12);
 
@@ -421,17 +429,6 @@ struct ofp_hello_elem_header {
     ovs_be16    length;      /* Length in bytes of this element. */
 };
 OFP_ASSERT(sizeof(struct ofp_hello_elem_header) == 4);
-
-/* Vendor extension. */
-struct ofp_vendor_header {
-    struct ofp_header header;   /* Type OFPT_VENDOR or OFPT_EXPERIMENTER. */
-    ovs_be32 vendor;            /* Vendor ID:
-                                 * - MSB 0: low-order bytes are IEEE OUI.
-                                 * - MSB != 0: defined by OpenFlow
-                                 *   consortium. */
-    /* Vendor-defined arbitrary additional data. */
-};
-OFP_ASSERT(sizeof(struct ofp_vendor_header) == 12);
 
 /* Table numbering. Tables can use any number up to OFPT_MAX. */
 enum ofp_table {

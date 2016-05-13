@@ -33,45 +33,51 @@
 #include "classifier.h"
 #include "command-line.h"
 #include "daemon.h"
+#include "colors.h"
 #include "compiler.h"
 #include "dirs.h"
-#include "dynamic-string.h"
+#include "dp-packet.h"
 #include "fatal-signal.h"
 #include "nx-match.h"
 #include "odp-util.h"
-#include "ofp-actions.h"
-#include "ofp-errors.h"
-#include "ofp-msgs.h"
-#include "ofp-parse.h"
-#include "ofp-print.h"
-#include "ofp-util.h"
 #include "ofp-version-opt.h"
-#include "ofpbuf.h"
 #include "ofproto/ofproto.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
-#include "dp-packet.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofp-parse.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vconn.h"
+#include "openvswitch/vlog.h"
 #include "packets.h"
 #include "pcap-file.h"
 #include "poll-loop.h"
 #include "random.h"
+#include "sort.h"
 #include "stream-ssl.h"
 #include "socket-util.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
-#include "openvswitch/vconn.h"
-#include "openvswitch/vlog.h"
-#include "meta-flow.h"
-#include "sort.h"
 
 VLOG_DEFINE_THIS_MODULE(ofctl);
 
-/* --bundle: Use OpenFlow 1.4 bundle for making the flow table change atomic.
- * NOTE: Also the flow mod will use OpenFlow 1.4, so the semantics may be
- * different (see the comment in parse_options() for details).
+/* --bundle: Use OpenFlow 1.3+ bundle for making the flow table change atomic.
+ * NOTE: If OpenFlow 1.3 or higher is not selected with the '-O' option,
+ * OpenFlow 1.4 will be implicitly selected.  Also the flow mod will use
+ * OpenFlow 1.4, so the semantics may be different (see the comment in
+ * parse_options() for details).
  */
 static bool bundle = false;
+
+/* --color: Use color markers. */
+static bool enable_color;
 
 /* --strict: Use strict matching for flow mod commands?  Additionally governs
  * use of nx_pull_match() instead of nx_pull_match_loose() in parse-nx-match.
@@ -168,6 +174,7 @@ parse_options(int argc, char *argv[])
         OPT_RSORT,
         OPT_UNIXCTL,
         OPT_BUNDLE,
+        OPT_COLOR,
         DAEMON_OPTION_ENUMS,
         OFP_VERSION_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
@@ -186,6 +193,7 @@ parse_options(int argc, char *argv[])
         {"help", no_argument, NULL, 'h'},
         {"option", no_argument, NULL, 'o'},
         {"bundle", no_argument, NULL, OPT_BUNDLE},
+        {"color", optional_argument, NULL, OPT_COLOR},
         DAEMON_LONG_OPTIONS,
         OFP_VERSION_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
@@ -287,6 +295,30 @@ parse_options(int argc, char *argv[])
             unixctl_path = optarg;
             break;
 
+        case OPT_COLOR:
+            if (optarg) {
+                if (!strcasecmp(optarg, "always")
+                    || !strcasecmp(optarg, "yes")
+                    || !strcasecmp(optarg, "force")) {
+                    enable_color = true;
+                } else if (!strcasecmp(optarg, "never")
+                           || !strcasecmp(optarg, "no")
+                           || !strcasecmp(optarg, "none")) {
+                    enable_color = false;
+                } else if (!strcasecmp(optarg, "auto")
+                           || !strcasecmp(optarg, "tty")
+                           || !strcasecmp(optarg, "if-tty")) {
+                    /* Determine whether we need colors, i.e. whether standard
+                     * output is a tty. */
+                    enable_color = is_stdout_a_tty();
+                } else {
+                    ovs_fatal(0, "incorrect value `%s' for --color", optarg);
+                }
+            } else {
+                enable_color = is_stdout_a_tty();
+            }
+        break;
+
         DAEMON_OPTION_HANDLERS
         OFP_VERSION_OPTION_HANDLERS
         VLOG_OPTION_HANDLERS
@@ -308,13 +340,14 @@ parse_options(int argc, char *argv[])
     free(short_options);
 
     /* Implicit OpenFlow 1.4 with the '--bundle' option. */
-    if (bundle) {
+    if (bundle && !(get_allowed_ofp_versions() &
+                    ofputil_protocols_to_version_bitmap(OFPUTIL_P_OF13_UP))) {
         /* Add implicit allowance for OpenFlow 1.4. */
         add_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
                                      OFPUTIL_P_OF14_OXM));
-        /* Remove all prior versions. */
+        /* Remove all versions that do not support bundles. */
         mask_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
-                                     OFPUTIL_P_OF14_UP));
+                                     OFPUTIL_P_OF13_UP));
     }
     versions = get_allowed_ofp_versions();
     version_protocols = ofputil_protocols_from_version_bitmap(versions);
@@ -331,6 +364,8 @@ parse_options(int argc, char *argv[])
     allowed_protocols &= version_protocols;
     mask_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
                                   allowed_protocols));
+
+    colors_init(enable_color);
 }
 
 static void
@@ -414,6 +449,7 @@ usage(void)
            "  --sort[=field]              sort in ascending order\n"
            "  --rsort[=field]             sort in descending order\n"
            "  --unixctl=SOCKET            set control socket name\n"
+           "  --color[=always|never|auto] control use of color in output\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
@@ -636,8 +672,8 @@ transact_noreply(struct vconn *vconn, struct ofpbuf *request)
 {
     struct ovs_list requests;
 
-    list_init(&requests);
-    list_push_back(&requests, &request->list_node);
+    ovs_list_init(&requests);
+    ovs_list_push_back(&requests, &request->list_node);
     transact_multiple_noreply(vconn, &requests);
 }
 
@@ -1315,17 +1351,17 @@ bundle_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
     struct ovs_list requests;
     size_t i;
 
-    list_init(&requests);
+    ovs_list_init(&requests);
 
-    /* Bundles need OpenFlow 1.4+. */
-    usable_protocols &= OFPUTIL_P_OF14_UP;
+    /* Bundles need OpenFlow 1.3+. */
+    usable_protocols &= OFPUTIL_P_OF13_UP;
     protocol = open_vconn_for_flow_mod(remote, &vconn, usable_protocols);
 
     for (i = 0; i < n_fms; i++) {
         struct ofputil_flow_mod *fm = &fms[i];
         struct ofpbuf *request = ofputil_encode_flow_mod(fm, protocol);
 
-        list_push_back(&requests, &request->list_node);
+        ovs_list_push_back(&requests, &request->list_node);
         free(CONST_CAST(struct ofpact *, fm->ofpacts));
     }
 
@@ -1424,18 +1460,38 @@ ofctl_del_flows(struct ovs_cmdl_context *ctx)
     ofctl_flow_mod(ctx->argc, ctx->argv, strict ? OFPFC_DELETE_STRICT : OFPFC_DELETE);
 }
 
-static void
+static bool
 set_packet_in_format(struct vconn *vconn,
-                     enum nx_packet_in_format packet_in_format)
+                     enum nx_packet_in_format packet_in_format,
+                     bool must_succeed)
 {
     struct ofpbuf *spif;
 
     spif = ofputil_make_set_packet_in_format(vconn_get_version(vconn),
                                              packet_in_format);
-    transact_noreply(vconn, spif);
-    VLOG_DBG("%s: using user-specified packet in format %s",
-             vconn_get_name(vconn),
-             ofputil_packet_in_format_to_string(packet_in_format));
+    if (must_succeed) {
+        transact_noreply(vconn, spif);
+    } else {
+        struct ofpbuf *reply;
+
+        run(vconn_transact_noreply(vconn, spif, &reply),
+            "talking to %s", vconn_get_name(vconn));
+        if (reply) {
+            char *s = ofp_to_string(reply->data, reply->size, 2);
+            VLOG_DBG("%s: failed to set packet in format to nx_packet_in, "
+                     "controller replied: %s.",
+                     vconn_get_name(vconn), s);
+            free(s);
+            ofpbuf_delete(reply);
+
+            return false;
+        } else {
+            VLOG_DBG("%s: using user-specified packet in format %s",
+                     vconn_get_name(vconn),
+                     ofputil_packet_in_format_to_string(packet_in_format));
+        }
+    }
+    return true;
 }
 
 static int
@@ -1613,9 +1669,13 @@ ofctl_unblock(struct unixctl_conn *conn, int argc OVS_UNUSED,
 /* Prints to stdout all of the messages received on 'vconn'.
  *
  * Iff 'reply_to_echo_requests' is true, sends a reply to any echo request
- * received on 'vconn'. */
+ * received on 'vconn'.
+ *
+ * If 'resume_continuations' is true, sends an NXT_RESUME in reply to any
+ * NXT_PACKET_IN2 that includes a continuation. */
 static void
-monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
+monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests,
+              bool resume_continuations)
 {
     struct barrier_aux barrier_aux = { vconn, NULL };
     struct unixctl_server *server;
@@ -1642,6 +1702,10 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
                              &blocked);
 
     daemonize_complete();
+
+    enum ofp_version version = vconn_get_version(vconn);
+    enum ofputil_protocol protocol
+        = ofputil_protocol_from_ofp_version(version);
 
     for (;;) {
         struct ofpbuf *b;
@@ -1685,6 +1749,36 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests)
                     retval = vconn_send_block(vconn, reply);
                     if (retval) {
                         ovs_fatal(retval, "failed to send echo reply");
+                    }
+                }
+                break;
+
+            case OFPTYPE_PACKET_IN:
+                if (resume_continuations) {
+                    struct ofputil_packet_in pin;
+                    struct ofpbuf continuation;
+
+                    error = ofputil_decode_packet_in(b->data, true, &pin,
+                                                     NULL, NULL,
+                                                     &continuation);
+                    if (error) {
+                        fprintf(stderr, "decoding packet-in failed: %s",
+                                ofperr_to_string(error));
+                    } else if (continuation.size) {
+                        struct ofpbuf *reply;
+
+                        reply = ofputil_encode_resume(&pin, &continuation,
+                                                      protocol);
+
+                        fprintf(stderr, "send: ");
+                        ofp_print(stderr, reply->data, reply->size,
+                                  verbosity + 2);
+                        fflush(stderr);
+
+                        retval = vconn_send_block(vconn, reply);
+                        if (retval) {
+                            ovs_fatal(retval, "failed to send NXT_RESUME");
+                        }
                     }
                 }
                 break;
@@ -1738,6 +1832,7 @@ ofctl_monitor(struct ovs_cmdl_context *ctx)
     }
 
     open_vconn(ctx->argv[1], &vconn);
+    bool resume_continuations = false;
     for (i = 2; i < ctx->argc; i++) {
         const char *arg = ctx->argv[i];
 
@@ -1764,46 +1859,38 @@ ofctl_monitor(struct ovs_cmdl_context *ctx)
             ofputil_append_flow_monitor_request(&fmr, msg);
             dump_transaction(vconn, msg);
             fflush(stdout);
+        } else if (!strcmp(arg, "resume")) {
+            /* This option is intentionally undocumented because it is meant
+             * only for testing. */
+            resume_continuations = true;
+
+            /* Set miss_send_len to ensure that we get packet-ins. */
+            struct ofputil_switch_config config;
+            fetch_switch_config(vconn, &config);
+            config.miss_send_len = UINT16_MAX;
+            set_switch_config(vconn, &config);
         } else {
             ovs_fatal(0, "%s: unsupported \"monitor\" argument", arg);
         }
     }
 
     if (preferred_packet_in_format >= 0) {
-        set_packet_in_format(vconn, preferred_packet_in_format);
+        /* A particular packet-in format was requested, so we must set it. */
+        set_packet_in_format(vconn, preferred_packet_in_format, true);
     } else {
-        enum ofp_version version = vconn_get_version(vconn);
-
-        switch (version) {
-        case OFP10_VERSION: {
-            struct ofpbuf *spif, *reply;
-
-            spif = ofputil_make_set_packet_in_format(vconn_get_version(vconn),
-                                                     NXPIF_NXM);
-            run(vconn_transact_noreply(vconn, spif, &reply),
-                "talking to %s", vconn_get_name(vconn));
-            if (reply) {
-                char *s = ofp_to_string(reply->data, reply->size, 2);
-                VLOG_DBG("%s: failed to set packet in format to nxm, controller"
-                        " replied: %s. Falling back to the switch default.",
-                        vconn_get_name(vconn), s);
-                free(s);
-                ofpbuf_delete(reply);
+        /* Otherwise, we always prefer NXT_PACKET_IN2. */
+        if (!set_packet_in_format(vconn, NXPIF_NXT_PACKET_IN2, false)) {
+            /* We can't get NXT_PACKET_IN2.  For OpenFlow 1.0 only, request
+             * NXT_PACKET_IN.  (Before 2.6, Open vSwitch will accept a request
+             * for NXT_PACKET_IN with OF1.1+, but even after that it still
+             * sends packet-ins in the OpenFlow native format.) */
+            if (vconn_get_version(vconn) == OFP10_VERSION) {
+                set_packet_in_format(vconn, NXPIF_NXT_PACKET_IN, false);
             }
-            break;
-        }
-        case OFP11_VERSION:
-        case OFP12_VERSION:
-        case OFP13_VERSION:
-        case OFP14_VERSION:
-        case OFP15_VERSION:
-            break;
-        default:
-            OVS_NOT_REACHED();
         }
     }
 
-    monitor_vconn(vconn, true);
+    monitor_vconn(vconn, true, resume_continuations);
 }
 
 static void
@@ -1812,7 +1899,7 @@ ofctl_snoop(struct ovs_cmdl_context *ctx)
     struct vconn *vconn;
 
     open_vconn__(ctx->argv[1], SNOOP, &vconn);
-    monitor_vconn(vconn, false);
+    monitor_vconn(vconn, false, false);
 }
 
 static void
@@ -1987,18 +2074,16 @@ fetch_table_desc(struct vconn *vconn, struct ofputil_table_mod *tm,
         recv_xid = ((struct ofp_header *) reply->data)->xid;
         if (send_xid == recv_xid) {
             struct ofp_header *oh = reply->data;
-            enum ofptype type;
-            struct ofpbuf b;
-            uint16_t flags;
+            struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
 
-            ofpbuf_use_const(&b, oh, ntohs(oh->length));
+            enum ofptype type;
             if (ofptype_pull(&type, &b)
                 || type != OFPTYPE_TABLE_DESC_REPLY) {
                 ovs_fatal(0, "received bad reply: %s",
                           ofp_to_string(reply->data, reply->size,
                                         verbosity + 1));
             }
-            flags = ofpmp_flags(oh);
+            uint16_t flags = ofpmp_flags(oh);
             done = !(flags & OFPSF_REPLY_MORE);
             if (found) {
                 /* We've already found the table desc consisting of current
@@ -2955,7 +3040,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
     }
 
     ofm = ofputil_encode_flow_mod(&fm, protocol);
-    list_push_back(packets, &ofm->list_node);
+    ovs_list_push_back(packets, &ofm->list_node);
 }
 
 static void
@@ -2977,7 +3062,7 @@ ofctl_replace_flows(struct ovs_cmdl_context *ctx)
 
     read_flows_from_switch(vconn, protocol, &tables, SWITCH_IDX);
 
-    list_init(&requests);
+    ovs_list_init(&requests);
 
     FOR_EACH_TABLE (cls, &tables) {
         /* Delete flows that exist on the switch but not in the file. */
@@ -3610,35 +3695,43 @@ ofctl_parse_ofp11_match(struct ovs_cmdl_context *ctx OVS_UNUSED)
     ds_destroy(&in);
 }
 
-/* "parse-pcap PCAP": read packets from PCAP and print their flows. */
+/* "parse-pcap PCAP...": read packets from each PCAP file and print their
+ * flows. */
 static void
 ofctl_parse_pcap(struct ovs_cmdl_context *ctx)
 {
-    FILE *pcap;
-
-    pcap = ovs_pcap_open(ctx->argv[1], "rb");
-    if (!pcap) {
-        ovs_fatal(errno, "%s: open failed", ctx->argv[1]);
-    }
-
-    for (;;) {
-        struct dp_packet *packet;
-        struct flow flow;
-        int error;
-
-        error = ovs_pcap_read(pcap, &packet, NULL);
-        if (error == EOF) {
-            break;
-        } else if (error) {
-            ovs_fatal(error, "%s: read failed", ctx->argv[1]);
+    int error = 0;
+    for (int i = 1; i < ctx->argc; i++) {
+        const char *filename = ctx->argv[i];
+        FILE *pcap = ovs_pcap_open(filename, "rb");
+        if (!pcap) {
+            error = errno;
+            ovs_error(error, "%s: open failed", filename);
+            continue;
         }
 
-        pkt_metadata_init(&packet->md, ODPP_NONE);
-        flow_extract(packet, &flow);
-        flow_print(stdout, &flow);
-        putchar('\n');
-        dp_packet_delete(packet);
+        for (;;) {
+            struct dp_packet *packet;
+            struct flow flow;
+            int retval;
+
+            retval = ovs_pcap_read(pcap, &packet, NULL);
+            if (retval == EOF) {
+                break;
+            } else if (retval) {
+                error = retval;
+                ovs_error(error, "%s: read failed", filename);
+            }
+
+            pkt_metadata_init(&packet->md, ODPP_NONE);
+            flow_extract(packet, &flow);
+            flow_print(stdout, &flow);
+            putchar('\n');
+            dp_packet_delete(packet);
+        }
+        fclose(pcap);
     }
+    exit(error);
 }
 
 /* "check-vlan VLAN_TCI VLAN_TCI_MASK": converts the specified vlan_tci and
@@ -3976,7 +4069,7 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "parse-instructions", NULL, 1, 1, ofctl_parse_instructions },
     { "parse-ofp10-match", NULL, 0, 0, ofctl_parse_ofp10_match },
     { "parse-ofp11-match", NULL, 0, 0, ofctl_parse_ofp11_match },
-    { "parse-pcap", NULL, 1, 1, ofctl_parse_pcap },
+    { "parse-pcap", NULL, 1, INT_MAX, ofctl_parse_pcap },
     { "check-vlan", NULL, 2, 2, ofctl_check_vlan },
     { "print-error", NULL, 1, 1, ofctl_print_error },
     { "encode-error-reply", NULL, 2, 2, ofctl_encode_error_reply },

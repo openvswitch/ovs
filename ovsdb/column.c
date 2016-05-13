@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@
 #include <stdlib.h>
 
 #include "column.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
@@ -65,17 +65,16 @@ struct ovsdb_error *
 ovsdb_column_from_json(const struct json *json, const char *name,
                        struct ovsdb_column **columnp)
 {
-    const struct json *mutable, *ephemeral, *type_json;
+    const struct json *mutable_json, *ephemeral, *type_json;
     struct ovsdb_error *error;
     struct ovsdb_type type;
     struct ovsdb_parser parser;
-    bool persistent;
 
     *columnp = NULL;
 
     ovsdb_parser_init(&parser, json, "schema for column %s", name);
-    mutable = ovsdb_parser_member(&parser, "mutable",
-                                OP_TRUE | OP_FALSE | OP_OPTIONAL);
+    mutable_json = ovsdb_parser_member(&parser, "mutable",
+                                       OP_TRUE | OP_FALSE | OP_OPTIONAL);
     ephemeral = ovsdb_parser_member(&parser, "ephemeral",
                                     OP_TRUE | OP_FALSE | OP_OPTIONAL);
     type_json = ovsdb_parser_member(&parser, "type", OP_STRING | OP_OBJECT);
@@ -89,10 +88,17 @@ ovsdb_column_from_json(const struct json *json, const char *name,
         return error;
     }
 
-    persistent = ephemeral ? !json_boolean(ephemeral) : true;
-    *columnp = ovsdb_column_create(name,
-                                   mutable ? json_boolean(mutable) : true,
-                                   persistent, &type);
+    bool mutable = !mutable_json || json_boolean(mutable_json);
+    if (!mutable
+        && (ovsdb_base_type_is_weak_ref(&type.key) ||
+            ovsdb_base_type_is_weak_ref(&type.value))) {
+        /* We cannot allow a weak reference to be immutable: if referenced rows
+         * are deleted, then the weak reference needs to change. */
+        mutable = true;
+    }
+
+    bool persistent = ephemeral ? !json_boolean(ephemeral) : true;
+    *columnp = ovsdb_column_create(name, mutable, persistent, &type);
 
     ovsdb_type_destroy(&type);
 

@@ -16,10 +16,16 @@ m4_define([RECONNECT_CHECK],
      [ovstest test-reconnect < input],
      [$3])
    __RECONNECT_CHECK(
-     [$1 - Python],
+     [$1 - Python2],
      [AT_SKIP_IF([test $HAVE_PYTHON = no])],
      [$2],
      [$PYTHON $srcdir/test-reconnect.py < input],
+     [$3])
+   __RECONNECT_CHECK(
+     [$1 - Python3],
+     [AT_SKIP_IF([test $HAVE_PYTHON3 = no])],
+     [$2],
+     [$PYTHON3 $srcdir/test-reconnect.py < input],
      [$3])])
 
 ######################################################################

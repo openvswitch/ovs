@@ -15,6 +15,7 @@
  */
 
 #include "precomp.h"
+#include "Recirc.h"
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
 #endif
@@ -115,4 +116,49 @@ OvsCompareString(PVOID string1, PVOID string2)
     RtlInitString(&str1, string1);
     RtlInitString(&str2, string2);
     return RtlEqualString(&str1, &str2, FALSE);
+}
+
+VOID *
+OvsAllocateMemoryPerCpu(size_t size,
+                        size_t count,
+                        ULONG tag)
+{
+    VOID *ptr = NULL;
+
+    ASSERT(KeQueryActiveGroupCount() == 1);
+
+    if (!count) {
+        count = KeQueryActiveProcessorCountEx(ALL_PROCESSOR_GROUPS);
+    }
+
+    ptr = OvsAllocateMemoryWithTag(count * size, tag);
+    if (ptr) {
+        RtlZeroMemory(ptr, count * size);
+    }
+
+    return ptr;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsPerCpuDataInit --
+ *     The function allocates necessary per-processor resources.
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsPerCpuDataInit()
+{
+    return OvsDeferredActionsInit();
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsPerCpuDataCleanup --
+ *     The function frees all per-processor resources.
+ * --------------------------------------------------------------------------
+ */
+VOID
+OvsPerCpuDataCleanup()
+{
+    OvsDeferredActionsCleanup();
 }

@@ -125,14 +125,14 @@ static void
 add_local_datapath(struct hmap *local_datapaths,
         const struct sbrec_port_binding *binding_rec)
 {
-    struct hmap_node *ld;
-    ld = hmap_first_with_hash(local_datapaths,
-                              binding_rec->datapath->tunnel_key);
-    if (!ld) {
-        ld = xmalloc(sizeof *ld);
-        hmap_insert(local_datapaths, ld,
-                    binding_rec->datapath->tunnel_key);
+    if (get_local_datapath(local_datapaths,
+                           binding_rec->datapath->tunnel_key)) {
+        return;
     }
+
+    struct local_datapath *ld = xzalloc(sizeof *ld);
+    hmap_insert(local_datapaths, &ld->hmap_node,
+                binding_rec->datapath->tunnel_key);
 }
 
 static void
@@ -154,10 +154,6 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     const struct sbrec_chassis *chassis_rec;
     const struct sbrec_port_binding *binding_rec;
 
-    if (!ctx->ovnsb_idl_txn) {
-        return;
-    }
-
     chassis_rec = get_chassis(ctx->ovnsb_idl, chassis_id);
     if (!chassis_rec) {
         return;
@@ -176,10 +172,6 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     SHASH_FOR_EACH (node, &lports) {
         sset_add(&all_lports, node->name);
     }
-
-    ovsdb_idl_txn_add_comment(
-        ctx->ovnsb_idl_txn,"ovn-controller: updating port bindings for '%s'",
-        chassis_id);
 
     /* Run through each binding record to see if it is resident on this
      * chassis and update the binding accordingly.  This includes both
@@ -201,15 +193,24 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             if (binding_rec->chassis == chassis_rec) {
                 continue;
             }
-            if (binding_rec->chassis) {
-                VLOG_INFO("Changing chassis for lport %s from %s to %s",
-                          binding_rec->logical_port,
-                          binding_rec->chassis->name,
-                          chassis_rec->name);
+            if (ctx->ovnsb_idl_txn) {
+                if (binding_rec->chassis) {
+                    VLOG_INFO("Changing chassis for lport %s from %s to %s.",
+                              binding_rec->logical_port,
+                              binding_rec->chassis->name,
+                              chassis_rec->name);
+                } else {
+                    VLOG_INFO("Claiming lport %s for this chassis.",
+                              binding_rec->logical_port);
+                }
+                sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
             }
-            sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
         } else if (binding_rec->chassis == chassis_rec) {
-            sbrec_port_binding_set_chassis(binding_rec, NULL);
+            if (ctx->ovnsb_idl_txn) {
+                VLOG_INFO("Releasing lport %s from this chassis.",
+                          binding_rec->logical_port);
+                sbrec_port_binding_set_chassis(binding_rec, NULL);
+            }
         } else if (!binding_rec->chassis
                    && !strcmp(binding_rec->type, "localnet")) {
             /* localnet ports will never be bound to a chassis, but we want

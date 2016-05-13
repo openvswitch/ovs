@@ -50,7 +50,6 @@
 #include "flow.h"
 #include "flow_netlink.h"
 #include "vport.h"
-#include "vlan.h"
 
 u64 ovs_flow_used_time(unsigned long flow_jiffies)
 {
@@ -477,7 +476,7 @@ static int key_extract(struct sk_buff *skb, struct sw_flow_key *key)
 
 	key->eth.tci = 0;
 	if (skb_vlan_tag_present(skb))
-		key->eth.tci = htons(vlan_get_tci(skb));
+		key->eth.tci = htons(skb->vlan_tci);
 	else if (eth->h_proto == htons(ETH_P_8021Q))
 		if (unlikely(parse_vlan(skb, key)))
 			return -ENOMEM;

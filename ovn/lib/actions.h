@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,10 @@
 #ifndef OVN_ACTIONS_H
 #define OVN_ACTIONS_H 1
 
+#include <stdbool.h>
 #include <stdint.h>
 #include "compiler.h"
+#include "util.h"
 
 struct expr;
 struct lexer;
@@ -26,15 +28,41 @@ struct ofpbuf;
 struct shash;
 struct simap;
 
+enum action_opcode {
+    /* "arp { ...actions... }".
+     *
+     * The actions, in OpenFlow 1.3 format, follow the action_header.
+     */
+    ACTION_OPCODE_ARP,
+
+    /* "put_arp(port, ip, mac)"
+     *
+     * Arguments are passed through the packet metadata and data, as follows:
+     *
+     *     MFF_REG0 = ip
+     *     MFF_LOG_INPORT = port
+     *     MFF_ETH_SRC = mac
+     */
+    ACTION_OPCODE_PUT_ARP,
+};
+
+/* Header. */
+struct action_header {
+    ovs_be32 opcode;            /* One of ACTION_OPCODE_* */
+    uint8_t pad[4];
+};
+BUILD_ASSERT_DECL(sizeof(struct action_header) == 8);
+
 struct action_params {
     /* A table of "struct expr_symbol"s to support (as one would provide to
      * expr_parse()). */
     const struct shash *symtab;
 
-     /* 'ports' must be a map from strings (presumably names of ports) to
-      * integers (as one would provide to expr_to_matches()).  Strings used in
-      * the actions that are not in 'ports' are translated to zero. */
-    const struct simap *ports;
+    /* Looks up logical port 'port_name'.  If found, stores its port number in
+     * '*portp' and returns true; otherwise, returns false. */
+    bool (*lookup_port)(const void *aux, const char *port_name,
+                        unsigned int *portp);
+    const void *aux;
 
     /* A map from a port name to its connection tracking zone. */
     const struct simap *ct_zones;
@@ -60,6 +88,7 @@ struct action_params {
     uint8_t first_ptable;       /* First OpenFlow table. */
     uint8_t cur_ltable;         /* 0 <= cur_ltable < n_tables. */
     uint8_t output_ptable;      /* OpenFlow table for 'output' to resubmit. */
+    uint8_t arp_ptable;         /* OpenFlow table for 'get_arp' to resubmit. */
 };
 
 char *actions_parse(struct lexer *, const struct action_params *,

@@ -23,13 +23,13 @@
 #include "coverage.h"
 #include "cmap.h"
 #include "dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fail-open.h"
 #include "guarded-list.h"
 #include "latch.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netlink.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto-dpif-ipfix.h"
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-xlate.h"
@@ -221,9 +221,6 @@ struct upcall {
     struct dpif_ipfix *ipfix;      /* IPFIX pointer or NULL. */
     struct dpif_sflow *sflow;      /* SFlow pointer or NULL. */
 
-    bool vsp_adjusted;             /* 'packet' and 'flow' were adjusted for
-                                      VLAN splinters if true. */
-
     struct udpif_key *ukey;        /* Revalidator flow cache. */
     bool ukey_persists;            /* Set true to keep 'ukey' beyond the
                                       lifetime of this upcall. */
@@ -400,7 +397,7 @@ udpif_create(struct dpif_backer *backer, struct dpif *dpif)
     udpif->dump_seq = seq_create();
     latch_init(&udpif->exit_latch);
     latch_init(&udpif->pause_latch);
-    list_push_back(&all_udpifs, &udpif->list_node);
+    ovs_list_push_back(&all_udpifs, &udpif->list_node);
     atomic_init(&udpif->enable_ufid, false);
     atomic_init(&udpif->n_flows, 0);
     atomic_init(&udpif->n_flows_timestamp, LLONG_MIN);
@@ -444,7 +441,7 @@ udpif_destroy(struct udpif *udpif)
     free(udpif->ukeys);
     udpif->ukeys = NULL;
 
-    list_remove(&udpif->list_node);
+    ovs_list_remove(&udpif->list_node);
     latch_destroy(&udpif->exit_latch);
     latch_destroy(&udpif->pause_latch);
     seq_destroy(udpif->reval_seq);
@@ -791,10 +788,6 @@ recv_upcalls(struct handler *handler)
         upcall->out_tun_key = dupcall->out_tun_key;
         upcall->actions = dupcall->actions;
 
-        if (vsp_adjust_flow(upcall->ofproto, flow, &dupcall->packet)) {
-            upcall->vsp_adjusted = true;
-        }
-
         pkt_metadata_from_flow(&dupcall->packet.md, flow);
         flow_extract(&dupcall->packet, flow);
 
@@ -1037,7 +1030,6 @@ upcall_receive(struct upcall *upcall, const struct dpif_backer *backer,
     ofpbuf_init(&upcall->put_actions, 0);
 
     upcall->xout_initialized = false;
-    upcall->vsp_adjusted = false;
     upcall->ukey_persists = false;
 
     upcall->ukey = NULL;
@@ -1069,13 +1061,13 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
     if (upcall->type == DPIF_UC_MISS) {
         xin.resubmit_stats = &stats;
 
-        if (xin.recirc) {
+        if (xin.frozen_state) {
             /* We may install a datapath flow only if we get a reference to the
              * recirculation context (otherwise we could have recirculation
              * upcalls using recirculation ID for which no context can be
              * found).  We may still execute the flow's actions even if we
              * don't install the flow. */
-            upcall->recirc = recirc_id_node_from_state(xin.recirc);
+            upcall->recirc = recirc_id_node_from_state(xin.frozen_state);
             upcall->have_recirc_ref = recirc_id_node_try_ref_rcu(upcall->recirc);
         }
     } else {
@@ -1312,21 +1304,6 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
         const struct dp_packet *packet = upcall->packet;
         struct ukey_op *op;
 
-        if (upcall->vsp_adjusted) {
-            /* This packet was received on a VLAN splinter port.  We added a
-             * VLAN to the packet to make the packet resemble the flow, but the
-             * actions were composed assuming that the packet contained no
-             * VLAN.  So, we must remove the VLAN header from the packet before
-             * trying to execute the actions. */
-            if (upcall->odp_actions.size) {
-                eth_pop_vlan(CONST_CAST(struct dp_packet *, upcall->packet));
-            }
-
-            /* Remove the flow vlan tags inserted by vlan splinter logic
-             * to ensure megaflow masks generated match the data path flow. */
-            CONST_CAST(struct flow *, upcall->flow)->vlan_tci = 0;
-        }
-
         /* Do not install a flow into the datapath if:
          *
          *    - The datapath already has too many flows.
@@ -1414,7 +1391,7 @@ ukey_lookup(struct udpif *udpif, const ovs_u128 *ufid, const unsigned pmd_id)
 
     CMAP_FOR_EACH_WITH_HASH (ukey, cmap_node,
                              get_ukey_hash(ufid, pmd_id), cmap) {
-        if (ovs_u128_equals(&ukey->ufid, ufid)) {
+        if (ovs_u128_equals(ukey->ufid, *ufid)) {
             return ukey;
         }
     }
@@ -1541,7 +1518,8 @@ ukey_create_from_dpif_flow(const struct udpif *udpif,
         /* If the key or actions were not provided by the datapath, fetch the
          * full flow. */
         ofpbuf_use_stack(&buf, &stub, sizeof stub);
-        err = dpif_flow_get(udpif->dpif, NULL, 0, &flow->ufid,
+        err = dpif_flow_get(udpif->dpif, flow->key, flow->key_len,
+                            flow->ufid_present ? &flow->ufid : NULL,
                             flow->pmd_id, &buf, &full_flow);
         if (err) {
             return err;
@@ -2474,11 +2452,11 @@ upcall_unixctl_dump_wait(struct unixctl_conn *conn,
                          const char *argv[] OVS_UNUSED,
                          void *aux OVS_UNUSED)
 {
-    if (list_is_singleton(&all_udpifs)) {
+    if (ovs_list_is_singleton(&all_udpifs)) {
         struct udpif *udpif = NULL;
         size_t len;
 
-        udpif = OBJECT_CONTAINING(list_front(&all_udpifs), udpif, list_node);
+        udpif = OBJECT_CONTAINING(ovs_list_front(&all_udpifs), udpif, list_node);
         len = (udpif->n_conns + 1) * sizeof *udpif->conns;
         udpif->conn_seq = seq_read(udpif->dump_seq);
         udpif->conns = xrealloc(udpif->conns, len);

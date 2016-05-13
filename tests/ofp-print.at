@@ -2796,7 +2796,7 @@ AT_CHECK([ovs-ofctl ofp-print "\
 01 04 00 14 00 00 00 02 00 00 23 20 00 00 00 10 \
 00 00 00 01 \
 "], [0], [dnl
-NXT_SET_PACKET_IN_FORMAT (xid=0x2): format=nxm
+NXT_SET_PACKET_IN_FORMAT (xid=0x2): format=nxt_packet_in
 ])
 AT_CLEANUP
 
@@ -2843,6 +2843,29 @@ tcp,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,n
 00000010  08 00 45 00 00 28 00 00-00 00 00 06 32 05 53 53
 00000020  53 53 54 54 54 54 00 55-00 56 00 00 00 00 00 00
 00000030  00 00 50 01 00 00 31 6d-00 00 00 00 00 00 00 00
+])
+AT_CLEANUP
+
+AT_SETUP([NX_PACKET_IN2])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "
+01 04 0098 00000000 00002320 0000001e
+0000 0034
+  82 82 82 82 82 82 80 81 81 81 81 81 81 00 00 50
+  08 00 45 00 00 28 00 00 00 00 00 06 32 05 53 53
+  53 53 54 54 54 54 00 55 00 56 00 00 00 00 00 00   00000000
+0001 0008 00000040
+0002 0008 00000114
+0003 0005 07   000000
+0004 0010 00000000   fedcba9876543210
+0005 0005 01   000000
+0006 0010 80000408 5a5a5a5a5a5a5a5a
+0007 0009 0102030405  00000000000000
+"
+], [0], [dnl
+NXT_PACKET_IN2 (xid=0x0): table_id=7 cookie=0xfedcba9876543210 total_len=64 metadata=0x5a5a5a5a5a5a5a5a (via action) data_len=48 buffer=0x00000114
+ userdata=01.02.03.04.05
+ip,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=0.0.0.0,nw_dst=0.0.0.0,nw_proto=0,nw_tos=0,nw_ecn=0,nw_ttl=0
 ])
 AT_CLEANUP
 
@@ -3088,6 +3111,18 @@ AT_CHECK([ovs-ofctl ofp-print "\
 01 00 00 00 00 00 00 00 \
 "], [0], [dnl
 NXT_FLOW_MOD_TABLE_ID (xid=0x1020304): enable
+])
+AT_CLEANUP
+
+AT_SETUP([NXT_RESUME])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 0038 01020304 00002320 0000001c \
+0000 0012 ffffffffffff 102030405060 1234 000000000000 \
+0006 000a 00000002 fffd 000000000000
+"], [0], [dnl
+NXT_RESUME (xid=0x1020304): total_len=14 in_port=CONTROLLER (via no_match) data_len=14 (unbuffered)
+vlan_tci=0x0000,dl_src=10:20:30:40:50:60,dl_dst=ff:ff:ff:ff:ff:ff,dl_type=0x1234
 ])
 AT_CLEANUP
 

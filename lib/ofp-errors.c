@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,15 +15,16 @@
  */
 
 #include <config.h>
-#include "ofp-errors.h"
 #include <errno.h>
 #include "byte-order.h"
-#include "dynamic-string.h"
-#include "ofp-msgs.h"
-#include "ofp-util.h"
-#include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_errors);
 
@@ -54,6 +55,8 @@ ofperr_domain_from_version(enum ofp_version version)
         return &ofperr_of14;
     case OFP15_VERSION:
         return &ofperr_of15;
+    case OFP16_VERSION:
+        return &ofperr_of16;
     default:
         return NULL;
     }
@@ -284,17 +287,15 @@ ofperr_decode_msg(const struct ofp_header *oh, struct ofpbuf *payload)
     const struct ofp_error_msg *oem;
     enum ofpraw raw;
     uint16_t type, code;
-    enum ofperr error;
     uint32_t vendor;
-    struct ofpbuf b;
 
     if (payload) {
         memset(payload, 0, sizeof *payload);
     }
 
     /* Pull off the error message. */
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    error = ofpraw_pull(&raw, &b);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofperr error = ofpraw_pull(&raw, &b);
     if (error) {
         return 0;
     }

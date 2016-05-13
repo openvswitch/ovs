@@ -41,6 +41,10 @@ setuptools.setup(
         'Topic :: Database :: Front-Ends',
         'Topic :: Software Development :: Libraries :: Python Modules',
         'Topic :: System :: Networking',
-        'License :: OSI Approved :: Apache Software License'
+        'License :: OSI Approved :: Apache Software License',
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.4',
     ]
 )

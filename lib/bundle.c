@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,15 +20,16 @@
 #include <arpa/inet.h>
 #include <inttypes.h>
 
-#include "dynamic-string.h"
+#include "colors.h"
 #include "multipath.h"
-#include "meta-flow.h"
 #include "nx-match.h"
-#include "ofpbuf.h"
-#include "ofp-actions.h"
-#include "ofp-errors.h"
-#include "ofp-util.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(bundle);
@@ -178,8 +179,7 @@ bundle_parse__(const char *s, char **save_ptr,
         bundle = ofpacts->header;
         bundle->n_slaves++;
     }
-    ofpact_finish(ofpacts, &bundle->ofpact);
-
+    ofpact_finish_BUNDLE(ofpacts, &bundle);
     bundle->basis = atoi(basis);
 
     if (!strcasecmp(fields, "eth_src")) {
@@ -299,22 +299,22 @@ bundle_format(const struct ofpact_bundle *bundle, struct ds *s)
 
     action = bundle->dst.field ? "bundle_load" : "bundle";
 
-    ds_put_format(s, "%s(%s,%"PRIu16",%s,%s,", action, fields,
-                  bundle->basis, algorithm, "ofport");
+    ds_put_format(s, "%s%s(%s%s,%"PRIu16",%s,%s,", colors.paren, action,
+                  colors.end, fields, bundle->basis, algorithm, "ofport");
 
     if (bundle->dst.field) {
         mf_format_subfield(&bundle->dst, s);
-        ds_put_cstr(s, ",");
+        ds_put_char(s, ',');
     }
 
-    ds_put_cstr(s, "slaves:");
+    ds_put_format(s, "%sslaves:%s", colors.param, colors.end);
     for (i = 0; i < bundle->n_slaves; i++) {
         if (i) {
-            ds_put_cstr(s, ",");
+            ds_put_char(s, ',');
         }
 
         ofputil_format_port(bundle->slaves[i], s);
     }
 
-    ds_put_cstr(s, ")");
+    ds_put_format(s, "%s)%s", colors.paren, colors.end);
 }

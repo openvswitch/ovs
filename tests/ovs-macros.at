@@ -2,7 +2,7 @@ AT_TESTED([ovs-vswitchd])
 AT_TESTED([ovs-vsctl])
 AT_TESTED([perl])
 
-m4_include([m4/compat.at])
+m4_include([m4/compat.m4])
 
 dnl Make AT_SETUP automatically run the ovs_init() shell function
 dnl as the first step in every test.
@@ -135,8 +135,18 @@ dnl
 dnl Ask the daemon named DAEMON to exit, via ovs-appctl, and then waits for it
 dnl to exit.
 m4_define([OVS_APP_EXIT_AND_WAIT],
-  [ovs-appctl -t $1 exit
-   OVS_WAIT_WHILE([test -e $1.pid])])
+  [TMPPID=$(cat "$OVS_RUNDIR"/$1.pid 2>/dev/null)
+   AT_CHECK([ovs-appctl -t $1 exit])
+   OVS_WAIT_WHILE([kill -0 $TMPPID 2>/dev/null])])
+
+dnl OVS_APP_EXIT_AND_WAIT_BY_TARGET(DAEMON)
+dnl
+dnl Ask the daemon named DAEMON to exit, via ovs-appctl (using the target
+dnl argument), and then waits for it to exit.
+m4_define([OVS_APP_EXIT_AND_WAIT_BY_TARGET],
+  [TMPPID=`cat "$OVS_RUNDIR"/$1.pid 2>/dev/null`
+   AT_CHECK([ovs-appctl --target=$OVS_RUNDIR/ovsdb-server.$TMPPID.ctl exit])
+   OVS_WAIT_WHILE([kill -0 $TMPPID 2>/dev/null])])
 
 dnl on_exit "COMMAND"
 dnl
@@ -153,3 +163,30 @@ on_exit () {
     mv cleanup.tmp cleanup
 }
 ])
+
+dnl Autoconf 2.63 compatibility verison of macro introduced in Autoconf 2.64:
+m4_ifndef([AS_VAR_APPEND],
+  [m4_divert_text([PREPARE_TESTS],
+    [as_var_append () {
+       eval $1=\$$1\$2
+     }
+])
+   m4_define([AS_VAR_APPEND], [as_var_append $1 $2])])
+
+dnl Autoconf 2.63 compatibility verison of macro introduced in Autoconf 2.64:
+m4_ifndef([AT_CHECK_UNQUOTED],
+  [m4_define([AT_CHECK_UNQUOTED],
+  [_AT_CHECK([$1], [$2], AS_ESCAPE(m4_dquote(m4_expand([$3])), [""]),
+    AS_ESCAPE(m4_dquote(m4_expand([$4])),[""]), [$5], [$6])])])
+
+dnl Autoconf 2.63 compatibility verison of macro introduced in Autoconf 2.64:
+m4_ifndef([AT_SKIP_IF],
+  [m4_define([AT_SKIP_IF],
+    [AT_CHECK([($1) \
+    && exit 77 || exit 0], [0], [ignore], [ignore])])])
+
+dnl Autoconf 2.63 compatibility verison of macro introduced in Autoconf 2.64:
+m4_ifndef([AT_FAIL_IF],
+  [m4_define([AT_FAIL_IF],
+    [AT_CHECK([($1) \
+    && exit 99 || exit 0], [0], [ignore], [ignore])])])

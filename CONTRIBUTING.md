@@ -29,15 +29,16 @@ In particular:
 
 Testing is also important:
 
-  - A patch that modifies existing code should be tested with
-    `make check` before submission.
+  - A patch that modifies existing code should be tested with `make
+    check` before submission.  Please see INSTALL.md, under
+    "Self-Tests", for more information.
 
   - A patch that adds or deletes files should also be tested with
     `make distcheck` before submission.
 
   - A patch that modifies Linux kernel code should be at least
     build-tested on various Linux kernel versions before
-    submission.  I suggest versions 2.6.32 and whatever
+    submission.  I suggest versions 3.10 and whatever
     the current latest release version is at the time.
 
   - A patch that modifies the ofproto or vswitchd code should be
@@ -249,6 +250,17 @@ Examples of common tags follow.
 
         git log -1 --pretty=format:"Fixes: %h (\"%s\")" --abbrev=12 COMMIT_REF
 
+    Vulnerability: CVE-2016-2074
+
+        Specifies that the patch fixes or is otherwise related to a
+        security vulnerability with the given CVE identifier.  Other
+        identifiers in public vulnerability databases are also
+        suitable.
+
+        If the vulnerability was reported publicly, then it is also
+        appropriate to cite the URL to the report in a Reported-at
+        tag.  Use a Reported-by tag to acknowledge the reporters.
+
 Developer's Certificate of Origin
 ---------------------------------
 
@@ -345,6 +357,12 @@ sending the patch as an attachment is a second choice.
 Please follow the style used in the code that you are modifying.  The
 [CodingStyle.md] file describes the coding style used in most of Open
 vSwitch. Use Linux kernel coding style for Linux kernel code.
+
+If your code is non-datapath code, you may use the
+`utilities/checkpatch.py` utility as a quick check for certain commonly
+occuring mistakes (improper leading/trailing whitespace, missing signoffs,
+some improper formatted patch files).  For linux datapath code, it is
+a good idea to use the linux script `checkpatch.pl`.
 
 Example
 -------

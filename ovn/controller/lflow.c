@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,13 @@
 
 #include <config.h>
 #include "lflow.h"
-#include "dynamic-string.h"
+#include "lport.h"
 #include "ofctrl.h"
-#include "ofp-actions.h"
-#include "ofpbuf.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
-#include "ovn/controller/ovn-controller.h"
+#include "ovn-controller.h"
 #include "ovn/lib/actions.h"
 #include "ovn/lib/expr.h"
 #include "ovn/lib/ovn-sb-idl.h"
@@ -43,8 +44,8 @@ add_logical_register(struct shash *symtab, enum mf_field_id id)
     expr_symtab_add_field(symtab, name, id, NULL, false);
 }
 
-static void
-symtab_init(void)
+void
+lflow_init(void)
 {
     shash_init(&symtab);
 
@@ -60,6 +61,8 @@ symtab_init(void)
 #undef MFF_LOG_REG
 
     /* Connection tracking state. */
+    expr_symtab_add_field(&symtab, "ct_mark", MFF_CT_MARK, NULL, false);
+    expr_symtab_add_field(&symtab, "ct_label", MFF_CT_LABEL, NULL, false);
     expr_symtab_add_field(&symtab, "ct_state", MFF_CT_STATE, NULL, false);
     char ct_state_str[16];
     snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_TRACKED_BIT);
@@ -155,159 +158,72 @@ symtab_init(void)
     expr_symtab_add_field(&symtab, "sctp.dst", MFF_SCTP_DST, "sctp", false);
 }
 
-/* Logical datapaths and logical port numbers. */
-
-enum ldp_type {
-    LDP_TYPE_ROUTER,
-    LDP_TYPE_SWITCH,
+struct lookup_port_aux {
+    const struct lport_index *lports;
+    const struct mcgroup_index *mcgroups;
+    const struct sbrec_datapath_binding *dp;
 };
 
-/* A logical datapath.
- *
- * 'ports' maps 'logical_port' names to 'tunnel_key' values in the OVN_SB
- * Port_Binding table within the logical datapath. */
-struct logical_datapath {
-    struct hmap_node hmap_node; /* Indexed on 'uuid'. */
-    struct uuid uuid;           /* UUID from Datapath_Binding row. */
-    uint32_t tunnel_key;        /* 'tunnel_key' from Datapath_Binding row. */
-    struct simap ports;         /* Logical port name to port number. */
-    enum ldp_type type;         /* Type of logical datapath */
-};
-
-/* Contains "struct logical_datapath"s. */
-static struct hmap logical_datapaths = HMAP_INITIALIZER(&logical_datapaths);
-
-/* Finds and returns the logical_datapath for 'binding', or NULL if no such
- * logical_datapath exists. */
-static struct logical_datapath *
-ldp_lookup(const struct sbrec_datapath_binding *binding)
+static bool
+lookup_port_cb(const void *aux_, const char *port_name, unsigned int *portp)
 {
-    struct logical_datapath *ldp;
-    HMAP_FOR_EACH_IN_BUCKET (ldp, hmap_node, uuid_hash(&binding->header_.uuid),
-                             &logical_datapaths) {
-        if (uuid_equals(&ldp->uuid, &binding->header_.uuid)) {
-            return ldp;
-        }
+    const struct lookup_port_aux *aux = aux_;
+
+    const struct sbrec_port_binding *pb
+        = lport_lookup_by_name(aux->lports, port_name);
+    if (pb && pb->datapath == aux->dp) {
+        *portp = pb->tunnel_key;
+        return true;
     }
-    return NULL;
+
+    const struct sbrec_multicast_group *mg
+        = mcgroup_lookup_by_dp_name(aux->mcgroups, aux->dp, port_name);
+    if (mg) {
+        *portp = mg->tunnel_key;
+        return true;
+    }
+
+    return false;
 }
 
-/* Creates a new logical_datapath for the given 'binding'. */
-static struct logical_datapath *
-ldp_create(const struct sbrec_datapath_binding *binding)
+static bool
+is_switch(const struct sbrec_datapath_binding *ldp)
 {
-    struct logical_datapath *ldp;
+    return smap_get(&ldp->external_ids, "logical-switch") != NULL;
 
-    ldp = xmalloc(sizeof *ldp);
-    hmap_insert(&logical_datapaths, &ldp->hmap_node,
-                uuid_hash(&binding->header_.uuid));
-    ldp->uuid = binding->header_.uuid;
-    ldp->tunnel_key = binding->tunnel_key;
-    const char *ls = smap_get(&binding->external_ids, "logical-switch");
-    ldp->type = ls ? LDP_TYPE_SWITCH : LDP_TYPE_ROUTER;
-    simap_init(&ldp->ports);
-    return ldp;
 }
 
-static struct logical_datapath *
-ldp_lookup_or_create(const struct sbrec_datapath_binding *binding)
-{
-    struct logical_datapath *ldp = ldp_lookup(binding);
-    return ldp ? ldp : ldp_create(binding);
-}
-
+/* Adds the logical flows from the Logical_Flow table to 'flow_table'. */
 static void
-ldp_free(struct logical_datapath *ldp)
+add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
+                  const struct mcgroup_index *mcgroups,
+                  const struct hmap *local_datapaths,
+                  const struct hmap *patched_datapaths,
+                  const struct simap *ct_zones, struct hmap *flow_table)
 {
-    simap_destroy(&ldp->ports);
-    hmap_remove(&logical_datapaths, &ldp->hmap_node);
-    free(ldp);
-}
-
-/* Iterates through all of the records in the Port_Binding table, updating the
- * table of logical_datapaths to match the values found in active
- * Port_Bindings. */
-static void
-ldp_run(struct controller_ctx *ctx)
-{
-    struct logical_datapath *ldp;
-    HMAP_FOR_EACH (ldp, hmap_node, &logical_datapaths) {
-        simap_clear(&ldp->ports);
-    }
-
-    const struct sbrec_port_binding *binding;
-    SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
-        struct logical_datapath *ldp = ldp_lookup_or_create(binding->datapath);
-
-        simap_put(&ldp->ports, binding->logical_port, binding->tunnel_key);
-    }
-
-    const struct sbrec_multicast_group *mc;
-    SBREC_MULTICAST_GROUP_FOR_EACH (mc, ctx->ovnsb_idl) {
-        struct logical_datapath *ldp = ldp_lookup_or_create(mc->datapath);
-        simap_put(&ldp->ports, mc->name, mc->tunnel_key);
-    }
-
-    struct logical_datapath *next_ldp;
-    HMAP_FOR_EACH_SAFE (ldp, next_ldp, hmap_node, &logical_datapaths) {
-        if (simap_is_empty(&ldp->ports)) {
-            ldp_free(ldp);
-        }
-    }
-}
-
-static void
-ldp_destroy(void)
-{
-    struct logical_datapath *ldp, *next_ldp;
-    HMAP_FOR_EACH_SAFE (ldp, next_ldp, hmap_node, &logical_datapaths) {
-        ldp_free(ldp);
-    }
-}
-
-void
-lflow_init(void)
-{
-    symtab_init();
-}
-
-/* Translates logical flows in the Logical_Flow table in the OVN_SB database
- * into OpenFlow flows.  See ovn-architecture(7) for more information. */
-void
-lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
-          const struct simap *ct_zones,
-          struct hmap *local_datapaths)
-{
-    struct hmap flows = HMAP_INITIALIZER(&flows);
     uint32_t conj_id_ofs = 1;
-
-    ldp_run(ctx);
 
     const struct sbrec_logical_flow *lflow;
     SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
-        /* Find the "struct logical_datapath" associated with this
-         * Logical_Flow row.  If there's no such struct, that must be because
-         * no logical ports are bound to that logical datapath, so there's no
-         * point in maintaining any flows for it anyway, so skip it. */
-        const struct logical_datapath *ldp;
-        ldp = ldp_lookup(lflow->logical_datapath);
+        /* Determine translation of logical table IDs to physical table IDs. */
+        bool ingress = !strcmp(lflow->pipeline, "ingress");
+
+        const struct sbrec_datapath_binding *ldp = lflow->logical_datapath;
         if (!ldp) {
             continue;
         }
-
-        bool ingress = !strcmp(lflow->pipeline, "ingress");
-
-        if (ldp->type == LDP_TYPE_SWITCH && !ingress) {
+        if (is_switch(ldp)) {
             /* For a logical switch datapath, local_datapaths tells us if there
-             * are any local ports for this datapath.  If not, processing
-             * logical flows for the egress pipeline of this datapath is
-             * unnecessary.
+             * are any local ports for this datapath.  If not, we can skip
+             * processing logical flows if the flow belongs to egress pipeline
+             * or if that logical switch datapath is not patched to any logical
+             * router.
              *
-             * We still need the ingress pipeline because even if there are no
-             * local ports, we still may need to execute the ingress pipeline
-             * after a packet leaves a logical router.  Further optimization
-             * is possible, but not based on what we know with local_datapaths
-             * right now.
+             * Otherwise, we still need the ingress pipeline because even if
+             * there are no local ports, we still may need to execute the ingress
+             * pipeline after a packet leaves a logical router.  Further
+             * optimization is possible, but not based on what we know with
+             * local_datapaths right now.
              *
              * A better approach would be a kind of "flood fill" algorithm:
              *
@@ -317,12 +233,22 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
              *   2. For each patch port P in a logical datapath in S, add the
              *      logical datapath of the remote end of P to S.  Iterate
              *      until S reaches a fixed point.
+             *
+             * This can be implemented in northd, which can generate the sets and
+             * save it on each port-binding record in SB, and ovn-controller can
+             * use the information directly. However, there can be update storms
+             * when a pair of patch ports are added/removed to connect/disconnect
+             * large lrouters and lswitches. This need to be studied further.
              */
 
-            struct hmap_node *ld;
-            ld = hmap_first_with_hash(local_datapaths, ldp->tunnel_key);
-            if (!ld) {
-                continue;
+            if (!get_local_datapath(local_datapaths, ldp->tunnel_key)) {
+                if (!ingress) {
+                    continue;
+                }
+                if (!get_patched_datapath(patched_datapaths,
+                                          ldp->tunnel_key)) {
+                    continue;
+                }
             }
         }
 
@@ -344,15 +270,22 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
         char *error;
 
         ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
+        struct lookup_port_aux aux = {
+            .lports = lports,
+            .mcgroups = mcgroups,
+            .dp = lflow->logical_datapath
+        };
         struct action_params ap = {
             .symtab = &symtab,
-            .ports = &ldp->ports,
+            .lookup_port = lookup_port_cb,
+            .aux = &aux,
             .ct_zones = ct_zones,
 
             .n_tables = LOG_PIPELINE_LEN,
             .first_ptable = first_ptable,
             .cur_ltable = lflow->table_id,
             .output_ptable = output_ptable,
+            .arp_ptable = OFTABLE_MAC_BINDING,
         };
         error = actions_parse_string(lflow->actions, &ap, &ofpacts, &prereqs);
         if (error) {
@@ -387,13 +320,15 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
 
         expr = expr_simplify(expr);
         expr = expr_normalize(expr);
-        uint32_t n_conjs = expr_to_matches(expr, &ldp->ports, &matches);
+        uint32_t n_conjs = expr_to_matches(expr, lookup_port_cb, &aux,
+                                           &matches);
         expr_destroy(expr);
 
         /* Prepare the OpenFlow matches for adding to the flow table. */
         struct expr_match *m;
         HMAP_FOR_EACH (m, hmap_node, &matches) {
-            match_set_metadata(&m->match, htonll(ldp->tunnel_key));
+            match_set_metadata(&m->match,
+                               htonll(lflow->logical_datapath->tunnel_key));
             if (m->match.wc.masks.conj_id) {
                 m->match.flow.conj_id += conj_id_ofs;
             }
@@ -427,9 +362,83 @@ lflow_run(struct controller_ctx *ctx, struct hmap *flow_table,
     }
 }
 
+static void
+put_load(const uint8_t *data, size_t len,
+         enum mf_field_id dst, int ofs, int n_bits,
+         struct ofpbuf *ofpacts)
+{
+    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
+    sf->field = mf_from_id(dst);
+    sf->flow_has_vlan = false;
+
+    bitwise_copy(data, len, 0, &sf->value, sf->field->n_bytes, ofs, n_bits);
+    bitwise_one(&sf->mask, sf->field->n_bytes, ofs, n_bits);
+}
+
+/* Adds an OpenFlow flow to 'flow_table' for each MAC binding in the OVN
+ * southbound database, using 'lports' to resolve logical port names to
+ * numbers. */
+static void
+add_neighbor_flows(struct controller_ctx *ctx,
+                   const struct lport_index *lports, struct hmap *flow_table)
+{
+    struct ofpbuf ofpacts;
+    struct match match;
+    match_init_catchall(&match);
+    ofpbuf_init(&ofpacts, 0);
+
+    const struct sbrec_mac_binding *b;
+    SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
+        const struct sbrec_port_binding *pb
+            = lport_lookup_by_name(lports, b->logical_port);
+        if (!pb) {
+            continue;
+        }
+
+        struct eth_addr mac;
+        if (!eth_addr_from_string(b->mac, &mac)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "bad 'mac' %s", b->mac);
+            continue;
+        }
+
+        ovs_be32 ip;
+        if (!ip_parse(b->ip, &ip)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "bad 'ip' %s", b->ip);
+            continue;
+        }
+
+        match_set_metadata(&match, htonll(pb->datapath->tunnel_key));
+        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, pb->tunnel_key);
+        match_set_reg(&match, 0, ntohl(ip));
+
+        ofpbuf_clear(&ofpacts);
+        put_load(mac.ea, sizeof mac.ea, MFF_ETH_DST, 0, 48, &ofpacts);
+
+        ofctrl_add_flow(flow_table, OFTABLE_MAC_BINDING, 100,
+                        &match, &ofpacts);
+    }
+    ofpbuf_uninit(&ofpacts);
+}
+
+/* Translates logical flows in the Logical_Flow table in the OVN_SB database
+ * into OpenFlow flows.  See ovn-architecture(7) for more information. */
+void
+lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
+          const struct mcgroup_index *mcgroups,
+          const struct hmap *local_datapaths,
+          const struct hmap *patched_datapaths,
+          const struct simap *ct_zones, struct hmap *flow_table)
+{
+    add_logical_flows(ctx, lports, mcgroups, local_datapaths,
+                      patched_datapaths, ct_zones, flow_table);
+    add_neighbor_flows(ctx, lports, flow_table);
+}
+
 void
 lflow_destroy(void)
 {
     expr_symtab_destroy(&symtab);
-    ldp_destroy();
+    shash_destroy(&symtab);
 }

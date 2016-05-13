@@ -27,7 +27,7 @@ bits=2048
 
 # OS-specific compatibility routines
 case $(uname -s) in
-FreeBSD|NetBSD)
+FreeBSD|NetBSD|Darwin)
     file_mod_epoch()
     {
         stat -r "$1" | awk '{print $10}'

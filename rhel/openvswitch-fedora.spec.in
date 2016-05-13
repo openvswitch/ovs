@@ -46,6 +46,7 @@ BuildRequires: systemd-units openssl openssl-devel
 BuildRequires: python python-twisted-core python-zope-interface PyQt4 python-six
 BuildRequires: desktop-file-utils
 BuildRequires: groff graphviz
+BuildRequires: checkpolicy, selinux-policy-devel
 # make check dependencies
 BuildRequires: procps-ng
 %if %{with libcapng}
@@ -71,6 +72,15 @@ Obsoletes: openvswitch-controller <= 0:2.1.0-1
 Open vSwitch provides standard network bridging functions and
 support for the OpenFlow protocol for remote per-flow control of
 traffic.
+
+%package selinux-policy
+Summary: Open vSwitch SELinux policy
+License: ASL 2.0
+BuildArch: noarch
+Requires: selinux-policy-targeted
+
+%description selinux-policy
+Tailored Open vSwitch SELinux policy
 
 %package -n python-openvswitch
 Summary: Open vSwitch python bindings
@@ -102,17 +112,51 @@ Provides: openvswitch-static = %{version}-%{release}
 This provides static library, libopenswitch.a and the openvswitch header
 files needed to build an external application.
 
-%package ovn
+%package ovn-central
 Summary: Open vSwitch - Open Virtual Network support
 License: ASL 2.0
-Requires: openvswitch
+Requires: openvswitch openvswitch-ovn-common
 
-%description ovn
+%description ovn-central
 OVN, the Open Virtual Network, is a system to support virtual network
 abstraction.  OVN complements the existing capabilities of OVS to add
 native support for virtual network abstractions, such as virtual L2 and L3
 overlays and security groups.
 
+%package ovn-host
+Summary: Open vSwitch - Open Virtual Network support
+License: ASL 2.0
+Requires: openvswitch openvswitch-ovn-common
+
+%description ovn-host
+OVN, the Open Virtual Network, is a system to support virtual network
+abstraction.  OVN complements the existing capabilities of OVS to add
+native support for virtual network abstractions, such as virtual L2 and L3
+overlays and security groups.
+
+%package ovn-vtep
+Summary: Open vSwitch - Open Virtual Network support
+License: ASL 2.0
+Requires: openvswitch openvswitch-ovn-common
+
+%description ovn-vtep
+OVN vtep controller
+
+%package ovn-common
+Summary: Open vSwitch - Open Virtual Network support
+License: ASL 2.0
+Requires: openvswitch
+
+%description ovn-common
+Utilities that are use to diagnose and manage the OVN components.
+
+%package ovn-docker
+Summary: Open vSwitch - Open Virtual Network support
+License: ASL 2.0
+Requires: openvswitch openvswitch-ovn-common python-openvswitch
+
+%description ovn-docker
+Docker network plugins for OVN.
 
 %prep
 %setup -q
@@ -131,6 +175,8 @@ overlays and security groups.
 	--with-pkidir=%{_sharedstatedir}/openvswitch/pki
 
 make %{?_smp_mflags}
+cd selinux
+make -f %{_datadir}/selinux/devel/Makefile
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -172,6 +218,9 @@ install -d -m 0755 $RPM_BUILD_ROOT/%{_sharedstatedir}/openvswitch
 touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/conf.db
 touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/system-id.conf
 
+install -p -m 644 -D selinux/openvswitch-custom.pp \
+        $RPM_BUILD_ROOT%{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp
+
 # remove unpackaged files
 rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
         $RPM_BUILD_ROOT%{_bindir}/ovs-pcap \
@@ -179,13 +228,11 @@ rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
         $RPM_BUILD_ROOT%{_sbindir}/ovs-vlan-bug-workaround \
         $RPM_BUILD_ROOT%{_mandir}/man1/ovs-pcap.1 \
         $RPM_BUILD_ROOT%{_mandir}/man1/ovs-tcpundump.1 \
-        $RPM_BUILD_ROOT%{_mandir}/man8/ovs-vlan-bug-workaround.8 \
-        $RPM_BUILD_ROOT%{_datadir}/openvswitch/scripts/ovs-save
+        $RPM_BUILD_ROOT%{_mandir}/man8/ovs-vlan-bug-workaround.8
 
 %check
 %if %{with check}
-    if make check TESTSUITEFLAGS='%{_smp_mflags}' ||
-       make check TESTSUITEFLAGS='--recheck'; then :;
+    if make check TESTSUITEFLAGS='%{_smp_mflags}' RECHECK=yes; then :;
     else
         cat tests/testsuite.log
         exit 1
@@ -200,26 +247,42 @@ rm -rf $RPM_BUILD_ROOT
     %systemd_preun %{name}.service
 %else
     if [ $1 -eq 0 ] ; then
-    # Package removal, not upgrade
+        # Package removal, not upgrade
         /bin/systemctl --no-reload disable %{name}.service >/dev/null 2>&1 || :
         /bin/systemctl stop %{name}.service >/dev/null 2>&1 || :
     fi
 %endif
 
-%preun ovn
+%preun ovn-central
 %if 0%{?systemd_preun:1}
-    %systemd_preun ovn-controller.service
-    %systemd_preun ovn-controller-vtep.service
     %systemd_preun ovn-northd.service
 %else
     if [ $1 -eq 0 ] ; then
-    # Package removal, not upgrade
-        /bin/systemctl --no-reload disable ovn-controller.service >/dev/null 2>&1 || :
-        /bin/systemctl stop ovn-controller.service >/dev/null 2>&1 || :
-        /bin/systemctl --no-reload disable ovn-controller-vtep.service >/dev/null 2>&1 || :
-        /bin/systemctl stop ovn-controller-vtep.service >/dev/null 2>&1 || :
+        # Package removal, not upgrade
         /bin/systemctl --no-reload disable ovn-northd.service >/dev/null 2>&1 || :
         /bin/systemctl stop ovn-northd.service >/dev/null 2>&1 || :
+    fi
+%endif
+
+%preun ovn-host
+%if 0%{?systemd_preun:1}
+    %systemd_preun ovn-controller.service
+%else
+    if [ $1 -eq 0 ] ; then
+        # Package removal, not upgrade
+        /bin/systemctl --no-reload disable ovn-controller.service >/dev/null 2>&1 || :
+        /bin/systemctl stop ovn-controller.service >/dev/null 2>&1 || :
+    fi
+%endif
+
+%preun ovn-vtep
+%if 0%{?systemd_preun:1}
+    %systemd_preun ovn-controller-vtep.service
+%else
+    if [ $1 -eq 0 ] ; then
+        # Package removal, not upgrade
+        /bin/systemctl --no-reload disable ovn-controller-vtep.service >/dev/null 2>&1 || :
+        /bin/systemctl stop ovn-controller-vtep.service >/dev/null 2>&1 || :
     fi
 %endif
 
@@ -233,10 +296,8 @@ rm -rf $RPM_BUILD_ROOT
     fi
 %endif
 
-%post ovn
+%post ovn-central
 %if 0%{?systemd_post:1}
-    %systemd_post ovn-controller.service
-    %systemd_post ovn-controller-vtep.service
     %systemd_post ovn-northd.service
 %else
     # Package install, not upgrade
@@ -244,6 +305,29 @@ rm -rf $RPM_BUILD_ROOT
         /bin/systemctl daemon-reload >dev/null || :
     fi
 %endif
+
+%post ovn-host
+%if 0%{?systemd_post:1}
+    %systemd_post ovn-controller.service
+%else
+    # Package install, not upgrade
+    if [ $1 -eq 1 ]; then
+        /bin/systemctl daemon-reload >dev/null || :
+    fi
+%endif
+
+%post ovn-vtep
+%if 0%{?systemd_post:1}
+    %systemd_post ovn-controller-vtep.service
+%else
+    # Package install, not upgrade
+    if [ $1 -eq 1 ]; then
+        /bin/systemctl daemon-reload >dev/null || :
+    fi
+%endif
+
+%post selinux-policy
+/usr/sbin/semodule -i %{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp &> /dev/null || :
 
 %postun
 %if 0%{?systemd_postun_with_restart:1}
@@ -256,20 +340,47 @@ rm -rf $RPM_BUILD_ROOT
     fi
 %endif
 
-%postun ovn
+%postun ovn-central
 %if 0%{?systemd_postun_with_restart:1}
-    %systemd_postun_with_restart ovn-controller.service
-    %systemd_postun_with_restart ovn-controller-vtep.service
     %systemd_postun_with_restart ovn-northd.service
 %else
     /bin/systemctl daemon-reload >/dev/null 2>&1 || :
     if [ "$1" -ge "1" ] ; then
     # Package upgrade, not uninstall
-        /bin/systemctl try-restart ovn-controller.service >/dev/null 2>&1 || :
-        /bin/systemctl try-restart ovn-controller-vtep.service >/dev/null 2>&1 || :
         /bin/systemctl try-restart ovn-northd.service >/dev/null 2>&1 || :
     fi
 %endif
+
+%postun ovn-host
+%if 0%{?systemd_postun_with_restart:1}
+    %systemd_postun_with_restart ovn-controller.service
+%else
+    /bin/systemctl daemon-reload >/dev/null 2>&1 || :
+    if [ "$1" -ge "1" ] ; then
+        # Package upgrade, not uninstall
+        /bin/systemctl try-restart ovn-controller.service >/dev/null 2>&1 || :
+    fi
+%endif
+
+%postun ovn-vtep
+%if 0%{?systemd_postun_with_restart:1}
+    %systemd_postun_with_restart ovn-controller-vtep.service
+%else
+    /bin/systemctl daemon-reload >/dev/null 2>&1 || :
+    if [ "$1" -ge "1" ] ; then
+        # Package upgrade, not uninstall
+        /bin/systemctl try-restart ovn-controller-vtep.service >/dev/null 2>&1 || :
+    fi
+%endif
+
+%postun selinux-policy
+if [ $1 -eq 0 ] ; then
+  /usr/sbin/semodule -r openvswitch-custom &> /dev/null || :
+fi
+
+%files selinux-policy
+%defattr(-,root,root)
+%{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp
 
 %files -n python-openvswitch
 %{python_sitelib}/ovs
@@ -309,6 +420,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_datadir}/openvswitch/scripts/ovs-bugtool-*
 %{_datadir}/openvswitch/scripts/ovs-check-dead-ifs
 %{_datadir}/openvswitch/scripts/ovs-lib
+%{_datadir}/openvswitch/scripts/ovs-save
 %{_datadir}/openvswitch/scripts/ovs-vtep
 %{_datadir}/openvswitch/scripts/ovs-ctl
 %config %{_datadir}/openvswitch/vswitch.ovsschema
@@ -350,30 +462,40 @@ rm -rf $RPM_BUILD_ROOT
 /var/log/openvswitch
 %ghost %attr(755,root,root) %{_rundir}/openvswitch
 
-%files ovn
-%{_bindir}/ovn-controller
-%{_bindir}/ovn-controller-vtep
+%files ovn-docker
 %{_bindir}/ovn-docker-overlay-driver
 %{_bindir}/ovn-docker-underlay-driver
+
+%files ovn-common
 %{_bindir}/ovn-nbctl
-%{_bindir}/ovn-northd
 %{_bindir}/ovn-sbctl
 %{_datadir}/openvswitch/scripts/ovn-ctl
-%{_mandir}/man8/ovs-testcontroller.8*
-%{_mandir}/man5/ovn-nb.5*
-%{_mandir}/man5/ovn-sb.5*
-%{_mandir}/man7/ovn-architecture.7*
-%{_mandir}/man8/ovn-controller.8*
-%{_mandir}/man8/ovn-controller-vtep.8*
+%{_datadir}/openvswitch/scripts/ovn-bugtool-nbctl-show
+%{_datadir}/openvswitch/scripts/ovn-bugtool-sbctl-lflow-list
+%{_datadir}/openvswitch/scripts/ovn-bugtool-sbctl-show
 %{_mandir}/man8/ovn-ctl.8*
 %{_mandir}/man8/ovn-nbctl.8*
-%{_mandir}/man8/ovn-northd.8*
+%{_mandir}/man7/ovn-architecture.7*
 %{_mandir}/man8/ovn-sbctl.8*
+%{_mandir}/man5/ovn-nb.5*
+%{_mandir}/man5/ovn-sb.5*
+
+%files ovn-central
+%{_bindir}/ovn-northd
+%{_mandir}/man8/ovn-northd.8*
 %config %{_datadir}/openvswitch/ovn-nb.ovsschema
 %config %{_datadir}/openvswitch/ovn-sb.ovsschema
-%{_unitdir}/ovn-controller.service
-%{_unitdir}/ovn-controller-vtep.service
 %{_unitdir}/ovn-northd.service
+
+%files ovn-host
+%{_bindir}/ovn-controller
+%{_mandir}/man8/ovn-controller.8*
+%{_unitdir}/ovn-controller.service
+
+%files ovn-vtep
+%{_bindir}/ovn-controller-vtep
+%{_mandir}/man8/ovn-controller-vtep.8*
+%{_unitdir}/ovn-controller-vtep.service
 
 %changelog
 * Wed Jan 12 2011 Ralf Spenneberg <ralf@os-s.net>

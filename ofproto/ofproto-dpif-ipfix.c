@@ -22,8 +22,9 @@
 #include "flow.h"
 #include "hash.h"
 #include "hmap.h"
-#include "list.h"
-#include "ofpbuf.h"
+#include "netdev.h"
+#include "openvswitch/list.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto.h"
 #include "ofproto-dpif.h"
 #include "dp-packet.h"
@@ -496,7 +497,7 @@ dpif_ipfix_exporter_init(struct dpif_ipfix_exporter *exporter)
     exporter->seq_number = 1;
     exporter->last_template_set_time = TIME_MIN;
     hmap_init(&exporter->cache_flow_key_map);
-    list_init(&exporter->cache_flow_start_timestamp_list);
+    ovs_list_init(&exporter->cache_flow_start_timestamp_list);
     exporter->cache_active_timeout = 0;
     exporter->cache_max_flows = 0;
 }
@@ -940,13 +941,12 @@ dpif_ipfix_get_bridge_exporter_tunnel_sampling(const struct dpif_ipfix *di)
 static void
 dpif_ipfix_clear(struct dpif_ipfix *di) OVS_REQUIRES(mutex)
 {
-    struct dpif_ipfix_flow_exporter_map_node *exp_node, *exp_next;
+    struct dpif_ipfix_flow_exporter_map_node *exp_node;
     struct dpif_ipfix_port *dip, *next;
 
     dpif_ipfix_bridge_exporter_clear(&di->bridge_exporter);
 
-    HMAP_FOR_EACH_SAFE (exp_node, exp_next, node, &di->flow_exporter_map) {
-        hmap_remove(&di->flow_exporter_map, &exp_node->node);
+    HMAP_FOR_EACH_POP (exp_node, node, &di->flow_exporter_map) {
         dpif_ipfix_flow_exporter_destroy(&exp_node->exporter);
         free(exp_node);
     }
@@ -1344,7 +1344,7 @@ ipfix_cache_update(struct dpif_ipfix_exporter *exporter,
         /* As the latest entry added into the cache, it should
          * logically have the highest flow_start_timestamp_usec, so
          * append it at the tail. */
-        list_push_back(&exporter->cache_flow_start_timestamp_list,
+        ovs_list_push_back(&exporter->cache_flow_start_timestamp_list,
                        &entry->cache_flow_start_timestamp_list_node);
 
         /* Enforce exporter->cache_max_flows limit. */
@@ -1772,7 +1772,7 @@ dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *exporter,
     bool template_msg_sent = false;
     enum ipfix_flow_end_reason flow_end_reason;
 
-    if (list_is_empty(&exporter->cache_flow_start_timestamp_list)) {
+    if (ovs_list_is_empty(&exporter->cache_flow_start_timestamp_list)) {
         return;
     }
 
@@ -1795,7 +1795,7 @@ dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *exporter,
             break;
         }
 
-        list_remove(&entry->cache_flow_start_timestamp_list_node);
+        ovs_list_remove(&entry->cache_flow_start_timestamp_list_node);
         hmap_remove(&exporter->cache_flow_key_map,
                     &entry->flow_key_map_node);
 

@@ -17,9 +17,7 @@
 #ifndef NETDEV_H
 #define NETDEV_H 1
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
+#include "openvswitch/netdev.h"
 #include "openvswitch/types.h"
 #include "packets.h"
 #include "flow.h"
@@ -62,7 +60,6 @@ extern "C" {
  */
 
 struct dp_packet;
-struct netdev;
 struct netdev_class;
 struct netdev_rxq;
 struct netdev_saved_flags;
@@ -72,37 +69,6 @@ struct in6_addr;
 struct smap;
 struct sset;
 struct ovs_action_push_tnl;
-
-/* Network device statistics.
- *
- * Values of unsupported statistics are set to all-1-bits (UINT64_MAX). */
-struct netdev_stats {
-    uint64_t rx_packets;        /* Total packets received. */
-    uint64_t tx_packets;        /* Total packets transmitted. */
-    uint64_t rx_bytes;          /* Total bytes received. */
-    uint64_t tx_bytes;          /* Total bytes transmitted. */
-    uint64_t rx_errors;         /* Bad packets received. */
-    uint64_t tx_errors;         /* Packet transmit problems. */
-    uint64_t rx_dropped;        /* No buffer space. */
-    uint64_t tx_dropped;        /* No buffer space. */
-    uint64_t multicast;         /* Multicast packets received. */
-    uint64_t collisions;
-
-    /* Detailed receive errors. */
-    uint64_t rx_length_errors;
-    uint64_t rx_over_errors;    /* Receiver ring buff overflow. */
-    uint64_t rx_crc_errors;     /* Recved pkt with crc error. */
-    uint64_t rx_frame_errors;   /* Recv'd frame alignment error. */
-    uint64_t rx_fifo_errors;    /* Recv'r fifo overrun . */
-    uint64_t rx_missed_errors;  /* Receiver missed packet. */
-
-    /* Detailed transmit errors. */
-    uint64_t tx_aborted_errors;
-    uint64_t tx_carrier_errors;
-    uint64_t tx_fifo_errors;
-    uint64_t tx_heartbeat_errors;
-    uint64_t tx_window_errors;
-};
 
 /* Configuration specific to tunnels. */
 struct netdev_tunnel_config {
@@ -175,6 +141,7 @@ int netdev_rxq_open(struct netdev *, struct netdev_rxq **, int id);
 void netdev_rxq_close(struct netdev_rxq *);
 
 const char *netdev_rxq_get_name(const struct netdev_rxq *);
+int netdev_rxq_get_queue_id(const struct netdev_rxq *);
 
 int netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet **buffers,
                     int *cnt);
@@ -203,36 +170,6 @@ bool netdev_get_carrier(const struct netdev *);
 long long int netdev_get_carrier_resets(const struct netdev *);
 int netdev_set_miimon_interval(struct netdev *, long long int interval);
 
-/* Features. */
-enum netdev_features {
-    NETDEV_F_10MB_HD =    1 << 0,  /* 10 Mb half-duplex rate support. */
-    NETDEV_F_10MB_FD =    1 << 1,  /* 10 Mb full-duplex rate support. */
-    NETDEV_F_100MB_HD =   1 << 2,  /* 100 Mb half-duplex rate support. */
-    NETDEV_F_100MB_FD =   1 << 3,  /* 100 Mb full-duplex rate support. */
-    NETDEV_F_1GB_HD =     1 << 4,  /* 1 Gb half-duplex rate support. */
-    NETDEV_F_1GB_FD =     1 << 5,  /* 1 Gb full-duplex rate support. */
-    NETDEV_F_10GB_FD =    1 << 6,  /* 10 Gb full-duplex rate support. */
-    NETDEV_F_40GB_FD =    1 << 7,  /* 40 Gb full-duplex rate support. */
-    NETDEV_F_100GB_FD =   1 << 8,  /* 100 Gb full-duplex rate support. */
-    NETDEV_F_1TB_FD =     1 << 9,  /* 1 Tb full-duplex rate support. */
-    NETDEV_F_OTHER =      1 << 10, /* Other rate, not in the list. */
-    NETDEV_F_COPPER =     1 << 11, /* Copper medium. */
-    NETDEV_F_FIBER =      1 << 12, /* Fiber medium. */
-    NETDEV_F_AUTONEG =    1 << 13, /* Auto-negotiation. */
-    NETDEV_F_PAUSE =      1 << 14, /* Pause. */
-    NETDEV_F_PAUSE_ASYM = 1 << 15, /* Asymmetric pause. */
-};
-
-int netdev_get_features(const struct netdev *,
-                        enum netdev_features *current,
-                        enum netdev_features *advertised,
-                        enum netdev_features *supported,
-                        enum netdev_features *peer);
-uint64_t netdev_features_to_bps(enum netdev_features features,
-                                uint64_t default_bps);
-bool netdev_features_is_full_duplex(enum netdev_features features);
-int netdev_set_advertisements(struct netdev *, enum netdev_features advertise);
-
 /* Flags. */
 enum netdev_flags {
     NETDEV_UP = 0x0001,         /* Device enabled? */
@@ -251,11 +188,11 @@ int netdev_turn_flags_off(struct netdev *, enum netdev_flags,
 void netdev_restore_flags(struct netdev_saved_flags *);
 
 /* TCP/IP stack interface. */
-int netdev_get_in4(const struct netdev *, struct in_addr *address,
-                   struct in_addr *netmask);
 int netdev_set_in4(struct netdev *, struct in_addr addr, struct in_addr mask);
 int netdev_get_in4_by_name(const char *device_name, struct in_addr *in4);
-int netdev_get_in6(const struct netdev *, struct in6_addr *);
+int netdev_get_addr_list(const struct netdev *netdev, struct in6_addr **addr,
+                         struct in6_addr **mask, int *n_in6);
+
 int netdev_add_router(struct netdev *, struct in_addr router);
 int netdev_get_next_hop(const struct netdev *, const struct in_addr *host,
                         struct in_addr *next_hop, char **);
@@ -341,6 +278,12 @@ int netdev_dump_queue_stats(const struct netdev *,
 
 enum { NETDEV_MAX_BURST = 32 }; /* Maximum number packets in a batch. */
 extern struct seq *tnl_conf_seq;
+
+#ifndef _WIN32
+void netdev_get_addrs_list_flush(void);
+int netdev_get_addrs(const char dev[], struct in6_addr **paddr,
+                     struct in6_addr **pmask, int *n_in6);
+#endif
 
 #ifdef  __cplusplus
 }

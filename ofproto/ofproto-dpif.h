@@ -20,7 +20,7 @@
 #include "fail-open.h"
 #include "hmapx.h"
 #include "odp-util.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "ovs-thread.h"
 #include "ofproto-provider.h"
 #include "timer.h"
@@ -143,20 +143,14 @@ const char *group_dpif_get_selection_method(const struct group_dpif *group);
 uint64_t group_dpif_get_selection_method_param(const struct group_dpif *group);
 const struct field_array *group_dpif_get_fields(const struct group_dpif *group);
 
-bool ofproto_has_vlan_splinters(const struct ofproto_dpif *);
-ofp_port_t vsp_realdev_to_vlandev(const struct ofproto_dpif *,
-                                  ofp_port_t realdev_ofp_port,
-                                  ovs_be16 vlan_tci);
-bool vsp_adjust_flow(const struct ofproto_dpif *, struct flow *,
-                     struct dp_packet *packet);
-
 int ofproto_dpif_execute_actions(struct ofproto_dpif *, const struct flow *,
                                  struct rule_dpif *, const struct ofpact *,
                                  size_t ofpacts_len, struct dp_packet *);
 int ofproto_dpif_execute_actions__(struct ofproto_dpif *, const struct flow *,
                                    struct rule_dpif *, const struct ofpact *,
-                                   size_t ofpacts_len, int recurse,
-                                   int resubmits, struct dp_packet *);
+                                   size_t ofpacts_len, int indentation,
+                                   int depth, int resubmits,
+                                   struct dp_packet *);
 void ofproto_dpif_send_async_msg(struct ofproto_dpif *,
                                  struct ofproto_async_msg *);
 bool ofproto_dpif_wants_packet_in_on_miss(struct ofproto_dpif *);

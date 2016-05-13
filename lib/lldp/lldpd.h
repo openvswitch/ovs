@@ -27,7 +27,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include "dp-packet.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "lldpd-structs.h"
 #include "lldp-tlv.h"
 #include "packets.h"
@@ -71,7 +71,7 @@ struct lldpd {
 static inline struct lldpd_hardware *
 lldpd_first_hardware(struct lldpd *lldpd)
 {
-    return CONTAINER_OF(list_front(&lldpd->g_hardware),
+    return CONTAINER_OF(ovs_list_front(&lldpd->g_hardware),
                         struct lldpd_hardware, h_entries);
 }
 

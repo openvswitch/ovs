@@ -84,9 +84,9 @@ only allow privileged users, such as the superuser, to use it.
 unavailable or unsuccessful.
 .
 .SS "DPDK Options"
-.IP "\fB\-\-dpdk\fR"
-Initialize \fBovs\-vswitchd\fR DPDK datapath.  Refer to INSTALL.DPDK
-for details.
+For details on initializing the \fBovs\-vswitchd\fR DPDK datapath,
+refer to INSTALL.DPDK.md or \fBovs\-vswitchd.conf.db\fR(5) for
+details.
 .SS "Daemon Options"
 .ds DD \
 \fBovs\-vswitchd\fR detaches only after it has connected to the \
@@ -112,6 +112,9 @@ how to configure Open vSwitch.
 .SS "GENERAL COMMANDS"
 .IP "\fBexit\fR"
 Causes \fBovs\-vswitchd\fR to gracefully terminate.
+.IP "\fBqos/show-types\fR \fIinterface\fR"
+Queries the interface for a list of Quality of Service types that are
+configurable via Open vSwitch for the given \fIinterface\fR.
 .IP "\fBqos/show\fR \fIinterface\fR"
 Queries the kernel for Quality of Service configuration and statistics
 associated with the given \fIinterface\fR.
@@ -256,6 +259,9 @@ measuring infrastructure.
 Resets to zero the per pmd thread performance numbers shown by the
 \fBdpif-netdev/pmd-stats-show\fR command.  It will NOT reset datapath or
 bridge statistics, only the values shown by the above command.
+.IP "\fBdpif-netdev/pmd-rxq-show\fR [\fIdp\fR]"
+For each pmd thread of the datapath \fIdp\fR shows list of queue-ids with
+port names, which this thread polls.
 .
 .so ofproto/ofproto-dpif-unixctl.man
 .so ofproto/ofproto-unixctl.man

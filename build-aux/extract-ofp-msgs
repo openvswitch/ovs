@@ -12,7 +12,8 @@ VERSION = {"1.0": 0x01,
            "1.2": 0x03,
            "1.3": 0x04,
            "1.4": 0x05,
-           "1.5": 0x06}
+           "1.5": 0x06,
+           "1.6": 0x07}
 
 NX_VENDOR_ID = 0x00002320
 ONF_VENDOR_ID = 0x4f4e4600
@@ -161,7 +162,7 @@ def extract_ofp_msgs(output_file_name):
                     hdrs = (version, OFPT10_STATS_REPLY, number, 0, 0)
                 else:
                     hdrs = (version, OFPT11_STATS_REPLY, number, 0, 0)
-            elif type_ == 'ONF':
+            elif type_ == 'ONFT':
                 hdrs = (version, OFPT_VENDOR, 0, ONF_VENDOR_ID, number)
             elif type_ == 'ONFST' and name.endswith('_REQUEST'):
                 if version == VERSION["1.0"]:

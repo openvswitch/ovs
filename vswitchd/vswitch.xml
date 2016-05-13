@@ -72,6 +72,10 @@
         host as displayed by <code>xe host-list</code>.
       </column>
 
+      <column name="external_ids" key="hostname">
+        The hostname for the host running Open vSwitch.
+      </column>
+
       <column name="other_config" key="stats-update-interval"
               type='{"type": "integer", "minInteger": 5000}'>
         <p>
@@ -167,6 +171,49 @@
         </p>
       </column>
 
+      <column name="other_config" key="dpdk-init"
+              type='{"type": "boolean"}'>
+        <p>
+          Set this value to <code>true</code> to enable runtime support for
+          DPDK ports. The vswitch must have compile-time support for DPDK as
+          well.
+        </p>
+        <p>
+          The default value is <code>false</code>. Changing this value requires
+          restarting the daemon
+        </p>
+        <p>
+          If this value is <code>false</code> at startup, any dpdk ports which
+          are configured in the bridge will fail due to memory errors.
+        </p>
+      </column>
+
+      <column name="other_config" key="dpdk-lcore-mask"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          Specifies the CPU cores where dpdk lcore threads should be spawned.
+          The DPDK lcore threads are used for DPDK library tasks, such as
+          library internal message processing, logging, etc. Value should be in
+          the form of a hex string (so '0x123') similar to the 'taskset' mask
+          input.
+        </p>
+        <p>
+          The lowest order bit corresponds to the first CPU core.  A set bit
+          means the corresponding core is available and an lcore thread will be
+          created and pinned to it.  If the input does not cover all cores,
+          those uncovered cores are considered not set.
+        </p>
+        <p>
+          For performance reasons, it is best to set this to a single core on
+          the system, rather than allow lcore threads to float.
+        </p>
+        <p>
+          If not specified, the value will be determined by choosing the lowest
+          CPU core from initial cpu affinity list. Otherwise, the value will be
+          passed directly to the DPDK library.
+        </p>
+      </column>
+
       <column name="other_config" key="pmd-cpu-mask">
         <p>
           Specifies CPU mask for setting the cpu affinity of PMD (Poll
@@ -183,6 +230,84 @@
         <p>
           If not specified, one pmd thread will be created for each numa node
           and pinned to any available core on the numa node by default.
+        </p>
+      </column>
+
+      <column name="other_config" key="dpdk-alloc-mem"
+              type='{"type": "integer", "minInteger": 0}'>
+        <p>
+          Specifies the amount of memory to preallocate from the hugepage pool,
+          regardless of socket. It is recommended that dpdk-socket-mem is used
+          instead.
+        </p>
+        <p>
+          If not specified, the value is 0. Changing this value requires
+          restarting the daemon.
+        </p>
+      </column>
+
+      <column name="other_config" key="dpdk-socket-mem"
+              type='{"type": "string"}'>
+        <p>
+          Specifies the amount of memory to preallocate from the hugepage pool,
+          on a per-socket basis.
+        </p>
+        <p>
+          The specifier is a comma-separated string, in ascending order of CPU
+          socket (ex: 1024,2048,4096,8192 would set socket 0 to preallocate
+          1024MB, socket 1 to preallocate 2048MB, etc.)
+        </p>
+        <p>
+          If not specified, the default value is 1024,0. Changing this value
+          requires restarting the daemon.
+        </p>
+      </column>
+
+      <column name="other_config" key="dpdk-hugepage-dir"
+              type='{"type": "string"}'>
+        <p>
+          Specifies the path to the hugetlbfs mount point.
+        </p>
+        <p>
+          If not specified, this will be guessed by the DPDK library (default
+          is /dev/hugepages). Changing this value requires restarting the
+          daemon.
+        </p>
+      </column>
+
+      <column name="other_config" key="dpdk-extra"
+              type='{"type": "string"}'>
+        <p>
+          Specifies additional eal command line arguments for DPDK.
+        </p>
+        <p>
+          The default is empty. Changing this value requires restarting the
+          daemon
+        </p>
+      </column>
+
+      <column name="other_config" key="cuse-dev-name"
+              type='{"type": "string"}'>
+        <p>
+          Specifies the name of the vhost-cuse character device to open for
+          vhost-cuse support.
+        </p>
+        <p>
+          The default is vhost-net. Changing this value requires restarting
+          the daemon.
+        </p>
+      </column>
+
+      <column name="other_config" key="vhost-sock-dir"
+              type='{"type": "string"}'>
+        <p>
+          Specifies the path to the vhost-user unix domain socket files. This
+          path must exist and be a subdirectory tree of the Open vSwitch
+          run directory.
+        </p>
+        <p>
+          Defaults to the working directory of the application. Changing this
+          value requires restarting the daemon.
         </p>
       </column>
 
@@ -704,16 +829,9 @@
         </p>
 
         <p>
-          OpenFlow 1.4 is not enabled by default because its implementation is
-          missing features.
-        </p>
-
-        <p>
-          OpenFlow 1.5 has the same risks as OpenFlow 1.4, but it is even more
-          experimental because the OpenFlow 1.5 specification is still under
-          development and thus subject to change.  Pass
-          <code>--enable-of15</code> to <code>ovs-vswitchd</code> to allow
-          OpenFlow 1.5 to be enabled.
+          OpenFlow 1.4, 1.5, and 1.6 are not enabled by default because their
+          implementations are missing features.  In addition, the OpenFlow 1.6
+          specification is still under development and thus subject to change.
         </p>
       </column>
     </group>
@@ -1850,7 +1968,7 @@
           <dt><code>geneve</code></dt>
           <dd>
             An Ethernet over Geneve (<code>http://tools.ietf.org/html/draft-ietf-nvo3-geneve-00</code>)
-            IPv4 tunnel.
+            IPv4/IPv6 tunnel.
 
             A description of how to match and set Geneve options can be found
             in the <code>ovs-ofctl</code> manual page.
@@ -1858,13 +1976,13 @@
 
           <dt><code>gre</code></dt>
           <dd>
-            An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4
+            An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4/IPv6
             tunnel.
           </dd>
 
           <dt><code>ipsec_gre</code></dt>
           <dd>
-            An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4
+            An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4/IPv6
             IPsec tunnel.
           </dd>
 
@@ -1951,18 +2069,18 @@
 
         <ul>
           <li>
-            An IPv4 address (not a DNS name), e.g. <code>192.168.0.123</code>.
+            An IPv4 or IPv6 address (not a DNS name), e.g. <code>192.168.0.123</code>.
             Only unicast endpoints are supported.
           </li>
           <li>
             The word <code>flow</code>.  The tunnel accepts packets from any
             remote tunnel endpoint.  To process only packets from a specific
             remote tunnel endpoint, the flow entries may match on the
-            <code>tun_src</code> field.  When sending packets to a
-            <code>remote_ip=flow</code> tunnel, the flow actions must
-            explicitly set the <code>tun_dst</code> field to the IP address of
-            the desired remote tunnel endpoint, e.g. with a
-            <code>set_field</code> action.
+            <code>tun_src</code> or <code>tun_ipv6_src</code>field.  When
+            sending packets to a <code>remote_ip=flow</code> tunnel, the flow
+            actions must explicitly set the <code>tun_dst</code> or
+            <code>tun_ipv6_dst</code> field to the IP address of the desired
+            remote tunnel endpoint, e.g. with a <code>set_field</code> action.
           </li>
         </ul>
 
@@ -1982,18 +2100,18 @@
 
         <ul>
           <li>
-            An IPv4 address (not a DNS name), e.g. <code>192.168.12.3</code>.
+            An IPv4/IPv6 address (not a DNS name), e.g. <code>192.168.12.3</code>.
           </li>
           <li>
             The word <code>flow</code>.  The tunnel accepts packets sent to any
             of the local IP addresses of the system running OVS.  To process
             only packets sent to a specific IP address, the flow entries may
-            match on the <code>tun_dst</code> field.  When sending packets to a
-            <code>local_ip=flow</code> tunnel, the flow actions may
-            explicitly set the <code>tun_src</code> field to the desired IP
-            address, e.g. with a <code>set_field</code> action.  However, while
-            routing the tunneled packet out, the local system may override the
-            specified address with the local IP address configured for the
+            match on the <code>tun_dst</code> or <code>tun_ipv6_dst</code> field.
+            When sending packets to a <code>local_ip=flow</code> tunnel, the flow
+            actions may explicitly set the <code>tun_src</code> or <code>tun_ipv6_src</code>
+            field to the desired IP address, e.g. with a <code>set_field</code> action.
+            However, while routing the tunneled packet out, the local system may
+            override the specified address with the local IP address configured for the
             outgoing system interface.
 
             <p>
@@ -2005,8 +2123,8 @@
 
         <p>
           The tunnel destination IP address for any packet received from a
-          tunnel is available in the <code>tun_dst</code> field for matching in
-          the flow table.
+          tunnel is available in the <code>tun_dst</code> or <code>tun_ipv6_dst</code>
+          field for matching in the flow table.
         </p>
       </column>
 
@@ -2286,7 +2404,7 @@
       </column>
 
       <column name="status" key="source_ip">
-        The source IP address used for an IPv4 tunnel end-point, such as
+        The source IP address used for an IPv4/IPv6 tunnel end-point, such as
         <code>gre</code>.
       </column>
 
@@ -2430,7 +2548,7 @@
 
       <column name="ingress_policing_burst">
         <p>Maximum burst size for data received on this interface, in kb.  The
-        default burst size if set to <code>0</code> is 1000 kb.  This value
+        default burst size if set to <code>0</code> is 8000 kbit.  This value
         has no effect if <ref column="ingress_policing_rate"/>
         is <code>0</code>.</p>
         <p>
@@ -2438,7 +2556,7 @@
           which is important for protocols like TCP that react severely to
           dropped packets.  The burst size should be at least the size of the
           interface's MTU.  Specifying a value that is numerically at least as
-          large as 10% of <ref column="ingress_policing_rate"/> helps TCP come
+          large as 80% of <ref column="ingress_policing_rate"/> helps TCP come
           closer to achieving the full rate.
         </p>
       </column>
@@ -2951,84 +3069,6 @@
       </column>
     </group>
 
-    <group title="VLAN Splinters">
-      <p>
-        The ``VLAN splinters'' feature increases Open vSwitch compatibility
-        with buggy network drivers in old versions of Linux that do not
-        properly support VLANs when VLAN devices are not used, at some cost
-        in memory and performance.
-      </p>
-
-      <p>
-        When VLAN splinters are enabled on a particular interface, Open vSwitch
-        creates a VLAN device for each in-use VLAN.  For sending traffic tagged
-        with a VLAN on the interface, it substitutes the VLAN device.  Traffic
-        received on the VLAN device is treated as if it had been received on
-        the interface on the particular VLAN.
-      </p>
-
-      <p>
-        VLAN splinters consider a VLAN to be in use if:
-      </p>
-
-      <ul>
-        <li>
-          The VLAN is the <ref table="Port" column="tag"/> value in any <ref
-          table="Port"/> record.
-        </li>
-
-        <li>
-          The VLAN is listed within the <ref table="Port" column="trunks"/>
-          column of the <ref table="Port"/> record of an interface on which
-          VLAN splinters are enabled.
-
-          An empty <ref table="Port" column="trunks"/> does not influence the
-          in-use VLANs: creating 4,096 VLAN devices is impractical because it
-          will exceed the current 1,024 port per datapath limit.
-        </li>
-
-        <li>
-          An OpenFlow flow within any bridge matches the VLAN.
-        </li>
-      </ul>
-
-      <p>
-        The same set of in-use VLANs applies to every interface on which VLAN
-        splinters are enabled.  That is, the set is not chosen separately for
-        each interface but selected once as the union of all in-use VLANs based
-        on the rules above.
-      </p>
-
-      <p>
-        It does not make sense to enable VLAN splinters on an interface for an
-        access port, or on an interface that is not a physical port.
-      </p>
-
-      <p>
-        VLAN splinters are deprecated.  When broken device drivers are no
-        longer in widespread use, we will delete this feature.
-      </p>
-
-      <column name="other_config" key="enable-vlan-splinters"
-              type='{"type": "boolean"}'>
-        <p>
-          Set to <code>true</code> to enable VLAN splinters on this interface.
-          Defaults to <code>false</code>.
-        </p>
-
-        <p>
-          VLAN splinters increase kernel and userspace memory overhead, so do
-          not use them unless they are needed.
-        </p>
-
-        <p>
-          VLAN splinters do not support 802.1p priority tags.  Received
-          priorities will appear to be 0, regardless of their actual values,
-          and priorities on transmitted packets will also be cleared to 0.
-        </p>
-      </column>
-    </group>
-
     <group title="Auto Attach Configuration">
       <p>
         Auto Attach configuration for a particular interface.
@@ -3206,6 +3246,7 @@
         <p>
           The supported fields are: <code>tun_id</code>,
           <code>tun_src</code>, <code>tun_dst</code>,
+          <code>tun_ipv6_src</code>, <code>tun_ipv6_dst</code>,
           <code>nw_src</code>, <code>nw_dst</code> (or aliases
           <code>ip_src</code> and <code>ip_dst</code>),
           <code>ipv6_src</code>, and <code>ipv6_dst</code>.  (Using this
@@ -3310,6 +3351,21 @@
           for information on how this classifier works.
         </dd>
       </dl>
+      <dl>
+        <dt><code>egress-policer</code></dt>
+        <dd>
+          An egress policer algorithm. This implementation uses the DPDK
+          rte_meter library. The rte_meter library provides an implementation
+          which allows the metering and policing of traffic. The implementation
+          in OVS essentially creates a single token bucket used to police
+          traffic. It should be noted that when the rte_meter is configured as
+          part of QoS there will be a performance overhead as the rte_meter
+          itself will consume CPU cycles in order to police traffic. These CPU
+          cycles ordinarily are used for packet proccessing. As such the drop
+          in performance will be noticed in terms of overall aggregate traffic
+          throughput.
+        </dd>
+      </dl>
     </column>
 
     <column name="queues">
@@ -3343,6 +3399,38 @@
         specified, for physical interfaces, the default is the link rate.  For
         other interfaces or if the link rate cannot be determined, the default
         is currently 100 Mbps.
+      </column>
+    </group>
+
+    <group title="Configuration for egress-policer QoS">
+      <p>
+        <ref table="QoS"/> <ref table="QoS" column="type"/>
+        <code>egress-policer</code> provides egress policing for userspace
+        port types with DPDK.
+
+        It has the following key-value pairs defined.
+      </p>
+
+      <column name="other_config" key="cir" type='{"type": "integer"}'>
+        The Committed Information Rate (CIR) is measured in bytes of IP
+        packets per second, i.e. it includes the IP header, but not link
+        specific (e.g. Ethernet) headers. This represents the bytes per second
+        rate at which the token bucket will be updated. The cir value is
+        calculated by (pps x packet data size).  For example assuming a user
+        wishes to limit a stream consisting of 64 byte packets to 1 million
+        packets per second the CIR would be set to to to 46000000. This value
+        can be broken into '1,000,000 x 46'. Where 1,000,000 is the policing
+        rate for the number of packets per second and 46 represents the size
+        of the packet data for a 64 byte ip packet.
+      </column>
+      <column name="other_config" key="cbs" type='{"type": "integer"}'>
+        The Committed Burst Size (CBS) is measured in bytes and represents a
+        token bucket. At a minimum this value should be be set to the expected
+        largest size packet in the traffic stream. In practice larger values
+        may be used to increase the size of the token bucket. If a packet can
+        be transmitted then the cbs will be decremented by the number of
+        bytes/tokens of the packet. If there are not enough tokens in the cbs
+        bucket the packet will be dropped.
       </column>
     </group>
 
@@ -4193,7 +4281,28 @@
     </group>
 
     <group title="Status">
-      <column name="is_connected">
+      <p>
+        Key-value pair of <ref column="is_connected"/> is always updated.
+        Other key-value pairs in the status columns may be updated depends
+        on the <ref column="target"/> type.
+      </p>
+
+      <p>
+        When <ref column="target"/> specifies a connection method that
+        listens for inbound connections (e.g. <code>ptcp:</code> or
+        <code>punix:</code>), both <ref column="n_connections"/> and
+        <ref column="is_connected"/> may also be updated while the
+        remaining key-value pairs are omitted.
+      </p>
+
+      <p>
+        On the other hand, when <ref column="target"/> specifies an
+        outbound connection, all key-value pairs may be updated, except
+        the above-mentioned two key-value pairs associated with inbound
+        connection targets. They are omitted.
+      </p>
+
+    <column name="is_connected">
         <code>true</code> if currently connected to this manager,
         <code>false</code> otherwise.
       </column>
@@ -4264,24 +4373,17 @@
 
       <column name="status" key="n_connections"
               type='{"type": "integer", "minInteger": 2}'>
-        <p>
-          When <ref column="target"/> specifies a connection method that
-          listens for inbound connections (e.g. <code>ptcp:</code> or
-          <code>pssl:</code>) and more than one connection is actually active,
-          the value is the number of active connections.  Otherwise, this
-          key-value pair is omitted.
-        </p>
-        <p>
-          When multiple connections are active, status columns and key-value
-          pairs (other than this one) report the status of one arbitrarily
-          chosen connection.
-        </p>
+        When <ref column="target"/> specifies a connection method that
+        listens for inbound connections (e.g. <code>ptcp:</code> or
+        <code>pssl:</code>) and more than one connection is actually active,
+        the value is the number of active connections.  Otherwise, this
+        key-value pair is omitted.
       </column>
 
       <column name="status" key="bound_port" type='{"type": "integer"}'>
         When <ref column="target"/> is <code>ptcp:</code> or
         <code>pssl:</code>, this is the TCP port on which the OVSDB server is
-        listening.  (This is is particularly useful when <ref
+        listening.  (This is particularly useful when <ref
         column="target"/> specifies a port of 0, allowing the kernel to
         choose any available port.)
       </column>

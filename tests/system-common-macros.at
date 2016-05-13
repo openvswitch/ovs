@@ -15,8 +15,9 @@ m4_define([DEL_NAMESPACES],
 m4_define([ADD_NAMESPACES],
    [m4_foreach([ns], [$@],
                [DEL_NAMESPACES(ns)
-                AT_CHECK([ip netns add ns])
-		on_exit 'DEL_NAMESPACES(ns)'
+                AT_CHECK([ip netns add ns || return 77])
+                on_exit 'DEL_NAMESPACES(ns)'
+                ip netns exec ns sysctl -w net.netfilter.nf_conntrack_helper=0
                ])
    ]
 )
@@ -66,7 +67,8 @@ m4_define([ADD_INT],
 # The existing 'port' or 'ovs-port' will be removed before new ones are added.
 #
 m4_define([ADD_VETH],
-    [ AT_CHECK([ip link add $1 type veth peer name ovs-$1])
+    [ AT_CHECK([ip link add $1 type veth peer name ovs-$1 || return 77])
+      CONFIGURE_VETH_OFFLOADS([$1])
       AT_CHECK([ip link set $1 netns $2])
       AT_CHECK([ip link set dev ovs-$1 up])
       AT_CHECK([ovs-vsctl add-port $3 ovs-$1])
@@ -155,3 +157,11 @@ m4_define([NETNS_DAEMONIZE],
 # Do basic check for vxlan functionality, skip the test if it's not there.
 m4_define([OVS_CHECK_VXLAN],
     [AT_SKIP_IF([! ip link add foo type vxlan help 2>&1 | grep dstport >/dev/null])])
+
+# OVS_CHECK_GRE()
+m4_define([OVS_CHECK_GRE],
+    [AT_SKIP_IF([! ip link add foo type gretap help 2>&1 | grep gre >/dev/null])])
+
+# OVS_CHECK_GENEVE()
+m4_define([OVS_CHECK_GENEVE],
+    [AT_SKIP_IF([! ip link add foo type geneve help 2>&1 | grep geneve >/dev/null])])

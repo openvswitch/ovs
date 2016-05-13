@@ -17,7 +17,7 @@
 #define SERVER_H 1
 
 #include "hmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "shash.h"
 
 struct ovsdb;

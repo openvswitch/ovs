@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,13 +23,13 @@
 #include <sys/uio.h>
 #include <unistd.h>
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
 #include "netlink.h"
 #include "netlink-protocol.h"
 #include "odp-netlink.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
 #include "seq.h"
@@ -48,20 +48,6 @@ COVERAGE_DEFINE(netlink_sent);
 #ifndef SOL_NETLINK
 #define SOL_NETLINK 270
 #endif
-
-#ifdef _WIN32
-static struct ovs_mutex portid_mutex = OVS_MUTEX_INITIALIZER;
-static uint32_t g_last_portid = 0;
-
-/* Port IDs must be unique! */
-static uint32_t
-portid_next(void)
-    OVS_GUARDED_BY(portid_mutex)
-{
-    g_last_portid++;
-    return g_last_portid;
-}
-#endif /* _WIN32 */
 
 /* A single (bad) Netlink message can in theory dump out many, many log
  * messages, so the burst size is set quite high here to avoid missing useful
@@ -568,7 +554,7 @@ nl_sock_recv__(struct nl_sock *sock, struct ofpbuf *buf, bool wait)
         if (!DeviceIoControl(sock->handle, sock->read_ioctl,
                              NULL, 0, tail, sizeof tail, &bytes, NULL)) {
             VLOG_DBG_RL(&rl, "fatal driver failure in transact: %s",
-                ovs_lasterror_to_string());
+                        ovs_lasterror_to_string());
             retval = -1;
             /* XXX: Map to a more appropriate error. */
             errno = EINVAL;
@@ -1801,15 +1787,12 @@ static void
 log_nlmsg(const char *function, int error,
           const void *message, size_t size, int protocol)
 {
-    struct ofpbuf buffer;
-    char *nlmsg;
-
     if (!VLOG_IS_DBG_ENABLED()) {
         return;
     }
 
-    ofpbuf_use_const(&buffer, message, size);
-    nlmsg = nlmsg_to_string(&buffer, protocol);
+    struct ofpbuf buffer = ofpbuf_const_initializer(message, size);
+    char *nlmsg = nlmsg_to_string(&buffer, protocol);
     VLOG_DBG_RL(&rl, "%s (%s): %s", function, ovs_strerror(error), nlmsg);
     free(nlmsg);
 }

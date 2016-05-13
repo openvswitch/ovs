@@ -41,7 +41,6 @@
 #include "datapath.h"
 #include "conntrack.h"
 #include "gso.h"
-#include "vlan.h"
 #include "vport.h"
 
 static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
@@ -68,9 +67,7 @@ struct ovs_frag_data {
 	u8 l2_data[MAX_L2_LEN];
 };
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 static DEFINE_PER_CPU(struct ovs_frag_data, ovs_frag_data_storage);
-#endif
 
 #define DEFERRED_ACTION_FIFO_SIZE 10
 struct action_fifo {
@@ -149,7 +146,7 @@ static int push_mpls(struct sk_buff *skb, struct sw_flow_key *key,
 	struct ethhdr *hdr;
 
 	/* Networking stack do not allow simultaneous Tunnel and MPLS GSO. */
-	if (skb_encapsulation(skb))
+	if (skb->encapsulation)
 		return -ENOTSUPP;
 
 	if (skb_cow_head(skb, MPLS_HLEN) < 0)
@@ -302,14 +299,14 @@ static void update_ip_l4_checksum(struct sk_buff *skb, struct iphdr *nh,
 	if (nh->protocol == IPPROTO_TCP) {
 		if (likely(transport_len >= sizeof(struct tcphdr)))
 			inet_proto_csum_replace4(&tcp_hdr(skb)->check, skb,
-						 addr, new_addr, 1);
+						 addr, new_addr, true);
 	} else if (nh->protocol == IPPROTO_UDP) {
 		if (likely(transport_len >= sizeof(struct udphdr))) {
 			struct udphdr *uh = udp_hdr(skb);
 
 			if (uh->check || skb->ip_summed == CHECKSUM_PARTIAL) {
 				inet_proto_csum_replace4(&uh->check, skb,
-							 addr, new_addr, 1);
+							 addr, new_addr, true);
 				if (!uh->check)
 					uh->check = CSUM_MANGLED_0;
 			}
@@ -335,14 +332,14 @@ static void update_ipv6_checksum(struct sk_buff *skb, u8 l4_proto,
 	if (l4_proto == NEXTHDR_TCP) {
 		if (likely(transport_len >= sizeof(struct tcphdr)))
 			inet_proto_csum_replace16(&tcp_hdr(skb)->check, skb,
-						  addr, new_addr, 1);
+						  addr, new_addr, true);
 	} else if (l4_proto == NEXTHDR_UDP) {
 		if (likely(transport_len >= sizeof(struct udphdr))) {
 			struct udphdr *uh = udp_hdr(skb);
 
 			if (uh->check || skb->ip_summed == CHECKSUM_PARTIAL) {
 				inet_proto_csum_replace16(&uh->check, skb,
-							  addr, new_addr, 1);
+							  addr, new_addr, true);
 				if (!uh->check)
 					uh->check = CSUM_MANGLED_0;
 			}
@@ -350,7 +347,7 @@ static void update_ipv6_checksum(struct sk_buff *skb, u8 l4_proto,
 	} else if (l4_proto == NEXTHDR_ICMP) {
 		if (likely(transport_len >= sizeof(struct icmp6hdr)))
 			inet_proto_csum_replace16(&icmp6_hdr(skb)->icmp6_cksum,
-						  skb, addr, new_addr, 1);
+						  skb, addr, new_addr, true);
 	}
 }
 
@@ -518,7 +515,7 @@ static int set_ipv6(struct sk_buff *skb, struct sw_flow_key *flow_key,
 static void set_tp_port(struct sk_buff *skb, __be16 *port,
 			__be16 new_port, __sum16 *check)
 {
-	inet_proto_csum_replace2(check, skb, *port, new_port, 0);
+	inet_proto_csum_replace2(check, skb, *port, new_port, false);
 	*port = new_port;
 }
 
@@ -625,7 +622,6 @@ static int set_sctp(struct sk_buff *skb, struct sw_flow_key *flow_key,
 	return 0;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 static int ovs_vport_output(OVS_VPORT_OUTPUT_PARAMS)
 {
 	struct ovs_frag_data *data = get_pcpu_ptr(ovs_frag_data_storage);
@@ -740,16 +736,6 @@ static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
 err:
 	kfree_skb(skb);
 }
-#else /* < 3.10 */
-static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
-			 __be16 ethertype)
-{
-	WARN_ONCE(1, "Fragment unavailable ->%s: eth=%04x, MRU=%d, MTU=%d.",
-		  ovs_vport_name(vport), ntohs(ethertype), mru,
-		  vport->dev->mtu);
-	kfree_skb(skb);
-}
-#endif
 
 static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port,
 		      struct sw_flow_key *key)

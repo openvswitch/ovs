@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -24,10 +24,9 @@
 #include <netinet/ip6.h>
 
 #include "classifier.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "nx-match.h"
-#include "ofp-errors.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "ovs-thread.h"
 #include "packets.h"
 #include "random.h"
@@ -36,6 +35,7 @@
 #include "tun-metadata.h"
 #include "unaligned.h"
 #include "util.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(meta_flow);
@@ -171,6 +171,13 @@ mf_subvalue_shift(union mf_subvalue *value, int n)
     }
 }
 
+/* Appends a formatted representation of 'sv' to 's'. */
+void
+mf_subvalue_format(const union mf_subvalue *sv, struct ds *s)
+{
+    ds_put_hex(s, sv, sizeof *sv);
+}
+
 /* Returns true if 'wc' wildcards all the bits in field 'mf', false if 'wc'
  * specifies at least one bit in the field.
  *
@@ -225,7 +232,7 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_CT_MARK:
         return !wc->masks.ct_mark;
     case MFF_CT_LABEL:
-        return ovs_u128_is_zero(&wc->masks.ct_label);
+        return ovs_u128_is_zero(wc->masks.ct_label);
     CASE_MFF_REGS:
         return !wc->masks.regs[mf->id - MFF_REG0];
     CASE_MFF_XREGS:
@@ -264,6 +271,8 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !(wc->masks.mpls_lse[0] & htonl(MPLS_TC_MASK));
     case MFF_MPLS_BOS:
         return !(wc->masks.mpls_lse[0] & htonl(MPLS_BOS_MASK));
+    case MFF_MPLS_TTL:
+        return !(wc->masks.mpls_lse[0] & htonl(MPLS_TTL_MASK));
 
     case MFF_IPV4_SRC:
         return !wc->masks.nw_src;
@@ -412,7 +421,15 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
 void
 mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow_wildcards *wc)
 {
-    mf_set_flow_value(mf, &exact_match_mask, &wc->masks);
+    mf_mask_field_and_prereqs__(mf, &exact_match_mask, wc);
+}
+
+void
+mf_mask_field_and_prereqs__(const struct mf_field *mf,
+                            const union mf_value *mask,
+                            struct flow_wildcards *wc)
+{
+    mf_set_flow_value_masked(mf, &exact_match_mask, mask, &wc->masks);
 
     switch (mf->prereqs) {
     case MFP_ND:
@@ -520,6 +537,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_ETH_DST:
     case MFF_ETH_TYPE:
     case MFF_VLAN_TCI:
+    case MFF_MPLS_TTL:
     case MFF_IPV4_SRC:
     case MFF_IPV4_DST:
     case MFF_IPV6_SRC:
@@ -732,6 +750,10 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     case MFF_MPLS_BOS:
         value->u8 = mpls_lse_to_bos(flow->mpls_lse[0]);
+        break;
+
+    case MFF_MPLS_TTL:
+        value->u8 = mpls_lse_to_ttl(flow->mpls_lse[0]);
         break;
 
     case MFF_IPV4_SRC:
@@ -986,6 +1008,10 @@ mf_set_value(const struct mf_field *mf,
 
     case MFF_MPLS_BOS:
         match_set_mpls_bos(match, 0, value->u8);
+        break;
+
+    case MFF_MPLS_TTL:
+        match_set_mpls_ttl(match, 0, value->u8);
         break;
 
     case MFF_IPV4_SRC:
@@ -1292,6 +1318,10 @@ mf_set_flow_value(const struct mf_field *mf,
 
     case MFF_MPLS_BOS:
         flow_set_mpls_bos(flow, 0, value->u8);
+        break;
+
+    case MFF_MPLS_TTL:
+        flow_set_mpls_ttl(flow, 0, value->u8);
         break;
 
     case MFF_IPV4_SRC:
@@ -1616,6 +1646,10 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
         match_set_any_mpls_bos(match, 0);
         break;
 
+    case MFF_MPLS_TTL:
+        match_set_any_mpls_ttl(match, 0);
+        break;
+
     case MFF_IPV4_SRC:
     case MFF_ARP_SPA:
         match_set_nw_src_masked(match, htonl(0), htonl(0));
@@ -1772,6 +1806,7 @@ mf_set(const struct mf_field *mf,
     case MFF_MPLS_LABEL:
     case MFF_MPLS_TC:
     case MFF_MPLS_BOS:
+    case MFF_MPLS_TTL:
     case MFF_IP_PROTO:
     case MFF_IP_TTL:
     case MFF_IP_DSCP:

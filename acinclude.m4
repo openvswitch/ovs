@@ -139,14 +139,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
        else
           AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.3.x is not supported (please refer to the FAQ for advice)])
        fi
-    elif test "$version" = 3; then
+    elif test "$version" = 3 && test "$patchlevel" -ge 10; then
        : # Linux 3.x
     else
-       if test "$version" -le 1 || test "$patchlevel" -le 5 || test "$sublevel" -le 31; then
-         AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version 2.6.32 or later is required])
-       else
-         : # Linux 2.6.x
-       fi
+       AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version 3.10 or later is required])
     fi
     if (test ! -e "$KBUILD"/include/linux/version.h && \
         test ! -e "$KBUILD"/include/generated/uapi/linux/version.h)|| \
@@ -167,27 +163,50 @@ AC_DEFUN([OVS_CHECK_DPDK], [
               [AC_HELP_STRING([--with-dpdk=/path/to/dpdk],
                               [Specify the DPDK build directory])])
 
-  if test X"$with_dpdk" != X; then
-    RTE_SDK=$with_dpdk
+  AC_MSG_CHECKING([whether dpdk datapath is enabled])
+  if test -z "$with_dpdk" || test "$with_dpdk" = no; then
+    AC_MSG_RESULT([no])
+    DPDKLIB_FOUND=false
+  else
+    AC_MSG_RESULT([yes])
+    case "$with_dpdk" in
+      yes)
+        DPDK_AUTO_DISCOVER="true"
+        DPDK_INCLUDE="/usr/local/include/dpdk -I/usr/include/dpdk"
+        ;;
+      *)
+        DPDK_AUTO_DISCOVER="false"
+        DPDK_INCLUDE="$with_dpdk/include"
+        # If 'with_dpdk' is passed install directory, point to headers
+        # installed in $DESTDIR/$prefix/include/dpdk
+        AC_CHECK_FILE([$DPDK_INCLUDE/rte_config.h], [],
+                      [AC_CHECK_FILE([$DPDK_INCLUDE/dpdk/rte_config.h],
+                                     [DPDK_INCLUDE=$DPDK_INCLUDE/dpdk], [])])
+        DPDK_LIB_DIR="$with_dpdk/lib"
+        ;;
+    esac
 
-    DPDK_INCLUDE=$RTE_SDK/include
-    DPDK_LIB_DIR=$RTE_SDK/lib
     DPDK_LIB="-ldpdk"
     DPDK_EXTRA_LIB=""
-    RTE_SDK_FULL=`readlink -f $RTE_SDK`
-
-    AC_COMPILE_IFELSE(
-      [AC_LANG_PROGRAM([#include <$RTE_SDK_FULL/include/rte_config.h>
-#if !RTE_LIBRTE_VHOST_USER
-#error
-#endif], [])],
-                    [], [AC_DEFINE([VHOST_CUSE], [1], [DPDK vhost-cuse support enabled, vhost-user disabled.])
-                         DPDK_EXTRA_LIB="-lfuse"])
 
     ovs_save_CFLAGS="$CFLAGS"
     ovs_save_LDFLAGS="$LDFLAGS"
-    LDFLAGS="$LDFLAGS -L$DPDK_LIB_DIR"
     CFLAGS="$CFLAGS -I$DPDK_INCLUDE"
+    if test "$DPDK_AUTO_DISCOVER" = "false"; then
+      LDFLAGS="$LDFLAGS -L${DPDK_LIB_DIR}"
+    fi
+
+    AC_COMPILE_IFELSE([
+      AC_LANG_PROGRAM(
+        [
+          #include <rte_config.h>
+#if !RTE_LIBRTE_VHOST_USER
+#error
+#endif
+        ], [])
+      ], [],
+      [AC_DEFINE([VHOST_CUSE], [1], [DPDK vhost-cuse support enabled, vhost-user disabled.])
+       DPDK_EXTRA_LIB="-lfuse"])
 
     # On some systems we have to add -ldl to link with dpdk
     #
@@ -196,7 +215,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     # Before each attempt the search cache must be unset,
     # otherwise autoconf will stick with the old result
 
-    found=false
+    DPDKLIB_FOUND=false
     save_LIBS=$LIBS
     for extras in "" "-ldl"; do
         LIBS="$DPDK_LIB $extras $save_LIBS $DPDK_EXTRA_LIB"
@@ -205,17 +224,25 @@ AC_DEFUN([OVS_CHECK_DPDK], [
                              #include <rte_eal.h>],
                             [int rte_argc; char ** rte_argv;
                              rte_eal_init(rte_argc, rte_argv);])],
-           [found=true])
-        if $found; then
+           [DPDKLIB_FOUND=true])
+        if $DPDKLIB_FOUND; then
             break
         fi
     done
-    if $found; then :; else
-        AC_MSG_ERROR([cannot link with dpdk])
+
+    # If linking unsuccessful
+    if test "$DPDKLIB_FOUND" = "false" ; then
+      if $DPDK_AUTO_DISCOVER; then
+        AC_MSG_ERROR([Could not find DPDK library in default search path, Use --with-dpdk to specify the DPDK library installed in non-standard location])
+      else
+        AC_MSG_ERROR([Could not find DPDK libraries in $DPDK_LIB_DIR])
+      fi
     fi
     CFLAGS="$ovs_save_CFLAGS"
     LDFLAGS="$ovs_save_LDFLAGS"
-    OVS_LDFLAGS="$OVS_LDFLAGS -L$DPDK_LIB_DIR"
+    if test "$DPDK_AUTO_DISCOVER" = "false"; then
+      OVS_LDFLAGS="$OVS_LDFLAGS -L$DPDK_LIB_DIR"
+    fi
     OVS_CFLAGS="$OVS_CFLAGS -I$DPDK_INCLUDE"
     OVS_ENABLE_OPTION([-mssse3])
 
@@ -230,12 +257,9 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     DPDK_vswitchd_LDFLAGS=-Wl,--whole-archive,$DPDK_LIB,--no-whole-archive
     AC_SUBST([DPDK_vswitchd_LDFLAGS])
     AC_DEFINE([DPDK_NETDEV], [1], [System uses the DPDK module.])
-
-  else
-    RTE_SDK=
   fi
 
-  AM_CONDITIONAL([DPDK_NETDEV], test -n "$RTE_SDK")
+  AM_CONDITIONAL([DPDK_NETDEV], test "$DPDKLIB_FOUND" = true)
 ])
 
 dnl OVS_GREP_IFELSE(FILE, REGEX, [IF-MATCH], [IF-NO-MATCH])
@@ -307,7 +331,7 @@ AC_DEFUN([OVS_DEFINE], [
 
 dnl OVS_CHECK_LINUX_COMPAT
 dnl
-dnl Runs various Autoconf checks on the Linux 2.6 kernel source in
+dnl Runs various Autoconf checks on the Linux kernel source in
 dnl the directory in $KBUILD.
 AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   rm -f datapath/linux/kcompat.h.new
@@ -348,12 +372,14 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [inet_get_local_port_range.*net],
                   [OVS_DEFINE([HAVE_INET_GET_LOCAL_PORT_RANGE_USING_NET])])
+  OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_defrag.*net],
+                  [OVS_DEFINE([HAVE_IP_DEFRAG_TAKES_NET])])
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_do_fragment])
-  OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_is_fragment])
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_skb_dst_mtu])
 
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [IPSKB_FRAG_PMTU],
                   [OVS_DEFINE([HAVE_CORRECT_MRU_HANDLING])])
+  OVS_GREP_IFELSE([$KSRC/include/net/ip_tunnels.h], [__ip_tunnel_change_mtu])
   OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [hashfn.*const],
                   [OVS_DEFINE([HAVE_INET_FRAGS_CONST])])
   OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [last_in],
@@ -380,11 +406,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [can_checksum_protocol])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [ndo_get_iflink])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netdev_features_t])
-  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [pcpu_sw_netstats])
-  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netdev_rx_handler_register])
-  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [net_device_extended])
-  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [rx_handler_func_t.*pskb],
-                  [OVS_DEFINE([HAVE_RX_HANDLER_PSKB])])
+  dnl Ubuntu kernel 3.13 has defined this struct but not used for netdev->tstats.
+  dnl So check type of tstats.
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [pcpu_sw_netstats.*tstats],
+                  [OVS_DEFINE([HAVE_PCPU_SW_NETSTATS])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netif_needs_gso.*net_device],
                   [OVS_DEFINE([HAVE_NETIF_NEEDS_GSO_NETDEV])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [udp_offload])
@@ -397,11 +422,14 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hookfn.*nf_hook_ops],
                   [OVS_DEFINE([HAVE_NF_HOOKFN_ARG_OPS])])
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netfilter_ipv6.h], [nf_ipv6_ops],
-                        [fragment], [OVS_DEFINE([HAVE_NF_IPV6_OPS_FRAGMENT])])
+                        [fragment.*sock], [OVS_DEFINE([HAVE_NF_IPV6_OPS_FRAGMENT])])
 
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
                   [tmpl_alloc.*conntrack_zone],
                   [OVS_DEFINE([HAVE_NF_CT_TMPL_ALLOC_TAKES_STRUCT_ZONE])])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
+                  [l3num.*struct.net],
+                  [OVS_DEFINE([HAVE_NF_CT_GET_TUPLEPR_TAKES_STRUCT_NET])])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_zones.h],
                   [nf_ct_zone_init])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_labels.h],
@@ -449,10 +477,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h],
                   [skb_reset_tail_pointer])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_cow_head])
-  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_transport_header],
-                  [OVS_DEFINE([HAVE_SKBUFF_HEADER_HELPERS])])
-  OVS_GREP_IFELSE([$KSRC/include/linux/icmpv6.h], [icmp6_hdr],
-                  [OVS_DEFINE([HAVE_ICMP6_HDR])])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_warn_if_lro],
                   [OVS_DEFINE([HAVE_SKB_WARN_LRO])])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [consume_skb])
@@ -529,8 +553,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/linux/u64_stats_sync.h], [u64_stats_fetch_begin_irq])
 
-  OVS_GREP_IFELSE([$KSRC/include/linux/openvswitch.h], [openvswitch_handle_frame_hook],
-                  [OVS_DEFINE([HAVE_RHEL_OVS_HOOK])])
   OVS_GREP_IFELSE([$KSRC/include/net/vxlan.h], [struct vxlan_metadata],
                   [OVS_DEFINE([HAVE_VXLAN_METADATA])])
   OVS_GREP_IFELSE([$KSRC/include/net/vxlan.h], [VXLAN_HF_RCO])
@@ -550,15 +572,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/linux/utsrelease.h], [el6],
                   [OVS_DEFINE([HAVE_RHEL6_PER_CPU])])
-
-  dnl Conntrack support, and therefore, IP fragment handling backport, should
-  dnl only be enabled on kernels 3.10+. In future when OVS drops support for
-  dnl kernels older than 3.10, this macro could be removed from the codebase.
-  if test "$version" = 4; then
-        OVS_DEFINE([OVS_FRAGMENT_BACKPORT])
-  elif test "$version" = 3 && test "$patchlevel" -ge 10; then
-        OVS_DEFINE([OVS_FRAGMENT_BACKPORT])
-  fi
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then

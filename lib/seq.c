@@ -24,7 +24,7 @@
 #include "hash.h"
 #include "hmap.h"
 #include "latch.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
 
@@ -159,7 +159,7 @@ seq_wait__(struct seq *seq, uint64_t value, const char *where)
     waiter->ovsthread_id = id;
     waiter->value = value;
     waiter->thread = seq_thread_get();
-    list_push_back(&waiter->thread->waiters, &waiter->list_node);
+    ovs_list_push_back(&waiter->thread->waiters, &waiter->list_node);
 
     if (!waiter->thread->waiting) {
         latch_wait_at(&waiter->thread->latch, where);
@@ -230,7 +230,7 @@ seq_thread_get(void)
     struct seq_thread *thread = pthread_getspecific(seq_thread_key);
     if (!thread) {
         thread = xmalloc(sizeof *thread);
-        list_init(&thread->waiters);
+        ovs_list_init(&thread->waiters);
         latch_init(&thread->latch);
         thread->waiting = false;
 
@@ -270,7 +270,7 @@ seq_waiter_destroy(struct seq_waiter *waiter)
     OVS_REQUIRES(seq_mutex)
 {
     hmap_remove(&waiter->seq->waiters, &waiter->hmap_node);
-    list_remove(&waiter->list_node);
+    ovs_list_remove(&waiter->list_node);
     free(waiter);
 }
 

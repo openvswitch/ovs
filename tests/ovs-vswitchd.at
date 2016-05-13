@@ -20,6 +20,8 @@ AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --enable-dummy --disable-sy
 AT_CAPTURE_FILE([ovs-vswitchd.log])
 
 dnl ovs-vswitchd detached OK or we wouldn't have made it this far.  Success.
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 
@@ -74,7 +76,7 @@ ovs-vswitchd --log-file=fakelog --unixctl="`pwd`"/unixctl &
 sleep 5
 
 # stop the process.
-ovs-appctl -t `pwd`/unixctl exit
+OVS_APP_EXIT_AND_WAIT([`pwd`/unixctl])
 
 # check the fakelog, should only see one ERR for reporting
 # the existing ovs-vswitchd process.
@@ -110,7 +112,7 @@ bridge br0: using datapath ID
 ])
 
 # stop the process.
-ovs-appctl -t `pwd`/unixctl exit
+OVS_APP_EXIT_AND_WAIT([`pwd`/unixctl])
 
 # check the fakelog, should not see WARN/ERR/EMER log other than the one
 # for reporting the existing ovs-vswitchd process and the one for killing
@@ -136,7 +138,7 @@ ovs-vswitchd unix:invalid.db.sock --log-file=fakelog --enable-dummy --unixctl="`
 sleep 10
 
 # stop the process.
-ovs-appctl -t `pwd`/unixctl exit
+OVS_APP_EXIT_AND_WAIT([`pwd`/unixctl])
 
 # should not see this log (which indicates high cpu utilization).
 AT_CHECK([grep "wakeup due to" fakelog], [ignore])

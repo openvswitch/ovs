@@ -20,7 +20,6 @@
 #include <netioapi.h>
 #define IFNAMSIZ IF_NAMESIZE
 #include "../ovsext/Netlink/Netlink.h"
-#include "Mpls.h"
 
 #define OVS_DP_NUMBER   ((uint32_t) 0)
 
@@ -166,6 +165,15 @@ typedef __declspec(align(8)) struct OvsFlowKey {
         Icmp6Key icmp6Key;       /* size 72 */
         MplsKey mplsKey;         /* size 8 */
     };
+    UINT32 recircId;             /* Recirculation ID.  */
+    UINT32 dpHash;               /* Datapath calculated hash value. */
+    struct {
+        /* Connection tracking fields. */
+        UINT16 zone;
+        UINT32 mark;
+        UINT32 state;
+        struct ovs_key_ct_labels labels;
+    } ct;                        /* Connection Tracking Flags */
 } OvsFlowKey;
 
 #define OVS_WIN_TUNNEL_KEY_SIZE (sizeof (OvsIPv4TunnelKey))
@@ -179,7 +187,7 @@ typedef __declspec(align(8)) struct OvsFlowKey {
 typedef struct OvsFlowStats {
     Ovs64AlignedU64 packetCount;
     Ovs64AlignedU64 byteCount;
-    uint32_t used;
+    uint64_t used;
     uint8_t tcpFlags;
 } OvsFlowStats;
 
@@ -269,6 +277,7 @@ typedef struct OvsPacketExecute {
    uint32_t actionsLen;
    PCHAR packetBuf;
    PNL_ATTR actions;
+   PNL_ATTR *keyAttrs;
 } OvsPacketExecute;
 
 

@@ -58,9 +58,11 @@ def parse_multiple(stream):
 def main(argv):
     argv0 = argv[0]
 
-    # Make stdout and stderr UTF-8, even if they are redirected to a file.
-    sys.stdout = codecs.getwriter("utf-8")(sys.stdout)
-    sys.stderr = codecs.getwriter("utf-8")(sys.stderr)
+    # When this is used with Python 3, the program produces no output.
+    if six.PY2:
+        # Make stdout and stderr UTF-8, even if they are redirected to a file.
+        sys.stdout = codecs.getwriter("utf-8")(sys.stdout)
+        sys.stderr = codecs.getwriter("utf-8")(sys.stderr)
 
     try:
         options, args = getopt.gnu_getopt(argv[1:], '', ['multiple'])

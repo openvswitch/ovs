@@ -81,7 +81,8 @@ If the database does exist, but it has an obsolete version, it
 upgrades it to the latest schema.
 .
 .IP 3.
-Starts \fBovsdb-server\fR.
+Starts \fBovsdb-server\fR, unless the \fB\-\-no\-ovsdb\-server\fR command
+option is given.
 .
 .IP 4.
 Initializes a few values inside the database.
@@ -96,7 +97,8 @@ that have \fBother_config:transient\fR set to true.
 .
 .PP
 The \fBstart\fR command skips the following step if
-\fBovs\-vswitchd\fR is already running:
+\fBovs\-vswitchd\fR is already running, or if the \fB\-\-no\-ovs\-vswitchd\fR
+command option is given:
 .IP 7.
 Starts \fBovs\-vswitchd\fR.
 .
@@ -238,7 +240,9 @@ taken as relative to \fIdbdir\fR.
 .
 .PP
 The \fBstop\fR command does not unload the Open vSwitch kernel
-modules.
+modules. It can take the same \fB\-\-no\-ovsdb\-server\fR and
+\fB\-\-no\-ovs\-vswitchd\fR options as that of the \fBstart\fR
+command. 
 .
 .PP
 This command does nothing and finishes successfully if the OVS daemons
@@ -314,7 +318,8 @@ particular distribution and installation.)
 .
 .PP
 \fBforce\-kmod\-reload\fR internally stops and starts OVS, so it
-accepts all of the options accepted by the \fBstart\fR command.
+accepts all of the options accepted by the \fBstart\fR command except
+for the \fB\-\-no\-ovs\-vswitchd\fR option.
 .
 .SH "The ``load\-kmod'' command"
 .
@@ -377,8 +382,23 @@ Prints a usage message and exits successfully.
 .
 .SH "OPTIONS"
 .PP
-In addition to the options listed for each command above, this option
-controls the behavior of several of \fBovs\-ctl\fR's commands.
+In addition to the options listed for each command above, these options
+control the behavior of several of \fBovs\-ctl\fR's commands.
+.
+.PP
+By default, \fBovs\-ctl\fR will control the \fBovsdb\-server\fR, and
+the \fBovs\-vswitchd\fR daemons. The following options restrict that control
+to exclude one or the other:
+.
+.IP "\fB\-\-no\-ovsdb-server\fR"
+Specifies that the \fBovs\-ctl\fR commands \fBstart\fR, \fBstop\fR, and
+\fBrestart\fR should not modify the running status of \fBovsdb\-server\fR.
+.
+.IP "\fB\-\-no\-ovs\-vswitchd\fR"
+Specifies that the \fBovs\-ctl\fR commands \fBstart\fR, \fBstop\fR, and
+\fBrestart\fR should not modify the running status of \fBovs\-vswitchd\fR.
+It is an error to include this option with the \fBforce\-reload\-kmod\fR
+command.
 .
 .SH "EXIT STATUS"
 .

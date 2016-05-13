@@ -19,7 +19,7 @@
 
 #include <stdint.h>
 
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 
 struct controller_ctx;
 struct hmap;

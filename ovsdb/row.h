@@ -20,7 +20,7 @@
 #include <stdint.h>
 #include "column.h"
 #include "hmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovsdb-data.h"
 
 struct ovsdb_column_set;

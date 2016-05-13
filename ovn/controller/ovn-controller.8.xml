@@ -78,6 +78,9 @@
       <dt><code>external_ids:system-id</code></dt>
       <dd>The chassis name to use in the Chassis table.</dd>
 
+      <dt><code>external_ids:hostname</code></dt>
+      <dd>The hostname to use in the Chassis table.</dd>
+
       <dt><code>external_ids:ovn-bridge</code></dt>
       <dd>
         The integration bridge to which logical ports are attached.  The
@@ -97,6 +100,20 @@
           Currently, <code>ovn-controller</code> does not support changing this
           setting mid-run.  If the value needs to change, the daemon must be
           restarted.  (This behavior should be improved.)
+        </p>
+      </dd>
+
+      <dt><code>external_ids:ovn-remote-probe-interval</code></dt>
+      <dd>
+        <p>
+          The inactivity probe interval of the connection to the OVN database,
+          in milliseconds.
+          If the value is zero, it disables the connection keepalive feature.
+        </p>
+
+        <p>
+          If the value is nonzero, then it will be forced to a value of
+          at least 1000 ms.
         </p>
       </dd>
 

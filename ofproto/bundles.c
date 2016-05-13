@@ -18,15 +18,18 @@
 
 #include <config.h>
 
+#include "bundles.h"
 #include "coverage.h"
 #include "fail-open.h"
 #include "in-band.h"
 #include "odp-util.h"
-#include "ofp-actions.h"
-#include "ofp-msgs.h"
-#include "ofp-util.h"
-#include "ofpbuf.h"
 #include "ofproto-provider.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vconn.h"
+#include "openvswitch/vlog.h"
 #include "pinsched.h"
 #include "poll-loop.h"
 #include "pktbuf.h"
@@ -35,10 +38,6 @@
 #include "simap.h"
 #include "stream.h"
 #include "timeval.h"
-#include "openvswitch/vconn.h"
-#include "openvswitch/vlog.h"
-
-#include "bundles.h"
 
 VLOG_DEFINE_THIS_MODULE(bundles);
 
@@ -53,7 +52,7 @@ ofp_bundle_create(uint32_t id, uint16_t flags)
     bundle->flags = flags;
     bundle->state = BS_OPEN;
 
-    list_init(&bundle->msg_list);
+    ovs_list_init(&bundle->msg_list);
 
     return bundle;
 }
@@ -166,6 +165,6 @@ ofp_bundle_add_message(struct ofconn *ofconn, uint32_t id, uint16_t flags,
         return OFPERR_OFPBFC_BAD_FLAGS;
     }
 
-    list_push_back(&bundle->msg_list, &bmsg->node);
+    ovs_list_push_back(&bundle->msg_list, &bmsg->node);
     return 0;
 }

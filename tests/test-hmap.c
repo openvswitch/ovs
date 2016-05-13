@@ -272,6 +272,47 @@ test_hmap_for_each_safe(hash_func *hash)
     }
 }
 
+/* Tests that HMAP_FOR_EACH_POP removes every element of a hmap. */
+static void
+test_hmap_for_each_pop(hash_func *hash)
+{
+    enum { MAX_ELEMS = 10 };
+    size_t n;
+
+    for (n = 0; n <= MAX_ELEMS; n++) {
+        struct element elements[MAX_ELEMS];
+        int values[MAX_ELEMS];
+        struct hmap hmap;
+        struct element *e;
+        size_t n_remaining, i;
+
+        make_hmap(&hmap, elements, values, n, hash);
+
+        i = 0;
+        n_remaining = n;
+        HMAP_FOR_EACH_POP (e, node, &hmap) {
+            size_t j;
+
+            assert(i < n);
+
+            for (j = 0; ; j++) {
+                assert(j < n_remaining);
+                if (values[j] == e->value) {
+                    values[j] = values[--n_remaining];
+                    break;
+                }
+            }
+            /* Trash the element memory (including the hmap node) */
+            memset(e, 0, sizeof *e);
+            check_hmap(&hmap, values, n_remaining, hash);
+            i++;
+        }
+        assert(i == n);
+
+        hmap_destroy(&hmap);
+    }
+}
+
 static void
 run_test(void (*function)(hash_func *))
 {
@@ -291,6 +332,7 @@ test_hmap_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     run_test(test_hmap_insert_delete);
     run_test(test_hmap_for_each_safe);
     run_test(test_hmap_reserve_shrink);
+    run_test(test_hmap_for_each_pop);
     printf("\n");
 }
 

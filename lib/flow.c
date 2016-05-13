@@ -26,12 +26,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include "byte-order.h"
+#include "colors.h"
 #include "coverage.h"
 #include "csum.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "jhash.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "dp-packet.h"
 #include "openflow/openflow.h"
 #include "packets.h"
@@ -199,6 +200,23 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
     }                                           \
 }
 
+#define miniflow_push_uint8_(MF, OFS, VALUE)            \
+{                                                       \
+    MINIFLOW_ASSERT(MF.data < MF.end);                  \
+                                                        \
+    if ((OFS) % 8 == 0) {                               \
+        miniflow_set_map(MF, OFS / 8);                  \
+        *(uint8_t *)MF.data = VALUE;                    \
+    } else if ((OFS) % 8 == 7) {                        \
+        miniflow_assert_in_map(MF, OFS / 8);            \
+        *((uint8_t *)MF.data + 7) = VALUE;              \
+        MF.data++;                                      \
+    } else {                                            \
+        miniflow_assert_in_map(MF, OFS / 8);            \
+        *((uint8_t *)MF.data + ((OFS) % 8)) = VALUE;    \
+    }                                                   \
+}
+
 #define miniflow_pad_to_64_(MF, OFS)                            \
 {                                                               \
     MINIFLOW_ASSERT((OFS) % 8 != 0);                            \
@@ -208,8 +226,21 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
     MF.data++;                                                  \
 }
 
+#define miniflow_pad_from_64_(MF, OFS)                          \
+{                                                               \
+    MINIFLOW_ASSERT(MF.data < MF.end);                          \
+                                                                \
+    MINIFLOW_ASSERT((OFS) % 8 != 0);                            \
+    miniflow_set_map(MF, OFS / 8);                              \
+                                                                \
+    memset((uint8_t *)MF.data, 0, (OFS) % 8);                   \
+}
+
 #define miniflow_push_be16_(MF, OFS, VALUE)                     \
     miniflow_push_uint16_(MF, OFS, (OVS_FORCE uint16_t)VALUE);
+
+#define miniflow_push_be8_(MF, OFS, VALUE)                     \
+    miniflow_push_uint8_(MF, OFS, (OVS_FORCE uint8_t)VALUE);
 
 #define miniflow_set_maps(MF, OFS, N_WORDS)                     \
 {                                                               \
@@ -262,8 +293,14 @@ BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
 #define miniflow_push_be16(MF, FIELD, VALUE)                        \
     miniflow_push_be16_(MF, offsetof(struct flow, FIELD), VALUE)
 
+#define miniflow_push_uint8(MF, FIELD, VALUE)                      \
+    miniflow_push_uint8_(MF, offsetof(struct flow, FIELD), VALUE)
+
 #define miniflow_pad_to_64(MF, FIELD)                       \
     miniflow_pad_to_64_(MF, OFFSETOFEND(struct flow, FIELD))
+
+#define miniflow_pad_from_64(MF, FIELD)                       \
+    miniflow_pad_from_64_(MF, offsetof(struct flow, FIELD))
 
 #define miniflow_push_words(MF, FIELD, VALUEP, N_WORDS)                 \
     miniflow_push_words_(MF, offsetof(struct flow, FIELD), VALUEP, N_WORDS)
@@ -487,7 +524,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         miniflow_push_uint32(mf, ct_mark, md->ct_mark);
         miniflow_pad_to_64(mf, ct_mark);
 
-        if (!ovs_u128_is_zero(&md->ct_label)) {
+        if (!ovs_u128_is_zero(md->ct_label)) {
             miniflow_push_words(mf, ct_label, &md->ct_label,
                                 sizeof md->ct_label / sizeof(uint64_t));
         }
@@ -858,7 +895,7 @@ flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
     if (flow->ct_mark != 0) {
         match_set_ct_mark(flow_metadata, flow->ct_mark);
     }
-    if (!ovs_u128_is_zero(&flow->ct_label)) {
+    if (!ovs_u128_is_zero(flow->ct_label)) {
         match_set_ct_label(flow_metadata, flow->ct_label);
     }
 }
@@ -948,7 +985,7 @@ format_flags_masked(struct ds *ds, const char *name,
                     uint32_t mask, uint32_t max_mask)
 {
     if (name) {
-        ds_put_format(ds, "%s=", name);
+        ds_put_format(ds, "%s%s=%s", colors.param, name, colors.end);
     }
 
     if (mask == max_mask) {
@@ -1169,7 +1206,7 @@ flow_format(struct ds *ds, const struct flow *flow)
     if (!flow->ct_mark) {
         WC_UNMASK_FIELD(wc, ct_mark);
     }
-    if (ovs_u128_is_zero(&flow->ct_label)) {
+    if (ovs_u128_is_zero(flow->ct_label)) {
         WC_UNMASK_FIELD(wc, ct_label);
     }
     for (int i = 0; i < FLOW_N_REGS; i++) {
@@ -1368,13 +1405,13 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
         FLOWMAP_SET(map, nw_frag);
         FLOWMAP_SET(map, nw_tos);
         FLOWMAP_SET(map, nw_ttl);
+        FLOWMAP_SET(map, tp_src);
+        FLOWMAP_SET(map, tp_dst);
 
         if (OVS_UNLIKELY(flow->nw_proto == IPPROTO_IGMP)) {
             FLOWMAP_SET(map, igmp_group_ip4);
         } else {
             FLOWMAP_SET(map, tcp_flags);
-            FLOWMAP_SET(map, tp_src);
-            FLOWMAP_SET(map, tp_dst);
         }
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         FLOWMAP_SET(map, ipv6_src);
@@ -1384,6 +1421,8 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
         FLOWMAP_SET(map, nw_frag);
         FLOWMAP_SET(map, nw_tos);
         FLOWMAP_SET(map, nw_ttl);
+        FLOWMAP_SET(map, tp_src);
+        FLOWMAP_SET(map, tp_dst);
 
         if (OVS_UNLIKELY(flow->nw_proto == IPPROTO_ICMPV6)) {
             FLOWMAP_SET(map, nd_target);
@@ -1391,8 +1430,6 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
             FLOWMAP_SET(map, arp_tha);
         } else {
             FLOWMAP_SET(map, tcp_flags);
-            FLOWMAP_SET(map, tp_src);
-            FLOWMAP_SET(map, tp_dst);
         }
     } else if (eth_type_mpls(flow->dl_type)) {
         FLOWMAP_SET(map, mpls_lse);

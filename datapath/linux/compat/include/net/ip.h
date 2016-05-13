@@ -6,13 +6,6 @@
 #include <net/route.h>
 #include <linux/version.h>
 
-#ifndef HAVE_IP_IS_FRAGMENT
-static inline bool ip_is_fragment(const struct iphdr *iph)
-{
-	return (iph->frag_off & htons(IP_MF | IP_OFFSET)) != 0;
-}
-#endif
-
 #ifndef HAVE_INET_GET_LOCAL_PORT_RANGE_USING_NET
 static inline void rpl_inet_get_local_port_range(struct net *net, int *low,
 					     int *high)
@@ -77,7 +70,7 @@ static inline unsigned int rpl_ip_skb_dst_mtu(const struct sk_buff *skb)
  * correctly, which would lead to reassembled packets not being refragmented.
  * So, we backport all of ip_defrag() in these cases.
  */
-#if !defined(HAVE_CORRECT_MRU_HANDLING) && defined(OVS_FRAGMENT_BACKPORT)
+#ifndef HAVE_CORRECT_MRU_HANDLING
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,2,0)
 static inline bool ip_defrag_user_in_between(u32 user,
@@ -116,28 +109,40 @@ static inline int rpl_ip_do_fragment(struct sock *sk, struct sk_buff *skb,
 #define ip_do_fragment rpl_ip_do_fragment
 #endif /* IP_DO_FRAGMENT */
 
-int rpl_ip_defrag(struct sk_buff *skb, u32 user);
+/* If backporting IP defrag, then init/exit functions need to be called from
+ * compat_{in,ex}it() to prepare the backported fragmentation cache. In this
+ * case we declare the functions which are defined in
+ * datapath/linux/compat/ip_fragment.c. */
+int rpl_ip_defrag(struct net *net, struct sk_buff *skb, u32 user);
 #define ip_defrag rpl_ip_defrag
-
 int __init rpl_ipfrag_init(void);
 void rpl_ipfrag_fini(void);
-#else /* HAVE_CORRECT_MRU_HANDLING || !OVS_FRAGMENT_BACKPORT */
+
+#else /* HAVE_CORRECT_MRU_HANDLING */
 
 /* We have no good way to detect the presence of upstream commit 8282f27449bf
  * ("inet: frag: Always orphan skbs inside ip_defrag()"), but it should be
  * always included in kernels 4.5+. */
 #if LINUX_VERSION_CODE < KERNEL_VERSION(4,5,0)
-static inline int rpl_ip_defrag(struct sk_buff *skb, u32 user)
+static inline int rpl_ip_defrag(struct net *net, struct sk_buff *skb, u32 user)
 {
 	skb_orphan(skb);
+#ifndef HAVE_IP_DEFRAG_TAKES_NET
 	return ip_defrag(skb, user);
+#else
+	return ip_defrag(net, skb, user);
+#endif
 }
 #define ip_defrag rpl_ip_defrag
 #endif
 
+/* If we can use upstream defrag then we can rely on the upstream
+ * defrag module to init/exit correctly. In this case the calls in
+ * compat_{in,ex}it() can be no-ops. */
 static inline int rpl_ipfrag_init(void) { return 0; }
 static inline void rpl_ipfrag_fini(void) { }
-#endif /* HAVE_CORRECT_MRU_HANDLING && OVS_FRAGMENT_BACKPORT */
+#endif /* HAVE_CORRECT_MRU_HANDLING */
+
 #define ipfrag_init rpl_ipfrag_init
 #define ipfrag_fini rpl_ipfrag_fini
 

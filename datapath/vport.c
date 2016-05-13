@@ -33,8 +33,9 @@
 #include <net/lisp.h>
 #include <net/gre.h>
 #include <net/geneve.h>
-#include <net/vxlan.h>
+#include <net/route.h>
 #include <net/stt.h>
+#include <net/vxlan.h>
 
 #include "datapath.h"
 #include "gso.h"
@@ -375,14 +376,6 @@ int ovs_vport_get_options(const struct vport *vport, struct sk_buff *skb)
 	return 0;
 }
 
-static void vport_portids_destroy_rcu_cb(struct rcu_head *rcu)
-{
-	struct vport_portids *ids = container_of(rcu, struct vport_portids,
-						 rcu);
-
-	kfree(ids);
-}
-
 /**
  *	ovs_vport_set_upcall_portids - set upcall portids of @vport.
  *
@@ -417,7 +410,7 @@ int ovs_vport_set_upcall_portids(struct vport *vport, const struct nlattr *ids)
 	rcu_assign_pointer(vport->upcall_portids, vport_portids);
 
 	if (old)
-		call_rcu(&old->rcu, vport_portids_destroy_rcu_cb);
+		kfree_rcu(old, rcu);
 	return 0;
 }
 
@@ -531,6 +524,25 @@ void ovs_vport_deferred_free(struct vport *vport)
 	call_rcu(&vport->rcu, free_vport_rcu);
 }
 EXPORT_SYMBOL_GPL(ovs_vport_deferred_free);
+
+static struct rtable *ovs_tunnel_route_lookup(struct net *net,
+					      const struct ip_tunnel_key *key,
+					      u32 mark,
+					      struct flowi4 *fl,
+					      u8 protocol)
+{
+	struct rtable *rt;
+
+	memset(fl, 0, sizeof(*fl));
+	fl->daddr = key->u.ipv4.dst;
+	fl->saddr = key->u.ipv4.src;
+	fl->flowi4_tos = RT_TOS(key->tos);
+	fl->flowi4_mark = mark;
+	fl->flowi4_proto = protocol;
+
+	rt = ip_route_output_key(net, fl);
+	return rt;
+}
 
 int ovs_tunnel_get_egress_info(struct dp_upcall_info *upcall,
 			       struct net *net,

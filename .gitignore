@@ -69,3 +69,6 @@ odp-netlink.h
 OvsDpInterface.h
 /.vagrant/
 testsuite.tmp.orig
+/rpm/
+/openvswitch-*.tar.gz
+/tests/lcov/

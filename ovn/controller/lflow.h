@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,6 +37,8 @@
 
 struct controller_ctx;
 struct hmap;
+struct lport_index;
+struct mcgroup_index;
 struct simap;
 struct uuid;
 
@@ -51,14 +53,18 @@ struct uuid;
 #define OFTABLE_DROP_LOOPBACK        34
 #define OFTABLE_LOG_EGRESS_PIPELINE  48 /* First of LOG_PIPELINE_LEN tables. */
 #define OFTABLE_LOG_TO_PHY           64
+#define OFTABLE_MAC_BINDING          65
 
 /* The number of tables for the ingress and egress pipelines. */
 #define LOG_PIPELINE_LEN 16
 
 void lflow_init(void);
-void lflow_run(struct controller_ctx *, struct hmap *flow_table,
+void lflow_run(struct controller_ctx *, const struct lport_index *,
+               const struct mcgroup_index *,
+               const struct hmap *local_datapaths,
+               const struct hmap *patched_datapaths,
                const struct simap *ct_zones,
-               struct hmap *local_datapaths);
+               struct hmap *flow_table);
 void lflow_destroy(void);
 
 #endif /* ovn/lflow.h */

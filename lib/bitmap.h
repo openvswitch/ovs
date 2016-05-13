@@ -21,8 +21,6 @@
 #include <stdlib.h>
 #include "util.h"
 
-#define BITMAP_ULONG_BITS (sizeof(unsigned long) * CHAR_BIT)
-
 static inline unsigned long *
 bitmap_unit__(const unsigned long *bitmap, size_t offset)
 {
@@ -34,8 +32,6 @@ bitmap_bit__(size_t offset)
 {
     return 1UL << (offset % BITMAP_ULONG_BITS);
 }
-
-#define BITMAP_N_LONGS(N_BITS) DIV_ROUND_UP(N_BITS, BITMAP_ULONG_BITS)
 
 static inline size_t
 bitmap_n_longs(size_t n_bits)

@@ -220,7 +220,7 @@ struct net_device *rpl_vxlan_dev_create(struct net *net, const char *name,
 
 static inline __be16 vxlan_dev_dst_port(struct vxlan_dev *vxlan)
 {
-	return inet_sport(vxlan->vn_sock->sock->sk);
+	return inet_sk(vxlan->vn_sock->sock->sk)->inet_sport;
 }
 
 static inline netdev_features_t vxlan_features_check(struct sk_buff *skb,
@@ -228,7 +228,7 @@ static inline netdev_features_t vxlan_features_check(struct sk_buff *skb,
 {
 	u8 l4_hdr = 0;
 
-	if (!skb_encapsulation(skb))
+	if (!skb->encapsulation)
 		return features;
 
 	switch (vlan_get_protocol(skb)) {

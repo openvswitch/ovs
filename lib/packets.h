@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,11 @@
 
 #include <inttypes.h>
 #include <sys/types.h>
-#include <netinet/in.h>
 #include <stdint.h>
 #include <string.h>
 #include "compiler.h"
-#include "geneve.h"
+#include "openvswitch/geneve.h"
+#include "openvswitch/packets.h"
 #include "openvswitch/types.h"
 #include "odp-netlink.h"
 #include "random.h"
@@ -34,39 +34,6 @@
 
 struct dp_packet;
 struct ds;
-
-/* Tunnel information used in flow key and metadata. */
-struct flow_tnl {
-    ovs_be32 ip_dst;
-    struct in6_addr ipv6_dst;
-    ovs_be32 ip_src;
-    struct in6_addr ipv6_src;
-    ovs_be64 tun_id;
-    uint16_t flags;
-    uint8_t ip_tos;
-    uint8_t ip_ttl;
-    ovs_be16 tp_src;
-    ovs_be16 tp_dst;
-    ovs_be16 gbp_id;
-    uint8_t  gbp_flags;
-    uint8_t  pad1[5];        /* Pad to 64 bits. */
-    struct tun_metadata metadata;
-};
-
-/* Some flags are exposed through OpenFlow while others are used only
- * internally. */
-
-/* Public flags */
-#define FLOW_TNL_F_OAM (1 << 0)
-
-#define FLOW_TNL_PUB_F_MASK ((1 << 1) - 1)
-
-/* Private flags */
-#define FLOW_TNL_F_DONT_FRAGMENT (1 << 1)
-#define FLOW_TNL_F_CSUM (1 << 2)
-#define FLOW_TNL_F_KEY (1 << 3)
-
-#define FLOW_TNL_F_MASK ((1 << 4) - 1)
 
 /* Purely internal to OVS userspace. These flags should never be exposed to
  * the outside world and so aren't included in the flags mask. */
@@ -122,14 +89,6 @@ flow_tnl_equal(const struct flow_tnl *a, const struct flow_tnl *b)
 
     return a_size == flow_tnl_size(b) && !memcmp(a, b, a_size);
 }
-
-/* Unfortunately, a "struct flow" sometimes has to handle OpenFlow port
- * numbers and other times datapath (dpif) port numbers.  This union allows
- * access to both. */
-union flow_in_port {
-    odp_port_t odp_port;
-    ofp_port_t ofp_port;
-};
 
 /* Datapath packet metadata */
 struct pkt_metadata {
@@ -594,6 +553,11 @@ char *ip_parse_masked(const char *s, ovs_be32 *ip, ovs_be32 *mask)
     OVS_WARN_UNUSED_RESULT;
 char *ip_parse_cidr(const char *s, ovs_be32 *ip, unsigned int *plen)
     OVS_WARN_UNUSED_RESULT;
+char *ip_parse_masked_len(const char *s, int *n, ovs_be32 *ip, ovs_be32 *mask)
+    OVS_WARN_UNUSED_RESULT;
+char *ip_parse_cidr_len(const char *s, int *n, ovs_be32 *ip,
+                        unsigned int *plen)
+    OVS_WARN_UNUSED_RESULT;
 
 #define IP_VER(ip_ihl_ver) ((ip_ihl_ver) >> 4)
 #define IP_IHL(ip_ihl_ver) ((ip_ihl_ver) & 15)
@@ -981,6 +945,22 @@ in6_addr_solicited_node(struct in6_addr *addr, const struct in6_addr *ip6)
     memcpy(&addr->s6_addr[13], &ip6->s6_addr[13], 3);
 }
 
+/*
+ * Generates ipv6 link local address from the given eth addr
+ * with prefix 'fe80::/64' and stores it in 'lla'
+ */
+static inline void
+in6_generate_lla(struct eth_addr ea, struct in6_addr *lla)
+{
+    union ovs_16aligned_in6_addr *taddr = (void *) lla;
+    memset(taddr->be16, 0, sizeof(taddr->be16));
+    taddr->be16[0] = htons(0xfe80);
+    taddr->be16[4] = htons(((ea.ea[0] ^ 0x02) << 8) | ea.ea[1]);
+    taddr->be16[5] = htons(ea.ea[2] << 8 | 0x00ff);
+    taddr->be16[6] = htons(0xfe << 8 | ea.ea[3]);
+    taddr->be16[7] = ea.be16[2];
+}
+
 static inline void
 ipv6_multicast_to_ethernet(struct eth_addr *eth, const struct in6_addr *ip6)
 {
@@ -1041,6 +1021,11 @@ char *ipv6_parse_masked(const char *s, struct in6_addr *ipv6,
                         struct in6_addr *mask);
 char *ipv6_parse_cidr(const char *s, struct in6_addr *ip, unsigned int *plen)
     OVS_WARN_UNUSED_RESULT;
+char *ipv6_parse_masked_len(const char *s, int *n, struct in6_addr *ipv6,
+                            struct in6_addr *mask);
+char *ipv6_parse_cidr_len(const char *s, int *n, struct in6_addr *ip,
+                          unsigned int *plen)
+    OVS_WARN_UNUSED_RESULT;
 
 void *eth_compose(struct dp_packet *, const struct eth_addr eth_dst,
                   const struct eth_addr eth_src, uint16_t eth_type,
@@ -1050,7 +1035,7 @@ void *snap_compose(struct dp_packet *, const struct eth_addr eth_dst,
                    unsigned int oui, uint16_t snap_type, size_t size);
 void packet_set_ipv4(struct dp_packet *, ovs_be32 src, ovs_be32 dst, uint8_t tos,
                      uint8_t ttl);
-void packet_set_ipv6(struct dp_packet *, uint8_t proto, const ovs_be32 src[4],
+void packet_set_ipv6(struct dp_packet *, const ovs_be32 src[4],
                      const ovs_be32 dst[4], uint8_t tc,
                      ovs_be32 fl, uint8_t hlmit);
 void packet_set_tcp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
@@ -1062,6 +1047,7 @@ void packet_set_nd(struct dp_packet *, const ovs_be32 target[4],
 
 void packet_format_tcp_flags(struct ds *, uint16_t);
 const char *packet_tcp_flag_to_string(uint32_t flag);
+void compose_arp__(struct dp_packet *);
 void compose_arp(struct dp_packet *, uint16_t arp_op,
                  const struct eth_addr arp_sha,
                  const struct eth_addr arp_tha, bool broadcast,

@@ -32,8 +32,8 @@
 
 #define pr_fmt(fmt) "IPv6: " fmt
 
-#if defined(OVS_FRAGMENT_BACKPORT) && \
-    LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
 
 #include <linux/errno.h>
 #include <linux/types.h>
@@ -107,4 +107,4 @@ out:
 	inet_frag_put(&fq->q, frags);
 }
 
-#endif /* OVS_FRAGMENT_BACKPORT */
+#endif

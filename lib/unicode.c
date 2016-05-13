@@ -20,7 +20,7 @@
 
 #include <inttypes.h>
 
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "util.h"
 
 /* Returns the unicode code point corresponding to leading surrogate 'leading'

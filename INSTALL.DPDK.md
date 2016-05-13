@@ -16,7 +16,7 @@ OVS needs a system with 1GB hugepages support.
 Building and Installing:
 ------------------------
 
-Required: DPDK 2.2
+Required: DPDK 16.04
 Optional (if building with vhost-cuse): `fuse`, `fuse-devel` (`libfuse-dev`
 on Debian/Ubuntu)
 
@@ -24,23 +24,18 @@ on Debian/Ubuntu)
   1. Set `$DPDK_DIR`
 
      ```
-     export DPDK_DIR=/usr/src/dpdk-2.2
+     export DPDK_DIR=/usr/src/dpdk-16.04
      cd $DPDK_DIR
      ```
 
-  2. Update `config/common_linuxapp` so that DPDK generate single lib file.
-     (modification also required for IVSHMEM build)
-
-     `CONFIG_RTE_BUILD_COMBINE_LIBS=y`
-
-     Then run `make install` to build and install the library.
+  2. Then run `make install` to build and install the library.
      For default install without IVSHMEM:
 
-     `make install T=x86_64-native-linuxapp-gcc`
+     `make install T=x86_64-native-linuxapp-gcc DESTDIR=install`
 
      To include IVSHMEM (shared memory):
 
-     `make install T=x86_64-ivshmem-linuxapp-gcc`
+     `make install T=x86_64-ivshmem-linuxapp-gcc DESTDIR=install`
 
      For further details refer to http://dpdk.org/
 
@@ -143,22 +138,67 @@ Using the DPDK with ovs-vswitchd:
 
 5. Start vswitchd:
 
-   DPDK configuration arguments can be passed to vswitchd via `--dpdk`
-   argument. This needs to be first argument passed to vswitchd process.
-   dpdk arg -c is ignored by ovs-dpdk, but it is a required parameter
-   for dpdk initialization.
+   DPDK configuration arguments can be passed to vswitchd via Open_vSwitch
+   other_config column. The recognized configuration options are listed.
+   Defaults will be provided for all values not explicitly set.
+
+   * dpdk-init
+   Specifies whether OVS should initialize and support DPDK ports. This is
+   a boolean, and defaults to false.
+
+   * dpdk-lcore-mask
+   Specifies the CPU cores on which dpdk lcore threads should be spawned.
+   The DPDK lcore threads are used for DPDK library tasks, such as
+   library internal message processing, logging, etc. Value should be in
+   the form of a hex string (so '0x123') similar to the 'taskset' mask
+   input.
+   If not specified, the value will be determined by choosing the lowest
+   CPU core from initial cpu affinity list. Otherwise, the value will be
+   passed directly to the DPDK library.
+   For performance reasons, it is best to set this to a single core on
+   the system, rather than allow lcore threads to float.
+
+   * dpdk-alloc-mem
+   This sets the total memory to preallocate from hugepages regardless of
+   processor socket. It is recommended to use dpdk-socket-mem instead.
+
+   * dpdk-socket-mem
+   Comma separated list of memory to pre-allocate from hugepages on specific
+   sockets.
+
+   * dpdk-hugepage-dir
+   Directory where hugetlbfs is mounted
+
+   * dpdk-extra
+   Extra arguments to provide to DPDK EAL, as previously specified on the
+   command line. Do not pass '--no-huge' to the system in this way. Support
+   for running the system without hugepages is nonexistent.
+
+   * cuse-dev-name
+   Option to set the vhost_cuse character device name.
+
+   * vhost-sock-dir
+   Option to set the path to the vhost_user unix socket files.
+
+   NOTE: Changing any of these options requires restarting the ovs-vswitchd
+   application.
+
+   Open vSwitch can be started as normal. DPDK will be initialized as long
+   as the dpdk-init option has been set to 'true'.
+
 
    ```
    export DB_SOCK=/usr/local/var/run/openvswitch/db.sock
-   ovs-vswitchd --dpdk -c 0x1 -n 4 -- unix:$DB_SOCK --pidfile --detach
+   ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true
+   ovs-vswitchd unix:$DB_SOCK --pidfile --detach
    ```
 
    If allocated more than one GB hugepage (as for IVSHMEM), set amount and
    use NUMA node 0 memory:
 
    ```
-   ovs-vswitchd --dpdk -c 0x1 -n 4 --socket-mem 1024,0 \
-   -- unix:$DB_SOCK --pidfile --detach
+   ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-socket-mem="1024,0"
+   ovs-vswitchd unix:$DB_SOCK --pidfile --detach
    ```
 
 6. Add bridge & ports
@@ -206,6 +246,26 @@ Using the DPDK with ovs-vswitchd:
    ./ovs-ofctl add-flow br0 in_port=1,action=output:2
    ./ovs-ofctl add-flow br0 in_port=2,action=output:1
    ```
+
+8. QoS usage example
+
+   Assuming you have a vhost-user port transmitting traffic consisting of
+   packets of size 64 bytes, the following command would limit the egress
+   transmission rate of the port to ~1,000,000 packets per second:
+
+   `ovs-vsctl set port vhost-user0 qos=@newqos -- --id=@newqos create qos
+   type=egress-policer other-config:cir=46000000 other-config:cbs=2048`
+
+   To examine the QoS configuration of the port:
+
+   `ovs-appctl -t ovs-vswitchd qos/show vhost-user0`
+
+   To clear the QoS configuration from the port and ovsdb use the following:
+
+   `ovs-vsctl destroy QoS vhost-user0 -- clear Port vhost-user0 qos`
+
+   For more details regarding egress-policer parameters please refer to the
+   vswitch.xml.
 
 Performance Tuning:
 -------------------
@@ -272,9 +332,12 @@ Performance Tuning:
 
 	NIC port0 <-> OVS <-> VM <-> OVS <-> NIC port 1
 
-	The OVS log can be checked to confirm that the port/rxq assignment to
-	pmd threads is as required. This can also be checked with the following
-	commands:
+	The following command can be used to confirm that the port/rxq assignment
+	to pmd threads is as required:
+
+	`ovs-appctl dpif-netdev/pmd-rxq-show`
+
+	This can also be checked with:
 
 	```
 	top -H
@@ -392,7 +455,7 @@ Performance Tuning:
 	This behavior is typically supported and enabled by default, however
 	in the case where the user knows that rx mergeable buffers are not needed
 	i.e. jumbo frames are not needed, it can be forced off by adding
-	rx_mrgbuf=off to the QEMU command line options. By not reserving multiple
+	mrg_rxbuf=off to the QEMU command line options. By not reserving multiple
 	chains of descriptors it will make more individual virtio descriptors
 	available for rx to the guest using dpdkvhost ports and this can improve
 	performance.
@@ -473,7 +536,7 @@ the vswitchd.
 DPDK vhost:
 -----------
 
-DPDK 2.2 supports two types of vhost:
+DPDK 16.04 supports two types of vhost:
 
 1. vhost-user
 2. vhost-cuse
@@ -494,7 +557,7 @@ with OVS.
 DPDK vhost-user Prerequisites:
 -------------------------
 
-1. DPDK 2.2 with vhost support enabled as documented in the "Building and
+1. DPDK 16.04 with vhost support enabled as documented in the "Building and
    Installing section"
 
 2. QEMU version v2.1.0+
@@ -508,7 +571,8 @@ Adding DPDK vhost-user ports to the Switch:
 
 Following the steps above to create a bridge, you can now add DPDK vhost-user
 as a port to the vswitch. Unlike DPDK ring ports, DPDK vhost-user ports can
-have arbitrary names.
+have arbitrary names, except that forward and backward slashes are prohibited
+in the names.
 
   -  For vhost-user, the name of the port type is `dpdkvhostuser`
 
@@ -521,11 +585,12 @@ have arbitrary names.
      `/usr/local/var/run/openvswitch/vhost-user-1`, which you must provide
      to your VM on the QEMU command line. More instructions on this can be
      found in the next section "DPDK vhost-user VM configuration"
-     Note: If you wish for the vhost-user sockets to be created in a
-     directory other than `/usr/local/var/run/openvswitch`, you may specify
-     another location on the ovs-vswitchd command line like so:
+  - If you wish for the vhost-user sockets to be created in a sub-directory of
+    `/usr/local/var/run/openvswitch`, you may specify this directory in the
+    ovsdb like so:
 
-      `./vswitchd/ovs-vswitchd --dpdk -vhost_sock_dir /my-dir -c 0x1 ...`
+      `./utilities/ovs-vsctl --no-wait \
+        set Open_vSwitch . other_config:vhost-sock-dir=subdir`
 
 DPDK vhost-user VM configuration:
 ---------------------------------
@@ -586,6 +651,22 @@ Follow the steps below to attach vhost-user port(s) to a VM.
    -device virtio-net-pci,mac=00:00:00:00:00:02,netdev=mynet2,mq=on,vectors=$v
    ```
 
+   If one wishes to use multiple queues for an interface in the guest, the
+   driver in the guest operating system must be configured to do so. It is
+   recommended that the number of queues configured be equal to '$q'.
+
+   For example, this can be done for the Linux kernel virtio-net driver with:
+
+   ```
+   ethtool -L <DEV> combined <$q>
+   ```
+
+   A note on the command above:
+
+   `-L`: Changes the numbers of channels of the specified network device
+
+   `combined`: Changes the number of multi-purpose channels.
+
 DPDK vhost-cuse:
 ----------------
 
@@ -595,10 +676,10 @@ with OVS.
 DPDK vhost-cuse Prerequisites:
 -------------------------
 
-1. DPDK 2.2 with vhost support enabled as documented in the "Building and
+1. DPDK 16.04 with vhost support enabled as documented in the "Building and
    Installing section"
    As an additional step, you must enable vhost-cuse in DPDK by setting the
-   following additional flag in `config/common_linuxapp`:
+   following additional flag in `config/common_base`:
 
    `CONFIG_RTE_LIBRTE_VHOST_USER=n`
 
@@ -657,14 +738,13 @@ DPDK vhost-cuse VM configuration:
 
 1. This step is only needed if using an alternative character device.
 
-   The new character device filename must be specified on the vswitchd
-   commandline:
+   The new character device filename must be specified in the ovsdb:
 
-        `./vswitchd/ovs-vswitchd --dpdk --cuse_dev_name my-vhost-net -c 0x1 ...`
+        `./utilities/ovs-vsctl --no-wait set Open_vSwitch . \
+                          other_config:cuse-dev-name=my-vhost-net`
 
-   Note that the `--cuse_dev_name` argument and associated string must be the first
-   arguments after `--dpdk` and come before the EAL arguments. In the example
-   above, the character device to be used will be `/dev/my-vhost-net`.
+   In the example above, the character device to be used will be
+   `/dev/my-vhost-net`.
 
 2. This step is only needed if reusing the standard character device. It will
    conflict with the kernel vhost character device so the user must first
@@ -776,8 +856,8 @@ steps.
         ```
 
         <my-vhost-device> refers to "vhost-net" if using the `/dev/vhost-net`
-        device. If you have specificed a different name on the ovs-vswitchd
-        commandline using the "--cuse_dev_name" parameter, please specify that
+        device. If you have specificed a different name in the database
+        using the "other_config:cuse-dev-name" parameter, please specify that
         filename instead.
 
      2. Disable SELinux or set to permissive mode
@@ -898,29 +978,17 @@ Restrictions:
     this with smaller page sizes.
 
   Platform and Network Interface:
-  - Currently it is not possible to use an Intel XL710 Network Interface as a
-    DPDK port type on a platform with more than 64 logical cores. This is
-    related to how DPDK reports the number of TX queues that may be used by
-    a DPDK application with an XL710. The maximum number of TX queues supported
-    by a DPDK application for an XL710 is 64. If a user attempts to add an
-    XL710 interface as a DPDK port type to a system as described above the
-    port addition will fail as OVS will attempt to initialize a TX queue greater
-    than 64. This issue is expected to be resolved in a future DPDK release.
-    As a workaround a user can disable hyper-threading to reduce the overall
-    core count of the system to be less than or equal to 64 when using an XL710
-    interface with DPDK.
-
-  vHost and QEMU v2.4.0+:
-  - For versions of QEMU v2.4.0 and later, it is currently not possible to
-    unbind more than one dpdkvhostuser port from the guest kernel driver
-    without causing the ovs-vswitchd process to crash. If this is a requirement
-    for your use case, it is recommended either to use a version of QEMU
-    between v2.2.0 and v2.3.1 (inclusive), or alternatively, to apply the
-    following patch to DPDK and rebuild:
-    http://dpdk.org/dev/patchwork/patch/7736/
-    This problem will likely be resolved in Open vSwitch at a later date, when
-    the next release of DPDK (which includes the above patch) is available and
-    integrated into OVS.
+  - By default with DPDK 16.04, a maximum of 64 TX queues can be used with an
+    Intel XL710 Network Interface on a platform with more than 64 logical
+    cores. If a user attempts to add an XL710 interface as a DPDK port type to
+    a system as described above, an error will be reported that initialization
+    failed for the 65th queue. OVS will then roll back to the previous
+    successful queue initialization and use that value as the total number of
+    TX queues available with queue locking. If a user wishes to use more than
+    64 queues and avoid locking, then the
+    `CONFIG_RTE_LIBRTE_I40E_QUEUE_NUM_PER_PF` config parameter in DPDK must be
+    increased to the desired number of queues. Both DPDK and OVS must be
+    recompiled for this change to take effect.
 
 Bug Reporting:
 --------------

@@ -63,23 +63,13 @@ install the following:
   - A supported Linux kernel version.  Please refer to [README.md] for a
     list of supported versions.
 
-    The Open vSwitch datapath requires bridging support
-    (CONFIG_BRIDGE) to be built as a kernel module.  (This is common
-    in kernels provided by Linux distributions.)  The bridge module
-    must not be loaded or in use.  If the bridge module is running
-    (check with "lsmod | grep bridge"), you must remove it ("rmmod
-    bridge") before starting the datapath.
-
     For optional support of ingress policing, you must enable kernel
     configuration options NET_CLS_BASIC, NET_SCH_INGRESS, and
     NET_ACT_POLICE, either built-in or as modules.  (NET_CLS_POLICE is
     obsolete and not needed.)
 
-    To use GRE tunneling on Linux 2.6.37 or newer, kernel support
-    for GRE demultiplexing (CONFIG_NET_IPGRE_DEMUX) must be compiled
-    in or available as a module.  Also, on kernels before 3.11, the
-    ip_gre module, for GRE tunnels over IP (NET_IPGRE), must not be
-    loaded or compiled in.
+    On kernels before 3.11, the ip_gre module, for GRE tunnels over IP
+    (NET_IPGRE), must not be loaded or compiled in.
 
     To configure HTB or HFSC quality of service with Open vSwitch,
     you must enable the respective configuration options.
@@ -181,16 +171,22 @@ usually invoke configure without any arguments.  For example:
 
       `% ./configure`
 
-By default all files are installed under /usr/local.  If you want
-to install into, e.g., /usr and /var instead of /usr/local and
-/usr/local/var, add options as shown here:
+By default all files are installed under /usr/local.  Open vSwitch also
+expects to find its database in /usr/local/etc/openvswitch by default.
+If you want to install all files into, e.g., /usr and /var instead of
+/usr/local and /usr/local/var and expect to use /etc/openvswitch as the default
+database directory, add options as shown here:
 
-      `% ./configure --prefix=/usr --localstatedir=/var`
+      `% ./configure --prefix=/usr --localstatedir=/var --sysconfdir=/etc`
+
+Note that the Open vSwitch installed with packages like .rpm (e.g. via 'yum
+install' or 'rpm -ivh') and .deb (e.g. via 'apt-get install' or 'dpkg -i') use
+the above configure options.
 
 By default, static libraries are built and linked against. If you
 want to use shared libraries instead:
 
-      % ./configure --enable-shared
+      `% ./configure --enable-shared`
 
 To use a specific C compiler for compiling Open vSwitch user
 programs, also specify it on the configure command line, like so:
@@ -213,7 +209,7 @@ Note that these CFLAGS are not applied when building the Linux
 kernel module.  Custom CFLAGS for the kernel module are supplied
 using the EXTRA_CFLAGS variable when running make.  So, for example:
 
-      `% make EXTRA_CFLAGS="-Wno-error=date-time"
+      `% make EXTRA_CFLAGS="-Wno-error=date-time"`
 
 To build the Linux kernel module, so that you can run the
 kernel-based switch, pass the location of the kernel build
@@ -254,9 +250,16 @@ from a single source directory, e.g. to try out both GCC and Clang
 builds, or to build kernel modules for more than one Linux version.
 Here is an example:
 
-      `% mkdir _gcc && (cd _gcc && ../configure CC=gcc)`  
+      `% mkdir _gcc && (cd _gcc && ../configure CC=gcc)`
       `% mkdir _clang && (cd _clang && ../configure CC=clang)`
 
+Under certains loads the ovsdb-server and other components perform
+better when using the jemalloc memory allocator, instead of the glibc
+memory allocator.
+
+If you wish to link with jemalloc add it to LIBS:
+
+      `% ./configure LIBS=-ljemalloc`
 
 Building the Sources
 --------------------
@@ -272,7 +275,7 @@ Building the Sources
    If you used a separate build directory, run make or gmake from that
    directory, e.g.:
 
-      `% make -C _gcc`  
+      `% make -C _gcc`
       `% make -C _clang`
 
    For improved warnings if you installed "sparse" (see "Prerequisites"),
@@ -292,7 +295,7 @@ Building the Sources
 
 5. If you built kernel modules, you may install and load them, e.g.:
 
-      `% make modules_install`  
+      `% make modules_install`
       `% /sbin/modprobe openvswitch`
 
    To verify that the modules have been loaded, run "/sbin/lsmod" and
@@ -300,23 +303,6 @@ Building the Sources
 
    If the `modprobe` operation fails, look at the last few kernel log
    messages (e.g. with `dmesg | tail`):
-
-      - The message "openvswitch: exports duplicate symbol
-        br_should_route_hook (owned by bridge)" means that the bridge
-        module is loaded.  Run `/sbin/rmmod bridge` to remove it.
-
-        If `/sbin/rmmod bridge` fails with "ERROR: Module bridge does
-        not exist in /proc/modules", then the bridge is compiled into
-        the kernel, rather than as a module.  Open vSwitch does not
-        support this configuration (see "Build Requirements", above).
-
-      - The message "openvswitch: exports duplicate symbol
-        dp_ioctl_hook (owned by ofdatapath)" means that the ofdatapath
-        module from the OpenFlow reference implementation is loaded.
-        Run `/sbin/rmmod ofdatapath` to remove it.  (You might have to
-        delete any existing datapaths beforehand, using the "dpctl"
-        program included with the OpenFlow reference implementation.
-        "ovs-dpctl" will not work.)
 
       - Otherwise, the most likely problem is that Open vSwitch was
         built for a kernel different from the one into which you are
@@ -335,21 +321,9 @@ Building the Sources
         module loading, please include the output from the `dmesg` and
         `modinfo` commands mentioned above.
 
-There is an optional module parameter to openvswitch.ko called
-vlan_tso that enables TCP segmentation offload over VLANs on NICs
-that support it. Many drivers do not expose support for TSO on VLANs
-in a way that Open vSwitch can use but there is no way to detect
-whether this is the case. If you know that your particular driver can
-handle it (for example by testing sending large TCP packets over VLANs)
-then passing in a value of 1 may improve performance. Modules built for
-Linux kernels 2.6.37 and later, as well as specially patched versions
-of earlier kernels, do not need this and do not have this parameter. If
-you do not understand what this means or do not know if your driver
-will work, do not set this.
-
 6. Initialize the configuration database using ovsdb-tool, e.g.:
 
-      `% mkdir -p /usr/local/etc/openvswitch`  
+      `% mkdir -p /usr/local/etc/openvswitch`
       `% ovsdb-tool create /usr/local/etc/openvswitch/conf.db vswitchd/vswitch.ovsschema`
 
 Startup
@@ -363,12 +337,14 @@ explained above), to listen on a Unix domain socket, to connect to any
 managers specified in the database itself, and to use the SSL
 configuration in the database:
 
+      ```
       % ovsdb-server --remote=punix:/usr/local/var/run/openvswitch/db.sock \
                      --remote=db:Open_vSwitch,Open_vSwitch,manager_options \
                      --private-key=db:Open_vSwitch,SSL,private_key \
                      --certificate=db:Open_vSwitch,SSL,certificate \
                      --bootstrap-ca-cert=db:Open_vSwitch,SSL,ca_cert \
                      --pidfile --detach
+      ```
 
 (If you built Open vSwitch without SSL support, then omit
 --private-key, --certificate, and --bootstrap-ca-cert.)
@@ -377,20 +353,20 @@ Then initialize the database using ovs-vsctl.  This is only
 necessary the first time after you create the database with
 ovsdb-tool (but running it at any time is harmless):
 
-      % ovs-vsctl --no-wait init
+      `% ovs-vsctl --no-wait init`
 
 Then start the main Open vSwitch daemon, telling it to connect to the
 same Unix domain socket:
 
-      % ovs-vswitchd --pidfile --detach
+      `% ovs-vswitchd --pidfile --detach`
 
 Now you may use ovs-vsctl to set up bridges and other Open vSwitch
 features.  For example, to create a bridge named br0 and add ports
 eth0 and vif1.0 to it:
 
-      % ovs-vsctl add-br br0
-      % ovs-vsctl add-port br0 eth0
-      % ovs-vsctl add-port br0 vif1.0
+      `% ovs-vsctl add-br br0`
+      `% ovs-vsctl add-port br0 eth0`
+      `% ovs-vsctl add-port br0 vif1.0`
 
 Please refer to ovs-vsctl(8) for more details.
 
@@ -406,7 +382,10 @@ also upgrade the database schema:
       % kill `cd /usr/local/var/run/openvswitch && cat ovsdb-server.pid ovs-vswitchd.pid`
       ```
 
-2. Install the new Open vSwitch release.
+2. Install the new Open vSwitch release by using the same configure options as
+was used for installing the previous version. If you do not use the same
+configure options, you can end up with two different versions of Open vSwitch
+executables installed in different locations.
 
 3. Upgrade the database, in one of the following two ways:
 
@@ -512,6 +491,12 @@ The results of a testing run are reported in tests/testsuite.log.
 Please report test failures as bugs and include the testsuite.log in
 your report.
 
+If the build was configured with "--enable-coverage" and the "lcov"
+utility is installed, you can run the testsuite and generate a code
+coverage report by using "make check-lcov". All of the options for
+TESTSUITEFLAGS are available, so you can e.g.:
+      `make check-lcov TESTSUITEFLAGS=-j8 -k ovn`
+
 If you have "valgrind" installed, then you can also run the testsuite
 under valgrind by using "make check-valgrind" in place of "make
 check".  All the same options are available via TESTSUITEFLAGS.  When
@@ -523,7 +508,10 @@ valgrind results are easier to interpret if you put "-q" in
 Sometimes a few tests may fail on some runs but not others.  This is
 usually a bug in the testsuite, not a bug in Open vSwitch itself.  If
 you find that a test fails intermittently, please report it, since the
-developers may not have noticed.
+developers may not have noticed.  You can make the testsuite
+automatically rerun tests that fail, by adding RECHECK=yes to the
+"make" command line, e.g.:
+      `make check TESTSUITEFLAGS=-j8 RECHECK=yes`
 
 OFTest
 ------

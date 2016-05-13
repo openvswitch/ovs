@@ -8,13 +8,16 @@ m4_define([JSON_CHECK_POSITIVE_C],
 ])
    AT_CLEANUP])
 
+# JSON_CHECK_POSITIVE_PY(TITLE, INPUT, OUTPUT, TEST-JSON-ARGS,
+#                        PYTHON-CHCEK, PYTHON-BIN)
+#
 m4_define([JSON_CHECK_POSITIVE_PY], 
   [AT_SETUP([$1])
    AT_KEYWORDS([json positive Python])
-   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_SKIP_IF([test $5 = no])
    AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
    AT_CAPTURE_FILE([input])
-   AT_CHECK([$PYTHON $srcdir/test-json.py $4 input], [0], [stdout], [])
+   AT_CHECK([$6 $srcdir/test-json.py $4 input], [0], [stdout], [])
    AT_CHECK([cat stdout], [0], [$3
 ])
    AT_CLEANUP])
@@ -33,7 +36,10 @@ m4_define([JSON_CHECK_POSITIVE_UCS4PY],
 
 m4_define([JSON_CHECK_POSITIVE],
   [JSON_CHECK_POSITIVE_C([$1 - C], [$2], [$3], [$4])
-   JSON_CHECK_POSITIVE_PY([$1 - Python], [$2], [$3], [$4])])
+   JSON_CHECK_POSITIVE_PY([$1 - Python2], [$2], [$3], [$4],
+                          [$HAVE_PYTHON], [$PYTHON])
+   JSON_CHECK_POSITIVE_PY([$1 - Python3], [$2], [$3], [$4],
+                          [$HAVE_PYTHON3], [$PYTHON3])])
 
 m4_define([JSON_CHECK_NEGATIVE_C],
   [AT_SETUP([$1])
@@ -45,20 +51,26 @@ m4_define([JSON_CHECK_NEGATIVE_C],
 ])
    AT_CLEANUP])
 
+# JSON_CHECK_NEGATIVE_PY(TITLE, INPUT, OUTPUT, TEST-JSON-ARGS,
+#                        PYTHON-CHCEK, PYTHON-BIN)
+#
 m4_define([JSON_CHECK_NEGATIVE_PY], 
   [AT_SETUP([$1])
    AT_KEYWORDS([json negative Python])
-   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_SKIP_IF([test $5 = no])
    AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
    AT_CAPTURE_FILE([input])
-   AT_CHECK([$PYTHON $srcdir/test-json.py $4 input], [1], [stdout], [])
+   AT_CHECK([$6 $srcdir/test-json.py $4 input], [1], [stdout], [])
    AT_CHECK([[sed 's/^error: [^:]*:/error:/' < stdout]], [0], [$3
 ])
    AT_CLEANUP])
 
 m4_define([JSON_CHECK_NEGATIVE],
   [JSON_CHECK_NEGATIVE_C([$1 - C], [$2], [$3], [$4])
-   JSON_CHECK_NEGATIVE_PY([$1 - Python], [$2], [$3], [$4])])
+   JSON_CHECK_NEGATIVE_PY([$1 - Python2], [$2], [$3], [$4],
+                          [$HAVE_PYTHON], [$PYTHON])
+   JSON_CHECK_NEGATIVE_PY([$1 - Python3], [$2], [$3], [$4],
+                          [$HAVE_PYTHON3], [$PYTHON3])])
 
 AT_BANNER([JSON -- arrays])
 

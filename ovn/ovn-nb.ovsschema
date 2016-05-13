@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "2.0.2",
-    "cksum": "616552869 5342",
+    "version": "2.1.2",
+    "cksum": "1749571306 5832",
     "tables": {
         "Logical_Switch": {
             "columns": {
@@ -86,7 +86,13 @@
                                            "refType": "strong"},
                                    "min": 0,
                                    "max": "unlimited"}},
+                "static_routes": {"type": {"key": {"type": "uuid",
+                                            "refTable": "Logical_Router_Static_Route",
+                                            "refType": "strong"},
+                                   "min": 0,
+                                   "max": "unlimited"}},
                 "default_gw": {"type": {"key": "string", "min": 0, "max": 1}},
+                "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
@@ -96,15 +102,18 @@
                 "name": {"type": "string"},
                 "network": {"type": "string"},
                 "mac": {"type": "string"},
-                "peer": {"type": {"key": {"type": "uuid",
-                                          "refTable": "Logical_Router_Port",
-                                          "refType": "strong"},
-                                  "min": 0, "max": 1}},
+                "peer": {"type": {"key": "string", "min": 0, "max": 1}},
                 "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
             "indexes": [["name"]],
+            "isRoot": false},
+        "Logical_Router_Static_Route": {
+            "columns": {
+                "ip_prefix": {"type": "string"},
+                "nexthop": {"type": "string"},
+                "output_port": {"type": {"key": "string", "min": 0, "max": 1}}},
             "isRoot": false}
     }
 }

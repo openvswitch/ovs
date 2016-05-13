@@ -55,7 +55,24 @@ OVSDB_CHECK_POSITIVE_CPY([schema with ephemeral strong references],
                     "refTable": "a"}}}},
               "isRoot": true}}}']],
   [[{"name":"mydb","tables":{"a":{"columns":{"x":{"ephemeral":true,"type":{"key":{"refTable":"b","type":"uuid"}}},"y":{"type":{"key":{"refTable":"a","type":"uuid"}}}}},"b":{"columns":{"aRef":{"type":{"key":{"refTable":"a","type":"uuid"}}}},"isRoot":true}},"version":"4.2.1"}]])
-     
+
+dnl Immutable weak references are forced to be mutable.
+OVSDB_CHECK_POSITIVE_CPY([schema with immutable weak references],
+  [[parse-schema \
+      '{"name": "mydb",
+	"version": "4.2.1",
+	"tables": {
+	  "a": {
+	    "columns": {
+	      "x": {
+		"type": {
+		  "key": {
+		    "type": "uuid",
+		    "refTable": "a",
+		    "refType": "weak"}},
+		"mutable": false}}}}}']],
+  [[{"name":"mydb","tables":{"a":{"columns":{"x":{"type":{"key":{"refTable":"a","refType":"weak","type":"uuid"}}}}}},"version":"4.2.1"}]])
+
 dnl Schemas without version numbers are accepted for backward
 dnl compatibility, but this is a deprecated feature.
 OVSDB_CHECK_POSITIVE_CPY([schema without version number],

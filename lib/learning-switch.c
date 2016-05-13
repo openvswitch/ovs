@@ -29,21 +29,21 @@
 #include "flow.h"
 #include "hmap.h"
 #include "mac-learning.h"
-#include "ofpbuf.h"
-#include "ofp-actions.h"
-#include "ofp-errors.h"
-#include "ofp-msgs.h"
-#include "ofp-parse.h"
-#include "ofp-print.h"
-#include "ofp-util.h"
 #include "openflow/openflow.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofp-parse.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vconn.h"
+#include "openvswitch/vlog.h"
 #include "poll-loop.h"
 #include "rconn.h"
 #include "shash.h"
 #include "simap.h"
 #include "timeval.h"
-#include "openvswitch/vconn.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(learning_switch);
 
@@ -269,11 +269,10 @@ void
 lswitch_destroy(struct lswitch *sw)
 {
     if (sw) {
-        struct lswitch_port *node, *next;
+        struct lswitch_port *node;
 
         rconn_destroy(sw->rconn);
-        HMAP_FOR_EACH_SAFE (node, next, hmap_node, &sw->queue_numbers) {
-            hmap_remove(&sw->queue_numbers, &node->hmap_node);
+        HMAP_FOR_EACH_POP (node, hmap_node, &sw->queue_numbers) {
             free(node);
         }
         shash_destroy(&sw->queue_names);
@@ -416,11 +415,9 @@ process_switch_features(struct lswitch *sw, struct ofp_header *oh)
 {
     struct ofputil_switch_features features;
     struct ofputil_phy_port port;
-    enum ofperr error;
-    struct ofpbuf b;
 
-    ofpbuf_use_const(&b, oh, ntohs(oh->length));
-    error = ofputil_pull_switch_features(&b, &features);
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    enum ofperr error = ofputil_pull_switch_features(&b, &features);
     if (error) {
         VLOG_ERR("received invalid switch feature reply (%s)",
                  ofperr_to_string(error));
@@ -513,7 +510,6 @@ static void
 process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
 {
     struct ofputil_packet_in pi;
-    size_t total_len;
     uint32_t buffer_id;
     uint32_t queue_id;
     ofp_port_t out_port;
@@ -527,7 +523,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
     struct dp_packet pkt;
     struct flow flow;
 
-    error = ofputil_decode_packet_in(oh, &pi, &total_len, &buffer_id);
+    error = ofputil_decode_packet_in(oh, true, &pi, NULL, &buffer_id, NULL);
     if (error) {
         VLOG_WARN_RL(&rl, "failed to decode packet-in: %s",
                      ofperr_to_string(error));
@@ -542,7 +538,7 @@ process_packet_in(struct lswitch *sw, const struct ofp_header *oh)
     }
 
     /* Extract flow data from 'pi' into 'flow'. */
-    dp_packet_use_const(&pkt, pi.packet, pi.len);
+    dp_packet_use_const(&pkt, pi.packet, pi.packet_len);
     flow_extract(&pkt, &flow);
     flow.in_port.ofp_port = pi.flow_metadata.flow.in_port.ofp_port;
     flow.tunnel.tun_id = pi.flow_metadata.flow.tunnel.tun_id;

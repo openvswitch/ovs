@@ -23,8 +23,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "byte-order.h"
 #include "command-line.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "jsonrpc.h"
 #include "ovsdb-data.h"
@@ -1415,8 +1416,8 @@ do_trigger(struct ovs_cmdl_context *ctx)
         }
 
         ovsdb_trigger_run(db, now);
-        while (!list_is_empty(&session.completions)) {
-            do_trigger_dump(CONTAINER_OF(list_pop_front(&session.completions),
+        while (!ovs_list_is_empty(&session.completions)) {
+            do_trigger_dump(CONTAINER_OF(ovs_list_pop_front(&session.completions),
                                          struct test_trigger, trigger.node),
                             now, "delayed");
         }

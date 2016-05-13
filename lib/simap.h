@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,11 +36,16 @@ struct simap_node {
 
 #define SIMAP_INITIALIZER(SIMAP) { HMAP_INITIALIZER(&(SIMAP)->map) }
 
-#define SIMAP_FOR_EACH(SIMAP_NODE, SIMAP) \
-    HMAP_FOR_EACH (SIMAP_NODE, node, &(SIMAP)->map)
+#define SIMAP_FOR_EACH(SIMAP_NODE, SIMAP)                               \
+    HMAP_FOR_EACH_INIT (SIMAP_NODE, node, &(SIMAP)->map,                \
+                        BUILD_ASSERT_TYPE(SIMAP_NODE, struct simap_node *), \
+                        BUILD_ASSERT_TYPE(SIMAP, struct simap *))
 
-#define SIMAP_FOR_EACH_SAFE(SIMAP_NODE, NEXT, SIMAP) \
-    HMAP_FOR_EACH_SAFE (SIMAP_NODE, NEXT, node, &(SIMAP)->map)
+#define SIMAP_FOR_EACH_SAFE(SIMAP_NODE, NEXT, SIMAP)                    \
+    HMAP_FOR_EACH_SAFE_INIT (SIMAP_NODE, NEXT, node, &(SIMAP)->map,     \
+                        BUILD_ASSERT_TYPE(SIMAP_NODE, struct simap_node *), \
+                        BUILD_ASSERT_TYPE(NEXT, struct simap_node *),   \
+                        BUILD_ASSERT_TYPE(SIMAP, struct simap *))
 
 void simap_init(struct simap *);
 void simap_destroy(struct simap *);

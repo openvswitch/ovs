@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,15 +19,16 @@
 #include "learn.h"
 
 #include "byte-order.h"
-#include "dynamic-string.h"
-#include "match.h"
-#include "meta-flow.h"
+#include "colors.h"
 #include "nx-match.h"
-#include "ofp-actions.h"
-#include "ofp-errors.h"
-#include "ofp-util.h"
-#include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/match.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
 #include "unaligned.h"
 
 
@@ -379,7 +380,7 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
             }
         }
     }
-    ofpact_finish(ofpacts, &learn->ofpact);
+    ofpact_finish_LEARN(ofpacts, &learn);
 
     return NULL;
 }
@@ -415,30 +416,38 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
 
     match_init_catchall(&match);
 
-    ds_put_format(s, "learn(table=%"PRIu8, learn->table_id);
+    ds_put_format(s, "%slearn(%s%stable=%s%"PRIu8,
+                  colors.learn, colors.end, colors.special, colors.end,
+                  learn->table_id);
     if (learn->idle_timeout != OFP_FLOW_PERMANENT) {
-        ds_put_format(s, ",idle_timeout=%"PRIu16, learn->idle_timeout);
+        ds_put_format(s, ",%sidle_timeout=%s%"PRIu16,
+                      colors.param, colors.end, learn->idle_timeout);
     }
     if (learn->hard_timeout != OFP_FLOW_PERMANENT) {
-        ds_put_format(s, ",hard_timeout=%"PRIu16, learn->hard_timeout);
+        ds_put_format(s, ",%shard_timeout=%s%"PRIu16,
+                      colors.param, colors.end, learn->hard_timeout);
     }
     if (learn->fin_idle_timeout) {
-        ds_put_format(s, ",fin_idle_timeout=%"PRIu16, learn->fin_idle_timeout);
+        ds_put_format(s, ",%sfin_idle_timeout=%s%"PRIu16,
+                      colors.param, colors.end, learn->fin_idle_timeout);
     }
     if (learn->fin_hard_timeout) {
-        ds_put_format(s, ",fin_hard_timeout=%"PRIu16, learn->fin_hard_timeout);
+        ds_put_format(s, "%s,fin_hard_timeout=%s%"PRIu16,
+                      colors.param, colors.end, learn->fin_hard_timeout);
     }
     if (learn->priority != OFP_DEFAULT_PRIORITY) {
-        ds_put_format(s, ",priority=%"PRIu16, learn->priority);
+        ds_put_format(s, "%s,priority=%s%"PRIu16,
+                      colors.special, colors.end, learn->priority);
     }
     if (learn->flags & NX_LEARN_F_SEND_FLOW_REM) {
-        ds_put_cstr(s, ",send_flow_rem");
+        ds_put_format(s, ",%ssend_flow_rem%s", colors.value, colors.end);
     }
     if (learn->flags & NX_LEARN_F_DELETE_LEARNED) {
-        ds_put_cstr(s, ",delete_learned");
+        ds_put_format(s, ",%sdelete_learned%s", colors.value, colors.end);
     }
     if (learn->cookie != 0) {
-        ds_put_format(s, ",cookie=%#"PRIx64, ntohll(learn->cookie));
+        ds_put_format(s, ",%scookie=%s%#"PRIx64,
+                      colors.param, colors.end, ntohll(learn->cookie));
     }
 
     for (spec = learn->specs; spec < &learn->specs[learn->n_specs]; spec++) {
@@ -454,43 +463,47 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
                 bitwise_copy(&spec->src_imm, sizeof spec->src_imm, 0,
                              &value, spec->dst.field->n_bytes, 0,
                              spec->dst.field->n_bits);
-                ds_put_format(s, "%s=", spec->dst.field->name);
+                ds_put_format(s, "%s%s=%s", colors.param,
+                              spec->dst.field->name, colors.end);
                 mf_format(spec->dst.field, &value, NULL, s);
             } else {
+                ds_put_format(s, "%s", colors.param);
                 mf_format_subfield(&spec->dst, s);
-                ds_put_char(s, '=');
+                ds_put_format(s, "=%s", colors.end);
                 mf_format_subvalue(&spec->src_imm, s);
             }
             break;
 
         case NX_LEARN_SRC_FIELD | NX_LEARN_DST_MATCH:
+            ds_put_format(s, "%s", colors.param);
             mf_format_subfield(&spec->dst, s);
+            ds_put_format(s, "%s", colors.end);
             if (spec->src.field != spec->dst.field ||
                 spec->src.ofs != spec->dst.ofs) {
-                ds_put_char(s, '=');
+                ds_put_format(s, "%s=%s", colors.param, colors.end);
                 mf_format_subfield(&spec->src, s);
             }
             break;
 
         case NX_LEARN_SRC_IMMEDIATE | NX_LEARN_DST_LOAD:
-            ds_put_format(s, "load:");
+            ds_put_format(s, "%sload:%s", colors.special, colors.end);
             mf_format_subvalue(&spec->src_imm, s);
-            ds_put_cstr(s, "->");
+            ds_put_format(s, "%s->%s", colors.special, colors.end);
             mf_format_subfield(&spec->dst, s);
             break;
 
         case NX_LEARN_SRC_FIELD | NX_LEARN_DST_LOAD:
-            ds_put_cstr(s, "load:");
+            ds_put_format(s, "%sload:%s", colors.special, colors.end);
             mf_format_subfield(&spec->src, s);
-            ds_put_cstr(s, "->");
+            ds_put_format(s, "%s->%s", colors.special, colors.end);
             mf_format_subfield(&spec->dst, s);
             break;
 
         case NX_LEARN_SRC_FIELD | NX_LEARN_DST_OUTPUT:
-            ds_put_cstr(s, "output:");
+            ds_put_format(s, "%soutput:%s", colors.special, colors.end);
             mf_format_subfield(&spec->src, s);
             break;
         }
     }
-    ds_put_char(s, ')');
+    ds_put_format(s, "%s)%s", colors.learn, colors.end);
 }

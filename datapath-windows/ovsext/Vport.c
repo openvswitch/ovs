@@ -291,7 +291,15 @@ HvDeletePort(POVS_SWITCH_CONTEXT switchContext,
      * delete will delete the vport.
     */
     if (vport) {
+        OVS_EVENT_ENTRY event;
+
+        event.portNo = vport->portNo;
+        event.ovsType = vport->ovsType;
+        event.upcallPid = vport->upcallPid;
+        RtlCopyMemory(&event.ovsName, &vport->ovsName, sizeof event.ovsName);
+        event.type = OVS_EVENT_LINK_DOWN;
         OvsRemoveAndDeleteVport(NULL, switchContext, vport, TRUE, FALSE);
+        OvsPostEvent(&event);
     } else {
         OVS_LOG_WARN("Vport not present.");
     }
@@ -924,14 +932,14 @@ OvsInitVportWithNicParam(POVS_SWITCH_CONTEXT switchContext,
     UNREFERENCED_PARAMETER(switchContext);
 
     RtlCopyMemory(vport->permMacAddress, nicParam->PermanentMacAddress,
-                  sizeof (nicParam->PermanentMacAddress));
+                  sizeof (vport->permMacAddress));
     RtlCopyMemory(vport->currMacAddress, nicParam->CurrentMacAddress,
-                  sizeof (nicParam->CurrentMacAddress));
+                  sizeof (vport->currMacAddress));
 
     if (nicParam->NicType == NdisSwitchNicTypeSynthetic ||
         nicParam->NicType == NdisSwitchNicTypeEmulated) {
         RtlCopyMemory(vport->vmMacAddress, nicParam->VMMacAddress,
-                      sizeof (nicParam->VMMacAddress));
+                      sizeof (vport->vmMacAddress));
         RtlCopyMemory(&vport->vmName, &nicParam->VmName,
                       sizeof (nicParam->VmName));
     } else {
@@ -1067,10 +1075,10 @@ static NTSTATUS
 GetNICAlias(GUID *netCfgInstanceId,
             IF_COUNTED_STRING *portFriendlyName)
 {
-    NTSTATUS status = STATUS_SUCCESS;
-    WCHAR interfaceName[IF_MAX_STRING_SIZE] = { 0 };
-    NET_LUID interfaceLuid = { 0 };
-    size_t len = 0;
+    NTSTATUS status;
+    WCHAR interfaceName[IF_MAX_STRING_SIZE + 1];
+    NET_LUID interfaceLuid;
+    size_t len;
 
     status = ConvertInterfaceGuidToLuid(netCfgInstanceId,
                                         &interfaceLuid);

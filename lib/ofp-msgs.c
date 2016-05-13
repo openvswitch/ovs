@@ -15,16 +15,16 @@
  */
 
 #include <config.h>
-#include "ofp-msgs.h"
 #include "byte-order.h"
-#include "dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
-#include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
-#include "ovs-thread.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
+#include "ovs-thread.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_msgs);
 
@@ -34,6 +34,78 @@ VLOG_DEFINE_THIS_MODULE(ofp_msgs);
 #define OFPT11_STATS_REQUEST 18
 #define OFPT11_STATS_REPLY 19
 #define OFPST_VENDOR 0xffff
+
+/* Vendor extension message. */
+struct ofp_vendor_header {
+    struct ofp_header header;   /* OFPT_VENDOR. */
+    ovs_be32 vendor;            /* Vendor ID:
+                                 * - MSB 0: low-order bytes are IEEE OUI.
+                                 * - MSB != 0: defined by OpenFlow
+                                 *   consortium. */
+
+    /* In theory everything after 'vendor' is vendor specific.  In practice,
+     * the vendors we support put a 32-bit subtype here.  We'll change this
+     * structure if we start adding support for other vendor formats. */
+    ovs_be32 subtype;           /* Vendor-specific subtype. */
+
+    /* Followed by vendor-defined additional data. */
+};
+OFP_ASSERT(sizeof(struct ofp_vendor_header) == 16);
+
+/* Statistics request or reply message. */
+struct ofp10_stats_msg {
+    struct ofp_header header;
+    ovs_be16 type;              /* One of the OFPST_* constants. */
+    ovs_be16 flags;             /* Requests: always 0.
+                                 * Replies: 0 or OFPSF_REPLY_MORE. */
+};
+OFP_ASSERT(sizeof(struct ofp10_stats_msg) == 12);
+
+/* Vendor extension stats message. */
+struct ofp10_vendor_stats_msg {
+    struct ofp10_stats_msg osm; /* Type OFPST_VENDOR. */
+    ovs_be32 vendor;            /* Vendor ID:
+                                 * - MSB 0: low-order bytes are IEEE OUI.
+                                 * - MSB != 0: defined by OpenFlow
+                                 *   consortium. */
+    /* Followed by vendor-defined arbitrary additional data. */
+};
+OFP_ASSERT(sizeof(struct ofp10_vendor_stats_msg) == 16);
+
+struct ofp11_stats_msg {
+    struct ofp_header header;
+    ovs_be16 type;              /* One of the OFPST_* constants. */
+    ovs_be16 flags;             /* OFPSF_REQ_* flags (none yet defined). */
+    uint8_t pad[4];
+    /* Followed by the body of the request. */
+};
+OFP_ASSERT(sizeof(struct ofp11_stats_msg) == 16);
+
+/* Vendor extension stats message. */
+struct ofp11_vendor_stats_msg {
+    struct ofp11_stats_msg osm; /* Type OFPST_VENDOR. */
+    ovs_be32 vendor;            /* Vendor ID:
+                                 * - MSB 0: low-order bytes are IEEE OUI.
+                                 * - MSB != 0: defined by OpenFlow
+                                 *   consortium. */
+
+    /* In theory everything after 'vendor' is vendor specific.  In practice,
+     * the vendors we support put a 32-bit subtype here.  We'll change this
+     * structure if we start adding support for other vendor formats. */
+    ovs_be32 subtype;           /* Vendor-specific subtype. */
+
+    /* Followed by vendor-defined additional data. */
+};
+OFP_ASSERT(sizeof(struct ofp11_vendor_stats_msg) == 24);
+
+/* Header for Nicira vendor stats request and reply messages in OpenFlow
+ * 1.0. */
+struct nicira10_stats_msg {
+    struct ofp10_vendor_stats_msg vsm; /* Vendor NX_VENDOR_ID. */
+    ovs_be32 subtype;           /* One of NXST_* below. */
+    uint8_t pad[4];             /* Align to 64-bits. */
+};
+OFP_ASSERT(sizeof(struct nicira10_stats_msg) == 24);
 
 /* A thin abstraction of OpenFlow headers:
  *
@@ -159,15 +231,8 @@ ofphdrs_decode(struct ofphdrs *hdrs,
 
         ovh = (const struct ofp_vendor_header *) oh;
         hdrs->vendor = ntohl(ovh->vendor);
-        if (hdrs->vendor == NX_VENDOR_ID) {
-            /* Get Nicira message subtype (NXT_*). */
-            const struct nicira_header *nh;
-
-            if (length < sizeof *nh) {
-                return OFPERR_OFPBRC_BAD_LEN;
-            }
-            nh = (const struct nicira_header *) oh;
-            hdrs->subtype = ntohl(nh->subtype);
+        if (hdrs->vendor == NX_VENDOR_ID || hdrs->vendor == ONF_VENDOR_ID) {
+            hdrs->subtype = ntohl(ovh->subtype);
         } else {
             log_bad_vendor(hdrs->vendor);
             return OFPERR_OFPBRC_BAD_VENDOR;
@@ -230,15 +295,9 @@ ofphdrs_decode(struct ofphdrs *hdrs,
 
             ovsm = (const struct ofp11_vendor_stats_msg *) oh;
             hdrs->vendor = ntohl(ovsm->vendor);
-            if (hdrs->vendor == NX_VENDOR_ID) {
-                /* Get Nicira statistic type (NXST_*). */
-                const struct nicira11_stats_msg *nsm;
-
-                if (length < sizeof *nsm) {
-                    return OFPERR_OFPBRC_BAD_LEN;
-                }
-                nsm = (const struct nicira11_stats_msg *) oh;
-                hdrs->subtype = ntohl(nsm->subtype);
+            if (hdrs->vendor == NX_VENDOR_ID ||
+                hdrs->vendor == ONF_VENDOR_ID) {
+                hdrs->subtype = ntohl(ovsm->subtype);
             } else {
                 log_bad_vendor(hdrs->vendor);
                 return OFPERR_OFPBRC_BAD_VENDOR;
@@ -268,6 +327,7 @@ ofp_is_stat_request(enum ofp_version version, uint8_t type)
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         return type == OFPT11_STATS_REQUEST;
     }
 
@@ -285,6 +345,7 @@ ofp_is_stat_reply(enum ofp_version version, uint8_t type)
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         return type == OFPT11_STATS_REPLY;
     }
 
@@ -308,7 +369,7 @@ size_t
 ofphdrs_len(const struct ofphdrs *hdrs)
 {
     if (hdrs->type == OFPT_VENDOR) {
-        return sizeof(struct nicira_header);
+        return sizeof(struct ofp_vendor_header);
     }
 
     switch ((enum ofp_version) hdrs->version) {
@@ -326,10 +387,11 @@ ofphdrs_len(const struct ofphdrs *hdrs)
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         if (hdrs->type == OFPT11_STATS_REQUEST ||
             hdrs->type == OFPT11_STATS_REPLY) {
             return (hdrs->stat == OFPST_VENDOR
-                    ? sizeof(struct nicira11_stats_msg)
+                    ? sizeof(struct ofp11_vendor_stats_msg)
                     : sizeof(struct ofp11_stats_msg));
         }
         break;
@@ -348,9 +410,7 @@ ofphdrs_len(const struct ofphdrs *hdrs)
 enum ofperr
 ofpraw_decode(enum ofpraw *raw, const struct ofp_header *oh)
 {
-    struct ofpbuf msg;
-
-    ofpbuf_use_const(&msg, oh, ntohs(oh->length));
+    struct ofpbuf msg = ofpbuf_const_initializer(oh, ntohs(oh->length));
     return ofpraw_pull(raw, &msg);
 }
 
@@ -675,11 +735,10 @@ ofpraw_put__(enum ofpraw raw, uint8_t version, ovs_be32 xid,
     oh->xid = xid;
 
     if (hdrs->type == OFPT_VENDOR) {
-        struct nicira_header *nh = buf->header;
+        struct ofp_vendor_header *ovh = buf->header;
 
-        ovs_assert(hdrs->vendor == NX_VENDOR_ID);
-        nh->vendor = htonl(hdrs->vendor);
-        nh->subtype = htonl(hdrs->subtype);
+        ovh->vendor = htonl(hdrs->vendor);
+        ovh->subtype = htonl(hdrs->subtype);
     } else if (version == OFP10_VERSION
                && (hdrs->type == OFPT10_STATS_REQUEST ||
                    hdrs->type == OFPT10_STATS_REPLY)) {
@@ -714,13 +773,7 @@ ofpraw_put__(enum ofpraw raw, uint8_t version, ovs_be32 xid,
             struct ofp11_vendor_stats_msg *ovsm = buf->header;
 
             ovsm->vendor = htonl(hdrs->vendor);
-            if (hdrs->vendor == NX_VENDOR_ID) {
-                struct nicira11_stats_msg *nsm = buf->header;
-
-                nsm->subtype = htonl(hdrs->subtype);
-            } else {
-                OVS_NOT_REACHED();
-            }
+            ovsm->subtype = htonl(hdrs->subtype);
         }
     }
 }
@@ -760,6 +813,7 @@ ofpraw_stats_request_to_reply(enum ofpraw raw, uint8_t version)
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         ovs_assert(hdrs.type == OFPT11_STATS_REQUEST);
         hdrs.type = OFPT11_STATS_REPLY;
         break;
@@ -871,10 +925,10 @@ ofpmp_init(struct ovs_list *replies, const struct ofp_header *request)
 {
     struct ofpbuf *msg;
 
-    list_init(replies);
+    ovs_list_init(replies);
 
     msg = ofpraw_alloc_stats_reply(request, 1000);
-    list_push_back(replies, &msg->list_node);
+    ovs_list_push_back(replies, &msg->list_node);
 }
 
 /* Prepares to append up to 'len' bytes to the series of statistics replies in
@@ -887,7 +941,7 @@ ofpmp_init(struct ovs_list *replies, const struct ofp_header *request)
 struct ofpbuf *
 ofpmp_reserve(struct ovs_list *replies, size_t len)
 {
-    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *msg = ofpbuf_from_list(ovs_list_back(replies));
 
     if (msg->size + len <= UINT16_MAX) {
         ofpbuf_prealloc_tailroom(msg, len);
@@ -904,7 +958,7 @@ ofpmp_reserve(struct ovs_list *replies, size_t len)
         ofpbuf_put(next, msg->data, hdrs_len);
         next->header = next->data;
         next->msg = ofpbuf_tail(next);
-        list_push_back(replies, &next->list_node);
+        ovs_list_push_back(replies, &next->list_node);
 
         *ofpmp_flags__(msg->data) |= htons(OFPSF_REPLY_MORE);
 
@@ -933,7 +987,7 @@ ofpmp_append(struct ovs_list *replies, size_t len)
 void
 ofpmp_postappend(struct ovs_list *replies, size_t start_ofs)
 {
-    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *msg = ofpbuf_from_list(ovs_list_back(replies));
 
     ovs_assert(start_ofs <= UINT16_MAX);
     if (msg->size > UINT16_MAX) {
@@ -949,7 +1003,7 @@ ofpmp_postappend(struct ovs_list *replies, size_t start_ofs)
 enum ofp_version
 ofpmp_version(struct ovs_list *replies)
 {
-    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *msg = ofpbuf_from_list(ovs_list_back(replies));
     const struct ofp_header *oh = msg->data;
 
     return oh->version;
@@ -960,7 +1014,7 @@ ofpmp_version(struct ovs_list *replies)
 enum ofpraw
 ofpmp_decode_raw(struct ovs_list *replies)
 {
-    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *msg = ofpbuf_from_list(ovs_list_back(replies));
     enum ofperr error;
     enum ofpraw raw;
 
@@ -980,6 +1034,7 @@ ofpmp_flags__(const struct ofp_header *oh)
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         return &((struct ofp11_stats_msg *) oh)->flags;
     default:
         OVS_NOT_REACHED();

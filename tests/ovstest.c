@@ -22,7 +22,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include "command-line.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "ovstest.h"
 #include "util.h"
 

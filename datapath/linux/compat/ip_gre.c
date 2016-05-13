@@ -289,7 +289,7 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb)
 
 	tunnel_hlen = ip_gre_calc_hlen(key->tun_flags);
 
-	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
+	min_headroom = LL_RESERVED_SPACE(rt->dst.dev) + rt->dst.header_len
 			+ tunnel_hlen + sizeof(struct iphdr)
 			+ (skb_vlan_tag_present(skb) ? VLAN_HLEN : 0);
 	if (skb_headroom(skb) < min_headroom || skb_header_cloned(skb)) {
@@ -613,6 +613,14 @@ struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
 #endif
 	if (err < 0)
 		goto out;
+
+	/* openvswitch users expect packet sizes to be unrestricted,
+	 * so set the largest MTU we can.
+	 */
+	err = __ip_tunnel_change_mtu(dev, IP_MAX_MTU, false);
+	if (err)
+		goto out;
+
 	return dev;
 out:
 	free_netdev(dev);
@@ -638,8 +646,6 @@ static struct pernet_operations ipgre_tap_net_ops = {
 	.id   = &gre_tap_net_id,
 	.size = sizeof(struct ip_tunnel_net),
 };
-
-DEFINE_COMPAT_PNET_REG_FUNC(device);
 
 int rpl_ipgre_init(void)
 {

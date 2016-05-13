@@ -22,14 +22,15 @@
 
 #include "dp-packet.h"
 #include "dpif-netdev.h"
-#include "dynamic-string.h"
 #include "flow.h"
-#include "list.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-util.h"
-#include "ofp-print.h"
-#include "ofpbuf.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/list.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "ovs-atomic.h"
 #include "packets.h"
 #include "pcap-file.h"
@@ -41,7 +42,6 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "reconnect.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_dummy);
 
@@ -116,7 +116,7 @@ struct netdev_dummy {
     FILE *tx_pcap, *rxq_pcap OVS_GUARDED;
 
     struct in_addr address, netmask;
-    struct in6_addr ipv6;
+    struct in6_addr ipv6, ipv6_mask;
     struct ovs_list rxes OVS_GUARDED; /* List of child "netdev_rxq_dummy"s. */
 };
 
@@ -127,7 +127,7 @@ struct netdev_rxq_dummy {
     struct netdev_rxq up;
     struct ovs_list node;       /* In netdev_dummy's "rxes" list. */
     struct ovs_list recv_queue;
-    int recv_queue_len;         /* list_size(&recv_queue). */
+    int recv_queue_len;         /* ovs_list_size(&recv_queue). */
     struct seq *seq;            /* Reports newly queued packets. */
 };
 
@@ -165,7 +165,7 @@ dummy_packet_stream_init(struct dummy_packet_stream *s, struct stream *stream)
     int rxbuf_size = stream ? 2048 : 0;
     s->stream = stream;
     dp_packet_init(&s->rxbuf, rxbuf_size);
-    list_init(&s->txq);
+    ovs_list_init(&s->txq);
 }
 
 static struct dummy_packet_stream *
@@ -183,7 +183,7 @@ static void
 dummy_packet_stream_wait(struct dummy_packet_stream *s)
 {
     stream_run_wait(s->stream);
-    if (!list_is_empty(&s->txq)) {
+    if (!ovs_list_is_empty(&s->txq)) {
         stream_send_wait(s->stream);
     }
     stream_recv_wait(s->stream);
@@ -192,7 +192,7 @@ dummy_packet_stream_wait(struct dummy_packet_stream *s)
 static void
 dummy_packet_stream_send(struct dummy_packet_stream *s, const void *buffer, size_t size)
 {
-    if (list_size(&s->txq) < NETDEV_DUMMY_MAX_QUEUE) {
+    if (ovs_list_size(&s->txq) < NETDEV_DUMMY_MAX_QUEUE) {
         struct dp_packet *b;
         struct pkt_list_node *node;
 
@@ -201,7 +201,7 @@ dummy_packet_stream_send(struct dummy_packet_stream *s, const void *buffer, size
 
         node = xmalloc(sizeof *node);
         node->pkt = b;
-        list_push_back(&s->txq, &node->list_node);
+        ovs_list_push_back(&s->txq, &node->list_node);
     }
 }
 
@@ -213,19 +213,19 @@ dummy_packet_stream_run(struct netdev_dummy *dev, struct dummy_packet_stream *s)
 
     stream_run(s->stream);
 
-    if (!list_is_empty(&s->txq)) {
+    if (!ovs_list_is_empty(&s->txq)) {
         struct pkt_list_node *txbuf_node;
         struct dp_packet *txbuf;
         int retval;
 
-        ASSIGN_CONTAINER(txbuf_node, list_front(&s->txq), list_node);
+        ASSIGN_CONTAINER(txbuf_node, ovs_list_front(&s->txq), list_node);
         txbuf = txbuf_node->pkt;
         retval = stream_send(s->stream, dp_packet_data(txbuf), dp_packet_size(txbuf));
 
         if (retval > 0) {
             dp_packet_pull(txbuf, retval);
             if (!dp_packet_size(txbuf)) {
-                list_remove(&txbuf_node->list_node);
+                ovs_list_remove(&txbuf_node->list_node);
                 free(txbuf_node);
                 dp_packet_delete(txbuf);
             }
@@ -664,11 +664,11 @@ netdev_dummy_construct(struct netdev *netdev_)
 
     dummy_packet_conn_init(&netdev->conn);
 
-    list_init(&netdev->rxes);
+    ovs_list_init(&netdev->rxes);
     ovs_mutex_unlock(&netdev->mutex);
 
     ovs_mutex_lock(&dummy_list_mutex);
-    list_push_back(&dummy_list, &netdev->list_node);
+    ovs_list_push_back(&dummy_list, &netdev->list_node);
     ovs_mutex_unlock(&dummy_list_mutex);
 
     return 0;
@@ -680,7 +680,7 @@ netdev_dummy_destruct(struct netdev *netdev_)
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
 
     ovs_mutex_lock(&dummy_list_mutex);
-    list_remove(&netdev->list_node);
+    ovs_list_remove(&netdev->list_node);
     ovs_mutex_unlock(&dummy_list_mutex);
 
     ovs_mutex_lock(&netdev->mutex);
@@ -717,29 +717,50 @@ netdev_dummy_get_config(const struct netdev *netdev_, struct smap *args)
 }
 
 static int
-netdev_dummy_get_in4(const struct netdev *netdev_,
-                     struct in_addr *address, struct in_addr *netmask)
+netdev_dummy_get_addr_list(const struct netdev *netdev_, struct in6_addr **paddr,
+                           struct in6_addr **pmask, int *n_addr)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+    int cnt = 0, i = 0, err = 0;
+    struct in6_addr *addr, *mask;
 
     ovs_mutex_lock(&netdev->mutex);
-    *address = netdev->address;
-    *netmask = netdev->netmask;
+    if (netdev->address.s_addr != INADDR_ANY) {
+        cnt++;
+    }
+
+    if (ipv6_addr_is_set(&netdev->ipv6)) {
+        cnt++;
+    }
+    if (!cnt) {
+        err = EADDRNOTAVAIL;
+        goto out;
+    }
+    addr = xmalloc(sizeof *addr * cnt);
+    mask = xmalloc(sizeof *mask * cnt);
+    if (netdev->address.s_addr != INADDR_ANY) {
+        in6_addr_set_mapped_ipv4(&addr[i], netdev->address.s_addr);
+        in6_addr_set_mapped_ipv4(&mask[i], netdev->netmask.s_addr);
+        i++;
+    }
+
+    if (ipv6_addr_is_set(&netdev->ipv6)) {
+        memcpy(&addr[i], &netdev->ipv6, sizeof *addr);
+        memcpy(&mask[i], &netdev->ipv6_mask, sizeof *mask);
+        i++;
+    }
+    if (paddr) {
+        *paddr = addr;
+        *pmask = mask;
+        *n_addr = cnt;
+    } else {
+        free(addr);
+        free(mask);
+    }
+out:
     ovs_mutex_unlock(&netdev->mutex);
 
-    return address->s_addr ? 0 : EADDRNOTAVAIL;
-}
-
-static int
-netdev_dummy_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
-{
-    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
-
-    ovs_mutex_lock(&netdev->mutex);
-    *in6 = netdev->ipv6;
-    ovs_mutex_unlock(&netdev->mutex);
-
-    return ipv6_addr_is_set(in6) ? 0 : EADDRNOTAVAIL;
+    return err;
 }
 
 static int
@@ -751,18 +772,22 @@ netdev_dummy_set_in4(struct netdev *netdev_, struct in_addr address,
     ovs_mutex_lock(&netdev->mutex);
     netdev->address = address;
     netdev->netmask = netmask;
+    netdev_change_seq_changed(netdev_);
     ovs_mutex_unlock(&netdev->mutex);
 
     return 0;
 }
 
 static int
-netdev_dummy_set_in6(struct netdev *netdev_, struct in6_addr *in6)
+netdev_dummy_set_in6(struct netdev *netdev_, struct in6_addr *in6,
+                     struct in6_addr *mask)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
 
     ovs_mutex_lock(&netdev->mutex);
     netdev->ipv6 = *in6;
+    netdev->ipv6_mask = *mask;
+    netdev_change_seq_changed(netdev_);
     ovs_mutex_unlock(&netdev->mutex);
 
     return 0;
@@ -820,8 +845,8 @@ netdev_dummy_rxq_construct(struct netdev_rxq *rxq_)
     struct netdev_dummy *netdev = netdev_dummy_cast(rx->up.netdev);
 
     ovs_mutex_lock(&netdev->mutex);
-    list_push_back(&netdev->rxes, &rx->node);
-    list_init(&rx->recv_queue);
+    ovs_list_push_back(&netdev->rxes, &rx->node);
+    ovs_list_init(&rx->recv_queue);
     rx->recv_queue_len = 0;
     rx->seq = seq_create();
     ovs_mutex_unlock(&netdev->mutex);
@@ -836,7 +861,7 @@ netdev_dummy_rxq_destruct(struct netdev_rxq *rxq_)
     struct netdev_dummy *netdev = netdev_dummy_cast(rx->up.netdev);
 
     ovs_mutex_lock(&netdev->mutex);
-    list_remove(&rx->node);
+    ovs_list_remove(&rx->node);
     pkt_list_delete(&rx->recv_queue);
     ovs_mutex_unlock(&netdev->mutex);
     seq_destroy(rx->seq);
@@ -859,10 +884,10 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
     struct dp_packet *packet;
 
     ovs_mutex_lock(&netdev->mutex);
-    if (!list_is_empty(&rx->recv_queue)) {
+    if (!ovs_list_is_empty(&rx->recv_queue)) {
         struct pkt_list_node *pkt_node;
 
-        ASSIGN_CONTAINER(pkt_node, list_pop_front(&rx->recv_queue), list_node);
+        ASSIGN_CONTAINER(pkt_node, ovs_list_pop_front(&rx->recv_queue), list_node);
         packet = pkt_node->pkt;
         free(pkt_node);
         rx->recv_queue_len--;
@@ -880,7 +905,6 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
     ovs_mutex_unlock(&netdev->mutex);
 
     dp_packet_pad(packet);
-    dp_packet_rss_invalidate(packet);
 
     arr[0] = packet;
     *c = 1;
@@ -895,7 +919,7 @@ netdev_dummy_rxq_wait(struct netdev_rxq *rxq_)
     uint64_t seq = seq_read(rx->seq);
 
     ovs_mutex_lock(&netdev->mutex);
-    if (!list_is_empty(&rx->recv_queue)) {
+    if (!ovs_list_is_empty(&rx->recv_queue)) {
         poll_immediate_wake();
     } else {
         seq_wait(rx->seq, seq);
@@ -1051,7 +1075,11 @@ netdev_dummy_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);
-    *stats = dev->stats;
+    /* Passing only collected counters */
+    stats->tx_packets = dev->stats.tx_packets;
+    stats->tx_bytes = dev->stats.tx_bytes;
+    stats->rx_packets = dev->stats.rx_packets;
+    stats->rx_bytes = dev->stats.rx_bytes;
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -1195,6 +1223,7 @@ netdev_dummy_update_flags(struct netdev *netdev_,
 
 static const struct netdev_class dummy_class = {
     "dummy",
+    false,                      /* is_pmd */
     NULL,                       /* init */
     netdev_dummy_run,
     netdev_dummy_wait,
@@ -1242,9 +1271,8 @@ static const struct netdev_class dummy_class = {
     netdev_dummy_queue_dump_done,
     netdev_dummy_dump_queue_stats,
 
-    netdev_dummy_get_in4,       /* get_in4 */
     NULL,                       /* set_in4 */
-    netdev_dummy_get_in6,       /* get_in6 */
+    netdev_dummy_get_addr_list,
     NULL,                       /* add_router */
     NULL,                       /* get_next_hop */
     NULL,                       /* get_status */
@@ -1318,7 +1346,7 @@ netdev_dummy_queue_packet__(struct netdev_rxq_dummy *rx, struct dp_packet *packe
     struct pkt_list_node *pkt_node = xmalloc(sizeof *pkt_node);
 
     pkt_node->pkt = packet;
-    list_push_back(&rx->recv_queue, &pkt_node->list_node);
+    ovs_list_push_back(&rx->recv_queue, &pkt_node->list_node);
     rx->recv_queue_len++;
     seq_change(rx->seq);
 }
@@ -1537,15 +1565,20 @@ netdev_dummy_ip6addr(struct unixctl_conn *conn, int argc OVS_UNUSED,
     struct netdev *netdev = netdev_from_name(argv[1]);
 
     if (netdev && is_dummy_class(netdev->netdev_class)) {
-        char ip6_s[IPV6_SCAN_LEN + 1];
         struct in6_addr ip6;
+        char *error;
+        uint32_t plen;
 
-        if (ovs_scan(argv[2], IPV6_SCAN_FMT, ip6_s) &&
-            inet_pton(AF_INET6, ip6_s, &ip6) == 1) {
-            netdev_dummy_set_in6(netdev, &ip6);
+        error = ipv6_parse_cidr(argv[2], &ip6, &plen);
+        if (!error) {
+            struct in6_addr mask;
+
+            mask = ipv6_create_mask(plen);
+            netdev_dummy_set_in6(netdev, &ip6, &mask);
             unixctl_command_reply(conn, "OK");
         } else {
-            unixctl_command_reply_error(conn, "Invalid parameters");
+            unixctl_command_reply_error(conn, error);
+            free(error);
         }
         netdev_close(netdev);
     } else {

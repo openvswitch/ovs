@@ -23,21 +23,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include "coverage.h"
-#include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "flow.h"
 #include "jsonrpc.h"
-#include "ofp-print.h"
-#include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "ovs-thread.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
 #include "socket-util.h"
 #include "util.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(stream);
 

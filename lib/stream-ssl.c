@@ -33,9 +33,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "entropy.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"

@@ -24,13 +24,21 @@
 #include <string.h>
 #include <unistd.h>
 
+#ifndef _WIN32
+#include <ifaddrs.h>
+#include <net/if.h>
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#endif
+
+#include "cmap.h"
 #include "coverage.h"
 #include "dpif.h"
 #include "dp-packet.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netdev-dpdk.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
@@ -45,6 +53,7 @@
 #include "svec.h"
 #include "openvswitch/vlog.h"
 #include "flow.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev);
 
@@ -67,24 +76,20 @@ static struct ovs_mutex netdev_mutex = OVS_MUTEX_INITIALIZER;
 static struct shash netdev_shash OVS_GUARDED_BY(netdev_mutex)
     = SHASH_INITIALIZER(&netdev_shash);
 
-/* Protects 'netdev_classes' against insertions or deletions.
- *
- * This is a recursive mutex to allow recursive acquisition when calling into
- * providers.  For example, netdev_run() calls into provider 'run' functions,
- * which might reasonably want to call one of the netdev functions that takes
- * netdev_class_mutex. */
-static struct ovs_mutex netdev_class_mutex OVS_ACQ_BEFORE(netdev_mutex);
+/* Mutual exclusion of */
+static struct ovs_mutex netdev_class_mutex OVS_ACQ_BEFORE(netdev_mutex)
+    = OVS_MUTEX_INITIALIZER;
 
 /* Contains 'struct netdev_registered_class'es. */
-static struct hmap netdev_classes OVS_GUARDED_BY(netdev_class_mutex)
-    = HMAP_INITIALIZER(&netdev_classes);
+static struct cmap netdev_classes = CMAP_INITIALIZER;
 
 struct netdev_registered_class {
-    /* In 'netdev_classes', by class->type. */
-    struct hmap_node hmap_node OVS_GUARDED_BY(netdev_class_mutex);
-    const struct netdev_class *class OVS_GUARDED_BY(netdev_class_mutex);
-    /* Number of 'struct netdev's of this class. */
-    int ref_cnt OVS_GUARDED_BY(netdev_class_mutex);
+    struct cmap_node cmap_node; /* In 'netdev_classes', by class->type. */
+    const struct netdev_class *class;
+
+    /* Number of references: one for the class itself and one for every
+     * instance of the class. */
+    struct ovs_refcount refcnt;
 };
 
 /* This is set pretty low because we probably won't learn anything from the
@@ -115,34 +120,18 @@ netdev_requested_n_rxq(const struct netdev *netdev)
 bool
 netdev_is_pmd(const struct netdev *netdev)
 {
-    return (!strcmp(netdev->netdev_class->type, "dpdk") ||
-            !strcmp(netdev->netdev_class->type, "dpdkr") ||
-            !strcmp(netdev->netdev_class->type, "dpdkvhostcuse") ||
-            !strcmp(netdev->netdev_class->type, "dpdkvhostuser"));
-}
-
-static void
-netdev_class_mutex_initialize(void)
-    OVS_EXCLUDED(netdev_class_mutex, netdev_mutex)
-{
-    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
-
-    if (ovsthread_once_start(&once)) {
-        ovs_mutex_init_recursive(&netdev_class_mutex);
-        ovsthread_once_done(&once);
-    }
+    return netdev->netdev_class->is_pmd;
 }
 
 static void
 netdev_initialize(void)
-    OVS_EXCLUDED(netdev_class_mutex, netdev_mutex)
+    OVS_EXCLUDED(netdev_mutex)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
     if (ovsthread_once_start(&once)) {
-        netdev_class_mutex_initialize();
-
         fatal_signal_add_hook(restore_all_flags, NULL, NULL, true);
+
         netdev_vport_patch_register();
 
 #ifdef __linux__
@@ -161,7 +150,6 @@ netdev_initialize(void)
         netdev_vport_tunnel_register();
 #endif
         netdev_dpdk_register();
-
         ovsthread_once_done(&once);
     }
 }
@@ -172,18 +160,16 @@ netdev_initialize(void)
  * main poll loop. */
 void
 netdev_run(void)
-    OVS_EXCLUDED(netdev_class_mutex, netdev_mutex)
+    OVS_EXCLUDED(netdev_mutex)
 {
-    struct netdev_registered_class *rc;
-
     netdev_initialize();
-    ovs_mutex_lock(&netdev_class_mutex);
-    HMAP_FOR_EACH (rc, hmap_node, &netdev_classes) {
+
+    struct netdev_registered_class *rc;
+    CMAP_FOR_EACH (rc, cmap_node, &netdev_classes) {
         if (rc->class->run) {
             rc->class->run();
         }
     }
-    ovs_mutex_unlock(&netdev_class_mutex);
 }
 
 /* Arranges for poll_block() to wake up when netdev_run() needs to be called.
@@ -192,26 +178,23 @@ netdev_run(void)
  * main poll loop. */
 void
 netdev_wait(void)
-    OVS_EXCLUDED(netdev_class_mutex, netdev_mutex)
+    OVS_EXCLUDED(netdev_mutex)
 {
-    struct netdev_registered_class *rc;
+    netdev_initialize();
 
-    ovs_mutex_lock(&netdev_class_mutex);
-    HMAP_FOR_EACH (rc, hmap_node, &netdev_classes) {
+    struct netdev_registered_class *rc;
+    CMAP_FOR_EACH (rc, cmap_node, &netdev_classes) {
         if (rc->class->wait) {
             rc->class->wait();
         }
     }
-    ovs_mutex_unlock(&netdev_class_mutex);
 }
 
 static struct netdev_registered_class *
 netdev_lookup_class(const char *type)
-    OVS_REQ_RDLOCK(netdev_class_mutex)
 {
     struct netdev_registered_class *rc;
-
-    HMAP_FOR_EACH_WITH_HASH (rc, hmap_node, hash_string(type, 0),
+    CMAP_FOR_EACH_WITH_HASH (rc, cmap_node, hash_string(type, 0),
                              &netdev_classes) {
         if (!strcmp(type, rc->class->type)) {
             return rc;
@@ -228,7 +211,6 @@ netdev_register_provider(const struct netdev_class *new_class)
 {
     int error;
 
-    netdev_class_mutex_initialize();
     ovs_mutex_lock(&netdev_class_mutex);
     if (netdev_lookup_class(new_class->type)) {
         VLOG_WARN("attempted to register duplicate netdev provider: %s",
@@ -240,10 +222,10 @@ netdev_register_provider(const struct netdev_class *new_class)
             struct netdev_registered_class *rc;
 
             rc = xmalloc(sizeof *rc);
-            hmap_insert(&netdev_classes, &rc->hmap_node,
+            cmap_insert(&netdev_classes, &rc->cmap_node,
                         hash_string(new_class->type, 0));
             rc->class = new_class;
-            rc->ref_cnt = 0;
+            ovs_refcount_init(&rc->refcnt);
         } else {
             VLOG_ERR("failed to initialize %s network device class: %s",
                      new_class->type, ovs_strerror(error));
@@ -254,9 +236,12 @@ netdev_register_provider(const struct netdev_class *new_class)
     return error;
 }
 
-/* Unregisters a netdev provider.  'type' must have been previously
- * registered and not currently be in use by any netdevs.  After unregistration
- * new netdevs of that type cannot be opened using netdev_open(). */
+/* Unregisters a netdev provider.  'type' must have been previously registered
+ * and not currently be in use by any netdevs.  After unregistration new
+ * netdevs of that type cannot be opened using netdev_open().  (However, the
+ * provider may still be accessible from other threads until the next RCU grace
+ * period, so the caller must not free or re-register the same netdev_class
+ * until that has passed.) */
 int
 netdev_unregister_provider(const char *type)
     OVS_EXCLUDED(netdev_class_mutex, netdev_mutex)
@@ -272,16 +257,16 @@ netdev_unregister_provider(const char *type)
         VLOG_WARN("attempted to unregister a netdev provider that is not "
                   "registered: %s", type);
         error = EAFNOSUPPORT;
-    } else {
-        if (!rc->ref_cnt) {
-            hmap_remove(&netdev_classes, &rc->hmap_node);
-            free(rc);
-            error = 0;
-        } else {
-            VLOG_WARN("attempted to unregister in use netdev provider: %s",
-                      type);
-            error = EBUSY;
-        }
+    } else if (ovs_refcount_unref(&rc->refcnt) != 1) {
+        ovs_refcount_ref(&rc->refcnt);
+        VLOG_WARN("attempted to unregister in use netdev provider: %s",
+                  type);
+        error = EBUSY;
+    } else  {
+        cmap_remove(&netdev_classes, &rc->cmap_node,
+                    hash_string(rc->class->type, 0));
+        ovsrcu_postpone(free, rc);
+        error = 0;
     }
     ovs_mutex_unlock(&netdev_class_mutex);
 
@@ -294,16 +279,13 @@ void
 netdev_enumerate_types(struct sset *types)
     OVS_EXCLUDED(netdev_mutex)
 {
-    struct netdev_registered_class *rc;
-
     netdev_initialize();
     sset_clear(types);
 
-    ovs_mutex_lock(&netdev_class_mutex);
-    HMAP_FOR_EACH (rc, hmap_node, &netdev_classes) {
+    struct netdev_registered_class *rc;
+    CMAP_FOR_EACH (rc, cmap_node, &netdev_classes) {
         sset_add(types, rc->class->type);
     }
-    ovs_mutex_unlock(&netdev_class_mutex);
 }
 
 /* Check that the network device name is not the same as any of the registered
@@ -315,19 +297,15 @@ bool
 netdev_is_reserved_name(const char *name)
     OVS_EXCLUDED(netdev_mutex)
 {
-    struct netdev_registered_class *rc;
-
     netdev_initialize();
 
-    ovs_mutex_lock(&netdev_class_mutex);
-    HMAP_FOR_EACH (rc, hmap_node, &netdev_classes) {
+    struct netdev_registered_class *rc;
+    CMAP_FOR_EACH (rc, cmap_node, &netdev_classes) {
         const char *dpif_port = netdev_vport_class_get_dpif_port(rc->class);
         if (dpif_port && !strncmp(name, dpif_port, strlen(dpif_port))) {
-            ovs_mutex_unlock(&netdev_class_mutex);
             return true;
         }
     }
-    ovs_mutex_unlock(&netdev_class_mutex);
 
     if (!strncmp(name, "ovs-", 4)) {
         struct sset types;
@@ -363,14 +341,13 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
 
     netdev_initialize();
 
-    ovs_mutex_lock(&netdev_class_mutex);
     ovs_mutex_lock(&netdev_mutex);
     netdev = shash_find_data(&netdev_shash, name);
     if (!netdev) {
         struct netdev_registered_class *rc;
 
         rc = netdev_lookup_class(type && type[0] ? type : "system");
-        if (rc) {
+        if (rc && ovs_refcount_try_ref_rcu(&rc->refcnt)) {
             netdev = rc->class->alloc();
             if (netdev) {
                 memset(netdev, 0, sizeof *netdev);
@@ -384,15 +361,15 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                 netdev->n_rxq = netdev->netdev_class->rxq_alloc ? 1 : 0;
                 netdev->requested_n_rxq = netdev->n_rxq;
 
-                list_init(&netdev->saved_flags_list);
+                ovs_list_init(&netdev->saved_flags_list);
 
                 error = rc->class->construct(netdev);
                 if (!error) {
-                    rc->ref_cnt++;
                     netdev_change_seq_changed(netdev);
                 } else {
+                    ovs_refcount_unref(&rc->refcnt);
                     free(netdev->name);
-                    ovs_assert(list_is_empty(&netdev->saved_flags_list));
+                    ovs_assert(ovs_list_is_empty(&netdev->saved_flags_list));
                     shash_delete(&netdev_shash, netdev->node);
                     rc->class->dealloc(netdev);
                 }
@@ -415,7 +392,6 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
         *netdevp = NULL;
     }
     ovs_mutex_unlock(&netdev_mutex);
-    ovs_mutex_unlock(&netdev_class_mutex);
 
     return error;
 }
@@ -528,11 +504,8 @@ netdev_unref(struct netdev *dev)
         dev->netdev_class->dealloc(dev);
         ovs_mutex_unlock(&netdev_mutex);
 
-        ovs_mutex_lock(&netdev_class_mutex);
         rc = netdev_lookup_class(class->type);
-        ovs_assert(rc->ref_cnt > 0);
-        rc->ref_cnt--;
-        ovs_mutex_unlock(&netdev_class_mutex);
+        ovs_refcount_unref(&rc->refcnt);
     } else {
         ovs_mutex_unlock(&netdev_mutex);
     }
@@ -639,28 +612,28 @@ netdev_rxq_close(struct netdev_rxq *rx)
     }
 }
 
-/* Attempts to receive batch of packets from 'rx'.
+/* Attempts to receive a batch of packets from 'rx'.  'pkts' should point to
+ * the beginning of an array of MAX_RX_BATCH pointers to dp_packet.  If
+ * successful, this function stores pointers to up to MAX_RX_BATCH dp_packets
+ * into the array, transferring ownership of the packets to the caller, stores
+ * the number of received packets into '*cnt', and returns 0.
  *
- * Returns EAGAIN immediately if no packet is ready to be received.
+ * The implementation does not necessarily initialize any non-data members of
+ * 'pkts'.  That is, the caller must initialize layer pointers and metadata
+ * itself, if desired, e.g. with pkt_metadata_init() and miniflow_extract().
  *
- * Returns EMSGSIZE, and discards the packet, if the received packet is longer
- * than 'dp_packet_tailroom(buffer)'.
- *
- * It is advised that the tailroom of 'buffer' should be
- * VLAN_HEADER_LEN bytes longer than the MTU to allow space for an
- * out-of-band VLAN header to be added to the packet.  At the very least,
- * 'buffer' must have at least ETH_TOTAL_MIN bytes of tailroom.
- *
- * This function may be set to null if it would always return EOPNOTSUPP
- * anyhow. */
+ * Returns EAGAIN immediately if no packet is ready to be received or another
+ * positive errno value if an error was encountered. */
 int
-netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet **buffers, int *cnt)
+netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet **pkts, int *cnt)
 {
     int retval;
 
-    retval = rx->netdev->netdev_class->rxq_recv(rx, buffers, cnt);
+    retval = rx->netdev->netdev_class->rxq_recv(rx, pkts, cnt);
     if (!retval) {
         COVERAGE_INC(netdev_received);
+    } else {
+        *cnt = 0;
     }
     return retval;
 }
@@ -1017,39 +990,6 @@ netdev_set_advertisements(struct netdev *netdev,
             : EOPNOTSUPP);
 }
 
-/* If 'netdev' has an assigned IPv4 address, sets '*address' to that address
- * and '*netmask' to its netmask and returns 0.  Otherwise, returns a positive
- * errno value and sets '*address' to 0 (INADDR_ANY).
- *
- * The following error values have well-defined meanings:
- *
- *   - EADDRNOTAVAIL: 'netdev' has no assigned IPv4 address.
- *
- *   - EOPNOTSUPP: No IPv4 network stack attached to 'netdev'.
- *
- * 'address' or 'netmask' or both may be null, in which case the address or
- * netmask is not reported. */
-int
-netdev_get_in4(const struct netdev *netdev,
-               struct in_addr *address_, struct in_addr *netmask_)
-{
-    struct in_addr address;
-    struct in_addr netmask;
-    int error;
-
-    error = (netdev->netdev_class->get_in4
-             ? netdev->netdev_class->get_in4(netdev,
-                    &address, &netmask)
-             : EOPNOTSUPP);
-    if (address_) {
-        address_->s_addr = error ? 0 : address.s_addr;
-    }
-    if (netmask_) {
-        netmask_->s_addr = error ? 0 : netmask.s_addr;
-    }
-    return error;
-}
-
 /* Assigns 'addr' as 'netdev''s IPv4 address and 'mask' as its netmask.  If
  * 'addr' is INADDR_ANY, 'netdev''s IPv4 address is cleared.  Returns a
  * positive errno value. */
@@ -1067,18 +1007,33 @@ netdev_set_in4(struct netdev *netdev, struct in_addr addr, struct in_addr mask)
 int
 netdev_get_in4_by_name(const char *device_name, struct in_addr *in4)
 {
-    struct netdev *netdev;
-    int error;
+    struct in6_addr *mask, *addr6;
+    int err, n_in6, i;
+    struct netdev *dev;
 
-    error = netdev_open(device_name, "system", &netdev);
-    if (error) {
-        in4->s_addr = htonl(0);
-        return error;
+    err = netdev_open(device_name, NULL, &dev);
+    if (err) {
+        return err;
     }
 
-    error = netdev_get_in4(netdev, in4, NULL);
-    netdev_close(netdev);
-    return error;
+    err = netdev_get_addr_list(dev, &addr6, &mask, &n_in6);
+    if (err) {
+        goto out;
+    }
+
+    for (i = 0; i < n_in6; i++) {
+        if (IN6_IS_ADDR_V4MAPPED(&addr6[i])) {
+            in4->s_addr = in6_addr_get_mapped_ipv4(&addr6[i]);
+            goto out;
+        }
+    }
+    err = -ENOENT;
+out:
+    free(addr6);
+    free(mask);
+    netdev_close(dev);
+    return err;
+
 }
 
 /* Adds 'router' as a default IP gateway for the TCP/IP stack that corresponds
@@ -1128,9 +1083,11 @@ netdev_get_status(const struct netdev *netdev, struct smap *smap)
             : EOPNOTSUPP);
 }
 
-/* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address and
- * returns 0.  Otherwise, returns a positive errno value and sets '*in6' to
- * all-zero-bits (in6addr_any).
+/* Returns all assigned IP address to  'netdev' and returns 0.
+ * API allocates array of address and masks and set it to
+ * '*addr' and '*mask'.
+ * Otherwise, returns a positive errno value and sets '*addr', '*mask
+ * and '*n_addr' to NULL.
  *
  * The following error values have well-defined meanings:
  *
@@ -1138,20 +1095,21 @@ netdev_get_status(const struct netdev *netdev, struct smap *smap)
  *
  *   - EOPNOTSUPP: No IPv6 network stack attached to 'netdev'.
  *
- * 'in6' may be null, in which case the address itself is not reported. */
+ * 'addr' may be null, in which case the address itself is not reported. */
 int
-netdev_get_in6(const struct netdev *netdev, struct in6_addr *in6)
+netdev_get_addr_list(const struct netdev *netdev, struct in6_addr **addr,
+                     struct in6_addr **mask, int *n_addr)
 {
-    struct in6_addr dummy;
     int error;
 
-    error = (netdev->netdev_class->get_in6
-             ? netdev->netdev_class->get_in6(netdev,
-                    in6 ? in6 : &dummy)
-             : EOPNOTSUPP);
-    if (error && in6) {
-        memset(in6, 0, sizeof *in6);
+    error = (netdev->netdev_class->get_addr_list
+             ? netdev->netdev_class->get_addr_list(netdev, addr, mask, n_addr): EOPNOTSUPP);
+    if (error && addr) {
+        *addr = NULL;
+        *mask = NULL;
+        *n_addr = 0;
     }
+
     return error;
 }
 
@@ -1181,7 +1139,7 @@ do_update_flags(struct netdev *netdev, enum netdev_flags off,
             ovs_mutex_lock(&netdev_mutex);
             *sfp = sf = xmalloc(sizeof *sf);
             sf->netdev = netdev;
-            list_push_front(&netdev->saved_flags_list, &sf->node);
+            ovs_list_push_front(&netdev->saved_flags_list, &sf->node);
             sf->saved_flags = changed_flags;
             sf->saved_values = changed_flags & new_flags;
 
@@ -1262,7 +1220,7 @@ netdev_restore_flags(struct netdev_saved_flags *sf)
                                            &old_flags);
 
         ovs_mutex_lock(&netdev_mutex);
-        list_remove(&sf->node);
+        ovs_list_remove(&sf->node);
         free(sf);
         netdev_unref(netdev);
     }
@@ -1343,11 +1301,16 @@ netdev_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 {
     int error;
 
+    /* Statistics are initialized before passing it to particular device
+     * implementation so all values are filtered out by default. */
+    memset(stats, 0xFF, sizeof *stats);
+
     COVERAGE_INC(netdev_get_stats);
     error = (netdev->netdev_class->get_stats
              ? netdev->netdev_class->get_stats(netdev, stats)
              : EOPNOTSUPP);
     if (error) {
+        /* In case of error all statistics are filtered out */
         memset(stats, 0xff, sizeof *stats);
     }
     return error;
@@ -1815,6 +1778,12 @@ netdev_rxq_get_name(const struct netdev_rxq *rx)
     return netdev_get_name(netdev_rxq_get_netdev(rx));
 }
 
+int
+netdev_rxq_get_queue_id(const struct netdev_rxq *rx)
+{
+    return rx->queue_id;
+}
+
 static void
 restore_all_flags(void *aux OVS_UNUSED)
 {
@@ -1848,3 +1817,97 @@ netdev_get_change_seq(const struct netdev *netdev)
 {
     return netdev->change_seq;
 }
+
+#ifndef _WIN32
+/* This implementation is shared by Linux and BSD. */
+
+static struct ifaddrs *if_addr_list;
+static struct ovs_mutex if_addr_list_lock = OVS_MUTEX_INITIALIZER;
+
+void
+netdev_get_addrs_list_flush(void)
+{
+    ovs_mutex_lock(&if_addr_list_lock);
+    if (if_addr_list) {
+        freeifaddrs(if_addr_list);
+        if_addr_list = NULL;
+    }
+    ovs_mutex_unlock(&if_addr_list_lock);
+}
+
+int
+netdev_get_addrs(const char dev[], struct in6_addr **paddr,
+                 struct in6_addr **pmask, int *n_in)
+{
+    struct in6_addr *addr_array, *mask_array;
+    const struct ifaddrs *ifa;
+    int cnt = 0, i = 0;
+
+    ovs_mutex_lock(&if_addr_list_lock);
+    if (!if_addr_list) {
+        int err;
+
+        err = getifaddrs(&if_addr_list);
+        if (err) {
+            ovs_mutex_unlock(&if_addr_list_lock);
+            return -err;
+        }
+    }
+
+    for (ifa = if_addr_list; ifa; ifa = ifa->ifa_next) {
+        if (ifa->ifa_addr != NULL) {
+            int family;
+
+            family = ifa->ifa_addr->sa_family;
+            if (family == AF_INET || family == AF_INET6) {
+                if (!strncmp(ifa->ifa_name, dev, IFNAMSIZ)) {
+                    cnt++;
+                }
+            }
+        }
+    }
+
+    if (!cnt) {
+        ovs_mutex_unlock(&if_addr_list_lock);
+        return EADDRNOTAVAIL;
+    }
+    addr_array = xzalloc(sizeof *addr_array * cnt);
+    mask_array = xzalloc(sizeof *mask_array * cnt);
+    for (ifa = if_addr_list; ifa; ifa = ifa->ifa_next) {
+        int family;
+
+        if (strncmp(ifa->ifa_name, dev, IFNAMSIZ) || ifa->ifa_addr == NULL) {
+            continue;
+        }
+
+        family = ifa->ifa_addr->sa_family;
+        if (family == AF_INET) {
+            const struct sockaddr_in *sin;
+
+            sin = ALIGNED_CAST(const struct sockaddr_in *, ifa->ifa_addr);
+            in6_addr_set_mapped_ipv4(&addr_array[i], sin->sin_addr.s_addr);
+            sin = (struct sockaddr_in *) &ifa->ifa_netmask;
+            in6_addr_set_mapped_ipv4(&mask_array[i], sin->sin_addr.s_addr);
+            i++;
+        } else if (family == AF_INET6) {
+            const struct sockaddr_in6 *sin6;
+
+            sin6 = ALIGNED_CAST(const struct sockaddr_in6 *, ifa->ifa_addr);
+            memcpy(&addr_array[i], &sin6->sin6_addr, sizeof *addr_array);
+            sin6 = (struct sockaddr_in6 *) &ifa->ifa_netmask;
+            memcpy(&mask_array[i], &sin6->sin6_addr, sizeof *mask_array);
+            i++;
+        }
+    }
+    ovs_mutex_unlock(&if_addr_list_lock);
+    if (paddr) {
+        *n_in = cnt;
+        *paddr = addr_array;
+        *pmask = mask_array;
+    } else {
+        free(addr_array);
+        free(mask_array);
+    }
+    return 0;
+}
+#endif

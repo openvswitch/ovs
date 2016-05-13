@@ -22,7 +22,7 @@
 #include <inttypes.h>
 #include <limits.h>
 
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "ovs-thread.h"
 #include "ovsdb-error.h"

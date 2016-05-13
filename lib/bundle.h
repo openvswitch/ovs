@@ -22,8 +22,8 @@
 #include <stdint.h>
 
 #include "compiler.h"
-#include "ofp-errors.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 
 struct ds;

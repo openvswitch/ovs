@@ -49,30 +49,6 @@ struct net;
 extern void dev_disable_lro(struct net_device *dev);
 #endif
 
-#if !defined HAVE_NETDEV_RX_HANDLER_REGISTER || \
-    defined HAVE_RHEL_OVS_HOOK
-
-#ifdef HAVE_RHEL_OVS_HOOK
-typedef struct sk_buff *(openvswitch_handle_frame_hook_t)(struct sk_buff *skb);
-extern openvswitch_handle_frame_hook_t *openvswitch_handle_frame_hook;
-
-#define netdev_rx_handler_register rpl_netdev_rx_handler_register
-int rpl_netdev_rx_handler_register(struct net_device *dev,
-				   openvswitch_handle_frame_hook_t *hook,
-				   void *rx_handler_data);
-#else
-
-#define netdev_rx_handler_register rpl_netdev_rx_handler_register
-int rpl_netdev_rx_handler_register(struct net_device *dev,
-				   struct sk_buff *(*netdev_hook)(struct net_bridge_port *p,
-							   struct sk_buff *skb),
-				   void *rx_handler_data);
-#endif
-
-#define netdev_rx_handler_unregister rpl_netdev_rx_handler_unregister
-void rpl_netdev_rx_handler_unregister(struct net_device *dev);
-#endif
-
 #ifndef HAVE_DEV_GET_BY_INDEX_RCU
 static inline struct net_device *dev_get_by_index_rcu(struct net *net, int ifindex)
 {
@@ -166,16 +142,7 @@ static inline struct net_device *netdev_notifier_info_to_dev(void *info)
 #endif
 
 #ifndef HAVE_PCPU_SW_NETSTATS
-
-#include <linux/u64_stats_sync.h>
-
-struct pcpu_sw_netstats {
-	u64     rx_packets;
-	u64     rx_bytes;
-	u64     tx_packets;
-	u64     tx_bytes;
-	struct u64_stats_sync   syncp;
-};
+#define pcpu_sw_netstats pcpu_tstats
 #endif
 
 #if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(8,0)
@@ -258,12 +225,6 @@ static inline void *skb_gro_remcsum_process(struct sk_buff *skb, void *ptr,
 #define dev_get_stats rpl_dev_get_stats
 struct rtnl_link_stats64 *rpl_dev_get_stats(struct net_device *dev,
 					struct rtnl_link_stats64 *storage);
-
-#else
-#define HAVE_DEV_TSTATS
-#if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)
-#undef HAVE_DEV_TSTATS
-#endif
 #endif
 
 #if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)

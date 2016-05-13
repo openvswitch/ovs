@@ -36,10 +36,10 @@
 #include "dpctl.h"
 #include "fatal-signal.h"
 #include "odp-util.h"
-#include "ofp-parse.h"
 #include "packets.h"
 #include "timeval.h"
 #include "util.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/vlog.h"
 
 static struct dpctl_params dpctl_p;
@@ -171,8 +171,8 @@ usage(void *userdata OVS_UNUSED)
            "  get-flow [DP] ufid:UFID    fetch flow corresponding to UFID\n"
            "  del-flow [DP] FLOW         delete FLOW from DP\n"
            "  del-flows [DP]             delete all flows from DP\n"
-           "  dump-conntrack [DP]        display conntrack entries\n"
-           "  flush-conntrack [DP]       delete all conntrack entries\n"
+           "  dump-conntrack [DP] [zone=ZONE]  display conntrack entries for ZONE\n"
+           "  flush-conntrack [DP] [zone=ZONE] delete all conntrack entries in ZONE\n"
            "Each IFACE on add-dp, add-if, and set-if may be followed by\n"
            "comma-separated options.  See ovs-dpctl(8) for syntax, or the\n"
            "Interface table in ovs-vswitchd.conf.db(5) for an options list.\n"

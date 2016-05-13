@@ -50,3 +50,21 @@ $(srcdir)/rhel/openvswitch.spec: rhel/openvswitch.spec.in $(top_builddir)/config
 
 $(srcdir)/rhel/openvswitch-fedora.spec: rhel/openvswitch-fedora.spec.in $(top_builddir)/config.status
 	$(update_rhel_spec)
+
+RPMBUILD_TOP := $(abs_top_builddir)/rpm/rpmbuild
+
+# Build user-space RPMs
+rpm-fedora: dist $(srcdir)/rhel/openvswitch-fedora.spec
+	${MKDIR_P} ${RPMBUILD_TOP}/SOURCES
+	cp ${DIST_ARCHIVES} ${RPMBUILD_TOP}/SOURCES
+	rpmbuild ${RPMBUILD_OPT} \
+                 -D "_topdir ${RPMBUILD_TOP}" \
+                 -bb $(srcdir)/rhel/openvswitch-fedora.spec
+
+# Build kernel datapath RPM
+rpm-fedora-kmod: dist $(srcdir)/rhel/openvswitch-kmod-fedora.spec
+	${MKDIR_P} ${RPMBUILD_TOP}/SOURCES
+	cp ${DIST_ARCHIVES} ${RPMBUILD_TOP}/SOURCES
+	rpmbuild -D "kversion $(shell uname -r)" ${RPMBUILD_OPT} \
+                 -D "_topdir ${RPMBUILD_TOP}" \
+                 -bb $(srcdir)/rhel/openvswitch-kmod-fedora.spec

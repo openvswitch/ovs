@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@
  * This is a simple lexical analyzer (or tokenizer) for OVN match expressions
  * and ACLs. */
 
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 
 struct ds;
 
@@ -79,18 +79,27 @@ const char *lex_format_to_string(enum lex_format);
 
 /* A token.
  *
- * 's' is owned by the token. */
+ * 's' may point to 'buffer'; otherwise, it points to malloc()ed memory owned
+ * by the token. */
 struct lex_token {
     enum lex_type type;         /* One of LEX_*. */
     char *s;                    /* LEX_T_ID, LEX_T_STRING, LEX_T_ERROR only. */
     enum lex_format format;     /* LEX_T_INTEGER, LEX_T_MASKED_INTEGER only. */
-    union mf_subvalue value;    /* LEX_T_INTEGER, LEX_T_MASKED_INTEGER only. */
-    union mf_subvalue mask;     /* LEX_T_MASKED_INTEGER only. */
+    union {
+        struct {
+            union mf_subvalue value; /* LEX_T_INTEGER, LEX_T_MASKED_INTEGER. */
+            union mf_subvalue mask;  /* LEX_T_MASKED_INTEGER only. */
+        };
+        char buffer[256];            /* Buffer for LEX_T_ID/LEX_T_STRING. */
+    };
 };
 
 void lex_token_init(struct lex_token *);
 void lex_token_destroy(struct lex_token *);
 void lex_token_swap(struct lex_token *, struct lex_token *);
+void lex_token_strcpy(struct lex_token *, const char *s, size_t length);
+void lex_token_strset(struct lex_token *, char *s);
+void lex_token_vsprintf(struct lex_token *, const char *format, va_list args);
 
 void lex_token_format(const struct lex_token *, struct ds *);
 const char *lex_token_parse(struct lex_token *, const char *input,

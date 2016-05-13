@@ -23,6 +23,26 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - http between two ports])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([datapath - ping between two ports on vlan])
 OVS_TRAFFIC_VSWITCHD_START()
 
@@ -59,9 +79,10 @@ ADD_NAMESPACES(at_ns0, at_ns1)
 ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
 ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
@@ -89,9 +110,10 @@ ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
 ADD_VLAN(p0, at_ns0, 100, "fc00:1::1/96")
 ADD_VLAN(p1, at_ns1, 100, "fc00:1::2/96")
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
@@ -147,6 +169,87 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PI
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - ping over gre tunnel])
+OVS_CHECK_GRE()
+
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_BR([br-underlay])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24")
+AT_CHECK([ip addr add dev br-underlay "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and with a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL([gre], [br0], [at_gre0], [172.31.1.1], [10.1.1.100/24])
+ADD_NATIVE_TUNNEL([gretap], [ns_gre0], [at_ns0], [172.31.1.100], [10.1.1.1/24])
+
+dnl First, check the underlay
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Okay, now check the overlay with different packet sizes
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([datapath - ping over geneve tunnel])
+OVS_CHECK_GENEVE()
+
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_BR([br-underlay])
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+ADD_NAMESPACES(at_ns0)
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24")
+AT_CHECK([ip addr add dev br-underlay "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and with a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL([geneve], [br0], [at_gnv0], [172.31.1.1], [10.1.1.100/24])
+ADD_NATIVE_TUNNEL([geneve], [ns_gnv0], [at_ns0], [172.31.1.100], [10.1.1.1/24],
+                  [vni 0])
+
+dnl First, check the underlay
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+dnl Okay, now check the overlay with different packet sizes
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - controller])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -181,9 +284,9 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) '50540000000a50
 
 dnl Check this output. We only see the latter two packets, not the first.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN2 (xid=0x0): total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=1,tp_dst=2 udp_csum:0
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=2,tp_dst=1 udp_csum:0
 ])
 
@@ -250,9 +353,10 @@ priority=100,in_port=2,ct_state=+trk+est,tcp6,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl HTTP requests from ns0->ns1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py http6]], [http0.pid])
@@ -770,6 +874,41 @@ tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - ct_mark bit-fiddling])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow traffic between ns0<->ns1 using the ct_mark. Return traffic should
+dnl cause an additional bit to be set in the connection (and be allowed).
+AT_DATA([flows.txt], [dnl
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+table=0,priority=100,in_port=1,tcp,action=ct(table=1)
+table=0,priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=1,commit,exec(set_field:0x2/0x6->ct_mark))
+table=1,priority=100,in_port=1,ct_state=+new,tcp,action=ct(commit,exec(set_field:0x5/0x5->ct_mark)),2
+table=1,priority=100,in_port=1,ct_state=-new,tcp,action=2
+table=1,priority=100,in_port=2,ct_state=+trk,ct_mark=3,tcp,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl HTTP requests from p0->p1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep TIME], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),mark=3,protoinfo=(state=TIME_WAIT)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - ct_mark from register])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -855,6 +994,79 @@ NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([conntrack - ct_label bit-fiddling])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow traffic between ns0<->ns1 using the ct_labels. Return traffic should
+dnl cause an additional bit to be set in the connection labels (and be allowed)
+AT_DATA([flows.txt], [dnl
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+table=0,priority=100,in_port=1,tcp,action=ct(table=1)
+table=0,priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=1,commit,exec(set_field:0x200000000/0x200000004->ct_label))
+table=1,priority=100,in_port=1,tcp,ct_state=+new,action=ct(commit,exec(set_field:0x5/0x5->ct_label)),2
+table=1,priority=100,in_port=1,tcp,ct_state=-new,action=2
+table=1,priority=100,in_port=2,ct_state=+trk,ct_label=0x200000001,tcp,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl HTTP requests from p0->p1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep TIME], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),labels=0x200000001,protoinfo=(state=TIME_WAIT)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - ct metadata, multiple zones])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1, at_ns2, at_ns3)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow traffic between ns0<->ns1 using the ct_mark and ct_labels in zone=1,
+dnl but do *not* set any of these for the ct() in zone=2. Traffic should pass,
+dnl and we should see that the conntrack entries only apply the ct_mark and
+dnl ct_labels to the connection in zone=1.
+AT_DATA([flows.txt], [dnl
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+table=0,priority=100,in_port=1,tcp,action=ct(zone=1,table=1)
+table=0,priority=100,in_port=2,ct_state=-trk,tcp,action=ct(zone=1,table=1,commit,exec(set_field:0x200000000/0x200000004->ct_label,set_field:0x2/0x6->ct_mark))
+table=1,priority=100,in_port=1,tcp,ct_state=+new,action=ct(zone=1,commit,exec(set_field:0x5/0x5->ct_label,set_field:0x5/0x5->ct_mark)),ct(commit,zone=2),2
+table=1,priority=100,in_port=1,tcp,ct_state=-new,action=ct(zone=2),2
+table=1,priority=100,in_port=2,tcp,action=ct(zone=2),1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl HTTP requests from p0->p1 should work fine.
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep TIME], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,mark=3,labels=0x200000001,protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=TIME_WAIT)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - ICMP related])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -925,9 +1137,9 @@ AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) 'e64c473528c9c6
 
 dnl Check this output. We only see the latter two packets, not the first.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=47 ct_state=new|trk,in_port=1 (via action) data_len=47 (unbuffered)
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=47 ct_state=new|trk,in_port=1 (via action) data_len=47 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=e6:4c:47:35:28:c9,dl_dst=c6:f9:4e:cb:72:db,nw_src=172.16.0.1,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=41614,tp_dst=5555 udp_csum:2096
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=75 ct_state=rel|rpl|trk,in_port=2 (via action) data_len=75 (unbuffered)
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=75 ct_state=rel|rpl|trk,in_port=2 (via action) data_len=75 (unbuffered)
 icmp,vlan_tci=0x0000,dl_src=c6:f9:4e:cb:72:db,dl_dst=e6:4c:47:35:28:c9,nw_src=172.16.0.2,nw_dst=172.16.0.1,nw_tos=192,nw_ecn=0,nw_ttl=64,icmp_type=3,icmp_code=3 icmp_csum:553f
 ])
 
@@ -973,6 +1185,7 @@ AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows1.txt])
 
 NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p1->p0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
@@ -1051,7 +1264,13 @@ table=1 priority=0, action=drop
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
+dnl "connect: Cannot assign requested address"
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
+
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
@@ -1261,9 +1480,10 @@ priority=100,icmp6,icmp_type=136,action=normal
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl Basic connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
@@ -1308,9 +1528,10 @@ priority=100,icmp6,icmp_type=136,action=normal
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl Basic connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
@@ -1351,9 +1572,10 @@ priority=100,icmp6,icmp_type=136,action=normal
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl Basic connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PING], [0], [dnl
@@ -1401,7 +1623,7 @@ AT_CHECK([ip link set dev br-underlay up])
 
 dnl Set up tunnel endpoints on OVS outside the namespace and with a native
 dnl linux device inside the namespace.
-ADD_OVS_TUNNEL([vxlan], [br0], [at_ns0], [172.31.1.1], [10.1.1.100/24])
+ADD_OVS_TUNNEL([vxlan], [br0], [at_vxlan0], [172.31.1.1], [10.1.1.100/24])
 ADD_NATIVE_TUNNEL([vxlan], [at_vxlan1], [at_ns0], [172.31.1.100], [10.1.1.1/24],
                   [id 0 dstport 4789])
 
@@ -1425,7 +1647,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 Fragmentation over vxlan])
-AT_SKIP_IF([! ip link help 2>&1 | grep vxlan >/dev/null])
+OVS_CHECK_VXLAN()
 CHECK_CONNTRACK()
 
 OVS_TRAFFIC_VSWITCHD_START()
@@ -1455,13 +1677,14 @@ AT_CHECK([ip link set dev br-underlay up])
 
 dnl Set up tunnel endpoints on OVS outside the namespace and with a native
 dnl linux device inside the namespace.
-ADD_OVS_TUNNEL([vxlan], [br0], [at_ns0], [172.31.1.1], ["fc00::2/96"])
+ADD_OVS_TUNNEL([vxlan], [br0], [at_vxlan0], [172.31.1.1], ["fc00::2/96"])
 ADD_NATIVE_TUNNEL([vxlan], [at_vxlan1], [at_ns0], [172.31.1.100], ["fc00::1/96"],
                   [id 0 dstport 4789])
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl First, check the underlay
 NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 172.31.1.100 | FORMAT_PING], [0], [dnl
@@ -1907,6 +2130,7 @@ AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
@@ -1974,6 +2198,7 @@ table=10 priority=0 action=drop
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
@@ -2010,9 +2235,10 @@ priority=200,in_port=2,ct_state=+trk+new,icmp6,icmpv6_code=0,icmpv6_type=135,nd_
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Without this sleep, we get occasional failures due to the following error:
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-sleep 2;
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl HTTP requests from ns0->ns1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py http6]], [http0.pid])
@@ -2066,7 +2292,13 @@ table=1 priority=0, action=drop
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
+dnl "connect: Cannot assign requested address"
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
+
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])

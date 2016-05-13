@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,10 +15,10 @@
  */
 
 #include <config.h>
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include <stdlib.h>
 #include <string.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "netdev-dpdk.h"
 #include "util.h"
 
@@ -29,7 +29,7 @@ ofpbuf_init__(struct ofpbuf *b, size_t allocated, enum ofpbuf_source source)
     b->source = source;
     b->header = NULL;
     b->msg = NULL;
-    list_poison(&b->list_node);
+    ovs_list_poison(&b->list_node);
 }
 
 static void
@@ -175,20 +175,21 @@ ofpbuf_clone(const struct ofpbuf *buffer)
 /* Creates and returns a new ofpbuf whose data are copied from 'buffer'.   The
  * returned ofpbuf will additionally have 'headroom' bytes of headroom. */
 struct ofpbuf *
-ofpbuf_clone_with_headroom(const struct ofpbuf *buffer, size_t headroom)
+ofpbuf_clone_with_headroom(const struct ofpbuf *b, size_t headroom)
 {
     struct ofpbuf *new_buffer;
 
-    new_buffer = ofpbuf_clone_data_with_headroom(buffer->data,
-                                                 buffer->size,
-                                                 headroom);
-    if (buffer->header) {
-        uintptr_t data_delta
-            = (char *)new_buffer->data - (char *)buffer->data;
+    new_buffer = ofpbuf_clone_data_with_headroom(b->data, b->size, headroom);
+    if (b->header) {
+        ptrdiff_t header_offset = (char *) b->header - (char *) b->data;
 
-        new_buffer->header = (char *) buffer->header + data_delta;
+        new_buffer->header = (char *) new_buffer->data + header_offset;
     }
-    new_buffer->msg = buffer->msg;
+    if (b->msg) {
+        ptrdiff_t msg_offset = (char *) b->msg - (char *) b->data;
+
+        new_buffer->msg = (char *) new_buffer->data + msg_offset;
+    }
 
     return new_buffer;
 }
@@ -267,14 +268,14 @@ ofpbuf_resize__(struct ofpbuf *b, size_t new_headroom, size_t new_tailroom)
     new_data = (char *) new_base + new_headroom;
     if (b->data != new_data) {
         if (b->header) {
-            uintptr_t data_delta = (char *) b->header - (char *) b->data;
+            ptrdiff_t header_offset = (char *) b->header - (char *) b->data;
 
-            b->header = (char *) new_data + data_delta;
+            b->header = (char *) new_data + header_offset;
         }
         if (b->msg) {
-            uintptr_t data_delta = (char *) b->msg - (char *) b->data;
+            ptrdiff_t msg_offset = (char *) b->msg - (char *) b->data;
 
-            b->msg = (char *) new_data + data_delta;
+            b->msg = (char *) new_data + msg_offset;
         }
         b->data = new_data;
     }
@@ -389,10 +390,10 @@ ofpbuf_put(struct ofpbuf *b, const void *p, size_t size)
     return dst;
 }
 
-/* Parses as many pairs of hex digits as possible (possibly separated by
- * spaces) from the beginning of 's', appending bytes for their values to 'b'.
- * Returns the first character of 's' that is not the first of a pair of hex
- * digits.  If 'n' is nonnull, stores the number of bytes added to 'b' in
+/* Parses as many pairs of hex digits as possible (possibly separated by spaces
+ * or periods) from the beginning of 's', appending bytes for their values to
+ * 'b'.  Returns the first character of 's' that is not the first of a pair of
+ * hex digits.  If 'n' is nonnull, stores the number of bytes added to 'b' in
  * '*n'. */
 char *
 ofpbuf_put_hex(struct ofpbuf *b, const char *s, size_t *n)
@@ -402,7 +403,7 @@ ofpbuf_put_hex(struct ofpbuf *b, const char *s, size_t *n)
         uint8_t byte;
         bool ok;
 
-        s += strspn(s, " \t\r\n");
+        s += strspn(s, " .\t\r\n");
         byte = hexits_value(s, 2, &ok);
         if (!ok) {
             if (n) {

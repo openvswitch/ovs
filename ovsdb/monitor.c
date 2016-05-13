@@ -20,7 +20,7 @@
 
 #include "bitmap.h"
 #include "column.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "jsonrpc.h"
 #include "ovsdb-error.h"
@@ -183,10 +183,9 @@ ovsdb_monitor_json_cache_insert(struct ovsdb_monitor *dbmon,
 static void
 ovsdb_monitor_json_cache_flush(struct ovsdb_monitor *dbmon)
 {
-    struct ovsdb_monitor_json_cache_node *node, *next;
+    struct ovsdb_monitor_json_cache_node *node;
 
-    HMAP_FOR_EACH_SAFE(node, next, hmap_node, &dbmon->json_cache) {
-        hmap_remove(&dbmon->json_cache, &node->hmap_node);
+    HMAP_FOR_EACH_POP(node, hmap_node, &dbmon->json_cache) {
         json_destroy(node->json);
         free(node);
     }
@@ -313,7 +312,7 @@ ovsdb_monitor_add_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
 
     jm = xzalloc(sizeof *jm);
     jm->jsonrpc_monitor = jsonrpc_monitor;
-    list_push_back(&dbmon->jsonrpc_monitors, &jm->node);
+    ovs_list_push_back(&dbmon->jsonrpc_monitors, &jm->node);
 }
 
 struct ovsdb_monitor *
@@ -326,7 +325,7 @@ ovsdb_monitor_create(struct ovsdb *db,
 
     ovsdb_replica_init(&dbmon->replica, &ovsdb_jsonrpc_replica_class);
     ovsdb_add_replica(db, &dbmon->replica);
-    list_init(&dbmon->jsonrpc_monitors);
+    ovs_list_init(&dbmon->jsonrpc_monitors);
     dbmon->db = db;
     dbmon->n_transactions = 0;
     shash_init(&dbmon->tables);
@@ -724,40 +723,40 @@ ovsdb_monitor_compose_update(struct ovsdb_monitor *dbmon,
  * going to be used as part of an "update" notification. */
 struct json *
 ovsdb_monitor_get_update(struct ovsdb_monitor *dbmon,
-                         bool initial, uint64_t *unflushed,
+                         bool initial, uint64_t *unflushed_,
                          enum ovsdb_monitor_version version)
 {
     struct ovsdb_monitor_json_cache_node *cache_node;
     struct shash_node *node;
     struct json *json;
-    uint64_t prev_txn = *unflushed;
-    uint64_t next_txn = dbmon->n_transactions + 1;
+    const uint64_t unflushed = *unflushed_;
+    const uint64_t next_unflushed = dbmon->n_transactions + 1;
 
     /* Return a clone of cached json if one exists. Otherwise,
      * generate a new one and add it to the cache.  */
-    cache_node = ovsdb_monitor_json_cache_search(dbmon, version, prev_txn);
+    cache_node = ovsdb_monitor_json_cache_search(dbmon, version, unflushed);
     if (cache_node) {
         json = cache_node->json ? json_clone(cache_node->json) : NULL;
     } else {
         if (version == OVSDB_MONITOR_V1) {
-            json = ovsdb_monitor_compose_update(dbmon, initial, prev_txn,
+            json = ovsdb_monitor_compose_update(dbmon, initial, unflushed,
                                         ovsdb_monitor_compose_row_update);
         } else {
             ovs_assert(version == OVSDB_MONITOR_V2);
-            json = ovsdb_monitor_compose_update(dbmon, initial, prev_txn,
+            json = ovsdb_monitor_compose_update(dbmon, initial, unflushed,
                                         ovsdb_monitor_compose_row_update2);
         }
-        ovsdb_monitor_json_cache_insert(dbmon, version, prev_txn, json);
+        ovsdb_monitor_json_cache_insert(dbmon, version, unflushed, json);
     }
 
     /* Maintain transaction id of 'changes'. */
     SHASH_FOR_EACH (node, &dbmon->tables) {
         struct ovsdb_monitor_table *mt = node->data;
 
-        ovsdb_monitor_table_untrack_changes(mt, prev_txn);
-        ovsdb_monitor_table_track_changes(mt, next_txn);
+        ovsdb_monitor_table_untrack_changes(mt, unflushed);
+        ovsdb_monitor_table_track_changes(mt, next_unflushed);
     }
-    *unflushed = next_txn;
+    *unflushed_ = next_unflushed;
 
     return json;
 }
@@ -959,11 +958,12 @@ ovsdb_monitor_get_initial(const struct ovsdb_monitor *dbmon)
 
 void
 ovsdb_monitor_remove_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
-                   struct ovsdb_jsonrpc_monitor *jsonrpc_monitor)
+                   struct ovsdb_jsonrpc_monitor *jsonrpc_monitor,
+                   uint64_t unflushed)
 {
     struct jsonrpc_monitor_node *jm;
 
-    if (list_is_empty(&dbmon->jsonrpc_monitors)) {
+    if (ovs_list_is_empty(&dbmon->jsonrpc_monitors)) {
         ovsdb_monitor_destroy(dbmon);
         return;
     }
@@ -971,11 +971,17 @@ ovsdb_monitor_remove_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
     /* Find and remove the jsonrpc monitor from the list.  */
     LIST_FOR_EACH(jm, node, &dbmon->jsonrpc_monitors) {
         if (jm->jsonrpc_monitor == jsonrpc_monitor) {
-            list_remove(&jm->node);
+            /* Release the tracked changes. */
+            struct shash_node *node;
+            SHASH_FOR_EACH (node, &dbmon->tables) {
+                struct ovsdb_monitor_table *mt = node->data;
+                ovsdb_monitor_table_untrack_changes(mt, unflushed);
+            }
+            ovs_list_remove(&jm->node);
             free(jm);
 
             /* Destroy ovsdb monitor if this is the last user.  */
-            if (list_is_empty(&dbmon->jsonrpc_monitors)) {
+            if (ovs_list_is_empty(&dbmon->jsonrpc_monitors)) {
                 ovsdb_monitor_destroy(dbmon);
             }
 
@@ -1069,7 +1075,7 @@ ovsdb_monitor_add(struct ovsdb_monitor *new_dbmon)
 
     /* New_dbmon should be associated with only one jsonrpc
      * connections.  */
-    ovs_assert(list_is_singleton(&new_dbmon->jsonrpc_monitors));
+    ovs_assert(ovs_list_is_singleton(&new_dbmon->jsonrpc_monitors));
 
     hash = ovsdb_monitor_hash(new_dbmon, 0);
     HMAP_FOR_EACH_WITH_HASH(dbmon, hmap_node, hash, &ovsdb_monitors) {
@@ -1087,7 +1093,7 @@ ovsdb_monitor_destroy(struct ovsdb_monitor *dbmon)
 {
     struct shash_node *node;
 
-    list_remove(&dbmon->replica.node);
+    ovs_list_remove(&dbmon->replica.node);
 
     if (!hmap_node_is_null(&dbmon->hmap_node)) {
         hmap_remove(&ovsdb_monitors, &dbmon->hmap_node);
@@ -1121,11 +1127,24 @@ ovsdb_monitor_commit(struct ovsdb_replica *replica,
     struct ovsdb_monitor_aux aux;
 
     ovsdb_monitor_init_aux(&aux, m);
+    /* Update ovsdb_monitor's transaction number for
+     * each transaction, before calling ovsdb_monitor_change_cb().  */
+    m->n_transactions++;
     ovsdb_txn_for_each_change(txn, ovsdb_monitor_change_cb, &aux);
 
-    if (aux.efficacy == OVSDB_CHANGES_REQUIRE_EXTERNAL_UPDATE) {
+    switch(aux.efficacy) {
+    case OVSDB_CHANGES_NO_EFFECT:
+        /* The transaction is ignored by the monitor.
+         * Roll back the 'n_transactions' as if the transaction
+         * has never happened. */
+        m->n_transactions--;
+        break;
+    case OVSDB_CHANGES_REQUIRE_INTERNAL_UPDATE:
+        /* Nothing.  */
+        break;
+    case  OVSDB_CHANGES_REQUIRE_EXTERNAL_UPDATE:
         ovsdb_monitor_json_cache_flush(m);
-        m->n_transactions++;
+        break;
     }
 
     return NULL;
@@ -1150,7 +1169,12 @@ ovsdb_monitor_destroy_callback(struct ovsdb_replica *replica)
 void
 ovsdb_monitor_get_memory_usage(struct simap *usage)
 {
+    struct ovsdb_monitor *dbmon;
     simap_put(usage, "monitors", hmap_count(&ovsdb_monitors));
+
+    HMAP_FOR_EACH(dbmon, hmap_node,  &ovsdb_monitors) {
+        simap_increase(usage, "json-caches", hmap_count(&dbmon->json_cache));
+    }
 }
 
 static const struct ovsdb_replica_class ovsdb_jsonrpc_replica_class = {

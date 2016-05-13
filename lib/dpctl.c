@@ -32,15 +32,14 @@
 #include "dirs.h"
 #include "dpctl.h"
 #include "dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "netdev.h"
 #include "netdev-dpdk.h"
 #include "netlink.h"
 #include "odp-util.h"
-#include "ofp-parse.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-numa.h"
 #include "packets.h"
 #include "shash.h"
@@ -50,6 +49,7 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
+#include "openvswitch/ofp-parse.h"
 
 typedef int dpctl_command_handler(int argc, const char *argv[],
                                   struct dpctl_params *);

@@ -16,7 +16,6 @@
 
 #include <config.h>
 #undef NDEBUG
-#include "openvswitch/vconn.h"
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -25,10 +24,12 @@
 #include <unistd.h>
 #include "command-line.h"
 #include "fatal-signal.h"
-#include "ofp-msgs.h"
-#include "ofp-util.h"
-#include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vconn.h"
+#include "openvswitch/vlog.h"
 #include "ovstest.h"
 #include "poll-loop.h"
 #include "socket-util.h"
@@ -36,7 +37,6 @@
 #include "stream-ssl.h"
 #include "timeval.h"
 #include "util.h"
-#include "openvswitch/vlog.h"
 
 struct fake_pvconn {
     const char *type;

@@ -1,6 +1,6 @@
 {
   "name": "hardware_vtep",
-  "cksum": "1621458335 10585",
+  "cksum": "4127261095 11302",
   "tables": {
     "Global": {
       "columns": {
@@ -28,6 +28,9 @@
         "tunnels": {
           "type": {"key": {"type": "uuid", "refTable": "Tunnel"},
                    "min": 0, "max": "unlimited"}},
+        "other_config": {
+          "type": {"key": "string", "value": "string",
+                   "min": 0, "max": "unlimited"}},
         "switch_fault_status": {
           "type": {
             "key": "string", "min": 0, "max": "unlimited"},
@@ -54,6 +57,9 @@
                              "refTable": "Logical_Binding_Stats"},
                    "min": 0, "max": "unlimited"},
           "ephemeral": true},
+        "other_config": {
+          "type": {"key": "string", "value": "string",
+                   "min": 0, "max": "unlimited"}},
         "port_fault_status": {
           "type": {
             "key": "string", "min": 0, "max": "unlimited"},
@@ -89,7 +95,15 @@
       "columns": {
         "name": {"type": "string"},
         "description": {"type": "string"},
-        "tunnel_key": {"type": {"key": "integer", "min": 0, "max": 1}}},
+        "tunnel_key": {"type": {"key": "integer", "min": 0, "max": 1}},
+        "replication_mode": {
+          "type": {
+            "key": {
+              "enum": ["set", ["service_node", "source_node"]],
+              "type": "string"},"min": 0, "max": 1}},
+        "other_config": {
+          "type": {"key": "string", "value": "string",
+                   "min": 0, "max": "unlimited"}}},
       "isRoot": true,
       "indexes": [["name"]]},
     "Ucast_Macs_Local": {
@@ -153,6 +167,9 @@
           "type": {"key": {"type": "string"},
                    "value": {"type": "uuid",
                              "refTable": "ACL"},
+                   "min": 0, "max": "unlimited"}},
+        "other_config": {
+          "type": {"key": "string", "value": "string",
                    "min": 0, "max": "unlimited"}},
         "LR_fault_status": {
           "type": {
@@ -284,4 +301,4 @@
           "ephemeral": true}},
       "indexes": [["target"]],
       "isRoot": false}},
-  "version": "1.5.0"}
+  "version": "1.6.0"}

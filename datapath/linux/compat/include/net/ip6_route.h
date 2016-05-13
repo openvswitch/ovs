@@ -31,17 +31,8 @@ struct dst_entry *rpl_ip6_route_output(struct net *net, const struct sock *sk,
 #endif /* 2.6.39 */
 
 #ifndef HAVE_NF_IPV6_OPS_FRAGMENT
-#ifdef OVS_FRAGMENT_BACKPORT
 int rpl_ip6_fragment(struct sock *sk, struct sk_buff *skb,
 		     int (*output)(OVS_VPORT_OUTPUT_PARAMS));
-#else
-static inline int rpl_ip6_fragment(struct sock *sk, struct sk_buff *skb,
-				   int (*output)(struct sk_buff *))
-{
-	kfree_skb(skb);
-	return -ENOTSUPP;
-}
-#endif /* OVS_FRAGMENT_BACKPORT */
 #define ip6_fragment rpl_ip6_fragment
 #endif /* HAVE_NF_IPV6_OPS_FRAGMENT */
 

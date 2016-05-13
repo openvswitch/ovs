@@ -85,6 +85,19 @@ struct cls_match {
     /* 'flow' must be the last field. */
 };
 
+/* Utilities for accessing the 'cls_match' member of struct cls_rule. */
+static inline struct cls_match *
+get_cls_match_protected(const struct cls_rule *rule)
+{
+    return ovsrcu_get_protected(struct cls_match *, &rule->cls_match);
+}
+
+static inline struct cls_match *
+get_cls_match(const struct cls_rule *rule)
+{
+    return ovsrcu_get(struct cls_match *, &rule->cls_match);
+}
+
 /* Must be RCU postponed. */
 void cls_match_free_cb(struct cls_match *);
 

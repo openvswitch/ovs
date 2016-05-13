@@ -25,7 +25,7 @@
 #include "command-line.h"
 #include "daemon.h"
 #include "dirs.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "jsonrpc.h"
 #include "process.h"
 #include "timeval.h"

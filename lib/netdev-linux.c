@@ -52,7 +52,7 @@
 #include "dp-packet.h"
 #include "dpif-netlink.h"
 #include "dpif-netdev.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
 #include "hmap.h"
@@ -61,7 +61,7 @@
 #include "netlink-notifier.h"
 #include "netlink-socket.h"
 #include "netlink.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "ovs-atomic.h"
 #include "packets.h"
@@ -220,13 +220,12 @@ struct rtnl_link_stats64 {
 enum {
     VALID_IFINDEX           = 1 << 0,
     VALID_ETHERADDR         = 1 << 1,
-    VALID_IN4               = 1 << 2,
-    VALID_IN6               = 1 << 3,
-    VALID_MTU               = 1 << 4,
-    VALID_POLICING          = 1 << 5,
-    VALID_VPORT_STAT_ERROR  = 1 << 6,
-    VALID_DRVINFO           = 1 << 7,
-    VALID_FEATURES          = 1 << 8,
+    VALID_IN                = 1 << 2,
+    VALID_MTU               = 1 << 3,
+    VALID_POLICING          = 1 << 4,
+    VALID_VPORT_STAT_ERROR  = 1 << 5,
+    VALID_DRVINFO           = 1 << 6,
+    VALID_FEATURES          = 1 << 7,
 };
 
 /* Traffic control. */
@@ -482,8 +481,6 @@ struct netdev_linux {
      * when the corresponding VALID_* bit in 'cache_valid' is set. */
     int ifindex;
     struct eth_addr etheraddr;
-    struct in_addr address, netmask;
-    struct in6_addr in6;
     int mtu;
     unsigned int ifi_flags;
     long long int carrier_resets;
@@ -496,8 +493,6 @@ struct netdev_linux {
     int netdev_policing_error;  /* Cached error code from set policing. */
     int get_features_error;     /* Cached error code from ETHTOOL_GSET. */
     int get_ifindex_error;      /* Cached error code from SIOCGIFINDEX. */
-    int in4_error;              /* Cached error code from reading in4 addr. */
-    int in6_error;              /* Cached error code from reading in6 addr. */
 
     enum netdev_features current;    /* Cached from ETHTOOL_GSET. */
     enum netdev_features advertised; /* Cached from ETHTOOL_GSET. */
@@ -532,8 +527,6 @@ static void netdev_linux_run(void);
 
 static int netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *,
                                    int cmd, const char *cmd_name);
-static int netdev_linux_get_ipv4(const struct netdev *, struct in_addr *,
-                                 int cmd, const char *cmd_name);
 static int get_flags(const struct netdev *, unsigned int *flags);
 static int set_flags(const char *, unsigned int flags);
 static int update_flags(struct netdev_linux *netdev, enum netdev_flags off,
@@ -595,8 +588,8 @@ netdev_linux_notify_sock(void)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     static struct nl_sock *sock;
-    unsigned int mcgroups[3] = {RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR,
-                                RTNLGRP_IPV6_IFADDR};
+    unsigned int mcgroups[] = {RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR,
+                                RTNLGRP_IPV6_IFADDR, RTNLGRP_IPV6_IFINFO};
 
     if (ovsthread_once_start(&once)) {
         int error;
@@ -652,7 +645,16 @@ netdev_linux_run(void)
             struct rtnetlink_change change;
 
             if (rtnetlink_parse(&buf, &change)) {
-                struct netdev *netdev_ = netdev_from_name(change.ifname);
+                struct netdev *netdev_ = NULL;
+                char dev_name[IFNAMSIZ];
+
+                if (!change.ifname) {
+                     change.ifname = if_indextoname(change.if_index, dev_name);
+                }
+
+                if (change.ifname) {
+                    netdev_ = netdev_from_name(change.ifname);
+                }
                 if (netdev_ && is_netdev_linux_class(netdev_->netdev_class)) {
                     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
@@ -718,6 +720,9 @@ netdev_linux_changed(struct netdev_linux *dev,
     dev->ifi_flags = ifi_flags;
 
     dev->cache_valid &= mask;
+    if (!(mask & VALID_IN)) {
+        netdev_get_addrs_list_flush();
+    }
 }
 
 static void
@@ -727,9 +732,9 @@ netdev_linux_update(struct netdev_linux *dev,
 {
     if (rtnetlink_type_is_rtnlgrp_link(change->nlmsg_type)){
         if (change->nlmsg_type == RTM_NEWLINK) {
-            /* Keep drv-info, in4, in6. */
+            /* Keep drv-info, and ip addresses. */
             netdev_linux_changed(dev, change->ifi_flags,
-                                 VALID_DRVINFO | VALID_IN4 | VALID_IN6);
+                                 VALID_DRVINFO | VALID_IN);
 
             /* Update netdev from rtnl-change msg. */
             if (change->mtu) {
@@ -752,8 +757,7 @@ netdev_linux_update(struct netdev_linux *dev,
         }
     } else if (rtnetlink_type_is_rtnlgrp_addr(change->nlmsg_type)) {
         /* Invalidates in4, in6. */
-        netdev_linux_changed(dev, dev->ifi_flags,
-                             ~(VALID_IN4 | VALID_IN6));
+        netdev_linux_changed(dev, dev->ifi_flags, ~VALID_IN);
     } else {
         OVS_NOT_REACHED();
     }
@@ -1112,7 +1116,6 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
         dp_packet_delete(buffer);
     } else {
         dp_packet_pad(buffer);
-        dp_packet_rss_invalidate(buffer);
         packets[0] = buffer;
         *c = 1;
     }
@@ -2042,7 +2045,7 @@ netdev_linux_set_policing(struct netdev *netdev_,
     int error;
 
     kbits_burst = (!kbits_rate ? 0       /* Force to 0 if no rate specified. */
-                   : !kbits_burst ? 1000 /* Default to 1000 kbits if 0. */
+                   : !kbits_burst ? 8000 /* Default to 8000 kbits if 0. */
                    : kbits_burst);       /* Stick with user-specified value. */
 
     ovs_mutex_lock(&netdev->mutex);
@@ -2464,40 +2467,6 @@ netdev_linux_dump_queue_stats(const struct netdev *netdev_,
 }
 
 static int
-netdev_linux_get_in4(const struct netdev *netdev_,
-                     struct in_addr *address, struct in_addr *netmask)
-{
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    int error;
-
-    ovs_mutex_lock(&netdev->mutex);
-    if (!(netdev->cache_valid & VALID_IN4)) {
-        error = netdev_linux_get_ipv4(netdev_, &netdev->address,
-                                      SIOCGIFADDR, "SIOCGIFADDR");
-        if (!error) {
-            error = netdev_linux_get_ipv4(netdev_, &netdev->netmask,
-                                          SIOCGIFNETMASK, "SIOCGIFNETMASK");
-        }
-        netdev->in4_error = error;
-        netdev->cache_valid |= VALID_IN4;
-    } else {
-        error = netdev->in4_error;
-    }
-
-    if (!error) {
-        if (netdev->address.s_addr != INADDR_ANY) {
-            *address = netdev->address;
-            *netmask = netdev->netmask;
-        } else {
-            error = EADDRNOTAVAIL;
-        }
-    }
-    ovs_mutex_unlock(&netdev->mutex);
-
-    return error;
-}
-
-static int
 netdev_linux_set_in4(struct netdev *netdev_, struct in_addr address,
                      struct in_addr netmask)
 {
@@ -2507,80 +2476,29 @@ netdev_linux_set_in4(struct netdev *netdev_, struct in_addr address,
     ovs_mutex_lock(&netdev->mutex);
     error = do_set_addr(netdev_, SIOCSIFADDR, "SIOCSIFADDR", address);
     if (!error) {
-        netdev->address = address;
-        netdev->netmask = netmask;
         if (address.s_addr != INADDR_ANY) {
             error = do_set_addr(netdev_, SIOCSIFNETMASK,
                                 "SIOCSIFNETMASK", netmask);
         }
     }
 
-    if (!error) {
-        netdev->cache_valid |= VALID_IN4;
-        netdev->in4_error = 0;
-    } else {
-        netdev->cache_valid &= ~VALID_IN4;
-    }
     ovs_mutex_unlock(&netdev->mutex);
 
     return error;
-}
-
-static bool
-parse_if_inet6_line(const char *line,
-                    struct in6_addr *in6, char ifname[16 + 1])
-{
-    uint8_t *s6 = in6->s6_addr;
-#define X8 "%2"SCNx8
-    return ovs_scan(line,
-                    " "X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8
-                    "%*x %*x %*x %*x %16s\n",
-                    &s6[0], &s6[1], &s6[2], &s6[3],
-                    &s6[4], &s6[5], &s6[6], &s6[7],
-                    &s6[8], &s6[9], &s6[10], &s6[11],
-                    &s6[12], &s6[13], &s6[14], &s6[15],
-                    ifname);
 }
 
 /* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address.
  * Otherwise, sets '*in6' to 'in6addr_any' and returns the corresponding
  * error. */
 static int
-netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
+netdev_linux_get_addr_list(const struct netdev *netdev_,
+                          struct in6_addr **addr, struct in6_addr **mask, int *n_cnt)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
 
     ovs_mutex_lock(&netdev->mutex);
-    if (!(netdev->cache_valid & VALID_IN6)) {
-        FILE *file;
-        char line[128];
-
-        netdev->in6 = in6addr_any;
-        netdev->in6_error = EADDRNOTAVAIL;
-
-        file = fopen("/proc/net/if_inet6", "r");
-        if (file != NULL) {
-            const char *name = netdev_get_name(netdev_);
-            while (fgets(line, sizeof line, file)) {
-                struct in6_addr in6_tmp;
-                char ifname[16 + 1];
-                if (parse_if_inet6_line(line, &in6_tmp, ifname)
-                    && !strcmp(name, ifname))
-                {
-                    netdev->in6 = in6_tmp;
-                    netdev->in6_error = 0;
-                    break;
-                }
-            }
-            fclose(file);
-        } else {
-            netdev->in6_error = EOPNOTSUPP;
-        }
-        netdev->cache_valid |= VALID_IN6;
-    }
-    *in6 = netdev->in6;
-    error = netdev->in6_error;
+    error = netdev_get_addrs(netdev_get_name(netdev_), addr, mask, n_cnt);
     ovs_mutex_unlock(&netdev->mutex);
 
     return error;
@@ -2831,6 +2749,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
                            GET_FEATURES, GET_STATUS)            \
 {                                                               \
     NAME,                                                       \
+    false,                      /* is_pmd */                    \
                                                                 \
     NULL,                                                       \
     netdev_linux_run,                                           \
@@ -2879,9 +2798,8 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     netdev_linux_queue_dump_done,                               \
     netdev_linux_dump_queue_stats,                              \
                                                                 \
-    netdev_linux_get_in4,                                       \
     netdev_linux_set_in4,                                       \
-    netdev_linux_get_in6,                                       \
+    netdev_linux_get_addr_list,                                 \
     netdev_linux_add_router,                                    \
     netdev_linux_get_next_hop,                                  \
     GET_STATUS,                                                 \
@@ -3933,10 +3851,9 @@ static void
 htb_tc_destroy(struct tc *tc)
 {
     struct htb *htb = CONTAINER_OF(tc, struct htb, tc);
-    struct htb_class *hc, *next;
+    struct htb_class *hc;
 
-    HMAP_FOR_EACH_SAFE (hc, next, tc_queue.hmap_node, &htb->tc.queues) {
-        hmap_remove(&htb->tc.queues, &hc->tc_queue.hmap_node);
+    HMAP_FOR_EACH_POP (hc, tc_queue.hmap_node, &htb->tc.queues) {
         free(hc);
     }
     tc_destroy(tc);
@@ -4802,21 +4719,15 @@ tc_add_policer(struct netdev *netdev,
     tc_police.mtu = mtu;
     tc_fill_rate(&tc_police.rate, ((uint64_t) kbits_rate * 1000)/8, mtu);
 
-    /* The following appears wrong in two ways:
-     *
-     * - tc_bytes_to_ticks() should take "bytes" as quantity for both of its
-     *   arguments (or at least consistently "bytes" as both or "bits" as
-     *   both), but this supplies bytes for the first argument and bits for the
-     *   second.
-     *
-     * - In networking a kilobit is usually 1000 bits but this uses 1024 bits.
+    /* The following appears wrong in one way: In networking a kilobit is
+     * usually 1000 bits but this uses 1024 bits.
      *
      * However if you "fix" those problems then "tc filter show ..." shows
      * "125000b", meaning 125,000 bits, when OVS configures it for 1000 kbit ==
      * 1,000,000 bits, whereas this actually ends up doing the right thing from
      * tc's point of view.  Whatever. */
     tc_police.burst = tc_bytes_to_ticks(
-        tc_police.rate.rate, MIN(UINT32_MAX / 1024, kbits_burst) * 1024);
+        tc_police.rate.rate, MIN(UINT32_MAX / 1024, kbits_burst) * 1024 / 8);
 
     tcmsg = tc_make_request(netdev, RTM_NEWTFILTER,
                             NLM_F_EXCL | NLM_F_CREATE, &request);
@@ -5450,6 +5361,9 @@ get_stats_via_netlink(const struct netdev *netdev_, struct netdev_stats *stats)
     struct ofpbuf *reply;
     int error;
 
+    /* Filtering all counters by default */
+    memset(stats, 0xFF, sizeof(struct netdev_stats));
+
     ofpbuf_init(&request, 0);
     nl_msg_put_nlmsghdr(&request,
                         sizeof(struct ifinfomsg) + NL_ATTR_SIZE(IFNAMSIZ),
@@ -5620,23 +5534,6 @@ netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *ecmd,
             /* The device doesn't support this operation.  That's pretty
              * common, so there's no point in logging anything. */
         }
-    }
-    return error;
-}
-
-static int
-netdev_linux_get_ipv4(const struct netdev *netdev, struct in_addr *ip,
-                      int cmd, const char *cmd_name)
-{
-    struct ifreq ifr;
-    int error;
-
-    ifr.ifr_addr.sa_family = AF_INET;
-    error = af_inet_ifreq_ioctl(netdev_get_name(netdev), &ifr, cmd, cmd_name);
-    if (!error) {
-        const struct sockaddr_in *sin = ALIGNED_CAST(struct sockaddr_in *,
-                                                     &ifr.ifr_addr);
-        *ip = sin->sin_addr;
     }
     return error;
 }

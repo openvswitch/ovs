@@ -30,6 +30,7 @@
 #include "Event.h"
 #include "User.h"
 #include "PacketIO.h"
+#include "Recirc.h"
 #include "NetProto.h"
 #include "Flow.h"
 #include "User.h"
@@ -378,17 +379,24 @@ FreeUserDumpState(POVS_OPEN_INSTANCE instance)
     }
 }
 
-VOID
+NDIS_STATUS
 OvsInit()
 {
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+
     gOvsCtrlLock = &ovsCtrlLockObj;
     NdisAllocateSpinLock(gOvsCtrlLock);
     OvsInitEventQueue();
+
+    status = OvsPerCpuDataInit();
+
+    return status;
 }
 
 VOID
 OvsCleanup()
 {
+    OvsPerCpuDataCleanup();
     OvsCleanupEventQueue();
     if (gOvsCtrlLock) {
         NdisFreeSpinLock(gOvsCtrlLock);
@@ -451,17 +459,11 @@ OvsCreateDeviceObject(NDIS_HANDLE ovsExtDriverHandle)
                                   &deviceAttributes,
                                   &gOvsDeviceObject,
                                   &gOvsDeviceHandle);
-    if (status != NDIS_STATUS_SUCCESS) {
-        POVS_DEVICE_EXTENSION ovsExt =
-            (POVS_DEVICE_EXTENSION)NdisGetDeviceReservedExtension(gOvsDeviceObject);
-        ASSERT(gOvsDeviceObject != NULL);
-        ASSERT(gOvsDeviceHandle != NULL);
-
-        if (ovsExt) {
-            ovsExt->numberOpenInstance = 0;
-        }
-    } else {
+    if (status == NDIS_STATUS_SUCCESS) {
         OvsRegisterSystemProvider((PVOID)gOvsDeviceObject);
+    } else {
+        OVS_LOG_ERROR("Failed to regiser pseudo device, error: 0x%08x",
+                      status);
     }
 
     OVS_LOG_TRACE("DeviceObject: %p", gOvsDeviceObject);
@@ -614,6 +616,7 @@ OvsOpenCloseDevice(PDEVICE_OBJECT deviceObject,
     POVS_DEVICE_EXTENSION ovsExt =
         (POVS_DEVICE_EXTENSION)NdisGetDeviceReservedExtension(deviceObject);
 
+    PAGED_CODE();
     ASSERT(deviceObject == gOvsDeviceObject);
     ASSERT(ovsExt != NULL);
 
@@ -646,7 +649,7 @@ NTSTATUS
 OvsCleanupDevice(PDEVICE_OBJECT deviceObject,
                  PIRP irp)
 {
-
+    PAGED_CODE();
     PIO_STACK_LOCATION irpSp;
     PFILE_OBJECT fileObject;
 
@@ -694,6 +697,7 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
     NETLINK_FAMILY *nlFamilyOps;
     OVS_USER_PARAMS_CONTEXT usrParamsCtx;
 
+    PAGED_CODE();
 #ifdef DBG
     POVS_DEVICE_EXTENSION ovsExt =
         (POVS_DEVICE_EXTENSION)NdisGetDeviceReservedExtension(deviceObject);

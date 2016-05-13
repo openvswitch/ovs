@@ -38,11 +38,11 @@
 #include "guarded-list.h"
 #include "heap.h"
 #include "hindex.h"
-#include "list.h"
-#include "ofp-actions.h"
-#include "ofp-errors.h"
-#include "ofp-util.h"
 #include "ofproto/ofproto.h"
+#include "openvswitch/list.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofp-errors.h"
 #include "ovs-atomic.h"
 #include "ovs-rcu.h"
 #include "ovs-thread.h"
@@ -121,14 +121,6 @@ struct ofproto {
      * the flow table and reacquire the global lock. */
     struct guarded_list rule_executes; /* Contains "struct rule_execute"s. */
 
-    /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
-     *
-     * This is deprecated.  It is only for compatibility with broken device
-     * drivers in old versions of Linux that do not properly support VLANs when
-     * VLAN devices are not used.  When broken device drivers are no longer in
-     * widespread use, we will delete these interfaces. */
-    unsigned long int *vlan_bitmap; /* 4096-bit bitmap of in-use VLANs. */
-    bool vlans_changed;             /* True if new VLANs are in use. */
     int min_mtu;                    /* Current MTU of non-internal ports. */
 
     /* Groups. */
@@ -256,8 +248,11 @@ struct oftable {
 #define EVICTION_OPENFLOW (1 << 1) /* Set to 1 if OpenFlow enables eviction. */
     unsigned int eviction;
 
-    /* If true, vacancy events are enabled; otherwise they are disabled. */
-    bool vacancy_enabled;
+    /* If zero, vacancy events are disabled.  If nonzero, this is the type of
+       vacancy event that is enabled: either OFPTR_VACANCY_DOWN or
+       OFPTR_VACANCY_UP.  Only one type of vacancy event can be enabled at a
+       time. */
+    enum ofp14_table_reason vacancy_event;
 
     /* Non-zero values for vacancy_up and vacancy_down indicates that vacancy
      * is enabled by table-mod, else these values are set to zero when
@@ -1326,6 +1321,9 @@ struct ofproto_class {
                               const struct ofpact *ofpacts,
                               size_t ofpacts_len);
 
+    enum ofperr (*nxt_resume)(struct ofproto *ofproto,
+                              const struct ofputil_packet_in_private *);
+
 /* ## ------------------------- ## */
 /* ## OFPP_NORMAL configuration ## */
 /* ## ------------------------- ## */
@@ -1697,25 +1695,6 @@ struct ofproto_class {
      * it to NULL or return EOPNOTSUPP. */
     int (*set_mcast_snooping_port)(struct ofproto *ofproto_, void *aux,
                           const struct ofproto_mcast_snooping_port_settings *s);
-
-/* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
- *
- * This is deprecated.  It is only for compatibility with broken device drivers
- * in old versions of Linux that do not properly support VLANs when VLAN
- * devices are not used.  When broken device drivers are no longer in
- * widespread use, we will delete these interfaces. */
-
-    /* If 'realdev_ofp_port' is nonzero, then this function configures 'ofport'
-     * as a VLAN splinter port for VLAN 'vid', associated with the real device
-     * that has OpenFlow port number 'realdev_ofp_port'.
-     *
-     * If 'realdev_ofp_port' is zero, then this function deconfigures 'ofport'
-     * as a VLAN splinter port.
-     *
-     * This function should be NULL if an implementation does not support it.
-     */
-    int (*set_realdev)(struct ofport *ofport,
-                       ofp_port_t realdev_ofp_port, int vid);
 
 /* ## ------------------------ ## */
 /* ## OpenFlow meter functions ## */

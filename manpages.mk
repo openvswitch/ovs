@@ -134,6 +134,7 @@ lib/common.man:
 
 utilities/ovs-ofctl.8: \
 	utilities/ovs-ofctl.8.in \
+	lib/colors.man \
 	lib/common.man \
 	lib/daemon.man \
 	lib/ofp-version.man \
@@ -142,6 +143,7 @@ utilities/ovs-ofctl.8: \
 	lib/vconn-active.man \
 	lib/vlog.man
 utilities/ovs-ofctl.8.in:
+lib/colors.man:
 lib/common.man:
 lib/daemon.man:
 lib/ofp-version.man:

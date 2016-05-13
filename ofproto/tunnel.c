@@ -21,13 +21,13 @@
 #include "connectivity.h"
 #include "csum.h"
 #include "dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fat-rwlock.h"
 #include "hash.h"
 #include "hmap.h"
 #include "netdev.h"
 #include "odp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "packets.h"
 #include "route-table.h"
 #include "seq.h"
@@ -419,12 +419,16 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
         flow->tunnel.ip_src = in6_addr_get_mapped_ipv4(&tnl_port->match.ipv6_src);
         if (!flow->tunnel.ip_src) {
             flow->tunnel.ipv6_src = tnl_port->match.ipv6_src;
+        } else {
+            flow->tunnel.ipv6_src = in6addr_any;
         }
     }
     if (!cfg->ip_dst_flow) {
         flow->tunnel.ip_dst = in6_addr_get_mapped_ipv4(&tnl_port->match.ipv6_dst);
         if (!flow->tunnel.ip_dst) {
             flow->tunnel.ipv6_dst = tnl_port->match.ipv6_dst;
+        } else {
+            flow->tunnel.ipv6_dst = in6addr_any;
         }
     }
     flow->pkt_mark = tnl_port->match.pkt_mark;

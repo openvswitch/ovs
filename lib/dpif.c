@@ -27,16 +27,15 @@
 #include "dpctl.h"
 #include "dp-packet.h"
 #include "dpif-netdev.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "netdev.h"
 #include "netlink.h"
 #include "odp-execute.h"
 #include "odp-util.h"
-#include "ofp-errors.h"
-#include "ofp-print.h"
-#include "ofp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "route-table.h"
@@ -49,6 +48,7 @@
 #include "util.h"
 #include "uuid.h"
 #include "valgrind.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(dpif);
@@ -903,7 +903,7 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
                           PMD_ID_NULL, &reply, &flow);
     if (!error
         && (!ufid || (flow.ufid_present
-                      && ovs_u128_equals(ufid, &flow.ufid)))) {
+                      && ovs_u128_equals(*ufid, flow.ufid)))) {
         enable_feature = true;
     }
 

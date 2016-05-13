@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,10 @@
 #include <unistd.h>
 #include "coverage.h"
 #include "dirs.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "jsonrpc.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "poll-loop.h"
 #include "shash.h"
 #include "stream.h"
@@ -151,6 +151,13 @@ unixctl_command_reply__(struct unixctl_conn *conn,
         reply = jsonrpc_create_error(body_json, conn->request_id);
     }
 
+    if (VLOG_IS_DBG_ENABLED()) {
+        char *id = json_to_string(conn->request_id, 0);
+        VLOG_DBG("replying with %s, id=%s: \"%s\"",
+                 success ? "success" : "error", id, body);
+        free(id);
+    }
+
     /* If jsonrpc_send() returns an error, the run loop will take care of the
      * problem eventually. */
     jsonrpc_send(conn->rpc, reply);
@@ -249,7 +256,7 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
 
     server = xmalloc(sizeof *server);
     server->listener = listener;
-    list_init(&server->conns);
+    ovs_list_init(&server->conns);
     *serverp = server;
 
 exit:
@@ -267,6 +274,15 @@ process_command(struct unixctl_conn *conn, struct jsonrpc_msg *request)
 
     COVERAGE_INC(unixctl_received);
     conn->request_id = json_clone(request->id);
+
+    if (VLOG_IS_DBG_ENABLED()) {
+        char *params_s = json_to_string(request->params, 0);
+        char *id_s = json_to_string(request->id, 0);
+        VLOG_DBG("received request %s%s, id=%s",
+                 request->method, params_s, id_s);
+        free(params_s);
+        free(id_s);
+    }
 
     params = json_array(request->params);
     command = shash_find_data(&commands, request->method);
@@ -346,7 +362,7 @@ run_connection(struct unixctl_conn *conn)
 static void
 kill_connection(struct unixctl_conn *conn)
 {
-    list_remove(&conn->node);
+    ovs_list_remove(&conn->node);
     jsonrpc_close(conn->rpc);
     json_destroy(conn->request_id);
     free(conn);
@@ -369,7 +385,7 @@ unixctl_server_run(struct unixctl_server *server)
         error = pstream_accept(server->listener, &stream);
         if (!error) {
             struct unixctl_conn *conn = xzalloc(sizeof *conn);
-            list_push_back(&server->conns, &conn->node);
+            ovs_list_push_back(&server->conns, &conn->node);
             conn->rpc = jsonrpc_open(stream);
         } else if (error == EAGAIN) {
             break;

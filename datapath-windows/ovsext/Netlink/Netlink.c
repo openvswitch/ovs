@@ -565,7 +565,7 @@ NlMsgPutNested(PNL_BUFFER buf, UINT16 type,
                const PVOID data, UINT32 size)
 {
     UINT32 offset = NlMsgStartNested(buf, type);
-    BOOLEAN ret = FALSE;
+    BOOLEAN ret;
 
     ASSERT(offset);
 

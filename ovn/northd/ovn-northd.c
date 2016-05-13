@@ -85,6 +85,7 @@ enum ovn_datapath_type {
  * form the stage's full name, e.g. S_SWITCH_IN_PORT_SEC_L2,
  * S_ROUTER_OUT_DELIVERY. */
 enum ovn_stage {
+
 #define PIPELINE_STAGES                                                     \
     /* Logical switch ingress stages. */                                    \
     PIPELINE_STAGE(SWITCH, IN,  PORT_SEC_L2,    0, "ls_in_port_sec_l2")     \
@@ -95,12 +96,12 @@ enum ovn_stage {
     PIPELINE_STAGE(SWITCH, IN,  ARP_RSP,        5, "ls_in_arp_rsp")         \ 
     PIPELINE_STAGE(SWITCH, IN,  CHAIN,          6, "ls_in_chain")           \
     PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,        7, "ls_in_l2_lkup")         \
-                                                                      \
+                                                                        \
     /* Logical switch egress stages. */                               \
     PIPELINE_STAGE(SWITCH, OUT, PRE_ACL,     0, "ls_out_pre_acl")     \
     PIPELINE_STAGE(SWITCH, OUT, ACL,         1, "ls_out_acl")         \
-    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_IP, 2, "ls_out_port_sec_ip") \
-    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_L2, 3, "ls_out_port_sec_l2") \
+    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_IP, 2, "ls_out_port_sec_ip")    \
+    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_L2, 3, "ls_out_port_sec_l2")    \
                                                                       \
     /* Logical router ingress stages. */                              \
     PIPELINE_STAGE(ROUTER, IN,  ADMISSION,   0, "lr_in_admission")    \
@@ -1754,6 +1755,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             build_port_security_ip(P_IN, op, lflows);
             build_port_security_nd(op, lflows);
         }
+
     }
 
     /* Ingress table 1 and 2: Port security - IP and ND, by default goto next.
@@ -1829,9 +1831,19 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             }
 
             free(laddrs.ipv4_addrs);
+
         }
     }
 
+    /* Ingress table 5: ARP responder, by default goto next.
+     * (priority 0)*/
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        if (!od->nbs) {
+            continue;
+        }
+
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_ARP_RSP, 0, "1", "next;");
+    }
     /* Ingress table 5: ARP responder, by default goto next.
      * (priority 0)*/
     HMAP_FOR_EACH (od, key_node, datapaths) {
@@ -1909,6 +1921,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             }
         }
     }
+
 
     /* Ingress table 7: Destination lookup for unknown MACs (priority 0). */
     HMAP_FOR_EACH (od, key_node, datapaths) {

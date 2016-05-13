@@ -175,7 +175,7 @@ are included. With \fB\-\-statistics\fR timeouts and timestamps are
 added to the output.
 .
 .TP
-\*(DX\fBflush\-conntrack [\fIdp\fR] [\fBzone=\fIzone\fR]
+\*(DX\fBflush\-conntrack\fR [\fIdp\fR] [\fBzone=\fIzone\fR]
 Flushes all the connection entries in the tracker used by \fIdp\fR.
 If \fBzone=\fIzone\fR is specified, only flushes the connections in
 \fBzone\fR.

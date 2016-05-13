@@ -18,7 +18,7 @@
 #define BACKTRACE_H 1
 
 #include <stdint.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 
 /* log_backtrace() will save the backtrace of a running program
  * into the log at the DEBUG level.

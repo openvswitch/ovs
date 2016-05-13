@@ -17,7 +17,7 @@
 #define OVSDB_IDL_PROVIDER_H 1
 
 #include "hmap.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovsdb-idl.h"
 #include "ovsdb-types.h"
 #include "shash.h"

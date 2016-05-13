@@ -1,0 +1,59 @@
+.de IQ
+.  br
+.  ns
+.  IP "\\$1"
+..
+.IP "\fB\-\-color\fR[\fB=\fR\fIwhen\fR]
+.
+Colorize the output (for some commands); \fIwhen\fR can be \fBnever\fR,
+\fBalways\fR, or \fBauto\fR (the default).
+.
+.RS
+.PP
+Only some commands support output coloring.  Color names and default
+colors may change in future releases.
+.PP
+The environment variable \fBOVS_COLORS\fR can be used to specify user-defined
+colors and other attributes used to highlight various parts of the output. If
+set, its value is a colon-separated list of capabilities that defaults to
+\fBac:01;31:dr=34:le=31:pm=36:pr=35:sp=33:vl=32\fR. Supported capabilities were
+initially designed for coloring flows from \fBovs-ofctl dump-flows\fR
+\fIswitch\fR command, and they are as follows.
+.RS
+.TP
+\fBac=01;31\fR
+SGR substring for \fBactions=\fR keyword in a flow.
+The default is a bold red text foreground.
+.TP
+\fBdr=34\fR
+SGR substring for \fBdrop\fR keyword.
+The default is a dark blue text foreground.
+.TP
+\fBle=31\fR
+SGR substring for \fBlearn=\fR keyword in a flow.
+The default is a red text foreground.
+.TP
+\fBpm=36\fR
+SGR substring for flow match attribute names.
+The default is a cyan text foreground.
+.TP
+\fBpr=35\fR
+SGR substring for keywords in a flow that are followed by arguments inside
+parenthesis.
+The default is a magenta text foreground.
+.TP
+\fBsp=33\fR
+SGR substring for some special keywords in a flow, notably: \fBtable=\fR,
+\fBpriority=\fR, \fBload:\fR, \fBoutput:\fR, \fBmove:\fR, \fBgroup:\fR,
+\fBCONTROLLER:\fR, \fBset_field:\fR, \fBresubmit:\fR, \fBexit\fR.
+The default is a yellow text foreground.
+.TP
+\fBvl=32\fR
+SGR substring for a lone flow match attribute with no field name.
+The default is a green text foreground.
+.RE
+.PP
+See the Select Graphic Rendition (SGR) section in the documentation of the text
+terminal that is used for permitted values and their meaning as character
+attributes.
+.RE

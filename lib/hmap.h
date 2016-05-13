@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2012, 2013, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -153,28 +153,65 @@ static inline struct hmap_node *hmap_next_in_bucket(const struct hmap_node *);
 
 bool hmap_contains(const struct hmap *, const struct hmap_node *);
 
-/* Iteration. */
+/* Iteration.
+ *
+ * The *_INIT variants of these macros additionally evaluate the expressions
+ * supplied following the HMAP argument once during the loop initialization.
+ * This makes it possible for data structures that wrap around hmaps to insert
+ * additional initialization into their iteration macros without having to
+ * completely rewrite them.  In particular, it can be a good idea to insert
+ * BUILD_ASSERT_TYPE checks for map and node types that wrap hmap, since
+ * otherwise it is possible for clients to accidentally confuse two derived
+ * data structures that happen to use the same member names for struct hmap and
+ * struct hmap_node. */
 
 /* Iterates through every node in HMAP. */
-#define HMAP_FOR_EACH(NODE, MEMBER, HMAP)                               \
-    for (INIT_CONTAINER(NODE, hmap_first(HMAP), MEMBER);                \
+#define HMAP_FOR_EACH(NODE, MEMBER, HMAP) \
+    HMAP_FOR_EACH_INIT(NODE, MEMBER, HMAP, (void) 0)
+#define HMAP_FOR_EACH_INIT(NODE, MEMBER, HMAP, ...)                     \
+    for (INIT_CONTAINER(NODE, hmap_first(HMAP), MEMBER), __VA_ARGS__;   \
          (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)) || (NODE = NULL); \
          ASSIGN_CONTAINER(NODE, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER))
 
 /* Safe when NODE may be freed (not needed when NODE may be removed from the
  * hash map but its members remain accessible and intact). */
-#define HMAP_FOR_EACH_SAFE(NODE, NEXT, MEMBER, HMAP)                    \
-    for (INIT_CONTAINER(NODE, hmap_first(HMAP), MEMBER);                \
+#define HMAP_FOR_EACH_SAFE(NODE, NEXT, MEMBER, HMAP) \
+    HMAP_FOR_EACH_SAFE_INIT(NODE, NEXT, MEMBER, HMAP, (void) 0)
+#define HMAP_FOR_EACH_SAFE_INIT(NODE, NEXT, MEMBER, HMAP, ...)          \
+    for (INIT_CONTAINER(NODE, hmap_first(HMAP), MEMBER), __VA_ARGS__;   \
          ((NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)) || (NODE = NULL) \
           ? INIT_CONTAINER(NEXT, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER), 1 \
           : 0);                                                         \
          (NODE) = (NEXT))
 
 /* Continues an iteration from just after NODE. */
-#define HMAP_FOR_EACH_CONTINUE(NODE, MEMBER, HMAP)                      \
-    for (ASSIGN_CONTAINER(NODE, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER); \
+#define HMAP_FOR_EACH_CONTINUE(NODE, MEMBER, HMAP) \
+    HMAP_FOR_EACH_CONTINUE_INIT(NODE, MEMBER, HMAP, (void) 0)
+#define HMAP_FOR_EACH_CONTINUE_INIT(NODE, MEMBER, HMAP, ...)            \
+    for (ASSIGN_CONTAINER(NODE, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER), \
+         __VA_ARGS__;                                                   \
          (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)) || (NODE = NULL); \
          ASSIGN_CONTAINER(NODE, hmap_next(HMAP, &(NODE)->MEMBER), MEMBER))
+
+static inline struct hmap_node *
+hmap_pop_helper__(struct hmap *hmap, size_t *bucket) {
+
+    for (; *bucket <= hmap->mask; (*bucket)++) {
+        struct hmap_node *node = hmap->buckets[*bucket];
+
+        if (node) {
+            hmap_remove(hmap, node);
+            return node;
+        }
+    }
+
+    return NULL;
+}
+
+#define HMAP_FOR_EACH_POP(NODE, MEMBER, HMAP)                               \
+    for (size_t bucket__ = 0;                                               \
+         INIT_CONTAINER(NODE, hmap_pop_helper__(HMAP, &bucket__), MEMBER),  \
+         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)) || (NODE = NULL);)
 
 static inline struct hmap_node *hmap_first(const struct hmap *);
 static inline struct hmap_node *hmap_next(const struct hmap *,

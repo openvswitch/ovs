@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -170,13 +170,13 @@ struct cmap_impl {
     unsigned int min_n;         /* Min elements before shrinking. */
     uint32_t mask;              /* Number of 'buckets', minus one. */
     uint32_t basis;             /* Basis for rehashing client's hash values. */
-
-    /* Padding to make cmap_impl exactly one cache line long. */
-    uint8_t pad[CACHE_LINE_SIZE - sizeof(unsigned int) * 5];
-
-    struct cmap_bucket buckets[];
+    uint8_t pad[CACHE_LINE_SIZE - 4 * 5]; /* Pad to end of cache line. */
+    struct cmap_bucket buckets[1];
 };
-BUILD_ASSERT_DECL(sizeof(struct cmap_impl) == CACHE_LINE_SIZE);
+BUILD_ASSERT_DECL(sizeof(struct cmap_impl) == CACHE_LINE_SIZE * 2);
+
+/* An empty cmap. */
+OVS_ALIGNED_VAR(CACHE_LINE_SIZE) const struct cmap_impl empty_cmap;
 
 static struct cmap_impl *cmap_rehash(struct cmap *, uint32_t mask);
 
@@ -226,8 +226,9 @@ cmap_impl_create(uint32_t mask)
 
     ovs_assert(is_pow2(mask + 1));
 
-    impl = xzalloc_cacheline(sizeof *impl
-                             + (mask + 1) * sizeof *impl->buckets);
+    /* There are 'mask + 1' buckets but struct cmap_impl has one bucket built
+     * in, so we only need to add space for the extra 'mask' buckets. */
+    impl = xzalloc_cacheline(sizeof *impl + mask * sizeof *impl->buckets);
     impl->n = 0;
     impl->max_n = calc_max_n(mask);
     impl->min_n = calc_min_n(mask);
@@ -241,7 +242,7 @@ cmap_impl_create(uint32_t mask)
 void
 cmap_init(struct cmap *cmap)
 {
-    ovsrcu_set(&cmap->impl, cmap_impl_create(0));
+    ovsrcu_set(&cmap->impl, CONST_CAST(struct cmap_impl *, &empty_cmap));
 }
 
 /* Destroys 'cmap'.
@@ -252,7 +253,10 @@ void
 cmap_destroy(struct cmap *cmap)
 {
     if (cmap) {
-        ovsrcu_postpone(free_cacheline, cmap_get_impl(cmap));
+        struct cmap_impl *impl = cmap_get_impl(cmap);
+        if (impl != &empty_cmap) {
+            ovsrcu_postpone(free_cacheline, impl);
+        }
     }
 }
 
@@ -892,7 +896,9 @@ cmap_rehash(struct cmap *cmap, uint32_t mask)
 
     new->n = old->n;
     ovsrcu_set(&cmap->impl, new);
-    ovsrcu_postpone(free_cacheline, old);
+    if (old != &empty_cmap) {
+        ovsrcu_postpone(free_cacheline, old);
+    }
 
     return new;
 }

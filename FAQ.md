@@ -27,7 +27,7 @@ A: Open vSwitch is a production quality open source software switch
 ### Q: What virtualization platforms can use Open vSwitch?
 
 A: Open vSwitch can currently run on any Linux-based virtualization
-   platform (kernel 2.6.32 and newer), including: KVM, VirtualBox, Xen,
+   platform (kernel 3.10 and newer), including: KVM, VirtualBox, Xen,
    Xen Cloud Platform, XenServer. As of Linux 3.3 it is part of the
    mainline kernel.  The bulk of the code is written in platform-
    independent C and is easily ported to other environments.  We welcome
@@ -157,6 +157,7 @@ A: The following table lists the Linux kernel versions against which the
 |    2.3.x     | 2.6.32 to 3.14
 |    2.4.x     | 2.6.32 to 4.0
 |    2.5.x     | 2.6.32 to 4.3
+|    2.6.x     | 3.10 to 4.3
 
    Open vSwitch userspace should also work with the Linux kernel module
    built into Linux 3.3 and later.
@@ -179,13 +180,10 @@ A: Open vSwitch supports different datapaths on different platforms.  Each
                        Linux release whose OVS module supports the feature.
 
    * *Linux OVS tree*: The datapath implemented by the Linux kernel module
-                       distributed with the OVS source tree. Some features of
-                       this module rely on functionality not available in older
-                       kernels: in this case the minumum Linux version (against
-                       which the feature can be compiled) is listed.
+                       distributed with the OVS source tree.
 
    * *Userspace*: Also known as DPDK, dpif-netdev or dummy datapath. It is the
-                  only datapath that works on NetBSD and FreeBSD.
+                  only datapath that works on NetBSD, FreeBSD and Mac OSX.
 
    * *Hyper-V*: Also known as the Windows datapath.
 
@@ -194,15 +192,17 @@ A: Open vSwitch supports different datapaths on different platforms.  Each
 
 Feature               | Linux upstream | Linux OVS tree | Userspace | Hyper-V |
 ----------------------|:--------------:|:--------------:|:---------:|:-------:|
-Connection tracking   |      4.3       |       3.10     |    NO     |   NO    |
+NAT                   |      4.6       |       NO       |    NO     |   NO    |
+Connection tracking   |      4.3       |       YES      |    NO     | PARTIAL |
 Tunnel - LISP         |      NO        |       YES      |    NO     |   NO    |
-Tunnel - STT          |      NO        |       3.5      |    NO     |   YES   |
+Tunnel - STT          |      NO        |       YES      |    NO     |   YES   |
 Tunnel - GRE          |      3.11      |       YES      |    YES    |   YES   |
 Tunnel - VXLAN        |      3.12      |       YES      |    YES    |   YES   |
 Tunnel - Geneve       |      3.18      |       YES      |    YES    |   NO    |
 QoS - Policing        |      YES       |       YES      |    NO     |   NO    |
 QoS - Shaping         |      YES       |       YES      |    NO     |   NO    |
 sFlow                 |      YES       |       YES      |    YES    |   NO    |
+IPFIX                 |      3.10      |       YES      |    YES    |   NO    |
 Set action            |      YES       |       YES      |    YES    | PARTIAL |
 NIC Bonding           |      YES       |       YES      |    YES    |   NO    |
 Multiple VTEPs        |      YES       |       YES      |    YES    |   NO    |
@@ -226,11 +226,24 @@ MPLS                  |      3.19      |       YES      |    YES    |   YES   |
 UFID                  |      4.0       |       YES      |    YES    |   NO    |
 Megaflows             |      3.12      |       YES      |    YES    |   NO    |
 Masked set action     |      4.0       |       YES      |    YES    |   NO    |
-Recirculation         |      3.19      |       YES      |    YES    |   NO    |
+Recirculation         |      3.19      |       YES      |    YES    |   YES   |
 TCP flags matching    |      3.13      |       YES      |    YES    |   NO    |
 Validate flow actions |      YES       |       YES      |    N/A    |   NO    |
 Multiple datapaths    |      YES       |       YES      |    YES    |   NO    |
 Tunnel TSO - STT      |      N/A       |       YES      |    NO     |   YES   |
+
+### Q: What DPDK version does each Open vSwitch release work with?
+
+A: The following table lists the DPDK version against which the
+   given versions of Open vSwitch will successfully build.
+
+| Open vSwitch | DPDK
+|:------------:|:-----:
+|    2.2.x     | 1.6
+|    2.3.x     | 1.6
+|    2.4.x     | 2.0
+|    2.5.x     | 2.2
+|    2.6.x     | 16.04
 
 ### Q: I get an error like this when I configure Open vSwitch:
 
@@ -308,12 +321,6 @@ A: Tunnel virtual ports are not supported, as described in the
    previous answer.  It is also not possible to use queue-related
    actions.  On Linux kernels before 2.6.39, maximum-sized VLAN packets
    may not be transmitted.
-
-### Q: What Linux kernel versions does IPFIX flow monitoring work with?
-
-A: IPFIX flow monitoring requires the Linux kernel module from Linux
-   3.10 or later, or the out-of-tree module from Open vSwitch version
-   1.10.90 or later.
 
 ### Q: Should userspace or kernel be upgraded first to minimize downtime?
 
@@ -431,9 +438,9 @@ A: Yes.  How you configure it depends on what you mean by "promiscuous
 
 A: Firstly, you must have a DPDK-enabled version of Open vSwitch.
 
-   If your version is DPDK-enabled it will support the --dpdk
-   argument on the command line and will display lines with
-   "EAL:..." during startup when --dpdk is supplied.
+   If your version is DPDK-enabled it will support the other-config:dpdk-init
+   configuration in the database and will display lines with "EAL:..."
+   during startup when other_config:dpdk-init is set to 'true'.
 
    Secondly, when adding a DPDK port, unlike a system port, the
    type for the interface must be specified. For example;
@@ -1123,7 +1130,7 @@ A: A policing policy can be configured on an interface to drop packets
    generate to 10Mbps:
 
        ovs-vsctl set interface vif1.0 ingress_policing_rate=10000
-       ovs-vsctl set interface vif1.0 ingress_policing_burst=1000
+       ovs-vsctl set interface vif1.0 ingress_policing_burst=8000
 
    Traffic policing can interact poorly with some network protocols and
    can have surprising results.  The "Ingress Policing" section of
@@ -1263,7 +1270,7 @@ A: Many drivers in Linux kernels before version 3.3 had VLAN-related
 
    - Use a NIC whose driver does not have VLAN problems.
 
-   - Use "VLAN splinters", a feature in Open vSwitch 1.4 and later
+   - Use "VLAN splinters", a feature in Open vSwitch 1.4 upto 2.5
      that works around bugs in kernel drivers.  To enable VLAN
      splinters on interface eth0, use the command:
 
@@ -1510,25 +1517,32 @@ Using OpenFlow (Manually or Via Controller)
 A: The following table lists the versions of OpenFlow supported by
    each version of Open vSwitch:
 
-       Open vSwitch      OF1.0  OF1.1  OF1.2  OF1.3  OF1.4  OF1.5
-       ###============   =====  =====  =====  =====  =====  =====
-       1.9 and earlier    yes    ---    ---    ---    ---    ---
-       1.10               yes    ---    [*]    [*]    ---    ---
-       1.11               yes    ---    [*]    [*]    ---    ---
-       2.0                yes    [*]    [*]    [*]    ---    ---
-       2.1                yes    [*]    [*]    [*]    ---    ---
-       2.2                yes    [*]    [*]    [*]    [%]    [*]
-       2.3                yes    yes    yes    yes    [*]    [*]
+       Open vSwitch      OF1.0  OF1.1  OF1.2  OF1.3  OF1.4  OF1.5  OF1.6
+       ###============   =====  =====  =====  =====  =====  =====  =====
+       1.9 and earlier    yes    ---    ---    ---    ---    ---     ---
+       1.10               yes    ---    [*]    [*]    ---    ---     ---
+       1.11               yes    ---    [*]    [*]    ---    ---     ---
+       2.0                yes    [*]    [*]    [*]    ---    ---     ---
+       2.1                yes    [*]    [*]    [*]    ---    ---     ---
+       2.2                yes    [*]    [*]    [*]    [%]    [*]     ---
+       2.3                yes    yes    yes    yes    [*]    [*]     ---
+       2.4                yes    yes    yes    yes    [*]    [*]     ---
+       2.5                yes    yes    yes    yes    [*]    [*]     [*]
 
        [*] Supported, with one or more missing features.
        [%] Experimental, unsafe implementation.
 
    Open vSwitch 2.3 enables OpenFlow 1.0, 1.1, 1.2, and 1.3 by default
    in ovs-vswitchd.  In Open vSwitch 1.10 through 2.2, OpenFlow 1.1,
-   1.2, and 1.3 must be enabled manually in ovs-vswitchd.  OpenFlow
-   1.4 and 1.5 are also supported, with missing features, in Open
-   vSwitch 2.3 and later, but not enabled by default.  In any case,
-   the user may override the default:
+   1.2, and 1.3 must be enabled manually in ovs-vswitchd.
+
+   Some versions of OpenFlow are supported with missing features and
+   therefore not enabled by default: OpenFlow 1.4 and 1.5, in Open
+   vSwitch 2.3 and later, as well as OpenFlow 1.6 in Open vSwitch 2.5
+   and later.  Also, the OpenFlow 1.6 specification is still under
+   development and thus subject to change.
+
+   In any case, the user may override the default:
 
    - To enable OpenFlow 1.0, 1.1, 1.2, and 1.3 on bridge br0:
 
@@ -1595,7 +1609,7 @@ A: This is a Open vSwitch extension to OpenFlow error codes.  Open
    If you want to dissect the extended error message yourself, the
    format is documented in include/openflow/nicira-ext.h in the Open
    vSwitch source distribution.  The extended error codes are
-   documented in lib/ofp-errors.h.
+   documented in include/openvswitch/ofp-errors.h.
 
 Q1: Some of the traffic that I'd expect my OpenFlow controller to see
     doesn't actually appear through the OpenFlow connection, even
@@ -2020,11 +2034,12 @@ A: Add new members for your field to "struct flow" in lib/flow.h, and
    add new enumerations for your new field to "enum mf_field_id" in
    lib/meta-flow.h, following the existing pattern.  Also, add support
    to miniflow_extract() in lib/flow.c for extracting your new field
-   from a packet into struct miniflow.  Then recompile and fix all of
-   the new warnings, implementing new functionality for the new field
-   or header as needed.  (If you configure with --enable-Werror, as
-   described in [INSTALL.md], then it is impossible to miss any
-   warnings.)
+   from a packet into struct miniflow, and to nx_put_raw() in
+   lib/nx-match.c to output your new field in OXM matches.  Then
+   recompile and fix all of the new warnings, implementing new
+   functionality for the new field or header as needed.  (If you
+   configure with --enable-Werror, as described in [INSTALL.md], then
+   it is impossible to miss any warnings.)
 
    If you want kernel datapath support for your new field, you also
    need to modify the kernel module for the operating systems you are

@@ -21,7 +21,7 @@
 
 #include "bitmap.h"
 #include "column.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "monitor.h"
 #include "json.h"
 #include "jsonrpc.h"
@@ -63,8 +63,11 @@ static void ovsdb_jsonrpc_session_close_all(struct ovsdb_jsonrpc_remote *);
 static void ovsdb_jsonrpc_session_reconnect_all(struct ovsdb_jsonrpc_remote *);
 static void ovsdb_jsonrpc_session_set_all_options(
     struct ovsdb_jsonrpc_remote *, const struct ovsdb_jsonrpc_options *);
-static bool ovsdb_jsonrpc_session_get_status(
+static bool ovsdb_jsonrpc_active_session_get_status(
     const struct ovsdb_jsonrpc_remote *,
+    struct ovsdb_jsonrpc_remote_status *);
+static void ovsdb_jsonrpc_session_get_status(
+    const struct ovsdb_jsonrpc_session *,
     struct ovsdb_jsonrpc_remote_status *);
 static void ovsdb_jsonrpc_session_unlock_all(struct ovsdb_jsonrpc_session *);
 static void ovsdb_jsonrpc_session_unlock__(struct ovsdb_lock_waiter *);
@@ -251,7 +254,7 @@ ovsdb_jsonrpc_server_add_remote(struct ovsdb_jsonrpc_server *svr,
     remote = xmalloc(sizeof *remote);
     remote->server = svr;
     remote->listener = listener;
-    list_init(&remote->sessions);
+    ovs_list_init(&remote->sessions);
     remote->dscp = options->dscp;
     shash_add(&svr->remotes, name, remote);
 
@@ -275,7 +278,7 @@ ovsdb_jsonrpc_server_del_remote(struct shash_node *node)
 /* Stores status information for the remote named 'target', which should have
  * been configured on 'svr' with a call to ovsdb_jsonrpc_server_set_remotes(),
  * into '*status'.  On success returns true, on failure (if 'svr' doesn't have
- * a remote named 'target' or if that remote is an inbound remote that has no
+ * a remote named 'target' or if that remote is an outbound remote that has no
  * active connections) returns false.  On failure, 'status' will be zeroed.
  */
 bool
@@ -288,7 +291,19 @@ ovsdb_jsonrpc_server_get_remote_status(
     memset(status, 0, sizeof *status);
 
     remote = shash_find_data(&svr->remotes, target);
-    return remote && ovsdb_jsonrpc_session_get_status(remote, status);
+
+    if (!remote) {
+        return false;
+    }
+
+    if (remote->listener) {
+        status->bound_port = pstream_get_bound_port(remote->listener);
+        status->is_connected = !ovs_list_is_empty(&remote->sessions);
+        status->n_connections = ovs_list_size(&remote->sessions);
+        return true;
+    }
+
+    return ovsdb_jsonrpc_active_session_get_status(remote, status);
 }
 
 void
@@ -412,7 +427,7 @@ ovsdb_jsonrpc_session_create(struct ovsdb_jsonrpc_remote *remote,
     s = xzalloc(sizeof *s);
     ovsdb_session_init(&s->up, &remote->server->up);
     s->remote = remote;
-    list_push_back(&remote->sessions, &s->node);
+    ovs_list_push_back(&remote->sessions, &s->node);
     hmap_init(&s->triggers);
     hmap_init(&s->monitors);
     s->js = js;
@@ -434,7 +449,7 @@ ovsdb_jsonrpc_session_close(struct ovsdb_jsonrpc_session *s)
     hmap_destroy(&s->triggers);
 
     jsonrpc_session_close(s->js);
-    list_remove(&s->node);
+    ovs_list_remove(&s->node);
     s->remote->server->n_sessions--;
     ovsdb_session_destroy(&s->up);
     free(s);
@@ -583,24 +598,37 @@ ovsdb_jsonrpc_session_set_all_options(
     }
 }
 
+/* Sets the 'status' of for the 'remote' with an outgoing connection.   */
 static bool
-ovsdb_jsonrpc_session_get_status(const struct ovsdb_jsonrpc_remote *remote,
+ovsdb_jsonrpc_active_session_get_status(
+    const struct ovsdb_jsonrpc_remote *remote,
+    struct ovsdb_jsonrpc_remote_status *status)
+{
+    const struct ovs_list *sessions = &remote->sessions;
+    const struct ovsdb_jsonrpc_session *s;
+
+    if (ovs_list_is_empty(sessions)) {
+        return false;
+    }
+
+    ovs_assert(ovs_list_is_singleton(sessions));
+    s = CONTAINER_OF(ovs_list_front(sessions), struct ovsdb_jsonrpc_session, node);
+    ovsdb_jsonrpc_session_get_status(s, status);
+    status->n_connections = 1;
+
+    return true;
+}
+
+static void
+ovsdb_jsonrpc_session_get_status(const struct ovsdb_jsonrpc_session *session,
                                  struct ovsdb_jsonrpc_remote_status *status)
 {
-    const struct ovsdb_jsonrpc_session *s;
+    const struct ovsdb_jsonrpc_session *s = session;
     const struct jsonrpc_session *js;
     struct ovsdb_lock_waiter *waiter;
     struct reconnect_stats rstats;
     struct ds locks_held, locks_waiting, locks_lost;
 
-    status->bound_port = (remote->listener
-                          ? pstream_get_bound_port(remote->listener)
-                          : htons(0));
-
-    if (list_is_empty(&remote->sessions)) {
-        return false;
-    }
-    s = CONTAINER_OF(remote->sessions.next, struct ovsdb_jsonrpc_session, node);
     js = s->js;
 
     status->is_connected = jsonrpc_session_is_connected(js);
@@ -630,10 +658,6 @@ ovsdb_jsonrpc_session_get_status(const struct ovsdb_jsonrpc_remote *remote,
     status->locks_held = ds_steal_cstr(&locks_held);
     status->locks_waiting = ds_steal_cstr(&locks_waiting);
     status->locks_lost = ds_steal_cstr(&locks_lost);
-
-    status->n_connections = list_size(&remote->sessions);
-
-    return true;
 }
 
 /* Examines 'request' to determine the database to which it relates, and then
@@ -1022,7 +1046,7 @@ ovsdb_jsonrpc_trigger_complete_all(struct ovsdb_jsonrpc_session *s)
 static void
 ovsdb_jsonrpc_trigger_complete_done(struct ovsdb_jsonrpc_session *s)
 {
-    while (!list_is_empty(&s->up.completions)) {
+    while (!ovs_list_is_empty(&s->up.completions)) {
         struct ovsdb_jsonrpc_trigger *t
             = CONTAINER_OF(s->up.completions.next,
                            struct ovsdb_jsonrpc_trigger, trigger.node);
@@ -1241,7 +1265,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
     dbmon = ovsdb_monitor_add(m->dbmon);
     if (dbmon != m->dbmon) {
         /* Found an exisiting dbmon, reuse the current one. */
-        ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m);
+        ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m, m->unflushed);
         ovsdb_monitor_add_jsonrpc_monitor(dbmon, m);
         m->dbmon = dbmon;
     }
@@ -1297,6 +1321,10 @@ static struct json *
 ovsdb_jsonrpc_monitor_compose_update(struct ovsdb_jsonrpc_monitor *m,
                                      bool initial)
 {
+    if (!ovsdb_monitor_needs_flush(m->dbmon, m->unflushed)) {
+        return NULL;
+    }
+
     return ovsdb_monitor_get_update(m->dbmon, initial, &m->unflushed,
                                     m->version);
 }
@@ -1320,7 +1348,7 @@ ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *m)
 {
     json_destroy(m->monitor_id);
     hmap_remove(&m->session->monitors, &m->node);
-    ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m);
+    ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m, m->unflushed);
     free(m);
 }
 

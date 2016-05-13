@@ -22,16 +22,16 @@
 #include <stdlib.h>
 #include <string.h>
 #include "classifier.h"
-#include "ofpbuf.h"
-#include "ofp-print.h"
-#include "ofp-util.h"
 #include "openflow/openflow.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "ovstest.h"
 #include "dp-packet.h"
 #include "pcap-file.h"
 #include "timeval.h"
 #include "util.h"
-#include "openvswitch/vlog.h"
 
 static void
 test_flows_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)

@@ -42,6 +42,8 @@
 #include <rte_ip.h>
 #include <rte_byteorder.h>
 
+#include "util.h"
+
 /* Number of packets to attempt to read from queue. */
 #define PKT_READ_SIZE  ((uint16_t)32)
 
@@ -51,25 +53,21 @@
 
 #define RTE_LOGTYPE_APP RTE_LOGTYPE_USER1
 
-#define BASE_10 10
-
 /* Our client id number - tells us which rx queue to read, and tx
  * queue to write to.
  */
-static uint8_t client_id = 0;
+static unsigned int client_id;
 
 /*
  * Given the rx queue name template above, get the queue name.
  */
 static inline const char *
-get_rx_queue_name(unsigned id)
+get_rx_queue_name(unsigned int id)
 {
-    /* Buffer for return value. Size calculated by %u being replaced
-     * by maximum 3 digits (plus an extra byte for safety).
-     */
-    static char buffer[sizeof(MP_CLIENT_RXQ_NAME) + 2];
+    /* Buffer for return value. */
+    static char buffer[RTE_RING_NAMESIZE];
 
-    snprintf(buffer, sizeof(buffer) - 1, MP_CLIENT_RXQ_NAME, id);
+    snprintf(buffer, sizeof(buffer), MP_CLIENT_RXQ_NAME, id);
     return buffer;
 }
 
@@ -77,14 +75,12 @@ get_rx_queue_name(unsigned id)
  * Given the tx queue name template above, get the queue name.
  */
 static inline const char *
-get_tx_queue_name(unsigned id)
+get_tx_queue_name(unsigned int id)
 {
-    /* Buffer for return value. Size calculated by %u being replaced
-     * by maximum 3 digits (plus an extra byte for safety).
-     */
-    static char buffer[sizeof(MP_CLIENT_TXQ_NAME) + 2];
+    /* Buffer for return value. */
+    static char buffer[RTE_RING_NAMESIZE];
 
-    snprintf(buffer, sizeof(buffer) - 1, MP_CLIENT_TXQ_NAME, id);
+    snprintf(buffer, sizeof(buffer), MP_CLIENT_TXQ_NAME, id);
     return buffer;
 }
 
@@ -98,27 +94,16 @@ usage(const char *progname)
 }
 
 /*
- * Convert the client id number from a string to an int.
+ * Convert the client id number from a string to an usigned int.
  */
 static int
 parse_client_num(const char *client)
 {
-    char *end = NULL;
-    unsigned long temp = 0;
-
-    if (client == NULL || *client == '\0') {
+    if (str_to_uint(client, 10, &client_id)) {
+        return 0;
+    } else {
         return -1;
     }
-
-    temp = strtoul(client, &end, BASE_10);
-    /* If valid string argument is provided, terminating '/0' character
-     * is stored in 'end'. */
-    if (end == NULL || *end != '\0') {
-        return -1;
-    }
-
-    client_id = (uint8_t)temp;
-    return 0;
 }
 
 /*

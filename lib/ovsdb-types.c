@@ -20,7 +20,7 @@
 #include <float.h>
 #include <limits.h>
 
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "ovs-thread.h"
 #include "ovsdb-data.h"

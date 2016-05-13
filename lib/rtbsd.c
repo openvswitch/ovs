@@ -74,7 +74,7 @@ rtbsd_notifier_register(struct rtbsd_notifier *notifier,
         }
     }
 
-    list_push_back(&all_notifiers, &notifier->node);
+    ovs_list_push_back(&all_notifiers, &notifier->node);
     notifier->cb = cb;
     notifier->aux = aux;
 
@@ -90,8 +90,8 @@ rtbsd_notifier_unregister(struct rtbsd_notifier *notifier)
     OVS_EXCLUDED(rtbsd_mutex)
 {
     ovs_mutex_lock(&rtbsd_mutex);
-    list_remove(&notifier->node);
-    if (list_is_empty(&all_notifiers)) {
+    ovs_list_remove(&notifier->node);
+    if (ovs_list_is_empty(&all_notifiers)) {
         close(notify_sock);
         notify_sock = -1;
     }
@@ -128,7 +128,9 @@ rtbsd_notifier_run(void)
             case RTM_IFINFO:
             /* Since RTM_IFANNOUNCE messages are smaller than RTM_IFINFO
              * messages, the same buffer may be used. */
+#ifndef __MACH__ /* OS X does not implement RTM_IFANNOUNCE */
             case RTM_IFANNOUNCE:
+#endif
                 rtbsd_report_change(&msg);
                 break;
             default:
@@ -168,7 +170,9 @@ rtbsd_report_change(const struct if_msghdr *msg)
 {
     struct rtbsd_notifier *notifier;
     struct rtbsd_change change;
+#ifndef __MACH__
     const struct if_announcemsghdr *ahdr;
+#endif
 
     COVERAGE_INC(rtbsd_changed);
 
@@ -180,11 +184,13 @@ rtbsd_report_change(const struct if_msghdr *msg)
         change.if_index = msg->ifm_index;
         if_indextoname(msg->ifm_index, change.if_name);
         break;
+#ifndef __MACH__ /* OS X does not implement RTM_IFANNOUNCE */
     case RTM_IFANNOUNCE:
         ahdr = (const struct if_announcemsghdr *) msg;
         change.if_index = ahdr->ifan_index;
         strncpy(change.if_name, ahdr->ifan_name, IF_NAMESIZE);
         break;
+#endif
     }
 
     LIST_FOR_EACH (notifier, node, &all_notifiers) {

@@ -21,9 +21,9 @@
 #include <stdint.h>
 
 #include "cmap.h"
-#include "list.h"
-#include "ofp-actions.h"
 #include "ofproto-dpif-mirror.h"
+#include "openvswitch/list.h"
+#include "openvswitch/ofp-actions.h"
 #include "ovs-thread.h"
 #include "uuid.h"
 
@@ -31,13 +31,18 @@ struct ofproto_dpif;
 struct rule;
 
 /*
- * Recirculation
- * =============
+ * Freezing and recirculation
+ * ==========================
  *
- * Recirculation is a technique to allow a frame to re-enter the datapath
- * packet processing path to achieve more flexible packet processing, such as
- * modifying header fields after MPLS POP action and selecting a slave port for
- * bond ports.
+ * Freezing is a technique for halting and checkpointing packet translation in
+ * a way that it can be restarted again later.  This file has a couple of data
+ * structures related to freezing in general; their names begin with "frozen".
+ *
+ * Recirculation is the use of freezing to allow a frame to re-enter the
+ * datapath packet processing path to achieve more flexible packet processing,
+ * such as modifying header fields after MPLS POP action and selecting a slave
+ * port for bond ports.
+ *
  *
  * Data path and user space interface
  * -----------------------------------
@@ -96,7 +101,7 @@ struct rule;
  * updates. */
 BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
 
-struct recirc_metadata {
+struct frozen_metadata {
     /* Metadata in struct flow. */
     const struct flow_tnl *tunnel; /* Encapsulating tunnel parameters. */
     ovs_be64 metadata;            /* OpenFlow Metadata. */
@@ -105,7 +110,7 @@ struct recirc_metadata {
 };
 
 static inline void
-recirc_metadata_from_flow(struct recirc_metadata *md,
+frozen_metadata_from_flow(struct frozen_metadata *md,
                           const struct flow *flow)
 {
     memset(md, 0, sizeof *md);
@@ -116,7 +121,7 @@ recirc_metadata_from_flow(struct recirc_metadata *md,
 }
 
 static inline void
-recirc_metadata_to_flow(const struct recirc_metadata *md,
+frozen_metadata_to_flow(const struct frozen_metadata *md,
                         struct flow *flow)
 {
     if (md->tunnel && flow_tnl_dst_is_set(md->tunnel)) {
@@ -129,21 +134,21 @@ recirc_metadata_to_flow(const struct recirc_metadata *md,
     flow->in_port.ofp_port = md->in_port;
 }
 
-/* State that flow translation can save, to restore when recirculation
- * occurs.  */
-struct recirc_state {
-    /* Initial table for post-recirculation processing. */
+/* State that flow translation can save, to restore when translation
+ * resumes.  */
+struct frozen_state {
+    /* Initial table for processing when thawing. */
     uint8_t table_id;
 
-    /* Pipeline context for post-recirculation processing. */
-    struct uuid ofproto_uuid;     /* Post-recirculation bridge. */
-    struct recirc_metadata metadata; /* Flow metadata. */
+    /* Pipeline context for processing when thawing. */
+    struct uuid ofproto_uuid;     /* Bridge to resume from. */
+    struct frozen_metadata metadata; /* Flow metadata. */
     union mf_subvalue *stack;     /* Stack if any. */
     size_t n_stack;
     mirror_mask_t mirrors;        /* Mirrors already output. */
-    bool conntracked;             /* Conntrack occurred prior to recirc. */
+    bool conntracked;             /* Conntrack occurred prior to freeze. */
 
-    /* Actions to be translated on recirculation. */
+    /* Actions to be translated when thawing. */
     struct ofpact *ofpacts;
     size_t ofpacts_len;           /* Size of 'ofpacts', in bytes. */
     struct ofpact *action_set;
@@ -165,27 +170,25 @@ struct recirc_id_node {
      *
      * This state should not be modified after inserting a node in the pool,
      * hence the 'const' to emphasize that. */
-    const struct recirc_state state;
+    const struct frozen_state state;
 
     /* Storage for tunnel metadata. */
     struct flow_tnl state_metadata_tunnel;
 };
 
-void recirc_init(void);
-
 /* This is only used for bonds and will go away when bonds implementation is
  * updated to use this mechanism instead of internal rules. */
 uint32_t recirc_alloc_id(struct ofproto_dpif *);
 
-uint32_t recirc_alloc_id_ctx(const struct recirc_state *);
-uint32_t recirc_find_id(const struct recirc_state *);
+uint32_t recirc_alloc_id_ctx(const struct frozen_state *);
+uint32_t recirc_find_id(const struct frozen_state *);
 void recirc_free_id(uint32_t recirc_id);
 void recirc_free_ofproto(struct ofproto_dpif *, const char *ofproto_name);
 
 const struct recirc_id_node *recirc_id_node_find(uint32_t recirc_id);
 
 static inline struct recirc_id_node *
-recirc_id_node_from_state(const struct recirc_state *state)
+recirc_id_node_from_state(const struct frozen_state *state)
 {
     return CONTAINER_OF(state, struct recirc_id_node, state);
 }

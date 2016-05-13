@@ -58,7 +58,6 @@
 #include "flow_table.h"
 #include "flow_netlink.h"
 #include "gso.h"
-#include "vlan.h"
 #include "vport-internal_dev.h"
 #include "vport-netdev.h"
 
@@ -450,11 +449,9 @@ static int queue_userspace_packet(struct datapath *dp, struct sk_buff *skb,
 		if (!nskb)
 			return -ENOMEM;
 
-		nskb = vlan_insert_tag_set_proto(nskb, nskb->vlan_proto, skb_vlan_tag_get(nskb));
+		nskb = __vlan_hwaccel_push_inside(nskb);
 		if (!nskb)
 			return -ENOMEM;
-
-		vlan_set_tci(nskb, 0);
 
 		skb = nskb;
 	}
@@ -2315,8 +2312,6 @@ static struct pernet_operations ovs_net_ops = {
 	.id   = &ovs_net_id,
 	.size = sizeof(struct ovs_net),
 };
-
-DEFINE_COMPAT_PNET_REG_FUNC(device);
 
 static int __init dp_init(void)
 {

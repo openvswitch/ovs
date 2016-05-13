@@ -265,9 +265,13 @@ def run():
     cmd = [build + "/vswitchd/ovs-vswitchd"]
 
     if options.dpdk:
-        cmd.append("--dpdk")
-        cmd.extend(options.dpdk)
-        cmd.append("--")
+        _sh("ovs-vsctl --no-wait set Open_vSwitch %s " \
+            "other_config:dpdk-init=true" % root_uuid)
+        _sh("ovs-vsctl --no-wait set Open_vSwitch %s other_config:" \
+            "dpdk-extra=\"%s\"" % (root_uuid, ' '.join(options.dpdk)))
+    else:
+        _sh("ovs-vsctl --no-wait set Open_vSwitch %s " \
+            "other_config:dpdk-init=false" % root_uuid)
 
     if options.gdb:
         cmd = ["gdb", "--args"] + cmd

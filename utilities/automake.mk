@@ -56,7 +56,8 @@ EXTRA_DIST += \
 	utilities/ovs-test.in \
 	utilities/ovs-vlan-test.in \
 	utilities/ovs-vsctl-bashcomp.bash \
-	utilities/qemu-wrap.py
+	utilities/qemu-wrap.py \
+	utilities/checkpatch.py
 MAN_ROOTS += \
 	utilities/ovs-appctl.8.in \
 	utilities/ovs-testcontroller.8.in \
@@ -146,6 +147,7 @@ utilities_nlmon_SOURCES = utilities/nlmon.c
 utilities_nlmon_LDADD = lib/libopenvswitch.la
 endif
 
-FLAKE8_PYFILES += utilities/ovs-pcap.in
+FLAKE8_PYFILES += utilities/ovs-pcap.in \
+	utilities/checkpatch.py
 
 include utilities/bugtool/automake.mk

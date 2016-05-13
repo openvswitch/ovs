@@ -17,6 +17,7 @@
 
 #include <linux/version.h>
 
+#include <linux/etherdevice.h>
 #include <linux/in.h>
 #include <linux/ip.h>
 #include <linux/net.h>
@@ -114,6 +115,7 @@ struct lisphdr {
 };
 
 #define LISP_HLEN (sizeof(struct udphdr) + sizeof(struct lisphdr))
+#define LISP_MAX_MTU (IP_MAX_MTU - LISP_HLEN - sizeof(struct iphdr))
 
 static inline struct lisphdr *lisp_hdr(const struct sk_buff *skb)
 {
@@ -309,7 +311,7 @@ netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb)
 		goto error;
 	}
 
-	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
+	min_headroom = LL_RESERVED_SPACE(rt->dst.dev) + rt->dst.header_len
 		+ sizeof(struct iphdr) + LISP_HLEN;
 
 	if (skb_headroom(skb) < min_headroom || skb_header_cloned(skb)) {
@@ -326,7 +328,7 @@ netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb)
 	/* Reset l2 headers. */
 	skb_pull(skb, network_offset);
 	skb_reset_mac_header(skb);
-	vlan_set_tci(skb, 0);
+	skb->vlan_tci = 0;
 
 	skb = udp_tunnel_handle_offloads(skb, false, 0, false);
 	if (IS_ERR(skb)) {
@@ -361,7 +363,6 @@ error:
 }
 EXPORT_SYMBOL(rpl_lisp_xmit);
 
-#ifdef HAVE_DEV_TSTATS
 /* Setup stats when device is created */
 static int lisp_init(struct net_device *dev)
 {
@@ -376,7 +377,6 @@ static void lisp_uninit(struct net_device *dev)
 {
 	free_percpu(dev->tstats);
 }
-#endif
 
 static struct socket *create_sock(struct net *net, bool ipv6,
 				       __be16 port)
@@ -447,16 +447,23 @@ static netdev_tx_t lisp_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 #endif
 }
 
+static int lisp_change_mtu(struct net_device *dev, int new_mtu)
+{
+	if (new_mtu < 68 || new_mtu > LISP_MAX_MTU)
+		return -EINVAL;
+
+	dev->mtu = new_mtu;
+	return 0;
+}
+
 static const struct net_device_ops lisp_netdev_ops = {
-#ifdef HAVE_DEV_TSTATS
 	.ndo_init               = lisp_init,
 	.ndo_uninit             = lisp_uninit,
 	.ndo_get_stats64        = ip_tunnel_get_stats64,
-#endif
 	.ndo_open               = lisp_open,
 	.ndo_stop               = lisp_stop,
 	.ndo_start_xmit         = lisp_dev_xmit,
-	.ndo_change_mtu         = eth_change_mtu,
+	.ndo_change_mtu         = lisp_change_mtu,
 	.ndo_validate_addr      = eth_validate_addr,
 	.ndo_set_mac_address    = eth_mac_addr,
 };
@@ -548,6 +555,10 @@ static int lisp_configure(struct net *net, struct net_device *dev,
 
 	if (find_dev(net, dst_port))
 		return -EBUSY;
+
+	err = lisp_change_mtu(dev, LISP_MAX_MTU);
+	if (err)
+		return err;
 
 	err = register_netdevice(dev);
 	if (err)
@@ -683,7 +694,6 @@ static struct pernet_operations lisp_net_ops = {
 	.size = sizeof(struct lisp_net),
 };
 
-DEFINE_COMPAT_PNET_REG_FUNC(device)
 int rpl_lisp_init_module(void)
 {
 	int rc;

@@ -19,7 +19,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "packets.h"
 #include "util.h"
@@ -56,7 +56,10 @@ lex_token_init(struct lex_token *token)
 void
 lex_token_destroy(struct lex_token *token)
 {
-    free(token->s);
+    if (token->s != token->buffer) {
+        free(token->s);
+    }
+    token->s = NULL;
 }
 
 /* Exchanges 'a' and 'b'. */
@@ -66,6 +69,48 @@ lex_token_swap(struct lex_token *a, struct lex_token *b)
     struct lex_token tmp = *a;
     *a = *b;
     *b = tmp;
+
+    /* Before swap, if 's' was pointed to 'buffer', its value shall be changed
+     * to point to the 'buffer' with the copied value. */
+    if (a->s == b->buffer) {
+        a->s = a->buffer;
+    }
+    if (b->s == a->buffer) {
+        b->s = b->buffer;
+    }
+}
+
+/* The string 's' need not be null-terminated at 'length'. */
+void
+lex_token_strcpy(struct lex_token *token, const char *s, size_t length)
+{
+    lex_token_destroy(token);
+    token->s = (length + 1 <= sizeof token->buffer
+                ? token->buffer
+                : xmalloc(length + 1));
+    memcpy(token->s, s, length);
+    token->buffer[length] = '\0';
+}
+
+void
+lex_token_strset(struct lex_token *token, char *s)
+{
+    lex_token_destroy(token);
+    token->s = s;
+}
+
+void
+lex_token_vsprintf(struct lex_token *token, const char *format, va_list args)
+{
+    lex_token_destroy(token);
+
+    va_list args2;
+    va_copy(args2, args);
+    token->s = (vsnprintf(token->buffer, sizeof token->buffer, format, args)
+                < sizeof token->buffer
+                ? token->buffer
+                : xvasprintf(format, args2));
+    va_end(args2);
 }
 
 /* lex_token_format(). */
@@ -261,7 +306,7 @@ lex_error(struct lex_token *token, const char *message, ...)
 
     va_list args;
     va_start(args, message);
-    token->s = xvasprintf(message, args);
+    lex_token_vsprintf(token, message, args);
     va_end(args);
 }
 
@@ -428,6 +473,7 @@ static const char *
 lex_parse_string(const char *p, struct lex_token *token)
 {
     const char *start = ++p;
+    char * s = NULL;
     for (;;) {
         switch (*p) {
         case '\0':
@@ -435,8 +481,9 @@ lex_parse_string(const char *p, struct lex_token *token)
             return p;
 
         case '"':
-            token->type = (json_string_unescape(start, p - start, &token->s)
+            token->type = (json_string_unescape(start, p - start, &s)
                            ? LEX_T_STRING : LEX_T_ERROR);
+            lex_token_strset(token, s);
             return p + 1;
 
         case '\\':
@@ -476,7 +523,7 @@ lex_parse_id(const char *p, struct lex_token *token)
     } while (lex_is_idn(*p));
 
     token->type = LEX_T_ID;
-    token->s = xmemdup0(start, p - start);
+    lex_token_strcpy(token, start, p - start);
     return p;
 }
 
