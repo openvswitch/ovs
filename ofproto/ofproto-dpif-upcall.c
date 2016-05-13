@@ -1953,7 +1953,7 @@ modify_op_init(struct ukey_op *op, struct udpif_key *ukey)
     op->dop.u.flow_put.key_len = ukey->key_len;
     op->dop.u.flow_put.mask = ukey->mask;
     op->dop.u.flow_put.mask_len = ukey->mask_len;
-    op->dop.u.flow_put.ufid = &ukey->ufid;
+    op->dop.u.flow_put.ufid = ukey->ufid_present ? &ukey->ufid : NULL;
     op->dop.u.flow_put.pmd_id = ukey->pmd_id;
     op->dop.u.flow_put.stats = NULL;
     ukey_get_actions(ukey, &op->dop.u.flow_put.actions,
