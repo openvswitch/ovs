@@ -192,8 +192,6 @@ dp_unregister_provider__(const char *type)
 
     node = shash_find(&dpif_classes, type);
     if (!node) {
-        VLOG_WARN("attempted to unregister a datapath provider that is not "
-                  "registered: %s", type);
         return EAFNOSUPPORT;
     }
 
