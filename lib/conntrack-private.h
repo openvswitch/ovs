@@ -40,7 +40,14 @@ struct ct_addr {
 
 struct ct_endpoint {
     struct ct_addr addr;
-    ovs_be16 port;
+    union {
+        ovs_be16 port;
+        struct {
+            ovs_be16 icmp_id;
+            uint8_t icmp_type;
+            uint8_t icmp_code;
+        };
+    };
 };
 
 /* Changes to this structure need to be reflected in conn_key_hash() */
@@ -83,6 +90,8 @@ struct ct_l4_proto {
 
 extern struct ct_l4_proto ct_proto_tcp;
 extern struct ct_l4_proto ct_proto_other;
+extern struct ct_l4_proto ct_proto_icmp4;
+extern struct ct_l4_proto ct_proto_icmp6;
 
 extern long long ct_timeout_val[];
 

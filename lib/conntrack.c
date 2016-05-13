@@ -78,8 +78,8 @@ static void *clean_thread_main(void *f_);
 static struct ct_l4_proto *l4_protos[] = {
     [IPPROTO_TCP] = &ct_proto_tcp,
     [IPPROTO_UDP] = &ct_proto_other,
-    [IPPROTO_ICMP] = &ct_proto_other,
-    [IPPROTO_ICMPV6] = &ct_proto_other,
+    [IPPROTO_ICMP] = &ct_proto_icmp4,
+    [IPPROTO_ICMPV6] = &ct_proto_icmp6,
 };
 
 long long ct_timeout_val[] = {
@@ -691,6 +691,29 @@ extract_l4_udp(struct conn_key *key, const void *data, size_t size)
 static inline bool extract_l4(struct conn_key *key, const void *data,
                               size_t size, bool *related, const void *l3);
 
+static uint8_t
+reverse_icmp_type(uint8_t type)
+{
+    switch (type) {
+    case ICMP4_ECHO_REQUEST:
+        return ICMP4_ECHO_REPLY;
+    case ICMP4_ECHO_REPLY:
+        return ICMP4_ECHO_REQUEST;
+
+    case ICMP4_TIMESTAMP:
+        return ICMP4_TIMESTAMPREPLY;
+    case ICMP4_TIMESTAMPREPLY:
+        return ICMP4_TIMESTAMP;
+
+    case ICMP4_INFOREQUEST:
+        return ICMP4_INFOREPLY;
+    case ICMP4_INFOREPLY:
+        return ICMP4_INFOREQUEST;
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
 /* If 'related' is not NULL and the function is processing an ICMP
  * error packet, extract the l3 and l4 fields from the nested header
  * instead and set *related to true.  If 'related' is NULL we're
@@ -713,8 +736,13 @@ extract_l4_icmp(struct conn_key *key, const void *data, size_t size,
     case ICMP4_TIMESTAMPREPLY:
     case ICMP4_INFOREQUEST:
     case ICMP4_INFOREPLY:
+        if (icmp->icmp_code != 0) {
+            return false;
+        }
         /* Separate ICMP connection: identified using id */
-        key->src.port = key->dst.port = icmp->icmp_fields.echo.id;
+        key->src.icmp_id = key->dst.icmp_id = icmp->icmp_fields.echo.id;
+        key->src.icmp_type = icmp->icmp_type;
+        key->dst.icmp_type = reverse_icmp_type(icmp->icmp_type);
         break;
     case ICMP4_DST_UNREACH:
     case ICMP4_TIME_EXCEEDED:
@@ -764,6 +792,19 @@ extract_l4_icmp(struct conn_key *key, const void *data, size_t size,
     return true;
 }
 
+static uint8_t
+reverse_icmp6_type(uint8_t type)
+{
+    switch (type) {
+    case ICMP6_ECHO_REQUEST:
+        return ICMP6_ECHO_REPLY;
+    case ICMP6_ECHO_REPLY:
+        return ICMP6_ECHO_REQUEST;
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
 /* If 'related' is not NULL and the function is processing an ICMP
  * error packet, extract the l3 and l4 fields from the nested header
  * instead and set *related to true.  If 'related' is NULL we're
@@ -784,8 +825,13 @@ extract_l4_icmp6(struct conn_key *key, const void *data, size_t size,
     switch (icmp6->icmp6_type) {
     case ICMP6_ECHO_REQUEST:
     case ICMP6_ECHO_REPLY:
+        if (icmp6->icmp6_code != 0) {
+            return false;
+        }
         /* Separate ICMP connection: identified using id */
-        key->src.port = key->dst.port = *(ovs_be16 *) (icmp6 + 1);
+        key->src.icmp_id = key->dst.icmp_id = *(ovs_be16 *) (icmp6 + 1);
+        key->src.icmp_type = icmp6->icmp6_type;
+        key->dst.icmp_type = reverse_icmp6_type(icmp6->icmp6_type);
         break;
     case ICMP6_DST_UNREACH:
     case ICMP6_PACKET_TOO_BIG:
@@ -978,6 +1024,7 @@ static void
 conn_key_reverse(struct conn_key *key)
 {
     struct ct_endpoint tmp;
+
     tmp = key->src;
     key->src = key->dst;
     key->dst = tmp;
@@ -1077,10 +1124,9 @@ conn_key_to_tuple(const struct conn_key *key, struct ct_dpif_tuple *tuple)
                                      key->dl_type);
 
     if (key->nw_proto == IPPROTO_ICMP || key->nw_proto == IPPROTO_ICMPV6) {
-        tuple->icmp_id = key->src.port;
-        /* ICMP type and code are not tracked */
-        tuple->icmp_type = 0;
-        tuple->icmp_code = 0;
+        tuple->icmp_id = key->src.icmp_id;
+        tuple->icmp_type = key->src.icmp_type;
+        tuple->icmp_code = key->src.icmp_code;
     } else {
         tuple->src_port = key->src.port;
         tuple->dst_port = key->dst.port;

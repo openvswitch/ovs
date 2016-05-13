@@ -136,14 +136,14 @@ ct_dpif_format_entry(const struct ct_dpif_entry *entry, struct ds *ds,
     ct_dpif_format_ipproto(ds, entry->tuple_orig.ip_proto);
 
     ds_put_cstr(ds, ",orig=(");
-    ct_dpif_format_tuple(ds, &entry->tuple_orig, verbose);
+    ct_dpif_format_tuple(ds, &entry->tuple_orig);
     if (print_stats) {
         ct_dpif_format_counters(ds, &entry->counters_orig);
     }
     ds_put_cstr(ds, ")");
 
     ds_put_cstr(ds, ",reply=(");
-    ct_dpif_format_tuple(ds, &entry->tuple_reply, verbose);
+    ct_dpif_format_tuple(ds, &entry->tuple_reply);
     if (print_stats) {
         ct_dpif_format_counters(ds, &entry->counters_reply);
     }
@@ -179,7 +179,7 @@ ct_dpif_format_entry(const struct ct_dpif_entry *entry, struct ds *ds,
     ct_dpif_format_helper(ds, ",helper=", &entry->helper);
     if (verbose && entry->tuple_master.l3_type != 0) {
         ds_put_cstr(ds, ",master=(");
-        ct_dpif_format_tuple(ds, &entry->tuple_master, verbose);
+        ct_dpif_format_tuple(ds, &entry->tuple_master);
         ds_put_cstr(ds, ")");
     }
 }
@@ -227,17 +227,10 @@ ct_dpif_format_timestamp(struct ds *ds,
 }
 
 static void
-ct_dpif_format_tuple_icmp(struct ds *ds, const struct ct_dpif_tuple *tuple,
-                          bool verbose)
+ct_dpif_format_tuple_icmp(struct ds *ds, const struct ct_dpif_tuple *tuple)
 {
-    if (verbose) {
-        ds_put_format(ds, ",id=%u,type=%u,code=%u",
-                      ntohs(tuple->icmp_id),
-                      tuple->icmp_type,
-                      tuple->icmp_code);
-    } else {
-        ds_put_format(ds, ",id=%u", ntohs(tuple->icmp_id));
-    }
+    ds_put_format(ds, ",id=%u,type=%u,code=%u", ntohs(tuple->icmp_id),
+                  tuple->icmp_type, tuple->icmp_code);
 }
 
 static void
@@ -248,8 +241,7 @@ ct_dpif_format_tuple_tp(struct ds *ds, const struct ct_dpif_tuple *tuple)
 }
 
 void
-ct_dpif_format_tuple(struct ds *ds, const struct ct_dpif_tuple *tuple,
-                     bool verbose)
+ct_dpif_format_tuple(struct ds *ds, const struct ct_dpif_tuple *tuple)
 {
     if (tuple->l3_type == AF_INET) {
         ds_put_format(ds, "src="IP_FMT",dst="IP_FMT,
@@ -268,7 +260,7 @@ ct_dpif_format_tuple(struct ds *ds, const struct ct_dpif_tuple *tuple,
 
     if (tuple->ip_proto == IPPROTO_ICMP
         || tuple->ip_proto == IPPROTO_ICMPV6) {
-        ct_dpif_format_tuple_icmp(ds, tuple, verbose);
+        ct_dpif_format_tuple_icmp(ds, tuple);
     } else {
         ct_dpif_format_tuple_tp(ds, tuple);
     }
