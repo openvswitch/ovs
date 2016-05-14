@@ -54,7 +54,7 @@ def _sh(*args, **kwargs):
 
 
 def uname():
-    return _sh("uname", "-r", capture=True)[0].strip()
+    return _sh("uname", "-r", capture=True)[0].decode().strip()
 
 
 def sudo():
@@ -209,7 +209,7 @@ def reset():
     if os.path.exists(RUNDIR):
         shutil.rmtree(RUNDIR)
     for dp in _sh("ovs-dpctl dump-dps", capture=True):
-        _sh("ovs-dpctl", "del-dp", dp.strip())
+        _sh("ovs-dpctl", "del-dp", dp.decode().strip())
 commands.append(reset)
 
 
@@ -258,9 +258,9 @@ def run():
         " %s/ovsclient-cert.pem %s/vswitchd.cacert"
         % (pki_dir, pki_dir, pki_dir))
     version = _sh("ovs-vsctl --no-wait --version", capture=True)
-    version = version[0].strip().split()[3]
+    version = version[0].decode().strip().split()[3]
     root_uuid = _sh("ovs-vsctl --no-wait --bare list Open_vSwitch",
-                    capture=True)[0].strip()
+                    capture=True)[0].decode().strip()
     _sh("ovs-vsctl --no-wait set Open_vSwitch %s ovs_version=%s"
         % (root_uuid, version))
 
@@ -409,7 +409,7 @@ def main():
     parser.add_option_group(group)
 
     group = optparse.OptionGroup(parser, "Optimization Flags")
-    for i in ["s", "g"] + range(4) + ["fast"]:
+    for i in ["s", "g"] + list(range(4)) + ["fast"]:
         group.add_option("--O%s" % str(i), dest="optimize",
                          action="store_const", const=i,
                          help="compile with -O%s" % str(i))
