@@ -148,6 +148,6 @@ utilities_nlmon_LDADD = lib/libopenvswitch.la
 endif
 
 FLAKE8_PYFILES += utilities/ovs-pcap.in \
-	utilities/checkpatch.py
+	utilities/checkpatch.py utilities/ovs-dev.py
 
 include utilities/bugtool/automake.mk
