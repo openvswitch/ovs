@@ -67,7 +67,7 @@ static void parse_options(int argc, char *argv[], struct shash *local_options);
 static const char *nbctl_default_db(void);
 static void run_prerequisites(struct ctl_command[], size_t n_commands,
                               struct ovsdb_idl *);
-static void do_nbctl(const char *args, struct ctl_command *, size_t n,
+static bool do_nbctl(const char *args, struct ctl_command *, size_t n,
                      struct ovsdb_idl *);
 
 int
@@ -125,7 +125,10 @@ main(int argc, char *argv[])
 
         if (seqno != ovsdb_idl_get_seqno(idl)) {
             seqno = ovsdb_idl_get_seqno(idl);
-            do_nbctl(args, commands, n_commands, idl);
+            if (do_nbctl(args, commands, n_commands, idl)) {
+                free(args);
+                exit(EXIT_SUCCESS);
+            }
         }
 
         if (seqno == ovsdb_idl_get_seqno(idl)) {
@@ -1157,7 +1160,7 @@ run_prerequisites(struct ctl_command *commands, size_t n_commands,
     }
 }
 
-static void
+static bool
 do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
          struct ovsdb_idl *idl)
 {
@@ -1296,7 +1299,7 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     ovsdb_idl_txn_destroy(txn);
     ovsdb_idl_destroy(idl);
 
-    exit(EXIT_SUCCESS);
+    return true;
 
 try_again:
     /* Our transaction needs to be rerun, or a prerequisite was not met.  Free
@@ -1313,6 +1316,7 @@ try_again:
         free(c->table);
     }
     free(error);
+    return false;
 }
 
 /* Frees the current transaction and the underlying IDL and then calls
