@@ -286,6 +286,7 @@ mcast_group_insert_bundle(struct mcast_snooping *ms OVS_UNUSED,
         b = xmalloc(sizeof *b);
         list_init(&b->bundle_node);
         b->port = port;
+        ms->need_revalidate = true;
     }
 
     b->expires = time_now() + idle_time;
