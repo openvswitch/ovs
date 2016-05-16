@@ -152,8 +152,8 @@ tcp_payload_length(struct dp_packet *pkt)
 }
 
 static enum ct_update_res
-tcp_conn_update(struct conn* conn_, struct dp_packet *pkt, bool reply,
-                long long now)
+tcp_conn_update(struct conn *conn_, struct conntrack_bucket *ctb,
+                struct dp_packet *pkt, bool reply, long long now)
 {
     struct conn_tcp *conn = conn_tcp_cast(conn_);
     struct tcp_header *tcp = dp_packet_l4(pkt);
@@ -319,18 +319,18 @@ tcp_conn_update(struct conn* conn_, struct dp_packet *pkt, bool reply,
 
         if (src->state >= CT_DPIF_TCPS_FIN_WAIT_2
             && dst->state >= CT_DPIF_TCPS_FIN_WAIT_2) {
-            update_expiration(conn_, CT_TM_TCP_CLOSED, now);
+            conn_update_expiration(ctb, &conn->up, CT_TM_TCP_CLOSED, now);
         } else if (src->state >= CT_DPIF_TCPS_CLOSING
                    && dst->state >= CT_DPIF_TCPS_CLOSING) {
-            update_expiration(conn_, CT_TM_TCP_FIN_WAIT, now);
+            conn_update_expiration(ctb, &conn->up, CT_TM_TCP_FIN_WAIT, now);
         } else if (src->state < CT_DPIF_TCPS_ESTABLISHED
                    || dst->state < CT_DPIF_TCPS_ESTABLISHED) {
-            update_expiration(conn_, now, CT_TM_TCP_OPENING);
+            conn_update_expiration(ctb, &conn->up, CT_TM_TCP_OPENING, now);
         } else if (src->state >= CT_DPIF_TCPS_CLOSING
                    || dst->state >= CT_DPIF_TCPS_CLOSING) {
-            update_expiration(conn_, now, CT_TM_TCP_CLOSING);
+            conn_update_expiration(ctb, &conn->up, CT_TM_TCP_CLOSING, now);
         } else {
-            update_expiration(conn_, now, CT_TM_TCP_ESTABLISHED);
+            conn_update_expiration(ctb, &conn->up, CT_TM_TCP_ESTABLISHED, now);
         }
     } else if ((dst->state < CT_DPIF_TCPS_SYN_SENT
                 || dst->state >= CT_DPIF_TCPS_FIN_WAIT_2
@@ -414,7 +414,8 @@ tcp_valid_new(struct dp_packet *pkt)
 }
 
 static struct conn *
-tcp_new_conn(struct dp_packet *pkt, long long now)
+tcp_new_conn(struct conntrack_bucket *ctb, struct dp_packet *pkt,
+             long long now)
 {
     struct conn_tcp* newconn = NULL;
     struct tcp_header *tcp = dp_packet_l4(pkt);
@@ -450,7 +451,8 @@ tcp_new_conn(struct dp_packet *pkt, long long now)
     src->state = CT_DPIF_TCPS_SYN_SENT;
     dst->state = CT_DPIF_TCPS_CLOSED;
 
-    update_expiration(&newconn->up, now, CT_TM_TCP_FIRST_PACKET);
+    conn_init_expiration(ctb, &newconn->up, CT_TM_TCP_FIRST_PACKET,
+                         now);
 
     return &newconn->up;
 }

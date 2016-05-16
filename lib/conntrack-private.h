@@ -69,10 +69,13 @@ enum ct_update_res {
 };
 
 struct ct_l4_proto {
-    struct conn *(*new_conn)(struct dp_packet *pkt, long long now);
+    struct conn *(*new_conn)(struct conntrack_bucket *, struct dp_packet *pkt,
+                             long long now);
     bool (*valid_new)(struct dp_packet *pkt);
-    enum ct_update_res (*conn_update)(struct conn *conn, struct dp_packet *pkt,
-                                      bool reply, long long now);
+    enum ct_update_res (*conn_update)(struct conn *conn,
+                                      struct conntrack_bucket *,
+                                      struct dp_packet *pkt, bool reply,
+                                      long long now);
 };
 
 extern struct ct_l4_proto ct_proto_tcp;
@@ -81,9 +84,19 @@ extern struct ct_l4_proto ct_proto_other;
 extern long long ct_timeout_val[];
 
 static inline void
-update_expiration(struct conn *conn, enum ct_timeout tm, long long now)
+conn_init_expiration(struct conntrack_bucket *ctb, struct conn *conn,
+                        enum ct_timeout tm, long long now)
 {
     conn->expiration = now + ct_timeout_val[tm];
+    ovs_list_push_back(&ctb->exp_lists[tm], &conn->exp_node);
+}
+
+static inline void
+conn_update_expiration(struct conntrack_bucket *ctb, struct conn *conn,
+                       enum ct_timeout tm, long long now)
+{
+    ovs_list_remove(&conn->exp_node);
+    conn_init_expiration(ctb, conn, tm, now);
 }
 
 #endif /* conntrack-private.h */

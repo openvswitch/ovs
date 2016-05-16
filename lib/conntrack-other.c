@@ -43,8 +43,8 @@ conn_other_cast(const struct conn *conn)
 }
 
 static enum ct_update_res
-other_conn_update(struct conn *conn_, struct dp_packet *pkt OVS_UNUSED,
-                  bool reply, long long now)
+other_conn_update(struct conn *conn_, struct conntrack_bucket *ctb,
+                  struct dp_packet *pkt OVS_UNUSED, bool reply, long long now)
 {
     struct conn_other *conn = conn_other_cast(conn_);
 
@@ -54,7 +54,7 @@ other_conn_update(struct conn *conn_, struct dp_packet *pkt OVS_UNUSED,
         conn->state = OTHERS_MULTIPLE;
     }
 
-    update_expiration(conn_, other_timeouts[conn->state], now);
+    conn_update_expiration(ctb, &conn->up, other_timeouts[conn->state], now);
 
     return CT_UPDATE_VALID;
 }
@@ -66,14 +66,15 @@ other_valid_new(struct dp_packet *pkt OVS_UNUSED)
 }
 
 static struct conn *
-other_new_conn(struct dp_packet *pkt OVS_UNUSED, long long now)
+other_new_conn(struct conntrack_bucket *ctb, struct dp_packet *pkt OVS_UNUSED,
+               long long now)
 {
     struct conn_other *conn;
 
     conn = xzalloc(sizeof *conn);
     conn->state = OTHERS_FIRST;
 
-    update_expiration(&conn->up, other_timeouts[conn->state], now);
+    conn_init_expiration(ctb, &conn->up, other_timeouts[conn->state], now);
 
     return &conn->up;
 }
