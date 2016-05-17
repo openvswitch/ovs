@@ -774,7 +774,7 @@ test_arp 11 f00000000011  $sip $tip
 # XXX This can be improved.
 sleep 1
 
-# dump infomration and flows with counters
+# dump information and flows with counters
 ovn-sbctl dump-flows -- list multicast_group
 
 echo "------ hv1 dump ------"
@@ -1026,7 +1026,8 @@ OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
-AT_SETUP([ovn -- 3 HVs, 1 VIFs/HV, 1 GW, 1 LS])
+AT_SETUP([ovn -- vtep: 3 HVs, 1 VIFs/HV, 1 GW, 1 LS])
+AT_KEYWORDS([vtep])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
