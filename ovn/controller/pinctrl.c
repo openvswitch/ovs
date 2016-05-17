@@ -514,7 +514,7 @@ struct garp_data {
     ovs_be32 ipv4;               /* Ipv4 address of port. */
     long long int announce_time; /* Next announcement in ms. */
     int backoff;                 /* Backoff for the next announcement. */
-    int ofport;                  /* ofport used to output this GARP. */
+    ofp_port_t ofport;           /* ofport used to output this GARP. */
 };
 
 /* Contains GARPs to be sent. */
@@ -548,7 +548,8 @@ send_garp_update(const struct sbrec_port_binding *binding_rec,
     if (!ld || !ld->localnet_port) {
         return;
     }
-    int ofport = simap_get(localnet_ofports, ld->localnet_port->logical_port);
+    ofp_port_t ofport = u16_to_ofp(simap_get(localnet_ofports,
+                                             ld->localnet_port->logical_port));
 
     /* Update GARP if it exists. */
     struct garp_data *garp = shash_find_data(&send_garp_data,
