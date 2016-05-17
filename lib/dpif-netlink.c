@@ -2400,9 +2400,9 @@ dpif_netlink_init(void)
         error = nl_lookup_genl_family(OVS_DATAPATH_FAMILY,
                                       &ovs_datapath_family);
         if (error) {
-            VLOG_ERR("Generic Netlink family '%s' does not exist. "
-                     "The Open vSwitch kernel module is probably not loaded.",
-                     OVS_DATAPATH_FAMILY);
+            VLOG_WARN("Generic Netlink family '%s' does not exist. "
+                      "The Open vSwitch kernel module is probably not loaded.",
+                      OVS_DATAPATH_FAMILY);
         }
         if (!error) {
             error = nl_lookup_genl_family(OVS_VPORT_FAMILY, &ovs_vport_family);
