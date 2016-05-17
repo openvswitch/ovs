@@ -1186,8 +1186,10 @@ as hv2 ovs-ofctl -O OpenFlow13 dump-flows br-int
 
 echo "------ hv3 dump ------"
 as hv3 ovs-vsctl show
-as hv3 ovs-ofctl show br-int
-as hv3 ovs-ofctl -O OpenFlow13 dump-flows br-int
+# note: hv3 has no logical port bind, thus it should not have br-int
+AT_CHECK([as hv3 ovs-ofctl -O OpenFlow13 show br-int], [1], [],
+[ovs-ofctl: br-int is not a bridge or a socket
+])
 
 # Now check the packets actually received against the ones expected.
 for i in 1 2 3; do
