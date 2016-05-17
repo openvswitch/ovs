@@ -46,8 +46,9 @@ extern PNDIS_SPIN_LOCK gOvsCtrlLock;
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 OVS_USER_STATS ovsUserStats;
 
-static VOID _MapNlAttrToOvsPktExec(PNL_ATTR *nlAttrs, PNL_ATTR *keyAttrs,
-                                   OvsPacketExecute  *execute);
+static VOID _MapNlAttrToOvsPktExec(PNL_MSG_HDR nlMsgHdr, PNL_ATTR *nlAttrs,
+                                   PNL_ATTR *keyAttrs,
+                                   OvsPacketExecute *execute);
 extern NL_POLICY nlFlowKeyPolicy[];
 extern UINT32 nlFlowKeyPolicyLen;
 
@@ -311,7 +312,7 @@ OvsNlExecuteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     execute.dpNo = ovsHdr->dp_ifindex;
 
-    _MapNlAttrToOvsPktExec(nlAttrs, keyAttrs, &execute);
+    _MapNlAttrToOvsPktExec(nlMsgHdr, nlAttrs, keyAttrs, &execute);
 
     status = OvsExecuteDpIoctl(&execute);
 
@@ -364,11 +365,13 @@ done:
  *----------------------------------------------------------------------------
  */
 static VOID
-_MapNlAttrToOvsPktExec(PNL_ATTR *nlAttrs, PNL_ATTR *keyAttrs,
-                       OvsPacketExecute *execute)
+_MapNlAttrToOvsPktExec(PNL_MSG_HDR nlMsgHdr, PNL_ATTR *nlAttrs,
+                       PNL_ATTR *keyAttrs, OvsPacketExecute *execute)
 {
     execute->packetBuf = NlAttrGet(nlAttrs[OVS_PACKET_ATTR_PACKET]);
     execute->packetLen = NlAttrGetSize(nlAttrs[OVS_PACKET_ATTR_PACKET]);
+
+    execute->nlMsgHdr = nlMsgHdr;
 
     execute->actions = NlAttrGet(nlAttrs[OVS_PACKET_ATTR_ACTIONS]);
     execute->actionsLen = NlAttrGetSize(nlAttrs[OVS_PACKET_ATTR_ACTIONS]);

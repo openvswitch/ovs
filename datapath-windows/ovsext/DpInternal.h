@@ -275,6 +275,7 @@ typedef struct OvsPacketExecute {
 
    uint32_t packetLen;
    uint32_t actionsLen;
+   PNL_MSG_HDR nlMsgHdr;
    PCHAR packetBuf;
    PNL_ATTR actions;
    PNL_ATTR *keyAttrs;
