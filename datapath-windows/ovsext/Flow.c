@@ -54,9 +54,6 @@ static VOID _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
                                  PNL_ATTR *tunnelAttrs,
                                  OvsFlowKey *destKey);
 
-static VOID _MapTunAttrToFlowPut(PNL_ATTR *keyAttrs,
-                                 PNL_ATTR *tunnelAttrs,
-                                 OvsFlowKey *destKey);
 static VOID _MapNlToFlowPutFlags(PGENL_MSG_HDR genlMsgHdr,
                                  PNL_ATTR flowAttrClear,
                                  OvsFlowPut *mappedFlow);
@@ -207,6 +204,7 @@ const NL_POLICY nlFlowTunnelKeyPolicy[] = {
     [OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS] = {.type = NL_A_VAR_LEN,
                                          .optional = TRUE}
 };
+const UINT32 nlFlowTunnelKeyPolicyLen = ARRAY_SIZE(nlFlowTunnelKeyPolicy);
 
 /* For Parsing nested OVS_FLOW_ATTR_ACTIONS attributes */
 const NL_POLICY nlFlowActionPolicy[] = {
@@ -1413,7 +1411,7 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
                      PNL_ATTR *tunnelAttrs,
                      OvsFlowKey *destKey)
 {
-    _MapTunAttrToFlowPut(keyAttrs, tunnelAttrs, destKey);
+    MapTunAttrToFlowPut(keyAttrs, tunnelAttrs, destKey);
 
     if (keyAttrs[OVS_KEY_ATTR_RECIRC_ID]) {
         destKey->recircId = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_RECIRC_ID]);
@@ -1635,14 +1633,14 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
 
 /*
  *----------------------------------------------------------------------------
- *  _MapTunAttrToFlowPut --
+ *  MapTunAttrToFlowPut --
  *    Converts FLOW_TUNNEL_KEY attribute to OvsFlowKey->tunKey.
  *----------------------------------------------------------------------------
  */
-static VOID
-_MapTunAttrToFlowPut(PNL_ATTR *keyAttrs,
-                     PNL_ATTR *tunAttrs,
-                     OvsFlowKey *destKey)
+VOID
+MapTunAttrToFlowPut(PNL_ATTR *keyAttrs,
+                    PNL_ATTR *tunAttrs,
+                    OvsFlowKey *destKey)
 {
     if (keyAttrs[OVS_KEY_ATTR_TUNNEL]) {
 
