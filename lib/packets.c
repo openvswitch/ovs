@@ -442,9 +442,9 @@ ip_parse_masked_len(const char *s, int *n, ovs_be32 *ip,
         /* OK. */
     } else if (ovs_scan_len(s, n, IP_SCAN_FMT"/%d",
                             IP_SCAN_ARGS(ip), &prefix)) {
-        if (prefix <= 0 || prefix > 32) {
-            return xasprintf("%s: network prefix bits not between 0 and "
-                             "32", s);
+        if (prefix < 0 || prefix > 32) {
+            return xasprintf("%s: IPv4 network prefix bits not between 0 and "
+                              "32, inclusive", s);
         }
         *mask = be32_prefix_mask(prefix);
     } else if (ovs_scan_len(s, n, IP_SCAN_FMT, IP_SCAN_ARGS(ip))) {
@@ -533,9 +533,9 @@ ipv6_parse_masked_len(const char *s, int *n, struct in6_addr *ip,
     if (ovs_scan_len(s, n, " "IPV6_SCAN_FMT, ipv6_s)
         && ipv6_parse(ipv6_s, ip)) {
         if (ovs_scan_len(s, n, "/%d", &prefix)) {
-            if (prefix <= 0 || prefix > 128) {
+            if (prefix < 0 || prefix > 128) {
                 return xasprintf("%s: IPv6 network prefix bits not between 0 "
-                                 "and 128", s);
+                                 "and 128, inclusive", s);
             }
             *mask = ipv6_create_mask(prefix);
         } else if (ovs_scan_len(s, n, "/"IPV6_SCAN_FMT, ipv6_s)) {
