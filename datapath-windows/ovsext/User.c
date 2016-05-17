@@ -51,6 +51,8 @@ static VOID _MapNlAttrToOvsPktExec(PNL_MSG_HDR nlMsgHdr, PNL_ATTR *nlAttrs,
                                    OvsPacketExecute *execute);
 extern NL_POLICY nlFlowKeyPolicy[];
 extern UINT32 nlFlowKeyPolicyLen;
+extern NL_POLICY nlFlowTunnelKeyPolicy[];
+extern UINT32 nlFlowTunnelKeyPolicyLen;
 
 static __inline VOID
 OvsAcquirePidHashLock()
@@ -376,6 +378,7 @@ _MapNlAttrToOvsPktExec(PNL_MSG_HDR nlMsgHdr, PNL_ATTR *nlAttrs,
     execute->actions = NlAttrGet(nlAttrs[OVS_PACKET_ATTR_ACTIONS]);
     execute->actionsLen = NlAttrGetSize(nlAttrs[OVS_PACKET_ATTR_ACTIONS]);
 
+    ASSERT(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
     execute->inPort = NlAttrGetU32(keyAttrs[OVS_KEY_ATTR_IN_PORT]);
     execute->keyAttrs = keyAttrs;
 }
@@ -392,6 +395,8 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
     OvsFlowKey                  key = { 0 };
     OVS_PACKET_HDR_INFO         layers = { 0 };
     POVS_VPORT_ENTRY            vport = NULL;
+    PNL_ATTR tunnelAttrs[__OVS_TUNNEL_KEY_ATTR_MAX];
+    OvsFlowKey tempTunKey = {0};
 
     if (execute->packetLen == 0) {
         status = STATUS_INVALID_PARAMETER;
@@ -429,8 +434,31 @@ OvsExecuteDpIoctl(OvsPacketExecute *execute)
         goto dropit;
     }
 
-    ndisStatus = OvsExtractFlow(pNbl, fwdDetail->SourcePortId, &key, &layers,
-                                NULL);
+    if (execute->keyAttrs[OVS_KEY_ATTR_TUNNEL]) {
+        UINT32 tunnelKeyAttrOffset;
+
+        tunnelKeyAttrOffset = (UINT32)((PCHAR)
+                              (execute->keyAttrs[OVS_KEY_ATTR_TUNNEL])
+                              - (PCHAR)execute->nlMsgHdr);
+
+        /* Get tunnel keys attributes */
+        if ((NlAttrParseNested(execute->nlMsgHdr, tunnelKeyAttrOffset,
+                               NlAttrLen(execute->keyAttrs[OVS_KEY_ATTR_TUNNEL]),
+                               nlFlowTunnelKeyPolicy, nlFlowTunnelKeyPolicyLen,
+                               tunnelAttrs, ARRAY_SIZE(tunnelAttrs)))
+                               != TRUE) {
+            OVS_LOG_ERROR("Tunnel key Attr Parsing failed for msg: %p",
+                           execute->nlMsgHdr);
+            status = STATUS_INVALID_PARAMETER;
+            goto dropit;
+        }
+
+        MapTunAttrToFlowPut(execute->keyAttrs, tunnelAttrs, &tempTunKey);
+    }
+
+    ndisStatus = OvsExtractFlow(pNbl, execute->inPort, &key, &layers,
+                     tempTunKey.tunKey.dst == 0 ? NULL : &tempTunKey.tunKey);
+
     if (ndisStatus == NDIS_STATUS_SUCCESS) {
         NdisAcquireRWLockRead(gOvsSwitchContext->dispatchLock, &lockState, 0);
         ndisStatus = OvsActionsExecute(gOvsSwitchContext, NULL, pNbl,
