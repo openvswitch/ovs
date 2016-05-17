@@ -2320,8 +2320,8 @@ ovn-nbctl lsp-add ls2 rp-ls2 -- set Logical_Switch_Port rp-ls2 type=router \
 ovn-nbctl lrp-add R1 R1_R2 00:00:00:02:03:04 20.0.0.1/24 R2_R1
 ovn-nbctl lrp-add R2 R2_R1 00:00:00:02:03:05 20.0.0.2/24 R1_R2
 
-ovn-nbctl set Logical_Router R1 default_gw="20.0.0.2"
-ovn-nbctl set Logical_Router R2 default_gw="20.0.0.1"
+ovn-nbctl lr-route-add R1 "0.0.0.0/0" 20.0.0.2
+ovn-nbctl lr-route-add R2 "0.0.0.0/0" 20.0.0.1
 
 # Create logical port ls1-lp1 in ls1
 ovn-nbctl lsp-add ls1 ls1-lp1 \

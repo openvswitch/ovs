@@ -729,10 +729,6 @@
       One or more static routes for the router.
     </column>
 
-    <column name="default_gw">
-      IP address to use as default gateway, if any.
-    </column>
-
     <column name="enabled">
       This column is used to administratively set router state.  If this column
       is empty or is set to <code>true</code>, the router is enabled.  If this

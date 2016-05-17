@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "3.2.0",
-    "cksum": "1784604034 7539",
+    "version": "4.0.0",
+    "cksum": "2156178478 7460",
     "tables": {
         "Logical_Switch": {
             "columns": {
@@ -105,7 +105,6 @@
                                             "refType": "strong"},
                                    "min": 0,
                                    "max": "unlimited"}},
-                "default_gw": {"type": {"key": "string", "min": 0, "max": 1}},
                 "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},
                 "nat": {"type": {"key": {"type": "uuid",
                                          "refTable": "NAT",

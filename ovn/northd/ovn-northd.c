@@ -262,10 +262,6 @@ struct ovn_datapath {
 
     struct ovs_list list;       /* In list of similar records. */
 
-    /* Logical router data (digested from nbr). */
-    const struct ovn_port *gateway_port;
-    ovs_be32 gateway;
-
     /* Logical switch data. */
     struct ovn_port **router_ports;
     size_t n_router_ports;
@@ -420,21 +416,6 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
                                      NULL, nbr, NULL);
             ovs_list_push_back(nb_only, &od->list);
         }
-
-        od->gateway = 0;
-        if (nbr->default_gw) {
-            ovs_be32 ip;
-            if (!ip_parse(nbr->default_gw, &ip) || !ip) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-                VLOG_WARN_RL(&rl, "bad 'gateway' %s", nbr->default_gw);
-            } else {
-                od->gateway = ip;
-            }
-        }
-
-        /* Set the gateway port to NULL.  If there is a gateway, it will get
-         * filled in as we go through the ports later. */
-        od->gateway_port = NULL;
     }
 }
 
@@ -658,18 +639,6 @@ join_logical_ports(struct northd_context *ctx,
                 op->mac = mac;
 
                 op->od = od;
-
-                /* If 'od' has a gateway and 'op' routes to it... */
-                if (od->gateway && !((op->network ^ od->gateway) & op->mask)) {
-                    /* ...and if 'op' is a longer match than the current
-                     * choice... */
-                    const struct ovn_port *gw = od->gateway_port;
-                    int len = gw ? ip_count_cidr_bits(gw->mask) : 0;
-                    if (ip_count_cidr_bits(op->mask) > len) {
-                        /* ...then it's the default gateway port. */
-                        od->gateway_port = op;
-                    }
-                }
             }
         }
     }
@@ -2523,10 +2492,6 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
             route = od->nbr->static_routes[i];
             build_static_route_flow(lflows, od, ports, route);
-        }
-
-        if (od->gateway && od->gateway_port) {
-            add_route(lflows, od->gateway_port, 0, 0, od->gateway);
         }
     }
     /* XXX destination unreachable */
