@@ -1,4 +1,5 @@
 /* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (C) 2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +45,7 @@ struct ovsdb_datum;
 struct ovsdb_idl_class;
 struct ovsdb_idl_row;
 struct ovsdb_idl_column;
+struct ovsdb_idl_table;
 struct ovsdb_idl_table_class;
 struct uuid;
 
@@ -105,8 +107,12 @@ void ovsdb_idl_set_probe_interval(const struct ovsdb_idl *, int probe_interval);
 #define OVSDB_IDL_MONITOR (1 << 0) /* Monitor this column? */
 #define OVSDB_IDL_ALERT   (1 << 1) /* Alert client when column updated? */
 #define OVSDB_IDL_TRACK   (1 << 2)
+#define OVSDB_IDL_ON_DEMAND (1 << 3) /* Manually update columns */
 
 void ovsdb_idl_add_column(struct ovsdb_idl *, const struct ovsdb_idl_column *);
+void ovsdb_idl_add_on_demand_column(struct ovsdb_idl *,
+                                    struct ovsdb_idl_table_class *,
+                                    const struct ovsdb_idl_column *);
 void ovsdb_idl_add_table(struct ovsdb_idl *,
                          const struct ovsdb_idl_table_class *);
 
@@ -132,6 +138,16 @@ enum ovsdb_idl_change {
     OVSDB_IDL_CHANGE_MODIFY,
     OVSDB_IDL_CHANGE_DELETE,
     OVSDB_IDL_CHANGE_MAX
+};
+
+/* On-demand fetch columns.
+ * Fetch request types.
+ */
+enum ovsdb_idl_fetch_type {
+    OVSDB_IDL_ROW_FETCH,        /* Fetch a column value for a given row. */
+    OVSDB_IDL_COLUMN_FETCH,     /* Fetch the value of a whole column. */
+    OVSDB_IDL_TABLE_FETCH       /* Fetch the value of all on-demand columns
+                                 * that are part of given table. */
 };
 
 /* Row, table sequence numbers */
@@ -168,6 +184,22 @@ const struct ovsdb_datum *ovsdb_idl_get(const struct ovsdb_idl_row *,
                                         const struct ovsdb_idl_column *,
                                         enum ovsdb_atomic_type key_type,
                                         enum ovsdb_atomic_type value_type);
+void ovsdb_idl_fetch_row(struct ovsdb_idl *,
+                         struct ovsdb_idl_row *,
+                         const struct ovsdb_idl_column *);
+void ovsdb_idl_fetch_column(struct ovsdb_idl *,
+                            const struct ovsdb_idl_table_class *,
+                            struct ovsdb_idl_column *);
+void ovsdb_idl_fetch_table(struct ovsdb_idl *,
+                           struct ovsdb_idl_table_class *);
+
+bool ovsdb_idl_is_row_fetch_pending(const struct ovsdb_idl_row *);
+bool ovsdb_idl_is_column_fetch_pending(struct ovsdb_idl *,
+                                       const struct ovsdb_idl_table_class *,
+                                       const struct ovsdb_idl_column *);
+bool ovsdb_idl_is_table_fetch_pending(struct ovsdb_idl *,
+                                      const struct ovsdb_idl_table_class *);
+
 bool ovsdb_idl_is_mutable(const struct ovsdb_idl_row *,
                           const struct ovsdb_idl_column *);
 

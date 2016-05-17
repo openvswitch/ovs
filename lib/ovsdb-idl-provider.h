@@ -1,4 +1,5 @@
 /* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (C) 2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,7 +29,7 @@ struct ovsdb_idl_row {
     struct uuid uuid;           /* Row "_uuid" field. */
     struct ovs_list src_arcs;   /* Forward arcs (ovsdb_idl_arc.src_node). */
     struct ovs_list dst_arcs;   /* Backward arcs (ovsdb_idl_arc.dst_node). */
-    struct ovsdb_idl_table *table; /* Containing table. */
+    struct ovsdb_idl_table *table;      /* Containing table. */
     struct ovsdb_datum *old;    /* Committed data (null if orphaned). */
 
     /* Transactional data. */
@@ -41,6 +42,10 @@ struct ovsdb_idl_row {
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
     struct ovs_list track_node; /* Rows modified/added/deleted by IDL */
     unsigned long int *updated; /* Bitmap of columns updated by IDL */
+
+    size_t outstanding_fetch_reqs;      /* Number of on-demand columns in this
+                                         * row with on-going fetch operations */
+
 };
 
 struct ovsdb_idl_column {
@@ -70,6 +75,15 @@ struct ovsdb_idl_table {
     struct ovsdb_idl *idl;   /* Containing idl. */
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
     struct ovs_list track_list; /* Tracked rows (ovsdb_idl_row.track_node). */
+    bool has_pending_fetch;     /* Indicates if the table has a pending fetch
+                                 * operation */
+    struct shash outstanding_col_fetch_reqs;    /* Contains the name of the
+                                                 * columns with on-demand
+                                                 * fetch request pending. It
+                                                 * does not store any data,
+                                                 * just keys */
+    size_t n_on_demand_columns; /* Number of columns in the table configured
+                                 * in OVSDB_IDL_ON_DEMAND mode. */
 };
 
 struct ovsdb_idl_class {

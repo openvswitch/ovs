@@ -800,3 +800,168 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
 014: updated columns: ba i ia r ra s
 015: done
 ]])
+
+m4_define([OVSDB_CHECK_IDL_ON_DEMAND_FETCH_COL_ROW_C],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb idl on-demand fetch  positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-fetch-column-row unix:socket $2],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$3], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+m4_define([OVSDB_CHECK_IDL_ON_DEMAND_FETCH_COL_ROW],
+  [OVSDB_CHECK_IDL_ON_DEMAND_FETCH_COL_ROW_C($@)])
+
+OVSDB_CHECK_IDL_ON_DEMAND_FETCH_COL_ROW([on-demand-fetch-col-row, simple idl, initially populated],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "name",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
+        {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "name",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}}
+  ]']],
+  [[000: Initial. On-demand columns: [s ia ua]
+000: i=1 r=2 b=true s= u=<0> ia=[] ra=[-0.5] ba=[true] sa=[abc def] ua=[] uuid=<1>
+001: i=1 r=2 b=true s= u=<0> ia=[] ra=[-0.5] ba=[true] sa=[abc def] ua=[] uuid=<2>
+002: After changes with fetch for ua column in only one row
+002: i=1 r=2 b=true s= u=<0> ia=[] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<1>
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[-0.5] ba=[true] sa=[abc def] ua=[] uuid=<2>
+]])
+
+m4_define([OVSDB_CHECK_IDL_ON_DEMAND_FETCH_COLUMN_C],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb idl on-demand fetch  positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-fetch-column unix:socket $2],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$3], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+m4_define([OVSDB_CHECK_IDL_ON_DEMAND_FETCH_COLUMN],
+  [OVSDB_CHECK_IDL_ON_DEMAND_FETCH_COLUMN_C($@)])
+
+OVSDB_CHECK_IDL_ON_DEMAND_FETCH_COLUMN([on-demand-fetch-column, simple idl, initially populated],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "name",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
+        {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "name",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}}
+  ]']],
+  [[000: Initial. On-demand columns: [s ia ua]
+000: i=1 r=2 b=true s= u=<0> ia=[] ra=[-0.5] ba=[true] sa=[abc def] ua=[] uuid=<1>
+001: i=1 r=2 b=true s= u=<0> ia=[] ra=[-0.5] ba=[true] sa=[abc def] ua=[] uuid=<2>
+002: After fetch for entire s column
+002: i=1 r=2 b=true s=name u=<0> ia=[] ra=[-0.5] ba=[true] sa=[abc def] ua=[] uuid=<1>
+003: i=1 r=2 b=true s=name u=<0> ia=[] ra=[-0.5] ba=[true] sa=[abc def] ua=[] uuid=<2>
+]])
+
+m4_define([OVSDB_CHECK_IDL_ON_DEMAND_FETCH_TABLE_C],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb idl on-demand fetch  positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-fetch-table unix:socket $2],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$3], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+m4_define([OVSDB_CHECK_IDL_ON_DEMAND_FETCH_TABLE],
+  [OVSDB_CHECK_IDL_ON_DEMAND_FETCH_TABLE_C($@)])
+
+OVSDB_CHECK_IDL_ON_DEMAND_FETCH_TABLE([on-demand-fetch-table, simple idl, initially populated],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "name",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
+        {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "name",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}}
+  ]']],
+  [[000: Initial. On-demand columns: [s ia ua]
+000: i=1 r=2 b=true s= u=<0> ia=[] ra=[-0.5] ba=[true] sa=[abc def] ua=[] uuid=<1>
+001: i=1 r=2 b=true s= u=<0> ia=[] ra=[-0.5] ba=[true] sa=[abc def] ua=[] uuid=<2>
+002: After complete table fetch
+002: i=1 r=2 b=true s=name u=<0> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<1>
+003: i=1 r=2 b=true s=name u=<0> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<2>
+]])

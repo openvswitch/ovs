@@ -192,10 +192,25 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
 bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
 ''' % {'s': structName, 'S': structName.upper()}
 
+        # On-demand fetching functions
+        print 'bool %(s)s_is_row_fetch_pending(const struct %(s)s *);\n' % {'s': structName}
+        for columnName, column in sorted(table.columns.iteritems()):
+            print 'bool %(s)s_is_%(c)s_fetch_pending(struct ovsdb_idl *);' % {'s': structName, 'c': columnName}
+        print '\nbool %(s)s_is_table_fetch_pending(struct ovsdb_idl *);\n' % {'s': structName}
+
+        for columnName, column in sorted(table.columns.iteritems()):
+            print 'void %(s)s_fetch_%(c)s(struct ovsdb_idl *, const struct %(s)s *);' % {'s': structName, 'c': columnName}
+        print
+
+        for columnName, column in sorted(table.columns.iteritems()):
+            print 'void %(s)s_fetch_col_%(c)s(struct ovsdb_idl *);' % {'s': structName, 'c': columnName}
+        print
+
+        print 'void %(s)s_fetch_table(struct ovsdb_idl *);\n' % {'s': structName, 'c': columnName}
+
         for columnName, column in sorted(table.columns.iteritems()):
             print 'void %(s)s_verify_%(c)s(const struct %(s)s *);' % {'s': structName, 'c': columnName}
 
-        print
         for columnName, column in sorted(table.columns.iteritems()):
             if column.type.value:
                 valueParam = ', enum ovsdb_atomic_type value_type'
@@ -216,7 +231,6 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
             print '%s);' % ', '.join(args)
 
         print
-
     # Table indexes.
     printEnum("%stable_id" % prefix.lower(), ["%sTABLE_%s" % (prefix.upper(), tableName.upper()) for tableName in sorted(schema.tables)] + ["%sN_TABLES" % prefix.upper()])
     print
@@ -501,7 +515,6 @@ const struct %(s)s
         'T': tableName.upper()}
 
         print '''
-
 /* Deletes 'row' from table "%(t)s".  'row' may be freed, so it must not be
  * accessed afterward.
  *
@@ -534,6 +547,104 @@ bool
         'P': prefix.upper(),
         't': tableName,
         'T': tableName.upper()}
+
+        # On-demand fetching functions.
+        print '''
+/* Verify if there is a pending fetch for 'rec'. */
+bool
+%(s)s_is_row_fetch_pending(const struct %(s)s *rec)
+{
+    ovs_assert(inited);
+    return ovsdb_idl_is_row_fetch_pending(CONST_CAST(struct ovsdb_idl_row *,
+                                                     &rec->header_));
+}''' % {'s': structName }
+
+        for columnName, column in sorted(table.columns.iteritems()):
+            print '''
+/* Verify if there is a pending fetch for '%(c)s' column. */
+bool
+%(s)s_is_%(c)s_fetch_pending(struct ovsdb_idl* idl)
+{
+    ovs_assert(inited);
+    return ovsdb_idl_is_column_fetch_pending(idl,
+                                             &%(p)stable_classes[%(P)sTABLE_%(T)s],
+                                             &%(s)s_col_%(c)s);
+}''' % {'s': structName,
+        'c': columnName,
+        'p': prefix,
+        'P': prefix.upper(),
+        't': tableName,
+        'T': tableName.upper()
+        }
+
+        print '''
+/* Verify if there is a pending fetch for table %(t)s. */
+bool
+%(s)s_is_table_fetch_pending(struct ovsdb_idl *idl)
+{
+    return ovsdb_idl_is_table_fetch_pending(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]);
+}
+''' % {'s': structName,
+       'p': prefix,
+       'P': prefix.upper(),
+       't': tableName,
+       'T': tableName.upper()}
+
+        for columnName, column in sorted(table.columns.iteritems()):
+            print '''
+/* Requests to fetch %(c)s for the specified 'rec'. */
+void
+%(s)s_fetch_%(c)s(struct ovsdb_idl *idl, const struct %(s)s *rec)
+{
+    ovs_assert(inited);
+    ovsdb_idl_fetch_row(idl,
+                        CONST_CAST(struct ovsdb_idl_row *, &rec->header_),
+                        &%(s)s_col_%(c)s);
+}''' % {'s': structName, 'c': columnName }
+
+
+        for columnName, column in sorted(table.columns.iteritems()):
+            print '''
+/* Requests to fetch the column '%(c)s'
+ *
+ * Note that if the reply from the server to an on-demand fetch request (i.e
+ * a select operation) reaches the IDL before the notification of new rows,
+ * then those new rows will have the default values for its on-demand columns.
+ * This happens because the information from rows that are not part of the
+ * replica are discarded when processing an on-demand fetch reply.
+ */
+void
+%(s)s_fetch_col_%(c)s(struct ovsdb_idl *idl)
+{
+    ovsdb_idl_fetch_column(idl,
+                           &%(p)stable_classes[%(P)sTABLE_%(T)s],
+                           &%(s)s_col_%(c)s);
+}''' % {'s': structName,
+        'c': columnName,
+        'p': prefix,
+        'P': prefix.upper(),
+        'T': tableName.upper()}
+
+        print '''
+/* Requests to fetch all the on-demand columns for the specified 'table'.
+ *
+ * Note that if the reply from the server to an on-demand fetch request (i.e
+ * a select operation) reaches the IDL before the notification of new rows,
+ * then those new rows will have the default values for its on-demand columns.
+ * This happens because the information from rows that are not part of the
+ * replica are discarded when processing an on-demand fetch reply.
+ */
+void
+%(s)s_fetch_table(struct ovsdb_idl *idl)
+{
+    ovs_assert(inited);
+    ovsdb_idl_fetch_table(idl,
+                          &%(p)stable_classes[%(P)sTABLE_%(T)s]);
+}''' % {'s': structName,
+        'p': prefix,
+        'P': prefix.upper(),
+        'T': tableName.upper()}
+        print
 
         # Verify functions.
         for columnName, column in sorted(table.columns.iteritems()):
