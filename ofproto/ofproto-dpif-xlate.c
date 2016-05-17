@@ -5114,7 +5114,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .rule = xin->rule,
         .wc = (xin->wc
                ? xin->wc
-               : &(struct flow_wildcards) { .masks.dl_type = 0 }),
+               : &(struct flow_wildcards) { .masks = { .dl_type = 0 } }),
         .odp_actions = xin->odp_actions ? xin->odp_actions : &scratch_actions,
 
         .indentation = xin->indentation,
