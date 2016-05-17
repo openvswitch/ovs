@@ -234,56 +234,56 @@ AT_CLEANUP
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - basic lrouter commands])
+AT_SETUP([ovn-nbctl - basic logical router commands])
 OVN_NBCTL_TEST_START
 
-AT_CHECK([ovn-nbctl lrouter-add lr0])
-AT_CHECK([ovn-nbctl lrouter-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+AT_CHECK([ovn-nbctl lr-add lr0])
+AT_CHECK([ovn-nbctl lr-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lr0)
 ])
 
-AT_CHECK([ovn-nbctl lrouter-add lr1])
-AT_CHECK([ovn-nbctl lrouter-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+AT_CHECK([ovn-nbctl lr-add lr1])
+AT_CHECK([ovn-nbctl lr-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lr0)
 <1> (lr1)
 ])
 
-AT_CHECK([ovn-nbctl lrouter-del lr0])
-AT_CHECK([ovn-nbctl lrouter-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+AT_CHECK([ovn-nbctl lr-del lr0])
+AT_CHECK([ovn-nbctl lr-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lr1)
 ])
 
 AT_CHECK([ovn-nbctl show lr0])
-AT_CHECK([ovn-nbctl lrouter-add lr0])
+AT_CHECK([ovn-nbctl lr-add lr0])
 AT_CHECK([ovn-nbctl show lr0 | ${PERL} $srcdir/uuidfilt.pl], [0],
-  [    lrouter <0> (lr0)
+  [    router <0> (lr0)
 ])
-AT_CHECK([ovn-nbctl lrouter-add lr0], [1], [],
-  [ovn-nbctl: lr0: an lrouter with this name already exists
+AT_CHECK([ovn-nbctl lr-add lr0], [1], [],
+  [ovn-nbctl: lr0: a router with this name already exists
 ])
-AT_CHECK([ovn-nbctl --may-exist lrouter-add lr0])
+AT_CHECK([ovn-nbctl --may-exist lr-add lr0])
 AT_CHECK([ovn-nbctl show lr0 | ${PERL} $srcdir/uuidfilt.pl], [0],
-  [    lrouter <0> (lr0)
+  [    router <0> (lr0)
 ])
-AT_CHECK([ovn-nbctl --add-duplicate lrouter-add lr0])
-AT_CHECK([ovn-nbctl --may-exist --add-duplicate lrouter-add lr0], [1], [],
+AT_CHECK([ovn-nbctl --add-duplicate lr-add lr0])
+AT_CHECK([ovn-nbctl --may-exist --add-duplicate lr-add lr0], [1], [],
   [ovn-nbctl: --may-exist and --add-duplicate may not be used together
 ])
-AT_CHECK([ovn-nbctl lrouter-del lr0], [1], [],
+AT_CHECK([ovn-nbctl lr-del lr0], [1], [],
   [ovn-nbctl: Multiple logical routers named 'lr0'.  Use a UUID.
 ])
 
-AT_CHECK([ovn-nbctl lrouter-del lr2], [1], [],
-  [ovn-nbctl: lr2: lrouter name not found
+AT_CHECK([ovn-nbctl lr-del lr2], [1], [],
+  [ovn-nbctl: lr2: router name not found
 ])
-AT_CHECK([ovn-nbctl --if-exists lrouter-del lr2])
+AT_CHECK([ovn-nbctl --if-exists lr-del lr2])
 
-AT_CHECK([ovn-nbctl lrouter-add])
-AT_CHECK([ovn-nbctl lrouter-add])
-AT_CHECK([ovn-nbctl --add-duplicate lrouter-add], [1], [],
+AT_CHECK([ovn-nbctl lr-add])
+AT_CHECK([ovn-nbctl lr-add])
+AT_CHECK([ovn-nbctl --add-duplicate lr-add], [1], [],
   [ovn-nbctl: --add-duplicate requires specifying a name
 ])
-AT_CHECK([ovn-nbctl --may-exist lrouter-add], [1], [],
+AT_CHECK([ovn-nbctl --may-exist lr-add], [1], [],
   [ovn-nbctl: --may-exist requires specifying a name
 ])
 
@@ -295,7 +295,7 @@ dnl ---------------------------------------------------------------------
 AT_SETUP([ovn-nbctl - basic lrport commands])
 OVN_NBCTL_TEST_START
 
-AT_CHECK([ovn-nbctl lrouter-add lr0])
+AT_CHECK([ovn-nbctl lr-add lr0])
 AT_CHECK([ovn-nbctl lrport-add lr0 lrp0])
 AT_CHECK([ovn-nbctl lrport-add lr0 lrp0], [1], [],
   [ovn-nbctl: lrp0: an lrport with this name already exists
@@ -311,12 +311,12 @@ AT_CHECK([ovn-nbctl lrport-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <1> (lrp1)
 ])
 
-AT_CHECK([ovn-nbctl lrouter-add lr1])
+AT_CHECK([ovn-nbctl lr-add lr1])
 AT_CHECK([ovn-nbctl lrport-add lr0 lrp1], [1], [],
   [ovn-nbctl: lrp1: an lrport with this name already exists
 ])
 AT_CHECK([ovn-nbctl --may-exist lrport-add lr1 lrp1], [1], [],
-  [ovn-nbctl: lrp1: lrport already exists but in lrouter lr0
+  [ovn-nbctl: lrp1: lrport already exists but in router lr0
 ])
 
 AT_CHECK([ovn-nbctl lrport-del lrp1])
@@ -332,7 +332,7 @@ dnl ---------------------------------------------------------------------
 AT_SETUP([ovn-nbctl - lrport addresses])
 OVN_NBCTL_TEST_START
 
-AT_CHECK([ovn-nbctl lrouter-add lr0])
+AT_CHECK([ovn-nbctl lr-add lr0])
 AT_CHECK([ovn-nbctl lrport-add lr0 lrp0])
 AT_CHECK([ovn-nbctl lrport-get-mac-address lrp0], [0], [
 ])
@@ -353,7 +353,7 @@ dnl ---------------------------------------------------------------------
 AT_SETUP([ovn-nbctl - lrport enable and disable])
 OVN_NBCTL_TEST_START
 
-AT_CHECK([ovn-nbctl lrouter-add lr0])
+AT_CHECK([ovn-nbctl lr-add lr0])
 AT_CHECK([ovn-nbctl lrport-add lr0 lrp0])
 AT_CHECK([ovn-nbctl lrport-get-enabled lrp0], [0], [enabled
 ])

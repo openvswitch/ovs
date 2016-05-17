@@ -1263,7 +1263,7 @@ for i in 1 2 3; do
     done
 done
 
-ovn-nbctl create Logical_Router name=lr0
+ovn-nbctl lr-add lr0
 for i in 1 2 3; do
     for j in 1 2 3; do
 	lrp_uuid=`ovn-nbctl \
@@ -2077,8 +2077,8 @@ ovn_start
 # network. R1 has a switchs ls1 (191.168.1.0/24) connected to it.
 # R2 has ls2 (172.16.1.0/24) connected to it.
 
-ovn-nbctl create Logical_Router name=R1
-ovn-nbctl create Logical_Router name=R2
+ovn-nbctl lr-add R1
+ovn-nbctl lr-add R2
 
 ovn-nbctl lswitch-add ls1
 ovn-nbctl lswitch-add ls2
@@ -2234,7 +2234,7 @@ ovn_start
 # One LR - R1 has switch ls1 (191.168.1.0/24) connected to it,
 # and has switch ls2 (172.16.1.0/24) connected to it.
 
-ovn-nbctl create Logical_Router name=R1
+ovn-nbctl lr-add R1
 
 ovn-nbctl lswitch-add ls1
 ovn-nbctl lswitch-add ls2
@@ -2377,8 +2377,8 @@ ovn_start
 # connected to it.
 # R2 has alice (172.16.1.0/24) and bob (172.16.2.0/24) connected to it.
 
-ovn-nbctl create Logical_Router name=R1
-ovn-nbctl create Logical_Router name=R2
+ovn-nbctl lr-add R1
+ovn-nbctl lr-add R2
 
 ovn-nbctl lswitch-add foo
 ovn-nbctl lswitch-add alice
@@ -2645,9 +2645,9 @@ ovn_start
 # connected to it. R2 has alice (172.16.1.0/24) and R3 has bob (10.32.1.0/24)
 # connected to it.
 
-ovn-nbctl create Logical_Router name=R1
-ovn-nbctl create Logical_Router name=R2
-ovn-nbctl create Logical_Router name=R3
+ovn-nbctl lr-add R1
+ovn-nbctl lr-add R2
+ovn-nbctl lr-add R3
 
 ovn-nbctl lswitch-add foo
 ovn-nbctl lswitch-add alice
@@ -3064,7 +3064,7 @@ ovn_start
 # One LR - R1 has switch ls1 (191.168.1.0/24) connected to it,
 # and has switch ls2 (172.16.1.0/24) connected to it.
 
-ovn-nbctl create Logical_Router name=R1
+ovn-nbctl lr-add R1
 
 ovn-nbctl lswitch-add ls1
 ovn-nbctl lswitch-add ls2
