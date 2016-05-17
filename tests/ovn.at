@@ -2384,17 +2384,9 @@ ovn-nbctl lrp-add R1 R1_R2 00:00:00:02:03:04 20.0.0.1/24 R2_R1
 ovn-nbctl lrp-add R2 R2_R1 00:00:00:02:03:05 20.0.0.2/24 R1_R2
 
 #install static routes
-ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
-ip_prefix=172.16.1.0/24 nexthop=20.0.0.2 -- add Logical_Router \
-R1 static_routes @lrt
-
-ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
-ip_prefix=172.16.2.0/24 nexthop=20.0.0.2 output_port=R1_R2 -- add Logical_Router \
-R1 static_routes @lrt
-
-ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
-ip_prefix=192.168.1.0/24 nexthop=20.0.0.1 -- add Logical_Router \
-R2 static_routes @lrt
+ovn-nbctl lr-route-add R1 172.16.1.0/24 20.0.0.2
+ovn-nbctl lr-route-add R2 172.16.2.0/24 20.0.0.2 R1_R2
+ovn-nbctl lr-route-add R2 192.168.1.0/24 20.0.0.1
 
 # Create logical port foo1 in foo
 ovn-nbctl lport-add foo foo1 \
@@ -2649,29 +2641,14 @@ ovn-nbctl lport-add join r3-join -- set Logical_port r3-join type=router \
     options:router-port=R3_join addresses='"00:00:04:01:02:05"'
 
 #install static routes
-ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
-ip_prefix=172.16.1.0/24 nexthop=20.0.0.2 -- add Logical_Router \
-R1 static_routes @lrt
+ovn-nbctl lr-route-add R1 172.16.1.0/24 20.0.0.2
+ovn-nbctl lr-route-add R1 10.32.1.0/24 20.0.0.3
 
-ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
-ip_prefix=10.32.1.0/24 nexthop=20.0.0.3 -- add Logical_Router \
-R1 static_routes @lrt
+ovn-nbctl lr-route-add R2 192.168.1.0/24 20.0.0.1
+ovn-nbctl lr-route-add R2 10.32.1.0/24 20.0.0.3
 
-ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
-ip_prefix=192.168.1.0/24 nexthop=20.0.0.1 -- add Logical_Router \
-R2 static_routes @lrt
-
-ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
-ip_prefix=10.32.1.0/24 nexthop=20.0.0.3 -- add Logical_Router \
-R2 static_routes @lrt
-
-ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
-ip_prefix=192.168.1.0/24 nexthop=20.0.0.1 -- add Logical_Router \
-R3 static_routes @lrt
-
-ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
-ip_prefix=172.16.1.0/24 nexthop=20.0.0.2 -- add Logical_Router \
-R3 static_routes @lrt
+ovn-nbctl lr-route-add R3 192.168.1.0/24 20.0.0.1
+ovn-nbctl lr-route-add R3 172.16.1.0/24 20.0.0.2
 
 # Create logical port foo1 in foo
 ovn-nbctl lport-add foo foo1 \

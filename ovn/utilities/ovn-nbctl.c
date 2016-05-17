@@ -350,6 +350,13 @@ Logical router port commands:\n\
   lrp-get-enabled PORT      get administrative state PORT\n\
                             ('enabled' or 'disabled')\n\
 \n\
+Route commands:\n\
+  lr-route-add ROUTER PREFIX NEXTHOP [PORT]\n\
+                            add a route to ROUTER\n\
+  lr-route-del ROUTER [PREFIX]\n\
+                            remove routes from ROUTER\n\
+  lr-route-list ROUTER      print routes for ROUTER\n\
+\n\
 %s\
 \n\
 Options:\n\
@@ -1268,6 +1275,189 @@ nbctl_lr_list(struct ctl_context *ctx)
     smap_destroy(&lrs);
     free(nodes);
 }
+
+/* The caller must free the returned string. */
+static char *
+normalize_ipv4_prefix(ovs_be32 ipv4, unsigned int plen)
+{
+    ovs_be32 network = ipv4 & be32_prefix_mask(plen);
+    if (plen == 32) {
+        return xasprintf(IP_FMT, IP_ARGS(network));
+    } else {
+        return xasprintf(IP_FMT"/%d", IP_ARGS(network), plen);
+    }
+}
+
+/* The caller must free the returned string. */
+static char *
+normalize_ipv6_prefix(struct in6_addr ipv6, unsigned int plen)
+{
+    char network_s[INET6_ADDRSTRLEN];
+
+    struct in6_addr mask = ipv6_create_mask(plen);
+    struct in6_addr network = ipv6_addr_bitand(&ipv6, &mask);
+
+    inet_ntop(AF_INET6, &network, network_s, INET6_ADDRSTRLEN);
+    if (plen == 128) {
+        return xasprintf("%s", network_s);
+    } else {
+        return xasprintf("%s/%d", network_s, plen);
+    }
+}
+
+/* The caller must free the returned string. */
+static char *
+normalize_prefix_str(const char *orig_prefix)
+{
+    unsigned int plen;
+    ovs_be32 ipv4;
+    char *error;
+
+    error = ip_parse_cidr(orig_prefix, &ipv4, &plen);
+    if (!error) {
+        return normalize_ipv4_prefix(ipv4, plen);
+    } else {
+        struct in6_addr ipv6;
+        free(error);
+
+        error = ipv6_parse_cidr(orig_prefix, &ipv6, &plen);
+        if (error) {
+            free(error);
+            return NULL;
+        }
+        return normalize_ipv6_prefix(ipv6, plen);
+    }
+}
+
+static void
+nbctl_lr_route_add(struct ctl_context *ctx)
+{
+    const struct nbrec_logical_router *lr;
+    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+    char *prefix, *next_hop;
+
+    prefix = normalize_prefix_str(ctx->argv[2]);
+    if (!prefix) {
+        ctl_fatal("bad prefix argument: %s", ctx->argv[2]);
+    }
+
+    next_hop = normalize_prefix_str(ctx->argv[3]);
+    if (!next_hop) {
+        ctl_fatal("bad next hop argument: %s", ctx->argv[3]);
+    }
+
+    if (strchr(prefix, '.')) {
+        ovs_be32 hop_ipv4;
+        if (!ip_parse(ctx->argv[3], &hop_ipv4)) {
+            ctl_fatal("bad IPv4 nexthop argument: %s", ctx->argv[3]);
+        }
+    } else {
+        struct in6_addr hop_ipv6;
+        if (!ipv6_parse(ctx->argv[3], &hop_ipv6)) {
+            ctl_fatal("bad IPv6 nexthop argument: %s", ctx->argv[3]);
+        }
+    }
+
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
+    for (int i = 0; i < lr->n_static_routes; i++) {
+        const struct nbrec_logical_router_static_route *route
+            = lr->static_routes[i];
+        char *rt_prefix;
+
+        rt_prefix = normalize_prefix_str(lr->static_routes[i]->ip_prefix);
+        if (!rt_prefix) {
+            /* Ignore existing prefix we couldn't parse. */
+            continue;
+        }
+
+        if (strcmp(rt_prefix, prefix)) {
+            free(rt_prefix);
+            continue;
+        }
+
+        if (!may_exist) {
+            ctl_fatal("duplicate prefix: %s", prefix);
+        }
+
+        /* Update the next hop for an existing route. */
+        nbrec_logical_router_verify_static_routes(lr);
+        nbrec_logical_router_static_route_verify_ip_prefix(route);
+        nbrec_logical_router_static_route_verify_nexthop(route);
+        nbrec_logical_router_static_route_set_ip_prefix(route, prefix);
+        nbrec_logical_router_static_route_set_nexthop(route, next_hop);
+        free(rt_prefix);
+        free(next_hop);
+        free(prefix);
+        return;
+    }
+
+    struct nbrec_logical_router_static_route *route;
+    route = nbrec_logical_router_static_route_insert(ctx->txn);
+    nbrec_logical_router_static_route_set_ip_prefix(route, prefix);
+    nbrec_logical_router_static_route_set_nexthop(route, next_hop);
+    if (ctx->argc == 5) {
+        nbrec_logical_router_static_route_set_output_port(route, ctx->argv[4]);
+    }
+
+    nbrec_logical_router_verify_static_routes(lr);
+    struct nbrec_logical_router_static_route **new_routes
+        = xmalloc(sizeof *new_routes * (lr->n_static_routes + 1));
+    memcpy(new_routes, lr->static_routes,
+           sizeof *new_routes * lr->n_static_routes);
+    new_routes[lr->n_static_routes] = route;
+    nbrec_logical_router_set_static_routes(lr, new_routes,
+                                           lr->n_static_routes + 1);
+    free(new_routes);
+    free(next_hop);
+    free(prefix);
+}
+
+static void
+nbctl_lr_route_del(struct ctl_context *ctx)
+{
+    const struct nbrec_logical_router *lr;
+    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    if (ctx->argc == 2) {
+        /* If a prefix is not specified, delete all routes. */
+        nbrec_logical_router_set_static_routes(lr, NULL, 0);
+        return;
+    }
+
+    char *prefix = normalize_prefix_str(ctx->argv[2]);
+    if (!prefix) {
+        ctl_fatal("bad prefix argument: %s", ctx->argv[2]);
+    }
+
+    for (int i = 0; i < lr->n_static_routes; i++) {
+        char *rt_prefix = normalize_prefix_str(lr->static_routes[i]->ip_prefix);
+        if (!rt_prefix) {
+            /* Ignore existing prefix we couldn't parse. */
+            continue;
+        }
+
+        if (!strcmp(prefix, rt_prefix)) {
+            struct nbrec_logical_router_static_route **new_routes
+                = xmemdup(lr->static_routes,
+                          sizeof *new_routes * lr->n_static_routes);
+
+            new_routes[i] = lr->static_routes[lr->n_static_routes - 1];
+            nbrec_logical_router_verify_static_routes(lr);
+            nbrec_logical_router_set_static_routes(lr, new_routes,
+                                                 lr->n_static_routes - 1);
+            free(new_routes);
+            free(rt_prefix);
+            free(prefix);
+            return;
+        }
+        free(rt_prefix);
+    }
+
+    if (!shash_find(&ctx->options, "--if-exists")) {
+        ctl_fatal("no matching prefix: %s", prefix);
+    }
+    free(prefix);
+}
 
 static const struct nbrec_logical_router_port *
 lrp_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
@@ -1378,9 +1568,9 @@ nbctl_lrp_add(struct ctl_context *ctx)
         ctl_fatal("%s: invalid mac address.", mac);
     }
 
-    ovs_be32 ip;
+    ovs_be32 ipv4;
     unsigned int plen;
-    char *error = ip_parse_cidr(network, &ip, &plen);
+    char *error = ip_parse_cidr(network, &ipv4, &plen);
     if (error) {
         free(error);
         struct in6_addr ipv6;
@@ -1521,6 +1711,130 @@ nbctl_lrp_get_enabled(struct ctl_context *ctx)
                   *lrp->enabled ? "enabled" : "disabled");
 }
 
+struct ipv4_route {
+    int plen;
+    ovs_be32 addr;
+    const struct nbrec_logical_router_static_route *route;
+};
+
+static int
+ipv4_route_cmp(const void *route1_, const void *route2_)
+{
+    const struct ipv4_route *route1p = route1_;
+    const struct ipv4_route *route2p = route2_;
+
+    if (route1p->plen != route2p->plen) {
+        return route1p->plen > route2p->plen ? -1 : 1;
+    } else if (route1p->addr != route2p->addr) {
+        return ntohl(route1p->addr) < ntohl(route2p->addr) ? -1 : 1;
+    } else {
+        return 0;
+    }
+}
+
+struct ipv6_route {
+    int plen;
+    struct in6_addr addr;
+    const struct nbrec_logical_router_static_route *route;
+};
+
+static int
+ipv6_route_cmp(const void *route1_, const void *route2_)
+{
+    const struct ipv6_route *route1p = route1_;
+    const struct ipv6_route *route2p = route2_;
+
+    if (route1p->plen != route2p->plen) {
+        return route1p->plen > route2p->plen ? -1 : 1;
+    }
+    return memcmp(&route1p->addr, &route2p->addr, sizeof(route1p->addr));
+}
+
+static void
+print_route(const struct nbrec_logical_router_static_route *route, struct ds *s)
+{
+
+    char *prefix = normalize_prefix_str(route->ip_prefix);
+    char *next_hop = normalize_prefix_str(route->nexthop);
+    ds_put_format(s, "%25s %25s", prefix, next_hop);
+    free(prefix);
+    free(next_hop);
+
+    if (route->output_port) {
+        ds_put_format(s, " %s", route->output_port);
+    }
+    ds_put_char(s, '\n');
+}
+
+static void
+nbctl_lr_route_list(struct ctl_context *ctx)
+{
+    const struct nbrec_logical_router *lr;
+    struct ipv4_route *ipv4_routes;
+    struct ipv6_route *ipv6_routes;
+    size_t n_ipv4_routes = 0;
+    size_t n_ipv6_routes = 0;
+
+    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    ipv4_routes = xmalloc(sizeof *ipv4_routes * lr->n_static_routes);
+    ipv6_routes = xmalloc(sizeof *ipv6_routes * lr->n_static_routes);
+
+    for (int i = 0; i < lr->n_static_routes; i++) {
+        const struct nbrec_logical_router_static_route *route
+            = lr->static_routes[i];
+        unsigned int plen;
+        ovs_be32 ipv4;
+        char *error;
+
+        error = ip_parse_cidr(route->ip_prefix, &ipv4, &plen);
+        if (!error) {
+            ipv4_routes[n_ipv4_routes].plen = plen;
+            ipv4_routes[n_ipv4_routes].addr = ipv4;
+            ipv4_routes[n_ipv4_routes].route = route;
+            n_ipv4_routes++;
+        } else {
+            free(error);
+
+            struct in6_addr ipv6;
+            if (!ipv6_parse_cidr(route->ip_prefix, &ipv6, &plen)) {
+                ipv6_routes[n_ipv6_routes].plen = plen;
+                ipv6_routes[n_ipv6_routes].addr = ipv6;
+                ipv6_routes[n_ipv6_routes].route = route;
+                n_ipv6_routes++;
+            } else {
+                /* Invalid prefix. */
+                VLOG_WARN("router "UUID_FMT" (%s) has invalid prefix: %s",
+                          UUID_ARGS(&lr->header_.uuid), lr->name,
+                          route->ip_prefix);
+                free(error);
+                continue;
+            }
+        }
+    }
+
+    qsort(ipv4_routes, n_ipv4_routes, sizeof *ipv4_routes, ipv4_route_cmp);
+    qsort(ipv6_routes, n_ipv6_routes, sizeof *ipv6_routes, ipv6_route_cmp);
+
+    if (n_ipv4_routes) {
+        ds_put_cstr(&ctx->output, "IPv4 Routes\n");
+    }
+    for (int i = 0; i < n_ipv4_routes; i++) {
+        print_route(ipv4_routes[i].route, &ctx->output);
+    }
+
+    if (n_ipv6_routes) {
+        ds_put_format(&ctx->output, "%sIPv6 Routes\n",
+                      n_ipv4_routes ?  "\n" : "");
+    }
+    for (int i = 0; i < n_ipv6_routes; i++) {
+        print_route(ipv6_routes[i].route, &ctx->output);
+    }
+
+    free(ipv4_routes);
+    free(ipv6_routes);
+}
+
 static const struct ctl_table_class tables[] = {
     {&nbrec_table_logical_switch,
      {{&nbrec_table_logical_switch, &nbrec_logical_switch_col_name, NULL},
@@ -1815,6 +2129,14 @@ static const struct ctl_command_syntax nbctl_commands[] = {
       NULL, "", RW },
     { "lrp-get-enabled", 1, 1, "PORT", NULL, nbctl_lrp_get_enabled,
       NULL, "", RO },
+
+    /* logical router route commands. */
+    { "lr-route-add", 3, 4, "ROUTER PREFIX NEXTHOP [PORT]", NULL,
+      nbctl_lr_route_add, NULL, "--may-exist", RW },
+    { "lr-route-del", 1, 2, "ROUTER [PREFIX]", NULL, nbctl_lr_route_del,
+      NULL, "--if-exists", RW },
+    { "lr-route-list", 1, 1, "ROUTER", NULL, nbctl_lr_route_list, NULL,
+      "", RO },
 
     {NULL, 0, 0, NULL, NULL, NULL, NULL, "", RO},
 };

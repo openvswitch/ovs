@@ -329,7 +329,53 @@
         Prints the administrative state of <var>port</var>, either
         <code>enabled</code> or <code>disabled</code>.
       </dd>
+    </dl>
 
+    <h1>Logical Router Static Route Commands</h1>
+
+    <dl>
+      <dt>[<code>--may-exist</code>] <code>lr-route-add</code> <var>router</var> <var>prefix</var> <var>nexthop</var> [<var>port</var>]</dt>
+      <dd>
+        <p>
+          Adds the specified route to <var>router</var>.
+          <var>prefix</var> describes an IPv4 or IPv6 prefix for this
+          route, such as <code>192.168.100.0/24</code>.
+          <var>nexthop</var> specifies the gateway to use for this
+          route, which should be the IP address of one of
+          <var>router</var> logical router ports or the IP address of a
+          logical port.  If <var>port</var> is specified, packets that
+          match this route will be sent out that port.  When
+          <var>port</var> is omitted, OVN infers the output port based
+          on <var>nexthop</var>.
+        </p>
+
+        <p>
+          It is an error if a route with <var>prefix</var> already exists,
+          unless <code>--may-exist</code> is specified.
+        </p>
+      </dd>
+
+      <dt>[<code>--if-exists</code>] <code>lr-route-del</code> <var>router</var> [<var>prefix</var>]</dt>
+      <dd>
+        <p>
+          Deletes routes from <var>router</var>.  If only <var>router</var>
+          is supplied, all the routes from the logical router are
+          deleted.  If <var>prefix</var> is also specified, then all the
+          routes that match the prefix will be deleted from the logical
+          router.
+        </p>
+
+        <p>
+          It is an error if <code>prefix</code> is specified and there
+          is no matching route entry, unless <code>--if-exists</code> is
+          specified.
+        </p>
+      </dd>
+
+      <dt><code>lr-route-list</code> <var>router</var></dt>
+      <dd>
+        Lists the routes on <var>router</var>.
+      </dd>
     </dl>
 
     <h1>Database Commands</h1>
