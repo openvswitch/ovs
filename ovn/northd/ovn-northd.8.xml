@@ -412,10 +412,10 @@
       </li>
     </ul>
 
-    <h3>Ingress Table 9: ARP responder</h3>
+    <h3>Ingress Table 9: ARP/ND responder</h3>
 
     <p>
-      This table implements ARP responder for known IPs.  It contains these
+      This table implements ARP/ND responder for known IPs.  It contains these
       logical flows:
     </p>
 
@@ -427,8 +427,8 @@
 
       <li>
         <p>
-          Priority-50 flows that matches ARP requests to each known IP address
-          <var>A</var> of logical port <var>P</var>, and respond with ARP
+          Priority-50 flows that match ARP requests to each known IP address
+          <var>A</var> of every logical router port, and respond with ARP
           replies directly with corresponding Ethernet address <var>E</var>:
         </p>
 
@@ -440,9 +440,36 @@ arp.tha = arp.sha;
 arp.sha = <var>E</var>;
 arp.tpa = arp.spa;
 arp.spa = <var>A</var>;
-outport = <var>P</var>;
+outport = inport;
 inport = ""; /* Allow sending out inport. */
 output;
+        </pre>
+
+        <p>
+          These flows are omitted for logical ports (other than router ports)
+          that are down.
+        </p>
+      </li>
+
+      <li>
+        <p>
+          Priority-50 flows that match IPv6 ND neighbor solicitations to
+          each known IP address <var>A</var> (and <var>A</var>'s
+          solicited node address) of every logical router port, and
+          respond with neighbor advertisements directly with
+          corresponding Ethernet address <var>E</var>:
+        </p>
+
+        <pre>
+nd_na {
+    eth.src = <var>E</var>;
+    ip6.src = <var>A</var>;
+    nd.target = <var>A</var>;
+    nd.tll = <var>E</var>;
+    outport = inport;
+    inport = ""; /* Allow sending out inport. */
+    output;
+};
         </pre>
 
         <p>
@@ -712,7 +739,8 @@ output;
             network source or destination)
           </li>
           <li>
-            <code>ip4.src</code> is any IP address owned by the router.
+            <code>ip4.src</code> or <code>ip6.src</code> is any IP
+            address owned by the router.
           </li>
           <li>
             <code>ip4.src</code> is the broadcast address of any IP network
@@ -725,19 +753,37 @@ output;
         <p>
           ICMP echo reply.  These flows reply to ICMP echo requests received
           for the router's IP address.  Let <var>A</var> be an IP address
-          owned by a router port.  Then, for each <var>A</var>, a priority-90
-          flow matches on <code>ip4.dst == <var>A</var></code> and <code>
-          icmp4.type == 8 &amp;&amp; icmp4.code == 0</code> (ICMP echo
-          request).  The port of the router that receives the echo request
-          does not matter. Also, the ip.ttl of the echo request packet is not
-          checked, so it complies with RFC 1812, section 4.2.2.9. These flows
-          use the following actions:
+          owned by a router port.  Then, for each <var>A</var> that is
+          an IPv4 address, a priority-90 flow matches on
+          <code>ip4.dst == <var>A</var></code> and
+          <code>icmp4.type == 8 &amp;&amp; icmp4.code == 0</code>
+          (ICMP echo request).  For each <var>A</var> that is an IPv6
+          address, a priority-90 flow matches on
+          <code>ip6.dst == <var>A</var></code> and
+          <code>icmp6.type == 128 &amp;&amp; icmp6.code == 0</code>
+          (ICMPv6 echo request).  The port of the router that receives the
+          echo request does not matter. Also, the <code>ip.ttl</code> of
+          the echo request packet is not checked, so it complies with
+          RFC 1812, section 4.2.2.9. Flows for ICMPv4 echo requests use the
+          following actions:
         </p>
 
         <pre>
 ip4.dst &lt;-&gt; ip4.src;
 ip.ttl = 255;
 icmp4.type = 0;
+inport = ""; /* Allow sending out inport. */
+next;
+        </pre>
+
+        <p>
+          Flows for ICMPv6 echo requests use the following actions:
+        </p>
+
+        <pre>
+ip6.dst &lt;-&gt; ip6.src;
+ip.ttl = 255;
+icmp6.type = 129;
 inport = ""; /* Allow sending out inport. */
 next;
         </pre>
@@ -801,6 +847,35 @@ output;
         logical router's ARP table.  A priority-90 flow with match <code>arp.op
         == 2</code> has actions <code>put_arp(inport, arp.spa,
         arp.sha);</code>.
+      </li>
+
+      <li>
+        <p>
+          Reply to IPv6 Neighbor Solicitations.
+        </p>
+
+        <p>
+          These flows reply to Neighbor Solictation requests for the
+          router's own IPv6 address.  For each router port <var>P</var>
+          that owns IPv6 address <var>A</var>, solicited node address
+          <var>S</var>, and Ethernet address
+          <var>E</var>, a priority-90 flow matches <code>inport ==
+          <var>P</var> &amp;&amp; nd_ns &amp;&amp; ip6.dst == {<var>A</var>,
+          <var>E</var>} &amp;&amp; nd.target == <var>A</var></code>
+          with the following actions:
+        </p>
+
+        <pre>
+nd_na {
+    eth.src = <var>E</var>;
+    ip6.src = <var>A</var>;
+    nd.target = <var>A</var>;
+    nd.tll = <var>E</var>;
+    outport = inport;
+    inport = ""; /* Allow sending out inport. */
+    output;
+};
+        </pre>
       </li>
 
       <li>
@@ -976,14 +1051,16 @@ icmp4 {
     <h3>Ingress Table 4: IP Routing</h3>
 
     <p>
-      A packet that arrives at this table is an IP packet that should be routed
-      to the address in <code>ip4.dst</code>.  This table implements IP
-      routing, setting <code>reg0</code> to the next-hop IP address (leaving
-      <code>ip4.dst</code>, the packet's final destination, unchanged) and
-      advances to the next table for ARP resolution.  It also sets
-      <code>reg1</code> to the IP address owned by the selected router port
-      (which is used later in table 6 as the IP source address for an ARP
-      request, if needed).
+      A packet that arrives at this table is an IP packet that should be
+      routed to the address in <code>ip4.dst</code> or
+      <code>ip6.dst</code>.  This table implements IP routing, setting
+      <code>reg0</code> (or <code>xxreg0</code> for IPv6) to the next-hop IP
+      address (leaving <code>ip4.dst</code> or <code>ip6.dst</code>, the
+      packet's final destination, unchanged) and advances to the next
+      table for ARP resolution.  It also sets <code>reg1</code> (or
+      <code>xxreg1</code> to the IP address owned by the selected router
+      port (which is used later in table 6 as the IP source address for
+      an ARP request, if needed).
     </p>
 
     <p>
@@ -993,7 +1070,7 @@ icmp4 {
     <ul>
       <li>
         <p>
-          Routing table.  For each route to IPv4 network <var>N</var> with
+          IPv4 routing table.  For each route to IPv4 network <var>N</var> with
           netmask <var>M</var>, on router port <var>P</var> with IP address
           <var>A</var> and Ethernet
           address <var>E</var>, a logical flow with match <code>ip4.dst ==
@@ -1022,16 +1099,52 @@ next;
           is the next hop IP address.  Else it is <code>ip4.dst</code>.
         </p>
       </li>
+
+      <li>
+        <p>
+          IPv6 routing table.  For each route to IPv6 network
+          <var>N</var> with netmask <var>M</var>, on router port
+          <var>P</var> with IP address <var>A</var> and Ethernet address
+          <var>E</var>, a logical flow with match in CIDR notation
+          <code>ip6.dst == <var>N</var>/<var>M</var></code>,
+          whose priority is the integer value of <var>M</var>, has the
+          following actions:
+        </p>
+
+        <pre>
+ip.ttl--;
+xxreg0 = <var>G</var>;
+xxreg1 = <var>A</var>;
+eth.src = <var>E</var>;
+outport = <var>P</var>;
+inport = ""; /* Allow sending out inport. */
+next;
+        </pre>
+
+        <p>
+          (Ingress table 1 already verified that <code>ip.ttl--;</code> will
+          not yield a TTL exceeded error.)
+        </p>
+
+        <p>
+          If the route has a gateway, <var>G</var> is the gateway IP address.
+          Instead, if the route is from a configured static route, <var>G</var>
+          is the next hop IP address.  Else it is <code>ip6.dst</code>.
+        </p>
+      </li>
     </ul>
 
-    <h3>Ingress Table 5: ARP Resolution</h3>
+    <h3>Ingress Table 5: ARP/ND Resolution</h3>
 
     <p>
-      Any packet that reaches this table is an IP packet whose next-hop IP
-      address is in <code>reg0</code>.  (<code>ip4.dst</code> is the final
-      destination.)  This table resolves the IP address in <code>reg0</code>
-      into an output port in <code>outport</code> and an Ethernet address in
-      <code>eth.dst</code>, using the following flows:
+      Any packet that reaches this table is an IP packet whose next-hop
+      IPv4 address is in <code>reg0</code> or IPv6 address is in
+      <code>xxreg0</code>.  (<code>ip4.dst</code> or
+      <code>ip6.dst</code> contains the final destination.)  This table
+      resolves the IP address in <code>reg0</code> (or
+      <code>xxreg0</code>) into an output port in <code>outport</code>
+      and an Ethernet address in <code>eth.dst</code>, using the
+      following flows:
     </p>
 
     <ul>
@@ -1048,18 +1161,35 @@ next;
         </p>
 
         <p>
-          For each IP address <var>A</var> whose host is known to have Ethernet
-          address <var>E</var> on router port <var>P</var>, a priority-100 flow
-          with match <code>outport === <var>P</var> &amp;&amp; reg0 ==
+          For each IPv4 address <var>A</var> whose host is known to have
+          Ethernet address <var>E</var> on router port <var>P</var>, a
+          priority-100 flow with match <code>outport === <var>P</var>
+          &amp;&amp; reg0 == <var>A</var></code> has actions
+          <code>eth.dst = <var>E</var>; next;</code>.
+        </p>
+
+        <p>
+          For each IPv6 address <var>A</var> whose host is known to have
+          Ethernet address <var>E</var> on router port <var>P</var>, a
+          priority-100 flow with match <code>outport === <var>P</var>
+          &amp;&amp; xxreg0 == <var>A</var></code> has actions
+          <code>eth.dst = <var>E</var>; next;</code>.
+        </p>
+
+        <p>
+          For each logical router port with an IPv4 address <var>A</var> and
+          a mac address of <var>E</var> that is reachable via a different
+          logical router port <var>P</var>, a priority-100 flow with
+          match <code>outport === <var>P</var> &amp;&amp; reg0 ==
           <var>A</var></code> has actions <code>eth.dst = <var>E</var>;
           next;</code>.
         </p>
 
         <p>
-          For each logical router port with an IP address <var>A</var> and
+          For each logical router port with an IPv6 address <var>A</var> and
           a mac address of <var>E</var> that is reachable via a different
           logical router port <var>P</var>, a priority-100 flow with
-          match <code>outport === <var>P</var> &amp;&amp; reg0 ==
+          match <code>outport === <var>P</var> &amp;&amp; xxreg0 ==
           <var>A</var></code> has actions <code>eth.dst = <var>E</var>;
           next;</code>.
         </p>
