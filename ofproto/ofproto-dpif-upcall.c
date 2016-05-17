@@ -434,6 +434,9 @@ udpif_destroy(struct udpif *udpif)
 {
     udpif_stop_threads(udpif);
 
+    dpif_register_dp_purge_cb(udpif->dpif, NULL, udpif);
+    dpif_register_upcall_cb(udpif->dpif, NULL, udpif);
+
     for (int i = 0; i < N_UMAPS; i++) {
         cmap_destroy(&udpif->ukeys[i].cmap);
         ovs_mutex_destroy(&udpif->ukeys[i].mutex);
