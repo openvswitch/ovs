@@ -3605,6 +3605,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                           uint16_t controller_id,
                           const uint8_t *userdata, size_t userdata_len)
 {
+    struct dp_packet_batch batch;
     struct dp_packet *packet;
 
     ctx->xout->slow |= SLOW_CONTROLLER;
@@ -3614,8 +3615,8 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     }
 
     packet = dp_packet_clone(ctx->xin->packet);
-
-    odp_execute_actions(NULL, &packet, 1, false,
+    packet_batch_init_packet(&batch, packet);
+    odp_execute_actions(NULL, &batch, false,
                         ctx->odp_actions->data, ctx->odp_actions->size, NULL);
 
     /* A packet sent by an action in a table-miss rule is considered an

@@ -59,6 +59,7 @@ extern "C" {
  *      netdev and access each of those from a different thread.)
  */
 
+struct dp_packet_batch;
 struct dp_packet;
 struct netdev_class;
 struct netdev_rxq;
@@ -143,23 +144,21 @@ void netdev_rxq_close(struct netdev_rxq *);
 const char *netdev_rxq_get_name(const struct netdev_rxq *);
 int netdev_rxq_get_queue_id(const struct netdev_rxq *);
 
-int netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet **buffers,
-                    int *cnt);
+int netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet_batch *);
 void netdev_rxq_wait(struct netdev_rxq *);
 int netdev_rxq_drain(struct netdev_rxq *);
 
 /* Packet transmission. */
-int netdev_send(struct netdev *, int qid, struct dp_packet **, int cnt,
+int netdev_send(struct netdev *, int qid, struct dp_packet_batch *,
                 bool may_steal);
 void netdev_send_wait(struct netdev *, int qid);
 
 int netdev_build_header(const struct netdev *, struct ovs_action_push_tnl *data,
                         const struct flow *tnl_flow);
 int netdev_push_header(const struct netdev *netdev,
-                       struct dp_packet **buffers, int cnt,
+                       struct dp_packet_batch *,
                        const struct ovs_action_push_tnl *data);
-int netdev_pop_header(struct netdev *netdev, struct dp_packet **buffers,
-                      int *pcnt);
+int netdev_pop_header(struct netdev *netdev, struct dp_packet_batch *);
 
 /* Hardware address. */
 int netdev_set_etheraddr(struct netdev *, const struct eth_addr mac);
@@ -276,7 +275,6 @@ typedef void netdev_dump_queue_stats_cb(unsigned int queue_id,
 int netdev_dump_queue_stats(const struct netdev *,
                             netdev_dump_queue_stats_cb *, void *aux);
 
-enum { NETDEV_MAX_BURST = 32 }; /* Maximum number packets in a batch. */
 extern struct seq *tnl_conf_seq;
 
 #ifndef _WIN32

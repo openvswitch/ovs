@@ -473,14 +473,14 @@ static void do_del_port(struct dp_netdev *dp, struct dp_netdev_port *)
 static int dpif_netdev_open(const struct dpif_class *, const char *name,
                             bool create, struct dpif **);
 static void dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
-                                      struct dp_packet **, int c,
+                                      struct dp_packet_batch *,
                                       bool may_steal,
                                       const struct nlattr *actions,
                                       size_t actions_len);
 static void dp_netdev_input(struct dp_netdev_pmd_thread *,
-                            struct dp_packet **, int cnt, odp_port_t port_no);
+                            struct dp_packet_batch *, odp_port_t port_no);
 static void dp_netdev_recirculate(struct dp_netdev_pmd_thread *,
-                                  struct dp_packet **, int cnt);
+                                  struct dp_packet_batch *);
 
 static void dp_netdev_disable_upcall(struct dp_netdev *);
 static void dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd);
@@ -2342,7 +2342,7 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_pmd_thread *pmd;
-    struct dp_packet *pp;
+    struct dp_packet_batch pp;
 
     if (dp_packet_size(execute->packet) < ETH_HEADER_LEN ||
         dp_packet_size(execute->packet) > UINT16_MAX) {
@@ -2364,8 +2364,8 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
         ovs_mutex_lock(&dp->port_mutex);
     }
 
-    pp = execute->packet;
-    dp_netdev_execute_actions(pmd, &pp, 1, false, execute->actions,
+    packet_batch_init_packet(&pp, execute->packet);
+    dp_netdev_execute_actions(pmd, &pp, false, execute->actions,
                               execute->actions_len);
     if (pmd->core_id == NON_PMD_CORE_ID) {
         dp_netdev_pmd_unref(pmd);
@@ -2559,17 +2559,18 @@ dp_netdev_process_rxq_port(struct dp_netdev_pmd_thread *pmd,
                            struct dp_netdev_port *port,
                            struct netdev_rxq *rxq)
 {
-    struct dp_packet *packets[NETDEV_MAX_BURST];
-    int error, cnt;
+    struct dp_packet_batch batch;
+    int error;
 
+    dp_packet_batch_init(&batch);
     cycles_count_start(pmd);
-    error = netdev_rxq_recv(rxq, packets, &cnt);
+    error = netdev_rxq_recv(rxq, &batch);
     cycles_count_end(pmd, PMD_CYCLES_POLLING);
     if (!error) {
         *recirc_depth_get() = 0;
 
         cycles_count_start(pmd);
-        dp_netdev_input(pmd, packets, cnt, port->port_no);
+        dp_netdev_input(pmd, &batch, port->port_no);
         cycles_count_end(pmd, PMD_CYCLES_PROCESSING);
     } else if (error != EAGAIN && error != EOPNOTSUPP) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
@@ -3330,13 +3331,11 @@ dpif_netdev_packet_get_rss_hash(struct dp_packet *packet,
 }
 
 struct packet_batch_per_flow {
-    unsigned int packet_count;
     unsigned int byte_count;
     uint16_t tcp_flags;
-
     struct dp_netdev_flow *flow;
 
-    struct dp_packet *packets[NETDEV_MAX_BURST];
+    struct dp_packet_batch array;
 };
 
 static inline void
@@ -3344,9 +3343,9 @@ packet_batch_per_flow_update(struct packet_batch_per_flow *batch,
                              struct dp_packet *packet,
                              const struct miniflow *mf)
 {
-    batch->tcp_flags |= miniflow_get_tcp_flags(mf);
-    batch->packets[batch->packet_count++] = packet;
     batch->byte_count += dp_packet_size(packet);
+    batch->tcp_flags |= miniflow_get_tcp_flags(mf);
+    batch->array.packets[batch->array.count++] = packet;
 }
 
 static inline void
@@ -3356,7 +3355,7 @@ packet_batch_per_flow_init(struct packet_batch_per_flow *batch,
     flow->batch = batch;
 
     batch->flow = flow;
-    batch->packet_count = 0;
+    dp_packet_batch_init(&batch->array);
     batch->byte_count = 0;
     batch->tcp_flags = 0;
 }
@@ -3369,12 +3368,12 @@ packet_batch_per_flow_execute(struct packet_batch_per_flow *batch,
     struct dp_netdev_actions *actions;
     struct dp_netdev_flow *flow = batch->flow;
 
-    dp_netdev_flow_used(flow, batch->packet_count, batch->byte_count,
+    dp_netdev_flow_used(flow, batch->array.count, batch->byte_count,
                         batch->tcp_flags, now);
 
     actions = dp_netdev_flow_get_actions(flow);
 
-    dp_netdev_execute_actions(pmd, batch->packets, batch->packet_count, true,
+    dp_netdev_execute_actions(pmd, &batch->array, true,
                               actions->actions, actions->size);
 }
 
@@ -3405,14 +3404,16 @@ dp_netdev_queue_batches(struct dp_packet *pkt,
  * initialized by this function using 'port_no'.
  */
 static inline size_t
-emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
-               size_t cnt, struct netdev_flow_key *keys,
+emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet_batch *packets_,
+               struct netdev_flow_key *keys,
                struct packet_batch_per_flow batches[], size_t *n_batches,
                bool md_is_valid, odp_port_t port_no)
 {
     struct emc_cache *flow_cache = &pmd->flow_cache;
     struct netdev_flow_key *key = &keys[0];
     size_t i, n_missed = 0, n_dropped = 0;
+    struct dp_packet **packets = packets_->packets;
+    int cnt = packets_->count;
 
     for (i = 0; i < cnt; i++) {
         struct dp_netdev_flow *flow;
@@ -3459,19 +3460,22 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
 
 static inline void
 fast_path_processing(struct dp_netdev_pmd_thread *pmd,
-                     struct dp_packet **packets, size_t cnt,
+                     struct dp_packet_batch *packets_,
                      struct netdev_flow_key *keys,
                      struct packet_batch_per_flow batches[], size_t *n_batches)
 {
+    int cnt = packets_->count;
 #if !defined(__CHECKER__) && !defined(_WIN32)
     const size_t PKT_ARRAY_SIZE = cnt;
 #else
     /* Sparse or MSVC doesn't like variable length array. */
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
+    struct dp_packet **packets = packets_->packets;
     struct dpcls_rule *rules[PKT_ARRAY_SIZE];
     struct dp_netdev *dp = pmd->dp;
     struct emc_cache *flow_cache = &pmd->flow_cache;
+    struct dp_packet_batch b;
     int miss_cnt = 0, lost_cnt = 0;
     bool any_miss;
     size_t i;
@@ -3539,7 +3543,8 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
             /* We can't allow the packet batching in the next loop to execute
              * the actions.  Otherwise, if there are any slow path actions,
              * we'll send the packet up twice. */
-            dp_netdev_execute_actions(pmd, &packets[i], 1, true,
+            packet_batch_init_packet(&b, packets[i]);
+            dp_netdev_execute_actions(pmd, &b, true,
                                       actions.data, actions.size);
 
             add_actions = put_actions.size ? &put_actions : &actions;
@@ -3604,9 +3609,10 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
  * valid, 'md_is_valid' must be true and 'port_no' will be ignored. */
 static void
 dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
-                  struct dp_packet **packets, int cnt,
+                  struct dp_packet_batch *packets,
                   bool md_is_valid, odp_port_t port_no)
 {
+    int cnt = packets->count;
 #if !defined(__CHECKER__) && !defined(_WIN32)
     const size_t PKT_ARRAY_SIZE = cnt;
 #else
@@ -3619,10 +3625,11 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     size_t newcnt, n_batches, i;
 
     n_batches = 0;
-    newcnt = emc_processing(pmd, packets, cnt, keys, batches, &n_batches,
+    newcnt = emc_processing(pmd, packets, keys, batches, &n_batches,
                             md_is_valid, port_no);
     if (OVS_UNLIKELY(newcnt)) {
-        fast_path_processing(pmd, packets, newcnt, keys, batches, &n_batches);
+        packets->count = newcnt;
+        fast_path_processing(pmd, packets, keys, batches, &n_batches);
     }
 
     for (i = 0; i < n_batches; i++) {
@@ -3636,17 +3643,17 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
 
 static void
 dp_netdev_input(struct dp_netdev_pmd_thread *pmd,
-                struct dp_packet **packets, int cnt,
+                struct dp_packet_batch *packets,
                 odp_port_t port_no)
 {
-     dp_netdev_input__(pmd, packets, cnt, false, port_no);
+     dp_netdev_input__(pmd, packets, false, port_no);
 }
 
 static void
 dp_netdev_recirculate(struct dp_netdev_pmd_thread *pmd,
-                      struct dp_packet **packets, int cnt)
+                      struct dp_packet_batch *packets)
 {
-     dp_netdev_input__(pmd, packets, cnt, true, 0);
+     dp_netdev_input__(pmd, packets, true, 0);
 }
 
 struct dp_netdev_execute_aux {
@@ -3671,22 +3678,10 @@ dpif_netdev_register_upcall_cb(struct dpif *dpif, upcall_callback *cb,
     dp->upcall_cb = cb;
 }
 
-static void
-dp_netdev_drop_packets(struct dp_packet **packets, int cnt, bool may_steal)
-{
-    if (may_steal) {
-        int i;
-
-        for (i = 0; i < cnt; i++) {
-            dp_packet_delete(packets[i]);
-        }
-    }
-}
-
 static int
 push_tnl_action(const struct dp_netdev *dp,
-                   const struct nlattr *attr,
-                   struct dp_packet **packets, int cnt)
+                const struct nlattr *attr,
+                struct dp_packet_batch *batch)
 {
     struct dp_netdev_port *tun_port;
     const struct ovs_action_push_tnl *data;
@@ -3697,24 +3692,13 @@ push_tnl_action(const struct dp_netdev *dp,
     if (!tun_port) {
         return -EINVAL;
     }
-    netdev_push_header(tun_port->netdev, packets, cnt, data);
+    netdev_push_header(tun_port->netdev, batch, data);
 
     return 0;
 }
 
 static void
-dp_netdev_clone_pkt_batch(struct dp_packet **dst_pkts,
-                          struct dp_packet **src_pkts, int cnt)
-{
-    int i;
-
-    for (i = 0; i < cnt; i++) {
-        dst_pkts[i] = dp_packet_clone(src_pkts[i]);
-    }
-}
-
-static void
-dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
+dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
               const struct nlattr *a, bool may_steal)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
@@ -3733,28 +3717,28 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
 
             atomic_read_relaxed(&pmd->tx_qid, &tx_qid);
 
-            netdev_send(p->netdev, tx_qid, packets, cnt, may_steal);
+            netdev_send(p->netdev, tx_qid, packets_, may_steal);
             return;
         }
         break;
 
     case OVS_ACTION_ATTR_TUNNEL_PUSH:
         if (*depth < MAX_RECIRC_DEPTH) {
-            struct dp_packet *tnl_pkt[NETDEV_MAX_BURST];
+            struct dp_packet_batch tnl_pkt;
             int err;
 
             if (!may_steal) {
-                dp_netdev_clone_pkt_batch(tnl_pkt, packets, cnt);
-                packets = tnl_pkt;
+                dp_packet_batch_clone(&tnl_pkt, packets_);
+                packets_ = &tnl_pkt;
             }
 
-            err = push_tnl_action(dp, a, packets, cnt);
+            err = push_tnl_action(dp, a, packets_);
             if (!err) {
                 (*depth)++;
-                dp_netdev_recirculate(pmd, packets, cnt);
+                dp_netdev_recirculate(pmd, packets_);
                 (*depth)--;
             } else {
-                dp_netdev_drop_packets(tnl_pkt, cnt, !may_steal);
+                dp_packet_delete_batch(&tnl_pkt, !may_steal);
             }
             return;
         }
@@ -3766,30 +3750,30 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
 
             p = dp_netdev_lookup_port(dp, portno);
             if (p) {
-                struct dp_packet *tnl_pkt[NETDEV_MAX_BURST];
+                struct dp_packet_batch tnl_pkt;
                 int err;
 
                 if (!may_steal) {
-                   dp_netdev_clone_pkt_batch(tnl_pkt, packets, cnt);
-                   packets = tnl_pkt;
+                   dp_packet_batch_clone(&tnl_pkt, packets_);
+                   packets_ = &tnl_pkt;
                 }
 
-                err = netdev_pop_header(p->netdev, packets, &cnt);
-                if (!cnt) {
+                err = netdev_pop_header(p->netdev, packets_);
+                if (!packets_->count) {
                     return;
                 }
                 if (!err) {
                     int i;
 
-                    for (i = 0; i < cnt; i++) {
-                        packets[i]->md.in_port.odp_port = portno;
+                    for (i = 0; i < packets_->count; i++) {
+                        packets_->packets[i]->md.in_port.odp_port = portno;
                     }
 
                     (*depth)++;
-                    dp_netdev_recirculate(pmd, packets, cnt);
+                    dp_netdev_recirculate(pmd, packets_);
                     (*depth)--;
                 } else {
-                    dp_netdev_drop_packets(tnl_pkt, cnt, !may_steal);
+                    dp_packet_delete_batch(&tnl_pkt, !may_steal);
                 }
                 return;
             }
@@ -3798,6 +3782,7 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
 
     case OVS_ACTION_ATTR_USERSPACE:
         if (!fat_rwlock_tryrdlock(&dp->upcall_rwlock)) {
+            struct dp_packet **packets = packets_->packets;
             const struct nlattr *userdata;
             struct ofpbuf actions;
             struct flow flow;
@@ -3807,8 +3792,9 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
             userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
             ofpbuf_init(&actions, 0);
 
-            for (i = 0; i < cnt; i++) {
+            for (i = 0; i < packets_->count; i++) {
                 int error;
+                struct dp_packet_batch b;
 
                 ofpbuf_clear(&actions);
 
@@ -3818,7 +3804,8 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
                                          DPIF_UC_ACTION, userdata,&actions,
                                          NULL);
                 if (!error || error == ENOSPC) {
-                    dp_netdev_execute_actions(pmd, &packets[i], 1, may_steal,
+                    packet_batch_init_packet(&b, packets[i]);
+                    dp_netdev_execute_actions(pmd, &b, may_steal,
                                               actions.data, actions.size);
                 } else if (may_steal) {
                     dp_packet_delete(packets[i]);
@@ -3833,20 +3820,20 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
 
     case OVS_ACTION_ATTR_RECIRC:
         if (*depth < MAX_RECIRC_DEPTH) {
-            struct dp_packet *recirc_pkts[NETDEV_MAX_BURST];
+            struct dp_packet_batch recirc_pkts;
             int i;
 
             if (!may_steal) {
-               dp_netdev_clone_pkt_batch(recirc_pkts, packets, cnt);
-               packets = recirc_pkts;
+               dp_packet_batch_clone(&recirc_pkts, packets_);
+               packets_ = &recirc_pkts;
             }
 
-            for (i = 0; i < cnt; i++) {
-                packets[i]->md.recirc_id = nl_attr_get_u32(a);
+            for (i = 0; i < packets_->count; i++) {
+                packets_->packets[i]->md.recirc_id = nl_attr_get_u32(a);
             }
 
             (*depth)++;
-            dp_netdev_recirculate(pmd, packets, cnt);
+            dp_netdev_recirculate(pmd, packets_);
             (*depth)--;
 
             return;
@@ -3875,18 +3862,18 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
         OVS_NOT_REACHED();
     }
 
-    dp_netdev_drop_packets(packets, cnt, may_steal);
+    dp_packet_delete_batch(packets_, may_steal);
 }
 
 static void
 dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
-                          struct dp_packet **packets, int cnt,
+                          struct dp_packet_batch *packets,
                           bool may_steal,
                           const struct nlattr *actions, size_t actions_len)
 {
     struct dp_netdev_execute_aux aux = { pmd };
 
-    odp_execute_actions(&aux, packets, cnt, may_steal, actions,
+    odp_execute_actions(&aux, packets, may_steal, actions,
                         actions_len, dp_execute_cb);
 }
 
