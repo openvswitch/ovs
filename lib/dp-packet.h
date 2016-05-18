@@ -563,6 +563,49 @@ dp_packet_rss_invalidate(struct dp_packet *p)
 #endif
 }
 
+enum { NETDEV_MAX_BURST = 32 }; /* Maximum number packets in a batch. */
+
+struct dp_packet_batch {
+    int count;
+    struct dp_packet *packets[NETDEV_MAX_BURST];
+};
+
+static inline void dp_packet_batch_init(struct dp_packet_batch *b)
+{
+    b->count = 0;
+}
+
+static inline void
+dp_packet_batch_clone(struct dp_packet_batch *dst,
+                      struct dp_packet_batch *src)
+{
+    int i;
+
+    for (i = 0; i < src->count; i++) {
+        dst->packets[i] = dp_packet_clone(src->packets[i]);
+    }
+    dst->count = src->count;
+}
+
+static inline void
+packet_batch_init_packet(struct dp_packet_batch *b, struct dp_packet *p)
+{
+    b->count = 1;
+    b->packets[0] = p;
+}
+
+static inline void
+dp_packet_delete_batch(struct dp_packet_batch *batch, bool may_steal)
+{
+    if (may_steal) {
+        int i;
+
+        for (i = 0; i < batch->count; i++) {
+            dp_packet_delete(batch->packets[i]);
+        }
+    }
+}
+
 #ifdef  __cplusplus
 }
 #endif

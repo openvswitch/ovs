@@ -624,15 +624,15 @@ netdev_rxq_close(struct netdev_rxq *rx)
  * Returns EAGAIN immediately if no packet is ready to be received or another
  * positive errno value if an error was encountered. */
 int
-netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet **pkts, int *cnt)
+netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet_batch *batch)
 {
     int retval;
 
-    retval = rx->netdev->netdev_class->rxq_recv(rx, pkts, cnt);
+    retval = rx->netdev->netdev_class->rxq_recv(rx, batch->packets, &batch->count);
     if (!retval) {
         COVERAGE_INC(netdev_received);
     } else {
-        *cnt = 0;
+        batch->count = 0;
     }
     return retval;
 }
@@ -713,19 +713,16 @@ netdev_set_multiq(struct netdev *netdev, unsigned int n_txq,
  * Some network devices may not implement support for this function.  In such
  * cases this function will always return EOPNOTSUPP. */
 int
-netdev_send(struct netdev *netdev, int qid, struct dp_packet **buffers,
-            int cnt, bool may_steal)
+netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
+            bool may_steal)
 {
     if (!netdev->netdev_class->send) {
-        if (may_steal) {
-            for (int i = 0; i < cnt; i++) {
-                dp_packet_delete(buffers[i]);
-            }
-        }
+        dp_packet_delete_batch(batch, may_steal);
         return EOPNOTSUPP;
     }
 
-    int error = netdev->netdev_class->send(netdev, qid, buffers, cnt,
+    int error = netdev->netdev_class->send(netdev, qid,
+                                           batch->packets, batch->count,
                                            may_steal);
     if (!error) {
         COVERAGE_INC(netdev_sent);
@@ -734,21 +731,22 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet **buffers,
 }
 
 int
-netdev_pop_header(struct netdev *netdev, struct dp_packet **buffers, int *pcnt)
+netdev_pop_header(struct netdev *netdev, struct dp_packet_batch *batch)
 {
-    int i, cnt = *pcnt, n_cnt = 0;
+    int i, n_cnt = 0;
+    struct dp_packet **buffers = batch->packets;
 
     if (!netdev->netdev_class->pop_header) {
         return EOPNOTSUPP;
     }
 
-    for (i = 0; i < cnt; i++) {
+    for (i = 0; i < batch->count; i++) {
         buffers[i] = netdev->netdev_class->pop_header(buffers[i]);
         if (buffers[i]) {
             buffers[n_cnt++] = buffers[i];
         }
     }
-    *pcnt = n_cnt;
+    batch->count = n_cnt;
     return 0;
 }
 
@@ -764,7 +762,7 @@ netdev_build_header(const struct netdev *netdev, struct ovs_action_push_tnl *dat
 
 int
 netdev_push_header(const struct netdev *netdev,
-                   struct dp_packet **buffers, int cnt,
+                   struct dp_packet_batch *batch,
                    const struct ovs_action_push_tnl *data)
 {
     int i;
@@ -773,9 +771,9 @@ netdev_push_header(const struct netdev *netdev,
         return -EINVAL;
     }
 
-    for (i = 0; i < cnt; i++) {
-        netdev->netdev_class->push_header(buffers[i], data);
-        pkt_metadata_init(&buffers[i]->md, u32_to_odp(data->out_port));
+    for (i = 0; i < batch->count; i++) {
+        netdev->netdev_class->push_header(batch->packets[i], data);
+        pkt_metadata_init(&batch->packets[i]->md, u32_to_odp(data->out_port));
     }
 
     return 0;
