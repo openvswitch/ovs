@@ -3716,6 +3716,30 @@ error:
 }
 
 static void
+dp_execute_userspace_action(struct dp_netdev_pmd_thread *pmd,
+                            struct dp_packet *packet, bool may_steal,
+                            struct flow *flow, ovs_u128 *ufid,
+                            struct ofpbuf *actions,
+                            const struct nlattr *userdata)
+{
+    struct dp_packet_batch b;
+    int error;
+
+    ofpbuf_clear(actions);
+
+    error = dp_netdev_upcall(pmd, packet, flow, NULL, ufid,
+                             DPIF_UC_ACTION, userdata, actions,
+                             NULL);
+    if (!error || error == ENOSPC) {
+        packet_batch_init_packet(&b, packet);
+        dp_netdev_execute_actions(pmd, &b, may_steal,
+                                  actions->data, actions->size);
+    } else if (may_steal) {
+        dp_packet_delete(packet);
+    }
+}
+
+static void
 dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
               const struct nlattr *a, bool may_steal)
     OVS_NO_THREAD_SAFETY_ANALYSIS
@@ -3804,23 +3828,10 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
             ofpbuf_init(&actions, 0);
 
             for (i = 0; i < packets_->count; i++) {
-                int error;
-                struct dp_packet_batch b;
-
-                ofpbuf_clear(&actions);
-
                 flow_extract(packets[i], &flow);
                 dpif_flow_hash(dp->dpif, &flow, sizeof flow, &ufid);
-                error = dp_netdev_upcall(pmd, packets[i], &flow, NULL, &ufid,
-                                         DPIF_UC_ACTION, userdata,&actions,
-                                         NULL);
-                if (!error || error == ENOSPC) {
-                    packet_batch_init_packet(&b, packets[i]);
-                    dp_netdev_execute_actions(pmd, &b, may_steal,
-                                              actions.data, actions.size);
-                } else if (may_steal) {
-                    dp_packet_delete(packets[i]);
-                }
+                dp_execute_userspace_action(pmd, packets[i], may_steal, &flow,
+                                            &ufid, &actions, userdata);
             }
             ofpbuf_uninit(&actions);
             fat_rwlock_unlock(&dp->upcall_rwlock);
