@@ -81,11 +81,11 @@ def unixctl_exit(conn, unused_argv, unused_aux):
 
 
 class Logical_Switch(object):
-    def __init__(self, ls_name):
+    def __init__(self, ls_name, ps_name):
         global ls_count
         self.name = ls_name
         ls_count += 1
-        self.short_name = "vtep_ls" + str(ls_count)
+        self.short_name = ps_name + "_vtep_ls" + str(ls_count)
         vlog.info("creating lswitch %s (%s)" % (self.name, self.short_name))
         self.ports = {}
         self.tunnels = {}
@@ -94,6 +94,7 @@ class Logical_Switch(object):
         self.unknown_dsts = set()
         self.tunnel_key = 0
         self.setup_ls()
+        self.replication_mode = "service_node"
 
     def __del__(self):
         vlog.info("destroying lswitch %s" % self.name)
@@ -141,13 +142,17 @@ class Logical_Switch(object):
             ovs_ofctl("add-flow %s table=1,priority=1,in_port=%s,action=%s"
                         % (self.short_name, port_no, ",".join(flood_ports)))
 
-        # Traffic coming from a VTEP physical port should only be flooded to
-        # one 'unknown-dst' and to all other physical ports that belong to that
-        # VTEP device and this logical switch.
+        # Traffic coming from a VTEP physical port should always be flooded to
+        # all the other physical ports that belong to that VTEP device and
+        # this logical switch.  If the replication mode is service node then
+        # send to one unknown_dst node (the first one here); else we assume the
+        # replication mode is source node and we send the packet to all
+        # unknown_dst nodes.
         for tunnel in self.unknown_dsts:
             port_no = self.tunnels[tunnel][0]
             flood_ports.append(port_no)
-            break
+            if self.replication_mode == "service_node":
+                break
 
         ovs_ofctl("add-flow %s table=1,priority=0,action=%s"
                   % (self.short_name, ",".join(flood_ports)))
@@ -293,8 +298,30 @@ class Logical_Switch(object):
 
         self.remote_macs = remote_macs
 
+        replication_mode = vtep_ctl("get logical_switch %s replication_mode"
+                                    % self.name)
+
+        # Replication mode is an optional column and if it is not set,
+        # replication mode defaults to service_node.
+        if replication_mode == "[]":
+            replication_mode = "service_node"
+
+        # If the logical switch level replication mode has changed then
+        # update to that value.
+        update_flood_set = False
+        if replication_mode != self.replication_mode:
+            self.replication_mode = replication_mode
+            vlog.info("%s replication mode changed to %s" %
+                      (self.name, self.replication_mode))
+            update_flood_set = True
+
         if (self.unknown_dsts != unknown_dsts):
             self.unknown_dsts = unknown_dsts
+            update_flood_set = True
+
+        # If either the replication mode has changed or the unknown
+        # destinations set has changed, update the flooding decision.
+        if update_flood_set is True:
             self.update_flood()
 
     def update_stats(self):
@@ -583,7 +610,7 @@ def handle_physical():
         for b in binding_set:
             vlan, ls_name = b.split()
             if ls_name not in Lswitches:
-                Lswitches[ls_name] = Logical_Switch(ls_name)
+                Lswitches[ls_name] = Logical_Switch(ls_name, ps_name)
 
             binding = "%s-%s" % (vlan, pp_name)
             ls = Lswitches[ls_name]

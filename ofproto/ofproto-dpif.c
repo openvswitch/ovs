@@ -15,10 +15,6 @@
  */
 
 #include <config.h>
-
-#include "ofproto/ofproto-dpif.h"
-#include "ofproto/ofproto-provider.h"
-
 #include <errno.h>
 
 #include "bfd.h"
@@ -29,9 +25,7 @@
 #include "connmgr.h"
 #include "coverage.h"
 #include "cfm.h"
-#include "ovs-lldp.h"
 #include "dpif.h"
-#include "openvswitch/dynamic-string.h"
 #include "fail-open.h"
 #include "guarded-list.h"
 #include "hmapx.h"
@@ -39,7 +33,6 @@
 #include "learn.h"
 #include "mac-learning.h"
 #include "mcast-snooping.h"
-#include "meta-flow.h"
 #include "multipath.h"
 #include "netdev-vport.h"
 #include "netdev.h"
@@ -47,10 +40,8 @@
 #include "nx-match.h"
 #include "odp-util.h"
 #include "odp-execute.h"
-#include "ofp-util.h"
-#include "openvswitch/ofpbuf.h"
-#include "ofp-actions.h"
-#include "ofp-print.h"
+#include "ofproto/ofproto-dpif.h"
+#include "ofproto/ofproto-provider.h"
 #include "ofproto-dpif-ipfix.h"
 #include "ofproto-dpif-mirror.h"
 #include "ofproto-dpif-monitor.h"
@@ -58,9 +49,18 @@
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-upcall.h"
 #include "ofproto-dpif-xlate.h"
-#include "poll-loop.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-parse.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
+#include "ovs-lldp.h"
 #include "ovs-rcu.h"
 #include "ovs-router.h"
+#include "poll-loop.h"
 #include "seq.h"
 #include "simap.h"
 #include "smap.h"
@@ -69,8 +69,6 @@
 #include "unaligned.h"
 #include "unixctl.h"
 #include "vlan-bitmap.h"
-#include "openvswitch/ofp-parse.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif);
 
@@ -191,33 +189,7 @@ struct ofport_dpif {
     /* Queue to DSCP mapping. */
     struct ofproto_port_queue *qdscp;
     size_t n_qdscp;
-
-    /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
-     *
-     * This is deprecated.  It is only for compatibility with broken device
-     * drivers in old versions of Linux that do not properly support VLANs when
-     * VLAN devices are not used.  When broken device drivers are no longer in
-     * widespread use, we will delete these interfaces. */
-    ofp_port_t realdev_ofp_port;
-    int vlandev_vid;
 };
-
-/* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
- *
- * This is deprecated.  It is only for compatibility with broken device drivers
- * in old versions of Linux that do not properly support VLANs when VLAN
- * devices are not used.  When broken device drivers are no longer in
- * widespread use, we will delete these interfaces. */
-struct vlan_splinter {
-    struct hmap_node realdev_vid_node;
-    struct hmap_node vlandev_node;
-    ofp_port_t realdev_ofp_port;
-    ofp_port_t vlandev_ofp_port;
-    int vid;
-};
-
-static void vsp_remove(struct ofport_dpif *);
-static void vsp_add(struct ofport_dpif *, ofp_port_t realdev_ofp_port, int vid);
 
 static odp_port_t ofp_port_to_odp_port(const struct ofproto_dpif *,
                                        ofp_port_t);
@@ -331,11 +303,6 @@ struct ofproto_dpif {
     /* Rapid Spanning Tree. */
     struct rstp *rstp;
     long long int rstp_last_tick;
-
-    /* VLAN splinters. */
-    struct ovs_mutex vsp_mutex;
-    struct hmap realdev_vid_map OVS_GUARDED; /* (realdev,vid) -> vlandev. */
-    struct hmap vlandev_map OVS_GUARDED;     /* vlandev -> (realdev,vid). */
 
     /* Ports. */
     struct sset ports;             /* Set of standard port names. */
@@ -894,8 +861,6 @@ open_dpif_backer(const char *type, struct dpif_backer **backerp)
     const char *name;
     int error;
 
-    recirc_init();
-
     backer = shash_find_data(&all_dpif_backers, type);
     if (backer) {
         backer->refcount++;
@@ -1331,12 +1296,8 @@ construct(struct ofproto *ofproto_)
     ofproto->has_bonded_bundles = false;
     ofproto->lacp_enabled = false;
     ovs_mutex_init_adaptive(&ofproto->stats_mutex);
-    ovs_mutex_init(&ofproto->vsp_mutex);
 
     guarded_list_init(&ofproto->ams);
-
-    hmap_init(&ofproto->vlandev_map);
-    hmap_init(&ofproto->realdev_vid_map);
 
     sset_init(&ofproto->ports);
     sset_init(&ofproto->ghost_ports);
@@ -1411,7 +1372,7 @@ add_internal_flows(struct ofproto_dpif *ofproto)
     controller->max_len = UINT16_MAX;
     controller->controller_id = 0;
     controller->reason = OFPR_IMPLICIT_MISS;
-    controller = ofpact_finish(&ofpacts, &controller->ofpact);
+    ofpact_finish_CONTROLLER(&ofpacts, &controller);
 
     error = add_internal_miss_flow(ofproto, id++, &ofpacts,
                                    &ofproto->miss_rule);
@@ -1489,15 +1450,11 @@ destruct(struct ofproto *ofproto_)
     mac_learning_unref(ofproto->ml);
     mcast_snooping_unref(ofproto->ms);
 
-    hmap_destroy(&ofproto->vlandev_map);
-    hmap_destroy(&ofproto->realdev_vid_map);
-
     sset_destroy(&ofproto->ports);
     sset_destroy(&ofproto->ghost_ports);
     sset_destroy(&ofproto->port_poll_set);
 
     ovs_mutex_destroy(&ofproto->stats_mutex);
-    ovs_mutex_destroy(&ofproto->vsp_mutex);
 
     seq_destroy(ofproto->ams_seq);
 
@@ -1739,8 +1696,6 @@ port_construct(struct ofport *port_)
     port->peer = NULL;
     port->qdscp = NULL;
     port->n_qdscp = 0;
-    port->realdev_ofp_port = 0;
-    port->vlandev_vid = 0;
     port->carrier_seq = netdev_get_carrier_resets(netdev);
     port->is_layer3 = netdev_vport_is_layer3(netdev);
 
@@ -3701,18 +3656,27 @@ rule_expire(struct rule_dpif *rule)
     }
 }
 
+static void
+ofproto_dpif_set_packet_odp_port(const struct ofproto_dpif *ofproto,
+                                 ofp_port_t in_port, struct dp_packet *packet)
+{
+    if (in_port == OFPP_NONE) {
+        in_port = OFPP_LOCAL;
+    }
+    packet->md.in_port.odp_port = ofp_port_to_odp_port(ofproto, in_port);
+}
+
 int
 ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
                                const struct flow *flow,
                                struct rule_dpif *rule,
                                const struct ofpact *ofpacts, size_t ofpacts_len,
-                               int recurse, int resubmits,
+                               int indentation, int depth, int resubmits,
                                struct dp_packet *packet)
 {
     struct dpif_flow_stats stats;
     struct xlate_out xout;
     struct xlate_in xin;
-    ofp_port_t in_port;
     struct dpif_execute execute;
     int error;
 
@@ -3731,7 +3695,8 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
     xin.ofpacts = ofpacts;
     xin.ofpacts_len = ofpacts_len;
     xin.resubmit_stats = &stats;
-    xin.recurse = recurse;
+    xin.indentation = indentation;
+    xin.depth = depth;
     xin.resubmits = resubmits;
     if (xlate_actions(&xin, &xout) != XLATE_OK) {
         error = EINVAL;
@@ -3748,11 +3713,7 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
     execute.mtu = 0;
 
     /* Fix up in_port. */
-    in_port = flow->in_port.ofp_port;
-    if (in_port == OFPP_NONE) {
-        in_port = OFPP_LOCAL;
-    }
-    execute.packet->md.in_port.odp_port = ofp_port_to_odp_port(ofproto, in_port);
+    ofproto_dpif_set_packet_odp_port(ofproto, flow->in_port.ofp_port, packet);
 
     error = dpif_execute(ofproto->backer->dpif, &execute);
 out:
@@ -3772,7 +3733,7 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
                              struct dp_packet *packet)
 {
     return ofproto_dpif_execute_actions__(ofproto, flow, rule, ofpacts,
-                                          ofpacts_len, 0, 0, packet);
+                                          ofpacts_len, 0, 0, 0, packet);
 }
 
 void
@@ -4041,7 +4002,7 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
         || ((ct_state & (CS_SRC_NAT | CS_DST_NAT)) && !support->ct_state_nat)
         || (ct_zone && !support->ct_zone)
         || (ct_mark && !support->ct_mark)
-        || (!ovs_u128_is_zero(&ct_label) && !support->ct_label)) {
+        || (!ovs_u128_is_zero(ct_label) && !support->ct_label)) {
         return OFPERR_OFPBMC_BAD_MASK;
     }
 
@@ -4443,6 +4404,13 @@ nxt_resume(struct ofproto *ofproto_,
     dp_packet_init(&packet, pin->public.packet_len);
     dp_packet_put(&packet, pin->public.packet, pin->public.packet_len);
 
+    pkt_metadata_from_flow(&packet.md, &pin->public.flow_metadata.flow);
+
+    /* Fix up in_port. */
+    ofproto_dpif_set_packet_odp_port(ofproto,
+                                     pin->public.flow_metadata.flow.in_port.ofp_port,
+                                     &packet);
+
     struct flow headers;
     flow_extract(&packet, &headers);
 
@@ -4753,62 +4721,63 @@ trace_format_megaflow(struct ds *result, int level, const char *title,
     ds_put_char(result, '\n');
 }
 
-static void trace_report(struct xlate_in *, int recurse,
+static void trace_report(struct xlate_in *, int indentation,
                          const char *format, ...)
     OVS_PRINTF_FORMAT(3, 4);
-static void trace_report_valist(struct xlate_in *, int recurse,
+static void trace_report_valist(struct xlate_in *, int indentation,
                                 const char *format, va_list args)
     OVS_PRINTF_FORMAT(3, 0);
 
 static void
-trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int recurse)
+trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int indentation)
 {
     struct trace_ctx *trace = CONTAINER_OF(xin, struct trace_ctx, xin);
     struct ds *result = trace->result;
 
-    if (!recurse) {
+    if (!indentation) {
         if (rule == xin->ofproto->miss_rule) {
-            trace_report(xin, recurse,
+            trace_report(xin, indentation,
                          "No match, flow generates \"packet in\"s.");
         } else if (rule == xin->ofproto->no_packet_in_rule) {
-            trace_report(xin, recurse, "No match, packets dropped because "
+            trace_report(xin, indentation, "No match, packets dropped because "
                          "OFPPC_NO_PACKET_IN is set on in_port.");
         } else if (rule == xin->ofproto->drop_frags_rule) {
-            trace_report(xin, recurse, "Packets dropped because they are IP "
-                         "fragments and the fragment handling mode is "
-                         "\"drop\".");
+            trace_report(xin, indentation,
+                         "Packets dropped because they are IP fragments and "
+                         "the fragment handling mode is \"drop\".");
         }
     }
 
     ds_put_char(result, '\n');
-    if (recurse) {
-        trace_format_flow(result, recurse, "Resubmitted flow", trace);
-        trace_format_regs(result, recurse, "Resubmitted regs", trace);
-        trace_format_odp(result,  recurse, "Resubmitted  odp", trace);
-        trace_format_megaflow(result, recurse, "Resubmitted megaflow", trace);
+    if (indentation) {
+        trace_format_flow(result, indentation, "Resubmitted flow", trace);
+        trace_format_regs(result, indentation, "Resubmitted regs", trace);
+        trace_format_odp(result,  indentation, "Resubmitted  odp", trace);
+        trace_format_megaflow(result, indentation, "Resubmitted megaflow",
+                              trace);
     }
-    trace_format_rule(result, recurse, rule);
+    trace_format_rule(result, indentation, rule);
 }
 
 static void
-trace_report_valist(struct xlate_in *xin, int recurse,
+trace_report_valist(struct xlate_in *xin, int indentation,
                     const char *format, va_list args)
 {
     struct trace_ctx *trace = CONTAINER_OF(xin, struct trace_ctx, xin);
     struct ds *result = trace->result;
 
-    ds_put_char_multiple(result, '\t', recurse);
+    ds_put_char_multiple(result, '\t', indentation);
     ds_put_format_valist(result, format, args);
     ds_put_char(result, '\n');
 }
 
 static void
-trace_report(struct xlate_in *xin, int recurse, const char *format, ...)
+trace_report(struct xlate_in *xin, int indentation, const char *format, ...)
 {
     va_list args;
 
     va_start(args, format);
-    trace_report_valist(xin, recurse, format, args);
+    trace_report_valist(xin, indentation, format, args);
     va_end(args);
 }
 
@@ -4904,9 +4873,6 @@ parse_flow_and_packet(int argc, const char *argv[],
             error = "Invalid datapath flow";
             goto exit;
         }
-
-        vsp_adjust_flow(*ofprotop, flow, NULL);
-
     } else {
         char *err = parse_ofp_exact_flow(flow, NULL, argv[argc - 1], NULL);
 
@@ -5416,239 +5382,6 @@ table_is_internal(uint8_t table_id)
     return table_id == TBL_INTERNAL;
 }
 
-/* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
- *
- * This is deprecated.  It is only for compatibility with broken device drivers
- * in old versions of Linux that do not properly support VLANs when VLAN
- * devices are not used.  When broken device drivers are no longer in
- * widespread use, we will delete these interfaces. */
-
-static int
-set_realdev(struct ofport *ofport_, ofp_port_t realdev_ofp_port, int vid)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport_->ofproto);
-    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
-
-    if (realdev_ofp_port == ofport->realdev_ofp_port
-        && vid == ofport->vlandev_vid) {
-        return 0;
-    }
-
-    ofproto->backer->need_revalidate = REV_RECONFIGURE;
-
-    if (ofport->realdev_ofp_port) {
-        vsp_remove(ofport);
-    }
-    if (realdev_ofp_port && ofport->bundle) {
-        /* vlandevs are enslaved to their realdevs, so they are not allowed to
-         * themselves be part of a bundle. */
-        bundle_set(ofport_->ofproto, ofport->bundle, NULL);
-    }
-
-    ofport->realdev_ofp_port = realdev_ofp_port;
-    ofport->vlandev_vid = vid;
-
-    if (realdev_ofp_port) {
-        vsp_add(ofport, realdev_ofp_port, vid);
-    }
-
-    return 0;
-}
-
-static uint32_t
-hash_realdev_vid(ofp_port_t realdev_ofp_port, int vid)
-{
-    return hash_2words(ofp_to_u16(realdev_ofp_port), vid);
-}
-
-bool
-ofproto_has_vlan_splinters(const struct ofproto_dpif *ofproto)
-    OVS_EXCLUDED(ofproto->vsp_mutex)
-{
-    /* hmap_is_empty is thread safe. */
-    return !hmap_is_empty(&ofproto->realdev_vid_map);
-}
-
-
-static ofp_port_t
-vsp_realdev_to_vlandev__(const struct ofproto_dpif *ofproto,
-                         ofp_port_t realdev_ofp_port, ovs_be16 vlan_tci)
-    OVS_REQUIRES(ofproto->vsp_mutex)
-{
-    if (!hmap_is_empty(&ofproto->realdev_vid_map)) {
-        int vid = vlan_tci_to_vid(vlan_tci);
-        const struct vlan_splinter *vsp;
-
-        HMAP_FOR_EACH_WITH_HASH (vsp, realdev_vid_node,
-                                 hash_realdev_vid(realdev_ofp_port, vid),
-                                 &ofproto->realdev_vid_map) {
-            if (vsp->realdev_ofp_port == realdev_ofp_port
-                && vsp->vid == vid) {
-                return vsp->vlandev_ofp_port;
-            }
-        }
-    }
-    return realdev_ofp_port;
-}
-
-/* Returns the OFP port number of the Linux VLAN device that corresponds to
- * 'vlan_tci' on the network device with port number 'realdev_ofp_port' in
- * 'struct ofport_dpif'.  For example, given 'realdev_ofp_port' of eth0 and
- * 'vlan_tci' 9, it would return the port number of eth0.9.
- *
- * Unless VLAN splinters are enabled for port 'realdev_ofp_port', this
- * function just returns its 'realdev_ofp_port' argument. */
-ofp_port_t
-vsp_realdev_to_vlandev(const struct ofproto_dpif *ofproto,
-                       ofp_port_t realdev_ofp_port, ovs_be16 vlan_tci)
-    OVS_EXCLUDED(ofproto->vsp_mutex)
-{
-    ofp_port_t ret;
-
-    /* hmap_is_empty is thread safe, see if we can return immediately. */
-    if (hmap_is_empty(&ofproto->realdev_vid_map)) {
-        return realdev_ofp_port;
-    }
-    ovs_mutex_lock(&ofproto->vsp_mutex);
-    ret = vsp_realdev_to_vlandev__(ofproto, realdev_ofp_port, vlan_tci);
-    ovs_mutex_unlock(&ofproto->vsp_mutex);
-    return ret;
-}
-
-static struct vlan_splinter *
-vlandev_find(const struct ofproto_dpif *ofproto, ofp_port_t vlandev_ofp_port)
-{
-    struct vlan_splinter *vsp;
-
-    HMAP_FOR_EACH_WITH_HASH (vsp, vlandev_node,
-                             hash_ofp_port(vlandev_ofp_port),
-                             &ofproto->vlandev_map) {
-        if (vsp->vlandev_ofp_port == vlandev_ofp_port) {
-            return vsp;
-        }
-    }
-
-    return NULL;
-}
-
-/* Returns the OpenFlow port number of the "real" device underlying the Linux
- * VLAN device with OpenFlow port number 'vlandev_ofp_port' and stores the
- * VLAN VID of the Linux VLAN device in '*vid'.  For example, given
- * 'vlandev_ofp_port' of eth0.9, it would return the OpenFlow port number of
- * eth0 and store 9 in '*vid'.
- *
- * Returns 0 and does not modify '*vid' if 'vlandev_ofp_port' is not a Linux
- * VLAN device.  Unless VLAN splinters are enabled, this is what this function
- * always does.*/
-static ofp_port_t
-vsp_vlandev_to_realdev(const struct ofproto_dpif *ofproto,
-                       ofp_port_t vlandev_ofp_port, int *vid)
-    OVS_REQUIRES(ofproto->vsp_mutex)
-{
-    if (!hmap_is_empty(&ofproto->vlandev_map)) {
-        const struct vlan_splinter *vsp;
-
-        vsp = vlandev_find(ofproto, vlandev_ofp_port);
-        if (vsp) {
-            if (vid) {
-                *vid = vsp->vid;
-            }
-            return vsp->realdev_ofp_port;
-        }
-    }
-    return 0;
-}
-
-/* Given 'flow', a flow representing a packet received on 'ofproto', checks
- * whether 'flow->in_port' represents a Linux VLAN device.  If so, changes
- * 'flow->in_port' to the "real" device backing the VLAN device, sets
- * 'flow->vlan_tci' to the VLAN VID, and returns true.  Optionally pushes the
- * appropriate VLAN on 'packet' if provided.  Otherwise (which is always the
- * case unless VLAN splinters are enabled), returns false without making any
- * changes. */
-bool
-vsp_adjust_flow(const struct ofproto_dpif *ofproto, struct flow *flow,
-                struct dp_packet *packet)
-    OVS_EXCLUDED(ofproto->vsp_mutex)
-{
-    ofp_port_t realdev;
-    int vid;
-
-    /* hmap_is_empty is thread safe. */
-    if (hmap_is_empty(&ofproto->vlandev_map)) {
-        return false;
-    }
-
-    ovs_mutex_lock(&ofproto->vsp_mutex);
-    realdev = vsp_vlandev_to_realdev(ofproto, flow->in_port.ofp_port, &vid);
-    ovs_mutex_unlock(&ofproto->vsp_mutex);
-    if (!realdev) {
-        return false;
-    }
-
-    /* Cause the flow to be processed as if it came in on the real device with
-     * the VLAN device's VLAN ID. */
-    flow->in_port.ofp_port = realdev;
-    flow->vlan_tci = htons((vid & VLAN_VID_MASK) | VLAN_CFI);
-
-    if (packet) {
-        /* Make the packet resemble the flow, so that it gets sent to an
-         * OpenFlow controller properly, so that it looks correct for sFlow,
-         * and so that flow_extract() will get the correct vlan_tci if it is
-         * called on 'packet'. */
-        eth_push_vlan(packet, htons(ETH_TYPE_VLAN), flow->vlan_tci);
-    }
-
-    return true;
-}
-
-static void
-vsp_remove(struct ofport_dpif *port)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
-    struct vlan_splinter *vsp;
-
-    ovs_mutex_lock(&ofproto->vsp_mutex);
-    vsp = vlandev_find(ofproto, port->up.ofp_port);
-    if (vsp) {
-        hmap_remove(&ofproto->vlandev_map, &vsp->vlandev_node);
-        hmap_remove(&ofproto->realdev_vid_map, &vsp->realdev_vid_node);
-        free(vsp);
-
-        port->realdev_ofp_port = 0;
-    } else {
-        VLOG_ERR("missing vlan device record");
-    }
-    ovs_mutex_unlock(&ofproto->vsp_mutex);
-}
-
-static void
-vsp_add(struct ofport_dpif *port, ofp_port_t realdev_ofp_port, int vid)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(port->up.ofproto);
-
-    ovs_mutex_lock(&ofproto->vsp_mutex);
-    if (!vsp_vlandev_to_realdev(ofproto, port->up.ofp_port, NULL)
-        && (vsp_realdev_to_vlandev__(ofproto, realdev_ofp_port, htons(vid))
-            == realdev_ofp_port)) {
-        struct vlan_splinter *vsp;
-
-        vsp = xmalloc(sizeof *vsp);
-        vsp->realdev_ofp_port = realdev_ofp_port;
-        vsp->vlandev_ofp_port = port->up.ofp_port;
-        vsp->vid = vid;
-
-        port->realdev_ofp_port = realdev_ofp_port;
-
-        hmap_insert(&ofproto->vlandev_map, &vsp->vlandev_node,
-                    hash_ofp_port(port->up.ofp_port));
-        hmap_insert(&ofproto->realdev_vid_map, &vsp->realdev_vid_node,
-                    hash_realdev_vid(realdev_ofp_port, vid));
-    } else {
-        VLOG_ERR("duplicate vlan device record");
-    }
-    ovs_mutex_unlock(&ofproto->vsp_mutex);
-}
 
 static odp_port_t
 ofp_port_to_odp_port(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
@@ -5847,7 +5580,6 @@ const struct ofproto_class ofproto_dpif_class = {
     set_mac_table_config,
     set_mcast_snooping,
     set_mcast_snooping_port,
-    set_realdev,
     NULL,                       /* meter_get_features */
     NULL,                       /* meter_set */
     NULL,                       /* meter_get */

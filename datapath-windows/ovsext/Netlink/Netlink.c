@@ -108,11 +108,17 @@ NlFillNlHdr(PNL_BUFFER nlBuf, UINT16 nlmsgType,
  * ---------------------------------------------------------------------------
  */
 VOID
-NlBuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgError, UINT errorCode)
+NlBuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgError,
+                UINT32 msgErrorLen,
+                UINT errorCode, UINT32 *msgLen)
 {
     NL_BUFFER nlBuffer;
 
     ASSERT(errorCode != NL_ERROR_PENDING);
+
+    if ((msgError == NULL) || (msgErrorLen < sizeof *msgError)) {
+        return;
+    }
 
     NlBufInit(&nlBuffer, (PCHAR)msgError, sizeof *msgError);
     NlFillNlHdr(&nlBuffer, NLMSG_ERROR, 0,
@@ -121,6 +127,10 @@ NlBuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgError, UINT errorCode)
     msgError->errorMsg.error = errorCode;
     msgError->errorMsg.nlMsg = msgIn->nlMsg;
     msgError->nlMsg.nlmsgLen = sizeof(OVS_MESSAGE_ERROR);
+
+    if (NULL != msgLen) {
+        *msgLen = msgError->nlMsg.nlmsgLen;
+    }
 }
 
 /*
@@ -565,7 +575,7 @@ NlMsgPutNested(PNL_BUFFER buf, UINT16 type,
                const PVOID data, UINT32 size)
 {
     UINT32 offset = NlMsgStartNested(buf, type);
-    BOOLEAN ret = FALSE;
+    BOOLEAN ret;
 
     ASSERT(offset);
 
@@ -1006,7 +1016,7 @@ NlAttrFind__(const PNL_ATTR attrs, UINT32 size, UINT16 type)
 {
     PNL_ATTR iter = NULL;
     PNL_ATTR ret = NULL;
-    UINT32 left;
+    INT left;
 
     NL_ATTR_FOR_EACH (iter, left, attrs, size) {
         if (NlAttrType(iter) == type) {
@@ -1036,6 +1046,49 @@ NlAttrFindNested(const PNL_ATTR nla, UINT16 type)
 
 /*
  *----------------------------------------------------------------------------
+ * Traverses all attributes in received buffer in order to insure all are valid
+ *----------------------------------------------------------------------------
+ */
+BOOLEAN NlValidateAllAttrs(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
+                           UINT32 totalAttrLen,
+                           const NL_POLICY policy[], const UINT32 numPolicy)
+{
+    PNL_ATTR nla;
+    INT left;
+    BOOLEAN ret = TRUE;
+
+    if ((NlMsgSize(nlMsg) < attrOffset)) {
+        OVS_LOG_WARN("No attributes in nlMsg: %p at offset: %d",
+            nlMsg, attrOffset);
+        ret = FALSE;
+        goto done;
+    }
+
+    NL_ATTR_FOR_EACH_UNSAFE(nla, left, NlMsgAt(nlMsg, attrOffset),
+                            totalAttrLen)
+    {
+        if (!NlAttrIsValid(nla, left)) {
+            ret = FALSE;
+            goto done;
+        }
+
+        UINT16 type = NlAttrType(nla);
+        if (type < numPolicy && policy[type].type != NL_A_NO_ATTR) {
+            /* Typecasting to keep the compiler happy */
+            const PNL_POLICY e = (const PNL_POLICY)(&policy[type]);
+            if (!NlAttrValidate(nla, e)) {
+                ret = FALSE;
+                goto done;
+            }
+        }
+    }
+
+done:
+    return ret;
+}
+
+/*
+ *----------------------------------------------------------------------------
  * Parses the netlink message at a given offset (attrOffset)
  * as a series of attributes. A pointer to the attribute with type
  * 'type' is stored in attrs at index 'type'. policy is used to define the
@@ -1052,19 +1105,12 @@ NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
             PNL_ATTR attrs[], UINT32 numAttrs)
 {
     PNL_ATTR nla;
-    UINT32 left;
+    INT left;
     UINT32 iter;
     BOOLEAN ret = FALSE;
     UINT32 numPolicyAttr = MIN(numPolicy, numAttrs);
 
     RtlZeroMemory(attrs, numAttrs * sizeof *attrs);
-
-
-    /* There is nothing to parse */
-    if (!(NlMsgAttrsLen(nlMsg))) {
-        ret = TRUE;
-        goto done;
-    }
 
     if ((NlMsgSize(nlMsg) < attrOffset)) {
         OVS_LOG_WARN("No attributes in nlMsg: %p at offset: %d",

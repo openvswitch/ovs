@@ -16,7 +16,7 @@ OVS needs a system with 1GB hugepages support.
 Building and Installing:
 ------------------------
 
-Required: DPDK 2.2
+Required: DPDK 16.04
 Optional (if building with vhost-cuse): `fuse`, `fuse-devel` (`libfuse-dev`
 on Debian/Ubuntu)
 
@@ -24,16 +24,11 @@ on Debian/Ubuntu)
   1. Set `$DPDK_DIR`
 
      ```
-     export DPDK_DIR=/usr/src/dpdk-2.2
+     export DPDK_DIR=/usr/src/dpdk-16.04
      cd $DPDK_DIR
      ```
 
-  2. Update `config/common_linuxapp` so that DPDK generate single lib file.
-     (modification also required for IVSHMEM build)
-
-     `CONFIG_RTE_BUILD_COMBINE_LIBS=y`
-
-     Then run `make install` to build and install the library.
+  2. Then run `make install` to build and install the library.
      For default install without IVSHMEM:
 
      `make install T=x86_64-native-linuxapp-gcc DESTDIR=install`
@@ -143,22 +138,67 @@ Using the DPDK with ovs-vswitchd:
 
 5. Start vswitchd:
 
-   DPDK configuration arguments can be passed to vswitchd via `--dpdk`
-   argument. This needs to be first argument passed to vswitchd process.
-   dpdk arg -c is ignored by ovs-dpdk, but it is a required parameter
-   for dpdk initialization.
+   DPDK configuration arguments can be passed to vswitchd via Open_vSwitch
+   other_config column. The recognized configuration options are listed.
+   Defaults will be provided for all values not explicitly set.
+
+   * dpdk-init
+   Specifies whether OVS should initialize and support DPDK ports. This is
+   a boolean, and defaults to false.
+
+   * dpdk-lcore-mask
+   Specifies the CPU cores on which dpdk lcore threads should be spawned.
+   The DPDK lcore threads are used for DPDK library tasks, such as
+   library internal message processing, logging, etc. Value should be in
+   the form of a hex string (so '0x123') similar to the 'taskset' mask
+   input.
+   If not specified, the value will be determined by choosing the lowest
+   CPU core from initial cpu affinity list. Otherwise, the value will be
+   passed directly to the DPDK library.
+   For performance reasons, it is best to set this to a single core on
+   the system, rather than allow lcore threads to float.
+
+   * dpdk-alloc-mem
+   This sets the total memory to preallocate from hugepages regardless of
+   processor socket. It is recommended to use dpdk-socket-mem instead.
+
+   * dpdk-socket-mem
+   Comma separated list of memory to pre-allocate from hugepages on specific
+   sockets.
+
+   * dpdk-hugepage-dir
+   Directory where hugetlbfs is mounted
+
+   * dpdk-extra
+   Extra arguments to provide to DPDK EAL, as previously specified on the
+   command line. Do not pass '--no-huge' to the system in this way. Support
+   for running the system without hugepages is nonexistent.
+
+   * cuse-dev-name
+   Option to set the vhost_cuse character device name.
+
+   * vhost-sock-dir
+   Option to set the path to the vhost_user unix socket files.
+
+   NOTE: Changing any of these options requires restarting the ovs-vswitchd
+   application.
+
+   Open vSwitch can be started as normal. DPDK will be initialized as long
+   as the dpdk-init option has been set to 'true'.
+
 
    ```
    export DB_SOCK=/usr/local/var/run/openvswitch/db.sock
-   ovs-vswitchd --dpdk -c 0x1 -n 4 -- unix:$DB_SOCK --pidfile --detach
+   ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true
+   ovs-vswitchd unix:$DB_SOCK --pidfile --detach
    ```
 
    If allocated more than one GB hugepage (as for IVSHMEM), set amount and
    use NUMA node 0 memory:
 
    ```
-   ovs-vswitchd --dpdk -c 0x1 -n 4 --socket-mem 1024,0 \
-   -- unix:$DB_SOCK --pidfile --detach
+   ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-socket-mem="1024,0"
+   ovs-vswitchd unix:$DB_SOCK --pidfile --detach
    ```
 
 6. Add bridge & ports
@@ -496,7 +536,7 @@ the vswitchd.
 DPDK vhost:
 -----------
 
-DPDK 2.2 supports two types of vhost:
+DPDK 16.04 supports two types of vhost:
 
 1. vhost-user
 2. vhost-cuse
@@ -517,7 +557,7 @@ with OVS.
 DPDK vhost-user Prerequisites:
 -------------------------
 
-1. DPDK 2.2 with vhost support enabled as documented in the "Building and
+1. DPDK 16.04 with vhost support enabled as documented in the "Building and
    Installing section"
 
 2. QEMU version v2.1.0+
@@ -545,11 +585,12 @@ in the names.
      `/usr/local/var/run/openvswitch/vhost-user-1`, which you must provide
      to your VM on the QEMU command line. More instructions on this can be
      found in the next section "DPDK vhost-user VM configuration"
-     Note: If you wish for the vhost-user sockets to be created in a
-     directory other than `/usr/local/var/run/openvswitch`, you may specify
-     another location on the ovs-vswitchd command line like so:
+  - If you wish for the vhost-user sockets to be created in a sub-directory of
+    `/usr/local/var/run/openvswitch`, you may specify this directory in the
+    ovsdb like so:
 
-      `./vswitchd/ovs-vswitchd --dpdk -vhost_sock_dir /my-dir -c 0x1 ...`
+      `./utilities/ovs-vsctl --no-wait \
+        set Open_vSwitch . other_config:vhost-sock-dir=subdir`
 
 DPDK vhost-user VM configuration:
 ---------------------------------
@@ -635,10 +676,10 @@ with OVS.
 DPDK vhost-cuse Prerequisites:
 -------------------------
 
-1. DPDK 2.2 with vhost support enabled as documented in the "Building and
+1. DPDK 16.04 with vhost support enabled as documented in the "Building and
    Installing section"
    As an additional step, you must enable vhost-cuse in DPDK by setting the
-   following additional flag in `config/common_linuxapp`:
+   following additional flag in `config/common_base`:
 
    `CONFIG_RTE_LIBRTE_VHOST_USER=n`
 
@@ -697,14 +738,13 @@ DPDK vhost-cuse VM configuration:
 
 1. This step is only needed if using an alternative character device.
 
-   The new character device filename must be specified on the vswitchd
-   commandline:
+   The new character device filename must be specified in the ovsdb:
 
-        `./vswitchd/ovs-vswitchd --dpdk --cuse_dev_name my-vhost-net -c 0x1 ...`
+        `./utilities/ovs-vsctl --no-wait set Open_vSwitch . \
+                          other_config:cuse-dev-name=my-vhost-net`
 
-   Note that the `--cuse_dev_name` argument and associated string must be the first
-   arguments after `--dpdk` and come before the EAL arguments. In the example
-   above, the character device to be used will be `/dev/my-vhost-net`.
+   In the example above, the character device to be used will be
+   `/dev/my-vhost-net`.
 
 2. This step is only needed if reusing the standard character device. It will
    conflict with the kernel vhost character device so the user must first
@@ -816,8 +856,8 @@ steps.
         ```
 
         <my-vhost-device> refers to "vhost-net" if using the `/dev/vhost-net`
-        device. If you have specificed a different name on the ovs-vswitchd
-        commandline using the "--cuse_dev_name" parameter, please specify that
+        device. If you have specificed a different name in the database
+        using the "other_config:cuse-dev-name" parameter, please specify that
         filename instead.
 
      2. Disable SELinux or set to permissive mode
@@ -938,7 +978,7 @@ Restrictions:
     this with smaller page sizes.
 
   Platform and Network Interface:
-  - By default with DPDK 2.2, a maximum of 64 TX queues can be used with an
+  - By default with DPDK 16.04, a maximum of 64 TX queues can be used with an
     Intel XL710 Network Interface on a platform with more than 64 logical
     cores. If a user attempts to add an XL710 interface as a DPDK port type to
     a system as described above, an error will be reported that initialization

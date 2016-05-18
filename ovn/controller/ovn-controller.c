@@ -44,6 +44,8 @@
 #include "physical.h"
 #include "pinctrl.h"
 #include "poll-loop.h"
+#include "lib/bitmap.h"
+#include "lib/hash.h"
 #include "smap.h"
 #include "stream-ssl.h"
 #include "stream.h"
@@ -61,6 +63,25 @@ static void parse_options(int argc, char *argv[]);
 OVS_NO_RETURN static void usage(void);
 
 static char *ovs_remote;
+
+struct local_datapath *
+get_local_datapath(const struct hmap *local_datapaths, uint32_t tunnel_key)
+{
+    struct hmap_node *node = hmap_first_with_hash(local_datapaths, tunnel_key);
+    return (node
+            ? CONTAINER_OF(node, struct local_datapath, hmap_node)
+            : NULL);
+}
+
+struct patched_datapath *
+get_patched_datapath(const struct hmap *patched_datapaths, uint32_t tunnel_key)
+{
+    struct hmap_node *node = hmap_first_with_hash(patched_datapaths,
+                                                  tunnel_key);
+    return (node
+            ? CONTAINER_OF(node, struct patched_datapath, hmap_node)
+            : NULL);
+}
 
 const struct sbrec_chassis *
 get_chassis(struct ovsdb_idl *ovnsb_idl, const char *chassis_id)
@@ -169,7 +190,14 @@ static const char *
 get_chassis_id(const struct ovsdb_idl *ovs_idl)
 {
     const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(ovs_idl);
-    return cfg ? smap_get(&cfg->external_ids, "system-id") : NULL;
+    const char *chassis_id = cfg ? smap_get(&cfg->external_ids, "system-id") : NULL;
+
+    if (!chassis_id) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "'system-id' in Open_vSwitch database is missing.");
+    }
+
+    return chassis_id;
 }
 
 /* Retrieves the OVN Southbound remote location from the
@@ -295,6 +323,7 @@ main(int argc, char *argv[])
     /* Initialize connection tracking zones. */
     struct simap ct_zones = SIMAP_INITIALIZER(&ct_zones);
     unsigned long ct_zone_bitmap[BITMAP_N_LONGS(MAX_CT_ZONES)];
+    memset(ct_zone_bitmap, 0, sizeof ct_zone_bitmap);
     bitmap_set1(ct_zone_bitmap, 0); /* Zone 0 is reserved. */
     unixctl_command_register("ct-zone-list", "", 0, 0,
                              ct_zone_list, &ct_zones);
@@ -302,6 +331,16 @@ main(int argc, char *argv[])
     /* Main loop. */
     exiting = false;
     while (!exiting) {
+        /* Check OVN SB database. */
+        char *new_ovnsb_remote = get_ovnsb_remote(ovs_idl_loop.idl);
+        if (strcmp(ovnsb_remote, new_ovnsb_remote)) {
+            free(ovnsb_remote);
+            ovnsb_remote = new_ovnsb_remote;
+            ovsdb_idl_set_remote(ovnsb_idl_loop.idl, ovnsb_remote, true);
+        } else {
+            free(new_ovnsb_remote);
+        }
+
         struct controller_ctx ctx = {
             .ovs_idl = ovs_idl_loop.idl,
             .ovs_idl_txn = ovsdb_idl_loop_run(&ovs_idl_loop),
@@ -335,7 +374,7 @@ main(int argc, char *argv[])
 
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
-            pinctrl_run(&ctx, &lports, br_int);
+            pinctrl_run(&ctx, &lports, br_int, chassis_id, &local_datapaths);
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
             lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,

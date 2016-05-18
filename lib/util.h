@@ -21,14 +21,10 @@
 #include <inttypes.h>
 #include <limits.h>
 #include <stdarg.h>
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "compiler.h"
-#include "openvswitch/types.h"
 #include "openvswitch/util.h"
 
 extern char *program_name;
@@ -48,48 +44,6 @@ extern char *program_name;
 #define __ARRAY_SIZE(ARRAY) __ARRAY_SIZE_NOCHECK(ARRAY)
 #endif
 
-/* Returns the number of elements in ARRAY. */
-#define ARRAY_SIZE(ARRAY) __ARRAY_SIZE(ARRAY)
-
-/* Returns X / Y, rounding up.  X must be nonnegative to round correctly. */
-#define DIV_ROUND_UP(X, Y) (((X) + ((Y) - 1)) / (Y))
-
-/* Returns X rounded up to the nearest multiple of Y. */
-#define ROUND_UP(X, Y) (DIV_ROUND_UP(X, Y) * (Y))
-
-/* Returns the least number that, when added to X, yields a multiple of Y. */
-#define PAD_SIZE(X, Y) (ROUND_UP(X, Y) - (X))
-
-/* Returns X rounded down to the nearest multiple of Y. */
-#define ROUND_DOWN(X, Y) ((X) / (Y) * (Y))
-
-/* Returns true if X is a power of 2, otherwise false. */
-#define IS_POW2(X) ((X) && !((X) & ((X) - 1)))
-
-static inline bool
-is_pow2(uintmax_t x)
-{
-    return IS_POW2(x);
-}
-
-/* Returns X rounded up to a power of 2.  X must be a constant expression. */
-#define ROUND_UP_POW2(X) RUP2__(X)
-#define RUP2__(X) (RUP2_1(X) + 1)
-#define RUP2_1(X) (RUP2_2(X) | (RUP2_2(X) >> 16))
-#define RUP2_2(X) (RUP2_3(X) | (RUP2_3(X) >> 8))
-#define RUP2_3(X) (RUP2_4(X) | (RUP2_4(X) >> 4))
-#define RUP2_4(X) (RUP2_5(X) | (RUP2_5(X) >> 2))
-#define RUP2_5(X) (RUP2_6(X) | (RUP2_6(X) >> 1))
-#define RUP2_6(X) ((X) - 1)
-
-/* Returns X rounded down to a power of 2.  X must be a constant expression. */
-#define ROUND_DOWN_POW2(X) RDP2__(X)
-#define RDP2__(X) (RDP2_1(X) - (RDP2_1(X) >> 1))
-#define RDP2_1(X) (RDP2_2(X) | (RDP2_2(X) >> 16))
-#define RDP2_2(X) (RDP2_3(X) | (RDP2_3(X) >> 8))
-#define RDP2_3(X) (RDP2_4(X) | (RDP2_4(X) >> 4))
-#define RDP2_4(X) (RDP2_5(X) | (RDP2_5(X) >> 2))
-#define RDP2_5(X) (      (X) | (      (X) >> 1))
 
 /* This system's cache line size, in bytes.
  * Being wrong hurts performance but not correctness. */
@@ -116,10 +70,6 @@ ovs_prefetch_range(const void *start, size_t size)
 #endif
 
 #define OVS_NOT_REACHED() abort()
-
-/* Given ATTR, and TYPE, cast the ATTR to TYPE by first casting ATTR to
- * (void *). This is to suppress the alignment warning issued by clang. */
-#define ALIGNED_CAST(TYPE, ATTR) ((TYPE) (void *) (ATTR))
 
 /* Use "%"PRIuSIZE to format size_t with printf(). */
 #ifdef _WIN32
@@ -442,37 +392,48 @@ void bitwise_toggle_bit(void *dst, unsigned int len, unsigned int ofs);
 
 /* Returns non-zero if the parameters have equal value. */
 static inline int
-ovs_u128_equals(const ovs_u128 *a, const ovs_u128 *b)
+ovs_u128_equals(const ovs_u128 a, const ovs_u128 b)
 {
-    return (a->u64.hi == b->u64.hi) && (a->u64.lo == b->u64.lo);
+    return (a.u64.hi == b.u64.hi) && (a.u64.lo == b.u64.lo);
 }
 
 /* Returns true if 'val' is 0. */
 static inline bool
-ovs_u128_is_zero(const ovs_u128 *val)
+ovs_u128_is_zero(const ovs_u128 val)
 {
-    return !(val->u64.hi || val->u64.lo);
+    return !(val.u64.hi || val.u64.lo);
 }
 
 /* Returns true if 'val' is all ones. */
 static inline bool
-ovs_u128_is_ones(const ovs_u128 *val)
+ovs_u128_is_ones(const ovs_u128 val)
 {
-    return ovs_u128_equals(val, &OVS_U128_MAX);
+    return ovs_u128_equals(val, OVS_U128_MAX);
 }
 
 /* Returns non-zero if the parameters have equal value. */
 static inline int
-ovs_be128_equals(const ovs_be128 *a, const ovs_be128 *b)
+ovs_be128_equals(const ovs_be128 a, const ovs_be128 b)
 {
-    return (a->be64.hi == b->be64.hi) && (a->be64.lo == b->be64.lo);
+    return (a.be64.hi == b.be64.hi) && (a.be64.lo == b.be64.lo);
 }
 
 /* Returns true if 'val' is 0. */
 static inline bool
-ovs_be128_is_zero(const ovs_be128 *val)
+ovs_be128_is_zero(const ovs_be128 val)
 {
-    return !(val->be64.hi || val->be64.lo);
+    return !(val.be64.hi || val.be64.lo);
+}
+
+static inline ovs_u128
+ovs_u128_and(const ovs_u128 a, const ovs_u128 b)
+{
+    ovs_u128 dst;
+
+    dst.u64.hi = a.u64.hi & b.u64.hi;
+    dst.u64.lo = a.u64.lo & b.u64.lo;
+
+    return dst;
 }
 
 void xsleep(unsigned int seconds);

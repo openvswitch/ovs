@@ -14,15 +14,15 @@
  * limitations under the License.
  */
 
-#ifndef OFP_ACTIONS_H
-#define OFP_ACTIONS_H 1
+#ifndef OPENVSWITCH_OFP_ACTIONS_H
+#define OPENVSWITCH_OFP_ACTIONS_H 1
 
 #include <stddef.h>
 #include <stdint.h>
-#include "meta-flow.h"
-#include "ofp-util.h"
 #include "openflow/openflow.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 
@@ -903,6 +903,7 @@ const char *ofpact_name(enum ofpact_type);
 /* Internal use by the helpers below. */
 void ofpact_init(struct ofpact *, enum ofpact_type, size_t len);
 void *ofpact_put(struct ofpbuf *, enum ofpact_type, size_t len);
+void *ofpact_finish(struct ofpbuf *, struct ofpact *);
 
 /* For each OFPACT_<ENUM> with a corresponding struct <STRUCT>, this defines
  * the following commonly useful functions:
@@ -923,6 +924,16 @@ void *ofpact_put(struct ofpbuf *, enum ofpact_type, size_t len);
  *
  *     Returns 'ofpact' cast to "struct <STRUCT> *".  'ofpact->type' must be
  *     OFPACT_<ENUM>.
+ *
+ *   void ofpact_finish_<ENUM>(struct ofpbuf *ofpacts, struct <STRUCT> **ap);
+ *
+ *     Finishes composing variable-length action '*ap' (begun using
+ *     ofpact_put_<NAME>() on 'ofpacts'), by padding the action to a multiple
+ *     of OFPACT_ALIGNTO bytes and updating its embedded length field.
+ *
+ *     May reallocate 'ofpacts', and so as a convenience automatically updates
+ *     '*ap' to point to the new location.  If the caller has other pointers
+ *     within 'ap' or 'ofpacts', it needs to update them manually.
  *
  * as well as the following more rarely useful definitions:
  *
@@ -965,12 +976,17 @@ void *ofpact_put(struct ofpbuf *, enum ofpact_type, size_t len);
     {                                                                   \
         ofpact_init(&ofpact->ofpact, OFPACT_##ENUM,                     \
                     OFPACT_##ENUM##_SIZE);                              \
+    }                                                                   \
+                                                                        \
+    static inline void                                                  \
+    ofpact_finish_##ENUM(struct ofpbuf *ofpbuf, struct STRUCT **ofpactp) \
+    {                                                                   \
+        struct ofpact *ofpact = &(*ofpactp)->ofpact;                    \
+        ovs_assert(ofpact->type == OFPACT_##ENUM);                      \
+        *ofpactp = ofpact_finish(ofpbuf, ofpact);                       \
     }
 OFPACTS
 #undef OFPACT
-
-/* Call after adding the variable-length part to a variable-length action. */
-void *ofpact_finish(struct ofpbuf *, struct ofpact *);
 
 /* Additional functions for composing ofpacts. */
 struct ofpact_set_field *ofpact_put_reg_load(struct ofpbuf *ofpacts);

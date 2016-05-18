@@ -307,6 +307,7 @@ static NTSTATUS MapIrpOutputBuffer(PIRP irp,
 static NTSTATUS ValidateNetlinkCmd(UINT32 devOp,
                                    POVS_OPEN_INSTANCE instance,
                                    POVS_MESSAGE ovsMsg,
+                                   UINT32 ovsMgsLength,
                                    NETLINK_FAMILY *nlFamilyOps);
 static NTSTATUS InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                         NETLINK_FAMILY *nlFamilyOps,
@@ -379,26 +380,29 @@ FreeUserDumpState(POVS_OPEN_INSTANCE instance)
     }
 }
 
-VOID
+NDIS_STATUS
 OvsInit()
 {
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+
     gOvsCtrlLock = &ovsCtrlLockObj;
     NdisAllocateSpinLock(gOvsCtrlLock);
     OvsInitEventQueue();
-    OvsDeferredActionsQueueAlloc();
-    OvsDeferredActionsLevelAlloc();
+
+    status = OvsPerCpuDataInit();
+
+    return status;
 }
 
 VOID
 OvsCleanup()
 {
+    OvsPerCpuDataCleanup();
     OvsCleanupEventQueue();
     if (gOvsCtrlLock) {
         NdisFreeSpinLock(gOvsCtrlLock);
         gOvsCtrlLock = NULL;
     }
-    OvsDeferredActionsQueueFree();
-    OvsDeferredActionsLevelFree();
 }
 
 VOID
@@ -456,17 +460,11 @@ OvsCreateDeviceObject(NDIS_HANDLE ovsExtDriverHandle)
                                   &deviceAttributes,
                                   &gOvsDeviceObject,
                                   &gOvsDeviceHandle);
-    if (status != NDIS_STATUS_SUCCESS) {
-        POVS_DEVICE_EXTENSION ovsExt =
-            (POVS_DEVICE_EXTENSION)NdisGetDeviceReservedExtension(gOvsDeviceObject);
-        ASSERT(gOvsDeviceObject != NULL);
-        ASSERT(gOvsDeviceHandle != NULL);
-
-        if (ovsExt) {
-            ovsExt->numberOpenInstance = 0;
-        }
-    } else {
+    if (status == NDIS_STATUS_SUCCESS) {
         OvsRegisterSystemProvider((PVOID)gOvsDeviceObject);
+    } else {
+        OVS_LOG_ERROR("Failed to regiser pseudo device, error: 0x%08x",
+                      status);
     }
 
     OVS_LOG_TRACE("DeviceObject: %p", gOvsDeviceObject);
@@ -619,6 +617,7 @@ OvsOpenCloseDevice(PDEVICE_OBJECT deviceObject,
     POVS_DEVICE_EXTENSION ovsExt =
         (POVS_DEVICE_EXTENSION)NdisGetDeviceReservedExtension(deviceObject);
 
+    PAGED_CODE();
     ASSERT(deviceObject == gOvsDeviceObject);
     ASSERT(ovsExt != NULL);
 
@@ -651,7 +650,7 @@ NTSTATUS
 OvsCleanupDevice(PDEVICE_OBJECT deviceObject,
                  PIRP irp)
 {
-
+    PAGED_CODE();
     PIO_STACK_LOCATION irpSp;
     PFILE_OBJECT fileObject;
 
@@ -696,9 +695,11 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
     UINT32 devOp;
     OVS_MESSAGE ovsMsgReadOp;
     POVS_MESSAGE ovsMsg;
+    UINT32 ovsMsgLength = 0;
     NETLINK_FAMILY *nlFamilyOps;
     OVS_USER_PARAMS_CONTEXT usrParamsCtx;
 
+    PAGED_CODE();
 #ifdef DBG
     POVS_DEVICE_EXTENSION ovsExt =
         (POVS_DEVICE_EXTENSION)NdisGetDeviceReservedExtension(deviceObject);
@@ -775,6 +776,7 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
         }
 
         ovsMsg = inputBuffer;
+        ovsMsgLength = inputBufferLen;
         devOp = OVS_TRANSACTION_DEV_OP;
         break;
 
@@ -809,6 +811,7 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
                               OVS_CTRL_CMD_EVENT_NOTIFY :
                               OVS_CTRL_CMD_READ_NOTIFY;
         ovsMsg->genlMsg.version = nlControlFamilyOps.version;
+        ovsMsgLength = outputBufferLen;
 
         devOp = OVS_READ_DEV_OP;
         break;
@@ -854,6 +857,7 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
 
         /* Create an NL message for consumption. */
         ovsMsg = &ovsMsgReadOp;
+        ovsMsgLength = sizeof (ovsMsgReadOp);
         devOp = OVS_READ_DEV_OP;
 
         break;
@@ -865,7 +869,21 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
             goto done;
         }
 
+        /*
+         * Output buffer not mandatory but map it in case we have something
+         * to return to requester.
+        */
+        if (outputBufferLen != 0) {
+            status = MapIrpOutputBuffer(irp, outputBufferLen,
+                sizeof *ovsMsg, &outputBuffer);
+            if (status != STATUS_SUCCESS) {
+                goto done;
+            }
+            ASSERT(outputBuffer);
+        }
+
         ovsMsg = inputBuffer;
+        ovsMsgLength = inputBufferLen;
         devOp = OVS_WRITE_DEV_OP;
         break;
 
@@ -904,7 +922,8 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
      * "artificial" or was copied from a previously validated 'ovsMsg'.
      */
     if (devOp != OVS_READ_DEV_OP) {
-        status = ValidateNetlinkCmd(devOp, instance, ovsMsg, nlFamilyOps);
+        status = ValidateNetlinkCmd(devOp, instance, ovsMsg,
+                                    ovsMsgLength, nlFamilyOps);
         if (status != STATUS_SUCCESS) {
             goto done;
         }
@@ -939,10 +958,17 @@ static NTSTATUS
 ValidateNetlinkCmd(UINT32 devOp,
                    POVS_OPEN_INSTANCE instance,
                    POVS_MESSAGE ovsMsg,
+                   UINT32 ovsMsgLength,
                    NETLINK_FAMILY *nlFamilyOps)
 {
     NTSTATUS status = STATUS_INVALID_PARAMETER;
     UINT16 i;
+
+    // We need to ensure we have enough data to process
+    if (NlMsgSize(&ovsMsg->nlMsg) > ovsMsgLength) {
+        status = STATUS_INVALID_PARAMETER;
+        goto done;
+    }
 
     for (i = 0; i < nlFamilyOps->opsCount; i++) {
         if (nlFamilyOps->cmds[i].cmd == ovsMsg->genlMsg.cmd) {
@@ -976,6 +1002,14 @@ ValidateNetlinkCmd(UINT32 devOp,
             status = STATUS_SUCCESS;
             break;
         }
+    }
+
+    // validate all NlAttrs
+    if (!NlValidateAllAttrs(&ovsMsg->nlMsg, sizeof(*ovsMsg),
+                            NlMsgAttrsLen((PNL_MSG_HDR)ovsMsg),
+                            NULL, 0)) {
+        status = STATUS_INVALID_PARAMETER;
+        goto done;
     }
 
 done:
@@ -1029,6 +1063,7 @@ InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
             POVS_MESSAGE msgIn = NULL;
             POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                 usrParamsCtx->outputBuffer;
+            UINT32 msgErrorLen = usrParamsCtx->outputLength;
 
             if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_EVENT_NOTIFY ||
                 usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_READ_NOTIFY) {
@@ -1044,8 +1079,7 @@ InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
             ASSERT(msgIn);
             ASSERT(msgError);
-            NlBuildErrorMsg(msgIn, msgError, nlError);
-            *replyLen = msgError->nlMsg.nlmsgLen;
+            NlBuildErrorMsg(msgIn, msgError, msgErrorLen, nlError, replyLen);
         }
 
         if (*replyLen != 0) {
@@ -1417,9 +1451,9 @@ cleanup:
     if (nlError != NL_ERROR_SUCCESS) {
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
             usrParamsCtx->outputBuffer;
+        UINT32 msgErrorLen = usrParamsCtx->outputLength;
 
-        NlBuildErrorMsg(msgIn, msgError, nlError);
-        *replyLen = msgError->nlMsg.nlmsgLen;
+        NlBuildErrorMsg(msgIn, msgError, msgErrorLen, nlError, replyLen);
     }
 
     return STATUS_SUCCESS;

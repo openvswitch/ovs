@@ -26,6 +26,12 @@ Post-v2.5.0
        assignment.
      * Type of log messages from PMD threads changed from INFO to DBG.
      * QoS functionality with sample egress-policer implementation.
+     * The mechanism for configuring DPDK has changed to use database
+     * Sensible defaults have been introduced for many of the required
+       configuration options
+     * DB entries have been added for many of the DPDK EAL command line
+       arguments. Additional arguments can be passed via the dpdk-extra
+       entry.
    - ovs-benchmark: This utility has been removed due to lack of use and
      bitrot.
    - ovs-appctl:
@@ -43,6 +49,7 @@ Post-v2.5.0
      * Introduced SELinux policy package.
    - Datapath Linux kernel compatibility.
      * Dropped support for kernel older than 3.10.
+     * Removed VLAN splinters feature.
    - Tunnels:
      * Flow based tunnel match and action can be used for IPv6 address using
        tun_ipv6_src, tun_ipv6_dst fields.

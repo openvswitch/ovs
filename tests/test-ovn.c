@@ -15,15 +15,17 @@
  */
 
 #include <config.h>
-#include "command-line.h"
 #include <errno.h>
 #include <getopt.h>
 #include <sys/wait.h>
-#include "openvswitch/dynamic-string.h"
+#include "command-line.h"
 #include "fatal-signal.h"
-#include "match.h"
-#include "ofp-actions.h"
+#include "flow.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/match.h"
+#include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "ovn/lib/actions.h"
 #include "ovn/lib/expr.h"
 #include "ovn/lib/lex.h"
@@ -32,7 +34,6 @@
 #include "shash.h"
 #include "simap.h"
 #include "util.h"
-#include "openvswitch/vlog.h"
 
 /* --relops: Bitmap of the relational operators to test, in exhaustive test. */
 static unsigned int test_relops;

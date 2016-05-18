@@ -1492,7 +1492,7 @@ find_end:
             nl_msg_put_unspec(actions, OVS_CT_ATTR_MARK, &ct_mark,
                               sizeof(ct_mark));
         }
-        if (!ovs_u128_is_zero(&ct_label.mask)) {
+        if (!ovs_u128_is_zero(ct_label.mask)) {
             nl_msg_put_unspec(actions, OVS_CT_ATTR_LABELS, &ct_label,
                               sizeof ct_label);
         }
@@ -2081,10 +2081,9 @@ odp_portno_names_get(const struct hmap *portno_names, odp_port_t port_no)
 void
 odp_portno_names_destroy(struct hmap *portno_names)
 {
-    struct odp_portno_names *odp_portno_names, *odp_portno_names_next;
-    HMAP_FOR_EACH_SAFE (odp_portno_names, odp_portno_names_next,
-                        hmap_node, portno_names) {
-        hmap_remove(portno_names, &odp_portno_names->hmap_node);
+    struct odp_portno_names *odp_portno_names;
+
+    HMAP_FOR_EACH_POP (odp_portno_names, hmap_node, portno_names) {
         free(odp_portno_names->name);
         free(odp_portno_names);
     }
@@ -2366,7 +2365,7 @@ format_odp_tun_vxlan_opt(const struct nlattr *attr,
         case OVS_VXLAN_EXT_GBP: {
             uint32_t key = nl_attr_get_u32(a);
             ovs_be16 id, id_mask;
-            uint8_t flags, flags_mask;
+            uint8_t flags, flags_mask = 0;
 
             id = htons(key & 0xFFFF);
             flags = (key >> 16) & 0xFF;
@@ -2951,12 +2950,12 @@ static void
 format_u128(struct ds *ds, const ovs_u128 *key, const ovs_u128 *mask,
             bool verbose)
 {
-    if (verbose || (mask && !ovs_u128_is_zero(mask))) {
+    if (verbose || (mask && !ovs_u128_is_zero(*mask))) {
         ovs_be128 value;
 
         value = hton128(*key);
         ds_put_hex(ds, &value, sizeof value);
-        if (mask && !(ovs_u128_is_ones(mask))) {
+        if (mask && !(ovs_u128_is_ones(*mask))) {
             value = hton128(*mask);
             ds_put_char(ds, '/');
             ds_put_hex(ds, &value, sizeof value);
@@ -4465,7 +4464,7 @@ odp_key_from_pkt_metadata(struct ofpbuf *buf, const struct pkt_metadata *md)
         if (md->ct_mark) {
             nl_msg_put_u32(buf, OVS_KEY_ATTR_CT_MARK, md->ct_mark);
         }
-        if (!ovs_u128_is_zero(&md->ct_label)) {
+        if (!ovs_u128_is_zero(md->ct_label)) {
             nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_LABELS, &md->ct_label,
                               sizeof(md->ct_label));
         }

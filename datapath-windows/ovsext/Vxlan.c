@@ -304,10 +304,8 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
         vxlanHdr->locallyReplicate = 0;
         vxlanHdr->flags2 = 0;
         vxlanHdr->reserved1 = 0;
-        if (tunKey->flags | OVS_TNL_F_KEY) {
-            vxlanHdr->vxlanID = VXLAN_TUNNELID_TO_VNI(tunKey->tunnelId);
-            vxlanHdr->instanceID = 1;
-        }
+        vxlanHdr->vxlanID = VXLAN_TUNNELID_TO_VNI(tunKey->tunnelId);
+        vxlanHdr->instanceID = 1;
         vxlanHdr->reserved2 = 0;
     }
     return STATUS_SUCCESS;

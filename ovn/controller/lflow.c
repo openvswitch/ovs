@@ -16,9 +16,9 @@
 #include <config.h>
 #include "lflow.h"
 #include "lport.h"
-#include "openvswitch/dynamic-string.h"
 #include "ofctrl.h"
-#include "ofp-actions.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 #include "ovn-controller.h"
@@ -241,15 +241,12 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
              * large lrouters and lswitches. This need to be studied further.
              */
 
-            struct hmap_node *ld;
-            ld = hmap_first_with_hash(local_datapaths, ldp->tunnel_key);
-            if (!ld) {
+            if (!get_local_datapath(local_datapaths, ldp->tunnel_key)) {
                 if (!ingress) {
                     continue;
                 }
-                struct hmap_node *pd;
-                pd = hmap_first_with_hash(patched_datapaths, ldp->tunnel_key);
-                if (!pd) {
+                if (!get_patched_datapath(patched_datapaths,
+                                          ldp->tunnel_key)) {
                     continue;
                 }
             }
@@ -443,4 +440,5 @@ void
 lflow_destroy(void)
 {
     expr_symtab_destroy(&symtab);
+    shash_destroy(&symtab);
 }

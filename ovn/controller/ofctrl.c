@@ -14,22 +14,25 @@
  */
 
 #include <config.h>
-#include "ofctrl.h"
+#include "byte-order.h"
 #include "dirs.h"
-#include "openvswitch/dynamic-string.h"
+#include "hash.h"
 #include "hmap.h"
-#include "match.h"
-#include "ofp-actions.h"
-#include "ofp-msgs.h"
-#include "ofp-print.h"
-#include "ofp-util.h"
-#include "openvswitch/ofpbuf.h"
+#include "ofctrl.h"
 #include "openflow/openflow.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/match.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 #include "ovn-controller.h"
 #include "physical.h"
 #include "rconn.h"
 #include "socket-util.h"
+#include "util.h"
 #include "vswitch-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(ofctrl);
@@ -564,9 +567,8 @@ ovn_flow_destroy(struct ovn_flow *f)
 static void
 ovn_flow_table_clear(struct hmap *flow_table)
 {
-    struct ovn_flow *f, *next;
-    HMAP_FOR_EACH_SAFE (f, next, hmap_node, flow_table) {
-        hmap_remove(flow_table, &f->hmap_node);
+    struct ovn_flow *f;
+    HMAP_FOR_EACH_POP (f, hmap_node, flow_table) {
         ovn_flow_destroy(f);
     }
 }

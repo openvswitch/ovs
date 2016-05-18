@@ -49,6 +49,14 @@
 #define STT_DST_PORT 7471
 
 #ifdef OVS_STT
+#ifdef CONFIG_SLUB
+/*
+ * We saw better performance with skipping zero copy in case of SLUB.
+ * So skip zero copy for SLUB case.
+ */
+#define SKIP_ZERO_COPY
+#endif
+
 #define STT_VER 0
 
 /* @list: Per-net list of STT ports.
@@ -216,73 +224,6 @@ static int clear_gso(struct sk_buff *skb)
 	shinfo->gso_type = 0;
 	shinfo->gso_size = 0;
 	shinfo->gso_segs = 0;
-	return 0;
-}
-
-static struct sk_buff *normalize_frag_list(struct sk_buff *head,
-					   struct sk_buff **skbp)
-{
-	struct sk_buff *skb = *skbp;
-	struct sk_buff *last;
-
-	do {
-		struct sk_buff *frags;
-
-		if (skb_shared(skb)) {
-			struct sk_buff *nskb = skb_clone(skb, GFP_ATOMIC);
-
-			if (unlikely(!nskb))
-				return ERR_PTR(-ENOMEM);
-
-			nskb->next = skb->next;
-			consume_skb(skb);
-			skb = nskb;
-			*skbp = skb;
-		}
-
-		if (head) {
-			head->len -= skb->len;
-			head->data_len -= skb->len;
-			head->truesize -= skb->truesize;
-		}
-
-		frags = skb_shinfo(skb)->frag_list;
-		if (frags) {
-			int err;
-
-			err = skb_unclone(skb, GFP_ATOMIC);
-			if (unlikely(err))
-				return ERR_PTR(err);
-
-			last = normalize_frag_list(skb, &frags);
-			if (IS_ERR(last))
-				return last;
-
-			skb_shinfo(skb)->frag_list = NULL;
-			last->next = skb->next;
-			skb->next = frags;
-		} else {
-			last = skb;
-		}
-
-		skbp = &skb->next;
-	} while ((skb = skb->next));
-
-	return last;
-}
-
-/* Takes a linked list of skbs, which potentially contain frag_list
- * (whose members in turn potentially contain frag_lists, etc.) and
- * converts them into a single linear linked list.
- */
-static int straighten_frag_list(struct sk_buff **skbp)
-{
-	struct sk_buff *err_skb;
-
-	err_skb = normalize_frag_list(NULL, skbp);
-	if (IS_ERR(err_skb))
-		return PTR_ERR(err_skb);
-
 	return 0;
 }
 
@@ -465,6 +406,74 @@ static int skb_list_segment(struct sk_buff *head, bool ipv4, int l4_offset)
 	return 0;
 }
 
+#ifndef SKIP_ZERO_COPY
+static struct sk_buff *normalize_frag_list(struct sk_buff *head,
+					   struct sk_buff **skbp)
+{
+	struct sk_buff *skb = *skbp;
+	struct sk_buff *last;
+
+	do {
+		struct sk_buff *frags;
+
+		if (skb_shared(skb)) {
+			struct sk_buff *nskb = skb_clone(skb, GFP_ATOMIC);
+
+			if (unlikely(!nskb))
+				return ERR_PTR(-ENOMEM);
+
+			nskb->next = skb->next;
+			consume_skb(skb);
+			skb = nskb;
+			*skbp = skb;
+		}
+
+		if (head) {
+			head->len -= skb->len;
+			head->data_len -= skb->len;
+			head->truesize -= skb->truesize;
+		}
+
+		frags = skb_shinfo(skb)->frag_list;
+		if (frags) {
+			int err;
+
+			err = skb_unclone(skb, GFP_ATOMIC);
+			if (unlikely(err))
+				return ERR_PTR(err);
+
+			last = normalize_frag_list(skb, &frags);
+			if (IS_ERR(last))
+				return last;
+
+			skb_shinfo(skb)->frag_list = NULL;
+			last->next = skb->next;
+			skb->next = frags;
+		} else {
+			last = skb;
+		}
+
+		skbp = &skb->next;
+	} while ((skb = skb->next));
+
+	return last;
+}
+
+/* Takes a linked list of skbs, which potentially contain frag_list
+ * (whose members in turn potentially contain frag_lists, etc.) and
+ * converts them into a single linear linked list.
+ */
+static int straighten_frag_list(struct sk_buff **skbp)
+{
+	struct sk_buff *err_skb;
+
+	err_skb = normalize_frag_list(NULL, skbp);
+	if (IS_ERR(err_skb))
+		return PTR_ERR(err_skb);
+
+	return 0;
+}
+
 static int coalesce_skb(struct sk_buff **headp)
 {
 	struct sk_buff *frag, *head, *prev;
@@ -510,6 +519,34 @@ static int coalesce_skb(struct sk_buff **headp)
 	head->next = NULL;
 	return 0;
 }
+#else
+static int coalesce_skb(struct sk_buff **headp)
+{
+	struct sk_buff *frag, *head = *headp, *next;
+	int delta = FRAG_CB(head)->first.tot_len - skb_headlen(head);
+	int err;
+
+	if (unlikely(!head->next))
+		return 0;
+
+	err = pskb_expand_head(head, 0, delta, GFP_ATOMIC);
+	if (unlikely(err))
+		return err;
+
+	if (unlikely(!__pskb_pull_tail(head, head->data_len)))
+		BUG();
+
+	for (frag = head->next; frag; frag = next) {
+		skb_copy_bits(frag, 0, skb_put(head, frag->len), frag->len);
+		next = frag->next;
+		kfree_skb(frag);
+	}
+
+	head->next = NULL;
+	head->truesize = SKB_TRUESIZE(head->len);
+	return 0;
+}
+#endif
 
 static int __try_to_segment(struct sk_buff *skb, bool csum_partial,
 			    bool ipv4, bool tcp, int l4_offset)
@@ -522,6 +559,12 @@ static int __try_to_segment(struct sk_buff *skb, bool csum_partial,
 
 static int try_to_segment(struct sk_buff *skb)
 {
+#ifdef SKIP_ZERO_COPY
+	/* coalesce_skb() since does not generate frag-list no need to
+	 * linearize it here.
+	 */
+	return 0;
+#else
 	struct stthdr *stth = stt_hdr(skb);
 	bool csum_partial = !!(stth->flags & STT_CSUM_PARTIAL);
 	bool ipv4 = !!(stth->flags & STT_PROTO_IPV4);
@@ -529,16 +572,19 @@ static int try_to_segment(struct sk_buff *skb)
 	int l4_offset = stth->l4_offset;
 
 	return __try_to_segment(skb, csum_partial, ipv4, tcp, l4_offset);
+#endif
 }
 
 static int segment_skb(struct sk_buff **headp, bool csum_partial,
 		       bool ipv4, bool tcp, int l4_offset)
 {
+#ifndef SKIP_ZERO_COPY
 	int err;
 
 	err = coalesce_skb(headp);
 	if (err)
 		return err;
+#endif
 
 	if (skb_shinfo(*headp)->frag_list)
 		return __try_to_segment(*headp, csum_partial,
@@ -1054,16 +1100,58 @@ static struct pkt_frag *lookup_frag(struct net *net,
 	return victim_frag;
 }
 
+#ifdef SKIP_ZERO_COPY
+static int __copy_skb(struct sk_buff *to, struct sk_buff *from,
+		      int *delta, bool *headstolen)
+{
+	int err;
+
+	if (unlikely(to->next))
+		return -EINVAL;
+
+	if (unlikely(FRAG_CB(to)->offset))
+		return -EINVAL;
+
+	if (unlikely(skb_unclone(to, GFP_ATOMIC)))
+		return -ENOMEM;
+
+	if (skb_try_coalesce(to, from, headstolen, delta))
+		return 0;
+
+	*headstolen = false;
+	err = pskb_expand_head(to, 0, to->data_len + from->len, GFP_ATOMIC);
+	if (unlikely(err))
+		return err;
+
+	if (unlikely(!__pskb_pull_tail(to, to->data_len)))
+		BUG();
+
+	skb_copy_bits(from, 0, skb_put(to, from->len), from->len);
+
+	*delta = from->len;
+	to->truesize += from->len;
+	return 0;
+}
+#else
+static int __copy_skb(struct sk_buff *to, struct sk_buff *from,
+		      int *delta, bool *headstolen)
+{
+	*headstolen = false;
+	return -EINVAL;
+}
+#endif
+
 static struct sk_buff *reassemble(struct sk_buff *skb)
 {
 	struct iphdr *iph = ip_hdr(skb);
 	struct tcphdr *tcph = tcp_hdr(skb);
 	u32 seq = ntohl(tcph->seq);
 	struct stt_percpu *stt_percpu;
-	struct sk_buff *last_skb;
+	struct sk_buff *last_skb, *copied_skb = NULL;
 	struct pkt_frag *frag;
 	struct pkt_key key;
-	int tot_len;
+	int tot_len, delta = skb->truesize;
+	bool headstolen;
 	u32 hash;
 
 	tot_len = seq >> STT_SEQ_LEN_SHIFT;
@@ -1103,7 +1191,6 @@ static struct sk_buff *reassemble(struct sk_buff *skb)
 		FRAG_CB(skb)->first.set_ecn_ce = false;
 		list_add_tail(&frag->lru_node, &stt_percpu->frag_lru);
 		stt_percpu->frag_mem_used += skb->truesize;
-
 		skb = NULL;
 		goto unlock;
 	}
@@ -1114,8 +1201,13 @@ static struct sk_buff *reassemble(struct sk_buff *skb)
 	last_skb = FRAG_CB(frag->skbs)->first.last_skb;
 	if (likely(FRAG_CB(last_skb)->offset + last_skb->len ==
 		   FRAG_CB(skb)->offset)) {
-		last_skb->next = skb;
-		FRAG_CB(frag->skbs)->first.last_skb = skb;
+
+		if (!__copy_skb(frag->skbs, skb, &delta, &headstolen)) {
+			copied_skb = skb;
+		} else {
+			last_skb->next = skb;
+			FRAG_CB(frag->skbs)->first.last_skb = skb;
+		}
 	} else {
 		struct sk_buff *prev = NULL, *next;
 
@@ -1154,8 +1246,8 @@ static struct sk_buff *reassemble(struct sk_buff *skb)
 
 	FRAG_CB(frag->skbs)->first.set_ecn_ce |= INET_ECN_is_ce(iph->tos);
 	FRAG_CB(frag->skbs)->first.rcvd_len += skb->len;
-	FRAG_CB(frag->skbs)->first.mem_used += skb->truesize;
-	stt_percpu->frag_mem_used += skb->truesize;
+	stt_percpu->frag_mem_used += delta;
+	FRAG_CB(frag->skbs)->first.mem_used += delta;
 
 	if (FRAG_CB(frag->skbs)->first.tot_len ==
 	    FRAG_CB(frag->skbs)->first.rcvd_len) {
@@ -1174,6 +1266,8 @@ static struct sk_buff *reassemble(struct sk_buff *skb)
 		skb = NULL;
 	}
 
+	if (copied_skb)
+		kfree_skb_partial(copied_skb, headstolen);
 	goto unlock;
 
 unlock_free:

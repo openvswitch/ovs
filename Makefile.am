@@ -107,6 +107,7 @@ EXTRA_DIST = \
 	boot.sh \
 	build-aux/cccl \
 	build-aux/cksum-schema-check \
+	build-aux/calculate-schema-cksum \
 	build-aux/dist-docs \
 	build-aux/sodepends.pl \
 	build-aux/soexpand.pl \

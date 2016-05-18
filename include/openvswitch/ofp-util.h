@@ -14,24 +14,23 @@
  * limitations under the License.
  */
 
-#ifndef OFP_UTIL_H
-#define OFP_UTIL_H 1
+#ifndef OPENVSWITCH_OFP_UTIL_H
+#define OPENVSWITCH_OFP_UTIL_H 1
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "bitmap.h"
-#include "compiler.h"
-#include "flow.h"
+#include "openvswitch/flow.h"
 #include "openvswitch/list.h"
-#include "match.h"
-#include "meta-flow.h"
-#include "netdev.h"
+#include "openvswitch/match.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/netdev.h"
 #include "openflow/netronome-ext.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/types.h"
-#include "type-props.h"
-#include "uuid.h"
+#include "openvswitch/type-props.h"
+#include "openvswitch/uuid.h"
 
 struct ofpbuf;
 union ofp_action;
@@ -115,10 +114,12 @@ enum ofputil_protocol {
     OFPUTIL_P_OF13_OXM      = 1 << 6,
     OFPUTIL_P_OF14_OXM      = 1 << 7,
     OFPUTIL_P_OF15_OXM      = 1 << 8,
+    OFPUTIL_P_OF16_OXM      = 1 << 9,
 #define OFPUTIL_P_ANY_OXM (OFPUTIL_P_OF12_OXM | \
                            OFPUTIL_P_OF13_OXM | \
                            OFPUTIL_P_OF14_OXM | \
-                           OFPUTIL_P_OF15_OXM)
+                           OFPUTIL_P_OF15_OXM | \
+                           OFPUTIL_P_OF16_OXM)
 
 #define OFPUTIL_P_NXM_OF11_UP (OFPUTIL_P_OF10_NXM_ANY | OFPUTIL_P_OF11_STD | \
                                OFPUTIL_P_ANY_OXM)
@@ -130,10 +131,11 @@ enum ofputil_protocol {
 #define OFPUTIL_P_OF12_UP (OFPUTIL_P_OF12_OXM | OFPUTIL_P_OF13_UP)
 #define OFPUTIL_P_OF13_UP (OFPUTIL_P_OF13_OXM | OFPUTIL_P_OF14_UP)
 #define OFPUTIL_P_OF14_UP (OFPUTIL_P_OF14_OXM | OFPUTIL_P_OF15_UP)
-#define OFPUTIL_P_OF15_UP OFPUTIL_P_OF15_OXM
+#define OFPUTIL_P_OF15_UP (OFPUTIL_P_OF15_OXM | OFPUTIL_P_OF16_UP)
+#define OFPUTIL_P_OF16_UP OFPUTIL_P_OF16_OXM
 
     /* All protocols. */
-#define OFPUTIL_P_ANY ((1 << 9) - 1)
+#define OFPUTIL_P_ANY ((1 << 10) - 1)
 
     /* Protocols in which a specific table may be specified in flow_mods. */
 #define OFPUTIL_P_TID (OFPUTIL_P_OF10_STD_TID | \

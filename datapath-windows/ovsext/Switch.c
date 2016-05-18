@@ -20,7 +20,7 @@
  */
 
 #include "precomp.h"
-
+#include "Conntrack.h"
 #include "Switch.h"
 #include "Vport.h"
 #include "Event.h"
@@ -218,6 +218,13 @@ OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
         goto create_switch_done;
     }
 
+    status = OvsInitConntrack(switchContext);
+    if (status != STATUS_SUCCESS) {
+        OvsUninitSwitchContext(switchContext);
+        OVS_LOG_ERROR("Exit: Failed to initialize Connection tracking");
+        goto create_switch_done;
+    }
+
     *switchContextOut = switchContext;
 
 create_switch_done:
@@ -249,6 +256,7 @@ OvsExtDetach(NDIS_HANDLE filterModuleContext)
     OvsDeleteSwitch(switchContext);
     OvsCleanupIpHelper();
     OvsCleanupSttDefragmentation();
+    OvsCleanupConntrack();
     /* This completes the cleanup, and a new attach can be handled now. */
 
     OVS_LOG_TRACE("Exit: OvsDetach Successfully");
@@ -345,14 +353,13 @@ OvsExtPause(NDIS_HANDLE filterModuleContext,
     OVS_LOG_TRACE("Enter: filterModuleContext %p",
                   filterModuleContext);
 
-    ASSERT(switchContext->dataFlowState == OvsSwitchRunning);
     switchContext->dataFlowState = OvsSwitchPaused;
     KeMemoryBarrier();
     while(switchContext->pendingOidCount > 0) {
         NdisMSleep(1000);
     }
 
-    OVS_LOG_TRACE("Exit: OvsDetach Successfully");
+    OVS_LOG_TRACE("Exit: OvsExtPause Successfully");
     return NDIS_STATUS_SUCCESS;
 }
 
@@ -603,6 +610,11 @@ OvsExtNetPnPEvent(NDIS_HANDLE filterModuleContext,
                           "status: %s", switchContext,
                           status ? "TRUE" : "FALSE");
         }
+    }
+
+    if (netPnPEvent->NetPnPEvent.NetEvent == NetEventFilterPreDetach) {
+        switchContext->dataFlowState = OvsSwitchPaused;
+        KeMemoryBarrier();
     }
 
     status = NdisFNetPnPEvent(switchContext->NdisFilterHandle,

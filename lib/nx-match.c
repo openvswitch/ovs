@@ -22,20 +22,20 @@
 
 #include "classifier.h"
 #include "colors.h"
-#include "openvswitch/dynamic-string.h"
 #include "hmap.h"
-#include "meta-flow.h"
-#include "ofp-actions.h"
-#include "ofp-util.h"
-#include "openvswitch/ofpbuf.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "packets.h"
 #include "shash.h"
 #include "tun-metadata.h"
 #include "unaligned.h"
 #include "util.h"
-#include "openvswitch/ofp-errors.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(nx_match);
 

@@ -219,6 +219,12 @@ A map or set contains a duplicate key.
 RFC 7047 requires the "version" field in <database-schema>.  Current
 versions of \fBovsdb\-server\fR allow it to be omitted (future
 versions are likely to require it).
+.IP
+RFC 7047 allows columns that contain weak references to be immutable.
+This raises the issue of the behavior of the weak reference when the
+rows that it references are deleted.  Since version 2.6,
+\fBovsdb\-server\fR forces columns that contain weak references to be
+mutable.
 .
 .IP "4. Wire Protocol"
 The original OVSDB specifications included the following reason,

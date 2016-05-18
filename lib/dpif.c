@@ -33,8 +33,8 @@
 #include "netlink.h"
 #include "odp-execute.h"
 #include "odp-util.h"
-#include "ofp-print.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -903,7 +903,7 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
                           PMD_ID_NULL, &reply, &flow);
     if (!error
         && (!ufid || (flow.ufid_present
-                      && ovs_u128_equals(ufid, &flow.ufid)))) {
+                      && ovs_u128_equals(*ufid, flow.ufid)))) {
         enable_feature = true;
     }
 

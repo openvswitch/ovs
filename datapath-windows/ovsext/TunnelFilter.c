@@ -206,7 +206,7 @@ static OVS_TUNFLT_THREAD_CONTEXT gTunnelThreadCtx[OVS_TUNFLT_MAX_THREADS] = { 0 
 NTSTATUS
 OvsTunnelEngineOpen(HANDLE *engineSession)
 {
-    NTSTATUS status = STATUS_SUCCESS;
+    NTSTATUS status;
     FWPM_SESSION session = { 0 };
 
     /*
@@ -387,7 +387,7 @@ OvsTunnelRegisterDatagramDataCallouts(const GUID *layerKey,
                                       VOID *deviceObject,
                                       UINT32 *calloutId)
 {
-    NTSTATUS status = STATUS_SUCCESS;
+    NTSTATUS status;
 
     FWPS_CALLOUT sCallout = {0};
     FWPM_CALLOUT mCallout = {0};
@@ -449,7 +449,7 @@ Exit:
 NTSTATUS
 OvsTunnelRegisterCallouts(VOID *deviceObject)
 {
-    NTSTATUS        status = STATUS_SUCCESS;
+    NTSTATUS        status;
     BOOLEAN         inTransaction = FALSE;
     FWPM_SUBLAYER   OvsTunnelSubLayer;
 
@@ -530,7 +530,7 @@ OvsTunnelFilterUninitialize(PDRIVER_OBJECT driverObject)
 NTSTATUS
 OvsTunnelFilterInitialize(PDRIVER_OBJECT driverObject)
 {
-    NTSTATUS        status = STATUS_SUCCESS;
+    NTSTATUS        status;
     UNICODE_STRING  deviceName;
 
     RtlInitUnicodeString(&deviceName,
@@ -676,7 +676,7 @@ OvsUnsubscribeTunnelProviderBfeStateChanges()
 VOID
 OvsRegisterSystemProvider(PVOID deviceObject)
 {
-    NTSTATUS status = STATUS_SUCCESS;
+    NTSTATUS status;
     HANDLE engineSession = NULL;
 
     status = OvsSubscribeTunnelProviderBfeStateChanges(deviceObject);
@@ -883,7 +883,7 @@ OvsTunnelAddFilterEx(HANDLE engineSession,
                      UINT32 filterPort,
                      UINT64 *filterID)
 {
-    NTSTATUS status = STATUS_SUCCESS;
+    NTSTATUS status;
 
     status = OvsTunnelAddFilter(engineSession,
                                 L"Datagram-Data OVS Filter (Inbound)",

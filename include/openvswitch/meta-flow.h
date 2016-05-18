@@ -14,17 +14,18 @@
  * limitations under the License.
  */
 
-#ifndef META_FLOW_H
-#define META_FLOW_H 1
+#ifndef OPENVSWITCH_META_FLOW_H
+#define OPENVSWITCH_META_FLOW_H 1
 
+#include <limits.h>
+#include <stdarg.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <netinet/ip6.h>
-#include "bitmap.h"
-#include "flow.h"
+#include "openvswitch/flow.h"
 #include "openvswitch/ofp-errors.h"
-#include "packets.h"
-#include "util.h"
+#include "openvswitch/packets.h"
+#include "openvswitch/util.h"
 
 struct ds;
 struct match;
@@ -1985,6 +1986,9 @@ void mf_get_mask(const struct mf_field *, const struct flow_wildcards *,
 bool mf_are_prereqs_ok(const struct mf_field *, const struct flow *);
 void mf_mask_field_and_prereqs(const struct mf_field *,
                                struct flow_wildcards *);
+void mf_mask_field_and_prereqs__(const struct mf_field *,
+                                 const union mf_value *,
+                                 struct flow_wildcards *);
 void mf_bitmap_set_field_and_prereqs(const struct mf_field *mf, struct
                                      mf_bitmap *bm);
 

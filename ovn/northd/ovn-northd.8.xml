@@ -397,6 +397,13 @@ output;
 
     <h2>Logical Router Datapaths</h2>
 
+    <p>
+      Logical router datapaths will only exist for <ref table="Logical_Router"
+      db="OVN_Northbound"/> rows in the <ref db="OVN_Northbound"/> database
+      that do not have <ref column="enabled" table="Logical_Router"
+      db="OVN_Northbound"/> set to <code>false</code>
+    </p>
+
     <h3>Ingress Table 0: L2 Admission Control</h3>
 
     <p>
@@ -682,8 +689,9 @@ next;
         </p>
 
         <p>
-          If the route has a gateway, <var>G</var> is the gateway IP address,
-          otherwise it is <code>ip4.dst</code>.
+          If the route has a gateway, <var>G</var> is the gateway IP address.
+          Instead, if the route is from a configured static route, <var>G</var>
+          is the next hop IP address.  Else it is <code>ip4.dst</code>.
         </p>
       </li>
 

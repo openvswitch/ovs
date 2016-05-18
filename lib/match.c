@@ -15,12 +15,13 @@
  */
 
 #include <config.h>
-#include "match.h"
+#include "openvswitch/match.h"
 #include <stdlib.h>
+#include "flow.h"
 #include "byte-order.h"
 #include "colors.h"
 #include "openvswitch/dynamic-string.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "packets.h"
 #include "tun-metadata.h"
 
@@ -1032,7 +1033,7 @@ format_flow_tunnel(struct ds *s, const struct match *match)
 static void
 format_ct_label_masked(struct ds *s, const ovs_u128 *key, const ovs_u128 *mask)
 {
-    if (!ovs_u128_is_zero(mask)) {
+    if (!ovs_u128_is_zero(*mask)) {
         ovs_be128 value = hton128(*key);
         ds_put_format(s, "%sct_label=%s", colors.param, colors.end);
         ds_put_hex(s, &value, sizeof value);
@@ -1117,7 +1118,7 @@ match_format(const struct match *match, struct ds *s, int priority)
         format_uint32_masked(s, "ct_mark", f->ct_mark, wc->masks.ct_mark);
     }
 
-    if (!ovs_u128_is_zero(&wc->masks.ct_label)) {
+    if (!ovs_u128_is_zero(wc->masks.ct_label)) {
         format_ct_label_masked(s, &f->ct_label, &wc->masks.ct_label);
     }
 

@@ -37,11 +37,12 @@
 #define OVS_GRE_POOL_TAG                'GSVO'
 #define OVS_TUNFLT_POOL_TAG             'WSVO'
 #define OVS_RECIRC_POOL_TAG             'CSVO'
+#define OVS_CT_POOL_TAG                 'CTVO'
 
 VOID *OvsAllocateMemory(size_t size);
 VOID *OvsAllocateMemoryWithTag(size_t size, ULONG tag);
 VOID *OvsAllocateAlignedMemory(size_t size, UINT16 align);
-VOID *OvsAllocateMemoryPerCpu(size_t size, ULONG tag);
+VOID *OvsAllocateMemoryPerCpu(size_t size, size_t count, ULONG tag);
 VOID OvsFreeMemory(VOID *ptr);
 VOID OvsFreeMemoryWithTag(VOID *ptr, ULONG tag);
 VOID OvsFreeAlignedMemory(VOID *ptr);
@@ -68,7 +69,7 @@ VOID OvsFreeAlignedMemory(VOID *ptr);
 
 VOID OvsAppendList(PLIST_ENTRY dst, PLIST_ENTRY src);
 
-
+#define MAX(_a, _b) ((_a) > (_b) ? (_a) : (_b))
 #define MIN(_a, _b) ((_a) > (_b) ? (_b) : (_a))
 #define ARRAY_SIZE(_x)  ((sizeof(_x))/sizeof (_x)[0])
 #define OVS_SWITCH_PORT_ID_INVALID  (NDIS_SWITCH_PORT_ID)(-1)
@@ -93,5 +94,23 @@ VOID OvsAppendList(PLIST_ENTRY dst, PLIST_ENTRY src);
 #define BIT32(_x)                       ((UINT32)0x1 << (_x))
 
 BOOLEAN OvsCompareString(PVOID string1, PVOID string2);
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsPerCpuDataInit --
+ *     The function allocates necessary per-processor resources.
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsPerCpuDataInit();
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsPerCpuDataCleanup --
+ *     The function frees all per-processor resources.
+ * --------------------------------------------------------------------------
+ */
+VOID
+OvsPerCpuDataCleanup();
 
 #endif /* __UTIL_H_ */

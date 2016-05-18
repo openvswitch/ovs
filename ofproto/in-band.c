@@ -15,7 +15,6 @@
  */
 
 #include <config.h>
-#include "in-band.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -26,18 +25,19 @@
 #include "classifier.h"
 #include "dhcp.h"
 #include "flow.h"
+#include "in-band.h"
 #include "netdev.h"
 #include "netlink.h"
 #include "odp-util.h"
-#include "ofp-actions.h"
 #include "ofproto.h"
-#include "openvswitch/ofpbuf.h"
 #include "ofproto-provider.h"
 #include "openflow/openflow.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "timeval.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(in_band);
 
@@ -449,10 +449,9 @@ void
 in_band_destroy(struct in_band *ib)
 {
     if (ib) {
-        struct in_band_rule *rule, *next;
+        struct in_band_rule *rule;
 
-        HMAP_FOR_EACH_SAFE (rule, next, hmap_node, &ib->rules) {
-            hmap_remove(&ib->rules, &rule->hmap_node);
+        HMAP_FOR_EACH_POP (rule, hmap_node, &ib->rules) {
             free(rule);
         }
         hmap_destroy(&ib->rules);

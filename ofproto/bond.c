@@ -23,31 +23,30 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "ofp-util.h"
-#include "ofp-actions.h"
-#include "openvswitch/ofpbuf.h"
-#include "ofproto/ofproto-provider.h"
-#include "ofproto/ofproto-dpif.h"
-#include "ofproto/ofproto-dpif-rid.h"
 #include "connectivity.h"
 #include "coverage.h"
-#include "openvswitch/dynamic-string.h"
+#include "dp-packet.h"
 #include "flow.h"
 #include "hmap.h"
 #include "lacp.h"
-#include "openvswitch/list.h"
 #include "netdev.h"
 #include "odp-util.h"
+#include "ofproto/ofproto-dpif.h"
+#include "ofproto/ofproto-dpif-rid.h"
+#include "ofproto/ofproto-provider.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/list.h"
+#include "openvswitch/match.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "packets.h"
-#include "dp-packet.h"
 #include "poll-loop.h"
 #include "seq.h"
-#include "match.h"
 #include "shash.h"
 #include "timeval.h"
 #include "unixctl.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(bond);
 
@@ -258,8 +257,8 @@ bond_ref(const struct bond *bond_)
 void
 bond_unref(struct bond *bond)
 {
-    struct bond_slave *slave, *next_slave;
-    struct bond_pr_rule_op *pr_op, *next_op;
+    struct bond_pr_rule_op *pr_op;
+    struct bond_slave *slave;
 
     if (!bond || ovs_refcount_unref_relaxed(&bond->ref_cnt) != 1) {
         return;
@@ -269,8 +268,7 @@ bond_unref(struct bond *bond)
     hmap_remove(all_bonds, &bond->hmap_node);
     ovs_rwlock_unlock(&rwlock);
 
-    HMAP_FOR_EACH_SAFE (slave, next_slave, hmap_node, &bond->slaves) {
-        hmap_remove(&bond->slaves, &slave->hmap_node);
+    HMAP_FOR_EACH_POP (slave, hmap_node, &bond->slaves) {
         /* Client owns 'slave->netdev'. */
         free(slave->name);
         free(slave);
@@ -281,8 +279,7 @@ bond_unref(struct bond *bond)
     free(bond->hash);
     free(bond->name);
 
-    HMAP_FOR_EACH_SAFE(pr_op, next_op, hmap_node, &bond->pr_rule_ops) {
-        hmap_remove(&bond->pr_rule_ops, &pr_op->hmap_node);
+    HMAP_FOR_EACH_POP (pr_op, hmap_node, &bond->pr_rule_ops) {
         free(pr_op);
     }
     hmap_destroy(&bond->pr_rule_ops);

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef OFP_PROP_H
-#define OFP_PROP_H 1
+#ifndef OPENVSWITCH_OFP_PROP_H
+#define OPENVSWITCH_OFP_PROP_H 1
 
 /* OpenFlow 1.3+ property support
  * ==============================

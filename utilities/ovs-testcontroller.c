@@ -43,7 +43,7 @@
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "socket-util.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 
 VLOG_DEFINE_THIS_MODULE(controller);
 

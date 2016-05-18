@@ -248,16 +248,6 @@ OvsReadDpIoctl(PFILE_OBJECT fileObject,
     return STATUS_SUCCESS;
 }
 
-/* Helper function to allocate a Forwarding Context for an NBL */
-NTSTATUS
-OvsAllocateForwardingContextForNBL(POVS_SWITCH_CONTEXT switchContext,
-                                   PNET_BUFFER_LIST nbl)
-{
-    return switchContext->NdisSwitchHandlers.
-        AllocateNetBufferListForwardingContext(
-            switchContext->NdisSwitchContext, nbl);
-}
-
 /*
  *----------------------------------------------------------------------------
  *  OvsNlExecuteCmdHandler --
@@ -355,8 +345,9 @@ OvsNlExecuteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
             POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                                            usrParamsCtx->outputBuffer;
-            NlBuildErrorMsg(msgIn, msgError, nlError);
-            *replyLen = msgError->nlMsg.nlmsgLen;
+            UINT32 msgErrorLen = usrParamsCtx->outputLength;
+
+            NlBuildErrorMsg(msgIn, msgError, msgErrorLen, nlError, replyLen);
             status = STATUS_SUCCESS;
             goto done;
         }

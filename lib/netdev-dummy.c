@@ -22,14 +22,15 @@
 
 #include "dp-packet.h"
 #include "dpif-netdev.h"
-#include "openvswitch/dynamic-string.h"
 #include "flow.h"
-#include "openvswitch/list.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "odp-util.h"
-#include "ofp-print.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/list.h"
+#include "openvswitch/ofp-print.h"
 #include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "ovs-atomic.h"
 #include "packets.h"
 #include "pcap-file.h"
@@ -41,7 +42,6 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "reconnect.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_dummy);
 
@@ -905,7 +905,6 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
     ovs_mutex_unlock(&netdev->mutex);
 
     dp_packet_pad(packet);
-    dp_packet_rss_invalidate(packet);
 
     arr[0] = packet;
     *c = 1;
@@ -1076,7 +1075,11 @@ netdev_dummy_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);
-    *stats = dev->stats;
+    /* Passing only collected counters */
+    stats->tx_packets = dev->stats.tx_packets;
+    stats->tx_bytes = dev->stats.tx_bytes;
+    stats->rx_packets = dev->stats.rx_packets;
+    stats->rx_bytes = dev->stats.rx_bytes;
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;

@@ -350,17 +350,15 @@ Other options:\n\
 }
 
 static const struct nbrec_logical_switch *
-lswitch_by_name_or_uuid(struct ctl_context *ctx, const char *id)
+lswitch_by_name_or_uuid(struct ctl_context *ctx, const char *id,
+                        bool must_exist)
 {
     const struct nbrec_logical_switch *lswitch = NULL;
-    bool is_uuid = false;
-    bool duplicate = false;
-    struct uuid lswitch_uuid;
 
-    if (uuid_from_string(&lswitch_uuid, id)) {
-        is_uuid = true;
-        lswitch = nbrec_logical_switch_get_for_uuid(ctx->idl,
-                                                    &lswitch_uuid);
+    struct uuid lswitch_uuid;
+    bool is_uuid = uuid_from_string(&lswitch_uuid, id);
+    if (is_uuid) {
+        lswitch = nbrec_logical_switch_get_for_uuid(ctx->idl, &lswitch_uuid);
     }
 
     if (!lswitch) {
@@ -371,19 +369,15 @@ lswitch_by_name_or_uuid(struct ctl_context *ctx, const char *id)
                 continue;
             }
             if (lswitch) {
-                VLOG_WARN("There is more than one logical switch named '%s'. "
-                        "Use a UUID.", id);
-                lswitch = NULL;
-                duplicate = true;
-                break;
+                ctl_fatal("Multiple logical switches named '%s'.  "
+                          "Use a UUID.", id);
             }
             lswitch = iter;
         }
     }
 
-    if (!lswitch && !duplicate) {
-        VLOG_WARN("lswitch not found for %s: '%s'",
-                is_uuid ? "UUID" : "name", id);
+    if (!lswitch && must_exist) {
+        ctl_fatal("%s: lswitch %s not found", id, is_uuid ? "UUID" : "name");
     }
 
     return lswitch;
@@ -423,7 +417,7 @@ nbctl_show(struct ctl_context *ctx)
     const struct nbrec_logical_switch *lswitch;
 
     if (ctx->argc == 2) {
-        lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1]);
+        lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1], false);
         if (lswitch) {
             print_lswitch(lswitch, &ctx->output);
         }
@@ -437,21 +431,48 @@ nbctl_show(struct ctl_context *ctx)
 static void
 nbctl_lswitch_add(struct ctl_context *ctx)
 {
-    struct nbrec_logical_switch *lswitch;
+    const char *lswitch_name = ctx->argc == 2 ? ctx->argv[1] : NULL;
 
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
+    bool add_duplicate = shash_find(&ctx->options, "--add-duplicate") != NULL;
+    if (may_exist && add_duplicate) {
+        ctl_fatal("--may-exist and --add-duplicate may not be used together");
+    }
+
+    if (lswitch_name) {
+        if (!add_duplicate) {
+            const struct nbrec_logical_switch *lswitch;
+            NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->idl) {
+                if (!strcmp(lswitch->name, lswitch_name)) {
+                    if (may_exist) {
+                        return;
+                    }
+                    ctl_fatal("%s: an lswitch with this name already exists",
+                              lswitch_name);
+                }
+            }
+        }
+    } else if (may_exist) {
+        ctl_fatal("--may-exist requires specifying a name");
+    } else if (add_duplicate) {
+        ctl_fatal("--add-duplicate requires specifying a name");
+    }
+
+    struct nbrec_logical_switch *lswitch;
     lswitch = nbrec_logical_switch_insert(ctx->txn);
-    if (ctx->argc == 2) {
-        nbrec_logical_switch_set_name(lswitch, ctx->argv[1]);
+    if (lswitch_name) {
+        nbrec_logical_switch_set_name(lswitch, lswitch_name);
     }
 }
 
 static void
 nbctl_lswitch_del(struct ctl_context *ctx)
 {
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *id = ctx->argv[1];
     const struct nbrec_logical_switch *lswitch;
 
-    lswitch = lswitch_by_name_or_uuid(ctx, id);
+    lswitch = lswitch_by_name_or_uuid(ctx, id, must_exist);
     if (!lswitch) {
         return;
     }
@@ -480,14 +501,14 @@ nbctl_lswitch_list(struct ctl_context *ctx)
 }
 
 static const struct nbrec_logical_port *
-lport_by_name_or_uuid(struct ctl_context *ctx, const char *id)
+lport_by_name_or_uuid(struct ctl_context *ctx, const char *id,
+                      bool must_exist)
 {
     const struct nbrec_logical_port *lport = NULL;
-    bool is_uuid = false;
-    struct uuid lport_uuid;
 
-    if (uuid_from_string(&lport_uuid, id)) {
-        is_uuid = true;
+    struct uuid lport_uuid;
+    bool is_uuid = uuid_from_string(&lport_uuid, id);
+    if (is_uuid) {
         lport = nbrec_logical_port_get_for_uuid(ctx->idl, &lport_uuid);
     }
 
@@ -499,45 +520,115 @@ lport_by_name_or_uuid(struct ctl_context *ctx, const char *id)
         }
     }
 
-    if (!lport) {
-        VLOG_WARN("lport not found for %s: '%s'",
-                is_uuid ? "UUID" : "name", id);
+    if (!lport && must_exist) {
+        ctl_fatal("%s: lport %s not found", id, is_uuid ? "UUID" : "name");
     }
 
     return lport;
 }
 
+/* Returns the lswitch that contains 'lport'. */
+static const struct nbrec_logical_switch *
+lport_to_lswitch(const struct ovsdb_idl *idl,
+                 const struct nbrec_logical_port *lport)
+{
+    const struct nbrec_logical_switch *lswitch;
+    NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, idl) {
+        for (size_t i = 0; i < lswitch->n_ports; i++) {
+            if (lswitch->ports[i] == lport) {
+                return lswitch;
+            }
+        }
+    }
+
+    /* Can't happen because of the database schema */
+    ctl_fatal("logical port %s is not part of any logical switch",
+              lport->name);
+}
+
+static const char *
+lswitch_get_name(const struct nbrec_logical_switch *lswitch,
+                 char uuid_s[UUID_LEN + 1], size_t uuid_s_size)
+{
+    if (lswitch->name[0]) {
+        return lswitch->name;
+    }
+    snprintf(uuid_s, uuid_s_size, UUID_FMT, UUID_ARGS(&lswitch->header_.uuid));
+    return uuid_s;
+}
+
 static void
 nbctl_lport_add(struct ctl_context *ctx)
 {
-    struct nbrec_logical_port *lport;
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
+
     const struct nbrec_logical_switch *lswitch;
+    lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    const char *parent_name;
     int64_t tag;
-
-    lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1]);
-    if (!lswitch) {
-        return;
-    }
-
-    if (ctx->argc != 3 && ctx->argc != 5) {
-        /* If a parent_name is specified, a tag must be specified as well. */
-        VLOG_WARN("Invalid arguments to lport-add.");
-        return;
-    }
-
-    if (ctx->argc == 5) {
+    if (ctx->argc == 3) {
+        parent_name = NULL;
+        tag = -1;
+    } else if (ctx->argc == 5) {
         /* Validate tag. */
-        if (!ovs_scan(ctx->argv[4], "%"SCNd64, &tag) || tag < 0 || tag > 4095) {
-            VLOG_WARN("Invalid tag '%s'", ctx->argv[4]);
-            return;
+        parent_name = ctx->argv[3];
+        if (!ovs_scan(ctx->argv[4], "%"SCNd64, &tag)
+            || tag < 0 || tag > 4095) {
+            ctl_fatal("%s: invalid tag", ctx->argv[4]);
         }
+    } else {
+        ctl_fatal("lport-add with parent must also specify a tag");
+    }
+
+    const char *lport_name = ctx->argv[2];
+    const struct nbrec_logical_port *lport;
+    lport = lport_by_name_or_uuid(ctx, lport_name, false);
+    if (lport) {
+        if (!may_exist) {
+            ctl_fatal("%s: an lport with this name already exists",
+                      lport_name);
+        }
+
+        const struct nbrec_logical_switch *lsw;
+        lsw = lport_to_lswitch(ctx->idl, lport);
+        if (lsw != lswitch) {
+            char uuid_s[UUID_LEN + 1];
+            ctl_fatal("%s: lport already exists but in lswitch %s", lport_name,
+                      lswitch_get_name(lsw, uuid_s, sizeof uuid_s));
+        }
+
+        if (parent_name) {
+            if (!lport->parent_name) {
+                ctl_fatal("%s: lport already exists but has no parent",
+                          lport_name);
+            } else if (strcmp(parent_name, lport->parent_name)) {
+                ctl_fatal("%s: lport already exists with different parent %s",
+                          lport_name, lport->parent_name);
+            }
+
+            if (!lport->n_tag) {
+                ctl_fatal("%s: lport already exists but has no tag",
+                          lport_name);
+            } else if (lport->tag[0] != tag) {
+                ctl_fatal("%s: lport already exists with different "
+                          "tag %"PRId64, lport_name, lport->tag[0]);
+            }
+        } else {
+            if (lport->parent_name) {
+                ctl_fatal("%s: lport already exists but has parent %s",
+                          lport_name, lport->parent_name);
+            }
+        }
+
+        return;
     }
 
     /* Create the logical port. */
     lport = nbrec_logical_port_insert(ctx->txn);
-    nbrec_logical_port_set_name(lport, ctx->argv[2]);
-    if (ctx->argc == 5) {
-        nbrec_logical_port_set_parent_name(lport, ctx->argv[3]);
+    nbrec_logical_port_set_name(lport, lport_name);
+    if (tag >= 0) {
+        nbrec_logical_port_set_parent_name(lport, parent_name);
         nbrec_logical_port_set_tag(lport, &tag, 1);
     }
 
@@ -546,7 +637,8 @@ nbctl_lport_add(struct ctl_context *ctx)
     struct nbrec_logical_port **new_ports = xmalloc(sizeof *new_ports *
                                                     (lswitch->n_ports + 1));
     memcpy(new_ports, lswitch->ports, sizeof *new_ports * lswitch->n_ports);
-    new_ports[lswitch->n_ports] = lport;
+    new_ports[lswitch->n_ports] = CONST_CAST(struct nbrec_logical_port *,
+                                             lport);
     nbrec_logical_switch_set_ports(lswitch, new_ports, lswitch->n_ports + 1);
     free(new_ports);
 }
@@ -576,9 +668,10 @@ remove_lport(const struct nbrec_logical_switch *lswitch, size_t idx)
 static void
 nbctl_lport_del(struct ctl_context *ctx)
 {
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const struct nbrec_logical_port *lport;
 
-    lport = lport_by_name_or_uuid(ctx, ctx->argv[1]);
+    lport = lport_by_name_or_uuid(ctx, ctx->argv[1], must_exist);
     if (!lport) {
         return;
     }
@@ -594,7 +687,8 @@ nbctl_lport_del(struct ctl_context *ctx)
         }
     }
 
-    VLOG_WARN("logical port %s is not part of any logical switch",
+    /* Can't happen because of the database schema. */
+    ctl_fatal("logical port %s is not part of any logical switch",
               ctx->argv[1]);
 }
 
@@ -606,10 +700,7 @@ nbctl_lport_list(struct ctl_context *ctx)
     struct smap lports;
     size_t i;
 
-    lswitch = lswitch_by_name_or_uuid(ctx, id);
-    if (!lswitch) {
-        return;
-    }
+    lswitch = lswitch_by_name_or_uuid(ctx, id, true);
 
     smap_init(&lports);
     for (i = 0; i < lswitch->n_ports; i++) {
@@ -631,11 +722,7 @@ nbctl_lport_get_parent(struct ctl_context *ctx)
 {
     const struct nbrec_logical_port *lport;
 
-    lport = lport_by_name_or_uuid(ctx, ctx->argv[1]);
-    if (!lport) {
-        return;
-    }
-
+    lport = lport_by_name_or_uuid(ctx, ctx->argv[1], true);
     if (lport->parent_name) {
         ds_put_format(&ctx->output, "%s\n", lport->parent_name);
     }
@@ -646,11 +733,7 @@ nbctl_lport_get_tag(struct ctl_context *ctx)
 {
     const struct nbrec_logical_port *lport;
 
-    lport = lport_by_name_or_uuid(ctx, ctx->argv[1]);
-    if (!lport) {
-        return;
-    }
-
+    lport = lport_by_name_or_uuid(ctx, ctx->argv[1], true);
     if (lport->n_tag > 0) {
         ds_put_format(&ctx->output, "%"PRId64"\n", lport->tag[0]);
     }
@@ -662,10 +745,7 @@ nbctl_lport_set_addresses(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_port *lport;
 
-    lport = lport_by_name_or_uuid(ctx, id);
-    if (!lport) {
-        return;
-    }
+    lport = lport_by_name_or_uuid(ctx, id, true);
 
     int i;
     for (i = 2; i < ctx->argc; i++) {
@@ -674,11 +754,10 @@ nbctl_lport_set_addresses(struct ctl_context *ctx)
         if (strcmp(ctx->argv[i], "unknown")
             && !ovs_scan(ctx->argv[i], ETH_ADDR_SCAN_FMT,
                          ETH_ADDR_SCAN_ARGS(ea))) {
-            VLOG_ERR("Invalid address format (%s). See ovn-nb(5). "
-                     "Hint: An Ethernet address must be "
-                     "listed before an IP address, together as a single "
-                     "argument.", ctx->argv[i]);
-            return;
+            ctl_fatal("%s: Invalid address format. See ovn-nb(5). "
+                      "Hint: An Ethernet address must be "
+                      "listed before an IP address, together as a single "
+                      "argument.", ctx->argv[i]);
         }
     }
 
@@ -695,10 +774,7 @@ nbctl_lport_get_addresses(struct ctl_context *ctx)
     const char *mac;
     size_t i;
 
-    lport = lport_by_name_or_uuid(ctx, id);
-    if (!lport) {
-        return;
-    }
+    lport = lport_by_name_or_uuid(ctx, id, true);
 
     svec_init(&addresses);
     for (i = 0; i < lport->n_addresses; i++) {
@@ -717,11 +793,7 @@ nbctl_lport_set_port_security(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_port *lport;
 
-    lport = lport_by_name_or_uuid(ctx, id);
-    if (!lport) {
-        return;
-    }
-
+    lport = lport_by_name_or_uuid(ctx, id, true);
     nbrec_logical_port_set_port_security(lport,
             (const char **) ctx->argv + 2, ctx->argc - 2);
 }
@@ -735,11 +807,7 @@ nbctl_lport_get_port_security(struct ctl_context *ctx)
     const char *addr;
     size_t i;
 
-    lport = lport_by_name_or_uuid(ctx, id);
-    if (!lport) {
-        return;
-    }
-
+    lport = lport_by_name_or_uuid(ctx, id, true);
     svec_init(&addrs);
     for (i = 0; i < lport->n_port_security; i++) {
         svec_add(&addrs, lport->port_security[i]);
@@ -757,11 +825,7 @@ nbctl_lport_get_up(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_port *lport;
 
-    lport = lport_by_name_or_uuid(ctx, id);
-    if (!lport) {
-        return;
-    }
-
+    lport = lport_by_name_or_uuid(ctx, id, true);
     ds_put_format(&ctx->output,
                   "%s\n", (lport->up && *lport->up) ? "up" : "down");
 }
@@ -773,11 +837,7 @@ nbctl_lport_set_enabled(struct ctl_context *ctx)
     const char *state = ctx->argv[2];
     const struct nbrec_logical_port *lport;
 
-    lport = lport_by_name_or_uuid(ctx, id);
-    if (!lport) {
-        return;
-    }
-
+    lport = lport_by_name_or_uuid(ctx, id, true);
     if (!strcasecmp(state, "enabled")) {
         bool enabled = true;
         nbrec_logical_port_set_enabled(lport, &enabled, 1);
@@ -785,7 +845,8 @@ nbctl_lport_set_enabled(struct ctl_context *ctx)
         bool enabled = false;
         nbrec_logical_port_set_enabled(lport, &enabled, 1);
     } else {
-        VLOG_ERR("Invalid state '%s' provided to lport-set-enabled", state);
+        ctl_fatal("%s: state must be \"enabled\" or \"disabled\"",
+                  state);
     }
 }
 
@@ -795,11 +856,7 @@ nbctl_lport_get_enabled(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_port *lport;
 
-    lport = lport_by_name_or_uuid(ctx, id);
-    if (!lport) {
-        return;
-    }
-
+    lport = lport_by_name_or_uuid(ctx, id, true);
     ds_put_format(&ctx->output, "%s\n",
                   !lport->enabled || *lport->enabled ? "enabled" : "disabled");
 }
@@ -811,11 +868,7 @@ nbctl_lport_set_type(struct ctl_context *ctx)
     const char *type = ctx->argv[2];
     const struct nbrec_logical_port *lport;
 
-    lport = lport_by_name_or_uuid(ctx, id);
-    if (!lport) {
-        return;
-    }
-
+    lport = lport_by_name_or_uuid(ctx, id, true);
     nbrec_logical_port_set_type(lport, type);
 }
 
@@ -825,11 +878,7 @@ nbctl_lport_get_type(struct ctl_context *ctx)
     const char *id = ctx->argv[1];
     const struct nbrec_logical_port *lport;
 
-    lport = lport_by_name_or_uuid(ctx, id);
-    if (!lport) {
-        return;
-    }
-
+    lport = lport_by_name_or_uuid(ctx, id, true);
     ds_put_format(&ctx->output, "%s\n", lport->type);
 }
 
@@ -841,11 +890,7 @@ nbctl_lport_set_options(struct ctl_context *ctx)
     size_t i;
     struct smap options = SMAP_INITIALIZER(&options);
 
-    lport = lport_by_name_or_uuid(ctx, id);
-    if (!lport) {
-        return;
-    }
-
+    lport = lport_by_name_or_uuid(ctx, id, true);
     for (i = 2; i < ctx->argc; i++) {
         char *key, *value;
         value = xstrdup(ctx->argv[i]);
@@ -868,11 +913,7 @@ nbctl_lport_get_options(struct ctl_context *ctx)
     const struct nbrec_logical_port *lport;
     struct smap_node *node;
 
-    lport = lport_by_name_or_uuid(ctx, id);
-    if (!lport) {
-        return;
-    }
-
+    lport = lport_by_name_or_uuid(ctx, id, true);
     SMAP_FOR_EACH(node, &lport->options) {
         ds_put_format(&ctx->output, "%s=%s\n", node->key, node->value);
     }
@@ -922,10 +963,7 @@ nbctl_acl_list(struct ctl_context *ctx)
     const struct nbrec_acl **acls;
     size_t i;
 
-    lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1]);
-    if (!lswitch) {
-        return;
-    }
+    lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1], true);
 
     acls = xmalloc(sizeof *acls * lswitch->n_acls);
     for (i = 0; i < lswitch->n_acls; i++) {
@@ -943,40 +981,47 @@ nbctl_acl_list(struct ctl_context *ctx)
     free(acls);
 }
 
+static const char *
+parse_direction(const char *arg)
+{
+    /* Validate direction.  Only require the first letter. */
+    if (arg[0] == 't') {
+        return "to-lport";
+    } else if (arg[0] == 'f') {
+        return "from-lport";
+    } else {
+        ctl_fatal("%s: direction must be \"to-lport\" or \"from-lport\"", arg);
+    }
+}
+
+static int
+parse_priority(const char *arg)
+{
+    /* Validate priority. */
+    int64_t priority;
+    if (!ovs_scan(arg, "%"SCNd64, &priority)
+        || priority < 0 || priority > 32767) {
+        ctl_fatal("%s: priority must in range 0...32767", arg);
+    }
+    return priority;
+}
+
 static void
 nbctl_acl_add(struct ctl_context *ctx)
 {
     const struct nbrec_logical_switch *lswitch;
     const char *action = ctx->argv[5];
-    const char *direction;
-    int64_t priority;
 
-    lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1]);
-    if (!lswitch) {
-        return;
-    }
+    lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1], true);
 
-    /* Validate direction.  Only require the first letter. */
-    if (ctx->argv[2][0] == 't') {
-        direction = "to-lport";
-    } else if (ctx->argv[2][0] == 'f') {
-        direction = "from-lport";
-    } else {
-        VLOG_WARN("Invalid direction '%s'", ctx->argv[2]);
-        return;
-    }
-
-    /* Validate priority. */
-    if (!ovs_scan(ctx->argv[3], "%"SCNd64, &priority) || priority < 0
-        || priority > 32767) {
-        VLOG_WARN("Invalid priority '%s'", ctx->argv[3]);
-        return;
-    }
+    const char *direction = parse_direction(ctx->argv[2]);
+    int64_t priority = parse_priority(ctx->argv[3]);
 
     /* Validate action. */
     if (strcmp(action, "allow") && strcmp(action, "allow-related")
         && strcmp(action, "drop") && strcmp(action, "reject")) {
-        VLOG_WARN("Invalid action '%s'", action);
+        ctl_fatal("%s: action must be one of \"allow\", \"allow-related\", "
+                  "\"drop\", and \"reject\"", action);
         return;
     }
 
@@ -1004,17 +1049,10 @@ static void
 nbctl_acl_del(struct ctl_context *ctx)
 {
     const struct nbrec_logical_switch *lswitch;
-    const char *direction;
-    int64_t priority = 0;
-
-    lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1]);
-    if (!lswitch) {
-        return;
-    }
+    lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1], true);
 
     if (ctx->argc != 2 && ctx->argc != 3 && ctx->argc != 5) {
-        VLOG_WARN("Invalid number of arguments");
-        return;
+        ctl_fatal("cannot specify priority without match");
     }
 
     if (ctx->argc == 2) {
@@ -1025,15 +1063,7 @@ nbctl_acl_del(struct ctl_context *ctx)
         return;
     }
 
-    /* Validate direction.  Only require first letter. */
-    if (ctx->argv[2][0] == 't') {
-        direction = "to-lport";
-    } else if (ctx->argv[2][0] == 'f') {
-        direction = "from-lport";
-    } else {
-        VLOG_WARN("Invalid direction '%s'", ctx->argv[2]);
-        return;
-    }
+    const char *direction = parse_direction(ctx->argv[2]);
 
     /* If priority and match are not specified, delete all ACLs with the
      * specified direction. */
@@ -1054,12 +1084,7 @@ nbctl_acl_del(struct ctl_context *ctx)
         return;
     }
 
-    /* Validate priority. */
-    if (!ovs_scan(ctx->argv[3], "%"SCNd64, &priority) || priority < 0
-        || priority > 32767) {
-        VLOG_WARN("Invalid priority '%s'", ctx->argv[3]);
-        return;
-    }
+    int64_t priority = parse_priority(ctx->argv[3]);
 
     /* Remove the matching rule. */
     for (size_t i = 0; i < lswitch->n_acls; i++) {
@@ -1098,6 +1123,11 @@ static const struct ctl_table_class tables[] = {
 
     {&nbrec_table_logical_router_port,
      {{&nbrec_table_logical_router_port, &nbrec_logical_router_port_col_name,
+       NULL},
+      {NULL, NULL, NULL}}},
+
+    {&nbrec_table_logical_router_static_route,
+     {{&nbrec_table_logical_router_static_route, NULL,
        NULL},
       {NULL, NULL, NULL}}},
 
@@ -1307,9 +1337,9 @@ static const struct ctl_command_syntax nbctl_commands[] = {
 
     /* lswitch commands. */
     { "lswitch-add", 0, 1, "[LSWITCH]", NULL, nbctl_lswitch_add,
-      NULL, "", RW },
+      NULL, "--may-exist,--add-duplicate", RW },
     { "lswitch-del", 1, 1, "LSWITCH", NULL, nbctl_lswitch_del,
-      NULL, "", RW },
+      NULL, "--if-exists", RW },
     { "lswitch-list", 0, 0, "", NULL, nbctl_lswitch_list, NULL, "", RO },
 
     /* acl commands. */
@@ -1321,8 +1351,9 @@ static const struct ctl_command_syntax nbctl_commands[] = {
 
     /* lport commands. */
     { "lport-add", 2, 4, "LSWITCH LPORT [PARENT] [TAG]", NULL, nbctl_lport_add,
-      NULL, "", RW },
-    { "lport-del", 1, 1, "LPORT", NULL, nbctl_lport_del, NULL, "", RO },
+      NULL, "--may-exist", RW },
+    { "lport-del", 1, 1, "LPORT", NULL, nbctl_lport_del, NULL, "--if-exists",
+      RW },
     { "lport-list", 1, 1, "LSWITCH", NULL, nbctl_lport_list, NULL, "", RO },
     { "lport-get-parent", 1, 1, "LPORT", NULL, nbctl_lport_get_parent, NULL,
       "", RO },

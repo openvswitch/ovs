@@ -17,6 +17,7 @@
 #include "precomp.h"
 
 #include "Actions.h"
+#include "Conntrack.h"
 #include "Debug.h"
 #include "Event.h"
 #include "Flow.h"
@@ -982,7 +983,7 @@ static __inline NDIS_STATUS
 OvsOutputBeforeSetAction(OvsForwardingContext *ovsFwdCtx)
 {
     PNET_BUFFER_LIST newNbl;
-    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    NDIS_STATUS status;
 
     /*
      * Create a copy and work on the copy after this point. The original NBL is
@@ -1141,7 +1142,7 @@ static __inline NDIS_STATUS
 OvsActionMplsPop(OvsForwardingContext *ovsFwdCtx,
                  ovs_be16 ethertype)
 {
-    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    NDIS_STATUS status;
     OVS_PACKET_HDR_INFO *layers = &ovsFwdCtx->layers;
     EthHdr *ethHdr = NULL;
 
@@ -1556,10 +1557,14 @@ OvsExecuteRecirc(OvsForwardingContext *ovsFwdCtx,
             ovsActionStats.noCopiedNbl++;
             return NDIS_STATUS_SUCCESS;
         }
-        ovsFwdCtx->curNbl = newNbl;
     }
 
-    deferredAction = OvsAddDeferredActions(ovsFwdCtx->curNbl, key, NULL);
+    if (newNbl) {
+        deferredAction = OvsAddDeferredActions(newNbl, key, NULL);
+    } else {
+        deferredAction = OvsAddDeferredActions(ovsFwdCtx->curNbl, key, NULL);
+    }
+
     if (deferredAction) {
         deferredAction->key.recircId = NlAttrGetU32(actions);
     } else {
@@ -1786,6 +1791,28 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
             break;
         }
 
+        case OVS_ACTION_ATTR_CT:
+        {
+            if (ovsFwdCtx.destPortsSizeOut > 0
+                || ovsFwdCtx.tunnelTxNic != NULL
+                || ovsFwdCtx.tunnelRxNic != NULL) {
+                status = OvsOutputBeforeSetAction(&ovsFwdCtx);
+                if (status != NDIS_STATUS_SUCCESS) {
+                    dropReason = L"OVS-adding destination failed";
+                    goto dropit;
+                }
+            }
+
+            status = OvsExecuteConntrackAction(ovsFwdCtx.curNbl, layers,
+                                               key, (const PNL_ATTR)a);
+            if (status != NDIS_STATUS_SUCCESS) {
+                OVS_LOG_ERROR("CT Action failed");
+                dropReason = L"OVS-conntrack action failed";
+                goto dropit;
+            }
+            break;
+        }
+
         case OVS_ACTION_ATTR_RECIRC:
         {
             if (ovsFwdCtx.destPortsSizeOut > 0 || ovsFwdCtx.tunnelTxNic != NULL
@@ -1922,7 +1949,7 @@ OvsActionsExecute(POVS_SWITCH_CONTEXT switchContext,
                   const PNL_ATTR actions,
                   INT actionsLen)
 {
-    NDIS_STATUS status = STATUS_SUCCESS;
+    NDIS_STATUS status;
 
     status = OvsDoExecuteActions(switchContext, completionList, curNbl,
                                  portNo, sendFlags, key, hash, layers,
@@ -1951,8 +1978,8 @@ OvsDoRecirc(POVS_SWITCH_CONTEXT switchContext,
             UINT32 srcPortNo,
             OVS_PACKET_HDR_INFO *layers)
 {
-    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
-    OvsFlow *flow = NULL;
+    NDIS_STATUS status;
+    OvsFlow *flow;
     OvsForwardingContext ovsFwdCtx = { 0 };
     UINT64 hash = 0;
     ASSERT(layers);

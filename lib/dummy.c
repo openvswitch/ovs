@@ -45,7 +45,6 @@ dummy_enable(const char *arg)
     netdev_dummy_register(level);
     dpif_dummy_register(level);
     timeval_dummy_register();
-    vlandev_dummy_enable();
     ofpact_dummy_enable();
 }
 

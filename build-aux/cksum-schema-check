@@ -3,7 +3,8 @@
 schema=$1
 stamp=$2
 
-sum=`sed '/cksum/d' $schema | cksum`
+cksumcheckpath=`dirname $0`
+sum=`$cksumcheckpath/calculate-schema-cksum $schema`
 expected=`sed -n 's/.*"cksum": "\(.*\)".*/\1/p' $schema`
 if test "X$sum" = "X$expected"; then
     touch $stamp

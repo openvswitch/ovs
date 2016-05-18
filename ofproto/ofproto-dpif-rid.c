@@ -24,39 +24,21 @@
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_rid);
 
-static struct ovs_mutex mutex;
+static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 
-static struct cmap id_map;
-static struct cmap metadata_map;
+static struct cmap id_map = CMAP_INITIALIZER;
+static struct cmap metadata_map = CMAP_INITIALIZER;
 
-static struct ovs_list expiring OVS_GUARDED_BY(mutex);
-static struct ovs_list expired OVS_GUARDED_BY(mutex);
+static struct ovs_list expiring OVS_GUARDED_BY(mutex)
+    = OVS_LIST_INITIALIZER(&expiring);
+static struct ovs_list expired OVS_GUARDED_BY(mutex)
+    = OVS_LIST_INITIALIZER(&expired);
 
-static uint32_t next_id OVS_GUARDED_BY(mutex); /* Possible next free id. */
+static uint32_t next_id OVS_GUARDED_BY(mutex) = 1; /* Possible next free id. */
 
 #define RECIRC_POOL_STATIC_IDS 1024
 
 static void recirc_id_node_free(struct recirc_id_node *);
-
-void
-recirc_init(void)
-{
-    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
-
-    if (ovsthread_once_start(&once)) {
-        ovs_mutex_init(&mutex);
-        ovs_mutex_lock(&mutex);
-        next_id = 1; /* 0 is not a valid ID. */
-        cmap_init(&id_map);
-        cmap_init(&metadata_map);
-        ovs_list_init(&expiring);
-        ovs_list_init(&expired);
-        ovs_mutex_unlock(&mutex);
-
-        ovsthread_once_done(&once);
-    }
-
-}
 
 /* This should be called by the revalidator once at each round (every 500ms or
  * more). */

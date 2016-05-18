@@ -28,28 +28,32 @@
 #include "daemon.h"
 #include "dirs.h"
 #include "dpif.h"
-#include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "hmap.h"
 #include "hmapx.h"
+#include "if-notifier.h"
 #include "jsonrpc.h"
 #include "lacp.h"
-#include "openvswitch/list.h"
-#include "ovs-lldp.h"
+#include "lib/netdev-dpdk.h"
 #include "mac-learning.h"
 #include "mcast-snooping.h"
-#include "meta-flow.h"
 #include "netdev.h"
 #include "nx-match.h"
-#include "ofp-print.h"
-#include "ofp-util.h"
-#include "openvswitch/ofpbuf.h"
 #include "ofproto/bond.h"
 #include "ofproto/ofproto.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/list.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
+#include "ovs-lldp.h"
 #include "ovs-numa.h"
+#include "packets.h"
 #include "poll-loop.h"
-#include "if-notifier.h"
 #include "seq.h"
+#include "sflow_api.h"
 #include "sha1.h"
 #include "shash.h"
 #include "smap.h"
@@ -61,13 +65,9 @@
 #include "timeval.h"
 #include "util.h"
 #include "unixctl.h"
-#include "vlandev.h"
 #include "lib/vswitch-idl.h"
 #include "xenserver.h"
-#include "openvswitch/vlog.h"
-#include "sflow_api.h"
 #include "vlan-bitmap.h"
-#include "packets.h"
 
 VLOG_DEFINE_THIS_MODULE(bridge);
 
@@ -234,7 +234,6 @@ static unixctl_cb_func bridge_unixctl_reconnect;
 static size_t bridge_get_controllers(const struct bridge *br,
                                      struct ovsrec_controller ***controllersp);
 static void bridge_collect_wanted_ports(struct bridge *,
-                                        const unsigned long *splinter_vlans,
                                         struct shash *wanted_ports);
 static void bridge_delete_ofprotos(void);
 static void bridge_delete_or_reconfigure_ports(struct bridge *);
@@ -319,24 +318,6 @@ static ofp_port_t iface_get_requested_ofp_port(
     const struct ovsrec_interface *);
 static ofp_port_t iface_pick_ofport(const struct ovsrec_interface *);
 
-
-/* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
- *
- * This is deprecated.  It is only for compatibility with broken device drivers
- * in old versions of Linux that do not properly support VLANs when VLAN
- * devices are not used.  When broken device drivers are no longer in
- * widespread use, we will delete these interfaces. */
-
-/* True if VLAN splinters are enabled on any interface, false otherwise.*/
-static bool vlan_splinters_enabled_anywhere;
-
-static bool vlan_splinters_is_enabled(const struct ovsrec_interface *);
-static unsigned long int *collect_splinter_vlans(
-    const struct ovsrec_open_vswitch *);
-static void configure_splinter_port(struct port *);
-static void add_vlan_splinter_ports(struct bridge *,
-                                    const unsigned long int *splinter_vlans,
-                                    struct shash *ports);
 
 static void discover_types(const struct ovsrec_open_vswitch *cfg);
 
@@ -572,7 +553,6 @@ collect_in_band_managers(const struct ovsrec_open_vswitch *ovs_cfg,
 static void
 bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 {
-    unsigned long int *splinter_vlans;
     struct sockaddr_in *managers;
     struct bridge *br, *next;
     int sflow_bridge_number;
@@ -596,12 +576,10 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
      * This is mostly an update to bridge data structures. Nothing is pushed
      * down to ofproto or lower layers. */
     add_del_bridges(ovs_cfg);
-    splinter_vlans = collect_splinter_vlans(ovs_cfg);
     HMAP_FOR_EACH (br, node, &all_bridges) {
-        bridge_collect_wanted_ports(br, splinter_vlans, &br->wanted_ports);
+        bridge_collect_wanted_ports(br, &br->wanted_ports);
         bridge_del_ports(br, &br->wanted_ports);
     }
-    free(splinter_vlans);
 
     /* Start pushing configuration changes down to the ofproto layer:
      *
@@ -917,11 +895,6 @@ port_configure(struct port *port)
     struct lacp_settings lacp_settings;
     struct ofproto_bundle_settings s;
     struct iface *iface;
-
-    if (cfg->vlan_mode && !strcmp(cfg->vlan_mode, "splinter")) {
-        configure_splinter_port(port);
-        return;
-    }
 
     /* Get name. */
     s.name = port->name;
@@ -1749,7 +1722,6 @@ iface_set_netdev_config(const struct ovsrec_interface *iface_cfg,
 static int
 iface_do_create(const struct bridge *br,
                 const struct ovsrec_interface *iface_cfg,
-                const struct ovsrec_port *port_cfg,
                 ofp_port_t *ofp_portp, struct netdev **netdevp,
                 char **errp)
 {
@@ -1785,10 +1757,6 @@ iface_do_create(const struct bridge *br,
     VLOG_INFO("bridge %s: added interface %s on port %d",
               br->name, iface_cfg->name, *ofp_portp);
 
-    if (port_cfg->vlan_mode && !strcmp(port_cfg->vlan_mode, "splinter")) {
-        netdev_turn_flags_on(netdev, NETDEV_UP, NULL);
-    }
-
     *netdevp = netdev;
     return 0;
 
@@ -1817,7 +1785,7 @@ iface_create(struct bridge *br, const struct ovsrec_interface *iface_cfg,
 
     /* Do the bits that can fail up front. */
     ovs_assert(!iface_lookup(br, iface_cfg->name));
-    error = iface_do_create(br, iface_cfg, port_cfg, &ofp_port, &netdev, &errp);
+    error = iface_do_create(br, iface_cfg, &ofp_port, &netdev, &errp);
     if (error) {
         iface_clear_db_record(iface_cfg, errp);
         free(errp);
@@ -2342,18 +2310,39 @@ static void
 iface_refresh_stats(struct iface *iface)
 {
 #define IFACE_STATS                             \
-    IFACE_STAT(rx_packets,      "rx_packets")   \
-    IFACE_STAT(tx_packets,      "tx_packets")   \
-    IFACE_STAT(rx_bytes,        "rx_bytes")     \
-    IFACE_STAT(tx_bytes,        "tx_bytes")     \
-    IFACE_STAT(rx_dropped,      "rx_dropped")   \
-    IFACE_STAT(tx_dropped,      "tx_dropped")   \
-    IFACE_STAT(rx_errors,       "rx_errors")    \
-    IFACE_STAT(tx_errors,       "tx_errors")    \
-    IFACE_STAT(rx_frame_errors, "rx_frame_err") \
-    IFACE_STAT(rx_over_errors,  "rx_over_err")  \
-    IFACE_STAT(rx_crc_errors,   "rx_crc_err")   \
-    IFACE_STAT(collisions,      "collisions")
+    IFACE_STAT(rx_packets,              "rx_packets")               \
+    IFACE_STAT(tx_packets,              "tx_packets")               \
+    IFACE_STAT(rx_bytes,                "rx_bytes")                 \
+    IFACE_STAT(tx_bytes,                "tx_bytes")                 \
+    IFACE_STAT(rx_dropped,              "rx_dropped")               \
+    IFACE_STAT(tx_dropped,              "tx_dropped")               \
+    IFACE_STAT(rx_errors,               "rx_errors")                \
+    IFACE_STAT(tx_errors,               "tx_errors")                \
+    IFACE_STAT(rx_frame_errors,         "rx_frame_err")             \
+    IFACE_STAT(rx_over_errors,          "rx_over_err")              \
+    IFACE_STAT(rx_crc_errors,           "rx_crc_err")               \
+    IFACE_STAT(collisions,              "collisions")               \
+    IFACE_STAT(rx_1_to_64_packets,      "rx_1_to_64_packets")       \
+    IFACE_STAT(rx_65_to_127_packets,    "rx_65_to_127_packets")     \
+    IFACE_STAT(rx_128_to_255_packets,   "rx_128_to_255_packets")    \
+    IFACE_STAT(rx_256_to_511_packets,   "rx_256_to_511_packets")    \
+    IFACE_STAT(rx_512_to_1023_packets,  "rx_512_to_1023_packets")   \
+    IFACE_STAT(rx_1024_to_1522_packets, "rx_1024_to_1518_packets")  \
+    IFACE_STAT(rx_1523_to_max_packets,  "rx_1523_to_max_packets")   \
+    IFACE_STAT(tx_1_to_64_packets,      "tx_1_to_64_packets")       \
+    IFACE_STAT(tx_65_to_127_packets,    "tx_65_to_127_packets")     \
+    IFACE_STAT(tx_128_to_255_packets,   "tx_128_to_255_packets")    \
+    IFACE_STAT(tx_256_to_511_packets,   "tx_256_to_511_packets")    \
+    IFACE_STAT(tx_512_to_1023_packets,  "tx_512_to_1023_packets")   \
+    IFACE_STAT(tx_1024_to_1522_packets, "tx_1024_to_1518_packets")  \
+    IFACE_STAT(tx_1523_to_max_packets,  "tx_1523_to_max_packets")   \
+    IFACE_STAT(tx_multicast_packets,    "tx_multicast_packets")     \
+    IFACE_STAT(rx_broadcast_packets,    "rx_broadcast_packets")     \
+    IFACE_STAT(tx_broadcast_packets,    "tx_broadcast_packets")     \
+    IFACE_STAT(rx_undersized_errors,    "rx_undersized_errors")     \
+    IFACE_STAT(rx_oversize_errors,      "rx_oversize_errors")       \
+    IFACE_STAT(rx_fragmented_errors,    "rx_fragmented_errors")     \
+    IFACE_STAT(rx_jabber_errors,        "rx_jabber_errors")
 
 #define IFACE_STAT(MEMBER, NAME) + 1
     enum { N_IFACE_STATS = IFACE_STATS };
@@ -2895,8 +2884,6 @@ bridge_run(void)
     static struct ovsrec_open_vswitch null_cfg;
     const struct ovsrec_open_vswitch *cfg;
 
-    bool vlan_splinters_changed;
-
     ovsrec_open_vswitch_init(&null_cfg);
 
     ovsdb_idl_run(idl);
@@ -2927,6 +2914,10 @@ bridge_run(void)
     }
     cfg = ovsrec_open_vswitch_first(idl);
 
+    if (cfg) {
+        dpdk_init(&cfg->other_config);
+    }
+
     /* Initialize the ofproto library.  This only needs to run once, but
      * it must be done after the configuration is set.  If the
      * initialization has already occurred, bridge_init_ofproto()
@@ -2955,22 +2946,7 @@ bridge_run(void)
         stream_ssl_set_ca_cert_file(ssl->ca_cert, ssl->bootstrap_ca_cert);
     }
 
-    /* If VLAN splinters are in use, then we need to reconfigure if VLAN
-     * usage has changed. */
-    vlan_splinters_changed = false;
-    if (vlan_splinters_enabled_anywhere) {
-        struct bridge *br;
-
-        HMAP_FOR_EACH (br, node, &all_bridges) {
-            if (ofproto_has_vlan_usage_changed(br->ofproto)) {
-                vlan_splinters_changed = true;
-                break;
-            }
-        }
-    }
-
-    if (ovsdb_idl_get_seqno(idl) != idl_seqno || vlan_splinters_changed
-        || ifaces_changed) {
+    if (ovsdb_idl_get_seqno(idl) != idl_seqno || ifaces_changed) {
         struct ovsdb_idl_txn *txn;
 
         ifaces_changed = false;
@@ -3348,7 +3324,6 @@ bridge_get_controllers(const struct bridge *br,
 
 static void
 bridge_collect_wanted_ports(struct bridge *br,
-                            const unsigned long int *splinter_vlans,
                             struct shash *wanted_ports)
 {
     size_t i;
@@ -3380,10 +3355,6 @@ bridge_collect_wanted_ports(struct bridge *br,
         br->synth_local_ifacep = &br->synth_local_iface;
 
         shash_add(wanted_ports, br->name, &br->synth_local_port);
-    }
-
-    if (splinter_vlans) {
-        add_vlan_splinter_ports(br, splinter_vlans, wanted_ports);
     }
 }
 
@@ -4817,278 +4788,8 @@ mirror_configure(struct mirror *m)
 
     return true;
 }
+
 
-/* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
- *
- * This is deprecated.  It is only for compatibility with broken device drivers
- * in old versions of Linux that do not properly support VLANs when VLAN
- * devices are not used.  When broken device drivers are no longer in
- * widespread use, we will delete these interfaces. */
-
-static struct ovsrec_port **recs;
-static size_t n_recs, allocated_recs;
-
-/* Adds 'rec' to a list of recs that have to be destroyed when the VLAN
- * splinters are reconfigured. */
-static void
-register_rec(struct ovsrec_port *rec)
-{
-    if (n_recs >= allocated_recs) {
-        recs = x2nrealloc(recs, &allocated_recs, sizeof *recs);
-    }
-    recs[n_recs++] = rec;
-}
-
-/* Frees all of the ports registered with register_reg(). */
-static void
-free_registered_recs(void)
-{
-    size_t i;
-
-    for (i = 0; i < n_recs; i++) {
-        struct ovsrec_port *port = recs[i];
-        size_t j;
-
-        for (j = 0; j < port->n_interfaces; j++) {
-            struct ovsrec_interface *iface = port->interfaces[j];
-            free(iface->name);
-            free(iface);
-        }
-
-        smap_destroy(&port->other_config);
-        free(port->interfaces);
-        free(port->name);
-        free(port->tag);
-        free(port);
-    }
-    n_recs = 0;
-}
-
-/* Returns true if VLAN splinters are enabled on 'iface_cfg', false
- * otherwise. */
-static bool
-vlan_splinters_is_enabled(const struct ovsrec_interface *iface_cfg)
-{
-    return smap_get_bool(&iface_cfg->other_config, "enable-vlan-splinters",
-                         false);
-}
-
-/* Figures out the set of VLANs that are in use for the purpose of VLAN
- * splinters.
- *
- * If VLAN splinters are enabled on at least one interface and any VLANs are in
- * use, returns a 4096-bit bitmap with a 1-bit for each in-use VLAN (bits 0 and
- * 4095 will not be set).  The caller is responsible for freeing the bitmap,
- * with free().
- *
- * If VLANs splinters are not enabled on any interface or if no VLANs are in
- * use, returns NULL.
- *
- * Updates 'vlan_splinters_enabled_anywhere'. */
-static unsigned long int *
-collect_splinter_vlans(const struct ovsrec_open_vswitch *ovs_cfg)
-{
-    unsigned long int *splinter_vlans;
-    struct sset splinter_ifaces;
-    const char *real_dev_name;
-    struct shash *real_devs;
-    struct shash_node *node;
-    struct bridge *br;
-    size_t i;
-
-    /* Free space allocated for synthesized ports and interfaces, since we're
-     * in the process of reconstructing all of them. */
-    free_registered_recs();
-
-    splinter_vlans = bitmap_allocate(4096);
-    sset_init(&splinter_ifaces);
-    vlan_splinters_enabled_anywhere = false;
-    for (i = 0; i < ovs_cfg->n_bridges; i++) {
-        struct ovsrec_bridge *br_cfg = ovs_cfg->bridges[i];
-        size_t j;
-
-        for (j = 0; j < br_cfg->n_ports; j++) {
-            struct ovsrec_port *port_cfg = br_cfg->ports[j];
-            int k;
-
-            for (k = 0; k < port_cfg->n_interfaces; k++) {
-                struct ovsrec_interface *iface_cfg = port_cfg->interfaces[k];
-
-                if (vlan_splinters_is_enabled(iface_cfg)) {
-                    vlan_splinters_enabled_anywhere = true;
-                    sset_add(&splinter_ifaces, iface_cfg->name);
-                    vlan_bitmap_from_array__(port_cfg->trunks,
-                                             port_cfg->n_trunks,
-                                             splinter_vlans);
-                }
-            }
-
-            if (port_cfg->tag && *port_cfg->tag > 0 && *port_cfg->tag < 4095) {
-                bitmap_set1(splinter_vlans, *port_cfg->tag);
-            }
-        }
-    }
-
-    if (!vlan_splinters_enabled_anywhere) {
-        free(splinter_vlans);
-        sset_destroy(&splinter_ifaces);
-        return NULL;
-    }
-
-    HMAP_FOR_EACH (br, node, &all_bridges) {
-        if (br->ofproto) {
-            ofproto_get_vlan_usage(br->ofproto, splinter_vlans);
-        }
-    }
-
-    /* Don't allow VLANs 0 or 4095 to be splintered.  VLAN 0 should appear on
-     * the real device.  VLAN 4095 is reserved and Linux doesn't allow a VLAN
-     * device to be created for it. */
-    bitmap_set0(splinter_vlans, 0);
-    bitmap_set0(splinter_vlans, 4095);
-
-    /* Delete all VLAN devices that we don't need. */
-    vlandev_refresh();
-    real_devs = vlandev_get_real_devs();
-    SHASH_FOR_EACH (node, real_devs) {
-        const struct vlan_real_dev *real_dev = node->data;
-        const struct vlan_dev *vlan_dev;
-        bool real_dev_has_splinters;
-
-        real_dev_has_splinters = sset_contains(&splinter_ifaces,
-                                               real_dev->name);
-        HMAP_FOR_EACH (vlan_dev, hmap_node, &real_dev->vlan_devs) {
-            if (!real_dev_has_splinters
-                || !bitmap_is_set(splinter_vlans, vlan_dev->vid)) {
-                struct netdev *netdev;
-
-                if (!netdev_open(vlan_dev->name, "system", &netdev)) {
-                    if (!netdev_get_addr_list(netdev, NULL, NULL, NULL)) {
-                        /* It has an IP address configured, so we don't own
-                         * it.  Don't delete it. */
-                    } else {
-                        vlandev_del(vlan_dev->name);
-                    }
-                    netdev_close(netdev);
-                }
-            }
-
-        }
-    }
-
-    /* Add all VLAN devices that we need. */
-    SSET_FOR_EACH (real_dev_name, &splinter_ifaces) {
-        int vid;
-
-        BITMAP_FOR_EACH_1 (vid, 4096, splinter_vlans) {
-            if (!vlandev_get_name(real_dev_name, vid)) {
-                vlandev_add(real_dev_name, vid);
-            }
-        }
-    }
-
-    vlandev_refresh();
-
-    sset_destroy(&splinter_ifaces);
-
-    if (bitmap_scan(splinter_vlans, 1, 0, 4096) >= 4096) {
-        free(splinter_vlans);
-        return NULL;
-    }
-    return splinter_vlans;
-}
-
-/* Pushes the configure of VLAN splinter port 'port' (e.g. eth0.9) down to
- * ofproto.  */
-static void
-configure_splinter_port(struct port *port)
-{
-    struct ofproto *ofproto = port->bridge->ofproto;
-    ofp_port_t realdev_ofp_port;
-    const char *realdev_name;
-    struct iface *vlandev, *realdev;
-
-    ofproto_bundle_unregister(port->bridge->ofproto, port);
-
-    vlandev = CONTAINER_OF(ovs_list_front(&port->ifaces), struct iface,
-                           port_elem);
-
-    realdev_name = smap_get(&port->cfg->other_config, "realdev");
-    realdev = iface_lookup(port->bridge, realdev_name);
-    realdev_ofp_port = realdev ? realdev->ofp_port : 0;
-
-    ofproto_port_set_realdev(ofproto, vlandev->ofp_port, realdev_ofp_port,
-                             *port->cfg->tag);
-}
-
-static struct ovsrec_port *
-synthesize_splinter_port(const char *real_dev_name,
-                         const char *vlan_dev_name, int vid)
-{
-    struct ovsrec_interface *iface;
-    struct ovsrec_port *port;
-
-    iface = xmalloc(sizeof *iface);
-    ovsrec_interface_init(iface);
-    iface->name = xstrdup(vlan_dev_name);
-    iface->type = "system";
-
-    port = xmalloc(sizeof *port);
-    ovsrec_port_init(port);
-    port->interfaces = xmemdup(&iface, sizeof iface);
-    port->n_interfaces = 1;
-    port->name = xstrdup(vlan_dev_name);
-    port->vlan_mode = "splinter";
-    port->tag = xmalloc(sizeof *port->tag);
-    *port->tag = vid;
-
-    smap_add(&port->other_config, "realdev", real_dev_name);
-
-    register_rec(port);
-    return port;
-}
-
-/* For each interface with 'br' that has VLAN splinters enabled, adds a
- * corresponding ovsrec_port to 'ports' for each splinter VLAN marked with a
- * 1-bit in the 'splinter_vlans' bitmap. */
-static void
-add_vlan_splinter_ports(struct bridge *br,
-                        const unsigned long int *splinter_vlans,
-                        struct shash *ports)
-{
-    size_t i;
-
-    /* We iterate through 'br->cfg->ports' instead of 'ports' here because
-     * we're modifying 'ports'. */
-    for (i = 0; i < br->cfg->n_ports; i++) {
-        const char *name = br->cfg->ports[i]->name;
-        struct ovsrec_port *port_cfg = shash_find_data(ports, name);
-        size_t j;
-
-        for (j = 0; j < port_cfg->n_interfaces; j++) {
-            struct ovsrec_interface *iface_cfg = port_cfg->interfaces[j];
-
-            if (vlan_splinters_is_enabled(iface_cfg)) {
-                const char *real_dev_name;
-                uint16_t vid;
-
-                real_dev_name = iface_cfg->name;
-                BITMAP_FOR_EACH_1 (vid, 4096, splinter_vlans) {
-                    const char *vlan_dev_name;
-
-                    vlan_dev_name = vlandev_get_name(real_dev_name, vid);
-                    if (vlan_dev_name
-                        && !shash_find(ports, vlan_dev_name)) {
-                        shash_add(ports, vlan_dev_name,
-                                  synthesize_splinter_port(
-                                      real_dev_name, vlan_dev_name, vid));
-                    }
-                }
-            }
-        }
-    }
-}
-
 static void
 mirror_refresh_stats(struct mirror *m)
 {

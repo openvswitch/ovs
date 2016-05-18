@@ -171,6 +171,49 @@
         </p>
       </column>
 
+      <column name="other_config" key="dpdk-init"
+              type='{"type": "boolean"}'>
+        <p>
+          Set this value to <code>true</code> to enable runtime support for
+          DPDK ports. The vswitch must have compile-time support for DPDK as
+          well.
+        </p>
+        <p>
+          The default value is <code>false</code>. Changing this value requires
+          restarting the daemon
+        </p>
+        <p>
+          If this value is <code>false</code> at startup, any dpdk ports which
+          are configured in the bridge will fail due to memory errors.
+        </p>
+      </column>
+
+      <column name="other_config" key="dpdk-lcore-mask"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          Specifies the CPU cores where dpdk lcore threads should be spawned.
+          The DPDK lcore threads are used for DPDK library tasks, such as
+          library internal message processing, logging, etc. Value should be in
+          the form of a hex string (so '0x123') similar to the 'taskset' mask
+          input.
+        </p>
+        <p>
+          The lowest order bit corresponds to the first CPU core.  A set bit
+          means the corresponding core is available and an lcore thread will be
+          created and pinned to it.  If the input does not cover all cores,
+          those uncovered cores are considered not set.
+        </p>
+        <p>
+          For performance reasons, it is best to set this to a single core on
+          the system, rather than allow lcore threads to float.
+        </p>
+        <p>
+          If not specified, the value will be determined by choosing the lowest
+          CPU core from initial cpu affinity list. Otherwise, the value will be
+          passed directly to the DPDK library.
+        </p>
+      </column>
+
       <column name="other_config" key="pmd-cpu-mask">
         <p>
           Specifies CPU mask for setting the cpu affinity of PMD (Poll
@@ -187,6 +230,84 @@
         <p>
           If not specified, one pmd thread will be created for each numa node
           and pinned to any available core on the numa node by default.
+        </p>
+      </column>
+
+      <column name="other_config" key="dpdk-alloc-mem"
+              type='{"type": "integer", "minInteger": 0}'>
+        <p>
+          Specifies the amount of memory to preallocate from the hugepage pool,
+          regardless of socket. It is recommended that dpdk-socket-mem is used
+          instead.
+        </p>
+        <p>
+          If not specified, the value is 0. Changing this value requires
+          restarting the daemon.
+        </p>
+      </column>
+
+      <column name="other_config" key="dpdk-socket-mem"
+              type='{"type": "string"}'>
+        <p>
+          Specifies the amount of memory to preallocate from the hugepage pool,
+          on a per-socket basis.
+        </p>
+        <p>
+          The specifier is a comma-separated string, in ascending order of CPU
+          socket (ex: 1024,2048,4096,8192 would set socket 0 to preallocate
+          1024MB, socket 1 to preallocate 2048MB, etc.)
+        </p>
+        <p>
+          If not specified, the default value is 1024,0. Changing this value
+          requires restarting the daemon.
+        </p>
+      </column>
+
+      <column name="other_config" key="dpdk-hugepage-dir"
+              type='{"type": "string"}'>
+        <p>
+          Specifies the path to the hugetlbfs mount point.
+        </p>
+        <p>
+          If not specified, this will be guessed by the DPDK library (default
+          is /dev/hugepages). Changing this value requires restarting the
+          daemon.
+        </p>
+      </column>
+
+      <column name="other_config" key="dpdk-extra"
+              type='{"type": "string"}'>
+        <p>
+          Specifies additional eal command line arguments for DPDK.
+        </p>
+        <p>
+          The default is empty. Changing this value requires restarting the
+          daemon
+        </p>
+      </column>
+
+      <column name="other_config" key="cuse-dev-name"
+              type='{"type": "string"}'>
+        <p>
+          Specifies the name of the vhost-cuse character device to open for
+          vhost-cuse support.
+        </p>
+        <p>
+          The default is vhost-net. Changing this value requires restarting
+          the daemon.
+        </p>
+      </column>
+
+      <column name="other_config" key="vhost-sock-dir"
+              type='{"type": "string"}'>
+        <p>
+          Specifies the path to the vhost-user unix domain socket files. This
+          path must exist and be a subdirectory tree of the Open vSwitch
+          run directory.
+        </p>
+        <p>
+          Defaults to the working directory of the application. Changing this
+          value requires restarting the daemon.
         </p>
       </column>
 
@@ -708,16 +829,9 @@
         </p>
 
         <p>
-          OpenFlow 1.4 is not enabled by default because its implementation is
-          missing features.
-        </p>
-
-        <p>
-          OpenFlow 1.5 has the same risks as OpenFlow 1.4, but it is even more
-          experimental because the OpenFlow 1.5 specification is still under
-          development and thus subject to change.  Pass
-          <code>--enable-of15</code> to <code>ovs-vswitchd</code> to allow
-          OpenFlow 1.5 to be enabled.
+          OpenFlow 1.4, 1.5, and 1.6 are not enabled by default because their
+          implementations are missing features.  In addition, the OpenFlow 1.6
+          specification is still under development and thus subject to change.
         </p>
       </column>
     </group>
@@ -2434,7 +2548,7 @@
 
       <column name="ingress_policing_burst">
         <p>Maximum burst size for data received on this interface, in kb.  The
-        default burst size if set to <code>0</code> is 1000 kb.  This value
+        default burst size if set to <code>0</code> is 8000 kbit.  This value
         has no effect if <ref column="ingress_policing_rate"/>
         is <code>0</code>.</p>
         <p>
@@ -2442,7 +2556,7 @@
           which is important for protocols like TCP that react severely to
           dropped packets.  The burst size should be at least the size of the
           interface's MTU.  Specifying a value that is numerically at least as
-          large as 10% of <ref column="ingress_policing_rate"/> helps TCP come
+          large as 80% of <ref column="ingress_policing_rate"/> helps TCP come
           closer to achieving the full rate.
         </p>
       </column>
@@ -2952,84 +3066,6 @@
 
       <column name="external_ids" key="xs-vm-uuid">
         The VM to which this interface belongs.
-      </column>
-    </group>
-
-    <group title="VLAN Splinters">
-      <p>
-        The ``VLAN splinters'' feature increases Open vSwitch compatibility
-        with buggy network drivers in old versions of Linux that do not
-        properly support VLANs when VLAN devices are not used, at some cost
-        in memory and performance.
-      </p>
-
-      <p>
-        When VLAN splinters are enabled on a particular interface, Open vSwitch
-        creates a VLAN device for each in-use VLAN.  For sending traffic tagged
-        with a VLAN on the interface, it substitutes the VLAN device.  Traffic
-        received on the VLAN device is treated as if it had been received on
-        the interface on the particular VLAN.
-      </p>
-
-      <p>
-        VLAN splinters consider a VLAN to be in use if:
-      </p>
-
-      <ul>
-        <li>
-          The VLAN is the <ref table="Port" column="tag"/> value in any <ref
-          table="Port"/> record.
-        </li>
-
-        <li>
-          The VLAN is listed within the <ref table="Port" column="trunks"/>
-          column of the <ref table="Port"/> record of an interface on which
-          VLAN splinters are enabled.
-
-          An empty <ref table="Port" column="trunks"/> does not influence the
-          in-use VLANs: creating 4,096 VLAN devices is impractical because it
-          will exceed the current 1,024 port per datapath limit.
-        </li>
-
-        <li>
-          An OpenFlow flow within any bridge matches the VLAN.
-        </li>
-      </ul>
-
-      <p>
-        The same set of in-use VLANs applies to every interface on which VLAN
-        splinters are enabled.  That is, the set is not chosen separately for
-        each interface but selected once as the union of all in-use VLANs based
-        on the rules above.
-      </p>
-
-      <p>
-        It does not make sense to enable VLAN splinters on an interface for an
-        access port, or on an interface that is not a physical port.
-      </p>
-
-      <p>
-        VLAN splinters are deprecated.  When broken device drivers are no
-        longer in widespread use, we will delete this feature.
-      </p>
-
-      <column name="other_config" key="enable-vlan-splinters"
-              type='{"type": "boolean"}'>
-        <p>
-          Set to <code>true</code> to enable VLAN splinters on this interface.
-          Defaults to <code>false</code>.
-        </p>
-
-        <p>
-          VLAN splinters increase kernel and userspace memory overhead, so do
-          not use them unless they are needed.
-        </p>
-
-        <p>
-          VLAN splinters do not support 802.1p priority tags.  Received
-          priorities will appear to be 0, regardless of their actual values,
-          and priorities on transmitted packets will also be cleared to 0.
-        </p>
       </column>
     </group>
 

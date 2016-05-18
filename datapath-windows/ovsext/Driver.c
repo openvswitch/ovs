@@ -60,6 +60,8 @@ static const GUID ovsExtGuid = {
       {0x8b, 0x47, 0x57, 0x82, 0x97, 0xad, 0x76, 0x23}
 };
 
+DRIVER_INITIALIZE DriverEntry;
+
 /* Declarations of callback functions for the filter driver. */
 DRIVER_UNLOAD OvsExtUnload;
 FILTER_NET_PNP_EVENT OvsExtNetPnPEvent;
@@ -96,7 +98,10 @@ DriverEntry(PDRIVER_OBJECT driverObject,
     UNREFERENCED_PARAMETER(registryPath);
 
     /* Initialize driver associated data structures. */
-    OvsInit();
+    status = OvsInit();
+    if (status != NDIS_STATUS_SUCCESS) {
+        goto cleanup;
+    }
 
     gOvsExtDriverObject = driverObject;
 
@@ -138,6 +143,7 @@ DriverEntry(PDRIVER_OBJECT driverObject,
 
     driverObject->DriverUnload = OvsExtUnload;
 
+    gOvsExtDriverHandle = NULL;
     status = NdisFRegisterFilterDriver(driverObject,
                                        (NDIS_HANDLE)gOvsExtDriverObject,
                                        &driverChars,
@@ -149,16 +155,14 @@ DriverEntry(PDRIVER_OBJECT driverObject,
     /* Create the communication channel for userspace. */
     status = OvsCreateDeviceObject(gOvsExtDriverHandle);
     if (status != NDIS_STATUS_SUCCESS) {
+        NdisFDeregisterFilterDriver(gOvsExtDriverHandle);
+        gOvsExtDriverHandle = NULL;
         goto cleanup;
     }
 
 cleanup:
     if (status != NDIS_STATUS_SUCCESS){
         OvsCleanup();
-        if (gOvsExtDriverHandle) {
-            NdisFDeregisterFilterDriver(gOvsExtDriverHandle);
-            gOvsExtDriverHandle = NULL;
-        }
     }
 
     return status;
@@ -175,12 +179,12 @@ OvsExtUnload(struct _DRIVER_OBJECT *driverObject)
 {
     UNREFERENCED_PARAMETER(driverObject);
 
-    /* Release driver associated data structures. */
-    OvsCleanup();
-
     OvsDeleteDeviceObject();
 
     NdisFDeregisterFilterDriver(gOvsExtDriverHandle);
+
+    /* Release driver associated data structures. */
+    OvsCleanup();
 }
 
 

@@ -29,6 +29,8 @@
 #include "ovn/lib/lex.h"
 #include "ovn/lib/ovn-nb-idl.h"
 #include "ovn/lib/ovn-sb-idl.h"
+#include "ovn/lib/ovn-util.h"
+#include "packets.h"
 #include "poll-loop.h"
 #include "smap.h"
 #include "stream.h"
@@ -187,9 +189,8 @@ struct tnlid_node {
 static void
 destroy_tnlids(struct hmap *tnlids)
 {
-    struct tnlid_node *node, *next;
-    HMAP_FOR_EACH_SAFE (node, next, hmap_node, tnlids) {
-        hmap_remove(tnlids, &node->hmap_node);
+    struct tnlid_node *node;
+    HMAP_FOR_EACH_POP (node, hmap_node, tnlids) {
         free(node);
     }
     hmap_destroy(tnlids);
@@ -316,6 +317,12 @@ ovn_datapath_from_sbrec(struct hmap *datapaths,
     return ovn_datapath_find(datapaths, &key);
 }
 
+static bool
+lrouter_is_enabled(const struct nbrec_logical_router *lrouter)
+{
+    return !lrouter->enabled || *lrouter->enabled;
+}
+
 static void
 join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
                struct ovs_list *sb_only, struct ovs_list *nb_only,
@@ -373,6 +380,10 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
 
     const struct nbrec_logical_router *nbr;
     NBREC_LOGICAL_ROUTER_FOR_EACH (nbr, ctx->ovnnb_idl) {
+        if (!lrouter_is_enabled(nbr)) {
+            continue;
+        }
+
         struct ovn_datapath *od = ovn_datapath_find(datapaths,
                                                     &nbr->header_.uuid);
         if (od) {
@@ -945,109 +956,6 @@ ovn_lflow_destroy(struct hmap *lflows, struct ovn_lflow *lflow)
     }
 }
 
-struct ipv4_netaddr {
-    ovs_be32 addr;
-    unsigned int plen;
-};
-
-struct ipv6_netaddr {
-    struct in6_addr addr;
-    unsigned int plen;
-};
-
-struct lport_addresses {
-    struct eth_addr ea;
-    size_t n_ipv4_addrs;
-    struct ipv4_netaddr *ipv4_addrs;
-    size_t n_ipv6_addrs;
-    struct ipv6_netaddr *ipv6_addrs;
-};
-
-/*
- * Extracts the mac, ipv4 and ipv6 addresses from the input param 'address'
- * which should be of the format 'MAC [IP1 IP2 ..]" where IPn should be
- * a valid IPv4 or IPv6 address and stores them in the 'ipv4_addrs' and
- * 'ipv6_addrs' fields of input param 'laddrs'.
- * The caller has to free the 'ipv4_addrs' and 'ipv6_addrs' fields.
- * If input param 'store_ipv6' is true only then extracted ipv6 addresses
- * are stored in 'ipv6_addrs' fields.
- * Return true if at least 'MAC' is found in 'address', false otherwise.
- * Eg 1.
- * If 'address' = '00:00:00:00:00:01 10.0.0.4 fe80::ea2a:eaff:fe28:3390/64
- *                 30.0.0.3/23' and 'store_ipv6' = true
- * then returns true with laddrs->n_ipv4_addrs = 2, naddrs->n_ipv6_addrs = 1.
- *
- * Eg. 2
- * If 'address' = '00:00:00:00:00:01 10.0.0.4 fe80::ea2a:eaff:fe28:3390/64
- *                 30.0.0.3/23' and 'store_ipv6' = false
- * then returns true with laddrs->n_ipv4_addrs = 2, naddrs->n_ipv6_addrs = 0.
- *
- * Eg 3. If 'address' = '00:00:00:00:00:01 10.0.0.4 addr 30.0.0.4', then
- * returns true with laddrs->n_ipv4_addrs = 1 and laddrs->n_ipv6_addrs = 0.
- */
-static bool
-extract_lport_addresses(char *address, struct lport_addresses *laddrs,
-                        bool store_ipv6)
-{
-    char *buf = address;
-    int buf_index = 0;
-    char *buf_end = buf + strlen(address);
-    if (!ovs_scan_len(buf, &buf_index, ETH_ADDR_SCAN_FMT,
-                      ETH_ADDR_SCAN_ARGS(laddrs->ea))) {
-        return false;
-    }
-
-    ovs_be32 ip4;
-    struct in6_addr ip6;
-    unsigned int plen;
-    char *error;
-
-    laddrs->n_ipv4_addrs = 0;
-    laddrs->n_ipv6_addrs = 0;
-    laddrs->ipv4_addrs = NULL;
-    laddrs->ipv6_addrs = NULL;
-
-    /* Loop through the buffer and extract the IPv4/IPv6 addresses
-     * and store in the 'laddrs'. Break the loop if invalid data is found.
-     */
-    buf += buf_index;
-    while (buf < buf_end) {
-        buf_index = 0;
-        error = ip_parse_cidr_len(buf, &buf_index, &ip4, &plen);
-        if (!error) {
-            laddrs->n_ipv4_addrs++;
-            laddrs->ipv4_addrs = xrealloc(
-                laddrs->ipv4_addrs,
-                sizeof (struct ipv4_netaddr) * laddrs->n_ipv4_addrs);
-            laddrs->ipv4_addrs[laddrs->n_ipv4_addrs - 1].addr = ip4;
-            laddrs->ipv4_addrs[laddrs->n_ipv4_addrs - 1].plen = plen;
-            buf += buf_index;
-            continue;
-        }
-        free(error);
-        error = ipv6_parse_cidr_len(buf, &buf_index, &ip6, &plen);
-        if (!error && store_ipv6) {
-            laddrs->n_ipv6_addrs++;
-            laddrs->ipv6_addrs = xrealloc(
-                laddrs->ipv6_addrs,
-                sizeof(struct ipv6_netaddr) * laddrs->n_ipv6_addrs);
-            memcpy(&laddrs->ipv6_addrs[laddrs->n_ipv6_addrs - 1].addr, &ip6,
-                   sizeof(struct in6_addr));
-            laddrs->ipv6_addrs[laddrs->n_ipv6_addrs - 1].plen = plen;
-        }
-
-        if (error) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-            VLOG_INFO_RL(&rl, "invalid syntax '%s' in address", address);
-            free(error);
-            break;
-        }
-        buf += buf_index;
-    }
-
-    return true;
-}
-
 /* Appends port security constraints on L2 address field 'eth_addr_field'
  * (e.g. "eth.src" or "eth.dst") to 'match'.  'port_security', with
  * 'n_port_security' elements, is the collection of port_security constraints
@@ -1179,8 +1087,20 @@ build_port_security_nd(struct ovn_port *op, struct hmap *lflows)
             if (ps.n_ipv4_addrs) {
                 ds_put_cstr(&match, " && (");
                 for (size_t i = 0; i < ps.n_ipv4_addrs; i++) {
-                    ds_put_format(&match, "arp.spa == "IP_FMT" || ",
-                                  IP_ARGS(ps.ipv4_addrs[i].addr));
+                    ds_put_cstr(&match, "arp.spa == ");
+                    ovs_be32 mask = be32_prefix_mask(ps.ipv4_addrs[i].plen);
+                    /* When the netmask is applied, if the host portion is
+                     * non-zero, the host can only use the specified
+                     * address in the arp.spa.  If zero, the host is allowed
+                     * to use any address in the subnet. */
+                    if (ps.ipv4_addrs[i].addr & ~mask) {
+                        ds_put_format(&match, IP_FMT,
+                                      IP_ARGS(ps.ipv4_addrs[i].addr));
+                    } else {
+                       ip_format_masked(ps.ipv4_addrs[i].addr & mask, mask,
+                                        &match);
+                    }
+                    ds_put_cstr(&match, " || ");
                 }
                 ds_chomp(&match, ' ');
                 ds_chomp(&match, '|');
@@ -1264,7 +1184,28 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
             }
 
             for (int i = 0; i < ps.n_ipv4_addrs; i++) {
-                ds_put_format(&match, IP_FMT", ", IP_ARGS(ps.ipv4_addrs[i].addr));
+                ovs_be32 mask = be32_prefix_mask(ps.ipv4_addrs[i].plen);
+                /* When the netmask is applied, if the host portion is
+                 * non-zero, the host can only use the specified
+                 * address.  If zero, the host is allowed to use any
+                 * address in the subnet.
+                 * */
+                if (ps.ipv4_addrs[i].addr & ~mask) {
+                    ds_put_format(&match, IP_FMT,
+                                  IP_ARGS(ps.ipv4_addrs[i].addr));
+                    if (pipeline == P_OUT && ps.ipv4_addrs[i].plen != 32) {
+                         /* Host is also allowed to receive packets to the
+                         * broadcast address in the specified subnet.
+                         */
+                        ds_put_format(&match, ", "IP_FMT,
+                                      IP_ARGS(ps.ipv4_addrs[i].addr | ~mask));
+                    }
+                } else {
+                    /* host portion is zero */
+                    ip_format_masked(ps.ipv4_addrs[i].addr & mask, mask,
+                                     &match);
+                }
+                ds_put_cstr(&match, ", ");
             }
 
             /* Replace ", " by "}". */
@@ -1329,7 +1270,6 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
 {
     bool has_stateful = has_stateful_acl(od);
     struct ovn_port *op;
-    struct ds match_in, match_out;
 
     /* Ingress and Egress Pre-ACL Table (Priority 0): Packets are
      * allowed by default. */
@@ -1348,22 +1288,27 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
     if (has_stateful) {
         HMAP_FOR_EACH (op, key_node, ports) {
             if (op->od == od && !strcmp(op->nbs->type, "router")) {
-                /* Can't use ct() for router ports. Consider the following configuration:
-                lp1(10.0.0.2) on hostA--ls1--lr0--ls2--lp2(10.0.1.2) on hostB,
-                For a ping from lp1 to lp2, First, the response will go through ct()
-                with a zone for lp2 in the ls2 ingress pipeline on hostB.
-                That ct zone knows about this connection. Next, it goes through ct()
-                with the zone for the router port in the egress pipeline of ls2 on hostB.
-                This zone does not know about the connection, as the icmp request
-                went through the logical router on hostA, not hostB. This would only work
-                with distributed conntrack state across all chassis. */
+                /* Can't use ct() for router ports. Consider the
+                 * following configuration: lp1(10.0.0.2) on
+                 * hostA--ls1--lr0--ls2--lp2(10.0.1.2) on hostB, For a
+                 * ping from lp1 to lp2, First, the response will go
+                 * through ct() with a zone for lp2 in the ls2 ingress
+                 * pipeline on hostB.  That ct zone knows about this
+                 * connection. Next, it goes through ct() with the zone
+                 * for the router port in the egress pipeline of ls2 on
+                 * hostB.  This zone does not know about the connection,
+                 * as the icmp request went through the logical router
+                 * on hostA, not hostB. This would only work with
+                 * distributed conntrack state across all chassis. */
+                struct ds match_in = DS_EMPTY_INITIALIZER;
+                struct ds match_out = DS_EMPTY_INITIALIZER;
 
-                ds_init(&match_in);
-                ds_init(&match_out);
                 ds_put_format(&match_in, "ip && inport == %s", op->json_key);
                 ds_put_format(&match_out, "ip && outport == %s", op->json_key);
-                ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 110, ds_cstr(&match_in), "next;");
-                ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 110, ds_cstr(&match_out), "next;");
+                ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 110,
+                              ds_cstr(&match_in), "next;");
+                ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 110,
+                              ds_cstr(&match_out), "next;");
 
                 ds_destroy(&match_in);
                 ds_destroy(&match_out);
@@ -1780,6 +1725,74 @@ add_route(struct hmap *lflows, const struct ovn_port *op,
 }
 
 static void
+build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
+                        struct hmap *ports,
+                        const struct nbrec_logical_router_static_route *route)
+{
+    ovs_be32 prefix, next_hop, mask;
+
+    /* Verify that next hop is an IP address with 32 bits mask. */
+    char *error = ip_parse_masked(route->nexthop, &next_hop, &mask);
+    if (error || mask != OVS_BE32_MAX) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "bad next hop ip address %s", route->nexthop);
+        free(error);
+        return;
+    }
+
+    /* Verify that ip prefix is a valid CIDR address. */
+    error = ip_parse_masked(route->ip_prefix, &prefix, &mask);
+    if (error || !ip_is_cidr(mask)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "bad 'network' in static routes %s",
+                     route->ip_prefix);
+        free(error);
+        return;
+    }
+
+    /* Find the outgoing port. */
+    struct ovn_port *out_port = NULL;
+    if (route->output_port) {
+        out_port = ovn_port_find(ports, route->output_port);
+        if (!out_port) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "Bad out port %s for static route %s",
+                         route->output_port, route->ip_prefix);
+            return;
+        }
+    } else {
+        /* output_port is not specified, find the
+         * router port matching the next hop. */
+        int i;
+        for (i = 0; i < od->nbr->n_ports; i++) {
+            struct nbrec_logical_router_port *lrp = od->nbr->ports[i];
+            out_port = ovn_port_find(ports, lrp->name);
+            if (!out_port) {
+                /* This should not happen. */
+                continue;
+            }
+
+            if (out_port->network
+                && !((out_port->network ^ next_hop) & out_port->mask)) {
+                /* There should be only 1 interface that matches the next hop.
+                 * Otherwise, it's a configuration error, because subnets of
+                 * router's interfaces should NOT overlap. */
+                break;
+            }
+        }
+        if (i == od->nbr->n_ports) {
+            /* There is no matched out port. */
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "No path for static route %s; next hop %s",
+                         route->ip_prefix, route->nexthop);
+            return;
+        }
+    }
+
+    add_route(lflows, out_port, prefix, mask, next_hop);
+}
+
+static void
 build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                     struct hmap *lflows)
 {
@@ -1946,6 +1959,14 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbr) {
             continue;
+        }
+
+        /* Convert the static routes to flows. */
+        for (int i = 0; i < od->nbr->n_static_routes; i++) {
+            const struct nbrec_logical_router_static_route *route;
+
+            route = od->nbr->static_routes[i];
+            build_static_route_flow(lflows, od, ports, route);
         }
 
         if (od->gateway && od->gateway_port) {
@@ -2218,7 +2239,7 @@ ovnsb_db_run(struct northd_context *ctx)
     struct lport_hash_node {
         struct hmap_node node;
         const struct nbrec_logical_port *nb;
-    } *hash_node, *hash_node_next;
+    } *hash_node;
 
     hmap_init(&lports_hmap);
 
@@ -2255,8 +2276,7 @@ ovnsb_db_run(struct northd_context *ctx)
         }
     }
 
-    HMAP_FOR_EACH_SAFE(hash_node, hash_node_next, node, &lports_hmap) {
-        hmap_remove(&lports_hmap, &hash_node->node);
+    HMAP_FOR_EACH_POP(hash_node, node, &lports_hmap) {
         free(hash_node);
     }
     hmap_destroy(&lports_hmap);

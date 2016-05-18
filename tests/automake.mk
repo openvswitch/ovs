@@ -58,7 +58,6 @@ TESTSUITE_AT = \
 	tests/dpctl.at \
 	tests/ofproto-dpif.at \
 	tests/bridge.at \
-	tests/vlan-splinters.at \
 	tests/ofproto.at \
 	tests/ovsdb.at \
 	tests/ovsdb-log.at \
@@ -153,6 +152,10 @@ check-lcov: all tests/atconfig tests/atlocal $(TESTSUITE) $(check_DATA) clean-lc
 # valgrind support
 
 valgrind_wrappers = \
+	tests/valgrind/ovn-controller \
+	tests/valgrind/ovn-nbctl \
+	tests/valgrind/ovn-northd \
+	tests/valgrind/ovn-sbctl \
 	tests/valgrind/ovs-appctl \
 	tests/valgrind/ovs-ofctl \
 	tests/valgrind/ovstest \
@@ -166,6 +169,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-bundle \
 	tests/valgrind/test-byte-order \
 	tests/valgrind/test-classifier \
+	tests/valgrind/test-ccmap \
 	tests/valgrind/test-cmap \
 	tests/valgrind/test-csum \
 	tests/valgrind/test-flows \
@@ -204,6 +208,9 @@ EXTRA_DIST += tests/valgrind-wrapper.in
 VALGRIND = valgrind --log-file=valgrind.%p --leak-check=full \
 	--suppressions=$(abs_top_srcdir)/tests/glibc.supp \
 	--suppressions=$(abs_top_srcdir)/tests/openssl.supp --num-callers=20
+HELGRIND = valgrind --log-file=helgrind.%p --tool=helgrind \
+	--suppressions=$(abs_top_srcdir)/tests/glibc.supp \
+	--suppressions=$(abs_top_srcdir)/tests/openssl.supp --num-callers=20
 EXTRA_DIST += tests/glibc.supp tests/openssl.supp
 check-valgrind: all tests/atconfig tests/atlocal $(TESTSUITE) \
                 $(valgrind_wrappers) $(check_DATA)
@@ -212,6 +219,10 @@ check-valgrind: all tests/atconfig tests/atlocal $(TESTSUITE) \
 	@echo '----------------------------------------------------------------------'
 	@echo 'Valgrind output can be found in tests/testsuite.dir/*/valgrind.*'
 	@echo '----------------------------------------------------------------------'
+check-helgrind: all tests/atconfig tests/atlocal $(TESTSUITE) \
+                $(valgrind_wrappers) $(check_DATA)
+	-$(SHELL) '$(TESTSUITE)' -C tests CHECK_VALGRIND=true VALGRIND='$(HELGRIND)' AUTOTEST_PATH='tests/valgrind:$(AUTOTEST_PATH)' -d $(TESTSUITEFLAGS)
+
 
 # OFTest support.
 
@@ -231,7 +242,7 @@ check-kernel: all tests/atconfig tests/atlocal $(SYSTEM_KMOD_TESTSUITE)
 # Testing the out of tree Kernel module
 check-kmod: all tests/atconfig tests/atlocal $(SYSTEM_KMOD_TESTSUITE)
 	$(MAKE) modules_install
-	modprobe -r openvswitch
+	modprobe -r -a vport-geneve vport-gre vport-lisp vport-stt vport-vxlan openvswitch
 	$(MAKE) check-kernel
 
 check-system-userspace: all tests/atconfig tests/atlocal $(SYSTEM_USERSPACE_TESTSUITE)
@@ -309,6 +320,7 @@ tests_ovstest_SOURCES = \
 	tests/test-bundle.c \
 	tests/test-byte-order.c \
 	tests/test-classifier.c \
+	tests/test-ccmap.c \
 	tests/test-cmap.c \
 	tests/test-csum.c \
 	tests/test-flows.c \

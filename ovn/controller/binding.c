@@ -125,8 +125,8 @@ static void
 add_local_datapath(struct hmap *local_datapaths,
         const struct sbrec_port_binding *binding_rec)
 {
-    if (hmap_first_with_hash(local_datapaths,
-                             binding_rec->datapath->tunnel_key)) {
+    if (get_local_datapath(local_datapaths,
+                           binding_rec->datapath->tunnel_key)) {
         return;
     }
 
@@ -155,9 +155,6 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     const struct sbrec_port_binding *binding_rec;
 
     chassis_rec = get_chassis(ctx->ovnsb_idl, chassis_id);
-    if (!chassis_rec) {
-        return;
-    }
 
     struct shash lports = SHASH_INITIALIZER(&lports);
     if (br_int) {
@@ -190,10 +187,8 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             if (iface_rec && ctx->ovs_idl_txn) {
                 update_qos(iface_rec, binding_rec);
             }
-            if (binding_rec->chassis == chassis_rec) {
-                continue;
-            }
-            if (ctx->ovnsb_idl_txn) {
+            if (ctx->ovnsb_idl_txn && chassis_rec
+                && binding_rec->chassis != chassis_rec) {
                 if (binding_rec->chassis) {
                     VLOG_INFO("Changing chassis for lport %s from %s to %s.",
                               binding_rec->logical_port,
@@ -205,7 +200,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                 }
                 sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
             }
-        } else if (binding_rec->chassis == chassis_rec) {
+        } else if (chassis_rec && binding_rec->chassis == chassis_rec) {
             if (ctx->ovnsb_idl_txn) {
                 VLOG_INFO("Releasing lport %s from this chassis.",
                           binding_rec->logical_port);

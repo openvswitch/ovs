@@ -22,12 +22,12 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include "colors.h"
-#include "openvswitch/dynamic-string.h"
 #include "nx-match.h"
-#include "ofp-actions.h"
-#include "ofp-util.h"
-#include "openvswitch/ofp-errors.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-util.h"
 #include "packets.h"
 
 /* Checks that 'mp' is valid on flow.  Returns 0 if it is valid, otherwise an

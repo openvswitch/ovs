@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 
 #include <errno.h>
 #include <limits.h>
@@ -26,7 +26,7 @@
 #include "classifier.h"
 #include "openvswitch/dynamic-string.h"
 #include "nx-match.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "ovs-thread.h"
 #include "packets.h"
 #include "random.h"
@@ -232,7 +232,7 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
     case MFF_CT_MARK:
         return !wc->masks.ct_mark;
     case MFF_CT_LABEL:
-        return ovs_u128_is_zero(&wc->masks.ct_label);
+        return ovs_u128_is_zero(wc->masks.ct_label);
     CASE_MFF_REGS:
         return !wc->masks.regs[mf->id - MFF_REG0];
     CASE_MFF_XREGS:
@@ -421,7 +421,15 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
 void
 mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow_wildcards *wc)
 {
-    mf_set_flow_value(mf, &exact_match_mask, &wc->masks);
+    mf_mask_field_and_prereqs__(mf, &exact_match_mask, wc);
+}
+
+void
+mf_mask_field_and_prereqs__(const struct mf_field *mf,
+                            const union mf_value *mask,
+                            struct flow_wildcards *wc)
+{
+    mf_set_flow_value_masked(mf, &exact_match_mask, mask, &wc->masks);
 
     switch (mf->prereqs) {
     case MFP_ND:

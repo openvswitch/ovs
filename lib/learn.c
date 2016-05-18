@@ -20,15 +20,15 @@
 
 #include "byte-order.h"
 #include "colors.h"
-#include "openvswitch/dynamic-string.h"
-#include "match.h"
-#include "meta-flow.h"
 #include "nx-match.h"
-#include "ofp-actions.h"
-#include "ofp-util.h"
-#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/match.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
 #include "unaligned.h"
 
 
@@ -380,7 +380,7 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
             }
         }
     }
-    ofpact_finish(ofpacts, &learn->ofpact);
+    ofpact_finish_LEARN(ofpacts, &learn);
 
     return NULL;
 }

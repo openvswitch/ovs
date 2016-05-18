@@ -782,6 +782,16 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl As of OVS-2.5, a note action after 4 set_field actions are likely to
+dnl trigger ofpbuf reallocation during decode (~1KB into ofpacts buffer).
+dnl Using `make check-valgrind' here checks for use-after-free in this
+dnl codepath.
+AT_SETUP([ofproto-dpif - note action deep inside ofpacts])
+OVS_VSWITCHD_START
+AT_CHECK([ovs-ofctl add-flow br0 'actions=set_field:0x1->metadata,set_field:0x2->metadata,set_field:0x3->metadata,set_field:0x4->metadata,note:00000000000000000000000000000000,note:00000000000000000000000000000000'])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - output, OFPP_NONE ingress port])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2
@@ -3876,10 +3886,13 @@ for frag in 4000 6000 6008 4010; do
   AT_CHECK([ovs-appctl netdev-dummy/receive p90 "0021853763af 0026b98cb0f9 0800 4500 003c 2e24 $frag 40 06 465d ac11370d ac11370b 828b 0016 751e267b 00000000 a002 16d0 1736 0000 02 04 05 b4 04 02 08 0a 2d 25 08 5f 00 00 00 00 01 03 03 07"])
 done
 
+dnl The set_field action only modifies 8 bits of the tcp_src, so both the flow
+dnl wildcard and the set_field action have a mask of 0xFF. Up to (including)
+dnl OVS-2.5, the wildcards and set_field mask are shared internally.
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=33419), packets:0, bytes:0, used:never, actions:set(tcp(src=33322)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=33419), packets:0, bytes:0, used:never, actions:set(tcp(src=33322)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=33419/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=33419/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:74, used:0.001s, actions:1
 ])
 
@@ -3893,8 +3906,8 @@ done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:60, used:0.001s, actions:1
 ])
 
@@ -3908,8 +3921,8 @@ done
 
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0), packets:0, bytes:0, used:never, actions:set(tcp(src=42)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:60, used:0.001s, actions:1
 ])
 
@@ -5150,17 +5163,17 @@ IFCOUNTERS
 	status=0
 	in_octets=0
 	in_unicasts=0
-	in_multicasts=0
+	in_multicasts=4294967295
 	in_broadcasts=4294967295
-	in_discards=0
-	in_errors=0
+	in_discards=4294967295
+	in_errors=4294967295
 	in_unknownprotos=4294967295
 	out_octets=120
 	out_unicasts=2
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
-	out_discards=0
-	out_errors=0
+	out_discards=4294967295
+	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
 	dgramSeqNo=2
@@ -5173,17 +5186,17 @@ IFCOUNTERS
 	status=0
 	in_octets=138
 	in_unicasts=3
-	in_multicasts=0
+	in_multicasts=4294967295
 	in_broadcasts=4294967295
-	in_discards=0
-	in_errors=0
+	in_discards=4294967295
+	in_errors=4294967295
 	in_unknownprotos=4294967295
 	out_octets=120
 	out_unicasts=2
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
-	out_discards=0
-	out_errors=0
+	out_discards=4294967295
+	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
 	dgramSeqNo=2
@@ -5196,17 +5209,17 @@ IFCOUNTERS
 	status=0
 	in_octets=84
 	in_unicasts=2
-	in_multicasts=0
+	in_multicasts=4294967295
 	in_broadcasts=4294967295
-	in_discards=0
-	in_errors=0
+	in_discards=4294967295
+	in_errors=4294967295
 	in_unknownprotos=4294967295
 	out_octets=180
 	out_unicasts=3
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
-	out_discards=0
-	out_errors=0
+	out_discards=4294967295
+	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
 	dgramSeqNo=3
@@ -5219,17 +5232,17 @@ IFCOUNTERS
 	status=0
 	in_octets=0
 	in_unicasts=0
-	in_multicasts=0
+	in_multicasts=4294967295
 	in_broadcasts=4294967295
-	in_discards=0
-	in_errors=0
+	in_discards=4294967295
+	in_errors=4294967295
 	in_unknownprotos=4294967295
 	out_octets=120
 	out_unicasts=2
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
-	out_discards=0
-	out_errors=0
+	out_discards=4294967295
+	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
 	dgramSeqNo=3
@@ -5242,17 +5255,17 @@ IFCOUNTERS
 	status=0
 	in_octets=138
 	in_unicasts=3
-	in_multicasts=0
+	in_multicasts=4294967295
 	in_broadcasts=4294967295
-	in_discards=0
-	in_errors=0
+	in_discards=4294967295
+	in_errors=4294967295
 	in_unknownprotos=4294967295
 	out_octets=120
 	out_unicasts=2
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
-	out_discards=0
-	out_errors=0
+	out_discards=4294967295
+	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
 	dgramSeqNo=3
@@ -5265,17 +5278,17 @@ IFCOUNTERS
 	status=0
 	in_octets=84
 	in_unicasts=2
-	in_multicasts=0
+	in_multicasts=4294967295
 	in_broadcasts=4294967295
-	in_discards=0
-	in_errors=0
+	in_discards=4294967295
+	in_errors=4294967295
 	in_unknownprotos=4294967295
 	out_octets=180
 	out_unicasts=3
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
-	out_discards=0
-	out_errors=0
+	out_discards=4294967295
+	out_errors=4294967295
 	promiscuous=0
 OPENFLOWPORT
 	datapath_id=18364758544493064720
@@ -6199,14 +6212,14 @@ skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(101),eth(src=5
 
 AT_CHECK([ovs-ofctl dump-ports br0 pbr0], [0], [dnl
 OFPST_PORT reply (xid=0x4): 1 ports
-  port  1: rx pkts=5, bytes=300, drop=0, errs=0, frame=0, over=0, crc=0
-           tx pkts=10, bytes=600, drop=0, errs=0, coll=0
+  port  1: rx pkts=5, bytes=300, drop=?, errs=?, frame=?, over=?, crc=?
+           tx pkts=10, bytes=600, drop=?, errs=?, coll=?
 ])
 
 AT_CHECK([ovs-ofctl dump-ports br1 pbr1], [0], [dnl
 OFPST_PORT reply (xid=0x4): 1 ports
-  port  1: rx pkts=10, bytes=600, drop=0, errs=0, frame=0, over=0, crc=0
-           tx pkts=5, bytes=300, drop=0, errs=0, coll=0
+  port  1: rx pkts=10, bytes=600, drop=?, errs=?, frame=?, over=?, crc=?
+           tx pkts=5, bytes=300, drop=?, errs=?, coll=?
 ])
 
 OVS_VSWITCHD_STOP
@@ -6312,7 +6325,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
 recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b/ff:ff:00:00:00:02,nw_frag=no, actions: <del>
+recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,nw_frag=no, actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6331,7 +6344,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
 recirc_id=0,icmp,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.4,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.2/0.0.0.2,nw_frag=no, actions: <del>
+recirc_id=0,ip,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.2/30,nw_frag=no, actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6350,7 +6363,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
 recirc_id=0,ipv6,in_port=1,vlan_tci=0x0000,ipv6_src=2001:db8:3c4d:1:2:3:4:5,nw_frag=no, actions: <del>
-recirc_id=0,ipv6,in_port=1,vlan_tci=0x0000,ipv6_src=2001:db8:3c4d:5:4:3:2:1/0:0:0:4::,nw_frag=no, actions: <del>
+recirc_id=0,ipv6,in_port=1,vlan_tci=0x0000,ipv6_src=2001:db8:3c4d:5:4:3:2:1/62,nw_frag=no, actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6538,7 +6551,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
 recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b/ff:ff:00:00:00:02,nw_frag=no, actions: <del>
+recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,nw_frag=no, actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6741,7 +6754,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
 recirc_id=0,icmp,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.4,nw_ttl=64,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.2/0.0.0.2,nw_frag=no, actions: <del>
+recirc_id=0,ip,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.2/30,nw_frag=no, actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6960,6 +6973,45 @@ AT_CLEANUP
 
 AT_BANNER([ofproto-dpif - flow translation resource limits])
 
+dnl Resubmits to later tables do not count against the depth limit, so we
+dnl can do 99 of them even though the maximum depth is 64.
+AT_SETUP([ofproto-dpif - forward resubmit])
+OVS_VSWITCHD_START
+(for i in `seq 0 99`; do
+    j=`expr $i + 1`
+    echo "table=$i, actions=resubmit(,$j)"
+ done
+ echo "table=100, actions=local") > flows
+AT_CHECK([ovs-ofctl add-flows br0 flows])
+AT_CHECK([ovs-appctl -vpoll_loop:off ofproto/trace br0 'eth_dst=ff:ff:ff:ff:ff:ff'],
+  [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: 100
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl Resubmits to the same or an earlier table count against the depth limit,
+dnl so only 64 of them are allowed.
+AT_SETUP([ofproto-dpif - backward resubmit])
+OVS_VSWITCHD_START
+(echo "table=0, actions=resubmit(,66)"
+ for i in `seq 2 66`; do
+    j=`expr $i - 1`
+    echo "table=$i, actions=resubmit(,$j)"
+ done
+ echo "table=1, actions=local") > flows
+AT_CHECK([ovs-ofctl add-flows br0 flows])
+AT_CHECK([ovs-appctl -vpoll_loop:off ofproto/trace br0 'eth_dst=ff:ff:ff:ff:ff:ff'],
+  [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Translation failed (Recursion too deep), packet is dropped.
+])
+AT_CHECK([grep -c 'over max translation depth 64' stdout],
+  [0], [1
+])
+OVS_VSWITCHD_STOP(["/resubmit actions recursed/d"])
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - infinite resubmit])
 OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl add-flow br0 actions=resubmit:1,resubmit:2,output:3])
@@ -6968,7 +7020,7 @@ AT_CHECK([ovs-appctl -vpoll_loop:off ofproto/trace br0 'eth_dst=ff:ff:ff:ff:ff:f
 AT_CHECK([tail -1 stdout], [0],
   [Translation failed (Recursion too deep), packet is dropped.
 ])
-AT_CHECK([grep -c 'resubmit actions recursed over 64 times' stdout],
+AT_CHECK([grep -c 'over max translation depth 64' stdout],
   [0], [1
 ])
 OVS_VSWITCHD_STOP(["/resubmit actions recursed/d"])
@@ -7256,6 +7308,36 @@ icmp6,vlan_tci=0x0000,dl_src=00:00:86:05:80:da,dl_dst=00:60:97:07:69:ea,ipv6_src
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - ICMPv6 type match])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+
+AT_CHECK([ovs-ofctl add-flow br0 'icmp6,icmp_type=128,actions=2'])
+AT_CHECK([ovs-ofctl add-flow br0 'icmp6,icmp_type=129,actions=3'])
+
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'recirc_id(0),in_port(1),eth(src=f2:49:6e:52:49:0b,dst=02:b7:d7:17:ff:72),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=128)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'recirc_id(0),in_port(1),eth(src=f2:49:6e:52:49:0b,dst=02:b7:d7:17:ff:72),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=128)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'recirc_id(0),in_port(1),eth(src=f2:49:6e:52:49:0b,dst=02:b7:d7:17:ff:72),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=129)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'recirc_id(0),in_port(1),eth(src=f2:49:6e:52:49:0b,dst=02:b7:d7:17:ff:72),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=129)'])
+
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+
+AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
+recirc_id=0,icmp6,in_port=1,vlan_tci=0x0000,nw_frag=no,icmp_type=0x80/0xff, actions:2
+recirc_id=0,icmp6,in_port=1,vlan_tci=0x0000,nw_frag=no,icmp_type=0x81/0xff, actions:3
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
+ n_packets=2, n_bytes=124, icmp6,icmp_type=128 actions=output:2
+ n_packets=2, n_bytes=124, icmp6,icmp_type=129 actions=output:3
+NXST_FLOW reply:
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - Neighbor Discovery set-field with checksum update])
 OVS_VSWITCHD_START
 add_of_ports br0 1
@@ -7395,7 +7477,7 @@ done
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
 recirc_id(0),in_port(1),eth_type(0x1234), packets:8, bytes:480, used:0.0s, actions:100
-recirc_id(0),in_port(1),eth_type(0x8100),vlan(vid=99/0x0,pcp=7/0x0),encap(eth_type(0x1234)), packets:2, bytes:120, used:0.0s, actions:drop
+recirc_id(0),in_port(1),eth_type(0x8100),vlan(vid=99,pcp=7/0x0),encap(eth_type(0x1234)), packets:2, bytes:120, used:0.0s, actions:drop
 ])
 
 # Check that the new flow matches the CFI bit, while both vid and pcp
@@ -7404,7 +7486,7 @@ AT_CHECK([grep '\(modify\)\|\(flow_add\)' ovs-vswitchd.log | strip_ufid ], [0], 
 dpif_netdev|DBG|flow_add: recirc_id=0,in_port=1,vlan_tci=0x0000,dl_type=0x1234, actions:100
 dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234)
 dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234), actions:100
-dpif_netdev|DBG|flow_add: recirc_id=0,in_port=1,vlan_tci=0xf063/0x1000,dl_type=0x1234, actions:drop
+dpif_netdev|DBG|flow_add: recirc_id=0,in_port=1,dl_vlan=99,dl_type=0x1234, actions:drop
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

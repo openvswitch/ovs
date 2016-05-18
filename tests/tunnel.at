@@ -114,7 +114,7 @@ OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
                     options:key=5 ofport_request=1\
                     -- add-port br0 p2 -- set Interface p2 type=dummy \
-                    ofport_request=2 ofport_request=2])
+                    ofport_request=2])
 AT_DATA([flows.txt], [dnl
 actions=output:1
 ])
@@ -521,6 +521,33 @@ AT_CHECK([tail -2 stdout], [0],
   [Megaflow: pkt_mark=0,recirc_id=0,ip,tun_id=0,tun_src=1.1.1.1,tun_dst=1.1.1.2,tun_tos=0,tun_flags=+df-csum+key,tun_metadata1,tun_metadata2=NP,in_port=1,nw_ecn=0,nw_frag=no
 Datapath actions: set(tunnel(tun_id=0x0,dst=1.1.1.1,ttl=64,geneve({class=0xffff,type=0x1,len=0}),flags(df|key))),6081
 ])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - concomitant IPv6 and IPv4 tunnels])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=vxlan \
+                    options:remote_ip=1.1.1.1 ofport_request=1 \
+                    -- add-port br0 p2 -- set Interface p2 type=vxlan \
+                    options:remote_ip=2001:cafe::1 ofport_request=2])
+AT_DATA([flows.txt], [dnl
+in_port=1,actions=2
+in_port=2,actions=1
+])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0,src=1.1.1.1,dst=1.1.1.2,ttl=64),in_port(4789)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x0,ipv6_dst=2001:cafe::1,ttl=64,flags(df|key))),4789
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'tunnel(tun_id=0x0,ipv6_src=2001:cafe::1,ipv6_dst=2001:cafe::2,ttl=64),in_port(4789)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x0,dst=1.1.1.1,ttl=64,flags(df|key))),4789
+])
+
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP

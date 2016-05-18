@@ -15,17 +15,18 @@
  */
 
 #include <config.h>
+#include "byte-order.h"
 #include "expr.h"
-#include "openvswitch/dynamic-string.h"
 #include "json.h"
 #include "lex.h"
 #include "logical-fields.h"
-#include "match.h"
-#include "ofp-actions.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/match.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/vlog.h"
 #include "shash.h"
 #include "simap.h"
 #include "sset.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(expr);
 
@@ -2510,10 +2511,9 @@ expr_to_matches(const struct expr *expr,
 void
 expr_matches_destroy(struct hmap *matches)
 {
-    struct expr_match *m, *n;
+    struct expr_match *m;
 
-    HMAP_FOR_EACH_SAFE (m, n, hmap_node, matches) {
-        hmap_remove(matches, &m->hmap_node);
+    HMAP_FOR_EACH_POP (m, hmap_node, matches) {
         free(m->conjunctions);
         free(m);
     }

@@ -21,7 +21,7 @@ The primary approach to compatibility is to abstract most of the
 details of the differences from the core code, by adding a protocol
 layer that translates between OF1.x and a slightly higher-level
 abstract representation.  The core of this approach is the many struct
-ofputil_* structures in lib/ofp-util.h.
+ofputil_* structures in include/openvswitch/ofp-util.h.
 
 As a consequence of this approach, OVS cannot use OpenFlow protocol
 definitions that closely resemble those in the OpenFlow specification,

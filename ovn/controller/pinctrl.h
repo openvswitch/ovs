@@ -19,15 +19,18 @@
 
 #include <stdint.h>
 
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 
+struct hmap;
 struct lport_index;
 struct ovsrec_bridge;
 struct controller_ctx;
 
 void pinctrl_init(void);
 void pinctrl_run(struct controller_ctx *, const struct lport_index *,
-                 const struct ovsrec_bridge *br_int);
+                 const struct ovsrec_bridge *,
+                 const char *chassis_id,
+                 struct hmap *local_datapaths);
 void pinctrl_wait(struct controller_ctx *);
 void pinctrl_destroy(void);
 

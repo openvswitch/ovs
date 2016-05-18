@@ -1116,7 +1116,6 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
         dp_packet_delete(buffer);
     } else {
         dp_packet_pad(buffer);
-        dp_packet_rss_invalidate(buffer);
         packets[0] = buffer;
         *c = 1;
     }
@@ -2046,7 +2045,7 @@ netdev_linux_set_policing(struct netdev *netdev_,
     int error;
 
     kbits_burst = (!kbits_rate ? 0       /* Force to 0 if no rate specified. */
-                   : !kbits_burst ? 1000 /* Default to 1000 kbits if 0. */
+                   : !kbits_burst ? 8000 /* Default to 8000 kbits if 0. */
                    : kbits_burst);       /* Stick with user-specified value. */
 
     ovs_mutex_lock(&netdev->mutex);
@@ -3852,10 +3851,9 @@ static void
 htb_tc_destroy(struct tc *tc)
 {
     struct htb *htb = CONTAINER_OF(tc, struct htb, tc);
-    struct htb_class *hc, *next;
+    struct htb_class *hc;
 
-    HMAP_FOR_EACH_SAFE (hc, next, tc_queue.hmap_node, &htb->tc.queues) {
-        hmap_remove(&htb->tc.queues, &hc->tc_queue.hmap_node);
+    HMAP_FOR_EACH_POP (hc, tc_queue.hmap_node, &htb->tc.queues) {
         free(hc);
     }
     tc_destroy(tc);
@@ -4721,21 +4719,15 @@ tc_add_policer(struct netdev *netdev,
     tc_police.mtu = mtu;
     tc_fill_rate(&tc_police.rate, ((uint64_t) kbits_rate * 1000)/8, mtu);
 
-    /* The following appears wrong in two ways:
-     *
-     * - tc_bytes_to_ticks() should take "bytes" as quantity for both of its
-     *   arguments (or at least consistently "bytes" as both or "bits" as
-     *   both), but this supplies bytes for the first argument and bits for the
-     *   second.
-     *
-     * - In networking a kilobit is usually 1000 bits but this uses 1024 bits.
+    /* The following appears wrong in one way: In networking a kilobit is
+     * usually 1000 bits but this uses 1024 bits.
      *
      * However if you "fix" those problems then "tc filter show ..." shows
      * "125000b", meaning 125,000 bits, when OVS configures it for 1000 kbit ==
      * 1,000,000 bits, whereas this actually ends up doing the right thing from
      * tc's point of view.  Whatever. */
     tc_police.burst = tc_bytes_to_ticks(
-        tc_police.rate.rate, MIN(UINT32_MAX / 1024, kbits_burst) * 1024);
+        tc_police.rate.rate, MIN(UINT32_MAX / 1024, kbits_burst) * 1024 / 8);
 
     tcmsg = tc_make_request(netdev, RTM_NEWTFILTER,
                             NLM_F_EXCL | NLM_F_CREATE, &request);
@@ -5368,6 +5360,9 @@ get_stats_via_netlink(const struct netdev *netdev_, struct netdev_stats *stats)
     struct ofpbuf request;
     struct ofpbuf *reply;
     int error;
+
+    /* Filtering all counters by default */
+    memset(stats, 0xFF, sizeof(struct netdev_stats));
 
     ofpbuf_init(&request, 0);
     nl_msg_put_nlmsghdr(&request,

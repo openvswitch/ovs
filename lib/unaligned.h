@@ -20,7 +20,7 @@
 #include <stdint.h>
 #include "byte-order.h"
 #include "openvswitch/types.h"
-#include "type-props.h"
+#include "openvswitch/type-props.h"
 #include "util.h"
 
 /* Public API. */

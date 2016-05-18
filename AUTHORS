@@ -21,6 +21,7 @@ Andy Zhou               azhou@ovn.org
 Ankur Sharma            ankursharma@vmware.com
 Anoob Soman             anoob.soman@citrix.com
 Ansis Atteka            aatteka@nicira.com
+Antonio Fischetti       antonio.fischetti@intel.com
 Anupam Chanda           achanda@nicira.com
 Ariel Tubaltsev         atubaltsev@vmware.com
 Arun Sharma             arun.sharma@calsoftinc.com
@@ -30,6 +31,7 @@ Babu Shanmugam          bschanmu@redhat.com
 Ben Pfaff               blp@ovn.org
 Ben Warren              ben@skyportsystems.com
 Bert Vermeulen          bert@biot.com
+Bhanuprakash Bodireddy  bhanuprakash.bodireddy@intel.com
 Billy O'Mahony          billy.o.mahony@intel.com
 Brian Kruger            bkruger+ovsdev@gmail.com
 Bruce Davie             bsd@nicira.com
@@ -51,6 +53,7 @@ Daniel Roman            droman@nicira.com
 Daniele Di Proietto     daniele.di.proietto@gmail.com
 Daniele Venturino       daniele.venturino@m3s.it
 Danny Kukawka           danny.kukawka@bisect.de
+Darrell Ball            dlu998@gmail.com
 Dave Tucker             dave@dtucker.co.uk
 David Erickson          derickso@stanford.edu
 David S. Miller         davem@davemloft.net
@@ -71,6 +74,7 @@ Eitan Eliahu            eliahue@vmware.com
 Eohyung Lee             liquidnuker@gmail.com
 Eric Sesterhenn         eric.sesterhenn@lsexperts.de
 Ethan J. Jackson        ejj@eecs.berkeley.edu
+Flavio Fernandes        flavio@flaviof.com
 Flavio Leitner          fbl@redhat.com
 Francesco Fusco         ffusco@redhat.com
 FUJITA Tomonori         fujita.tomonori@lab.ntt.co.jp
@@ -89,12 +93,14 @@ Hao Zheng               hzheng@nicira.com
 Helmut Schaa            helmut.schaa@googlemail.com
 Hiteshi Kalra           hiteshi.kalra@tcs.com
 Huanle Han              hanxueluo@gmail.com
+Hui Kang                kangh@us.ibm.com
 Ian Campbell            Ian.Campbell@citrix.com
 Ian Stokes              ian.stokes@intel.com
 Ilya Maximets           i.maximets@samsung.com
 Isaku Yamahata          yamahata@valinux.co.jp
 James P.                roampune@gmail.com
 James Page              james.page@ubuntu.com
+Jamie Lennox            jamielennox@gmail.com
 Jan Vansteenkiste       jan@vstone.eu
 Jarno Rajahalme         jarno@ovn.org
 Jason Kölker            jason@koelker.net
@@ -109,6 +115,7 @@ Joe Perches             joe@perches.com
 Joe Stringer            joe@ovn.org
 Jonathan Vestin         jonavest@kau.se
 Jun Nakajima            jun.nakajima@intel.com
+JunoZhu                 zhunatuzi@gmail.com
 Justin Pettit           jpettit@ovn.org
 Keith Amidon            keith@nicira.com
 Ken Ajiro               ajiro@mxw.nes.nec.co.jp
@@ -205,6 +212,7 @@ Steffen Gebert          steffen.gebert@informatik.uni-wuerzburg.de
 Sten Spans              sten@blinkenlights.nl
 Stephane A. Sezer       sas@cd80.net
 Stephen Finucane        stephen.finucane@intel.com
+Steve Ruan              ruansx@cn.ibm.com
 SUGYO Kazushi           sugyo.org@gmail.com
 Tadaaki Nagao           nagao@stratosphere.co.jp
 Terry Wilson            twilson@redhat.com
@@ -238,6 +246,7 @@ Zoltán Balogh           zoltan.balogh@ericsson.com
 Zoltan Kiss             zoltan.kiss@citrix.com
 Zhi Yong Wu             zwu.kernel@gmail.com
 Zang MingJie            zealot0630@gmail.com
+nickcooper-zhangtonghao nickcooper-zhangtonghao@opencloud.tech
 xushengping             shengping.xu@huawei.com
 yinpeijun               yinpeijun@huawei.com
 
@@ -284,6 +293,7 @@ Christian Stigen Larsen cslarsen@gmail.com
 Christopher Paggen      cpaggen@cisco.com
 Chunhe Li               lichunhe@huawei.com
 Daniel Badea            daniel.badea@windriver.com
+Darragh O'Reilly        darragh.oreilly@hpe.com
 Dave Walker             DaveWalker@ubuntu.com
 David Evans             davidjoshuaevans@gmail.com
 David Palma             palma@onesource.pt
@@ -346,6 +356,7 @@ Koichi Yagishita        yagishita.koichi@jrc.co.jp
 Konstantin Khorenko     khorenko@openvz.org
 Kris zhang              zhang.kris@gmail.com
 Krishna Miriyala        krishna@nicira.com
+Krishna Mohan Elluru    elluru.kri.mohan@hpe.com
 Len Gao                 leng@vmware.com
 Logan Rosen             logatronico@gmail.com
 Luca Falavigna          dktrkranz@debian.org

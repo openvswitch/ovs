@@ -15,15 +15,16 @@
  */
 
 #include <config.h>
-#include "actions.h"
 #include <stdarg.h>
 #include <stdbool.h>
+#include "actions.h"
+#include "byte-order.h"
 #include "compiler.h"
-#include "openvswitch/dynamic-string.h"
 #include "expr.h"
 #include "lex.h"
 #include "logical-fields.h"
-#include "ofp-actions.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofpbuf.h"
 #include "simap.h"
 
@@ -205,7 +206,7 @@ finish_controller_op(struct ofpbuf *ofpacts, size_t ofs)
     struct ofpact_controller *oc = ofpbuf_at_assert(ofpacts, ofs, sizeof *oc);
     ofpacts->header = oc;
     oc->userdata_len = ofpacts->size - (ofs + sizeof *oc);
-    ofpact_finish(ofpacts, &oc->ofpact);
+    ofpact_finish_CONTROLLER(ofpacts, &oc);
 }
 
 static void

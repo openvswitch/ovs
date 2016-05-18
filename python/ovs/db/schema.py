@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010, 2011 Nicira, Inc.
+# Copyright (c) 2009, 2010, 2011, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -264,6 +264,12 @@ class ColumnSchema(object):
         _types.extend([dict])
         type_ = ovs.db.types.Type.from_json(parser.get("type", _types))
         parser.finish()
+
+        if not mutable and (type_.key.is_weak_ref()
+                            or (type_.value and type_.value.is_weak_ref())):
+            # We cannot allow a weak reference to be immutable: if referenced
+            # rows are deleted, then the weak reference needs to change.
+            mutable = True
 
         return ColumnSchema(name, mutable, not ephemeral, type_)
 

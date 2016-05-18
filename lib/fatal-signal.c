@@ -32,7 +32,7 @@
 #include "util.h"
 #include "openvswitch/vlog.h"
 
-#include "type-props.h"
+#include "openvswitch/type-props.h"
 
 #ifndef SIG_ATOMIC_MAX
 #define SIG_ATOMIC_MAX TYPE_MAXIMUM(sig_atomic_t)

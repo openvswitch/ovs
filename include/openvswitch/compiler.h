@@ -17,6 +17,9 @@
 #ifndef OPENVSWITCH_COMPILER_H
 #define OPENVSWITCH_COMPILER_H 1
 
+#include <stddef.h>
+#include <stdbool.h>
+
 #ifndef __has_feature
   #define __has_feature(x) 0
 #endif
@@ -180,18 +183,23 @@
 #define OVS_PACKED(DECL) __pragma(pack(push, 1)) DECL __pragma(pack(pop))
 #endif
 
-/* For defining a structure whose instances should aligned on an N-byte
- * boundary.
- *
- * e.g. The following:
+/* OVS_ALIGNED_STRUCT may be used to define a structure whose instances should
+ * aligned on an N-byte boundary.  This:
  *     OVS_ALIGNED_STRUCT(64, mystruct) { ... };
  * is equivalent to the following except that it specifies 64-byte alignment:
  *     struct mystruct { ... };
+ *
+ * OVS_ALIGNED_VAR defines a variable aligned on an N-byte boundary.  For
+ * example,
+ *     OVS_ALIGNED_VAR(64) int x;
+ * defines a "int" variable that is aligned on a 64-byte boundary.
  */
 #ifndef _MSC_VER
 #define OVS_ALIGNED_STRUCT(N, TAG) struct __attribute__((aligned(N))) TAG
+#define OVS_ALIGNED_VAR(N) __attribute__((aligned(N)))
 #else
 #define OVS_ALIGNED_STRUCT(N, TAG) __declspec(align(N)) struct TAG
+#define OVS_ALIGNED_VAR(N) __declspec(align(N))
 #endif
 
 /* Supplies code to be run at startup time before invoking main().

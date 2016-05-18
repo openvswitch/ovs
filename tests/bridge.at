@@ -17,9 +17,9 @@ dummy@ovs-dummy: hit:0 missed:0
 		p2 2/2: (dummy)
 ])
 
-# Delete p1 from the datapath as if by "ovs-dpctl del-port"
+# Delete p1 from the datapath with "ovs-dpctl del-if"
 # and check that it disappeared.
-AT_CHECK([ovs-appctl dpif-dummy/delete-port ovs-dummy p1])
+AT_CHECK([ovs-appctl dpctl/del-if dummy@ovs-dummy p1])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:

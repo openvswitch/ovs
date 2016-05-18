@@ -195,6 +195,32 @@ combination on the physical switch \fIpswitch\fR.
 List the logical switch bindings for \fIport\fR on the physical switch
 \fIpswitch\fR.
 .
+.IP "\fBset\-replication\-mode \fIlswitch replication\-mode\fR"
+Set logical switch \fIlswitch\fR replication mode to
+\fIreplication\-mode\fR; the only valid values for replication mode
+are "service_node" and "source_node".
+.
+For handling L2 broadcast, multicast and unknown unicast traffic,
+packets can be sent to all members of a logical switch referenced by
+a physical switch.  There are different modes to replicate the
+packets.  The default mode of replication is to send the traffic to
+a service node, which can be a hypervisor, server or appliance, and
+let the service node handle replication to other transport nodes
+(hypervisors or other VTEP physical switches).  This mode is called
+service node replication.  An alternate mode of replication, called
+source node replication involves the source node sending to all
+other transport nodes.  Hypervisors are always responsible for doing
+their own replication for locally attached VMs in both modes.
+Service node mode is the default, if the replication mode is not
+explicitly set.  Service node replication mode is considered a basic
+requirement because it only requires sending the packet to a single
+transport node.
+.
+.IP "\fBget\-replication\-mode \fIlswitch\fR"
+Get logical switch \fIlswitch\fR replication mode.  The only valid values
+for replication mode are "service_node" and "source_node".  An empty reply
+for replication mode implies a default of "service_node".
+.
 .SS "Logical Router Commands"
 These commands examine and manipulate logical routers.
 .

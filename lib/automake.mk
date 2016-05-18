@@ -38,6 +38,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/classifier.c \
 	lib/classifier.h \
 	lib/classifier-private.h \
+	lib/ccmap.c \
+	lib/ccmap.h \
 	lib/cmap.c \
 	lib/cmap.h \
 	lib/colors.c \
@@ -115,13 +117,11 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/mac-learning.c \
 	lib/mac-learning.h \
 	lib/match.c \
-	lib/match.h \
 	lib/mcast-snooping.c \
 	lib/mcast-snooping.h \
 	lib/memory.c \
 	lib/memory.h \
 	lib/meta-flow.c \
-	lib/meta-flow.h \
 	lib/multipath.c \
 	lib/multipath.h \
 	lib/netdev-dummy.c \
@@ -140,17 +140,12 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/odp-util.c \
 	lib/odp-util.h \
 	lib/ofp-actions.c \
-	lib/ofp-actions.h \
 	lib/ofp-errors.c \
 	lib/ofp-msgs.c \
-	lib/ofp-msgs.h \
 	lib/ofp-parse.c \
 	lib/ofp-print.c \
-	lib/ofp-print.h \
 	lib/ofp-prop.c \
-	lib/ofp-prop.h \
 	lib/ofp-util.c \
-	lib/ofp-util.h \
 	lib/ofp-version-opt.h \
 	lib/ofp-version-opt.c \
 	lib/ofpbuf.c \
@@ -181,6 +176,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovsdb-idl-provider.h \
 	lib/ovsdb-idl.c \
 	lib/ovsdb-idl.h \
+	lib/ovsdb-map-op.c \
+	lib/ovsdb-map-op.h \
 	lib/ovsdb-parser.c \
 	lib/ovsdb-parser.h \
 	lib/ovsdb-types.c \
@@ -259,7 +256,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/token-bucket.c \
 	lib/tun-metadata.c \
 	lib/tun-metadata.h \
-	lib/type-props.h \
 	lib/unaligned.h \
 	lib/unicode.c \
 	lib/unicode.h \
@@ -275,8 +271,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/vconn.c \
 	lib/vlan-bitmap.c \
 	lib/vlan-bitmap.h \
-	lib/vlandev.c \
-	lib/vlandev.h \
 	lib/vlog.c \
 	lib/lldp/aa-structs.h \
 	lib/lldp/lldp.c \
@@ -364,6 +358,10 @@ if DPDK_NETDEV
 lib_libopenvswitch_la_SOURCES += \
        lib/netdev-dpdk.c \
        lib/netdev-dpdk.h
+else
+lib_libopenvswitch_la_SOURCES += \
+	lib/netdev-nodpdk.c \
+	lib/netdev-dpdk.h
 endif
 
 if WIN32
@@ -472,10 +470,10 @@ lib/dirs.c: lib/dirs.c.in Makefile
 	     > lib/dirs.c.tmp && \
 	mv lib/dirs.c.tmp lib/dirs.c
 
-lib/meta-flow.inc: $(srcdir)/build-aux/extract-ofp-fields lib/meta-flow.h
+lib/meta-flow.inc: $(srcdir)/build-aux/extract-ofp-fields include/openvswitch/meta-flow.h
 	$(AM_V_GEN)$(run_python) $^ --meta-flow > $@.tmp && mv $@.tmp $@
 lib/meta-flow.lo: lib/meta-flow.inc
-lib/nx-match.inc: $(srcdir)/build-aux/extract-ofp-fields lib/meta-flow.h
+lib/nx-match.inc: $(srcdir)/build-aux/extract-ofp-fields include/openvswitch/meta-flow.h
 	$(AM_V_GEN)$(run_python) $^ --nx-match > $@.tmp && mv $@.tmp $@
 lib/nx-match.lo: lib/nx-match.inc
 CLEANFILES += lib/meta-flow.inc lib/nx-match.inc
@@ -499,9 +497,9 @@ lib/ofp-errors.lo: lib/ofp-errors.inc
 CLEANFILES += lib/ofp-errors.inc
 EXTRA_DIST += build-aux/extract-ofp-errors
 
-lib/ofp-msgs.inc: lib/ofp-msgs.h $(srcdir)/build-aux/extract-ofp-msgs
+lib/ofp-msgs.inc: include/openvswitch/ofp-msgs.h $(srcdir)/build-aux/extract-ofp-msgs
 	$(AM_V_GEN)$(run_python) $(srcdir)/build-aux/extract-ofp-msgs \
-		$(srcdir)/lib/ofp-msgs.h $@ > $@.tmp && mv $@.tmp $@
+		$(srcdir)/include/openvswitch/ofp-msgs.h $@ > $@.tmp && mv $@.tmp $@
 lib/ofp-msgs.lo: lib/ofp-msgs.inc
 CLEANFILES += lib/ofp-msgs.inc
 EXTRA_DIST += build-aux/extract-ofp-msgs
@@ -512,4 +510,3 @@ lib-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(PKIDIR)
 	$(MKDIR_P) $(DESTDIR)$(LOGDIR)
 	$(MKDIR_P) $(DESTDIR)$(DBDIR)
-

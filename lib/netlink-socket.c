@@ -127,6 +127,7 @@ nl_sock_create(int protocol, struct nl_sock **sockp)
     sock = xmalloc(sizeof *sock);
 
 #ifdef _WIN32
+    sock->overlapped.hEvent = NULL;
     sock->handle = CreateFile(OVS_DEVICE_NAME_USER,
                               GENERIC_READ | GENERIC_WRITE,
                               FILE_SHARE_READ | FILE_SHARE_WRITE,
@@ -1191,6 +1192,7 @@ pend_io_request(struct nl_sock *sock)
 
     ovs_header = ofpbuf_put_uninit(&request, sizeof *ovs_header);
     ovs_header->dp_ifindex = 0;
+    nlmsg->nlmsg_len = request.size;
 
     if (!DeviceIoControl(sock->handle, OVS_IOCTL_WRITE,
                          request.data, request.size,

@@ -20,18 +20,21 @@
 #include "coverage.h"
 #include "dirs.h"
 #include "dp-packet.h"
+#include "flow.h"
 #include "lport.h"
-#include "ofp-actions.h"
-#include "ovn/lib/actions.h"
-#include "ovn/lib/logical-fields.h"
-#include "ofp-msgs.h"
-#include "ofp-print.h"
-#include "ofp-util.h"
-#include "ovn/lib/actions.h"
-#include "rconn.h"
+#include "ovn-controller.h"
+#include "lib/sset.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/vlog.h"
 #include "ovn-controller.h"
+#include "ovn/lib/actions.h"
+#include "ovn/lib/logical-fields.h"
+#include "ovn/lib/ovn-util.h"
 #include "poll-loop.h"
+#include "rconn.h"
 #include "socket-util.h"
 #include "timeval.h"
 #include "vswitch-idl.h"
@@ -54,6 +57,14 @@ static void run_put_arps(struct controller_ctx *,
 static void wait_put_arps(struct controller_ctx *);
 static void flush_put_arps(void);
 
+static void init_send_garps(void);
+static void destroy_send_garps(void);
+static void send_garp_wait(void);
+static void send_garp_run(const struct ovsrec_bridge *,
+                          const char *chassis_id,
+                          const struct lport_index *lports,
+                          struct hmap *local_datapaths);
+
 COVERAGE_DEFINE(pinctrl_drop_put_arp);
 
 void
@@ -62,6 +73,7 @@ pinctrl_init(void)
     swconn = rconn_create(5, 0, DSCP_DEFAULT, 1 << OFP13_VERSION);
     conn_seq_no = 0;
     init_put_arps();
+    init_send_garps();
 }
 
 static ovs_be32
@@ -266,7 +278,9 @@ pinctrl_recv(const struct ofp_header *oh, enum ofptype type)
 
 void
 pinctrl_run(struct controller_ctx *ctx, const struct lport_index *lports,
-            const struct ovsrec_bridge *br_int)
+            const struct ovsrec_bridge *br_int,
+            const char *chassis_id,
+            struct hmap *local_datapaths)
 {
     if (br_int) {
         char *target;
@@ -307,6 +321,7 @@ pinctrl_run(struct controller_ctx *ctx, const struct lport_index *lports,
     }
 
     run_put_arps(ctx, lports);
+    send_garp_run(br_int, chassis_id, lports, local_datapaths);
 }
 
 void
@@ -315,6 +330,7 @@ pinctrl_wait(struct controller_ctx *ctx)
     wait_put_arps(ctx);
     rconn_run_wait(swconn);
     rconn_recv_wait(swconn);
+    send_garp_wait();
 }
 
 void
@@ -322,6 +338,7 @@ pinctrl_destroy(void)
 {
     rconn_destroy(swconn);
     destroy_put_arps();
+    destroy_send_garps();
 }
 
 /* Implementation of the "put_arp" OVN action.  This action sends a packet to
@@ -478,9 +495,242 @@ wait_put_arps(struct controller_ctx *ctx)
 static void
 flush_put_arps(void)
 {
-    struct put_arp *pa, *next;
-    HMAP_FOR_EACH_SAFE (pa, next, hmap_node, &put_arps) {
-        hmap_remove(&put_arps, &pa->hmap_node);
+    struct put_arp *pa;
+    HMAP_FOR_EACH_POP (pa, hmap_node, &put_arps) {
         free(pa);
     }
+}
+
+/*
+ * Send gratuitous ARP for vif on localnet.
+ *
+ * When a new vif on localnet is added, gratuitous ARPs are sent announcing
+ * the port's mac,ip mapping.  On localnet, such announcements are needed for
+ * switches and routers on the broadcast segment to update their port-mac
+ * and ARP tables.
+ */
+struct garp_data {
+    struct eth_addr ea;          /* Ethernet address of port. */
+    ovs_be32 ipv4;               /* Ipv4 address of port. */
+    long long int announce_time; /* Next announcement in ms. */
+    int backoff;                 /* Backoff for the next announcement. */
+    ofp_port_t ofport;           /* ofport used to output this GARP. */
+};
+
+/* Contains GARPs to be sent. */
+static struct shash send_garp_data;
+
+/* Next GARP announcement in ms. */
+static long long int send_garp_time;
+
+static void
+init_send_garps(void)
+{
+    shash_init(&send_garp_data);
+    send_garp_time = LLONG_MAX;
+}
+
+static void
+destroy_send_garps(void)
+{
+    shash_destroy_free_data(&send_garp_data);
+}
+
+/* Add or update a vif for which GARPs need to be announced. */
+static void
+send_garp_update(const struct sbrec_port_binding *binding_rec,
+                 struct simap *localnet_ofports, struct hmap *local_datapaths)
+{
+    /* Find the localnet ofport to send this GARP. */
+    struct local_datapath *ld
+        = get_local_datapath(local_datapaths,
+                             binding_rec->datapath->tunnel_key);
+    if (!ld || !ld->localnet_port) {
+        return;
+    }
+    ofp_port_t ofport = u16_to_ofp(simap_get(localnet_ofports,
+                                             ld->localnet_port->logical_port));
+
+    /* Update GARP if it exists. */
+    struct garp_data *garp = shash_find_data(&send_garp_data,
+                                             binding_rec->logical_port);
+    if (garp) {
+        garp->ofport = ofport;
+        return;
+    }
+
+    /* Add GARP for new vif. */
+    int i;
+    for (i = 0; i < binding_rec->n_mac; i++) {
+        struct lport_addresses laddrs;
+        if (!extract_lport_addresses(binding_rec->mac[i], &laddrs, false)
+            || !laddrs.n_ipv4_addrs) {
+            continue;
+        }
+
+        struct garp_data *garp = xmalloc(sizeof *garp);
+        garp->ea = laddrs.ea;
+        garp->ipv4 = laddrs.ipv4_addrs[0].addr;
+        garp->announce_time = time_msec() + 1000;
+        garp->backoff = 1;
+        garp->ofport = ofport;
+        shash_add(&send_garp_data, binding_rec->logical_port, garp);
+
+        free(laddrs.ipv4_addrs);
+        break;
+    }
+}
+
+/* Remove a vif from GARP announcements. */
+static void
+send_garp_delete(const char *lport)
+{
+    struct garp_data *garp = shash_find_and_delete(&send_garp_data, lport);
+    free(garp);
+}
+
+static long long int
+send_garp(struct garp_data *garp, long long int current_time)
+{
+    if (current_time < garp->announce_time) {
+        return garp->announce_time;
+    }
+
+    /* Compose a GARP request packet. */
+    uint64_t packet_stub[128 / 8];
+    struct dp_packet packet;
+    dp_packet_use_stub(&packet, packet_stub, sizeof packet_stub);
+    compose_arp(&packet, ARP_OP_REQUEST, garp->ea, eth_addr_zero,
+                true, garp->ipv4, garp->ipv4);
+
+    /* Compose actions.  The garp request is output on localnet ofport. */
+    uint64_t ofpacts_stub[4096 / 8];
+    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
+    enum ofp_version version = rconn_get_version(swconn);
+    ofpact_put_OUTPUT(&ofpacts)->port = garp->ofport;
+
+    struct ofputil_packet_out po = {
+        .packet = dp_packet_data(&packet),
+        .packet_len = dp_packet_size(&packet),
+        .buffer_id = UINT32_MAX,
+        .in_port = OFPP_CONTROLLER,
+        .ofpacts = ofpacts.data,
+        .ofpacts_len = ofpacts.size,
+    };
+    enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
+    queue_msg(ofputil_encode_packet_out(&po, proto));
+    dp_packet_uninit(&packet);
+    ofpbuf_uninit(&ofpacts);
+
+    /* Set the next announcement.  At most 5 announcements are sent for a
+     * vif. */
+    if (garp->backoff < 16) {
+        garp->backoff *= 2;
+        garp->announce_time = current_time + garp->backoff * 1000;
+    } else {
+        garp->announce_time = LLONG_MAX;
+    }
+    return garp->announce_time;
+}
+
+/* Get localnet vifs, and ofport for localnet patch ports. */
+static void
+get_localnet_vifs(const struct ovsrec_bridge *br_int,
+                  const char *this_chassis_id,
+                  const struct lport_index *lports,
+                  struct hmap *local_datapaths,
+                  struct sset *localnet_vifs,
+                  struct simap *localnet_ofports)
+{
+    for (int i = 0; i < br_int->n_ports; i++) {
+        const struct ovsrec_port *port_rec = br_int->ports[i];
+        if (!strcmp(port_rec->name, br_int->name)) {
+            continue;
+        }
+        const char *chassis_id = smap_get(&port_rec->external_ids,
+                                          "ovn-chassis-id");
+        if (chassis_id && !strcmp(chassis_id, this_chassis_id)) {
+            continue;
+        }
+        const char *localnet = smap_get(&port_rec->external_ids,
+                                        "ovn-localnet-port");
+        for (int j = 0; j < port_rec->n_interfaces; j++) {
+            const struct ovsrec_interface *iface_rec = port_rec->interfaces[j];
+            if (!iface_rec->n_ofport) {
+                continue;
+            }
+            if (localnet) {
+                int64_t ofport = iface_rec->ofport[0];
+                if (ofport < 1 || ofport > ofp_to_u16(OFPP_MAX)) {
+                    continue;
+                }
+                simap_put(localnet_ofports, localnet, ofport);
+                continue;
+            }
+            const char *iface_id = smap_get(&iface_rec->external_ids,
+                                            "iface-id");
+            if (!iface_id) {
+                continue;
+            }
+            const struct sbrec_port_binding *pb
+                = lport_lookup_by_name(lports, iface_id);
+            if (!pb) {
+                continue;
+            }
+            struct local_datapath *ld
+                = get_local_datapath(local_datapaths,
+                                     pb->datapath->tunnel_key);
+            if (ld && ld->localnet_port) {
+                sset_add(localnet_vifs, iface_id);
+            }
+        }
+    }
+}
+
+static void
+send_garp_wait(void)
+{
+    poll_timer_wait_until(send_garp_time);
+}
+
+static void
+send_garp_run(const struct ovsrec_bridge *br_int, const char *chassis_id,
+              const struct lport_index *lports,
+              struct hmap *local_datapaths)
+{
+    struct sset localnet_vifs = SSET_INITIALIZER(&localnet_vifs);
+    struct simap localnet_ofports = SIMAP_INITIALIZER(&localnet_ofports);
+
+    get_localnet_vifs(br_int, chassis_id, lports, local_datapaths,
+                      &localnet_vifs, &localnet_ofports);
+
+    /* For deleted ports, remove from send_garp_data. */
+    struct shash_node *iter, *next;
+    SHASH_FOR_EACH_SAFE (iter, next, &send_garp_data) {
+        if (!sset_contains(&localnet_vifs, iter->name)) {
+            send_garp_delete(iter->name);
+        }
+    }
+
+    /* Update send_garp_data. */
+    const char *iface_id;
+    SSET_FOR_EACH (iface_id, &localnet_vifs) {
+        const struct sbrec_port_binding *pb = lport_lookup_by_name(lports,
+                                                                   iface_id);
+        if (pb) {
+            send_garp_update(pb, &localnet_ofports, local_datapaths);
+        }
+    }
+
+    /* Send GARPs, and update the next announcement. */
+    long long int current_time = time_msec();
+    send_garp_time = LLONG_MAX;
+    SHASH_FOR_EACH (iter, &send_garp_data) {
+        long long int next_announce = send_garp(iter->data, current_time);
+        if (send_garp_time > next_announce) {
+            send_garp_time = next_announce;
+        }
+    }
+    sset_destroy(&localnet_vifs);
+    simap_destroy(&localnet_ofports);
 }

@@ -47,6 +47,7 @@ __regex_added_line = re.compile(r'^\+{1,2}[^\+][\w\W]*')
 __regex_leading_with_whitespace_at_all = re.compile(r'^\s+')
 __regex_leading_with_spaces = re.compile(r'^ +[\S]+')
 __regex_trailing_whitespace = re.compile(r'[^\S]+$')
+__regex_single_line_feed = re.compile(r'^\f$')
 __regex_for_if_missing_whitespace = re.compile(r'(if|for|while)[\(]')
 __regex_for_if_too_much_whitespace = re.compile(r'(if|for|while)  +[\(]')
 __regex_for_if_parens_whitespace = re.compile(r'(if|for|while) \( +[\s\S]+\)')
@@ -55,6 +56,13 @@ skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
 skip_block_whitespace_check = False
 skip_signoff_check = False
+
+# Don't enforce character limit on files that include these characters in their
+# name, as they may have legitimate reasons to have longer lines.
+#
+# Python isn't checked as flake8 performs these checks during build.
+line_length_blacklist = ['.am', '.at', 'etc', '.in', '.m4', '.mk', '.patch',
+                         '.py']
 
 
 def is_added_line(line):
@@ -68,8 +76,10 @@ def leading_whitespace_is_spaces(line):
     """
     if skip_leading_whitespace_check:
         return True
-    if __regex_leading_with_whitespace_at_all.search(line) is not None:
+    if (__regex_leading_with_whitespace_at_all.search(line) is not None and
+            __regex_single_line_feed.search(line) is None):
         return __regex_leading_with_spaces.search(line) is not None
+
     return True
 
 
@@ -78,7 +88,8 @@ def trailing_whitespace_or_crlf(line):
     """
     if skip_trailing_whitespace_check:
         return False
-    return __regex_trailing_whitespace.search(line) is not None
+    return (__regex_trailing_whitespace.search(line) is not None and
+            __regex_single_line_feed.search(line) is None)
 
 
 def if_and_for_whitespace_checks(line):
@@ -99,14 +110,23 @@ def ovs_checkpatch_parse(text):
     co_authors = []
     parse = 0
     current_file = ''
+    previous_file = ''
     scissors = re.compile(r'^[\w]*---[\w]*')
     hunks = re.compile('^(---|\+\+\+) (\S+)')
     is_signature = re.compile(r'((\s*Signed-off-by: )(.*))$',
                               re.I | re.M | re.S)
     is_co_author = re.compile(r'(\s*(Co-authored-by: )(.*))$',
                               re.I | re.M | re.S)
+    skip_line_length_check = False
 
     for line in text.split('\n'):
+        if current_file != previous_file:
+            previous_file = current_file
+            if any([fmt in current_file for fmt in line_length_blacklist]):
+                skip_line_length_check = True
+            else:
+                skip_line_length_check = False
+
         lineno = lineno + 1
         if len(line) <= 0:
             continue
@@ -154,7 +174,7 @@ def ovs_checkpatch_parse(text):
             if trailing_whitespace_or_crlf(line[1:]):
                 print_line = True
                 print_warning("Line has trailing whitespace", lineno)
-            if len(line[1:]) > 79:
+            if len(line[1:]) > 79 and not skip_line_length_check:
                 print_line = True
                 print_warning("Line is greater than 79-characters long",
                               lineno)

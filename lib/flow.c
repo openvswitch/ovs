@@ -32,7 +32,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "hash.h"
 #include "jhash.h"
-#include "match.h"
+#include "openvswitch/match.h"
 #include "dp-packet.h"
 #include "openflow/openflow.h"
 #include "packets.h"
@@ -524,7 +524,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
         miniflow_push_uint32(mf, ct_mark, md->ct_mark);
         miniflow_pad_to_64(mf, ct_mark);
 
-        if (!ovs_u128_is_zero(&md->ct_label)) {
+        if (!ovs_u128_is_zero(md->ct_label)) {
             miniflow_push_words(mf, ct_label, &md->ct_label,
                                 sizeof md->ct_label / sizeof(uint64_t));
         }
@@ -895,7 +895,7 @@ flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
     if (flow->ct_mark != 0) {
         match_set_ct_mark(flow_metadata, flow->ct_mark);
     }
-    if (!ovs_u128_is_zero(&flow->ct_label)) {
+    if (!ovs_u128_is_zero(flow->ct_label)) {
         match_set_ct_label(flow_metadata, flow->ct_label);
     }
 }
@@ -1206,7 +1206,7 @@ flow_format(struct ds *ds, const struct flow *flow)
     if (!flow->ct_mark) {
         WC_UNMASK_FIELD(wc, ct_mark);
     }
-    if (ovs_u128_is_zero(&flow->ct_label)) {
+    if (ovs_u128_is_zero(flow->ct_label)) {
         WC_UNMASK_FIELD(wc, ct_label);
     }
     for (int i = 0; i < FLOW_N_REGS; i++) {
@@ -1405,13 +1405,13 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
         FLOWMAP_SET(map, nw_frag);
         FLOWMAP_SET(map, nw_tos);
         FLOWMAP_SET(map, nw_ttl);
+        FLOWMAP_SET(map, tp_src);
+        FLOWMAP_SET(map, tp_dst);
 
         if (OVS_UNLIKELY(flow->nw_proto == IPPROTO_IGMP)) {
             FLOWMAP_SET(map, igmp_group_ip4);
         } else {
             FLOWMAP_SET(map, tcp_flags);
-            FLOWMAP_SET(map, tp_src);
-            FLOWMAP_SET(map, tp_dst);
         }
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         FLOWMAP_SET(map, ipv6_src);
@@ -1421,6 +1421,8 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
         FLOWMAP_SET(map, nw_frag);
         FLOWMAP_SET(map, nw_tos);
         FLOWMAP_SET(map, nw_ttl);
+        FLOWMAP_SET(map, tp_src);
+        FLOWMAP_SET(map, tp_dst);
 
         if (OVS_UNLIKELY(flow->nw_proto == IPPROTO_ICMPV6)) {
             FLOWMAP_SET(map, nd_target);
@@ -1428,8 +1430,6 @@ flow_wc_map(const struct flow *flow, struct flowmap *map)
             FLOWMAP_SET(map, arp_tha);
         } else {
             FLOWMAP_SET(map, tcp_flags);
-            FLOWMAP_SET(map, tp_src);
-            FLOWMAP_SET(map, tp_dst);
         }
     } else if (eth_type_mpls(flow->dl_type)) {
         FLOWMAP_SET(map, mpls_lse);

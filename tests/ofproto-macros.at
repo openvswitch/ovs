@@ -281,7 +281,8 @@ m4_define([_OVS_VSWITCHD_START],
 /reconnect|INFO|/d
 /ofproto|INFO|using datapath ID/d
 /netdev_linux|INFO|.*device has unknown hardware address family/d
-/ofproto|INFO|datapath ID changed to fedcba9876543210/d']])
+/ofproto|INFO|datapath ID changed to fedcba9876543210/d
+/dpdk|INFO|DPDK Disabled - to change this requires a restart./d']])
 ])
 
 # OVS_VSWITCHD_START([vsctl-args], [vsctl-output], [=override])
@@ -339,7 +340,8 @@ add_of_br () {
 			  other-config:datapath-id=$dpid \
 			  other-config:hwaddr=$mac \
 			  protocols="[[OpenFlow10,OpenFlow11,OpenFlow12,\
-                                       OpenFlow13,OpenFlow14,OpenFlow15]]" \
+                                       OpenFlow13,OpenFlow14,OpenFlow15,\
+                                       OpenFlow16]]" \
         -- "$@"
 }
 

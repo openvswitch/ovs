@@ -40,6 +40,24 @@ m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
    AT_CHECK([:; $2])
   ])
 
+# CONFIGURE_VETH_OFFLOADS([VETH])
+#
+# Disable TX offloads for veths.  The userspace datapath uses the AF_PACKET
+# socket to receive packets for veths.  Unfortunately, the AF_PACKET socket
+# doesn't play well with offloads:
+# 1. GSO packets are received without segmentation and therefore discarded.
+# 2. Packets with offloaded partial checksum are received with the wrong
+#    checksum, therefore discarded by the receiver.
+#
+# By disabling tx offloads in the non-OVS side of the veth peer we make sure
+# that the AF_PACKET socket will not receive bad packets.
+#
+# This is a workaround, and should be removed when offloads are properly
+# supported in netdev-linux.
+m4_define([CONFIGURE_VETH_OFFLOADS],
+    [ethtool -K $1 tx off]
+)
+
 # CHECK_CONNTRACK()
 #
 # Perform requirements checks for running conntrack tests, and flush the

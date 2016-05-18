@@ -280,9 +280,8 @@ encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     }
 
     /* Delete any existing OVN tunnels that were not still around. */
-    struct port_hash_node *hash_node, *next_hash_node;
-    HMAP_FOR_EACH_SAFE (hash_node, next_hash_node, node, &tc.tunnel_hmap) {
-        hmap_remove(&tc.tunnel_hmap, &hash_node->node);
+    struct port_hash_node *hash_node;
+    HMAP_FOR_EACH_POP (hash_node, node, &tc.tunnel_hmap) {
         bridge_delete_port(hash_node->bridge, hash_node->port);
         free(hash_node);
     }

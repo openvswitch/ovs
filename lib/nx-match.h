@@ -22,7 +22,7 @@
 #include <netinet/in.h>
 #include "compiler.h"
 #include "flow.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 

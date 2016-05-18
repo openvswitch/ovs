@@ -21,15 +21,15 @@
 #include <inttypes.h>
 
 #include "colors.h"
-#include "openvswitch/dynamic-string.h"
 #include "multipath.h"
-#include "meta-flow.h"
 #include "nx-match.h"
-#include "openvswitch/ofpbuf.h"
-#include "ofp-actions.h"
-#include "ofp-util.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(bundle);
@@ -179,7 +179,7 @@ bundle_parse__(const char *s, char **save_ptr,
         bundle = ofpacts->header;
         bundle->n_slaves++;
     }
-    bundle = ofpact_finish(ofpacts, &bundle->ofpact);
+    ofpact_finish_BUNDLE(ofpacts, &bundle);
     bundle->basis = atoi(basis);
 
     if (!strcasecmp(fields, "eth_src")) {

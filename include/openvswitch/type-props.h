@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef TYPE_PROPS_H
-#define TYPE_PROPS_H 1
+#ifndef OPENVSWITCH_TYPE_PROPS_H
+#define OPENVSWITCH_TYPE_PROPS_H 1
 
 #include <limits.h>
 
