@@ -562,11 +562,12 @@ void ofpacts_execute_action_set(struct ofpbuf *action_list,
 /* Bits for 'flags' in struct nx_action_nat.
  */
 enum nx_nat_flags {
-    NX_NAT_F_SRC          = 1 << 0,
+    NX_NAT_F_SRC          = 1 << 0, /* Mutually exclusive with NX_NAT_F_DST. */
     NX_NAT_F_DST          = 1 << 1,
     NX_NAT_F_PERSISTENT   = 1 << 2,
-    NX_NAT_F_PROTO_HASH   = 1 << 3,
+    NX_NAT_F_PROTO_HASH   = 1 << 3, /* Mutually exclusive with PROTO_RANDOM. */
     NX_NAT_F_PROTO_RANDOM = 1 << 4,
+    NX_NAT_F_MASK = (NX_NAT_F_SRC | NX_NAT_F_DST | NX_NAT_F_PERSISTENT | NX_NAT_F_PROTO_HASH | NX_NAT_F_PROTO_RANDOM)
 };
 
 /* OFPACT_NAT.

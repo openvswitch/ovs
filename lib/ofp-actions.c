@@ -5277,6 +5277,14 @@ decode_NXAST_RAW_NAT(const struct nx_action_nat *nan,
     nat = ofpact_put_NAT(out);
     nat->flags = ntohs(nan->flags);
 
+    /* Check for unknown or mutually exclusive flags. */
+    if ((nat->flags & ~NX_NAT_F_MASK)
+        || (nat->flags & NX_NAT_F_SRC && nat->flags & NX_NAT_F_DST)
+        || (nat->flags & NX_NAT_F_PROTO_HASH
+            && nat->flags & NX_NAT_F_PROTO_RANDOM)) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
 #define NX_NAT_GET_OPT(DST, SRC, LEN, TYPE)                     \
     (LEN >= sizeof(TYPE)                                        \
      ? (memcpy(DST, SRC, sizeof(TYPE)), LEN -= sizeof(TYPE),    \
@@ -5515,16 +5523,20 @@ parse_NAT(char *arg, struct ofpbuf *ofpacts,
         }
     }
     if (on->flags & NX_NAT_F_SRC && on->flags & NX_NAT_F_DST) {
-        return xasprintf("May only specify one of \"snat\" or \"dnat\".");
+        return xasprintf("May only specify one of \"src\" or \"dst\".");
     }
     if (!(on->flags & NX_NAT_F_SRC || on->flags & NX_NAT_F_DST)) {
         if (on->flags) {
-            return xasprintf("Flags allowed only with \"snat\" or \"dnat\".");
+            return xasprintf("Flags allowed only with \"src\" or \"dst\".");
         }
         if (on->range_af != AF_UNSPEC) {
-            return xasprintf("Range allowed only with \"snat\" or \"dnat\".");
+            return xasprintf("Range allowed only with \"src\" or \"dst\".");
         }
     }
+    if (on->flags & NX_NAT_F_PROTO_HASH && on->flags & NX_NAT_F_PROTO_RANDOM) {
+        return xasprintf("Both \"hash\" and \"random\" are not allowed.");
+    }
+
     return NULL;
 }
 
