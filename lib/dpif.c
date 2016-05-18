@@ -1079,6 +1079,7 @@ dpif_flow_dump_next(struct dpif_flow_dump_thread *thread,
 
 struct dpif_execute_helper_aux {
     struct dpif *dpif;
+    const struct flow *flow;
     int error;
 };
 
@@ -1124,6 +1125,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
         }
 
         execute.packet = packet;
+        execute.flow = aux->flow;
         execute.needs_help = false;
         execute.probe = false;
         execute.mtu = 0;
@@ -1158,7 +1160,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
 static int
 dpif_execute_with_help(struct dpif *dpif, struct dpif_execute *execute)
 {
-    struct dpif_execute_helper_aux aux = {dpif, 0};
+    struct dpif_execute_helper_aux aux = {dpif, execute->flow, 0};
     struct dp_packet_batch pb;
 
     COVERAGE_INC(dpif_execute_with_help);
