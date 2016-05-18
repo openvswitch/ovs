@@ -189,6 +189,7 @@ valgrind_wrappers = \
 	tests/valgrind/test-reconnect \
 	tests/valgrind/test-rstp \
 	tests/valgrind/test-sha1 \
+	tests/valgrind/test-skiplist \
 	tests/valgrind/test-stp \
 	tests/valgrind/test-type-props \
 	tests/valgrind/test-unix-socket \
@@ -344,6 +345,7 @@ tests_ovstest_SOURCES = \
 	tests/test-rstp.c \
 	tests/test-sflow.c \
 	tests/test-sha1.c \
+	tests/test-skiplist.c \
 	tests/test-stp.c \
 	tests/test-unixctl.c \
 	tests/test-util.c \

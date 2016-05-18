@@ -1,4 +1,5 @@
 /* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (C) 2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,6 +39,7 @@
 #include <stdint.h>
 #include "compiler.h"
 #include "ovsdb-types.h"
+#include "skiplist.h"
 
 struct json;
 struct ovsdb_datum;
@@ -291,5 +293,62 @@ struct ovsdb_idl_loop {
 void ovsdb_idl_loop_destroy(struct ovsdb_idl_loop *);
 struct ovsdb_idl_txn *ovsdb_idl_loop_run(struct ovsdb_idl_loop *);
 void ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *);
+
+/*
+ * The OVSDB-IDL Compound Indexes feature allows to create custom
+ * indexes over several columns in the IDL.
+ * With those index, the developer can retrieve rows matching a search
+ * criteria, or show the rows sorted in a specific way.
+ */
+
+struct ovsdb_idl_index *
+ovsdb_idl_create_index(struct ovsdb_idl *idl,
+                       const struct ovsdb_idl_table_class *tc,
+                       const char *index_name);
+
+#define OVSDB_INDEX_DESC -1
+#define OVSDB_INDEX_ASC 1
+
+/*
+ * Skiplist comparison function. Allows to store sorted data.
+ */
+typedef int
+(column_comparator)(const void *a, const void *b);
+
+struct ovsdb_idl_index_cursor {
+    struct ovsdb_idl_index *index;    /* Index used by this cursor */
+    struct skiplist_node *position;   /* Current position in the index */
+};
+
+int ovsdb_idl_index_strcmp(char *, char *);
+int ovsdb_idl_index_intcmp(int64_t, int64_t);
+int ovsdb_idl_index_doublecmp(double, double);
+void ovsdb_idl_index_add_column(struct ovsdb_idl_index *,
+                                const struct ovsdb_idl_column *,
+                                int order,
+                                column_comparator *custom_comparer
+                                );
+bool ovsdb_idl_initialize_cursor(struct ovsdb_idl *,
+                            const struct ovsdb_idl_table_class *tc,
+                            const char *index_name,
+                            struct ovsdb_idl_index_cursor *cursor);
+void ovsdb_idl_index_write_(struct ovsdb_idl_row *,
+                            const struct ovsdb_idl_column *,
+                            struct ovsdb_datum *,
+                            const struct ovsdb_idl_table_class *);
+struct ovsdb_idl_row *ovsdb_idl_index_init_row(struct ovsdb_idl*,
+                                       const struct ovsdb_idl_table_class *);
+void ovsdb_idl_index_destroy_row__(const struct ovsdb_idl_row *);
+struct ovsdb_idl_row *ovsdb_idl_index_first(struct ovsdb_idl_index_cursor *);
+struct ovsdb_idl_row *ovsdb_idl_index_next(struct ovsdb_idl_index_cursor *);
+struct ovsdb_idl_row *ovsdb_idl_index_data(struct ovsdb_idl_index_cursor *);
+struct ovsdb_idl_row *ovsdb_idl_index_find(struct ovsdb_idl_index_cursor *,
+                                           struct ovsdb_idl_row *);
+struct ovsdb_idl_row *ovsdb_idl_index_forward_to(
+        struct ovsdb_idl_index_cursor *,
+        struct ovsdb_idl_row *);
+int ovsdb_idl_index_compare(struct ovsdb_idl_index_cursor *,
+                            struct ovsdb_idl_row *a,
+                            struct ovsdb_idl_row *b);
 
 #endif /* ovsdb-idl.h */
