@@ -64,7 +64,7 @@ struct netdev {
     struct ovs_list saved_flags_list; /* Contains "struct netdev_saved_flags". */
 };
 
-static void
+static inline void
 netdev_change_seq_changed(const struct netdev *netdev_)
 {
     struct netdev *netdev = CONST_CAST(struct netdev *, netdev_);
