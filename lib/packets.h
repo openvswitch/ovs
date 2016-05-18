@@ -110,6 +110,15 @@ struct pkt_metadata {
 };
 
 static inline void
+pkt_metadata_init_tnl(struct pkt_metadata *md)
+{
+    /* Zero up through the tunnel metadata options. The length and table
+     * are before this and as long as they are empty, the options won't
+     * be looked at. */
+    memset(md, 0, offsetof(struct pkt_metadata, tunnel.metadata.opts));
+}
+
+static inline void
 pkt_metadata_init(struct pkt_metadata *md, odp_port_t port)
 {
     /* It can be expensive to zero out all of the tunnel metadata. However,
