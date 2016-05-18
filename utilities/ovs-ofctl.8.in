@@ -1407,8 +1407,15 @@ modules are not loaded.
 This packet is tracked, meaning that it has previously traversed the connection
 tracker. If this flag is not set, then no other flags will be set. If this flag
 is set, then the packet is tracked and other flags may also be set.
+.IP "\fB0x40: snat\fR"
+This packet was transformed by source address/port translation by a
+preceding \fBct\fR action.
+.IP "\fB0x80: dnat\fR"
+This packet was transformed by destination address/port translation by
+a preceding \fBct\fR action.
 .PP
-This field was introduced in Open vSwitch 2.5.
+This field was introduced in Open vSwitch 2.5.  The \fBsnat\fR and
+\fBdnat\fR bits were added in Open vSwitch 2.6.
 .RE
 .
 .PP
@@ -1776,6 +1783,74 @@ The \fBcommit\fR parameter must be specified to use \fBalg=\fIalg\fR.
 When committing related connections, the \fBct_mark\fR for that connection is
 inherited from the current \fBct_mark\fR stored with the original connection
 (ie, the connection created by \fBct(alg=...)\fR).
+.
+.IP \fBnat\fR[\fB(\fR(\fBsrc\fR|\fBdst\fR)\fB=\fIaddr1\fR[\fB-\fIaddr2\fR][\fB:\fIport1\fR[\fB-\fIport2\fR]][\fB,\fIflags\fR]\fB)\fR]
+.
+Specify address and port translation for the connection being tracked.
+For new connections either \fBsrc\fR or \fBdst\fR argument must be
+provided to set up either source address/port translation (SNAT) or
+destination address/port translation (DNAT), respectively.  Setting up
+address translation for a new connection takes effect only if the
+\fBcommit\fR flag is also provided for the enclosing \fBct\fR action.
+A bare \fBnat\fR action will only translate the packet being processed
+in the way the connection has been set up with an earlier \fBct\fR
+action.  Also a \fBnat\fR action with \fBsrc\fR or \fBdst\fR, when
+applied to a packet belonging to an established (rather than new)
+connection, will behave the same as a bare \fBnat\fR.
+.IP
+\fBsrc\fR and \fBdst\fR options take the following arguments:
+.RS
+.IP \fIaddr1\fR[\fB-\fIaddr2\fR]
+The address range from which the translated address should be
+selected.  If only one address is given, then that address will always
+be selected, otherwise the address selection can be informed by the
+optional \fBpersistent\fR flag as described below.  Either IPv4 or
+IPv6 addresses can be provided, but both addresses must be of the same
+type, and the datapath behavior is undefined in case of providing IPv4
+address range for an IPv6 packet, or IPv6 address range for an IPv4
+packet.  IPv6 addresses must be bracketed with '[' and ']' if a port
+range is also given.
+.RE
+.
+.RS
+.IP \fIport1\fR[\fB-\fIport2\fR]
+The port range from which the translated port should be selected.  If
+only one port number is provided, then that should be selected.  In
+case of a mapping conflict the datapath may choose any other
+non-conflicting port number instead, even when no port range is
+specified.  The port number selection can be informed by the optional
+\fBrandom\fR and \fBhash\fR flags as described below.
+.RE
+.IP
+The optional flags are:
+.RS
+.IP \fBrandom\fR
+The selection of the port from the given range should be done using a
+fresh random number.  This flag is mutually exclusive with \fBhash\fR.
+.RE
+.
+.RS
+.IP \fBhash\fR
+The selection of the port from the given range should be done using a
+datapath specific hash of the packet's IP addresses and the other,
+non-mapped port number.  This flag is mutually exclusive with
+\fBrandom\fR.
+.RE
+.
+.RS
+.IP \fBpersistent\fR
+The selection of the IP address from the given range should be done so
+that the same mapping can be provided after the system restarts.
+.RE
+.IP
+If an \fBalg\fR is specified for the committing \fBct\fR action that
+also includes \fBnat\fR with a \fBsrc\fR or \fBdst\fR attribute,
+then the datapath tries to set up the helper to be NAT aware.  This
+functionality is datapath specific and may not be supported by all
+datapaths.
+.IP
+\fBnat\fR was introduced in Open vSwitch 2.6.  The first datapath that
+implements \fBct nat\fR support is the one that ships with Linux 4.6.
 .RE
 .IP
 The \fBct\fR action may be used as a primitive to construct stateful firewalls
