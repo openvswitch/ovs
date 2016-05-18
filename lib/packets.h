@@ -584,6 +584,12 @@ char *ip_parse_cidr_len(const char *s, int *n, ovs_be32 *ip,
 #define IP_ECN_MASK 0x03
 #define IP_DSCP_MASK 0xfc
 
+static inline int
+IP_ECN_is_ce(uint8_t dsfield)
+{
+    return (dsfield & IP_ECN_MASK) == IP_ECN_CE;
+}
+
 #define IP_VERSION 4
 
 #define IP_DONT_FRAGMENT  0x4000 /* Don't fragment. */
@@ -1064,5 +1070,6 @@ void compose_arp(struct dp_packet *, uint16_t arp_op,
 void compose_nd(struct dp_packet *, const struct eth_addr eth_src,
                 struct in6_addr *, struct in6_addr *);
 uint32_t packet_csum_pseudoheader(const struct ip_header *);
+void IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6);
 
 #endif /* packets.h */
