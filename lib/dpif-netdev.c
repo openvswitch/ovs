@@ -327,8 +327,8 @@ struct dp_netdev_flow {
     /* While processing a group of input packets, the datapath uses the next
      * member to store a pointer to the output batch for the flow.  It is
      * reset after the batch has been sent out (See dp_netdev_queue_batches(),
-     * packet_batch_init() and packet_batch_execute()). */
-    struct packet_batch *batch;
+     * packet_batch_per_flow_init() and packet_batch_per_flow_execute()). */
+    struct packet_batch_per_flow *batch;
 
     /* Packet classification. */
     struct dpcls_rule cr;        /* In owning dp_netdev's 'cls'. */
@@ -3329,7 +3329,7 @@ dpif_netdev_packet_get_rss_hash(struct dp_packet *packet,
     return hash;
 }
 
-struct packet_batch {
+struct packet_batch_per_flow {
     unsigned int packet_count;
     unsigned int byte_count;
     uint16_t tcp_flags;
@@ -3340,8 +3340,9 @@ struct packet_batch {
 };
 
 static inline void
-packet_batch_update(struct packet_batch *batch, struct dp_packet *packet,
-                    const struct miniflow *mf)
+packet_batch_per_flow_update(struct packet_batch_per_flow *batch,
+                             struct dp_packet *packet,
+                             const struct miniflow *mf)
 {
     batch->tcp_flags |= miniflow_get_tcp_flags(mf);
     batch->packets[batch->packet_count++] = packet;
@@ -3349,7 +3350,8 @@ packet_batch_update(struct packet_batch *batch, struct dp_packet *packet,
 }
 
 static inline void
-packet_batch_init(struct packet_batch *batch, struct dp_netdev_flow *flow)
+packet_batch_per_flow_init(struct packet_batch_per_flow *batch,
+                           struct dp_netdev_flow *flow)
 {
     flow->batch = batch;
 
@@ -3360,9 +3362,9 @@ packet_batch_init(struct packet_batch *batch, struct dp_netdev_flow *flow)
 }
 
 static inline void
-packet_batch_execute(struct packet_batch *batch,
-                     struct dp_netdev_pmd_thread *pmd,
-                     long long now)
+packet_batch_per_flow_execute(struct packet_batch_per_flow *batch,
+                              struct dp_netdev_pmd_thread *pmd,
+                              long long now)
 {
     struct dp_netdev_actions *actions;
     struct dp_netdev_flow *flow = batch->flow;
@@ -3379,16 +3381,16 @@ packet_batch_execute(struct packet_batch *batch,
 static inline void
 dp_netdev_queue_batches(struct dp_packet *pkt,
                         struct dp_netdev_flow *flow, const struct miniflow *mf,
-                        struct packet_batch *batches, size_t *n_batches)
+                        struct packet_batch_per_flow *batches, size_t *n_batches)
 {
-    struct packet_batch *batch = flow->batch;
+    struct packet_batch_per_flow *batch = flow->batch;
 
     if (OVS_UNLIKELY(!batch)) {
         batch = &batches[(*n_batches)++];
-        packet_batch_init(batch, flow);
+        packet_batch_per_flow_init(batch, flow);
     }
 
-    packet_batch_update(batch, pkt, mf);
+    packet_batch_per_flow_update(batch, pkt, mf);
 }
 
 /* Try to process all ('cnt') the 'packets' using only the exact match cache
@@ -3405,7 +3407,7 @@ dp_netdev_queue_batches(struct dp_packet *pkt,
 static inline size_t
 emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet **packets,
                size_t cnt, struct netdev_flow_key *keys,
-               struct packet_batch batches[], size_t *n_batches,
+               struct packet_batch_per_flow batches[], size_t *n_batches,
                bool md_is_valid, odp_port_t port_no)
 {
     struct emc_cache *flow_cache = &pmd->flow_cache;
@@ -3459,7 +3461,7 @@ static inline void
 fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                      struct dp_packet **packets, size_t cnt,
                      struct netdev_flow_key *keys,
-                     struct packet_batch batches[], size_t *n_batches)
+                     struct packet_batch_per_flow batches[], size_t *n_batches)
 {
 #if !defined(__CHECKER__) && !defined(_WIN32)
     const size_t PKT_ARRAY_SIZE = cnt;
@@ -3612,7 +3614,7 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
     struct netdev_flow_key keys[PKT_ARRAY_SIZE];
-    struct packet_batch batches[PKT_ARRAY_SIZE];
+    struct packet_batch_per_flow batches[PKT_ARRAY_SIZE];
     long long now = time_msec();
     size_t newcnt, n_batches, i;
 
@@ -3628,7 +3630,7 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     }
 
     for (i = 0; i < n_batches; i++) {
-        packet_batch_execute(&batches[i], pmd, now);
+        packet_batch_per_flow_execute(&batches[i], pmd, now);
     }
 }
 
