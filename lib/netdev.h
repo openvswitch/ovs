@@ -158,7 +158,7 @@ int netdev_build_header(const struct netdev *, struct ovs_action_push_tnl *data,
 int netdev_push_header(const struct netdev *netdev,
                        struct dp_packet_batch *,
                        const struct ovs_action_push_tnl *data);
-int netdev_pop_header(struct netdev *netdev, struct dp_packet_batch *);
+void netdev_pop_header(struct netdev *netdev, struct dp_packet_batch *);
 
 /* Hardware address. */
 int netdev_set_etheraddr(struct netdev *, const struct eth_addr mac);

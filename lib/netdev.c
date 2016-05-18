@@ -730,14 +730,16 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
     return error;
 }
 
-int
+void
 netdev_pop_header(struct netdev *netdev, struct dp_packet_batch *batch)
 {
     int i, n_cnt = 0;
     struct dp_packet **buffers = batch->packets;
 
     if (!netdev->netdev_class->pop_header) {
-        return EOPNOTSUPP;
+        dp_packet_delete_batch(batch, true);
+        batch->count = 0;
+        return;
     }
 
     for (i = 0; i < batch->count; i++) {
@@ -747,7 +749,6 @@ netdev_pop_header(struct netdev *netdev, struct dp_packet_batch *batch)
         }
     }
     batch->count = n_cnt;
-    return 0;
 }
 
 int

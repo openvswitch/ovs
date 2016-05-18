@@ -3751,30 +3751,25 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
             p = dp_netdev_lookup_port(dp, portno);
             if (p) {
                 struct dp_packet_batch tnl_pkt;
-                int err;
+                int i;
 
                 if (!may_steal) {
                    dp_packet_batch_clone(&tnl_pkt, packets_);
                    packets_ = &tnl_pkt;
                 }
 
-                err = netdev_pop_header(p->netdev, packets_);
+                netdev_pop_header(p->netdev, packets_);
                 if (!packets_->count) {
                     return;
                 }
-                if (!err) {
-                    int i;
 
-                    for (i = 0; i < packets_->count; i++) {
-                        packets_->packets[i]->md.in_port.odp_port = portno;
-                    }
-
-                    (*depth)++;
-                    dp_netdev_recirculate(pmd, packets_);
-                    (*depth)--;
-                } else {
-                    dp_packet_delete_batch(&tnl_pkt, !may_steal);
+                for (i = 0; i < packets_->count; i++) {
+                    packets_->packets[i]->md.in_port.odp_port = portno;
                 }
+
+                (*depth)++;
+                dp_netdev_recirculate(pmd, packets_);
+                (*depth)--;
                 return;
             }
         }
