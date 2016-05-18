@@ -3685,16 +3685,22 @@ push_tnl_action(const struct dp_netdev *dp,
 {
     struct dp_netdev_port *tun_port;
     const struct ovs_action_push_tnl *data;
+    int err;
 
     data = nl_attr_get(attr);
 
     tun_port = dp_netdev_lookup_port(dp, u32_to_odp(data->tnl_port));
     if (!tun_port) {
-        return -EINVAL;
+        err = -EINVAL;
+        goto error;
     }
-    netdev_push_header(tun_port->netdev, batch, data);
-
-    return 0;
+    err = netdev_push_header(tun_port->netdev, batch, data);
+    if (!err) {
+        return 0;
+    }
+error:
+    dp_packet_delete_batch(batch, true);
+    return err;
 }
 
 static void
@@ -3737,8 +3743,6 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
                 (*depth)++;
                 dp_netdev_recirculate(pmd, packets_);
                 (*depth)--;
-            } else {
-                dp_packet_delete_batch(&tnl_pkt, !may_steal);
             }
             return;
         }
