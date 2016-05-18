@@ -94,68 +94,6 @@
       </dd>
     </dl>
 
-    <h1>Logical Router Port Commands</h1>
-
-    <dl>
-      <dt>[<code>--may-exist</code>] <code>lrport-add</code> <var>router</var> <var>lrport</var></dt>
-      <dd>
-        <p>
-          Creates on <var>router</var> a new logical router port named
-          <var>lrport</var>.
-        </p>
-
-        <p>
-          It is an error if a logical router port named <var>lrport</var>
-          already exists, unless <code>--may-exist</code> is specified.
-          Regardless of <code>--may-exist</code>, it is an error if the
-          existing router port is in some logical router other than
-          <var>router</var>.
-        </p>
-      </dd>
-
-      <dt>[<code>--if-exists</code>] <code>lrport-del</code> <var>lrport</var></dt>
-      <dd>
-        Deletes <var>lrport</var>.  It is an error if <var>lrport</var> does
-        not exist, unless <code>--if-exists</code> is specified.
-      </dd>
-
-      <dt><code>lrport-list</code> <var>router</var></dt>
-      <dd>
-        Lists all the logical router ports within <var>router</var> on
-        standard output, one per line.
-      </dd>
-
-      <dt><code>lrport-set-mac-address</code> <var>lrport</var>
-                <var>address</var>...</dt>
-      <dd>
-        Sets the address associated with <var>lrport</var> to
-        <var>address</var>.  <var>address</var> should be either an
-        Ethernet address or an Ethernet address followed by an IP address
-        (separated by a space and quoted to form a single command-line
-        argument).  The special form <code>unknown</code> is also valid.
-      </dd>
-
-      <dt><code>lrport-get-mac-address</code> <var>lrport</var></dt>
-      <dd>
-        Lists the mac address associated with <var>lrport</var> on standard
-        output.
-      </dd>
-
-      <dt><code>lrport-set-enabled</code> <var>lrport</var> <var>state</var></dt>
-      <dd>
-        Set the administrative state of <var>lrport</var>,
-        either <code>enabled</code> or <code>disabled</code>.
-        When a port is disabled, no traffic is allowed into
-        or out of the port.
-      </dd>
-
-      <dt><code>lrport-get-enabled</code> <var>lrport</var></dt>
-      <dd>
-        Prints the administrative state of <var>lrport</var>,
-        either <code>enabled</code> or <code>disabled</code>.
-      </dd>
-
-    </dl>
     <h1>Logical Port Commands</h1>
     <dl>
       <dt>[<code>--may-exist</code>] <code>lport-add</code> <var>lswitch</var> <var>lport</var></dt>
@@ -343,6 +281,55 @@
       <dd>
         Lists all existing routers on standard output, one per line.
       </dd>
+    </dl>
+
+    <h1>Logical Router Port Commands</h1>
+
+    <dl>
+      <dt>[<code>--may-exist</code>] <code>lrp-add</code> <var>router</var> <var>port</var> <var>mac</var> <var>network</var> [<var>peer</var>]</dt>
+      <dd>
+        <p>
+          Creates on <var>router</var> a new logical router port named
+          <var>port</var> with Ethernet address <var>mac</var> and IP
+          address/netmask <var>network</var>.  If <var>peer</var> is
+          specified, it identifies a logical router port that connects
+          to this one.
+        </p>
+
+        <p>
+          It is an error if a logical router port named <var>port</var>
+          already exists, unless <code>--may-exist</code> is specified.
+          Regardless of <code>--may-exist</code>, it is an error if the
+          existing router port is in some logical router other than
+          <var>router</var>.
+        </p>
+      </dd>
+
+      <dt>[<code>--if-exists</code>] <code>lrp-del</code> <var>port</var></dt>
+      <dd>
+        Deletes <var>port</var>.  It is an error if <var>port</var> does
+        not exist, unless <code>--if-exists</code> is specified.
+      </dd>
+
+      <dt><code>lrp-list</code> <var>router</var></dt>
+      <dd>
+        Lists all the logical router ports within <var>router</var> on
+        standard output, one per line.
+      </dd>
+
+      <dt><code>lrp-set-enabled</code> <var>port</var> <var>state</var></dt>
+      <dd>
+        Set the administrative state of <var>port</var>, either
+        <code>enabled</code> or <code>disabled</code>.  When a port is
+        disabled, no traffic is allowed into or out of the port.
+      </dd>
+
+      <dt><code>lrp-get-enabled</code> <var>port</var></dt>
+      <dd>
+        Prints the administrative state of <var>port</var>, either
+        <code>enabled</code> or <code>disabled</code>.
+      </dd>
+
     </dl>
 
     <h1>Database Commands</h1>

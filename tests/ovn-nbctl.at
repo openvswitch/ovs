@@ -292,35 +292,46 @@ AT_CLEANUP
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - basic lrport commands])
+AT_SETUP([ovn-nbctl - basic logical router port commands])
 OVN_NBCTL_TEST_START
 
 AT_CHECK([ovn-nbctl lr-add lr0])
-AT_CHECK([ovn-nbctl lrport-add lr0 lrp0])
-AT_CHECK([ovn-nbctl lrport-add lr0 lrp0], [1], [],
-  [ovn-nbctl: lrp0: an lrport with this name already exists
+AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24])
+AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24], [1], [],
+  [ovn-nbctl: lrp0: a port with this name already exists
 ])
-AT_CHECK([ovn-nbctl --may-exist lrport-add lr0 lrp0])
-AT_CHECK([ovn-nbctl lrport-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24])
+AT_CHECK([ovn-nbctl lrp-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lrp0)
 ])
 
-AT_CHECK([ovn-nbctl lrport-add lr0 lrp1])
-AT_CHECK([ovn-nbctl lrport-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+AT_CHECK([ovn-nbctl lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 lrp1-peer])
+AT_CHECK([ovn-nbctl lrp-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lrp0)
 <1> (lrp1)
 ])
 
 AT_CHECK([ovn-nbctl lr-add lr1])
-AT_CHECK([ovn-nbctl lrport-add lr0 lrp1], [1], [],
-  [ovn-nbctl: lrp1: an lrport with this name already exists
-])
-AT_CHECK([ovn-nbctl --may-exist lrport-add lr1 lrp1], [1], [],
-  [ovn-nbctl: lrp1: lrport already exists but in router lr0
+AT_CHECK([ovn-nbctl lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24], [1], [],
+  [ovn-nbctl: lrp1: a port with this name already exists
 ])
 
-AT_CHECK([ovn-nbctl lrport-del lrp1])
-AT_CHECK([ovn-nbctl lrport-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr1 lrp1 00:00:00:01:02:03 192.168.1.1/24], [1], [],
+  [ovn-nbctl: lrp1: port already exists but in router lr0
+])
+
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:04:05:06 192.168.1.1/24], [1], [],
+  [ovn-nbctl: lrp1: port already exists with mac 00:00:00:01:02:03
+])
+
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24], [1], [],
+  [ovn-nbctl: lrp1: port already exists with mismatching peer
+])
+
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 lrp1-peer])
+
+AT_CHECK([ovn-nbctl lrp-del lrp1])
+AT_CHECK([ovn-nbctl lrp-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lrp0)
 ])
 
@@ -329,44 +340,23 @@ AT_CLEANUP
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - lrport addresses])
+AT_SETUP([ovn-nbctl - logical router port enable and disable])
 OVN_NBCTL_TEST_START
 
 AT_CHECK([ovn-nbctl lr-add lr0])
-AT_CHECK([ovn-nbctl lrport-add lr0 lrp0])
-AT_CHECK([ovn-nbctl lrport-get-mac-address lrp0], [0], [
+AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24])
+AT_CHECK([ovn-nbctl lrp-get-enabled lrp0], [0], [enabled
 ])
 
-AT_CHECK([ovn-nbctl lrport-set-mac-address lrp0 00:11:22:33:44:55])
-AT_CHECK([ovn-nbctl lrport-get-mac-address lrp0], [0], [00:11:22:33:44:55
+AT_CHECK([ovn-nbctl lrp-set-enabled lrp0 disabled])
+AT_CHECK([ovn-nbctl lrp-get-enabled lrp0], [0], [disabled
 ])
 
-AT_CHECK([ovn-nbctl lrport-set-mac-address lrp0])
-AT_CHECK([ovn-nbctl lrport-get-mac-address lrp0], [0], [
+AT_CHECK([ovn-nbctl lrp-set-enabled lrp0 enabled])
+AT_CHECK([ovn-nbctl lrp-get-enabled lrp0], [0], [enabled
 ])
 
-OVN_NBCTL_TEST_STOP
-AT_CLEANUP
-
-dnl ---------------------------------------------------------------------
-
-AT_SETUP([ovn-nbctl - lrport enable and disable])
-OVN_NBCTL_TEST_START
-
-AT_CHECK([ovn-nbctl lr-add lr0])
-AT_CHECK([ovn-nbctl lrport-add lr0 lrp0])
-AT_CHECK([ovn-nbctl lrport-get-enabled lrp0], [0], [enabled
-])
-
-AT_CHECK([ovn-nbctl lrport-set-enabled lrp0 disabled])
-AT_CHECK([ovn-nbctl lrport-get-enabled lrp0], [0], [disabled
-])
-
-AT_CHECK([ovn-nbctl lrport-set-enabled lrp0 enabled])
-AT_CHECK([ovn-nbctl lrport-get-enabled lrp0], [0], [enabled
-])
-
-AT_CHECK([ovn-nbctl lrport-set-enabled lrp0 xyzzy], [1], [],
+AT_CHECK([ovn-nbctl lrp-set-enabled lrp0 xyzzy], [1], [],
   [ovn-nbctl: xyzzy: state must be "enabled" or "disabled"
 ])
 

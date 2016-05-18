@@ -1266,13 +1266,11 @@ done
 ovn-nbctl lr-add lr0
 for i in 1 2 3; do
     for j in 1 2 3; do
-	lrp_uuid=`ovn-nbctl \
-	    -- --id=@lrp create Logical_Router_Port name=lrp$i$j \
-	       network=192.168.$i$j.254/24 mac='"00:00:00:00:ff:'$i$j'"' \
-	    -- add Logical_Router lr0 ports @lrp \
-	    -- lport-add ls$i lrp$i$j-attachment`
-	ovn-nbctl \
-	    set Logical_Port lrp$i$j-attachment type=router \
+	    ovn-nbctl lrp-add lr0 lrp$i$j 00:00:00:00:ff:$i$j \
+            192.168.$i$j.254/24 lrp$i$j-attachment
+	    ovn-nbctl \
+            -- lport-add ls$i lrp$i$j-attachment \
+	        -- set Logical_Port lrp$i$j-attachment type=router \
                              options:router-port=lrp$i$j \
                              addresses='"00:00:00:00:ff:'$i$j'"'
     done
@@ -2084,32 +2082,20 @@ ovn-nbctl lswitch-add ls1
 ovn-nbctl lswitch-add ls2
 
 # Connect ls1 to R1
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=ls1 \
-network=192.168.1.1/24 mac=\"00:00:00:01:02:03\" -- add Logical_Router R1 \
-ports @lrp -- lport-add ls1 rp-ls1
+ovn-nbctl lrp-add R1 ls1 00:00:00:01:02:03 192.168.1.1/24 rp-ls1
 
-ovn-nbctl set Logical_port rp-ls1 type=router options:router-port=ls1 \
-addresses=\"00:00:00:01:02:03\"
+ovn-nbctl lport-add ls1 rp-ls1 -- set Logical_port rp-ls1 type=router \
+  options:router-port=ls1 addresses=\"00:00:00:01:02:03\"
 
 # Connect ls2 to R2
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=ls2 \
-network=172.16.1.1/24 mac=\"00:00:00:01:02:04\" -- add Logical_Router R2 \
-ports @lrp -- lport-add ls2 rp-ls2
+ovn-nbctl lrp-add R2 ls2 00:00:00:01:02:04 172.16.1.1/24 rp-ls2
 
-ovn-nbctl set Logical_port rp-ls2 type=router options:router-port=ls2 \
-addresses=\"00:00:00:01:02:04\"
+ovn-nbctl lport-add ls2 rp-ls2 -- set Logical_port rp-ls2 type=router \
+  options:router-port=ls2 addresses=\"00:00:00:01:02:04\"
 
 # Connect R1 to R2
-lrp1_uuid=`ovn-nbctl -- --id=@lrp create Logical_Router_port name=R1_R2 \
-network="20.0.0.1/24" mac=\"00:00:00:02:03:04\" \
--- add Logical_Router R1 ports @lrp`
-
-lrp2_uuid=`ovn-nbctl -- --id=@lrp create Logical_Router_port name=R2_R1 \
-network="20.0.0.2/24" mac=\"00:00:00:02:03:05\" \
--- add Logical_Router R2 ports @lrp`
-
-ovn-nbctl set logical_router_port $lrp1_uuid peer="R2_R1"
-ovn-nbctl set logical_router_port $lrp2_uuid peer="R1_R2"
+ovn-nbctl lrp-add R1 R1_R2 00:00:00:02:03:04 20.0.0.1/24 R2_R1
+ovn-nbctl lrp-add R2 R2_R1 00:00:00:02:03:05 20.0.0.2/24 R1_R2
 
 ovn-nbctl set Logical_Router R1 default_gw="20.0.0.2"
 ovn-nbctl set Logical_Router R2 default_gw="20.0.0.1"
@@ -2240,20 +2226,14 @@ ovn-nbctl lswitch-add ls1
 ovn-nbctl lswitch-add ls2
 
 # Connect ls1 to R1
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=ls1 \
-network=192.168.1.1/24 mac=\"00:00:00:01:02:03\" -- add Logical_Router R1 \
-ports @lrp -- lport-add ls1 rp-ls1
-
-ovn-nbctl set Logical_port rp-ls1 type=router options:router-port=ls1 \
-addresses=\"00:00:00:01:02:03\"
+ovn-nbctl lrp-add R1 ls1 00:00:00:01:02:03 192.168.1.1/24 rp-ls1
+ovn-nbctl lport-add ls1 rp-ls1 -- set Logical_port rp-ls1 type=router \
+          options:router-port=ls1 addresses=\"00:00:00:01:02:03\"
 
 # Connect ls2 to R1
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=ls2 \
-network=172.16.1.1/24 mac=\"00:00:00:01:02:04\" -- add Logical_Router R1 \
-ports @lrp -- lport-add ls2 rp-ls2
-
-ovn-nbctl set Logical_port rp-ls2 type=router options:router-port=ls2 \
-addresses=\"00:00:00:01:02:04\"
+ovn-nbctl lrp-add R1 ls2 00:00:00:01:02:04 172.16.1.1/24 rp-ls2
+ovn-nbctl lport-add ls2 rp-ls2 -- set Logical_port rp-ls2 type=router \
+          options:router-port=ls2 addresses=\"00:00:00:01:02:04\"
 
 # Create logical port ls1-lp1 in ls1
 ovn-nbctl lport-add ls1 ls1-lp1 \
@@ -2385,40 +2365,23 @@ ovn-nbctl lswitch-add alice
 ovn-nbctl lswitch-add bob
 
 # Connect foo to R1
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=foo \
-network=192.168.1.1/24 mac=\"00:00:00:01:02:03\" -- add Logical_Router R1 \
-ports @lrp -- lport-add foo rp-foo
-
-ovn-nbctl set Logical_port rp-foo type=router options:router-port=foo \
-addresses=\"00:00:00:01:02:03\"
+ovn-nbctl lrp-add R1 foo 00:00:00:01:02:03 192.168.1.1/24 rp-foo
+ovn-nbctl lport-add foo rp-foo -- set Logical_port rp-foo type=router \
+          options:router-port=foo addresses=\"00:00:00:01:02:03\"
 
 # Connect alice to R2
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=alice \
-network=172.16.1.1/24 mac=\"00:00:00:01:02:04\" -- add Logical_Router R2 \
-ports @lrp -- lport-add alice rp-alice
-
-ovn-nbctl set Logical_port rp-alice type=router options:router-port=alice \
-addresses=\"00:00:00:01:02:04\"
+ovn-nbctl lrp-add R2 alice 00:00:00:01:02:04 172.16.1.1/24 rp-alice
+ovn-nbctl lport-add alice rp-alice -- set Logical_port rp-alice type=router \
+          options:router-port=alice addresses=\"00:00:00:01:02:04\"
 
 # Connect bob to R2
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=bob \
-network=172.16.2.1/24 mac=\"00:00:00:01:02:05\" -- add Logical_Router R2 \
-ports @lrp -- lport-add bob rp-bob
-
-ovn-nbctl set Logical_port rp-bob type=router options:router-port=bob \
-addresses=\"00:00:00:01:02:05\"
+ovn-nbctl lrp-add R2 bob 00:00:00:01:02:05 172.16.2.1/24 rp-bob
+ovn-nbctl lport-add bob rp-bob -- set Logical_port rp-bob type=router \
+          options:router-port=bob addresses=\"00:00:00:01:02:05\"
 
 # Connect R1 to R2
-lrp1_uuid=`ovn-nbctl -- --id=@lrp create Logical_Router_port name=R1_R2 \
-network="20.0.0.1/24" mac=\"00:00:00:02:03:04\" \
--- add Logical_Router R1 ports @lrp`
-
-lrp2_uuid=`ovn-nbctl -- --id=@lrp create Logical_Router_port name=R2_R1 \
-network="20.0.0.2/24" mac=\"00:00:00:02:03:05\" \
--- add Logical_Router R2 ports @lrp`
-
-ovn-nbctl set logical_router_port $lrp1_uuid peer="R2_R1"
-ovn-nbctl set logical_router_port $lrp2_uuid peer="R1_R2"
+ovn-nbctl lrp-add R1 R1_R2 00:00:00:02:03:04 20.0.0.1/24 R2_R1
+ovn-nbctl lrp-add R2 R2_R1 00:00:00:02:03:05 20.0.0.2/24 R1_R2
 
 #install static routes
 ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
@@ -2655,53 +2618,35 @@ ovn-nbctl lswitch-add bob
 ovn-nbctl lswitch-add join
 
 # Connect foo to R1
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=foo \
-network=192.168.1.1/24 mac=\"00:00:01:01:02:03\" -- add Logical_Router R1 \
-ports @lrp -- lport-add foo rp-foo
-
-ovn-nbctl set Logical_port rp-foo type=router options:router-port=foo \
-addresses=\"00:00:01:01:02:03\"
+ovn-nbctl lrp-add R1 foo 00:00:01:01:02:03 192.168.1.1/24
+ovn-nbctl lport-add foo rp-foo -- set Logical_port rp-foo type=router \
+    options:router-port=foo addresses=\"00:00:01:01:02:03\"
 
 # Connect alice to R2
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=alice \
-network=172.16.1.1/24 mac=\"00:00:02:01:02:03\" -- add Logical_Router R2 \
-ports @lrp -- lport-add alice rp-alice
-
-ovn-nbctl set Logical_port rp-alice type=router options:router-port=alice \
-addresses=\"00:00:02:01:02:03\"
+ovn-nbctl lrp-add R2 alice 00:00:02:01:02:03 172.16.1.1/24
+ovn-nbctl lport-add alice rp-alice -- set Logical_port rp-alice type=router \
+    options:router-port=alice addresses=\"00:00:02:01:02:03\"
 
 # Connect bob to R3
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=bob \
-network=10.32.1.1/24 mac=\"00:00:03:01:02:03\" -- add Logical_Router R3 \
-ports @lrp -- lport-add bob rp-bob
-
-ovn-nbctl set Logical_port rp-bob type=router options:router-port=bob \
-addresses=\"00:00:03:01:02:03\"
+ovn-nbctl lrp-add R3 bob 00:00:03:01:02:03 10.32.1.1/24
+ovn-nbctl lport-add bob rp-bob -- set Logical_port rp-bob type=router \
+    options:router-port=bob addresses=\"00:00:03:01:02:03\"
 
 # Connect R1 to join
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=R1_join \
-network=20.0.0.1/24 mac=\"00:00:04:01:02:03\" -- add Logical_Router R1 \
-ports @lrp -- lport-add join r1-join
-
-ovn-nbctl set Logical_port r1-join type=router options:router-port=R1_join \
-addresses='"00:00:04:01:02:03"'
+ovn-nbctl lrp-add R1 R1_join 00:00:04:01:02:03 20.0.0.1/24
+ovn-nbctl lport-add join r1-join -- set Logical_port r1-join type=router \
+    options:router-port=R1_join addresses='"00:00:04:01:02:03"'
 
 # Connect R2 to join
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=R2_join \
-network=20.0.0.2/24 mac=\"00:00:04:01:02:04\" -- add Logical_Router R2 \
-ports @lrp -- lport-add join r2-join
-
-ovn-nbctl set Logical_port r2-join type=router options:router-port=R2_join \
-addresses='"00:00:04:01:02:04"'
+ovn-nbctl lrp-add R2 R2_join 00:00:04:01:02:04 20.0.0.2/24
+ovn-nbctl lport-add join r2-join -- set Logical_port r2-join type=router \
+    options:router-port=R2_join addresses='"00:00:04:01:02:04"'
 
 
 # Connect R3 to join
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=R3_join \
-network=20.0.0.3/24 mac=\"00:00:04:01:02:05\" -- add Logical_Router R3 \
-ports @lrp -- lport-add join r3-join
-
-ovn-nbctl set Logical_port r3-join type=router options:router-port=R3_join \
-addresses='"00:00:04:01:02:05"'
+ovn-nbctl lrp-add R3 R3_join 00:00:04:01:02:05 20.0.0.3/24
+ovn-nbctl lport-add join r3-join -- set Logical_port r3-join type=router \
+    options:router-port=R3_join addresses='"00:00:04:01:02:05"'
 
 #install static routes
 ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
@@ -2922,37 +2867,24 @@ ovn-nbctl lswitch-add alice
 ovn-nbctl lswitch-add join
 
 # Connect foo to R1
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=foo \
-network=192.168.1.1/24 mac=\"00:00:01:01:02:03\" -- add Logical_Router R1 \
-ports @lrp -- lport-add foo rp-foo
-
-ovn-nbctl set Logical_port rp-foo type=router options:router-port=foo \
-addresses=\"00:00:01:01:02:03\"
+ovn-nbctl lrp-add R1 foo 00:00:01:01:02:03 192.168.1.1/24
+ovn-nbctl lport-add foo rp-foo -- set Logical_port rp-foo type=router \
+    options:router-port=foo addresses=\"00:00:01:01:02:03\"
 
 # Connect alice to R2
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=alice \
-network=172.16.1.1/24 mac=\"00:00:02:01:02:03\" -- add Logical_Router R2 \
-ports @lrp -- lport-add alice rp-alice
-
-ovn-nbctl set Logical_port rp-alice type=router options:router-port=alice \
-addresses=\"00:00:02:01:02:03\"
-
+ovn-nbctl lrp-add R2 alice 00:00:02:01:02:03 172.16.1.1/24
+ovn-nbctl lport-add alice rp-alice -- set Logical_port rp-alice type=router \
+    options:router-port=alice addresses=\"00:00:02:01:02:03\"
 
 # Connect R1 to join
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=R1_join \
-network=20.0.0.1/24 mac=\"00:00:04:01:02:03\" -- add Logical_Router R1 \
-ports @lrp -- lport-add join r1-join
-
-ovn-nbctl set Logical_port r1-join type=router options:router-port=R1_join \
-addresses='"00:00:04:01:02:03"'
+ovn-nbctl lrp-add R1 R1_join 00:00:04:01:02:03 20.0.0.1/24
+ovn-nbctl lport-add join r1-join -- set Logical_port r1-join type=router \
+    options:router-port=R1_join addresses='"00:00:04:01:02:03"'
 
 # Connect R2 to join
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=R2_join \
-network=20.0.0.2/24 mac=\"00:00:04:01:02:04\" -- add Logical_Router R2 \
-ports @lrp -- lport-add join r2-join
-
-ovn-nbctl set Logical_port r2-join type=router options:router-port=R2_join \
-addresses='"00:00:04:01:02:04"'
+ovn-nbctl lrp-add R2 R2_join 00:00:04:01:02:04 20.0.0.2/24
+ovn-nbctl lport-add join r2-join -- set Logical_port r2-join type=router \
+    options:router-port=R2_join addresses='"00:00:04:01:02:04"'
 
 
 #install static routes
@@ -3070,20 +3002,14 @@ ovn-nbctl lswitch-add ls1
 ovn-nbctl lswitch-add ls2
 
 # Connect ls1 to R1
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=ls1 \
-network=192.168.1.1/24 mac=\"00:00:00:01:02:f1\" -- add Logical_Router R1 \
-ports @lrp -- lport-add ls1 rp-ls1
-
-ovn-nbctl set Logical_port rp-ls1 type=router options:router-port=ls1 \
-addresses=\"00:00:00:01:02:f1\"
+ovn-nbctl lrp-add R1 ls1 00:00:00:01:02:f1 192.168.1.1/24
+ovn-nbctl lport-add ls1 rp-ls1 -- set Logical_port rp-ls1 type=router \
+    options:router-port=ls1 addresses=\"00:00:00:01:02:f1\"
 
 # Connect ls2 to R1
-ovn-nbctl -- --id=@lrp create Logical_Router_port name=ls2 \
-network=172.16.1.1/24 mac=\"00:00:00:01:02:f2\" -- add Logical_Router R1 \
-ports @lrp -- lport-add ls2 rp-ls2
-
-ovn-nbctl set Logical_port rp-ls2 type=router options:router-port=ls2 \
-addresses=\"00:00:00:01:02:f2\"
+ovn-nbctl lrp-add R1 ls2 00:00:00:01:02:f2 172.16.1.1/24
+ovn-nbctl lport-add ls2 rp-ls2 -- set Logical_port rp-ls2 type=router \
+    options:router-port=ls2 addresses=\"00:00:00:01:02:f2\"
 
 # Create logical port ls1-lp1 in ls1
 ovn-nbctl lport-add ls1 ls1-lp1 \

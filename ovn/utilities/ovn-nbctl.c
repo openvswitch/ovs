@@ -307,19 +307,6 @@ ACL commands:\n\
                             remove ACLs from LSWITCH\n\
   acl-list LSWITCH          print ACLs for LSWITCH\n\
 \n\
-Logical router port commands:\n\
-  lrport-add ROUTER LRPORT  add logical router port LRPORT to ROUTER\n\
-  lrport-del LRPORT         delete LRPORT from its attached router\n\
-  lrport-list ROUTER        print the names of all logical ports on ROUTER\n\
-  lrport-set-mac-address LRPORT [ADDRESS]\n\
-                            set MAC address for LRPORT.\n\
-  lrport-get-mac-address LRPORT      get MAC addresses on LRPORT\n\
-  lrport-set-enabled LRPORT STATE\n\
-                            set administrative state LRPORT\n\
-                            ('enabled' or 'disabled')\n\
-  lrport-get-enabled LRPORT   get administrative state LRPORT\n\
-                            ('enabled' or 'disabled')\n\
-\n\
 Logical port commands:\n\
   lport-add LSWITCH LPORT   add logical port LPORT on LSWITCH\n\
   lport-add LSWITCH LPORT PARENT TAG\n\
@@ -351,6 +338,17 @@ Logical router commands:\n\
   lr-add [ROUTER]           create a logical router named ROUTER\n\
   lr-del ROUTER             delete ROUTER and all its ports\n\
   lr-list                   print the names of all logical routers\n\
+\n\
+Logical router port commands:\n\
+  lrp-add ROUTER PORT MAC NETWORK [PEER]\n\
+                            add logical port PORT on ROUTER\n\
+  lrp-del PORT              delete PORT from its attached router\n\
+  lrp-list ROUTER           print the names of all ports on ROUTER\n\
+  lrp-set-enabled PORT STATE\n\
+                            set administrative state PORT\n\
+                            ('enabled' or 'disabled')\n\
+  lrp-get-enabled PORT      get administrative state PORT\n\
+                            ('enabled' or 'disabled')\n\
 \n\
 %s\
 \n\
@@ -451,11 +449,11 @@ print_lr(const struct nbrec_logical_router *lr, struct ds *s)
                   UUID_ARGS(&lr->header_.uuid), lr->name);
 
     for (size_t i = 0; i < lr->n_ports; i++) {
-        const struct nbrec_logical_router_port *lrport = lr->ports[i];
-        ds_put_format(s, "        lrport %s\n", lrport->name);
-        if (lrport->mac) {
+        const struct nbrec_logical_router_port *lrp = lr->ports[i];
+        ds_put_format(s, "        port %s\n", lrp->name);
+        if (lrp->mac) {
             ds_put_cstr(s, "            mac: ");
-            ds_put_format(s, "\"%s\"", lrport->mac);
+            ds_put_format(s, "\"%s\"", lrp->mac);
         }
         ds_put_format(s, "\n");
     }
@@ -590,37 +588,6 @@ nbctl_lswitch_list(struct ctl_context *ctx)
     free(nodes);
 }
 
-/* Find the lrport given its id. */
-static const struct nbrec_logical_router_port *
-lrport_by_name_or_uuid(struct ctl_context *ctx, const char *id,
-                       bool must_exist)
-{
-    const struct nbrec_logical_router_port *lrport = NULL;
-    bool is_uuid = false;
-    struct uuid lrport_uuid;
-
-    if (uuid_from_string(&lrport_uuid, id)) {
-        is_uuid = true;
-        lrport = nbrec_logical_router_port_get_for_uuid(ctx->idl,
-                                                        &lrport_uuid);
-    }
-
-    if (!lrport) {
-        NBREC_LOGICAL_ROUTER_PORT_FOR_EACH(lrport, ctx->idl) {
-            if (!strcmp(lrport->name, id)) {
-                break;
-            }
-        }
-    }
-
-    if (!lrport && must_exist) {
-        ctl_fatal("%s: lrport with this %s not found",
-                  id, is_uuid ? "name" : "UUID");
-    }
-
-    return lrport;
-}
-
 static const struct nbrec_logical_port *
 lport_by_name_or_uuid(struct ctl_context *ctx, const char *id,
                       bool must_exist)
@@ -667,25 +634,6 @@ lport_to_lswitch(const struct ovsdb_idl *idl,
               lport->name);
 }
 
-/* Returns the logical router that contains 'lport'. */
-static const struct nbrec_logical_router *
-lrport_to_lr(const struct ovsdb_idl *idl,
-             const struct nbrec_logical_router_port *lrport)
-{
-    const struct nbrec_logical_router *lr;
-    NBREC_LOGICAL_ROUTER_FOR_EACH (lr, idl) {
-        for (size_t i = 0; i < lr->n_ports; i++) {
-            if (lr->ports[i] == lrport) {
-                return lr;
-            }
-        }
-    }
-
-    /* Can't happen because of the database schema */
-    ctl_fatal("logical port %s is not part of any logical router",
-              lrport->name);
-}
-
 static const char *
 lswitch_get_name(const struct nbrec_logical_switch *lswitch,
                  char uuid_s[UUID_LEN + 1], size_t uuid_s_size)
@@ -694,17 +642,6 @@ lswitch_get_name(const struct nbrec_logical_switch *lswitch,
         return lswitch->name;
     }
     snprintf(uuid_s, uuid_s_size, UUID_FMT, UUID_ARGS(&lswitch->header_.uuid));
-    return uuid_s;
-}
-
-static const char *
-lr_get_name(const struct nbrec_logical_router *lr,
-            char uuid_s[UUID_LEN + 1], size_t uuid_s_size)
-{
-    if (lr->name[0]) {
-        return lr->name;
-    }
-    snprintf(uuid_s, uuid_s_size, UUID_FMT, UUID_ARGS(&lr->header_.uuid));
     return uuid_s;
 }
 
@@ -792,26 +729,6 @@ nbctl_lport_add(struct ctl_context *ctx)
                                              lport);
     nbrec_logical_switch_set_ports(lswitch, new_ports, lswitch->n_ports + 1);
     free(new_ports);
-}
-
-/* Removes lrport 'lr->ports[idx]' from logical router. */
-static void
-remove_lrport(const struct nbrec_logical_router *lr, size_t idx)
-{
-    const struct nbrec_logical_router_port *lrport = lr->ports[idx];
-
-    /* First remove 'lrport' from the array of ports.  This is what will
-     * actually cause the logical port to be deleted when the transaction is
-     * sent to the database server (due to garbage collection). */
-    struct nbrec_logical_router_port **new_ports
-        = xmemdup(lr->ports, sizeof *new_ports * lr->n_ports);
-    new_ports[idx] = new_ports[lr->n_ports - 1];
-    nbrec_logical_router_verify_ports(lr);
-    nbrec_logical_router_set_ports(lr, new_ports, lr->n_ports - 1);
-    free(new_ports);
-
-    /* Delete 'lrport' from the IDL. */
-    nbrec_logical_router_port_delete(lrport);
 }
 
 /* Removes lport 'lswitch->ports[idx]'. */
@@ -910,26 +827,6 @@ nbctl_lport_get_tag(struct ctl_context *ctx)
     }
 }
 
-/* Set the MAC address of lrport. */
-static void
-nbctl_lrport_set_mac(struct ctl_context *ctx)
-{
-    struct eth_addr ea;
-    const char *id = ctx->argv[1];
-    const struct nbrec_logical_router_port *lrport;
-
-    lrport = lrport_by_name_or_uuid(ctx, id, true);
-
-    const char *mac = ctx->argc > 2 ? ctx->argv[2] : "";
-    if (mac[0] && !ovs_scan(ctx->argv[2], ETH_ADDR_SCAN_FMT,
-                            ETH_ADDR_SCAN_ARGS(ea))) {
-        ctl_fatal("%s: invalid MAC address format", mac);
-        return;
-    }
-
-    nbrec_logical_router_port_set_mac(lrport, mac);
-}
-
 static void
 nbctl_lport_set_addresses(struct ctl_context *ctx)
 {
@@ -954,20 +851,6 @@ nbctl_lport_set_addresses(struct ctl_context *ctx)
 
     nbrec_logical_port_set_addresses(lport,
             (const char **) ctx->argv + 2, ctx->argc - 2);
-}
-
-/* Following function prints the mac address of the lrport. */
-static void
-nbctl_lrport_get_mac(struct ctl_context *ctx)
-{
-    const char *id = ctx->argv[1];
-    const struct nbrec_logical_router_port *lrport;
-
-    lrport = lrport_by_name_or_uuid(ctx, id, true);
-    if (!lrport) {
-        return;
-    }
-    ds_put_format(&ctx->output, "%s\n", lrport->mac);
 }
 
 static void
@@ -1047,23 +930,6 @@ parse_enabled(const char *state)
     }
 }
 
-/* Set the lrport admin-enabled state. */
-static void
-nbctl_lrport_set_enabled(struct ctl_context *ctx)
-{
-    const char *id = ctx->argv[1];
-    const char *state = ctx->argv[2];
-    const struct nbrec_logical_router_port *lrport;
-
-    lrport = lrport_by_name_or_uuid(ctx, id, true);
-    if (!lrport) {
-        return;
-    }
-
-    bool enabled = parse_enabled(state);
-    nbrec_logical_router_port_set_enabled(lrport, &enabled, 1);
-}
-
 static void
 nbctl_lport_set_enabled(struct ctl_context *ctx)
 {
@@ -1074,23 +940,6 @@ nbctl_lport_set_enabled(struct ctl_context *ctx)
     lport = lport_by_name_or_uuid(ctx, id, true);
     bool enabled = parse_enabled(state);
     nbrec_logical_port_set_enabled(lport, &enabled, 1);
-}
-
-/* Print admin-enabled state for lrport. */
-static void
-nbctl_lrport_get_enabled(struct ctl_context *ctx)
-{
-    const char *id = ctx->argv[1];
-    const struct nbrec_logical_router_port *lrport;
-
-    lrport = lrport_by_name_or_uuid(ctx, id, true);
-    if (!lrport) {
-        return;
-    }
-
-    ds_put_format(&ctx->output, "%s\n",
-                  !lrport->enabled ||
-                  *lrport->enabled ? "enabled" : "disabled");
 }
 
 static void
@@ -1420,6 +1269,258 @@ nbctl_lr_list(struct ctl_context *ctx)
     free(nodes);
 }
 
+static const struct nbrec_logical_router_port *
+lrp_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
+{
+    const struct nbrec_logical_router_port *lrp = NULL;
+
+    struct uuid lrp_uuid;
+    bool is_uuid = uuid_from_string(&lrp_uuid, id);
+    if (is_uuid) {
+        lrp = nbrec_logical_router_port_get_for_uuid(ctx->idl, &lrp_uuid);
+    }
+
+    if (!lrp) {
+        NBREC_LOGICAL_ROUTER_PORT_FOR_EACH(lrp, ctx->idl) {
+            if (!strcmp(lrp->name, id)) {
+                break;
+            }
+        }
+    }
+
+    if (!lrp && must_exist) {
+        ctl_fatal("%s: port %s not found", id, is_uuid ? "UUID" : "name");
+    }
+
+    return lrp;
+}
+
+/* Returns the logical router that contains 'lrp'. */
+static const struct nbrec_logical_router *
+lrp_to_lr(const struct ovsdb_idl *idl,
+               const struct nbrec_logical_router_port *lrp)
+{
+    const struct nbrec_logical_router *lr;
+    NBREC_LOGICAL_ROUTER_FOR_EACH (lr, idl) {
+        for (size_t i = 0; i < lr->n_ports; i++) {
+            if (lr->ports[i] == lrp) {
+                return lr;
+            }
+        }
+    }
+
+    /* Can't happen because of the database schema */
+    ctl_fatal("port %s is not part of any logical router",
+              lrp->name);
+}
+
+static const char *
+lr_get_name(const struct nbrec_logical_router *lr, char uuid_s[UUID_LEN + 1],
+            size_t uuid_s_size)
+{
+    if (lr->name[0]) {
+        return lr->name;
+    }
+    snprintf(uuid_s, uuid_s_size, UUID_FMT, UUID_ARGS(&lr->header_.uuid));
+    return uuid_s;
+}
+
+static void
+nbctl_lrp_add(struct ctl_context *ctx)
+{
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
+
+    const struct nbrec_logical_router *lr;
+    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    const char *lrp_name = ctx->argv[2];
+    const char *mac = ctx->argv[3];
+    const char *network = ctx->argv[4];
+    const char *peer = (ctx->argc == 6) ? ctx->argv[5] : NULL;
+
+    const struct nbrec_logical_router_port *lrp;
+    lrp = lrp_by_name_or_uuid(ctx, lrp_name, false);
+    if (lrp) {
+        if (!may_exist) {
+            ctl_fatal("%s: a port with this name already exists",
+                      lrp_name);
+        }
+
+        const struct nbrec_logical_router *bound_lr;
+        bound_lr = lrp_to_lr(ctx->idl, lrp);
+        if (bound_lr != lr) {
+            char uuid_s[UUID_LEN + 1];
+            ctl_fatal("%s: port already exists but in router %s", lrp_name,
+                      lr_get_name(bound_lr, uuid_s, sizeof uuid_s));
+        }
+
+        if (strcmp(mac, lrp->mac)) {
+            ctl_fatal("%s: port already exists with mac %s", lrp_name,
+                      lrp->mac);
+        }
+
+        if (strcmp(network, lrp->network)) {
+            ctl_fatal("%s: port already exists with network %s", lrp_name,
+                      lrp->network);
+        }
+
+        if ((!peer != !lrp->peer) ||
+                (lrp->peer && strcmp(peer, lrp->peer))) {
+            ctl_fatal("%s: port already exists with mismatching peer",
+                      lrp_name);
+        }
+
+        return;
+    }
+
+    struct eth_addr ea;
+    if (!ovs_scan(mac, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(ea))) {
+        ctl_fatal("%s: invalid mac address.", mac);
+    }
+
+    ovs_be32 ip;
+    unsigned int plen;
+    char *error = ip_parse_cidr(network, &ip, &plen);
+    if (error) {
+        free(error);
+        struct in6_addr ipv6;
+        error = ipv6_parse_cidr(network, &ipv6, &plen);
+        if (error) {
+            free(error);
+            ctl_fatal("%s: invalid network address.", network);
+        }
+    }
+
+    /* Create the logical port. */
+    lrp = nbrec_logical_router_port_insert(ctx->txn);
+    nbrec_logical_router_port_set_name(lrp, lrp_name);
+    nbrec_logical_router_port_set_mac(lrp, mac);
+    nbrec_logical_router_port_set_network(lrp, network);
+    if (peer) {
+        nbrec_logical_router_port_set_peer(lrp, peer);
+    }
+
+    /* Insert the logical port into the logical router. */
+    nbrec_logical_router_verify_ports(lr);
+    struct nbrec_logical_router_port **new_ports = xmalloc(sizeof *new_ports *
+                                                        (lr->n_ports + 1));
+    memcpy(new_ports, lr->ports, sizeof *new_ports * lr->n_ports);
+    new_ports[lr->n_ports] = CONST_CAST(struct nbrec_logical_router_port *,
+                                             lrp);
+    nbrec_logical_router_set_ports(lr, new_ports, lr->n_ports + 1);
+    free(new_ports);
+}
+
+/* Removes logical router port 'lr->ports[idx]'. */
+static void
+remove_lrp(const struct nbrec_logical_router *lr, size_t idx)
+{
+    const struct nbrec_logical_router_port *lrp = lr->ports[idx];
+
+    /* First remove 'lrp' from the array of ports.  This is what will
+     * actually cause the logical port to be deleted when the transaction is
+     * sent to the database server (due to garbage collection). */
+    struct nbrec_logical_router_port **new_ports
+        = xmemdup(lr->ports, sizeof *new_ports * lr->n_ports);
+    new_ports[idx] = new_ports[lr->n_ports - 1];
+    nbrec_logical_router_verify_ports(lr);
+    nbrec_logical_router_set_ports(lr, new_ports, lr->n_ports - 1);
+    free(new_ports);
+
+    /* Delete 'lrp' from the IDL.  This won't have a real effect on
+     * the database server (the IDL will suppress it in fact) but it
+     * means that it won't show up when we iterate with
+     * NBREC_LOGICAL_ROUTER_PORT_FOR_EACH later. */
+    nbrec_logical_router_port_delete(lrp);
+}
+
+static void
+nbctl_lrp_del(struct ctl_context *ctx)
+{
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
+    const struct nbrec_logical_router_port *lrp;
+
+    lrp = lrp_by_name_or_uuid(ctx, ctx->argv[1], must_exist);
+    if (!lrp) {
+        return;
+    }
+
+    /* Find the router that contains 'lrp', then delete it. */
+    const struct nbrec_logical_router *lr;
+    NBREC_LOGICAL_ROUTER_FOR_EACH (lr, ctx->idl) {
+        for (size_t i = 0; i < lr->n_ports; i++) {
+            if (lr->ports[i] == lrp) {
+                remove_lrp(lr, i);
+                return;
+            }
+        }
+    }
+
+    /* Can't happen because of the database schema. */
+    ctl_fatal("logical port %s is not part of any logical router",
+              ctx->argv[1]);
+}
+
+/* Print a list of logical router ports. */
+static void
+nbctl_lrp_list(struct ctl_context *ctx)
+{
+    const char *id = ctx->argv[1];
+    const struct nbrec_logical_router *lr;
+    struct smap lrps;
+    size_t i;
+
+    lr = lr_by_name_or_uuid(ctx, id, true);
+
+    smap_init(&lrps);
+    for (i = 0; i < lr->n_ports; i++) {
+        const struct nbrec_logical_router_port *lrp = lr->ports[i];
+        smap_add_format(&lrps, lrp->name, UUID_FMT " (%s)",
+                        UUID_ARGS(&lrp->header_.uuid), lrp->name);
+    }
+    const struct smap_node **nodes = smap_sort(&lrps);
+    for (i = 0; i < smap_count(&lrps); i++) {
+        const struct smap_node *node = nodes[i];
+        ds_put_format(&ctx->output, "%s\n", node->value);
+    }
+    smap_destroy(&lrps);
+    free(nodes);
+}
+
+/* Set the logical router port admin-enabled state. */
+static void
+nbctl_lrp_set_enabled(struct ctl_context *ctx)
+{
+    const char *id = ctx->argv[1];
+    const char *state = ctx->argv[2];
+    const struct nbrec_logical_router_port *lrp;
+
+    lrp = lrp_by_name_or_uuid(ctx, id, true);
+    if (!lrp) {
+        return;
+    }
+
+    bool enabled = parse_enabled(state);
+    nbrec_logical_router_port_set_enabled(lrp, &enabled, 1);
+}
+
+/* Print admin-enabled state for logical router port. */
+static void
+nbctl_lrp_get_enabled(struct ctl_context *ctx)
+{
+    const char *id = ctx->argv[1];
+    const struct nbrec_logical_router_port *lrp;
+
+    lrp = lrp_by_name_or_uuid(ctx, id, true);
+    if (!lrp) {
+        return;
+    }
+
+    ds_put_format(&ctx->output, "%s\n",
+                  !lrp->enabled ||
+                  *lrp->enabled ? "enabled" : "disabled");
+}
+
 static const struct ctl_table_class tables[] = {
     {&nbrec_table_logical_switch,
      {{&nbrec_table_logical_switch, &nbrec_logical_switch_col_name, NULL},
@@ -1649,105 +1750,6 @@ nbctl_exit(int status)
     exit(status);
 }
 
-/* Print a list of lrports. */
-static void
-nbctl_lrport_list(struct ctl_context *ctx)
-{
-    const char *id = ctx->argv[1];
-    const struct nbrec_logical_router *lr;
-    struct smap lports;
-    size_t i;
-
-    lr = lr_by_name_or_uuid(ctx, id, true);
-
-    smap_init(&lports);
-    for (i = 0; i < lr->n_ports; i++) {
-        const struct nbrec_logical_router_port *lport = lr->ports[i];
-        smap_add_format(&lports, lport->name, UUID_FMT " (%s)",
-                        UUID_ARGS(&lport->header_.uuid), lport->name);
-    }
-    const struct smap_node **nodes = smap_sort(&lports);
-    for (i = 0; i < smap_count(&lports); i++) {
-        const struct smap_node *node = nodes[i];
-        ds_put_format(&ctx->output, "%s\n", node->value);
-    }
-    smap_destroy(&lports);
-    free(nodes);
-}
-
-/* Add an lrport to the logical router. */
-static void
-nbctl_lrport_add(struct ctl_context *ctx)
-{
-    bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
-
-    const struct nbrec_logical_router *lr;
-    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
-
-    const char *lrport_name = ctx->argv[2];
-    const struct nbrec_logical_router_port *lrport;
-
-    lrport = lrport_by_name_or_uuid(ctx, lrport_name, false);
-    if (lrport) {
-        if (!may_exist) {
-            ctl_fatal("%s: an lrport with this name already exists",
-                      lrport_name);
-        }
-
-        const struct nbrec_logical_router *bound_lr;
-        bound_lr = lrport_to_lr(ctx->idl, lrport);
-        if (bound_lr != lr) {
-            char uuid_s[UUID_LEN + 1];
-            ctl_fatal("%s: lrport already exists but in router %s",
-                      lrport_name,
-                      lr_get_name(bound_lr, uuid_s, sizeof uuid_s));
-        }
-
-        return;
-    }
-
-    /* Create the logical router port. */
-    lrport = nbrec_logical_router_port_insert(ctx->txn);
-    nbrec_logical_router_port_set_name(lrport, ctx->argv[2]);
-
-    /* Insert the logical port into the logical router. */
-    nbrec_logical_router_verify_ports(lr);
-    struct nbrec_logical_router_port **new_ports = xmalloc(sizeof *new_ports *
-                                                    (lr->n_ports + 1));
-    memcpy(new_ports, lr->ports, sizeof *new_ports * lr->n_ports);
-    new_ports[lr->n_ports] = CONST_CAST(
-        struct nbrec_logical_router_port *, lrport);
-    nbrec_logical_router_set_ports(lr, new_ports, lr->n_ports + 1);
-    free(new_ports);
-}
-
-/* Deletes an lrport from a logical router. */
-static void
-nbctl_lrport_del(struct ctl_context *ctx)
-{
-    bool must_exist = !shash_find(&ctx->options, "--if-exists");
-    const struct nbrec_logical_router_port *lrport;
-
-    lrport = lrport_by_name_or_uuid(ctx, ctx->argv[1], must_exist);
-    if (!lrport) {
-        return;
-    }
-
-    /* Find the router that contains 'lrport', then delete it. */
-    const struct nbrec_logical_router *lr;
-    NBREC_LOGICAL_ROUTER_FOR_EACH (lr, ctx->idl) {
-        for (size_t i = 0; i < lr->n_ports; i++) {
-            if (lr->ports[i] == lrport) {
-                remove_lrport(lr, i);
-                return;
-            }
-        }
-    }
-
-    ctl_fatal("logical router port %s is not part of any logical router",
-              ctx->argv[1]);
-}
-
 static const struct ctl_command_syntax nbctl_commands[] = {
     { "show", 0, 1, "[LSWITCH]", NULL, nbctl_show, NULL, "", RO },
 
@@ -1764,21 +1766,6 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     { "acl-del", 1, 4, "LSWITCH [DIRECTION [PRIORITY MATCH]]", NULL,
       nbctl_acl_del, NULL, "", RW },
     { "acl-list", 1, 1, "LSWITCH", NULL, nbctl_acl_list, NULL, "", RO },
-
-    /* lrport commands. */
-    { "lrport-add", 2, 2, "ROUTER LRPORT", NULL, nbctl_lrport_add,
-      NULL, "--may-exist", RW },
-    { "lrport-del", 1, 1, "LRPORT", NULL, nbctl_lrport_del, NULL, "", RO },
-    { "lrport-list", 1, 1, "ROUTER", NULL, nbctl_lrport_list, NULL, "", RO },
-    { "lrport-set-mac-address", 1, 2, "LRPORT [ADDRESS]", NULL,
-      nbctl_lrport_set_mac, NULL, "", RW },
-    { "lrport-get-mac-address", 1, 1, "LRPORT", NULL,
-      nbctl_lrport_get_mac, NULL,
-      "", RO },
-    { "lrport-set-enabled", 2, 2, "LRPORT STATE", NULL,
-      nbctl_lrport_set_enabled, NULL, "", RW },
-    { "lrport-get-enabled", 1, 1, "LRPORT", NULL,
-      nbctl_lrport_get_enabled, NULL, "", RO },
 
     /* lport commands. */
     { "lport-add", 2, 4, "LSWITCH LPORT [PARENT] [TAG]", NULL, nbctl_lport_add,
@@ -1818,6 +1805,16 @@ static const struct ctl_command_syntax nbctl_commands[] = {
       "--may-exist,--add-duplicate", RW },
     { "lr-del", 1, 1, "ROUTER", NULL, nbctl_lr_del, NULL, "--if-exists", RW },
     { "lr-list", 0, 0, "", NULL, nbctl_lr_list, NULL, "", RO },
+
+    /* logical router port commands. */
+    { "lrp-add", 4, 5, "ROUTER PORT MAC NETWORK [PEER]", NULL, nbctl_lrp_add,
+      NULL, "--may-exist", RW },
+    { "lrp-del", 1, 1, "LPORT", NULL, nbctl_lrp_del, NULL, "--if-exists", RW },
+    { "lrp-list", 1, 1, "ROUTER", NULL, nbctl_lrp_list, NULL, "", RO },
+    { "lrp-set-enabled", 2, 2, "PORT STATE", NULL, nbctl_lrp_set_enabled,
+      NULL, "", RW },
+    { "lrp-get-enabled", 1, 1, "PORT", NULL, nbctl_lrp_get_enabled,
+      NULL, "", RO },
 
     {NULL, 0, 0, NULL, NULL, NULL, NULL, "", RO},
 };
