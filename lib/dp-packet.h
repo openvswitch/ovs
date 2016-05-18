@@ -516,7 +516,7 @@ dp_packet_reset_packet(struct dp_packet *b, int off)
 {
     dp_packet_set_size(b, dp_packet_size(b) - off);
     dp_packet_set_data(b, ((unsigned char *) dp_packet_data(b) + off));
-    b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
+    dp_packet_reset_offsets(b);
 }
 
 /* Returns the RSS hash of the packet 'p'.  Note that the returned value is
