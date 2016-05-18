@@ -330,6 +330,9 @@ ovsdb_execute_insert(struct ovsdb_execution *x, struct ovsdb_parser *parser,
             if (datum->n == 1) {
                 error = ovsdb_datum_check_constraints(datum, &column->type);
                 if (error) {
+                    error = ovsdb_wrap_error(error, "Table - \"%s\", Column - "
+                                             "\"%s\"", table->schema->name,
+                                             column->name);
                     ovsdb_row_destroy(row);
                     break;
                 }
