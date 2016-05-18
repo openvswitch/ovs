@@ -342,7 +342,7 @@ tnl_process_ecn(struct flow *flow)
         return true;
     }
 
-    if (is_ip_any(flow) && (flow->tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
+    if (is_ip_any(flow) && IP_ECN_is_ce(flow->tunnel.ip_tos)) {
         if ((flow->nw_tos & IP_ECN_MASK) == IP_ECN_NOT_ECT) {
             VLOG_WARN_RL(&rl, "dropping tunnel packet marked ECN CE"
                          " but is not ECN capable");
@@ -382,7 +382,7 @@ tnl_wc_init(struct flow *flow, struct flow_wildcards *wc)
         memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
 
         if (is_ip_any(flow)
-            && (flow->tunnel.ip_tos & IP_ECN_MASK) == IP_ECN_CE) {
+            && IP_ECN_is_ce(flow->tunnel.ip_tos)) {
             wc->masks.nw_tos |= IP_ECN_MASK;
         }
     }
@@ -455,7 +455,7 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
     if (is_ip_any(flow)) {
         wc->masks.nw_tos |= IP_ECN_MASK;
 
-        if ((flow->nw_tos & IP_ECN_MASK) == IP_ECN_CE) {
+        if (IP_ECN_is_ce(flow->nw_tos)) {
             flow->tunnel.ip_tos |= IP_ECN_ECT_0;
         } else {
             flow->tunnel.ip_tos |= flow->nw_tos & IP_ECN_MASK;
