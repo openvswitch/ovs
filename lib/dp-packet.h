@@ -36,6 +36,8 @@ enum OVS_PACKED_ENUM dp_packet_source {
                                 * ref to build_dp_packet() in netdev-dpdk. */
 };
 
+#define DP_PACKET_CONTEXT_SIZE 64
+
 /* Buffer for holding packet data.  A dp_packet is automatically reallocated
  * as necessary if it grows too large for the available memory.
  */
@@ -58,7 +60,10 @@ struct dp_packet {
                                     * or UINT16_MAX. */
     uint16_t l4_ofs;               /* Transport-level header offset,
                                       or UINT16_MAX. */
-    struct pkt_metadata md;
+    union {
+        struct pkt_metadata md;
+        uint64_t data[DP_PACKET_CONTEXT_SIZE / 8];
+    };
 };
 
 static inline void *dp_packet_data(const struct dp_packet *);
