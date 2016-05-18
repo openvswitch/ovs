@@ -51,7 +51,8 @@ static struct ovs_list addr_list;
 
 struct tnl_port {
     odp_port_t port;
-    ovs_be16 udp_port;
+    ovs_be16 tp_port;
+    uint8_t nw_proto;
     char dev_name[IFNAMSIZ];
     struct ovs_list node;
 };
@@ -82,7 +83,7 @@ tnl_port_free(struct tnl_port_in *p)
 
 static void
 tnl_port_init_flow(struct flow *flow, struct eth_addr mac,
-                   struct in6_addr *addr, ovs_be16 udp_port)
+                   struct in6_addr *addr, uint8_t nw_proto, ovs_be16 tp_port)
 {
     memset(flow, 0, sizeof *flow);
 
@@ -95,24 +96,20 @@ tnl_port_init_flow(struct flow *flow, struct eth_addr mac,
         flow->ipv6_dst = *addr;
     }
 
-    if (udp_port) {
-        flow->nw_proto = IPPROTO_UDP;
-    } else {
-        flow->nw_proto = IPPROTO_GRE;
-    }
-    flow->tp_dst = udp_port;
+    flow->nw_proto = nw_proto;
+    flow->tp_dst = tp_port;
 }
 
 static void
 map_insert(odp_port_t port, struct eth_addr mac, struct in6_addr *addr,
-           ovs_be16 udp_port, const char dev_name[])
+           uint8_t nw_proto, ovs_be16 tp_port, const char dev_name[])
 {
     const struct cls_rule *cr;
     struct tnl_port_in *p;
     struct match match;
 
     memset(&match, 0, sizeof match);
-    tnl_port_init_flow(&match.flow, mac, addr, udp_port);
+    tnl_port_init_flow(&match.flow, mac, addr, nw_proto, tp_port);
 
     do {
         cr = classifier_lookup(&cls, CLS_MAX_VERSION, &match.flow, NULL);
@@ -129,9 +126,9 @@ map_insert(odp_port_t port, struct eth_addr mac, struct in6_addr *addr,
          /* XXX: No fragments support. */
         match.wc.masks.nw_frag = FLOW_NW_FRAG_MASK;
 
-        /* 'udp_port' is zero for non-UDP tunnels (e.g. GRE). In this case it
+        /* 'tp_port' is zero for GRE tunnels. In this case it
          * doesn't make sense to match on UDP port numbers. */
-        if (udp_port) {
+        if (tp_port) {
             match.wc.masks.tp_dst = OVS_BE16_MAX;
         }
         if (IN6_IS_ADDR_V4MAPPED(addr)) {
@@ -152,40 +149,65 @@ map_insert(odp_port_t port, struct eth_addr mac, struct in6_addr *addr,
 
 static void
 map_insert_ipdev__(struct ip_device *ip_dev, char dev_name[],
-                   odp_port_t port, ovs_be16 udp_port)
+                   odp_port_t port, uint8_t nw_proto, ovs_be16 tp_port)
 {
     if (ip_dev->n_addr) {
         int i;
 
         for (i = 0; i < ip_dev->n_addr; i++) {
             map_insert(port, ip_dev->mac, &ip_dev->addr[i],
-                       udp_port, dev_name);
+                       nw_proto, tp_port, dev_name);
         }
     }
 }
 
+static uint8_t
+tnl_type_to_nw_proto(const char type[])
+{
+    if (!strcmp(type, "geneve")) {
+        return IPPROTO_UDP;
+    }
+    if (!strcmp(type, "stt")) {
+        return IPPROTO_TCP;
+    }
+    if (!strcmp(type, "gre")) {
+        return IPPROTO_GRE;
+    }
+    if (!strcmp(type, "vxlan")) {
+        return IPPROTO_UDP;
+    }
+    return 0;
+}
+
 void
-tnl_port_map_insert(odp_port_t port,
-                    ovs_be16 udp_port, const char dev_name[])
+tnl_port_map_insert(odp_port_t port, ovs_be16 tp_port,
+                    const char dev_name[], const char type[])
 {
     struct tnl_port *p;
     struct ip_device *ip_dev;
+    uint8_t nw_proto;
+
+    nw_proto = tnl_type_to_nw_proto(type);
+    if (!nw_proto) {
+        return;
+    }
 
     ovs_mutex_lock(&mutex);
     LIST_FOR_EACH(p, node, &port_list) {
-        if (udp_port == p->udp_port) {
+        if (tp_port == p->tp_port && p->nw_proto == nw_proto) {
              goto out;
         }
     }
 
     p = xzalloc(sizeof *p);
     p->port = port;
-    p->udp_port = udp_port;
+    p->tp_port = tp_port;
+    p->nw_proto = nw_proto;
     ovs_strlcpy(p->dev_name, dev_name, sizeof p->dev_name);
     ovs_list_insert(&port_list, &p->node);
 
     LIST_FOR_EACH(ip_dev, node, &addr_list) {
-        map_insert_ipdev__(ip_dev, p->dev_name, p->port, p->udp_port);
+        map_insert_ipdev__(ip_dev, p->dev_name, p->port, p->nw_proto, p->tp_port);
     }
 
 out:
@@ -205,39 +227,43 @@ tnl_port_unref(const struct cls_rule *cr)
 }
 
 static void
-map_delete(struct eth_addr mac, struct in6_addr *addr, ovs_be16 udp_port)
+map_delete(struct eth_addr mac, struct in6_addr *addr,
+           ovs_be16 tp_port, uint8_t nw_proto)
 {
     const struct cls_rule *cr;
     struct flow flow;
 
-    tnl_port_init_flow(&flow, mac, addr, udp_port);
+    tnl_port_init_flow(&flow, mac, addr, nw_proto, tp_port);
 
     cr = classifier_lookup(&cls, CLS_MAX_VERSION, &flow, NULL);
     tnl_port_unref(cr);
 }
 
 static void
-ipdev_map_delete(struct ip_device *ip_dev, ovs_be16 udp_port)
+ipdev_map_delete(struct ip_device *ip_dev, ovs_be16 tp_port, uint8_t nw_proto)
 {
     if (ip_dev->n_addr) {
         int i;
 
         for (i = 0; i < ip_dev->n_addr; i++) {
-            map_delete(ip_dev->mac, &ip_dev->addr[i], udp_port);
+            map_delete(ip_dev->mac, &ip_dev->addr[i], tp_port, nw_proto);
         }
     }
 }
 
 void
-tnl_port_map_delete(ovs_be16 udp_port)
+tnl_port_map_delete(ovs_be16 tp_port, const char type[])
 {
     struct tnl_port *p, *next;
     struct ip_device *ip_dev;
     bool found = false;
+    uint8_t nw_proto;
+
+    nw_proto = tnl_type_to_nw_proto(type);
 
     ovs_mutex_lock(&mutex);
     LIST_FOR_EACH_SAFE(p, next, node, &port_list) {
-        if (p->udp_port == udp_port) {
+        if (p->tp_port == tp_port && p->nw_proto == nw_proto) {
             ovs_list_remove(&p->node);
             found = true;
             break;
@@ -248,7 +274,7 @@ tnl_port_map_delete(ovs_be16 udp_port)
         goto out;
     }
     LIST_FOR_EACH(ip_dev, node, &addr_list) {
-        ipdev_map_delete(ip_dev, p->udp_port);
+        ipdev_map_delete(ip_dev, p->tp_port, p->nw_proto);
     }
 
     free(p);
@@ -343,7 +369,7 @@ map_insert_ipdev(struct ip_device *ip_dev)
     struct tnl_port *p;
 
     LIST_FOR_EACH(p, node, &port_list) {
-        map_insert_ipdev__(ip_dev, p->dev_name, p->port, p->udp_port);
+        map_insert_ipdev__(ip_dev, p->dev_name, p->port, p->nw_proto, p->tp_port);
     }
 }
 
@@ -409,7 +435,7 @@ delete_ipdev(struct ip_device *ip_dev)
     struct tnl_port *p;
 
     LIST_FOR_EACH(p, node, &port_list) {
-        ipdev_map_delete(ip_dev, p->udp_port);
+        ipdev_map_delete(ip_dev, p->tp_port, p->nw_proto);
     }
 
     ovs_list_remove(&ip_dev->node);
