@@ -1584,14 +1584,13 @@ flow_wildcards_set_xreg_mask(struct flow_wildcards *wc, int idx, uint64_t mask)
 uint32_t
 miniflow_hash_5tuple(const struct miniflow *flow, uint32_t basis)
 {
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
     uint32_t hash = basis;
 
     if (flow) {
         ovs_be16 dl_type = MINIFLOW_GET_BE16(flow, dl_type);
+        uint8_t nw_proto;
 
-        hash = hash_add(hash, MINIFLOW_GET_U8(flow, nw_proto));
-
-        /* Separate loops for better optimization. */
         if (dl_type == htons(ETH_TYPE_IPV6)) {
             struct flowmap map = FLOWMAP_EMPTY_INITIALIZER;
             uint64_t value;
@@ -1602,15 +1601,27 @@ miniflow_hash_5tuple(const struct miniflow *flow, uint32_t basis)
             MINIFLOW_FOR_EACH_IN_FLOWMAP(value, flow, map) {
                 hash = hash_add64(hash, value);
             }
-        } else {
+        } else if (dl_type == htons(ETH_TYPE_IP)
+                   || dl_type == htons(ETH_TYPE_ARP)) {
             hash = hash_add(hash, MINIFLOW_GET_U32(flow, nw_src));
             hash = hash_add(hash, MINIFLOW_GET_U32(flow, nw_dst));
+        } else {
+            goto out;
         }
+
+        nw_proto = MINIFLOW_GET_U8(flow, nw_proto);
+        hash = hash_add(hash, nw_proto);
+        if (nw_proto != IPPROTO_TCP && nw_proto != IPPROTO_UDP
+            && nw_proto != IPPROTO_SCTP && nw_proto != IPPROTO_ICMP
+            && nw_proto != IPPROTO_ICMPV6) {
+            goto out;
+        }
+
         /* Add both ports at once. */
         hash = hash_add(hash, MINIFLOW_GET_U32(flow, tp_src));
-        hash = hash_finish(hash, 42); /* Arbitrary number. */
     }
-    return hash;
+out:
+    return hash_finish(hash, 42);
 }
 
 ASSERT_SEQUENTIAL_SAME_WORD(tp_src, tp_dst);
@@ -1620,10 +1631,10 @@ ASSERT_SEQUENTIAL(ipv6_src, ipv6_dst);
 uint32_t
 flow_hash_5tuple(const struct flow *flow, uint32_t basis)
 {
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
     uint32_t hash = basis;
 
     if (flow) {
-        hash = hash_add(hash, flow->nw_proto);
 
         if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
             const uint64_t *flow_u64 = (const uint64_t *)flow;
@@ -1633,17 +1644,28 @@ flow_hash_5tuple(const struct flow *flow, uint32_t basis)
             for (;ofs < end; ofs++) {
                 hash = hash_add64(hash, flow_u64[ofs]);
             }
-        } else {
+        } else if (flow->dl_type == htons(ETH_TYPE_IP)
+                   || flow->dl_type == htons(ETH_TYPE_ARP)) {
             hash = hash_add(hash, (OVS_FORCE uint32_t) flow->nw_src);
             hash = hash_add(hash, (OVS_FORCE uint32_t) flow->nw_dst);
+        } else {
+            goto out;
         }
+
+        hash = hash_add(hash, flow->nw_proto);
+        if (flow->nw_proto != IPPROTO_TCP && flow->nw_proto != IPPROTO_UDP
+            && flow->nw_proto != IPPROTO_SCTP && flow->nw_proto != IPPROTO_ICMP
+            && flow->nw_proto != IPPROTO_ICMPV6) {
+            goto out;
+        }
+
         /* Add both ports at once. */
         hash = hash_add(hash,
                         ((const uint32_t *)flow)[offsetof(struct flow, tp_src)
                                                  / sizeof(uint32_t)]);
-        hash = hash_finish(hash, 42); /* Arbitrary number. */
     }
-    return hash;
+out:
+    return hash_finish(hash, 42); /* Arbitrary number. */
 }
 
 /* Hashes 'flow' based on its L2 through L4 protocol information. */
