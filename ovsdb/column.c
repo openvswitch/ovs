@@ -85,7 +85,7 @@ ovsdb_column_from_json(const struct json *json, const char *name,
 
     error = ovsdb_type_from_json(&type, type_json);
     if (error) {
-        return ovsdb_wrap_error(error, "Column - %s", name);
+        return ovsdb_wrap_error(error, "Column - \"%s\"", name);
     }
 
     bool mutable = !mutable_json || json_boolean(mutable_json);

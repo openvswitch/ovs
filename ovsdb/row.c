@@ -221,7 +221,7 @@ ovsdb_row_from_json(struct ovsdb_row *row, const struct json *json,
                                       symtab);
         if (error) {
             return ovsdb_wrap_error(error, "Table - \"%s\", "
-                                    "Column - \"%s\"", 
+                                    "Column - \"%s\"",
                                     schema->name, column_name);
         }
         ovsdb_datum_swap(&row->fields[column->index], &datum);
