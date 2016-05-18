@@ -734,23 +734,21 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet **buffers,
 }
 
 int
-netdev_pop_header(struct netdev *netdev, struct dp_packet **buffers, int cnt)
+netdev_pop_header(struct netdev *netdev, struct dp_packet **buffers, int *pcnt)
 {
-    int i;
+    int i, cnt = *pcnt, n_cnt = 0;
 
     if (!netdev->netdev_class->pop_header) {
         return EOPNOTSUPP;
     }
 
     for (i = 0; i < cnt; i++) {
-        int err;
-
-        err = netdev->netdev_class->pop_header(buffers[i]);
-        if (err) {
-            dp_packet_clear(buffers[i]);
+        buffers[i] = netdev->netdev_class->pop_header(buffers[i]);
+        if (buffers[i]) {
+            buffers[n_cnt++] = buffers[i];
         }
     }
-
+    *pcnt = n_cnt;
     return 0;
 }
 
