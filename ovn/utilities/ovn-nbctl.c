@@ -1292,8 +1292,9 @@ nbctl_acl_list(struct ctl_context *ctx)
 
     for (i = 0; i < lswitch->n_acls; i++) {
         const struct nbrec_acl *acl = acls[i];
-        printf("%10s %5"PRId64" (%s) %s%s\n", acl->direction, acl->priority,
-                acl->match, acl->action, acl->log ? " log" : "");
+        ds_put_format(&ctx->output, "%10s %5"PRId64" (%s) %s%s\n",
+                      acl->direction, acl->priority,
+                      acl->match, acl->action, acl->log ? " log" : "");
     }
 
     free(acls);
