@@ -275,8 +275,10 @@ struct netdev_class {
                         const struct ovs_action_push_tnl *data);
 
     /* Pop tunnel header from packet, build tunnel metadata and resize packet
-     * for further processing. */
-    int (*pop_header)(struct dp_packet *packet);
+     * for further processing.
+     * Returns NULL in case of error or tunnel implementation queued packet for further
+     * processing. */
+    struct dp_packet * (*pop_header)(struct dp_packet *packet);
 
     /* Returns the id of the numa node the 'netdev' is on.  If there is no
      * such info, returns NETDEV_NUMA_UNSPEC. */

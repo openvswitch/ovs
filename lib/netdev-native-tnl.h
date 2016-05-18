@@ -29,7 +29,7 @@ netdev_gre_build_header(const struct netdev *netdev,
 void
 netdev_gre_push_header(struct dp_packet *packet,
                        const struct ovs_action_push_tnl *data);
-int
+struct dp_packet *
 netdev_gre_pop_header(struct dp_packet *packet);
 
 void
@@ -39,14 +39,14 @@ int
 netdev_geneve_build_header(const struct netdev *netdev,
                            struct ovs_action_push_tnl *data,
                            const struct flow *tnl_flow);
-int
+struct dp_packet *
 netdev_geneve_pop_header(struct dp_packet *packet);
 
 int
 netdev_vxlan_build_header(const struct netdev *netdev,
                           struct ovs_action_push_tnl *data,
                           const struct flow *tnl_flow);
-int
+struct dp_packet *
 netdev_vxlan_pop_header(struct dp_packet *packet);
 
 static inline bool

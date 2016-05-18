@@ -353,7 +353,7 @@ parse_gre_header(struct dp_packet *packet,
     return hlen;
 }
 
-int
+struct dp_packet *
 netdev_gre_pop_header(struct dp_packet *packet)
 {
     struct pkt_metadata *md = &packet->md;
@@ -365,17 +365,20 @@ netdev_gre_pop_header(struct dp_packet *packet)
 
     pkt_metadata_init_tnl(md);
     if (hlen > dp_packet_size(packet)) {
-        return EINVAL;
+        goto err;
     }
 
     hlen = parse_gre_header(packet, tnl);
     if (hlen < 0) {
-        return -hlen;
+        goto err;
     }
 
     dp_packet_reset_packet(packet, hlen);
 
-    return 0;
+    return packet;
+err:
+    dp_packet_delete(packet);
+    return NULL;
 }
 
 void
@@ -450,7 +453,7 @@ netdev_gre_build_header(const struct netdev *netdev,
     return 0;
 }
 
-int
+struct dp_packet *
 netdev_vxlan_pop_header(struct dp_packet *packet)
 {
     struct pkt_metadata *md = &packet->md;
@@ -460,12 +463,12 @@ netdev_vxlan_pop_header(struct dp_packet *packet)
 
     pkt_metadata_init_tnl(md);
     if (VXLAN_HLEN > dp_packet_l4_size(packet)) {
-        return EINVAL;
+        goto err;
     }
 
     vxh = udp_extract_tnl_md(packet, tnl, &hlen);
     if (!vxh) {
-        return EINVAL;
+        goto err;
     }
 
     if (get_16aligned_be32(&vxh->vx_flags) != htonl(VXLAN_FLAGS) ||
@@ -473,14 +476,17 @@ netdev_vxlan_pop_header(struct dp_packet *packet)
         VLOG_WARN_RL(&err_rl, "invalid vxlan flags=%#x vni=%#x\n",
                      ntohl(get_16aligned_be32(&vxh->vx_flags)),
                      ntohl(get_16aligned_be32(&vxh->vx_vni)));
-        return EINVAL;
+        goto err;
     }
     tnl->tun_id = htonll(ntohl(get_16aligned_be32(&vxh->vx_vni)) >> 8);
     tnl->flags |= FLOW_TNL_F_KEY;
 
     dp_packet_reset_packet(packet, hlen + VXLAN_HLEN);
 
-    return 0;
+    return packet;
+err:
+    dp_packet_delete(packet);
+    return NULL;
 }
 
 int
@@ -508,7 +514,7 @@ netdev_vxlan_build_header(const struct netdev *netdev,
     return 0;
 }
 
-int
+struct dp_packet *
 netdev_geneve_pop_header(struct dp_packet *packet)
 {
     struct pkt_metadata *md = &packet->md;
@@ -520,12 +526,12 @@ netdev_geneve_pop_header(struct dp_packet *packet)
     if (GENEVE_BASE_HLEN > dp_packet_l4_size(packet)) {
         VLOG_WARN_RL(&err_rl, "geneve packet too small: min header=%u packet size=%"PRIuSIZE"\n",
                      (unsigned int)GENEVE_BASE_HLEN, dp_packet_l4_size(packet));
-        return EINVAL;
+        goto err;
     }
 
     gnh = udp_extract_tnl_md(packet, tnl, &ulen);
     if (!gnh) {
-        return EINVAL;
+        goto err;
     }
 
     opts_len = gnh->opt_len * 4;
@@ -533,18 +539,18 @@ netdev_geneve_pop_header(struct dp_packet *packet)
     if (hlen > dp_packet_size(packet)) {
         VLOG_WARN_RL(&err_rl, "geneve packet too small: header len=%u packet size=%u\n",
                      hlen, dp_packet_size(packet));
-        return EINVAL;
+        goto err;
     }
 
     if (gnh->ver != 0) {
         VLOG_WARN_RL(&err_rl, "unknown geneve version: %"PRIu8"\n", gnh->ver);
-        return EINVAL;
+        goto err;
     }
 
     if (gnh->proto_type != htons(ETH_TYPE_TEB)) {
         VLOG_WARN_RL(&err_rl, "unknown geneve encapsulated protocol: %#x\n",
                      ntohs(gnh->proto_type));
-        return EINVAL;
+        goto err;
     }
 
     tnl->flags |= gnh->oam ? FLOW_TNL_F_OAM : 0;
@@ -557,7 +563,10 @@ netdev_geneve_pop_header(struct dp_packet *packet)
 
     dp_packet_reset_packet(packet, hlen);
 
-    return 0;
+    return packet;
+err:
+    dp_packet_delete(packet);
+    return NULL;
 }
 
 int

@@ -3722,7 +3722,6 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
     struct dp_netdev *dp = pmd->dp;
     int type = nl_attr_type(a);
     struct dp_netdev_port *p;
-    int i;
 
     switch ((enum ovs_action_attr)type) {
     case OVS_ACTION_ATTR_OUTPUT:
@@ -3773,8 +3772,12 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
                    packets = tnl_pkt;
                 }
 
-                err = netdev_pop_header(p->netdev, packets, cnt);
+                err = netdev_pop_header(p->netdev, packets, &cnt);
+                if (!cnt) {
+                    return;
+                }
                 if (!err) {
+                    int i;
 
                     for (i = 0; i < cnt; i++) {
                         packets[i]->md.in_port.odp_port = portno;
@@ -3797,6 +3800,7 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
             struct ofpbuf actions;
             struct flow flow;
             ovs_u128 ufid;
+            int i;
 
             userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
             ofpbuf_init(&actions, 0);
@@ -3828,6 +3832,7 @@ dp_execute_cb(void *aux_, struct dp_packet **packets, int cnt,
     case OVS_ACTION_ATTR_RECIRC:
         if (*depth < MAX_RECIRC_DEPTH) {
             struct dp_packet *recirc_pkts[NETDEV_MAX_BURST];
+            int i;
 
             if (!may_steal) {
                dp_netdev_clone_pkt_batch(recirc_pkts, packets, cnt);
