@@ -1271,11 +1271,11 @@ done
 ovn-nbctl lr-add lr0
 for i in 1 2 3; do
     for j in 1 2 3; do
-	    ovn-nbctl lrp-add lr0 lrp$i$j 00:00:00:00:ff:$i$j \
+        ovn-nbctl lrp-add lr0 lrp$i$j 00:00:00:00:ff:$i$j \
             192.168.$i$j.254/24 lrp$i$j-attachment
-	    ovn-nbctl \
+        ovn-nbctl \
             -- lsp-add ls$i lrp$i$j-attachment \
-	        -- set Logical_Switch_Port lrp$i$j-attachment type=router \
+            -- set Logical_Switch_Port lrp$i$j-attachment type=router \
                              options:router-port=lrp$i$j \
                              addresses='"00:00:00:00:ff:'$i$j'"'
     done
@@ -1324,14 +1324,14 @@ done
 for i in 1 2 3; do
     for j in 1 2 3; do
         for k in 1 2 3; do
-	    hv=`vif_to_hv $i$j$k`
-	    as hv$hv ovs-vsctl \
-		-- add-port br-int vif$i$j$k \
-		-- set Interface vif$i$j$k \
-		       external-ids:iface-id=lp$i$j$k \
-		       options:tx_pcap=hv$hv/vif$i$j$k-tx.pcap \
-		       options:rxq_pcap=hv$hv/vif$i$j$k-rx.pcap \
-		       ofport-request=$i$j$k
+            hv=`vif_to_hv $i$j$k`
+                as hv$hv ovs-vsctl \
+                -- add-port br-int vif$i$j$k \
+                -- set Interface vif$i$j$k \
+                    external-ids:iface-id=lp$i$j$k \
+                    options:tx_pcap=hv$hv/vif$i$j$k-tx.pcap \
+                    options:rxq_pcap=hv$hv/vif$i$j$k-rx.pcap \
+                    ofport-request=$i$j$k
         done
     done
 done
@@ -1359,7 +1359,7 @@ for i in 1 2 3; do
     for j in 1 2 3; do
         for k in 1 2 3; do
             : > $i$j$k.expected
-	done
+        done
     done
 done
 test_ip() {
@@ -1373,14 +1373,14 @@ test_ip() {
     in_ls=`vif_to_ls $inport`
     in_lrp=`vif_to_lrp $inport`
     for outport; do
-	out_ls=`vif_to_ls $outport`
+        out_ls=`vif_to_ls $outport`
         if test $in_ls = $out_ls; then
             # Ports on the same logical switch receive exactly the same packet.
             echo $packet
         else
             # Routing decrements TTL and updates source and dest MAC
             # (and checksum).
-	    out_lrp=`vif_to_lrp $outport`
+            out_lrp=`vif_to_lrp $outport`
             echo f00000000${outport}00000000ff${out_lrp}08004500001c00000000"3f1101"00${src_ip}${dst_ip}0035111100080000
         fi | trim_zeros >> $outport.expected
     done
@@ -1403,29 +1403,29 @@ ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
 }
 for is in 1 2 3; do
-    for js in 1 2 3; do
-	for ks in 1 2 3; do
-	    bcast=
-	    s=$is$js$ks
-	    smac=f00000000$s
-	    sip=`ip_to_hex 192 168 $is$js $ks`
-	    for id in 1 2 3; do
-		for jd in 1 2 3; do
-                    for kd in 1 2 3; do
-			d=$id$jd$kd
-			dip=`ip_to_hex 192 168 $id$jd $kd`
-			if test $is = $id; then dmac=f00000000$d; else dmac=00000000ff$is$js; fi
-			if test $d != $s; then unicast=$d; else unicast=; fi
+  for js in 1 2 3; do
+    for ks in 1 2 3; do
+      bcast=
+      s=$is$js$ks
+      smac=f00000000$s
+      sip=`ip_to_hex 192 168 $is$js $ks`
+      for id in 1 2 3; do
+          for jd in 1 2 3; do
+              for kd in 1 2 3; do
+                d=$id$jd$kd
+                dip=`ip_to_hex 192 168 $id$jd $kd`
+                if test $is = $id; then dmac=f00000000$d; else dmac=00000000ff$is$js; fi
+                if test $d != $s; then unicast=$d; else unicast=; fi
 
-			test_ip $s $smac $dmac $sip $dip $unicast #1
+                test_ip $s $smac $dmac $sip $dip $unicast #1
 
-			if test $id = $is && test $d != $s; then bcast="$bcast $d"; fi
-                    done
-		done
-	    done
-	    test_ip $s $smac ffffffffffff $sip ffffffff $bcast #2
+                if test $id = $is && test $d != $s; then bcast="$bcast $d"; fi
+              done
+          done
         done
-    done
+      test_ip $s $smac ffffffffffff $sip ffffffff $bcast #2
+      done
+  done
 done
 
 # 3. Send an IP packet from every logical port to every other subnet,
@@ -1433,41 +1433,41 @@ done
 #    This should generate a broadcast ARP request for the destination
 #    IP address in the destination subnet.
 for is in 1 2 3; do
-    for js in 1 2 3; do
-	for ks in 1 2 3; do
-	    s=$is$js$ks
-	    smac=f00000000$s
-	    sip=`ip_to_hex 192 168 $is$js $ks`
-	    for id in 1 2 3; do
-		for jd in 1 2 3; do
-		    if test $is$js = $id$jd; then
-		        continue
-                    fi
+  for js in 1 2 3; do
+    for ks in 1 2 3; do
+      s=$is$js$ks
+      smac=f00000000$s
+      sip=`ip_to_hex 192 168 $is$js $ks`
+      for id in 1 2 3; do
+        for jd in 1 2 3; do
+          if test $is$js = $id$jd; then
+            continue
+          fi
 
-		    # Send the packet.
-		    dmac=00000000ff$is$js
-		    # Calculate a 4th octet for the destination that is
-		    # unique per $s, avoids the .1 .2 .3 and .254 IP addresses
-		    # that have static MAC bindings, and fits in the range
-		    # 0-255.
-		    o4=`expr $is '*' 9 + $js '*' 3 + $ks + 10`
-		    dip=`ip_to_hex 192 168 $id$jd $o4`
-		    test_ip $s $smac $dmac $sip $dip
+          # Send the packet.
+          dmac=00000000ff$is$js
+          # Calculate a 4th octet for the destination that is
+          # unique per $s, avoids the .1 .2 .3 and .254 IP addresses
+          # that have static MAC bindings, and fits in the range
+          # 0-255.
+          o4=`expr $is '*' 9 + $js '*' 3 + $ks + 10`
+          dip=`ip_to_hex 192 168 $id$jd $o4`
+          test_ip $s $smac $dmac $sip $dip
 
-		    # Every LP on the destination subnet's switch should
-		    # receive the ARP request.
-		    lrmac=00000000ff$id$jd
-		    lrip=`ip_to_hex 192 168 $id$jd 254`
-		    arp=ffffffffffff${lrmac}08060001080006040001${lrmac}${lrip}000000000000${dip}
-		    for jd2 in 1 2 3; do
-                        for kd in 1 2 3; do
-		            echo $arp | trim_zeros >> $id$jd2$kd.expected
-			done
-		    done
-		done
+          # Every LP on the destination subnet's lswitch should
+          # receive the ARP request.
+          lrmac=00000000ff$id$jd
+          lrip=`ip_to_hex 192 168 $id$jd 254`
+          arp=ffffffffffff${lrmac}08060001080006040001${lrmac}${lrip}000000000000${dip}
+          for jd2 in 1 2 3; do
+            for kd in 1 2 3; do
+              echo $arp | trim_zeros >> $id$jd2$kd.expected
             done
+          done
         done
+      done
     done
+  done
 done
 
 # test_arp INPORT SHA SPA TPA [REPLY_HA]
@@ -1520,19 +1520,19 @@ test_arp() {
 #
 # 7. No reply to query for IP address other than router IP.
 for i in 1 2 3; do
-    for j in 1 2 3; do
-        for k in 1 2 3; do
-	    smac=f00000000$i$j$k               # Source MAC
-	    sip=`ip_to_hex 192 168 $i$j $k`    # Source IP
-	    rip=`ip_to_hex 192 168 $i$j 254`   # Router IP
-	    rmac=00000000ff$i$j                # Router MAC
-	    otherip=`ip_to_hex 192 168 $i$j 55` # Some other IP in subnet
-	    test_arp $i$j$k $smac $sip        $rip        $rmac #4
-	    test_arp $i$j$k $smac $otherip    $rip        $rmac #5
-	    test_arp $i$j$k $smac 0a123456    $rip        $rmac #6
-	    test_arp $i$j$k $smac $sip        $otherip          #7
-        done
+  for j in 1 2 3; do
+    for k in 1 2 3; do
+      smac=f00000000$i$j$k               # Source MAC
+      sip=`ip_to_hex 192 168 $i$j $k`    # Source IP
+      rip=`ip_to_hex 192 168 $i$j 254`   # Router IP
+      rmac=00000000ff$i$j                # Router MAC
+      otherip=`ip_to_hex 192 168 $i$j 55` # Some other IP in subnet
+      test_arp $i$j$k $smac $sip        $rip        $rmac #4
+      test_arp $i$j$k $smac $otherip    $rip        $rmac #5
+      test_arp $i$j$k $smac 0a123456    $rip        $rmac #6
+      test_arp $i$j$k $smac $sip        $otherip          #7
     done
+  done
 done
 
 # Allow some time for packet forwarding.
@@ -1547,42 +1547,42 @@ sleep 1
 #    it means that $s and $d are the same as #3.
 : > mac_bindings.expected
 for is in 1 2 3; do
-    for js in 1 2 3; do
-	for ks in 1 2 3; do
-	    s=$is$js$ks
-	    for id in 1 2 3; do
-		for jd in 1 2 3; do
-		    if test $is$js = $id$jd; then
-		        continue
-                    fi
+  for js in 1 2 3; do
+    for ks in 1 2 3; do
+      s=$is$js$ks
+      for id in 1 2 3; do
+        for jd in 1 2 3; do
+          if test $is$js = $id$jd; then
+            continue
+          fi
 
-		    kd=1
-		    d=$id$jd$kd
+          kd=1
+          d=$id$jd$kd
 
-		    o4=`expr $is '*' 9 + $js '*' 3 + $ks + 10`
-		    host_ip=`ip_to_hex 192 168 $id$jd $o4`
-		    host_mac=8000000000$o4
+          o4=`expr $is '*' 9 + $js '*' 3 + $ks + 10`
+          host_ip=`ip_to_hex 192 168 $id$jd $o4`
+          host_mac=8000000000$o4
 
-		    lrmac=00000000ff$id$jd
-		    lrip=`ip_to_hex 192 168 $id$jd 254`
+          lrmac=00000000ff$id$jd
+          lrip=`ip_to_hex 192 168 $id$jd 254`
 
-		    arp=${lrmac}${host_mac}08060001080006040002${host_mac}${host_ip}${lrmac}${lrip}
+          arp=${lrmac}${host_mac}08060001080006040002${host_mac}${host_ip}${lrmac}${lrip}
 
-		    echo
-		    echo
-		    echo
-                    hv=hv`vif_to_hv $d`
-		    as $hv ovs-appctl netdev-dummy/receive vif$d $arp
-		    #as $hv ovs-appctl ofproto/trace br-int in_port=$d $arp
-		    #as $hv ovs-ofctl dump-flows br-int table=19
+          echo
+          echo
+          echo
+          hv=hv`vif_to_hv $d`
+          as $hv ovs-appctl netdev-dummy/receive vif$d $arp
+          #as $hv ovs-appctl ofproto/trace br-int in_port=$d $arp
+          #as $hv ovs-ofctl dump-flows br-int table=19
 
-		    host_ip_pretty=192.168.$id$jd.$o4
-		    host_mac_pretty=80:00:00:00:00:$o4
-		    echo lrp$id$jd,$host_ip_pretty,$host_mac_pretty >> mac_bindings.expected
-		done
-            done
+          host_ip_pretty=192.168.$id$jd.$o4
+          host_mac_pretty=80:00:00:00:00:$o4
+          echo lrp$id$jd,$host_ip_pretty,$host_mac_pretty >> mac_bindings.expected
         done
+      done
     done
+  done
 done
 
 # Allow some time for packet forwarding.
@@ -1596,36 +1596,36 @@ sleep 1
 #    have static MAC bindings, so they go to the port we've designated as
 #    accepting "unknown" MACs.)
 for is in 1 2 3; do
-    for js in 1 2 3; do
-	for ks in 1 2 3; do
-	    s=$is$js$ks
-	    smac=f00000000$s
-	    sip=`ip_to_hex 192 168 $is$js $ks`
-	    for id in 1 2 3; do
-		for jd in 1 2 3; do
-		    if test $is$js = $id$jd; then
-		        continue
-                    fi
+  for js in 1 2 3; do
+    for ks in 1 2 3; do
+      s=$is$js$ks
+      smac=f00000000$s
+      sip=`ip_to_hex 192 168 $is$js $ks`
+      for id in 1 2 3; do
+        for jd in 1 2 3; do
+          if test $is$js = $id$jd; then
+            continue
+          fi
 
-		    # Send the packet.
-		    dmac=00000000ff$is$js
-		    # Calculate a 4th octet for the destination that is
-		    # unique per $s, avoids the .1 .2 .3 and .254 IP addresses
-		    # that have static MAC bindings, and fits in the range
-		    # 0-255.
-		    o4=`expr $is '*' 9 + $js '*' 3 + $ks + 10`
-		    dip=`ip_to_hex 192 168 $id$jd $o4`
-		    test_ip $s $smac $dmac $sip $dip
+          # Send the packet.
+          dmac=00000000ff$is$js
+          # Calculate a 4th octet for the destination that is
+          # unique per $s, avoids the .1 .2 .3 and .254 IP addresses
+          # that have static MAC bindings, and fits in the range
+          # 0-255.
+          o4=`expr $is '*' 9 + $js '*' 3 + $ks + 10`
+          dip=`ip_to_hex 192 168 $id$jd $o4`
+          test_ip $s $smac $dmac $sip $dip
 
-		    # Expect the packet egress.
-		    host_mac=8000000000$o4
-		    outport=${id}11
-                    out_lrp=$id$jd
-                    echo ${host_mac}00000000ff${out_lrp}08004500001c00000000"3f1101"00${sip}${dip}0035111100080000 | trim_zeros >> $outport.expected
-		done
-            done
+          # Expect the packet egress.
+          host_mac=8000000000$o4
+          outport=${id}11
+          out_lrp=$id$jd
+          echo ${host_mac}00000000ff${out_lrp}08004500001c00000000"3f1101"00${sip}${dip}0035111100080000 | trim_zeros >> $outport.expected
         done
+      done
     done
+  done
 done
 
 # Allow some time for packet forwarding.
@@ -1639,12 +1639,12 @@ ovn-sbctl -f csv -d bare --no-heading \
 for i in 1 2 3; do
     for j in 1 2 3; do
         for k in 1 2 3; do
-	    file=hv`vif_to_hv $i$j$k`/vif$i$j$k-tx.pcap
-	    echo $file
-	    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j$k.packets
-	    sort $i$j$k.expected > expout
-	    AT_CHECK([sort $i$j$k.packets], [0], [expout])
-	    echo
+            file=hv`vif_to_hv $i$j$k`/vif$i$j$k-tx.pcap
+            echo $file
+            $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j$k.packets
+            sort $i$j$k.expected > expout
+            AT_CHECK([sort $i$j$k.packets], [0], [expout])
+            echo
         done
     done
 done

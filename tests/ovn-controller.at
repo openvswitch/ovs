@@ -21,14 +21,14 @@ check_patches () {
     echo 'ovs-vsctl -f csv -d bare --no-headings --columns=name find Interface type=patch | sort' > query
     for patch
     do
-	echo $patch
+        echo $patch
     done | cut -d' ' -f 2 | sort > expout
 
     # Generate code to verify that the configuration of each patch
     # port is correct.
     for patch
     do
-	set $patch; bridge=$1 port=$2 peer=$3
+        set $patch; bridge=$1 port=$2 peer=$3
         echo >>query "ovs-vsctl iface-to-br $port -- get Interface $port type options"
         echo >>expout "$bridge
 patch
