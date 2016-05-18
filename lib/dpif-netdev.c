@@ -3459,6 +3459,74 @@ emc_processing(struct dp_netdev_pmd_thread *pmd, struct dp_packet_batch *packets
 }
 
 static inline void
+handle_packet_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet,
+                     const struct netdev_flow_key *key,
+                     struct ofpbuf *actions, struct ofpbuf *put_actions,
+                     int *lost_cnt)
+{
+    struct ofpbuf *add_actions;
+    struct dp_packet_batch b;
+    struct match match;
+    ovs_u128 ufid;
+    int error;
+
+    match.tun_md.valid = false;
+    miniflow_expand(&key->mf, &match.flow);
+
+    ofpbuf_clear(actions);
+    ofpbuf_clear(put_actions);
+
+    dpif_flow_hash(pmd->dp->dpif, &match.flow, sizeof match.flow, &ufid);
+    error = dp_netdev_upcall(pmd, packet, &match.flow, &match.wc,
+                             &ufid, DPIF_UC_MISS, NULL, actions,
+                             put_actions);
+    if (OVS_UNLIKELY(error && error != ENOSPC)) {
+        dp_packet_delete(packet);
+        (*lost_cnt)++;
+        return;
+    }
+
+    /* The Netlink encoding of datapath flow keys cannot express
+     * wildcarding the presence of a VLAN tag. Instead, a missing VLAN
+     * tag is interpreted as exact match on the fact that there is no
+     * VLAN.  Unless we refactor a lot of code that translates between
+     * Netlink and struct flow representations, we have to do the same
+     * here. */
+    if (!match.wc.masks.vlan_tci) {
+        match.wc.masks.vlan_tci = htons(0xffff);
+    }
+
+    /* We can't allow the packet batching in the next loop to execute
+     * the actions.  Otherwise, if there are any slow path actions,
+     * we'll send the packet up twice. */
+    packet_batch_init_packet(&b, packet);
+    dp_netdev_execute_actions(pmd, &b, true,
+                              actions->data, actions->size);
+
+    add_actions = put_actions->size ? put_actions : actions;
+    if (OVS_LIKELY(error != ENOSPC)) {
+        struct dp_netdev_flow *netdev_flow;
+
+        /* XXX: There's a race window where a flow covering this packet
+         * could have already been installed since we last did the flow
+         * lookup before upcall.  This could be solved by moving the
+         * mutex lock outside the loop, but that's an awful long time
+         * to be locking everyone out of making flow installs.  If we
+         * move to a per-core classifier, it would be reasonable. */
+        ovs_mutex_lock(&pmd->flow_mutex);
+        netdev_flow = dp_netdev_pmd_lookup_flow(pmd, key);
+        if (OVS_LIKELY(!netdev_flow)) {
+            netdev_flow = dp_netdev_flow_add(pmd, &match, &ufid,
+                                             add_actions->data,
+                                             add_actions->size);
+        }
+        ovs_mutex_unlock(&pmd->flow_mutex);
+
+        emc_insert(&pmd->flow_cache, key, netdev_flow);
+    }
+}
+
+static inline void
 fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                      struct dp_packet_batch *packets_,
                      struct netdev_flow_key *keys,
@@ -3475,7 +3543,6 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     struct dpcls_rule *rules[PKT_ARRAY_SIZE];
     struct dp_netdev *dp = pmd->dp;
     struct emc_cache *flow_cache = &pmd->flow_cache;
-    struct dp_packet_batch b;
     int miss_cnt = 0, lost_cnt = 0;
     bool any_miss;
     size_t i;
@@ -3488,16 +3555,12 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
     if (OVS_UNLIKELY(any_miss) && !fat_rwlock_tryrdlock(&dp->upcall_rwlock)) {
         uint64_t actions_stub[512 / 8], slow_stub[512 / 8];
         struct ofpbuf actions, put_actions;
-        ovs_u128 ufid;
 
         ofpbuf_use_stub(&actions, actions_stub, sizeof actions_stub);
         ofpbuf_use_stub(&put_actions, slow_stub, sizeof slow_stub);
 
         for (i = 0; i < cnt; i++) {
             struct dp_netdev_flow *netdev_flow;
-            struct ofpbuf *add_actions;
-            struct match match;
-            int error;
 
             if (OVS_LIKELY(rules[i])) {
                 continue;
@@ -3513,59 +3576,8 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
             }
 
             miss_cnt++;
-
-            match.tun_md.valid = false;
-            miniflow_expand(&keys[i].mf, &match.flow);
-
-            ofpbuf_clear(&actions);
-            ofpbuf_clear(&put_actions);
-
-            dpif_flow_hash(dp->dpif, &match.flow, sizeof match.flow, &ufid);
-            error = dp_netdev_upcall(pmd, packets[i], &match.flow, &match.wc,
-                                     &ufid, DPIF_UC_MISS, NULL, &actions,
-                                     &put_actions);
-            if (OVS_UNLIKELY(error && error != ENOSPC)) {
-                dp_packet_delete(packets[i]);
-                lost_cnt++;
-                continue;
-            }
-
-            /* The Netlink encoding of datapath flow keys cannot express
-             * wildcarding the presence of a VLAN tag. Instead, a missing VLAN
-             * tag is interpreted as exact match on the fact that there is no
-             * VLAN.  Unless we refactor a lot of code that translates between
-             * Netlink and struct flow representations, we have to do the same
-             * here. */
-            if (!match.wc.masks.vlan_tci) {
-                match.wc.masks.vlan_tci = htons(0xffff);
-            }
-
-            /* We can't allow the packet batching in the next loop to execute
-             * the actions.  Otherwise, if there are any slow path actions,
-             * we'll send the packet up twice. */
-            packet_batch_init_packet(&b, packets[i]);
-            dp_netdev_execute_actions(pmd, &b, true,
-                                      actions.data, actions.size);
-
-            add_actions = put_actions.size ? &put_actions : &actions;
-            if (OVS_LIKELY(error != ENOSPC)) {
-                /* XXX: There's a race window where a flow covering this packet
-                 * could have already been installed since we last did the flow
-                 * lookup before upcall.  This could be solved by moving the
-                 * mutex lock outside the loop, but that's an awful long time
-                 * to be locking everyone out of making flow installs.  If we
-                 * move to a per-core classifier, it would be reasonable. */
-                ovs_mutex_lock(&pmd->flow_mutex);
-                netdev_flow = dp_netdev_pmd_lookup_flow(pmd, &keys[i]);
-                if (OVS_LIKELY(!netdev_flow)) {
-                    netdev_flow = dp_netdev_flow_add(pmd, &match, &ufid,
-                                                     add_actions->data,
-                                                     add_actions->size);
-                }
-                ovs_mutex_unlock(&pmd->flow_mutex);
-
-                emc_insert(flow_cache, &keys[i], netdev_flow);
-            }
+            handle_packet_upcall(pmd, packets[i], &keys[i], &actions, &put_actions,
+                          &lost_cnt);
         }
 
         ofpbuf_uninit(&actions);
