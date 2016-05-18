@@ -1338,6 +1338,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             op->ukey = NULL;
             op->dop.type = DPIF_OP_EXECUTE;
             op->dop.u.execute.packet = CONST_CAST(struct dp_packet *, packet);
+            op->dop.u.execute.flow = upcall->flow;
             odp_key_to_pkt_metadata(upcall->key, upcall->key_len,
                                     &op->dop.u.execute.packet->md);
             op->dop.u.execute.actions = upcall->odp_actions.data;

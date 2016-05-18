@@ -1061,6 +1061,7 @@ check_variable_length_userdata(struct dpif_backer *backer)
     struct ofpbuf actions;
     struct dpif_execute execute;
     struct dp_packet packet;
+    struct flow flow;
     size_t start;
     int error;
 
@@ -1083,11 +1084,14 @@ check_variable_length_userdata(struct dpif_backer *backer)
     eth = dp_packet_put_zeros(&packet, ETH_HEADER_LEN);
     eth->eth_type = htons(0x1234);
 
+    flow_extract(&packet, &flow);
+
     /* Execute the actions.  On older datapaths this fails with ERANGE, on
      * newer datapaths it succeeds. */
     execute.actions = actions.data;
     execute.actions_len = actions.size;
     execute.packet = &packet;
+    execute.flow = &flow;
     execute.needs_help = false;
     execute.probe = true;
     execute.mtu = 0;
@@ -1164,6 +1168,7 @@ check_masked_set_action(struct dpif_backer *backer)
     struct ofpbuf actions;
     struct dpif_execute execute;
     struct dp_packet packet;
+    struct flow flow;
     int error;
     struct ovs_key_ethernet key, mask;
 
@@ -1182,11 +1187,14 @@ check_masked_set_action(struct dpif_backer *backer)
     eth = dp_packet_put_zeros(&packet, ETH_HEADER_LEN);
     eth->eth_type = htons(0x1234);
 
+    flow_extract(&packet, &flow);
+
     /* Execute the actions.  On older datapaths this fails with EINVAL, on
      * newer datapaths it succeeds. */
     execute.actions = actions.data;
     execute.actions_len = actions.size;
     execute.packet = &packet;
+    execute.flow = &flow;
     execute.needs_help = false;
     execute.probe = true;
     execute.mtu = 0;
@@ -3708,6 +3716,7 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
 
     pkt_metadata_from_flow(&packet->md, flow);
     execute.packet = packet;
+    execute.flow = flow;
     execute.needs_help = (xout.slow & SLOW_ACTION) != 0;
     execute.probe = false;
     execute.mtu = 0;
@@ -4420,6 +4429,7 @@ nxt_resume(struct ofproto *ofproto_,
         .actions_len = odp_actions.size,
         .needs_help = (slow & SLOW_ACTION) != 0,
         .packet = &packet,
+        .flow = &headers,
     };
     dpif_execute(ofproto->backer->dpif, &execute);
 
