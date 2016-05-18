@@ -1,6 +1,6 @@
 {
   "name": "hardware_vtep",
-  "cksum": "4127261095 11302",
+  "cksum": "353943336 11434",
   "tables": {
     "Global": {
       "columns": {
@@ -10,6 +10,9 @@
                    "min": 0, "max": "unlimited"}},
         "switches": {
           "type": {"key": {"type": "uuid", "refTable": "Physical_Switch"},
+                   "min": 0, "max": "unlimited"}},
+        "other_config": {
+          "type": {"key": "string", "value": "string",
                    "min": 0, "max": "unlimited"}}
       },
       "maxRows": 1,
@@ -301,4 +304,4 @@
           "ephemeral": true}},
       "indexes": [["target"]],
       "isRoot": false}},
-  "version": "1.6.0"}
+  "version": "1.7.0"}

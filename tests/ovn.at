@@ -2545,3 +2545,66 @@ OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP
 
+AT_SETUP([ovn -- send gratuitous arp on localnet])
+AT_KEYWORDS([ovn])
+ovn_start
+ovn-nbctl lswitch-add lsw0
+net_add n1
+sim_add hv
+as hv
+ovs-vsctl \
+    -- add-br br-phys \
+    -- add-br br-eth0
+
+ovn_attach n1 br-phys 192.168.0.1
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-eth0])
+AT_CHECK([ovs-vsctl add-port br-eth0 snoopvif -- set Interface snoopvif options:tx_pcap=hv/snoopvif-tx.pcap options:rxq_pcap=hv/snoopvif-rx.pcap])
+
+# Create a vif.
+AT_CHECK([ovn-nbctl lport-add lsw0 localvif1])
+AT_CHECK([ovn-nbctl lport-set-addresses localvif1 "f0:00:00:00:00:01 192.168.1.2"])
+AT_CHECK([ovn-nbctl lport-set-port-security localvif1 "f0:00:00:00:00:01"])
+
+# Create a localnet port.
+AT_CHECK([ovn-nbctl lport-add lsw0 ln_port])
+AT_CHECK([ovn-nbctl lport-set-addresses ln_port unknown])
+AT_CHECK([ovn-nbctl lport-set-type ln_port localnet])
+AT_CHECK([ovn-nbctl lport-set-options ln_port network_name=physnet1])
+
+AT_CHECK([ovs-vsctl add-port br-int localvif1 -- set Interface localvif1 external_ids:iface-id=localvif1])
+
+# Wait for packet to be received.
+OVS_WAIT_UNTIL([test `wc -c < "hv/snoopvif-tx.pcap"` -ge 50])
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv/snoopvif-tx.pcap | trim_zeros > packets
+expected="fffffffffffff0000000000108060001080006040001f00000000001c0a80102000000000000c0a80102"
+echo $expected > expout
+AT_CHECK([sort packets], [0], [expout])
+cat packets
+
+# Delete the localnet ports.
+AT_CHECK([ovs-vsctl del-port localvif1])
+AT_CHECK([ovn-nbctl lport-del ln_port])
+
+as hv
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+AT_CLEANUP

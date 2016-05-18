@@ -88,6 +88,14 @@
         table for more information.
       </column>
     </group>
+
+    <group title="Common Column">
+      The overall purpose of this column is described under <code>Common
+      Column</code> at the beginning of this document.
+
+      <column name="other_config"/>
+    </group>
+
   </table>
 
   <table name="Manager" title="OVSDB management connection.">

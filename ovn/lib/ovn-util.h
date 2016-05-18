@@ -1,6 +1,4 @@
-
-/* Copyright (c) 2015, 2016 Nicira, Inc.
- *
+/*
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at:
@@ -14,24 +12,33 @@
  * limitations under the License.
  */
 
-#ifndef PINCTRL_H
-#define PINCTRL_H 1
 
-#include <stdint.h>
+#ifndef OVN_UTIL_H
+#define OVN_UTIL_H 1
 
-#include "openvswitch/meta-flow.h"
+#include "lib/packets.h"
 
-struct hmap;
-struct lport_index;
-struct ovsrec_bridge;
-struct controller_ctx;
+struct ipv4_netaddr {
+    ovs_be32 addr;
+    unsigned int plen;
+};
 
-void pinctrl_init(void);
-void pinctrl_run(struct controller_ctx *, const struct lport_index *,
-                 const struct ovsrec_bridge *,
-                 const char *chassis_id,
-                 struct hmap *local_datapaths);
-void pinctrl_wait(struct controller_ctx *);
-void pinctrl_destroy(void);
+struct ipv6_netaddr {
+    struct in6_addr addr;
+    unsigned int plen;
+};
 
-#endif /* ovn/pinctrl.h */
+struct lport_addresses {
+    struct eth_addr ea;
+    size_t n_ipv4_addrs;
+    struct ipv4_netaddr *ipv4_addrs;
+    size_t n_ipv6_addrs;
+    struct ipv6_netaddr *ipv6_addrs;
+};
+
+bool
+extract_lport_addresses(char *address, struct lport_addresses *laddrs,
+                        bool store_ipv6);
+
+
+#endif

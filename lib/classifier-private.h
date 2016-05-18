@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #ifndef CLASSIFIER_PRIVATE_H
 #define CLASSIFIER_PRIVATE_H 1
 
+#include "ccmap.h"
 #include "cmap.h"
 #include "flow.h"
 #include "hash.h"
@@ -44,7 +45,7 @@ struct cls_subtable {
     unsigned int trie_plen[CLS_MAX_TRIES];  /* Trie prefix length in 'mask'
                                              * (runtime configurable). */
     const int ports_mask_len;
-    struct cmap indices[CLS_MAX_INDICES];   /* Staged lookup indices. */
+    struct ccmap indices[CLS_MAX_INDICES];  /* Staged lookup indices. */
     rcu_trie_ptr ports_trie;                /* NULL if none. */
 
     /* These fields are accessed by all readers. */
@@ -67,8 +68,7 @@ struct cls_match {
 
     /* Accessed by readers interested in wildcarding. */
     const int priority;         /* Larger numbers are higher priorities. */
-    struct cmap_node index_nodes[CLS_MAX_INDICES]; /* Within subtable's
-                                                    * 'indices'. */
+
     /* Accessed by all readers. */
     struct cmap_node cmap_node; /* Within struct cls_subtable 'rules'. */
 
