@@ -220,7 +220,9 @@ ovsdb_row_from_json(struct ovsdb_row *row, const struct json *json,
         error = ovsdb_datum_from_json(&datum, &column->type, node->data,
                                       symtab);
         if (error) {
-            return error;
+            return ovsdb_wrap_error(error, "Table - \"%s\", "
+                                    "Column - \"%s\"",
+                                    schema->name, column_name);
         }
         ovsdb_datum_swap(&row->fields[column->index], &datum);
         ovsdb_datum_destroy(&datum, &column->type);

@@ -159,7 +159,7 @@ OVSDB_CHECK_EXECUTION([named-uuid must be <id>],
       {"op": "insert",
        "table": "a",
        "row": {"a2a": ["named-uuid", "0"]}}]]]],
-  [[[{"details":"named-uuid string is not a valid <id>","error":"syntax error","syntax":"[\"named-uuid\",\"0\"]"}]
+  [[[{"details":"Table - \"a\", Column - \"a2a\": named-uuid string is not a valid <id>","error":"syntax error","syntax":"[\"named-uuid\",\"0\"]"}]
 ]])
 
 OVSDB_CHECK_EXECUTION([duplicate uuid-name not allowed],
@@ -576,9 +576,9 @@ OVSDB_CHECK_EXECUTION([insert and update constraints],
       {"op": "insert",
        "table": "constrained",
        "row": {"positive": 2}}]]]],
-  [[[{"details":"0 is less than minimum allowed value 1","error":"constraint violation"}]
-[{"details":"-1 is less than minimum allowed value 1","error":"constraint violation"}]
-[{"details":"-2 is less than minimum allowed value 1","error":"constraint violation"}]
+  [[[{"details":"Table - \"constrained\", Column - \"positive\": 0 is less than minimum allowed value 1","error":"constraint violation"}]
+[{"details":"Table - \"constrained\", Column - \"positive\": -1 is less than minimum allowed value 1","error":"constraint violation"}]
+[{"details":"Table - \"constrained\", Column - \"positive\": -2 is less than minimum allowed value 1","error":"constraint violation"}]
 [{"uuid":["uuid","<0>"]}]
 [{"uuid":["uuid","<1>"]},{"details":"transaction causes \"constrained\" table to contain 2 rows, greater than the schema-defined limit of 1 row(s)","error":"constraint violation"}]
 ]])

@@ -187,16 +187,22 @@ class TableSchema(object):
         if max_rows is None:
             max_rows = sys.maxsize
         elif max_rows <= 0:
-            raise error.Error("maxRows must be at least 1", json)
+            raise error.Error('Table - "%s": maxRows must be at least 1'
+                              % name, json)
 
         if not columns_json:
-            raise error.Error("table must have at least one column", json)
+            raise error.Error('table "%s" must have at least one column'
+                              % name, json)
 
         columns = {}
         for column_name, column_json in six.iteritems(columns_json):
             _check_id(column_name, json)
-            columns[column_name] = ColumnSchema.from_json(column_json,
-                                                          column_name)
+            try:
+                columns[column_name] = ColumnSchema.from_json(column_json,
+                                                              column_name)
+            except error.Error as err:
+                raise error.Error('Table - "%s": %s' % (name, err.msg),
+                                  err.json)
 
         indexes = []
         for index_json in indexes_json:
