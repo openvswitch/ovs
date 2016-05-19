@@ -398,9 +398,10 @@ done:
     if (nlError != NL_ERROR_SUCCESS) {
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                                        usrParamsCtx->outputBuffer;
-        UINT32 msgErrorLen = usrParamsCtx->outputLength;
 
-        NlBuildErrorMsg(msgIn, msgError, msgErrorLen, nlError, replyLen);
+        ASSERT(msgError);
+        NlBuildErrorMsg(msgIn, msgError, nlError, replyLen);
+        ASSERT(*replyLen != 0);
         rc = STATUS_SUCCESS;
     }
 
@@ -568,9 +569,10 @@ done:
     if (nlError != NL_ERROR_SUCCESS) {
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                                       usrParamsCtx->outputBuffer;
-        UINT32 msgErrorLen = usrParamsCtx->outputLength;
 
-        NlBuildErrorMsg(msgIn, msgError, msgErrorLen, nlError, replyLen);
+        ASSERT(msgError);
+        NlBuildErrorMsg(msgIn, msgError, nlError, replyLen);
+        ASSERT(*replyLen != 0);
         rc = STATUS_SUCCESS;
     }
 
@@ -707,9 +709,9 @@ done:
     if (nlError != NL_ERROR_SUCCESS) {
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                                       usrParamsCtx->outputBuffer;
-        UINT32 msgErrorLen = usrParamsCtx->outputLength;
-
-        NlBuildErrorMsg(msgIn, msgError, msgErrorLen, nlError, replyLen);
+        ASSERT(msgError);
+        NlBuildErrorMsg(msgIn, msgError, nlError, replyLen);
+        ASSERT(*replyLen != 0);
         rc = STATUS_SUCCESS;
     }
 

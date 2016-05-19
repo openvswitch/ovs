@@ -109,16 +109,11 @@ NlFillNlHdr(PNL_BUFFER nlBuf, UINT16 nlmsgType,
  */
 VOID
 NlBuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgError,
-                UINT32 msgErrorLen,
-                UINT errorCode, UINT32 *msgLen)
+                UINT errorCode, UINT32 *replyLen)
 {
     NL_BUFFER nlBuffer;
 
     ASSERT(errorCode != NL_ERROR_PENDING);
-
-    if ((msgError == NULL) || (msgErrorLen < sizeof *msgError)) {
-        return;
-    }
 
     NlBufInit(&nlBuffer, (PCHAR)msgError, sizeof *msgError);
     NlFillNlHdr(&nlBuffer, NLMSG_ERROR, 0,
@@ -128,9 +123,7 @@ NlBuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgError,
     msgError->errorMsg.nlMsg = msgIn->nlMsg;
     msgError->nlMsg.nlmsgLen = sizeof(OVS_MESSAGE_ERROR);
 
-    if (NULL != msgLen) {
-        *msgLen = msgError->nlMsg.nlmsgLen;
-    }
+    *replyLen = msgError->nlMsg.nlmsgLen;
 }
 
 /*
