@@ -3084,7 +3084,7 @@ dpdk_init__(const struct smap *ovs_other_config)
     int result;
     int argc, argc_tmp;
     bool auto_determine = true;
-    int err;
+    int err = 0;
     cpu_set_t cpuset;
 #ifndef VHOST_CUSE
     char *sock_dir_subcomponent;
@@ -3126,14 +3126,6 @@ dpdk_init__(const struct smap *ovs_other_config)
 #endif
     }
 
-    /* Get the main thread affinity */
-    CPU_ZERO(&cpuset);
-    err = pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t),
-                                 &cpuset);
-    if (err) {
-        VLOG_ERR("Thread getaffinity error %d.", err);
-    }
-
     argv = grow_argv(&argv, 0, 1);
     argc = 1;
     argv[0] = xstrdup(ovs_get_program_name());
@@ -3154,13 +3146,26 @@ dpdk_init__(const struct smap *ovs_other_config)
      */
     if (auto_determine) {
         int i;
-        for (i = 0; i < CPU_SETSIZE; i++) {
-            if (CPU_ISSET(i, &cpuset)) {
-                argv = grow_argv(&argv, argc, 2);
-                argv[argc++] = xstrdup("-c");
-                argv[argc++] = xasprintf("0x%08llX", (1ULL<<i));
-                i = CPU_SETSIZE;
+        /* Get the main thread affinity */
+        CPU_ZERO(&cpuset);
+        err = pthread_getaffinity_np(pthread_self(), sizeof(cpu_set_t),
+                                     &cpuset);
+        if (!err) {
+            for (i = 0; i < CPU_SETSIZE; i++) {
+                if (CPU_ISSET(i, &cpuset)) {
+                    argv = grow_argv(&argv, argc, 2);
+                    argv[argc++] = xstrdup("-c");
+                    argv[argc++] = xasprintf("0x%08llX", (1ULL<<i));
+                    i = CPU_SETSIZE;
+                }
             }
+        } else {
+            VLOG_ERR("Thread getaffinity error %d. Using core 0x1", err);
+            /* User did not set dpdk-lcore-mask and unable to get current
+             * thread affintity - default to core 0x1 */
+            argv = grow_argv(&argv, argc, 2);
+            argv[argc++] = xstrdup("-c");
+            argv[argc++] = xasprintf("0x%X", 1);
         }
     }
 
@@ -3189,7 +3194,7 @@ dpdk_init__(const struct smap *ovs_other_config)
     }
 
     /* Set the main thread affinity back to pre rte_eal_init() value */
-    if (auto_determine) {
+    if (auto_determine && !err) {
         err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t),
                                      &cpuset);
         if (err) {
