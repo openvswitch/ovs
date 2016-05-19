@@ -869,19 +869,6 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
             goto done;
         }
 
-        /*
-         * Output buffer not mandatory but map it in case we have something
-         * to return to requester.
-        */
-        if (outputBufferLen != 0) {
-            status = MapIrpOutputBuffer(irp, outputBufferLen,
-                sizeof *ovsMsg, &outputBuffer);
-            if (status != STATUS_SUCCESS) {
-                goto done;
-            }
-            ASSERT(outputBuffer);
-        }
-
         ovsMsg = inputBuffer;
         ovsMsgLength = inputBufferLen;
         devOp = OVS_WRITE_DEV_OP;
