@@ -236,15 +236,21 @@ struct netdev_class {
     int (*init)(void);
 
     /* Performs periodic work needed by netdevs of this class.  May be null if
-     * no periodic work is necessary. */
-    void (*run)(void);
+     * no periodic work is necessary.
+     *
+     * 'netdev_class' points to the class.  It is useful in case the same
+     * function is used to implement different classes. */
+    void (*run)(const struct netdev_class *netdev_class);
 
     /* Arranges for poll_block() to wake up if the "run" member function needs
      * to be called.  Implementations are additionally required to wake
      * whenever something changes in any of its netdevs which would cause their
      * ->change_seq() function to change its result.  May be null if nothing is
-     * needed here. */
-    void (*wait)(void);
+     * needed here.
+     *
+     * 'netdev_class' points to the class.  It is useful in case the same
+     * function is used to implement different classes. */
+    void (*wait)(const struct netdev_class *netdev_class);
 
 /* ## ---------------- ## */
 /* ## netdev Functions ## */

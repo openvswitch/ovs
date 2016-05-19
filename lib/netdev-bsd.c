@@ -146,7 +146,7 @@ static void ifr_set_flags(struct ifreq *, int flags);
 static int af_link_ioctl(unsigned long command, const void *arg);
 #endif
 
-static void netdev_bsd_run(void);
+static void netdev_bsd_run(const struct netdev_class *);
 static int netdev_bsd_get_mtu(const struct netdev *netdev_, int *mtup);
 
 static bool
@@ -180,7 +180,7 @@ netdev_get_kernel_name(const struct netdev *netdev)
  * interface status changes, and eventually calls all the user callbacks.
  */
 static void
-netdev_bsd_run(void)
+netdev_bsd_run(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     rtbsd_notifier_run();
 }
@@ -190,7 +190,7 @@ netdev_bsd_run(void)
  * be called.
  */
 static void
-netdev_bsd_wait(void)
+netdev_bsd_wait(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     rtbsd_notifier_wait();
 }

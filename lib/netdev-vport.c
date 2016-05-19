@@ -312,7 +312,7 @@ netdev_vport_update_flags(struct netdev *netdev OVS_UNUSED,
 }
 
 static void
-netdev_vport_run(void)
+netdev_vport_run(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     uint64_t seq;
 
@@ -325,7 +325,7 @@ netdev_vport_run(void)
 }
 
 static void
-netdev_vport_wait(void)
+netdev_vport_wait(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     uint64_t seq;
 
