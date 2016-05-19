@@ -3189,7 +3189,7 @@ dpdk_init__(const struct smap *ovs_other_config)
     }
 
     /* Set the main thread affinity back to pre rte_eal_init() value */
-    if (!auto_determine) {
+    if (auto_determine) {
         err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t),
                                      &cpuset);
         if (err) {
