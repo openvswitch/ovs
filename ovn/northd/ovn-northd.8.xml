@@ -160,9 +160,25 @@
           </li>
 
           <li>
+            Priority 90 flow to allow IPv4 DHCP discovery traffic if it has a
+            valid <code>eth.src</code>. This is necessary since DHCP discovery
+            messages are sent from the unspecified IPv4 address (0.0.0.0) since
+            the IPv4 address has not yet been assigned.
+          </li>
+
+          <li>
             Priority 90 flow to allow IPv6 traffic if it has IPv6 addresses
             which match the <code>inport</code>, valid <code>eth.src</code> and
             valid <code>ip6.src</code> address(es).
+          </li>
+
+          <li>
+            Priority 90 flow to allow IPv6 DAD (Duplicate Address Detection)
+            traffic if it has a valid <code>eth.src</code>. This is is
+            necessary since DAD include requires joining an multicast group and
+            sending neighbor solicitations for the newly assigned address. Since
+            no address is yet assigned, these are sent from the unspecified
+            IPv6 address (::).
           </li>
 
           <li>

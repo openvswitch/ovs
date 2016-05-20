@@ -1789,6 +1789,21 @@ test_ipv6() {
     done
 }
 
+# test_icmpv6 INPORT  SRC_MAC DST_MAC SRC_IP DST_IP ICMP_TYPE OUTPORT...
+# This function is similar to test_ipv6() except it specifies the ICMPv6 type
+# of the test packet
+test_icmpv6() {
+    local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5 icmp_type=$6
+    local packet=${dst_mac}${src_mac}86dd6000000000083aff${src_ip}${dst_ip}${icmp_type}00000000000000
+    shift; shift; shift; shift; shift; shift
+    hv=`vif_to_hv $inport`
+    as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
+    #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $packet
+    for outport; do
+        echo $packet | trim_zeros >> $outport.expected
+    done
+}
+
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
 }
@@ -1926,8 +1941,15 @@ for i in 1 2 3; do
     sip=fe80000000000000ea2aeafffe2800${i}3
     test_ipv6 ${i}3 f00000000${i}${i}3 f00000000021 $sip $tip 21
 
+    # Test ICMPv6 MLD reports (v1 and v2) and NS for DAD
     sip=00000000000000000000000000000000
-    test_ipv6 ${i}3 f00000000${i}${i}3 f00000000021 $sip $tip 21
+    test_icmpv6 ${i}3 f00000000${i}${i}3 f00000000021 $sip ff020000000000000000000000160000 83 21
+    test_icmpv6 ${i}3 f00000000${i}${i}3 f00000000021 $sip ff020000000000000000000000160000 8f 21
+    test_icmpv6 ${i}3 f00000000${i}${i}3 f00000000021 $sip ff0200000000000000ea2aeafffe2800 87 21
+    # Traffic to non-multicast traffic should be dropped
+    test_icmpv6 ${i}3 f00000000${i}${i}3 f00000000021 $sip $tip 83
+    # Traffic of other ICMPv6 types should be dropped
+    test_icmpv6 ${i}3 f00000000${i}${i}3 f00000000021 $sip ff020000000000000000000000160000 80
 
     # should be dropped
     sip=ae80000000000000ea2aeafffe2800aa

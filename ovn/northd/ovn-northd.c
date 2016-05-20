@@ -1033,12 +1033,17 @@ build_port_security_ipv6_flow(
     ipv6_string_mapped(ip6_str, &lla);
     ds_put_format(match, "%s, ", ip6_str);
 
-    /* Allow ip6.src=:: and ip6.dst=ff00::/8 for ND packets */
-    ds_put_cstr(match, pipeline == P_IN ? "::" : "ff00::/8");
+    /* Allow ip6.dst=ff00::/8 for multicast packets */
+    if (pipeline == P_OUT) {
+        ds_put_cstr(match, "ff00::/8, ");
+    }
     for(int i = 0; i < n_ipv6_addrs; i++) {
         ipv6_string_mapped(ip6_str, &ipv6_addrs[i].addr);
-        ds_put_format(match, ", %s", ip6_str);
+        ds_put_format(match, "%s, ", ip6_str);
     }
+    /* Replace ", " by "}". */
+    ds_chomp(match, ' ');
+    ds_chomp(match, ',');
     ds_put_cstr(match, "}");
 }
 
@@ -1174,8 +1179,19 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
         if (ps.n_ipv4_addrs) {
             struct ds match = DS_EMPTY_INITIALIZER;
             if (pipeline == P_IN) {
+                /* Permit use of the unspecified address for DHCP discovery */
+                struct ds dhcp_match = DS_EMPTY_INITIALIZER;
+                ds_put_format(&dhcp_match, "inport == %s"
+                              " && eth.src == "ETH_ADDR_FMT
+                              " && ip4.src == 0.0.0.0"
+                              " && ip4.dst == 255.255.255.255"
+                              " && udp.src == 68 && udp.dst == 67", op->json_key,
+                              ETH_ADDR_ARGS(ps.ea));
+                ovn_lflow_add(lflows, op->od, stage, 90,
+                              ds_cstr(&dhcp_match), "next;");
+                ds_destroy(&dhcp_match);
                 ds_put_format(&match, "inport == %s && eth.src == "ETH_ADDR_FMT
-                              " && ip4.src == {0.0.0.0, ", op->json_key,
+                              " && ip4.src == {", op->json_key,
                               ETH_ADDR_ARGS(ps.ea));
             } else {
                 ds_put_format(&match, "outport == %s && eth.dst == "ETH_ADDR_FMT
@@ -1219,6 +1235,20 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
 
         if (ps.n_ipv6_addrs) {
             struct ds match = DS_EMPTY_INITIALIZER;
+            if (pipeline == P_IN) {
+                /* Permit use of unspecified address for duplicate address
+                 * detection */
+                struct ds dad_match = DS_EMPTY_INITIALIZER;
+                ds_put_format(&dad_match, "inport == %s"
+                              " && eth.src == "ETH_ADDR_FMT
+                              " && ip6.src == ::"
+                              " && ip6.dst == ff02::/16"
+                              " && icmp6.type == {131, 135, 143}", op->json_key,
+                              ETH_ADDR_ARGS(ps.ea));
+                ovn_lflow_add(lflows, op->od, stage, 90,
+                              ds_cstr(&dad_match), "next;");
+                ds_destroy(&dad_match);
+            }
             ds_put_format(&match, "%s == %s && %s == "ETH_ADDR_FMT"",
                           port_direction, op->json_key,
                           pipeline == P_IN ? "eth.src" : "eth.dst",
