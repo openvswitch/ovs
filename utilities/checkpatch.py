@@ -51,6 +51,10 @@ __regex_single_line_feed = re.compile(r'^\f$')
 __regex_for_if_missing_whitespace = re.compile(r'(if|for|while)[\(]')
 __regex_for_if_too_much_whitespace = re.compile(r'(if|for|while)  +[\(]')
 __regex_for_if_parens_whitespace = re.compile(r'(if|for|while) \( +[\s\S]+\)')
+__regex_is_for_if_single_line_bracket = \
+    re.compile(r'^ +(if|for|while) \(.*\)')
+
+__regex_ends_with_bracket = re.compile(r'[^\s]\) {$')
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -101,6 +105,28 @@ def if_and_for_whitespace_checks(line):
             __regex_for_if_too_much_whitespace.search(line) is not None or
             __regex_for_if_parens_whitespace.search(line)):
         return False
+    return True
+
+
+def if_and_for_end_with_bracket_check(line):
+    """Return TRUE if there is not a bracket at the end of an if, for, while
+       block which fits on a single line ie: 'if (foo)'"""
+
+    def balanced_parens(line):
+        """This is a rather naive counter - it won't deal with quotes"""
+        balance = 0
+        for letter in line:
+            if letter is '(':
+                balance += 1
+            elif letter is ')':
+                balance -= 1
+        return balance is 0
+
+    if __regex_is_for_if_single_line_bracket.search(line) is not None:
+        if not balanced_parens(line):
+            return True
+        if __regex_ends_with_bracket.search(line) is None:
+            return False
     return True
 
 
@@ -181,6 +207,10 @@ def ovs_checkpatch_parse(text):
             if not if_and_for_whitespace_checks(line[1:]):
                 print_line = True
                 print_warning("Improper whitespace around control block",
+                              lineno)
+            if not if_and_for_end_with_bracket_check(line[1:]):
+                print_line = True
+                print_warning("Inappropriate bracing around statement",
                               lineno)
             if print_line:
                 print(line)
