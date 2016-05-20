@@ -168,3 +168,41 @@ tunnel(tun_id=0x7b,src=1.1.2.92,dst=1.1.2.88,geneve({class=0xffff,type=0x80,len=
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([tunnel_push_pop - packet_out])
+
+OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 other-config:hwaddr=aa:55:aa:55:00:00])
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
+AT_CHECK([ovs-vsctl add-br int-br -- set bridge int-br datapath_type=dummy])
+AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=geneve \
+                       options:remote_ip=1.1.2.92 options:key=123 ofport_request=2 \
+                       ])
+
+dnl First setup dummy interface IP address, then add the route
+dnl so that tnl-port table can get valid IP address for the device.
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 1.1.2.88/24], [0], [OK
+])
+
+AT_CHECK([ovs-appctl ovs/route/add 1.1.2.92/24 br0], [0], [OK
+])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+dnl This ARP reply from p0 has two effects:
+dnl 1. The ARP cache will learn that 1.1.2.92 is at f8:bc:12:44:34:b6.
+dnl 2. The br0 mac learning will learn that f8:bc:12:44:34:b6 is on p0.
+AT_CHECK([ovs-appctl netdev-dummy/receive p0 'recirc_id(0),in_port(2),eth(src=f8:bc:12:44:34:b6,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=1.1.2.92,tip=1.1.2.88,op=2,sha=f8:bc:12:44:34:b6,tha=00:00:00:00:00:00)'])
+
+AT_CHECK([ovs-vsctl -- set Interface p0 options:tx_pcap=p0.pcap])
+
+dnl Output to tunnel from a int-br internal port
+AT_CHECK([ovs-ofctl add-flow int-br "in_port=LOCAL,actions=output:2"])
+AT_CHECK([ovs-appctl netdev-dummy/receive int-br '50540000000a5054000000091234'])
+OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep 50540000000a5054000000091234 | wc -l` -ge 1])
+
+dnl Output to tunnel from the controller
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out int-br CONTROLLER "output:2" '50540000000a5054000000091235'])
+OVS_WAIT_UNTIL([test `ovs-pcap p0.pcap | grep 50540000000a5054000000091235 | wc -l` -ge 1])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
