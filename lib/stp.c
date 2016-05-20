@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -240,8 +240,19 @@ static void stp_unixctl_tcn(struct unixctl_conn *, int argc,
 void
 stp_init(void)
 {
-    unixctl_command_register("stp/tcn", "[bridge]", 0, 1, stp_unixctl_tcn,
-                             NULL);
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+
+    if (ovsthread_once_start(&once)) {
+        /* We need a recursive mutex because stp_send_bpdu() could loop back
+         * into the stp module through a patch port.  This happens
+         * intentionally as part of the unit tests.  Ideally we'd ditch
+         * the call back function, but for now this is what we have. */
+        ovs_mutex_init_recursive(&mutex);
+
+        unixctl_command_register("stp/tcn", "[bridge]", 0, 1, stp_unixctl_tcn,
+                                 NULL);
+        ovsthread_once_done(&once);
+    }
 }
 
 /* Creates and returns a new STP instance that initially has no ports enabled.
@@ -262,18 +273,10 @@ stp_create(const char *name, stp_identifier bridge_id,
            void (*send_bpdu)(struct dp_packet *bpdu, int port_no, void *aux),
            void *aux)
 {
-    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     struct stp *stp;
     struct stp_port *p;
 
-    if (ovsthread_once_start(&once)) {
-        /* We need a recursive mutex because stp_send_bpdu() could loop back
-         * into the stp module through a patch port.  This happens
-         * intentionally as part of the unit tests.  Ideally we'd ditch
-         * the call back function, but for now this is what we have. */
-        ovs_mutex_init_recursive(&mutex);
-        ovsthread_once_done(&once);
-    }
+    stp_init();
 
     ovs_mutex_lock(&mutex);
     stp = xzalloc(sizeof *stp);
