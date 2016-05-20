@@ -20,7 +20,7 @@ SCRIPT
 $configure_ovs = <<SCRIPT
 mkdir -p ~/build
 cd ~/build
-/vagrant/configure --with-linux=/lib/modules/`uname -r`/build
+/vagrant/configure --with-linux=/lib/modules/`uname -r`/build --enable-silent-rules
 SCRIPT
 
 $build_ovs = <<SCRIPT
