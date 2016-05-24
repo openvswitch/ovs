@@ -578,12 +578,14 @@ OvsValidateUDPChecksum(PNET_BUFFER_LIST curNbl, BOOLEAN udpCsumZero)
 {
     NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
 
-    csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl, TcpIpChecksumNetBufferListInfo);
+    csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
+                                          TcpIpChecksumNetBufferListInfo);
 
     if (udpCsumZero) {
         /* Zero is valid checksum. */
         csumInfo.Receive.UdpChecksumFailed = 0;
-        NET_BUFFER_LIST_INFO(curNbl, TcpIpChecksumNetBufferListInfo) = csumInfo.Value;
+        NET_BUFFER_LIST_INFO(curNbl, TcpIpChecksumNetBufferListInfo) =
+            csumInfo.Value;
         return NDIS_STATUS_SUCCESS;
     }
 
@@ -644,7 +646,7 @@ OvsCalculateUDPChecksum(PNET_BUFFER_LIST curNbl,
 /*
  * OvsApplySWChecksumOnNB --
  *
- * This function calculates and sets the required sofware offloads given by
+ * This function calculates and sets the required software offloads given by
  * csumInfo for a given NBL(nbl) with a single NB.
  *
  */
