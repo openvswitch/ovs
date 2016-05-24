@@ -2502,8 +2502,8 @@
         table="Queue"/> tables).
       </p>
       <p>
-        Policing is currently implemented only on Linux.  The Linux
-        implementation uses a simple ``token bucket'' approach:
+        Policing is currently implemented on Linux and OVS with DPDK. Both
+        implementations use a simple ``token bucket'' approach:
       </p>
       <ul>
         <li>

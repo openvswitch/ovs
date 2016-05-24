@@ -32,6 +32,7 @@ Post-v2.5.0
      * DB entries have been added for many of the DPDK EAL command line
        arguments. Additional arguments can be passed via the dpdk-extra
        entry.
+     * Add ingress policing functionality.
    - ovs-benchmark: This utility has been removed due to lack of use and
      bitrot.
    - ovs-appctl:

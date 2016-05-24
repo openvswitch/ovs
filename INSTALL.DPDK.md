@@ -267,6 +267,25 @@ Using the DPDK with ovs-vswitchd:
    For more details regarding egress-policer parameters please refer to the
    vswitch.xml.
 
+9. Ingress Policing Example
+
+   Assuming you have a vhost-user port receiving traffic consisting of
+   packets of size 64 bytes, the following command would limit the reception
+   rate of the port to ~1,000,000 packets per second:
+
+   `ovs-vsctl set interface vhost-user0 ingress_policing_rate=368000
+    ingress_policing_burst=1000`
+
+   To examine the ingress policer configuration of the port:
+
+   `ovs-vsctl list interface vhost-user0`
+
+   To clear the ingress policer configuration from the port use the following:
+
+   `ovs-vsctl set interface vhost-user0 ingress_policing_rate=0`
+
+   For more details regarding ingress-policer see the vswitch.xml.
+
 Performance Tuning:
 -------------------
 

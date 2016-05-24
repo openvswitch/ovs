@@ -328,6 +328,12 @@ struct dpdk_ring {
     struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
 };
 
+struct ingress_policer {
+    struct rte_meter_srtcm_params app_srtcm_params;
+    struct rte_meter_srtcm in_policer;
+    rte_spinlock_t policer_lock;
+};
+
 struct netdev_dpdk {
     struct netdev up;
     int port_id;
@@ -378,6 +384,11 @@ struct netdev_dpdk {
      * netdev_dpdk*_reconfigure() is called */
     int requested_n_txq;
     int requested_n_rxq;
+
+    /* Ingress Policer */
+    OVSRCU_TYPE(struct ingress_policer *) ingress_policer;
+    uint32_t policer_rate;
+    uint32_t policer_burst;
 };
 
 struct netdev_rxq_dpdk {
@@ -390,6 +401,9 @@ static bool dpdk_thread_is_pmd(void);
 static int netdev_dpdk_construct(struct netdev *);
 
 struct virtio_net * netdev_dpdk_get_virtio(const struct netdev_dpdk *dev);
+
+struct ingress_policer *
+netdev_dpdk_get_ingress_policer(const struct netdev_dpdk *dev);
 
 static bool
 is_dpdk_class(const struct netdev_class *class)
@@ -764,6 +778,11 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
     dev->qos_conf = NULL;
     rte_spinlock_init(&dev->qos_lock);
 
+    /* Initialise rcu pointer for ingress policer to NULL */
+    ovsrcu_init(&dev->ingress_policer, NULL);
+    dev->policer_rate = 0;
+    dev->policer_burst = 0;
+
     netdev->n_txq = NR_QUEUE;
     netdev->n_rxq = NR_QUEUE;
     dev->requested_n_rxq = NR_QUEUE;
@@ -910,6 +929,8 @@ netdev_dpdk_destruct(struct netdev *netdev)
 
     ovs_mutex_lock(&dev->mutex);
     rte_eth_dev_stop(dev->port_id);
+    free(ovsrcu_get_protected(struct ingress_policer *,
+                              &dev->ingress_policer));
     ovs_mutex_unlock(&dev->mutex);
 
     ovs_mutex_lock(&dpdk_mutex);
@@ -938,6 +959,11 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
     } else {
         fatal_signal_remove_file_to_unlink(dev->vhost_id);
     }
+
+    ovs_mutex_lock(&dev->mutex);
+    free(ovsrcu_get_protected(struct ingress_policer *,
+                              &dev->ingress_policer));
+    ovs_mutex_unlock(&dev->mutex);
 
     ovs_mutex_lock(&dpdk_mutex);
     rte_free(dev->tx_q);
@@ -1136,6 +1162,19 @@ netdev_dpdk_policer_run(struct rte_meter_srtcm *meter,
     return cnt;
 }
 
+static int
+ingress_policer_run(struct ingress_policer *policer, struct rte_mbuf **pkts,
+                    int pkt_cnt)
+{
+    int cnt = 0;
+
+    rte_spinlock_lock(&policer->policer_lock);
+    cnt = netdev_dpdk_policer_run(&policer->in_policer, pkts, pkt_cnt);
+    rte_spinlock_unlock(&policer->policer_lock);
+
+    return cnt;
+}
+
 static bool
 is_vhost_running(struct virtio_net *virtio_dev)
 {
@@ -1170,13 +1209,15 @@ netdev_dpdk_vhost_update_rx_size_counters(struct netdev_stats *stats,
 
 static inline void
 netdev_dpdk_vhost_update_rx_counters(struct netdev_stats *stats,
-                                     struct dp_packet **packets, int count)
+                                     struct dp_packet **packets, int count,
+                                     int dropped)
 {
     int i;
     unsigned int packet_size;
     struct dp_packet *packet;
 
     stats->rx_packets += count;
+    stats->rx_dropped += dropped;
     for (i = 0; i < count; i++) {
         packet = packets[i];
         packet_size = dp_packet_size(packet);
@@ -1211,7 +1252,9 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
     struct netdev_dpdk *dev = netdev_dpdk_cast(rxq->netdev);
     struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(dev);
     int qid = rxq->queue_id;
+    struct ingress_policer *policer = netdev_dpdk_get_ingress_policer(dev);
     uint16_t nb_rx = 0;
+    uint16_t dropped = 0;
 
     if (OVS_UNLIKELY(!is_vhost_running(virtio_dev))) {
         return EAGAIN;
@@ -1229,8 +1272,14 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
         return EAGAIN;
     }
 
+    if (policer) {
+        dropped = nb_rx;
+        nb_rx = ingress_policer_run(policer, (struct rte_mbuf **)packets, nb_rx);
+        dropped -= nb_rx;
+    }
+
     rte_spinlock_lock(&dev->stats_lock);
-    netdev_dpdk_vhost_update_rx_counters(&dev->stats, packets, nb_rx);
+    netdev_dpdk_vhost_update_rx_counters(&dev->stats, packets, nb_rx, dropped);
     rte_spinlock_unlock(&dev->stats_lock);
 
     *c = (int) nb_rx;
@@ -1243,7 +1292,9 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet **packets,
 {
     struct netdev_rxq_dpdk *rx = netdev_rxq_dpdk_cast(rxq);
     struct netdev_dpdk *dev = netdev_dpdk_cast(rxq->netdev);
+    struct ingress_policer *policer = netdev_dpdk_get_ingress_policer(dev);
     int nb_rx;
+    int dropped = 0;
 
     /* There is only one tx queue for this core.  Do not flush other
      * queues.
@@ -1259,6 +1310,19 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet **packets,
                              NETDEV_MAX_BURST);
     if (!nb_rx) {
         return EAGAIN;
+    }
+
+    if (policer) {
+        dropped = nb_rx;
+        nb_rx = ingress_policer_run(policer, (struct rte_mbuf **) packets, nb_rx);
+        dropped -= nb_rx;
+    }
+
+    /* Update stats to reflect dropped packets */
+    if (OVS_UNLIKELY(dropped)) {
+        rte_spinlock_lock(&dev->stats_lock);
+        dev->stats.rx_dropped += dropped;
+        rte_spinlock_unlock(&dev->stats_lock);
     }
 
     *c = nb_rx;
@@ -1694,6 +1758,7 @@ netdev_dpdk_vhost_get_stats(const struct netdev *netdev,
     /* Supported Stats */
     stats->rx_packets += dev->stats.rx_packets;
     stats->tx_packets += dev->stats.tx_packets;
+    stats->rx_dropped = dev->stats.rx_dropped;
     stats->tx_dropped += dev->stats.tx_dropped;
     stats->multicast = dev->stats.multicast;
     stats->rx_bytes = dev->stats.rx_bytes;
@@ -1821,11 +1886,12 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
 
     rte_spinlock_lock(&dev->stats_lock);
     stats->tx_dropped = dev->stats.tx_dropped;
+    stats->rx_dropped = dev->stats.rx_dropped;
     rte_spinlock_unlock(&dev->stats_lock);
 
     /* These are the available DPDK counters for packets not received due to
      * local resource constraints in DPDK and NIC respectively. */
-    stats->rx_dropped = rte_stats.rx_nombuf + rte_stats.imissed;
+    stats->rx_dropped += rte_stats.rx_nombuf + rte_stats.imissed;
     stats->rx_missed_errors = rte_stats.imissed;
 
     ovs_mutex_unlock(&dev->mutex);
@@ -1875,6 +1941,79 @@ netdev_dpdk_get_features(const struct netdev *netdev,
     if (link.link_autoneg) {
         *current |= NETDEV_F_AUTONEG;
     }
+
+    return 0;
+}
+
+static struct ingress_policer *
+netdev_dpdk_policer_construct(uint32_t rate, uint32_t burst)
+{
+    struct ingress_policer *policer = NULL;
+    uint64_t rate_bytes;
+    uint64_t burst_bytes;
+    int err = 0;
+
+    policer = xmalloc(sizeof *policer);
+    rte_spinlock_init(&policer->policer_lock);
+
+    /* rte_meter requires bytes so convert kbits rate and burst to bytes. */
+    rate_bytes = rate * 1000/8;
+    burst_bytes = burst * 1000/8;
+
+    policer->app_srtcm_params.cir = rate_bytes;
+    policer->app_srtcm_params.cbs = burst_bytes;
+    policer->app_srtcm_params.ebs = 0;
+    err = rte_meter_srtcm_config(&policer->in_policer,
+                                    &policer->app_srtcm_params);
+    if(err) {
+        VLOG_ERR("Could not create rte meter for ingress policer");
+        return NULL;
+    }
+
+    return policer;
+}
+
+static int
+netdev_dpdk_set_policing(struct netdev* netdev, uint32_t policer_rate,
+                         uint32_t policer_burst)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct ingress_policer *policer;
+
+    /* Force to 0 if no rate specified,
+     * default to 8000 kbits if burst is 0,
+     * else stick with user-specified value.
+     */
+    policer_burst = (!policer_rate ? 0
+                     : !policer_burst ? 8000
+                     : policer_burst);
+
+    ovs_mutex_lock(&dev->mutex);
+
+    policer = ovsrcu_get_protected(struct ingress_policer *,
+                                    &dev->ingress_policer);
+
+    if (dev->policer_rate == policer_rate &&
+        dev->policer_burst == policer_burst) {
+        /* Assume that settings haven't changed since we last set them. */
+        ovs_mutex_unlock(&dev->mutex);
+        return 0;
+    }
+
+    /* Destroy any existing ingress policer for the device if one exists */
+    if (policer) {
+        ovsrcu_postpone(free, policer);
+    }
+
+    if (policer_rate != 0) {
+        policer = netdev_dpdk_policer_construct(policer_rate, policer_burst);
+    } else {
+        policer = NULL;
+    }
+    ovsrcu_set(&dev->ingress_policer, policer);
+    dev->policer_rate = policer_rate;
+    dev->policer_burst = policer_burst;
+    ovs_mutex_unlock(&dev->mutex);
 
     return 0;
 }
@@ -2324,6 +2463,12 @@ struct virtio_net *
 netdev_dpdk_get_virtio(const struct netdev_dpdk *dev)
 {
     return ovsrcu_get(struct virtio_net *, &dev->virtio_dev);
+}
+
+struct ingress_policer *
+netdev_dpdk_get_ingress_policer(const struct netdev_dpdk *dev)
+{
+    return ovsrcu_get(struct ingress_policer *, &dev->ingress_policer);
 }
 
 /*
@@ -2839,7 +2984,7 @@ netdev_dpdk_vhost_cuse_reconfigure(struct netdev *netdev)
     GET_FEATURES,                                             \
     NULL,                       /* set_advertisements */      \
                                                               \
-    NULL,                       /* set_policing */            \
+    netdev_dpdk_set_policing,                                 \
     netdev_dpdk_get_qos_types,                                \
     NULL,                       /* get_qos_capabilities */    \
     netdev_dpdk_get_qos,                                      \
