@@ -126,10 +126,12 @@ netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
         *hlen += IP_HEADER_LEN;
 
     } else if (IP_VER(ip->ip_ihl_ver) == 6) {
+        ovs_be32 tc_flow = get_16aligned_be32(&ip6->ip6_flow);
 
         memcpy(tnl->ipv6_src.s6_addr, ip6->ip6_src.be16, sizeof ip6->ip6_src);
         memcpy(tnl->ipv6_dst.s6_addr, ip6->ip6_dst.be16, sizeof ip6->ip6_dst);
-        tnl->ip_tos = 0;
+
+        tnl->ip_tos = ntohl(tc_flow) >> 20;
         tnl->ip_ttl = ip6->ip6_hlim;
 
         *hlen += IPV6_HEADER_LEN;
@@ -294,7 +296,8 @@ netdev_tnl_ip_build_header(struct ovs_action_push_tnl *data,
 
         ip6 = (struct ovs_16aligned_ip6_hdr *) l3;
 
-        ip6->ip6_vfc = 0x60;
+        put_16aligned_be32(&ip6->ip6_flow, htonl(6 << 28) |
+                           htonl(params->flow->tunnel.ip_tos << 20));
         ip6->ip6_hlim = params->flow->tunnel.ip_ttl;
         ip6->ip6_nxt = next_proto;
         memcpy(&ip6->ip6_src, params->s_ip, sizeof(ovs_be32[4]));
