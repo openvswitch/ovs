@@ -581,8 +581,8 @@ class DatabaseCache(object):
         os.rename(temp_file, cache_file)
 
     def get_pif_by_uuid(self, uuid):
-        pifs = map(lambda (ref,rec): ref,
-                  filter(lambda (ref,rec): uuid == rec['uuid'],
+        pifs = map(lambda ref_rec: ref_rec[0],
+                  filter(lambda ref_rec: uuid == ref_rec[1]['uuid'],
                          self.__pifs.items()))
         if len(pifs) == 0:
             raise Error("Unknown PIF \"%s\"" % uuid)
@@ -592,14 +592,14 @@ class DatabaseCache(object):
         return pifs[0]
 
     def get_pifs_by_device(self, device):
-        return map(lambda (ref,rec): ref,
-                   filter(lambda (ref,rec): rec['device'] == device,
-                          self.__pifs.items()))
+        return list(map(lambda ref_rec: ref_rec[0],
+                   list(filter(lambda ref_rec: ref_rec[1]['device'] == device,
+                          self.__pifs.items()))))
 
     def get_networks_with_bridge(self, bridge):
-        return map(lambda (ref,rec): ref,
-                  filter(lambda (ref,rec): rec['bridge'] == bridge,
-                         self.__networks.items()))
+        return list(map(lambda ref_rec: ref_rec[0],
+                  list(filter(lambda ref_rec: ref_rec[1]['bridge'] == bridge,
+                         self.__networks.items()))))
 
     def get_network_by_bridge(self, bridge):
         #Assumes one network has bridge.

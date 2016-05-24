@@ -196,9 +196,9 @@ def datapath_configure_bond(pif,slaves):
     # override defaults with values from other-config whose keys
     # being with "bond-"
     oc = pifrec['other_config']
-    overrides = filter(lambda (key,val):
-                           key.startswith("bond-"), oc.items())
-    overrides = map(lambda (key,val): (key[5:], val), overrides)
+    overrides = filter(lambda key_val:
+                           key_val[0].startswith("bond-"), oc.items())
+    overrides = map(lambda key_val: (key_val[0][5:], key_val[1]), overrides)
     bond_options.update(overrides)
     mode = None
     halgo = None
