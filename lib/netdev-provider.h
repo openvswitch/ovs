@@ -32,6 +32,7 @@
 extern "C" {
 #endif
 
+struct netdev_tnl_build_header_params;
 #define NETDEV_NUMA_UNSPEC OVS_NUMA_UNSPEC
 
 /* A network device (e.g. an Ethernet device).
@@ -276,10 +277,10 @@ struct netdev_class {
     const struct netdev_tunnel_config *
         (*get_tunnel_config)(const struct netdev *netdev);
 
-    /* Build Partial Tunnel header.  Ethernet and ip header is already built,
-     * build_header() is suppose build protocol specific part of header. */
+    /* Build Tunnel header.  Ethernet and ip header parameters are passed to
+     * tunnel implementation to build entire outer header for given flow. */
     int (*build_header)(const struct netdev *, struct ovs_action_push_tnl *data,
-                        const struct flow *tnl_flow);
+                        const struct netdev_tnl_build_header_params *params);
 
     /* build_header() can not build entire header for all packets for given
      * flow.  Push header is called for packet to build header specific to

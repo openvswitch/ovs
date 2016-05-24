@@ -690,65 +690,16 @@ tnl_port_get_name(const struct tnl_port *tnl_port) OVS_REQ_RDLOCK(rwlock)
 
 int
 tnl_port_build_header(const struct ofport_dpif *ofport,
-                      const struct flow *tnl_flow,
-                      const struct eth_addr dmac,
-                      const struct eth_addr smac,
-                      const struct in6_addr * ipv6_src,
-                      struct ovs_action_push_tnl *data)
+                      struct ovs_action_push_tnl *data,
+                      const struct netdev_tnl_build_header_params *params)
 {
     struct tnl_port *tnl_port;
-    struct eth_header *eth;
-    struct ip_header *ip;
-    struct ovs_16aligned_ip6_hdr *ip6;
-    void *l3;
     int res;
-    ovs_be32 ip_src;
 
     fat_rwlock_rdlock(&rwlock);
     tnl_port = tnl_find_ofport(ofport);
     ovs_assert(tnl_port);
-
-    ip_src = in6_addr_get_mapped_ipv4(ipv6_src);
-
-    /* Build Ethernet and IP headers. */
-    memset(data->header, 0, sizeof data->header);
-
-    eth = (struct eth_header *)data->header;
-    eth->eth_dst = dmac;
-    eth->eth_src = smac;
-    eth->eth_type = ip_src ? htons(ETH_TYPE_IP) : htons(ETH_TYPE_IPV6);
-
-    l3 = (eth + 1);
-
-    if (ip_src) {
-        ip = (struct ip_header *) l3;
-
-        ip->ip_ihl_ver = IP_IHL_VER(5, 4);
-        ip->ip_tos = tnl_flow->tunnel.ip_tos;
-        ip->ip_ttl = tnl_flow->tunnel.ip_ttl;
-        ip->ip_frag_off = (tnl_flow->tunnel.flags & FLOW_TNL_F_DONT_FRAGMENT) ?
-                          htons(IP_DF) : 0;
-
-        put_16aligned_be32(&ip->ip_src, ip_src);
-        put_16aligned_be32(&ip->ip_dst, tnl_flow->tunnel.ip_dst);
-    } else {
-        ip6 = (struct ovs_16aligned_ip6_hdr *) l3;
-
-        ip6->ip6_vfc = 0x60;
-        ip6->ip6_hlim = tnl_flow->tunnel.ip_ttl;
-
-        /* next header, plen - at netdev_build_header? */
-
-        memcpy(&ip6->ip6_src, ipv6_src, sizeof(ovs_be32[4]));
-        memcpy(&ip6->ip6_dst, &tnl_flow->tunnel.ipv6_dst, sizeof(ovs_be32[4]));
-    }
-
-    res = netdev_build_header(tnl_port->netdev, data, tnl_flow);
-
-    if (ip_src) {
-        ip->ip_csum = csum(ip, sizeof *ip);
-    }
-
+    res = netdev_build_header(tnl_port->netdev, data, params);
     fat_rwlock_unlock(&rwlock);
 
     return res;

@@ -25,7 +25,8 @@
 int
 netdev_gre_build_header(const struct netdev *netdev,
                         struct ovs_action_push_tnl *data,
-                        const struct flow *tnl_flow);
+                        const struct netdev_tnl_build_header_params *params);
+
 void
 netdev_gre_push_header(struct dp_packet *packet,
                        const struct ovs_action_push_tnl *data);
@@ -38,14 +39,16 @@ netdev_tnl_push_udp_header(struct dp_packet *packet,
 int
 netdev_geneve_build_header(const struct netdev *netdev,
                            struct ovs_action_push_tnl *data,
-                           const struct flow *tnl_flow);
+                           const struct netdev_tnl_build_header_params *params);
+
 struct dp_packet *
 netdev_geneve_pop_header(struct dp_packet *packet);
 
 int
 netdev_vxlan_build_header(const struct netdev *netdev,
                           struct ovs_action_push_tnl *data,
-                          const struct flow *tnl_flow);
+                          const struct netdev_tnl_build_header_params *params);
+
 struct dp_packet *
 netdev_vxlan_pop_header(struct dp_packet *packet);
 
@@ -68,6 +71,11 @@ netdev_tnl_ipv6_hdr(void *eth)
 {
     return (void *)((char *)eth + sizeof (struct eth_header));
 }
+
+void *
+netdev_tnl_ip_build_header(struct ovs_action_push_tnl *data,
+                           const struct netdev_tnl_build_header_params *params,
+                           uint8_t next_proto);
 
 extern uint16_t tnl_udp_port_min;
 extern uint16_t tnl_udp_port_max;

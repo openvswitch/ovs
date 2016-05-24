@@ -152,8 +152,26 @@ int netdev_send(struct netdev *, int qid, struct dp_packet_batch *,
                 bool may_steal);
 void netdev_send_wait(struct netdev *, int qid);
 
+/* native tunnel APIs */
+/* Structure to pass parameters required to build a tunnel header. */
+struct netdev_tnl_build_header_params {
+    const struct flow *flow;
+    const struct in6_addr *s_ip;
+    struct eth_addr dmac;
+    struct eth_addr smac;
+    bool is_ipv6;
+};
+
+void
+netdev_init_tnl_build_header_params(struct netdev_tnl_build_header_params *params,
+                                    const struct flow *tnl_flow,
+                                    const struct in6_addr *src,
+                                    struct eth_addr dmac,
+                                    struct eth_addr smac);
+
 int netdev_build_header(const struct netdev *, struct ovs_action_push_tnl *data,
-                        const struct flow *tnl_flow);
+                        const struct netdev_tnl_build_header_params *params);
+
 int netdev_push_header(const struct netdev *netdev,
                        struct dp_packet_batch *,
                        const struct ovs_action_push_tnl *data);

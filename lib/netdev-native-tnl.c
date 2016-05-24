@@ -245,41 +245,83 @@ netdev_tnl_push_udp_header(struct dp_packet *packet,
 }
 
 static void *
-udp_build_header(struct netdev_tunnel_config *tnl_cfg,
-                 const struct flow *tnl_flow,
-                 struct ovs_action_push_tnl *data,
-                 unsigned int *hlen)
+eth_build_header(struct ovs_action_push_tnl *data,
+                 const struct netdev_tnl_build_header_params *params)
 {
-    struct ip_header *ip;
-    struct ovs_16aligned_ip6_hdr *ip6;
-    struct udp_header *udp;
-    bool is_ipv6;
+    uint16_t eth_proto = params->is_ipv6 ? ETH_TYPE_IPV6 : ETH_TYPE_IP;
+    struct eth_header *eth;
 
-    *hlen = sizeof(struct eth_header);
+    memset(data->header, 0, sizeof data->header);
 
-    is_ipv6 = netdev_tnl_is_header_ipv6(data->header);
+    eth = (struct eth_header *)data->header;
+    eth->eth_dst = params->dmac;
+    eth->eth_src = params->smac;
+    eth->eth_type = htons(eth_proto);
+    data->header_len = sizeof(struct eth_header);
+    return eth + 1;
+}
 
-    if (is_ipv6) {
-        ip6 = netdev_tnl_ipv6_hdr(data->header);
-        ip6->ip6_nxt = IPPROTO_UDP;
-        udp = (struct udp_header *) (ip6 + 1);
-        *hlen += IPV6_HEADER_LEN;
+void *
+netdev_tnl_ip_build_header(struct ovs_action_push_tnl *data,
+                           const struct netdev_tnl_build_header_params *params,
+                           uint8_t next_proto)
+{
+    void *l3;
+
+    l3 = eth_build_header(data, params);
+    if (!params->is_ipv6) {
+        ovs_be32 ip_src = in6_addr_get_mapped_ipv4(params->s_ip);
+        struct ip_header *ip;
+
+        ip = (struct ip_header *) l3;
+
+        ip->ip_ihl_ver = IP_IHL_VER(5, 4);
+        ip->ip_tos = params->flow->tunnel.ip_tos;
+        ip->ip_ttl = params->flow->tunnel.ip_ttl;
+        ip->ip_proto = next_proto;
+        put_16aligned_be32(&ip->ip_src, ip_src);
+        put_16aligned_be32(&ip->ip_dst, params->flow->tunnel.ip_dst);
+
+        ip->ip_frag_off = (params->flow->tunnel.flags & FLOW_TNL_F_DONT_FRAGMENT) ?
+                          htons(IP_DF) : 0;
+
+        ip->ip_csum = csum(ip, sizeof *ip);
+
+        data->header_len += IP_HEADER_LEN;
+        return ip + 1;
     } else {
-        ip = netdev_tnl_ip_hdr(data->header);
-        ip->ip_proto = IPPROTO_UDP;
-        udp = (struct udp_header *) (ip + 1);
-        *hlen += IP_HEADER_LEN;
-    }
+        struct ovs_16aligned_ip6_hdr *ip6;
 
+        ip6 = (struct ovs_16aligned_ip6_hdr *) l3;
+
+        ip6->ip6_vfc = 0x60;
+        ip6->ip6_hlim = params->flow->tunnel.ip_ttl;
+        ip6->ip6_nxt = next_proto;
+        memcpy(&ip6->ip6_src, params->s_ip, sizeof(ovs_be32[4]));
+        memcpy(&ip6->ip6_dst, &params->flow->tunnel.ipv6_dst, sizeof(ovs_be32[4]));
+
+        data->header_len += IPV6_HEADER_LEN;
+        return ip6 + 1;
+    }
+}
+
+static void *
+udp_build_header(struct netdev_tunnel_config *tnl_cfg,
+                 struct ovs_action_push_tnl *data,
+                 const struct netdev_tnl_build_header_params *params)
+{
+    struct udp_header *udp;
+
+    udp = netdev_tnl_ip_build_header(data, params, IPPROTO_UDP);
     udp->udp_dst = tnl_cfg->dst_port;
 
-    if (is_ipv6 || tnl_flow->tunnel.flags & FLOW_TNL_F_CSUM) {
+    if (params->is_ipv6 || params->flow->tunnel.flags & FLOW_TNL_F_CSUM) {
         /* Write a value in now to mark that we should compute the checksum
          * later. 0xffff is handy because it is transparent to the
          * calculation. */
         udp->udp_csum = htons(0xffff);
     }
-
+    data->header_len += sizeof *udp;
     return udp + 1;
 }
 
@@ -400,38 +442,25 @@ netdev_gre_push_header(struct dp_packet *packet,
 int
 netdev_gre_build_header(const struct netdev *netdev,
                         struct ovs_action_push_tnl *data,
-                        const struct flow *tnl_flow)
+                        const struct netdev_tnl_build_header_params *params)
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
     struct netdev_tunnel_config *tnl_cfg;
-    struct ip_header *ip;
-    struct ovs_16aligned_ip6_hdr *ip6;
     struct gre_base_hdr *greh;
     ovs_16aligned_be32 *options;
-    int hlen;
-    bool is_ipv6;
-
-    is_ipv6 = netdev_tnl_is_header_ipv6(data->header);
+    unsigned int hlen;
 
     /* XXX: RCUfy tnl_cfg. */
     ovs_mutex_lock(&dev->mutex);
     tnl_cfg = &dev->tnl_cfg;
 
-    if (is_ipv6) {
-        ip6 = netdev_tnl_ipv6_hdr(data->header);
-        ip6->ip6_nxt = IPPROTO_GRE;
-        greh = (struct gre_base_hdr *) (ip6 + 1);
-    } else {
-        ip = netdev_tnl_ip_hdr(data->header);
-        ip->ip_proto = IPPROTO_GRE;
-        greh = (struct gre_base_hdr *) (ip + 1);
-    }
+    greh = netdev_tnl_ip_build_header(data, params, IPPROTO_GRE);
 
     greh->protocol = htons(ETH_TYPE_TEB);
     greh->flags = 0;
 
     options = (ovs_16aligned_be32 *) (greh + 1);
-    if (tnl_flow->tunnel.flags & FLOW_TNL_F_CSUM) {
+    if (params->flow->tunnel.flags & FLOW_TNL_F_CSUM) {
         greh->flags |= htons(GRE_CSUM);
         put_16aligned_be32(options, 0);
         options++;
@@ -440,7 +469,7 @@ netdev_gre_build_header(const struct netdev *netdev,
     if (tnl_cfg->out_key_present) {
         greh->flags |= htons(GRE_KEY);
         put_16aligned_be32(options, (OVS_FORCE ovs_be32)
-                                    ((OVS_FORCE uint64_t) tnl_flow->tunnel.tun_id >> 32));
+                                    ((OVS_FORCE uint64_t) params->flow->tunnel.tun_id >> 32));
         options++;
     }
 
@@ -448,8 +477,7 @@ netdev_gre_build_header(const struct netdev *netdev,
 
     hlen = (uint8_t *) options - (uint8_t *) greh;
 
-    data->header_len = sizeof(struct eth_header) + hlen +
-                       (is_ipv6 ? IPV6_HEADER_LEN : IP_HEADER_LEN);
+    data->header_len += hlen;
     data->tnl_type = OVS_VPORT_TYPE_GRE;
     return 0;
 }
@@ -493,24 +521,23 @@ err:
 int
 netdev_vxlan_build_header(const struct netdev *netdev,
                           struct ovs_action_push_tnl *data,
-                          const struct flow *tnl_flow)
+                          const struct netdev_tnl_build_header_params *params)
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
     struct netdev_tunnel_config *tnl_cfg;
     struct vxlanhdr *vxh;
-    unsigned int hlen;
 
     /* XXX: RCUfy tnl_cfg. */
     ovs_mutex_lock(&dev->mutex);
     tnl_cfg = &dev->tnl_cfg;
 
-    vxh = udp_build_header(tnl_cfg, tnl_flow, data, &hlen);
+    vxh = udp_build_header(tnl_cfg, data, params);
 
     put_16aligned_be32(&vxh->vx_flags, htonl(VXLAN_FLAGS));
-    put_16aligned_be32(&vxh->vx_vni, htonl(ntohll(tnl_flow->tunnel.tun_id) << 8));
+    put_16aligned_be32(&vxh->vx_vni, htonl(ntohll(params->flow->tunnel.tun_id) << 8));
 
     ovs_mutex_unlock(&dev->mutex);
-    data->header_len = hlen + VXLAN_HLEN;
+    data->header_len += sizeof *vxh;
     data->tnl_type = OVS_VPORT_TYPE_VXLAN;
     return 0;
 }
@@ -573,34 +600,33 @@ err:
 int
 netdev_geneve_build_header(const struct netdev *netdev,
                            struct ovs_action_push_tnl *data,
-                           const struct flow *tnl_flow)
+                           const struct netdev_tnl_build_header_params *params)
 {
     struct netdev_vport *dev = netdev_vport_cast(netdev);
     struct netdev_tunnel_config *tnl_cfg;
     struct genevehdr *gnh;
     int opt_len;
     bool crit_opt;
-    unsigned int hlen;
 
     /* XXX: RCUfy tnl_cfg. */
     ovs_mutex_lock(&dev->mutex);
     tnl_cfg = &dev->tnl_cfg;
 
-    gnh = udp_build_header(tnl_cfg, tnl_flow, data, &hlen);
+    gnh = udp_build_header(tnl_cfg, data, params);
 
-    put_16aligned_be32(&gnh->vni, htonl(ntohll(tnl_flow->tunnel.tun_id) << 8));
+    put_16aligned_be32(&gnh->vni, htonl(ntohll(params->flow->tunnel.tun_id) << 8));
 
     ovs_mutex_unlock(&dev->mutex);
 
-    opt_len = tun_metadata_to_geneve_header(&tnl_flow->tunnel,
+    opt_len = tun_metadata_to_geneve_header(&params->flow->tunnel,
                                             gnh->options, &crit_opt);
 
     gnh->opt_len = opt_len / 4;
-    gnh->oam = !!(tnl_flow->tunnel.flags & FLOW_TNL_F_OAM);
+    gnh->oam = !!(params->flow->tunnel.flags & FLOW_TNL_F_OAM);
     gnh->critical = crit_opt ? 1 : 0;
     gnh->proto_type = htons(ETH_TYPE_TEB);
 
-    data->header_len = hlen + GENEVE_BASE_HLEN + opt_len;
+    data->header_len += sizeof *gnh + opt_len;
     data->tnl_type = OVS_VPORT_TYPE_GENEVE;
     return 0;
 }

@@ -2882,6 +2882,7 @@ static int
 build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
                   const struct flow *flow, odp_port_t tunnel_odp_port)
 {
+    struct netdev_tnl_build_header_params tnl_params;
     struct ovs_action_push_tnl tnl_push_data;
     struct xport *out_dev = NULL;
     ovs_be32 s_ip = 0, d_ip = 0;
@@ -2942,8 +2943,8 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
                  ETH_ADDR_ARGS(smac), ipv6_string_mapped(buf_sip6, &s_ip6),
                  ETH_ADDR_ARGS(dmac), buf_dip6);
 
-    err = tnl_port_build_header(xport->ofport, flow,
-                                dmac, smac, &s_ip6, &tnl_push_data);
+    netdev_init_tnl_build_header_params(&tnl_params, flow, &s_ip6, dmac, smac);
+    err = tnl_port_build_header(xport->ofport, &tnl_push_data, &tnl_params);
     if (err) {
         return err;
     }

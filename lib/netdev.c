@@ -741,12 +741,26 @@ netdev_pop_header(struct netdev *netdev, struct dp_packet_batch *batch)
     batch->count = n_cnt;
 }
 
-int
-netdev_build_header(const struct netdev *netdev, struct ovs_action_push_tnl *data,
-                    const struct flow *tnl_flow)
+void
+netdev_init_tnl_build_header_params(struct netdev_tnl_build_header_params *params,
+                                    const struct flow *tnl_flow,
+                                    const struct in6_addr *src,
+                                    struct eth_addr dmac,
+                                    struct eth_addr smac)
+{
+    params->flow = tnl_flow;
+    params->dmac = dmac;
+    params->smac = smac;
+    params->s_ip = src;
+    params->is_ipv6 = !IN6_IS_ADDR_V4MAPPED(src);
+}
+
+int netdev_build_header(const struct netdev *netdev,
+                        struct ovs_action_push_tnl *data,
+                        const struct netdev_tnl_build_header_params *params)
 {
     if (netdev->netdev_class->build_header) {
-        return netdev->netdev_class->build_header(netdev, data, tnl_flow);
+        return netdev->netdev_class->build_header(netdev, data, params);
     }
     return EOPNOTSUPP;
 }
