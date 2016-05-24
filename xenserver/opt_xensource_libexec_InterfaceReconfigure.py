@@ -758,15 +758,22 @@ def pif_ipdev_name(pif):
 def netdev_exists(netdev):
     return os.path.exists(root_prefix() + "/sys/class/net/" + netdev)
 
+
+def unicode_2to3(string):
+    if sys.version_info < (3,):
+        return string.encode()
+    return string
+
+
 def pif_netdev_name(pif):
     """Get the netdev name for a PIF."""
 
     pifrec = db().get_pif_record(pif)
 
     if pif_is_vlan(pif):
-        return "%(device)s.%(VLAN)s" % pifrec
+        return unicode_2to3("%(device)s.%(VLAN)s" % pifrec)
     else:
-        return pifrec['device']
+        return unicode_2to3(pifrec['device'])
 
 #
 # Bridges

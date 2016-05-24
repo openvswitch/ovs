@@ -655,7 +655,7 @@ class DatapathVswitch(Datapath):
             for flow in self._bridge_flows:
                 if flow.find('in_port=%s') != -1 or flow.find('actions=%s') != -1:
                     for port in ofports:
-                        f = flow % (port)
+                        f = flow % (port.decode())
                         run_command(['/usr/bin/ovs-ofctl', 'add-flow', dpname, f])
                 else:
                     run_command(['/usr/bin/ovs-ofctl', 'add-flow', dpname, flow])
