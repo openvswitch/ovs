@@ -279,11 +279,10 @@ _BOND_XML_TAG = "bond"
 _NETWORK_XML_TAG = "network"
 _POOL_XML_TAG = "pool"
 
-_ETHTOOL_OTHERCONFIG_ATTRS = ['ethtool-%s' % x for x in 'autoneg', 'speed', 'duplex', 'rx', 'tx', 'sg', 'tso', 'ufo', 'gso', 'gro', 'lro' ]
+_ETHTOOL_OTHERCONFIG_ATTRS = ['ethtool-%s' % x for x in ['autoneg', 'speed', 'duplex', 'rx', 'tx', 'sg', 'tso', 'ufo', 'gso', 'gro', 'lro'] ]
 
 _PIF_OTHERCONFIG_ATTRS = [ 'domain', 'peerdns', 'defaultroute', 'mtu', 'static-routes' ] + \
-                        [ 'bond-%s' % x for x in 'mode', 'miimon', 'downdelay',
-                                'updelay', 'use_carrier', 'hashing-algorithm' ] + \
+                        [ 'bond-%s' % x for x in ['mode', 'miimon', 'downdelay', 'updelay', 'use_carrier', 'hashing-algorithm'] ] + \
                         [ 'vlan-bug-workaround' ] + \
                         _ETHTOOL_OTHERCONFIG_ATTRS
 
@@ -387,7 +386,7 @@ class DatabaseCache(object):
         return dict(defs)
 
     def __pif_on_host(self,pif):
-        return self.__pifs.has_key(pif)
+        return pif in self.__pifs
 
     def __get_pif_records_from_xapi(self, session, host):
         self.__pifs = {}
@@ -399,7 +398,7 @@ class DatabaseCache(object):
                 self.__pifs[p][f] = rec[f]
             self.__pifs[p]['other_config'] = {}
             for f in _PIF_OTHERCONFIG_ATTRS:
-                if not rec['other_config'].has_key(f): continue
+                if f not in rec['other_config']: continue
                 self.__pifs[p]['other_config'][f] = rec['other_config'][f]
 
     def __get_vlan_records_from_xapi(self, session):
@@ -446,7 +445,7 @@ class DatabaseCache(object):
                     self.__networks[n][f] = rec[f]
             self.__networks[n]['other_config'] = {}
             for f in _NETWORK_OTHERCONFIG_ATTRS:
-                if not rec['other_config'].has_key(f): continue
+                if f not in rec['other_config']: continue
                 self.__networks[n]['other_config'][f] = rec['other_config'][f]
 
     def __get_pool_records_from_xapi(self, session):
@@ -460,7 +459,7 @@ class DatabaseCache(object):
                 self.__pools[p][f] = rec[f]
 
             for f in _POOL_OTHERCONFIG_ATTRS:
-                if rec['other_config'].has_key(f):
+                if f in rec['other_config']:
                     self.__pools[p]['other_config'][f] = rec['other_config'][f]
 
     def __to_xml(self, xml, parent, key, ref, rec, attrs):
@@ -471,7 +470,7 @@ class DatabaseCache(object):
             e.setAttribute('ref', ref)
 
         for n,v in rec.items():
-            if attrs.has_key(n):
+            if n in attrs:
                 h,_ = attrs[n]
                 h(xml, e, n, v)
             else:
@@ -502,7 +501,7 @@ class DatabaseCache(object):
             try:
 
                 inventory = self.__read_xensource_inventory()
-                assert(inventory.has_key('INSTALLATION_UUID'))
+                assert('INSTALLATION_UUID' in inventory)
                 log("host uuid is %s" % inventory['INSTALLATION_UUID'])
 
                 host = session.xenapi.host.get_by_uuid(inventory['INSTALLATION_UUID'])
@@ -628,13 +627,13 @@ class DatabaseCache(object):
         return answer
 
     def get_pif_record(self, pif):
-        if self.__pifs.has_key(pif):
+        if pif in self.__pifs:
             return self.__pifs[pif]
         raise Error("Unknown PIF \"%s\"" % pif)
     def get_all_pifs(self):
         return self.__pifs
     def pif_exists(self, pif):
-        return self.__pifs.has_key(pif)
+        return pif in self.__pifs
 
     def get_management_pif(self):
         """ Returns the management pif on host
@@ -646,25 +645,25 @@ class DatabaseCache(object):
         return None
 
     def get_network_record(self, network):
-        if self.__networks.has_key(network):
+        if network in self.__networks:
             return self.__networks[network]
         raise Error("Unknown network \"%s\"" % network)
 
     def get_bond_record(self, bond):
-        if self.__bonds.has_key(bond):
+        if bond in self.__bonds:
             return self.__bonds[bond]
         else:
             return None
 
     def get_vlan_record(self, vlan):
-        if self.__vlans.has_key(vlan):
+        if vlan in self.__vlans:
             return self.__vlans[vlan]
         else:
             return None
 
     def get_pool_record(self):
         if len(self.__pools) > 0:
-            return self.__pools.values()[0]
+            return list(self.__pools.values())[0]
 
 #
 #
@@ -673,19 +672,19 @@ PIF_OTHERCONFIG_DEFAULTS = {'gro': 'off', 'lro': 'off'}
 
 def ethtool_settings(oc, defaults = {}):
     settings = []
-    if oc.has_key('ethtool-speed'):
+    if 'ethtool-speed' in oc:
         val = oc['ethtool-speed']
         if val in ["10", "100", "1000"]:
             settings += ['speed', val]
         else:
             log("Invalid value for ethtool-speed = %s. Must be 10|100|1000." % val)
-    if oc.has_key('ethtool-duplex'):
+    if 'ethtool-duplex' in oc:
         val = oc['ethtool-duplex']
         if val in ["half", "full"]:
             settings += ['duplex', val]
         else:
             log("Invalid value for ethtool-duplex = %s. Must be half|full." % val)
-    if oc.has_key('ethtool-autoneg'):
+    if 'ethtool-autoneg' in oc:
         val = oc['ethtool-autoneg']
         if val in ["true", "on"]:
             settings += ['autoneg', 'on']
@@ -695,7 +694,7 @@ def ethtool_settings(oc, defaults = {}):
             log("Invalid value for ethtool-autoneg = %s. Must be on|true|off|false." % val)
     offload = []
     for opt in ("rx", "tx", "sg", "tso", "ufo", "gso", "gro", "lro"):
-        if oc.has_key("ethtool-" + opt):
+        if "ethtool-" + opt in oc:
             val = oc["ethtool-" + opt]
             if val in ["true", "on"]:
                 offload += [opt, 'on']
@@ -717,12 +716,12 @@ def mtu_setting(nw, type, oc):
     mtu = None
 
     nwrec = db().get_network_record(nw)
-    if nwrec.has_key('MTU'):
+    if 'MTU' in nwrec:
         mtu = nwrec['MTU']
     else:
         mtu = "1500"
         
-    if oc.has_key('mtu'):
+    if 'mtu' in oc:
         log("Override Network.MTU setting on bridge %s from %s.MTU is %s" % \
             (nwrec['bridge'], type, mtu))
         mtu = oc['mtu']

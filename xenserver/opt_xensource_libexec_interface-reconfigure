@@ -241,7 +241,7 @@ def ipdev_configure_static_routes(interface, oc, f):
           172.16.0.0/15 via 192.168.0.3 dev xenbr1
           172.18.0.0/16 via 192.168.0.4 dev xenbr1
     """
-    if oc.has_key('static-routes'):
+    if 'static-routes' in oc:
         # The key is present - extract comma separates entries
         lines = oc['static-routes'].split(',')
     else:
@@ -306,7 +306,7 @@ def ipdev_configure_network(pif, dp):
     log("Configuring %s using %s configuration" % (ipdev, mode))
 
     oc = None
-    if pifrec.has_key('other_config'):
+    if 'other_config' in pifrec:
         oc = pifrec['other_config']
 
     dp.configure_ipdev(f)
@@ -324,7 +324,7 @@ def ipdev_configure_network(pif, dp):
     else:
         raise Error("Unknown ip-configuration-mode %s" % pifrec['ip_configuration_mode'])
 
-    if nwrec.has_key('other_config'):
+    if 'other_config' in nwrec:
         settings,offload = ethtool_settings(nwrec['other_config'])
         if len(settings):
             f.write("ETHTOOL_OPTS=\"%s\"\n" % str.join(" ", settings))
@@ -338,10 +338,10 @@ def ipdev_configure_network(pif, dp):
         f.write("MTU=%s\n" % mtu)
 
 
-    if pifrec.has_key('DNS') and pifrec['DNS'] != "":
+    if 'DNS' in pifrec and pifrec['DNS'] != "":
         ServerList = pifrec['DNS'].split(",")
         for i in range(len(ServerList)): f.write("DNS%d=%s\n" % (i+1, ServerList[i]))
-    if oc and oc.has_key('domain'):
+    if oc and 'domain' in oc:
         f.write("DOMAIN='%s'\n" % oc['domain'].replace(',', ' '))
 
     # There can be only one DNSDEV and one GATEWAYDEV in /etc/sysconfig/network.
@@ -375,13 +375,13 @@ def ipdev_configure_network(pif, dp):
     for __pif in pifs_on_host:
         __pifrec = db().get_pif_record(__pif)
         __oc = __pifrec['other_config']
-        if __oc.has_key('peerdns') and __oc['peerdns'] == 'true':
+        if 'peerdns' in __oc and __oc['peerdns'] == 'true':
             if peerdns_pif == None:
                 peerdns_pif = __pif
             else:
                 log('Warning: multiple pifs with "peerdns=true" - choosing %s and ignoring %s' % \
                         (db().get_pif_record(peerdns_pif)['device'], __pifrec['device']))
-        if __oc.has_key('defaultroute') and __oc['defaultroute'] == 'true':
+        if 'defaultroute' in __oc and __oc['defaultroute'] == 'true':
             if defaultroute_pif == None:
                 defaultroute_pif = __pif
             else:
@@ -511,7 +511,7 @@ def action_force_rewrite(bridge, config):
     elif mode != 'dhcp':
         raise Usage("--mode must be either static or dhcp")
 
-    if config.has_key('vlan'):
+    if 'vlan' in config:
         is_vlan = True
         vlan_slave, vlan_vid = config['vlan'].split('.')
     else:
