@@ -890,7 +890,7 @@ Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi1 configuration
     --may-exist add-br xapi1
     --with-iface --if-exists del-port bond0
     --fake-iface add-bond xapi1 bond0 eth0 eth1
-    set Port bond0 MAC="00:22:19:22:4b:af" other-config:bond-miimon-interval=100 bond_downdelay=200 bond_updelay=31000 other-config:bond-detect-mode=carrier lacp=off bond_mode=balance-slb
+    set Port bond0 MAC="00:22:19:22:4b:af" bond_downdelay=200 other-config:bond-miimon-interval=100 bond_updelay=31000 other-config:bond-detect-mode=carrier lacp=off bond_mode=balance-slb
     set Bridge xapi1 other-config:hwaddr="00:22:19:22:4b:af"
     set Bridge xapi1 fail_mode=secure
     remove Bridge xapi1 other_config disable-in-band
@@ -980,7 +980,7 @@ Applying changes to /etc/sysconfig/network-scripts/ifcfg-xapi2 configuration
     --may-exist add-br xapi1
     --with-iface --if-exists del-port bond0
     --fake-iface add-bond xapi1 bond0 eth0 eth1
-    set Port bond0 MAC="00:22:19:22:4b:af" other-config:bond-miimon-interval=100 bond_downdelay=200 bond_updelay=31000 other-config:bond-detect-mode=carrier lacp=off bond_mode=balance-slb
+    set Port bond0 MAC="00:22:19:22:4b:af" bond_downdelay=200 other-config:bond-miimon-interval=100 bond_updelay=31000 other-config:bond-detect-mode=carrier lacp=off bond_mode=balance-slb
     set Bridge xapi1 other-config:hwaddr="00:22:19:22:4b:af"
     set Bridge xapi1 fail_mode=secure
     remove Bridge xapi1 other_config disable-in-band

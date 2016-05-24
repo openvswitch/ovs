@@ -206,7 +206,7 @@ def datapath_configure_bond(pif,slaves):
     argv += ['--', 'set', 'Port', interface]
     if pifrec['MAC'] != "":
         argv += ['MAC=%s' % vsctl_escape(pifrec['MAC'])]
-    for (name,val) in bond_options.items():
+    for (name,val) in sorted(bond_options.items()):
         if name in ['updelay', 'downdelay']:
             # updelay and downdelay have dedicated schema columns.
             # The value must be a nonnegative integer.
