@@ -629,7 +629,7 @@ def main(argv=None):
             elif o == "--no-syslog":
                 set_log_destination("stderr")
             elif o == "-h" or o == "--help":
-                print __doc__ % {'command-name': os.path.basename(argv[0])}
+                print(__doc__ % {'command-name': os.path.basename(argv[0])})
                 return 0
 
         if get_log_destination() == "syslog":
@@ -714,8 +714,9 @@ def main(argv=None):
             db().save(dbcache_file)
 
     except Usage as err:
-        print >>sys.stderr, err.msg
-        print >>sys.stderr, "For help use --help."
+        sys.stderr.write(err.msg + "\n")
+        sys.stderr.write("For help use --help.\n")
+        sys.stderr.flush()
         return 2
     except Error as err:
         log(err.msg)

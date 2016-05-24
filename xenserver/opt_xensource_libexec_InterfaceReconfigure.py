@@ -44,7 +44,8 @@ def log(s):
     if get_log_destination() == 'syslog':
         syslog.syslog(s)
     else:
-        print >>sys.stderr, s
+        sys.stderr.write(s + '\n')
+        sys.stderr.flush()
 
 #
 # Exceptions.
