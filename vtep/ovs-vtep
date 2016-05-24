@@ -22,7 +22,6 @@ import shlex
 import subprocess
 import sys
 import time
-import types
 
 import ovs.dirs
 import ovs.util
@@ -58,7 +57,7 @@ def call_prog(prog, args_list):
     if len(output) == 0 or output[0] is None:
         output = ""
     else:
-        output = output[0].strip()
+        output = output[0].decode().strip()
     return output
 
 
@@ -101,9 +100,9 @@ class Logical_Switch(object):
 
     def setup_ls(self):
         column = vtep_ctl("--columns=tunnel_key find logical_switch "
-                              "name=%s" % self.name)
+                          "name=%s" % self.name)
         tunnel_key = column.partition(":")[2].strip()
-        if tunnel_key and isinstance(eval(tunnel_key), types.IntType):
+        if tunnel_key and isinstance(eval(tunnel_key), six.integer_types):
             self.tunnel_key = tunnel_key
             vlog.info("using tunnel key %s in %s"
                       % (self.tunnel_key, self.name))
@@ -140,7 +139,7 @@ class Logical_Switch(object):
         for tunnel in self.unknown_dsts:
             port_no = self.tunnels[tunnel][0]
             ovs_ofctl("add-flow %s table=1,priority=1,in_port=%s,action=%s"
-                        % (self.short_name, port_no, ",".join(flood_ports)))
+                      % (self.short_name, port_no, ",".join(flood_ports)))
 
         # Traffic coming from a VTEP physical port should always be flooded to
         # all the other physical ports that belong to that VTEP device and
@@ -217,7 +216,7 @@ class Logical_Switch(object):
 
         port_no, tun_name, remote_ip = self.tunnels[tunnel]
         ovs_ofctl("del-flows %s table=0,in_port=%s"
-                    % (self.short_name, port_no))
+                  % (self.short_name, port_no))
         ovs_vsctl("del-port %s %s" % (self.short_name, tun_name))
 
         del_bfd(remote_ip)
@@ -349,9 +348,9 @@ class Logical_Switch(object):
 
             for mapfrom, mapto in six.iteritems(stats_map):
                 value = ovs_vsctl("get interface %s statistics:%s"
-                                % (interface, mapfrom)).strip('"')
+                                  % (interface, mapfrom)).strip('"')
                 vtep_ctl("set logical_binding_stats %s %s=%s"
-                        % (uuid, mapto, value))
+                         % (uuid, mapto, value))
 
     def run(self):
         self.update_local_macs()
@@ -465,7 +464,7 @@ def run_bfd():
 
         for key, default in six.iteritems(bfd_params_default):
             column = vtep_ctl("--if-exists get tunnel %s %s"
-                               % (tunnel, key))
+                              % (tunnel, key))
             if not column:
                 bfd_params_values[key] = default
             else:
@@ -492,7 +491,7 @@ def run_bfd():
         # Add the defaults as described in VTEP schema to make it explicit.
         bfd_lconf_default = {'bfd_config_local:bfd_dst_ip': '169.254.1.0',
                              'bfd_config_local:bfd_dst_mac':
-                                    '00:23:20:00:00:01'}
+                             '00:23:20:00:00:01'}
         for key, value in six.iteritems(bfd_lconf_default):
             vtep_ctl("set tunnel %s %s=%s" % (tunnel, key, value))
 
@@ -504,15 +503,15 @@ def run_bfd():
             bfd_dst_ip = "169.254.1.1"
 
         bfd_dst_mac = vtep_ctl("--if-exists get tunnel %s "
-                              "bfd_config_remote:bfd_dst_mac" % (tunnel))
+                               "bfd_config_remote:bfd_dst_mac" % (tunnel))
         if not bfd_dst_mac:
             bfd_dst_mac = "00:23:20:00:00:01"
 
         ovs_vsctl("set interface %s bfd:bfd_dst_ip=%s "
                   "bfd:bfd_remote_dst_mac=%s bfd:bfd_local_dst_mac=%s"
                   % (port, bfd_dst_ip,
-                  bfd_lconf_default['bfd_config_local:bfd_dst_mac'],
-                  bfd_dst_mac))
+                     bfd_lconf_default['bfd_config_local:bfd_dst_mac'],
+                     bfd_dst_mac))
 
 
 def add_binding(binding, ls):

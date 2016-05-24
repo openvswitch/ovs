@@ -98,7 +98,7 @@ if __name__ == "__main__":
             if packet is None:
                 break
 
-            print(binascii.hexlify(packet))
+            print(binascii.hexlify(packet).decode().strip())
 
     except PcapException as e:
         sys.stderr.write("%s: %s\n" % (argv0, e))
