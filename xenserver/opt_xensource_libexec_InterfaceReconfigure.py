@@ -730,7 +730,7 @@ def mtu_setting(nw, type, oc):
         try:
             int(mtu)      # Check that the value is an integer
             return mtu
-        except ValueError, x:
+        except ValueError as x:
             log("Invalid value for mtu = %s" % mtu)
 
     return None
@@ -958,7 +958,7 @@ def DatapathFactory():
         network_conf = open(root_prefix() + "/etc/xensource/network.conf", 'r')
         network_backend = network_conf.readline().strip()
         network_conf.close()                
-    except Exception, e:
+    except Exception as e:
         raise Error("failed to determine network backend:" + e)
     
     if network_backend == "bridge":

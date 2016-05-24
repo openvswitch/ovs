@@ -54,7 +54,7 @@ def netdev_get_driver_name(netdev):
     symlink = '%s/sys/class/net/%s/device/driver' % (root_prefix(), netdev)
     try:
         target = os.readlink(symlink)
-    except OSError, e:
+    except OSError as e:
         log("%s: could not read netdev's driver name (%s)" % (netdev, e))
         return None
 

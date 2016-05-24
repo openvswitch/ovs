@@ -260,7 +260,7 @@ def ipdev_configure_static_routes(interface, oc, f):
         f.attach_child(child)
         child.close()
 
-    except ValueError, e:
+    except ValueError as e:
         log("Error in other-config['static-routes'] format for network %s: %s" % (interface, e))
 
 def ipdev_open_ifcfg(pif):
@@ -461,7 +461,7 @@ def action_up(pif, force):
         os.system(root_prefix() + "/sbin/update-issue")
 
         f.commit()
-    except Error, e:
+    except Error as e:
         log("failed to apply changes: %s" % e.msg)
         f.revert()
         raise
@@ -575,7 +575,7 @@ def action_force_rewrite(bridge, config):
     try:
         f.apply()
         f.commit()
-    except Error, e:
+    except Error as e:
         log("failed to apply changes: %s" % e.msg)
         f.revert()
         raise
@@ -606,7 +606,7 @@ def main(argv=None):
                         "no-syslog",
                         "help" ]
             arglist, args = getopt.gnu_getopt(argv[1:], shortops, longops)
-        except getopt.GetoptError, msg:
+        except getopt.GetoptError as msg:
             raise Usage(msg)
 
         force_rewrite_config = {}
@@ -713,11 +713,11 @@ def main(argv=None):
             # Save cache.
             db().save(dbcache_file)
 
-    except Usage, err:
+    except Usage as err:
         print >>sys.stderr, err.msg
         print >>sys.stderr, "For help use --help."
         return 2
-    except Error, err:
+    except Error as err:
         log(err.msg)
         return 1
 
