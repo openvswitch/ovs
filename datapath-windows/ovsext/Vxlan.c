@@ -353,48 +353,6 @@ OvsEncapVxlan(POVS_VPORT_ENTRY vport,
                            switchContext, newNbl);
 }
 
-/*
- *----------------------------------------------------------------------------
- * OvsCalculateUDPChecksum
- *     Calculate UDP checksum
- *----------------------------------------------------------------------------
- */
-static __inline NDIS_STATUS
-OvsCalculateUDPChecksum(PNET_BUFFER_LIST curNbl,
-                        PNET_BUFFER curNb,
-                        IPHdr *ipHdr,
-                        UDPHdr *udpHdr,
-                        UINT32 packetLength)
-{
-    NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
-    UINT16 checkSum;
-
-    csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl, TcpIpChecksumNetBufferListInfo);
-
-    /* Next check if UDP checksum has been calculated. */
-    if (!csumInfo.Receive.UdpChecksumSucceeded) {
-        UINT32 l4Payload;
-
-        checkSum = udpHdr->check;
-
-        l4Payload = packetLength - sizeof(EthHdr) - ipHdr->ihl * 4;
-        udpHdr->check = 0;
-        udpHdr->check =
-            IPPseudoChecksum((UINT32 *)&ipHdr->saddr,
-                             (UINT32 *)&ipHdr->daddr,
-                             IPPROTO_UDP, (UINT16)l4Payload);
-        udpHdr->check = CalculateChecksumNB(curNb, (UINT16)l4Payload,
-            sizeof(EthHdr) + ipHdr->ihl * 4);
-        if (checkSum != udpHdr->check) {
-            OVS_LOG_TRACE("UDP checksum incorrect.");
-            return NDIS_STATUS_INVALID_PACKET;
-        }
-    }
-
-    csumInfo.Receive.UdpChecksumSucceeded = 1;
-    NET_BUFFER_LIST_INFO(curNbl, TcpIpChecksumNetBufferListInfo) = csumInfo.Value;
-    return NDIS_STATUS_SUCCESS;
-}
 
 /*
  *----------------------------------------------------------------------------
@@ -414,7 +372,7 @@ OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
     IPHdr *ipHdr;
     UDPHdr *udpHdr;
     VXLANHdr *vxlanHdr;
-    UINT32 tunnelSize = 0, packetLength = 0;
+    UINT32 tunnelSize, packetLength;
     PUINT8 bufferStart;
     NDIS_STATUS status;
 
@@ -422,7 +380,7 @@ OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
     packetLength = NET_BUFFER_DATA_LENGTH(curNb);
     tunnelSize = OvsGetVxlanTunHdrSize();
-    if (packetLength <= tunnelSize) {
+    if (packetLength < tunnelSize) {
         return NDIS_STATUS_INVALID_LENGTH;
     }
 
@@ -430,7 +388,7 @@ OvsDecapVxlan(POVS_SWITCH_CONTEXT switchContext,
      * Create a copy of the NBL so that we have all the headers in one MDL.
      */
     *newNbl = OvsPartialCopyNBL(switchContext, curNbl,
-                                tunnelSize + OVS_DEFAULT_COPY_SIZE, 0,
+                                tunnelSize, 0,
                                 TRUE /*copy NBL info */);
 
     if (*newNbl == NULL) {
