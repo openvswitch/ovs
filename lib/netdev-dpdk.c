@@ -1101,6 +1101,41 @@ dpdk_queue_flush(struct netdev_dpdk *dev, int qid)
     dpdk_queue_flush__(dev, qid);
 }
 
+static inline bool
+netdev_dpdk_policer_pkt_handle(struct rte_meter_srtcm *meter,
+                               struct rte_mbuf *pkt, uint64_t time)
+{
+    uint32_t pkt_len = rte_pktmbuf_pkt_len(pkt) - sizeof(struct ether_hdr);
+
+    return rte_meter_srtcm_color_blind_check(meter, time, pkt_len) ==
+                                                e_RTE_METER_GREEN;
+}
+
+static int
+netdev_dpdk_policer_run(struct rte_meter_srtcm *meter,
+                        struct rte_mbuf **pkts, int pkt_cnt)
+{
+    int i = 0;
+    int cnt = 0;
+    struct rte_mbuf *pkt = NULL;
+    uint64_t current_time = rte_rdtsc();
+
+    for (i = 0; i < pkt_cnt; i++) {
+        pkt = pkts[i];
+        /* Handle current packet */
+        if (netdev_dpdk_policer_pkt_handle(meter, pkt, current_time)) {
+            if (cnt != i) {
+                pkts[cnt] = pkt;
+            }
+            cnt++;
+        } else {
+            rte_pktmbuf_free(pkt);
+        }
+    }
+
+    return cnt;
+}
+
 static bool
 is_vhost_running(struct virtio_net *virtio_dev)
 {
@@ -2675,39 +2710,13 @@ egress_policer_qos_set(struct netdev *netdev, const struct smap *details)
     return err;
 }
 
-static inline bool
-egress_policer_pkt_handle__(struct rte_meter_srtcm *meter,
-                            struct rte_mbuf *pkt, uint64_t time)
-{
-    uint32_t pkt_len = rte_pktmbuf_pkt_len(pkt) - sizeof(struct ether_hdr);
-
-    return rte_meter_srtcm_color_blind_check(meter, time, pkt_len) ==
-                                                e_RTE_METER_GREEN;
-}
-
 static int
-egress_policer_run(struct netdev *netdev, struct rte_mbuf **pkts,
-                        int pkt_cnt)
+egress_policer_run(struct netdev *netdev, struct rte_mbuf **pkts, int pkt_cnt)
 {
-    int i = 0;
     int cnt = 0;
     struct egress_policer *policer = egress_policer_get__(netdev);
-    struct rte_mbuf *pkt = NULL;
-    uint64_t current_time = rte_rdtsc();
 
-    for(i = 0; i < pkt_cnt; i++) {
-        pkt = pkts[i];
-        /* Handle current packet */
-        if (egress_policer_pkt_handle__(&policer->egress_meter, pkt,
-                                        current_time)) {
-            if (cnt != i) {
-                pkts[cnt] = pkt;
-            }
-            cnt++;
-        } else {
-            rte_pktmbuf_free(pkt);
-        }
-    }
+    cnt = netdev_dpdk_policer_run(&policer->egress_meter, pkts, pkt_cnt);
 
     return cnt;
 }
