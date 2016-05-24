@@ -6104,7 +6104,8 @@ ofpacts_execute_action_set(struct ofpbuf *action_list,
      * not be sent anywhere. */
     if (!ofpacts_copy_last(action_list, action_set, OFPACT_GROUP) &&
         !ofpacts_copy_last(action_list, action_set, OFPACT_OUTPUT) &&
-        !ofpacts_copy_last(action_list, action_set, OFPACT_RESUBMIT)) {
+        !ofpacts_copy_last(action_list, action_set, OFPACT_RESUBMIT) &&
+        !ofpacts_copy_last(action_list, action_set, OFPACT_CT)) {
         ofpbuf_clear(action_list);
     }
 }
