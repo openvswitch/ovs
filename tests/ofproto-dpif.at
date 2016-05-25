@@ -6415,8 +6415,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout_keep_actions], [0], [dnl
 recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,mpls_label=11,mpls_tc=3,mpls_ttl=64,mpls_bos=1, actions:push_mpls(label=11,tc=3,ttl=64,bos=0,eth_type=0x8847),2
-recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,mpls_bos=1, actions:pop_mpls(eth_type=0x800),recirc(0x1)
-recirc_id=0x1,ip,in_port=1,vlan_tci=0x0000,nw_frag=no, actions:2
+recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,mpls_bos=1, actions:pop_mpls(eth_type=0x800),2
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
