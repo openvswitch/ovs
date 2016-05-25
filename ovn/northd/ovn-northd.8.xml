@@ -191,7 +191,7 @@
 
       <li>
         One priority-0 fallback flow that matches all packets and advances to
-        table 2.
+        the next table.
       </li>
     </ul>
 
@@ -236,18 +236,19 @@
 
       <li>
         One priority-0 fallback flow that matches all packets and advances to
-        table 3.
+        the next table.
       </li>
     </ul>
 
     <h3>Ingress Table 3: <code>from-lport</code> Pre-ACLs</h3>
 
     <p>
-      Ingress table 3 prepares flows for possible stateful ACL processing
-      in table 4.  It contains a priority-0 flow that simply moves
-      traffic to table 4.  If stateful ACLs are used in the logical
-      datapath, a priority-100 flow is added that sends IP packets to
-      the connection tracker before advancing to table 4.
+      This table prepares flows for possible stateful ACL processing in
+      ingress table <code>ACLs</code>.  It contains a priority-0 flow that
+      simply moves traffic to the next table.  If stateful ACLs are used in the
+      logical datapath, a priority-100 flow is added that sends IP packets to
+      the connection tracker before advancing to ingress table
+      <code>ACLs</code>.
     </p>
 
     <h3>Ingress table 4: <code>from-lport</code> ACLs</h3>
@@ -266,7 +267,7 @@
     </p>
 
     <p>
-      Ingress table 4 also contains a priority 0 flow with action
+      This table also contains a priority 0 flow with action
       <code>next;</code>, so that ACLs allow packets by default.  If the
       logical datapath has a statetful ACL, the following flows will
       also be added:
@@ -308,7 +309,7 @@
     <ul>
       <li>
         Priority-100 flows to skip ARP responder if inport is of type
-        <code>localnet</code>, and advances directly to table 6.
+        <code>localnet</code>, and advances directly to the next table.
       </li>
 
       <li>
@@ -339,7 +340,7 @@ output;
 
       <li>
         One priority-0 fallback flow that matches all packets and advances to
-        table 6.
+        the next table.
       </li>
     </ul>
 
@@ -377,29 +378,32 @@ output;
     <h3>Egress Table 0: <code>to-lport</code> Pre-ACLs</h3>
 
     <p>
-      This is similar to ingress table 3 except for <code>to-lport</code>
-      traffic.
+      This is similar to ingress table <code>Pre-ACLs</code> except for
+     <code>to-lport</code> traffic.
     </p>
 
     <h3>Egress Table 1: <code>to-lport</code> ACLs</h3>
 
     <p>
-      This is similar to ingress table 4 except for <code>to-lport</code> ACLs.
+      This is similar to ingress table <code>ACLs</code> except for
+      <code>to-lport</code> ACLs.
     </p>
 
     <h3>Egress Table 2: Egress Port Security - IP</h3>
 
     <p>
-      This is similar to the ingress port security logic in table 1 except
-      that <code>outport</code>, <code>eth.dst</code>, <code>ip4.dst</code>
-      and <code>ip6.dst</code> are checked instead of <code>inport</code>,
-      <code>eth.src</code>, <code>ip4.src</code> and <code>ip6.src</code>
+      This is similar to the port security logic in table
+      <code>Ingress Port Security - IP</code> except that <code>outport</code>,
+      <code>eth.dst</code>, <code>ip4.dst</code> and <code>ip6.dst</code>
+      are checked instead of <code>inport</code>, <code>eth.src</code>,
+      <code>ip4.src</code> and <code>ip6.src</code>
     </p>
 
     <h3>Egress Table 3: Egress Port Security - L2</h3>
 
     <p>
-      This is similar to the ingress port security logic in ingress table 0,
+      This is similar to the ingress port security logic in ingress table
+      <code>Admission Control and Ingress Port Security - L2</code>,
       but with important differences.  Most obviously, <code>outport</code> and
       <code>eth.dst</code> are checked instead of <code>inport</code> and
       <code>eth.src</code>.  Second, packets directed to broadcast or multicast
