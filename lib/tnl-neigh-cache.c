@@ -115,7 +115,7 @@ tnl_neigh_delete(struct tnl_neigh_entry *neigh)
 
 static void
 tnl_neigh_set__(const char name[IFNAMSIZ], const struct in6_addr *dst,
-              const struct eth_addr mac)
+                const struct eth_addr mac)
 {
     ovs_mutex_lock(&mutex);
     struct tnl_neigh_entry *neigh = tnl_neigh_lookup__(name, dst);
@@ -151,26 +151,21 @@ static int
 tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
               const char name[IFNAMSIZ])
 {
-    if (flow->dl_type != htons(ETH_TYPE_ARP) ||
-        flow->nw_proto != ARP_OP_REPLY ||
-        eth_addr_is_zero(flow->arp_sha)) {
+    if (flow->dl_type != htons(ETH_TYPE_ARP)
+        || FLOW_WC_GET_AND_MASK_WC(flow, wc, nw_proto) != ARP_OP_REPLY
+        || eth_addr_is_zero(FLOW_WC_GET_AND_MASK_WC(flow, wc, arp_sha))) {
         return EINVAL;
     }
 
-    /* Exact Match on all ARP flows. */
-    memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-    memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
-    memset(&wc->masks.arp_sha, 0xff, sizeof wc->masks.arp_sha);
-
-    tnl_arp_set(name, flow->nw_src, flow->arp_sha);
+    tnl_arp_set(name, FLOW_WC_GET_AND_MASK_WC(flow, wc, nw_src), flow->arp_sha);
     return 0;
 }
 
 static int
 tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
-              const char name[IFNAMSIZ])
+             const char name[IFNAMSIZ])
 {
-    if (!is_nd(flow, NULL) || flow->tp_src != htons(ND_NEIGHBOR_ADVERT)) {
+    if (!is_nd(flow, wc) || flow->tp_src != htons(ND_NEIGHBOR_ADVERT)) {
         return EINVAL;
     }
     /* - RFC4861 says Neighbor Advertisements sent in response to unicast Neighbor
@@ -179,14 +174,13 @@ tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
      *   TLL address and other Advertisements not including it can be ignored.
      * - OVS flow extract can set this field to zero in case of packet parsing errors.
      *   For details refer miniflow_extract()*/
-    if (eth_addr_is_zero(flow->arp_tha)) {
+    if (eth_addr_is_zero(FLOW_WC_GET_AND_MASK_WC(flow, wc, arp_tha))) {
         return EINVAL;
     }
 
     memset(&wc->masks.ipv6_src, 0xff, sizeof wc->masks.ipv6_src);
     memset(&wc->masks.ipv6_dst, 0xff, sizeof wc->masks.ipv6_dst);
     memset(&wc->masks.nd_target, 0xff, sizeof wc->masks.nd_target);
-    memset(&wc->masks.arp_tha, 0xff, sizeof wc->masks.arp_tha);
 
     tnl_neigh_set__(name, &flow->nd_target, flow->arp_tha);
     return 0;
