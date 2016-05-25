@@ -111,7 +111,7 @@ tnl_neigh_delete(struct tnl_neigh_entry *neigh)
 
 static void
 tnl_neigh_set__(const char name[IFNAMSIZ], const struct in6_addr *dst,
-              const struct eth_addr mac)
+                const struct eth_addr mac)
 {
     ovs_mutex_lock(&mutex);
     struct tnl_neigh_entry *neigh = tnl_neigh_lookup__(name, dst);
@@ -162,12 +162,13 @@ tnl_arp_snoop(const struct flow *flow, struct flow_wildcards *wc,
 
 static int
 tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
-              const char name[IFNAMSIZ])
+             const char name[IFNAMSIZ])
 {
-    if (flow->dl_type != htons(ETH_TYPE_IPV6) ||
-        flow->nw_proto != IPPROTO_ICMPV6 ||
-        flow->tp_dst != htons(0) ||
-        flow->tp_src != htons(ND_NEIGHBOR_ADVERT)) {
+    if (flow->dl_type != htons(ETH_TYPE_IPV6)
+        || FLOW_WC_GET_AND_MASK_WC(flow, wc, nw_proto) != IPPROTO_ICMPV6
+        || FLOW_WC_GET_AND_MASK_WC(flow, wc, tp_dst) != htons(0)
+        || FLOW_WC_GET_AND_MASK_WC(flow, wc, tp_src)
+           != htons(ND_NEIGHBOR_ADVERT)) {
         return EINVAL;
     }
 
