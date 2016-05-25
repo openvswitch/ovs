@@ -854,6 +854,13 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
     md->ct_label = flow->ct_label;
 }
 
+/* Often, during translation we need to read a value from a flow('FLOW') and
+ * unwildcard the corresponding bits in the wildcards('WC').  This macro makes
+ * it easier to do that. */
+
+#define FLOW_WC_GET_AND_MASK_WC(FLOW, WC, FIELD) \
+    (((WC) ? WC_MASK_FIELD(WC, FIELD) : NULL), ((FLOW)->FIELD))
+
 static inline bool is_vlan(const struct flow *flow,
                            struct flow_wildcards *wc)
 {
