@@ -92,15 +92,17 @@ enum ovn_stage {
     PIPELINE_STAGE(SWITCH, IN,  PORT_SEC_IP,    1, "ls_in_port_sec_ip")     \
     PIPELINE_STAGE(SWITCH, IN,  PORT_SEC_ND,    2, "ls_in_port_sec_nd")     \
     PIPELINE_STAGE(SWITCH, IN,  PRE_ACL,        3, "ls_in_pre_acl")      \
-    PIPELINE_STAGE(SWITCH, IN,  ACL,            4, "ls_in_acl")          \
-    PIPELINE_STAGE(SWITCH, IN,  ARP_ND_RSP,     5, "ls_in_arp_nd_rsp")   \
-    PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,        6, "ls_in_l2_lkup")      \
+    PIPELINE_STAGE(SWITCH, IN,  PRE_STATEFUL,   4, "ls_in_pre_stateful")    \
+    PIPELINE_STAGE(SWITCH, IN,  ACL,            5, "ls_in_acl")          \
+    PIPELINE_STAGE(SWITCH, IN,  ARP_ND_RSP,     6, "ls_in_arp_nd_rsp")   \
+    PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,        7, "ls_in_l2_lkup")      \
                                                                       \
     /* Logical switch egress stages. */                               \
-    PIPELINE_STAGE(SWITCH, OUT, PRE_ACL,     0, "ls_out_pre_acl")     \
-    PIPELINE_STAGE(SWITCH, OUT, ACL,         1, "ls_out_acl")         \
-    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_IP, 2, "ls_out_port_sec_ip")    \
-    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_L2, 3, "ls_out_port_sec_l2")    \
+    PIPELINE_STAGE(SWITCH, OUT, PRE_ACL,      0, "ls_out_pre_acl")     \
+    PIPELINE_STAGE(SWITCH, OUT, PRE_STATEFUL, 1, "ls_out_pre_stateful")  \
+    PIPELINE_STAGE(SWITCH, OUT, ACL,          2, "ls_out_acl")         \
+    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_IP,  3, "ls_out_port_sec_ip")    \
+    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_L2,  4, "ls_out_port_sec_l2")    \
                                                                       \
     /* Logical router ingress stages. */                              \
     PIPELINE_STAGE(ROUTER, IN,  ADMISSION,   0, "lr_in_admission")    \
@@ -127,6 +129,8 @@ enum ovn_stage {
  * are available to logical flows.  This value is added to an ACL
  * priority to determine the ACL's logical flow priority. */
 #define OVN_ACL_PRI_OFFSET 1000
+
+#define REGBIT_CONNTRACK_DEFRAG "reg0[0]"
 
 /* Returns an "enum ovn_stage" built from the arguments. */
 static enum ovn_stage
@@ -1382,10 +1386,31 @@ build_pre_acls(struct ovn_datapath *od, struct hmap *lflows,
          *
          * Regardless of whether the ACL is "from-lport" or "to-lport",
          * we need rules in both the ingress and egress table, because
-         * the return traffic needs to be followed. */
-        ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 100, "ip", "ct_next;");
-        ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 100, "ip", "ct_next;");
+         * the return traffic needs to be followed.
+         *
+         * 'REGBIT_CONNTRACK_DEFRAG' is set to let the pre-stateful table send
+         * it to conntrack for tracking and defragmentation. */
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 100, "ip",
+                      REGBIT_CONNTRACK_DEFRAG" = 1; next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 100, "ip",
+                      REGBIT_CONNTRACK_DEFRAG" = 1; next;");
     }
+}
+
+static void
+build_pre_stateful(struct ovn_datapath *od, struct hmap *lflows)
+{
+    /* Ingress and Egress pre-stateful Table (Priority 0): Packets are
+     * allowed by default. */
+    ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_STATEFUL, 0, "1", "next;");
+    ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_STATEFUL, 0, "1", "next;");
+
+    /* If REGBIT_CONNTRACK_DEFRAG is set as 1, then the packets should be
+     * sent to conntrack for tracking and defragmentation. */
+    ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_STATEFUL, 100,
+                  REGBIT_CONNTRACK_DEFRAG" == 1", "ct_next;");
+    ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_STATEFUL, 100,
+                  REGBIT_CONNTRACK_DEFRAG" == 1", "ct_next;");
 }
 
 static void
@@ -1516,6 +1541,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
 
         build_pre_acls(od, lflows, ports);
+        build_pre_stateful(od, lflows);
         build_acls(od, lflows);
     }
 

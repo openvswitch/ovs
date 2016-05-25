@@ -246,12 +246,24 @@
       This table prepares flows for possible stateful ACL processing in
       ingress table <code>ACLs</code>.  It contains a priority-0 flow that
       simply moves traffic to the next table.  If stateful ACLs are used in the
-      logical datapath, a priority-100 flow is added that sends IP packets to
-      the connection tracker before advancing to ingress table
-      <code>ACLs</code>.
+      logical datapath, a priority-100 flow is added that sets a hint
+      (with <code>reg0[0] = 1; next;</code>) for table
+      <code>Pre-stateful</code> to send IP packets to the connection tracker
+      before eventually advancing to ingress table <code>ACLs</code>.
     </p>
 
-    <h3>Ingress table 4: <code>from-lport</code> ACLs</h3>
+    <h3>Ingress Table 4: Pre-stateful</h3>
+
+    <p>
+      This table prepares flows for all possible stateful processing
+      in next tables.  It contains a priority-0 flow that simply moves
+      traffic to the next table.  A priority-100 flow sends the packets to
+      connection tracker based on a hint provided by the previous tables
+      (with a match for <code>reg0[0] == 1</code>) by using the
+      <code>ct_next;</code> action.
+    </p>
+
+    <h3>Ingress table 5: <code>from-lport</code> ACLs</h3>
 
     <p>
       Logical flows in this table closely reproduce those in the
@@ -299,7 +311,7 @@
       </li>
     </ul>
 
-    <h3>Ingress Table 5: ARP responder</h3>
+    <h3>Ingress Table 6: ARP responder</h3>
 
     <p>
       This table implements ARP responder for known IPs.  It contains these
@@ -344,7 +356,7 @@ output;
       </li>
     </ul>
 
-    <h3>Ingress Table 6: Destination Lookup</h3>
+    <h3>Ingress Table 7: Destination Lookup</h3>
 
     <p>
       This table implements switching behavior.  It contains these logical
@@ -382,14 +394,20 @@ output;
      <code>to-lport</code> traffic.
     </p>
 
-    <h3>Egress Table 1: <code>to-lport</code> ACLs</h3>
+    <h3>Egress Table 1: Pre-stateful</h3>
+
+    <p>
+      This is similar to ingress table <code>Pre-stateful</code>.
+    </p>
+
+    <h3>Egress Table 2: <code>to-lport</code> ACLs</h3>
 
     <p>
       This is similar to ingress table <code>ACLs</code> except for
       <code>to-lport</code> ACLs.
     </p>
 
-    <h3>Egress Table 2: Egress Port Security - IP</h3>
+    <h3>Egress Table 3: Egress Port Security - IP</h3>
 
     <p>
       This is similar to the port security logic in table
@@ -399,7 +417,7 @@ output;
       <code>ip4.src</code> and <code>ip6.src</code>
     </p>
 
-    <h3>Egress Table 3: Egress Port Security - L2</h3>
+    <h3>Egress Table 4: Egress Port Security - L2</h3>
 
     <p>
       This is similar to the ingress port security logic in ingress table
