@@ -7390,7 +7390,12 @@ ovs-appctl vlog/set PATTERN:ANY:'%c|%p|%m'
 
 ovs-appctl time/stop
 
-for i in 1 2 3; do
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'])
+
+# Wait for the flow setup to be done.
+OVS_WAIT_UNTIL([grep 'flow_add:' ovs-vswitchd.log])
+
+for i in 1 2; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'
 done
 
@@ -7430,8 +7435,12 @@ ovs-appctl vlog/set PATTERN:ANY:'%c|%p|%m'
 
 ovs-appctl time/stop
 
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'])
+
 # Check that a correct datapath flow is created.
-for i in 1 2 3; do
+OVS_WAIT_UNTIL([grep 'flow_add:' ovs-vswitchd.log])
+
+for i in 1 2; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'
 done
 
@@ -7471,7 +7480,11 @@ recirc_id(0),in_port(1),eth_type(0x1234), packets:8, bytes:480, used:0.0s, actio
 ])
 
 # Check that VLAN packets will not hit the same datapath megaflow.
-for i in 1 2 3; do
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x1234))'])
+OVS_WAIT_UNTIL([grep 'flow_add:.*dl_vlan=99' ovs-vswitchd.log])
+
+for i in 1 2; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x1234))'
 done
 
