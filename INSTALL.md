@@ -608,7 +608,7 @@ tree as found locally in a virtual machine using the following commands:
 	vagrant up
 	vagrant ssh
 
-This will bring up w Fedora 20 VM by default, alternatively the
+This will bring up w Fedora 23 VM by default, alternatively the
 `Vagrantfile` can be modified to use a different distribution box as
 base. Also, the VM can be reprovisioned at any time:
 
