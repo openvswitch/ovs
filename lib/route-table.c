@@ -252,7 +252,11 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
 
                 VLOG_DBG_RL(&rl, "Could not find interface name[%u]: %s",
                             rta_oif, ovs_strerror(error));
-                return false;
+                if (error == ENXIO) {
+                    change->relevant = false;
+                } else {
+                    return false;
+                }
             }
         }
 
