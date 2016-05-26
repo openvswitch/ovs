@@ -1197,40 +1197,70 @@ print_queue_rate(struct ds *string, const char *name, unsigned int rate)
     }
 }
 
+/* qsort comparison function. */
+static int
+compare_queues(const void *a_, const void *b_)
+{
+    const struct ofputil_queue_config *a = a_;
+    const struct ofputil_queue_config *b = b_;
+
+    uint16_t ap = ofp_to_u16(a->port);
+    uint16_t bp = ofp_to_u16(b->port);
+    if (ap != bp) {
+        return ap < bp ? -1 : 1;
+    }
+
+    uint32_t aq = a->queue;
+    uint32_t bq = b->queue;
+    return aq < bq ? -1 : aq > bq;
+}
+
 static void
 ofp_print_queue_get_config_reply(struct ds *string,
                                  const struct ofp_header *oh)
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
-    ofp_port_t port = 0;
 
-    ds_put_char(string, ' ');
+    struct ofputil_queue_config *queues = NULL;
+    size_t allocated_queues = 0;
+    size_t n = 0;
+
+    int retval = 0;
     for (;;) {
-        struct ofputil_queue_config queue;
-        int retval;
-
-        retval = ofputil_pull_queue_get_config_reply(&b, &queue);
+        if (n >= allocated_queues) {
+            queues = x2nrealloc(queues, &allocated_queues, sizeof *queues);
+        }
+        retval = ofputil_pull_queue_get_config_reply(&b, &queues[n]);
         if (retval) {
-            if (retval != EOF) {
-                ofp_print_error(string, retval);
-            }
-            ds_chomp(string, ' ');
             break;
         }
+        n++;
+    }
 
-        if (queue.port != port) {
-            port = queue.port;
+    qsort(queues, n, sizeof *queues, compare_queues);
+
+    ds_put_char(string, ' ');
+
+    ofp_port_t port = 0;
+    for (const struct ofputil_queue_config *q = queues; q < &queues[n]; q++) {
+        if (q->port != port) {
+            port = q->port;
 
             ds_put_cstr(string, "port=");
             ofputil_format_port(port, string);
             ds_put_char(string, '\n');
         }
 
-        ds_put_format(string, "queue %"PRIu32":", queue.queue);
-        print_queue_rate(string, "min_rate", queue.min_rate);
-        print_queue_rate(string, "max_rate", queue.max_rate);
+        ds_put_format(string, "queue %"PRIu32":", q->queue);
+        print_queue_rate(string, "min_rate", q->min_rate);
+        print_queue_rate(string, "max_rate", q->max_rate);
         ds_put_char(string, '\n');
     }
+
+    if (retval != EOF) {
+        ofp_print_error(string, retval);
+    }
+    ds_chomp(string, ' ');
 }
 
 static void
