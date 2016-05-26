@@ -527,7 +527,7 @@ static int dpif_netdev_open(const struct dpif_class *, const char *name,
                             bool create, struct dpif **);
 static void dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
                                       struct dp_packet_batch *,
-                                      bool may_steal,
+                                      bool may_steal, const struct flow *flow,
                                       const struct nlattr *actions,
                                       size_t actions_len,
                                       long long now);
@@ -2553,8 +2553,9 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     }
 
     packet_batch_init_packet(&pp, execute->packet);
-    dp_netdev_execute_actions(pmd, &pp, false, execute->actions,
-                              execute->actions_len, time_msec());
+    dp_netdev_execute_actions(pmd, &pp, false, execute->flow,
+                              execute->actions, execute->actions_len,
+                              time_msec());
 
     if (pmd->core_id == NON_PMD_CORE_ID) {
         ovs_mutex_unlock(&dp->non_pmd_mutex);
@@ -3863,7 +3864,7 @@ packet_batch_per_flow_execute(struct packet_batch_per_flow *batch,
 
     actions = dp_netdev_flow_get_actions(flow);
 
-    dp_netdev_execute_actions(pmd, &batch->array, true,
+    dp_netdev_execute_actions(pmd, &batch->array, true, &flow->flow,
                               actions->actions, actions->size, now);
 }
 
@@ -3990,7 +3991,7 @@ handle_packet_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet,
      * the actions.  Otherwise, if there are any slow path actions,
      * we'll send the packet up twice. */
     packet_batch_init_packet(&b, packet);
-    dp_netdev_execute_actions(pmd, &b, true,
+    dp_netdev_execute_actions(pmd, &b, true, &match.flow,
                               actions->data, actions->size, now);
 
     add_actions = put_actions->size ? put_actions : actions;
@@ -4162,6 +4163,7 @@ dp_netdev_recirculate(struct dp_netdev_pmd_thread *pmd,
 struct dp_netdev_execute_aux {
     struct dp_netdev_pmd_thread *pmd;
     long long now;
+    const struct flow *flow;
 };
 
 static void
@@ -4302,7 +4304,7 @@ dp_execute_userspace_action(struct dp_netdev_pmd_thread *pmd,
                              NULL);
     if (!error || error == ENOSPC) {
         packet_batch_init_packet(&b, packet);
-        dp_netdev_execute_actions(pmd, &b, may_steal,
+        dp_netdev_execute_actions(pmd, &b, may_steal, flow,
                                   actions->data, actions->size, now);
     } else if (may_steal) {
         dp_packet_delete(packet);
@@ -4505,8 +4507,8 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
             }
         }
 
-        conntrack_execute(&dp->conntrack, packets_, commit, zone,
-                          setmark, setlabel, helper);
+        conntrack_execute(&dp->conntrack, packets_, aux->flow->dl_type, commit,
+                          zone, setmark, setlabel, helper);
         break;
     }
 
@@ -4530,11 +4532,11 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
 static void
 dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
                           struct dp_packet_batch *packets,
-                          bool may_steal,
+                          bool may_steal, const struct flow *flow,
                           const struct nlattr *actions, size_t actions_len,
                           long long now)
 {
-    struct dp_netdev_execute_aux aux = { pmd, now };
+    struct dp_netdev_execute_aux aux = { pmd, now, flow };
 
     odp_execute_actions(&aux, packets, may_steal, actions,
                         actions_len, dp_execute_cb);

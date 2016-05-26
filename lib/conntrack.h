@@ -65,7 +65,8 @@ void conntrack_init(struct conntrack *);
 void conntrack_destroy(struct conntrack *);
 
 int conntrack_execute(struct conntrack *, struct dp_packet_batch *,
-                      bool commit, uint16_t zone, const uint32_t *setmark,
+                      ovs_be16 dl_type, bool commit,
+                      uint16_t zone, const uint32_t *setmark,
                       const struct ovs_key_ct_labels *setlabel,
                       const char *helper);
 
