@@ -461,14 +461,9 @@ ovs_strerror(int error)
  * vSwitch.  Otherwise, it is assumed to be an external program linking against
  * the Open vSwitch libraries.
  *
- * The 'date' and 'time' arguments should likely be called with
- * "__DATE__" and "__TIME__" to use the time the binary was built.
- * Alternatively, the "ovs_set_program_name" macro may be called to do this
- * automatically.
  */
 void
-ovs_set_program_name__(const char *argv0, const char *version, const char *date,
-                       const char *time)
+ovs_set_program_name(const char *argv0, const char *version)
 {
     char *basename;
 #ifdef _WIN32
@@ -496,14 +491,12 @@ ovs_set_program_name__(const char *argv0, const char *version, const char *date,
 
     free(program_version);
     if (!strcmp(version, VERSION)) {
-        program_version = xasprintf("%s (Open vSwitch) "VERSION"\n"
-                                    "Compiled %s %s\n",
-                                    program_name, date, time);
+        program_version = xasprintf("%s (Open vSwitch) "VERSION"\n",
+                                    program_name);
     } else {
         program_version = xasprintf("%s %s\n"
-                                    "Open vSwitch Library "VERSION"\n"
-                                    "Compiled %s %s\n",
-                                    program_name, version, date, time);
+                                    "Open vSwitch Library "VERSION"\n",
+                                    program_name, version);
     }
 }
 
