@@ -1093,6 +1093,17 @@ print_queue_rate(struct ds *string, const char *name, unsigned int rate)
     }
 }
 
+static int
+compare_queues(const void *a_, const void *b_)
+{
+    const struct ofputil_queue_config *a = a_;
+    const struct ofputil_queue_config *b = b_;
+
+    uint32_t aq = a->queue_id;
+    uint32_t bq = b->queue_id;
+    return aq < bq ? -1 : aq > bq;
+}
+
 static void
 ofp_print_queue_get_config_reply(struct ds *string,
                                  const struct ofp_header *oh)
@@ -1112,22 +1123,33 @@ ofp_print_queue_get_config_reply(struct ds *string,
     ofputil_format_port(port, string);
     ds_put_char(string, '\n');
 
-    for (;;) {
-        struct ofputil_queue_config queue;
-        int retval;
+    struct ofputil_queue_config *queues = NULL;
+    size_t allocated_queues = 0;
+    size_t n = 0;
 
-        retval = ofputil_pull_queue_get_config_reply(&b, &queue);
+    int retval = 0;
+    for (;;) {
+        if (n >= allocated_queues) {
+            queues = x2nrealloc(queues, &allocated_queues, sizeof *queues);
+        }
+        retval = ofputil_pull_queue_get_config_reply(&b, &queues[n]);
         if (retval) {
-            if (retval != EOF) {
-                ofp_print_error(string, retval);
-            }
             break;
         }
+        n++;
+    }
 
-        ds_put_format(string, "queue %"PRIu32":", queue.queue_id);
-        print_queue_rate(string, "min_rate", queue.min_rate);
-        print_queue_rate(string, "max_rate", queue.max_rate);
+    qsort(queues, n, sizeof *queues, compare_queues);
+
+    for (const struct ofputil_queue_config *q = queues; q < &queues[n]; q++) {
+        ds_put_format(string, "queue %"PRIu32":", q->queue_id);
+        print_queue_rate(string, "min_rate", q->min_rate);
+        print_queue_rate(string, "max_rate", q->max_rate);
         ds_put_char(string, '\n');
+    }
+
+    if (retval != EOF) {
+        ofp_print_error(string, retval);
     }
 }
 
