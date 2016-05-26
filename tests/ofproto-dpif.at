@@ -437,12 +437,12 @@ Datapath actions: 11
 # Try a bunch of different flows and make sure that they are not distributed
 # as they only vary a field that is not hashed
 for d in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
-    AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=1,dl_src=50:54:00:00:00:$d,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0"], [0], [stdout])
+    AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=1,dl_src=50:54:00:00:00:0$d,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0"], [0], [stdout])
     tail -1 stdout >> results
 done
 sort results | uniq -c
-AT_CHECK([sort results | uniq], [0],
-  [Datapath actions: 10
+AT_CHECK([sort results | uniq | sed 's/1[[01]]/1?/'], [0],
+  [Datapath actions: 1?
 ])
 
 OVS_VSWITCHD_STOP
