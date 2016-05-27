@@ -906,7 +906,7 @@ bool
 dpif_ipfix_get_bridge_exporter_input_sampling(const struct dpif_ipfix *di)
     OVS_EXCLUDED(mutex)
 {
-    bool ret = true;
+    bool ret = false;
     ovs_mutex_lock(&mutex);
     if (di->bridge_exporter.options) {
         ret = di->bridge_exporter.options->enable_input_sampling;
@@ -919,7 +919,7 @@ bool
 dpif_ipfix_get_bridge_exporter_output_sampling(const struct dpif_ipfix *di)
     OVS_EXCLUDED(mutex)
 {
-    bool ret = true;
+    bool ret = false;
     ovs_mutex_lock(&mutex);
     if (di->bridge_exporter.options) {
         ret = di->bridge_exporter.options->enable_output_sampling;
