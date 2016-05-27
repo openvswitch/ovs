@@ -1952,11 +1952,14 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         free(match);
 
         /* ICMP echo reply.  These flows reply to ICMP echo requests
-         * received for the router's IP address. */
+         * received for the router's IP address. Since packets only
+         * get here as part of the logical router datapath, the inport
+         * (i.e. the incoming locally attached net) does not matter.
+         * The ip.ttl also does not matter (RFC1812 section 4.2.2.9) */
         match = xasprintf(
-            "inport == %s && (ip4.dst == "IP_FMT" || ip4.dst == "IP_FMT") && "
+            "(ip4.dst == "IP_FMT" || ip4.dst == "IP_FMT") && "
             "icmp4.type == 8 && icmp4.code == 0",
-            op->json_key, IP_ARGS(op->ip), IP_ARGS(op->bcast));
+            IP_ARGS(op->ip), IP_ARGS(op->bcast));
         char *actions = xasprintf(
             "ip4.dst = ip4.src; "
             "ip4.src = "IP_FMT"; "
