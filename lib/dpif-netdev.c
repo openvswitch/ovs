@@ -2045,26 +2045,48 @@ dpif_netdev_flow_get(const struct dpif *dpif, const struct dpif_flow_get *get)
     struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *netdev_flow;
     struct dp_netdev_pmd_thread *pmd;
-    unsigned pmd_id = get->pmd_id == PMD_ID_NULL
-                      ? NON_PMD_CORE_ID : get->pmd_id;
-    int error = 0;
+    struct hmapx to_find = HMAPX_INITIALIZER(&to_find);
+    struct hmapx_node *node;
+    int error = EINVAL;
 
-    pmd = dp_netdev_get_pmd(dp, pmd_id);
-    if (!pmd) {
-        return EINVAL;
-    }
-
-    netdev_flow = dp_netdev_pmd_find_flow(pmd, get->ufid, get->key,
-                                          get->key_len);
-    if (netdev_flow) {
-        dp_netdev_flow_to_dpif_flow(netdev_flow, get->buffer, get->buffer,
-                                    get->flow, false);
+    if (get->pmd_id == PMD_ID_NULL) {
+        CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
+            if (dp_netdev_pmd_try_ref(pmd) && !hmapx_add(&to_find, pmd)) {
+                dp_netdev_pmd_unref(pmd);
+            }
+        }
     } else {
-        error = ENOENT;
+        pmd = dp_netdev_get_pmd(dp, get->pmd_id);
+        if (!pmd) {
+            goto out;
+        }
+        hmapx_add(&to_find, pmd);
     }
-    dp_netdev_pmd_unref(pmd);
 
+    if (!hmapx_count(&to_find)) {
+        goto out;
+    }
 
+    HMAPX_FOR_EACH (node, &to_find) {
+        pmd = (struct dp_netdev_pmd_thread *) node->data;
+        netdev_flow = dp_netdev_pmd_find_flow(pmd, get->ufid, get->key,
+                                              get->key_len);
+        if (netdev_flow) {
+            dp_netdev_flow_to_dpif_flow(netdev_flow, get->buffer, get->buffer,
+                                        get->flow, false);
+            error = 0;
+            break;
+        } else {
+            error = ENOENT;
+        }
+    }
+
+    HMAPX_FOR_EACH (node, &to_find) {
+        pmd = (struct dp_netdev_pmd_thread *) node->data;
+        dp_netdev_pmd_unref(pmd);
+    }
+out:
+    hmapx_destroy(&to_find);
     return error;
 }
 
