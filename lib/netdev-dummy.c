@@ -831,6 +831,12 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
     return 0;
 }
 
+static int
+netdev_dummy_get_numa_id(const struct netdev *netdev_ OVS_UNUSED)
+{
+    return 0;
+}
+
 static struct netdev_rxq *
 netdev_dummy_rxq_alloc(void)
 {
@@ -1221,74 +1227,80 @@ netdev_dummy_update_flags(struct netdev *netdev_,
 
 /* Helper functions. */
 
-static const struct netdev_class dummy_class = {
-    "dummy",
-    false,                      /* is_pmd */
-    NULL,                       /* init */
-    netdev_dummy_run,
-    netdev_dummy_wait,
+#define NETDEV_DUMMY_CLASS(NAME, PMD)                           \
+{                                                               \
+    NAME,                                                       \
+    PMD,                        /* is_pmd */                    \
+    NULL,                       /* init */                      \
+    netdev_dummy_run,                                           \
+    netdev_dummy_wait,                                          \
+                                                                \
+    netdev_dummy_alloc,                                         \
+    netdev_dummy_construct,                                     \
+    netdev_dummy_destruct,                                      \
+    netdev_dummy_dealloc,                                       \
+    netdev_dummy_get_config,                                    \
+    netdev_dummy_set_config,                                    \
+    NULL,                       /* get_tunnel_config */         \
+    NULL,                       /* build header */              \
+    NULL,                       /* push header */               \
+    NULL,                       /* pop header */                \
+    netdev_dummy_get_numa_id,                                   \
+    NULL,                       /* set_tx_multiq */             \
+                                                                \
+    netdev_dummy_send,          /* send */                      \
+    NULL,                       /* send_wait */                 \
+                                                                \
+    netdev_dummy_set_etheraddr,                                 \
+    netdev_dummy_get_etheraddr,                                 \
+    netdev_dummy_get_mtu,                                       \
+    netdev_dummy_set_mtu,                                       \
+    netdev_dummy_get_ifindex,                                   \
+    NULL,                       /* get_carrier */               \
+    NULL,                       /* get_carrier_resets */        \
+    NULL,                       /* get_miimon */                \
+    netdev_dummy_get_stats,                                     \
+                                                                \
+    NULL,                       /* get_features */              \
+    NULL,                       /* set_advertisements */        \
+                                                                \
+    NULL,                       /* set_policing */              \
+    NULL,                       /* get_qos_types */             \
+    NULL,                       /* get_qos_capabilities */      \
+    NULL,                       /* get_qos */                   \
+    NULL,                       /* set_qos */                   \
+    netdev_dummy_get_queue,                                     \
+    NULL,                       /* set_queue */                 \
+    NULL,                       /* delete_queue */              \
+    netdev_dummy_get_queue_stats,                               \
+    netdev_dummy_queue_dump_start,                              \
+    netdev_dummy_queue_dump_next,                               \
+    netdev_dummy_queue_dump_done,                               \
+    netdev_dummy_dump_queue_stats,                              \
+                                                                \
+    NULL,                       /* set_in4 */                   \
+    netdev_dummy_get_addr_list,                                 \
+    NULL,                       /* add_router */                \
+    NULL,                       /* get_next_hop */              \
+    NULL,                       /* get_status */                \
+    NULL,                       /* arp_lookup */                \
+                                                                \
+    netdev_dummy_update_flags,                                  \
+    NULL,                       /* reconfigure */               \
+                                                                \
+    netdev_dummy_rxq_alloc,                                     \
+    netdev_dummy_rxq_construct,                                 \
+    netdev_dummy_rxq_destruct,                                  \
+    netdev_dummy_rxq_dealloc,                                   \
+    netdev_dummy_rxq_recv,                                      \
+    netdev_dummy_rxq_wait,                                      \
+    netdev_dummy_rxq_drain,                                     \
+}
 
-    netdev_dummy_alloc,
-    netdev_dummy_construct,
-    netdev_dummy_destruct,
-    netdev_dummy_dealloc,
-    netdev_dummy_get_config,
-    netdev_dummy_set_config,
-    NULL,                       /* get_tunnel_config */
-    NULL,                       /* build header */
-    NULL,                       /* push header */
-    NULL,                       /* pop header */
-    NULL,                       /* get_numa_id */
-    NULL,                       /* set_tx_multiq */
-
-    netdev_dummy_send,          /* send */
-    NULL,                       /* send_wait */
-
-    netdev_dummy_set_etheraddr,
-    netdev_dummy_get_etheraddr,
-    netdev_dummy_get_mtu,
-    netdev_dummy_set_mtu,
-    netdev_dummy_get_ifindex,
-    NULL,                       /* get_carrier */
-    NULL,                       /* get_carrier_resets */
-    NULL,                       /* get_miimon */
-    netdev_dummy_get_stats,
-
-    NULL,                       /* get_features */
-    NULL,                       /* set_advertisements */
-
-    NULL,                       /* set_policing */
-    NULL,                       /* get_qos_types */
-    NULL,                       /* get_qos_capabilities */
-    NULL,                       /* get_qos */
-    NULL,                       /* set_qos */
-    netdev_dummy_get_queue,
-    NULL,                       /* set_queue */
-    NULL,                       /* delete_queue */
-    netdev_dummy_get_queue_stats,
-    netdev_dummy_queue_dump_start,
-    netdev_dummy_queue_dump_next,
-    netdev_dummy_queue_dump_done,
-    netdev_dummy_dump_queue_stats,
-
-    NULL,                       /* set_in4 */
-    netdev_dummy_get_addr_list,
-    NULL,                       /* add_router */
-    NULL,                       /* get_next_hop */
-    NULL,                       /* get_status */
-    NULL,                       /* arp_lookup */
-
-    netdev_dummy_update_flags,
-    NULL,                       /* reconfigure */
-
-    netdev_dummy_rxq_alloc,
-    netdev_dummy_rxq_construct,
-    netdev_dummy_rxq_destruct,
-    netdev_dummy_rxq_dealloc,
-    netdev_dummy_rxq_recv,
-    netdev_dummy_rxq_wait,
-    netdev_dummy_rxq_drain,
-};
+static const struct netdev_class dummy_class =
+    NETDEV_DUMMY_CLASS("dummy", false);
+static const struct netdev_class dummy_pmd_class =
+    NETDEV_DUMMY_CLASS("dummy-pmd", true);
 
 static void
 pkt_list_delete(struct ovs_list *l)
@@ -1643,6 +1655,7 @@ netdev_dummy_register(enum dummy_level level)
         netdev_dummy_override("system");
     }
     netdev_register_provider(&dummy_class);
+    netdev_register_provider(&dummy_pmd_class);
 
     netdev_vport_tunnel_register();
 }
