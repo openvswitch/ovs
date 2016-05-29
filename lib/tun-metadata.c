@@ -490,7 +490,7 @@ memcpy_to_metadata(struct tun_metadata *dst, const void *src,
     int addr = 0;
 
     while (chain) {
-        memcpy(dst->opts.u8 + loc->c.offset + addr, (uint8_t *)src + addr,
+        memcpy(dst->opts.u8 + chain->offset, (uint8_t *)src + addr,
                chain->len);
         addr += chain->len;
         chain = chain->next;
@@ -507,7 +507,7 @@ memcpy_from_metadata(void *dst, const struct tun_metadata *src,
     int addr = 0;
 
     while (chain) {
-        memcpy((uint8_t *)dst + addr, src->opts.u8 + loc->c.offset + addr,
+        memcpy((uint8_t *)dst + addr, src->opts.u8 + chain->offset,
                chain->len);
         addr += chain->len;
         chain = chain->next;
