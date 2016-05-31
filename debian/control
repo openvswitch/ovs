@@ -288,3 +288,19 @@ Description: Open vSwitch VTEP utilities
  .
  This package provides utilities that are useful to interact with a
  VTEP-configured database and a VTEP emulator.
+
+Package: openvswitch-dev
+Architecture: linux-any
+Depends:
+ openvswitch-common (>= ${binary:Version}),
+ ${misc:Depends}
+Description: Open vSwitch development package
+ Open vSwitch is a production quality, multilayer, software-based, Ethernet
+ virtual switch. It is designed to enable massive network automation through
+ programmatic extension, while still supporting standard management interfaces
+ and protocols (e.g. NetFlow, sFlow, SPAN, RSPAN, CLI, LACP, 802.1ag). In
+ addition, it is designed to support distribution across multiple physical
+ servers similar to VMware's vNetwork distributed vswitch or Cisco's Nexus
+ 1000V.
+ .
+ This package provides openvswitch headers and libopenvswitch for developers.
