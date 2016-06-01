@@ -113,4 +113,31 @@ OvsPerCpuDataInit();
 VOID
 OvsPerCpuDataCleanup();
 
+static LARGE_INTEGER seed;
+
+/*
+ *----------------------------------------------------------------------------
+ *  SRand --
+ *    This function sets the starting seed value for the pseudorandom number
+ *    generator.
+ *----------------------------------------------------------------------------
+ */
+static __inline
+VOID SRand()
+{
+    KeQuerySystemTime(&seed);
+}
+
+/*
+ *----------------------------------------------------------------------------
+ *  Rand --
+ *    This function generates a pseudorandom number between 0 to UINT_MAX.
+ *----------------------------------------------------------------------------
+ */
+static __inline
+UINT32 Rand()
+{
+    return seed.LowPart *= 0x8088405 + 1;
+}
+
 #endif /* __UTIL_H_ */

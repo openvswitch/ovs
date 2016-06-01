@@ -1600,6 +1600,131 @@ OvsExecuteHash(OvsFlowKey *key,
 
 /*
  * --------------------------------------------------------------------------
+ * OvsOutputUserspaceAction --
+ *      This function sends the packet to userspace according to nested
+ *      %OVS_USERSPACE_ATTR_* attributes.
+ * --------------------------------------------------------------------------
+ */
+static __inline NDIS_STATUS
+OvsOutputUserspaceAction(OvsForwardingContext *ovsFwdCtx,
+                         OvsFlowKey *key,
+                         const PNL_ATTR attr)
+{
+    NTSTATUS status = NDIS_STATUS_SUCCESS;
+    PNL_ATTR userdataAttr;
+    PNL_ATTR queueAttr;
+    POVS_PACKET_QUEUE_ELEM elem;
+    POVS_PACKET_HDR_INFO layers = &ovsFwdCtx->layers;
+    BOOLEAN isRecv = FALSE;
+
+    POVS_VPORT_ENTRY vport = OvsFindVportByPortNo(ovsFwdCtx->switchContext,
+                                                  ovsFwdCtx->srcVportNo);
+
+    if (vport) {
+        if (vport->isExternal ||
+            OvsIsTunnelVportType(vport->ovsType)) {
+            isRecv = TRUE;
+        }
+    }
+
+    queueAttr = NlAttrFindNested(attr, OVS_USERSPACE_ATTR_PID);
+    userdataAttr = NlAttrFindNested(attr, OVS_USERSPACE_ATTR_USERDATA);
+
+    elem = OvsCreateQueueNlPacket(NlAttrData(userdataAttr),
+                                  NlAttrGetSize(userdataAttr),
+                                  OVS_PACKET_CMD_ACTION,
+                                  vport, key, ovsFwdCtx->curNbl,
+                                  NET_BUFFER_LIST_FIRST_NB(ovsFwdCtx->curNbl),
+                                  isRecv,
+                                  layers);
+    if (elem) {
+        LIST_ENTRY missedPackets;
+        InitializeListHead(&missedPackets);
+        InsertTailList(&missedPackets, &elem->link);
+        OvsQueuePackets(&missedPackets, 1);
+    } else {
+        status = NDIS_STATUS_FAILURE;
+    }
+
+    return status;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsExecuteSampleAction --
+ *      Executes actions based on probability, as specified in the nested
+ *      %OVS_SAMPLE_ATTR_* attributes.
+ * --------------------------------------------------------------------------
+ */
+static __inline NDIS_STATUS
+OvsExecuteSampleAction(OvsForwardingContext *ovsFwdCtx,
+                       OvsFlowKey *key,
+                       const PNL_ATTR attr)
+{
+    PNET_BUFFER_LIST newNbl = NULL;
+    PNL_ATTR actionsList = NULL;
+    PNL_ATTR a = NULL;
+    INT rem = 0;
+
+    SRand();
+    NL_ATTR_FOR_EACH_UNSAFE(a, rem, NlAttrData(attr), NlAttrGetSize(attr)) {
+        switch (NlAttrType(a)) {
+        case OVS_SAMPLE_ATTR_PROBABILITY:
+        {
+            UINT32 probability = NlAttrGetU32(a);
+
+            if (!probability || Rand() > probability) {
+                return 0;
+            }
+            break;
+        }
+        case OVS_SAMPLE_ATTR_ACTIONS:
+            actionsList = a;
+            break;
+        }
+    }
+
+    if (actionsList) {
+        rem = NlAttrGetSize(actionsList);
+        a = (PNL_ATTR)NlAttrData(actionsList);
+    }
+
+    if (!rem) {
+        /* Actions list is empty, do nothing */
+        return STATUS_SUCCESS;
+    }
+
+    /*
+     * The only known usage of sample action is having a single user-space
+     * action. Treat this usage as a special case.
+     */
+    if (NlAttrType(a) == OVS_ACTION_ATTR_USERSPACE &&
+        NlAttrIsLast(a, rem)) {
+        return OvsOutputUserspaceAction(ovsFwdCtx, key, a);
+    }
+
+    newNbl = OvsPartialCopyNBL(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
+                               0, 0, TRUE /*copy NBL info*/);
+    if (newNbl == NULL) {
+        /*
+         * Skip the sample action when out of memory, but continue on with the
+         * rest of the action list.
+         */
+        ovsActionStats.noCopiedNbl++;
+        return STATUS_SUCCESS;
+    }
+
+    if (!OvsAddDeferredActions(newNbl, key, a)) {
+        OVS_LOG_INFO(
+            "Deferred actions limit reached, dropping sample action.");
+        OvsCompleteNBL(ovsFwdCtx->switchContext, newNbl, TRUE);
+    }
+
+    return STATUS_SUCCESS;
+}
+
+/*
+ * --------------------------------------------------------------------------
  * OvsDoExecuteActions --
  *     Interpret and execute the specified 'actions' on the specified packet
  *     'curNbl'. The expectation is that if the packet needs to be dropped
@@ -1838,43 +1963,15 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
 
         case OVS_ACTION_ATTR_USERSPACE:
         {
-            PNL_ATTR userdataAttr;
-            PNL_ATTR queueAttr;
-            POVS_PACKET_QUEUE_ELEM elem;
-            BOOLEAN isRecv = FALSE;
-
-            POVS_VPORT_ENTRY vport = OvsFindVportByPortNo(switchContext,
-                portNo);
-
-            if (vport) {
-                if (vport->isExternal ||
-                    OvsIsTunnelVportType(vport->ovsType)) {
-                    isRecv = TRUE;
-                }
-            }
-
-            queueAttr = NlAttrFindNested(a, OVS_USERSPACE_ATTR_PID);
-            userdataAttr = NlAttrFindNested(a, OVS_USERSPACE_ATTR_USERDATA);
-
-            elem = OvsCreateQueueNlPacket((PVOID)userdataAttr,
-                                    userdataAttr->nlaLen,
-                                    OVS_PACKET_CMD_ACTION,
-                                    vport, key, ovsFwdCtx.curNbl,
-                                    NET_BUFFER_LIST_FIRST_NB(ovsFwdCtx.curNbl),
-                                    isRecv,
-                                    layers);
-            if (elem) {
-                LIST_ENTRY missedPackets;
-                InitializeListHead(&missedPackets);
-                InsertTailList(&missedPackets, &elem->link);
-                OvsQueuePackets(&missedPackets, 1);
-                dropReason = L"OVS-Completed since packet was copied to "
-                             L"userspace";
-            } else {
+            status = OvsOutputUserspaceAction(&ovsFwdCtx, key,
+                                              (const PNL_ATTR)a);
+            if (status != NDIS_STATUS_SUCCESS) {
                 dropReason = L"OVS-Dropped due to failure to queue to "
                              L"userspace";
                 goto dropit;
             }
+            dropReason = L"OVS-Completed since packet was copied to "
+                         L"userspace";
             break;
         }
         case OVS_ACTION_ATTR_SET:
@@ -1898,6 +1995,24 @@ OvsDoExecuteActions(POVS_SWITCH_CONTEXT switchContext,
             break;
         }
         case OVS_ACTION_ATTR_SAMPLE:
+        {
+            if (ovsFwdCtx.destPortsSizeOut > 0 || ovsFwdCtx.tunnelTxNic != NULL
+                || ovsFwdCtx.tunnelRxNic != NULL) {
+                status = OvsOutputBeforeSetAction(&ovsFwdCtx);
+                if (status != NDIS_STATUS_SUCCESS) {
+                    dropReason = L"OVS-adding destination failed";
+                    goto dropit;
+                }
+            }
+
+            status = OvsExecuteSampleAction(&ovsFwdCtx, key,
+                                            (const PNL_ATTR)a);
+            if (status != NDIS_STATUS_SUCCESS) {
+                dropReason = L"OVS-sample action failed";
+                goto dropit;
+            }
+            break;
+        }
         default:
             status = NDIS_STATUS_NOT_SUPPORTED;
             break;
