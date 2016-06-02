@@ -109,7 +109,7 @@ BUILD_ASSERT_DECL(offsetof(struct rule_dpif, up) == 0);
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes,
                            long long int *used);
 static struct rule_dpif *rule_dpif_cast(const struct rule *);
-static void rule_expire(struct rule_dpif *);
+static void rule_expire(struct rule_dpif *, long long now);
 
 struct group_dpif {
     struct ofgroup up;
@@ -1545,6 +1545,7 @@ run(struct ofproto *ofproto_)
     new_dump_seq = seq_read(udpif_dump_seq(ofproto->backer->udpif));
     if (ofproto->dump_seq != new_dump_seq) {
         struct rule *rule, *next_rule;
+        long long now = time_msec();
 
         /* We know stats are relatively fresh, so now is a good time to do some
          * periodic work. */
@@ -1555,7 +1556,7 @@ run(struct ofproto *ofproto_)
         ovs_mutex_lock(&ofproto_mutex);
         LIST_FOR_EACH_SAFE (rule, next_rule, expirable,
                             &ofproto->up.expirable) {
-            rule_expire(rule_dpif_cast(rule));
+            rule_expire(rule_dpif_cast(rule), now);
         }
         ovs_mutex_unlock(&ofproto_mutex);
 
@@ -3621,11 +3622,10 @@ port_is_lacp_current(const struct ofport *ofport_)
 /* If 'rule' is an OpenFlow rule, that has expired according to OpenFlow rules,
  * then delete it entirely. */
 static void
-rule_expire(struct rule_dpif *rule)
+rule_expire(struct rule_dpif *rule, long long now)
     OVS_REQUIRES(ofproto_mutex)
 {
     uint16_t hard_timeout, idle_timeout;
-    long long int now = time_msec();
     int reason = -1;
 
     hard_timeout = rule->up.hard_timeout;
