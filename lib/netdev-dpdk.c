@@ -797,6 +797,8 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
         }
     } else {
         netdev_dpdk_alloc_txq(dev, OVS_VHOST_MAX_QUEUE_NUM);
+        /* Enable DPDK_DEV_VHOST device and set promiscuous mode flag. */
+        dev->flags = NETDEV_UP | NETDEV_PROMISC;
     }
 
     ovs_list_push_back(&dpdk_list, &dev->list_node);
@@ -1256,7 +1258,8 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
     uint16_t nb_rx = 0;
     uint16_t dropped = 0;
 
-    if (OVS_UNLIKELY(!is_vhost_running(virtio_dev))) {
+    if (OVS_UNLIKELY(!is_vhost_running(virtio_dev)
+                     || !(dev->flags & NETDEV_UP))) {
         return EAGAIN;
     }
 
@@ -1378,7 +1381,8 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
 
     qid = dev->tx_q[qid % dev->real_n_txq].map;
 
-    if (OVS_UNLIKELY(!is_vhost_running(virtio_dev) || qid < 0)) {
+    if (OVS_UNLIKELY(!is_vhost_running(virtio_dev) || qid < 0
+                     || !(dev->flags & NETDEV_UP))) {
         rte_spinlock_lock(&dev->stats_lock);
         dev->stats.tx_dropped+= cnt;
         rte_spinlock_unlock(&dev->stats_lock);
@@ -2117,6 +2121,23 @@ netdev_dpdk_update_flags__(struct netdev_dpdk *dev,
         if (!(dev->flags & NETDEV_UP)) {
             rte_eth_dev_stop(dev->port_id);
         }
+    } else {
+        /* If DPDK_DEV_VHOST device's NETDEV_UP flag was changed and vhost is
+         * running then change netdev's change_seq to trigger link state
+         * update. */
+        struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(dev);
+
+        if ((NETDEV_UP & ((*old_flagsp ^ on) | (*old_flagsp ^ off)))
+            && is_vhost_running(virtio_dev)) {
+            netdev_change_seq_changed(&dev->up);
+
+            /* Clear statistics if device is getting up. */
+            if (NETDEV_UP & on) {
+                rte_spinlock_lock(&dev->stats_lock);
+                memset(&dev->stats, 0, sizeof(dev->stats));
+                rte_spinlock_unlock(&dev->stats_lock);
+            }
+        }
     }
 
     return 0;
@@ -2339,6 +2360,7 @@ new_device(struct virtio_net *virtio_dev)
             virtio_dev->flags |= VIRTIO_DEV_RUNNING;
             /* Disable notifications. */
             set_irq_status(virtio_dev);
+            netdev_change_seq_changed(&dev->up);
             ovs_mutex_unlock(&dev->mutex);
             break;
         }
@@ -2390,6 +2412,7 @@ destroy_device(volatile struct virtio_net *virtio_dev)
             ovsrcu_set(&dev->virtio_dev, NULL);
             netdev_dpdk_txq_map_clear(dev);
             exists = true;
+            netdev_change_seq_changed(&dev->up);
             ovs_mutex_unlock(&dev->mutex);
             break;
         }
