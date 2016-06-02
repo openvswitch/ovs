@@ -21,7 +21,8 @@
     <h1>Configuration</h1>
     <p>
       <code>ovn-northd</code> requires a connection to the Northbound
-      and Southbound databases.  The default is <code>db.sock</code>
+      and Southbound databases.  The defaults are <code>ovnnb_db.sock</code>
+      and <code>ovnsb_db.sock</code> respectively
       in the local Open vSwitch's "run" directory.  This may be
       overridden with the following commands:
     </p>
