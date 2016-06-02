@@ -20,7 +20,13 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "compiler.h"
+#include "dp-packet.h"
+#include "packets.h"
 #include "unixctl.h"
+
+struct netdev;
+struct ovs_action_push_tnl;
+struct netdev_tnl_build_header_params;
 
 int
 netdev_gre_build_header(const struct netdev *netdev,

@@ -16,11 +16,14 @@
 
 #include <config.h>
 
+#include "netdev-native-tnl.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <net/if.h>
 #include <netinet/in.h>
+#include <netinet/ip.h>
 #include <netinet/ip6.h>
 #include <sys/ioctl.h>
 
@@ -28,36 +31,18 @@
 #include <stdlib.h>
 #include <sys/time.h>
 
-#include "openvswitch/list.h"
 #include "byte-order.h"
 #include "csum.h"
-#include "daemon.h"
-#include "dirs.h"
-#include "dpif.h"
 #include "dp-packet.h"
-#include "entropy.h"
-#include "flow.h"
-#include "hash.h"
-#include "hmap.h"
-#include "id-pool.h"
-#include "netdev-provider.h"
+#include "netdev.h"
 #include "netdev-vport.h"
 #include "netdev-vport-private.h"
 #include "odp-netlink.h"
-#include "dp-packet.h"
-#include "ovs-router.h"
 #include "packets.h"
-#include "poll-loop.h"
-#include "random.h"
-#include "route-table.h"
-#include "shash.h"
-#include "socket-util.h"
-#include "timeval.h"
-#include "netdev-native-tnl.h"
-#include "openvswitch/vlog.h"
+#include "seq.h"
 #include "unaligned.h"
 #include "unixctl.h"
-#include "util.h"
+#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(native_tnl);
 static struct vlog_rate_limit err_rl = VLOG_RATE_LIMIT_INIT(60, 5);

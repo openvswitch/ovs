@@ -20,6 +20,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include "compiler.h"
+#include "netdev.h"
+#include "netdev-provider.h"
 #include "ovs-thread.h"
 
 struct netdev_vport {
