@@ -33,9 +33,6 @@
 # or func_output().
 #
 
-import warnings
-warnings.filterwarnings(action="ignore", category=DeprecationWarning)
-
 import getopt
 import re
 import os
@@ -44,19 +41,16 @@ import sys
 import tarfile
 import time
 import commands
-import pprint
 from xml.dom.minidom import parse, getDOMImplementation
 import zipfile
 from subprocess import Popen, PIPE
 from select import select
-from signal import SIGTERM, SIGUSR1
+from signal import SIGTERM
 import md5
 import platform
 import fcntl
-import glob
-import urllib
-import socket
-import base64
+import warnings
+warnings.filterwarnings(action="ignore", category=DeprecationWarning)
 
 OS_RELEASE = platform.release()
 
