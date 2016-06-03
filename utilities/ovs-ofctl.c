@@ -3723,7 +3723,7 @@ ofctl_parse_pcap(struct ovs_cmdl_context *ctx)
                 ovs_error(error, "%s: read failed", filename);
             }
 
-            pkt_metadata_init(&packet->md, ODPP_NONE);
+            pkt_metadata_init(&packet->md, u32_to_odp(ofp_to_u16(OFPP_ANY)));
             flow_extract(packet, &flow);
             flow_print(stdout, &flow);
             putchar('\n');

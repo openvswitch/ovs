@@ -92,7 +92,6 @@ struct flow {
     ovs_u128 ct_label;          /* Connection label. */
     uint32_t conj_id;           /* Conjunction ID. */
     ofp_port_t actset_output;   /* Output port in action set. */
-    uint8_t pad2[2];            /* Pad to 64 bits. */
 
     /* L2, Order the same as in the Ethernet header! (64-bit aligned) */
     struct eth_addr dl_dst;     /* Ethernet destination address. */
