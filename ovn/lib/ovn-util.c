@@ -23,11 +23,14 @@ VLOG_DEFINE_THIS_MODULE(ovn_util);
  * Extracts the mac, ipv4 and ipv6 addresses from the input param 'address'
  * which should be of the format 'MAC [IP1 IP2 ..]" where IPn should be
  * a valid IPv4 or IPv6 address and stores them in the 'ipv4_addrs' and
- * 'ipv6_addrs' fields of input param 'laddrs'.
- * The caller has to free the 'ipv4_addrs' and 'ipv6_addrs' fields.
- * If input param 'store_ipv6' is true only then extracted ipv6 addresses
- * are stored in 'ipv6_addrs' fields.
+ * 'ipv6_addrs' fields of input param 'laddrs'.  If input param
+ * 'store_ipv6' is true only then extracted ipv6 addresses are stored in
+ * 'ipv6_addrs' fields.
+ *
  * Return true if at least 'MAC' is found in 'address', false otherwise.
+ *
+ * The caller must call destroy_lport_addresses().
+ *
  * Eg 1.
  * If 'address' = '00:00:00:00:00:01 10.0.0.4 fe80::ea2a:eaff:fe28:3390/64
  *                 30.0.0.3/23' and 'store_ipv6' = true
@@ -45,23 +48,23 @@ bool
 extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
                       bool store_ipv6)
 {
+    memset(laddrs, 0, sizeof *laddrs);
+
     char *buf = address;
     int buf_index = 0;
     char *buf_end = buf + strlen(address);
     if (!ovs_scan_len(buf, &buf_index, ETH_ADDR_SCAN_FMT,
                       ETH_ADDR_SCAN_ARGS(laddrs->ea))) {
+        laddrs->ea = eth_addr_zero;
         return false;
     }
+
+    laddrs->ea_s = xasprintf(ETH_ADDR_FMT, ETH_ADDR_ARGS(laddrs->ea));
 
     ovs_be32 ip4;
     struct in6_addr ip6;
     unsigned int plen;
     char *error;
-
-    laddrs->n_ipv4_addrs = 0;
-    laddrs->n_ipv6_addrs = 0;
-    laddrs->ipv4_addrs = NULL;
-    laddrs->ipv6_addrs = NULL;
 
     /* Loop through the buffer and extract the IPv4/IPv6 addresses
      * and store in the 'laddrs'. Break the loop if invalid data is found.
@@ -72,11 +75,21 @@ extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
         error = ip_parse_cidr_len(buf, &buf_index, &ip4, &plen);
         if (!error) {
             laddrs->n_ipv4_addrs++;
-            laddrs->ipv4_addrs = xrealloc(
-                laddrs->ipv4_addrs,
+            laddrs->ipv4_addrs = xrealloc(laddrs->ipv4_addrs,
                 sizeof (struct ipv4_netaddr) * laddrs->n_ipv4_addrs);
-            laddrs->ipv4_addrs[laddrs->n_ipv4_addrs - 1].addr = ip4;
-            laddrs->ipv4_addrs[laddrs->n_ipv4_addrs - 1].plen = plen;
+
+            struct ipv4_netaddr *na
+                = &laddrs->ipv4_addrs[laddrs->n_ipv4_addrs - 1];
+
+            na->addr = ip4;
+            na->mask = be32_prefix_mask(plen);
+            na->network = ip4 & na->mask;
+            na->plen = plen;
+
+            na->addr_s = xasprintf(IP_FMT, IP_ARGS(ip4));
+            na->network_s = xasprintf(IP_FMT, IP_ARGS(na->network));
+            na->bcast_s = xasprintf(IP_FMT, IP_ARGS(ip4 | ~na->mask));
+
             buf += buf_index;
             continue;
         }
@@ -87,9 +100,19 @@ extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
             laddrs->ipv6_addrs = xrealloc(
                 laddrs->ipv6_addrs,
                 sizeof(struct ipv6_netaddr) * laddrs->n_ipv6_addrs);
-            memcpy(&laddrs->ipv6_addrs[laddrs->n_ipv6_addrs - 1].addr, &ip6,
-                   sizeof(struct in6_addr));
-            laddrs->ipv6_addrs[laddrs->n_ipv6_addrs - 1].plen = plen;
+
+            struct ipv6_netaddr *na
+                = &laddrs->ipv6_addrs[laddrs->n_ipv6_addrs - 1];
+
+            memcpy(&na->addr, &ip6, sizeof(struct in6_addr));
+            na->mask = ipv6_create_mask(plen);
+            na->network = ipv6_addr_bitand(&ip6, &na->mask);
+            na->plen = plen;
+
+            na->addr_s = xmalloc(INET6_ADDRSTRLEN);
+            inet_ntop(AF_INET6, &ip6, na->addr_s, INET6_ADDRSTRLEN);
+            na->network_s = xmalloc(INET6_ADDRSTRLEN);
+            inet_ntop(AF_INET6, &na->network, na->network_s, INET6_ADDRSTRLEN);
         }
 
         if (error) {
@@ -102,6 +125,25 @@ extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
     }
 
     return true;
+}
+
+void
+destroy_lport_addresses(struct lport_addresses *laddrs)
+{
+    free(laddrs->ea_s);
+
+    for (int i = 0; i < laddrs->n_ipv4_addrs; i++) {
+        free(laddrs->ipv4_addrs[i].addr_s);
+        free(laddrs->ipv4_addrs[i].network_s);
+        free(laddrs->ipv4_addrs[i].bcast_s);
+    }
+    free(laddrs->ipv4_addrs);
+
+    for (int i = 0; i < laddrs->n_ipv6_addrs; i++) {
+        free(laddrs->ipv6_addrs[i].addr_s);
+        free(laddrs->ipv6_addrs[i].network_s);
+    }
+    free(laddrs->ipv6_addrs);
 }
 
 /* Allocates a key for NAT conntrack zone allocation for a provided

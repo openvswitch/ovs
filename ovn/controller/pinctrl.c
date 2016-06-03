@@ -747,7 +747,7 @@ send_garp_update(const struct sbrec_port_binding *binding_rec,
         garp->ofport = ofport;
         shash_add(&send_garp_data, binding_rec->logical_port, garp);
 
-        free(laddrs.ipv4_addrs);
+        destroy_lport_addresses(&laddrs);
         break;
     }
 }

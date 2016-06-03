@@ -1155,8 +1155,7 @@ build_port_security_nd(struct ovn_port *op, struct hmap *lflows)
                           ds_cstr(&match), "next;");
             ds_destroy(&match);
         }
-        free(ps.ipv4_addrs);
-        free(ps.ipv6_addrs);
+        destroy_lport_addresses(&ps);
     }
 
     char *match = xasprintf("inport == %s && (arp || nd)", op->json_key);
@@ -1258,7 +1257,6 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
             ds_put_cstr(&match, "}");
             ovn_lflow_add(lflows, op->od, stage, 90, ds_cstr(&match), "next;");
             ds_destroy(&match);
-            free(ps.ipv4_addrs);
         }
 
         if (ps.n_ipv6_addrs) {
@@ -1286,8 +1284,9 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
             ovn_lflow_add(lflows, op->od, stage, 90,
                           ds_cstr(&match), "next;");
             ds_destroy(&match);
-            free(ps.ipv6_addrs);
         }
+
+        destroy_lport_addresses(&ps);
 
         char *match = xasprintf(
             "%s == %s && %s == "ETH_ADDR_FMT" && ip", port_direction,
@@ -1296,6 +1295,7 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
         ovn_lflow_add(lflows, op->od, stage, 80, match, "drop;");
         free(match);
     }
+
 }
 
 static bool
@@ -1894,8 +1894,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 
             }
 
-            free(laddrs.ipv4_addrs);
-            free(laddrs.ipv6_addrs);
+            destroy_lport_addresses(&laddrs);
         }
     }
 
@@ -2594,7 +2593,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                     }
                 }
 
-                free(laddrs.ipv4_addrs);
+                destroy_lport_addresses(&laddrs);
             }
         } else if (!strcmp(op->nbs->type, "router")) {
             /* This is a logical switch port that connects to a router. */

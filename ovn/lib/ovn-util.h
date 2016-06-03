@@ -18,19 +18,29 @@
 
 #include "lib/packets.h"
 
-struct sbrec_port_binding;
-
 struct ipv4_netaddr {
-    ovs_be32 addr;
-    unsigned int plen;
+    ovs_be32 addr;            /* 192.168.10.123 */
+    ovs_be32 mask;            /* 255.255.255.0 */
+    ovs_be32 network;         /* 192.168.10.0 */
+    unsigned int plen;        /* CIDR Prefix: 24. */
+
+    char *addr_s;             /* "192.168.10.123" */
+    char *network_s;          /* "192.168.10.0" */
+    char *bcast_s;            /* "192.168.10.255" */
 };
 
 struct ipv6_netaddr {
-    struct in6_addr addr;
-    unsigned int plen;
+    struct in6_addr addr;     /* fc00::1 */
+    struct in6_addr mask;     /* ffff:ffff:ffff:ffff:: */
+    struct in6_addr network;  /* fc00:: */
+    unsigned int plen;        /* CIDR Prefix: 64 */
+
+    char *addr_s;             /* "fc00::1" */
+    char *network_s;          /* "fc00::" */
 };
 
 struct lport_addresses {
+    char *ea_s;
     struct eth_addr ea;
     size_t n_ipv4_addrs;
     struct ipv4_netaddr *ipv4_addrs;
@@ -38,10 +48,10 @@ struct lport_addresses {
     struct ipv6_netaddr *ipv6_addrs;
 };
 
-bool
-extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
-                      bool store_ipv6);
 
-char *
-alloc_nat_zone_key(const char *key, const char *type);
+bool extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
+                           bool store_ipv6);
+void destroy_lport_addresses(struct lport_addresses *);
+
+char *alloc_nat_zone_key(const char *key, const char *type);
 #endif
