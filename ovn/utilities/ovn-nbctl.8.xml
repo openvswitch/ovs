@@ -12,14 +12,50 @@
     <h1>General Commands</h1>
 
     <dl>
-      <dt><code>show [<var>lswitch</var>]</code></dt>
+      <dt><code>show [<var>lswitch</var> | <var>lrouter</var>]</code></dt>
       <dd>
         Prints a brief overview of the database contents.  If
         <var>lswitch</var> is provided, only records related to that
-        logical switch are shown.
+        logical switch are shown. If
+        <var>lrouter</var> is provided, only records related to that
+        logical router are shown.
       </dd>
     </dl>
 
+    <h1>Logical Router Commands</h1>
+
+    <dl>
+      <dt>[<code>--may-exist</code> | <code>--add-duplicate</code>] <code>lrouter-add</code> <var>lrouter</var></dt> 
+      <dd>
+        <p>
+          Creates a new logical router named <var>lrouter</var>, which
+          initially has no router ports.
+        </p>
+
+        <p>
+          The OVN northbound database schema does not require logical router
+          names to be unique, but the whole point to the names is to provide an
+          easy way for humans to refer to the routers, making duplicate names
+          unhelpful.  Thus, without any options, this command regards it as an
+          error if <var>lrouter</var> is a duplicate name.  With
+          <code>--may-exist</code>, adding a duplicate name succeeds but does
+          not create a new logical router.  With <code>--add-duplicate</code>,
+          the command really creates a new logical router with a duplicate
+          name.  It is an error to specify both options.
+        </p>
+      </dd>
+
+      <dt>[<code>--if-exists</code>] <code>lrouter-del</code> <var>lrouter</var></dt>
+      <dd>
+        Deletes <var>lrouter</var>.  It is an error if <var>lrouter</var> does
+        not exist, unless <code>--if-exists</code> is specified.
+      </dd>
+
+      <dt><code>lrouter-list</code></dt>
+      <dd>
+        Lists all existing logical routers on standard output, one per line.
+      </dd>
+    </dl>
     <h1>Logical Switch Commands</h1>
 
     <dl>
@@ -91,7 +127,67 @@
         Lists the ACLs on <var>lswitch</var>.
       </dd>
     </dl>
+    <h1>Logical Router Port Commands</h1>
+    <dl>
+      <dt>[<code>--may-exist</code>] <code>lrport-add</code> <var>lrouter</var> <var>lrport</var></dt>
+      <dd>
+        <p>
+          Creates on <var>lrouter</var> a new logical router port named
+          <var>lrport</var>.
+        </p>
 
+        <p>
+          It is an error if a logical router port named <var>lrport</var>
+          already exists, unless <code>--may-exist</code> is specified.
+          Regardless of <code>--may-exist</code>, it is an error if the
+          existing router port is in some logical router other than
+          <var>lrouter</var>.
+        </p>
+      </dd>
+
+      <dt>[<code>--if-exists</code>] <code>lrport-del</code> <var>lrport</var></dt>
+      <dd>
+        Deletes <var>lrport</var>.  It is an error if <var>lrport</var> does
+        not exist, unless <code>--if-exists</code> is specified.
+      </dd>
+
+      <dt><code>lrport-list</code> <var>lrouter</var></dt>
+      <dd>
+        Lists all the logical router ports within <var>lrouter</var> on
+        standard output, one per line.
+      </dd>
+
+      <dt><code>lrport-set-mac-address</code> <var>lrport</var>
+                <var>address</var>...</dt>
+      <dd>
+        Sets the address associated with <var>lrport</var> to
+        <var>address</var>.  <var>address</var> should be either an
+        Ethernet address or an Ethernet address followed by an IP address
+        (separated by a space and quoted to form a single command-line
+        argument).  The special form <code>unknown</code> is also valid.
+      </dd>
+
+      <dt><code>lrport-get-mac-address</code> <var>lrport</var></dt>
+      <dd>
+        Lists the mac address associated with <var>lrport</var> on standard
+        output.
+      </dd>
+
+      <dt><code>lrport-set-enabled</code> <var>lrport</var> <var>state</var></dt>
+      <dd>
+        Set the administrative state of <var>lrport</var>,
+        either <code>enabled</code> or <code>disabled</code>.
+        When a port is disabled, no traffic is allowed into
+        or out of the port.
+      </dd>
+
+      <dt><code>lrport-get-enabled</code> <var>lrport</var></dt>
+      <dd>
+        Prints the administrative state of <var>lrport</var>,
+        either <code>enabled</code> or <code>disabled</code>.
+      </dd>
+
+    </dl>
     <h1>Logical Port Commands</h1>
     <dl>
       <dt>[<code>--may-exist</code>] <code>lport-add</code> <var>lswitch</var> <var>lport</var></dt>
