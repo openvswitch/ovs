@@ -1101,7 +1101,7 @@ build_port_security_nd(struct ovn_port *op, struct hmap *lflows)
 {
     for (size_t i = 0; i < op->nbs->n_port_security; i++) {
         struct lport_addresses ps;
-        if (!extract_lsp_addresses(op->nbs->port_security[i], &ps, true)) {
+        if (!extract_lsp_addresses(op->nbs->port_security[i], &ps)) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_INFO_RL(&rl, "invalid syntax '%s' in port security. No MAC"
                          " address found", op->nbs->port_security[i]);
@@ -1195,7 +1195,7 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
 
     for (size_t i = 0; i < op->nbs->n_port_security; i++) {
         struct lport_addresses ps;
-        if (!extract_lsp_addresses(op->nbs->port_security[i], &ps, true)) {
+        if (!extract_lsp_addresses(op->nbs->port_security[i], &ps)) {
             continue;
         }
 
@@ -1831,8 +1831,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 
         for (size_t i = 0; i < op->nbs->n_addresses; i++) {
             struct lport_addresses laddrs;
-            if (!extract_lsp_addresses(op->nbs->addresses[i], &laddrs,
-                                       true)) {
+            if (!extract_lsp_addresses(op->nbs->addresses[i], &laddrs)) {
                 continue;
             }
             for (size_t j = 0; j < laddrs.n_ipv4_addrs; j++) {
@@ -2550,8 +2549,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
             for (size_t i = 0; i < op->nbs->n_addresses; i++) {
                 struct lport_addresses laddrs;
-                if (!extract_lsp_addresses(op->nbs->addresses[i], &laddrs,
-                                           false)) {
+                if (!extract_lsp_addresses(op->nbs->addresses[i], &laddrs)) {
                     continue;
                 }
 

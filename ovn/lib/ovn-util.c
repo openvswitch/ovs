@@ -23,30 +23,14 @@ VLOG_DEFINE_THIS_MODULE(ovn_util);
  * Extracts the mac, ipv4 and ipv6 addresses from the input param 'address'
  * which should be of the format 'MAC [IP1 IP2 ..]" where IPn should be
  * a valid IPv4 or IPv6 address and stores them in the 'ipv4_addrs' and
- * 'ipv6_addrs' fields of input param 'laddrs'.  If input param
- * 'store_ipv6' is true only then extracted ipv6 addresses are stored in
- * 'ipv6_addrs' fields.
+ * 'ipv6_addrs' fields of input param 'laddrs'.
  *
  * Return true if at least 'MAC' is found in 'address', false otherwise.
  *
  * The caller must call destroy_lport_addresses().
- *
- * Eg 1.
- * If 'address' = '00:00:00:00:00:01 10.0.0.4 fe80::ea2a:eaff:fe28:3390/64
- *                 30.0.0.3/23' and 'store_ipv6' = true
- * then returns true with laddrs->n_ipv4_addrs = 2, naddrs->n_ipv6_addrs = 1.
- *
- * Eg. 2
- * If 'address' = '00:00:00:00:00:01 10.0.0.4 fe80::ea2a:eaff:fe28:3390/64
- *                 30.0.0.3/23' and 'store_ipv6' = false
- * then returns true with laddrs->n_ipv4_addrs = 2, naddrs->n_ipv6_addrs = 0.
- *
- * Eg 3. If 'address' = '00:00:00:00:00:01 10.0.0.4 addr 30.0.0.4', then
- * returns true with laddrs->n_ipv4_addrs = 1 and laddrs->n_ipv6_addrs = 0.
  */
 bool
-extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
-                      bool store_ipv6)
+extract_lsp_addresses(char *address, struct lport_addresses *laddrs)
 {
     memset(laddrs, 0, sizeof *laddrs);
 
@@ -95,7 +79,7 @@ extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
         }
         free(error);
         error = ipv6_parse_cidr_len(buf, &buf_index, &ip6, &plen);
-        if (!error && store_ipv6) {
+        if (!error) {
             laddrs->n_ipv6_addrs++;
             laddrs->ipv6_addrs = xrealloc(
                 laddrs->ipv6_addrs,

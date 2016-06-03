@@ -49,8 +49,7 @@ struct lport_addresses {
 };
 
 
-bool extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
-                           bool store_ipv6);
+bool extract_lsp_addresses(char *address, struct lport_addresses *);
 void destroy_lport_addresses(struct lport_addresses *);
 
 char *alloc_nat_zone_key(const char *key, const char *type);
