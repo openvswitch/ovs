@@ -68,13 +68,22 @@
         logical port.
       </p>
     </column>
-    <column name="services">
+    <column name="port_pairs">
       <p>
-        The logical service connected to the logical switch.
+        The logical chains that define the service path.
       </p>
 
       <p>
-        A logical service should not cross logical switch boundaries.
+        Logical chains cannot currently cross logical switch boundaries.
+      </p>
+    </column>
+    <column name="flow_classifiers">
+      <p>
+        The logical chains that define the service path.
+      </p>
+
+      <p>
+        Logical chains cannot currently cross logical switch boundaries.
       </p>
     </column>
     <column name="acls">
@@ -88,43 +97,32 @@
     </group>
   </table>
 
- <table name="Logical_Service" title="Logical service">
+ <table name="Logical_Port_Chain" title="Logical port chain">
     <p>
-      Each row represents one logical service.
+      Each row represents one logical chain
     </p>
 
     <column name="name">
       <p>
-        A name for the logical serivce.  This name has no special meaning or purpose
+        A name for the logical chain.  This name has no special meaning or purpose
         other than to provide convenience for human interaction with the ovn-nb
         database.  There is no requirement for the name to be unique.  The
-        logical service's UUID should be used as the unique identifier.
+        logical chains's UUID should be used as the unique identifier.
       </p>
     </column>
 
-    <column name="app_port">
+    <column name="port_pair_groups">
       <p>
-        The logical application port connected to the logical service.
+        The logical list of port pairs that the flow goes through.
       </p>
 
       <p>
-        It is an error for multiple logical switches to include the same
-        logical port.
+        It is an error for a port pair group to be empty
       </p>
     </column>
-    <column name="in_port">
+    <column name="flow_classifier">
       <p>
-        The logical service port connected to the logical application.
-      </p>
-
-      <p>
-        It is an error for multiple logical switches to include the same
-        logical port.
-      </p>
-    </column>
-    <column name="out_port">
-      <p>
-        The logical service port connected to the logical network.
+        The logical flow classifier that steeers the flows to the port_pair_groups.
       </p>
 
       <p>
@@ -138,6 +136,119 @@
       </column>
     </group>
   </table>
+
+ <table name="Logical_Port_Pair_Group" title="logical port pair groups">
+   <p>
+     An ordered port pair list
+   </p>
+   <column name="name">
+     <p> 
+       Logical port pair group name
+     </p>
+   </column>
+   <column name="port_pairs">
+     <p>
+       port pair for this group
+     </p>
+   </column>
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+ </table>
+ <table name="Logical_Port_Pair" title="logical port pairs">
+   <p>
+     Ports pairs defining the service
+   </p>
+   <column name="name">
+     <p> 
+       Logical port pair
+     </p>
+   </column>
+   <column name="outport">
+     <p>
+       out port for this port pair
+     </p>
+   </column>
+   <column name="inport">
+     <p>
+       in port for this port pair
+     </p>
+   </column>
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+ </table>
+
+ <table name="Logical_Flow_Classifier" title="logical flow classifier">
+   <p>
+     Flow classifier defining traffic steering rules
+   </p>
+   <column name="name">
+     <p> 
+       Logical flow classifier
+     </p>
+   </column>
+   <column name="logical_source_port">
+     <p>
+       source port for flow
+     </p>
+   </column>
+   <column name="logical_destination_port">
+     <p>
+       destination port for flow
+     </p>
+   </column>
+   <column name="source_port_range_min">
+     <p>
+       minimum port value for source port
+     </p>
+   </column>
+   <column name="source_port_range_max">
+     <p>
+       maximum port value for source port
+     </p>
+   </column>
+   <column name="destination_port_range_min">
+     <p>
+       minimum port value for destination port
+     </p>
+   </column>
+   <column name="destination_port_range_max">
+     <p>
+       maximum port value for destination port
+     </p>
+   </column>
+  <column name="source_ip_prefix">
+     <p>
+       source ip prefix
+     </p>
+   </column>
+   <column name="destination_ip_prefix">
+     <p>
+       destination ip prefix
+     </p>
+   </column> 
+   <column name="protocol">
+     <p>
+       protocol
+     </p>
+   </column> 
+   <column name="ethertype">
+     <p>
+       ethertype
+     </p>
+   </column> 
+   <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+ </table>
+
   <table name="Logical_Port" title="L2 logical switch port">
     <p>
       A port within an L2 logical switch.

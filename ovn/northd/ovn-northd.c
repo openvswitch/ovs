@@ -94,7 +94,7 @@ enum ovn_stage {
     PIPELINE_STAGE(SWITCH, IN,  PORT_SEC_ND,    2, "ls_in_port_sec_nd")     \
     PIPELINE_STAGE(SWITCH, IN,  PRE_ACL,        3, "ls_in_pre_acl")         \
     PIPELINE_STAGE(SWITCH, IN,  ACL,            4, "ls_in_acl")             \
-    PIPELINE_STAGE(SWITCH, IN,  ARP_RSP,        5, "ls_in_arp_rsp")         \ 
+    PIPELINE_STAGE(SWITCH, IN,  ARP_RSP,        5, "ls_in_arp_rsp")         \
     PIPELINE_STAGE(SWITCH, IN,  CHAIN,          6, "ls_in_chain")           \
     PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,        7, "ls_in_l2_lkup")         \
                                                                         \
@@ -1418,6 +1418,7 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
         }
     }
 }
+#ifdef JED
 /*
  * Build the rules to insert service chains
  *
@@ -1461,22 +1462,45 @@ build_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
  /*
    * Iterate through all the services defined for this datapath.
    */
-  VLOG_INFO("Iterating through %d services \n", (int)od->nbs->n_services);
-  for (size_t i = 0; i < od->nbs->n_services; i++){
+  VLOG_INFO("Iterating through %d services \n", (int)od->nbs->n_port_chains);
+  for (size_t i = 0; i < od->nbs->n_port_chains; i++){
     /*
-     * Map database entries for ports to port data structures
-     *
-     * app_port: Port of server that is having service inserted
+     * For each port-pair-group in a port chain pull out the first port-pair.
+     * TODO: Need to add in load balancing for port-pair-groups
+     */
+    for (size_t j = 0; j < od->nbs->port_chains[i]->n_port_pair_groups; j++){
+
+      for (size_t k = 0; k < od->nbs->port_chains[i]->port_pair_groups[j]->n_port_pairs; k++){
+	in_port = ovn_port_find(ports,od->nbs->port_chains[i]->port_pair_groups[j]->port_pairs[k]->inport);
+	VLOG_INFO("In port: %s\n", in_port->key);
+        out_port = ovn_port_find(ports,od->nbs->port_chains[i]->port_pair_groups[j]->port_pairs[k]->outport);
+	VLOG_INFO("Out port: %s\n", out_port->key);
+      }
+
+    }
+    /*
+     * Just do a single port-pair now to get system built and working
+     * TODO: Add support for full port-chain 
+     */
+
+
+    /*
      * in_port: Port of service connected to application/server
      * out_port: Port of service connected to logical network
      */
-    app_port =  ovn_port_find(ports, od->nbs->services[i]->app_port);
-    VLOG_INFO("App port: %s\n", app_port->key);
-    in_port = ovn_port_find(ports, od->nbs->services[i]->in_port);
-    VLOG_INFO("In port: %s\n", in_port->key);
-    out_port = ovn_port_find(ports, od->nbs->services[i]->out_port);
-    VLOG_INFO("Out port: %s\n", out_port->key);
+
+    //in_port = ovn_port_find(ports, od->nbs->services[i]->in_port);
+   
+    //out_port = ovn_port_find(ports, od->nbs->services[i]->out_port);
+   
     /*
+     * From flow classifier get the logical source port
+     * app_port: Port of server that is having service inserted
+     */
+    app_port  = ovn_port_find(ports,od->nbs->port_chains[i]->flow_classifier->logical_source_port);
+      //app_port =  ovn_port_find(ports, od->nbs->services[i]->app_port);
+    VLOG_INFO("App port: %s\n", app_port->key);
+     /*
      * Add ingress flow rules
      */
 
@@ -1585,6 +1609,7 @@ build_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
     }
   }
 }
+#endif
 
 static void
 build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
@@ -1760,7 +1785,9 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
     if (!od->nbs) {
       continue;
     }
+#ifdef JED
     build_chain(od, lflows, ports);
+#endif
   }
   VLOG_INFO("Service Insertion complete\n");
     /* Ingress table 7: Destination lookup, broadcast and multicast handling
