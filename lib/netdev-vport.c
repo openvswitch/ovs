@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1169,7 +1169,7 @@ parse_gre_header(struct dp_packet *packet,
     }
 
     if (greh->flags & htons(GRE_KEY)) {
-        tnl->tun_id = (OVS_FORCE ovs_be64) ((OVS_FORCE uint64_t)(get_16aligned_be32(options)) << 32);
+        tnl->tun_id = be32_to_be64(get_16aligned_be32(options));
         tnl->flags |= FLOW_TNL_F_KEY;
         options++;
     }
@@ -1272,8 +1272,7 @@ netdev_gre_build_header(const struct netdev *netdev,
 
     if (tnl_cfg->out_key_present) {
         greh->flags |= htons(GRE_KEY);
-        put_16aligned_be32(options, (OVS_FORCE ovs_be32)
-                                    ((OVS_FORCE uint64_t) tnl_flow->tunnel.tun_id >> 32));
+        put_16aligned_be32(options, be64_to_be32(tnl_flow->tunnel.tun_id));
         options++;
     }
 
