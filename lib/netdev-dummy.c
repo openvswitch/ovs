@@ -1239,7 +1239,7 @@ static const struct netdev_class dummy_class = {
     NULL,                       /* push header */
     NULL,                       /* pop header */
     NULL,                       /* get_numa_id */
-    NULL,                       /* set_multiq */
+    NULL,                       /* set_tx_multiq */
 
     netdev_dummy_send,          /* send */
     NULL,                       /* send_wait */
@@ -1279,6 +1279,7 @@ static const struct netdev_class dummy_class = {
     NULL,                       /* arp_lookup */
 
     netdev_dummy_update_flags,
+    NULL,                       /* reconfigure */
 
     netdev_dummy_rxq_alloc,
     netdev_dummy_rxq_construct,

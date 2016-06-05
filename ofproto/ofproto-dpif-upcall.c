@@ -434,6 +434,9 @@ udpif_destroy(struct udpif *udpif)
 {
     udpif_stop_threads(udpif);
 
+    dpif_register_dp_purge_cb(udpif->dpif, NULL, udpif);
+    dpif_register_upcall_cb(udpif->dpif, NULL, udpif);
+
     for (int i = 0; i < N_UMAPS; i++) {
         cmap_destroy(&udpif->ukeys[i].cmap);
         ovs_mutex_destroy(&udpif->ukeys[i].mutex);
@@ -1338,6 +1341,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             op->ukey = NULL;
             op->dop.type = DPIF_OP_EXECUTE;
             op->dop.u.execute.packet = CONST_CAST(struct dp_packet *, packet);
+            op->dop.u.execute.flow = upcall->flow;
             odp_key_to_pkt_metadata(upcall->key, upcall->key_len,
                                     &op->dop.u.execute.packet->md);
             op->dop.u.execute.actions = upcall->odp_actions.data;

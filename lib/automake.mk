@@ -128,6 +128,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/netdev-provider.h \
 	lib/netdev-vport.c \
 	lib/netdev-vport.h \
+	lib/netdev-vport-private.h \
 	lib/netdev.c \
 	lib/netdev.h \
 	lib/netflow.h \
@@ -176,6 +177,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovsdb-idl-provider.h \
 	lib/ovsdb-idl.c \
 	lib/ovsdb-idl.h \
+	lib/ovsdb-map-op.c \
+	lib/ovsdb-map-op.h \
 	lib/ovsdb-parser.c \
 	lib/ovsdb-parser.h \
 	lib/ovsdb-types.c \
@@ -251,6 +254,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/tnl-neigh-cache.h \
 	lib/tnl-ports.c \
 	lib/tnl-ports.h \
+	lib/netdev-native-tnl.c \
+	lib/netdev-native-tnl.h \
 	lib/token-bucket.c \
 	lib/tun-metadata.c \
 	lib/tun-metadata.h \
@@ -508,4 +513,3 @@ lib-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(PKIDIR)
 	$(MKDIR_P) $(DESTDIR)$(LOGDIR)
 	$(MKDIR_P) $(DESTDIR)$(DBDIR)
-

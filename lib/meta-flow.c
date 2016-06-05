@@ -393,21 +393,21 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
         return is_ip_any(flow) && flow->nw_proto == IPPROTO_SCTP
             && !(flow->nw_frag & FLOW_NW_FRAG_LATER);
     case MFP_ICMPV4:
-        return is_icmpv4(flow);
+        return is_icmpv4(flow, NULL);
     case MFP_ICMPV6:
-        return is_icmpv6(flow);
+        return is_icmpv6(flow, NULL);
 
     case MFP_ND:
-        return (is_icmpv6(flow)
+        return (is_icmpv6(flow, NULL)
                 && flow->tp_dst == htons(0)
                 && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
                     flow->tp_src == htons(ND_NEIGHBOR_ADVERT)));
     case MFP_ND_SOLICIT:
-        return (is_icmpv6(flow)
+        return (is_icmpv6(flow, NULL)
                 && flow->tp_dst == htons(0)
                 && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)));
     case MFP_ND_ADVERT:
-        return (is_icmpv6(flow)
+        return (is_icmpv6(flow, NULL)
                 && flow->tp_dst == htons(0)
                 && (flow->tp_src == htons(ND_NEIGHBOR_ADVERT)));
     }

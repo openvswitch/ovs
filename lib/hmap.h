@@ -217,8 +217,13 @@ static inline struct hmap_node *hmap_first(const struct hmap *);
 static inline struct hmap_node *hmap_next(const struct hmap *,
                                           const struct hmap_node *);
 
+struct hmap_position {
+    unsigned int bucket;
+    unsigned int offset;
+};
+
 struct hmap_node *hmap_at_position(const struct hmap *,
-                                   uint32_t *bucket, uint32_t *offset);
+                                   struct hmap_position *);
 
 /* Returns the number of nodes currently in 'hmap'. */
 static inline size_t

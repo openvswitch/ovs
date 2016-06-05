@@ -36,6 +36,8 @@ enum OVS_PACKED_ENUM dp_packet_source {
                                 * ref to build_dp_packet() in netdev-dpdk. */
 };
 
+#define DP_PACKET_CONTEXT_SIZE 64
+
 /* Buffer for holding packet data.  A dp_packet is automatically reallocated
  * as necessary if it grows too large for the available memory.
  */
@@ -58,7 +60,10 @@ struct dp_packet {
                                     * or UINT16_MAX. */
     uint16_t l4_ofs;               /* Transport-level header offset,
                                       or UINT16_MAX. */
-    struct pkt_metadata md;
+    union {
+        struct pkt_metadata md;
+        uint64_t data[DP_PACKET_CONTEXT_SIZE / 8];
+    };
 };
 
 static inline void *dp_packet_data(const struct dp_packet *);
@@ -511,7 +516,7 @@ dp_packet_reset_packet(struct dp_packet *b, int off)
 {
     dp_packet_set_size(b, dp_packet_size(b) - off);
     dp_packet_set_data(b, ((unsigned char *) dp_packet_data(b) + off));
-    b->l2_5_ofs = b->l3_ofs = b->l4_ofs = UINT16_MAX;
+    dp_packet_reset_offsets(b);
 }
 
 /* Returns the RSS hash of the packet 'p'.  Note that the returned value is
@@ -556,6 +561,49 @@ dp_packet_rss_invalidate(struct dp_packet *p)
 #else
     p->rss_hash_valid = false;
 #endif
+}
+
+enum { NETDEV_MAX_BURST = 32 }; /* Maximum number packets in a batch. */
+
+struct dp_packet_batch {
+    int count;
+    struct dp_packet *packets[NETDEV_MAX_BURST];
+};
+
+static inline void dp_packet_batch_init(struct dp_packet_batch *b)
+{
+    b->count = 0;
+}
+
+static inline void
+dp_packet_batch_clone(struct dp_packet_batch *dst,
+                      struct dp_packet_batch *src)
+{
+    int i;
+
+    for (i = 0; i < src->count; i++) {
+        dst->packets[i] = dp_packet_clone(src->packets[i]);
+    }
+    dst->count = src->count;
+}
+
+static inline void
+packet_batch_init_packet(struct dp_packet_batch *b, struct dp_packet *p)
+{
+    b->count = 1;
+    b->packets[0] = p;
+}
+
+static inline void
+dp_packet_delete_batch(struct dp_packet_batch *batch, bool may_steal)
+{
+    if (may_steal) {
+        int i;
+
+        for (i = 0; i < batch->count; i++) {
+            dp_packet_delete(batch->packets[i]);
+        }
+    }
 }
 
 #ifdef  __cplusplus

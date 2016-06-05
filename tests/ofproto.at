@@ -294,9 +294,9 @@ add_of_ports br0 1 2
 AT_CHECK([ovs-ofctl -O OpenFlow14 queue-get-config br0 any | strip_xids], [0],
   [OFPST_QUEUE_DESC reply (OF1.4): port=1
 queue 0:
-port=LOCAL
-queue 0:
 port=2
+queue 0:
+port=LOCAL
 queue 0:
 ])
 

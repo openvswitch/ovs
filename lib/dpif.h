@@ -699,6 +699,7 @@ struct dpif_execute {
     bool probe;                     /* Suppress error messages. */
     unsigned int mtu;               /* Maximum transmission unit to fragment.
                                        0 if not a fragmented packet */
+    const struct flow *flow;         /* Flow extracted from 'packet'. */
 
     /* Input, but possibly modified as a side effect of execution. */
     struct dp_packet *packet;          /* Packet to execute. */

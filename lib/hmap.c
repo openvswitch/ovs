@@ -236,24 +236,22 @@ hmap_random_node(const struct hmap *hmap)
 }
 
 /* Returns the next node in 'hmap' in hash order, or NULL if no nodes remain in
- * 'hmap'.  Uses '*bucketp' and '*offsetp' to determine where to begin
- * iteration, and stores new values to pass on the next iteration into them
- * before returning.
+ * 'hmap'.  Uses '*pos' to determine where to begin iteration, and updates
+ * '*pos' to pass on the next iteration into them before returning.
  *
  * It's better to use plain HMAP_FOR_EACH and related functions, since they are
  * faster and better at dealing with hmaps that change during iteration.
  *
- * Before beginning iteration, store 0 into '*bucketp' and '*offsetp'.
- */
+ * Before beginning iteration, set '*pos' to all zeros. */
 struct hmap_node *
 hmap_at_position(const struct hmap *hmap,
-                 uint32_t *bucketp, uint32_t *offsetp)
+                 struct hmap_position *pos)
 {
     size_t offset;
     size_t b_idx;
 
-    offset = *offsetp;
-    for (b_idx = *bucketp; b_idx <= hmap->mask; b_idx++) {
+    offset = pos->offset;
+    for (b_idx = pos->bucket; b_idx <= hmap->mask; b_idx++) {
         struct hmap_node *node;
         size_t n_idx;
 
@@ -261,11 +259,11 @@ hmap_at_position(const struct hmap *hmap,
              n_idx++, node = node->next) {
             if (n_idx == offset) {
                 if (node->next) {
-                    *bucketp = node->hash & hmap->mask;
-                    *offsetp = offset + 1;
+                    pos->bucket = node->hash & hmap->mask;
+                    pos->offset = offset + 1;
                 } else {
-                    *bucketp = (node->hash & hmap->mask) + 1;
-                    *offsetp = 0;
+                    pos->bucket = (node->hash & hmap->mask) + 1;
+                    pos->offset = 0;
                 }
                 return node;
             }
@@ -273,8 +271,8 @@ hmap_at_position(const struct hmap *hmap,
         offset = 0;
     }
 
-    *bucketp = 0;
-    *offsetp = 0;
+    pos->bucket = 0;
+    pos->offset = 0;
     return NULL;
 }
 

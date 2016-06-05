@@ -15,6 +15,7 @@
 #include <config.h>
 #include "ovn-util.h"
 #include "openvswitch/vlog.h"
+#include "ovn/lib/ovn-sb-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(ovn_util);
 
@@ -101,4 +102,16 @@ extract_lport_addresses(char *address, struct lport_addresses *laddrs,
     }
 
     return true;
+}
+
+/* Allocates a key for NAT conntrack zone allocation for a provided
+ * 'port_binding' record and a 'type'.
+ *
+ * It is the caller's responsibility to free the allocated memory. */
+char *
+alloc_nat_zone_key(const struct sbrec_port_binding *port_binding,
+                   const char *type)
+{
+    return xasprintf(UUID_FMT"_%s",
+                     UUID_ARGS(&port_binding->datapath->header_.uuid), type);
 }

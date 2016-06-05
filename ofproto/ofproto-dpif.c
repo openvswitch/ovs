@@ -109,7 +109,7 @@ BUILD_ASSERT_DECL(offsetof(struct rule_dpif, up) == 0);
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes,
                            long long int *used);
 static struct rule_dpif *rule_dpif_cast(const struct rule *);
-static void rule_expire(struct rule_dpif *);
+static void rule_expire(struct rule_dpif *, long long now);
 
 struct group_dpif {
     struct ofgroup up;
@@ -503,6 +503,8 @@ type_run(const char *type)
         return 0;
     }
 
+    /* This must be called before dpif_run() */
+    dpif_poll_threads_set(backer->dpif, pmd_cpu_mask);
 
     if (dpif_run(backer->dpif)) {
         backer->need_revalidate = REV_RECONFIGURE;
@@ -530,8 +532,6 @@ type_run(const char *type)
     if (backer->recv_set_enable) {
         udpif_set_threads(backer->udpif, n_handlers, n_revalidators);
     }
-
-    dpif_poll_threads_set(backer->dpif, pmd_cpu_mask);
 
     if (backer->need_revalidate) {
         struct ofproto_dpif *ofproto;
@@ -1061,6 +1061,7 @@ check_variable_length_userdata(struct dpif_backer *backer)
     struct ofpbuf actions;
     struct dpif_execute execute;
     struct dp_packet packet;
+    struct flow flow;
     size_t start;
     int error;
 
@@ -1083,11 +1084,14 @@ check_variable_length_userdata(struct dpif_backer *backer)
     eth = dp_packet_put_zeros(&packet, ETH_HEADER_LEN);
     eth->eth_type = htons(0x1234);
 
+    flow_extract(&packet, &flow);
+
     /* Execute the actions.  On older datapaths this fails with ERANGE, on
      * newer datapaths it succeeds. */
     execute.actions = actions.data;
     execute.actions_len = actions.size;
     execute.packet = &packet;
+    execute.flow = &flow;
     execute.needs_help = false;
     execute.probe = true;
     execute.mtu = 0;
@@ -1164,6 +1168,7 @@ check_masked_set_action(struct dpif_backer *backer)
     struct ofpbuf actions;
     struct dpif_execute execute;
     struct dp_packet packet;
+    struct flow flow;
     int error;
     struct ovs_key_ethernet key, mask;
 
@@ -1182,11 +1187,14 @@ check_masked_set_action(struct dpif_backer *backer)
     eth = dp_packet_put_zeros(&packet, ETH_HEADER_LEN);
     eth->eth_type = htons(0x1234);
 
+    flow_extract(&packet, &flow);
+
     /* Execute the actions.  On older datapaths this fails with EINVAL, on
      * newer datapaths it succeeds. */
     execute.actions = actions.data;
     execute.actions_len = actions.size;
     execute.packet = &packet;
+    execute.flow = &flow;
     execute.needs_help = false;
     execute.probe = true;
     execute.mtu = 0;
@@ -1537,6 +1545,7 @@ run(struct ofproto *ofproto_)
     new_dump_seq = seq_read(udpif_dump_seq(ofproto->backer->udpif));
     if (ofproto->dump_seq != new_dump_seq) {
         struct rule *rule, *next_rule;
+        long long now = time_msec();
 
         /* We know stats are relatively fresh, so now is a good time to do some
          * periodic work. */
@@ -1547,7 +1556,7 @@ run(struct ofproto *ofproto_)
         ovs_mutex_lock(&ofproto_mutex);
         LIST_FOR_EACH_SAFE (rule, next_rule, expirable,
                             &ofproto->up.expirable) {
-            rule_expire(rule_dpif_cast(rule));
+            rule_expire(rule_dpif_cast(rule), now);
         }
         ovs_mutex_unlock(&ofproto_mutex);
 
@@ -3513,8 +3522,7 @@ port_get_lacp_stats(const struct ofport *ofport_, struct lacp_slave_stats *stats
 }
 
 struct port_dump_state {
-    uint32_t bucket;
-    uint32_t offset;
+    struct sset_position pos;
     bool ghost;
 
     struct ofproto_port port;
@@ -3542,7 +3550,7 @@ port_dump_next(const struct ofproto *ofproto_, void *state_,
         state->has_port = false;
     }
     sset = state->ghost ? &ofproto->ghost_ports : &ofproto->ports;
-    while ((node = sset_at_position(sset, &state->bucket, &state->offset))) {
+    while ((node = sset_at_position(sset, &state->pos))) {
         int error;
 
         error = port_query_by_name(ofproto_, node->name, &state->port);
@@ -3557,8 +3565,7 @@ port_dump_next(const struct ofproto *ofproto_, void *state_,
 
     if (!state->ghost) {
         state->ghost = true;
-        state->bucket = 0;
-        state->offset = 0;
+        memset(&state->pos, 0, sizeof state->pos);
         return port_dump_next(ofproto_, state_, port);
     }
 
@@ -3615,11 +3622,10 @@ port_is_lacp_current(const struct ofport *ofport_)
 /* If 'rule' is an OpenFlow rule, that has expired according to OpenFlow rules,
  * then delete it entirely. */
 static void
-rule_expire(struct rule_dpif *rule)
+rule_expire(struct rule_dpif *rule, long long now)
     OVS_REQUIRES(ofproto_mutex)
 {
     uint16_t hard_timeout, idle_timeout;
-    long long int now = time_msec();
     int reason = -1;
 
     hard_timeout = rule->up.hard_timeout;
@@ -3708,6 +3714,7 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
 
     pkt_metadata_from_flow(&packet->md, flow);
     execute.packet = packet;
+    execute.flow = flow;
     execute.needs_help = (xout.slow & SLOW_ACTION) != 0;
     execute.probe = false;
     execute.mtu = 0;
@@ -4420,6 +4427,7 @@ nxt_resume(struct ofproto *ofproto_,
         .actions_len = odp_actions.size,
         .needs_help = (slow & SLOW_ACTION) != 0,
         .packet = &packet,
+        .flow = &headers,
     };
     dpif_execute(ofproto->backer->dpif, &execute);
 

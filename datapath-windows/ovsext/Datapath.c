@@ -759,8 +759,10 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
     case OVS_IOCTL_TRANSACT:
         /* Both input buffer and output buffer are mandatory. */
         if (outputBufferLen != 0) {
+            ASSERT(sizeof(OVS_MESSAGE_ERROR) >= sizeof *ovsMsg);
             status = MapIrpOutputBuffer(irp, outputBufferLen,
-                                        sizeof *ovsMsg, &outputBuffer);
+                                        sizeof(OVS_MESSAGE_ERROR),
+                                        &outputBuffer);
             if (status != STATUS_SUCCESS) {
                 goto done;
             }
@@ -788,7 +790,8 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
          */
         if (outputBufferLen != 0) {
             status = MapIrpOutputBuffer(irp, outputBufferLen,
-                                        sizeof *ovsMsg, &outputBuffer);
+                                        sizeof(OVS_MESSAGE_ERROR),
+                                        &outputBuffer);
             if (status != STATUS_SUCCESS) {
                 goto done;
             }
@@ -820,7 +823,8 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
         /* Output buffer is mandatory. */
         if (outputBufferLen != 0) {
             status = MapIrpOutputBuffer(irp, outputBufferLen,
-                                        sizeof *ovsMsg, &outputBuffer);
+                                        sizeof(OVS_MESSAGE_ERROR),
+                                        &outputBuffer);
             if (status != STATUS_SUCCESS) {
                 goto done;
             }
@@ -867,19 +871,6 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
         if (inputBufferLen < sizeof (*ovsMsg)) {
             status = STATUS_NDIS_INVALID_LENGTH;
             goto done;
-        }
-
-        /*
-         * Output buffer not mandatory but map it in case we have something
-         * to return to requester.
-        */
-        if (outputBufferLen != 0) {
-            status = MapIrpOutputBuffer(irp, outputBufferLen,
-                sizeof *ovsMsg, &outputBuffer);
-            if (status != STATUS_SUCCESS) {
-                goto done;
-            }
-            ASSERT(outputBuffer);
         }
 
         ovsMsg = inputBuffer;
@@ -1063,7 +1054,6 @@ InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
             POVS_MESSAGE msgIn = NULL;
             POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                 usrParamsCtx->outputBuffer;
-            UINT32 msgErrorLen = usrParamsCtx->outputLength;
 
             if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_EVENT_NOTIFY ||
                 usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_READ_NOTIFY) {
@@ -1079,7 +1069,8 @@ InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
             ASSERT(msgIn);
             ASSERT(msgError);
-            NlBuildErrorMsg(msgIn, msgError, msgErrorLen, nlError, replyLen);
+            NlBuildErrorMsg(msgIn, msgError, nlError, replyLen);
+            ASSERT(*replyLen != 0);
         }
 
         if (*replyLen != 0) {
@@ -1451,9 +1442,10 @@ cleanup:
     if (nlError != NL_ERROR_SUCCESS) {
         POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
             usrParamsCtx->outputBuffer;
-        UINT32 msgErrorLen = usrParamsCtx->outputLength;
 
-        NlBuildErrorMsg(msgIn, msgError, msgErrorLen, nlError, replyLen);
+        ASSERT(msgError);
+        NlBuildErrorMsg(msgIn, msgError, nlError, replyLen);
+        ASSERT(*replyLen != 0);
     }
 
     return STATUS_SUCCESS;

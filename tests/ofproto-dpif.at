@@ -437,12 +437,12 @@ Datapath actions: 11
 # Try a bunch of different flows and make sure that they are not distributed
 # as they only vary a field that is not hashed
 for d in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
-    AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=1,dl_src=50:54:00:00:00:$d,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0"], [0], [stdout])
+    AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=1,dl_src=50:54:00:00:00:0$d,dl_dst=50:54:00:00:00:07,dl_type=0x0800,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=1,nw_tos=0,nw_ttl=128,icmp_type=8,icmp_code=0"], [0], [stdout])
     tail -1 stdout >> results
 done
 sort results | uniq -c
-AT_CHECK([sort results | uniq], [0],
-  [Datapath actions: 10
+AT_CHECK([sort results | uniq | sed 's/1[[01]]/1?/'], [0],
+  [Datapath actions: 1?
 ])
 
 OVS_VSWITCHD_STOP
@@ -1575,7 +1575,7 @@ cookie=0xd dl_src=60:66:66:66:00:01 actions=pop_mpls:0x0800,dec_ttl,controller
 cookie=0xd dl_src=60:66:66:66:00:02 actions=pop_mpls:0x0800,load:0xa000001->OXM_OF_IPV4_DST[[]],controller
 cookie=0xd dl_src=60:66:66:66:00:03 actions=pop_mpls:0x0800,move:OXM_OF_IPV4_DST[[]]->OXM_OF_IPV4_SRC[[]],controller
 cookie=0xd dl_src=60:66:66:66:00:04 actions=pop_mpls:0x0800,push:OXM_OF_IPV4_DST[[]],pop:OXM_OF_IPV4_SRC[[]],controller
-cookie=0xd dl_src=60:66:66:66:00:05 actions=pop_mpls:0x0800,multipath(eth_src,50,modulo_n,256,0,OXM_OF_IPV4_SRC[[0..7]]),controller
+cookie=0xd dl_src=60:66:66:66:00:05 actions=pop_mpls:0x0800,multipath(eth_src,50,modulo_n,1,0,OXM_OF_IPV4_SRC[[0..7]]),controller
 cookie=0xd dl_src=60:66:66:66:00:06 actions=pop_mpls:0x0800,bundle_load(eth_src,50,hrw,ofport,OXM_OF_IPV4_SRC[[0..15]],slaves:1,2),controller
 cookie=0xd dl_src=60:66:66:66:00:07 actions=pop_mpls:0x0800,learn(table=1,hard_timeout=60,eth_type=0x800,nw_proto=6,OXM_OF_IPV4_SRC[[]]=OXM_OF_IPV4_DST[[]]),controller
 
@@ -1984,13 +1984,13 @@ OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([strip_metadata < ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
-tcp,vlan_tci=0x0000,dl_src=60:66:66:66:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.106,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:76db
+tcp,vlan_tci=0x0000,dl_src=60:66:66:66:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.0,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:7745
 dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
-tcp,vlan_tci=0x0000,dl_src=60:66:66:66:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.106,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:76db
+tcp,vlan_tci=0x0000,dl_src=60:66:66:66:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.0,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:7745
 dnl
 NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
-tcp,vlan_tci=0x0000,dl_src=60:66:66:66:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.106,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:76db
+tcp,vlan_tci=0x0000,dl_src=60:66:66:66:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.0,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=255,tp_src=80,tp_dst=0,tcp_flags=0 tcp_csum:7745
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
@@ -2573,7 +2573,7 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:02 actions=pop_mpls:0x0800,load:0xa000001->NXM_OF_IP_DST[[]],CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:03 actions=pop_mpls:0x0800,move:NXM_OF_IP_DST[[]]->NXM_OF_IP_SRC[[]],CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:04 actions=pop_mpls:0x0800,push:NXM_OF_IP_DST[[]],pop:NXM_OF_IP_SRC[[]],CONTROLLER:65535
- cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:05 actions=pop_mpls:0x0800,multipath(eth_src,50,modulo_n,256,0,NXM_OF_IP_SRC[[0..7]]),CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:05 actions=pop_mpls:0x0800,multipath(eth_src,50,modulo_n,1,0,NXM_OF_IP_SRC[[0..7]]),CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:06 actions=pop_mpls:0x0800,bundle_load(eth_src,50,hrw,ofport,NXM_OF_IP_SRC[[0..15]],slaves:1,2),CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:07 actions=pop_mpls:0x0800,learn(table=1,hard_timeout=60,eth_type=0x800,nw_proto=6,NXM_OF_IP_SRC[[]]=NXM_OF_IP_DST[[]]),CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:09 actions=resubmit(,2),CONTROLLER:65535
@@ -6415,8 +6415,7 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout_keep_actions], [0], [dnl
 recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,mpls_label=11,mpls_tc=3,mpls_ttl=64,mpls_bos=1, actions:push_mpls(label=11,tc=3,ttl=64,bos=0,eth_type=0x8847),2
-recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,mpls_bos=1, actions:pop_mpls(eth_type=0x800),recirc(0x1)
-recirc_id=0x1,ip,in_port=1,vlan_tci=0x0000,nw_frag=no, actions:2
+recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,mpls_bos=1, actions:pop_mpls(eth_type=0x800),2
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7390,7 +7389,12 @@ ovs-appctl vlog/set PATTERN:ANY:'%c|%p|%m'
 
 ovs-appctl time/stop
 
-for i in 1 2 3; do
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'])
+
+# Wait for the flow setup to be done.
+OVS_WAIT_UNTIL([grep 'flow_add:' ovs-vswitchd.log])
+
+for i in 1 2; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'
 done
 
@@ -7430,8 +7434,12 @@ ovs-appctl vlog/set PATTERN:ANY:'%c|%p|%m'
 
 ovs-appctl time/stop
 
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'])
+
 # Check that a correct datapath flow is created.
-for i in 1 2 3; do
+OVS_WAIT_UNTIL([grep 'flow_add:' ovs-vswitchd.log])
+
+for i in 1 2; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'
 done
 
@@ -7471,7 +7479,11 @@ recirc_id(0),in_port(1),eth_type(0x1234), packets:8, bytes:480, used:0.0s, actio
 ])
 
 # Check that VLAN packets will not hit the same datapath megaflow.
-for i in 1 2 3; do
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x1234))'])
+OVS_WAIT_UNTIL([grep 'flow_add:.*dl_vlan=99' ovs-vswitchd.log])
+
+for i in 1 2; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x1234))'
 done
 

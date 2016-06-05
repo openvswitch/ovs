@@ -18,6 +18,8 @@
 
 #include "lib/packets.h"
 
+struct sbrec_port_binding;
+
 struct ipv4_netaddr {
     ovs_be32 addr;
     unsigned int plen;
@@ -40,5 +42,7 @@ bool
 extract_lport_addresses(char *address, struct lport_addresses *laddrs,
                         bool store_ipv6);
 
-
+char *
+alloc_nat_zone_key(const struct sbrec_port_binding *port_binding,
+                   const char *type);
 #endif

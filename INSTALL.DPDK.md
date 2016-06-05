@@ -267,226 +267,249 @@ Using the DPDK with ovs-vswitchd:
    For more details regarding egress-policer parameters please refer to the
    vswitch.xml.
 
+9. Ingress Policing Example
+
+   Assuming you have a vhost-user port receiving traffic consisting of
+   packets of size 64 bytes, the following command would limit the reception
+   rate of the port to ~1,000,000 packets per second:
+
+   `ovs-vsctl set interface vhost-user0 ingress_policing_rate=368000
+    ingress_policing_burst=1000`
+
+   To examine the ingress policer configuration of the port:
+
+   `ovs-vsctl list interface vhost-user0`
+
+   To clear the ingress policer configuration from the port use the following:
+
+   `ovs-vsctl set interface vhost-user0 ingress_policing_rate=0`
+
+   For more details regarding ingress-policer see the vswitch.xml.
+
 Performance Tuning:
 -------------------
 
-  1. PMD affinitization
+1. PMD affinitization
 
-	A poll mode driver (pmd) thread handles the I/O of all DPDK
-	interfaces assigned to it. A pmd thread will busy loop through
-	the assigned port/rxq's polling for packets, switch the packets
-	and send to a tx port if required. Typically, it is found that
-	a pmd thread is CPU bound, meaning that the greater the CPU
-	occupancy the pmd thread can get, the better the performance. To
-	that end, it is good practice to ensure that a pmd thread has as
-	many cycles on a core available to it as possible. This can be
-	achieved by affinitizing the pmd thread with a core that has no
-	other workload. See section 7 below for a description of how to
-	isolate cores for this purpose also.
+   A poll mode driver (pmd) thread handles the I/O of all DPDK
+   interfaces assigned to it. A pmd thread will busy loop through
+   the assigned port/rxq's polling for packets, switch the packets
+   and send to a tx port if required. Typically, it is found that
+   a pmd thread is CPU bound, meaning that the greater the CPU
+   occupancy the pmd thread can get, the better the performance. To
+   that end, it is good practice to ensure that a pmd thread has as
+   many cycles on a core available to it as possible. This can be
+   achieved by affinitizing the pmd thread with a core that has no
+   other workload. See section 7 below for a description of how to
+   isolate cores for this purpose also.
 
-	The following command can be used to specify the affinity of the
-	pmd thread(s).
+   The following command can be used to specify the affinity of the
+   pmd thread(s).
 
-	`ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=<hex string>`
+   `ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=<hex string>`
 
-	By setting a bit in the mask, a pmd thread is created and pinned
-	to the corresponding CPU core. e.g. to run a pmd thread on core 1
+   By setting a bit in the mask, a pmd thread is created and pinned
+   to the corresponding CPU core. e.g. to run a pmd thread on core 1
 
-	`ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=2`
+   `ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=2`
 
-	For more information, please refer to the Open_vSwitch TABLE section in
+   For more information, please refer to the Open_vSwitch TABLE section in
 
-	`man ovs-vswitchd.conf.db`
+   `man ovs-vswitchd.conf.db`
 
-	Note, that a pmd thread on a NUMA node is only created if there is
-	at least one DPDK interface from that NUMA node added to OVS.
+   Note, that a pmd thread on a NUMA node is only created if there is
+   at least one DPDK interface from that NUMA node added to OVS.
 
-  2. Multiple poll mode driver threads
+2. Multiple poll mode driver threads
 
-	With pmd multi-threading support, OVS creates one pmd thread
-	for each NUMA node by default. However, it can be seen that in cases
-	where there are multiple ports/rxq's producing traffic, performance
-	can be improved by creating multiple pmd threads running on separate
-	cores. These pmd threads can then share the workload by each being
-	responsible for different ports/rxq's. Assignment of ports/rxq's to
-	pmd threads is done automatically.
+   With pmd multi-threading support, OVS creates one pmd thread
+   for each NUMA node by default. However, it can be seen that in cases
+   where there are multiple ports/rxq's producing traffic, performance
+   can be improved by creating multiple pmd threads running on separate
+   cores. These pmd threads can then share the workload by each being
+   responsible for different ports/rxq's. Assignment of ports/rxq's to
+   pmd threads is done automatically.
 
-	The following command can be used to specify the affinity of the
-	pmd threads.
+   The following command can be used to specify the affinity of the
+   pmd threads.
 
-	`ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=<hex string>`
+   `ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=<hex string>`
 
-	A set bit in the mask means a pmd thread is created and pinned
-	to the corresponding CPU core. e.g. to run pmd threads on core 1 and 2
+   A set bit in the mask means a pmd thread is created and pinned
+   to the corresponding CPU core. e.g. to run pmd threads on core 1 and 2
 
-	`ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=6`
+   `ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=6`
 
-	For more information, please refer to the Open_vSwitch TABLE section in
+   For more information, please refer to the Open_vSwitch TABLE section in
 
-	`man ovs-vswitchd.conf.db`
+   `man ovs-vswitchd.conf.db`
 
-	For example, when using dpdk and dpdkvhostuser ports in a bi-directional
-	VM loopback as shown below, spreading the workload over 2 or 4 pmd
-	threads shows significant improvements as there will be more total CPU
-	occupancy available.
+   For example, when using dpdk and dpdkvhostuser ports in a bi-directional
+   VM loopback as shown below, spreading the workload over 2 or 4 pmd
+   threads shows significant improvements as there will be more total CPU
+   occupancy available.
 
-	NIC port0 <-> OVS <-> VM <-> OVS <-> NIC port 1
+   NIC port0 <-> OVS <-> VM <-> OVS <-> NIC port 1
 
-	The following command can be used to confirm that the port/rxq assignment
-	to pmd threads is as required:
+   The following command can be used to confirm that the port/rxq assignment
+   to pmd threads is as required:
 
-	`ovs-appctl dpif-netdev/pmd-rxq-show`
+   `ovs-appctl dpif-netdev/pmd-rxq-show`
 
-	This can also be checked with:
+   This can also be checked with:
 
-	```
-	top -H
-	taskset -p <pid_of_pmd>
-	```
+   ```
+   top -H
+   taskset -p <pid_of_pmd>
+   ```
 
-	To understand where most of the pmd thread time is spent and whether the
-	caches are being utilized, these commands can be used:
+   To understand where most of the pmd thread time is spent and whether the
+   caches are being utilized, these commands can be used:
 
-	```
-	# Clear previous stats
-	ovs-appctl dpif-netdev/pmd-stats-clear
+   ```
+   # Clear previous stats
+   ovs-appctl dpif-netdev/pmd-stats-clear
 
-	# Check current stats
-	ovs-appctl dpif-netdev/pmd-stats-show
-	```
+   # Check current stats
+   ovs-appctl dpif-netdev/pmd-stats-show
+   ```
 
-  3. DPDK port Rx Queues
+3. DPDK port Rx Queues
 
-	`ovs-vsctl set Interface <DPDK interface> options:n_rxq=<integer>`
+   `ovs-vsctl set Interface <DPDK interface> options:n_rxq=<integer>`
 
-	The command above sets the number of rx queues for DPDK interface.
-	The rx queues are assigned to pmd threads on the same NUMA node in a
-	round-robin fashion.  For more information, please refer to the
-	Open_vSwitch TABLE section in
+   The command above sets the number of rx queues for DPDK interface.
+   The rx queues are assigned to pmd threads on the same NUMA node in a
+   round-robin fashion.  For more information, please refer to the
+   Open_vSwitch TABLE section in
 
-	`man ovs-vswitchd.conf.db`
+   `man ovs-vswitchd.conf.db`
 
-  4. Exact Match Cache
+4. Exact Match Cache
 
-	Each pmd thread contains one EMC. After initial flow setup in the
-	datapath, the EMC contains a single table and provides the lowest level
-	(fastest) switching for DPDK ports. If there is a miss in the EMC then
-	the next level where switching will occur is the datapath classifier.
-	Missing in the EMC and looking up in the datapath classifier incurs a
-	significant performance penalty. If lookup misses occur in the EMC
-	because it is too small to handle the number of flows, its size can
-	be increased. The EMC size can be modified by editing the define
-	EM_FLOW_HASH_SHIFT in lib/dpif-netdev.c.
+   Each pmd thread contains one EMC. After initial flow setup in the
+   datapath, the EMC contains a single table and provides the lowest level
+   (fastest) switching for DPDK ports. If there is a miss in the EMC then
+   the next level where switching will occur is the datapath classifier.
+   Missing in the EMC and looking up in the datapath classifier incurs a
+   significant performance penalty. If lookup misses occur in the EMC
+   because it is too small to handle the number of flows, its size can
+   be increased. The EMC size can be modified by editing the define
+   EM_FLOW_HASH_SHIFT in lib/dpif-netdev.c.
 
-	As mentioned above an EMC is per pmd thread. So an alternative way of
-	increasing the aggregate amount of possible flow entries in EMC and
-	avoiding datapath classifier lookups is to have multiple pmd threads
-	running. This can be done as described in section 2.
+   As mentioned above an EMC is per pmd thread. So an alternative way of
+   increasing the aggregate amount of possible flow entries in EMC and
+   avoiding datapath classifier lookups is to have multiple pmd threads
+   running. This can be done as described in section 2.
 
-  5. Compiler options
+5. Compiler options
 
-	The default compiler optimization level is '-O2'. Changing this to
-	more aggressive compiler optimizations such as '-O3' or
-	'-Ofast -march=native' with gcc can produce performance gains.
+   The default compiler optimization level is '-O2'. Changing this to
+   more aggressive compiler optimizations such as '-O3' or
+   '-Ofast -march=native' with gcc can produce performance gains.
 
-  6. Simultaneous Multithreading (SMT)
+6. Simultaneous Multithreading (SMT)
 
-	With SMT enabled, one physical core appears as two logical cores
-	which can improve performance.
+   With SMT enabled, one physical core appears as two logical cores
+   which can improve performance.
 
-	SMT can be utilized to add additional pmd threads without consuming
-	additional physical cores. Additional pmd threads may be added in the
-	same manner as described in section 2. If trying to minimize the use
-	of physical cores for pmd threads, care must be taken to set the
-	correct bits in the pmd-cpu-mask to ensure that the pmd threads are
-	pinned to SMT siblings.
+   SMT can be utilized to add additional pmd threads without consuming
+   additional physical cores. Additional pmd threads may be added in the
+   same manner as described in section 2. If trying to minimize the use
+   of physical cores for pmd threads, care must be taken to set the
+   correct bits in the pmd-cpu-mask to ensure that the pmd threads are
+   pinned to SMT siblings.
 
-	For example, when using 2x 10 core processors in a dual socket system
-	with HT enabled, /proc/cpuinfo will report 40 logical cores. To use
-	two logical cores which share the same physical core for pmd threads,
-	the following command can be used to identify a pair of logical cores.
+   For example, when using 2x 10 core processors in a dual socket system
+   with HT enabled, /proc/cpuinfo will report 40 logical cores. To use
+   two logical cores which share the same physical core for pmd threads,
+   the following command can be used to identify a pair of logical cores.
 
-	`cat /sys/devices/system/cpu/cpuN/topology/thread_siblings_list`
+   `cat /sys/devices/system/cpu/cpuN/topology/thread_siblings_list`
 
-	where N is the logical core number. In this example, it would show that
-	cores 1 and 21 share the same physical core. The pmd-cpu-mask to enable
-	two pmd threads running on these two logical cores (one physical core)
-	is.
+   where N is the logical core number. In this example, it would show that
+   cores 1 and 21 share the same physical core. The pmd-cpu-mask to enable
+   two pmd threads running on these two logical cores (one physical core)
+   is.
 
-	`ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=100002`
+   `ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=100002`
 
-	Note that SMT is enabled by the Hyper-Threading section in the
-	BIOS, and as such will apply to the whole system. So the impact of
-	enabling/disabling it for the whole system should be considered
-	e.g. If workloads on the system can scale across multiple cores,
-	SMT may very beneficial. However, if they do not and perform best
-	on a single physical core, SMT may not be beneficial.
+   Note that SMT is enabled by the Hyper-Threading section in the
+   BIOS, and as such will apply to the whole system. So the impact of
+   enabling/disabling it for the whole system should be considered
+   e.g. If workloads on the system can scale across multiple cores,
+   SMT may very beneficial. However, if they do not and perform best
+   on a single physical core, SMT may not be beneficial.
 
-  7. The isolcpus kernel boot parameter
+7. The isolcpus kernel boot parameter
 
-	isolcpus can be used on the kernel bootline to isolate cores from the
-	kernel scheduler and hence dedicate them to OVS or other packet
-	forwarding related workloads. For example a Linux kernel boot-line
-	could be:
+   isolcpus can be used on the kernel bootline to isolate cores from the
+   kernel scheduler and hence dedicate them to OVS or other packet
+   forwarding related workloads. For example a Linux kernel boot-line
+   could be:
 
-	'GRUB_CMDLINE_LINUX_DEFAULT="quiet hugepagesz=1G hugepages=4 default_hugepagesz=1G 'intel_iommu=off' isolcpus=1-19"'
+   ```
+   GRUB_CMDLINE_LINUX_DEFAULT="quiet hugepagesz=1G hugepages=4
+   default_hugepagesz=1G 'intel_iommu=off' isolcpus=1-19"
+   ```
 
-  8. NUMA/Cluster On Die
+8. NUMA/Cluster On Die
 
-	Ideally inter NUMA datapaths should be avoided where possible as packets
-	will go across QPI and there may be a slight performance penalty when
-	compared with intra NUMA datapaths. On Intel Xeon Processor E5 v3,
-	Cluster On Die is introduced on models that have 10 cores or more.
-	This makes it possible to logically split a socket into two NUMA regions
-	and again it is preferred where possible to keep critical datapaths
-	within the one cluster.
+   Ideally inter NUMA datapaths should be avoided where possible as packets
+   will go across QPI and there may be a slight performance penalty when
+   compared with intra NUMA datapaths. On Intel Xeon Processor E5 v3,
+   Cluster On Die is introduced on models that have 10 cores or more.
+   This makes it possible to logically split a socket into two NUMA regions
+   and again it is preferred where possible to keep critical datapaths
+   within the one cluster.
 
-	It is good practice to ensure that threads that are in the datapath are
-	pinned to cores in the same NUMA area. e.g. pmd threads and QEMU vCPUs
-	responsible for forwarding.
+   It is good practice to ensure that threads that are in the datapath are
+   pinned to cores in the same NUMA area. e.g. pmd threads and QEMU vCPUs
+   responsible for forwarding.
 
-  9. Rx Mergeable buffers
+9. Rx Mergeable buffers
 
-	Rx Mergeable buffers is a virtio feature that allows chaining of multiple
-	virtio descriptors to handle large packet sizes. As such, large packets
-	are handled by reserving and chaining multiple free descriptors
-	together. Mergeable buffer support is negotiated between the virtio
-	driver and virtio device and is supported by the DPDK vhost library.
-	This behavior is typically supported and enabled by default, however
-	in the case where the user knows that rx mergeable buffers are not needed
-	i.e. jumbo frames are not needed, it can be forced off by adding
-	mrg_rxbuf=off to the QEMU command line options. By not reserving multiple
-	chains of descriptors it will make more individual virtio descriptors
-	available for rx to the guest using dpdkvhost ports and this can improve
-	performance.
+   Rx Mergeable buffers is a virtio feature that allows chaining of multiple
+   virtio descriptors to handle large packet sizes. As such, large packets
+   are handled by reserving and chaining multiple free descriptors
+   together. Mergeable buffer support is negotiated between the virtio
+   driver and virtio device and is supported by the DPDK vhost library.
+   This behavior is typically supported and enabled by default, however
+   in the case where the user knows that rx mergeable buffers are not needed
+   i.e. jumbo frames are not needed, it can be forced off by adding
+   mrg_rxbuf=off to the QEMU command line options. By not reserving multiple
+   chains of descriptors it will make more individual virtio descriptors
+   available for rx to the guest using dpdkvhost ports and this can improve
+   performance.
 
-  10. Packet processing in the guest
+10. Packet processing in the guest
 
-	It is good practice whether simply forwarding packets from one
-	interface to another or more complex packet processing in the guest,
-	to ensure that the thread performing this work has as much CPU
-	occupancy as possible. For example when the DPDK sample application
-	`testpmd` is used to forward packets in the guest, multiple QEMU vCPU
-	threads can be created. Taskset can then be used to affinitize the
-	vCPU thread responsible for forwarding to a dedicated core not used
-	for other general processing on the host system.
+   It is good practice whether simply forwarding packets from one
+   interface to another or more complex packet processing in the guest,
+   to ensure that the thread performing this work has as much CPU
+   occupancy as possible. For example when the DPDK sample application
+   `testpmd` is used to forward packets in the guest, multiple QEMU vCPU
+   threads can be created. Taskset can then be used to affinitize the
+   vCPU thread responsible for forwarding to a dedicated core not used
+   for other general processing on the host system.
 
-  11. DPDK virtio pmd in the guest
+11. DPDK virtio pmd in the guest
 
-	dpdkvhostcuse or dpdkvhostuser ports can be used to accelerate the path
-	to the guest using the DPDK vhost library. This library is compatible with
-	virtio-net drivers in the guest but significantly better performance can
-	be observed when using the DPDK virtio pmd driver in the guest. The DPDK
-	`testpmd` application can be used in the guest as an example application
-	that forwards packet from one DPDK vhost port to another. An example of
-	running `testpmd` in the guest can be seen here.
+   dpdkvhostcuse or dpdkvhostuser ports can be used to accelerate the path
+   to the guest using the DPDK vhost library. This library is compatible with
+   virtio-net drivers in the guest but significantly better performance can
+   be observed when using the DPDK virtio pmd driver in the guest. The DPDK
+   `testpmd` application can be used in the guest as an example application
+   that forwards packet from one DPDK vhost port to another. An example of
+   running `testpmd` in the guest can be seen here.
 
-	`./testpmd -c 0x3 -n 4 --socket-mem 512 -- --burst=64 -i --txqflags=0xf00 --disable-hw-vlan --forward-mode=io --auto-start`
+   ```
+   ./testpmd -c 0x3 -n 4 --socket-mem 512 -- --burst=64 -i --txqflags=0xf00
+   --disable-hw-vlan --forward-mode=io --auto-start
+   ```
 
-	See below information on dpdkvhostcuse and dpdkvhostuser ports.
-	See [DPDK Docs] for more information on `testpmd`.
-
-
+   See below information on dpdkvhostcuse and dpdkvhostuser ports.
+   See [DPDK Docs] for more information on `testpmd`.
 
 DPDK Rings :
 ------------

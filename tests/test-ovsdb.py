@@ -487,6 +487,51 @@ def do_idl(schema_file, remote, *commands):
     print("%03d: done" % step)
 
 
+def do_idl_passive(schema_file, remote, *commands):
+    symtab = {}
+    step = 0
+    schema_helper = ovs.db.idl.SchemaHelper(schema_file)
+    schema_helper.register_all()
+    idl = ovs.db.idl.Idl(remote, schema_helper)
+
+    while idl._session.rpc is None:
+        idl.run()
+
+    rpc = idl._session.rpc
+
+    print_idl(idl, step)
+    step += 1
+
+    for command in commands:
+        json = ovs.json.from_string(command)
+        if isinstance(json, six.string_types):
+            sys.stderr.write("\"%s\": %s\n" % (command, json))
+            sys.exit(1)
+        json = substitute_uuids(json, symtab)
+        request = ovs.jsonrpc.Message.create_request("transact", json)
+        error, reply = rpc.transact_block(request)
+        if error:
+            sys.stderr.write("jsonrpc transaction failed: %s"
+                             % os.strerror(error))
+            sys.exit(1)
+        elif reply.error is not None:
+            sys.stderr.write("jsonrpc transaction failed: %s"
+                             % reply.error)
+            sys.exit(1)
+
+        sys.stdout.write("%03d: " % step)
+        sys.stdout.flush()
+        step += 1
+        if reply.result is not None:
+            parse_uuids(reply.result, symtab)
+        reply.id = None
+        sys.stdout.write("%s\n" % ovs.json.to_string(reply.to_json()))
+        sys.stdout.flush()
+
+    idl.close()
+    print("%03d: done" % step)
+
+
 def usage():
     print("""\
 %(program_name)s: test utility for Open vSwitch database Python bindings
@@ -587,7 +632,8 @@ def main(argv):
                 "parse-column": (do_parse_column, 2),
                 "parse-table": (do_parse_table, (2, 3)),
                 "parse-schema": (do_parse_schema, 1),
-                "idl": (do_idl, (2,))}
+                "idl": (do_idl, (2,)),
+                "idl_passive": (do_idl_passive, (2,))}
 
     command_name = args[0]
     args = args[1:]

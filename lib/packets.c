@@ -1391,3 +1391,24 @@ packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *ip6)
     return partial;
 }
 #endif
+
+void
+IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6)
+{
+    if (is_ipv6) {
+        ovs_16aligned_be32 *ip6 = dp_packet_l3(pkt);
+
+        put_16aligned_be32(ip6, get_16aligned_be32(ip6) |
+                                htonl(IP_ECN_CE << 20));
+    } else {
+        struct ip_header *nh = dp_packet_l3(pkt);
+        uint8_t tos = nh->ip_tos;
+
+        tos |= IP_ECN_CE;
+        if (nh->ip_tos != tos) {
+            nh->ip_csum = recalc_csum16(nh->ip_csum, htons(nh->ip_tos),
+                                        htons((uint16_t) tos));
+            nh->ip_tos = tos;
+        }
+    }
+}

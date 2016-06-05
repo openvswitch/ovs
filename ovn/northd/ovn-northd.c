@@ -692,11 +692,24 @@ ovn_port_update_sbrec(const struct ovn_port *op)
 {
     sbrec_port_binding_set_datapath(op->sb, op->od->sb);
     if (op->nbr) {
-        sbrec_port_binding_set_type(op->sb, "patch");
+        /* If the router is for l3 gateway, it resides on a chassis
+         * and its port type is "gateway". */
+        const char *chassis = smap_get(&op->od->nbr->options, "chassis");
+        if (chassis) {
+            sbrec_port_binding_set_type(op->sb, "gateway");
+        } else {
+            sbrec_port_binding_set_type(op->sb, "patch");
+        }
 
         const char *peer = op->peer ? op->peer->key : "<error>";
-        const struct smap ids = SMAP_CONST1(&ids, "peer", peer);
-        sbrec_port_binding_set_options(op->sb, &ids);
+        struct smap new;
+        smap_init(&new);
+        smap_add(&new, "peer", peer);
+        if (chassis) {
+            smap_add(&new, "gateway-chassis", chassis);
+        }
+        sbrec_port_binding_set_options(op->sb, &new);
+        smap_destroy(&new);
 
         sbrec_port_binding_set_parent_port(op->sb, NULL);
         sbrec_port_binding_set_tag(op->sb, NULL, 0);
@@ -706,15 +719,32 @@ ovn_port_update_sbrec(const struct ovn_port *op)
             sbrec_port_binding_set_type(op->sb, op->nbs->type);
             sbrec_port_binding_set_options(op->sb, &op->nbs->options);
         } else {
-            sbrec_port_binding_set_type(op->sb, "patch");
+            const char *chassis = NULL;
+            if (op->peer && op->peer->od && op->peer->od->nbr) {
+                chassis = smap_get(&op->peer->od->nbr->options, "chassis");
+            }
+
+            /* A switch port connected to a gateway router is also of
+             * type "gateway". */
+            if (chassis) {
+                sbrec_port_binding_set_type(op->sb, "gateway");
+            } else {
+                sbrec_port_binding_set_type(op->sb, "patch");
+            }
 
             const char *router_port = smap_get(&op->nbs->options,
                                                "router-port");
             if (!router_port) {
                 router_port = "<error>";
             }
-            const struct smap ids = SMAP_CONST1(&ids, "peer", router_port);
-            sbrec_port_binding_set_options(op->sb, &ids);
+            struct smap new;
+            smap_init(&new);
+            smap_add(&new, "peer", router_port);
+            if (chassis) {
+                smap_add(&new, "gateway-chassis", chassis);
+            }
+            sbrec_port_binding_set_options(op->sb, &new);
+            smap_destroy(&new);
         }
         sbrec_port_binding_set_parent_port(op->sb, op->nbs->parent_name);
         sbrec_port_binding_set_tag(op->sb, op->nbs->tag, op->nbs->n_tag);
@@ -1035,12 +1065,17 @@ build_port_security_ipv6_flow(
     ipv6_string_mapped(ip6_str, &lla);
     ds_put_format(match, "%s, ", ip6_str);
 
-    /* Allow ip6.src=:: and ip6.dst=ff00::/8 for ND packets */
-    ds_put_cstr(match, pipeline == P_IN ? "::" : "ff00::/8");
+    /* Allow ip6.dst=ff00::/8 for multicast packets */
+    if (pipeline == P_OUT) {
+        ds_put_cstr(match, "ff00::/8, ");
+    }
     for(int i = 0; i < n_ipv6_addrs; i++) {
         ipv6_string_mapped(ip6_str, &ipv6_addrs[i].addr);
-        ds_put_format(match, ", %s", ip6_str);
+        ds_put_format(match, "%s, ", ip6_str);
     }
+    /* Replace ", " by "}". */
+    ds_chomp(match, ' ');
+    ds_chomp(match, ',');
     ds_put_cstr(match, "}");
 }
 
@@ -1176,8 +1211,19 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
         if (ps.n_ipv4_addrs) {
             struct ds match = DS_EMPTY_INITIALIZER;
             if (pipeline == P_IN) {
+                /* Permit use of the unspecified address for DHCP discovery */
+                struct ds dhcp_match = DS_EMPTY_INITIALIZER;
+                ds_put_format(&dhcp_match, "inport == %s"
+                              " && eth.src == "ETH_ADDR_FMT
+                              " && ip4.src == 0.0.0.0"
+                              " && ip4.dst == 255.255.255.255"
+                              " && udp.src == 68 && udp.dst == 67", op->json_key,
+                              ETH_ADDR_ARGS(ps.ea));
+                ovn_lflow_add(lflows, op->od, stage, 90,
+                              ds_cstr(&dhcp_match), "next;");
+                ds_destroy(&dhcp_match);
                 ds_put_format(&match, "inport == %s && eth.src == "ETH_ADDR_FMT
-                              " && ip4.src == {0.0.0.0, ", op->json_key,
+                              " && ip4.src == {", op->json_key,
                               ETH_ADDR_ARGS(ps.ea));
             } else {
                 ds_put_format(&match, "outport == %s && eth.dst == "ETH_ADDR_FMT
@@ -1221,6 +1267,20 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
 
         if (ps.n_ipv6_addrs) {
             struct ds match = DS_EMPTY_INITIALIZER;
+            if (pipeline == P_IN) {
+                /* Permit use of unspecified address for duplicate address
+                 * detection */
+                struct ds dad_match = DS_EMPTY_INITIALIZER;
+                ds_put_format(&dad_match, "inport == %s"
+                              " && eth.src == "ETH_ADDR_FMT
+                              " && ip6.src == ::"
+                              " && ip6.dst == ff02::/16"
+                              " && icmp6.type == {131, 135, 143}", op->json_key,
+                              ETH_ADDR_ARGS(ps.ea));
+                ovn_lflow_add(lflows, op->od, stage, 90,
+                              ds_cstr(&dad_match), "next;");
+                ds_destroy(&dad_match);
+            }
             ds_put_format(&match, "%s == %s && %s == "ETH_ADDR_FMT"",
                           port_direction, op->json_key,
                           pipeline == P_IN ? "eth.src" : "eth.dst",
@@ -2227,7 +2287,13 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 free(actions);
                 free(match);
             }
-        } else if (op->od->n_router_ports) {
+        } else if (op->od->n_router_ports && strcmp(op->nbs->type, "router")) {
+            /* This is a logical switch port that backs a VM or a container.
+             * Extract its addresses. For each of the address, go through all
+             * the router ports attached to the switch (to which this port
+             * connects) and if the address in question is reachable from the
+             * router port, add an ARP entry in that router's pipeline. */
+
             for (size_t i = 0; i < op->nbs->n_addresses; i++) {
                 struct lport_addresses laddrs;
                 if (!extract_lport_addresses(op->nbs->addresses[i], &laddrs,
@@ -2275,8 +2341,56 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
                 free(laddrs.ipv4_addrs);
             }
+        } else if (!strcmp(op->nbs->type, "router")) {
+            /* This is a logical switch port that connects to a router. */
+
+            /* The peer of this switch port is the router port for which
+             * we need to add logical flows such that it can resolve
+             * ARP entries for all the other router ports connected to
+             * the switch in question. */
+
+            const char *peer_name = smap_get(&op->nbs->options,
+                                             "router-port");
+            if (!peer_name) {
+                continue;
+            }
+
+            struct ovn_port *peer = ovn_port_find(ports, peer_name);
+            if (!peer || !peer->nbr || !peer->ip) {
+                continue;
+            }
+
+            for (size_t j = 0; j < op->od->n_router_ports; j++) {
+                const char *router_port_name = smap_get(
+                                    &op->od->router_ports[j]->nbs->options,
+                                    "router-port");
+                struct ovn_port *router_port = ovn_port_find(ports,
+                                                             router_port_name);
+                if (!router_port || !router_port->nbr || !router_port->ip) {
+                    continue;
+                }
+
+                /* Skip the router port under consideration. */
+                if (router_port == peer) {
+                   continue;
+                }
+
+                if (!router_port->ip) {
+                    continue;
+                }
+                char *match = xasprintf("outport == %s && reg0 == "IP_FMT,
+                                        peer->json_key,
+                                        IP_ARGS(router_port->ip));
+                char *actions = xasprintf("eth.dst = "ETH_ADDR_FMT"; next;",
+                                          ETH_ADDR_ARGS(router_port->mac));
+                ovn_lflow_add(lflows, peer->od, S_ROUTER_IN_ARP_RESOLVE,
+                              100, match, actions);
+                free(actions);
+                free(match);
+            }
         }
     }
+
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbr) {
             continue;

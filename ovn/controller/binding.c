@@ -77,51 +77,6 @@ get_local_iface_ids(const struct ovsrec_bridge *br_int, struct shash *lports)
 }
 
 static void
-update_ct_zones(struct sset *lports, struct simap *ct_zones,
-                unsigned long *ct_zone_bitmap)
-{
-    struct simap_node *ct_zone, *ct_zone_next;
-    const char *iface_id;
-    int scan_start = 1;
-
-    /* xxx This is wasteful to assign a zone to each port--even if no
-     * xxx security policy is applied. */
-
-    /* Delete any zones that are associated with removed ports. */
-    SIMAP_FOR_EACH_SAFE(ct_zone, ct_zone_next, ct_zones) {
-        if (!sset_contains(lports, ct_zone->name)) {
-            bitmap_set0(ct_zone_bitmap, ct_zone->data);
-            simap_delete(ct_zones, ct_zone);
-        }
-    }
-
-    /* Assign a unique zone id for each logical port. */
-    SSET_FOR_EACH(iface_id, lports) {
-        size_t zone;
-
-        if (simap_contains(ct_zones, iface_id)) {
-            continue;
-        }
-
-        /* We assume that there are 64K zones and that we own them all. */
-        zone = bitmap_scan(ct_zone_bitmap, 0, scan_start, MAX_CT_ZONES + 1);
-        if (zone == MAX_CT_ZONES + 1) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-            VLOG_WARN_RL(&rl, "exhausted all ct zones");
-            return;
-        }
-        scan_start = zone + 1;
-
-        bitmap_set1(ct_zone_bitmap, zone);
-        simap_put(ct_zones, iface_id, zone);
-
-        /* xxx We should erase any old entries for this
-         * xxx zone, but we need a generic interface to the conntrack
-         * xxx table. */
-    }
-}
-
-static void
 add_local_datapath(struct hmap *local_datapaths,
         const struct sbrec_port_binding *binding_rec)
 {
@@ -148,8 +103,8 @@ update_qos(const struct ovsrec_interface *iface_rec,
 
 void
 binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
-            const char *chassis_id, struct simap *ct_zones,
-            unsigned long *ct_zone_bitmap, struct hmap *local_datapaths)
+            const char *chassis_id, struct sset *all_lports,
+            struct hmap *local_datapaths)
 {
     const struct sbrec_chassis *chassis_rec;
     const struct sbrec_port_binding *binding_rec;
@@ -164,10 +119,9 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
          * We'll remove our chassis from all port binding records below. */
     }
 
-    struct sset all_lports = SSET_INITIALIZER(&all_lports);
     struct shash_node *node;
     SHASH_FOR_EACH (node, &lports) {
-        sset_add(&all_lports, node->name);
+        sset_add(all_lports, node->name);
     }
 
     /* Run through each binding record to see if it is resident on this
@@ -178,10 +132,10 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             = shash_find_and_delete(&lports, binding_rec->logical_port);
         if (iface_rec
             || (binding_rec->parent_port && binding_rec->parent_port[0] &&
-                sset_contains(&all_lports, binding_rec->parent_port))) {
+                sset_contains(all_lports, binding_rec->parent_port))) {
             if (binding_rec->parent_port && binding_rec->parent_port[0]) {
                 /* Add child logical port to the set of all local ports. */
-                sset_add(&all_lports, binding_rec->logical_port);
+                sset_add(all_lports, binding_rec->logical_port);
             }
             add_local_datapath(local_datapaths, binding_rec);
             if (iface_rec && ctx->ovs_idl_txn) {
@@ -200,7 +154,8 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                 }
                 sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
             }
-        } else if (chassis_rec && binding_rec->chassis == chassis_rec) {
+        } else if (chassis_rec && binding_rec->chassis == chassis_rec
+                   && strcmp(binding_rec->type, "gateway")) {
             if (ctx->ovnsb_idl_txn) {
                 VLOG_INFO("Releasing lport %s from this chassis.",
                           binding_rec->logical_port);
@@ -212,7 +167,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
              * to list them in all_lports because we want to allocate
              * a conntrack zone ID for each one, as we'll be creating
              * a patch port for each one. */
-            sset_add(&all_lports, binding_rec->logical_port);
+            sset_add(all_lports, binding_rec->logical_port);
         }
     }
 
@@ -220,10 +175,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
         VLOG_DBG("No port binding record for lport %s", node->name);
     }
 
-    update_ct_zones(&all_lports, ct_zones, ct_zone_bitmap);
-
     shash_destroy(&lports);
-    sset_destroy(&all_lports);
 }
 
 /* Returns true if the database is all cleaned up, false if more work is

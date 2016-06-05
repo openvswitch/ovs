@@ -2012,6 +2012,23 @@ A: In Open vSwitch 2.3 and earlier, Open vSwitch used the destination
    vSwitch source tree.  (OpenFlow 1.5 support in Open vSwitch is still
    experimental.)
 
+### Q: I added a flow to accept packets on VLAN 123 and output them on
+   VLAN 456, like so:
+
+       ovs-ofctl add-flow br0 dl_vlan=123,actions=output:1,mod_vlan_vid:456
+
+   but the packets are actually being output in VLAN 123.  Why?
+
+A: OpenFlow actions are executed in the order specified.  Thus, the
+   actions above first output the packet, then change its VLAN.  Since
+   the output occurs before changing the VLAN, the change in VLAN will
+   have no visible effect.
+
+   To solve this and similar problems, order actions so that changes
+   to headers happen before output, e.g.:
+
+       ovs-ofctl add-flow br0 dl_vlan=123,actions=mod_vlan_vid:456,output:1
+
 
 Development
 -----------

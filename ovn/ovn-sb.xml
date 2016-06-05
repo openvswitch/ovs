@@ -1220,7 +1220,12 @@ tcp.flags = RST;
       which <code>ovn-controller</code>/<code>ovn-controller-vtep</code> in
       turn finds out by monitoring the local hypervisor's Open_vSwitch
       database, which identifies logical ports via the conventions described
-      in <code>IntegrationGuide.md</code>.
+      in <code>IntegrationGuide.md</code>.  (The exceptions are for
+      <code>Port_Binding</code> records with <code>type</code> of
+      <code>gateway</code>, whose locations are identified by
+      <code>ovn-northd</code> via the <code>options:gateway-chassis</code>
+      column in this table.  <code>ovn-controller</code> is still responsible
+      to populate the <code>chassis</code> column.)
     </p>
 
     <p>
@@ -1298,6 +1303,14 @@ tcp.flags = RST;
             a logical router to a logical switch or to another logical router.
           </dd>
 
+          <dt><code>gateway</code></dt>
+          <dd>
+            One of a pair of logical ports that act as if connected by a patch
+            cable across multiple chassis.  Useful for connecting a logical
+            switch with a Gateway router (which is only resident on a
+            particular chassis).
+          </dd>
+
           <dt><code>localnet</code></dt>
           <dd>
             A connection to a locally accessible network from each
@@ -1333,6 +1346,26 @@ tcp.flags = RST;
         in its own <code>peer</code> option.  That is, the two patch logical
         ports must have reversed <ref column="logical_port"/> and
         <code>peer</code> values.
+      </column>
+    </group>
+
+    <group title="Gateway Options">
+      <p>
+        These options apply to logical ports with <ref column="type"/> of
+        <code>gateway</code>.
+      </p>
+
+      <column name="options" key="peer">
+        The <ref column="logical_port"/> in the <ref table="Port_Binding"/>
+        record for the other side of the 'gateway' port.  The named <ref
+        column="logical_port"/> must specify this <ref column="logical_port"/>
+        in its own <code>peer</code> option.  That is, the two 'gateway'
+        logical ports must have reversed <ref column="logical_port"/> and
+        <code>peer</code> values.
+      </column>
+
+      <column name="options" key="gateway-chassis">
+        The <code>chassis</code> in which the port resides.
       </column>
     </group>
 

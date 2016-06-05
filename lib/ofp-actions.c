@@ -1257,7 +1257,7 @@ decode_bundle(bool load, const struct nx_action_bundle *nab,
     }
 
     for (i = 0; i < bundle->n_slaves; i++) {
-        uint16_t ofp_port = ntohs(((ovs_be16 *)(nab + 1))[i]);
+        ofp_port_t ofp_port = u16_to_ofp(ntohs(((ovs_be16 *)(nab + 1))[i]));
         ofpbuf_put(ofpacts, &ofp_port, sizeof ofp_port);
         bundle = ofpacts->header;
     }
@@ -5277,6 +5277,14 @@ decode_NXAST_RAW_NAT(const struct nx_action_nat *nan,
     nat = ofpact_put_NAT(out);
     nat->flags = ntohs(nan->flags);
 
+    /* Check for unknown or mutually exclusive flags. */
+    if ((nat->flags & ~NX_NAT_F_MASK)
+        || (nat->flags & NX_NAT_F_SRC && nat->flags & NX_NAT_F_DST)
+        || (nat->flags & NX_NAT_F_PROTO_HASH
+            && nat->flags & NX_NAT_F_PROTO_RANDOM)) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
 #define NX_NAT_GET_OPT(DST, SRC, LEN, TYPE)                     \
     (LEN >= sizeof(TYPE)                                        \
      ? (memcpy(DST, SRC, sizeof(TYPE)), LEN -= sizeof(TYPE),    \
@@ -5515,16 +5523,20 @@ parse_NAT(char *arg, struct ofpbuf *ofpacts,
         }
     }
     if (on->flags & NX_NAT_F_SRC && on->flags & NX_NAT_F_DST) {
-        return xasprintf("May only specify one of \"snat\" or \"dnat\".");
+        return xasprintf("May only specify one of \"src\" or \"dst\".");
     }
     if (!(on->flags & NX_NAT_F_SRC || on->flags & NX_NAT_F_DST)) {
         if (on->flags) {
-            return xasprintf("Flags allowed only with \"snat\" or \"dnat\".");
+            return xasprintf("Flags allowed only with \"src\" or \"dst\".");
         }
         if (on->range_af != AF_UNSPEC) {
-            return xasprintf("Range allowed only with \"snat\" or \"dnat\".");
+            return xasprintf("Range allowed only with \"src\" or \"dst\".");
         }
     }
+    if (on->flags & NX_NAT_F_PROTO_HASH && on->flags & NX_NAT_F_PROTO_RANDOM) {
+        return xasprintf("Both \"hash\" and \"random\" are not allowed.");
+    }
+
     return NULL;
 }
 
@@ -6092,7 +6104,8 @@ ofpacts_execute_action_set(struct ofpbuf *action_list,
      * not be sent anywhere. */
     if (!ofpacts_copy_last(action_list, action_set, OFPACT_GROUP) &&
         !ofpacts_copy_last(action_list, action_set, OFPACT_OUTPUT) &&
-        !ofpacts_copy_last(action_list, action_set, OFPACT_RESUBMIT)) {
+        !ofpacts_copy_last(action_list, action_set, OFPACT_RESUBMIT) &&
+        !ofpacts_copy_last(action_list, action_set, OFPACT_CT)) {
         ofpbuf_clear(action_list);
     }
 }

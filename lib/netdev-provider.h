@@ -32,6 +32,7 @@
 extern "C" {
 #endif
 
+struct netdev_tnl_build_header_params;
 #define NETDEV_NUMA_UNSPEC OVS_NUMA_UNSPEC
 
 /* A network device (e.g. an Ethernet device).
@@ -52,19 +53,27 @@ struct netdev {
      * 'netdev''s flags, features, ethernet address, or carrier changes. */
     uint64_t change_seq;
 
+    /* A netdev provider might be unable to change some of the device's
+     * parameter (n_rxq, mtu) when the device is in use.  In this case
+     * the provider can notify the upper layer by calling
+     * netdev_request_reconfigure().  The upper layer will react by stopping
+     * the operations on the device and calling netdev_reconfigure() to allow
+     * the configuration changes.  'last_reconfigure_seq' remembers the value
+     * of 'reconfigure_seq' when the last reconfiguration happened. */
+    struct seq *reconfigure_seq;
+    uint64_t last_reconfigure_seq;
+
     /* The core netdev code initializes these at netdev construction and only
      * provide read-only access to its client.  Netdev implementations may
      * modify them. */
     int n_txq;
     int n_rxq;
-    /* Number of rx queues requested by user. */
-    int requested_n_rxq;
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
     struct ovs_list saved_flags_list; /* Contains "struct netdev_saved_flags". */
 };
 
-static void
+static inline void
 netdev_change_seq_changed(const struct netdev *netdev_)
 {
     struct netdev *netdev = CONST_CAST(struct netdev *, netdev_);
@@ -73,6 +82,12 @@ netdev_change_seq_changed(const struct netdev *netdev_)
     if (!netdev->change_seq) {
         netdev->change_seq++;
     }
+}
+
+static inline void
+netdev_request_reconfigure(struct netdev *netdev)
+{
+    seq_change(netdev->reconfigure_seq);
 }
 
 const char *netdev_get_type(const struct netdev *);
@@ -262,10 +277,10 @@ struct netdev_class {
     const struct netdev_tunnel_config *
         (*get_tunnel_config)(const struct netdev *netdev);
 
-    /* Build Partial Tunnel header.  Ethernet and ip header is already built,
-     * build_header() is suppose build protocol specific part of header. */
+    /* Build Tunnel header.  Ethernet and ip header parameters are passed to
+     * tunnel implementation to build entire outer header for given flow. */
     int (*build_header)(const struct netdev *, struct ovs_action_push_tnl *data,
-                        const struct flow *tnl_flow);
+                        const struct netdev_tnl_build_header_params *params);
 
     /* build_header() can not build entire header for all packets for given
      * flow.  Push header is called for packet to build header specific to
@@ -275,20 +290,17 @@ struct netdev_class {
                         const struct ovs_action_push_tnl *data);
 
     /* Pop tunnel header from packet, build tunnel metadata and resize packet
-     * for further processing. */
-    int (*pop_header)(struct dp_packet *packet);
+     * for further processing.
+     * Returns NULL in case of error or tunnel implementation queued packet for further
+     * processing. */
+    struct dp_packet * (*pop_header)(struct dp_packet *packet);
 
     /* Returns the id of the numa node the 'netdev' is on.  If there is no
      * such info, returns NETDEV_NUMA_UNSPEC. */
     int (*get_numa_id)(const struct netdev *netdev);
 
-    /* Configures the number of tx queues and rx queues of 'netdev'.
-     * Return 0 if successful, otherwise a positive errno value.
-     *
-     * 'n_rxq' specifies the maximum number of receive queues to create.
-     * The netdev provider might choose to create less (e.g. if the hardware
-     * supports only a smaller number).  The actual number of queues created
-     * is stored in the 'netdev->n_rxq' field.
+    /* Configures the number of tx queues of 'netdev'. Returns 0 if successful,
+     * otherwise a positive errno value.
      *
      * 'n_txq' specifies the exact number of transmission queues to create.
      * The caller will call netdev_send() concurrently from 'n_txq' different
@@ -296,12 +308,12 @@ struct netdev_class {
      * making sure that these concurrent calls do not create a race condition
      * by using multiple hw queues or locking.
      *
-     * On error, the tx queue and rx queue configuration is indeterminant.
-     * Caller should make decision on whether to restore the previous or
-     * the default configuration.  Also, caller must make sure there is no
-     * other thread accessing the queues at the same time. */
-    int (*set_multiq)(struct netdev *netdev, unsigned int n_txq,
-                      unsigned int n_rxq);
+     * The caller will call netdev_reconfigure() (if necessary) before using
+     * netdev_send() on any of the newly configured queues, giving the provider
+     * a chance to adjust its settings.
+     *
+     * On error, the tx queue configuration is unchanged. */
+    int (*set_tx_multiq)(struct netdev *netdev, unsigned int n_txq);
 
     /* Sends buffers on 'netdev'.
      * Returns 0 if successful (for every buffer), otherwise a positive errno
@@ -692,6 +704,15 @@ struct netdev_class {
     int (*update_flags)(struct netdev *netdev, enum netdev_flags off,
                         enum netdev_flags on, enum netdev_flags *old_flags);
 
+    /* If the provider called netdev_request_reconfigure(), the upper layer
+     * will eventually call this.  The provider can update the device
+     * configuration knowing that the upper layer will not call rxq_recv() or
+     * send() until this function returns.
+     *
+     * On error, the configuration is indeterminant and the device cannot be
+     * used to send and receive packets until a successful configuration is
+     * applied. */
+    int (*reconfigure)(struct netdev *netdev);
 /* ## -------------------- ## */
 /* ## netdev_rxq Functions ## */
 /* ## -------------------- ## */

@@ -28,6 +28,7 @@
 struct ovs_action_push_tnl;
 struct ofport_dpif;
 struct netdev;
+struct netdev_tnl_build_header_params;
 
 void ofproto_tunnel_init(void);
 bool tnl_port_reconfigure(const struct ofport_dpif *, const struct netdev *,
@@ -50,11 +51,9 @@ tnl_port_should_receive(const struct flow *flow)
     return flow_tnl_dst_is_set(&flow->tunnel);
 }
 
-int tnl_port_build_header(const struct ofport_dpif *ofport,
-                          const struct flow *tnl_flow,
-                          const struct eth_addr dmac,
-                          const struct eth_addr smac,
-                          const struct in6_addr *ipv6_src,
-                          struct ovs_action_push_tnl *data);
+int
+tnl_port_build_header(const struct ofport_dpif *ofport,
+                      struct ovs_action_push_tnl *data,
+                      const struct netdev_tnl_build_header_params *params);
 
 #endif /* tunnel.h */

@@ -81,6 +81,8 @@ NTSTATUS MapFlowKeyToNlKey(PNL_BUFFER nlBuf, OvsFlowKey *flowKey,
                            UINT16 keyType, UINT16 tunKeyType);
 NTSTATUS MapFlowTunKeyToNlKey(PNL_BUFFER nlBuf, OvsIPv4TunnelKey *tunKey,
                               UINT16 tunKeyType);
+VOID MapTunAttrToFlowPut(PNL_ATTR *keyAttrs, PNL_ATTR *tunAttrs,
+                         OvsFlowKey *destKey);
 UINT32 OvsFlowKeyAttrSize(void);
 UINT32 OvsTunKeyAttrSize(void);
 

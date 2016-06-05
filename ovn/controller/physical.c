@@ -24,6 +24,7 @@
 #include "openvswitch/vlog.h"
 #include "ovn-controller.h"
 #include "ovn/lib/ovn-sb-idl.h"
+#include "ovn/lib/ovn-util.h"
 #include "physical.h"
 #include "shash.h"
 #include "simap.h"
@@ -367,6 +368,21 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                 put_load(zone_id, MFF_LOG_CT_ZONE, 0, 32, &ofpacts);
             }
 
+            int zone_id_dnat, zone_id_snat;
+            char *dnat = alloc_nat_zone_key(binding, "dnat");
+            char *snat = alloc_nat_zone_key(binding, "snat");
+            zone_id_dnat = simap_get(ct_zones, dnat);
+            if (zone_id_dnat) {
+                put_load(zone_id_dnat, MFF_LOG_DNAT_ZONE, 0, 32, &ofpacts);
+            }
+            free(dnat);
+
+            zone_id_snat = simap_get(ct_zones, snat);
+            if (zone_id_snat) {
+                put_load(zone_id_snat, MFF_LOG_SNAT_ZONE, 0, 32, &ofpacts);
+            }
+            free(snat);
+
             /* Set MFF_LOG_DATAPATH and MFF_LOG_INPORT. */
             put_load(dp_key, MFF_LOG_DATAPATH, 0, 64, &ofpacts);
             put_load(port_key, MFF_LOG_INPORT, 0, 32, &ofpacts);
@@ -402,6 +418,12 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
 
             if (zone_id) {
                 put_load(zone_id, MFF_LOG_CT_ZONE, 0, 32, &ofpacts);
+            }
+            if (zone_id_dnat) {
+                put_load(zone_id_dnat, MFF_LOG_DNAT_ZONE, 0, 32, &ofpacts);
+            }
+            if (zone_id_snat) {
+                put_load(zone_id_snat, MFF_LOG_SNAT_ZONE, 0, 32, &ofpacts);
             }
 
             /* Resubmit to table 34. */

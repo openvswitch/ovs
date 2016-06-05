@@ -2766,7 +2766,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     NULL,                       /* push header */               \
     NULL,                       /* pop header */                \
     NULL,                       /* get_numa_id */               \
-    NULL,                       /* set_multiq */                \
+    NULL,                       /* set_tx_multiq */             \
                                                                 \
     netdev_linux_send,                                          \
     netdev_linux_send_wait,                                     \
@@ -2806,6 +2806,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     netdev_linux_arp_lookup,                                    \
                                                                 \
     netdev_linux_update_flags,                                  \
+    NULL,                       /* reconfigure */               \
                                                                 \
     netdev_linux_rxq_alloc,                                     \
     netdev_linux_rxq_construct,                                 \

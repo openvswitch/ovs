@@ -96,7 +96,6 @@ BOOLEAN NlFillNlHdr(PNL_BUFFER nlBuf,
                     UINT32 nlmsgSeq, UINT32 nlmsgPid);
 
 VOID NlBuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgError,
-                     UINT32 msgErrorLen,
                      UINT errorCode, UINT32 *msgLen);
 
 /* Netlink message accessing the payload */

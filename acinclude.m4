@@ -161,10 +161,11 @@ dnl Configure DPDK source tree
 AC_DEFUN([OVS_CHECK_DPDK], [
   AC_ARG_WITH([dpdk],
               [AC_HELP_STRING([--with-dpdk=/path/to/dpdk],
-                              [Specify the DPDK build directory])])
+                              [Specify the DPDK build directory])],
+              [have_dpdk=true])
 
   AC_MSG_CHECKING([whether dpdk datapath is enabled])
-  if test -z "$with_dpdk" || test "$with_dpdk" = no; then
+  if test "$have_dpdk" != true || test "$with_dpdk" = no; then
     AC_MSG_RESULT([no])
     DPDKLIB_FOUND=false
   else

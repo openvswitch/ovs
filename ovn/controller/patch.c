@@ -230,7 +230,7 @@ add_bridge_mappings(struct controller_ctx *ctx,
 
 static void
 add_patched_datapath(struct hmap *patched_datapaths,
-                     const struct sbrec_port_binding *binding_rec)
+                     const struct sbrec_port_binding *binding_rec, bool local)
 {
     if (get_patched_datapath(patched_datapaths,
                              binding_rec->datapath->tunnel_key)) {
@@ -238,6 +238,8 @@ add_patched_datapath(struct hmap *patched_datapaths,
     }
 
     struct patched_datapath *pd = xzalloc(sizeof *pd);
+    pd->local = local;
+    pd->port_binding = binding_rec;
     hmap_insert(patched_datapaths, &pd->hmap_node,
                 binding_rec->datapath->tunnel_key);
 }
@@ -267,12 +269,28 @@ add_patched_datapath(struct hmap *patched_datapaths,
 static void
 add_logical_patch_ports(struct controller_ctx *ctx,
                         const struct ovsrec_bridge *br_int,
+                        const char *local_chassis_id,
                         struct shash *existing_ports,
                         struct hmap *patched_datapaths)
 {
+    const struct sbrec_chassis *chassis_rec;
+    chassis_rec = get_chassis(ctx->ovnsb_idl, local_chassis_id);
+    if (!chassis_rec) {
+        return;
+    }
+
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
-        if (!strcmp(binding->type, "patch")) {
+        bool local_port = false;
+        if (!strcmp(binding->type, "gateway")) {
+            const char *chassis = smap_get(&binding->options,
+                                           "gateway-chassis");
+            if (!strcmp(local_chassis_id, chassis)) {
+                local_port = true;
+            }
+        }
+
+        if (!strcmp(binding->type, "patch") || local_port) {
             const char *local = binding->logical_port;
             const char *peer = smap_get(&binding->options, "peer");
             if (!peer) {
@@ -286,14 +304,20 @@ add_logical_patch_ports(struct controller_ctx *ctx,
                               existing_ports);
             free(dst_name);
             free(src_name);
-            add_patched_datapath(patched_datapaths, binding);
+            add_patched_datapath(patched_datapaths, binding, local_port);
+            if (local_port) {
+                if (binding->chassis != chassis_rec && ctx->ovnsb_idl_txn) {
+                    sbrec_port_binding_set_chassis(binding, chassis_rec);
+                }
+            }
         }
     }
 }
 
 void
 patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
-          struct hmap *local_datapaths, struct hmap *patched_datapaths)
+          const char *chassis_id, struct hmap *local_datapaths,
+          struct hmap *patched_datapaths)
 {
     if (!ctx->ovs_idl_txn) {
         return;
@@ -313,7 +337,8 @@ patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
      * 'existing_ports' any patch ports that do exist in the database and
      * should be there. */
     add_bridge_mappings(ctx, br_int, &existing_ports, local_datapaths);
-    add_logical_patch_ports(ctx, br_int, &existing_ports, patched_datapaths);
+    add_logical_patch_ports(ctx, br_int, chassis_id, &existing_ports,
+                            patched_datapaths);
 
     /* Now 'existing_ports' only still contains patch ports that exist in the
      * database but shouldn't.  Delete them from the database. */

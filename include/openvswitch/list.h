@@ -39,9 +39,6 @@ struct ovs_list {
 static const struct ovs_list OVS_LIST_POISON =
     { (struct ovs_list *) (UINTPTR_MAX / 0xf * 0xc),
       (struct ovs_list *) (UINTPTR_MAX / 0xf * 0xc) };
-#define OVS_LIST_POISON \
-(struct ovs_list) { (struct ovs_list *) (uintptr_t) 0xccccccccccccccccULL, \
-                    (struct ovs_list *) (uintptr_t) 0xccccccccccccccccULL }
 
 static inline void ovs_list_init(struct ovs_list *);
 static inline void ovs_list_poison(struct ovs_list *);

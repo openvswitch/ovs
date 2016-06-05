@@ -620,13 +620,18 @@
     <group title="Core Features">
       <column name="name">
         <p>
-          Bridge identifier.  Should be alphanumeric and no more than about 8
-          bytes long.  Must be unique among the names of ports, interfaces, and
-          bridges on a host.
+          Bridge identifier.  Must be unique among the names of ports,
+          interfaces, and bridges on a host.
         </p>
 
         <p>
-          Forward and backward slashes are prohibited in bridge names.
+          The name must be alphanumeric and must not contain forward or
+          backward slashes.  The name of a bridge is also the name of an <ref
+          table="Interface"/> (and a <ref table="Port"/>) within the bridge, so
+          the restrictions on the <ref table="Interface" column="name"/> column
+          in the <ref table="Interface"/> table, particularly on length, also
+          apply to bridge names.  Refer to the documentation for <ref
+          table="Interface"/> names for details.
         </p>
       </column>
 
@@ -1241,10 +1246,13 @@
     part of the port's <ref table="Interface"/> members.</p>
 
     <column name="name">
-      Port name.  Should be alphanumeric and no more than about 8
-      bytes long.  May be the same as the interface name, for
-      non-bonded ports.  Must otherwise be unique among the names of
-      ports, interfaces, and bridges on a host.
+      Port name.  For a non-bonded port, this should be the same as its
+      interface's name.  Port names must otherwise be unique among the names of
+      ports, interfaces, and bridges on a host.  Because port and interfaces
+      names are usually the same, the restrictions on the <ref
+      table="Interface" column="name"/> column in the <ref table="Interface"/>
+      table, particularly on length, also apply to port names.  Refer to the
+      documentation for <ref table="Interface"/> names for details.
     </column>
 
     <column name="interfaces">
@@ -1839,10 +1847,37 @@
 
     <group title="Core Features">
       <column name="name">
-        Interface name.  Should be alphanumeric and no more than about 8 bytes
-        long.  May be the same as the port name, for non-bonded ports.  Must
-        otherwise be unique among the names of ports, interfaces, and bridges
-        on a host.
+        <p>
+          Interface name.  Should be alphanumeric.  For non-bonded port, this
+          should be the same as the port name.  It must otherwise be unique
+          among the names of ports, interfaces, and bridges on a host.
+        </p>
+
+        <p>
+          The maximum length of an interface name depends on the underlying
+          datapath:
+        </p>
+
+        <ul>
+          <li>
+            The names of interfaces implemented as Linux and BSD network
+            devices, including interfaces with type <code>internal</code>,
+            <code>tap</code>, or <code>system</code>, are limited to 15 bytes.
+            Windows limits these names to 255 bytes.
+          </li>
+
+          <li>
+            The names of tunnels and patch ports are not used in the underlying
+            datapath, so operating system restrictions do not apply.  Thus,
+            they may have arbitrary length.
+          </li>
+        </ul>
+
+        <p>
+          Regardless of other restrictions, OpenFlow only supports 15-byte
+          names, which means that <code>ovs-ofctl</code> and OpenFlow
+          controllers will show names truncated to 15 bytes.
+        </p>
       </column>
 
       <column name="ifindex">
@@ -2502,8 +2537,8 @@
         table="Queue"/> tables).
       </p>
       <p>
-        Policing is currently implemented only on Linux.  The Linux
-        implementation uses a simple ``token bucket'' approach:
+        Policing is currently implemented on Linux and OVS with DPDK. Both
+        implementations use a simple ``token bucket'' approach:
       </p>
       <ul>
         <li>

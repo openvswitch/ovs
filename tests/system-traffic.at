@@ -2311,3 +2311,175 @@ tcp,orig=(src=fc00::2,dst=fc00::240,sport=<cleared>,dport=<cleared>),reply=(src=
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([conntrack - DNAT load balancing])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns1, at_ns2, at_ns3, at_ns4)
+
+ADD_VETH(p1, at_ns1, br0, "10.1.1.1/24")
+ADD_VETH(p2, at_ns2, br0, "10.1.1.2/24")
+ADD_VETH(p3, at_ns3, br0, "10.1.1.3/24")
+ADD_VETH(p4, at_ns4, br0, "10.1.1.4/24")
+NS_CHECK_EXEC([at_ns1], [ip link set dev p1 address 80:88:88:88:88:11])
+NS_CHECK_EXEC([at_ns2], [ip link set dev p2 address 80:88:88:88:88:22])
+NS_CHECK_EXEC([at_ns3], [ip link set dev p3 address 80:88:88:88:88:33])
+NS_CHECK_EXEC([at_ns4], [ip link set dev p4 address 80:88:88:88:88:44])
+
+dnl Select group for load balancing.  One bucket per server.  Each bucket
+dnl tracks and NATs the connection and recirculates to table 4 for egress
+dnl routing.  Packets of existing connections are always NATted based on
+dnl connection state, only new connections are NATted according to the
+dnl specific NAT parameters in each bucket.
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-group br0 "group_id=234,type=select,bucket=weight=100,ct(nat(dst=10.1.1.2),commit,table=4),bucket=weight=100,ct(nat(dst=10.1.1.3),commit,table=4),bucket=weight=100,ct(nat(dst=10.1.1.4),commit,table=4)"])
+
+AT_DATA([flows.txt], [dnl
+dnl Track connections to the virtual IP address.
+table=0 priority=100 ip nw_dst=10.1.1.64 action=group:234
+dnl All other IP traffic is allowed but the connection state is no commited.
+table=0 priority=90 ip action=ct(table=4,nat)
+dnl
+dnl Allow ARP, but generate responses for virtual addresses
+table=0 priority=100 arp arp_op=1 action=move:OXM_OF_ARP_TPA[[]]->NXM_NX_REG2[[]],resubmit(,8),goto_table:10
+table=0 priority=10 arp action=normal
+table=0 priority=0 action=drop
+dnl
+dnl Routing table
+dnl
+table=4,ip,nw_dst=10.1.1.1 action=mod_dl_dst:80:88:88:88:88:11,output:1
+table=4,ip,nw_dst=10.1.1.2 action=mod_dl_dst:80:88:88:88:88:22,output:2
+table=4,ip,nw_dst=10.1.1.3 action=mod_dl_dst:80:88:88:88:88:33,output:3
+table=4,ip,nw_dst=10.1.1.4 action=mod_dl_dst:80:88:88:88:88:44,output:4
+table=4 priority=0 action=drop
+dnl
+dnl MAC resolution table for IP in reg2, stores mac in OXM_OF_PKT_REG0
+table=8,reg2=0x0a010140,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
+dnl Zero result means not found.
+table=8,priority=0,action=load:0->OXM_OF_PKT_REG0[[]]
+dnl ARP responder mac filled in at OXM_OF_PKT_REG0, or 0 for normal action.
+dnl TPA IP in reg2.
+table=10 priority=100 arp xreg0=0 action=normal
+dnl Swaps the fields of the ARP message to turn a query to a response.
+table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
+table=10 priority=0 action=controller
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Start web servers
+NETNS_DAEMONIZE([at_ns2], [[$PYTHON $srcdir/test-l7.py]], [http2.pid])
+NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http3.pid])
+NETNS_DAEMONIZE([at_ns4], [[$PYTHON $srcdir/test-l7.py]], [http4.pid])
+
+on_exit 'ovs-ofctl -O OpenFlow15 dump-flows br0'
+on_exit 'ovs-appctl revalidator/purge'
+on_exit 'ovs-appctl dpif/dump-flows br0'
+
+dnl Should work with the virtual IP address through NAT
+for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    echo Request $i
+    NS_CHECK_EXEC([at_ns1], [wget 10.1.1.64 -t 5 -T 1 --retry-connrefused -v -o wget$i.log])
+done
+
+dnl Each server should have at least one connection.
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.64) | grep -v "FIN" | grep -v "CLOS"], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.64,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.64,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.3,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.64,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
+])
+
+ovs-appctl dpif/dump-flows br0
+ovs-appctl revalidator/purge
+ovs-ofctl -O OpenFlow15 dump-flows br0
+ovs-ofctl -O OpenFlow15 dump-group-stats br0
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([conntrack - DNAT load balancing with NC])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns1, at_ns2, at_ns3, at_ns4, at_ns5)
+
+ADD_VETH(p1, at_ns1, br0, "10.1.1.1/24")
+ADD_VETH(p2, at_ns2, br0, "10.1.1.2/24")
+ADD_VETH(p3, at_ns3, br0, "10.1.1.3/24")
+ADD_VETH(p4, at_ns4, br0, "10.1.1.4/24")
+ADD_VETH(p5, at_ns5, br0, "10.1.1.5/24")
+NS_CHECK_EXEC([at_ns1], [ip link set dev p1 address 80:88:88:88:88:11])
+NS_CHECK_EXEC([at_ns2], [ip link set dev p2 address 80:88:88:88:88:22])
+NS_CHECK_EXEC([at_ns3], [ip link set dev p3 address 80:88:88:88:88:33])
+NS_CHECK_EXEC([at_ns4], [ip link set dev p4 address 80:88:88:88:88:44])
+NS_CHECK_EXEC([at_ns5], [ip link set dev p5 address 80:88:88:88:88:55])
+
+dnl Select group for load balancing.  One bucket per server.  Each bucket
+dnl tracks and NATs the connection and recirculates to table 4 for egress
+dnl routing.  Packets of existing connections are always NATted based on
+dnl connection state, only new connections are NATted according to the
+dnl specific NAT parameters in each bucket.
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-group br0 "group_id=234,type=select,bucket=weight=100,ct(nat(dst=10.1.1.2),commit,table=4),bucket=weight=100,ct(nat(dst=10.1.1.3),commit,table=4),bucket=weight=100,ct(nat(dst=10.1.1.4),commit,table=4)"])
+
+AT_DATA([flows.txt], [dnl
+dnl Track connections to the virtual IP address.
+table=0 priority=100 ip nw_dst=10.1.1.64 action=group:234
+dnl All other IP traffic is allowed but the connection state is no commited.
+table=0 priority=90 ip action=ct(table=4,nat)
+dnl
+dnl Allow ARP, but generate responses for virtual addresses
+table=0 priority=100 arp arp_op=1 action=move:OXM_OF_ARP_TPA[[]]->NXM_NX_REG2[[]],resubmit(,8),goto_table:10
+table=0 priority=10 arp action=normal
+table=0 priority=0 action=drop
+dnl
+dnl Routing table
+dnl
+table=4,ip,nw_dst=10.1.1.1 action=mod_dl_dst:80:88:88:88:88:11,output:1
+table=4,ip,nw_dst=10.1.1.2 action=mod_dl_dst:80:88:88:88:88:22,output:2
+table=4,ip,nw_dst=10.1.1.3 action=mod_dl_dst:80:88:88:88:88:33,output:3
+table=4,ip,nw_dst=10.1.1.4 action=mod_dl_dst:80:88:88:88:88:44,output:4
+table=4,ip,nw_dst=10.1.1.5 action=mod_dl_dst:80:88:88:88:88:55,output:5
+table=4 priority=0 action=drop
+dnl
+dnl MAC resolution table for IP in reg2, stores mac in OXM_OF_PKT_REG0
+table=8,reg2=0x0a010140,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
+dnl Zero result means not found.
+table=8,priority=0,action=load:0->OXM_OF_PKT_REG0[[]]
+dnl ARP responder mac filled in at OXM_OF_PKT_REG0, or 0 for normal action.
+dnl TPA IP in reg2.
+table=10 priority=100 arp xreg0=0 action=normal
+dnl Swaps the fields of the ARP message to turn a query to a response.
+table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
+table=10 priority=0 action=controller
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Start web servers
+NETNS_DAEMONIZE([at_ns2], [[$PYTHON $srcdir/test-l7.py]], [http2.pid])
+NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http3.pid])
+NETNS_DAEMONIZE([at_ns4], [[$PYTHON $srcdir/test-l7.py]], [http4.pid])
+
+on_exit 'ovs-ofctl -O OpenFlow15 dump-flows br0'
+on_exit 'ovs-appctl revalidator/purge'
+on_exit 'ovs-appctl dpif/dump-flows br0'
+
+sleep 5
+
+dnl Should work with the virtual IP address through NAT
+for i in 1 2 3 4 5 6 7 8 9; do
+    echo Request $i
+    NS_CHECK_EXEC([at_ns1], [echo "TEST1" | nc -p 4100$i 10.1.1.64 80 > nc-1-$i.log])
+    NS_CHECK_EXEC([at_ns5], [echo "TEST5" | nc -p 4100$i 10.1.1.64 80 > nc-5-$i.log])
+done
+
+conntrack -L 2>&1
+
+ovs-appctl dpif/dump-flows br0
+ovs-appctl revalidator/purge
+ovs-ofctl -O OpenFlow15 dump-flows br0
+ovs-ofctl -O OpenFlow15 dump-group-stats br0
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
