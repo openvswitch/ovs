@@ -2320,6 +2320,10 @@ echo "---------------------"
 echo "------ hv1 dump ----------"
 as hv1 ovs-ofctl dump-flows br-int
 
+# Allow some time for the disabling of logical router R1 to propagate.
+# XXX This should be more systematic.
+sleep 1
+
 as hv1 ovs-appctl netdev-dummy/receive vif1 $packet
 
 # Packet to Expect
