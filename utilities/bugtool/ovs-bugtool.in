@@ -288,7 +288,10 @@ def file_output(cap, path_list, newest_first=False, last_mod_time=None):
             if last_mod_time is None or s.st_mtime >= last_mod_time:
                 path_entries.append((path, s))
 
-        mtime = lambda(path, stat): stat.st_mtime
+        def mtime(arg):
+            (path, stat) = arg
+            return stat.st_mtime
+
         path_entries.sort(key=mtime, reverse=newest_first)
         for p in path_entries:
             if check_space(cap, p[0], p[1].st_size):
