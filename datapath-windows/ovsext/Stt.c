@@ -647,6 +647,9 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         NdisMoveMemory(&entry->ovsPktKey, &pktKey, sizeof (OVS_STT_PKT_KEY));
 
         entry->recvdLen = fragmentLength;
+        if (ipHdr->ecn == IP_ECN_CE) {
+            entry->ecn = IP_ECN_CE;
+        }
 
         UINT64 currentTime;
         NdisGetCurrentSystemTime((LARGE_INTEGER *) &currentTime);
@@ -681,6 +684,9 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         if (segOffset == 0) {
             pktFragEntry->sttHdr = *sttHdr;
         }
+        if (ipHdr->ecn == IP_ECN_CE) {
+            pktFragEntry->ecn = IP_ECN_CE;
+        }
 
         /* Copy the fragment data from Source to existing buffer */
         if (OvsGetPacketBytes(curNbl, fragmentLength, startOffset,
@@ -692,6 +698,14 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
 
 handle_error:
     if (lastPacket) {
+        /* It is RECOMMENDED that if any segment of the received STT
+        *  frame has the CE (congestion experienced) bit set
+        *  in its IP header, then the CE bit SHOULD be set in the IP
+        *  header of the decapsulated STT frame.*/
+        if (pktFragEntry->ecn == IP_ECN_CE) {
+            ipHdr->ecn = IP_ECN_CE;
+        }
+
         /* Retrieve the original STT header */
         NdisMoveMemory(newSttHdr, &pktFragEntry->sttHdr, sizeof (SttHdr));
         targetPNbl = OvsAllocateNBLFromBuffer(switchContext,
@@ -723,7 +737,9 @@ handle_error:
 *----------------------------------------------------------------------------
 */
 NDIS_STATUS
-OvsDecapSetOffloads(PNET_BUFFER_LIST *curNbl, SttHdr *sttHdr)
+OvsDecapSetOffloads(PNET_BUFFER_LIST *curNbl, 
+                    SttHdr *sttHdr,
+                    OVS_PACKET_HDR_INFO *layers)
 {
     if ((sttHdr->flags & STT_CSUM_VERIFIED)
         || !(sttHdr->flags & STT_CSUM_PARTIAL)) {
@@ -767,11 +783,13 @@ OvsDecapSetOffloads(PNET_BUFFER_LIST *curNbl, SttHdr *sttHdr)
         PMDL curMdl = NULL;
         PNET_BUFFER curNb;
         PUINT8 buf = NULL;
-        OVS_PACKET_HDR_INFO layers;
 
-        status = OvsExtractLayers(*curNbl, &layers);
-        if (status != NDIS_STATUS_SUCCESS) {
-            return status;
+        // if layers not initialized by the caller we extract layers here
+        if (layers->value == 0) {
+            status = OvsExtractLayers(*curNbl, layers);
+            if (status != NDIS_STATUS_SUCCESS) {
+                return status;
+            }
         }
 
         curNb = NET_BUFFER_LIST_FIRST_NB(*curNbl);
@@ -786,8 +804,8 @@ OvsDecapSetOffloads(PNET_BUFFER_LIST *curNbl, SttHdr *sttHdr)
             IPHdr *ipHdr;
             TCPHdr *tcpHdr;
 
-            ipHdr = (IPHdr *)(buf + layers.l3Offset);
-            tcpHdr = (TCPHdr *)(buf + layers.l4Offset);
+            ipHdr = (IPHdr *)(buf + layers->l3Offset);
+            tcpHdr = (TCPHdr *)(buf + layers->l4Offset);
 
             tcpHdr->check = IPPseudoChecksum(&ipHdr->saddr,
                                                 (uint32 *)&ipHdr->daddr,
@@ -796,8 +814,8 @@ OvsDecapSetOffloads(PNET_BUFFER_LIST *curNbl, SttHdr *sttHdr)
             IPv6Hdr *ipHdr;
             TCPHdr *tcpHdr;
 
-            ipHdr = (IPv6Hdr *)(buf + layers.l3Offset);
-            tcpHdr = (TCPHdr *)(buf + layers.l4Offset);
+            ipHdr = (IPv6Hdr *)(buf + layers->l3Offset);
+            tcpHdr = (TCPHdr *)(buf + layers->l4Offset);
 
             tcpHdr->check = IPv6PseudoChecksum((UINT32*)&ipHdr->saddr,
                                         (UINT32*)&ipHdr->daddr,
@@ -919,6 +937,53 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     tunKey->ttl = ipHdr->ttl;
     tunKey->pad = 0;
 
+    /* Handle ECN */
+    OVS_PACKET_HDR_INFO layers = {0};
+    if (0 != ipHdr->tos) {
+        status = OvsExtractLayers(*newNbl, &layers);
+        if (status != NDIS_STATUS_SUCCESS) {
+            OvsCompleteNBL(switchContext, *newNbl, TRUE);
+            return NDIS_STATUS_FAILURE;
+        }
+
+        if (layers.isIPv4) {
+            IPHdr ip_storage;
+            IPHdr *innerIpHdr;
+
+            /*
+            *  If CE is set for outer IP header, reset ECN of inner IP
+            *  header to CE, all other values are kept the same
+            */
+            innerIpHdr = (IPHdr*)OvsGetIp(*newNbl,
+                                          layers.l3Offset,
+                                          &ip_storage);
+            if (innerIpHdr) {
+                if (ipHdr->ecn == IP_ECN_CE) {
+                        innerIpHdr->ecn |= IP_ECN_CE;
+                }
+                /* copy DSCP from outer header to inner header */
+                innerIpHdr->dscp = ipHdr->dscp;
+                /* fix IP checksum */
+                innerIpHdr->check = IPChecksum((UINT8 *)innerIpHdr,
+                                                innerIpHdr->ihl * 4, 0);
+            }
+        } else if (layers.isIPv6) {
+            IPv6Hdr ipv6_storage;
+            IPv6Hdr *innerIpv6Hdr = (IPv6Hdr*)OvsGetPacketBytes(
+                                                      *newNbl,
+                                                      sizeof *innerIpv6Hdr,
+                                                      layers.l3Offset,
+                                                      &ipv6_storage);
+            if (innerIpv6Hdr) {
+                /* copy ECN and DSCN to inner header */
+                innerIpv6Hdr->priority = ipHdr->ecn
+                                    | ((innerIpv6Hdr->flow_lbl[0] & 0x3) << 2);
+                innerIpv6Hdr->flow_lbl[0] = (innerIpv6Hdr->flow_lbl[0] & 0xF)
+                                             | ((ipHdr->tos & 0xF) << 4);
+            }
+        }
+    }
+
     /* Apply VLAN tag if present */
     if (ntohs(sttHdr->vlanTCI) & OVSWIN_VLAN_CFI) {
         NDIS_NET_BUFFER_LIST_8021Q_INFO vlanTag;
@@ -930,7 +995,7 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     }
 
     /* Set Checksum and LSO offload flags */
-    OvsDecapSetOffloads(newNbl, sttHdr);
+    OvsDecapSetOffloads(newNbl, sttHdr, &layers);
 
     return NDIS_STATUS_SUCCESS;
 }
