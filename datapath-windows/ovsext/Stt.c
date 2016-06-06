@@ -156,6 +156,7 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
     PUINT8 bufferStart;
     ULONG mss = 0;
     NDIS_TCP_LARGE_SEND_OFFLOAD_NET_BUFFER_LIST_INFO lsoInfo;
+    PVOID vlanTagValue;
 
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
 
@@ -173,6 +174,7 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
     NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
     csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
                                           TcpIpChecksumNetBufferListInfo);
+    vlanTagValue = NET_BUFFER_LIST_INFO(curNbl, Ieee8021QNetBufferListInfo);
     *newNbl = OvsPartialCopyNBL(switchContext, curNbl, 0, headRoom,
                                 FALSE /*copy NblInfo*/);
     if (*newNbl == NULL) {
@@ -310,8 +312,16 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
         sttHdr->mss = 0;
     }
 
-    sttHdr->reserved = 0;
+    /* Set VLAN tag */
     sttHdr->vlanTCI = 0;
+    if (vlanTagValue) {
+        PNDIS_NET_BUFFER_LIST_8021Q_INFO vlanTag =
+            (PNDIS_NET_BUFFER_LIST_8021Q_INFO)(PVOID *)&vlanTagValue;
+        sttHdr->vlanTCI = htons(vlanTag->TagHeader.VlanId | OVSWIN_VLAN_CFI |
+                                (vlanTag->TagHeader.UserPriority << 13));
+    }
+
+    sttHdr->reserved = 0;
     sttHdr->key = tunKey->tunnelId;
     /* Zero out stt padding */
     *(uint16 *)(sttHdr + 1) = 0;
@@ -898,6 +908,16 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     tunKey->tos = ipHdr->tos;
     tunKey->ttl = ipHdr->ttl;
     tunKey->pad = 0;
+
+    /* Apply VLAN tag if present */
+    if (ntohs(sttHdr->vlanTCI) & OVSWIN_VLAN_CFI) {
+        NDIS_NET_BUFFER_LIST_8021Q_INFO vlanTag;
+        vlanTag.Value = 0;
+        vlanTag.TagHeader.VlanId = ntohs(sttHdr->vlanTCI) & 0xfff;
+        vlanTag.TagHeader.UserPriority = ntohs(sttHdr->vlanTCI) >> 13;
+        NET_BUFFER_LIST_INFO(*newNbl,
+            Ieee8021QNetBufferListInfo) = vlanTag.Value;
+    }
 
     /* Set Checksum and LSO offload flags */
     OvsDecapSetOffloads(newNbl, sttHdr);
