@@ -84,14 +84,13 @@ OvsGetPacketBytes(const NET_BUFFER_LIST *nbl,
 
 NDIS_STATUS
 OvsParseIPv6(const NET_BUFFER_LIST *packet,
-             OvsFlowKey *key,
+             Ipv6Key *ipv6Key,
              POVS_PACKET_HDR_INFO layers)
 {
     UINT16 ofs = layers->l3Offset;
     IPv6Hdr ipv6HdrStorage;
     const IPv6Hdr *nh;
     UINT32 nextHdr;
-    Ipv6Key *flow= &key->ipv6Key;
 
     nh = OvsGetPacketBytes(packet, sizeof *nh, ofs, &ipv6HdrStorage);
     if (!nh) {
@@ -99,15 +98,15 @@ OvsParseIPv6(const NET_BUFFER_LIST *packet,
     }
 
     nextHdr = nh->nexthdr;
-    memcpy(&flow->ipv6Src, nh->saddr.s6_addr, 16);
-    memcpy(&flow->ipv6Dst, nh->daddr.s6_addr, 16);
+    RtlCopyMemory(&ipv6Key->ipv6Src, nh->saddr.s6_addr, 16);
+    RtlCopyMemory(&ipv6Key->ipv6Dst, nh->daddr.s6_addr, 16);
 
-    flow->nwTos = ((nh->flow_lbl[0] & 0xF0) >> 4) | (nh->priority << 4);
-    flow->ipv6Label =
+    ipv6Key->nwTos = ((nh->flow_lbl[0] & 0xF0) >> 4) | (nh->priority << 4);
+    ipv6Key->ipv6Label =
         ((nh->flow_lbl[0] & 0x0F) << 16) | (nh->flow_lbl[1] << 8) | nh->flow_lbl[2];
-    flow->nwTtl = nh->hop_limit;
-    flow->nwProto = SOCKET_IPPROTO_NONE;
-    flow->nwFrag = OVS_FRAG_TYPE_NONE;
+    ipv6Key->nwTtl = nh->hop_limit;
+    ipv6Key->nwProto = SOCKET_IPPROTO_NONE;
+    ipv6Key->nwFrag = OVS_FRAG_TYPE_NONE;
 
     // Parse extended headers and compute L4 offset
     ofs += sizeof(IPv6Hdr);
@@ -160,9 +159,9 @@ OvsParseIPv6(const NET_BUFFER_LIST *packet,
             /* We only process the first fragment. */
             if (fragHdr->offlg != htons(0)) {
                 if ((fragHdr->offlg & IP6F_OFF_HOST_ORDER_MASK) == htons(0)) {
-                    flow->nwFrag = OVS_FRAG_TYPE_FIRST;
+                    ipv6Key->nwFrag = OVS_FRAG_TYPE_FIRST;
                 } else {
-                    flow->nwFrag = OVS_FRAG_TYPE_LATER;
+                    ipv6Key->nwFrag = OVS_FRAG_TYPE_LATER;
                     nextHdr = SOCKET_IPPROTO_FRAGMENT;
                     break;
                 }
@@ -170,7 +169,7 @@ OvsParseIPv6(const NET_BUFFER_LIST *packet,
         }
     }
 
-    flow->nwProto = (UINT8)nextHdr;
+    ipv6Key->nwProto = (UINT8)nextHdr;
     layers->l4Offset = ofs;
     return NDIS_STATUS_SUCCESS;
 }
@@ -183,10 +182,14 @@ OvsParseTcp(const NET_BUFFER_LIST *packet,
     TCPHdr tcpStorage;
     const TCPHdr *tcp = OvsGetTcp(packet, layers->l4Offset, &tcpStorage);
     if (tcp) {
-        flow->tpSrc = tcp->source;
-        flow->tpDst = tcp->dest;
-        layers->isTcp = 1;
-        layers->l7Offset = layers->l4Offset + 4 * tcp->doff;
+        if (flow) {
+            flow->tpSrc = tcp->source;
+            flow->tpDst = tcp->dest;
+        }
+        if (layers) {
+            layers->isTcp = 1;
+            layers->l7Offset = layers->l4Offset + 4 * tcp->doff;
+        }
     }
 }
 
@@ -198,10 +201,14 @@ OvsParseSctp(const NET_BUFFER_LIST *packet,
     SCTPHdr sctpStorage;
     const SCTPHdr *sctp = OvsGetSctp(packet, layers->l4Offset, &sctpStorage);
     if (sctp) {
-        flow->tpSrc = sctp->source;
-        flow->tpDst = sctp->dest;
-        layers->isSctp = 1;
-        layers->l7Offset = layers->l4Offset + sizeof *sctp;
+        if (flow) {
+            flow->tpSrc = sctp->source;
+            flow->tpDst = sctp->dest;
+        }
+        if (layers) {
+            layers->isSctp = 1;
+            layers->l7Offset = layers->l4Offset + sizeof *sctp;
+        }
     }
 }
 
@@ -213,29 +220,33 @@ OvsParseUdp(const NET_BUFFER_LIST *packet,
     UDPHdr udpStorage;
     const UDPHdr *udp = OvsGetUdp(packet, layers->l4Offset, &udpStorage);
     if (udp) {
-        flow->tpSrc = udp->source;
-        flow->tpDst = udp->dest;
-        layers->isUdp = 1;
-        if (udp->check == 0) {
-            layers->udpCsumZero = 1;
+        if (flow) {
+            flow->tpSrc = udp->source;
+            flow->tpDst = udp->dest;
         }
-        layers->l7Offset = layers->l4Offset + sizeof *udp;
+        if (layers) {
+            layers->isUdp = 1;
+            if (udp->check == 0) {
+                layers->udpCsumZero = 1;
+            }
+            layers->l7Offset = layers->l4Offset + sizeof *udp;
+        }
     }
 }
 
 NDIS_STATUS
 OvsParseIcmpV6(const NET_BUFFER_LIST *packet,
-            OvsFlowKey *key,
-            POVS_PACKET_HDR_INFO layers)
+               Ipv6Key *ipv6Key,
+               Icmp6Key *icmp6Key,
+               POVS_PACKET_HDR_INFO layers)
 {
     UINT16 ofs = layers->l4Offset;
     ICMPHdr icmpStorage;
     const ICMPHdr *icmp;
-    Icmp6Key *flow = &key->icmp6Key;
 
-    memset(&flow->ndTarget, 0, sizeof(flow->ndTarget));
-    memset(flow->arpSha, 0, sizeof(flow->arpSha));
-    memset(flow->arpTha, 0, sizeof(flow->arpTha));
+    memset(&icmp6Key->ndTarget, 0, sizeof(icmp6Key->ndTarget));
+    memset(icmp6Key->arpSha, 0, sizeof(icmp6Key->arpSha));
+    memset(icmp6Key->arpTha, 0, sizeof(icmp6Key->arpTha));
 
     icmp = OvsGetIcmp(packet, ofs, &icmpStorage);
     if (!icmp) {
@@ -247,8 +258,10 @@ OvsParseIcmpV6(const NET_BUFFER_LIST *packet,
      * The ICMPv6 type and code fields use the 16-bit transport port
      * fields, so we need to store them in 16-bit network byte order.
      */
-    key->ipv6Key.l4.tpSrc = htons(icmp->type);
-    key->ipv6Key.l4.tpDst = htons(icmp->code);
+    if (ipv6Key) {
+        ipv6Key->l4.tpSrc = htons(icmp->type);
+        ipv6Key->l4.tpDst = htons(icmp->code);
+    }
 
     if (icmp->code == 0 &&
         (icmp->type == ND_NEIGHBOR_SOLICIT ||
@@ -261,7 +274,7 @@ OvsParseIcmpV6(const NET_BUFFER_LIST *packet,
         if (!ndTarget) {
             return NDIS_STATUS_FAILURE;
         }
-        flow->ndTarget = *ndTarget;
+        icmp6Key->ndTarget = *ndTarget;
 
         while ((UINT32)(ofs + 8) <= OvsPacketLenNBL(packet)) {
             /*
@@ -288,14 +301,14 @@ OvsParseIcmpV6(const NET_BUFFER_LIST *packet,
              * layer option is specified twice.
              */
             if (ndOpt->type == ND_OPT_SOURCE_LINKADDR && optLen == 8) {
-                if (Eth_IsNullAddr(flow->arpSha)) {
-                    memcpy(flow->arpSha, ndOpt + 1, ETH_ADDR_LENGTH);
+                if (Eth_IsNullAddr(icmp6Key->arpSha)) {
+                    memcpy(icmp6Key->arpSha, ndOpt + 1, ETH_ADDR_LENGTH);
                 } else {
                     goto invalid;
                 }
             } else if (ndOpt->type == ND_OPT_TARGET_LINKADDR && optLen == 8) {
-                if (Eth_IsNullAddr(flow->arpTha)) {
-                    memcpy(flow->arpTha, ndOpt + 1, ETH_ADDR_LENGTH);
+                if (Eth_IsNullAddr(icmp6Key->arpTha)) {
+                    memcpy(icmp6Key->arpTha, ndOpt + 1, ETH_ADDR_LENGTH);
                 } else {
                     goto invalid;
                 }
@@ -309,9 +322,9 @@ OvsParseIcmpV6(const NET_BUFFER_LIST *packet,
     return NDIS_STATUS_SUCCESS;
 
 invalid:
-    memset(&flow->ndTarget, 0, sizeof(flow->ndTarget));
-    memset(flow->arpSha, 0, sizeof(flow->arpSha));
-    memset(flow->arpTha, 0, sizeof(flow->arpTha));
+    RtlZeroMemory(&icmp6Key->ndTarget, sizeof(icmp6Key->ndTarget));
+    RtlZeroMemory(icmp6Key->arpSha, sizeof(icmp6Key->arpSha));
+    RtlZeroMemory(icmp6Key->arpTha, sizeof(icmp6Key->arpTha));
 
     return NDIS_STATUS_FAILURE;
 }

@@ -53,6 +53,8 @@ NDIS_STATUS OvsAllocateFlowTable(OVS_DATAPATH *datapath,
 
 NDIS_STATUS OvsGetFlowMetadata(OvsFlowKey *key,
                                PNL_ATTR *keyAttrs);
+NDIS_STATUS OvsExtractLayers(const NET_BUFFER_LIST *packet,
+                             POVS_PACKET_HDR_INFO layers);
 NDIS_STATUS OvsExtractFlow(const NET_BUFFER_LIST *pkt, UINT32 inPort,
                            OvsFlowKey *flow, POVS_PACKET_HDR_INFO layers,
                            OvsIPv4TunnelKey *tunKey);
