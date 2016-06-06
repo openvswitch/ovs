@@ -334,7 +334,7 @@ def collect_data():
         cap = v['cap']
         if 'cmd_args' in v:
             v['output'] = StringIOmtime()
-            if not cap in process_lists:
+            if cap not in process_lists:
                 process_lists[cap] = []
             process_lists[cap].append(
                 ProcOutput(v['cmd_args'], caps[cap][MAX_TIME], v['output'],
@@ -824,7 +824,7 @@ def fd_usage(cap):
             name = fh.readline()
             num_fds = len(os.listdir(os.path.join('/proc/' + d + '/fd')))
             if num_fds > 0:
-                if not num_fds in fd_dict:
+                if num_fds not in fd_dict:
                     fd_dict[num_fds] = []
                 fd_dict[num_fds].append(name.replace('\0', ' ').strip())
         finally:
@@ -873,7 +873,7 @@ def load_plugins(just_capabilities=False, filter=None):
 
     for dir in [d for d in os.listdir(PLUGIN_DIR)
                 if os.path.isdir(os.path.join(PLUGIN_DIR, d))]:
-        if not dir in caps:
+        if dir not in caps:
             if not os.path.exists("%s/%s.xml" % (PLUGIN_DIR, dir)):
                 continue
             xmldoc = parse("%s/%s.xml" % (PLUGIN_DIR, dir))
