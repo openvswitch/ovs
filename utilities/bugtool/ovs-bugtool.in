@@ -283,7 +283,7 @@ def file_output(cap, path_list, newest_first=False, last_mod_time=None):
         for path in path_list:
             try:
                 s = os.stat(path)
-            except OSError, e:
+            except OSError:
                 continue
             if last_mod_time is None or s.st_mtime >= last_mod_time:
                 path_entries.append((path, s))
@@ -324,7 +324,6 @@ def prefix_output(cap, prefix, newest_first=False, last_mod_time=None):
 
 def func_output(cap, label, func):
     if cap in entries:
-        t = str(func).split()
         data[label] = {'cap': cap, 'func': func}
 
 
@@ -804,7 +803,7 @@ def collect_ovsdb():
             file_output(CAP_NETWORK_STATUS, [OPENVSWITCH_COMPACT_DB])
         else:
             file_output(CAP_NETWORK_STATUS, [OPENVSWITCH_CONF_DB])
-    except OSError, e:
+    except OSError:
         return
 
 
