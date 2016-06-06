@@ -1279,7 +1279,7 @@ def run_procs(procs):
                     active_procs.append(p)
                     pipes.append(p.proc.stdout)
                     break
-                elif p.status == None and not p.failed and not p.timed_out:
+                elif p.status is None and not p.failed and not p.timed_out:
                     p.run()
                     if p.running:
                         active_procs.append(p)
