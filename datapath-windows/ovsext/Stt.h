@@ -68,6 +68,7 @@ typedef struct _OVS_STT_PKT_ENTRY {
     OVS_STT_PKT_KEY     ovsPktKey;
     UINT64              timeout;
     UINT32              recvdLen;
+    UINT32              allocatedLen;
     SttHdr              sttHdr;
     PCHAR               packetBuf;
     LIST_ENTRY          link;

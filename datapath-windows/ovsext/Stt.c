@@ -612,9 +612,6 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
     SttHdr *sttHdr = NULL;
     sourceNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
 
-    /* XXX optimize this lock */
-    NdisAcquireSpinLock(&OvsSttSpinLock);
-
     /* If this is the first fragment, copy the STT header */
     if (segOffset == 0) {
         sttHdr = NdisGetDataBuffer(sourceNb, sizeof(SttHdr), &stt, 1, 0);
@@ -625,6 +622,14 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         fragmentLength = fragmentLength - STT_HDR_LEN;
         startOffset = startOffset + STT_HDR_LEN;
     }
+
+    if (offset + fragmentLength > innerPacketLen) {
+        // avoid buffer overflow on copy
+        return NULL;
+    }
+
+    /* XXX optimize this lock */
+    NdisAcquireSpinLock(&OvsSttSpinLock);
 
     /* Lookup fragment */
     OVS_STT_PKT_KEY pktKey = OvsGeneratePacketKey(ipHdr, tcp);
@@ -652,6 +657,7 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         }
 
         /* Copy the data from Source to new buffer */
+        entry->allocatedLen = innerPacketLen;
         entry->packetBuf = OvsAllocateMemoryWithTag(innerPacketLen,
                                                     OVS_STT_POOL_TAG);
         if (OvsGetPacketBytes(curNbl, fragmentLength, startOffset,
@@ -664,6 +670,10 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         InsertHeadList(&OvsSttPktFragHash[hash & STT_HASH_TABLE_MASK],
                        &entry->link);
     } else {
+        if (offset + fragmentLength > pktFragEntry->allocatedLen) {
+            // don't copy more than it is allocated
+            goto handle_error;
+        }
         /* Add to recieved length to identify if this is the last fragment */
         pktFragEntry->recvdLen += fragmentLength;
         lastPacket = (pktFragEntry->recvdLen == innerPacketLen);
