@@ -1056,7 +1056,7 @@ A: Yes.  For traffic that egresses from a switch, OVS supports traffic
 
    Keep in mind that ingress and egress are from the perspective of the
    switch.  That means that egress shaping limits the rate at which
-   traffic is allowed to transmit from a physical interface, but the
+   traffic is allowed to transmit from a physical interface, but not the
    rate at which traffic will be received on a virtual machine's VIF.
    For ingress policing, the behavior is the opposite.
 
