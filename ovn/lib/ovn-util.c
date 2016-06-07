@@ -42,8 +42,8 @@ VLOG_DEFINE_THIS_MODULE(ovn_util);
  * returns true with laddrs->n_ipv4_addrs = 1 and laddrs->n_ipv6_addrs = 0.
  */
 bool
-extract_lport_addresses(char *address, struct lport_addresses *laddrs,
-                        bool store_ipv6)
+extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
+                      bool store_ipv6)
 {
     char *buf = address;
     int buf_index = 0;

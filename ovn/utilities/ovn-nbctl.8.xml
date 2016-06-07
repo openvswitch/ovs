@@ -187,8 +187,8 @@
           Port security limits the addresses from which a logical port may send
           packets and to which it may receive packets.  See the
           <code>ovn-nb</code>(5) documentation for the <ref
-          column="port_security" table="Logical_Port"/> column in the <ref
-          table="Logical_Port"/> table for details.
+          column="port_security" table="Logical_Switch_Port"/> column in
+          the <ref table="Logical_Switch_Port"/> table for details.
         </p>
       </dd>
 
@@ -397,7 +397,7 @@
         An L2 logical switch.  Records may be identified by name.
       </dd>
 
-      <dt><code>Logical_Port</code></dt>
+      <dt><code>Logical_Switch_Port</code></dt>
       <dd>
         A port within an L2 logical switch.  Records may be identified by name.
       </dd>

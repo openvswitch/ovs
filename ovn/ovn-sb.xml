@@ -1207,10 +1207,11 @@ tcp.flags = RST;
     </p>
 
     <p>
-      For every <code>Logical_Port</code> record in <code>OVN_Northbound</code>
-      database, <code>ovn-northd</code> creates a record in this table.
-      <code>ovn-northd</code> populates and maintains every column except
-      the <code>chassis</code> column, which it leaves empty in new records.
+      For every <code>Logical_Switch_Port</code> record in
+      <code>OVN_Northbound</code> database, <code>ovn-northd</code>
+      creates a record in this table.  <code>ovn-northd</code> populates
+      and maintains every column except the <code>chassis</code> column,
+      which it leaves empty in new records.
     </p>
 
     <p>
@@ -1245,10 +1246,11 @@ tcp.flags = RST;
       </column>
 
       <column name="logical_port">
-        A logical port, taken from <ref table="Logical_Port" column="name"
-        db="OVN_Northbound"/> in the OVN_Northbound database's <ref
-        table="Logical_Port" db="OVN_Northbound"/> table.  OVN does not
-        prescribe a particular format for the logical port ID.
+        A logical port, taken from <ref table="Logical_Switch_Port"
+        column="name" db="OVN_Northbound"/> in the OVN_Northbound
+        database's <ref table="Logical_Switch_Port" db="OVN_Northbound"/>
+        table.  OVN does not prescribe a particular format for the
+        logical port ID.
       </column>
 
       <column name="chassis">
@@ -1445,9 +1447,9 @@ tcp.flags = RST;
 
       <column name="parent_port">
         This is taken from
-        <ref table="Logical_Port" column="parent_name" db="OVN_Northbound"/>
-        in the OVN_Northbound database's <ref table="Logical_Port"
-        db="OVN_Northbound"/> table.
+        <ref table="Logical_Switch_Port" column="parent_name"
+        db="OVN_Northbound"/> in the OVN_Northbound database's
+        <ref table="Logical_Switch_Port" db="OVN_Northbound"/> table.
       </column>
 
       <column name="tag">

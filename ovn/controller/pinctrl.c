@@ -563,7 +563,7 @@ send_garp_update(const struct sbrec_port_binding *binding_rec,
     int i;
     for (i = 0; i < binding_rec->n_mac; i++) {
         struct lport_addresses laddrs;
-        if (!extract_lport_addresses(binding_rec->mac[i], &laddrs, false)
+        if (!extract_lsp_addresses(binding_rec->mac[i], &laddrs, false)
             || !laddrs.n_ipv4_addrs) {
             continue;
         }

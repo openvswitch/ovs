@@ -129,7 +129,7 @@ AT_CHECK([ovn-nbctl --may-exist lport-add ls0 lp2 lp4 5], [1], [],
 AT_CHECK([ovn-nbctl --may-exist lport-add ls0 lp2 lp3 10], [1], [],
   [ovn-nbctl: lp2: lport already exists with different tag 5
 ])
-AT_CHECK([ovn-nbctl clear Logical_Port lp2 tag])
+AT_CHECK([ovn-nbctl clear Logical_Switch_Port lp2 tag])
 AT_CHECK([ovn-nbctl --may-exist lport-add ls0 lp2 lp3 5], [1], [],
   [ovn-nbctl: lp2: lport already exists but has no tag
 ])

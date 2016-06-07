@@ -80,7 +80,7 @@
     </group>
   </table>
 
-  <table name="Logical_Port" title="L2 logical switch port">
+  <table name="Logical_Switch_Port" title="L2 logical switch port">
     <p>
       A port within an L2 logical switch.
     </p>
@@ -227,7 +227,7 @@
       <column name="parent_name">
         The VM interface through which the nested container sends its network
         traffic.  This must match the <ref column="name"/> column for some
-        other <ref table="Logical_Port"/>.
+        other <ref table="Logical_Switch_Port"/>.
       </column>
 
       <column name="tag">
@@ -671,8 +671,8 @@
       <p>
         In addition to provide convenience for human interaction with the
         ovn-nb database, this column is used as reference by its patch port in
-        <ref table="Logical_Port"/> or another logical router port in <ref
-        table="Logical_Router_Port"/>.
+        <ref table="Logical_Switch_Port"/> or another logical router port in
+        <ref table="Logical_Router_Port"/>.
       </p>
     </column>
 
@@ -703,10 +703,11 @@
         <li>
           To attach a logical switch to a logical router.  A logical router
           port of this type is referenced by exactly one <ref
-          table="Logical_Port"/> of type <code>router</code>.  The value of
-          <ref column="name"/> is set as <code>router-port</code> in column
-          <ref column="options"/> of <ref table="Logical_Port"/>.
-          In this case <ref column="peer"/> column is empty.
+          table="Logical_Switch_Port"/> of type <code>router</code>.
+          The value of <ref column="name"/> is set as
+          <code>router-port</code> in column <ref column="options"/> of
+          <ref table="Logical_Switch_Port"/>.  In this case <ref
+          column="peer"/> column is empty.
         </li>
 
         <li>

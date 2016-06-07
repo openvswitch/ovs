@@ -261,8 +261,9 @@ def create_endpoint():
                                     }})
 
 
-def get_logical_port_addresses(eid):
-    ret = ovn_nbctl("--if-exists", "get", "Logical_port", eid, "addresses")
+def get_lsp_addresses(eid):
+    ret = ovn_nbctl("--if-exists", "get", "Logical_Switch_Port", eid,
+                    "addresses")
     if not ret:
         error = "endpoint not found in OVN database"
         return (None, None, error)
@@ -290,11 +291,11 @@ def show_endpoint():
         abort(400)
 
     try:
-        (mac_address, ip_address, error) = get_logical_port_addresses(eid)
+        (mac_address, ip_address, error) = get_lsp_addresses(eid)
         if error:
             jsonify({'Err': error})
     except Exception as e:
-        error = "show_endpoint: get Logical_port addresses. (%s)" % (str(e))
+        error = "show_endpoint: get Logical_Switch_Port addresses. (%s)" % (str(e))
         return jsonify({'Err': error})
 
     veth_outside = eid[0:15]
@@ -351,7 +352,7 @@ def network_join():
     vm_id = sboxkey.rsplit('/')[-1]
 
     try:
-        (mac_address, ip_address, error) = get_logical_port_addresses(eid)
+        (mac_address, ip_address, error) = get_lsp_addresses(eid)
         if error:
             jsonify({'Err': error})
     except Exception as e:

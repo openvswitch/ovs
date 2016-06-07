@@ -483,7 +483,7 @@ struct ovn_port {
     char *key;                  /* nbs->name, nbr->name, sb->logical_port. */
     char *json_key;             /* 'key', quoted for use in JSON. */
 
-    const struct nbrec_logical_port *nbs;        /* May be NULL. */
+    const struct nbrec_logical_switch_port *nbs; /* May be NULL. */
     const struct nbrec_logical_router_port *nbr; /* May be NULL. */
     const struct sbrec_port_binding *sb;         /* May be NULL. */
 
@@ -501,7 +501,7 @@ struct ovn_port {
 
 static struct ovn_port *
 ovn_port_create(struct hmap *ports, const char *key,
-                const struct nbrec_logical_port *nbs,
+                const struct nbrec_logical_switch_port *nbs,
                 const struct nbrec_logical_router_port *nbr,
                 const struct sbrec_port_binding *sb)
 {
@@ -575,7 +575,7 @@ join_logical_ports(struct northd_context *ctx,
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (od->nbs) {
             for (size_t i = 0; i < od->nbs->n_ports; i++) {
-                const struct nbrec_logical_port *nbs = od->nbs->ports[i];
+                const struct nbrec_logical_switch_port *nbs = od->nbs->ports[i];
                 struct ovn_port *op = ovn_port_find(ports, nbs->name);
                 if (op) {
                     if (op->nbs || op->nbr) {
@@ -752,7 +752,7 @@ ovn_port_update_sbrec(const struct ovn_port *op)
 }
 
 /* Updates the southbound Port_Binding table so that it contains the logical
- * ports specified by the northbound database.
+ * switch ports specified by the northbound database.
  *
  * Initializes 'ports' to contain a "struct ovn_port" for every logical port,
  * using the "struct ovn_datapath"s in 'datapaths' to look up logical
@@ -989,7 +989,7 @@ ovn_lflow_destroy(struct hmap *lflows, struct ovn_lflow *lflow)
 /* Appends port security constraints on L2 address field 'eth_addr_field'
  * (e.g. "eth.src" or "eth.dst") to 'match'.  'port_security', with
  * 'n_port_security' elements, is the collection of port_security constraints
- * from an OVN_NB Logical_Port row. */
+ * from an OVN_NB Logical_Switch_Port row. */
 static void
 build_port_security_l2(const char *eth_addr_field,
                        char **port_security, size_t n_port_security,
@@ -1103,7 +1103,7 @@ build_port_security_nd(struct ovn_port *op, struct hmap *lflows)
 {
     for (size_t i = 0; i < op->nbs->n_port_security; i++) {
         struct lport_addresses ps;
-        if (!extract_lport_addresses(op->nbs->port_security[i], &ps, true)) {
+        if (!extract_lsp_addresses(op->nbs->port_security[i], &ps, true)) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_INFO_RL(&rl, "invalid syntax '%s' in port security. No MAC"
                          " address found", op->nbs->port_security[i]);
@@ -1198,7 +1198,7 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
 
     for (size_t i = 0; i < op->nbs->n_port_security; i++) {
         struct lport_addresses ps;
-        if (!extract_lport_addresses(op->nbs->port_security[i], &ps, true)) {
+        if (!extract_lsp_addresses(op->nbs->port_security[i], &ps, true)) {
             continue;
         }
 
@@ -1301,15 +1301,15 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
 }
 
 static bool
-lport_is_enabled(const struct nbrec_logical_port *lport)
+lsp_is_enabled(const struct nbrec_logical_switch_port *lsp)
 {
-    return !lport->enabled || *lport->enabled;
+    return !lsp->enabled || *lsp->enabled;
 }
 
 static bool
-lport_is_up(const struct nbrec_logical_port *lport)
+lsp_is_up(const struct nbrec_logical_switch_port *lsp)
 {
-    return !lport->up || *lport->up;
+    return !lsp->up || *lsp->up;
 }
 
 static bool
@@ -1525,7 +1525,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        if (!lport_is_enabled(op->nbs)) {
+        if (!lsp_is_enabled(op->nbs)) {
             /* Drop packets from disabled logical ports (since logical flow
              * tables are default-drop). */
             continue;
@@ -1584,14 +1584,14 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
          *  - port is up or
          *  - port type is router
          */
-        if (!lport_is_up(op->nbs) && strcmp(op->nbs->type, "router")) {
+        if (!lsp_is_up(op->nbs) && strcmp(op->nbs->type, "router")) {
             continue;
         }
 
         for (size_t i = 0; i < op->nbs->n_addresses; i++) {
             struct lport_addresses laddrs;
-            if (!extract_lport_addresses(op->nbs->addresses[i], &laddrs,
-                                         false)) {
+            if (!extract_lsp_addresses(op->nbs->addresses[i], &laddrs,
+                                       false)) {
                 continue;
             }
             for (size_t j = 0; j < laddrs.n_ipv4_addrs; j++) {
@@ -1639,7 +1639,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        if (lport_is_enabled(op->nbs)) {
+        if (lsp_is_enabled(op->nbs)) {
             ovn_multicast_add(mcgroups, &mc_flood, op);
         }
     }
@@ -1675,7 +1675,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                 ds_destroy(&actions);
                 ds_destroy(&match);
             } else if (!strcmp(op->nbs->addresses[i], "unknown")) {
-                if (lport_is_enabled(op->nbs)) {
+                if (lsp_is_enabled(op->nbs)) {
                     ovn_multicast_add(mcgroups, &mc_unknown, op);
                     op->od->has_unknown = true;
                 }
@@ -1730,7 +1730,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 
         struct ds match = DS_EMPTY_INITIALIZER;
         ds_put_format(&match, "outport == %s", op->json_key);
-        if (lport_is_enabled(op->nbs)) {
+        if (lsp_is_enabled(op->nbs)) {
             build_port_security_l2("eth.dst", op->nbs->port_security,
                                    op->nbs->n_port_security, &match);
             ovn_lflow_add(lflows, op->od, S_SWITCH_OUT_PORT_SEC_L2, 50,
@@ -2080,16 +2080,17 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
             for (size_t i = 0; i < op->nbs->n_addresses; i++) {
                 struct lport_addresses laddrs;
-                if (!extract_lport_addresses(op->nbs->addresses[i], &laddrs,
-                                             false)) {
+                if (!extract_lsp_addresses(op->nbs->addresses[i], &laddrs,
+                                           false)) {
                     continue;
                 }
 
                 for (size_t k = 0; k < laddrs.n_ipv4_addrs; k++) {
                     ovs_be32 ip = laddrs.ipv4_addrs[k].addr;
                     for (size_t j = 0; j < op->od->n_router_ports; j++) {
-                        /* Get the Logical_Router_Port that the Logical_Port is
-                         * connected to, as 'peer'. */
+                        /* Get the Logical_Router_Port that the
+                         * Logical_Switch_Port is connected to, as
+                         * 'peer'. */
                         const char *peer_name = smap_get(
                             &op->od->router_ports[j]->nbs->options,
                             "router-port");
@@ -2351,16 +2352,16 @@ ovnsb_db_run(struct northd_context *ctx)
     }
     struct hmap lports_hmap;
     const struct sbrec_port_binding *sb;
-    const struct nbrec_logical_port *nb;
+    const struct nbrec_logical_switch_port *nb;
 
     struct lport_hash_node {
         struct hmap_node node;
-        const struct nbrec_logical_port *nb;
+        const struct nbrec_logical_switch_port *nb;
     } *hash_node;
 
     hmap_init(&lports_hmap);
 
-    NBREC_LOGICAL_PORT_FOR_EACH(nb, ctx->ovnnb_idl) {
+    NBREC_LOGICAL_SWITCH_PORT_FOR_EACH(nb, ctx->ovnnb_idl) {
         hash_node = xzalloc(sizeof *hash_node);
         hash_node->nb = nb;
         hmap_insert(&lports_hmap, &hash_node->node, hash_string(nb->name, 0));
@@ -2386,10 +2387,10 @@ ovnsb_db_run(struct northd_context *ctx)
 
         if (sb->chassis && (!nb->up || !*nb->up)) {
             bool up = true;
-            nbrec_logical_port_set_up(nb, &up, 1);
+            nbrec_logical_switch_port_set_up(nb, &up, 1);
         } else if (!sb->chassis && (!nb->up || *nb->up)) {
             bool up = false;
-            nbrec_logical_port_set_up(nb, &up, 1);
+            nbrec_logical_switch_port_set_up(nb, &up, 1);
         }
     }
 

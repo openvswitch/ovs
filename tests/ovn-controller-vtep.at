@@ -183,7 +183,7 @@ OVN_CONTROLLER_VTEP_START
 
 # adds logical switch 'lswitch0' and vlan_bindings.
 AT_CHECK([vtep-ctl add-ls lswitch0 -- bind-ls br-vtep p0 100 lswitch0 -- bind-ls br-vtep p1 300 lswitch0])
-# adds lport in ovn-nb database, and sets the type and options.
+# adds logical switch port in ovn-nb database, and sets the type and options.
 OVN_NB_ADD_VTEP_PORT([br-test], [br-vtep_lswitch0], [br-vtep], [lswitch0])
 OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Port_Binding  | grep br-vtep_lswitch0`"])
 # should see one binding, associated to chassis of 'br-vtep'.
@@ -194,7 +194,7 @@ ${chassis_uuid}
 
 # adds another logical switch 'lswitch1' and vlan_bindings.
 AT_CHECK([vtep-ctl add-ls lswitch1 -- bind-ls br-vtep p0 200 lswitch1])
-# adds lport in ovn-nb database for lswitch1.
+# adds logical switch port in ovn-nb database for lswitch1.
 OVN_NB_ADD_VTEP_PORT([br-test], [br-vtep_lswitch1], [br-vtep], [lswitch1])
 OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Port_Binding | grep -- br-vtep_lswitch1`"])
 # This is allowed, but not recommended, to have two vlan_bindings (to different vtep logical switches)
@@ -205,7 +205,7 @@ ${chassis_uuid}
 ${chassis_uuid}
 ])
 
-# adds another lport in ovn-nb database for lswitch0.
+# adds another logical switch port in ovn-nb database for lswitch0.
 OVN_NB_ADD_VTEP_PORT([br-test], [br-vtep_lswitch0_dup], [br-vtep], [lswitch0])
 OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Port_Binding | grep -- br-vtep_lswitch0_dup`"])
 # it is not allowed to have more than one ovn-nb logical port for the same
@@ -247,7 +247,7 @@ OVN_CONTROLLER_VTEP_START
 
 # adds logical switch 'lswitch0' and vlan_bindings.
 AT_CHECK([vtep-ctl add-ls lswitch0 -- bind-ls br-vtep p0 100 lswitch0])
-# adds lport in ovn-nb database, and sets the type and options.
+# adds logical switch port in ovn-nb database, and sets the type and options.
 OVN_NB_ADD_VTEP_PORT([br-test], [br-vtep_lswitch0], [br-vtep], [lswitch0])
 OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Port_Binding  | grep br-vtep_lswitch0`"])
 
@@ -376,7 +376,7 @@ AT_CHECK([ovs-vsctl --columns=options list Interface bfd1.2.3.5 | cut -d ':' -f2
 {remote_ip="1.2.3.5"}
 ])
 
-# adds another mac to lport.
+# adds another mac to logical switch port.
 AT_CHECK([ovn-nbctl lport-set-addresses vif0 f0:ab:cd:ef:01:02 f0:ab:cd:ef:01:03])
 OVS_WAIT_UNTIL([test -n "`vtep-ctl list Ucast_Macs_Remote | grep 03`"])
 AT_CHECK([vtep-ctl --columns=MAC list Ucast_Macs_Remote | cut -d ':' -f2- | tr -d ' ' | sort], [0], [dnl
@@ -385,14 +385,14 @@ AT_CHECK([vtep-ctl --columns=MAC list Ucast_Macs_Remote | cut -d ':' -f2- | tr -
 "f0:ab:cd:ef:01:03"
 ])
 
-# removes one mac to lport.
+# removes one mac to logical switch port.
 AT_CHECK([ovn-nbctl lport-set-addresses vif0 f0:ab:cd:ef:01:03])
 OVS_WAIT_UNTIL([test -z "`vtep-ctl --columns=MAC list Ucast_Macs_Remote | grep 02`"])
 AT_CHECK([vtep-ctl --columns=MAC list Ucast_Macs_Remote | cut -d ':' -f2- | tr -d ' ' | sort], [0], [dnl
 "f0:ab:cd:ef:01:03"
 ])
 
-# migrates mac to lport vif1 on 'br-void'.
+# migrates mac to logical switch port vif1 on 'br-void'.
 AT_CHECK([ovn-nbctl lport-set-addresses vif0])
 AT_CHECK([ovn-nbctl lport-set-addresses vif1 f0:ab:cd:ef:01:03])
 OVS_WAIT_UNTIL([test -z "`vtep-ctl --columns=MAC list Ucast_Macs_Remote | grep 03`"])

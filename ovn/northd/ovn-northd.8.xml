@@ -760,10 +760,10 @@ icmp4 {
           data in the <code>OVN_Northbound</code> database.  For router ports
           connected to logical switches, MAC bindings can be known statically
           from the <code>addresses</code> column in the
-          <code>Logical_Port</code> table.  For router ports connected to other
-          logical routers, MAC bindings can be known statically from the
-          <code>mac</code> and <code>network</code> column in the
-          <code>Logical_Router_Port</code> table.
+          <code>Logical_Switch_Port</code> table.  For router ports
+          connected to other logical routers, MAC bindings can be known
+          statically from the <code>mac</code> and <code>network</code>
+          column in the <code>Logical_Router_Port</code> table.
         </p>
 
         <p>

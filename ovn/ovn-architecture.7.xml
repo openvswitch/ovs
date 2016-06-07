@@ -340,10 +340,11 @@
 
     <li>
       The CMS plugin updates the OVN Northbound database to include the new
-      VIF, by adding a row to the <code>Logical_Port</code> table.  In the new
-      row, <code>name</code> is <var>vif-id</var>, <code>mac</code> is
-      <var>mac</var>, <code>switch</code> points to the OVN logical switch's
-      Logical_Switch record, and other columns are initialized appropriately.
+      VIF, by adding a row to the <code>Logical_Switch_Port</code>
+      table.  In the new row, <code>name</code> is <var>vif-id</var>,
+      <code>mac</code> is <var>mac</var>, <code>switch</code> points to
+      the OVN logical switch's Logical_Switch record, and other columns
+      are initialized appropriately.
     </li>
 
     <li>
@@ -394,11 +395,11 @@
       networking is ready.  To support this, <code>ovn-northd</code> notices
       the <code>chassis</code> column updated for the row in
       <code>Binding</code> table and pushes this upward by updating the
-      <ref column="up" table="Logical_Port" db="OVN_NB"/> column in the OVN
-      Northbound database's <ref table="Logical_Port" db="OVN_NB"/> table to
-      indicate that the VIF is now up.  The CMS, if it uses this feature, can
-      then
-      react by allowing the VM's execution to proceed.
+      <ref column="up" table="Logical_Switch_Port" db="OVN_NB"/> column
+      in the OVN Northbound database's <ref table="Logical_Switch_Port"
+      db="OVN_NB"/> table to indicate that the VIF is now up.  The CMS,
+      if it uses this feature, can then react by allowing the VM's
+      execution to proceed.
     </li>
 
     <li>
@@ -440,7 +441,7 @@
 
     <li>
       The CMS plugin removes the VIF from the OVN Northbound database,
-      by deleting its row in the <code>Logical_Port</code> table.
+      by deleting its row in the <code>Logical_Switch_Port</code> table.
     </li>
 
     <li>
@@ -533,10 +534,11 @@
       The container spawning entity (either directly or through the CMS that
       manages the underlying infrastructure) updates the OVN Northbound
       database to include the new CIF, by adding a row to the
-      <code>Logical_Port</code> table.  In the new row, <code>name</code> is
-      any unique identifier, <code>parent_name</code> is the <var>vif-id</var>
-      of the VM through which the CIF's network traffic is expected to go
-      through and the <code>tag</code> is the VLAN tag that identifies the
+      <code>Logical_Switch_Port</code> table.  In the new row,
+      <code>name</code> is any unique identifier,
+      <code>parent_name</code> is the <var>vif-id</var> of the VM
+      through which the CIF's network traffic is expected to go through
+      and the <code>tag</code> is the VLAN tag that identifies the
       network traffic of that CIF.
     </li>
 
@@ -567,9 +569,9 @@
       One can only start the application inside the container after the
       underlying network is ready.  To support this, <code>ovn-northd</code>
       notices the updated <code>chassis</code> column in <code>Binding</code>
-      table and updates the <ref column="up" table="Logical_Port"
+      table and updates the <ref column="up" table="Logical_Switch_Port"
       db="OVN_NB"/> column in the OVN Northbound database's
-      <ref table="Logical_Port" db="OVN_NB"/> table to indicate that the
+      <ref table="Logical_Switch_Port" db="OVN_NB"/> table to indicate that the
       CIF is now up.  The entity responsible to start the container application
       queries this value and starts the application.
     </li>
@@ -577,7 +579,7 @@
     <li>
       Eventually the entity that created and started the container, stops it.
       The entity, through the CMS (or directly) deletes its row in the
-      <code>Logical_Port</code> table.
+      <code>Logical_Switch_Port</code> table.
     </li>
 
     <li>
@@ -943,7 +945,7 @@
     <li>
       Now, the administrator can use the CMS to add a VTEP logical switch
       to the OVN logical network.  To do that, the CMS must first create a
-      new <code>Logical_Port</code> table entry in the <code>
+      new <code>Logical_Switch_Port</code> table entry in the <code>
       OVN_Northbound</code> database.  Then, the <var>type</var> column
       of this entry must be set to "vtep".  Next, the <var>
       vtep-logical-switch</var> and <var>vtep-physical-switch</var> keys
