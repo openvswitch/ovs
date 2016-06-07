@@ -156,6 +156,7 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
     PUINT8 bufferStart;
     ULONG mss = 0;
     NDIS_TCP_LARGE_SEND_OFFLOAD_NET_BUFFER_LIST_INFO lsoInfo;
+    PVOID vlanTagValue;
 
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
 
@@ -173,6 +174,7 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
     NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
     csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
                                           TcpIpChecksumNetBufferListInfo);
+    vlanTagValue = NET_BUFFER_LIST_INFO(curNbl, Ieee8021QNetBufferListInfo);
     *newNbl = OvsPartialCopyNBL(switchContext, curNbl, 0, headRoom,
                                 FALSE /*copy NblInfo*/);
     if (*newNbl == NULL) {
@@ -194,7 +196,7 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
     if (layers->isIPv4) {
         IPHdr *ip = (IPHdr *)(bufferStart + layers->l3Offset);
         if (!ip->tot_len) {
-            ip->tot_len = htons(innerFrameLen - sizeof(EthHdr));
+            ip->tot_len = htons(innerFrameLen - layers->l3Offset);
         }
         if (!ip->check) {
             ip->check = IPChecksum((UINT8 *)ip, ip->ihl * 4, 0);
@@ -231,8 +233,8 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
      * memory.
      */
     curMdl = NET_BUFFER_CURRENT_MDL(curNb);
-    ASSERT((int) (MmGetMdlByteCount(curMdl) - NET_BUFFER_CURRENT_MDL_OFFSET(curNb))
-                >= (int) headRoom);
+    ASSERT((int) (MmGetMdlByteCount(curMdl) -
+                NET_BUFFER_CURRENT_MDL_OFFSET(curNb)) >= (int) headRoom);
 
     buf = (PUINT8) MmGetSystemAddressForMdlSafe(curMdl, LowPagePriority);
     if (!buf) {
@@ -288,12 +290,12 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
     /* Calculate pseudo header chksum */
     tcpChksumLen = sizeof(TCPHdr) + STT_HDR_LEN + innerFrameLen;
     ASSERT(tcpChksumLen < 65535);
-    outerTcpHdr->check = IPPseudoChecksum(&fwdInfo->srcIpAddr,(uint32 *) &tunKey->dst,
-                                          IPPROTO_TCP, (uint16) tcpChksumLen);
     sttHdr->version = 0;
 
     /* Set STT Header */
     sttHdr->flags = 0;
+    sttHdr->mss = 0;
+    sttHdr->l4Offset = 0;
     if (innerPartialChecksum) {
         sttHdr->flags |= STT_CSUM_PARTIAL;
         if (layers->isIPv4) {
@@ -310,8 +312,16 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
         sttHdr->mss = 0;
     }
 
-    sttHdr->reserved = 0;
+    /* Set VLAN tag */
     sttHdr->vlanTCI = 0;
+    if (vlanTagValue) {
+        PNDIS_NET_BUFFER_LIST_8021Q_INFO vlanTag =
+            (PNDIS_NET_BUFFER_LIST_8021Q_INFO)(PVOID *)&vlanTagValue;
+        sttHdr->vlanTCI = htons(vlanTag->TagHeader.VlanId | OVSWIN_VLAN_CFI |
+                                (vlanTag->TagHeader.UserPriority << 13));
+    }
+
+    sttHdr->reserved = 0;
     sttHdr->key = tunKey->tunnelId;
     /* Zero out stt padding */
     *(uint16 *)(sttHdr + 1) = 0;
@@ -327,8 +337,22 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
     NET_BUFFER_LIST_INFO(curNbl,
                          TcpIpChecksumNetBufferListInfo) = csumInfo.Value;
 
-    UINT32 encapMss = OvsGetExternalMtu(switchContext) - sizeof(IPHdr) - sizeof(TCPHdr);
+    UINT32 encapMss = OvsGetExternalMtu(switchContext)
+                      - sizeof(IPHdr)
+                      - sizeof(TCPHdr);
     if (ipTotalLen > encapMss) {
+        /* For Windows LSO, the TCP pseudo checksum must contain Source IP
+         * Address, Destination IP Address, and Protocol; the length of the
+         * payload is excluded because the underlying miniport driver and NIC
+         * generate TCP segments from the large packet that is passed down by
+         * the TCP/IP transport, the transport does not know the size of the
+         * TCP payload for each TCP segment and therefore cannot include the
+         * TCP Length in the pseudo-header.
+        */
+        outerTcpHdr->check = IPPseudoChecksum(&fwdInfo->srcIpAddr,
+                                              (uint32 *) &tunKey->dst,
+                                              IPPROTO_TCP, (uint16) 0);
+
         lsoInfo.Value = 0;
         lsoInfo.LsoV2Transmit.TcpHeaderOffset = tcpHeaderOffset;
         lsoInfo.LsoV2Transmit.MSS = encapMss;
@@ -336,6 +360,11 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
         lsoInfo.LsoV2Transmit.IPVersion = NDIS_TCP_LARGE_SEND_OFFLOAD_IPv4;
         NET_BUFFER_LIST_INFO(curNbl,
                              TcpLargeSendNetBufferListInfo) = lsoInfo.Value;
+    } else {
+        outerTcpHdr->check = IPPseudoChecksum(&fwdInfo->srcIpAddr,
+                                        (uint32 *) &tunKey->dst,
+                                        IPPROTO_TCP,
+                                        (uint16) tcpChksumLen);
     }
 
     return STATUS_SUCCESS;
@@ -583,9 +612,6 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
     SttHdr *sttHdr = NULL;
     sourceNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
 
-    /* XXX optimize this lock */
-    NdisAcquireSpinLock(&OvsSttSpinLock);
-
     /* If this is the first fragment, copy the STT header */
     if (segOffset == 0) {
         sttHdr = NdisGetDataBuffer(sourceNb, sizeof(SttHdr), &stt, 1, 0);
@@ -596,6 +622,14 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         fragmentLength = fragmentLength - STT_HDR_LEN;
         startOffset = startOffset + STT_HDR_LEN;
     }
+
+    if (offset + fragmentLength > innerPacketLen) {
+        // avoid buffer overflow on copy
+        return NULL;
+    }
+
+    /* XXX optimize this lock */
+    NdisAcquireSpinLock(&OvsSttSpinLock);
 
     /* Lookup fragment */
     OVS_STT_PKT_KEY pktKey = OvsGeneratePacketKey(ipHdr, tcp);
@@ -613,6 +647,9 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         NdisMoveMemory(&entry->ovsPktKey, &pktKey, sizeof (OVS_STT_PKT_KEY));
 
         entry->recvdLen = fragmentLength;
+        if (ipHdr->ecn == IP_ECN_CE) {
+            entry->ecn = IP_ECN_CE;
+        }
 
         UINT64 currentTime;
         NdisGetCurrentSystemTime((LARGE_INTEGER *) &currentTime);
@@ -623,6 +660,7 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         }
 
         /* Copy the data from Source to new buffer */
+        entry->allocatedLen = innerPacketLen;
         entry->packetBuf = OvsAllocateMemoryWithTag(innerPacketLen,
                                                     OVS_STT_POOL_TAG);
         if (OvsGetPacketBytes(curNbl, fragmentLength, startOffset,
@@ -635,12 +673,19 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         InsertHeadList(&OvsSttPktFragHash[hash & STT_HASH_TABLE_MASK],
                        &entry->link);
     } else {
+        if (offset + fragmentLength > pktFragEntry->allocatedLen) {
+            // don't copy more than it is allocated
+            goto handle_error;
+        }
         /* Add to recieved length to identify if this is the last fragment */
         pktFragEntry->recvdLen += fragmentLength;
         lastPacket = (pktFragEntry->recvdLen == innerPacketLen);
 
         if (segOffset == 0) {
             pktFragEntry->sttHdr = *sttHdr;
+        }
+        if (ipHdr->ecn == IP_ECN_CE) {
+            pktFragEntry->ecn = IP_ECN_CE;
         }
 
         /* Copy the fragment data from Source to existing buffer */
@@ -653,9 +698,18 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
 
 handle_error:
     if (lastPacket) {
+        /* It is RECOMMENDED that if any segment of the received STT
+        *  frame has the CE (congestion experienced) bit set
+        *  in its IP header, then the CE bit SHOULD be set in the IP
+        *  header of the decapsulated STT frame.*/
+        if (pktFragEntry->ecn == IP_ECN_CE) {
+            ipHdr->ecn = IP_ECN_CE;
+        }
+
         /* Retrieve the original STT header */
         NdisMoveMemory(newSttHdr, &pktFragEntry->sttHdr, sizeof (SttHdr));
-        targetPNbl = OvsAllocateNBLFromBuffer(switchContext, pktFragEntry->packetBuf,
+        targetPNbl = OvsAllocateNBLFromBuffer(switchContext,
+                                              pktFragEntry->packetBuf,
                                               innerPacketLen);
 
         /* Delete this entry and free up the memory/ */
@@ -668,16 +722,34 @@ handle_error:
     return lastPacket ? targetPNbl : NULL;
 }
 
-VOID
-OvsDecapSetOffloads(PNET_BUFFER_LIST curNbl, SttHdr *sttHdr)
+
+/*
+*----------------------------------------------------------------------------
+* OvsDecapSetOffloads
+*     Processes received STT header and sets TcpIpChecksumNetBufferListInfo
+*     accordingly.
+*     For TCP packets with total length bigger than destination MSS it
+*     populates TcpLargeSendNetBufferListInfo.
+*
+* Returns NDIS_STATUS_SUCCESS normally.
+* Fails only if packet data is invalid.
+* (e.g. if OvsExtractLayers() returns an error).
+*----------------------------------------------------------------------------
+*/
+NDIS_STATUS
+OvsDecapSetOffloads(PNET_BUFFER_LIST *curNbl, 
+                    SttHdr *sttHdr,
+                    OVS_PACKET_HDR_INFO *layers)
 {
     if ((sttHdr->flags & STT_CSUM_VERIFIED)
         || !(sttHdr->flags & STT_CSUM_PARTIAL)) {
-        return;
+        return NDIS_STATUS_SUCCESS;
     }
 
-    UINT8 protoType;
+    NDIS_STATUS status;
     NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
+    UINT8 protoType;
+
     csumInfo.Value = 0;
     csumInfo.Transmit.IpHeaderChecksum = 0;
     csumInfo.Transmit.TcpHeaderOffset = sttHdr->l4Offset;
@@ -703,25 +775,68 @@ OvsDecapSetOffloads(PNET_BUFFER_LIST curNbl, SttHdr *sttHdr)
             csumInfo.Transmit.IsIPv6 = 1;
             csumInfo.Transmit.UdpChecksum = 1;
     }
-    NET_BUFFER_LIST_INFO(curNbl,
+    NET_BUFFER_LIST_INFO(*curNbl,
                          TcpIpChecksumNetBufferListInfo) = csumInfo.Value;
 
-    if (sttHdr->mss) {
+    if (sttHdr->mss && (sttHdr->flags & STT_PROTO_TCP)) {
         NDIS_TCP_LARGE_SEND_OFFLOAD_NET_BUFFER_LIST_INFO lsoInfo;
+        PMDL curMdl = NULL;
+        PNET_BUFFER curNb;
+        PUINT8 buf = NULL;
+
+        // if layers not initialized by the caller we extract layers here
+        if (layers->value == 0) {
+            status = OvsExtractLayers(*curNbl, layers);
+            if (status != NDIS_STATUS_SUCCESS) {
+                return status;
+            }
+        }
+
+        curNb = NET_BUFFER_LIST_FIRST_NB(*curNbl);
+        curMdl = NET_BUFFER_CURRENT_MDL(curNb);
+
+        buf = (PUINT8)MmGetSystemAddressForMdlSafe(curMdl,
+            LowPagePriority);
+        buf += NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
+
+        // apply pseudo checksum on extracted packet
+        if (sttHdr->flags & STT_PROTO_IPV4) {
+            IPHdr *ipHdr;
+            TCPHdr *tcpHdr;
+
+            ipHdr = (IPHdr *)(buf + layers->l3Offset);
+            tcpHdr = (TCPHdr *)(buf + layers->l4Offset);
+
+            tcpHdr->check = IPPseudoChecksum(&ipHdr->saddr,
+                                                (uint32 *)&ipHdr->daddr,
+                                                IPPROTO_TCP, 0);
+        } else {
+            IPv6Hdr *ipHdr;
+            TCPHdr *tcpHdr;
+
+            ipHdr = (IPv6Hdr *)(buf + layers->l3Offset);
+            tcpHdr = (TCPHdr *)(buf + layers->l4Offset);
+
+            tcpHdr->check = IPv6PseudoChecksum((UINT32*)&ipHdr->saddr,
+                                        (UINT32*)&ipHdr->daddr,
+                                        IPPROTO_TCP, 0);
+        }
+
+        // setup LSO
         lsoInfo.Value = 0;
         lsoInfo.LsoV2Transmit.TcpHeaderOffset = sttHdr->l4Offset;
-        lsoInfo.LsoV2Transmit.MSS = ETH_DEFAULT_MTU
-                                    - sizeof(IPHdr)
-                                    - sizeof(TCPHdr);
+        lsoInfo.LsoV2Transmit.MSS = ntohs(sttHdr->mss);
         lsoInfo.LsoV2Transmit.Type = NDIS_TCP_LARGE_SEND_OFFLOAD_V2_TYPE;
         if (sttHdr->flags & STT_PROTO_IPV4) {
             lsoInfo.LsoV2Transmit.IPVersion = NDIS_TCP_LARGE_SEND_OFFLOAD_IPv4;
         } else {
             lsoInfo.LsoV2Transmit.IPVersion = NDIS_TCP_LARGE_SEND_OFFLOAD_IPv6;
         }
-        NET_BUFFER_LIST_INFO(curNbl,
+        NET_BUFFER_LIST_INFO(*curNbl,
                              TcpLargeSendNetBufferListInfo) = lsoInfo.Value;
     }
+
+    return NDIS_STATUS_SUCCESS;
 }
 
 /*
@@ -736,15 +851,14 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
             OvsIPv4TunnelKey *tunKey,
             PNET_BUFFER_LIST *newNbl)
 {
-    NDIS_STATUS status = NDIS_STATUS_FAILURE;
-    PNET_BUFFER curNb, newNb;
+    NDIS_STATUS status;
+    PNET_BUFFER curNb;
     IPHdr *ipHdr;
     char *ipBuf[sizeof(IPHdr)];
     SttHdr stt;
     SttHdr *sttHdr;
     char *sttBuf[STT_HDR_LEN];
     UINT32 advanceCnt, hdrLen;
-    BOOLEAN isLsoPacket = FALSE;
 
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
     ASSERT(NET_BUFFER_NEXT_NB(curNb) == NULL);
@@ -767,7 +881,7 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     TCPHdr *tcp = (TCPHdr *)((PCHAR)ipHdr + ipHdr->ihl * 4);
 
     /* Skip IP & TCP headers */
-    hdrLen = sizeof(IPHdr) + sizeof(TCPHdr),
+    hdrLen = (ipHdr->ihl * 4) + (tcp->doff * 4);
     NdisAdvanceNetBufferDataStart(curNb, hdrLen, FALSE, NULL);
     advanceCnt += hdrLen;
 
@@ -775,7 +889,7 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     UINT32 totalLen = (seq >> STT_SEQ_LEN_SHIFT);
     UINT16 payloadLen = (UINT16)ntohs(ipHdr->tot_len)
                         - (ipHdr->ihl * 4)
-                        - (sizeof * tcp);
+                        - (tcp->doff * 4);
 
     /* Check if incoming packet requires reassembly */
     if (totalLen != payloadLen) {
@@ -788,7 +902,6 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
         }
 
         *newNbl = pNbl;
-        isLsoPacket = TRUE;
     } else {
         /* STT Header */
         sttHdr = NdisGetDataBuffer(curNb, sizeof *sttHdr,
@@ -812,7 +925,6 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
         OvsCompleteNBL(switchContext, *newNbl, TRUE);
         return NDIS_STATUS_FAILURE;
     }
-    newNb = NET_BUFFER_LIST_FIRST_NB(*newNbl);
 
     ASSERT(sttHdr);
 
@@ -825,8 +937,65 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     tunKey->ttl = ipHdr->ttl;
     tunKey->pad = 0;
 
+    /* Handle ECN */
+    OVS_PACKET_HDR_INFO layers = {0};
+    if (0 != ipHdr->tos) {
+        status = OvsExtractLayers(*newNbl, &layers);
+        if (status != NDIS_STATUS_SUCCESS) {
+            OvsCompleteNBL(switchContext, *newNbl, TRUE);
+            return NDIS_STATUS_FAILURE;
+        }
+
+        if (layers.isIPv4) {
+            IPHdr ip_storage;
+            IPHdr *innerIpHdr;
+
+            /*
+            *  If CE is set for outer IP header, reset ECN of inner IP
+            *  header to CE, all other values are kept the same
+            */
+            innerIpHdr = (IPHdr*)OvsGetIp(*newNbl,
+                                          layers.l3Offset,
+                                          &ip_storage);
+            if (innerIpHdr) {
+                if (ipHdr->ecn == IP_ECN_CE) {
+                        innerIpHdr->ecn |= IP_ECN_CE;
+                }
+                /* copy DSCP from outer header to inner header */
+                innerIpHdr->dscp = ipHdr->dscp;
+                /* fix IP checksum */
+                innerIpHdr->check = IPChecksum((UINT8 *)innerIpHdr,
+                                                innerIpHdr->ihl * 4, 0);
+            }
+        } else if (layers.isIPv6) {
+            IPv6Hdr ipv6_storage;
+            IPv6Hdr *innerIpv6Hdr = (IPv6Hdr*)OvsGetPacketBytes(
+                                                      *newNbl,
+                                                      sizeof *innerIpv6Hdr,
+                                                      layers.l3Offset,
+                                                      &ipv6_storage);
+            if (innerIpv6Hdr) {
+                /* copy ECN and DSCN to inner header */
+                innerIpv6Hdr->priority = ipHdr->ecn
+                                    | ((innerIpv6Hdr->flow_lbl[0] & 0x3) << 2);
+                innerIpv6Hdr->flow_lbl[0] = (innerIpv6Hdr->flow_lbl[0] & 0xF)
+                                             | ((ipHdr->tos & 0xF) << 4);
+            }
+        }
+    }
+
+    /* Apply VLAN tag if present */
+    if (ntohs(sttHdr->vlanTCI) & OVSWIN_VLAN_CFI) {
+        NDIS_NET_BUFFER_LIST_8021Q_INFO vlanTag;
+        vlanTag.Value = 0;
+        vlanTag.TagHeader.VlanId = ntohs(sttHdr->vlanTCI) & 0xfff;
+        vlanTag.TagHeader.UserPriority = ntohs(sttHdr->vlanTCI) >> 13;
+        NET_BUFFER_LIST_INFO(*newNbl,
+            Ieee8021QNetBufferListInfo) = vlanTag.Value;
+    }
+
     /* Set Checksum and LSO offload flags */
-    OvsDecapSetOffloads(*newNbl, sttHdr);
+    OvsDecapSetOffloads(newNbl, sttHdr, &layers);
 
     return NDIS_STATUS_SUCCESS;
 }

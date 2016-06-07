@@ -1,0 +1,11 @@
+usr/lib/lib*.so
+usr/lib/lib*.a
+usr/lib/pkgconfig
+include/*.h usr/include/openvswitch
+include/openflow/*.h usr/include/openvswitch/openflow
+include/openvswitch/*.h usr/include/openvswitch/openvswitch
+include/sparse/*.h usr/include/openvswitch/sparse
+include/sparse/arpa/*.h usr/include/openvswitch/sparse/arpa
+include/sparse/netinet/*.h usr/include/openvswitch/sparse/netinet
+include/sparse/sys/*.h usr/include/openvswitch/sparse/sys
+lib/*.h usr/include/openvswitch/lib

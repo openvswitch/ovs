@@ -3054,3 +3054,178 @@ OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- icmp_reply: 1 HVs, 2 LSs, 1 lport/LS, 1 LR])
+AT_KEYWORDS([router-icmp-reply])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# One LR - R1 has switch ls1 (191.168.1.0/24) connected to it,
+# and has switch ls2 (172.16.1.0/24) connected to it.
+
+ovn-nbctl create Logical_Router name=R1
+
+ovn-nbctl lswitch-add ls1
+ovn-nbctl lswitch-add ls2
+
+# Connect ls1 to R1
+ovn-nbctl -- --id=@lrp create Logical_Router_port name=ls1 \
+network=192.168.1.1/24 mac=\"00:00:00:01:02:f1\" -- add Logical_Router R1 \
+ports @lrp -- lport-add ls1 rp-ls1
+
+ovn-nbctl set Logical_port rp-ls1 type=router options:router-port=ls1 \
+addresses=\"00:00:00:01:02:f1\"
+
+# Connect ls2 to R1
+ovn-nbctl -- --id=@lrp create Logical_Router_port name=ls2 \
+network=172.16.1.1/24 mac=\"00:00:00:01:02:f2\" -- add Logical_Router R1 \
+ports @lrp -- lport-add ls2 rp-ls2
+
+ovn-nbctl set Logical_port rp-ls2 type=router options:router-port=ls2 \
+addresses=\"00:00:00:01:02:f2\"
+
+# Create logical port ls1-lp1 in ls1
+ovn-nbctl lport-add ls1 ls1-lp1 \
+-- lport-set-addresses ls1-lp1 "00:00:00:01:02:03 192.168.1.2"
+
+# Create logical port ls2-lp1 in ls2
+ovn-nbctl lport-add ls2 ls2-lp1 \
+-- lport-set-addresses ls2-lp1 "00:00:00:01:02:04 172.16.1.2"
+
+# Create one hypervisor and create OVS ports corresponding to logical ports.
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int vif1 -- \
+    set interface vif1 external-ids:iface-id=ls1-lp1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int vif2 -- \
+    set interface vif2 external-ids:iface-id=ls2-lp1 \
+    options:tx_pcap=hv1/vif2-tx.pcap \
+    options:rxq_pcap=hv1/vif2-rx.pcap \
+    ofport-request=1
+
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+for i in 1 2; do
+    : > vif$i.expected
+done
+# test_ipv4_icmp_request INPORT ETH_SRC ETH_DST IPV4_SRC IPV4_DST IP_CHKSUM ICMP_CHKSUM [EXP_IP_CHKSUM EXP_ICMP_CHKSUM]
+#
+# Causes a packet to be received on INPORT.  The packet is an ICMPv4
+# request with ETH_SRC, ETH_DST, IPV4_SRC, IPV4_DST, IP_CHSUM and
+# ICMP_CHKSUM as specified.  If EXP_IP_CHKSUM and EXP_ICMP_CHKSUM are
+# provided, then it should be the ip and icmp checksums of the packet
+# responded; otherwise, no reply is expected.
+# In the absence of an ip checksum calculation helpers, this relies
+# on the caller to provide the checksums for the ip and icmp headers.
+# XXX This should be more systematic.
+#
+# INPORT is an lport number, e.g. 11 for vif11.
+# ETH_SRC and ETH_DST are each 12 hex digits.
+# IPV4_SRC and IPV4_DST are each 8 hex digits.
+# IP_CHSUM and ICMP_CHKSUM are each 4 hex digits.
+# EXP_IP_CHSUM and EXP_ICMP_CHKSUM are each 4 hex digits.
+test_ipv4_icmp_request() {
+    local inport=$1 eth_src=$2 eth_dst=$3 ipv4_src=$4 ipv4_dst=$5 ip_chksum=$6 icmp_chksum=$7
+    local exp_ip_chksum=$8 exp_icmp_chksum=$9
+    shift; shift; shift; shift; shift; shift; shift
+    shift; shift
+
+    # Use ttl to exercise section 4.2.2.9 of RFC1812
+    local ip_ttl=01
+    local icmp_id=5fbf
+    local icmp_seq=0001
+    local icmp_data=$(seq 1 56 | xargs printf "%02x")
+    local icmp_type_code_request=0800
+    local icmp_payload=${icmp_type_code_request}${icmp_chksum}${icmp_id}${icmp_seq}${icmp_data}
+    local packet=${eth_dst}${eth_src}08004500005400004000${ip_ttl}01${ip_chksum}${ipv4_src}${ipv4_dst}${icmp_payload}
+
+    as hv1 ovs-appctl netdev-dummy/receive vif$inport $packet
+    if test X$exp_icmp_chksum != X; then
+        # Expect to receive the reply, if any. In same port where packet was sent.
+        # Note: src and dst fields are expected to be reversed.
+        local icmp_type_code_response=0000
+        local reply_icmp_ttl=fe
+        local reply_icmp_payload=${icmp_type_code_response}${exp_icmp_chksum}${icmp_id}${icmp_seq}${icmp_data}
+        local reply=${eth_src}${eth_dst}08004500005400004000${reply_icmp_ttl}01${exp_ip_chksum}${ipv4_dst}${ipv4_src}${reply_icmp_payload}
+        echo $reply >> vif$inport.expected
+    fi
+}
+
+# Send ping packet to router's ip addresses, from each of the 2 logical ports.
+rtr_l1_ip=$(ip_to_hex 192 168 1 1)
+rtr_l2_ip=$(ip_to_hex 172 16 1 1)
+l1_ip=$(ip_to_hex 192 168 1 2)
+l2_ip=$(ip_to_hex 172 16 1 2)
+
+# Ping router ip address that is on same subnet as the logical port
+test_ipv4_icmp_request 1 000000010203 0000000102f1 $l1_ip $rtr_l1_ip 0000 8510 02ff 8d10
+test_ipv4_icmp_request 2 000000010204 0000000102f2 $l2_ip $rtr_l2_ip 0000 8510 02ff 8d10
+
+# Ping router ip address that is on the other side of the logical ports
+test_ipv4_icmp_request 1 000000010203 0000000102f1 $l1_ip $rtr_l2_ip 0000 8510 02ff 8d10
+test_ipv4_icmp_request 2 000000010204 0000000102f2 $l2_ip $rtr_l1_ip 0000 8510 02ff 8d10
+
+echo "---------NB dump-----"
+ovn-nbctl show
+echo "---------------------"
+ovn-nbctl list logical_router
+echo "---------------------"
+ovn-nbctl list logical_router_port
+echo "---------------------"
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list logical_flow
+echo "---------------------"
+
+echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl dump-flows br-int
+
+# Now check the packets actually received against the ones expected.
+for inport in 1 2; do
+    file=hv1/vif${inport}-tx.pcap
+    echo $file
+    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > received.packets
+    cat vif$inport.expected | trim_zeros > expout
+    AT_CHECK([cat received.packets], [0], [expout])
+done
+
+as hv1
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+AT_CLEANUP

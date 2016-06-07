@@ -1570,7 +1570,8 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
 
                     ndKey = NlAttrGet(keyAttrs[OVS_KEY_ATTR_ND]);
                     RtlCopyMemory(&icmp6FlowPutKey->ndTarget,
-                                  ndKey->nd_target, sizeof (icmp6FlowPutKey->ndTarget));
+                                  ndKey->nd_target,
+                                  sizeof (icmp6FlowPutKey->ndTarget));
                     RtlCopyMemory(icmp6FlowPutKey->arpSha,
                                   ndKey->nd_sll, ETH_ADDR_LEN);
                     RtlCopyMemory(icmp6FlowPutKey->arpTha,
@@ -1600,8 +1601,10 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
             arpFlowPutKey->nwSrc = arpKey->arp_sip;
             arpFlowPutKey->nwDst = arpKey->arp_tip;
 
-            RtlCopyMemory(arpFlowPutKey->arpSha, arpKey->arp_sha, ETH_ADDR_LEN);
-            RtlCopyMemory(arpFlowPutKey->arpTha, arpKey->arp_tha, ETH_ADDR_LEN);
+            RtlCopyMemory(arpFlowPutKey->arpSha, arpKey->arp_sha,
+                          ETH_ADDR_LEN);
+            RtlCopyMemory(arpFlowPutKey->arpTha, arpKey->arp_tha,
+                          ETH_ADDR_LEN);
             /* Kernel datapath assumes 'arpFlowPutKey->nwProto' to be in host
              * order. */
             arpFlowPutKey->nwProto = (UINT8)ntohs((arpKey->arp_op));
@@ -1850,29 +1853,195 @@ OvsGetFlowMetadata(OvsFlowKey *key,
     return status;
 }
 
+
 /*
- *----------------------------------------------------------------------------
- * Initializes 'flow' members from 'packet', 'skb_priority', 'tun_id', and
- * 'ofp_in_port'.
- *
- * Initializes 'packet' header pointers as follows:
- *
- *    - packet->l2 to the start of the Ethernet header.
- *
- *    - packet->l3 to just past the Ethernet header, or just past the
- *      vlan_header if one is present, to the first byte of the payload of the
- *      Ethernet frame.
- *
- *    - packet->l4 to just past the IPv4 header, if one is present and has a
- *      correct length, and otherwise NULL.
- *
- *    - packet->l7 to just past the TCP, UDP, SCTP or ICMP header, if one is
- *      present and has a correct length, and otherwise NULL.
- *
- * Returns NDIS_STATUS_SUCCESS normally.  Fails only if packet data cannot be accessed
- * (e.g. if Pkt_CopyBytesOut() returns an error).
- *----------------------------------------------------------------------------
- */
+*----------------------------------------------------------------------------
+* Initializes 'layers' members from 'packet'
+*
+* Initializes 'layers' header pointers as follows:
+*
+*    - layers->l2 to the start of the Ethernet header.
+*
+*    - layers->l3 to just past the Ethernet header, or just past the
+*      vlan_header if one is present, to the first byte of the payload of the
+*      Ethernet frame.
+*
+*    - layers->l4 to just past the IPv4 header, if one is present and has a
+*      correct length, and otherwise NULL.
+*
+*    - layers->l7 to just past the TCP, UDP, SCTP or ICMP header, if one is
+*      present and has a correct length, and otherwise NULL.
+*
+*    - layers->isIPv4/isIPv6/isTcp/isUdp/isSctp based on the packet type
+*
+* Returns NDIS_STATUS_SUCCESS normally.
+* Fails only if packet data cannot be accessed.
+* (e.g. if OvsParseIPv6() returns an error).
+*----------------------------------------------------------------------------
+*/
+NDIS_STATUS
+OvsExtractLayers(const NET_BUFFER_LIST *packet,
+                 POVS_PACKET_HDR_INFO layers)
+{
+    struct Eth_Header *eth;
+    UINT8 offset = 0;
+    PVOID vlanTagValue;
+    ovs_be16 dlType;
+
+    layers->value = 0;
+
+    /* Link layer. */
+    eth = (Eth_Header *)GetStartAddrNBL((NET_BUFFER_LIST *)packet);
+
+    /*
+    * vlan_tci.
+    */
+    vlanTagValue = NET_BUFFER_LIST_INFO(packet, Ieee8021QNetBufferListInfo);
+    if (!vlanTagValue) {
+        if (eth->dix.typeNBO == ETH_TYPE_802_1PQ_NBO) {
+            offset = sizeof(Eth_802_1pq_Tag);
+        }
+
+        /*
+        * XXX Please note after this point, src mac and dst mac should
+        * not be accessed through eth
+        */
+        eth = (Eth_Header *)((UINT8 *)eth + offset);
+    }
+
+    /*
+    * dl_type.
+    *
+    * XXX assume that at least the first
+    * 12 bytes of received packets are mapped.  This code has the stronger
+    * assumption that at least the first 22 bytes of 'packet' is mapped (if my
+    * arithmetic is right).
+    */
+    if (ETH_TYPENOT8023(eth->dix.typeNBO)) {
+        dlType = eth->dix.typeNBO;
+        layers->l3Offset = ETH_HEADER_LEN_DIX + offset;
+    } else if (OvsPacketLenNBL(packet) >= ETH_HEADER_LEN_802_3 &&
+               eth->e802_3.llc.dsap == 0xaa &&
+               eth->e802_3.llc.ssap == 0xaa &&
+               eth->e802_3.llc.control == ETH_LLC_CONTROL_UFRAME &&
+               eth->e802_3.snap.snapOrg[0] == 0x00 &&
+               eth->e802_3.snap.snapOrg[1] == 0x00 &&
+               eth->e802_3.snap.snapOrg[2] == 0x00) {
+        dlType = eth->e802_3.snap.snapType.typeNBO;
+        layers->l3Offset = ETH_HEADER_LEN_802_3 + offset;
+    } else {
+        dlType = htons(OVSWIN_DL_TYPE_NONE);
+        layers->l3Offset = ETH_HEADER_LEN_DIX + offset;
+    }
+
+    /* Network layer. */
+    if (dlType == htons(ETH_TYPE_IPV4)) {
+        struct IPHdr ip_storage;
+        const struct IPHdr *nh;
+
+        layers->isIPv4 = 1;
+        nh = OvsGetIp(packet, layers->l3Offset, &ip_storage);
+        if (nh) {
+            layers->l4Offset = layers->l3Offset + nh->ihl * 4;
+
+            if (!(nh->frag_off & htons(IP_OFFSET))) {
+                if (nh->protocol == SOCKET_IPPROTO_TCP) {
+                    OvsParseTcp(packet, NULL, layers);
+                } else if (nh->protocol == SOCKET_IPPROTO_UDP) {
+                    OvsParseUdp(packet, NULL, layers);
+                } else if (nh->protocol == SOCKET_IPPROTO_SCTP) {
+                    OvsParseSctp(packet, NULL, layers);
+                } else if (nh->protocol == SOCKET_IPPROTO_ICMP) {
+                    ICMPHdr icmpStorage;
+                    const ICMPHdr *icmp;
+
+                    icmp = OvsGetIcmp(packet, layers->l4Offset, &icmpStorage);
+                    if (icmp) {
+                        layers->l7Offset = layers->l4Offset + sizeof *icmp;
+                    }
+                }
+            }
+        }
+    } else if (dlType == htons(ETH_TYPE_IPV6)) {
+        NDIS_STATUS status;
+        Ipv6Key ipv6Key;
+
+        status = OvsParseIPv6(packet, &ipv6Key, layers);
+        if (status != NDIS_STATUS_SUCCESS) {
+            return status;
+        }
+        layers->isIPv6 = 1;
+
+        if (ipv6Key.nwProto == SOCKET_IPPROTO_TCP) {
+            OvsParseTcp(packet, &(ipv6Key.l4), layers);
+        } else if (ipv6Key.nwProto == SOCKET_IPPROTO_UDP) {
+            OvsParseUdp(packet, &(ipv6Key.l4), layers);
+        } else if (ipv6Key.nwProto == SOCKET_IPPROTO_SCTP) {
+            OvsParseSctp(packet, &ipv6Key.l4, layers);
+        } else if (ipv6Key.nwProto == SOCKET_IPPROTO_ICMPV6) {
+            Icmp6Key icmp6Key;
+            OvsParseIcmpV6(packet, NULL, &icmp6Key, layers);
+        }
+    } else if (OvsEthertypeIsMpls(dlType)) {
+        MPLSHdr mplsStorage;
+        const MPLSHdr *mpls;
+
+        /*
+        * In the presence of an MPLS label stack the end of the L2
+        * header and the beginning of the L3 header differ.
+        *
+        * A network packet may contain multiple MPLS labels, but we
+        * are only interested in the topmost label stack entry.
+        *
+        * Advance network header to the beginning of the L3 header.
+        * layers->l3Offset corresponds to the end of the L2 header.
+        */
+        for (UINT32 i = 0; i < FLOW_MAX_MPLS_LABELS; i++) {
+            mpls = OvsGetMpls(packet, layers->l3Offset, &mplsStorage);
+            if (!mpls) {
+                break;
+            }
+
+            layers->l3Offset += MPLS_HLEN;
+            layers->l4Offset += MPLS_HLEN;
+
+            if (mpls->lse & htonl(MPLS_BOS_MASK)) {
+                /*
+                * Bottom of Stack bit is set, which means there are no
+                * remaining MPLS labels in the packet.
+                */
+                break;
+            }
+        }
+    }
+
+    return NDIS_STATUS_SUCCESS;
+}
+
+/*
+*----------------------------------------------------------------------------
+* Initializes 'flow' members from 'packet', 'skb_priority', 'tun_id', and
+* 'ofp_in_port'.
+*
+* Initializes 'packet' header pointers as follows:
+*
+*    - packet->l2 to the start of the Ethernet header.
+*
+*    - packet->l3 to just past the Ethernet header, or just past the
+*      vlan_header if one is present, to the first byte of the payload of the
+*      Ethernet frame.
+*
+*    - packet->l4 to just past the IPv4 header, if one is present and has a
+*      correct length, and otherwise NULL.
+*
+*    - packet->l7 to just past the TCP, UDP, SCTP or ICMP header, if one is
+*      present and has a correct length, and otherwise NULL.
+*
+* Returns NDIS_STATUS_SUCCESS normally.
+* Fails only if packet data cannot be accessed.
+* (e.g. if Pkt_CopyBytesOut() returns an error).
+*----------------------------------------------------------------------------
+*/
 NDIS_STATUS
 OvsExtractFlow(const NET_BUFFER_LIST *packet,
                UINT32 inPort,
@@ -1904,8 +2073,8 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
 
     /* Link layer. */
     eth = (Eth_Header *)GetStartAddrNBL((NET_BUFFER_LIST *)packet);
-    memcpy(flow->l2.dlSrc, eth->src, ETH_ADDR_LENGTH);
-    memcpy(flow->l2.dlDst, eth->dst, ETH_ADDR_LENGTH);
+    RtlCopyMemory(flow->l2.dlSrc, eth->src, ETH_ADDR_LENGTH);
+    RtlCopyMemory(flow->l2.dlDst, eth->dst, ETH_ADDR_LENGTH);
 
     /*
      * vlan_tci.
@@ -1927,8 +2096,7 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
             flow->l2.vlanTci = 0;
         }
         /*
-         * XXX
-         * Please note after this point, src mac and dst mac should
+         * XXX Please note after this point, src mac and dst mac should
          * not be accessed through eth
          */
         eth = (Eth_Header *)((UINT8 *)eth + offset);
@@ -1959,7 +2127,8 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
         layers->l3Offset = ETH_HEADER_LEN_DIX + offset;
     }
 
-    flow->l2.keyLen = OVS_WIN_TUNNEL_KEY_SIZE + OVS_L2_KEY_SIZE - flow->l2.offset;
+    flow->l2.keyLen = OVS_WIN_TUNNEL_KEY_SIZE + OVS_L2_KEY_SIZE
+                      - flow->l2.offset;
     /* Network layer. */
     if (flow->l2.dlType == htons(ETH_TYPE_IPV4)) {
         struct IPHdr ip_storage;
@@ -2016,9 +2185,9 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
     } else if (flow->l2.dlType == htons(ETH_TYPE_IPV6)) {
         NDIS_STATUS status;
         flow->l2.keyLen += OVS_IPV6_KEY_SIZE;
-        status = OvsParseIPv6(packet, flow, layers);
+        status = OvsParseIPv6(packet, &flow->ipv6Key, layers);
         if (status != NDIS_STATUS_SUCCESS) {
-            memset(&flow->ipv6Key, 0, sizeof (Ipv6Key));
+            RtlZeroMemory(&flow->ipv6Key, sizeof (Ipv6Key));
             return status;
         }
         layers->isIPv6 = 1;
@@ -2033,7 +2202,7 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
         } else if (flow->ipv6Key.nwProto == SOCKET_IPPROTO_SCTP) {
             OvsParseSctp(packet, &flow->ipv6Key.l4, layers);
         } else if (flow->ipv6Key.nwProto == SOCKET_IPPROTO_ICMPV6) {
-            OvsParseIcmpV6(packet, flow, layers);
+            OvsParseIcmpV6(packet, &flow->ipv6Key, &flow->icmp6Key, layers);
             flow->l2.keyLen += (OVS_ICMPV6_KEY_SIZE - OVS_IPV6_KEY_SIZE);
         }
     } else if (flow->l2.dlType == htons(ETH_TYPE_ARP)) {
@@ -2055,10 +2224,10 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
             }
             if (arpKey->nwProto == ARPOP_REQUEST
                 || arpKey->nwProto == ARPOP_REPLY) {
-                memcpy(&arpKey->nwSrc, arp->arp_spa, 4);
-                memcpy(&arpKey->nwDst, arp->arp_tpa, 4);
-                memcpy(arpKey->arpSha, arp->arp_sha, ETH_ADDR_LENGTH);
-                memcpy(arpKey->arpTha, arp->arp_tha, ETH_ADDR_LENGTH);
+                RtlCopyMemory(&arpKey->nwSrc, arp->arp_spa, 4);
+                RtlCopyMemory(&arpKey->nwDst, arp->arp_tpa, 4);
+                RtlCopyMemory(arpKey->arpSha, arp->arp_sha, ETH_ADDR_LENGTH);
+                RtlCopyMemory(arpKey->arpTha, arp->arp_tha, ETH_ADDR_LENGTH);
             }
         }
     } else if (OvsEthertypeIsMpls(flow->l2.dlType)) {

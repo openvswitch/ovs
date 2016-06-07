@@ -9,7 +9,7 @@ m4_define([OVS_VSCTL_SETUP],
 dnl OVS_VSCTL_CLEANUP
 dnl
 dnl Kills off the database server.
-m4_define([OVS_VSCTL_CLEANUP], [OVSDB_SERVER_SHUTDOWN])
+m4_define([OVS_VSCTL_CLEANUP], [OVS_APP_EXIT_AND_WAIT(["`pwd`"/unixctl])])
 
 dnl RUN_OVS_VSCTL(COMMAND, ...)
 dnl
@@ -1332,7 +1332,7 @@ AT_CHECK([ovs-vsctl -t 5 --no-wait --db=ssl:127.0.0.1:$SSL_PORT --private-key=$P
 AT_CHECK([ovs-vsctl -t 5 --no-wait --db=ssl:127.0.0.1:$SSL_PORT --private-key=$PKIDIR/vsctl-privkey.pem --certificate=$PKIDIR/vsctl-cert.pem --bootstrap-ca-cert=$PKIDIR/cacert.pem list-br], [0], [br0
 ])
 
-OVSDB_SERVER_SHUTDOWN
+OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
 AT_SETUP([peer ca cert])
@@ -1359,5 +1359,5 @@ AT_CHECK([ovs-vsctl -t 5 --no-wait --db=ssl:127.0.0.1:$SSL_PORT --private-key=$P
 AT_CHECK([ovs-vsctl -t 5 --no-wait --db=ssl:127.0.0.1:$SSL_PORT --private-key=$PKIDIR/vsctl-privkey.pem --certificate=$PKIDIR/vsctl-cert.pem --bootstrap-ca-cert=$PKIDIR/cacert.pem list-br], [0], [br0
 ])
 
-OVSDB_SERVER_SHUTDOWN
+OVS_VSCTL_CLEANUP
 AT_CLEANUP

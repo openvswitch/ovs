@@ -768,7 +768,8 @@ OvsCreateAndAddPackets(PVOID userData,
         NDIS_TCP_LARGE_SEND_OFFLOAD_NET_BUFFER_LIST_INFO tsoInfo;
         UINT32 packetLength;
 
-        tsoInfo.Value = NET_BUFFER_LIST_INFO(nbl, TcpLargeSendNetBufferListInfo);
+        tsoInfo.Value = NET_BUFFER_LIST_INFO(nbl,
+                                             TcpLargeSendNetBufferListInfo);
         nb = NET_BUFFER_LIST_FIRST_NB(nbl);
         packetLength = NET_BUFFER_DATA_LENGTH(nb);
 
@@ -870,7 +871,8 @@ OvsCompletePacketHeader(UINT8 *packet,
                                          (UINT32 *)&ipHdr->DestinationAddress,
                                          IPPROTO_TCP, hdrInfoOut->l4PayLoad);
         } else {
-            PIPV6_HEADER ipv6Hdr = (PIPV6_HEADER)(packet + hdrInfoIn->l3Offset);
+            PIPV6_HEADER ipv6Hdr = (PIPV6_HEADER)(packet +
+                                                  hdrInfoIn->l3Offset);
             hdrInfoOut->l4PayLoad =
                 (UINT16)(ntohs(ipv6Hdr->PayloadLength) +
                 hdrInfoIn->l3Offset + sizeof(IPV6_HEADER)-
@@ -884,9 +886,9 @@ OvsCompletePacketHeader(UINT8 *packet,
         hdrInfoOut->tcpCsumNeeded = 1;
         ovsUserStats.recalTcpCsum++;
     } else if (!isRecv) {
-        if (csumInfo.Transmit.TcpChecksum) {
+        if (hdrInfoIn->isTcp && csumInfo.Transmit.TcpChecksum) {
             hdrInfoOut->tcpCsumNeeded = 1;
-        } else if (csumInfo.Transmit.UdpChecksum) {
+        } else if (hdrInfoIn->isUdp && csumInfo.Transmit.UdpChecksum) {
             hdrInfoOut->udpCsumNeeded = 1;
         }
         if (hdrInfoOut->tcpCsumNeeded || hdrInfoOut->udpCsumNeeded) {
@@ -896,7 +898,8 @@ OvsCompletePacketHeader(UINT8 *packet,
                 hdrInfoOut->tcpCsumNeeded ? IPPROTO_TCP : IPPROTO_UDP;
 #endif
             if (hdrInfoIn->isIPv4) {
-                PIPV4_HEADER ipHdr = (PIPV4_HEADER)(packet + hdrInfoIn->l3Offset);
+                PIPV4_HEADER ipHdr = (PIPV4_HEADER)(packet +
+                                                    hdrInfoIn->l3Offset);
                 hdrInfoOut->l4PayLoad = (UINT16)(ntohs(ipHdr->TotalLength) -
                     (ipHdr->HeaderLength << 2));
 #ifdef DBG
@@ -1004,8 +1007,8 @@ OvsCreateQueueNlPacket(PVOID userData,
     csumInfo.Value = NET_BUFFER_LIST_INFO(nbl, TcpIpChecksumNetBufferListInfo);
 
     if (isRecv && (csumInfo.Receive.TcpChecksumFailed ||
-                  (csumInfo.Receive.UdpChecksumFailed && !hdrInfo->udpCsumZero) ||
-                  csumInfo.Receive.IpChecksumFailed)) {
+            (csumInfo.Receive.UdpChecksumFailed && !hdrInfo->udpCsumZero) ||
+            csumInfo.Receive.IpChecksumFailed)) {
         OVS_LOG_INFO("Packet dropped due to checksum failure.");
         ovsUserStats.dropDuetoChecksum++;
         return NULL;
