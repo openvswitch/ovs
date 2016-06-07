@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-/* On non-Linux, these functions are defined inline in ovs-numa.h. */
-#ifdef __linux__
-
 #include <config.h>
 #include "ovs-numa.h"
 
 #include <ctype.h>
-#include <dirent.h>
 #include <errno.h>
+#ifdef __linux__
+#include <dirent.h>
 #include <stddef.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+#endif /* __linux__ */
 
 #include "hash.h"
 #include "hmap.h"
@@ -82,18 +81,21 @@ static struct hmap all_cpu_cores = HMAP_INITIALIZER(&all_cpu_cores);
 /* True if numa node and core info are correctly extracted. */
 static bool found_numa_and_core;
 
+#ifdef __linux__
 /* Returns true if 'str' contains all digits.  Returns false otherwise. */
 static bool
 contain_all_digits(const char *str)
 {
     return str[strspn(str, "0123456789")] == '\0';
 }
+#endif /* __linux__ */
 
 /* Discovers all numa nodes and the corresponding cpu cores.
  * Constructs the 'struct numa_node' and 'struct cpu_core'. */
 static void
 discover_numa_and_core(void)
 {
+#ifdef __linux__
     int n_cpus = 0;
     int i;
     DIR *dir;
@@ -165,6 +167,7 @@ discover_numa_and_core(void)
     if (hmap_count(&all_numa_nodes) && hmap_count(&all_cpu_cores)) {
         found_numa_and_core = true;
     }
+#endif /* __linux__ */
 }
 
 /* Gets 'struct cpu_core' by 'core_id'. */
@@ -373,14 +376,14 @@ ovs_numa_unpin_core(unsigned core_id)
 struct ovs_numa_dump *
 ovs_numa_dump_cores_on_numa(int numa_id)
 {
-    struct ovs_numa_dump *dump = NULL;
+    struct ovs_numa_dump *dump = xmalloc(sizeof *dump);
     struct numa_node *numa = get_numa_by_numa_id(numa_id);
+
+    ovs_list_init(&dump->dump);
 
     if (numa) {
         struct cpu_core *core;
 
-        dump = xmalloc(sizeof *dump);
-        ovs_list_init(&dump->dump);
         LIST_FOR_EACH(core, list_node, &numa->cores) {
             struct ovs_numa_info *info = xmalloc(sizeof *info);
 
@@ -397,6 +400,10 @@ void
 ovs_numa_dump_destroy(struct ovs_numa_dump *dump)
 {
     struct ovs_numa_info *iter;
+
+    if (!dump) {
+        return;
+    }
 
     LIST_FOR_EACH_POP (iter, list_node, &dump->dump) {
         free(iter);
@@ -466,5 +473,3 @@ ovs_numa_set_cpu_mask(const char *cmask)
         core->available = false;
     }
 }
-
-#endif /* __linux__ */
