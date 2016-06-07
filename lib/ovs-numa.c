@@ -473,3 +473,23 @@ ovs_numa_set_cpu_mask(const char *cmask)
         core->available = false;
     }
 }
+
+int ovs_numa_thread_setaffinity_core(unsigned core_id)
+{
+#ifdef __linux__
+    cpu_set_t cpuset;
+    int err;
+
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id, &cpuset);
+    err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+    if (err) {
+        VLOG_ERR("Thread affinity error %d",err);
+        return err;
+    }
+
+    return 0;
+#else /* !__linux__ */
+    return EOPNOTSUPP;
+#endif /* __linux__ */
+}

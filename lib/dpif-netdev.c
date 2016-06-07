@@ -2839,7 +2839,8 @@ pmd_thread_main(void *f_)
 
     /* Stores the pmd thread's 'pmd' to 'per_pmd_key'. */
     ovsthread_setspecific(pmd->dp->per_pmd_key, pmd);
-    pmd_thread_setaffinity_cpu(pmd->core_id);
+    ovs_numa_thread_setaffinity_core(pmd->core_id);
+    dpdk_set_lcore_id(pmd->core_id);
     poll_cnt = pmd_load_queues_and_ports(pmd, &poll_list);
 reload:
     emc_cache_init(&pmd->flow_cache);

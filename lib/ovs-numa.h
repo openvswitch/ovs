@@ -54,6 +54,7 @@ unsigned ovs_numa_get_unpinned_core_on_numa(int numa_id);
 void ovs_numa_unpin_core(unsigned core_id);
 struct ovs_numa_dump *ovs_numa_dump_cores_on_numa(int numa_id);
 void ovs_numa_dump_destroy(struct ovs_numa_dump *);
+int ovs_numa_thread_setaffinity_core(unsigned core_id);
 
 #define FOR_EACH_CORE_ON_NUMA(ITER, DUMP)                    \
     LIST_FOR_EACH((ITER), list_node, &(DUMP)->dump)
