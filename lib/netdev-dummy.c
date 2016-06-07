@@ -19,6 +19,7 @@
 #include "dummy.h"
 
 #include <errno.h>
+#include <unistd.h>
 
 #include "dp-packet.h"
 #include "dpif-netdev.h"
@@ -971,6 +972,20 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
     ovs_mutex_unlock(&netdev->mutex);
 
     if (!packet) {
+        if (netdev_is_pmd(&netdev->up)) {
+            /* If 'netdev' is a PMD device, this is called as part of the PMD
+             * thread busy loop.  We yield here (without quiescing) for two
+             * reasons:
+             *
+             * - To reduce the CPU utilization during the testsuite
+             * - To give valgrind a chance to switch thread. According
+             *   to the valgrind documentation, there's a big lock that
+             *   prevents multiple thread from being executed at the same
+             *   time.  On my system, without this sleep, the pmd threads
+             *   testcases fail under valgrind, because ovs-vswitchd becomes
+             *   unresponsive. */
+            sched_yield();
+        }
         return EAGAIN;
     }
     ovs_mutex_lock(&netdev->mutex);
