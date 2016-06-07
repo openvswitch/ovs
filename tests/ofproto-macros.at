@@ -285,7 +285,8 @@ m4_define([_OVS_VSWITCHD_START],
 /dpdk|INFO|DPDK Disabled - to change this requires a restart./d']])
 ])
 
-# OVS_VSWITCHD_START([vsctl-args], [vsctl-output], [=override])
+# OVS_VSWITCHD_START([vsctl-args], [vsctl-output], [=override],
+#                    [vswitchd-aux-args])
 #
 # Creates a database and starts ovsdb-server, starts ovs-vswitchd
 # connected to that database, calls ovs-vsctl to create a bridge named
@@ -298,8 +299,11 @@ m4_define([_OVS_VSWITCHD_START],
 # =override (literally) as the third argument.  Otherwise, system devices
 # won't work at all (which makes sense because tests should not access a
 # system's real Ethernet devices).
+#
+# 'vswitchd-aux-args' provides a way to pass extra command line arguments
+# to ovs-vswitchd
 m4_define([OVS_VSWITCHD_START],
-  [_OVS_VSWITCHD_START([--enable-dummy$3 --disable-system])
+  [_OVS_VSWITCHD_START([--enable-dummy$3 --disable-system $4])
    AT_CHECK([add_of_br 0 $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
 ])
 
