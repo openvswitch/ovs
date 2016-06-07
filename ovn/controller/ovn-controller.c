@@ -322,6 +322,11 @@ update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
     sset_destroy(&all_users);
 }
 
+/* Contains "struct local_datapath" nodes whose hash values are the
+ * tunnel_key of datapaths with at least one local port binding. */
+static struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
+static struct hmap patched_datapaths = HMAP_INITIALIZER(&patched_datapaths);
+
 int
 main(int argc, char *argv[])
 {
@@ -411,6 +416,7 @@ main(int argc, char *argv[])
             free(ovnsb_remote);
             ovnsb_remote = new_ovnsb_remote;
             ovsdb_idl_set_remote(ovnsb_idl_loop.idl, ovnsb_remote, true);
+            binding_reset_processing();
         } else {
             free(new_ovnsb_remote);
         }
@@ -422,11 +428,6 @@ main(int argc, char *argv[])
             .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
-        /* Contains "struct local_datpath" nodes whose hash values are the
-         * tunnel_key of datapaths with at least one local port binding. */
-        struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
-
-        struct hmap patched_datapaths = HMAP_INITIALIZER(&patched_datapaths);
         struct sset all_lports = SSET_INITIALIZER(&all_lports);
 
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
@@ -435,8 +436,7 @@ main(int argc, char *argv[])
         if (chassis_id) {
             chassis_run(&ctx, chassis_id);
             encaps_run(&ctx, br_int, chassis_id);
-            binding_run(&ctx, br_int, chassis_id, &all_lports,
-                        &local_datapaths);
+            binding_run(&ctx, br_int, chassis_id, &local_datapaths);
         }
 
         if (br_int && chassis_id) {
@@ -469,21 +469,6 @@ main(int argc, char *argv[])
         }
 
         sset_destroy(&all_lports);
-
-        struct local_datapath *cur_node, *next_node;
-        HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node, &local_datapaths) {
-            hmap_remove(&local_datapaths, &cur_node->hmap_node);
-            free(cur_node);
-        }
-        hmap_destroy(&local_datapaths);
-
-        struct patched_datapath *pd_cur_node, *pd_next_node;
-        HMAP_FOR_EACH_SAFE (pd_cur_node, pd_next_node, hmap_node,
-                &patched_datapaths) {
-            hmap_remove(&patched_datapaths, &pd_cur_node->hmap_node);
-            free(pd_cur_node);
-        }
-        hmap_destroy(&patched_datapaths);
 
         unixctl_server_run(unixctl);
 

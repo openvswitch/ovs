@@ -185,7 +185,15 @@ add_bridge_mappings(struct controller_ctx *ctx,
                  * to create patch ports for it. */
                 continue;
             }
-            if (ld->localnet_port) {
+
+            /* Under incremental processing, it is possible to re-enter the
+             * following block with a logical port that has already been
+             * recorded in binding->logical_port.  Rather than emit spurious
+             * warnings, add a check to see if the logical port name has
+             * actually changed. */
+
+            if (ld->localnet_port && strcmp(ld->localnet_port->logical_port,
+                                            binding->logical_port)) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
                 VLOG_WARN_RL(&rl, "localnet port '%s' already set for datapath "
                              "'%"PRId64"', skipping the new port '%s'.",
