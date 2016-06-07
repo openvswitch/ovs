@@ -94,17 +94,17 @@
       </dd>
     </dl>
 
-    <h1>Logical Port Commands</h1>
+    <h1>Logical Switch Port Commands</h1>
     <dl>
-      <dt>[<code>--may-exist</code>] <code>lport-add</code> <var>lswitch</var> <var>lport</var></dt>
+      <dt>[<code>--may-exist</code>] <code>lsp-add</code> <var>lswitch</var> <var>port</var></dt>
       <dd>
         <p>
-          Creates on <var>lswitch</var> a new logical port named
-          <var>lport</var>.
+          Creates on <var>lswitch</var> a new logical switch port named
+          <var>port</var>.
         </p>
 
         <p>
-          It is an error if a logical port named <var>lport</var> already
+          It is an error if a logical port named <var>port</var> already
           exists, unless <code>--may-exist</code> is specified.  Regardless of
           <code>--may-exist</code>, it is an error if the existing port is in
           some logical switch other than <var>lswitch</var> or if it has a
@@ -112,19 +112,19 @@
         </p>
       </dd>
 
-      <dt>[<code>--may-exist</code>] <code>lport-add</code> <var>lswitch</var> <var>lport</var> <var>parent</var> <var>tag</var></dt>
+      <dt>[<code>--may-exist</code>] <code>lsp-add</code> <var>lswitch</var> <var>port</var> <var>parent</var> <var>tag</var></dt>
       <dd>
         <p>
-          Creates on <var>lswitch</var> a logical port named <var>lport</var>
-          that is a child of <var>parent</var> that is identifed with VLAN ID
-          <var>tag</var>.  This is useful in cases such as virtualized
-          container environments where Open vSwitch does not have a direct
-          connection to the container's port and it must be shared with
-          the virtual machine's port.
+          Creates on <var>lswitch</var> a logical switch port named
+          <var>port</var> that is a child of <var>parent</var> that is
+          identifed with VLAN ID <var>tag</var>.  This is useful in
+          cases such as virtualized container environments where Open
+          vSwitch does not have a direct connection to the container's
+          port and it must be shared with the virtual machine's port.
         </p>
 
         <p>
-          It is an error if a logical port named <var>lport</var> already
+          It is an error if a logical port named <var>port</var> already
           exists, unless <code>--may-exist</code> is specified.  Regardless of
           <code>--may-exist</code>, it is an error if the existing port is not
           in <var>lswitch</var> or if it does not have the specified
@@ -132,55 +132,55 @@
         </p>
       </dd>
 
-      <dt>[<code>--if-exists</code>] <code>lport-del</code> <var>lport</var></dt>
+      <dt>[<code>--if-exists</code>] <code>lsp-del</code> <var>port</var></dt>
       <dd>
-        Deletes <var>lport</var>.  It is an error if <var>lport</var> does
+        Deletes <var>port</var>.  It is an error if <var>port</var> does
         not exist, unless <code>--if-exists</code> is specified.
       </dd>
 
-      <dt><code>lport-list</code> <var>lswitch</var></dt>
+      <dt><code>lsp-list</code> <var>lswitch</var></dt>
       <dd>
-        Lists all the logical ports within <var>lswitch</var> on
+        Lists all the logical switch ports within <var>lswitch</var> on
         standard output, one per line.
       </dd>
 
-      <dt><code>lport-get-parent</code> <var>lport</var></dt>
+      <dt><code>lsp-get-parent</code> <var>port</var></dt>
       <dd>
-        If set, get the parent port of <var>lport</var>.  If not set, print
+        If set, get the parent port of <var>port</var>.  If not set, print
         nothing.
       </dd>
 
-      <dt><code>lport-get-tag</code> <var>lport</var></dt>
+      <dt><code>lsp-get-tag</code> <var>port</var></dt>
       <dd>
-        If set, get the tag for <var>lport</var> traffic.  If not set, print
+        If set, get the tag for <var>port</var> traffic.  If not set, print
         nothing.
       </dd>
 
-      <dt><code>lport-set-addresses</code> <var>lport</var> [<var>address</var>]...</dt>
+      <dt><code>lsp-set-addresses</code> <var>port</var> [<var>address</var>]...</dt>
       <dd>
-        Sets the addresses associated with <var>lport</var> to
+        Sets the addresses associated with <var>port</var> to
         <var>address</var>.  Each <var>address</var> should be either an
         Ethernet address or an Ethernet address followed by an IP address
         (separated by a space and quoted to form a single command-line
         argument).  The special form <code>unknown</code> is also valid.
         Multiple Ethernet addresses or Ethernet+IP pairs may be set. If no
-        <var>address</var> argument is given, <var>lport</var> will have no
+        <var>address</var> argument is given, <var>port</var> will have no
         addresses associated with it.
       </dd>
 
-      <dt><code>lport-get-addresses</code> <var>lport</var></dt>
+      <dt><code>lsp-get-addresses</code> <var>port</var></dt>
       <dd>
-        Lists all the addresses associated with <var>lport</var> on standard
+        Lists all the addresses associated with <var>port</var> on standard
         output, one per line.
       </dd>
 
-      <dt><code>lport-set-port-security</code> <var>lport</var> [<var>addrs</var>]...</dt>
+      <dt><code>lsp-set-port-security</code> <var>port</var> [<var>addrs</var>]...</dt>
       <dd>
         <p>
-          Sets the port security addresses associated with <var>lport</var> to
+          Sets the port security addresses associated with <var>port</var> to
           <var>addrs</var>.  Multiple sets of addresses may be set by using
           multiple <var>addrs</var> arguments.  If no <var>addrs</var> argument
-          is given, <var>lport</var> will not have port security enabled.
+          is given, <var>port</var> will not have port security enabled.
         </p>
 
         <p>
@@ -192,47 +192,47 @@
         </p>
       </dd>
 
-      <dt><code>lport-get-port-security</code> <var>lport</var></dt>
+      <dt><code>lsp-get-port-security</code> <var>port</var></dt>
       <dd>
-        Lists all the port security addresses associated with <var>lport</var>
+        Lists all the port security addresses associated with <var>port</var>
         on standard output, one per line.
       </dd>
 
-      <dt><code>lport-get-up</code> <var>lport</var></dt>
+      <dt><code>lsp-get-up</code> <var>port</var></dt>
       <dd>
-        Prints the state of <var>lport</var>, either <code>up</code> or
+        Prints the state of <var>port</var>, either <code>up</code> or
         <code>down</code>.
       </dd>
 
-      <dt><code>lport-set-enabled</code> <var>lport</var> <var>state</var></dt>
+      <dt><code>lsp-set-enabled</code> <var>port</var> <var>state</var></dt>
       <dd>
-        Set the administrative state of <var>lport</var>, either <code>enabled</code>
+        Set the administrative state of <var>port</var>, either <code>enabled</code>
         or <code>disabled</code>.  When a port is disabled, no traffic is allowed into
         or out of the port.
       </dd>
 
-      <dt><code>lport-get-enabled</code> <var>lport</var></dt>
+      <dt><code>lsp-get-enabled</code> <var>port</var></dt>
       <dd>
-        Prints the administrative state of <var>lport</var>, either <code>enabled</code>
+        Prints the administrative state of <var>port</var>, either <code>enabled</code>
         or <code>disabled</code>.
       </dd>
 
-      <dt><code>lport-set-type</code> <var>lport</var> <var>type</var></dt>
+      <dt><code>lsp-set-type</code> <var>port</var> <var>type</var></dt>
       <dd>
         Set the type for the logical port.  No special types have been implemented yet.
       </dd>
 
-      <dt><code>lport-get-type</code> <var>lport</var></dt>
+      <dt><code>lsp-get-type</code> <var>port</var></dt>
       <dd>
         Get the type for the logical port.
       </dd>
 
-      <dt><code>lport-set-options</code> <var>lport</var> [<var>key=value</var>]...</dt>
+      <dt><code>lsp-set-options</code> <var>port</var> [<var>key=value</var>]...</dt>
       <dd>
         Set type-specific key-value options for the logical port.
       </dd>
 
-      <dt><code>lport-get-options</code> <var>lport</var></dt>
+      <dt><code>lsp-get-options</code> <var>port</var></dt>
       <dd>
         Get the type-specific options for the logical port.
       </dd>

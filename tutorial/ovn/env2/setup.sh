@@ -17,18 +17,18 @@ set -o xtrace
 
 ovn-nbctl lswitch-add sw0
 ovn-nbctl lswitch-add sw1
-ovn-nbctl lport-add sw0 sw0-port1 
-ovn-nbctl lport-add sw0 sw0-port2 
-ovn-nbctl lport-add sw1 sw1-port1 
-ovn-nbctl lport-add sw1 sw1-port2 
-ovn-nbctl lport-set-addresses sw0-port1 00:00:00:00:00:01
-ovn-nbctl lport-set-addresses sw0-port2 00:00:00:00:00:02
-ovn-nbctl lport-set-addresses sw1-port1 00:00:00:00:00:03
-ovn-nbctl lport-set-addresses sw1-port2 00:00:00:00:00:04
-ovn-nbctl lport-set-port-security sw0-port1 00:00:00:00:00:01
-ovn-nbctl lport-set-port-security sw0-port2 00:00:00:00:00:02
-ovn-nbctl lport-set-port-security sw1-port1 00:00:00:00:00:03
-ovn-nbctl lport-set-port-security sw1-port2 00:00:00:00:00:04
+ovn-nbctl lsp-add sw0 sw0-port1
+ovn-nbctl lsp-add sw0 sw0-port2
+ovn-nbctl lsp-add sw1 sw1-port1
+ovn-nbctl lsp-add sw1 sw1-port2
+ovn-nbctl lsp-set-addresses sw0-port1 00:00:00:00:00:01
+ovn-nbctl lsp-set-addresses sw0-port2 00:00:00:00:00:02
+ovn-nbctl lsp-set-addresses sw1-port1 00:00:00:00:00:03
+ovn-nbctl lsp-set-addresses sw1-port2 00:00:00:00:00:04
+ovn-nbctl lsp-set-port-security sw0-port1 00:00:00:00:00:01
+ovn-nbctl lsp-set-port-security sw0-port2 00:00:00:00:00:02
+ovn-nbctl lsp-set-port-security sw1-port1 00:00:00:00:00:03
+ovn-nbctl lsp-set-port-security sw1-port2 00:00:00:00:00:04
 
 ovs-vsctl add-port br-int lport1 -- set Interface lport1 external_ids:iface-id=sw0-port1
 ovs-vsctl add-port br-int lport2 -- set Interface lport2 external_ids:iface-id=sw0-port2

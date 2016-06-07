@@ -308,31 +308,31 @@ ACL commands:\n\
   acl-list LSWITCH          print ACLs for LSWITCH\n\
 \n\
 Logical switch port commands:\n\
-  lport-add LSWITCH LPORT   add logical port LPORT on LSWITCH\n\
-  lport-add LSWITCH LPORT PARENT TAG\n\
-                            add logical port LPORT on LSWITCH with PARENT\n\
+  lsp-add LSWITCH PORT      add logical port PORT on LSWITCH\n\
+  lsp-add LSWITCH PORT PARENT TAG\n\
+                            add logical port PORT on LSWITCH with PARENT\n\
                             on TAG\n\
-  lport-del LPORT           delete LPORT from its attached switch\n\
-  lport-list LSWITCH        print the names of all logical ports on LSWITCH\n\
-  lport-get-parent LPORT    get the parent of LPORT if set\n\
-  lport-get-tag LPORT       get the LPORT's tag if set\n\
-  lport-set-addresses LPORT [ADDRESS]...\n\
-                            set MAC or MAC+IP addresses for LPORT.\n\
-  lport-get-addresses LPORT      get a list of MAC addresses on LPORT\n\
-  lport-set-port-security LPORT [ADDRS]...\n\
-                            set port security addresses for LPORT.\n\
-  lport-get-port-security LPORT    get LPORT's port security addresses\n\
-  lport-get-up LPORT        get state of LPORT ('up' or 'down')\n\
-  lport-set-enabled LPORT STATE\n\
-                            set administrative state LPORT\n\
+  lsp-del PORT              delete PORT from its attached switch\n\
+  lsp-list LSWITCH          print the names of all logical ports on LSWITCH\n\
+  lsp-get-parent PORT       get the parent of PORT if set\n\
+  lsp-get-tag PORT          get the PORT's tag if set\n\
+  lsp-set-addresses PORT [ADDRESS]...\n\
+                            set MAC or MAC+IP addresses for PORT.\n\
+  lsp-get-addresses PORT    get a list of MAC addresses on PORT\n\
+  lsp-set-port-security PORT [ADDRS]...\n\
+                            set port security addresses for PORT.\n\
+  lsp-get-port-security PORT    get PORT's port security addresses\n\
+  lsp-get-up PORT           get state of PORT ('up' or 'down')\n\
+  lsp-set-enabled PORT STATE\n\
+                            set administrative state PORT\n\
                             ('enabled' or 'disabled')\n\
-  lport-get-enabled LPORT   get administrative state LPORT\n\
+  lsp-get-enabled PORT      get administrative state PORT\n\
                             ('enabled' or 'disabled')\n\
-  lport-set-type LPORT TYPE Set the type for LPORT\n\
-  lport-get-type LPORT      Get the type for LPORT\n\
-  lport-set-options LPORT KEY=VALUE [KEY=VALUE]...\n\
-                            Set options related to the type of LPORT\n\
-  lport-get-options LPORT   Get the type specific options for LPORT\n\
+  lsp-set-type PORT TYPE    set the type for PORT\n\
+  lsp-get-type PORT         get the type for PORT\n\
+  lsp-set-options PORT KEY=VALUE [KEY=VALUE]...\n\
+                            set options related to the type of PORT\n\
+  lsp-get-options PORT      get the type specific options for PORT\n\
 \n\
 Logical router commands:\n\
   lr-add [ROUTER]           create a logical router named ROUTER\n\
@@ -673,7 +673,7 @@ nbctl_lsp_add(struct ctl_context *ctx)
             ctl_fatal("%s: invalid tag", ctx->argv[4]);
         }
     } else {
-        ctl_fatal("lport-add with parent must also specify a tag");
+        ctl_fatal("lsp-add with parent must also specify a tag");
     }
 
     const char *lsp_name = ctx->argv[2];
@@ -681,7 +681,7 @@ nbctl_lsp_add(struct ctl_context *ctx)
     lsp = lsp_by_name_or_uuid(ctx, lsp_name, false);
     if (lsp) {
         if (!may_exist) {
-            ctl_fatal("%s: an lport with this name already exists",
+            ctl_fatal("%s: a port with this name already exists",
                       lsp_name);
         }
 
@@ -689,29 +689,29 @@ nbctl_lsp_add(struct ctl_context *ctx)
         lsw = lsp_to_lswitch(ctx->idl, lsp);
         if (lsw != lswitch) {
             char uuid_s[UUID_LEN + 1];
-            ctl_fatal("%s: lport already exists but in lswitch %s", lsp_name,
+            ctl_fatal("%s: port already exists but in lswitch %s", lsp_name,
                       lswitch_get_name(lsw, uuid_s, sizeof uuid_s));
         }
 
         if (parent_name) {
             if (!lsp->parent_name) {
-                ctl_fatal("%s: lport already exists but has no parent",
+                ctl_fatal("%s: port already exists but has no parent",
                           lsp_name);
             } else if (strcmp(parent_name, lsp->parent_name)) {
-                ctl_fatal("%s: lport already exists with different parent %s",
+                ctl_fatal("%s: port already exists with different parent %s",
                           lsp_name, lsp->parent_name);
             }
 
             if (!lsp->n_tag) {
-                ctl_fatal("%s: lport already exists but has no tag",
+                ctl_fatal("%s: port already exists but has no tag",
                           lsp_name);
             } else if (lsp->tag[0] != tag) {
-                ctl_fatal("%s: lport already exists with different "
+                ctl_fatal("%s: port already exists with different "
                           "tag %"PRId64, lsp_name, lsp->tag[0]);
             }
         } else {
             if (lsp->parent_name) {
-                ctl_fatal("%s: lport already exists but has parent %s",
+                ctl_fatal("%s: port already exists but has parent %s",
                           lsp_name, lsp->parent_name);
             }
         }
@@ -2084,36 +2084,32 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     { "acl-list", 1, 1, "LSWITCH", NULL, nbctl_acl_list, NULL, "", RO },
 
     /* logical switch port commands. */
-    { "lport-add", 2, 4, "LSWITCH LPORT [PARENT] [TAG]", NULL, nbctl_lsp_add,
+    { "lsp-add", 2, 4, "LSWITCH PORT [PARENT] [TAG]", NULL, nbctl_lsp_add,
       NULL, "--may-exist", RW },
-    { "lport-del", 1, 1, "LPORT", NULL, nbctl_lsp_del, NULL, "--if-exists",
-      RW },
-    { "lport-list", 1, 1, "LSWITCH", NULL, nbctl_lsp_list, NULL, "", RO },
-    { "lport-get-parent", 1, 1, "LPORT", NULL, nbctl_lsp_get_parent, NULL,
+    { "lsp-del", 1, 1, "PORT", NULL, nbctl_lsp_del, NULL, "--if-exists", RW },
+    { "lsp-list", 1, 1, "LSWITCH", NULL, nbctl_lsp_list, NULL, "", RO },
+    { "lsp-get-parent", 1, 1, "PORT", NULL, nbctl_lsp_get_parent, NULL,
       "", RO },
-    { "lport-get-tag", 1, 1, "LPORT", NULL, nbctl_lsp_get_tag, NULL, "",
-      RO },
-    { "lport-set-addresses", 1, INT_MAX, "LPORT [ADDRESS]...", NULL,
+    { "lsp-get-tag", 1, 1, "PORT", NULL, nbctl_lsp_get_tag, NULL, "", RO },
+    { "lsp-set-addresses", 1, INT_MAX, "PORT [ADDRESS]...", NULL,
       nbctl_lsp_set_addresses, NULL, "", RW },
-    { "lport-get-addresses", 1, 1, "LPORT", NULL,
-      nbctl_lsp_get_addresses, NULL,
+    { "lsp-get-addresses", 1, 1, "PORT", NULL, nbctl_lsp_get_addresses, NULL,
       "", RO },
-    { "lport-set-port-security", 0, INT_MAX, "LPORT [ADDRS]...", NULL,
+    { "lsp-set-port-security", 0, INT_MAX, "PORT [ADDRS]...", NULL,
       nbctl_lsp_set_port_security, NULL, "", RW },
-    { "lport-get-port-security", 1, 1, "LPORT", NULL,
+    { "lsp-get-port-security", 1, 1, "PORT", NULL,
       nbctl_lsp_get_port_security, NULL, "", RO },
-    { "lport-get-up", 1, 1, "LPORT", NULL, nbctl_lsp_get_up, NULL, "", RO },
-    { "lport-set-enabled", 2, 2, "LPORT STATE", NULL, nbctl_lsp_set_enabled,
+    { "lsp-get-up", 1, 1, "PORT", NULL, nbctl_lsp_get_up, NULL, "", RO },
+    { "lsp-set-enabled", 2, 2, "PORT STATE", NULL, nbctl_lsp_set_enabled,
       NULL, "", RW },
-    { "lport-get-enabled", 1, 1, "LPORT", NULL, nbctl_lsp_get_enabled, NULL,
+    { "lsp-get-enabled", 1, 1, "PORT", NULL, nbctl_lsp_get_enabled, NULL,
       "", RO },
-    { "lport-set-type", 2, 2, "LPORT TYPE", NULL, nbctl_lsp_set_type, NULL,
+    { "lsp-set-type", 2, 2, "PORT TYPE", NULL, nbctl_lsp_set_type, NULL,
       "", RW },
-    { "lport-get-type", 1, 1, "LPORT", NULL, nbctl_lsp_get_type, NULL, "",
-      RO },
-    { "lport-set-options", 1, INT_MAX, "LPORT KEY=VALUE [KEY=VALUE]...", NULL,
+    { "lsp-get-type", 1, 1, "PORT", NULL, nbctl_lsp_get_type, NULL, "", RO },
+    { "lsp-set-options", 1, INT_MAX, "PORT KEY=VALUE [KEY=VALUE]...", NULL,
       nbctl_lsp_set_options, NULL, "", RW },
-    { "lport-get-options", 1, 1, "LPORT", NULL, nbctl_lsp_get_options, NULL,
+    { "lsp-get-options", 1, 1, "PORT", NULL, nbctl_lsp_get_options, NULL,
       "", RO },
 
     /* logical router commands. */

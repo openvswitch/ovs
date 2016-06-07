@@ -87,51 +87,51 @@ AT_CLEANUP
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-nbctl - basic lport commands])
+AT_SETUP([ovn-nbctl - basic logical switch port commands])
 OVN_NBCTL_TEST_START
 
 AT_CHECK([ovn-nbctl lswitch-add ls0])
-AT_CHECK([ovn-nbctl lport-add ls0 lp0])
-AT_CHECK([ovn-nbctl lport-add ls0 lp0], [1], [],
-  [ovn-nbctl: lp0: an lport with this name already exists
+AT_CHECK([ovn-nbctl lsp-add ls0 lp0])
+AT_CHECK([ovn-nbctl lsp-add ls0 lp0], [1], [],
+  [ovn-nbctl: lp0: a port with this name already exists
 ])
-AT_CHECK([ovn-nbctl --may-exist lport-add ls0 lp0])
-AT_CHECK([ovn-nbctl lport-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+AT_CHECK([ovn-nbctl --may-exist lsp-add ls0 lp0])
+AT_CHECK([ovn-nbctl lsp-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lp0)
 ])
 
-AT_CHECK([ovn-nbctl lport-add ls0 lp1])
-AT_CHECK([ovn-nbctl lport-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+AT_CHECK([ovn-nbctl lsp-add ls0 lp1])
+AT_CHECK([ovn-nbctl lsp-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lp0)
 <1> (lp1)
 ])
 
 AT_CHECK([ovn-nbctl lswitch-add ls1])
-AT_CHECK([ovn-nbctl lport-add ls0 lp1], [1], [],
-  [ovn-nbctl: lp1: an lport with this name already exists
+AT_CHECK([ovn-nbctl lsp-add ls0 lp1], [1], [],
+  [ovn-nbctl: lp1: a port with this name already exists
 ])
-AT_CHECK([ovn-nbctl --may-exist lport-add ls1 lp1], [1], [],
-  [ovn-nbctl: lp1: lport already exists but in lswitch ls0
+AT_CHECK([ovn-nbctl --may-exist lsp-add ls1 lp1], [1], [],
+  [ovn-nbctl: lp1: port already exists but in lswitch ls0
 ])
-AT_CHECK([ovn-nbctl --may-exist lport-add ls0 lp1 lp0 5], [1], [],
-  [ovn-nbctl: lp1: lport already exists but has no parent
+AT_CHECK([ovn-nbctl --may-exist lsp-add ls0 lp1 lp0 5], [1], [],
+  [ovn-nbctl: lp1: port already exists but has no parent
 ])
 
-AT_CHECK([ovn-nbctl lport-del lp1])
-AT_CHECK([ovn-nbctl lport-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+AT_CHECK([ovn-nbctl lsp-del lp1])
+AT_CHECK([ovn-nbctl lsp-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lp0)
 ])
 
-AT_CHECK([ovn-nbctl lport-add ls0 lp2 lp3 5])
-AT_CHECK([ovn-nbctl --may-exist lport-add ls0 lp2 lp4 5], [1], [],
-  [ovn-nbctl: lp2: lport already exists with different parent lp3
+AT_CHECK([ovn-nbctl lsp-add ls0 lp2 lp3 5])
+AT_CHECK([ovn-nbctl --may-exist lsp-add ls0 lp2 lp4 5], [1], [],
+  [ovn-nbctl: lp2: port already exists with different parent lp3
 ])
-AT_CHECK([ovn-nbctl --may-exist lport-add ls0 lp2 lp3 10], [1], [],
-  [ovn-nbctl: lp2: lport already exists with different tag 5
+AT_CHECK([ovn-nbctl --may-exist lsp-add ls0 lp2 lp3 10], [1], [],
+  [ovn-nbctl: lp2: port already exists with different tag 5
 ])
 AT_CHECK([ovn-nbctl clear Logical_Switch_Port lp2 tag])
-AT_CHECK([ovn-nbctl --may-exist lport-add ls0 lp2 lp3 5], [1], [],
-  [ovn-nbctl: lp2: lport already exists but has no tag
+AT_CHECK([ovn-nbctl --may-exist lsp-add ls0 lp2 lp3 5], [1], [],
+  [ovn-nbctl: lp2: port already exists but has no tag
 ])
 
 OVN_NBCTL_TEST_STOP
@@ -143,18 +143,18 @@ AT_SETUP([ovn-nbctl - lport addresses])
 OVN_NBCTL_TEST_START
 
 AT_CHECK([ovn-nbctl lswitch-add ls0])
-AT_CHECK([ovn-nbctl lport-add ls0 lp0])
-AT_CHECK([ovn-nbctl lport-get-addresses lp0], [0], [dnl
+AT_CHECK([ovn-nbctl lsp-add ls0 lp0])
+AT_CHECK([ovn-nbctl lsp-get-addresses lp0], [0], [dnl
 ])
 
-AT_CHECK([ovn-nbctl lport-set-addresses lp0 00:11:22:33:44:55 unknown])
-AT_CHECK([ovn-nbctl lport-get-addresses lp0], [0], [dnl
+AT_CHECK([ovn-nbctl lsp-set-addresses lp0 00:11:22:33:44:55 unknown])
+AT_CHECK([ovn-nbctl lsp-get-addresses lp0], [0], [dnl
 00:11:22:33:44:55
 unknown
 ])
 
-AT_CHECK([ovn-nbctl lport-set-addresses lp0])
-AT_CHECK([ovn-nbctl lport-get-addresses lp0], [0], [dnl
+AT_CHECK([ovn-nbctl lsp-set-addresses lp0])
+AT_CHECK([ovn-nbctl lsp-get-addresses lp0], [0], [dnl
 ])
 
 OVN_NBCTL_TEST_STOP
@@ -166,18 +166,18 @@ AT_SETUP([ovn-nbctl - port security])
 OVN_NBCTL_TEST_START
 
 AT_CHECK([ovn-nbctl lswitch-add ls0])
-AT_CHECK([ovn-nbctl lport-add ls0 lp0])
-AT_CHECK([ovn-nbctl lport-get-addresses lp0], [0], [dnl
+AT_CHECK([ovn-nbctl lsp-add ls0 lp0])
+AT_CHECK([ovn-nbctl lsp-get-addresses lp0], [0], [dnl
 ])
 
-AT_CHECK([ovn-nbctl lport-set-port-security lp0 aa:bb:cc:dd:ee:ff 00:11:22:33:44:55])
-AT_CHECK([ovn-nbctl lport-get-port-security lp0], [0], [dnl
+AT_CHECK([ovn-nbctl lsp-set-port-security lp0 aa:bb:cc:dd:ee:ff 00:11:22:33:44:55])
+AT_CHECK([ovn-nbctl lsp-get-port-security lp0], [0], [dnl
 00:11:22:33:44:55
 aa:bb:cc:dd:ee:ff
 ])
 
-AT_CHECK([ovn-nbctl lport-set-port-security lp0])
-AT_CHECK([ovn-nbctl lport-get-port-security lp0], [0], [dnl
+AT_CHECK([ovn-nbctl lsp-set-port-security lp0])
+AT_CHECK([ovn-nbctl lsp-get-port-security lp0], [0], [dnl
 ])
 
 OVN_NBCTL_TEST_STOP

@@ -102,10 +102,10 @@ m4_define([OVN_CONTROLLER_VTEP_STOP],
 # $3: physical vtep gateway name
 # $4: logical switch name on vtep gateway chassis
 m4_define([OVN_NB_ADD_VTEP_PORT], [
-AT_CHECK([ovn-nbctl lport-add $1 $2])
+AT_CHECK([ovn-nbctl lsp-add $1 $2])
 
-AT_CHECK([ovn-nbctl lport-set-type $2 vtep])
-AT_CHECK([ovn-nbctl lport-set-options $2 vtep-physical-switch=$3 vtep-logical-switch=$4])
+AT_CHECK([ovn-nbctl lsp-set-type $2 vtep])
+AT_CHECK([ovn-nbctl lsp-set-options $2 vtep-physical-switch=$3 vtep-logical-switch=$4])
 ])
 
 ##############################################
@@ -321,7 +321,7 @@ ${tunnel_key}
 
 # changes the ovn-nb logical port type so that it is no longer
 # vtep port.
-AT_CHECK([ovn-nbctl lport-set-type br-vtep_lswitch0 void])
+AT_CHECK([ovn-nbctl lsp-set-type br-vtep_lswitch0 void])
 OVS_WAIT_UNTIL([test -z "`vtep-ctl --columns=tunnel_key list Logical_Switch | grep 1`"])
 # now should see the tunnel key reset.
 AT_CHECK([vtep-ctl --columns=tunnel_key list Logical_Switch | cut -d ':' -f2 | tr -d ' '], [0], [dnl
@@ -338,8 +338,8 @@ OVN_CONTROLLER_VTEP_START
 
 # creates a simple logical network with the vtep device and a fake hv chassis
 # 'ch0'.
-AT_CHECK([ovn-nbctl lport-add br-test vif0])
-AT_CHECK([ovn-nbctl lport-set-addresses vif0 f0:ab:cd:ef:01:02])
+AT_CHECK([ovn-nbctl lsp-add br-test vif0])
+AT_CHECK([ovn-nbctl lsp-set-addresses vif0 f0:ab:cd:ef:01:02])
 AT_CHECK([ovn-sbctl chassis-add ch0 vxlan 1.2.3.5])
 AT_CHECK([ovn-sbctl lport-bind vif0 ch0])
 
@@ -352,8 +352,8 @@ OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Port_Binding  | grep br-vtep_lswitch0`"
 # adds another lswitch 'br-void' in ovn-nb database.
 AT_CHECK([ovn-nbctl lswitch-add br-void])
 # adds fake hv chassis 'ch1'.
-AT_CHECK([ovn-nbctl lport-add br-void vif1])
-AT_CHECK([ovn-nbctl lport-set-addresses vif1 f0:ab:cd:ef:01:02])
+AT_CHECK([ovn-nbctl lsp-add br-void vif1])
+AT_CHECK([ovn-nbctl lsp-set-addresses vif1 f0:ab:cd:ef:01:02])
 AT_CHECK([ovn-sbctl chassis-add ch1 vxlan 1.2.3.6])
 AT_CHECK([ovn-sbctl lport-bind vif1 ch1])
 OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Port_Binding | grep vif1`"])
@@ -377,7 +377,7 @@ AT_CHECK([ovs-vsctl --columns=options list Interface bfd1.2.3.5 | cut -d ':' -f2
 ])
 
 # adds another mac to logical switch port.
-AT_CHECK([ovn-nbctl lport-set-addresses vif0 f0:ab:cd:ef:01:02 f0:ab:cd:ef:01:03])
+AT_CHECK([ovn-nbctl lsp-set-addresses vif0 f0:ab:cd:ef:01:02 f0:ab:cd:ef:01:03])
 OVS_WAIT_UNTIL([test -n "`vtep-ctl list Ucast_Macs_Remote | grep 03`"])
 AT_CHECK([vtep-ctl --columns=MAC list Ucast_Macs_Remote | cut -d ':' -f2- | tr -d ' ' | sort], [0], [dnl
 
@@ -386,15 +386,15 @@ AT_CHECK([vtep-ctl --columns=MAC list Ucast_Macs_Remote | cut -d ':' -f2- | tr -
 ])
 
 # removes one mac to logical switch port.
-AT_CHECK([ovn-nbctl lport-set-addresses vif0 f0:ab:cd:ef:01:03])
+AT_CHECK([ovn-nbctl lsp-set-addresses vif0 f0:ab:cd:ef:01:03])
 OVS_WAIT_UNTIL([test -z "`vtep-ctl --columns=MAC list Ucast_Macs_Remote | grep 02`"])
 AT_CHECK([vtep-ctl --columns=MAC list Ucast_Macs_Remote | cut -d ':' -f2- | tr -d ' ' | sort], [0], [dnl
 "f0:ab:cd:ef:01:03"
 ])
 
 # migrates mac to logical switch port vif1 on 'br-void'.
-AT_CHECK([ovn-nbctl lport-set-addresses vif0])
-AT_CHECK([ovn-nbctl lport-set-addresses vif1 f0:ab:cd:ef:01:03])
+AT_CHECK([ovn-nbctl lsp-set-addresses vif0])
+AT_CHECK([ovn-nbctl lsp-set-addresses vif1 f0:ab:cd:ef:01:03])
 OVS_WAIT_UNTIL([test -z "`vtep-ctl --columns=MAC list Ucast_Macs_Remote | grep 03`"])
 AT_CHECK([vtep-ctl --columns=MAC list Ucast_Macs_Remote | cut -d ':' -f2- | tr -d ' ' | sort], [0], [dnl
 ])
@@ -409,14 +409,14 @@ OVN_CONTROLLER_VTEP_START
 
 # creates a simple logical network with the vtep device and a fake hv chassis
 # 'ch0'.
-AT_CHECK([ovn-nbctl lport-add br-test vif0])
-AT_CHECK([ovn-nbctl lport-set-addresses vif0 f0:ab:cd:ef:01:02])
+AT_CHECK([ovn-nbctl lsp-add br-test vif0])
+AT_CHECK([ovn-nbctl lsp-set-addresses vif0 f0:ab:cd:ef:01:02])
 AT_CHECK([ovn-sbctl chassis-add ch0 vxlan 1.2.3.5])
 AT_CHECK([ovn-sbctl lport-bind vif0 ch0])
 
 # creates another vif in the same logical switch with duplicate mac.
-AT_CHECK([ovn-nbctl lport-add br-test vif1])
-AT_CHECK([ovn-nbctl lport-set-addresses vif1 f0:ab:cd:ef:01:02])
+AT_CHECK([ovn-nbctl lsp-add br-test vif1])
+AT_CHECK([ovn-nbctl lsp-set-addresses vif1 f0:ab:cd:ef:01:02])
 AT_CHECK([ovn-sbctl lport-bind vif1 ch0])
 
 # creates the logical switch in vtep and adds the corresponding logical
@@ -438,13 +438,13 @@ AT_CHECK([sed -n 's/^.*\(|WARN|.*\)$/\1/p' ovn-controller-vtep.log | sed 's/([[-
 ])
 
 # deletes vif1.
-AT_CHECK([ovn-nbctl lport-del vif1])
+AT_CHECK([ovn-nbctl lsp-del vif1])
 
 # adds another lswitch 'br-void' in ovn-nb database.
 AT_CHECK([ovn-nbctl lswitch-add br-void])
 # adds fake hv chassis 'ch1' and vif1 with same mac address as vif0.
-AT_CHECK([ovn-nbctl lport-add br-void vif1])
-AT_CHECK([ovn-nbctl lport-set-addresses vif1 f0:ab:cd:ef:01:02])
+AT_CHECK([ovn-nbctl lsp-add br-void vif1])
+AT_CHECK([ovn-nbctl lsp-set-addresses vif1 f0:ab:cd:ef:01:02])
 AT_CHECK([ovn-sbctl chassis-add ch1 vxlan 1.2.3.6])
 AT_CHECK([ovn-sbctl lport-bind vif1 ch1])
 OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Port_Binding | grep vif1`"])

@@ -15,7 +15,7 @@
 
 set -o xtrace
 
-ovn-nbctl lport-add sw0 sw0-port3
-ovn-nbctl lport-set-addresses sw0-port3 00:00:00:00:00:03
-ovn-nbctl lport-set-port-security sw0-port3 00:00:00:00:00:03
+ovn-nbctl lsp-add sw0 sw0-port3
+ovn-nbctl lsp-set-addresses sw0-port3 00:00:00:00:00:03
+ovn-nbctl lsp-set-port-security sw0-port3 00:00:00:00:00:03
 ovs-vsctl add-port br-int lport3 -- set Interface lport3 external_ids:iface-id=sw0-port3

@@ -228,9 +228,9 @@ def create_endpoint():
     mac_address_output = ""
 
     try:
-        ovn_nbctl("lport-add", nid, eid)
+        ovn_nbctl("lsp-add", nid, eid)
     except Exception as e:
-        error = "create_endpoint: lport-add (%s)" % (str(e))
+        error = "create_endpoint: lsp-add (%s)" % (str(e))
         return jsonify({'Err': error})
 
     if not mac_address_input:
@@ -243,10 +243,10 @@ def create_endpoint():
         mac_address = mac_address_input
 
     try:
-        ovn_nbctl("lport-set-addresses", eid,
+        ovn_nbctl("lsp-set-addresses", eid,
                   mac_address + " " + ip_address)
     except Exception as e:
-        error = "create_endpoint: lport-set-addresses (%s)" % (str(e))
+        error = "create_endpoint: lsp-set-addresses (%s)" % (str(e))
         return jsonify({'Err': error})
 
     # Only return a mac address if one did not come as request.
@@ -295,7 +295,8 @@ def show_endpoint():
         if error:
             jsonify({'Err': error})
     except Exception as e:
-        error = "show_endpoint: get Logical_Switch_Port addresses. (%s)" % (str(e))
+        error = "show_endpoint: get Logical_Switch_Port addresses. (%s)" \
+                % (str(e))
         return jsonify({'Err': error})
 
     veth_outside = eid[0:15]
@@ -321,9 +322,9 @@ def delete_endpoint():
         abort(400)
 
     try:
-        ovn_nbctl("lport-del", eid)
+        ovn_nbctl("lsp-del", eid)
     except Exception as e:
-        error = "delete_endpoint: lport-del %s" % (str(e))
+        error = "delete_endpoint: lsp-del %s" % (str(e))
         return jsonify({'Err': error})
 
     return jsonify({})
