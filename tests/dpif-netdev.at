@@ -40,110 +40,123 @@ strip_metadata () {
 ]
 m4_divert_pop([PREPARE_TESTS])
 
-AT_SETUP([dpif-netdev - dummy interface])
-# Create br0 with interfaces p1 and p7
-#    and br1 with interfaces p2 and p8
-# with p1 and p2 connected via unix domain socket
-OVS_VSWITCHD_START(
-  [add-port br0 p1 -- set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock ofport_request=1 -- \
-   add-port br0 p7 -- set interface p7 ofport_request=7 type=dummy -- \
-   add-br br1 -- \
-   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
-   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
-                  fail-mode=secure -- \
-   add-port br1 p2 -- set interface p2 type=dummy options:stream=unix:$OVS_RUNDIR/p0.sock ofport_request=2 -- \
-   add-port br1 p8 -- set interface p8 ofport_request=8 type=dummy --])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+m4_define([DPIF_NETDEV_DUMMY_IFACE],
+  [AT_SETUP([dpif-netdev - $1 interface])
+   # Create br0 with interfaces p1 and p7
+   #    and br1 with interfaces p2 and p8
+   # with p1 and p2 connected via unix domain socket
+   OVS_VSWITCHD_START(
+     [add-port br0 p1 -- set interface p1 type=$1 options:pstream=punix:$OVS_RUNDIR/p0.sock ofport_request=1 -- \
+      add-port br0 p7 -- set interface p7 ofport_request=7 type=$1 -- \
+      add-br br1 -- \
+      set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+      set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                     fail-mode=secure -- \
+      add-port br1 p2 -- set interface p2 type=$1 options:stream=unix:$OVS_RUNDIR/p0.sock ofport_request=2 -- \
+      add-port br1 p8 -- set interface p8 ofport_request=8 type=$1 --], [], [],
+      [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
+   AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 
-AT_CHECK([ovs-ofctl add-flow br0 action=normal])
-AT_CHECK([ovs-ofctl add-flow br1 action=normal])
-ovs-appctl time/stop
-ovs-appctl time/warp 5000
-AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-ovs-appctl time/warp 100
-sleep 1  # wait for forwarders process packets
+   AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+   AT_CHECK([ovs-ofctl add-flow br1 action=normal])
+   ovs-appctl time/stop
+   ovs-appctl time/warp 5000
+   AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+   AT_CHECK([ovs-appctl netdev-dummy/receive p8 'in_port(8),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+   ovs-appctl time/warp 100
+   sleep 1  # wait for forwarders process packets
 
-AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
+   AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
 recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_frag=no, actions: <del>
 recirc_id=0,ip,in_port=2,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions: <del>
 recirc_id=0,ip,in_port=7,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions: <del>
 recirc_id=0,ip,in_port=8,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_frag=no, actions: <del>
 ])
 
-OVS_VSWITCHD_STOP
-AT_CLEANUP
+   OVS_VSWITCHD_STOP
+   AT_CLEANUP])
 
-AT_SETUP([dpif-netdev - miss upcall key matches flow_install])
-OVS_VSWITCHD_START(
-  [add-port br0 p1 -- set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock
-   set bridge br0 datapath-type=dummy other-config:datapath-id=1234 \
-                  fail-mode=secure])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+DPIF_NETDEV_DUMMY_IFACE([dummy])
+DPIF_NETDEV_DUMMY_IFACE([dummy-pmd])
 
-AT_CHECK([ovs-ofctl add-flow br0 action=normal])
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-sleep 1
+m4_define([DPIF_NETDEV_MISS_FLOW_INSTALL],
+  [AT_SETUP([dpif-netdev - miss upcall key matches flow_install - $1])
+   OVS_VSWITCHD_START(
+     [add-port br0 p1 -- set interface p1 type=$1 options:pstream=punix:$OVS_RUNDIR/p0.sock
+      set bridge br0 datapath-type=dummy other-config:datapath-id=1234 fail-mode=secure], [], [],
+      [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
+   AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 
-AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
+   AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+   AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+   sleep 1
+
+   AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
-AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
+   AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
 recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions: <del>
 ])
 
-# Now, the same again without megaflows.
-AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [megaflows disabled
+   # Now, the same again without megaflows.
+   AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [megaflows disabled
 ])
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-sleep 1
+   AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+   sleep 1
 
-AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
+   AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
-AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
+   AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
 pkt_mark=0,recirc_id=0,dp_hash=0,skb_priority=0,ct_state=0,ct_zone=0,ct_mark=0,ct_label=0,icmp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0, actions: <del>
 recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions: <del>
 ])
 
-OVS_VSWITCHD_STOP
-AT_CLEANUP
+   OVS_VSWITCHD_STOP
+   AT_CLEANUP])
 
-AT_SETUP([dpif-netdev - miss upcall key matches flow_dump])
-OVS_VSWITCHD_START(
-  [add-port br0 p1 -- set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock
-   set bridge br0 datapath-type=dummy other-config:datapath-id=1234 \
-                  fail-mode=secure])
-AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using UFID disabled
+DPIF_NETDEV_MISS_FLOW_INSTALL([dummy])
+DPIF_NETDEV_MISS_FLOW_INSTALL([dummy-pmd])
+
+m4_define([DPIF_NETDEV_MISS_FLOW_DUMP],
+  [AT_SETUP([dpif-netdev - miss upcall key matches flow_dump - $1])
+   OVS_VSWITCHD_START(
+     [add-port br0 p1 -- set interface p1 type=$1 options:pstream=punix:$OVS_RUNDIR/p0.sock
+      set bridge br0 datapath-type=dummy other-config:datapath-id=1234 fail-mode=secure], [], [],
+      [m4_if([$1], [dummy-pmd], [--dummy-numa="0,0,0,0,1,1,1,1"], [])])
+   AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using UFID disabled
 ], [])
-AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+   AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 
-AT_CHECK([ovs-ofctl add-flow br0 action=normal])
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-sleep 1
+   AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+   AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+   sleep 1
 
-AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
+   AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
-AT_CHECK([filter_flow_dump < ovs-vswitchd.log | strip_xout], [0], [dnl
+   AT_CHECK([filter_flow_dump < ovs-vswitchd.log | strip_xout], [0], [dnl
 skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions: <del>
 ])
 
-# Now, the same again without megaflows.
-AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [megaflows disabled
+   # Now, the same again without megaflows.
+   AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [megaflows disabled
 ])
-AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using UFID disabled
+   AT_CHECK([ovs-appctl upcall/disable-ufid], [0], [Datapath dumping tersely using UFID disabled
 ], [])
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
-sleep 1
+   AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+   sleep 1
 
-AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
+   AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
-AT_CHECK([filter_flow_dump < ovs-vswitchd.log | strip_xout], [0], [dnl
+   AT_CHECK([filter_flow_dump < ovs-vswitchd.log | strip_xout], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:0, bytes:0, used:never, actions: <del>
 skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2/0.0.0.0,dst=10.0.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:0, bytes:0, used:never, actions: <del>
 ])
 
-OVS_VSWITCHD_STOP
-AT_CLEANUP
+   OVS_VSWITCHD_STOP
+   AT_CLEANUP])
+
+DPIF_NETDEV_MISS_FLOW_DUMP([dummy])
+DPIF_NETDEV_MISS_FLOW_DUMP([dummy-pmd])
