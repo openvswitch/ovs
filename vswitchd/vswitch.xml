@@ -1862,14 +1862,15 @@
           <li>
             The names of interfaces implemented as Linux and BSD network
             devices, including interfaces with type <code>internal</code>,
-            <code>tap</code>, or <code>system</code>, are limited to 15 bytes.
-            Windows limits these names to 255 bytes.
+            <code>tap</code>, or <code>system</code> plus the different types
+            of tunnel ports, are limited to 15 bytes. Windows limits these
+            names to 255 bytes.
           </li>
 
           <li>
-            The names of tunnels and patch ports are not used in the underlying
-            datapath, so operating system restrictions do not apply.  Thus,
-            they may have arbitrary length.
+            The names of patch ports are not used in the underlying datapath,
+            so operating system restrictions do not apply.  Thus, they may have
+            arbitrary length.
           </li>
         </ul>
 
@@ -2002,7 +2003,7 @@
 
           <dt><code>geneve</code></dt>
           <dd>
-            An Ethernet over Geneve (<code>http://tools.ietf.org/html/draft-ietf-nvo3-geneve-00</code>)
+            An Ethernet over Geneve (<code>http://tools.ietf.org/html/draft-ietf-nvo3-geneve</code>)
             IPv4/IPv6 tunnel.
 
             A description of how to match and set Geneve options can be found
@@ -2028,9 +2029,9 @@
               RFC 7348.
             </p>
             <p>
-              Open vSwitch uses UDP destination port 4789.  The source port used for
-              VXLAN traffic varies on a per-flow basis and is in the ephemeral port
-              range.
+              Open vSwitch uses IANA-assigned UDP destination port 4789.  The
+              source port used for VXLAN traffic varies on a per-flow basis
+              and is in the ephemeral port range.
             </p>
           </dd>
 
@@ -2063,10 +2064,9 @@
             Since the STT protocol does not engage in the usual TCP 3-way handshake,
             so it will have difficulty traversing stateful firewalls.
             The protocol is documented at
-            http://www.ietf.org/archive/id/draft-davie-stt-06.txt
+            https://tools.ietf.org/html/draft-davie-stt
 
-            All traffic uses a default destination port of 7471. STT is only
-            available in kernel datapath on kernel 3.5 or newer.
+            All traffic uses a default destination port of 7471.
           </dd>
 
           <dt><code>patch</code></dt>
