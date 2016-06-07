@@ -383,6 +383,10 @@ main(int argc, char *argv[])
     char *ovnsb_remote = get_ovnsb_remote(ovs_idl_loop.idl);
     struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
+
+    /* Track the southbound idl. */
+    ovsdb_idl_track_add_all(ovnsb_idl_loop.idl);
+
     ovsdb_idl_get_initial_snapshot(ovnsb_idl_loop.idl);
 
     int probe_interval = 0;
@@ -494,6 +498,7 @@ main(int argc, char *argv[])
         }
         ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
         ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop);
+        ovsdb_idl_track_clear(ovnsb_idl_loop.idl);
         poll_block();
         if (should_service_stop()) {
             exiting = true;
