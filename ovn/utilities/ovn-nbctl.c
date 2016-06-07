@@ -904,7 +904,7 @@ nbctl_lport_chain_del(struct ctl_context *ctx)
 static void
 nbctl_lport_chain_list(struct ctl_context *ctx)
 {
-    struct nbrec_logical_port_chain *lport_chain;
+    const struct nbrec_logical_port_chain *lport_chain;
     struct smap lport_chains;
     
     smap_init(&lport_chains);
@@ -951,7 +951,7 @@ static void nbctl_lport_chain_get_flow_classifier(struct ctl_context *ctx)
     const struct nbrec_logical_port_chain *lport_chain;
 
     lport_chain = lport_chain_by_name_or_uuid(ctx, id);
-    ds_put_format(&ctx->output, "%s\n", lport_chain->flow_classifier);
+    ds_put_format(&ctx->output, "%s\n", lport_chain->flow_classifier->name);
 }
 /* End of port-chain operations */
 
@@ -961,9 +961,9 @@ static void nbctl_lport_chain_get_flow_classifier(struct ctl_context *ctx)
 static void
 nbctl_lport_pair_group_add(struct ctl_context *ctx)
 {
-    struct nbrec_logical_port_pair_group *lport_pair_group;
+    const struct nbrec_logical_port_pair_group *lport_pair_group;
     const struct nbrec_logical_port_chain *lport_chain;
-    struct nbrec_logical_port_pair *lport_pair;
+
     /* check lport_chain exists */
     lport_chain = lport_chain_by_name_or_uuid(ctx, ctx->argv[1]);
     if (!lport_chain) {
@@ -977,7 +977,6 @@ nbctl_lport_pair_group_add(struct ctl_context *ctx)
     lport_pair_group = lport_pair_group_by_name_or_uuid(ctx,ctx->argv[2]);
     /* create the logical port-pair-group. */
     lport_pair_group = nbrec_logical_port_pair_group_insert(ctx->txn);
-    nbrec_logical_port_chain_set_port_pair_groups(lport_chain, ctx->argv[2],lport_chain->n_port_pair_groups+1);
     if (ctx->argc == 3){
        nbrec_logical_port_pair_group_set_name(lport_pair_group, ctx->argv[3]);
     }
@@ -988,7 +987,8 @@ nbctl_lport_pair_group_add(struct ctl_context *ctx)
     struct nbrec_logical_port_pair_group  **new_port_pair_group = xmalloc(sizeof *new_port_pair_group *
                                                     (lport_chain->n_port_pair_groups + 1));
     memcpy(new_port_pair_group, lport_chain->port_pair_groups, sizeof *new_port_pair_group * lport_chain->n_port_pair_groups);
-    new_port_pair_group[lport_chain->n_port_pair_groups] = lport_pair_group;
+    new_port_pair_group[lport_chain->n_port_pair_groups] = 
+      CONST_CAST(struct nbrec_logical_port_pair_group *,lport_pair_group);
     nbrec_logical_port_chain_set_port_pair_groups(lport_chain, new_port_pair_group, lport_chain->n_port_pair_groups + 1);
     free(new_port_pair_group);
 }
@@ -1029,7 +1029,7 @@ nbctl_lport_pair_group_del(struct ctl_context *ctx)
     NBREC_LOGICAL_PORT_CHAIN_FOR_EACH (lport_chain, ctx->idl) {
         for (size_t i = 0; i < lport_chain->n_port_pair_groups; i++) {
             if (lport_chain->port_pair_groups[i] == lport_pair_group) {
-	      remove_lport_pair_group(lport_pair_group,i);
+	      remove_lport_pair_group(lport_chain,i);
 	      printf("Deleted lport-pair-group: %s\n", ctx->argv[1]);
               return;
             }
@@ -1044,7 +1044,7 @@ nbctl_lport_pair_group_list(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
     const struct nbrec_logical_port_chain *lport_chain;
-    struct smap lport_pair_group;
+    struct smap lport_pair_groups;
     size_t i;
 
     lport_chain = lport_chain_by_name_or_uuid(ctx, id);
@@ -1052,26 +1052,26 @@ nbctl_lport_pair_group_list(struct ctl_context *ctx)
         return;
     }
 
-    smap_init(&lport_pair_group);
+    smap_init(&lport_pair_groups);
     for (i = 0; i < lport_chain->n_port_pair_groups; i++) {
         const struct nbrec_logical_port_pair_group *lport_pair_group = lport_chain->port_pair_groups[i];
-        smap_add_format(&lport_pair_group, lport_pair_group->name, UUID_FMT " (%s)",
+        smap_add_format(&lport_pair_groups, lport_pair_group->name, UUID_FMT " (%s)",
                         UUID_ARGS(&lport_pair_group->header_.uuid), lport_pair_group->name);
     }
-    const struct smap_node **nodes = smap_sort(&lport_pair_group);
-    for (i = 0; i < smap_count(&lport_pair_group); i++) {
+    const struct smap_node **nodes = smap_sort(&lport_pair_groups);
+    for (i = 0; i < smap_count(&lport_pair_groups); i++) {
         const struct smap_node *node = nodes[i];
         ds_put_format(&ctx->output, "%s\n", node->value);
     }
-    smap_destroy(&lport_pair_group);
+    smap_destroy(&lport_pair_groups);
     free(nodes);
 }
 
 static void
 nbctl_lport_pair_group_add_port_pair(struct ctl_context *ctx)
 {
-    struct nbrec_logical_port_pair_group *lport_pair_group;
-    struct nbrec_logical_port_pair *lport_pair;
+    const struct nbrec_logical_port_pair_group *lport_pair_group;
+    const struct nbrec_logical_port_pair *lport_pair;
     const char *lport_pair_name;
     
     lport_pair_group = lport_pair_group_by_name_or_uuid(ctx, ctx->argv[1]);
@@ -1092,7 +1092,7 @@ nbctl_lport_pair_group_add_port_pair(struct ctl_context *ctx)
     struct nbrec_logical_port_pair  **new_port_pair = xmalloc(sizeof *new_port_pair *
                                                     (lport_pair_group->n_port_pairs + 1));
     memcpy(new_port_pair, lport_pair_group->port_pairs, sizeof *new_port_pair * lport_pair_group->n_port_pairs);
-    new_port_pair[lport_pair_group->n_port_pairs] = CONST_CAST(struct nbrec_lport_pair *, lport_pair);
+    new_port_pair[lport_pair_group->n_port_pairs] = CONST_CAST(struct nbrec_logical_port_pair *, lport_pair);
     nbrec_logical_port_pair_group_set_port_pairs(lport_pair_group, new_port_pair, lport_pair_group->n_port_pairs + 1);
     free(new_port_pair);
 }
@@ -1101,7 +1101,7 @@ nbctl_lport_pair_group_add_port_pair(struct ctl_context *ctx)
 static void
 remove_lport_pair_from_port_pair_group(const struct nbrec_logical_port_pair_group *lport_pair_group, size_t idx)
 {
-  const struct nbrec_logical_port_pair *lport_pair = lport_pair_group->port_pairs[idx];
+  //TODO Check const struct nbrec_logical_port_pair *lport_pair = lport_pair_group->port_pairs[idx];
 
     /* First remove 'lport-pair' from the array of port-pairs.  This is what will
      * actually cause the logical port-pair to be deleted when the transaction is
@@ -1132,7 +1132,7 @@ nbctl_lport_pair_group_del_port_pair(struct ctl_context *ctx)
     NBREC_LOGICAL_PORT_PAIR_GROUP_FOR_EACH (lport_pair_group, ctx->idl) {
         for (size_t i = 0; i < lport_pair_group->n_port_pairs; i++) {
             if (lport_pair_group->port_pairs[i] == lport_pair) {
-	      remove_lport_pair_from_port_pair_group(lport_pair,i);
+	      remove_lport_pair_from_port_pair_group(lport_pair_group,i);
 	      printf("Deleted lport-pair: %s from lport-group-pair \n", ctx->argv[1]);
               return;
             }
@@ -1152,8 +1152,8 @@ nbctl_lport_pair_add(struct ctl_context *ctx)
   const char *port_id_in = ctx->argv[2];
   const char *port_id_out = ctx->argv[3];
 
-    struct nbrec_logical_switch *lswitch;
-    struct nbrec_logical_port_pair *lport_pair;
+    const struct nbrec_logical_switch *lswitch;
+    const struct nbrec_logical_port_pair *lport_pair;
     const struct nbrec_logical_port *lport_in,*lport_out;
     lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1], true);
 
@@ -1173,8 +1173,8 @@ nbctl_lport_pair_add(struct ctl_context *ctx)
 
     /* create the logical port-pair. */
     lport_pair = nbrec_logical_port_pair_insert(ctx->txn);
-    nbrec_logical_port_pair_set_inport(lport_pair, ctx->argv[2]);
-    nbrec_logical_port_pair_set_outport(lport_pair, ctx->argv[3]);
+    nbrec_logical_port_pair_set_inport(lport_pair, lport_in);
+    nbrec_logical_port_pair_set_outport(lport_pair, lport_out);
     if (ctx->argc == 5){
        nbrec_logical_port_pair_set_name(lport_pair, ctx->argv[4]);
     }
@@ -1184,7 +1184,7 @@ nbctl_lport_pair_add(struct ctl_context *ctx)
     struct nbrec_logical_port_pair  **new_port_pair = xmalloc(sizeof *new_port_pair *
                                                     (lswitch->n_port_pairs + 1));
     memcpy(new_port_pair, lswitch->port_pairs, sizeof *new_port_pair * lswitch->n_port_pairs);
-    new_port_pair[lswitch->n_port_pairs] = CONST_CAST(struct nbrec_lport_pair *, lport_pair);
+    new_port_pair[lswitch->n_port_pairs] = CONST_CAST(struct nbrec_logical_port_pair *, lport_pair);
     nbrec_logical_switch_set_port_pairs(lswitch, new_port_pair, lswitch->n_port_pairs + 1);
     free(new_port_pair);
 }
@@ -1217,8 +1217,7 @@ nbctl_lport_pair_del(struct ctl_context *ctx)
 
     lport_pair = lport_pair_by_name_or_uuid(ctx, ctx->argv[1]);
     if (!lport_pair) {
-      printf("Cannot find lport_pair: %s\n", ctx->argv[1]);
-        return;
+      ctl_fatal("Cannot find lport_pair: %s\n", ctx->argv[1]);
     }
 
     /* Find the port-pair_group that contains 'port-pair', then delete it. */
@@ -1226,7 +1225,7 @@ nbctl_lport_pair_del(struct ctl_context *ctx)
     NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->idl) {
         for (size_t i = 0; i < lswitch->n_port_pairs; i++) {
             if (lswitch->port_pairs[i] == lport_pair) {
-	      remove_lport_pair(lport_pair,i);
+	      remove_lport_pair(lswitch,i);
 	      printf("Deleted lport-pair: %s\n", ctx->argv[1]);
               return;
             }
@@ -1289,7 +1288,7 @@ nbctl_lflow_classifier_add(struct ctl_context *ctx)
 
     /* create the logical port-pair. */
     lflow_classifier = nbrec_logical_flow_classifier_insert(ctx->txn);
-    nbrec_logical_flow_classifier_set_logical_source_port(lflow_classifier, ctx->argv[2]);
+    nbrec_logical_flow_classifier_set_logical_source_port(lflow_classifier, lport);
     if (ctx->argc == 4){
        nbrec_logical_flow_classifier_set_name(lflow_classifier, ctx->argv[3]);
     }
@@ -1384,7 +1383,7 @@ nbctl_lflow_classifier_set_logical_destination_port(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
 
-    struct nbrec_logical_port *lport;
+    const struct nbrec_logical_port *lport = NULL;
     const struct nbrec_logical_flow_classifier *lflow_classifier;
 
     lflow_classifier = lflow_classifier_by_name_or_uuid(ctx, id);
@@ -1674,7 +1673,7 @@ nbctl_lport_get_tag(struct ctl_context *ctx)
     }
 }
 
-/* Set the MAC address of lrport. */
+/* Set the address of lrport. */
 static void
 nbctl_lrport_set_mac(struct ctl_context *ctx)
 {

@@ -1836,6 +1836,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 
         ovn_lflow_add(lflows, od, S_SWITCH_IN_ARP_RSP, 0, "1", "next;");
     }
+#ifdef JED
   /* Ingress table 6: Add override rules for service insertion
    *  If a service is defined send traffic destined for an application
    *  to the service first (both for ingress and egress)
@@ -1845,11 +1846,11 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
     if (!od->nbs) {
       continue;
     }
-#ifdef JED
     build_chain(od, lflows, ports);
-#endif
+
   }
   VLOG_INFO("Service Insertion complete\n");
+#endif
     /* Ingress table 7: Destination lookup, broadcast and multicast handling
      * (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
