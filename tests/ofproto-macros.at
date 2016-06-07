@@ -349,32 +349,47 @@ add_of_br () {
         -- "$@"
 }
 
-# add_of_ports [--pcap] BRIDGE PNUM...
+# add_of_ports__ PORT_TYPE [--pcap] BRIDGE PNUM...
 #
-# Creates dummy interfaces in BRIDGE named pPNUM, OpenFlow port number
+# Creates PORT_TYPE interfaces in BRIDGE named pPNUM, OpenFlow port number
 # PNUM, and datapath port number PNUM (the latter is a consequence of
 # the dummy implementation, which tries to assign datapath port
 # numbers based on port names).
 #
 # If --pcap is supplied then packets received from the interface will
 # be written to $port-rx.pcap and those sent to it to $port-tx.pcap.
-add_of_ports () {
+add_of_ports__ () {
     local args
     local pcap=false
+    local ptype=$1
+    shift
     if test "$1" = --pcap; then
         pcap=:
-	shift
+    shift
     fi
     local br=$1; shift
     for pnum; do
-        AS_VAR_APPEND([args], [" -- add-port $br p$pnum -- set Interface p$pnum type=dummy ofport_request=$pnum"])
-	if $pcap; then
-	    AS_VAR_APPEND([args], [" -- set Interface p$pnum options:rxq_pcap=p$pnum-rx.pcap options:tx_pcap=p$pnum-tx.pcap"])
-	fi
+        AS_VAR_APPEND([args], [" -- add-port $br p$pnum -- set Interface p$pnum type=$ptype ofport_request=$pnum"])
+    if $pcap; then
+        AS_VAR_APPEND([args], [" -- set Interface p$pnum options:rxq_pcap=p$pnum-rx.pcap options:tx_pcap=p$pnum-tx.pcap"])
+    fi
     done
     echo ovs-vsctl $args
     ovs-vsctl $args
 }
+
+# add_of_ports [--pcap] BRIDGE PNUM...
+#
+add_of_ports () {
+    add_of_ports__ dummy $@
+}
+
+# add_pmd_of_ports [--pcap] BRIDGE PNUM...
+#
+add_pmd_of_ports () {
+    add_of_ports__ dummy-pmd $@
+}
+
 m4_divert_pop([PREPARE_TESTS])
 
 # OVS_VSWITCHD_STOP([WHITELIST])
