@@ -280,7 +280,7 @@ class Parser(object):
                     significand *= 10
                     pow10 -= 1
                 while pow10 < 0 and significand % 10 == 0:
-                    significand /= 10
+                    significand //= 10
                     pow10 += 1
                 if (pow10 == 0 and
                     ((not sign and significand < 2 ** 63) or
