@@ -3502,24 +3502,12 @@ netdev_dpdk_register(void)
 #endif
 }
 
-int
-pmd_thread_setaffinity_cpu(unsigned cpu)
+void
+dpdk_set_lcore_id(unsigned cpu)
 {
-    cpu_set_t cpuset;
-    int err;
-
-    CPU_ZERO(&cpuset);
-    CPU_SET(cpu, &cpuset);
-    err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
-    if (err) {
-        VLOG_ERR("Thread affinity error %d",err);
-        return err;
-    }
     /* NON_PMD_CORE_ID is reserved for use by non pmd threads. */
     ovs_assert(cpu != NON_PMD_CORE_ID);
     RTE_PER_LCORE(_lcore_id) = cpu;
-
-    return 0;
 }
 
 static bool

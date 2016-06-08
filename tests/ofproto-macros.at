@@ -285,7 +285,8 @@ m4_define([_OVS_VSWITCHD_START],
 /dpdk|INFO|DPDK Disabled - to change this requires a restart./d']])
 ])
 
-# OVS_VSWITCHD_START([vsctl-args], [vsctl-output], [=override])
+# OVS_VSWITCHD_START([vsctl-args], [vsctl-output], [=override],
+#                    [vswitchd-aux-args])
 #
 # Creates a database and starts ovsdb-server, starts ovs-vswitchd
 # connected to that database, calls ovs-vsctl to create a bridge named
@@ -298,8 +299,11 @@ m4_define([_OVS_VSWITCHD_START],
 # =override (literally) as the third argument.  Otherwise, system devices
 # won't work at all (which makes sense because tests should not access a
 # system's real Ethernet devices).
+#
+# 'vswitchd-aux-args' provides a way to pass extra command line arguments
+# to ovs-vswitchd
 m4_define([OVS_VSWITCHD_START],
-  [_OVS_VSWITCHD_START([--enable-dummy$3 --disable-system])
+  [_OVS_VSWITCHD_START([--enable-dummy$3 --disable-system $4])
    AT_CHECK([add_of_br 0 $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
 ])
 
@@ -345,32 +349,47 @@ add_of_br () {
         -- "$@"
 }
 
-# add_of_ports [--pcap] BRIDGE PNUM...
+# add_of_ports__ PORT_TYPE [--pcap] BRIDGE PNUM...
 #
-# Creates dummy interfaces in BRIDGE named pPNUM, OpenFlow port number
+# Creates PORT_TYPE interfaces in BRIDGE named pPNUM, OpenFlow port number
 # PNUM, and datapath port number PNUM (the latter is a consequence of
 # the dummy implementation, which tries to assign datapath port
 # numbers based on port names).
 #
 # If --pcap is supplied then packets received from the interface will
 # be written to $port-rx.pcap and those sent to it to $port-tx.pcap.
-add_of_ports () {
+add_of_ports__ () {
     local args
     local pcap=false
+    local ptype=$1
+    shift
     if test "$1" = --pcap; then
         pcap=:
-	shift
+    shift
     fi
     local br=$1; shift
     for pnum; do
-        AS_VAR_APPEND([args], [" -- add-port $br p$pnum -- set Interface p$pnum type=dummy ofport_request=$pnum"])
-	if $pcap; then
-	    AS_VAR_APPEND([args], [" -- set Interface p$pnum options:rxq_pcap=p$pnum-rx.pcap options:tx_pcap=p$pnum-tx.pcap"])
-	fi
+        AS_VAR_APPEND([args], [" -- add-port $br p$pnum -- set Interface p$pnum type=$ptype ofport_request=$pnum"])
+    if $pcap; then
+        AS_VAR_APPEND([args], [" -- set Interface p$pnum options:rxq_pcap=p$pnum-rx.pcap options:tx_pcap=p$pnum-tx.pcap"])
+    fi
     done
     echo ovs-vsctl $args
     ovs-vsctl $args
 }
+
+# add_of_ports [--pcap] BRIDGE PNUM...
+#
+add_of_ports () {
+    add_of_ports__ dummy $@
+}
+
+# add_pmd_of_ports [--pcap] BRIDGE PNUM...
+#
+add_pmd_of_ports () {
+    add_of_ports__ dummy-pmd $@
+}
+
 m4_divert_pop([PREPARE_TESTS])
 
 # OVS_VSWITCHD_STOP([WHITELIST])
