@@ -2056,6 +2056,7 @@ log_unexpected_flow(const struct dpif_flow *flow, int error)
                   "unexpected flow (%s): ", ovs_strerror(error));
     odp_format_ufid(&flow->ufid, &ds);
     VLOG_WARN_RL(&rl, "%s", ds_cstr(&ds));
+    ds_destroy(&ds);
 }
 
 static void
