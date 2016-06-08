@@ -271,16 +271,18 @@ update_row_ref_count(struct ovsdb_txn *txn, struct ovsdb_txn_row *r)
         const struct ovsdb_column *column = node->data;
         struct ovsdb_error *error;
 
-        if (r->old) {
-            error = ovsdb_txn_adjust_row_refs(txn, r->old, column, -1);
-            if (error) {
-                return OVSDB_WRAP_BUG("error decreasing refcount", error);
+        if (bitmap_is_set(r->changed, column->index)) {
+            if (r->old) {
+                error = ovsdb_txn_adjust_row_refs(txn, r->old, column, -1);
+                if (error) {
+                    return OVSDB_WRAP_BUG("error decreasing refcount", error);
+                }
             }
-        }
-        if (r->new) {
-            error = ovsdb_txn_adjust_row_refs(txn, r->new, column, 1);
-            if (error) {
-                return error;
+            if (r->new) {
+                error = ovsdb_txn_adjust_row_refs(txn, r->new, column, 1);
+                if (error) {
+                    return error;
+                }
             }
         }
     }
