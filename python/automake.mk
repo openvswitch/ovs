@@ -46,6 +46,9 @@ EXTRA_DIST += \
 	python/README.rst \
 	python/setup.py
 
+# C extension support.
+EXTRA_DIST += python/ovs/_json.c
+
 PYFILES = $(ovs_pyfiles) python/ovs/dirs.py $(ovstest_pyfiles)
 EXTRA_DIST += $(PYFILES)
 PYCOV_CLEAN_FILES += $(PYFILES:.py=.py,cover)
