@@ -3,6 +3,7 @@ etc/bash_completion.d/ovs-vsctl-bashcomp.bash
 usr/bin/ovs-dpctl
 usr/bin/ovs-dpctl-top
 usr/bin/ovs-pcap
+usr/bin/ovs-tcpdump
 usr/bin/ovs-tcpundump
 usr/bin/ovs-vlan-test
 usr/bin/ovs-vsctl
