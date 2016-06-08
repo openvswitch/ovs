@@ -164,6 +164,12 @@ utilities/ovs-pki.8: \
 	utilities/ovs-pki.8.in
 utilities/ovs-pki.8.in:
 
+utilities/ovs-tcpdump.8: \
+	utilities/ovs-tcpdump.8.in \
+	lib/common.man
+utilities/ovs-tcpdump.8.in:
+lib/common.man:
+
 utilities/ovs-tcpundump.1: \
 	utilities/ovs-tcpundump.1.in \
 	lib/common-syn.man \

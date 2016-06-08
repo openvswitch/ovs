@@ -1,0 +1,51 @@
+.TH ovs\-tcpdump 8 "@VERSION@" "Open vSwitch" "Open vSwitch Manual"
+.
+.SH NAME
+ovs\-tcpdump \- Dump traffic from an Open vSwitch port using \fBtcpdump\fR.
+.
+.SH SYNOPSIS
+\fBovs\-tcpdump\fR \fB\-i\fR \fIport\fR \fBtcpdump options...\fR
+.
+.SH DESCRIPTION
+\fBovs\-tcpdump\fR creates switch mirror ports in the \fBovs\-vswitchd\fR
+daemon and executes \fBtcpdump\fR to listen against those ports. When the
+\fBtcpdump\fR instance exits, it then cleans up the mirror port it created.
+.PP
+\fBovs\-tcpdump\fR will not allow multiple mirrors for the same port. It has
+some logic to parse the current configuration and prevent duplicate mirrors.
+.PP
+The \fB\-i\fR option may not appear multiple times.
+.PP
+It is important to note that under \fBLinux\fR based kernels, tap devices do
+not receive packets unless the specific tuntap device has been opened by an
+application. This requires \fBCAP_NET_ADMIN\fR privileges, so the
+\fBovs-tcpdump\fR command must be run as a user with such permissions (this
+is usually a super-user).
+.
+.SH "OPTIONS"
+.so lib/common.man
+.
+.IP "\fB\-\-db\-sock\fR"
+The Open vSwitch database socket connection string. The default is
+\fIunix:@RUNDIR@/db.sock\fR
+.
+.IP "\fB\-\-dump\-cmd\fR"
+The command to run instead of \fBtcpdump\fR.
+.
+.IP "\fB\-i\fR"
+.IQ "\fB\-\-interface\fR"
+The interface for which a mirror port should be created, and packets should
+be dumped.
+.
+.IP "\fB\-\-mirror\-to\fR"
+The name of the interface which should be the destination of the mirrored
+packets. The default is miINTERFACE
+.
+.SH "SEE ALSO"
+.
+.BR ovs\-appctl (8),
+.BR ovs\-vswitchd (8),
+.BR ovs\-pcap (1),
+.BR ovs\-tcpundump (1),
+.BR tcpdump (8),
+.BR wireshark (8).

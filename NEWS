@@ -62,6 +62,8 @@ Post-v2.5.0
      * Flow based tunnel match and action can be used for IPv6 address using
        tun_ipv6_src, tun_ipv6_dst fields.
      * Added support for IPv6 tunnels to native tunneling.
+   - A wrapper script, 'ovs-tcpdump', to easily port-mirror an OVS port and
+     watch with tcpdump
 
 v2.5.0 - 26 Feb 2016
 ---------------------
