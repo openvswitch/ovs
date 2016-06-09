@@ -33,6 +33,8 @@
 # or func_output().
 #
 
+from __future__ import print_function
+
 import getopt
 import re
 import os
@@ -252,7 +254,7 @@ dev_null = open('/dev/null', 'r+')
 def output(x):
     global SILENT_MODE
     if not SILENT_MODE:
-        print x
+        print(x)
 
 
 def output_ts(x):
@@ -355,7 +357,7 @@ def collect_data():
         elif 'func' in v:
             try:
                 s = v['func'](cap)
-            except Exception, e:
+            except Exception as e:
                 s = str(e)
             if check_space(cap, k, len(s)):
                 v['output'] = StringIOmtime(s)
@@ -373,7 +375,7 @@ def main(argv=None):
     collect_all_info = True
 
     if '--help' in sys.argv:
-        print """\
+        print("""
 %(argv0)s: create status report bundles to assist in problem diagnosis
 usage: %(argv0)s OPTIONS
 
@@ -398,12 +400,12 @@ Output options:
   --outfd=FD                 write output to FD (requires --output=tar)
   --unlimited                ignore default limits on sizes of data collected
   --debug                    print ovs-bugtool debug info on stdout\
-""" % {'argv0': sys.argv[0]}
+""" % {'argv0': sys.argv[0]})
         sys.exit(0)
 
     # we need access to privileged files, exit if we are not running as root
     if os.getuid() != 0:
-        print >>sys.stderr, "Error: ovs-bugtool must be run as root"
+        print("Error: ovs-bugtool must be run as root", file=sys.stderr)
         return 1
 
     output_file = None
@@ -418,8 +420,8 @@ Output options:
             argv, 'sy', ['capabilities', 'silent', 'yestoall', 'entries=',
                          'output=', 'outfd=', 'outfile=', 'all', 'unlimited',
                          'debug', 'ovs', 'log-days='])
-    except getopt.GetoptError, opterr:
-        print >>sys.stderr, opterr
+    except getopt.GetoptError as opterr:
+        print(opterr, file=sys.stderr)
         return 2
 
     try:
@@ -439,7 +441,7 @@ Output options:
             if v in ['tar', 'tar.bz2', 'tar.gz', 'zip']:
                 output_type = v
             else:
-                print >>sys.stderr, "Invalid output format '%s'" % v
+                print("Invalid output format '%s'" % v, file=sys.stderr)
                 return 2
 
         # "-s" or "--silent" means suppress output (except for the final
@@ -461,7 +463,8 @@ Output options:
                 old = fcntl.fcntl(output_fd, fcntl.F_GETFD)
                 fcntl.fcntl(output_fd, fcntl.F_SETFD, old | fcntl.FD_CLOEXEC)
             except:
-                print >>sys.stderr, "Invalid output file descriptor", output_fd
+                print("Invalid output file descriptor", output_fd,
+                      file=sys.stderr)
                 return 2
 
         if k == '--outfile':
@@ -483,15 +486,16 @@ Output options:
             log_days = int(v)
 
     if len(params) != 1:
-        print >>sys.stderr, "Invalid additional arguments", str(params)
+        print("Invalid additional arguments", str(params), file=sys.stderr)
         return 2
 
     if output_fd != -1 and output_type != 'tar':
-        print >>sys.stderr, "Option '--outfd' only valid with '--output=tar'"
+        print("Option '--outfd' only valid with '--output=tar'",
+              file=sys.stderr)
         return 2
 
     if output_fd != -1 and output_file is not None:
-        print >>sys.stderr, "Cannot set both '--outfd' and '--outfile'"
+        print("Cannot set both '--outfd' and '--outfile'", file=sys.stderr)
         return 2
 
     if output_file is not None and not unlimited_data:
@@ -713,10 +717,10 @@ exclude those logs from the archive.
         make_zip(subdir, output_file)
 
     if dbg:
-        print >>sys.stderr, "Category sizes (max, actual):\n"
+        print("Category sizes (max, actual):\n", file=sys.stderr)
         for c in caps.keys():
-            print >>sys.stderr, "    %s (%d, %d)" % (c, caps[c][MAX_SIZE],
-                                                     cap_sizes[c])
+            print("    %s (%d, %d)" % (c, caps[c][MAX_SIZE], cap_sizes[c]),
+                  file=sys.stderr)
 
     cleanup_ovsdb()
     return 0
@@ -970,7 +974,7 @@ def make_tar(subdir, suffix, output_fd, output_file):
             filename = "%s/%s.%s" % (BUG_DIR, subdir, suffix)
         else:
             filename = output_file
-        old_umask = os.umask(0077)
+        old_umask = os.umask(0o077)
         tf = tarfile.open(filename, mode)
         os.umask(old_umask)
     else:
@@ -1003,7 +1007,7 @@ def make_tar(subdir, suffix, output_fd, output_file):
     if output_fd == -1:
         output('Writing tarball %s successful.' % filename)
         if SILENT_MODE:
-            print filename
+            print(filename)
 
 
 def make_zip(subdir, output_file):
@@ -1013,7 +1017,7 @@ def make_zip(subdir, output_file):
         filename = "%s/%s.zip" % (BUG_DIR, subdir)
     else:
         filename = output_file
-    old_umask = os.umask(0077)
+    old_umask = os.umask(0o077)
     zf = zipfile.ZipFile(filename, 'w', zipfile.ZIP_DEFLATED)
     os.umask(old_umask)
 
@@ -1037,7 +1041,7 @@ def make_zip(subdir, output_file):
 
     output('Writing archive %s successful.' % filename)
     if SILENT_MODE:
-        print filename
+        print(filename)
 
 
 def make_inventory(inventory, subdir):
@@ -1149,7 +1153,7 @@ def print_capabilities():
         "ns", CAP_XML_ROOT, None)
     map(lambda key: capability(document, key),
         [k for k in caps.keys() if not caps[k][HIDDEN]])
-    print document.toprettyxml()
+    print(document.toprettyxml())
 
 
 def capability(document, key):
@@ -1196,7 +1200,7 @@ def disk_list():
     return disks
 
 
-class ProcOutput:
+class ProcOutput(object):
     debug = False
 
     def __init__(self, command, max_time, inst=None, filter=None,
@@ -1362,5 +1366,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print "\nInterrupted."
+        print("\nInterrupted.")
         sys.exit(3)
