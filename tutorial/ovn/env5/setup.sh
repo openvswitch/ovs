@@ -32,24 +32,24 @@ ovn-sbctl chassis-add fakechassis geneve 127.0.0.1
 
 for n in 1 2 3 4 5 6 7 8; do
     if [ $n -gt 4 ] ; then
-        lswitch_name="provnet1-$n-101"
-        lsp_name="$lswitch_name-port1"
+        ls_name="provnet1-$n-101"
+        lsp_name="$ls_name-port1"
     else
-        lswitch_name="provnet1-$n"
+        ls_name="provnet1-$n"
     fi
-    ovn-nbctl lswitch-add $lswitch_name
+    ovn-nbctl ls-add $ls_name
 
-    lsp_name="$lswitch_name-port1"
-    ovn-nbctl lsp-add $lswitch_name $lsp_name
+    lsp_name="$ls_name-port1"
+    ovn-nbctl lsp-add $ls_name $lsp_name
     ovn-nbctl lsp-set-addresses $lsp_name 00:00:00:00:00:0$n
     ovn-nbctl lsp-set-port-security $lsp_name 00:00:00:00:00:0$n
 
     if [ $n -gt 4 ] ; then
         lsp_name="provnet1-$n-physnet1-101"
-        ovn-nbctl lsp-add $lswitch_name $lsp_name "" 101
+        ovn-nbctl lsp-add $ls_name $lsp_name "" 101
     else
         lsp_name="provnet1-$n-physnet1"
-        ovn-nbctl lsp-add $lswitch_name $lsp_name
+        ovn-nbctl lsp-add $ls_name $lsp_name
     fi
     ovn-nbctl lsp-set-addresses $lsp_name unknown
     ovn-nbctl lsp-set-type $lsp_name localnet

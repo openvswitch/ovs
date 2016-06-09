@@ -292,28 +292,28 @@ usage: %s [OPTIONS] COMMAND [ARG...]\n\
 \n\
 General commands:\n\
   show                      print overview of database contents\n\
-  show LSWITCH              print overview of database contents for LSWITCH\n\
+  show SWITCH               print overview of database contents for SWITCH\n\
   show ROUTER               print overview of database contents for ROUTER\n\
 \n\
 Logical switch commands:\n\
-  lswitch-add [LSWITCH]     create a logical switch named LSWITCH\n\
-  lswitch-del LSWITCH       delete LSWITCH and all its ports\n\
-  lswitch-list              print the names of all logical switches\n\
+  ls-add [SWITCH]           create a logical switch named SWITCH\n\
+  ls-del SWITCH             delete SWITCH and all its ports\n\
+  ls-list                   print the names of all logical switches\n\
 \n\
 ACL commands:\n\
-  acl-add LSWITCH DIRECTION PRIORITY MATCH ACTION [log]\n\
-                            add an ACL to LSWITCH\n\
-  acl-del LSWITCH [DIRECTION [PRIORITY MATCH]]\n\
-                            remove ACLs from LSWITCH\n\
-  acl-list LSWITCH          print ACLs for LSWITCH\n\
+  acl-add SWITCH DIRECTION PRIORITY MATCH ACTION [log]\n\
+                            add an ACL to SWITCH\n\
+  acl-del SWITCH [DIRECTION [PRIORITY MATCH]]\n\
+                            remove ACLs from SWITCH\n\
+  acl-list SWITCH           print ACLs for SWITCH\n\
 \n\
 Logical switch port commands:\n\
-  lsp-add LSWITCH PORT      add logical port PORT on LSWITCH\n\
-  lsp-add LSWITCH PORT PARENT TAG\n\
-                            add logical port PORT on LSWITCH with PARENT\n\
+  lsp-add SWITCH PORT       add logical port PORT on SWITCH\n\
+  lsp-add SWITCH PORT PARENT TAG\n\
+                            add logical port PORT on SWITCH with PARENT\n\
                             on TAG\n\
   lsp-del PORT              delete PORT from its attached switch\n\
-  lsp-list LSWITCH          print the names of all logical ports on LSWITCH\n\
+  lsp-list SWITCH           print the names of all logical ports on SWITCH\n\
   lsp-get-parent PORT       get the parent of PORT if set\n\
   lsp-get-tag PORT          get the PORT's tag if set\n\
   lsp-set-addresses PORT [ADDRESS]...\n\
@@ -414,37 +414,36 @@ lr_by_name_or_uuid(struct ctl_context *ctx, const char *id,
 }
 
 static const struct nbrec_logical_switch *
-lswitch_by_name_or_uuid(struct ctl_context *ctx, const char *id,
-                        bool must_exist)
+ls_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
 {
-    const struct nbrec_logical_switch *lswitch = NULL;
+    const struct nbrec_logical_switch *ls = NULL;
 
-    struct uuid lswitch_uuid;
-    bool is_uuid = uuid_from_string(&lswitch_uuid, id);
+    struct uuid ls_uuid;
+    bool is_uuid = uuid_from_string(&ls_uuid, id);
     if (is_uuid) {
-        lswitch = nbrec_logical_switch_get_for_uuid(ctx->idl, &lswitch_uuid);
+        ls = nbrec_logical_switch_get_for_uuid(ctx->idl, &ls_uuid);
     }
 
-    if (!lswitch) {
+    if (!ls) {
         const struct nbrec_logical_switch *iter;
 
         NBREC_LOGICAL_SWITCH_FOR_EACH(iter, ctx->idl) {
             if (strcmp(iter->name, id)) {
                 continue;
             }
-            if (lswitch) {
+            if (ls) {
                 ctl_fatal("Multiple logical switches named '%s'.  "
                           "Use a UUID.", id);
             }
-            lswitch = iter;
+            ls = iter;
         }
     }
 
-    if (!lswitch && must_exist) {
-        ctl_fatal("%s: lswitch %s not found", id, is_uuid ? "UUID" : "name");
+    if (!ls && must_exist) {
+        ctl_fatal("%s: switch %s not found", id, is_uuid ? "UUID" : "name");
     }
 
-    return lswitch;
+    return ls;
 }
 
 /* Given pointer to logical router, this routine prints the router
@@ -467,13 +466,13 @@ print_lr(const struct nbrec_logical_router *lr, struct ds *s)
 }
 
 static void
-print_lswitch(const struct nbrec_logical_switch *lswitch, struct ds *s)
+print_ls(const struct nbrec_logical_switch *ls, struct ds *s)
 {
-    ds_put_format(s, "    lswitch "UUID_FMT" (%s)\n",
-                  UUID_ARGS(&lswitch->header_.uuid), lswitch->name);
+    ds_put_format(s, "    switch "UUID_FMT" (%s)\n",
+                  UUID_ARGS(&ls->header_.uuid), ls->name);
 
-    for (size_t i = 0; i < lswitch->n_ports; i++) {
-        const struct nbrec_logical_switch_port *lsp = lswitch->ports[i];
+    for (size_t i = 0; i < ls->n_ports; i++) {
+        const struct nbrec_logical_switch_port *lsp = ls->ports[i];
 
         ds_put_format(s, "        port %s\n", lsp->name);
         if (lsp->parent_name) {
@@ -497,16 +496,16 @@ print_lswitch(const struct nbrec_logical_switch *lswitch, struct ds *s)
 static void
 nbctl_show(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_switch *lswitch;
+    const struct nbrec_logical_switch *ls;
 
     if (ctx->argc == 2) {
-        lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1], false);
-        if (lswitch) {
-            print_lswitch(lswitch, &ctx->output);
+        ls = ls_by_name_or_uuid(ctx, ctx->argv[1], false);
+        if (ls) {
+            print_ls(ls, &ctx->output);
         }
     } else {
-        NBREC_LOGICAL_SWITCH_FOR_EACH(lswitch, ctx->idl) {
-            print_lswitch(lswitch, &ctx->output);
+        NBREC_LOGICAL_SWITCH_FOR_EACH(ls, ctx->idl) {
+            print_ls(ls, &ctx->output);
         }
     }
     const struct nbrec_logical_router *lr;
@@ -524,9 +523,9 @@ nbctl_show(struct ctl_context *ctx)
 }
 
 static void
-nbctl_lswitch_add(struct ctl_context *ctx)
+nbctl_ls_add(struct ctl_context *ctx)
 {
-    const char *lswitch_name = ctx->argc == 2 ? ctx->argv[1] : NULL;
+    const char *ls_name = ctx->argc == 2 ? ctx->argv[1] : NULL;
 
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
     bool add_duplicate = shash_find(&ctx->options, "--add-duplicate") != NULL;
@@ -534,16 +533,16 @@ nbctl_lswitch_add(struct ctl_context *ctx)
         ctl_fatal("--may-exist and --add-duplicate may not be used together");
     }
 
-    if (lswitch_name) {
+    if (ls_name) {
         if (!add_duplicate) {
-            const struct nbrec_logical_switch *lswitch;
-            NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->idl) {
-                if (!strcmp(lswitch->name, lswitch_name)) {
+            const struct nbrec_logical_switch *ls;
+            NBREC_LOGICAL_SWITCH_FOR_EACH (ls, ctx->idl) {
+                if (!strcmp(ls->name, ls_name)) {
                     if (may_exist) {
                         return;
                     }
-                    ctl_fatal("%s: an lswitch with this name already exists",
-                              lswitch_name);
+                    ctl_fatal("%s: a switch with this name already exists",
+                              ls_name);
                 }
             }
         }
@@ -553,38 +552,38 @@ nbctl_lswitch_add(struct ctl_context *ctx)
         ctl_fatal("--add-duplicate requires specifying a name");
     }
 
-    struct nbrec_logical_switch *lswitch;
-    lswitch = nbrec_logical_switch_insert(ctx->txn);
-    if (lswitch_name) {
-        nbrec_logical_switch_set_name(lswitch, lswitch_name);
+    struct nbrec_logical_switch *ls;
+    ls = nbrec_logical_switch_insert(ctx->txn);
+    if (ls_name) {
+        nbrec_logical_switch_set_name(ls, ls_name);
     }
 }
 
 static void
-nbctl_lswitch_del(struct ctl_context *ctx)
+nbctl_ls_del(struct ctl_context *ctx)
 {
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch *lswitch;
+    const struct nbrec_logical_switch *ls;
 
-    lswitch = lswitch_by_name_or_uuid(ctx, id, must_exist);
-    if (!lswitch) {
+    ls = ls_by_name_or_uuid(ctx, id, must_exist);
+    if (!ls) {
         return;
     }
 
-    nbrec_logical_switch_delete(lswitch);
+    nbrec_logical_switch_delete(ls);
 }
 
 static void
-nbctl_lswitch_list(struct ctl_context *ctx)
+nbctl_ls_list(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_switch *lswitch;
+    const struct nbrec_logical_switch *ls;
     struct smap lswitches;
 
     smap_init(&lswitches);
-    NBREC_LOGICAL_SWITCH_FOR_EACH(lswitch, ctx->idl) {
-        smap_add_format(&lswitches, lswitch->name, UUID_FMT " (%s)",
-                        UUID_ARGS(&lswitch->header_.uuid), lswitch->name);
+    NBREC_LOGICAL_SWITCH_FOR_EACH(ls, ctx->idl) {
+        smap_add_format(&lswitches, ls->name, UUID_FMT " (%s)",
+                        UUID_ARGS(&ls->header_.uuid), ls->name);
     }
     const struct smap_node **nodes = smap_sort(&lswitches);
     for (size_t i = 0; i < smap_count(&lswitches); i++) {
@@ -622,16 +621,16 @@ lsp_by_name_or_uuid(struct ctl_context *ctx, const char *id,
     return lsp;
 }
 
-/* Returns the lswitch that contains 'lsp'. */
+/* Returns the logical switch that contains 'lsp'. */
 static const struct nbrec_logical_switch *
-lsp_to_lswitch(const struct ovsdb_idl *idl,
+lsp_to_ls(const struct ovsdb_idl *idl,
                const struct nbrec_logical_switch_port *lsp)
 {
-    const struct nbrec_logical_switch *lswitch;
-    NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, idl) {
-        for (size_t i = 0; i < lswitch->n_ports; i++) {
-            if (lswitch->ports[i] == lsp) {
-                return lswitch;
+    const struct nbrec_logical_switch *ls;
+    NBREC_LOGICAL_SWITCH_FOR_EACH (ls, idl) {
+        for (size_t i = 0; i < ls->n_ports; i++) {
+            if (ls->ports[i] == lsp) {
+                return ls;
             }
         }
     }
@@ -642,13 +641,13 @@ lsp_to_lswitch(const struct ovsdb_idl *idl,
 }
 
 static const char *
-lswitch_get_name(const struct nbrec_logical_switch *lswitch,
+ls_get_name(const struct nbrec_logical_switch *ls,
                  char uuid_s[UUID_LEN + 1], size_t uuid_s_size)
 {
-    if (lswitch->name[0]) {
-        return lswitch->name;
+    if (ls->name[0]) {
+        return ls->name;
     }
-    snprintf(uuid_s, uuid_s_size, UUID_FMT, UUID_ARGS(&lswitch->header_.uuid));
+    snprintf(uuid_s, uuid_s_size, UUID_FMT, UUID_ARGS(&ls->header_.uuid));
     return uuid_s;
 }
 
@@ -657,8 +656,8 @@ nbctl_lsp_add(struct ctl_context *ctx)
 {
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
 
-    const struct nbrec_logical_switch *lswitch;
-    lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1], true);
+    const struct nbrec_logical_switch *ls;
+    ls = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
 
     const char *parent_name;
     int64_t tag;
@@ -686,11 +685,11 @@ nbctl_lsp_add(struct ctl_context *ctx)
         }
 
         const struct nbrec_logical_switch *lsw;
-        lsw = lsp_to_lswitch(ctx->idl, lsp);
-        if (lsw != lswitch) {
+        lsw = lsp_to_ls(ctx->idl, lsp);
+        if (lsw != ls) {
             char uuid_s[UUID_LEN + 1];
-            ctl_fatal("%s: port already exists but in lswitch %s", lsp_name,
-                      lswitch_get_name(lsw, uuid_s, sizeof uuid_s));
+            ctl_fatal("%s: port already exists but in switch %s", lsp_name,
+                      ls_get_name(lsw, uuid_s, sizeof uuid_s));
         }
 
         if (parent_name) {
@@ -728,30 +727,30 @@ nbctl_lsp_add(struct ctl_context *ctx)
     }
 
     /* Insert the logical port into the logical switch. */
-    nbrec_logical_switch_verify_ports(lswitch);
+    nbrec_logical_switch_verify_ports(ls);
     struct nbrec_logical_switch_port **new_ports = xmalloc(sizeof *new_ports *
-                                                    (lswitch->n_ports + 1));
-    memcpy(new_ports, lswitch->ports, sizeof *new_ports * lswitch->n_ports);
-    new_ports[lswitch->n_ports] = CONST_CAST(struct nbrec_logical_switch_port *,
+                                                    (ls->n_ports + 1));
+    memcpy(new_ports, ls->ports, sizeof *new_ports * ls->n_ports);
+    new_ports[ls->n_ports] = CONST_CAST(struct nbrec_logical_switch_port *,
                                              lsp);
-    nbrec_logical_switch_set_ports(lswitch, new_ports, lswitch->n_ports + 1);
+    nbrec_logical_switch_set_ports(ls, new_ports, ls->n_ports + 1);
     free(new_ports);
 }
 
-/* Removes logical switch port 'lswitch->ports[idx]'. */
+/* Removes logical switch port 'ls->ports[idx]'. */
 static void
-remove_lsp(const struct nbrec_logical_switch *lswitch, size_t idx)
+remove_lsp(const struct nbrec_logical_switch *ls, size_t idx)
 {
-    const struct nbrec_logical_switch_port *lsp = lswitch->ports[idx];
+    const struct nbrec_logical_switch_port *lsp = ls->ports[idx];
 
     /* First remove 'lsp' from the array of ports.  This is what will
      * actually cause the logical port to be deleted when the transaction is
      * sent to the database server (due to garbage collection). */
     struct nbrec_logical_switch_port **new_ports
-        = xmemdup(lswitch->ports, sizeof *new_ports * lswitch->n_ports);
-    new_ports[idx] = new_ports[lswitch->n_ports - 1];
-    nbrec_logical_switch_verify_ports(lswitch);
-    nbrec_logical_switch_set_ports(lswitch, new_ports, lswitch->n_ports - 1);
+        = xmemdup(ls->ports, sizeof *new_ports * ls->n_ports);
+    new_ports[idx] = new_ports[ls->n_ports - 1];
+    nbrec_logical_switch_verify_ports(ls);
+    nbrec_logical_switch_set_ports(ls, new_ports, ls->n_ports - 1);
     free(new_ports);
 
     /* Delete 'lsp' from the IDL.  This won't have a real effect on the
@@ -773,11 +772,11 @@ nbctl_lsp_del(struct ctl_context *ctx)
     }
 
     /* Find the switch that contains 'lsp', then delete it. */
-    const struct nbrec_logical_switch *lswitch;
-    NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->idl) {
-        for (size_t i = 0; i < lswitch->n_ports; i++) {
-            if (lswitch->ports[i] == lsp) {
-                remove_lsp(lswitch, i);
+    const struct nbrec_logical_switch *ls;
+    NBREC_LOGICAL_SWITCH_FOR_EACH (ls, ctx->idl) {
+        for (size_t i = 0; i < ls->n_ports; i++) {
+            if (ls->ports[i] == lsp) {
+                remove_lsp(ls, i);
                 return;
             }
         }
@@ -792,15 +791,15 @@ static void
 nbctl_lsp_list(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
-    const struct nbrec_logical_switch *lswitch;
+    const struct nbrec_logical_switch *ls;
     struct smap lsps;
     size_t i;
 
-    lswitch = lswitch_by_name_or_uuid(ctx, id, true);
+    ls = ls_by_name_or_uuid(ctx, id, true);
 
     smap_init(&lsps);
-    for (i = 0; i < lswitch->n_ports; i++) {
-        const struct nbrec_logical_switch_port *lsp = lswitch->ports[i];
+    for (i = 0; i < ls->n_ports; i++) {
+        const struct nbrec_logical_switch_port *lsp = ls->ports[i];
         smap_add_format(&lsps, lsp->name, UUID_FMT " (%s)",
                         UUID_ARGS(&lsp->header_.uuid), lsp->name);
     }
@@ -1059,20 +1058,20 @@ acl_cmp(const void *acl1_, const void *acl2_)
 static void
 nbctl_acl_list(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_switch *lswitch;
+    const struct nbrec_logical_switch *ls;
     const struct nbrec_acl **acls;
     size_t i;
 
-    lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1], true);
+    ls = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
 
-    acls = xmalloc(sizeof *acls * lswitch->n_acls);
-    for (i = 0; i < lswitch->n_acls; i++) {
-        acls[i] = lswitch->acls[i];
+    acls = xmalloc(sizeof *acls * ls->n_acls);
+    for (i = 0; i < ls->n_acls; i++) {
+        acls[i] = ls->acls[i];
     }
 
-    qsort(acls, lswitch->n_acls, sizeof *acls, acl_cmp);
+    qsort(acls, ls->n_acls, sizeof *acls, acl_cmp);
 
-    for (i = 0; i < lswitch->n_acls; i++) {
+    for (i = 0; i < ls->n_acls; i++) {
         const struct nbrec_acl *acl = acls[i];
         ds_put_format(&ctx->output, "%10s %5"PRId64" (%s) %s%s\n",
                       acl->direction, acl->priority,
@@ -1110,10 +1109,10 @@ parse_priority(const char *arg)
 static void
 nbctl_acl_add(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_switch *lswitch;
+    const struct nbrec_logical_switch *ls;
     const char *action = ctx->argv[5];
 
-    lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1], true);
+    ls = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
 
     const char *direction = parse_direction(ctx->argv[2]);
     int64_t priority = parse_priority(ctx->argv[3]);
@@ -1137,20 +1136,19 @@ nbctl_acl_add(struct ctl_context *ctx)
     }
 
     /* Insert the acl into the logical switch. */
-    nbrec_logical_switch_verify_acls(lswitch);
-    struct nbrec_acl **new_acls = xmalloc(sizeof *new_acls *
-                                          (lswitch->n_acls + 1));
-    memcpy(new_acls, lswitch->acls, sizeof *new_acls * lswitch->n_acls);
-    new_acls[lswitch->n_acls] = acl;
-    nbrec_logical_switch_set_acls(lswitch, new_acls, lswitch->n_acls + 1);
+    nbrec_logical_switch_verify_acls(ls);
+    struct nbrec_acl **new_acls = xmalloc(sizeof *new_acls * (ls->n_acls + 1));
+    memcpy(new_acls, ls->acls, sizeof *new_acls * ls->n_acls);
+    new_acls[ls->n_acls] = acl;
+    nbrec_logical_switch_set_acls(ls, new_acls, ls->n_acls + 1);
     free(new_acls);
 }
 
 static void
 nbctl_acl_del(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_switch *lswitch;
-    lswitch = lswitch_by_name_or_uuid(ctx, ctx->argv[1], true);
+    const struct nbrec_logical_switch *ls;
+    ls = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
 
     if (ctx->argc != 2 && ctx->argc != 3 && ctx->argc != 5) {
         ctl_fatal("cannot specify priority without match");
@@ -1159,8 +1157,8 @@ nbctl_acl_del(struct ctl_context *ctx)
     if (ctx->argc == 2) {
         /* If direction, priority, and match are not specified, delete
          * all ACLs. */
-        nbrec_logical_switch_verify_acls(lswitch);
-        nbrec_logical_switch_set_acls(lswitch, NULL, 0);
+        nbrec_logical_switch_verify_acls(ls);
+        nbrec_logical_switch_set_acls(ls, NULL, 0);
         return;
     }
 
@@ -1169,18 +1167,17 @@ nbctl_acl_del(struct ctl_context *ctx)
     /* If priority and match are not specified, delete all ACLs with the
      * specified direction. */
     if (ctx->argc == 3) {
-        struct nbrec_acl **new_acls
-            = xmalloc(sizeof *new_acls * lswitch->n_acls);
+        struct nbrec_acl **new_acls = xmalloc(sizeof *new_acls * ls->n_acls);
 
         int n_acls = 0;
-        for (size_t i = 0; i < lswitch->n_acls; i++) {
-            if (strcmp(direction, lswitch->acls[i]->direction)) {
-                new_acls[n_acls++] = lswitch->acls[i];
+        for (size_t i = 0; i < ls->n_acls; i++) {
+            if (strcmp(direction, ls->acls[i]->direction)) {
+                new_acls[n_acls++] = ls->acls[i];
             }
         }
 
-        nbrec_logical_switch_verify_acls(lswitch);
-        nbrec_logical_switch_set_acls(lswitch, new_acls, n_acls);
+        nbrec_logical_switch_verify_acls(ls);
+        nbrec_logical_switch_set_acls(ls, new_acls, n_acls);
         free(new_acls);
         return;
     }
@@ -1188,17 +1185,17 @@ nbctl_acl_del(struct ctl_context *ctx)
     int64_t priority = parse_priority(ctx->argv[3]);
 
     /* Remove the matching rule. */
-    for (size_t i = 0; i < lswitch->n_acls; i++) {
-        struct nbrec_acl *acl = lswitch->acls[i];
+    for (size_t i = 0; i < ls->n_acls; i++) {
+        struct nbrec_acl *acl = ls->acls[i];
 
         if (priority == acl->priority && !strcmp(ctx->argv[4], acl->match) &&
              !strcmp(direction, acl->direction)) {
             struct nbrec_acl **new_acls
-                = xmemdup(lswitch->acls, sizeof *new_acls * lswitch->n_acls);
-            new_acls[i] = lswitch->acls[lswitch->n_acls - 1];
-            nbrec_logical_switch_verify_acls(lswitch);
-            nbrec_logical_switch_set_acls(lswitch, new_acls,
-                                          lswitch->n_acls - 1);
+                = xmemdup(ls->acls, sizeof *new_acls * ls->n_acls);
+            new_acls[i] = ls->acls[ls->n_acls - 1];
+            nbrec_logical_switch_verify_acls(ls);
+            nbrec_logical_switch_set_acls(ls, new_acls,
+                                          ls->n_acls - 1);
             free(new_acls);
             return;
         }
@@ -2067,27 +2064,26 @@ nbctl_exit(int status)
 }
 
 static const struct ctl_command_syntax nbctl_commands[] = {
-    { "show", 0, 1, "[LSWITCH]", NULL, nbctl_show, NULL, "", RO },
+    { "show", 0, 1, "[SWITCH]", NULL, nbctl_show, NULL, "", RO },
 
-    /* lswitch commands. */
-    { "lswitch-add", 0, 1, "[LSWITCH]", NULL, nbctl_lswitch_add,
-      NULL, "--may-exist,--add-duplicate", RW },
-    { "lswitch-del", 1, 1, "LSWITCH", NULL, nbctl_lswitch_del,
-      NULL, "--if-exists", RW },
-    { "lswitch-list", 0, 0, "", NULL, nbctl_lswitch_list, NULL, "", RO },
+    /* logical switch commands. */
+    { "ls-add", 0, 1, "[SWITCH]", NULL, nbctl_ls_add, NULL,
+      "--may-exist,--add-duplicate", RW },
+    { "ls-del", 1, 1, "SWITCH", NULL, nbctl_ls_del, NULL, "--if-exists", RW },
+    { "ls-list", 0, 0, "", NULL, nbctl_ls_list, NULL, "", RO },
 
     /* acl commands. */
-    { "acl-add", 5, 5, "LSWITCH DIRECTION PRIORITY MATCH ACTION", NULL,
+    { "acl-add", 5, 5, "SWITCH DIRECTION PRIORITY MATCH ACTION", NULL,
       nbctl_acl_add, NULL, "--log", RW },
-    { "acl-del", 1, 4, "LSWITCH [DIRECTION [PRIORITY MATCH]]", NULL,
+    { "acl-del", 1, 4, "SWITCH [DIRECTION [PRIORITY MATCH]]", NULL,
       nbctl_acl_del, NULL, "", RW },
-    { "acl-list", 1, 1, "LSWITCH", NULL, nbctl_acl_list, NULL, "", RO },
+    { "acl-list", 1, 1, "SWITCH", NULL, nbctl_acl_list, NULL, "", RO },
 
     /* logical switch port commands. */
-    { "lsp-add", 2, 4, "LSWITCH PORT [PARENT] [TAG]", NULL, nbctl_lsp_add,
+    { "lsp-add", 2, 4, "SWITCH PORT [PARENT] [TAG]", NULL, nbctl_lsp_add,
       NULL, "--may-exist", RW },
     { "lsp-del", 1, 1, "PORT", NULL, nbctl_lsp_del, NULL, "--if-exists", RW },
-    { "lsp-list", 1, 1, "LSWITCH", NULL, nbctl_lsp_list, NULL, "", RO },
+    { "lsp-list", 1, 1, "SWITCH", NULL, nbctl_lsp_list, NULL, "", RO },
     { "lsp-get-parent", 1, 1, "PORT", NULL, nbctl_lsp_get_parent, NULL,
       "", RO },
     { "lsp-get-tag", 1, 1, "PORT", NULL, nbctl_lsp_get_tag, NULL, "", RO },

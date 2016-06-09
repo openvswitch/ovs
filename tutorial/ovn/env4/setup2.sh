@@ -28,7 +28,7 @@ set -o xtrace
 ovn-sbctl chassis-add fakechassis geneve 127.0.0.1
 
 for n in 1 2 3 4; do
-    ovn-nbctl lswitch-add provnet1-$n
+    ovn-nbctl ls-add provnet1-$n
 
     ovn-nbctl lsp-add provnet1-$n provnet1-$n-port1
     ovn-nbctl lsp-set-addresses provnet1-$n-port1 00:00:00:00:00:0$n

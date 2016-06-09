@@ -79,7 +79,7 @@ dnl ---------------------------------------------------------------------
 AT_SETUP([ovn-sbctl])
 OVN_SBCTL_TEST_START
 
-AT_CHECK([ovn-nbctl lswitch-add br-test])
+AT_CHECK([ovn-nbctl ls-add br-test])
 AT_CHECK([ovn-nbctl lsp-add br-test vif0])
 AT_CHECK([ovn-nbctl lsp-set-addresses vif0 f0:ab:cd:ef:01:02])
 AT_CHECK([ovn-sbctl chassis-add ch0 stt 1.2.3.5])

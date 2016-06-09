@@ -29,56 +29,56 @@ m4_define([OVN_NBCTL_TEST_STOP],
    OVS_APP_EXIT_AND_WAIT([ovsdb-server])])
 
 
-AT_SETUP([ovn-nbctl - basic lswitch commands])
+AT_SETUP([ovn-nbctl - basic switch commands])
 OVN_NBCTL_TEST_START
 
-AT_CHECK([ovn-nbctl lswitch-add ls0])
-AT_CHECK([ovn-nbctl lswitch-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+AT_CHECK([ovn-nbctl ls-add ls0])
+AT_CHECK([ovn-nbctl ls-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (ls0)
 ])
 
-AT_CHECK([ovn-nbctl lswitch-add ls1])
-AT_CHECK([ovn-nbctl lswitch-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+AT_CHECK([ovn-nbctl ls-add ls1])
+AT_CHECK([ovn-nbctl ls-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (ls0)
 <1> (ls1)
 ])
 
-AT_CHECK([ovn-nbctl lswitch-del ls0])
-AT_CHECK([ovn-nbctl lswitch-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+AT_CHECK([ovn-nbctl ls-del ls0])
+AT_CHECK([ovn-nbctl ls-list | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (ls1)
 ])
 
 AT_CHECK([ovn-nbctl show ls0])
-AT_CHECK([ovn-nbctl lswitch-add ls0])
+AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl show ls0 | ${PERL} $srcdir/uuidfilt.pl], [0],
-  [    lswitch <0> (ls0)
+  [    switch <0> (ls0)
 ])
-AT_CHECK([ovn-nbctl lswitch-add ls0], [1], [],
-  [ovn-nbctl: ls0: an lswitch with this name already exists
+AT_CHECK([ovn-nbctl ls-add ls0], [1], [],
+  [ovn-nbctl: ls0: a switch with this name already exists
 ])
-AT_CHECK([ovn-nbctl --may-exist lswitch-add ls0])
+AT_CHECK([ovn-nbctl --may-exist ls-add ls0])
 AT_CHECK([ovn-nbctl show ls0 | ${PERL} $srcdir/uuidfilt.pl], [0],
-  [    lswitch <0> (ls0)
+  [    switch <0> (ls0)
 ])
-AT_CHECK([ovn-nbctl --add-duplicate lswitch-add ls0])
-AT_CHECK([ovn-nbctl --may-exist --add-duplicate lswitch-add ls0], [1], [],
+AT_CHECK([ovn-nbctl --add-duplicate ls-add ls0])
+AT_CHECK([ovn-nbctl --may-exist --add-duplicate ls-add ls0], [1], [],
   [ovn-nbctl: --may-exist and --add-duplicate may not be used together
 ])
-AT_CHECK([ovn-nbctl lswitch-del ls0], [1], [],
+AT_CHECK([ovn-nbctl ls-del ls0], [1], [],
   [ovn-nbctl: Multiple logical switches named 'ls0'.  Use a UUID.
 ])
 
-AT_CHECK([ovn-nbctl lswitch-del ls2], [1], [],
-  [ovn-nbctl: ls2: lswitch name not found
+AT_CHECK([ovn-nbctl ls-del ls2], [1], [],
+  [ovn-nbctl: ls2: switch name not found
 ])
-AT_CHECK([ovn-nbctl --if-exists lswitch-del ls2])
+AT_CHECK([ovn-nbctl --if-exists ls-del ls2])
 
-AT_CHECK([ovn-nbctl lswitch-add])
-AT_CHECK([ovn-nbctl lswitch-add])
-AT_CHECK([ovn-nbctl --add-duplicate lswitch-add], [1], [],
+AT_CHECK([ovn-nbctl ls-add])
+AT_CHECK([ovn-nbctl ls-add])
+AT_CHECK([ovn-nbctl --add-duplicate ls-add], [1], [],
   [ovn-nbctl: --add-duplicate requires specifying a name
 ])
-AT_CHECK([ovn-nbctl --may-exist lswitch-add], [1], [],
+AT_CHECK([ovn-nbctl --may-exist ls-add], [1], [],
   [ovn-nbctl: --may-exist requires specifying a name
 ])
 
@@ -90,7 +90,7 @@ dnl ---------------------------------------------------------------------
 AT_SETUP([ovn-nbctl - basic logical switch port commands])
 OVN_NBCTL_TEST_START
 
-AT_CHECK([ovn-nbctl lswitch-add ls0])
+AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl lsp-add ls0 lp0])
 AT_CHECK([ovn-nbctl lsp-add ls0 lp0], [1], [],
   [ovn-nbctl: lp0: a port with this name already exists
@@ -106,12 +106,12 @@ AT_CHECK([ovn-nbctl lsp-list ls0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <1> (lp1)
 ])
 
-AT_CHECK([ovn-nbctl lswitch-add ls1])
+AT_CHECK([ovn-nbctl ls-add ls1])
 AT_CHECK([ovn-nbctl lsp-add ls0 lp1], [1], [],
   [ovn-nbctl: lp1: a port with this name already exists
 ])
 AT_CHECK([ovn-nbctl --may-exist lsp-add ls1 lp1], [1], [],
-  [ovn-nbctl: lp1: port already exists but in lswitch ls0
+  [ovn-nbctl: lp1: port already exists but in switch ls0
 ])
 AT_CHECK([ovn-nbctl --may-exist lsp-add ls0 lp1 lp0 5], [1], [],
   [ovn-nbctl: lp1: port already exists but has no parent
@@ -142,7 +142,7 @@ dnl ---------------------------------------------------------------------
 AT_SETUP([ovn-nbctl - lport addresses])
 OVN_NBCTL_TEST_START
 
-AT_CHECK([ovn-nbctl lswitch-add ls0])
+AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl lsp-add ls0 lp0])
 AT_CHECK([ovn-nbctl lsp-get-addresses lp0], [0], [dnl
 ])
@@ -165,7 +165,7 @@ dnl ---------------------------------------------------------------------
 AT_SETUP([ovn-nbctl - port security])
 OVN_NBCTL_TEST_START
 
-AT_CHECK([ovn-nbctl lswitch-add ls0])
+AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl lsp-add ls0 lp0])
 AT_CHECK([ovn-nbctl lsp-get-addresses lp0], [0], [dnl
 ])
@@ -188,7 +188,7 @@ dnl ---------------------------------------------------------------------
 AT_SETUP([ovn-nbctl - ACLs])
 OVN_NBCTL_TEST_START
 
-AT_CHECK([ovn-nbctl lswitch-add ls0])
+AT_CHECK([ovn-nbctl ls-add ls0])
 AT_CHECK([ovn-nbctl --log acl-add ls0 from-lport 600 udp drop])
 AT_CHECK([ovn-nbctl --log acl-add ls0 to-lport 500 udp drop])
 AT_CHECK([ovn-nbctl acl-add ls0 from-lport 400 tcp drop])

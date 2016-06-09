@@ -16,7 +16,7 @@
 set -o xtrace
 
 # create a logical switch
-ovn-nbctl lswitch-add csw0
+ovn-nbctl ls-add csw0
 
 # create a container port with parent set to sw0-port1
 ovn-nbctl lsp-add csw0 csw0-cport1 sw0-port1 42

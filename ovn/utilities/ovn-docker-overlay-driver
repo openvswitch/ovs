@@ -167,11 +167,11 @@ def create_network():
         return jsonify({'Err': error})
 
     try:
-        ovn_nbctl("lswitch-add", network, "--", "set", "Logical_Switch",
+        ovn_nbctl("ls-add", network, "--", "set", "Logical_Switch",
                   network, "external_ids:subnet=" + subnet,
                   "external_ids:gateway_ip=" + gateway_ip)
     except Exception as e:
-        error = "create_network: lswitch-add %s" % (str(e))
+        error = "create_network: ls-add %s" % (str(e))
         return jsonify({'Err': error})
 
     return jsonify({})
@@ -189,9 +189,9 @@ def delete_network():
         abort(400)
 
     try:
-        ovn_nbctl("lswitch-del", nid)
+        ovn_nbctl("ls-del", nid)
     except Exception as e:
-        error = "delete_network: lswitch-del %s" % (str(e))
+        error = "delete_network: ls-del %s" % (str(e))
         return jsonify({'Err': error})
 
     return jsonify({})

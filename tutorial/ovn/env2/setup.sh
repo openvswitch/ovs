@@ -15,8 +15,8 @@
 
 set -o xtrace
 
-ovn-nbctl lswitch-add sw0
-ovn-nbctl lswitch-add sw1
+ovn-nbctl ls-add sw0
+ovn-nbctl ls-add sw1
 ovn-nbctl lsp-add sw0 sw0-port1
 ovn-nbctl lsp-add sw0 sw0-port2
 ovn-nbctl lsp-add sw1 sw1-port1

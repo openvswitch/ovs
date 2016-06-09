@@ -64,7 +64,7 @@ Start by running the setup script for this environment.
 You can use the `ovn-nbctl` utility to see an overview of the logical topology.
 
     $ ovn-nbctl show
-    lswitch 78687d53-e037-4555-bcd3-f4f8eaf3f2aa (sw0)
+    switch 78687d53-e037-4555-bcd3-f4f8eaf3f2aa (sw0)
         port sw0-port1
             addresses: 00:00:00:00:00:01
         port sw0-port2
@@ -237,12 +237,12 @@ switch.
 View the logical topology with `ovn-nbctl`.
 
     $ ovn-nbctl show
-    lswitch e3190dc2-89d1-44ed-9308-e7077de782b3 (sw0)
+    switch e3190dc2-89d1-44ed-9308-e7077de782b3 (sw0)
         port sw0-port1
             addresses: 00:00:00:00:00:01
         port sw0-port2
             addresses: 00:00:00:00:00:02
-    lswitch c8ed4c5f-9733-43f6-93da-795b1aabacb1 (sw1)
+    switch c8ed4c5f-9733-43f6-93da-795b1aabacb1 (sw1)
         port sw1-port1
             addresses: 00:00:00:00:00:03
         port sw1-port2
@@ -348,7 +348,7 @@ two hypervisors with two of the logical ports bound to each hypervisor.
 You can start by viewing the logical topology with `ovn-nbctl`.
 
     $ ovn-nbctl show
-    lswitch b977dc03-79a5-41ba-9665-341a80e1abfd (sw0)
+    switch b977dc03-79a5-41ba-9665-341a80e1abfd (sw0)
         port sw0-port1
             addresses: 00:00:00:00:00:01
         port sw0-port2
@@ -463,22 +463,22 @@ regular VIF port and a `localnet` port.
 The logical topology from `ovn-nbctl` should look like this.
 
     $ ovn-nbctl show
-        lswitch 5a652488-cfba-4f3e-929d-00010cdfde40 (provnet1-2)
+        switch 5a652488-cfba-4f3e-929d-00010cdfde40 (provnet1-2)
             port provnet1-2-physnet1
                 addresses: unknown
             port provnet1-2-port1
                 addresses: 00:00:00:00:00:02
-        lswitch 5829b60a-eda8-4d78-94f6-7017ff9efcf0 (provnet1-4)
+        switch 5829b60a-eda8-4d78-94f6-7017ff9efcf0 (provnet1-4)
             port provnet1-4-port1
                 addresses: 00:00:00:00:00:04
             port provnet1-4-physnet1
                 addresses: unknown
-        lswitch 06cbbcb6-38e3-418d-a81e-634ec9b54ad6 (provnet1-1)
+        switch 06cbbcb6-38e3-418d-a81e-634ec9b54ad6 (provnet1-1)
             port provnet1-1-port1
                 addresses: 00:00:00:00:00:01
             port provnet1-1-physnet1
                 addresses: unknown
-        lswitch 9cba3b3b-59ae-4175-95f5-b6f1cd9c2afb (provnet1-3)
+        switch 9cba3b3b-59ae-4175-95f5-b6f1cd9c2afb (provnet1-3)
             port provnet1-3-physnet1
                 addresses: unknown
             port provnet1-3-port1
@@ -616,45 +616,45 @@ ports representing connectivity to VLAN 101 of `physnet1` have the `tag` field
 set to `101`.
 
     $ ovn-nbctl show
-        lswitch 12ea93d0-694b-48e9-adef-d0ddd3ec4ac9 (provnet1-7-101)
+        switch 12ea93d0-694b-48e9-adef-d0ddd3ec4ac9 (provnet1-7-101)
             port provnet1-7-physnet1-101
                 parent: , tag:101
                 addresses: unknown
             port provnet1-7-101-port1
                 addresses: 00:00:00:00:00:07
-        lswitch c9a5ce3a-15ec-48ea-a898-416013463589 (provnet1-4)
+        switch c9a5ce3a-15ec-48ea-a898-416013463589 (provnet1-4)
             port provnet1-4-port1
                 addresses: 00:00:00:00:00:04
             port provnet1-4-physnet1
                 addresses: unknown
-        lswitch e07d4f7a-2085-4fbb-9937-d6192b79a397 (provnet1-1)
+        switch e07d4f7a-2085-4fbb-9937-d6192b79a397 (provnet1-1)
             port provnet1-1-physnet1
                 addresses: unknown
             port provnet1-1-port1
                 addresses: 00:00:00:00:00:01
-        lswitch 6c098474-0509-4219-bc9b-eb4e28dd1aeb (provnet1-2)
+        switch 6c098474-0509-4219-bc9b-eb4e28dd1aeb (provnet1-2)
             port provnet1-2-physnet1
                 addresses: unknown
             port provnet1-2-port1
                 addresses: 00:00:00:00:00:02
-        lswitch 723c4684-5d58-4202-b8e3-4ba99ad5ed9e (provnet1-8-101)
+        switch 723c4684-5d58-4202-b8e3-4ba99ad5ed9e (provnet1-8-101)
             port provnet1-8-101-port1
                 addresses: 00:00:00:00:00:08
             port provnet1-8-physnet1-101
                 parent: , tag:101
                 addresses: unknown
-        lswitch 8444e925-ceb2-4b02-ac20-eb2e4cfb954d (provnet1-6-101)
+        switch 8444e925-ceb2-4b02-ac20-eb2e4cfb954d (provnet1-6-101)
             port provnet1-6-physnet1-101
                 parent: , tag:101
                 addresses: unknown
             port provnet1-6-101-port1
                 addresses: 00:00:00:00:00:06
-        lswitch e11e5605-7c46-4395-b28d-cff57451fc7e (provnet1-3)
+        switch e11e5605-7c46-4395-b28d-cff57451fc7e (provnet1-3)
             port provnet1-3-port1
                 addresses: 00:00:00:00:00:03
             port provnet1-3-physnet1
                 addresses: unknown
-        lswitch 0706b697-6c92-4d54-bc0a-db5bababb74a (provnet1-5-101)
+        switch 0706b697-6c92-4d54-bc0a-db5bababb74a (provnet1-5-101)
             port provnet1-5-101-port1
                 addresses: 00:00:00:00:00:05
             port provnet1-5-physnet1-101

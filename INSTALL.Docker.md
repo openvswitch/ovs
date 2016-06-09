@@ -138,7 +138,7 @@ You can also look at this logical switch in OVN's northbound database by
 running the following command.
 
 ```
-ovn-nbctl --db=tcp:$CENTRAL_IP:6640 lswitch-list
+ovn-nbctl --db=tcp:$CENTRAL_IP:6640 ls-list
 ```
 
 * Docker creates your logical port and attaches it to the logical network

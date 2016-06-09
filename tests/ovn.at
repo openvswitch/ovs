@@ -555,7 +555,7 @@ ovn_start
 # Turn on port security on all the vifs except vif[123]1.
 # Make vif13, vif2[23], vif3[123] destinations for unknown MACs.
 # Add some ACLs for Ethertypes 1234, 1235, 1236.
-ovn-nbctl lswitch-add lsw0
+ovn-nbctl ls-add lsw0
 net_add n1
 for i in 1 2 3; do
     sim_add hv$i
@@ -669,22 +669,22 @@ ip_to_hex() {
 # 2. Broadcast and multicast are delivered to all logical switch ports
 #    except the input port.
 #
-# 3. When port security is turned on, the lswitch drops packets from the wrong
+# 3. When port security is turned on, the switch drops packets from the wrong
 #    MAC address.
 #
-# 4. The lswitch drops all packets with a VLAN tag.
+# 4. The switch drops all packets with a VLAN tag.
 #
-# 5. The lswitch drops all packets with a multicast source address.  (This only
+# 5. The switch drops all packets with a multicast source address.  (This only
 #    affects behavior when port security is turned off, since otherwise port
 #    security would drop the packet anyway.)
 #
-# 6. The lswitch delivers packets with an unknown destination to logical
+# 6. The switch delivers packets with an unknown destination to logical
 #    switch ports with "unknown" among their MAC addresses (and port
 #    security disabled).
 #
-# 7. The lswitch drops unicast packets that violate an ACL.
+# 7. The switch drops unicast packets that violate an ACL.
 #
-# 8. The lswitch drops multicast and broadcast packets that violate an ACL.
+# 8. The switch drops multicast and broadcast packets that violate an ACL.
 #
 # 9. ARP requests to known IPs are responded directly.
 #
@@ -833,35 +833,35 @@ AT_KEYWORDS([ovn-localnet])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
-# In this test cases we create 3 lswitches, all connected to same
-# physical network (through br-phys on each HV). Each lswitch has
+# In this test cases we create 3 switches, all connected to same
+# physical network (through br-phys on each HV). Each switch has
 # VIF ports across 2 HVs. Each HV has 5 VIF ports. The first digit
 # of VIF port name indicates the hypervisor it is bound to, e.g.
 # lp23 means VIF 3 on hv2.
 #
-# lswitch's VLAN tag and their logical switch ports are:
+# Each switch's VLAN tag and their logical switch ports are:
 #   - ls1:
 #       - untagged
-#       - lports: lp11, lp12, lp21, lp22
+#       - ports: lp11, lp12, lp21, lp22
 #
 #   - ls2:
 #       - tagged with VLAN 101
-#       - lports: lp13, lp14, lp23, lp24
+#       - ports: lp13, lp14, lp23, lp24
 #   - ls3:
 #       - untagged
-#       - lports: lp15, lp25
+#       - ports: lp15, lp25
 #
-# Note: a localnet port is created for each lswitch to connect to
+# Note: a localnet port is created for each switch to connect to
 # physical network.
 
 for i in 1 2 3; do
-    lswitch_name=ls$i
-    ovn-nbctl lswitch-add $lswitch_name
+    ls_name=ls$i
+    ovn-nbctl ls-add $ls_name
     ln_port_name=ln$i
     if test $i -eq 2; then
-        ovn-nbctl lsp-add $lswitch_name $ln_port_name "" 101
+        ovn-nbctl lsp-add $ls_name $ln_port_name "" 101
     else
-        ovn-nbctl lsp-add $lswitch_name $ln_port_name
+        ovn-nbctl lsp-add $ls_name $ln_port_name
     fi
     ovn-nbctl lsp-set-addresses $ln_port_name unknown
     ovn-nbctl lsp-set-type $ln_port_name localnet
@@ -885,14 +885,14 @@ for i in 1 2; do
 
         lsp_name=lp$i$j
         if test $j -le 2; then
-            lswitch_name=ls1
+            ls_name=ls1
         elif test $j -le 4; then
-            lswitch_name=ls2
+            ls_name=ls2
         else
-            lswitch_name=ls3
+            ls_name=ls3
         fi
 
-        ovn-nbctl lsp-add $lswitch_name $lsp_name
+        ovn-nbctl lsp-add $ls_name $lsp_name
         ovn-nbctl lsp-set-addresses $lsp_name f0:00:00:00:00:$i$j
         ovn-nbctl lsp-set-port-security $lsp_name f0:00:00:00:00:$i$j
 
@@ -957,12 +957,12 @@ test_packet 13 f00000000014 f00000000013 1314 14
 test_packet 14 f00000000013 f00000000014 1413 13
 
 # lp11 and lp15 are on the same network (phys, untagged),
-# same hypervisor, and on different lswitches
+# same hypervisor, and on different switches
 test_packet 11 f00000000015 f00000000011 1115 15
 test_packet 15 f00000000011 f00000000015 1511 11
 
 # lp11 and lp25 are on the same network (phys, untagged),
-# different hypervisors, and on different lswitches
+# different hypervisors, and on different switches
 test_packet 11 f00000000025 f00000000011 1125 25
 test_packet 25 f00000000011 f00000000025 2511 11
 
@@ -1034,7 +1034,7 @@ AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
 # Configure the Northbound database
-ovn-nbctl lswitch-add lsw0
+ovn-nbctl ls-add lsw0
 
 ovn-nbctl lsp-add lsw0 lp1
 ovn-nbctl lsp-set-addresses lp1 f0:00:00:00:00:01
@@ -1145,7 +1145,7 @@ test_packet() {
 # 2. Broadcast and multicast are delivered to all logical switch ports
 #    except the input port.
 #
-# 3. The lswitch delivers packets with an unknown destination to logical
+# 3. The switch delivers packets with an unknown destination to logical
 #    switch ports with "unknown" among their MAC addresses (and port
 #    security disabled).
 for s in 1 2 3; do
@@ -1253,7 +1253,7 @@ ovn_start
 # 27 VIFs, 9 per LS, 3 per subnet: lp[123][123][123], where the first two
 # digits are the subnet and the last digit distinguishes the VIF.
 for i in 1 2 3; do
-    ovn-nbctl lswitch-add ls$i
+    ovn-nbctl ls-add ls$i
     for j in 1 2 3; do
         for k in 1 2 3; do
             # Add "unknown" to MAC addresses for lp?11, so packets for
@@ -1454,7 +1454,7 @@ for is in 1 2 3; do
 		    dip=`ip_to_hex 192 168 $id$jd $o4`
 		    test_ip $s $smac $dmac $sip $dip
 
-		    # Every LP on the destination subnet's lswitch should
+		    # Every LP on the destination subnet's switch should
 		    # receive the ARP request.
 		    lrmac=00000000ff$id$jd
 		    lrip=`ip_to_hex 192 168 $id$jd 254`
@@ -1488,12 +1488,12 @@ test_arp() {
     #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $request
 
     # Expect to receive the broadcast ARP on the other logical switch ports if
-    # IP address is not configured to the lswitch patch port.
+    # IP address is not configured to the switch patch port.
     local i=`vif_to_ls $inport`
     local j k
     for j in 1 2 3; do
         for k in 1 2 3; do
-            # 192.168.33.254 is configured to the lswitch patch port for lrp33,
+            # 192.168.33.254 is configured to the switch patch port for lrp33,
             # so no ARP flooding expected for it.
             if test $i$j$k != $inport && test $tpa != `ip_to_hex 192 168 33 254`; then
                 echo $request >> $i$j$k.expected
@@ -1672,7 +1672,7 @@ ovn_start
 # Turn on l2 port security on vifs vif[123]2
 # Turn of l2 and l3 port security on vifs vif[123]3
 # Make vif13, vif2[23], vif3[123] destinations for unknown MACs.
-ovn-nbctl lswitch-add lsw0
+ovn-nbctl ls-add lsw0
 net_add n1
 for i in 1 2 3; do
     sim_add hv$i
@@ -2084,8 +2084,8 @@ ovn_start
 ovn-nbctl lr-add R1
 ovn-nbctl lr-add R2
 
-ovn-nbctl lswitch-add ls1
-ovn-nbctl lswitch-add ls2
+ovn-nbctl ls-add ls1
+ovn-nbctl ls-add ls2
 
 # Connect ls1 to R1
 ovn-nbctl lrp-add R1 ls1 00:00:00:01:02:03 192.168.1.1/24 rp-ls1
@@ -2228,8 +2228,8 @@ ovn_start
 
 ovn-nbctl lr-add R1
 
-ovn-nbctl lswitch-add ls1
-ovn-nbctl lswitch-add ls2
+ovn-nbctl ls-add ls1
+ovn-nbctl ls-add ls2
 
 # Connect ls1 to R1
 ovn-nbctl lrp-add R1 ls1 00:00:00:01:02:03 192.168.1.1/24 rp-ls1
@@ -2366,9 +2366,9 @@ ovn_start
 ovn-nbctl lr-add R1
 ovn-nbctl lr-add R2
 
-ovn-nbctl lswitch-add foo
-ovn-nbctl lswitch-add alice
-ovn-nbctl lswitch-add bob
+ovn-nbctl ls-add foo
+ovn-nbctl ls-add alice
+ovn-nbctl ls-add bob
 
 # Connect foo to R1
 ovn-nbctl lrp-add R1 foo 00:00:00:01:02:03 192.168.1.1/24 rp-foo
@@ -2534,7 +2534,7 @@ AT_CLEANUP
 AT_SETUP([ovn -- send gratuitous arp on localnet])
 AT_KEYWORDS([ovn])
 ovn_start
-ovn-nbctl lswitch-add lsw0
+ovn-nbctl ls-add lsw0
 net_add n1
 sim_add hv
 as hv
@@ -2610,10 +2610,10 @@ ovn-nbctl lr-add R1
 ovn-nbctl lr-add R2
 ovn-nbctl lr-add R3
 
-ovn-nbctl lswitch-add foo
-ovn-nbctl lswitch-add alice
-ovn-nbctl lswitch-add bob
-ovn-nbctl lswitch-add join
+ovn-nbctl ls-add foo
+ovn-nbctl ls-add alice
+ovn-nbctl ls-add bob
+ovn-nbctl ls-add join
 
 # Connect foo to R1
 ovn-nbctl lrp-add R1 foo 00:00:01:01:02:03 192.168.1.1/24
@@ -2844,9 +2844,9 @@ ovn_populate_arp
 ovn-nbctl create Logical_Router name=R1
 ovn-nbctl create Logical_Router name=R2 options:chassis="hv2"
 
-ovn-nbctl lswitch-add foo
-ovn-nbctl lswitch-add alice
-ovn-nbctl lswitch-add join
+ovn-nbctl ls-add foo
+ovn-nbctl ls-add alice
+ovn-nbctl ls-add join
 
 # Connect foo to R1
 ovn-nbctl lrp-add R1 foo 00:00:01:01:02:03 192.168.1.1/24
@@ -2980,8 +2980,8 @@ ovn_start
 
 ovn-nbctl lr-add R1
 
-ovn-nbctl lswitch-add ls1
-ovn-nbctl lswitch-add ls2
+ovn-nbctl ls-add ls1
+ovn-nbctl ls-add ls2
 
 # Connect ls1 to R1
 ovn-nbctl lrp-add R1 ls1 00:00:00:01:02:f1 192.168.1.1/24
