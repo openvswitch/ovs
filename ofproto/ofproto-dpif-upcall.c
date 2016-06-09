@@ -1083,7 +1083,16 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
 
     upcall->dump_seq = seq_read(udpif->dump_seq);
     upcall->reval_seq = seq_read(udpif->reval_seq);
+
     xlate_actions(&xin, &upcall->xout);
+    if (wc) {
+        /* Convert the input port wildcard from OFP to ODP format. There's no
+         * real way to do this for arbitrary bitmasks since the numbering spaces
+         * aren't the same. However, flow translation always exact matches the
+         * whole thing, so we can do the same here. */
+        WC_MASK_FIELD(wc, in_port.odp_port);
+    }
+
     upcall->xout_initialized = true;
 
     if (!upcall->xout.slow) {
@@ -1489,7 +1498,7 @@ ukey_create_from_upcall(struct upcall *upcall, struct flow_wildcards *wc)
     atomic_read_relaxed(&enable_megaflows, &megaflow);
     ofpbuf_use_stack(&maskbuf, &maskstub, sizeof maskstub);
     if (megaflow) {
-        odp_parms.odp_in_port = ODPP_NONE;
+        odp_parms.odp_in_port = wc->masks.in_port.odp_port;
         odp_parms.key_buf = &keybuf;
 
         odp_flow_key_from_mask(&odp_parms, &maskbuf);
