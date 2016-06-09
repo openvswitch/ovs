@@ -757,7 +757,7 @@
 
     <column name="output_port">
       <p>
-        The name of the <ref table="Logical_router_port"/> via which the packet
+        The name of the <ref table="Logical_Router_Port"/> via which the packet
         needs to be sent out.  This is optional and when not specified,
         OVN will automatically figure this out based on the
         <ref column="nexthop"/>.
