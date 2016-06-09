@@ -76,7 +76,7 @@ AT_CLEANUP
 
 dnl ---------------------------------------------------------------------
 
-AT_SETUP([ovn-sbctl - test])
+AT_SETUP([ovn-sbctl])
 OVN_SBCTL_TEST_START
 
 AT_CHECK([ovn-nbctl lswitch-add br-test])

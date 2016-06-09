@@ -111,7 +111,7 @@ AT_CHECK([ovn-nbctl lport-set-options $2 vtep-physical-switch=$3 vtep-logical-sw
 ##############################################
 
 # tests chassis related updates.
-AT_SETUP([ovn-controller-vtep - test chassis])
+AT_SETUP([ovn-controller-vtep - chassis])
 OVN_CONTROLLER_VTEP_START
 
 # verifies the initial ovn-sb db configuration.
@@ -178,7 +178,7 @@ AT_CLEANUP
 
 
 # Tests binding updates.
-AT_SETUP([ovn-controller-vtep - test binding 1])
+AT_SETUP([ovn-controller-vtep - binding 1])
 OVN_CONTROLLER_VTEP_START
 
 # adds logical switch 'lswitch0' and vlan_bindings.
@@ -242,7 +242,7 @@ AT_CLEANUP
 
 # Tests corner case: Binding the vtep logical switch from two different
 # datapath.
-AT_SETUP([ovn-controller-vtep - test binding 2])
+AT_SETUP([ovn-controller-vtep - binding 2])
 OVN_CONTROLLER_VTEP_START
 
 # adds logical switch 'lswitch0' and vlan_bindings.
@@ -281,7 +281,7 @@ AT_CLEANUP
 
 
 # Tests vtep module vtep logical switch tunnel key update.
-AT_SETUP([ovn-controller-vtep - test vtep-lswitch])
+AT_SETUP([ovn-controller-vtep - vtep-lswitch])
 OVN_CONTROLLER_VTEP_START
 
 # creates the logical switch in vtep and adds the corresponding logical
@@ -333,7 +333,7 @@ AT_CLEANUP
 
 
 # Tests vtep module 'Ucast_Macs_Remote's.
-AT_SETUP([ovn-controller-vtep - test vtep-macs 1])
+AT_SETUP([ovn-controller-vtep - vtep-macs 1])
 OVN_CONTROLLER_VTEP_START
 
 # creates a simple logical network with the vtep device and a fake hv chassis
@@ -404,7 +404,7 @@ AT_CLEANUP
 
 
 # Tests vtep module 'Ucast_Macs_Remote's (corner cases).
-AT_SETUP([ovn-controller-vtep - test vtep-macs 2])
+AT_SETUP([ovn-controller-vtep - vtep-macs 2])
 OVN_CONTROLLER_VTEP_START
 
 # creates a simple logical network with the vtep device and a fake hv chassis
