@@ -1025,13 +1025,7 @@ expr_parse__(struct expr_context *ctx)
 struct expr *
 expr_parse(struct lexer *lexer, const struct shash *symtab, char **errorp)
 {
-    struct expr_context ctx;
-
-    ctx.lexer = lexer;
-    ctx.symtab = symtab;
-    ctx.error = NULL;
-    ctx.not = false;
-
+    struct expr_context ctx = { .lexer = lexer, .symtab = symtab };
     struct expr *e = expr_parse__(&ctx);
     *errorp = ctx.error;
     ovs_assert((ctx.error != NULL) != (e != NULL));
@@ -1108,12 +1102,7 @@ parse_field_from_string(const char *s, const struct shash *symtab,
     lexer_init(&lexer, s);
     lexer_get(&lexer);
 
-    struct expr_context ctx;
-    ctx.lexer = &lexer;
-    ctx.symtab = symtab;
-    ctx.error = NULL;
-    ctx.not = false;
-
+    struct expr_context ctx = { .lexer = &lexer, .symtab = symtab };
     bool ok = parse_field(&ctx, field);
     if (!ok) {
         *errorp = ctx.error;
@@ -2861,12 +2850,7 @@ expr_parse_assignment(struct lexer *lexer, const struct shash *symtab,
                       const void *aux,
                       struct ofpbuf *ofpacts, struct expr **prereqsp)
 {
-    struct expr_context ctx;
-    ctx.lexer = lexer;
-    ctx.symtab = symtab;
-    ctx.error = NULL;
-    ctx.not = false;
-
+    struct expr_context ctx = { .lexer = lexer, .symtab = symtab };
     struct expr *prereqs = parse_assignment(&ctx, lookup_port, aux, ofpacts);
     if (ctx.error) {
         expr_destroy(prereqs);
@@ -2881,12 +2865,8 @@ expr_parse_field(struct lexer *lexer, int n_bits, bool rw,
                  const struct shash *symtab,
                  struct mf_subfield *sf, struct expr **prereqsp)
 {
+    struct expr_context ctx = { .lexer = lexer, .symtab = symtab };
     struct expr *prereqs = NULL;
-    struct expr_context ctx;
-    ctx.lexer = lexer;
-    ctx.symtab = symtab;
-    ctx.error = NULL;
-    ctx.not = false;
 
     struct expr_field field;
     if (!parse_field(&ctx, &field)) {
