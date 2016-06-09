@@ -1491,16 +1491,13 @@ ukey_create_from_upcall(struct upcall *upcall, struct flow_wildcards *wc)
         /* dpif-netdev doesn't provide a netlink-formatted flow key in the
          * upcall, so convert the upcall's flow here. */
         ofpbuf_use_stack(&keybuf, &keystub, sizeof keystub);
-        odp_parms.odp_in_port = upcall->flow->in_port.odp_port;
         odp_flow_key_from_flow(&odp_parms, &keybuf);
     }
 
     atomic_read_relaxed(&enable_megaflows, &megaflow);
     ofpbuf_use_stack(&maskbuf, &maskstub, sizeof maskstub);
     if (megaflow) {
-        odp_parms.odp_in_port = wc->masks.in_port.odp_port;
         odp_parms.key_buf = &keybuf;
-
         odp_flow_key_from_mask(&odp_parms, &maskbuf);
     }
 

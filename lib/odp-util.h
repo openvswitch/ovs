@@ -194,12 +194,6 @@ struct odp_flow_key_parms {
     const struct flow *flow;
     const struct flow *mask;
 
-   /* 'flow->in_port' is ignored (since it is likely to be an OpenFlow port
-    * number rather than a datapath port number).  Instead, if 'odp_in_port'
-    * is anything other than ODPP_NONE, it is included in 'buf' as the input
-    * port. */
-    odp_port_t odp_in_port;
-
     /* Indicates support for various fields. If the datapath supports a field,
      * then it will always be serialised. */
     struct odp_support support;
