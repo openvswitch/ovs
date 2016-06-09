@@ -438,15 +438,6 @@ struct expr_constant_set {
     bool in_curlies;              /* Whether the constants were in {}. */
 };
 
-/* A reference to a symbol or a subfield of a symbol.
- *
- * For string fields, ofs and n_bits are 0. */
-struct expr_field {
-    const struct expr_symbol *symbol; /* The symbol. */
-    int ofs;                          /* Starting bit offset. */
-    int n_bits;                       /* Number of bits. */
-};
-
 /* Context maintained during expr_parse(). */
 struct expr_context {
     struct lexer *lexer;        /* Lexer for pulling more tokens. */
@@ -2698,49 +2689,44 @@ init_stack_action(const struct expr_field *f, struct ofpact_stack *stack)
     mf_subfield_from_expr_field(f, &stack->subfield);
 }
 
-static struct expr *
-parse_assignment(struct expr_context *ctx,
+static char * OVS_WARN_UNUSED_RESULT
+parse_assignment(struct lexer *lexer, struct expr_field *dst,
+                 const struct shash *symtab, bool exchange,
                  bool (*lookup_port)(const void *aux, const char *port_name,
                                      unsigned int *portp),
-                 const void *aux, struct ofpbuf *ofpacts)
+                 const void *aux, struct ofpbuf *ofpacts,
+                 struct expr **prereqsp)
 {
+    struct expr_context ctx = { .lexer = lexer, .symtab = symtab };
     struct expr *prereqs = NULL;
 
     /* Parse destination and do basic checking. */
-    struct expr_field dst;
-    if (!parse_field(ctx, &dst)) {
-        goto exit;
-    }
-    bool exchange = lexer_match(ctx->lexer, LEX_T_EXCHANGE);
-    if (!exchange && !lexer_match(ctx->lexer, LEX_T_EQUALS)) {
-        expr_syntax_error(ctx, "expecting `='.");
-        goto exit;
-    }
-    const struct expr_symbol *orig_dst = dst.symbol;
-    if (!expand_symbol(ctx, true, &dst, &prereqs)) {
+    const struct expr_symbol *orig_dst = dst->symbol;
+    if (!expand_symbol(&ctx, true, dst, &prereqs)) {
         goto exit;
     }
 
-    if (exchange || ctx->lexer->token.type == LEX_T_ID) {
+    if (exchange || ctx.lexer->token.type == LEX_T_ID) {
         struct expr_field src;
-        if (!parse_field(ctx, &src)) {
+        if (!parse_field(&ctx, &src)) {
             goto exit;
         }
         const struct expr_symbol *orig_src = src.symbol;
-        if (!expand_symbol(ctx, exchange, &src, &prereqs)) {
+        if (!expand_symbol(&ctx, exchange, &src, &prereqs)) {
             goto exit;
         }
 
-        if ((dst.symbol->width != 0) != (src.symbol->width != 0)) {
+        if ((dst->symbol->width != 0) != (src.symbol->width != 0)) {
             if (exchange) {
-                expr_error(ctx,
+                expr_error(&ctx,
                            "Can't exchange %s field (%s) with %s field (%s).",
                            orig_dst->width ? "integer" : "string",
                            orig_dst->name,
                            orig_src->width ? "integer" : "string",
                            orig_src->name);
             } else {
-                expr_error(ctx, "Can't assign %s field (%s) to %s field (%s).",
+                expr_error(&ctx,
+                           "Can't assign %s field (%s) to %s field (%s).",
                            orig_src->width ? "integer" : "string",
                            orig_src->name,
                            orig_dst->width ? "integer" : "string",
@@ -2749,20 +2735,20 @@ parse_assignment(struct expr_context *ctx,
             goto exit;
         }
 
-        if (dst.n_bits != src.n_bits) {
+        if (dst->n_bits != src.n_bits) {
             if (exchange) {
-                expr_error(ctx,
+                expr_error(&ctx,
                            "Can't exchange %d-bit field with %d-bit field.",
-                           dst.n_bits, src.n_bits);
+                           dst->n_bits, src.n_bits);
             } else {
-                expr_error(ctx,
+                expr_error(&ctx,
                            "Can't assign %d-bit value to %d-bit destination.",
-                           src.n_bits, dst.n_bits);
+                           src.n_bits, dst->n_bits);
             }
             goto exit;
-        } else if (!dst.n_bits
-                   && dst.symbol->field->n_bits != src.symbol->field->n_bits) {
-            expr_error(ctx, "String fields %s and %s are incompatible for "
+        } else if (!dst->n_bits &&
+                   dst->symbol->field->n_bits != src.symbol->field->n_bits) {
+            expr_error(&ctx, "String fields %s and %s are incompatible for "
                        "%s.", orig_dst->name, orig_src->name,
                        exchange ? "exchange" : "assignment");
             goto exit;
@@ -2770,38 +2756,38 @@ parse_assignment(struct expr_context *ctx,
 
         if (exchange) {
             init_stack_action(&src, ofpact_put_STACK_PUSH(ofpacts));
-            init_stack_action(&dst, ofpact_put_STACK_PUSH(ofpacts));
+            init_stack_action(dst, ofpact_put_STACK_PUSH(ofpacts));
             init_stack_action(&src, ofpact_put_STACK_POP(ofpacts));
-            init_stack_action(&dst, ofpact_put_STACK_POP(ofpacts));
+            init_stack_action(dst, ofpact_put_STACK_POP(ofpacts));
         } else {
             struct ofpact_reg_move *move = ofpact_put_REG_MOVE(ofpacts);
             mf_subfield_from_expr_field(&src, &move->src);
-            mf_subfield_from_expr_field(&dst, &move->dst);
+            mf_subfield_from_expr_field(dst, &move->dst);
         }
     } else {
         struct expr_constant_set cs;
-        if (!parse_constant_set(ctx, &cs)) {
+        if (!parse_constant_set(&ctx, &cs)) {
             goto exit;
         }
 
-        if (!type_check(ctx, &dst, &cs)) {
+        if (!type_check(&ctx, dst, &cs)) {
             goto exit_destroy_cs;
         }
         if (cs.in_curlies) {
-            expr_error(ctx, "Assignments require a single value.");
+            expr_error(&ctx, "Assignments require a single value.");
             goto exit_destroy_cs;
         }
 
         union expr_constant *c = cs.values;
         struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-        sf->field = dst.symbol->field;
-        if (dst.symbol->width) {
-            mf_subvalue_shift(&c->value, dst.ofs);
+        sf->field = dst->symbol->field;
+        if (dst->symbol->width) {
+            mf_subvalue_shift(&c->value, dst->ofs);
             if (!c->masked) {
                 memset(&c->mask, 0, sizeof c->mask);
-                bitwise_one(&c->mask, sizeof c->mask, dst.ofs, dst.n_bits);
+                bitwise_one(&c->mask, sizeof c->mask, dst->ofs, dst->n_bits);
             } else {
-                mf_subvalue_shift(&c->mask, dst.ofs);
+                mf_subvalue_shift(&c->mask, dst->ofs);
             }
 
             memcpy(&sf->value,
@@ -2835,23 +2821,6 @@ parse_assignment(struct expr_context *ctx,
     }
 
 exit:
-    return prereqs;
-}
-
-/* A helper for actions_parse(), to parse an OVN assignment action in the form
- * "field = value" or "field1 = field2", or a "exchange" action in the form
- * "field1 <-> field2", into 'ofpacts'.  The parameters and return value match
- * those for actions_parse(). */
-char *
-expr_parse_assignment(struct lexer *lexer, const struct shash *symtab,
-                      bool (*lookup_port)(const void *aux,
-                                          const char *port_name,
-                                          unsigned int *portp),
-                      const void *aux,
-                      struct ofpbuf *ofpacts, struct expr **prereqsp)
-{
-    struct expr_context ctx = { .lexer = lexer, .symtab = symtab };
-    struct expr *prereqs = parse_assignment(&ctx, lookup_port, aux, ofpacts);
     if (ctx.error) {
         expr_destroy(prereqs);
         prereqs = NULL;
@@ -2860,40 +2829,94 @@ expr_parse_assignment(struct lexer *lexer, const struct shash *symtab,
     return ctx.error;
 }
 
-char *
-expr_parse_field(struct lexer *lexer, int n_bits, bool rw,
-                 const struct shash *symtab,
-                 struct mf_subfield *sf, struct expr **prereqsp)
+/* A helper for actions_parse(), to parse an OVN assignment action in the form
+ * "field = value" or "field = field2" into 'ofpacts'.  The caller must have
+ * already parsed and skipped the left-hand side "field =" and pass in the
+ * field as 'dst'.  Other parameters and return value match those for
+ * actions_parse(). */
+char * OVS_WARN_UNUSED_RESULT
+expr_parse_assignment(struct lexer *lexer, struct expr_field *dst,
+                      const struct shash *symtab,
+                      bool (*lookup_port)(const void *aux,
+                                          const char *port_name,
+                                          unsigned int *portp),
+                      const void *aux,
+                      struct ofpbuf *ofpacts, struct expr **prereqsp)
+{
+    return parse_assignment(lexer, dst, symtab, false, lookup_port, aux,
+                            ofpacts, prereqsp);
+}
+
+/* A helper for actions_parse(), to parse an OVN exchange action in the form
+ * "field1 <-> field2" into 'ofpacts'.  The caller must have already parsed and
+ * skipped the left-hand side "field1 <->" and pass in 'field1'.  Other
+ * parameters and return value match those for actions_parse(). */
+char * OVS_WARN_UNUSED_RESULT
+expr_parse_exchange(struct lexer *lexer, struct expr_field *field,
+                    const struct shash *symtab,
+                    bool (*lookup_port)(const void *aux,
+                                        const char *port_name,
+                                        unsigned int *portp),
+                    const void *aux,
+                    struct ofpbuf *ofpacts, struct expr **prereqsp)
+{
+    return parse_assignment(lexer, field, symtab, true, lookup_port, aux,
+                            ofpacts, prereqsp);
+}
+
+/* Parses a field or subfield from 'lexer' into 'field', obtaining field names
+ * from 'symtab'.  Returns NULL if successful, otherwise an error message owned
+ * by the caller. */
+char * OVS_WARN_UNUSED_RESULT
+expr_parse_field(struct lexer *lexer, const struct shash *symtab,
+                 struct expr_field *field)
+{
+    struct expr_context ctx = { .lexer = lexer, .symtab = symtab };
+    if (!parse_field(&ctx, field)) {
+        memset(field, 0, sizeof *field);
+    }
+    return ctx.error;
+}
+
+/* Takes 'field', which was presumably parsed by expr_parse_field(), and
+ * converts it into mf_subfield 'sf' and a set of prerequisites in '*prereqsp'.
+ *
+ * 'n_bits' specifies the number of bits that the field must have, and 0
+ * indicates a string field; reports an error if 'field' has a different type
+ * or width.  If 'rw' is true, it is an error if 'field' is read-only.  Uses
+ * 'symtab 'for expanding references and 'lexer' for error reporting.
+ *
+ * Returns NULL if successful, otherwise an error message owned by the
+ * caller. */
+char * OVS_WARN_UNUSED_RESULT
+expr_expand_field(struct lexer *lexer, const struct shash *symtab,
+                  const struct expr_field *orig_field, int n_bits, bool rw,
+                  struct mf_subfield *sf, struct expr **prereqsp)
 {
     struct expr_context ctx = { .lexer = lexer, .symtab = symtab };
     struct expr *prereqs = NULL;
 
-    struct expr_field field;
-    if (!parse_field(&ctx, &field)) {
-        goto exit;
-    }
-
-    const struct expr_field orig_field = field;
+    struct expr_field field = *orig_field;
     if (!expand_symbol(&ctx, rw, &field, &prereqs)) {
         goto exit;
     }
-    ovs_assert(field.n_bits == orig_field.n_bits);
+    ovs_assert(field.n_bits == orig_field->n_bits);
 
     if (n_bits != field.n_bits) {
         if (n_bits && field.n_bits) {
             expr_error(&ctx, "Cannot use %d-bit field %s[%d..%d] "
                        "where %d-bit field is required.",
-                       orig_field.n_bits, orig_field.symbol->name,
-                       orig_field.ofs, orig_field.ofs + orig_field.n_bits - 1,
-                       n_bits);
+                       orig_field->n_bits, orig_field->symbol->name,
+                       orig_field->ofs,
+                       orig_field->ofs + orig_field->n_bits - 1, n_bits);
         } else if (n_bits) {
             expr_error(&ctx, "Cannot use string field %s where numeric "
                        "field is required.",
-                       orig_field.symbol->name);
+                       orig_field->symbol->name);
         } else {
             expr_error(&ctx, "Cannot use numeric field %s where string "
                        "field is required.",
-                       orig_field.symbol->name);
+                       orig_field->symbol->name);
         }
     }
 

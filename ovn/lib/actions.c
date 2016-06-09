@@ -106,19 +106,33 @@ action_syntax_error(struct action_context *ctx, const char *message, ...)
 static void
 parse_set_action(struct action_context *ctx)
 {
-    struct expr *prereqs;
+    struct expr *prereqs = NULL;
+    struct expr_field dst;
     char *error;
 
-    error = expr_parse_assignment(ctx->lexer, ctx->ap->symtab,
-                                  ctx->ap->lookup_port, ctx->ap->aux,
-                                  ctx->ofpacts, &prereqs);
-    if (error) {
-        action_error(ctx, "%s", error);
-        free(error);
-        return;
+    error = expr_parse_field(ctx->lexer, ctx->ap->symtab, &dst);
+    if (!error) {
+        if (lexer_match(ctx->lexer, LEX_T_EXCHANGE)) {
+            error = expr_parse_exchange(ctx->lexer, &dst, ctx->ap->symtab,
+                                        ctx->ap->lookup_port, ctx->ap->aux,
+                                        ctx->ofpacts, &prereqs);
+        } else if (lexer_match(ctx->lexer, LEX_T_EQUALS)) {
+            error = expr_parse_assignment(
+                ctx->lexer, &dst, ctx->ap->symtab, ctx->ap->lookup_port,
+                ctx->ap->aux, ctx->ofpacts, &prereqs);
+        } else {
+            action_syntax_error(ctx, "expecting `=' or `<->'");
+        }
+        if (!error) {
+            ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, prereqs);
+        }
     }
 
-    ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, prereqs);
+    if (error) {
+        expr_destroy(prereqs);
+        action_error(ctx, "%s", error);
+        free(error);
+    }
 }
 
 static void
@@ -282,19 +296,23 @@ static bool
 action_parse_field(struct action_context *ctx,
                    int n_bits, struct mf_subfield *sf)
 {
-    struct expr *prereqs;
+    struct expr_field field;
     char *error;
 
-    error = expr_parse_field(ctx->lexer, n_bits, false, ctx->ap->symtab, sf,
-                             &prereqs);
-    if (error) {
-        action_error(ctx, "%s", error);
-        free(error);
-        return false;
+    error = expr_parse_field(ctx->lexer, ctx->ap->symtab, &field);
+    if (!error) {
+        struct expr *prereqs;
+        error = expr_expand_field(ctx->lexer, ctx->ap->symtab,
+                                  &field, n_bits, false, sf, &prereqs);
+        if (!error) {
+            ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, prereqs);
+            return true;
+        }
     }
 
-    ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, prereqs);
-    return true;
+    action_error(ctx, "%s", error);
+    free(error);
+    return false;
 }
 
 static void
