@@ -9,7 +9,7 @@ m4_define([OVS_VSCTL_SETUP],
 dnl OVS_VSCTL_CLEANUP
 dnl
 dnl Kills off the database server.
-m4_define([OVS_VSCTL_CLEANUP], [OVS_APP_EXIT_AND_WAIT(["`pwd`"/unixctl])])
+m4_define([OVS_VSCTL_CLEANUP], [OVS_APP_EXIT_AND_WAIT_BY_TARGET(["`pwd`"/unixctl], ["`pwd`"/pid])])
 
 dnl RUN_OVS_VSCTL(COMMAND, ...)
 dnl

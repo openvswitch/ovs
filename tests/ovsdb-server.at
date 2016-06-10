@@ -1,7 +1,7 @@
 AT_BANNER([OVSDB -- ovsdb-server transactions (Unix sockets)])
 
 m4_define([OVSDB_SERVER_SHUTDOWN], 
-  [OVS_APP_EXIT_AND_WAIT(["`pwd`"/unixctl])])
+  [OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/unixctl], [`pwd`/pid])])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
