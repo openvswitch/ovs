@@ -108,10 +108,7 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 static char *cuse_dev_name = NULL;    /* Character device cuse_dev_name. */
 static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 
-/*
- * Maximum amount of time in micro seconds to try and enqueue to vhost.
- */
-#define VHOST_ENQ_RETRY_USECS 100
+#define VHOST_ENQ_RETRY_NUM 8
 
 static const struct rte_eth_conf port_conf = {
     .rxmode = {
@@ -1127,7 +1124,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(vhost_dev);
     struct rte_mbuf **cur_pkts = (struct rte_mbuf **) pkts;
     unsigned int total_pkts = cnt;
-    uint64_t start = 0;
+    int retries = 0;
 
     qid = vhost_dev->tx_q[qid % vhost_dev->real_n_txq].map;
 
@@ -1149,32 +1146,13 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
         if (OVS_LIKELY(tx_pkts)) {
             /* Packets have been sent.*/
             cnt -= tx_pkts;
-            /* Prepare for possible next iteration.*/
+            /* Prepare for possible retry.*/
             cur_pkts = &cur_pkts[tx_pkts];
         } else {
-            uint64_t timeout = VHOST_ENQ_RETRY_USECS * rte_get_timer_hz() / 1E6;
-            unsigned int expired = 0;
-
-            if (!start) {
-                start = rte_get_timer_cycles();
-            }
-
-            /*
-             * Unable to enqueue packets to vhost interface.
-             * Check available entries before retrying.
-             */
-            while (!rte_vring_available_entries(virtio_dev, vhost_qid)) {
-                if (OVS_UNLIKELY((rte_get_timer_cycles() - start) > timeout)) {
-                    expired = 1;
-                    break;
-                }
-            }
-            if (expired) {
-                /* break out of main loop. */
-                break;
-            }
+            /* No packets sent - do not retry.*/
+            break;
         }
-    } while (cnt);
+    } while (cnt && (retries++ < VHOST_ENQ_RETRY_NUM));
 
     rte_spinlock_unlock(&vhost_dev->tx_q[qid].tx_lock);
 
