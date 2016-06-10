@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -254,18 +254,30 @@ get_row_by_id(struct ctl_context *ctx, const struct ctl_table_class *table,
             return NULL;
         }
     } else {
-        const struct ovsdb_idl_row *row;
-
         referrer = NULL;
-        for (row = ovsdb_idl_first_row(ctx->idl, id->table);
-             row != NULL;
-             row = ovsdb_idl_next_row(row))
-            {
-                const struct ovsdb_datum *name;
 
-                name = ovsdb_idl_get(row, id->name_column,
-                                     OVSDB_TYPE_STRING, OVSDB_TYPE_VOID);
-                if (name->n == 1 && !strcmp(name->keys[0].string, record_id)) {
+        ovs_assert(id->name_column->type.value.type == OVSDB_TYPE_VOID);
+
+        enum ovsdb_atomic_type key = id->name_column->type.key.type;
+        if (key == OVSDB_TYPE_INTEGER) {
+            if (!record_id[0] || record_id[strspn(record_id, "0123456789")]) {
+                return NULL;
+            }
+        } else {
+            ovs_assert(key == OVSDB_TYPE_STRING);
+        }
+
+        for (const struct ovsdb_idl_row *row = ovsdb_idl_first_row(ctx->idl,
+                                                                   id->table);
+             row != NULL;
+             row = ovsdb_idl_next_row(row)) {
+            const struct ovsdb_datum *name = ovsdb_idl_get(
+                row, id->name_column, key, OVSDB_TYPE_VOID);
+            if (name->n == 1) {
+                const union ovsdb_atom *atom = &name->keys[0];
+                if (key == OVSDB_TYPE_STRING
+                    ? !strcmp(atom->string, record_id)
+                    : atom->integer == strtoll(record_id, NULL, 10)) {
                     if (referrer) {
                         ctl_fatal("multiple rows in %s match \"%s\"",
                                   table->class->name, record_id);
@@ -273,6 +285,7 @@ get_row_by_id(struct ctl_context *ctx, const struct ctl_table_class *table,
                     referrer = row;
                 }
             }
+        }
     }
     if (!referrer) {
         return NULL;
