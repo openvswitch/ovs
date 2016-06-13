@@ -1361,6 +1361,16 @@ struct ofproto_class {
         const struct ofproto_ipfix_flow_exporter_options
             *flow_exporters_options, size_t n_flow_exporters_options);
 
+    /* Gets IPFIX stats on 'ofproto' according to the exporter of birdge
+     * IPFIX or flow-based IPFIX.
+     *
+     * OFPERR_NXST_NOT_CONFIGURED as a return value indicates that bridge
+     * IPFIX or flow-based IPFIX is not configured. */
+    int (*get_ipfix_stats)(
+        const struct ofproto *ofproto,
+        bool bridge_ipfix, struct ovs_list *replies
+        );
+
     /* Configures connectivity fault management on 'ofport'.
      *
      * If 'cfm_settings' is nonnull, configures CFM according to its members.

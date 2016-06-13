@@ -3240,6 +3240,88 @@ ofp_print_requestforward(struct ds *string, const struct ofp_header *oh)
 }
 
 static void
+print_ipfix_stat(struct ds *string, const char *leader, uint64_t stat, int more)
+{
+    ds_put_cstr(string, leader);
+    if (stat != UINT64_MAX) {
+        ds_put_format(string, "%"PRIu64, stat);
+    } else {
+        ds_put_char(string, '?');
+    }
+    if (more) {
+        ds_put_cstr(string, ", ");
+    } else {
+        ds_put_cstr(string, "\n");
+    }
+}
+
+static void
+ofp_print_nxst_ipfix_bridge_reply(struct ds *string, const struct ofp_header *oh)
+{
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    for (;;) {
+        struct ofputil_ipfix_stats is;
+        int retval;
+
+        retval = ofputil_pull_ipfix_stats(&is, &b);
+        if (retval) {
+            if (retval != EOF) {
+                ds_put_cstr(string, " ***parse error***");
+            }
+            return;
+        }
+
+        ds_put_cstr(string, "\n  bridge ipfix: ");
+        print_ipfix_stat(string, "flows=", is.total_flows, 1);
+        print_ipfix_stat(string, "current flows=", is.current_flows, 1);
+        print_ipfix_stat(string, "sampled pkts=", is.pkts, 1);
+        print_ipfix_stat(string, "ipv4 ok=", is.ipv4_pkts, 1);
+        print_ipfix_stat(string, "ipv6 ok=", is.ipv6_pkts, 1);
+        print_ipfix_stat(string, "tx pkts=", is.tx_pkts, 0);
+        ds_put_cstr(string, "                ");
+        print_ipfix_stat(string, "pkts errs=", is.error_pkts, 1);
+        print_ipfix_stat(string, "ipv4 errs=", is.ipv4_error_pkts, 1);
+        print_ipfix_stat(string, "ipv6 errs=", is.ipv6_error_pkts, 1);
+        print_ipfix_stat(string, "tx errs=", is.tx_errors, 0);
+    }
+}
+
+static void
+ofp_print_nxst_ipfix_flow_reply(struct ds *string, const struct ofp_header *oh)
+{
+    ds_put_format(string, " %"PRIuSIZE" ids\n", ofputil_count_ipfix_stats(oh));
+
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    for (;;) {
+        struct ofputil_ipfix_stats is;
+        int retval;
+
+        retval = ofputil_pull_ipfix_stats(&is, &b);
+        if (retval) {
+            if (retval != EOF) {
+                ds_put_cstr(string, " ***parse error***");
+            }
+            return;
+        }
+
+        ds_put_cstr(string, "  id");
+        ds_put_format(string, " %3"PRIuSIZE": ", (size_t) is.collector_set_id);
+        print_ipfix_stat(string, "flows=", is.total_flows, 1);
+        print_ipfix_stat(string, "current flows=", is.current_flows, 1);
+        print_ipfix_stat(string, "sampled pkts=", is.pkts, 1);
+        print_ipfix_stat(string, "ipv4 ok=", is.ipv4_pkts, 1);
+        print_ipfix_stat(string, "ipv6 ok=", is.ipv6_pkts, 1);
+        print_ipfix_stat(string, "tx pkts=", is.tx_pkts, 0);
+        ds_put_cstr(string, "          ");
+        print_ipfix_stat(string, "pkts errs=", is.error_pkts, 1);
+        print_ipfix_stat(string, "ipv4 errs=", is.ipv4_error_pkts, 1);
+        print_ipfix_stat(string, "ipv6 errs=", is.ipv6_error_pkts, 1);
+        print_ipfix_stat(string, "tx errs=", is.tx_errors, 0);
+    }
+}
+
+
+static void
 ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
                 struct ds *string, int verbosity)
 {
@@ -3528,6 +3610,16 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
 
     case OFPTYPE_NXT_RESUME:
         ofp_print_packet_in(string, msg, verbosity);
+        break;
+    case OFPTYPE_IPFIX_BRIDGE_STATS_REQUEST:
+        break;
+    case OFPTYPE_IPFIX_BRIDGE_STATS_REPLY:
+        ofp_print_nxst_ipfix_bridge_reply(string, oh);
+        break;
+    case OFPTYPE_IPFIX_FLOW_STATS_REQUEST:
+        break;
+    case OFPTYPE_IPFIX_FLOW_STATS_REPLY:
+        ofp_print_nxst_ipfix_flow_reply(string, oh);
         break;
     }
 }

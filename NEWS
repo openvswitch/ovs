@@ -19,6 +19,8 @@ Post-v2.5.0
      * queue-get-config command now allows a queue ID to be specified.
      * '--bundle' option can now be used with OpenFlow 1.3.
      * New option "--color" to produce colorized output for some commands.
+     * New commands "dump-ipfix-bridge" and "dump-ipfix-flow" to dump bridge
+       IPFIX statistics and flow based IPFIX statistics.
    - DPDK:
      * New option "n_rxq" for PMD interfaces.
        Old 'other_config:n-dpdk-rxqs' is no longer supported.

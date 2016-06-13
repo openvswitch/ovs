@@ -1960,6 +1960,21 @@ set_ipfix(
 }
 
 static int
+get_ipfix_stats(const struct ofproto *ofproto_,
+                bool bridge_ipfix,
+                struct ovs_list *replies)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct dpif_ipfix *di = ofproto->ipfix;
+
+    if (!di) {
+        return OFPERR_NXST_NOT_CONFIGURED;
+    }
+
+    return dpif_ipfix_get_stats(di, bridge_ipfix, replies);
+}
+
+static int
 set_cfm(struct ofport *ofport_, const struct cfm_settings *s)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
@@ -5555,6 +5570,7 @@ const struct ofproto_class ofproto_dpif_class = {
     get_netflow_ids,
     set_sflow,
     set_ipfix,
+    get_ipfix_stats,
     set_cfm,
     cfm_status_changed,
     get_cfm_status,

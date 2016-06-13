@@ -46,6 +46,8 @@ void dpif_ipfix_set_options(
     const struct ofproto_ipfix_bridge_exporter_options *,
     const struct ofproto_ipfix_flow_exporter_options *, size_t);
 
+int dpif_ipfix_get_stats(const struct dpif_ipfix *, bool, struct ovs_list *);
+
 void dpif_ipfix_bridge_sample(struct dpif_ipfix *, const struct dp_packet *,
                               const struct flow *,
                               odp_port_t, odp_port_t, const struct flow_tnl *);

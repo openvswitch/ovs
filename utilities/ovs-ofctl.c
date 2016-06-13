@@ -425,6 +425,8 @@ usage(void)
            "  add-tlv-map SWITCH MAP      add TLV option MAPpings\n"
            "  del-tlv-map SWITCH [MAP] delete TLV option MAPpings\n"
            "  dump-tlv-map SWITCH      print TLV option mappings\n"
+           "  dump-ipfix-bridge SWITCH    print ipfix stats of bridge\n"
+           "  dump-ipfix-flow SWITCH      print flow ipfix of a bridge\n"
            "\nFor OpenFlow switches and controllers:\n"
            "  probe TARGET                probe whether TARGET is up\n"
            "  ping TARGET [N]             latency of N-byte echos\n"
@@ -2437,6 +2439,18 @@ ofctl_benchmark(struct ovs_cmdl_context *ctx)
 }
 
 static void
+ofctl_dump_ipfix_bridge(struct ovs_cmdl_context *ctx)
+{
+    dump_trivial_transaction(ctx->argv[1], OFPRAW_NXST_IPFIX_BRIDGE_REQUEST);
+}
+
+static void
+ofctl_dump_ipfix_flow(struct ovs_cmdl_context *ctx)
+{
+    dump_trivial_transaction(ctx->argv[1], OFPRAW_NXST_IPFIX_FLOW_REQUEST);
+}
+
+static void
 ofctl_group_mod__(const char *remote, struct ofputil_group_mod *gms,
                   size_t n_gms, enum ofputil_protocol usable_protocols)
 {
@@ -4026,6 +4040,11 @@ static const struct ovs_cmdl_command all_commands[] = {
       1, 2, ofctl_ping },
     { "benchmark", "target n count",
       3, 3, ofctl_benchmark },
+
+    { "dump-ipfix-bridge", "switch",
+      1, 1, ofctl_dump_ipfix_bridge},
+    { "dump-ipfix-flow", "switch",
+      1, 1, ofctl_dump_ipfix_flow},
 
     { "ofp-parse", "file",
       1, 1, ofctl_ofp_parse },
