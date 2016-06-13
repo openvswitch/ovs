@@ -382,12 +382,12 @@
     <li>
       On the hypervisor where the VM is powered on, <code>ovn-controller</code>
       notices <code>external-ids</code>:<code>iface-id</code> in the new
-      Interface.  In response, it updates the local hypervisor's OpenFlow
-      tables so that packets to and from the VIF are properly handled.
-      Afterward, in the OVN Southbound DB, it updates the
+      Interface. In response, in the OVN Southbound DB, it updates the
       <code>Binding</code> table's <code>chassis</code> column for the
-      row that links the logical port from
-      <code>external-ids</code>:<code>iface-id</code> to the hypervisor.
+      row that links the logical port from <code>external-ids</code>:<code>
+      iface-id</code> to the hypervisor. Afterward, <code>ovn-controller</code>
+      updates the local hypervisor's OpenFlow tables so that packets to and from
+      the VIF are properly handled.
     </li>
 
     <li>
