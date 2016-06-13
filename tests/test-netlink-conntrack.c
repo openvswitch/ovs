@@ -30,12 +30,22 @@ struct test_change {
     struct ct_dpif_entry entry;
 };
 
-static bool
+static int
 event_parse(struct ofpbuf *buf, void *change_)
 {
     struct test_change *change = change_;
 
-    return nl_ct_parse_entry(buf, &change->entry, &change->type);
+    if (nl_ct_parse_entry(buf, &change->entry, &change->type)) {
+        switch (change->type) {
+        case NL_CT_EVENT_NEW:
+            return NFNLGRP_CONNTRACK_NEW;
+        case NL_CT_EVENT_UPDATE:
+            return NFNLGRP_CONNTRACK_UPDATE;
+        case NL_CT_EVENT_DELETE:
+            return NFNLGRP_CONNTRACK_DESTROY;
+        }
+    }
+    return 0;
 }
 
 static void
@@ -62,32 +72,29 @@ test_nl_ct_monitor(struct ovs_cmdl_context *ctx OVS_UNUSED)
         NFNLGRP_CONNTRACK_UPDATE,
     };
 
-    struct nln *nlns[ARRAY_SIZE(groups)];
+    struct nln *nln;
     struct nln_notifier *notifiers[ARRAY_SIZE(groups)];
 
     struct test_change change;
 
     unsigned i;
 
-    for (i = 0; i < ARRAY_SIZE(groups); i++) {
-        nlns[i] = nln_create(NETLINK_NETFILTER, groups[i], event_parse,
-                             &change);
+    nln = nln_create(NETLINK_NETFILTER, event_parse, &change);
 
-        notifiers[i] = nln_notifier_create(nlns[i], event_print, NULL);
+    for (i = 0; i < ARRAY_SIZE(groups); i++) {
+        notifiers[i] = nln_notifier_create(nln, groups[i], event_print, NULL);
     }
 
     for (;;) {
-        for (i = 0; i < ARRAY_SIZE(groups); i++) {
-            nln_run(nlns[i]);
-            nln_wait(nlns[i]);
-        }
+        nln_run(nln);
+        nln_wait(nln);
         poll_block();
     }
 
     for (i = 0; i < ARRAY_SIZE(groups); i++) {
         nln_notifier_destroy(notifiers[i]);
-        nln_destroy(nlns[i]);
     }
+    nln_destroy(nln);
 }
 
 /* Dump command */

@@ -125,10 +125,11 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
     return parsed;
 }
 
-static bool
+/* Return RTNLGRP_LINK on success, 0 on parse error. */
+static int
 rtnetlink_parse_cb(struct ofpbuf *buf, void *change)
 {
-    return rtnetlink_parse(buf, change);
+    return rtnetlink_parse(buf, change) ? RTNLGRP_LINK : 0;
 }
 
 /* Registers 'cb' to be called with auxiliary data 'aux' with network device
@@ -146,11 +147,10 @@ struct nln_notifier *
 rtnetlink_notifier_create(rtnetlink_notify_func *cb, void *aux)
 {
     if (!nln) {
-        nln = nln_create(NETLINK_ROUTE, RTNLGRP_LINK, rtnetlink_parse_cb,
-                         &rtn_change);
+        nln = nln_create(NETLINK_ROUTE, rtnetlink_parse_cb, &rtn_change);
     }
 
-    return nln_notifier_create(nln, (nln_notify_func *) cb, aux);
+    return nln_notifier_create(nln, RTNLGRP_LINK, (nln_notify_func *) cb, aux);
 }
 
 /* Destroys 'notifier', which must have previously been created with
