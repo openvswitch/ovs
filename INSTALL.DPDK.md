@@ -16,7 +16,7 @@ OVS needs a system with 1GB hugepages support.
 Building and Installing:
 ------------------------
 
-Required: DPDK 16.04
+Required: DPDK 16.04, libnuma
 Optional (if building with vhost-cuse): `fuse`, `fuse-devel` (`libfuse-dev`
 on Debian/Ubuntu)
 
@@ -465,7 +465,11 @@ Performance Tuning:
 
    It is good practice to ensure that threads that are in the datapath are
    pinned to cores in the same NUMA area. e.g. pmd threads and QEMU vCPUs
-   responsible for forwarding.
+   responsible for forwarding. If DPDK is built with
+   CONFIG_RTE_LIBRTE_VHOST_NUMA=y, vHost User ports automatically
+   detect the NUMA socket of the QEMU vCPUs and will be serviced by a PMD
+   from the same node provided a core on this node is enabled in the
+   pmd-cpu-mask.
 
 9. Rx Mergeable buffers
 

@@ -30,6 +30,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <getopt.h>
+#include <numaif.h>
 
 #include "dirs.h"
 #include "dp-packet.h"
@@ -381,6 +382,9 @@ struct netdev_dpdk {
      * netdev_dpdk*_reconfigure() is called */
     int requested_n_txq;
     int requested_n_rxq;
+
+    /* Socket ID detected when vHost device is brought up */
+    int requested_socket_id;
 
     /* Ingress Policer */
     OVSRCU_TYPE(struct ingress_policer *) ingress_policer;
@@ -758,6 +762,7 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
     }
 
     dev->socket_id = sid < 0 ? SOCKET0 : sid;
+    dev->requested_socket_id = dev->socket_id;
     dev->port_id = port_no;
     dev->type = type;
     dev->flags = 0;
@@ -2322,6 +2327,8 @@ new_device(struct virtio_net *virtio_dev)
 {
     struct netdev_dpdk *dev;
     bool exists = false;
+    int newnode = 0;
+    long err = 0;
 
     ovs_mutex_lock(&dpdk_mutex);
     /* Add device to the vhost port with the same name as that passed down. */
@@ -2335,6 +2342,19 @@ new_device(struct virtio_net *virtio_dev)
             }
             ovsrcu_set(&dev->virtio_dev, virtio_dev);
             exists = true;
+
+            /* Get NUMA information */
+            err = get_mempolicy(&newnode, NULL, 0, virtio_dev,
+                                MPOL_F_NODE | MPOL_F_ADDR);
+            if (err) {
+                VLOG_INFO("Error getting NUMA info for vHost Device '%s'",
+                        virtio_dev->ifname);
+                newnode = dev->socket_id;
+            } else if (newnode != dev->socket_id) {
+                dev->requested_socket_id = newnode;
+                netdev_request_reconfigure(&dev->up);
+            }
+
             virtio_dev->flags |= VIRTIO_DEV_RUNNING;
             /* Disable notifications. */
             set_irq_status(virtio_dev);
@@ -2352,8 +2372,8 @@ new_device(struct virtio_net *virtio_dev)
         return -1;
     }
 
-    VLOG_INFO("vHost Device '%s' %"PRIu64" has been added", virtio_dev->ifname,
-              virtio_dev->device_fh);
+    VLOG_INFO("vHost Device '%s' %"PRIu64" has been added on numa node %i",
+              virtio_dev->ifname, virtio_dev->device_fh, newnode);
     return 0;
 }
 
@@ -2915,6 +2935,7 @@ static int
 netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    int err = 0;
 
     ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
@@ -2922,10 +2943,20 @@ netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
     netdev->n_txq = dev->requested_n_txq;
     netdev->n_rxq = dev->requested_n_rxq;
 
+    if (dev->requested_socket_id != dev->socket_id) {
+        dev->socket_id = dev->requested_socket_id;
+        /* Change mempool to new NUMA Node */
+        dpdk_mp_put(dev->dpdk_mp);
+        dev->dpdk_mp = dpdk_mp_get(dev->socket_id, dev->mtu);
+        if (!dev->dpdk_mp) {
+            err = ENOMEM;
+        }
+    }
+
     ovs_mutex_unlock(&dev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
 
-    return 0;
+    return err;
 }
 
 static int
