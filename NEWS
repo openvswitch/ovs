@@ -23,6 +23,9 @@ Post-v2.5.0
      * New option "--color" to produce colorized output for some commands.
      * New commands "dump-ipfix-bridge" and "dump-ipfix-flow" to dump bridge
        IPFIX statistics and flow based IPFIX statistics.
+   - Linux:
+     * New QoS type "linux-noop" that prevents Open vSwitch from trying to
+       manage QoS for a given port (useful when other software manages QoS).
    - DPDK:
      * New option "n_rxq" for PMD interfaces.
        Old 'other_config:n-dpdk-rxqs' is no longer supported.
