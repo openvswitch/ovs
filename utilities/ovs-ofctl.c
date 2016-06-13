@@ -3834,6 +3834,26 @@ ofctl_encode_hello(struct ovs_cmdl_context *ctx)
     ofpbuf_delete(hello);
 }
 
+static void
+ofctl_parse_key_value(struct ovs_cmdl_context *ctx)
+{
+    for (size_t i = 1; i < ctx->argc; i++) {
+        char *s = ctx->argv[i];
+        char *key, *value;
+        int j = 0;
+        while (ofputil_parse_key_value(&s, &key, &value)) {
+            if (j++) {
+                fputs(", ", stdout);
+            }
+            fputs(key, stdout);
+            if (value[0]) {
+                printf("=%s", value);
+            }
+        }
+        putchar('\n');
+    }
+}
+
 static const struct ovs_cmdl_command all_commands[] = {
     { "show", "switch",
       1, 1, ofctl_show },
@@ -3954,6 +3974,7 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "encode-error-reply", NULL, 2, 2, ofctl_encode_error_reply },
     { "ofp-print", NULL, 1, 2, ofctl_ofp_print },
     { "encode-hello", NULL, 1, 1, ofctl_encode_hello },
+    { "parse-key-value", NULL, 1, INT_MAX, ofctl_parse_key_value },
 
     { NULL, NULL, 0, 0, NULL },
 };

@@ -6858,6 +6858,38 @@ ofputil_normalize_match_quiet(struct match *match)
     ofputil_normalize_match__(match, false);
 }
 
+static size_t
+parse_value(const char *s, const char *delimiters)
+{
+    size_t n = 0;
+
+    /* Iterate until we reach a delimiter.
+     *
+     * strchr(s, '\0') returns s+strlen(s), so this test handles the null
+     * terminator at the end of 's'.  */
+    while (!strchr(delimiters, s[n])) {
+        if (s[n] == '(') {
+            int level = 0;
+            do {
+                switch (s[n]) {
+                case '\0':
+                    return n;
+                case '(':
+                    level++;
+                    break;
+                case ')':
+                    level--;
+                    break;
+                }
+                n++;
+            } while (level > 0);
+        } else {
+            n++;
+        }
+    }
+    return n;
+}
+
 /* Parses a key or a key-value pair from '*stringp'.
  *
  * On success: Stores the key into '*keyp'.  Stores the value, if present, into
@@ -6871,58 +6903,49 @@ ofputil_normalize_match_quiet(struct match *match)
 bool
 ofputil_parse_key_value(char **stringp, char **keyp, char **valuep)
 {
-    char *pos, *key, *value;
-    size_t key_len;
-
-    pos = *stringp;
-    pos += strspn(pos, ", \t\r\n");
-    if (*pos == '\0') {
+    /* Skip white space and delimiters.  If that brings us to the end of the
+     * input string, we are done and there are no more key-value pairs. */
+    *stringp += strspn(*stringp, ", \t\r\n");
+    if (**stringp == '\0') {
         *keyp = *valuep = NULL;
         return false;
     }
 
-    key = pos;
-    key_len = strcspn(pos, ":=(, \t\r\n");
-    if (key[key_len] == ':' || key[key_len] == '=') {
-        /* The value can be separated by a colon. */
-        size_t value_len;
-
-        value = key + key_len + 1;
-        value_len = strcspn(value, ", \t\r\n");
-        pos = value + value_len + (value[value_len] != '\0');
-        value[value_len] = '\0';
-    } else if (key[key_len] == '(') {
-        /* The value can be surrounded by balanced parentheses.  The outermost
-         * set of parentheses is removed. */
-        int level = 1;
-        size_t value_len;
-
-        value = key + key_len + 1;
-        for (value_len = 0; level > 0; value_len++) {
-            switch (value[value_len]) {
-            case '\0':
-                level = 0;
-                break;
-
-            case '(':
-                level++;
-                break;
-
-            case ')':
-                level--;
-                break;
-            }
-        }
-        value[value_len - 1] = '\0';
-        pos = value + value_len;
-    } else {
-        /* There might be no value at all. */
-        value = key + key_len;  /* Will become the empty string below. */
-        pos = key + key_len + (key[key_len] != '\0');
-    }
+    /* Extract the key and the delimiter that ends the key-value pair or begins
+     * the value.  Advance the input position past the key and delimiter. */
+    char *key = *stringp;
+    size_t key_len = strcspn(key, ":=(, \t\r\n");
+    char key_delim = key[key_len];
     key[key_len] = '\0';
+    *stringp += key_len + (key_delim != '\0');
 
-    *stringp = pos;
+    /* Figure out what delimiter ends the value:
+     *
+     *     - If key_delim is ":" or "=", the value extends until white space
+     *       or a comma.
+     *
+     *     - If key_delim is "(", the value extends until ")".
+     *
+     * If there is no value, we are done. */
+    const char *value_delims;
+    if (key_delim == ':' || key_delim == '=') {
+        value_delims = ", \t\r\n";
+    } else if (key_delim == '(') {
+        value_delims = ")";
+    } else {
+        *keyp = key;
+        *valuep = key + key_len; /* Empty string. */
+        return true;
+    }
+
+    /* Extract the value.  Advance the input position past the value and
+     * delimiter. */
+    char *value = *stringp;
+    size_t value_len = parse_value(value, value_delims);
+    char value_delim = value[value_len];
+    value[value_len] = '\0';
+    *stringp += value_len + (value_delim != '\0');
+
     *keyp = key;
     *valuep = value;
     return true;

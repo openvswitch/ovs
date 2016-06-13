@@ -727,6 +727,10 @@ OVS_VSWITCHD_START
 AT_DATA([groups.txt], [dnl
 group_id=1234,type=all,bucket=output:10
 group_id=1235,type=all,bucket=output:10
+
+dnl This checks for regression against a parser bug such that
+dnl "actions=resbmit(,1)" etc. was rejected as a syntax error.
+group_id=2345,type=select,bucket=weight:10,actions=resubmit(,1),bucket=weight:10,actions=resubmit(,2),bucket=weight:1,actions=resubmit(,3)
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn add-groups br0 groups.txt])
 AT_CHECK([ovs-vsctl del-br br0])
