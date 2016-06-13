@@ -50,3 +50,46 @@ OFPT_HELLO (OF1.1) (xid=0x1):
  version bitmap: 0x02
 ])
 AT_CLEANUP
+
+AT_SETUP([parsing key-value pairs])
+dnl Key-only basics.
+AT_CHECK([ovs-ofctl parse-key-value a a,b 'a b' 'a	b' 'a
+b'], 0, [a
+a, b
+a, b
+a, b
+a, b
+])
+
+dnl Key-value basics.
+AT_CHECK([ovs-ofctl parse-key-value a:b a=b a:b,c=d 'a=b c' 'a(b)' 'a(b),c(d)'], 0,
+[a=b
+a=b
+a=b, c=d
+a=b, c
+a=b
+a=b, c=d
+])
+
+dnl Values that contain nested delimiters.
+AT_CHECK([ovs-ofctl parse-key-value 'a:(b,c)' 'a:b(c,d)e' 'a(b,c(d,e),f)'], 0,
+[a=(b,c)
+a=b(c,d)e
+a=b,c(d,e),f
+])
+
+dnl Extraneous delimiters.
+AT_CHECK([ovs-ofctl parse-key-value a,,b ',a  b' ' a b ,'], 0, [a, b
+a, b
+a, b
+])
+
+dnl Missing right parentheses.
+dnl
+dnl m4 can't handle unbalanced parentheses so we use @{:@, which
+dnl Autotest replaces by a left parenthesis.
+AT_CHECK([ovs-ofctl parse-key-value 'a@{:@b' 'a@{:@b(c)' 'a=b@{:@c'], 0, [a=b
+a=b(c)
+a=b@{:@c
+])
+AT_CLEANUP
