@@ -2262,6 +2262,18 @@ static const struct ctl_table_class tables[] = {
      {{&nbrec_table_logical_port_chain, &nbrec_logical_port_chain_col_name, NULL},
       {NULL, NULL, NULL}}},
 
+    {&nbrec_table_logical_port_pair_group,
+     {{&nbrec_table_logical_port_pair_group, &nbrec_logical_port_pair_group_col_name, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&nbrec_table_logical_port_pair,
+     {{&nbrec_table_logical_port_pair, &nbrec_logical_port_pair_col_name, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&nbrec_table_logical_flow_classifier,
+     {{&nbrec_table_logical_flow_classifier, &nbrec_logical_flow_classifier_col_name, NULL},
+      {NULL, NULL, NULL}}},
+
     {&nbrec_table_logical_port,
      {{&nbrec_table_logical_port, &nbrec_logical_port_col_name, NULL},
       {NULL, NULL, NULL}}},
