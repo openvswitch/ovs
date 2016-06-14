@@ -479,6 +479,80 @@ build_datapaths(struct northd_context *ctx, struct hmap *datapaths)
         ovn_datapath_destroy(datapaths, od);
     }
 }
+/*
+ * Build port-chain structures
+ */
+struct ovn_portchain {
+  struct hmap_node key_node;
+  struct uuid key;
+
+  const struct nbrec_logical_port_chain *nbpc;
+  
+  struct ovs_list list;
+
+  bool has_unknown;
+};
+
+static struct ovn_portchain *
+ovn_portchain_create(struct hmap *portchains, const struct uuid *key,
+		     const struct nbrec_logical_port_chain *nbpc)
+{
+  struct ovn_portchain *opc = xzalloc(sizeof *opc);
+  opc->key = *key;
+  opc->nbpc = nbpc;
+
+  hmap_insert(portchains, &opc->key_node, uuid_hash(&opc->key));
+  
+  return opc;
+}
+
+static void
+ovn_portchain_destroy(struct hmap *portchains, struct ovn_portchain *opc)
+{
+
+  if (opc) {
+    hmap_remove(portchains, &opc->key_node);
+    free(opc);
+  }
+}
+
+static struct ovn_portchain *
+ovn_portchain_find(struct hmap *portchains, const struct uuid *uuid)
+{
+  struct ovn_portchain *opc;
+  
+  HMAP_FOR_EACH_WITH_HASH(opc,key_node, uuid_hash(uuid), portchains){
+    if (uuid_equals(uuid, &opc->key)){
+      return opc;
+    }
+  }
+  return NULL;
+}
+static void 
+build_portchains(struct northd_context *ctx, struct hmap *portchains)
+{
+  struct ovs_list nbpc_list;
+  const struct nbrec_logical_port_chain *nbpc;
+    
+  hmap_init(portchains);
+  ovs_list_init(&nbpc_list);
+
+  NBREC_LOGICAL_PORT_CHAIN_FOR_EACH (nbpc, ctx->ovnnb_idl) {
+    struct ovn_portchain *opc = ovn_portchain_find(portchains,
+                                                    &nbpc->header_.uuid);
+    if (opc) {
+      opc->nbpc = nbpc;
+      ovs_list_remove(&opc->list);
+      ovs_list_push_back(&nbpc_list, &opc->list);
+    } else {
+      opc = ovn_portchain_create(portchains, &nbpc->header_.uuid,
+                                     nbpc);
+      ovs_list_push_back(&nbpc_list, &opc->list);
+    }
+  }
+}
+
+
 
 struct ovn_port {
     struct hmap_node key_node;  /* Index on 'key'. */
@@ -1484,10 +1558,10 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
  *
  */
 static void
-build_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
+install_chain(struct ovn_portchain *opc, struct hmap *lflows, struct hmap *ports)
 {
  
-  VLOG_INFO("entered service insertion\n");
+  VLOG_INFO("beginning port-chain insertion\n");
   /* For each service add ingress and egress flow rules. These rules are given
    *  a higher priority than the base rules. If the service exists then it will
    *  be inserted into the flow, if not then the behavior is the default.
@@ -1522,8 +1596,8 @@ build_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
  /*
    * Iterate through all the services defined for this datapath.
    */
-  VLOG_INFO("Iterating through %d services \n", (int)od->nbs->n_port_chains);
-  for (size_t i = 0; i < od->nbs->n_port_chains; i++){
+  VLOG_INFO("Iterating through %d services \n", (int)opc->nbpc->n_port_chains);
+  for (size_t i = 0; i < opc->nbpc->n_port_chains; i++){
     /*
      * For each port-pair-group in a port chain pull out the first port-pair.
      * TODO: Need to add in load balancing for port-pair-groups
@@ -1673,7 +1747,8 @@ build_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
 
 static void
 build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
-                    struct hmap *lflows, struct hmap *mcgroups)
+                    struct hmap *lflows, struct hmap *mcgroups,
+		    struct hmap *portchains)
 {
     /* This flow table structure is documented in ovn-northd(8), so please
      * update ovn-northd.8.xml if you change anything. */
@@ -1841,15 +1916,16 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
    *  If a service is defined send traffic destined for an application
    *  to the service first (both for ingress and egress)
    */
-  VLOG_INFO("just before service insertion\n");
-  HMAP_FOR_EACH(od, key_node, datapaths) {
-    if (!od->nbs) {
+  struct ovn_portchain *opc
+  VLOG_INFO("just before service chaining\n");
+  HMAP_FOR_EACH(opc, key_node, portchains) {
+    if (!ops->nbpc) {
       continue;
     }
-    build_chain(od, lflows, ports);
+    install_chain(opc, lflows, ports);
 
   }
-  VLOG_INFO("Service Insertion complete\n");
+  VLOG_INFO("Service Chaining complete\n");
 #endif
     /* Ingress table 7: Destination lookup, broadcast and multicast handling
      * (priority 100). */
@@ -2454,8 +2530,10 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
 {
     struct hmap lflows = HMAP_INITIALIZER(&lflows);
     struct hmap mcgroups = HMAP_INITIALIZER(&mcgroups);
+    struct hmap portchains = HMAP_INITIALIZER(&portchains);
 
-    build_lswitch_flows(datapaths, ports, &lflows, &mcgroups);
+    build_portchains(ctx,&portchains);
+    build_lswitch_flows(datapaths, ports, &lflows, &mcgroups, &portchains);
     build_lrouter_flows(datapaths, ports, &lflows);
 
     /* Push changes to the Logical_Flow table to database. */
