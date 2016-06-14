@@ -494,7 +494,7 @@ dpif_ipfix_exporter_init(struct dpif_ipfix_exporter *exporter)
 {
     exporter->collectors = NULL;
     exporter->seq_number = 1;
-    exporter->last_template_set_time = TIME_MIN;
+    exporter->last_template_set_time = 0;
     hmap_init(&exporter->cache_flow_key_map);
     list_init(&exporter->cache_flow_start_timestamp_list);
     exporter->cache_active_timeout = 0;
@@ -510,7 +510,7 @@ dpif_ipfix_exporter_clear(struct dpif_ipfix_exporter *exporter)
     collectors_destroy(exporter->collectors);
     exporter->collectors = NULL;
     exporter->seq_number = 1;
-    exporter->last_template_set_time = TIME_MIN;
+    exporter->last_template_set_time = 0;
     exporter->cache_active_timeout = 0;
     exporter->cache_max_flows = 0;
 }
