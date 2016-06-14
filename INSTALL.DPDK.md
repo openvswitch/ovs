@@ -583,6 +583,17 @@ Follow the steps below to attach vhost-user port(s) to a VM.
    -device virtio-net-pci,mac=00:00:00:00:00:02,netdev=mynet2,mq=on,vectors=$v
    ```
 
+   A least 2 PMDs should be configured for the vswitch when using multiqueue.
+   Using a single PMD will cause traffic to be enqueued to the same vhost
+   queue rather than being distributed among different vhost queues for a
+   vhost-user interface.
+
+   If traffic destined for a VM configured with multiqueue arrives to the
+   vswitch via a physical DPDK port, then the number of rxqs should also be
+   set to at least 2 for that physical DPDK port. This is required to increase
+   the probability that a different PMD will handle the multiqueue
+   transmission to the guest using a different vhost queue.
+
    If one wishes to use multiple queues for an interface in the guest, the
    driver in the guest operating system must be configured to do so. It is
    recommended that the number of queues configured be equal to '$q'.
