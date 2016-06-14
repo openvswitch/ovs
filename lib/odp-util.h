@@ -297,6 +297,7 @@ union user_action_cookie {
         uint32_t collector_set_id; /* ID of IPFIX collector set. */
         uint32_t obs_domain_id; /* Observation Domain ID. */
         uint32_t obs_point_id;  /* Observation Point ID. */
+        odp_port_t output_odp_port; /* The output odp port. */
     } flow_sample;
 
     struct {
@@ -304,7 +305,7 @@ union user_action_cookie {
         odp_port_t output_odp_port; /* The output odp port. */
     } ipfix;
 };
-BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 16);
+BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 20);
 
 size_t odp_put_userspace_action(uint32_t pid,
                                 const void *userdata, size_t userdata_size,

@@ -289,6 +289,8 @@ enum ofp_raw_action_type {
 
     /* NX1.0+(29): struct nx_action_sample. */
     NXAST_RAW_SAMPLE,
+    /* NX1.0+(38): struct nx_action_sample2. */
+    NXAST_RAW_SAMPLE2,
 
     /* NX1.0+(34): struct nx_action_conjunction. */
     NXAST_RAW_CONJUNCTION,
@@ -4697,6 +4699,24 @@ struct nx_action_sample {
 };
 OFP_ASSERT(sizeof(struct nx_action_sample) == 24);
 
+/* Action structure for NXAST_SAMPLE2.
+ *
+ * This replacement for NXAST_SAMPLE makes it support exporting
+ * egress tunnel information. */
+struct nx_action_sample2 {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* Length is 32. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID. */
+    ovs_be16 subtype;               /* NXAST_SAMPLE. */
+    ovs_be16 probability;           /* Fraction of packets to sample. */
+    ovs_be32 collector_set_id;      /* ID of collector set in OVSDB. */
+    ovs_be32 obs_domain_id;         /* ID of sampling observation domain. */
+    ovs_be32 obs_point_id;          /* ID of sampling observation point. */
+    ovs_be16 sampling_port;         /* Sampling port. */
+    uint8_t  pad[6];                /* Pad to a multiple of 8 bytes */
+ };
+ OFP_ASSERT(sizeof(struct nx_action_sample2) == 32);
+
 static enum ofperr
 decode_NXAST_RAW_SAMPLE(const struct nx_action_sample *nas,
                         enum ofp_version ofp_version OVS_UNUSED,
@@ -4705,10 +4725,35 @@ decode_NXAST_RAW_SAMPLE(const struct nx_action_sample *nas,
     struct ofpact_sample *sample;
 
     sample = ofpact_put_SAMPLE(out);
+    sample->ofpact.raw = NXAST_RAW_SAMPLE;
     sample->probability = ntohs(nas->probability);
     sample->collector_set_id = ntohl(nas->collector_set_id);
     sample->obs_domain_id = ntohl(nas->obs_domain_id);
     sample->obs_point_id = ntohl(nas->obs_point_id);
+    /* Default value for sampling port is OFPP_NONE */
+    sample->sampling_port = OFPP_NONE;
+
+    if (sample->probability == 0) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    return 0;
+}
+
+static enum ofperr
+decode_NXAST_RAW_SAMPLE2(const struct nx_action_sample2 *nas,
+                         enum ofp_version ofp_version OVS_UNUSED,
+                         struct ofpbuf *out)
+{
+    struct ofpact_sample *sample;
+
+    sample = ofpact_put_SAMPLE(out);
+    sample->ofpact.raw = NXAST_RAW_SAMPLE2;
+    sample->probability = ntohs(nas->probability);
+    sample->collector_set_id = ntohl(nas->collector_set_id);
+    sample->obs_domain_id = ntohl(nas->obs_domain_id);
+    sample->obs_point_id = ntohl(nas->obs_point_id);
+    sample->sampling_port = u16_to_ofp(ntohs(nas->sampling_port));
 
     if (sample->probability == 0) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
@@ -4721,13 +4766,21 @@ static void
 encode_SAMPLE(const struct ofpact_sample *sample,
               enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
 {
-    struct nx_action_sample *nas;
-
-    nas = put_NXAST_SAMPLE(out);
-    nas->probability = htons(sample->probability);
-    nas->collector_set_id = htonl(sample->collector_set_id);
-    nas->obs_domain_id = htonl(sample->obs_domain_id);
-    nas->obs_point_id = htonl(sample->obs_point_id);
+    if (sample->ofpact.raw == NXAST_RAW_SAMPLE2
+        || sample->sampling_port != OFPP_NONE) {
+        struct nx_action_sample2 *nas = put_NXAST_SAMPLE2(out);
+        nas->probability = htons(sample->probability);
+        nas->collector_set_id = htonl(sample->collector_set_id);
+        nas->obs_domain_id = htonl(sample->obs_domain_id);
+        nas->obs_point_id = htonl(sample->obs_point_id);
+        nas->sampling_port = htons(ofp_to_u16(sample->sampling_port));
+    } else {
+        struct nx_action_sample *nas = put_NXAST_SAMPLE(out);
+        nas->probability = htons(sample->probability);
+        nas->collector_set_id = htonl(sample->collector_set_id);
+        nas->obs_domain_id = htonl(sample->obs_domain_id);
+        nas->obs_point_id = htonl(sample->obs_point_id);
+    }
 }
 
 /* Parses 'arg' as the argument to a "sample" action, and appends such an
@@ -4740,8 +4793,9 @@ parse_SAMPLE(char *arg, struct ofpbuf *ofpacts,
              enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
     struct ofpact_sample *os = ofpact_put_SAMPLE(ofpacts);
-    char *key, *value;
+    os->sampling_port = OFPP_NONE;
 
+    char *key, *value;
     while (ofputil_parse_key_value(&arg, &key, &value)) {
         char *error = NULL;
 
@@ -4756,6 +4810,10 @@ parse_SAMPLE(char *arg, struct ofpbuf *ofpacts,
             error = str_to_u32(value, &os->obs_domain_id);
         } else if (!strcmp(key, "obs_point_id")) {
             error = str_to_u32(value, &os->obs_point_id);
+        } else if (!strcmp(key, "sampling_port")) {
+            if (!ofputil_port_from_string(value, &os->sampling_port)) {
+                error = xasprintf("%s: unknown port", value);
+            }
         } else {
             error = xasprintf("invalid key \"%s\" in \"sample\" argument",
                               key);
@@ -4767,6 +4825,7 @@ parse_SAMPLE(char *arg, struct ofpbuf *ofpacts,
     if (os->probability == 0) {
         return xstrdup("non-zero \"probability\" must be specified on sample");
     }
+
     return NULL;
 }
 
@@ -4776,13 +4835,17 @@ format_SAMPLE(const struct ofpact_sample *a, struct ds *s)
     ds_put_format(s, "%ssample(%s%sprobability=%s%"PRIu16
                   ",%scollector_set_id=%s%"PRIu32
                   ",%sobs_domain_id=%s%"PRIu32
-                  ",%sobs_point_id=%s%"PRIu32"%s)%s",
+                  ",%sobs_point_id=%s%"PRIu32,
                   colors.paren, colors.end,
                   colors.param, colors.end, a->probability,
                   colors.param, colors.end, a->collector_set_id,
                   colors.param, colors.end, a->obs_domain_id,
-                  colors.param, colors.end, a->obs_point_id,
-                  colors.paren, colors.end);
+                  colors.param, colors.end, a->obs_point_id);
+    if (a->sampling_port != OFPP_NONE) {
+        ds_put_format(s, ",%ssampling_port=%s%"PRIu16,
+                      colors.param, colors.end, a->sampling_port);
+    }
+    ds_put_format(s, "%s)%s", colors.paren, colors.end);
 }
 
 /* debug_recirc instruction. */

@@ -775,13 +775,14 @@ struct ofpact_note {
 
 /* OFPACT_SAMPLE.
  *
- * Used for NXAST_SAMPLE. */
+ * Used for NXAST_SAMPLE and NXAST_SAMPLE2. */
 struct ofpact_sample {
     struct ofpact ofpact;
-    uint16_t probability;  // Always >0.
+    uint16_t probability;  /* Always positive. */
     uint32_t collector_set_id;
     uint32_t obs_domain_id;
     uint32_t obs_point_id;
+    ofp_port_t sampling_port;
 };
 
 /* OFPACT_DEC_TTL.

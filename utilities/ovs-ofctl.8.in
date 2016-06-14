@@ -2320,6 +2320,12 @@ Observation Domain ID sent in every IPFIX flow record.  Defaults to 0.
 .IP "\fBobs_point_id=\fIid\fR"
 When sending samples to IPFIX collectors, the unsigned 32-bit integer
 Observation Point ID sent in every IPFIX flow record.  Defaults to 0.
+.IP "\fBsampling_port=\fIport\fR"
+Sample packets on the port.  It can be set as input port or output
+port.  When this option is omitted, or specified as \fBNONE\fB, IPFIX
+does not differentiate between ingress packets and egress packets and
+does not export egress tunnel information.  This option was added in
+Open vSwitch 2.5.90.
 .RE
 .IP
 Refer to \fBovs\-vswitchd.conf.db\fR(5) for more details on

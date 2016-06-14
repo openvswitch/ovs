@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -479,6 +479,7 @@ ofproto_ipfix_flow_exporter_options_equal(
     return (a->collector_set_id == b->collector_set_id
             && a->cache_active_timeout == b->cache_active_timeout
             && a->cache_max_flows == b->cache_max_flows
+            && a->enable_tunnel_sampling == b->enable_tunnel_sampling
             && sset_equals(&a->targets, &b->targets));
 }
 
@@ -947,6 +948,22 @@ dpif_ipfix_get_bridge_exporter_tunnel_sampling(const struct dpif_ipfix *di)
         ret = di->bridge_exporter.options->enable_tunnel_sampling;
     }
     ovs_mutex_unlock(&mutex);
+    return ret;
+}
+
+bool
+dpif_ipfix_get_flow_exporter_tunnel_sampling(const struct dpif_ipfix *di,
+                                             const uint32_t collector_set_id)
+    OVS_EXCLUDED(mutex)
+{
+    ovs_mutex_lock(&mutex);
+    struct dpif_ipfix_flow_exporter_map_node *node
+        = dpif_ipfix_find_flow_exporter_map_node(di, collector_set_id);
+    bool ret = (node
+                && node->exporter.options
+                && node->exporter.options->enable_tunnel_sampling);
+    ovs_mutex_unlock(&mutex);
+
     return ret;
 }
 
@@ -1895,11 +1912,19 @@ dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
 
 void
 dpif_ipfix_flow_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
-                       const struct flow *flow, uint32_t collector_set_id,
-                       uint16_t probability, uint32_t obs_domain_id,
-                       uint32_t obs_point_id) OVS_EXCLUDED(mutex)
+                       const struct flow *flow,
+                       const union user_action_cookie *cookie,
+                       odp_port_t input_odp_port,
+                       const struct flow_tnl *output_tunnel_key)
+    OVS_EXCLUDED(mutex)
 {
     struct dpif_ipfix_flow_exporter_map_node *node;
+    const struct flow_tnl *tunnel_key = NULL;
+    struct dpif_ipfix_port * tunnel_port = NULL;
+    odp_port_t output_odp_port = cookie->flow_sample.output_odp_port;
+    uint32_t collector_set_id = cookie->flow_sample.collector_set_id;
+    uint16_t probability = cookie->flow_sample.probability;
+
     /* Use the sampling probability as an approximation of the number
      * of matched packets. */
     uint64_t packet_delta_count = USHRT_MAX / probability;
@@ -1907,9 +1932,24 @@ dpif_ipfix_flow_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
     ovs_mutex_lock(&mutex);
     node = dpif_ipfix_find_flow_exporter_map_node(di, collector_set_id);
     if (node) {
+        if (node->exporter.options->enable_tunnel_sampling) {
+            if (output_odp_port == ODPP_NONE && flow->tunnel.ip_dst) {
+                /* Input tunnel. */
+                tunnel_key = &flow->tunnel;
+                tunnel_port = dpif_ipfix_find_port(di, input_odp_port);
+            }
+            if (output_odp_port != ODPP_NONE && output_tunnel_key) {
+                /* Output tunnel, output_tunnel_key must be valid. */
+                tunnel_key = output_tunnel_key;
+                tunnel_port = dpif_ipfix_find_port(di, output_odp_port);
+            }
+        }
+
         dpif_ipfix_sample(&node->exporter.exporter, packet, flow,
-                          packet_delta_count, obs_domain_id, obs_point_id,
-                          ODPP_NONE, NULL, NULL);
+                          packet_delta_count,
+                          cookie->flow_sample.obs_domain_id,
+                          cookie->flow_sample.obs_point_id,
+                          output_odp_port, tunnel_port, tunnel_key);
     }
     ovs_mutex_unlock(&mutex);
 }

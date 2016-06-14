@@ -2601,7 +2601,10 @@ xlate_normal(struct xlate_ctx *ctx)
  * 'cookie' (of length 'cookie_size' bytes) is passed back in the callback for
  * each sampled packet.  'tunnel_out_port', if not ODPP_NONE, is added as the
  * OVS_USERSPACE_ATTR_EGRESS_TUN_PORT attribute.  If 'include_actions', an
- * OVS_USERSPACE_ATTR_ACTIONS attribute is added.
+ * OVS_USERSPACE_ATTR_ACTIONS attribute is added.  If 'emit_set_tunnel',
+ * sample(sampling_port=1) would translate into datapath sample action
+ * set(tunnel(...)), sample(...) and it is used for sampling egress tunnel
+ * information.
  */
 static size_t
 compose_sample_action(struct xlate_ctx *ctx,
@@ -2655,8 +2658,10 @@ compose_sflow_action(struct xlate_ctx *ctx)
                                  true);
 }
 
-/* If IPFIX is enabled, this appends a "sample" action to implement IPFIX to
- * 'ctx->odp_actions'. */
+/* If flow IPFIX is enabled, make sure IPFIX flow sample action
+ * at egress point of tunnel port is just in front of corresponding
+ * output action. If bridge IPFIX is enabled, this appends an IPFIX
+ * sample action to 'ctx->odp_actions'. */
 static void
 compose_ipfix_action(struct xlate_ctx *ctx, odp_port_t output_odp_port)
 {
@@ -2674,7 +2679,7 @@ compose_ipfix_action(struct xlate_ctx *ctx, odp_port_t output_odp_port)
         return;
     }
 
-    /* For output case, output_odp_port is valid*/
+    /* For output case, output_odp_port is valid. */
     if (output_odp_port != ODPP_NONE) {
         if (!dpif_ipfix_get_bridge_exporter_output_sampling(ipfix)) {
             return;
@@ -4145,6 +4150,15 @@ static void
 xlate_sample_action(struct xlate_ctx *ctx,
                     const struct ofpact_sample *os)
 {
+    odp_port_t output_odp_port = ODPP_NONE;
+    odp_port_t tunnel_out_port = ODPP_NONE;
+    struct dpif_ipfix *ipfix = ctx->xbridge->ipfix;
+    bool emit_set_tunnel = false;
+
+    if (!ipfix || ctx->xin->flow.in_port.ofp_port == OFPP_NONE) {
+        return;
+    }
+
     /* Scale the probability from 16-bit to 32-bit while representing
      * the same percentage. */
     uint32_t probability = (os->probability << 16) | os->probability;
@@ -4158,7 +4172,51 @@ xlate_sample_action(struct xlate_ctx *ctx,
         return;
     }
 
-    xlate_commit_actions(ctx);
+    /* If ofp_port in flow sample action is equel to ofp_port,
+     * this sample action is a input port action. */
+    if (os->sampling_port != OFPP_NONE &&
+        os->sampling_port != ctx->xin->flow.in_port.ofp_port) {
+        output_odp_port = ofp_port_to_odp_port(ctx->xbridge,
+                                               os->sampling_port);
+        if (output_odp_port == ODPP_NONE) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(&rl, "can't use unknown port %d in flow sample "
+                         "action", os->sampling_port);
+            return;
+        }
+
+        if (dpif_ipfix_get_flow_exporter_tunnel_sampling(ipfix,
+                                                         os->collector_set_id)
+            && dpif_ipfix_get_tunnel_port(ipfix, output_odp_port)) {
+            tunnel_out_port = output_odp_port;
+            emit_set_tunnel = true;
+        }
+    }
+
+     xlate_commit_actions(ctx);
+    /* If 'emit_set_tunnel', sample(sampling_port=1) would translate
+     * into datapath sample action set(tunnel(...)), sample(...) and
+     * it is used for sampling egress tunnel information. */
+    if (emit_set_tunnel) {
+        const struct xport *xport = get_ofp_port(ctx->xbridge,
+                                                 os->sampling_port);
+
+        if (xport && xport->is_tunnel) {
+            struct flow *flow = &ctx->xin->flow;
+            tnl_port_send(xport->ofport, flow, ctx->wc);
+            if (!ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
+                struct flow_tnl flow_tnl = flow->tunnel;
+
+                commit_odp_tunnel_action(flow, &ctx->base_flow,
+                                         ctx->odp_actions);
+                flow->tunnel = flow_tnl;
+            }
+        } else {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(&rl, "sampling_port:%d should be a tunnel port.",
+                         os->sampling_port);
+        }
+    }
 
     union user_action_cookie cookie = {
         .flow_sample = {
@@ -4167,10 +4225,11 @@ xlate_sample_action(struct xlate_ctx *ctx,
             .collector_set_id = os->collector_set_id,
             .obs_domain_id = os->obs_domain_id,
             .obs_point_id = os->obs_point_id,
+            .output_odp_port = output_odp_port,
         }
     };
     compose_sample_action(ctx, probability, &cookie, sizeof cookie.flow_sample,
-                          ODPP_NONE, false);
+                          tunnel_out_port, false);
 }
 
 static bool

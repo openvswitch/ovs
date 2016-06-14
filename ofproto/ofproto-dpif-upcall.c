@@ -1265,17 +1265,22 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
     case FLOW_SAMPLE_UPCALL:
         if (upcall->ipfix) {
             union user_action_cookie cookie;
+            struct flow_tnl output_tunnel_key;
 
             memset(&cookie, 0, sizeof cookie);
             memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.flow_sample);
 
+            if (upcall->out_tun_key) {
+                odp_tun_key_from_attr(upcall->out_tun_key, false,
+                                      &output_tunnel_key);
+            }
+
             /* The flow reflects exactly the contents of the packet.
              * Sample the packet using it. */
             dpif_ipfix_flow_sample(upcall->ipfix, packet, flow,
-                                   cookie.flow_sample.collector_set_id,
-                                   cookie.flow_sample.probability,
-                                   cookie.flow_sample.obs_domain_id,
-                                   cookie.flow_sample.obs_point_id);
+                                   &cookie, flow->in_port.odp_port,
+                                   upcall->out_tun_key ?
+                                       &output_tunnel_key : NULL);
         }
         break;
 
