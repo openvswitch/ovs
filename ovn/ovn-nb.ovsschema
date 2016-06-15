@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "3.1.0",
-    "cksum": "4200094286 6620",
+    "version": "3.2.0",
+    "cksum": "1784604034 7539",
     "tables": {
         "Logical_Switch": {
             "columns": {
@@ -16,6 +16,11 @@
                                           "refType": "strong"},
                                   "min": 0,
                                   "max": "unlimited"}},
+                "load_balancer": {"type": {"key": {"type": "uuid",
+                                                  "refTable": "Load_Balancer",
+                                                  "refType": "strong"},
+                                           "min": 0,
+                                           "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
@@ -58,6 +63,19 @@
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
             "indexes": [["name"]],
+            "isRoot": true},
+        "Load_Balancer": {
+            "columns": {
+                "vips": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}},
+                "protocol": {
+                    "type": {"key": {"type": "string",
+                             "enum": ["set", ["tcp", "udp"]]},
+                             "min": 0, "max": 1}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
             "isRoot": true},
         "ACL": {
             "columns": {

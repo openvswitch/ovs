@@ -1852,6 +1852,10 @@ static const struct ctl_table_class tables[] = {
      {{NULL, NULL, NULL},
       {NULL, NULL, NULL}}},
 
+    {&nbrec_table_load_balancer,
+     {{NULL, NULL, NULL},
+      {NULL, NULL, NULL}}},
+
     {&nbrec_table_logical_router,
      {{&nbrec_table_logical_router, &nbrec_logical_router_col_name, NULL},
       {NULL, NULL, NULL}}},

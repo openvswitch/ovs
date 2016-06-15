@@ -33,6 +33,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "smap.h"
+#include "sset.h"
 #include "stream.h"
 #include "stream-ssl.h"
 #include "unixctl.h"
@@ -92,19 +93,23 @@ enum ovn_stage {
     PIPELINE_STAGE(SWITCH, IN,  PORT_SEC_IP,    1, "ls_in_port_sec_ip")     \
     PIPELINE_STAGE(SWITCH, IN,  PORT_SEC_ND,    2, "ls_in_port_sec_nd")     \
     PIPELINE_STAGE(SWITCH, IN,  PRE_ACL,        3, "ls_in_pre_acl")      \
-    PIPELINE_STAGE(SWITCH, IN,  PRE_STATEFUL,   4, "ls_in_pre_stateful")    \
-    PIPELINE_STAGE(SWITCH, IN,  ACL,            5, "ls_in_acl")          \
-    PIPELINE_STAGE(SWITCH, IN,  STATEFUL,       6, "ls_in_stateful")     \
-    PIPELINE_STAGE(SWITCH, IN,  ARP_ND_RSP,     7, "ls_in_arp_nd_rsp")   \
-    PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,        8, "ls_in_l2_lkup")      \
+    PIPELINE_STAGE(SWITCH, IN,  PRE_LB,         4, "ls_in_pre_lb")         \
+    PIPELINE_STAGE(SWITCH, IN,  PRE_STATEFUL,   5, "ls_in_pre_stateful")    \
+    PIPELINE_STAGE(SWITCH, IN,  ACL,            6, "ls_in_acl")          \
+    PIPELINE_STAGE(SWITCH, IN,  LB,             7, "ls_in_lb")           \
+    PIPELINE_STAGE(SWITCH, IN,  STATEFUL,       8, "ls_in_stateful")     \
+    PIPELINE_STAGE(SWITCH, IN,  ARP_ND_RSP,     9, "ls_in_arp_rsp")      \
+    PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,       10, "ls_in_l2_lkup")      \
                                                                       \
     /* Logical switch egress stages. */                               \
-    PIPELINE_STAGE(SWITCH, OUT, PRE_ACL,      0, "ls_out_pre_acl")     \
-    PIPELINE_STAGE(SWITCH, OUT, PRE_STATEFUL, 1, "ls_out_pre_stateful")  \
-    PIPELINE_STAGE(SWITCH, OUT, ACL,          2, "ls_out_acl")            \
-    PIPELINE_STAGE(SWITCH, OUT, STATEFUL,     3, "ls_out_stateful")       \
-    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_IP,  4, "ls_out_port_sec_ip")    \
-    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_L2,  5, "ls_out_port_sec_l2")    \
+    PIPELINE_STAGE(SWITCH, OUT, PRE_LB,       0, "ls_out_pre_lb")     \
+    PIPELINE_STAGE(SWITCH, OUT, PRE_ACL,      1, "ls_out_pre_acl")     \
+    PIPELINE_STAGE(SWITCH, OUT, PRE_STATEFUL, 2, "ls_out_pre_stateful")  \
+    PIPELINE_STAGE(SWITCH, OUT, LB,           3, "ls_out_lb")            \
+    PIPELINE_STAGE(SWITCH, OUT, ACL,          4, "ls_out_acl")            \
+    PIPELINE_STAGE(SWITCH, OUT, STATEFUL,     5, "ls_out_stateful")       \
+    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_IP,  6, "ls_out_port_sec_ip")    \
+    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_L2,  7, "ls_out_port_sec_l2")    \
                                                                       \
     /* Logical router ingress stages. */                              \
     PIPELINE_STAGE(ROUTER, IN,  ADMISSION,   0, "lr_in_admission")    \
@@ -134,6 +139,7 @@ enum ovn_stage {
 
 #define REGBIT_CONNTRACK_DEFRAG "reg0[0]"
 #define REGBIT_CONNTRACK_COMMIT "reg0[1]"
+#define REGBIT_CONNTRACK_NAT    "reg0[2]"
 
 /* Returns an "enum ovn_stage" built from the arguments. */
 static enum ovn_stage
@@ -1400,6 +1406,107 @@ build_pre_acls(struct ovn_datapath *od, struct hmap *lflows,
     }
 }
 
+/* For a 'key' of the form "IP:port" or just "IP", sets 'port' and
+ * 'ip_address'.  The caller must free() the memory allocated for
+ * 'ip_address'. */
+static void
+ip_address_and_port_from_lb_key(const char *key, char **ip_address,
+                                uint16_t *port)
+{
+    char *ip_str, *start, *next;
+    *ip_address = NULL;
+    *port = 0;
+
+    next = start = xstrdup(key);
+    ip_str = strsep(&next, ":");
+    if (!ip_str || !ip_str[0]) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "bad ip address for load balancer key %s", key);
+        free(start);
+        return;
+    }
+
+    ovs_be32 ip, mask;
+    char *error = ip_parse_masked(ip_str, &ip, &mask);
+    if (error || mask != OVS_BE32_MAX) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "bad ip address for load balancer key %s", key);
+        free(start);
+        free(error);
+        return;
+    }
+
+    int l4_port = 0;
+    if (next && next[0]) {
+        if (!str_to_int(next, 0, &l4_port) || l4_port < 0 || l4_port > 65535) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "bad ip port for load balancer key %s", key);
+            free(start);
+            return;
+        }
+    }
+
+    *port = l4_port;
+    *ip_address = strdup(ip_str);
+    free(start);
+}
+
+static void
+build_pre_lb(struct ovn_datapath *od, struct hmap *lflows)
+{
+    /* Allow all packets to go to next tables by default. */
+    ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_LB, 0, "1", "next;");
+    ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_LB, 0, "1", "next;");
+
+    struct sset all_ips = SSET_INITIALIZER(&all_ips);
+    if (od->nbs->load_balancer) {
+        struct nbrec_load_balancer *lb = od->nbs->load_balancer;
+        struct smap *vips = &lb->vips;
+        struct smap_node *node;
+        bool vip_configured = false;
+
+        SMAP_FOR_EACH (node, vips) {
+            vip_configured = true;
+
+            /* node->key contains IP:port or just IP. */
+            char *ip_address = NULL;
+            uint16_t port;
+            ip_address_and_port_from_lb_key(node->key, &ip_address, &port);
+            if (!ip_address) {
+                continue;
+            }
+
+            if (!sset_contains(&all_ips, ip_address)) {
+                sset_add(&all_ips, ip_address);
+            }
+
+            free(ip_address);
+
+            /* Ignore L4 port information in the key because fragmented packets
+             * may not have L4 information.  The pre-stateful table will send
+             * the packet through ct() action to de-fragment. In stateful
+             * table, we will eventually look at L4 information. */
+        }
+
+        /* 'REGBIT_CONNTRACK_DEFRAG' is set to let the pre-stateful table send
+         * packet to conntrack for defragmentation. */
+        const char *ip_address;
+        SSET_FOR_EACH(ip_address, &all_ips) {
+            char *match = xasprintf("ip && ip4.dst == %s", ip_address);
+            ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_LB,
+                          100, match, REGBIT_CONNTRACK_DEFRAG" = 1; next;");
+            free(match);
+        }
+
+        sset_destroy(&all_ips);
+
+        if (vip_configured) {
+            ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_LB,
+                          100, "ip", REGBIT_CONNTRACK_DEFRAG" = 1; next;");
+        }
+    }
+}
+
 static void
 build_pre_stateful(struct ovn_datapath *od, struct hmap *lflows)
 {
@@ -1532,6 +1639,27 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
 }
 
 static void
+build_lb(struct ovn_datapath *od, struct hmap *lflows)
+{
+    /* Ingress and Egress LB Table (Priority 0): Packets are allowed by
+     * default.  */
+    ovn_lflow_add(lflows, od, S_SWITCH_IN_LB, 0, "1", "next;");
+    ovn_lflow_add(lflows, od, S_SWITCH_OUT_LB, 0, "1", "next;");
+
+    if (od->nbs->load_balancer) {
+        /* Ingress and Egress LB Table (Priority 65535).
+         *
+         * Send established traffic through conntrack for just NAT. */
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_LB, UINT16_MAX,
+                      "ct.est && !ct.rel && !ct.new && !ct.inv",
+                      REGBIT_CONNTRACK_NAT" = 1; next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_OUT_LB, UINT16_MAX,
+                      "ct.est && !ct.rel && !ct.new && !ct.inv",
+                      REGBIT_CONNTRACK_NAT" = 1; next;");
+    }
+}
+
+static void
 build_stateful(struct ovn_datapath *od, struct hmap *lflows)
 {
     /* Ingress and Egress stateful Table (Priority 0): Packets are
@@ -1545,6 +1673,60 @@ build_stateful(struct ovn_datapath *od, struct hmap *lflows)
                   REGBIT_CONNTRACK_COMMIT" == 1", "ct_commit; next;");
     ovn_lflow_add(lflows, od, S_SWITCH_OUT_STATEFUL, 100,
                   REGBIT_CONNTRACK_COMMIT" == 1", "ct_commit; next;");
+
+    /* If REGBIT_CONNTRACK_NAT is set as 1, then packets should just be sent
+     * through nat (without committing).
+     *
+     * REGBIT_CONNTRACK_COMMIT is set for new connections and
+     * REGBIT_CONNTRACK_NAT is set for established connections. So they
+     * don't overlap.
+     */
+    ovn_lflow_add(lflows, od, S_SWITCH_IN_STATEFUL, 100,
+                  REGBIT_CONNTRACK_NAT" == 1", "ct_lb;");
+    ovn_lflow_add(lflows, od, S_SWITCH_OUT_STATEFUL, 100,
+                  REGBIT_CONNTRACK_NAT" == 1", "ct_lb;");
+
+    /* Load balancing rules for new connections get committed to conntrack
+     * table.  So even if REGBIT_CONNTRACK_COMMIT is set in a previous table
+     * a higher priority rule for load balancing below also commits the
+     * connection, so it is okay if we do not hit the above match on
+     * REGBIT_CONNTRACK_COMMIT. */
+    if (od->nbs->load_balancer) {
+        struct nbrec_load_balancer *lb = od->nbs->load_balancer;
+        struct smap *vips = &lb->vips;
+        struct smap_node *node;
+
+        SMAP_FOR_EACH (node, vips) {
+            uint16_t port = 0;
+
+            /* node->key contains IP:port or just IP. */
+            char *ip_address = NULL;
+            ip_address_and_port_from_lb_key(node->key, &ip_address, &port);
+            if (!ip_address) {
+                continue;
+            }
+
+            /* New connections in Ingress table. */
+            char *action = xasprintf("ct_lb(%s);", node->value);
+            struct ds match = DS_EMPTY_INITIALIZER;
+            ds_put_format(&match, "ct.new && ip && ip4.dst == %s", ip_address);
+            if (port) {
+                if (lb->protocol && !strcmp(lb->protocol, "udp")) {
+                    ds_put_format(&match, "&& udp && udp.dst == %d", port);
+                } else {
+                    ds_put_format(&match, "&& tcp && tcp.dst == %d", port);
+                }
+                ovn_lflow_add(lflows, od, S_SWITCH_IN_STATEFUL,
+                              120, ds_cstr(&match), action);
+            } else {
+                ovn_lflow_add(lflows, od, S_SWITCH_IN_STATEFUL,
+                              110, ds_cstr(&match), action);
+            }
+
+            ds_destroy(&match);
+            free(action);
+       }
+    }
 }
 
 static void
@@ -1563,8 +1745,10 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
 
         build_pre_acls(od, lflows, ports);
+        build_pre_lb(od, lflows);
         build_pre_stateful(od, lflows);
         build_acls(od, lflows);
+        build_lb(od, lflows);
         build_stateful(od, lflows);
     }
 

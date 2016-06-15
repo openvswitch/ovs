@@ -69,6 +69,11 @@
       </p>
     </column>
 
+    <column name="load_balancer">
+      Load balance a virtual ipv4 address to a set of logical port endpoint
+      ipv4 addresses.
+    </column>
+
     <column name="acls">
       Access control rules that apply to packets within the logical switch.
     </column>
@@ -534,6 +539,44 @@
 
     <column name="addresses">
       The set of addresses in string form.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="Load_Balancer" title="load balancer">
+    <p>
+      Each row represents one load balancer.
+    </p>
+
+    <column name="vips">
+      <p>
+        A map of virtual IPv4 addresses (and an optional port number with
+        <code>:</code> as a separator) associated with this load balancer and
+        their corresponding endpoint IPv4 addresses (and optional port numbers
+        with <code>:</code> as separators) separated by commas.  If
+        the destination IP address (and port number) of a packet leaving a
+        container or a VM matches the virtual IPv4 address (and port number)
+        provided here as a key, then OVN will statefully replace the
+        destination IP address by one of the provided IPv4 address (and port
+        number) in this map as a value.  Examples for keys are "192.168.1.4"
+        and "172.16.1.8:80".  Examples for value are "10.0.0.1, 10.0.0.2" and
+        "20.0.0.10:8800, 20.0.0.11:8800".
+      </p>
+    </column>
+
+    <column name="protocol">
+      <p>
+        Valid protocols are <code>tcp</code> or <code>udp</code>.  This column
+        is useful when a port number is provided as part of the
+        <code>vips</code> column.  If this column is empty and a port number
+        is provided as part of <code>vips</code> column, OVN assumes the
+        protocol to be <code>tcp</code>.
+      </p>
     </column>
 
     <group title="Common Columns">
