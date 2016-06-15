@@ -44,6 +44,16 @@ enum action_opcode {
      *     MFF_ETH_SRC = mac
      */
     ACTION_OPCODE_PUT_ARP,
+
+    /* "result = put_dhcp_opts(offer_ip, option, ...)".
+     *
+     * Arguments follow the action_header, in this format:
+     *   - A 32-bit or 64-bit OXM header designating the result field.
+     *   - A 32-bit integer specifying a bit offset within the result field.
+     *   - The 32-bit DHCP offer IP.
+     *   - Any number of DHCP options.
+     */
+    ACTION_OPCODE_PUT_DHCP_OPTS,
 };
 
 /* Header. */
@@ -57,6 +67,9 @@ struct action_params {
     /* A table of "struct expr_symbol"s to support (as one would provide to
      * expr_parse()). */
     const struct shash *symtab;
+
+    /* hmap of 'struct dhcp_opts_map'  to support 'put_dhcp_opts' action */
+    const struct hmap *dhcp_opts;
 
     /* Looks up logical port 'port_name'.  If found, stores its port number in
      * '*portp' and returns true; otherwise, returns false. */

@@ -542,6 +542,31 @@ get_arp(reg0, ip4.dst); => Cannot use numeric field reg0 where string field is r
 # put_arp
 put_arp(inport, arp.spa, arp.sha); => actions=push:NXM_NX_REG0[],push:NXM_OF_ETH_SRC[],push:NXM_NX_ARP_SHA[],push:NXM_OF_ARP_SPA[],pop:NXM_NX_REG0[],pop:NXM_OF_ETH_SRC[],controller(userdata=00.00.00.01.00.00.00.00),pop:NXM_OF_ETH_SRC[],pop:NXM_NX_REG0[], prereqs=eth.type == 0x806 && eth.type == 0x806
 
+# put_dhcp_opts
+reg1[0] = put_dhcp_opts(offerip = 1.2.3.4, router = 10.0.0.1); => actions=controller(userdata=00.00.00.02.00.00.00.00.80.01.00.08.00.00.00.00.01.02.03.04.03.04.0a.00.00.01,pause), prereqs=1
+reg2[5] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.254.0,mtu=1400,domain="ovn.org"); => actions=controller(userdata=00.00.00.02.00.00.00.00.80.01.02.08.00.00.00.25.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.fe.00.1a.02.05.78.0f.07.6f.76.6e.2e.6f.72.67,pause), prereqs=1
+# offerip=10.0.0.4             --> 0a.00.00.04
+# router=10.0.0.1              --> 03.04.0a.00.00.01
+# netmask=255.255.255.0        --> 01.04.ff.ff.ff.00
+# mtu=1400                     --> 1a.02.05.78
+# ip_forward_enable-1          --> 13.01.01
+# default_ttl=121              --> 17.01.79
+# dns_server={8.8.8.8,7.7.7.7} --> 06.08.08.08.08.08.07.07.07.07
+# classless_static_route=      --> 79.14
+# {30.0.0.0/24,10.0.0.4        --> 18.1e.00.00.0a.00.00.04
+#  40.0.0.0/16,10.0.0.6        --> 10.28.00.0a.00.00.06
+#  0.0.0.0/0,10.0.0.1}         --> 00.0a.00.00.01
+# ethernet_encap=1             --> 24.01.01
+# router_discovery=0           --> 1f.01.00
+reg0[15] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.255.0,mtu=1400,ip_forward_enable=1,default_ttl=121,dns_server={8.8.8.8,7.7.7.7},classless_static_route={30.0.0.0/24,10.0.0.4,40.0.0.0/16,10.0.0.6,0.0.0.0/0,10.0.0.1},ethernet_encap=1,router_discovery=0); => actions=controller(userdata=00.00.00.02.00.00.00.00.80.01.00.08.00.00.00.2f.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.ff.00.1a.02.05.78.13.01.01.17.01.79.06.08.08.08.08.08.07.07.07.07.79.14.18.1e.00.00.0a.00.00.04.10.28.00.0a.00.00.06.00.0a.00.00.01.24.01.01.1f.01.00,pause), prereqs=1
+reg1[0..1] = put_dhcp_opts(offerip = 1.2.3.4, router = 10.0.0.1); => Cannot use 2-bit field reg1[0..1] where 1-bit field is required.
+reg1[0] = put_dhcp_opts(); => Syntax error at `)'.
+reg1[0] = put_dhcp_opts(x = 1.2.3.4, router = 10.0.0.1); => Syntax error at `x' expecting offerip option.
+reg1[0] = put_dhcp_opts(offerip=1.2.3.4, "hi"); => Syntax error at `"hi"'.
+reg1[0] = put_dhcp_opts(offerip=1.2.3.4, xyzzy); => Syntax error at `xyzzy' expecting DHCP option name.
+reg1[0] = put_dhcp_opts(offerip="xyzzy"); => DHCP option offerip requires numeric value.
+reg1[0] = put_dhcp_opts(offerip=1.2.3.4, domain=1.2.3.4); => DHCP option domain requires string value.
+
 # Contradictionary prerequisites (allowed but not useful):
 ip4.src = ip6.src[0..31]; => actions=move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
 ip4.src <-> ip6.src[0..31]; => actions=push:NXM_NX_IPV6_SRC[0..31],push:NXM_OF_IP_SRC[],pop:NXM_NX_IPV6_SRC[0..31],pop:NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
@@ -2818,7 +2843,6 @@ OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP
-
 
 AT_SETUP([ovn -- 2 HVs, 2 LRs connected via LS, gateway router])
 AT_KEYWORDS([ovngatewayrouter])

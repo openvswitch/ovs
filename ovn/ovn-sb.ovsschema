@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.3.0",
-    "cksum": "654726257 5528",
+    "version": "1.4.0",
+    "cksum": "198773462 6073",
     "tables": {
         "Chassis": {
             "columns": {
@@ -110,4 +110,16 @@
                 "ip": {"type": "string"},
                 "mac": {"type": "string"}},
             "indexes": [["logical_port", "ip"]],
+            "isRoot": true},
+        "DHCP_Options": {
+            "columns": {
+                "name": {"type": "string"},
+                "code": {
+                    "type": {"key": {"type": "integer",
+                                     "minInteger": 0, "maxInteger": 254}}},
+                "type": {
+                    "type": {"key": {
+                        "type": "string",
+                        "enum": ["set", ["bool", "uint8", "uint16", "uint32",
+                                         "ipv4", "static_routes", "str"]]}}}},
             "isRoot": true}}}
