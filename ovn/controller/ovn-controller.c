@@ -60,7 +60,9 @@ static unixctl_cb_func ovn_controller_exit;
 static unixctl_cb_func ct_zone_list;
 
 #define DEFAULT_BRIDGE_NAME "br-int"
+#define DEFAULT_PROBE_INTERVAL_MSEC 5000
 
+static void update_probe_interval(struct controller_ctx *);
 static void parse_options(int argc, char *argv[]);
 OVS_NO_RETURN static void usage(void);
 
@@ -228,32 +230,6 @@ get_ovnsb_remote(struct ovsdb_idl *ovs_idl)
     }
 }
 
-/* Retrieves the OVN Southbound remote's json session probe interval from the
- * "external-ids:ovn-remote-probe-interval" key in 'ovs_idl' and returns it.
- *
- * This function must be called after get_ovnsb_remote(). */
-static bool
-get_ovnsb_remote_probe_interval(struct ovsdb_idl *ovs_idl, int *value)
-{
-    const struct ovsrec_open_vswitch *cfg = ovsrec_open_vswitch_first(ovs_idl);
-    if (!cfg) {
-        return false;
-    }
-
-    const char *probe_interval =
-        smap_get(&cfg->external_ids, "ovn-remote-probe-interval");
-    if (probe_interval) {
-        if (str_to_int(probe_interval, 10, value)) {
-            return true;
-        }
-
-        VLOG_WARN("Invalid value for OVN remote probe interval: %s",
-                  probe_interval);
-    }
-
-    return false;
-}
-
 static void
 update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
                 struct simap *ct_zones, unsigned long *ct_zone_bitmap)
@@ -400,11 +376,6 @@ main(int argc, char *argv[])
 
     ovsdb_idl_get_initial_snapshot(ovnsb_idl_loop.idl);
 
-    int probe_interval = 0;
-    if (get_ovnsb_remote_probe_interval(ovs_idl_loop.idl, &probe_interval)) {
-        ovsdb_idl_set_probe_interval(ovnsb_idl_loop.idl, probe_interval);
-    }
-
     /* Initialize connection tracking zones. */
     struct simap ct_zones = SIMAP_INITIALIZER(&ct_zones);
     unsigned long ct_zone_bitmap[BITMAP_N_LONGS(MAX_CT_ZONES)];
@@ -435,6 +406,8 @@ main(int argc, char *argv[])
             .ovnsb_idl = ovnsb_idl_loop.idl,
             .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
+
+        update_probe_interval(&ctx);
 
         struct sset all_lports = SSET_INITIALIZER(&all_lports);
 
@@ -650,4 +623,19 @@ ct_zone_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
+}
+
+/* Get the desired SB probe timer from the OVS database and configure it into
+ * the SB database. */
+static void
+update_probe_interval(struct controller_ctx *ctx)
+{
+    const struct ovsrec_open_vswitch *cfg
+        = ovsrec_open_vswitch_first(ctx->ovs_idl);
+    int interval = (cfg
+                    ? smap_get_int(&cfg->external_ids,
+                                   "ovn-remote-probe-interval",
+                                   DEFAULT_PROBE_INTERVAL_MSEC)
+                    : DEFAULT_PROBE_INTERVAL_MSEC);
+    ovsdb_idl_set_probe_interval(ctx->ovnsb_idl, interval);
 }
