@@ -194,7 +194,7 @@ nln_run(struct nln *nln)
             if (group != 0) {
                 nln_report(nln, nln->change, group);
             } else {
-                VLOG_WARN_RL(&rl, "received bad netlink message");
+                VLOG_WARN_RL(&rl, "unexpected netlink message contents");
                 nln_report(nln, NULL, 0);
             }
             ofpbuf_uninit(&buf);
