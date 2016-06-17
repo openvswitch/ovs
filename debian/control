@@ -62,6 +62,8 @@ Depends: openssl,
          ${misc:Depends},
          ${shlibs:Depends}
 Suggests: ethtool
+Replaces: openvswitch-switch (<< 2.5.90)
+Breaks: openvswitch-switch (<< 2.5.90)
 Description: Open vSwitch common components
  Open vSwitch is a production quality, multilayer, software-based,
  Ethernet virtual switch. It is designed to enable massive network
