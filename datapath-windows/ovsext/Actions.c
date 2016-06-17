@@ -215,32 +215,32 @@ OvsDetectTunnelRxPkt(OvsForwardingContext *ovsFwdCtx,
     /* XXX: we should also check for the length of the UDP payload to pick
      * packets only if they are at least VXLAN header size.
      */
+
+    /*
+     * For some of the tunnel types such as GRE, the dstPort is not applicable
+     * since GRE does not have a L4 port. We use '0' for convenience.
+     */
     if (!flowKey->ipKey.nwFrag) {
         UINT16 dstPort = htons(flowKey->ipKey.l4.tpDst);
-        switch (flowKey->ipKey.nwProto) {
-        case IPPROTO_GRE:
-            tunnelVport = OvsFindTunnelVportByPortType(ovsFwdCtx->switchContext,
-                                                       OVS_VPORT_TYPE_GRE);
-            if (tunnelVport) {
-                ovsActionStats.rxGre++;
-            }
-            break;
-        case IPPROTO_TCP:
-            tunnelVport = OvsFindTunnelVportByDstPort(ovsFwdCtx->switchContext,
-                                                      dstPort,
-                                                      OVS_VPORT_TYPE_STT);
-            if (tunnelVport) {
+
+        ASSERT(flowKey->ipKey.nwProto != IPPROTO_GRE || dstPort == 0);
+
+        tunnelVport =
+            OvsFindTunnelVportByDstPortAndNWProto(ovsFwdCtx->switchContext,
+                                                  dstPort,
+                                                  flowKey->ipKey.nwProto);
+        if (tunnelVport) {
+            switch(tunnelVport->ovsType) {
+            case OVS_VPORT_TYPE_STT:
                 ovsActionStats.rxStt++;
-            }
-            break;
-        case IPPROTO_UDP:
-            tunnelVport = OvsFindTunnelVportByDstPort(ovsFwdCtx->switchContext,
-                                                      dstPort,
-                                                      OVS_VPORT_TYPE_VXLAN);
-            if (tunnelVport) {
+                break;
+            case OVS_VPORT_TYPE_VXLAN:
                 ovsActionStats.rxVxlan++;
+                break;
+            case OVS_VPORT_TYPE_GRE:
+                ovsActionStats.rxGre++;
+                break;
             }
-            break;
         }
     }
 
