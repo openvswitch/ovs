@@ -39,7 +39,6 @@ test_rcu_quiesce(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     pthread_t quiescer;
 
-    fatal_signal_init();
     quiescer = ovs_thread_create("quiescer", quiescer_main, NULL);
 
     /* This is the main thread of the process. After spawning its first

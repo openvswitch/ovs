@@ -372,7 +372,6 @@ ovs_thread_create(const char *name, void *(*start)(void *), void *arg)
     int error;
 
     forbid_forking("multiple threads exist");
-    multithreaded = true;
 
     if (ovsthread_once_start(&once)) {
         /* The first call to this function has to happen in the main thread.
@@ -389,6 +388,7 @@ ovs_thread_create(const char *name, void *(*start)(void *), void *arg)
         ovsthread_once_done(&once);
     }
 
+    multithreaded = true;
     aux = xmalloc(sizeof *aux);
     aux->start = start;
     aux->arg = arg;
