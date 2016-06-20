@@ -180,6 +180,30 @@ By default \fBovs\-ctl\fR passes \fB\-\-mlockall\fR to
 memory, preventing it from being paged to disk.  This option
 suppresses that behavior.
 .
+.IP "\fB\-\-no\-self\-confinement\fR"
+Disable self-confinement for \fBovs-vswitchd\fR and \fBovsdb\-server\fR
+daemons.  This flag may be used when, for example, OpenFlow controller
+creates its Unix Domain Socket outside OVS run directory and OVS needs
+to connect to it.  It is better to stick with the default behavior and
+not to use this flag, unless:
+.
+.RS
+.IP \(bu
+You have Open vSwitch running under SELinux or AppArmor Mandatory
+Access Control that would prevent OVS from messing with sockets
+outside ordinary OVS directories.
+.
+.IP \(bu
+You believe that relying on protocol handshakes (e.g. OpenFlow)
+is enough to prevent OVS to adversely interact with other daemons
+running on your system.
+.
+.IP \(bu
+You don't have much worries of remote OVSDB exploits in the first
+place, because, perhaps, OVSDB manager is running on the same host
+as OVS and share similar attack vectors.
+.RE
+.
 .IP "\fB\-\-ovsdb\-server\-priority=\fIniceness\fR"
 .IQ "\fB\-\-ovs\-vswitchd\-priority=\fIniceness\fR"
 Sets the \fBnice\fR(1) level used for each daemon.  All of them

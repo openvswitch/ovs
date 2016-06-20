@@ -73,6 +73,8 @@ Post-v2.5.0
      * Added support for IPv6 tunnels to native tunneling.
    - A wrapper script, 'ovs-tcpdump', to easily port-mirror an OVS port and
      watch with tcpdump
+   - Introduce --no-self-confinement flag that allows daemons to work with
+     sockets outside their run directory.
 
 v2.5.0 - 26 Feb 2016
 ---------------------

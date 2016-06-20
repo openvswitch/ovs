@@ -3570,8 +3570,9 @@ bridge_configure_remotes(struct bridge *br,
     for (i = 0; i < n_controllers; i++) {
         struct ovsrec_controller *c = controllers[i];
 
-        if (!strncmp(c->target, "punix:", 6)
-            || !strncmp(c->target, "unix:", 5)) {
+        if (daemon_should_self_confine()
+            && (!strncmp(c->target, "punix:", 6)
+            || !strncmp(c->target, "unix:", 5))) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
             char *whitelist;
 

@@ -162,6 +162,9 @@ do_start_ovsdb () {
                 log_warning_msg "$db (from \$EXTRA_DBS) cannot be read as a database (see error message above)"
             fi
         done
+        if test X"$SELF_CONFINEMENT" = Xno; then
+            set "$@" --no-self-confinement
+        fi
         set "$@" -vconsole:emer -vsyslog:err -vfile:info
         set "$@" --remote=punix:"$DB_SOCK"
         set "$@" --private-key=db:Open_vSwitch,SSL,private_key
@@ -226,13 +229,16 @@ do_start_forwarding () {
             ulimit -n $MAXFD
         fi
 
-	    # Start ovs-vswitchd.
-	    set ovs-vswitchd unix:"$DB_SOCK"
-	    set "$@" -vconsole:emer -vsyslog:err -vfile:info
-	    if test X"$MLOCKALL" != Xno; then
-	        set "$@" --mlockall
-	    fi
-	    start_daemon "$OVS_VSWITCHD_PRIORITY" "$OVS_VSWITCHD_WRAPPER" "$@"
+        # Start ovs-vswitchd.
+        set ovs-vswitchd unix:"$DB_SOCK"
+        set "$@" -vconsole:emer -vsyslog:err -vfile:info
+        if test X"$MLOCKALL" != Xno; then
+            set "$@" --mlockall
+        fi
+        if test X"$SELF_CONFINEMENT" = Xno; then
+            set "$@" --no-self-confinement
+        fi
+        start_daemon "$OVS_VSWITCHD_PRIORITY" "$OVS_VSWITCHD_WRAPPER" "$@"
     fi
 }
 
@@ -492,6 +498,7 @@ set_defaults () {
     DAEMON_CWD=/
     FORCE_COREFILES=yes
     MLOCKALL=yes
+    SELF_CONFINEMENT=yes
     OVSDB_SERVER=yes
     OVS_VSWITCHD=yes
     OVSDB_SERVER_PRIORITY=-10
