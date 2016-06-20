@@ -489,14 +489,15 @@ output;
       <li>
         <p>
           ICMP echo reply.  These flows reply to ICMP echo requests received
-          for the router's IP address.  Let <var>A</var> be an IP address or
-          broadcast address owned by a router port.  Then, for each
-          <var>A</var>, a priority-90 flow matches on <code>ip4.dst ==
-          <var>A</var></code> and <code>icmp4.type == 8 &amp;&amp; icmp4.code
-          == 0</code> (ICMP echo request).  These flows use the following
-          actions where, if <var>A</var> is unicast, then <var>S</var> is
-          <var>A</var>, and if <var>A</var> is broadcast, <var>S</var> is the
-          router's IP address in <var>A</var>'s network:
+          for the router's IP address.  Let <var>A</var> be an IP address
+          owned by a router port.  Then, for each <var>A</var>, a priority-90
+          flow matches on <code>ip4.dst == <var>A</var></code> and <code>
+          icmp4.type == 8 &amp;&amp; icmp4.code == 0</code> (ICMP echo
+          request).  The port of the router that receives the echo request
+          does not matter. Also, the ip.ttl of the echo request packet is not
+          checked, so it complies with RFC 1812, section 4.2.2.9. These flows
+          use the following actions where <var>S</var> is the router's IP
+          address:
         </p>
 
         <pre>
@@ -507,12 +508,6 @@ icmp4.type = 0;
 inport = ""; /* Allow sending out inport. */
 next;
         </pre>
-
-        <p>
-          Similar flows match on <code>ip4.dst == 255.255.255.255</code> and
-          each individual <code>inport</code>, and use the same actions in
-          which <var>S</var> is a function of <code>inport</code>.
-        </p>
       </li>
 
       <li>

@@ -1960,9 +1960,8 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
          * (i.e. the incoming locally attached net) does not matter.
          * The ip.ttl also does not matter (RFC1812 section 4.2.2.9) */
         match = xasprintf(
-            "(ip4.dst == "IP_FMT" || ip4.dst == "IP_FMT") && "
-            "icmp4.type == 8 && icmp4.code == 0",
-            IP_ARGS(op->ip), IP_ARGS(op->bcast));
+            "ip4.dst == "IP_FMT" && icmp4.type == 8 && icmp4.code == 0",
+            IP_ARGS(op->ip));
         char *actions = xasprintf(
             "ip4.dst = ip4.src; "
             "ip4.src = "IP_FMT"; "
