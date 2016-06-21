@@ -858,8 +858,11 @@ struct ofproto_class {
                          struct ofputil_table_stats *stats);
 
     /* Sets the current tables version the provider should use for classifier
-     * lookups. */
+     * lookups.  This must be called with a new version number after each set
+     * of flow table changes has been completed, so that datapath revalidation
+     * can be triggered. */
     void (*set_tables_version)(struct ofproto *ofproto, cls_version_t version);
+
 /* ## ---------------- ## */
 /* ## ofport Functions ## */
 /* ## ---------------- ## */
@@ -1198,8 +1201,9 @@ struct ofproto_class {
      * ========
      *
      * The ofproto base code removes 'rule' from its flow table before it calls
-     * ->rule_delete().  ->rule_delete() must remove 'rule' from the datapath
-     * flow table and return only after this has completed successfully.
+     * ->rule_delete() (if non-null).  ->rule_delete() must remove 'rule' from
+     * the datapath flow table and return only after this has completed
+     * successfully.
      *
      * Rule deletion must not fail.
      *

@@ -1663,8 +1663,8 @@ set_tables_version(struct ofproto *ofproto_, cls_version_t version)
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
 
     atomic_store_relaxed(&ofproto->tables_version, version);
+    ofproto->backer->need_revalidate = REV_FLOW_TABLE;
 }
-
 
 static struct ofport *
 port_alloc(void)
@@ -3972,15 +3972,6 @@ out:
     return rule;
 }
 
-static void
-complete_operation(struct rule_dpif *rule)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-
-    ofproto->backer->need_revalidate = REV_FLOW_TABLE;
-}
-
 static struct rule_dpif *rule_dpif_cast(const struct rule *rule)
 {
     return rule ? CONTAINER_OF(rule, struct rule_dpif, up) : NULL;
@@ -4132,16 +4123,6 @@ rule_insert(struct rule *rule_, struct rule *old_rule_, bool forward_stats)
         ovs_mutex_unlock(&rule->stats_mutex);
         ovs_mutex_unlock(&old_rule->stats_mutex);
     }
-
-    complete_operation(rule);
-}
-
-static void
-rule_delete(struct rule *rule_)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    struct rule_dpif *rule = rule_dpif_cast(rule_);
-    complete_operation(rule);
 }
 
 static void
@@ -5558,7 +5539,7 @@ const struct ofproto_class ofproto_dpif_class = {
     rule_alloc,
     rule_construct,
     rule_insert,
-    rule_delete,
+    NULL,                       /* rule_delete */
     rule_destruct,
     rule_dealloc,
     rule_get_stats,

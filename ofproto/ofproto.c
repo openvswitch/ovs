@@ -1533,7 +1533,9 @@ ofproto_rule_delete(struct ofproto *ofproto, struct rule *rule)
             OVS_NOT_REACHED();
         }
         ofproto_rule_remove__(rule->ofproto, rule);
-        ofproto->ofproto_class->rule_delete(rule);
+        if (ofproto->ofproto_class->rule_delete) {
+            ofproto->ofproto_class->rule_delete(rule);
+        }
         ofproto_rule_unref(rule);
     }
     ovs_mutex_unlock(&ofproto_mutex);
@@ -2883,7 +2885,9 @@ remove_rule_rcu__(struct rule *rule)
     if (!classifier_remove(&table->cls, &rule->cr)) {
         OVS_NOT_REACHED();
     }
-    ofproto->ofproto_class->rule_delete(rule);
+    if (ofproto->ofproto_class->rule_delete) {
+        ofproto->ofproto_class->rule_delete(rule);
+    }
     ofproto_rule_unref(rule);
 }
 
