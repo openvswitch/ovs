@@ -25,16 +25,9 @@
 #include "Switch.h"
 #include "User.h"
 #include "Datapath.h"
-#include "Jhash.h"
-#include "Vport.h"
 #include "Event.h"
-#include "User.h"
-#include "PacketIO.h"
-#include "Recirc.h"
 #include "NetProto.h"
 #include "Flow.h"
-#include "User.h"
-#include "Vxlan.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
