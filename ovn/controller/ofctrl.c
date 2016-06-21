@@ -470,22 +470,31 @@ queue_msg(struct ofpbuf *msg)
 }
 
 static void
+log_openflow_rl(struct vlog_rate_limit *rl, enum vlog_level level,
+                const struct ofp_header *oh, const char *title)
+{
+    if (!vlog_should_drop(&this_module, level, rl)) {
+        char *s = ofp_to_string(oh, ntohs(oh->length), 2);
+        vlog(&this_module, level, "%s: %s", title, s);
+        free(s);
+    }
+}
+
+static void
 ofctrl_recv(const struct ofp_header *oh, enum ofptype type)
 {
     if (type == OFPTYPE_ECHO_REQUEST) {
         queue_msg(make_echo_reply(oh));
+    } else if (type == OFPTYPE_ERROR) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
+        log_openflow_rl(&rl, VLL_INFO, oh, "OpenFlow error");
     } else if (type != OFPTYPE_ECHO_REPLY &&
                type != OFPTYPE_BARRIER_REPLY &&
                type != OFPTYPE_PACKET_IN &&
                type != OFPTYPE_PORT_STATUS &&
                type != OFPTYPE_FLOW_REMOVED) {
-        if (VLOG_IS_DBG_ENABLED()) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
-
-            char *s = ofp_to_string(oh, ntohs(oh->length), 2);
-            VLOG_DBG_RL(&rl, "OpenFlow packet ignored: %s", s);
-            free(s);
-        }
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
+        log_openflow_rl(&rl, VLL_DBG, oh, "OpenFlow packet ignored");
     }
 }
 
