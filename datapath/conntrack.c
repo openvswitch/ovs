@@ -415,6 +415,8 @@ static int __ovs_ct_lookup(struct net *net, struct sw_flow_key *key,
 	 */
 	if (!skb_nfct_cached(net, skb, info)) {
 		struct nf_conn *tmpl = info->ct;
+		enum ip_conntrack_info ctinfo;
+		struct nf_conn *ct;
 
 		/* Associate skb with specified zone. */
 		if (tmpl) {
@@ -429,9 +431,32 @@ static int __ovs_ct_lookup(struct net *net, struct sw_flow_key *key,
 				    skb) != NF_ACCEPT)
 			return -ENOENT;
 
-		if (ovs_ct_helper(skb, info->family) != NF_ACCEPT) {
-			WARN_ONCE(1, "helper rejected packet");
-			return -EINVAL;
+		ct = nf_ct_get(skb, &ctinfo);
+		if (ct) {
+			/* Userspace may decide to perform a ct lookup without
+			 * a helper specified followed by a (recirculate and)
+			 * commit with one.  Therefore, for unconfirmed
+			 * connections which we will commit, we need to attach
+			 * the helper here.
+			 */
+			if (!nf_ct_is_confirmed(ct) && info->commit &&
+			    info->helper && !nfct_help(ct)) {
+				int err = __nf_ct_try_assign_helper(ct,
+								    info->ct,
+								    GFP_ATOMIC);
+				if (err)
+					return err;
+			}
+
+			/* Call the helper only if:
+			 * - The connection is confirmed, or
+			 * - When committing an unconfirmed connection.
+			 */
+			if ((nf_ct_is_confirmed(ct) || info->commit) &&
+			    ovs_ct_helper(skb, info->family) != NF_ACCEPT) {
+				WARN_ONCE(1, "helper rejected packet");
+				return -EINVAL;
+			}
 		}
 	}
 
