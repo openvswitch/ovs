@@ -137,7 +137,7 @@ m4_define([FORMAT_PING], [grep "transmitted" | sed 's/time.*ms$/time 0ms/'])
 # and limit the output to the rows containing 'ip-addr'.
 #
 m4_define([FORMAT_CT],
-    [[grep "dst=$1" | sed -e 's/port=[0-9]*/port=<cleared>/g' -e 's/id=[0-9]*/id=<cleared>/g' | sort | uniq]])
+    [[grep "dst=$1" | sed -e 's/port=[0-9]*/port=<cleared>/g' -e 's/id=[0-9]*/id=<cleared>/g' -e 's/state=[0-9_A-Z]*/state=<cleared>/g' | sort | uniq]])
 
 # NETNS_DAEMONIZE([namespace], [command], [pidfile])
 #
