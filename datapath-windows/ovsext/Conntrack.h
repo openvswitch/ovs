@@ -80,8 +80,11 @@ typedef struct OvsConntrackKeyLookupCtx {
 
 #define CT_HASH_TABLE_SIZE ((UINT32)1 << 10)
 #define CT_HASH_TABLE_MASK (CT_HASH_TABLE_SIZE - 1)
-#define CT_ENTRY_TIMEOUT (2 * 600000000)   // 2m
-#define CT_CLEANUP_INTERVAL (2 * 600000000) // 2m
+#define CT_INTERVAL_SEC 10000000LL //1s
+#define CT_ENTRY_TIMEOUT (2 * 60 * CT_INTERVAL_SEC)   // 2m
+#define CT_CLEANUP_INTERVAL (2 * 60 * CT_INTERVAL_SEC) // 2m
+
+
 /* Given POINTER, the address of the given MEMBER in a STRUCT object, returns
    the STRUCT object. */
 #define CONTAINER_OF(POINTER, STRUCT, MEMBER)                           \
@@ -99,9 +102,13 @@ BOOLEAN OvsConntrackValidateTcpPacket(const TCPHdr *tcp);
 OVS_CT_ENTRY * OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
                                           PNET_BUFFER_LIST nbl,
                                           UINT64 now);
+OVS_CT_ENTRY * OvsConntrackCreateOtherEntry(UINT64 now);
 enum CT_UPDATE_RES OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
                                               const TCPHdr *tcp,
                                               PNET_BUFFER_LIST nbl,
                                               BOOLEAN reply,
                                               UINT64 now);
+enum ct_update_res OvsConntrackUpdateOtherEntry(OVS_CT_ENTRY *conn_,
+                                                BOOLEAN reply,
+                                                UINT64 now);
 #endif /* __OVS_CONNTRACK_H_ */
