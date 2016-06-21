@@ -300,6 +300,7 @@ static int ovs_ct_helper(struct sk_buff *skb, u16 proto)
 	enum ip_conntrack_info ctinfo;
 	unsigned int protoff;
 	struct nf_conn *ct;
+	u8 nexthdr;
 	int err;
 
 	ct = nf_ct_get(skb, &ctinfo);
@@ -319,10 +320,10 @@ static int ovs_ct_helper(struct sk_buff *skb, u16 proto)
 		protoff = ip_hdrlen(skb);
 		break;
 	case NFPROTO_IPV6: {
-		u8 nexthdr = ipv6_hdr(skb)->nexthdr;
 		__be16 frag_off;
 		int ofs;
 
+		nexthdr = ipv6_hdr(skb)->nexthdr;
 		ofs = ipv6_skip_exthdr(skb, sizeof(struct ipv6hdr), &nexthdr,
 				       &frag_off);
 		if (ofs < 0 || (frag_off & htons(~0x7)) != 0) {
@@ -337,6 +338,42 @@ static int ovs_ct_helper(struct sk_buff *skb, u16 proto)
 		return NF_DROP;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+	/* Linux 4.5 and older depend on skb_dst being set when recalculating
+	 * checksums after NAT helper has mangled TCP or UDP packet payload.
+	 * This dependency is avoided when skb is CHECKSUM_PARTIAL or when UDP
+	 * has no checksum.
+	 *
+	 * The dependency is not triggered when the main NAT code updates
+	 * checksums after translating the IP header (address, port), so this
+	 * fix only needs to be executed on packets that are both being NATted
+	 * and that have a helper assigned.
+	 */
+	if (ct->status & IPS_NAT_MASK && skb->ip_summed != CHECKSUM_PARTIAL) {
+		u8 ipproto = (proto == NFPROTO_IPV4)
+			? ip_hdr(skb)->protocol : nexthdr;
+		u16 offset = 0;
+
+		switch (ipproto) {
+		case IPPROTO_TCP:
+			offset = offsetof(struct tcphdr, check);
+			break;
+		case IPPROTO_UDP:
+			/* Skip if no csum. */
+			if (udp_hdr(skb)->check)
+				offset = offsetof(struct udphdr, check);
+			break;
+		}
+		if (offset) {
+			if (unlikely(!pskb_may_pull(skb, protoff + offset + 2)))
+				return NF_DROP;
+
+			skb->csum_start = skb_headroom(skb) + protoff;
+			skb->csum_offset = offset;
+			skb->ip_summed = CHECKSUM_PARTIAL;
+		}
+	}
+#endif
 	err = helper->help(skb, protoff, ct, ctinfo);
 	if (err != NF_ACCEPT)
 		return err;
