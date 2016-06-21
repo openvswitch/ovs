@@ -417,6 +417,7 @@ static int __ovs_ct_lookup(struct net *net, struct sw_flow_key *key,
 		struct nf_conn *tmpl = info->ct;
 		enum ip_conntrack_info ctinfo;
 		struct nf_conn *ct;
+		int err;
 
 		/* Associate skb with specified zone. */
 		if (tmpl) {
@@ -427,8 +428,13 @@ static int __ovs_ct_lookup(struct net *net, struct sw_flow_key *key,
 			skb->nfctinfo = IP_CT_NEW;
 		}
 
-		if (nf_conntrack_in(net, info->family, NF_INET_FORWARD,
-				    skb) != NF_ACCEPT)
+		/* Repeat if requested, see nf_iterate(). */
+		do {
+			err = nf_conntrack_in(net, info->family,
+					      NF_INET_FORWARD, skb);
+		} while (err == NF_REPEAT);
+
+		if (err != NF_ACCEPT)
 			return -ENOENT;
 
 		ct = nf_ct_get(skb, &ctinfo);
