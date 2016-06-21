@@ -71,6 +71,7 @@ struct ovs_conntrack_info {
 	struct nf_conn *ct;
 	u8 commit : 1;
 	u8 nat : 3;                 /* enum ovs_ct_nat */
+	u8 random_fully_compat : 1; /* bool */
 	u16 family;
 	struct md_mark mark;
 	struct md_labels labels;
@@ -1048,7 +1049,12 @@ static int parse_nat(const struct nlattr *attr,
 			break;
 
 		case OVS_NAT_ATTR_PROTO_RANDOM:
+#ifdef NF_NAT_RANGE_PROTO_RANDOM_FULLY
 			info->range.flags |= NF_NAT_RANGE_PROTO_RANDOM_FULLY;
+#else
+			info->range.flags |= NF_NAT_RANGE_PROTO_RANDOM;
+			info->random_fully_compat = true;
+#endif
 			break;
 
 		default:
@@ -1322,11 +1328,15 @@ static bool ovs_ct_nat_to_attr(const struct ovs_conntrack_info *info,
 	    nla_put_flag(skb, OVS_NAT_ATTR_PERSISTENT))
 		return false;
 	if (info->range.flags & NF_NAT_RANGE_PROTO_RANDOM &&
-	    nla_put_flag(skb, OVS_NAT_ATTR_PROTO_HASH))
+	    nla_put_flag(skb, info->random_fully_compat
+			 ? OVS_NAT_ATTR_PROTO_RANDOM
+			 : OVS_NAT_ATTR_PROTO_HASH))
 		return false;
+#ifdef NF_NAT_RANGE_PROTO_RANDOM_FULLY
 	if (info->range.flags & NF_NAT_RANGE_PROTO_RANDOM_FULLY &&
 	    nla_put_flag(skb, OVS_NAT_ATTR_PROTO_RANDOM))
 		return false;
+#endif
 out:
 	nla_nest_end(skb, start);
 
