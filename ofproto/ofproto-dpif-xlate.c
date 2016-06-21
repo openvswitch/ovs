@@ -890,7 +890,7 @@ xlate_xport_copy(struct xbridge *xbridge, struct xbundle *xbundle,
  * This needs to be called after editing the xlate configuration.
  *
  * Functions that edit the new xlate configuration are
- * xlate_<ofport/bundle/ofport>_set and xlate_<ofport/bundle/ofport>_remove.
+ * xlate_<ofproto/bundle/ofport>_set and xlate_<ofproto/bundle/ofport>_remove.
  *
  * A sample workflow:
  *
