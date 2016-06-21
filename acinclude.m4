@@ -468,6 +468,9 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [nf_ct_zone_init])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_labels.h],
                   [nf_connlabels_get])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_labels.h],
+                  [nf_connlabels_get], [int bit],
+                  [OVS_DEFINE([HAVE_NF_CONNLABELS_GET_TAKES_BIT])])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/ipv6/nf_defrag_ipv6.h],
                   [nf_ct_frag6_consume_orig])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/ipv6/nf_defrag_ipv6.h],
