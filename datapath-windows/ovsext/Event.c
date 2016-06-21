@@ -134,6 +134,13 @@ OvsPostEvent(POVS_EVENT_ENTRY event)
 
         elem = (POVS_EVENT_QUEUE_ELEM)OvsAllocateMemoryWithTag(
             sizeof(*elem), OVS_EVENT_POOL_TAG);
+
+        if (elem == NULL) {
+            OVS_LOG_WARN("Fail to allocate memory for event");
+            OvsReleaseEventQueueLock();
+            return;
+        }
+
         RtlCopyMemory(&elem->event, event, sizeof elem->event);
         InsertTailList(&queue->elemList, &elem->link);
         queue->numElems++;
