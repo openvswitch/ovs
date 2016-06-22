@@ -951,6 +951,47 @@
           </p>
         </dd>
 
+        <dt><code>ct_dnat;</code></dt>
+        <dt><code>ct_dnat(<var>IP</var>);</code></dt>
+        <dd>
+          <p>
+            <code>ct_dnat</code> sends the packet through the DNAT zone in
+            connection tracking table to unDNAT any packet that was DNATed in
+            the opposite direction.  The packet is then automatically sent to
+            to the next tables as if followed by <code>next;</code> action.
+            The next tables will see the changes in the packet caused by
+            the connection tracker.
+          </p>
+          <p>
+            <code>ct_dnat(<var>IP</var>)</code> sends the packet through the
+            DNAT zone to change the destination IP address of the packet to
+            the one provided inside the parenthesis and commits the connection.
+            The packet is then automatically sent to the next tables as if
+            followed by <code>next;</code> action.  The next tables will see
+            the changes in the packet caused by the connection tracker.
+          </p>
+        </dd>
+
+        <dt><code>ct_snat;</code></dt>
+        <dt><code>ct_snat(<var>IP</var>);</code></dt>
+        <dd>
+          <p>
+            <code>ct_snat</code> sends the packet through the SNAT zone to
+            unSNAT any packet that was SNATed in the opposite direction.  If
+            the packet needs to be sent to the next tables, then it should be
+            followed by a <code>next;</code> action.  The next tables will not
+            see the changes in the packet caused by the connection tracker.
+          </p>
+          <p>
+            <code>ct_snat(<var>IP</var>)</code> sends the packet through the
+            SNAT zone to change the source IP address of the packet to
+            the one provided inside the parenthesis and commits the connection.
+            The packet is then automatically sent to the next tables as if
+            followed by <code>next;</code> action.  The next tables will see the
+            changes in the packet caused by the connection tracker.
+          </p>
+        </dd>
+
         <dt><code>arp { <var>action</var>; </code>...<code> };</code></dt>
         <dd>
           <p>
@@ -1207,10 +1248,11 @@ tcp.flags = RST;
     </p>
 
     <p>
-      For every <code>Logical_Port</code> record in <code>OVN_Northbound</code>
-      database, <code>ovn-northd</code> creates a record in this table.
-      <code>ovn-northd</code> populates and maintains every column except
-      the <code>chassis</code> column, which it leaves empty in new records.
+      For every <code>Logical_Switch_Port</code> record in
+      <code>OVN_Northbound</code> database, <code>ovn-northd</code>
+      creates a record in this table.  <code>ovn-northd</code> populates
+      and maintains every column except the <code>chassis</code> column,
+      which it leaves empty in new records.
     </p>
 
     <p>
@@ -1245,10 +1287,11 @@ tcp.flags = RST;
       </column>
 
       <column name="logical_port">
-        A logical port, taken from <ref table="Logical_Port" column="name"
-        db="OVN_Northbound"/> in the OVN_Northbound database's <ref
-        table="Logical_Port" db="OVN_Northbound"/> table.  OVN does not
-        prescribe a particular format for the logical port ID.
+        A logical port, taken from <ref table="Logical_Switch_Port"
+        column="name" db="OVN_Northbound"/> in the OVN_Northbound
+        database's <ref table="Logical_Switch_Port" db="OVN_Northbound"/>
+        table.  OVN does not prescribe a particular format for the
+        logical port ID.
       </column>
 
       <column name="chassis">
@@ -1445,9 +1488,9 @@ tcp.flags = RST;
 
       <column name="parent_port">
         This is taken from
-        <ref table="Logical_Port" column="parent_name" db="OVN_Northbound"/>
-        in the OVN_Northbound database's <ref table="Logical_Port"
-        db="OVN_Northbound"/> table.
+        <ref table="Logical_Switch_Port" column="parent_name"
+        db="OVN_Northbound"/> in the OVN_Northbound database's
+        <ref table="Logical_Switch_Port" db="OVN_Northbound"/> table.
       </column>
 
       <column name="tag">

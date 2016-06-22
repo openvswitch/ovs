@@ -1225,6 +1225,9 @@ bridge_configure_ipfix(struct bridge *br)
                     ? *fe_cfg->ipfix->cache_active_timeout : 0;
                 opts->cache_max_flows = fe_cfg->ipfix->cache_max_flows
                     ? *fe_cfg->ipfix->cache_max_flows : 0;
+                opts->enable_tunnel_sampling = smap_get_bool(
+                                                   &fe_cfg->ipfix->other_config,
+                                                  "enable-tunnel-sampling", true);
                 opts++;
             }
         }

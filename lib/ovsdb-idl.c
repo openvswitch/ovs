@@ -286,6 +286,7 @@ ovsdb_idl_set_remote(struct ovsdb_idl *idl, const char *remote,
 {
     if (idl) {
         ovs_assert(!idl->txn);
+        jsonrpc_session_close(idl->session);
         idl->session = jsonrpc_session_open(remote, retry);
         idl->state_seqno = UINT_MAX;
     }

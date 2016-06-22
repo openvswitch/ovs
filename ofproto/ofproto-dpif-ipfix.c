@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,7 +33,6 @@
 #include "sset.h"
 #include "util.h"
 #include "timeval.h"
-#include "util.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ipfix);
@@ -47,6 +46,15 @@ static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 /* Cf. IETF RFC 5881 Setion 8. */
 #define BFD_CONTROL_DEST_PORT        3784
 #define BFD_ECHO_DEST_PORT           3785
+
+enum ipfix_sampled_packet_type {
+    IPFIX_SAMPLED_PKT_UNKNOWN = 0x00,
+    IPFIX_SAMPLED_PKT_IPV4_OK = 0x01,
+    IPFIX_SAMPLED_PKT_IPV6_OK = 0x02,
+    IPFIX_SAMPLED_PKT_IPV4_ERROR = 0x03,
+    IPFIX_SAMPLED_PKT_IPV6_ERROR = 0x04,
+    IPFIX_SAMPLED_PKT_OTHERS = 0x05
+};
 
 /* The standard layer2SegmentId (ID 351) element is included in vDS to send
  * the VxLAN tunnel's VNI. It is 64-bit long, the most significant byte is
@@ -75,6 +83,8 @@ enum dpif_ipfix_tunnel_type {
     NUM_DPIF_IPFIX_TUNNEL
 };
 
+typedef struct ofputil_ipfix_stats ofproto_ipfix_stats;
+
 struct dpif_ipfix_port {
     struct hmap_node hmap_node; /* In struct dpif_ipfix's "tunnel_ports" hmap. */
     struct ofport *ofport;      /* To retrieve port stats. */
@@ -91,6 +101,8 @@ struct dpif_ipfix_exporter {
     struct ovs_list cache_flow_start_timestamp_list;  /* ipfix_flow_cache_entry. */
     uint32_t cache_active_timeout;  /* In seconds. */
     uint32_t cache_max_flows;
+
+    ofproto_ipfix_stats stats;
 };
 
 struct dpif_ipfix_bridge_exporter {
@@ -467,6 +479,7 @@ ofproto_ipfix_flow_exporter_options_equal(
     return (a->collector_set_id == b->collector_set_id
             && a->cache_active_timeout == b->cache_active_timeout
             && a->cache_max_flows == b->cache_max_flows
+            && a->enable_tunnel_sampling == b->enable_tunnel_sampling
             && sset_equals(&a->targets, &b->targets));
 }
 
@@ -495,7 +508,7 @@ dpif_ipfix_exporter_init(struct dpif_ipfix_exporter *exporter)
 {
     exporter->collectors = NULL;
     exporter->seq_number = 1;
-    exporter->last_template_set_time = TIME_MIN;
+    exporter->last_template_set_time = 0;
     hmap_init(&exporter->cache_flow_key_map);
     ovs_list_init(&exporter->cache_flow_start_timestamp_list);
     exporter->cache_active_timeout = 0;
@@ -511,7 +524,7 @@ dpif_ipfix_exporter_clear(struct dpif_ipfix_exporter *exporter)
     collectors_destroy(exporter->collectors);
     exporter->collectors = NULL;
     exporter->seq_number = 1;
-    exporter->last_template_set_time = TIME_MIN;
+    exporter->last_template_set_time = 0;
     exporter->cache_active_timeout = 0;
     exporter->cache_max_flows = 0;
 }
@@ -938,6 +951,22 @@ dpif_ipfix_get_bridge_exporter_tunnel_sampling(const struct dpif_ipfix *di)
     return ret;
 }
 
+bool
+dpif_ipfix_get_flow_exporter_tunnel_sampling(const struct dpif_ipfix *di,
+                                             const uint32_t collector_set_id)
+    OVS_EXCLUDED(mutex)
+{
+    ovs_mutex_lock(&mutex);
+    struct dpif_ipfix_flow_exporter_map_node *node
+        = dpif_ipfix_find_flow_exporter_map_node(di, collector_set_id);
+    bool ret = (node
+                && node->exporter.options
+                && node->exporter.options->enable_tunnel_sampling);
+    ovs_mutex_unlock(&mutex);
+
+    return ret;
+}
+
 static void
 dpif_ipfix_clear(struct dpif_ipfix *di) OVS_REQUIRES(mutex)
 {
@@ -984,17 +1013,21 @@ ipfix_init_header(uint32_t export_time_sec, uint32_t seq_number,
     hdr->obs_domain_id = htonl(obs_domain_id);
 }
 
-static void
+static size_t
 ipfix_send_msg(const struct collectors *collectors, struct dp_packet *msg)
 {
     struct ipfix_header *hdr;
+    size_t tx_errors;
 
     /* Adjust the length in the header. */
     hdr = dp_packet_data(msg);
     hdr->length = htons(dp_packet_size(msg));
 
-    collectors_send(collectors, dp_packet_data(msg), dp_packet_size(msg));
+    tx_errors = collectors_send(collectors,
+                                dp_packet_data(msg), dp_packet_size(msg));
     dp_packet_set_size(msg, 0);
+
+    return tx_errors;
 }
 
 static uint16_t
@@ -1150,20 +1183,23 @@ ipfix_init_template_msg(void *msg_stub, uint32_t export_time_sec,
     set_hdr->set_id = htons(IPFIX_SET_ID_TEMPLATE);
 }
 
-static void
+static size_t
 ipfix_send_template_msg(const struct collectors *collectors,
                         struct dp_packet *msg, size_t set_hdr_offset)
 {
     struct ipfix_set_header *set_hdr;
+    size_t tx_errors;
 
     /* Send template message. */
     set_hdr = (struct ipfix_set_header*)
               ((uint8_t*)dp_packet_data(msg) + set_hdr_offset);
     set_hdr->length = htons(dp_packet_size(msg) - set_hdr_offset);
 
-    ipfix_send_msg(collectors, msg);
+    tx_errors = ipfix_send_msg(collectors, msg);
 
     dp_packet_uninit(msg);
+
+    return tx_errors;
 }
 
 static void
@@ -1172,9 +1208,11 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
 {
     uint64_t msg_stub[DIV_ROUND_UP(MAX_MESSAGE_LEN, 8)];
     struct dp_packet msg;
-    size_t set_hdr_offset, tmpl_hdr_offset;
+    size_t set_hdr_offset, tmpl_hdr_offset, error_pkts;
     struct ipfix_template_record_header *tmpl_hdr;
     uint16_t field_count;
+    size_t tx_packets = 0;
+    size_t tx_errors = 0;
     enum ipfix_proto_l2 l2;
     enum ipfix_proto_l3 l3;
     enum ipfix_proto_l4 l4;
@@ -1199,8 +1237,10 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
                      */
                     if (dp_packet_size(&msg) >= MAX_MESSAGE_LEN) {
                         /* Send template message. */
-                        ipfix_send_template_msg(exporter->collectors,
-                                                &msg, set_hdr_offset);
+                        error_pkts = ipfix_send_template_msg(exporter->collectors,
+                                                             &msg, set_hdr_offset);
+                        tx_errors += error_pkts;
+                        tx_packets += collectors_count(exporter->collectors) - error_pkts;
 
                         /* Reinitialize the template msg. */
                         ipfix_init_template_msg(msg_stub, export_time_sec,
@@ -1224,7 +1264,12 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
     }
 
     /* Send template message. */
-    ipfix_send_template_msg(exporter->collectors, &msg, set_hdr_offset);
+    error_pkts = ipfix_send_template_msg(exporter->collectors, &msg, set_hdr_offset);
+    tx_errors += error_pkts;
+    tx_packets += collectors_count(exporter->collectors) - error_pkts;
+
+    exporter->stats.tx_pkts += tx_packets;
+    exporter->stats.tx_errors += tx_errors;
 
     /* XXX: Add Options Template Sets, at least to define a Flow Keys
      * Option Template. */
@@ -1326,14 +1371,117 @@ ipfix_cache_aggregate_entries(struct ipfix_flow_cache_entry *from_entry,
     }
 }
 
+/* Get statistics */
+static void
+ipfix_get_stats__(const struct dpif_ipfix_exporter *exporter,
+                  ofproto_ipfix_stats *stats)
+{
+    memset(stats, 0xff, sizeof *stats);
+
+    if (!exporter) {
+        return;
+    }
+
+    *stats = exporter->stats;
+}
+
+static void
+ipfix_get_bridge_stats(const struct dpif_ipfix_bridge_exporter *exporter,
+                       ofproto_ipfix_stats *stats)
+{
+    ipfix_get_stats__(&exporter->exporter, stats);
+}
+
+static void
+ipfix_get_flow_stats(const struct dpif_ipfix_flow_exporter *exporter,
+                     ofproto_ipfix_stats *stats)
+{
+    ipfix_get_stats__(&exporter->exporter, stats);
+    stats->collector_set_id = exporter->options->collector_set_id;
+}
+
+int
+dpif_ipfix_get_stats(const struct dpif_ipfix *di,
+                     bool bridge_ipfix,
+                     struct ovs_list *replies)
+    OVS_EXCLUDED(mutex)
+{
+    struct dpif_ipfix_flow_exporter_map_node *flow_exporter_node;
+    struct ofputil_ipfix_stats ois;
+
+    ovs_mutex_lock(&mutex);
+    if (bridge_ipfix) {
+        if (!di->bridge_exporter.options) {
+            ovs_mutex_unlock(&mutex);
+            return OFPERR_NXST_NOT_CONFIGURED;
+        }
+
+        ipfix_get_bridge_stats(&di->bridge_exporter, &ois);
+        ofputil_append_ipfix_stat(replies, &ois);
+    } else {
+        if (hmap_count(&di->flow_exporter_map) == 0) {
+            ovs_mutex_unlock(&mutex);
+            return OFPERR_NXST_NOT_CONFIGURED;
+        }
+
+        HMAP_FOR_EACH (flow_exporter_node, node,
+                       &di->flow_exporter_map) {
+            ipfix_get_flow_stats(&flow_exporter_node->exporter, &ois);
+            ofputil_append_ipfix_stat(replies, &ois);
+        }
+    }
+    ovs_mutex_unlock(&mutex);
+
+    return 0;
+}
+
+/* Update partial ipfix stats */
+static void
+ipfix_update_stats(struct dpif_ipfix_exporter *exporter,
+                   bool new_flow,
+                   size_t current_flows,
+                   enum ipfix_sampled_packet_type sampled_pkt_type)
+{
+    if (new_flow) {
+        exporter->stats.total_flows++;
+        exporter->stats.current_flows = current_flows;
+    }
+    exporter->stats.pkts++;
+
+    switch (sampled_pkt_type) {
+    case IPFIX_SAMPLED_PKT_IPV4_OK:
+        exporter->stats.ipv4_pkts++;
+        break;
+    case IPFIX_SAMPLED_PKT_IPV6_OK:
+        exporter->stats.ipv6_pkts++;
+        break;
+    case IPFIX_SAMPLED_PKT_IPV4_ERROR:
+        exporter->stats.ipv4_error_pkts++;
+        exporter->stats.error_pkts++;
+        break;
+    case IPFIX_SAMPLED_PKT_IPV6_ERROR:
+        exporter->stats.ipv6_error_pkts++;
+        exporter->stats.error_pkts++;
+        break;
+    case IPFIX_SAMPLED_PKT_UNKNOWN:
+        exporter->stats.error_pkts++;
+        break;
+    case IPFIX_SAMPLED_PKT_OTHERS:
+    default:
+        break;
+    }
+}
+
 /* Add an entry into a flow cache.  The entry is either aggregated into
  * an existing entry with the same flow key and free()d, or it is
- * inserted into the cache. */
+ * inserted into the cache. And IPFIX stats will be updated */
 static void
 ipfix_cache_update(struct dpif_ipfix_exporter *exporter,
-                   struct ipfix_flow_cache_entry *entry)
+                   struct ipfix_flow_cache_entry *entry,
+                   enum ipfix_sampled_packet_type sampled_pkt_type)
 {
     struct ipfix_flow_cache_entry *old_entry;
+    size_t current_flows = 0;
 
     old_entry = ipfix_cache_find_entry(exporter, &entry->flow_key);
 
@@ -1348,17 +1496,19 @@ ipfix_cache_update(struct dpif_ipfix_exporter *exporter,
                        &entry->cache_flow_start_timestamp_list_node);
 
         /* Enforce exporter->cache_max_flows limit. */
-        if (hmap_count(&exporter->cache_flow_key_map)
-            > exporter->cache_max_flows) {
+        current_flows = hmap_count(&exporter->cache_flow_key_map);
+        ipfix_update_stats(exporter, true, current_flows, sampled_pkt_type);
+        if (current_flows > exporter->cache_max_flows) {
             dpif_ipfix_cache_expire_now(exporter, false);
         }
     } else {
         ipfix_cache_aggregate_entries(entry, old_entry);
         free(entry);
+        ipfix_update_stats(exporter, false, current_flows, sampled_pkt_type);
     }
 }
 
-static void
+static enum ipfix_sampled_packet_type
 ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
                        const struct dp_packet *packet, const struct flow *flow,
                        uint64_t packet_delta_count, uint32_t obs_domain_id,
@@ -1372,6 +1522,7 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
     enum ipfix_proto_l3 l3;
     enum ipfix_proto_l4 l4;
     enum ipfix_proto_tunnel tunnel = IPFIX_PROTO_NOT_TUNNELED;
+    enum ipfix_sampled_packet_type sampled_pkt_type = IPFIX_SAMPLED_PKT_UNKNOWN;
     uint8_t ethernet_header_length;
     uint16_t ethernet_total_length;
 
@@ -1391,12 +1542,15 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         case IPPROTO_UDP:
         case IPPROTO_SCTP:
             l4 = IPFIX_PROTO_L4_TCP_UDP_SCTP;
+            sampled_pkt_type = IPFIX_SAMPLED_PKT_IPV4_OK;
             break;
         case IPPROTO_ICMP:
             l4 = IPFIX_PROTO_L4_ICMP;
+            sampled_pkt_type = IPFIX_SAMPLED_PKT_IPV4_OK;
             break;
         default:
             l4 = IPFIX_PROTO_L4_UNKNOWN;
+            sampled_pkt_type = IPFIX_SAMPLED_PKT_IPV4_ERROR;
         }
         break;
     case ETH_TYPE_IPV6:
@@ -1406,17 +1560,21 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         case IPPROTO_UDP:
         case IPPROTO_SCTP:
             l4 = IPFIX_PROTO_L4_TCP_UDP_SCTP;
+            sampled_pkt_type = IPFIX_SAMPLED_PKT_IPV6_OK;
             break;
         case IPPROTO_ICMPV6:
             l4 = IPFIX_PROTO_L4_ICMP;
+            sampled_pkt_type = IPFIX_SAMPLED_PKT_IPV6_OK;
             break;
         default:
             l4 = IPFIX_PROTO_L4_UNKNOWN;
+            sampled_pkt_type = IPFIX_SAMPLED_PKT_IPV6_ERROR;
         }
         break;
     default:
         l3 = IPFIX_PROTO_L3_UNKNOWN;
         l4 = IPFIX_PROTO_L4_UNKNOWN;
+        sampled_pkt_type = IPFIX_SAMPLED_PKT_OTHERS;
     }
 
     if (tunnel_port && tunnel_key) {
@@ -1569,6 +1727,8 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         entry->minimum_ip_total_length = 0;
         entry->maximum_ip_total_length = 0;
     }
+
+    return sampled_pkt_type;
 }
 
 /* Send each single data record in its own data set, to simplify the
@@ -1650,14 +1810,20 @@ ipfix_send_data_msg(struct dpif_ipfix_exporter *exporter,
 {
     uint64_t msg_stub[DIV_ROUND_UP(MAX_MESSAGE_LEN, 8)];
     struct dp_packet msg;
+    size_t tx_errors;
+
     dp_packet_use_stub(&msg, msg_stub, sizeof msg_stub);
 
     ipfix_init_header(export_time_sec, exporter->seq_number++,
                       entry->flow_key.obs_domain_id, &msg);
     ipfix_put_data_set(export_time_sec, entry, flow_end_reason, &msg);
-    ipfix_send_msg(exporter->collectors, &msg);
+    tx_errors = ipfix_send_msg(exporter->collectors, &msg);
 
     dp_packet_uninit(&msg);
+
+    exporter->stats.current_flows--;
+    exporter->stats.tx_pkts += collectors_count(exporter->collectors) - tx_errors;
+    exporter->stats.tx_errors += tx_errors;
 }
 
 static void
@@ -1669,13 +1835,16 @@ dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
                   const struct flow_tnl *tunnel_key)
 {
     struct ipfix_flow_cache_entry *entry;
+    enum ipfix_sampled_packet_type sampled_packet_type;
 
     /* Create a flow cache entry from the sample. */
     entry = xmalloc(sizeof *entry);
-    ipfix_cache_entry_init(entry, packet, flow, packet_delta_count,
-                           obs_domain_id, obs_point_id,
-                           output_odp_port, tunnel_port, tunnel_key);
-    ipfix_cache_update(exporter, entry);
+    sampled_packet_type = ipfix_cache_entry_init(entry, packet,
+                                                 flow, packet_delta_count,
+                                                 obs_domain_id, obs_point_id,
+                                                 output_odp_port, tunnel_port,
+                                                 tunnel_key);
+    ipfix_cache_update(exporter, entry, sampled_packet_type);
 }
 
 static bool
@@ -1743,11 +1912,19 @@ dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
 
 void
 dpif_ipfix_flow_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
-                       const struct flow *flow, uint32_t collector_set_id,
-                       uint16_t probability, uint32_t obs_domain_id,
-                       uint32_t obs_point_id) OVS_EXCLUDED(mutex)
+                       const struct flow *flow,
+                       const union user_action_cookie *cookie,
+                       odp_port_t input_odp_port,
+                       const struct flow_tnl *output_tunnel_key)
+    OVS_EXCLUDED(mutex)
 {
     struct dpif_ipfix_flow_exporter_map_node *node;
+    const struct flow_tnl *tunnel_key = NULL;
+    struct dpif_ipfix_port * tunnel_port = NULL;
+    odp_port_t output_odp_port = cookie->flow_sample.output_odp_port;
+    uint32_t collector_set_id = cookie->flow_sample.collector_set_id;
+    uint16_t probability = cookie->flow_sample.probability;
+
     /* Use the sampling probability as an approximation of the number
      * of matched packets. */
     uint64_t packet_delta_count = USHRT_MAX / probability;
@@ -1755,9 +1932,24 @@ dpif_ipfix_flow_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
     ovs_mutex_lock(&mutex);
     node = dpif_ipfix_find_flow_exporter_map_node(di, collector_set_id);
     if (node) {
+        if (node->exporter.options->enable_tunnel_sampling) {
+            if (output_odp_port == ODPP_NONE && flow->tunnel.ip_dst) {
+                /* Input tunnel. */
+                tunnel_key = &flow->tunnel;
+                tunnel_port = dpif_ipfix_find_port(di, input_odp_port);
+            }
+            if (output_odp_port != ODPP_NONE && output_tunnel_key) {
+                /* Output tunnel, output_tunnel_key must be valid. */
+                tunnel_key = output_tunnel_key;
+                tunnel_port = dpif_ipfix_find_port(di, output_odp_port);
+            }
+        }
+
         dpif_ipfix_sample(&node->exporter.exporter, packet, flow,
-                          packet_delta_count, obs_domain_id, obs_point_id,
-                          ODPP_NONE, NULL, NULL);
+                          packet_delta_count,
+                          cookie->flow_sample.obs_domain_id,
+                          cookie->flow_sample.obs_point_id,
+                          output_odp_port, tunnel_port, tunnel_key);
     }
     ovs_mutex_unlock(&mutex);
 }

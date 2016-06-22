@@ -316,7 +316,6 @@ tnl_port_show_v(struct ds *ds)
         miniflow_expand(p->cr.match.flow, &flow);
 
         /* Key. */
-        odp_parms.odp_in_port = flow.in_port.odp_port;
         odp_parms.support.recirc = true;
         ofpbuf_use_stack(&buf, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&odp_parms, &buf);
@@ -324,7 +323,6 @@ tnl_port_show_v(struct ds *ds)
         key_len = buf.size;
 
         /* mask*/
-        odp_parms.odp_in_port = wc.masks.in_port.odp_port;
         odp_parms.support.recirc = false;
         ofpbuf_use_stack(&buf, &maskbuf, sizeof maskbuf);
         odp_flow_key_from_mask(&odp_parms, &buf);

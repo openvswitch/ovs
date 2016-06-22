@@ -194,11 +194,6 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
     ULONG mss = 0;
     NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
 
-    /*
-     * XXX: the assumption currently is that the NBL is owned by OVS, and
-     * headroom has already been allocated as part of allocating the NBL and
-     * MDL.
-     */
     curNb = NET_BUFFER_LIST_FIRST_NB(curNbl);
     packetLength = NET_BUFFER_DATA_LENGTH(curNb);
 

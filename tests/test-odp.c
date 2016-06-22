@@ -86,7 +86,6 @@ parse_keys(bool wc_keys)
             /* Convert cls_rule back to odp_key. */
             ofpbuf_uninit(&odp_key);
             ofpbuf_init(&odp_key, 0);
-            odp_parms.odp_in_port = flow.in_port.odp_port;
             odp_flow_key_from_flow(&odp_parms, &odp_key);
 
             if (odp_key.size > ODPUTIL_FLOW_KEY_BYTES) {

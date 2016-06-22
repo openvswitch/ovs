@@ -65,11 +65,11 @@ Neutron that are currently needed, it sends the vif-id and the VLAN tag as
 inputs.
 
 * Neutron in turn will verify that the vif-id belongs to the tenant in question
-and then uses the OVN specific plugin to create a new row in the Logical_Port
-table of the OVN Northbound Database.  Neutron responds back with an
-IP address and MAC address for that network interface.  So Neutron becomes
-the IPAM system and provides unique IP and MAC addresses across VMs and
-containers in the same logical network.
+and then uses the OVN specific plugin to create a new row in the
+Logical_Switch_Port table of the OVN Northbound Database.  Neutron
+responds back with an IP address and MAC address for that network
+interface.  So Neutron becomes the IPAM system and provides unique IP
+and MAC addresses across VMs and containers in the same logical network.
 
 * The Neutron API call above to create a logical port for the container
 could add a relatively significant amount of time to container creation.
@@ -80,7 +80,8 @@ port needs to be attached to a different logical network.
 
 * When a container is eventually deleted, the network plugin in that VM
 may make a call to Neutron to delete that port.  Neutron in turn will
-delete the entry in the Logical_Port table of the OVN Northbound Database.
+delete the entry in the Logical_Switch_Port table of the OVN Northbound
+Database.
 
 As an example, consider Docker containers.  Since Docker currently does not
 have a network plugin feature, this example uses a hypothetical wrapper

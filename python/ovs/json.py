@@ -18,6 +18,11 @@ import sys
 import six
 from six.moves import range
 
+try:
+    import ovs._json
+except ImportError:
+    pass
+
 __pychecker__ = 'no-stringiter'
 
 escapes = {ord('"'): u"\\\"",
@@ -165,6 +170,12 @@ class Parser(object):
     # Maximum height of parsing stack. #
     MAX_HEIGHT = 1000
 
+    def __new__(cls, *args, **kwargs):
+        try:
+            return ovs._json.Parser(*args, **kwargs)
+        except NameError:
+            return super(Parser, cls).__new__(cls)
+
     def __init__(self, check_trailer=False):
         self.check_trailer = check_trailer
 
@@ -280,7 +291,7 @@ class Parser(object):
                     significand *= 10
                     pow10 -= 1
                 while pow10 < 0 and significand % 10 == 0:
-                    significand /= 10
+                    significand //= 10
                     pow10 += 1
                 if (pow10 == 0 and
                     ((not sign and significand < 2 ** 63) or

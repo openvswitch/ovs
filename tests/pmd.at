@@ -167,7 +167,7 @@ AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:77,dst=50:54:00:00:01:78),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
 ])
 AT_CHECK([cat ovs-vswitchd.log | filter_flow_install | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:77,dl_dst=50:54:00:00:01:78,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:77,dst=50:54:00:00:01:78),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 4], [0], [dnl

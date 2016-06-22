@@ -42,13 +42,13 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(src=10.0.0.6,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 ovs-appctl time/warp 200 100
 sleep 1
-AT_CHECK([grep 'in_port=[[348]]' ovs-vswitchd.log | filter_flow_install | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=3,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=3,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=4,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0d,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=4,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0e,nw_frag=no, actions: <del>
-recirc_id=0,rarp,in_port=4,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=ff:ff:ff:ff:ff:ff, actions: <del>
-recirc_id=0,rarp,in_port=4,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,dl_dst=ff:ff:ff:ff:ff:ff, actions: <del>
+AT_CHECK([grep 'in_port([[348]])' ovs-vswitchd.log | filter_flow_install | strip_xout], [0], [dnl
+recirc_id(0),in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(3),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(4),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0d),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(4),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0e),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(4),eth(src=50:54:00:00:00:09,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), actions: <del>
+recirc_id(0),in_port(4),eth(src=50:54:00:00:00:0b,dst=ff:ff:ff:ff:ff:ff),eth_type(0x8035), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -5790,18 +5790,18 @@ CHECK_NETFLOW_ACTIVE_EXPIRATION([[[::1]]])
 AT_CLEANUP
 
 dnl In the absence of an IPFIX collector to verify protocol correctness, simply
-dnl configure IPFIX and ensure that sample action generation works at the
+dnl configure bridge IPFIX and ensure that sample action generation works at the
 dnl datapath level.
-AT_SETUP([ofproto-dpif - Basic IPFIX sanity check])
+AT_SETUP([ofproto-dpif - Bridge IPFIX sanity check])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2
 
-dnl Sample every packet using bridge-based sampling
+dnl Sample every packet using bridge-based sampling.
 AT_CHECK([ovs-vsctl -- set bridge br0 ipfix=@fix -- \
                     --id=@fix create ipfix targets=\"127.0.0.1:4739\" \
                               sampling=1], [0], [ignore])
 
-dnl Send some packets that should be sampled
+dnl Send some packets that should be sampled.
 for i in `seq 1 3`; do
     AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
 done
@@ -5810,7 +5810,7 @@ flow-dump from non-dpdk interfaces:
 packets:2, bytes:120, used:0.001s, actions:sample(sample=100.0%,actions(userspace(pid=0,ipfix(output_port=4294967295))))
 ])
 
-dnl Remove the IPFIX configuration
+dnl Remove the IPFIX configuration.
 AT_CHECK([ovs-vsctl clear bridge br0 ipfix])
 AT_CHECK([ovs-appctl revalidator/purge])
 
@@ -5821,6 +5821,216 @@ done
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
 packets:2, bytes:120, used:0.001s, actions:drop
+])
+
+OVS_VSWITCHD_STOP(["/sending to collector failed/d"])
+AT_CLEANUP
+
+dnl Bridge IPFIX statistics check
+AT_SETUP([ofproto-dpif - Bridge IPFIX statistics check])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+dnl Negative test check.
+AT_CHECK([ovs-ofctl dump-ipfix-bridge br0], [0], [dnl
+OFPT_ERROR (xid=0x2): NXST_NOT_CONFIGURED
+NXST_IPFIX_BRIDGE request (xid=0x2):
+])
+
+dnl Sample every packet using bridge-based sampling.
+AT_CHECK([ovs-vsctl -- set bridge br0 ipfix=@fix -- \
+                    --id=@fix create ipfix targets=\"127.0.0.1:4739\" \
+                              sampling=1], [0], [ignore])
+
+dnl Send some packets that should be sampled.
+for i in `seq 1 20`; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
+done
+
+dnl There are 4 extra IPFIX template packets.
+AT_CHECK([ovs-ofctl dump-ipfix-bridge br0], [0], [dnl
+NXST_IPFIX_BRIDGE reply (xid=0x2):
+  bridge ipfix: flows=20, current flows=0, sampled pkts=20, ipv4 ok=0, ipv6 ok=0, tx pkts=12
+                pkts errs=20, ipv4 errs=20, ipv6 errs=0, tx errs=12
+])
+
+dnl Remove the IPFIX configuration.
+AT_CHECK([ovs-vsctl clear bridge br0 ipfix])
+AT_CHECK([ovs-appctl revalidator/purge])
+
+dnl Send some more packets, to ensure that these are not sampled.
+for i in `seq 1 2`; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
+done
+AT_CHECK([ovs-ofctl dump-ipfix-bridge br0], [0], [dnl
+OFPT_ERROR (xid=0x2): NXST_NOT_CONFIGURED
+NXST_IPFIX_BRIDGE request (xid=0x2):
+])
+
+OVS_VSWITCHD_STOP(["/sending to collector failed/d"])
+AT_CLEANUP
+
+dnl Flow IPFIX sanity check
+AT_SETUP([ofproto-dpif - Flow IPFIX sanity check])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- --id=@ipfix create IPFIX targets=\"127.0.0.1:4739\" \
+                    -- --id=@cs create Flow_Sample_Collector_Set id=1 bridge=@br0 ipfix=@ipfix],
+         [0], [ignore])
+
+AT_DATA([flows.txt], [dnl
+in_port=1, actions=sample(probability=65535,collector_set_id=1),output:2
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt], [0], [ignore])
+
+dnl Send some packets that should be sampled.
+for i in `seq 1 3`; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
+done
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
+flow-dump from non-dpdk interfaces:
+packets:2, bytes:120, used:0.001s, actions:sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=4294967295)))),2
+])
+
+dnl Remove the flow which contains sample action.
+AT_CHECK([ovs-ofctl del-flows br0 in_port=1], [0], [ignore])
+AT_CHECK([ovs-appctl revalidator/purge])
+
+dnl Send some more packets, to ensure that these are not sampled.
+for i in `seq 1 3`; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
+done
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
+flow-dump from non-dpdk interfaces:
+packets:2, bytes:120, used:0.001s, actions:drop
+])
+
+OVS_VSWITCHD_STOP(["/sending to collector failed/d"])
+AT_CLEANUP
+
+dnl Flow IPFIX sanity check for tunnel set
+AT_SETUP([ofproto-dpif - Flow IPFIX sanity check - tunnel set])
+AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
+                    options:key=5 ofport_request=1\
+                    -- add-port br0 p2 -- set Interface p2 type=stt \
+                    options:remote_ip=1.1.1.2 options:local_ip=2.2.2.3 \
+                    options:key=6 ofport_request=2\
+                    -- add-port br0 p3 -- set Interface p3 type=dummy \
+                    ofport_request=3 \
+                    -- --id=@br0 get Bridge br0 \
+                    -- --id=@ipfix create IPFIX targets=\"127.0.0.1:4739\" \
+                    -- --id=@cs create Flow_Sample_Collector_Set id=1 bridge=@br0 ipfix=@ipfix],
+                   [<0>
+<1>
+])
+
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+
+dnl Add openflow sample action without sampling_port.
+AT_DATA([flows.txt], [dnl
+in_port=3, actions=sample(probability=65535,collector_set_id=1),output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt], [0], [ignore])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=4294967295)))),set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df|key))),1
+])
+
+dnl Remove the flow which contains sample action.
+AT_CHECK([ovs-ofctl del-flows br0 in_port=3], [0], [ignore])
+AT_CHECK([ovs-appctl revalidator/purge])
+
+dnl Add openflow sample action with sampling_port which is
+dnl equal to output port.
+AT_DATA([flows2.txt], [dnl
+in_port=3, actions=sample(probability=65535,collector_set_id=1,sampling_port=1),output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows2.txt], [0], [ignore])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+dnl Make sure flow sample action in datapath is behind set tunnel
+dnl action at egress point of tunnel port.
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df|key))),sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=1),tunnel_out_port=1))),1
+])
+
+dnl Remove the flow which contains sample action.
+AT_CHECK([ovs-ofctl del-flows br0 in_port=3], [0], [ignore])
+AT_CHECK([ovs-appctl revalidator/purge])
+
+dnl Add a rule with two sample actions and each sample action
+dnl has a sampling_port
+AT_DATA([flows3.txt], [dnl
+in_port=3, actions=sample(probability=65535,collector_set_id=1,sampling_port=1),output:1,sample(probability=65535,collector_set_id=1,sampling_port=2),output:2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows3.txt], [0], [ignore])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+dnl Make sure flow sample action in datapath is behind set tunnel
+dnl action at egress point of tunnel port.
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df|key))),sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=1),tunnel_out_port=1))),1,set(tunnel(tun_id=0x6,src=2.2.2.3,dst=1.1.1.2,tos=0x1,ttl=64,flags(df|key))),sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=7471),tunnel_out_port=7471))),7471
+])
+
+dnl Remove the flow which contains sample action.
+AT_CHECK([ovs-ofctl del-flows br0 in_port=3], [0], [ignore])
+AT_CHECK([ovs-vsctl destroy Flow_Sample_Collector_Set 1], [0], [ignore])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl Flow based IPFIX statistics check
+AT_SETUP([ofproto-dpif - Flow IPFIX statistics check])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+
+dnl Negative test check.
+AT_CHECK([ovs-ofctl dump-ipfix-flow br0], [0], [dnl
+OFPT_ERROR (xid=0x2): NXST_NOT_CONFIGURED
+NXST_IPFIX_FLOW request (xid=0x2):
+])
+
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- --id=@ipfix create IPFIX targets=\"127.0.0.1:4739\" \
+                    -- --id=@cs create Flow_Sample_Collector_Set id=1 bridge=@br0 ipfix=@ipfix],
+         [0], [ignore])
+
+AT_DATA([flows.txt], [dnl
+in_port=1, actions=sample(probability=65535,collector_set_id=1),output:2
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt], [0], [ignore])
+
+dnl Send some packets that should be sampled.
+for i in `seq 1 20`; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
+done
+
+dnl There are 4 extra IPFIX template packets.
+AT_CHECK([ovs-ofctl dump-ipfix-flow br0], [0], [dnl
+NXST_IPFIX_FLOW reply (xid=0x2): 1 ids
+  id   1: flows=20, current flows=0, sampled pkts=20, ipv4 ok=0, ipv6 ok=0, tx pkts=12
+          pkts errs=20, ipv4 errs=20, ipv6 errs=0, tx errs=12
+])
+
+dnl Remove the flow which contains sample action.
+AT_CHECK([ovs-ofctl del-flows br0 in_port=1], [0], [ignore])
+AT_CHECK([ovs-vsctl destroy Flow_Sample_Collector_Set 1], [0], [ignore])
+AT_CHECK([ovs-appctl revalidator/purge])
+
+dnl Send some more packets, to ensure that these are not sampled.
+for i in `seq 1 3`; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800)'])
+done
+AT_CHECK([ovs-ofctl dump-ipfix-flow br0], [0], [dnl
+OFPT_ERROR (xid=0x2): NXST_NOT_CONFIGURED
+NXST_IPFIX_FLOW request (xid=0x2):
 ])
 
 OVS_VSWITCHD_STOP(["/sending to collector failed/d"])
@@ -6114,8 +6324,8 @@ for dl_src in 00 01; do
 done
 sleep 1  # wait for the datapath flow installed
 AT_CHECK_UNQUOTED([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=60:66:66:66:66:00,mpls_label=20,mpls_tc=0,mpls_ttl=32,mpls_bos=0,mpls_lse1=82208, actions:userspace(pid=0,slow_path(controller))
-recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=60:66:66:66:66:01,mpls_bos=0,mpls_lse1=82208, actions:userspace(pid=0,slow_path(controller))
+recirc_id(0),in_port(1),eth(src=60:66:66:66:66:00),eth_type(0x8847),mpls(label=20,tc=0,ttl=32,bos=0,label=20,tc=0,ttl=32,bos=1), actions:userspace(pid=0,slow_path(controller))
+recirc_id(0),in_port(1),eth(src=60:66:66:66:66:01),eth_type(0x8847),mpls(label=20/0x0,tc=0/0,ttl=32/0x0,bos=0/1,label=20/0xfffff,tc=0/7,ttl=32/0xff,bos=1/1), actions:userspace(pid=0,slow_path(controller))
 ])
 
 OVS_VSWITCHD_STOP
@@ -6153,8 +6363,8 @@ for dl_src in 00 01; do
 done
 sleep 1  # wait for the datapath flow installed
 AT_CHECK_UNQUOTED([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=60:66:66:66:66:00,mpls_label=20,mpls_tc=0,mpls_ttl=32,mpls_bos=0,mpls_lse1=82208, actions:userspace(pid=0,slow_path(controller))
-recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=60:66:66:66:66:01,mpls_bos=0,mpls_lse1=82208, actions:userspace(pid=0,slow_path(controller))
+recirc_id(0),in_port(1),eth(src=60:66:66:66:66:00),eth_type(0x8847),mpls(label=20,tc=0,ttl=32,bos=0,label=20,tc=0,ttl=32,bos=1), actions:userspace(pid=0,slow_path(controller))
+recirc_id(0),in_port(1),eth(src=60:66:66:66:66:01),eth_type(0x8847),mpls(label=20/0x0,tc=0/0,ttl=32/0x0,bos=0/1,label=20/0xfffff,tc=0/7,ttl=32/0xff,bos=1/1), actions:userspace(pid=0,slow_path(controller))
 ])
 
 OVS_VSWITCHD_STOP
@@ -6209,8 +6419,8 @@ dummy@ovs-dummy: hit:13 missed:2
 ])
 
 AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id=0,ip,in_port=100,vlan_tci=0x0000,nw_frag=no, actions:101,3,2
-recirc_id=0,ip,in_port=101,vlan_tci=0x0000,nw_frag=no, actions:100,2,3
+recirc_id(0),in_port(100),eth_type(0x0800),ipv4(frag=no), actions:101,3,2
+recirc_id(0),in_port(101),eth_type(0x0800),ipv4(frag=no), actions:100,2,3
 ])
 
 AT_CHECK([grep -e 'in_port(100).*packets:9' ovs-vswitchd.log | strip_ufid | filter_flow_dump], [0], [dnl
@@ -6274,7 +6484,7 @@ dummy@ovs-dummy: hit:0 missed:1
 ])
 
 AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id=0,ip,in_port=100,vlan_tci=0x0000,nw_src=192.168.0.1,nw_frag=no, actions:101,set(ipv4(src=255.255.255.254)),2
+recirc_id(0),in_port(100),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), actions:101,set(ipv4(src=255.255.255.254)),2
 ])
 
 AT_CHECK([grep -e '|nx_match|WARN|' ovs-vswitchd.log | sed "s/^.*|WARN|//"], [0], [dnl
@@ -6317,7 +6527,7 @@ sleep 1
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6334,8 +6544,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6353,8 +6563,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,icmp,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.4,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.2/30,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.252,frag=no), actions: <del>
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.4,proto=1,frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6372,8 +6582,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:5:4:3:2:1,dst=2001:db8:3c4d:1:2:3:4:1,label=0,proto=99,tclass=0x70,hlimit=64,frag=no)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ipv6,in_port=1,vlan_tci=0x0000,ipv6_src=2001:db8:3c4d:1:2:3:4:5,nw_frag=no, actions: <del>
-recirc_id=0,ipv6,in_port=1,vlan_tci=0x0000,ipv6_src=2001:db8:3c4d:5:4:3:2:1/62,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:1:2:3:4:5,frag=no), actions: <del>
+recirc_id(0),in_port(1),eth_type(0x86dd),ipv6(src=2001:db8:3c4d:5:4:3:2:1/ffff:ffff:ffff:fffc::,frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6391,7 +6601,7 @@ sleep 1
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,icmp,in_port=1,vlan_tci=0x0000,nw_frag=no,icmp_type=0x8/0xff, actions: <del>
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(proto=1,frag=no),icmp(type=8), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6407,8 +6617,8 @@ m4_define([OFPROTO_DPIF_MEGAFLOW_NORMAL],
    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
    sleep 1
    AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
@@ -6429,8 +6639,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0a),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout_keep_actions], [0], [dnl
-recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,mpls_label=11,mpls_tc=3,mpls_ttl=64,mpls_bos=1, actions:push_mpls(label=11,tc=3,ttl=64,bos=0,eth_type=0x8847),2
-recirc_id=0,mpls,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,mpls_bos=1, actions:pop_mpls(eth_type=0x800),2
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09),eth_type(0x8847),mpls(label=11,tc=3,ttl=64,bos=1), actions:push_mpls(label=11,tc=3,ttl=64,bos=0,eth_type=0x8847),2
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b),eth_type(0x8847),mpls(label=11/0x0,tc=3/0,ttl=64/0x0,bos=1/1), actions:pop_mpls(eth_type=0x800),2
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6456,8 +6666,8 @@ m4_define([CHECK_MEGAFLOW_NETFLOW],
   AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
   sleep 1
   AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,icmp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_frag=no,icmp_type=0x8/0xff,icmp_code=0x0/0xff, actions: <del>
-recirc_id=0,icmp,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_src=10.0.0.4,nw_dst=10.0.0.3,nw_tos=0,nw_frag=no,icmp_type=0x8/0xff,icmp_code=0x0/0xff, actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0/0xfc,frag=no),icmp(type=8,code=0), actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0/0xfc,frag=no),icmp(type=8,code=0), actions: <del>
 ])
   OVS_APP_EXIT_AND_WAIT([test-netflow])
   OVS_VSWITCHD_STOP])
@@ -6488,8 +6698,8 @@ m4_define([OFPROTO_DPIF_MEGAFLOW_NORMAL_ACB_BOND],
    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
    sleep 1
    AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
@@ -6512,8 +6722,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6550,8 +6760,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p7 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=7,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=7,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_frag=no, actions: <del>
+recirc_id(0),in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(7),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6569,8 +6779,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6589,8 +6799,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6608,8 +6818,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6633,7 +6843,7 @@ sleep 1
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6655,8 +6865,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,dl_vlan=11,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),eth_type(0x8100),vlan(vid=11,pcp=7/0x0),encap(eth_type(0x0800),ipv4(frag=no)), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6675,8 +6885,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.2,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.4,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2,frag=no), actions: <del>
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.4,frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6693,8 +6903,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.2,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.4,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2,frag=no), actions: <del>
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.4,frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6720,8 +6930,8 @@ done
 sleep 1
 dnl The original flow is missing due to a revalidation.
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:09,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000/0x1fff,dl_src=50:54:00:00:00:0b,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:09),eth_type(0x0800),ipv4(frag=no), actions: <del>
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:0b),eth_type(0x0800),ipv4(frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6752,9 +6962,9 @@ sleep 1
 AT_CHECK([ovs-appctl netdev-dummy/receive p3 'in_port(3),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0x1,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,nw_ecn=1,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=3,vlan_tci=0x0000,nw_tos=0,nw_ecn=1,nw_ttl=64,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=3,vlan_tci=0x0000,nw_tos=252,nw_ecn=1,nw_ttl=128,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(tos=0xfd/0x3,frag=no), actions: <del>
+recirc_id(0),in_port(3),eth_type(0x0800),ipv4(tos=0x1,ttl=64,frag=no), actions: <del>
+recirc_id(0),in_port(3),eth_type(0x0800),ipv4(tos=0xfd,ttl=128,frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6772,8 +6982,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
 sleep 1
 AT_CHECK([filter_flow_install < ovs-vswitchd.log | strip_xout], [0], [dnl
-recirc_id=0,icmp,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.4,nw_ttl=64,nw_frag=no, actions: <del>
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,nw_src=10.0.0.2/30,nw_frag=no, actions: <del>
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.2/255.255.255.252,frag=no), actions: <del>
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=10.0.0.4,proto=1,ttl=64,frag=no), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6793,8 +7003,8 @@ dnl The first packet is essentially a no-op, as the new destination MAC is the
 dnl same as the original.  The second entry actually updates the destination
 dnl MAC.
 AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_dst=50:54:00:00:00:0a,nw_frag=no, actions:2
-recirc_id=0,ip,in_port=1,vlan_tci=0x0000,dl_dst=50:54:00:00:00:0c,nw_frag=no, actions:set(eth(dst=50:54:00:00:00:0a)),2
+recirc_id(0),in_port(1),eth(dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(frag=no), actions:2
+recirc_id(0),in_port(1),eth(dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(frag=no), actions:set(eth(dst=50:54:00:00:00:0a)),2
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6824,8 +7034,8 @@ table=0 in_port=1,ip,nw_dst=10.0.0.3 actions=drop
    done
    sleep 1
    AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-pkt_mark=0,recirc_id=0,dp_hash=0,skb_priority=0,ct_state=0,ct_zone=0,ct_mark=0,ct_label=0,icmp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0, actions:2
-pkt_mark=0,recirc_id=0,dp_hash=0,skb_priority=0,ct_state=0,ct_zone=0,ct_mark=0,ct_label=0,icmp,in_port=1,vlan_tci=0x0000,dl_src=50:54:00:00:00:0b,dl_dst=50:54:00:00:00:0c,nw_src=10.0.0.4,nw_dst=10.0.0.3,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0, actions:drop
+skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), actions:2
+skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), actions:drop
 ])
    AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_dump | grep 'packets:3'], [0], [dnl
 skb_priority(0),skb_mark(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:3, bytes:180, used:0.0s, actions:2
@@ -7349,8 +7559,8 @@ AT_CHECK([ovs-appctl netdev-dummy/receive p1 'recirc_id(0),in_port(1),eth(src=f2
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 
 AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
-recirc_id=0,icmp6,in_port=1,vlan_tci=0x0000,nw_frag=no,icmp_type=0x80/0xff, actions:2
-recirc_id=0,icmp6,in_port=1,vlan_tci=0x0000,nw_frag=no,icmp_type=0x81/0xff, actions:3
+recirc_id(0),in_port(1),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=128), actions:2
+recirc_id(0),in_port(1),eth_type(0x86dd),ipv6(proto=58,frag=no),icmpv6(type=129), actions:3
 ])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
@@ -7395,8 +7605,8 @@ AT_CHECK([ovs-ofctl add-flow br0 "vlan_tci=0x000a/0x0fff,action=output:local"])
 AT_CHECK([ovs-appctl netdev-dummy/receive p0 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8100),vlan(vid=10,pcp=0),encap(eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0))'])
 
 OVS_WAIT_UNTIL([grep flow_add: ovs-vswitchd.log])
-AT_CHECK([grep 'in_port=[[1]]' ovs-vswitchd.log | filter_flow_install | strip_xout], [0], [dnl
-recirc_id=0,ip,in_port=1,dl_vlan=10,nw_frag=no, actions: <del>
+AT_CHECK([grep 'in_port([[1]])' ovs-vswitchd.log | filter_flow_install | strip_xout], [0], [dnl
+recirc_id(0),in_port(1),eth_type(0x8100),vlan(vid=10),encap(eth_type(0x0800),ipv4(frag=no)), actions: <del>
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -7506,7 +7716,7 @@ recirc_id(0),in_port(1),eth_type(0x1234), packets:8, bytes:480, used:0.0s, actio
 # Check that VLAN packets will not hit the same datapath megaflow.
 
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x1234))'])
-OVS_WAIT_UNTIL([grep 'flow_add:.*dl_vlan=99' ovs-vswitchd.log])
+OVS_WAIT_UNTIL([grep 'flow_add:.*vlan(vid=99' ovs-vswitchd.log])
 
 for i in 1 2; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x8100),vlan(vid=99,pcp=7),encap(eth_type(0x1234))'
@@ -7520,10 +7730,10 @@ recirc_id(0),in_port(1),eth_type(0x8100),vlan(vid=99,pcp=7/0x0),encap(eth_type(0
 # Check that the new flow matches the CFI bit, while both vid and pcp
 # are wildcarded.
 AT_CHECK([grep '\(modify\)\|\(flow_add\)' ovs-vswitchd.log | strip_ufid ], [0], [dnl
-dpif_netdev|DBG|flow_add: recirc_id=0,in_port=1,vlan_tci=0x0000,dl_type=0x1234, actions:100
+dpif_netdev|DBG|flow_add: recirc_id(0),in_port(1),eth_type(0x1234), actions:100
 dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234)
 dpif|DBG|dummy@ovs-dummy: put[[modify]] skb_priority(0/0),skb_mark(0/0),recirc_id(0),dp_hash(0/0),in_port(1),eth(src=50:54:00:00:00:09/00:00:00:00:00:00,dst=50:54:00:00:00:0a/00:00:00:00:00:00),eth_type(0x1234), actions:100
-dpif_netdev|DBG|flow_add: recirc_id=0,in_port=1,dl_vlan=99,dl_type=0x1234, actions:drop
+dpif_netdev|DBG|flow_add: recirc_id(0),in_port(1),eth_type(0x8100),vlan(vid=99,pcp=7/0x0),encap(eth_type(0x1234)), actions:drop
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

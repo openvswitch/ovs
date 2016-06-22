@@ -425,6 +425,8 @@ usage(void)
            "  add-tlv-map SWITCH MAP      add TLV option MAPpings\n"
            "  del-tlv-map SWITCH [MAP] delete TLV option MAPpings\n"
            "  dump-tlv-map SWITCH      print TLV option mappings\n"
+           "  dump-ipfix-bridge SWITCH    print ipfix stats of bridge\n"
+           "  dump-ipfix-flow SWITCH      print flow ipfix of a bridge\n"
            "\nFor OpenFlow switches and controllers:\n"
            "  probe TARGET                probe whether TARGET is up\n"
            "  ping TARGET [N]             latency of N-byte echos\n"
@@ -2437,6 +2439,18 @@ ofctl_benchmark(struct ovs_cmdl_context *ctx)
 }
 
 static void
+ofctl_dump_ipfix_bridge(struct ovs_cmdl_context *ctx)
+{
+    dump_trivial_transaction(ctx->argv[1], OFPRAW_NXST_IPFIX_BRIDGE_REQUEST);
+}
+
+static void
+ofctl_dump_ipfix_flow(struct ovs_cmdl_context *ctx)
+{
+    dump_trivial_transaction(ctx->argv[1], OFPRAW_NXST_IPFIX_FLOW_REQUEST);
+}
+
+static void
 ofctl_group_mod__(const char *remote, struct ofputil_group_mod *gms,
                   size_t n_gms, enum ofputil_protocol usable_protocols)
 {
@@ -3955,6 +3969,26 @@ ofctl_encode_hello(struct ovs_cmdl_context *ctx)
     ofpbuf_delete(hello);
 }
 
+static void
+ofctl_parse_key_value(struct ovs_cmdl_context *ctx)
+{
+    for (size_t i = 1; i < ctx->argc; i++) {
+        char *s = ctx->argv[i];
+        char *key, *value;
+        int j = 0;
+        while (ofputil_parse_key_value(&s, &key, &value)) {
+            if (j++) {
+                fputs(", ", stdout);
+            }
+            fputs(key, stdout);
+            if (value[0]) {
+                printf("=%s", value);
+            }
+        }
+        putchar('\n');
+    }
+}
+
 static const struct ovs_cmdl_command all_commands[] = {
     { "show", "switch",
       1, 1, ofctl_show },
@@ -4027,6 +4061,11 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "benchmark", "target n count",
       3, 3, ofctl_benchmark },
 
+    { "dump-ipfix-bridge", "switch",
+      1, 1, ofctl_dump_ipfix_bridge},
+    { "dump-ipfix-flow", "switch",
+      1, 1, ofctl_dump_ipfix_flow},
+
     { "ofp-parse", "file",
       1, 1, ofctl_ofp_parse },
     { "ofp-parse-pcap", "pcap",
@@ -4075,6 +4114,7 @@ static const struct ovs_cmdl_command all_commands[] = {
     { "encode-error-reply", NULL, 2, 2, ofctl_encode_error_reply },
     { "ofp-print", NULL, 1, 2, ofctl_ofp_print },
     { "encode-hello", NULL, 1, 1, ofctl_encode_hello },
+    { "parse-key-value", NULL, 1, INT_MAX, ofctl_parse_key_value },
 
     { NULL, NULL, 0, 0, NULL },
 };

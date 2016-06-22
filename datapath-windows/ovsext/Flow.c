@@ -1650,19 +1650,19 @@ MapTunAttrToFlowPut(PNL_ATTR *keyAttrs,
     if (keyAttrs[OVS_KEY_ATTR_TUNNEL]) {
 
         if (tunAttrs[OVS_TUNNEL_KEY_ATTR_ID]) {
-            destKey->tunKey.tunnelId = NlAttrGetU64
-                                       (tunAttrs[OVS_TUNNEL_KEY_ATTR_ID]);
+            destKey->tunKey.tunnelId =
+                NlAttrGetU64(tunAttrs[OVS_TUNNEL_KEY_ATTR_ID]);
             destKey->tunKey.flags |= OVS_TNL_F_KEY;
         }
 
         if (tunAttrs[OVS_TUNNEL_KEY_ATTR_IPV4_DST]) {
-        destKey->tunKey.dst = NlAttrGetU32
-                              (tunAttrs[OVS_TUNNEL_KEY_ATTR_IPV4_DST]);
+            destKey->tunKey.dst =
+                NlAttrGetU32(tunAttrs[OVS_TUNNEL_KEY_ATTR_IPV4_DST]);
         }
 
         if (tunAttrs[OVS_TUNNEL_KEY_ATTR_IPV4_SRC]) {
-        destKey->tunKey.src = NlAttrGetU32
-                              (tunAttrs[OVS_TUNNEL_KEY_ATTR_IPV4_SRC]);
+            destKey->tunKey.src =
+                NlAttrGetU32(tunAttrs[OVS_TUNNEL_KEY_ATTR_IPV4_SRC]);
         }
 
         if (tunAttrs[OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT]) {
@@ -1674,13 +1674,13 @@ MapTunAttrToFlowPut(PNL_ATTR *keyAttrs,
         }
 
         if (tunAttrs[OVS_TUNNEL_KEY_ATTR_TOS]) {
-        destKey->tunKey.tos = NlAttrGetU8
-                              (tunAttrs[OVS_TUNNEL_KEY_ATTR_TOS]);
+            destKey->tunKey.tos =
+                NlAttrGetU8(tunAttrs[OVS_TUNNEL_KEY_ATTR_TOS]);
         }
 
         if (tunAttrs[OVS_TUNNEL_KEY_ATTR_TTL]) {
-        destKey->tunKey.ttl = NlAttrGetU8
-                              (tunAttrs[OVS_TUNNEL_KEY_ATTR_TTL]);
+            destKey->tunKey.ttl =
+                NlAttrGetU8(tunAttrs[OVS_TUNNEL_KEY_ATTR_TTL]);
         }
 
         destKey->tunKey.pad = 0;

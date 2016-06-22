@@ -1942,14 +1942,12 @@ dp_netdev_flow_to_dpif_flow(const struct dp_netdev_flow *netdev_flow,
         /* Key */
         offset = key_buf->size;
         flow->key = ofpbuf_tail(key_buf);
-        odp_parms.odp_in_port = netdev_flow->flow.in_port.odp_port;
         odp_flow_key_from_flow(&odp_parms, key_buf);
         flow->key_len = key_buf->size - offset;
 
         /* Mask */
         offset = mask_buf->size;
         flow->mask = ofpbuf_tail(mask_buf);
-        odp_parms.odp_in_port = wc.masks.in_port.odp_port;
         odp_parms.key_buf = key_buf;
         odp_flow_key_from_mask(&odp_parms, mask_buf);
         flow->mask_len = mask_buf->size - offset;
@@ -2122,22 +2120,34 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
                 dp_netdev_flow_hash(&flow->ufid));
 
     if (OVS_UNLIKELY(VLOG_IS_DBG_ENABLED())) {
-        struct match match;
         struct ds ds = DS_EMPTY_INITIALIZER;
+        struct ofpbuf key_buf, mask_buf;
+        struct odp_flow_key_parms odp_parms = {
+            .flow = &match->flow,
+            .mask = &match->wc.masks,
+            .support = dp_netdev_support,
+        };
 
-        match.tun_md.valid = false;
-        match.flow = flow->flow;
-        miniflow_expand(&flow->cr.mask->mf, &match.wc.masks);
+        ofpbuf_init(&key_buf, 0);
+        ofpbuf_init(&mask_buf, 0);
+
+        odp_flow_key_from_flow(&odp_parms, &key_buf);
+        odp_parms.key_buf = &key_buf;
+        odp_flow_key_from_mask(&odp_parms, &mask_buf);
 
         ds_put_cstr(&ds, "flow_add: ");
         odp_format_ufid(ufid, &ds);
         ds_put_cstr(&ds, " ");
-        match_format(&match, &ds, OFP_DEFAULT_PRIORITY);
+        odp_flow_format(key_buf.data, key_buf.size,
+                        mask_buf.data, mask_buf.size,
+                        NULL, &ds, false);
         ds_put_cstr(&ds, ", actions:");
         format_odp_actions(&ds, actions, actions_len);
 
         VLOG_DBG_RL(&upcall_rl, "%s", ds_cstr(&ds));
 
+        ofpbuf_uninit(&key_buf);
+        ofpbuf_uninit(&mask_buf);
         ds_destroy(&ds);
     }
 
@@ -3518,7 +3528,6 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
         struct odp_flow_key_parms odp_parms = {
             .flow = flow,
             .mask = &wc->masks,
-            .odp_in_port = flow->in_port.odp_port,
             .support = dp_netdev_support,
         };
 

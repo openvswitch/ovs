@@ -40,18 +40,22 @@ uint32_t dpif_ipfix_get_bridge_exporter_probability(const struct dpif_ipfix *);
 bool dpif_ipfix_get_bridge_exporter_tunnel_sampling(const struct dpif_ipfix *);
 bool dpif_ipfix_get_bridge_exporter_input_sampling(const struct dpif_ipfix *);
 bool dpif_ipfix_get_bridge_exporter_output_sampling(const struct dpif_ipfix *);
+bool dpif_ipfix_get_flow_exporter_tunnel_sampling(const struct dpif_ipfix *,
+                                                  const uint32_t);
 bool dpif_ipfix_get_tunnel_port(const struct dpif_ipfix *, odp_port_t);
 void dpif_ipfix_set_options(
     struct dpif_ipfix *,
     const struct ofproto_ipfix_bridge_exporter_options *,
     const struct ofproto_ipfix_flow_exporter_options *, size_t);
 
+int dpif_ipfix_get_stats(const struct dpif_ipfix *, bool, struct ovs_list *);
+
 void dpif_ipfix_bridge_sample(struct dpif_ipfix *, const struct dp_packet *,
                               const struct flow *,
                               odp_port_t, odp_port_t, const struct flow_tnl *);
 void dpif_ipfix_flow_sample(struct dpif_ipfix *, const struct dp_packet *,
-                            const struct flow *, uint32_t, uint16_t, uint32_t,
-                            uint32_t);
+                            const struct flow *, const union user_action_cookie *,
+                            odp_port_t, const struct flow_tnl *);
 
 void dpif_ipfix_run(struct dpif_ipfix *);
 void dpif_ipfix_wait(struct dpif_ipfix *);

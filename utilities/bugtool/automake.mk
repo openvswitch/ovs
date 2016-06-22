@@ -33,6 +33,8 @@ bugtool_scripts = \
 
 scripts_SCRIPTS += $(bugtool_scripts)
 
+FLAKE8_PYFILES += utilities/bugtool/ovs-bugtool.in
+
 bugtoolpluginsdir = $(pkgdatadir)/bugtool-plugins
 INSTALL_DATA_LOCAL += bugtool-install-data-local
 bugtool-install-data-local:

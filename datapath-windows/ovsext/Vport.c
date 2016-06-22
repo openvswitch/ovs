@@ -404,7 +404,6 @@ HvConnectNic(POVS_SWITCH_CONTEXT switchContext,
 {
     LOCK_STATE_EX lockState;
     POVS_VPORT_ENTRY vport;
-    UINT32 portNo;
 
     VPORT_NIC_ENTER(nicParam);
 
@@ -430,7 +429,6 @@ HvConnectNic(POVS_SWITCH_CONTEXT switchContext,
 
     vport->ovsState = OVS_STATE_CONNECTED;
     vport->nicState = NdisSwitchNicStateConnected;
-    portNo = vport->portNo;
 
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
 
@@ -691,9 +689,9 @@ OvsFindVportByPortNo(POVS_SWITCH_CONTEXT switchContext,
 
 
 POVS_VPORT_ENTRY
-OvsFindTunnelVportByDstPort(POVS_SWITCH_CONTEXT switchContext,
-                            UINT16 dstPort,
-                            OVS_VPORT_TYPE ovsPortType)
+OvsFindTunnelVportByDstPortAndType(POVS_SWITCH_CONTEXT switchContext,
+                                   UINT16 dstPort,
+                                   OVS_VPORT_TYPE ovsPortType)
 {
     POVS_VPORT_ENTRY vport;
     PLIST_ENTRY head, link;
@@ -704,6 +702,41 @@ OvsFindTunnelVportByDstPort(POVS_SWITCH_CONTEXT switchContext,
         vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, tunnelVportLink);
         if (GetPortFromPriv(vport) == dstPort &&
             vport->ovsType == ovsPortType) {
+            return vport;
+        }
+    }
+    return NULL;
+}
+
+POVS_VPORT_ENTRY
+OvsFindTunnelVportByDstPortAndNWProto(POVS_SWITCH_CONTEXT switchContext,
+                                      UINT16 dstPort,
+                                      UINT8 nwProto)
+{
+    POVS_VPORT_ENTRY vport;
+    PLIST_ENTRY head, link;
+    UINT32 hash = OvsJhashBytes((const VOID *)&dstPort, sizeof(dstPort),
+                                OVS_HASH_BASIS);
+    head = &(switchContext->tunnelVportsArray[hash & OVS_VPORT_MASK]);
+    LIST_FORALL(head, link) {
+        vport = CONTAINING_RECORD(link, OVS_VPORT_ENTRY, tunnelVportLink);
+        if (GetPortFromPriv(vport) == dstPort) {
+            switch (nwProto) {
+            case IPPROTO_UDP:
+                if (vport->ovsType != OVS_VPORT_TYPE_VXLAN) {
+                    continue;
+                }
+                break;
+            case IPPROTO_TCP:
+                if (vport->ovsType != OVS_VPORT_TYPE_STT) {
+                    continue;
+                }
+                break;
+            case IPPROTO_GRE:
+                break;
+            default:
+                continue;
+            }
             return vport;
         }
     }
@@ -1641,7 +1674,7 @@ OvsGetExtInfoIoctl(POVS_VPORT_GET vportGet,
                                                  OVS_MAX_PORT_NAME_LENGTH);
         if (status != STATUS_SUCCESS) {
             OVS_LOG_INFO("Fail to convert NIC name.");
-            extInfo->vmUUID[0] = 0;
+            extInfo->name[0] = 0;
         }
 
         status = OvsConvertIfCountedStrToAnsiStr(&vport->vmName,
@@ -2222,15 +2255,20 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
         if (OvsIsTunnelVportType(portType)) {
             UINT16 transportPortDest = 0;
+            UINT8 nwProto;
+            POVS_VPORT_ENTRY dupVport;
 
             switch (portType) {
             case OVS_VPORT_TYPE_GRE:
+                nwProto = IPPROTO_GRE;
                 break;
             case OVS_VPORT_TYPE_VXLAN:
                 transportPortDest = VXLAN_UDP_PORT;
+                nwProto = IPPROTO_UDP;
                 break;
             case OVS_VPORT_TYPE_STT:
                 transportPortDest = STT_TCP_PORT;
+                nwProto = IPPROTO_TCP;
                 break;
             default:
                 nlError = NL_ERROR_INVAL;
@@ -2243,6 +2281,22 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                 if (attr) {
                     transportPortDest = NlAttrGetU16(attr);
                 }
+            }
+
+            /*
+             * We don't allow two tunnel ports on identical N/W protocol and
+             * L4 port number. This is applicable even if the two ports are of
+             * different tunneling types.
+             */
+            dupVport =
+                OvsFindTunnelVportByDstPortAndNWProto(gOvsSwitchContext,
+                                                      transportPortDest,
+                                                      nwProto);
+            if (dupVport) {
+                OVS_LOG_ERROR("Vport for N/W proto and port already exists,"
+                    " type: %u, dst port: %u, name: %s", dupVport->ovsType,
+                    transportPortDest, dupVport->ovsName);
+                goto Cleanup;
             }
 
             status = OvsInitTunnelVport(usrParamsCtx,
@@ -2319,6 +2373,8 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                    gOvsSwitchContext->dpNo);
 
     *replyLen = msgOut->nlMsg.nlmsgLen;
+    OVS_LOG_INFO("Created new vport, name: %s, type: %u", vport->ovsName,
+                 vport->ovsType);
 
 Cleanup:
     NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);

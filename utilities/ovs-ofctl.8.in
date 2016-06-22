@@ -255,6 +255,26 @@ This command has limited usefulness, because ports often have no
 configured queues and because the OpenFlow protocol provides only very
 limited information about the configuration of a queue.
 .
+.IP "\fBdump\-ipfix\-bridge \fIswitch
+Prints to the console the statistics of bridge IPFIX for \fIswitch\fR.
+If bridge IPFIX is configured on the \fIswitch\fR, IPFIX statistics
+can be retrieved.  Otherwise, error message will be printed.
+.IP
+This command uses an Open vSwitch extension that is only in Open
+vSwitch 2.6 and later.
+.
+.IP "\fBdump\-ipfix\-flow \fIswitch
+Prints to the console the statistics of flow-based IPFIX for
+\fIswitch\fR.  If flow-based IPFIX is configured on the \fIswitch\fR,
+statistics of all the collector set ids on the \fIswitch\fR will be
+printed.  Otherwise, print error message.
+.IP
+Refer to \fBovs-vswitchd.conf.db\fR(5) for more details on configuring
+flow based IPFIX and collector set ids.
+.IP
+This command uses an Open vSwitch extension that is only in Open
+vSwitch 2.6 and later.
+.
 .SS "OpenFlow 1.1+ Group Table Commands"
 .
 The following commands work only with switches that support OpenFlow
@@ -2300,9 +2320,15 @@ Observation Domain ID sent in every IPFIX flow record.  Defaults to 0.
 .IP "\fBobs_point_id=\fIid\fR"
 When sending samples to IPFIX collectors, the unsigned 32-bit integer
 Observation Point ID sent in every IPFIX flow record.  Defaults to 0.
+.IP "\fBsampling_port=\fIport\fR"
+Sample packets on the port.  It can be set as input port or output
+port.  When this option is omitted, or specified as \fBNONE\fB, IPFIX
+does not differentiate between ingress packets and egress packets and
+does not export egress tunnel information.  This option was added in
+Open vSwitch 2.5.90.
 .RE
 .IP
-Refer to \fBovs\-vswitchd.conf.db\fR(8) for more details on
+Refer to \fBovs\-vswitchd.conf.db\fR(5) for more details on
 configuring sample collector sets.
 .IP
 This action was added in Open vSwitch 1.10.90.

@@ -863,6 +863,64 @@ ofproto_set_ipfix(struct ofproto *ofproto,
     }
 }
 
+static int
+ofproto_get_ipfix_stats(struct ofproto *ofproto,
+                        bool bridge_ipfix,
+                        struct ovs_list *replies)
+{
+    int error;
+
+    if (ofproto->ofproto_class->get_ipfix_stats) {
+        error = ofproto->ofproto_class->get_ipfix_stats(ofproto,
+                                                          bridge_ipfix,
+                                                          replies);
+    } else {
+        error = EOPNOTSUPP;
+    }
+
+    return error;
+}
+
+static enum ofperr
+handle_ipfix_bridge_stats_request(struct ofconn *ofconn,
+                                  const struct ofp_header *request)
+{
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct ovs_list replies;
+    enum ofperr error;
+
+    ofpmp_init(&replies, request);
+    error = ofproto_get_ipfix_stats(ofproto, true, &replies);
+
+    if (!error) {
+        ofconn_send_replies(ofconn, &replies);
+    } else {
+        ofpbuf_list_delete(&replies);
+    }
+
+    return error;
+}
+
+static enum ofperr
+handle_ipfix_flow_stats_request(struct ofconn *ofconn,
+                                const struct ofp_header *request)
+{
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct ovs_list replies;
+    enum ofperr error;
+
+    ofpmp_init(&replies, request);
+    error = ofproto_get_ipfix_stats(ofproto, false, &replies);
+
+    if (!error) {
+        ofconn_send_replies(ofconn, &replies);
+    } else {
+        ofpbuf_list_delete(&replies);
+    }
+
+    return error;
+}
+
 void
 ofproto_set_flow_restore_wait(bool flow_restore_wait_db)
 {
@@ -1475,7 +1533,9 @@ ofproto_rule_delete(struct ofproto *ofproto, struct rule *rule)
             OVS_NOT_REACHED();
         }
         ofproto_rule_remove__(rule->ofproto, rule);
-        ofproto->ofproto_class->rule_delete(rule);
+        if (ofproto->ofproto_class->rule_delete) {
+            ofproto->ofproto_class->rule_delete(rule);
+        }
         ofproto_rule_unref(rule);
     }
     ovs_mutex_unlock(&ofproto_mutex);
@@ -2825,7 +2885,9 @@ remove_rule_rcu__(struct rule *rule)
     if (!classifier_remove(&table->cls, &rule->cr)) {
         OVS_NOT_REACHED();
     }
-    ofproto->ofproto_class->rule_delete(rule);
+    if (ofproto->ofproto_class->rule_delete) {
+        ofproto->ofproto_class->rule_delete(rule);
+    }
     ofproto_rule_unref(rule);
 }
 
@@ -7356,6 +7418,12 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_NXT_TLV_TABLE_REQUEST:
         return handle_tlv_table_request(ofconn, oh);
 
+    case OFPTYPE_IPFIX_BRIDGE_STATS_REQUEST:
+        return handle_ipfix_bridge_stats_request(ofconn, oh);
+
+    case OFPTYPE_IPFIX_FLOW_STATS_REQUEST:
+        return handle_ipfix_flow_stats_request(ofconn, oh);
+
     case OFPTYPE_HELLO:
     case OFPTYPE_ERROR:
     case OFPTYPE_FEATURES_REPLY:
@@ -7389,6 +7457,8 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_REQUESTFORWARD:
     case OFPTYPE_TABLE_STATUS:
     case OFPTYPE_NXT_TLV_TABLE_REPLY:
+    case OFPTYPE_IPFIX_BRIDGE_STATS_REPLY:
+    case OFPTYPE_IPFIX_FLOW_STATS_REPLY:
     default:
         if (ofpmsg_is_stat_request(oh)) {
             return OFPERR_OFPBRC_BAD_STAT;

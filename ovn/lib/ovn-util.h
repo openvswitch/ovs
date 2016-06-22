@@ -39,8 +39,8 @@ struct lport_addresses {
 };
 
 bool
-extract_lport_addresses(char *address, struct lport_addresses *laddrs,
-                        bool store_ipv6);
+extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
+                      bool store_ipv6);
 
 char *
 alloc_nat_zone_key(const struct sbrec_port_binding *port_binding,

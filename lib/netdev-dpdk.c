@@ -30,6 +30,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <getopt.h>
+#include <numaif.h>
 
 #include "dirs.h"
 #include "dp-packet.h"
@@ -141,10 +142,7 @@ static char *cuse_dev_name = NULL;    /* Character device cuse_dev_name. */
 #endif
 static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 
-/*
- * Maximum amount of time in micro seconds to try and enqueue to vhost.
- */
-#define VHOST_ENQ_RETRY_USECS 100
+#define VHOST_ENQ_RETRY_NUM 8
 
 static const struct rte_eth_conf port_conf = {
     .rxmode = {
@@ -384,6 +382,9 @@ struct netdev_dpdk {
      * netdev_dpdk*_reconfigure() is called */
     int requested_n_txq;
     int requested_n_rxq;
+
+    /* Socket ID detected when vHost device is brought up */
+    int requested_socket_id;
 
     /* Ingress Policer */
     OVSRCU_TYPE(struct ingress_policer *) ingress_policer;
@@ -761,6 +762,7 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
     }
 
     dev->socket_id = sid < 0 ? SOCKET0 : sid;
+    dev->requested_socket_id = dev->socket_id;
     dev->port_id = port_no;
     dev->type = type;
     dev->flags = 0;
@@ -1377,7 +1379,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     struct rte_mbuf **cur_pkts = (struct rte_mbuf **) pkts;
     unsigned int total_pkts = cnt;
     unsigned int qos_pkts = cnt;
-    uint64_t start = 0;
+    int retries = 0;
 
     qid = dev->tx_q[qid % dev->real_n_txq].map;
 
@@ -1404,32 +1406,13 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
         if (OVS_LIKELY(tx_pkts)) {
             /* Packets have been sent.*/
             cnt -= tx_pkts;
-            /* Prepare for possible next iteration.*/
+            /* Prepare for possible retry.*/
             cur_pkts = &cur_pkts[tx_pkts];
         } else {
-            uint64_t timeout = VHOST_ENQ_RETRY_USECS * rte_get_timer_hz() / 1E6;
-            unsigned int expired = 0;
-
-            if (!start) {
-                start = rte_get_timer_cycles();
-            }
-
-            /*
-             * Unable to enqueue packets to vhost interface.
-             * Check available entries before retrying.
-             */
-            while (!rte_vring_available_entries(virtio_dev, vhost_qid)) {
-                if (OVS_UNLIKELY((rte_get_timer_cycles() - start) > timeout)) {
-                    expired = 1;
-                    break;
-                }
-            }
-            if (expired) {
-                /* break out of main loop. */
-                break;
-            }
+            /* No packets sent - do not retry.*/
+            break;
         }
-    } while (cnt);
+    } while (cnt && (retries++ < VHOST_ENQ_RETRY_NUM));
 
     rte_spinlock_unlock(&dev->tx_q[qid].tx_lock);
 
@@ -2344,6 +2327,8 @@ new_device(struct virtio_net *virtio_dev)
 {
     struct netdev_dpdk *dev;
     bool exists = false;
+    int newnode = 0;
+    long err = 0;
 
     ovs_mutex_lock(&dpdk_mutex);
     /* Add device to the vhost port with the same name as that passed down. */
@@ -2357,6 +2342,19 @@ new_device(struct virtio_net *virtio_dev)
             }
             ovsrcu_set(&dev->virtio_dev, virtio_dev);
             exists = true;
+
+            /* Get NUMA information */
+            err = get_mempolicy(&newnode, NULL, 0, virtio_dev,
+                                MPOL_F_NODE | MPOL_F_ADDR);
+            if (err) {
+                VLOG_INFO("Error getting NUMA info for vHost Device '%s'",
+                        virtio_dev->ifname);
+                newnode = dev->socket_id;
+            } else if (newnode != dev->socket_id) {
+                dev->requested_socket_id = newnode;
+                netdev_request_reconfigure(&dev->up);
+            }
+
             virtio_dev->flags |= VIRTIO_DEV_RUNNING;
             /* Disable notifications. */
             set_irq_status(virtio_dev);
@@ -2374,8 +2372,8 @@ new_device(struct virtio_net *virtio_dev)
         return -1;
     }
 
-    VLOG_INFO("vHost Device '%s' %"PRIu64" has been added", virtio_dev->ifname,
-              virtio_dev->device_fh);
+    VLOG_INFO("vHost Device '%s' %"PRIu64" has been added on numa node %i",
+              virtio_dev->ifname, virtio_dev->device_fh, newnode);
     return 0;
 }
 
@@ -2937,6 +2935,7 @@ static int
 netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    int err = 0;
 
     ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
@@ -2944,10 +2943,20 @@ netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
     netdev->n_txq = dev->requested_n_txq;
     netdev->n_rxq = dev->requested_n_rxq;
 
+    if (dev->requested_socket_id != dev->socket_id) {
+        dev->socket_id = dev->requested_socket_id;
+        /* Change mempool to new NUMA Node */
+        dpdk_mp_put(dev->dpdk_mp);
+        dev->dpdk_mp = dpdk_mp_get(dev->socket_id, dev->mtu);
+        if (!dev->dpdk_mp) {
+            err = ENOMEM;
+        }
+    }
+
     ovs_mutex_unlock(&dev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
 
-    return 0;
+    return err;
 }
 
 static int

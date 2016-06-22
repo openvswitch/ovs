@@ -552,7 +552,7 @@ ovs_numa_set_cpu_mask(const char *cmask)
     }
 
     for (i = strlen(cmask) - 1; i >= 0; i--) {
-        char hex = toupper(cmask[i]);
+        char hex = toupper((unsigned char)cmask[i]);
         int bin, j;
 
         if (hex >= '0' && hex <= '9') {

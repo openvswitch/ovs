@@ -219,7 +219,7 @@ AC_DEFUN([OVS_CHECK_DPDK], [
     DPDKLIB_FOUND=false
     save_LIBS=$LIBS
     for extras in "" "-ldl"; do
-        LIBS="$DPDK_LIB $extras $save_LIBS $DPDK_EXTRA_LIB"
+        LIBS="$DPDK_LIB $extras $save_LIBS $DPDK_EXTRA_LIB -lnuma"
         AC_LINK_IFELSE(
            [AC_LANG_PROGRAM([#include <rte_config.h>
                              #include <rte_eal.h>],
@@ -303,6 +303,39 @@ AC_DEFUN([OVS_FIND_FIELD_IFELSE], [
   AC_MSG_CHECKING([whether $2 has member $3 in $1])
   if test -f $1; then
     awk '/$2.{/,/^}/' $1 2>/dev/null | grep '$3' >/dev/null
+    status=$?
+    case $status in
+      0)
+        AC_MSG_RESULT([yes])
+        m4_if([$4], [], [OVS_DEFINE([HAVE_]m4_toupper([$2])[_WITH_]m4_toupper([$3]))], [$4])
+        ;;
+      1)
+        AC_MSG_RESULT([no])
+        $5
+        ;;
+      *)
+        AC_MSG_ERROR([grep exited with status $status])
+        ;;
+    esac
+  else
+    AC_MSG_RESULT([file not found])
+    $5
+  fi
+])
+
+dnl OVS_FIND_PARAM_IFELSE(FILE, FUNCTION, REGEX, [IF-MATCH], [IF-NO-MATCH])
+dnl
+dnl Looks for FUNCTION in FILE. If it is found, greps for REGEX within
+dnl the function signature starting from the line matching FUNCTION
+dnl and ending with the line containing the closing parenthesis.  If
+dnl this is successful, runs IF-MATCH, otherwise IF_NO_MATCH.  If
+dnl IF-MATCH is empty then it defines to
+dnl OVS_DEFINE(HAVE_<FUNCTION>_WITH_<REGEX>), with <FUNCTION> and
+dnl <REGEX> translated to uppercase.
+AC_DEFUN([OVS_FIND_PARAM_IFELSE], [
+  AC_MSG_CHECKING([whether $2 has parameter $3 in $1])
+  if test -f $1; then
+    awk '/$2[[ \t\n]]*\(/,/\)/' $1 2>/dev/null | grep '$3' >/dev/null
     status=$?
     case $status in
       0)
@@ -425,20 +458,26 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netfilter_ipv6.h], [nf_ipv6_ops],
                         [fragment.*sock], [OVS_DEFINE([HAVE_NF_IPV6_OPS_FRAGMENT])])
 
-  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
-                  [tmpl_alloc.*conntrack_zone],
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
+                  [nf_ct_tmpl_alloc], [nf_conntrack_zone],
                   [OVS_DEFINE([HAVE_NF_CT_TMPL_ALLOC_TAKES_STRUCT_ZONE])])
-  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
-                  [l3num.*struct.net],
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
+                  [nf_ct_get_tuplepr], [struct.net],
                   [OVS_DEFINE([HAVE_NF_CT_GET_TUPLEPR_TAKES_STRUCT_NET])])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_zones.h],
                   [nf_ct_zone_init])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_labels.h],
                   [nf_connlabels_get])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_labels.h],
+                  [nf_connlabels_get], [int bit],
+                  [OVS_DEFINE([HAVE_NF_CONNLABELS_GET_TAKES_BIT])])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/ipv6/nf_defrag_ipv6.h],
                   [nf_ct_frag6_consume_orig])
   OVS_GREP_IFELSE([$KSRC/include/net/netfilter/ipv6/nf_defrag_ipv6.h],
                   [nf_ct_frag6_output])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_nat.h], [nf_ct_nat_ext_add])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_nat.h], [nf_nat_alloc_null_binding])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack_seqadj.h], [nf_ct_seq_adjust])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32])
   OVS_GREP_IFELSE([$KSRC/include/linux/random.h], [prandom_u32_max])

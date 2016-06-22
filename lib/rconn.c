@@ -1426,6 +1426,10 @@ is_admitted_msg(const struct ofpbuf *b)
     case OFPTYPE_NXT_TLV_TABLE_REQUEST:
     case OFPTYPE_NXT_TLV_TABLE_REPLY:
     case OFPTYPE_NXT_RESUME:
+    case OFPTYPE_IPFIX_BRIDGE_STATS_REQUEST:
+    case OFPTYPE_IPFIX_BRIDGE_STATS_REPLY:
+    case OFPTYPE_IPFIX_FLOW_STATS_REQUEST:
+    case OFPTYPE_IPFIX_FLOW_STATS_REPLY:
     default:
         return true;
     }

@@ -311,11 +311,13 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
                 ds_put_format(ds, ",flow_sample(probability=%"PRIu16
                               ",collector_set_id=%"PRIu32
                               ",obs_domain_id=%"PRIu32
-                              ",obs_point_id=%"PRIu32")",
+                              ",obs_point_id=%"PRIu32
+                              ",output_port=%"PRIu32")",
                               cookie.flow_sample.probability,
                               cookie.flow_sample.collector_set_id,
                               cookie.flow_sample.obs_domain_id,
-                              cookie.flow_sample.obs_point_id);
+                              cookie.flow_sample.obs_point_id,
+                              cookie.flow_sample.output_odp_port);
             } else if (userdata_len >= sizeof cookie.ipfix
                        && cookie.type == USER_ACTION_COOKIE_IPFIX) {
                 ds_put_format(ds, ",ipfix(output_port=%"PRIu32")",
@@ -951,9 +953,11 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
         } else if (ovs_scan(&s[n], ",flow_sample(probability=%"SCNi32","
                             "collector_set_id=%"SCNi32","
                             "obs_domain_id=%"SCNi32","
-                            "obs_point_id=%"SCNi32")%n",
+                            "obs_point_id=%"SCNi32","
+                            "output_port=%"SCNi32")%n",
                             &probability, &collector_set_id,
-                            &obs_domain_id, &obs_point_id, &n1)) {
+                            &obs_domain_id, &obs_point_id,
+                            &output, &n1)) {
             n += n1;
 
             cookie.type = USER_ACTION_COOKIE_FLOW_SAMPLE;
@@ -961,6 +965,7 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             cookie.flow_sample.collector_set_id = collector_set_id;
             cookie.flow_sample.obs_domain_id = obs_domain_id;
             cookie.flow_sample.obs_point_id = obs_point_id;
+            cookie.flow_sample.output_odp_port = u32_to_odp(output);
             user_data = &cookie;
             user_data_size = sizeof cookie.flow_sample;
         } else if (ovs_scan(&s[n], ",ipfix(output_port=%"SCNi32")%n",
@@ -4274,10 +4279,10 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
         nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, data->dp_hash);
     }
 
-    /* Add an ingress port attribute if this is a mask or 'odp_in_port'
+    /* Add an ingress port attribute if this is a mask or 'in_port.odp_port'
      * is not the magical value "ODPP_NONE". */
-    if (export_mask || parms->odp_in_port != ODPP_NONE) {
-        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, parms->odp_in_port);
+    if (export_mask || flow->in_port.odp_port != ODPP_NONE) {
+        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, data->in_port.odp_port);
     }
 
     eth_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ETHERNET,

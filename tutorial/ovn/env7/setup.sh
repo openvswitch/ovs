@@ -16,20 +16,20 @@
 set -o xtrace
 
 # Create a logical switch named "sw0"
-ovn-nbctl lswitch-add sw0
+ovn-nbctl ls-add sw0
 
 # Create two logical ports on "sw0".
-ovn-nbctl lport-add sw0 sw0-port1
-ovn-nbctl lport-add sw0 sw0-port2
-ovn-nbctl lport-add sw0 sw0-port3
+ovn-nbctl lsp-add sw0 sw0-port1
+ovn-nbctl lsp-add sw0 sw0-port2
+ovn-nbctl lsp-add sw0 sw0-port3
 
-ovn-nbctl lport-set-addresses sw0-port1 00:00:00:00:00:01
-ovn-nbctl lport-set-addresses sw0-port2 00:00:00:00:00:02
-ovn-nbctl lport-set-addresses sw0-port3 00:00:00:00:00:03
+ovn-nbctl lsp-set-addresses sw0-port1 00:00:00:00:00:01
+ovn-nbctl lsp-set-addresses sw0-port2 00:00:00:00:00:02
+ovn-nbctl lsp-set-addresses sw0-port3 00:00:00:00:00:03
 
-ovn-nbctl lport-set-port-security sw0-port1 00:00:00:00:00:01
-ovn-nbctl lport-set-port-security sw0-port2 00:00:00:00:00:02
-ovn-nbctl lport-set-port-security sw0-port3 00:00:00:00:00:03
+ovn-nbctl lsp-set-port-security sw0-port1 00:00:00:00:00:01
+ovn-nbctl lsp-set-port-security sw0-port2 00:00:00:00:00:02
+ovn-nbctl lsp-set-port-security sw0-port3 00:00:00:00:00:03
 
 ovs-vsctl add-port br-int lport1 -- set Interface lport1 external_ids:iface-id=sw0-port1
 ovs-vsctl add-port br-int lport2 -- set Interface lport2 external_ids:iface-id=sw0-port2

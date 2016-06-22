@@ -2348,7 +2348,9 @@ static const struct ctl_table_class tables[] = {
       {NULL, NULL, NULL}}},
 
     {&ovsrec_table_flow_sample_collector_set,
-     {{NULL, NULL, NULL},
+     {{&ovsrec_table_flow_sample_collector_set,
+       &ovsrec_flow_sample_collector_set_col_id,
+       NULL},
       {NULL, NULL, NULL}}},
 
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}

@@ -89,6 +89,7 @@ struct ofproto_ipfix_flow_exporter_options {
     struct sset targets;
     uint32_t cache_active_timeout;
     uint32_t cache_max_flows;
+    bool enable_tunnel_sampling;
 };
 
 struct ofproto_rstp_status {

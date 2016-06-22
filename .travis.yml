@@ -11,6 +11,7 @@ addons:
     packages:
       - bc
       - gcc-multilib
+      - libnuma-dev
       - libssl-dev
       - llvm-dev
       - libjemalloc1
