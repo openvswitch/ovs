@@ -70,5 +70,5 @@ OvsDpInterface.h
 /.vagrant/
 testsuite.tmp.orig
 /rpm/
-/openvswitch-*.tar.gz
+/openvswitch*.tar.gz
 /tests/lcov/
