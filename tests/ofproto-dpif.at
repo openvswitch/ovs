@@ -940,7 +940,7 @@ AT_CHECK([ovs-ofctl del-flows br0])
 
 AT_CHECK([ovs-ofctl monitor -OOpenFlow13 -P standard br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
-dnl Test that missed packets are droped
+dnl Test that missed packets are dropped
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(ack,syn)'
 done
@@ -1201,7 +1201,7 @@ AT_CHECK([ovs-ofctl -OOpenFlow11 mod-table br0 all drop])
 
 AT_CHECK([ovs-ofctl monitor -P standard br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
-dnl Test that missed packets are droped
+dnl Test that missed packets are dropped
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
@@ -1231,7 +1231,7 @@ AT_CHECK([ovs-ofctl -OOpenFlow11 mod-table br0 all drop])
 
 AT_CHECK([ovs-ofctl monitor -P standard br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
-dnl Test that missed packets are droped
+dnl Test that missed packets are dropped
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
@@ -1262,7 +1262,7 @@ AT_CHECK([ovs-ofctl -OOpenFlow11 mod-table br0 all drop])
 
 AT_CHECK([ovs-ofctl monitor -P standard br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
-dnl Test that missed packets are droped
+dnl Test that missed packets are dropped
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
