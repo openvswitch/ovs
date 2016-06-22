@@ -631,7 +631,10 @@ output;
         handled by one of the flows above, which amounts to ICMP (other than
         echo requests) and fragments with nonzero offsets.  For each IP address
         <var>A</var> owned by the router, a priority-60 flow matches
-        <code>ip4.dst == <var>A</var></code> and drops the traffic.
+        <code>ip4.dst == <var>A</var></code> and drops the traffic.  An
+        exception is made and the above flow is not added if the router
+        port's own IP address is used to SNAT packets passing through that
+        router.
       </li>
     </ul>
 

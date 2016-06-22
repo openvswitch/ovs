@@ -2046,11 +2046,37 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             free(actions);
         }
 
-        /* Drop IP traffic to this router. */
-        match = xasprintf("ip4.dst == "IP_FMT, IP_ARGS(op->ip));
-        ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 60,
-                      match, "drop;");
-        free(match);
+        /* Drop IP traffic to this router, unless the router ip is used as
+         * SNAT ip. */
+        bool snat_ip_is_router_ip = false;
+        for (int i = 0; i < op->od->nbr->n_nat; i++) {
+            const struct nbrec_nat *nat;
+            ovs_be32 ip;
+
+            nat = op->od->nbr->nat[i];
+            if (strcmp(nat->type, "snat")) {
+                continue;
+            }
+
+            if (!ip_parse(nat->external_ip, &ip) || !ip) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+                VLOG_WARN_RL(&rl, "bad ip address %s in snat configuration "
+                         "for router %s", nat->external_ip, op->key);
+                continue;
+            }
+
+            if (ip == op->ip) {
+                snat_ip_is_router_ip = true;
+                break;
+            }
+        }
+
+        if (!snat_ip_is_router_ip) {
+            match = xasprintf("ip4.dst == "IP_FMT, IP_ARGS(op->ip));
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 60, match,
+                          "drop;");
+            free(match);
+        }
     }
 
     /* NAT in Gateway routers. */
