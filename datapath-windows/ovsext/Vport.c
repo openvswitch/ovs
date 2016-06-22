@@ -530,14 +530,14 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
     vport->numaNodeId = nicParam->NumaNodeId;
 
     if (nameChanged) {
-        OVS_EVENT_ENTRY event;
-        event.portNo = vport->portNo;
-        event.ovsType = vport->ovsType;
-        event.upcallPid = vport->upcallPid;
-        RtlCopyMemory(&event.ovsName, &vport->ovsName, sizeof event.ovsName);
-        event.type = OVS_EVENT_LINK_DOWN;
+        OVS_EVENT_ENTRY evt;
+        evt.portNo = vport->portNo;
+        evt.ovsType = vport->ovsType;
+        evt.upcallPid = vport->upcallPid;
+        RtlCopyMemory(&evt.ovsName, &vport->ovsName, sizeof evt.ovsName);
+        evt.type = OVS_EVENT_LINK_DOWN;
         OvsRemoveAndDeleteVport(NULL, switchContext, vport, FALSE, TRUE);
-        OvsPostEvent(&event);
+        OvsPostEvent(&evt);
     }
 
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
