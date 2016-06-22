@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
     "version": "3.2.0",
-    "cksum": "1426508118 6135",
+    "cksum": "2612981904 11137",
     "tables": {
         "Logical_Switch": {
             "columns": {
@@ -91,11 +91,11 @@
             "columns": {
                 "name": {"type": "string"},
                 "outport": {"type": {"key": {"type": "uuid",
-                                              "refTable": "Logical_Port",
+                                              "refTable": "Logical_Switch_Port",
                                               "refType": "strong"},
                                       "min": 0, "max": 1}},
                  "inport": {"type": {"key": {"type": "uuid",
-                                             "refTable": "Logical_Port",
+                                             "refTable": "Logical_Switch_Port",
                                              "refType": "strong"},
                                      "min": 0, "max": 1}},
                 "external_ids": {
@@ -106,11 +106,11 @@
             "columns": {
                 "name": {"type": "string"},
                 "logical_source_port": {"type": {"key": {"type": "uuid",
-                                              "refTable": "Logical_Port",
+                                              "refTable": "Logical_Switch_Port",
                                               "refType": "strong"},
                                       "min": 0, "max": 1}},
                  "logical_destination_port": {"type": {"key": {"type": "uuid",
-                                             "refTable": "Logical_Port",
+                                             "refTable": "Logical_Switch_Port",
                                              "refType": "strong"},
                                      "min": 0, "max": 1}},
   		 "source_port_range_min": {"type": {"key": {"type": "integer",
