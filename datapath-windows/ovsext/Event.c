@@ -16,8 +16,6 @@
 
 #include "precomp.h"
 
-#include "Switch.h"
-#include "User.h"
 #include "Datapath.h"
 #include "Vport.h"
 #include "Event.h"
