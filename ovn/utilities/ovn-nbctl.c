@@ -1632,11 +1632,11 @@ nbctl_lsp_get_parent(struct ctl_context *ctx)
 static void
 nbctl_lsp_get_tag(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_switch_port *lport;
+    const struct nbrec_logical_switch_port *lsp;
 
-    lport = lsp_by_name_or_uuid(ctx, ctx->argv[1], true);
-    if (lport->n_tag > 0) {
-        ds_put_format(&ctx->output, "%"PRId64"\n", lport->tag[0]);
+    lsp = lsp_by_name_or_uuid(ctx, ctx->argv[1], true);
+    if (lsp->n_tag > 0) {
+        ds_put_format(&ctx->output, "%"PRId64"\n", lsp->tag[0]);
     }
 }
 
@@ -3001,6 +3001,7 @@ static const struct ctl_command_syntax nbctl_commands[] = {
       NULL, "--if-exists", RW },
     { "lr-route-list", 1, 1, "ROUTER", NULL, nbctl_lr_route_list, NULL,
       "", RO },
+
     {NULL, 0, 0, NULL, NULL, NULL, NULL, "", RO},
 };
 
