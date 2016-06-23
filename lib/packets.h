@@ -1027,6 +1027,9 @@ void ipv6_format_masked(const struct in6_addr *addr,
 const char * ipv6_string_mapped(char *addr_str, const struct in6_addr *addr);
 struct in6_addr ipv6_addr_bitand(const struct in6_addr *src,
                                  const struct in6_addr *mask);
+struct in6_addr ipv6_addr_bitxor(const struct in6_addr *a,
+                                 const struct in6_addr *b);
+bool ipv6_is_zero(const struct in6_addr *a);
 struct in6_addr ipv6_create_mask(int mask);
 int ipv6_count_cidr_bits(const struct in6_addr *netmask);
 bool ipv6_is_cidr(const struct in6_addr *netmask);

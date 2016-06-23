@@ -674,23 +674,43 @@ ipv6_string_mapped(char *addr_str, const struct in6_addr *addr)
     }
 }
 
-struct in6_addr ipv6_addr_bitand(const struct in6_addr *a,
-                                 const struct in6_addr *b)
-{
-    int i;
-    struct in6_addr dst;
-
 #ifdef s6_addr32
-    for (i=0; i<4; i++) {
-        dst.s6_addr32[i] = a->s6_addr32[i] & b->s6_addr32[i];
-    }
+#define s6_addrX s6_addr32
+#define IPV6_FOR_EACH(VAR) for (int VAR = 0; VAR < 4; VAR++)
 #else
-    for (i=0; i<16; i++) {
-        dst.s6_addr[i] = a->s6_addr[i] & b->s6_addr[i];
-    }
+#define s6_addrX s6_addr
+#define IPV6_FOR_EACH(VAR) for (int VAR = 0; VAR < 16; VAR++)
 #endif
 
-    return dst;
+struct in6_addr
+ipv6_addr_bitand(const struct in6_addr *a, const struct in6_addr *b)
+{
+   struct in6_addr dst;
+   IPV6_FOR_EACH (i) {
+       dst.s6_addrX[i] = a->s6_addrX[i] & b->s6_addrX[i];
+   }
+   return dst;
+}
+
+struct in6_addr
+ipv6_addr_bitxor(const struct in6_addr *a, const struct in6_addr *b)
+{
+   struct in6_addr dst;
+   IPV6_FOR_EACH (i) {
+       dst.s6_addrX[i] = a->s6_addrX[i] ^ b->s6_addrX[i];
+   }
+   return dst;
+}
+
+bool
+ipv6_is_zero(const struct in6_addr *a)
+{
+   IPV6_FOR_EACH (i) {
+       if (a->s6_addrX[i]) {
+           return false;
+       }
+   }
+   return true;
 }
 
 /* Returns an in6_addr consisting of 'mask' high-order 1-bits and 128-N
