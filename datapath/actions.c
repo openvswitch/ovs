@@ -706,7 +706,7 @@ static void ovs_fragment(struct net *net, struct vport *vport,
 		skb_dst_set_noref(skb, &ovs_dst);
 		IPCB(skb)->frag_max_size = mru;
 
-		ip_do_fragment(skb->sk, skb, ovs_vport_output);
+		ip_do_fragment(net, skb->sk, skb, ovs_vport_output);
 		refdst_drop(orig_dst);
 	} else if (ethertype == htons(ETH_P_IPV6)) {
 		const struct nf_ipv6_ops *v6ops = nf_get_ipv6_ops();
@@ -741,8 +741,8 @@ err:
 	kfree_skb(skb);
 }
 #else /* < 3.10 */
-static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
-			 __be16 ethertype)
+static void ovs_fragment(struct net *net, struct vport *vport,
+			 struct sk_buff *skb, u16 mru, __be16 ethertype)
 {
 	WARN_ONCE(1, "Fragment unavailable ->%s: eth=%04x, MRU=%d, MTU=%d.",
 		  ovs_vport_name(vport), ntohs(ethertype), mru,

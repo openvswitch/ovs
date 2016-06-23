@@ -88,8 +88,9 @@ static inline bool ip_defrag_user_in_between(u32 user,
 }
 #endif /* < v4.2 */
 
-#ifndef HAVE_IP_DO_FRAGMENT
-static inline int rpl_ip_do_fragment(struct sock *sk, struct sk_buff *skb,
+#ifndef HAVE_IP_DO_FRAGMENT_TAKES_NET
+static inline int rpl_ip_do_fragment(struct net *net, struct sock *sk,
+				     struct sk_buff *skb,
 				     int (*output)(OVS_VPORT_OUTPUT_PARAMS))
 {
 	unsigned int mtu = ip_skb_dst_mtu(skb);
@@ -102,7 +103,7 @@ static inline int rpl_ip_do_fragment(struct sock *sk, struct sk_buff *skb,
 		      IPCB(skb)->frag_max_size > mtu))) {
 
 		pr_warn("Dropping packet in ip_do_fragment()\n");
-		IP_INC_STATS(dev_net(dev), IPSTATS_MIB_FRAGFAILS);
+		IP_INC_STATS(net, IPSTATS_MIB_FRAGFAILS);
 		kfree_skb(skb);
 		return -EMSGSIZE;
 	}
@@ -114,7 +115,7 @@ static inline int rpl_ip_do_fragment(struct sock *sk, struct sk_buff *skb,
 #endif
 }
 #define ip_do_fragment rpl_ip_do_fragment
-#endif /* IP_DO_FRAGMENT */
+#endif /* IP_DO_FRAGMENT_TAKES_NET */
 
 int rpl_ip_defrag(struct sk_buff *skb, u32 user);
 #define ip_defrag rpl_ip_defrag
@@ -122,6 +123,16 @@ int rpl_ip_defrag(struct sk_buff *skb, u32 user);
 int __init rpl_ipfrag_init(void);
 void rpl_ipfrag_fini(void);
 #else /* HAVE_CORRECT_MRU_HANDLING || !OVS_FRAGMENT_BACKPORT */
+
+#if !defined(HAVE_IP_DO_FRAGMENT_TAKES_NET) && defined(OVS_FRAGMENT_BACKPORT)
+static inline int rpl_ip_do_fragment(struct net *net, struct sock *sk,
+				     struct sk_buff *skb,
+				     int (*output)(OVS_VPORT_OUTPUT_PARAMS))
+{
+	return ip_do_fragment(sk, skb, output);
+}
+#define ip_do_fragment rpl_ip_do_fragment
+#endif /* IP_DO_FRAGMENT_TAKES_NET */
 
 /* We have no good way to detect the presence of upstream commit 8282f27449bf
  * ("inet: frag: Always orphan skbs inside ip_defrag()"), but it should be
