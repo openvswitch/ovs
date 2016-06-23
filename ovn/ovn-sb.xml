@@ -1073,16 +1073,16 @@
         </dd>
 
         <dt>
-          <code>na { <var>action</var>; </code>...<code> };</code>
+          <code>nd_na { <var>action</var>; </code>...<code> };</code>
         </dt>
 
         <dd>
           <p>
-            Temporarily replaces the IPv6 packet being processed by an IPv6
-            neighbor advertisement (NA) packet and executes each nested
-            <var>action</var> on the NA packet.  Actions following the
-            <var>na</var> action, if any, apply to the original, unmodified
-            packet.
+            Temporarily replaces the IPv6 neighbor solicitation packet
+            being processed by an IPv6 neighbor advertisement (NA)
+            packet and executes each nested <var>action</var> on the NA
+            packet.  Actions following the <code>nd_na</code> action,
+            if any, apply to the original, unmodified packet.
           </p>
 
           <p>
@@ -1108,7 +1108,7 @@
           </p>
 
           <p>
-            <b>Prerequisite:</b> <code>nd</code>
+            <b>Prerequisite:</b> <code>nd_ns</code>
           </p>
         </dd>
 

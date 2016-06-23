@@ -69,9 +69,9 @@ static void send_garp_run(const struct ovsrec_bridge *,
                           const char *chassis_id,
                           const struct lport_index *lports,
                           struct hmap *local_datapaths);
-static void pinctrl_handle_na(const struct flow *ip_flow,
-                              const struct match *md,
-                              struct ofpbuf *userdata);
+static void pinctrl_handle_nd_na(const struct flow *ip_flow,
+                                 const struct match *md,
+                                 struct ofpbuf *userdata);
 static void reload_metadata(struct ofpbuf *ofpacts,
                             const struct match *md);
 
@@ -410,8 +410,8 @@ process_packet_in(const struct ofp_header *msg)
         pinctrl_handle_put_dhcp_opts(&packet, &pin, &userdata, &continuation);
         break;
 
-    case ACTION_OPCODE_NA:
-        pinctrl_handle_na(&headers, &pin.flow_metadata, &userdata);
+    case ACTION_OPCODE_ND_NA:
+        pinctrl_handle_nd_na(&headers, &pin.flow_metadata, &userdata);
         break;
 
     default:
@@ -947,9 +947,8 @@ reload_metadata(struct ofpbuf *ofpacts, const struct match *md)
 }
 
 static void
-pinctrl_handle_na(const struct flow *ip_flow,
-                  const struct match *md,
-                  struct ofpbuf *userdata)
+pinctrl_handle_nd_na(const struct flow *ip_flow, const struct match *md,
+                     struct ofpbuf *userdata)
 {
     /* This action only works for IPv6 ND packets, and the switch should only
      * send us ND packets this way, but check here just to be sure. */
