@@ -10,6 +10,7 @@ openvswitch_sources += \
 	linux/compat/inet_fragment.c \
 	linux/compat/ip_gre.c \
 	linux/compat/ip_fragment.c \
+	linux/compat/ip_output.c \
 	linux/compat/ip_tunnel.c \
 	linux/compat/ip_tunnels_core.c \
 	linux/compat/ip6_output.c \
