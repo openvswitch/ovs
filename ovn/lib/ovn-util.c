@@ -53,9 +53,12 @@ add_ipv6_netaddr(struct lport_addresses *laddrs, struct in6_addr addr,
     na->mask = ipv6_create_mask(plen);
     na->network = ipv6_addr_bitand(&addr, &na->mask);
     na->plen = plen;
+    in6_addr_solicited_node(&na->sn_addr, &addr);
 
     na->addr_s = xmalloc(INET6_ADDRSTRLEN);
     inet_ntop(AF_INET6, &addr, na->addr_s, INET6_ADDRSTRLEN);
+    na->sn_addr_s = xmalloc(INET6_ADDRSTRLEN);
+    inet_ntop(AF_INET6, &na->sn_addr, na->sn_addr_s, INET6_ADDRSTRLEN);
     na->network_s = xmalloc(INET6_ADDRSTRLEN);
     inet_ntop(AF_INET6, &na->network, na->network_s, INET6_ADDRSTRLEN);
 }
@@ -189,6 +192,7 @@ destroy_lport_addresses(struct lport_addresses *laddrs)
 
     for (int i = 0; i < laddrs->n_ipv6_addrs; i++) {
         free(laddrs->ipv6_addrs[i].addr_s);
+        free(laddrs->ipv6_addrs[i].sn_addr_s);
         free(laddrs->ipv6_addrs[i].network_s);
     }
     free(laddrs->ipv6_addrs);
