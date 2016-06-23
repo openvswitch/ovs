@@ -81,8 +81,9 @@ static inline bool ip_defrag_user_in_between(u32 user,
 }
 #endif /* < v4.2 */
 
-#ifndef HAVE_IP_DO_FRAGMENT
-static inline int rpl_ip_do_fragment(struct sock *sk, struct sk_buff *skb,
+#ifndef HAVE_IP_DO_FRAGMENT_TAKES_NET
+static inline int rpl_ip_do_fragment(struct net *net, struct sock *sk,
+				     struct sk_buff *skb,
 				     int (*output)(OVS_VPORT_OUTPUT_PARAMS))
 {
 	unsigned int mtu = ip_skb_dst_mtu(skb);
@@ -95,7 +96,7 @@ static inline int rpl_ip_do_fragment(struct sock *sk, struct sk_buff *skb,
 		      IPCB(skb)->frag_max_size > mtu))) {
 
 		pr_warn("Dropping packet in ip_do_fragment()\n");
-		IP_INC_STATS(dev_net(dev), IPSTATS_MIB_FRAGFAILS);
+		IP_INC_STATS(net, IPSTATS_MIB_FRAGFAILS);
 		kfree_skb(skb);
 		return -EMSGSIZE;
 	}
@@ -107,7 +108,7 @@ static inline int rpl_ip_do_fragment(struct sock *sk, struct sk_buff *skb,
 #endif
 }
 #define ip_do_fragment rpl_ip_do_fragment
-#endif /* IP_DO_FRAGMENT */
+#endif /* IP_DO_FRAGMENT_TAKES_NET */
 
 /* If backporting IP defrag, then init/exit functions need to be called from
  * compat_{in,ex}it() to prepare the backported fragmentation cache. In this
@@ -119,6 +120,16 @@ int __init rpl_ipfrag_init(void);
 void rpl_ipfrag_fini(void);
 
 #else /* HAVE_CORRECT_MRU_HANDLING */
+
+#ifndef HAVE_IP_DO_FRAGMENT_TAKES_NET
+static inline int rpl_ip_do_fragment(struct net *net, struct sock *sk,
+				     struct sk_buff *skb,
+				     int (*output)(OVS_VPORT_OUTPUT_PARAMS))
+{
+	return ip_do_fragment(sk, skb, output);
+}
+#define ip_do_fragment rpl_ip_do_fragment
+#endif /* IP_DO_FRAGMENT_TAKES_NET */
 
 /* We have no good way to detect the presence of upstream commit 8282f27449bf
  * ("inet: frag: Always orphan skbs inside ip_defrag()"), but it should be
