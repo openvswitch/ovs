@@ -2932,7 +2932,7 @@ static const struct ctl_command_syntax nbctl_commands[] = {
       NULL, "", RO },
     { "lflow-classifier-get-logical-destination-port", 1, 1, "LFLOW-CLASSIFIER", NULL, 
       nbctl_lflow_classifier_get_logical_destination_port, NULL, "", RO },
-    { "lflow-classifier-set-logical-destination-port", 1, 1, "LFLOW-CLASSIFIER [LDESTINATION_PORT", NULL, 
+    { "lflow-classifier-set-logical-destination-port", 2, 2, "LFLOW-CLASSIFIER [LDESTINATION_PORT", NULL, 
       nbctl_lflow_classifier_set_logical_destination_port, NULL, "", RO },
     /* TODO ADD OTHER FLOW-CLASSIFIER PARAMETERS */
 
