@@ -192,13 +192,13 @@ A: Open vSwitch supports different datapaths on different platforms.  Each
 
 Feature               | Linux upstream | Linux OVS tree | Userspace | Hyper-V |
 ----------------------|:--------------:|:--------------:|:---------:|:-------:|
-NAT                   |      4.6       |       NO       |    NO     |   NO    |
+NAT                   |      4.6       |       YES      |    NO     |   NO    |
 Connection tracking   |      4.3       |       YES      |    NO     | PARTIAL |
 Tunnel - LISP         |      NO        |       YES      |    NO     |   NO    |
 Tunnel - STT          |      NO        |       YES      |    NO     |   YES   |
 Tunnel - GRE          |      3.11      |       YES      |    YES    |   YES   |
 Tunnel - VXLAN        |      3.12      |       YES      |    YES    |   YES   |
-Tunnel - Geneve       |      3.18      |       YES      |    YES    |   NO    |
+Tunnel - Geneve       |      3.18      |       YES      |    YES    |   YES   |
 QoS - Policing        |      YES       |       YES      |    NO     |   NO    |
 QoS - Shaping         |      YES       |       YES      |    NO     |   NO    |
 sFlow                 |      YES       |       YES      |    YES    |   NO    |
