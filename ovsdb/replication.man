@@ -1,0 +1,8 @@
+The following options allow \fBovsdb\-server\fR to synchronize  its  databases
+with another running \fBovsdb\-server\fR.
+.TP
+\fB\-\-sync\-from=\fIserver\fR
+Causes  \fBovsdb\-server\fR to synchronize its databases with the databases in
+\fIserver\fR.  Every transaction committed by \fIserver\fR  will  be  replicated
+to \fBovsdb\-server\fR. \fIserver\fR is an active connection method in one of
+the forms documented in \fBovsdb\-client(1).

@@ -42,6 +42,7 @@
 #include "ovsdb-error.h"
 #include "poll-loop.h"
 #include "process.h"
+#include "replication.h"
 #include "row.h"
 #include "simap.h"
 #include "shash.h"
@@ -59,15 +60,7 @@
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_server);
 
-struct db {
-    /* Initialized in main(). */
-    char *filename;
-    struct ovsdb_file *file;
-    struct ovsdb *db;
-
-    /* Only used by update_remote_status(). */
-    struct ovsdb_txn *txn;
-};
+struct db;
 
 /* SSL configuration. */
 static char *private_key_file;
@@ -75,12 +68,21 @@ static char *certificate_file;
 static char *ca_cert_file;
 static bool bootstrap_ca_cert;
 
+/* Replication configuration. */
+static bool connect_to_remote_server;
+
 static unixctl_cb_func ovsdb_server_exit;
 static unixctl_cb_func ovsdb_server_compact;
 static unixctl_cb_func ovsdb_server_reconnect;
 static unixctl_cb_func ovsdb_server_perf_counters_clear;
 static unixctl_cb_func ovsdb_server_perf_counters_show;
 static unixctl_cb_func ovsdb_server_disable_monitor2;
+static unixctl_cb_func ovsdb_server_set_remote_ovsdb_server;
+static unixctl_cb_func ovsdb_server_get_remote_ovsdb_server;
+static unixctl_cb_func ovsdb_server_connect_remote_ovsdb_server;
+static unixctl_cb_func ovsdb_server_disconnect_remote_ovsdb_server;
+static unixctl_cb_func ovsdb_server_set_sync_excluded_tables;
+static unixctl_cb_func ovsdb_server_get_sync_excluded_tables;
 
 struct server_config {
     struct sset *remotes;
@@ -159,6 +161,10 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         report_error_if_changed(reconfigure_ssl(all_dbs), &ssl_error);
         ovsdb_jsonrpc_server_run(jsonrpc);
 
+        if (connect_to_remote_server) {
+             replication_run(all_dbs);
+        }
+
         SHASH_FOR_EACH(node, all_dbs) {
             struct db *db = node->data;
             ovsdb_trigger_run(db->db, time_msec());
@@ -170,9 +176,9 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
             }
         }
 
-        /* update Manager status(es) every 5 seconds */
+        /* update Manager status(es) every 2.5 seconds */
         if (time_msec() >= status_timer) {
-            status_timer = time_msec() + 5000;
+            status_timer = time_msec() + 2500;
             update_remote_status(jsonrpc, remotes, all_dbs);
         }
 
@@ -334,6 +340,19 @@ main(int argc, char *argv[])
     unixctl_command_register("ovsdb-server/perf-counters-clear", "", 0, 0,
                              ovsdb_server_perf_counters_clear, NULL);
 
+    unixctl_command_register("ovsdb-server/set-remote-ovsdb-server", "", 0, 1,
+                              ovsdb_server_set_remote_ovsdb_server, NULL);
+    unixctl_command_register("ovsdb-server/get-remote-ovsdb-server", "", 0, 0,
+                              ovsdb_server_get_remote_ovsdb_server, NULL);
+    unixctl_command_register("ovsdb-server/connect-remote-ovsdb-server", "", 0, 0,
+                              ovsdb_server_connect_remote_ovsdb_server, NULL);
+    unixctl_command_register("ovsdb-server/disconnect-remote-ovsdb-server", "", 0, 0,
+                              ovsdb_server_disconnect_remote_ovsdb_server, NULL);
+    unixctl_command_register("ovsdb-server/set-sync-excluded-tables", "", 0, 1,
+                              ovsdb_server_set_sync_excluded_tables, NULL);
+    unixctl_command_register("ovsdb-server/get-sync-excluded-tables", "", 0, 0,
+                              ovsdb_server_get_sync_excluded_tables, NULL);
+
     /* Simulate the behavior of OVS release prior to version 2.5 that
      * does not support the monitor2 method.  */
     unixctl_command_register("ovsdb-server/disable-monitor2", "", 0, 0,
@@ -351,6 +370,7 @@ main(int argc, char *argv[])
     sset_destroy(&remotes);
     sset_destroy(&db_filenames);
     unixctl_server_destroy(unixctl);
+    disconnect_remote_server();
 
     if (run_process && process_exited(run_process)) {
         int status = process_status(run_process);
@@ -432,21 +452,6 @@ open_db(struct server_config *config, const char *filename)
     ovsdb_error_destroy(db_error);
     close_db(db);
     return error;
-}
-
-static const struct db *
-find_db(const struct shash *all_dbs, const char *db_name)
-{
-    struct shash_node *node;
-
-    SHASH_FOR_EACH(node, all_dbs) {
-        struct db *db = node->data;
-        if (!strcmp(db->db->schema->name, db_name)) {
-            return db;
-        }
-    }
-
-    return NULL;
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -1033,6 +1038,84 @@ report_error_if_changed(char *error, char **last_errorp)
 }
 
 static void
+ovsdb_server_set_remote_ovsdb_server(struct unixctl_conn *conn,
+                                     int argc OVS_UNUSED, const char *argv[],
+                                     void *arg_ OVS_UNUSED)
+{
+    set_remote_ovsdb_server(argv[1]);
+    connect_to_remote_server = false;
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovsdb_server_get_remote_ovsdb_server(struct unixctl_conn *conn,
+                                     int argc OVS_UNUSED,
+                                     const char *argv[] OVS_UNUSED,
+                                     void *arg_ OVS_UNUSED)
+{
+    struct ds s;
+    ds_init(&s);
+
+    ds_put_format(&s, "%s\n", get_remote_ovsdb_server());
+
+    unixctl_command_reply(conn, ds_cstr(&s));
+    ds_destroy(&s);
+}
+
+static void
+ovsdb_server_connect_remote_ovsdb_server(struct unixctl_conn *conn,
+                                         int argc OVS_UNUSED,
+                                         const char *argv[] OVS_UNUSED,
+                                         void *arg_ OVS_UNUSED)
+{
+    if (!connect_to_remote_server) {
+	    replication_init();
+        connect_to_remote_server = true;
+    }
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovsdb_server_disconnect_remote_ovsdb_server(struct unixctl_conn *conn,
+                                            int argc OVS_UNUSED,
+                                            const char *argv[] OVS_UNUSED,
+                                            void *arg_ OVS_UNUSED)
+{
+    disconnect_remote_server();
+    connect_to_remote_server = false;
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovsdb_server_set_sync_excluded_tables(struct unixctl_conn *conn,
+                                      int argc OVS_UNUSED,
+                                      const char *argv[],
+                                      void *arg_ OVS_UNUSED)
+{
+    set_tables_blacklist(argv[1]);
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovsdb_server_get_sync_excluded_tables(struct unixctl_conn *conn,
+                                 int argc OVS_UNUSED,
+                                 const char *argv[] OVS_UNUSED,
+                                 void *arg_ OVS_UNUSED)
+{
+    struct ds s;
+    const char *table_name;
+    struct sset table_blacklist = get_tables_blacklist();
+
+    ds_init(&s);
+
+    SSET_FOR_EACH(table_name, &table_blacklist) {
+        ds_put_format(&s, "%s\n", table_name);
+    }
+
+    unixctl_command_reply(conn, ds_cstr(&s));
+}
+
+static void
 ovsdb_server_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
                   const char *argv[] OVS_UNUSED,
                   void *exiting_)
@@ -1279,6 +1362,8 @@ parse_options(int *argcp, char **argvp[],
         OPT_RUN,
         OPT_BOOTSTRAP_CA_CERT,
         OPT_PEER_CA_CERT,
+        OPT_SYNC_FROM,
+        OPT_SYNC_EXCLUDE,
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS
     };
@@ -1297,6 +1382,8 @@ parse_options(int *argcp, char **argvp[],
         {"private-key", required_argument, NULL, 'p'},
         {"certificate", required_argument, NULL, 'c'},
         {"ca-cert",     required_argument, NULL, 'C'},
+        {"sync-from",   required_argument, NULL, OPT_SYNC_FROM},
+        {"sync-exclude-tables", required_argument, NULL, OPT_SYNC_EXCLUDE},
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
@@ -1357,6 +1444,15 @@ parse_options(int *argcp, char **argvp[],
             stream_ssl_set_peer_ca_cert_file(optarg);
             break;
 
+        case OPT_SYNC_FROM:
+            set_remote_ovsdb_server(optarg);
+            connect_to_remote_server = true;
+            break;
+
+        case OPT_SYNC_EXCLUDE:
+            set_tables_blacklist(optarg);
+            break;
+
         case '?':
             exit(EXIT_FAILURE);
 
@@ -1383,6 +1479,7 @@ usage(void)
     stream_usage("JSON-RPC", true, true, true);
     daemon_usage();
     vlog_usage();
+    replication_usage();
     printf("\nOther options:\n"
            "  --run COMMAND           run COMMAND as subprocess then exit\n"
            "  --unixctl=SOCKET        override default control socket name\n"

@@ -1,0 +1,2 @@
+.IP "Syncing options:"
+[\fB\-\-sync\-from=\fIserver\fR]
