@@ -69,6 +69,8 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/Vport.h \
 	datapath-windows/ovsext/Vxlan.c \
 	datapath-windows/ovsext/Vxlan.h \
+	datapath-windows/ovsext/Geneve.c \
+	datapath-windows/ovsext/Geneve.h \
 	datapath-windows/ovsext/ovsext.inf \
 	datapath-windows/ovsext/ovsext.rc \
 	datapath-windows/ovsext/ovsext.vcxproj \

@@ -33,6 +33,7 @@
 #include "User.h"
 #include "Vport.h"
 #include "Vxlan.h"
+#include "Geneve.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
@@ -48,6 +49,8 @@ typedef struct _OVS_ACTION_STATS {
     UINT64 txVxlan;
     UINT64 rxStt;
     UINT64 txStt;
+    UINT64 rxGeneve;
+    UINT64 txGeneve;
     UINT64 flowMiss;
     UINT64 flowUserspace;
     UINT64 txTcp;
@@ -237,6 +240,9 @@ OvsDetectTunnelRxPkt(OvsForwardingContext *ovsFwdCtx,
             case OVS_VPORT_TYPE_VXLAN:
                 ovsActionStats.rxVxlan++;
                 break;
+            case OVS_VPORT_TYPE_GENEVE:
+                ovsActionStats.rxGeneve++;
+                break;
             case OVS_VPORT_TYPE_GRE:
                 ovsActionStats.rxGre++;
                 break;
@@ -333,6 +339,9 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
             case OVS_VPORT_TYPE_STT:
                 ovsActionStats.txStt++;
                 break;
+            case OVS_VPORT_TYPE_GENEVE:
+               ovsActionStats.txGeneve++;
+               break;
             }
             ovsFwdCtx->tunnelTxNic = dstVport;
         }
@@ -689,6 +698,11 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
                              &ovsFwdCtx->tunKey, ovsFwdCtx->switchContext,
                              &ovsFwdCtx->layers, &newNbl);
         break;
+    case OVS_VPORT_TYPE_GENEVE:
+        status = OvsEncapGeneve(ovsFwdCtx->tunnelTxNic, ovsFwdCtx->curNbl,
+                                &ovsFwdCtx->tunKey, ovsFwdCtx->switchContext,
+                                &ovsFwdCtx->layers, &newNbl);
+        break;
     default:
         ASSERT(! "Tx: Unhandled tunnel type");
     }
@@ -766,6 +780,10 @@ OvsTunnelPortRx(OvsForwardingContext *ovsFwdCtx)
             /* This was an STT-LSO Fragment */
             dropReason = L"OVS-STT segment is cached";
         }
+        break;
+    case OVS_VPORT_TYPE_GENEVE:
+        status = OvsDecapGeneve(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
+                                &ovsFwdCtx->tunKey, &newNbl);
         break;
     default:
         OVS_LOG_ERROR("Rx: Unhandled tunnel type: %d\n",
@@ -1233,57 +1251,6 @@ OvsActionMplsPush(OvsForwardingContext *ovsFwdCtx,
 }
 
 /*
- * --------------------------------------------------------------------------
- * OvsTunnelAttrToIPv4TunnelKey --
- *      Convert tunnel attribute to OvsIPv4TunnelKey.
- * --------------------------------------------------------------------------
- */
-static __inline NDIS_STATUS
-OvsTunnelAttrToIPv4TunnelKey(PNL_ATTR attr,
-                             OvsIPv4TunnelKey *tunKey)
-{
-   PNL_ATTR a;
-   INT rem;
-
-   tunKey->attr[0] = 0;
-   tunKey->attr[1] = 0;
-   tunKey->attr[2] = 0;
-   ASSERT(NlAttrType(attr) == OVS_KEY_ATTR_TUNNEL);
-
-   NL_ATTR_FOR_EACH_UNSAFE (a, rem, NlAttrData(attr),
-                            NlAttrGetSize(attr)) {
-      switch (NlAttrType(a)) {
-      case OVS_TUNNEL_KEY_ATTR_ID:
-         tunKey->tunnelId = NlAttrGetBe64(a);
-         tunKey->flags |= OVS_TNL_F_KEY;
-         break;
-      case OVS_TUNNEL_KEY_ATTR_IPV4_SRC:
-         tunKey->src = NlAttrGetBe32(a);
-         break;
-      case OVS_TUNNEL_KEY_ATTR_IPV4_DST:
-         tunKey->dst = NlAttrGetBe32(a);
-         break;
-      case OVS_TUNNEL_KEY_ATTR_TOS:
-         tunKey->tos = NlAttrGetU8(a);
-         break;
-      case OVS_TUNNEL_KEY_ATTR_TTL:
-         tunKey->ttl = NlAttrGetU8(a);
-         break;
-      case OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT:
-         tunKey->flags |= OVS_TNL_F_DONT_FRAGMENT;
-         break;
-      case OVS_TUNNEL_KEY_ATTR_CSUM:
-         tunKey->flags |= OVS_TNL_F_CSUM;
-         break;
-      default:
-         ASSERT(0);
-      }
-   }
-
-   return NDIS_STATUS_SUCCESS;
-}
-
-/*
  *----------------------------------------------------------------------------
  * OvsUpdateEthHeader --
  *      Updates the ethernet header in ovsFwdCtx.curNbl inline based on the
@@ -1511,7 +1478,8 @@ OvsExecuteSetAction(OvsForwardingContext *ovsFwdCtx,
     case OVS_KEY_ATTR_TUNNEL:
     {
         OvsIPv4TunnelKey tunKey;
-        status = OvsTunnelAttrToIPv4TunnelKey((PNL_ATTR)a, &tunKey);
+        NTSTATUS convertStatus = OvsTunnelAttrToIPv4TunnelKey((PNL_ATTR)a, &tunKey);
+        status = SUCCEEDED(convertStatus) ? NDIS_STATUS_SUCCESS : NDIS_STATUS_FAILURE;
         ASSERT(status == NDIS_STATUS_SUCCESS);
         tunKey.flow_hash = (uint16)(hash ? *hash : OvsHashFlow(key));
         tunKey.dst_port = key->ipKey.l4.tpDst;
