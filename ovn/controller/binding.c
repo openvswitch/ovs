@@ -59,10 +59,15 @@ binding_register_ovs_idl(struct ovsdb_idl *ovs_idl)
                          &ovsrec_interface_col_ingress_policing_burst);
 }
 
-static void
+static bool
 get_local_iface_ids(const struct ovsrec_bridge *br_int, struct shash *lports)
 {
     int i;
+    bool changed = false;
+
+    /* A local copy of ports that we can use to compare with the persisted
+     * list. */
+    struct shash local_ports = SHASH_INITIALIZER(&local_ports);
 
     for (i = 0; i < br_int->n_ports; i++) {
         const struct ovsrec_port *port_rec = br_int->ports[i];
@@ -81,13 +86,26 @@ get_local_iface_ids(const struct ovsrec_bridge *br_int, struct shash *lports)
             if (!iface_id) {
                 continue;
             }
-            shash_add(lports, iface_id, iface_rec);
+            shash_add(&local_ports, iface_id, iface_rec);
+            if (!shash_find(lports, iface_id)) {
+                shash_add(lports, iface_id, iface_rec);
+                changed = true;
+            }
             if (!sset_find(&all_lports, iface_id)) {
                 sset_add(&all_lports, iface_id);
                 binding_reset_processing();
             }
         }
     }
+    struct shash_node *iter, *next;
+    SHASH_FOR_EACH_SAFE(iter, next, lports) {
+        if (!shash_find_and_delete(&local_ports, iter->name)) {
+            shash_delete(lports, iter);
+            changed = true;
+        }
+    }
+    shash_destroy(&local_ports);
+    return changed;
 }
 
 /* Contains "struct local_datpath" nodes whose hash values are the
@@ -176,7 +194,7 @@ consider_local_datapath(struct controller_ctx *ctx, struct shash *lports,
                         struct hmap *local_datapaths)
 {
     const struct ovsrec_interface *iface_rec
-        = shash_find_and_delete(lports, binding_rec->logical_port);
+        = shash_find_data(lports, binding_rec->logical_port);
     if (iface_rec
         || (binding_rec->parent_port && binding_rec->parent_port[0] &&
             sset_contains(&all_lports, binding_rec->parent_port))) {
@@ -221,6 +239,10 @@ consider_local_datapath(struct controller_ctx *ctx, struct shash *lports,
     }
 }
 
+/* We persist lports because we need to know when it changes to
+ * handle ports going away correctly in the binding record. */
+static struct shash lports = SHASH_INITIALIZER(&lports);
+
 void
 binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             const char *chassis_id, struct hmap *local_datapaths)
@@ -233,12 +255,14 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
         return;
     }
 
-    struct shash lports = SHASH_INITIALIZER(&lports);
     if (br_int) {
-        get_local_iface_ids(br_int, &lports);
+        if (get_local_iface_ids(br_int, &lports)) {
+            process_full_binding = true;
+        }
     } else {
         /* We have no integration bridge, therefore no local logical ports.
          * We'll remove our chassis from all port binding records below. */
+        process_full_binding = true;
     }
 
     /* Run through each binding record to see if it is resident on this
@@ -274,8 +298,6 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             }
         }
     }
-
-    shash_destroy(&lports);
 }
 
 /* Returns true if the database is all cleaned up, false if more work is
