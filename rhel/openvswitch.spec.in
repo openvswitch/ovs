@@ -164,6 +164,7 @@ exit 0
 /usr/bin/ovs-parse-backtrace
 /usr/bin/ovs-pcap
 /usr/bin/ovs-pki
+/usr/bin/ovs-tcpdump
 /usr/bin/ovs-tcpundump
 /usr/bin/ovs-vlan-test
 /usr/bin/ovs-vsctl
@@ -189,6 +190,7 @@ exit 0
 /usr/share/man/man8/ovs-ofctl.8.gz
 /usr/share/man/man8/ovs-parse-backtrace.8.gz
 /usr/share/man/man8/ovs-pki.8.gz
+/usr/share/man/man8/ovs-tcpdump.8.gz
 /usr/share/man/man8/ovs-vlan-test.8.gz
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
