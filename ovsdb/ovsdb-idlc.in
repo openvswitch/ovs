@@ -186,6 +186,18 @@ const struct %(s)s *%(s)s_track_get_next(const struct %(s)s *);
              (ROW); \\
              (ROW) = %(s)s_track_get_next(ROW))
 
+/* Returns true if 'row' was inserted since the last change tracking reset. */
+static inline bool %(s)s_is_new(const struct %(s)s *row)
+{
+    return %(s)s_row_get_seqno(row, OVSDB_IDL_CHANGE_MODIFY) == 0;
+}
+
+/* Returns true if 'row' was deleted since the last change tracking reset. */
+static inline bool %(s)s_is_deleted(const struct %(s)s *row)
+{
+    return %(s)s_row_get_seqno(row, OVSDB_IDL_CHANGE_DELETE) > 0;
+}
+
 void %(s)s_init(struct %(s)s *);
 void %(s)s_delete(const struct %(s)s *);
 struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);

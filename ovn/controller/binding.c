@@ -266,15 +266,12 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
         process_full_binding = false;
     } else {
         SBREC_PORT_BINDING_FOR_EACH_TRACKED(binding_rec, ctx->ovnsb_idl) {
-            bool is_deleted = sbrec_port_binding_row_get_seqno(binding_rec,
-                OVSDB_IDL_CHANGE_DELETE) > 0;
-
-            if (is_deleted) {
+            if (sbrec_port_binding_is_deleted(binding_rec)) {
                 remove_local_datapath_by_binding(local_datapaths, binding_rec);
-                continue;
+            } else {
+                consider_local_datapath(ctx, &lports, chassis_rec, binding_rec,
+                                        local_datapaths);
             }
-            consider_local_datapath(ctx, &lports, chassis_rec, binding_rec,
-                                    local_datapaths);
         }
     }
 

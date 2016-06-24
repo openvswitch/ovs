@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -404,12 +404,7 @@ encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
         process_full_encaps = false;
     } else {
         SBREC_CHASSIS_FOR_EACH_TRACKED (chassis_rec, ctx->ovnsb_idl) {
-            bool is_deleted = sbrec_chassis_row_get_seqno(chassis_rec,
-                                                          OVSDB_IDL_CHANGE_DELETE) > 0;
-            bool is_new = sbrec_chassis_row_get_seqno(chassis_rec,
-                                                      OVSDB_IDL_CHANGE_MODIFY) == 0;
-
-            if (is_deleted) {
+            if (sbrec_chassis_is_deleted(chassis_rec)) {
                 /* Lookup the tunnel by row uuid and remove it. */
                 struct port_hash_node *port_hash =
                     port_lookup_by_uuid(&tc.tunnel_hmap_by_uuid,
@@ -424,14 +419,10 @@ encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                     free(port_hash);
                     binding_reset_processing();
                 }
-                continue;
-            }
-            if (!is_new) {
-                check_and_update_tunnel(chassis_rec);
-                continue;
-            } else {
+            } else if (sbrec_chassis_is_new(chassis_rec)) {
                 check_and_add_tunnel(chassis_rec, chassis_id);
-                continue;
+            } else {
+                check_and_update_tunnel(chassis_rec);
             }
         }
     }

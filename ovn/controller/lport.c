@@ -107,14 +107,11 @@ lport_index_fill(struct lport_index *lports, struct ovsdb_idl *ovnsb_idl)
         full_lport_rebuild = false;
     } else {
         SBREC_PORT_BINDING_FOR_EACH_TRACKED (pb, ovnsb_idl) {
-            bool is_delete = sbrec_port_binding_row_get_seqno(pb,
-                OVSDB_IDL_CHANGE_DELETE) > 0;
-
-            if (is_delete) {
+            if (sbrec_port_binding_is_deleted(pb)) {
                 lport_index_remove(lports, &pb->header_.uuid);
-                continue;
+            } else {
+                consider_lport_index(lports, pb);
             }
-            consider_lport_index(lports, pb);
         }
     }
 }
@@ -248,14 +245,11 @@ mcgroup_index_fill(struct mcgroup_index *mcgroups, struct ovsdb_idl *ovnsb_idl)
         full_mc_rebuild = false;
     } else {
         SBREC_MULTICAST_GROUP_FOR_EACH_TRACKED (mg, ovnsb_idl) {
-            bool is_delete = sbrec_multicast_group_row_get_seqno(mg,
-                OVSDB_IDL_CHANGE_DELETE) > 0;
-
-            if (is_delete) {
+            if (sbrec_multicast_group_is_deleted(mg)) {
                 mcgroup_index_remove(mcgroups, &mg->header_.uuid);
-                continue;
+            } else {
+                consider_mcgroup_index(mcgroups, mg);
             }
-            consider_mcgroup_index(mcgroups, mg);
         }
     }
 }
