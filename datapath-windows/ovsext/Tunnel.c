@@ -225,7 +225,7 @@ OvsInjectPacketThroughActions(PNET_BUFFER_LIST pNbl,
     OvsCompletionList completionList;
     KIRQL irql;
     ULONG SendFlags = NDIS_SEND_FLAGS_SWITCH_DESTINATION_GROUP;
-    OVS_DATAPATH *datapath = &gOvsSwitchContext->datapath;;
+    OVS_DATAPATH *datapath = &gOvsSwitchContext->datapath;
 
     ASSERT(gOvsSwitchContext);
 
