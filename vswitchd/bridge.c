@@ -1165,7 +1165,6 @@ bridge_configure_ipfix(struct bridge *br)
     struct ofproto_ipfix_bridge_exporter_options be_opts;
     struct ofproto_ipfix_flow_exporter_options *fe_opts = NULL;
     size_t n_fe_opts = 0;
-    const char *virtual_obs_id;
 
     OVSREC_FLOW_SAMPLE_COLLECTOR_SET_FOR_EACH(fe_cfg, idl) {
         if (ovsrec_fscs_is_valid(fe_cfg, br)) {
@@ -1210,11 +1209,6 @@ bridge_configure_ipfix(struct bridge *br)
 
         be_opts.enable_output_sampling = !smap_get_bool(&be_cfg->other_config,
                                               "enable-output-sampling", false);
-
-        virtual_obs_id = smap_get(&be_cfg->other_config, "virtual_obs_id");
-        be_opts.virtual_obs_id = (virtual_obs_id
-                                  ? xstrdup(virtual_obs_id)
-                                  : NULL);
     }
 
     if (n_fe_opts > 0) {
@@ -1234,11 +1228,6 @@ bridge_configure_ipfix(struct bridge *br)
                 opts->enable_tunnel_sampling = smap_get_bool(
                                                    &fe_cfg->ipfix->other_config,
                                                   "enable-tunnel-sampling", true);
-                virtual_obs_id = smap_get(&be_cfg->other_config,
-                                          "virtual_obs_id");
-                opts->virtual_obs_id = (virtual_obs_id
-                                        ? xstrdup(virtual_obs_id)
-                                        : NULL);
                 opts++;
             }
         }
@@ -1249,7 +1238,6 @@ bridge_configure_ipfix(struct bridge *br)
 
     if (valid_be_cfg) {
         sset_destroy(&be_opts.targets);
-        free(be_opts.virtual_obs_id);
     }
 
     if (n_fe_opts > 0) {
@@ -1257,7 +1245,6 @@ bridge_configure_ipfix(struct bridge *br)
         size_t i;
         for (i = 0; i < n_fe_opts; i++) {
             sset_destroy(&opts->targets);
-            free(opts->virtual_obs_id);
             opts++;
         }
         free(fe_opts);

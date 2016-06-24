@@ -4747,39 +4747,6 @@
       </p>
     </column>
 
-    <column name="other_config" key="virtual_obs_id"
-            type='{"type": "string"}'>
-      <p>
-        A string that accompanies each IPFIX flow record.  Its intended use is
-        for the ``virtual observation ID,'' an identifier of a virtual
-        observation point that is locally unique in a virtual network.  It
-        describes a location in the virtual network where IP packets can be
-        observed.  The maximum length is 254 bytes.  If not specified, the
-        field is omitted from the IPFIX flow record.
-      </p>
-
-      <p>
-        The following enterprise entity reports the specified virtual
-        observation ID:
-      </p>
-
-      <dl>
-        <dt>virtualObsID:</dt>
-        <dd>
-          <p>ID: 898, and enterprise ID 6876 (VMware).</p>
-          <p>type: variable-length string.</p>
-          <p>data type semantics: identifier.</p>
-          <p>description: A virtual observation domain ID that is locally
-          unique in a virtual network.
-          </p>
-        </dd>
-      </dl>
-
-      <p>
-        This feature was introduced in Open vSwitch 2.5.90.
-      </p>
-    </column>
-
     <group title="Per-Bridge Sampling">
       <p>
         These values affect only per-bridge sampling.  See above for a

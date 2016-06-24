@@ -82,7 +82,6 @@ struct ofproto_ipfix_bridge_exporter_options {
     bool enable_tunnel_sampling;
     bool enable_input_sampling;
     bool enable_output_sampling;
-    char *virtual_obs_id;
 };
 
 struct ofproto_ipfix_flow_exporter_options {
@@ -91,7 +90,6 @@ struct ofproto_ipfix_flow_exporter_options {
     uint32_t cache_active_timeout;
     uint32_t cache_max_flows;
     bool enable_tunnel_sampling;
-    char *virtual_obs_id;
 };
 
 struct ofproto_rstp_status {

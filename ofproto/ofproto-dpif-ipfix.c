@@ -101,8 +101,6 @@ struct dpif_ipfix_exporter {
     struct ovs_list cache_flow_start_timestamp_list;  /* ipfix_flow_cache_entry. */
     uint32_t cache_active_timeout;  /* In seconds. */
     uint32_t cache_max_flows;
-    char *virtual_obs_id;
-    uint8_t virtual_obs_len;
 
     ofproto_ipfix_stats stats;
 };
@@ -369,32 +367,6 @@ struct ipfix_data_record_aggregated_ip {
 BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_aggregated_ip) == 32);
 
 /*
- * Refer to RFC 7011, the length of Variable length element is 0~65535:
- * In most case, it should be less than 255 octets:
- *  0                   1                   2                   3
- *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
- *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *  | Length (< 255)|          Information Element                  |
- *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *  |                      ... continuing as needed                 |
- *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- * When it is greater than or equeal to 255 octets:
- *  0                   1                   2                   3
- *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
- *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *  |      255      |      Length (0 to 65535)      |       IE      |
- *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *  |                      ... continuing as needed                 |
- *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
- *
- *
- * Now, only the virtual_obs_id whose length < 255 is implemented.
- */
-
-#define IPFIX_VIRTUAL_OBS_MAX_LEN 254
-
-/*
  * support tunnel key for:
  * VxLAN: 24-bit VIN,
  * GRE: 32-bit key,
@@ -464,18 +436,6 @@ static void get_export_time_now(uint64_t *, uint32_t *);
 static void dpif_ipfix_cache_expire_now(struct dpif_ipfix_exporter *, bool);
 
 static bool
-nullable_string_is_equal(const char *a, const char *b)
-{
-    return a ? b && !strcmp(a, b) : !b;
-}
-
-static char *
-nullable_xstrdup(const char *s)
-{
-    return s ? xstrdup(s) : NULL;
-}
-
-static bool
 ofproto_ipfix_bridge_exporter_options_equal(
     const struct ofproto_ipfix_bridge_exporter_options *a,
     const struct ofproto_ipfix_bridge_exporter_options *b)
@@ -488,8 +448,7 @@ ofproto_ipfix_bridge_exporter_options_equal(
             && a->enable_tunnel_sampling == b->enable_tunnel_sampling
             && a->enable_input_sampling == b->enable_input_sampling
             && a->enable_output_sampling == b->enable_output_sampling
-            && sset_equals(&a->targets, &b->targets)
-            && nullable_string_is_equal(a->virtual_obs_id, b->virtual_obs_id));
+            && sset_equals(&a->targets, &b->targets));
 }
 
 static struct ofproto_ipfix_bridge_exporter_options *
@@ -499,7 +458,6 @@ ofproto_ipfix_bridge_exporter_options_clone(
     struct ofproto_ipfix_bridge_exporter_options *new =
         xmemdup(old, sizeof *old);
     sset_clone(&new->targets, &old->targets);
-    new->virtual_obs_id = nullable_xstrdup(old->virtual_obs_id);
     return new;
 }
 
@@ -509,7 +467,6 @@ ofproto_ipfix_bridge_exporter_options_destroy(
 {
     if (options) {
         sset_destroy(&options->targets);
-        free(options->virtual_obs_id);
         free(options);
     }
 }
@@ -523,8 +480,7 @@ ofproto_ipfix_flow_exporter_options_equal(
             && a->cache_active_timeout == b->cache_active_timeout
             && a->cache_max_flows == b->cache_max_flows
             && a->enable_tunnel_sampling == b->enable_tunnel_sampling
-            && sset_equals(&a->targets, &b->targets)
-            && nullable_string_is_equal(a->virtual_obs_id, b->virtual_obs_id));
+            && sset_equals(&a->targets, &b->targets));
 }
 
 static struct ofproto_ipfix_flow_exporter_options *
@@ -534,7 +490,6 @@ ofproto_ipfix_flow_exporter_options_clone(
     struct ofproto_ipfix_flow_exporter_options *new =
         xmemdup(old, sizeof *old);
     sset_clone(&new->targets, &old->targets);
-    new->virtual_obs_id = nullable_xstrdup(old->virtual_obs_id);
     return new;
 }
 
@@ -544,7 +499,6 @@ ofproto_ipfix_flow_exporter_options_destroy(
 {
     if (options) {
         sset_destroy(&options->targets);
-        free(options->virtual_obs_id);
         free(options);
     }
 }
@@ -559,8 +513,6 @@ dpif_ipfix_exporter_init(struct dpif_ipfix_exporter *exporter)
     ovs_list_init(&exporter->cache_flow_start_timestamp_list);
     exporter->cache_active_timeout = 0;
     exporter->cache_max_flows = 0;
-    exporter->virtual_obs_id = NULL;
-    exporter->virtual_obs_len = 0;
 }
 
 static void
@@ -575,9 +527,6 @@ dpif_ipfix_exporter_clear(struct dpif_ipfix_exporter *exporter)
     exporter->last_template_set_time = 0;
     exporter->cache_active_timeout = 0;
     exporter->cache_max_flows = 0;
-    free(exporter->virtual_obs_id);
-    exporter->virtual_obs_id = NULL;
-    exporter->virtual_obs_len = 0;
 }
 
 static void
@@ -591,10 +540,8 @@ static bool
 dpif_ipfix_exporter_set_options(struct dpif_ipfix_exporter *exporter,
                                 const struct sset *targets,
                                 const uint32_t cache_active_timeout,
-                                const uint32_t cache_max_flows,
-                                const char *virtual_obs_id)
+                                const uint32_t cache_max_flows)
 {
-    size_t virtual_obs_len;
     collectors_destroy(exporter->collectors);
     collectors_create(targets, IPFIX_DEFAULT_COLLECTOR_PORT,
                       &exporter->collectors);
@@ -606,16 +553,6 @@ dpif_ipfix_exporter_set_options(struct dpif_ipfix_exporter *exporter,
     }
     exporter->cache_active_timeout = cache_active_timeout;
     exporter->cache_max_flows = cache_max_flows;
-    virtual_obs_len = virtual_obs_id ? strlen(virtual_obs_id) : 0;
-    if (virtual_obs_len > IPFIX_VIRTUAL_OBS_MAX_LEN) {
-        VLOG_WARN_RL(&rl, "Virtual obsevation ID too long (%d bytes), "
-                     "should not be longer than %d bytes.",
-                     exporter->virtual_obs_len, IPFIX_VIRTUAL_OBS_MAX_LEN);
-        dpif_ipfix_exporter_clear(exporter);
-        return false;
-    }
-    exporter->virtual_obs_len = virtual_obs_len;
-    exporter->virtual_obs_id = nullable_xstrdup(virtual_obs_id);
     return true;
 }
 
@@ -770,8 +707,7 @@ dpif_ipfix_bridge_exporter_set_options(
             < sset_count(&options->targets)) {
         if (!dpif_ipfix_exporter_set_options(
                 &exporter->exporter, &options->targets,
-                options->cache_active_timeout, options->cache_max_flows,
-                options->virtual_obs_id)) {
+                options->cache_active_timeout, options->cache_max_flows)) {
             return;
         }
     }
@@ -859,8 +795,7 @@ dpif_ipfix_flow_exporter_set_options(
             < sset_count(&options->targets)) {
         if (!dpif_ipfix_exporter_set_options(
                 &exporter->exporter, &options->targets,
-                options->cache_active_timeout, options->cache_max_flows,
-                options->virtual_obs_id)) {
+                options->cache_active_timeout, options->cache_max_flows)) {
             return false;
         }
     }
@@ -1139,7 +1074,6 @@ ipfix_define_template_entity(enum ipfix_entity_id id,
 static uint16_t
 ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
                              enum ipfix_proto_l4 l4, enum ipfix_proto_tunnel tunnel,
-                             bool virtual_obs_id_set,
                              struct dp_packet *msg)
 {
     uint16_t count = 0;
@@ -1211,12 +1145,7 @@ ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
         DEF(TUNNEL_KEY);
     }
 
-    /* 2. Virtual observation ID, which is not a part of flow key. */
-    if (virtual_obs_id_set) {
-        DEF(VIRTUAL_OBS_ID);
-    }
-
-    /* 3. Flow aggregated data. */
+    /* 2. Flow aggregated data. */
 
     DEF(FLOW_START_DELTA_MICROSECONDS);
     DEF(FLOW_END_DELTA_MICROSECONDS);
@@ -1230,6 +1159,8 @@ ipfix_define_template_fields(enum ipfix_proto_l2 l2, enum ipfix_proto_l3 l3,
         DEF(MINIMUM_IP_TOTAL_LENGTH);
         DEF(MAXIMUM_IP_TOTAL_LENGTH);
     }
+
+
 #undef DEF
 
     return count;
@@ -1322,9 +1253,8 @@ ipfix_send_template_msgs(struct dpif_ipfix_exporter *exporter,
                     tmpl_hdr = dp_packet_put_zeros(&msg, sizeof *tmpl_hdr);
                     tmpl_hdr->template_id = htons(
                         ipfix_get_template_id(l2, l3, l4, tunnel));
-                    field_count = ipfix_define_template_fields(
-                        l2, l3, l4, tunnel, exporter->virtual_obs_id != NULL,
-                        &msg);
+                    field_count =
+                        ipfix_define_template_fields(l2, l3, l4, tunnel, &msg);
                     tmpl_hdr = (struct ipfix_template_record_header*)
                         ((uint8_t*)dp_packet_data(&msg) + tmpl_hdr_offset);
                     tmpl_hdr->field_count = htons(field_count);
@@ -1808,8 +1738,6 @@ static void
 ipfix_put_data_set(uint32_t export_time_sec,
                    struct ipfix_flow_cache_entry *entry,
                    enum ipfix_flow_end_reason flow_end_reason,
-                   const char *virtual_obs_id,
-                   uint8_t virtual_obs_len,
                    struct dp_packet *msg)
 {
     size_t set_hdr_offset;
@@ -1825,12 +1753,6 @@ ipfix_put_data_set(uint32_t export_time_sec,
 
     dp_packet_put(msg, entry->flow_key.flow_key_msg_part,
                entry->flow_key.flow_key_msg_part_size);
-
-    /* Export virtual observation ID. */
-    if (virtual_obs_id) {
-        dp_packet_put(msg, &virtual_obs_len, sizeof(virtual_obs_len));
-        dp_packet_put(msg, virtual_obs_id, virtual_obs_len);
-    }
 
     /* Put the non-key part of the data record. */
 
@@ -1894,9 +1816,7 @@ ipfix_send_data_msg(struct dpif_ipfix_exporter *exporter,
 
     ipfix_init_header(export_time_sec, exporter->seq_number++,
                       entry->flow_key.obs_domain_id, &msg);
-    ipfix_put_data_set(export_time_sec, entry, flow_end_reason,
-                       exporter->virtual_obs_id, exporter->virtual_obs_len,
-                       &msg);
+    ipfix_put_data_set(export_time_sec, entry, flow_end_reason, &msg);
     tx_errors = ipfix_send_msg(exporter->collectors, &msg);
 
     dp_packet_uninit(&msg);
