@@ -503,6 +503,7 @@ requires_datapath_assistance(const struct nlattr *a)
     case OVS_ACTION_ATTR_HASH:
     case OVS_ACTION_ATTR_PUSH_MPLS:
     case OVS_ACTION_ATTR_POP_MPLS:
+    case OVS_ACTION_ATTR_TRUNC:
         return false;
 
     case OVS_ACTION_ATTR_UNSPEC:
@@ -624,6 +625,17 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
                 return;
             }
             break;
+
+        case OVS_ACTION_ATTR_TRUNC: {
+            const struct ovs_action_trunc *trunc =
+                        nl_attr_get_unspec(a, sizeof *trunc);
+
+            batch->trunc = true;
+            for (i = 0; i < cnt; i++) {
+                dp_packet_set_cutlen(packets[i], trunc->max_len);
+            }
+            break;
+        }
 
         case OVS_ACTION_ATTR_OUTPUT:
         case OVS_ACTION_ATTR_TUNNEL_PUSH:

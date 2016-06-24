@@ -388,6 +388,10 @@ ip,actions=ct(commit,exec(load(0x1->NXM_NX_CT_LABEL[])))
 ip,actions=ct(commit,exec(load(0x1234567890ABCDEF->NXM_NX_CT_LABEL[32..95])))
 ip,actions=ct(commit,exec(set_field(0x1->ct_label)))
 ip,ct_state=+trk,ct_label=0x1234567890abcdef12345678,actions=ct(commit)
+actions=output(max_len=100,port=123)
+actions=output(port=100,max_len=123)
+actions=output(port=LOCAL,max_len=123)
+actions=output(port=IN_PORT,max_len=123)
 ]])
 
 AT_CHECK([ovs-ofctl parse-flows flows.txt
@@ -431,6 +435,10 @@ NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1234567890abcdef->NXM_NX_CT_LABEL[32..95]))
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
 NXT_FLOW_MOD: ADD table:255 ct_state=+trk,ct_label=0x1234567890abcdef12345678,ip actions=ct(commit)
+NXT_FLOW_MOD: ADD table:255 actions=output(port=123,max_len=100)
+NXT_FLOW_MOD: ADD table:255 actions=output(port=100,max_len=123)
+NXT_FLOW_MOD: ADD table:255 actions=output(port=65534,max_len=123)
+NXT_FLOW_MOD: ADD table:255 actions=output(port=65528,max_len=123)
 ]])
 AT_CLEANUP
 

@@ -1044,6 +1044,8 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
         const void *buffer = dp_packet_data(pkts[i]);
         size_t size = dp_packet_size(pkts[i]);
 
+        size -= dp_packet_get_cutlen(pkts[i]);
+
         if (size < ETH_HEADER_LEN) {
             error = EMSGSIZE;
             break;

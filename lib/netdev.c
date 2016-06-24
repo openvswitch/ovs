@@ -681,7 +681,7 @@ netdev_set_tx_multiq(struct netdev *netdev, unsigned int n_txq)
     return error;
 }
 
-/* Sends 'buffers' on 'netdev'.  Returns 0 if successful (for every packet),
+/* Sends 'batch' on 'netdev'.  Returns 0 if successful (for every packet),
  * otherwise a positive errno value.  Returns EAGAIN without blocking if
  * at least one the packets cannot be queued immediately.  Returns EMSGSIZE
  * if a partial packet was transmitted or if a packet is too big or too small
@@ -716,6 +716,9 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
                                            may_steal);
     if (!error) {
         COVERAGE_INC(netdev_sent);
+        if (!may_steal) {
+            dp_packet_batch_reset_cutlen(batch);
+        }
     }
     return error;
 }

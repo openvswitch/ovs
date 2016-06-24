@@ -1172,6 +1172,9 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
         size_t size = dp_packet_size(pkts[i]);
         ssize_t retval;
 
+        /* Truncate the packet if it is configured. */
+        size -= dp_packet_get_cutlen(pkts[i]);
+
         if (!is_tap_netdev(netdev_)) {
             /* Use our AF_PACKET socket to send to this device. */
             struct sockaddr_ll sll;

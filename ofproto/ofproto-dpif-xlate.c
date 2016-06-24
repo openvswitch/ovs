@@ -3995,6 +3995,56 @@ xlate_output_reg_action(struct xlate_ctx *ctx,
 }
 
 static void
+xlate_output_trunc_action(struct xlate_ctx *ctx,
+                    ofp_port_t port, uint32_t max_len)
+{
+    bool support_trunc = ctx->xbridge->support.trunc;
+    struct ovs_action_trunc *trunc;
+    char name[OFP_MAX_PORT_NAME_LEN];
+
+    switch (port) {
+    case OFPP_TABLE:
+    case OFPP_NORMAL:
+    case OFPP_FLOOD:
+    case OFPP_ALL:
+    case OFPP_CONTROLLER:
+    case OFPP_NONE:
+        ofputil_port_to_string(port, name, sizeof name);
+        xlate_report(ctx, "output_trunc does not support port: %s", name);
+        break;
+    case OFPP_LOCAL:
+    case OFPP_IN_PORT:
+    default:
+        if (port != ctx->xin->flow.in_port.ofp_port) {
+            const struct xport *xport = get_ofp_port(ctx->xbridge, port);
+
+            if (xport == NULL || xport->odp_port == ODPP_NONE) {
+                /* Since truncate happens at its following output action, if
+                 * the output port is a patch port, the behavior is somehow
+                 * unpredicable. For simpilicity, disallow this case. */
+                ofputil_port_to_string(port, name, sizeof name);
+                XLATE_REPORT_ERROR(ctx, "bridge %s: "
+                         "output_trunc does not support port: %s",
+                         ctx->xbridge->name, name);
+                break;
+            }
+
+            trunc = nl_msg_put_unspec_uninit(ctx->odp_actions,
+                                OVS_ACTION_ATTR_TRUNC,
+                                sizeof *trunc);
+            trunc->max_len = max_len;
+            xlate_output_action(ctx, port, max_len, false);
+            if (!support_trunc) {
+                ctx->xout->slow |= SLOW_ACTION;
+            }
+        } else {
+            xlate_report(ctx, "skipping output to input port");
+        }
+        break;
+    }
+}
+
+static void
 xlate_enqueue_action(struct xlate_ctx *ctx,
                      const struct ofpact_enqueue *enqueue)
 {
@@ -4333,6 +4383,7 @@ freeze_unroll_actions(const struct ofpact *a, const struct ofpact *end,
     for (; a < end; a = ofpact_next(a)) {
         switch (a->type) {
         case OFPACT_OUTPUT_REG:
+        case OFPACT_OUTPUT_TRUNC:
         case OFPACT_GROUP:
         case OFPACT_OUTPUT:
         case OFPACT_CONTROLLER:
@@ -4584,6 +4635,7 @@ recirc_for_mpls(const struct ofpact *a, struct xlate_ctx *ctx)
 
     /* Output actions  do not require recirculation. */
     case OFPACT_OUTPUT:
+    case OFPACT_OUTPUT_TRUNC:
     case OFPACT_ENQUEUE:
     case OFPACT_OUTPUT_REG:
     /* Set actions that don't touch L3+ fields do not require recirculation. */
@@ -4931,6 +4983,11 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_OUTPUT_REG:
             xlate_output_reg_action(ctx, ofpact_get_OUTPUT_REG(a));
+            break;
+
+        case OFPACT_OUTPUT_TRUNC:
+            xlate_output_trunc_action(ctx, ofpact_get_OUTPUT_TRUNC(a)->port,
+                                ofpact_get_OUTPUT_TRUNC(a)->max_len);
             break;
 
         case OFPACT_LEARN:

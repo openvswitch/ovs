@@ -60,6 +60,7 @@ struct dp_packet {
                                     * or UINT16_MAX. */
     uint16_t l4_ofs;               /* Transport-level header offset,
                                       or UINT16_MAX. */
+    uint32_t cutlen;               /* length in bytes to cut from the end. */
     union {
         struct pkt_metadata md;
         uint64_t data[DP_PACKET_CONTEXT_SIZE / 8];
@@ -494,6 +495,34 @@ dp_packet_set_allocated(struct dp_packet *b, uint16_t s)
 }
 #endif
 
+static inline void
+dp_packet_reset_cutlen(struct dp_packet *b)
+{
+    b->cutlen = 0;
+}
+
+static inline uint32_t
+dp_packet_set_cutlen(struct dp_packet *b, uint32_t max_len)
+{
+    if (max_len < ETH_HEADER_LEN) {
+        max_len = ETH_HEADER_LEN;
+    }
+
+    if (max_len >= dp_packet_size(b)) {
+        b->cutlen = 0;
+    } else {
+        b->cutlen = dp_packet_size(b) - max_len;
+    }
+    return b->cutlen;
+}
+
+static inline uint32_t
+dp_packet_get_cutlen(struct dp_packet *b)
+{
+    /* Always in valid range if user uses dp_packet_set_cutlen. */
+    return b->cutlen;
+}
+
 static inline void *
 dp_packet_data(const struct dp_packet *b)
 {
@@ -567,12 +596,14 @@ enum { NETDEV_MAX_BURST = 32 }; /* Maximum number packets in a batch. */
 
 struct dp_packet_batch {
     int count;
+    bool trunc; /* true if the batch needs truncate. */
     struct dp_packet *packets[NETDEV_MAX_BURST];
 };
 
 static inline void dp_packet_batch_init(struct dp_packet_batch *b)
 {
     b->count = 0;
+    b->trunc = false;
 }
 
 static inline void
@@ -585,12 +616,14 @@ dp_packet_batch_clone(struct dp_packet_batch *dst,
         dst->packets[i] = dp_packet_clone(src->packets[i]);
     }
     dst->count = src->count;
+    dst->trunc = src->trunc;
 }
 
 static inline void
 packet_batch_init_packet(struct dp_packet_batch *b, struct dp_packet *p)
 {
     b->count = 1;
+    b->trunc = false;
     b->packets[0] = p;
 }
 
@@ -603,6 +636,38 @@ dp_packet_delete_batch(struct dp_packet_batch *batch, bool may_steal)
         for (i = 0; i < batch->count; i++) {
             dp_packet_delete(batch->packets[i]);
         }
+    }
+}
+
+static inline void
+dp_packet_batch_apply_cutlen(struct dp_packet_batch *pktb)
+{
+    int i;
+
+    if (!pktb->trunc)
+        return;
+
+    for (i = 0; i < pktb->count; i++) {
+        uint32_t cutlen = dp_packet_get_cutlen(pktb->packets[i]);
+
+        dp_packet_set_size(pktb->packets[i],
+                    dp_packet_size(pktb->packets[i]) - cutlen);
+        dp_packet_reset_cutlen(pktb->packets[i]);
+    }
+    pktb->trunc = false;
+}
+
+static inline void
+dp_packet_batch_reset_cutlen(struct dp_packet_batch *pktb)
+{
+    int i;
+
+    if (!pktb->trunc)
+        return;
+
+    pktb->trunc = false;
+    for (i = 0; i < pktb->count; i++) {
+        dp_packet_reset_cutlen(pktb->packets[i]);
     }
 }
 

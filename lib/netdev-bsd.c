@@ -699,6 +699,9 @@ netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
         const void *data = dp_packet_data(pkts[i]);
         size_t size = dp_packet_size(pkts[i]);
 
+        /* Truncate the packet if it is configured. */
+        size -= dp_packet_get_cutlen(pkts[i]);
+
         while (!error) {
             ssize_t retval;
             if (dev->tap_fd >= 0) {

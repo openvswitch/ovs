@@ -1503,6 +1503,10 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet **pkts,
             break;
         }
 
+        /* Cut the size so only the truncated size is copied. */
+        size -= dp_packet_get_cutlen(pkts[i]);
+        dp_packet_reset_cutlen(pkts[i]);
+
         /* We have to do a copy for now */
         memcpy(rte_pktmbuf_mtod(mbufs[newcnt], void *), dp_packet_data(pkts[i]), size);
 
@@ -1550,6 +1554,14 @@ netdev_dpdk_vhost_send(struct netdev *netdev, int qid, struct dp_packet **pkts,
             }
         }
     } else {
+        int i;
+
+        for (i = 0; i < cnt; i++) {
+            int cutlen = dp_packet_get_cutlen(pkts[i]);
+
+            dp_packet_set_size(pkts[i], dp_packet_size(pkts[i]) - cutlen);
+            dp_packet_reset_cutlen(pkts[i]);
+        }
         __netdev_dpdk_vhost_send(netdev, qid, pkts, cnt, may_steal);
     }
     return 0;
@@ -1585,6 +1597,9 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
 
         for (i = 0; i < cnt; i++) {
             int size = dp_packet_size(pkts[i]);
+
+            size -= dp_packet_get_cutlen(pkts[i]);
+            dp_packet_set_size(pkts[i], size);
 
             if (OVS_UNLIKELY(size > dev->max_packet_len)) {
                 if (next_tx_idx != i) {
