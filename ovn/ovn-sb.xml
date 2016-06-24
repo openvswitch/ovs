@@ -344,7 +344,7 @@
       the <code>output</code> as a no-op.  In the common case, where they are
       different, the packet enters the egress pipeline.  This transition to the
       egress pipeline discards register data, e.g. <code>reg0</code> ...
-      <code>reg4</code> and connection tracking state, to achieve
+      <code>reg9</code> and connection tracking state, to achieve
       uniform behavior regardless of whether the egress pipeline is on a
       different hypervisor (because registers aren't preserve across
       tunnel encapsulation).
@@ -739,7 +739,7 @@
       </p>
 
       <ul>
-        <li><code>reg0</code>...<code>reg4</code></li>
+        <li><code>reg0</code>...<code>reg9</code></li>
         <li><code>inport</code> <code>outport</code></li>
         <li><code>eth.src</code> <code>eth.dst</code> <code>eth.type</code></li>
         <li><code>vlan.tci</code> <code>vlan.vid</code> <code>vlan.pcp</code> <code>vlan.present</code></li>

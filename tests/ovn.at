@@ -411,32 +411,32 @@ AT_SETUP([ovn -- converting expressions to flows -- string fields])
 expr_to_flow () {
     echo "$1" | ovstest test-ovn expr-to-flows | sort
 }
-AT_CHECK([expr_to_flow 'inport == "eth0"'], [0], [reg6=0x5
+AT_CHECK([expr_to_flow 'inport == "eth0"'], [0], [reg14=0x5
 ])
-AT_CHECK([expr_to_flow 'inport == "eth1"'], [0], [reg6=0x6
+AT_CHECK([expr_to_flow 'inport == "eth1"'], [0], [reg14=0x6
 ])
 AT_CHECK([expr_to_flow 'inport == "eth2"'], [0], [(no flows)
 ])
 AT_CHECK([expr_to_flow 'inport == "eth0" && ip'], [0], [dnl
-ip,reg6=0x5
-ipv6,reg6=0x5
+ip,reg14=0x5
+ipv6,reg14=0x5
 ])
 AT_CHECK([expr_to_flow 'inport == "eth1" && ip'], [0], [dnl
-ip,reg6=0x6
-ipv6,reg6=0x6
+ip,reg14=0x6
+ipv6,reg14=0x6
 ])
 AT_CHECK([expr_to_flow 'inport == "eth2" && ip'], [0], [(no flows)
 ])
 AT_CHECK([expr_to_flow 'inport == {"eth0", "eth1", "eth2", "LOCAL"}'], [0],
-[reg6=0x5
-reg6=0x6
-reg6=0xfffe
+[reg14=0x5
+reg14=0x6
+reg14=0xfffe
 ])
 AT_CHECK([expr_to_flow 'inport == {"eth0", "eth1", "eth2"} && ip'], [0], [dnl
-ip,reg6=0x5
-ip,reg6=0x6
-ipv6,reg6=0x5
-ipv6,reg6=0x6
+ip,reg14=0x5
+ip,reg14=0x6
+ipv6,reg14=0x5
+ipv6,reg14=0x6
 ])
 AT_CHECK([expr_to_flow 'inport == "eth0" && inport == "eth1"'], [0], [dnl
 (no flows)
@@ -524,9 +524,9 @@ tcp.dst=80; => actions=set_field:80->tcp_dst, prereqs=ip.proto == 0x6 && (eth.ty
 eth.dst[40] = 1; => actions=set_field:01:00:00:00:00:00/01:00:00:00:00:00->eth_dst, prereqs=1
 vlan.pcp = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=vlan.tci[12]
 vlan.tci[13..15] = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=1
-inport = ""; => actions=set_field:0->reg6,set_field:0->in_port, prereqs=1
+inport = ""; => actions=set_field:0->reg14,set_field:0->in_port, prereqs=1
 ip.ttl = 4; => actions=set_field:4->nw_ttl, prereqs=eth.type == 0x800 || eth.type == 0x86dd
-outport="eth0"; next; outport="LOCAL"; next; => actions=set_field:0x5->reg7,resubmit(,27),set_field:0xfffe->reg7,resubmit(,27), prereqs=1
+outport="eth0"; next; outport="LOCAL"; next; => actions=set_field:0x5->reg15,resubmit(,27),set_field:0xfffe->reg15,resubmit(,27), prereqs=1
 
 inport[1] = 1; => Cannot select subfield of string field inport.
 ip.proto[1] = 1; => Cannot select subfield of nominal field ip.proto.
@@ -543,7 +543,7 @@ vlan.present = 0; => Predicate symbol vlan.present used where lvalue required.
 reg0 = reg1; => actions=move:OXM_OF_PKT_REG0[0..31]->OXM_OF_PKT_REG0[32..63], prereqs=1
 vlan.pcp = reg0[0..2]; => actions=move:OXM_OF_PKT_REG0[32..34]->NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
 reg0[10] = vlan.pcp[1]; => actions=move:NXM_OF_VLAN_TCI[14]->OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]
-outport = inport; => actions=move:NXM_NX_REG6[]->NXM_NX_REG7[], prereqs=1
+outport = inport; => actions=move:NXM_NX_REG14[]->NXM_NX_REG15[], prereqs=1
 
 reg0[0] = vlan.present; => Predicate symbol vlan.present used where lvalue required.
 reg0 = reg1[0..10]; => Can't assign 11-bit value to 32-bit destination.
@@ -555,7 +555,7 @@ ip.proto = reg0[0..7]; => Field ip.proto is not modifiable.
 reg0 <-> reg1; => actions=push:OXM_OF_PKT_REG0[0..31],push:OXM_OF_PKT_REG0[32..63],pop:OXM_OF_PKT_REG0[0..31],pop:OXM_OF_PKT_REG0[32..63], prereqs=1
 vlan.pcp <-> reg0[0..2]; => actions=push:OXM_OF_PKT_REG0[32..34],push:NXM_OF_VLAN_TCI[13..15],pop:OXM_OF_PKT_REG0[32..34],pop:NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
 reg0[10] <-> vlan.pcp[1]; => actions=push:NXM_OF_VLAN_TCI[14],push:OXM_OF_PKT_REG0[42],pop:NXM_OF_VLAN_TCI[14],pop:OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]
-outport <-> inport; => actions=push:NXM_NX_REG6[],push:NXM_NX_REG7[],pop:NXM_NX_REG6[],pop:NXM_NX_REG7[], prereqs=1
+outport <-> inport; => actions=push:NXM_NX_REG14[],push:NXM_NX_REG15[],pop:NXM_NX_REG14[],pop:NXM_NX_REG15[], prereqs=1
 
 reg0[0] <-> vlan.present; => Predicate symbol vlan.present used where lvalue required.
 reg0 <-> reg1[0..10]; => Can't exchange 32-bit field with 11-bit field.
@@ -569,7 +569,7 @@ ip.ttl--; => actions=dec_ttl, prereqs=ip
 ip.ttl => Syntax error at end of input expecting `--'.
 
 # load balancing.
-ct_lb; => actions=ct(table=27,zone=NXM_NX_REG5[0..15],nat), prereqs=ip
+ct_lb; => actions=ct(table=27,zone=NXM_NX_REG13[0..15],nat), prereqs=ip
 ct_lb(); => Syntax error at `)' expecting IPv4 address.
 ct_lb(192.168.1.2:80, 192.168.1.3:80); => actions=group:1, prereqs=ip
 ct_lb(192.168.1.2, 192.168.1.3, ); => actions=group:2, prereqs=ip
@@ -578,26 +578,26 @@ ct_lb(192.168.1.2:123456); => Syntax error at `123456' expecting port number.
 ct_lb(foo); => Syntax error at `foo' expecting IPv4 address.
 
 # conntrack
-ct_next; => actions=ct(table=27,zone=NXM_NX_REG5[0..15]), prereqs=ip
-ct_commit; => actions=ct(commit,zone=NXM_NX_REG5[0..15]), prereqs=ip
-ct_commit(); => actions=ct(commit,zone=NXM_NX_REG5[0..15]), prereqs=ip
-ct_commit(ct_mark=1); => actions=ct(commit,zone=NXM_NX_REG5[0..15],exec(set_field:0x1->ct_mark)), prereqs=ip
-ct_commit(ct_mark=1/1); => actions=ct(commit,zone=NXM_NX_REG5[0..15],exec(set_field:0x1/0x1->ct_mark)), prereqs=ip
-ct_commit(ct_label=1); => actions=ct(commit,zone=NXM_NX_REG5[0..15],exec(set_field:0x1->ct_label)), prereqs=ip
-ct_commit(ct_label=1/1); => actions=ct(commit,zone=NXM_NX_REG5[0..15],exec(set_field:0x1/0x1->ct_label)), prereqs=ip
-ct_commit(ct_mark=1, ct_label=2); => actions=ct(commit,zone=NXM_NX_REG5[0..15],exec(set_field:0x1->ct_mark,set_field:0x2->ct_label)), prereqs=ip
+ct_next; => actions=ct(table=27,zone=NXM_NX_REG13[0..15]), prereqs=ip
+ct_commit; => actions=ct(commit,zone=NXM_NX_REG13[0..15]), prereqs=ip
+ct_commit(); => actions=ct(commit,zone=NXM_NX_REG13[0..15]), prereqs=ip
+ct_commit(ct_mark=1); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1->ct_mark)), prereqs=ip
+ct_commit(ct_mark=1/1); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1/0x1->ct_mark)), prereqs=ip
+ct_commit(ct_label=1); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1->ct_label)), prereqs=ip
+ct_commit(ct_label=1/1); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1/0x1->ct_label)), prereqs=ip
+ct_commit(ct_mark=1, ct_label=2); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1->ct_mark,set_field:0x2->ct_label)), prereqs=ip
 
 # dnat
-ct_dnat; => actions=ct(table=27,zone=NXM_NX_REG3[0..15],nat), prereqs=ip
-ct_dnat(192.168.1.2); => actions=ct(commit,table=27,zone=NXM_NX_REG3[0..15],nat(dst=192.168.1.2)), prereqs=ip
+ct_dnat; => actions=ct(table=27,zone=NXM_NX_REG11[0..15],nat), prereqs=ip
+ct_dnat(192.168.1.2); => actions=ct(commit,table=27,zone=NXM_NX_REG11[0..15],nat(dst=192.168.1.2)), prereqs=ip
 ct_dnat(192.168.1.2, 192.168.1.3); => Syntax error at `,' expecting `)'.
 ct_dnat(foo); => Syntax error at `foo' invalid ip.
 ct_dnat(foo, bar); => Syntax error at `foo' invalid ip.
 ct_dnat(); => Syntax error at `)' invalid ip.
 
 # snat
-ct_snat; => actions=ct(zone=NXM_NX_REG4[0..15],nat), prereqs=ip
-ct_snat(192.168.1.2); => actions=ct(commit,table=27,zone=NXM_NX_REG4[0..15],nat(src=192.168.1.2)), prereqs=ip
+ct_snat; => actions=ct(zone=NXM_NX_REG12[0..15],nat), prereqs=ip
+ct_snat(192.168.1.2); => actions=ct(commit,table=27,zone=NXM_NX_REG12[0..15],nat(src=192.168.1.2)), prereqs=ip
 ct_snat(192.168.1.2, 192.168.1.3); => Syntax error at `,' expecting `)'.
 ct_snat(foo); => Syntax error at `foo' invalid ip.
 ct_snat(foo, bar); => Syntax error at `foo' invalid ip.
@@ -609,7 +609,7 @@ arp { eth.dst = ff:ff:ff:ff:ff:ff; output; }; => actions=controller(userdata=00.
 
 # get_arp
 get_arp(outport, ip4.dst); => actions=push:NXM_NX_REG0[],push:NXM_OF_IP_DST[],pop:NXM_NX_REG0[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_REG0[], prereqs=eth.type == 0x800
-get_arp(inport, reg0); => actions=push:NXM_NX_REG7[],push:NXM_NX_REG0[],push:OXM_OF_PKT_REG0[32..63],push:NXM_NX_REG6[],pop:NXM_NX_REG7[],pop:NXM_NX_REG0[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_REG0[],pop:NXM_NX_REG7[], prereqs=1
+get_arp(inport, reg0); => actions=push:NXM_NX_REG15[],push:NXM_NX_REG0[],push:OXM_OF_PKT_REG0[32..63],push:NXM_NX_REG14[],pop:NXM_NX_REG15[],pop:NXM_NX_REG0[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_REG0[],pop:NXM_NX_REG15[], prereqs=1
 get_arp; => Syntax error at `;' expecting `('.
 get_arp(); => Syntax error at `)' expecting field name.
 get_arp(inport); => Syntax error at `)' expecting `,'.
@@ -648,7 +648,7 @@ reg1[0] = put_dhcp_opts(offerip="xyzzy"); => DHCP option offerip requires numeri
 reg1[0] = put_dhcp_opts(offerip=1.2.3.4, domain=1.2.3.4); => DHCP option domain requires string value.
 
 # na
-na { eth.src = 12:34:56:78:9a:bc; nd.tll = 12:34:56:78:9a:bc; outport = inport; inport = ""; /* Allow sending out inport. */ output; }; => actions=controller(userdata=00.00.00.03.00.00.00.00.00.19.00.10.80.00.08.06.12.34.56.78.9a.bc.00.00.00.19.00.10.80.00.42.06.12.34.56.78.9a.bc.00.00.ff.ff.00.18.00.00.23.20.00.06.00.20.00.00.00.00.00.01.0c.04.00.01.0e.04.00.19.00.10.00.01.0c.04.00.00.00.00.00.00.00.00.00.19.00.10.00.00.00.02.00.00.00.00.00.00.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00), prereqs=nd
+na { eth.src = 12:34:56:78:9a:bc; nd.tll = 12:34:56:78:9a:bc; outport = inport; inport = ""; /* Allow sending out inport. */ output; }; => actions=controller(userdata=00.00.00.03.00.00.00.00.00.19.00.10.80.00.08.06.12.34.56.78.9a.bc.00.00.00.19.00.10.80.00.42.06.12.34.56.78.9a.bc.00.00.ff.ff.00.18.00.00.23.20.00.06.00.20.00.00.00.00.00.01.1c.04.00.01.1e.04.00.19.00.10.00.01.1c.04.00.00.00.00.00.00.00.00.00.19.00.10.00.00.00.02.00.00.00.00.00.00.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00), prereqs=nd
 
 # Contradictionary prerequisites (allowed but not useful):
 ip4.src = ip6.src[0..31]; => actions=move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd

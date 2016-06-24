@@ -143,8 +143,8 @@ create_symtab(struct shash *symtab)
     /* Reserve a pair of registers for the logical inport and outport.  A full
      * 32-bit register each is bigger than we need, but the expression code
      * doesn't yet support string fields that occupy less than a full OXM. */
-    expr_symtab_add_string(symtab, "inport", MFF_REG6, NULL);
-    expr_symtab_add_string(symtab, "outport", MFF_REG7, NULL);
+    expr_symtab_add_string(symtab, "inport", MFF_REG14, NULL);
+    expr_symtab_add_string(symtab, "outport", MFF_REG15, NULL);
 
     expr_symtab_add_field(symtab, "xreg0", MFF_XREG0, NULL, false);
     expr_symtab_add_field(symtab, "xreg1", MFF_XREG1, NULL, false);
