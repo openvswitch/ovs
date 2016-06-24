@@ -34,6 +34,7 @@
 #
 
 from __future__ import print_function
+from six.moves import input
 
 import getopt
 import re
@@ -893,10 +894,10 @@ def load_plugins(just_capabilities=False, filter=None):
                [PII_NO, PII_YES, PII_MAYBE, PII_IF_CUSTOMIZED]:
                 pii = xmldoc.documentElement.getAttribute("pii")
             if xmldoc.documentElement.getAttribute("min_size") != '':
-                min_size = long(
+                min_size = int(
                             xmldoc.documentElement.getAttribute("min_size"))
             if xmldoc.documentElement.getAttribute("max_size") != '':
-                max_size = long(
+                max_size = int(
                             xmldoc.documentElement.getAttribute("max_size"))
             if xmldoc.documentElement.getAttribute("min_time") != '':
                 min_time = int(xmldoc.documentElement.getAttribute("min_time"))
@@ -998,7 +999,7 @@ def make_tar(subdir, suffix, output_fd, output_file):
                     s = os.stat(v['filename'])
                     ti.mtime = s.st_mtime
                     ti.size = s.st_size
-                    tf.addfile(ti, file(v['filename']))
+                    tf.addfile(ti, open(v['filename']))
             except:
                 pass
     finally:
@@ -1059,7 +1060,7 @@ def make_inventory(inventory, subdir):
     s.setAttribute('uptime', commands.getoutput(UPTIME))
     document.getElementsByTagName(INVENTORY_XML_ROOT)[0].appendChild(s)
 
-    map(lambda (k, v): inventory_entry(document, subdir, k, v),
+    map(lambda k_v: inventory_entry(document, subdir, k_v[0], k_v[1]),
         inventory.items())
     return document.toprettyxml()
 
@@ -1176,7 +1177,7 @@ def prettyDict(d):
 
 
 def yes(prompt):
-    yn = raw_input(prompt)
+    yn = input(prompt)
 
     return len(yn) == 0 or yn.lower()[0] == 'y'
 
