@@ -164,8 +164,7 @@ pinctrl_handle_arp(const struct flow *ip_flow, const struct match *md,
     enum ofp_version version = rconn_get_version(swconn);
 
     reload_metadata(&ofpacts, md);
-    enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size,
-                                                      version, &ofpacts);
+    enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size, version, &ofpacts);
     if (error) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_WARN_RL(&rl, "failed to parse arp actions (%s)",
@@ -911,7 +910,7 @@ static void
 reload_metadata(struct ofpbuf *ofpacts, const struct match *md)
 {
     enum mf_field_id md_fields[] = {
-#if FLOW_N_REGS == 8
+#if FLOW_N_REGS == 16
         MFF_REG0,
         MFF_REG1,
         MFF_REG2,
@@ -920,6 +919,14 @@ reload_metadata(struct ofpbuf *ofpacts, const struct match *md)
         MFF_REG5,
         MFF_REG6,
         MFF_REG7,
+        MFF_REG8,
+        MFF_REG9,
+        MFF_REG10,
+        MFF_REG11,
+        MFF_REG12,
+        MFF_REG13,
+        MFF_REG14,
+        MFF_REG15,
 #else
 #error
 #endif

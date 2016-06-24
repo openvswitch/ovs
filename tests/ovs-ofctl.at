@@ -41,7 +41,20 @@ for test_case in \
     'reg6=6                                      NXM,OXM' \
     'reg6=6/1                                    NXM,OXM' \
     'reg7=7                                      NXM,OXM' \
-    'reg7=7/1                                    NXM,OXM' \
+    'reg8=8/1                                    NXM,OXM' \
+    'reg8=8                                      NXM,OXM' \
+    'reg9=9/1                                    NXM,OXM' \
+    'reg9=9                                      NXM,OXM' \
+    'reg10=10                                    NXM,OXM' \
+    'reg10=10/1                                  NXM,OXM' \
+    'reg11=11                                    NXM,OXM' \
+    'reg11=11/1                                  NXM,OXM' \
+    'reg12=12                                    NXM,OXM' \
+    'reg12=12/1                                  NXM,OXM' \
+    'reg13=13                                    NXM,OXM' \
+    'reg13=13/1                                  NXM,OXM' \
+    'reg14=14                                    NXM,OXM' \
+    'reg14=14/1                                  NXM,OXM' \
     'xreg0=0                                     NXM,OXM' \
     'xreg0=0/1                                   NXM,OXM' \
     'xreg1=1                                     NXM,OXM' \
@@ -50,6 +63,14 @@ for test_case in \
     'xreg2=2/3                                   NXM,OXM' \
     'xreg3=3                                     NXM,OXM' \
     'xreg3=3/5                                   NXM,OXM' \
+    'xreg4=4                                     NXM,OXM' \
+    'xreg4=4/1                                   NXM,OXM' \
+    'xreg5=5                                     NXM,OXM' \
+    'xreg5=5/1                                   NXM,OXM' \
+    'xreg6=6                                     NXM,OXM' \
+    'xreg6=6/1                                   NXM,OXM' \
+    'xreg7=7                                     NXM,OXM' \
+    'xreg7=7/1                                   NXM,OXM' \
     'dl_src=00:11:22:33:44:55                    any' \
     'dl_src=00:11:22:33:44:55/00:ff:ff:ff:ff:ff  NXM,OXM,OpenFlow11' \
     'dl_dst=00:11:22:33:44:55                    any' \
@@ -886,15 +907,6 @@ NXOXM_ET_DP_HASH(01234567)
 # Invalid field numbers (experimenter OXM).
 ffff020800002320(11112222)
 ffff030800002320(1111/3333)
-
-# Unimplemented registers.
-#
-# This test assumes that at least two registers, but fewer than 16,
-# registers are implemented.
-00010004(12345678)
-00010108(12345678/12345678)
-00011e04(12345678)
-00011f08(12345678/12345678)
 ])
 AT_CHECK([ovs-ofctl -vPATTERN:'console:%c|%p|%m' --strict parse-nx-match < nx-match.txt], [0], [dnl
 <any>
@@ -1189,15 +1201,6 @@ NXM_NX_DP_HASH(01234567)
 nx_pull_match() returned error OFPBMC_BAD_FIELD
 
 # Invalid field numbers (experimenter OXM).
-nx_pull_match() returned error OFPBMC_BAD_FIELD
-nx_pull_match() returned error OFPBMC_BAD_FIELD
-
-# Unimplemented registers.
-#
-# This test assumes that at least two registers, but fewer than 16,
-# registers are implemented.
-NXM_NX_REG0(12345678)
-NXM_NX_REG0_W(12345678/12345678)
 nx_pull_match() returned error OFPBMC_BAD_FIELD
 nx_pull_match() returned error OFPBMC_BAD_FIELD
 ], [stderr])
