@@ -412,7 +412,9 @@ dpdk_watchdog(void *dummy OVS_UNUSED)
         ovs_mutex_lock(&dpdk_mutex);
         LIST_FOR_EACH (dev, list_node, &dpdk_list) {
             ovs_mutex_lock(&dev->mutex);
-            check_link_status(dev);
+            if (dev->type == DPDK_DEV_ETH) {
+                check_link_status(dev);
+            }
             ovs_mutex_unlock(&dev->mutex);
         }
         ovs_mutex_unlock(&dpdk_mutex);
