@@ -26,12 +26,13 @@ m4_define([OVSDB_CHECK_MONITOR],
    AT_CAPTURE_FILE([ovsdb-server-log])
    AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/server-pid --remote=punix:socket --unixctl="`pwd`"/unixctl --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1],
             [0], [], [])
+   AT_CAPTURE_FILE([ovsdb-client-log])
    if test "$IS_WIN32" = "yes"; then
-     AT_CHECK([ovsdb-client -vjsonrpc --pidfile="`pwd`"/client-pid -d json monitor --format=csv unix:socket $4 $5 $8 > output &],
+     AT_CHECK([ovsdb-client -vjsonrpc --pidfile="`pwd`"/client-pid --log-file="`pwd`"/ovsdb-client-log -d json monitor --format=csv unix:socket $4 $5 $8 > output 2>/dev/null &],
               [0], [ignore], [ignore], [kill `cat server-pid`])
      sleep 1
    else
-     AT_CHECK([ovsdb-client -vjsonrpc --detach --no-chdir --pidfile="`pwd`"/client-pid -d json monitor --format=csv unix:socket $4 $5 $8 > output],
+     AT_CHECK([ovsdb-client -vjsonrpc --detach --no-chdir --pidfile="`pwd`"/client-pid --log-file="`pwd`"/ovsdb-client-log -d json monitor --format=csv unix:socket $4 $5 $8 > output],
             [0], [ignore], [ignore], [kill `cat server-pid`])
    fi
    m4_foreach([txn], [$6],
