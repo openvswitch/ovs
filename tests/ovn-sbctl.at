@@ -83,7 +83,7 @@ AT_CHECK([ovn-nbctl ls-add br-test])
 AT_CHECK([ovn-nbctl lsp-add br-test vif0])
 AT_CHECK([ovn-nbctl lsp-set-addresses vif0 f0:ab:cd:ef:01:02])
 AT_CHECK([ovn-sbctl chassis-add ch0 stt 1.2.3.5])
-AT_CHECK([ovn-sbctl lport-bind vif0 ch0])
+AT_CHECK([ovn-sbctl lsp-bind vif0 ch0])
 
 AT_CHECK([ovn-sbctl show], [0], [dnl
 Chassis "ch0"
@@ -95,7 +95,7 @@ Chassis "ch0"
 # adds another 'vif1'
 AT_CHECK([ovn-nbctl lsp-add br-test vif1])
 AT_CHECK([ovn-nbctl lsp-set-addresses vif1 f0:ab:cd:ef:01:03])
-AT_CHECK([ovn-sbctl lport-bind vif1 ch0])
+AT_CHECK([ovn-sbctl lsp-bind vif1 ch0])
 
 AT_CHECK([ovn-sbctl show | sed 's/vif[[0-9]]/vif/'], [0], [dnl
 Chassis "ch0"

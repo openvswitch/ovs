@@ -1356,7 +1356,7 @@ net_attach n2 br-phys2
 ovs-vsctl set open . external_ids:ovn-bridge-mappings="physnet1:br-phys2"
 
 # Bind our gateway port to the hv_gw chassis
-ovn-sbctl lport-bind lp-gw hv_gw
+ovn-sbctl lsp-bind lp-gw hv_gw
 
 # Add hv3 on the other side of the GW
 sim_add hv3

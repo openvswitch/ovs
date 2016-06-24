@@ -341,7 +341,7 @@ OVN_CONTROLLER_VTEP_START
 AT_CHECK([ovn-nbctl lsp-add br-test vif0])
 AT_CHECK([ovn-nbctl lsp-set-addresses vif0 f0:ab:cd:ef:01:02])
 AT_CHECK([ovn-sbctl chassis-add ch0 vxlan 1.2.3.5])
-AT_CHECK([ovn-sbctl lport-bind vif0 ch0])
+AT_CHECK([ovn-sbctl lsp-bind vif0 ch0])
 
 # creates the logical switch in vtep and adds the corresponding logical
 # port to 'br-test'.
@@ -355,7 +355,7 @@ AT_CHECK([ovn-nbctl ls-add br-void])
 AT_CHECK([ovn-nbctl lsp-add br-void vif1])
 AT_CHECK([ovn-nbctl lsp-set-addresses vif1 f0:ab:cd:ef:01:02])
 AT_CHECK([ovn-sbctl chassis-add ch1 vxlan 1.2.3.6])
-AT_CHECK([ovn-sbctl lport-bind vif1 ch1])
+AT_CHECK([ovn-sbctl lsp-bind vif1 ch1])
 OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Port_Binding | grep vif1`"])
 
 # checks Ucast_Macs_Remote creation.
@@ -412,12 +412,12 @@ OVN_CONTROLLER_VTEP_START
 AT_CHECK([ovn-nbctl lsp-add br-test vif0])
 AT_CHECK([ovn-nbctl lsp-set-addresses vif0 f0:ab:cd:ef:01:02])
 AT_CHECK([ovn-sbctl chassis-add ch0 vxlan 1.2.3.5])
-AT_CHECK([ovn-sbctl lport-bind vif0 ch0])
+AT_CHECK([ovn-sbctl lsp-bind vif0 ch0])
 
 # creates another vif in the same logical switch with duplicate mac.
 AT_CHECK([ovn-nbctl lsp-add br-test vif1])
 AT_CHECK([ovn-nbctl lsp-set-addresses vif1 f0:ab:cd:ef:01:02])
-AT_CHECK([ovn-sbctl lport-bind vif1 ch0])
+AT_CHECK([ovn-sbctl lsp-bind vif1 ch0])
 
 # creates the logical switch in vtep and adds the corresponding logical
 # port to 'br-test'.
@@ -446,7 +446,7 @@ AT_CHECK([ovn-nbctl ls-add br-void])
 AT_CHECK([ovn-nbctl lsp-add br-void vif1])
 AT_CHECK([ovn-nbctl lsp-set-addresses vif1 f0:ab:cd:ef:01:02])
 AT_CHECK([ovn-sbctl chassis-add ch1 vxlan 1.2.3.6])
-AT_CHECK([ovn-sbctl lport-bind vif1 ch1])
+AT_CHECK([ovn-sbctl lsp-bind vif1 ch1])
 OVS_WAIT_UNTIL([test -n "`ovn-sbctl list Port_Binding | grep vif1`"])
 
 # creates another logical switch in vtep and adds the corresponding logical

@@ -317,8 +317,8 @@ Chassis commands:\n\
                               and gateway_ports\n\
 \n\
 Port binding commands:\n\
-  lport-bind LPORT CHASSIS    bind logical port LPORT to CHASSIS\n\
-  lport-unbind LPORT          reset the port binding of logical port LPORT\n\
+  lsp-bind PORT CHASSIS       bind logical port PORT to CHASSIS\n\
+  lsp-unbind PORT             reset the port binding of logical port PORT\n\
 \n\
 Logical flow commands:\n\
   lflow-list [DATAPATH]       List logical flows for all or a single datapath\n\
@@ -602,7 +602,7 @@ cmd_chassis_del(struct ctl_context *ctx)
 }
 
 static void
-cmd_lport_bind(struct ctl_context *ctx)
+cmd_lsp_bind(struct ctl_context *ctx)
 {
     struct sbctl_context *sbctl_ctx = sbctl_context_cast(ctx);
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
@@ -631,7 +631,7 @@ cmd_lport_bind(struct ctl_context *ctx)
 }
 
 static void
-cmd_lport_unbind(struct ctl_context *ctx)
+cmd_lsp_unbind(struct ctl_context *ctx)
 {
     struct sbctl_context *sbctl_ctx = sbctl_context_cast(ctx);
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
@@ -1026,9 +1026,9 @@ static const struct ctl_command_syntax sbctl_commands[] = {
      "--if-exists", RW},
 
     /* Port binding commands. */
-    {"lport-bind", 2, 2, "LPORT CHASSIS", pre_get_info, cmd_lport_bind, NULL,
+    {"lsp-bind", 2, 2, "PORT CHASSIS", pre_get_info, cmd_lsp_bind, NULL,
      "--may-exist", RW},
-    {"lport-unbind", 1, 1, "LPORT", pre_get_info, cmd_lport_unbind, NULL,
+    {"lsp-unbind", 1, 1, "PORT", pre_get_info, cmd_lsp_unbind, NULL,
      "--if-exists", RW},
 
     /* Logical flow commands */
