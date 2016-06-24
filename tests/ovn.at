@@ -3188,3 +3188,44 @@ OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP
+
+# 1 hypervisor, 1 port
+# make sure that the port state is properly set to up and back down
+# when created and deleted.
+AT_SETUP([ovn -- port state up and down])
+AT_KEYWORDS([ovn])
+ovn_start
+
+ovn-nbctl ls-add ls1
+ovn-nbctl lsp-add ls1 lp1
+ovn-nbctl lsp-set-addresses lp1 unknown
+
+net_add n1
+sim_add hv1
+as hv1 ovs-vsctl add-br br-phys
+as hv1 ovn_attach n1 br-phys 192.168.0.1
+
+as hv1 ovs-vsctl add-port br-int vif1 -- set Interface vif1 external-ids:iface-id=lp1
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up lp1` = xup])
+
+as hv1 ovs-vsctl del-port br-int vif1
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up lp1` = xdown])
+
+as hv1
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CLEANUP
