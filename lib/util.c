@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -149,6 +149,12 @@ char *
 xstrdup(const char *s)
 {
     return xmemdup0(s, strlen(s));
+}
+
+char * MALLOC_LIKE
+nullable_xstrdup(const char *s)
+{
+    return s ? xstrdup(s) : NULL;
 }
 
 char *

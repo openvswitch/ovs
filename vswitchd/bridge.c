@@ -1212,9 +1212,7 @@ bridge_configure_ipfix(struct bridge *br)
                                               "enable-output-sampling", false);
 
         virtual_obs_id = smap_get(&be_cfg->other_config, "virtual_obs_id");
-        be_opts.virtual_obs_id = (virtual_obs_id
-                                  ? xstrdup(virtual_obs_id)
-                                  : NULL);
+        be_opts.virtual_obs_id = nullable_xstrdup(virtual_obs_id);
     }
 
     if (n_fe_opts > 0) {
@@ -1236,9 +1234,7 @@ bridge_configure_ipfix(struct bridge *br)
                                                   "enable-tunnel-sampling", true);
                 virtual_obs_id = smap_get(&fe_cfg->ipfix->other_config,
                                           "virtual_obs_id");
-                opts->virtual_obs_id = (virtual_obs_id
-                                        ? xstrdup(virtual_obs_id)
-                                        : NULL);
+                opts->virtual_obs_id = nullable_xstrdup(virtual_obs_id);
                 opts++;
             }
         }

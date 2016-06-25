@@ -469,12 +469,6 @@ nullable_string_is_equal(const char *a, const char *b)
     return a ? b && !strcmp(a, b) : !b;
 }
 
-static char *
-nullable_xstrdup(const char *s)
-{
-    return s ? xstrdup(s) : NULL;
-}
-
 static bool
 ofproto_ipfix_bridge_exporter_options_equal(
     const struct ofproto_ipfix_bridge_exporter_options *a,

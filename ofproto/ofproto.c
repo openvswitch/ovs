@@ -784,8 +784,7 @@ void
 ofproto_set_cpu_mask(const char *cmask)
 {
     free(pmd_cpu_mask);
-
-    pmd_cpu_mask = cmask ? xstrdup(cmask) : NULL;
+    pmd_cpu_mask = nullable_xstrdup(cmask);
 }
 
 void
@@ -811,7 +810,7 @@ void
 ofproto_set_dp_desc(struct ofproto *p, const char *dp_desc)
 {
     free(p->dp_desc);
-    p->dp_desc = dp_desc ? xstrdup(dp_desc) : NULL;
+    p->dp_desc = nullable_xstrdup(dp_desc);
 }
 
 int

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  * Copyright (c) 2009 InMon Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -115,8 +115,8 @@ ofproto_sflow_options_clone(const struct ofproto_sflow_options *old)
 {
     struct ofproto_sflow_options *new = xmemdup(old, sizeof *old);
     sset_clone(&new->targets, &old->targets);
-    new->agent_device = old->agent_device ? xstrdup(old->agent_device) : NULL;
-    new->control_ip = old->control_ip ? xstrdup(old->control_ip) : NULL;
+    new->agent_device = nullable_xstrdup(old->agent_device);
+    new->control_ip = nullable_xstrdup(old->control_ip);
     return new;
 }
 

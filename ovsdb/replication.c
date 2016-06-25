@@ -115,7 +115,7 @@ replication_run(struct shash *all_dbs)
 void
 set_remote_ovsdb_server(const char *remote_server)
 {
-    remote_ovsdb_server = remote_server ? xstrdup(remote_server) : NULL;
+    remote_ovsdb_server = nullable_xstrdup(remote_server);
 }
 
 void

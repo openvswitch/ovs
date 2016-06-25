@@ -2531,7 +2531,7 @@ dpif_netdev_pmd_set(struct dpif *dpif, const char *cmask)
 
     if (!cmask_equals(dp->requested_pmd_cmask, cmask)) {
         free(dp->requested_pmd_cmask);
-        dp->requested_pmd_cmask = cmask ? xstrdup(cmask) : NULL;
+        dp->requested_pmd_cmask = nullable_xstrdup(cmask);
     }
 
     return 0;
@@ -2690,9 +2690,7 @@ reconfigure_pmd_threads(struct dp_netdev *dp)
     /* Reconfigures the cpu mask. */
     ovs_numa_set_cpu_mask(dp->requested_pmd_cmask);
     free(dp->pmd_cmask);
-    dp->pmd_cmask = dp->requested_pmd_cmask
-                    ? xstrdup(dp->requested_pmd_cmask)
-                    : NULL;
+    dp->pmd_cmask = nullable_xstrdup(dp->requested_pmd_cmask);
 
     /* Restores the non-pmd. */
     dp_netdev_set_nonpmd(dp);

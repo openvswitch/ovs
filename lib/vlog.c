@@ -426,7 +426,7 @@ vlog_reopen_log_file(void)
     char *fn;
 
     ovs_mutex_lock(&log_file_mutex);
-    fn = log_file_name ? xstrdup(log_file_name) : NULL;
+    fn = nullable_xstrdup(log_file_name);
     ovs_mutex_unlock(&log_file_mutex);
 
     if (fn) {
