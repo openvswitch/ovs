@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2015 Nicira, Inc.
+ * Copyright (c) 2011, 2012, 2013, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -97,6 +97,25 @@ void
 sset_moved(struct sset *set)
 {
     hmap_moved(&set->map);
+}
+
+/* Initializes 'set' with substrings of 's' that are delimited by any of the
+ * characters in 'delimiters'.  For example,
+ *     sset_from_delimited_string(&set, "a b,c", " ,");
+ * initializes 'set' with three strings "a", "b", and "c". */
+void
+sset_from_delimited_string(struct sset *set, const char *s_,
+                           const char *delimiters)
+{
+    sset_init(set);
+
+    char *s = xstrdup(s_);
+    char *token, *save_ptr = NULL;
+    for (token = strtok_r(s, delimiters, &save_ptr); token != NULL;
+         token = strtok_r(NULL, delimiters, &save_ptr)) {
+        sset_add(set, token);
+    }
+    free(s);
 }
 
 /* Returns true if 'set' contains no strings, false if it contains at least one

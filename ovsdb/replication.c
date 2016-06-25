@@ -121,19 +121,9 @@ set_remote_ovsdb_server(const char *remote_server)
 void
 set_tables_blacklist(const char *blacklist)
 {
-    char *save_ptr = NULL;
-    char *blacklist_item;
-
     replication_init();
-
     if (blacklist) {
-        char *t_blacklist = xstrdup(blacklist);
-        for (blacklist_item = strtok_r(t_blacklist, ",", &save_ptr);
-             blacklist_item != NULL;
-             blacklist_item = strtok_r(NULL, ",", &save_ptr)) {
-            sset_add(&tables_blacklist, blacklist_item);
-        }
-        free(t_blacklist);
+        sset_from_delimited_string(&tables_blacklist, blacklist, ",");
     }
 }
 

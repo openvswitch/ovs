@@ -43,6 +43,9 @@ void sset_clone(struct sset *, const struct sset *);
 void sset_swap(struct sset *, struct sset *);
 void sset_moved(struct sset *);
 
+void sset_from_delimited_string(struct sset *, const char *s,
+                                const char *delimiters);
+
 /* Count. */
 bool sset_is_empty(const struct sset *);
 size_t sset_count(const struct sset *);

@@ -548,14 +548,8 @@ cmd_chassis_add(struct ctl_context *ctx)
     check_conflicts(sbctl_ctx, ch_name,
                     xasprintf("cannot create a chassis named %s", ch_name));
 
-    char *tokstr = xstrdup(encap_types);
-    char *token, *save_ptr = NULL;
-    struct sset encap_set = SSET_INITIALIZER(&encap_set);
-    for (token = strtok_r(tokstr, ",", &save_ptr); token != NULL;
-         token = strtok_r(NULL, ",", &save_ptr)) {
-        sset_add(&encap_set, token);
-    }
-    free(tokstr);
+    struct sset encap_set;
+    sset_from_delimited_string(&encap_set, encap_types, ",");
 
     size_t n_encaps = sset_count(&encap_set);
     struct sbrec_encap **encaps = xmalloc(n_encaps * sizeof *encaps);
