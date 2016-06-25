@@ -473,7 +473,7 @@ OvsConntrackSetLabels(OvsFlowKey *key,
                       struct ovs_key_ct_labels *val,
                       struct ovs_key_ct_labels *mask)
 {
-    ovs_u128 v, m, pktMdLabel;
+    ovs_u128 v, m, pktMdLabel = {0};
     memcpy(&v, val, sizeof v);
     memcpy(&m, mask, sizeof m);
 
