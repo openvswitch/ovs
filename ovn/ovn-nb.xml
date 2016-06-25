@@ -99,7 +99,7 @@
 
  <table name="Logical_Port_Chain" title="Logical port chain">
     <p>
-      Each row represents one logical chain
+      Each row represents one logical port chain
     </p>
 
     <column name="name">
