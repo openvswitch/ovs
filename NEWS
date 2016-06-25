@@ -15,16 +15,19 @@ Post-v2.5.0
        now implemented.  Only flow mod and port mod messages are supported
        in bundles.
      * New OpenFlow extension NXM_NX_MPLS_TTL to provide access to MPLS TTL.
-     * New "sampling_port" option for "sample" action to allow sampling
-       ingress and egress tunnel metadata with IPFIX.
      * New output option, output(port=N,max_len=M), to allow truncating a
        packet to size M bytes when outputting to port N.
    - ovs-ofctl:
      * queue-get-config command now allows a queue ID to be specified.
      * '--bundle' option can now be used with OpenFlow 1.3.
      * New option "--color" to produce colorized output for some commands.
-     * New commands "dump-ipfix-bridge" and "dump-ipfix-flow" to dump bridge
-       IPFIX statistics and flow based IPFIX statistics.
+   - IPFIX:
+     * New "sampling_port" option for "sample" action to allow sampling
+       ingress and egress tunnel metadata with IPFIX.
+     * New ovs-ofctl commands "dump-ipfix-bridge" and "dump-ipfix-flow" to
+       dump bridge IPFIX statistics and flow based IPFIX statistics.
+     * New setting other-config:virtual_obs_id to add an arbitrary string
+       to IPFIX records.
    - Linux:
      * New QoS type "linux-noop" that prevents Open vSwitch from trying to
        manage QoS for a given port (useful when other software manages QoS).
