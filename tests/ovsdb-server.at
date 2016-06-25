@@ -3,6 +3,11 @@ AT_BANNER([OVSDB -- ovsdb-server transactions (Unix sockets)])
 m4_define([OVSDB_SERVER_SHUTDOWN], 
   [OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/unixctl], [`pwd`/pid])])
 
+m4_define([OVSDB_SERVER_SHUTDOWN2],
+  [cp pid2 savepid2
+   AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 -e exit], [0], [ignore], [ignore])
+   OVS_WAIT_WHILE([kill -0 `cat savepid2`], [kill `cat savepid2`])])
+
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
 # Creates a database with the given SCHEMA, starts an ovsdb-server on
@@ -969,6 +974,52 @@ m4_define([OVSDB_CHECK_EXECUTION],
       cat stdout >> output
 ])
    AT_CHECK([${PERL} $srcdir/uuidfilt.pl output], [0], [$4], [ignore])
+   AT_CLEANUP])
+
+EXECUTION_EXAMPLES
+
+AT_BANNER([OVSDB -- ovsdb-server replication (TCP IPv4 sockets)])
+
+# OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Creates two databases with the given SCHEMA, and starts an ovsdb-server on
+# each database.
+# Runs each of the TRANSACTIONS (which should be a quoted list of
+# quoted strings) against one of the servers with ovsdb-client one at a
+# time. The server replicates its database to the other ovsdb-server.
+#
+# Checks that the dump of both databases are the same.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_EXECUTION],
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb server tcp replication $5])
+   $2 > schema
+   AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
+
+   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile="`pwd`"/pid --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl db1], [0], [ignore], [ignore])
+   PARSE_LISTENING_PORT([ovsdb-server1.log], [TCP_PORT1])
+
+   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile="`pwd`"/pid2 --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl2 --sync-from=tcp:127.0.0.1:$TCP_PORT1 db2], [0], [ignore], [ignore])
+   PARSE_LISTENING_PORT([ovsdb-server2.log], [TCP_PORT2])
+
+   m4_foreach([txn], [$3],
+     [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT1 'txn'; sleep 2], [0], [stdout], [ignore],
+     [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
+   ])
+
+   AT_CHECK([ovsdb-client dump tcp:127.0.0.1:$TCP_PORT1], [0], [stdout], [ignore],
+     [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
+   cat stdout >> dump1
+   AT_CHECK([ovsdb-client dump tcp:127.0.0.1:$TCP_PORT2], [0], [stdout], [ignore],
+     [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
+   cat stdout >> dump2
+
+   AT_CHECK([diff dump1 dump2], [0], [], [ignore],
+            [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
+   OVSDB_SERVER_SHUTDOWN
+   OVSDB_SERVER_SHUTDOWN2
    AT_CLEANUP])
 
 EXECUTION_EXAMPLES

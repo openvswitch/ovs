@@ -64,7 +64,9 @@ ovsdb/ovsdb-server.1: \
 	lib/vlog-unixctl.man \
 	lib/vlog.man \
 	ovsdb/remote-active.man \
-	ovsdb/remote-passive.man
+	ovsdb/remote-passive.man \
+	ovsdb/replication-syn.man \
+	ovsdb/replication.man
 ovsdb/ovsdb-server.1.in:
 lib/common-syn.man:
 lib/common.man:
@@ -87,6 +89,8 @@ lib/vlog-unixctl.man:
 lib/vlog.man:
 ovsdb/remote-active.man:
 ovsdb/remote-passive.man:
+ovsdb/replication-syn.man:
+ovsdb/replication.man:
 
 ovsdb/ovsdb-tool.1: \
 	ovsdb/ovsdb-tool.1.in \
