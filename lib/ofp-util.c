@@ -7982,6 +7982,7 @@ ofputil_ipfix_stats_to_reply(const struct ofputil_ipfix_stats *ois,
     reply->ipv6_error_pkts = htonll(ois->ipv6_error_pkts);
     reply->tx_pkts = htonll(ois->tx_pkts);
     reply->tx_errors = htonll(ois->tx_errors);
+    memset(reply->pad, 0, sizeof reply->pad);
 }
 
 /* Encode a ipfix stat for 'ois' and append it to 'replies'. */
