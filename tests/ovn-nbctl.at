@@ -407,7 +407,7 @@ AT_CHECK([ovn-nbctl lr-route-list lr0], [0], [dnl
 ])
 
 dnl Check IPv6 routes
-AT_CHECK([ovn-nbctl lr-route-add lr0 ::/0 2001:0db8:0:f101::1])
+AT_CHECK([ovn-nbctl lr-route-add lr0 0:0:0:0:0:0:0:0/0 2001:0db8:0:f101::1])
 AT_CHECK([ovn-nbctl lr-route-add lr0 2001:0db8:0::/64 2001:0db8:0:f102::1 lp0])
 AT_CHECK([ovn-nbctl lr-route-add lr0 2001:0db8:1::/64 2001:0db8:0:f103::1])
 
@@ -434,7 +434,7 @@ dnl Check IPv4 and IPv6 routes
 AT_CHECK([ovn-nbctl lr-route-add lr0 0.0.0.0/0 192.168.0.1])
 AT_CHECK([ovn-nbctl lr-route-add lr0 10.0.1.1/24 11.0.1.1 lp0])
 AT_CHECK([ovn-nbctl lr-route-add lr0 10.0.0.1/24 11.0.0.1])
-AT_CHECK([ovn-nbctl lr-route-add lr0 ::/0 2001:0db8:0:f101::1])
+AT_CHECK([ovn-nbctl lr-route-add lr0 0:0:0:0:0:0:0:0/0 2001:0db8:0:f101::1])
 AT_CHECK([ovn-nbctl lr-route-add lr0 2001:0db8:0::/64 2001:0db8:0:f102::1 lp0])
 AT_CHECK([ovn-nbctl lr-route-add lr0 2001:0db8:1::/64 2001:0db8:0:f103::1])
 
