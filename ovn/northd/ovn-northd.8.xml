@@ -1131,6 +1131,11 @@ next;
           Instead, if the route is from a configured static route, <var>G</var>
           is the next hop IP address.  Else it is <code>ip6.dst</code>.
         </p>
+
+        <p>
+          If the address <var>A</var> is in the link-local scope, the
+          route will be limited to sending on the ingress port.
+        </p>
       </li>
     </ul>
 

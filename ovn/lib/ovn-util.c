@@ -122,9 +122,11 @@ extract_lsp_addresses(char *address, struct lport_addresses *laddrs)
 /* Extracts the mac, IPv4 and IPv6 addresses from the
  * "nbrec_logical_router_port" parameter 'lrp'.  Stores the IPv4 and
  * IPv6 addresses in the 'ipv4_addrs' and 'ipv6_addrs' fields of
- * 'laddrs', respectively.
+ * 'laddrs', respectively.  In addition, a link local IPv6 address
+ * based on the 'mac' member of 'lrp' is added to the 'ipv6_addrs'
+ * field.
  *
- * Return true if at least 'MAC' is found in 'lrp', false otherwise.
+ * Return true if a valid 'mac' address is found in 'lrp', false otherwise.
  *
  * The caller must call destroy_lport_addresses(). */
 bool
@@ -174,6 +176,11 @@ extract_lrp_networks(const struct nbrec_logical_router_port *lrp,
             free(error);
         }
     }
+
+    /* Always add the IPv6 link local address. */
+    struct in6_addr lla;
+    in6_generate_lla(laddrs->ea, &lla);
+    add_ipv6_netaddr(laddrs, lla, 64);
 
     return true;
 }

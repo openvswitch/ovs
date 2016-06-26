@@ -885,6 +885,12 @@
         address is 192.168.0.1 and that packets destined to
         192.168.0.<var>x</var> should be routed to this port.
       </p>
+
+      <p>
+        A logical router port always adds a link-local IPv6 address
+        (fe80::/64) automatically generated from the interface's MAC
+        address using the modified EUI-64 format.
+      </p>
     </column>
 
     <column name="mac">

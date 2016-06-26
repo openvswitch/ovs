@@ -2777,9 +2777,18 @@ add_route(struct hmap *lflows, const struct ovn_port *op,
           const char *gateway)
 {
     bool is_ipv4 = strchr(network_s, '.') ? true : false;
+    struct ds match = DS_EMPTY_INITIALIZER;
 
-    char *match = xasprintf("ip%s.dst == %s/%d", is_ipv4 ? "4" : "6",
-                            network_s, plen);
+    /* IPv6 link-local addresses must be scoped to the local router port. */
+    if (!is_ipv4) {
+        struct in6_addr network;
+        ovs_assert(ipv6_parse(network_s, &network));
+        if (in6_is_lla(&network)) {
+            ds_put_format(&match, "inport == %s && ", op->json_key);
+        }
+    }
+    ds_put_format(&match, "ip%s.dst == %s/%d", is_ipv4 ? "4" : "6",
+                  network_s, plen);
 
     struct ds actions = DS_EMPTY_INITIALIZER;
     ds_put_format(&actions, "ip.ttl--; %sreg0 = ", is_ipv4 ? "" : "xx");
@@ -2802,10 +2811,10 @@ add_route(struct hmap *lflows, const struct ovn_port *op,
 
     /* The priority here is calculated to implement longest-prefix-match
      * routing. */
-    ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_ROUTING, plen, match,
-                  ds_cstr(&actions));
+    ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_ROUTING, plen,
+                  ds_cstr(&match), ds_cstr(&actions));
+    ds_destroy(&match);
     ds_destroy(&actions);
-    free(match);
 }
 
 static void
