@@ -191,6 +191,10 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
 
     bufferStart = (PUINT8)MmGetSystemAddressForMdlSafe(curMdl,
                                                        LowPagePriority);
+    if (bufferStart == NULL) {
+        status = NDIS_STATUS_RESOURCES;
+        goto ret_error;
+    }
     bufferStart += NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
 
     if (layers->isIPv4) {
@@ -402,6 +406,9 @@ OvsValidateTCPChecksum(PNET_BUFFER_LIST curNbl, PNET_BUFFER curNb)
 
     EthHdr *eth = (EthHdr *)NdisGetDataBuffer(curNb, sizeof(EthHdr),
                                               NULL, 1, 0);
+    if (eth == NULL) {
+        return NDIS_STATUS_RESOURCES;
+    }
 
     if (eth->Type == ntohs(NDIS_ETH_TYPE_IPV4)) {
         IPHdr *ip = (IPHdr *)((PCHAR)eth + sizeof *eth);
@@ -641,6 +648,9 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         POVS_STT_PKT_ENTRY entry;
         entry = OvsAllocateMemoryWithTag(sizeof(OVS_STT_PKT_ENTRY),
                                          OVS_STT_POOL_TAG);
+        if (entry == NULL) {
+            goto handle_error;
+        }
         RtlZeroMemory(entry, sizeof (OVS_STT_PKT_ENTRY));
 
         /* Update Key, timestamp and recvdLen */
@@ -663,6 +673,10 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
         entry->allocatedLen = innerPacketLen;
         entry->packetBuf = OvsAllocateMemoryWithTag(innerPacketLen,
                                                     OVS_STT_POOL_TAG);
+        if (entry->packetBuf == NULL) {
+            OvsFreeMemoryWithTag(entry, OVS_STT_POOL_TAG);
+            goto handle_error;
+        }
         if (OvsGetPacketBytes(curNbl, fragmentLength, startOffset,
                               entry->packetBuf + offset) == NULL) {
             OVS_LOG_ERROR("Error when obtaining bytes from Packet");
@@ -677,9 +691,6 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
             // don't copy more than it is allocated
             goto handle_error;
         }
-        /* Add to recieved length to identify if this is the last fragment */
-        pktFragEntry->recvdLen += fragmentLength;
-        lastPacket = (pktFragEntry->recvdLen == innerPacketLen);
 
         if (segOffset == 0) {
             pktFragEntry->sttHdr = *sttHdr;
@@ -694,6 +705,10 @@ OvsSttReassemble(POVS_SWITCH_CONTEXT switchContext,
             OVS_LOG_ERROR("Error when obtaining bytes from Packet");
             goto handle_error;
         }
+
+        /* Add to received length to identify if this is the last fragment */
+        pktFragEntry->recvdLen += fragmentLength;
+        lastPacket = (pktFragEntry->recvdLen == innerPacketLen);
     }
 
 handle_error:
@@ -737,7 +752,7 @@ handle_error:
 *----------------------------------------------------------------------------
 */
 NDIS_STATUS
-OvsDecapSetOffloads(PNET_BUFFER_LIST *curNbl, 
+OvsDecapSetOffloads(PNET_BUFFER_LIST *curNbl,
                     SttHdr *sttHdr,
                     OVS_PACKET_HDR_INFO *layers)
 {
@@ -797,6 +812,9 @@ OvsDecapSetOffloads(PNET_BUFFER_LIST *curNbl,
 
         buf = (PUINT8)MmGetSystemAddressForMdlSafe(curMdl,
             LowPagePriority);
+        if (buf == NULL) {
+            return NDIS_STATUS_RESOURCES;
+        }
         buf += NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
 
         // apply pseudo checksum on extracted packet
@@ -876,7 +894,9 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
 
     ipHdr = NdisGetDataBuffer(curNb, sizeof *ipHdr, (PVOID) &ipBuf,
                               1 /*no align*/, 0);
-    ASSERT(ipHdr);
+    if (ipHdr == NULL) {
+        return NDIS_STATUS_RESOURCES;
+    }
 
     TCPHdr *tcp = (TCPHdr *)((PCHAR)ipHdr + ipHdr->ihl * 4);
 
@@ -906,6 +926,9 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
         /* STT Header */
         sttHdr = NdisGetDataBuffer(curNb, sizeof *sttHdr,
                                    (PVOID) &sttBuf, 1 /*no align*/, 0);
+        if (sttHdr == NULL) {
+            return NDIS_STATUS_RESOURCES;
+        }
         /* Skip stt header, DataOffset points to inner pkt now. */
         hdrLen = STT_HDR_LEN;
         NdisAdvanceNetBufferDataStart(curNb, hdrLen, FALSE, NULL);
@@ -922,8 +945,8 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
 
     status = NdisRetreatNetBufferDataStart(curNb, advanceCnt, 0, NULL);
     if (status != NDIS_STATUS_SUCCESS) {
-        OvsCompleteNBL(switchContext, *newNbl, TRUE);
-        return NDIS_STATUS_FAILURE;
+        status = NDIS_STATUS_FAILURE;
+        goto dropNbl;
     }
 
     ASSERT(sttHdr);
@@ -942,8 +965,8 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     if (0 != ipHdr->tos) {
         status = OvsExtractLayers(*newNbl, &layers);
         if (status != NDIS_STATUS_SUCCESS) {
-            OvsCompleteNBL(switchContext, *newNbl, TRUE);
-            return NDIS_STATUS_FAILURE;
+            status = NDIS_STATUS_FAILURE;
+            goto dropNbl;
         }
 
         if (layers.isIPv4) {
@@ -966,6 +989,9 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
                 /* fix IP checksum */
                 innerIpHdr->check = IPChecksum((UINT8 *)innerIpHdr,
                                                 innerIpHdr->ihl * 4, 0);
+            } else {
+                status = NDIS_STATUS_RESOURCES;
+                goto dropNbl;
             }
         } else if (layers.isIPv6) {
             IPv6Hdr ipv6_storage;
@@ -980,6 +1006,9 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
                                     | ((innerIpv6Hdr->flow_lbl[0] & 0x3) << 2);
                 innerIpv6Hdr->flow_lbl[0] = (innerIpv6Hdr->flow_lbl[0] & 0xF)
                                              | ((ipHdr->tos & 0xF) << 4);
+            } else {
+                status = NDIS_STATUS_RESOURCES;
+                goto dropNbl;
             }
         }
     }
@@ -998,4 +1027,9 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     OvsDecapSetOffloads(newNbl, sttHdr, &layers);
 
     return NDIS_STATUS_SUCCESS;
+
+dropNbl:
+    OvsCompleteNBL(switchContext, *newNbl, TRUE);
+    *newNbl = NULL;
+    return status;
 }
