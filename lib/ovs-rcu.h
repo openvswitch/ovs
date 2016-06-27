@@ -42,8 +42,7 @@
  * A "quiescent state" is a time at which a thread holds no pointers to memory
  * that is managed by RCU; that is, when the thread is known not to reference
  * memory that might be an old version of some object freed via RCU.  For
- * example, poll_block() includes a quiescent state, as does
- * ovs_mutex_cond_wait().
+ * example, poll_block() includes a quiescent state.
  *
  * The following functions manage the recognition of quiescent states:
  *

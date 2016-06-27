@@ -25,11 +25,7 @@
 extern "C" {
 #endif
 
-void ovs_set_program_name__(const char *name, const char *version,
-                            const char *date, const char *time);
-
-#define ovs_set_program_name(name, version) \
-        ovs_set_program_name__(name, version, __DATE__, __TIME__)
+void ovs_set_program_name(const char *name, const char *version);
 
 const char *ovs_get_program_name(void);
 const char *ovs_get_program_version(void);

@@ -2,6 +2,15 @@ AT_BANNER([daemon unit tests - C])
 
 AT_SETUP([daemon])
 AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+
+dnl OVS_SKIP_NON_ADMIN_WIN()
+dnl
+dnl Checks if we have enough rights to create a service
+m4_define([OVS_SKIP_NON_ADMIN_WIN],
+  [
+   AT_SKIP_IF([net session; test $? -ne 0])
+   ])
+
 OVSDB_INIT([db])
 AT_CAPTURE_FILE([pid])
 AT_CAPTURE_FILE([expected])
@@ -83,7 +92,7 @@ if test "$IS_WIN32" = "yes"; then
   # When a 'kill pid' is done on windows (through 'taskkill //F'),
   # pidfiles are not deleted (because it is force kill), so use
   # 'ovs-appctl exit' instead
-  OVS_APP_EXIT_AND_WAIT([`pwd`/unixctl])
+  OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/unixctl], [`pwd`/pid])
 else
   kill `cat pid`
 fi
@@ -163,6 +172,8 @@ AT_CLEANUP
 AT_SETUP([daemon --service])
 AT_KEYWORDS([windows-service])
 AT_SKIP_IF([test "$IS_WIN32" != "yes"])
+OVS_SKIP_NON_ADMIN_WIN
+
 OVSDB_INIT([db])
 AT_CAPTURE_FILE([pid])
 # To create a Windows service, we need the absolute path for the executable.

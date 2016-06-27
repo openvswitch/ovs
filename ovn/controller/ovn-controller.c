@@ -40,6 +40,7 @@
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-sb-idl.h"
+#include "ovn/lib/ovn-util.h"
 #include "patch.h"
 #include "physical.h"
 #include "pinctrl.h"
@@ -47,6 +48,7 @@
 #include "lib/bitmap.h"
 #include "lib/hash.h"
 #include "smap.h"
+#include "sset.h"
 #include "stream-ssl.h"
 #include "stream.h"
 #include "unixctl.h"
@@ -252,6 +254,82 @@ get_ovnsb_remote_probe_interval(struct ovsdb_idl *ovs_idl, int *value)
     return false;
 }
 
+static void
+update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
+                struct simap *ct_zones, unsigned long *ct_zone_bitmap)
+{
+    struct simap_node *ct_zone, *ct_zone_next;
+    int scan_start = 1;
+    struct patched_datapath *pd;
+    const char *user;
+    struct sset all_users = SSET_INITIALIZER(&all_users);
+
+    SSET_FOR_EACH(user, lports) {
+        sset_add(&all_users, user);
+    }
+
+    /* Local patched datapath (gateway routers) need zones assigned. */
+    HMAP_FOR_EACH(pd, hmap_node, patched_datapaths) {
+        if (!pd->local) {
+            continue;
+        }
+
+        char *dnat = alloc_nat_zone_key(pd->port_binding, "dnat");
+        char *snat = alloc_nat_zone_key(pd->port_binding, "snat");
+        sset_add(&all_users, dnat);
+        sset_add(&all_users, snat);
+        free(dnat);
+        free(snat);
+    }
+
+    /* Delete zones that do not exist in above sset. */
+    SIMAP_FOR_EACH_SAFE(ct_zone, ct_zone_next, ct_zones) {
+        if (!sset_contains(&all_users, ct_zone->name)) {
+            bitmap_set0(ct_zone_bitmap, ct_zone->data);
+            simap_delete(ct_zones, ct_zone);
+        }
+    }
+
+    /* xxx This is wasteful to assign a zone to each port--even if no
+     * xxx security policy is applied. */
+
+    /* Assign a unique zone id for each logical port and two zones
+     * to a gateway router. */
+    SSET_FOR_EACH(user, &all_users) {
+        size_t zone;
+
+        if (simap_contains(ct_zones, user)) {
+            continue;
+        }
+
+        /* We assume that there are 64K zones and that we own them all. */
+        zone = bitmap_scan(ct_zone_bitmap, 0, scan_start, MAX_CT_ZONES + 1);
+        if (zone == MAX_CT_ZONES + 1) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(&rl, "exhausted all ct zones");
+            return;
+        }
+        scan_start = zone + 1;
+
+        bitmap_set1(ct_zone_bitmap, zone);
+        simap_put(ct_zones, user, zone);
+
+        /* xxx We should erase any old entries for this
+         * xxx zone, but we need a generic interface to the conntrack
+         * xxx table. */
+    }
+
+    sset_destroy(&all_users);
+}
+
+/* Contains "struct local_datapath" nodes whose hash values are the
+ * tunnel_key of datapaths with at least one local port binding. */
+static struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
+static struct hmap patched_datapaths = HMAP_INITIALIZER(&patched_datapaths);
+
+static struct lport_index lports;
+static struct mcgroup_index mcgroups;
+
 int
 main(int argc, char *argv[])
 {
@@ -281,6 +359,9 @@ main(int argc, char *argv[])
     ofctrl_init();
     pinctrl_init();
     lflow_init();
+
+    lport_index_init(&lports);
+    mcgroup_index_init(&mcgroups);
 
     /* Connect to OVS OVSDB instance.  We do not monitor all tables by
      * default, so modules must register their interest explicitly.  */
@@ -313,6 +394,10 @@ main(int argc, char *argv[])
     char *ovnsb_remote = get_ovnsb_remote(ovs_idl_loop.idl);
     struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
+
+    /* Track the southbound idl. */
+    ovsdb_idl_track_add_all(ovnsb_idl_loop.idl);
+
     ovsdb_idl_get_initial_snapshot(ovnsb_idl_loop.idl);
 
     int probe_interval = 0;
@@ -337,6 +422,9 @@ main(int argc, char *argv[])
             free(ovnsb_remote);
             ovnsb_remote = new_ovnsb_remote;
             ovsdb_idl_set_remote(ovnsb_idl_loop.idl, ovnsb_remote, true);
+            binding_reset_processing();
+            lport_index_clear(&lports);
+            mcgroup_index_clear(&mcgroups);
         } else {
             free(new_ovnsb_remote);
         }
@@ -348,11 +436,7 @@ main(int argc, char *argv[])
             .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
-        /* Contains "struct local_datpath" nodes whose hash values are the
-         * tunnel_key of datapaths with at least one local port binding. */
-        struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
-
-        struct hmap patched_datapaths = HMAP_INITIALIZER(&patched_datapaths);
+        struct sset all_lports = SSET_INITIALIZER(&all_lports);
 
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
@@ -360,21 +444,21 @@ main(int argc, char *argv[])
         if (chassis_id) {
             chassis_run(&ctx, chassis_id);
             encaps_run(&ctx, br_int, chassis_id);
-            binding_run(&ctx, br_int, chassis_id, &ct_zones, ct_zone_bitmap,
-                    &local_datapaths);
+            binding_run(&ctx, br_int, chassis_id, &local_datapaths);
         }
 
-        if (br_int) {
-            patch_run(&ctx, br_int, &local_datapaths, &patched_datapaths);
+        if (br_int && chassis_id) {
+            patch_run(&ctx, br_int, chassis_id, &local_datapaths,
+                      &patched_datapaths);
 
-            struct lport_index lports;
-            struct mcgroup_index mcgroups;
-            lport_index_init(&lports, ctx.ovnsb_idl);
-            mcgroup_index_init(&mcgroups, ctx.ovnsb_idl);
+            lport_index_fill(&lports, ctx.ovnsb_idl);
+            mcgroup_index_fill(&mcgroups, ctx.ovnsb_idl);
 
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
             pinctrl_run(&ctx, &lports, br_int, chassis_id, &local_datapaths);
+            update_ct_zones(&all_lports, &patched_datapaths, &ct_zones,
+                            ct_zone_bitmap);
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
             lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
@@ -386,24 +470,9 @@ main(int argc, char *argv[])
             }
             ofctrl_put(&flow_table);
             hmap_destroy(&flow_table);
-            mcgroup_index_destroy(&mcgroups);
-            lport_index_destroy(&lports);
         }
 
-        struct local_datapath *cur_node, *next_node;
-        HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node, &local_datapaths) {
-            hmap_remove(&local_datapaths, &cur_node->hmap_node);
-            free(cur_node);
-        }
-        hmap_destroy(&local_datapaths);
-
-        struct patched_datapath *pd_cur_node, *pd_next_node;
-        HMAP_FOR_EACH_SAFE (pd_cur_node, pd_next_node, hmap_node,
-                &patched_datapaths) {
-            hmap_remove(&patched_datapaths, &pd_cur_node->hmap_node);
-            free(pd_cur_node);
-        }
-        hmap_destroy(&patched_datapaths);
+        sset_destroy(&all_lports);
 
         unixctl_server_run(unixctl);
 
@@ -418,6 +487,7 @@ main(int argc, char *argv[])
         }
         ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
         ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop);
+        ovsdb_idl_track_clear(ovnsb_idl_loop.idl);
         poll_block();
         if (should_service_stop()) {
             exiting = true;

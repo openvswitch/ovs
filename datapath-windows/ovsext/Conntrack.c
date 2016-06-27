@@ -146,9 +146,20 @@ OvsCtUpdateFlowKey(struct OvsFlowKey *key,
     }
 }
 
+static __inline VOID
+OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx)
+{
+    NdisMoveMemory(&entry->key, &ctx->key, sizeof (OVS_CT_KEY));
+    NdisMoveMemory(&entry->rev_key, &ctx->key, sizeof (OVS_CT_KEY));
+    OvsCtKeyReverse(&entry->rev_key);
+    InsertHeadList(&ovsConntrackTable[ctx->hash & CT_HASH_TABLE_MASK],
+                   &entry->link);
+}
+
 static __inline POVS_CT_ENTRY
-OvsCtEntryCreate(const TCPHdr *tcp,
-                 PNET_BUFFER_LIST curNbl,
+OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
+                 UINT8 ipProto,
+                 UINT32 l4Offset,
                  OvsConntrackKeyLookupCtx *ctx,
                  OvsFlowKey *key,
                  BOOLEAN commit,
@@ -156,24 +167,72 @@ OvsCtEntryCreate(const TCPHdr *tcp,
 {
     POVS_CT_ENTRY entry = NULL;
     UINT32 state = 0;
-    if (!OvsConntrackValidateTcpPacket(tcp)) {
-        state |= OVS_CS_F_INVALID;
-        OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
-        return entry;
+    switch (ipProto)
+    {
+        case IPPROTO_TCP:
+        {
+            TCPHdr tcpStorage;
+            const TCPHdr *tcp;
+            tcp = OvsGetTcp(curNbl, l4Offset, &tcpStorage);
+            if (!OvsConntrackValidateTcpPacket(tcp)) {
+                goto invalid;
+            }
+
+            state |= OVS_CS_F_NEW;
+            if (commit) {
+                entry = OvsConntrackCreateTcpEntry(tcp, curNbl, currentTime);
+                OvsCtAddEntry(entry, ctx);
+            }
+
+            OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
+            return entry;
+        }
+        case IPPROTO_ICMP:
+        case IPPROTO_UDP:
+            state |= OVS_CS_F_NEW;
+            if (commit) {
+                entry = OvsConntrackCreateOtherEntry(currentTime);
+                OvsCtAddEntry(entry, ctx);
+            }
+
+            OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
+            return entry;
+        default:
+            goto invalid;
     }
 
-    state |= OVS_CS_F_NEW;
-    if (commit) {
-        entry = OvsConntrackCreateTcpEntry(tcp, curNbl, currentTime);
-        NdisMoveMemory(&entry->key, &ctx->key, sizeof (OVS_CT_KEY));
-        NdisMoveMemory(&entry->rev_key, &ctx->key, sizeof (OVS_CT_KEY));
-        OvsCtKeyReverse(&entry->rev_key);
-        InsertHeadList(&ovsConntrackTable[ctx->hash & CT_HASH_TABLE_MASK],
-                       &entry->link);
-    }
-
+invalid:
+    state |= OVS_CS_F_INVALID;
     OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
     return entry;
+}
+
+static enum CT_UPDATE_RES
+OvsCtUpdateEntry(OVS_CT_ENTRY* entry,
+                        PNET_BUFFER_LIST nbl,
+                        UINT8 ipProto,
+                        UINT32 l4Offset,
+                        BOOLEAN reply,
+                        UINT64 now)
+{
+    switch (ipProto)
+    {
+        case IPPROTO_TCP:
+        {
+            TCPHdr tcpStorage;
+            const TCPHdr *tcp;
+            tcp = OvsGetTcp(nbl, l4Offset, &tcpStorage);
+            if (!tcp) {
+                return CT_UPDATE_INVALID;
+            }
+            return OvsConntrackUpdateTcpEntry(entry, tcp, nbl, reply, now);
+        }
+        case IPPROTO_ICMP:
+        case IPPROTO_UDP:
+            return OvsConntrackUpdateOtherEntry(entry, reply, now);
+        default:
+            return CT_UPDATE_INVALID;
+    }
 }
 
 static __inline VOID
@@ -204,10 +263,12 @@ OvsDetectCtPacket(OvsFlowKey *key)
         if (key->ipKey.nwFrag != OVS_FRAG_TYPE_NONE) {
             return NDIS_STATUS_NOT_SUPPORTED;
         }
-        if (key->ipKey.nwProto != IPPROTO_TCP) {
-            return NDIS_STATUS_NOT_SUPPORTED;
+        if (key->ipKey.nwProto == IPPROTO_TCP
+            || key->ipKey.nwProto == IPPROTO_UDP
+            || key->ipKey.nwProto == IPPROTO_ICMP) {
+            return NDIS_STATUS_SUCCESS;
         }
-        return NDIS_STATUS_SUCCESS;
+        return NDIS_STATUS_NOT_SUPPORTED;
     case ETH_TYPE_IPV6:
         return NDIS_STATUS_NOT_SUPPORTED;
     }
@@ -265,16 +326,31 @@ OvsCtLookup(OvsConntrackKeyLookupCtx *ctx)
     return found;
 }
 
-static __inline VOID
-OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
-                    UINT16 zone,
-                    OvsConntrackKeyLookupCtx *ctx)
+static __inline UINT32
+OvsExtractLookupCtxHash(OvsConntrackKeyLookupCtx *ctx)
 {
     UINT32 hsrc, hdst,hash;
+    hsrc = OvsJhashBytes((UINT32*) &ctx->key.src, sizeof(ctx->key.src), 0);
+    hdst = OvsJhashBytes((UINT32*) &ctx->key.dst, sizeof(ctx->key.dst), 0);
+    hash = hsrc ^ hdst; /* TO identify reverse traffic */
+    return OvsJhashBytes((uint32_t *) &ctx->key.dst + 1,
+                         ((uint32_t *) (&ctx->key + 1) -
+                         (uint32_t *) (&ctx->key.dst + 1)),
+                         hash);
+}
 
+static __inline NDIS_STATUS
+OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
+                    UINT16 zone,
+                    OvsConntrackKeyLookupCtx *ctx,
+                    PNET_BUFFER_LIST curNbl,
+                    UINT32 l4Offset)
+{
     ctx->key.zone = zone;
     ctx->key.dl_type = flowKey->l2.dlType;
+    ctx->related = FALSE;
 
+    /* Extract L3 and L4*/
     if (flowKey->l2.dlType == htons(ETH_TYPE_IPV4)) {
         ctx->key.src.addr.ipv4 = flowKey->ipKey.nwSrc;
         ctx->key.dst.addr.ipv4 = flowKey->ipKey.nwDst;
@@ -282,6 +358,28 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
 
         ctx->key.src.port = flowKey->ipKey.l4.tpSrc;
         ctx->key.dst.port = flowKey->ipKey.l4.tpDst;
+        if (flowKey->ipKey.nwProto == IPPROTO_ICMP) {
+            ICMPHdr icmpStorage;
+            const ICMPHdr *icmp;
+            icmp = OvsGetIcmp(curNbl, l4Offset, &icmpStorage);
+            ASSERT(icmp);
+            ctx->key.src.port = ctx->key.dst.port = icmp->fields.echo.id;
+
+            /* Related bit is set when ICMP has an error */
+            /* XXX parse out the appropriate src and dst from inner pkt */
+            switch (icmp->type) {
+               case ICMP4_DEST_UNREACH:
+               case ICMP4_TIME_EXCEEDED:
+               case ICMP4_PARAM_PROB:
+               case ICMP4_SOURCE_QUENCH:
+               case ICMP4_REDIRECT: {
+                   ctx->related = TRUE;
+                   break;
+               }
+               default:
+                   ctx->related = FALSE;
+            }
+        }
     } else if (flowKey->l2.dlType == htons(ETH_TYPE_IPV6)) {
         ctx->key.src.addr.ipv6 = flowKey->ipv6Key.ipv6Src;
         ctx->key.dst.addr.ipv6 = flowKey->ipv6Key.ipv6Dst;
@@ -289,18 +387,13 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
 
         ctx->key.src.port = flowKey->ipv6Key.l4.tpSrc;
         ctx->key.dst.port = flowKey->ipv6Key.l4.tpDst;
+        /* XXX Handle ICMPv6 errors*/
+    } else {
+        return NDIS_STATUS_INVALID_PACKET;
     }
 
-    /* Related bit is set for ICMP and FTP (Not supported)*/
-    ctx->related = FALSE;
-
-    hsrc = OvsJhashBytes((UINT32*) &ctx->key.src, sizeof(ctx->key.src), 0);
-    hdst = OvsJhashBytes((UINT32*) &ctx->key.dst, sizeof(ctx->key.dst), 0);
-    hash = hsrc ^ hdst; /* TO identify reverse traffic */
-    ctx->hash = OvsJhashBytes((uint32_t *) &ctx->key.dst + 1,
-                              ((uint32_t *) (&ctx->key + 1) -
-                              (uint32_t *) (&ctx->key.dst + 1)),
-                              hash);
+    ctx->hash = OvsExtractLookupCtxHash(ctx);
+    return NDIS_STATUS_SUCCESS;
 }
 
 /*
@@ -311,7 +404,7 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
  */
 static __inline POVS_CT_ENTRY
 OvsProcessConntrackEntry(PNET_BUFFER_LIST curNbl,
-                         const TCPHdr *tcp,
+                         UINT32 l4Offset,
                          OvsConntrackKeyLookupCtx *ctx,
                          OvsFlowKey *key,
                          UINT16 zone,
@@ -329,8 +422,8 @@ OvsProcessConntrackEntry(PNET_BUFFER_LIST curNbl,
         }
     } else {
         CT_UPDATE_RES result;
-        result = OvsConntrackUpdateTcpEntry(entry, tcp, curNbl,
-                                            ctx->reply, currentTime);
+        result = OvsCtUpdateEntry(entry, curNbl, key->ipKey.nwProto,
+                                  l4Offset, ctx->reply, currentTime);
         switch (result) {
         case CT_UPDATE_VALID:
             state |= OVS_CS_F_ESTABLISHED;
@@ -345,14 +438,18 @@ OvsProcessConntrackEntry(PNET_BUFFER_LIST curNbl,
             //Delete and update the Conntrack
             OvsCtEntryDelete(ctx->entry);
             ctx->entry = NULL;
-            entry = OvsCtEntryCreate(tcp, curNbl, ctx, key,
-                                     commit, currentTime);
+            entry = OvsCtEntryCreate(curNbl, key->ipKey.nwProto, l4Offset,
+                                     ctx, key, commit, currentTime);
             break;
         }
     }
     /* Copy mark and label from entry into flowKey. If actions specify
        different mark and label, update the flowKey. */
-    OvsCtUpdateFlowKey(key, state, zone, entry->mark, &entry->labels);
+    if (entry != NULL) {
+        OvsCtUpdateFlowKey(key, state, zone, entry->mark, &entry->labels);
+    } else {
+        OvsCtUpdateFlowKey(key, state, zone, 0, NULL);
+    }
     return entry;
 }
 
@@ -401,15 +498,12 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     POVS_CT_ENTRY entry = NULL;
     OvsConntrackKeyLookupCtx ctx = { 0 };
-    TCPHdr tcpStorage;
-    UINT64 currentTime;
     LOCK_STATE_EX lockState;
-    const TCPHdr *tcp;
-    tcp = OvsGetTcp(curNbl, layers->l4Offset, &tcpStorage);
+    UINT64 currentTime;
     NdisGetCurrentSystemTime((LARGE_INTEGER *) &currentTime);
 
     /* Retrieve the Conntrack Key related fields from packet */
-    OvsCtSetupLookupCtx(key, zone, &ctx);
+    OvsCtSetupLookupCtx(key, zone, &ctx, curNbl, layers->l4Offset);
 
     NdisAcquireRWLockWrite(ovsConntrackLockObj, &lockState, 0);
 
@@ -418,11 +512,12 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
 
     if (!entry) {
         /* If no matching entry was found, create one and add New state */
-        entry = OvsCtEntryCreate(tcp, curNbl, &ctx,
+        entry = OvsCtEntryCreate(curNbl, key->ipKey.nwProto,
+                                 layers->l4Offset, &ctx,
                                  key, commit, currentTime);
     } else {
         /* Process the entry and update CT flags */
-        entry = OvsProcessConntrackEntry(curNbl, tcp, &ctx, key,
+        entry = OvsProcessConntrackEntry(curNbl, layers->l4Offset, &ctx, key,
                                          zone, commit, currentTime);
     }
 

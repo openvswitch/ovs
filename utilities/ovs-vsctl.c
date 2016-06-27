@@ -287,7 +287,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             }
             shash_add_nocopy(local_options,
                              xasprintf("--%s", options[idx].name),
-                             optarg ? xstrdup(optarg) : NULL);
+                             nullable_xstrdup(optarg));
             break;
 
         case 'h':
@@ -2348,7 +2348,9 @@ static const struct ctl_table_class tables[] = {
       {NULL, NULL, NULL}}},
 
     {&ovsrec_table_flow_sample_collector_set,
-     {{NULL, NULL, NULL},
+     {{&ovsrec_table_flow_sample_collector_set,
+       &ovsrec_flow_sample_collector_set_col_id,
+       NULL},
       {NULL, NULL, NULL}}},
 
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}

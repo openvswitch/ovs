@@ -54,7 +54,7 @@ def netdev_get_driver_name(netdev):
     symlink = '%s/sys/class/net/%s/device/driver' % (root_prefix(), netdev)
     try:
         target = os.readlink(symlink)
-    except OSError, e:
+    except OSError as e:
         log("%s: could not read netdev's driver name (%s)" % (netdev, e))
         return None
 
@@ -196,9 +196,9 @@ def datapath_configure_bond(pif,slaves):
     # override defaults with values from other-config whose keys
     # being with "bond-"
     oc = pifrec['other_config']
-    overrides = filter(lambda (key,val):
-                           key.startswith("bond-"), oc.items())
-    overrides = map(lambda (key,val): (key[5:], val), overrides)
+    overrides = filter(lambda key_val:
+                           key_val[0].startswith("bond-"), oc.items())
+    overrides = map(lambda key_val: (key_val[0][5:], key_val[1]), overrides)
     bond_options.update(overrides)
     mode = None
     halgo = None
@@ -206,7 +206,7 @@ def datapath_configure_bond(pif,slaves):
     argv += ['--', 'set', 'Port', interface]
     if pifrec['MAC'] != "":
         argv += ['MAC=%s' % vsctl_escape(pifrec['MAC'])]
-    for (name,val) in bond_options.items():
+    for (name,val) in sorted(bond_options.items()):
         if name in ['updelay', 'downdelay']:
             # updelay and downdelay have dedicated schema columns.
             # The value must be a nonnegative integer.
@@ -655,7 +655,7 @@ class DatapathVswitch(Datapath):
             for flow in self._bridge_flows:
                 if flow.find('in_port=%s') != -1 or flow.find('actions=%s') != -1:
                     for port in ofports:
-                        f = flow % (port)
+                        f = flow % (port.decode())
                         run_command(['/usr/bin/ovs-ofctl', 'add-flow', dpname, f])
                 else:
                     run_command(['/usr/bin/ovs-ofctl', 'add-flow', dpname, flow])

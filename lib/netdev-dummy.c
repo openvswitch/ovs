@@ -19,6 +19,7 @@
 #include "dummy.h"
 
 #include <errno.h>
+#include <unistd.h>
 
 #include "dp-packet.h"
 #include "dpif-netdev.h"
@@ -110,6 +111,7 @@ struct netdev_dummy {
     struct netdev_stats stats OVS_GUARDED;
     enum netdev_flags flags OVS_GUARDED;
     int ifindex OVS_GUARDED;
+    int numa_id OVS_GUARDED;
 
     struct dummy_packet_conn conn OVS_GUARDED;
 
@@ -118,6 +120,13 @@ struct netdev_dummy {
     struct in_addr address, netmask;
     struct in6_addr ipv6, ipv6_mask;
     struct ovs_list rxes OVS_GUARDED; /* List of child "netdev_rxq_dummy"s. */
+
+    /* The following properties are for dummy-pmd and they cannot be changed
+     * when a device is running, so we remember the request and update them
+     * next time netdev_dummy_reconfigure() is called. */
+    int requested_n_txq OVS_GUARDED;
+    int requested_n_rxq OVS_GUARDED;
+    int requested_numa_id OVS_GUARDED;
 };
 
 /* Max 'recv_queue_len' in struct netdev_dummy. */
@@ -133,7 +142,8 @@ struct netdev_rxq_dummy {
 
 static unixctl_cb_func netdev_dummy_set_admin_state;
 static int netdev_dummy_construct(struct netdev *);
-static void netdev_dummy_queue_packet(struct netdev_dummy *, struct dp_packet *);
+static void netdev_dummy_queue_packet(struct netdev_dummy *,
+                                      struct dp_packet *, int);
 
 static void dummy_packet_stream_close(struct dummy_packet_stream *);
 
@@ -260,7 +270,7 @@ dummy_packet_stream_run(struct netdev_dummy *dev, struct dummy_packet_stream *s)
             if (retval == n && dp_packet_size(&s->rxbuf) > 2) {
                 dp_packet_pull(&s->rxbuf, 2);
                 netdev_dummy_queue_packet(dev,
-                                          dp_packet_clone(&s->rxbuf));
+                                          dp_packet_clone(&s->rxbuf), 0);
                 dp_packet_clear(&s->rxbuf);
             }
         } else if (retval != -EAGAIN) {
@@ -661,6 +671,9 @@ netdev_dummy_construct(struct netdev *netdev_)
     netdev->mtu = 1500;
     netdev->flags = 0;
     netdev->ifindex = -EOPNOTSUPP;
+    netdev->requested_n_rxq = netdev_->n_rxq;
+    netdev->requested_n_txq = netdev_->n_txq;
+    netdev->numa_id = 0;
 
     dummy_packet_conn_init(&netdev->conn);
 
@@ -700,9 +713,9 @@ netdev_dummy_dealloc(struct netdev *netdev_)
 }
 
 static int
-netdev_dummy_get_config(const struct netdev *netdev_, struct smap *args)
+netdev_dummy_get_config(const struct netdev *dev, struct smap *args)
 {
-    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+    struct netdev_dummy *netdev = netdev_dummy_cast(dev);
 
     ovs_mutex_lock(&netdev->mutex);
 
@@ -712,6 +725,16 @@ netdev_dummy_get_config(const struct netdev *netdev_, struct smap *args)
 
     dummy_packet_conn_get_config(&netdev->conn, args);
 
+    /* 'dummy-pmd' specific config. */
+    if (!netdev_is_pmd(dev)) {
+        goto exit;
+    }
+    smap_add_format(args, "requested_rx_queues", "%d", netdev->requested_n_rxq);
+    smap_add_format(args, "configured_rx_queues", "%d", dev->n_rxq);
+    smap_add_format(args, "requested_tx_queues", "%d", netdev->requested_n_txq);
+    smap_add_format(args, "configured_tx_queues", "%d", dev->n_txq);
+
+exit:
     ovs_mutex_unlock(&netdev->mutex);
     return 0;
 }
@@ -798,6 +821,7 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     const char *pcap;
+    int new_n_rxq, new_numa_id;
 
     ovs_mutex_lock(&netdev->mutex);
     netdev->ifindex = smap_get_int(args, "ifindex", -EOPNOTSUPP);
@@ -826,8 +850,72 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
         }
     }
 
+    netdev_change_seq_changed(netdev_);
+
+    /* 'dummy-pmd' specific config. */
+    if (!netdev_->netdev_class->is_pmd) {
+        goto exit;
+    }
+
+    new_n_rxq = MAX(smap_get_int(args, "n_rxq", netdev->requested_n_rxq), 1);
+    new_numa_id = smap_get_int(args, "numa_id", 0);
+    if (new_n_rxq != netdev->requested_n_rxq
+        || new_numa_id != netdev->requested_numa_id) {
+        netdev->requested_n_rxq = new_n_rxq;
+        netdev->requested_numa_id = new_numa_id;
+        netdev_request_reconfigure(netdev_);
+    }
+
+exit:
+    ovs_mutex_unlock(&netdev->mutex);
+    return 0;
+}
+
+static int
+netdev_dummy_get_numa_id(const struct netdev *netdev_)
+{
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+
+    ovs_mutex_lock(&netdev->mutex);
+    int numa_id = netdev->numa_id;
     ovs_mutex_unlock(&netdev->mutex);
 
+    return numa_id;
+}
+
+/* Requests the number of tx queues for the dummy PMD interface. */
+static int
+netdev_dummy_set_tx_multiq(struct netdev *netdev_, unsigned int n_txq)
+{
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+
+    ovs_mutex_lock(&netdev->mutex);
+
+    if (netdev_->n_txq == n_txq) {
+        goto out;
+    }
+
+    netdev->requested_n_txq = n_txq;
+    netdev_request_reconfigure(netdev_);
+
+out:
+    ovs_mutex_unlock(&netdev->mutex);
+    return 0;
+}
+
+/* Sets the number of tx queues and rx queues for the dummy PMD interface. */
+static int
+netdev_dummy_reconfigure(struct netdev *netdev_)
+{
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+
+    ovs_mutex_lock(&netdev->mutex);
+
+    netdev_->n_txq = netdev->requested_n_txq;
+    netdev_->n_rxq = netdev->requested_n_rxq;
+    netdev->numa_id = netdev->requested_numa_id;
+
+    ovs_mutex_unlock(&netdev->mutex);
     return 0;
 }
 
@@ -897,6 +985,20 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
     ovs_mutex_unlock(&netdev->mutex);
 
     if (!packet) {
+        if (netdev_is_pmd(&netdev->up)) {
+            /* If 'netdev' is a PMD device, this is called as part of the PMD
+             * thread busy loop.  We yield here (without quiescing) for two
+             * reasons:
+             *
+             * - To reduce the CPU utilization during the testsuite
+             * - To give valgrind a chance to switch thread. According
+             *   to the valgrind documentation, there's a big lock that
+             *   prevents multiple thread from being executed at the same
+             *   time.  On my system, without this sleep, the pmd threads
+             *   testcases fail under valgrind, because ovs-vswitchd becomes
+             *   unresponsive. */
+            sched_yield();
+        }
         return EAGAIN;
     }
     ovs_mutex_lock(&netdev->mutex);
@@ -955,6 +1057,8 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
         const void *buffer = dp_packet_data(pkts[i]);
         size_t size = dp_packet_size(pkts[i]);
 
+        size -= dp_packet_get_cutlen(pkts[i]);
+
         if (size < ETH_HEADER_LEN) {
             error = EMSGSIZE;
             break;
@@ -994,7 +1098,7 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
                 struct dp_packet *reply = dp_packet_new(0);
                 compose_arp(reply, ARP_OP_REPLY, dev->hwaddr, flow.dl_src,
                             false, flow.nw_dst, flow.nw_src);
-                netdev_dummy_queue_packet(dev, reply);
+                netdev_dummy_queue_packet(dev, reply, 0);
             }
         }
 
@@ -1221,73 +1325,83 @@ netdev_dummy_update_flags(struct netdev *netdev_,
 
 /* Helper functions. */
 
-static const struct netdev_class dummy_class = {
-    "dummy",
-    false,                      /* is_pmd */
-    NULL,                       /* init */
-    netdev_dummy_run,
-    netdev_dummy_wait,
+#define NETDEV_DUMMY_CLASS(NAME, PMD, TX_MULTIQ, RECOFIGURE)       \
+{                                                               \
+    NAME,                                                       \
+    PMD,                        /* is_pmd */                    \
+    NULL,                       /* init */                      \
+    netdev_dummy_run,                                           \
+    netdev_dummy_wait,                                          \
+                                                                \
+    netdev_dummy_alloc,                                         \
+    netdev_dummy_construct,                                     \
+    netdev_dummy_destruct,                                      \
+    netdev_dummy_dealloc,                                       \
+    netdev_dummy_get_config,                                    \
+    netdev_dummy_set_config,                                    \
+    NULL,                       /* get_tunnel_config */         \
+    NULL,                       /* build header */              \
+    NULL,                       /* push header */               \
+    NULL,                       /* pop header */                \
+    netdev_dummy_get_numa_id,                                   \
+    TX_MULTIQ,                                                  \
+                                                                \
+    netdev_dummy_send,          /* send */                      \
+    NULL,                       /* send_wait */                 \
+                                                                \
+    netdev_dummy_set_etheraddr,                                 \
+    netdev_dummy_get_etheraddr,                                 \
+    netdev_dummy_get_mtu,                                       \
+    netdev_dummy_set_mtu,                                       \
+    netdev_dummy_get_ifindex,                                   \
+    NULL,                       /* get_carrier */               \
+    NULL,                       /* get_carrier_resets */        \
+    NULL,                       /* get_miimon */                \
+    netdev_dummy_get_stats,                                     \
+                                                                \
+    NULL,                       /* get_features */              \
+    NULL,                       /* set_advertisements */        \
+                                                                \
+    NULL,                       /* set_policing */              \
+    NULL,                       /* get_qos_types */             \
+    NULL,                       /* get_qos_capabilities */      \
+    NULL,                       /* get_qos */                   \
+    NULL,                       /* set_qos */                   \
+    netdev_dummy_get_queue,                                     \
+    NULL,                       /* set_queue */                 \
+    NULL,                       /* delete_queue */              \
+    netdev_dummy_get_queue_stats,                               \
+    netdev_dummy_queue_dump_start,                              \
+    netdev_dummy_queue_dump_next,                               \
+    netdev_dummy_queue_dump_done,                               \
+    netdev_dummy_dump_queue_stats,                              \
+                                                                \
+    NULL,                       /* set_in4 */                   \
+    netdev_dummy_get_addr_list,                                 \
+    NULL,                       /* add_router */                \
+    NULL,                       /* get_next_hop */              \
+    NULL,                       /* get_status */                \
+    NULL,                       /* arp_lookup */                \
+                                                                \
+    netdev_dummy_update_flags,                                  \
+    RECOFIGURE,                                                 \
+                                                                \
+    netdev_dummy_rxq_alloc,                                     \
+    netdev_dummy_rxq_construct,                                 \
+    netdev_dummy_rxq_destruct,                                  \
+    netdev_dummy_rxq_dealloc,                                   \
+    netdev_dummy_rxq_recv,                                      \
+    netdev_dummy_rxq_wait,                                      \
+    netdev_dummy_rxq_drain,                                     \
+}
 
-    netdev_dummy_alloc,
-    netdev_dummy_construct,
-    netdev_dummy_destruct,
-    netdev_dummy_dealloc,
-    netdev_dummy_get_config,
-    netdev_dummy_set_config,
-    NULL,                       /* get_tunnel_config */
-    NULL,                       /* build header */
-    NULL,                       /* push header */
-    NULL,                       /* pop header */
-    NULL,                       /* get_numa_id */
-    NULL,                       /* set_multiq */
+static const struct netdev_class dummy_class =
+    NETDEV_DUMMY_CLASS("dummy", false, NULL, NULL);
 
-    netdev_dummy_send,          /* send */
-    NULL,                       /* send_wait */
-
-    netdev_dummy_set_etheraddr,
-    netdev_dummy_get_etheraddr,
-    netdev_dummy_get_mtu,
-    netdev_dummy_set_mtu,
-    netdev_dummy_get_ifindex,
-    NULL,                       /* get_carrier */
-    NULL,                       /* get_carrier_resets */
-    NULL,                       /* get_miimon */
-    netdev_dummy_get_stats,
-
-    NULL,                       /* get_features */
-    NULL,                       /* set_advertisements */
-
-    NULL,                       /* set_policing */
-    NULL,                       /* get_qos_types */
-    NULL,                       /* get_qos_capabilities */
-    NULL,                       /* get_qos */
-    NULL,                       /* set_qos */
-    netdev_dummy_get_queue,
-    NULL,                       /* set_queue */
-    NULL,                       /* delete_queue */
-    netdev_dummy_get_queue_stats,
-    netdev_dummy_queue_dump_start,
-    netdev_dummy_queue_dump_next,
-    netdev_dummy_queue_dump_done,
-    netdev_dummy_dump_queue_stats,
-
-    NULL,                       /* set_in4 */
-    netdev_dummy_get_addr_list,
-    NULL,                       /* add_router */
-    NULL,                       /* get_next_hop */
-    NULL,                       /* get_status */
-    NULL,                       /* arp_lookup */
-
-    netdev_dummy_update_flags,
-
-    netdev_dummy_rxq_alloc,
-    netdev_dummy_rxq_construct,
-    netdev_dummy_rxq_destruct,
-    netdev_dummy_rxq_dealloc,
-    netdev_dummy_rxq_recv,
-    netdev_dummy_rxq_wait,
-    netdev_dummy_rxq_drain,
-};
+static const struct netdev_class dummy_pmd_class =
+    NETDEV_DUMMY_CLASS("dummy-pmd", true,
+                       netdev_dummy_set_tx_multiq,
+                       netdev_dummy_reconfigure);
 
 static void
 pkt_list_delete(struct ovs_list *l)
@@ -1352,7 +1466,8 @@ netdev_dummy_queue_packet__(struct netdev_rxq_dummy *rx, struct dp_packet *packe
 }
 
 static void
-netdev_dummy_queue_packet(struct netdev_dummy *dummy, struct dp_packet *packet)
+netdev_dummy_queue_packet(struct netdev_dummy *dummy, struct dp_packet *packet,
+                          int queue_id)
     OVS_REQUIRES(dummy->mutex)
 {
     struct netdev_rxq_dummy *rx, *prev;
@@ -1363,7 +1478,8 @@ netdev_dummy_queue_packet(struct netdev_dummy *dummy, struct dp_packet *packet)
     }
     prev = NULL;
     LIST_FOR_EACH (rx, node, &dummy->rxes) {
-        if (rx->recv_queue_len < NETDEV_DUMMY_MAX_QUEUE) {
+        if (rx->up.queue_id == queue_id &&
+            rx->recv_queue_len < NETDEV_DUMMY_MAX_QUEUE) {
             if (prev) {
                 netdev_dummy_queue_packet__(prev, dp_packet_clone(packet));
             }
@@ -1383,16 +1499,27 @@ netdev_dummy_receive(struct unixctl_conn *conn,
 {
     struct netdev_dummy *dummy_dev;
     struct netdev *netdev;
-    int i;
+    int i, k = 1, rx_qid = 0;
 
-    netdev = netdev_from_name(argv[1]);
+    netdev = netdev_from_name(argv[k++]);
     if (!netdev || !is_dummy_class(netdev->netdev_class)) {
         unixctl_command_reply_error(conn, "no such dummy netdev");
-        goto exit;
+        goto exit_netdev;
     }
     dummy_dev = netdev_dummy_cast(netdev);
 
-    for (i = 2; i < argc; i++) {
+    ovs_mutex_lock(&dummy_dev->mutex);
+
+    if (argc > k + 1 && !strcmp(argv[k], "--qid")) {
+        rx_qid = strtol(argv[k + 1], NULL, 10);
+        if (rx_qid < 0 || rx_qid >= netdev->n_rxq) {
+            unixctl_command_reply_error(conn, "bad rx queue id.");
+            goto exit;
+        }
+        k += 2;
+    }
+
+    for (i = k; i < argc; i++) {
         struct dp_packet *packet;
 
         packet = eth_from_packet_or_flow(argv[i]);
@@ -1401,14 +1528,14 @@ netdev_dummy_receive(struct unixctl_conn *conn,
             goto exit;
         }
 
-        ovs_mutex_lock(&dummy_dev->mutex);
-        netdev_dummy_queue_packet(dummy_dev, packet);
-        ovs_mutex_unlock(&dummy_dev->mutex);
+        netdev_dummy_queue_packet(dummy_dev, packet, rx_qid);
     }
 
     unixctl_command_reply(conn, NULL);
 
 exit:
+    ovs_mutex_unlock(&dummy_dev->mutex);
+exit_netdev:
     netdev_close(netdev);
 }
 
@@ -1611,7 +1738,8 @@ netdev_dummy_override(const char *type)
 void
 netdev_dummy_register(enum dummy_level level)
 {
-    unixctl_command_register("netdev-dummy/receive", "name packet|flow...",
+    unixctl_command_register("netdev-dummy/receive",
+                             "name [--qid queue_id] packet|flow...",
                              2, INT_MAX, netdev_dummy_receive, NULL);
     unixctl_command_register("netdev-dummy/set-admin-state",
                              "[netdev] up|down", 1, 2,
@@ -1642,6 +1770,7 @@ netdev_dummy_register(enum dummy_level level)
         netdev_dummy_override("system");
     }
     netdev_register_provider(&dummy_class);
+    netdev_register_provider(&dummy_pmd_class);
 
     netdev_vport_tunnel_register();
 }

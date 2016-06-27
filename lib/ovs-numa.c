@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 
-/* On non-Linux, these functions are defined inline in ovs-numa.h. */
-#ifdef __linux__
-
 #include <config.h>
 #include "ovs-numa.h"
 
 #include <ctype.h>
-#include <dirent.h>
 #include <errno.h>
+#ifdef __linux__
+#include <dirent.h>
 #include <stddef.h>
 #include <string.h>
 #include <sys/types.h>
 #include <unistd.h>
+#endif /* __linux__ */
 
 #include "hash.h"
 #include "hmap.h"
@@ -81,12 +80,99 @@ static struct hmap all_numa_nodes = HMAP_INITIALIZER(&all_numa_nodes);
 static struct hmap all_cpu_cores = HMAP_INITIALIZER(&all_cpu_cores);
 /* True if numa node and core info are correctly extracted. */
 static bool found_numa_and_core;
+/* True if the module was initialized with dummy options. In this case, the
+ * module must not interact with the actual cpus/nodes in the system. */
+static bool dummy_numa = false;
+/* If 'dummy_numa' is true, contains a copy of the dummy numa configuration
+ * parameter */
+static char *dummy_config;
 
+static struct numa_node *get_numa_by_numa_id(int numa_id);
+
+#ifdef __linux__
 /* Returns true if 'str' contains all digits.  Returns false otherwise. */
 static bool
 contain_all_digits(const char *str)
 {
     return str[strspn(str, "0123456789")] == '\0';
+}
+#endif /* __linux__ */
+
+static struct numa_node *
+insert_new_numa_node(int numa_id)
+{
+    struct numa_node *n = xzalloc(sizeof *n);
+
+    hmap_insert(&all_numa_nodes, &n->hmap_node, hash_int(numa_id, 0));
+    ovs_list_init(&n->cores);
+    n->numa_id = numa_id;
+
+    return n;
+}
+
+static struct cpu_core *
+insert_new_cpu_core(struct numa_node *n, unsigned core_id)
+{
+    struct cpu_core *c = xzalloc(sizeof *c);
+
+    hmap_insert(&all_cpu_cores, &c->hmap_node, hash_int(core_id, 0));
+    ovs_list_insert(&n->cores, &c->list_node);
+    c->core_id = core_id;
+    c->numa = n;
+    c->available = true;
+
+    return c;
+}
+
+/* Has the same effect as discover_numa_and_core(), but instead of reading
+ * sysfs entries, extracts the info from 'dummy_config'.
+ *
+ * 'dummy_config' lists the numa_ids of each CPU separated by a comma, e.g.
+ * - "0,0,0,0": four cores on numa socket 0.
+ * - "0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1": 16 cores on two numa sockets.
+ * - "0,0,0,0,1,1,1,1": 8 cores on two numa sockets.
+ *
+ * The different numa ids must be consecutives or the function will abort. */
+static void
+discover_numa_and_core_dummy(const char *dummy_config)
+{
+    char *conf = xstrdup(dummy_config);
+    char *id, *saveptr = NULL;
+    unsigned i = 0;
+    long max_numa_id = 0;
+
+    for (id = strtok_r(conf, ",", &saveptr); id;
+         id = strtok_r(NULL, ",", &saveptr)) {
+        struct hmap_node *hnode;
+        struct numa_node *n;
+        long numa_id;
+
+        numa_id = strtol(id, NULL, 10);
+        if (numa_id < 0 || numa_id >= MAX_NUMA_NODES) {
+            VLOG_WARN("Invalid numa node %ld", numa_id);
+            continue;
+        }
+
+        max_numa_id = MAX(max_numa_id, numa_id);
+
+        hnode = hmap_first_with_hash(&all_numa_nodes, hash_int(numa_id, 0));
+
+        if (hnode) {
+            n = CONTAINER_OF(hnode, struct numa_node, hmap_node);
+        } else {
+            n = insert_new_numa_node(numa_id);
+        }
+
+        insert_new_cpu_core(n, i);
+
+        i++;
+    }
+
+    free(conf);
+
+    if (max_numa_id + 1 != hmap_count(&all_numa_nodes)) {
+        ovs_fatal(0, "dummy numa contains non consecutive numa ids");
+    }
 }
 
 /* Discovers all numa nodes and the corresponding cpu cores.
@@ -94,7 +180,7 @@ contain_all_digits(const char *str)
 static void
 discover_numa_and_core(void)
 {
-    int n_cpus = 0;
+#ifdef __linux__
     int i;
     DIR *dir;
     bool numa_supported = true;
@@ -123,31 +209,20 @@ discover_numa_and_core(void)
 
         /* Creates 'struct numa_node' if the 'dir' is non-null. */
         if (dir) {
-            struct numa_node *n = xzalloc(sizeof *n);
+            struct numa_node *n;
             struct dirent *subdir;
 
-            hmap_insert(&all_numa_nodes, &n->hmap_node, hash_int(i, 0));
-            ovs_list_init(&n->cores);
-            n->numa_id = i;
+            n = insert_new_numa_node(i);
 
             while ((subdir = readdir(dir)) != NULL) {
                 if (!strncmp(subdir->d_name, "cpu", 3)
-                    && contain_all_digits(subdir->d_name + 3)){
-                    struct cpu_core *c = xzalloc(sizeof *c);
+                    && contain_all_digits(subdir->d_name + 3)) {
                     unsigned core_id;
 
                     core_id = strtoul(subdir->d_name + 3, NULL, 10);
-                    hmap_insert(&all_cpu_cores, &c->hmap_node,
-                                hash_int(core_id, 0));
-                    ovs_list_insert(&n->cores, &c->list_node);
-                    c->core_id = core_id;
-                    c->numa = n;
-                    c->available = true;
-                    n_cpus++;
+                    insert_new_cpu_core(n, core_id);
                 }
             }
-            VLOG_INFO("Discovered %"PRIuSIZE" CPU cores on NUMA node %d",
-                      ovs_list_size(&n->cores), n->numa_id);
             closedir(dir);
         } else if (errno != ENOENT) {
             VLOG_WARN("opendir(%s) failed (%s)", path,
@@ -159,12 +234,7 @@ discover_numa_and_core(void)
             break;
         }
     }
-
-    VLOG_INFO("Discovered %"PRIuSIZE" NUMA nodes and %d CPU cores",
-               hmap_count(&all_numa_nodes), n_cpus);
-    if (hmap_count(&all_numa_nodes) && hmap_count(&all_cpu_cores)) {
-        found_numa_and_core = true;
-    }
+#endif /* __linux__ */
 }
 
 /* Gets 'struct cpu_core' by 'core_id'. */
@@ -198,15 +268,63 @@ get_numa_by_numa_id(int numa_id)
 }
 
 
-/* Extracts the numa node and core info from the 'sysfs'. */
-void
-ovs_numa_init(void)
+
+static bool
+ovs_numa_init__(const char *dummy_config)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
     if (ovsthread_once_start(&once)) {
-        discover_numa_and_core();
+        const struct numa_node *n;
+
+        if (!dummy_config) {
+            discover_numa_and_core();
+        } else {
+            discover_numa_and_core_dummy(dummy_config);
+        }
+
+        HMAP_FOR_EACH(n, hmap_node, &all_numa_nodes) {
+            VLOG_INFO("Discovered %"PRIuSIZE" CPU cores on NUMA node %d",
+                      ovs_list_size(&n->cores), n->numa_id);
+        }
+
+        VLOG_INFO("Discovered %"PRIuSIZE" NUMA nodes and %"PRIuSIZE" CPU cores",
+                   hmap_count(&all_numa_nodes), hmap_count(&all_cpu_cores));
+
+        if (hmap_count(&all_numa_nodes) && hmap_count(&all_cpu_cores)) {
+            found_numa_and_core = true;
+        }
+
         ovsthread_once_done(&once);
+
+        return true;
+    } else {
+        return false;
+    }
+}
+
+/* Extracts the numa node and core info from the 'config'.  This is useful for
+ * testing purposes.  The function must be called once, before ovs_numa_init().
+ *
+ * The format of 'config' is explained in the comment above
+ * discover_numa_and_core_dummy().*/
+void
+ovs_numa_set_dummy(const char *config)
+{
+    dummy_numa = true;
+    ovs_assert(config);
+    free(dummy_config);
+    dummy_config = xstrdup(config);
+}
+
+/* Initializes the numa module. */
+void
+ovs_numa_init(void)
+{
+    if (dummy_numa) {
+        ovs_numa_init__(dummy_config);
+    } else {
+        ovs_numa_init__(NULL);
     }
 }
 
@@ -373,14 +491,14 @@ ovs_numa_unpin_core(unsigned core_id)
 struct ovs_numa_dump *
 ovs_numa_dump_cores_on_numa(int numa_id)
 {
-    struct ovs_numa_dump *dump = NULL;
+    struct ovs_numa_dump *dump = xmalloc(sizeof *dump);
     struct numa_node *numa = get_numa_by_numa_id(numa_id);
+
+    ovs_list_init(&dump->dump);
 
     if (numa) {
         struct cpu_core *core;
 
-        dump = xmalloc(sizeof *dump);
-        ovs_list_init(&dump->dump);
         LIST_FOR_EACH(core, list_node, &numa->cores) {
             struct ovs_numa_info *info = xmalloc(sizeof *info);
 
@@ -397,6 +515,10 @@ void
 ovs_numa_dump_destroy(struct ovs_numa_dump *dump)
 {
     struct ovs_numa_info *iter;
+
+    if (!dump) {
+        return;
+    }
 
     LIST_FOR_EACH_POP (iter, list_node, &dump->dump) {
         free(iter);
@@ -430,7 +552,7 @@ ovs_numa_set_cpu_mask(const char *cmask)
     }
 
     for (i = strlen(cmask) - 1; i >= 0; i--) {
-        char hex = toupper(cmask[i]);
+        char hex = toupper((unsigned char)cmask[i]);
         int bin, j;
 
         if (hex >= '0' && hex <= '9') {
@@ -467,4 +589,27 @@ ovs_numa_set_cpu_mask(const char *cmask)
     }
 }
 
+int ovs_numa_thread_setaffinity_core(unsigned core_id OVS_UNUSED)
+{
+    if (dummy_numa) {
+        /* Nothing to do */
+        return 0;
+    }
+
+#ifdef __linux__
+    cpu_set_t cpuset;
+    int err;
+
+    CPU_ZERO(&cpuset);
+    CPU_SET(core_id, &cpuset);
+    err = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+    if (err) {
+        VLOG_ERR("Thread affinity error %d",err);
+        return err;
+    }
+
+    return 0;
+#else /* !__linux__ */
+    return EOPNOTSUPP;
 #endif /* __linux__ */
+}

@@ -145,6 +145,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         OPT_DISABLE_SYSTEM,
         DAEMON_OPTION_ENUMS,
         OPT_DPDK,
+        OPT_DUMMY_NUMA,
     };
     static const struct option long_options[] = {
         {"help",        no_argument, NULL, 'h'},
@@ -159,6 +160,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         {"enable-dummy", optional_argument, NULL, OPT_ENABLE_DUMMY},
         {"disable-system", no_argument, NULL, OPT_DISABLE_SYSTEM},
         {"dpdk", optional_argument, NULL, OPT_DPDK},
+        {"dummy-numa", required_argument, NULL, OPT_DUMMY_NUMA},
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
@@ -212,6 +214,10 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
 
         case OPT_DPDK:
             ovs_fatal(0, "Using --dpdk to configure DPDK is not supported.");
+            break;
+
+        case OPT_DUMMY_NUMA:
+            ovs_numa_set_dummy(optarg);
             break;
 
         default:

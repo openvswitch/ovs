@@ -349,6 +349,12 @@ struct xlate_ctx {
     struct ofpbuf frozen_actions;
     const struct ofpact_controller *pause;
 
+    /* True if a packet was but is no longer MPLS (due to an MPLS pop action).
+     * This is a trigger for recirculation in cases where translating an action
+     * or looking up a flow requires access to the fields of the packet after
+     * the MPLS label stack that was originally present. */
+    bool was_mpls;
+
     /* True if conntrack has been performed on this packet during processing
      * on the current bridge. This is used to determine whether conntrack
      * state from the datapath should be honored after thawing. */
@@ -884,7 +890,7 @@ xlate_xport_copy(struct xbridge *xbridge, struct xbundle *xbundle,
  * This needs to be called after editing the xlate configuration.
  *
  * Functions that edit the new xlate configuration are
- * xlate_<ofport/bundle/ofport>_set and xlate_<ofport/bundle/ofport>_remove.
+ * xlate_<ofproto/bundle/ofport>_set and xlate_<ofproto/bundle/ofport>_remove.
  *
  * A sample workflow:
  *
@@ -2388,6 +2394,20 @@ xlate_normal_flood(struct xlate_ctx *ctx, struct xbundle *in_xbundle,
     ctx->nf_output_iface = NF_OUT_FLOOD;
 }
 
+static bool
+is_ip_local_multicast(const struct flow *flow, struct flow_wildcards *wc)
+{
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
+        return ip_is_local_multicast(flow->nw_dst);
+    } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+        memset(&wc->masks.ipv6_dst, 0xff, sizeof wc->masks.ipv6_dst);
+        return ipv6_is_all_hosts(&flow->ipv6_dst);
+    } else {
+        return false;
+    }
+}
+
 static void
 xlate_normal(struct xlate_ctx *ctx)
 {
@@ -2471,7 +2491,8 @@ xlate_normal(struct xlate_ctx *ctx)
         struct mcast_snooping *ms = ctx->xbridge->ms;
         struct mcast_group *grp = NULL;
 
-        if (is_igmp(flow)) {
+        if (is_igmp(flow, wc)) {
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
             if (mcast_snooping_is_membership(flow->tp_src) ||
                 mcast_snooping_is_query(flow->tp_src)) {
                 if (ctx->xin->may_learn && ctx->xin->packet) {
@@ -2504,13 +2525,13 @@ xlate_normal(struct xlate_ctx *ctx)
                 xlate_normal_flood(ctx, in_xbundle, vlan);
             }
             return;
-        } else if (is_mld(flow)) {
+        } else if (is_mld(flow, wc)) {
             ctx->xout->slow |= SLOW_ACTION;
             if (ctx->xin->may_learn && ctx->xin->packet) {
                 update_mcast_snooping_table(ctx->xbridge, flow, vlan,
                                             in_xbundle, ctx->xin->packet);
             }
-            if (is_mld_report(flow)) {
+            if (is_mld_report(flow, wc)) {
                 ovs_rwlock_rdlock(&ms->rwlock);
                 xlate_normal_mcast_send_mrouters(ctx, ms, in_xbundle, vlan);
                 xlate_normal_mcast_send_rports(ctx, ms, in_xbundle, vlan);
@@ -2520,10 +2541,7 @@ xlate_normal(struct xlate_ctx *ctx)
                 xlate_normal_flood(ctx, in_xbundle, vlan);
             }
         } else {
-            if ((flow->dl_type == htons(ETH_TYPE_IP)
-                 && ip_is_local_multicast(flow->nw_dst))
-                || (flow->dl_type == htons(ETH_TYPE_IPV6)
-                    && ipv6_is_all_hosts(&flow->ipv6_dst))) {
+            if (is_ip_local_multicast(flow, wc)) {
                 /* RFC4541: section 2.1.2, item 2: Packets with a dst IP
                  * address in the 224.0.0.x range which are not IGMP must
                  * be forwarded on all ports */
@@ -2583,7 +2601,10 @@ xlate_normal(struct xlate_ctx *ctx)
  * 'cookie' (of length 'cookie_size' bytes) is passed back in the callback for
  * each sampled packet.  'tunnel_out_port', if not ODPP_NONE, is added as the
  * OVS_USERSPACE_ATTR_EGRESS_TUN_PORT attribute.  If 'include_actions', an
- * OVS_USERSPACE_ATTR_ACTIONS attribute is added.
+ * OVS_USERSPACE_ATTR_ACTIONS attribute is added.  If 'emit_set_tunnel',
+ * sample(sampling_port=1) would translate into datapath sample action
+ * set(tunnel(...)), sample(...) and it is used for sampling egress tunnel
+ * information.
  */
 static size_t
 compose_sample_action(struct xlate_ctx *ctx,
@@ -2637,8 +2658,10 @@ compose_sflow_action(struct xlate_ctx *ctx)
                                  true);
 }
 
-/* If IPFIX is enabled, this appends a "sample" action to implement IPFIX to
- * 'ctx->odp_actions'. */
+/* If flow IPFIX is enabled, make sure IPFIX flow sample action
+ * at egress point of tunnel port is just in front of corresponding
+ * output action. If bridge IPFIX is enabled, this appends an IPFIX
+ * sample action to 'ctx->odp_actions'. */
 static void
 compose_ipfix_action(struct xlate_ctx *ctx, odp_port_t output_odp_port)
 {
@@ -2656,7 +2679,7 @@ compose_ipfix_action(struct xlate_ctx *ctx, odp_port_t output_odp_port)
         return;
     }
 
-    /* For output case, output_odp_port is valid*/
+    /* For output case, output_odp_port is valid. */
     if (output_odp_port != ODPP_NONE) {
         if (!dpif_ipfix_get_bridge_exporter_output_sampling(ipfix)) {
             return;
@@ -2870,6 +2893,7 @@ static int
 build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
                   const struct flow *flow, odp_port_t tunnel_odp_port)
 {
+    struct netdev_tnl_build_header_params tnl_params;
     struct ovs_action_push_tnl tnl_push_data;
     struct xport *out_dev = NULL;
     ovs_be32 s_ip = 0, d_ip = 0;
@@ -2930,8 +2954,8 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
                  ETH_ADDR_ARGS(smac), ipv6_string_mapped(buf_sip6, &s_ip6),
                  ETH_ADDR_ARGS(dmac), buf_dip6);
 
-    err = tnl_port_build_header(xport->ofport, flow,
-                                dmac, smac, &s_ip6, &tnl_push_data);
+    netdev_init_tnl_build_header_params(&tnl_params, flow, &s_ip6, dmac, smac);
+    err = tnl_port_build_header(xport->ofport, &tnl_push_data, &tnl_params);
     if (err) {
         return err;
     }
@@ -3016,6 +3040,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         const struct xport *peer = xport->peer;
         struct flow old_flow = ctx->xin->flow;
         bool old_conntrack = ctx->conntracked;
+        bool old_was_mpls = ctx->was_mpls;
         cls_version_t old_version = ctx->tables_version;
         struct ofpbuf old_stack = ctx->stack;
         union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];
@@ -3072,6 +3097,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
         /* Restore calling bridge's lookup version. */
         ctx->tables_version = old_version;
+
+        /* The peer bridge popping MPLS should have no effect on the original
+         * bridge. */
+        ctx->was_mpls = old_was_mpls;
 
         /* The peer bridge's conntrack execution should have no effect on the
          * original bridge. */
@@ -3281,6 +3310,11 @@ static void
 xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                    bool may_packet_in, bool honor_table_miss)
 {
+    /* Check if we need to recirculate before matching in a table. */
+    if (ctx->was_mpls) {
+        ctx_trigger_freeze(ctx);
+        return;
+    }
     if (xlate_resubmit_resource_check(ctx)) {
         uint8_t old_table_id = ctx->table_id;
         struct rule_dpif *rule;
@@ -3342,6 +3376,7 @@ xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket)
     struct ofpbuf action_set = ofpbuf_const_initializer(bucket->ofpacts,
                                                         bucket->ofpacts_len);
     struct flow old_flow = ctx->xin->flow;
+    bool old_was_mpls = ctx->was_mpls;
 
     ofpacts_execute_action_set(&action_list, &action_set);
     ctx->indentation++;
@@ -3372,6 +3407,10 @@ xlate_group_bucket(struct xlate_ctx *ctx, struct ofputil_bucket *bucket)
      * with the action_set and stack in the tables resubmitted to from
      * group buckets. */
     ctx->xin->flow = old_flow;
+
+    /* The group bucket popping MPLS should have no effect after bucket
+     * execution. */
+    ctx->was_mpls = old_was_mpls;
 
     /* The fact that the group bucket exits (for any reason) does not mean that
      * the translation after the group action should exit.  Specifically, if
@@ -3496,6 +3535,13 @@ xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
     const char *selection_method = group_dpif_get_selection_method(group);
 
+    /* Select groups may access flow keys beyond L2 in order to
+     * select a bucket. Recirculate as appropriate to make this possible.
+     */
+    if (ctx->was_mpls) {
+        ctx_trigger_freeze(ctx);
+    }
+
     if (selection_method[0] == '\0') {
         xlate_default_select_group(ctx, group);
     } else if (!strcasecmp("hash", selection_method)) {
@@ -3605,6 +3651,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
                           uint16_t controller_id,
                           const uint8_t *userdata, size_t userdata_len)
 {
+    struct dp_packet_batch batch;
     struct dp_packet *packet;
 
     ctx->xout->slow |= SLOW_CONTROLLER;
@@ -3614,8 +3661,8 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     }
 
     packet = dp_packet_clone(ctx->xin->packet);
-
-    odp_execute_actions(NULL, &packet, 1, false,
+    packet_batch_init_packet(&batch, packet);
+    odp_execute_actions(NULL, &batch, false,
                         ctx->odp_actions->data, ctx->odp_actions->size, NULL);
 
     /* A packet sent by an action in a table-miss rule is considered an
@@ -3788,7 +3835,7 @@ compose_mpls_pop_action(struct xlate_ctx *ctx, ovs_be16 eth_type)
 
     if (flow_pop_mpls(flow, n, eth_type, ctx->wc)) {
         if (!eth_type_mpls(eth_type) && ctx->xbridge->support.odp.recirc) {
-            ctx_trigger_freeze(ctx);
+            ctx->was_mpls = true;
         }
     } else if (n >= FLOW_MAX_MPLS_LABELS) {
         if (ctx->xin->packet != NULL) {
@@ -3948,6 +3995,56 @@ xlate_output_reg_action(struct xlate_ctx *ctx,
 }
 
 static void
+xlate_output_trunc_action(struct xlate_ctx *ctx,
+                    ofp_port_t port, uint32_t max_len)
+{
+    bool support_trunc = ctx->xbridge->support.trunc;
+    struct ovs_action_trunc *trunc;
+    char name[OFP_MAX_PORT_NAME_LEN];
+
+    switch (port) {
+    case OFPP_TABLE:
+    case OFPP_NORMAL:
+    case OFPP_FLOOD:
+    case OFPP_ALL:
+    case OFPP_CONTROLLER:
+    case OFPP_NONE:
+        ofputil_port_to_string(port, name, sizeof name);
+        xlate_report(ctx, "output_trunc does not support port: %s", name);
+        break;
+    case OFPP_LOCAL:
+    case OFPP_IN_PORT:
+    default:
+        if (port != ctx->xin->flow.in_port.ofp_port) {
+            const struct xport *xport = get_ofp_port(ctx->xbridge, port);
+
+            if (xport == NULL || xport->odp_port == ODPP_NONE) {
+                /* Since truncate happens at its following output action, if
+                 * the output port is a patch port, the behavior is somehow
+                 * unpredicable. For simpilicity, disallow this case. */
+                ofputil_port_to_string(port, name, sizeof name);
+                XLATE_REPORT_ERROR(ctx, "bridge %s: "
+                         "output_trunc does not support port: %s",
+                         ctx->xbridge->name, name);
+                break;
+            }
+
+            trunc = nl_msg_put_unspec_uninit(ctx->odp_actions,
+                                OVS_ACTION_ATTR_TRUNC,
+                                sizeof *trunc);
+            trunc->max_len = max_len;
+            xlate_output_action(ctx, port, max_len, false);
+            if (!support_trunc) {
+                ctx->xout->slow |= SLOW_ACTION;
+            }
+        } else {
+            xlate_report(ctx, "skipping output to input port");
+        }
+        break;
+    }
+}
+
+static void
 xlate_enqueue_action(struct xlate_ctx *ctx,
                      const struct ofpact_enqueue *enqueue)
 {
@@ -4103,6 +4200,15 @@ static void
 xlate_sample_action(struct xlate_ctx *ctx,
                     const struct ofpact_sample *os)
 {
+    odp_port_t output_odp_port = ODPP_NONE;
+    odp_port_t tunnel_out_port = ODPP_NONE;
+    struct dpif_ipfix *ipfix = ctx->xbridge->ipfix;
+    bool emit_set_tunnel = false;
+
+    if (!ipfix || ctx->xin->flow.in_port.ofp_port == OFPP_NONE) {
+        return;
+    }
+
     /* Scale the probability from 16-bit to 32-bit while representing
      * the same percentage. */
     uint32_t probability = (os->probability << 16) | os->probability;
@@ -4116,7 +4222,51 @@ xlate_sample_action(struct xlate_ctx *ctx,
         return;
     }
 
-    xlate_commit_actions(ctx);
+    /* If ofp_port in flow sample action is equel to ofp_port,
+     * this sample action is a input port action. */
+    if (os->sampling_port != OFPP_NONE &&
+        os->sampling_port != ctx->xin->flow.in_port.ofp_port) {
+        output_odp_port = ofp_port_to_odp_port(ctx->xbridge,
+                                               os->sampling_port);
+        if (output_odp_port == ODPP_NONE) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(&rl, "can't use unknown port %d in flow sample "
+                         "action", os->sampling_port);
+            return;
+        }
+
+        if (dpif_ipfix_get_flow_exporter_tunnel_sampling(ipfix,
+                                                         os->collector_set_id)
+            && dpif_ipfix_get_tunnel_port(ipfix, output_odp_port)) {
+            tunnel_out_port = output_odp_port;
+            emit_set_tunnel = true;
+        }
+    }
+
+     xlate_commit_actions(ctx);
+    /* If 'emit_set_tunnel', sample(sampling_port=1) would translate
+     * into datapath sample action set(tunnel(...)), sample(...) and
+     * it is used for sampling egress tunnel information. */
+    if (emit_set_tunnel) {
+        const struct xport *xport = get_ofp_port(ctx->xbridge,
+                                                 os->sampling_port);
+
+        if (xport && xport->is_tunnel) {
+            struct flow *flow = &ctx->xin->flow;
+            tnl_port_send(xport->ofport, flow, ctx->wc);
+            if (!ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
+                struct flow_tnl flow_tnl = flow->tunnel;
+
+                commit_odp_tunnel_action(flow, &ctx->base_flow,
+                                         ctx->odp_actions);
+                flow->tunnel = flow_tnl;
+            }
+        } else {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(&rl, "sampling_port:%d should be a tunnel port.",
+                         os->sampling_port);
+        }
+    }
 
     union user_action_cookie cookie = {
         .flow_sample = {
@@ -4125,10 +4275,11 @@ xlate_sample_action(struct xlate_ctx *ctx,
             .collector_set_id = os->collector_set_id,
             .obs_domain_id = os->obs_domain_id,
             .obs_point_id = os->obs_point_id,
+            .output_odp_port = output_odp_port,
         }
     };
     compose_sample_action(ctx, probability, &cookie, sizeof cookie.flow_sample,
-                          ODPP_NONE, false);
+                          tunnel_out_port, false);
 }
 
 static bool
@@ -4232,6 +4383,7 @@ freeze_unroll_actions(const struct ofpact *a, const struct ofpact *end,
     for (; a < end; a = ofpact_next(a)) {
         switch (a->type) {
         case OFPACT_OUTPUT_REG:
+        case OFPACT_OUTPUT_TRUNC:
         case OFPACT_GROUP:
         case OFPACT_OUTPUT:
         case OFPACT_CONTROLLER:
@@ -4464,6 +4616,96 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
 }
 
 static void
+recirc_for_mpls(const struct ofpact *a, struct xlate_ctx *ctx)
+{
+    /* No need to recirculate if already exiting. */
+    if (ctx->exit) {
+        return;
+    }
+
+    /* Do not consider recirculating unless the packet was previously MPLS. */
+    if (!ctx->was_mpls) {
+        return;
+    }
+
+    /* Special case these actions, only recirculating if necessary.
+     * This avoids the overhead of recirculation in common use-cases.
+     */
+    switch (a->type) {
+
+    /* Output actions  do not require recirculation. */
+    case OFPACT_OUTPUT:
+    case OFPACT_OUTPUT_TRUNC:
+    case OFPACT_ENQUEUE:
+    case OFPACT_OUTPUT_REG:
+    /* Set actions that don't touch L3+ fields do not require recirculation. */
+    case OFPACT_SET_VLAN_VID:
+    case OFPACT_SET_VLAN_PCP:
+    case OFPACT_SET_ETH_SRC:
+    case OFPACT_SET_ETH_DST:
+    case OFPACT_SET_TUNNEL:
+    case OFPACT_SET_QUEUE:
+    /* If actions of a group require recirculation that can be detected
+     * when translating them. */
+    case OFPACT_GROUP:
+        return;
+
+    /* Set field that don't touch L3+ fields don't require recirculation. */
+    case OFPACT_SET_FIELD:
+        if (mf_is_l3_or_higher(ofpact_get_SET_FIELD(a)->field)) {
+            break;
+        }
+        return;
+
+    /* For simplicity, recirculate in all other cases. */
+    case OFPACT_CONTROLLER:
+    case OFPACT_BUNDLE:
+    case OFPACT_STRIP_VLAN:
+    case OFPACT_PUSH_VLAN:
+    case OFPACT_SET_IPV4_SRC:
+    case OFPACT_SET_IPV4_DST:
+    case OFPACT_SET_IP_DSCP:
+    case OFPACT_SET_IP_ECN:
+    case OFPACT_SET_IP_TTL:
+    case OFPACT_SET_L4_SRC_PORT:
+    case OFPACT_SET_L4_DST_PORT:
+    case OFPACT_REG_MOVE:
+    case OFPACT_STACK_PUSH:
+    case OFPACT_STACK_POP:
+    case OFPACT_DEC_TTL:
+    case OFPACT_SET_MPLS_LABEL:
+    case OFPACT_SET_MPLS_TC:
+    case OFPACT_SET_MPLS_TTL:
+    case OFPACT_DEC_MPLS_TTL:
+    case OFPACT_PUSH_MPLS:
+    case OFPACT_POP_MPLS:
+    case OFPACT_POP_QUEUE:
+    case OFPACT_FIN_TIMEOUT:
+    case OFPACT_RESUBMIT:
+    case OFPACT_LEARN:
+    case OFPACT_CONJUNCTION:
+    case OFPACT_MULTIPATH:
+    case OFPACT_NOTE:
+    case OFPACT_EXIT:
+    case OFPACT_SAMPLE:
+    case OFPACT_UNROLL_XLATE:
+    case OFPACT_CT:
+    case OFPACT_NAT:
+    case OFPACT_DEBUG_RECIRC:
+    case OFPACT_METER:
+    case OFPACT_CLEAR_ACTIONS:
+    case OFPACT_WRITE_ACTIONS:
+    case OFPACT_WRITE_METADATA:
+    case OFPACT_GOTO_TABLE:
+    default:
+        break;
+    }
+
+    /* Recirculate */
+    ctx_trigger_freeze(ctx);
+}
+
+static void
 do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
                  struct xlate_ctx *ctx)
 {
@@ -4485,6 +4727,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         if (ctx->error) {
             break;
         }
+
+        recirc_for_mpls(a, ctx);
 
         if (ctx->exit) {
             /* Check if need to store the remaining actions for later
@@ -4739,6 +4983,11 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_OUTPUT_REG:
             xlate_output_reg_action(ctx, ofpact_get_OUTPUT_REG(a));
+            break;
+
+        case OFPACT_OUTPUT_TRUNC:
+            xlate_output_trunc_action(ctx, ofpact_get_OUTPUT_TRUNC(a)->port,
+                                ofpact_get_OUTPUT_TRUNC(a)->max_len);
             break;
 
         case OFPACT_LEARN:
@@ -5065,7 +5314,7 @@ xlate_wc_finish(struct xlate_ctx *ctx)
      * Avoid the problem here by making sure that only the low 8 bits of
      * either field can be unwildcarded for ICMP.
      */
-    if (is_icmpv4(&ctx->xin->flow) || is_icmpv6(&ctx->xin->flow)) {
+    if (is_icmpv4(&ctx->xin->flow, NULL) || is_icmpv6(&ctx->xin->flow, NULL)) {
         ctx->wc->masks.tp_src &= htons(UINT8_MAX);
         ctx->wc->masks.tp_dst &= htons(UINT8_MAX);
     }
@@ -5137,6 +5386,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .frozen_actions = OFPBUF_STUB_INITIALIZER(frozen_actions_stub),
         .pause = NULL,
 
+        .was_mpls = false,
         .conntracked = false,
 
         .ct_nat_action = NULL,

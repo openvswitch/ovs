@@ -30,6 +30,7 @@ dp_packet_init__(struct dp_packet *b, size_t allocated, enum dp_packet_source so
     dp_packet_reset_offsets(b);
     pkt_metadata_init(&b->md, 0);
     dp_packet_rss_invalidate(b);
+    dp_packet_reset_cutlen(b);
 }
 
 static void
@@ -168,6 +169,7 @@ dp_packet_clone_with_headroom(const struct dp_packet *buffer, size_t headroom)
     new_buffer->l3_ofs = buffer->l3_ofs;
     new_buffer->l4_ofs = buffer->l4_ofs;
     new_buffer->md = buffer->md;
+    new_buffer->cutlen = buffer->cutlen;
 #ifdef DPDK_NETDEV
     new_buffer->mbuf.ol_flags = buffer->mbuf.ol_flags;
 #else

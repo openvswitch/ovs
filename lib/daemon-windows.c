@@ -485,8 +485,12 @@ daemon_become_new_user(bool access_datapath OVS_UNUSED)
 char *
 make_pidfile_name(const char *name)
 {
-    if (name && strchr(name, ':')) {
-        return xstrdup(name);
+    if (name) {
+        if (strchr(name, ':')) {
+            return xstrdup(name);
+        } else {
+            return xasprintf("%s/%s", ovs_rundir(), name);
+        }
     } else {
         return xasprintf("%s/%s.pid", ovs_rundir(), program_name);
     }

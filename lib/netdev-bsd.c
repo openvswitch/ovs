@@ -699,6 +699,9 @@ netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
         const void *data = dp_packet_data(pkts[i]);
         size_t size = dp_packet_size(pkts[i]);
 
+        /* Truncate the packet if it is configured. */
+        size -= dp_packet_get_cutlen(pkts[i]);
+
         while (!error) {
             ssize_t retval;
             if (dev->tap_fd >= 0) {
@@ -1497,7 +1500,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     NULL, /* push header */                          \
     NULL, /* pop header */                           \
     NULL, /* get_numa_id */                          \
-    NULL, /* set_multiq */                           \
+    NULL, /* set_tx_multiq */                        \
                                                      \
     netdev_bsd_send,                                 \
     netdev_bsd_send_wait,                            \
@@ -1536,6 +1539,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     netdev_bsd_arp_lookup, /* arp_lookup */          \
                                                      \
     netdev_bsd_update_flags,                         \
+    NULL, /* reconfigure */                          \
                                                      \
     netdev_bsd_rxq_alloc,                            \
     netdev_bsd_rxq_construct,                        \

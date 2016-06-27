@@ -2565,8 +2565,8 @@ AT_CHECK([ovs-ofctl ofp-print "01 15 00 40 00 00 00 01 \
 00 00 44 44 00 08 00 00 \
 "], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (xid=0x1): port=1
-queue 21845: min_rate:50.0% max_rate:75.0%
 queue 17476:
+queue 21845: min_rate:50.0% max_rate:75.0%
 ])
 AT_CLEANUP
 
@@ -2580,8 +2580,8 @@ AT_CHECK([ovs-ofctl ofp-print "02 17 00 40 00 00 00 01 \
 00 00 44 44 00 08 00 00 \
 "], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (OF1.1) (xid=0x1): port=1
-queue 21845: min_rate:50.0% max_rate:75.0%
 queue 17476:
+queue 21845: min_rate:50.0% max_rate:75.0%
 ])
 AT_CLEANUP
 
@@ -2595,8 +2595,8 @@ AT_CHECK([ovs-ofctl ofp-print "03 17 00 50 00 00 00 01 \
 00 00 44 44 00 08 00 01 00 10 00 00 00 00 00 00 \
 "], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (OF1.2) (xid=0x1): port=1
-queue 21845: min_rate:50.0% max_rate:75.0%
 queue 17476:
+queue 21845: min_rate:50.0% max_rate:75.0%
 ])
 AT_CLEANUP
 
@@ -2610,8 +2610,8 @@ AT_CHECK([ovs-ofctl ofp-print "04 17 00 50 00 00 00 01 \
 00 00 44 44 00 08 00 01 00 10 00 00 00 00 00 00 \
 "], [0], [dnl
 OFPT_QUEUE_GET_CONFIG_REPLY (OF1.3) (xid=0x1): port=1
-queue 21845: min_rate:50.0% max_rate:75.0%
 queue 17476:
+queue 21845: min_rate:50.0% max_rate:75.0%
 ])
 AT_CLEANUP
 
@@ -3505,5 +3505,84 @@ OFPT_PORT_MOD (OF1.4) (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: 10MB-HD
+])
+AT_CLEANUP
+
+AT_SETUP([NXST_IPFIX_BRIDGE - request])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 10 00 18 00 00 00 02 \
+ff ff 00 00 00 00 23 20 00 00 00 03 00 00 00 00 \
+"], [0], [dnl
+NXST_IPFIX_BRIDGE request (xid=0x2):
+])
+AT_CLEANUP
+
+AT_SETUP([NXST_IPFIX_BRIDGE - reply])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 11 00 70 00 00 00 02 \
+ff ff 00 00 00 00 23 20 00 00 00 03 00 00 00 00\
+00 00 00 00 00 00 00 01 \
+00 00 00 00 00 00 00 10 \
+00 00 00 00 00 00 00 78 \
+00 00 00 00 00 00 00 f0 \
+00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 a0 \
+00 00 00 00 00 00 00 02 \
+00 00 00 00 00 00 00 03 \
+00 00 00 00 00 00 00 04 \
+00 00 00 00 00 00 00 05 \
+00 00 00 00 00 00 00 00 \
+"], [0], [dnl
+NXST_IPFIX_BRIDGE reply (xid=0x2):
+  bridge ipfix: flows=1, current flows=16, sampled pkts=120, ipv4 ok=240, ipv6 ok=0, tx pkts=4
+                pkts errs=160, ipv4 errs=2, ipv6 errs=3, tx errs=5
+])
+AT_CLEANUP
+
+AT_SETUP([NXST_IPFIX_FLOW - request])
+AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 10 00 18 00 00 00 02 \
+ff ff 00 00 00 00 23 20 00 00 00 04 00 00 00 00 \
+"], [0], [dnl
+NXST_IPFIX_FLOW request (xid=0x2):
+])
+AT_CLEANUP
+
+AT_SETUP([NXST_IPFIX_FLOW - reply])
+AT_KEYWORDS([ofp-print OFPT_STATS_REPLY])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 11 00 C8 00 00 00 02 \
+ff ff 00 00 00 00 23 20 00 00 00 04 00 00 00 00\
+00 00 00 00 00 00 00 01 \
+00 00 00 00 00 00 00 10 \
+00 00 00 00 00 00 00 78 \
+00 00 00 00 00 00 00 f0 \
+00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 a0 \
+00 00 00 10 00 00 00 02 \
+00 00 00 00 00 00 00 03 \
+00 00 00 00 00 00 00 04 \
+00 00 00 00 00 00 00 05 \
+00 00 00 01 00 00 00 00 \
+00 00 00 00 00 00 00 01 \
+00 00 00 00 00 00 00 10 \
+00 00 00 00 00 00 00 78 \
+00 00 00 00 00 00 00 f0 \
+00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 a0 \
+00 00 00 10 00 00 00 02 \
+00 00 00 00 00 00 00 03 \
+00 00 00 00 00 00 00 04 \
+00 00 00 00 00 00 00 05 \
+00 00 00 02 00 00 00 00 \
+"], [0], [dnl
+NXST_IPFIX_FLOW reply (xid=0x2): 2 ids
+  id   1: flows=1, current flows=16, sampled pkts=120, ipv4 ok=240, ipv6 ok=0, tx pkts=4
+          pkts errs=160, ipv4 errs=68719476738, ipv6 errs=3, tx errs=5
+  id   2: flows=1, current flows=16, sampled pkts=120, ipv4 ok=240, ipv6 ok=0, tx pkts=4
+          pkts errs=160, ipv4 errs=68719476738, ipv6 errs=3, tx errs=5
 ])
 AT_CLEANUP

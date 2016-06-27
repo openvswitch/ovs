@@ -128,6 +128,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/netdev-provider.h \
 	lib/netdev-vport.c \
 	lib/netdev-vport.h \
+	lib/netdev-vport-private.h \
 	lib/netdev.c \
 	lib/netdev.h \
 	lib/netflow.h \
@@ -163,6 +164,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovs-atomic.h \
 	lib/ovs-lldp.c \
 	lib/ovs-lldp.h \
+	lib/ovs-numa.c \
+	lib/ovs-numa.h \
 	lib/ovs-rcu.c \
 	lib/ovs-rcu.h \
 	lib/ovs-router.h \
@@ -253,6 +256,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/tnl-neigh-cache.h \
 	lib/tnl-ports.c \
 	lib/tnl-ports.h \
+	lib/netdev-native-tnl.c \
+	lib/netdev-native-tnl.h \
 	lib/token-bucket.c \
 	lib/tun-metadata.c \
 	lib/tun-metadata.h \
@@ -346,8 +351,6 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/netlink-protocol.h \
 	lib/netlink-socket.c \
 	lib/netlink-socket.h \
-	lib/ovs-numa.c \
-	lib/ovs-numa.h \
 	lib/rtnetlink.c \
 	lib/rtnetlink.h \
 	lib/route-table.c \

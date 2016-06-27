@@ -21,7 +21,8 @@
     <h1>Configuration</h1>
     <p>
       <code>ovn-northd</code> requires a connection to the Northbound
-      and Southbound databases.  The default is <code>db.sock</code>
+      and Southbound databases.  The defaults are <code>ovnnb_db.sock</code>
+      and <code>ovnsb_db.sock</code> respectively
       in the local Open vSwitch's "run" directory.  This may be
       overridden with the following commands:
     </p>
@@ -160,9 +161,25 @@
           </li>
 
           <li>
+            Priority 90 flow to allow IPv4 DHCP discovery traffic if it has a
+            valid <code>eth.src</code>. This is necessary since DHCP discovery
+            messages are sent from the unspecified IPv4 address (0.0.0.0) since
+            the IPv4 address has not yet been assigned.
+          </li>
+
+          <li>
             Priority 90 flow to allow IPv6 traffic if it has IPv6 addresses
             which match the <code>inport</code>, valid <code>eth.src</code> and
             valid <code>ip6.src</code> address(es).
+          </li>
+
+          <li>
+            Priority 90 flow to allow IPv6 DAD (Duplicate Address Detection)
+            traffic if it has a valid <code>eth.src</code>. This is is
+            necessary since DAD include requires joining an multicast group and
+            sending neighbor solicitations for the newly assigned address. Since
+            no address is yet assigned, these are sent from the unspecified
+            IPv6 address (::).
           </li>
 
           <li>
@@ -472,14 +489,15 @@ output;
       <li>
         <p>
           ICMP echo reply.  These flows reply to ICMP echo requests received
-          for the router's IP address.  Let <var>A</var> be an IP address or
-          broadcast address owned by a router port.  Then, for each
-          <var>A</var>, a priority-90 flow matches on <code>ip4.dst ==
-          <var>A</var></code> and <code>icmp4.type == 8 &amp;&amp; icmp4.code
-          == 0</code> (ICMP echo request).  These flows use the following
-          actions where, if <var>A</var> is unicast, then <var>S</var> is
-          <var>A</var>, and if <var>A</var> is broadcast, <var>S</var> is the
-          router's IP address in <var>A</var>'s network:
+          for the router's IP address.  Let <var>A</var> be an IP address
+          owned by a router port.  Then, for each <var>A</var>, a priority-90
+          flow matches on <code>ip4.dst == <var>A</var></code> and <code>
+          icmp4.type == 8 &amp;&amp; icmp4.code == 0</code> (ICMP echo
+          request).  The port of the router that receives the echo request
+          does not matter. Also, the ip.ttl of the echo request packet is not
+          checked, so it complies with RFC 1812, section 4.2.2.9. These flows
+          use the following actions where <var>S</var> is the router's IP
+          address:
         </p>
 
         <pre>
@@ -490,21 +508,44 @@ icmp4.type = 0;
 inport = ""; /* Allow sending out inport. */
 next;
         </pre>
-
-        <p>
-          Similar flows match on <code>ip4.dst == 255.255.255.255</code> and
-          each individual <code>inport</code>, and use the same actions in
-          which <var>S</var> is a function of <code>inport</code>.
-        </p>
       </li>
 
       <li>
         <p>
-          Reply to ARP requests.  These flows reply to ARP requests for the
-          router's own IP address.  For each router port <var>P</var> that owns
-          IP address <var>A</var> and Ethernet address <var>E</var>, a
-          priority-90 flow matches <code>inport == <var>P</var> &amp;&amp;
-          arp.op == 1 &amp;&amp; arp.tpa == <var>A</var></code> (ARP request)
+          Reply to ARP requests.
+        </p>
+
+        <p>
+          These flows reply to ARP requests for the router's own IP address.
+          For each router port <var>P</var> that owns IP address <var>A</var>
+          and Ethernet address <var>E</var>, a priority-90 flow matches
+          <code>inport == <var>P</var> &amp;&amp; arp.op == 1 &amp;&amp;
+          arp.tpa == <var>A</var></code> (ARP request) with the following
+          actions:
+        </p>
+
+        <pre>
+eth.dst = eth.src;
+eth.src = <var>E</var>;
+arp.op = 2; /* ARP reply. */
+arp.tha = arp.sha;
+arp.sha = <var>E</var>;
+arp.tpa = arp.spa;
+arp.spa = <var>A</var>;
+outport = <var>P</var>;
+inport = ""; /* Allow sending out inport. */
+output;
+        </pre>
+      </li>
+
+      <li>
+        <p>
+          These flows reply to ARP requests for the virtual IP addresses
+          configured in the router for DNAT. For a configured DNAT IP address
+          <var>A</var>, for each router port <var>P</var> with Ethernet
+          address <var>E</var>, a priority-90 flow matches
+          <code>inport == <var>P</var> &amp;&amp; arp.op == 1 &amp;&amp;
+          arp.tpa == <var>A</var></code> (ARP request)
           with the following actions:
         </p>
 
@@ -585,7 +626,10 @@ output;
         handled by one of the flows above, which amounts to ICMP (other than
         echo requests) and fragments with nonzero offsets.  For each IP address
         <var>A</var> owned by the router, a priority-60 flow matches
-        <code>ip4.dst == <var>A</var></code> and drops the traffic.
+        <code>ip4.dst == <var>A</var></code> and drops the traffic.  An
+        exception is made and the above flow is not added if the router
+        port's own IP address is used to SNAT packets passing through that
+        router.
       </li>
     </ul>
 
@@ -646,7 +690,62 @@ icmp4 {
       </li>
     </ul>
 
-    <h3>Ingress Table 2: IP Routing</h3>
+    <h3>Ingress Table 2: UNSNAT</h3>
+
+    <p>
+      This is for already established connections' reverse traffic.
+      i.e., SNAT has already been done in egress pipeline and now the
+      packet has entered the ingress pipeline as part of a reply.  It is
+      unSNATted here.
+    </p>
+
+    <ul>
+      <li>
+        <p>
+          For each configuration in the OVN Northbound database, that asks
+          to change the source IP address of a packet from <var>A</var> to
+          <var>B</var>, a priority-100 flow matches <code>ip &amp;&amp;
+          ip4.dst == <var>B</var></code> with an action
+          <code>ct_snat; next;</code>.
+        </p>
+
+        <p>
+          A priority-0 logical flow with match <code>1</code> has actions
+          <code>next;</code>.
+        </p>
+      </li>
+    </ul>
+
+    <h3>Ingress Table 3: DNAT</h3>
+
+    <p>
+      Packets enter the pipeline with destination IP address that needs to
+      be DNATted from a virtual IP address to a real IP address.  Packets
+      in the reverse direction needs to be unDNATed.
+    </p>
+    <ul>
+      <li>
+        <p>
+          For each configuration in the OVN Northbound database, that asks
+          to change the destination IP address of a packet from <var>A</var> to
+          <var>B</var>, a priority-100 flow matches <code>ip &amp;&amp;
+          ip4.dst == <var>A</var></code> with an action <code>inport = "";
+          ct_dnat(<var>B</var>);</code>.
+        </p>
+
+        <p>
+          For all IP packets of a Gateway router, a priority-50 flow with an
+          action <code>inport = ""; ct_dnat;</code>.
+        </p>
+
+        <p>
+          A priority-0 logical flow with match <code>1</code> has actions
+          <code>next;</code>.
+        </p>
+      </li>
+    </ul>
+
+    <h3>Ingress Table 4: IP Routing</h3>
 
     <p>
       A packet that arrives at this table is an IP packet that should be routed
@@ -655,7 +754,7 @@ icmp4 {
       <code>ip4.dst</code>, the packet's final destination, unchanged) and
       advances to the next table for ARP resolution.  It also sets
       <code>reg1</code> to the IP address owned by the selected router port
-      (which is used later in table 4 as the IP source address for an ARP
+      (which is used later in table 6 as the IP source address for an ARP
       request, if needed).
     </p>
 
@@ -726,7 +825,7 @@ icmp4 {
       </li>
     </ul>
 
-    <h3>Ingress Table 3: ARP Resolution</h3>
+    <h3>Ingress Table 5: ARP Resolution</h3>
 
     <p>
       Any packet that reaches this table is an IP packet whose next-hop IP
@@ -743,10 +842,10 @@ icmp4 {
           data in the <code>OVN_Northbound</code> database.  For router ports
           connected to logical switches, MAC bindings can be known statically
           from the <code>addresses</code> column in the
-          <code>Logical_Port</code> table.  For router ports connected to other
-          logical routers, MAC bindings can be known statically from the
-          <code>mac</code> and <code>network</code> column in the
-          <code>Logical_Router_Port</code> table.
+          <code>Logical_Switch_Port</code> table.  For router ports
+          connected to other logical routers, MAC bindings can be known
+          statically from the <code>mac</code> and <code>network</code>
+          column in the <code>Logical_Router_Port</code> table.
         </p>
 
         <p>
@@ -781,7 +880,7 @@ icmp4 {
       </li>
     </ul>
 
-    <h3>Ingress Table 4: ARP Request</h3>
+    <h3>Ingress Table 6: ARP Request</h3>
 
     <p>
       In the common case where the Ethernet destination has been resolved, this
@@ -806,7 +905,7 @@ arp {
         </pre>
 
         <p>
-          (Ingress table 2 initialized <code>reg1</code> with the IP address
+          (Ingress table 4 initialized <code>reg1</code> with the IP address
           owned by <code>outport</code>.)
         </p>
 
@@ -821,7 +920,32 @@ arp {
       </li>
     </ul>
 
-    <h3>Egress Table 0: Delivery</h3>
+    <h3>Egress Table 0: SNAT</h3>
+
+    <p>
+      Packets that are configured to be SNATed get their source IP address
+      changed based on the configuration in the OVN Northbound database.
+    </p>
+    <ul>
+      <li>
+        <p>
+          For each configuration in the OVN Northbound database, that asks
+          to change the source IP address of a packet from an IP address of
+          <var>A</var> or to change the source IP address of a packet that
+          belongs to network <var>A</var> to <var>B</var>, a flow matches
+          <code>ip &amp;&amp; ip4.src == <var>A</var></code> with an action
+          <code>ct_snat(<var>B</var>);</code>.  The priority of the flow
+          is calculated based on the mask of <var>A</var>, with matches
+          having larger masks getting higher priorities.
+        </p>
+        <p>
+          A priority-0 logical flow with match <code>1</code> has actions
+          <code>next;</code>.
+        </p>
+      </li>
+    </ul>
+
+    <h3>Egress Table 1: Delivery</h3>
 
     <p>
       Packets that reach this table are ready for delivery.  It contains

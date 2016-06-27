@@ -101,6 +101,14 @@ To run the unit tests, you also need:
   - Perl.  Version 5.10.1 is known to work.  Earlier versions should
     also work.
 
+The datapath tests for userspace and Linux datapaths also rely upon:
+
+  - pyftpdlib. Version 1.2.0 is known to work. Earlier versions should
+    also work.
+
+  - GNU wget. Version 1.16 is known to work. Earlier versions should
+    also work.
+
 The ovs-vswitchd.conf.db(5) manpage will include an E-R diagram, in
 formats other than plain text, only if you have the following:
 
@@ -119,7 +127,11 @@ installing the following to obtain better warnings:
 
   - clang, version 3.4 or later
 
-  - flake8 (for Python code)
+  - “flake8”, along with the “hacking” flake8 plugin (for Python code).
+    The automatic flake8 check that runs against Python code has some
+    warnings enabled that come from the "hacking" flake8 plugin.  If it's
+    not installed, the warnings just won't occur until it's run on a system
+    with "hacking" installed.
 
 Also, you may find the ovs-dev script found in utilities/ovs-dev.py useful.
 
@@ -593,24 +605,41 @@ test failures that you believe to represent bugs in Open vSwitch.
 Include the precise versions of Open vSwitch and Ryu in your bug
 report, plus any other information needed to reproduce the problem.
 
-Vagrant
--------
+Datapath testing
+----------------
 
-Requires: Vagrant (version 1.7.0 or later) and a compatible hypervisor
+Open vSwitch also includes a suite of tests specifically for datapath
+functionality, which can be run against the userspace or kernel datapaths.
+If you are developing datapath features, it is recommended that you use
+these tests and build upon them to verify your implementation.
+
+The datapath tests make some assumptions about the environment. They
+must be run under root privileges on a Linux system with support for
+network namespaces. For ease of use, the OVS source tree includes a
+vagrant box to invoke these tests. Running the tests inside Vagrant
+provides kernel isolation, protecting your development host from kernel
+panics or configuration conflicts in the testsuite. If you wish to run
+the tests without using the vagrant box, there are further instructions
+below.
+
+### Vagrant
+
+*Requires Vagrant (version 1.7.0 or later) and a compatible hypervisor*
 
 You must bootstrap and configure the sources (steps are in "Building
 and Installing Open vSwitch for Linux, FreeBSD or NetBSD" above) before
 you run the steps described here.
 
 A Vagrantfile is provided allowing to compile and provision the source
-tree as found locally in a virtual machine using the following commands:
+tree as found locally in a virtual machine using the following command:
 
 	vagrant up
-	vagrant ssh
 
-This will bring up w Fedora 20 VM by default, alternatively the
-`Vagrantfile` can be modified to use a different distribution box as
-base. Also, the VM can be reprovisioned at any time:
+This will bring up a Fedora 23 VM by default. If you wish to use a
+different box or a vagrant backend not supported by the default box,
+the `Vagrantfile` can be modified to use a different box as base.
+
+The VM can be reprovisioned at any time:
 
 	vagrant provision
 
@@ -619,11 +648,10 @@ OVS out-of-tree compilation environment can be set up with:
 	./boot.sh
 	vagrant provision --provision-with configure_ovs,build_ovs
 
-This will set up an out-of-tree build environment in /home/vagrant/build.
-The source code can be found in /vagrant.  Out-of-tree build is preferred
-to work around limitations of the sync file systems.
+This will set up an out-of-tree build environment inside the VM in
+/root/build. The source code can be found in /vagrant.
 
-To recompile and reinstall OVS using RPM:
+To recompile and reinstall OVS in the VM using RPM:
 
 	./boot.sh
 	vagrant provision --provision-with configure_ovs,install_rpm
@@ -634,6 +662,46 @@ the self-tests mentioned above.  To run them:
 
 	./boot.sh
 	vagrant provision --provision-with configure_ovs,test_ovs_kmod,test_ovs_system_userspace
+
+The results of the testsuite reside in the VM root user's home directory:
+
+        vagrant ssh
+        sudo -s
+        cd /root/build
+        ls tests/system*
+
+### Native
+
+The datapath testsuite as invoked by Vagrant above may also be run
+manually on a Linux system with root privileges. These tests may take
+several minutes to complete, and cannot be run in parallel.
+
+#### Userspace datapath
+
+To invoke the datapath testsuite with the userspace datapath:
+
+        make check-system-userspace
+
+The results of the testsuite are in tests/system-userspace-traffic.dir/.
+
+#### Kernel datapath
+
+Make targets are also provided for testing the Linux kernel module.
+Note that these tests operate by inserting modules into the running
+Linux kernel, so if the tests are able to trigger a bug in the OVS
+kernel module or in the upstream kernel then the kernel may panic.
+
+To run the testsuite against the kernel module which is currently
+installed on your system:
+
+        make check-kernel
+
+To install the kernel module from the current build directory and
+run the testsuite against that kernel module:
+
+        make check-kmod
+
+The results of the testsuite are in tests/system-kmod-traffic.dir/.
 
 Continuous Integration with Travis-CI
 -------------------------------------

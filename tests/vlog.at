@@ -278,8 +278,9 @@ on_exit 'kill `cat test-unixctl.pid`'
 AT_CAPTURE_FILE([log])
 AT_CAPTURE_FILE([log.old])
 AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
-  [0], [], [stderr])
-AT_CHECK([vlog_filt stderr], [0], [opened log file
+  [0], [], [ignore])
+AT_CHECK([vlog_filt log], [0], [opened log file
+Entering run loop.
 ])
 
 AT_CHECK([APPCTL -t test-unixctl log message])
@@ -355,8 +356,9 @@ on_exit 'kill `cat test-unixctl.pid`'
 
 AT_CAPTURE_FILE([log])
 AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
-  [0], [], [stderr])
-AT_CHECK([vlog_filt stderr], [0], [opened log file
+  [0], [], [ignore])
+AT_CHECK([vlog_filt log], [0], [opened log file
+Entering run loop.
 ])
 
 AT_CHECK([APPCTL -t test-unixctl vlog/list | sed -n '1,2p

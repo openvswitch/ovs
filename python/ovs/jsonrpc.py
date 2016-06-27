@@ -435,7 +435,7 @@ class Session(object):
                 self.reconnect.connecting(ovs.timeval.msec())
             else:
                 self.reconnect.connect_failed(ovs.timeval.msec(), error)
-        elif self.pstream is not None:
+        elif self.pstream is None:
             error, self.pstream = ovs.stream.PassiveStream.open(name)
             if not error:
                 self.reconnect.listening(ovs.timeval.msec())

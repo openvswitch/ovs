@@ -21,14 +21,14 @@ check_patches () {
     echo 'ovs-vsctl -f csv -d bare --no-headings --columns=name find Interface type=patch | sort' > query
     for patch
     do
-	echo $patch
+        echo $patch
     done | cut -d' ' -f 2 | sort > expout
 
     # Generate code to verify that the configuration of each patch
     # port is correct.
     for patch
     do
-	set $patch; bridge=$1 port=$2 peer=$3
+        set $patch; bridge=$1 port=$2 peer=$3
         echo >>query "ovs-vsctl iface-to-br $port -- get Interface $port type options"
         echo >>expout "$bridge
 patch
@@ -127,7 +127,8 @@ check_patches \
 on_exit 'kill `cat $ovs_base/ovn-sb/ovsdb-server-2.pid`'
 
 ovsdb-tool create $ovs_base/ovn-sb/ovn-sb1.db "$abs_top_srcdir"/ovn/ovn-sb.ovsschema
-as ovn-sb ovsdb-server --detach --pidfile=$ovs_base/ovn-sb/ovsdb-server-2.pid --remote=punix:$ovs_base/ovn-sb/ovn-sb1.sock $ovs_base/ovn-sb/ovn-sb1.db
+as ovn-sb ovsdb-server --detach --pidfile=$ovs_base/ovn-sb/ovsdb-server-2.pid --remote=punix:$ovs_base/ovn-sb/ovn-sb1.sock $ovs_base/ovn-sb/ovn-sb1.db \
+   --unixctl=$ovs_base/ovn-sb/ovsdb-server-2.ctl
 AT_CHECK([ovs-vsctl -- set Open_vSwitch . external-ids:ovn-remote=unix:$ovs_base/ovn-sb/ovn-sb1.sock])
 check_patches
 AT_CHECK([ovs-vsctl -- set Open_vSwitch . external-ids:ovn-remote=unix:$ovs_base/ovn-sb/ovn-sb.sock])
@@ -153,7 +154,7 @@ OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 as ovn-sb
-OVS_APP_EXIT_AND_WAIT_BY_TARGET([ovsdb-server-2])
+OVS_APP_EXIT_AND_WAIT_BY_TARGET([$ovs_base/ovn-sb/ovsdb-server-2.ctl], [$ovs_base/ovn-sb/ovsdb-server-2.pid])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP

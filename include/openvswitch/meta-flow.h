@@ -1930,6 +1930,18 @@ union mf_subvalue {
 
     /* Convenient access to just least-significant bits in various forms. */
     struct {
+        uint8_t dummy_u8[127];
+        uint8_t u8_val;
+    };
+    struct {
+        ovs_be16 dummy_be16[63];
+        ovs_be16 be16_int;
+    };
+    struct {
+        ovs_be32 dummy_be32[31];
+        ovs_be32 be32_int;
+    };
+    struct {
         ovs_be64 dummy_integer[15];
         ovs_be64 integer;
     };

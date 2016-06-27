@@ -20,12 +20,16 @@
 #include "actions.h"
 #include "byte-order.h"
 #include "compiler.h"
+#include "ovn-dhcp.h"
 #include "expr.h"
 #include "lex.h"
 #include "logical-fields.h"
+#include "nx-match.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofpbuf.h"
+#include "packets.h"
+#include "shash.h"
 #include "simap.h"
 
 /* Context maintained during actions_parse(). */
@@ -38,6 +42,8 @@ struct action_context {
 };
 
 static bool parse_action(struct action_context *);
+static void parse_put_dhcp_opts_action(struct action_context *,
+                                       const struct expr_field *dst);
 
 static bool
 action_error_handle_common(struct action_context *ctx)
@@ -102,23 +108,45 @@ action_syntax_error(struct action_context *ctx, const char *message, ...)
     ctx->error = ds_steal_cstr(&s);
 }
 
-/* Parses an assignment or exchange action. */
+/* Parses an assignment or exchange or put_dhcp_opts action. */
 static void
 parse_set_action(struct action_context *ctx)
 {
-    struct expr *prereqs;
+    struct expr *prereqs = NULL;
+    struct expr_field dst;
     char *error;
 
-    error = expr_parse_assignment(ctx->lexer, ctx->ap->symtab,
-                                  ctx->ap->lookup_port, ctx->ap->aux,
-                                  ctx->ofpacts, &prereqs);
-    if (error) {
-        action_error(ctx, "%s", error);
-        free(error);
-        return;
+    error = expr_parse_field(ctx->lexer, ctx->ap->symtab, &dst);
+    if (!error) {
+        if (lexer_match(ctx->lexer, LEX_T_EXCHANGE)) {
+            error = expr_parse_exchange(ctx->lexer, &dst, ctx->ap->symtab,
+                                        ctx->ap->lookup_port, ctx->ap->aux,
+                                        ctx->ofpacts, &prereqs);
+        } else if (lexer_match(ctx->lexer, LEX_T_EQUALS)) {
+            if (ctx->lexer->token.type == LEX_T_ID
+                && !strcmp(ctx->lexer->token.s, "put_dhcp_opts")
+                && lexer_lookahead(ctx->lexer) == LEX_T_LPAREN) {
+                lexer_get(ctx->lexer); /* Skip put_dhcp_opts. */
+                lexer_get(ctx->lexer); /* Skip '('. */
+                parse_put_dhcp_opts_action(ctx, &dst);
+            } else {
+                error = expr_parse_assignment(
+                    ctx->lexer, &dst, ctx->ap->symtab, ctx->ap->lookup_port,
+                    ctx->ap->aux, ctx->ofpacts, &prereqs);
+            }
+        } else {
+            action_syntax_error(ctx, "expecting `=' or `<->'");
+        }
+        if (!error) {
+            ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, prereqs);
+        }
     }
 
-    ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, prereqs);
+    if (error) {
+        expr_destroy(prereqs);
+        action_error(ctx, "%s", error);
+        free(error);
+    }
 }
 
 static void
@@ -186,13 +214,15 @@ add_prerequisite(struct action_context *ctx, const char *prerequisite)
 }
 
 static size_t
-start_controller_op(struct ofpbuf *ofpacts, enum action_opcode opcode)
+start_controller_op(struct ofpbuf *ofpacts, enum action_opcode opcode,
+                    bool pause)
 {
     size_t ofs = ofpacts->size;
 
     struct ofpact_controller *oc = ofpact_put_CONTROLLER(ofpacts);
     oc->max_len = UINT16_MAX;
     oc->reason = OFPR_ACTION;
+    oc->pause = pause;
 
     struct action_header ah = { .opcode = htonl(opcode) };
     ofpbuf_put(ofpacts, &ah, sizeof ah);
@@ -212,7 +242,7 @@ finish_controller_op(struct ofpbuf *ofpacts, size_t ofs)
 static void
 put_controller_op(struct ofpbuf *ofpacts, enum action_opcode opcode)
 {
-    size_t ofs = start_controller_op(ofpacts, opcode);
+    size_t ofs = start_controller_op(ofpacts, opcode, false);
     finish_controller_op(ofpacts, ofs);
 }
 
@@ -246,7 +276,9 @@ parse_arp_action(struct action_context *ctx)
      * converted to OpenFlow, as its userdata.  ovn-controller will convert the
      * packet to an ARP and then send the packet and actions back to the switch
      * inside an OFPT_PACKET_OUT message. */
-    size_t oc_offset = start_controller_op(ctx->ofpacts, ACTION_OPCODE_ARP);
+    /* controller. */
+    size_t oc_offset = start_controller_op(ctx->ofpacts, ACTION_OPCODE_ARP,
+                                           false);
     ofpacts_put_openflow_actions(inner_ofpacts.data, inner_ofpacts.size,
                                  ctx->ofpacts, OFP13_VERSION);
     finish_controller_op(ctx->ofpacts, oc_offset);
@@ -282,19 +314,23 @@ static bool
 action_parse_field(struct action_context *ctx,
                    int n_bits, struct mf_subfield *sf)
 {
-    struct expr *prereqs;
+    struct expr_field field;
     char *error;
 
-    error = expr_parse_field(ctx->lexer, n_bits, false, ctx->ap->symtab, sf,
-                             &prereqs);
-    if (error) {
-        action_error(ctx, "%s", error);
-        free(error);
-        return false;
+    error = expr_parse_field(ctx->lexer, ctx->ap->symtab, &field);
+    if (!error) {
+        struct expr *prereqs;
+        error = expr_expand_field(ctx->lexer, ctx->ap->symtab,
+                                  &field, n_bits, false, sf, &prereqs);
+        if (!error) {
+            ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, prereqs);
+            return true;
+        }
     }
 
-    ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, prereqs);
-    return true;
+    action_error(ctx, "%s", error);
+    free(error);
+    return false;
 }
 
 static void
@@ -414,6 +450,180 @@ parse_put_arp_action(struct action_context *ctx)
 }
 
 static void
+parse_dhcp_opt(struct action_context *ctx, struct ofpbuf *ofpacts)
+{
+    if (ctx->lexer->token.type != LEX_T_ID) {
+        action_syntax_error(ctx, NULL);
+        return;
+    }
+    const struct dhcp_opts_map *dhcp_opt = dhcp_opts_find(
+        ctx->ap->dhcp_opts, ctx->lexer->token.s);
+    if (!dhcp_opt) {
+        action_syntax_error(ctx, "expecting DHCP option name");
+        return;
+    }
+    lexer_get(ctx->lexer);
+
+    if (!action_force_match(ctx, LEX_T_EQUALS)) {
+        return;
+    }
+
+    struct expr_constant_set cs;
+    memset(&cs, 0, sizeof(struct expr_constant_set));
+    char *error = expr_parse_constant_set(ctx->lexer, NULL, &cs);
+    if (error) {
+        action_error(ctx, "%s", error);
+        free(error);
+        return;
+    }
+
+    if (!strcmp(dhcp_opt->type, "str")) {
+        if (cs.type != EXPR_C_STRING) {
+            action_error(ctx, "DHCP option %s requires string value.",
+                         dhcp_opt->name);
+            return;
+        }
+    } else {
+        if (cs.type != EXPR_C_INTEGER) {
+            action_error(ctx, "DHCP option %s requires numeric value.",
+                         dhcp_opt->name);
+            return;
+        }
+    }
+
+    if (!lexer_match(ctx->lexer, LEX_T_COMMA) && (
+        ctx->lexer->token.type != LEX_T_RPAREN)) {
+        action_syntax_error(ctx, NULL);
+        return;
+    }
+
+
+    if (dhcp_opt->code == 0) {
+        /* offer-ip */
+        ofpbuf_put(ofpacts, &cs.values[0].value.ipv4, sizeof(ovs_be32));
+        goto exit;
+    }
+
+    uint8_t *opt_header = ofpbuf_put_uninit(ofpacts, 2);
+    opt_header[0] = dhcp_opt->code;
+
+    if (!strcmp(dhcp_opt->type, "bool") || !strcmp(dhcp_opt->type, "uint8")) {
+        opt_header[1] = 1;
+        ofpbuf_put(ofpacts, &cs.values[0].value.u8_val, 1);
+    } else if (!strcmp(dhcp_opt->type, "uint16")) {
+        opt_header[1] = 2;
+        ofpbuf_put(ofpacts, &cs.values[0].value.be16_int, 2);
+    } else if (!strcmp(dhcp_opt->type, "uint32")) {
+        opt_header[1] = 4;
+        ofpbuf_put(ofpacts, &cs.values[0].value.be32_int, 4);
+    } else if (!strcmp(dhcp_opt->type, "ipv4")) {
+        opt_header[1] = cs.n_values * sizeof(ovs_be32);
+        for (size_t i = 0; i < cs.n_values; i++) {
+            ofpbuf_put(ofpacts, &cs.values[i].value.ipv4, sizeof(ovs_be32));
+        }
+    } else if (!strcmp(dhcp_opt->type, "static_routes")) {
+        size_t no_of_routes = cs.n_values;
+        if (no_of_routes % 2) {
+            no_of_routes -= 1;
+        }
+        opt_header[1] = 0;
+
+        /* Calculating the length of this option first because when
+         * we call ofpbuf_put, it might reallocate the buffer if the
+         * tail room is short making "opt_header" pointer invalid.
+         * So running the for loop twice.
+         */
+        for (size_t i = 0; i < no_of_routes; i += 2) {
+            uint8_t plen = 32;
+            if (cs.values[i].masked) {
+                plen = (uint8_t) ip_count_cidr_bits(cs.values[i].mask.ipv4);
+            }
+            opt_header[1] += (1 + (plen / 8) + sizeof(ovs_be32)) ;
+        }
+
+        /* Copied from RFC 3442. Please refer to this RFC for the format of
+         * the classless static route option.
+         *
+         *  The following table contains some examples of how various subnet
+         *  number/mask combinations can be encoded:
+         *
+         *  Subnet number   Subnet mask      Destination descriptor
+         *  0               0                0
+         *  10.0.0.0        255.0.0.0        8.10
+         *  10.0.0.0        255.255.255.0    24.10.0.0
+         *  10.17.0.0       255.255.0.0      16.10.17
+         *  10.27.129.0     255.255.255.0    24.10.27.129
+         *  10.229.0.128    255.255.255.128  25.10.229.0.128
+         *  10.198.122.47   255.255.255.255  32.10.198.122.47
+         */
+
+        for (size_t i = 0; i < no_of_routes; i += 2) {
+            uint8_t plen = 32;
+            if (cs.values[i].masked) {
+                plen = ip_count_cidr_bits(cs.values[i].mask.ipv4);
+            }
+            ofpbuf_put(ofpacts, &plen, 1);
+            ofpbuf_put(ofpacts, &cs.values[i].value.ipv4, plen / 8);
+            ofpbuf_put(ofpacts, &cs.values[i + 1].value.ipv4,
+                       sizeof(ovs_be32));
+        }
+    } else if (!strcmp(dhcp_opt->type, "str")) {
+        opt_header[1] = strlen(cs.values[0].string);
+        ofpbuf_put(ofpacts, cs.values[0].string, opt_header[1]);
+    }
+
+exit:
+    expr_constant_set_destroy(&cs);
+}
+
+/* Parses the "put_dhcp_opts" action.  The result should be stored into 'dst'.
+ *
+ * The caller has already consumed "put_dhcp_opts(", so this just parses the
+ * rest. */
+static void
+parse_put_dhcp_opts_action(struct action_context *ctx,
+                           const struct expr_field *dst)
+{
+    /* Validate that the destination is a 1-bit, modifiable field. */
+    struct mf_subfield sf;
+    struct expr *prereqs;
+    char *error = expr_expand_field(ctx->lexer, ctx->ap->symtab,
+                                    dst, 1, true, &sf, &prereqs);
+    if (error) {
+        action_error(ctx, "%s", error);
+        free(error);
+        return;
+    }
+    ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, prereqs);
+
+    /* Make sure the first option is "offer_ip" */
+    if (ctx->lexer->token.type != LEX_T_ID) {
+        action_syntax_error(ctx, NULL);
+        return;
+    }
+    const struct dhcp_opts_map *dhcp_opt = dhcp_opts_find(
+        ctx->ap->dhcp_opts, ctx->lexer->token.s);
+    if (!dhcp_opt || dhcp_opt->code != 0) {
+        action_syntax_error(ctx, "expecting offerip option");
+        return;
+    }
+
+    /* controller. */
+    size_t oc_offset = start_controller_op(ctx->ofpacts,
+                                           ACTION_OPCODE_PUT_DHCP_OPTS, true);
+    nx_put_header(ctx->ofpacts, sf.field->id, OFP13_VERSION, false);
+    ovs_be32 ofs = htonl(sf.ofs);
+    ofpbuf_put(ctx->ofpacts, &ofs, sizeof ofs);
+    while (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
+        parse_dhcp_opt(ctx, ctx->ofpacts);
+        if (ctx->error) {
+            return;
+        }
+    }
+    finish_controller_op(ctx->ofpacts, oc_offset);
+}
+
+static void
 emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
 {
     struct ofpact_conntrack *ct = ofpact_put_CT(ctx->ofpacts);
@@ -440,6 +650,85 @@ emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
 
     /* CT only works with IP, so set up a prerequisite. */
     add_prerequisite(ctx, "ip");
+}
+
+static void
+parse_ct_nat(struct action_context *ctx, bool snat)
+{
+    const size_t ct_offset = ctx->ofpacts->size;
+    ofpbuf_pull(ctx->ofpacts, ct_offset);
+
+    struct ofpact_conntrack *ct = ofpact_put_CT(ctx->ofpacts);
+
+    if (ctx->ap->cur_ltable < ctx->ap->n_tables) {
+        ct->recirc_table = ctx->ap->first_ptable + ctx->ap->cur_ltable + 1;
+    } else {
+        action_error(ctx,
+                     "\"ct_[sd]nat\" action not allowed in last table.");
+        return;
+    }
+
+    if (snat) {
+        ct->zone_src.field = mf_from_id(MFF_LOG_SNAT_ZONE);
+    } else {
+        ct->zone_src.field = mf_from_id(MFF_LOG_DNAT_ZONE);
+    }
+    ct->zone_src.ofs = 0;
+    ct->zone_src.n_bits = 16;
+    ct->flags = 0;
+    ct->alg = 0;
+
+    add_prerequisite(ctx, "ip");
+
+    struct ofpact_nat *nat;
+    size_t nat_offset;
+    nat_offset = ctx->ofpacts->size;
+    ofpbuf_pull(ctx->ofpacts, nat_offset);
+
+    nat = ofpact_put_NAT(ctx->ofpacts);
+    nat->flags = 0;
+    nat->range_af = AF_UNSPEC;
+
+    int commit = 0;
+    if (lexer_match(ctx->lexer, LEX_T_LPAREN)) {
+        ovs_be32 ip;
+        if (ctx->lexer->token.type == LEX_T_INTEGER
+            && ctx->lexer->token.format == LEX_F_IPV4) {
+            ip = ctx->lexer->token.value.ipv4;
+        } else {
+            action_syntax_error(ctx, "invalid ip");
+            return;
+        }
+
+        nat->range_af = AF_INET;
+        nat->range.addr.ipv4.min = ip;
+        if (snat) {
+            nat->flags |= NX_NAT_F_SRC;
+        } else {
+            nat->flags |= NX_NAT_F_DST;
+        }
+        commit = NX_CT_F_COMMIT;
+        lexer_get(ctx->lexer);
+        if (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
+            action_syntax_error(ctx, "expecting `)'");
+            return;
+        }
+    }
+
+    ctx->ofpacts->header = ofpbuf_push_uninit(ctx->ofpacts, nat_offset);
+    ct = ctx->ofpacts->header;
+    ct->flags |= commit;
+
+    /* XXX: For performance reasons, we try to prevent additional
+     * recirculations.  So far, ct_snat which is used in a gateway router
+     * does not need a recirculation. ct_snat(IP) does need a recirculation.
+     * Should we consider a method to let the actions specify whether a action
+     * needs recirculation if there more use cases?. */
+    if (!commit && snat) {
+        ct->recirc_table = NX_CT_RECIRC_NONE;
+    }
+    ofpact_finish(ctx->ofpacts, &ct->ofpact);
+    ofpbuf_push_uninit(ctx->ofpacts, ct_offset);
 }
 
 static bool
@@ -469,6 +758,10 @@ parse_action(struct action_context *ctx)
         emit_ct(ctx, true, false);
     } else if (lexer_match_id(ctx->lexer, "ct_commit")) {
         emit_ct(ctx, false, true);
+    } else if (lexer_match_id(ctx->lexer, "ct_dnat")) {
+        parse_ct_nat(ctx, false);
+    } else if (lexer_match_id(ctx->lexer, "ct_snat")) {
+        parse_ct_nat(ctx, true);
     } else if (lexer_match_id(ctx->lexer, "arp")) {
         parse_arp_action(ctx);
     } else if (lexer_match_id(ctx->lexer, "get_arp")) {

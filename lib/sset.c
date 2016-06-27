@@ -251,21 +251,19 @@ sset_equals(const struct sset *a, const struct sset *b)
 }
 
 /* Returns the next node in 'set' in hash order, or NULL if no nodes remain in
- * 'set'.  Uses '*bucketp' and '*offsetp' to determine where to begin
- * iteration, and stores new values to pass on the next iteration into them
- * before returning.
+ * 'set'.  Uses '*pos' to determine where to begin iteration, and updates
+ * '*pos' to pass on the next iteration into them before returning.
  *
  * It's better to use plain SSET_FOR_EACH and related functions, since they are
  * faster and better at dealing with ssets that change during iteration.
  *
- * Before beginning iteration, store 0 into '*bucketp' and '*offsetp'.
- */
+ * Before beginning iteration, set '*pos' to all zeros. */
 struct sset_node *
-sset_at_position(const struct sset *set, uint32_t *bucketp, uint32_t *offsetp)
+sset_at_position(const struct sset *set, struct sset_position *pos)
 {
     struct hmap_node *hmap_node;
 
-    hmap_node = hmap_at_position(&set->map, bucketp, offsetp);
+    hmap_node = hmap_at_position(&set->map, &pos->pos);
     return SSET_NODE_FROM_HMAP_NODE(hmap_node);
 }
 

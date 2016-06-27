@@ -28,16 +28,16 @@ set -o xtrace
 ovn-sbctl chassis-add fakechassis geneve 127.0.0.1
 
 for n in 1 2 3 4; do
-    ovn-nbctl lswitch-add provnet1-$n
+    ovn-nbctl ls-add provnet1-$n
 
-    ovn-nbctl lport-add provnet1-$n provnet1-$n-port1
-    ovn-nbctl lport-set-addresses provnet1-$n-port1 00:00:00:00:00:0$n
-    ovn-nbctl lport-set-port-security provnet1-$n-port1 00:00:00:00:00:0$n
+    ovn-nbctl lsp-add provnet1-$n provnet1-$n-port1
+    ovn-nbctl lsp-set-addresses provnet1-$n-port1 00:00:00:00:00:0$n
+    ovn-nbctl lsp-set-port-security provnet1-$n-port1 00:00:00:00:00:0$n
 
-    ovn-nbctl lport-add provnet1-$n provnet1-$n-physnet1
-    ovn-nbctl lport-set-addresses provnet1-$n-physnet1 unknown
-    ovn-nbctl lport-set-type provnet1-$n-physnet1 localnet
-    ovn-nbctl lport-set-options provnet1-$n-physnet1 network_name=physnet1
+    ovn-nbctl lsp-add provnet1-$n provnet1-$n-physnet1
+    ovn-nbctl lsp-set-addresses provnet1-$n-physnet1 unknown
+    ovn-nbctl lsp-set-type provnet1-$n-physnet1 localnet
+    ovn-nbctl lsp-set-options provnet1-$n-physnet1 network_name=physnet1
 done
 
 ovs-vsctl add-port br-int lport1 -- set Interface lport1 external_ids:iface-id=provnet1-1-port1

@@ -448,6 +448,7 @@ odp_execute_sample(void *dp, struct dp_packet *packet, bool steal,
 {
     const struct nlattr *subactions = NULL;
     const struct nlattr *a;
+    struct dp_packet_batch pb;
     size_t left;
 
     NL_NESTED_FOR_EACH_UNSAFE (a, left, action) {
@@ -474,7 +475,8 @@ odp_execute_sample(void *dp, struct dp_packet *packet, bool steal,
         }
     }
 
-    odp_execute_actions(dp, &packet, 1, steal, nl_attr_get(subactions),
+    packet_batch_init_packet(&pb, packet);
+    odp_execute_actions(dp, &pb, steal, nl_attr_get(subactions),
                         nl_attr_get_size(subactions), dp_execute_action);
 }
 
@@ -501,6 +503,7 @@ requires_datapath_assistance(const struct nlattr *a)
     case OVS_ACTION_ATTR_HASH:
     case OVS_ACTION_ATTR_PUSH_MPLS:
     case OVS_ACTION_ATTR_POP_MPLS:
+    case OVS_ACTION_ATTR_TRUNC:
         return false;
 
     case OVS_ACTION_ATTR_UNSPEC:
@@ -512,10 +515,12 @@ requires_datapath_assistance(const struct nlattr *a)
 }
 
 void
-odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
+odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
                     const struct nlattr *actions, size_t actions_len,
                     odp_execute_cb dp_execute_action)
 {
+    struct dp_packet **packets = batch->packets;
+    int cnt = batch->count;
     const struct nlattr *a;
     unsigned int left;
     int i;
@@ -530,7 +535,7 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
                  * not need it any more. */
                 bool may_steal = steal && last_action;
 
-                dp_execute_action(dp, packets, cnt, a, may_steal);
+                dp_execute_action(dp, batch, a, may_steal);
 
                 if (last_action) {
                     /* We do not need to free the packets. dp_execute_actions()
@@ -620,6 +625,17 @@ odp_execute_actions(void *dp, struct dp_packet **packets, int cnt, bool steal,
                 return;
             }
             break;
+
+        case OVS_ACTION_ATTR_TRUNC: {
+            const struct ovs_action_trunc *trunc =
+                        nl_attr_get_unspec(a, sizeof *trunc);
+
+            batch->trunc = true;
+            for (i = 0; i < cnt; i++) {
+                dp_packet_set_cutlen(packets[i], trunc->max_len);
+            }
+            break;
+        }
 
         case OVS_ACTION_ATTR_OUTPUT:
         case OVS_ACTION_ATTR_TUNNEL_PUSH:

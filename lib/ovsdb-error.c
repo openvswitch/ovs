@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -183,8 +183,8 @@ ovsdb_error_clone(const struct ovsdb_error *old)
     if (old) {
         struct ovsdb_error *new = xmalloc(sizeof *new);
         new->tag = old->tag;
-        new->details = old->details ? xstrdup(old->details) : NULL;
-        new->syntax = old->syntax ? xstrdup(old->syntax) : NULL;
+        new->details = nullable_xstrdup(old->details);
+        new->syntax = nullable_xstrdup(old->syntax);
         new->errno_ = old->errno_;
         return new;
     } else {

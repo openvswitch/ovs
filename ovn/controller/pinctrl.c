@@ -18,10 +18,12 @@
 #include "pinctrl.h"
 
 #include "coverage.h"
+#include "csum.h"
 #include "dirs.h"
 #include "dp-packet.h"
 #include "flow.h"
 #include "lport.h"
+#include "nx-match.h"
 #include "ovn-controller.h"
 #include "lib/sset.h"
 #include "openvswitch/ofp-actions.h"
@@ -29,6 +31,8 @@
 #include "openvswitch/ofp-print.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/vlog.h"
+
+#include "lib/dhcp.h"
 #include "ovn-controller.h"
 #include "ovn/lib/actions.h"
 #include "ovn/lib/logical-fields.h"
@@ -204,13 +208,191 @@ exit:
 }
 
 static void
+pinctrl_handle_put_dhcp_opts(
+    struct dp_packet *pkt_in, struct ofputil_packet_in *pin,
+    struct ofpbuf *userdata, struct ofpbuf *continuation)
+{
+    enum ofp_version version = rconn_get_version(swconn);
+    enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
+    struct dp_packet *pkt_out_ptr = NULL;
+    uint32_t success = 0;
+
+    /* Parse result field. */
+    const struct mf_field *f;
+    enum ofperr ofperr = nx_pull_header(userdata, &f, NULL);
+    if (ofperr) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "bad result OXM (%s)", ofperr_to_string(ofperr));
+        goto exit;
+    }
+
+    /* Parse result offset and offer IP. */
+    ovs_be32 *ofsp = ofpbuf_try_pull(userdata, sizeof *ofsp);
+    ovs_be32 *offer_ip = ofpbuf_try_pull(userdata, sizeof *offer_ip);
+    if (!ofsp || !offer_ip) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "offset or offer_ip not present in the userdata");
+        goto exit;
+    }
+
+    /* Check that the result is valid and writable. */
+    struct mf_subfield dst = { .field = f, .ofs = ntohl(*ofsp), .n_bits = 1 };
+    ofperr = mf_check_dst(&dst, NULL);
+    if (ofperr) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "bad result bit (%s)", ofperr_to_string(ofperr));
+        goto exit;
+    }
+
+    if (!userdata->size) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "DHCP options not present in the userdata");
+        goto exit;
+    }
+
+    /* Validate the DHCP request packet.
+     * Format of the DHCP packet is
+     * ------------------------------------------------------------------------
+     *| UDP HEADER  | DHCP HEADER  | 4 Byte DHCP Cookie | DHCP OPTIONS(var len)|
+     * ------------------------------------------------------------------------
+     */
+    if (dp_packet_l4_size(pkt_in) < (UDP_HEADER_LEN +
+        sizeof (struct dhcp_header) + sizeof(uint32_t) + 3)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "Invalid or incomplete DHCP packet recieved");
+        goto exit;
+    }
+
+    struct dhcp_header const *in_dhcp_data = dp_packet_get_udp_payload(pkt_in);
+    if (in_dhcp_data->op != DHCP_OP_REQUEST) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "Invalid opcode in the DHCP packet : %d",
+                     in_dhcp_data->op);
+        goto exit;
+    }
+
+    /* DHCP options follow the DHCP header. The first 4 bytes of the DHCP
+     * options is the DHCP magic cookie followed by the actual DHCP options.
+     */
+    const uint8_t *in_dhcp_opt =
+        (const uint8_t *)dp_packet_get_udp_payload(pkt_in) +
+        sizeof (struct dhcp_header);
+
+    ovs_be32 magic_cookie = htonl(DHCP_MAGIC_COOKIE);
+    if (memcmp(in_dhcp_opt, &magic_cookie, sizeof(ovs_be32))) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "DHCP magic cookie not present in the DHCP packet");
+        goto exit;
+    }
+
+    in_dhcp_opt += 4;
+    /* Check that the DHCP Message Type (opt 53) is present or not with
+     * valid values - DHCP_MSG_DISCOVER or DHCP_MSG_REQUEST as the first
+     * DHCP option.
+     */
+    if (!(in_dhcp_opt[0] == DHCP_OPT_MSG_TYPE && in_dhcp_opt[1] == 1 && (
+            in_dhcp_opt[2] == DHCP_MSG_DISCOVER ||
+            in_dhcp_opt[2] == DHCP_MSG_REQUEST))) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "Invalid DHCP message type : opt code = %d,"
+                     " opt value = %d", in_dhcp_opt[0], in_dhcp_opt[2]);
+        goto exit;
+    }
+
+    uint8_t msg_type;
+    if (in_dhcp_opt[2] == DHCP_MSG_DISCOVER) {
+        msg_type = DHCP_MSG_OFFER;
+    } else {
+        msg_type = DHCP_MSG_ACK;
+    }
+
+    /* Frame the DHCP reply packet
+     * Total DHCP options length will be options stored in the userdata +
+     * 16 bytes.
+     *
+     * --------------------------------------------------------------
+     *| 4 Bytes (dhcp cookie) | 3 Bytes (option type) | DHCP options |
+     * --------------------------------------------------------------
+     *| 4 Bytes padding | 1 Byte (option end 0xFF ) | 4 Bytes padding|
+     * --------------------------------------------------------------
+     */
+    uint16_t new_l4_size = UDP_HEADER_LEN + DHCP_HEADER_LEN + \
+                           userdata->size + 16;
+    size_t new_packet_size = pkt_in->l4_ofs + new_l4_size;
+
+    struct dp_packet pkt_out;
+    dp_packet_init(&pkt_out, new_packet_size);
+    dp_packet_clear(&pkt_out);
+    dp_packet_prealloc_tailroom(&pkt_out, new_packet_size);
+    pkt_out_ptr = &pkt_out;
+
+    /* Copy the L2 and L3 headers from the pkt_in as they would remain same*/
+    dp_packet_put(
+        &pkt_out, dp_packet_pull(pkt_in, pkt_in->l4_ofs), pkt_in->l4_ofs);
+
+    pkt_out.l2_5_ofs = pkt_in->l2_5_ofs;
+    pkt_out.l2_pad_size = pkt_in->l2_pad_size;
+    pkt_out.l3_ofs = pkt_in->l3_ofs;
+    pkt_out.l4_ofs = pkt_in->l4_ofs;
+
+    struct udp_header *udp = dp_packet_put(
+        &pkt_out, dp_packet_pull(pkt_in, UDP_HEADER_LEN), UDP_HEADER_LEN);
+
+    struct dhcp_header *dhcp_data = dp_packet_put(
+        &pkt_out, dp_packet_pull(pkt_in, DHCP_HEADER_LEN), DHCP_HEADER_LEN);
+    dhcp_data->op = DHCP_OP_REPLY;
+    dhcp_data->yiaddr = *offer_ip;
+    dp_packet_put(&pkt_out, &magic_cookie, sizeof(ovs_be32));
+
+    uint8_t *out_dhcp_opts = dp_packet_put_zeros(&pkt_out,
+                                                 userdata->size + 12);
+    /* DHCP option - type */
+    out_dhcp_opts[0] = DHCP_OPT_MSG_TYPE;
+    out_dhcp_opts[1] = 1;
+    out_dhcp_opts[2] = msg_type;
+    out_dhcp_opts += 3;
+
+    memcpy(out_dhcp_opts, userdata->data, userdata->size);
+    out_dhcp_opts += userdata->size;
+    /* Padding */
+    out_dhcp_opts += 4;
+    /* End */
+    out_dhcp_opts[0] = DHCP_OPT_END;
+
+    udp->udp_len = htons(new_l4_size);
+
+    struct ip_header *out_ip = dp_packet_l3(&pkt_out);
+    out_ip->ip_tot_len = htons(pkt_out.l4_ofs - pkt_out.l3_ofs + new_l4_size);
+    udp->udp_csum = 0;
+    out_ip->ip_csum = 0;
+    out_ip->ip_csum = csum(out_ip, sizeof *out_ip);
+
+    pin->packet = dp_packet_data(&pkt_out);
+    pin->packet_len = dp_packet_size(&pkt_out);
+
+    success = 1;
+exit:
+    if (!ofperr) {
+        union mf_subvalue sv;
+        sv.u8_val = success;
+        mf_write_subfield(&dst, &sv, &pin->flow_metadata);
+    }
+    queue_msg(ofputil_encode_resume(pin, continuation, proto));
+    if (pkt_out_ptr) {
+        dp_packet_uninit(pkt_out_ptr);
+    }
+}
+
+static void
 process_packet_in(const struct ofp_header *msg)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
     struct ofputil_packet_in pin;
+    struct ofpbuf continuation;
     enum ofperr error = ofputil_decode_packet_in(msg, true, &pin,
-                                                 NULL, NULL, NULL);
+                                                 NULL, NULL, &continuation);
+
     if (error) {
         VLOG_WARN_RL(&rl, "error decoding packet-in: %s",
                      ofperr_to_string(error));
@@ -240,6 +422,10 @@ process_packet_in(const struct ofp_header *msg)
 
     case ACTION_OPCODE_PUT_ARP:
         pinctrl_handle_put_arp(&pin.flow_metadata.flow, &headers);
+        break;
+
+    case ACTION_OPCODE_PUT_DHCP_OPTS:
+        pinctrl_handle_put_dhcp_opts(&packet, &pin, &userdata, &continuation);
         break;
 
     default:
@@ -563,7 +749,7 @@ send_garp_update(const struct sbrec_port_binding *binding_rec,
     int i;
     for (i = 0; i < binding_rec->n_mac; i++) {
         struct lport_addresses laddrs;
-        if (!extract_lport_addresses(binding_rec->mac[i], &laddrs, false)
+        if (!extract_lsp_addresses(binding_rec->mac[i], &laddrs, false)
             || !laddrs.n_ipv4_addrs) {
             continue;
         }

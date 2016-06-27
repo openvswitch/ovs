@@ -442,9 +442,9 @@ ip_parse_masked_len(const char *s, int *n, ovs_be32 *ip,
         /* OK. */
     } else if (ovs_scan_len(s, n, IP_SCAN_FMT"/%d",
                             IP_SCAN_ARGS(ip), &prefix)) {
-        if (prefix <= 0 || prefix > 32) {
-            return xasprintf("%s: network prefix bits not between 0 and "
-                             "32", s);
+        if (prefix < 0 || prefix > 32) {
+            return xasprintf("%s: IPv4 network prefix bits not between 0 and "
+                              "32, inclusive", s);
         }
         *mask = be32_prefix_mask(prefix);
     } else if (ovs_scan_len(s, n, IP_SCAN_FMT, IP_SCAN_ARGS(ip))) {
@@ -533,9 +533,9 @@ ipv6_parse_masked_len(const char *s, int *n, struct in6_addr *ip,
     if (ovs_scan_len(s, n, " "IPV6_SCAN_FMT, ipv6_s)
         && ipv6_parse(ipv6_s, ip)) {
         if (ovs_scan_len(s, n, "/%d", &prefix)) {
-            if (prefix <= 0 || prefix > 128) {
+            if (prefix < 0 || prefix > 128) {
                 return xasprintf("%s: IPv6 network prefix bits not between 0 "
-                                 "and 128", s);
+                                 "and 128, inclusive", s);
             }
             *mask = ipv6_create_mask(prefix);
         } else if (ovs_scan_len(s, n, "/"IPV6_SCAN_FMT, ipv6_s)) {
@@ -1391,3 +1391,24 @@ packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *ip6)
     return partial;
 }
 #endif
+
+void
+IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6)
+{
+    if (is_ipv6) {
+        ovs_16aligned_be32 *ip6 = dp_packet_l3(pkt);
+
+        put_16aligned_be32(ip6, get_16aligned_be32(ip6) |
+                                htonl(IP_ECN_CE << 20));
+    } else {
+        struct ip_header *nh = dp_packet_l3(pkt);
+        uint8_t tos = nh->ip_tos;
+
+        tos |= IP_ECN_CE;
+        if (nh->ip_tos != tos) {
+            nh->ip_csum = recalc_csum16(nh->ip_csum, htons(nh->ip_tos),
+                                        htons((uint16_t) tos));
+            nh->ip_tos = tos;
+        }
+    }
+}

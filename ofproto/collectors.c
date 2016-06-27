@@ -102,10 +102,13 @@ collectors_destroy(struct collectors *c)
     }
 }
 
-/* Sends the 'n'-byte 'payload' to each of the collectors in 'c'. */
-void
+/* Sends the 'n'-byte 'payload' to each of the collectors in 'c'.
+ * Return the number of IPFIX packets which were sent unsuccessfully*/
+size_t
 collectors_send(const struct collectors *c, const void *payload, size_t n)
 {
+    size_t errors = 0;
+
     if (c) {
         size_t i;
 
@@ -116,9 +119,12 @@ collectors_send(const struct collectors *c, const void *payload, size_t n)
                 VLOG_WARN_RL(&rl, "%s: sending to collector failed (%s)",
                              s, ovs_strerror(errno));
                 free(s);
+                errors++;
             }
         }
     }
+
+    return errors;
 }
 
 int

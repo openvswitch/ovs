@@ -38,6 +38,7 @@
 #define OVS_TUNFLT_POOL_TAG             'WSVO'
 #define OVS_RECIRC_POOL_TAG             'CSVO'
 #define OVS_CT_POOL_TAG                 'CTVO'
+#define OVS_GENEVE_POOL_TAG             'GNVO'
 
 VOID *OvsAllocateMemory(size_t size);
 VOID *OvsAllocateMemoryWithTag(size_t size, ULONG tag);
@@ -112,5 +113,32 @@ OvsPerCpuDataInit();
  */
 VOID
 OvsPerCpuDataCleanup();
+
+static LARGE_INTEGER seed;
+
+/*
+ *----------------------------------------------------------------------------
+ *  SRand --
+ *    This function sets the starting seed value for the pseudorandom number
+ *    generator.
+ *----------------------------------------------------------------------------
+ */
+static __inline
+VOID SRand()
+{
+    KeQuerySystemTime(&seed);
+}
+
+/*
+ *----------------------------------------------------------------------------
+ *  Rand --
+ *    This function generates a pseudorandom number between 0 to UINT_MAX.
+ *----------------------------------------------------------------------------
+ */
+static __inline
+UINT32 Rand()
+{
+    return seed.LowPart *= 0x8088405 + 1;
+}
 
 #endif /* __UTIL_H_ */

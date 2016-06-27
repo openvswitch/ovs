@@ -81,6 +81,7 @@
     <ClInclude Include="Ethernet.h" />
     <ClInclude Include="Event.h" />
     <ClInclude Include="Flow.h" />
+    <ClInclude Include="Geneve.h" />
     <ClInclude Include="Gre.h" />
     <ClInclude Include="IpHelper.h" />
     <ClInclude Include="Jhash.h" />
@@ -176,12 +177,14 @@
   <ItemGroup>
     <ClCompile Include="Actions.c" />
     <ClCompile Include="BufferMgmt.c" />
+    <ClCompile Include="Conntrack-other.c" />
     <ClCompile Include="Conntrack-tcp.c" />
     <ClCompile Include="Conntrack.c" />
     <ClCompile Include="Debug.c" />
     <ClCompile Include="Driver.c" />
     <ClCompile Include="Event.c" />
     <ClCompile Include="Flow.c" />
+    <ClCompile Include="Geneve.c" />
     <ClCompile Include="Gre.c" />
     <ClCompile Include="IpHelper.c" />
     <ClCompile Include="Jhash.c" />

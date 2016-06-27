@@ -20,21 +20,21 @@
 set -o xtrace
 
 # Create a logical switch named "sw0"
-ovn-nbctl lswitch-add sw0
+ovn-nbctl ls-add sw0
 
 # Create two logical ports on "sw0".
-ovn-nbctl lport-add sw0 sw0-port1
-ovn-nbctl lport-add sw0 sw0-port2
+ovn-nbctl lsp-add sw0 sw0-port1
+ovn-nbctl lsp-add sw0 sw0-port2
 
 # Set a MAC address for each of the two logical ports.
-ovn-nbctl lport-set-addresses sw0-port1 00:00:00:00:00:01
-ovn-nbctl lport-set-addresses sw0-port2 00:00:00:00:00:02
+ovn-nbctl lsp-set-addresses sw0-port1 00:00:00:00:00:01
+ovn-nbctl lsp-set-addresses sw0-port2 00:00:00:00:00:02
 
 # Set up port security for the two logical ports.  This ensures that
 # the logical port mac address we have configured is the only allowed
 # source and destination mac address for these ports.
-ovn-nbctl lport-set-port-security sw0-port1 00:00:00:00:00:01
-ovn-nbctl lport-set-port-security sw0-port2 00:00:00:00:00:02
+ovn-nbctl lsp-set-port-security sw0-port1 00:00:00:00:00:01
+ovn-nbctl lsp-set-port-security sw0-port2 00:00:00:00:00:02
 
 # Create ports on the local OVS bridge, br-int.  When ovn-controller
 # sees these ports show up with an "iface-id" that matches the OVN

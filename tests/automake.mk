@@ -48,6 +48,7 @@ TESTSUITE_AT = \
 	tests/json.at \
 	tests/jsonrpc.at \
 	tests/jsonrpc-py.at \
+	tests/pmd.at \
 	tests/tunnel.at \
 	tests/tunnel-push-pop.at \
 	tests/tunnel-push-pop-ipv6.at \
@@ -74,6 +75,7 @@ TESTSUITE_AT = \
 	tests/ovsdb-execution.at \
 	tests/ovsdb-trigger.at \
 	tests/ovsdb-tool.at \
+	tests/ovsdb-replication.at \
 	tests/ovsdb-server.at \
 	tests/ovsdb-monitor.at \
 	tests/ovsdb-idl.at \

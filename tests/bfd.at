@@ -85,8 +85,8 @@ AT_CLEANUP
 
 
 AT_SETUP([bfd - Verify tunnel down detection])
-#Create 3 bridges - br-bfd0, br-bfd1 and br-sw which is midway between the two. br2 is
-#connected to br-bfd0 and br-bfd1 through patch ports p0-2 and p1-2. Enable BFD on
+#Create 3 bridges - br-bfd0, br-bfd1 and br-sw which is midway between the two. br-sw is
+#connected to br-bfd0 and br-bfd1 through patch ports p0-sw and p1-sw. Enable BFD on
 #interfaces in br-bfd0 and br-bfd1. When br-sw is dropping all packets, BFD should detect
 # that the tunnel is down, and come back up when br-sw is working fine.
 

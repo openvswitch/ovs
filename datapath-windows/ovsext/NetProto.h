@@ -45,6 +45,8 @@ typedef struct EthHdr {
 #define ICMP_CSUM_OFFSET       2
 #define INET_CSUM_LENGTH       (sizeof(UINT16))
 
+#define PACKET_MAX_LENGTH      64*1024 // 64K
+
 #define IP4_UNITS_TO_BYTES(x) ((x) << 2)
 #define IP4_BYTES_TO_UNITS(x) ((x) >> 2)
 
@@ -245,7 +247,13 @@ typedef union _OVS_PACKET_HDR_INFO {
 typedef struct IPHdr {
    UINT8    ihl:4,
             version:4;
-   UINT8    tos;
+   union {
+       struct {
+           UINT8 ecn:2,
+                 dscp:6;
+       };
+       UINT8    tos;
+   };
    UINT16   tot_len;
    UINT16   id;
    UINT16   frag_off;

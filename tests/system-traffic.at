@@ -250,6 +250,253 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PI
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - basic truncate action])
+OVS_TRAFFIC_VSWITCHD_START()
+AT_CHECK([ovs-ofctl del-flows br0])
+
+dnl Create p0 and ovs-p0(1)
+ADD_NAMESPACES(at_ns0)
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address e6:66:c1:11:11:11])
+NS_CHECK_EXEC([at_ns0], [arp -s 10.1.1.2 e6:66:c1:22:22:22])
+
+dnl Create p1(3) and ovs-p1(2), packets received from ovs-p1 will appear in p1
+AT_CHECK([ip link add p1 type veth peer name ovs-p1])
+on_exit 'ip link del ovs-p1'
+AT_CHECK([ip link set dev ovs-p1 up])
+AT_CHECK([ip link set dev p1 up])
+AT_CHECK([ovs-vsctl add-port br0 ovs-p1 -- set interface ovs-p1 ofport_request=2])
+dnl Use p1 to check the truncated packet
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set interface p1 ofport_request=3])
+
+dnl Create p2(5) and ovs-p2(4)
+AT_CHECK([ip link add p2 type veth peer name ovs-p2])
+on_exit 'ip link del ovs-p2'
+AT_CHECK([ip link set dev ovs-p2 up])
+AT_CHECK([ip link set dev p2 up])
+AT_CHECK([ovs-vsctl add-port br0 ovs-p2 -- set interface ovs-p2 ofport_request=4])
+dnl Use p2 to check the truncated packet
+AT_CHECK([ovs-vsctl add-port br0 p2 -- set interface p2 ofport_request=5])
+
+dnl basic test
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_DATA([flows.txt], [dnl
+in_port=3 dl_dst=e6:66:c1:22:22:22 actions=drop
+in_port=5 dl_dst=e6:66:c1:22:22:22 actions=drop
+in_port=1 dl_dst=e6:66:c1:22:22:22 actions=output(port=2,max_len=100),output:4
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl use this file as payload file for ncat
+AT_CHECK([dd if=/dev/urandom of=payload200.bin bs=200 count=1 2> /dev/null])
+on_exit 'rm -f payload200.bin'
+NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 1234 < payload200.bin])
+
+dnl packet with truncated size
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+AT_CHECK([ovs-ofctl dump-flows br0 table=0 | grep "in_port=3" |  sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=100
+])
+dnl packet with original size
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+AT_CHECK([ovs-ofctl dump-flows br0 table=0 | grep "in_port=5" | sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=242
+])
+
+dnl more complicated output actions
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_DATA([flows.txt], [dnl
+in_port=3 dl_dst=e6:66:c1:22:22:22 actions=drop
+in_port=5 dl_dst=e6:66:c1:22:22:22 actions=drop
+in_port=1 dl_dst=e6:66:c1:22:22:22 actions=output(port=2,max_len=100),output:4,output(port=2,max_len=100),output(port=4,max_len=100),output:2,output(port=4,max_len=200),output(port=2,max_len=65535)
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 1234 < payload200.bin])
+
+dnl 100 + 100 + 242 + min(65535,242) = 684
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+AT_CHECK([ovs-ofctl dump-flows br0 table=0 | grep "in_port=3" | sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=684
+])
+dnl 242 + 100 + min(242,200) = 542
+AT_CHECK([ovs-ofctl dump-flows br0 table=0 | grep "in_port=5" | sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=542
+])
+
+dnl SLOW_ACTION: disable kernel datapath truncate support
+dnl Repeat the test above, but exercise the SLOW_ACTION code path
+AT_CHECK([ovs-appctl dpif/disable-truncate], [0],
+[Datapath truncate action diabled
+])
+
+dnl SLOW_ACTION test1: check datapatch actions
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+CHECK_KERNEL_DP(
+AT_CHECK([ovs-appctl ofproto/trace system 'in_port(2),eth(src=e6:66:c1:11:11:11,dst=e6:66:c1:22:22:22),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -3 stdout], [0],
+[Datapath actions: trunc(100),3,5,trunc(100),3,trunc(100),5,3,trunc(200),5,trunc(65535),3
+This flow is handled by the userspace slow path because it:
+	- Uses action(s) not supported by datapath.
+])
+)
+
+dnl SLOW_ACTION test2: check actual packet truncate
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 1234 < payload200.bin])
+
+dnl 100 + 100 + 242 + min(65535,242) = 684
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+AT_CHECK([ovs-ofctl dump-flows br0 table=0 | grep "in_port=3" | sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=684
+])
+
+dnl 242 + 100 + min(242,200) = 542
+AT_CHECK([ovs-ofctl dump-flows br0 table=0 | grep "in_port=5" | sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=542
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl Create 2 bridges and 2 namespaces to test truncate over
+dnl GRE tunnel:
+dnl   br0: overlay bridge
+dnl   ns1: connect to br0, with IP:10.1.1.2
+dnl   br-underlay: with IP: 172.31.1.100
+dnl   ns0: connect to br-underlay, with IP: 10.1.1.1
+AT_SETUP([datapath - truncate and output to gre tunnel])
+OVS_CHECK_GRE()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_BR([br-underlay])
+ADD_NAMESPACES(at_ns0)
+ADD_NAMESPACES(at_ns1)
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+AT_CHECK([ovs-ofctl add-flow br-underlay "actions=normal"])
+
+dnl Set up underlay link from host into the namespace using veth pair.
+ADD_VETH(p0, at_ns0, br-underlay, "172.31.1.1/24")
+AT_CHECK([ip addr add dev br-underlay "172.31.1.100/24"])
+AT_CHECK([ip link set dev br-underlay up])
+
+dnl Set up tunnel endpoints on OVS outside the namespace and with a native
+dnl linux device inside the namespace.
+ADD_OVS_TUNNEL([gre], [br0], [at_gre0], [172.31.1.1], [10.1.1.100/24])
+ADD_NATIVE_TUNNEL([gretap], [ns_gre0], [at_ns0], [172.31.1.100], [10.1.1.1/24])
+AT_CHECK([ovs-vsctl -- set interface at_gre0 ofport_request=1])
+NS_CHECK_EXEC([at_ns0], [ip link set dev ns_gre0 address e6:66:c1:11:11:11])
+NS_CHECK_EXEC([at_ns0], [arp -s 10.1.1.2 e6:66:c1:22:22:22])
+
+dnl Set up (p1 and ovs-p1) at br0
+ADD_VETH(p1, at_ns1, br0, '10.1.1.2/24')
+AT_CHECK([ovs-vsctl -- set interface ovs-p1 ofport_request=2])
+NS_CHECK_EXEC([at_ns1], [ip link set dev p1 address e6:66:c1:22:22:22])
+NS_CHECK_EXEC([at_ns1], [arp -s 10.1.1.1 e6:66:c1:11:11:11])
+
+dnl Set up (p2 and ovs-p2) as loopback for verifying packet size
+AT_CHECK([ip link add p2 type veth peer name ovs-p2])
+on_exit 'ip link del ovs-p2'
+AT_CHECK([ip link set dev ovs-p2 up])
+AT_CHECK([ip link set dev p2 up])
+AT_CHECK([ovs-vsctl add-port br0 ovs-p2 -- set interface ovs-p2 ofport_request=3])
+AT_CHECK([ovs-vsctl add-port br0 p2 -- set interface p2 ofport_request=4])
+
+dnl use this file as payload file for ncat
+AT_CHECK([dd if=/dev/urandom of=payload200.bin bs=200 count=1 2> /dev/null])
+on_exit 'rm -f payload200.bin'
+
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_DATA([flows.txt], [dnl
+priority=99,in_port=1,actions=output(port=2,max_len=100),output(port=3,max_len=100)
+priority=99,in_port=2,udp,actions=output(port=1,max_len=100)
+priority=1,in_port=4,ip,actions=drop
+priority=1,actions=drop
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-ofctl del-flows br-underlay])
+AT_DATA([flows-underlay.txt], [dnl
+priority=99,dl_type=0x0800,nw_proto=47,in_port=1,actions=LOCAL
+priority=99,dl_type=0x0800,nw_proto=47,in_port=LOCAL,ip_dst=172.31.1.1/24,actions=1
+priority=1,actions=drop
+])
+
+AT_CHECK([ovs-ofctl add-flows br-underlay flows-underlay.txt])
+
+dnl check tunnel push path, from at_ns1 to at_ns0
+NS_CHECK_EXEC([at_ns1], [nc -u 10.1.1.1 1234 < payload200.bin])
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+
+dnl Before truncation = ETH(14) + IP(20) + UDP(8) + 200 = 242B
+AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=2" | sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=242
+])
+dnl After truncation = outer ETH(14) + outer IP(20) + GRE(4) + 100 = 138B
+AT_CHECK([ovs-ofctl dump-flows br-underlay | grep "in_port=LOCAL" | sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=138
+])
+
+dnl check tunnel pop path, from at_ns0 to at_ns1
+NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 5678 < payload200.bin])
+dnl After truncation = 100 byte at loopback device p2(4)
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | awk --field-separator=', '  '{print $5}'], [0], [dnl
+n_bytes=100
+])
+
+dnl SLOW_ACTION: disable datapath truncate support
+dnl Repeat the test above, but exercise the SLOW_ACTION code path
+AT_CHECK([ovs-appctl dpif/disable-truncate], [0],
+[Datapath truncate action diabled
+])
+
+dnl SLOW_ACTION test1: check datapatch actions
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+CHECK_KERNEL_DP(
+AT_CHECK([ovs-appctl ofproto/trace system 'in_port(5),eth(src=e6:66:c1:11:11:11,dst=e6:66:c1:22:22:22),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=17,tos=4,ttl=128,frag=no),udp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -3 stdout], [0],
+[Datapath actions: trunc(100),set(tunnel(dst=172.31.1.1,ttl=64,flags(df))),4
+This flow is handled by the userspace slow path because it:
+	- Uses action(s) not supported by datapath.
+])
+)
+
+dnl SLOW_ACTION test2: check actual packet truncate
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl del-flows br-underlay])
+AT_CHECK([ovs-ofctl add-flows br-underlay flows-underlay.txt])
+
+dnl check tunnel push path, from at_ns1 to at_ns0
+NS_CHECK_EXEC([at_ns1], [nc -u 10.1.1.1 1234 < payload200.bin])
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+
+dnl Before truncation = ETH(14) + IP(20) + UDP(8) + 200 = 242B
+AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=2" | sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=242
+])
+dnl After truncation = outer ETH(14) + outer IP(20) + GRE(4) + 100 = 138B
+AT_CHECK([ovs-ofctl dump-flows br-underlay | grep "in_port=LOCAL" | sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=138
+])
+
+dnl check tunnel pop path, from at_ns0 to at_ns1
+NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 5678 < payload200.bin])
+dnl After truncation = 100 byte at loopback device p2(4)
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | awk --field-separator=', '  '{print $5}'], [0], [dnl
+n_bytes=100
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([conntrack - controller])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -314,15 +561,12 @@ priority=100,in_port=2,ct_state=+trk+est,tcp,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 >/dev/null])
-
 dnl HTTP requests from ns0->ns1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 ])
 
 dnl HTTP requests from ns1->ns0 should fail due to network failure.
@@ -364,7 +608,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py http6]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget http://[[fc00::2]] -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
-tcp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::1,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 ])
 
 dnl HTTP requests from ns1->ns0 should fail due to network failure.
@@ -530,7 +774,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 ])
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
@@ -539,7 +783,7 @@ NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.4)], [0], [dnl
-tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=ESTABLISHED)
+tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -576,7 +820,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=4097,protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=4097,protoinfo=(state=<cleared>)
 ])
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
@@ -585,7 +829,7 @@ NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.4)], [0], [dnl
-tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),zone=4098,protoinfo=(state=ESTABLISHED)
+tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),zone=4098,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -664,8 +908,8 @@ dnl (again) HTTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=SYN_SENT)
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -711,8 +955,8 @@ AT_CHECK([wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep "zone"], [0], [dnl
 icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>),zone=1
 icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>),zone=2
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -750,7 +994,7 @@ dnl (again) HTTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP(["dnl
@@ -820,8 +1064,8 @@ AT_CHECK([wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep "zone"], [0], [dnl
 icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>),zone=1
 icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>),zone=65534
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=65534,protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=65534,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -858,8 +1102,8 @@ dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep TIME], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),mark=1,protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),mark=1,protoinfo=(state=<cleared>)
 ])
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
@@ -868,7 +1112,7 @@ NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.4)], [0], [dnl
-tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),mark=2,protoinfo=(state=ESTABLISHED)
+tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),mark=2,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -902,8 +1146,8 @@ dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep TIME], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),mark=3,protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),mark=3,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -939,8 +1183,8 @@ dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep TIME], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),mark=1,protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),mark=1,protoinfo=(state=<cleared>)
 ])
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
@@ -949,7 +1193,7 @@ NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.4)], [0], [dnl
-tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),mark=2,protoinfo=(state=ESTABLISHED)
+tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),mark=2,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1022,8 +1266,8 @@ dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep TIME], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),labels=0x200000001,protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),labels=0x200000001,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1059,9 +1303,9 @@ dnl HTTP requests from p0->p1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep TIME], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,mark=3,labels=0x200000001,protoinfo=(state=TIME_WAIT)
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,mark=3,labels=0x200000001,protoinfo=(state=<cleared>)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1195,8 +1439,8 @@ AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
 
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep -v "FIN"], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT),helper=ftp
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
 ])
 
 dnl Try the second set of flows.
@@ -1211,18 +1455,18 @@ AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
 
 dnl Active FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0-1.log])
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep -v "FIN"], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT),helper=ftp
-tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 ])
 
 AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 dnl Passive FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0-2.log])
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep -v "FIN"], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT),helper=ftp
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1276,9 +1520,9 @@ dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
 
 dnl Discards CLOSE_WAIT and CLOSING
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2) | grep -v "FIN" | grep -v "CLOS"], [0], [dnl
-tcp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::1,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT),helper=ftp
-tcp,orig=(src=fc00::2,dst=fc00::1,sport=<cleared>,dport=<cleared>),reply=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
+tcp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=fc00::2,dst=fc00::1,sport=<cleared>,dport=<cleared>),reply=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1325,22 +1569,22 @@ AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
 
 dnl Active FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v -o wget0.log])
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep -v "FIN"], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT),helper=ftp
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=TIME_WAIT),helper=ftp
-tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
-tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
+tcp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=<cleared>)
 ])
 
 AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
 dnl Passive FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep -v "FIN"], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT),helper=ftp
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=TIME_WAIT)
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=TIME_WAIT),helper=ftp
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=<cleared>)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=<cleared>),helper=ftp
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1365,11 +1609,6 @@ priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
-
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
-3 packets transmitted, 3 received, 0% packet loss, time 0ms
-])
 
 dnl Ipv4 fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
@@ -1406,11 +1645,6 @@ priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
-3 packets transmitted, 3 received, 0% packet loss, time 0ms
-])
-
 dnl Ipv4 fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 1 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 7 packets transmitted, 0 received, 100% packet loss, time 0ms
@@ -1440,11 +1674,6 @@ priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
-
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
-3 packets transmitted, 3 received, 0% packet loss, time 0ms
-])
 
 dnl Ipv4 fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
@@ -1484,11 +1713,6 @@ dnl Linux seems to take a little time to get its IPv6 stack in order. Without
 dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
-
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
-3 packets transmitted, 3 received, 0% packet loss, time 0ms
-])
 
 dnl Ipv6 fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
@@ -1533,11 +1757,6 @@ dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
-3 packets transmitted, 3 received, 0% packet loss, time 0ms
-])
-
 dnl Send an IPv6 fragment. Some time later, it should expire.
 NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 1 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
 7 packets transmitted, 0 received, 100% packet loss, time 0ms
@@ -1576,11 +1795,6 @@ dnl Linux seems to take a little time to get its IPv6 stack in order. Without
 dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
-
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PING], [0], [dnl
-3 packets transmitted, 3 received, 0% packet loss, time 0ms
-])
 
 dnl Ipv4 fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PING], [0], [dnl
@@ -1784,7 +1998,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1831,7 +2045,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1883,7 +2097,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.2XX,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1929,15 +2143,15 @@ dnl Should work with the virtual IP address through NAT
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.64 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.64) ], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.64,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.64)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.64,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 ])
 
 dnl Should work with the assigned IP address as well
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) ], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1989,15 +2203,15 @@ dnl Should work with the virtual IP address through NAT
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.64 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.64) ], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.64,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.64)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.64,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 ])
 
 dnl Should work with the assigned IP address as well
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) ], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -2135,9 +2349,9 @@ OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
 
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep -v "FIN"], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT),helper=ftp
-tcp,orig=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -2204,9 +2418,9 @@ dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
 
 dnl Discards CLOSE_WAIT and CLOSING
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep -v "FIN" | grep -v "CLOS"], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT),helper=ftp
-tcp,orig=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -2304,10 +2518,182 @@ dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
 
 dnl Discards CLOSE_WAIT and CLOSING
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2) | grep -v "FIN" | grep -v "CLOS"], [0], [dnl
-tcp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::240,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT),helper=ftp
-tcp,orig=(src=fc00::2,dst=fc00::240,sport=<cleared>,dport=<cleared>),reply=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),protoinfo=(state=TIME_WAIT)
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
+tcp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::240,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=fc00::2,dst=fc00::240,sport=<cleared>,dport=<cleared>),reply=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 ])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - DNAT load balancing])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns1, at_ns2, at_ns3, at_ns4)
+
+ADD_VETH(p1, at_ns1, br0, "10.1.1.1/24")
+ADD_VETH(p2, at_ns2, br0, "10.1.1.2/24")
+ADD_VETH(p3, at_ns3, br0, "10.1.1.3/24")
+ADD_VETH(p4, at_ns4, br0, "10.1.1.4/24")
+NS_CHECK_EXEC([at_ns1], [ip link set dev p1 address 80:88:88:88:88:11])
+NS_CHECK_EXEC([at_ns2], [ip link set dev p2 address 80:88:88:88:88:22])
+NS_CHECK_EXEC([at_ns3], [ip link set dev p3 address 80:88:88:88:88:33])
+NS_CHECK_EXEC([at_ns4], [ip link set dev p4 address 80:88:88:88:88:44])
+
+dnl Select group for load balancing.  One bucket per server.  Each bucket
+dnl tracks and NATs the connection and recirculates to table 4 for egress
+dnl routing.  Packets of existing connections are always NATted based on
+dnl connection state, only new connections are NATted according to the
+dnl specific NAT parameters in each bucket.
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-group br0 "group_id=234,type=select,bucket=weight=100,ct(nat(dst=10.1.1.2),commit,table=4),bucket=weight=100,ct(nat(dst=10.1.1.3),commit,table=4),bucket=weight=100,ct(nat(dst=10.1.1.4),commit,table=4)"])
+
+AT_DATA([flows.txt], [dnl
+dnl Track connections to the virtual IP address.
+table=0 priority=100 ip nw_dst=10.1.1.64 action=group:234
+dnl All other IP traffic is allowed but the connection state is no commited.
+table=0 priority=90 ip action=ct(table=4,nat)
+dnl
+dnl Allow ARP, but generate responses for virtual addresses
+table=0 priority=100 arp arp_op=1 action=move:OXM_OF_ARP_TPA[[]]->NXM_NX_REG2[[]],resubmit(,8),goto_table:10
+table=0 priority=10 arp action=normal
+table=0 priority=0 action=drop
+dnl
+dnl Routing table
+dnl
+table=4,ip,nw_dst=10.1.1.1 action=mod_dl_dst:80:88:88:88:88:11,output:1
+table=4,ip,nw_dst=10.1.1.2 action=mod_dl_dst:80:88:88:88:88:22,output:2
+table=4,ip,nw_dst=10.1.1.3 action=mod_dl_dst:80:88:88:88:88:33,output:3
+table=4,ip,nw_dst=10.1.1.4 action=mod_dl_dst:80:88:88:88:88:44,output:4
+table=4 priority=0 action=drop
+dnl
+dnl MAC resolution table for IP in reg2, stores mac in OXM_OF_PKT_REG0
+table=8,reg2=0x0a010140,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
+dnl Zero result means not found.
+table=8,priority=0,action=load:0->OXM_OF_PKT_REG0[[]]
+dnl ARP responder mac filled in at OXM_OF_PKT_REG0, or 0 for normal action.
+dnl TPA IP in reg2.
+table=10 priority=100 arp xreg0=0 action=normal
+dnl Swaps the fields of the ARP message to turn a query to a response.
+table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
+table=10 priority=0 action=controller
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Start web servers
+NETNS_DAEMONIZE([at_ns2], [[$PYTHON $srcdir/test-l7.py]], [http2.pid])
+NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http3.pid])
+NETNS_DAEMONIZE([at_ns4], [[$PYTHON $srcdir/test-l7.py]], [http4.pid])
+
+on_exit 'ovs-ofctl -O OpenFlow15 dump-flows br0'
+on_exit 'ovs-appctl revalidator/purge'
+on_exit 'ovs-appctl dpif/dump-flows br0'
+
+dnl Should work with the virtual IP address through NAT
+for i in 1 2 3 4 5 6 7 8 9 10 11 12; do
+    echo Request $i
+    NS_CHECK_EXEC([at_ns1], [wget 10.1.1.64 -t 5 -T 1 --retry-connrefused -v -o wget$i.log])
+done
+
+dnl Each server should have at least one connection.
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.64)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.64,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.64,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.3,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+tcp,orig=(src=10.1.1.1,dst=10.1.1.64,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+])
+
+ovs-appctl dpif/dump-flows br0
+ovs-appctl revalidator/purge
+ovs-ofctl -O OpenFlow15 dump-flows br0
+ovs-ofctl -O OpenFlow15 dump-group-stats br0
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([conntrack - DNAT load balancing with NC])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns1, at_ns2, at_ns3, at_ns4, at_ns5)
+
+ADD_VETH(p1, at_ns1, br0, "10.1.1.1/24")
+ADD_VETH(p2, at_ns2, br0, "10.1.1.2/24")
+ADD_VETH(p3, at_ns3, br0, "10.1.1.3/24")
+ADD_VETH(p4, at_ns4, br0, "10.1.1.4/24")
+ADD_VETH(p5, at_ns5, br0, "10.1.1.5/24")
+NS_CHECK_EXEC([at_ns1], [ip link set dev p1 address 80:88:88:88:88:11])
+NS_CHECK_EXEC([at_ns2], [ip link set dev p2 address 80:88:88:88:88:22])
+NS_CHECK_EXEC([at_ns3], [ip link set dev p3 address 80:88:88:88:88:33])
+NS_CHECK_EXEC([at_ns4], [ip link set dev p4 address 80:88:88:88:88:44])
+NS_CHECK_EXEC([at_ns5], [ip link set dev p5 address 80:88:88:88:88:55])
+
+dnl Select group for load balancing.  One bucket per server.  Each bucket
+dnl tracks and NATs the connection and recirculates to table 4 for egress
+dnl routing.  Packets of existing connections are always NATted based on
+dnl connection state, only new connections are NATted according to the
+dnl specific NAT parameters in each bucket.
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-group br0 "group_id=234,type=select,bucket=weight=100,ct(nat(dst=10.1.1.2),commit,table=4),bucket=weight=100,ct(nat(dst=10.1.1.3),commit,table=4),bucket=weight=100,ct(nat(dst=10.1.1.4),commit,table=4)"])
+
+AT_DATA([flows.txt], [dnl
+dnl Track connections to the virtual IP address.
+table=0 priority=100 ip nw_dst=10.1.1.64 action=group:234
+dnl All other IP traffic is allowed but the connection state is no commited.
+table=0 priority=90 ip action=ct(table=4,nat)
+dnl
+dnl Allow ARP, but generate responses for virtual addresses
+table=0 priority=100 arp arp_op=1 action=move:OXM_OF_ARP_TPA[[]]->NXM_NX_REG2[[]],resubmit(,8),goto_table:10
+table=0 priority=10 arp action=normal
+table=0 priority=0 action=drop
+dnl
+dnl Routing table
+dnl
+table=4,ip,nw_dst=10.1.1.1 action=mod_dl_dst:80:88:88:88:88:11,output:1
+table=4,ip,nw_dst=10.1.1.2 action=mod_dl_dst:80:88:88:88:88:22,output:2
+table=4,ip,nw_dst=10.1.1.3 action=mod_dl_dst:80:88:88:88:88:33,output:3
+table=4,ip,nw_dst=10.1.1.4 action=mod_dl_dst:80:88:88:88:88:44,output:4
+table=4,ip,nw_dst=10.1.1.5 action=mod_dl_dst:80:88:88:88:88:55,output:5
+table=4 priority=0 action=drop
+dnl
+dnl MAC resolution table for IP in reg2, stores mac in OXM_OF_PKT_REG0
+table=8,reg2=0x0a010140,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
+dnl Zero result means not found.
+table=8,priority=0,action=load:0->OXM_OF_PKT_REG0[[]]
+dnl ARP responder mac filled in at OXM_OF_PKT_REG0, or 0 for normal action.
+dnl TPA IP in reg2.
+table=10 priority=100 arp xreg0=0 action=normal
+dnl Swaps the fields of the ARP message to turn a query to a response.
+table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
+table=10 priority=0 action=controller
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Start web servers
+NETNS_DAEMONIZE([at_ns2], [[$PYTHON $srcdir/test-l7.py]], [http2.pid])
+NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http3.pid])
+NETNS_DAEMONIZE([at_ns4], [[$PYTHON $srcdir/test-l7.py]], [http4.pid])
+
+on_exit 'ovs-ofctl -O OpenFlow15 dump-flows br0'
+on_exit 'ovs-appctl revalidator/purge'
+on_exit 'ovs-appctl dpif/dump-flows br0'
+
+sleep 5
+
+dnl Should work with the virtual IP address through NAT
+for i in 1 2 3 4 5 6 7 8 9; do
+    echo Request $i
+    NS_CHECK_EXEC([at_ns1], [echo "TEST1" | nc -p 4100$i 10.1.1.64 80 > nc-1-$i.log])
+    NS_CHECK_EXEC([at_ns5], [echo "TEST5" | nc -p 4100$i 10.1.1.64 80 > nc-5-$i.log])
+done
+
+conntrack -L 2>&1
+
+ovs-appctl dpif/dump-flows br0
+ovs-appctl revalidator/purge
+ovs-ofctl -O OpenFlow15 dump-flows br0
+ovs-ofctl -O OpenFlow15 dump-group-stats br0
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP

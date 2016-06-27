@@ -194,12 +194,6 @@ struct odp_flow_key_parms {
     const struct flow *flow;
     const struct flow *mask;
 
-   /* 'flow->in_port' is ignored (since it is likely to be an OpenFlow port
-    * number rather than a datapath port number).  Instead, if 'odp_in_port'
-    * is anything other than ODPP_NONE, it is included in 'buf' as the input
-    * port. */
-    odp_port_t odp_in_port;
-
     /* Indicates support for various fields. If the datapath supports a field,
      * then it will always be serialised. */
     struct odp_support support;
@@ -303,6 +297,7 @@ union user_action_cookie {
         uint32_t collector_set_id; /* ID of IPFIX collector set. */
         uint32_t obs_domain_id; /* Observation Domain ID. */
         uint32_t obs_point_id;  /* Observation Point ID. */
+        odp_port_t output_odp_port; /* The output odp port. */
     } flow_sample;
 
     struct {
@@ -310,7 +305,7 @@ union user_action_cookie {
         odp_port_t output_odp_port; /* The output odp port. */
     } ipfix;
 };
-BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 16);
+BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 20);
 
 size_t odp_put_userspace_action(uint32_t pid,
                                 const void *userdata, size_t userdata_size,

@@ -62,7 +62,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 static uint64_t rt_change_seq;
 
 static struct nln *nln = NULL;
-static struct nln *nln6 = NULL;
 static struct route_table_msg rtmsg;
 static struct nln_notifier *route_notifier = NULL;
 static struct nln_notifier *route6_notifier = NULL;
@@ -72,7 +71,7 @@ static bool route_table_valid = false;
 
 static int route_table_reset(void);
 static void route_table_handle_msg(const struct route_table_msg *);
-static bool route_table_parse(struct ofpbuf *, struct route_table_msg *);
+static int route_table_parse(struct ofpbuf *, struct route_table_msg *);
 static void route_table_change(const struct route_table_msg *, void *);
 static void route_map_clear(void);
 
@@ -93,22 +92,19 @@ route_table_init(void)
 {
     ovs_mutex_lock(&route_table_mutex);
     ovs_assert(!nln);
-    ovs_assert(!nln6);
     ovs_assert(!route_notifier);
     ovs_assert(!route6_notifier);
 
     ovs_router_init();
-    nln = nln_create(NETLINK_ROUTE, RTNLGRP_IPV4_ROUTE,
-                     (nln_parse_func *) route_table_parse, &rtmsg);
-    nln6 = nln_create(NETLINK_ROUTE, RTNLGRP_IPV6_ROUTE,
-                      (nln_parse_func *) route_table_parse, &rtmsg);
+    nln = nln_create(NETLINK_ROUTE, (nln_parse_func *) route_table_parse,
+                     &rtmsg);
 
     route_notifier =
-        nln_notifier_create(nln, (nln_notify_func *) route_table_change,
-                            NULL);
+        nln_notifier_create(nln, RTNLGRP_IPV4_ROUTE,
+                            (nln_notify_func *) route_table_change, NULL);
     route6_notifier =
-        nln_notifier_create(nln6, (nln_notify_func *) route_table_change,
-                            NULL);
+        nln_notifier_create(nln, RTNLGRP_IPV6_ROUTE,
+                            (nln_notify_func *) route_table_change, NULL);
 
     route_table_reset();
     name_table_init();
@@ -122,14 +118,9 @@ route_table_run(void)
     OVS_EXCLUDED(route_table_mutex)
 {
     ovs_mutex_lock(&route_table_mutex);
-    if (nln || nln6) {
+    if (nln) {
         rtnetlink_run();
-        if (nln) {
-            nln_run(nln);
-        }
-        if (nln6) {
-            nln_run(nln6);
-        }
+        nln_run(nln);
 
         if (!route_table_valid) {
             route_table_reset();
@@ -144,14 +135,9 @@ route_table_wait(void)
     OVS_EXCLUDED(route_table_mutex)
 {
     ovs_mutex_lock(&route_table_mutex);
-    if (nln || nln6) {
+    if (nln) {
         rtnetlink_wait();
-        if (nln) {
-            nln_wait(nln);
-        }
-        if (nln6) {
-            nln_wait(nln6);
-        }
+        nln_wait(nln);
     }
     ovs_mutex_unlock(&route_table_mutex);
 }
@@ -191,7 +177,9 @@ route_table_reset(void)
     return nl_dump_done(&dump);
 }
 
-static bool
+/* Return RTNLGRP_IPV4_ROUTE or RTNLGRP_IPV6_ROUTE on success, 0 on parse
+ * error. */
+static int
 route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
 {
     bool parsed, ipv4 = false;
@@ -222,7 +210,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
                                  policy6, attrs, ARRAY_SIZE(policy6));
     } else {
         VLOG_DBG_RL(&rl, "received non AF_INET rtnetlink route message");
-        return false;
+        return 0;
     }
 
     if (parsed) {
@@ -252,7 +240,11 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
 
                 VLOG_DBG_RL(&rl, "Could not find interface name[%u]: %s",
                             rta_oif, ovs_strerror(error));
-                return false;
+                if (error == ENXIO) {
+                    change->relevant = false;
+                } else {
+                    return 0;
+                }
             }
         }
 
@@ -278,9 +270,11 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
         }
     } else {
         VLOG_DBG_RL(&rl, "received unparseable rtnetlink route message");
+        return 0;
     }
 
-    return parsed;
+    /* Success. */
+    return ipv4 ? RTNLGRP_IPV4_ROUTE : RTNLGRP_IPV6_ROUTE;
 }
 
 static void

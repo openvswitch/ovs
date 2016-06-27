@@ -132,20 +132,22 @@ m4_define([OVS_WAIT_WHILE],
 
 dnl OVS_APP_EXIT_AND_WAIT(DAEMON)
 dnl
-dnl Ask the daemon named DAEMON to exit, via ovs-appctl, and then waits for it
+dnl Ask the daemon named DAEMON to exit, via ovs-appctl, and then wait for it
 dnl to exit.
 m4_define([OVS_APP_EXIT_AND_WAIT],
-  [TMPPID=$(cat "$OVS_RUNDIR"/$1.pid 2>/dev/null)
+  [AT_CHECK([test -e $OVS_RUNDIR/$1.pid])
+   TMPPID=$(cat $OVS_RUNDIR/$1.pid)
    AT_CHECK([ovs-appctl -t $1 exit])
    OVS_WAIT_WHILE([kill -0 $TMPPID 2>/dev/null])])
 
-dnl OVS_APP_EXIT_AND_WAIT_BY_TARGET(DAEMON)
+dnl OVS_APP_EXIT_AND_WAIT_BY_TARGET(TARGET, PIDFILE)
 dnl
-dnl Ask the daemon named DAEMON to exit, via ovs-appctl (using the target
-dnl argument), and then waits for it to exit.
+dnl Ask the daemon identified by TARGET to exit, via ovs-appctl (using the target
+dnl argument), and then wait for it to exit.
 m4_define([OVS_APP_EXIT_AND_WAIT_BY_TARGET],
-  [TMPPID=`cat "$OVS_RUNDIR"/$1.pid 2>/dev/null`
-   AT_CHECK([ovs-appctl --target=$OVS_RUNDIR/ovsdb-server.$TMPPID.ctl exit])
+  [AT_CHECK([test -e $2])
+   TMPPID=$(cat $2)
+   AT_CHECK([ovs-appctl --target=$1 exit])
    OVS_WAIT_WHILE([kill -0 $TMPPID 2>/dev/null])])
 
 dnl on_exit "COMMAND"

@@ -54,6 +54,8 @@ BuildRequires: libcap-ng libcap-ng-devel
 %endif
 %if %{with dpdk}
 BuildRequires: dpdk-devel >= 2.2.0
+BuildRequires: numactl-devel
+Requires: numactl-libs
 Provides: %{name}-dpdk = %{version}-%{release}
 %endif
 
@@ -223,11 +225,7 @@ install -p -m 644 -D selinux/openvswitch-custom.pp \
 
 # remove unpackaged files
 rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
-        $RPM_BUILD_ROOT%{_bindir}/ovs-pcap \
-        $RPM_BUILD_ROOT%{_bindir}/ovs-tcpundump \
         $RPM_BUILD_ROOT%{_sbindir}/ovs-vlan-bug-workaround \
-        $RPM_BUILD_ROOT%{_mandir}/man1/ovs-pcap.1 \
-        $RPM_BUILD_ROOT%{_mandir}/man1/ovs-tcpundump.1 \
         $RPM_BUILD_ROOT%{_mandir}/man8/ovs-vlan-bug-workaround.8
 
 %check
@@ -390,9 +388,15 @@ fi
 %{_bindir}/ovs-test
 %{_bindir}/ovs-vlan-test
 %{_bindir}/ovs-l3ping
+%{_bindir}/ovs-pcap
+%{_bindir}/ovs-tcpdump
+%{_bindir}/ovs-tcpundump
 %{_mandir}/man8/ovs-test.8*
 %{_mandir}/man8/ovs-vlan-test.8*
 %{_mandir}/man8/ovs-l3ping.8*
+%{_mandir}/man1/ovs-pcap.1*
+%{_mandir}/man8/ovs-tcpdump.8*
+%{_mandir}/man1/ovs-tcpundump.1*
 %{python_sitelib}/ovstest
 
 %files devel

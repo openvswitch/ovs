@@ -418,6 +418,7 @@ static const struct tc_ops tc_ops_codel;
 static const struct tc_ops tc_ops_fqcodel;
 static const struct tc_ops tc_ops_sfq;
 static const struct tc_ops tc_ops_default;
+static const struct tc_ops tc_ops_noop;
 static const struct tc_ops tc_ops_other;
 
 static const struct tc_ops *const tcs[] = {
@@ -426,6 +427,7 @@ static const struct tc_ops *const tcs[] = {
     &tc_ops_codel,              /* Controlled delay */
     &tc_ops_fqcodel,            /* Fair queue controlled delay */
     &tc_ops_sfq,                /* Stochastic fair queueing */
+    &tc_ops_noop,               /* Non operating qos type. */
     &tc_ops_default,            /* Default qdisc (see tc-pfifo_fast(8)). */
     &tc_ops_other,              /* Some other qdisc. */
     NULL
@@ -1169,6 +1171,9 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
         const void *data = dp_packet_data(pkts[i]);
         size_t size = dp_packet_size(pkts[i]);
         ssize_t retval;
+
+        /* Truncate the packet if it is configured. */
+        size -= dp_packet_get_cutlen(pkts[i]);
 
         if (!is_tap_netdev(netdev_)) {
             /* Use our AF_PACKET socket to send to this device. */
@@ -2101,7 +2106,6 @@ netdev_linux_get_qos_types(const struct netdev *netdev OVS_UNUSED,
                            struct sset *types)
 {
     const struct tc_ops *const *opsp;
-
     for (opsp = tcs; *opsp != NULL; opsp++) {
         const struct tc_ops *ops = *opsp;
         if (ops->tc_install && ops->ovs_name[0] != '\0') {
@@ -2204,6 +2208,10 @@ netdev_linux_set_qos(struct netdev *netdev_,
     new_ops = tc_lookup_ovs_name(type);
     if (!new_ops || !new_ops->tc_install) {
         return EOPNOTSUPP;
+    }
+
+    if (new_ops == &tc_ops_noop) {
+        return new_ops->tc_install(netdev_, details);
     }
 
     ovs_mutex_lock(&netdev->mutex);
@@ -2766,7 +2774,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     NULL,                       /* push header */               \
     NULL,                       /* pop header */                \
     NULL,                       /* get_numa_id */               \
-    NULL,                       /* set_multiq */                \
+    NULL,                       /* set_tx_multiq */             \
                                                                 \
     netdev_linux_send,                                          \
     netdev_linux_send_wait,                                     \
@@ -2806,6 +2814,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     netdev_linux_arp_lookup,                                    \
                                                                 \
     netdev_linux_update_flags,                                  \
+    NULL,                       /* reconfigure */               \
                                                                 \
     netdev_linux_rxq_alloc,                                     \
     netdev_linux_rxq_construct,                                 \
@@ -4486,6 +4495,48 @@ static const struct tc_ops tc_ops_hfsc = {
     hfsc_class_delete,          /* class_delete */
     hfsc_class_get_stats,       /* class_get_stats */
     hfsc_class_dump_stats       /* class_dump_stats */
+};
+
+/* "linux-noop" traffic control class. */
+
+static void
+noop_install__(struct netdev *netdev_)
+{
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    static const struct tc tc = TC_INITIALIZER(&tc, &tc_ops_default);
+
+    netdev->tc = CONST_CAST(struct tc *, &tc);
+}
+
+static int
+noop_tc_install(struct netdev *netdev,
+                   const struct smap *details OVS_UNUSED)
+{
+    noop_install__(netdev);
+    return 0;
+}
+
+static int
+noop_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
+{
+    noop_install__(netdev);
+    return 0;
+}
+
+static const struct tc_ops tc_ops_noop = {
+    NULL,                       /* linux_name */
+    "linux-noop",               /* ovs_name */
+    0,                          /* n_queues */
+    noop_tc_install,
+    noop_tc_load,
+    NULL,                       /* tc_destroy */
+    NULL,                       /* qdisc_get */
+    NULL,                       /* qdisc_set */
+    NULL,                       /* class_get */
+    NULL,                       /* class_set */
+    NULL,                       /* class_delete */
+    NULL,                       /* class_get_stats */
+    NULL                        /* class_dump_stats */
 };
 
 /* "linux-default" traffic control class.

@@ -24,12 +24,14 @@ Ansis Atteka            aatteka@nicira.com
 Antonio Fischetti       antonio.fischetti@intel.com
 Anupam Chanda           achanda@nicira.com
 Ariel Tubaltsev         atubaltsev@vmware.com
+Arnoldo Lutz            arnoldo.lutz.guevara@hpe.com
 Arun Sharma             arun.sharma@calsoftinc.com
 Aryan TaheriMonfared    aryan.taherimonfared@uis.no
 Ashwin Swaminathan      ashwinds@arista.com
 Babu Shanmugam          bschanmu@redhat.com
 Ben Pfaff               blp@ovn.org
 Ben Warren              ben@skyportsystems.com
+Benli Ye                daniely@vmware.com
 Bert Vermeulen          bert@biot.com
 Bhanuprakash Bodireddy  bhanuprakash.bodireddy@intel.com
 Billy O'Mahony          billy.o.mahony@intel.com
@@ -38,6 +40,7 @@ Bruce Davie             bsd@nicira.com
 Bryan Phillippe         bp@toroki.com
 Carlo Andreotti         c.andreotti@m3s.it
 Casey Barker            crbarker@google.com
+Chandra Sekhar Vejendla csvejend@us.ibm.com
 Christoph Jaeger        cj@linux.com
 Chris Wright            chrisw@sous-sol.org
 Chuck Short             zulcss@ubuntu.com
@@ -64,6 +67,7 @@ Dmitry Krivenok         krivenok.dmitry@gmail.com
 Dominic Curran          dominic.curran@citrix.com
 Dongdong                dongdong1@huawei.com
 Duffie Cooley           dcooley@nicira.com
+Dustin Lundquist        dustin@null-ptr.net
 Ed Maste                emaste@freebsd.org
 Ed Swierk               eswierk@skyportsystems.com
 Edouard Bourguignon     madko@linuxed.net
@@ -101,6 +105,7 @@ Isaku Yamahata          yamahata@valinux.co.jp
 James P.                roampune@gmail.com
 James Page              james.page@ubuntu.com
 Jamie Lennox            jamielennox@gmail.com
+Jan Scheurich           jan.scheurich@ericsson.com
 Jan Vansteenkiste       jan@vstone.eu
 Jarno Rajahalme         jarno@ovn.org
 Jason Kölker            jason@koelker.net
@@ -140,10 +145,12 @@ Lucian Petrut           lpetrut@cloudbasesolutions.com
 Luigi Rizzo             rizzo@iet.unipi.it
 Luis E. P.              l31g@hotmail.com
 Madhu Challa            challa@noironetworks.com
+Mario Cabrera           mario.cabrera@hpe.com
 Mark D. Gray            mark.d.gray@intel.com
 Mark Hamilton           mhamilton@nicira.com
 Mark Kavanagh           mark.b.kavanagh@intel.com
 Mark Maglana            mmaglana@gmail.com
+Markos Chandras         mchandras@suse.de
 Martin Casado           casado@nicira.com
 Martino Fornasa         mf@fornasa.it
 Maryam Tahhan           maryam.tahhan@intel.com
@@ -164,6 +171,7 @@ Ofer Ben-Yacov          ofer.benyacov@gmail.com
 Padmanabhan Krishnan    kprad1@yahoo.com
 Panu Matilainen         pmatilai@redhat.com
 Paraneetharan Chandrasekaran    paraneetharanc@gmail.com
+Paul Boca               pboca@cloudbasesolutions.com
 Paul Fazzone            pfazzone@nicira.com
 Paul Ingram             paul@nicira.com
 Paul-Emmanuel Raoul     skyper@skyplabs.net
@@ -247,6 +255,7 @@ Zoltan Kiss             zoltan.kiss@citrix.com
 Zhi Yong Wu             zwu.kernel@gmail.com
 Zang MingJie            zealot0630@gmail.com
 nickcooper-zhangtonghao nickcooper-zhangtonghao@opencloud.tech
+wisd0me                 ak47izatool@gmail.com
 xushengping             shengping.xu@huawei.com
 yinpeijun               yinpeijun@huawei.com
 
@@ -300,6 +309,7 @@ David Palma             palma@onesource.pt
 Derek Cormier           derek.cormier@lab.ntt.co.jp
 Dhaval Badiani          dbadiani@vmware.com
 DK Moon                 dkmoon@nicira.com
+Ding Zhi                zhi.ding@6wind.com
 Edwin Chiu              echiu@vmware.com
 Eivind Bulie Haanaes
 Enas Ahmad              enas.ahmad@kaust.edu.sa
@@ -445,6 +455,7 @@ Ziyou Wang              ziyouw@vmware.com
 Zoltán Balogh           zoltan.balogh@ericsson.com
 ankur dwivedi           ankurengg2003@gmail.com
 chen zhang              3zhangchen9211@gmail.com
+james hopper            jameshopper@email.com
 kk yap                  yapkke@stanford.edu
 likunyun                kunyunli@hotmail.com
 meishengxin             meishengxin@huawei.com

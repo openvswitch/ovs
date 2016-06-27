@@ -1089,8 +1089,7 @@ dpctl_get_flow(int argc, const char *argv[], struct dpctl_params *dpctl_p)
         goto out;
     }
 
-    /* Does not work for DPDK, since do not know which 'pmd' to apply the
-     * operation.  So, just uses PMD_ID_NULL. */
+    /* In case of PMD will be returned flow from first PMD thread with match. */
     error = dpif_flow_get(dpif, NULL, 0, &ufid, PMD_ID_NULL, &buf, &flow);
     if (error) {
         dpctl_error(dpctl_p, error, "getting flow");

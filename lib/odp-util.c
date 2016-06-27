@@ -107,6 +107,7 @@ odp_action_len(uint16_t type)
 
     switch ((enum ovs_action_attr) type) {
     case OVS_ACTION_ATTR_OUTPUT: return sizeof(uint32_t);
+    case OVS_ACTION_ATTR_TRUNC: return sizeof(struct ovs_action_trunc);
     case OVS_ACTION_ATTR_TUNNEL_PUSH: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_TUNNEL_POP: return sizeof(uint32_t);
     case OVS_ACTION_ATTR_USERSPACE: return ATTR_LEN_VARIABLE;
@@ -311,11 +312,13 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
                 ds_put_format(ds, ",flow_sample(probability=%"PRIu16
                               ",collector_set_id=%"PRIu32
                               ",obs_domain_id=%"PRIu32
-                              ",obs_point_id=%"PRIu32")",
+                              ",obs_point_id=%"PRIu32
+                              ",output_port=%"PRIu32")",
                               cookie.flow_sample.probability,
                               cookie.flow_sample.collector_set_id,
                               cookie.flow_sample.obs_domain_id,
-                              cookie.flow_sample.obs_point_id);
+                              cookie.flow_sample.obs_point_id,
+                              cookie.flow_sample.output_odp_port);
             } else if (userdata_len >= sizeof cookie.ipfix
                        && cookie.type == USER_ACTION_COOKIE_IPFIX) {
                 ds_put_format(ds, ",ipfix(output_port=%"PRIu32")",
@@ -775,6 +778,14 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     case OVS_ACTION_ATTR_OUTPUT:
         ds_put_format(ds, "%"PRIu32, nl_attr_get_u32(a));
         break;
+    case OVS_ACTION_ATTR_TRUNC: {
+        const struct ovs_action_trunc *trunc =
+                       nl_attr_get_unspec(a, sizeof *trunc);
+
+        ds_put_format(ds, "trunc(%"PRIu32")", trunc->max_len);
+        break;
+    }
+    break;
     case OVS_ACTION_ATTR_TUNNEL_POP:
         ds_put_format(ds, "tnl_pop(%"PRIu32")", nl_attr_get_u32(a));
         break;
@@ -951,9 +962,11 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
         } else if (ovs_scan(&s[n], ",flow_sample(probability=%"SCNi32","
                             "collector_set_id=%"SCNi32","
                             "obs_domain_id=%"SCNi32","
-                            "obs_point_id=%"SCNi32")%n",
+                            "obs_point_id=%"SCNi32","
+                            "output_port=%"SCNi32")%n",
                             &probability, &collector_set_id,
-                            &obs_domain_id, &obs_point_id, &n1)) {
+                            &obs_domain_id, &obs_point_id,
+                            &output, &n1)) {
             n += n1;
 
             cookie.type = USER_ACTION_COOKIE_FLOW_SAMPLE;
@@ -961,6 +974,7 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             cookie.flow_sample.collector_set_id = collector_set_id;
             cookie.flow_sample.obs_domain_id = obs_domain_id;
             cookie.flow_sample.obs_point_id = obs_point_id;
+            cookie.flow_sample.output_odp_port = u32_to_odp(output);
             user_data = &cookie;
             user_data_size = sizeof cookie.flow_sample;
         } else if (ovs_scan(&s[n], ",ipfix(output_port=%"SCNi32")%n",
@@ -1519,6 +1533,20 @@ parse_odp_action(const char *s, const struct simap *port_names,
 
         if (ovs_scan(s, "%"SCNi32"%n", &port, &n)) {
             nl_msg_put_u32(actions, OVS_ACTION_ATTR_OUTPUT, port);
+            return n;
+        }
+    }
+
+    {
+        uint32_t max_len;
+        int n;
+
+        if (ovs_scan(s, "trunc(%"SCNi32")%n", &max_len, &n)) {
+            struct ovs_action_trunc *trunc;
+
+            trunc = nl_msg_put_unspec_uninit(actions,
+                     OVS_ACTION_ATTR_TRUNC, sizeof *trunc);
+            trunc->max_len = max_len;
             return n;
         }
     }
@@ -4274,10 +4302,10 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
         nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, data->dp_hash);
     }
 
-    /* Add an ingress port attribute if this is a mask or 'odp_in_port'
+    /* Add an ingress port attribute if this is a mask or 'in_port.odp_port'
      * is not the magical value "ODPP_NONE". */
-    if (export_mask || parms->odp_in_port != ODPP_NONE) {
-        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, parms->odp_in_port);
+    if (export_mask || flow->in_port.odp_port != ODPP_NONE) {
+        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, data->in_port.odp_port);
     }
 
     eth_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ETHERNET,
@@ -5719,9 +5747,9 @@ commit_set_icmp_action(const struct flow *flow, struct flow *base_flow,
     struct ovs_key_icmp key, mask, base;
     enum ovs_key_attr attr;
 
-    if (is_icmpv4(flow)) {
+    if (is_icmpv4(flow, NULL)) {
         attr = OVS_KEY_ATTR_ICMP;
-    } else if (is_icmpv6(flow)) {
+    } else if (is_icmpv6(flow, NULL)) {
         attr = OVS_KEY_ATTR_ICMPV6;
     } else {
         return 0;

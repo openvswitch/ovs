@@ -434,6 +434,9 @@ udpif_destroy(struct udpif *udpif)
 {
     udpif_stop_threads(udpif);
 
+    dpif_register_dp_purge_cb(udpif->dpif, NULL, udpif);
+    dpif_register_upcall_cb(udpif->dpif, NULL, udpif);
+
     for (int i = 0; i < N_UMAPS; i++) {
         cmap_destroy(&udpif->ukeys[i].cmap);
         ovs_mutex_destroy(&udpif->ukeys[i].mutex);
@@ -1080,7 +1083,16 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
 
     upcall->dump_seq = seq_read(udpif->dump_seq);
     upcall->reval_seq = seq_read(udpif->reval_seq);
+
     xlate_actions(&xin, &upcall->xout);
+    if (wc) {
+        /* Convert the input port wildcard from OFP to ODP format. There's no
+         * real way to do this for arbitrary bitmasks since the numbering spaces
+         * aren't the same. However, flow translation always exact matches the
+         * whole thing, so we can do the same here. */
+        WC_MASK_FIELD(wc, in_port.odp_port);
+    }
+
     upcall->xout_initialized = true;
 
     if (!upcall->xout.slow) {
@@ -1253,17 +1265,22 @@ process_upcall(struct udpif *udpif, struct upcall *upcall,
     case FLOW_SAMPLE_UPCALL:
         if (upcall->ipfix) {
             union user_action_cookie cookie;
+            struct flow_tnl output_tunnel_key;
 
             memset(&cookie, 0, sizeof cookie);
             memcpy(&cookie, nl_attr_get(userdata), sizeof cookie.flow_sample);
 
+            if (upcall->out_tun_key) {
+                odp_tun_key_from_attr(upcall->out_tun_key, false,
+                                      &output_tunnel_key);
+            }
+
             /* The flow reflects exactly the contents of the packet.
              * Sample the packet using it. */
             dpif_ipfix_flow_sample(upcall->ipfix, packet, flow,
-                                   cookie.flow_sample.collector_set_id,
-                                   cookie.flow_sample.probability,
-                                   cookie.flow_sample.obs_domain_id,
-                                   cookie.flow_sample.obs_point_id);
+                                   &cookie, flow->in_port.odp_port,
+                                   upcall->out_tun_key ?
+                                       &output_tunnel_key : NULL);
         }
         break;
 
@@ -1338,6 +1355,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
             op->ukey = NULL;
             op->dop.type = DPIF_OP_EXECUTE;
             op->dop.u.execute.packet = CONST_CAST(struct dp_packet *, packet);
+            op->dop.u.execute.flow = upcall->flow;
             odp_key_to_pkt_metadata(upcall->key, upcall->key_len,
                                     &op->dop.u.execute.packet->md);
             op->dop.u.execute.actions = upcall->odp_actions.data;
@@ -1478,16 +1496,13 @@ ukey_create_from_upcall(struct upcall *upcall, struct flow_wildcards *wc)
         /* dpif-netdev doesn't provide a netlink-formatted flow key in the
          * upcall, so convert the upcall's flow here. */
         ofpbuf_use_stack(&keybuf, &keystub, sizeof keystub);
-        odp_parms.odp_in_port = upcall->flow->in_port.odp_port;
         odp_flow_key_from_flow(&odp_parms, &keybuf);
     }
 
     atomic_read_relaxed(&enable_megaflows, &megaflow);
     ofpbuf_use_stack(&maskbuf, &maskstub, sizeof maskstub);
     if (megaflow) {
-        odp_parms.odp_in_port = ODPP_NONE;
         odp_parms.key_buf = &keybuf;
-
         odp_flow_key_from_mask(&odp_parms, &maskbuf);
     }
 
@@ -2052,6 +2067,7 @@ log_unexpected_flow(const struct dpif_flow *flow, int error)
                   "unexpected flow (%s): ", ovs_strerror(error));
     odp_format_ufid(&flow->ufid, &ds);
     VLOG_WARN_RL(&rl, "%s", ds_cstr(&ds));
+    ds_destroy(&ds);
 }
 
 static void

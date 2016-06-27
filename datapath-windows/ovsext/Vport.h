@@ -145,9 +145,12 @@ POVS_VPORT_ENTRY OvsFindVportByHvNameA(POVS_SWITCH_CONTEXT switchContext,
 POVS_VPORT_ENTRY OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
                                                  NDIS_SWITCH_PORT_ID portId,
                                                  NDIS_SWITCH_NIC_INDEX index);
-POVS_VPORT_ENTRY OvsFindTunnelVportByDstPort(POVS_SWITCH_CONTEXT switchContext,
-                                             UINT16 dstPort,
-                                             OVS_VPORT_TYPE ovsVportType);
+POVS_VPORT_ENTRY OvsFindTunnelVportByDstPortAndType(POVS_SWITCH_CONTEXT switchContext,
+                                                    UINT16 dstPort,
+                                                    OVS_VPORT_TYPE ovsPortType);
+POVS_VPORT_ENTRY OvsFindTunnelVportByDstPortAndNWProto(POVS_SWITCH_CONTEXT switchContext,
+                                                       UINT16 dstPort,
+                                                       UINT8 nwProto);
 POVS_VPORT_ENTRY OvsFindTunnelVportByPortType(POVS_SWITCH_CONTEXT switchContext,
                                               OVS_VPORT_TYPE ovsPortType);
 

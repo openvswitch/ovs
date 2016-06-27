@@ -1139,6 +1139,25 @@ int ofputil_decode_port_stats(struct ofputil_port_stats *, struct ofpbuf *msg);
 enum ofperr ofputil_decode_port_stats_request(const struct ofp_header *request,
                                               ofp_port_t *ofp10_port);
 
+struct ofputil_ipfix_stats {
+    uint32_t collector_set_id;  /* Used only for flow-based IPFIX statistics. */
+    uint64_t total_flows;  /* Totabl flows of this IPFIX exporter. */
+    uint64_t current_flows;  /* Current flows of this IPFIX exporter. */
+    uint64_t pkts;  /* Successfully sampled packets. */
+    uint64_t ipv4_pkts;  /* Successfully sampled IPV4 packets. */
+    uint64_t ipv6_pkts;  /* Successfully sampled IPV6 packets. */
+    uint64_t error_pkts;  /* Error packets when sampling. */
+    uint64_t ipv4_error_pkts;  /* Error IPV4 packets when sampling. */
+    uint64_t ipv6_error_pkts;  /* Error IPV6 packets when sampling. */
+    uint64_t tx_pkts;  /* TX IPFIX packets. */
+    uint64_t tx_errors;  /* IPFIX packets TX errors. */
+};
+
+void ofputil_append_ipfix_stat(struct ovs_list *replies,
+                              const struct ofputil_ipfix_stats *ois);
+size_t ofputil_count_ipfix_stats(const struct ofp_header *);
+int ofputil_pull_ipfix_stats(struct ofputil_ipfix_stats *, struct ofpbuf *msg);
+
 struct ofputil_queue_stats_request {
     ofp_port_t port_no;           /* OFPP_ANY means "all ports". */
     uint32_t queue_id;

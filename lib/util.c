@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -149,6 +149,12 @@ char *
 xstrdup(const char *s)
 {
     return xmemdup0(s, strlen(s));
+}
+
+char * MALLOC_LIKE
+nullable_xstrdup(const char *s)
+{
+    return s ? xstrdup(s) : NULL;
 }
 
 char *
@@ -461,14 +467,9 @@ ovs_strerror(int error)
  * vSwitch.  Otherwise, it is assumed to be an external program linking against
  * the Open vSwitch libraries.
  *
- * The 'date' and 'time' arguments should likely be called with
- * "__DATE__" and "__TIME__" to use the time the binary was built.
- * Alternatively, the "ovs_set_program_name" macro may be called to do this
- * automatically.
  */
 void
-ovs_set_program_name__(const char *argv0, const char *version, const char *date,
-                       const char *time)
+ovs_set_program_name(const char *argv0, const char *version)
 {
     char *basename;
 #ifdef _WIN32
@@ -496,14 +497,12 @@ ovs_set_program_name__(const char *argv0, const char *version, const char *date,
 
     free(program_version);
     if (!strcmp(version, VERSION)) {
-        program_version = xasprintf("%s (Open vSwitch) "VERSION"\n"
-                                    "Compiled %s %s\n",
-                                    program_name, date, time);
+        program_version = xasprintf("%s (Open vSwitch) "VERSION"\n",
+                                    program_name);
     } else {
         program_version = xasprintf("%s %s\n"
-                                    "Open vSwitch Library "VERSION"\n"
-                                    "Compiled %s %s\n",
-                                    program_name, version, date, time);
+                                    "Open vSwitch Library "VERSION"\n",
+                                    program_name, version);
     }
 }
 

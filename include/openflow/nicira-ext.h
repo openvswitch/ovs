@@ -774,6 +774,23 @@ struct nx_aggregate_stats_request {
      */
 };
 OFP_ASSERT(sizeof(struct nx_aggregate_stats_request) == 8);
+
+struct nx_ipfix_stats_reply {
+    ovs_be64 total_flows;
+    ovs_be64 current_flows;
+    ovs_be64 pkts;
+    ovs_be64 ipv4_pkts;
+    ovs_be64 ipv6_pkts;
+    ovs_be64 error_pkts;
+    ovs_be64 ipv4_error_pkts;
+    ovs_be64 ipv6_error_pkts;
+    ovs_be64 tx_pkts;
+    ovs_be64 tx_errors;
+    ovs_be32 collector_set_id; /* Range 0 to 4,294,967,295. */
+    uint8_t pad[4];            /* Pad to a multiple of 8 bytes. */
+};
+OFP_ASSERT(sizeof(struct nx_ipfix_stats_reply) == 88);
+
 
 /* NXT_SET_CONTROLLER_ID.
  *

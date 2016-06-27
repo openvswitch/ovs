@@ -25,7 +25,7 @@ struct smap;
 
 void netdev_dpdk_register(void);
 void free_dpdk_buf(struct dp_packet *);
-int pmd_thread_setaffinity_cpu(unsigned cpu);
+void dpdk_set_lcore_id(unsigned cpu);
 
 #else
 
@@ -45,10 +45,10 @@ free_dpdk_buf(struct dp_packet *buf OVS_UNUSED)
     /* Nothing */
 }
 
-static inline int
-pmd_thread_setaffinity_cpu(unsigned cpu OVS_UNUSED)
+static inline void
+dpdk_set_lcore_id(unsigned cpu OVS_UNUSED)
 {
-    return 0;
+    /* Nothing */
 }
 
 #endif /* DPDK_NETDEV */

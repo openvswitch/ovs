@@ -699,6 +699,7 @@ struct dpif_execute {
     bool probe;                     /* Suppress error messages. */
     unsigned int mtu;               /* Maximum transmission unit to fragment.
                                        0 if not a fragmented packet */
+    const struct flow *flow;         /* Flow extracted from 'packet'. */
 
     /* Input, but possibly modified as a side effect of execution. */
     struct dp_packet *packet;          /* Packet to execute. */
@@ -783,6 +784,7 @@ struct dpif_upcall {
     size_t key_len;             /* Length of 'key' in bytes. */
     ovs_u128 ufid;              /* Unique flow identifier for 'key'. */
     struct nlattr *mru;         /* Maximum receive unit. */
+    struct nlattr *cutlen;      /* Number of bytes shrink from the end. */
 
     /* DPIF_UC_ACTION only. */
     struct nlattr *userdata;    /* Argument to OVS_ACTION_ATTR_USERSPACE. */

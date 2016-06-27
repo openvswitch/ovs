@@ -1,13 +1,13 @@
 {
     "name": "OVN_Northbound",
-    "version": "2.1.1",
-    "cksum": "2615511875 5108",
+    "version": "3.1.0",
+    "cksum": "1426508118 6135",
     "tables": {
         "Logical_Switch": {
             "columns": {
                 "name": {"type": "string"},
                 "ports": {"type": {"key": {"type": "uuid",
-                                           "refTable": "Logical_Port",
+                                           "refTable": "Logical_Switch_Port",
                                            "refType": "strong"},
                                    "min": 0,
                                    "max": "unlimited"}},
@@ -20,7 +20,7 @@
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
             "isRoot": true},
-        "Logical_Port": {
+        "Logical_Switch_Port": {
             "columns": {
                 "name": {"type": "string"},
                 "type": {"type": "string"},
@@ -78,6 +78,16 @@
                                    "max": "unlimited"}},
                 "default_gw": {"type": {"key": "string", "min": 0, "max": 1}},
                 "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},
+                "nat": {"type": {"key": {"type": "uuid",
+                                         "refTable": "NAT",
+                                         "refType": "strong"},
+                                 "min": 0,
+                                 "max": "unlimited"}},
+                "options": {
+                     "type": {"key": "string",
+                              "value": "string",
+                              "min": 0,
+                              "max": "unlimited"}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
@@ -99,6 +109,16 @@
                 "ip_prefix": {"type": "string"},
                 "nexthop": {"type": "string"},
                 "output_port": {"type": {"key": "string", "min": 0, "max": 1}}},
+            "isRoot": false},
+        "NAT": {
+            "columns": {
+                "external_ip": {"type": "string"},
+                "logical_ip": {"type": "string"},
+                "type": {"type": {"key": {"type": "string",
+                                           "enum": ["set", ["dnat",
+                                                             "snat",
+                                                             "dnat_and_snat"
+                                                               ]]}}}},
             "isRoot": false}
     }
 }

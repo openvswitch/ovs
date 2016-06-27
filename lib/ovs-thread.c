@@ -247,15 +247,17 @@ ovs_rwlock_init(const struct ovs_rwlock *l_)
     xpthread_rwlockattr_destroy(&attr);
 }
 
+/* Provides an error-checking wrapper around pthread_cond_wait().
+ *
+ * If the wait can take a significant amount of time, consider bracketing this
+ * call with calls to ovsrcu_quiesce_start() and ovsrcu_quiesce_end().  */
 void
 ovs_mutex_cond_wait(pthread_cond_t *cond, const struct ovs_mutex *mutex_)
 {
     struct ovs_mutex *mutex = CONST_CAST(struct ovs_mutex *, mutex_);
     int error;
 
-    ovsrcu_quiesce_start();
     error = pthread_cond_wait(cond, &mutex->lock);
-    ovsrcu_quiesce_end();
 
     if (OVS_UNLIKELY(error)) {
         ovs_abort(error, "pthread_cond_wait failed");

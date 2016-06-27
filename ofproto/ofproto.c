@@ -219,6 +219,7 @@ static void learned_cookies_flush(struct ofproto *, struct ovs_list *dead_cookie
 /* ofport. */
 static void ofport_destroy__(struct ofport *) OVS_EXCLUDED(ofproto_mutex);
 static void ofport_destroy(struct ofport *, bool del);
+static inline bool ofport_is_internal(const struct ofport *);
 
 static int update_port(struct ofproto *, const char *devname);
 static int init_ports(struct ofproto *);
@@ -320,6 +321,7 @@ static uint64_t pick_datapath_id(const struct ofproto *);
 static uint64_t pick_fallback_dpid(void);
 static void ofproto_destroy__(struct ofproto *);
 static void update_mtu(struct ofproto *, struct ofport *);
+static void update_mtu_ofproto(struct ofproto *);
 static void meter_delete(struct ofproto *, uint32_t first, uint32_t last);
 static void meter_insert_rule(struct rule *);
 
@@ -782,8 +784,7 @@ void
 ofproto_set_cpu_mask(const char *cmask)
 {
     free(pmd_cpu_mask);
-
-    pmd_cpu_mask = cmask ? xstrdup(cmask) : NULL;
+    pmd_cpu_mask = nullable_xstrdup(cmask);
 }
 
 void
@@ -809,7 +810,7 @@ void
 ofproto_set_dp_desc(struct ofproto *p, const char *dp_desc)
 {
     free(p->dp_desc);
-    p->dp_desc = dp_desc ? xstrdup(dp_desc) : NULL;
+    p->dp_desc = nullable_xstrdup(dp_desc);
 }
 
 int
@@ -859,6 +860,64 @@ ofproto_set_ipfix(struct ofproto *ofproto,
     } else {
         return (bo || fo) ? EOPNOTSUPP : 0;
     }
+}
+
+static int
+ofproto_get_ipfix_stats(struct ofproto *ofproto,
+                        bool bridge_ipfix,
+                        struct ovs_list *replies)
+{
+    int error;
+
+    if (ofproto->ofproto_class->get_ipfix_stats) {
+        error = ofproto->ofproto_class->get_ipfix_stats(ofproto,
+                                                          bridge_ipfix,
+                                                          replies);
+    } else {
+        error = EOPNOTSUPP;
+    }
+
+    return error;
+}
+
+static enum ofperr
+handle_ipfix_bridge_stats_request(struct ofconn *ofconn,
+                                  const struct ofp_header *request)
+{
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct ovs_list replies;
+    enum ofperr error;
+
+    ofpmp_init(&replies, request);
+    error = ofproto_get_ipfix_stats(ofproto, true, &replies);
+
+    if (!error) {
+        ofconn_send_replies(ofconn, &replies);
+    } else {
+        ofpbuf_list_delete(&replies);
+    }
+
+    return error;
+}
+
+static enum ofperr
+handle_ipfix_flow_stats_request(struct ofconn *ofconn,
+                                const struct ofp_header *request)
+{
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    struct ovs_list replies;
+    enum ofperr error;
+
+    ofpmp_init(&replies, request);
+    error = ofproto_get_ipfix_stats(ofproto, false, &replies);
+
+    if (!error) {
+        ofconn_send_replies(ofconn, &replies);
+    } else {
+        ofpbuf_list_delete(&replies);
+    }
+
+    return error;
 }
 
 void
@@ -1473,7 +1532,9 @@ ofproto_rule_delete(struct ofproto *ofproto, struct rule *rule)
             OVS_NOT_REACHED();
         }
         ofproto_rule_remove__(rule->ofproto, rule);
-        ofproto->ofproto_class->rule_delete(rule);
+        if (ofproto->ofproto_class->rule_delete) {
+            ofproto->ofproto_class->rule_delete(rule);
+        }
         ofproto_rule_unref(rule);
     }
     ovs_mutex_unlock(&ofproto_mutex);
@@ -2386,9 +2447,15 @@ error:
 static void
 ofport_remove(struct ofport *ofport)
 {
+    struct ofproto *p = ofport->ofproto;
+    bool is_internal = ofport_is_internal(ofport);
+
     connmgr_send_port_status(ofport->ofproto->connmgr, NULL, &ofport->pp,
                              OFPPR_DELETE);
     ofport_destroy(ofport, true);
+    if (!is_internal) {
+        update_mtu_ofproto(p);
+    }
 }
 
 /* If 'ofproto' contains an ofport named 'name', removes it from 'ofproto' and
@@ -2666,6 +2733,12 @@ init_ports(struct ofproto *p)
     return 0;
 }
 
+static inline bool
+ofport_is_internal(const struct ofport *port)
+{
+    return !strcmp(netdev_get_type(port->netdev), "internal");
+}
+
 /* Find the minimum MTU of all non-datapath devices attached to 'p'.
  * Returns ETH_PAYLOAD_MAX or the minimum of the ports. */
 static int
@@ -2680,7 +2753,7 @@ find_min_mtu(struct ofproto *p)
 
         /* Skip any internal ports, since that's what we're trying to
          * set. */
-        if (!strcmp(netdev_get_type(netdev), "internal")) {
+        if (ofport_is_internal(ofport)) {
             continue;
         }
 
@@ -2700,15 +2773,14 @@ find_min_mtu(struct ofproto *p)
 static void
 update_mtu(struct ofproto *p, struct ofport *port)
 {
-    struct ofport *ofport;
     struct netdev *netdev = port->netdev;
-    int dev_mtu, old_min;
+    int dev_mtu;
 
     if (netdev_get_mtu(netdev, &dev_mtu)) {
         port->mtu = 0;
         return;
     }
-    if (!strcmp(netdev_get_type(port->netdev), "internal")) {
+    if (ofport_is_internal(port)) {
         if (dev_mtu > p->min_mtu) {
            if (!netdev_set_mtu(port->netdev, p->min_mtu)) {
                dev_mtu = p->min_mtu;
@@ -2718,9 +2790,18 @@ update_mtu(struct ofproto *p, struct ofport *port)
         return;
     }
 
-    /* For non-internal port find new min mtu. */
-    old_min = p->min_mtu;
     port->mtu = dev_mtu;
+    /* For non-internal port find new min mtu. */
+    update_mtu_ofproto(p);
+}
+
+static void
+update_mtu_ofproto(struct ofproto *p)
+{
+    /* For non-internal port find new min mtu. */
+    struct ofport *ofport;
+    int old_min = p->min_mtu;
+
     p->min_mtu = find_min_mtu(p);
     if (p->min_mtu == old_min) {
         return;
@@ -2729,7 +2810,7 @@ update_mtu(struct ofproto *p, struct ofport *port)
     HMAP_FOR_EACH (ofport, hmap_node, &p->ports) {
         struct netdev *netdev = ofport->netdev;
 
-        if (!strcmp(netdev_get_type(netdev), "internal")) {
+        if (ofport_is_internal(ofport)) {
             if (!netdev_set_mtu(netdev, p->min_mtu)) {
                 ofport->mtu = p->min_mtu;
             }
@@ -2803,7 +2884,9 @@ remove_rule_rcu__(struct rule *rule)
     if (!classifier_remove(&table->cls, &rule->cr)) {
         OVS_NOT_REACHED();
     }
-    ofproto->ofproto_class->rule_delete(rule);
+    if (ofproto->ofproto_class->rule_delete) {
+        ofproto->ofproto_class->rule_delete(rule);
+    }
     ofproto_rule_unref(rule);
 }
 
@@ -7334,6 +7417,12 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_NXT_TLV_TABLE_REQUEST:
         return handle_tlv_table_request(ofconn, oh);
 
+    case OFPTYPE_IPFIX_BRIDGE_STATS_REQUEST:
+        return handle_ipfix_bridge_stats_request(ofconn, oh);
+
+    case OFPTYPE_IPFIX_FLOW_STATS_REQUEST:
+        return handle_ipfix_flow_stats_request(ofconn, oh);
+
     case OFPTYPE_HELLO:
     case OFPTYPE_ERROR:
     case OFPTYPE_FEATURES_REPLY:
@@ -7367,6 +7456,8 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
     case OFPTYPE_REQUESTFORWARD:
     case OFPTYPE_TABLE_STATUS:
     case OFPTYPE_NXT_TLV_TABLE_REPLY:
+    case OFPTYPE_IPFIX_BRIDGE_STATS_REPLY:
+    case OFPTYPE_IPFIX_FLOW_STATS_REPLY:
     default:
         if (ofpmsg_is_stat_request(oh)) {
             return OFPERR_OFPBRC_BAD_STAT;

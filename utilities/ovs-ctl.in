@@ -199,9 +199,14 @@ add_managers () {
     # churn in the database at startup or restart.  (For example, managers
     # won't briefly see empty datapath-id or ofport columns for records that
     # exist at startup.)
-    action "Enabling remote OVSDB managers" \
-	ovs-appctl -t ovsdb-server ovsdb-server/add-remote \
-	    db:Open_vSwitch,Open_vSwitch,manager_options
+    if test X"$OVSDB_SERVER" = Xyes || test X"$OVS_VSWITCHD" = Xyes; then
+        if daemon_is_running ovsdb-server \
+                && daemon_is_running ovs-vswitchd; then
+            action "Enabling remote OVSDB managers" \
+                   ovs-appctl -t ovsdb-server ovsdb-server/add-remote \
+                   db:Open_vSwitch,Open_vSwitch,manager_options
+        fi
+    fi
 }
 
 do_start_forwarding () {

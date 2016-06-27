@@ -620,13 +620,18 @@
     <group title="Core Features">
       <column name="name">
         <p>
-          Bridge identifier.  Should be alphanumeric and no more than about 8
-          bytes long.  Must be unique among the names of ports, interfaces, and
-          bridges on a host.
+          Bridge identifier.  Must be unique among the names of ports,
+          interfaces, and bridges on a host.
         </p>
 
         <p>
-          Forward and backward slashes are prohibited in bridge names.
+          The name must be alphanumeric and must not contain forward or
+          backward slashes.  The name of a bridge is also the name of an <ref
+          table="Interface"/> (and a <ref table="Port"/>) within the bridge, so
+          the restrictions on the <ref table="Interface" column="name"/> column
+          in the <ref table="Interface"/> table, particularly on length, also
+          apply to bridge names.  Refer to the documentation for <ref
+          table="Interface"/> names for details.
         </p>
       </column>
 
@@ -1241,10 +1246,13 @@
     part of the port's <ref table="Interface"/> members.</p>
 
     <column name="name">
-      Port name.  Should be alphanumeric and no more than about 8
-      bytes long.  May be the same as the interface name, for
-      non-bonded ports.  Must otherwise be unique among the names of
-      ports, interfaces, and bridges on a host.
+      Port name.  For a non-bonded port, this should be the same as its
+      interface's name.  Port names must otherwise be unique among the names of
+      ports, interfaces, and bridges on a host.  Because port and interfaces
+      names are usually the same, the restrictions on the <ref
+      table="Interface" column="name"/> column in the <ref table="Interface"/>
+      table, particularly on length, also apply to port names.  Refer to the
+      documentation for <ref table="Interface"/> names for details.
     </column>
 
     <column name="interfaces">
@@ -1839,10 +1847,38 @@
 
     <group title="Core Features">
       <column name="name">
-        Interface name.  Should be alphanumeric and no more than about 8 bytes
-        long.  May be the same as the port name, for non-bonded ports.  Must
-        otherwise be unique among the names of ports, interfaces, and bridges
-        on a host.
+        <p>
+          Interface name.  Should be alphanumeric.  For non-bonded port, this
+          should be the same as the port name.  It must otherwise be unique
+          among the names of ports, interfaces, and bridges on a host.
+        </p>
+
+        <p>
+          The maximum length of an interface name depends on the underlying
+          datapath:
+        </p>
+
+        <ul>
+          <li>
+            The names of interfaces implemented as Linux and BSD network
+            devices, including interfaces with type <code>internal</code>,
+            <code>tap</code>, or <code>system</code> plus the different types
+            of tunnel ports, are limited to 15 bytes. Windows limits these
+            names to 255 bytes.
+          </li>
+
+          <li>
+            The names of patch ports are not used in the underlying datapath,
+            so operating system restrictions do not apply.  Thus, they may have
+            arbitrary length.
+          </li>
+        </ul>
+
+        <p>
+          Regardless of other restrictions, OpenFlow only supports 15-byte
+          names, which means that <code>ovs-ofctl</code> and OpenFlow
+          controllers will show names truncated to 15 bytes.
+        </p>
       </column>
 
       <column name="ifindex">
@@ -1967,7 +2003,7 @@
 
           <dt><code>geneve</code></dt>
           <dd>
-            An Ethernet over Geneve (<code>http://tools.ietf.org/html/draft-ietf-nvo3-geneve-00</code>)
+            An Ethernet over Geneve (<code>http://tools.ietf.org/html/draft-ietf-nvo3-geneve</code>)
             IPv4/IPv6 tunnel.
 
             A description of how to match and set Geneve options can be found
@@ -1993,9 +2029,9 @@
               RFC 7348.
             </p>
             <p>
-              Open vSwitch uses UDP destination port 4789.  The source port used for
-              VXLAN traffic varies on a per-flow basis and is in the ephemeral port
-              range.
+              Open vSwitch uses IANA-assigned UDP destination port 4789.  The
+              source port used for VXLAN traffic varies on a per-flow basis
+              and is in the ephemeral port range.
             </p>
           </dd>
 
@@ -2028,10 +2064,9 @@
             Since the STT protocol does not engage in the usual TCP 3-way handshake,
             so it will have difficulty traversing stateful firewalls.
             The protocol is documented at
-            http://www.ietf.org/archive/id/draft-davie-stt-06.txt
+            https://tools.ietf.org/html/draft-davie-stt
 
-            All traffic uses a default destination port of 7471. STT is only
-            available in kernel datapath on kernel 3.5 or newer.
+            All traffic uses a default destination port of 7471.
           </dd>
 
           <dt><code>patch</code></dt>
@@ -2502,8 +2537,8 @@
         table="Queue"/> tables).
       </p>
       <p>
-        Policing is currently implemented only on Linux.  The Linux
-        implementation uses a simple ``token bucket'' approach:
+        Policing is currently implemented on Linux and OVS with DPDK. Both
+        implementations use a simple ``token bucket'' approach:
       </p>
       <ul>
         <li>
@@ -3315,16 +3350,14 @@
           (<code>http://luxik.cdi.cz/~devik/qos/htb/manual/userg.htm</code>)
           for information on how this classifier works and how to configure it.
         </dd>
-      </dl>
-      <dl>
+
         <dt><code>linux-hfsc</code></dt>
         <dd>
           Linux "Hierarchical Fair Service Curve" classifier.
           See <code>http://linux-ip.net/articles/hfsc.en/</code> for
           information on how this classifier works.
         </dd>
-      </dl>
-      <dl>
+
         <dt><code>linux-sfq</code></dt>
         <dd>
           Linux ``Stochastic Fairness Queueing'' classifier. See
@@ -3332,8 +3365,7 @@
           <code>http://linux.die.net/man/8/tc-sfq</code>) for information on
           how this classifier works.
         </dd>
-      </dl>
-      <dl>
+
         <dt><code>linux-codel</code></dt>
         <dd>
           Linux ``Controlled Delay'' classifier. See <code>tc-codel</code>(8)
@@ -3341,8 +3373,7 @@
           <code>http://man7.org/linux/man-pages/man8/tc-codel.8.html</code>)
           for information on how this classifier works.
         </dd>
-      </dl>
-      <dl>
+
         <dt><code>linux-fq_codel</code></dt>
         <dd>
           Linux ``Fair Queuing with Controlled Delay'' classifier. See
@@ -3350,11 +3381,19 @@
           <code>http://man7.org/linux/man-pages/man8/tc-fq_codel.8.html</code>)
           for information on how this classifier works.
         </dd>
-      </dl>
-      <dl>
+
+        <dt><code>linux-noop</code></dt>
+        <dd>
+          Linux ``No operation.''  By default, Open vSwitch manages quality of
+          service on all of its configured ports.  This can be helpful, but
+          sometimes administrators prefer to use other software to manage QoS.
+          This <ref column="type"/> prevents Open vSwitch from changing the QoS
+          configuration for a port.
+        </dd>
+
         <dt><code>egress-policer</code></dt>
         <dd>
-          An egress policer algorithm. This implementation uses the DPDK
+          A DPDK egress policer algorithm using the DPDK
           rte_meter library. The rte_meter library provides an implementation
           which allows the metering and policing of traffic. The implementation
           in OVS essentially creates a single token bucket used to police
@@ -4620,6 +4659,127 @@
       disabled.
     </column>
 
+    <column name="other_config" key="enable-tunnel-sampling"
+            type='{"type": "boolean"}'>
+      <p>
+        Set to <code>true</code> to enable sampling and reporting tunnel
+        header 7-tuples in IPFIX flow records.  Tunnel sampling is enabled
+        by default.
+      </p>
+
+      <p>
+        The following enterprise entities report the sampled tunnel info:
+      </p>
+
+      <dl>
+        <dt>tunnelType:</dt>
+        <dd>
+          <p>ID: 891, and enterprise ID 6876 (VMware).</p>
+          <p>type: unsigned 8-bit integer.</p>
+          <p>data type semantics: identifier.</p>
+          <p>description: Identifier of the layer 2 network overlay network
+          encapsulation type: 0x01 VxLAN, 0x02 GRE, 0x03 LISP, 0x05 IPsec+GRE,
+          0x07 GENEVE.</p>
+        </dd>
+        <dt>tunnelKey:</dt>
+        <dd>
+          <p>ID: 892, and enterprise ID 6876 (VMware).</p>
+          <p>type: variable-length octetarray.</p>
+          <p>data type semantics: identifier.</p>
+          <p>description: Key which is used for identifying an individual
+          traffic flow within a VxLAN (24-bit VNI), GENEVE (24-bit VNI),
+          GRE (32-bit key), or LISP (24-bit instance ID) tunnel. The
+          key is encoded in this octetarray as a 3-, 4-, or 8-byte integer
+          ID in network byte order.</p>
+        </dd>
+        <dt>tunnelSourceIPv4Address:</dt>
+        <dd>
+          <p>ID: 893, and enterprise ID 6876 (VMware).</p>
+          <p>type: unsigned 32-bit integer.</p>
+          <p>data type semantics: identifier.</p>
+          <p>description: The IPv4 source address in the tunnel IP packet
+          header.</p>
+        </dd>
+        <dt>tunnelDestinationIPv4Address:</dt>
+        <dd>
+          <p>ID: 894, and enterprise ID 6876 (VMware).</p>
+          <p>type: unsigned 32-bit integer.</p>
+          <p>data type semantics: identifier.</p>
+          <p>description: The IPv4 destination address in the tunnel IP
+          packet header.</p>
+        </dd>
+        <dt>tunnelProtocolIdentifier:</dt>
+        <dd>
+          <p>ID: 895, and enterprise ID 6876 (VMware).</p>
+          <p>type: unsigned 8-bit integer.</p>
+          <p>data type semantics: identifier.</p>
+          <p>description: The value of the protocol number in the tunnel
+          IP packet header. The protocol number identifies the tunnel IP
+          packet payload type.</p>
+        </dd>
+        <dt>tunnelSourceTransportPort:</dt>
+        <dd>
+          <p>ID: 896, and enterprise ID 6876 (VMware).</p>
+          <p>type: unsigned 16-bit integer.</p>
+          <p>data type semantics: identifier.</p>
+          <p>description: The source port identifier in the tunnel transport
+          header. For the transport protocols UDP, TCP, and SCTP, this is
+          the source port number given in the respective header.</p>
+        </dd>
+        <dt>tunnelDestinationTransportPort:</dt>
+        <dd>
+          <p>ID: 897, and enterprise ID 6876 (VMware).</p>
+          <p>type: unsigned 16-bit integer.</p>
+          <p>data type semantics: identifier.</p>
+          <p>description: The destination port identifier in the tunnel
+          transport header. For the transport protocols UDP, TCP, and SCTP,
+          this is the destination port number given in the respective header.
+          </p>
+        </dd>
+      </dl>
+
+      <p>
+        Before Open vSwitch 2.5.90, <ref column="other_config"
+        key="enable-tunnel-sampling"/> was only supported with per-bridge
+        sampling, and ignored otherwise.  Open vSwitch 2.5.90 and later support
+        <ref column="other_config" key="enable-tunnel-sampling"/> for
+        per-bridge and per-flow sampling.
+      </p>
+    </column>
+
+    <column name="other_config" key="virtual_obs_id"
+            type='{"type": "string"}'>
+      <p>
+        A string that accompanies each IPFIX flow record.  Its intended use is
+        for the ``virtual observation ID,'' an identifier of a virtual
+        observation point that is locally unique in a virtual network.  It
+        describes a location in the virtual network where IP packets can be
+        observed.  The maximum length is 254 bytes.  If not specified, the
+        field is omitted from the IPFIX flow record.
+      </p>
+
+      <p>
+        The following enterprise entity reports the specified virtual
+        observation ID:
+      </p>
+
+      <dl>
+        <dt>virtualObsID:</dt>
+        <dd>
+          <p>ID: 898, and enterprise ID 6876 (VMware).</p>
+          <p>type: variable-length string.</p>
+          <p>data type semantics: identifier.</p>
+          <p>description: A virtual observation domain ID that is locally
+          unique in a virtual network.
+          </p>
+        </dd>
+      </dl>
+
+      <p>
+        This feature was introduced in Open vSwitch 2.5.90.
+      </p>
+    </column>
+
     <group title="Per-Bridge Sampling">
       <p>
         These values affect only per-bridge sampling.  See above for a
@@ -4641,86 +4801,6 @@
       <column name="obs_point_id">
         The IPFIX Observation Point ID sent in each IPFIX flow record.  If not
         specified, defaults to 0.
-      </column>
-
-      <column name="other_config" key="enable-tunnel-sampling"
-              type='{"type": "boolean"}'>
-        <p>
-          Set to <code>true</code> to enable sampling and reporting tunnel
-          header 7-tuples in IPFIX flow records.  Tunnel sampling is disabled
-          by default.
-        </p>
-
-        <p>
-          The following enterprise entities report the sampled tunnel info:
-        </p>
-
-        <dl>
-          <dt>tunnelType:</dt>
-          <dd>
-            <p>ID: 891, and enterprise ID 6876 (VMware).</p>
-            <p>type: unsigned 8-bit integer.</p>
-            <p>data type semantics: identifier.</p>
-            <p>description: Identifier of the layer 2 network overlay network
-            encapsulation type: 0x01 VxLAN, 0x02 GRE, 0x03 LISP, 0x05 IPsec+GRE,
-            0x07 GENEVE.</p>
-          </dd>
-          <dt>tunnelKey:</dt>
-          <dd>
-            <p>ID: 892, and enterprise ID 6876 (VMware).</p>
-            <p>type: variable-length octetarray.</p>
-            <p>data type semantics: identifier.</p>
-            <p>description: Key which is used for identifying an individual
-            traffic flow within a VxLAN (24-bit VNI), GENEVE (24-bit VNI),
-            GRE (32-bit key), or LISP (24-bit instance ID) tunnel. The
-            key is encoded in this octetarray as a 3-, 4-, or 8-byte integer
-            ID in network byte order.</p>
-          </dd>
-          <dt>tunnelSourceIPv4Address:</dt>
-          <dd>
-            <p>ID: 893, and enterprise ID 6876 (VMware).</p>
-            <p>type: unsigned 32-bit integer.</p>
-            <p>data type semantics: identifier.</p>
-            <p>description: The IPv4 source address in the tunnel IP packet
-            header.</p>
-          </dd>
-          <dt>tunnelDestinationIPv4Address:</dt>
-          <dd>
-            <p>ID: 894, and enterprise ID 6876 (VMware).</p>
-            <p>type: unsigned 32-bit integer.</p>
-            <p>data type semantics: identifier.</p>
-            <p>description: The IPv4 destination address in the tunnel IP
-            packet header.</p>
-          </dd>
-          <dt>tunnelProtocolIdentifier:</dt>
-          <dd>
-            <p>ID: 895, and enterprise ID 6876 (VMware).</p>
-            <p>type: unsigned 8-bit integer.</p>
-            <p>data type semantics: identifier.</p>
-            <p>description: The value of the protocol number in the tunnel
-            IP packet header. The protocol number identifies the tunnel IP
-            packet payload type.</p>
-          </dd>
-          <dt>tunnelSourceTransportPort:</dt>
-          <dd>
-            <p>ID: 896, and enterprise ID 6876 (VMware).</p>
-            <p>type: unsigned 16-bit integer.</p>
-            <p>data type semantics: identifier.</p>
-            <p>description: The source port identifier in the tunnel transport
-            header. For the transport protocols UDP, TCP, and SCTP, this is
-            the source port number given in the respective header.</p>
-          </dd>
-          <dt>tunnelDestinationTransportPort:</dt>
-          <dd>
-            <p>ID: 897, and enterprise ID 6876 (VMware).</p>
-            <p>type: unsigned 16-bit integer.</p>
-            <p>data type semantics: identifier.</p>
-            <p>description: The destination port identifier in the tunnel
-            transport header. For the transport protocols UDP, TCP, and SCTP,
-            this is the destination port number given in the respective header.
-            </p>
-          </dd>
-        </dl>
       </column>
 
       <column name="other_config" key="enable-input-sampling"

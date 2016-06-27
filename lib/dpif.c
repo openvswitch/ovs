@@ -192,8 +192,6 @@ dp_unregister_provider__(const char *type)
 
     node = shash_find(&dpif_classes, type);
     if (!node) {
-        VLOG_WARN("attempted to unregister a datapath provider that is not "
-                  "registered: %s", type);
         return EAFNOSUPPORT;
     }
 
@@ -1081,20 +1079,22 @@ dpif_flow_dump_next(struct dpif_flow_dump_thread *thread,
 
 struct dpif_execute_helper_aux {
     struct dpif *dpif;
+    const struct flow *flow;
     int error;
 };
 
 /* This is called for actions that need the context of the datapath to be
  * meaningful. */
 static void
-dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
+dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
                        const struct nlattr *action, bool may_steal OVS_UNUSED)
 {
     struct dpif_execute_helper_aux *aux = aux_;
     int type = nl_attr_type(action);
-    struct dp_packet *packet = *packets;
+    struct dp_packet *packet = packets_->packets[0];
+    struct dp_packet *trunc_packet = NULL, *orig_packet;
 
-    ovs_assert(cnt == 1);
+    ovs_assert(packets_->count == 1);
 
     switch ((enum ovs_action_attr)type) {
     case OVS_ACTION_ATTR_CT:
@@ -1107,7 +1107,8 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
         struct ofpbuf execute_actions;
         uint64_t stub[256 / 8];
         struct pkt_metadata *md = &packet->md;
-        bool dst_set;
+        bool dst_set, clone = false;
+        uint32_t cutlen = dp_packet_get_cutlen(packet);
 
         dst_set = flow_tnl_dst_is_set(&md->tunnel);
         if (dst_set) {
@@ -1125,7 +1126,24 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
             execute.actions_len = NLA_ALIGN(action->nla_len);
         }
 
+        orig_packet = packet;
+
+        if (cutlen > 0 && (type == OVS_ACTION_ATTR_OUTPUT ||
+            type == OVS_ACTION_ATTR_TUNNEL_PUSH ||
+            type == OVS_ACTION_ATTR_TUNNEL_POP ||
+            type == OVS_ACTION_ATTR_USERSPACE)) {
+            if (!may_steal) {
+                trunc_packet = dp_packet_clone(packet);
+                packet = trunc_packet;
+                clone = true;
+            }
+
+            dp_packet_set_size(packet, dp_packet_size(packet) - cutlen);
+            dp_packet_reset_cutlen(orig_packet);
+        }
+
         execute.packet = packet;
+        execute.flow = aux->flow;
         execute.needs_help = false;
         execute.probe = false;
         execute.mtu = 0;
@@ -1134,6 +1152,10 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
 
         if (dst_set) {
             ofpbuf_uninit(&execute_actions);
+        }
+
+        if (clone) {
+            dp_packet_delete(trunc_packet);
         }
         break;
     }
@@ -1146,6 +1168,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
     case OVS_ACTION_ATTR_SET:
     case OVS_ACTION_ATTR_SET_MASKED:
     case OVS_ACTION_ATTR_SAMPLE:
+    case OVS_ACTION_ATTR_TRUNC:
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
         OVS_NOT_REACHED();
@@ -1160,13 +1183,13 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet **packets, int cnt,
 static int
 dpif_execute_with_help(struct dpif *dpif, struct dpif_execute *execute)
 {
-    struct dpif_execute_helper_aux aux = {dpif, 0};
-    struct dp_packet *pp;
+    struct dpif_execute_helper_aux aux = {dpif, execute->flow, 0};
+    struct dp_packet_batch pb;
 
     COVERAGE_INC(dpif_execute_with_help);
 
-    pp = execute->packet;
-    odp_execute_actions(&aux, &pp, 1, false, execute->actions,
+    packet_batch_init_packet(&pb, execute->packet);
+    odp_execute_actions(&aux, &pb, false, execute->actions,
                         execute->actions_len, dpif_execute_helper_cb);
     return aux.error;
 }

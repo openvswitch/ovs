@@ -38,9 +38,8 @@ struct ovs_numa_info {
     unsigned core_id;
 };
 
-#ifdef __linux__
-
 void ovs_numa_init(void);
+void ovs_numa_set_dummy(const char *dummy_config);
 bool ovs_numa_numa_id_is_valid(int numa_id);
 bool ovs_numa_core_id_is_valid(unsigned core_id);
 bool ovs_numa_core_is_pinned(unsigned core_id);
@@ -56,111 +55,9 @@ unsigned ovs_numa_get_unpinned_core_on_numa(int numa_id);
 void ovs_numa_unpin_core(unsigned core_id);
 struct ovs_numa_dump *ovs_numa_dump_cores_on_numa(int numa_id);
 void ovs_numa_dump_destroy(struct ovs_numa_dump *);
+int ovs_numa_thread_setaffinity_core(unsigned core_id);
 
 #define FOR_EACH_CORE_ON_NUMA(ITER, DUMP)                    \
     LIST_FOR_EACH((ITER), list_node, &(DUMP)->dump)
 
-#else
-
-static inline void
-ovs_numa_init(void)
-{
-    /* Nothing */
-}
-
-static inline bool
-ovs_numa_numa_id_is_valid(int numa_id OVS_UNUSED)
-{
-    return false;
-}
-
-static inline bool
-ovs_numa_core_id_is_valid(unsigned core_id OVS_UNUSED)
-{
-    return false;
-}
-
-static inline bool
-ovs_numa_core_is_pinned(unsigned core_id OVS_UNUSED)
-{
-    return false;
-}
-
-static inline void
-ovs_numa_set_cpu_mask(const char *cmask OVS_UNUSED)
-{
-    /* Nothing */
-}
-
-static inline int
-ovs_numa_get_n_numas(void)
-{
-    return OVS_NUMA_UNSPEC;
-}
-
-static inline int
-ovs_numa_get_n_cores(void)
-{
-    return OVS_CORE_UNSPEC;
-}
-
-static inline int
-ovs_numa_get_numa_id(unsigned core_id OVS_UNUSED)
-{
-    return OVS_NUMA_UNSPEC;
-}
-
-static inline int
-ovs_numa_get_n_cores_on_numa(int numa_id OVS_UNUSED)
-{
-    return OVS_CORE_UNSPEC;
-}
-
-static inline int
-ovs_numa_get_n_unpinned_cores_on_numa(int numa_id OVS_UNUSED)
-{
-    return OVS_CORE_UNSPEC;
-}
-
-static inline bool
-ovs_numa_try_pin_core_specific(unsigned core_id OVS_UNUSED)
-{
-    return false;
-}
-
-static inline unsigned
-ovs_numa_get_unpinned_core_any(void)
-{
-    return OVS_CORE_UNSPEC;
-}
-
-static inline unsigned
-ovs_numa_get_unpinned_core_on_numa(int numa_id OVS_UNUSED)
-{
-    return OVS_CORE_UNSPEC;
-}
-
-static inline void
-ovs_numa_unpin_core(unsigned core_id OVS_UNUSED)
-{
-    /* Nothing */
-}
-
-static inline struct ovs_numa_dump *
-ovs_numa_dump_cores_on_numa(int numa_id OVS_UNUSED)
-{
-    return NULL;
-}
-
-static inline void
-ovs_numa_dump_destroy(struct ovs_numa_dump *dump OVS_UNUSED)
-{
-    /* Nothing */
-}
-
-/* No loop. */
-#define FOR_EACH_CORE_ON_NUMA(ITER, DUMP)                    \
-    for ((ITER) = NULL; (ITER);)
-
-#endif /* __linux__ */
-#endif /* ovs-thead.h */
+#endif /* ovs-numa.h */

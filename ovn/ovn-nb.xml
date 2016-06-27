@@ -80,7 +80,7 @@
     </group>
   </table>
 
-  <table name="Logical_Port" title="L2 logical switch port">
+  <table name="Logical_Switch_Port" title="L2 logical switch port">
     <p>
       A port within an L2 logical switch.
     </p>
@@ -152,13 +152,6 @@
       <group title="Options for router ports">
         <p>
           These options apply when <ref column="type"/> is <code>router</code>.
-        </p>
-
-        <p>
-          If a given logical switch has multiple <code>router</code> ports, the
-          <ref table="Logical_Router_Port"/> rows that they reference must be
-          all on the same <ref table="Logical_Router"/> (for different
-          subnets).
         </p>
 
         <column name="options" key="router-port">
@@ -234,7 +227,7 @@
       <column name="parent_name">
         The VM interface through which the nested container sends its network
         traffic.  This must match the <ref column="name"/> column for some
-        other <ref table="Logical_Port"/>.
+        other <ref table="Logical_Switch_Port"/>.
       </column>
 
       <column name="tag">
@@ -637,6 +630,34 @@
       column is set to <code>false</code>, the router is disabled.  A disabled
       router has all ingress and egress traffic dropped.
     </column>
+
+    <column name="nat">
+      One or more NAT rules for the router. NAT rules only work on the
+      Gateway routers.
+    </column>
+
+    <group title="Options">
+      <p>
+        Additional options for the logical router.
+      </p>
+
+      <column name="options" key="chassis">
+        <p>
+          If set, indicates that the logical router in question is a Gateway
+          router (which is centralized) and resides in the set chassis.  The
+          same value is also used by <code>ovn-controller</code> to
+          uniquely identify the chassis in the OVN deployment and
+          comes from <code>external_ids:system-id</code> in the
+          <code>Open_vSwitch</code> table of Open_vSwitch database.
+        </p>
+
+        <p>
+          The Gateway router can only be connected to a distributed router
+          via a switch if SNAT and DNAT are to be configured in the Gateway
+          router.
+        </p>
+      </column>
+    </group>
     
     <group title="Common Columns">
       <column name="external_ids">
@@ -663,8 +684,8 @@
       <p>
         In addition to provide convenience for human interaction with the
         ovn-nb database, this column is used as reference by its patch port in
-        <ref table="Logical_Port"/> or another logical router port in <ref
-        table="Logical_Router_Port"/>.
+        <ref table="Logical_Switch_Port"/> or another logical router port in
+        <ref table="Logical_Router_Port"/>.
       </p>
     </column>
 
@@ -695,10 +716,11 @@
         <li>
           To attach a logical switch to a logical router.  A logical router
           port of this type is referenced by exactly one <ref
-          table="Logical_Port"/> of type <code>router</code>.  The value of
-          <ref column="name"/> is set as <code>router-port</code> in column
-          <ref column="options"/> of <ref table="Logical_Port"/>.
-          In this case <ref column="peer"/> column is empty.
+          table="Logical_Switch_Port"/> of type <code>router</code>.
+          The value of <ref column="name"/> is set as
+          <code>router-port</code> in column <ref column="options"/> of
+          <ref table="Logical_Switch_Port"/>.  In this case <ref
+          column="peer"/> column is empty.
         </li>
 
         <li>
@@ -749,11 +771,51 @@
 
     <column name="output_port">
       <p>
-        The name of the <ref table="Logical_router_port"/> via which the packet
+        The name of the <ref table="Logical_Router_Port"/> via which the packet
         needs to be sent out.  This is optional and when not specified,
         OVN will automatically figure this out based on the
         <ref column="nexthop"/>.
       </p>
+    </column>
+  </table>
+
+  <table name="NAT" title="NAT rules for a Gateway router.">
+    <p>
+      Each record represents a NAT rule in a Gateway router.
+    </p>
+
+    <column name="type">
+      <p>Type of the NAT rule.</p>
+      <ul>
+        <li>
+          When <ref column="type"/> is <code>dnat</code>, the externally
+          visible IP address <ref column="external_ip"/> is DNATted to the IP
+          address <ref column="logical_ip"/> in the logical space.
+        </li>
+        <li>
+          When <ref column="type"/> is <code>snat</code>, IP packets
+          with their source IP address that either matches the IP address
+          in <ref column="logical_ip"/> or is in the network provided by
+          <ref column="logical_ip"/> is SNATed into the IP address in
+          <ref column="external_ip"/>.
+        </li>
+        <li>
+          When <ref column="type"/> is <code>dnat_and_snat</code>, the
+          externally visible IP address <ref column="external_ip"/> is
+          DNATted to the IP address <ref column="logical_ip"/> in the
+          logical space. In addition, IP packets with the source IP
+          address that matches <ref column="logical_ip"/> is SNATed into
+          the IP address in <ref column="external_ip"/>.
+        </li>
+      </ul>
+    </column>
+
+    <column name="external_ip">
+      An IPv4 address.
+    </column>
+
+    <column name="logical_ip">
+      An IPv4 network (e.g 192.168.1.0/24) or an IPv4 address.
     </column>
   </table>
 

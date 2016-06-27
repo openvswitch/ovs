@@ -108,6 +108,7 @@
     OFPACT(UNROLL_XLATE,    ofpact_unroll_xlate, ofpact, "unroll_xlate") \
     OFPACT(CT,              ofpact_conntrack,   ofpact, "ct")           \
     OFPACT(NAT,             ofpact_nat,         ofpact, "nat")          \
+    OFPACT(OUTPUT_TRUNC,    ofpact_output_trunc,ofpact, "output_trunc") \
                                                                         \
     /* Debugging actions.                                               \
      *                                                                  \
@@ -288,6 +289,15 @@ struct ofpact_output_reg {
     struct ofpact ofpact;
     uint16_t max_len;
     struct mf_subfield src;
+};
+
+/* OFPACT_OUTPUT_TRUNC.
+ *
+ * Used for NXAST_OUTPUT_TRUNC. */
+struct ofpact_output_trunc {
+    struct ofpact ofpact;
+    ofp_port_t port;            /* Output port. */
+    uint32_t max_len;           /* Max send len. */
 };
 
 /* Bundle slave choice algorithm to apply.
@@ -562,11 +572,12 @@ void ofpacts_execute_action_set(struct ofpbuf *action_list,
 /* Bits for 'flags' in struct nx_action_nat.
  */
 enum nx_nat_flags {
-    NX_NAT_F_SRC          = 1 << 0,
+    NX_NAT_F_SRC          = 1 << 0, /* Mutually exclusive with NX_NAT_F_DST. */
     NX_NAT_F_DST          = 1 << 1,
     NX_NAT_F_PERSISTENT   = 1 << 2,
-    NX_NAT_F_PROTO_HASH   = 1 << 3,
+    NX_NAT_F_PROTO_HASH   = 1 << 3, /* Mutually exclusive with PROTO_RANDOM. */
     NX_NAT_F_PROTO_RANDOM = 1 << 4,
+    NX_NAT_F_MASK = (NX_NAT_F_SRC | NX_NAT_F_DST | NX_NAT_F_PERSISTENT | NX_NAT_F_PROTO_HASH | NX_NAT_F_PROTO_RANDOM)
 };
 
 /* OFPACT_NAT.
@@ -774,13 +785,14 @@ struct ofpact_note {
 
 /* OFPACT_SAMPLE.
  *
- * Used for NXAST_SAMPLE. */
+ * Used for NXAST_SAMPLE and NXAST_SAMPLE2. */
 struct ofpact_sample {
     struct ofpact ofpact;
-    uint16_t probability;  // Always >0.
+    uint16_t probability;  /* Always positive. */
     uint32_t collector_set_id;
     uint32_t obs_domain_id;
     uint32_t obs_point_id;
+    ofp_port_t sampling_port;
 };
 
 /* OFPACT_DEC_TTL.

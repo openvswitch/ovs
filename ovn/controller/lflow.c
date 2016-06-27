@@ -24,6 +24,7 @@
 #include "ovn-controller.h"
 #include "ovn/lib/actions.h"
 #include "ovn/lib/expr.h"
+#include "ovn/lib/ovn-dhcp.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "packets.h"
 #include "simap.h"
@@ -203,6 +204,13 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
 {
     uint32_t conj_id_ofs = 1;
 
+    struct hmap dhcp_opts = HMAP_INITIALIZER(&dhcp_opts);
+    const struct sbrec_dhcp_options *dhcp_opt_row;
+    SBREC_DHCP_OPTIONS_FOR_EACH(dhcp_opt_row, ctx->ovnsb_idl) {
+        dhcp_opt_add(&dhcp_opts, dhcp_opt_row->name, dhcp_opt_row->code,
+                     dhcp_opt_row->type);
+    }
+
     const struct sbrec_logical_flow *lflow;
     SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
         /* Determine translation of logical table IDs to physical table IDs. */
@@ -215,15 +223,15 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
         if (is_switch(ldp)) {
             /* For a logical switch datapath, local_datapaths tells us if there
              * are any local ports for this datapath.  If not, we can skip
-             * processing logical flows if the flow belongs to egress pipeline
-             * or if that logical switch datapath is not patched to any logical
-             * router.
+             * processing logical flows if that logical switch datapath is not
+             * patched to any logical router.
              *
-             * Otherwise, we still need the ingress pipeline because even if
-             * there are no local ports, we still may need to execute the ingress
-             * pipeline after a packet leaves a logical router.  Further
-             * optimization is possible, but not based on what we know with
-             * local_datapaths right now.
+             * Otherwise, we still need both ingress and egress pipeline
+             * because even if there are no local ports, we still may need to
+             * execute the ingress pipeline after a packet leaves a logical
+             * router and we need to do egress pipeline for a switch that
+             * is connected to only routers.  Further optimization is possible,
+             * but not based on what we know with local_datapaths right now.
              *
              * A better approach would be a kind of "flood fill" algorithm:
              *
@@ -242,9 +250,6 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
              */
 
             if (!get_local_datapath(local_datapaths, ldp->tunnel_key)) {
-                if (!ingress) {
-                    continue;
-                }
                 if (!get_patched_datapath(patched_datapaths,
                                           ldp->tunnel_key)) {
                     continue;
@@ -277,6 +282,7 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
         };
         struct action_params ap = {
             .symtab = &symtab,
+            .dhcp_opts = &dhcp_opts,
             .lookup_port = lookup_port_cb,
             .aux = &aux,
             .ct_zones = ct_zones,
@@ -360,6 +366,8 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
         ofpbuf_uninit(&ofpacts);
         conj_id_ofs += n_conjs;
     }
+
+    dhcp_opts_destroy(&dhcp_opts);
 }
 
 static void
