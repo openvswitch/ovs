@@ -573,6 +573,9 @@ reg1[0] = put_dhcp_opts(offerip=1.2.3.4, xyzzy); => Syntax error at `xyzzy' expe
 reg1[0] = put_dhcp_opts(offerip="xyzzy"); => DHCP option offerip requires numeric value.
 reg1[0] = put_dhcp_opts(offerip=1.2.3.4, domain=1.2.3.4); => DHCP option domain requires string value.
 
+# na
+na { eth.src = 12:34:56:78:9a:bc; nd.tll = 12:34:56:78:9a:bc; outport = inport; inport = ""; /* Allow sending out inport. */ output; }; => actions=controller(userdata=00.00.00.03.00.00.00.00.00.19.00.10.80.00.08.06.12.34.56.78.9a.bc.00.00.00.19.00.10.80.00.42.06.12.34.56.78.9a.bc.00.00.ff.ff.00.18.00.00.23.20.00.06.00.20.00.00.00.00.00.01.0c.04.00.01.0e.04.00.19.00.10.00.01.0c.04.00.00.00.00.00.00.00.00.00.19.00.10.00.00.00.02.00.00.00.00.00.00.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00), prereqs=nd
+
 # Contradictionary prerequisites (allowed but not useful):
 ip4.src = ip6.src[0..31]; => actions=move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
 ip4.src <-> ip6.src[0..31]; => actions=push:NXM_NX_IPV6_SRC[0..31],push:NXM_OF_IP_SRC[],pop:NXM_NX_IPV6_SRC[0..31],pop:NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
@@ -3392,4 +3395,102 @@ OVS_APP_EXIT_AND_WAIT([ovn-northd])
 as main
 OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CLEANUP
+
+AT_SETUP([ovn -- nd ])
+AT_KEYWORDS([ovn-nd])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+#TODO: since patch port for IPv6 logical router port is not ready not,
+#  so we are not going to test vifs on different lswitches cases. Try
+#  to update for that once relevant stuff implemented.
+
+# In this test cases we create 1 lswitch, it has 2 VIF ports attached
+# with. NS packet we test, from one VIF for another VIF, will be replied
+# by local ovn-controller, but not by target VIF.
+
+# Create hypervisors and logical switch lsw0.
+ovn-nbctl ls-add lsw0
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+
+# Add vif1 to hv1 and lsw0, turn on l2 port security on vif1.
+ovs-vsctl add-port br-int vif1 -- set Interface vif1 external-ids:iface-id=lp1 options:tx_pcap=hv1/vif1-tx.pcap options:rxq_pcap=hv1/vif1-rx.pcap ofport-request=1
+ovn-nbctl lsp-add lsw0 lp1
+ovn-nbctl lsp-set-addresses lp1 "fa:16:3e:94:05:98 192.168.0.3 fd81:ce49:a948:0:f816:3eff:fe94:598"
+ovn-nbctl lsp-set-port-security lp1 "fa:16:3e:94:05:98 192.168.0.3 fd81:ce49:a948:0:f816:3eff:fe94:598"
+
+# Add vif2 to hv1 and lsw0, turn on l2 port security on vif2.
+ovs-vsctl add-port br-int vif2 -- set Interface vif2 external-ids:iface-id=lp2 options:tx_pcap=hv1/vif2-tx.pcap options:rxq_pcap=hv1/vif2-rx.pcap ofport-request=2
+ovn-nbctl lsp-add lsw0 lp2
+ovn-nbctl lsp-set-addresses lp2 "fa:16:3e:a1:f9:ae 192.168.0.4 fd81:ce49:a948:0:f816:3eff:fea1:f9ae"
+ovn-nbctl lsp-set-port-security lp2 "fa:16:3e:a1:f9:ae 192.168.0.4 fd81:ce49:a948:0:f816:3eff:fea1:f9ae"
+
+# Add ACL rule for ICMPv6 on lsw0
+ovn-nbctl acl-add lsw0 from-lport 1002 'ip6 && icmp6'  allow-related
+ovn-nbctl acl-add lsw0 to-lport 1002 'outport == "lp1" && ip6 && icmp6'  allow-related
+ovn-nbctl acl-add lsw0 to-lport 1002 'outport == "lp2" && ip6 && icmp6'  allow-related
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+# Given the name of a logical port, prints the name of the hypervisor
+# on which it is located.
+vif_to_hv() {
+    echo hv1${1%?}
+}
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+for i in 1 2; do
+    : > $i.expected
+done
+
+# Complete Neighbor Solicitation packet and Neighbor Advertisement packet
+# vif1 -> NS -> vif2.  vif1 <- NA <- ovn-controller.
+# vif2 will not receive NS packet, since ovn-controller will reply for it.
+ns_packet=3333ffa1f9aefa163e94059886dd6000000000203afffd81ce49a9480000f8163efffe940598fd81ce49a9480000f8163efffea1f9ae8700e01160000000fd81ce49a9480000f8163efffea1f9ae0101fa163e940598
+na_packet=fa163e940598fa163ea1f9ae86dd6000000000203afffd81ce49a9480000f8163efffea1f9aefd81ce49a9480000f8163efffe9405988800e9ed60000000fd81ce49a9480000f8163efffea1f9ae0201fa163ea1f9ae
+
+as hv1 ovs-appctl netdev-dummy/receive vif1 $ns_packet
+echo $na_packet | trim_zeros >> 1.expected
+
+sleep 1
+
+echo "------ hv1 dump ------"
+as hv1 ovs-vsctl show
+as hv1 ovs-ofctl -O OpenFlow13 show br-int
+as hv1 ovs-ofctl -O OpenFlow13 dump-flows br-int
+
+for i in 1 2; do
+    file=hv1/vif$i-tx.pcap
+    echo $file
+    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i.packets
+    cat $i.expected > expout
+    AT_CHECK([cat $i.packets], [0], [expout])
+done
+
+as hv1
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
 AT_CLEANUP

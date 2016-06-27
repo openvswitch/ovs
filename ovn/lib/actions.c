@@ -246,8 +246,11 @@ put_controller_op(struct ofpbuf *ofpacts, enum action_opcode opcode)
     finish_controller_op(ofpacts, ofs);
 }
 
+/* Implements the "arp" and "na" actions, which execute nested actions on a
+ * packet derived from the one being processed. */
 static void
-parse_arp_action(struct action_context *ctx)
+parse_nested_action(struct action_context *ctx, enum action_opcode opcode,
+                    const char *prereq)
 {
     if (!lexer_match(ctx->lexer, LEX_T_LCURLY)) {
         action_syntax_error(ctx, "expecting `{'");
@@ -272,13 +275,11 @@ parse_arp_action(struct action_context *ctx)
 
     ctx->ofpacts = outer_ofpacts;
 
-    /* Add a "controller" action with the actions nested inside "arp {...}",
+    /* Add a "controller" action with the actions nested inside "{...}",
      * converted to OpenFlow, as its userdata.  ovn-controller will convert the
-     * packet to an ARP and then send the packet and actions back to the switch
-     * inside an OFPT_PACKET_OUT message. */
-    /* controller. */
-    size_t oc_offset = start_controller_op(ctx->ofpacts, ACTION_OPCODE_ARP,
-                                           false);
+     * packet to ARP or NA and then send the packet and actions back to the
+     * switch inside an OFPT_PACKET_OUT message. */
+    size_t oc_offset = start_controller_op(ctx->ofpacts, opcode, false);
     ofpacts_put_openflow_actions(inner_ofpacts.data, inner_ofpacts.size,
                                  ctx->ofpacts, OFP13_VERSION);
     finish_controller_op(ctx->ofpacts, oc_offset);
@@ -286,7 +287,7 @@ parse_arp_action(struct action_context *ctx)
     /* Restore prerequisites. */
     expr_destroy(ctx->prereqs);
     ctx->prereqs = outer_prereqs;
-    add_prerequisite(ctx, "ip4");
+    add_prerequisite(ctx, prereq);
 
     /* Free memory. */
     ofpbuf_uninit(&inner_ofpacts);
@@ -908,7 +909,9 @@ parse_action(struct action_context *ctx)
     } else if (lexer_match_id(ctx->lexer, "ct_snat")) {
         parse_ct_nat(ctx, true);
     } else if (lexer_match_id(ctx->lexer, "arp")) {
-        parse_arp_action(ctx);
+        parse_nested_action(ctx, ACTION_OPCODE_ARP, "ip4");
+    } else if (lexer_match_id(ctx->lexer, "na")) {
+        parse_nested_action(ctx, ACTION_OPCODE_NA, "nd");
     } else if (lexer_match_id(ctx->lexer, "get_arp")) {
         parse_get_arp_action(ctx);
     } else if (lexer_match_id(ctx->lexer, "put_arp")) {

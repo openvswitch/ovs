@@ -1069,6 +1069,10 @@ void compose_arp(struct dp_packet *, uint16_t arp_op,
                  ovs_be32 arp_spa, ovs_be32 arp_tpa);
 void compose_nd(struct dp_packet *, const struct eth_addr eth_src,
                 struct in6_addr *, struct in6_addr *);
+void compose_na(struct dp_packet *,
+                const struct eth_addr eth_src, const struct eth_addr eth_dst,
+                const ovs_be32 ipv6_src[4], const ovs_be32 ipv6_dst[4],
+                ovs_be32 rco_flags);
 uint32_t packet_csum_pseudoheader(const struct ip_header *);
 void IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6);
 

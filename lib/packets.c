@@ -1355,6 +1355,35 @@ compose_nd(struct dp_packet *b, const struct eth_addr eth_src,
                                                       ND_MSG_LEN + ND_OPT_LEN));
 }
 
+void
+compose_na(struct dp_packet *b,
+           const struct eth_addr eth_src, const struct eth_addr eth_dst,
+           const ovs_be32 ipv6_src[4], const ovs_be32 ipv6_dst[4],
+           ovs_be32 rco_flags)
+{
+    struct ovs_nd_msg *na;
+    struct ovs_nd_opt *nd_opt;
+    uint32_t icmp_csum;
+
+    eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6, IPV6_HEADER_LEN);
+    na = compose_ipv6(b, IPPROTO_ICMPV6, ipv6_src, ipv6_dst, 0, 0, 255,
+                      ND_MSG_LEN + ND_OPT_LEN);
+
+    na->icmph.icmp6_type = ND_NEIGHBOR_ADVERT;
+    na->icmph.icmp6_code = 0;
+    put_16aligned_be32(&na->rco_flags, rco_flags);
+
+    nd_opt = &na->options[0];
+    nd_opt->nd_opt_type = ND_OPT_TARGET_LINKADDR;
+    nd_opt->nd_opt_len = 1;
+
+    packet_set_nd(b, ipv6_src, eth_addr_zero, eth_src);
+    na->icmph.icmp6_cksum = 0;
+    icmp_csum = packet_csum_pseudoheader6(dp_packet_l3(b));
+    na->icmph.icmp6_cksum = csum_finish(csum_continue(icmp_csum, na,
+                                                      ND_MSG_LEN + ND_OPT_LEN));
+}
+
 uint32_t
 packet_csum_pseudoheader(const struct ip_header *ip)
 {

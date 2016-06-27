@@ -93,7 +93,7 @@ enum ovn_stage {
     PIPELINE_STAGE(SWITCH, IN,  PORT_SEC_ND,    2, "ls_in_port_sec_nd")     \
     PIPELINE_STAGE(SWITCH, IN,  PRE_ACL,        3, "ls_in_pre_acl")      \
     PIPELINE_STAGE(SWITCH, IN,  ACL,            4, "ls_in_acl")          \
-    PIPELINE_STAGE(SWITCH, IN,  ARP_RSP,        5, "ls_in_arp_rsp")      \
+    PIPELINE_STAGE(SWITCH, IN,  ARP_ND_RSP,     5, "ls_in_arp_nd_rsp")   \
     PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,        6, "ls_in_l2_lkup")      \
                                                                       \
     /* Logical switch egress stages. */                               \
@@ -1386,6 +1386,12 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
         ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 100, "ip", "ct_next;");
         ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 100, "ip", "ct_next;");
 
+        /* Ingress and Egress Pre-ACL Table (Priority 110).
+         *
+         * Not to do conntrack on ND packets. */
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 110, "nd", "next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 110, "nd", "next;");
+
         /* Ingress and Egress ACL Table (Priority 1).
          *
          * By default, traffic is allowed.  This is partially handled by
@@ -1436,6 +1442,12 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
         ovn_lflow_add(lflows, od, S_SWITCH_OUT_ACL, UINT16_MAX,
                       "!ct.est && ct.rel && !ct.new && !ct.inv",
                       "next;");
+
+        /* Ingress and Egress ACL Table (Priority 65535).
+         *
+         * Not to do conntrack on ND packets. */
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_ACL, UINT16_MAX, "nd", "next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_OUT_ACL, UINT16_MAX, "nd", "next;");
     }
 
     /* Ingress or Egress ACL Table (Various priorities). */
@@ -1569,13 +1581,13 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 
         if (!strcmp(op->nbs->type, "localnet")) {
             char *match = xasprintf("inport == %s", op->json_key);
-            ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_RSP, 100,
+            ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 100,
                           match, "next;");
             free(match);
         }
     }
 
-    /* Ingress table 5: ARP responder, reply for known IPs.
+    /* Ingress table 5: ARP/ND responder, reply for known IPs.
      * (priority 50). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbs) {
@@ -1583,7 +1595,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
 
         /*
-         * Add ARP reply flows if either the
+         * Add ARP/ND reply flows if either the
          *  - port is up or
          *  - port type is router
          */
@@ -1594,7 +1606,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         for (size_t i = 0; i < op->nbs->n_addresses; i++) {
             struct lport_addresses laddrs;
             if (!extract_lsp_addresses(op->nbs->addresses[i], &laddrs,
-                                       false)) {
+                                       true)) {
                 continue;
             }
             for (size_t j = 0; j < laddrs.n_ipv4_addrs; j++) {
@@ -1615,24 +1627,61 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     ETH_ADDR_ARGS(laddrs.ea),
                     ETH_ADDR_ARGS(laddrs.ea),
                     IP_ARGS(laddrs.ipv4_addrs[j].addr));
-                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_RSP, 50,
+                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 50,
                               match, actions);
                 free(match);
                 free(actions);
             }
 
+            if (laddrs.n_ipv6_addrs > 0) {
+                char ip6_str[INET6_ADDRSTRLEN + 1];
+                struct ds match = DS_EMPTY_INITIALIZER;
+                ds_put_cstr(&match, "icmp6 && icmp6.type == 135 && ");
+                if (laddrs.n_ipv6_addrs == 1) {
+                    ipv6_string_mapped(ip6_str,
+                                       &(laddrs.ipv6_addrs[0].addr));
+                    ds_put_format(&match, "nd.target == %s", ip6_str);
+                } else {
+                    ds_put_cstr(&match, "(");
+                    for (size_t j = 0; j < laddrs.n_ipv6_addrs; j++) {
+                        ipv6_string_mapped(ip6_str,
+                                           &(laddrs.ipv6_addrs[j].addr));
+                        ds_put_format(&match, "nd.target == %s || ", ip6_str);
+                    }
+                    ds_chomp(&match, ' ');
+                    ds_chomp(&match, '|');
+                    ds_chomp(&match, '|');
+                    ds_chomp(&match, ' ');
+                    ds_put_cstr(&match, ")");
+                }
+                char *actions = xasprintf(
+                    "na { eth.src = "ETH_ADDR_FMT"; "
+                    "nd.tll = "ETH_ADDR_FMT"; "
+                    "outport = inport; "
+                    "inport = \"\"; /* Allow sending out inport. */ "
+                    "output; };",
+                    ETH_ADDR_ARGS(laddrs.ea),
+                    ETH_ADDR_ARGS(laddrs.ea));
+
+                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 50,
+                              ds_cstr(&match), actions);
+
+                ds_destroy(&match);
+            }
+
             free(laddrs.ipv4_addrs);
+            free(laddrs.ipv6_addrs);
         }
     }
 
-    /* Ingress table 5: ARP responder, by default goto next.
+    /* Ingress table 5: ARP/ND responder, by default goto next.
      * (priority 0)*/
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbs) {
             continue;
         }
 
-        ovn_lflow_add(lflows, od, S_SWITCH_IN_ARP_RSP, 0, "1", "next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_ARP_ND_RSP, 0, "1", "next;");
     }
 
     /* Ingress table 6: Destination lookup, broadcast and multicast handling

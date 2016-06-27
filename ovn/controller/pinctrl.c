@@ -25,6 +25,7 @@
 #include "lport.h"
 #include "nx-match.h"
 #include "ovn-controller.h"
+#include "lib/packets.h"
 #include "lib/sset.h"
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-msgs.h"
@@ -68,6 +69,11 @@ static void send_garp_run(const struct ovsrec_bridge *,
                           const char *chassis_id,
                           const struct lport_index *lports,
                           struct hmap *local_datapaths);
+static void pinctrl_handle_na(const struct flow *ip_flow,
+                              const struct match *md,
+                              struct ofpbuf *userdata);
+static void reload_metadata(struct ofpbuf *ofpacts,
+                            const struct match *md);
 
 COVERAGE_DEFINE(pinctrl_drop_put_arp);
 
@@ -157,31 +163,7 @@ pinctrl_handle_arp(const struct flow *ip_flow, const struct match *md,
     struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
     enum ofp_version version = rconn_get_version(swconn);
 
-    enum mf_field_id md_fields[] = {
-#if FLOW_N_REGS == 8
-        MFF_REG0,
-        MFF_REG1,
-        MFF_REG2,
-        MFF_REG3,
-        MFF_REG4,
-        MFF_REG5,
-        MFF_REG6,
-        MFF_REG7,
-#else
-#error
-#endif
-        MFF_METADATA,
-    };
-    for (size_t i = 0; i < ARRAY_SIZE(md_fields); i++) {
-        const struct mf_field *field = mf_from_id(md_fields[i]);
-        if (!mf_is_all_wild(field, &md->wc)) {
-            struct ofpact_set_field *sf = ofpact_put_SET_FIELD(&ofpacts);
-            sf->field = field;
-            sf->flow_has_vlan = false;
-            mf_get_value(field, &md->flow, &sf->value);
-            memset(&sf->mask, 0xff, field->n_bytes);
-        }
-    }
+    reload_metadata(&ofpacts, md);
     enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size,
                                                       version, &ofpacts);
     if (error) {
@@ -426,6 +408,10 @@ process_packet_in(const struct ofp_header *msg)
 
     case ACTION_OPCODE_PUT_DHCP_OPTS:
         pinctrl_handle_put_dhcp_opts(&packet, &pin, &userdata, &continuation);
+        break;
+
+    case ACTION_OPCODE_NA:
+        pinctrl_handle_na(&headers, &pin.flow_metadata, &userdata);
         break;
 
     default:
@@ -919,4 +905,94 @@ send_garp_run(const struct ovsrec_bridge *br_int, const char *chassis_id,
     }
     sset_destroy(&localnet_vifs);
     simap_destroy(&localnet_ofports);
+}
+
+static void
+reload_metadata(struct ofpbuf *ofpacts, const struct match *md)
+{
+    enum mf_field_id md_fields[] = {
+#if FLOW_N_REGS == 8
+        MFF_REG0,
+        MFF_REG1,
+        MFF_REG2,
+        MFF_REG3,
+        MFF_REG4,
+        MFF_REG5,
+        MFF_REG6,
+        MFF_REG7,
+#else
+#error
+#endif
+        MFF_METADATA,
+    };
+    for (size_t i = 0; i < ARRAY_SIZE(md_fields); i++) {
+        const struct mf_field *field = mf_from_id(md_fields[i]);
+        if (!mf_is_all_wild(field, &md->wc)) {
+            struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
+            sf->field = field;
+            sf->flow_has_vlan = false;
+            mf_get_value(field, &md->flow, &sf->value);
+            memset(&sf->mask, 0xff, field->n_bytes);
+        }
+    }
+}
+
+static void
+pinctrl_handle_na(const struct flow *ip_flow,
+                  const struct match *md,
+                  struct ofpbuf *userdata)
+{
+    /* This action only works for IPv6 ND packets, and the switch should only
+     * send us ND packets this way, but check here just to be sure. */
+    if (!is_nd(ip_flow, NULL)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "NA action on non-ND packet");
+        return;
+    }
+
+    enum ofp_version version = rconn_get_version(swconn);
+    enum ofputil_protocol proto = ofputil_protocol_from_ofp_version(version);
+
+    uint64_t packet_stub[128 / 8];
+    struct dp_packet packet;
+    dp_packet_use_stub(&packet, packet_stub, sizeof packet_stub);
+
+    ovs_be32 ipv6_src[4], ipv6_dst[4];
+    memcpy(ipv6_dst, &ip_flow->ipv6_src, sizeof ipv6_src);
+    memcpy(ipv6_src, &ip_flow->nd_target, sizeof ipv6_dst);
+
+    /* Frame the NA packet with RSO=011. */
+    compose_na(&packet,
+               ip_flow->dl_dst, ip_flow->dl_src,
+               ipv6_src, ipv6_dst,
+               htonl(0x60000000));
+
+    /* Reload previous packet metadata. */
+    uint64_t ofpacts_stub[4096 / 8];
+    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(ofpacts_stub);
+    reload_metadata(&ofpacts, md);
+
+    enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size,
+                                                      version, &ofpacts);
+    if (error) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "failed to parse actions for 'na' (%s)",
+                     ofperr_to_string(error));
+        goto exit;
+    }
+
+    struct ofputil_packet_out po = {
+        .packet = dp_packet_data(&packet),
+        .packet_len = dp_packet_size(&packet),
+        .buffer_id = UINT32_MAX,
+        .in_port = OFPP_CONTROLLER,
+        .ofpacts = ofpacts.data,
+        .ofpacts_len = ofpacts.size,
+    };
+
+    queue_msg(ofputil_encode_packet_out(&po, proto));
+
+exit:
+    dp_packet_uninit(&packet);
+    ofpbuf_uninit(&ofpacts);
 }
