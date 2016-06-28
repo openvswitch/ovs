@@ -8896,6 +8896,7 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
     switch (group_cmd) {
     case OFPGC15_ADD:
     case OFPGC15_MODIFY:
+    case OFPGC15_ADD_OR_MOD:
         break;
     case OFPGC15_DELETE:
     case OFPGC15_INSERT_BUCKET:
@@ -9224,6 +9225,7 @@ bad_group_cmd(enum ofp15_group_mod_command cmd)
     switch (cmd) {
     case OFPGC15_ADD:
     case OFPGC15_MODIFY:
+    case OFPGC15_ADD_OR_MOD:
     case OFPGC15_DELETE:
         version = "1.1";
         opt_version = "11";
@@ -9245,6 +9247,7 @@ bad_group_cmd(enum ofp15_group_mod_command cmd)
         break;
 
     case OFPGC15_MODIFY:
+    case OFPGC15_ADD_OR_MOD:
         cmd_str = "mod-group";
         break;
 
@@ -9284,7 +9287,7 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
-        if (gm->command > OFPGC11_DELETE) {
+        if (gm->command > OFPGC11_DELETE && gm->command != OFPGC11_ADD_OR_MOD) {
             bad_group_cmd(gm->command);
         }
         return ofputil_encode_ofp11_group_mod(ofp_version, gm);
@@ -9355,6 +9358,7 @@ ofputil_pull_ofp15_group_mod(struct ofpbuf *msg, enum ofp_version ofp_version,
 
     case OFPGC11_ADD:
     case OFPGC11_MODIFY:
+    case OFPGC11_ADD_OR_MOD:
     case OFPGC11_DELETE:
     default:
         if (gm->command_bucket_id == OFPG15_BUCKET_ALL) {
@@ -9433,6 +9437,7 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     switch (gm->command) {
     case OFPGC11_ADD:
     case OFPGC11_MODIFY:
+    case OFPGC11_ADD_OR_MOD:
     case OFPGC11_DELETE:
     case OFPGC15_INSERT_BUCKET:
         break;

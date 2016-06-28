@@ -1380,6 +1380,10 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
         fields = F_GROUP_TYPE | F_BUCKETS;
         break;
 
+    case OFPGC11_ADD_OR_MOD:
+        fields = F_GROUP_TYPE | F_BUCKETS;
+        break;
+
     case OFPGC15_INSERT_BUCKET:
         fields = F_BUCKETS | F_COMMAND_BUCKET_ID;
         *usable_protocols &= OFPUTIL_P_OF15_UP;

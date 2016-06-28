@@ -84,6 +84,10 @@ static bool enable_color;
  */
 static bool strict;
 
+/* --may-create: If true, the mod-group command creates a group that does not
+ * yet exist; otherwise, such a command has no effect. */
+static bool may_create;
+
 /* --readd: If true, on replace-flows, re-add even flows that have not changed
  * (to reset flow counters). */
 static bool readd;
@@ -175,6 +179,7 @@ parse_options(int argc, char *argv[])
         OPT_UNIXCTL,
         OPT_BUNDLE,
         OPT_COLOR,
+        OPT_MAY_CREATE,
         DAEMON_OPTION_ENUMS,
         OFP_VERSION_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
@@ -194,6 +199,7 @@ parse_options(int argc, char *argv[])
         {"option", no_argument, NULL, 'o'},
         {"bundle", no_argument, NULL, OPT_BUNDLE},
         {"color", optional_argument, NULL, OPT_COLOR},
+        {"may-create", no_argument, NULL, OPT_MAY_CREATE},
         DAEMON_LONG_OPTIONS,
         OFP_VERSION_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
@@ -319,6 +325,10 @@ parse_options(int argc, char *argv[])
             }
         break;
 
+        case OPT_MAY_CREATE:
+            may_create = true;
+            break;
+
         DAEMON_OPTION_HANDLERS
         OFP_VERSION_OPTION_HANDLERS
         VLOG_OPTION_HANDLERS
@@ -406,7 +416,7 @@ usage(void)
            "  snoop SWITCH                snoop on SWITCH and its controller\n"
            "  add-group SWITCH GROUP      add group described by GROUP\n"
            "  add-groups SWITCH FILE      add group from FILE\n"
-           "  mod-group SWITCH GROUP      modify specific group\n"
+           "  [--may-create] mod-group SWITCH GROUP   modify specific group\n"
            "  del-groups SWITCH [GROUP]   delete matching GROUPs\n"
            "  insert-buckets SWITCH [GROUP] add buckets to GROUP\n"
            "  remove-buckets SWITCH [GROUP] remove buckets from GROUP\n"
@@ -2534,7 +2544,8 @@ ofctl_add_groups(struct ovs_cmdl_context *ctx)
 static void
 ofctl_mod_group(struct ovs_cmdl_context *ctx)
 {
-    ofctl_group_mod(ctx->argc, ctx->argv, OFPGC11_MODIFY);
+    ofctl_group_mod(ctx->argc, ctx->argv,
+                    may_create ? OFPGC11_ADD_OR_MOD : OFPGC11_MODIFY);
 }
 
 static void

@@ -431,10 +431,14 @@ zero or more groups in the same syntax, one per line.
 .IQ "\fBadd\-groups \fIswitch file\fR"
 Add each group entry to \fIswitch\fR's tables.
 .
-.IP "\fBmod\-group \fIswitch group\fR"
-.IQ "\fBmod\-group \fIswitch \fB\- < \fIfile\fR"
+.IP "[\fB\-\-may\-create\fR] \fBmod\-group \fIswitch group\fR"
+.IQ "[\fB\-\-may\-create\fR] \fBmod\-group \fIswitch \fB\- < \fIfile\fR"
 Modify the action buckets in entries from \fIswitch\fR's tables for
-each group entry.
+each group entry.  If a specified group does not already exist, then
+without \fB\-\-may\-create\fR, this command has no effect; with
+\fB\-\-may\-create\fR, it creates a new group.  The
+\fB\-\-may\-create\fR option uses an Open vSwitch extension to
+OpenFlow only implemented in Open vSwitch 2.6 and later.
 .
 .IP "\fBdel\-groups \fIswitch\fR"
 .IQ "\fBdel\-groups \fIswitch \fR[\fIgroup\fR]"

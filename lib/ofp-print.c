@@ -2703,6 +2703,10 @@ ofp_print_group_mod__(struct ds *s, enum ofp_version ofp_version,
         ds_put_cstr(s, "MOD");
         break;
 
+    case OFPGC11_ADD_OR_MOD:
+        ds_put_cstr(s, "ADD_OR_MOD");
+        break;
+
     case OFPGC11_DELETE:
         ds_put_cstr(s, "DEL");
         break;

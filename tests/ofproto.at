@@ -393,6 +393,32 @@ AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 'group_id=1236,type=indir
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - group_mod with mod and add_or_mod command])
+OVS_VSWITCHD_START
+dnl Check that mod-group for non-existing group fails without --may-create
+AT_DATA([stderr], [dnl
+OFPT_ERROR (OF1.3) (xid=0x2): OFPGMFC_UNKNOWN_GROUP
+OFPT_GROUP_MOD (OF1.3) (xid=0x2):
+ MOD group_id=1234,type=indirect,bucket=actions=output:2
+])
+AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn mod-group br0 'group_id=1234,type=indirect,bucket=actions=2'], [1], , [stderr])
+dnl Check that mod-group for non-existing group succeeds with --may-create
+AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn --may-create mod-group br0 'group_id=1234,type=indirect,bucket=actions=2'])
+AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.3):
+ group_id=1234,type=indirect,bucket=actions=output:2
+])
+dnl Check that mod-group for existing group succeeds with --may-create
+AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn --may-create mod-group br0 'group_id=1234,type=indirect,bucket=actions=3'])
+AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.3):
+ group_id=1234,type=indirect,bucket=actions=output:3
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
 dnl Actions definition listed in both supported formats (w/ actions=)

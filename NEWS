@@ -17,10 +17,13 @@ Post-v2.5.0
      * New OpenFlow extension NXM_NX_MPLS_TTL to provide access to MPLS TTL.
      * New output option, output(port=N,max_len=M), to allow truncating a
        packet to size M bytes when outputting to port N.
+     * New command OFPGC_ADD_OR_MOD for OFPT_GROUP_MOD message that adds a
+       new group or modifies an existing groups
    - ovs-ofctl:
      * queue-get-config command now allows a queue ID to be specified.
      * '--bundle' option can now be used with OpenFlow 1.3.
      * New option "--color" to produce colorized output for some commands.
+     * New option '--may-create' to use OFPGC_ADD_OR_MOD in mod-group command.
    - IPFIX:
      * New "sampling_port" option for "sample" action to allow sampling
        ingress and egress tunnel metadata with IPFIX.
