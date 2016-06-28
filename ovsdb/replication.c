@@ -208,8 +208,7 @@ open_jsonrpc(const char *server)
     struct stream *stream;
     int error;
 
-    error = stream_open_block(jsonrpc_stream_open(server, &stream,
-                                                  DSCP_DEFAULT), &stream);
+    error = jsonrpc_stream_open(server, &stream, DSCP_DEFAULT);
 
     return error ? NULL : jsonrpc_open(stream);
 }
