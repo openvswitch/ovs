@@ -34,6 +34,7 @@ void replication_run(struct shash *dbs);
 void set_remote_ovsdb_server(const char *remote_server);
 void set_tables_blacklist(const char *blacklist);
 void disconnect_remote_server(void);
+void destroy_remote_server(void);
 const struct db *find_db(const struct shash *all_dbs, const char *db_name);
 void replication_usage(void);
 
