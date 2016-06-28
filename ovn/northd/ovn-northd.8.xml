@@ -843,7 +843,7 @@ output;
       </li>
 
       <li>
-        ARP reply handling.  These flows use ARP replies to populate the
+        ARP reply handling.  This flow uses ARP replies to populate the
         logical router's ARP table.  A priority-90 flow with match <code>arp.op
         == 2</code> has actions <code>put_arp(inport, arp.spa,
         arp.sha);</code>.
@@ -851,21 +851,19 @@ output;
 
       <li>
         <p>
-          Reply to IPv6 Neighbor Solicitations.
-        </p>
-
-        <p>
-          These flows reply to Neighbor Solictation requests for the
-          router's own IPv6 address.  For each router port <var>P</var>
-          that owns IPv6 address <var>A</var>, solicited node address
-          <var>S</var>, and Ethernet address
-          <var>E</var>, a priority-90 flow matches <code>inport ==
-          <var>P</var> &amp;&amp; nd_ns &amp;&amp; ip6.dst == {<var>A</var>,
-          <var>E</var>} &amp;&amp; nd.target == <var>A</var></code>
-          with the following actions:
+          Reply to IPv6 Neighbor Solicitations.  These flows reply to
+          Neighbor Solicitation requests for the router's own IPv6
+          address and populate the logical router's mac binding table.
+          For each router port <var>P</var> that owns IPv6 address
+          <var>A</var>, solicited node address <var>S</var>, and
+          Ethernet address <var>E</var>, a priority-90 flow matches
+          <code>inport == <var>P</var> &amp;&amp; nd_ns &amp;&amp;
+          ip6.dst == {<var>A</var>, <var>E</var>} &amp;&amp; nd.target
+          == <var>A</var></code> with the following actions:
         </p>
 
         <pre>
+put_nd(inport, ip6.src, nd.sll);
 nd_na {
     eth.src = <var>E</var>;
     ip6.src = <var>A</var>;
@@ -876,6 +874,23 @@ nd_na {
     output;
 };
         </pre>
+      </li>
+
+      <li>
+        IPv6 neighbor advertisement handling.  This flow uses neighbor
+        advertisements to populate the logical router's mac binding
+        table.  A priority-90 flow with match <code>nd_na</code>
+        has actions <code>put_nd(inport, nd.target, nd.tll);</code>.
+      </li>
+
+      <li>
+        IPv6 neighbor solicitation for non-hosted addresses handling.
+        This flow uses neighbor solicitations to populate the logical
+        router's mac binding table (ones that were directed at the
+        logical router would have matched the priority-90 neighbor
+        solicitation flow already).  A priority-80 flow with match
+        <code>nd_ns</code> has actions
+        <code>put_nd(inport, ip6.src, nd.sll);</code>.
       </li>
 
       <li>
@@ -1202,14 +1217,21 @@ next;
 
       <li>
         <p>
-          Dynamic MAC bindings.  This flows resolves MAC-to-IP bindings that
-          have become known dynamically through ARP.  (The next table will
-          issue an ARP request for cases where the binding is not yet known.)
+          Dynamic MAC bindings.  These flows resolve MAC-to-IP bindings
+          that have become known dynamically through ARP or neighbor
+          discovery.  (The next table will issue an ARP or neighbor
+          solicitation request for cases where the binding is not yet
+          known.)
         </p>
 
         <p>
-          A priority-0 logical flow with match <code>1</code> has actions
+          A priority-0 logical flow with match <code>ip4</code> has actions
           <code>get_arp(outport, reg0); next;</code>.
+        </p>
+
+        <p>
+          A priority-0 logical flow with match <code>ip6</code> has actions
+          <code>get_nd(outport, xxreg0); next;</code>.
         </p>
       </li>
     </ul>

@@ -1073,6 +1073,44 @@
           <p><b>Prerequisite:</b> <code>ip4</code></p>
         </dd>
 
+        <dt><code>get_arp(<var>P</var>, <var>A</var>);</code></dt>
+
+        <dd>
+          <p>
+            <b>Parameters</b>: logical port string field <var>P</var>, 32-bit
+            IP address field <var>A</var>.
+          </p>
+
+          <p>
+            Looks up <var>A</var> in <var>P</var>'s mac binding table.
+            If an entry is found, stores its Ethernet address in
+            <code>eth.dst</code>, otherwise stores
+            <code>00:00:00:00:00:00</code> in <code>eth.dst</code>.
+          </p>
+
+          <p><b>Example:</b> <code>get_arp(outport, ip4.dst);</code></p>
+        </dd>
+
+        <dt>
+          <code>put_arp(<var>P</var>, <var>A</var>, <var>E</var>);</code>
+        </dt>
+
+        <dd>
+          <p>
+            <b>Parameters</b>: logical port string field <var>P</var>, 32-bit
+            IP address field <var>A</var>, 48-bit Ethernet address field
+            <var>E</var>.
+          </p>
+
+          <p>
+            Adds or updates the entry for IP address <var>A</var> in
+            logical port <var>P</var>'s mac binding table, setting its
+            Ethernet address to <var>E</var>.
+          </p>
+
+          <p><b>Example:</b> <code>put_arp(inport, arp.spa, arp.sha);</code></p>
+        </dd>
+
         <dt>
           <code>nd_na { <var>action</var>; </code>...<code> };</code>
         </dt>
@@ -1113,42 +1151,42 @@
           </p>
         </dd>
 
-        <dt><code>get_arp(<var>P</var>, <var>A</var>);</code></dt>
+        <dt><code>get_nd(<var>P</var>, <var>A</var>);</code></dt>
 
         <dd>
           <p>
-            <b>Parameters</b>: logical port string field <var>P</var>, 32-bit
-            IP address field <var>A</var>.
+            <b>Parameters</b>: logical port string field <var>P</var>, 128-bit
+            IPv6 address field <var>A</var>.
           </p>
 
           <p>
-            Looks up <var>A</var> in <var>P</var>'s ARP table.  If an entry is
-            found, stores its Ethernet address in <code>eth.dst</code>,
-            otherwise stores <code>00:00:00:00:00:00</code> in
-            <code>eth.dst</code>.
+            Looks up <var>A</var> in <var>P</var>'s mac binding table.
+            If an entry is found, stores its Ethernet address in
+            <code>eth.dst</code>, otherwise stores
+            <code>00:00:00:00:00:00</code> in <code>eth.dst</code>.
           </p>
 
-          <p><b>Example:</b> <code>get_arp(outport, ip4.dst);</code></p>
+          <p><b>Example:</b> <code>get_nd(outport, ip6.dst);</code></p>
         </dd>
 
         <dt>
-          <code>put_arp(<var>P</var>, <var>A</var>, <var>E</var>);</code>
+          <code>put_nd(<var>P</var>, <var>A</var>, <var>E</var>);</code>
         </dt>
 
         <dd>
           <p>
-            <b>Parameters</b>: logical port string field <var>P</var>, 32-bit
-            IP address field <var>A</var>, 48-bit Ethernet address field
-            <var>E</var>.
+            <b>Parameters</b>: logical port string field <var>P</var>,
+            128-bit IPv6 address field <var>A</var>, 48-bit Ethernet
+            address field <var>E</var>.
           </p>
 
           <p>
-            Adds or updates the entry for IP address <var>A</var> in logical
-            port <var>P</var>'s ARP table, setting its Ethernet address to
-            <var>E</var>.
+            Adds or updates the entry for IPv6 address <var>A</var> in
+            logical port <var>P</var>'s mac binding table, setting its
+            Ethernet address to <var>E</var>.
           </p>
 
-          <p><b>Example:</b> <code>put_arp(inport, arp.spa, arp.sha);</code></p>
+          <p><b>Example:</b> <code>put_nd(inport, nd.target, nd.tll);</code></p>
         </dd>
 
         <dt>

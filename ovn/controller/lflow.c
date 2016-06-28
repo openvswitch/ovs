@@ -528,7 +528,7 @@ consider_logical_flow(const struct lport_index *lports,
         .first_ptable = first_ptable,
         .cur_ltable = lflow->table_id,
         .output_ptable = output_ptable,
-        .arp_ptable = OFTABLE_MAC_BINDING,
+        .mac_bind_ptable = OFTABLE_MAC_BINDING,
     };
     error = actions_parse_string(lflow->actions, &ap, &ofpacts, &prereqs);
     if (error) {
@@ -638,16 +638,29 @@ consider_neighbor_flow(const struct lport_index *lports,
         return;
     }
 
-    ovs_be32 ip;
-    if (!ip_parse(b->ip, &ip)) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-        VLOG_WARN_RL(&rl, "bad 'ip' %s", b->ip);
-        return;
+
+    if (strchr(b->ip, '.')) {
+        ovs_be32 ip;
+        if (!ip_parse(b->ip, &ip)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "bad 'ip' %s", b->ip);
+            return;
+        }
+        match_set_reg(match_p, 0, ntohl(ip));
+    } else {
+        struct in6_addr ip6;
+        if (!ipv6_parse(b->ip, &ip6)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "bad 'ip' %s", b->ip);
+            return;
+        }
+        ovs_be128 value;
+        memcpy(&value, &ip6, sizeof(value));
+        match_set_xxreg(match_p, 0, ntoh128(value));
     }
 
     match_set_metadata(match_p, htonll(pb->datapath->tunnel_key));
     match_set_reg(match_p, MFF_LOG_OUTPORT - MFF_REG0, pb->tunnel_key);
-    match_set_reg(match_p, 0, ntohl(ip));
 
     ofpbuf_clear(ofpacts_p);
     put_load(mac.ea, sizeof mac.ea, MFF_ETH_DST, 0, 48, ofpacts_p);

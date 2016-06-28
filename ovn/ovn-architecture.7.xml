@@ -857,6 +857,7 @@
         </dd>
 
         <dt><code>get_arp(<var>P</var>, <var>A</var>);</code></dt>
+        <dt><code>get_nd(<var>P</var>, <var>A</var>);</code></dt>
         <dd>
           <p>
             Implemented by storing arguments into OpenFlow fields, then
@@ -875,6 +876,7 @@
         </dd>
 
         <dt><code>put_arp(<var>P</var>, <var>A</var>, <var>E</var>);</code></dt>
+        <dt><code>put_nd(<var>P</var>, <var>A</var>, <var>E</var>);</code></dt>
         <dd>
           <p>
             Implemented by storing the arguments into OpenFlow fields, then

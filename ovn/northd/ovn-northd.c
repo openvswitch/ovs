@@ -3046,6 +3046,17 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_INPUT, 30,
                       ds_cstr(&match), "drop;");
 
+        /* ND advertisement handling.  Use advertisements to populate
+         * the logical router's ARP/ND table. */
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_INPUT, 90, "nd_na",
+                      "put_nd(inport, nd.target, nd.tll);");
+
+        /* Lean from neighbor solicitations that were not directed at
+         * us.  (A priority-90 flow will respond to requests to us and
+         * learn the sender's mac address. */
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_INPUT, 80, "nd_ns",
+                      "put_nd(inport, ip6.src, nd.sll);");
+
         /* Pass other traffic not already handled to the next table for
          * routing. */
         ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_INPUT, 0, "1", "next;");
@@ -3252,6 +3263,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
             ds_clear(&actions);
             ds_put_format(&actions,
+                          "put_nd(inport, ip6.src, nd.sll); "
                           "nd_na { "
                           "eth.src = %s; "
                           "ip6.src = %s; "
@@ -3629,6 +3641,11 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
         ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_RESOLVE, 0, "1",
                       "get_arp(outport, reg0); next;");
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_RESOLVE, 0, "ip4",
+                      "get_arp(outport, reg0); next;");
+
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_RESOLVE, 0, "ip6",
+                      "get_nd(outport, xxreg0); next;");
     }
 
     /* Local router ingress table 6: ARP request.

@@ -424,7 +424,7 @@ parse_get_arp_action(struct action_context *ctx)
     setup_args(ctx, args, ARRAY_SIZE(args));
 
     put_load(0, MFF_ETH_DST, 0, 48, ctx->ofpacts);
-    emit_resubmit(ctx, ctx->ap->arp_ptable);
+    emit_resubmit(ctx, ctx->ap->mac_bind_ptable);
 
     restore_args(ctx, args, ARRAY_SIZE(args));
 }
@@ -776,6 +776,56 @@ parse_ct_lb_action(struct action_context *ctx)
 }
 
 static void
+parse_get_nd_action(struct action_context *ctx)
+{
+    struct mf_subfield port, ip6;
+
+    if (!action_force_match(ctx, LEX_T_LPAREN)
+        || !action_parse_field(ctx, 0, &port)
+        || !action_force_match(ctx, LEX_T_COMMA)
+        || !action_parse_field(ctx, 128, &ip6)
+        || !action_force_match(ctx, LEX_T_RPAREN)) {
+        return;
+    }
+
+    const struct arg args[] = {
+        { &port, MFF_LOG_OUTPORT },
+        { &ip6, MFF_XXREG0 },
+    };
+    setup_args(ctx, args, ARRAY_SIZE(args));
+
+    put_load(0, MFF_ETH_DST, 0, 48, ctx->ofpacts);
+    emit_resubmit(ctx, ctx->ap->mac_bind_ptable);
+
+    restore_args(ctx, args, ARRAY_SIZE(args));
+}
+
+static void
+parse_put_nd_action(struct action_context *ctx)
+{
+    struct mf_subfield port, ip6, mac;
+
+    if (!action_force_match(ctx, LEX_T_LPAREN)
+        || !action_parse_field(ctx, 0, &port)
+        || !action_force_match(ctx, LEX_T_COMMA)
+        || !action_parse_field(ctx, 128, &ip6)
+        || !action_force_match(ctx, LEX_T_COMMA)
+        || !action_parse_field(ctx, 48, &mac)
+        || !action_force_match(ctx, LEX_T_RPAREN)) {
+        return;
+    }
+
+    const struct arg args[] = {
+        { &port, MFF_LOG_INPORT },
+        { &ip6, MFF_XXREG0 },
+        { &mac, MFF_ETH_SRC }
+    };
+    setup_args(ctx, args, ARRAY_SIZE(args));
+    put_controller_op(ctx->ofpacts, ACTION_OPCODE_PUT_ND);
+    restore_args(ctx, args, ARRAY_SIZE(args));
+}
+
+static void
 emit_ct(struct action_context *ctx, bool recirc_next, bool commit,
         int *ct_mark, int *ct_mark_mask,
         ovs_be128 *ct_label, ovs_be128 *ct_label_mask)
@@ -1065,12 +1115,16 @@ parse_action(struct action_context *ctx)
         parse_ct_lb_action(ctx);
     } else if (lexer_match_id(ctx->lexer, "arp")) {
         parse_nested_action(ctx, ACTION_OPCODE_ARP, "ip4");
-    } else if (lexer_match_id(ctx->lexer, "nd_na")) {
-        parse_nested_action(ctx, ACTION_OPCODE_ND_NA, "nd_ns");
     } else if (lexer_match_id(ctx->lexer, "get_arp")) {
         parse_get_arp_action(ctx);
     } else if (lexer_match_id(ctx->lexer, "put_arp")) {
         parse_put_arp_action(ctx);
+    } else if (lexer_match_id(ctx->lexer, "nd_na")) {
+        parse_nested_action(ctx, ACTION_OPCODE_ND_NA, "nd_ns");
+    } else if (lexer_match_id(ctx->lexer, "get_nd")) {
+        parse_get_nd_action(ctx);
+    } else if (lexer_match_id(ctx->lexer, "put_nd")) {
+        parse_put_nd_action(ctx);
     } else {
         action_syntax_error(ctx, "expecting action");
     }
