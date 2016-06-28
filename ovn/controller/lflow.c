@@ -306,7 +306,7 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
         struct hmap matches;
         struct expr *expr;
 
-        expr = expr_parse_string(lflow->match, &symtab, &error);
+        expr = expr_parse_string(lflow->match, &symtab, NULL, &error);
         if (!error) {
             if (prereqs) {
                 expr = expr_combine(EXPR_T_AND, expr, prereqs);

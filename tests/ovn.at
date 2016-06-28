@@ -8,6 +8,9 @@ foo bar baz quuxquuxquux _abcd_ a.b.c.d a123_.456
 "abc\u0020def" => "abc def"
 " => error("Input ends inside quoted string.")dnl "
 
+$foo $bar $baz $quuxquuxquux $_abcd_ $a.b.c.d $a123_.456
+$1 => error("`$' must be followed by a valid identifier.") 1
+
 a/*b*/c => a c
 a//b c => a
 a/**/b => a b
@@ -214,6 +217,8 @@ eth.type != 0x800 => Nominal field eth.type may only be tested for equality (tak
 !(eth.type == 0x800) => Nominal field eth.type may only be tested for equality (taking enclosing `!' operators into account).
 
 123 == 123 => Syntax error at `123' expecting field name.
+
+$name => Syntax error at `$name' expecting address set name.
 
 123 == xyzzy => Syntax error at `xyzzy' expecting field name.
 xyzzy == 1 => Syntax error at `xyzzy' expecting field name.
@@ -431,6 +436,56 @@ ipv6,reg6=0x6
 ])
 AT_CHECK([expr_to_flow 'inport == "eth0" && inport == "eth1"'], [0], [dnl
 (no flows)
+])
+AT_CLEANUP
+
+AT_SETUP([ovn -- converting expressions to flows -- address sets])
+expr_to_flow () {
+    echo "$1" | ovstest test-ovn expr-to-flows | sort
+}
+AT_CHECK([expr_to_flow 'ip4.src == {10.0.0.1, 10.0.0.2, 10.0.0.3}'], [0], [dnl
+ip,nw_src=10.0.0.1
+ip,nw_src=10.0.0.2
+ip,nw_src=10.0.0.3
+])
+AT_CHECK([expr_to_flow 'ip4.src == $set1'], [0], [dnl
+ip,nw_src=10.0.0.1
+ip,nw_src=10.0.0.2
+ip,nw_src=10.0.0.3
+])
+AT_CHECK([expr_to_flow 'ip4.src == {1.2.3.4, $set1}'], [0], [dnl
+ip,nw_src=1.2.3.4
+ip,nw_src=10.0.0.1
+ip,nw_src=10.0.0.2
+ip,nw_src=10.0.0.3
+])
+AT_CHECK([expr_to_flow 'ip4.src == {1.2.0.0/20, 5.5.5.0/24, $set1}'], [0], [dnl
+ip,nw_src=1.2.0.0/20
+ip,nw_src=10.0.0.1
+ip,nw_src=10.0.0.2
+ip,nw_src=10.0.0.3
+ip,nw_src=5.5.5.0/24
+])
+AT_CHECK([expr_to_flow 'ip6.src == {::1, ::2, ::3}'], [0], [dnl
+ipv6,ipv6_src=::1
+ipv6,ipv6_src=::2
+ipv6,ipv6_src=::3
+])
+AT_CHECK([expr_to_flow 'ip6.src == {::1, $set2, ::4}'], [0], [dnl
+ipv6,ipv6_src=::1
+ipv6,ipv6_src=::2
+ipv6,ipv6_src=::3
+ipv6,ipv6_src=::4
+])
+AT_CHECK([expr_to_flow 'eth.src == {00:00:00:00:00:01, 00:00:00:00:00:02, 00:00:00:00:00:03}'], [0], [dnl
+dl_src=00:00:00:00:00:01
+dl_src=00:00:00:00:00:02
+dl_src=00:00:00:00:00:03
+])
+AT_CHECK([expr_to_flow 'eth.src == {$set3}'], [0], [dnl
+dl_src=00:00:00:00:00:01
+dl_src=00:00:00:00:00:02
+dl_src=00:00:00:00:00:03
 ])
 AT_CLEANUP
 

@@ -409,6 +409,7 @@ expr_print(const struct expr *e)
 struct expr_context {
     struct lexer *lexer;        /* Lexer for pulling more tokens. */
     const struct shash *symtab; /* Symbol table. */
+    const struct shash *macros; /* Table of macros. */
     char *error;                /* Error, if any, otherwise NULL. */
     bool not;                   /* True inside odd number of NOT operators. */
 };
@@ -729,6 +730,33 @@ assign_constant_set_type(struct expr_context *ctx,
 }
 
 static bool
+parse_macros(struct expr_context *ctx, struct expr_constant_set *cs,
+             size_t *allocated_values)
+{
+    struct expr_constant_set *addr_set
+        = shash_find_data(ctx->macros, ctx->lexer->token.s);
+    if (!addr_set) {
+        expr_syntax_error(ctx, "expecting address set name.");
+        return false;
+    }
+
+    if (!assign_constant_set_type(ctx, cs, EXPR_C_INTEGER)) {
+        return false;
+    }
+
+    size_t n_values = cs->n_values + addr_set->n_values;
+    if (n_values >= *allocated_values) {
+        cs->values = xrealloc(cs->values, n_values * sizeof *cs->values);
+        *allocated_values = n_values;
+    }
+    for (size_t i = 0; i < addr_set->n_values; i++) {
+        cs->values[cs->n_values++] = addr_set->values[i];
+    }
+
+    return true;
+}
+
+static bool
 parse_constant(struct expr_context *ctx, struct expr_constant_set *cs,
                size_t *allocated_values)
 {
@@ -756,6 +784,12 @@ parse_constant(struct expr_context *ctx, struct expr_constant_set *cs,
         c->masked = ctx->lexer->token.type == LEX_T_MASKED_INTEGER;
         if (c->masked) {
             c->mask = ctx->lexer->token.mask;
+        }
+        lexer_get(ctx->lexer);
+        return true;
+    } else if (ctx->lexer->token.type == LEX_T_MACRO) {
+        if (!parse_macros(ctx, cs, allocated_values)) {
+            return false;
         }
         lexer_get(ctx->lexer);
         return true;
@@ -805,6 +839,69 @@ expr_constant_set_destroy(struct expr_constant_set *cs)
             }
         }
         free(cs->values);
+    }
+}
+
+/* Adds a macro named 'name' to 'macros', replacing any existing macro with the
+ * given name. */
+void
+expr_macros_add(struct shash *macros, const char *name,
+                const char *const *values, size_t n_values)
+{
+    /* Replace any existing entry for this name. */
+    expr_macros_remove(macros, name);
+
+    struct expr_constant_set *cs = xzalloc(sizeof *cs);
+    cs->type = EXPR_C_INTEGER;
+    cs->in_curlies = true;
+    cs->n_values = 0;
+    cs->values = xmalloc(n_values * sizeof *cs->values);
+    for (size_t i = 0; i < n_values; i++) {
+        /* Use the lexer to convert each macro into the proper
+         * integer format. */
+        struct lexer lex;
+        lexer_init(&lex, values[i]);
+        lexer_get(&lex);
+        if (lex.token.type != LEX_T_INTEGER
+            && lex.token.type != LEX_T_MASKED_INTEGER) {
+            VLOG_WARN("Invalid address set entry: '%s', token type: %d",
+                      values[i], lex.token.type);
+        } else {
+            union expr_constant *c = &cs->values[cs->n_values++];
+            c->value = lex.token.value;
+            c->format = lex.token.format;
+            c->masked = lex.token.type == LEX_T_MASKED_INTEGER;
+            if (c->masked) {
+                c->mask = lex.token.mask;
+            }
+        }
+        lexer_destroy(&lex);
+    }
+
+    shash_add(macros, name, cs);
+}
+
+void
+expr_macros_remove(struct shash *macros, const char *name)
+{
+    struct expr_constant_set *cs = shash_find_and_delete(macros, name);
+    if (cs) {
+        expr_constant_set_destroy(cs);
+        free(cs);
+    }
+}
+
+/* Destroy all contents of 'macros'. */
+void
+expr_macros_destroy(struct shash *macros)
+{
+    struct shash_node *node, *next;
+
+    SHASH_FOR_EACH_SAFE (node, next, macros) {
+        struct expr_constant_set *cs = node->data;
+
+        shash_delete(macros, node);
+        expr_constant_set_destroy(cs);
     }
 }
 
@@ -980,9 +1077,12 @@ expr_parse__(struct expr_context *ctx)
  * The caller must eventually free the returned expression (with
  * expr_destroy()) or error (with free()). */
 struct expr *
-expr_parse(struct lexer *lexer, const struct shash *symtab, char **errorp)
+expr_parse(struct lexer *lexer, const struct shash *symtab,
+           const struct shash *macros, char **errorp)
 {
-    struct expr_context ctx = { .lexer = lexer, .symtab = symtab };
+    struct expr_context ctx = { .lexer = lexer,
+                                .symtab = symtab,
+                                .macros = macros };
     struct expr *e = expr_parse__(&ctx);
     *errorp = ctx.error;
     ovs_assert((ctx.error != NULL) != (e != NULL));
@@ -991,14 +1091,15 @@ expr_parse(struct lexer *lexer, const struct shash *symtab, char **errorp)
 
 /* Like expr_parse(), but the expression is taken from 's'. */
 struct expr *
-expr_parse_string(const char *s, const struct shash *symtab, char **errorp)
+expr_parse_string(const char *s, const struct shash *symtab,
+                  const struct shash *macros, char **errorp)
 {
     struct lexer lexer;
     struct expr *expr;
 
     lexer_init(&lexer, s);
     lexer_get(&lexer);
-    expr = expr_parse(&lexer, symtab, errorp);
+    expr = expr_parse(&lexer, symtab, macros, errorp);
     if (!*errorp && lexer.token.type != LEX_T_END) {
         *errorp = xstrdup("Extra tokens at end of input.");
         expr_destroy(expr);
@@ -1149,7 +1250,7 @@ expr_get_level(const struct expr *expr)
 static enum expr_level
 expr_parse_level(const char *s, const struct shash *symtab, char **errorp)
 {
-    struct expr *expr = expr_parse_string(s, symtab, errorp);
+    struct expr *expr = expr_parse_string(s, symtab, NULL, errorp);
     enum expr_level level = expr ? expr_get_level(expr) : EXPR_L_NOMINAL;
     expr_destroy(expr);
     return level;
@@ -1292,7 +1393,7 @@ parse_and_annotate(const char *s, const struct shash *symtab,
     char *error;
     struct expr *expr;
 
-    expr = expr_parse_string(s, symtab, &error);
+    expr = expr_parse_string(s, symtab, NULL, &error);
     if (expr) {
         expr = expr_annotate__(expr, symtab, nesting, &error);
     }

@@ -208,7 +208,7 @@ add_prerequisite(struct action_context *ctx, const char *prerequisite)
     struct expr *expr;
     char *error;
 
-    expr = expr_parse_string(prerequisite, ctx->ap->symtab, &error);
+    expr = expr_parse_string(prerequisite, ctx->ap->symtab, NULL, &error);
     ovs_assert(!error);
     ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, expr);
 }

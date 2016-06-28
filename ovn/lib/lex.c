@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -225,6 +225,10 @@ lex_token_format(const struct lex_token *token, struct ds *s)
 
     case LEX_T_MASKED_INTEGER:
         lex_token_format_masked_integer(token, s);
+        break;
+
+    case LEX_T_MACRO:
+        ds_put_format(s, "$%s", token->s);
         break;
 
     case LEX_T_LPAREN:
@@ -514,7 +518,7 @@ lex_is_idn(unsigned char c)
 }
 
 static const char *
-lex_parse_id(const char *p, struct lex_token *token)
+lex_parse_id(const char *p, enum lex_type type, struct lex_token *token)
 {
     const char *start = p;
 
@@ -522,9 +526,21 @@ lex_parse_id(const char *p, struct lex_token *token)
         p++;
     } while (lex_is_idn(*p));
 
-    token->type = LEX_T_ID;
+    token->type = type;
     lex_token_strcpy(token, start, p - start);
     return p;
+}
+
+static const char *
+lex_parse_macro(const char *p, struct lex_token *token)
+{
+    p++;
+    if (!lex_is_id1(*p)) {
+        lex_error(token, "`$' must be followed by a valid identifier.");
+        return p;
+    }
+
+    return lex_parse_id(p, LEX_T_MACRO, token);
 }
 
 /* Initializes 'token' and parses the first token from the beginning of
@@ -697,6 +713,10 @@ next:
         }
         break;
 
+    case '$':
+        p = lex_parse_macro(p, token);
+        break;
+
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
     case ':':
@@ -715,12 +735,12 @@ next:
          * digits followed by a colon, but identifiers never do. */
         p = (p[strspn(p, "0123456789abcdefABCDEF")] == ':'
              ? lex_parse_integer(p, token)
-             : lex_parse_id(p, token));
+             : lex_parse_id(p, LEX_T_ID, token));
         break;
 
     default:
         if (lex_is_id1(*p)) {
-            p = lex_parse_id(p, token);
+            p = lex_parse_id(p, LEX_T_ID, token);
         } else {
             if (isprint((unsigned char) *p)) {
                 lex_error(token, "Invalid character `%c' in input.", *p);
