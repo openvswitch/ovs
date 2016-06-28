@@ -398,11 +398,6 @@ static int handle_fragments(struct net *net, struct sw_flow_key *key,
 	struct ovs_gso_cb ovs_cb = *OVS_GSO_CB(skb);
 	int err;
 
-	if (!skb->dev) {
-		OVS_NLERR(true, "%s: skb has no dev; dropping", __func__);
-		return -EINVAL;
-	}
-
 	if (key->eth.type == htons(ETH_P_IP)) {
 		enum ip_defrag_users user = IP_DEFRAG_CONNTRACK_IN + zone;
 
