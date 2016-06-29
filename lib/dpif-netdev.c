@@ -2842,7 +2842,6 @@ pmd_thread_main(void *f_)
     int poll_cnt;
     int i;
 
-    poll_cnt = 0;
     poll_list = NULL;
 
     /* Stores the pmd thread's 'pmd' to 'per_pmd_key'. */

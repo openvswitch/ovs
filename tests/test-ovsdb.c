@@ -2244,7 +2244,7 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     /* Insert new elements in different map columns */
     myRow = idltest_simple2_first(idl);
     myTxn = ovsdb_idl_txn_create(idl);
-    smap = idltest_simple2_get_smap(myRow, OVSDB_TYPE_STRING,
+    idltest_simple2_get_smap(myRow, OVSDB_TYPE_STRING,
                                     OVSDB_TYPE_STRING);
     idltest_simple2_update_smap_setkey(myRow, "key1", "myList1");
     imap = idltest_simple2_get_imap(myRow, OVSDB_TYPE_INTEGER,
