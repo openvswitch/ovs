@@ -61,6 +61,8 @@ struct mirror {
     /* Output (exactly one of out == NULL and out_vlan == -1 is true). */
     struct mbundle *out;        /* Output port or NULL. */
     int out_vlan;               /* Output VLAN or -1. */
+    uint16_t snaplen;           /* Max per mirrored packet size in byte,
+                                   set to 0 equals 65535. */
     mirror_mask_t dup_mirrors;  /* Bitmap of mirrors with the same output. */
 
     /* Counters. */
@@ -203,6 +205,7 @@ mirror_set(struct mbridge *mbridge, void *aux, const char *name,
            struct ofbundle **srcs, size_t n_srcs,
            struct ofbundle **dsts, size_t n_dsts,
            unsigned long *src_vlans, struct ofbundle *out_bundle,
+           uint16_t snaplen,
            uint16_t out_vlan)
 {
     struct mbundle *mbundle, *out;
@@ -227,6 +230,7 @@ mirror_set(struct mbridge *mbridge, void *aux, const char *name,
         mirror->idx = idx;
         mirror->aux = aux;
         mirror->out_vlan = -1;
+        mirror->snaplen = 0;
     }
 
     /* Get the new configuration. */
@@ -266,6 +270,7 @@ mirror_set(struct mbridge *mbridge, void *aux, const char *name,
 
     mirror->out = out;
     mirror->out_vlan = out_vlan;
+    mirror->snaplen = snaplen;
 
     /* Update mbundles. */
     mirror_bit = MIRROR_MASK_C(1) << mirror->idx;
@@ -388,7 +393,8 @@ mirror_update_stats(struct mbridge *mbridge, mirror_mask_t mirrors,
  * receives the output VLAN (if any). */
 bool
 mirror_get(struct mbridge *mbridge, int index, const unsigned long **vlans,
-           mirror_mask_t *dup_mirrors, struct ofbundle **out, int *out_vlan)
+           mirror_mask_t *dup_mirrors, struct ofbundle **out,
+           int *snaplen, int *out_vlan)
 {
     struct mirror *mirror;
 
@@ -405,6 +411,7 @@ mirror_get(struct mbridge *mbridge, int index, const unsigned long **vlans,
     *dup_mirrors = mirror->dup_mirrors;
     *out = mirror->out ? mirror->out->ofbundle : NULL;
     *out_vlan = mirror->out_vlan;
+    *snaplen = mirror->snaplen;
     return true;
 }
 

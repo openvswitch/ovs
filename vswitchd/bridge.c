@@ -4760,6 +4760,12 @@ mirror_configure(struct mirror *m)
         return false;
     }
 
+    if (cfg->snaplen) {
+        s.snaplen = *cfg->snaplen;
+    } else {
+        s.snaplen = 0;
+    }
+
     /* Get port selection. */
     if (cfg->select_all) {
         size_t n_ports = hmap_count(&m->bridge->ports);

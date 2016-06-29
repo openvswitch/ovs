@@ -3699,6 +3699,15 @@
           VLAN and should generally be preferred.
         </p>
       </column>
+
+      <column name="snaplen">
+        <p>Maximum per-packet number of bytes to mirror.</p>
+        <p>A mirrored packet with size larger than <ref column="snaplen"/>
+           will be truncated in datapath to <ref column="snaplen"/> bytes
+           before sending to the mirror output port.  If omitted, packets
+           are not truncated.
+        </p>
+      </column>
     </group>
 
     <group title="Statistics: Mirror counters">
