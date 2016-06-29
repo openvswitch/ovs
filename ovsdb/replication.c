@@ -468,8 +468,8 @@ process_table_update(struct json *table_update, const char *table_name,
     struct ovsdb_error *error;
 
     if (table_update->type != JSON_OBJECT) {
-        error = ovsdb_error("Not a JSON object",
-                            "<table-update> for table is not object");
+        return ovsdb_error("Not a JSON object",
+                           "<table-update> for table is not object");
     }
 
     table = ovsdb_get_table(database, table_name);
