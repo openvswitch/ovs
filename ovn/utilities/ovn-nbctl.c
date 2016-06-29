@@ -1799,7 +1799,8 @@ nbctl_lr_route_list(struct ctl_context *ctx)
             free(error);
 
             struct in6_addr ipv6;
-            if (!ipv6_parse_cidr(route->ip_prefix, &ipv6, &plen)) {
+            error = ipv6_parse_cidr(route->ip_prefix, &ipv6, &plen);
+            if (!error) {
                 ipv6_routes[n_ipv6_routes].plen = plen;
                 ipv6_routes[n_ipv6_routes].addr = ipv6;
                 ipv6_routes[n_ipv6_routes].route = route;
