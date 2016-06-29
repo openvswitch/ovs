@@ -230,9 +230,6 @@ parse_options(int argc, char *argv[])
     }
     free(short_options);
 
-    argc -= optind;
-    argv += optind;
-
     if (!ovnsb_remote) {
         ovnsb_remote = xstrdup(default_db());
     }
