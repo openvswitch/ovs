@@ -5724,18 +5724,21 @@ xlate_resume(struct ofproto_dpif *ofproto,
     return error == XLATE_BRIDGE_NOT_FOUND ? OFPERR_NXR_STALE : 0;
 }
 
-/* Sends 'packet' out 'ofport'.
+/* Sends 'packet' out 'ofport'. If 'port' is a tunnel and that tunnel type
+ * supports a notion of an OAM flag, sets it if 'oam' is true.
  * May modify 'packet'.
  * Returns 0 if successful, otherwise a positive errno value. */
 int
-xlate_send_packet(const struct ofport_dpif *ofport, struct dp_packet *packet)
+xlate_send_packet(const struct ofport_dpif *ofport, bool oam,
+                  struct dp_packet *packet)
 {
     struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     struct xport *xport;
-    struct ofpact_output output;
+    uint64_t ofpacts_stub[1024 / 8];
+    struct ofpbuf ofpacts;
     struct flow flow;
 
-    ofpact_init(&output.ofpact, OFPACT_OUTPUT, sizeof output);
+    ofpbuf_use_stack(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     /* Use OFPP_NONE as the in_port to avoid special packet processing. */
     flow_extract(packet, &flow);
     flow.in_port.ofp_port = OFPP_NONE;
@@ -5744,12 +5747,19 @@ xlate_send_packet(const struct ofport_dpif *ofport, struct dp_packet *packet)
     if (!xport) {
         return EINVAL;
     }
-    output.port = xport->ofp_port;
-    output.max_len = 0;
+
+    if (oam) {
+        struct ofpact_set_field *sf = ofpact_put_SET_FIELD(&ofpacts);
+
+        sf->field = mf_from_id(MFF_TUN_FLAGS);
+        sf->value.be16 = htons(NX_TUN_FLAG_OAM);
+        sf->mask.be16 = htons(NX_TUN_FLAG_OAM);
+    }
+
+    ofpact_put_OUTPUT(&ofpacts)->port = xport->ofp_port;
 
     return ofproto_dpif_execute_actions(xport->xbridge->ofproto, &flow, NULL,
-                                        &output.ofpact, sizeof output,
-                                        packet);
+                                        ofpacts.data, ofpacts.size, packet);
 }
 
 struct xlate_cache *

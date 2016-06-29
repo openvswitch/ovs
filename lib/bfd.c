@@ -168,6 +168,8 @@ struct bfd {
     enum flags flags;             /* Flags sent on messages. */
     enum flags rmt_flags;         /* Flags last received. */
 
+    bool oam;                     /* Set tunnel OAM flag if applicable. */
+
     uint32_t rmt_disc;            /* bfd.RemoteDiscr. */
 
     struct eth_addr local_eth_src; /* Local eth src address. */
@@ -390,6 +392,8 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
         bfd_status_changed(bfd);
     }
 
+    bfd->oam = smap_get_bool(cfg, "oam", false);
+
     atomic_store_relaxed(&bfd->check_tnl_key,
                          smap_get_bool(cfg, "check_tnl_key", false));
     min_tx = smap_get_int(cfg, "min_tx", 100);
@@ -586,7 +590,7 @@ bfd_should_send_packet(const struct bfd *bfd) OVS_EXCLUDED(mutex)
 
 void
 bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
-               const struct eth_addr eth_src) OVS_EXCLUDED(mutex)
+               const struct eth_addr eth_src, bool *oam) OVS_EXCLUDED(mutex)
 {
     long long int min_tx, min_rx;
     struct udp_header *udp;
@@ -654,6 +658,7 @@ bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
     msg->min_rx = htonl(min_rx * 1000);
 
     bfd->flags &= ~FLAG_FINAL;
+    *oam = bfd->oam;
 
     log_msg(VLL_DBG, msg, "Sending BFD Message", bfd);
 

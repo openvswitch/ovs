@@ -2718,6 +2718,13 @@
           Set to an IPv4 address to set the IP address used as destination
           for transmitted BFD packets.  The default is <code>169.254.1.0</code>.
         </column>
+
+        <column name="bfd" key="oam">
+          Some tunnel protocols (such as Geneve) include a bit in the header
+          to indicate that the encapsulated packet is an OAM frame. By setting
+          this to true, BFD packets will be marked as OAM if encapsulated in
+          one of these tunnels.
+        </column>
       </group>
 
       <group title="BFD Status">

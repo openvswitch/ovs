@@ -211,7 +211,7 @@ enum ofperr xlate_resume(struct ofproto_dpif *,
                          const struct ofputil_packet_in_private *,
                          struct ofpbuf *odp_actions, enum slow_path_reason *);
 
-int xlate_send_packet(const struct ofport_dpif *, struct dp_packet *);
+int xlate_send_packet(const struct ofport_dpif *, bool oam, struct dp_packet *);
 
 struct xlate_cache *xlate_cache_new(void);
 void xlate_push_stats(struct xlate_cache *, const struct dpif_flow_stats *);
