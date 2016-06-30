@@ -284,16 +284,33 @@
     <p>
       Logical flows in this table closely reproduce those in the
       <code>ACL</code> table in the <code>OVN_Northbound</code> database
-      for the <code>from-lport</code> direction.  <code>allow</code>
-      ACLs translate into logical flows with the <code>next;</code>
-      action, <code>allow-related</code> ACLs translate into logical
-      flows with the <code>reg0[1] = 1; next;</code> actions (which acts
-      as a hint for the next tables to commit the connection to conntrack),
-      other ACLs translate to <code>drop;</code>.  The <code>priority</code>
-      values from the <code>ACL</code> table have a limited range and have 1000
-      added to them to leave room for OVN default flows at both higher
-      and lower priorities.
+      for the <code>from-lport</code> direction. The <code>priority</code>
+      values from the <code>ACL</code> table have a limited range and have
+      1000 added to them to leave room for OVN default flows at both
+      higher and lower priorities.
     </p>
+    <ul>
+      <li>
+        <code>allow</code> ACLs translate into logical flows with
+        the <code>next;</code> action.  If there are any stateful ACLs
+        on this datapath, then <code>allow</code> ACLs translate to
+        <code>ct_commit; next;</code> (which acts as a hint for the next tables
+        to commit the connection to conntrack),
+      </li>
+      <li>
+        <code>allow-related</code> ACLs translate into logical
+        flows with the <code>ct_commit(ct_label=0/1); next;</code> actions
+        for new connections and <code>reg0[1] = 1; next;</code> for existing
+        connections.
+      </li>
+      <li>
+        Other ACLs translate to <code>drop;</code> for new or untracked
+        connections and <code>ct_commit(ct_label=1/1);</code> for known
+        connections.  Setting <code>ct_label</code> marks a connection
+        as one that was previously allowed, but should no longer be
+        allowed due to a policy change.
+      </li>
+    </ul>
 
     <p>
       This table also contains a priority 0 flow with action
@@ -312,19 +329,36 @@
       </li>
 
       <li>
-        A priority-65535 flow that allows any traffic that has been
-        committed to the connection tracker (i.e., established flows).
+        A priority-65535 flow that allows any traffic in the reply
+        direction for a connection that has been committed to the
+        connection tracker (i.e., established flows), as long as
+        the committed flow does not have <code>ct_label[0]</code> set.
+        We only handle traffic in the reply direction here because
+        we want all packets going in the request direction to still
+        go through the flows that implement the currently defined
+        policy based on ACLs.  If a connection is no longer allowed by
+        policy, <code>ct_label[0]</code> will get set and packets in the
+        reply direction will no longer be allowed, either.
       </li>
 
       <li>
         A priority-65535 flow that allows any traffic that is considered
         related to a committed flow in the connection tracker (e.g., an
-        ICMP Port Unreachable from a non-listening UDP port).
+        ICMP Port Unreachable from a non-listening UDP port), as long
+        as the committed flow does not have <code>ct_label[0]</code> set.
       </li>
 
       <li>
         A priority-65535 flow that drops all traffic marked by the
         connection tracker as invalid.
+      </li>
+
+      <li>
+        A priority-65535 flow that drops all trafic in the reply direction
+        with <code>ct_label[0]</code> set meaning that the connection
+        should no longer be allowed due to a policy change.  Packets
+        in the request direction are skipped here to let a newly created
+        ACL re-allow this connection.
       </li>
     </ul>
 
