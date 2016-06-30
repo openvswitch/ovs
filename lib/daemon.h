@@ -102,7 +102,7 @@ pid_t read_pidfile(const char *name);
 
 #define DAEMON_LONG_OPTIONS                                               \
         {"detach",             no_argument, NULL, OPT_DETACH},            \
-        {"no-self-confinement" no_argument, NULL, OPT_NO_SELF_CONFINEMENT}, \
+        {"no-self-confinement", no_argument, NULL, OPT_NO_SELF_CONFINEMENT}, \
         {"no-chdir",           no_argument, NULL, OPT_NO_CHDIR},          \
         {"pidfile",            optional_argument, NULL, OPT_PIDFILE},     \
         {"pipe-handle",        required_argument, NULL, OPT_PIPE_HANDLE}, \
