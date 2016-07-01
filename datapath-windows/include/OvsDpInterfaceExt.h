@@ -65,6 +65,13 @@
 #define OVS_WIN_NL_VPORT_FAMILY_ID           (NLMSG_MIN_TYPE + 4)
 #define OVS_WIN_NL_FLOW_FAMILY_ID            (NLMSG_MIN_TYPE + 5)
 #define OVS_WIN_NL_NETDEV_FAMILY_ID          (NLMSG_MIN_TYPE + 6)
+/*
+ * Conntrack Family is defined in OvsDpInterfaceCtExt.h
+ * OVS_WIN_NL_CT_FAMILY_ID is not used in the messages, but used internally
+ * in the kernel as a placeholder to enable parsing out the ct family cmds.
+ */
+
+#define OVS_WIN_NL_CT_FAMILY_ID              (NLMSG_MIN_TYPE + 7)
 
 #define OVS_WIN_NL_INVALID_MCGRP_ID          0
 #define OVS_WIN_NL_MCGRP_START_ID            100

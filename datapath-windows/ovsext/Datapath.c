@@ -96,7 +96,8 @@ NetlinkCmdHandler        OvsGetNetdevCmdHandler,
                          OvsDeleteVportCmdHandler,
                          OvsPendPacketCmdHandler,
                          OvsSubscribePacketCmdHandler,
-                         OvsReadPacketCmdHandler;
+                         OvsReadPacketCmdHandler,
+                         OvsCtDeleteCmdHandler;
 
 static NTSTATUS HandleGetDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                        UINT32 *replyLen);
@@ -273,6 +274,24 @@ NETLINK_FAMILY nlFLowFamilyOps = {
     .maxAttr  = OVS_FLOW_ATTR_MAX,
     .cmds     = nlFlowFamilyCmdOps,
     .opsCount = ARRAY_SIZE(nlFlowFamilyCmdOps)
+};
+
+/* Netlink Ct family. */
+NETLINK_CMD nlCtFamilyCmdOps[] = {
+    { .cmd              = IPCTNL_MSG_CT_DELETE,
+      .handler          = OvsCtDeleteCmdHandler,
+      .supportedDevOp   = OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex  = TRUE
+    }
+};
+
+NETLINK_FAMILY nlCtFamilyOps = {
+    .name     = OVS_CT_FAMILY, /* Keep this for consistency*/
+    .id       = OVS_WIN_NL_CT_FAMILY_ID, /* Keep this for consistency*/
+    .version  = OVS_CT_VERSION, /* Keep this for consistency*/
+    .maxAttr  = OVS_NL_CT_ATTR_MAX,
+    .cmds     = nlCtFamilyCmdOps,
+    .opsCount = ARRAY_SIZE(nlCtFamilyCmdOps)
 };
 
 /* Netlink netdev family. */
@@ -878,6 +897,9 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
 
     ASSERT(ovsMsg);
     switch (ovsMsg->nlMsg.nlmsgType) {
+    case NFNL_TYPE_CT_DEL:
+        nlFamilyOps = &nlCtFamilyOps;
+        break;
     case OVS_WIN_NL_CTRL_FAMILY_ID:
         nlFamilyOps = &nlControlFamilyOps;
         break;
@@ -954,6 +976,30 @@ ValidateNetlinkCmd(UINT32 devOp,
         goto done;
     }
 
+    /*
+     *  Verify if the Netlink message is part of Netfilter Netlink
+     *  This is currently used by Conntrack
+     */
+    if (IS_NFNL_CMD(ovsMsg->nlMsg.nlmsgType)) {
+
+        /* Validate Netfilter Netlink version is 0 */
+        if (ovsMsg->nfGenMsg.version != NFNETLINK_V0) {
+            status = STATUS_INVALID_PARAMETER;
+            goto done;
+        }
+
+        /* Validate Netfilter Netlink Subsystem */
+        if (NFNL_SUBSYS_ID(ovsMsg->nlMsg.nlmsgType)
+            != NFNL_SUBSYS_CTNETLINK) {
+            status = STATUS_INVALID_PARAMETER;
+            goto done;
+        }
+
+        /* Exit the function because there aren't any other validations */
+        status = STATUS_SUCCESS;
+        goto done;
+    }
+
     for (i = 0; i < nlFamilyOps->opsCount; i++) {
         if (nlFamilyOps->cmds[i].cmd == ovsMsg->genlMsg.cmd) {
             /* Validate if the command is valid for the device operation. */
@@ -1014,9 +1060,17 @@ InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 {
     NTSTATUS status = STATUS_INVALID_PARAMETER;
     UINT16 i;
+    UINT8 cmd;
+
+    if (IS_NFNL_CMD(usrParamsCtx->ovsMsg->nlMsg.nlmsgType)) {
+        /* If nlMsg is of type Netfilter-Netlink parse the Cmd accordingly */
+        cmd = NFNL_MSG_TYPE(usrParamsCtx->ovsMsg->nlMsg.nlmsgType);
+    } else {
+        cmd = usrParamsCtx->ovsMsg->genlMsg.cmd;
+    }
 
     for (i = 0; i < nlFamilyOps->opsCount; i++) {
-        if (nlFamilyOps->cmds[i].cmd == usrParamsCtx->ovsMsg->genlMsg.cmd) {
+        if (nlFamilyOps->cmds[i].cmd == cmd) {
             NetlinkCmdHandler *handler = nlFamilyOps->cmds[i].handler;
             ASSERT(handler);
             if (handler) {
@@ -1048,8 +1102,9 @@ InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
             POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                 usrParamsCtx->outputBuffer;
 
-            if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_EVENT_NOTIFY ||
-                usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_READ_NOTIFY) {
+            if (!IS_NFNL_CMD(usrParamsCtx->ovsMsg->nlMsg.nlmsgType) &&
+                (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_EVENT_NOTIFY ||
+                 usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_READ_NOTIFY)) {
                 /* There's no input buffer associated with such requests. */
                 NL_BUFFER nlBuffer;
                 msgIn = &msgInTmp;
