@@ -425,11 +425,15 @@ def main():
 
     pipes = _doexec(*([dump_cmd, '-i', mirror_interface] + tcpdargs))
     try:
-        while True:
-            print(pipes.stdout.readline())
+        while pipes.poll() is None:
+            data = pipes.stdout.readline()
+            if len(data) == 0:
+                raise KeyboardInterrupt
+            print(data)
             if select.select([sys.stdin], [], [], 0.0)[0]:
                 data_in = sys.stdin.read()
                 pipes.stdin.write(data_in)
+        raise KeyboardInterrupt
     except KeyboardInterrupt:
         pipes.terminate()
         ovsdb.destroy_mirror('m%s' % interface, ovsdb.port_bridge(interface))
