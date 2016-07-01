@@ -525,6 +525,10 @@ nl_ct_parse_tuple(struct nlattr *nla, struct ct_dpif_tuple *tuple,
 static uint8_t
 nl_ct_tcp_state_to_dpif(uint8_t state)
 {
+#ifdef _WIN32
+    /* Windows currently sends up CT_DPIF_TCP state */
+    return state;
+#else
     switch (state) {
     case TCP_CONNTRACK_NONE:
         return CT_DPIF_TCPS_CLOSED;
@@ -549,17 +553,23 @@ nl_ct_tcp_state_to_dpif(uint8_t state)
     default:
         return CT_DPIF_TCPS_CLOSED;
     }
+#endif
 }
 
 static uint8_t
 ip_ct_tcp_flags_to_dpif(uint8_t flags)
 {
+#ifdef _WIN32
+    /* Windows currently sends up CT_DPIF_TCP flags */
+    return flags;
+#else
     uint8_t ret = 0;
 #define CT_DPIF_TCP_FLAG(FLAG) \
         ret |= (flags & IP_CT_TCP_FLAG_##FLAG) ? CT_DPIF_TCPF_##FLAG : 0;
     CT_DPIF_TCP_FLAGS
 #undef CT_DPIF_STATUS_FLAG
     return ret;
+#endif
 }
 
 static bool
