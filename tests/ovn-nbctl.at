@@ -388,6 +388,14 @@ IPv4 Routes
                 0.0.0.0/0               192.168.0.1
 ])
 
+AT_CHECK([ovn-nbctl --may-exist lr-route-add lr0 10.0.0.111/24 11.0.0.1 lp1])
+AT_CHECK([ovn-nbctl lr-route-list lr0], [0], [dnl
+IPv4 Routes
+              10.0.0.0/24                  11.0.0.1 lp1
+              10.0.1.0/24                  11.0.1.1 lp0
+                0.0.0.0/0               192.168.0.1
+])
+
 dnl Delete non-existent prefix
 AT_CHECK([ovn-nbctl lr-route-del lr0 10.0.2.1/24], [1], [],
   [ovn-nbctl: no matching prefix: 10.0.2.0/24
@@ -398,7 +406,7 @@ AT_CHECK([ovn-nbctl lr-route-del lr0 10.0.1.1/24])
 
 AT_CHECK([ovn-nbctl lr-route-list lr0], [0], [dnl
 IPv4 Routes
-              10.0.0.0/24                  11.0.0.1
+              10.0.0.0/24                  11.0.0.1 lp1
                 0.0.0.0/0               192.168.0.1
 ])
 

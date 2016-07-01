@@ -1383,6 +1383,10 @@ nbctl_lr_route_add(struct ctl_context *ctx)
         nbrec_logical_router_static_route_verify_nexthop(route);
         nbrec_logical_router_static_route_set_ip_prefix(route, prefix);
         nbrec_logical_router_static_route_set_nexthop(route, next_hop);
+        if (ctx->argc == 5) {
+            nbrec_logical_router_static_route_set_output_port(route,
+                                                              ctx->argv[4]);
+        }
         free(rt_prefix);
         free(next_hop);
         free(prefix);
