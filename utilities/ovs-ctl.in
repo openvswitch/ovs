@@ -574,7 +574,6 @@ Less important options for "start", "restart" and "force-reload-kmod":
 Debugging options for "start", "restart" and "force-reload-kmod":
   --ovsdb-server-wrapper=WRAPPER
   --ovs-vswitchd-wrapper=WRAPPER
-  --ovs-vswitchd-wrapper=WRAPPER
      run specified daemon under WRAPPER (either 'valgrind' or 'strace')
 
 File location options:
