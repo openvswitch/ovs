@@ -73,6 +73,45 @@ NlFillOvsMsg(PNL_BUFFER nlBuf, UINT16 nlmsgType,
 
 /*
  * ---------------------------------------------------------------------------
+ * Prepare netlink message headers. This API adds
+ * NL_MSG_HDR + GENL_HDR + OVS_HDR to the tail of input NLBuf.
+ * Attributes should be added by caller.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+NlFillOvsMsgForNfGenMsg(PNL_BUFFER nlBuf, UINT16 nlmsgType,
+                        UINT16 nlmsgFlags, UINT32 nlmsgSeq,
+                        UINT32 nlmsgPid, UINT8 nfgenFamily,
+                        UINT8 nfGenVersion, UINT32 dpNo)
+{
+    BOOLEAN writeOk;
+    OVS_MESSAGE msgOut;
+    UINT32 offset = NlBufSize(nlBuf);
+
+    /* To keep compiler happy for release build. */
+    UNREFERENCED_PARAMETER(offset);
+    ASSERT(NlBufAt(nlBuf, offset, 0) != 0);
+
+    msgOut.nlMsg.nlmsgType = nlmsgType;
+    msgOut.nlMsg.nlmsgFlags = nlmsgFlags;
+    msgOut.nlMsg.nlmsgSeq = nlmsgSeq;
+    msgOut.nlMsg.nlmsgPid = nlmsgPid;
+    msgOut.nlMsg.nlmsgLen = sizeof(struct _OVS_MESSAGE);
+
+    msgOut.nfGenMsg.nfgenFamily = nfgenFamily;
+    msgOut.nfGenMsg.version = nfGenVersion;
+    msgOut.nfGenMsg.resId = 0;
+
+    msgOut.ovsHdr.dp_ifindex = dpNo;
+
+    writeOk = NlMsgPutTail(nlBuf, (PCHAR)(&msgOut),
+                           sizeof (struct _OVS_MESSAGE));
+
+    return writeOk;
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * Prepare NL_MSG_HDR only. This API appends a NL_MSG_HDR to the tail of
  * input NlBuf.
  * ---------------------------------------------------------------------------

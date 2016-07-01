@@ -95,6 +95,10 @@ BOOLEAN NlFillOvsMsg(PNL_BUFFER nlBuf,
                      UINT16 nlmsgType, UINT16 nlmsgFlags,
                      UINT32 nlmsgSeq, UINT32 nlmsgPid,
                      UINT8 genlCmd, UINT8 genlVer, UINT32 dpNo);
+BOOLEAN NlFillOvsMsgForNfGenMsg(PNL_BUFFER nlBuf, UINT16 nlmsgType,
+                                UINT16 nlmsgFlags, UINT32 nlmsgSeq,
+                                UINT32 nlmsgPid, UINT8 nfgenFamily,
+                                UINT8 nfGenVersion, UINT32 dpNo);
 BOOLEAN NlFillNlHdr(PNL_BUFFER nlBuf,
                     UINT16 nlmsgType, UINT16 nlmsgFlags,
                     UINT32 nlmsgSeq, UINT32 nlmsgPid);
