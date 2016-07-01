@@ -168,8 +168,7 @@ class OVSDB(object):
 
     def port_bridge(self, port_name):
         try:
-            row = self._find_row_by_name('Interface', port_name)
-            port = self._find_row('Port', lambda x: row in x.interfaces)
+            port = self._find_row_by_name('Port', port_name)
             br = self._find_row('Bridge', lambda x: port in x.ports)
             return br.name
         except Exception:
