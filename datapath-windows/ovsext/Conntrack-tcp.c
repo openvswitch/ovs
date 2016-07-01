@@ -484,6 +484,10 @@ OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
 
     newconn = OvsAllocateMemoryWithTag(sizeof(struct conn_tcp),
                                        OVS_CT_POOL_TAG);
+    if (!newconn) {
+        return NULL;
+    }
+
     newconn->up = (OVS_CT_ENTRY) {0};
     src = &newconn->peer[0];
     dst = &newconn->peer[1];

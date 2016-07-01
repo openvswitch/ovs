@@ -73,8 +73,9 @@ OvsConntrackCreateOtherEntry(UINT64 now)
     struct conn_other *conn;
     conn = OvsAllocateMemoryWithTag(sizeof(struct conn_other),
                                     OVS_CT_POOL_TAG);
-    /* XXX Handle memory allocation error (by returning a status) */
-    ASSERT(conn);
+    if (!conn) {
+        return NULL;
+    }
     conn->up = (OVS_CT_ENTRY) {0};
     conn->state = OTHERS_FIRST;
     OvsConntrackUpdateExpiration(conn, now);
