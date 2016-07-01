@@ -30,4 +30,5 @@
 #include "Netlink/Netlink.h"
 #include "Netlink/NetlinkProto.h"
 #include "..\include\OvsDpInterfaceExt.h"
+#include "..\include\OvsDpInterfaceCtExt.h"
 #include "DpInternal.h"
