@@ -24,6 +24,10 @@
 #include "PacketParser.h"
 #include "Debug.h"
 
+#define WINDOWS_TICK 10000000
+#define SEC_TO_UNIX_EPOCH 11644473600LL
+#define SEC_TO_NANOSEC 1000000000LL
+
 typedef struct _OVS_CT_THREAD_CTX {
     KEVENT      event;
     PVOID       threadObject;
@@ -147,11 +151,12 @@ OvsCtUpdateFlowKey(struct OvsFlowKey *key,
 }
 
 static __inline VOID
-OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx)
+OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx, UINT64 now)
 {
     NdisMoveMemory(&entry->key, &ctx->key, sizeof (OVS_CT_KEY));
     NdisMoveMemory(&entry->rev_key, &ctx->key, sizeof (OVS_CT_KEY));
     OvsCtKeyReverse(&entry->rev_key);
+    entry->timestampStart = now;
     InsertHeadList(&ovsConntrackTable[ctx->hash & CT_HASH_TABLE_MASK],
                    &entry->link);
 }
@@ -181,7 +186,10 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
             state |= OVS_CS_F_NEW;
             if (commit) {
                 entry = OvsConntrackCreateTcpEntry(tcp, curNbl, currentTime);
-                OvsCtAddEntry(entry, ctx);
+                if (!entry) {
+                    return NULL;
+                }
+                OvsCtAddEntry(entry, ctx, currentTime);
             }
 
             OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
@@ -192,7 +200,10 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
             state |= OVS_CS_F_NEW;
             if (commit) {
                 entry = OvsConntrackCreateOtherEntry(currentTime);
-                OvsCtAddEntry(entry, ctx);
+                if (!entry) {
+                    return NULL;
+                }
+                OvsCtAddEntry(entry, ctx, currentTime);
             }
 
             OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
@@ -288,6 +299,18 @@ OvsCtKeyAreSame(OVS_CT_KEY ctxKey, OVS_CT_KEY entryKey)
         (ctxKey.dl_type == entryKey.dl_type) &&
         (ctxKey.nw_proto == entryKey.nw_proto) &&
         (ctxKey.zone == entryKey.zone));
+}
+
+static __inline VOID
+OvsCtIncrementCounters(POVS_CT_ENTRY entry, BOOLEAN reply, PNET_BUFFER_LIST nbl)
+{
+    if (reply) {
+        entry->rev_key.byteCount+= OvsPacketLenNBL(nbl);
+        entry->rev_key.packetCount++;
+    } else {
+        entry->key.byteCount += OvsPacketLenNBL(nbl);
+        entry->key.packetCount++;
+    }
 }
 
 static __inline POVS_CT_ENTRY
@@ -440,6 +463,9 @@ OvsProcessConntrackEntry(PNET_BUFFER_LIST curNbl,
             ctx->entry = NULL;
             entry = OvsCtEntryCreate(curNbl, key->ipKey.nwProto, l4Offset,
                                      ctx, key, commit, currentTime);
+            if (!entry) {
+                return NULL;
+            }
             break;
         }
     }
@@ -517,6 +543,7 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
                                  key, commit, currentTime);
     } else {
         /* Process the entry and update CT flags */
+        OvsCtIncrementCounters(entry, ctx.reply, curNbl);
         entry = OvsProcessConntrackEntry(curNbl, layers->l4Offset, &ctx, key,
                                          zone, commit, currentTime);
     }
@@ -716,4 +743,420 @@ done:
     }
 
     return status;
+}
+
+static __inline NDIS_STATUS
+MapIpTupleToNl(PNL_BUFFER nlBuf, OVS_CT_KEY *key)
+{
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    UINT32 offset = 0;
+
+    offset = NlMsgStartNested(nlBuf, CTA_TUPLE_IP);
+    if (!offset) {
+        return NDIS_STATUS_FAILURE;
+    }
+
+    if (key->dl_type == ntohs(ETH_TYPE_IPV4)) {
+        if (!NlMsgPutTailU32(nlBuf, CTA_IP_V4_SRC, key->src.addr.ipv4)) {
+            status = NDIS_STATUS_FAILURE;
+            goto done;
+        }
+        if (!NlMsgPutTailU32(nlBuf, CTA_IP_V4_DST, key->dst.addr.ipv4)) {
+            status = NDIS_STATUS_FAILURE;
+            goto done;
+        }
+    } else if (key->dl_type == ntohs(ETH_TYPE_IPV6)) {
+        if (!NlMsgPutTailUnspec(nlBuf, CTA_IP_V6_SRC,
+                                (PCHAR)(&key->src.addr.ipv6),
+                                sizeof(key->src.addr.ipv6))) {
+            status = NDIS_STATUS_FAILURE;
+            goto done;
+        }
+        if (!NlMsgPutTailUnspec(nlBuf, CTA_IP_V6_DST,
+                                (PCHAR)(&key->dst.addr.ipv6),
+                                sizeof(key->dst.addr.ipv6))) {
+            status = NDIS_STATUS_FAILURE;
+            goto done;
+        }
+    }
+
+done:
+    NlMsgEndNested(nlBuf, offset);
+    return status;
+}
+
+static __inline NDIS_STATUS
+MapProtoTupleToNl(PNL_BUFFER nlBuf, OVS_CT_KEY *key)
+{
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    UINT32 offset = 0;
+
+    offset = NlMsgStartNested(nlBuf, CTA_TUPLE_PROTO);
+    if (!offset) {
+        return NDIS_STATUS_FAILURE;
+    }
+
+    if (!NlMsgPutTailU8(nlBuf, CTA_PROTO_NUM, key->nw_proto)) {
+        status = NDIS_STATUS_FAILURE;
+        goto done;
+    }
+
+    if (key->dl_type == ntohs(ETH_TYPE_IPV4)
+        || key->dl_type == ntohs(ETH_TYPE_IPV6)) {
+        /* ICMP and ICMPv6 Type, Code and ID are currently not tracked */
+        if (key->nw_proto == IPPROTO_ICMP) {
+            if (!NlMsgPutTailU16(nlBuf, CTA_PROTO_ICMP_ID, 0)) {
+                status = NDIS_STATUS_FAILURE;
+                goto done;
+            }
+            if (!NlMsgPutTailU8(nlBuf, CTA_PROTO_ICMP_TYPE, 0)) {
+                status = NDIS_STATUS_FAILURE;
+                goto done;
+            }
+            if (!NlMsgPutTailU8(nlBuf, CTA_PROTO_ICMP_CODE, 0)) {
+                status = NDIS_STATUS_FAILURE;
+                goto done;
+            }
+        } else if (key->nw_proto == IPPROTO_ICMPV6) {
+            if (!NlMsgPutTailU16(nlBuf, CTA_PROTO_ICMPV6_ID, 0)) {
+                status = NDIS_STATUS_FAILURE;
+                goto done;
+            }
+            if (!NlMsgPutTailU8(nlBuf, CTA_PROTO_ICMPV6_TYPE, 0)) {
+                status = NDIS_STATUS_FAILURE;
+                goto done;
+            }
+            if (!NlMsgPutTailU8(nlBuf, CTA_PROTO_ICMPV6_CODE, 0)) {
+                status = NDIS_STATUS_FAILURE;
+                goto done;
+            }
+        } else if (key->nw_proto == IPPROTO_TCP
+                   || key->nw_proto == IPPROTO_UDP) {
+            if (!NlMsgPutTailU16(nlBuf, CTA_PROTO_SRC_PORT,
+                                 key->src.port)) {
+                status = NDIS_STATUS_FAILURE;
+                goto done;
+            }
+            if (!NlMsgPutTailU16(nlBuf, CTA_PROTO_DST_PORT,
+                                 key->dst.port)) {
+                status = NDIS_STATUS_FAILURE;
+                goto done;
+            }
+        }
+    }
+
+done:
+    NlMsgEndNested(nlBuf, offset);
+    return status;
+}
+
+static __inline NDIS_STATUS
+MapCtKeyTupleToNl(PNL_BUFFER nlBuf,
+                  UINT16 tupleType,
+                  OVS_CT_KEY *key)
+{
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    UINT32 offset = 0;
+
+    offset = NlMsgStartNested(nlBuf, tupleType);
+    if (!offset) {
+        return NDIS_STATUS_FAILURE;
+    }
+
+    status = MapIpTupleToNl(nlBuf, key);
+    if (status != NDIS_STATUS_SUCCESS) {
+        goto done;
+    }
+
+    status = MapProtoTupleToNl(nlBuf, key);
+    if (status != NDIS_STATUS_SUCCESS) {
+        goto done;
+    }
+
+done:
+    NlMsgEndNested(nlBuf, offset);
+    return status;
+}
+
+static __inline NDIS_STATUS
+MapCtCounterToNl(PNL_BUFFER nlBuf,
+                 UINT16 counterType,
+                 OVS_CT_KEY *key)
+{
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    UINT32 offset = 0;
+
+    offset = NlMsgStartNested(nlBuf, counterType);
+    if (!offset) {
+        return NDIS_STATUS_FAILURE;
+    }
+
+    if (!NlMsgPutTailU64(nlBuf, CTA_COUNTERS_PACKETS,
+                         htonll(key->packetCount))) {
+        status = NDIS_STATUS_FAILURE;
+        goto done;
+    }
+
+    if (!NlMsgPutTailU64(nlBuf, CTA_COUNTERS_BYTES,
+                         htonll(key->byteCount))) {
+        status = NDIS_STATUS_FAILURE;
+        goto done;
+    }
+
+done:
+    NlMsgEndNested(nlBuf, offset);
+    return status;
+}
+
+/* Userspace expects system time to be Unix timestamp in Nano Seconds */
+static __inline unsigned
+WindowsTickToUnixSeconds(long long windowsTicks)
+{
+    /*
+     *  Windows epoch starts 1601-01-01T00:00:00Z. It's 11644473600 seconds
+     *  before the UNIX/Linux epoch (1970-01-01T00:00:00Z). Windows ticks are
+     *  in 100 nanoseconds
+     */
+    return (unsigned)((windowsTicks / WINDOWS_TICK
+                        - SEC_TO_UNIX_EPOCH));
+}
+
+static NTSTATUS
+OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
+                          POVS_MESSAGE msgIn,
+                          PVOID outBuffer,
+                          UINT32 outBufLen,
+                          int dpIfIndex)
+{
+    NL_BUFFER nlBuf;
+    BOOLEAN ok;
+    PNL_MSG_HDR nlMsg;
+    UINT32 timeout;
+    NDIS_STATUS status;
+    UINT64 currentTime, expiration;
+    NdisGetCurrentSystemTime((LARGE_INTEGER *)&currentTime);
+    UINT8 nfgenFamily = 0;
+    if (entry->key.dl_type == htons(ETH_TYPE_IPV4)) {
+        nfgenFamily = AF_INET;
+    } else if (entry->key.dl_type == htons(ETH_TYPE_IPV6)) {
+        nfgenFamily = AF_INET6;
+    }
+
+    NlBufInit(&nlBuf, outBuffer, outBufLen);
+    /* Mimic netfilter */
+    UINT16 nlmsgType = (NFNL_SUBSYS_CTNETLINK << 8 | IPCTNL_MSG_CT_NEW);
+    ok = NlFillOvsMsgForNfGenMsg(&nlBuf, nlmsgType, NLM_F_CREATE,
+                                 msgIn->nlMsg.nlmsgSeq,
+                                 msgIn->nlMsg.nlmsgPid,
+                                 nfgenFamily,
+                                 msgIn->nfGenMsg.version,
+                                 dpIfIndex);
+    if (!ok) {
+        return STATUS_INVALID_BUFFER_SIZE;
+    }
+
+    status = MapCtKeyTupleToNl(&nlBuf, CTA_TUPLE_ORIG, &entry->key);
+    if (status != NDIS_STATUS_SUCCESS) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    status = MapCtKeyTupleToNl(&nlBuf, CTA_TUPLE_REPLY, &entry->rev_key);
+    if (status != NDIS_STATUS_SUCCESS) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    status = MapCtCounterToNl(&nlBuf, CTA_COUNTERS_ORIG, &entry->key);
+    if (status != NDIS_STATUS_SUCCESS) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    status = MapCtCounterToNl(&nlBuf, CTA_COUNTERS_REPLY, &entry->rev_key);
+    if (status != NDIS_STATUS_SUCCESS) {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    if (entry->key.zone) {
+        if (!NlMsgPutTailU16(&nlBuf, CTA_ZONE, htons(entry->key.zone))) {
+            return STATUS_INVALID_BUFFER_SIZE;
+        }
+    }
+
+    if (entry->mark) {
+        if (!NlMsgPutTailU32(&nlBuf, CTA_MARK, htonl(entry->mark))) {
+            return STATUS_INVALID_BUFFER_SIZE;
+        }
+    }
+
+    if (entry->labels.ct_labels) {
+        ok = NlMsgPutTailUnspec(&nlBuf, CTA_LABELS,
+                                (PCHAR)(&entry->labels),
+                                sizeof(entry->labels));
+        if (!ok) {
+            return STATUS_INVALID_BUFFER_SIZE;
+        }
+    }
+
+    if (entry->expiration > currentTime) {
+        expiration = entry->expiration - currentTime;
+        timeout = (UINT32) (expiration / CT_INTERVAL_SEC);
+        if (!NlMsgPutTailU32(&nlBuf, CTA_TIMEOUT, htonl(timeout))) {
+            return STATUS_INVALID_BUFFER_SIZE;
+        }
+    }
+
+    if (entry->key.nw_proto == IPPROTO_TCP) {
+        /* Add ProtoInfo for TCP */
+        UINT32 offset;
+        offset = NlMsgStartNested(&nlBuf, CTA_PROTOINFO);
+        if (!offset) {
+            return NDIS_STATUS_FAILURE;
+        }
+
+        status = OvsCtMapTcpProtoInfoToNl(&nlBuf, entry);
+        NlMsgEndNested(&nlBuf, offset);
+        if (status != NDIS_STATUS_SUCCESS) {
+            return STATUS_UNSUCCESSFUL;
+        }
+    }
+
+    /* CTA_STATUS is required but not implemented. Default to 0 */
+    if (!NlMsgPutTailU32(&nlBuf, CTA_STATUS, 0)) {
+        return STATUS_INVALID_BUFFER_SIZE;
+    }
+
+    /* Mimic netfilter - nf_conntrack_netlink.c:
+     *
+     * int ctnetlink_dump_id(struct sk_buff *skb, const struct nf_conn *ct) {
+     *     NLA_PUT_BE32(skb, CTA_ID, htonl((unsigned long)ct));
+     *     return 0;
+     * }
+     *
+     */
+    if(!NlMsgPutTailU32(&nlBuf, CTA_ID, htonl((UINT32) entry))) {
+        return STATUS_INVALID_BUFFER_SIZE;
+    }
+
+    if (entry->timestampStart) {
+        UINT32 offset;
+        offset = NlMsgStartNested(&nlBuf, CTA_TIMESTAMP);
+        if (!offset) {
+            return NDIS_STATUS_FAILURE;
+        }
+        UINT64 start;
+        start = WindowsTickToUnixSeconds(entry->timestampStart);
+        start = start * SEC_TO_NANOSEC;
+        if (!NlMsgPutTailU64(&nlBuf, CTA_TIMESTAMP_START, htonll(start))) {
+            NlMsgEndNested(&nlBuf, offset);
+            return STATUS_INVALID_BUFFER_SIZE;
+        }
+
+        NlMsgEndNested(&nlBuf, offset);
+    }
+
+    nlMsg = (PNL_MSG_HDR)NlBufAt(&nlBuf, 0, 0);
+    nlMsg->nlmsgLen = NlBufSize(&nlBuf);
+
+    return STATUS_SUCCESS;
+}
+
+/*
+ *----------------------------------------------------------------------------
+ *  OvsCtDumpCmdHandler --
+ *    Handler for IPCTNL_MSG_CT_GET command.
+ *
+ *  XXX - Try to consolidate dump handler patterns around dumpState usage
+ *        The following dumpHandler is similar to one vport.c uses
+ *----------------------------------------------------------------------------
+*/
+NTSTATUS
+OvsCtDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                    UINT32 *replyLen)
+{
+    NTSTATUS rc;
+    /* Setup Dump Start if it's OVS_WRITE_DEV_OP and return */
+    if (usrParamsCtx->devOp == OVS_WRITE_DEV_OP) {
+        *replyLen = 0;
+        OvsSetupDumpStart(usrParamsCtx);
+        return STATUS_SUCCESS;
+    }
+
+    POVS_OPEN_INSTANCE instance =
+        (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+    POVS_MESSAGE msgIn;
+    UINT32 i;
+
+    ASSERT(usrParamsCtx->devOp == OVS_READ_DEV_OP);
+    if (instance->dumpState.ovsMsg == NULL) {
+        ASSERT(FALSE);
+        return STATUS_INVALID_DEVICE_STATE;
+    }
+
+    /* Output buffer has been validated while validating read dev op. */
+    ASSERT(usrParamsCtx->outputBuffer != NULL);
+    msgIn = instance->dumpState.ovsMsg;
+    UINT32 inBucket = instance->dumpState.index[0];
+    UINT32 inIndex = instance->dumpState.index[1];
+    UINT32 outIndex = 0;
+
+    LOCK_STATE_EX lockState;
+    NdisAcquireRWLockRead(ovsConntrackLockObj, &lockState, 0);
+
+    for (i = inBucket; i < CT_HASH_TABLE_SIZE; i++) {
+        PLIST_ENTRY head, link;
+        head = &ovsConntrackTable[i];
+        POVS_CT_ENTRY entry = NULL;
+
+        outIndex = 0;
+        LIST_FORALL(head, link) {
+            /*
+             * if one or more dumps were previously done on this same bucket,
+             * inIndex will be > 0, so we'll need to reply with the
+             * inIndex + 1 ct-entry from the bucket.
+             */
+            if (outIndex >= inIndex) {
+                entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
+
+                rc = OvsCreateNlMsgFromCtEntry(entry, msgIn,
+                                               usrParamsCtx->outputBuffer,
+                                               usrParamsCtx->outputLength,
+                                               0);
+
+                if (rc != NDIS_STATUS_SUCCESS) {
+                    NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
+                    return STATUS_UNSUCCESSFUL;
+                }
+
+                ++outIndex;
+                break;
+            }
+
+            ++outIndex;
+        }
+
+        if (entry) {
+            break;
+        }
+
+        /*
+         * if no ct-entry was found above, check the next bucket, beginning
+         * with the first (i.e. index 0) elem from within that bucket
+         */
+        inIndex = 0;
+    }
+
+    instance->dumpState.index[0] = i;
+    instance->dumpState.index[1] = outIndex;
+    NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
+
+    /* if i < CT_HASH_TABLE_SIZE => entry was found */
+    if (i < CT_HASH_TABLE_SIZE) {
+        POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+        *replyLen = msgOut->nlMsg.nlmsgLen;
+    } else {
+        /* if i >= CT_HASH_TABLE_SIZE => entry was not found => dump done */
+        *replyLen = 0;
+        FreeUserDumpState(instance);
+    }
+
+    return STATUS_SUCCESS;
 }

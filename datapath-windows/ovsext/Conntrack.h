@@ -59,6 +59,8 @@ typedef struct _OVS_CT_KEY {
     UINT16 dl_type;
     UINT8 nw_proto;
     UINT16 zone;
+    UINT64 packetCount;
+    UINT64 byteCount;
 } OVS_CT_KEY, *POVS_CT_KEY;
 
 typedef struct OVS_CT_ENTRY {
@@ -67,6 +69,7 @@ typedef struct OVS_CT_ENTRY {
     UINT64      expiration;
     LIST_ENTRY  link;
     UINT32      mark;
+    UINT64      timestampStart;
     struct ovs_key_ct_labels labels;
 } OVS_CT_ENTRY, *POVS_CT_ENTRY;
 
@@ -102,6 +105,8 @@ BOOLEAN OvsConntrackValidateTcpPacket(const TCPHdr *tcp);
 OVS_CT_ENTRY * OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
                                           PNET_BUFFER_LIST nbl,
                                           UINT64 now);
+NDIS_STATUS OvsCtMapTcpProtoInfoToNl(PNL_BUFFER nlBuf,
+                                     OVS_CT_ENTRY *conn_);
 OVS_CT_ENTRY * OvsConntrackCreateOtherEntry(UINT64 now);
 enum CT_UPDATE_RES OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
                                               const TCPHdr *tcp,

@@ -80,6 +80,10 @@ VOID OvsAppendList(PLIST_ENTRY dst, PLIST_ENTRY src);
 #define ntohs(_x)    _byteswap_ushort((USHORT)(_x))
 #define htonl(_x)    _byteswap_ulong((ULONG)(_x))
 #define ntohl(_x)    _byteswap_ulong((ULONG)(_x))
+#define htonll(_x)    ((1==htonl(1)) ? (_x) : \
+                           ((uint64_t) htonl(_x) << 32) | htonl(_x >> 32))
+#define ntohll(_x)    ((1==ntohl(1)) ? (_x) : \
+                           ((uint64_t) ntohl(_x) << 32) | ntohl(_x >> 32))
 #endif
 
 #define OVS_INIT_OBJECT_HEADER(_obj, _type, _revision, _size) \

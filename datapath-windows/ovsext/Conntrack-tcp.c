@@ -516,3 +516,62 @@ OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
 
     return &newconn->up;
 }
+
+static __inline uint8_t
+OvsCtTcpPeerToProtoInfoFlags(const struct tcp_peer *peer)
+{
+    uint8_t res = 0;
+
+    if (peer->wscale & CT_WSCALE_FLAG) {
+        res |= CT_DPIF_TCPF_WINDOW_SCALE;
+    }
+
+    if (peer->wscale & CT_WSCALE_UNKNOWN) {
+        res |= CT_DPIF_TCPF_BE_LIBERAL;
+    }
+
+    return res;
+}
+
+NDIS_STATUS
+OvsCtMapTcpProtoInfoToNl(PNL_BUFFER nlBuf, OVS_CT_ENTRY *conn_)
+{
+    struct conn_tcp *conn = OvsCastConntrackEntryToTcpEntry(conn_);
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    UINT32 offset = 0;
+
+    offset = NlMsgStartNested(nlBuf, CTA_PROTOINFO_TCP);
+    if (!offset) {
+        return NDIS_STATUS_FAILURE;
+    }
+
+    if (!NlMsgPutTailU8(nlBuf, CTA_PROTOINFO_TCP_STATE,
+                        conn->peer[0].state)) {
+        status = NDIS_STATUS_FAILURE;
+        goto done;
+    }
+    if (!NlMsgPutTailU8(nlBuf, CTA_PROTOINFO_TCP_WSCALE_ORIGINAL,
+                        (conn->peer[0].wscale & CT_WSCALE_MASK))) {
+        status = NDIS_STATUS_FAILURE;
+        goto done;
+    }
+    if (!NlMsgPutTailU8(nlBuf, CTA_PROTOINFO_TCP_WSCALE_REPLY,
+                        (conn->peer[1].wscale & CT_WSCALE_MASK))) {
+        status = NDIS_STATUS_FAILURE;
+        goto done;
+    }
+    if (!NlMsgPutTailU16(nlBuf, CTA_PROTOINFO_TCP_FLAGS_ORIGINAL,
+                         OvsCtTcpPeerToProtoInfoFlags(&conn->peer[0]))) {
+        status = NDIS_STATUS_FAILURE;
+        goto done;
+    }
+    if (!NlMsgPutTailU16(nlBuf, CTA_PROTOINFO_TCP_FLAGS_REPLY,
+                         OvsCtTcpPeerToProtoInfoFlags(&conn->peer[1]))) {
+        status = NDIS_STATUS_FAILURE;
+        goto done;
+    }
+
+done:
+    NlMsgEndNested(nlBuf, offset);
+    return status;
+}
