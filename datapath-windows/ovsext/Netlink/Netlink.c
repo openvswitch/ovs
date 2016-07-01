@@ -672,6 +672,17 @@ NlMsgAttrsLen(const PNL_MSG_HDR nlh)
     return NlHdrPayloadLen(nlh) - GENL_HDRLEN - OVS_HDRLEN;
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * Returns size of to nfnlmsg attributes.
+ * ---------------------------------------------------------------------------
+ */
+UINT32
+NlNfMsgAttrsLen(const PNL_MSG_HDR nlh)
+{
+    return NlHdrPayloadLen(nlh) - NF_GEN_MSG_HDRLEN - OVS_HDRLEN;
+}
+
 /* Netlink message parse. */
 
 /*
