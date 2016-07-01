@@ -624,3 +624,96 @@ ovsConntrackEntryCleaner(PVOID data)
 
     PsTerminateSystemThread(STATUS_SUCCESS);
 }
+
+/*
+ *----------------------------------------------------------------------------
+ * OvsCtFlush
+ *     Flushes out all Conntrack Entries that match the given zone
+ *----------------------------------------------------------------------------
+ */
+static __inline NDIS_STATUS
+OvsCtFlush(UINT16 zone)
+{
+    PLIST_ENTRY link, next;
+    POVS_CT_ENTRY entry;
+
+    LOCK_STATE_EX lockState;
+    NdisAcquireRWLockWrite(ovsConntrackLockObj, &lockState, 0);
+
+    for (int i = 0; i < CT_HASH_TABLE_SIZE; i++) {
+        LIST_FORALL_SAFE(&ovsConntrackTable[i], link, next) {
+            entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
+            /* zone is a non-zero value */
+            if (!zone || zone == entry->key.zone)
+                OvsCtEntryDelete(entry);
+        }
+    }
+
+    NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
+    return NDIS_STATUS_SUCCESS;
+}
+
+NTSTATUS
+OvsCtDeleteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                      UINT32 *replyLen)
+{
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    PNL_MSG_HDR nlMsgHdr = &(msgIn->nlMsg);
+    PNL_ATTR ctAttrs[__CTA_MAX];
+    UINT32 attrOffset = NLMSG_HDRLEN + NF_GEN_MSG_HDRLEN + OVS_HDRLEN;
+    NL_ERROR nlError = NL_ERROR_SUCCESS;
+    NTSTATUS status;
+    UINT16 zone = 0;
+    NL_BUFFER nlBuf;
+    UINT16 nlmsgType;
+    PNL_MSG_HDR nlMsg;
+
+    static const NL_POLICY ctZonePolicy[] = {
+        [CTA_ZONE] = { .type = NL_A_BE16, .optional = TRUE },
+    };
+
+    if ((NlAttrParse(nlMsgHdr, attrOffset, NlNfMsgAttrsLen(nlMsgHdr),
+        ctZonePolicy, ARRAY_SIZE(ctZonePolicy),
+        ctAttrs, ARRAY_SIZE(ctAttrs)))
+        != TRUE) {
+        OVS_LOG_ERROR("Zone attr parsing failed for msg: %p", nlMsgHdr);
+        status = STATUS_INVALID_PARAMETER;
+        goto done;
+    }
+
+    if (ctAttrs[CTA_ZONE]) {
+        zone = NlAttrGetU16(ctAttrs[CTA_ZONE]);
+    }
+
+    status = OvsCtFlush(zone);
+    if (status == STATUS_SUCCESS) {
+        nlmsgType = (NFNL_SUBSYS_CTNETLINK << 8 | IPCTNL_MSG_CT_DELETE);
+        NlBufInit(&nlBuf,
+                  usrParamsCtx->outputBuffer,
+                  usrParamsCtx->outputLength);
+        status = NlFillOvsMsgForNfGenMsg(&nlBuf, nlmsgType, NLM_F_CREATE,
+                                         msgIn->nlMsg.nlmsgSeq,
+                                         msgIn->nlMsg.nlmsgPid,
+                                         AF_UNSPEC,
+                                         msgIn->nfGenMsg.version,
+                                         0);
+        nlMsg = (PNL_MSG_HDR)NlBufAt(&nlBuf, 0, 0);
+        nlMsg->nlmsgLen = NlBufSize(&nlBuf);
+        *replyLen = msgOut->nlMsg.nlmsgLen;
+    }
+
+done:
+    nlError = NlMapStatusToNlErr(status);
+    if (nlError != NL_ERROR_SUCCESS) {
+        POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
+                                       usrParamsCtx->outputBuffer;
+
+        ASSERT(msgError);
+        NlBuildErrorMsg(msgIn, msgError, nlError, replyLen);
+        ASSERT(*replyLen != 0);
+        status = STATUS_SUCCESS;
+    }
+
+    return status;
+}
