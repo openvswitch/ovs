@@ -38,6 +38,8 @@ KSTART_ROUTINE ovsConntrackEntryCleaner;
 static PLIST_ENTRY ovsConntrackTable;
 static OVS_CT_THREAD_CTX ctThreadCtx;
 static PNDIS_RW_LOCK_EX ovsConntrackLockObj;
+extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
+static UINT64 ctTotalEntries;
 
 /*
  *----------------------------------------------------------------------------
@@ -50,6 +52,7 @@ OvsInitConntrack(POVS_SWITCH_CONTEXT context)
 {
     NTSTATUS status;
     HANDLE threadHandle = NULL;
+    ctTotalEntries = 0;
 
     /* Init the sync-lock */
     ovsConntrackLockObj = NdisAllocateRWLock(context->NdisFilterHandle);
@@ -159,6 +162,7 @@ OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx, UINT64 now)
     entry->timestampStart = now;
     InsertHeadList(&ovsConntrackTable[ctx->hash & CT_HASH_TABLE_MASK],
                    &entry->link);
+    ctTotalEntries++;
 }
 
 static __inline POVS_CT_ENTRY
@@ -251,6 +255,7 @@ OvsCtEntryDelete(POVS_CT_ENTRY entry)
 {
     RemoveEntryList(&entry->link);
     OvsFreeMemoryWithTag(entry, OVS_CT_POOL_TAG);
+    ctTotalEntries--;
 }
 
 static __inline BOOLEAN
@@ -320,6 +325,11 @@ OvsCtLookup(OvsConntrackKeyLookupCtx *ctx)
     POVS_CT_ENTRY entry;
     BOOLEAN reply = FALSE;
     POVS_CT_ENTRY found = NULL;
+
+    if (!ctTotalEntries)
+    {
+        return found;
+    }
 
     LIST_FORALL(&ovsConntrackTable[ctx->hash & CT_HASH_TABLE_MASK], link) {
         entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
@@ -635,15 +645,16 @@ ovsConntrackEntryCleaner(PVOID data)
         NdisGetCurrentSystemTime((LARGE_INTEGER *)&currentTime);
         threadSleepTimeout = currentTime + CT_CLEANUP_INTERVAL;
 
-        for (int i = 0; i < CT_HASH_TABLE_SIZE; i++) {
-            LIST_FORALL_SAFE(&ovsConntrackTable[i], link, next) {
-                entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
-                if (entry->expiration < currentTime) {
-                    OvsCtEntryDelete(entry);
+        if (ctTotalEntries) {
+            for (int i = 0; i < CT_HASH_TABLE_SIZE; i++) {
+                LIST_FORALL_SAFE(&ovsConntrackTable[i], link, next) {
+                    entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
+                    if (entry->expiration < currentTime) {
+                        OvsCtEntryDelete(entry);
+                    }
                 }
             }
         }
-
         NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
         KeWaitForSingleObject(&context->event, Executive, KernelMode,
                               FALSE, (LARGE_INTEGER *)&threadSleepTimeout);
@@ -667,12 +678,14 @@ OvsCtFlush(UINT16 zone)
     LOCK_STATE_EX lockState;
     NdisAcquireRWLockWrite(ovsConntrackLockObj, &lockState, 0);
 
-    for (int i = 0; i < CT_HASH_TABLE_SIZE; i++) {
-        LIST_FORALL_SAFE(&ovsConntrackTable[i], link, next) {
-            entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
-            /* zone is a non-zero value */
-            if (!zone || zone == entry->key.zone)
-                OvsCtEntryDelete(entry);
+    if (ctTotalEntries) {
+        for (int i = 0; i < CT_HASH_TABLE_SIZE; i++) {
+            LIST_FORALL_SAFE(&ovsConntrackTable[i], link, next) {
+                entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
+                /* zone is a non-zero value */
+                if (!zone || zone == entry->key.zone)
+                    OvsCtEntryDelete(entry);
+            }
         }
     }
 
@@ -1083,7 +1096,6 @@ OvsCtDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     POVS_OPEN_INSTANCE instance =
         (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
     POVS_MESSAGE msgIn;
-    UINT32 i;
 
     ASSERT(usrParamsCtx->devOp == OVS_READ_DEV_OP);
     if (instance->dumpState.ovsMsg == NULL) {
@@ -1096,54 +1108,56 @@ OvsCtDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     msgIn = instance->dumpState.ovsMsg;
     UINT32 inBucket = instance->dumpState.index[0];
     UINT32 inIndex = instance->dumpState.index[1];
+    UINT32 i = CT_HASH_TABLE_SIZE;
     UINT32 outIndex = 0;
 
     LOCK_STATE_EX lockState;
     NdisAcquireRWLockRead(ovsConntrackLockObj, &lockState, 0);
 
-    for (i = inBucket; i < CT_HASH_TABLE_SIZE; i++) {
-        PLIST_ENTRY head, link;
-        head = &ovsConntrackTable[i];
-        POVS_CT_ENTRY entry = NULL;
+    if (ctTotalEntries) {
+        for (i = inBucket; i < CT_HASH_TABLE_SIZE; i++) {
+            PLIST_ENTRY head, link;
+            head = &ovsConntrackTable[i];
+            POVS_CT_ENTRY entry = NULL;
 
-        outIndex = 0;
-        LIST_FORALL(head, link) {
-            /*
-             * if one or more dumps were previously done on this same bucket,
-             * inIndex will be > 0, so we'll need to reply with the
-             * inIndex + 1 ct-entry from the bucket.
-             */
-            if (outIndex >= inIndex) {
-                entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
+            outIndex = 0;
+            LIST_FORALL(head, link) {
+                /*
+                 * if one or more dumps were previously done on this same
+                 * bucket, inIndex will be > 0, so we'll need to reply with
+                 * the inIndex + 1 ct-entry from the bucket.
+                 */
+                if (outIndex >= inIndex) {
+                    entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
 
-                rc = OvsCreateNlMsgFromCtEntry(entry, msgIn,
-                                               usrParamsCtx->outputBuffer,
-                                               usrParamsCtx->outputLength,
-                                               0);
+                    rc = OvsCreateNlMsgFromCtEntry(entry, msgIn,
+                                                   usrParamsCtx->outputBuffer,
+                                                   usrParamsCtx->outputLength,
+                                                   0);
 
-                if (rc != NDIS_STATUS_SUCCESS) {
-                    NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
-                    return STATUS_UNSUCCESSFUL;
+                    if (rc != NDIS_STATUS_SUCCESS) {
+                        NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
+                        return STATUS_UNSUCCESSFUL;
+                    }
+
+                    ++outIndex;
+                    break;
                 }
 
                 ++outIndex;
+            }
+
+            if (entry) {
                 break;
             }
 
-            ++outIndex;
+            /*
+             * if no ct-entry was found above, check the next bucket, beginning
+             * with the first (i.e. index 0) elem from within that bucket
+             */
+            inIndex = 0;
         }
-
-        if (entry) {
-            break;
-        }
-
-        /*
-         * if no ct-entry was found above, check the next bucket, beginning
-         * with the first (i.e. index 0) elem from within that bucket
-         */
-        inIndex = 0;
     }
-
     instance->dumpState.index[0] = i;
     instance->dumpState.index[1] = outIndex;
     NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
