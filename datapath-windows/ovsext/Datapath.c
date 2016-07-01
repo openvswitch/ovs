@@ -97,7 +97,8 @@ NetlinkCmdHandler        OvsGetNetdevCmdHandler,
                          OvsPendPacketCmdHandler,
                          OvsSubscribePacketCmdHandler,
                          OvsReadPacketCmdHandler,
-                         OvsCtDeleteCmdHandler;
+                         OvsCtDeleteCmdHandler,
+                         OvsCtDumpCmdHandler;
 
 static NTSTATUS HandleGetDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                        UINT32 *replyLen);
@@ -281,7 +282,12 @@ NETLINK_CMD nlCtFamilyCmdOps[] = {
     { .cmd              = IPCTNL_MSG_CT_DELETE,
       .handler          = OvsCtDeleteCmdHandler,
       .supportedDevOp   = OVS_TRANSACTION_DEV_OP,
-      .validateDpIndex  = TRUE
+      .validateDpIndex  = FALSE
+    },
+    { .cmd              = IPCTNL_MSG_CT_GET,
+      .handler          = OvsCtDumpCmdHandler,
+      .supportedDevOp   = OVS_WRITE_DEV_OP | OVS_READ_DEV_OP,
+      .validateDpIndex  = FALSE
     }
 };
 
@@ -897,6 +903,7 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
 
     ASSERT(ovsMsg);
     switch (ovsMsg->nlMsg.nlmsgType) {
+    case NFNL_TYPE_CT_GET:
     case NFNL_TYPE_CT_DEL:
         nlFamilyOps = &nlCtFamilyOps;
         break;
