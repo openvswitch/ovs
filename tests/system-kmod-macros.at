@@ -66,10 +66,3 @@ m4_define([CHECK_CONNTRACK],
      on_exit 'ovstest test-netlink-conntrack flush'
     ]
 )
-
-# CHECK_KERNEL_DP, CHECK_USER_DP
-#
-# Ignore the CHECK_USER_DP and execute the CHECK_KERNEL_DP
-#
-m4_define([CHECK_KERNEL_DP], [$1])
-m4_define([CHECK_USER_DP], [])

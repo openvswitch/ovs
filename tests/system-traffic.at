@@ -334,14 +334,12 @@ dnl SLOW_ACTION test1: check datapatch actions
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-CHECK_KERNEL_DP(
-AT_CHECK([ovs-appctl ofproto/trace system 'in_port(2),eth(src=e6:66:c1:11:11:11,dst=e6:66:c1:22:22:22),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=1,dl_type=0x800,dl_src=e6:66:c1:11:11:11,dl_dst=e6:66:c1:22:22:22,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,tp_src=8,tp_dst=9"], [0], [stdout])
 AT_CHECK([tail -3 stdout], [0],
 [Datapath actions: trunc(100),3,5,trunc(100),3,trunc(100),5,3,trunc(200),5,trunc(65535),3
 This flow is handled by the userspace slow path because it:
 	- Uses action(s) not supported by datapath.
 ])
-)
 
 dnl SLOW_ACTION test2: check actual packet truncate
 AT_CHECK([ovs-ofctl del-flows br0])
@@ -457,15 +455,6 @@ AT_CHECK([ovs-appctl dpif/disable-truncate], [0],
 dnl SLOW_ACTION test1: check datapatch actions
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
-
-CHECK_KERNEL_DP(
-AT_CHECK([ovs-appctl ofproto/trace system 'in_port(5),eth(src=e6:66:c1:11:11:11,dst=e6:66:c1:22:22:22),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=17,tos=4,ttl=128,frag=no),udp(src=8,dst=9)'], [0], [stdout])
-AT_CHECK([tail -3 stdout], [0],
-[Datapath actions: trunc(100),set(tunnel(dst=172.31.1.1,ttl=64,flags(df))),4
-This flow is handled by the userspace slow path because it:
-	- Uses action(s) not supported by datapath.
-])
-)
 
 dnl SLOW_ACTION test2: check actual packet truncate
 AT_CHECK([ovs-ofctl del-flows br0])
