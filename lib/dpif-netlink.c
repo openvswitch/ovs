@@ -2274,7 +2274,6 @@ dpif_netlink_get_datapath_version(void)
     return version_str;
 }
 
-#ifdef __linux__
 struct dpif_netlink_ct_dump_state {
     struct ct_dpif_dump_state up;
     struct nl_ct_dump_state *nl_ct_dump;
@@ -2335,7 +2334,6 @@ dpif_netlink_ct_flush(struct dpif *dpif OVS_UNUSED, const uint16_t *zone)
         return nl_ct_flush();
     }
 }
-#endif
 
 const struct dpif_class dpif_netlink_class = {
     "system",
@@ -2377,17 +2375,10 @@ const struct dpif_class dpif_netlink_class = {
     NULL,                       /* enable_upcall */
     NULL,                       /* disable_upcall */
     dpif_netlink_get_datapath_version, /* get_datapath_version */
-#ifdef __linux__
     dpif_netlink_ct_dump_start,
     dpif_netlink_ct_dump_next,
     dpif_netlink_ct_dump_done,
-    dpif_netlink_ct_flush,
-#else
-    NULL,                       /* ct_dump_start */
-    NULL,                       /* ct_dump_next */
-    NULL,                       /* ct_dump_done */
-    NULL,                       /* ct_flush */
-#endif
+    dpif_netlink_ct_flush
 };
 
 static int
@@ -2442,7 +2433,7 @@ dpif_netlink_is_internal_device(const char *name)
 
     return reply.type == OVS_VPORT_TYPE_INTERNAL;
 }
-
+
 /* Parses the contents of 'buf', which contains a "struct ovs_header" followed
  * by Netlink attributes, into 'vport'.  Returns 0 if successful, otherwise a
  * positive errno value.
@@ -2946,7 +2937,7 @@ dpif_netlink_flow_get_stats(const struct dpif_netlink_flow *flow,
     stats->used = flow->used ? get_32aligned_u64(flow->used) : 0;
     stats->tcp_flags = flow->tcp_flags ? *flow->tcp_flags : 0;
 }
-
+
 /* Logs information about a packet that was recently lost in 'ch' (in
  * 'dpif_'). */
 static void

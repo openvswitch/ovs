@@ -75,6 +75,14 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 #define IPS_UNTRACKED_BIT 12
 #define IPS_UNTRACKED (1 << IPS_UNTRACKED_BIT)
 
+#ifdef _WIN32
+#ifdef NETLINK_NETFILTER
+#undef NETLINK_NETFILTER
+#endif
+/* Reuse same socket for nfgenmsg and genlmsghdr in Windows*/
+#define NETLINK_NETFILTER       NETLINK_GENERIC
+#endif
+
 static const struct nl_policy nfnlgrp_conntrack_policy[] = {
     [CTA_TUPLE_ORIG] = { .type = NL_A_NESTED, .optional = false },
     [CTA_TUPLE_REPLY] = { .type = NL_A_NESTED, .optional = false },
@@ -118,7 +126,7 @@ struct nl_ct_dump_state {
     bool filter_zone;
     uint16_t zone;
 };
-
+
 /* Conntrack netlink dumping. */
 
 /* Initialize a conntrack netlink dump. */
@@ -200,7 +208,7 @@ nl_ct_dump_done(struct nl_ct_dump_state *state)
     free(state);
     return error;
 }
-
+
 /* Format conntrack event 'entry' of 'type' to 'ds'. */
 void
 nl_ct_format_event_entry(const struct ct_dpif_entry *entry,
@@ -235,6 +243,26 @@ nl_ct_flush(void)
     return err;
 }
 
+#ifdef _WIN32
+int
+nl_ct_flush_zone(uint16_t flush_zone)
+{
+    /* Windows can flush a specific zone */
+    struct ofpbuf buf;
+    int err;
+
+    ofpbuf_init(&buf, NL_DUMP_BUFSIZE);
+
+    nl_msg_put_nfgenmsg(&buf, 0, AF_UNSPEC, NFNL_SUBSYS_CTNETLINK,
+                        IPCTNL_MSG_CT_DELETE, NLM_F_REQUEST);
+    nl_msg_put_be16(&buf, CTA_ZONE, flush_zone);
+
+    err = nl_transact(NETLINK_NETFILTER, &buf, NULL);
+    ofpbuf_uninit(&buf);
+
+    return err;
+}
+#else
 int
 nl_ct_flush_zone(uint16_t flush_zone)
 {
@@ -299,7 +327,8 @@ nl_ct_flush_zone(uint16_t flush_zone)
      * have a master connection anymore */
     return 0;
 }
-
+#endif
+
 /* Conntrack netlink parsing. */
 
 static bool
@@ -788,7 +817,7 @@ nl_ct_parse_entry(struct ofpbuf *buf, struct ct_dpif_entry *entry,
 
     return true;
 }
-
+
 /* NetFilter utility functions. */
 
 /* Puts a nlmsghdr and nfgenmsg at the beginning of 'msg', which must be
@@ -826,4 +855,8 @@ nl_msg_put_nfgenmsg(struct ofpbuf *msg, size_t expected_payload,
     nfm->nfgen_family = family;
     nfm->version = NFNETLINK_V0;
     nfm->res_id = 0;
+#ifdef _WIN32
+    /* nfgenmsg contains ovsHdr padding in windows */
+    nfm->ovsHdr.dp_ifindex = 0;
+#endif
 }
