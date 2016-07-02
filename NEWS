@@ -4,6 +4,9 @@ v2.5.1 - xx xxx xxxx
      * New appctl command 'dpif-netdev/pmd-rxq-show' to check the port/rxq
        assignment.
      * Type of log messages from PMD threads changed from INFO to DBG.
+   - ovs-pki: Changed message digest algorithm from SHA-1 to SHA-512 because
+     SHA-1 is no longer secure and some operating systems have started to
+     disable it in OpenSSL.
 
 
 v2.5.0 - 26 Feb 2016
