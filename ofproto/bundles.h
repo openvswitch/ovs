@@ -22,6 +22,7 @@
 #include <sys/types.h>
 
 #include "connmgr.h"
+#include "dp-packet.h"
 #include "ofproto-provider.h"
 #include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofp-util.h"
@@ -37,6 +38,7 @@ struct ofp_bundle_entry {
     union {
         struct ofproto_flow_mod ofm;   /* ofm.fm.ofpacts must be malloced. */
         struct ofproto_port_mod opm;
+        struct ofproto_packet_out opo; /* opo.po.ofpacts must be malloced */
     };
 
     /* OpenFlow header and some of the message contents for error reporting. */
@@ -89,6 +91,9 @@ ofp_bundle_entry_free(struct ofp_bundle_entry *entry)
     if (entry) {
         if (entry->type == OFPTYPE_FLOW_MOD) {
             free(entry->ofm.fm.ofpacts);
+        } else if (entry->type == OFPTYPE_PACKET_OUT) {
+            dp_packet_delete(entry->opo.payload);
+            free(entry->opo.po.ofpacts);
         }
         free(entry);
     }

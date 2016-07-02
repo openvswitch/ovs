@@ -7058,6 +7058,8 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                  * effect. */
                 be->ofm.version = version;
                 error = ofproto_flow_mod_start(ofproto, &be->ofm);
+            } else if (be->type == OFPTYPE_PACKET_OUT) {
+                prev_is_port_mod = false;
             } else {
                 OVS_NOT_REACHED();
             }
@@ -7078,7 +7080,7 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                 if (be->type == OFPTYPE_FLOW_MOD) {
                     ofproto_flow_mod_revert(ofproto, &be->ofm);
                 }
-                /* Nothing needs to be reverted for a port mod. */
+                /* Nothing needs to be reverted for a port mod or packet out. */
             }
         } else {
             /* 4. Finish. */
@@ -7104,6 +7106,18 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                      * also from OVSDB changes asynchronously to all upcall
                      * processing. */
                     port_mod_finish(ofconn, &be->opm.pm, be->opm.port);
+                } else if (be->type == OFPTYPE_PACKET_OUT) {
+                    /* Try to send the packet. The bundle is committed
+                     * regardless of errors */
+                    error = ofproto->ofproto_class->packet_out(ofproto,
+                                                        be->opo.payload,
+                                                        &(be->opo.flow),
+                                                        be->opo.po.ofpacts,
+                                                        be->opo.po.ofpacts_len);
+                    if (error) {
+                        VLOG_INFO("Error sending packet out while committing a "
+                                  "bundle: %d", error);
+                    }
                 }
             }
         }
@@ -7212,6 +7226,58 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
             error = ofproto_check_ofpacts(ofproto, bmsg->ofm.fm.ofpacts,
                                           bmsg->ofm.fm.ofpacts_len);
         }
+    } else if (type == OFPTYPE_PACKET_OUT) {
+        uint64_t ofpacts_stub[1024 / 8];
+        struct ofpbuf ofpacts;
+
+        /* Decode message. */
+        ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
+        error = ofputil_decode_packet_out(&(bmsg->opo.po), badd.msg, &ofpacts);
+        /* Same validation steps as in handle_packet_out  */
+        if (error) {
+            goto exit;
+        }
+
+        /* Move actions to heap. */
+        bmsg->opo.po.ofpacts = ofpbuf_steal_data(&ofpacts);
+
+        if (ofp_to_u16(bmsg->opo.po.in_port) >= ofproto->max_ports
+            && ofp_to_u16(bmsg->opo.po.in_port) < ofp_to_u16(OFPP_MAX)) {
+            error = OFPERR_OFPBRC_BAD_PORT;
+            goto exit;
+        }
+
+        /* Get payload. */
+        if (bmsg->opo.po.buffer_id != UINT32_MAX) {
+            error = ofconn_pktbuf_retrieve(ofconn, bmsg->opo.po.buffer_id,
+                                           &(bmsg->opo.payload), NULL);
+            if (error) {
+                goto exit;
+            }
+        } else {
+            /* Ensure that the L3 header is 32-bit aligned. */
+            bmsg->opo.payload = dp_packet_clone_data_with_headroom(
+                                                        bmsg->opo.po.packet,
+                                                        bmsg->opo.po.packet_len,
+                                                        2);
+        }
+
+        /* Verify actions against packet */
+        flow_extract(bmsg->opo.payload, &(bmsg->opo.flow));
+        bmsg->opo.flow.in_port.ofp_port = bmsg->opo.po.in_port;
+        /* Check actions like for flow mods. */
+        error = ofpacts_check_consistency(bmsg->opo.po.ofpacts,
+                                          bmsg->opo.po.ofpacts_len,
+                                          &(bmsg->opo.flow),
+                                          u16_to_ofp(ofproto->max_ports),
+                                          0, ofproto->n_tables,
+                                          ofconn_get_protocol(ofconn));
+        if (error) {
+            goto exit;
+        }
+
+        error = ofproto_check_ofpacts(ofproto, bmsg->opo.po.ofpacts,
+                                      bmsg->opo.po.ofpacts_len);
     } else {
         OVS_NOT_REACHED();
     }
@@ -7220,7 +7286,7 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
         error = ofp_bundle_add_message(ofconn, badd.bundle_id, badd.flags,
                                        bmsg);
     }
-
+exit:
     if (error) {
         ofp_bundle_entry_free(bmsg);
     }

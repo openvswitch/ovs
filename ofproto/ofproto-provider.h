@@ -1801,6 +1801,13 @@ struct ofproto_port_mod {
     struct ofport *port;                /* Affected port. */
 };
 
+/* packet_out with execution context. */
+struct ofproto_packet_out {
+    struct ofputil_packet_out po;
+    struct dp_packet *payload;
+    struct flow flow;
+};
+
 enum ofperr ofproto_flow_mod(struct ofproto *, struct ofproto_flow_mod *)
     OVS_EXCLUDED(ofproto_mutex);
 void ofproto_add_flow(struct ofproto *, const struct match *, int priority,
