@@ -266,7 +266,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     }
 
     if (br_int) {
-        if (get_local_iface_ids(br_int, &lports)) {
+        if (ctx->ovnsb_idl_txn && get_local_iface_ids(br_int, &lports)) {
             process_full_binding = true;
         }
     } else {
