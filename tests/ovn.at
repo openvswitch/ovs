@@ -1869,9 +1869,26 @@ AT_CHECK_UNQUOTED([sort < mac_bindings], [0], [`sort < mac_bindings.expected`
 ])
 
 # Gracefully terminate daemons
-for daemon in ovn-controller ovn-northd ovsdb-server; do
-    ovs-appctl -t $daemon exit
+for sim in hv1 hv2 hv3; do
+    as $sim
+    OVS_APP_EXIT_AND_WAIT([ovn-controller])
+    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 done
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
 AT_CLEANUP
 
 # 3 hypervisors, one logical switch, 3 logical ports per hypervisor
