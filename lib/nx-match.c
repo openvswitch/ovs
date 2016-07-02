@@ -879,8 +879,7 @@ nxm_put_ip(struct ofpbuf *b, const struct match *match, enum ofp_version oxm)
                 nxm_put_8(b, MFF_ICMPV6_CODE, oxm,
                           ntohs(flow->tp_dst));
             }
-            if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
-                flow->tp_src == htons(ND_NEIGHBOR_ADVERT)) {
+            if (is_nd(flow, NULL)) {
                 nxm_put_ipv6(b, MFF_ND_TARGET, oxm,
                              &flow->nd_target, &match->wc.masks.nd_target);
                 if (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)) {

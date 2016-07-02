@@ -398,18 +398,11 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
         return is_icmpv6(flow, NULL);
 
     case MFP_ND:
-        return (is_icmpv6(flow, NULL)
-                && flow->tp_dst == htons(0)
-                && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
-                    flow->tp_src == htons(ND_NEIGHBOR_ADVERT)));
+        return is_nd(flow, NULL);
     case MFP_ND_SOLICIT:
-        return (is_icmpv6(flow, NULL)
-                && flow->tp_dst == htons(0)
-                && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)));
+        return is_nd(flow, NULL) && flow->tp_src == htons(ND_NEIGHBOR_SOLICIT);
     case MFP_ND_ADVERT:
-        return (is_icmpv6(flow, NULL)
-                && flow->tp_dst == htons(0)
-                && (flow->tp_src == htons(ND_NEIGHBOR_ADVERT)));
+        return is_nd(flow, NULL) && flow->tp_src == htons(ND_NEIGHBOR_ADVERT);
     }
 
     OVS_NOT_REACHED();
