@@ -118,7 +118,7 @@ local_datapath_lookup_by_uuid(struct hmap *hmap_p, const struct uuid *uuid)
 {
     struct local_datapath *ld;
     HMAP_FOR_EACH_WITH_HASH(ld, uuid_hmap_node, uuid_hash(uuid), hmap_p) {
-        if (uuid_equals(ld->uuid, uuid)) {
+        if (uuid_equals(&ld->uuid, uuid)) {
             return ld;
         }
     }
@@ -169,7 +169,7 @@ add_local_datapath(struct hmap *local_datapaths,
 
     struct local_datapath *ld = xzalloc(sizeof *ld);
     ld->logical_port = xstrdup(binding_rec->logical_port);
-    ld->uuid = &binding_rec->header_.uuid;
+    memcpy(&ld->uuid, &binding_rec->header_.uuid, sizeof ld->uuid);
     hmap_insert(local_datapaths, &ld->hmap_node,
                 binding_rec->datapath->tunnel_key);
     hmap_insert(&local_datapaths_by_uuid, &ld->uuid_hmap_node,
@@ -285,14 +285,14 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             consider_local_datapath(ctx, &lports, chassis_rec, binding_rec,
                                     local_datapaths);
             struct local_datapath *ld = xzalloc(sizeof *ld);
-            ld->uuid = &binding_rec->header_.uuid;
+            memcpy(&ld->uuid, &binding_rec->header_.uuid, sizeof ld->uuid);
             hmap_insert(&keep_local_datapath_by_uuid, &ld->uuid_hmap_node,
-                        uuid_hash(ld->uuid));
+                        uuid_hash(&ld->uuid));
         }
         struct local_datapath *old_ld, *next;
         HMAP_FOR_EACH_SAFE (old_ld, next, hmap_node, local_datapaths) {
             if (!local_datapath_lookup_by_uuid(&keep_local_datapath_by_uuid,
-                                               old_ld->uuid)) {
+                                               &old_ld->uuid)) {
                 remove_local_datapath(local_datapaths, old_ld);
             }
         }

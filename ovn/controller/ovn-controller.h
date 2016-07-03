@@ -39,7 +39,7 @@ struct controller_ctx {
 struct local_datapath {
     struct hmap_node hmap_node;
     struct hmap_node uuid_hmap_node;
-    const struct uuid *uuid;
+    struct uuid uuid;
     char *logical_port;
     const struct sbrec_port_binding *localnet_port;
 };

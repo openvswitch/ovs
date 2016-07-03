@@ -28,7 +28,7 @@ struct lport {
     struct hmap_node name_node;  /* Index by name. */
     struct hmap_node key_node;   /* Index by (dp_key, port_key). */
     struct hmap_node uuid_node;  /* Index by row uuid. */
-    const struct uuid *uuid;
+    struct uuid uuid;
     const struct sbrec_port_binding *pb;
 };
 
@@ -91,7 +91,7 @@ consider_lport_index(struct lport_index *lports,
                 hash_int(pb->tunnel_key, pb->datapath->tunnel_key));
     hmap_insert(&lports->by_uuid, &p->uuid_node,
                 uuid_hash(&pb->header_.uuid));
-    p->uuid = &pb->header_.uuid;
+    memcpy(&p->uuid, &pb->header_.uuid, sizeof p->uuid);
     p->pb = pb;
 }
 
@@ -148,7 +148,7 @@ lport_lookup_by_uuid(const struct lport_index *lports,
     const struct lport *lport;
     HMAP_FOR_EACH_WITH_HASH (lport, uuid_node, uuid_hash(uuid),
                              &lports->by_uuid) {
-        if (uuid_equals(uuid, lport->uuid)) {
+        if (uuid_equals(uuid, &lport->uuid)) {
             return lport;
         }
     }
@@ -173,7 +173,7 @@ lport_lookup_by_key(const struct lport_index *lports,
 struct mcgroup {
     struct hmap_node dp_name_node; /* Index by (logical datapath, name). */
     struct hmap_node uuid_node;    /* Index by insert uuid. */
-    const struct uuid *uuid;
+    struct uuid uuid;
     const struct sbrec_multicast_group *mg;
 };
 
@@ -229,7 +229,7 @@ consider_mcgroup_index(struct mcgroup_index *mcgroups,
                 hash_string(mg->name, uuid_hash(dp_uuid)));
     hmap_insert(&mcgroups->by_uuid, &m->uuid_node,
                 uuid_hash(&mg->header_.uuid));
-    m->uuid = &mg->header_.uuid;
+    memcpy(&m->uuid, &mg->header_.uuid, sizeof m->uuid);
     m->mg = mg;
 }
 
@@ -269,7 +269,7 @@ mcgroup_lookup_by_uuid(const struct mcgroup_index *mcgroups,
     const struct mcgroup *mcgroup;
     HMAP_FOR_EACH_WITH_HASH (mcgroup, uuid_node, uuid_hash(uuid),
                              &mcgroups->by_uuid) {
-        if (uuid_equals(mcgroup->uuid, uuid)) {
+        if (uuid_equals(&mcgroup->uuid, uuid)) {
             return mcgroup;
         }
     }
