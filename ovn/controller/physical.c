@@ -457,6 +457,126 @@ consider_port_binding(struct hmap *flow_table,
     }
 }
 
+static void
+consider_mc_group(struct hmap *flow_table,
+                  enum mf_field_id mff_ovn_geneve,
+                  const struct simap *ct_zones,
+                  struct hmap *local_datapaths,
+                  const struct sbrec_multicast_group *mc,
+                  struct ofpbuf *ofpacts_p,
+                  struct ofpbuf *remote_ofpacts_p)
+{
+    struct sset remote_chassis = SSET_INITIALIZER(&remote_chassis);
+    struct match match;
+
+    match_init_catchall(&match);
+    match_set_metadata(&match, htonll(mc->datapath->tunnel_key));
+    match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, mc->tunnel_key);
+
+    /* Go through all of the ports in the multicast group:
+     *
+     *    - For remote ports, add the chassis to 'remote_chassis'.
+     *
+     *    - For local ports (other than logical patch ports), add actions
+     *      to 'ofpacts_p' to set the output port and resubmit.
+     *
+     *    - For logical patch ports, add actions to 'remote_ofpacts_p'
+     *      instead.  (If we put them in 'ofpacts', then the output
+     *      would happen on every hypervisor in the multicast group,
+     *      effectively duplicating the packet.)
+     */
+    ofpbuf_clear(ofpacts_p);
+    ofpbuf_clear(remote_ofpacts_p);
+    for (size_t i = 0; i < mc->n_ports; i++) {
+        struct sbrec_port_binding *port = mc->ports[i];
+
+        if (port->datapath != mc->datapath) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, UUID_FMT": multicast group contains ports "
+                         "in wrong datapath",
+                         UUID_ARGS(&mc->header_.uuid));
+            continue;
+        }
+
+        int zone_id = simap_get(ct_zones, port->logical_port);
+        if (zone_id) {
+            put_load(zone_id, MFF_LOG_CT_ZONE, 0, 32, ofpacts_p);
+        }
+
+        if (!strcmp(port->type, "patch")) {
+            put_load(port->tunnel_key, MFF_LOG_OUTPORT, 0, 32,
+                     remote_ofpacts_p);
+            put_resubmit(OFTABLE_DROP_LOOPBACK, remote_ofpacts_p);
+        } else if (simap_contains(&localvif_to_ofport,
+                           (port->parent_port && *port->parent_port)
+                           ? port->parent_port : port->logical_port)) {
+            put_load(port->tunnel_key, MFF_LOG_OUTPORT, 0, 32, ofpacts_p);
+            put_resubmit(OFTABLE_DROP_LOOPBACK, ofpacts_p);
+        } else if (port->chassis && !get_localnet_port(local_datapaths,
+                                         mc->datapath->tunnel_key)) {
+            /* Add remote chassis only when localnet port not exist,
+             * otherwise multicast will reach remote ports through localnet
+             * port. */
+            sset_add(&remote_chassis, port->chassis->name);
+        }
+    }
+
+    /* Table 33, priority 100.
+     * =======================
+     *
+     * Handle output to the local logical ports in the multicast group, if
+     * any. */
+    bool local_ports = ofpacts_p->size > 0;
+    if (local_ports) {
+        /* Following delivery to local logical ports, restore the multicast
+         * group as the logical output port. */
+        put_load(mc->tunnel_key, MFF_LOG_OUTPORT, 0, 32, ofpacts_p);
+
+        ofctrl_add_flow(flow_table, OFTABLE_LOCAL_OUTPUT, 100,
+                        &match, ofpacts_p);
+    }
+
+    /* Table 32, priority 100.
+     * =======================
+     *
+     * Handle output to the remote chassis in the multicast group, if
+     * any. */
+    if (!sset_is_empty(&remote_chassis) || remote_ofpacts_p->size > 0) {
+        if (remote_ofpacts_p->size > 0) {
+            /* Following delivery to logical patch ports, restore the
+             * multicast group as the logical output port. */
+            put_load(mc->tunnel_key, MFF_LOG_OUTPORT, 0, 32,
+                     remote_ofpacts_p);
+        }
+
+        const char *chassis;
+        const struct chassis_tunnel *prev = NULL;
+        SSET_FOR_EACH (chassis, &remote_chassis) {
+            const struct chassis_tunnel *tun
+                = chassis_tunnel_find(chassis);
+            if (!tun) {
+                continue;
+            }
+
+            if (!prev || tun->type != prev->type) {
+                put_encapsulation(mff_ovn_geneve, tun, mc->datapath,
+                                  mc->tunnel_key, remote_ofpacts_p);
+                prev = tun;
+            }
+            ofpact_put_OUTPUT(remote_ofpacts_p)->port = tun->ofport;
+        }
+
+        if (remote_ofpacts_p->size) {
+            if (local_ports) {
+                put_resubmit(OFTABLE_LOCAL_OUTPUT, remote_ofpacts_p);
+            }
+            ofctrl_add_flow(flow_table, OFTABLE_REMOTE_OUTPUT, 100,
+                            &match, remote_ofpacts_p);
+        }
+    }
+    sset_destroy(&remote_chassis);
+}
+
 void
 physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              const struct ovsrec_bridge *br_int, const char *this_chassis_id,
@@ -558,116 +678,10 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     struct ofpbuf remote_ofpacts;
     ofpbuf_init(&remote_ofpacts, 0);
     SBREC_MULTICAST_GROUP_FOR_EACH (mc, ctx->ovnsb_idl) {
-        struct sset remote_chassis = SSET_INITIALIZER(&remote_chassis);
-        struct match match;
-
-        match_init_catchall(&match);
-        match_set_metadata(&match, htonll(mc->datapath->tunnel_key));
-        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, mc->tunnel_key);
-
-        /* Go through all of the ports in the multicast group:
-         *
-         *    - For remote ports, add the chassis to 'remote_chassis'.
-         *
-         *    - For local ports (other than logical patch ports), add actions
-         *      to 'ofpacts' to set the output port and resubmit.
-         *
-         *    - For logical patch ports, add actions to 'remote_ofpacts'
-         *      instead.  (If we put them in 'ofpacts', then the output
-         *      would happen on every hypervisor in the multicast group,
-         *      effectively duplicating the packet.)
-         */
-        ofpbuf_clear(&ofpacts);
-        ofpbuf_clear(&remote_ofpacts);
-        for (size_t i = 0; i < mc->n_ports; i++) {
-            struct sbrec_port_binding *port = mc->ports[i];
-
-            if (port->datapath != mc->datapath) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-                VLOG_WARN_RL(&rl, UUID_FMT": multicast group contains ports "
-                             "in wrong datapath",
-                             UUID_ARGS(&mc->header_.uuid));
-                continue;
-            }
-
-            int zone_id = simap_get(ct_zones, port->logical_port);
-            if (zone_id) {
-                put_load(zone_id, MFF_LOG_CT_ZONE, 0, 32, &ofpacts);
-            }
-
-            if (!strcmp(port->type, "patch")) {
-                put_load(port->tunnel_key, MFF_LOG_OUTPORT, 0, 32,
-                         &remote_ofpacts);
-                put_resubmit(OFTABLE_DROP_LOOPBACK, &remote_ofpacts);
-            } else if (simap_contains(&localvif_to_ofport,
-                               (port->parent_port && *port->parent_port)
-                               ? port->parent_port : port->logical_port)) {
-                put_load(port->tunnel_key, MFF_LOG_OUTPORT, 0, 32, &ofpacts);
-                put_resubmit(OFTABLE_DROP_LOOPBACK, &ofpacts);
-            } else if (port->chassis && !get_localnet_port(local_datapaths,
-                                             mc->datapath->tunnel_key)) {
-                /* Add remote chassis only when localnet port not exist,
-                 * otherwise multicast will reach remote ports through localnet
-                 * port. */
-                sset_add(&remote_chassis, port->chassis->name);
-            }
-        }
-
-        /* Table 33, priority 100.
-         * =======================
-         *
-         * Handle output to the local logical ports in the multicast group, if
-         * any. */
-        bool local_ports = ofpacts.size > 0;
-        if (local_ports) {
-            /* Following delivery to local logical ports, restore the multicast
-             * group as the logical output port. */
-            put_load(mc->tunnel_key, MFF_LOG_OUTPORT, 0, 32, &ofpacts);
-
-            ofctrl_add_flow(flow_table, OFTABLE_LOCAL_OUTPUT, 100,
-                            &match, &ofpacts);
-        }
-
-        /* Table 32, priority 100.
-         * =======================
-         *
-         * Handle output to the remote chassis in the multicast group, if
-         * any. */
-        if (!sset_is_empty(&remote_chassis) || remote_ofpacts.size > 0) {
-            if (remote_ofpacts.size > 0) {
-                /* Following delivery to logical patch ports, restore the
-                 * multicast group as the logical output port. */
-                put_load(mc->tunnel_key, MFF_LOG_OUTPORT, 0, 32,
-                         &remote_ofpacts);
-            }
-
-            const char *chassis;
-            const struct chassis_tunnel *prev = NULL;
-            SSET_FOR_EACH (chassis, &remote_chassis) {
-                const struct chassis_tunnel *tun
-                    = chassis_tunnel_find(chassis);
-                if (!tun) {
-                    continue;
-                }
-
-                if (!prev || tun->type != prev->type) {
-                    put_encapsulation(mff_ovn_geneve, tun, mc->datapath,
-                                      mc->tunnel_key, &remote_ofpacts);
-                    prev = tun;
-                }
-                ofpact_put_OUTPUT(&remote_ofpacts)->port = tun->ofport;
-            }
-
-            if (remote_ofpacts.size) {
-                if (local_ports) {
-                    put_resubmit(OFTABLE_LOCAL_OUTPUT, &remote_ofpacts);
-                }
-                ofctrl_add_flow(flow_table, OFTABLE_REMOTE_OUTPUT, 100,
-                                &match, &remote_ofpacts);
-            }
-        }
-        sset_destroy(&remote_chassis);
+        consider_mc_group(flow_table, mff_ovn_geneve, ct_zones,
+                          local_datapaths, mc, &ofpacts, &remote_ofpacts);
     }
+
     ofpbuf_uninit(&remote_ofpacts);
 
     /* Table 0, priority 100.
