@@ -319,6 +319,7 @@ static void consider_logical_flow(const struct lport_index *lports,
                                   const struct sbrec_logical_flow *lflow,
                                   const struct hmap *local_datapaths,
                                   const struct hmap *patched_datapaths,
+                                  struct group_table *group_table,
                                   const struct simap *ct_zones,
                                   struct hmap *dhcp_opts_p,
                                   uint32_t *conj_id_ofs_p,
@@ -359,6 +360,7 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
                   const struct mcgroup_index *mcgroups,
                   const struct hmap *local_datapaths,
                   const struct hmap *patched_datapaths,
+                  struct group_table *group_table,
                   const struct simap *ct_zones, struct hmap *flow_table)
 {
     uint32_t conj_id_ofs = 1;
@@ -373,7 +375,7 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
     const struct sbrec_logical_flow *lflow;
     SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
         consider_logical_flow(lports, mcgroups, lflow, local_datapaths,
-                              patched_datapaths, ct_zones,
+                              patched_datapaths, group_table, ct_zones,
                               &dhcp_opts, &conj_id_ofs, flow_table);
     }
 
@@ -386,6 +388,7 @@ consider_logical_flow(const struct lport_index *lports,
                       const struct sbrec_logical_flow *lflow,
                       const struct hmap *local_datapaths,
                       const struct hmap *patched_datapaths,
+                      struct group_table *group_table,
                       const struct simap *ct_zones,
                       struct hmap *dhcp_opts_p,
                       uint32_t *conj_id_ofs_p,
@@ -464,6 +467,7 @@ consider_logical_flow(const struct lport_index *lports,
         .lookup_port = lookup_port_cb,
         .aux = &aux,
         .ct_zones = ct_zones,
+        .group_table = group_table,
 
         .n_tables = LOG_PIPELINE_LEN,
         .first_ptable = first_ptable,
@@ -622,11 +626,12 @@ lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
           const struct mcgroup_index *mcgroups,
           const struct hmap *local_datapaths,
           const struct hmap *patched_datapaths,
+          struct group_table *group_table,
           const struct simap *ct_zones, struct hmap *flow_table)
 {
     update_address_sets(ctx);
     add_logical_flows(ctx, lports, mcgroups, local_datapaths,
-                      patched_datapaths, ct_zones, flow_table);
+                      patched_datapaths, group_table, ct_zones, flow_table);
     add_neighbor_flows(ctx, lports, flow_table);
 }
 

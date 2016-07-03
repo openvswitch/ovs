@@ -39,6 +39,7 @@
 #include "ofctrl.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
+#include "ovn/lib/actions.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-util.h"
 #include "patch.h"
@@ -327,6 +328,13 @@ main(int argc, char *argv[])
     }
     unixctl_command_register("exit", "", 0, 0, ovn_controller_exit, &exiting);
 
+    /* Initialize group ids for loadbalancing. */
+    struct group_table group_table;
+    group_table.group_ids = bitmap_allocate(MAX_OVN_GROUPS);
+    bitmap_set1(group_table.group_ids, 0); /* Group id 0 is invalid. */
+    hmap_init(&group_table.desired_groups);
+    hmap_init(&group_table.existing_groups);
+
     daemonize_complete();
 
     ovsrec_init();
@@ -435,13 +443,14 @@ main(int argc, char *argv[])
 
             struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
             lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
-                      &patched_datapaths, &ct_zones, &flow_table);
+                      &patched_datapaths, &group_table, &ct_zones,
+                      &flow_table);
             if (chassis_id) {
                 physical_run(&ctx, mff_ovn_geneve,
                              br_int, chassis_id, &ct_zones, &flow_table,
                              &local_datapaths, &patched_datapaths);
             }
-            ofctrl_put(&flow_table);
+            ofctrl_put(&flow_table, &group_table);
             hmap_destroy(&flow_table);
         }
 
@@ -500,6 +509,18 @@ main(int argc, char *argv[])
     pinctrl_destroy();
 
     simap_destroy(&ct_zones);
+
+    bitmap_free(group_table.group_ids);
+    hmap_destroy(&group_table.desired_groups);
+
+    struct group_info *installed, *next_group;
+    HMAP_FOR_EACH_SAFE(installed, next_group, hmap_node,
+                       &group_table.existing_groups) {
+        hmap_remove(&group_table.existing_groups, &installed->hmap_node);
+        ds_destroy(&installed->group);
+        free(installed);
+    }
+    hmap_destroy(&group_table.existing_groups);
 
     ovsdb_idl_loop_destroy(&ovs_idl_loop);
     ovsdb_idl_loop_destroy(&ovnsb_idl_loop);

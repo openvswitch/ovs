@@ -26,11 +26,12 @@ struct hmap;
 struct match;
 struct ofpbuf;
 struct ovsrec_bridge;
+struct group_table;
 
 /* Interface for OVN main loop. */
 void ofctrl_init(void);
 enum mf_field_id ofctrl_run(const struct ovsrec_bridge *br_int);
-void ofctrl_put(struct hmap *flows);
+void ofctrl_put(struct hmap *flows, struct group_table *group_table);
 void ofctrl_wait(void);
 void ofctrl_destroy(void);
 

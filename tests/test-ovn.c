@@ -1281,6 +1281,13 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
     create_symtab(&symtab);
     create_dhcp_opts(&dhcp_opts);
 
+    /* Initialize group ids. */
+    struct group_table group_table;
+    group_table.group_ids = bitmap_allocate(MAX_OVN_GROUPS);
+    bitmap_set1(group_table.group_ids, 0); /* Group id 0 is invalid. */
+    hmap_init(&group_table.desired_groups);
+    hmap_init(&group_table.existing_groups);
+
     simap_init(&ports);
     simap_put(&ports, "eth0", 5);
     simap_put(&ports, "eth1", 6);
@@ -1301,6 +1308,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
             .lookup_port = lookup_port_cb,
             .aux = &ports,
             .ct_zones = &ct_zones,
+            .group_table = &group_table,
 
             .n_tables = 16,
             .first_ptable = 16,

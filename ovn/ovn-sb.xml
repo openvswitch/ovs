@@ -1000,7 +1000,7 @@
           <p>
             <code>ct_dnat(<var>IP</var>)</code> sends the packet through the
             DNAT zone to change the destination IP address of the packet to
-            the one provided inside the parenthesis and commits the connection.
+            the one provided inside the parentheses and commits the connection.
             The packet is then automatically sent to the next tables as if
             followed by <code>next;</code> action.  The next tables will see
             the changes in the packet caused by the connection tracker.
@@ -1181,6 +1181,31 @@
               reg0[0] = put_dhcp_opts(offerip = 10.0.0.2, router = 10.0.0.1,
               netmask = 255.255.255.0, dns_server = {8.8.8.8, 7.7.7.7});
             </code>
+          </p>
+        </dd>
+
+        <dt><code>ct_lb;</code></dt>
+        <dt><code>ct_lb(</code><var>ip</var>[<code>:</code><var>port</var>]...<code>);</code></dt>
+        <dd>
+          <p>
+            With one or more arguments, <code>ct_lb</code> commits the packet
+            to the connection tracking table and DNATs the packet's destination
+            IP address (and port) to the IP address or addresses (and optional
+            ports) specified in the string.  If multiple comma-separated IP
+            addresses are specified, each is given equal weight for picking the
+            DNAT address.  Processing automatically moves on to the next table,
+            as if <code>next;</code> were specified, and later tables act on
+            the packet as modified by the connection tracker.  Connection
+            tracking state is scoped by the logical port, so overlapping
+            addresses may be used.
+          </p>
+          <p>
+            Without arguments, <code>ct_lb</code> sends the packet to the
+            connection tracking table to NAT the packets.  If the packet is
+            part of an established connection that was previously committed to
+            the connection tracker via <code>ct_lb(</code>...<code>)</code>, it
+            will automatically get DNATed to the same IP address as the first
+            packet in that connection.
           </p>
         </dd>
       </dl>

@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,6 +14,7 @@
  */
 
 #include <config.h>
+#include "bitmap.h"
 #include "byte-order.h"
 #include "dirs.h"
 #include "hash.h"
@@ -24,11 +25,13 @@
 #include "openvswitch/match.h"
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/ofp-print.h"
 #include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 #include "ovn-controller.h"
+#include "ovn/lib/actions.h"
 #include "physical.h"
 #include "rconn.h"
 #include "socket-util.h"
@@ -63,6 +66,8 @@ static void queue_flow_mod(struct ofputil_flow_mod *);
 /* OpenFlow connection to the switch. */
 static struct rconn *swconn;
 
+static void queue_group_mod(struct ofputil_group_mod *);
+
 /* Last seen sequence number for 'swconn'.  When this differs from
  * rconn_get_connection_seqno(rconn), 'swconn' has reconnected. */
 static unsigned int seqno;
@@ -95,6 +100,9 @@ static struct rconn_packet_counter *tx_counter;
  * installed in the switch. */
 static struct hmap installed_flows;
 
+/* A reference to the group_table. */
+static struct group_table *groups;
+
 /* MFF_* field ID for our Geneve option.  In S_TLV_TABLE_MOD_SENT, this is
  * the option we requested (we don't know whether we obtained it yet).  In
  * S_CLEAR_FLOWS or S_UPDATE_FLOWS, this is really the option we have. */
@@ -102,6 +110,9 @@ static enum mf_field_id mff_ovn_geneve;
 
 static void ovn_flow_table_clear(struct hmap *flow_table);
 static void ovn_flow_table_destroy(struct hmap *flow_table);
+
+static void ovn_group_table_clear(struct group_table *group_table,
+                                  bool existing);
 
 static void ofctrl_recv(const struct ofp_header *, enum ofptype);
 
@@ -312,8 +323,22 @@ run_S_CLEAR_FLOWS(void)
     queue_flow_mod(&fm);
     VLOG_DBG("clearing all flows");
 
+    struct ofputil_group_mod gm;
+    memset(&gm, 0, sizeof gm);
+    gm.command = OFPGC11_DELETE;
+    gm.group_id = OFPG_ALL;
+    gm.command_bucket_id = OFPG15_BUCKET_ALL;
+    ovs_list_init(&gm.buckets);
+    queue_group_mod(&gm);
+    ofputil_bucket_list_destroy(&gm.buckets);
+
     /* Clear installed_flows, to match the state of the switch. */
     ovn_flow_table_clear(&installed_flows);
+
+    /* Clear existing groups, to match the state of the switch. */
+    if (groups) {
+        ovn_group_table_clear(groups, true);
+    }
 
     state = S_UPDATE_FLOWS;
 }
@@ -591,16 +616,70 @@ queue_flow_mod(struct ofputil_flow_mod *fm)
     queue_msg(ofputil_encode_flow_mod(fm, OFPUTIL_P_OF13_OXM));
 }
 
+
+/* group_table. */
+
+/* Finds and returns a group_info in 'existing_groups' whose key is identical
+ * to 'target''s key, or NULL if there is none. */
+static struct group_info *
+ovn_group_lookup(struct hmap *exisiting_groups,
+                 const struct group_info *target)
+{
+    struct group_info *e;
+
+    HMAP_FOR_EACH_WITH_HASH(e, hmap_node, target->hmap_node.hash,
+                            exisiting_groups) {
+        if (e->group_id == target->group_id) {
+            return e;
+        }
+   }
+    return NULL;
+}
+
+/* Clear either desired_groups or existing_groups in group_table. */
+static void
+ovn_group_table_clear(struct group_table *group_table, bool existing)
+{
+    struct group_info *g, *next;
+    struct hmap *target_group = existing
+                                ? &group_table->existing_groups
+                                : &group_table->desired_groups;
+
+    HMAP_FOR_EACH_SAFE (g, next, hmap_node, target_group) {
+        hmap_remove(target_group, &g->hmap_node);
+        bitmap_set0(group_table->group_ids, g->group_id);
+        ds_destroy(&g->group);
+        free(g);
+    }
+}
+
+static void
+queue_group_mod(struct ofputil_group_mod *gm)
+{
+    queue_msg(ofputil_encode_group_mod(OFP13_VERSION, gm));
+}
+
+
 /* Replaces the flow table on the switch, if possible, by the flows in
  * 'flow_table', which should have been added with ofctrl_add_flow().
  * Regardless of whether the flow table is updated, this deletes all of the
  * flows from 'flow_table' and frees them.  (The hmap itself isn't
  * destroyed.)
  *
+ * Replaces the group table on the switch, if possible, by the groups in
+ * 'group_table->desired_groups'. Regardless of whether the group table
+ * is updated, this deletes all the groups from the
+ * 'group_table->desired_groups' and frees them. (The hmap itself isn't
+ * destroyed.)
+ *
  * This called be called be ofctrl_run() within the main loop. */
 void
-ofctrl_put(struct hmap *flow_table)
+ofctrl_put(struct hmap *flow_table, struct group_table *group_table)
 {
+    if (!groups) {
+        groups = group_table;
+    }
+
     /* The flow table can be updated if the connection to the switch is up and
      * in the correct state and not backlogged with existing flow_mods.  (Our
      * criteria for being backlogged appear very conservative, but the socket
@@ -610,7 +689,37 @@ ofctrl_put(struct hmap *flow_table)
     if (state != S_UPDATE_FLOWS
         || rconn_packet_counter_n_packets(tx_counter)) {
         ovn_flow_table_clear(flow_table);
+        ovn_group_table_clear(group_table, false);
         return;
+    }
+
+    /* Iterate through all the desired groups. If there are new ones,
+     * add them to the switch. */
+    struct group_info *desired;
+    HMAP_FOR_EACH(desired, hmap_node, &group_table->desired_groups) {
+        if (!ovn_group_lookup(&group_table->existing_groups, desired)) {
+            /* Create and install new group. */
+            struct ofputil_group_mod gm;
+            enum ofputil_protocol usable_protocols;
+            char *error;
+            struct ds group_string = DS_EMPTY_INITIALIZER;
+            ds_put_format(&group_string, "group_id=%u,%s",
+                          desired->group_id, ds_cstr(&desired->group));
+
+            error = parse_ofp_group_mod_str(&gm, OFPGC11_ADD,
+                                            ds_cstr(&group_string),
+                                            &usable_protocols);
+            if (!error) {
+                queue_group_mod(&gm);
+            } else {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+                VLOG_ERR_RL(&rl, "new group %s %s", error,
+                         ds_cstr(&group_string));
+                free(error);
+            }
+            ds_destroy(&group_string);
+            ofputil_bucket_list_destroy(&gm.buckets);
+        }
     }
 
     /* Iterate through all of the installed flows.  If any of them are no
@@ -681,5 +790,55 @@ ofctrl_put(struct hmap *flow_table)
         /* Move 'd' from 'flow_table' to installed_flows. */
         hmap_remove(flow_table, &d->hmap_node);
         hmap_insert(&installed_flows, &d->hmap_node, d->hmap_node.hash);
+    }
+
+    /* Iterate through the installed groups from previous runs. If they
+     * are not needed delete them. */
+    struct group_info *installed, *next_group;
+    HMAP_FOR_EACH_SAFE(installed, next_group, hmap_node,
+                       &group_table->existing_groups) {
+        if (!ovn_group_lookup(&group_table->desired_groups, installed)) {
+            /* Delete the group. */
+            struct ofputil_group_mod gm;
+            enum ofputil_protocol usable_protocols;
+            char *error;
+            struct ds group_string = DS_EMPTY_INITIALIZER;
+            ds_put_format(&group_string, "group_id=%u", installed->group_id);
+
+            error = parse_ofp_group_mod_str(&gm, OFPGC11_DELETE,
+                                            ds_cstr(&group_string),
+                                            &usable_protocols);
+            if (!error) {
+                queue_group_mod(&gm);
+            } else {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+                VLOG_ERR_RL(&rl, "Error deleting group %d: %s",
+                         installed->group_id, error);
+                free(error);
+            }
+            ds_destroy(&group_string);
+            ofputil_bucket_list_destroy(&gm.buckets);
+
+            /* Remove 'installed' from 'group_table->existing_groups' */
+            hmap_remove(&group_table->existing_groups, &installed->hmap_node);
+            ds_destroy(&installed->group);
+
+            /* Dealloc group_id. */
+            bitmap_set0(group_table->group_ids, installed->group_id);
+            free(installed);
+        }
+    }
+
+    /* Move the contents of desired_groups to existing_groups. */
+    HMAP_FOR_EACH_SAFE(desired, next_group, hmap_node,
+                       &group_table->desired_groups) {
+        hmap_remove(&group_table->desired_groups, &desired->hmap_node);
+        if (!ovn_group_lookup(&group_table->existing_groups, desired)) {
+            hmap_insert(&group_table->existing_groups, &desired->hmap_node,
+                        desired->hmap_node.hash);
+        } else {
+            ds_destroy(&desired->group);
+            free(desired);
+        }
     }
 }

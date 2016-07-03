@@ -568,6 +568,15 @@ reg0[0..7] <-> ip.proto; => Field ip.proto is not modifiable.
 ip.ttl--; => actions=dec_ttl, prereqs=ip
 ip.ttl => Syntax error at end of input expecting `--'.
 
+# load balancing.
+ct_lb; => actions=ct(table=27,zone=NXM_NX_REG5[0..15],nat), prereqs=ip
+ct_lb(); => Syntax error at `)' expecting IPv4 address.
+ct_lb(192.168.1.2:80, 192.168.1.3:80); => actions=group:1, prereqs=ip
+ct_lb(192.168.1.2, 192.168.1.3, ); => actions=group:2, prereqs=ip
+ct_lb(192.168.1.2:); => Syntax error at `)' expecting port number.
+ct_lb(192.168.1.2:123456); => Syntax error at `123456' expecting port number.
+ct_lb(foo); => Syntax error at `foo' expecting IPv4 address.
+
 # conntrack
 ct_next; => actions=ct(table=27,zone=NXM_NX_REG5[0..15]), prereqs=ip
 ct_commit; => actions=ct(commit,zone=NXM_NX_REG5[0..15]), prereqs=ip
