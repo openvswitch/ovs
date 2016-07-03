@@ -672,7 +672,7 @@ queue_group_mod(struct ofputil_group_mod *gm)
  * 'group_table->desired_groups' and frees them. (The hmap itself isn't
  * destroyed.)
  *
- * This called be called be ofctrl_run() within the main loop. */
+ * This should be called after ofctrl_run() within the main loop. */
 void
 ofctrl_put(struct hmap *flow_table, struct group_table *group_table)
 {
