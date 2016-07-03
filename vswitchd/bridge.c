@@ -1997,6 +1997,9 @@ find_local_hw_addr(const struct bridge *br, struct eth_addr *ea,
                 }
             }
 
+            /* A port always has at least one interface. */
+            ovs_assert(iface != NULL);
+
             /* The local port doesn't count (since we're trying to choose its
              * MAC address anyway). */
             if (iface->ofp_port == OFPP_LOCAL) {
