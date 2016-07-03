@@ -314,6 +314,16 @@ struct lookup_port_aux {
     const struct sbrec_datapath_binding *dp;
 };
 
+static void consider_logical_flow(const struct lport_index *lports,
+                                  const struct mcgroup_index *mcgroups,
+                                  const struct sbrec_logical_flow *lflow,
+                                  const struct hmap *local_datapaths,
+                                  const struct hmap *patched_datapaths,
+                                  const struct simap *ct_zones,
+                                  struct hmap *dhcp_opts_p,
+                                  uint32_t *conj_id_ofs_p,
+                                  struct hmap *flow_table);
+
 static bool
 lookup_port_cb(const void *aux_, const char *port_name, unsigned int *portp)
 {
@@ -362,162 +372,178 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
 
     const struct sbrec_logical_flow *lflow;
     SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
-        /* Determine translation of logical table IDs to physical table IDs. */
-        bool ingress = !strcmp(lflow->pipeline, "ingress");
-
-        const struct sbrec_datapath_binding *ldp = lflow->logical_datapath;
-        if (!ldp) {
-            continue;
-        }
-        if (is_switch(ldp)) {
-            /* For a logical switch datapath, local_datapaths tells us if there
-             * are any local ports for this datapath.  If not, we can skip
-             * processing logical flows if that logical switch datapath is not
-             * patched to any logical router.
-             *
-             * Otherwise, we still need both ingress and egress pipeline
-             * because even if there are no local ports, we still may need to
-             * execute the ingress pipeline after a packet leaves a logical
-             * router and we need to do egress pipeline for a switch that
-             * is connected to only routers.  Further optimization is possible,
-             * but not based on what we know with local_datapaths right now.
-             *
-             * A better approach would be a kind of "flood fill" algorithm:
-             *
-             *   1. Initialize set S to the logical datapaths that have a port
-             *      located on the hypervisor.
-             *
-             *   2. For each patch port P in a logical datapath in S, add the
-             *      logical datapath of the remote end of P to S.  Iterate
-             *      until S reaches a fixed point.
-             *
-             * This can be implemented in northd, which can generate the sets and
-             * save it on each port-binding record in SB, and ovn-controller can
-             * use the information directly. However, there can be update storms
-             * when a pair of patch ports are added/removed to connect/disconnect
-             * large lrouters and lswitches. This need to be studied further.
-             */
-
-            if (!get_local_datapath(local_datapaths, ldp->tunnel_key)) {
-                if (!get_patched_datapath(patched_datapaths,
-                                          ldp->tunnel_key)) {
-                    continue;
-                }
-            }
-        }
-
-        /* Determine translation of logical table IDs to physical table IDs. */
-        uint8_t first_ptable = (ingress
-                                ? OFTABLE_LOG_INGRESS_PIPELINE
-                                : OFTABLE_LOG_EGRESS_PIPELINE);
-        uint8_t ptable = first_ptable + lflow->table_id;
-        uint8_t output_ptable = (ingress
-                                 ? OFTABLE_REMOTE_OUTPUT
-                                 : OFTABLE_LOG_TO_PHY);
-
-        /* Translate OVN actions into OpenFlow actions.
-         *
-         * XXX Deny changes to 'outport' in egress pipeline. */
-        uint64_t ofpacts_stub[64 / 8];
-        struct ofpbuf ofpacts;
-        struct expr *prereqs;
-        char *error;
-
-        ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
-        struct lookup_port_aux aux = {
-            .lports = lports,
-            .mcgroups = mcgroups,
-            .dp = lflow->logical_datapath
-        };
-        struct action_params ap = {
-            .symtab = &symtab,
-            .dhcp_opts = &dhcp_opts,
-            .lookup_port = lookup_port_cb,
-            .aux = &aux,
-            .ct_zones = ct_zones,
-
-            .n_tables = LOG_PIPELINE_LEN,
-            .first_ptable = first_ptable,
-            .cur_ltable = lflow->table_id,
-            .output_ptable = output_ptable,
-            .arp_ptable = OFTABLE_MAC_BINDING,
-        };
-        error = actions_parse_string(lflow->actions, &ap, &ofpacts, &prereqs);
-        if (error) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-            VLOG_WARN_RL(&rl, "error parsing actions \"%s\": %s",
-                         lflow->actions, error);
-            free(error);
-            continue;
-        }
-
-        /* Translate OVN match into table of OpenFlow matches. */
-        struct hmap matches;
-        struct expr *expr;
-
-        expr = expr_parse_string(lflow->match, &symtab,
-                                 &expr_address_sets, &error);
-        if (!error) {
-            if (prereqs) {
-                expr = expr_combine(EXPR_T_AND, expr, prereqs);
-                prereqs = NULL;
-            }
-            expr = expr_annotate(expr, &symtab, &error);
-        }
-        if (error) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-            VLOG_WARN_RL(&rl, "error parsing match \"%s\": %s",
-                         lflow->match, error);
-            expr_destroy(prereqs);
-            ofpbuf_uninit(&ofpacts);
-            free(error);
-            continue;
-        }
-
-        expr = expr_simplify(expr);
-        expr = expr_normalize(expr);
-        uint32_t n_conjs = expr_to_matches(expr, lookup_port_cb, &aux,
-                                           &matches);
-        expr_destroy(expr);
-
-        /* Prepare the OpenFlow matches for adding to the flow table. */
-        struct expr_match *m;
-        HMAP_FOR_EACH (m, hmap_node, &matches) {
-            match_set_metadata(&m->match,
-                               htonll(lflow->logical_datapath->tunnel_key));
-            if (m->match.wc.masks.conj_id) {
-                m->match.flow.conj_id += conj_id_ofs;
-            }
-            if (!m->n) {
-                ofctrl_add_flow(flow_table, ptable, lflow->priority,
-                                &m->match, &ofpacts);
-            } else {
-                uint64_t conj_stubs[64 / 8];
-                struct ofpbuf conj;
-
-                ofpbuf_use_stub(&conj, conj_stubs, sizeof conj_stubs);
-                for (int i = 0; i < m->n; i++) {
-                    const struct cls_conjunction *src = &m->conjunctions[i];
-                    struct ofpact_conjunction *dst;
-
-                    dst = ofpact_put_CONJUNCTION(&conj);
-                    dst->id = src->id + conj_id_ofs;
-                    dst->clause = src->clause;
-                    dst->n_clauses = src->n_clauses;
-                }
-                ofctrl_add_flow(flow_table, ptable, lflow->priority,
-                                &m->match, &conj);
-                ofpbuf_uninit(&conj);
-            }
-        }
-
-        /* Clean up. */
-        expr_matches_destroy(&matches);
-        ofpbuf_uninit(&ofpacts);
-        conj_id_ofs += n_conjs;
+        consider_logical_flow(lports, mcgroups, lflow, local_datapaths,
+                              patched_datapaths, ct_zones,
+                              &dhcp_opts, &conj_id_ofs, flow_table);
     }
 
     dhcp_opts_destroy(&dhcp_opts);
+}
+
+static void
+consider_logical_flow(const struct lport_index *lports,
+                      const struct mcgroup_index *mcgroups,
+                      const struct sbrec_logical_flow *lflow,
+                      const struct hmap *local_datapaths,
+                      const struct hmap *patched_datapaths,
+                      const struct simap *ct_zones,
+                      struct hmap *dhcp_opts_p,
+                      uint32_t *conj_id_ofs_p,
+                      struct hmap *flow_table)
+{
+    /* Determine translation of logical table IDs to physical table IDs. */
+    bool ingress = !strcmp(lflow->pipeline, "ingress");
+
+    const struct sbrec_datapath_binding *ldp = lflow->logical_datapath;
+    if (!ldp) {
+        return;
+    }
+    if (is_switch(ldp)) {
+        /* For a logical switch datapath, local_datapaths tells us if there
+         * are any local ports for this datapath.  If not, we can skip
+         * processing logical flows if that logical switch datapath is not
+         * patched to any logical router.
+         *
+         * Otherwise, we still need both ingress and egress pipeline
+         * because even if there are no local ports, we still may need to
+         * execute the ingress pipeline after a packet leaves a logical
+         * router and we need to do egress pipeline for a switch that
+         * is connected to only routers.  Further optimization is possible,
+         * but not based on what we know with local_datapaths right now.
+         *
+         * A better approach would be a kind of "flood fill" algorithm:
+         *
+         *   1. Initialize set S to the logical datapaths that have a port
+         *      located on the hypervisor.
+         *
+         *   2. For each patch port P in a logical datapath in S, add the
+         *      logical datapath of the remote end of P to S.  Iterate
+         *      until S reaches a fixed point.
+         *
+         * This can be implemented in northd, which can generate the sets and
+         * save it on each port-binding record in SB, and ovn-controller can
+         * use the information directly. However, there can be update storms
+         * when a pair of patch ports are added/removed to connect/disconnect
+         * large lrouters and lswitches. This need to be studied further.
+         */
+
+        if (!get_local_datapath(local_datapaths, ldp->tunnel_key)) {
+            if (!get_patched_datapath(patched_datapaths,
+                                      ldp->tunnel_key)) {
+                return;
+            }
+        }
+    }
+
+    /* Determine translation of logical table IDs to physical table IDs. */
+    uint8_t first_ptable = (ingress
+                            ? OFTABLE_LOG_INGRESS_PIPELINE
+                            : OFTABLE_LOG_EGRESS_PIPELINE);
+    uint8_t ptable = first_ptable + lflow->table_id;
+    uint8_t output_ptable = (ingress
+                             ? OFTABLE_REMOTE_OUTPUT
+                             : OFTABLE_LOG_TO_PHY);
+
+    /* Translate OVN actions into OpenFlow actions.
+     *
+     * XXX Deny changes to 'outport' in egress pipeline. */
+    uint64_t ofpacts_stub[64 / 8];
+    struct ofpbuf ofpacts;
+    struct expr *prereqs;
+    char *error;
+
+    ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
+    struct lookup_port_aux aux = {
+        .lports = lports,
+        .mcgroups = mcgroups,
+        .dp = lflow->logical_datapath
+    };
+    struct action_params ap = {
+        .symtab = &symtab,
+        .dhcp_opts = dhcp_opts_p,
+        .lookup_port = lookup_port_cb,
+        .aux = &aux,
+        .ct_zones = ct_zones,
+
+        .n_tables = LOG_PIPELINE_LEN,
+        .first_ptable = first_ptable,
+        .cur_ltable = lflow->table_id,
+        .output_ptable = output_ptable,
+        .arp_ptable = OFTABLE_MAC_BINDING,
+    };
+    error = actions_parse_string(lflow->actions, &ap, &ofpacts, &prereqs);
+    if (error) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_WARN_RL(&rl, "error parsing actions \"%s\": %s",
+                     lflow->actions, error);
+        free(error);
+        return;
+    }
+
+    /* Translate OVN match into table of OpenFlow matches. */
+    struct hmap matches;
+    struct expr *expr;
+
+    expr = expr_parse_string(lflow->match, &symtab,
+                             &expr_address_sets, &error);
+    if (!error) {
+        if (prereqs) {
+            expr = expr_combine(EXPR_T_AND, expr, prereqs);
+            prereqs = NULL;
+        }
+        expr = expr_annotate(expr, &symtab, &error);
+    }
+    if (error) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+        VLOG_WARN_RL(&rl, "error parsing match \"%s\": %s",
+                     lflow->match, error);
+        expr_destroy(prereqs);
+        ofpbuf_uninit(&ofpacts);
+        free(error);
+        return;
+    }
+
+    expr = expr_simplify(expr);
+    expr = expr_normalize(expr);
+    uint32_t n_conjs = expr_to_matches(expr, lookup_port_cb, &aux,
+                                       &matches);
+    expr_destroy(expr);
+
+    /* Prepare the OpenFlow matches for adding to the flow table. */
+    struct expr_match *m;
+    HMAP_FOR_EACH (m, hmap_node, &matches) {
+        match_set_metadata(&m->match,
+                           htonll(lflow->logical_datapath->tunnel_key));
+        if (m->match.wc.masks.conj_id) {
+            m->match.flow.conj_id += *conj_id_ofs_p;
+        }
+        if (!m->n) {
+            ofctrl_add_flow(flow_table, ptable, lflow->priority,
+                            &m->match, &ofpacts);
+        } else {
+            uint64_t conj_stubs[64 / 8];
+            struct ofpbuf conj;
+
+            ofpbuf_use_stub(&conj, conj_stubs, sizeof conj_stubs);
+            for (int i = 0; i < m->n; i++) {
+                const struct cls_conjunction *src = &m->conjunctions[i];
+                struct ofpact_conjunction *dst;
+
+                dst = ofpact_put_CONJUNCTION(&conj);
+                dst->id = src->id + *conj_id_ofs_p;
+                dst->clause = src->clause;
+                dst->n_clauses = src->n_clauses;
+            }
+            ofctrl_add_flow(flow_table, ptable, lflow->priority,
+                            &m->match, &conj);
+            ofpbuf_uninit(&conj);
+        }
+    }
+
+    /* Clean up. */
+    expr_matches_destroy(&matches);
+    ofpbuf_uninit(&ofpacts);
+    *conj_id_ofs_p += n_conjs;
 }
 
 static void
