@@ -110,6 +110,53 @@ as() {
     fi
 }
 
+# OVN_CLEANUP_VSWITCH(sim)
+#
+# Gracefully terminate vswitch daemons in the
+# specified sandbox.
+m4_define([OVN_CLEANUP_VSWITCH],[
+    as $1
+    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+])
+
+# OVN_CLEANUP_SBOX(sbox)
+#
+# Gracefully terminate OVN daemons in the specified
+# sandbox instance. The sandbox name "vtep" is treated
+# as a special case, and is assumed to have ovn-controller-vtep
+# and ovs-vtep daemons running instead of ovn-controller.
+m4_define([OVN_CLEANUP_SBOX],[
+    as $1
+    if test "$1" = "vtep"; then
+        OVS_APP_EXIT_AND_WAIT([ovn-controller-vtep])
+        OVS_APP_EXIT_AND_WAIT([ovs-vtep])
+    else
+        OVS_APP_EXIT_AND_WAIT([ovn-controller])
+    fi
+    OVN_CLEANUP_VSWITCH([$1])
+])
+
+# OVN_CLEANUP(sim [, sim ...])
+#
+# Gracefully terminate all OVN daemons, including those in the
+# specified sandbox instances.
+m4_define([OVN_CLEANUP],[
+    m4_foreach([sbox], [$@], [
+        OVN_CLEANUP_SBOX([sbox])
+    ])
+    as ovn-sb
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+    as ovn-nb
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+    as northd
+    OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+    OVN_CLEANUP_VSWITCH([main])
+])
+
 # ovn_init_db DATABASE
 #
 # Creates and initializes the given DATABASE (one of "ovn-sb" or "ovn-nb"),

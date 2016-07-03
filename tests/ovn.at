@@ -927,26 +927,7 @@ for i in 1 2 3; do
     done
 done
 
-# Gracefully terminate daemons
-for sim in hv1 hv2 hv3; do
-    as $sim
-    OVS_APP_EXIT_AND_WAIT([ovn-controller])
-    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-done
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1],[hv2],[hv3])
 
 AT_CLEANUP
 
@@ -1131,26 +1112,8 @@ for i in 1 2; do
     done
 done
 
-# Gracefully terminate daemons
-for sim in hv1 hv2; do
-    as $sim
-    OVS_APP_EXIT_AND_WAIT([ovn-controller])
-    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-done
+OVN_CLEANUP([hv1],[hv2])
 
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovn -- vtep: 3 HVs, 1 VIFs/HV, 1 GW, 1 LS])
@@ -1331,31 +1294,9 @@ for i in 1 2 3; do
 done
 
 # Gracefully terminate daemons
-as vtep
-OVS_APP_EXIT_AND_WAIT([ovn-controller-vtep])
-OVS_APP_EXIT_AND_WAIT([ovs-vtep])
+OVN_CLEANUP([hv1],[hv2],[vtep])
+OVN_CLEANUP_VSWITCH([hv3])
 
-as hv1
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-
-as hv2
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-for sim in hv1 hv2 hv3 vtep main; do
-    as $sim
-    for daemon in ovs-vswitchd ovsdb-server; do
-        OVS_APP_EXIT_AND_WAIT([$daemon])
-    done
-done
 AT_CLEANUP
 
 # Similar test to "hardware GW"
@@ -1943,25 +1884,7 @@ AT_CHECK_UNQUOTED([sort < mac_bindings], [0], [`sort < mac_bindings.expected`
 ])
 
 # Gracefully terminate daemons
-for sim in hv1 hv2 hv3; do
-    as $sim
-    OVS_APP_EXIT_AND_WAIT([ovn-controller])
-    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-done
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1], [hv2], [hv3])
 
 AT_CLEANUP
 
@@ -2354,26 +2277,7 @@ for i in 1 2 3; do
     done
 done
 
-# Gracefully terminate daemons
-for sim in hv1 hv2 hv3; do
-    as $sim
-    OVS_APP_EXIT_AND_WAIT([ovn-controller])
-    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-done
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1],[hv2],[hv3])
 
 AT_CLEANUP
 
@@ -2500,25 +2404,7 @@ $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > rece
 echo $expected | trim_zeros > expout
 AT_CHECK([cat received.packets], [0], [expout])
 
-for sim in hv1 hv2; do
-    as $sim
-    OVS_APP_EXIT_AND_WAIT([ovn-controller])
-    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-done
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1],[hv2])
 
 AT_CLEANUP
 
@@ -2642,23 +2528,7 @@ echo $expected | trim_zeros > expout
 AT_CHECK([cat received.packets], [0], [expout])
 
 
-as hv1
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1])
 
 AT_CLEANUP
 
@@ -2819,25 +2689,7 @@ $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > rece
 echo $expected | trim_zeros > expout
 AT_CHECK([cat received1.packets], [0], [expout])
 
-for sim in hv1 hv2; do
-    as $sim
-    OVS_APP_EXIT_AND_WAIT([ovn-controller])
-    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-done
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1],[hv2])
 
 AT_CLEANUP
 
@@ -2885,23 +2737,7 @@ cat packets
 AT_CHECK([ovs-vsctl del-port localvif1])
 AT_CHECK([ovn-nbctl lsp-del ln_port])
 
-as hv
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv])
 
 AT_CLEANUP
 
@@ -3086,25 +2922,7 @@ $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > rece
 echo $expected | trim_zeros > expout
 AT_CHECK([cat received1.packets], [0], [expout])
 
-for sim in hv1 hv2; do
-    as $sim
-    OVS_APP_EXIT_AND_WAIT([ovn-controller])
-    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-done
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1],[hv2])
 
 AT_CLEANUP
 
@@ -3256,25 +3074,7 @@ $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > rece
 echo $expected | trim_zeros > expout
 AT_CHECK([cat received1.packets], [0], [expout])
 
-for sim in hv1 hv2; do
-    as $sim
-    OVS_APP_EXIT_AND_WAIT([ovn-controller])
-    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-done
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1],[hv2])
 
 AT_CLEANUP
 
@@ -3427,23 +3227,7 @@ for inport in 1 2; do
     AT_CHECK([cat received.packets], [0], [expout])
 done
 
-as hv1
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1])
 
 AT_CLEANUP
 
@@ -3469,23 +3253,8 @@ OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up lp1` = xup])
 as hv1 ovs-vsctl del-port br-int vif1
 OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up lp1` = xdown])
 
-as hv1
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1])
 
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovn -- nd ])
@@ -3566,22 +3335,6 @@ for i in 1 2; do
     AT_CHECK([cat $i.packets], [0], [expout])
 done
 
-as hv1
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-sb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as ovn-nb
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as northd
-OVS_APP_EXIT_AND_WAIT([ovn-northd])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+OVN_CLEANUP([hv1])
 
 AT_CLEANUP

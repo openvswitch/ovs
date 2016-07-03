@@ -144,15 +144,8 @@ AT_CHECK([ovn-sbctl \
 check_patches
 
 # Gracefully terminate daemons
-as hv
-OVS_APP_EXIT_AND_WAIT([ovn-controller])
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
-as main
-OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
-OVS_APP_EXIT_AND_WAIT([ovsdb-server])
-
+OVN_CLEANUP_SBOX([hv])
+OVN_CLEANUP_VSWITCH([main])
 as ovn-sb
 OVS_APP_EXIT_AND_WAIT_BY_TARGET([$ovs_base/ovn-sb/ovsdb-server-2.ctl], [$ovs_base/ovn-sb/ovsdb-server-2.pid])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
