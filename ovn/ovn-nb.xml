@@ -503,6 +503,46 @@
     </group>
   </table>
 
+  <table name="Address_Set" title="Address Sets">
+    <p>
+      Each row in this table represents a named set of addresses.
+      An address set may contain Ethernet, IPv4, or IPv6 addresses
+      with optional bitwise or CIDR masks.
+      Address set may ultimately be used in ACLs to compare against
+      fields such as <code>ip4.src</code> or <code>ip6.src</code>.
+      A single address set must contain addresses of the
+      same type. As an example, the following would create an address set
+      with three IP addresses:
+    </p>
+
+    <pre>
+      ovn-nbctl create Address_Set name=set1 addresses='10.0.0.1 10.0.0.2 10.0.0.3'
+    </pre>
+
+    <p>
+      Address sets may be used in the <ref column="match" table="ACL"/> column
+      of the <ref table="ACL"/> table.  For syntax information, see the details
+      of the expression language used for the <ref column="match"
+      table="Logical_Flow" db="OVN_Southbound"/> column in the <ref
+      table="Logical_Flow" db="OVN_Southbound"/> table of the <ref
+      db="OVN_Southbound"/> database.
+    </p>
+
+    <column name="name">
+      A name for the address set.  This must be unique among all address sets.
+    </column>
+
+    <column name="addresses">
+      The set of addresses in string form.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
   <table name="ACL" title="Access Control List (ACL) rule">
     <p>
       Each row in this table represents one ACL rule for a logical switch

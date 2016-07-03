@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
     "version": "3.1.0",
-    "cksum": "1426508118 6135",
+    "cksum": "4200094286 6620",
     "tables": {
         "Logical_Switch": {
             "columns": {
@@ -48,6 +48,17 @@
                              "min": 0, "max": "unlimited"}}},
             "indexes": [["name"]],
             "isRoot": false},
+        "Address_Set": {
+            "columns": {
+                "name": {"type": "string"},
+                "addresses": {"type": {"key": "string",
+                                       "min": 0,
+                                       "max": "unlimited"}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "indexes": [["name"]],
+            "isRoot": true},
         "ACL": {
             "columns": {
                 "priority": {"type": {"key": {"type": "integer",

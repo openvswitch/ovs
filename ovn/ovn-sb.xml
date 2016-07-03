@@ -249,6 +249,17 @@
     </column>
   </table>
 
+  <table name="Address_Set" title="Address Sets">
+    <p>
+      See the documentation for the <ref table="Address_Set"
+      db="OVN_Northbound"/> table in the <ref db="OVN_Northbound"/> database
+      for details.
+    </p>
+
+    <column name="name"/>
+    <column name="addresses"/>
+  </table>
+
   <table name="Logical_Flow" title="Logical Network Flows">
     <p>
       Each row in this table represents one logical flow.
@@ -654,6 +665,14 @@
         ``<code><var>field</var> != <var>constant1</var> &amp;&amp;
         <var>field</var> != <var>constant2</var> &amp;&amp;
         </code>...<code></code>''.
+      </p>
+
+      <p>
+        You may refer to a set of IPv4, IPv6, or MAC addresses stored in the
+        <ref table="Address_Set"/> table by its <ref column="name"
+        table="Address_Set"/>.  An <ref table="Address_Set"/> with a name
+        of <code>set1</code> can be referred to as
+        <code>$set1</code>.
       </p>
 
       <p><em>Miscellaneous</em></p>

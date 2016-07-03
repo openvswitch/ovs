@@ -264,6 +264,9 @@ ip4.src == ::1 => 128-bit constant is not compatible with 32-bit field ip4.src.
 1 == eth.type == 2 => Range expressions must have the form `x < field < y' or `x > field > y', with each `<' optionally replaced by `<=' or `>' by `>=').
 
 eth.dst[40] x => Extra tokens at end of input.
+
+ip4.src == {1.2.3.4, $set1, $unknownset} => Syntax error at `$unknownset' expecting address set name.
+eth.src == {$set3, badmac, 00:00:00:00:00:01} => Syntax error at `badmac' expecting constant.
 ]])
 sed 's/ =>.*//' test-cases.txt > input.txt
 sed 's/.* => //' test-cases.txt > expout
@@ -487,6 +490,12 @@ dl_src=00:00:00:00:00:01
 dl_src=00:00:00:00:00:02
 dl_src=00:00:00:00:00:03
 ])
+AT_CHECK([expr_to_flow 'eth.src == {00:00:00:00:00:01, $set3, ba:be:be:ef:de:ad, $set3}'], [0], [dnl
+dl_src=00:00:00:00:00:01
+dl_src=00:00:00:00:00:02
+dl_src=00:00:00:00:00:03
+dl_src=ba:be:be:ef:de:ad
+])
 AT_CLEANUP
 
 AT_SETUP([ovn -- action parsing])
@@ -688,6 +697,8 @@ done
 ovn-nbctl acl-add lsw0 from-lport 1000 'eth.type == 0x1234' drop
 ovn-nbctl acl-add lsw0 from-lport 1000 'eth.type == 0x1235 && inport == "lp11"' drop
 ovn-nbctl acl-add lsw0 to-lport 1000 'eth.type == 0x1236 && outport == "lp33"' drop
+ovn-nbctl create Address_Set name=set1 addresses=\"f0:00:00:00:00:11\",\"f0:00:00:00:00:21\",\"f0:00:00:00:00:31\"
+ovn-nbctl acl-add lsw0 to-lport 1000 'eth.type == 0x1237 && eth.src == $set1 && outport == "lp33"' drop
 
 # Pre-populate the hypervisors' ARP tables so that we don't lose any
 # packets for ARP resolution (native tunneling doesn't queue packets
@@ -818,9 +829,17 @@ for is in 1 2 3; do
 
                 if test $d != $s && test $s != 11; then acl2=$d; else acl2=; fi
                 if test $d != $s && test $d != 33; then acl3=$d; else acl3=; fi
+                if test $d == $s || (test $js == 1 && test $d == 33); then
+                    # Source of 11, 21, or 31 and dest of 33 should be dropped
+                    # due to the 4th ACL that uses address_set(set1).
+                    acl4=
+                else
+                    acl4=$d
+                fi
                 test_packet $s f000000000$d f000000000$s 1234        #7, acl1
                 test_packet $s f000000000$d f000000000$s 1235 $acl2  #7, acl2
                 test_packet $s f000000000$d f000000000$s 1236 $acl3  #7, acl3
+                test_packet $s f000000000$d f000000000$s 1237 $acl4  #7, acl4
 
                 test_packet $s f000000000$d f00000000055 810000091234      #4
                 test_packet $s f000000000$d 0100000000$s $s$d              #5

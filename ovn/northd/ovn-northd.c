@@ -2574,6 +2574,43 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
     }
     hmap_destroy(&mcgroups);
 }
+
+/* OVN_Northbound and OVN_Southbound have an identical Address_Set table.
+ * We always update OVN_Southbound to match the current data in
+ * OVN_Northbound, so that the address sets used in Logical_Flows in
+ * OVN_Southbound is checked against the proper set.*/
+static void
+sync_address_sets(struct northd_context *ctx)
+{
+    struct shash sb_address_sets = SHASH_INITIALIZER(&sb_address_sets);
+
+    const struct sbrec_address_set *sb_address_set;
+    SBREC_ADDRESS_SET_FOR_EACH (sb_address_set, ctx->ovnsb_idl) {
+        shash_add(&sb_address_sets, sb_address_set->name, sb_address_set);
+    }
+
+    const struct nbrec_address_set *nb_address_set;
+    NBREC_ADDRESS_SET_FOR_EACH (nb_address_set, ctx->ovnnb_idl) {
+        sb_address_set = shash_find_and_delete(&sb_address_sets,
+                                               nb_address_set->name);
+        if (!sb_address_set) {
+            sb_address_set = sbrec_address_set_insert(ctx->ovnsb_txn);
+            sbrec_address_set_set_name(sb_address_set, nb_address_set->name);
+        }
+
+        sbrec_address_set_set_addresses(sb_address_set,
+                /* "char **" is not compatible with "const char **" */
+                (const char **) nb_address_set->addresses,
+                nb_address_set->n_addresses);
+    }
+
+    struct shash_node *node, *next;
+    SHASH_FOR_EACH_SAFE (node, next, &sb_address_sets) {
+        sbrec_address_set_delete(node->data);
+        shash_delete(&sb_address_sets, node);
+    }
+    shash_destroy(&sb_address_sets);
+}
 
 static void
 ovnnb_db_run(struct northd_context *ctx)
@@ -2585,6 +2622,8 @@ ovnnb_db_run(struct northd_context *ctx)
     build_datapaths(ctx, &datapaths);
     build_ports(ctx, &datapaths, &ports);
     build_lflows(ctx, &datapaths, &ports);
+
+    sync_address_sets(ctx);
 
     struct ovn_datapath *dp, *next_dp;
     HMAP_FOR_EACH_SAFE (dp, next_dp, key_node, &datapaths) {
@@ -2829,6 +2868,10 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_options);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_mac);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_port_binding_col_chassis);
+
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_address_set);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_address_set_col_name);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_address_set_col_addresses);
 
     /* Main loop. */
     exiting = false;
