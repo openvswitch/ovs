@@ -58,6 +58,7 @@ a/b => a error("`/' is only valid as part of `//' or `/*'.") b
 192.168.0.0/255.0.0.0 => error("Value contains unmasked 1-bits.")
 192.168.0.0/32
 192.168.0.0/255.255.255.255 => 192.168.0.0/32
+1.2.3.4:5 => 1.2.3.4 : 5
 
 ::
 ::1
@@ -85,7 +86,7 @@ fe:x => error("Invalid numeric constant.")
 00:01:02:03:04:x => error("Invalid numeric constant.")
 
 # Test that operators are tokenized as expected, even without white space.
-(){}[[]]==!=<<=>>=!&&||..,;=<->-- => ( ) { } [[ ]] == != < <= > >= ! && || .. , ; = <-> --
+(){}[[]]==!=<<=>>=!&&||..,;=<->--: => ( ) { } [[ ]] == != < <= > >= ! && || .. , ; = <-> -- :
 & => error("`&' is only valid as part of `&&'.")
 | => error("`|' is only valid as part of `||'.")
 - => error("`-' is only valid as part of `--'.")

@@ -61,6 +61,7 @@ enum lex_type {
     LEX_T_EQUALS,               /* = */
     LEX_T_EXCHANGE,             /* <-> */
     LEX_T_DECREMENT,            /* -- */
+    LEX_T_COLON,                /* : */
 };
 
 /* Subtype for LEX_T_INTEGER and LEX_T_MASKED_INTEGER tokens.
