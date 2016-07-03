@@ -559,6 +559,43 @@ put_load(const uint8_t *data, size_t len,
     bitwise_one(&sf->mask, sf->field->n_bytes, ofs, n_bits);
 }
 
+static void
+consider_neighbor_flow(struct hmap *flow_table,
+                       const struct lport_index *lports,
+                       const struct sbrec_mac_binding *b,
+                       struct ofpbuf *ofpacts_p,
+                       struct match *match_p)
+{
+    const struct sbrec_port_binding *pb
+        = lport_lookup_by_name(lports, b->logical_port);
+    if (!pb) {
+        return;
+    }
+
+    struct eth_addr mac;
+    if (!eth_addr_from_string(b->mac, &mac)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "bad 'mac' %s", b->mac);
+        return;
+    }
+
+    ovs_be32 ip;
+    if (!ip_parse(b->ip, &ip)) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "bad 'ip' %s", b->ip);
+        return;
+    }
+
+    match_set_metadata(match_p, htonll(pb->datapath->tunnel_key));
+    match_set_reg(match_p, MFF_LOG_OUTPORT - MFF_REG0, pb->tunnel_key);
+    match_set_reg(match_p, 0, ntohl(ip));
+
+    ofpbuf_clear(ofpacts_p);
+    put_load(mac.ea, sizeof mac.ea, MFF_ETH_DST, 0, 48, ofpacts_p);
+
+    ofctrl_add_flow(flow_table, OFTABLE_MAC_BINDING, 100, match_p, ofpacts_p);
+}
+
 /* Adds an OpenFlow flow to 'flow_table' for each MAC binding in the OVN
  * southbound database, using 'lports' to resolve logical port names to
  * numbers. */
@@ -573,35 +610,7 @@ add_neighbor_flows(struct controller_ctx *ctx,
 
     const struct sbrec_mac_binding *b;
     SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
-        const struct sbrec_port_binding *pb
-            = lport_lookup_by_name(lports, b->logical_port);
-        if (!pb) {
-            continue;
-        }
-
-        struct eth_addr mac;
-        if (!eth_addr_from_string(b->mac, &mac)) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-            VLOG_WARN_RL(&rl, "bad 'mac' %s", b->mac);
-            continue;
-        }
-
-        ovs_be32 ip;
-        if (!ip_parse(b->ip, &ip)) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-            VLOG_WARN_RL(&rl, "bad 'ip' %s", b->ip);
-            continue;
-        }
-
-        match_set_metadata(&match, htonll(pb->datapath->tunnel_key));
-        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, pb->tunnel_key);
-        match_set_reg(&match, 0, ntohl(ip));
-
-        ofpbuf_clear(&ofpacts);
-        put_load(mac.ea, sizeof mac.ea, MFF_ETH_DST, 0, 48, &ofpacts);
-
-        ofctrl_add_flow(flow_table, OFTABLE_MAC_BINDING, 100,
-                        &match, &ofpacts);
+        consider_neighbor_flow(flow_table, lports, b, &ofpacts, &match);
     }
     ofpbuf_uninit(&ofpacts);
 }
