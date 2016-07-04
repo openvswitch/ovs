@@ -50,7 +50,9 @@
           <code>--may-exist</code>, adding a duplicate name succeeds but does
           not create a new logical switch.  With <code>--add-duplicate</code>,
           the command really creates a new logical switch with a duplicate
-          name.  It is an error to specify both options.
+          name.  It is an error to specify both options.  If there are multiple
+          logical switches with a duplicate name, configure the logical switches
+          using the UUID instead of the <var>switch</var> name.
         </p>
       </dd>
 
@@ -267,7 +269,9 @@
           <code>--may-exist</code>, adding a duplicate name succeeds but does
           not create a new logical router.  With <code>--add-duplicate</code>,
           the command really creates a new logical router with a duplicate
-          name.  It is an error to specify both options.
+          name.  It is an error to specify both options.  If there are multiple
+          logical routers with a duplicate name, configure the logical routers
+          using the UUID instead of the <var>router</var> name.
         </p>
       </dd>
 
