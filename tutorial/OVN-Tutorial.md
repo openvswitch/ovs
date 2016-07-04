@@ -221,6 +221,38 @@ that it is output to both ports `2` and `3`.
 
     $ ovn/env1/packet2.sh
 
+The logical port may have an unknown set of Ethernet addresses.  When an OVN logical
+switch processes a unicast Ethernet frame whose destination MAC address is not in any 
+logical port’s addresses column, it delivers it to the port (or ports) whose addresses 
+columns include unknown.
+
+[View ovn/env1/add-unknown-ports.sh][env1unknownports].
+
+    $ ovn/env1/add-unknown-ports.sh
+
+This trace shows a packet from `sw0-port1` to `sw0-port4`, `sw0-port5` whose addresses
+columns include unknown.  You will see that it is output to both ports `4` and `5`.
+
+[View ovn/env1/packet3.sh][env1packet3].
+
+    $ ovn/env1/packet3.sh
+
+The logical port would restrict the host to sending packets from and receiving packets
+to the ethernet addresses defined in the logical port’s port_security column.
+In addition to the restrictions described for Ethernet addresses above, such an element
+of port_security restricts the IPv4 or IPv6 addresses from which the host may send and
+to which it may receive packets to the specified addresses. 
+
+[View ovn/env1/add-security-ip-ports.sh][env1securityport].
+
+    $ ovn/env1/add-security-ip-ports.sh
+
+This trace shows a packet from `sw0-port6` to `sw0-port7`.
+
+[View ovn/env1/packet4.sh][env1packet4].
+
+    $ ovn/env1/packet4.sh
+
 2) 2 switches, 4 ports
 ----------------------
 
@@ -867,6 +899,10 @@ hypervisors. Please see the tutorial 3 above.
 [env1packet1]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env1/packet1.sh
 [env1packet2]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env1/packet2.sh
 [env1thirdport]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env1/add-third-port.sh
+[env1unknownports]:https://github.com/nickcooper-zhangtonghao/ovs/blob/master/tutorial/ovn/env1/add-unknown-ports.sh
+[env1securityport]:https://github.com/nickcooper-zhangtonghao/ovs/blob/master/tutorial/ovn/env1/add-security-ip-ports.sh
+[env1packet3]:https://github.com/nickcooper-zhangtonghao/ovs/blob/master/tutorial/ovn/env1/packet3.sh
+[env1packet4]:https://github.com/nickcooper-zhangtonghao/ovs/blob/master/tutorial/ovn/env1/packet4.sh
 [env2setup]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env2/setup.sh
 [env2packet1]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env2/packet1.sh
 [env2packet2]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env2/packet2.sh
