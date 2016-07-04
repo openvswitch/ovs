@@ -60,6 +60,7 @@ TESTSUITE_AT = \
 	tests/ofproto-dpif.at \
 	tests/bridge.at \
 	tests/ofproto.at \
+	tests/netdev-type.at \
 	tests/ovsdb.at \
 	tests/ovsdb-log.at \
 	tests/ovsdb-types.at \
