@@ -2705,6 +2705,7 @@ AT_CLEANUP
 
 AT_SETUP([ovn -- send gratuitous arp on localnet])
 AT_KEYWORDS([ovn])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 ovn-nbctl ls-add lsw0
 net_add n1
