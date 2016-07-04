@@ -60,6 +60,7 @@ TESTSUITE_AT = \
 	tests/bridge.at \
 	tests/vlan-splinters.at \
 	tests/ofproto.at \
+	tests/netdev-type.at \
 	tests/ovsdb.at \
 	tests/ovsdb-log.at \
 	tests/ovsdb-types.at \
