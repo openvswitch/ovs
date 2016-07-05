@@ -15,6 +15,7 @@
  */
 
 #include <config.h>
+#include <errno.h>
 #include "ovs-rcu.h"
 #include "fatal-signal.h"
 #include "guarded-list.h"
@@ -57,6 +58,7 @@ static struct guarded_list flushed_cbsets;
 static struct seq *flushed_cbsets_seq;
 
 static void ovsrcu_init_module(void);
+static void ovsrcu_flush_cbset__(struct ovsrcu_perthread *, bool);
 static void ovsrcu_flush_cbset(struct ovsrcu_perthread *);
 static void ovsrcu_unregister__(struct ovsrcu_perthread *);
 static bool ovsrcu_call_postponed(void);
@@ -149,6 +151,27 @@ ovsrcu_quiesce(void)
     seq_change(global_seqno);
 
     ovsrcu_quiesced();
+}
+
+int
+ovsrcu_try_quiesce(void)
+{
+    struct ovsrcu_perthread *perthread;
+    int ret = EBUSY;
+
+    ovs_assert(!single_threaded());
+    perthread = ovsrcu_perthread_get();
+    if (!seq_try_lock()) {
+        perthread->seqno = seq_read_protected(global_seqno);
+        if (perthread->cbset) {
+            ovsrcu_flush_cbset__(perthread, true);
+        }
+        seq_change_protected(global_seqno);
+        seq_unlock();
+        ovsrcu_quiesced();
+        ret = 0;
+    }
+    return ret;
 }
 
 bool
@@ -292,7 +315,7 @@ ovsrcu_postpone_thread(void *arg OVS_UNUSED)
 }
 
 static void
-ovsrcu_flush_cbset(struct ovsrcu_perthread *perthread)
+ovsrcu_flush_cbset__(struct ovsrcu_perthread *perthread, bool protected)
 {
     struct ovsrcu_cbset *cbset = perthread->cbset;
 
@@ -300,8 +323,18 @@ ovsrcu_flush_cbset(struct ovsrcu_perthread *perthread)
         guarded_list_push_back(&flushed_cbsets, &cbset->list_node, SIZE_MAX);
         perthread->cbset = NULL;
 
-        seq_change(flushed_cbsets_seq);
+        if (protected) {
+            seq_change_protected(flushed_cbsets_seq);
+        } else {
+            seq_change(flushed_cbsets_seq);
+        }
     }
+}
+
+static void
+ovsrcu_flush_cbset(struct ovsrcu_perthread *perthread)
+{
+    ovsrcu_flush_cbset__(perthread, false);
 }
 
 static void
