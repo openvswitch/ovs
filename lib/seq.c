@@ -100,18 +100,59 @@ seq_destroy(struct seq *seq)
     ovs_mutex_unlock(&seq_mutex);
 }
 
+int
+seq_try_lock(void)
+{
+    return ovs_mutex_trylock(&seq_mutex);
+}
+
+void
+seq_lock(void)
+    OVS_ACQUIRES(seq_mutex)
+{
+    ovs_mutex_lock(&seq_mutex);
+}
+
+void
+seq_unlock(void)
+    OVS_RELEASES(seq_mutex)
+{
+    ovs_mutex_unlock(&seq_mutex);
+}
+
+/* Increments 'seq''s sequence number, waking up any threads that are waiting
+ * on 'seq'. */
+void
+seq_change_protected(struct seq *seq)
+    OVS_REQUIRES(seq_mutex)
+{
+    COVERAGE_INC(seq_change);
+
+    seq->value = seq_next++;
+    seq_wake_waiters(seq);
+}
+
 /* Increments 'seq''s sequence number, waking up any threads that are waiting
  * on 'seq'. */
 void
 seq_change(struct seq *seq)
     OVS_EXCLUDED(seq_mutex)
 {
-    COVERAGE_INC(seq_change);
-
     ovs_mutex_lock(&seq_mutex);
-    seq->value = seq_next++;
-    seq_wake_waiters(seq);
+    seq_change_protected(seq);
     ovs_mutex_unlock(&seq_mutex);
+}
+
+/* Returns 'seq''s current sequence number (which could change immediately).
+ *
+ * seq_read() and seq_wait() can be used together to yield a race-free wakeup
+ * when an object changes, even without an ability to lock the object.  See
+ * Usage in seq.h for details. */
+uint64_t
+seq_read_protected(const struct seq *seq)
+    OVS_REQUIRES(seq_mutex)
+{
+    return seq->value;
 }
 
 /* Returns 'seq''s current sequence number (which could change immediately).
@@ -126,7 +167,7 @@ seq_read(const struct seq *seq)
     uint64_t value;
 
     ovs_mutex_lock(&seq_mutex);
-    value = seq->value;
+    value = seq_read_protected(seq);
     ovs_mutex_unlock(&seq_mutex);
 
     return value;
