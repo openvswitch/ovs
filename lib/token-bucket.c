@@ -50,7 +50,7 @@ token_bucket_set(struct token_bucket *tb,
 {
     tb->rate = rate;
     tb->burst = burst;
-    if (burst > tb->tokens) {
+    if (burst < tb->tokens) {
         tb->tokens = burst;
     }
 }
