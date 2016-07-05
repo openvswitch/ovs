@@ -839,7 +839,7 @@ for is in 1 2 3; do
 
                 if test $d != $s && test $s != 11; then acl2=$d; else acl2=; fi
                 if test $d != $s && test $d != 33; then acl3=$d; else acl3=; fi
-                if test $d == $s || (test $js == 1 && test $d == 33); then
+                if test $d = $s || (test $js = 1 && test $d = 33); then
                     # Source of 11, 21, or 31 and dest of 33 should be dropped
                     # due to the 4th ACL that uses address_set(set1).
                     acl4=
@@ -1998,7 +1998,7 @@ test_arp() {
     as $hv ovs-appctl netdev-dummy/receive vif$inport $request
     #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $request
     if test $drop != 1; then
-        if test X$reply_ha == X; then
+        if test X$reply_ha = X; then
             # Expect to receive the broadcast ARP on the other logical switch ports
             # if no reply is expected.
             local i j
