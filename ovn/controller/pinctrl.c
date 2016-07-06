@@ -969,11 +969,14 @@ pinctrl_handle_na(const struct flow *ip_flow,
     memcpy(ipv6_dst, &ip_flow->ipv6_src, sizeof ipv6_src);
     memcpy(ipv6_src, &ip_flow->nd_target, sizeof ipv6_dst);
 
-    /* Frame the NA packet with RSO=011. */
+    /* xxx These flags are not exactly correct.  Look at section 7.2.4
+     * xxx of RFC 4861.  For example, we need to set ND_RSO_ROUTER for
+     * xxx router's interfaces and ND_RSO_SOLICITED only if it was
+     * xxx requested. */
     compose_na(&packet,
                ip_flow->dl_dst, ip_flow->dl_src,
                ipv6_src, ipv6_dst,
-               htonl(0x60000000));
+               htonl(ND_RSO_SOLICITED | ND_RSO_OVERRIDE));
 
     /* Reload previous packet metadata. */
     uint64_t ofpacts_stub[4096 / 8];

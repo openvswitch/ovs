@@ -840,6 +840,10 @@ struct ovs_nd_msg {
 };
 BUILD_ASSERT_DECL(ND_MSG_LEN == sizeof(struct ovs_nd_msg));
 
+#define ND_RSO_ROUTER    0x80000000
+#define ND_RSO_SOLICITED 0x40000000
+#define ND_RSO_OVERRIDE  0x20000000
+
 /*
  * Use the same struct for MLD and MLD2, naming members as the defined fields in
  * in the corresponding version of the protocol, though they are reserved in the
