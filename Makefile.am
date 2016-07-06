@@ -73,6 +73,7 @@ docs = \
 	INSTALL.md \
 	INSTALL.Debian.md \
 	INSTALL.Docker.md \
+	INSTALL.DPDK-ADVANCED.md \
 	INSTALL.DPDK.md \
 	INSTALL.Fedora.md \
 	INSTALL.KVM.md \
