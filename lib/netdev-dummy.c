@@ -68,7 +68,7 @@ enum dummy_netdev_conn_state {
 
 struct dummy_packet_pconn {
     struct pstream *pstream;
-    struct dummy_packet_stream *streams;
+    struct dummy_packet_stream **streams;
     size_t n_streams;
 };
 
@@ -328,7 +328,8 @@ dummy_packet_conn_close(struct dummy_packet_conn *conn)
     case PASSIVE:
         pstream_close(pconn->pstream);
         for (i = 0; i < pconn->n_streams; i++) {
-            dummy_packet_stream_close(&pconn->streams[i]);
+            dummy_packet_stream_close(pconn->streams[i]);
+            free(pconn->streams[i]);
         }
         free(pconn->streams);
         pconn->pstream = NULL;
@@ -446,8 +447,9 @@ dummy_pconn_run(struct netdev_dummy *dev)
 
         pconn->streams = xrealloc(pconn->streams,
                                 ((pconn->n_streams + 1)
-                                 * sizeof *s));
-        s = &pconn->streams[pconn->n_streams++];
+                                 * sizeof s));
+        s = xmalloc(sizeof *s);
+        pconn->streams[pconn->n_streams++] = s;
         dummy_packet_stream_init(s, new_stream);
     } else if (error != EAGAIN) {
         VLOG_WARN("%s: accept failed (%s)",
@@ -457,8 +459,8 @@ dummy_pconn_run(struct netdev_dummy *dev)
         dev->conn.type = NONE;
     }
 
-    for (i = 0; i < pconn->n_streams; i++) {
-        struct dummy_packet_stream *s = &pconn->streams[i];
+    for (i = 0; i < pconn->n_streams; ) {
+        struct dummy_packet_stream *s = pconn->streams[i];
 
         error = dummy_packet_stream_run(dev, s);
         if (error) {
@@ -466,7 +468,10 @@ dummy_pconn_run(struct netdev_dummy *dev)
                      stream_get_name(s->stream),
                      ovs_retval_to_string(error));
             dummy_packet_stream_close(s);
+            free(s);
             pconn->streams[i] = pconn->streams[--pconn->n_streams];
+        } else {
+            i++;
         }
     }
 }
@@ -553,7 +558,7 @@ dummy_packet_conn_wait(struct dummy_packet_conn *conn)
     case PASSIVE:
         pstream_wait(conn->u.pconn.pstream);
         for (i = 0; i < conn->u.pconn.n_streams; i++) {
-            struct dummy_packet_stream *s = &conn->u.pconn.streams[i];
+            struct dummy_packet_stream *s = conn->u.pconn.streams[i];
             dummy_packet_stream_wait(s);
         }
         break;
@@ -578,7 +583,7 @@ dummy_packet_conn_send(struct dummy_packet_conn *conn,
     switch (conn->type) {
     case PASSIVE:
         for (i = 0; i < conn->u.pconn.n_streams; i++) {
-            struct dummy_packet_stream *s = &conn->u.pconn.streams[i];
+            struct dummy_packet_stream *s = conn->u.pconn.streams[i];
 
             dummy_packet_stream_send(s, buffer, size);
             pstream_wait(conn->u.pconn.pstream);
