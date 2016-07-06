@@ -834,7 +834,7 @@ BUILD_ASSERT_DECL(ND_OPT_LEN == sizeof(struct ovs_nd_opt));
 #define ND_MSG_LEN 24
 struct ovs_nd_msg {
     struct icmp6_header icmph;
-    ovs_16aligned_be32 rco_flags;
+    ovs_16aligned_be32 rso_flags;
     union ovs_16aligned_in6_addr target;
     struct ovs_nd_opt options[0];
 };
@@ -1075,7 +1075,7 @@ void compose_nd(struct dp_packet *, const struct eth_addr eth_src,
 void compose_na(struct dp_packet *,
                 const struct eth_addr eth_src, const struct eth_addr eth_dst,
                 const ovs_be32 ipv6_src[4], const ovs_be32 ipv6_dst[4],
-                ovs_be32 rco_flags);
+                ovs_be32 rso_flags);
 uint32_t packet_csum_pseudoheader(const struct ip_header *);
 void IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6);
 
