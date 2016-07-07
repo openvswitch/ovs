@@ -1223,15 +1223,20 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
         }
 
         if (retval < 0) {
-            /* The Linux AF_PACKET implementation never blocks waiting for room
-             * for packets, instead returning ENOBUFS.  Translate this into
-             * EAGAIN for the caller. */
-            error = errno == ENOBUFS ? EAGAIN : errno;
-            if (error == EINTR) {
-                /* continue without incrementing 'i', i.e. retry this packet */
+            if (errno == EINTR) {
+                /* The send was interrupted by a signal.  Retry the packet by
+                 * continuing without incrementing 'i'.*/
                 continue;
+            } else if (errno == EIO && is_tap_netdev(netdev_)) {
+                /* The Linux tap driver returns EIO if the device is not up.
+                 * From the OVS side this is not an error, so ignore it. */
+            } else {
+                /* The Linux AF_PACKET implementation never blocks waiting for
+                 * room for packets, instead returning ENOBUFS.  Translate this
+                 * into EAGAIN for the caller. */
+                error = errno == ENOBUFS ? EAGAIN : errno;
+                break;
             }
-            break;
         } else if (retval != size) {
             VLOG_WARN_RL(&rl, "sent partial Ethernet packet (%"PRIuSIZE" bytes"
                               " of %"PRIuSIZE") on %s", retval, size,
