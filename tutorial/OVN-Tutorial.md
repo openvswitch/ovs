@@ -66,9 +66,9 @@ You can use the `ovn-nbctl` utility to see an overview of the logical topology.
     $ ovn-nbctl show
     switch 78687d53-e037-4555-bcd3-f4f8eaf3f2aa (sw0)
         port sw0-port1
-            addresses: 00:00:00:00:00:01
+            addresses: [“00:00:00:00:00:01”]
         port sw0-port2
-            addresses: 00:00:00:00:00:02
+            addresses: [“00:00:00:00:00:02”]
 
 The `ovn-sbctl` utility can be used to see into the state stored in the
 `OVN_Southbound` database.  The `show` command shows that there is a single
@@ -161,8 +161,8 @@ fields have been omitted for brevity.
 
     $ ovs-ofctl -O OpenFlow13 dump-flows br-int
     OFPST_FLOW reply (OF1.3) (xid=0x2):
-     table=0, priority=100,in_port=1 actions=set_field:0x1->reg5,set_field:0x1->metadata,set_field:0x1->reg6,resubmit(,16)
-     table=0, priority=100,in_port=2 actions=set_field:0x2->reg5,set_field:0x1->metadata,set_field:0x2->reg6,resubmit(,16)
+     table=0, priority=100,in_port=1 actions=set_field:0x1->metadata,set_field:0x1->reg6,resubmit(,16)
+     table=0, priority=100,in_port=2 actions=set_field:0x1->metadata,set_field:0x2->reg6,resubmit(,16)
      table=16, priority=100,metadata=0x1,vlan_tci=0x1000/0x1000 actions=drop
      table=16, priority=100,metadata=0x1,dl_src=01:00:00:00:00:00/01:00:00:00:00:00 actions=drop
      table=16, priority=50,reg6=0x1,metadata=0x1,dl_src=00:00:00:00:00:01 actions=resubmit(,17)
@@ -188,24 +188,31 @@ fields have been omitted for brevity.
      table=19, priority=0,metadata=0x1 actions=resubmit(,20)
      table=20, priority=0,metadata=0x1 actions=resubmit(,21)
      table=21, priority=0,metadata=0x1 actions=resubmit(,22)
-     table=22, priority=100,metadata=0x1,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00 actions=set_field:0xffff->reg7,resubmit(,32)
-     table=22, priority=50,metadata=0x1,dl_dst=00:00:00:00:00:01 actions=set_field:0x1->reg7,resubmit(,32)
-     table=22, priority=50,metadata=0x1,dl_dst=00:00:00:00:00:02 actions=set_field:0x2->reg7,resubmit(,32)
+     table=22, priority=0,metadata=0x1 actions=resubmit(,23)
+     table=23, priority=0,metadata=0x1 actions=resubmit(,24)
+     table=24, priority=0,metadata=0x1 actions=resubmit(,25)
+     table=25, priority=0,metadata=0x1 actions=resubmit(,26)
+     table=26, priority=100,metadata=0x1,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00 actions=set_field:0xffff->reg7,resubmit(,32)
+     table=26, priority=50,metadata=0x1,dl_dst=00:00:00:00:00:01 actions=set_field:0x1->reg7,resubmit(,32)
+     table=26, priority=50,metadata=0x1,dl_dst=00:00:00:00:00:02 actions=set_field:0x2->reg7,resubmit(,32)
      table=32, priority=0 actions=resubmit(,33)
-     table=33, priority=100,reg7=0x1,metadata=0x1 actions=set_field:0x1->reg5,resubmit(,34)
-     table=33, priority=100,reg7=0xffff,metadata=0x1 actions=set_field:0x2->reg5,set_field:0x2->reg7,resubmit(,34),set_field:0x1->reg5,set_field:0x1->reg7,resubmit(,34),set_field:0xffff->reg7
-     table=33, priority=100,reg7=0x2,metadata=0x1 actions=set_field:0x2->reg5,resubmit(,34)
+     table=33, priority=100,reg7=0x1,metadata=0x1 actions=resubmit(,34)
+     table=33, priority=100,reg7=0xffff,metadata=0x1 actions=set_field:0x2->reg7,resubmit(,34),set_field:0x1->reg7,resubmit(,34),set_field:0xffff->reg7
+     table=33, priority=100,reg7=0x2,metadata=0x1 actions=resubmit(,34)
      table=34, priority=100,reg6=0x1,reg7=0x1,metadata=0x1 actions=drop
      table=34, priority=100,reg6=0x2,reg7=0x2,metadata=0x1 actions=drop
-     table=34, priority=0 actions=set_field:0->reg0,set_field:0->reg1,set_field:0->reg2,set_field:0->reg3,set_field:0->reg4,resubmit(,48)
+     table=34, priority=0 actions=set_field:0->reg0,set_field:0->reg1,set_field:0->reg2,resubmit(,48)
      table=48, priority=0,metadata=0x1 actions=resubmit(,49)
      table=49, priority=0,metadata=0x1 actions=resubmit(,50)
      table=50, priority=0,metadata=0x1 actions=resubmit(,51)
-     table=51, priority=100,metadata=0x1,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00 actions=resubmit(,64)
-     table=51, priority=50,reg7=0x2,metadata=0x1,dl_dst=00:00:00:00:00:02 actions=resubmit(,64)
-     table=51, priority=50,reg7=0x1,metadata=0x1,dl_dst=00:00:00:00:00:01 actions=resubmit(,64)
+     table=51, priority=0,metadata=0x1 actions=resubmit(,52)
+     table=52, priority=0,metadata=0x1 actions=resubmit(,53)
+     table=53, priority=0,metadata=0x1 actions=resubmit(,54)
+     table=54, priority=0,metadata=0x1 actions=resubmit(,55)
+     table=55, priority=100,metadata=0x1,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00 actions=resubmit(,64)
+     table=55, priority=50,reg7=0x2,metadata=0x1,dl_dst=00:00:00:00:00:02 actions=resubmit(,64)
+     table=55, priority=50,reg7=0x1,metadata=0x1,dl_dst=00:00:00:00:00:01 actions=resubmit(,64)
      table=64, priority=100,reg7=0x1,metadata=0x1 actions=output:1
-     table=64, priority=100,reg7=0x2,metadata=0x1 actions=output:2
 
 The `ovs-appctl` command can be used to generate an OpenFlow trace of how a
 packet would be processed in this configuration.  This first trace shows a
