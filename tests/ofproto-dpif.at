@@ -6221,10 +6221,10 @@ for i in `seq 1 20`; do
 done
 
 dnl There are 4 extra IPFIX template packets.
-AT_CHECK([ovs-ofctl dump-ipfix-bridge br0], [0], [dnl
+AT_CHECK([ovs-ofctl dump-ipfix-bridge br0 | sed 's/tx pkts=[[0-9]]*/tx pkts=24/' | sed 's/tx errs=[[0-9]]*/tx errs=0/'], [0], [dnl
 NXST_IPFIX_BRIDGE reply (xid=0x2):
-  bridge ipfix: flows=20, current flows=0, sampled pkts=20, ipv4 ok=0, ipv6 ok=0, tx pkts=12
-                pkts errs=20, ipv4 errs=20, ipv6 errs=0, tx errs=12
+  bridge ipfix: flows=20, current flows=0, sampled pkts=20, ipv4 ok=0, ipv6 ok=0, tx pkts=24
+                pkts errs=20, ipv4 errs=20, ipv6 errs=0, tx errs=0
 ])
 
 dnl Remove the IPFIX configuration.
@@ -6286,7 +6286,6 @@ AT_CLEANUP
 
 dnl Flow IPFIX sanity check for tunnel set
 AT_SETUP([ofproto-dpif - Flow IPFIX sanity check - tunnel set])
-AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
                     options:key=5 ofport_request=1\
@@ -6386,10 +6385,10 @@ for i in `seq 1 20`; do
 done
 
 dnl There are 4 extra IPFIX template packets.
-AT_CHECK([ovs-ofctl dump-ipfix-flow br0], [0], [dnl
+AT_CHECK([ovs-ofctl dump-ipfix-flow br0 | sed 's/tx pkts=[[0-9]]*/tx pkts=24/' | sed 's/tx errs=[[0-9]]*/tx errs=0/'], [0], [dnl
 NXST_IPFIX_FLOW reply (xid=0x2): 1 ids
-  id   1: flows=20, current flows=0, sampled pkts=20, ipv4 ok=0, ipv6 ok=0, tx pkts=12
-          pkts errs=20, ipv4 errs=20, ipv6 errs=0, tx errs=12
+  id   1: flows=20, current flows=0, sampled pkts=20, ipv4 ok=0, ipv6 ok=0, tx pkts=24
+          pkts errs=20, ipv4 errs=20, ipv6 errs=0, tx errs=0
 ])
 
 dnl Remove the flow which contains sample action.
