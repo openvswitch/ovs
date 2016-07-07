@@ -3348,3 +3348,31 @@ done
 OVN_CLEANUP([hv1])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- address sets modification/removal smoke test])
+AT_KEYWORDS([ovn-addr])
+ovn_start
+
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+
+row=`ovn-nbctl create Address_Set name=set1 addresses=\"1.1.1.1\"`
+ovn-nbctl set Address_Set $row name=set1 addresses=\"1.1.1.1,1.1.1.2\"
+ovn-nbctl destroy Address_Set $row
+
+sleep 1
+
+# A bug previously existed in the address set support code
+# that caused ovn-controller to crash after an address set
+# was updated and then removed.  This test case ensures
+# that ovn-controller is at least still running after
+# creating, updating, and deleting an address set.
+AT_CHECK([ovs-appctl -t ovn-controller version], [0], [ignore])
+
+OVN_CLEANUP([hv1])
+
+AT_CLEANUP

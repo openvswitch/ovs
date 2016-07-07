@@ -258,6 +258,7 @@ update_address_sets(struct controller_ctx *ctx)
              * if the symtab entry needs to be updated due to a change. */
             sset_find_and_delete(&cur_addr_set_names, addr_set_rec->name);
             if (!address_sets_match(addr_set, addr_set_rec)) {
+                shash_find_and_delete(&local_address_sets, addr_set_rec->name);
                 expr_macros_remove(&expr_address_sets, addr_set_rec->name);
                 address_set_destroy(addr_set);
                 addr_set = NULL;
