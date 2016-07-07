@@ -110,10 +110,11 @@ pip install Flask
 ```
 
 Start the Open vSwitch driver on every host where you plan to create your
-containers.
+containers.  (Please read a note on $OVS_PYTHON_LIBS_PATH that is used below
+at the end of this document.)
 
 ```
-ovn-docker-overlay-driver --detach
+PYTHONPATH=$OVS_PYTHON_LIBS_PATH ovn-docker-overlay-driver --detach
 ```
 
 Docker has inbuilt primitives that closely match OVN's logical switches
@@ -257,10 +258,12 @@ Source the openrc file. e.g.:
 ```
 
 Start the network driver and provide your OpenStack tenant password
-when prompted.
+when prompted.  (Please read a note on $OVS_PYTHON_LIBS_PATH that is used below
+at the end of this document.)
 
 ```
-ovn-docker-underlay-driver --bridge breth0 --detach
+PYTHONPATH=$OVS_PYTHON_LIBS_PATH ovn-docker-underlay-driver --bridge breth0 \
+--detach
 ```
 
 From here-on you can use the same Docker commands as described in the
@@ -268,6 +271,18 @@ section 'The "overlay" mode'.
 
 Please read 'man ovn-architecture' to understand OVN's architecture in
 detail.
+
+Note on $OVS_PYTHON_LIBS_PATH
+=============================
+
+$OVS_PYTHON_LIBS_PATH should point to the directory where Open vSwitch
+python modules are installed.  If you installed Open vSwitch python
+modules via the debian package of 'python-openvswitch' or via pip by
+running 'pip install ovs', you do not need to specify the path.
+If you installed it by following the instructions in INSTALL.md, you
+should specify the path.  The path in that case depends on the options passed
+to ./configure.  (It is usually either '/usr/share/openvswitch/python' or
+'/usr/local/share/openvswitch/python'.)
 
 [INSTALL.md]: INSTALL.md
 [openvswitch-switch.README.Debian]: debian/openvswitch-switch.README.Debian
