@@ -16,74 +16,38 @@
 #include <net/ip6_tunnel.h>
 
 
-int rpl_udp_sock_create(struct net *net, struct udp_port_cfg *cfg,
-		        struct socket **sockp)
+int rpl_udp_sock_create4(struct net *net, struct udp_port_cfg *cfg,
+			 struct socket **sockp)
 {
 	int err;
 	struct socket *sock = NULL;
+	struct sockaddr_in udp_addr;
 
-#if IS_ENABLED(CONFIG_IPV6)
-	if (cfg->family == AF_INET6) {
-		struct sockaddr_in6 udp6_addr;
+	err = sock_create_kern(net, AF_INET, SOCK_DGRAM, 0, &sock);
+	if (err < 0)
+		goto error;
 
-		err = sock_create_kern(net, AF_INET6, SOCK_DGRAM, 0, &sock);
-		if (err < 0)
-			goto error;
+	udp_addr.sin_family = AF_INET;
+	udp_addr.sin_addr = cfg->local_ip;
+	udp_addr.sin_port = cfg->local_udp_port;
+	err = kernel_bind(sock, (struct sockaddr *)&udp_addr,
+			sizeof(udp_addr));
+	if (err < 0)
+		goto error;
 
-		udp6_addr.sin6_family = AF_INET6;
-		memcpy(&udp6_addr.sin6_addr, &cfg->local_ip6,
-		       sizeof(udp6_addr.sin6_addr));
-		udp6_addr.sin6_port = cfg->local_udp_port;
-		err = kernel_bind(sock, (struct sockaddr *)&udp6_addr,
-				  sizeof(udp6_addr));
-		if (err < 0)
-			goto error;
-
-		if (cfg->peer_udp_port) {
-			udp6_addr.sin6_family = AF_INET6;
-			memcpy(&udp6_addr.sin6_addr, &cfg->peer_ip6,
-			       sizeof(udp6_addr.sin6_addr));
-			udp6_addr.sin6_port = cfg->peer_udp_port;
-			err = kernel_connect(sock,
-					     (struct sockaddr *)&udp6_addr,
-					     sizeof(udp6_addr), 0);
-		}
-		if (err < 0)
-			goto error;
-	} else
-#endif
-	if (cfg->family == AF_INET) {
-		struct sockaddr_in udp_addr;
-
-		err = sock_create_kern(net, AF_INET, SOCK_DGRAM, 0, &sock);
-		if (err < 0)
-			goto error;
-
+	if (cfg->peer_udp_port) {
 		udp_addr.sin_family = AF_INET;
-		udp_addr.sin_addr = cfg->local_ip;
-		udp_addr.sin_port = cfg->local_udp_port;
-		err = kernel_bind(sock, (struct sockaddr *)&udp_addr,
-				  sizeof(udp_addr));
+		udp_addr.sin_addr = cfg->peer_ip;
+		udp_addr.sin_port = cfg->peer_udp_port;
+		err = kernel_connect(sock, (struct sockaddr *)&udp_addr,
+				sizeof(udp_addr), 0);
 		if (err < 0)
 			goto error;
-
-		if (cfg->peer_udp_port) {
-			udp_addr.sin_family = AF_INET;
-			udp_addr.sin_addr = cfg->peer_ip;
-			udp_addr.sin_port = cfg->peer_udp_port;
-			err = kernel_connect(sock,
-					     (struct sockaddr *)&udp_addr,
-					     sizeof(udp_addr), 0);
-			if (err < 0)
-				goto error;
-		}
-	} else {
-		return -EPFNOSUPPORT;
 	}
-
-
+#ifdef HAVE_SK_NO_CHECK_TX
+	sock->sk->sk_no_check_tx = !cfg->use_udp_checksums;
+#endif
 	*sockp = sock;
-
 	return 0;
 
 error:
@@ -94,7 +58,64 @@ error:
 	*sockp = NULL;
 	return err;
 }
-EXPORT_SYMBOL_GPL(rpl_udp_sock_create);
+EXPORT_SYMBOL(rpl_udp_sock_create4);
+
+int rpl_udp_sock_create6(struct net *net, struct udp_port_cfg *cfg,
+			 struct socket **sockp)
+{
+	struct sockaddr_in6 udp6_addr;
+	int err;
+	struct socket *sock = NULL;
+
+	err = sock_create_kern(net, AF_INET6, SOCK_DGRAM, 0, &sock);
+	if (err < 0)
+		goto error;
+
+	if (cfg->ipv6_v6only) {
+		int val = 1;
+
+		err = kernel_setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY,
+				(char *) &val, sizeof(val));
+		if (err < 0)
+			goto error;
+	}
+
+	udp6_addr.sin6_family = AF_INET6;
+	memcpy(&udp6_addr.sin6_addr, &cfg->local_ip6,
+			sizeof(udp6_addr.sin6_addr));
+	udp6_addr.sin6_port = cfg->local_udp_port;
+	err = kernel_bind(sock, (struct sockaddr *)&udp6_addr,
+			sizeof(udp6_addr));
+	if (err < 0)
+		goto error;
+
+	if (cfg->peer_udp_port) {
+		udp6_addr.sin6_family = AF_INET6;
+		memcpy(&udp6_addr.sin6_addr, &cfg->peer_ip6,
+				sizeof(udp6_addr.sin6_addr));
+		udp6_addr.sin6_port = cfg->peer_udp_port;
+		err = kernel_connect(sock,
+				(struct sockaddr *)&udp6_addr,
+				sizeof(udp6_addr), 0);
+	}
+	if (err < 0)
+		goto error;
+
+	udp_set_no_check6_tx(sock->sk, !cfg->use_udp6_tx_checksums);
+	udp_set_no_check6_rx(sock->sk, !cfg->use_udp6_rx_checksums);
+
+	*sockp = sock;
+	return 0;
+
+error:
+	if (sock) {
+		kernel_sock_shutdown(sock, SHUT_RDWR);
+		sock_release(sock);
+	}
+	*sockp = NULL;
+	return err;
+}
+EXPORT_SYMBOL_GPL(rpl_udp_sock_create6);
 
 void rpl_setup_udp_tunnel_sock(struct net *net, struct socket *sock,
 			       struct udp_tunnel_sock_cfg *cfg)

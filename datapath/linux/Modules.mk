@@ -67,6 +67,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/stddef.h \
 	linux/compat/include/linux/types.h \
 	linux/compat/include/linux/u64_stats_sync.h \
+	linux/compat/include/linux/udp.h \
 	linux/compat/include/linux/workqueue.h \
 	linux/compat/include/net/checksum.h \
 	linux/compat/include/net/dst.h \

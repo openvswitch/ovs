@@ -850,6 +850,13 @@ static void vxlan_rcv(struct vxlan_sock *vs, struct sk_buff *skb,
 		oip6 = ipv6_hdr(skb);
 		saddr.sin6.sin6_addr = oip6->saddr;
 		saddr.sa.sa_family = AF_INET6;
+#ifdef OVS_CHECK_UDP_TUNNEL_ZERO_CSUM
+		if (!udp_hdr(skb)->check &&
+		    !(vs->flags & VXLAN_F_UDP_ZERO_CSUM6_RX)) {
+			udp6_csum_zero_error(skb);
+			goto drop;
+		}
+#endif
 #endif
 	}
 

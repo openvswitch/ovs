@@ -41,9 +41,35 @@ struct udp_port_cfg {
 				ipv6_v6only:1;
 };
 
+#define udp_sock_create4 rpl_udp_sock_create4
+int rpl_udp_sock_create4(struct net *net, struct udp_port_cfg *cfg,
+		     struct socket **sockp);
+
+#define udp_sock_create6 rpl_udp_sock_create6
+#if IS_ENABLED(CONFIG_IPV6)
+int rpl_udp_sock_create6(struct net *net, struct udp_port_cfg *cfg,
+		struct socket **sockp);
+#else
+static inline int udp_sock_create6(struct net *net, struct udp_port_cfg *cfg,
+				   struct socket **sockp)
+{
+	return -EPFNOSUPPORT;
+}
+#endif
+
 #define udp_sock_create rpl_udp_sock_create
-int rpl_udp_sock_create(struct net *net, struct udp_port_cfg *cfg,
-		        struct socket **sockp);
+static inline int udp_sock_create(struct net *net,
+                                  struct udp_port_cfg *cfg,
+                                  struct socket **sockp)
+{
+        if (cfg->family == AF_INET)
+                return udp_sock_create4(net, cfg, sockp);
+
+        if (cfg->family == AF_INET6)
+                return udp_sock_create6(net, cfg, sockp);
+
+        return -EPFNOSUPPORT;
+}
 
 typedef int (*udp_tunnel_encap_rcv_t)(struct sock *sk, struct sk_buff *skb);
 typedef void (*udp_tunnel_encap_destroy_t)(struct sock *sk);
