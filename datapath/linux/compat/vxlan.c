@@ -53,7 +53,7 @@
 #endif
 #include <net/dst_metadata.h>
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 #include "gso.h"
 #include "vport-netdev.h"
 

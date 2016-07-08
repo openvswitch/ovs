@@ -74,7 +74,7 @@ static rx_handler_result_t netdev_frame_hook(struct sk_buff **pskb)
 	if (unlikely(skb->pkt_type == PACKET_LOOPBACK))
 		return RX_HANDLER_PASS;
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 	netdev_port_receive(skb, NULL);
 #else
 	netdev_port_receive(skb, skb_tunnel_info(skb));

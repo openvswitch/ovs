@@ -7,7 +7,7 @@
 #include <net/dst_metadata.h>
 #include <linux/netdev_features.h>
 
-#ifdef HAVE_METADATA_DST
+#ifdef USE_UPSTREAM_TUNNEL
 #include_next <net/udp_tunnel.h>
 
 #else

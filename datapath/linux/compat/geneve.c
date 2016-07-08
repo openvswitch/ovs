@@ -29,7 +29,7 @@
 #include "vport-netdev.h"
 #include "compat.h"
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 #define GENEVE_NETDEV_VER	"0.6"
 
 #define GENEVE_UDP_PORT		6081

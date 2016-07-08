@@ -38,7 +38,7 @@
 
 #include "gso.h"
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 #if IS_ENABLED(CONFIG_NET_IPGRE_DEMUX)
 
 #ifndef HAVE_GRE_HANDLE_OFFLOADS
@@ -310,4 +310,4 @@ EXPORT_SYMBOL_GPL(rpl_gre_cisco_unregister);
 #endif
 
 #endif /* CONFIG_NET_IPGRE_DEMUX */
-#endif /* HAVE_METADATA_DST */
+#endif /* USE_UPSTREAM_TUNNEL */

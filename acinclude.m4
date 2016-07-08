@@ -436,7 +436,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                         [label],
                         [OVS_GREP_IFELSE([$KSRC/include/net/ip_tunnels.h],
                                          [iptunnel_pull_offloads],
-                                         [OVS_DEFINE([HAVE_METADATA_DST])])])
+                                         [OVS_DEFINE([USE_UPSTREAM_TUNNEL])])])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/net.h], [sock_create_kern.*net],
                   [OVS_DEFINE([HAVE_SOCK_CREATE_KERN_NET])])

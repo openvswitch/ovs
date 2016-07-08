@@ -1412,7 +1412,7 @@ static void rcv_list(struct net_device *dev, struct sk_buff *skb,
 	} while ((skb = next));
 }
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 static int __stt_rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
 {
 	struct metadata_dst tun_dst;
@@ -1732,7 +1732,7 @@ out:
 
 static netdev_tx_t stt_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-#ifdef HAVE_METADATA_DST
+#ifdef USE_UPSTREAM_TUNNEL
 	return ovs_stt_xmit(skb);
 #else
 	/* Drop All packets coming from networking stack. OVS-CB is
@@ -1890,7 +1890,7 @@ static void stt_setup(struct net_device *dev)
 	dev->hw_features |= NETIF_F_SG | NETIF_F_HW_CSUM | NETIF_F_RXCSUM;
 	dev->hw_features |= NETIF_F_GSO_SOFTWARE;
 
-#ifdef HAVE_METADATA_DST
+#ifdef USE_UPSTREAM_TUNNEL
 	netif_keep_dst(dev);
 #endif
 	dev->priv_flags |= IFF_LIVE_ADDR_CHANGE | IFF_NO_QUEUE;

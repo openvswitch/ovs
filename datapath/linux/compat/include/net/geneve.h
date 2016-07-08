@@ -6,7 +6,7 @@
 #endif
 
 
-#ifdef HAVE_METADATA_DST
+#ifdef USE_UPSTREAM_TUNNEL
 #include_next <net/geneve.h>
 
 static inline int rpl_geneve_init_module(void)

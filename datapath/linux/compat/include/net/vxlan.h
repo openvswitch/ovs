@@ -6,7 +6,7 @@
 #endif
 
 
-#ifdef HAVE_METADATA_DST
+#ifdef USE_UPSTREAM_TUNNEL
 #include_next <net/vxlan.h>
 
 static inline int rpl_vxlan_init_module(void)

@@ -3,7 +3,7 @@
 
 #include <linux/version.h>
 
-#ifdef HAVE_METADATA_DST
+#ifdef USE_UPSTREAM_TUNNEL
 /* Block all ip_tunnel functions.
  * Only function that do not depend on ip_tunnel structure can
  * be used. Those needs to be explicitly defined in this header file. */
@@ -101,7 +101,7 @@ struct tnl_ptk_info {
 #define skb_is_encapsulated ovs_skb_is_encapsulated
 bool ovs_skb_is_encapsulated(struct sk_buff *skb);
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 /* Used to memset ip_tunnel padding. */
 #define IP_TUNNEL_KEY_SIZE	offsetofend(struct ip_tunnel_key, tp_dst)
 
@@ -329,7 +329,7 @@ int rpl_ip_tunnel_get_iflink(const struct net_device *dev);
 
 #define ip_tunnel_get_link_net rpl_ip_tunnel_get_link_net
 struct net *rpl_ip_tunnel_get_link_net(const struct net_device *dev);
-#endif /* HAVE_METADATA_DST */
+#endif /* USE_UPSTREAM_TUNNEL */
 
 #ifndef HAVE___IP_TUNNEL_CHANGE_MTU
 #define __ip_tunnel_change_mtu rpl___ip_tunnel_change_mtu

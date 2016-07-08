@@ -212,7 +212,7 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 	struct lisphdr *lisph;
 	struct iphdr *inner_iph;
 	struct metadata_dst *tun_dst;
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 	struct metadata_dst temp;
 #endif
 	__be64 key;
@@ -236,7 +236,7 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 		key = instance_id_to_tunnel_id(&lisph->u2.word2.instance_id[0]);
 
 	/* Save outer tunnel values */
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 	tun_dst = &temp;
 	ovs_udp_tun_rx_dst(&tun_dst->u.tun_info, skb, AF_INET, TUNNEL_KEY, key, 0);
 #else
@@ -445,7 +445,7 @@ static int lisp_stop(struct net_device *dev)
 
 static netdev_tx_t lisp_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-#ifdef HAVE_METADATA_DST
+#ifdef USE_UPSTREAM_TUNNEL
 	return rpl_lisp_xmit(skb);
 #else
 	/* Drop All packets coming from networking stack. OVS-CB is
@@ -553,7 +553,7 @@ static void lisp_setup(struct net_device *dev)
 	dev->hw_features |= NETIF_F_SG | NETIF_F_HW_CSUM | NETIF_F_RXCSUM;
 	dev->hw_features |= NETIF_F_GSO_SOFTWARE;
 #endif
-#ifdef HAVE_METADATA_DST
+#ifdef USE_UPSTREAM_TUNNEL
 	netif_keep_dst(dev);
 #endif
 	dev->priv_flags |= IFF_LIVE_ADDR_CHANGE | IFF_NO_QUEUE;

@@ -18,7 +18,7 @@
 #endif
 #include <uapi/linux/in.h>
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 struct dst_cache_pcpu {
 	unsigned long refresh_ts;
 	struct dst_entry *dst;
@@ -168,4 +168,4 @@ void rpl_dst_cache_destroy(struct dst_cache *dst_cache)
 	free_percpu(dst_cache->cache);
 }
 EXPORT_SYMBOL_GPL(rpl_dst_cache_destroy);
-#endif /*HAVE_METADATA_DST */
+#endif /*USE_UPSTREAM_TUNNEL */

@@ -7,7 +7,7 @@
 #include <net/ip6_fib.h>
 #endif
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 struct dst_cache {
 	struct dst_cache_pcpu __percpu *cache;
 	unsigned long reset_ts;
@@ -102,5 +102,5 @@ int rpl_dst_cache_init(struct dst_cache *dst_cache, gfp_t gfp);
 #define rpl_dst_cache_destroy dst_cache_destroy
 void rpl_dst_cache_destroy(struct dst_cache *dst_cache);
 
-#endif /* HAVE_METADATA_DST */
+#endif /* USE_UPSTREAM_TUNNEL */
 #endif

@@ -8,7 +8,7 @@ typedef void (*gso_fix_segment_t)(struct sk_buff *);
 
 struct ovs_gso_cb {
 	struct ovs_skb_cb dp_cb;
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 	struct metadata_dst	*tun_dst;
 #endif
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
@@ -163,7 +163,7 @@ static inline void skb_reset_inner_headers(struct sk_buff *skb)
 }
 #endif /* 3.18 */
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 /* We need two separate functions to manage different dst in this case.
  * First is dst_entry and second is tunnel-dst.
  * So define ovs_* separate functions for tun_dst.

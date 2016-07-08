@@ -1,6 +1,6 @@
 #include <linux/version.h>
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 
 #include <linux/module.h>
 #include <linux/errno.h>

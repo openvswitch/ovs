@@ -208,7 +208,7 @@ void ovs_ip_tunnel_rcv(struct net_device *dev, struct sk_buff *skb,
 
 	ovs_skb_dst_set(skb, (struct dst_entry *)tun_dst);
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 	netdev_port_receive(skb, &tun_dst->u.tun_info);
 #else
 	netif_rx(skb);
