@@ -1030,6 +1030,7 @@ static int vxlan6_xmit_skb(struct dst_entry *dst, struct sock *sk,
 			   __be16 src_port, __be16 dst_port, __be32 vni,
 			   struct vxlan_metadata *md, bool xnet, u32 vxflags)
 {
+	void (*fix_segment)(struct sk_buff *);
 	struct vxlanhdr *vxh;
 	int min_headroom;
 	int err;
@@ -1074,9 +1075,11 @@ static int vxlan6_xmit_skb(struct dst_entry *dst, struct sock *sk,
 		goto err;
 	}
 
-	skb = udp_tunnel_handle_offloads(skb, udp_sum, type, true);
-	if (IS_ERR(skb)) {
-		err = -EINVAL;
+	type |= udp_sum ? SKB_GSO_UDP_TUNNEL_CSUM : SKB_GSO_UDP_TUNNEL;
+	fix_segment = udp_sum ? ovs_udp_gso : ovs_udp_csum_gso;
+	err = ovs_iptunnel_handle_offloads(skb, udp_sum, type, fix_segment);
+	if (err) {
+		kfree_skb(skb);
 		goto err;
 	}
 
@@ -1123,6 +1126,7 @@ static int vxlan_xmit_skb(struct rtable *rt, struct sock *sk, struct sk_buff *sk
 			  __be16 src_port, __be16 dst_port, __be32 vni,
 			  struct vxlan_metadata *md, bool xnet, u32 vxflags)
 {
+	void (*fix_segment)(struct sk_buff *);
 	struct vxlanhdr *vxh;
 	int min_headroom;
 	int err;
@@ -1162,10 +1166,13 @@ static int vxlan_xmit_skb(struct rtable *rt, struct sock *sk, struct sk_buff *sk
 	if (WARN_ON(!skb))
 		return -ENOMEM;
 
-	skb = udp_tunnel_handle_offloads(skb, udp_sum, type, true);
-	if (IS_ERR(skb))
-		return PTR_ERR(skb);
-
+	type |= udp_sum ? SKB_GSO_UDP_TUNNEL_CSUM : SKB_GSO_UDP_TUNNEL;
+	fix_segment = udp_sum ? ovs_udp_gso : ovs_udp_csum_gso;
+	err = ovs_iptunnel_handle_offloads(skb, udp_sum, type, fix_segment);
+	if (err) {
+		kfree_skb(skb);
+		return err;
+	}
 	vxh = (struct vxlanhdr *) __skb_push(skb, sizeof(*vxh));
 	vxh->vx_flags = htonl(VXLAN_HF_VNI);
 	vxh->vx_vni = vni;

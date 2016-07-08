@@ -31,11 +31,27 @@ static inline int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len,
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
-struct sk_buff *ovs_iptunnel_handle_offloads(struct sk_buff *skb,
-					     bool csum_help, int gso_type_mask,
-					     void (*fix_segment)(struct sk_buff *));
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
+int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
+				 bool csum_help, int gso_type_mask,
+				 void (*fix_segment)(struct sk_buff *));
 
+/* This is is required to compile upstream gre.h. gre_handle_offloads()
+ * is defined in gre.h and needs iptunnel_handle_offloads(). This provides
+ * default signature for this function.
+ * rpl prefix is to make OVS build happy.
+ */
+#define iptunnel_handle_offloads rpl_iptunnel_handle_offloads
+struct sk_buff *rpl_iptunnel_handle_offloads(struct sk_buff *skb,
+					 bool csum_help,
+					 int gso_type_mask);
+#else
+
+#define ovs_iptunnel_handle_offloads(skb, csum_help, gso_type_mask, fix_segment) \
+	iptunnel_handle_offloads(skb, gso_type_mask)
+#endif
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 #define iptunnel_xmit rpl_iptunnel_xmit
 int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 		      __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
@@ -43,23 +59,12 @@ int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 
 #else
 
-#define ovs_iptunnel_handle_offloads(skb, csum_help, gso_type_mask, fix_segment) \
-	iptunnel_handle_offloads(skb, csum_help, gso_type_mask)
-
 #define rpl_iptunnel_xmit iptunnel_xmit
 int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 		      __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
 		      __be16 df, bool xnet);
 
 #endif /* 3.18 */
-
-/* This is not required for OVS on kernel older than 3.18, but gre.h
- * header file needs this declaration for function gre_handle_offloads().
- * So it is defined for all kernel version.
- */
-#define rpl_iptunnel_handle_offloads iptunnel_handle_offloads
-struct sk_buff *rpl_iptunnel_handle_offloads(struct sk_buff *skb, bool gre_csum,
-					 int gso_type_mask);
 
 #ifndef TUNNEL_CSUM
 #define TUNNEL_CSUM	__cpu_to_be16(0x01)

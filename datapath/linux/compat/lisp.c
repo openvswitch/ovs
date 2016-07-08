@@ -344,12 +344,9 @@ netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb)
 	skb_reset_mac_header(skb);
 	skb->vlan_tci = 0;
 
-	skb = udp_tunnel_handle_offloads(skb, false, 0, false);
-	if (IS_ERR(skb)) {
-		err = PTR_ERR(skb);
-		skb = NULL;
+	err = udp_tunnel_handle_offloads(skb, false, false);
+	if (err)
 		goto err_free_rt;
-	}
 
 	src_port = htons(get_src_port(net, skb));
 	dst_port = lisp_dev->dst_port;

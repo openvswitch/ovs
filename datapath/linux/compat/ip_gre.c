@@ -171,7 +171,8 @@ static int gre_rcv(struct sk_buff *skb, const struct tnl_ptk_info *tpi)
 	return 0;
 }
 
-#ifndef HAVE_GRE_HANDLE_OFFLOADS
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
+/* gre_handle_offloads() has different return type on older kernsl. */
 static void gre_nop_fix(struct sk_buff *skb) { }
 
 static void gre_csum_fix(struct sk_buff *skb)
@@ -193,7 +194,7 @@ static bool is_gre_gso(struct sk_buff *skb)
 	return skb_is_gso(skb);
 }
 
-static struct sk_buff *rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
+static int rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 {
 	int type = gre_csum ? SKB_GSO_GRE_CSUM : SKB_GSO_GRE;
 	gso_fix_segment_t fix_segment;
@@ -213,12 +214,11 @@ static bool is_gre_gso(struct sk_buff *skb)
 		(SKB_GSO_GRE | SKB_GSO_GRE_CSUM);
 }
 
-static struct sk_buff *rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
+static int rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 {
-	if (skb_is_gso(skb) && skb_is_encapsulated(skb)) {
-		kfree_skb(skb);
-		return ERR_PTR(-ENOSYS);
-	}
+	if (skb_is_gso(skb) && skb_is_encapsulated(skb))
+		return -ENOSYS;
+
 #undef gre_handle_offloads
 	return gre_handle_offloads(skb, gre_csum);
 }
@@ -318,11 +318,9 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb)
 	}
 
 	/* Push Tunnel header. */
-	skb = rpl_gre_handle_offloads(skb, !!(tun_info->key.tun_flags & TUNNEL_CSUM));
-	if (IS_ERR(skb)) {
-		skb = NULL;
+	err = rpl_gre_handle_offloads(skb, !!(tun_info->key.tun_flags & TUNNEL_CSUM));
+	if (err)
 		goto err_free_rt;
-	}
 
 	flags = tun_info->key.tun_flags & (TUNNEL_CSUM | TUNNEL_KEY);
 	build_header(skb, tunnel_hlen, flags, htons(ETH_P_TEB),

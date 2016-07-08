@@ -86,10 +86,12 @@ int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 	return pkt_len;
 }
 EXPORT_SYMBOL_GPL(rpl_iptunnel_xmit);
+#endif
 
-struct sk_buff *ovs_iptunnel_handle_offloads(struct sk_buff *skb,
-					     bool csum_help, int gso_type_mask,
-					     void (*fix_segment)(struct sk_buff *))
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
+int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
+				 bool csum_help, int gso_type_mask,
+				 void (*fix_segment)(struct sk_buff *))
 {
 	int err;
 
@@ -103,17 +105,19 @@ struct sk_buff *ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 		goto error;
 	}
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 	if (gso_type_mask)
 		fix_segment = NULL;
 
 	OVS_GSO_CB(skb)->fix_segment = fix_segment;
+#endif
 
 	if (skb_is_gso(skb)) {
 		err = skb_unclone(skb, GFP_ATOMIC);
 		if (unlikely(err))
 			goto error;
 		skb_shinfo(skb)->gso_type |= gso_type_mask;
-		return skb;
+		return 0;
 	}
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0)
@@ -133,15 +137,12 @@ struct sk_buff *ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 	} else if (skb->ip_summed != CHECKSUM_PARTIAL)
 		skb->ip_summed = CHECKSUM_NONE;
 
-	return skb;
+	return 0;
 error:
-	kfree_skb(skb);
-	return ERR_PTR(err);
+	return err;
 }
 EXPORT_SYMBOL_GPL(ovs_iptunnel_handle_offloads);
-#endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
 int rpl___iptunnel_pull_header(struct sk_buff *skb, int hdr_len,
 			       __be16 inner_proto, bool raw_proto, bool xnet)
 {
