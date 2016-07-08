@@ -197,6 +197,13 @@
           uses its local configuration to determine exactly how to connect to
           this network.
         </column>
+
+        <column name="options" key="l2gateway-chassis">
+          Required. The chassis on which the <code>l2gateway</code> logical
+          port should be bound to. <code>ovn-controller</code> running on the
+          defined chassis will connect this logical port to the physical network.
+        </column>
+
       </group>
 
       <group title="Options for vtep ports">

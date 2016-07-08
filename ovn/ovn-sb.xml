@@ -1476,8 +1476,8 @@ tcp.flags = RST;
           <dd>
             The physical location of this L2 gateway.  To successfully identify a
             chassis, this column must be a <ref table="Chassis"/> record.
-            This is populated by an entity external to OVN, either manually or by
-            a CMS.
+            This is populated by <code>ovn-controller</code> based on the value
+            of the <code>options:l2gateway-chassis</code> column in this table.
           </dd>
         </dl>
 
@@ -1655,6 +1655,10 @@ tcp.flags = RST;
           must have a bridge mapping configured to reach the network
           identified by <code>network_name</code>.
         </p>
+      </column>
+
+      <column name="options" key="l2gateway-chassis">
+        Required. The <code>chassis</code> in which the port resides.
       </column>
 
       <column name="tag">

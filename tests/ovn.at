@@ -1325,7 +1325,7 @@ ovn-nbctl lsp-set-addresses lp2 f0:00:00:00:00:02
 
 ovn-nbctl lsp-add lsw0 lp-gw
 ovn-nbctl lsp-set-type lp-gw l2gateway
-ovn-nbctl lsp-set-options lp-gw network_name=physnet1
+ovn-nbctl lsp-set-options lp-gw network_name=physnet1 l2gateway-chassis=hv_gw
 ovn-nbctl lsp-set-addresses lp-gw unknown
 
 net_add n1               # Network to connect hv1, hv2, and gw
@@ -1354,9 +1354,6 @@ ovn_attach n1 br-phys 192.168.0.3
 ovs-vsctl add-br br-phys2
 net_attach n2 br-phys2
 ovs-vsctl set open . external_ids:ovn-bridge-mappings="physnet1:br-phys2"
-
-# Bind our gateway port to the hv_gw chassis
-ovn-sbctl lsp-bind lp-gw hv_gw
 
 # Add hv3 on the other side of the GW
 sim_add hv3
