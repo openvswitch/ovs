@@ -7,7 +7,7 @@
 #include <net/dst_metadata.h>
 #include <linux/netdev_features.h>
 
-#ifdef HAVE_UDP_TUNNEL_IPV6
+#ifdef HAVE_METADATA_DST
 #include_next <net/udp_tunnel.h>
 
 #else
@@ -141,6 +141,7 @@ static inline int rpl_udp_tunnel_handle_offloads(struct sk_buff *skb,
 #endif
 
 #define udp_tunnel_handle_offloads rpl_udp_tunnel_handle_offloads
+
 static inline void ovs_udp_tun_rx_dst(struct ip_tunnel_info *info,
 				  struct sk_buff *skb,
 				  unsigned short family,
@@ -148,6 +149,8 @@ static inline void ovs_udp_tun_rx_dst(struct ip_tunnel_info *info,
 {
 	if (family == AF_INET)
 		ovs_ip_tun_rx_dst(info, skb, flags, tunnel_id, md_size);
+	else
+		ovs_ipv6_tun_rx_dst(info, skb, flags, tunnel_id, md_size);
 
 	info->key.tp_src = udp_hdr(skb)->source;
 	info->key.tp_dst = udp_hdr(skb)->dest;
