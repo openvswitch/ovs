@@ -52,9 +52,9 @@ struct sk_buff *rpl_iptunnel_handle_offloads(struct sk_buff *skb,
 #endif
 
 #define iptunnel_xmit rpl_iptunnel_xmit
-int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
-		      __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
-		      __be16 df, bool xnet);
+void rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
+		       __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
+		       __be16 df, bool xnet);
 
 #ifndef TUNNEL_CSUM
 #define TUNNEL_CSUM	__cpu_to_be16(0x01)
@@ -258,41 +258,27 @@ static inline u8 ip_tunnel_ecn_encap(u8 tos, const struct iphdr *iph,
 	return INET_ECN_encapsulate(tos, inner);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
-#define iptunnel_xmit_stats(err, stats, dummy)		\
-do {							\
-	if (err > 0) {					\
-		(stats)->tx_bytes += err;		\
-		(stats)->tx_packets++;			\
-	} else if (err < 0) {				\
-		(stats)->tx_errors++;			\
-		(stats)->tx_aborted_errors++;		\
-	} else {					\
-		(stats)->tx_dropped++;			\
-	}						\
-} while (0)
-
-#else
-#define iptunnel_xmit_stats rpl_iptunnel_xmit_stats
-static inline void iptunnel_xmit_stats(int err,
-		struct net_device_stats *err_stats,
-		struct pcpu_sw_netstats __percpu *stats)
+static inline void iptunnel_xmit_stats(struct net_device *dev, int pkt_len)
 {
-	if (err > 0) {
-		struct pcpu_sw_netstats *tstats = this_cpu_ptr(stats);
+	if (pkt_len > 0) {
+		struct pcpu_sw_netstats *tstats = get_cpu_ptr(dev->tstats);
 
 		u64_stats_update_begin(&tstats->syncp);
-		tstats->tx_bytes += err;
+		tstats->tx_bytes += pkt_len;
 		tstats->tx_packets++;
 		u64_stats_update_end(&tstats->syncp);
-	} else if (err < 0) {
-		err_stats->tx_errors++;
-		err_stats->tx_aborted_errors++;
+		put_cpu_ptr(tstats);
 	} else {
-		err_stats->tx_dropped++;
+		struct net_device_stats *err_stats = &dev->stats;
+
+		if (pkt_len < 0) {
+			err_stats->tx_errors++;
+			err_stats->tx_aborted_errors++;
+		} else {
+			err_stats->tx_dropped++;
+		}
 	}
 }
-#endif
 
 #define ip_tunnel_init rpl_ip_tunnel_init
 int rpl_ip_tunnel_init(struct net_device *dev);

@@ -38,10 +38,11 @@
 #include "vport-netdev.h"
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
-int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
+void rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
                       __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
                       __be16 df, bool xnet)
 {
+	struct net_device *dev = skb->dev;
 	int pkt_len = skb->len;
 	struct iphdr *iph;
 	int err;
@@ -83,7 +84,7 @@ int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 	err = ip_local_out(skb);
 	if (unlikely(net_xmit_eval(err)))
 		pkt_len = 0;
-	return pkt_len;
+	iptunnel_xmit_stats(dev, pkt_len);
 }
 EXPORT_SYMBOL_GPL(rpl_iptunnel_xmit);
 #endif
@@ -111,7 +112,6 @@ int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 
 	OVS_GSO_CB(skb)->fix_segment = fix_segment;
 #endif
-
 	if (skb_is_gso(skb)) {
 		err = skb_unclone(skb, GFP_ATOMIC);
 		if (unlikely(err))

@@ -1207,9 +1207,10 @@ static int vxlan_xmit_skb(struct rtable *rt, struct sock *sk, struct sk_buff *sk
 
 	ovs_skb_set_inner_protocol(skb, htons(ETH_P_TEB));
 
-	return udp_tunnel_xmit_skb(rt, sk, skb, src, dst, tos,
-				   ttl, df, src_port, dst_port, xnet,
-				   !(vxflags & VXLAN_F_UDP_CSUM));
+	udp_tunnel_xmit_skb(rt, sk, skb, src, dst, tos,
+			    ttl, df, src_port, dst_port, xnet,
+			    !(vxflags & VXLAN_F_UDP_CSUM));
+	return 0;
 }
 
 static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
@@ -1342,18 +1343,10 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 
 		tos = ip_tunnel_ecn_encap(tos, old_iph, skb);
 		ttl = ttl ? : ip4_dst_hoplimit(&rt->dst);
-		err = vxlan_xmit_skb(rt, sk, skb, fl4.saddr,
-				     dst->sin.sin_addr.s_addr, tos, ttl, df,
-				     src_port, dst_port, htonl(vni << 8), md,
-				     !net_eq(vxlan->net, dev_net(vxlan->dev)),
-				     flags);
-		if (err < 0) {
-			/* skb is already freed. */
-			skb = NULL;
-			goto rt_tx_error;
-		}
-
-		iptunnel_xmit_stats(err, &dev->stats, (struct pcpu_sw_netstats __percpu *)dev->tstats);
+		vxlan_xmit_skb(rt, sk, skb, fl4.saddr,
+			       dst->sin.sin_addr.s_addr, tos, ttl, df,
+			       src_port, dst_port, htonl(vni << 8), md,
+			       !net_eq(vxlan->net, dev_net(vxlan->dev)), flags);
 #if IS_ENABLED(CONFIG_IPV6)
 	} else {
 		struct dst_entry *ndst;

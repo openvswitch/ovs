@@ -99,7 +99,7 @@ void rpl_setup_udp_tunnel_sock(struct net *net, struct socket *sock,
 
 /* Transmit the skb using UDP encapsulation. */
 #define udp_tunnel_xmit_skb rpl_udp_tunnel_xmit_skb
-int rpl_udp_tunnel_xmit_skb(struct rtable *rt,
+void rpl_udp_tunnel_xmit_skb(struct rtable *rt,
 			    struct sock *sk, struct sk_buff *skb,
 			    __be32 src, __be32 dst, __u8 tos, __u8 ttl,
 			    __be16 df, __be16 src_port, __be16 dst_port,

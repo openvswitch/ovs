@@ -851,11 +851,9 @@ error:
 	return ERR_PTR(err);
 }
 
-static int skb_list_xmit(struct rtable *rt, struct sk_buff *skb, __be32 src,
-			 __be32 dst, __u8 tos, __u8 ttl, __be16 df)
+static void skb_list_xmit(struct rtable *rt, struct sk_buff *skb, __be32 src,
+			  __be32 dst, __u8 tos, __u8 ttl, __be16 df)
 {
-	int len = 0;
-
 	while (skb) {
 		struct sk_buff *next = skb->next;
 
@@ -863,12 +861,11 @@ static int skb_list_xmit(struct rtable *rt, struct sk_buff *skb, __be32 src,
 			dst_clone(&rt->dst);
 
 		skb->next = NULL;
-		len += iptunnel_xmit(NULL, rt, skb, src, dst, IPPROTO_TCP,
-				     tos, ttl, df, false);
+		iptunnel_xmit(NULL, rt, skb, src, dst, IPPROTO_TCP,
+			      tos, ttl, df, false);
 
 		skb = next;
 	}
-	return len;
 }
 
 static u8 parse_ipv6_l4_proto(struct sk_buff *skb)
@@ -909,9 +906,9 @@ static u8 skb_get_l4_proto(struct sk_buff *skb, __be16 l3_proto)
 }
 
 static int stt_xmit_skb(struct sk_buff *skb, struct rtable *rt,
-		 __be32 src, __be32 dst, __u8 tos,
-		 __u8 ttl, __be16 df, __be16 src_port, __be16 dst_port,
-		 __be64 tun_id)
+			__be32 src, __be32 dst, __u8 tos,
+			__u8 ttl, __be16 df, __be16 src_port, __be16 dst_port,
+			__be64 tun_id)
 {
 	struct ethhdr *eh = eth_hdr(skb);
 	int ret = 0, min_headroom;
@@ -966,13 +963,13 @@ static int stt_xmit_skb(struct sk_buff *skb, struct rtable *rt,
 		}
 
 		/* Push IP header. */
-		ret += skb_list_xmit(rt, skb, src, dst, tos, ttl, df);
+		skb_list_xmit(rt, skb, src, dst, tos, ttl, df);
 
 next:
 		skb = next_skb;
 	}
 
-	return ret;
+	return 0;
 
 err_free_rt:
 	ip_rt_put(rt);
@@ -1030,10 +1027,9 @@ netdev_tx_t ovs_stt_xmit(struct sk_buff *skb)
 	sport = udp_flow_src_port(net, skb, 1, USHRT_MAX, true);
 	skb->ignore_df = 1;
 
-	err = stt_xmit_skb(skb, rt, fl.saddr, tun_key->u.ipv4.dst,
-			    tun_key->tos, tun_key->ttl,
-			    df, sport, dport, tun_key->tun_id);
-	iptunnel_xmit_stats(err, &dev->stats, (struct pcpu_sw_netstats __percpu *)dev->tstats);
+	stt_xmit_skb(skb, rt, fl.saddr, tun_key->u.ipv4.dst,
+		    tun_key->tos, tun_key->ttl,
+		    df, sport, dport, tun_key->tun_id);
 	return NETDEV_TX_OK;
 error:
 	kfree_skb(skb);

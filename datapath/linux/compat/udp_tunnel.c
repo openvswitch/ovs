@@ -166,7 +166,7 @@ void ovs_udp_csum_gso(struct sk_buff *skb)
 }
 EXPORT_SYMBOL_GPL(ovs_udp_csum_gso);
 
-int rpl_udp_tunnel_xmit_skb(struct rtable *rt, struct sock *sk,
+void rpl_udp_tunnel_xmit_skb(struct rtable *rt, struct sock *sk,
 			    struct sk_buff *skb, __be32 src, __be32 dst,
 			    __u8 tos, __u8 ttl, __be16 df, __be16 src_port,
 			    __be16 dst_port, bool xnet, bool nocheck)
@@ -183,8 +183,7 @@ int rpl_udp_tunnel_xmit_skb(struct rtable *rt, struct sock *sk,
 
 	udp_set_csum(nocheck, skb, src, dst, skb->len);
 
-	return iptunnel_xmit(sk, rt, skb, src, dst, IPPROTO_UDP,
-			     tos, ttl, df, xnet);
+	iptunnel_xmit(sk, rt, skb, src, dst, IPPROTO_UDP, tos, ttl, df, xnet);
 }
 EXPORT_SYMBOL_GPL(rpl_udp_tunnel_xmit_skb);
 

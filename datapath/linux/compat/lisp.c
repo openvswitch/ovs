@@ -358,12 +358,11 @@ netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb)
 	ovs_skb_set_inner_protocol(skb, skb->protocol);
 
 	df = tun_key->tun_flags & TUNNEL_DONT_FRAGMENT ? htons(IP_DF) : 0;
-	err = udp_tunnel_xmit_skb(rt, lisp_dev->sock->sk, skb,
-			fl.saddr, tun_key->u.ipv4.dst,
-			tun_key->tos, tun_key->ttl,
-			df, src_port, dst_port, false, true);
+	udp_tunnel_xmit_skb(rt, lisp_dev->sock->sk, skb,
+			    fl.saddr, tun_key->u.ipv4.dst,
+			    tun_key->tos, tun_key->ttl,
+			    df, src_port, dst_port, false, true);
 
-	iptunnel_xmit_stats(err, &dev->stats, (struct pcpu_sw_netstats __percpu *)dev->tstats);
 	return NETDEV_TX_OK;
 
 err_free_rt:

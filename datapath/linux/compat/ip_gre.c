@@ -327,10 +327,8 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb)
 		     tunnel_id_to_key(tun_info->key.tun_id), 0);
 
 	df = key->tun_flags & TUNNEL_DONT_FRAGMENT ?  htons(IP_DF) : 0;
-	err = iptunnel_xmit(skb->sk, rt, skb, fl.saddr,
-			    key->u.ipv4.dst, IPPROTO_GRE,
-			    key->tos, key->ttl, df, false);
-	iptunnel_xmit_stats(err, &dev->stats, (struct pcpu_sw_netstats __percpu *)dev->tstats);
+	iptunnel_xmit(skb->sk, rt, skb, fl.saddr, key->u.ipv4.dst, IPPROTO_GRE,
+		      key->tos, key->ttl, df, false);
 	return NETDEV_TX_OK;
 
 err_free_rt:

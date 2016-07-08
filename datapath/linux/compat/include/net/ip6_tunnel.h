@@ -22,12 +22,10 @@ static inline void ip6tunnel_xmit(struct sock *sk, struct sk_buff *skb,
 #else
 	err = ip6_local_out(skb);
 #endif
-	if (net_xmit_eval(err) != 0)
-		pkt_len = net_xmit_eval(err);
-	else
-		pkt_len = err;
+	if (net_xmit_eval(err))
+		pkt_len = -1;
 
-	iptunnel_xmit_stats(pkt_len, &dev->stats, (struct pcpu_sw_netstats __percpu *)dev->tstats);
+	iptunnel_xmit_stats(dev, pkt_len);
 }
 
 #endif

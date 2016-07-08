@@ -703,12 +703,9 @@ netdev_tx_t rpl_geneve_xmit(struct sk_buff *skb)
 		ttl = ttl ? : ip4_dst_hoplimit(&rt->dst);
 		df = 0;
 	}
-	err = udp_tunnel_xmit_skb(rt, gs->sock->sk, skb, fl4.saddr, fl4.daddr,
-				  tos, ttl, df, sport, geneve->dst_port,
-				  !net_eq(geneve->net, dev_net(geneve->dev)),
-				  !udp_csum);
-
-	iptunnel_xmit_stats(err, &dev->stats, (struct pcpu_sw_netstats __percpu *) dev->tstats);
+	udp_tunnel_xmit_skb(rt, gs->sock->sk, skb, fl4.saddr, fl4.daddr,
+			    tos, ttl, df, sport, geneve->dst_port,
+			    !net_eq(geneve->net, dev_net(geneve->dev)), !udp_csum);
 	return NETDEV_TX_OK;
 
 tx_error:
