@@ -349,12 +349,11 @@ struct netdev_dpdk {
     struct rte_eth_link link;
     int link_reset_cnt;
 
-    /* The user might request more txqs than the NIC has.  We remap those
-     * ('up.n_txq') on these ('real_n_txq').
-     * If the numbers match, 'txq_needs_locking' is false, otherwise it is
-     * true and we will take a spinlock on transmission */
-    int real_n_txq;
-    int real_n_rxq;
+    /* Caller of netdev_send() might want to use more txqs than the device has.
+     * For physical NICs, if the 'requested_n_txq' less or equal to 'up.n_txq',
+     * 'txq_needs_locking' is false, otherwise it is true and we will take a
+     * spinlock on transmission.  For vhost devices, 'requested_n_txq' is
+     * always true.  */
     bool txq_needs_locking;
 
     /* virtio-net structure for vhost device */
@@ -627,7 +626,7 @@ dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
         }
 
         dev->up.n_rxq = n_rxq;
-        dev->real_n_txq = n_txq;
+        dev->up.n_txq = n_txq;
 
         return 0;
     }
@@ -767,20 +766,21 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
     dev->policer_rate = 0;
     dev->policer_burst = 0;
 
-    netdev->n_txq = NR_QUEUE;
     netdev->n_rxq = NR_QUEUE;
-    dev->requested_n_rxq = NR_QUEUE;
-    dev->requested_n_txq = NR_QUEUE;
-    dev->real_n_txq = NR_QUEUE;
+    netdev->n_txq = NR_QUEUE;
+    dev->requested_n_rxq = netdev->n_rxq;
+    dev->requested_n_txq = netdev->n_txq;
 
     if (type == DPDK_DEV_ETH) {
-        netdev_dpdk_alloc_txq(dev, NR_QUEUE);
         err = dpdk_eth_dev_init(dev);
         if (err) {
             goto unlock;
         }
+        netdev_dpdk_alloc_txq(dev, netdev->n_txq);
+        dev->txq_needs_locking = netdev->n_txq < dev->requested_n_txq;
     } else {
         netdev_dpdk_alloc_txq(dev, OVS_VHOST_MAX_QUEUE_NUM);
+        dev->txq_needs_locking = true;
         /* Enable DPDK_DEV_VHOST device and set promiscuous mode flag. */
         dev->flags = NETDEV_UP | NETDEV_PROMISC;
     }
@@ -788,9 +788,6 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
     ovs_list_push_back(&dpdk_list, &dev->list_node);
 
 unlock:
-    if (err) {
-        rte_free(dev->tx_q);
-    }
     ovs_mutex_unlock(&dev->mutex);
     return err;
 }
@@ -975,8 +972,8 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
 
     smap_add_format(args, "requested_rx_queues", "%d", dev->requested_n_rxq);
     smap_add_format(args, "configured_rx_queues", "%d", netdev->n_rxq);
-    smap_add_format(args, "requested_tx_queues", "%d", netdev->n_txq);
-    smap_add_format(args, "configured_tx_queues", "%d", dev->real_n_txq);
+    smap_add_format(args, "requested_tx_queues", "%d", dev->requested_n_txq);
+    smap_add_format(args, "configured_tx_queues", "%d", netdev->n_txq);
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -1232,10 +1229,6 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
         return EAGAIN;
     }
 
-    if (rxq->queue_id >= dev->real_n_rxq) {
-        return EOPNOTSUPP;
-    }
-
     nb_rx = rte_vhost_dequeue_burst(virtio_dev, qid * VIRTIO_QNUM + VIRTIO_TXQ,
                                     dev->dpdk_mp->mp,
                                     (struct rte_mbuf **)packets,
@@ -1339,7 +1332,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     unsigned int qos_pkts = cnt;
     int retries = 0;
 
-    qid = dev->tx_q[qid % dev->real_n_txq].map;
+    qid = dev->tx_q[qid % netdev->n_txq].map;
 
     if (OVS_UNLIKELY(!is_vhost_running(virtio_dev) || qid < 0
                      || !(dev->flags & NETDEV_UP))) {
@@ -1502,7 +1495,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
     int i;
 
     if (OVS_UNLIKELY(dev->txq_needs_locking)) {
-        qid = qid % dev->real_n_txq;
+        qid = qid % dev->up.n_txq;
         rte_spinlock_lock(&dev->tx_q[qid].tx_lock);
     }
 
@@ -2197,14 +2190,14 @@ set_irq_status(struct virtio_net *virtio_dev)
 
 /*
  * Fixes mapping for vhost-user tx queues. Must be called after each
- * enabling/disabling of queues and real_n_txq modifications.
+ * enabling/disabling of queues and n_txq modifications.
  */
 static void
 netdev_dpdk_remap_txqs(struct netdev_dpdk *dev)
     OVS_REQUIRES(dev->mutex)
 {
     int *enabled_queues, n_enabled = 0;
-    int i, k, total_txqs = dev->real_n_txq;
+    int i, k, total_txqs = dev->up.n_txq;
 
     enabled_queues = dpdk_rte_mzalloc(total_txqs * sizeof *enabled_queues);
 
@@ -2236,33 +2229,6 @@ netdev_dpdk_remap_txqs(struct netdev_dpdk *dev)
     rte_free(enabled_queues);
 }
 
-static int
-netdev_dpdk_vhost_set_queues(struct netdev_dpdk *dev, struct virtio_net *virtio_dev)
-    OVS_REQUIRES(dev->mutex)
-{
-    uint32_t qp_num;
-
-    qp_num = virtio_dev->virt_qp_nb;
-    if (qp_num > dev->up.n_rxq) {
-        VLOG_ERR("vHost Device '%s' %"PRIu64" can't be added - "
-                 "too many queues %d > %d", virtio_dev->ifname, virtio_dev->device_fh,
-                 qp_num, dev->up.n_rxq);
-        return -1;
-    }
-
-    dev->real_n_rxq = qp_num;
-    dev->real_n_txq = qp_num;
-    dev->txq_needs_locking = true;
-    /* Enable TX queue 0 by default if it wasn't disabled. */
-    if (dev->tx_q[0].map == OVS_VHOST_QUEUE_MAP_UNKNOWN) {
-        dev->tx_q[0].map = 0;
-    }
-
-    netdev_dpdk_remap_txqs(dev);
-
-    return 0;
-}
-
 /*
  * A new virtio-net device is added to a vhost port.
  */
@@ -2278,15 +2244,9 @@ new_device(struct virtio_net *virtio_dev)
     /* Add device to the vhost port with the same name as that passed down. */
     LIST_FOR_EACH(dev, list_node, &dpdk_list) {
         if (strncmp(virtio_dev->ifname, dev->vhost_id, IF_NAME_SZ) == 0) {
-            ovs_mutex_lock(&dev->mutex);
-            if (netdev_dpdk_vhost_set_queues(dev, virtio_dev)) {
-                ovs_mutex_unlock(&dev->mutex);
-                ovs_mutex_unlock(&dpdk_mutex);
-                return -1;
-            }
-            ovsrcu_set(&dev->virtio_dev, virtio_dev);
-            exists = true;
+            uint32_t qp_num = virtio_dev->virt_qp_nb;
 
+            ovs_mutex_lock(&dev->mutex);
             /* Get NUMA information */
             err = get_mempolicy(&newnode, NULL, 0, virtio_dev,
                                 MPOL_F_NODE | MPOL_F_ADDR);
@@ -2294,12 +2254,16 @@ new_device(struct virtio_net *virtio_dev)
                 VLOG_INFO("Error getting NUMA info for vHost Device '%s'",
                         virtio_dev->ifname);
                 newnode = dev->socket_id;
-            } else if (newnode != dev->socket_id) {
-                dev->requested_socket_id = newnode;
-                netdev_request_reconfigure(&dev->up);
             }
 
-            virtio_dev->flags |= VIRTIO_DEV_RUNNING;
+            dev->requested_socket_id = newnode;
+            dev->requested_n_rxq = qp_num;
+            dev->requested_n_txq = qp_num;
+            netdev_request_reconfigure(&dev->up);
+
+            ovsrcu_set(&dev->virtio_dev, virtio_dev);
+            exists = true;
+
             /* Disable notifications. */
             set_irq_status(virtio_dev);
             netdev_change_seq_changed(&dev->up);
@@ -2328,7 +2292,7 @@ netdev_dpdk_txq_map_clear(struct netdev_dpdk *dev)
 {
     int i;
 
-    for (i = 0; i < dev->real_n_txq; i++) {
+    for (i = 0; i < dev->up.n_txq; i++) {
         dev->tx_q[i].map = OVS_VHOST_QUEUE_MAP_UNKNOWN;
     }
 }
@@ -2352,10 +2316,15 @@ destroy_device(volatile struct virtio_net *virtio_dev)
             ovs_mutex_lock(&dev->mutex);
             virtio_dev->flags &= ~VIRTIO_DEV_RUNNING;
             ovsrcu_set(&dev->virtio_dev, NULL);
+            /* Clear tx/rx queue settings. */
             netdev_dpdk_txq_map_clear(dev);
-            exists = true;
+            dev->requested_n_rxq = NR_QUEUE;
+            dev->requested_n_txq = NR_QUEUE;
+            netdev_request_reconfigure(&dev->up);
+
             netdev_change_seq_changed(&dev->up);
             ovs_mutex_unlock(&dev->mutex);
+            exists = true;
             break;
         }
     }
@@ -2863,9 +2832,9 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
 
     rte_free(dev->tx_q);
     err = dpdk_eth_dev_init(dev);
-    netdev_dpdk_alloc_txq(dev, dev->real_n_txq);
+    netdev_dpdk_alloc_txq(dev, netdev->n_txq);
 
-    dev->txq_needs_locking = dev->real_n_txq != netdev->n_txq;
+    dev->txq_needs_locking = netdev->n_txq < dev->requested_n_txq;
 
 out:
 
@@ -2879,6 +2848,7 @@ static int
 netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(dev);
     int err = 0;
 
     ovs_mutex_lock(&dpdk_mutex);
@@ -2886,6 +2856,13 @@ netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
 
     netdev->n_txq = dev->requested_n_txq;
     netdev->n_rxq = dev->requested_n_rxq;
+
+    /* Enable TX queue 0 by default if it wasn't disabled. */
+    if (dev->tx_q[0].map == OVS_VHOST_QUEUE_MAP_UNKNOWN) {
+        dev->tx_q[0].map = 0;
+    }
+
+    netdev_dpdk_remap_txqs(dev);
 
     if (dev->requested_socket_id != dev->socket_id) {
         dev->socket_id = dev->requested_socket_id;
@@ -2895,6 +2872,10 @@ netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
         if (!dev->dpdk_mp) {
             err = ENOMEM;
         }
+    }
+
+    if (virtio_dev) {
+        virtio_dev->flags |= VIRTIO_DEV_RUNNING;
     }
 
     ovs_mutex_unlock(&dev->mutex);
@@ -2912,9 +2893,7 @@ netdev_dpdk_vhost_cuse_reconfigure(struct netdev *netdev)
     ovs_mutex_lock(&dev->mutex);
 
     netdev->n_txq = dev->requested_n_txq;
-    dev->real_n_txq = 1;
     netdev->n_rxq = 1;
-    dev->txq_needs_locking = dev->real_n_txq != netdev->n_txq;
 
     ovs_mutex_unlock(&dev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
@@ -2922,9 +2901,11 @@ netdev_dpdk_vhost_cuse_reconfigure(struct netdev *netdev)
     return 0;
 }
 
-#define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT, DESTRUCT, SEND, \
-                          GET_CARRIER, GET_STATS, GET_FEATURES,  \
-                          GET_STATUS, RECONFIGURE, RXQ_RECV)     \
+#define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT, DESTRUCT,    \
+                          SET_CONFIG, SET_TX_MULTIQ, SEND,    \
+                          GET_CARRIER, GET_STATS,             \
+                          GET_FEATURES, GET_STATUS,           \
+                          RECONFIGURE, RXQ_RECV)              \
 {                                                             \
     NAME,                                                     \
     true,                       /* is_pmd */                  \
@@ -2937,13 +2918,13 @@ netdev_dpdk_vhost_cuse_reconfigure(struct netdev *netdev)
     DESTRUCT,                                                 \
     netdev_dpdk_dealloc,                                      \
     netdev_dpdk_get_config,                                   \
-    netdev_dpdk_set_config,                                   \
+    SET_CONFIG,                                               \
     NULL,                       /* get_tunnel_config */       \
     NULL,                       /* build header */            \
     NULL,                       /* push header */             \
     NULL,                       /* pop header */              \
     netdev_dpdk_get_numa_id,    /* get_numa_id */             \
-    netdev_dpdk_set_tx_multiq,                                \
+    SET_TX_MULTIQ,                                            \
                                                               \
     SEND,                       /* send */                    \
     NULL,                       /* send_wait */               \
@@ -3392,6 +3373,8 @@ static const struct netdev_class dpdk_class =
         NULL,
         netdev_dpdk_construct,
         netdev_dpdk_destruct,
+        netdev_dpdk_set_config,
+        netdev_dpdk_set_tx_multiq,
         netdev_dpdk_eth_send,
         netdev_dpdk_get_carrier,
         netdev_dpdk_get_stats,
@@ -3406,6 +3389,8 @@ static const struct netdev_class dpdk_ring_class =
         NULL,
         netdev_dpdk_ring_construct,
         netdev_dpdk_destruct,
+        netdev_dpdk_set_config,
+        netdev_dpdk_set_tx_multiq,
         netdev_dpdk_ring_send,
         netdev_dpdk_get_carrier,
         netdev_dpdk_get_stats,
@@ -3420,6 +3405,8 @@ static const struct netdev_class OVS_UNUSED dpdk_vhost_cuse_class =
         dpdk_vhost_cuse_class_init,
         netdev_dpdk_vhost_cuse_construct,
         netdev_dpdk_vhost_destruct,
+        NULL,
+        NULL,
         netdev_dpdk_vhost_send,
         netdev_dpdk_vhost_get_carrier,
         netdev_dpdk_vhost_get_stats,
@@ -3434,6 +3421,8 @@ static const struct netdev_class OVS_UNUSED dpdk_vhost_user_class =
         dpdk_vhost_user_class_init,
         netdev_dpdk_vhost_user_construct,
         netdev_dpdk_vhost_destruct,
+        NULL,
+        NULL,
         netdev_dpdk_vhost_send,
         netdev_dpdk_vhost_get_carrier,
         netdev_dpdk_vhost_get_stats,

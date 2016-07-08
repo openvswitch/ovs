@@ -37,6 +37,8 @@ Post-v2.5.0
    - DPDK:
      * New option "n_rxq" for PMD interfaces.
        Old 'other_config:n-dpdk-rxqs' is no longer supported.
+       Not supported by vHost interfaces. For them number of rx and tx queues
+       is applied from connected virtio device.
      * New appctl command 'dpif-netdev/pmd-rxq-show' to check the port/rxq
        assignment.
      * Type of log messages from PMD threads changed from INFO to DBG.

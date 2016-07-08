@@ -442,8 +442,10 @@ struct dp_netdev_pmd_thread {
     pthread_t thread;
     unsigned core_id;               /* CPU core id of this pmd thread. */
     int numa_id;                    /* numa node id of this pmd thread. */
-    atomic_int tx_qid;              /* Queue id used by this pmd thread to
-                                     * send packets on all netdevs */
+
+    /* Queue id used by this pmd thread to send packets on all netdevs.
+     * All tx_qid's are unique and less than 'ovs_numa_get_n_cores() + 1'. */
+    atomic_int tx_qid;
 
     struct ovs_mutex port_mutex;    /* Mutex for 'poll_list' and 'tx_ports'. */
     /* List of rx queues to poll. */

@@ -2346,12 +2346,13 @@
         Only PMD netdevs support these options.
       </p>
 
-      <column name="options" key="n_rxqs"
+      <column name="options" key="n_rxq"
               type='{"type": "integer", "minInteger": 1}'>
         <p>
           Specifies the maximum number of rx queues to be created for PMD
           netdev.  If not specified or specified to 0, one rx queue will
           be created by default.
+          Not supported by DPDK vHost interfaces.
         </p>
       </column>
     </group>

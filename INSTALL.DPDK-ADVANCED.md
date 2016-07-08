@@ -246,16 +246,13 @@ needs to be affinitized accordingly.
 
   NIC port0 <-> OVS <-> VM <-> OVS <-> NIC port 1
 
-### 4.3 DPDK port Rx Queues
+### 4.3 DPDK physical port Rx Queues
 
   `ovs-vsctl set Interface <DPDK interface> options:n_rxq=<integer>`
 
-  The command above sets the number of rx queues for DPDK interface.
+  The command above sets the number of rx queues for DPDK physical interface.
   The rx queues are assigned to pmd threads on the same NUMA node in a
-  round-robin fashion.  For more information, please refer to the
-  Open_vSwitch TABLE section in
-
-  `man ovs-vswitchd.conf.db`
+  round-robin fashion.
 
 ### 4.4 Exact Match Cache
 
@@ -454,16 +451,8 @@ DPDK 16.04 supports two types of vhost:
 
     3. Enable multiqueue support(OPTIONAL)
 
-       The vhost-user interface must be configured in Open vSwitch with the
-       desired amount of queues with:
-
-       ```
-       ovs-vsctl set Interface vhost-user-2 options:n_rxq=<requested queues>
-       ```
-
-       QEMU needs to be configured as well.
-       The $q below should match the queues requested in OVS (if $q is more,
-       packets will not be received).
+       QEMU needs to be configured to use multiqueue.
+       The $q below is the number of queues.
        The $v is the number of vectors, which is '$q x 2 + 2'.
 
        ```
@@ -471,6 +460,11 @@ DPDK 16.04 supports two types of vhost:
        -netdev type=vhost-user,id=mynet2,chardev=char2,vhostforce,queues=$q
        -device virtio-net-pci,mac=00:00:00:00:00:02,netdev=mynet2,mq=on,vectors=$v
        ```
+
+       The vhost-user interface will be automatically reconfigured with required
+       number of rx and tx queues after connection of virtio device.
+       Manual configuration of `n_rxq` is not supported because OVS will work
+       properly only if `n_rxq` will match number of queues configured in QEMU.
 
        A least 2 PMDs should be configured for the vswitch when using multiqueue.
        Using a single PMD will cause traffic to be enqueued to the same vhost
