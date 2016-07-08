@@ -620,6 +620,7 @@ struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
 {
 	struct nlattr *tb[IFLA_MAX + 1];
 	struct net_device *dev;
+	LIST_HEAD(list_kill);
 	struct ip_tunnel *t;
 	int err;
 
@@ -633,13 +634,11 @@ struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
 	t = netdev_priv(dev);
 	t->collect_md = true;
 	/* Configure flow based GRE device. */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 	err = ipgre_newlink(net, dev, tb, NULL);
-#else
-	err = ipgre_newlink(dev, tb, NULL);
-#endif
-	if (err < 0)
-		goto out;
+	if (err < 0) {
+		free_netdev(dev);
+		return ERR_PTR(err);
+	}
 
 	/* openvswitch users expect packet sizes to be unrestricted,
 	 * so set the largest MTU we can.
@@ -650,7 +649,8 @@ struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
 
 	return dev;
 out:
-	free_netdev(dev);
+	ip_tunnel_dellink(dev, &list_kill);
+	unregister_netdevice_many(&list_kill);
 	return ERR_PTR(err);
 }
 EXPORT_SYMBOL_GPL(rpl_gretap_fb_dev_create);
