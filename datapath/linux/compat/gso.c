@@ -181,9 +181,11 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 					   netdev_features_t features,
 					   bool tx_path)
 {
-	struct iphdr *iph = ip_hdr(skb);
+	void *iph = skb_network_header(skb);
 	int pkt_hlen = skb_inner_network_offset(skb); /* inner l2 + tunnel hdr. */
 	int mac_offset = skb_inner_mac_offset(skb);
+	int outer_l3_offset = skb_network_offset(skb);
+	int outer_l4_offset = skb_transport_offset(skb);
 	struct sk_buff *skb1 = skb;
 	struct sk_buff *segs;
 	__be16 proto = skb->protocol;
@@ -221,11 +223,11 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 	while (skb) {
 		__skb_push(skb, pkt_hlen);
 		skb_reset_mac_header(skb);
-		skb_reset_network_header(skb);
-		skb_set_transport_header(skb, sizeof(struct iphdr));
+		skb_set_network_header(skb, outer_l3_offset);
+		skb_set_transport_header(skb, outer_l4_offset);
 		skb->mac_len = 0;
 
-		memcpy(ip_hdr(skb), iph, pkt_hlen);
+		memcpy(skb_network_header(skb), iph, pkt_hlen);
 		memcpy(skb->cb, cb, sizeof(cb));
 		OVS_GSO_CB(skb)->fix_segment(skb);
 
