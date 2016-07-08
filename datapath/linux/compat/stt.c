@@ -1462,7 +1462,8 @@ static void stt_rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
 
 	err = iptunnel_pull_header(skb,
 				   sizeof(struct stthdr) + STT_ETH_PAD,
-				   htons(ETH_P_TEB));
+				   htons(ETH_P_TEB),
+				   !net_eq(stt_dev->net, dev_net(stt_dev->dev)));
 	if (unlikely(err))
 		goto drop;
 

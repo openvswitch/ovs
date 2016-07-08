@@ -139,23 +139,25 @@ error:
 	return ERR_PTR(err);
 }
 EXPORT_SYMBOL_GPL(ovs_iptunnel_handle_offloads);
+#endif
 
-int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
+int rpl___iptunnel_pull_header(struct sk_buff *skb, int hdr_len,
+			       __be16 inner_proto, bool raw_proto, bool xnet)
 {
 	if (unlikely(!pskb_may_pull(skb, hdr_len)))
 		return -ENOMEM;
 
 	skb_pull_rcsum(skb, hdr_len);
 
-	if (inner_proto == htons(ETH_P_TEB)) {
+	if (!raw_proto && inner_proto == htons(ETH_P_TEB)) {
 		struct ethhdr *eh;
 
 		if (unlikely(!pskb_may_pull(skb, ETH_HLEN)))
 			return -ENOMEM;
 
 		eh = (struct ethhdr *)skb->data;
-
-		if (likely(ntohs(eh->h_proto) >= ETH_P_802_3_MIN))
+		if (likely(eth_proto_is_802_3(eh->h_proto)))
 			skb->protocol = eh->h_proto;
 		else
 			skb->protocol = htons(ETH_P_802_2);
@@ -164,16 +166,14 @@ int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_prot
 		skb->protocol = inner_proto;
 	}
 
-	nf_reset(skb);
-	secpath_reset(skb);
-	skb_clear_hash(skb);
-	skb_dst_drop(skb);
+	skb_clear_hash_if_not_l4(skb);
 	skb->vlan_tci = 0;
 	skb_set_queue_mapping(skb, 0);
-	skb->pkt_type = PACKET_HOST;
+	skb_scrub_packet(skb, xnet);
+
 	return 0;
 }
-EXPORT_SYMBOL_GPL(rpl_iptunnel_pull_header);
+EXPORT_SYMBOL_GPL(rpl___iptunnel_pull_header);
 
 #endif
 

@@ -207,6 +207,7 @@ static void lisp_build_header(struct sk_buff *skb,
 /* Called with rcu_read_lock and BH disabled. */
 static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 {
+	struct lisp_dev *lisp_dev;
 	struct net_device *dev;
 	struct lisphdr *lisph;
 	struct iphdr *inner_iph;
@@ -222,7 +223,9 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 	if (unlikely(!dev))
 		goto error;
 
-	if (iptunnel_pull_header(skb, LISP_HLEN, 0))
+	lisp_dev = netdev_priv(dev);
+	if (iptunnel_pull_header(skb, LISP_HLEN, 0,
+				 !net_eq(lisp_dev->net, dev_net(lisp_dev->dev))))
 		goto error;
 
 	lisph = lisp_hdr(skb);

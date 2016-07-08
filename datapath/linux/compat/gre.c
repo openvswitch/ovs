@@ -243,7 +243,7 @@ static int parse_gre_header(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 		}
 	}
 
-	return iptunnel_pull_header(skb, hdr_len, tpi->proto);
+	return iptunnel_pull_header(skb, hdr_len, tpi->proto, false);
 }
 
 static struct gre_cisco_protocol __rcu *gre_cisco_proto;

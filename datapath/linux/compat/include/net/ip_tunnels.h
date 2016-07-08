@@ -18,6 +18,19 @@
 #include <net/ip.h>
 #include <net/rtnetlink.h>
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
+#define __iptunnel_pull_header rpl___iptunnel_pull_header
+int rpl___iptunnel_pull_header(struct sk_buff *skb, int hdr_len,
+			   __be16 inner_proto, bool raw_proto, bool xnet);
+
+#define iptunnel_pull_header rpl_iptunnel_pull_header
+static inline int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len,
+				       __be16 inner_proto, bool xnet)
+{
+	return rpl___iptunnel_pull_header(skb, hdr_len, inner_proto, false, xnet);
+}
+#endif
+
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 struct sk_buff *ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 					     bool csum_help, int gso_type_mask,
@@ -28,17 +41,10 @@ int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 		      __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
 		      __be16 df, bool xnet);
 
-#define iptunnel_pull_header rpl_iptunnel_pull_header
-int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto);
-
 #else
 
 #define ovs_iptunnel_handle_offloads(skb, csum_help, gso_type_mask, fix_segment) \
 	iptunnel_handle_offloads(skb, csum_help, gso_type_mask)
-
-/* This macro is to make OVS build happy about declared functions name. */
-#define rpl_iptunnel_pull_header iptunnel_pull_header
-int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto);
 
 #define rpl_iptunnel_xmit iptunnel_xmit
 int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,

@@ -333,4 +333,12 @@ static inline void skb_pop_mac_header(struct sk_buff *skb)
 {
 	skb->mac_header = skb->network_header;
 }
+
+#ifndef HAVE_SKB_CLEAR_HASH_IF_NOT_L4
+static inline void skb_clear_hash_if_not_l4(struct sk_buff *skb)
+{
+	if (!skb->l4_rxhash)
+		skb_clear_hash(skb);
+}
+#endif
 #endif
