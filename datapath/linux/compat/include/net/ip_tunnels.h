@@ -339,4 +339,19 @@ struct net *rpl_ip_tunnel_get_link_net(const struct net_device *dev);
 int rpl___ip_tunnel_change_mtu(struct net_device *dev, int new_mtu, bool strict);
 #endif
 
+static inline int iptunnel_pull_offloads(struct sk_buff *skb)
+{
+	if (skb_is_gso(skb)) {
+		int err;
+
+		err = skb_unclone(skb, GFP_ATOMIC);
+		if (unlikely(err))
+			return err;
+		skb_shinfo(skb)->gso_type &= ~(NETIF_F_GSO_ENCAP_ALL >>
+					       NETIF_F_GSO_SHIFT);
+	}
+
+	skb->encapsulation = 0;
+	return 0;
+}
 #endif /* __NET_IP_TUNNELS_H */
