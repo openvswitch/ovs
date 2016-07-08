@@ -1705,6 +1705,9 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
     /* This flow table structure is documented in ovn-northd(8), so please
      * update ovn-northd.8.xml if you change anything. */
 
+    struct ds match = DS_EMPTY_INITIALIZER;
+    struct ds actions = DS_EMPTY_INITIALIZER;
+
     /* Build pre-ACL and ACL tables for both ingress and egress.
      * Ingress tables 3 and 4.  Egress tables 0 and 1. */
     struct ovn_datapath *od;
@@ -1757,14 +1760,13 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        struct ds match = DS_EMPTY_INITIALIZER;
+        ds_clear(&match);
         ds_put_format(&match, "inport == %s", op->json_key);
         build_port_security_l2(
             "eth.src", op->nbs->port_security, op->nbs->n_port_security,
             &match);
         ovn_lflow_add(lflows, op->od, S_SWITCH_IN_PORT_SEC_L2, 50,
                       ds_cstr(&match), "next;");
-        ds_destroy(&match);
 
         if (op->nbs->n_port_security) {
             build_port_security_ip(P_IN, op, lflows);
@@ -1791,10 +1793,10 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
 
         if (!strcmp(op->nbs->type, "localnet")) {
-            char *match = xasprintf("inport == %s", op->json_key);
+            ds_clear(&match);
+            ds_put_format(&match, "inport == %s", op->json_key);
             ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 100,
-                          match, "next;");
-            free(match);
+                          ds_cstr(&match), "next;");
         }
     }
 
@@ -1821,10 +1823,11 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                 continue;
             }
             for (size_t j = 0; j < laddrs.n_ipv4_addrs; j++) {
-                char *match = xasprintf(
-                    "arp.tpa == "IP_FMT" && arp.op == 1",
-                    IP_ARGS(laddrs.ipv4_addrs[j].addr));
-                char *actions = xasprintf(
+                ds_clear(&match);
+                ds_put_format(&match, "arp.tpa == "IP_FMT" && arp.op == 1",
+                              IP_ARGS(laddrs.ipv4_addrs[j].addr));
+                ds_clear(&actions);
+                ds_put_format(&actions,
                     "eth.dst = eth.src; "
                     "eth.src = "ETH_ADDR_FMT"; "
                     "arp.op = 2; /* ARP reply */ "
@@ -1839,14 +1842,12 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     ETH_ADDR_ARGS(laddrs.ea),
                     IP_ARGS(laddrs.ipv4_addrs[j].addr));
                 ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 50,
-                              match, actions);
-                free(match);
-                free(actions);
+                              ds_cstr(&match), ds_cstr(&actions));
             }
 
             if (laddrs.n_ipv6_addrs > 0) {
                 char ip6_str[INET6_ADDRSTRLEN + 1];
-                struct ds match = DS_EMPTY_INITIALIZER;
+                ds_clear(&match);
                 ds_put_cstr(&match, "icmp6 && icmp6.type == 135 && ");
                 if (laddrs.n_ipv6_addrs == 1) {
                     ipv6_string_mapped(ip6_str,
@@ -1865,7 +1866,8 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     ds_chomp(&match, ' ');
                     ds_put_cstr(&match, ")");
                 }
-                char *actions = xasprintf(
+                ds_clear(&actions);
+                ds_put_format(&actions,
                     "na { eth.src = "ETH_ADDR_FMT"; "
                     "nd.tll = "ETH_ADDR_FMT"; "
                     "outport = inport; "
@@ -1875,9 +1877,8 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     ETH_ADDR_ARGS(laddrs.ea));
 
                 ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 50,
-                              ds_cstr(&match), actions);
+                              ds_cstr(&match), ds_cstr(&actions));
 
-                ds_destroy(&match);
             }
 
             free(laddrs.ipv4_addrs);
@@ -1925,18 +1926,14 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             struct eth_addr mac;
 
             if (eth_addr_from_string(op->nbs->addresses[i], &mac)) {
-                struct ds match, actions;
-
-                ds_init(&match);
+                ds_clear(&match);
                 ds_put_format(&match, "eth.dst == "ETH_ADDR_FMT,
                               ETH_ADDR_ARGS(mac));
 
-                ds_init(&actions);
+                ds_clear(&actions);
                 ds_put_format(&actions, "outport = %s; output;", op->json_key);
                 ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, 50,
                               ds_cstr(&match), ds_cstr(&actions));
-                ds_destroy(&actions);
-                ds_destroy(&match);
             } else if (!strcmp(op->nbs->addresses[i], "unknown")) {
                 if (lsp_is_enabled(op->nbs)) {
                     ovn_multicast_add(mcgroups, &mc_unknown, op);
@@ -1991,7 +1988,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        struct ds match = DS_EMPTY_INITIALIZER;
+        ds_clear(&match);
         ds_put_format(&match, "outport == %s", op->json_key);
         if (lsp_is_enabled(op->nbs)) {
             build_port_security_l2("eth.dst", op->nbs->port_security,
@@ -2003,12 +2000,13 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                           ds_cstr(&match), "drop;");
         }
 
-        ds_destroy(&match);
-
         if (op->nbs->n_port_security) {
             build_port_security_ip(P_OUT, op, lflows);
         }
     }
+
+    ds_destroy(&match);
+    ds_destroy(&actions);
 }
 
 static bool
@@ -2122,6 +2120,9 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
     /* This flow table structure is documented in ovn-northd(8), so please
      * update ovn-northd.8.xml if you change anything. */
 
+    struct ds match = DS_EMPTY_INITIALIZER;
+    struct ds actions = DS_EMPTY_INITIALIZER;
+
     /* Logical router ingress table 0: Admission control framework. */
     struct ovn_datapath *od;
     HMAP_FOR_EACH (od, key_node, datapaths) {
@@ -2148,12 +2149,12 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        char *match = xasprintf(
+        ds_clear(&match);
+        ds_put_format(&match,
             "(eth.mcast || eth.dst == "ETH_ADDR_FMT") && inport == %s",
             ETH_ADDR_ARGS(op->mac), op->json_key);
         ovn_lflow_add(lflows, op->od, S_ROUTER_IN_ADMISSION, 50,
-                      match, "next;");
-        free(match);
+                      ds_cstr(&match), "next;");
     }
 
     /* Logical router ingress table 1: IP Input. */
@@ -2191,9 +2192,10 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         /* TTL discard.
          *
          * XXX Need to send ICMP time exceeded if !ip.later_frag. */
-        char *match = xasprintf("ip4 && ip.ttl == {0, 1}");
-        ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_INPUT, 30, match, "drop;");
-        free(match);
+        ds_clear(&match);
+        ds_put_cstr(&match, "ip4 && ip.ttl == {0, 1}");
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_INPUT, 30,
+                      ds_cstr(&match), "drop;");
 
         /* Pass other traffic not already handled to the next table for
          * routing. */
@@ -2208,21 +2210,23 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         /* L3 admission control: drop packets that originate from an IP address
          * owned by the router or a broadcast address known to the router
          * (priority 100). */
-        char *match = xasprintf("ip4.src == {"IP_FMT", "IP_FMT"}",
-                                IP_ARGS(op->ip), IP_ARGS(op->bcast));
+        ds_clear(&match);
+        ds_put_format(&match, "ip4.src == {"IP_FMT", "IP_FMT"}",
+                      IP_ARGS(op->ip), IP_ARGS(op->bcast));
         ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 100,
-                      match, "drop;");
-        free(match);
+                      ds_cstr(&match), "drop;");
 
         /* ICMP echo reply.  These flows reply to ICMP echo requests
          * received for the router's IP address. Since packets only
          * get here as part of the logical router datapath, the inport
          * (i.e. the incoming locally attached net) does not matter.
          * The ip.ttl also does not matter (RFC1812 section 4.2.2.9) */
-        match = xasprintf(
+        ds_clear(&match);
+        ds_put_format(&match,
             "ip4.dst == "IP_FMT" && icmp4.type == 8 && icmp4.code == 0",
             IP_ARGS(op->ip));
-        char *actions = xasprintf(
+        ds_clear(&actions);
+        ds_put_format(&actions,
             "ip4.dst = ip4.src; "
             "ip4.src = "IP_FMT"; "
             "ip.ttl = 255; "
@@ -2231,16 +2235,16 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             "next; ",
             IP_ARGS(op->ip));
         ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
-                      match, actions);
-        free(match);
-        free(actions);
+                      ds_cstr(&match), ds_cstr(&actions));
 
         /* ARP reply.  These flows reply to ARP requests for the router's own
          * IP address. */
-        match = xasprintf(
+        ds_clear(&match);
+        ds_put_format(&match,
             "inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
             op->json_key, IP_ARGS(op->ip));
-        actions = xasprintf(
+        ds_clear(&actions);
+        ds_put_format(&actions,
             "eth.dst = eth.src; "
             "eth.src = "ETH_ADDR_FMT"; "
             "arp.op = 2; /* ARP reply */ "
@@ -2256,9 +2260,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             IP_ARGS(op->ip),
             op->json_key);
         ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
-                      match, actions);
-        free(match);
-        free(actions);
+                      ds_cstr(&match), ds_cstr(&actions));
 
         /* ARP handling for external IP addresses.
          *
@@ -2281,10 +2283,12 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 continue;
             }
 
-            match = xasprintf(
-                "inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
-                op->json_key, IP_ARGS(ip));
-            actions = xasprintf(
+            ds_clear(&match);
+            ds_put_format(&match,
+                          "inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
+                          op->json_key, IP_ARGS(ip));
+            ds_clear(&actions);
+            ds_put_format(&actions,
                 "eth.dst = eth.src; "
                 "eth.src = "ETH_ADDR_FMT"; "
                 "arp.op = 2; /* ARP reply */ "
@@ -2300,9 +2304,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 IP_ARGS(ip),
                 op->json_key);
             ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
-                          match, actions);
-            free(match);
-            free(actions);
+                          ds_cstr(&match), ds_cstr(&actions));
         }
 
         /* Drop IP traffic to this router, unless the router ip is used as
@@ -2331,10 +2333,10 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         }
 
         if (!snat_ip_is_router_ip) {
-            match = xasprintf("ip4.dst == "IP_FMT, IP_ARGS(op->ip));
-            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 60, match,
-                          "drop;");
-            free(match);
+            ds_clear(&match);
+            ds_put_format(&match, "ip4.dst == "IP_FMT, IP_ARGS(op->ip));
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 60,
+                          ds_cstr(&match), "drop;");
         }
     }
 
@@ -2394,9 +2396,6 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 }
             }
 
-
-            char *match, *actions;
-
             /* Ingress UNSNAT table: It is for already established connections'
              * reverse traffic. i.e., SNAT has already been done in egress
              * pipeline and now the packet has entered the ingress pipeline as
@@ -2408,10 +2407,10 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
              * egress pipeline. */
             if (!strcmp(nat->type, "snat")
                 || !strcmp(nat->type, "dnat_and_snat")) {
-                match = xasprintf("ip && ip4.dst == %s", nat->external_ip);
+                ds_clear(&match);
+                ds_put_format(&match, "ip && ip4.dst == %s", nat->external_ip);
                 ovn_lflow_add(lflows, od, S_ROUTER_IN_UNSNAT, 100,
-                              match, "ct_snat; next;");
-                free(match);
+                              ds_cstr(&match), "ct_snat; next;");
             }
 
             /* Ingress DNAT table: Packets enter the pipeline with destination
@@ -2422,13 +2421,13 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 /* Packet when it goes from the initiator to destination.
                  * We need to zero the inport because the router can
                  * send the packet back through the same interface. */
-                match = xasprintf("ip && ip4.dst == %s", nat->external_ip);
-                actions = xasprintf("inport = \"\"; ct_dnat(%s);",
-                                    nat->logical_ip);
+                ds_clear(&match);
+                ds_put_format(&match, "ip && ip4.dst == %s", nat->external_ip);
+                ds_clear(&actions);
+                ds_put_format(&actions,"inport = \"\"; ct_dnat(%s);",
+                              nat->logical_ip);
                 ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT, 100,
-                           match, actions);
-                free(match);
-                free(actions);
+                              ds_cstr(&match), ds_cstr(&actions));
             }
 
             /* Egress SNAT table: Packets enter the egress pipeline with
@@ -2436,16 +2435,17 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
              * address. */
             if (!strcmp(nat->type, "snat")
                 || !strcmp(nat->type, "dnat_and_snat")) {
-                match = xasprintf("ip && ip4.src == %s", nat->logical_ip);
-                actions = xasprintf("ct_snat(%s);", nat->external_ip);
+                ds_clear(&match);
+                ds_put_format(&match, "ip && ip4.src == %s", nat->logical_ip);
+                ds_clear(&actions);
+                ds_put_format(&actions, "ct_snat(%s);", nat->external_ip);
 
                 /* The priority here is calculated such that the
                  * nat->logical_ip with the longest mask gets a higher
                  * priority. */
                 ovn_lflow_add(lflows, od, S_ROUTER_OUT_SNAT,
-                              count_1bits(ntohl(mask)) + 1, match, actions);
-                free(match);
-                free(actions);
+                              count_1bits(ntohl(mask)) + 1,
+                              ds_cstr(&match), ds_cstr(&actions));
             }
         }
 
@@ -2520,14 +2520,14 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 if (!peer->ip || !op->ip) {
                     continue;
                 }
-                char *match = xasprintf("outport == %s && reg0 == "IP_FMT,
-                                        peer->json_key, IP_ARGS(op->ip));
-                char *actions = xasprintf("eth.dst = "ETH_ADDR_FMT"; "
-                                          "next;", ETH_ADDR_ARGS(op->mac));
+                ds_clear(&match);
+                ds_put_format(&match, "outport == %s && reg0 == "IP_FMT,
+                              peer->json_key, IP_ARGS(op->ip));
+                ds_clear(&actions);
+                ds_put_format(&actions, "eth.dst = "ETH_ADDR_FMT"; next;",
+                              ETH_ADDR_ARGS(op->mac));
                 ovn_lflow_add(lflows, peer->od, S_ROUTER_IN_ARP_RESOLVE,
-                              100, match, actions);
-                free(actions);
-                free(match);
+                              100, ds_cstr(&match), ds_cstr(&actions));
             }
         } else if (op->od->n_router_ports && strcmp(op->nbs->type, "router")) {
             /* This is a logical switch port that backs a VM or a container.
@@ -2567,17 +2567,16 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                             continue;
                         }
 
-                        char *match = xasprintf(
-                            "outport == %s && reg0 == "IP_FMT,
-                            peer->json_key, IP_ARGS(ip));
-                        char *actions = xasprintf("eth.dst = "ETH_ADDR_FMT"; "
-                                                  "next;",
-                                                  ETH_ADDR_ARGS(laddrs.ea));
+                        ds_clear(&match);
+                        ds_put_format(&match, "outport == %s && reg0 == "IP_FMT,
+                                      peer->json_key, IP_ARGS(ip));
+                        ds_clear(&actions);
+                        ds_put_format(&actions,
+                                      "eth.dst = "ETH_ADDR_FMT"; next;",
+                                      ETH_ADDR_ARGS(laddrs.ea));
                         ovn_lflow_add(lflows, peer->od,
-                                      S_ROUTER_IN_ARP_RESOLVE,
-                                      100, match, actions);
-                        free(actions);
-                        free(match);
+                                      S_ROUTER_IN_ARP_RESOLVE, 100,
+                                      ds_cstr(&match), ds_cstr(&actions));
                         break;
                     }
                 }
@@ -2621,15 +2620,14 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 if (!router_port->ip) {
                     continue;
                 }
-                char *match = xasprintf("outport == %s && reg0 == "IP_FMT,
-                                        peer->json_key,
-                                        IP_ARGS(router_port->ip));
-                char *actions = xasprintf("eth.dst = "ETH_ADDR_FMT"; next;",
-                                          ETH_ADDR_ARGS(router_port->mac));
+                ds_clear(&match);
+                ds_put_format(&match, "outport == %s && reg0 == "IP_FMT,
+                              peer->json_key, IP_ARGS(router_port->ip));
+                ds_clear(&actions);
+                ds_put_format(&actions, "eth.dst = "ETH_ADDR_FMT"; next;",
+                              ETH_ADDR_ARGS(router_port->mac));
                 ovn_lflow_add(lflows, peer->od, S_ROUTER_IN_ARP_RESOLVE,
-                              100, match, actions);
-                free(actions);
-                free(match);
+                              100, ds_cstr(&match), ds_cstr(&actions));
             }
         }
     }
@@ -2678,11 +2676,14 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        char *match = xasprintf("outport == %s", op->json_key);
+        ds_clear(&match);
+        ds_put_format(&match, "outport == %s", op->json_key);
         ovn_lflow_add(lflows, op->od, S_ROUTER_OUT_DELIVERY, 100,
-                      match, "output;");
-        free(match);
+                      ds_cstr(&match), "output;");
     }
+
+    ds_destroy(&match);
+    ds_destroy(&actions);
 }
 
 /* Updates the Logical_Flow and Multicast_Group tables in the OVN_SB database,
