@@ -290,8 +290,48 @@
     </column>
 
     <column name="options">
-      Options for configuring the encapsulation, e.g. IPsec parameters when
-      IPsec support is introduced.  No options are currently defined.
+      <p>
+        Options for configuring the encapsulation. Currently, the only
+        option that has been defined is <code>csum</code>.
+       </p>
+
+      <p>
+        <code>csum</code> indicates that encapsulation checksums can be
+        transmitted and received with reasonable performance. It is a hint
+        to senders transmitting data to this chassis that they should use
+        checksums to protect OVN metadata. Set to <code>true</code> to enable
+        or <code>false</code> to disable.
+      </p>
+
+      <p>
+        In terms of performance, this actually significantly increases
+        throughput in most common cases when running on Linux based hosts
+        without NICs supporting encapsulation hardware offload (around 60% for
+        bulk traffic). The reason is that generally all NICs are capable of
+        offloading transmitted and received TCP/UDP checksums (viewed as
+        ordinary data packets and not as tunnels). The benefit comes on the
+        receive side where the validated outer checksum can be used to
+        additionally validate an inner checksum (such as TCP), which in turn
+        allows aggregation of packets to be more efficiently handled by the
+        rest of the stack.
+      </p>
+
+      <p>
+        Not all devices see such a benefit. The most notable exception is
+        hardware VTEPs. These devices are designed to not buffer entire
+        packets in their switching engines and are therefore unable to
+        efficiently compute or validate full packet checksums. In addition
+        certain versions of the Linux kernel are not able to fully take
+        advantage of encapsulation NIC offloads in the presence of checksums.
+        (This is actually a pretty narrow corner case though - earlier
+        versions of Linux don't support encapsulation offloads at all and
+        later versions support both offloads and checksums well.)
+      </p>
+
+      <p>
+        <code>csum</code> defaults to <code>false</code> for hardware VTEPs and
+        <code>true</code> for all other cases.
+      </p>
     </column>
 
     <column name="ip">

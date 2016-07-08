@@ -189,6 +189,7 @@ tunnel_add(const struct sbrec_chassis *chassis_rec,
     struct smap options = SMAP_INITIALIZER(&options);
     struct ovsrec_port *port, **ports;
     struct ovsrec_interface *iface;
+    const char *csum = smap_get(&encap->options, "csum");
     char *port_name;
     size_t i;
 
@@ -204,6 +205,9 @@ tunnel_add(const struct sbrec_chassis *chassis_rec,
     ovsrec_interface_set_type(iface, encap->type);
     smap_add(&options, "remote_ip", encap->ip);
     smap_add(&options, "key", "flow");
+    if (csum && (!strcmp(csum, "true") || !strcmp(csum, "false"))) {
+        smap_add(&options, "csum", csum);
+    }
     ovsrec_interface_set_options(iface, &options);
     smap_destroy(&options);
 
@@ -301,15 +305,21 @@ check_and_update_tunnel(const struct ovsrec_port *port,
 {
     const struct sbrec_encap *encap = preferred_encap(chassis_rec);
     const struct ovsrec_interface *iface = port->interfaces[0];
+    const char *csum = smap_get(&encap->options, "csum");
+    const char *existing_csum = smap_get(&iface->options, "csum");
 
     if (strcmp(encap->type, iface->type)) {
         ovsrec_interface_set_type(iface, encap->type);
     }
     const char *ip = smap_get(&iface->options, "remote_ip");
-    if (!ip || strcmp(encap->ip, ip)) {
+    if (!ip || strcmp(encap->ip, ip) ||
+        (!!csum != !!existing_csum || (csum && strcmp(csum, existing_csum)))) {
         struct smap options = SMAP_INITIALIZER(&options);
         smap_add(&options, "remote_ip", encap->ip);
         smap_add(&options, "key", "flow");
+        if (csum && (!strcmp(csum, "true") || !strcmp(csum, "false"))) {
+            smap_add(&options, "csum", csum);
+        }
         ovsrec_interface_set_options(iface, &options);
         smap_destroy(&options);
     }

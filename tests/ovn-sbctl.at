@@ -93,6 +93,7 @@ AT_CHECK([ovn-sbctl show], [0], [dnl
 Chassis "ch0"
     Encap stt
         ip: "1.2.3.5"
+        options: {csum="true"}
     Port_Binding "vif0"
 ])
 
@@ -105,6 +106,7 @@ AT_CHECK([ovn-sbctl show | sed 's/vif[[0-9]]/vif/'], [0], [dnl
 Chassis "ch0"
     Encap stt
         ip: "1.2.3.5"
+        options: {csum="true"}
     Port_Binding "vif"
     Port_Binding "vif"
 ])
@@ -116,6 +118,7 @@ AT_CHECK([ovn-sbctl show], [0], [dnl
 Chassis "ch0"
     Encap stt
         ip: "1.2.3.5"
+        options: {csum="true"}
     Port_Binding "vif0"
 ])
 

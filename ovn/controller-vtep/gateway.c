@@ -57,6 +57,8 @@ create_chassis_rec(struct ovsdb_idl_txn *txn, const char *name,
     encap_rec = sbrec_encap_insert(txn);
     sbrec_encap_set_type(encap_rec, OVN_SB_ENCAP_TYPE);
     sbrec_encap_set_ip(encap_rec, encap_ip);
+    const struct smap options = SMAP_CONST1(&options, "csum", "false");
+    sbrec_encap_set_options(encap_rec, &options);
     sbrec_chassis_set_encaps(chassis_rec, &encap_rec, 1);
 
     return chassis_rec;
@@ -106,6 +108,11 @@ revalidate_gateway(struct controller_vtep_ctx *ctx)
             }
             if (strcmp(chassis_rec->encaps[0]->ip, encap_ip)) {
                 sbrec_encap_set_ip(chassis_rec->encaps[0], encap_ip);
+            }
+            if (smap_get_bool(&chassis_rec->encaps[0]->options, "csum", true)) {
+                const struct smap options = SMAP_CONST1(&options, "csum",
+                                                                  "false");
+                sbrec_encap_set_options(chassis_rec->encaps[0], &options);
             }
         } else {
             if (gw_node) {

@@ -124,6 +124,7 @@ AT_CHECK([ovn-sbctl show], [0], [dnl
 Chassis br-vtep
     Encap vxlan
         ip: "1.2.3.4"
+        options: {csum="false"}
 ])
 
 # deletes the chassis via ovn-sbctl and check that it is readded back

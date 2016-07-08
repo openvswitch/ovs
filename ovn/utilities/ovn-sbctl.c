@@ -557,6 +557,7 @@ cmd_chassis_add(struct ctl_context *ctx)
 
     size_t n_encaps = sset_count(&encap_set);
     struct sbrec_encap **encaps = xmalloc(n_encaps * sizeof *encaps);
+    const struct smap options = SMAP_CONST1(&options, "csum", "true");
     const char *encap_type;
     int i = 0;
     SSET_FOR_EACH (encap_type, &encap_set){
@@ -564,6 +565,7 @@ cmd_chassis_add(struct ctl_context *ctx)
 
         sbrec_encap_set_type(encaps[i], encap_type);
         sbrec_encap_set_ip(encaps[i], encap_ip);
+        sbrec_encap_set_options(encaps[i], &options);
         i++;
     }
     sset_destroy(&encap_set);
