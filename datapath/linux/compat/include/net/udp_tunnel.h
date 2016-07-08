@@ -4,6 +4,7 @@
 #include <linux/version.h>
 #include <linux/kconfig.h>
 
+#include <net/addrconf.h>
 #include <net/dst_metadata.h>
 #include <linux/netdev_features.h>
 
@@ -99,7 +100,20 @@ int rpl_udp_tunnel_xmit_skb(struct rtable *rt,
 #define udp_tunnel_sock_release rpl_udp_tunnel_sock_release
 void rpl_udp_tunnel_sock_release(struct socket *sock);
 
-#define udp_tunnel_encap_enable(sock) udp_encap_enable()
+#define udp_tunnel_encap_enable rpl_udp_tunnel_encap_enable
+static inline void udp_tunnel_encap_enable(struct socket *sock)
+{
+#if IS_ENABLED(CONFIG_IPV6)
+	if (sock->sk->sk_family == PF_INET6)
+#ifdef HAVE_IPV6_STUB
+		ipv6_stub->udpv6_encap_enable();
+#else
+		udpv6_encap_enable();
+#endif
+	else
+#endif
+		udp_encap_enable();
+}
 
 #if IS_ENABLED(CONFIG_IPV6)
 #define udp_tunnel6_xmit_skb rpl_udp_tunnel6_xmit_skb
