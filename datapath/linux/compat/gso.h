@@ -195,6 +195,9 @@ static inline void ovs_dst_hold(void *dst)
 
 static inline void ovs_dst_release(struct dst_entry *dst)
 {
+	struct metadata_dst *tun_dst = (struct metadata_dst *) dst;
+
+	dst_cache_destroy(&tun_dst->u.tun_info.dst_cache);
 	kfree(dst);
 }
 

@@ -197,6 +197,24 @@ static inline void ip_tunnel_key_init(struct ip_tunnel_key *key,
 
 #define ip_tunnel_collect_metadata() true
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+#define TUNNEL_NOCACHE 0
+
+static inline bool
+ip_tunnel_dst_cache_usable(const struct sk_buff *skb,
+			   const struct ip_tunnel_info *info)
+{
+	if (skb->mark)
+		return false;
+	if (!info)
+		return true;
+	if (info->key.tun_flags & TUNNEL_NOCACHE)
+		return false;
+
+	return true;
+}
+#endif
+
 #define ip_tunnel rpl_ip_tunnel
 
 struct ip_tunnel {

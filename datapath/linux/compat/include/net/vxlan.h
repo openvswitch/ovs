@@ -25,6 +25,7 @@ static inline void rpl_vxlan_cleanup_module(void)
 #include <linux/skbuff.h>
 #include <linux/netdevice.h>
 #include <linux/udp.h>
+#include <net/dst_cache.h>
 #include <net/dst_metadata.h>
 
 #include "compat.h"
@@ -227,6 +228,7 @@ struct vxlan_rdst {
 	u32			 remote_ifindex;
 	struct list_head	 list;
 	struct rcu_head		 rcu;
+	struct dst_cache	 dst_cache;
 };
 
 struct vxlan_config {

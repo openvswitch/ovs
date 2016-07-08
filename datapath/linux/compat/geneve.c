@@ -19,6 +19,7 @@
 #include <linux/if_vlan.h>
 
 #include <net/addrconf.h>
+#include <net/dst_cache.h>
 #include <net/dst_metadata.h>
 #include <net/net_namespace.h>
 #include <net/netns/generic.h>
@@ -88,6 +89,7 @@ struct geneve_dev {
 	__be16		   dst_port;
 	bool		   collect_md;
 	u32		   flags;
+	struct dst_cache   dst_cache;
 };
 
 /* Geneve device flags */
@@ -301,15 +303,27 @@ drop:
 /* Setup stats when device is created */
 static int geneve_init(struct net_device *dev)
 {
+	struct geneve_dev *geneve = netdev_priv(dev);
+	int err;
+
 	dev->tstats = netdev_alloc_pcpu_stats(struct pcpu_sw_netstats);
 	if (!dev->tstats)
 		return -ENOMEM;
+
+	err = dst_cache_init(&geneve->dst_cache, GFP_KERNEL);
+	if (err) {
+		free_percpu(dev->tstats);
+		return err;
+	}
 
 	return 0;
 }
 
 static void geneve_uninit(struct net_device *dev)
 {
+	struct geneve_dev *geneve = netdev_priv(dev);
+
+	dst_cache_destroy(&geneve->dst_cache);
 	free_percpu(dev->tstats);
 }
 
@@ -799,7 +813,9 @@ static struct rtable *geneve_get_v4_rt(struct sk_buff *skb,
 				       struct flowi4 *fl4,
 				       struct ip_tunnel_info *info)
 {
+	bool use_cache = ip_tunnel_dst_cache_usable(skb, info);
 	struct geneve_dev *geneve = netdev_priv(dev);
+	struct dst_cache *dst_cache;
 	struct rtable *rt = NULL;
 	__u8 tos;
 
@@ -811,16 +827,25 @@ static struct rtable *geneve_get_v4_rt(struct sk_buff *skb,
 		fl4->daddr = info->key.u.ipv4.dst;
 		fl4->saddr = info->key.u.ipv4.src;
 		fl4->flowi4_tos = RT_TOS(info->key.tos);
+		dst_cache = &info->dst_cache;
 	} else {
 		tos = geneve->tos;
 		if (tos == 1) {
 			const struct iphdr *iip = ip_hdr(skb);
 
 			tos = ip_tunnel_get_dsfield(iip, skb);
+			use_cache = false;
 		}
 
 		fl4->flowi4_tos = RT_TOS(tos);
 		fl4->daddr = geneve->remote.sin.sin_addr.s_addr;
+		dst_cache = &geneve->dst_cache;
+	}
+
+	if (use_cache) {
+		rt = dst_cache_get_ip4(dst_cache, &fl4->saddr);
+		if (rt)
+			return rt;
 	}
 
 	rt = ip_route_output_key(geneve->net, fl4);
@@ -833,6 +858,8 @@ static struct rtable *geneve_get_v4_rt(struct sk_buff *skb,
 		ip_rt_put(rt);
 		return ERR_PTR(-ELOOP);
 	}
+	if (use_cache)
+		dst_cache_set_ip4(dst_cache, &rt->dst, fl4->saddr);
 	return rt;
 }
 
@@ -842,9 +869,11 @@ static struct dst_entry *geneve_get_v6_dst(struct sk_buff *skb,
 					   struct flowi6 *fl6,
 					   struct ip_tunnel_info *info)
 {
+	bool use_cache = ip_tunnel_dst_cache_usable(skb, info);
 	struct geneve_dev *geneve = netdev_priv(dev);
 	struct geneve_sock *gs6 = geneve->sock6;
 	struct dst_entry *dst = NULL;
+	struct dst_cache *dst_cache;
 	__u8 prio;
 
 	memset(fl6, 0, sizeof(*fl6));
@@ -856,17 +885,26 @@ static struct dst_entry *geneve_get_v6_dst(struct sk_buff *skb,
 		fl6->saddr = info->key.u.ipv6.src;
 		fl6->flowlabel = ip6_make_flowinfo(RT_TOS(info->key.tos),
 						   info->key.label);
+		dst_cache = &info->dst_cache;
 	} else {
 		prio = geneve->tos;
 		if (prio == 1) {
 			const struct iphdr *iip = ip_hdr(skb);
 
 			prio = ip_tunnel_get_dsfield(iip, skb);
+			use_cache = false;
 		}
 
 		fl6->flowlabel = ip6_make_flowinfo(RT_TOS(prio),
 						   geneve->label);
 		fl6->daddr = geneve->remote.sin6.sin6_addr;
+		dst_cache = &geneve->dst_cache;
+	}
+
+	if (use_cache) {
+		dst = dst_cache_get_ip6(dst_cache, &fl6->saddr);
+		if (dst)
+			return dst;
 	}
 
 #ifdef HAVE_IPV6_DST_LOOKUP_NET
@@ -887,6 +925,8 @@ static struct dst_entry *geneve_get_v6_dst(struct sk_buff *skb,
 		return ERR_PTR(-ELOOP);
 	}
 
+	if (use_cache)
+		dst_cache_set_ip6(dst_cache, dst, &fl6->saddr);
 	return dst;
 }
 #endif
@@ -1373,6 +1413,8 @@ static int geneve_configure(struct net *net, struct net_device *dev,
 		if (tun_collect_md)
 			return -EPERM;
 	}
+
+	dst_cache_reset(&geneve->dst_cache);
 
 	err = register_netdevice(dev);
 	if (err)
