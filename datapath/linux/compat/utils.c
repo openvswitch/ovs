@@ -65,3 +65,31 @@ bool rpl___net_get_random_once(void *buf, int nbytes, bool *done,
 EXPORT_SYMBOL_GPL(rpl___net_get_random_once);
 
 #endif
+
+#ifdef NEED_ALLOC_PERCPU_GFP
+void __percpu *__alloc_percpu_gfp(size_t size, size_t align, gfp_t gfp)
+{
+	void __percpu *p;
+	int i;
+
+	/* older kernel do not allow all GFP flags, specifically atomic
+	 * allocation.
+	 */
+	if (gfp & ~(GFP_KERNEL | __GFP_ZERO))
+		return NULL;
+	p = __alloc_percpu(size, align);
+	if (!p)
+		return p;
+
+	if (!(gfp & __GFP_ZERO))
+		return p;
+
+	for_each_possible_cpu(i) {
+		void *d;
+
+		d = per_cpu_ptr(p, i);
+		memset(d, 0, size);
+	}
+	return p;
+}
+#endif
