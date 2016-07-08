@@ -1026,7 +1026,7 @@ static void vxlan_build_gbp_hdr(struct vxlanhdr *vxh, u32 vxflags,
 static int vxlan6_xmit_skb(struct dst_entry *dst, struct sock *sk,
 			   struct sk_buff *skb,
 			   struct net_device *dev, struct in6_addr *saddr,
-			   struct in6_addr *daddr, __u8 prio, __u8 ttl,
+			   struct in6_addr *daddr, __u8 prio, __u8 ttl, __be32 label,
 			   __be16 src_port, __be16 dst_port, __be32 vni,
 			   struct vxlan_metadata *md, bool xnet, u32 vxflags)
 {
@@ -1112,7 +1112,7 @@ static int vxlan6_xmit_skb(struct dst_entry *dst, struct sock *sk,
 	ovs_skb_set_inner_protocol(skb, htons(ETH_P_TEB));
 
 	udp_tunnel6_xmit_skb(dst, sk, skb, dev, saddr, daddr, prio,
-			     ttl, src_port, dst_port,
+			     ttl, label, src_port, dst_port,
 			     !!(vxflags & VXLAN_F_UDP_ZERO_CSUM6_TX));
 	return 0;
 err:
@@ -1220,7 +1220,7 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 	struct vxlan_metadata _md;
 	struct vxlan_metadata *md = &_md;
 	__be16 src_port = 0, dst_port;
-	u32 vni;
+	u32 vni, label;
 	__be16 df = 0;
 	__u8 tos, ttl;
 	int err;
@@ -1270,6 +1270,7 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 	if (tos == 1)
 		tos = ip_tunnel_get_dsfield(old_iph, skb);
 
+	label = vxlan->cfg.label;
 	src_port = udp_flow_src_port(dev_net(dev), skb, vxlan->cfg.port_min,
 				     vxlan->cfg.port_max, true);
 
@@ -1281,6 +1282,7 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 
 		ttl = info->key.ttl;
 		tos = info->key.tos;
+		label = info->key.label;
 
 		if (info->options_len)
 			md = ip_tunnel_info_opts(info);
@@ -1357,6 +1359,7 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 		fl6.saddr = vxlan->cfg.saddr.sin6.sin6_addr;
 		fl6.flowi6_mark = skb->mark;
 		fl6.flowi6_proto = IPPROTO_UDP;
+		fl6.flowlabel = ip6_make_flowinfo(RT_TOS(tos), label);
 
 #ifdef HAVE_IPV6_DST_LOOKUP_NET
 		if (ipv6_stub->ipv6_dst_lookup(vxlan->net, sk, &ndst, &fl6)) {
@@ -1401,7 +1404,7 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 
 		ttl = ttl ? : ip6_dst_hoplimit(ndst);
 		err = vxlan6_xmit_skb(ndst, sk, skb, dev, &fl6.saddr, &fl6.daddr,
-				      0, ttl, src_port, dst_port, htonl(vni << 8), md,
+				      0, ttl, label, src_port, dst_port, htonl(vni << 8), md,
 				      !net_eq(vxlan->net, dev_net(vxlan->dev)),
 				      flags);
 #endif

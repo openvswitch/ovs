@@ -73,7 +73,7 @@ static inline void ovs_ip_tun_rx_dst(struct ip_tunnel_info *tun_info,
 
 	ovs_tun_rx_dst(tun_info, md_size);
 	ip_tunnel_key_init(&tun_info->key,
-			   iph->saddr, iph->daddr, iph->tos, iph->ttl,
+			   iph->saddr, iph->daddr, iph->tos, iph->ttl, 0,
 			   0, 0, tunnel_id, flags);
 }
 
@@ -97,6 +97,7 @@ static inline void ovs_ipv6_tun_rx_dst(struct ip_tunnel_info *info,
 
 	info->key.tos = ipv6_get_dsfield(ip6h);
 	info->key.ttl = ip6h->hop_limit;
+	info->key.label = ip6_flowlabel(ip6h);
 }
 
 void ovs_ip_tunnel_rcv(struct net_device *dev, struct sk_buff *skb,

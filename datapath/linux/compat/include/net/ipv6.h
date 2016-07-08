@@ -54,4 +54,27 @@ static inline u32 __ipv6_addr_jhash(const struct in6_addr *a, const u32 unused)
 }
 #endif
 
+#define ip6_flowlabel rpl_ip6_flowlabel
+static inline __be32 ip6_flowlabel(const struct ipv6hdr *hdr)
+{
+	return *(__be32 *)hdr & IPV6_FLOWLABEL_MASK;
+}
+
+#ifndef IPV6_TCLASS_SHIFT
+#define IPV6_TCLASS_MASK (IPV6_FLOWINFO_MASK & ~IPV6_FLOWLABEL_MASK)
+#define IPV6_TCLASS_SHIFT	20
+#endif
+
+#define ip6_tclass rpl_ip6_tclass
+static inline u8 ip6_tclass(__be32 flowinfo)
+{
+	return ntohl(flowinfo & IPV6_TCLASS_MASK) >> IPV6_TCLASS_SHIFT;
+}
+
+#define ip6_make_flowinfo rpl_ip6_make_flowinfo
+static inline __be32 ip6_make_flowinfo(unsigned int tclass, __be32 flowlabel)
+{
+	return htonl(tclass << IPV6_TCLASS_SHIFT) | flowlabel;
+}
+
 #endif
