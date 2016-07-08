@@ -43,7 +43,7 @@ void rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
                       __be16 df, bool xnet)
 {
 	struct net_device *dev = skb->dev;
-	int pkt_len = skb->len;
+	int pkt_len = skb->len - skb_inner_network_offset(skb);
 	struct iphdr *iph;
 	int err;
 
