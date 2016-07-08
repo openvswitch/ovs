@@ -3,6 +3,11 @@
 #include <linux/version.h>
 #include <net/rtnetlink.h>
 
+#include "gso.h"
+#include "vport.h"
+#include "vport-internal_dev.h"
+#include "vport-netdev.h"
+
 #ifndef HAVE_DEV_DISABLE_LRO
 
 #ifdef NETIF_F_LRO
@@ -54,3 +59,30 @@ int rpl_rtnl_delete_link(struct net_device *dev)
 #endif
 	return 0;
 }
+
+#ifndef HAVE_NDO_FILL_METADATA_DST
+int ovs_dev_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb)
+{
+	struct ip_tunnel_info *info;
+	struct vport *vport;
+
+	if (!SKB_SETUP_FILL_METADATA_DST(skb))
+		return -ENOMEM;
+
+	vport = ovs_netdev_get_vport(dev);
+	if (!vport)
+		return -EINVAL;
+
+	if (!vport->ops->fill_metadata_dst)
+		return -EINVAL;
+
+	info = skb_tunnel_info(skb);
+	if (!info)
+		return -ENOMEM;
+	if (unlikely(!(info->mode & IP_TUNNEL_INFO_TX)))
+		return -EINVAL;
+
+	return vport->ops->fill_metadata_dst(dev, skb);
+}
+EXPORT_SYMBOL_GPL(ovs_dev_fill_metadata_dst);
+#endif

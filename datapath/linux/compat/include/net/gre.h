@@ -66,4 +66,7 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb);
 #define ipgre_init rpl_ipgre_init
 #define ipgre_fini rpl_ipgre_fini
 
+#define gre_fill_metadata_dst ovs_gre_fill_metadata_dst
+int ovs_gre_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
+
 #endif

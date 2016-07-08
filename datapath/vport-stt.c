@@ -54,18 +54,6 @@ static int stt_get_options(const struct vport *vport,
 	return 0;
 }
 
-static int stt_get_egress_tun_info(struct vport *vport, struct sk_buff *skb,
-				      struct dp_upcall_info *upcall)
-{
-	struct stt_port *stt_port = stt_vport(vport);
-	struct net *net = ovs_dp_get_net(vport->dp);
-	__be16 dport = htons(stt_port->port_no);
-	__be16 sport = udp_flow_src_port(net, skb, 1, USHRT_MAX, true);
-
-	return ovs_tunnel_get_egress_info(upcall, ovs_dp_get_net(vport->dp),
-					  skb, IPPROTO_UDP, sport, dport);
-}
-
 static struct vport *stt_tnl_create(const struct vport_parms *parms)
 {
 	struct net *net = ovs_dp_get_net(parms->dp);
@@ -130,8 +118,8 @@ static struct vport_ops ovs_stt_vport_ops = {
 	.create		= stt_create,
 	.destroy	= ovs_netdev_tunnel_destroy,
 	.get_options	= stt_get_options,
+	.fill_metadata_dst = stt_fill_metadata_dst,
 	.send		= ovs_stt_xmit,
-	.get_egress_tun_info	= stt_get_egress_tun_info,
 };
 
 static int __init ovs_stt_tnl_init(void)

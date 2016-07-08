@@ -775,20 +775,21 @@ static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port,
 		kfree_skb(skb);
 	}
 }
+
 static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 			    struct sw_flow_key *key, const struct nlattr *attr,
 			    const struct nlattr *actions, int actions_len,
 			    uint32_t cutlen)
 {
-	struct ip_tunnel_info info;
 	struct dp_upcall_info upcall;
 	const struct nlattr *a;
-	int rem;
+	int rem, err;
 
 	memset(&upcall, 0, sizeof(upcall));
 	upcall.cmd = OVS_PACKET_CMD_ACTION;
 	upcall.mru = OVS_CB(skb)->mru;
 
+	SKB_INIT_FILL_METADATA_DST(skb);
 	for (a = nla_data(attr), rem = nla_len(attr); rem > 0;
 		 a = nla_next(a, &rem)) {
 		switch (nla_type(a)) {
@@ -808,11 +809,9 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 			if (vport) {
 				int err;
 
-				upcall.egress_tun_info = &info;
-				err = ovs_vport_get_egress_tun_info(vport, skb,
-								    &upcall);
-				if (err)
-					upcall.egress_tun_info = NULL;
+				err = dev_fill_metadata_dst(vport->dev, skb);
+				if (!err)
+					upcall.egress_tun_info = skb_tunnel_info(skb);
 			}
 
 			break;
@@ -828,7 +827,9 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 		} /* End of switch. */
 	}
 
-	return ovs_dp_upcall(dp, skb, key, &upcall, cutlen);
+	err = ovs_dp_upcall(dp, skb, key, &upcall, cutlen);
+	SKB_RESTORE_FILL_METADATA_DST(skb);
+	return err;
 }
 
 static int sample(struct datapath *dp, struct sk_buff *skb,

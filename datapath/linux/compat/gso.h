@@ -23,6 +23,11 @@ struct ovs_gso_cb {
 #ifndef HAVE_INNER_NETWORK_HEADER
 	unsigned int	inner_network_header;
 #endif
+#ifndef HAVE_NDO_FILL_METADATA_DST
+	/* Keep original tunnel info during userspace action execution. */
+	struct metadata_dst *fill_md_dst;
+#endif
+
 };
 #define OVS_GSO_CB(skb) ((struct ovs_gso_cb *)(skb)->cb)
 
@@ -195,6 +200,46 @@ static inline void ovs_dst_release(struct dst_entry *dst)
 #define ovs_skb_dst_drop skb_dst_drop
 #define ovs_dst_hold dst_hold
 #define ovs_dst_release dst_release
+#endif
+
+#ifndef HAVE_NDO_FILL_METADATA_DST
+#define SKB_INIT_FILL_METADATA_DST(skb)	OVS_GSO_CB(skb)->fill_md_dst = NULL;
+
+#define SKB_RESTORE_FILL_METADATA_DST(skb)	do {			\
+	if (OVS_GSO_CB(skb)->fill_md_dst) {					\
+		kfree(OVS_GSO_CB(skb)->tun_dst);			\
+		OVS_GSO_CB(skb)->tun_dst = OVS_GSO_CB(skb)->fill_md_dst;	\
+	}								\
+} while (0)
+
+
+#define SKB_SETUP_FILL_METADATA_DST(skb) ({			\
+	struct metadata_dst *new_md_dst;			\
+	struct metadata_dst *md_dst;				\
+	int md_size;						\
+	int ret = 1;						\
+								\
+	SKB_RESTORE_FILL_METADATA_DST(skb); 			\
+	new_md_dst = kmalloc(sizeof(struct metadata_dst) + 256, GFP_ATOMIC); \
+	if (new_md_dst) {						\
+		md_dst = OVS_GSO_CB(skb)->tun_dst;			\
+		md_size = new_md_dst->u.tun_info.options_len;		\
+		memcpy(&new_md_dst->u.tun_info, &md_dst->u.tun_info,	\
+			sizeof(struct ip_tunnel_info) + md_size);	\
+									\
+		OVS_GSO_CB(skb)->fill_md_dst = md_dst;				\
+		OVS_GSO_CB(skb)->tun_dst = new_md_dst;			\
+		ret = 1;						\
+	} else {							\
+		ret = 0;						\
+	}								\
+	ret;								\
+})
+
+#else
+#define SKB_INIT_FILL_METADATA_DST(skb)		do {} while(0)
+#define SKB_SETUP_FILL_METADATA_DST(skb)	(true)
+#define SKB_RESTORE_FILL_METADATA_DST(skb)	do {} while(0)
 #endif
 
 #endif

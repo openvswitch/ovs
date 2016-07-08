@@ -269,6 +269,24 @@ out:
 	return 0;
 }
 
+static struct rtable *lisp_get_rt(struct sk_buff *skb,
+				 struct net_device *dev,
+				 struct flowi4 *fl,
+				 const struct ip_tunnel_key *key)
+{
+	struct net *net = dev_net(dev);
+
+	/* Route lookup */
+	memset(fl, 0, sizeof(*fl));
+	fl->daddr = key->u.ipv4.dst;
+	fl->saddr = key->u.ipv4.src;
+	fl->flowi4_tos = RT_TOS(key->tos);
+	fl->flowi4_mark = skb->mark;
+	fl->flowi4_proto = IPPROTO_UDP;
+
+	return ip_route_output_key(net, fl);
+}
+
 netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb)
 {
 	struct net_device *dev = skb->dev;
@@ -298,14 +316,7 @@ netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb)
 
 	tun_key = &info->key;
 
-	/* Route lookup */
-	memset(&fl, 0, sizeof(fl));
-	fl.daddr = tun_key->u.ipv4.dst;
-	fl.saddr = tun_key->u.ipv4.src;
-	fl.flowi4_tos = RT_TOS(tun_key->tos);
-	fl.flowi4_mark = skb->mark;
-	fl.flowi4_proto = IPPROTO_UDP;
-	rt = ip_route_output_key(net, &fl);
+	rt = lisp_get_rt(skb, dev, &fl, tun_key);
 	if (IS_ERR(rt)) {
 		err = PTR_ERR(rt);
 		goto error;
@@ -456,6 +467,40 @@ static int lisp_change_mtu(struct net_device *dev, int new_mtu)
 	return 0;
 }
 
+static int egress_ipv4_tun_info(struct net_device *dev, struct sk_buff *skb,
+				struct ip_tunnel_info *info,
+				__be16 sport, __be16 dport)
+{
+	struct rtable *rt;
+	struct flowi4 fl4;
+
+	rt = lisp_get_rt(skb, dev, &fl4, &info->key);
+	if (IS_ERR(rt))
+		return PTR_ERR(rt);
+	ip_rt_put(rt);
+
+	info->key.u.ipv4.src = fl4.saddr;
+	info->key.tp_src = sport;
+	info->key.tp_dst = dport;
+	return 0;
+}
+
+int ovs_lisp_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb)
+{
+	struct lisp_dev *lisp = netdev_priv(dev);
+	struct net *net = lisp->net;
+	struct ip_tunnel_info *info = skb_tunnel_info(skb);
+	__be16 sport, dport;
+
+	sport = htons(get_src_port(net, skb));
+	dport = lisp->dst_port;
+
+	if (ip_tunnel_info_af(info) == AF_INET)
+		return egress_ipv4_tun_info(dev, skb, info, sport, dport);
+	return -EINVAL;
+}
+EXPORT_SYMBOL_GPL(ovs_lisp_fill_metadata_dst);
+
 static const struct net_device_ops lisp_netdev_ops = {
 	.ndo_init               = lisp_init,
 	.ndo_uninit             = lisp_uninit,
@@ -466,6 +511,9 @@ static const struct net_device_ops lisp_netdev_ops = {
 	.ndo_change_mtu         = lisp_change_mtu,
 	.ndo_validate_addr      = eth_validate_addr,
 	.ndo_set_mac_address    = eth_mac_addr,
+#ifdef HAVE_NDO_FILL_METADATA_DST
+	.ndo_fill_metadata_dst  = lisp_fill_metadata_dst,
+#endif
 };
 
 static void lisp_get_drvinfo(struct net_device *dev,

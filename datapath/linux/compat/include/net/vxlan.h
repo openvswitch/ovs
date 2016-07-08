@@ -274,4 +274,6 @@ netdev_tx_t rpl_vxlan_xmit(struct sk_buff *skb);
 #define vxlan_init_module rpl_vxlan_init_module
 #define vxlan_cleanup_module rpl_vxlan_cleanup_module
 
+#define vxlan_fill_metadata_dst ovs_vxlan_fill_metadata_dst
+int ovs_vxlan_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
 #endif

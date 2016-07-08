@@ -980,6 +980,24 @@ err_free_rt:
 	return ret;
 }
 
+static struct rtable *stt_get_rt(struct sk_buff *skb,
+				 struct net_device *dev,
+				 struct flowi4 *fl,
+				 const struct ip_tunnel_key *key)
+{
+	struct net *net = dev_net(dev);
+
+	/* Route lookup */
+	memset(fl, 0, sizeof(*fl));
+	fl->daddr = key->u.ipv4.dst;
+	fl->saddr = key->u.ipv4.src;
+	fl->flowi4_tos = RT_TOS(key->tos);
+	fl->flowi4_mark = skb->mark;
+	fl->flowi4_proto = IPPROTO_TCP;
+
+	return ip_route_output_key(net, fl);
+}
+
 netdev_tx_t ovs_stt_xmit(struct sk_buff *skb)
 {
 	struct net_device *dev = skb->dev;
@@ -1002,14 +1020,7 @@ netdev_tx_t ovs_stt_xmit(struct sk_buff *skb)
 
 	tun_key = &tun_info->key;
 
-	/* Route lookup */
-	memset(&fl, 0, sizeof(fl));
-	fl.daddr = tun_key->u.ipv4.dst;
-	fl.saddr = tun_key->u.ipv4.src;
-	fl.flowi4_tos = RT_TOS(tun_key->tos);
-	fl.flowi4_mark = skb->mark;
-	fl.flowi4_proto = IPPROTO_TCP;
-	rt = ip_route_output_key(net, &fl);
+	rt = stt_get_rt(skb, dev, &fl, tun_key);
 	if (IS_ERR(rt)) {
 		err = PTR_ERR(rt);
 		goto error;
@@ -1802,6 +1813,31 @@ static int stt_change_mtu(struct net_device *dev, int new_mtu)
 	return __stt_change_mtu(dev, new_mtu, true);
 }
 
+int ovs_stt_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb)
+{
+	struct ip_tunnel_info *info = skb_tunnel_info(skb);
+	struct stt_dev *stt_dev = netdev_priv(dev);
+	struct net *net = stt_dev->net;
+	__be16 dport = stt_dev->dst_port;
+	struct flowi4 fl4;
+	struct rtable *rt;
+
+	if (ip_tunnel_info_af(info) != AF_INET)
+		return -EINVAL;
+
+	rt = stt_get_rt(skb, dev, &fl4, &info->key);
+	if (IS_ERR(rt))
+		return PTR_ERR(rt);
+
+	ip_rt_put(rt);
+
+	info->key.u.ipv4.src = fl4.saddr;
+	info->key.tp_src = udp_flow_src_port(net, skb, 1, USHRT_MAX, true);
+	info->key.tp_dst = dport;
+	return 0;
+}
+EXPORT_SYMBOL_GPL(ovs_stt_fill_metadata_dst);
+
 static const struct net_device_ops stt_netdev_ops = {
 	.ndo_init               = stt_init,
 	.ndo_uninit             = stt_uninit,
@@ -1812,6 +1848,9 @@ static const struct net_device_ops stt_netdev_ops = {
 	.ndo_change_mtu         = stt_change_mtu,
 	.ndo_validate_addr      = eth_validate_addr,
 	.ndo_set_mac_address    = eth_mac_addr,
+#ifdef HAVE_NDO_FILL_METADATA_DST
+	.ndo_fill_metadata_dst  = stt_fill_metadata_dst,
+#endif
 };
 
 static void stt_get_drvinfo(struct net_device *dev,

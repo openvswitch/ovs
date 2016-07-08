@@ -249,4 +249,8 @@ do {								\
 
 #endif
 
+#ifndef HAVE_NDO_FILL_METADATA_DST
+#define dev_fill_metadata_dst ovs_dev_fill_metadata_dst
+int ovs_dev_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
+#endif
 #endif /* __LINUX_NETDEVICE_WRAPPER_H */

@@ -64,4 +64,7 @@ static inline netdev_tx_t ovs_stt_xmit(struct sk_buff *skb)
 #define stt_init_module ovs_stt_init_module
 #define stt_cleanup_module ovs_stt_cleanup_module
 
+#define stt_fill_metadata_dst ovs_stt_fill_metadata_dst
+int ovs_stt_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
+
 #endif /*ifdef__NET_STT_H */

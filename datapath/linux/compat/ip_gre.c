@@ -256,11 +256,26 @@ static void build_header(struct sk_buff *skb, int hdr_len, __be16 flags,
 	ovs_skb_set_inner_protocol(skb, proto);
 }
 
+static struct rtable *gre_get_rt(struct sk_buff *skb,
+				 struct net_device *dev,
+				 struct flowi4 *fl,
+				 const struct ip_tunnel_key *key)
+{
+	struct net *net = dev_net(dev);
+
+	memset(fl, 0, sizeof(*fl));
+	fl->daddr = key->u.ipv4.dst;
+	fl->saddr = key->u.ipv4.src;
+	fl->flowi4_tos = RT_TOS(key->tos);
+	fl->flowi4_mark = skb->mark;
+	fl->flowi4_proto = IPPROTO_GRE;
+
+	return ip_route_output_key(net, fl);
+}
 
 netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb)
 {
 	struct net_device *dev = skb->dev;
-	struct net *net = dev_net(dev);
 	struct ip_tunnel_info *tun_info;
 	const struct ip_tunnel_key *key;
 	struct flowi4 fl;
@@ -276,14 +291,8 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb)
 		goto err_free_skb;
 
 	key = &tun_info->key;
-	memset(&fl, 0, sizeof(fl));
-	fl.daddr = key->u.ipv4.dst;
-	fl.saddr = key->u.ipv4.src;
-	fl.flowi4_tos = RT_TOS(key->tos);
-	fl.flowi4_mark = skb->mark;
-	fl.flowi4_proto = IPPROTO_GRE;
 
-	rt = ip_route_output_key(net, &fl);
+	rt = gre_get_rt(skb, dev, &fl, key);
 	if (IS_ERR(rt))
 		goto err_free_skb;
 
@@ -459,6 +468,25 @@ static netdev_tx_t gre_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	return NETDEV_TX_OK;
 }
 
+int ovs_gre_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb)
+{
+	struct ip_tunnel_info *info = skb_tunnel_info(skb);
+	struct rtable *rt;
+	struct flowi4 fl4;
+
+	if (ip_tunnel_info_af(info) != AF_INET)
+		return -EINVAL;
+
+	rt = gre_get_rt(skb, dev, &fl4, &info->key);
+	if (IS_ERR(rt))
+		return PTR_ERR(rt);
+
+	ip_rt_put(rt);
+	info->key.u.ipv4.src = fl4.saddr;
+	return 0;
+}
+EXPORT_SYMBOL_GPL(ovs_gre_fill_metadata_dst);
+
 static const struct net_device_ops gre_tap_netdev_ops = {
 	.ndo_init		= gre_tap_init,
 	.ndo_uninit		= ip_tunnel_uninit,
@@ -471,6 +499,9 @@ static const struct net_device_ops gre_tap_netdev_ops = {
 #endif
 #ifdef HAVE_NDO_GET_IFLINK
 	.ndo_get_iflink		= ip_tunnel_get_iflink,
+#endif
+#ifdef HAVE_NDO_FILL_METADATA_DST
+	.ndo_fill_metadata_dst  = gre_fill_metadata_dst,
 #endif
 };
 
