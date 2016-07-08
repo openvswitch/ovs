@@ -51,20 +51,10 @@ struct sk_buff *rpl_iptunnel_handle_offloads(struct sk_buff *skb,
 	iptunnel_handle_offloads(skb, gso_type_mask)
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 #define iptunnel_xmit rpl_iptunnel_xmit
 int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 		      __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
 		      __be16 df, bool xnet);
-
-#else
-
-#define rpl_iptunnel_xmit iptunnel_xmit
-int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
-		      __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
-		      __be16 df, bool xnet);
-
-#endif /* 3.18 */
 
 #ifndef TUNNEL_CSUM
 #define TUNNEL_CSUM	__cpu_to_be16(0x01)
