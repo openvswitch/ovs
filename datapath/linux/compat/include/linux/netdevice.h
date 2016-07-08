@@ -253,4 +253,13 @@ do {								\
 #define dev_fill_metadata_dst ovs_dev_fill_metadata_dst
 int ovs_dev_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
 #endif
+
+#ifndef NETDEV_OFFLOAD_PUSH_VXLAN
+#define NETDEV_OFFLOAD_PUSH_VXLAN       0x001C
+#endif
+
+#ifndef NETDEV_OFFLOAD_PUSH_GENEVE
+#define NETDEV_OFFLOAD_PUSH_GENEVE      0x001D
+#endif
+
 #endif /* __LINUX_NETDEVICE_WRAPPER_H */

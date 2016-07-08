@@ -32,6 +32,10 @@
 #define NETIF_F_GSO_SIT 0
 #endif
 
+#ifndef NETIF_F_CSUM_MASK
+#define NETIF_F_CSUM_MASK 0
+#endif
+
 #ifndef NETIF_F_GSO_UDP_TUNNEL
 #define NETIF_F_GSO_UDP_TUNNEL 0
 #else
