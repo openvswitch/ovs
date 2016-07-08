@@ -199,6 +199,9 @@ Tunnel - STT          |      NO        |       YES      |    NO     |   YES   |
 Tunnel - GRE          |      3.11      |       YES      |    YES    |   YES   |
 Tunnel - VXLAN        |      3.12      |       YES      |    YES    |   YES   |
 Tunnel - Geneve       |      3.18      |       YES      |    YES    |   YES   |
+Tunnel - GRE-IPv6     |      NO        |       NO       |    YES    |   NO    |
+Tunnel - VXLAN-IPv6   |      4.3       |       YES      |    YES    |   NO    |
+Tunnel - Geneve-IPv6  |      4.4       |       YES      |    YES    |   NO    |
 QoS - Policing        |      YES       |       YES      |    NO     |   NO    |
 QoS - Shaping         |      YES       |       YES      |    NO     |   NO    |
 sFlow                 |      YES       |       YES      |    YES    |   NO    |
