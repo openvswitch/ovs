@@ -74,6 +74,11 @@ static inline int udp_sock_create(struct net *net,
 
 typedef int (*udp_tunnel_encap_rcv_t)(struct sock *sk, struct sk_buff *skb);
 typedef void (*udp_tunnel_encap_destroy_t)(struct sock *sk);
+typedef struct sk_buff **(*udp_tunnel_gro_receive_t)(struct sock *sk,
+                                                    struct sk_buff **head,
+                                                    struct sk_buff *skb);
+typedef int (*udp_tunnel_gro_complete_t)(struct sock *sk, struct sk_buff *skb,
+                                        int nhoff);
 
 struct udp_tunnel_sock_cfg {
 	void *sk_user_data;     /* user data used by encap_rcv call back */
@@ -81,6 +86,10 @@ struct udp_tunnel_sock_cfg {
 	__u8  encap_type;
 	udp_tunnel_encap_rcv_t encap_rcv;
 	udp_tunnel_encap_destroy_t encap_destroy;
+#ifdef HAVE_UDP_TUNNEL_SOCK_CFG_GRO_RECEIVE
+	udp_tunnel_gro_receive_t gro_receive;
+	udp_tunnel_gro_complete_t gro_complete;
+#endif
 };
 
 /* Setup the given (UDP) sock to receive UDP encapsulated packets */
