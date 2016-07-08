@@ -821,7 +821,7 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     const char *pcap;
-    int new_n_rxq, new_numa_id;
+    int new_n_rxq, new_n_txq, new_numa_id;
 
     ovs_mutex_lock(&netdev->mutex);
     netdev->ifindex = smap_get_int(args, "ifindex", -EOPNOTSUPP);
@@ -858,10 +858,13 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
     }
 
     new_n_rxq = MAX(smap_get_int(args, "n_rxq", netdev->requested_n_rxq), 1);
+    new_n_txq = MAX(smap_get_int(args, "n_txq", netdev->requested_n_txq), 1);
     new_numa_id = smap_get_int(args, "numa_id", 0);
     if (new_n_rxq != netdev->requested_n_rxq
+        || new_n_txq != netdev->requested_n_txq
         || new_numa_id != netdev->requested_numa_id) {
         netdev->requested_n_rxq = new_n_rxq;
+        netdev->requested_n_txq = new_n_txq;
         netdev->requested_numa_id = new_numa_id;
         netdev_request_reconfigure(netdev_);
     }
@@ -881,26 +884,6 @@ netdev_dummy_get_numa_id(const struct netdev *netdev_)
     ovs_mutex_unlock(&netdev->mutex);
 
     return numa_id;
-}
-
-/* Requests the number of tx queues for the dummy PMD interface. */
-static int
-netdev_dummy_set_tx_multiq(struct netdev *netdev_, unsigned int n_txq)
-{
-    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
-
-    ovs_mutex_lock(&netdev->mutex);
-
-    if (netdev_->n_txq == n_txq) {
-        goto out;
-    }
-
-    netdev->requested_n_txq = n_txq;
-    netdev_request_reconfigure(netdev_);
-
-out:
-    ovs_mutex_unlock(&netdev->mutex);
-    return 0;
 }
 
 /* Sets the number of tx queues and rx queues for the dummy PMD interface. */
@@ -1325,7 +1308,7 @@ netdev_dummy_update_flags(struct netdev *netdev_,
 
 /* Helper functions. */
 
-#define NETDEV_DUMMY_CLASS(NAME, PMD, TX_MULTIQ, RECOFIGURE)       \
+#define NETDEV_DUMMY_CLASS(NAME, PMD, RECOFIGURE)               \
 {                                                               \
     NAME,                                                       \
     PMD,                        /* is_pmd */                    \
@@ -1344,7 +1327,7 @@ netdev_dummy_update_flags(struct netdev *netdev_,
     NULL,                       /* push header */               \
     NULL,                       /* pop header */                \
     netdev_dummy_get_numa_id,                                   \
-    TX_MULTIQ,                                                  \
+    NULL,                       /* set_tx_multiq */             \
                                                                 \
     netdev_dummy_send,          /* send */                      \
     NULL,                       /* send_wait */                 \
@@ -1396,11 +1379,10 @@ netdev_dummy_update_flags(struct netdev *netdev_,
 }
 
 static const struct netdev_class dummy_class =
-    NETDEV_DUMMY_CLASS("dummy", false, NULL, NULL);
+    NETDEV_DUMMY_CLASS("dummy", false, NULL);
 
 static const struct netdev_class dummy_pmd_class =
     NETDEV_DUMMY_CLASS("dummy-pmd", true,
-                       netdev_dummy_set_tx_multiq,
                        netdev_dummy_reconfigure);
 
 static void
