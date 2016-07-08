@@ -252,16 +252,48 @@ static void
 add_patched_datapath(struct hmap *patched_datapaths,
                      const struct sbrec_port_binding *binding_rec, bool local)
 {
-    if (get_patched_datapath(patched_datapaths,
-                             binding_rec->datapath->tunnel_key)) {
+    struct patched_datapath *pd = get_patched_datapath(patched_datapaths,
+                                       binding_rec->datapath->tunnel_key);
+    if (pd) {
+        /* If the patched datapath is referenced by a logical patch port it is
+         * not stale, by definition, so set 'stale' to false */
+        pd->stale = false;
         return;
     }
 
-    struct patched_datapath *pd = xzalloc(sizeof *pd);
+    pd = xzalloc(sizeof *pd);
     pd->local = local;
     pd->port_binding = binding_rec;
+    /* stale is set to false. */
     hmap_insert(patched_datapaths, &pd->hmap_node,
                 binding_rec->datapath->tunnel_key);
+}
+
+static void
+add_logical_patch_ports_preprocess(struct hmap *patched_datapaths)
+{
+    /* Mark all patched datapaths as stale for later cleanup by
+     * add_logical_patch_ports_postprocess(). */
+    struct patched_datapath *pd;
+    HMAP_FOR_EACH (pd, hmap_node, patched_datapaths) {
+        pd->stale = true;
+    }
+}
+
+/* This function should cleanup stale patched datapaths and any memory
+ * allocated for fields within a stale patched datapath. */
+static void
+add_logical_patch_ports_postprocess(struct hmap *patched_datapaths)
+{
+    /* Clean up stale patched datapaths. */
+    struct patched_datapath *pd_cur_node, *pd_next_node;
+    HMAP_FOR_EACH_SAFE (pd_cur_node, pd_next_node, hmap_node,
+                        patched_datapaths) {
+        if (pd_cur_node->stale == true) {
+            hmap_remove(patched_datapaths, &pd_cur_node->hmap_node);
+            free(pd_cur_node);
+        }
+    }
 }
 
 /* Add one OVS patch port for each OVN logical patch port.
@@ -299,6 +331,8 @@ add_logical_patch_ports(struct controller_ctx *ctx,
         return;
     }
 
+    add_logical_patch_ports_preprocess(patched_datapaths);
+
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
         bool local_port = false;
@@ -332,6 +366,7 @@ add_logical_patch_ports(struct controller_ctx *ctx,
             }
         }
     }
+    add_logical_patch_ports_postprocess(patched_datapaths);
 }
 
 void
