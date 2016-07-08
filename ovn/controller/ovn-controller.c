@@ -251,8 +251,8 @@ update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
             continue;
         }
 
-        char *dnat = alloc_nat_zone_key(pd->port_binding, "dnat");
-        char *snat = alloc_nat_zone_key(pd->port_binding, "snat");
+        char *dnat = alloc_nat_zone_key(pd->key, "dnat");
+        char *snat = alloc_nat_zone_key(pd->key, "snat");
         sset_add(&all_users, dnat);
         sset_add(&all_users, snat);
         free(dnat);

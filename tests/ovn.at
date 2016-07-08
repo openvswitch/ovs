@@ -3082,6 +3082,27 @@ $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > rece
 echo $expected | trim_zeros > expout
 AT_CHECK([cat received1.packets], [0], [expout])
 
+# Delete the router and re-create it. Things should work as before.
+ovn-nbctl  lr-del R2
+ovn-nbctl create Logical_Router name=R2 options:chassis="hv2"
+# Connect alice to R2
+ovn-nbctl lrp-add R2 alice 00:00:02:01:02:03 172.16.1.1/24
+# Connect R2 to join
+ovn-nbctl lrp-add R2 R2_join 00:00:04:01:02:04 20.0.0.2/24
+
+ovn-nbctl -- --id=@lrt create Logical_Router_Static_Route \
+ip_prefix=192.168.1.0/24 nexthop=20.0.0.1 -- add Logical_Router \
+R2 static_routes @lrt
+
+# Wait for ovn-controller to catch up.
+sleep 1
+
+# Send the packet again.
+as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received1.packets
+echo $expected | trim_zeros >> expout
+AT_CHECK([cat received1.packets], [0], [expout])
+
 OVN_CLEANUP([hv1],[hv2])
 
 AT_CLEANUP

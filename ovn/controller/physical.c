@@ -297,8 +297,12 @@ consider_port_binding(struct hmap *flow_table,
         }
 
         int zone_id_dnat, zone_id_snat;
-        char *dnat = alloc_nat_zone_key(binding, "dnat");
-        char *snat = alloc_nat_zone_key(binding, "snat");
+        char *key = xasprintf(UUID_FMT,
+                              UUID_ARGS(&binding->datapath->header_.uuid));
+        char *dnat = alloc_nat_zone_key(key, "dnat");
+        char *snat = alloc_nat_zone_key(key, "snat");
+        free(key);
+
         zone_id_dnat = simap_get(ct_zones, dnat);
         if (zone_id_dnat) {
             put_load(zone_id_dnat, MFF_LOG_DNAT_ZONE, 0, 32, ofpacts_p);

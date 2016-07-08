@@ -105,13 +105,11 @@ extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
 }
 
 /* Allocates a key for NAT conntrack zone allocation for a provided
- * 'port_binding' record and a 'type'.
+ * 'key' record and a 'type'.
  *
  * It is the caller's responsibility to free the allocated memory. */
 char *
-alloc_nat_zone_key(const struct sbrec_port_binding *port_binding,
-                   const char *type)
+alloc_nat_zone_key(const char *key, const char *type)
 {
-    return xasprintf(UUID_FMT"_%s",
-                     UUID_ARGS(&port_binding->datapath->header_.uuid), type);
+    return xasprintf("%s_%s", key, type);
 }

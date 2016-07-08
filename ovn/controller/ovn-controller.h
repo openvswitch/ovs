@@ -51,7 +51,7 @@ struct local_datapath *get_local_datapath(const struct hmap *,
  * with at least one logical patch port binding. */
 struct patched_datapath {
     struct hmap_node hmap_node;
-    const struct sbrec_port_binding *port_binding;
+    char *key;  /* Holds the uuid of the corresponding datapath. */
     bool local; /* 'True' if the datapath is for gateway router. */
     bool stale; /* 'True' if the datapath is not referenced by any patch
                  * port. */
