@@ -35,6 +35,7 @@
 #include "openvswitch/vlog.h"
 #include "ovn-controller.h"
 #include "ovn/lib/actions.h"
+#include "poll-loop.h"
 #include "physical.h"
 #include "rconn.h"
 #include "socket-util.h"
@@ -409,9 +410,10 @@ ofctrl_run(const struct ovsrec_bridge *br_int)
         state = S_NEW;
     }
 
-    enum ofctrl_state old_state;
-    do {
-        old_state = state;
+    bool progress = true;
+    for (int i = 0; progress && i < 50; i++) {
+        /* Allow the state machine to run. */
+        enum ofctrl_state old_state = state;
         switch (state) {
 #define STATE(NAME) case NAME: run_##NAME(); break;
             STATES
@@ -419,35 +421,41 @@ ofctrl_run(const struct ovsrec_bridge *br_int)
         default:
             OVS_NOT_REACHED();
         }
-    } while (state != old_state);
 
-    for (int i = 0; state == old_state && i < 50; i++) {
+        /* Try to process a received packet. */
         struct ofpbuf *msg = rconn_recv(swconn);
-        if (!msg) {
-            break;
-        }
+        if (msg) {
+            const struct ofp_header *oh = msg->data;
+            enum ofptype type;
+            enum ofperr error;
 
-        const struct ofp_header *oh = msg->data;
-        enum ofptype type;
-        enum ofperr error;
-
-        error = ofptype_decode(&type, oh);
-        if (!error) {
-            switch (state) {
+            error = ofptype_decode(&type, oh);
+            if (!error) {
+                switch (state) {
 #define STATE(NAME) case NAME: recv_##NAME(oh, type); break;
-                STATES
+                    STATES
 #undef STATE
-            default:
-                OVS_NOT_REACHED();
+                default:
+                    OVS_NOT_REACHED();
+                }
+            } else {
+                char *s = ofp_to_string(oh, ntohs(oh->length), 1);
+                VLOG_WARN("could not decode OpenFlow message (%s): %s",
+                          ofperr_to_string(error), s);
+                free(s);
             }
-        } else {
-            char *s = ofp_to_string(oh, ntohs(oh->length), 1);
-            VLOG_WARN("could not decode OpenFlow message (%s): %s",
-                      ofperr_to_string(error), s);
-            free(s);
+
+            ofpbuf_delete(msg);
         }
 
-        ofpbuf_delete(msg);
+        /* If we did some work, plan to go around again. */
+        progress = old_state != state || msg;
+    }
+    if (progress) {
+        /* We bailed out to limit the amount of work we do in one go, to allow
+         * other code a chance to run.  We were still making progress at that
+         * point, so ensure that we come back again without waiting. */
+        poll_immediate_wake();
     }
 
     return (state == S_CLEAR_FLOWS || state == S_UPDATE_FLOWS
