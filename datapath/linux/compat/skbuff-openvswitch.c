@@ -248,7 +248,7 @@ int rpl_pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 
 	inner_mac_offset = skb_inner_mac_offset(skb);
 	inner_nw_offset = skb_inner_network_offset(skb);
-	inner_transport_offset = ovs_skb_inner_transport_offset(skb);
+	inner_transport_offset = skb_inner_transport_offset(skb);
 
 #undef pskb_expand_head
 	err = pskb_expand_head(skb, nhead, ntail, gfp_mask);

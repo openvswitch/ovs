@@ -17,12 +17,6 @@ struct ovs_gso_cb {
 #ifndef HAVE_INNER_PROTOCOL
 	__be16		inner_protocol;
 #endif
-#ifndef HAVE_INNER_MAC_HEADER
-	unsigned int	inner_mac_header;
-#endif
-#ifndef HAVE_INNER_NETWORK_HEADER
-	unsigned int	inner_network_header;
-#endif
 #ifndef HAVE_NDO_FILL_METADATA_DST
 	/* Keep original tunnel info during userspace action execution. */
 	struct metadata_dst *fill_md_dst;
@@ -47,59 +41,6 @@ static inline void skb_clear_ovs_gso_cb(struct sk_buff *skb)
 
 }
 #endif
-
-#ifndef HAVE_INNER_MAC_HEADER
-static inline unsigned char *skb_inner_mac_header(const struct sk_buff *skb)
-{
-	return skb->head + OVS_GSO_CB(skb)->inner_mac_header;
-}
-
-static inline void skb_set_inner_mac_header(const struct sk_buff *skb,
-					    int offset)
-{
-	OVS_GSO_CB(skb)->inner_mac_header = (skb->data - skb->head) + offset;
-}
-#endif /* HAVE_INNER_MAC_HEADER */
-
-#ifndef HAVE_INNER_NETWORK_HEADER
-static inline unsigned char *skb_inner_network_header(const struct sk_buff *skb)
-{
-	return skb->head + OVS_GSO_CB(skb)->inner_network_header;
-}
-
-static inline int skb_inner_network_offset(const struct sk_buff *skb)
-{
-	return skb_inner_network_header(skb) - skb->data;
-}
-
-/* We don't actually store the transport offset on backports because
- * we don't use it anywhere. Slightly rename this version to avoid
- * future users from picking it up accidentially.
- */
-static inline int ovs_skb_inner_transport_offset(const struct sk_buff *skb)
-{
-	return 0;
-}
-
-static inline void skb_set_inner_network_header(const struct sk_buff *skb,
-						int offset)
-{
-	OVS_GSO_CB(skb)->inner_network_header = (skb->data - skb->head)
-						+ offset;
-}
-
-static inline void skb_set_inner_transport_header(const struct sk_buff *skb,
-						  int offset)
-{ }
-
-#else
-
-static inline int ovs_skb_inner_transport_offset(const struct sk_buff *skb)
-{
-	return skb_inner_transport_header(skb) - skb->data;
-}
-
-#endif /* HAVE_INNER_NETWORK_HEADER */
 
 #ifndef HAVE_INNER_PROTOCOL
 static inline void ovs_skb_init_inner_protocol(struct sk_buff *skb)
@@ -142,7 +83,7 @@ static inline void ovs_skb_set_inner_protocol(struct sk_buff *skb,
 	skb->inner_protocol = ethertype;
 }
 #endif /* ENCAP_TYPE_ETHER */
-#endif /* 3.11 */
+#endif /* HAVE_INNER_PROTOCOL */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 #define ip_local_out rpl_ip_local_out
@@ -155,15 +96,6 @@ static inline int skb_inner_mac_offset(const struct sk_buff *skb)
 
 #define ip6_local_out rpl_ip6_local_out
 int rpl_ip6_local_out(struct sk_buff *skb);
-
-#define skb_reset_inner_headers rpl_skb_reset_inner_headers
-static inline void skb_reset_inner_headers(struct sk_buff *skb)
-{
-	BUILD_BUG_ON(sizeof(struct ovs_gso_cb) > FIELD_SIZEOF(struct sk_buff, cb));
-	skb_set_inner_mac_header(skb, skb_mac_header(skb) - skb->data);
-	skb_set_inner_network_header(skb, skb_network_offset(skb));
-	skb_set_inner_transport_header(skb, skb_transport_offset(skb));
-}
 #endif /* 3.18 */
 
 #ifndef USE_UPSTREAM_TUNNEL

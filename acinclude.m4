@@ -522,8 +522,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_checksum_start_offset])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [inner_protocol])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [inner_protocol_type])
-  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [inner_mac_header])
-  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [inner_network_header])
+  OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_inner_transport_offset])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [kfree_skb_list])
   OVS_GREP_IFELSE([$KSRC/include/linux/skbuff.h], [skb_scrub_packet.*xnet],
 		  [OVS_DEFINE([HAVE_SKB_SCRUB_PACKET_XNET])])
