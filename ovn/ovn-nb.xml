@@ -794,11 +794,13 @@
       </p>
     </column>
 
-    <column name="network">
-      The IP address of the router and the netmask.  For example,
-      <code>192.168.0.1/24</code> indicates that the router's IP address is
-      192.168.0.1 and that packets destined to 192.168.0.<var>x</var> should be
-      routed to this port.
+    <column name="networks">
+      <p>
+        The IP addresses and netmasks of the router.  For example,
+        <code>192.168.0.1/24</code> indicates that the router's IP
+        address is 192.168.0.1 and that packets destined to
+        192.168.0.<var>x</var> should be routed to this port.
+      </p>
     </column>
 
     <column name="mac">

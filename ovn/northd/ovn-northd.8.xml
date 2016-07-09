@@ -608,13 +608,11 @@ output;
           request).  The port of the router that receives the echo request
           does not matter. Also, the ip.ttl of the echo request packet is not
           checked, so it complies with RFC 1812, section 4.2.2.9. These flows
-          use the following actions where <var>S</var> is the router's IP
-          address:
+          use the following actions:
         </p>
 
         <pre>
-ip4.dst = ip4.src;
-ip4.src = <var>S</var>;
+ip4.dst &lt;-&gt; ip4.src;
 ip.ttl = 255;
 icmp4.type = 0;
 inport = ""; /* Allow sending out inport. */
@@ -891,6 +889,7 @@ reg0 = <var>G</var>;
 reg1 = <var>A</var>;
 eth.src = <var>E</var>;
 outport = <var>P</var>;
+inport = ""; /* Allow sending out inport. */
 next;
         </pre>
 
@@ -956,7 +955,7 @@ icmp4 {
           from the <code>addresses</code> column in the
           <code>Logical_Switch_Port</code> table.  For router ports
           connected to other logical routers, MAC bindings can be known
-          statically from the <code>mac</code> and <code>network</code>
+          statically from the <code>mac</code> and <code>networks</code>
           column in the <code>Logical_Router_Port</code> table.
         </p>
 

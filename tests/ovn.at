@@ -1508,8 +1508,8 @@ done
 ovn-nbctl lr-add lr0
 for i in 1 2 3; do
     for j in 1 2 3; do
-        ovn-nbctl lrp-add lr0 lrp$i$j 00:00:00:00:ff:$i$j \
-            192.168.$i$j.254/24 lrp$i$j-attachment
+        ovn-nbctl lrp-add lr0 lrp$i$j 00:00:00:00:ff:$i$j 192.168.$i$j.254/24 \
+            peer=lrp$i$j-attachment
         ovn-nbctl \
             -- lsp-add ls$i lrp$i$j-attachment \
             -- set Logical_Switch_Port lrp$i$j-attachment type=router \
@@ -2305,20 +2305,20 @@ ovn-nbctl ls-add ls1
 ovn-nbctl ls-add ls2
 
 # Connect ls1 to R1
-ovn-nbctl lrp-add R1 ls1 00:00:00:01:02:03 192.168.1.1/24 rp-ls1
+ovn-nbctl lrp-add R1 ls1 00:00:00:01:02:03 192.168.1.1/24 peer=rp-ls1
 
 ovn-nbctl lsp-add ls1 rp-ls1 -- set Logical_Switch_Port rp-ls1 type=router \
   options:router-port=ls1 addresses=\"00:00:00:01:02:03\"
 
 # Connect ls2 to R2
-ovn-nbctl lrp-add R2 ls2 00:00:00:01:02:04 172.16.1.1/24 rp-ls2
+ovn-nbctl lrp-add R2 ls2 00:00:00:01:02:04 172.16.1.1/24 peer=rp-ls2
 
 ovn-nbctl lsp-add ls2 rp-ls2 -- set Logical_Switch_Port rp-ls2 type=router \
   options:router-port=ls2 addresses=\"00:00:00:01:02:04\"
 
 # Connect R1 to R2
-ovn-nbctl lrp-add R1 R1_R2 00:00:00:02:03:04 20.0.0.1/24 R2_R1
-ovn-nbctl lrp-add R2 R2_R1 00:00:00:02:03:05 20.0.0.2/24 R1_R2
+ovn-nbctl lrp-add R1 R1_R2 00:00:00:02:03:04 20.0.0.1/24 peer=R2_R1
+ovn-nbctl lrp-add R2 R2_R1 00:00:00:02:03:05 20.0.0.2/24 peer=R1_R2
 
 ovn-nbctl lr-route-add R1 "0.0.0.0/0" 20.0.0.2
 ovn-nbctl lr-route-add R2 "0.0.0.0/0" 20.0.0.1
@@ -2416,7 +2416,138 @@ OVN_CLEANUP([hv1],[hv2])
 AT_CLEANUP
 
 
-AT_SETUP([ovn -- 1 HVs, 2 LSs, 1 lport/LS, 1 LR])
+AT_SETUP([ovn -- 1 HV, 1 LS, 2 lport/LS, 1 LR])
+AT_KEYWORDS([router-admin-state])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# One LR - R1 has switch ls1 with two subnets attached to it (191.168.1.0/24
+# and 172.16.1.0/24) connected to it.
+
+ovn-nbctl lr-add R1
+
+ovn-nbctl ls-add ls1
+
+# Connect ls1 to R1
+ovn-nbctl lrp-add R1 ls1 00:00:00:01:02:03 192.168.1.1/24 172.16.1.1/24 \
+          peer=rp-ls1
+ovn-nbctl lsp-add ls1 rp-ls1 -- set Logical_Switch_Port rp-ls1 type=router \
+          options:router-port=ls1 addresses=\"00:00:00:01:02:03\"
+
+# Create logical port ls1-lp1 in ls1
+ovn-nbctl lsp-add ls1 ls1-lp1 \
+          -- lsp-set-addresses ls1-lp1 "f0:00:00:01:02:03 192.168.1.2"
+
+# Create logical port ls1-lp2 in ls1
+ovn-nbctl lsp-add ls1 ls1-lp2 \
+          -- lsp-set-addresses ls1-lp2 "f0:00:00:01:02:04 172.16.1.2"
+
+# Create one hypervisor and create OVS ports corresponding to logical ports.
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int vif1 -- \
+    set interface vif1 external-ids:iface-id=ls1-lp1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int vif2 -- \
+    set interface vif2 external-ids:iface-id=ls1-lp2 \
+    options:tx_pcap=hv1/vif2-tx.pcap \
+    options:rxq_pcap=hv1/vif2-rx.pcap \
+    ofport-request=1
+
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+# Send ip packets between the two ports.
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+# Packet to send.
+src_mac="f00000010203"
+dst_mac="000000010203"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 172 16 1 2`
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+as hv1 ovs-appctl netdev-dummy/receive vif1 $packet
+
+
+echo "---------NB dump-----"
+ovn-nbctl show
+echo "---------------------"
+ovn-nbctl list logical_router
+echo "---------------------"
+ovn-nbctl list logical_router_port
+echo "---------------------"
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list logical_flow
+echo "---------------------"
+
+echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl dump-flows br-int
+
+
+#Disable router R1
+ovn-nbctl set Logical_Router R1 enabled=false
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list logical_flow
+echo "---------------------"
+
+echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl dump-flows br-int
+
+as hv1 ovs-appctl netdev-dummy/receive vif1 $packet
+
+# Packet to Expect
+expect_src_mac="000000010203"
+expect_dst_mac="f00000010204"
+expected=${expect_dst_mac}${expect_src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > received.packets
+echo $expected | trim_zeros > expout
+AT_CHECK([cat received.packets], [0], [expout])
+
+
+as hv1
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+AT_CLEANUP
+
+
+AT_SETUP([ovn -- 1 HV, 2 LSs, 1 lport/LS, 1 LR])
 AT_KEYWORDS([router-admin-state])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
@@ -2431,12 +2562,12 @@ ovn-nbctl ls-add ls1
 ovn-nbctl ls-add ls2
 
 # Connect ls1 to R1
-ovn-nbctl lrp-add R1 ls1 00:00:00:01:02:03 192.168.1.1/24 rp-ls1
+ovn-nbctl lrp-add R1 ls1 00:00:00:01:02:03 192.168.1.1/24 peer=rp-ls1
 ovn-nbctl lsp-add ls1 rp-ls1 -- set Logical_Switch_Port rp-ls1 type=router \
           options:router-port=ls1 addresses=\"00:00:00:01:02:03\"
 
 # Connect ls2 to R1
-ovn-nbctl lrp-add R1 ls2 00:00:00:01:02:04 172.16.1.1/24 rp-ls2
+ovn-nbctl lrp-add R1 ls2 00:00:00:01:02:04 172.16.1.1/24 peer=rp-ls2
 ovn-nbctl lsp-add ls2 rp-ls2 -- set Logical_Switch_Port rp-ls2 type=router \
           options:router-port=ls2 addresses=\"00:00:00:01:02:04\"
 
@@ -2506,7 +2637,6 @@ echo "---------------------"
 echo "------ hv1 dump ----------"
 as hv1 ovs-ofctl dump-flows br-int
 
-
 #Disable router R1
 ovn-nbctl set Logical_Router R1 enabled=false
 
@@ -2558,23 +2688,23 @@ ovn-nbctl ls-add alice
 ovn-nbctl ls-add bob
 
 # Connect foo to R1
-ovn-nbctl lrp-add R1 foo 00:00:00:01:02:03 192.168.1.1/24 rp-foo
+ovn-nbctl lrp-add R1 foo 00:00:00:01:02:03 192.168.1.1/24 peer=rp-foo
 ovn-nbctl lsp-add foo rp-foo -- set Logical_Switch_Port rp-foo type=router \
           options:router-port=foo addresses=\"00:00:00:01:02:03\"
 
 # Connect alice to R2
-ovn-nbctl lrp-add R2 alice 00:00:00:01:02:04 172.16.1.1/24 rp-alice
+ovn-nbctl lrp-add R2 alice 00:00:00:01:02:04 172.16.1.1/24 peer=rp-alice
 ovn-nbctl lsp-add alice rp-alice -- set Logical_Switch_Port rp-alice \
           type=router options:router-port=alice addresses=\"00:00:00:01:02:04\"
 
 # Connect bob to R2
-ovn-nbctl lrp-add R2 bob 00:00:00:01:02:05 172.16.2.1/24 rp-bob
+ovn-nbctl lrp-add R2 bob 00:00:00:01:02:05 172.16.2.1/24 peer=rp-bob
 ovn-nbctl lsp-add bob rp-bob -- set Logical_Switch_Port rp-bob type=router \
           options:router-port=bob addresses=\"00:00:00:01:02:05\"
 
 # Connect R1 to R2
-ovn-nbctl lrp-add R1 R1_R2 00:00:00:02:03:04 20.0.0.1/24 R2_R1
-ovn-nbctl lrp-add R2 R2_R1 00:00:00:02:03:05 20.0.0.2/24 R1_R2
+ovn-nbctl lrp-add R1 R1_R2 00:00:00:02:03:04 20.0.0.1/24 peer=R2_R1
+ovn-nbctl lrp-add R2 R2_R1 00:00:00:02:03:05 20.0.0.2/24 peer=R1_R2
 
 #install static routes
 ovn-nbctl lr-route-add R1 172.16.1.0/24 20.0.0.2

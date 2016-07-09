@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "4.0.0",
-    "cksum": "2156178478 7460",
+    "version": "5.0.0",
+    "cksum": "849073644 7576",
     "tables": {
         "Logical_Switch": {
             "columns": {
@@ -123,7 +123,9 @@
         "Logical_Router_Port": {
             "columns": {
                 "name": {"type": "string"},
-                "network": {"type": "string"},
+                "networks": {"type": {"key": "string",
+                                      "min": 1,
+                                      "max": "unlimited"}},
                 "mac": {"type": "string"},
                 "peer": {"type": {"key": "string", "min": 0, "max": 1}},
                 "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},

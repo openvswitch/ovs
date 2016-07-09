@@ -290,14 +290,23 @@
     <h1>Logical Router Port Commands</h1>
 
     <dl>
-      <dt>[<code>--may-exist</code>] <code>lrp-add</code> <var>router</var> <var>port</var> <var>mac</var> <var>network</var> [<var>peer</var>]</dt>
+      <dt>[<code>--may-exist</code>] <code>lrp-add</code> <var>router</var> <var>port</var> <var>mac</var> <var>network</var>... [<code>peer=</code><var>peer</var>]</dt>
       <dd>
         <p>
           Creates on <var>router</var> a new logical router port named
-          <var>port</var> with Ethernet address <var>mac</var> and IP
-          address/netmask <var>network</var>.  If <var>peer</var> is
-          specified, it identifies a logical router port that connects
-          to this one.
+          <var>port</var> with Ethernet address <var>mac</var> and one
+          or more IP address/netmask for each <var>network</var>.
+        </p>
+
+        <p>
+          The optional argument <code>peer</code> identifies a logical
+          router port that connects to this one.  The following example
+          adds a router port with an IPv4 and IPv6 address with peer
+          <code>lr1</code>:
+        </p>
+
+        <p>
+          <code>lrp-add lr0 lrp0 00:11:22:33:44:55 192.168.0.1/24 2001:db8::1/64 peer=lr1</code>
         </p>
 
         <p>

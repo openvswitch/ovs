@@ -18,6 +18,8 @@
 
 #include "lib/packets.h"
 
+struct nbrec_logical_router_port;
+
 struct ipv4_netaddr {
     ovs_be32 addr;            /* 192.168.10.123 */
     ovs_be32 mask;            /* 255.255.255.0 */
@@ -50,6 +52,8 @@ struct lport_addresses {
 
 
 bool extract_lsp_addresses(char *address, struct lport_addresses *);
+bool extract_lrp_networks(const struct nbrec_logical_router_port *,
+                          struct lport_addresses *);
 void destroy_lport_addresses(struct lport_addresses *);
 
 char *alloc_nat_zone_key(const char *key, const char *type);

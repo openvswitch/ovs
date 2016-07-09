@@ -305,7 +305,7 @@ AT_CHECK([ovn-nbctl lrp-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lrp0)
 ])
 
-AT_CHECK([ovn-nbctl lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 lrp1-peer])
+AT_CHECK([ovn-nbctl lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 peer=lrp1-peer])
 AT_CHECK([ovn-nbctl lrp-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lrp0)
 <1> (lrp1)
@@ -328,12 +328,24 @@ AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/2
   [ovn-nbctl: lrp1: port already exists with mismatching peer
 ])
 
-AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 lrp1-peer])
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 10.0.0.1/24 peer=lrp1-peer], [1], [],
+  [ovn-nbctl: lrp1: port already exists with different network
+])
+
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 peer=lrp1-peer])
 
 AT_CHECK([ovn-nbctl lrp-del lrp1])
 AT_CHECK([ovn-nbctl lrp-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lrp0)
 ])
+
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 10.0.0.1/24 peer=lrp1-peer])
+
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 172.16.0.1/24 peer=lrp1-peer], [1], [],
+  [ovn-nbctl: lrp1: port already exists with different network
+])
+
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 10.0.0.1/24 192.168.1.1/24 peer=lrp1-peer])
 
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP

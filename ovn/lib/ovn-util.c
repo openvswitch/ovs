@@ -15,20 +15,59 @@
 #include <config.h>
 #include "ovn-util.h"
 #include "openvswitch/vlog.h"
-#include "ovn/lib/ovn-sb-idl.h"
+#include "ovn/lib/ovn-nb-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(ovn_util);
 
-/*
- * Extracts the mac, ipv4 and ipv6 addresses from the input param 'address'
- * which should be of the format 'MAC [IP1 IP2 ..]" where IPn should be
- * a valid IPv4 or IPv6 address and stores them in the 'ipv4_addrs' and
- * 'ipv6_addrs' fields of input param 'laddrs'.
+static void
+add_ipv4_netaddr(struct lport_addresses *laddrs, ovs_be32 addr,
+                 unsigned int plen)
+{
+    laddrs->n_ipv4_addrs++;
+    laddrs->ipv4_addrs = xrealloc(laddrs->ipv4_addrs,
+        laddrs->n_ipv4_addrs * sizeof *laddrs->ipv4_addrs);
+
+    struct ipv4_netaddr *na = &laddrs->ipv4_addrs[laddrs->n_ipv4_addrs - 1];
+
+    na->addr = addr;
+    na->mask = be32_prefix_mask(plen);
+    na->network = addr & na->mask;
+    na->plen = plen;
+
+    na->addr_s = xasprintf(IP_FMT, IP_ARGS(addr));
+    na->network_s = xasprintf(IP_FMT, IP_ARGS(na->network));
+    na->bcast_s = xasprintf(IP_FMT, IP_ARGS(addr | ~na->mask));
+}
+
+static void
+add_ipv6_netaddr(struct lport_addresses *laddrs, struct in6_addr addr,
+                 unsigned int plen)
+{
+    laddrs->n_ipv6_addrs++;
+    laddrs->ipv6_addrs = xrealloc(laddrs->ipv6_addrs,
+        laddrs->n_ipv6_addrs * sizeof *laddrs->ipv6_addrs);
+
+    struct ipv6_netaddr *na = &laddrs->ipv6_addrs[laddrs->n_ipv6_addrs - 1];
+
+    memcpy(&na->addr, &addr, sizeof na->addr);
+    na->mask = ipv6_create_mask(plen);
+    na->network = ipv6_addr_bitand(&addr, &na->mask);
+    na->plen = plen;
+
+    na->addr_s = xmalloc(INET6_ADDRSTRLEN);
+    inet_ntop(AF_INET6, &addr, na->addr_s, INET6_ADDRSTRLEN);
+    na->network_s = xmalloc(INET6_ADDRSTRLEN);
+    inet_ntop(AF_INET6, &na->network, na->network_s, INET6_ADDRSTRLEN);
+}
+
+/* Extracts the mac, IPv4 and IPv6 addresses from * 'address' which
+ * should be of the format 'MAC [IP1 IP2 ..]" where IPn should be a
+ * valid IPv4 or IPv6 address and stores them in the 'ipv4_addrs' and
+ * 'ipv6_addrs' fields of 'laddrs'.
  *
  * Return true if at least 'MAC' is found in 'address', false otherwise.
  *
- * The caller must call destroy_lport_addresses().
- */
+ * The caller must call destroy_lport_addresses(). */
 bool
 extract_lsp_addresses(char *address, struct lport_addresses *laddrs)
 {
@@ -58,54 +97,79 @@ extract_lsp_addresses(char *address, struct lport_addresses *laddrs)
         buf_index = 0;
         error = ip_parse_cidr_len(buf, &buf_index, &ip4, &plen);
         if (!error) {
-            laddrs->n_ipv4_addrs++;
-            laddrs->ipv4_addrs = xrealloc(laddrs->ipv4_addrs,
-                sizeof (struct ipv4_netaddr) * laddrs->n_ipv4_addrs);
-
-            struct ipv4_netaddr *na
-                = &laddrs->ipv4_addrs[laddrs->n_ipv4_addrs - 1];
-
-            na->addr = ip4;
-            na->mask = be32_prefix_mask(plen);
-            na->network = ip4 & na->mask;
-            na->plen = plen;
-
-            na->addr_s = xasprintf(IP_FMT, IP_ARGS(ip4));
-            na->network_s = xasprintf(IP_FMT, IP_ARGS(na->network));
-            na->bcast_s = xasprintf(IP_FMT, IP_ARGS(ip4 | ~na->mask));
-
+            add_ipv4_netaddr(laddrs, ip4, plen);
             buf += buf_index;
             continue;
         }
         free(error);
         error = ipv6_parse_cidr_len(buf, &buf_index, &ip6, &plen);
         if (!error) {
-            laddrs->n_ipv6_addrs++;
-            laddrs->ipv6_addrs = xrealloc(
-                laddrs->ipv6_addrs,
-                sizeof(struct ipv6_netaddr) * laddrs->n_ipv6_addrs);
-
-            struct ipv6_netaddr *na
-                = &laddrs->ipv6_addrs[laddrs->n_ipv6_addrs - 1];
-
-            memcpy(&na->addr, &ip6, sizeof(struct in6_addr));
-            na->mask = ipv6_create_mask(plen);
-            na->network = ipv6_addr_bitand(&ip6, &na->mask);
-            na->plen = plen;
-
-            na->addr_s = xmalloc(INET6_ADDRSTRLEN);
-            inet_ntop(AF_INET6, &ip6, na->addr_s, INET6_ADDRSTRLEN);
-            na->network_s = xmalloc(INET6_ADDRSTRLEN);
-            inet_ntop(AF_INET6, &na->network, na->network_s, INET6_ADDRSTRLEN);
-        }
-
-        if (error) {
+            add_ipv6_netaddr(laddrs, ip6, plen);
+        } else {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_INFO_RL(&rl, "invalid syntax '%s' in address", address);
             free(error);
             break;
         }
         buf += buf_index;
+    }
+
+    return true;
+}
+
+/* Extracts the mac, IPv4 and IPv6 addresses from the
+ * "nbrec_logical_router_port" parameter 'lrp'.  Stores the IPv4 and
+ * IPv6 addresses in the 'ipv4_addrs' and 'ipv6_addrs' fields of
+ * 'laddrs', respectively.
+ *
+ * Return true if at least 'MAC' is found in 'lrp', false otherwise.
+ *
+ * The caller must call destroy_lport_addresses(). */
+bool
+extract_lrp_networks(const struct nbrec_logical_router_port *lrp,
+                     struct lport_addresses *laddrs)
+{
+    memset(laddrs, 0, sizeof *laddrs);
+
+    if (!eth_addr_from_string(lrp->mac, &laddrs->ea)) {
+        laddrs->ea = eth_addr_zero;
+        return false;
+    }
+    laddrs->ea_s = xasprintf(ETH_ADDR_FMT, ETH_ADDR_ARGS(laddrs->ea));
+
+    for (int i = 0; i < lrp->n_networks; i++) {
+        ovs_be32 ip4;
+        struct in6_addr ip6;
+        unsigned int plen;
+        char *error;
+
+        error = ip_parse_cidr(lrp->networks[i], &ip4, &plen);
+        if (!error) {
+            if (!ip4 || plen == 32) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+                VLOG_WARN_RL(&rl, "bad 'networks' %s", lrp->networks[i]);
+                continue;
+            }
+
+            add_ipv4_netaddr(laddrs, ip4, plen);
+            continue;
+        }
+        free(error);
+
+        error = ipv6_parse_cidr(lrp->networks[i], &ip6, &plen);
+        if (!error) {
+            if (plen == 128) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+                VLOG_WARN_RL(&rl, "bad 'networks' %s", lrp->networks[i]);
+                continue;
+            }
+            add_ipv6_netaddr(laddrs, ip6, plen);
+        } else {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_INFO_RL(&rl, "invalid syntax '%s' in networks",
+                         lrp->networks[i]);
+            free(error);
+        }
     }
 
     return true;
