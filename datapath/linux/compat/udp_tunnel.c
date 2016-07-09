@@ -141,31 +141,6 @@ void rpl_setup_udp_tunnel_sock(struct net *net, struct socket *sock,
 }
 EXPORT_SYMBOL_GPL(rpl_setup_udp_tunnel_sock);
 
-void ovs_udp_gso(struct sk_buff *skb)
-{
-	int udp_offset = skb_transport_offset(skb);
-	struct udphdr *uh;
-
-	uh = udp_hdr(skb);
-	uh->len = htons(skb->len - udp_offset);
-}
-EXPORT_SYMBOL_GPL(ovs_udp_gso);
-
-void ovs_udp_csum_gso(struct sk_buff *skb)
-{
-	struct iphdr *iph = ip_hdr(skb);
-	int udp_offset = skb_transport_offset(skb);
-
-	ovs_udp_gso(skb);
-
-	/* csum segment if tunnel sets skb with csum. The cleanest way
-	 * to do this just to set it up from scratch. */
-	skb->ip_summed = CHECKSUM_NONE;
-	udp_set_csum(false, skb, iph->saddr, iph->daddr,
-		     skb->len - udp_offset);
-}
-EXPORT_SYMBOL_GPL(ovs_udp_csum_gso);
-
 void rpl_udp_tunnel_xmit_skb(struct rtable *rt, struct sock *sk,
 			    struct sk_buff *skb, __be32 src, __be32 dst,
 			    __u8 tos, __u8 ttl, __be16 df, __be16 src_port,
@@ -288,4 +263,40 @@ int rpl_udp_tunnel6_xmit_skb(struct dst_entry *dst, struct sock *sk,
 	return 0;
 }
 #endif
+
+void ovs_udp_gso(struct sk_buff *skb)
+{
+	int udp_offset = skb_transport_offset(skb);
+	struct udphdr *uh;
+
+	uh = udp_hdr(skb);
+	uh->len = htons(skb->len - udp_offset);
+}
+EXPORT_SYMBOL_GPL(ovs_udp_gso);
+
+void ovs_udp_csum_gso(struct sk_buff *skb)
+{
+	int udp_offset = skb_transport_offset(skb);
+
+	ovs_udp_gso(skb);
+
+	if (!OVS_GSO_CB(skb)->ipv6) {
+		struct iphdr *iph = ip_hdr(skb);
+
+		/* csum segment if tunnel sets skb with csum. The cleanest way
+		 * to do this just to set it up from scratch. */
+		udp_set_csum(false, skb, iph->saddr, iph->daddr,
+				skb->len - udp_offset);
+#if IS_ENABLED(CONFIG_IPV6)
+	} else {
+		struct ipv6hdr *ip6h;
+
+		ip6h = ipv6_hdr(skb);
+		udp6_set_csum(false, skb, &ip6h->saddr, &ip6h->daddr,
+			      skb->len - udp_offset);
+#endif
+	}
+}
+EXPORT_SYMBOL_GPL(ovs_udp_csum_gso);
+
 #endif

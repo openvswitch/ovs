@@ -27,7 +27,7 @@ struct ovs_gso_cb {
 	/* Keep original tunnel info during userspace action execution. */
 	struct metadata_dst *fill_md_dst;
 #endif
-
+	bool ipv6;
 };
 #define OVS_GSO_CB(skb) ((struct ovs_gso_cb *)(skb)->cb)
 
@@ -152,6 +152,9 @@ static inline int skb_inner_mac_offset(const struct sk_buff *skb)
 {
 	return skb_inner_mac_header(skb) - skb->data;
 }
+
+#define ip6_local_out rpl_ip6_local_out
+int rpl_ip6_local_out(struct sk_buff *skb);
 
 #define skb_reset_inner_headers rpl_skb_reset_inner_headers
 static inline void skb_reset_inner_headers(struct sk_buff *skb)

@@ -25,6 +25,7 @@
 #include <linux/icmp.h>
 #include <linux/in.h>
 #include <linux/ip.h>
+#include <linux/ipv6.h>
 #include <linux/kernel.h>
 #include <linux/kmod.h>
 #include <linux/netdevice.h>
@@ -179,7 +180,8 @@ static __be16 __skb_network_protocol(struct sk_buff *skb)
 
 static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 					   netdev_features_t features,
-					   bool tx_path)
+					   bool tx_path,
+					   sa_family_t sa_family)
 {
 	void *iph = skb_network_header(skb);
 	int pkt_hlen = skb_inner_network_offset(skb); /* inner l2 + tunnel hdr. */
@@ -191,6 +193,7 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 	__be16 proto = skb->protocol;
 	char cb[sizeof(skb->cb)];
 
+	OVS_GSO_CB(skb)->ipv6 = (sa_family == AF_INET6);
 	/* setup whole inner packet to get protocol. */
 	__skb_pull(skb, mac_offset);
 	skb->protocol = __skb_network_protocol(skb);
@@ -267,7 +270,7 @@ int rpl_ip_local_out(struct sk_buff *skb)
 
 		iph = ip_hdr(skb);
 		id = ntohs(iph->id);
-		skb = tnl_skb_gso_segment(skb, 0, false);
+		skb = tnl_skb_gso_segment(skb, 0, false, AF_INET);
 		if (!skb || IS_ERR(skb))
 			return 0;
 	}  else if (skb->ip_summed == CHECKSUM_PARTIAL) {
@@ -295,4 +298,47 @@ int rpl_ip_local_out(struct sk_buff *skb)
 }
 EXPORT_SYMBOL_GPL(rpl_ip_local_out);
 
+static int output_ipv6(struct sk_buff *skb)
+{
+	int ret = NETDEV_TX_OK;
+	int err;
+
+	memset(IP6CB(skb), 0, sizeof (*IP6CB(skb)));
+#undef ip6_local_out
+	err = ip6_local_out(skb);
+	if (unlikely(net_xmit_eval(err)))
+		ret = err;
+
+	return ret;
+}
+
+int rpl_ip6_local_out(struct sk_buff *skb)
+{
+	int ret = NETDEV_TX_OK;
+
+	if (!OVS_GSO_CB(skb)->fix_segment)
+		return output_ipv6(skb);
+
+	if (skb_is_gso(skb)) {
+		skb = tnl_skb_gso_segment(skb, 0, false, AF_INET6);
+		if (!skb || IS_ERR(skb))
+			return 0;
+	}  else if (skb->ip_summed == CHECKSUM_PARTIAL) {
+		int err;
+
+		err = skb_checksum_help(skb);
+		if (unlikely(err))
+			return 0;
+	}
+
+	while (skb) {
+		struct sk_buff *next_skb = skb->next;
+
+		skb->next = NULL;
+		ret = output_ipv6(skb);
+		skb = next_skb;
+	}
+	return ret;
+}
+EXPORT_SYMBOL_GPL(rpl_ip6_local_out);
 #endif /* 3.18 */
