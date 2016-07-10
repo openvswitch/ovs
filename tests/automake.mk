@@ -102,10 +102,12 @@ SYSTEM_KMOD_TESTSUITE_AT = \
 
 SYSTEM_USERSPACE_TESTSUITE_AT = \
 	tests/system-userspace-testsuite.at \
+	tests/system-ovn.at \
 	tests/system-userspace-macros.at
 
 SYSTEM_TESTSUITE_AT = \
 	tests/system-common-macros.at \
+	tests/system-ovn.at \
 	tests/system-traffic.at
 
 TESTSUITE = $(srcdir)/tests/testsuite
