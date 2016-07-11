@@ -75,14 +75,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 #define IPS_UNTRACKED_BIT 12
 #define IPS_UNTRACKED (1 << IPS_UNTRACKED_BIT)
 
-#ifdef _WIN32
-#ifdef NETLINK_NETFILTER
-#undef NETLINK_NETFILTER
-#endif
-/* Reuse same socket for nfgenmsg and genlmsghdr in Windows*/
-#define NETLINK_NETFILTER       NETLINK_GENERIC
-#endif
-
 static const struct nl_policy nfnlgrp_conntrack_policy[] = {
     [CTA_TUPLE_ORIG] = { .type = NL_A_NESTED, .optional = false },
     [CTA_TUPLE_REPLY] = { .type = NL_A_NESTED, .optional = false },
