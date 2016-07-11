@@ -297,6 +297,14 @@ OVN_NBCTL_TEST_START
 
 AT_CHECK([ovn-nbctl lr-add lr0])
 AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24])
+
+AT_CHECK([ovn-nbctl show lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+    router <0> (lr0)
+        port lrp0
+            mac: "00:00:00:01:02:03"
+            networks: [["192.168.1.1/24"]]
+])
+
 AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24], [1], [],
   [ovn-nbctl: lrp0: a port with this name already exists
 ])

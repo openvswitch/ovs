@@ -460,9 +460,17 @@ print_lr(const struct nbrec_logical_router *lr, struct ds *s)
         ds_put_format(s, "        port %s\n", lrp->name);
         if (lrp->mac) {
             ds_put_cstr(s, "            mac: ");
-            ds_put_format(s, "\"%s\"", lrp->mac);
+            ds_put_format(s, "\"%s\"\n", lrp->mac);
         }
-        ds_put_format(s, "\n");
+        if (lrp->n_networks) {
+            ds_put_cstr(s, "            networks: [");
+            for (size_t j = 0; j < lrp->n_networks; j++) {
+                ds_put_format(s, "%s\"%s\"",
+                        j == 0 ? "" : ", ",
+                        lrp->networks[j]);
+            }
+            ds_put_cstr(s, "]\n");
+        }
     }
 }
 
