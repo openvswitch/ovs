@@ -290,7 +290,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 dnl use this file as payload file for ncat
 AT_CHECK([dd if=/dev/urandom of=payload200.bin bs=200 count=1 2> /dev/null])
 on_exit 'rm -f payload200.bin'
-NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 1234 < payload200.bin])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 1234 < payload200.bin])
 
 dnl packet with truncated size
 AT_CHECK([ovs-appctl revalidator/purge], [0])
@@ -312,7 +312,7 @@ in_port=1 dl_dst=e6:66:c1:22:22:22 actions=output(port=2,max_len=100),output:4,o
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 1234 < payload200.bin])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 1234 < payload200.bin])
 
 dnl 100 + 100 + 242 + min(65535,242) = 684
 AT_CHECK([ovs-appctl revalidator/purge], [0])
@@ -346,7 +346,7 @@ This flow is handled by the userspace slow path because it:
 dnl SLOW_ACTION test2: check actual packet truncate
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
-NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 1234 < payload200.bin])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 1234 < payload200.bin])
 
 dnl 100 + 100 + 242 + min(65535,242) = 684
 AT_CHECK([ovs-appctl revalidator/purge], [0])
@@ -428,7 +428,7 @@ priority=1,actions=drop
 AT_CHECK([ovs-ofctl add-flows br-underlay flows-underlay.txt])
 
 dnl check tunnel push path, from at_ns1 to at_ns0
-NS_CHECK_EXEC([at_ns1], [nc -u 10.1.1.1 1234 < payload200.bin])
+NS_CHECK_EXEC([at_ns1], [nc $NC_EOF_OPT -u 10.1.1.1 1234 < payload200.bin])
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 
 dnl Before truncation = ETH(14) + IP(20) + UDP(8) + 200 = 242B
@@ -441,7 +441,7 @@ n_bytes=138
 ])
 
 dnl check tunnel pop path, from at_ns0 to at_ns1
-NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 5678 < payload200.bin])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 5678 < payload200.bin])
 dnl After truncation = 100 byte at loopback device p2(4)
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | awk --field-separator=', '  '{print $5}'], [0], [dnl
@@ -474,7 +474,7 @@ AT_CHECK([ovs-ofctl del-flows br-underlay])
 AT_CHECK([ovs-ofctl add-flows br-underlay flows-underlay.txt])
 
 dnl check tunnel push path, from at_ns1 to at_ns0
-NS_CHECK_EXEC([at_ns1], [nc -u 10.1.1.1 1234 < payload200.bin])
+NS_CHECK_EXEC([at_ns1], [nc $NC_EOF_OPT -u 10.1.1.1 1234 < payload200.bin])
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 
 dnl Before truncation = ETH(14) + IP(20) + UDP(8) + 200 = 242B
@@ -487,7 +487,7 @@ n_bytes=138
 ])
 
 dnl check tunnel pop path, from at_ns0 to at_ns1
-NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 5678 < payload200.bin])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 5678 < payload200.bin])
 dnl After truncation = 100 byte at loopback device p2(4)
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | awk --field-separator=', '  '{print $5}'], [0], [dnl
