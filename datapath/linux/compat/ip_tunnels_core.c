@@ -37,7 +37,7 @@
 #include "gso.h"
 #include "vport-netdev.h"
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+#ifndef USE_UPSTREAM_TUNNEL
 void rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
                       __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
                       __be16 df, bool xnet)
@@ -87,9 +87,7 @@ void rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 	iptunnel_xmit_stats(dev, pkt_len);
 }
 EXPORT_SYMBOL_GPL(rpl_iptunnel_xmit);
-#endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
 int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 				 bool csum_help, int gso_type_mask,
 				 void (*fix_segment)(struct sk_buff *))
@@ -175,8 +173,7 @@ int rpl___iptunnel_pull_header(struct sk_buff *skb, int hdr_len,
 	return iptunnel_pull_offloads(skb);
 }
 EXPORT_SYMBOL_GPL(rpl___iptunnel_pull_header);
-
-#endif
+#endif /* USE_UPSTREAM_TUNNEL */
 
 bool ovs_skb_is_encapsulated(struct sk_buff *skb)
 {

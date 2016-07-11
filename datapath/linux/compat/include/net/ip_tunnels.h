@@ -8,7 +8,7 @@
  * Only function that do not depend on ip_tunnel structure can
  * be used. Those needs to be explicitly defined in this header file. */
 #include_next <net/ip_tunnels.h>
-#endif
+#else
 
 #include <linux/if_tunnel.h>
 #include <linux/types.h>
@@ -19,7 +19,6 @@
 #include <net/ip.h>
 #include <net/rtnetlink.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
 #define __iptunnel_pull_header rpl___iptunnel_pull_header
 int rpl___iptunnel_pull_header(struct sk_buff *skb, int hdr_len,
 			   __be16 inner_proto, bool raw_proto, bool xnet);
@@ -30,9 +29,7 @@ static inline int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len,
 {
 	return rpl___iptunnel_pull_header(skb, hdr_len, inner_proto, false, xnet);
 }
-#endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
 int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 				 bool csum_help, int gso_type_mask,
 				 void (*fix_segment)(struct sk_buff *));
@@ -46,11 +43,6 @@ int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 struct sk_buff *rpl_iptunnel_handle_offloads(struct sk_buff *skb,
 					 bool csum_help,
 					 int gso_type_mask);
-#else
-
-#define ovs_iptunnel_handle_offloads(skb, csum_help, gso_type_mask, fix_segment) \
-	iptunnel_handle_offloads(skb, gso_type_mask)
-#endif
 
 #define iptunnel_xmit rpl_iptunnel_xmit
 void rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
@@ -102,7 +94,6 @@ struct tnl_ptk_info {
 #define skb_is_encapsulated ovs_skb_is_encapsulated
 bool ovs_skb_is_encapsulated(struct sk_buff *skb);
 
-#ifndef USE_UPSTREAM_TUNNEL
 /* Used to memset ip_tunnel padding. */
 #define IP_TUNNEL_KEY_SIZE	offsetofend(struct ip_tunnel_key, tp_dst)
 
@@ -334,7 +325,6 @@ int rpl_ip_tunnel_get_iflink(const struct net_device *dev);
 
 #define ip_tunnel_get_link_net rpl_ip_tunnel_get_link_net
 struct net *rpl_ip_tunnel_get_link_net(const struct net_device *dev);
-#endif /* USE_UPSTREAM_TUNNEL */
 
 #ifndef HAVE___IP_TUNNEL_CHANGE_MTU
 #define __ip_tunnel_change_mtu rpl___ip_tunnel_change_mtu
@@ -356,4 +346,5 @@ static inline int iptunnel_pull_offloads(struct sk_buff *skb)
 	skb->encapsulation = 0;
 	return 0;
 }
+#endif /* USE_UPSTREAM_TUNNEL */
 #endif /* __NET_IP_TUNNELS_H */

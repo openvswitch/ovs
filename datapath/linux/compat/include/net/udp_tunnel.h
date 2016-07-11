@@ -11,6 +11,19 @@
 #ifdef USE_UPSTREAM_TUNNEL
 #include_next <net/udp_tunnel.h>
 
+/* this is to handle the return type change in handle-offload
+ * functions.
+ */
+static inline int
+rpl_udp_tunnel_handle_offloads(struct sk_buff *skb, bool udp_csum,
+			       bool is_vxlan)
+{
+	if (skb_is_gso(skb) && skb_is_encapsulated(skb)) {
+		return -ENOSYS;
+	}
+	return udp_tunnel_handle_offloads(skb, udp_csum);
+}
+
 #else
 
 #include <net/addrconf.h>
@@ -143,23 +156,7 @@ static inline void udp_tunnel_gro_complete(struct sk_buff *skb, int nhoff)
 	skb_shinfo(skb)->gso_type |= uh->check ?
 		SKB_GSO_UDP_TUNNEL_CSUM : SKB_GSO_UDP_TUNNEL;
 }
-#endif
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,7,0)
-/* this is to handle the return type change in handle-offload
- * functions.
- */
-static inline int
-rpl_udp_tunnel_handle_offloads(struct sk_buff *skb, bool udp_csum,
-			       bool is_vxlan)
-{
-	if (skb_is_gso(skb) && skb_is_encapsulated(skb)) {
-		return -ENOSYS;
-	}
-	return udp_tunnel_handle_offloads(skb, udp_csum);
-}
-
-#else
 void ovs_udp_gso(struct sk_buff *skb);
 void ovs_udp_csum_gso(struct sk_buff *skb);
 
@@ -188,10 +185,9 @@ static inline int rpl_udp_tunnel_handle_offloads(struct sk_buff *skb,
 
 	return ovs_iptunnel_handle_offloads(skb, udp_csum, type, fix_segment);
 }
-#endif
+#endif /* USE_UPSTREAM_TUNNEL */
 
 #define udp_tunnel_handle_offloads rpl_udp_tunnel_handle_offloads
-
 static inline void ovs_udp_tun_rx_dst(struct ip_tunnel_info *info,
 				  struct sk_buff *skb,
 				  unsigned short family,
