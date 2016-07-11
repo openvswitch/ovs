@@ -92,9 +92,12 @@ enum ovs_win_control_cmd {
     OVS_CTRL_CMD_MC_SUBSCRIBE_REQ,
     OVS_CTRL_CMD_PACKET_SUBSCRIBE_REQ,
 
-    /* This command is logically belong to the Vport family */
+    /* This command logically belongs to the Vport family */
     OVS_CTRL_CMD_EVENT_NOTIFY,
-    OVS_CTRL_CMD_READ_NOTIFY
+    OVS_CTRL_CMD_READ_NOTIFY,
+
+    /* Used for Socket property */
+    OVS_CTRL_CMD_SOCK_PROP
 };
 
 /* NL Attributes for joining/unjoining an MC group */
@@ -162,5 +165,15 @@ enum ovs_win_netdev_attr {
 
 typedef struct ovs_dp_stats OVS_DP_STATS;
 typedef enum ovs_vport_type OVS_VPORT_TYPE;
+
+/* NL Attributes for setting socket attributes */
+enum ovs_nl_sock_attr {
+    /* (UINT32) Netlink Protocol set in Userspace and read in Kernel */
+    OVS_NL_ATTR_SOCK_PROTO,
+    /* (UINT32) Instance PID set in Kernel and read in Userspace */
+    OVS_NL_ATTR_SOCK_PID,
+    __OVS_NL_ATTR_SOCK_MAX
+};
+#define OVS_WIN_SOCK_ATTR_MAX (__OVS_NL_ATTR_SOCK_MAX - 1)
 
 #endif /* __OVS_DP_INTERFACE_EXT_H_ */

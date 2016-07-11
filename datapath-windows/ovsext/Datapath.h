@@ -51,6 +51,7 @@ typedef struct _OVS_OPEN_INSTANCE {
     PVOID eventQueue;
     POVS_USER_PACKET_QUEUE packetQueue;
     UINT32 pid;
+    UINT32 protocol; /* Refers to NETLINK Family (eg. NETLINK_GENERIC)*/
 
     struct {
         POVS_MESSAGE ovsMsg;    /* OVS message passed during dump start. */
