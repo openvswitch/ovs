@@ -17,7 +17,6 @@ openvswitch_sources += \
 	linux/compat/netdevice.c \
 	linux/compat/nf_conntrack_core.c \
 	linux/compat/nf_conntrack_reasm.c \
-	linux/compat/reassembly.c \
 	linux/compat/reciprocal_div.c \
 	linux/compat/skbuff-openvswitch.c \
 	linux/compat/socket.c \
@@ -41,7 +40,6 @@ openvswitch_headers += \
 	linux/compat/include/linux/if_link.h \
 	linux/compat/include/linux/if_vlan.h \
 	linux/compat/include/linux/in.h \
-	linux/compat/include/linux/ipv6.h \
 	linux/compat/include/linux/jiffies.h \
 	linux/compat/include/linux/kconfig.h \
 	linux/compat/include/linux/kernel.h \
