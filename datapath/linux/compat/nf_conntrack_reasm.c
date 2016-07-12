@@ -581,7 +581,7 @@ static int nf_ct_net_init(struct net *net)
 
 static void nf_ct_net_exit(struct net *net)
 {
-	inet_frags_exit_net(&net->ipv6.frags, &nf_frags);
+	inet_frags_exit_net(&net->nf_frag.frags, &nf_frags);
 }
 
 static struct pernet_operations nf_ct_net_ops = {
