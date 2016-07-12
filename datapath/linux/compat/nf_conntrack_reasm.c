@@ -80,6 +80,12 @@ static unsigned int nf_hash_frag(__be32 id, const struct in6_addr *saddr,
 	return jhash_3words(ipv6_addr_hash(saddr), ipv6_addr_hash(daddr),
 			    (__force u32)id, nf_frags.rnd);
 }
+/* fb3cfe6e75b9 ("inet: frag: remove hash size assumptions from callers")
+ * shifted this logic into inet_fragment, but prior kernels still need this.
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#define nf_hash_frag(a, b, c) (nf_hash_frag(a, b, c) & (INETFRAGS_HASHSZ - 1))
+#endif
 
 #ifdef HAVE_INET_FRAGS_CONST
 static unsigned int nf_hashfn(const struct inet_frag_queue *q)
@@ -119,7 +125,11 @@ static inline struct frag_queue *fq_find(struct net *net, __be32 id,
 	arg.dst = dst;
 	arg.ecn = ecn;
 
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
+	read_lock_bh(&nf_frags.lock);
+#else
 	local_bh_disable();
+#endif
 	hash = nf_hash_frag(id, src, dst);
 
 	q = inet_frag_find(&net->nf_frag.frags, &nf_frags, &arg, hash);
@@ -511,6 +521,13 @@ int rpl_nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user)
 	skb_set_transport_header(skb, fhoff);
 	hdr = ipv6_hdr(skb);
 	fhdr = (struct frag_hdr *)skb_transport_header(skb);
+
+/* See ip_evictor(). */
+#ifdef HAVE_INET_FRAG_EVICTOR
+	local_bh_disable();
+	inet_frag_evictor(&net->nf_frag.frags, &nf_frags, false);
+	local_bh_enable();
+#endif
 
 	fq = fq_find(net, fhdr->identification, user, &hdr->saddr, &hdr->daddr,
 		     ip6_frag_ecn(hdr));

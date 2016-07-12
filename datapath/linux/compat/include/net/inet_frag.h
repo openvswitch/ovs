@@ -21,43 +21,18 @@
 #define qp_flags(qp) (qp->q.flags)
 #endif
 
-#ifndef HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR
-/**
- * struct ovs_inet_frag_queue - fragment queue
- *
- * Wrap the system inet_frag_queue to provide a list evictor.
- *
- * @list_evictor: list of queues to forcefully evict (e.g. due to low memory)
- */
-struct ovs_inet_frag_queue {
-	struct inet_frag_queue	fq;
-	struct hlist_node	list_evictor;
-};
-
-static inline bool rpl_inet_frag_evicting(struct inet_frag_queue *q)
+#ifndef HAVE_INET_FRAG_EVICTING
+static inline bool inet_frag_evicting(struct inet_frag_queue *q)
 {
-#ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
-	struct ovs_inet_frag_queue *ofq = (struct ovs_inet_frag_queue *)q;
-	return !hlist_unhashed(&ofq->list_evictor);
+#ifdef HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR
+	return !hlist_unhashed(&q->list_evictor);
 #else
 	return (q_flags(q) & INET_FRAG_FIRST_IN) && q->fragments != NULL;
-#endif
+#endif /* HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR */
 }
-#define inet_frag_evicting rpl_inet_frag_evicting
-#else /* HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR */
-#ifndef HAVE_INET_FRAG_EVICTING
-static inline bool rpl_inet_frag_evicting(struct inet_frag_queue *q)
-{
-	return !hlist_unhashed(&q->list_evictor);
-}
-#define inet_frag_evicting rpl_inet_frag_evicting
-#endif
-#endif
+#endif /* HAVE_INET_FRAG_EVICTING */
 
 #ifndef HAVE_CORRECT_MRU_HANDLING
-static unsigned int rpl_frag_percpu_counter_batch = 130000;
-#define frag_percpu_counter_batch rpl_frag_percpu_counter_batch
-
 static inline void rpl_sub_frag_mem_limit(struct netns_frags *nf, int i)
 {
 	__percpu_counter_add(&nf->mem, -i, frag_percpu_counter_batch);
@@ -70,14 +45,29 @@ static inline void rpl_add_frag_mem_limit(struct netns_frags *nf, int i)
 }
 #define add_frag_mem_limit rpl_add_frag_mem_limit
 
-int rpl_inet_frags_init(struct inet_frags *f);
+static inline int rpl_inet_frags_init(struct inet_frags *frags)
+{
+	inet_frags_init(frags);
+	return 0;
+}
 #define inet_frags_init rpl_inet_frags_init
 
+/* We reuse the upstream inet_fragment.c common code for managing fragment
+ * stores, However we actually store the fragments within our own 'inet_frags'
+ * structures (in {ip_fragment,nf_conntrack_reasm}.c). When unloading the OVS
+ * kernel module, we need to flush all of the remaining fragments from these
+ * caches, or else we will panic with the following sequence of events:
+ *
+ * 1) A fragment for a packet arrives and is cached in inet_frags. This
+ *    starts a timer to ensure the fragment does not hang around forever.
+ * 2) openvswitch module is unloaded.
+ * 3) The timer for the fragment fires, calling into backported OVS code
+ *    to free the fragment.
+ * 4) BUG: unable to handle kernel paging request at ffffffffc03c01e0
+ */
 void rpl_inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f);
 #define inet_frags_exit_net rpl_inet_frags_exit_net
 
-void rpl_inet_frag_destroy(struct inet_frag_queue *q, struct inet_frags *f);
-#define inet_frag_destroy(q, f, work) rpl_inet_frag_destroy(q, f)
 #endif /* !HAVE_CORRECT_MRU_HANDLING */
 
 #endif /* inet_frag.h */
