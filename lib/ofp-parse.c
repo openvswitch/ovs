@@ -38,6 +38,7 @@
 #include "packets.h"
 #include "simap.h"
 #include "socket-util.h"
+#include "util.h"
 
 /* Parses 'str' as an 8-bit unsigned integer into '*valuep'.
  *

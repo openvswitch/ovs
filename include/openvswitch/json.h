@@ -30,7 +30,8 @@
  *        "should" be unique).
  */
 
-#include "shash.h"
+#include <stdio.h>
+#include "openvswitch/shash.h"
 
 #ifdef  __cplusplus
 extern "C" {

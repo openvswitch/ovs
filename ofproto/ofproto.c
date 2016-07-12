@@ -31,7 +31,7 @@
 #include "coverage.h"
 #include "dp-packet.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "netdev.h"
 #include "nx-match.h"
 #include "ofproto.h"
@@ -54,7 +54,7 @@
 #include "poll-loop.h"
 #include "random.h"
 #include "seq.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "simap.h"
 #include "smap.h"
 #include "sset.h"
@@ -62,6 +62,7 @@
 #include "tun-metadata.h"
 #include "unaligned.h"
 #include "unixctl.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto);
 

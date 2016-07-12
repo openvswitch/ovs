@@ -25,7 +25,7 @@
 #include "ovs-numa.h"
 #include "packets.h"
 #include "seq.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "smap.h"
 
 #ifdef  __cplusplus

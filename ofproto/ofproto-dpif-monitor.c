@@ -25,7 +25,7 @@
 #include "guarded-list.h"
 #include "hash.h"
 #include "heap.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "latch.h"
 #include "openvswitch/ofpbuf.h"
 #include "ofproto-dpif.h"

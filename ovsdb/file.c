@@ -24,7 +24,7 @@
 #include "bitmap.h"
 #include "column.h"
 #include "log.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "lockfile.h"
 #include "ovsdb.h"
 #include "ovsdb-error.h"

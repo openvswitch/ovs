@@ -17,16 +17,17 @@
 #include <config.h>
 #include "byte-order.h"
 #include "expr.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "lex.h"
 #include "logical-fields.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/match.h"
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/vlog.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "simap.h"
 #include "sset.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(expr);
 

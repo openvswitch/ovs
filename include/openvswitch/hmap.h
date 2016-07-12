@@ -19,7 +19,7 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
-#include "util.h"
+#include "openvswitch/util.h"
 
 #ifdef  __cplusplus
 extern "C" {

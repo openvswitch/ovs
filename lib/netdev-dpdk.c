@@ -48,7 +48,7 @@
 #include "ovs-thread.h"
 #include "ovs-rcu.h"
 #include "packets.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "smap.h"
 #include "sset.h"
 #include "unaligned.h"

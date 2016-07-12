@@ -16,12 +16,12 @@
 #ifndef OVSDB_IDL_PROVIDER_H
 #define OVSDB_IDL_PROVIDER_H 1
 
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
 #include "ovsdb-idl.h"
 #include "ovsdb-map-op.h"
 #include "ovsdb-types.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "uuid.h"
 
 struct ovsdb_idl_row {

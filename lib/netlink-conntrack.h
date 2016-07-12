@@ -21,7 +21,7 @@
 #include "compiler.h"
 #include "ct-dpif.h"
 #include "openvswitch/dynamic-string.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/ofpbuf.h"
 #include "timeval.h"
 #include "unixctl.h"

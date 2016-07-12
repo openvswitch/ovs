@@ -94,7 +94,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/hindex.c \
 	lib/hindex.h \
 	lib/hmap.c \
-	lib/hmap.h \
 	lib/hmapx.c \
 	lib/hmapx.h \
 	lib/id-pool.c \
@@ -102,7 +101,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/jhash.c \
 	lib/jhash.h \
 	lib/json.c \
-	lib/json.h \
 	lib/jsonrpc.c \
 	lib/jsonrpc.h \
 	lib/lacp.c \
@@ -219,7 +217,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/sha1.c \
 	lib/sha1.h \
 	lib/shash.c \
-	lib/shash.h \
 	lib/simap.c \
 	lib/simap.h \
 	lib/smap.c \

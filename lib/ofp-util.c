@@ -49,6 +49,7 @@
 #include "random.h"
 #include "tun-metadata.h"
 #include "unaligned.h"
+#include "util.h"
 #include "uuid.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_util);

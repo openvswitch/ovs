@@ -2,8 +2,10 @@ openvswitchincludedir = $(includedir)/openvswitch
 openvswitchinclude_HEADERS = \
 	include/openvswitch/compiler.h \
 	include/openvswitch/dynamic-string.h \
+	include/openvswitch/hmap.h \
 	include/openvswitch/flow.h \
 	include/openvswitch/geneve.h \
+	include/openvswitch/json.h \
 	include/openvswitch/list.h \
 	include/openvswitch/netdev.h \
 	include/openvswitch/match.h \
@@ -17,6 +19,7 @@ openvswitchinclude_HEADERS = \
 	include/openvswitch/ofp-prop.h \
 	include/openvswitch/ofp-util.h \
 	include/openvswitch/packets.h \
+	include/openvswitch/shash.h \
 	include/openvswitch/thread.h \
 	include/openvswitch/token-bucket.h \
 	include/openvswitch/tun-metadata.h \

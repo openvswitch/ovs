@@ -26,7 +26,7 @@
 #include "compiler.h"
 #include "dpif.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "netdev.h"
 #include "netlink.h"
 #include "openvswitch/ofpbuf.h"

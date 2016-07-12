@@ -21,7 +21,7 @@
 #include "collectors.h"
 #include "flow.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "netdev.h"
 #include "openvswitch/list.h"
 #include "openvswitch/ofpbuf.h"

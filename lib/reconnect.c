@@ -20,6 +20,7 @@
 #include <stdlib.h>
 
 #include "poll-loop.h"
+#include "util.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(reconnect);

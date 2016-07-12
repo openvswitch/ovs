@@ -21,17 +21,18 @@
 #include "connectivity.h"
 #include "openvswitch/dynamic-string.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "dp-packet.h"
 #include "ovs-atomic.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "seq.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "timer.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(lacp);
 

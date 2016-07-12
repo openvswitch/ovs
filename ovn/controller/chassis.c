@@ -24,6 +24,7 @@
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn-controller.h"
+#include "lib/util.h"
 
 VLOG_DEFINE_THIS_MODULE(chassis);
 

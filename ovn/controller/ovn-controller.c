@@ -32,7 +32,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "encaps.h"
 #include "fatal-signal.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "lflow.h"
 #include "lib/vswitch-idl.h"
 #include "lport.h"

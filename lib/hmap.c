@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include <stdint.h>
 #include <string.h>
 #include "coverage.h"

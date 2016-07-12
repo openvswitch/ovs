@@ -26,7 +26,7 @@
 
 #include "coverage.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "ovs-thread.h"
 #include "timeval.h"
 #include "util.h"

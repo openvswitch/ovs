@@ -32,7 +32,7 @@
 #include "ovn/lib/ovn-dhcp.h"
 #include "ovs-thread.h"
 #include "ovstest.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "simap.h"
 #include "util.h"
 

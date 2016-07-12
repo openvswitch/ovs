@@ -20,10 +20,14 @@
 #include <limits.h>
 
 #include "column.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "ovsdb-error.h"
 #include "row.h"
+
+#include <string.h>
+
 #include "table.h"
+#include "util.h"
 
 struct ovsdb_error *
 ovsdb_function_from_string(const char *name, enum ovsdb_function *function)

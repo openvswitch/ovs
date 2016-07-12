@@ -20,7 +20,7 @@
 
 #include "bitmap.h"
 #include "compiler.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/match.h"
 #include "nx-match.h"
 #include "odp-netlink.h"
@@ -29,6 +29,7 @@
 #include "ovs-rcu.h"
 #include "packets.h"
 #include "tun-metadata.h"
+#include "util.h"
 
 struct tun_meta_entry {
     struct hmap_node node;      /* In struct tun_table's key_hmap. */

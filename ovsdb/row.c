@@ -20,11 +20,12 @@
 #include <stddef.h>
 
 #include "openvswitch/dynamic-string.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "ovsdb-error.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "sort.h"
 #include "table.h"
+#include "util.h"
 
 static struct ovsdb_row *
 allocate_row(const struct ovsdb_table *table)

@@ -20,7 +20,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "compiler.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/dynamic-string.h"
 #include "util.h"
 

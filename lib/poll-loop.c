@@ -30,7 +30,7 @@
 #include "socket-util.h"
 #include "timeval.h"
 #include "openvswitch/vlog.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "hash.h"
 
 VLOG_DEFINE_THIS_MODULE(poll_loop);

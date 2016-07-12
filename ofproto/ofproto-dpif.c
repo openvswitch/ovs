@@ -68,6 +68,7 @@
 #include "tunnel.h"
 #include "unaligned.h"
 #include "unixctl.h"
+#include "util.h"
 #include "vlan-bitmap.h"
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif);

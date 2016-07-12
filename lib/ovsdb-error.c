@@ -21,7 +21,7 @@
 
 #include "backtrace.h"
 #include "openvswitch/dynamic-string.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
 

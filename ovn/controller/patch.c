@@ -19,9 +19,9 @@
 
 #include "hash.h"
 #include "lflow.h"
-#include "lib/hmap.h"
 #include "lib/vswitch-idl.h"
 #include "lport.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/vlog.h"
 #include "ovn-controller.h"
 

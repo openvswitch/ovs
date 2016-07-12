@@ -18,7 +18,7 @@
 #include <strings.h>
 
 #include "hash.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "packets.h"
 #include "uuid.h"
 

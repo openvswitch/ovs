@@ -23,7 +23,7 @@
 #include "db-ctl-base.h"
 #include "dirs.h"
 #include "fatal-signal.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "ovn/lib/ovn-nb-idl.h"
 #include "packets.h"
 #include "poll-loop.h"

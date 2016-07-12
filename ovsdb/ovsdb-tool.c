@@ -31,7 +31,7 @@
 #include "file.h"
 #include "lockfile.h"
 #include "log.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "ovsdb.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"

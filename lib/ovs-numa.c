@@ -28,7 +28,7 @@
 #endif /* __linux__ */
 
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
 #include "ovs-thread.h"
 #include "openvswitch/vlog.h"

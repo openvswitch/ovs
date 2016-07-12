@@ -22,7 +22,7 @@
 #include "colors.h"
 #include "compiler.h"
 #include "dummy.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "learn.h"
 #include "multipath.h"
 #include "nx-match.h"

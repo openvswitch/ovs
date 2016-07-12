@@ -17,7 +17,7 @@
 #define OVN_LPORT_H 1
 
 #include <stdint.h>
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "uuid.h"
 
 struct ovsdb_idl;

@@ -47,7 +47,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "seq.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "smap.h"
 #include "sset.h"
 #include "svec.h"

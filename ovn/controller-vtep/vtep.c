@@ -18,8 +18,8 @@
 #include "vtep.h"
 
 #include "lib/hash.h"
-#include "lib/hmap.h"
-#include "lib/shash.h"
+#include "openvswitch/hmap.h"
+#include "openvswitch/shash.h"
 #include "lib/smap.h"
 #include "lib/sset.h"
 #include "lib/util.h"

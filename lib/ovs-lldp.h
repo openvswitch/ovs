@@ -21,7 +21,7 @@
 
 #include <stdint.h>
 #include "dp-packet.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
 #include "lldp/lldpd.h"
 #include "ovs-atomic.h"

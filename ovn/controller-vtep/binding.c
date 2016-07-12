@@ -16,7 +16,7 @@
 #include <config.h>
 #include "binding.h"
 
-#include "lib/shash.h"
+#include "openvswitch/shash.h"
 #include "lib/smap.h"
 #include "lib/util.h"
 #include "openvswitch/vlog.h"

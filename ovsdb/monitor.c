@@ -21,7 +21,7 @@
 #include "bitmap.h"
 #include "column.h"
 #include "openvswitch/dynamic-string.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "jsonrpc.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
@@ -36,6 +36,7 @@
 #include "transaction.h"
 #include "jsonrpc-server.h"
 #include "monitor.h"
+#include "util.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_monitor);

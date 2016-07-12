@@ -27,6 +27,7 @@
 #include "timeval.h"
 #include "unaligned.h"
 #include "openvswitch/vlog.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(netlink);
 

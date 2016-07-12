@@ -28,7 +28,7 @@
 #include <asm/unistd.h>
 #include "openvswitch/dynamic-string.h"
 #include "perf-counter.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "util.h"
 
 static struct shash perf_counters = SHASH_INITIALIZER(&perf_counters);

@@ -22,7 +22,7 @@
 
 #include "classifier.h"
 #include "colors.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openflow/nicira-ext.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/meta-flow.h"
@@ -32,7 +32,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 #include "packets.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "tun-metadata.h"
 #include "unaligned.h"
 #include "util.h"

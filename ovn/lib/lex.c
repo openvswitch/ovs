@@ -20,7 +20,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include "openvswitch/dynamic-string.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "packets.h"
 #include "util.h"
 

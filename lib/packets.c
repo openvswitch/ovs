@@ -26,7 +26,7 @@
 #include "csum.h"
 #include "crc32c.h"
 #include "flow.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/dynamic-string.h"
 #include "ovs-thread.h"
 #include "odp-util.h"

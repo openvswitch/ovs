@@ -18,7 +18,7 @@
 
 #include <errno.h>
 
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "hmapx.h"
 #include "ofproto.h"
 #include "vlan-bitmap.h"

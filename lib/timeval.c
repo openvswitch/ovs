@@ -30,7 +30,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "ovs-rcu.h"
 #include "ovs-thread.h"
 #include "signals.h"

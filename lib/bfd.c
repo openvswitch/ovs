@@ -29,7 +29,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
 #include "netdev.h"
 #include "odp-util.h"

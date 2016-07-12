@@ -23,7 +23,7 @@
 #include <stdlib.h>
 #include "flow.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"

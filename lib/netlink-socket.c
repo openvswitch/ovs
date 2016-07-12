@@ -25,7 +25,7 @@
 #include "coverage.h"
 #include "openvswitch/dynamic-string.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "netlink.h"
 #include "netlink-protocol.h"
 #include "odp-netlink.h"

@@ -20,7 +20,7 @@
 #include "column.h"
 #include "condition.h"
 #include "file.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "mutation.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"

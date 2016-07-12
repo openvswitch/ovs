@@ -42,7 +42,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "ovs-numa.h"
 #include "packets.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "simap.h"
 #include "smap.h"
 #include "sset.h"

@@ -59,6 +59,7 @@
 #include "tnl-neigh-cache.h"
 #include "tnl-ports.h"
 #include "tunnel.h"
+#include "util.h"
 
 COVERAGE_DEFINE(xlate_actions);
 COVERAGE_DEFINE(xlate_actions_oversize);

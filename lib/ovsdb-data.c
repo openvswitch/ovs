@@ -27,11 +27,12 @@
 #include "ovs-thread.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
-#include "json.h"
-#include "shash.h"
+#include "openvswitch/json.h"
+#include "openvswitch/shash.h"
 #include "smap.h"
 #include "sort.h"
 #include "unicode.h"
+#include "util.h"
 
 static struct json *
 wrap_json(const char *name, struct json *wrapped)

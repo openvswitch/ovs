@@ -18,7 +18,7 @@
 #include "ovsdb.h"
 
 #include "column.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
 #include "ovsdb-types.h"

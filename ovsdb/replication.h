@@ -18,7 +18,7 @@
 #ifndef REPLICATION_H
 #define REPLICATION_H 1
 
-#include "shash.h"
+#include "openvswitch/shash.h"
 
 struct db {
     /* Initialized in main(). */

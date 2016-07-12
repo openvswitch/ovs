@@ -17,7 +17,7 @@
 #include <config.h>
 #include "ovsdb-map-op.h"
 #include "util.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "hash.h"
 
 /* Map Operation: a Partial Map Update */

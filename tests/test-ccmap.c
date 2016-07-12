@@ -27,7 +27,7 @@
 #include "command-line.h"
 #include "fat-rwlock.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "ovstest.h"
 #include "ovs-thread.h"
 #include "random.h"

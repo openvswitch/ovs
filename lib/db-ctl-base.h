@@ -19,7 +19,7 @@
 
 #include "compiler.h"
 #include "openvswitch/dynamic-string.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 
 struct ctl_context;
 struct option;

@@ -18,7 +18,7 @@
 #define CONNMGR_H 1
 
 #include "classifier.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
 #include "openvswitch/match.h"
 #include "openvswitch/ofp-util.h"

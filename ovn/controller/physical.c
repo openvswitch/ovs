@@ -28,10 +28,11 @@
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-util.h"
 #include "physical.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "simap.h"
 #include "smap.h"
 #include "sset.h"
+#include "util.h"
 #include "vswitch-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(physical);

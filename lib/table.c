@@ -19,7 +19,7 @@
 #include "table.h"
 
 #include "openvswitch/dynamic-string.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
 #include "timeval.h"

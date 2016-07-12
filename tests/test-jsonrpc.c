@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include "command-line.h"
 #include "daemon.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "ovstest.h"
 #include "poll-loop.h"
 #include "stream-ssl.h"

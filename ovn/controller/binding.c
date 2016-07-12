@@ -19,11 +19,11 @@
 #include "lport.h"
 
 #include "lib/bitmap.h"
-#include "lib/hmap.h"
 #include "lib/poll-loop.h"
 #include "lib/sset.h"
 #include "lib/util.h"
 #include "lib/vswitch-idl.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn-controller.h"

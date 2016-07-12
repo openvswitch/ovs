@@ -46,7 +46,7 @@
 #include "ovs-atomic.h"
 #include "ovs-rcu.h"
 #include "ovs-thread.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "simap.h"
 #include "timeval.h"
 

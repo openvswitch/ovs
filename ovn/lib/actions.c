@@ -24,7 +24,7 @@
 #include "ovn-dhcp.h"
 #include "expr.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "lex.h"
 #include "logical-fields.h"
 #include "nx-match.h"
@@ -32,7 +32,7 @@
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofpbuf.h"
 #include "packets.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "simap.h"
 
 /* Context maintained during actions_parse(). */

@@ -49,7 +49,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "sset.h"
 #include "timeval.h"
 #include "unaligned.h"

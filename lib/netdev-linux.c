@@ -55,7 +55,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "netlink-notifier.h"
@@ -67,12 +67,13 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "rtnetlink.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "socket-util.h"
 #include "sset.h"
 #include "timer.h"
 #include "unaligned.h"
 #include "openvswitch/vlog.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_linux);
 

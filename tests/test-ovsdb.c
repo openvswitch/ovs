@@ -26,7 +26,7 @@
 #include "byte-order.h"
 #include "command-line.h"
 #include "openvswitch/dynamic-string.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "jsonrpc.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"

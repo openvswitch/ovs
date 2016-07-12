@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "compiler.h"
+#include "util.h"
 #include "openvswitch/util.h"
 
 extern char *program_name;

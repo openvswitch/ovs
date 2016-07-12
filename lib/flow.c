@@ -39,6 +39,7 @@
 #include "odp-util.h"
 #include "random.h"
 #include "unaligned.h"
+#include "util.h"
 
 COVERAGE_DEFINE(flow_extract);
 COVERAGE_DEFINE(miniflow_malloc);

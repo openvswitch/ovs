@@ -30,7 +30,7 @@
 #include "ovs-thread.h"
 #include "packets.h"
 #include "random.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "socket-util.h"
 #include "tun-metadata.h"
 #include "unaligned.h"

@@ -19,7 +19,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include "column.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
 #include "ovsdb-data.h"
 

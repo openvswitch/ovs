@@ -24,7 +24,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "fat-rwlock.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "netdev.h"
 #include "odp-util.h"
 #include "openvswitch/ofpbuf.h"

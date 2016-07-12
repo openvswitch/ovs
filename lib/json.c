@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include "json.h"
+#include "openvswitch/json.h"
 
 #include <ctype.h>
 #include <errno.h>
@@ -26,7 +26,7 @@
 
 #include "openvswitch/dynamic-string.h"
 #include "hash.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "unicode.h"
 #include "util.h"
 

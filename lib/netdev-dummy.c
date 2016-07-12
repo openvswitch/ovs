@@ -36,7 +36,7 @@
 #include "packets.h"
 #include "pcap-file.h"
 #include "poll-loop.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "sset.h"
 #include "stream.h"
 #include "unaligned.h"

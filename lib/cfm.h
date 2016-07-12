@@ -18,7 +18,7 @@
 
 #include <stdint.h>
 
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/types.h"
 #include "packets.h"
 

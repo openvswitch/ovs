@@ -17,7 +17,7 @@
 #ifndef SSET_H
 #define SSET_H
 
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "util.h"
 
 #ifdef __cplusplus

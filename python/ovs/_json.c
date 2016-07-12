@@ -1,5 +1,5 @@
 #include "Python.h"
-#include <openvswitch/lib/json.h>
+#include <openvswitch/json.h>
 #include "structmember.h"
 
 #if PY_MAJOR_VERSION >= 3
