@@ -1558,7 +1558,6 @@ group_best_live_bucket(const struct xlate_ctx *ctx,
 {
     struct ofputil_bucket *best_bucket = NULL;
     uint32_t best_score = 0;
-    int i = 0;
 
     struct ofputil_bucket *bucket;
     const struct ovs_list *buckets;
@@ -1566,13 +1565,13 @@ group_best_live_bucket(const struct xlate_ctx *ctx,
     group_dpif_get_buckets(group, &buckets);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         if (bucket_is_alive(ctx, bucket, 0)) {
-            uint32_t score = (hash_int(i, basis) & 0xffff) * bucket->weight;
+            uint32_t score =
+                (hash_int(bucket->bucket_id, basis) & 0xffff) * bucket->weight;
             if (score >= best_score) {
                 best_bucket = bucket;
                 best_score = score;
             }
         }
-        i++;
     }
 
     return best_bucket;
