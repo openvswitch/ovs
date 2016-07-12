@@ -556,20 +556,12 @@ out_unlock:
 	return ret;
 }
 
-static int nf_ct_net_init(struct net *net)
-{
-	nf_defrag_ipv6_enable();
-
-	return 0;
-}
-
 static void nf_ct_net_exit(struct net *net)
 {
 	inet_frags_exit_net(&net->nf_frag.frags, &nf_frags);
 }
 
 static struct pernet_operations nf_ct_net_ops = {
-	.init = nf_ct_net_init,
 	.exit = nf_ct_net_exit,
 };
 
@@ -577,6 +569,7 @@ int rpl_nf_ct_frag6_init(void)
 {
 	int ret = 0;
 
+	nf_defrag_ipv6_enable();
 	nf_frags.hashfn = nf_hashfn;
 	nf_frags.constructor = ip6_frag_init;
 	nf_frags.destructor = NULL;
