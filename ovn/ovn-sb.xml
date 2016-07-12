@@ -738,8 +738,20 @@
         symbols, only names within the flow's logical datapath may be used.
       </p>
 
+      <p>
+        The <code>reg</code><var>X</var> symbols are 32-bit integers.
+        The <code>xxreg</code><var>X</var> symbols are 128-bit integers,
+        which overlay four of the 32-bit registers: <code>xxreg0</code>
+        overlays <code>reg0</code> through <code>reg3</code>, with
+        <code>reg0</code> supplying the most-significant bits of
+        <code>xxreg0</code> and <code>reg3</code> the least-signficant.
+        <code>xxreg1</code> similarly overlays <code>reg4</code> through
+        <code>reg7</code>.
+      </p>
+
       <ul>
         <li><code>reg0</code>...<code>reg9</code></li>
+        <li><code>xxreg0</code> <code>xxreg1</code></li>
         <li><code>inport</code> <code>outport</code></li>
         <li><code>eth.src</code> <code>eth.dst</code> <code>eth.type</code></li>
         <li><code>vlan.tci</code> <code>vlan.vid</code> <code>vlan.pcp</code> <code>vlan.present</code></li>

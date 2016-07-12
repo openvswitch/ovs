@@ -66,6 +66,9 @@ lflow_init(void)
     MFF_LOG_REGS;
 #undef MFF_LOG_REG
 
+    expr_symtab_add_field(&symtab, "xxreg0", MFF_XXREG0, NULL, false);
+    expr_symtab_add_field(&symtab, "xxreg1", MFF_XXREG1, NULL, false);
+
     /* Connection tracking state. */
     expr_symtab_add_field(&symtab, "ct_mark", MFF_CT_MARK, NULL, false);
     expr_symtab_add_field(&symtab, "ct_label", MFF_CT_LABEL, NULL, false);

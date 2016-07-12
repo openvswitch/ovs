@@ -146,6 +146,9 @@ create_symtab(struct shash *symtab)
     expr_symtab_add_string(symtab, "inport", MFF_REG14, NULL);
     expr_symtab_add_string(symtab, "outport", MFF_REG15, NULL);
 
+    expr_symtab_add_field(symtab, "xxreg0", MFF_XXREG0, NULL, false);
+    expr_symtab_add_field(symtab, "xxreg1", MFF_XXREG1, NULL, false);
+
     expr_symtab_add_field(symtab, "xreg0", MFF_XREG0, NULL, false);
     expr_symtab_add_field(symtab, "xreg1", MFF_XREG1, NULL, false);
     expr_symtab_add_field(symtab, "xreg2", MFF_XREG2, NULL, false);
