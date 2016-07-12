@@ -655,7 +655,6 @@ monitor2_print_table(struct json *table_update2,
     const struct ovsdb_column_set *columns = &mt->columns;
     struct shash_node *node;
     struct table t;
-    size_t i;
 
     if (table_update2->type != JSON_OBJECT) {
         ovs_error(0, "<table-update> for table %s is not object", table->name);
@@ -668,7 +667,7 @@ monitor2_print_table(struct json *table_update2,
 
     table_add_column(&t, "row");
     table_add_column(&t, "action");
-    for (i = 0; i < columns->n_columns; i++) {
+    for (size_t i = 0; i < columns->n_columns; i++) {
         table_add_column(&t, "%s", columns->columns[i]->name);
     }
     SHASH_FOR_EACH (node, json_object(table_update2)) {
