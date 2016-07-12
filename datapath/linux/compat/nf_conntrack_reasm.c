@@ -497,7 +497,7 @@ find_prev_fhdr(struct sk_buff *skb, u8 *prevhdrp, int *prevhoff, int *fhoff)
 	return 0;
 }
 
-int rpl_nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user)
+int nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user)
 {
 	struct net_device *dev = skb->dev;
 	int fhoff, nhoff, ret;
@@ -555,39 +555,6 @@ out_unlock:
 	inet_frag_put(&fq->q, &nf_frags);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(rpl_nf_ct_frag6_gather);
-
-#ifdef HAVE_INET_FRAGS_CONST
-static void rpl_ip6_frag_init(struct inet_frag_queue *q, const void *a)
-#else
-static void rpl_ip6_frag_init(struct inet_frag_queue *q, void *a)
-#endif
-{
-	struct frag_queue *fq = container_of(q, struct frag_queue, q);
-	const struct ip6_create_arg *arg = a;
-
-	fq->id = arg->id;
-	fq->user = arg->user;
-	fq->saddr = *arg->src;
-	fq->daddr = *arg->dst;
-	fq->ecn = arg->ecn;
-}
-
-#ifdef HAVE_INET_FRAGS_CONST
-static bool rpl_ip6_frag_match(const struct inet_frag_queue *q, const void *a)
-#else
-static bool rpl_ip6_frag_match(struct inet_frag_queue *q, void *a)
-#endif
-{
-	const struct frag_queue *fq;
-	const struct ip6_create_arg *arg = a;
-
-	fq = container_of(q, struct frag_queue, q);
-	return	fq->id == arg->id &&
-		fq->user == arg->user &&
-		ipv6_addr_equal(&fq->saddr, arg->src) &&
-		ipv6_addr_equal(&fq->daddr, arg->dst);
-}
 
 static int nf_ct_net_init(struct net *net)
 {
@@ -611,10 +578,10 @@ int rpl_nf_ct_frag6_init(void)
 	int ret = 0;
 
 	nf_frags.hashfn = nf_hashfn;
-	nf_frags.constructor = rpl_ip6_frag_init;
+	nf_frags.constructor = ip6_frag_init;
 	nf_frags.destructor = NULL;
 	nf_frags.qsize = sizeof(struct frag_queue);
-	nf_frags.match = rpl_ip6_frag_match;
+	nf_frags.match = ip6_frag_match;
 	nf_frags.frag_expire = nf_ct_frag6_expire;
 #ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	nf_frags.frags_cache_name = nf_frags_cache_name;
