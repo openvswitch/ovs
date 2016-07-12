@@ -1814,7 +1814,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_SWITCH_IN_PORT_SEC_IP, 0, "1", "next;");
     }
 
-    /* Ingress table 3: ARP responder, skip requests coming from localnet ports.
+    /* Ingress table 9: ARP responder, skip requests coming from localnet ports.
      * (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbs) {
@@ -1829,7 +1829,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
 
-    /* Ingress table 5: ARP/ND responder, reply for known IPs.
+    /* Ingress table 9: ARP/ND responder, reply for known IPs.
      * (priority 50). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbs) {
@@ -1916,7 +1916,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
 
-    /* Ingress table 5: ARP/ND responder, by default goto next.
+    /* Ingress table 9: ARP/ND responder, by default goto next.
      * (priority 0)*/
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbs) {
@@ -1926,7 +1926,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_SWITCH_IN_ARP_ND_RSP, 0, "1", "next;");
     }
 
-    /* Ingress table 6: Destination lookup, broadcast and multicast handling
+    /* Ingress table 10: Destination lookup, broadcast and multicast handling
      * (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbs) {
@@ -1946,7 +1946,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                       "outport = \""MC_FLOOD"\"; output;");
     }
 
-    /* Ingress table 6: Destination lookup, unicast handling (priority 50), */
+    /* Ingress table 10: Destination lookup, unicast handling (priority 50), */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbs) {
             continue;
@@ -1983,7 +1983,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
 
-    /* Ingress table 6: Destination lookup for unknown MACs (priority 0). */
+    /* Ingress table 10: Destination lookup for unknown MACs (priority 0). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbs) {
             continue;
@@ -1995,9 +1995,9 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
 
-    /* Egress table 2: Egress port security - IP (priority 0)
-     * port security L2 - multicast/broadcast (priority
-     * 100). */
+    /* Egress tables 6: Egress port security - IP (priority 0)
+     * Egress table 7: Egress port security L2 - multicast/broadcast
+     *                 (priority 100). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbs) {
             continue;
@@ -2008,10 +2008,10 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                       "output;");
     }
 
-    /* Egress table 2: Egress port security - IP (priorities 90 and 80)
+    /* Egress table 6: Egress port security - IP (priorities 90 and 80)
      * if port security enabled.
      *
-     * Egress table 3: Egress port security - L2 (priorities 50 and 150).
+     * Egress table 7: Egress port security - L2 (priorities 50 and 150).
      *
      * Priority 50 rules implement port security for enabled logical port.
      *
@@ -2498,7 +2498,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                       "ip", "inport = \"\"; ct_dnat;");
     }
 
-    /* Logical router ingress table 2: IP Routing.
+    /* Logical router ingress table 4: IP Routing.
      *
      * A packet that arrives at this table is an IP packet that should be
      * routed to the address in ip4.dst. This table sets outport to the correct
@@ -2531,7 +2531,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
     }
     /* XXX destination unreachable */
 
-    /* Local router ingress table 3: ARP Resolution.
+    /* Local router ingress table 5: ARP Resolution.
      *
      * Any packet that reaches this table is an IP packet whose next-hop IP
      * address is in reg0. (ip4.dst is the final destination.) This table
@@ -2678,11 +2678,11 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                       "get_arp(outport, reg0); next;");
     }
 
-    /* Local router ingress table 4: ARP request.
+    /* Local router ingress table 6: ARP request.
      *
      * In the common case where the Ethernet destination has been resolved,
-     * this table outputs the packet (priority 100).  Otherwise, it composes
-     * and sends an ARP request (priority 0). */
+     * this table outputs the packet (priority 0).  Otherwise, it composes
+     * and sends an ARP request (priority 100). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbr) {
             continue;
