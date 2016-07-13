@@ -22,8 +22,8 @@ Post-v2.5.0
    - Improved OpenFlow version compatibility for actions:
      * New OpenFlow extension to support the "group" action in OpenFlow 1.0.
      * OpenFlow 1.0 "enqueue" action now properly translated to OpenFlow 1.1+.
-     * OpenFlow 1.1 "mod_nw_ecn" action now properly translated to
-       OpenFlow 1.0.
+     * OpenFlow 1.1 "mod_nw_ecn" and OpenFlow 1.1+ "mod_nw_ttl" actions now
+       properly translated to OpenFlow 1.0.
    - ovs-ofctl:
      * queue-get-config command now allows a queue ID to be specified.
      * '--bundle' option can now be used with OpenFlow 1.3.
