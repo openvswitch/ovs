@@ -2034,7 +2034,7 @@ lrport_is_enabled(const struct nbrec_logical_router_port *lrport)
 static const char *
 find_lrp_member_ip(const struct ovn_port *op, const char *ip_s)
 {
-    uint32_t ip;
+    ovs_be32 ip;
 
     if (!ip_parse(ip_s, &ip)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
