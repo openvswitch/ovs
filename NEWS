@@ -20,6 +20,7 @@ Post-v2.5.0
      * New command OFPGC_ADD_OR_MOD for OFPT_GROUP_MOD message that adds a
        new group or modifies an existing groups
      * New OpenFlow extension to support the "group" action in OpenFlow 1.0.
+     * OpenFlow 1.0 "enqueue" action now properly translated to OpenFlow 1.1+.
    - ovs-ofctl:
      * queue-get-config command now allows a queue ID to be specified.
      * '--bundle' option can now be used with OpenFlow 1.3.

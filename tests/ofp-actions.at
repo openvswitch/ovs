@@ -751,3 +751,20 @@ NXST_FLOW reply:
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([enqueue action for OF1.1+])
+AT_KEYWORDS([ofp-actions])
+OVS_VSWITCHD_START
+dnl OpenFlow 1.0 has an "enqueue" action.  For OpenFlow 1.1+, we translate
+dnl it to a series of actions that accomplish the same thing.
+AT_CHECK([ovs-ofctl -O OpenFlow10 add-flow br0 'actions=enqueue(123,456)'])
+AT_CHECK([ovs-ofctl -O OpenFlow10 dump-flows br0 | ofctl_strip], [0], [dnl
+NXST_FLOW reply:
+ actions=enqueue:123:456
+])
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.3):
+ reset_counts actions=set_queue:456,output:123,pop_queue
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
