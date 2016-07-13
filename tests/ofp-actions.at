@@ -329,6 +329,9 @@ AT_DATA([test-data], [dnl
 # actions=mod_nw_tos:48
 0007 0008 30 000000
 
+# actions=mod_nw_ecn:2
+0008 0008 02 000000
+
 # actions=mod_tp_src:80
 0009 0008 0050 0000
 
@@ -765,6 +768,43 @@ NXST_FLOW reply:
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-flows br0 | ofctl_strip], [0], [dnl
 OFPST_FLOW reply (OF1.3):
  reset_counts actions=set_queue:456,output:123,pop_queue
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([mod_nw_ecn action translation])
+AT_KEYWORDS([ofp-actions])
+OVS_VSWITCHD_START
+
+dnl OpenFlow 1.1, but no other version, has a "mod_nw_ecn" action.
+dnl Check that we translate it properly for OF1.0 and OF1.2.
+dnl (OF1.3+ should be the same as OF1.2.)
+AT_CHECK([ovs-ofctl -O OpenFlow11 add-flow br0 'ip,actions=mod_nw_ecn:2'])
+AT_CHECK([ovs-ofctl -O OpenFlow10 dump-flows br0 | ofctl_strip], [0], [dnl
+NXST_FLOW reply:
+ ip actions=load:0x2->NXM_NX_IP_ECN[[]]
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.1):
+ ip actions=mod_nw_ecn:2
+])
+AT_CHECK([ovs-ofctl -O OpenFlow12 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.2):
+ ip actions=set_field:2->nw_ecn
+])
+
+dnl Check that OF1.2+ set_field to set ECN is translated into the OF1.1
+dnl mod_nw_ecn action.
+dnl
+dnl We don't do anything equivalent for OF1.0 reg_load because we prefer
+dnl that anything that comes in as reg_load gets translated back to reg_load
+dnl on output.  Perhaps this is somewhat inconsistent but it's what OVS
+dnl has done for multiple versions.
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 'ip,actions=set_field:2->ip_ecn'])
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.1):
+ ip actions=mod_nw_ecn:2
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

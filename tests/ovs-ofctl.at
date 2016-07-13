@@ -184,7 +184,7 @@ tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
 udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
-ip,actions=set_field:10.4.3.77->ip_src
+ip,actions=set_field:10.4.3.77->ip_src,mod_nw_ecn:2
 sctp actions=drop
 sctp actions=drop
 in_port=0 actions=resubmit:0
@@ -215,7 +215,7 @@ OFPT_FLOW_MOD: ADD tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:
 OFPT_FLOW_MOD: ADD udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 OFPT_FLOW_MOD: ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
 OFPT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
-OFPT_FLOW_MOD: ADD ip actions=mod_nw_src:10.4.3.77
+OFPT_FLOW_MOD: ADD ip actions=mod_nw_src:10.4.3.77,load:0x2->NXM_NX_IP_ECN[]
 OFPT_FLOW_MOD: ADD sctp actions=drop
 OFPT_FLOW_MOD: ADD sctp actions=drop
 OFPT_FLOW_MOD: ADD in_port=0 actions=resubmit:0

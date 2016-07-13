@@ -356,6 +356,9 @@ static enum ofperr ofpacts_verify(const struct ofpact[], size_t ofpacts_len,
 static void ofpact_put_set_field(struct ofpbuf *openflow, enum ofp_version,
                                  enum mf_field_id, uint64_t value);
 
+static void put_reg_load(struct ofpbuf *openflow,
+                         const struct mf_subfield *, uint64_t value);
+
 static enum ofperr ofpact_pull_raw(struct ofpbuf *, enum ofp_version,
                                    enum ofp_raw_action_type *, uint64_t *arg);
 static void *ofpact_put_raw(struct ofpbuf *, enum ofp_version,
@@ -1913,7 +1916,9 @@ encode_SET_IP_ECN(const struct ofpact_ecn *ip_ecn,
 {
     uint8_t ecn = ip_ecn->ecn;
     if (ofp_version == OFP10_VERSION) {
-        /* XXX */
+        struct mf_subfield dst = { .field = mf_from_id(MFF_IP_ECN),
+                                   .ofs = 0, .n_bits = 2 };
+        put_reg_load(out, &dst, ecn);
     } else if (ofp_version == OFP11_VERSION) {
         put_OFPAT11_SET_NW_ECN(out, ecn);
     } else {
@@ -2604,6 +2609,18 @@ ofpact_put_set_field(struct ofpbuf *openflow, enum ofp_version ofp_version,
     pad_ofpat(openflow, start_ofs);
 }
 
+static void
+put_reg_load(struct ofpbuf *openflow,
+             const struct mf_subfield *dst, uint64_t value)
+{
+    ovs_assert(dst->n_bits <= 64);
+
+    struct nx_action_reg_load *narl = put_NXAST_REG_LOAD(openflow);
+    narl->ofs_nbits = nxm_encode_ofs_nbits(dst->ofs, dst->n_bits);
+    narl->dst = htonl(mf_nxm_header(dst->field->id));
+    narl->value = htonll(value);
+}
+
 static bool
 next_load_segment(const struct ofpact_set_field *sf,
                   struct mf_subfield *dst, uint64_t *value)
@@ -2648,10 +2665,7 @@ set_field_to_nxast(const struct ofpact_set_field *sf, struct ofpbuf *openflow)
 
         dst.ofs = dst.n_bits = 0;
         while (next_load_segment(sf, &dst, &value)) {
-            struct nx_action_reg_load *narl = put_NXAST_REG_LOAD(openflow);
-            narl->ofs_nbits = nxm_encode_ofs_nbits(dst.ofs, dst.n_bits);
-            narl->dst = htonl(mf_nxm_header(dst.field->id));
-            narl->value = htonll(value);
+            put_reg_load(openflow, &dst, value);
         }
     }
 }
@@ -2757,6 +2771,10 @@ set_field_to_legacy_openflow(const struct ofpact_set_field *sf,
 
     case MFF_IP_DSCP_SHIFTED:
         put_OFPAT_SET_NW_TOS(out, ofp_version, sf->value.u8 << 2);
+        break;
+
+    case MFF_IP_ECN:
+        put_OFPAT11_SET_NW_ECN(out, sf->value.u8);
         break;
 
     case MFF_TCP_SRC:
