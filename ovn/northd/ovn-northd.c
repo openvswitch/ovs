@@ -2470,27 +2470,30 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                           ds_cstr(&match), ds_cstr(&actions));
         }
 
-        /* ARP handling for external IP addresses.
-         *
-         * DNAT IP addresses are external IP addresses that need ARP
-         * handling. */
+        ovs_be32 *snat_ips = xmalloc(sizeof *snat_ips * op->od->nbr->n_nat);
+        size_t n_snat_ips = 0;
         for (int i = 0; i < op->od->nbr->n_nat; i++) {
             const struct nbrec_nat *nat;
 
             nat = op->od->nbr->nat[i];
 
-            if(!strcmp(nat->type, "snat")) {
-                continue;
-            }
-
             ovs_be32 ip;
             if (!ip_parse(nat->external_ip, &ip) || !ip) {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-                VLOG_WARN_RL(&rl, "bad ip address %s in dnat configuration "
+                VLOG_WARN_RL(&rl, "bad ip address %s in nat configuration "
                              "for router %s", nat->external_ip, op->key);
                 continue;
             }
 
+            if (!strcmp(nat->type, "snat")) {
+                snat_ips[n_snat_ips++] = ip;
+                continue;
+            }
+
+            /* ARP handling for external IP addresses.
+             *
+             * DNAT IP addresses are external IP addresses that need ARP
+             * handling. */
             ds_clear(&match);
             ds_put_format(&match,
                           "inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
@@ -2516,35 +2519,13 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                           ds_cstr(&match), ds_cstr(&actions));
         }
 
-        /* Drop IP traffic to this router, unless the router ip is used as
-         * SNAT ip. */
-        ovs_be32 *nat_ips = xmalloc(sizeof *nat_ips * op->od->nbr->n_nat);
-        size_t n_nat_ips = 0;
-        for (int i = 0; i < op->od->nbr->n_nat; i++) {
-            const struct nbrec_nat *nat;
-            ovs_be32 ip;
-
-            nat = op->od->nbr->nat[i];
-            if (strcmp(nat->type, "snat")) {
-                continue;
-            }
-
-            if (!ip_parse(nat->external_ip, &ip) || !ip) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-                VLOG_WARN_RL(&rl, "bad ip address %s in snat configuration "
-                         "for router %s", nat->external_ip, op->key);
-                continue;
-            }
-
-            nat_ips[n_nat_ips++] = ip;
-        }
-
         ds_clear(&match);
         ds_put_cstr(&match, "ip4.dst == {");
         bool has_drop_ips = false;
         for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
-            for (int j = 0; j < n_nat_ips; j++) {
-                if (op->lrp_networks.ipv4_addrs[i].addr == nat_ips[j]) {
+            for (int j = 0; j < n_snat_ips; j++) {
+                /* Packets to SNAT IPs should not be dropped. */
+                if (op->lrp_networks.ipv4_addrs[i].addr == snat_ips[j]) {
                     continue;
                 }
             }
@@ -2562,7 +2543,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                           ds_cstr(&match), "drop;");
         }
 
-        free(nat_ips);
+        free(snat_ips);
     }
 
     /* NAT in Gateway routers. */
