@@ -36,9 +36,11 @@ struct ovsdb_column_set;
  * ovsdb_weak_ref" structures are created for them.
  */
 struct ovsdb_weak_ref {
-    struct ovs_list src_node;   /* In src->src_refs list. */
-    struct ovs_list dst_node;   /* In destination row's dst_refs list. */
-    struct ovsdb_row *src;      /* Source row. */
+    struct ovs_list src_node;      /* In src->src_refs list. */
+    struct ovs_list dst_node;      /* In destination row's dst_refs list. */
+    struct ovsdb_row *src;         /* Source row. */
+    struct ovsdb_table *dst_table; /* Destination table. */
+    struct uuid dst;               /* Destination row uuid. */
 };
 
 /* A row in a database table. */
