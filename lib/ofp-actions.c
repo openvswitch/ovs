@@ -7632,7 +7632,6 @@ ofpacts_format(const struct ofpact *ofpacts, size_t ofpacts_len,
                 ds_put_char(string, ',');
             }
 
-            /* XXX write-actions */
             ofpact_format(a, string);
         }
     }
