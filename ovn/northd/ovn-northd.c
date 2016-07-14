@@ -2251,10 +2251,6 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_INPUT, 50,
                       "eth.bcast", "drop;");
 
-        /* Drop IP multicast. */
-        ovn_lflow_add(lflows, od, S_ROUTER_IN_IP_INPUT, 50,
-                      "ip4.mcast", "drop;");
-
         /* TTL discard.
          *
          * XXX Need to send ICMP time exceeded if !ip.later_frag. */
