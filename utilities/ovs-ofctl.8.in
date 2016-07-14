@@ -1534,8 +1534,10 @@ Packets larger than \fInbytes\fR will be trimmed to \fInbytes\fR while
 packets smaller than \fInbytes\fR remains the original size.
 .
 .IP \fBgroup:\fIgroup_id\fR
-Outputs the packet to the OpenFlow group \fIgroup_id\fR. Group tables
-are only supported in OpenFlow 1.1+. See Group Syntax for more details.
+Outputs the packet to the OpenFlow group \fIgroup_id\fR.  OpenFlow 1.1
+introduced support for groups; Open vSwitch 2.6 and later also
+supports output to groups as an extension to OpenFlow 1.0.  See
+\fBGroup Syntax\fR for more details.
 .
 .IP \fBnormal\fR
 Subjects the packet to the device's normal L2/L3 processing.  (This

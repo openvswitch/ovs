@@ -196,8 +196,8 @@ enum ofp_raw_action_type {
     /* NX1.0(4), OF1.1+(21): uint32_t. */
     OFPAT_RAW_SET_QUEUE,
 
-    /* OF1.1+(22): uint32_t. */
-    OFPAT_RAW11_GROUP,
+    /* NX1.0(40), OF1.1+(22): uint32_t. */
+    OFPAT_RAW_GROUP,
 
     /* OF1.1+(23): uint8_t. */
     OFPAT_RAW11_SET_NW_TTL,
@@ -619,7 +619,7 @@ format_OUTPUT(const struct ofpact_output *a, struct ds *s)
 /* Group actions. */
 
 static enum ofperr
-decode_OFPAT_RAW11_GROUP(uint32_t group_id,
+decode_OFPAT_RAW_GROUP(uint32_t group_id,
                          enum ofp_version ofp_version OVS_UNUSED,
                          struct ofpbuf *out)
 {
@@ -631,11 +631,7 @@ static void
 encode_GROUP(const struct ofpact_group *group,
              enum ofp_version ofp_version, struct ofpbuf *out)
 {
-    if (ofp_version == OFP10_VERSION) {
-        /* XXX */
-    } else {
-        put_OFPAT11_GROUP(out, group->group_id);
-    }
+    put_OFPAT_GROUP(out, ofp_version, group->group_id);
 }
 
 static char * OVS_WARN_UNUSED_RESULT
