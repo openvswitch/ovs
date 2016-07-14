@@ -91,7 +91,6 @@ class Logical_Switch(object):
         self.local_macs = set()
         self.remote_macs = {}
         self.unknown_dsts = set()
-        self.tunnel_key = 0
         self.setup_ls()
         self.replication_mode = "service_node"
 
@@ -99,16 +98,6 @@ class Logical_Switch(object):
         vlog.info("destroying lswitch %s" % self.name)
 
     def setup_ls(self):
-        column = vtep_ctl("--columns=tunnel_key find logical_switch "
-                          "name=%s" % self.name)
-        tunnel_key = column.partition(":")[2].strip()
-        if tunnel_key and isinstance(eval(tunnel_key), six.integer_types):
-            self.tunnel_key = tunnel_key
-            vlog.info("using tunnel key %s in %s"
-                      % (self.tunnel_key, self.name))
-        else:
-            self.tunnel_key = 0
-            vlog.warn("invalid tunnel key for %s, using 0" % self.name)
 
         if ps_type:
             ovs_vsctl("--may-exist add-br %s -- set Bridge %s datapath_type=%s"
@@ -175,7 +164,7 @@ class Logical_Switch(object):
         del self.ports[lbinding]
         self.update_flood()
 
-    def add_tunnel(self, tunnel):
+    def add_tunnel(self, tunnel, tunnel_key):
         global tun_id
         vlog.info("adding tunnel %s" % tunnel)
         encap, ip = tunnel.split("/")
@@ -189,7 +178,7 @@ class Logical_Switch(object):
 
         ovs_vsctl("add-port %s %s -- set Interface %s type=vxlan "
                   "options:key=%s options:remote_ip=%s"
-                  % (self.short_name, tun_name, tun_name, self.tunnel_key, ip))
+                  % (self.short_name, tun_name, tun_name, tunnel_key, ip))
 
         for i in range(10):
             port_no = ovs_vsctl("get Interface %s ofport" % tun_name)
@@ -259,6 +248,17 @@ class Logical_Switch(object):
         tunnels = set()
         parse_ucast = True
 
+        column = vtep_ctl("--columns=tunnel_key find logical_switch "
+                          "name=%s" % self.name)
+        tunnel_key = column.partition(":")[2].strip()
+        if tunnel_key and isinstance(eval(tunnel_key), six.integer_types):
+            vlog.info("update_remote_macs: using tunnel key %s in %s"
+                      % (tunnel_key, self.name))
+        else:
+            vlog.info("Invalid tunnel key %s in %s post VTEP DB requery"
+                      % (tunnel_key, self.name))
+            return
+
         mac_list = vtep_ctl("list-remote-macs %s" % self.name).splitlines()
         for line in mac_list:
             if (line.find("mcast-mac-remote") != -1):
@@ -282,7 +282,7 @@ class Logical_Switch(object):
         old_tunnels = set(self.tunnels.keys())
 
         for tunnel in tunnels.difference(old_tunnels):
-            self.add_tunnel(tunnel)
+            self.add_tunnel(tunnel, tunnel_key)
 
         for tunnel in old_tunnels.difference(tunnels):
             self.del_tunnel(tunnel)
