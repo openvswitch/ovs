@@ -1988,6 +1988,7 @@ union mf_subvalue {
     ovs_be16 be16[64];
     ovs_be32 be32[32];
     ovs_be64 be64[16];
+    ovs_be128 be128[8];
 
     /* Convenient access to just least-significant bits in various forms. */
     struct {
