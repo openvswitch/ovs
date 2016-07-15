@@ -735,7 +735,9 @@ parse_macros(struct expr_context *ctx, struct expr_constant_set *cs,
              size_t *allocated_values)
 {
     struct expr_constant_set *addr_set
-        = shash_find_data(ctx->macros, ctx->lexer->token.s);
+        = (ctx->macros
+           ? shash_find_data(ctx->macros, ctx->lexer->token.s)
+           : NULL);
     if (!addr_set) {
         expr_syntax_error(ctx, "expecting address set name.");
         return false;
