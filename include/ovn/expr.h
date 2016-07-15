@@ -246,6 +246,7 @@ struct expr_symbol {
 
     char *prereqs;
     bool must_crossproduct;
+    bool rw;
 };
 
 /* A reference to a symbol or a subfield of a symbol.

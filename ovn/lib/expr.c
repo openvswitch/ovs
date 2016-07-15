@@ -1119,7 +1119,7 @@ expr_parse_string(const char *s, const struct shash *symtab,
 static struct expr_symbol *
 add_symbol(struct shash *symtab, const char *name, int width,
            const char *prereqs, enum expr_level level,
-           bool must_crossproduct)
+           bool must_crossproduct, bool rw)
 {
     struct expr_symbol *symbol = xzalloc(sizeof *symbol);
     symbol->name = xstrdup(name);
@@ -1127,6 +1127,7 @@ add_symbol(struct shash *symtab, const char *name, int width,
     symbol->width = width;
     symbol->level = level;
     symbol->must_crossproduct = must_crossproduct;
+    symbol->rw = rw;
     shash_add_assert(symtab, symbol->name, symbol);
     return symbol;
 }
@@ -1153,7 +1154,7 @@ expr_symtab_add_field(struct shash *symtab, const char *name,
                         (field->maskable == MFM_FULLY
                          ? EXPR_L_ORDINAL
                          : EXPR_L_NOMINAL),
-                        must_crossproduct);
+                        must_crossproduct, field->writable);
     symbol->field = field;
     return symbol;
 }
@@ -1206,7 +1207,8 @@ expr_symtab_add_subfield(struct shash *symtab, const char *name,
                   name, expr_level_to_string(level), f.symbol->name);
     }
 
-    symbol = add_symbol(symtab, name, f.n_bits, prereqs, level, false);
+    symbol = add_symbol(symtab, name, f.n_bits, prereqs, level, false,
+                        f.symbol->rw);
     symbol->expansion = xstrdup(subfield);
     return symbol;
 }
@@ -1220,7 +1222,8 @@ expr_symtab_add_string(struct shash *symtab, const char *name,
     const struct mf_field *field = mf_from_id(id);
     struct expr_symbol *symbol;
 
-    symbol = add_symbol(symtab, name, 0, prereqs, EXPR_L_NOMINAL, false);
+    symbol = add_symbol(symtab, name, 0, prereqs, EXPR_L_NOMINAL, false,
+                        field->writable);
     symbol->field = field;
     return symbol;
 }
@@ -1281,7 +1284,7 @@ expr_symtab_add_predicate(struct shash *symtab, const char *name,
         return NULL;
     }
 
-    symbol = add_symbol(symtab, name, 1, NULL, level, false);
+    symbol = add_symbol(symtab, name, 1, NULL, level, false, false);
     symbol->expansion = xstrdup(expansion);
     return symbol;
 }
