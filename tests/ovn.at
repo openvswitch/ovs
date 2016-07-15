@@ -585,6 +585,11 @@ ct_commit(ct_mark=1); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_fie
 ct_commit(ct_mark=1/1); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1/0x1->ct_mark)), prereqs=ip
 ct_commit(ct_label=1); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1->ct_label)), prereqs=ip
 ct_commit(ct_label=1/1); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1/0x1->ct_label)), prereqs=ip
+ct_commit(ct_label=0x01020304050607080910111213141516); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1020304050607080910111213141516->ct_label)), prereqs=ip
+ct_commit(ct_label=0x181716151413121110090807060504030201); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x16151413121110090807060504030201->ct_label)), prereqs=ip
+ct_commit(ct_label=0x01000000000000000000000000000000/0x01000000000000000000000000000000); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1000000000000000000000000000000/0x1000000000000000000000000000000->ct_label)), prereqs=ip
+ct_commit(ct_label=18446744073709551615); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0xffffffffffffffff->ct_label)), prereqs=ip
+ct_commit(ct_label=18446744073709551616); => Decimal constants must be less than 2**64.
 ct_commit(ct_mark=1, ct_label=2); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1->ct_mark,set_field:0x2->ct_label)), prereqs=ip
 
 # dnat

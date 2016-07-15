@@ -879,16 +879,18 @@ parse_ct_commit_arg(struct action_context *ctx,
             action_error(ctx, "Expected '=' after argument to ct_commit");
             return false;
         }
+
+        /* ct_label is a 128-bit field.  The lexer supports 128-bit
+         * integers if its a hex string. The ct_label value should be specified
+         * in hex string if > 64-bits are to be used */
         if (ctx->lexer->token.type == LEX_T_INTEGER) {
-            label_value->be64.lo = ctx->lexer->token.value.integer;
+            label_value->be64.lo = ctx->lexer->token.value.be128_int.be64.lo;
+            label_value->be64.hi = ctx->lexer->token.value.be128_int.be64.hi;
         } else if (ctx->lexer->token.type == LEX_T_MASKED_INTEGER) {
-            /* XXX Technically, ct_label is a 128-bit field.  The lexer
-             * only supports 64-bit integers, so that's all we support
-             * here.  More work is needed to use parse_int_string()
-             * to support the full 128-bits. */
-            label_value->be64.lo = ctx->lexer->token.value.integer;
-            label_mask->be64.hi = 0;
-            label_mask->be64.lo = ctx->lexer->token.mask.integer;
+            label_value->be64.lo = ctx->lexer->token.value.be128_int.be64.lo;
+            label_value->be64.hi = ctx->lexer->token.value.be128_int.be64.hi;
+            label_mask->be64.lo = ctx->lexer->token.mask.be128_int.be64.lo;
+            label_mask->be64.hi = ctx->lexer->token.mask.be128_int.be64.hi;
         } else {
             action_error(ctx, "Expected integer after 'ct_label='");
             return false;

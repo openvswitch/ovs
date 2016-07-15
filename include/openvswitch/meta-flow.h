@@ -2006,6 +2006,10 @@ union mf_subvalue {
         ovs_be64 integer;
     };
     struct {
+        ovs_be128 dummy_be128[7];
+        ovs_be128 be128_int;
+    };
+    struct {
         uint8_t dummy_mac[122];
         struct eth_addr mac;
     };

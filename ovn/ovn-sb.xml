@@ -982,9 +982,8 @@
             <code>ct_mark</code> and/or <code>ct_label</code> will be set to the
             values indicated by <var>value[/mask]</var> on the connection
             tracking entry. <code>ct_mark</code> is a 32-bit field.
-            <code>ct_label</code> is technically a 128-bit field, though OVN
-            currently only supports 64-bits and will later be extended to
-            support the full 128-bits.
+            <code>ct_label</code> is a 128-bit field. The <var>value[/mask]</var>
+            should be specified in hex string if more than 64bits are to be used.
           </p>
 
           <p>
