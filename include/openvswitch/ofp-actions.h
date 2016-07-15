@@ -185,19 +185,7 @@ BUILD_ASSERT_DECL(sizeof(struct ofpact) == 4);
 /* Alignment. */
 #define OFPACT_ALIGNTO 8
 #define OFPACT_ALIGN(SIZE) ROUND_UP(SIZE, OFPACT_ALIGNTO)
-
-/* Expands to an anonymous union that contains:
- *
- *    - MEMBERS in a nested anonymous struct.
- *
- *    - An array as large as MEMBERS plus padding to a multiple of 8 bytes.
- *
- * The effect is to pad MEMBERS to a multiple of 8 bytes. */
-#define OFPACT_PADDED_MEMBERS(MEMBERS)                          \
-    union {                                                     \
-        struct { MEMBERS };                                     \
-        uint8_t pad[OFPACT_ALIGN(sizeof(struct { MEMBERS }))];  \
-    }
+#define OFPACT_PADDED_MEMBERS(MEMBERS) PADDED_MEMBERS(OFPACT_ALIGNTO, MEMBERS)
 
 /* Returns the ofpact following 'ofpact'. */
 static inline struct ofpact *
