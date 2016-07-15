@@ -107,11 +107,6 @@ get_local_iface_ids(const struct ovsrec_bridge *br_int,
     return changed;
 }
 
-/* Contains "struct local_datpath" nodes whose hash values are the
- * row uuids of datapaths with at least one local port binding. */
-static struct hmap local_datapaths_by_uuid =
-    HMAP_INITIALIZER(&local_datapaths_by_uuid);
-
 static struct local_datapath *
 local_datapath_lookup_by_uuid(struct hmap *hmap_p, const struct uuid *uuid)
 {
@@ -132,7 +127,6 @@ remove_local_datapath(struct hmap *local_datapaths, struct local_datapath *ld)
         ld->logical_port = NULL;
     }
     hmap_remove(local_datapaths, &ld->hmap_node);
-    hmap_remove(&local_datapaths_by_uuid, &ld->uuid_hmap_node);
     free(ld);
 }
 
@@ -157,8 +151,7 @@ remove_local_datapath_by_binding(struct hmap *local_datapaths,
 
 static void
 add_local_datapath(struct hmap *local_datapaths,
-        const struct sbrec_port_binding *binding_rec,
-        const struct uuid *uuid)
+        const struct sbrec_port_binding *binding_rec)
 {
     if (get_local_datapath(local_datapaths,
                            binding_rec->datapath->tunnel_key)) {
@@ -170,8 +163,6 @@ add_local_datapath(struct hmap *local_datapaths,
     memcpy(&ld->uuid, &binding_rec->header_.uuid, sizeof ld->uuid);
     hmap_insert(local_datapaths, &ld->hmap_node,
                 binding_rec->datapath->tunnel_key);
-    hmap_insert(&local_datapaths_by_uuid, &ld->uuid_hmap_node,
-                uuid_hash(uuid));
 }
 
 static void
@@ -198,8 +189,7 @@ consider_local_datapath(struct controller_ctx *ctx,
     if (iface_rec
         || (binding_rec->parent_port && binding_rec->parent_port[0] &&
             sset_contains(&local_ids, binding_rec->parent_port))) {
-        add_local_datapath(local_datapaths, binding_rec,
-                           &binding_rec->header_.uuid);
+        add_local_datapath(local_datapaths, binding_rec);
         if (iface_rec && ctx->ovs_idl_txn) {
             update_qos(iface_rec, binding_rec);
         }
@@ -238,8 +228,7 @@ consider_local_datapath(struct controller_ctx *ctx,
             VLOG_INFO("Claiming l2gateway port %s for this chassis.",
                       binding_rec->logical_port);
             sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
-            add_local_datapath(local_datapaths, binding_rec,
-                               &binding_rec->header_.uuid);
+            add_local_datapath(local_datapaths, binding_rec);
         }
     } else if (chassis_rec && binding_rec->chassis == chassis_rec
                && strcmp(binding_rec->type, "gateway")) {
