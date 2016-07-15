@@ -14,7 +14,6 @@ Build-Depends: graphviz,
                openssl,
                procps,
                python-all (>= 2.7),
-               python-qt4,
                python-twisted-conch,
                python-zopeinterface,
                python-six
