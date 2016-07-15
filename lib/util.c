@@ -157,6 +157,12 @@ nullable_xstrdup(const char *s)
     return s ? xstrdup(s) : NULL;
 }
 
+bool
+nullable_string_is_equal(const char *a, const char *b)
+{
+    return a ? b && !strcmp(a, b) : !b;
+}
+
 char *
 xvasprintf(const char *format, va_list args)
 {

@@ -92,12 +92,6 @@ static void dpif_sflow_del_port__(struct dpif_sflow *,
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 static bool
-nullable_string_is_equal(const char *a, const char *b)
-{
-    return a ? b && !strcmp(a, b) : !b;
-}
-
-static bool
 ofproto_sflow_options_equal(const struct ofproto_sflow_options *a,
                          const struct ofproto_sflow_options *b)
 {

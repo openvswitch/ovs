@@ -2514,16 +2514,6 @@ dpif_netdev_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
     }
 }
 
-static bool
-cmask_equals(const char *a, const char *b)
-{
-    if (a && b) {
-        return !strcmp(a, b);
-    }
-
-    return a == NULL && b == NULL;
-}
-
 /* Changes the number or the affinity of pmd threads.  The changes are actually
  * applied in dpif_netdev_run(). */
 static int
@@ -2531,7 +2521,7 @@ dpif_netdev_pmd_set(struct dpif *dpif, const char *cmask)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
 
-    if (!cmask_equals(dp->requested_pmd_cmask, cmask)) {
+    if (!nullable_string_is_equal(dp->requested_pmd_cmask, cmask)) {
         free(dp->requested_pmd_cmask);
         dp->requested_pmd_cmask = nullable_xstrdup(cmask);
     }
@@ -2741,7 +2731,7 @@ dpif_netdev_run(struct dpif *dpif)
 
     dp_netdev_pmd_unref(non_pmd);
 
-    if (!cmask_equals(dp->pmd_cmask, dp->requested_pmd_cmask)
+    if (!nullable_string_is_equal(dp->pmd_cmask, dp->requested_pmd_cmask)
         || ports_require_restart(dp)) {
         reconfigure_pmd_threads(dp);
     }

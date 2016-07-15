@@ -114,6 +114,7 @@ void *xmemdup(const void *, size_t) MALLOC_LIKE;
 char *xmemdup0(const char *, size_t) MALLOC_LIKE;
 char *xstrdup(const char *) MALLOC_LIKE;
 char *nullable_xstrdup(const char *) MALLOC_LIKE;
+bool nullable_string_is_equal(const char *a, const char *b);
 char *xasprintf(const char *format, ...) OVS_PRINTF_FORMAT(1, 2) MALLOC_LIKE;
 char *xvasprintf(const char *format, va_list) OVS_PRINTF_FORMAT(1, 0) MALLOC_LIKE;
 void *x2nrealloc(void *p, size_t *n, size_t s);

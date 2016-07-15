@@ -464,12 +464,6 @@ static void get_export_time_now(uint64_t *, uint32_t *);
 static void dpif_ipfix_cache_expire_now(struct dpif_ipfix_exporter *, bool);
 
 static bool
-nullable_string_is_equal(const char *a, const char *b)
-{
-    return a ? b && !strcmp(a, b) : !b;
-}
-
-static bool
 ofproto_ipfix_bridge_exporter_options_equal(
     const struct ofproto_ipfix_bridge_exporter_options *a,
     const struct ofproto_ipfix_bridge_exporter_options *b)
