@@ -757,11 +757,6 @@ output;
       </li>
 
       <li>
-        Drop IP multicast.  A priority-50 flow with match
-        <code>ip4.mcast</code> drops IP multicast traffic.
-      </li>
-
-      <li>
         <p>
           ICMP time exceeded.  For each router port <var>P</var>, whose IP
           address is <var>A</var>, a priority-40 flow with match <code>inport
