@@ -401,6 +401,13 @@ ovsext_clean: datapath-windows/ovsext.sln
 endif
 .PHONY: ovsext
 
+clang-analyze: clean
+	@which clang scan-build >/dev/null 2>&1 || \
+		(echo "Unable to find clang/scan-build, Install clang,clang-analyzer packages"; exit 1)
+	@$(MKDIR_P) "$(srcdir)/tests/clang-analyzer-results"
+	@scan-build -o $(srcdir)/tests/clang-analyzer-results --use-cc=$(CC) $(MAKE)
+.PHONY: clang-analyze
+
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)
 clean-local: $(CLEAN_LOCAL)
