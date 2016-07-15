@@ -119,7 +119,7 @@
     /* Instructions. */                                                 \
     OFPACT(METER,           ofpact_meter,       ofpact, "meter")        \
     OFPACT(CLEAR_ACTIONS,   ofpact_null,        ofpact, "clear_actions") \
-    OFPACT(WRITE_ACTIONS,   ofpact_nest,        ofpact, "write_actions") \
+    OFPACT(WRITE_ACTIONS,   ofpact_nest,        actions, "write_actions") \
     OFPACT(WRITE_METADATA,  ofpact_metadata,    ofpact, "write_metadata") \
     OFPACT(GOTO_TABLE,      ofpact_goto_table,  ofpact, "goto_table")
 
