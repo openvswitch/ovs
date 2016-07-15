@@ -592,7 +592,7 @@ make_cmp(struct expr_context *ctx,
     }
 
     if (f->symbol->level == EXPR_L_NOMINAL) {
-        if (f->symbol->expansion) {
+        if (f->symbol->predicate) {
             ovs_assert(f->symbol->width > 0);
             for (size_t i = 0; i < cs->n_values; i++) {
                 const union mf_subvalue *value = &cs->values[i].value;
@@ -1209,7 +1209,8 @@ expr_symtab_add_subfield(struct shash *symtab, const char *name,
 
     symbol = add_symbol(symtab, name, f.n_bits, prereqs, level, false,
                         f.symbol->rw);
-    symbol->expansion = xstrdup(subfield);
+    symbol->parent = f.symbol;
+    symbol->parent_ofs = f.ofs;
     return symbol;
 }
 
@@ -1285,7 +1286,7 @@ expr_symtab_add_predicate(struct shash *symtab, const char *name,
     }
 
     symbol = add_symbol(symtab, name, 1, NULL, level, false, false);
-    symbol->expansion = xstrdup(expansion);
+    symbol->predicate = xstrdup(expansion);
     return symbol;
 }
 
@@ -1301,7 +1302,7 @@ expr_symtab_destroy(struct shash *symtab)
         shash_delete(symtab, node);
         free(symbol->name);
         free(symbol->prereqs);
-        free(symbol->expansion);
+        free(symbol->predicate);
         free(symbol);
     }
 }
@@ -1444,36 +1445,27 @@ expr_annotate_cmp(struct expr *expr, const struct shash *symtab,
         }
     }
 
-    if (symbol->expansion) {
-        if (symbol->level == EXPR_L_ORDINAL) {
-            struct expr_field field;
+    if (symbol->parent) {
+        expr->cmp.symbol = symbol->parent;
+        mf_subvalue_shift(&expr->cmp.value, symbol->parent_ofs);
+        mf_subvalue_shift(&expr->cmp.mask, symbol->parent_ofs);
+    } else if (symbol->predicate) {
+        struct expr *predicate;
 
-            if (!parse_field_from_string(symbol->expansion, symtab,
-                                         &field, errorp)) {
-                goto error;
-            }
-
-            expr->cmp.symbol = field.symbol;
-            mf_subvalue_shift(&expr->cmp.value, field.ofs);
-            mf_subvalue_shift(&expr->cmp.mask, field.ofs);
-        } else {
-            struct expr *expansion;
-
-            expansion = parse_and_annotate(symbol->expansion, symtab,
-                                           nesting, errorp);
-            if (!expansion) {
-                goto error;
-            }
-
-            bool positive = (expr->cmp.value.integer & htonll(1)) != 0;
-            positive ^= expr->cmp.relop == EXPR_R_NE;
-            if (!positive) {
-                expr_not(expansion);
-            }
-
-            expr_destroy(expr);
-            expr = expansion;
+        predicate = parse_and_annotate(symbol->predicate, symtab,
+                                       nesting, errorp);
+        if (!predicate) {
+            goto error;
         }
+
+        bool positive = (expr->cmp.value.integer & htonll(1)) != 0;
+        positive ^= expr->cmp.relop == EXPR_R_NE;
+        if (!positive) {
+            expr_not(predicate);
+        }
+
+        expr_destroy(expr);
+        expr = predicate;
     }
 
     *errorp = NULL;
@@ -2707,7 +2699,7 @@ expand_symbol(struct expr_context *ctx, bool rw,
 {
     const struct expr_symbol *orig_symbol = f->symbol;
 
-    if (f->symbol->expansion && f->symbol->level != EXPR_L_ORDINAL) {
+    if (f->symbol->predicate) {
         expr_error(ctx, "Predicate symbol %s used where lvalue required.",
                    f->symbol->name);
         return false;
@@ -2730,21 +2722,13 @@ expand_symbol(struct expr_context *ctx, bool rw,
         }
 
         /* If there's no expansion, we're done. */
-        if (!f->symbol->expansion) {
+        if (!f->symbol->parent) {
             break;
         }
 
         /* Expand. */
-        struct expr_field expansion;
-        char *error;
-        if (!parse_field_from_string(f->symbol->expansion, ctx->symtab,
-                                     &expansion, &error)) {
-            expr_error(ctx, "%s", error);
-            free(error);
-            return false;
-        }
-        f->symbol = expansion.symbol;
-        f->ofs += expansion.ofs;
+        f->ofs += f->symbol->parent_ofs;
+        f->symbol = f->symbol->parent;
     }
 
     if (rw && !f->symbol->field->writable) {

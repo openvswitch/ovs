@@ -106,20 +106,23 @@ const char *expr_level_to_string(enum expr_level);
  *   Fields:
  *
  *     One might, for example, define a field named "vlan.tci" to refer to
- *     MFF_VLAN_TCI.  For integer fields, 'field' specifies the referent; for
- *     string fields, 'field' is NULL.
+ *     MFF_VLAN_TCI.  'field' specifies the field.
  *
- *     'expansion' is NULL.
+ *     'parent' and 'predicate' are NULL, and 'parent_ofs' is 0.
  *
  *     Integer fields can be nominal or ordinal (see below).  String fields are
  *     always nominal.
  *
  *   Subfields:
  *
- *     'expansion' is a string that specifies a subfield of some larger field,
- *     e.g. "vlan.tci[0..11]" for a field that represents a VLAN VID.
+ *     'parent' specifies the field (which may itself be a subfield,
+ *     recursively) in which the subfield is embedded, and 'parent_ofs' a
+ *     bitwise offset from the least-significant bit of the parent.  The
+ *     subfield can contain a subset of the bits of the parent or all of them
+ *     (in the latter case the subfield is really just a synonym for the
+ *     parent).
  *
- *     'field' is NULL.
+ *     'field' and 'predicate' are NULL.
  *
  *     Only ordinal fields (see below) may have subfields, and subfields are
  *     always ordinal.
@@ -127,16 +130,15 @@ const char *expr_level_to_string(enum expr_level);
  *   Predicates:
  *
  *     A predicate is an arbitrary Boolean expression that can be used in an
- *     expression much like a 1-bit field.  'expansion' specifies the Boolean
+ *     expression much like a 1-bit field.  'predicate' specifies the Boolean
  *     expression, e.g. "ip4" might expand to "eth.type == 0x800".  The
- *     expansion of a predicate might refer to other predicates, e.g. "icmp4"
- *     might expand to "ip4 && ip4.proto == 1".
+ *     epxression might refer to other predicates, e.g. "icmp4" might expand to
+ *     "ip4 && ip4.proto == 1".
  *
- *     'field' is NULL.
+ *     'field' and 'parent' are NULL, and 'parent_ofs' is 0.
  *
- *     A predicate whose expansion refers to any nominal field or predicate
- *     (see below) is nominal; other predicates have Boolean level of
- *     measurement.
+ *     A predicate that refers to any nominal field or predicate (see below) is
+ *     nominal; other predicates have Boolean level of measurement.
  *
  *
  * Level of Measurement
@@ -239,8 +241,10 @@ struct expr_symbol {
     char *name;
     int width;
 
-    const struct mf_field *field;
-    char *expansion;
+    const struct mf_field *field;     /* Fields only, otherwise NULL. */
+    const struct expr_symbol *parent; /* Subfields only, otherwise NULL. */
+    int parent_ofs;                   /* Subfields only, otherwise 0. */
+    char *predicate;                  /* Predicates only, otherwise NULL. */
 
     enum expr_level level;
 
