@@ -622,7 +622,7 @@ static int set_sctp(struct sk_buff *skb, struct sw_flow_key *flow_key,
 
 static int ovs_vport_output(OVS_VPORT_OUTPUT_PARAMS)
 {
-	struct ovs_frag_data *data = get_pcpu_ptr(ovs_frag_data_storage);
+	struct ovs_frag_data *data = this_cpu_ptr(&ovs_frag_data_storage);
 	struct vport *vport = data->vport;
 
 	if (skb_cow_head(skb, data->l2_len) < 0) {
@@ -665,7 +665,7 @@ static void prepare_frag(struct vport *vport, struct sk_buff *skb)
 	unsigned int hlen = skb_network_offset(skb);
 	struct ovs_frag_data *data;
 
-	data = get_pcpu_ptr(ovs_frag_data_storage);
+	data = this_cpu_ptr(&ovs_frag_data_storage);
 	data->dst = (unsigned long) skb_dst(skb);
 	data->vport = vport;
 	data->cb = *OVS_GSO_CB(skb);
