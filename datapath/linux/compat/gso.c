@@ -189,6 +189,7 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 	int outer_l3_offset = skb_network_offset(skb);
 	int outer_l4_offset = skb_transport_offset(skb);
 	struct sk_buff *skb1 = skb;
+	struct dst_entry *dst = skb_dst(skb);
 	struct sk_buff *segs;
 	__be16 proto = skb->protocol;
 	char cb[sizeof(skb->cb)];
@@ -232,9 +233,14 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 
 		memcpy(skb_network_header(skb), iph, pkt_hlen);
 		memcpy(skb->cb, cb, sizeof(cb));
-		OVS_GSO_CB(skb)->fix_segment(skb);
 
 		skb->protocol = proto;
+		if (skb->next)
+			dst = dst_clone(dst);
+
+		skb_dst_set(skb, dst);
+		OVS_GSO_CB(skb)->fix_segment(skb);
+
 		skb = skb->next;
 	}
 free:
