@@ -281,4 +281,10 @@ static inline void netdev_reset_rx_headroom(struct net_device *dev)
 
 #endif
 
+#ifdef IFF_NO_QUEUE
+#define HAVE_IFF_NO_QUEUE
+#else
+#define IFF_NO_QUEUE 0
+#endif
+
 #endif /* __LINUX_NETDEVICE_WRAPPER_H */
