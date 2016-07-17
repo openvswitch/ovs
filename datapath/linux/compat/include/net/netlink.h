@@ -142,5 +142,12 @@ void rpl___nla_put_64bit(struct sk_buff *skb, int attrtype, int attrlen,
 #define __nla_reserve_64bit rpl___nla_reserve_64bit
 struct nlattr *rpl___nla_reserve_64bit(struct sk_buff *skb, int attrtype,
 				   int attrlen, int padattr);
+
+static inline int nla_put_u64_64bit(struct sk_buff *skb, int attrtype,
+                                    u64 value, int padattr)
+{
+        return nla_put_64bit(skb, attrtype, sizeof(u64), &value, padattr);
+}
+
 #endif
 #endif /* net/netlink.h */
