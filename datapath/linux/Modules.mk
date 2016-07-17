@@ -39,6 +39,7 @@ openvswitch_headers += \
 	linux/compat/include/linux/err.h \
 	linux/compat/include/linux/etherdevice.h \
 	linux/compat/include/linux/flex_array.h \
+	linux/compat/include/linux/genetlink.h \
 	linux/compat/include/linux/if.h \
 	linux/compat/include/linux/if_ether.h \
 	linux/compat/include/linux/if_link.h \
