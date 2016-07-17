@@ -96,6 +96,22 @@ static inline int skb_inner_mac_offset(const struct sk_buff *skb)
 
 #define ip6_local_out rpl_ip6_local_out
 int rpl_ip6_local_out(struct sk_buff *skb);
+#else
+
+static inline int rpl_ip_local_out(struct sk_buff *skb)
+{
+	memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
+	return ip_local_out(skb);
+}
+#define ip_local_out rpl_ip_local_out
+
+static inline int rpl_ip6_local_out(struct sk_buff *skb)
+{
+	memset(IP6CB(skb), 0, sizeof (*IP6CB(skb)));
+	return ip6_local_out(skb);
+}
+#define ip6_local_out rpl_ip6_local_out
+
 #endif /* 3.18 */
 
 #ifndef USE_UPSTREAM_TUNNEL
