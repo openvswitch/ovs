@@ -188,15 +188,17 @@ static inline int rpl_udp_tunnel_handle_offloads(struct sk_buff *skb,
 #endif /* USE_UPSTREAM_TUNNEL */
 
 #define udp_tunnel_handle_offloads rpl_udp_tunnel_handle_offloads
-static inline void ovs_udp_tun_rx_dst(struct ip_tunnel_info *info,
-				  struct sk_buff *skb,
-				  unsigned short family,
-				  __be16 flags, __be64 tunnel_id, int md_size)
+static inline void ovs_udp_tun_rx_dst(struct metadata_dst *md_dst,
+				      struct sk_buff *skb,
+				      unsigned short family,
+				      __be16 flags, __be64 tunnel_id, int md_size)
 {
+	struct ip_tunnel_info *info = &md_dst->u.tun_info;
+
 	if (family == AF_INET)
-		ovs_ip_tun_rx_dst(info, skb, flags, tunnel_id, md_size);
+		ovs_ip_tun_rx_dst(md_dst, skb, flags, tunnel_id, md_size);
 	else
-		ovs_ipv6_tun_rx_dst(info, skb, flags, tunnel_id, md_size);
+		ovs_ipv6_tun_rx_dst(md_dst, skb, flags, tunnel_id, md_size);
 
 	info->key.tp_src = udp_hdr(skb)->source;
 	info->key.tp_dst = udp_hdr(skb)->dest;

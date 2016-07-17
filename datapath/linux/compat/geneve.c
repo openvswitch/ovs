@@ -244,7 +244,7 @@ static void geneve_rx(struct geneve_dev *geneve, struct geneve_sock *gs,
 			(gnvh->critical ? TUNNEL_CRIT_OPT : 0);
 
 		tun_dst = &buf.dst;
-		ovs_udp_tun_rx_dst(&tun_dst->u.tun_info,
+		ovs_udp_tun_rx_dst(tun_dst,
 				   skb, geneve_get_sk_family(gs), flags,
 				   vni_to_tunnel_id(gnvh->vni),
 				   gnvh->opt_len * 4);

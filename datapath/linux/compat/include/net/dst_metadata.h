@@ -50,7 +50,7 @@ static inline struct metadata_dst *metadata_dst_alloc(u8 optslen, gfp_t flags)
 #define skb_tunnel_info ovs_skb_tunnel_info
 #endif
 
-static inline void ovs_tun_rx_dst(struct ip_tunnel_info *info, int md_size)
+static inline void ovs_tun_rx_dst(struct metadata_dst *md_dst, int optslen)
 {
 	/* No need to allocate for OVS backport case. */
 #if 0
@@ -61,31 +61,31 @@ static inline void ovs_tun_rx_dst(struct ip_tunnel_info *info, int md_size)
 	if (!tun_dst)
 		return NULL;
 #endif
-	info->mode = 0;
-	info->options_len = 0;
+	__metadata_dst_init(md_dst, optslen);
 }
 
-static inline void ovs_ip_tun_rx_dst(struct ip_tunnel_info *tun_info,
-				 struct sk_buff *skb, __be16 flags,
-				 __be64 tunnel_id, int md_size)
+static inline void ovs_ip_tun_rx_dst(struct metadata_dst *md_dst,
+				     struct sk_buff *skb, __be16 flags,
+				     __be64 tunnel_id, int md_size)
 {
 	const struct iphdr *iph = ip_hdr(skb);
 
-	ovs_tun_rx_dst(tun_info, md_size);
-	ip_tunnel_key_init(&tun_info->key,
+	ovs_tun_rx_dst(md_dst, md_size);
+	ip_tunnel_key_init(&md_dst->u.tun_info.key,
 			   iph->saddr, iph->daddr, iph->tos, iph->ttl, 0,
 			   0, 0, tunnel_id, flags);
 }
 
-static inline void ovs_ipv6_tun_rx_dst(struct ip_tunnel_info *info,
+static inline void ovs_ipv6_tun_rx_dst(struct metadata_dst *md_dst,
 				       struct sk_buff *skb,
 				       __be16 flags,
 				       __be64 tunnel_id,
 				       int md_size)
 {
+	struct ip_tunnel_info *info = &md_dst->u.tun_info;
 	const struct ipv6hdr *ip6h = ipv6_hdr(skb);
 
-	ovs_tun_rx_dst(info, md_size);
+	ovs_tun_rx_dst(md_dst, md_size);
 	info->mode = IP_TUNNEL_INFO_IPV6;
 	info->key.tun_flags = flags;
 	info->key.tun_id = tunnel_id;

@@ -238,7 +238,7 @@ static int lisp_rcv(struct sock *sk, struct sk_buff *skb)
 	/* Save outer tunnel values */
 #ifndef USE_UPSTREAM_TUNNEL
 	tun_dst = &temp;
-	ovs_udp_tun_rx_dst(&tun_dst->u.tun_info, skb, AF_INET, TUNNEL_KEY, key, 0);
+	ovs_udp_tun_rx_dst(tun_dst, skb, AF_INET, TUNNEL_KEY, key, 0);
 #else
 	tun_dst = udp_tun_rx_dst(skb, AF_INET, TUNNEL_KEY, key, 0);
 #endif

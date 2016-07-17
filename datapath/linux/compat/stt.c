@@ -1413,7 +1413,7 @@ static int __stt_rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
 {
 	struct metadata_dst tun_dst;
 
-	ovs_ip_tun_rx_dst(&tun_dst.u.tun_info, skb, TUNNEL_KEY | TUNNEL_CSUM,
+	ovs_ip_tun_rx_dst(&tun_dst, skb, TUNNEL_KEY | TUNNEL_CSUM,
 			  get_unaligned(&stt_hdr(skb)->key), 0);
 	tun_dst.u.tun_info.key.tp_src = tcp_hdr(skb)->source;
 	tun_dst.u.tun_info.key.tp_dst = tcp_hdr(skb)->dest;

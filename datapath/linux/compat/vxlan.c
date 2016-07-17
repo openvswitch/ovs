@@ -718,7 +718,7 @@ static int vxlan_rcv(struct sock *sk, struct sk_buff *skb)
 		struct metadata_dst *tun_dst;
 
 		tun_dst = &buf.dst;
-		ovs_udp_tun_rx_dst(&tun_dst->u.tun_info, skb,
+		ovs_udp_tun_rx_dst(tun_dst, skb,
 				   vxlan_get_sk_family(vs), TUNNEL_KEY,
 				   vxlan_vni_to_tun_id(vni), sizeof(*md));
 

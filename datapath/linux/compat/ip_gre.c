@@ -144,7 +144,7 @@ static int ipgre_rcv(struct sk_buff *skb, const struct tnl_ptk_info *tpi)
 		skb_pop_mac_header(skb);
 		flags = tpi->flags & (TUNNEL_CSUM | TUNNEL_KEY);
 		tun_id = key_to_tunnel_id(tpi->key);
-		ovs_ip_tun_rx_dst(&tun_dst.u.tun_info, skb, flags, tun_id, 0);
+		ovs_ip_tun_rx_dst(&tun_dst, skb, flags, tun_id, 0);
 
 		skb_reset_network_header(skb);
 		err = IP_ECN_decapsulate(iph, skb);
