@@ -104,17 +104,18 @@ int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 		goto error;
 	}
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
-	if (gso_type_mask)
-		fix_segment = NULL;
-
-	OVS_GSO_CB(skb)->fix_segment = fix_segment;
-#endif
 	if (skb_is_gso(skb)) {
 		err = skb_unclone(skb, GFP_ATOMIC);
 		if (unlikely(err))
 			goto error;
 		skb_shinfo(skb)->gso_type |= gso_type_mask;
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+		if (gso_type_mask)
+			fix_segment = NULL;
+
+		OVS_GSO_CB(skb)->fix_segment = fix_segment;
+#endif
 		return 0;
 	}
 
