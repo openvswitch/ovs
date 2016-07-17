@@ -595,6 +595,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/ip6_route.h], [ip6_frag.*sock],
                   [OVS_DEFINE([HAVE_IP_FRAGMENT_TAKES_SOCK])])
 
+  OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_64bit])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_get_be16])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_be16])
   OVS_GREP_IFELSE([$KSRC/include/net/netlink.h], [nla_put_be32])

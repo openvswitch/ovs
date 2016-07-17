@@ -93,3 +93,42 @@ void __percpu *__alloc_percpu_gfp(size_t size, size_t align, gfp_t gfp)
 	return p;
 }
 #endif
+
+#ifndef HAVE_NLA_PUT_64BIT
+int rpl_nla_put_64bit(struct sk_buff *skb, int attrtype, int attrlen,
+		      const void *data, int padattr)
+{
+	size_t len;
+
+	if (nla_need_padding_for_64bit(skb))
+		len = nla_total_size_64bit(attrlen);
+	else
+		len = nla_total_size(attrlen);
+	if (unlikely(skb_tailroom(skb) < len))
+		return -EMSGSIZE;
+
+	__nla_put_64bit(skb, attrtype, attrlen, data, padattr);
+	return 0;
+}
+EXPORT_SYMBOL_GPL(rpl_nla_put_64bit);
+
+void rpl___nla_put_64bit(struct sk_buff *skb, int attrtype, int attrlen,
+			const void *data, int padattr)
+{
+	struct nlattr *nla;
+
+	nla = __nla_reserve_64bit(skb, attrtype, attrlen, padattr);
+	memcpy(nla_data(nla), data, attrlen);
+}
+EXPORT_SYMBOL_GPL(rpl___nla_put_64bit);
+
+struct nlattr *rpl___nla_reserve_64bit(struct sk_buff *skb, int attrtype,
+				       int attrlen, int padattr)
+{
+	if (nla_need_padding_for_64bit(skb))
+		nla_align_64bit(skb, padattr);
+
+	return __nla_reserve(skb, attrtype, attrlen);
+}
+EXPORT_SYMBOL_GPL(rpl___nla_reserve_64bit);
+#endif
