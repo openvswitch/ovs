@@ -469,6 +469,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [udp_offload.*uoff],
                   [OVS_DEFINE([HAVE_UDP_OFFLOAD_ARG_UOFF])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [gro_remcsum])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [IFF_PHONY_HEADROOM])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hook_state])
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_register_net_hook])

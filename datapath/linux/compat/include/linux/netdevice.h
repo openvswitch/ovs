@@ -262,4 +262,23 @@ int ovs_dev_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
 #define NETDEV_OFFLOAD_PUSH_GENEVE      0x001D
 #endif
 
+#ifndef HAVE_IFF_PHONY_HEADROOM
+
+#define IFF_PHONY_HEADROOM 0
+static inline unsigned netdev_get_fwd_headroom(struct net_device *dev)
+{
+	return 0;
+}
+
+static inline void netdev_set_rx_headroom(struct net_device *dev, int new_hr)
+{
+}
+
+/* set the device rx headroom to the dev's default */
+static inline void netdev_reset_rx_headroom(struct net_device *dev)
+{
+}
+
+#endif
+
 #endif /* __LINUX_NETDEVICE_WRAPPER_H */
