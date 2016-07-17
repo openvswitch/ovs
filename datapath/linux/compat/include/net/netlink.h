@@ -149,5 +149,12 @@ static inline int nla_put_u64_64bit(struct sk_buff *skb, int attrtype,
         return nla_put_64bit(skb, attrtype, sizeof(u64), &value, padattr);
 }
 
+#define nla_put_be64 rpl_nla_put_be64
+static inline int nla_put_be64(struct sk_buff *skb, int attrtype, __be64 value,
+                               int padattr)
+{
+        return nla_put_64bit(skb, attrtype, sizeof(__be64), &value, padattr);
+}
+
 #endif
 #endif /* net/netlink.h */

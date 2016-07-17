@@ -2593,6 +2593,8 @@ format_odp_tun_attr(const struct nlattr *attr, const struct nlattr *mask_attr,
             format_odp_tun_geneve(a, ma, ds, verbose);
             ds_put_cstr(ds, "),");
             break;
+        case OVS_TUNNEL_KEY_ATTR_PAD:
+            break;
         case __OVS_TUNNEL_KEY_ATTR_MAX:
         default:
             format_unknown_key(ds, a, ma);
