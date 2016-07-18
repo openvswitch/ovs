@@ -181,6 +181,8 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/ovsdb-idl.h \
 	lib/ovsdb-map-op.c \
 	lib/ovsdb-map-op.h \
+	lib/ovsdb-condition.h \
+	lib/ovsdb-condition.c \
 	lib/ovsdb-parser.c \
 	lib/ovsdb-parser.h \
 	lib/ovsdb-types.c \

@@ -144,6 +144,7 @@ class Idl(object):
             table.rows = {}
             table.idl = self
             table.condition = []
+            table.cond_changed = False
 
     def close(self):
         """Closes the connection to the database.  The IDL will no longer
@@ -170,6 +171,8 @@ class Idl(object):
         for changes in self.change_seqno."""
         assert not self.txn
         initial_change_seqno = self.change_seqno
+
+        self.send_cond_change()
         self._session.run()
         i = 0
         while i < 50:
@@ -252,18 +255,32 @@ class Idl(object):
 
         return initial_change_seqno != self.change_seqno
 
-    def cond_change(self, table_name, cond):
+    def send_cond_change(self):
+        if not self._session.is_connected():
+            return
+
+        for table in six.itervalues(self.tables):
+            if table.cond_changed:
+                self.__send_cond_change(table, table.condition)
+                table.cond_changed = False
+
+    def cond_change(self, table_name, add_cmd, cond):
         """Change conditions for this IDL session. If session is not already
         connected, add condtion to table and submit it on send_monitor_request.
         Otherwise  send monitor_cond_change method with the requested
         changes."""
+
         table = self.tables.get(table_name)
         if not table:
             raise error.Error('Unknown table "%s"' % table_name)
-        if self._session.is_connected():
-            self.__send_cond_change(table, cond)
+
+        if add_cmd:
+            table.condition += cond
         else:
-            table.condition = cond
+            for c in cond:
+                table.condition.remove(c)
+
+        table.cond_changed = True
 
     def wait(self, poller):
         """Arranges for poller.block() to wake up when self.run() has something
@@ -401,9 +418,10 @@ class Idl(object):
                         (column not in self.readonly[table.name])):
                     columns.append(column)
             monitor_requests[table.name] = {"columns": columns}
-            if method == "monitor_cond" and table.condition:
+            if method == "monitor_cond" and table.cond_changed and \
+                   table.condition:
                 monitor_requests[table.name]["where"] = table.condition
-                table.condition = None
+                table.cond_change = False
 
         msg = ovs.jsonrpc.Message.create_request(
             method, [self._db.name, str(self.uuid), monitor_requests])

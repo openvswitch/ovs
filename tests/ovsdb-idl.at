@@ -389,6 +389,142 @@ OVSDB_CHECK_IDL([simple idl, destroy without commit or abort],
 004: done
 ]])
 
+OVSDB_CHECK_IDL([simple idl, conditional, false condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition remove simple [false]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, true condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition add simple [true]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, multiple clauses in condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}},
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 2,
+               "r": 3.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition add simple [["i","==",1],["i","==",2]]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+003: i=2 r=3 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+004: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, modify as insert due to condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition add simple [["i","==",1]]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, modify as delete due to condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition add simple [["i","==",1],["i","==",2]]' \
+    'condition remove simple [["i","==",1]]' \
+    '["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 2,
+               "r": 3.0,
+               "b": true}}]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: change conditions
+005: empty
+006: {"error":null,"result":[{"uuid":["uuid","<2>"]}]}
+007: i=2 r=3 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+008: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, multiple tables],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}},
+       {"op": "insert",
+       "table": "link1",
+       "row": {"i": 0, "k": ["named-uuid", "self"]},
+       "uuid-name": "self"},
+        {"op": "insert",
+       "table": "link2",
+       "row": {"i": 2},
+       "uuid-name": "row0"}]']],
+  [['condition add simple [false];condition add link1 [false];condition add link2 [false]' \
+    'condition add simple [["i","==",1]]' \
+    'condition add link1 [["i","==",0]]' \
+    'condition add link2 [["i","==",3]]' \
+    '+["idltest",
+       {"op": "insert",
+       "table": "link2",
+       "row": {"i": 3},
+        "uuid-name": "row0"}]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: change conditions
+005: i=0 k=0 ka=[] l2= uuid=<2>
+005: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+006: change conditions
+007: {"error":null,"result":[{"uuid":["uuid","<3>"]}]}
+008: i=0 k=0 ka=[] l2= uuid=<2>
+008: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+008: i=3 l1= uuid=<3>
+009: done
+]])
+
 OVSDB_CHECK_IDL([self-linking idl, consistent ops],
   [],
   [['["idltest",

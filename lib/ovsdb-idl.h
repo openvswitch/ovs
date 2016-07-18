@@ -38,6 +38,9 @@
 #include <stdint.h>
 #include "compiler.h"
 #include "ovsdb-types.h"
+#include "ovsdb-data.h"
+#include "openvswitch/list.h"
+#include "ovsdb-condition.h"
 
 struct json;
 struct ovsdb_datum;
@@ -45,6 +48,7 @@ struct ovsdb_idl_class;
 struct ovsdb_idl_row;
 struct ovsdb_idl_column;
 struct ovsdb_idl_table_class;
+struct ovsdb_idl_condition;
 struct uuid;
 
 struct ovsdb_idl *ovsdb_idl_create(const char *remote,
@@ -298,5 +302,30 @@ struct ovsdb_idl_loop {
 void ovsdb_idl_loop_destroy(struct ovsdb_idl_loop *);
 struct ovsdb_idl_txn *ovsdb_idl_loop_run(struct ovsdb_idl_loop *);
 void ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *);
+
+struct ovsdb_idl_condition {
+    const struct ovsdb_idl_table_class *tc;
+    struct ovs_list clauses;
+};
+
+struct ovsdb_idl_clause {
+    struct ovs_list node;
+    enum ovsdb_function function;
+    const struct ovsdb_idl_column *column;
+    struct ovsdb_datum arg;
+};
+
+void ovsdb_idl_condition_reset(struct ovsdb_idl *idl,
+                               const struct ovsdb_idl_table_class *tc);
+void ovsdb_idl_condition_add_clause(struct ovsdb_idl *idl,
+                                    const struct ovsdb_idl_table_class *tc,
+                                    enum ovsdb_function function,
+                                    const struct ovsdb_idl_column *column,
+                                    struct ovsdb_datum *arg);
+void ovsdb_idl_condition_remove_clause(struct ovsdb_idl *idl,
+                                       const struct ovsdb_idl_table_class *tc,
+                                       enum ovsdb_function function,
+                                       const struct ovsdb_idl_column *column,
+                                       struct ovsdb_datum *arg);
 
 #endif /* ovsdb-idl.h */

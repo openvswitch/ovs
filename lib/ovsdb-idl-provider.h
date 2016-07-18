@@ -73,6 +73,8 @@ struct ovsdb_idl_table {
     struct ovsdb_idl *idl;   /* Containing idl. */
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
     struct ovs_list track_list; /* Tracked rows (ovsdb_idl_row.track_node). */
+    struct ovsdb_idl_condition condition;
+    bool cond_changed;
 };
 
 struct ovsdb_idl_class {

@@ -20,37 +20,11 @@
 #include "compiler.h"
 #include "ovsdb-data.h"
 #include "bitmap.h"
+#include "ovsdb-condition.h"
 
 struct json;
 struct ovsdb_table_schema;
 struct ovsdb_row;
-
-/* These list is ordered first with boolean functions and then in
- * ascending order of the fraction of tables row that they are
- * (heuristically) expected to leave in query results. */
-#define OVSDB_FUNCTIONS                         \
-    OVSDB_FUNCTION(OVSDB_F_FALSE, "false")            \
-    OVSDB_FUNCTION(OVSDB_F_TRUE, "true")              \
-    OVSDB_FUNCTION(OVSDB_F_EQ, "==")                  \
-    OVSDB_FUNCTION(OVSDB_F_INCLUDES, "includes")      \
-    OVSDB_FUNCTION(OVSDB_F_LE, "<=")                  \
-    OVSDB_FUNCTION(OVSDB_F_LT, "<")                   \
-    OVSDB_FUNCTION(OVSDB_F_GE, ">=")                  \
-    OVSDB_FUNCTION(OVSDB_F_GT, ">")                   \
-    OVSDB_FUNCTION(OVSDB_F_EXCLUDES, "excludes")      \
-    OVSDB_FUNCTION(OVSDB_F_NE, "!=")
-
-enum ovsdb_function {
-#define OVSDB_FUNCTION(ENUM, NAME) ENUM,
-    OVSDB_FUNCTIONS
-#undef OVSDB_FUNCTION
-    OVSDB_F_LAST = OVSDB_F_NE
-};
-
-struct ovsdb_error *ovsdb_function_from_string(const char *,
-                                               enum ovsdb_function *)
-    OVS_WARN_UNUSED_RESULT;
-const char *ovsdb_function_to_string(enum ovsdb_function);
 
 struct ovsdb_clause {
     enum ovsdb_function function;
