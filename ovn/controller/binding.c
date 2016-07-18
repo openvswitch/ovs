@@ -18,6 +18,7 @@
 
 #include "lib/bitmap.h"
 #include "lib/hmap.h"
+#include "lib/poll-loop.h"
 #include "lib/sset.h"
 #include "lib/util.h"
 #include "lib/vswitch-idl.h"
@@ -128,25 +129,6 @@ remove_local_datapath(struct hmap *local_datapaths, struct local_datapath *ld)
     }
     hmap_remove(local_datapaths, &ld->hmap_node);
     free(ld);
-}
-
-static void
-remove_local_datapath_by_binding(struct hmap *local_datapaths,
-                                 const struct sbrec_port_binding *binding_rec)
-{
-    const struct uuid *uuid = &binding_rec->header_.uuid;
-    struct local_datapath *ld = local_datapath_lookup_by_uuid(local_datapaths,
-                                                              uuid);
-    if (ld) {
-        remove_local_datapath(local_datapaths, ld);
-    } else {
-        struct local_datapath *ld;
-        HMAP_FOR_EACH (ld, hmap_node, local_datapaths) {
-            if (ld->localnet_port == binding_rec) {
-                ld->localnet_port = NULL;
-            }
-        }
-    }
 }
 
 static void
@@ -289,7 +271,14 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     } else {
         SBREC_PORT_BINDING_FOR_EACH_TRACKED(binding_rec, ctx->ovnsb_idl) {
             if (sbrec_port_binding_is_deleted(binding_rec)) {
-                remove_local_datapath_by_binding(local_datapaths, binding_rec);
+                /* If a port binding was bound to this chassis and removed before
+                 * the ovs interface was removed, we'll catch that here and trigger
+                 * a full bindings refresh.  This is to see if we need to clear
+                 * an entry out of local_datapaths. */
+                if (binding_rec->chassis == chassis_rec) {
+                    process_full_binding = true;
+                    poll_immediate_wake();
+                }
             } else {
                 consider_local_datapath(ctx, chassis_rec, binding_rec,
                                         local_datapaths, &lport_to_iface);
