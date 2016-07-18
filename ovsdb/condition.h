@@ -62,9 +62,12 @@ struct ovsdb_clause {
 struct ovsdb_condition {
     struct ovsdb_clause *clauses;
     size_t n_clauses;
+    bool optimized;
+    struct shash o_columns;
 };
 
-#define OVSDB_CONDITION_INITIALIZER { NULL, 0}
+#define OVSDB_CONDITION_INITIALIZER(COND) \
+    { NULL, 0, true, SHASH_INITIALIZER(&(COND)->o_columns)}
 
 void ovsdb_condition_init(struct ovsdb_condition *);
 bool ovsdb_condition_empty(const struct ovsdb_condition *);

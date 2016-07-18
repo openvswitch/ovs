@@ -688,7 +688,7 @@ ovsdb_monitor_table_condition_update(
     struct ovsdb_monitor_table_condition *mtc =
         shash_find_data(&condition->tables, table->schema->name);
     struct ovsdb_error *error;
-    struct ovsdb_condition cond = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_condition cond = OVSDB_CONDITION_INITIALIZER(&cond);
 
     if (!condition) {
         return NULL;

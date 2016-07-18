@@ -535,7 +535,7 @@ execute_delete(struct ovsdb_txn *txn, const char *uuid,
 {
     const struct json *where;
     struct ovsdb_error *error;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     char where_string[UUID_LEN+29];
 
     if (!table) {
@@ -586,7 +586,7 @@ execute_update(struct ovsdb_txn *txn, const char *uuid,
                struct ovsdb_table *table, struct json *json_row)
 {
     struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     struct update_row_cbdata ur;
     struct ovsdb_row *row;
     struct ovsdb_error *error;
