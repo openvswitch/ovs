@@ -45,6 +45,7 @@
 #include "stream-ssl.h"
 #include "table.h"
 #include "monitor.h"
+#include "condition.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
@@ -257,12 +258,14 @@ usage(void)
            "    monitor contents of COLUMNs in TABLE in DATABASE on SERVER.\n"
            "    COLUMNs may include !initial, !insert, !delete, !modify\n"
            "    to avoid seeing the specified kinds of changes.\n"
+           "\n  monitor-cond [SERVER] [DATABASE] CONDITION TABLE [COLUMN,...]...\n"
+           "    monitor contents that match CONDITION of COLUMNs in TABLE in\n"
+           "    DATABASE on SERVER.\n"
+           "    COLUMNs may include !initial, !insert, !delete, !modify\n"
+           "    to avoid seeing the specified kinds of changes.\n"
            "\n  monitor [SERVER] [DATABASE] ALL\n"
            "    monitor all changes to all columns in all tables\n"
            "    in DATBASE on SERVER.\n"
-           "\n  monitor2 [SERVER] [DATABASE] ALL\n"
-           "    same usage as monitor, but uses \"monitor2\" method over"
-           "    the wire."
            "\n  dump [SERVER] [DATABASE]\n"
            "    dump contents of DATABASE on SERVER to stdout\n"
            "\nThe default SERVER is unix:%s/db.sock.\n"
@@ -838,14 +841,41 @@ ovsdb_client_unblock(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
+ovsdb_client_cond_change(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                     const char *argv[], void *rpc_)
+{
+    struct jsonrpc *rpc = rpc_;
+    struct json *monitor_cond_update_requests = json_object_create();
+    struct json *monitor_cond_update_request = json_object_create();
+    struct json *params;
+    struct jsonrpc_msg *request;
+
+    json_object_put(monitor_cond_update_request, "where",
+                    json_from_string(argv[2]));
+    json_object_put(monitor_cond_update_requests,
+                    argv[1],
+                    json_array_create_1(monitor_cond_update_request));
+
+    params = json_array_create_3(json_null_create(),json_null_create(),
+                                 monitor_cond_update_requests);
+
+    request = jsonrpc_create_request("monitor_cond_change", params, NULL);
+    jsonrpc_send(rpc, request);
+
+    VLOG_DBG("cond change %s %s", argv[1], argv[2]);
+    unixctl_command_reply(conn, "condiiton changed");
+}
+
+static void
 add_monitored_table(int argc, char *argv[],
                     const char *server, const char *database,
+                    struct json *condition,
                     struct ovsdb_table_schema *table,
                     struct json *monitor_requests,
                     struct monitored_table **mts,
                     size_t *n_mts, size_t *allocated_mts)
 {
-    struct json *monitor_request_array;
+    struct json *monitor_request_array, *mr;
     struct monitored_table *mt;
 
     if (*n_mts >= *allocated_mts) {
@@ -860,19 +890,24 @@ add_monitored_table(int argc, char *argv[],
         int i;
 
         for (i = 1; i < argc; i++) {
-            json_array_add(
-                monitor_request_array,
-                parse_monitor_columns(argv[i], server, database, table,
-                                      &mt->columns));
+            mr = parse_monitor_columns(argv[i], server, database, table,
+                                       &mt->columns);
+            if (i == 1 && condition) {
+                json_object_put(mr, "where", condition);
+            }
+            json_array_add(monitor_request_array, mr);
         }
     } else {
         /* Allocate a writable empty string since parse_monitor_columns()
          * is going to strtok() it and that's risky with literal "". */
         char empty[] = "";
-        json_array_add(
-            monitor_request_array,
-            parse_monitor_columns(empty, server, database,
-                                  table, &mt->columns));
+
+        mr = parse_monitor_columns(empty, server, database,
+                                   table, &mt->columns);
+        if (condition) {
+            json_object_put(mr, "where", condition);
+        }
+        json_array_add(monitor_request_array, mr);
     }
 
     json_object_put(monitor_requests, table->name, monitor_request_array);
@@ -894,7 +929,7 @@ destroy_monitored_table(struct monitored_table *mts, size_t n)
 static void
 do_monitor__(struct jsonrpc *rpc, const char *database,
              enum ovsdb_monitor_version version,
-             int argc, char *argv[])
+             int argc, char *argv[], struct json *condition)
 {
     const char *server = jsonrpc_get_name(rpc);
     const char *table_name = argv[0];
@@ -926,6 +961,8 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
                                  ovsdb_client_block, &blocked);
         unixctl_command_register("ovsdb-client/unblock", "", 0, 0,
                                  ovsdb_client_unblock, &blocked);
+        unixctl_command_register("ovsdb-client/cond_change", "TABLE COND", 2, 2,
+                                 ovsdb_client_cond_change, rpc);
     } else {
         unixctl = NULL;
     }
@@ -945,17 +982,21 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
                       server, database, table_name);
         }
 
-        add_monitored_table(argc, argv, server, database, table,
+        add_monitored_table(argc, argv, server, database, condition, table,
                             monitor_requests, &mts, &n_mts, &allocated_mts);
     } else {
         size_t n = shash_count(&schema->tables);
         const struct shash_node **nodes = shash_sort(&schema->tables);
         size_t i;
 
+        if (condition) {
+            ovs_fatal(0, "ALL tables are not allowed with condition");
+        }
+
         for (i = 0; i < n; i++) {
             struct ovsdb_table_schema *table = nodes[i]->data;
 
-            add_monitored_table(argc, argv, server, database, table,
+            add_monitored_table(argc, argv, server, database, NULL, table,
                                 monitor_requests,
                                 &mts, &n_mts, &allocated_mts);
         }
@@ -964,7 +1005,7 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
 
     monitor = json_array_create_3(json_string_create(database),
                                   json_null_create(), monitor_requests);
-    const char *method = version == OVSDB_MONITOR_V2 ? "monitor2"
+    const char *method = version == OVSDB_MONITOR_V2 ? "monitor_cond"
                                                      : "monitor";
 
     request = jsonrpc_create_request(method, monitor, NULL);
@@ -1048,14 +1089,31 @@ static void
 do_monitor(struct jsonrpc *rpc, const char *database,
            int argc, char *argv[])
 {
-    do_monitor__(rpc, database, OVSDB_MONITOR_V1, argc, argv);
+    do_monitor__(rpc, database, OVSDB_MONITOR_V1, argc, argv, NULL);
 }
 
 static void
-do_monitor2(struct jsonrpc *rpc, const char *database,
+do_monitor_cond(struct jsonrpc *rpc, const char *database,
            int argc, char *argv[])
 {
-    do_monitor__(rpc, database, OVSDB_MONITOR_V2, argc, argv);
+    struct ovsdb_condition cnd;
+    struct json *condition = NULL;
+    struct ovsdb_schema *schema;
+    struct ovsdb_table_schema *table;
+    const char *table_name = argv[1];
+
+    ovs_assert(argc > 1);
+    schema = fetch_schema(rpc, database);
+    table = shash_find_data(&schema->tables, table_name);
+    if (!table) {
+        ovs_fatal(0, "%s does not have a table named \"%s\"",
+                  database, table_name);
+    }
+    condition = parse_json(argv[0]);
+    check_ovsdb_error(ovsdb_condition_from_json(table, condition,
+                                                    NULL, &cnd));
+    ovsdb_condition_destroy(&cnd);
+    do_monitor__(rpc, database, OVSDB_MONITOR_V2, --argc, ++argv, condition);
 }
 
 struct dump_table_aux {
@@ -1328,7 +1386,7 @@ static const struct ovsdb_client_command all_commands[] = {
     { "list-columns",       NEED_DATABASE, 0, 1,       do_list_columns },
     { "transact",           NEED_RPC,      1, 1,       do_transact },
     { "monitor",            NEED_DATABASE, 1, INT_MAX, do_monitor },
-    { "monitor2",           NEED_DATABASE, 1, INT_MAX, do_monitor2 },
+    { "monitor-cond",       NEED_DATABASE, 2, 3,       do_monitor_cond },
     { "dump",               NEED_DATABASE, 0, INT_MAX, do_dump },
     { "help",               NEED_NONE,     0, INT_MAX, do_help },
 

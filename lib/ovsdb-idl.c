@@ -79,8 +79,8 @@ enum ovsdb_idl_state {
     IDL_S_SCHEMA_REQUESTED,
     IDL_S_MONITOR_REQUESTED,
     IDL_S_MONITORING,
-    IDL_S_MONITOR2_REQUESTED,
-    IDL_S_MONITORING2,
+    IDL_S_MONITOR_COND_REQUESTED,
+    IDL_S_MONITORING_COND,
     IDL_S_NO_SCHEMA
 };
 
@@ -154,7 +154,7 @@ static struct vlog_rate_limit semantic_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 static void ovsdb_idl_clear(struct ovsdb_idl *);
 static void ovsdb_idl_send_schema_request(struct ovsdb_idl *);
 static void ovsdb_idl_send_monitor_request(struct ovsdb_idl *);
-static void ovsdb_idl_send_monitor2_request(struct ovsdb_idl *);
+static void ovsdb_idl_send_monitor_cond_request(struct ovsdb_idl *);
 static void ovsdb_idl_parse_update(struct ovsdb_idl *, const struct json *,
                                    enum ovsdb_update_version);
 static struct ovsdb_error *ovsdb_idl_parse_update__(struct ovsdb_idl *,
@@ -413,20 +413,20 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
             case IDL_S_SCHEMA_REQUESTED:
                 /* Reply to our "get_schema" request. */
                 idl->schema = json_clone(msg->result);
-                ovsdb_idl_send_monitor2_request(idl);
-                idl->state = IDL_S_MONITOR2_REQUESTED;
+                ovsdb_idl_send_monitor_cond_request(idl);
+                idl->state = IDL_S_MONITOR_COND_REQUESTED;
                 break;
 
             case IDL_S_MONITOR_REQUESTED:
-            case IDL_S_MONITOR2_REQUESTED:
-                /* Reply to our "monitor" or "monitor2" request. */
+            case IDL_S_MONITOR_COND_REQUESTED:
+                /* Reply to our "monitor" or "monitor_cond" request. */
                 idl->change_seqno++;
                 ovsdb_idl_clear(idl);
                 if (idl->state == IDL_S_MONITOR_REQUESTED) {
                     idl->state = IDL_S_MONITORING;
                     ovsdb_idl_parse_update(idl, msg->result, OVSDB_UPDATE);
-                } else { /* IDL_S_MONITOR2_REQUESTED. */
-                    idl->state = IDL_S_MONITORING2;
+                } else { /* IDL_S_MONITOR_COND_REQUESTED. */
+                    idl->state = IDL_S_MONITORING_COND;
                     ovsdb_idl_parse_update(idl, msg->result, OVSDB_UPDATE2);
                 }
 
@@ -437,7 +437,7 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
                 break;
 
             case IDL_S_MONITORING:
-            case IDL_S_MONITORING2:
+            case IDL_S_MONITORING_COND:
             case IDL_S_NO_SCHEMA:
             default:
                 OVS_NOT_REACHED();
@@ -464,7 +464,7 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
             /* Someone else stole our lock. */
             ovsdb_idl_parse_lock_notify(idl, msg->params, false);
         } else if (msg->type == JSONRPC_ERROR
-                   && idl->state == IDL_S_MONITOR2_REQUESTED
+                   && idl->state == IDL_S_MONITOR_COND_REQUESTED
                    && idl->request_id
                    && json_equal(idl->request_id, msg->id)) {
             if (msg->error && !strcmp(json_string(msg->error),
@@ -1066,9 +1066,9 @@ log_parse_update_error(struct ovsdb_error *error)
 }
 
 static void
-ovsdb_idl_send_monitor2_request(struct ovsdb_idl *idl)
+ovsdb_idl_send_monitor_cond_request(struct ovsdb_idl *idl)
 {
-    ovsdb_idl_send_monitor_request__(idl, "monitor2");
+    ovsdb_idl_send_monitor_request__(idl, "monitor_cond");
 }
 
 static void
@@ -3254,7 +3254,7 @@ ovsdb_idl_update_has_lock(struct ovsdb_idl *idl, bool new_has_lock)
 {
     if (new_has_lock && !idl->has_lock) {
         if (idl->state == IDL_S_MONITORING ||
-            idl->state == IDL_S_MONITORING2) {
+            idl->state == IDL_S_MONITORING_COND) {
             idl->change_seqno++;
         } else {
             /* We're setting up a session, so don't signal that the database

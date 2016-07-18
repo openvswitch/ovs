@@ -33,10 +33,8 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 .br
 \fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR
 .br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor2\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR
-[\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
-.br
-\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor2\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR
+\fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor-cond\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fIconditions
+\fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
 .br
 \fBovsdb\-client help\fR
 .IP "Output formatting options:"
@@ -113,12 +111,12 @@ specified, only that table is retrieved.  If at least one \fIcolumn\fR
 is specified, only those columns are retrieved.
 .
 .IP "\fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
-.IQ "\fBmonitor2\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
-Connects to \fIserver\fR and monitors the contents of \fItable\fR in
-\fIdatabase\fR.  By default, the initial contents of \fItable\fR are
-printed, followed by each change as it occurs.  If at least one
-\fIcolumn\fR is specified, only those columns are monitored.  The
-following \fIcolumn\fR names have special meanings:
+.IQ "\fBmonitor-cond\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fIconditions\fR \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]..."
+Connects to \fIserver\fR and monitors the contents of rows that match conditions in
+\fItable\fR in \fIdatabase\fR. By default, the initial contents of \fItable\fR are
+printed, followed by each change as it occurs.  If conditions empty,
+all rows will be monitored. If at least one \fIcolumn\fR is specified, only those
+columns are monitored.  The following \fIcolumn\fR names have special meanings:
 .RS
 .IP "\fB!initial\fR"
 Do not print the initial contents of the specified columns.
@@ -136,16 +134,18 @@ each group.  Whether multiple groups or only a single group is
 specified, any given column may only be mentioned once on the command
 line.
 .IP
-If \fB\-\-detach\fR is used with \fBmonitor\fR or \fBmointor2\fR, then
+\fBconditions\fR is a JSON array of <condition> as defined in RFC 7047 5.1
+with the following change: A condition can be either a 3-element JSON array
+as deescribed in the RFC or a boolean value..
+.IP
+If \fB\-\-detach\fR is used with \fBmonitor\fR or \fBmonitor-cond\fR, then
 \fBovsdb\-client\fR detaches after it has successfully received and
 printed the initial contents of \fItable\fR.
 .IP
 The \fBmonitor\fR command uses RFC 7047 "monitor" method to open a monitor
-session with the server. The \fBmonitor2\fR command uses RFC 7047
-extension "monitor2" method. See \fBovsdb\-server\fR(1) for details.
-.
+session with the server. The \fBmonitor-cond\fR command uses RFC 7047
+extension "monitor_cond" method. See \fBovsdb\-server\fR(1) for details.
 .IP "\fBmonitor\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR"
-.IQ "\fBmonitor2\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fBALL\fR"
 Connects to \fIserver\fR and monitors the contents of all tables in
 \fIdatabase\fR.  Prints initial values and all kinds of changes to all
 columns in the database.  The \fB\-\-detach\fR option causes
@@ -153,8 +153,7 @@ columns in the database.  The \fB\-\-detach\fR option causes
 prints the initial database contents.
 .IP
 The \fBmonitor\fR command uses RFC 7047 "monitor" method to open a monitor
-session with the server. The \fBmonitor2\fR command uses RFC 7047
-extension "monitor2" method. See \fBovsdb\-server\fR(1) for details.
+session with the server.
 .
 .SH OPTIONS
 .SS "Output Formatting Options"
@@ -165,13 +164,13 @@ The following options controlling output formatting:
 .so lib/table.man
 .
 .IP "\fB\-\-timestamp\fR"
-For the \fBmonitor\fR and \fBmonitor2\fR commands, add a timestamp to each
+For the \fBmonitor\fR and \fBmonitor-cond\fR commands, add a timestamp to each
 table update.  Most output formats add the timestamp on a line of its own
 just above the table.  The JSON output format puts the timestamp in a
 member of the top-level JSON object named \fBtime\fR.
 .
 .SS "Daemon Options"
-The daemon options apply only to the \fBmonitor\fR and \fBmonitor2\fR commands.
+The daemon options apply only to the \fBmonitor\fR and \fBmonitor-cond\fR commands.
 With any other command, they have no effect.
 .ds DD
 .so lib/daemon.man

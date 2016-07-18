@@ -76,7 +76,7 @@ static unixctl_cb_func ovsdb_server_compact;
 static unixctl_cb_func ovsdb_server_reconnect;
 static unixctl_cb_func ovsdb_server_perf_counters_clear;
 static unixctl_cb_func ovsdb_server_perf_counters_show;
-static unixctl_cb_func ovsdb_server_disable_monitor2;
+static unixctl_cb_func ovsdb_server_disable_monitor_cond;
 
 struct server_config {
     struct sset *remotes;
@@ -335,9 +335,9 @@ main(int argc, char *argv[])
                              ovsdb_server_perf_counters_clear, NULL);
 
     /* Simulate the behavior of OVS release prior to version 2.5 that
-     * does not support the monitor2 method.  */
-    unixctl_command_register("ovsdb-server/disable-monitor2", "", 0, 0,
-                             ovsdb_server_disable_monitor2, jsonrpc);
+     * does not support the monitor_cond method.  */
+    unixctl_command_register("ovsdb-server/disable-monitor-cond", "", 0, 0,
+                             ovsdb_server_disable_monitor_cond, jsonrpc);
 
     main_loop(jsonrpc, &all_dbs, unixctl, &remotes, run_process, &exiting);
 
@@ -1048,16 +1048,18 @@ ovsdb_server_perf_counters_clear(struct unixctl_conn *conn, int argc OVS_UNUSED,
     unixctl_command_reply(conn, NULL);
 }
 
-/* "ovsdb-server/disable-monitor2": makes ovsdb-server drop all of its
+/* "ovsdb-server/disable-monitor-cond": makes ovsdb-server drop all of its
  * JSON-RPC connections and reconnect. New sessions will not recognize
- * the 'monitor2' method.   */
+ * the 'monitor_cond' method.   */
 static void
-ovsdb_server_disable_monitor2(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                              const char *argv[] OVS_UNUSED, void *jsonrpc_)
+ovsdb_server_disable_monitor_cond(struct unixctl_conn *conn,
+                                  int argc OVS_UNUSED,
+                                  const char *argv[] OVS_UNUSED,
+                                  void *jsonrpc_)
 {
     struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
 
-    ovsdb_jsonrpc_disable_monitor2();
+    ovsdb_jsonrpc_disable_monitor_cond();
     ovsdb_jsonrpc_server_reconnect(jsonrpc);
     unixctl_command_reply(conn, NULL);
 }
