@@ -162,7 +162,7 @@ class Atom(object):
                 % (self.to_string(), base.enum.to_string()))
         elif base.type in [ovs.db.types.IntegerType, ovs.db.types.RealType]:
             if ((base.min is None or self.value >= base.min) and
-                (base.max is None or self.value <= base.max)):
+                    (base.max is None or self.value <= base.max)):
                 pass
             elif base.min is not None and base.max is not None:
                 raise ConstraintViolation(
@@ -171,7 +171,7 @@ class Atom(object):
             elif base.min is not None:
                 raise ConstraintViolation(
                     "%s is less than minimum allowed value %.15g"
-                            % (self.to_string(), base.min))
+                    % (self.to_string(), base.min))
             else:
                 raise ConstraintViolation(
                     "%s is greater than maximum allowed value %.15g"
@@ -414,6 +414,18 @@ class Datum(object):
         if tail:
             s.append(tail)
         return ''.join(s)
+
+    def diff(self, datum):
+        if self.type.n_max > 1 or len(self.values) == 0:
+            for k, v in six.iteritems(datum.values):
+                if k in self.values and v == self.values[k]:
+                    del self.values[k]
+                else:
+                    self.values[k] = v
+        else:
+            return datum
+
+        return self
 
     def as_list(self):
         if self.type.is_map():
