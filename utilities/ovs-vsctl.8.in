@@ -875,9 +875,16 @@ Configure bridge \fBbr0\fR to support OpenFlow versions 1.0, 1.2, and
 .B "ovs\-vsctl set bridge br0 protocols=OpenFlow10,OpenFlow12,OpenFlow13"
 .
 .SS "Flow Table Configuration"
-Limit flow table 0 on bridge br0 to a maximum of 100 flows:
+Make flow table 0 on bridge br0 refuse to accept more than 100 flows:
 .IP
 .B "ovs\-vsctl \-\- \-\-id=@ft create Flow_Table flow_limit=100 overflow_policy=refuse \-\- set Bridge br0 flow_tables=0=@ft"
+.
+.PP
+Make flow table 0 on bridge br0 evict flows, with fairness based on
+the matched ingress port, when there are more than 100:
+.
+.IP
+.B "ovs\-vsctl \-\- \-\-id=@ft create Flow_Table flow_limit=100 overflow_policy=evict groups='\(dqNXM_OF_IN_PORT[]\(dq' \-\- set Bridge br0 flow_tables:0=@ft"
 .SH "EXIT STATUS"
 .IP "0"
 Successful program execution.
