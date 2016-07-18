@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Nicira, Inc.
+ * Copyright (c) 2013, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -131,6 +131,15 @@ void hindex_remove(struct hindex *, struct hindex_node *);
     for (INIT_CONTAINER(NODE, hindex_node_with_hash(HINDEX, HASH), MEMBER); \
          NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER);                     \
          ASSIGN_CONTAINER(NODE, (NODE)->MEMBER.s, MEMBER))
+
+/* Safe when NODE may be freed (not needed when NODE may be removed from the
+ * hash map but its members remain accessible and intact). */
+#define HINDEX_FOR_EACH_WITH_HASH_SAFE(NODE, NEXT, MEMBER, HASH, HINDEX) \
+    for (INIT_CONTAINER(NODE, hindex_node_with_hash(HINDEX, HASH), MEMBER); \
+         (NODE != OBJECT_CONTAINING(NULL, NODE, MEMBER)                 \
+          ? INIT_CONTAINER(NEXT, (NODE)->MEMBER.s, MEMBER), 1           \
+          : 0);                                                         \
+         (NODE) = (NEXT))
 
 /* Returns the head node in 'hindex' with the given 'hash', or a null pointer
  * if no nodes have that hash value. */

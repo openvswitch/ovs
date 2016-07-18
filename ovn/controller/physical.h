@@ -43,7 +43,7 @@ struct simap;
 void physical_register_ovs_idl(struct ovsdb_idl *);
 void physical_run(struct controller_ctx *, enum mf_field_id mff_ovn_geneve,
                   const struct ovsrec_bridge *br_int, const char *chassis_id,
-                  const struct simap *ct_zones, struct hmap *flow_table,
+                  const struct simap *ct_zones,
                   struct hmap *local_datapaths, struct hmap *patched_datapaths);
 
 #endif /* ovn/physical.h */

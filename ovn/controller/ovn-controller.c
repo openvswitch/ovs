@@ -441,17 +441,15 @@ main(int argc, char *argv[])
             update_ct_zones(&all_lports, &patched_datapaths, &ct_zones,
                             ct_zone_bitmap);
 
-            struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
+            ovn_flow_table_clear();
             lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
-                      &patched_datapaths, &group_table, &ct_zones,
-                      &flow_table);
+                      &patched_datapaths, &group_table, &ct_zones);
             if (chassis_id) {
                 physical_run(&ctx, mff_ovn_geneve,
-                             br_int, chassis_id, &ct_zones, &flow_table,
+                             br_int, chassis_id, &ct_zones,
                              &local_datapaths, &patched_datapaths);
             }
-            ofctrl_put(&flow_table, &group_table);
-            hmap_destroy(&flow_table);
+            ofctrl_put(&group_table);
         }
 
         sset_destroy(&all_lports);
