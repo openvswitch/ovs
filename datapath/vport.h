@@ -142,8 +142,9 @@ struct vport_ops {
 	int (*get_options)(const struct vport *, struct sk_buff *);
 
 	netdev_tx_t (*send)(struct sk_buff *skb);
+#ifndef USE_UPSTREAM_TUNNEL
 	int  (*fill_metadata_dst)(struct net_device *dev, struct sk_buff *skb);
-
+#endif
 	struct module *owner;
 	struct list_head list;
 };

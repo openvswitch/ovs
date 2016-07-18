@@ -249,7 +249,7 @@ do {								\
 
 #endif
 
-#ifndef HAVE_NDO_FILL_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 #define dev_fill_metadata_dst ovs_dev_fill_metadata_dst
 int ovs_dev_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
 #endif

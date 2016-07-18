@@ -116,7 +116,9 @@ static struct vport_ops ovs_lisp_vport_ops = {
 	.create		= lisp_create,
 	.destroy	= ovs_netdev_tunnel_destroy,
 	.get_options	= lisp_get_options,
+#ifndef USE_UPSTREAM_TUNNEL
 	.fill_metadata_dst = lisp_fill_metadata_dst,
+#endif
 	.send		= lisp_xmit,
 };
 

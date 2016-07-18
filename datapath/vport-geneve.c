@@ -116,7 +116,9 @@ static struct vport_ops ovs_geneve_vport_ops = {
 	.create		= geneve_create,
 	.destroy	= ovs_netdev_tunnel_destroy,
 	.get_options	= geneve_get_options,
+#ifndef USE_UPSTREAM_TUNNEL
 	.fill_metadata_dst = geneve_fill_metadata_dst,
+#endif
 	.send		= geneve_xmit,
 };
 

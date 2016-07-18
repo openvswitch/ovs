@@ -118,7 +118,9 @@ static struct vport_ops ovs_stt_vport_ops = {
 	.create		= stt_create,
 	.destroy	= ovs_netdev_tunnel_destroy,
 	.get_options	= stt_get_options,
+#ifndef USE_UPSTREAM_TUNNEL
 	.fill_metadata_dst = stt_fill_metadata_dst,
+#endif
 	.send		= ovs_stt_xmit,
 };
 

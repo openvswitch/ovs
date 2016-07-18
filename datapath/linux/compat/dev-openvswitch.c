@@ -60,7 +60,7 @@ int rpl_rtnl_delete_link(struct net_device *dev)
 	return 0;
 }
 
-#ifndef HAVE_NDO_FILL_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 int ovs_dev_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb)
 {
 	struct ip_tunnel_info *info;

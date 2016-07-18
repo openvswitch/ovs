@@ -153,7 +153,9 @@ static struct vport_ops ovs_vxlan_netdev_vport_ops = {
 	.create			= vxlan_create,
 	.destroy		= ovs_netdev_tunnel_destroy,
 	.get_options		= vxlan_get_options,
+#ifndef USE_UPSTREAM_TUNNEL
 	.fill_metadata_dst	= vxlan_fill_metadata_dst,
+#endif
 	.send			= vxlan_xmit,
 };
 

@@ -88,7 +88,9 @@ static struct vport_ops ovs_gre_vport_ops = {
 	.type		= OVS_VPORT_TYPE_GRE,
 	.create		= gre_create,
 	.send		= gre_fb_xmit,
+#ifndef USE_UPSTREAM_TUNNEL
 	.fill_metadata_dst = gre_fill_metadata_dst,
+#endif
 	.destroy	= ovs_netdev_tunnel_destroy,
 };
 
