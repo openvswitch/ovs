@@ -39,9 +39,10 @@ struct lport_index {
 void lport_index_reset(void);
 void lport_index_init(struct lport_index *);
 void lport_index_fill(struct lport_index *, struct ovsdb_idl *);
-void lport_index_remove(struct lport_index *, const struct uuid *);
+bool lport_index_remove(struct lport_index *, const struct uuid *);
 void lport_index_clear(struct lport_index *);
 void lport_index_destroy(struct lport_index *);
+void lport_index_rebuild(void);
 
 const struct sbrec_port_binding *lport_lookup_by_name(
     const struct lport_index *, const char *name);
@@ -73,6 +74,7 @@ void mcgroup_index_fill(struct mcgroup_index *, struct ovsdb_idl *);
 void mcgroup_index_remove(struct mcgroup_index *, const struct uuid *);
 void mcgroup_index_clear(struct mcgroup_index *);
 void mcgroup_index_destroy(struct mcgroup_index *);
+void mcgroup_index_rebuild(void);
 
 const struct sbrec_multicast_group *mcgroup_lookup_by_dp_name(
     const struct mcgroup_index *,

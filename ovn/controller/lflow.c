@@ -27,6 +27,7 @@
 #include "ovn/lib/ovn-dhcp.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "packets.h"
+#include "physical.h"
 #include "simap.h"
 #include "sset.h"
 
@@ -39,6 +40,17 @@ static struct shash symtab;
 
 /* Contains an internal expr datastructure that represents an address set. */
 static struct shash expr_address_sets;
+
+static bool full_flow_processing = false;
+static bool full_logical_flow_processing = false;
+static bool full_neighbor_flow_processing = false;
+
+void
+lflow_reset_processing(void)
+{
+    full_flow_processing = true;
+    physical_reset_processing();
+}
 
 static void
 add_logical_register(struct shash *symtab, enum mf_field_id id)
@@ -367,6 +379,15 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
                   const struct simap *ct_zones)
 {
     uint32_t conj_id_ofs = 1;
+    const struct sbrec_logical_flow *lflow;
+
+    if (full_flow_processing) {
+        ovn_flow_table_clear();
+        full_logical_flow_processing = true;
+        full_neighbor_flow_processing = true;
+        full_flow_processing = false;
+        physical_reset_processing();
+    }
 
     struct hmap dhcp_opts = HMAP_INITIALIZER(&dhcp_opts);
     const struct sbrec_dhcp_options *dhcp_opt_row;
@@ -375,11 +396,35 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
                      dhcp_opt_row->type);
     }
 
-    const struct sbrec_logical_flow *lflow;
-    SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
-        consider_logical_flow(lports, mcgroups, lflow, local_datapaths,
-                              patched_datapaths, group_table, ct_zones,
-                              &dhcp_opts, &conj_id_ofs);
+    if (full_logical_flow_processing) {
+        SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
+            consider_logical_flow(lports, mcgroups, lflow, local_datapaths,
+                                  patched_datapaths, group_table, ct_zones,
+                                  &dhcp_opts, &conj_id_ofs);
+        }
+        full_logical_flow_processing = false;
+    } else {
+        /* First, remove any flows that should be removed. */
+        SBREC_LOGICAL_FLOW_FOR_EACH_TRACKED (lflow, ctx->ovnsb_idl) {
+            if (sbrec_logical_flow_is_deleted(lflow)) {
+                ofctrl_remove_flows(&lflow->header_.uuid);
+            }
+        }
+
+        /* Now, add/modify existing flows. */
+        SBREC_LOGICAL_FLOW_FOR_EACH_TRACKED (lflow, ctx->ovnsb_idl) {
+            if (!sbrec_logical_flow_is_deleted(lflow)) {
+                /* if the logical flow is a modification, just remove
+                 * the flows for this row, and then add new flows. */
+                if (!sbrec_logical_flow_is_new(lflow)) {
+                    ofctrl_remove_flows(&lflow->header_.uuid);
+                }
+                consider_logical_flow(lports, mcgroups, lflow,
+                                      local_datapaths, patched_datapaths,
+                                      group_table, ct_zones,
+                                      &dhcp_opts, &conj_id_ofs);
+            }
+        }
     }
 
     dhcp_opts_destroy(&dhcp_opts);
@@ -616,9 +661,24 @@ add_neighbor_flows(struct controller_ctx *ctx,
     ofpbuf_init(&ofpacts, 0);
 
     const struct sbrec_mac_binding *b;
-    SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
-        consider_neighbor_flow(lports, b, &ofpacts, &match);
+    if (full_neighbor_flow_processing) {
+        SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
+            consider_neighbor_flow(lports, b, &ofpacts, &match);
+        }
+        full_neighbor_flow_processing = false;
+    } else {
+        SBREC_MAC_BINDING_FOR_EACH_TRACKED (b, ctx->ovnsb_idl) {
+            if (sbrec_mac_binding_is_deleted(b)) {
+                ofctrl_remove_flows(&b->header_.uuid);
+            } else {
+                if (!sbrec_mac_binding_is_new(b)) {
+                    ofctrl_remove_flows(&b->header_.uuid);
+                }
+                consider_neighbor_flow(lports, b, &ofpacts, &match);
+            }
+        }
     }
+
     ofpbuf_uninit(&ofpacts);
 }
 

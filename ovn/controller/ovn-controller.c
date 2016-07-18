@@ -441,7 +441,6 @@ main(int argc, char *argv[])
             update_ct_zones(&all_lports, &patched_datapaths, &ct_zones,
                             ct_zone_bitmap);
 
-            ovn_flow_table_clear();
             lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
                       &patched_datapaths, &group_table, &ct_zones);
             if (chassis_id) {

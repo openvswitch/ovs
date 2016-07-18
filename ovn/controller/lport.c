@@ -48,7 +48,7 @@ lport_index_init(struct lport_index *lports)
     hmap_init(&lports->by_uuid);
 }
 
-void
+bool
 lport_index_remove(struct lport_index *lports, const struct uuid *uuid)
 {
     const struct lport *port_ = lport_lookup_by_uuid(lports, uuid);
@@ -58,7 +58,9 @@ lport_index_remove(struct lport_index *lports, const struct uuid *uuid)
         hmap_remove(&lports->by_key, &port->key_node);
         hmap_remove(&lports->by_uuid, &port->uuid_node);
         free(port);
+        return true;
     }
+    return false;
 }
 
 void
@@ -74,6 +76,7 @@ lport_index_clear(struct lport_index *lports)
         hmap_remove(&lports->by_uuid, &port->uuid_node);
         free(port);
     }
+    lflow_reset_processing();
 }
 
 static void
@@ -93,6 +96,7 @@ consider_lport_index(struct lport_index *lports,
                 uuid_hash(&pb->header_.uuid));
     memcpy(&p->uuid, &pb->header_.uuid, sizeof p->uuid);
     p->pb = pb;
+    lflow_reset_processing();
 }
 
 void
@@ -108,7 +112,10 @@ lport_index_fill(struct lport_index *lports, struct ovsdb_idl *ovnsb_idl)
     } else {
         SBREC_PORT_BINDING_FOR_EACH_TRACKED (pb, ovnsb_idl) {
             if (sbrec_port_binding_is_deleted(pb)) {
-                lport_index_remove(lports, &pb->header_.uuid);
+                while (lport_index_remove(lports, &pb->header_.uuid)) {
+                    ;
+                }
+                lflow_reset_processing();
             } else {
                 consider_lport_index(lports, pb);
             }
@@ -202,6 +209,7 @@ mcgroup_index_remove(struct mcgroup_index *mcgroups, const struct uuid *uuid)
         hmap_remove(&mcgroups->by_uuid, &mcgroup->uuid_node);
         free(mcgroup);
     }
+    lflow_reset_processing();
 }
 
 void
@@ -231,6 +239,7 @@ consider_mcgroup_index(struct mcgroup_index *mcgroups,
                 uuid_hash(&mg->header_.uuid));
     memcpy(&m->uuid, &mg->header_.uuid, sizeof m->uuid);
     m->mg = mg;
+    lflow_reset_processing();
 }
 
 void
@@ -247,6 +256,7 @@ mcgroup_index_fill(struct mcgroup_index *mcgroups, struct ovsdb_idl *ovnsb_idl)
         SBREC_MULTICAST_GROUP_FOR_EACH_TRACKED (mg, ovnsb_idl) {
             if (sbrec_multicast_group_is_deleted(mg)) {
                 mcgroup_index_remove(mcgroups, &mg->header_.uuid);
+                lflow_reset_processing();
             } else {
                 consider_mcgroup_index(mcgroups, mg);
             }

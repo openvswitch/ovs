@@ -67,5 +67,6 @@ void lflow_run(struct controller_ctx *, const struct lport_index *,
                struct group_table *group_table,
                const struct simap *ct_zones);
 void lflow_destroy(void);
+void lflow_reset_processing(void);
 
 #endif /* ovn/lflow.h */

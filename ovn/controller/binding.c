@@ -15,6 +15,8 @@
 
 #include <config.h>
 #include "binding.h"
+#include "lflow.h"
+#include "lport.h"
 
 #include "lib/bitmap.h"
 #include "lib/hmap.h"
@@ -129,6 +131,7 @@ remove_local_datapath(struct hmap *local_datapaths, struct local_datapath *ld)
     }
     hmap_remove(local_datapaths, &ld->hmap_node);
     free(ld);
+    lflow_reset_processing();
 }
 
 static void
@@ -145,6 +148,9 @@ add_local_datapath(struct hmap *local_datapaths,
     memcpy(&ld->uuid, &binding_rec->header_.uuid, sizeof ld->uuid);
     hmap_insert(local_datapaths, &ld->hmap_node,
                 binding_rec->datapath->tunnel_key);
+    lport_index_reset();
+    mcgroup_index_reset();
+    lflow_reset_processing();
 }
 
 static void

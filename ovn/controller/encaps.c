@@ -17,6 +17,7 @@
 #include "encaps.h"
 #include "binding.h"
 #include "lflow.h"
+#include "lport.h"
 
 #include "lib/hash.h"
 #include "lib/sset.h"
@@ -237,6 +238,9 @@ tunnel_add(const struct sbrec_chassis *chassis_rec,
     free(port_name);
     free(ports);
     binding_reset_processing();
+    lport_index_reset();
+    mcgroup_index_reset();
+    lflow_reset_processing();
     process_full_encaps = true;
 }
 
@@ -421,6 +425,7 @@ encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                                 &port_hash->uuid_node);
                     free(port_hash);
                     binding_reset_processing();
+                    lflow_reset_processing();
                 }
             } else if (sbrec_chassis_is_new(chassis_rec)) {
                 check_and_add_tunnel(chassis_rec, chassis_id);
