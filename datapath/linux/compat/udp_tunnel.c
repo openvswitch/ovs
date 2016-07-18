@@ -15,6 +15,7 @@
 #include <net/ip6_checksum.h>
 #include <net/ip6_tunnel.h>
 
+#include "gso.h"
 
 int rpl_udp_sock_create4(struct net *net, struct udp_port_cfg *cfg,
 			 struct socket **sockp)

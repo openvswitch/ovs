@@ -30,6 +30,7 @@
 #include <linux/workqueue.h>
 #include <linux/rculist.h>
 #include <net/ip_tunnels.h>
+#include <net/ip6_tunnel.h>
 #include <net/route.h>
 #include <net/xfrm.h>
 
@@ -81,7 +82,7 @@ void rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 	__ip_select_ident(iph, skb_shinfo(skb)->gso_segs ?: 1);
 #endif
 
-	err = ip_local_out(skb);
+	err = ip_local_out(dev_net(rt->dst.dev), sk, skb);
 	if (unlikely(net_xmit_eval(err)))
 		pkt_len = 0;
 	iptunnel_xmit_stats(dev, pkt_len);
@@ -264,4 +265,22 @@ struct rtnl_link_stats64 *rpl_ip_tunnel_get_stats64(struct net_device *dev,
 	return tot;
 }
 #endif
+
+void rpl_ip6tunnel_xmit(struct sock *sk, struct sk_buff *skb,
+		    struct net_device *dev)
+{
+	int pkt_len, err;
+
+	pkt_len = skb->len - skb_inner_network_offset(skb);
+#ifdef HAVE_IP6_LOCAL_OUT_SK
+	err = ip6_local_out_sk(sk, skb);
+#else
+	err = ip6_local_out(dev_net(skb_dst(skb)->dev), sk, skb);
+#endif
+	if (net_xmit_eval(err))
+		pkt_len = -1;
+
+	iptunnel_xmit_stats(dev, pkt_len);
+}
+EXPORT_SYMBOL_GPL(rpl_ip6tunnel_xmit);
 #endif

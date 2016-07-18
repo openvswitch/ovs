@@ -86,29 +86,38 @@ static inline void ovs_skb_set_inner_protocol(struct sk_buff *skb,
 #endif /* HAVE_INNER_PROTOCOL */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
-#define ip_local_out rpl_ip_local_out
-int rpl_ip_local_out(struct sk_buff *skb);
-
 static inline int skb_inner_mac_offset(const struct sk_buff *skb)
 {
 	return skb_inner_mac_header(skb) - skb->data;
 }
 
+#define ip_local_out rpl_ip_local_out
+int rpl_ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb);
+
 #define ip6_local_out rpl_ip6_local_out
-int rpl_ip6_local_out(struct sk_buff *skb);
+int rpl_ip6_local_out(struct net *net, struct sock *sk, struct sk_buff *skb);
 #else
 
-static inline int rpl_ip_local_out(struct sk_buff *skb)
+static inline int rpl_ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
+#ifdef HAVE_IP_LOCAL_OUT_TAKES_NET
+	/* net and sk parameters are added at same time. */
+	return ip_local_out(net, sk, skb);
+#else
 	return ip_local_out(skb);
+#endif
 }
 #define ip_local_out rpl_ip_local_out
 
-static inline int rpl_ip6_local_out(struct sk_buff *skb)
+static inline int rpl_ip6_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	memset(IP6CB(skb), 0, sizeof (*IP6CB(skb)));
+#ifdef HAVE_IP_LOCAL_OUT_TAKES_NET
+	return ip6_local_out(net, sk, skb);
+#else
 	return ip6_local_out(skb);
+#endif
 }
 #define ip6_local_out rpl_ip6_local_out
 

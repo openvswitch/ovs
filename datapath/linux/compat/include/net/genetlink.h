@@ -44,11 +44,6 @@ struct rpl_genl_family {
 };
 
 #define genl_family rpl_genl_family
-#define genl_notify rpl_genl_notify
-void rpl_genl_notify(struct genl_family *family,
-		     struct sk_buff *skb, struct net *net, u32 portid, u32 group,
-		     struct nlmsghdr *nlh, gfp_t flags);
-
 static inline void *rpl_genlmsg_put(struct sk_buff *skb, u32 portid, u32 seq,
 				    struct genl_family *family, int flags, u8 cmd)
 {
@@ -93,7 +88,12 @@ static inline int rpl_genl_register_family(struct genl_family *family)
 	family->module = THIS_MODULE;
 	return rpl___genl_register_family(family);
 }
+#endif
 
+#ifdef HAVE_GENL_NOTIFY_TAKES_NET
+#define genl_notify rpl_genl_notify
+void rpl_genl_notify(struct genl_family *family, struct sk_buff *skb,
+		     struct genl_info *info , u32 group, gfp_t flags);
 #endif
 
 #ifndef HAVE_GENL_HAS_LISTENERS

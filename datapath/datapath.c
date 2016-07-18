@@ -95,8 +95,7 @@ static bool ovs_must_notify(struct genl_family *family, struct genl_info *info,
 static void ovs_notify(struct genl_family *family, struct genl_multicast_group *grp,
 		       struct sk_buff *skb, struct genl_info *info)
 {
-	genl_notify(family, skb, genl_info_net(info),
-		    info->snd_portid, GROUP_ID(grp), info->nlhdr, GFP_KERNEL);
+	genl_notify(family, skb, info, GROUP_ID(grp), GFP_KERNEL);
 }
 
 /**

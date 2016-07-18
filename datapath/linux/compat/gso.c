@@ -263,7 +263,7 @@ static int output_ip(struct sk_buff *skb)
 	return ret;
 }
 
-int rpl_ip_local_out(struct sk_buff *skb)
+int rpl_ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	int ret = NETDEV_TX_OK;
 	int id = -1;
@@ -318,7 +318,7 @@ static int output_ipv6(struct sk_buff *skb)
 	return ret;
 }
 
-int rpl_ip6_local_out(struct sk_buff *skb)
+int rpl_ip6_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	int ret = NETDEV_TX_OK;
 

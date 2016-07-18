@@ -1554,7 +1554,11 @@ static void clean_percpu(struct work_struct *work)
 #ifdef HAVE_NF_HOOKFN_ARG_OPS
 #define FIRST_PARAM const struct nf_hook_ops *ops
 #else
+#ifdef HAVE_NF_HOOKFN_ARG_PRIV
+#define FIRST_PARAM void *priv
+#else
 #define FIRST_PARAM unsigned int hooknum
+#endif
 #endif
 
 #ifdef HAVE_NF_HOOK_STATE
@@ -1600,7 +1604,9 @@ static unsigned int nf_ip_hook(FIRST_PARAM, struct sk_buff *skb, LAST_PARAM)
 
 static struct nf_hook_ops nf_hook_ops __read_mostly = {
 	.hook           = nf_ip_hook,
+#ifdef HAVE_NF_HOOKS_OPS_OWNER
 	.owner          = THIS_MODULE,
+#endif
 	.pf             = NFPROTO_IPV4,
 	.hooknum        = NF_INET_LOCAL_IN,
 	.priority       = INT_MAX,

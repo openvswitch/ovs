@@ -42,7 +42,6 @@
 #include <net/inet_ecn.h>
 #include <net/net_namespace.h>
 #include <net/netns/generic.h>
-#include <net/vxlan.h>
 #include <net/protocol.h>
 
 #if IS_ENABLED(CONFIG_IPV6)
@@ -53,6 +52,7 @@
 #include <net/ip6_route.h>
 #endif
 
+#include <net/vxlan.h>
 #include "gso.h"
 #include "vport-netdev.h"
 #include "compat.h"
@@ -221,7 +221,7 @@ static struct vxlan_dev *vxlan_find_vni(struct net *net, __be32 vni,
 static int vxlan_fdb_create(struct vxlan_dev *vxlan,
 			    const u8 *mac, union vxlan_addr *ip,
 			    __u16 state, __u16 flags,
-			    __be16 port, __u32 vni, __u32 ifindex,
+			    __be16 port, __be32 vni, __u32 ifindex,
 			    __u8 ndm_flags)
 {
 	return -EINVAL;

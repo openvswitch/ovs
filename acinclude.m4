@@ -134,10 +134,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     AC_MSG_RESULT([$kversion])
 
     if test "$version" -ge 4; then
-       if test "$version" = 4 && test "$patchlevel" -le 3; then
+       if test "$version" = 4 && test "$patchlevel" -le 4; then
           : # Linux 4.x
        else
-          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.3.x is not supported (please refer to the FAQ for advice)])
+          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.4.x is not supported (please refer to the FAQ for advice)])
        fi
     elif test "$version" = 3 && test "$patchlevel" -ge 10; then
        : # Linux 3.x
@@ -415,6 +415,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_PARAM_IFELSE([$KSRC/include/net/ip.h],
                         [ip_do_fragment], [net],
                         [OVS_DEFINE([HAVE_IP_DO_FRAGMENT_TAKES_NET])])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/ip.h],
+                        [ip_local_out], [net],
+                        [OVS_DEFINE([HAVE_IP_LOCAL_OUT_TAKES_NET])])
+
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [ip_skb_dst_mtu])
 
   OVS_GREP_IFELSE([$KSRC/include/net/ip.h], [IPSKB_FRAG_PMTU],
@@ -476,6 +480,11 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_register_net_hook])
   OVS_GREP_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hookfn.*nf_hook_ops],
                   [OVS_DEFINE([HAVE_NF_HOOKFN_ARG_OPS])])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hookfn], [priv],
+                  [OVS_DEFINE([HAVE_NF_HOOKFN_ARG_PRIV])])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netfilter.h], [nf_hook_ops],
+                        [owner], [OVS_DEFINE([HAVE_NF_HOOKS_OPS_OWNER])])
+
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netfilter_ipv6.h], [nf_ipv6_ops],
                         [fragment.*sock], [OVS_DEFINE([HAVE_NF_IPV6_OPS_FRAGMENT])])
 
@@ -581,6 +590,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genlmsg_parse])
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genl_notify.*family],
                   [OVS_DEFINE([HAVE_GENL_NOTIFY_TAKES_FAMILY])])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/genetlink.h],
+                        [genl_notify], [net],
+                        [OVS_DEFINE([HAVE_GENL_NOTIFY_TAKES_NET])])
+
 
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/genetlink.h],
                         [genl_multicast_group], [id])

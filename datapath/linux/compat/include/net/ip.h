@@ -60,7 +60,11 @@ static inline unsigned int rpl_ip_skb_dst_mtu(const struct sk_buff *skb)
 #endif /* HAVE_IP_SKB_DST_MTU */
 
 #ifdef HAVE_IP_FRAGMENT_TAKES_SOCK
+#ifdef HAVE_IP_LOCAL_OUT_TAKES_NET
+#define OVS_VPORT_OUTPUT_PARAMS struct net *net, struct sock *sock, struct sk_buff *skb
+#else
 #define OVS_VPORT_OUTPUT_PARAMS struct sock *sock, struct sk_buff *skb
+#endif
 #else
 #define OVS_VPORT_OUTPUT_PARAMS struct sk_buff *skb
 #endif
