@@ -78,9 +78,7 @@ struct action_fifo {
 };
 
 static struct action_fifo __percpu *action_fifos;
-#define EXEC_ACTIONS_LEVEL_LIMIT 4   /* limit used to detect packet
-				      *	looping by the network stack
-				      */
+
 static DEFINE_PER_CPU(int, exec_actions_level);
 
 static void action_fifo_init(struct action_fifo *fifo)
@@ -1207,31 +1205,26 @@ int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			const struct sw_flow_actions *acts,
 			struct sw_flow_key *key)
 {
-	int level = this_cpu_read(exec_actions_level);
-	int err;
+	static const int ovs_recursion_limit = 4;
+	int err, level;
 
-	if (unlikely(level >= EXEC_ACTIONS_LEVEL_LIMIT)) {
-		if (net_ratelimit())
-			pr_warn("%s: packet loop detected, dropping.\n",
-				ovs_dp_name(dp));
-
+	level = __this_cpu_inc_return(exec_actions_level);
+	if (unlikely(level > ovs_recursion_limit)) {
+		net_crit_ratelimited("ovs: recursion limit reached on datapath %s, probable configuration error\n",
+				     ovs_dp_name(dp));
 		kfree_skb(skb);
-		return -ELOOP;
+		err = -ENETDOWN;
+		goto out;
 	}
 
-	this_cpu_inc(exec_actions_level);
 	err = do_execute_actions(dp, skb, key,
 				 acts->actions, acts->actions_len);
 
-	if (!level)
+	if (level == 1)
 		process_deferred_actions(dp);
 
-	this_cpu_dec(exec_actions_level);
-
-	/* This return status currently does not reflect the errors
-	 * encounted during deferred actions execution. Probably needs to
-	 * be fixed in the future.
-	 */
+out:
+	__this_cpu_dec(exec_actions_level);
 	return err;
 }
 
