@@ -1158,8 +1158,12 @@ ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor *dbmon,
                 return ovsdb_syntax_error(columns, NULL, "%s is not a valid "
                                           "column name", s);
             }
-            ovsdb_monitor_add_column(dbmon, table, column, select,
-                                     allocated_columns);
+            if (ovsdb_monitor_add_column(dbmon, table, column, select,
+                                         allocated_columns)) {
+                return ovsdb_syntax_error(columns, NULL, "column %s "
+                                          "mentioned more than once",
+                                          column->name);
+            }
         }
     } else {
         struct shash_node *node;
@@ -1167,8 +1171,12 @@ ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor *dbmon,
         SHASH_FOR_EACH (node, &ts->columns) {
             const struct ovsdb_column *column = node->data;
             if (column->index != OVSDB_COL_UUID) {
-                ovsdb_monitor_add_column(dbmon, table, column, select,
-                                         allocated_columns);
+                if (ovsdb_monitor_add_column(dbmon, table, column, select,
+                                             allocated_columns)) {
+                    return ovsdb_syntax_error(columns, NULL, "column %s "
+                                              "mentioned more than once",
+                                              column->name);
+                }
             }
         }
     }
@@ -1217,7 +1225,6 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
 
     SHASH_FOR_EACH (node, json_object(monitor_requests)) {
         const struct ovsdb_table *table;
-        const char *column_name;
         size_t allocated_columns;
         const struct json *mr_value;
         size_t i;
@@ -1250,15 +1257,6 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
             if (error) {
                 goto error;
             }
-        }
-
-        column_name = ovsdb_monitor_table_check_duplicates(m->dbmon, table);
-
-        if (column_name) {
-            error = ovsdb_syntax_error(mr_value, NULL, "column %s "
-                                       "mentioned more than once",
-                                        column_name);
-            goto error;
         }
     }
 

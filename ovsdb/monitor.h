@@ -52,15 +52,11 @@ void ovsdb_monitor_remove_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
 void ovsdb_monitor_add_table(struct ovsdb_monitor *m,
                              const struct ovsdb_table *table);
 
-void ovsdb_monitor_add_column(struct ovsdb_monitor *dbmon,
+const char * ovsdb_monitor_add_column(struct ovsdb_monitor *dbmon,
                               const struct ovsdb_table *table,
                               const struct ovsdb_column *column,
                               enum ovsdb_monitor_selection select,
                               size_t *allocated_columns);
-
-const char * OVS_WARN_UNUSED_RESULT
-ovsdb_monitor_table_check_duplicates(struct ovsdb_monitor *,
-                          const struct ovsdb_table *);
 
 struct json *ovsdb_monitor_get_update(struct ovsdb_monitor *dbmon,
                                       bool initial,
