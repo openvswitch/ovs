@@ -639,6 +639,7 @@ run_put_arp(struct controller_ctx *ctx, const struct lport_index *lports,
     sbrec_mac_binding_set_logical_port(b, pb->logical_port);
     sbrec_mac_binding_set_ip(b, ip_string);
     sbrec_mac_binding_set_mac(b, mac_string);
+    sbrec_mac_binding_set_datapath(b, pb->datapath);
 }
 
 static void

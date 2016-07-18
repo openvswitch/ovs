@@ -1822,6 +1822,9 @@ tcp.flags = RST;
     <column name="mac">
       The Ethernet address to which the IP is bound.
     </column>
+    <column name="datapath">
+      The logical datapath to which the logical port belongs.
+    </column>
   </table>
 
   <table name="DHCP_Options" title="DHCP Options supported by native OVN DHCP">
