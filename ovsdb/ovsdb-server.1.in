@@ -257,31 +257,141 @@ notifications (see below) to the request, it must be unique among all
 active monitors.  \fBovsdb\-server\fR rejects attempt to create two
 monitors with the same identifier.
 .
-.IP "4.1.12. Monitor2"
-A new monitor method added in Open vSwitch version 2.5. Monitor2 allows
-for more efficient update notifications (described below).
+.IP "4.1.12. Monitor_cond"
+A new monitor method added in Open vSwitch version 2.5. The monitor_cond
+request enables a client to replicate subsets of tables within an OVSDB
+database by requesting notifications of changes to rows matching one of
+the conditions specified in "where" by receiving the specified contents
+of these rows when table updates occur. Monitor_cond also allows a more
+efficient update notifications by receiving table-updates2 notifications
+(described below).
+.
 .IP
-The monitor method described in Section 4.1.5 also applies to
-monitor2, with the following exceptions.
+The monitor method described in Section 4.1.5 also applies to monitor_cond,
+with the following exceptions:
 .
 .RS
 .IP \(bu
-RPC request method becomes "monitor2".
+RPC request method becomes "monitor_cond".
 .IP \(bu
-Replay result follows <table-updates2>, described in Section 4.1.13.
+Reply result follows <table-updates2>, described in Section 4.1.14.
 .IP \(bu
 Subsequent changes are sent to the client using the "update2" monitor
-notification, described in Section 4.1.13
+notification, described in Section 4.1.14
+.IP \(bu
+Update notifications are being sent only for rows matching [<condition>*].
 .RE
 .
 .IP
-Both monitor and monitor2 sessions can exist concurrently. However,
-monitor and monitor2 shares the same <json-value> parameter space; it
-must be unique among all monitor and monitor2 sessions.
+The request object has the following members:
 .
-.IP "4.1.13. Update2 notification"
+.PP
+.RS
+.nf
+"method": "monitor_cond"
+"params": [<db-name>, <json-value>, <monitor-cond-requests>]
+"id": <nonnull-json-value>
+.fi
+.RE
+.
+.IP
+The <json-value> parameter is used to match subsequent update notifications
+(see below) to this request. The <monitor-cond-requests> object maps the name
+of the table to an array of <monitor-cond-request>.
+.
+.IP
+Each <monitor-cond-request> is an object with the following members:
+.
+.PP
+.RS
+.nf
+"columns": [<column>*]            optional
+"where": [<condition>*]           optional
+"select": <monitor-select>        optional
+.fi
+.RE
+.
+.IP
+The "columns", if present, define the columns within the table to be monitored
+that match conditions. If not present all columns are being monitored.
+.
+.IP
+The "where" if present is a JSON array of <condition> and boolean values. If not
+present or condition is an empty array, implicit True will be considered and
+updates on all rows will be sent.
+.
+.IP
+<monitor-select> is an object with the following members:
+.
+.PP
+.RS
+.nf
+"initial": <boolean>              optional
+"insert": <boolean>               optional
+"delete": <boolean>               optional
+"modify": <boolean>               optional
+.fi
+.RE
+.
+.IP
+The contents of this object specify how the columns or table are to be
+monitored as explained in more detail below.
+.
+.IP
+The response object has the following members:
+.
+.PP
+.RS
+.nf
+"result": <table-updates2>
+"error": null
+"id": same "id" as request
+.fi
+.RE
+.
+.IP
+The <table-updates2> object is described in detail in Section 4.1.14. It
+contains the contents of the tables for which "initial" rows are selected.
+If no tables initial contents are requested, then "result" is an empty object.
+.
+.IP
+Subsequently, when changes to a specified table that match one of the conditions
+in monitor-cond-request are committed, the changes are automatically sent to the
+client using the "update2" monitor notification (see Section 4.1.14). This
+monitoring persists until the JSON-RPC session terminates or until the client
+sends a "monitor_cancel" JSON-RPC request.
+.
+.IP
+Each <monitor-cond-request> specifies one or more conditions and the manner in
+which the rows that match the conditions are to be monitored. The circumstances in
+which an "update" notification is sent for a row within the table are determined by
+<monitor-select>:
+.
+.RS
+.IP \(bu
+If "initial" is omitted or true, every row in the original table that matches one of
+the conditions is sent as part of the response to the "monitor_cond" request.
+.IP \(bu
+If "insert" is omitted or true, "update" notifications are sent for rows newly
+inserted into the table that match conditions or for rows modified in the table
+so that their old version does not match the condition and new version does.
+.IP \(bu
+If "delete" is omitted or true, "update" notifications are sent for rows deleted
+from the table that match conditions or for rows modified in the table so that
+their old version does match the conditions and new version does not.
+.IP \(bu
+If "modify" is omitted or true, "update" notifications are sent whenever a row in
+the table that matches conditions in both old and new version is modified.
+.RE
+.
+.IP
+Both monitor and monitor_cond sessions can exist concurrently. However,
+monitor and monitor_cond shares the same <json-value> parameter space; it
+must be unique among all monitor and monitor_cond sessions.
+.
+.IP "4.1.14. Update2 notification"
 The "update2" notification is sent by the server to the client to report
-changes in tables that are being monitored following a "monitor2" request
+changes in tables that are being monitored following a "monitor_cond" request
 as described above. The notification has the following members:
 .
 .RS
@@ -296,7 +406,8 @@ as described above. The notification has the following members:
 The <json-value> in "params" is the same as the value passed as the
 <json-value>  in "params" for the corresponding "monitor" request.
 <table-updates2> is an object that maps from a table name to a <table-update2>.
-A <table-update2> is an object that maps from row's UUID to a <row-update2> object. A <row-update2> is an object with one of the following members:
+A <table-update2> is an object that maps from row's UUID to a <row-update2>
+object. A <row-update2> is an object with one of the following members:
 .
 .RS
 .IP "\(dqinitial\(dq: <row>"
@@ -338,8 +449,8 @@ elements, <row> includes the value from the new column.
 .
 .IP
 Initial views of rows are not presented in update2 notifications,
-but in the response object to the monitor2 request. The formatting of the
-<table-updates2> object, however, is the same in either case.
+but in the response object to the monitor_cond request. The formatting
+of the <table-updates2> object, however, is the same in either case.
 .
 .IP "5.1. Notation"
 For <condition>, RFC 7047 only allows the use of \fB!=\fR, \fB==\fR,

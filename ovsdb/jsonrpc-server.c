@@ -28,6 +28,7 @@
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
 #include "ovsdb.h"
+#include "condition.h"
 #include "poll-loop.h"
 #include "reconnect.h"
 #include "row.h"
@@ -865,7 +866,8 @@ ovsdb_jsonrpc_session_got_request(struct ovsdb_jsonrpc_session *s,
             reply = execute_transaction(s, db, request);
         }
     } else if (!strcmp(request->method, "monitor") ||
-               (monitor2_enable__ && !strcmp(request->method, "monitor2"))) {
+               (monitor2_enable__ && !strcmp(request->method, "monitor2")) ||
+               !strcmp(request->method, "monitor_cond")) {
         struct ovsdb *db = ovsdb_jsonrpc_lookup_db(s, request, &reply);
         if (!reply) {
             int l = strlen(request->method) - strlen("monitor");
@@ -1064,6 +1066,7 @@ struct ovsdb_jsonrpc_monitor {
     uint64_t unflushed;         /* The first transaction that has not been
                                        flushed to the jsonrpc remote client. */
     enum ovsdb_monitor_version version;
+    struct ovsdb_monitor_session_condition *condition;/* Session's condition */
 };
 
 static struct ovsdb_jsonrpc_monitor *
@@ -1091,20 +1094,27 @@ parse_bool(struct ovsdb_parser *parser, const char *name, bool default_value)
 }
 
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
-ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor *dbmon,
-                                    const struct ovsdb_table *table,
-                                    const struct json *monitor_request)
+ovsdb_jsonrpc_parse_monitor_request(
+                               struct ovsdb_monitor *dbmon,
+                               const struct ovsdb_table *table,
+                               struct ovsdb_monitor_session_condition *cond,
+                               const struct json *monitor_request)
 {
     const struct ovsdb_table_schema *ts = table->schema;
     enum ovsdb_monitor_selection select;
-    const struct json *columns, *select_json;
+    const struct json *columns, *select_json, *where = NULL;
     struct ovsdb_parser parser;
     struct ovsdb_error *error;
 
     ovsdb_parser_init(&parser, monitor_request, "table %s", ts->name);
+    if (cond) {
+        where = ovsdb_parser_member(&parser, "where", OP_ARRAY | OP_OPTIONAL);
+    }
     columns = ovsdb_parser_member(&parser, "columns", OP_ARRAY | OP_OPTIONAL);
+
     select_json = ovsdb_parser_member(&parser, "select",
                                       OP_OBJECT | OP_OPTIONAL);
+
     error = ovsdb_parser_finish(&parser);
     if (error) {
         return error;
@@ -1179,6 +1189,12 @@ ovsdb_jsonrpc_parse_monitor_request(struct ovsdb_monitor *dbmon,
             }
         }
     }
+    if (cond) {
+        error = ovsdb_monitor_table_condition_create(cond, table, where);
+        if (error) {
+            return error;
+        }
+    }
 
     return NULL;
 }
@@ -1217,6 +1233,9 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
     m->session = s;
     m->db = db;
     m->dbmon = ovsdb_monitor_create(db, m);
+    if (version == OVSDB_MONITOR_V2) {
+        m->condition = ovsdb_monitor_session_condition_create();
+    }
     m->unflushed = 0;
     m->version = version;
     hmap_insert(&s->monitors, &m->node, json_hash(monitor_id, 0));
@@ -1244,6 +1263,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
             for (i = 0; i < array->n; i++) {
                 error = ovsdb_jsonrpc_parse_monitor_request(m->dbmon,
                                                             table,
+                                                            m->condition,
                                                             array->elems[i]);
                 if (error) {
                     goto error;
@@ -1252,6 +1272,7 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
         } else {
             error = ovsdb_jsonrpc_parse_monitor_request(m->dbmon,
                                                         table,
+                                                        m->condition,
                                                         mr_value);
             if (error) {
                 goto error;
@@ -1265,6 +1286,11 @@ ovsdb_jsonrpc_monitor_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
         ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m, m->unflushed);
         ovsdb_monitor_add_jsonrpc_monitor(dbmon, m);
         m->dbmon = dbmon;
+    }
+
+    /* Only now we can bind session's condition to ovsdb_monitor */
+    if (m->condition) {
+        ovsdb_monitor_condition_bind(m->dbmon, m->condition);
     }
 
     ovsdb_monitor_get_initial(m->dbmon);
@@ -1323,7 +1349,7 @@ ovsdb_jsonrpc_monitor_compose_update(struct ovsdb_jsonrpc_monitor *m,
     }
 
     return ovsdb_monitor_get_update(m->dbmon, initial, &m->unflushed,
-                                    m->version);
+                                    m->condition, m->version);
 }
 
 static bool
@@ -1346,6 +1372,7 @@ ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *m)
     json_destroy(m->monitor_id);
     hmap_remove(&m->session->monitors, &m->node);
     ovsdb_monitor_remove_jsonrpc_monitor(m->dbmon, m, m->unflushed);
+    ovsdb_monitor_session_condition_destroy(m->condition);
     free(m);
 }
 
