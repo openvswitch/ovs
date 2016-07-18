@@ -258,7 +258,7 @@ active monitors.  \fBovsdb\-server\fR rejects attempt to create two
 monitors with the same identifier.
 .
 .IP "4.1.12. Monitor_cond"
-A new monitor method added in Open vSwitch version 2.5. The monitor_cond
+A new monitor method added in Open vSwitch version 2.6. The monitor_cond
 request enables a client to replicate subsets of tables within an OVSDB
 database by requesting notifications of changes to rows matching one of
 the conditions specified in "where" by receiving the specified contents
@@ -388,6 +388,78 @@ the table that matches conditions in both old and new version is modified.
 Both monitor and monitor_cond sessions can exist concurrently. However,
 monitor and monitor_cond shares the same <json-value> parameter space; it
 must be unique among all monitor and monitor_cond sessions.
+.
+.IP "4.1.13. Monitor_cond_change"
+The "monitor_cond_change" request enables a client to change an existing
+"monitor_cond" replication of the database by specifying a new condition
+and columns for each replicated table. Currently changing the columns set
+is not supported.
+.
+.IP
+The request object has the following members:
+.
+.IP
+.RS
+.nf
+"method": "monitor_cond_change"
+"params": [<json-value>, <json-value>, <monitor-cond-update-requests>]
+"id": <nonnull-json-value>
+.fi
+.RE
+.
+.IP
+The <json-value> parameter should have a value of an existing conditional
+monitoring session from this client. The second <json-value> in params array
+is the requested value for this session. This value is valid only after
+"monitor_cond_change" is committed. A user can use these values to distinguish
+between update messages before conditions update and after. The
+<monitor-cond-update-requests> object maps the name of the table to an array of
+<monitor-cond-update-request>.
+.
+.IP
+Each <monitor-cond-update-request> is an object with the following members:
+.
+.IP
+.RS
+.nf
+"columns": [<column>*]         optional
+"where": [<condition>*]        optional
+.fi
+.RE
+.
+.IP
+The "columns" specify a new array of columns to be monitored
+(Currently unsupported).
+.
+.IP
+The "where" specify a new array of conditions to be applied to this monitoring
+session.
+.
+.IP
+The response object has the following members:
+.
+.IP
+.RS
+.nf
+"result": null
+"error": null
+"id": same "id" as request
+.fi
+.RE
+.IP
+Subsequent <table-updates2> notifications are described in detail in Section
+4.1.14 in the RFC. If insert contents are requested by original monitor_cond
+request, <table-updates2> will contain rows that match the new condition and
+do not match the old condition.
+If deleted contents are requested by origin monitor request, <table-updates2>
+will contain any matched rows by old condition and not matched by the new
+condition.
+.
+.IP
+Changes according to the new conditions are automatically sent to the client
+using the "update2" monitor notification. An update, if any, as a result of a
+condition change, will be sent to the client before the reply to the
+"monitor_cond_change" request.
 .
 .IP "4.1.14. Update2 notification"
 The "update2" notification is sent by the server to the client to report

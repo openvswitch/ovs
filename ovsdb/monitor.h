@@ -56,17 +56,20 @@ void ovsdb_monitor_add_table(struct ovsdb_monitor *m,
                              const struct ovsdb_table *table);
 
 const char * ovsdb_monitor_add_column(struct ovsdb_monitor *dbmon,
-                              const struct ovsdb_table *table,
-                              const struct ovsdb_column *column,
-                              enum ovsdb_monitor_selection select,
-                              bool monitored);
+                                      const struct ovsdb_table *table,
+                                      const struct ovsdb_column *column,
+                                      enum ovsdb_monitor_selection select,
+                                      bool monitored);
+bool
+ovsdb_monitor_table_exists(struct ovsdb_monitor *m,
+                           const struct ovsdb_table *table);
 
-struct json *ovsdb_monitor_get_update(
-               struct ovsdb_monitor *dbmon,
-               bool initial,
-               uint64_t *unflushed_transaction,
-               const struct ovsdb_monitor_session_condition *condition,
-               enum ovsdb_monitor_version version);
+struct json *ovsdb_monitor_get_update(struct ovsdb_monitor *dbmon,
+                                      bool initial,
+                                      bool cond_updated,
+                                      uint64_t *unflushed_transaction,
+                                      struct ovsdb_monitor_session_condition *condition,
+                                      enum ovsdb_monitor_version version);
 
 void ovsdb_monitor_table_add_select(struct ovsdb_monitor *dbmon,
                                     const struct ovsdb_table *table,
@@ -94,5 +97,12 @@ ovsdb_monitor_table_condition_create(
 void
 ovsdb_monitor_condition_bind(struct ovsdb_monitor *dbmon,
                              struct ovsdb_monitor_session_condition *cond);
+
+struct ovsdb_error *
+ovsdb_monitor_table_condition_update(
+                           struct ovsdb_monitor *dbmon,
+                           struct ovsdb_monitor_session_condition *condition,
+                           const struct ovsdb_table *table,
+                           const struct json *cond_json);
 
 #endif
