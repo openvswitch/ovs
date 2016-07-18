@@ -34,7 +34,8 @@ ovsdb_query(struct ovsdb_table *table, const struct ovsdb_condition *cnd,
         const struct ovsdb_row *row;
 
         row = ovsdb_table_get_row(table, &cnd->clauses[0].arg.keys[0].uuid);
-        if (row && row->table == table && ovsdb_condition_evaluate(row, cnd)) {
+        if (row && row->table == table &&
+            ovsdb_condition_match_every_clause(row, cnd)) {
             output_row(row, aux);
         }
     } else {
@@ -42,7 +43,8 @@ ovsdb_query(struct ovsdb_table *table, const struct ovsdb_condition *cnd,
         const struct ovsdb_row *row, *next;
 
         HMAP_FOR_EACH_SAFE (row, next, hmap_node, &table->rows) {
-            if (ovsdb_condition_evaluate(row, cnd) && !output_row(row, aux)) {
+            if (ovsdb_condition_match_every_clause(row, cnd) &&
+                !output_row(row, aux)) {
                 break;
             }
         }

@@ -350,6 +350,12 @@ of 0 or 1 integer'' and ``set of 0 or 1 real''.  These conditions
 evaluate to false when the column is empty, and otherwise as described
 in RFC 7047 for integer and real types.
 .
+.IP
+<condition> is specified in Section 5.1 in the RFC with the following change:
+A condition can be either a 3-element JSON array as described in the RFC or a
+boolean value. In case of an empty array an implicit true boolean value will be
+considered.
+.
 .SH "BUGS"
 .
 In Open vSwitch before version 2.4, when \fBovsdb\-server\fR sent
