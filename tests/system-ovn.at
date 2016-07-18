@@ -399,3 +399,106 @@ OVS_APP_EXIT_AND_WAIT([ovn-northd])
 as
 OVS_TRAFFIC_VSWITCHD_STOP(["/failed to query port patch-.*/d"])
 AT_CLEANUP
+
+AT_SETUP([ovn -- load-balancing - same subnet.])
+AT_KEYWORDS([ovnlb])
+
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
+ovn_start
+OVS_TRAFFIC_VSWITCHD_START()
+ADD_BR([br-int])
+
+# Set external-ids in br-int needed for ovn-controller
+ovs-vsctl \
+        -- set Open_vSwitch . external-ids:system-id=hv1 \
+        -- set Open_vSwitch . external-ids:ovn-remote=unix:$ovs_base/ovn-sb/ovn-sb.sock \
+        -- set Open_vSwitch . external-ids:ovn-encap-type=geneve \
+        -- set Open_vSwitch . external-ids:ovn-encap-ip=169.0.0.1 \
+        -- set bridge br-int fail-mode=secure other-config:disable-in-band=true
+
+# Start ovn-controller
+start_daemon ovn-controller
+
+# Logical network:
+# 1 logical switch "foo" (192.168.1.0/24) connected to router R1.
+# foo has foo1, foo2, foo3, foo4 as logical ports.
+#
+# Loadbalancer VIPs in 30.0.0.0/24 network. Router is needed for default
+# gateway. We will test load-balancing with foo1 as a client and foo2, foo3 and
+# foo4 as servers.
+
+ovn-nbctl create Logical_Router name=R1
+ovn-nbctl ls-add foo
+
+# Connect foo to R1
+ovn-nbctl lrp-add R1 foo 00:00:01:01:02:03 192.168.1.1/24
+ovn-nbctl lsp-add foo rp-foo -- set Logical_Switch_Port rp-foo \
+    type=router options:router-port=foo addresses=\"00:00:01:01:02:03\"
+
+# Create logical port 'foo1', 'foo2', 'foo3' and 'foo4' in switch 'foo'.
+ADD_NAMESPACES(foo1, foo2, foo3, foo4)
+for i in `seq 1 4`; do
+    j=`expr $i + 1`
+    ADD_VETH(foo$i, foo$i, br-int, "192.168.1.$j/24", "f0:00:00:01:02:0$j", \
+             "192.168.1.1")
+    ovn-nbctl lsp-add foo foo$i \
+        -- lsp-set-addresses foo$i "f0:00:00:01:02:0$j 192.168.1.$j"
+done
+
+# Config OVN load-balancer with a VIP.
+uuid=`ovn-nbctl  create load_balancer vips:30.0.0.1="192.168.1.3,192.168.1.4,192.168.1.5"`
+ovn-nbctl set logical_switch foo load_balancer=$uuid
+
+# Config OVN load-balancer with another VIP (this time with ports).
+ovn-nbctl set load_balancer $uuid vips:'"30.0.0.2:8000"'='"192.168.1.3:80,192.168.1.4:80,192.168.1.5:80"'
+
+# Wait for ovn-controller to catch up.
+OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | grep ct\(])
+
+# Start webservers in 'foo2', 'foo3' and 'foo4'.
+NETNS_DAEMONIZE([foo2], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
+NETNS_DAEMONIZE([foo3], [[$PYTHON $srcdir/test-l7.py]], [http2.pid])
+NETNS_DAEMONIZE([foo4], [[$PYTHON $srcdir/test-l7.py]], [http3.pid])
+
+dnl Should work with the virtual IP address through NAT
+for i in `seq 1 20`; do
+    echo Request $i
+    NS_CHECK_EXEC([foo1], [wget 30.0.0.1 -t 5 -T 1 --retry-connrefused -v -o wget$i.log])
+done
+
+dnl Each server should have at least one connection.
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(30.0.0.1)], [0], [dnl
+tcp,orig=(src=192.168.1.2,dst=30.0.0.1,sport=<cleared>,dport=<cleared>),reply=(src=192.168.1.3,dst=192.168.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+tcp,orig=(src=192.168.1.2,dst=30.0.0.1,sport=<cleared>,dport=<cleared>),reply=(src=192.168.1.4,dst=192.168.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+tcp,orig=(src=192.168.1.2,dst=30.0.0.1,sport=<cleared>,dport=<cleared>),reply=(src=192.168.1.5,dst=192.168.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+])
+
+dnl Test load-balancing that includes L4 ports in NAT.
+for i in `seq 1 20`; do
+    echo Request $i
+    NS_CHECK_EXEC([foo1], [wget 30.0.0.2:8000 -t 5 -T 1 --retry-connrefused -v -o wget$i.log])
+done
+
+dnl Each server should have at least one connection.
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(30.0.0.2)], [0], [dnl
+tcp,orig=(src=192.168.1.2,dst=30.0.0.2,sport=<cleared>,dport=<cleared>),reply=(src=192.168.1.3,dst=192.168.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+tcp,orig=(src=192.168.1.2,dst=30.0.0.2,sport=<cleared>,dport=<cleared>),reply=(src=192.168.1.4,dst=192.168.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+tcp,orig=(src=192.168.1.2,dst=30.0.0.2,sport=<cleared>,dport=<cleared>),reply=(src=192.168.1.5,dst=192.168.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+])
+
+
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as
+OVS_TRAFFIC_VSWITCHD_STOP(["/failed to query port patch-.*/d"])
+AT_CLEANUP
