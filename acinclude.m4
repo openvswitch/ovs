@@ -576,7 +576,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genl_has_listeners])
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [mcgrp_offset])
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [parallel_ops])
-  OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genlmsg_new_unicast])
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [netlink_has_listeners(net->genl_sock],
                   [OVS_DEFINE([HAVE_GENL_HAS_LISTENERS_TAKES_NET])])
   OVS_GREP_IFELSE([$KSRC/include/net/genetlink.h], [genlmsg_parse])
