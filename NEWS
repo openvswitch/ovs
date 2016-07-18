@@ -79,6 +79,7 @@ Post-v2.5.0
      * Dropped support for kernel older than 3.10.
      * Removed VLAN splinters feature.
      * Support for truncate action.
+     * Datapath supports kernel upto 4.6.
    - Tunnels:
      * Flow based tunnel match and action can be used for IPv6 address using
        tun_ipv6_src, tun_ipv6_dst fields.
