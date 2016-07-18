@@ -87,6 +87,7 @@ enum ovsdb_idl_state {
 struct ovsdb_idl {
     const struct ovsdb_idl_class *class;
     struct jsonrpc_session *session;
+    struct uuid uuid;
     struct shash table_by_name;
     struct ovsdb_idl_table *tables; /* Contains "struct ovsdb_idl_table *"s.*/
     unsigned int change_seqno;
@@ -275,6 +276,7 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
     idl->schema = NULL;
 
     hmap_init(&idl->outstanding_txns);
+    uuid_generate(&idl->uuid);
 
     return idl;
 }
@@ -399,7 +401,7 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
             && !strcmp(msg->method, "update2")
             && msg->params->type == JSON_ARRAY
             && msg->params->u.array.n == 2
-            && msg->params->u.array.elems[0]->type == JSON_NULL) {
+            && msg->params->u.array.elems[0]->type == JSON_STRING) {
             /* Database contents changed. */
             ovsdb_idl_parse_update(idl, msg->params->u.array.elems[1],
                                    OVSDB_UPDATE2);
@@ -443,10 +445,10 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
                 OVS_NOT_REACHED();
             }
         } else if (msg->type == JSONRPC_NOTIFY
-            && !strcmp(msg->method, "update")
-            && msg->params->type == JSON_ARRAY
-            && msg->params->u.array.n == 2
-            && msg->params->u.array.elems[0]->type == JSON_NULL) {
+                   && !strcmp(msg->method, "update")
+                   && msg->params->type == JSON_ARRAY
+                   && msg->params->u.array.n == 2
+                   && msg->params->u.array.elems[0]->type == JSON_STRING) {
             /* Database contents changed. */
             ovsdb_idl_parse_update(idl, msg->params->u.array.elems[1],
                                    OVSDB_UPDATE);
@@ -989,6 +991,7 @@ ovsdb_idl_send_monitor_request__(struct ovsdb_idl *idl,
     struct shash *schema;
     struct json *monitor_requests;
     struct jsonrpc_msg *msg;
+    char uuid[UUID_LEN + 1];
     size_t i;
 
     schema = parse_schema(idl->schema);
@@ -1040,10 +1043,12 @@ ovsdb_idl_send_monitor_request__(struct ovsdb_idl *idl,
     free_schema(schema);
 
     json_destroy(idl->request_id);
+
+    snprintf(uuid, sizeof uuid, UUID_FMT, UUID_ARGS(&idl->uuid));
     msg = jsonrpc_create_request(
         method,
         json_array_create_3(json_string_create(idl->class->database),
-                            json_null_create(), monitor_requests),
+                            json_string_create(uuid), monitor_requests),
         &idl->request_id);
     jsonrpc_session_send(idl->session, msg);
 }
