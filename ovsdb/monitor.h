@@ -56,7 +56,7 @@ const char * ovsdb_monitor_add_column(struct ovsdb_monitor *dbmon,
                               const struct ovsdb_table *table,
                               const struct ovsdb_column *column,
                               enum ovsdb_monitor_selection select,
-                              size_t *allocated_columns);
+                              bool monitored);
 
 struct json *ovsdb_monitor_get_update(struct ovsdb_monitor *dbmon,
                                       bool initial,

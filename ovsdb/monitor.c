@@ -75,6 +75,7 @@ struct jsonrpc_monitor_node {
 struct ovsdb_monitor_column {
     const struct ovsdb_column *column;
     enum ovsdb_monitor_selection select;
+    bool monitored;
 };
 
 /* A row that has changed in a monitored table. */
@@ -115,6 +116,8 @@ struct ovsdb_monitor_table {
     /* Columns being monitored. */
     struct ovsdb_monitor_column *columns;
     size_t n_columns;
+    size_t n_monitored_columns;
+    size_t allocated_columns;
 
     /* Columns in ovsdb_monitor_row have different indexes then in
      * ovsdb_row. This field maps between column->index to the index in the
@@ -201,6 +204,11 @@ compare_ovsdb_monitor_column(const void *a_, const void *b_)
 {
     const struct ovsdb_monitor_column *a = a_;
     const struct ovsdb_monitor_column *b = b_;
+
+    /* put all monitored columns at the begining */
+    if (a->monitored != b->monitored) {
+        return a->monitored ? -1 : 1;
+    }
 
     return a->column < b->column ? -1 : a->column > b->column;
 }
@@ -383,7 +391,7 @@ ovsdb_monitor_add_column(struct ovsdb_monitor *dbmon,
                          const struct ovsdb_table *table,
                          const struct ovsdb_column *column,
                          enum ovsdb_monitor_selection select,
-                         size_t *allocated_columns)
+                         bool monitored)
 {
     struct ovsdb_monitor_table *mt;
     struct ovsdb_monitor_column *c;
@@ -395,8 +403,8 @@ ovsdb_monitor_add_column(struct ovsdb_monitor *dbmon,
         return column->name;
     }
 
-    if (mt->n_columns >= *allocated_columns) {
-        mt->columns = x2nrealloc(mt->columns, allocated_columns,
+    if (mt->n_columns >= mt->allocated_columns) {
+        mt->columns = x2nrealloc(mt->columns, &mt->allocated_columns,
                                  sizeof *mt->columns);
     }
 
@@ -405,6 +413,10 @@ ovsdb_monitor_add_column(struct ovsdb_monitor *dbmon,
     c = &mt->columns[mt->n_columns++];
     c->column = column;
     c->select = select;
+    c->monitored = monitored;
+    if (monitored) {
+        mt->n_monitored_columns++;
+    }
 
     return NULL;
 }
@@ -561,10 +573,10 @@ ovsdb_monitor_compose_row_update(
         new_json = json_object_create();
         json_object_put(row_json, "new", new_json);
     }
-    for (i = 0; i < mt->n_columns; i++) {
+    for (i = 0; i < mt->n_monitored_columns; i++) {
         const struct ovsdb_monitor_column *c = &mt->columns[i];
 
-        if (!(type & c->select)) {
+        if (!c->monitored || !(type & c->select))  {
             /* We don't care about this type of change for this
              * particular column (but we will care about it for some
              * other column). */
@@ -618,10 +630,10 @@ ovsdb_monitor_compose_row_update2(
         diff_json = json_object_create();
         const char *op;
 
-        for (i = 0; i < mt->n_columns; i++) {
+        for (i = 0; i < mt->n_monitored_columns; i++) {
             const struct ovsdb_monitor_column *c = &mt->columns[i];
 
-            if (!(type & c->select)) {
+            if (!c->monitored || !(type & c->select))  {
                 /* We don't care about this type of change for this
                  * particular column (but we will care about it for some
                  * other column). */
@@ -1011,19 +1023,21 @@ ovsdb_monitor_table_equal(const struct ovsdb_monitor_table *a,
 {
     size_t i;
 
+    ovs_assert(b->n_columns == b->n_monitored_columns);
+
     if ((a->table != b->table) ||
         (a->select != b->select) ||
-        (a->n_columns != b->n_columns)) {
+        (a->n_monitored_columns != b->n_monitored_columns)) {
         return false;
     }
 
-    for (i = 0; i < a->n_columns; i++) {
+    /* Compare only monitored columns that must be sorted already */
+    for (i = 0; i < a->n_monitored_columns; i++) {
         if ((a->columns[i].column != b->columns[i].column) ||
             (a->columns[i].select != b->columns[i].select)) {
             return false;
         }
     }
-
     return true;
 }
 
