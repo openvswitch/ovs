@@ -55,6 +55,7 @@ m4_define([CHECK_CONNTRACK],
                 [modprobe mod || echo "Module mod not loaded."
                  on_exit 'modprobe -r mod'
                 ])
+     sysctl -w net.netfilter.nf_conntrack_helper=0
      on_exit 'ovstest test-netlink-conntrack flush'
     ]
 )
