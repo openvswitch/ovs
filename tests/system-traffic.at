@@ -1458,7 +1458,6 @@ AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 dnl Passive FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0-2.log])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
 ])
 
@@ -1539,13 +1538,14 @@ table=0,priority=10,arp,action=normal
 table=0,priority=10,icmp,action=normal
 
 dnl Traffic from ns1
-table=0,priority=100,in_port=1,tcp,action=ct(table=1,zone=1,alg=ftp)
-table=1,in_port=1,tcp,ct_zone=1,ct_state=+trk+new,action=ct(commit,alg=ftp,zone=1),ct(commit,alg=ftp,zone=2),2
+table=0,priority=100,in_port=1,tcp,action=ct(table=1,zone=1)
+table=1,in_port=1,tcp,ct_zone=1,ct_state=+trk+new-rel,action=ct(commit,alg=ftp,zone=1),ct(commit,alg=ftp,zone=2),2
+table=1,in_port=1,tcp,ct_zone=1,ct_state=+trk+new+rel,action=ct(commit,zone=1),ct(commit,zone=2),2
 table=1,in_port=1,tcp,ct_zone=1,ct_state=+trk+est,action=ct(table=2,zone=2)
 table=2,in_port=1,tcp,ct_zone=2,ct_state=+trk+est,action=2
 
 dnl Traffic from ns2
-table=0,priority=100,in_port=2,tcp,action=ct(table=1,alg=ftp,zone=2)
+table=0,priority=100,in_port=2,tcp,action=ct(table=1,zone=2)
 table=1,in_port=2,tcp,ct_zone=2,ct_state=+trk+rel,action=ct(commit,zone=2),ct(commit,zone=1),1
 table=1,in_port=2,tcp,ct_zone=2,ct_state=+trk+est,action=ct(table=2,zone=1)
 table=2,in_port=2,tcp,ct_zone=1,ct_state=+trk+rel,action=ct(commit,zone=2),ct(commit,zone=1),1
