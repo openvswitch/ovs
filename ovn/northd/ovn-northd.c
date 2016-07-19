@@ -2741,21 +2741,16 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
              *
              * The packet is still in peer's logical pipeline. So the match
              * should be on peer's outport. */
-            if (op->nbrp->peer) {
-                struct ovn_port *peer = ovn_port_find(ports, op->nbrp->peer);
-                if (!peer) {
-                    continue;
-                }
-
+            if (op->peer && op->peer->nbrp) {
                 ds_clear(&match);
                 ds_put_format(&match, "outport == %s && reg0 == ",
-                              peer->json_key);
+                              op->peer->json_key);
                 op_put_networks(&match, op, false);
 
                 ds_clear(&actions);
                 ds_put_format(&actions, "eth.dst = %s; next;",
                               op->lrp_networks.ea_s);
-                ovn_lflow_add(lflows, peer->od, S_ROUTER_IN_ARP_RESOLVE,
+                ovn_lflow_add(lflows, op->peer->od, S_ROUTER_IN_ARP_RESOLVE,
                               100, ds_cstr(&match), ds_cstr(&actions));
             }
         } else if (op->od->n_router_ports && strcmp(op->nbsp->type, "router")) {
