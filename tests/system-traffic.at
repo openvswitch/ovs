@@ -924,8 +924,8 @@ priority=100,in_port=LOCAL,ip,ct_state=-trk,action=drop
 priority=100,in_port=LOCAL,ip,ct_state=+trk+new,action=ct(commit,zone=1),ct(commit,zone=2),1
 priority=100,in_port=LOCAL,ip,ct_state=+trk+est,action=ct(commit,zone=1),ct(commit,zone=2),1
 priority=100,in_port=1,ip,ct_state=-trk,action=ct(table=1,zone=1)
-table=1,priority=100,in_port=1,ip,ct_state=+trk+est,ct_zone=1,action=ct(table=2,zone=2)
-table=2,priority=100,in_port=1,ip,ct_state=+trk+est,ct_zone=2,action=LOCAL
+table=1,in_port=1,ip,ct_state=+trk+est,ct_zone=1,action=ct(table=2,zone=2)
+table=2,in_port=1,ip,ct_state=+trk+est,ct_zone=2,action=LOCAL
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
@@ -1124,9 +1124,9 @@ table=0,priority=10,arp,action=normal
 table=0,priority=10,icmp,action=normal
 table=0,priority=100,in_port=1,tcp,action=ct(table=1)
 table=0,priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=1,commit,exec(set_field:0x2/0x6->ct_mark))
-table=1,priority=100,in_port=1,ct_state=+new,tcp,action=ct(commit,exec(set_field:0x5/0x5->ct_mark)),2
-table=1,priority=100,in_port=1,ct_state=-new,tcp,action=2
-table=1,priority=100,in_port=2,ct_state=+trk,ct_mark=3,tcp,action=1
+table=1,in_port=1,ct_state=+new,tcp,action=ct(commit,exec(set_field:0x5/0x5->ct_mark)),2
+table=1,in_port=1,ct_state=-new,tcp,action=2
+table=1,in_port=2,ct_state=+trk,ct_mark=3,tcp,action=1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
@@ -1244,9 +1244,9 @@ table=0,priority=10,arp,action=normal
 table=0,priority=10,icmp,action=normal
 table=0,priority=100,in_port=1,tcp,action=ct(table=1)
 table=0,priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=1,commit,exec(set_field:0x200000000/0x200000004->ct_label))
-table=1,priority=100,in_port=1,tcp,ct_state=+new,action=ct(commit,exec(set_field:0x5/0x5->ct_label)),2
-table=1,priority=100,in_port=1,tcp,ct_state=-new,action=2
-table=1,priority=100,in_port=2,ct_state=+trk,ct_label=0x200000001,tcp,action=1
+table=1,in_port=1,tcp,ct_state=+new,action=ct(commit,exec(set_field:0x5/0x5->ct_label)),2
+table=1,in_port=1,tcp,ct_state=-new,action=2
+table=1,in_port=2,ct_state=+trk,ct_label=0x200000001,tcp,action=1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
@@ -1281,9 +1281,9 @@ table=0,priority=10,arp,action=normal
 table=0,priority=10,icmp,action=normal
 table=0,priority=100,in_port=1,tcp,action=ct(zone=1,table=1)
 table=0,priority=100,in_port=2,ct_state=-trk,tcp,action=ct(zone=1,table=1,commit,exec(set_field:0x200000000/0x200000004->ct_label,set_field:0x2/0x6->ct_mark))
-table=1,priority=100,in_port=1,tcp,ct_state=+new,action=ct(zone=1,commit,exec(set_field:0x5/0x5->ct_label,set_field:0x5/0x5->ct_mark)),ct(commit,zone=2),2
-table=1,priority=100,in_port=1,tcp,ct_state=-new,action=ct(zone=2),2
-table=1,priority=100,in_port=2,tcp,action=ct(zone=2),1
+table=1,in_port=1,tcp,ct_state=+new,action=ct(zone=1,commit,exec(set_field:0x5/0x5->ct_label,set_field:0x5/0x5->ct_mark)),ct(commit,zone=2),2
+table=1,in_port=1,tcp,ct_state=-new,action=ct(zone=2),2
+table=1,in_port=2,tcp,action=ct(zone=2),1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
@@ -1821,7 +1821,7 @@ priority=1,action=drop
 priority=10,arp,action=normal
 priority=100,in_port=1,icmp,action=ct(commit,zone=9),LOCAL
 priority=100,in_port=LOCAL,icmp,action=ct(table=1,zone=9)
-table=1,priority=100,in_port=LOCAL,ct_state=+trk+est,icmp,action=1
+table=1,in_port=LOCAL,ct_state=+trk+est,icmp,action=1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
@@ -1871,7 +1871,7 @@ AT_DATA([flows.txt], [dnl
 priority=1,action=drop
 priority=100,in_port=1,ipv6,action=ct(commit,zone=9),LOCAL
 priority=100,in_port=LOCAL,ipv6,action=ct(table=1,zone=9)
-table=1,priority=100,in_port=LOCAL,ct_state=+trk+est,ipv6,action=1
+table=1,in_port=LOCAL,ct_state=+trk+est,ipv6,action=1
 
 dnl Neighbour Discovery
 priority=1000,icmp6,icmp_type=135,action=normal
@@ -1930,8 +1930,8 @@ AT_DATA([flows.txt], [dnl
 table=0,priority=150,arp,action=normal
 table=0,priority=100,ip,in_port=1,action=resubmit(,1),resubmit(,2)
 
-table=1,priority=100,ip,action=ct(table=3)
-table=2,priority=100,ip,action=ct(table=3)
+table=1,ip,action=ct(table=3)
+table=2,ip,action=ct(table=3)
 
 table=3,ip,action=drop
 ])
@@ -1945,8 +1945,8 @@ NS_CHECK_EXEC([at_ns0], [ping -q -c 1 10.1.1.2 | FORMAT_PING], [0], [dnl
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=1, n_bytes=98, priority=100,ip,in_port=1 actions=resubmit(,1),resubmit(,2)
  n_packets=2, n_bytes=84, priority=150,arp actions=NORMAL
- table=1, n_packets=1, n_bytes=98, priority=100,ip actions=ct(table=3)
- table=2, n_packets=1, n_bytes=98, priority=100,ip actions=ct(table=3)
+ table=1, n_packets=1, n_bytes=98, ip actions=ct(table=3)
+ table=2, n_packets=1, n_bytes=98, ip actions=ct(table=3)
  table=3, n_packets=2, n_bytes=196, ip actions=drop
 NXST_FLOW reply:
 ])
