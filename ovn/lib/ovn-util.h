@@ -26,9 +26,9 @@ struct ipv4_netaddr {
     ovs_be32 network;         /* 192.168.10.0 */
     unsigned int plen;        /* CIDR Prefix: 24. */
 
-    char *addr_s;             /* "192.168.10.123" */
-    char *network_s;          /* "192.168.10.0" */
-    char *bcast_s;            /* "192.168.10.255" */
+    char addr_s[INET_ADDRSTRLEN + 1];     /* "192.168.10.123" */
+    char network_s[INET_ADDRSTRLEN + 1];  /* "192.168.10.0" */
+    char bcast_s[INET_ADDRSTRLEN + 1];    /* "192.168.10.255" */
 };
 
 struct ipv6_netaddr {
@@ -38,13 +38,13 @@ struct ipv6_netaddr {
     struct in6_addr network;  /* fc00:: */
     unsigned int plen;        /* CIDR Prefix: 64 */
 
-    char *addr_s;             /* "fc00::1" */
-    char *sn_addr_s;          /* "ff02:1:ff00::1" */
-    char *network_s;          /* "fc00::" */
+    char addr_s[INET6_ADDRSTRLEN + 1];    /* "fc00::1" */
+    char sn_addr_s[INET6_ADDRSTRLEN + 1]; /* "ff02:1:ff00::1" */
+    char network_s[INET6_ADDRSTRLEN + 1]; /* "fc00::" */
 };
 
 struct lport_addresses {
-    char *ea_s;
+    char ea_s[ETH_ADDR_STRLEN + 1];
     struct eth_addr ea;
     size_t n_ipv4_addrs;
     struct ipv4_netaddr *ipv4_addrs;

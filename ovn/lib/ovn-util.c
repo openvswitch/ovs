@@ -34,9 +34,10 @@ add_ipv4_netaddr(struct lport_addresses *laddrs, ovs_be32 addr,
     na->network = addr & na->mask;
     na->plen = plen;
 
-    na->addr_s = xasprintf(IP_FMT, IP_ARGS(addr));
-    na->network_s = xasprintf(IP_FMT, IP_ARGS(na->network));
-    na->bcast_s = xasprintf(IP_FMT, IP_ARGS(addr | ~na->mask));
+    ovs_be32 bcast = addr | ~na->mask;
+    inet_ntop(AF_INET, &addr, na->addr_s, sizeof na->addr_s);
+    inet_ntop(AF_INET, &na->network, na->network_s, sizeof na->network_s);
+    inet_ntop(AF_INET, &bcast, na->bcast_s, sizeof na->bcast_s);
 }
 
 static void
@@ -55,12 +56,9 @@ add_ipv6_netaddr(struct lport_addresses *laddrs, struct in6_addr addr,
     na->plen = plen;
     in6_addr_solicited_node(&na->sn_addr, &addr);
 
-    na->addr_s = xmalloc(INET6_ADDRSTRLEN);
-    inet_ntop(AF_INET6, &addr, na->addr_s, INET6_ADDRSTRLEN);
-    na->sn_addr_s = xmalloc(INET6_ADDRSTRLEN);
-    inet_ntop(AF_INET6, &na->sn_addr, na->sn_addr_s, INET6_ADDRSTRLEN);
-    na->network_s = xmalloc(INET6_ADDRSTRLEN);
-    inet_ntop(AF_INET6, &na->network, na->network_s, INET6_ADDRSTRLEN);
+    inet_ntop(AF_INET6, &addr, na->addr_s, sizeof na->addr_s);
+    inet_ntop(AF_INET6, &na->sn_addr, na->sn_addr_s, sizeof na->sn_addr_s);
+    inet_ntop(AF_INET6, &na->network, na->network_s, sizeof na->network_s);
 }
 
 /* Extracts the mac, IPv4 and IPv6 addresses from * 'address' which
@@ -85,7 +83,8 @@ extract_lsp_addresses(char *address, struct lport_addresses *laddrs)
         return false;
     }
 
-    laddrs->ea_s = xasprintf(ETH_ADDR_FMT, ETH_ADDR_ARGS(laddrs->ea));
+    snprintf(laddrs->ea_s, sizeof laddrs->ea_s, ETH_ADDR_FMT,
+             ETH_ADDR_ARGS(laddrs->ea));
 
     ovs_be32 ip4;
     struct in6_addr ip6;
@@ -138,7 +137,8 @@ extract_lrp_networks(const struct nbrec_logical_router_port *lrp,
         laddrs->ea = eth_addr_zero;
         return false;
     }
-    laddrs->ea_s = xasprintf(ETH_ADDR_FMT, ETH_ADDR_ARGS(laddrs->ea));
+    snprintf(laddrs->ea_s, sizeof laddrs->ea_s, ETH_ADDR_FMT,
+             ETH_ADDR_ARGS(laddrs->ea));
 
     for (int i = 0; i < lrp->n_networks; i++) {
         ovs_be32 ip4;
@@ -181,20 +181,7 @@ extract_lrp_networks(const struct nbrec_logical_router_port *lrp,
 void
 destroy_lport_addresses(struct lport_addresses *laddrs)
 {
-    free(laddrs->ea_s);
-
-    for (int i = 0; i < laddrs->n_ipv4_addrs; i++) {
-        free(laddrs->ipv4_addrs[i].addr_s);
-        free(laddrs->ipv4_addrs[i].network_s);
-        free(laddrs->ipv4_addrs[i].bcast_s);
-    }
     free(laddrs->ipv4_addrs);
-
-    for (int i = 0; i < laddrs->n_ipv6_addrs; i++) {
-        free(laddrs->ipv6_addrs[i].addr_s);
-        free(laddrs->ipv6_addrs[i].sn_addr_s);
-        free(laddrs->ipv6_addrs[i].network_s);
-    }
     free(laddrs->ipv6_addrs);
 }
 
