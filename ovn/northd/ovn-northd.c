@@ -517,6 +517,12 @@ struct ovn_port {
 
     struct lport_addresses lrp_networks;
 
+    /* The port's peer:
+     *
+     *     - A switch port S of type "router" has a router port R as a peer,
+     *       and R in turn has S has its peer.
+     *
+     *     - Two connected logical router ports have each other as peer. */
     struct ovn_port *peer;
 
     struct ovn_datapath *od;
@@ -738,7 +744,22 @@ join_logical_ports(struct northd_context *ctx,
                 sizeof *op->od->router_ports * (op->od->n_router_ports + 1));
             op->od->router_ports[op->od->n_router_ports++] = op;
         } else if (op->nbrp && op->nbrp->peer) {
-            op->peer = ovn_port_find(ports, op->nbrp->peer);
+            struct ovn_port *peer = ovn_port_find(ports, op->nbrp->peer);
+            if (peer) {
+                if (peer->nbrp) {
+                    op->peer = peer;
+                } else {
+                    /* An ovn_port for a switch port of type "router" does have
+                     * a router port as its peer (see the case above for
+                     * "router" ports), but this is set via options:router-port
+                     * in Logical_Switch_Port and does not involve the
+                     * Logical_Router_Port's 'peer' column. */
+                    static struct vlog_rate_limit rl =
+                            VLOG_RATE_LIMIT_INIT(5, 1);
+                    VLOG_WARN_RL(&rl, "Bad configuration: The peer of router "
+                                 "port %s is a switch port", op->key);
+                }
+            }
         }
     }
 }
