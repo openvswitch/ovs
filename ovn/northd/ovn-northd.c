@@ -175,6 +175,20 @@ ovn_stage_to_str(enum ovn_stage stage)
         default: return "<unknown>";
     }
 }
+
+/* Returns the type of the datapath to which a flow with the given 'stage' may
+ * be added. */
+static enum ovn_datapath_type
+ovn_stage_to_datapath_type(enum ovn_stage stage)
+{
+    switch (stage) {
+#define PIPELINE_STAGE(DP_TYPE, PIPELINE, STAGE, TABLE, NAME)       \
+        case S_##DP_TYPE##_##PIPELINE##_##STAGE: return DP_##DP_TYPE;
+    PIPELINE_STAGES
+#undef PIPELINE_STAGE
+    default: OVS_NOT_REACHED();
+    }
+}
 
 static void
 usage(void)
@@ -301,6 +315,13 @@ ovn_datapath_destroy(struct hmap *datapaths, struct ovn_datapath *od)
         free(od->router_ports);
         free(od);
     }
+}
+
+/* Returns 'od''s datapath type. */
+static enum ovn_datapath_type
+ovn_datapath_get_type(const struct ovn_datapath *od)
+{
+    return od->nbs ? DP_SWITCH : DP_ROUTER;
 }
 
 static struct ovn_datapath *
@@ -985,6 +1006,8 @@ ovn_lflow_add(struct hmap *lflow_map, struct ovn_datapath *od,
               enum ovn_stage stage, uint16_t priority,
               const char *match, const char *actions)
 {
+    ovs_assert(ovn_stage_to_datapath_type(stage) == ovn_datapath_get_type(od));
+
     struct ovn_lflow *lflow = xmalloc(sizeof *lflow);
     ovn_lflow_init(lflow, od, stage, priority,
                    xstrdup(match), xstrdup(actions));
