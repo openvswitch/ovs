@@ -947,8 +947,7 @@ netdev_dummy_rxq_dealloc(struct netdev_rxq *rxq_)
 }
 
 static int
-netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
-                      int *c)
+netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
 {
     struct netdev_rxq_dummy *rx = netdev_rxq_dummy_cast(rxq_);
     struct netdev_dummy *netdev = netdev_dummy_cast(rx->up.netdev);
@@ -991,8 +990,8 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **arr,
 
     dp_packet_pad(packet);
 
-    arr[0] = packet;
-    *c = 1;
+    batch->packets[0] = packet;
+    batch->count = 1;
     return 0;
 }
 
@@ -1030,17 +1029,17 @@ netdev_dummy_rxq_drain(struct netdev_rxq *rxq_)
 
 static int
 netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
-                  struct dp_packet **pkts, int cnt, bool may_steal)
+                  struct dp_packet_batch *batch, bool may_steal)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
     int error = 0;
     int i;
 
-    for (i = 0; i < cnt; i++) {
-        const void *buffer = dp_packet_data(pkts[i]);
-        size_t size = dp_packet_size(pkts[i]);
+    for (i = 0; i < batch->count; i++) {
+        const void *buffer = dp_packet_data(batch->packets[i]);
+        size_t size = dp_packet_size(batch->packets[i]);
 
-        size -= dp_packet_get_cutlen(pkts[i]);
+        size -= dp_packet_get_cutlen(batch->packets[i]);
 
         if (size < ETH_HEADER_LEN) {
             error = EMSGSIZE;
@@ -1096,11 +1095,7 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
         ovs_mutex_unlock(&dev->mutex);
     }
 
-    if (may_steal) {
-        for (i = 0; i < cnt; i++) {
-            dp_packet_delete(pkts[i]);
-        }
-    }
+    dp_packet_delete_batch(batch, may_steal);
 
     return error;
 }

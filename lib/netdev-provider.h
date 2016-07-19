@@ -340,8 +340,8 @@ struct netdev_class {
      * network device from being usefully used by the netdev-based "userspace
      * datapath".  It will also prevent the OVS implementation of bonding from
      * working properly over 'netdev'.) */
-    int (*send)(struct netdev *netdev, int qid, struct dp_packet **buffers,
-                int cnt, bool may_steal);
+    int (*send)(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
+                bool may_steal);
 
     /* Registers with the poll loop to wake up from the next call to
      * poll_block() when the packet transmission queue for 'netdev' has
@@ -727,25 +727,24 @@ struct netdev_class {
     void (*rxq_destruct)(struct netdev_rxq *);
     void (*rxq_dealloc)(struct netdev_rxq *);
 
-    /* Attempts to receive a batch of packets from 'rx'.  The caller supplies
-     * 'pkts' as the pointer to the beginning of an array of MAX_RX_BATCH
-     * pointers to dp_packet.  If successful, the implementation stores
-     * pointers to up to MAX_RX_BATCH dp_packets into the array, transferring
-     * ownership of the packets to the caller, stores the number of received
-     * packets into '*cnt', and returns 0.
+    /* Attempts to receive a batch of packets from 'rx'.  In 'batch', the
+     * caller supplies 'packets' as the pointer to the beginning of an array
+     * of MAX_RX_BATCH pointers to dp_packet.  If successful, the
+     * implementation stores pointers to up to MAX_RX_BATCH dp_packets into
+     * the array, transferring ownership of the packets to the caller, stores
+     * the number of received packets into 'count', and returns 0.
      *
      * The implementation does not necessarily initialize any non-data members
-     * of 'pkts'.  That is, the caller must initialize layer pointers and
-     * metadata itself, if desired, e.g. with pkt_metadata_init() and
-     * miniflow_extract().
+     * of 'packets' in 'batch'.  That is, the caller must initialize layer
+     * pointers and metadata itself, if desired, e.g. with pkt_metadata_init()
+     * and miniflow_extract().
      *
      * Implementations should allocate buffers with DP_NETDEV_HEADROOM bytes of
      * headroom.
      *
      * Returns EAGAIN immediately if no packet is ready to be received or
      * another positive errno value if an error was encountered. */
-    int (*rxq_recv)(struct netdev_rxq *rx, struct dp_packet **pkts,
-                    int *cnt);
+    int (*rxq_recv)(struct netdev_rxq *rx, struct dp_packet_batch *batch);
 
     /* Registers with the poll loop to wake up from the next call to
      * poll_block() when a packet is ready to be received with
