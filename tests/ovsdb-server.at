@@ -978,7 +978,7 @@ m4_define([OVSDB_CHECK_EXECUTION],
 
 EXECUTION_EXAMPLES
 
-AT_BANNER([OVSDB -- ovsdb-server replication (TCP IPv4 sockets)])
+AT_BANNER([OVSDB -- ovsdb-server replication])
 
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
@@ -998,21 +998,19 @@ m4_define([OVSDB_CHECK_EXECUTION],
    AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
    AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
 
-   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile="`pwd`"/pid --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl db1], [0], [ignore], [ignore])
-   PARSE_LISTENING_PORT([ovsdb-server1.log], [TCP_PORT1])
+   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile="`pwd`"/pid --remote=punix:db.sock --unixctl="`pwd`"/unixctl db1], [0], [ignore], [ignore])
 
-   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile="`pwd`"/pid2 --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl2 --sync-from=tcp:127.0.0.1:$TCP_PORT1 db2], [0], [ignore], [ignore])
-   PARSE_LISTENING_PORT([ovsdb-server2.log], [TCP_PORT2])
+   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile="`pwd`"/pid2 --remote=punix:db2.sock --unixctl="`pwd`"/unixctl2 --sync-from=unix:db.sock db2], [0], [ignore], [ignore])
 
    m4_foreach([txn], [$3],
-     [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT1 'txn'; sleep 2], [0], [stdout], [ignore],
+     [AT_CHECK([ovsdb-client transact 'txn'; sleep 2], [0], [stdout], [ignore],
      [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
    ])
 
-   AT_CHECK([ovsdb-client dump tcp:127.0.0.1:$TCP_PORT1], [0], [stdout], [ignore],
+   AT_CHECK([ovsdb-client dump], [0], [stdout], [ignore],
      [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
    cat stdout >> dump1
-   AT_CHECK([ovsdb-client dump tcp:127.0.0.1:$TCP_PORT2], [0], [stdout], [ignore],
+   AT_CHECK([ovsdb-client dump unix:db2.sock], [0], [stdout], [ignore],
      [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
    cat stdout >> dump2
 
@@ -1024,7 +1022,7 @@ m4_define([OVSDB_CHECK_EXECUTION],
 
 EXECUTION_EXAMPLES
 
-AT_BANNER([OVSDB -- ovsdb-server replication table-exclusion (TCP IPv4 sockets)])
+AT_BANNER([OVSDB -- ovsdb-server replication table-exclusion])
 
 # OVSDB_CHECK_REPLICATION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
@@ -1049,21 +1047,19 @@ m4_define([OVSDB_CHECK_REPLICATION],
    AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
    AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
 
-   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile="`pwd`"/pid --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl db1], [0], [ignore], [ignore])
-   PARSE_LISTENING_PORT([ovsdb-server1.log], [TCP_PORT1])
+   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile="`pwd`"/pid --remote=punix:db.sock --unixctl="`pwd`"/unixctl db1], [0], [ignore], [ignore])
 
-   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile="`pwd`"/pid2 --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl2 --sync-from=tcp:127.0.0.1:$TCP_PORT1 --sync-exclude-tables=mydb:b db2], [0], [ignore], [ignore])
-   PARSE_LISTENING_PORT([ovsdb-server2.log], [TCP_PORT2])
+   AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile="`pwd`"/pid2 --remote=punix:db2.sock --unixctl="`pwd`"/unixctl2 --sync-from=unix:db.sock --sync-exclude-tables=mydb:b db2], [0], [ignore], [ignore])
 
    m4_foreach([txn], [$3],
-     [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT1 'txn'; sleep 2], [0], [stdout], [ignore],
+     [AT_CHECK([ovsdb-client transact 'txn'; sleep 2], [0], [stdout], [ignore],
      [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
    ])
 
-   AT_CHECK([ovsdb-client dump tcp:127.0.0.1:$TCP_PORT1], [0], [stdout], [ignore],
+   AT_CHECK([ovsdb-client dump], [0], [stdout], [ignore],
      [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
    cat stdout >> dump1
-   AT_CHECK([ovsdb-client dump tcp:127.0.0.1:$TCP_PORT2], [0], [stdout], [ignore],
+   AT_CHECK([ovsdb-client dump unix:db2.sock], [0], [stdout], [ignore],
      [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
    cat stdout >> dump2
 
@@ -1130,15 +1126,13 @@ replication_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
 
-AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile="`pwd`"/pid --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl db1], [0], [ignore], [ignore])
-PARSE_LISTENING_PORT([ovsdb-server1.log], [TCP_PORT1])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile="`pwd`"/pid --remote=punix:db.sock --unixctl="`pwd`"/unixctl db1], [0], [ignore], [ignore])
 
-AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile="`pwd`"/pid2 --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl2 --sync-from=tcp:127.0.0.1:$TCP_PORT1	 db2], [0], [ignore], [ignore])
-PARSE_LISTENING_PORT([ovsdb-server2.log], [TCP_PORT2])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile="`pwd`"/pid2 --remote=punix:db2.sock --unixctl="`pwd`"/unixctl2 --sync-from=unix:db.sock db2], [0], [ignore], [ignore])
 
 AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/set-sync-excluded-tables mydb:b], [0], [ignore], [ignore], [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
-AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT1 \
+AT_CHECK([ovsdb-client transact unix:db.sock \
  '[["mydb",
     {"op": "insert",
       "table": "a",
@@ -1149,10 +1143,10 @@ AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT1 \
  [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 sleep 2
 
-AT_CHECK([ovsdb-client dump tcp:127.0.0.1:$TCP_PORT1], [0], [stdout], [ignore],
+AT_CHECK([ovsdb-client dump unix:db.sock], [0], [stdout], [ignore],
  [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 cat stdout >> dump1
-AT_CHECK([ovsdb-client dump tcp:127.0.0.1:$TCP_PORT2], [0], [stdout], [ignore],
+AT_CHECK([ovsdb-client dump unix:db2.sock], [0], [stdout], [ignore],
  [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 cat stdout >> dump2
 
@@ -1180,18 +1174,16 @@ replication_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
 
-AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile="`pwd`"/pid --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl db1], [0], [ignore], [ignore])
-PARSE_LISTENING_PORT([ovsdb-server1.log], [TCP_PORT1])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile="`pwd`"/pid --remote=punix:db.sock --unixctl="`pwd`"/unixctl db1], [0], [ignore], [ignore])
 
-AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile="`pwd`"/pid2 --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl2 db2], [0], [ignore], [ignore])
-PARSE_LISTENING_PORT([ovsdb-server2.log], [TCP_PORT2])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile="`pwd`"/pid2 --remote=punix:db2.sock --unixctl="`pwd`"/unixctl2 db2], [0], [ignore], [ignore])
 
-AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/set-remote-ovsdb-server tcp:127.0.0.1:$TCP_PORT1], [0], [ignore], [ignore], [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
+AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/set-remote-ovsdb-server unix:db.sock], [0], [ignore], [ignore], [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
 AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/connect-remote-ovsdb-server], [0], [ignore], [ignore],
         [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
-AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT1 \
+AT_CHECK([ovsdb-client transact unix:db.sock \
  '[["mydb",
   {"op": "insert",
    "table": "a",
@@ -1200,10 +1192,10 @@ AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT1 \
  [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 sleep 2
 
-AT_CHECK([ovsdb-client dump tcp:127.0.0.1:$TCP_PORT1], [0], [stdout], [ignore],
+AT_CHECK([ovsdb-client dump unix:db.sock], [0], [stdout], [ignore],
  [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 cat stdout >> dump1
-AT_CHECK([ovsdb-client dump tcp:127.0.0.1:$TCP_PORT2], [0], [stdout], [ignore],
+AT_CHECK([ovsdb-client dump unix:db2.sock], [0], [stdout], [ignore],
  [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 cat stdout >> dump2
 
@@ -1219,36 +1211,34 @@ replication_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
 
-AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile="`pwd`"/pid --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl db1], [0], [ignore], [ignore])
-PARSE_LISTENING_PORT([ovsdb-server1.log], [TCP_PORT1])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfile="`pwd`"/pid --remote=punix:db.sock --unixctl="`pwd`"/unixctl db1], [0], [ignore], [ignore])
 
-AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile="`pwd`"/pid2 --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl2 --sync-from=tcp:127.0.0.1:$TCP_PORT1	 db2], [0], [ignore], [ignore])
-PARSE_LISTENING_PORT([ovsdb-server2.log], [TCP_PORT2])
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile="`pwd`"/pid2 --remote=punix:db2.sock --unixctl="`pwd`"/unixctl2 --sync-from=unix:db.sock db2], [0], [ignore], [ignore])
 
-AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT1 \
+AT_CHECK([ovsdb-client transact unix:db.sock \
 '[["mydb",
   {"op": "insert",
    "table": "a",
    "row": {"number": 0, "name": "zero"}}]]'], [0], [stdout], [ignore],
 [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
-OVS_WAIT_UNTIL([ovsdb-client dump tcp:127.0.0.1:$TCP_PORT2 | grep zero])
+OVS_WAIT_UNTIL([ovsdb-client dump unix:db2.sock | grep zero])
 
 AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/disconnect-remote-ovsdb-server], [0], [ignore], [ignore],
         [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
-AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT1 \
+AT_CHECK([ovsdb-client transact unix:db.sock \
 '[["mydb",
   {"op": "insert",
    "table": "b",
    "row": {"number": 1, "name": "one"}}]]'], [0], [stdout], [ignore],
 [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
-AT_CHECK([ovsdb-client dump tcp:127.0.0.1:$TCP_PORT1], [0], [stdout], [ignore],
+AT_CHECK([ovsdb-client dump unix:db.sock], [0], [stdout], [ignore],
  [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 cat stdout >> dump1
 
-AT_CHECK([ovsdb-client dump tcp:127.0.0.1:$TCP_PORT2], [0], [stdout], [ignore],
+AT_CHECK([ovsdb-client dump unix:db2.sock], [0], [stdout], [ignore],
  [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 cat stdout >> dump2
 
