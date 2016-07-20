@@ -172,7 +172,6 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         OPT_ONELINE,
         OPT_NO_SYSLOG,
         OPT_DRY_RUN,
-        OPT_PEER_CA_CERT,
         OPT_LOCAL,
         OPT_COMMANDS,
         OPT_OPTIONS,
