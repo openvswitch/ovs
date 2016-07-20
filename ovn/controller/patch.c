@@ -349,7 +349,7 @@ add_logical_patch_ports(struct controller_ctx *ctx,
         if (!strcmp(binding->type, "gateway")) {
             const char *chassis = smap_get(&binding->options,
                                            "gateway-chassis");
-            if (!strcmp(local_chassis_id, chassis)) {
+            if (chassis && !strcmp(local_chassis_id, chassis)) {
                 local_port = true;
             }
         }
