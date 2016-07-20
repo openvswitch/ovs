@@ -1,4 +1,4 @@
-/* Copyright (c) 2012, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2012, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -182,12 +182,21 @@ smap_clear(struct smap *smap)
     }
 }
 
-/* Returns the value associated with 'key' in 'smap', or NULL. */
+/* Returns the value associated with 'key' in 'smap'.
+ * If 'smap' does not contain 'key', returns NULL. */
 const char *
 smap_get(const struct smap *smap, const char *key)
 {
+    return smap_get_def(smap, key, NULL);
+}
+
+/* Returns the value associated with 'key' in 'smap'.
+ * If 'smap' does not contain 'key', returns 'def'. */
+const char *
+smap_get_def(const struct smap *smap, const char *key, const char *def)
+{
     struct smap_node *node = smap_get_node(smap, key);
-    return node ? node->value : NULL;
+    return node ? node->value : def;
 }
 
 /* Returns the node associated with 'key' in 'smap', or NULL. */
@@ -204,12 +213,7 @@ smap_get_node(const struct smap *smap, const char *key)
 bool
 smap_get_bool(const struct smap *smap, const char *key, bool def)
 {
-    const char *value = smap_get(smap, key);
-
-    if (!value) {
-        return def;
-    }
-
+    const char *value = smap_get_def(smap, key, "");
     if (def) {
         return strcasecmp("false", value) != 0;
     } else {
@@ -233,8 +237,7 @@ smap_get_int(const struct smap *smap, const char *key, int def)
 bool
 smap_get_uuid(const struct smap *smap, const char *key, struct uuid *uuid)
 {
-    const char *value = smap_get(smap, key);
-    return value && uuid_from_string(uuid, value);
+    return uuid_from_string(uuid, smap_get_def(smap, key, ""));
 }
 
 /* Returns true of there are no elements in 'smap'. */

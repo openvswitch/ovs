@@ -327,8 +327,9 @@ check_and_update_tunnel(const struct sbrec_chassis *chassis_rec)
             smap_destroy(&options);
         }
 
-        const char *chassis = smap_get(&port->external_ids, "ovn-chassis-id");
-        if (!chassis || strcmp(chassis_rec->name, chassis)) {
+        const char *chassis = smap_get_def(&port->external_ids,
+                                           "ovn-chassis-id", "");
+        if (strcmp(chassis_rec->name, chassis)) {
             const struct smap id = SMAP_CONST1(&id, "ovn-chassis-id",
                                                chassis_rec->name);
             ovsrec_port_set_external_ids(port, &id);

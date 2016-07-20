@@ -60,8 +60,7 @@ pop_tunnel_name(uint32_t *type)
 static const char *
 get_bridge_mappings(const struct smap *ext_ids)
 {
-    const char *bridge_mappings = smap_get(ext_ids, "ovn-bridge-mappings");
-    return bridge_mappings ? bridge_mappings : "";
+    return smap_get_def(ext_ids, "ovn-bridge-mappings", "");
 }
 
 /* Returns this chassis's Chassis record, if it is available and is currently
@@ -104,9 +103,9 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
     }
     free(tokstr);
 
-    const char *hostname = smap_get(&cfg->external_ids, "hostname");
+    const char *hostname = smap_get_def(&cfg->external_ids, "hostname", "");
     char hostname_[HOST_NAME_MAX + 1];
-    if (!hostname || !hostname[0]) {
+    if (!hostname[0]) {
         if (gethostname(hostname_, sizeof hostname_)) {
             hostname_[0] = '\0';
         }

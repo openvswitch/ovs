@@ -1178,11 +1178,8 @@ ovn_port_update_sbrec(const struct ovn_port *op)
                 sbrec_port_binding_set_type(op->sb, "patch");
             }
 
-            const char *router_port = smap_get(&op->nbsp->options,
-                                               "router-port");
-            if (!router_port) {
-                router_port = "<error>";
-            }
+            const char *router_port = smap_get_def(&op->nbsp->options,
+                                                   "router-port", "<error>");
             struct smap new;
             smap_init(&new);
             smap_add(&new, "peer", router_port);

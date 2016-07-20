@@ -178,10 +178,8 @@ get_br_int(struct controller_ctx *ctx)
         return NULL;
     }
 
-    const char *br_int_name = smap_get(&cfg->external_ids, "ovn-bridge");
-    if (!br_int_name) {
-        br_int_name = DEFAULT_BRIDGE_NAME;
-    }
+    const char *br_int_name = smap_get_def(&cfg->external_ids, "ovn-bridge",
+                                           DEFAULT_BRIDGE_NAME);
 
     const struct ovsrec_bridge *br;
     br = get_bridge(ctx->ovs_idl, br_int_name);
