@@ -231,6 +231,17 @@ smap_get_int(const struct smap *smap, const char *key, int def)
     return value ? atoi(value) : def;
 }
 
+/* Gets the value associated with 'key' in 'smap' and converts it to an int
+ * using strtoull().  If 'key' is not in 'smap', returns 'def'. */
+unsigned long long int
+smap_get_ullong(const struct smap *smap, const char *key,
+                unsigned long long def)
+{
+    const char *value = smap_get(smap, key);
+
+    return value ? strtoull(value, NULL, 10) : def;
+}
+
 /* Gets the value associated with 'key' in 'smap' and converts it to a UUID
  * using uuid_from_string().  Returns true if successful, false if 'key' is not
  * in 'smap' or if 'key' does not have the correct syntax for a UUID. */

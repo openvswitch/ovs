@@ -2763,18 +2763,14 @@ egress_policer_qos_construct(struct netdev *netdev,
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct egress_policer *policer;
-    const char *cir_s;
-    const char *cbs_s;
     int err = 0;
 
     rte_spinlock_lock(&dev->qos_lock);
     policer = xmalloc(sizeof *policer);
     qos_conf_init(&policer->qos_conf, &egress_policer_ops);
     dev->qos_conf = &policer->qos_conf;
-    cir_s = smap_get(details, "cir");
-    cbs_s = smap_get(details, "cbs");
-    policer->app_srtcm_params.cir = cir_s ? strtoull(cir_s, NULL, 10) : 0;
-    policer->app_srtcm_params.cbs = cbs_s ? strtoull(cbs_s, NULL, 10) : 0;
+    policer->app_srtcm_params.cir = smap_get_ullong(details, "cir", 0);
+    policer->app_srtcm_params.cbs = smap_get_ullong(details, "cbs", 0);
     policer->app_srtcm_params.ebs = 0;
     err = rte_meter_srtcm_config(&policer->egress_meter,
                                     &policer->app_srtcm_params);
@@ -2808,15 +2804,11 @@ static int
 egress_policer_qos_set(struct netdev *netdev, const struct smap *details)
 {
     struct egress_policer *policer;
-    const char *cir_s;
-    const char *cbs_s;
     int err = 0;
 
     policer = egress_policer_get__(netdev);
-    cir_s = smap_get(details, "cir");
-    cbs_s = smap_get(details, "cbs");
-    policer->app_srtcm_params.cir = cir_s ? strtoull(cir_s, NULL, 10) : 0;
-    policer->app_srtcm_params.cbs = cbs_s ? strtoull(cbs_s, NULL, 10) : 0;
+    policer->app_srtcm_params.cir = smap_get_ullong(details, "cir", 0);
+    policer->app_srtcm_params.cbs = smap_get_ullong(details, "cbs", 0);
     policer->app_srtcm_params.ebs = 0;
     err = rte_meter_srtcm_config(&policer->egress_meter,
                                     &policer->app_srtcm_params);
