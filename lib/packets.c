@@ -140,6 +140,9 @@ eth_addr_is_reserved(const struct eth_addr ea)
     return false;
 }
 
+/* Attempts to parse 's' as an Ethernet address.  If successful, stores the
+ * address in 'ea' and returns true, otherwise zeros 'ea' and returns
+ * false.  */
 bool
 eth_addr_from_string(const char *s, struct eth_addr *ea)
 {
