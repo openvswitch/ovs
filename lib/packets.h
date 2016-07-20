@@ -987,8 +987,9 @@ in6_is_lla(struct in6_addr *addr)
 #ifdef s6_addr32
     return addr->s6_addr32[0] == htonl(0xfe800000) && !(addr->s6_addr32[1]);
 #else
-    return addr->s6_addr[0] == htons(0xfe80) &&
-         !(addr->s6_addr[1] | addr->s6_addr[2] | addr->s6_addr[3]);
+    return addr->s6_addr[0] == 0xfe && addr->s6_addr[1] == 0x80 &&
+         !(addr->s6_addr[2] | addr->s6_addr[3] | addr->s6_addr[4] |
+           addr->s6_addr[5] | addr->s6_addr[6] | addr->s6_addr[7]);
 #endif
 }
 
