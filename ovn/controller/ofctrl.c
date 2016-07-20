@@ -509,6 +509,18 @@ ofctrl_recv(const struct ofp_header *oh, enum ofptype type)
 
 /* Flow table interfaces to the rest of ovn-controller. */
 
+static void
+log_ovn_flow_rl(struct vlog_rate_limit *rl, enum vlog_level level,
+                const struct ovn_flow *flow, const char *title)
+{
+    if (!vlog_should_drop(&this_module, level, rl)) {
+        char *s = ovn_flow_to_string(flow);
+        vlog(&this_module, level, "%s for parent "UUID_FMT": %s",
+             title, UUID_ARGS(&flow->uuid), s);
+        free(s);
+    }
+}
+
 /* Adds a flow to the collection associated with 'uuid'.  The flow has the
  * specified 'match' and 'actions' to the OpenFlow table numbered 'table_id'
  * with the given 'priority'.  The caller retains ownership of 'match' and
@@ -554,12 +566,38 @@ ofctrl_add_flow(uint8_t table_id, uint16_t priority,
     struct ovn_flow *d;
     LIST_FOR_EACH (d, list_node, &existing) {
         if (uuid_equals(&f->uuid, &d->uuid)) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-            char *s = ovn_flow_to_string(f);
-            VLOG_WARN_RL(&rl, "found duplicate flow %s for parent "UUID_FMT,
-                         s, UUID_ARGS(&f->uuid));
+            /* Duplicate flows with the same UUID indicate some kind of bug
+             * (see the function-level comment), but we distinguish two
+             * cases:
+             *
+             *     - If the actions for the duplicate flow are the same, then
+             *       it's benign; it's hard to imagine how there could be a
+             *       real problem.  Log at INFO level.
+             *
+             *     - If the actions are different, then one or the other set of
+             *       actions must be wrong or (perhaps more likely) we've got a
+             *       new set of actions replacing an old set but the caller
+             *       neglected to use ofctrl_remove_flows() or
+             *       ofctrl_set_flow() to do it properly.  Log at WARN level to
+             *       get some attention.
+             */
+            if (ofpacts_equal(f->ofpacts, f->ofpacts_len,
+                              d->ofpacts, d->ofpacts_len)) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+                log_ovn_flow_rl(&rl, VLL_INFO, f, "duplicate flow");
+            } else {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+                log_ovn_flow_rl(&rl, VLL_WARN, f,
+                                "duplicate flow with modified action");
+
+                /* It seems likely that the newer actions are the correct
+                 * ones. */
+                free(d->ofpacts);
+                d->ofpacts = f->ofpacts;
+                d->ofpacts_len = f->ofpacts_len;
+                f->ofpacts = NULL;
+            }
             ovn_flow_destroy(f);
-            free(s);
             return;
         }
     }
