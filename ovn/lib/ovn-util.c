@@ -14,6 +14,7 @@
 
 #include <config.h>
 #include "ovn-util.h"
+#include "dirs.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-nb-idl.h"
 
@@ -200,4 +201,30 @@ char *
 alloc_nat_zone_key(const char *key, const char *type)
 {
     return xasprintf("%s_%s", key, type);
+}
+
+const char *
+default_nb_db(void)
+{
+    static char *def;
+    if (!def) {
+        def = getenv("OVN_NB_DB");
+        if (!def) {
+            def = xasprintf("unix:%s/ovnnb_db.sock", ovs_rundir());
+        }
+    }
+    return def;
+}
+
+const char *
+default_sb_db(void)
+{
+    static char *def;
+    if (!def) {
+        def = getenv("OVN_SB_DB");
+        if (!def) {
+            def = xasprintf("unix:%s/ovnsb_db.sock", ovs_rundir());
+        }
+    }
+    return def;
 }

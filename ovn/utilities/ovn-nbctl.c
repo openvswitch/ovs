@@ -25,6 +25,7 @@
 #include "fatal-signal.h"
 #include "openvswitch/json.h"
 #include "ovn/lib/ovn-nb-idl.h"
+#include "ovn/lib/ovn-util.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "process.h"
@@ -77,7 +78,6 @@ OVS_NO_RETURN static void nbctl_exit(int status);
 static void nbctl_cmd_init(void);
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
-static const char *nbctl_default_db(void);
 static void run_prerequisites(struct ctl_command[], size_t n_commands,
                               struct ovsdb_idl *);
 static bool do_nbctl(const char *args, struct ctl_command *, size_t n,
@@ -151,19 +151,6 @@ main(int argc, char *argv[])
             poll_block();
         }
     }
-}
-
-static const char *
-nbctl_default_db(void)
-{
-    static char *def;
-    if (!def) {
-        def = getenv("OVN_NB_DB");
-        if (!def) {
-            def = xasprintf("unix:%s/ovnnb_db.sock", ovs_rundir());
-        }
-    }
-    return def;
 }
 
 static void
@@ -310,7 +297,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     free(short_options);
 
     if (!db) {
-        db = nbctl_default_db();
+        db = default_nb_db();
     }
 
     for (i = n_global_long_options; options[i].name; i++) {
@@ -424,7 +411,8 @@ Options:\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
-           program_name, program_name, ctl_get_db_cmd_usage(), nbctl_default_db());
+           program_name, program_name, ctl_get_db_cmd_usage(),
+           default_nb_db());
     vlog_usage();
     printf("\
   --no-syslog             equivalent to --verbose=nbctl:syslog:warn\n");

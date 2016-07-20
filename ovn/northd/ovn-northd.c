@@ -56,9 +56,6 @@ struct northd_context {
 static const char *ovnnb_db;
 static const char *ovnsb_db;
 
-static const char *default_nb_db(void);
-static const char *default_sb_db(void);
-
 #define MAC_ADDR_PREFIX 0x0A0000000000ULL
 #define MAC_ADDR_SPACE 0xffffff
 
@@ -4173,28 +4170,6 @@ ovnsb_db_run(struct northd_context *ctx, struct ovsdb_idl_loop *sb_loop)
     update_northbound_cfg(ctx, sb_loop);
 }
 
-static char *default_nb_db_;
-
-static const char *
-default_nb_db(void)
-{
-    if (!default_nb_db_) {
-        default_nb_db_ = xasprintf("unix:%s/ovnnb_db.sock", ovs_rundir());
-    }
-    return default_nb_db_;
-}
-
-static char *default_sb_db_;
-
-static const char *
-default_sb_db(void)
-{
-    if (!default_sb_db_) {
-        default_sb_db_ = xasprintf("unix:%s/ovnsb_db.sock", ovs_rundir());
-    }
-    return default_sb_db_;
-}
-
 static void
 parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
@@ -4398,8 +4373,6 @@ main(int argc, char *argv[])
     ovsdb_idl_loop_destroy(&ovnsb_idl_loop);
     service_stop();
 
-    free(default_nb_db_);
-    free(default_sb_db_);
     exit(res);
 }
 

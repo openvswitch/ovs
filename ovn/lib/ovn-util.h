@@ -59,4 +59,8 @@ bool extract_lrp_networks(const struct nbrec_logical_router_port *,
 void destroy_lport_addresses(struct lport_addresses *);
 
 char *alloc_nat_zone_key(const char *key, const char *type);
+
+const char *default_nb_db(void);
+const char *default_sb_db(void);
+
 #endif

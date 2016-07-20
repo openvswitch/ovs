@@ -27,27 +27,27 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "db-ctl-base.h"
-#include "dirs.h"
-
 #include "command-line.h"
 #include "compiler.h"
-#include "openvswitch/dynamic-string.h"
+#include "db-ctl-base.h"
+#include "dirs.h"
 #include "fatal-signal.h"
+#include "openvswitch/dynamic-string.h"
 #include "openvswitch/json.h"
+#include "openvswitch/shash.h"
+#include "openvswitch/vlog.h"
+#include "ovn/lib/ovn-sb-idl.h"
+#include "ovn/lib/ovn-util.h"
 #include "ovsdb-data.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
 #include "process.h"
 #include "sset.h"
-#include "openvswitch/shash.h"
 #include "stream-ssl.h"
 #include "stream.h"
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
-#include "openvswitch/vlog.h"
-#include "ovn/lib/ovn-sb-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(sbctl);
 
@@ -78,7 +78,6 @@ OVS_NO_RETURN static void sbctl_exit(int status);
 static void sbctl_cmd_init(void);
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
-static const char *sbctl_default_db(void);
 static void run_prerequisites(struct ctl_command[], size_t n_commands,
                               struct ovsdb_idl *);
 static bool do_sbctl(const char *args, struct ctl_command *, size_t n,
@@ -149,19 +148,6 @@ main(int argc, char *argv[])
             poll_block();
         }
     }
-}
-
-static const char *
-sbctl_default_db(void)
-{
-    static char *def;
-    if (!def) {
-        def = getenv("OVN_SB_DB");
-        if (!def) {
-            def = xasprintf("unix:%s/ovnsb_db.sock", ovs_rundir());
-        }
-    }
-    return def;
 }
 
 static void
@@ -286,7 +272,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     free(short_options);
 
     if (!db) {
-        db = sbctl_default_db();
+        db = default_sb_db();
     }
 
     for (i = n_global_long_options; options[i].name; i++) {
@@ -331,7 +317,8 @@ Options:\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
-           program_name, program_name, ctl_get_db_cmd_usage(), sbctl_default_db());
+           program_name, program_name, ctl_get_db_cmd_usage(),
+           default_sb_db());
     vlog_usage();
     printf("\
   --no-syslog             equivalent to --verbose=sbctl:syslog:warn\n");
