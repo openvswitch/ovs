@@ -435,7 +435,8 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
         goto out;
     }
 
-    flow->pkt_mark = tnl_port->match.pkt_mark;
+    flow->pkt_mark |= tnl_port->match.pkt_mark;
+    wc->masks.pkt_mark |= tnl_port->match.pkt_mark;
 
     if (!cfg->out_key_flow) {
         flow->tunnel.tun_id = cfg->out_key;
