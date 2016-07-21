@@ -209,27 +209,7 @@ static inline int skb_orphan_frags(struct sk_buff *skb, gfp_t gfp_mask)
 #endif
 
 #ifndef HAVE_SKB_GET_HASH
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)
-#define __skb_get_hash rpl__skb_get_rxhash
-#define skb_get_hash rpl_skb_get_rxhash
-
-extern u32 __skb_get_hash(struct sk_buff *skb);
-static inline __u32 skb_get_hash(struct sk_buff *skb)
-{
-#ifdef HAVE_RXHASH
-	if (skb->rxhash)
-#ifndef HAVE_U16_RXHASH
-		return skb->rxhash;
-#else
-		return jhash_1word(skb->rxhash, 0);
-#endif
-#endif
-	return __skb_get_hash(skb);
-}
-
-#else
 #define skb_get_hash skb_get_rxhash
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0) */
 #endif /* HAVE_SKB_GET_HASH */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)

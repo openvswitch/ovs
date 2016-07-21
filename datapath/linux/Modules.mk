@@ -2,7 +2,6 @@ openvswitch_sources += \
 	linux/compat/dev-openvswitch.c \
 	linux/compat/dst_cache.c \
 	linux/compat/exthdrs_core.c \
-	linux/compat/flow_dissector.c \
 	linux/compat/geneve.c \
 	linux/compat/gre.c \
 	linux/compat/gso.c \
@@ -71,7 +70,6 @@ openvswitch_headers += \
 	linux/compat/include/net/dst.h \
 	linux/compat/include/net/dst_cache.h \
 	linux/compat/include/net/dst_metadata.h \
-	linux/compat/include/net/flow_keys.h \
 	linux/compat/include/net/genetlink.h \
 	linux/compat/include/net/geneve.h \
 	linux/compat/include/net/gre.h \
