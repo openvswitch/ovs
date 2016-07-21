@@ -14,7 +14,7 @@ OVS_MONITOR_IPSEC_START
 ###
 ### Add an ipsec_gre psk interface and check what ovs-monitor-ipsec does
 ###
-AT_CHECK([ovs-vsctl --no-wait -vreconnect:emer \
+AT_CHECK([ovs-vsctl \
               -- add-port br0 gre0 \
               -- set interface gre0 type=ipsec_gre \
                                     options:remote_ip=1.2.3.4 \
