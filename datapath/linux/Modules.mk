@@ -2,7 +2,6 @@ openvswitch_sources += \
 	linux/compat/dev-openvswitch.c \
 	linux/compat/dst_cache.c \
 	linux/compat/exthdrs_core.c \
-	linux/compat/flex_array.c \
 	linux/compat/flow_dissector.c \
 	linux/compat/geneve.c \
 	linux/compat/gre.c \
@@ -38,7 +37,6 @@ openvswitch_headers += \
 	linux/compat/include/linux/cpumask.h \
 	linux/compat/include/linux/err.h \
 	linux/compat/include/linux/etherdevice.h \
-	linux/compat/include/linux/flex_array.h \
 	linux/compat/include/linux/genetlink.h \
 	linux/compat/include/linux/if.h \
 	linux/compat/include/linux/if_ether.h \
@@ -59,7 +57,6 @@ openvswitch_headers += \
 	linux/compat/include/linux/netfilter_ipv6.h \
 	linux/compat/include/linux/netlink.h \
 	linux/compat/include/linux/openvswitch.h \
-	linux/compat/include/linux/poison.h \
 	linux/compat/include/linux/rculist.h \
 	linux/compat/include/linux/rcupdate.h \
 	linux/compat/include/linux/reciprocal_div.h \
