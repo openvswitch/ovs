@@ -2081,8 +2081,6 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     rte_eth_dev_info_get(dev->port_id, &dev_info);
     ovs_mutex_unlock(&dev->mutex);
 
-    smap_add_format(args, "driver_name", "%s", dev_info.driver_name);
-
     smap_add_format(args, "port_no", "%d", dev->port_id);
     smap_add_format(args, "numa_id", "%d", rte_eth_dev_socket_id(dev->port_id));
     smap_add_format(args, "driver_name", "%s", dev_info.driver_name);
