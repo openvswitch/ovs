@@ -42,18 +42,6 @@
 #include "gso.h"
 
 #ifdef OVS_USE_COMPAT_GSO_SEGMENTATION
-static bool dev_supports_vlan_tx(struct net_device *dev)
-{
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-	return true;
-#elif defined(HAVE_VLAN_BUG_WORKAROUND)
-	return dev->features & NETIF_F_HW_VLAN_TX;
-#else
-	/* Assume that the driver is buggy. */
-	return false;
-#endif
-}
-
 /* Strictly this is not needed and will be optimised out
  * as this code is guarded by if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0).
  * It is here to make things explicit should the compatibility
@@ -75,9 +63,9 @@ int rpl_dev_queue_xmit(struct sk_buff *skb)
 {
 #undef dev_queue_xmit
 	int err = -ENOMEM;
-	bool vlan, mpls;
+	bool mpls;
 
-	vlan = mpls = false;
+	mpls = false;
 
 	/* Avoid traversing any VLAN tags that are present to determine if
 	 * the ethtype is MPLS. Instead compare the mac_len (end of L2) and
@@ -86,21 +74,10 @@ int rpl_dev_queue_xmit(struct sk_buff *skb)
 	if (skb->mac_len != skb_network_offset(skb) && !supports_mpls_gso())
 		mpls = true;
 
-	if (skb_vlan_tag_present(skb) && !dev_supports_vlan_tx(skb->dev))
-		vlan = true;
-
-	if (vlan || mpls) {
+	if (mpls) {
 		int features;
 
 		features = netif_skb_features(skb);
-
-		if (vlan) {
-			skb = vlan_insert_tag_set_proto(skb, skb->vlan_proto,
-							skb_vlan_tag_get(skb));
-			if (unlikely(!skb))
-				return err;
-			skb->vlan_tci = 0;
-		}
 
 		/* As of v3.11 the kernel provides an mpls_features field in
 		 * struct net_device which allows devices to advertise which
