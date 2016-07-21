@@ -521,7 +521,7 @@ class Datum(object):
                 ka = Atom.from_python(type_.key, row_to_uuid(k))
                 va = Atom.from_python(type_.value, row_to_uuid(v))
                 d[ka] = va
-        elif isinstance(value, (list, tuple)):
+        elif isinstance(value, (list, set, tuple)):
             for k in value:
                 ka = Atom.from_python(type_.key, row_to_uuid(k))
                 d[ka] = None
