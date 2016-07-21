@@ -15,7 +15,6 @@ openvswitch_sources += \
 	linux/compat/ip6_output.c \
 	linux/compat/lisp.c \
 	linux/compat/netdevice.c \
-	linux/compat/net_namespace.c \
 	linux/compat/nf_conntrack_core.c \
 	linux/compat/nf_conntrack_reasm.c \
 	linux/compat/reassembly.c \
