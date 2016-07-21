@@ -9,12 +9,6 @@
 #define NEXTHDR_SCTP    132 /* Stream Control Transport Protocol */
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0)
-#define ipv6_skip_exthdr rpl_ipv6_skip_exthdr
-extern int rpl_ipv6_skip_exthdr(const struct sk_buff *skb, int start,
-			        u8 *nexthdrp, __be16 *frag_offp);
-#endif
-
 #ifndef HAVE_IP6_FH_F_SKIP_RH
 
 enum {
