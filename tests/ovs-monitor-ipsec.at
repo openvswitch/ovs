@@ -4,60 +4,17 @@ AT_SETUP([ovs-monitor-ipsec])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 AT_SKIP_IF([$non_ascii_cwd])
 
-cp "$top_srcdir/vswitchd/vswitch.ovsschema" .
-
-on_exit 'kill `cat pid ovs-monitor-ipsec.pid`'
-
-mkdir etc etc/init.d etc/racoon etc/racoon/certs
-mkdir usr usr/sbin
-
-AT_DATA([etc/init.d/racoon], [dnl
-#! /bin/sh
-echo "racoon: $@" >&3
-exit 0
-])
-chmod +x etc/init.d/racoon
-
-AT_DATA([usr/sbin/setkey], [dnl
-#! /bin/sh
-exec >&3
-echo "setkey:"
-while read line; do
-      echo "> $line"
-done
-])
-chmod +x usr/sbin/setkey
-
-touch etc/racoon/certs/ovs-stale.pem
-
-ovs_vsctl () {
-    ovs-vsctl --no-wait -vreconnect:emer --db=unix:socket "$@"
-}
 trim () {  # Removes blank lines and lines starting with # from input.
     sed -e '/^#/d' -e '/^[       ]*$/d' "$@"
 }
 
-###
-### Start ovsdb-server.
-###
-OVS_VSCTL_SETUP
-
-###
-### Start ovs-monitor-ipsec and wait for it to delete the stale cert.
-###
-AT_CHECK(
-  [$PYTHON $top_srcdir/debian/ovs-monitor-ipsec "--root-prefix=`pwd`" \
-        "--pidfile=`pwd`/ovs-monitor-ipsec.pid" \
-        unix:socket 2>log 3>actions &])
-AT_CAPTURE_FILE([log])
-AT_CAPTURE_FILE([actions])
-OVS_WAIT_UNTIL([test ! -f etc/racoon/certs/ovs-stale.pem])
+OVS_VSWITCHD_START([])
+OVS_MONITOR_IPSEC_START
 
 ###
 ### Add an ipsec_gre psk interface and check what ovs-monitor-ipsec does
 ###
-AT_CHECK([ovs_vsctl \
-              -- add-br br0 \
+AT_CHECK([ovs-vsctl --no-wait -vreconnect:emer \
               -- add-port br0 gre0 \
               -- set interface gre0 type=ipsec_gre \
                                     options:remote_ip=1.2.3.4 \
@@ -101,7 +58,7 @@ sainfo anonymous {
 ###
 ### Delete the ipsec_gre interface and check what ovs-monitor-ipsec does
 ###
-AT_CHECK([ovs_vsctl del-port gre0])
+AT_CHECK([ovs-vsctl del-port gre0])
 OVS_WAIT_UNTIL([test `wc -l < actions` -ge 17])
 AT_CHECK([sed '1,9d' actions], [0], [dnl
 racoon: reload
@@ -139,7 +96,7 @@ AT_DATA([key.pem], [dnl
 (not a real private key)
 -----END RSA PRIVATE KEY-----
 ])
-AT_CHECK([ovs_vsctl \
+AT_CHECK([ovs-vsctl \
               -- add-port br0 gre1 \
               -- set Interface gre1 type=ipsec_gre \
                  options:remote_ip=2.3.4.5 \
@@ -193,7 +150,7 @@ AT_CHECK([cat etc/racoon/certs/ovs-2.3.4.5.pem], [0], [dnl
 ###
 ### Delete the ipsec_gre certificate interface.
 ###
-AT_CHECK([ovs_vsctl del-port gre1])
+AT_CHECK([ovs-vsctl del-port gre1])
 OVS_WAIT_UNTIL([test `wc -l < actions` -ge 29])
 AT_CHECK([sed '1,21d' actions], [0], [dnl
 racoon: reload
@@ -229,7 +186,7 @@ AT_DATA([ssl-cacert.pem], [dnl
 (not a real CA certificate)
 -----END CERTIFICATE-----
 ])
-AT_CHECK([ovs_vsctl set-ssl /ssl-key.pem /ssl-cert.pem /ssl-cacert.pem \
+AT_CHECK([ovs-vsctl set-ssl /ssl-key.pem /ssl-cert.pem /ssl-cacert.pem \
               -- add-port br0 gre2 \
               -- set Interface gre2 type=ipsec_gre \
                  options:remote_ip=3.4.5.6 \
@@ -282,7 +239,7 @@ AT_CHECK([cat etc/racoon/certs/ovs-3.4.5.6.pem], [0], [dnl
 ###
 ### Delete the SSL certificate interface.
 ###
-AT_CHECK([ovs_vsctl del-port gre2])
+AT_CHECK([ovs-vsctl del-port gre2])
 OVS_WAIT_UNTIL([test `wc -l < actions` -ge 41])
 AT_CHECK([sed '1,33d' actions], [0], [dnl
 racoon: reload
@@ -308,6 +265,6 @@ sainfo anonymous {
 ])
 AT_CHECK([test ! -f etc/racoon/certs/ovs-3.4.5.6.pem])
 
-OVSDB_SERVER_SHUTDOWN
-
+dnl Skip SSL errors reported by Open vSwitch
+OVS_VSWITCHD_STOP(["/stream_ssl/d"])
 AT_CLEANUP
