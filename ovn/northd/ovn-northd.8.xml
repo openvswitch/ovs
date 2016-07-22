@@ -1022,36 +1022,6 @@ next;
           is the next hop IP address.  Else it is <code>ip4.dst</code>.
         </p>
       </li>
-
-      <li>
-        <p>
-          Destination unreachable.  For each router port <var>P</var>, which
-          owns IP address <var>A</var>, a priority-0 logical flow with match
-          <code>in_port == <var>P</var> &amp;&amp; !ip.later_frag &amp;&amp;
-          !icmp</code> has the following actions:
-        </p>
-
-        <pre>
-icmp4 {
-    icmp4.type = 3; /* Destination unreachable. */
-    icmp4.code = 0; /* Network unreachable. */
-    ip4.dst = ip4.src;
-    ip4.src = <var>A</var>;
-    ip.ttl = 255;
-    next(2);
-};
-        </pre>
-
-        <p>
-          (The <code>!icmp</code> check prevents recursion if the destination
-          unreachable message itself cannot be routed.)
-        </p>
-
-        <p>
-          These flows are omitted if the logical router has a default route,
-          that is, a route with netmask 0.0.0.0.
-        </p>
-      </li>
     </ul>
 
     <h3>Ingress Table 5: ARP Resolution</h3>
