@@ -505,7 +505,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
             goto out;
         }
         tot_len = ntohs(nh->ip_tot_len);
-        if (OVS_UNLIKELY(tot_len > size)) {
+        if (OVS_UNLIKELY(tot_len > size || ip_len > tot_len)) {
             goto out;
         }
         if (OVS_UNLIKELY(size - tot_len > UINT8_MAX)) {
