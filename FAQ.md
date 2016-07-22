@@ -125,12 +125,15 @@ Releases
 ### Q: What does it mean for an Open vSwitch release to be LTS (long-term support)?
 
 A: All official releases have been through a comprehensive testing
-   process and are suitable for production use.  Planned releases will
-   occur several times a year.  If a significant bug is identified in an
+   process and are suitable for production use.  Planned releases
+   occur twice a year.  If a significant bug is identified in an
    LTS release, we will provide an updated release that includes the
    fix.  Releases that are not LTS may not be fixed and may just be
    supplanted by the next major release.  The current LTS release is
    2.3.x.
+
+   For more information on the Open vSwitch release process, please
+   see [release-process.md].
 
 ### Q: What Linux kernel versions does each Open vSwitch release work with?
 
@@ -2140,3 +2143,4 @@ http://openvswitch.org/
 [OPENFLOW-1.1+.md]:OPENFLOW-1.1+.md
 [INSTALL.DPDK.md]:INSTALL.DPDK.md
 [Tutorial.md]:tutorial/Tutorial.md
+[release-process.md]:Documentation/release-process.md
