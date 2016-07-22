@@ -3192,14 +3192,6 @@ ovn-sbctl list chassis
 ovn-sbctl list encap
 echo "---------------------"
 
-echo "------ hv1 dump ----------"
-as hv1 ovs-ofctl show br-int
-as hv1 ovs-ofctl dump-flows br-int
-echo "------ hv2 dump ----------"
-as hv2 ovs-ofctl show br-int
-as hv2 ovs-ofctl dump-flows br-int
-echo "----------------------------"
-
 # Packet to Expect at alice1
 src_mac="000002010203"
 dst_mac="f00000010204"
@@ -3210,6 +3202,14 @@ expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}00351
 
 as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
 as hv1 ovs-appctl ofproto/trace br-int in_port=1 $packet
+
+echo "------ hv1 dump after packet 1 ----------"
+as hv1 ovs-ofctl show br-int
+as hv1 ovs-ofctl dump-flows br-int
+echo "------ hv2 dump after packet 1 ----------"
+as hv2 ovs-ofctl show br-int
+as hv2 ovs-ofctl dump-flows br-int
+echo "----------------------------"
 
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received1.packets
 echo $expected | trim_zeros > expout
@@ -3232,6 +3232,15 @@ sleep 1
 
 # Send the packet again.
 as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+
+echo "------ hv1 dump after packet 2 ----------"
+as hv1 ovs-ofctl show br-int
+as hv1 ovs-ofctl dump-flows br-int
+echo "------ hv2 dump after packet 2 ----------"
+as hv2 ovs-ofctl show br-int
+as hv2 ovs-ofctl dump-flows br-int
+echo "----------------------------"
+
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received1.packets
 echo $expected | trim_zeros >> expout
 AT_CHECK([cat received1.packets], [0], [expout])

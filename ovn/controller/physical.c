@@ -14,9 +14,11 @@
  */
 
 #include <config.h>
+#include "binding.h"
 #include "byte-order.h"
 #include "flow.h"
 #include "lflow.h"
+#include "lib/poll-loop.h"
 #include "ofctrl.h"
 #include "openvswitch/match.h"
 #include "openvswitch/ofp-actions.h"
@@ -602,6 +604,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         uuid_generate(hc_uuid);
     }
 
+    struct simap new_localvif_to_ofport =
+        SIMAP_INITIALIZER(&new_localvif_to_ofport);
     for (int i = 0; i < br_int->n_ports; i++) {
         const struct ovsrec_port *port_rec = br_int->ports[i];
         if (!strcmp(port_rec->name, br_int->name)) {
@@ -638,51 +642,15 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             bool is_patch = !strcmp(iface_rec->type, "patch");
             if (is_patch && localnet) {
                 /* localnet patch ports can be handled just like VIFs. */
-                if (simap_find(&localvif_to_ofport, localnet)) {
-                    unsigned int old_port = simap_get(&localvif_to_ofport,
-                                                      localnet);
-                    if (old_port != ofport) {
-                        simap_put(&localvif_to_ofport, localnet, ofport);
-                        full_binding_processing = true;
-                        lflow_reset_processing();
-                    }
-                } else {
-                    simap_put(&localvif_to_ofport, localnet, ofport);
-                    full_binding_processing = true;
-                    lflow_reset_processing();
-                }
+                simap_put(&new_localvif_to_ofport, localnet, ofport);
                 break;
             } else if (is_patch && l2gateway) {
                 /* L2 gateway patch ports can be handled just like VIFs. */
-                if (simap_find(&localvif_to_ofport, l2gateway)) {
-                    unsigned int old_port = simap_get(&localvif_to_ofport,
-                                                      l2gateway);
-                    if (old_port != ofport) {
-                        simap_put(&localvif_to_ofport, l2gateway, ofport);
-                        full_binding_processing = true;
-                        lflow_reset_processing();
-                    }
-                } else {
-                    simap_put(&localvif_to_ofport, l2gateway, ofport);
-                    full_binding_processing = true;
-                    lflow_reset_processing();
-                }
+                simap_put(&new_localvif_to_ofport, l2gateway, ofport);
                 break;
             } else if (is_patch && logpatch) {
                 /* Logical patch ports can be handled just like VIFs. */
-                if (simap_find(&localvif_to_ofport, logpatch)) {
-                    unsigned int old_port = simap_get(&localvif_to_ofport,
-                                                      logpatch);
-                    if (old_port != ofport) {
-                        simap_put(&localvif_to_ofport, logpatch, ofport);
-                        full_binding_processing = true;
-                        lflow_reset_processing();
-                    }
-                } else {
-                    simap_put(&localvif_to_ofport, logpatch, ofport);
-                    full_binding_processing = true;
-                    lflow_reset_processing();
-                }
+                simap_put(&new_localvif_to_ofport, logpatch, ofport);
                 break;
             } else if (chassis_id) {
                 enum chassis_tunnel_type tunnel_type;
@@ -706,27 +674,50 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                 tun->ofport = u16_to_ofp(ofport);
                 tun->type = tunnel_type;
                 full_binding_processing = true;
+                binding_reset_processing();
+
+                /* Reprocess logical flow table immediately. */
+                lflow_reset_processing();
+                poll_immediate_wake();
                 break;
             } else {
                 const char *iface_id = smap_get(&iface_rec->external_ids,
                                                 "iface-id");
                 if (iface_id) {
-                    if (simap_find(&localvif_to_ofport, iface_id)) {
-                        unsigned int old_port = simap_get(&localvif_to_ofport,
-                                                          iface_id);
-                        if (old_port != ofport) {
-                            simap_put(&localvif_to_ofport, iface_id, ofport);
-                            full_binding_processing = true;
-                            lflow_reset_processing();
-                        }
-                    } else {
-                        simap_put(&localvif_to_ofport, iface_id, ofport);
-                        full_binding_processing = true;
-                        lflow_reset_processing();
-                    }
+                    simap_put(&new_localvif_to_ofport, iface_id, ofport);
                 }
             }
         }
+    }
+
+    /* Capture changed or removed openflow ports. */
+    bool localvif_map_changed = false;
+    struct simap_node *vif_name, *vif_name_next;
+    SIMAP_FOR_EACH_SAFE (vif_name, vif_name_next, &localvif_to_ofport) {
+        int newport;
+        if ((newport = simap_get(&new_localvif_to_ofport, vif_name->name))) {
+            if (newport != simap_get(&localvif_to_ofport, vif_name->name)) {
+                simap_put(&localvif_to_ofport, vif_name->name, newport);
+                localvif_map_changed = true;
+            }
+        } else {
+            simap_find_and_delete(&localvif_to_ofport, vif_name->name);
+            localvif_map_changed = true;
+        }
+    }
+    SIMAP_FOR_EACH (vif_name, &new_localvif_to_ofport) {
+        if (!simap_get(&localvif_to_ofport, vif_name->name)) {
+            simap_put(&localvif_to_ofport, vif_name->name,
+                      simap_get(&new_localvif_to_ofport, vif_name->name));
+            localvif_map_changed = true;
+        }
+    }
+    if (localvif_map_changed) {
+        full_binding_processing = true;
+
+        /* Reprocess logical flow table immediately. */
+        lflow_reset_processing();
+        poll_immediate_wake();
     }
 
     struct ofpbuf ofpacts;
@@ -870,4 +861,6 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         free(tun);
     }
     hmap_clear(&tunnels);
+
+    simap_destroy(&new_localvif_to_ofport);
 }
