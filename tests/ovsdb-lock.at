@@ -1,0 +1,73 @@
+AT_BANNER([OVSDB -- lock])
+
+# OVSDB_CHECK_LOCK_SETUP(TITILE, KEYWORDS)
+#
+# Starts an OVSDB server and the default lock transaction, acquire "lock0",
+# using the ovsdb-client tool.  Execute additional <LOCK_TRANSACTIONS>,
+# and compare output file catured from ovsdb-client tools to <OUTPUT>.
+
+m4_define([OVSDB_CHECK_LOCK_SETUP],
+   [AT_SETUP([ovsdb lock -- $1])
+    AT_SKIP_IF([test "$IS_WIN32" = "yes"])
+    AT_KEYWORDS([ovsdb lock $2])
+    ordinal_schema > schema
+    AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+    AT_CAPTURE_FILE([ovsdb-server-log])
+    AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1], [0], [], [])])
+
+#
+# Two sessions create two locks. Both sessions should be able to get their
+# own lock immediately.
+OVSDB_CHECK_LOCK_SETUP([lock], [positive])
+AT_CHECK([ovsdb-client --detach lock unix:socket lock0 >c1-output 2>&1],
+      [0], [], [])
+AT_CHECK([ovsdb-client --detach lock unix:socket lock1 >c2-output 2>&1],
+      [0], [], [])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CHECK([cat c1-output], 0, [{"locked":true}
+], [])
+AT_CHECK([cat c2-output], 0, [{"locked":true}
+], [])
+AT_CLEANUP
+
+#
+# Two session wait on the same lock. The first session should be able
+# to get the lock immediately, the second session will get a notification
+# after the first session unlocks.
+OVSDB_CHECK_LOCK_SETUP([unlock], [positive])
+AT_CHECK([ovsdb-client --detach --pidfile lock unix:socket lock0 >c1-output 2>&1],
+      [0], [], [])
+AT_CHECK([ovsdb-client --detach lock unix:socket lock0 >c2-output 2>&1],
+      [0], [], [])
+AT_CHECK([ovs-appctl -t ovsdb-client unlock lock0], [0], [], [])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CHECK([cat c1-output], 0, [{"locked":true}
+{}
+])
+AT_CHECK([cat c2-output], 0, [{"locked":false}
+locked
+[["lock0"]]
+], [])
+AT_CLEANUP
+
+#
+# Two session waits on the same lock. The first session should be able
+# to get the lock immediately. The second session tries to steal the lock, then
+# unlocks the lock.
+OVSDB_CHECK_LOCK_SETUP([steal], [positive])
+AT_CHECK([ovsdb-client --detach lock unix:socket lock0 >c1-output 2>&1],
+      [0], [], [])
+AT_CHECK([ovsdb-client --detach --pidfile steal unix:socket lock0 >c2-output 2>&1],
+      [0], [], [])
+AT_CHECK([ovs-appctl -t ovsdb-client unlock lock0], [0], [], [])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CHECK([cat c1-output], 0, [{"locked":true}
+stolen
+[["lock0"]]
+locked
+[["lock0"]]
+])
+AT_CHECK([cat c2-output], 0, [{"locked":true}
+{}
+], [])
+AT_CLEANUP
