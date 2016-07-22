@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+ * Copyright (C) 2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -260,8 +261,19 @@ compare_nodes_by_name(const void *a_, const void *b_)
     return strcmp((*a)->name, (*b)->name);
 }
 
+static int
+compare_nodes_by_name_numeric(const void *a_, const void *b_)
+{
+    const struct shash_node *const *a = a_;
+    const struct shash_node *const *b = b_;
+    return (strtoul((*a)->name, NULL, 0) > strtoul((*b)->name, NULL, 0)) -
+           (strtoul((*a)->name, NULL, 0) < strtoul((*b)->name, NULL, 0));
+}
+
+/* Performs shash_sort, but allows a different comparison function */
 const struct shash_node **
-shash_sort(const struct shash *sh)
+shash_sort_with_compar(const struct shash *sh,
+                       int (*compar)(const void *, const void *))
 {
     if (shash_is_empty(sh)) {
         return NULL;
@@ -278,10 +290,30 @@ shash_sort(const struct shash *sh)
         }
         ovs_assert(i == n);
 
-        qsort(nodes, n, sizeof *nodes, compare_nodes_by_name);
+        qsort(nodes, n, sizeof *nodes, compar);
 
         return nodes;
     }
+}
+
+/* Returns an array of nodes sorted by name or NULL if 'sh' is empty.  The
+ * caller is responsible for freeing this array. */
+const struct shash_node **
+shash_sort(const struct shash *sh)
+{
+    return shash_sort_with_compar(sh, compare_nodes_by_name);
+}
+
+/* Returns an array of nodes sorted by name or NULL if 'sh' is empty.
+ * The caller is responsible for freeing this array.
+ *
+ * Names are assumed to be numbers represented as strings such that the strings
+ * "10", "20", "100" will be sorted in that order, whereas lexigraphical
+ * sorting would result in "10", "100", "20"). */
+const struct shash_node **
+shash_sort_numeric(const struct shash *sh)
+{
+    return shash_sort_with_compar(sh, compare_nodes_by_name_numeric);
 }
 
 /* Returns true if 'a' and 'b' contain the same keys (regardless of their

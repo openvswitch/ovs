@@ -1,4 +1,5 @@
 /* Copyright (c) 2012, 2014, 2015 Nicira, Inc.
+ * Copyright (C) 2016 Hewlett Packard Enterprise Development LP
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +28,7 @@ static struct smap_node *smap_add__(struct smap *, char *, void *,
 static struct smap_node *smap_find__(const struct smap *, const char *key,
                                      size_t key_len, size_t hash);
 static int compare_nodes_by_key(const void *, const void *);
+static int compare_nodes_by_key_numeric(const void *, const void *);
 
 /* Public Functions. */
 
@@ -264,10 +266,10 @@ smap_clone(struct smap *dst, const struct smap *src)
     }
 }
 
-/* Returns an array of nodes sorted on key or NULL if 'smap' is empty.  The
- * caller is responsible for freeing this array. */
+/* Performs smap_sort, but allows a different comparison function */
 const struct smap_node **
-smap_sort(const struct smap *smap)
+smap_sort_with_compar(const struct smap *smap,
+                      int (*compar)(const void *, const void *))
 {
     if (smap_is_empty(smap)) {
         return NULL;
@@ -284,10 +286,30 @@ smap_sort(const struct smap *smap)
         }
         ovs_assert(i == n);
 
-        qsort(nodes, n, sizeof *nodes, compare_nodes_by_key);
+        qsort(nodes, n, sizeof *nodes, compar);
 
         return nodes;
     }
+}
+
+/* Returns an array of nodes sorted on key or NULL if 'smap' is empty.  The
+ * caller is responsible for freeing this array. */
+const struct smap_node **
+smap_sort(const struct smap *smap)
+{
+    return smap_sort_with_compar(smap, compare_nodes_by_key);
+}
+
+/* Returns an array of nodes sorted on key or NULL if 'smap' is empty.
+ * The caller is responsible for freeing this array.
+ *
+ * Keys are assumed to be numbers represented as strings such that the strings
+ * "10", "20", "100" will be sorted in that order, whereas lexigraphical
+ * sorting would result in "10", "100", "20"). */
+const struct smap_node **
+smap_sort_numeric(const struct smap *smap)
+{
+    return smap_sort_with_compar(smap, compare_nodes_by_key_numeric);
 }
 
 /* Adds each of the key-value pairs from 'json' (which must be a JSON object
@@ -378,4 +400,13 @@ compare_nodes_by_key(const void *a_, const void *b_)
     const struct smap_node *const *a = a_;
     const struct smap_node *const *b = b_;
     return strcmp((*a)->key, (*b)->key);
+}
+
+static int
+compare_nodes_by_key_numeric(const void *a_, const void *b_)
+{
+    const struct smap_node *const *a = a_;
+    const struct smap_node *const *b = b_;
+    return (strtoul((*a)->key, NULL, 0) > strtoul((*b)->key, NULL, 0)) -
+           (strtoul((*a)->key, NULL, 0) < strtoul((*b)->key, NULL, 0));
 }
