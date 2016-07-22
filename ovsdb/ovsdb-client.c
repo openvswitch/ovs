@@ -268,6 +268,12 @@ usage(void)
            "    in DATBASE on SERVER.\n"
            "\n  dump [SERVER] [DATABASE]\n"
            "    dump contents of DATABASE on SERVER to stdout\n"
+           "\n  lock [SERVER] LOCK\n"
+           "    create or wait for LOCK in SERVER\n"
+           "\n  steal [SERVER] LOCK\n"
+           "    steal LOCK from SERVER\n"
+           "\n  unlock [SERVER] LOCK\n"
+           "    unlock LOCK from SERVER\n"
            "\nThe default SERVER is unix:%s/db.sock.\n"
            "The default DATABASE is Open_vSwitch.\n",
            program_name, program_name, ovs_rundir());
@@ -1371,6 +1377,193 @@ do_help(struct jsonrpc *rpc OVS_UNUSED, const char *database OVS_UNUSED,
     usage();
 }
 
+
+/* "lock" command. */
+
+struct ovsdb_client_lock_req {
+    const char *method;
+    char *lock;
+};
+
+static void
+lock_req_init(struct ovsdb_client_lock_req *lock_req,
+              const char *method, const char *lock_name)
+{
+    if (lock_req->method || lock_req->lock) {
+        return;
+    }
+    lock_req->method = method;
+    lock_req->lock = xstrdup(lock_name);
+}
+
+static bool
+lock_req_is_set(struct ovsdb_client_lock_req *lock_req)
+{
+    return lock_req->method;
+}
+
+static void
+lock_req_destroy(struct ovsdb_client_lock_req *lock_req)
+{
+    free(lock_req->lock);
+    lock_req->method = NULL;
+    lock_req->lock = NULL;
+}
+
+/* Create a lock class request. Caller is responsible for free
+ * the 'request' message. */
+static struct jsonrpc_msg *
+create_lock_request(struct ovsdb_client_lock_req *lock_req)
+{
+    struct json *locks, *lock;
+
+    locks = json_array_create_empty();
+    lock = json_string_create(lock_req->lock);
+    json_array_add(locks, lock);
+
+    return jsonrpc_create_request(lock_req->method, locks, NULL);
+}
+
+static void
+ovsdb_client_lock(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                  const char *argv[], void *lock_req_)
+{
+    struct ovsdb_client_lock_req *lock_req = lock_req_;
+    lock_req_init(lock_req, "lock", argv[1]);
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovsdb_client_unlock(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                    const char *argv[], void *lock_req_)
+{
+    struct ovsdb_client_lock_req *lock_req = lock_req_;
+    lock_req_init(lock_req, "unlock", argv[1]);
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+ovsdb_client_steal(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                   const char *argv[], void *lock_req_)
+{
+    struct ovsdb_client_lock_req *lock_req = lock_req_;
+    lock_req_init(lock_req, "steal", argv[1]);
+    unixctl_command_reply(conn, NULL);
+}
+
+static void
+do_lock(struct jsonrpc *rpc, const char *method, const char *lock)
+{
+    struct ovsdb_client_lock_req lock_req = {NULL, NULL};
+    struct unixctl_server *unixctl;
+    struct jsonrpc_msg *request;
+    struct json *request_id = NULL;
+    bool exiting = false;
+    bool enable_lock_request = true; /* Don't send another request before
+                                        getting a reply of the previous
+                                        request. */
+    daemon_save_fd(STDOUT_FILENO);
+    daemonize_start(false);
+    lock_req_init(&lock_req, method, lock);
+
+    if (get_detach()) {
+        int error;
+
+        error = unixctl_server_create(NULL, &unixctl);
+        if (error) {
+            ovs_fatal(error, "failed to create unixctl server");
+        }
+
+        unixctl_command_register("unlock", "LOCK", 1, 1,
+                                  ovsdb_client_unlock, &lock_req);
+        unixctl_command_register("steal", "LOCK", 1, 1,
+                                  ovsdb_client_steal, &lock_req);
+        unixctl_command_register("lock", "LOCK", 1, 1,
+                                  ovsdb_client_lock, &lock_req);
+        unixctl_command_register("exit", "", 0, 0,
+                                 ovsdb_client_exit, &exiting);
+    } else {
+        unixctl = NULL;
+    }
+
+    for (;;) {
+        struct jsonrpc_msg *msg;
+        int error;
+
+        unixctl_server_run(unixctl);
+        if (enable_lock_request && lock_req_is_set(&lock_req)) {
+            request = create_lock_request(&lock_req);
+            request_id = json_clone(request->id);
+            jsonrpc_send(rpc, request);
+            lock_req_destroy(&lock_req);
+        }
+
+        error = jsonrpc_recv(rpc, &msg);
+        if (error == EAGAIN) {
+            goto no_msg;
+        } else if (error) {
+            ovs_fatal(error, "%s: receive failed", jsonrpc_get_name(rpc));
+        }
+
+        if (msg->type == JSONRPC_REQUEST && !strcmp(msg->method, "echo")) {
+            jsonrpc_send(rpc, jsonrpc_create_reply(json_clone(msg->params),
+                                                   msg->id));
+        } else if (msg->type == JSONRPC_REPLY
+                   && json_equal(msg->id, request_id)) {
+            print_json(msg->result);
+            putchar('\n');
+            fflush(stdout);
+            enable_lock_request = true;
+            json_destroy(request_id);
+            request_id = NULL;
+            daemonize_complete();
+        } else if (msg->type == JSONRPC_NOTIFY) {
+            puts(msg->method);
+            print_json(msg->params);
+            putchar('\n');
+            fflush(stdout);
+        }
+
+        jsonrpc_msg_destroy(msg);
+
+no_msg:
+        if (exiting) {
+            break;
+        }
+
+        jsonrpc_run(rpc);
+        jsonrpc_wait(rpc);
+        jsonrpc_recv_wait(rpc);
+
+        unixctl_server_wait(unixctl);
+        poll_block();
+    }
+
+    json_destroy(request_id);
+    unixctl_server_destroy(unixctl);
+}
+
+static void
+do_lock_create(struct jsonrpc *rpc, const char *database OVS_UNUSED,
+               int argc OVS_UNUSED, char *argv[])
+{
+    do_lock(rpc, "lock", argv[0]);
+}
+
+static void
+do_lock_steal(struct jsonrpc *rpc, const char *database OVS_UNUSED,
+              int argc OVS_UNUSED, char *argv[])
+{
+    do_lock(rpc, "steal", argv[0]);
+}
+
+static void
+do_lock_unlock(struct jsonrpc *rpc, const char *database OVS_UNUSED,
+               int argc OVS_UNUSED, char *argv[])
+{
+    do_lock(rpc, "unlock", argv[0]);
+}
+
 /* All command handlers (except for "help") are expected to take an optional
  * server socket name (e.g. "unix:...") as their first argument.  The socket
  * name argument must be included in max_args (but left out of min_args).  The
@@ -1388,6 +1581,9 @@ static const struct ovsdb_client_command all_commands[] = {
     { "monitor",            NEED_DATABASE, 1, INT_MAX, do_monitor },
     { "monitor-cond",       NEED_DATABASE, 2, 3,       do_monitor_cond },
     { "dump",               NEED_DATABASE, 0, INT_MAX, do_dump },
+    { "lock",               NEED_RPC,      1, 1,       do_lock_create },
+    { "steal",              NEED_RPC,      1, 1,       do_lock_steal },
+    { "unlock",             NEED_RPC,      1, 1,       do_lock_unlock },
     { "help",               NEED_NONE,     0, INT_MAX, do_help },
 
     { NULL,                 0,             0, 0,       NULL },

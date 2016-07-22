@@ -36,6 +36,12 @@ ovsdb\-client \- command-line interface to \fBovsdb-server\fR(1)
 \fBovsdb\-client \fR[\fIoptions\fR] \fBmonitor-cond\fI \fR[\fIserver\fR] \fR[\fIdatabase\fR] \fIconditions
 \fItable\fR [\fIcolumn\fR[\fB,\fIcolumn\fR]...]...
 .br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBlock\fI \fR[\fIserver\fR] \fIlock\fR
+.br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBsteal\fI \fR[\fIserver\fR] \fIlock\fR
+.br
+\fBovsdb\-client \fR[\fIoptions\fR] \fBunlock\fI \fR[\fIserver\fR] \fIlock\fR
+.br
 \fBovsdb\-client help\fR
 .IP "Output formatting options:"
 [\fB\-\-format=\fIformat\fR]
@@ -154,6 +160,26 @@ prints the initial database contents.
 .IP
 The \fBmonitor\fR command uses RFC 7047 "monitor" method to open a monitor
 session with the server.
+.
+.SH TESTING COMMANDS
+The following commands are mostly of interest for testing the correctness
+of the OVSDB server.
+.
+.IP "\fBovsdb\-client\fR [\fIoptions\fR] \fBlock\fI \fR[\fIserver\fR] \fIlock\fR"
+.IQ "\fBovsdb\-client\fR [\fIoptions\fR] \fBsteal\fI \fR[\fIserver\fR] \fIlock\fR"
+.IQ "\fBovsdb\-client\fR [\fIoptions\fR] \fBunlock\fI \fR[\fIserver\fR] \fIlock\fR"
+Connects to \fIserver\fR and issues corresponding RFC 7047 lock operations
+on \fIlock\fR. Prints json reply or subsequent update messages.
+The \fB\-\-detach\fR option causes \fBovsdb\-client\fR to detach after it
+successfully receives and prints the initial reply.
+.IP
+When running with the \fB\-\-detach\fR option, \fBlock\fR, \fBsteal\fR,
+\fBunlock\fR and \fBexit\fR commands can be issued by using
+\fBovs-appctl\fR. \fBexit\fR command causes the \fBovsdb\-client\fR to
+close its \fBovsdb\-server\fR connection before exit.
+The \fBlock\fR, \fBsteal\fR and \fBunlock\fR commands can be used to
+issue additional lock operations over the same \fBovsdb\-server\fR connection. All above commands take a single \fIlock\fR argument, which does not have
+to be the same as the \fIlock\fR that \fBovsdb\-client\fR started with.
 .
 .SH OPTIONS
 .SS "Output Formatting Options"
