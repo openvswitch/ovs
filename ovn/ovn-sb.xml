@@ -375,13 +375,13 @@
       depends on the current value of the <code>outport</code> field.  Suppose
       <code>outport</code> designates a logical port.  First, OVN compares
       <code>inport</code> to <code>outport</code>; if they are equal, it treats
-      the <code>output</code> as a no-op.  In the common case, where they are
-      different, the packet enters the egress pipeline.  This transition to the
-      egress pipeline discards register data, e.g. <code>reg0</code> ...
-      <code>reg9</code> and connection tracking state, to achieve
-      uniform behavior regardless of whether the egress pipeline is on a
-      different hypervisor (because registers aren't preserve across
-      tunnel encapsulation).
+      the <code>output</code> as a no-op by default.  In the common
+      case, where they are different, the packet enters the egress
+      pipeline.  This transition to the egress pipeline discards
+      register data, e.g. <code>reg0</code> ...  <code>reg9</code> and
+      connection tracking state, to achieve uniform behavior regardless
+      of whether the egress pipeline is on a different hypervisor
+      (because registers aren't preserve across tunnel encapsulation).
     </p>
 
     <p>
@@ -751,6 +751,7 @@
         <li><code>reg0</code>...<code>reg9</code></li>
         <li><code>xxreg0</code> <code>xxreg1</code></li>
         <li><code>inport</code> <code>outport</code></li>
+        <li><code>flags.loopback</code></li>
         <li><code>eth.src</code> <code>eth.dst</code> <code>eth.type</code></li>
         <li><code>vlan.tci</code> <code>vlan.vid</code> <code>vlan.pcp</code> <code>vlan.present</code></li>
         <li><code>ip.proto</code> <code>ip.dscp</code> <code>ip.ecn</code> <code>ip.ttl</code> <code>ip.frag</code></li>
@@ -847,13 +848,13 @@
           </p>
 
           <p>
-            Output to the input port is implicitly dropped, that is,
-            <code>output</code> becomes a no-op if <code>outport</code> ==
-            <code>inport</code>.  Occasionally it may be useful to override
-            this behavior, e.g. to send an ARP reply to an ARP request; to do
-            so, use <code>inport = "";</code> to set the logical input port to
-            an empty string (which should not be used as the name of any
-            logical port).
+            By default, output to the input port is implicitly dropped,
+            that is, <code>output</code> becomes a no-op if
+            <code>outport</code> == <code>inport</code>.  Occasionally
+            it may be useful to override this behavior, e.g. to send an
+            ARP reply to an ARP request; to do so, use
+            <code>flags.loopback = 1</code> to allow the packet to
+            "hair-pin" back to the input port.
           </p>
         </dd>
 

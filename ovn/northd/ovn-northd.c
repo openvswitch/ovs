@@ -1802,8 +1802,8 @@ build_dhcpv4_action(struct ovn_port *op, ovs_be32 offer_ip,
 
     ds_put_format(response_action, "eth.dst = eth.src; eth.src = %s; "
                   "ip4.dst = "IP_FMT"; ip4.src = %s; udp.src = 67; "
-                  "udp.dst = 68; outport = inport; inport = \"\";"
-                  " /* Allow sending out inport. */ output;",
+                  "udp.dst = 68; outport = inport; flags.loopback = 1; "
+                  "output;",
                   server_mac, IP_ARGS(offer_ip), server_ip);
 
     smap_destroy(&dhcpv4_options);
@@ -2470,7 +2470,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     "arp.tpa = arp.spa; "
                     "arp.spa = %s; "
                     "outport = inport; "
-                    "inport = \"\"; /* Allow sending out inport. */ "
+                    "flags.loopback = 1; "
                     "output;",
                     op->lsp_addrs[i].ea_s, op->lsp_addrs[i].ea_s,
                     op->lsp_addrs[i].ipv4_addrs[j].addr_s);
@@ -2497,7 +2497,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                         "nd.target = %s; "
                         "nd.tll = %s; "
                         "outport = inport; "
-                        "inport = \"\"; /* Allow sending out inport. */ "
+                        "flags.loopback = 1; "
                         "output; "
                         "};",
                         op->lsp_addrs[i].ea_s,
@@ -2793,7 +2793,7 @@ add_route(struct hmap *lflows, const struct ovn_port *op,
                   "%sreg1 = %s; "
                   "eth.src = %s; "
                   "outport = %s; "
-                  "inport = \"\"; /* Allow sending out inport. */ "
+                  "flags.loopback = 1; "
                   "next;",
                   is_ipv4 ? "" : "xx",
                   lrp_addr_s,
@@ -3074,7 +3074,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 "ip4.dst <-> ip4.src; "
                 "ip.ttl = 255; "
                 "icmp4.type = 0; "
-                "inport = \"\"; /* Allow sending out inport. */ "
+                "flags.loopback = 1; "
                 "next; ");
             ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
                           ds_cstr(&match), ds_cstr(&actions));
@@ -3098,7 +3098,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 "arp.tpa = arp.spa; "
                 "arp.spa = %s; "
                 "outport = %s; "
-                "inport = \"\"; /* Allow sending out inport. */ "
+                "flags.loopback = 1; "
                 "output;",
                 op->lrp_networks.ea_s,
                 op->lrp_networks.ea_s,
@@ -3147,7 +3147,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 "arp.tpa = arp.spa; "
                 "arp.spa = "IP_FMT"; "
                 "outport = %s; "
-                "inport = \"\"; /* Allow sending out inport. */ "
+                "flags.loopback = 1; "
                 "output;",
                 op->lrp_networks.ea_s,
                 op->lrp_networks.ea_s,
@@ -3216,7 +3216,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                         "ip6.dst <-> ip6.src; "
                         "ip.ttl = 255; "
                         "icmp6.type = 129; "
-                        "inport = \"\"; /* Allow sending out inport. */ "
+                        "flags.loopback = 1; "
                         "next; ");
             ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
                           ds_cstr(&match), ds_cstr(&actions));
@@ -3249,7 +3249,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                           "nd.target = %s; "
                           "nd.tll = %s; "
                           "outport = inport; "
-                          "inport = \"\"; /* Allow sending out inport. */ "
+                          "flags.loopback = 1; "
                           "output; "
                           "};",
                           op->lrp_networks.ea_s,
@@ -3345,7 +3345,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 ds_clear(&match);
                 ds_put_format(&match, "ip && ip4.dst == %s", nat->external_ip);
                 ds_clear(&actions);
-                ds_put_format(&actions,"inport = \"\"; ct_dnat(%s);",
+                ds_put_format(&actions,"flags.loopback = 1; ct_dnat(%s);",
                               nat->logical_ip);
                 ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT, 100,
                               ds_cstr(&match), ds_cstr(&actions));
@@ -3385,7 +3385,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         * back the new destination IP address that is needed for
         * routing in the openflow pipeline. */
         ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT, 50,
-                      "ip", "inport = \"\"; ct_dnat;");
+                      "ip", "flags.loopback = 1; ct_dnat;");
     }
 
     /* Logical router ingress table 4: IP Routing.

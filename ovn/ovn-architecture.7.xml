@@ -768,6 +768,15 @@
       Open vSwitch extension register number 12.
     </dd>
 
+    <dt>logical flow flags</dt>
+    <dd>
+      A field used to store flags to be used when transforming logical
+        <!-- Keep the following in sync with MFF_LOG_FLAGS in
+             ovn/lib/logical-fields.h. -->
+      flows into physical flows.  OVN stores this in Open vSwitch
+      extension register number 10.
+    </dd>
+
     <dt>VLAN ID</dt>
     <dd>
       The VLAN ID is used as an interface between OVN and containers nested
@@ -851,10 +860,10 @@
         <dd>
           <p>
             Implemented by storing arguments into OpenFlow fields, then
-            resubmitting to table 65, which <code>ovn-controller</code>
+            resubmitting to table 66, which <code>ovn-controller</code>
             populates with flows generated from the <code>MAC_Binding</code>
             table in the OVN Southbound database.  If there is a match in table
-            65, then its actions store the bound MAC in the Ethernet
+            66, then its actions store the bound MAC in the Ethernet
             destination address field.
           </p>
 
@@ -887,8 +896,8 @@
         OpenFlow tables 32 through 47 implement the <code>output</code> action
         in the logical ingress pipeline.  Specifically, table 32 handles
         packets to remote hypervisors, table 33 handles packets to the local
-        hypervisor, and table 34 discards packets whose logical ingress and
-        egress port are the same.
+        hypervisor, and table 34 checks whether packets whose logical ingress
+        and egress port are the same should be discarded.
       </p>
 
       <p>
@@ -941,7 +950,8 @@
 
       <p>
         Table 34 matches and drops packets for which the logical input and
-        output ports are the same.  It resubmits other packets to table 48.
+        output ports are the same and the MLF_ALLOW_LOOPBACK flag is not
+        set.  It resubmits other packets to table 48.
       </p>
     </li>
 
@@ -964,8 +974,22 @@
     </li>
 
     <li>
+     <p>
+       Table 64 bypasses OpenFlow loopback when MLF_ALLOW_LOOPBACK is set.
+       Logical loopback was handled in table 34, but OpenFlow by default also
+       prevents loopback to the OpenFlow ingress port.  Thus, when
+       MLF_ALLOW_LOOPBACK is set, OpenFlow table 64 saves the OpenFlow ingress
+       port, sets it to zero, resubmits to table 65 for logical-to-physical
+       transformation, and then restores the OpenFlow ingress port,
+       effectively disabling OpenFlow loopback prevents.  When
+       MLF_ALLOW_LOOPBACK is unset, table 64 flow simply resubmits to table
+       65.
+     </p>
+    </li>
+
+    <li>
       <p>
-        OpenFlow table 64 performs logical-to-physical translation, the
+        OpenFlow table 65 performs logical-to-physical translation, the
         opposite of table 0.  It matches the packet's logical egress port.  Its
         actions output the packet to the port attached to the OVN integration
         bridge that represents that logical port.  If the logical egress port
@@ -974,7 +998,7 @@
       </p>
 
       <p>
-        If the logical egress port is a logical patch port, then table 64
+        If the logical egress port is a logical patch port, then table 65
         outputs to an OVS patch port that represents the logical patch port.
         The packet re-enters the OpenFlow flow table from the OVS patch port's
         peer in table 0, which identifies the logical datapath and logical

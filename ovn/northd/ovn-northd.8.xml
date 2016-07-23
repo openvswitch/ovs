@@ -441,7 +441,7 @@ arp.sha = <var>E</var>;
 arp.tpa = arp.spa;
 arp.spa = <var>A</var>;
 outport = inport;
-inport = ""; /* Allow sending out inport. */
+flags.loopback = 1;
 output;
         </pre>
 
@@ -467,7 +467,7 @@ nd_na {
     nd.target = <var>A</var>;
     nd.tll = <var>E</var>;
     outport = inport;
-    inport = ""; /* Allow sending out inport. */
+    flags.loopback = 1;
     output;
 };
         </pre>
@@ -546,7 +546,7 @@ ip4.src = <var>S</var>;
 udp.src = 67;
 udp.dst = 68;
 outport = <var>P</var>;
-inport = ""; /* Allow sending out inport. */
+flags.loopback = 1;
 output;
         </pre>
 
@@ -772,7 +772,7 @@ output;
 ip4.dst &lt;-&gt; ip4.src;
 ip.ttl = 255;
 icmp4.type = 0;
-inport = ""; /* Allow sending out inport. */
+flags.loopback = 1;
 next;
         </pre>
 
@@ -784,7 +784,7 @@ next;
 ip6.dst &lt;-&gt; ip6.src;
 ip.ttl = 255;
 icmp6.type = 129;
-inport = ""; /* Allow sending out inport. */
+flags.loopback = 1;
 next;
         </pre>
       </li>
@@ -812,7 +812,7 @@ arp.sha = <var>E</var>;
 arp.tpa = arp.spa;
 arp.spa = <var>A</var>;
 outport = <var>P</var>;
-inport = ""; /* Allow sending out inport. */
+flags.loopback = 1;
 output;
         </pre>
       </li>
@@ -837,7 +837,7 @@ arp.sha = <var>E</var>;
 arp.tpa = arp.spa;
 arp.spa = <var>A</var>;
 outport = <var>P</var>;
-inport = ""; /* Allow sending out inport. */
+flags.loopback = 1;
 output;
         </pre>
       </li>
@@ -872,7 +872,7 @@ nd_na {
     nd.target = <var>A</var>;
     nd.tll = <var>E</var>;
     outport = inport;
-    inport = ""; /* Allow sending out inport. */
+    flags.loopback = 1;
     output;
 };
         </pre>
@@ -1032,13 +1032,13 @@ icmp4 {
           For each configuration in the OVN Northbound database, that asks
           to change the destination IP address of a packet from <var>A</var> to
           <var>B</var>, a priority-100 flow matches <code>ip &amp;&amp;
-          ip4.dst == <var>A</var></code> with an action <code>inport = "";
-          ct_dnat(<var>B</var>);</code>.
+          ip4.dst == <var>A</var></code> with an action
+          <code>flags.loopback = 1; ct_dnat(<var>B</var>);</code>.
         </p>
 
         <p>
           For all IP packets of a Gateway router, a priority-50 flow with an
-          action <code>inport = ""; ct_dnat;</code>.
+          action <code>flags.loopback = 1; ct_dnat;</code>.
         </p>
 
         <p>
@@ -1084,7 +1084,7 @@ reg0 = <var>G</var>;
 reg1 = <var>A</var>;
 eth.src = <var>E</var>;
 outport = <var>P</var>;
-inport = ""; /* Allow sending out inport. */
+flags.loopback = 1;
 next;
         </pre>
 
@@ -1117,7 +1117,7 @@ xxreg0 = <var>G</var>;
 xxreg1 = <var>A</var>;
 eth.src = <var>E</var>;
 outport = <var>P</var>;
-inport = ""; /* Allow sending out inport. */
+flags.loopback = 1;
 next;
         </pre>
 

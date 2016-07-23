@@ -375,23 +375,47 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
         }
 
         /* Resubmit to table 34. */
-        put_resubmit(OFTABLE_DROP_LOOPBACK, ofpacts_p);
+        put_resubmit(OFTABLE_CHECK_LOOPBACK, ofpacts_p);
         ofctrl_add_flow(OFTABLE_LOCAL_OUTPUT, 100,
                         &match, ofpacts_p, &binding->header_.uuid);
 
         /* Table 34, Priority 100.
          * =======================
          *
-         * Drop packets whose logical inport and outport are the same. */
+         * Drop packets whose logical inport and outport are the same
+         * and the MLF_ALLOW_LOOPBACK flag is not set. */
         match_init_catchall(&match);
         ofpbuf_clear(ofpacts_p);
         match_set_metadata(&match, htonll(dp_key));
+        match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
+                             0, MLF_ALLOW_LOOPBACK);
         match_set_reg(&match, MFF_LOG_INPORT - MFF_REG0, port_key);
         match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
-        ofctrl_add_flow(OFTABLE_DROP_LOOPBACK, 100,
+        ofctrl_add_flow(OFTABLE_CHECK_LOOPBACK, 100,
                         &match, ofpacts_p, &binding->header_.uuid);
 
         /* Table 64, Priority 100.
+         * =======================
+         *
+         * If the packet is supposed to hair-pin because the "loopback"
+         * flag is set, temporarily set the in_port to zero, resubmit to
+         * table 65 for logical-to-physical translation, then restore
+         * the port number. */
+        match_init_catchall(&match);
+        ofpbuf_clear(ofpacts_p);
+        match_set_metadata(&match, htonll(dp_key));
+        match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
+                             MLF_ALLOW_LOOPBACK, MLF_ALLOW_LOOPBACK);
+        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
+
+        put_stack(MFF_IN_PORT, ofpact_put_STACK_PUSH(ofpacts_p));
+        put_load(0, MFF_IN_PORT, 0, 16, ofpacts_p);
+        put_resubmit(OFTABLE_LOG_TO_PHY, ofpacts_p);
+        put_stack(MFF_IN_PORT, ofpact_put_STACK_POP(ofpacts_p));
+        ofctrl_add_flow(OFTABLE_SAVE_INPORT, 100,
+                        &match, ofpacts_p, &binding->header_.uuid);
+
+        /* Table 65, Priority 100.
          * =======================
          *
          * Deliver the packet to the local vif. */
@@ -523,12 +547,12 @@ consider_mc_group(enum mf_field_id mff_ovn_geneve,
         if (!strcmp(port->type, "patch")) {
             put_load(port->tunnel_key, MFF_LOG_OUTPORT, 0, 32,
                      remote_ofpacts_p);
-            put_resubmit(OFTABLE_DROP_LOOPBACK, remote_ofpacts_p);
+            put_resubmit(OFTABLE_CHECK_LOOPBACK, remote_ofpacts_p);
         } else if (simap_contains(&localvif_to_ofport,
                            (port->parent_port && *port->parent_port)
                            ? port->parent_port : port->logical_port)) {
             put_load(port->tunnel_key, MFF_LOG_OUTPORT, 0, 32, ofpacts_p);
-            put_resubmit(OFTABLE_DROP_LOOPBACK, ofpacts_p);
+            put_resubmit(OFTABLE_CHECK_LOOPBACK, ofpacts_p);
         } else if (port->chassis && !get_localnet_port(local_datapaths,
                                          mc->datapath->tunnel_key)) {
             /* Add remote chassis only when localnet port not exist,
@@ -888,7 +912,17 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     MFF_LOG_REGS;
 #undef MFF_LOG_REGS
     put_resubmit(OFTABLE_LOG_EGRESS_PIPELINE, &ofpacts);
-    ofctrl_add_flow(OFTABLE_DROP_LOOPBACK, 0, &match, &ofpacts, hc_uuid);
+    ofctrl_add_flow(OFTABLE_CHECK_LOOPBACK, 0, &match, &ofpacts, hc_uuid);
+
+    /* Table 64, Priority 0.
+     * =======================
+     *
+     * Resubmit packets that do not have the MLF_ALLOW_LOOPBACK flag set
+     * to table 65 for logical-to-physical translation. */
+    match_init_catchall(&match);
+    ofpbuf_clear(&ofpacts);
+    put_resubmit(OFTABLE_LOG_TO_PHY, &ofpacts);
+    ofctrl_add_flow(OFTABLE_SAVE_INPORT, 0, &match, &ofpacts, hc_uuid);
 
     ofpbuf_uninit(&ofpacts);
 

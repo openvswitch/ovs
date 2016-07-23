@@ -81,6 +81,12 @@ lflow_init(void)
     expr_symtab_add_field(&symtab, "xxreg0", MFF_XXREG0, NULL, false);
     expr_symtab_add_field(&symtab, "xxreg1", MFF_XXREG1, NULL, false);
 
+    /* Flags used in logical to physical transformation. */
+    expr_symtab_add_field(&symtab, "flags", MFF_LOG_FLAGS, NULL, false);
+    char flags_str[16];
+    snprintf(flags_str, sizeof flags_str, "flags[%d]", MLF_ALLOW_LOOPBACK_BIT);
+    expr_symtab_add_subfield(&symtab, "flags.loopback", NULL, flags_str);
+
     /* Connection tracking state. */
     expr_symtab_add_field(&symtab, "ct_mark", MFF_CT_MARK, NULL, false);
     expr_symtab_add_field(&symtab, "ct_label", MFF_CT_LABEL, NULL, false);
@@ -494,7 +500,7 @@ consider_logical_flow(const struct lport_index *lports,
     uint8_t ptable = first_ptable + lflow->table_id;
     uint8_t output_ptable = (ingress
                              ? OFTABLE_REMOTE_OUTPUT
-                             : OFTABLE_LOG_TO_PHY);
+                             : OFTABLE_SAVE_INPORT);
 
     /* Translate OVN actions into OpenFlow actions.
      *

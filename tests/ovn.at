@@ -557,7 +557,7 @@ tcp.dst=80; => actions=set_field:80->tcp_dst, prereqs=ip.proto == 0x6 && (eth.ty
 eth.dst[40] = 1; => actions=set_field:01:00:00:00:00:00/01:00:00:00:00:00->eth_dst, prereqs=1
 vlan.pcp = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=vlan.tci[12]
 vlan.tci[13..15] = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=1
-inport = ""; => actions=set_field:0->reg14,set_field:0->in_port, prereqs=1
+inport = ""; => actions=set_field:0->reg14, prereqs=1
 ip.ttl = 4; => actions=set_field:4->nw_ttl, prereqs=eth.type == 0x800 || eth.type == 0x86dd
 outport="eth0"; next; outport="LOCAL"; next; => actions=set_field:0x5->reg15,resubmit(,27),set_field:0xfffe->reg15,resubmit(,27), prereqs=1
 
@@ -686,7 +686,7 @@ reg1[0] = put_dhcp_opts(offerip="xyzzy"); => DHCP option offerip requires numeri
 reg1[0] = put_dhcp_opts(offerip=1.2.3.4, domain=1.2.3.4); => DHCP option domain requires string value.
 
 # nd_na
-nd_na { eth.src = 12:34:56:78:9a:bc; nd.tll = 12:34:56:78:9a:bc; outport = inport; inport = ""; /* Allow sending out inport. */ output; }; => actions=controller(userdata=00.00.00.03.00.00.00.00.00.19.00.10.80.00.08.06.12.34.56.78.9a.bc.00.00.00.19.00.10.80.00.42.06.12.34.56.78.9a.bc.00.00.ff.ff.00.18.00.00.23.20.00.06.00.20.00.00.00.00.00.01.1c.04.00.01.1e.04.00.19.00.10.00.01.1c.04.00.00.00.00.00.00.00.00.00.19.00.10.00.00.00.02.00.00.00.00.00.00.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00), prereqs=nd_ns
+nd_na { eth.src = 12:34:56:78:9a:bc; nd.tll = 12:34:56:78:9a:bc; outport = inport; inport = ""; /* Allow sending out inport. */ output; }; => actions=controller(userdata=00.00.00.03.00.00.00.00.00.19.00.10.80.00.08.06.12.34.56.78.9a.bc.00.00.00.19.00.10.80.00.42.06.12.34.56.78.9a.bc.00.00.ff.ff.00.18.00.00.23.20.00.06.00.20.00.00.00.00.00.01.1c.04.00.01.1e.04.00.19.00.10.00.01.1c.04.00.00.00.00.00.00.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00), prereqs=nd_ns
 
 # Contradictionary prerequisites (allowed but not useful):
 ip4.src = ip6.src[0..31]; => actions=move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd

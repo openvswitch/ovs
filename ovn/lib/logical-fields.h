@@ -18,11 +18,21 @@
 
 #include "openvswitch/meta-flow.h"
 
+enum {
+    MLF_ALLOW_LOOPBACK_BIT = 0
+};
+
+enum {
+    MLF_ALLOW_LOOPBACK = (1 << MLF_ALLOW_LOOPBACK_BIT) /* Allow outputting
+                                                          back to inport. */
+};
+
 /* Logical fields.
  *
  * These values are documented in ovn-architecture(7), please update the
  * documentation if you change any of them. */
 #define MFF_LOG_DATAPATH MFF_METADATA /* Logical datapath (64 bits). */
+#define MFF_LOG_FLAGS      MFF_REG10  /* One of MLF_* (32 bits). */
 #define MFF_LOG_DNAT_ZONE  MFF_REG11  /* conntrack dnat zone for gateway router
                                        * (32 bits). */
 #define MFF_LOG_SNAT_ZONE  MFF_REG12  /* conntrack snat zone for gateway router

@@ -2872,16 +2872,6 @@ parse_assignment(struct lexer *lexer, struct expr_field *dst,
             bitwise_put(port, &sf->value,
                         sf->field->n_bytes, 0, sf->field->n_bits);
             bitwise_one(&sf->mask, sf->field->n_bytes, 0, sf->field->n_bits);
-
-            /* If the logical input port is being zeroed, clear the OpenFlow
-             * ingress port also, to allow a packet to be sent back to its
-             * origin. */
-            if (!port && sf->field->id == MFF_LOG_INPORT) {
-                sf = ofpact_put_SET_FIELD(ofpacts);
-                sf->field = mf_from_id(MFF_IN_PORT);
-                bitwise_one(&sf->mask,
-                            sf->field->n_bytes, 0, sf->field->n_bits);
-            }
         }
 
     exit_destroy_cs:
