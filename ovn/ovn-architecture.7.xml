@@ -715,7 +715,7 @@
         entered the logical datapath.
         <!-- Keep the following in sync with MFF_LOG_INPORT in
              ovn/lib/logical-fields.h. -->
-        OVN stores this in Nicira extension register number 14.
+        OVN stores this in Open vSwitch extension register number 14.
       </p>
 
       <p>
@@ -736,7 +736,7 @@
         beginning of the logical ingress pipeline.
         <!-- Keep the following in sync with MFF_LOG_OUTPORT in
              ovn/lib/logical-fields.h. -->
-        OVN stores this in Nicira extension register number 15.
+        OVN stores this in Open vSwitch extension register number 15.
       </p>
 
       <p>
@@ -752,7 +752,7 @@
       chassis.  This is initialized to 0 at the beginning of the logical
         <!-- Keep the following in sync with MFF_LOG_CT_ZONE in
              ovn/lib/logical-fields.h. -->
-      ingress pipeline.  OVN stores this in Nicira extension register
+      ingress pipeline.  OVN stores this in Open vSwitch extension register
       number 13.
     </dd>
 
@@ -761,11 +761,11 @@
       Fields that denote the connection tracking zones for Gateway routers.
       These values only have local significance (only on chassis that have
       Gateway routers instantiated) and is not meaningful between
-      chassis.  OVN stores the zone information for DNATting in Nicira
+      chassis.  OVN stores the zone information for DNATting in Open vSwitch
         <!-- Keep the following in sync with MFF_LOG_DNAT_ZONE and
         MFF_LOG_SNAT_ZONE in ovn/lib/logical-fields.h. -->
-      extension register number 11 and zone information for SNATing in Nicira
-      extension register number 12.
+      extension register number 11 and zone information for SNATing in
+      Open vSwitch extension register number 12.
     </dd>
 
     <dt>VLAN ID</dt>
