@@ -136,6 +136,7 @@ get_src_addr(const struct in6_addr *ip6_dst,
     struct in6_addr *mask, *addr6;
     int err, n_in6, i, max_plen = -1;
     struct netdev *dev;
+    bool is_ipv4;
 
     err = netdev_open(output_bridge, NULL, &dev);
     if (err) {
@@ -147,9 +148,15 @@ get_src_addr(const struct in6_addr *ip6_dst,
         goto out;
     }
 
+    is_ipv4 = IN6_IS_ADDR_V4MAPPED(ip6_dst);
+
     for (i = 0; i < n_in6; i++) {
         struct in6_addr a1, a2;
         int mask_bits;
+
+        if (is_ipv4 && !IN6_IS_ADDR_V4MAPPED(&addr6[i])) {
+            continue;
+        }
 
         a1 = ipv6_addr_bitand(ip6_dst, &mask[i]);
         a2 = ipv6_addr_bitand(&addr6[i], &mask[i]);
