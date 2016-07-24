@@ -108,6 +108,10 @@ sections below.
 .SS "OVN_Southbound Commands"
 These commands work with an \fBOVN_Southbound\fR database as a whole.
 .
+.IP "\fBinit\fR"
+Initializes the database, if it is empty.  If the database has already
+been initialized, this command has no effect.
+.
 .IP "\fBshow\fR"
 Prints a brief overview of the database contents.
 .

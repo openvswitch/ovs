@@ -1,8 +1,18 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.1.0",
-    "cksum": "2201958537 8295",
+    "version": "5.2.0",
+    "cksum": "650844440 8727",
     "tables": {
+        "NB_Global": {
+            "columns": {
+                "nb_cfg": {"type": {"key": "integer"}},
+                "sb_cfg": {"type": {"key": "integer"}},
+                "hv_cfg": {"type": {"key": "integer"}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "maxRows": 1,
+            "isRoot": true},
         "Logical_Switch": {
             "columns": {
                 "name": {"type": "string"},

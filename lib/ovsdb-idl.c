@@ -3707,12 +3707,16 @@ ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *loop)
                 /* If the database has already changed since we started the
                  * commit, re-evaluate it immediately to avoid missing a change
                  * for a while. */
+                loop->cur_cfg = loop->next_cfg;
                 if (ovsdb_idl_get_seqno(loop->idl) != loop->precommit_seqno) {
                     poll_immediate_wake();
                 }
                 break;
 
             case TXN_UNCHANGED:
+                loop->cur_cfg = loop->next_cfg;
+                break;
+
             case TXN_ABORTED:
             case TXN_NOT_LOCKED:
             case TXN_ERROR:
@@ -3721,7 +3725,6 @@ ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *loop)
             case TXN_UNCOMMITTED:
             case TXN_INCOMPLETE:
                 OVS_NOT_REACHED();
-
             }
             ovsdb_idl_txn_destroy(txn);
             loop->committing_txn = NULL;

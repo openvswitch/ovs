@@ -30,6 +30,47 @@
     </dd>
   </dl>
 
+  <table name="NB_Global" title="Northbound configuration">
+    <p>
+      Northbound configuration for an OVN system.  This table must have exactly
+      one row.
+    </p>
+
+    <group title="Status">
+      These columns allow a client to track the overall configuration state of
+      the system.
+
+      <column name="nb_cfg">
+        Sequence number for client to increment.  When a client modifies any
+        part of the northbound database configuration and wishes to wait for
+        <code>ovn-northd</code> and possibly all of the hypervisors to finish
+        applying the changes, it may increment this sequence number.
+      </column>
+
+      <column name="sb_cfg">
+        Sequence number that <code>ovn-northd</code> sets to the value of <ref
+        column="nb_cfg"/> after it finishes applying the corresponding
+        configuration changes to the <ref db="OVN_Southbound"/> database.
+      </column>
+
+      <column name="hv_cfg">
+        Sequence number that <code>ovn-northd</code> sets to the smallest
+        sequence number of all the chassis in the system, as reported in the
+        <code>Chassis</code> table in the southbound database.  Thus, <ref
+        column="hv_cfg"/> equals <ref column="nb_cfg"/> if all chassis are
+        caught up with the northbound configuration (which may never happen, if
+        any chassis is down).  This value can regress, if a chassis was removed
+        from the system and rejoins before catching up.
+      </column>
+    </group>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
   <table name="Logical_Switch" title="L2 logical switch">
     <p>
       Each row represents one L2 logical switch.

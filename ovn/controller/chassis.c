@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,11 +64,13 @@ get_bridge_mappings(const struct smap *ext_ids)
     return bridge_mappings ? bridge_mappings : "";
 }
 
-void
+/* Returns this chassis's Chassis record, if it is available and is currently
+ * amenable to a transaction. */
+const struct sbrec_chassis *
 chassis_run(struct controller_ctx *ctx, const char *chassis_id)
 {
     if (!ctx->ovnsb_idl_txn) {
-        return;
+        return NULL;
     }
 
     const struct ovsrec_open_vswitch *cfg;
@@ -78,14 +80,14 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
     cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
     if (!cfg) {
         VLOG_INFO("No Open_vSwitch row defined.");
-        return;
+        return NULL;
     }
 
     encap_type = smap_get(&cfg->external_ids, "ovn-encap-type");
     encap_ip = smap_get(&cfg->external_ids, "ovn-encap-ip");
     if (!encap_type || !encap_ip) {
         VLOG_INFO("Need to specify an encap type and ip");
-        return;
+        return NULL;
     }
 
     char *tokstr = xstrdup(encap_type);
@@ -144,7 +146,7 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
         if (same) {
             /* Nothing changed. */
             inited = true;
-            return;
+            return chassis_rec;
         } else if (!inited) {
             struct ds cur_encaps = DS_EMPTY_INITIALIZER;
             for (int i = 0; i < chassis_rec->n_encaps; i++) {
@@ -190,6 +192,7 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id)
     free(encaps);
 
     inited = true;
+    return chassis_rec;
 }
 
 /* Returns true if the database is all cleaned up, false if more work is

@@ -12,6 +12,12 @@
     <h1>General Commands</h1>
 
     <dl>
+      <dt><code>init</code></dt>
+      <dd>
+        Initializes the database, if it is empty.  If the database has already
+        been initialized, this command has no effect.
+      </dd>
+
       <dt><code>show [<var>switch</var> | <var>router</var>]</code></dt>
       <dd>
         Prints a brief overview of the database contents.  If
@@ -472,6 +478,38 @@
     <h1>Options</h1>
 
     <dl>
+      <dt><code>--no-wait</code> | <code>--wait=none</code></dt>
+      <dt><code>--wait=sb</code></dt>
+      <dt><code>--wait=hv</code></dt>
+
+      <dd>
+        <p>
+          These options control whether and how <code>ovn-nbctl</code> waits
+          for the OVN system to become up-to-date with changes made in an
+          <code>ovn-nbctl</code> invocation.
+        </p>
+
+        <p>
+          By default, or if <code>--no-wait</code> or <code>--wait=none</code>,
+          <code>ovn-nbctl</code> exits immediately after confirming that
+          changes have been committed to the northbound database, without
+          waiting.
+        </p>
+
+        <p>
+          With <code>--wait=sb</code>, before <code>ovn-nbctl</code> exits, it
+          waits for <code>ovn-northd</code> to bring the southbound database
+          up-to-date with the northbound database updates.
+        </p>
+
+        <p>
+          With <code>--wait=hv</code>, before <code>ovn-nbctl</code> exits, it
+          additionally waits for all OVN chassis (hypervisors and gateways) to
+          become up-to-date with the northbound database updates.  (This can
+          become an indefinite wait if any chassis is malfunctioning.)
+        </p>
+      </dd>
+
     <dt><code>--db</code> <var>database</var></dt>
     <dd>
       The OVSDB database remote to contact.  If the <env>OVN_NB_DB</env>

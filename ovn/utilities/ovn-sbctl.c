@@ -526,6 +526,11 @@ static struct cmd_show_table cmd_show_tables[] = {
 };
 
 static void
+sbctl_init(struct ctl_context *ctx OVS_UNUSED)
+{
+}
+
+static void
 cmd_chassis_add(struct ctl_context *ctx)
 {
     struct sbctl_context *sbctl_ctx = sbctl_context_cast(ctx);
@@ -744,6 +749,10 @@ cmd_lflow_list(struct ctl_context *ctx)
 
 
 static const struct ctl_table_class tables[] = {
+    {&sbrec_table_sb_global,
+     {{&sbrec_table_sb_global, NULL, NULL},
+      {NULL, NULL, NULL}}},
+
     {&sbrec_table_chassis,
      {{&sbrec_table_chassis, &sbrec_chassis_col_name, NULL},
       {NULL, NULL, NULL}}},
@@ -817,9 +826,9 @@ static void
 run_prerequisites(struct ctl_command *commands, size_t n_commands,
                   struct ovsdb_idl *idl)
 {
-    struct ctl_command *c;
+    ovsdb_idl_add_table(idl, &sbrec_table_sb_global);
 
-    for (c = commands; c < &commands[n_commands]; c++) {
+    for (struct ctl_command *c = commands; c < &commands[n_commands]; c++) {
         if (c->syntax->prerequisites) {
             struct sbctl_context sbctl_ctx;
 
@@ -854,6 +863,12 @@ do_sbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     }
 
     ovsdb_idl_txn_add_comment(txn, "ovs-sbctl: %s", args);
+
+    const struct sbrec_sb_global *sb = sbrec_sb_global_first(idl);
+    if (!sb) {
+        /* XXX add verification that table is empty */
+        sb = sbrec_sb_global_insert(txn);
+    }
 
     symtab = ovsdb_symbol_table_create();
     for (c = commands; c < &commands[n_commands]; c++) {
@@ -1013,6 +1028,8 @@ sbctl_exit(int status)
 }
 
 static const struct ctl_command_syntax sbctl_commands[] = {
+    { "init", 0, 0, "", NULL, sbctl_init, NULL, "", RW },
+
     /* Chassis commands. */
     {"chassis-add", 3, 3, "CHASSIS ENCAP-TYPE ENCAP-IP", pre_get_info,
      cmd_chassis_add, NULL, "--may-exist", RW},

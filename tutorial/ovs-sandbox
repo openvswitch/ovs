@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# Copyright (c) 2013, 2015 Nicira, Inc.
+# Copyright (c) 2013, 2015, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -360,6 +360,9 @@ if $ovn; then
     ovs-vsctl set open . external-ids:ovn-remote=unix:"$sandbox"/ovnsb_db.sock
     ovs-vsctl set open . external-ids:ovn-encap-type=geneve
     ovs-vsctl set open . external-ids:ovn-encap-ip=127.0.0.1
+
+    ovn-nbctl init
+    ovn-sbctl init
 
     rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach \
         --no-chdir --pidfile -vconsole:off --log-file \

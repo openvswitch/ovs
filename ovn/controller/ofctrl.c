@@ -68,13 +68,8 @@ static char *ovn_flow_to_string(const struct ovn_flow *);
 static void ovn_flow_log(const struct ovn_flow *, const char *action);
 static void ovn_flow_destroy(struct ovn_flow *);
 
-static ovs_be32 queue_msg(struct ofpbuf *);
-static void queue_flow_mod(struct ofputil_flow_mod *);
-
 /* OpenFlow connection to the switch. */
 static struct rconn *swconn;
-
-static void queue_group_mod(struct ofputil_group_mod *);
 
 /* Last seen sequence number for 'swconn'.  When this differs from
  * rconn_get_connection_seqno(rconn), 'swconn' has reconnected. */
@@ -92,6 +87,30 @@ enum ofctrl_state {
     STATES
 #undef STATE
 };
+
+/* An in-flight update to the switch's flow table.
+ *
+ * When we receive a barrier reply from the switch with the given 'xid', we
+ * know that the switch is caught up to northbound database sequence number
+ * 'nb_cfg' (and make that available to the client via ofctrl_get_cur_cfg(), so
+ * that it can store it into our Chassis record's nb_cfg column). */
+struct ofctrl_flow_update {
+    struct ovs_list list_node;  /* In 'flow_updates'. */
+    ovs_be32 xid;               /* OpenFlow transaction ID for barrier. */
+    int64_t nb_cfg;             /* Northbound database sequence number. */
+};
+
+static struct ofctrl_flow_update *
+ofctrl_flow_update_from_list_node(const struct ovs_list *list_node)
+{
+    return CONTAINER_OF(list_node, struct ofctrl_flow_update, list_node);
+}
+
+/* Currently in-flight updates. */
+static struct ovs_list flow_updates;
+
+/* nb_cfg of latest committed flow update. */
+static int64_t cur_cfg;
 
 /* Current state. */
 static enum ofctrl_state state;
@@ -116,10 +135,14 @@ static struct group_table *groups;
  * S_CLEAR_FLOWS or S_UPDATE_FLOWS, this is really the option we have. */
 static enum mf_field_id mff_ovn_geneve;
 
+static ovs_be32 queue_msg(struct ofpbuf *);
+
 static void ovn_flow_table_destroy(void);
+static struct ofpbuf *encode_flow_mod(struct ofputil_flow_mod *);
 
 static void ovn_group_table_clear(struct group_table *group_table,
                                   bool existing);
+static struct ofpbuf *encode_group_mod(const struct ofputil_group_mod *);
 
 static void ofctrl_recv(const struct ofp_header *, enum ofptype);
 
@@ -132,6 +155,7 @@ ofctrl_init(void)
     swconn = rconn_create(5, 0, DSCP_DEFAULT, 1 << OFP13_VERSION);
     tx_counter = rconn_packet_counter_create();
     hmap_init(&installed_flows);
+    ovs_list_init(&flow_updates);
 }
 
 /* S_NEW, for a new connection.
@@ -330,16 +354,17 @@ run_S_CLEAR_FLOWS(void)
         .table_id = OFPTT_ALL,
         .command = OFPFC_DELETE,
     };
-    queue_flow_mod(&fm);
+    queue_msg(encode_flow_mod(&fm));
     VLOG_DBG("clearing all flows");
 
+    /* Send a group_mod to delete all groups. */
     struct ofputil_group_mod gm;
     memset(&gm, 0, sizeof gm);
     gm.command = OFPGC11_DELETE;
     gm.group_id = OFPG_ALL;
     gm.command_bucket_id = OFPG15_BUCKET_ALL;
     ovs_list_init(&gm.buckets);
-    queue_group_mod(&gm);
+    queue_msg(encode_group_mod(&gm));
     ofputil_bucket_list_destroy(&gm.buckets);
 
     /* Clear installed_flows, to match the state of the switch. */
@@ -348,6 +373,13 @@ run_S_CLEAR_FLOWS(void)
     /* Clear existing groups, to match the state of the switch. */
     if (groups) {
         ovn_group_table_clear(groups, true);
+    }
+
+    /* All flow updates are irrelevant now. */
+    struct ofctrl_flow_update *fup, *next;
+    LIST_FOR_EACH_SAFE (fup, next, list_node, &flow_updates) {
+        ovs_list_remove(&fup->list_node);
+        free(fup);
     }
 
     state = S_UPDATE_FLOWS;
@@ -378,7 +410,19 @@ run_S_UPDATE_FLOWS(void)
 static void
 recv_S_UPDATE_FLOWS(const struct ofp_header *oh, enum ofptype type)
 {
-    ofctrl_recv(oh, type);
+    if (type == OFPTYPE_BARRIER_REPLY && !ovs_list_is_empty(&flow_updates)) {
+        struct ofctrl_flow_update *fup = ofctrl_flow_update_from_list_node(
+            ovs_list_front(&flow_updates));
+        if (fup->xid == oh->xid) {
+            if (fup->nb_cfg >= cur_cfg) {
+                cur_cfg = fup->nb_cfg;
+            }
+            ovs_list_remove(&fup->list_node);
+            free(fup);
+        }
+    } else {
+        ofctrl_recv(oh, type);
+    }
 }
 
 /* Runs the OpenFlow state machine against 'br_int', which is local to the
@@ -475,6 +519,12 @@ ofctrl_destroy(void)
     rconn_destroy(swconn);
     ovn_flow_table_destroy();
     rconn_packet_counter_destroy(tx_counter);
+}
+
+int64_t
+ofctrl_get_cur_cfg(void)
+{
+    return cur_cfg;
 }
 
 static ovs_be32
@@ -765,15 +815,21 @@ ovn_flow_table_destroy(void)
 
 /* Flow table update. */
 
-static void
-queue_flow_mod(struct ofputil_flow_mod *fm)
+static struct ofpbuf *
+encode_flow_mod(struct ofputil_flow_mod *fm)
 {
     fm->buffer_id = UINT32_MAX;
     fm->out_port = OFPP_ANY;
     fm->out_group = OFPG_ANY;
-    queue_msg(ofputil_encode_flow_mod(fm, OFPUTIL_P_OF13_OXM));
+    return ofputil_encode_flow_mod(fm, OFPUTIL_P_OF13_OXM);
 }
 
+static void
+add_flow_mod(struct ofputil_flow_mod *fm, struct ovs_list *msgs)
+{
+    struct ofpbuf *msg = encode_flow_mod(fm);
+    ovs_list_push_back(msgs, &msg->list_node);
+}
 
 /* group_table. */
 
@@ -811,10 +867,17 @@ ovn_group_table_clear(struct group_table *group_table, bool existing)
     }
 }
 
-static void
-queue_group_mod(struct ofputil_group_mod *gm)
+static struct ofpbuf *
+encode_group_mod(const struct ofputil_group_mod *gm)
 {
-    queue_msg(ofputil_encode_group_mod(OFP13_VERSION, gm));
+    return ofputil_encode_group_mod(OFP13_VERSION, gm);
+}
+
+static void
+add_group_mod(const struct ofputil_group_mod *gm, struct ovs_list *msgs)
+{
+    struct ofpbuf *msg = encode_group_mod(gm);
+    ovs_list_push_back(msgs, &msg->list_node);
 }
 
 
@@ -829,7 +892,7 @@ queue_group_mod(struct ofputil_group_mod *gm)
  *
  * This should be called after ofctrl_run() within the main loop. */
 void
-ofctrl_put(struct group_table *group_table)
+ofctrl_put(struct group_table *group_table, int64_t nb_cfg)
 {
     if (!groups) {
         groups = group_table;
@@ -844,6 +907,9 @@ ofctrl_put(struct group_table *group_table)
         ovn_group_table_clear(group_table, false);
         return;
     }
+
+    /* OpenFlow messages to send to the switch to bring it up-to-date. */
+    struct ovs_list msgs = OVS_LIST_INITIALIZER(&msgs);
 
     /* Iterate through all the desired groups. If there are new ones,
      * add them to the switch. */
@@ -862,7 +928,7 @@ ofctrl_put(struct group_table *group_table)
                                             ds_cstr(&group_string),
                                             &usable_protocols);
             if (!error) {
-                queue_group_mod(&gm);
+                add_group_mod(&gm, &msgs);
             } else {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
                 VLOG_ERR_RL(&rl, "new group %s %s", error,
@@ -890,7 +956,7 @@ ofctrl_put(struct group_table *group_table)
                 .table_id = i->table_id,
                 .command = OFPFC_DELETE_STRICT,
             };
-            queue_flow_mod(&fm);
+            add_flow_mod(&fm, &msgs);
             ovn_flow_log(i, "removing installed");
 
             hmap_remove(&installed_flows, &i->match_hmap_node);
@@ -917,7 +983,7 @@ ofctrl_put(struct group_table *group_table)
                     .ofpacts_len = d->ofpacts_len,
                     .command = OFPFC_MODIFY_STRICT,
                 };
-                queue_flow_mod(&fm);
+                add_flow_mod(&fm, &msgs);
                 ovn_flow_log(i, "updating installed");
 
                 /* Replace 'i''s actions by 'd''s. */
@@ -950,7 +1016,7 @@ ofctrl_put(struct group_table *group_table)
                 .ofpacts_len = d->ofpacts_len,
                 .command = OFPFC_ADD,
             };
-            queue_flow_mod(&fm);
+            add_flow_mod(&fm, &msgs);
             ovn_flow_log(d, "adding installed");
 
             /* Copy 'd' from 'flow_table' to installed_flows. */
@@ -977,7 +1043,7 @@ ofctrl_put(struct group_table *group_table)
                                             ds_cstr(&group_string),
                                             &usable_protocols);
             if (!error) {
-                queue_group_mod(&gm);
+                add_group_mod(&gm, &msgs);
             } else {
                 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
                 VLOG_ERR_RL(&rl, "Error deleting group %d: %s",
@@ -1008,5 +1074,64 @@ ofctrl_put(struct group_table *group_table)
             ds_destroy(&desired->group);
             free(desired);
         }
+    }
+
+    if (!ovs_list_is_empty(&msgs)) {
+        /* Add a barrier to the list of messages. */
+        struct ofpbuf *barrier = ofputil_encode_barrier_request(OFP13_VERSION);
+        const struct ofp_header *oh = barrier->data;
+        ovs_be32 xid = oh->xid;
+        ovs_list_push_back(&msgs, &barrier->list_node);
+
+        /* Queue the messages. */
+        struct ofpbuf *msg;
+        LIST_FOR_EACH_POP (msg, list_node, &msgs) {
+            queue_msg(msg);
+        }
+
+        /* Track the flow update. */
+        struct ofctrl_flow_update *fup, *prev;
+        LIST_FOR_EACH_REVERSE_SAFE (fup, prev, list_node, &flow_updates) {
+            if (nb_cfg < fup->nb_cfg) {
+                /* This ofctrl_flow_update is for a configuration later than
+                 * 'nb_cfg'.  This should not normally happen, because it means
+                 * that 'nb_cfg' in the SB_Global table of the southbound
+                 * database decreased, and it should normally be monotonically
+                 * increasing. */
+                VLOG_WARN("nb_cfg regressed from %"PRId64" to %"PRId64,
+                          fup->nb_cfg, nb_cfg);
+                ovs_list_remove(&fup->list_node);
+                free(fup);
+            } else if (nb_cfg == fup->nb_cfg) {
+                /* This ofctrl_flow_update is for the same configuration as
+                 * 'nb_cfg'.  Probably, some change to the physical topology
+                 * means that we had to revise the OpenFlow flow table even
+                 * though the logical topology did not change.  Update fp->xid,
+                 * so that we don't send a notification that we're up-to-date
+                 * until we're really caught up. */
+                VLOG_DBG("advanced xid target for nb_cfg=%"PRId64, nb_cfg);
+                fup->xid = xid;
+                goto done;
+            } else {
+                break;
+            }
+        }
+
+        /* Add a flow update. */
+        fup = xmalloc(sizeof *fup);
+        ovs_list_push_back(&flow_updates, &fup->list_node);
+        fup->xid = xid;
+        fup->nb_cfg = nb_cfg;
+    done:;
+    } else if (!ovs_list_is_empty(&flow_updates)) {
+        /* Getting up-to-date with 'nb_cfg' didn't require any extra flow table
+         * changes, so whenever we get up-to-date with the most recent flow
+         * table update, we're also up-to-date with 'nb_cfg'. */
+        struct ofctrl_flow_update *fup = ofctrl_flow_update_from_list_node(
+            ovs_list_back(&flow_updates));
+        fup->nb_cfg = nb_cfg;
+    } else {
+        /* We were completely up-to-date before and still are. */
+        cur_cfg = nb_cfg;
     }
 }

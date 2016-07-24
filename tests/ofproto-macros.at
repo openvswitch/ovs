@@ -183,8 +183,8 @@ ovn_init_db () {
 # ovn-sbctl and ovn-nbctl use them by default, and starts ovn-northd running
 # against them.
 ovn_start () {
-    ovn_init_db ovn-sb
-    ovn_init_db ovn-nb
+    ovn_init_db ovn-sb; ovn-sbctl init
+    ovn_init_db ovn-nb; ovn-nbctl init
 
     echo "starting ovn-northd"
     mkdir "$ovs_base"/northd

@@ -137,6 +137,33 @@
     </dd>
   </dl>
 
+  <table name="SB_Global" title="Southbound configuration">
+    <p>
+      Southbound configuration for an OVN system.  This table must have exactly
+      one row.
+    </p>
+
+    <group title="Status">
+      This column allow a client to track the overall configuration state of
+      the system.
+
+      <column name="nb_cfg">
+        Sequence number for the configuration.  When a CMS or
+        <code>ovn-nbctl</code> updates the northbound database, it increments
+        the <code>nb_cfg</code> column in the <code>NB_Global</code> table in
+        the northbound database.  In turn, when <code>ovn-northd</code> updates
+        the southbound database to bring it up to date with these changes, it
+        updates this column to the same value.
+      </column>
+    </group>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
   <table name="Chassis" title="Physical Network Hypervisor and Gateway Information">
     <p>
       Each row in this table represents a hypervisor or gateway (a chassis) in
@@ -170,6 +197,13 @@
       The hostname of the chassis, if applicable.  ovn-controller will populate
       this column with the hostname of the host it is running on.
       ovn-controller-vtep will leave this column empty.
+    </column>
+
+    <column name="nb_cfg">
+      Sequence number for the configuration.  When <code>ovn-controller</code>
+      updates the configuration of a chassis from the contents of the
+      southbound database, it copies <ref table="SB_Global" column="nb_cfg"/>
+      from the <ref table="SB_Global"/> table into this column.
     </column>
 
     <column name="external_ids" key="ovn-bridge-mappings">

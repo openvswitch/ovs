@@ -1,8 +1,16 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.6.0",
-    "cksum": "1715817174 6541",
+    "version": "1.7.0",
+    "cksum": "3677179333 6917",
     "tables": {
+        "SB_Global": {
+            "columns": {
+                "nb_cfg": {"type": {"key": "integer"}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "maxRows": 1,
+            "isRoot": true},
         "Chassis": {
             "columns": {
                 "name": {"type": "string"},
@@ -13,6 +21,7 @@
                 "vtep_logical_switches" : {"type": {"key": "string",
                                                     "min": 0,
                                                     "max": "unlimited"}},
+                "nb_cfg": {"type": {"key": "integer"}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},

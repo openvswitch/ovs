@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,9 +32,10 @@ struct group_table;
 /* Interface for OVN main loop. */
 void ofctrl_init(void);
 enum mf_field_id ofctrl_run(const struct ovsrec_bridge *br_int);
-void ofctrl_put(struct group_table *group_table);
+void ofctrl_put(struct group_table *group_table, int64_t nb_cfg);
 void ofctrl_wait(void);
 void ofctrl_destroy(void);
+int64_t ofctrl_get_cur_cfg(void);
 
 struct ovn_flow *ofctrl_dup_flow(struct ovn_flow *source);
 

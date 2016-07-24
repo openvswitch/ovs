@@ -200,6 +200,80 @@
 +-------------------------------+     +-------------------------------+
   </pre>
 
+  <h2>Information Flow in OVN</h2>
+
+  <p>
+    Configuration data in OVN flows from north to south.  The CMS, through its
+    OVN/CMS plugin, passes the logical network configuration to
+    <code>ovn-northd</code> via the northbound database.  In turn,
+    <code>ovn-northd</code> compiles the configuration into a lower-level form
+    and passes it to all of the chassis via the southbound database.
+  </p>
+
+  <p>
+    Status information in OVN flows from south to north.  OVN currently
+    provides only a few forms of status information.  First,
+    <code>ovn-northd</code> populates the <code>up</code> column in the
+    northbound <code>Logical_Switch_Port</code> table: if a logical port's
+    <code>chassis</code> column in the southbound <code>Port_Binding</code>
+    table is nonempty, it sets <code>up</code> to <code>true</code>, otherwise
+    to <code>false</code>.  This allows the CMS to detect when a VM's
+    networking has come up.
+  </p>
+
+  <p>
+    Second, OVN provides feedback to the CMS on the realization of its
+    configuration, that is, whether the configuration provided by the CMS has
+    taken effect.  This feature requires the CMS to participate in a sequence
+    number protocol, which works the following way:
+  </p>
+
+  <ol>
+    <li>
+      When the CMS updates the configuration in the northbound database, as
+      part of the same transaction, it increments the value of the
+      <code>nb_cfg</code> column in the <code>NB_Global</code> table.  (This is
+      only necessary if the CMS wants to know when the configuration has been
+      realized.)
+    </li>
+
+    <li>
+      When <code>ovn-northd</code> updates the southbound database based on a
+      given snapshot of the northbound database, it copies <code>nb_cfg</code>
+      from northbound <code>NB_Global</code> into the southbound database
+      <code>SB_Global</code> table, as part of the same transaction.  (Thus, an
+      observer monitoring both databases can determine when the southbound
+      database is caught up with the northbound.)
+    </li>
+
+    <li>
+      After <code>ovn-northd</code> receives confirmation from the southbound
+      database server that its changes have committed, it updates
+      <code>sb_cfg</code> in the northbound <code>NB_Global</code> table to the
+      <code>nb_cfg</code> version that was pushed down.  (Thus, the CMS or
+      another observer can determine when the southbound database is caught up
+      without a connection to the southbound database.)
+    </li>
+
+    <li>
+      The <code>ovn-controller</code> process on each chassis receives the
+      updated southbound database, with the updated <code>nb_cfg</code>.  This
+      process in turn updates the physical flows installed in the chassis's
+      Open vSwitch instances.  When it receives confirmation from Open vSwitch
+      that the physical flows have been updated, it updates <code>nb_cfg</code>
+      in its own <code>Chassis</code> record in the southbound database.
+    </li>
+
+    <li>
+      <code>ovn-northd</code> monitors the <code>nb_cfg</code> column in all of
+      the <code>Chassis</code> records in the southbound database.  It keeps
+      track of the minimum value among all the records and copies it into the
+      <code>hv_cfg</code> column in the northbound <code>NB_Global</code>
+      table.  (Thus, the CMS or another observer can determine when all of the
+      hypervisors have caught up to the northbound configuration.)
+    </li>
+  </ol>
+
   <h2>Chassis Setup</h2>
 
   <p>

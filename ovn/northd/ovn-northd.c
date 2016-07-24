@@ -3171,9 +3171,9 @@ sync_address_sets(struct northd_context *ctx)
 }
 
 static void
-ovnnb_db_run(struct northd_context *ctx)
+ovnnb_db_run(struct northd_context *ctx, struct ovsdb_idl_loop *sb_loop)
 {
-    if (!ctx->ovnsb_txn) {
+    if (!ctx->ovnsb_txn || !ovsdb_idl_has_ever_connected(ctx->ovnnb_idl)) {
         return;
     }
     struct hmap datapaths, ports;
@@ -3194,19 +3194,24 @@ ovnnb_db_run(struct northd_context *ctx)
         ovn_port_destroy(&ports, port);
     }
     hmap_destroy(&ports);
+
+    /* Copy nb_cfg from northbound to southbound database.
+     *
+     * Also set up to update sb_cfg once our southbound transaction commits. */
+    const struct nbrec_nb_global *nb = nbrec_nb_global_first(ctx->ovnnb_idl);
+    const struct sbrec_sb_global *sb = sbrec_sb_global_first(ctx->ovnsb_idl);
+    if (nb && sb) {
+        sbrec_sb_global_set_nb_cfg(sb, nb->nb_cfg);
+        sb_loop->next_cfg = nb->nb_cfg;
+    }
 }
 
-/*
- * The only change we get notified about is if the 'chassis' column of the
- * 'Port_Binding' table changes.  When this column is not empty, it means we
- * need to set the corresponding logical port as 'up' in the northbound DB.
- */
+/* Handle changes to the 'chassis' column of the 'Port_Binding' table.  When
+ * this column is not empty, it means we need to set the corresponding logical
+ * port as 'up' in the northbound DB. */
 static void
-ovnsb_db_run(struct northd_context *ctx)
+update_logical_port_status(struct northd_context *ctx)
 {
-    if (!ctx->ovnnb_txn) {
-        return;
-    }
     struct hmap lports_hmap;
     const struct sbrec_port_binding *sb;
     const struct nbrec_logical_switch_port *nbsp;
@@ -3256,7 +3261,6 @@ ovnsb_db_run(struct northd_context *ctx)
     }
     hmap_destroy(&lports_hmap);
 }
-
 
 static struct dhcp_opts_map supported_dhcp_opts[] = {
     OFFERIP,
@@ -3318,6 +3322,48 @@ check_and_add_supported_dhcp_opts_to_sb_db(struct northd_context *ctx)
     hmap_destroy(&dhcp_opts_to_add);
 }
 
+/* Updates the sb_cfg and hv_cfg columns in the northbound NB_Global table. */
+static void
+update_northbound_cfg(struct northd_context *ctx,
+                      struct ovsdb_idl_loop *sb_loop)
+{
+    /* Update northbound sb_cfg if appropriate. */
+    const struct nbrec_nb_global *nbg = nbrec_nb_global_first(ctx->ovnnb_idl);
+    int64_t sb_cfg = sb_loop->cur_cfg;
+    if (nbg && sb_cfg && nbg->sb_cfg != sb_cfg) {
+        nbrec_nb_global_set_sb_cfg(nbg, sb_cfg);
+    }
+
+    /* Update northbound hv_cfg if appropriate. */
+    if (nbg) {
+        /* Find minimum nb_cfg among all chassis. */
+        const struct sbrec_chassis *chassis;
+        int64_t hv_cfg = nbg->nb_cfg;
+        SBREC_CHASSIS_FOR_EACH (chassis, ctx->ovnsb_idl) {
+            if (chassis->nb_cfg < hv_cfg) {
+                hv_cfg = chassis->nb_cfg;
+            }
+        }
+
+        /* Update hv_cfg. */
+        if (nbg->hv_cfg != hv_cfg) {
+            nbrec_nb_global_set_hv_cfg(nbg, hv_cfg);
+        }
+    }
+}
+
+/* Handle a fairly small set of changes in the southbound database. */
+static void
+ovnsb_db_run(struct northd_context *ctx, struct ovsdb_idl_loop *sb_loop)
+{
+    if (!ctx->ovnnb_txn || !ovsdb_idl_has_ever_connected(ctx->ovnsb_idl)) {
+        return;
+    }
+
+    update_logical_port_status(ctx);
+    update_northbound_cfg(ctx, sb_loop);
+}
+
 static char *default_nb_db_;
 
 static const char *
@@ -3443,12 +3489,18 @@ main(int argc, char *argv[])
     nbrec_init();
     sbrec_init();
 
-    /* We want to detect all changes to the ovn-nb db. */
+    /* We want to detect (almost) all changes to the ovn-nb db. */
     struct ovsdb_idl_loop ovnnb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnnb_db, &nbrec_idl_class, true, true));
+    ovsdb_idl_omit_alert(ovnnb_idl_loop.idl, &nbrec_nb_global_col_sb_cfg);
+    ovsdb_idl_omit_alert(ovnnb_idl_loop.idl, &nbrec_nb_global_col_hv_cfg);
 
+    /* We want to detect only selected changes to the ovn-sb db. */
     struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnsb_db, &sbrec_idl_class, false, true));
+
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_sb_global);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_sb_global_col_nb_cfg);
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_logical_flow);
     add_column_noalert(ovnsb_idl_loop.idl,
@@ -3495,6 +3547,9 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_address_set_col_name);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_address_set_col_addresses);
 
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_chassis);
+    ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
+
     /* Main loop. */
     exiting = false;
     while (!exiting) {
@@ -3505,8 +3560,8 @@ main(int argc, char *argv[])
             .ovnsb_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
-        ovnnb_db_run(&ctx);
-        ovnsb_db_run(&ctx);
+        ovnnb_db_run(&ctx, &ovnsb_idl_loop);
+        ovnsb_db_run(&ctx, &ovnsb_idl_loop);
         if (ctx.ovnsb_txn) {
             check_and_add_supported_dhcp_opts_to_sb_db(&ctx);
         }

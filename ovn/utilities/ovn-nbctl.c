@@ -49,6 +49,14 @@ static bool oneline;
 /* --dry-run: Do not commit any changes. */
 static bool dry_run;
 
+/* --wait=TYPE: Wait for configuration change to take effect? */
+enum nbctl_wait_type {
+    NBCTL_WAIT_NONE,            /* Do not wait. */
+    NBCTL_WAIT_SB,              /* Wait for southbound database updates. */
+    NBCTL_WAIT_HV               /* Wait for hypervisors to catch up. */
+};
+static enum nbctl_wait_type wait_type = NBCTL_WAIT_NONE;
+
 /* --timeout: Time to wait for a connection to 'db'. */
 static int timeout;
 
@@ -160,6 +168,8 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     enum {
         OPT_DB = UCHAR_MAX + 1,
         OPT_NO_SYSLOG,
+        OPT_NO_WAIT,
+        OPT_WAIT,
         OPT_DRY_RUN,
         OPT_ONELINE,
         OPT_LOCAL,
@@ -171,6 +181,8 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     static const struct option global_long_options[] = {
         {"db", required_argument, NULL, OPT_DB},
         {"no-syslog", no_argument, NULL, OPT_NO_SYSLOG},
+        {"no-wait", no_argument, NULL, OPT_NO_WAIT},
+        {"wait", required_argument, NULL, OPT_WAIT},
         {"dry-run", no_argument, NULL, OPT_DRY_RUN},
         {"oneline", no_argument, NULL, OPT_ONELINE},
         {"timeout", required_argument, NULL, 't'},
@@ -225,6 +237,23 @@ parse_options(int argc, char *argv[], struct shash *local_options)
 
         case OPT_NO_SYSLOG:
             vlog_set_levels(&this_module, VLF_SYSLOG, VLL_WARN);
+            break;
+
+        case OPT_NO_WAIT:
+            wait_type = NBCTL_WAIT_NONE;
+            break;
+
+        case OPT_WAIT:
+            if (!strcmp(optarg, "none")) {
+                wait_type = NBCTL_WAIT_NONE;
+            } else if (!strcmp(optarg, "sb")) {
+                wait_type = NBCTL_WAIT_SB;
+            } else if (!strcmp(optarg, "hv")) {
+                wait_type = NBCTL_WAIT_HV;
+            } else {
+                ctl_fatal("argument to --wait must be "
+                          "\"none\", \"sb\", or \"hv\"");
+            }
             break;
 
         case OPT_DRY_RUN:
@@ -294,6 +323,7 @@ usage(void)
 usage: %s [OPTIONS] COMMAND [ARG...]\n\
 \n\
 General commands:\n\
+  init                      initialize the database\n\
   show                      print overview of database contents\n\
   show SWITCH               print overview of database contents for SWITCH\n\
   show ROUTER               print overview of database contents for ROUTER\n\
@@ -381,6 +411,9 @@ DHCP Options commands:\n\
 Options:\n\
   --db=DATABASE               connect to DATABASE\n\
                               (default: %s)\n\
+  --no-wait, --wait=none      do not wait for OVN reconfiguration (default)\n\
+  --wait=sb                   wait for southbound database update\n\
+  --wait=hv                   wait for all chassis to catch up\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
@@ -518,6 +551,11 @@ print_ls(const struct nbrec_logical_switch *ls, struct ds *s)
             ds_put_cstr(s, "]\n");
         }
     }
+}
+
+static void
+nbctl_init(struct ctl_context *ctx OVS_UNUSED)
+{
 }
 
 static void
@@ -2064,6 +2102,10 @@ nbctl_lr_route_list(struct ctl_context *ctx)
 }
 
 static const struct ctl_table_class tables[] = {
+    {&nbrec_table_nb_global,
+     {{&nbrec_table_nb_global, NULL, NULL},
+      {NULL, NULL, NULL}}},
+
     {&nbrec_table_logical_switch,
      {{&nbrec_table_logical_switch, &nbrec_logical_switch_col_name, NULL},
       {NULL, NULL, NULL}}},
@@ -2116,9 +2158,14 @@ static void
 run_prerequisites(struct ctl_command *commands, size_t n_commands,
                   struct ovsdb_idl *idl)
 {
-    struct ctl_command *c;
+    ovsdb_idl_add_table(idl, &nbrec_table_nb_global);
+    if (wait_type == NBCTL_WAIT_SB) {
+        ovsdb_idl_add_column(idl, &nbrec_nb_global_col_sb_cfg);
+    } else if (wait_type == NBCTL_WAIT_HV) {
+        ovsdb_idl_add_column(idl, &nbrec_nb_global_col_hv_cfg);
+    }
 
-    for (c = commands; c < &commands[n_commands]; c++) {
+    for (struct ctl_command *c = commands; c < &commands[n_commands]; c++) {
         if (c->syntax->prerequisites) {
             struct ctl_context ctx;
 
@@ -2145,6 +2192,7 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     struct ctl_context ctx;
     struct ctl_command *c;
     struct shash_node *node;
+    int64_t next_cfg = 0;
     char *error = NULL;
 
     txn = the_idl_txn = ovsdb_idl_txn_create(idl);
@@ -2153,6 +2201,17 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     }
 
     ovsdb_idl_txn_add_comment(txn, "ovs-nbctl: %s", args);
+
+    const struct nbrec_nb_global *nb = nbrec_nb_global_first(idl);
+    if (!nb) {
+        /* XXX add verification that table is empty */
+        nb = nbrec_nb_global_insert(txn);
+    }
+
+    if (wait_type != NBCTL_WAIT_NONE) {
+        ovsdb_idl_txn_increment(txn, &nb->header_,
+                                &nbrec_nb_global_col_nb_cfg);
+    }
 
     symtab = ovsdb_symbol_table_create();
     for (c = commands; c < &commands[n_commands]; c++) {
@@ -2195,6 +2254,9 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     }
 
     status = ovsdb_idl_txn_commit_block(txn);
+    if (wait_type != NBCTL_WAIT_NONE && status == TXN_SUCCESS) {
+        next_cfg = ovsdb_idl_txn_get_increment_new_value(txn);
+    }
     if (status == TXN_UNCHANGED || status == TXN_SUCCESS) {
         for (c = commands; c < &commands[n_commands]; c++) {
             if (c->syntax->postprocess) {
@@ -2271,6 +2333,25 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
         shash_destroy_free_data(&c->options);
     }
     free(commands);
+
+    if (wait_type != NBCTL_WAIT_NONE && status != TXN_UNCHANGED) {
+        ovsdb_idl_enable_reconnect(idl);
+        for (;;) {
+            ovsdb_idl_run(idl);
+            NBREC_NB_GLOBAL_FOR_EACH (nb, idl) {
+                int64_t cur_cfg = (wait_type == NBCTL_WAIT_SB
+                                   ? nb->sb_cfg
+                                   : nb->hv_cfg);
+                if (cur_cfg >= next_cfg) {
+                    goto done;
+                }
+            }
+            ovsdb_idl_wait(idl);
+            poll_block();
+        }
+    done: ;
+    }
+
     ovsdb_idl_txn_destroy(txn);
     ovsdb_idl_destroy(idl);
 
@@ -2312,6 +2393,7 @@ nbctl_exit(int status)
 }
 
 static const struct ctl_command_syntax nbctl_commands[] = {
+    { "init", 0, 0, "", NULL, nbctl_init, NULL, "", RW },
     { "show", 0, 1, "[SWITCH]", NULL, nbctl_show, NULL, "", RO },
 
     /* logical switch commands. */
