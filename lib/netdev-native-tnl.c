@@ -273,6 +273,7 @@ netdev_tnl_ip_build_header(struct ovs_action_push_tnl *data,
         ip->ip_frag_off = (params->flow->tunnel.flags & FLOW_TNL_F_DONT_FRAGMENT) ?
                           htons(IP_DF) : 0;
 
+        /* Checksum has already been zeroed by eth_build_header. */
         ip->ip_csum = csum(ip, sizeof *ip);
 
         data->header_len += IP_HEADER_LEN;

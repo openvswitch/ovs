@@ -2226,6 +2226,7 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow)
             icmp = dp_packet_put_zeros(p, l4_len);
             icmp->icmp_type = ntohs(flow->tp_src);
             icmp->icmp_code = ntohs(flow->tp_dst);
+            /* Checksum has already been zeroed by put_zeros call. */
             icmp->icmp_csum = csum(icmp, ICMP_HEADER_LEN);
         } else if (flow->nw_proto == IPPROTO_IGMP) {
             struct igmp_header *igmp;
@@ -2235,6 +2236,7 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow)
             igmp->igmp_type = ntohs(flow->tp_src);
             igmp->igmp_code = ntohs(flow->tp_dst);
             put_16aligned_be32(&igmp->group, flow->igmp_group_ip4);
+            /* Checksum has already been zeroed by put_zeros call. */
             igmp->igmp_csum = csum(igmp, IGMP_HEADER_LEN);
         } else if (flow->nw_proto == IPPROTO_ICMPV6) {
             struct icmp6_hdr *icmp;
@@ -2323,6 +2325,7 @@ flow_compose(struct dp_packet *p, const struct flow *flow)
 
         ip = dp_packet_l3(p);
         ip->ip_tot_len = htons(p->l4_ofs - p->l3_ofs + l4_len);
+        /* Checksum has already been zeroed by put_zeros call. */
         ip->ip_csum = csum(ip, sizeof *ip);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         struct ovs_16aligned_ip6_hdr *nh;

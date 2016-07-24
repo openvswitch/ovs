@@ -629,6 +629,7 @@ bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
     ip->ip_proto = IPPROTO_UDP;
     put_16aligned_be32(&ip->ip_src, bfd->ip_src);
     put_16aligned_be32(&ip->ip_dst, bfd->ip_dst);
+    /* Checksum has already been zeroed by put_zeros call. */
     ip->ip_csum = csum(ip, sizeof *ip);
 
     udp = dp_packet_put_zeros(p, sizeof *udp);

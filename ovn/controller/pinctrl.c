@@ -345,6 +345,7 @@ pinctrl_handle_put_dhcp_opts(
     struct ip_header *out_ip = dp_packet_l3(&pkt_out);
     out_ip->ip_tot_len = htons(pkt_out.l4_ofs - pkt_out.l3_ofs + new_l4_size);
     udp->udp_csum = 0;
+    /* Checksum needs to be initialized to zero. */
     out_ip->ip_csum = 0;
     out_ip->ip_csum = csum(out_ip, sizeof *out_ip);
 
