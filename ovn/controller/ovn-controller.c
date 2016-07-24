@@ -443,11 +443,11 @@ main(int argc, char *argv[])
 
             lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
                       &patched_datapaths, &group_table, &ct_zones);
-            if (chassis_id) {
-                physical_run(&ctx, mff_ovn_geneve,
-                             br_int, chassis_id, &ct_zones,
-                             &local_datapaths, &patched_datapaths);
-            }
+
+            physical_run(&ctx, mff_ovn_geneve,
+                         br_int, chassis_id, &ct_zones,
+                         &local_datapaths, &patched_datapaths);
+
             ofctrl_put(&group_table);
         }
 
