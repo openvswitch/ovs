@@ -151,7 +151,8 @@ start_daemon () {
     # pidfile and monitoring
     test -d "$rundir" || install -d -m 755 -o root -g root "$rundir"
     set "$@" --pidfile="$rundir/$daemon.pid"
-    set "$@" --detach --monitor
+    set "$@" --detach
+    test X"$MONITOR" = Xno || set "$@" --monitor
 
     # wrapper
     case $wrapper in

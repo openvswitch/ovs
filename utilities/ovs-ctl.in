@@ -494,6 +494,7 @@ set_defaults () {
     DAEMON_CWD=/
     FORCE_COREFILES=yes
     MLOCKALL=yes
+    MONITOR=yes
     OVSDB_SERVER=yes
     OVS_VSWITCHD=yes
     OVSDB_SERVER_PRIORITY=-10
