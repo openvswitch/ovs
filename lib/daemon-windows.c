@@ -18,6 +18,7 @@
 #include "daemon.h"
 #include "daemon-private.h"
 #include <stdio.h>
+#include <io.h>
 #include <stdlib.h>
 #include "dirs.h"
 #include "ovs-thread.h"
@@ -25,6 +26,10 @@
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(daemon_windows);
+
+/* Constants for flock function */
+#define	LOCK_SHARED	0x0                     /* Shared lock. */
+#define	LOCK_UNLOCK	0x80000000              /* Unlock. Custom value. */
 
 static bool service_create;          /* Was --service specified? */
 static bool service_started;         /* Have we dispatched service to start? */
@@ -404,9 +409,39 @@ detach_process(int argc, char *argv[])
 }
 
 static void
+flock(FILE* fd, int operation)
+{
+    HANDLE hFile;
+    OVERLAPPED ov = {0};
+
+    hFile = (HANDLE)_get_osfhandle(fileno(fd));
+    if (hFile == INVALID_HANDLE_VALUE) {
+        VLOG_FATAL("Failed to get PID file handle (%s).",
+                   ovs_lasterror_to_string());
+    }
+
+    if (operation & LOCK_UNLOCK) {
+        if (UnlockFileEx(hFile, 0, 1, 0, &ov) == 0) {
+            VLOG_FATAL("Failed to unlock PID file (%s).",
+                       ovs_lasterror_to_string());
+        }
+    } else {
+       /* Use LOCKFILE_FAIL_IMMEDIATELY flag to avoid hang of another daemon that tries to
+           acquire exclusive lock over the same PID file */
+        if (LockFileEx(hFile, operation | LOCKFILE_FAIL_IMMEDIATELY,
+                       0, 1, 0, &ov) == FALSE) {
+            VLOG_FATAL("Failed to lock PID file (%s).",
+                       ovs_lasterror_to_string());
+        }
+    }
+}
+
+static void
 unlink_pidfile(void)
 {
     if (filep_pidfile) {
+        /* Remove the shared lock on file */
+        flock(filep_pidfile, LOCK_UNLOCK);
         fclose(filep_pidfile);
     }
     if (pidfile) {
@@ -437,12 +472,18 @@ make_pidfile(void)
         VLOG_FATAL("failed to open %s (%s)", pidfile, ovs_strerror(errno));
     }
 
+    flock(filep_pidfile, LOCKFILE_EXCLUSIVE_LOCK);
+
     fatal_signal_add_hook(unlink_pidfile, NULL, NULL, true);
 
     fprintf(filep_pidfile, "%d\n", _getpid());
     if (fflush(filep_pidfile) == EOF) {
         VLOG_FATAL("Failed to write into the pidfile %s", pidfile);
     }
+
+    flock(filep_pidfile, LOCK_SHARED);
+    /* This will remove the exclusive lock. The shared lock will remain */
+    flock(filep_pidfile, LOCK_UNLOCK);
 
     /* Don't close the pidfile till the process exits. */
 }
