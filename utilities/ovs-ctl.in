@@ -499,6 +499,7 @@ set_defaults () {
     FORCE_COREFILES=yes
     MLOCKALL=yes
     SELF_CONFINEMENT=yes
+    MONITOR=yes
     OVSDB_SERVER=yes
     OVS_VSWITCHD=yes
     OVSDB_SERVER_PRIORITY=-10
