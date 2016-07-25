@@ -605,8 +605,13 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         uuid_generate(hc_uuid);
     }
 
+    /* This bool tracks physical mapping changes. */
+    bool physical_map_changed = false;
+
     struct simap new_localvif_to_ofport =
         SIMAP_INITIALIZER(&new_localvif_to_ofport);
+    struct simap new_tunnel_to_ofport =
+        SIMAP_INITIALIZER(&new_tunnel_to_ofport);
     for (int i = 0; i < br_int->n_ports; i++) {
         const struct ovsrec_port *port_rec = br_int->ports[i];
         if (!strcmp(port_rec->name, br_int->name)) {
@@ -668,18 +673,25 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                     continue;
                 }
 
-                struct chassis_tunnel *tun = xmalloc(sizeof *tun);
-                hmap_insert(&tunnels, &tun->hmap_node,
-                            hash_string(chassis_id, 0));
-                tun->chassis_id = chassis_id;
-                tun->ofport = u16_to_ofp(ofport);
-                tun->type = tunnel_type;
-                full_binding_processing = true;
-                binding_reset_processing();
-
-                /* Reprocess logical flow table immediately. */
-                lflow_reset_processing();
-                poll_immediate_wake();
+                simap_put(&new_tunnel_to_ofport, chassis_id, ofport);
+                struct chassis_tunnel *tun = chassis_tunnel_find(chassis_id);
+                if (tun) {
+                    /* If the tunnel's ofport has changed, update. */
+                    if (tun->ofport != u16_to_ofp(ofport) ||
+                        tun->type != tunnel_type) {
+                        tun->ofport = u16_to_ofp(ofport);
+                        tun->type = tunnel_type;
+                        physical_map_changed = true;
+                    }
+                } else {
+                    tun = xmalloc(sizeof *tun);
+                    hmap_insert(&tunnels, &tun->hmap_node,
+                                hash_string(chassis_id, 0));
+                    tun->chassis_id = chassis_id;
+                    tun->ofport = u16_to_ofp(ofport);
+                    tun->type = tunnel_type;
+                    physical_map_changed = true;
+                }
                 break;
             } else {
                 const char *iface_id = smap_get(&iface_rec->external_ids,
@@ -691,29 +703,38 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         }
     }
 
+    /* Remove tunnels that are no longer here. */
+    struct chassis_tunnel *tun, *tun_next;
+    HMAP_FOR_EACH_SAFE (tun, tun_next, hmap_node, &tunnels) {
+        if (!simap_find(&new_tunnel_to_ofport, tun->chassis_id)) {
+            hmap_remove(&tunnels, &tun->hmap_node);
+            physical_map_changed = true;
+            free(tun);
+        }
+    }
+
     /* Capture changed or removed openflow ports. */
-    bool localvif_map_changed = false;
     struct simap_node *vif_name, *vif_name_next;
     SIMAP_FOR_EACH_SAFE (vif_name, vif_name_next, &localvif_to_ofport) {
         int newport;
         if ((newport = simap_get(&new_localvif_to_ofport, vif_name->name))) {
             if (newport != simap_get(&localvif_to_ofport, vif_name->name)) {
                 simap_put(&localvif_to_ofport, vif_name->name, newport);
-                localvif_map_changed = true;
+                physical_map_changed = true;
             }
         } else {
             simap_find_and_delete(&localvif_to_ofport, vif_name->name);
-            localvif_map_changed = true;
+            physical_map_changed = true;
         }
     }
     SIMAP_FOR_EACH (vif_name, &new_localvif_to_ofport) {
         if (!simap_get(&localvif_to_ofport, vif_name->name)) {
             simap_put(&localvif_to_ofport, vif_name->name,
                       simap_get(&new_localvif_to_ofport, vif_name->name));
-            localvif_map_changed = true;
+            physical_map_changed = true;
         }
     }
-    if (localvif_map_changed) {
+    if (physical_map_changed) {
         full_binding_processing = true;
 
         /* Reprocess logical flow table immediately. */
@@ -769,7 +790,6 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
      * ports.  We set MFF_LOG_DATAPATH, MFF_LOG_INPORT, and
      * MFF_LOG_OUTPORT from the tunnel key data, then resubmit to table
      * 33 to handle packets to the local hypervisor. */
-    struct chassis_tunnel *tun;
     HMAP_FOR_EACH (tun, hmap_node, &tunnels) {
         struct match match = MATCH_CATCHALL_INITIALIZER;
         match_set_in_port(&match, tun->ofport);
@@ -858,10 +878,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     ofctrl_add_flow(OFTABLE_DROP_LOOPBACK, 0, &match, &ofpacts, hc_uuid);
 
     ofpbuf_uninit(&ofpacts);
-    HMAP_FOR_EACH_POP (tun, hmap_node, &tunnels) {
-        free(tun);
-    }
-    hmap_clear(&tunnels);
 
     simap_destroy(&new_localvif_to_ofport);
+    simap_destroy(&new_tunnel_to_ofport);
 }
