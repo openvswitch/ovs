@@ -1,7 +1,7 @@
 [Unit]
 Description=Open vSwitch
-After=syslog.target network.target openvswitch-nonetwork.service
-Requires=openvswitch-nonetwork.service
+After=syslog.target network.target ovsdb-server.service
+Requires=ovsdb-server.service
 
 [Service]
 Type=oneshot

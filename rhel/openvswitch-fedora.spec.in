@@ -187,7 +187,7 @@ install -d -m 0755 $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch
 install -p -D -m 0644 \
         rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
         $RPM_BUILD_ROOT/%{_sysconfdir}/sysconfig/openvswitch
-for service in openvswitch openvswitch-nonetwork \
+for service in openvswitch ovsdb-server \
 		ovn-controller ovn-controller-vtep ovn-northd; do
 	install -p -D -m 0644 \
 			rhel/usr_lib_systemd_system_${service}.service \
@@ -415,7 +415,7 @@ fi
 %config(noreplace) %{_sysconfdir}/sysconfig/openvswitch
 %config(noreplace) %{_sysconfdir}/logrotate.d/openvswitch
 %{_unitdir}/openvswitch.service
-%{_unitdir}/openvswitch-nonetwork.service
+%{_unitdir}/ovsdb-server.service
 %{_datadir}/openvswitch/scripts/openvswitch.init
 %{_sysconfdir}/sysconfig/network-scripts/ifup-ovs
 %{_sysconfdir}/sysconfig/network-scripts/ifdown-ovs
