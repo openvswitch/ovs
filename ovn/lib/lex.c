@@ -15,12 +15,12 @@
  */
 
 #include <config.h>
-#include "lex.h"
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/json.h"
+#include "ovn/lex.h"
 #include "packets.h"
 #include "util.h"
 

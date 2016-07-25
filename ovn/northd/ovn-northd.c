@@ -26,7 +26,7 @@
 #include "hash.h"
 #include "openvswitch/hmap.h"
 #include "openvswitch/json.h"
-#include "ovn/lib/lex.h"
+#include "ovn/lex.h"
 #include "ovn/lib/ovn-dhcp.h"
 #include "ovn/lib/ovn-nb-idl.h"
 #include "ovn/lib/ovn-sb-idl.h"

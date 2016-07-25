@@ -35,7 +35,7 @@
 
 #include "lib/dhcp.h"
 #include "ovn-controller.h"
-#include "ovn/lib/actions.h"
+#include "ovn/actions.h"
 #include "ovn/lib/logical-fields.h"
 #include "ovn/lib/ovn-util.h"
 #include "poll-loop.h"

@@ -39,7 +39,7 @@
 #include "ofctrl.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
-#include "ovn/lib/actions.h"
+#include "ovn/actions.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-util.h"
 #include "patch.h"

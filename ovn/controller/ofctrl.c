@@ -34,7 +34,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 #include "ovn-controller.h"
-#include "ovn/lib/actions.h"
+#include "ovn/actions.h"
 #include "poll-loop.h"
 #include "physical.h"
 #include "rconn.h"
