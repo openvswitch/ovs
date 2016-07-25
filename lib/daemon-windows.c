@@ -417,7 +417,7 @@ flock(FILE* fd, int operation)
     hFile = (HANDLE)_get_osfhandle(fileno(fd));
     if (hFile == INVALID_HANDLE_VALUE) {
         VLOG_FATAL("Failed to get PID file handle (%s).",
-                   ovs_lasterror_to_string());
+                   ovs_strerror(errno));
     }
 
     if (operation & LOCK_UNLOCK) {
