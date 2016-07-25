@@ -617,6 +617,7 @@ ovsdb_monitor_session_condition_destroy(
         shash_delete(&condition->tables, node);
         free(mtc);
     }
+    shash_destroy(&condition->tables);
     free(condition);
 }
 
