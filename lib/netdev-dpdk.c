@@ -1411,6 +1411,8 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
         ovs_mutex_lock(&nonpmd_mempool_mutex);
     }
 
+    dp_packet_batch_apply_cutlen(batch);
+
     for (i = 0; i < batch->count; i++) {
         int size = dp_packet_size(batch->packets[i]);
 
@@ -1428,10 +1430,6 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
             dropped += batch->count - i;
             break;
         }
-
-        /* Cut the size so only the truncated size is copied. */
-        size -= dp_packet_get_cutlen(batch->packets[i]);
-        dp_packet_reset_cutlen(batch->packets[i]);
 
         /* We have to do a copy for now */
         memcpy(rte_pktmbuf_mtod(mbufs[newcnt], void *),
@@ -1506,11 +1504,10 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
         unsigned int temp_cnt = 0;
         int cnt = batch->count;
 
+        dp_packet_batch_apply_cutlen(batch);
+
         for (int i = 0; i < cnt; i++) {
             int size = dp_packet_size(batch->packets[i]);
-
-            size -= dp_packet_get_cutlen(batch->packets[i]);
-            dp_packet_set_size(batch->packets[i], size);
 
             if (OVS_UNLIKELY(size > dev->max_packet_len)) {
                 if (next_tx_idx != i) {
