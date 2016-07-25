@@ -1,11 +1,13 @@
 [Unit]
 Description=Open vSwitch
-After=syslog.target network.target ovsdb-server.service
-Requires=ovsdb-server.service
+PartOf=network.target
+BindsTo=ovsdb-server.service
+BindsTo=ovs-vswitchd.service
 
 [Service]
 Type=oneshot
 ExecStart=/bin/true
+ExecReload=/bin/true
 ExecStop=/bin/true
 RemainAfterExit=yes
 

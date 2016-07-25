@@ -60,10 +60,10 @@ fi
 	fi
 done
 
-SERVICE_UNIT=/usr/lib/systemd/system/ovsdb-server.service
+SERVICE_UNIT=/usr/lib/systemd/system/openvswitch.service
 if [ -f $SERVICE_UNIT ] && [ -x /usr/bin/systemctl ]; then
-	if ! systemctl --quiet is-active ovsdb-server.service; then
-		systemctl start ovsdb-server.service
+	if ! systemctl --quiet is-active openvswitch.service; then
+		systemctl start openvswitch.service
 	fi
 else
 	if [ ! -f /var/lock/subsys/openvswitch ]; then
