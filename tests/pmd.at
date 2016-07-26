@@ -461,3 +461,56 @@ icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([PMD - rxq affinity])
+OVS_VSWITCHD_START(
+  [], [], [], [--dummy-numa 0,0,0,0,0,0,0,0,0])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+AT_CHECK([ovs-ofctl add-flow br0 actions=controller])
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=1fe])
+
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=4 other_config:pmd-rxq-affinity="0:3,1:7,2:2,3:8"])
+
+dnl The rxqs should be on the requested cores.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 3
+p1 1 0 7
+p1 2 0 2
+p1 3 0 8
+])
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=6])
+
+dnl We removed the cores requested by some queues from pmd-cpu-mask.
+dnl Those queues will not be polled.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 2 0 2
+])
+
+AT_CHECK([ovs-vsctl remove Interface p1 other_config pmd-rxq-affinity])
+
+dnl We removed the rxq-affinity request.  dpif-netdev should assign queues
+dnl in a round robin fashion.  We just make sure that every rxq is being
+dnl polled again.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show | cut -f 1,2 -d ' ' | sort], [0], [dnl
+p1 0
+p1 1
+p1 2
+p1 3
+])
+
+AT_CHECK([ovs-vsctl set Interface p1 other_config:pmd-rxq-affinity='0:1'])
+
+dnl We explicitly requested core 1 for queue 0.  Core 1 becomes isolated and
+dnl every other queue goes to core 2.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 1
+p1 1 0 2
+p1 2 0 2
+p1 3 0 2
+])
+
+OVS_VSWITCHD_STOP(["/dpif_netdev|WARN|There is no PMD thread on core/d"])
+AT_CLEANUP
