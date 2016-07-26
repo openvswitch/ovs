@@ -1454,8 +1454,8 @@ tcp.flags = RST;
       database, which identifies logical ports via the conventions described
       in <code>IntegrationGuide.md</code>.  (The exceptions are for
       <code>Port_Binding</code> records with <code>type</code> of
-      <code>gateway</code>, whose locations are identified by
-      <code>ovn-northd</code> via the <code>options:gateway-chassis</code>
+      <code>l3gateway</code>, whose locations are identified by
+      <code>ovn-northd</code> via the <code>options:l3gateway-chassis</code>
       column in this table.  <code>ovn-controller</code> is still responsible
       to populate the <code>chassis</code> column.)
     </p>
@@ -1509,12 +1509,12 @@ tcp.flags = RST;
             connectivity to the corresponding physical network.
           </dd>
 
-          <dt>gateway</dt>
+          <dt>l3gateway</dt>
           <dd>
             The physical location of the L3 gateway.  To successfully identify a
             chassis, this column must be a <ref table="Chassis"/> record.  This is
             populated by <code>ovn-controller</code> based on the value of
-            the <code>options:gateway-chassis</code> column in this table.
+            the <code>options:l3gateway-chassis</code> column in this table.
           </dd>
 
           <dt>l2gateway</dt>
@@ -1573,7 +1573,7 @@ tcp.flags = RST;
             a logical router to a logical switch or to another logical router.
           </dd>
 
-          <dt><code>gateway</code></dt>
+          <dt><code>l3gateway</code></dt>
           <dd>
             One of a pair of logical ports that act as if connected by a patch
             cable across multiple chassis.  Useful for connecting a logical
@@ -1630,19 +1630,19 @@ tcp.flags = RST;
     <group title="L3 Gateway Options">
       <p>
         These options apply to logical ports with <ref column="type"/> of
-        <code>gateway</code>.
+        <code>l3gateway</code>.
       </p>
 
       <column name="options" key="peer">
         The <ref column="logical_port"/> in the <ref table="Port_Binding"/>
-        record for the other side of the 'gateway' port.  The named <ref
+        record for the other side of the 'l3gateway' port.  The named <ref
         column="logical_port"/> must specify this <ref column="logical_port"/>
-        in its own <code>peer</code> option.  That is, the two 'gateway'
+        in its own <code>peer</code> option.  That is, the two 'l3gateway'
         logical ports must have reversed <ref column="logical_port"/> and
         <code>peer</code> values.
       </column>
 
-      <column name="options" key="gateway-chassis">
+      <column name="options" key="l3gateway-chassis">
         The <code>chassis</code> in which the port resides.
       </column>
     </group>

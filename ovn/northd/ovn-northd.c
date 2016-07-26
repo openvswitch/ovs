@@ -774,10 +774,10 @@ ovn_port_update_sbrec(const struct ovn_port *op)
     sbrec_port_binding_set_datapath(op->sb, op->od->sb);
     if (op->nbrp) {
         /* If the router is for l3 gateway, it resides on a chassis
-         * and its port type is "gateway". */
+         * and its port type is "l3gateway". */
         const char *chassis = smap_get(&op->od->nbr->options, "chassis");
         if (chassis) {
-            sbrec_port_binding_set_type(op->sb, "gateway");
+            sbrec_port_binding_set_type(op->sb, "l3gateway");
         } else {
             sbrec_port_binding_set_type(op->sb, "patch");
         }
@@ -787,7 +787,7 @@ ovn_port_update_sbrec(const struct ovn_port *op)
         smap_init(&new);
         smap_add(&new, "peer", peer);
         if (chassis) {
-            smap_add(&new, "gateway-chassis", chassis);
+            smap_add(&new, "l3gateway-chassis", chassis);
         }
         sbrec_port_binding_set_options(op->sb, &new);
         smap_destroy(&new);
@@ -806,9 +806,9 @@ ovn_port_update_sbrec(const struct ovn_port *op)
             }
 
             /* A switch port connected to a gateway router is also of
-             * type "gateway". */
+             * type "l3gateway". */
             if (chassis) {
-                sbrec_port_binding_set_type(op->sb, "gateway");
+                sbrec_port_binding_set_type(op->sb, "l3gateway");
             } else {
                 sbrec_port_binding_set_type(op->sb, "patch");
             }
@@ -822,7 +822,7 @@ ovn_port_update_sbrec(const struct ovn_port *op)
             smap_init(&new);
             smap_add(&new, "peer", router_port);
             if (chassis) {
-                smap_add(&new, "gateway-chassis", chassis);
+                smap_add(&new, "l3gateway-chassis", chassis);
             }
             sbrec_port_binding_set_options(op->sb, &new);
             smap_destroy(&new);

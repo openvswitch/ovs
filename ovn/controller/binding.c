@@ -219,7 +219,7 @@ consider_local_datapath(struct controller_ctx *ctx,
             add_local_datapath(local_datapaths, binding_rec);
         }
     } else if (chassis_rec && binding_rec->chassis == chassis_rec
-               && strcmp(binding_rec->type, "gateway")) {
+               && strcmp(binding_rec->type, "l3gateway")) {
         if (ctx->ovnsb_idl_txn) {
             VLOG_INFO("Releasing lport %s from this chassis.",
                       binding_rec->logical_port);

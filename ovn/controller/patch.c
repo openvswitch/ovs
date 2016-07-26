@@ -346,9 +346,9 @@ add_logical_patch_ports(struct controller_ctx *ctx,
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
         bool local_port = false;
-        if (!strcmp(binding->type, "gateway")) {
+        if (!strcmp(binding->type, "l3gateway")) {
             const char *chassis = smap_get(&binding->options,
-                                           "gateway-chassis");
+                                           "l3gateway-chassis");
             if (chassis && !strcmp(local_chassis_id, chassis)) {
                 local_port = true;
             }
