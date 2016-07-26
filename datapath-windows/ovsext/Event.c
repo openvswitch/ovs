@@ -109,7 +109,7 @@ OvsCleanupEvent(POVS_OPEN_INSTANCE instance)
  * --------------------------------------------------------------------------
  */
 VOID
-OvsPostEvent(POVS_EVENT_ENTRY event)
+OvsPostVportEvent(POVS_VPORT_EVENT_ENTRY event)
 {
     POVS_EVENT_QUEUE_ELEM elem;
     POVS_EVENT_QUEUE queue;
@@ -141,7 +141,7 @@ OvsPostEvent(POVS_EVENT_ENTRY event)
             return;
         }
 
-        RtlCopyMemory(&elem->event, event, sizeof elem->event);
+        RtlCopyMemory(&elem->vportEvent, event, sizeof elem->vportEvent);
         InsertTailList(&queue->elemList, &elem->link);
         queue->numElems++;
         OVS_LOG_INFO("Queue: %p, numElems: %d",
@@ -409,8 +409,8 @@ unlock:
  * --------------------------------------------------------------------------
  */
 NTSTATUS
-OvsRemoveEventEntry(POVS_OPEN_INSTANCE instance,
-                    POVS_EVENT_ENTRY entry)
+OvsRemoveVportEventEntry(POVS_OPEN_INSTANCE instance,
+                         POVS_VPORT_EVENT_ENTRY entry)
 {
     NTSTATUS status = STATUS_UNSUCCESSFUL;
     POVS_EVENT_QUEUE queue;
@@ -427,7 +427,7 @@ OvsRemoveEventEntry(POVS_OPEN_INSTANCE instance,
 
     if (queue->numElems) {
         elem = (POVS_EVENT_QUEUE_ELEM)RemoveHeadList(&queue->elemList);
-        *entry = elem->event;
+        *entry = elem->vportEvent;
         OvsFreeMemoryWithTag(elem, OVS_EVENT_POOL_TAG);
         queue->numElems--;
         status = STATUS_SUCCESS;

@@ -19,7 +19,7 @@
 
 typedef struct _OVS_EVENT_QUEUE_ELEM {
     LIST_ENTRY link;
-    OVS_EVENT_ENTRY event;
+    OVS_VPORT_EVENT_ENTRY vportEvent;
 } OVS_EVENT_QUEUE_ELEM, *POVS_EVENT_QUEUE_ELEM;
 
 typedef struct _OVS_EVENT_QUEUE {
@@ -38,7 +38,7 @@ VOID OvsCleanupEventQueue(VOID);
 struct _OVS_OPEN_INSTANCE;
 
 VOID OvsCleanupEvent(struct _OVS_OPEN_INSTANCE *instance);
-VOID OvsPostEvent(POVS_EVENT_ENTRY event);
+VOID OvsPostVportEvent(POVS_VPORT_EVENT_ENTRY event);
 NTSTATUS OvsSubscribeEventIoctl(PFILE_OBJECT fileObject, PVOID inputBuffer,
                                 UINT32 inputLength);
 NTSTATUS OvsPollEventIoctl(PFILE_OBJECT fileObject, PVOID inputBuffer,
@@ -46,6 +46,7 @@ NTSTATUS OvsPollEventIoctl(PFILE_OBJECT fileObject, PVOID inputBuffer,
                            UINT32 outputLength, UINT32 *replyLen);
 NTSTATUS OvsWaitEventIoctl(PIRP irp, PFILE_OBJECT fileObject,
                            PVOID inputBuffer, UINT32 inputLength);
-NTSTATUS OvsRemoveEventEntry(PVOID instance, POVS_EVENT_ENTRY entry);
+NTSTATUS OvsRemoveVportEventEntry(POVS_OPEN_INSTANCE instance,
+                                  POVS_VPORT_EVENT_ENTRY entry);
 
 #endif /* __EVENT_H_ */

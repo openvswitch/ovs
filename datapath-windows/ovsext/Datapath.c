@@ -1582,7 +1582,7 @@ MapIrpOutputBuffer(PIRP irp,
  */
 static NTSTATUS
 OvsPortFillInfo(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                POVS_EVENT_ENTRY eventEntry,
+                POVS_VPORT_EVENT_ENTRY eventEntry,
                 PNL_BUFFER nlBuf)
 {
     NTSTATUS status;
@@ -1659,7 +1659,7 @@ OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 #endif
     NL_BUFFER nlBuf;
     NTSTATUS status;
-    OVS_EVENT_ENTRY eventEntry;
+    OVS_VPORT_EVENT_ENTRY eventEntry;
 
     ASSERT(usrParamsCtx->devOp == OVS_READ_DEV_OP);
 
@@ -1675,7 +1675,8 @@ OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     NlBufInit(&nlBuf, usrParamsCtx->outputBuffer, usrParamsCtx->outputLength);
 
     /* remove an event entry from the event queue */
-    status = OvsRemoveEventEntry(usrParamsCtx->ovsInstance, &eventEntry);
+    status = OvsRemoveVportEventEntry(usrParamsCtx->ovsInstance,
+                                      &eventEntry);
     if (status != STATUS_SUCCESS) {
         /* If there were not elements, read should return no data. */
         status = STATUS_SUCCESS;

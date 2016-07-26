@@ -328,19 +328,13 @@ enum {
 };
 
 
-typedef struct _OVS_EVENT_ENTRY {
+typedef struct _OVS_VPORT_EVENT_ENTRY {
     UINT32 portNo;
     OVS_VPORT_TYPE ovsType;
     UINT32 upcallPid;
     CHAR ovsName[OVS_MAX_PORT_NAME_LENGTH];
     UINT32 type;
-} OVS_EVENT_ENTRY, *POVS_EVENT_ENTRY;
-
-
-typedef struct _OVS_EVENT_STATUS {
-    uint32_t numberEntries;
-    OVS_EVENT_ENTRY eventEntries[0];
-} OVS_EVENT_STATUS, *POVS_EVENT_STATUS;
+} OVS_VPORT_EVENT_ENTRY, *POVS_VPORT_EVENT_ENTRY;
 
 #pragma pack(pop)
 
