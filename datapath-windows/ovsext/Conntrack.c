@@ -23,6 +23,7 @@
 #include "Jhash.h"
 #include "PacketParser.h"
 #include "Debug.h"
+#include "Event.h"
 
 #define WINDOWS_TICK 10000000
 #define SEC_TO_UNIX_EPOCH 11644473600LL
@@ -154,6 +155,15 @@ OvsCtUpdateFlowKey(struct OvsFlowKey *key,
 }
 
 static __inline VOID
+OvsPostCtEventEntry(POVS_CT_ENTRY entry, UINT8 type)
+{
+    OVS_CT_EVENT_ENTRY ctEventEntry = {0};
+    NdisMoveMemory(&ctEventEntry.entry, entry, sizeof(OVS_CT_ENTRY));
+    ctEventEntry.type = type;
+    OvsPostCtEvent(&ctEventEntry);
+}
+
+static __inline VOID
 OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx, UINT64 now)
 {
     NdisMoveMemory(&entry->key, &ctx->key, sizeof (OVS_CT_KEY));
@@ -162,6 +172,7 @@ OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx, UINT64 now)
     entry->timestampStart = now;
     InsertHeadList(&ovsConntrackTable[ctx->hash & CT_HASH_TABLE_MASK],
                    &entry->link);
+    OvsPostCtEventEntry(entry, OVS_EVENT_CT_NEW);
     ctTotalEntries++;
 }
 
@@ -253,6 +264,7 @@ OvsCtUpdateEntry(OVS_CT_ENTRY* entry,
 static __inline VOID
 OvsCtEntryDelete(POVS_CT_ENTRY entry)
 {
+    OvsPostCtEventEntry(entry, OVS_EVENT_CT_DELETE);
     RemoveEntryList(&entry->link);
     OvsFreeMemoryWithTag(entry, OVS_CT_POOL_TAG);
     ctTotalEntries--;
