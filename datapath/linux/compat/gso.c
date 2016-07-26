@@ -229,101 +229,85 @@ free:
 
 static int output_ip(struct sk_buff *skb)
 {
-	int ret = NETDEV_TX_OK;
-	int err;
-
 	memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
 
 #undef ip_local_out
-	err = ip_local_out(skb);
-	if (unlikely(net_xmit_eval(err)))
-		ret = err;
-
-	return ret;
+	return ip_local_out(skb);
 }
 
 int rpl_ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
-	int ret = NETDEV_TX_OK;
-	int id = -1;
-
 	if (!OVS_GSO_CB(skb)->fix_segment)
 		return output_ip(skb);
 
 	if (skb_is_gso(skb)) {
-		struct iphdr *iph;
+		int ret;
+		int id;
 
-		iph = ip_hdr(skb);
-		id = ntohs(iph->id);
 		skb = tnl_skb_gso_segment(skb, 0, false, AF_INET);
 		if (!skb || IS_ERR(skb))
-			return 0;
+			return NET_XMIT_DROP;
+
+		id = ntohs(ip_hdr(skb)->id);
+		do {
+			struct sk_buff *next_skb = skb->next;
+
+			skb->next = NULL;
+			ip_hdr(skb)->id = htons(id++);
+
+			ret = output_ip(skb);
+			skb = next_skb;
+		} while (skb);
+		return ret;
 	}  else if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		int err;
 
 		err = skb_checksum_help(skb);
 		if (unlikely(err))
-			return 0;
+			return NET_XMIT_DROP;
 	}
 
-	while (skb) {
-		struct sk_buff *next_skb = skb->next;
-		struct iphdr *iph;
-
-		skb->next = NULL;
-
-		iph = ip_hdr(skb);
-		if (id >= 0)
-			iph->id = htons(id++);
-
-		ret = output_ip(skb);
-		skb = next_skb;
-	}
-	return ret;
+	return output_ip(skb);
 }
 EXPORT_SYMBOL_GPL(rpl_ip_local_out);
 
 static int output_ipv6(struct sk_buff *skb)
 {
-	int ret = NETDEV_TX_OK;
-	int err;
-
 	memset(IP6CB(skb), 0, sizeof (*IP6CB(skb)));
 #undef ip6_local_out
-	err = ip6_local_out(skb);
-	if (unlikely(net_xmit_eval(err)))
-		ret = err;
-
-	return ret;
+	return ip6_local_out(skb);
 }
 
 int rpl_ip6_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
-	int ret = NETDEV_TX_OK;
 
 	if (!OVS_GSO_CB(skb)->fix_segment)
 		return output_ipv6(skb);
 
 	if (skb_is_gso(skb)) {
+		int ret;
+
 		skb = tnl_skb_gso_segment(skb, 0, false, AF_INET6);
 		if (!skb || IS_ERR(skb))
-			return 0;
+			return NET_XMIT_DROP;
+
+		do {
+			struct sk_buff *next_skb = skb->next;
+
+			skb->next = NULL;
+			ret = output_ipv6(skb);
+			skb = next_skb;
+		} while (skb);
+		return ret;
 	}  else if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		int err;
 
 		err = skb_checksum_help(skb);
 		if (unlikely(err))
-			return 0;
+			return NET_XMIT_DROP;
 	}
 
-	while (skb) {
-		struct sk_buff *next_skb = skb->next;
-
-		skb->next = NULL;
-		ret = output_ipv6(skb);
-		skb = next_skb;
-	}
-	return ret;
+	return output_ipv6(skb);
 }
 EXPORT_SYMBOL_GPL(rpl_ip6_local_out);
 #endif /* 3.18 */
