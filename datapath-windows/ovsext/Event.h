@@ -16,16 +16,28 @@
 
 #ifndef __EVENT_H_
 #define __EVENT_H_ 1
+#include "Conntrack.h"
+
+typedef struct _OVS_CT_EVENT_ENTRY {
+    OVS_CT_ENTRY entry;
+    UINT8 type;
+    UINT64 pad[10];
+} OVS_CT_EVENT_ENTRY, *POVS_CT_EVENT_ENTRY;
 
 typedef struct _OVS_EVENT_QUEUE_ELEM {
     LIST_ENTRY link;
-    OVS_VPORT_EVENT_ENTRY vportEvent;
+    union {
+        OVS_VPORT_EVENT_ENTRY vportEvent;
+        OVS_CT_EVENT_ENTRY ctEvent;
+    };
 } OVS_EVENT_QUEUE_ELEM, *POVS_EVENT_QUEUE_ELEM;
 
 typedef struct _OVS_EVENT_QUEUE {
     LIST_ENTRY queueLink;
     LIST_ENTRY elemList;
     UINT32 mask;
+    UINT32 mcastEventId;
+    UINT32 protocol;
     UINT16 numElems;
     BOOLEAN pollAll;
     PIRP pendingIrp;
@@ -39,6 +51,7 @@ struct _OVS_OPEN_INSTANCE;
 
 VOID OvsCleanupEvent(struct _OVS_OPEN_INSTANCE *instance);
 VOID OvsPostVportEvent(POVS_VPORT_EVENT_ENTRY event);
+VOID OvsPostCtEvent(POVS_CT_EVENT_ENTRY ctEvent);
 NTSTATUS OvsSubscribeEventIoctl(PFILE_OBJECT fileObject, PVOID inputBuffer,
                                 UINT32 inputLength);
 NTSTATUS OvsPollEventIoctl(PFILE_OBJECT fileObject, PVOID inputBuffer,
@@ -48,5 +61,7 @@ NTSTATUS OvsWaitEventIoctl(PIRP irp, PFILE_OBJECT fileObject,
                            PVOID inputBuffer, UINT32 inputLength);
 NTSTATUS OvsRemoveVportEventEntry(POVS_OPEN_INSTANCE instance,
                                   POVS_VPORT_EVENT_ENTRY entry);
+NTSTATUS OvsRemoveCtEventEntry(POVS_OPEN_INSTANCE instance,
+                               POVS_CT_EVENT_ENTRY entry);
 
 #endif /* __EVENT_H_ */
