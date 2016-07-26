@@ -54,7 +54,7 @@ static inline __sum16 udp_v4_check(int len, __be32 saddr,
 }
 #endif
 
-#ifndef HAVE_UDP_SET_CSUM
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 #define udp_set_csum rpl_udp_set_csum
 void rpl_udp_set_csum(bool nocheck, struct sk_buff *skb,
 		      __be32 saddr, __be32 daddr, int len);

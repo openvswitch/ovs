@@ -203,12 +203,13 @@ static void udp6_set_csum(bool nocheck, struct sk_buff *skb,
 		skb->csum_offset = offsetof(struct udphdr, check);
 		uh->check = ~udp_v6_check(len, saddr, daddr, 0);
 	} else {
+		int l4_offset = skb_transport_offset(skb);
 		__wsum csum;
 
 		BUG_ON(skb->ip_summed == CHECKSUM_PARTIAL);
 
 		uh->check = 0;
-		csum = skb_checksum(skb, 0, len, 0);
+		csum = skb_checksum(skb, l4_offset, len, 0);
 		uh->check = udp_v6_check(len, saddr, daddr, csum);
 		if (uh->check == 0)
 			uh->check = CSUM_MANGLED_0;

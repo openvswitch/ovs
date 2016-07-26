@@ -639,7 +639,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_GREP_IFELSE([$KSRC/include/net/udp.h], [inet_get_local_port_range(net],
                                    [OVS_DEFINE([HAVE_UDP_FLOW_SRC_PORT])])])
   OVS_GREP_IFELSE([$KSRC/include/net/udp.h], [udp_v4_check])
-  OVS_GREP_IFELSE([$KSRC/include/net/udp.h], [udp_set_csum])
   OVS_GREP_IFELSE([$KSRC/include/net/udp_tunnel.h], [udp_tunnel_gro_complete])
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/udp_tunnel.h], [udp_tunnel_sock_cfg],
                         [gro_receive])

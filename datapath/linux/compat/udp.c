@@ -1,6 +1,6 @@
 #include <linux/version.h>
 
-#ifndef HAVE_UDP_SET_CSUM
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
 
 #include <net/udp.h>
 
@@ -26,12 +26,13 @@ void rpl_udp_set_csum(bool nocheck, struct sk_buff *skb,
 		skb->csum_offset = offsetof(struct udphdr, check);
 		uh->check = ~udp_v4_check(len, saddr, daddr, 0);
 	} else {
+		int l4_offset = skb_transport_offset(skb);
 		__wsum csum;
 
 		BUG_ON(skb->ip_summed == CHECKSUM_PARTIAL);
 
 		uh->check = 0;
-		csum = skb_checksum(skb, 0, len, 0);
+		csum = skb_checksum(skb, l4_offset, len, 0);
 		uh->check = udp_v4_check(len, saddr, daddr, csum);
 		if (uh->check == 0)
 			uh->check = CSUM_MANGLED_0;
