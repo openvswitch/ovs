@@ -27,6 +27,7 @@
 #include "openvswitch/hmap.h"
 #include "openvswitch/json.h"
 #include "ovn/lib/lex.h"
+#include "ovn/lib/ovn-dhcp.h"
 #include "ovn/lib/ovn-nb-idl.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-util.h"
@@ -99,7 +100,9 @@ enum ovn_stage {
     PIPELINE_STAGE(SWITCH, IN,  LB,             7, "ls_in_lb")           \
     PIPELINE_STAGE(SWITCH, IN,  STATEFUL,       8, "ls_in_stateful")     \
     PIPELINE_STAGE(SWITCH, IN,  ARP_ND_RSP,     9, "ls_in_arp_rsp")      \
-    PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,       10, "ls_in_l2_lkup")      \
+    PIPELINE_STAGE(SWITCH, IN,  DHCP_OPTIONS,   10, "ls_in_dhcp_options") \
+    PIPELINE_STAGE(SWITCH, IN,  DHCP_RESPONSE,  11, "ls_in_dhcp_response") \
+    PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,        12, "ls_in_l2_lkup")      \
                                                                       \
     /* Logical switch egress stages. */                               \
     PIPELINE_STAGE(SWITCH, OUT, PRE_LB,       0, "ls_out_pre_lb")     \
@@ -140,6 +143,7 @@ enum ovn_stage {
 #define REGBIT_CONNTRACK_DEFRAG "reg0[0]"
 #define REGBIT_CONNTRACK_COMMIT "reg0[1]"
 #define REGBIT_CONNTRACK_NAT    "reg0[2]"
+#define REGBIT_DHCP_OPTS_RESULT "reg0[3]"
 
 /* Returns an "enum ovn_stage" built from the arguments. */
 static enum ovn_stage
@@ -1371,6 +1375,77 @@ lsp_is_up(const struct nbrec_logical_switch_port *lsp)
 }
 
 static bool
+build_dhcpv4_action(struct ovn_port *op, ovs_be32 offer_ip,
+                    struct ds *options_action, struct ds *response_action)
+{
+    if (!op->nbsp->dhcpv4_options) {
+        /* CMS has disabled native DHCPv4 for this lport. */
+        return false;
+    }
+
+    ovs_be32 host_ip, mask;
+    char *error = ip_parse_masked(op->nbsp->dhcpv4_options->cidr, &host_ip,
+                                  &mask);
+    if (error || ((offer_ip ^ host_ip) & mask)) {
+       /* Either
+        *  - cidr defined is invalid or
+        *  - the offer ip of the logical port doesn't belong to the cidr
+        *    defined in the DHCPv4 options.
+        *  */
+        free(error);
+        return false;
+    }
+
+    const char *server_ip = smap_get(
+        &op->nbsp->dhcpv4_options->options, "server_id");
+    const char *server_mac = smap_get(
+        &op->nbsp->dhcpv4_options->options, "server_mac");
+    const char *lease_time = smap_get(
+        &op->nbsp->dhcpv4_options->options, "lease_time");
+    const char *router = smap_get(
+            &op->nbsp->dhcpv4_options->options, "router");
+
+    if (!(server_ip && server_mac && lease_time && router)) {
+        /* "server_id", "server_mac", "lease_time" and "router" should be
+         * present in the dhcp_options. */
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "Required DHCPv4 options not defined for lport - %s",
+                     op->json_key);
+        return false;
+    }
+
+    struct smap dhcpv4_options = SMAP_INITIALIZER(&dhcpv4_options);
+    smap_clone(&dhcpv4_options, &op->nbsp->dhcpv4_options->options);
+
+    /* server_mac is not DHCPv4 option, delete it from the smap. */
+    smap_remove(&dhcpv4_options, "server_mac");
+    char *netmask = xasprintf(IP_FMT, IP_ARGS(mask));
+    smap_add(&dhcpv4_options, "netmask", netmask);
+    free(netmask);
+
+    ds_put_format(options_action,
+                  REGBIT_DHCP_OPTS_RESULT" = put_dhcp_opts(offerip = "
+                  IP_FMT", ", IP_ARGS(offer_ip));
+    struct smap_node *node;
+    SMAP_FOR_EACH(node, &dhcpv4_options) {
+        ds_put_format(options_action, "%s = %s, ", node->key, node->value);
+    }
+
+    ds_chomp(options_action, ' ');
+    ds_chomp(options_action, ',');
+    ds_put_cstr(options_action, "); next;");
+
+    ds_put_format(response_action, "eth.dst = eth.src; eth.src = %s; "
+                  "ip4.dst = "IP_FMT"; ip4.src = %s; udp.src = 67; "
+                  "udp.dst = 68; outport = inport; inport = \"\";"
+                  " /* Allow sending out inport. */ output;",
+                  server_mac, IP_ARGS(offer_ip), server_ip);
+
+    smap_destroy(&dhcpv4_options);
+    return true;
+}
+
+static bool
 has_stateful_acl(struct ovn_datapath *od)
 {
     for (size_t i = 0; i < od->nbs->n_acls; i++) {
@@ -1774,6 +1849,35 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
             }
         }
     }
+
+    /* Add 34000 priority flow to allow DHCP reply from ovn-controller to all
+     * logical ports of the datapath if the CMS has configured DHCPv4 options*/
+    if (od->nbs && od->nbs->n_ports) {
+        for (size_t i = 0; i < od->nbs->n_ports; i++) {
+            if (od->nbs->ports[i]->dhcpv4_options) {
+                const char *server_id = smap_get(
+                    &od->nbs->ports[i]->dhcpv4_options->options, "server_id");
+                const char *server_mac = smap_get(
+                    &od->nbs->ports[i]->dhcpv4_options->options, "server_mac");
+                const char *lease_time = smap_get(
+                    &od->nbs->ports[i]->dhcpv4_options->options, "lease_time");
+                const char *router = smap_get(
+                    &od->nbs->ports[i]->dhcpv4_options->options, "router");
+                if (server_id && server_mac && lease_time && router) {
+                    struct ds match = DS_EMPTY_INITIALIZER;
+                    const char *actions =
+                        has_stateful ? "ct_commit; next;" : "next;";
+                    ds_put_format(&match, "outport == \"%s\" && eth.src == %s "
+                                  "&& ip4.src == %s && udp && udp.src == 67 "
+                                  "&& udp.dst == 68", od->nbs->ports[i]->name,
+                                  server_mac, server_id);
+                    ovn_lflow_add(
+                        lflows, od, S_SWITCH_OUT_ACL, 34000, ds_cstr(&match),
+                        actions);
+                }
+            }
+        }
+    }
 }
 
 static void
@@ -1955,8 +2059,8 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_SWITCH_IN_PORT_SEC_IP, 0, "1", "next;");
     }
 
-    /* Ingress table 9: ARP responder, skip requests coming from localnet ports.
-     * (priority 100). */
+    /* Ingress table 9: ARP/ND responder, skip requests coming from localnet
+     * ports. (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbsp) {
             continue;
@@ -2052,7 +2156,69 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_SWITCH_IN_ARP_ND_RSP, 0, "1", "next;");
     }
 
-    /* Ingress table 10: Destination lookup, broadcast and multicast handling
+    /* Logical switch ingress table 10 and 11: DHCP options and response
+         * priority 100 flows. */
+    HMAP_FOR_EACH (op, key_node, ports) {
+        if (!op->nbsp) {
+           continue;
+        }
+
+        if (!lsp_is_enabled(op->nbsp) || !strcmp(op->nbsp->type, "router")) {
+            /* Don't add the DHCP flows if the port is not enabled or if the
+             * port is a router port. */
+            continue;
+        }
+
+        if (!op->nbsp->dhcpv4_options) {
+            /* CMS has disabled native DHCPv4 for this lport. */
+            continue;
+        }
+
+        for (size_t i = 0; i < op->n_lsp_addrs; i++) {
+            for (size_t j = 0; j < op->lsp_addrs[i].n_ipv4_addrs; j++) {
+                struct ds options_action = DS_EMPTY_INITIALIZER;
+                struct ds response_action = DS_EMPTY_INITIALIZER;
+                if (build_dhcpv4_action(
+                        op, op->lsp_addrs[i].ipv4_addrs[j].addr,
+                        &options_action, &response_action)) {
+                    struct ds match = DS_EMPTY_INITIALIZER;
+                    ds_put_format(
+                        &match, "inport == %s && eth.src == %s && "
+                        "ip4.src == 0.0.0.0 && ip4.dst == 255.255.255.255 && "
+                        "udp.src == 68 && udp.dst == 67", op->json_key,
+                        op->lsp_addrs[i].ea_s);
+
+                    ovn_lflow_add(lflows, op->od, S_SWITCH_IN_DHCP_OPTIONS,
+                                  100, ds_cstr(&match),
+                                  ds_cstr(&options_action));
+                    /* If REGBIT_DHCP_OPTS_RESULT is set, it means the
+                     * put_dhcp_opts action  is successful */
+                    ds_put_cstr(&match, " && "REGBIT_DHCP_OPTS_RESULT);
+                    ovn_lflow_add(lflows, op->od, S_SWITCH_IN_DHCP_RESPONSE,
+                                  100, ds_cstr(&match),
+                                  ds_cstr(&response_action));
+                    ds_destroy(&match);
+                    ds_destroy(&options_action);
+                    ds_destroy(&response_action);
+                    break;
+                }
+            }
+        }
+    }
+
+    /* Ingress table 10 and 11: DHCP options and response, by default goto next.
+     * (priority 0). */
+
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        if (!od->nbs) {
+            continue;
+        }
+
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_DHCP_OPTIONS, 0, "1", "next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_DHCP_RESPONSE, 0, "1", "next;");
+    }
+
+    /* Ingress table 12: Destination lookup, broadcast and multicast handling
      * (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbsp) {
@@ -2072,7 +2238,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                       "outport = \""MC_FLOOD"\"; output;");
     }
 
-    /* Ingress table 10: Destination lookup, unicast handling (priority 50), */
+    /* Ingress table 12: Destination lookup, unicast handling (priority 50), */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbsp) {
             continue;
@@ -2105,7 +2271,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
 
-    /* Ingress table 10: Destination lookup for unknown MACs (priority 0). */
+    /* Ingress table 12: Destination lookup for unknown MACs (priority 0). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbs) {
             continue;
@@ -3092,6 +3258,66 @@ ovnsb_db_run(struct northd_context *ctx)
 }
 
 
+static struct dhcp_opts_map supported_dhcp_opts[] = {
+    OFFERIP,
+    DHCP_OPT_NETMASK,
+    DHCP_OPT_ROUTER,
+    DHCP_OPT_DNS_SERVER,
+    DHCP_OPT_LOG_SERVER,
+    DHCP_OPT_LPR_SERVER,
+    DHCP_OPT_SWAP_SERVER,
+    DHCP_OPT_POLICY_FILTER,
+    DHCP_OPT_ROUTER_SOLICITATION,
+    DHCP_OPT_NIS_SERVER,
+    DHCP_OPT_NTP_SERVER,
+    DHCP_OPT_SERVER_ID,
+    DHCP_OPT_TFTP_SERVER,
+    DHCP_OPT_CLASSLESS_STATIC_ROUTE,
+    DHCP_OPT_MS_CLASSLESS_STATIC_ROUTE,
+    DHCP_OPT_IP_FORWARD_ENABLE,
+    DHCP_OPT_ROUTER_DISCOVERY,
+    DHCP_OPT_ETHERNET_ENCAP,
+    DHCP_OPT_DEFAULT_TTL,
+    DHCP_OPT_TCP_TTL,
+    DHCP_OPT_MTU,
+    DHCP_OPT_LEASE_TIME,
+    DHCP_OPT_T1,
+    DHCP_OPT_T2
+};
+
+static void
+check_and_add_supported_dhcp_opts_to_sb_db(struct northd_context *ctx)
+{
+    struct hmap dhcp_opts_to_add = HMAP_INITIALIZER(&dhcp_opts_to_add);
+    for (size_t i = 0; (i < sizeof(supported_dhcp_opts) /
+                            sizeof(supported_dhcp_opts[0])); i++) {
+        hmap_insert(&dhcp_opts_to_add, &supported_dhcp_opts[i].hmap_node,
+                    dhcp_opt_hash(supported_dhcp_opts[i].name));
+    }
+
+    const struct sbrec_dhcp_options *opt_row, *opt_row_next;
+    SBREC_DHCP_OPTIONS_FOR_EACH_SAFE(opt_row, opt_row_next, ctx->ovnsb_idl) {
+        struct dhcp_opts_map *dhcp_opt =
+            dhcp_opts_find(&dhcp_opts_to_add, opt_row->name);
+        if (dhcp_opt) {
+            hmap_remove(&dhcp_opts_to_add, &dhcp_opt->hmap_node);
+        } else {
+            sbrec_dhcp_options_delete(opt_row);
+        }
+    }
+
+    struct dhcp_opts_map *opt;
+    HMAP_FOR_EACH (opt, hmap_node, &dhcp_opts_to_add) {
+        struct sbrec_dhcp_options *sbrec_dhcp_option =
+            sbrec_dhcp_options_insert(ctx->ovnsb_txn);
+        sbrec_dhcp_options_set_name(sbrec_dhcp_option, opt->name);
+        sbrec_dhcp_options_set_code(sbrec_dhcp_option, opt->code);
+        sbrec_dhcp_options_set_type(sbrec_dhcp_option, opt->type);
+    }
+
+    hmap_destroy(&dhcp_opts_to_add);
+}
+
 static char *default_nb_db_;
 
 static const char *
@@ -3260,6 +3486,10 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_options);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_mac);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_port_binding_col_chassis);
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_dhcp_options);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dhcp_options_col_code);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dhcp_options_col_type);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dhcp_options_col_name);
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_address_set);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_address_set_col_name);
@@ -3277,6 +3507,9 @@ main(int argc, char *argv[])
 
         ovnnb_db_run(&ctx);
         ovnsb_db_run(&ctx);
+        if (ctx.ovnsb_txn) {
+            check_and_add_supported_dhcp_opts_to_sb_db(&ctx);
+        }
 
         unixctl_server_run(unixctl);
         unixctl_server_wait(unixctl);

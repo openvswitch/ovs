@@ -391,6 +391,36 @@
       </dd>
     </dl>
 
+    <h1>DHCP Options commands</h1>
+
+    <dl>
+      <dt><code>dhcp-options-create</code> <var>cidr</var> [<var>key=value</var>]</dt>
+      <dd>
+        Creates a new DHCP Options entry in the <code>DHCP_Options</code> table
+        with the specified <code>cidr</code> and optional <code>external-ids</code>.
+      </dd>
+
+      <dt><code>dhcp-options-list</code></dt>
+      <dd>
+        Lists the DHCP Options entries.
+      </dd>
+
+      <dt><code>dhcp-options-del</code> <var>dhcp-option</var></dt>
+      <dd>
+        Deletes the DHCP Options entry referred by <var>dhcp-option</var> UUID.
+      </dd>
+
+      <dt><code>dhcp-options-set-options</code> <var>dhcp-option</var> [<var>key=value</var>]...</dt>
+      <dd>
+        Set the DHCP Options for the <var>dhcp-option</var> UUID.
+      </dd>
+
+      <dt><code>dhcp-options-get-options</code> <var>dhcp-option</var></dt>
+      <dd>
+        Lists the DHCP Options for the <var>dhcp-option</var> UUID.
+      </dd>
+    </dl>
+
     <h1>Database Commands</h1>
     <p>These commands query and modify the contents of <code>ovsdb</code> tables.
     They are a slight abstraction of the <code>ovsdb</code> interface and

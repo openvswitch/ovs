@@ -509,6 +509,12 @@
     </group>
 
     <group title="Common Columns">
+      <column name="dhcpv4_options">
+        This column defines the DHCPv4 Options to be included by the
+        <code>ovn-controller</code> when it replies to the DHCPv4 requests.
+        Please see the <ref table="DHCP_Options"/> table.
+      </column>
+
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.
       </column>
@@ -926,4 +932,230 @@
     </column>
   </table>
 
+  <table name="DHCP_Options" title="DHCP options">
+    <p>
+      OVN implements a native DHCPv4 support which caters to the common
+      use case of providing an IPv4 address to a booting instance by
+      providing stateless replies to DHCPv4 requests based on statically
+      configured address mappings. To do this it allows a short list of
+      DHCPv4 options to be configured and applied at each compute host
+      running ovn-controller.
+    </p>
+
+    <column name="cidr">
+      <p>
+        The DHCPv4 options will be included if the logical port has the IPv4
+        address in this <ref column="cidr"/>.
+      </p>
+    </column>
+
+    <group title="DHCPv4 options">
+      <p>
+        CMS should define the set of DHCPv4 options as key/value pairs in the
+        <ref column="options"/> column of this table. For
+        <code>ovn-controller</code> to include these DHCPv4 options, the
+        <ref column="dhcpv4_options"/> of <ref table="Logical_Switch_Port"/>
+        should refer to an entry in this table.
+      </p>
+
+      <group title="Mandatory DHCPv4 options">
+        <p>
+          The following options must be defined.
+        </p>
+
+        <column name="options" key="server_id">
+          The IP address for the DHCP server to use.  This should be in the
+          subnet of the offered IP.  This is also included in the DHCP offer as
+          option 54, ``server identifier.''
+        </column>
+
+        <column name="options" key="server_mac">
+          The Ethernet address for the DHCP server to use.
+        </column>
+
+        <column name="options" key="router">
+          <p>
+            The IP address of a gateway for the client to use.  This should be
+            in the subnet of the offered IP.  The DHCPv4 option code for this
+            option is 3.
+          </p>
+        </column>
+
+        <column name="options" key="lease_time"
+                type='{"type": "integer", "minInteger": 0, "maxInteger": 4294967295}'>
+          <p>
+            The offered lease time in seconds, 
+          </p>
+
+          <p>
+            The DHCPv4 option code for this option is 51.
+          </p>
+        </column>
+      </group>
+
+      <group title="IPv4 DHCP Options">
+        <p>
+          Below are the supported DHCPv4 options whose values are an IPv4
+          address, e.g. <code>192.168.1.1</code>.  Some options accept multiple
+          IPv4 addresses enclosed within curly braces, e.g. <code>{192.168.1.2,
+          192.168.1.3}</code>. Please refer to RFC 2132 for more details on
+          DHCPv4 options and their codes.
+        </p>
+
+        <column name="options" key="netmask">
+          <p>
+            The DHCPv4 option code for this option is 1.
+          </p>
+        </column>
+
+        <column name="options" key="dns_server">
+          <p>
+            The DHCPv4 option code for this option is 6.
+          </p>
+        </column>
+
+        <column name="options" key="log_server">
+          <p>
+            The DHCPv4 option code for this option is 7.
+          </p>
+        </column>
+
+        <column name="options" key="lpr_server">
+          <p>
+            The DHCPv4 option code for this option is 9.
+          </p>
+        </column>
+
+        <column name="options" key="swap_server">
+          <p>
+            The DHCPv4 option code for this option is 16.
+          </p>
+        </column>
+
+        <column name="options" key="policy_filter">
+          <p>
+            The DHCPv4 option code for this option is 21.
+          </p>
+        </column>
+
+        <column name="options" key="router_solicitation">
+          <p>
+            The DHCPv4 option code for this option is 32.
+          </p>
+        </column>
+
+        <column name="options" key="nis_server">
+          <p>
+            The DHCPv4 option code for this option is 41.
+          </p>
+        </column>
+
+        <column name="options" key="ntp_server">
+          <p>
+            The DHCPv4 option code for this option is 42.
+          </p>
+        </column>
+
+        <column name="options" key="tftp_server">
+          <p>
+            The DHCPv4 option code for this option is 66.
+          </p>
+        </column>
+
+        <column name="options" key="classless_static_route">
+          <p>
+            The DHCPv4 option code for this option is 121.
+          </p>
+
+          <p>
+             This option can contain one or more static routes, each of which
+             consists of a destination descriptor and the IP address of the
+             router that should be used to reach that destination. Please see
+             RFC 3442 for more details.
+          </p>
+
+          <p>
+            Example: <code>{30.0.0.0/24,10.0.0.10, 0.0.0.0/0,10.0.0.1}</code>
+          </p>
+        </column>
+
+        <column name="options" key="ms_classless_static_route">
+          <p>
+            The DHCPv4 option code for this option is 249. This option is
+            similar to <code>classless_static_route</code> supported by
+            Microsoft Windows DHCPv4 clients.
+          </p>
+        </column>
+      </group>
+
+      <group title="Boolean DHCP Options">
+        <p>
+          These options accept a Boolean value, expressed as <code>0</code> for
+          false or <code>1</code> for true.
+        </p>
+
+        <column name="options" key="ip_forward_enable"
+                type='{"type": "string", "enum": ["set", ["0", "1"]]}'>
+          <p>
+            The DHCPv4 option code for this option is 19.
+          </p>
+        </column>
+
+        <column name="options" key="router_discovery"
+                type='{"type": "string", "enum": ["set", ["0", "1"]]}'>
+          <p>
+            The DHCPv4 option code for this option is 31.
+          </p>
+        </column>
+
+        <column name="options" key="ethernet_encap"
+                type='{"type": "string", "enum": ["set", ["0", "1"]]}'>
+          <p>
+            The DHCPv4 option code for this option is 36.
+          </p>
+        </column>
+      </group>
+
+      <group title="Integer DHCP Options">
+        <p>
+          These options accept a nonnegative integer value.
+        </p>
+
+        <column name="options" key="default_ttl"
+                type='{"type": "integer", "minInteger": 0, "maxInteger": 255}'>
+          The DHCPv4 option code for this option is 23.
+        </column>
+
+        <column name="options" key="tcp_ttl"
+                type='{"type": "integer", "minInteger": 0, "maxInteger": 255}'>
+          The DHCPv4 option code for this option is 37.
+        </column>
+
+        <column name="options" key="mtu"
+                type='{"type": "integer", "minInteger": 68, "maxInteger": 65535}'>
+          The DHCPv4 option code for this option is 26.
+        </column>
+
+        <column name="options" key="T1"
+                type='{"type": "integer", "minInteger": 68, "maxInteger": 4294967295}'>
+          This specifies the time interval from address assignment until the
+          client begins trying to renew its address.  The DHCPv4 option code
+          for this option is 58.
+        </column>
+
+        <column name="options" key="T2"
+                type='{"type": "integer", "minInteger": 68, "maxInteger": 4294967295}'>
+          This specifies the time interval from address assignment until the
+          client begins trying to rebind its address.  The DHCPv4 option code
+          for this option is 59.
+        </column>
+      </group>
+    </group>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
 </database>

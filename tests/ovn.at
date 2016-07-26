@@ -3067,6 +3067,287 @@ OVN_CLEANUP([hv1],[hv2])
 
 AT_CLEANUP
 
+AT_SETUP([ovn -- dhcpv4 : 1 HV, 2 LS, 2 LSPs/LS])
+AT_KEYWORDS([dhcpv4])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl ls-add ls1
+
+ovn-nbctl lsp-add ls1 ls1-lp1 \
+-- lsp-set-addresses ls1-lp1 "f0:00:00:00:00:01 10.0.0.4"
+
+ovn-nbctl lsp-set-port-security ls1-lp1 "f0:00:00:00:00:01 10.0.0.4"
+
+ovn-nbctl lsp-add ls1 ls1-lp2 \
+-- lsp-set-addresses ls1-lp2 "f0:00:00:00:00:02 10.0.0.6 20.0.0.4"
+
+ovn-nbctl lsp-set-port-security ls1-lp2 "f0:00:00:00:00:02 10.0.0.6 20.0.0.4"
+
+ovn-nbctl ls-add ls2
+ovn-nbctl lsp-add ls2 ls2-lp1 \
+-- lsp-set-addresses ls2-lp1 "f0:00:00:00:00:03 30.0.0.6 40.0.0.4"
+ovn-nbctl lsp-set-port-security ls2-lp1 "f0:00:00:00:00:03 30.0.0.6 40.0.0.4"
+ovn-nbctl lsp-add ls2 ls2-lp2 \
+-- lsp-set-addresses ls2-lp2 "f0:00:00:00:00:04 30.0.0.7"
+ovn-nbctl lsp-set-port-security ls2-lp2 "f0:00:00:00:00:04 30.0.0.7"
+
+ovn-nbctl -- --id=@d1 create DHCP_Options cidr=10.0.0.0/24 \
+options="\"server_id\"=\"10.0.0.1\" \"server_mac\"=\"ff:10:00:00:00:01\" \
+\"lease_time\"=\"3600\" \"router\"=\"10.0.0.1\"" \
+-- add Logical_Switch_Port ls1-lp1 dhcpv4_options @d1 \
+-- add Logical_Switch_Port ls1-lp2 dhcpv4_options @d1
+
+ovn-nbctl -- --id=@d2 create DHCP_Options cidr=30.0.0.0/24 \
+options="\"server_id\"=\"30.0.0.1\" \"server_mac\"=\"ff:10:00:00:00:02\" \
+\"lease_time\"=\"3600\"" -- add Logical_Switch_Port ls2-lp2 dhcpv4_options @d2
+
+net_add n1
+sim_add hv1
+
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=ls1-lp1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int hv1-vif2 -- \
+    set interface hv1-vif2 external-ids:iface-id=ls1-lp2 \
+    options:tx_pcap=hv1/vif2-tx.pcap \
+    options:rxq_pcap=hv1/vif2-rx.pcap \
+    ofport-request=2
+
+ovs-vsctl -- add-port br-int hv1-vif3 -- \
+    set interface hv1-vif3 external-ids:iface-id=ls2-lp1 \
+    options:tx_pcap=hv1/vif3-tx.pcap \
+    options:rxq_pcap=hv1/vif3-rx.pcap \
+    ofport-request=3
+
+ovs-vsctl -- add-port br-int hv1-vif4 -- \
+    set interface hv1-vif4 external-ids:iface-id=ls2-lp2 \
+    options:tx_pcap=hv1/vif4-tx.pcap \
+    options:rxq_pcap=hv1/vif4-rx.pcap \
+    ofport-request=4
+
+ovn_populate_arp
+
+sleep 2
+
+as hv1 ovs-vsctl show
+
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+# This shell function sends a DHCP request packet
+# test_dhcp INPORT SRC_MAC DHCP_TYPE OFFER_IP ...
+test_dhcp() {
+    local inport=$1 src_mac=$2 dhcp_type=$3 offer_ip=$4
+    local request=ffffffffffff${src_mac}080045100110000000008011000000000000ffffffff
+    # udp header and dhcp header
+    request+=0044004300fc0000
+    request+=010106006359aa760000000000000000000000000000000000000000${src_mac}
+    # client hardware padding
+    request+=00000000000000000000
+    # server hostname
+    request+=0000000000000000000000000000000000000000000000000000000000000000
+    request+=0000000000000000000000000000000000000000000000000000000000000000
+    # boot file name
+    request+=0000000000000000000000000000000000000000000000000000000000000000
+    request+=0000000000000000000000000000000000000000000000000000000000000000
+    request+=0000000000000000000000000000000000000000000000000000000000000000
+    request+=0000000000000000000000000000000000000000000000000000000000000000
+    # dhcp magic cookie
+    request+=63825363
+    # dhcp message type
+    request+=3501${dhcp_type}ff
+
+    if test $offer_ip != 0; then
+        local srv_mac=$5 srv_ip=$6 expected_dhcp_opts=$7
+        # total IP length will be the IP length of the request packet
+        # (which is 272 in our case) + 8 (padding bytes) + (expected_dhcp_opts / 2)
+        ip_len=`expr 280 + ${#expected_dhcp_opts} / 2`
+        udp_len=`expr $ip_len - 20`
+        printf -v ip_len "%x" $ip_len
+        printf -v udp_len "%x" $udp_len
+        # $ip_len var will be in 3 digits i.e 134. So adding a '0' before $ip_len
+        local reply=${src_mac}${srv_mac}080045100${ip_len}000000008011XXXX${srv_ip}${offer_ip}
+        # udp header and dhcp header.
+        # $udp_len var will be in 3 digits. So adding a '0' before $udp_len
+        reply+=004300440${udp_len}0000020106006359aa760000000000000000
+        # your ip address
+        reply+=${offer_ip}
+        # next server ip address, relay agent ip address, client mac address
+        reply+=0000000000000000${src_mac}
+        # client hardware padding
+        reply+=00000000000000000000
+        # server hostname
+        reply+=0000000000000000000000000000000000000000000000000000000000000000
+        reply+=0000000000000000000000000000000000000000000000000000000000000000
+        # boot file name
+        reply+=0000000000000000000000000000000000000000000000000000000000000000
+        reply+=0000000000000000000000000000000000000000000000000000000000000000
+        reply+=0000000000000000000000000000000000000000000000000000000000000000
+        reply+=0000000000000000000000000000000000000000000000000000000000000000
+        # dhcp magic cookie
+        reply+=63825363
+        # dhcp message type
+        local dhcp_reply_type=02
+        if test $dhcp_type = 03; then
+            dhcp_reply_type=05
+        fi
+        reply+=3501${dhcp_reply_type}${expected_dhcp_opts}00000000ff00000000
+        echo $reply >> $inport.expected
+    else
+        shift; shift; shift; shift;
+        for outport; do
+            echo $request | trim_zeros >> $outport.expected
+        done
+    fi
+    as hv1 ovs-appctl netdev-dummy/receive hv1-vif$inport $request
+}
+
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+AT_CAPTURE_FILE([ofctl_monitor0.log])
+as hv1 ovs-ofctl monitor br-int resume --detach --no-chdir \
+--pidfile=ovs-ofctl0.pid 2> ofctl_monitor0.log
+
+echo "---------NB dump-----"
+ovn-nbctl show
+echo "---------------------"
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list logical_flow
+echo "---------------------"
+
+echo "---------------------"
+ovn-sbctl dump-flows
+echo "---------------------"
+
+echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl dump-flows br-int
+
+# Send DHCPDISCOVER.
+offer_ip=`ip_to_hex 10 0 0 4`
+server_ip=`ip_to_hex 10 0 0 1`
+expected_dhcp_opts=0104ffffff0003040a00000136040a000001330400000e10
+test_dhcp 1 f00000000001 01 $offer_ip ff1000000001 $server_ip $expected_dhcp_opts
+
+# NXT_RESUMEs should be 1.
+OVS_WAIT_UNTIL([test 1 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap > 1.packets
+cat 1.expected | cut -c -48 > expout
+AT_CHECK([cat 1.packets | cut -c -48], [0], [expout])
+# Skipping the IPv4 checksum.
+cat 1.expected | cut -c 53- > expout
+AT_CHECK([cat 1.packets | cut -c 53-], [0], [expout])
+
+# ovs-ofctl also resumes the packets and this causes other ports to receive
+# the DHCP request packet. So reset the pcap files so that its easier to test.
+reset_pcap_file hv1-vif1 hv1/vif1
+reset_pcap_file hv1-vif2 hv1/vif2
+rm -f 1.expected
+rm -f 2.expected
+
+# Send DHCPREQUEST.
+offer_ip=`ip_to_hex 10 0 0 6`
+server_ip=`ip_to_hex 10 0 0 1`
+expected_dhcp_opts=0104ffffff0003040a00000136040a000001330400000e10
+test_dhcp 2 f00000000002 03 $offer_ip ff1000000001 $server_ip $expected_dhcp_opts
+
+# NXT_RESUMEs should be 2.
+OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap > 2.packets
+cat 2.expected | cut -c -48 > expout
+AT_CHECK([cat 2.packets | cut -c -48], [0], [expout])
+# Skipping the IPv4 checksum.
+cat 2.expected | cut -c 53- > expout
+AT_CHECK([cat 2.packets | cut -c 53-], [0], [expout])
+
+reset_pcap_file hv1-vif1 hv1/vif1
+reset_pcap_file hv1-vif2 hv1/vif2
+rm -f 1.expected
+rm -f 2.expected
+
+# Send Invalid DHCPv4 packet on ls1-lp2. It should be received by ovn-controller
+# but should be resumed without the reply.
+# ls1-lp1 (vif1-tx.pcap) should receive the DHCPv4 request packet twice,
+# one from ovn-controller and the other from "ovs-ofctl resume."
+offer_ip=0
+test_dhcp 2 f00000000002 08 $offer_ip 1 1
+
+# NXT_RESUMEs should be 3.
+OVS_WAIT_UNTIL([test 3 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+# vif1-tx.pcap should have received the DHCPv4 (invalid) request packet
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap | trim_zeros > 1.packets
+cat 1.expected > expout
+AT_CHECK([cat 1.packets], [0], [expout])
+
+reset_pcap_file hv1-vif1 hv1/vif1
+reset_pcap_file hv1-vif2 hv1/vif2
+rm -f 1.expected
+rm -f 2.expected
+
+# Send DHCPv4 packet on ls2-lp1. It doesn't have any DHCPv4 options defined.
+# ls2-lp2 (vif4-tx.pcap) should receive the DHCPv4 request packet once.
+
+test_dhcp 3 f00000000003 01 0 4
+
+# Send DHCPv4 packet on ls2-lp2. "router" DHCPv4 option is not defined for
+# this lport.
+test_dhcp 4 f00000000004 01 0 3
+
+# NXT_RESUMEs should be 3.
+OVS_WAIT_UNTIL([test 3 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif3-tx.pcap | trim_zeros > 3.packets
+cat 3.expected > expout
+AT_CHECK([cat 3.packets], [0], [expout])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif4-tx.pcap | trim_zeros > 4.packets
+cat 4.expected > expout
+AT_CHECK([cat 4.packets], [0], [expout])
+
+as hv1
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+AT_CLEANUP
+
 AT_SETUP([ovn -- 2 HVs, 2 LRs connected via LS, gateway router])
 AT_KEYWORDS([ovngatewayrouter])
 AT_SKIP_IF([test $HAVE_PYTHON = no])

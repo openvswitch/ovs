@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.0.0",
-    "cksum": "849073644 7576",
+    "version": "5.1.0",
+    "cksum": "2201958537 8295",
     "tables": {
         "Logical_Switch": {
             "columns": {
@@ -48,6 +48,11 @@
                                            "max": "unlimited"}},
                 "up": {"type": {"key": "boolean", "min": 0, "max": 1}},
                 "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},
+                "dhcpv4_options": {"type": {"key": {"type": "uuid",
+                                            "refTable": "DHCP_Options",
+                                            "refType": "weak"},
+                                 "min": 0,
+                                 "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
@@ -149,6 +154,15 @@
                                                              "snat",
                                                              "dnat_and_snat"
                                                                ]]}}}},
-            "isRoot": false}
+            "isRoot": false},
+        "DHCP_Options": {
+            "columns": {
+                "cidr": {"type": "string"},
+                "options": {"type": {"key": "string", "value": "string",
+                                     "min": 0, "max": "unlimited"}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "isRoot": true}
     }
 }
