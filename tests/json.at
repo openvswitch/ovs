@@ -1,4 +1,4 @@
-m4_define([JSON_CHECK_POSITIVE_C], 
+m4_define([JSON_CHECK_POSITIVE_C],
   [AT_SETUP([$1])
    AT_KEYWORDS([json positive])
    AT_CHECK([printf %s "AS_ESCAPE([$2])" > input])
@@ -11,7 +11,7 @@ m4_define([JSON_CHECK_POSITIVE_C],
 # JSON_CHECK_POSITIVE_PY(TITLE, INPUT, OUTPUT, TEST-JSON-ARGS,
 #                        PYTHON-CHCEK, PYTHON-BIN)
 #
-m4_define([JSON_CHECK_POSITIVE_PY], 
+m4_define([JSON_CHECK_POSITIVE_PY],
   [AT_SETUP([$1])
    AT_KEYWORDS([json positive Python])
    AT_SKIP_IF([test $5 = no])
@@ -37,6 +37,12 @@ m4_define([JSON_CHECK_POSITIVE_UCS4PY],
 m4_define([JSON_CHECK_POSITIVE],
   [JSON_CHECK_POSITIVE_C([$1 - C], [$2], [$3], [$4])
    JSON_CHECK_POSITIVE_PY([$1 - Python2], [$2], [$3], [$4],
+                          [$HAVE_PYTHON], [$PYTHON])
+   JSON_CHECK_POSITIVE_PY([$1 - Python3], [$2], [$3], [$4],
+                          [$HAVE_PYTHON3], [$PYTHON3])])
+
+m4_define([JSON_CHECK_POSITIVE_PY23],
+  [JSON_CHECK_POSITIVE_PY([$1 - Python2], [$2], [$3], [$4],
                           [$HAVE_PYTHON], [$PYTHON])
    JSON_CHECK_POSITIVE_PY([$1 - Python3], [$2], [$3], [$4],
                           [$HAVE_PYTHON3], [$PYTHON3])])
@@ -216,10 +222,14 @@ JSON_CHECK_POSITIVE(
 # It seems likely that the following test will fail on some system that
 # rounds slightly differently in arithmetic or in printf, but I'd like
 # to keep it this way until we run into such a system.
-JSON_CHECK_POSITIVE(
-  [large integers that overflow to reals], 
+JSON_CHECK_POSITIVE_C(
+  [C - large integers that overflow to reals],
   [[[9223372036854775807000, -92233720368547758080000]]],
   [[[9.22337203685478e+21,-9.22337203685478e+22]]])
+JSON_CHECK_POSITIVE_PY23(
+  [large integers that overflow to reals],
+  [[[9223372036854775807000, -92233720368547758080000]]],
+  [[[9.223372036854776e+21,-9.223372036854776e+22]]])
 
 JSON_CHECK_POSITIVE(
   [negative zero],
@@ -237,10 +247,14 @@ JSON_CHECK_POSITIVE(
 # It seems likely that the following test will fail on some system that
 # rounds slightly differently in arithmetic or in printf, but I'd like
 # to keep it this way until we run into such a system.
-JSON_CHECK_POSITIVE(
-  [+/- DBL_MAX],
+JSON_CHECK_POSITIVE_C(
+  [C - +/- DBL_MAX],
   [[[1.7976931348623157e+308, -1.7976931348623157e+308]]],
   [[[1.79769313486232e+308,-1.79769313486232e+308]]])
+JSON_CHECK_POSITIVE_PY23(
+  [+/- DBL_MAX],
+  [[[1.7976931348623157e+308, -1.7976931348623157e+308]]],
+  [[[1.7976931348623157e+308,-1.7976931348623157e+308]]])
 
 JSON_CHECK_POSITIVE(
   [negative reals], 
