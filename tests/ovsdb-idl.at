@@ -1106,3 +1106,111 @@ OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN([map, simple2 idl-partial-update-map-c
 009: name=String2 smap=[[key2 : value2]] imap=[[3 : myids2]]
 010: End test
 ]])
+
+m4_define([OVSDB_CHECK_IDL_NOTIFY_PY],
+  [AT_SETUP([$1 - Python])
+   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_KEYWORDS([ovsdb server idl Python notify $4])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$5],,, [[| $5]]),
+            [0], [$3], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+
+m4_define([OVSDB_CHECK_IDL_NOTIFY],
+   [OVSDB_CHECK_IDL_NOTIFY_PY($@)])
+
+
+OVSDB_CHECK_IDL_NOTIFY([simple idl verify notify],
+  [['track-notify' \
+    '["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "mystring",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
+      {"op": "insert",
+       "table": "simple",
+       "row": {}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [],
+       "row": {"b": false}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [],
+       "row": {"r": 123.5}}]' \
+    '["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": -1,
+               "r": 125,
+               "b": false,
+               "s": "",
+               "ia": ["set", [1]],
+               "ra": ["set", [1.5]],
+               "ba": ["set", [false]],
+               "sa": ["set", []],
+               "ua": ["set", []]}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [["i", "<", 1]],
+       "row": {"s": "newstring"}}]' \
+    '["idltest",
+      {"op": "delete",
+       "table": "simple",
+       "where": [["i", "==", 0]]}]' \
+    'reconnect']],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
+002: event:create, row={i=0 r=0 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>}, updates=None
+002: event:create, row={i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>}, updates=None
+002: i=0 r=0 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+002: i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+003: {"error":null,"result":[{"count":2}]}
+004: event:update, row={i=1 r=2 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>}, updates={b=true uuid=<0>}
+004: i=0 r=0 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: i=1 r=2 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+005: {"error":null,"result":[{"count":2}]}
+006: event:update, row={i=0 r=123.5 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>}, updates={r=0 uuid=<1>}
+006: event:update, row={i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>}, updates={r=2 uuid=<0>}
+006: i=0 r=123.5 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+006: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+007: {"error":null,"result":[{"uuid":["uuid","<6>"]}]}
+008: event:create, row={i=-1 r=125 b=false s= u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>}, updates=None
+008: i=-1 r=125 b=false s= u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+008: i=0 r=123.5 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+008: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+009: {"error":null,"result":[{"count":2}]}
+010: event:update, row={i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>}, updates={s= uuid=<6>}
+010: event:update, row={i=0 r=123.5 b=false s=newstring u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>}, updates={s= uuid=<1>}
+010: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+010: i=0 r=123.5 b=false s=newstring u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+010: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+011: {"error":null,"result":[{"count":1}]}
+012: event:delete, row={i=0 r=123.5 b=false s=newstring u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>}, updates=None
+012: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+012: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+013: reconnect
+014: event:create, row={i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>}, updates=None
+014: event:create, row={i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>}, updates=None
+014: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+014: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+015: done
+]])

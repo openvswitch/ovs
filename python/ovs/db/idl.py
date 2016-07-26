@@ -333,7 +333,8 @@ class Idl(object):
         :type event:    ROW_CREATE, ROW_UPDATE, or ROW_DELETE
         :param row:     The row as it is after the operation has occured
         :type row:      Row
-        :param updates: For updates, row with only updated columns
+        :param updates: For updates, row with only old values of the changed
+                        columns
         :type updates:  Row
         """
 
@@ -511,9 +512,10 @@ class Idl(object):
             if not row:
                 raise error.Error('Modify non-existing row')
 
-            self.__apply_diff(table, row, row_update['modify'])
+            old_row_diff_json = self.__apply_diff(table, row,
+                                                  row_update['modify'])
             self.notify(ROW_UPDATE, row,
-                        Row.from_json(self, table, uuid, row_update['modify']))
+                        Row.from_json(self, table, uuid, old_row_diff_json))
             changed = True
         else:
             raise error.Error('<row-update> unknown operation',
@@ -576,7 +578,8 @@ class Idl(object):
                         row_update[column.name] = self.__column_name(column)
 
     def __apply_diff(self, table, row, row_diff):
-        for column_name, datum_json in six.iteritems(row_diff):
+        old_row_diff_json = {}
+        for column_name, datum_diff_json in six.iteritems(row_diff):
             column = table.columns.get(column_name)
             if not column:
                 # XXX rate-limit
@@ -585,16 +588,20 @@ class Idl(object):
                 continue
 
             try:
-                datum = ovs.db.data.Datum.from_json(column.type, datum_json)
+                datum_diff = ovs.db.data.Datum.from_json(column.type,
+                                                         datum_diff_json)
             except error.Error as e:
                 # XXX rate-limit
                 vlog.warn("error parsing column %s in table %s: %s"
                           % (column_name, table.name, e))
                 continue
 
-            datum = row._data[column_name].diff(datum)
+            old_row_diff_json[column_name] = row._data[column_name].to_json()
+            datum = row._data[column_name].diff(datum_diff)
             if datum != row._data[column_name]:
                 row._data[column_name] = datum
+
+        return old_row_diff_json
 
     def __row_update(self, table, row, row_json):
         changed = False
