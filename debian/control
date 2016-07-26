@@ -240,7 +240,7 @@ Description: Debug symbols for Open vSwitch packages
 Package: python-openvswitch
 Architecture: all
 Section: python
-Depends: ${misc:Depends}, ${python:Depends}
+Depends: ${misc:Depends}, ${python:Depends}, python-six
 Description: Python bindings for Open vSwitch
  Open vSwitch is a production quality, multilayer, software-based,
  Ethernet virtual switch. It is designed to enable massive network
