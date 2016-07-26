@@ -1273,11 +1273,12 @@ OvsSubscribeEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     OVS_EVENT_SUBSCRIBE request;
     BOOLEAN rc;
     UINT8 join;
+    UINT32 mcastGrp;
     PNL_ATTR attrs[2];
     const NL_POLICY policy[] =  {
         [OVS_NL_ATTR_MCAST_GRP] = {.type = NL_A_U32 },
         [OVS_NL_ATTR_MCAST_JOIN] = {.type = NL_A_U8 },
-        };
+    };
 
     UNREFERENCED_PARAMETER(replyLen);
 
@@ -1293,11 +1294,25 @@ OvsSubscribeEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto done;
     }
 
-    /* XXX Ignore the MC group for now */
+    mcastGrp = NlAttrGetU32(attrs[OVS_NL_ATTR_MCAST_GRP]);
     join = NlAttrGetU8(attrs[OVS_NL_ATTR_MCAST_JOIN]);
     request.dpNo = msgIn->ovsHdr.dp_ifindex;
     request.subscribe = join;
-    request.mask = OVS_EVENT_MASK_ALL;
+    request.mcastGrp = mcastGrp;
+    request.protocol = instance->protocol;
+    request.mask = 0;
+
+    /* We currently support Vport and CT related events */
+    if (instance->protocol == NETLINK_GENERIC) {
+        request.mask = OVS_EVENT_MASK_ALL;
+    } else if (instance->protocol == NETLINK_NETFILTER) {
+        if (mcastGrp == NFNLGRP_CONNTRACK_NEW) {
+            request.mask = OVS_EVENT_CT_NEW;
+        }
+        if (mcastGrp == NFNLGRP_CONNTRACK_DESTROY) {
+            request.mask = OVS_EVENT_CT_DELETE;
+        }
+    }
 
     status = OvsSubscribeEventIoctl(instance->fileObject, &request,
                                     sizeof request);

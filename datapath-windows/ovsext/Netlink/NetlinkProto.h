@@ -125,4 +125,7 @@ BUILD_ASSERT_DECL(sizeof(NL_ATTR) == 4);
 #define OVS_HDRLEN NLMSG_ALIGN(sizeof(OVS_HDR))
 #define NLA_HDRLEN ((INT) NLA_ALIGN(sizeof(NL_ATTR)))
 
+#define NETLINK_NETFILTER       12
+#define NETLINK_GENERIC         16
+
 #endif /* NetlinProto.h */
