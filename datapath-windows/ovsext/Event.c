@@ -217,9 +217,8 @@ OvsSubscribeEventIoctl(PFILE_OBJECT fileObject,
         if (queue->mask != request->mask) {
             status = STATUS_INVALID_PARAMETER;
             OVS_LOG_WARN("Can not chnage mask when the queue is subscribed");
+            goto done_event_subscribe;
         }
-        status = STATUS_SUCCESS;
-        goto done_event_subscribe;
     } else if (!request->subscribe && queue == NULL) {
         status = STATUS_SUCCESS;
         goto done_event_subscribe;
@@ -356,8 +355,6 @@ OvsWaitEventIoctl(PIRP irp,
     }
     poll = (POVS_EVENT_POLL)inputBuffer;
 
-    OvsAcquireEventQueueLock();
-
     instance = OvsGetOpenInstance(fileObject, poll->dpNo);
     if (instance == NULL) {
         OVS_LOG_TRACE("Exit: Can not find open instance, dpNo: %d",
@@ -365,6 +362,7 @@ OvsWaitEventIoctl(PIRP irp,
         return STATUS_INVALID_PARAMETER;
     }
 
+    OvsAcquireEventQueueLock();
     queue = (POVS_EVENT_QUEUE)instance->eventQueue;
     if (queue == NULL) {
         OVS_LOG_TRACE("Exit: Event queue does not exist");

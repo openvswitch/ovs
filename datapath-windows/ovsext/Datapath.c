@@ -521,12 +521,17 @@ POVS_OPEN_INSTANCE
 OvsGetOpenInstance(PFILE_OBJECT fileObject,
                    UINT32 dpNo)
 {
+    LOCK_STATE_EX lockState;
     POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)fileObject->FsContext;
     ASSERT(instance);
     ASSERT(instance->fileObject == fileObject);
+    NdisAcquireRWLockWrite(gOvsSwitchContext->dispatchLock, &lockState, 0);
+
     if (gOvsSwitchContext->dpNo != dpNo) {
-        return NULL;
+        instance = NULL;
     }
+
+    NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
     return instance;
 }
 
