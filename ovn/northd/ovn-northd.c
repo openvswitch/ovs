@@ -2122,7 +2122,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                 } else {
                     ds_put_format(&match, "nd.target == {");
                     for (size_t j = 0; j < op->lsp_addrs[i].n_ipv6_addrs; j++) {
-                        ds_put_cstr(&match,
+                        ds_put_format(&match, "%s, ",
                                       op->lsp_addrs[i].ipv6_addrs[j].addr_s);
                     }
                     ds_chomp(&match, ' ');
