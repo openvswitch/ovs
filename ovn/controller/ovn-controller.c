@@ -322,6 +322,14 @@ update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
     sset_destroy(&all_users);
 }
 
+/* Contains "struct local_datapath" nodes whose hash values are the
+ * tunnel_key of datapaths with at least one local port binding. */
+static struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
+static struct hmap patched_datapaths = HMAP_INITIALIZER(&patched_datapaths);
+
+static struct lport_index lports;
+static struct mcgroup_index mcgroups;
+
 int
 main(int argc, char *argv[])
 {
@@ -351,6 +359,9 @@ main(int argc, char *argv[])
     ofctrl_init();
     pinctrl_init();
     lflow_init();
+
+    lport_index_init(&lports);
+    mcgroup_index_init(&mcgroups);
 
     /* Connect to OVS OVSDB instance.  We do not monitor all tables by
      * default, so modules must register their interest explicitly.  */
@@ -383,6 +394,10 @@ main(int argc, char *argv[])
     char *ovnsb_remote = get_ovnsb_remote(ovs_idl_loop.idl);
     struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
+
+    /* Track the southbound idl. */
+    ovsdb_idl_track_add_all(ovnsb_idl_loop.idl);
+
     ovsdb_idl_get_initial_snapshot(ovnsb_idl_loop.idl);
 
     int probe_interval = 0;
@@ -407,6 +422,9 @@ main(int argc, char *argv[])
             free(ovnsb_remote);
             ovnsb_remote = new_ovnsb_remote;
             ovsdb_idl_set_remote(ovnsb_idl_loop.idl, ovnsb_remote, true);
+            binding_reset_processing();
+            lport_index_clear(&lports);
+            mcgroup_index_clear(&mcgroups);
         } else {
             free(new_ovnsb_remote);
         }
@@ -418,11 +436,6 @@ main(int argc, char *argv[])
             .ovnsb_idl_txn = ovsdb_idl_loop_run(&ovnsb_idl_loop),
         };
 
-        /* Contains "struct local_datpath" nodes whose hash values are the
-         * tunnel_key of datapaths with at least one local port binding. */
-        struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
-
-        struct hmap patched_datapaths = HMAP_INITIALIZER(&patched_datapaths);
         struct sset all_lports = SSET_INITIALIZER(&all_lports);
 
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
@@ -431,18 +444,15 @@ main(int argc, char *argv[])
         if (chassis_id) {
             chassis_run(&ctx, chassis_id);
             encaps_run(&ctx, br_int, chassis_id);
-            binding_run(&ctx, br_int, chassis_id, &all_lports,
-                        &local_datapaths);
+            binding_run(&ctx, br_int, chassis_id, &local_datapaths);
         }
 
         if (br_int && chassis_id) {
             patch_run(&ctx, br_int, chassis_id, &local_datapaths,
                       &patched_datapaths);
 
-            struct lport_index lports;
-            struct mcgroup_index mcgroups;
-            lport_index_init(&lports, ctx.ovnsb_idl);
-            mcgroup_index_init(&mcgroups, ctx.ovnsb_idl);
+            lport_index_fill(&lports, ctx.ovnsb_idl);
+            mcgroup_index_fill(&mcgroups, ctx.ovnsb_idl);
 
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
 
@@ -460,26 +470,9 @@ main(int argc, char *argv[])
             }
             ofctrl_put(&flow_table);
             hmap_destroy(&flow_table);
-            mcgroup_index_destroy(&mcgroups);
-            lport_index_destroy(&lports);
         }
 
         sset_destroy(&all_lports);
-
-        struct local_datapath *cur_node, *next_node;
-        HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node, &local_datapaths) {
-            hmap_remove(&local_datapaths, &cur_node->hmap_node);
-            free(cur_node);
-        }
-        hmap_destroy(&local_datapaths);
-
-        struct patched_datapath *pd_cur_node, *pd_next_node;
-        HMAP_FOR_EACH_SAFE (pd_cur_node, pd_next_node, hmap_node,
-                &patched_datapaths) {
-            hmap_remove(&patched_datapaths, &pd_cur_node->hmap_node);
-            free(pd_cur_node);
-        }
-        hmap_destroy(&patched_datapaths);
 
         unixctl_server_run(unixctl);
 
@@ -494,6 +487,7 @@ main(int argc, char *argv[])
         }
         ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
         ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop);
+        ovsdb_idl_track_clear(ovnsb_idl_loop.idl);
         poll_block();
         if (should_service_stop()) {
             exiting = true;

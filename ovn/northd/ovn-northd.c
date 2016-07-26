@@ -1522,7 +1522,7 @@ Options:\n\
     uint16_t ingress_inner_priority = 150;
     uint16_t ingress_outer_priority = 100;
     uint16_t egress_inner_priority = 150;
-    uint16_t egress_outer_priority = 100;
+    uint16_t egress_outer_priority = 125;
 
     const struct nbrec_logical_flow_classifier *fc;
     
@@ -2198,142 +2198,141 @@ Options:\n\
     }
 
     HMAP_FOR_EACH (op, key_node, ports) {
-      if (!op->nbr) {
-	continue;
-      }
+        if (!op->nbr) {
+            continue;
+        }
 
-      /* L3 admission control: drop packets that originate from an IP address
-       * owned by the router or a broadcast address known to the router
-       * (priority 100). */
-      char *match = xasprintf("ip4.src == {"IP_FMT", "IP_FMT"}",
-			      IP_ARGS(op->ip), IP_ARGS(op->bcast));
-      ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 100,
-		    match, "drop;");
-      free(match);
+        /* L3 admission control: drop packets that originate from an IP address
+         * owned by the router or a broadcast address known to the router
+         * (priority 100). */
+        char *match = xasprintf("ip4.src == {"IP_FMT", "IP_FMT"}",
+                                IP_ARGS(op->ip), IP_ARGS(op->bcast));
+        ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 100,
+                      match, "drop;");
+        free(match);
 
-      /* ICMP echo reply.  These flows reply to ICMP echo requests
-       * received for the router's IP address. Since packets only
-       * get here as part of the logical router datapath, the inport
-       * (i.e. the incoming locally attached net) does not matter.
-       * The ip.ttl also does not matter (RFC1812 section 4.2.2.9) */
-      match = xasprintf(
-			"(ip4.dst == "IP_FMT" || ip4.dst == "IP_FMT") && "
-			"icmp4.type == 8 && icmp4.code == 0",
-			IP_ARGS(op->ip), IP_ARGS(op->bcast));
-      char *actions = xasprintf(
-				"ip4.dst = ip4.src; "
-				"ip4.src = "IP_FMT"; "
-				"ip.ttl = 255; "
-				"icmp4.type = 0; "
-				"inport = \"\"; /* Allow sending out inport. */ "
-				"next; ",
-				IP_ARGS(op->ip));
-      ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
-		    match, actions);
-      free(match);
-      free(actions);
+        /* ICMP echo reply.  These flows reply to ICMP echo requests
+         * received for the router's IP address. Since packets only
+         * get here as part of the logical router datapath, the inport
+         * (i.e. the incoming locally attached net) does not matter.
+         * The ip.ttl also does not matter (RFC1812 section 4.2.2.9) */
+        match = xasprintf(
+            "ip4.dst == "IP_FMT" && icmp4.type == 8 && icmp4.code == 0",
+            IP_ARGS(op->ip));
+        char *actions = xasprintf(
+            "ip4.dst = ip4.src; "
+            "ip4.src = "IP_FMT"; "
+            "ip.ttl = 255; "
+            "icmp4.type = 0; "
+            "inport = \"\"; /* Allow sending out inport. */ "
+            "next; ",
+            IP_ARGS(op->ip));
+        ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
+                      match, actions);
+        free(match);
+        free(actions);
 
-      /* ARP reply.  These flows reply to ARP requests for the router's own
-       * IP address. */
-      match = xasprintf(
-			"inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
-			op->json_key, IP_ARGS(op->ip));
-      actions = xasprintf(
-			  "eth.dst = eth.src; "
-			  "eth.src = "ETH_ADDR_FMT"; "
-			  "arp.op = 2; /* ARP reply */ "
-			  "arp.tha = arp.sha; "
-			  "arp.sha = "ETH_ADDR_FMT"; "
-			  "arp.tpa = arp.spa; "
-			  "arp.spa = "IP_FMT"; "
-			  "outport = %s; "
-			  "inport = \"\"; /* Allow sending out inport. */ "
-			  "output;",
-			  ETH_ADDR_ARGS(op->mac),
-			  ETH_ADDR_ARGS(op->mac),
-			  IP_ARGS(op->ip),
-			  op->json_key);
-      ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
-		    match, actions);
-      free(match);
-      free(actions);
+        /* ARP reply.  These flows reply to ARP requests for the router's own
+         * IP address. */
+        match = xasprintf(
+            "inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
+            op->json_key, IP_ARGS(op->ip));
+        actions = xasprintf(
+            "eth.dst = eth.src; "
+            "eth.src = "ETH_ADDR_FMT"; "
+            "arp.op = 2; /* ARP reply */ "
+            "arp.tha = arp.sha; "
+            "arp.sha = "ETH_ADDR_FMT"; "
+            "arp.tpa = arp.spa; "
+            "arp.spa = "IP_FMT"; "
+            "outport = %s; "
+            "inport = \"\"; /* Allow sending out inport. */ "
+            "output;",
+            ETH_ADDR_ARGS(op->mac),
+            ETH_ADDR_ARGS(op->mac),
+            IP_ARGS(op->ip),
+            op->json_key);
+        ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
+                      match, actions);
+        free(match);
+        free(actions);
 
-      /* ARP handling for external IP addresses.
-       *
-       * DNAT IP addresses are external IP addresses that need ARP
-       * handling. */
-      for (int i = 0; i < op->od->nbr->n_nat; i++) {
-	const struct nbrec_nat *nat;
+        /* ARP handling for external IP addresses.
+         *
+         * DNAT IP addresses are external IP addresses that need ARP
+         * handling. */
+        for (int i = 0; i < op->od->nbr->n_nat; i++) {
+            const struct nbrec_nat *nat;
 
-	nat = op->od->nbr->nat[i];
+            nat = op->od->nbr->nat[i];
 
-	if(!strcmp(nat->type, "snat")) {
-	  continue;
-	}
+            if(!strcmp(nat->type, "snat")) {
+                continue;
+            }
 
-	ovs_be32 ip;
-	if (!ip_parse(nat->external_ip, &ip) || !ip) {
-	  static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-	  VLOG_WARN_RL(&rl, "bad ip address %s in dnat configuration "
-		       "for router %s", nat->external_ip, op->key);
-	  continue;
-	}
+            ovs_be32 ip;
+            if (!ip_parse(nat->external_ip, &ip) || !ip) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+                VLOG_WARN_RL(&rl, "bad ip address %s in dnat configuration "
+                             "for router %s", nat->external_ip, op->key);
+                continue;
+            }
 
-	match = xasprintf(
-			  "inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
-			  op->json_key, IP_ARGS(ip));
-	actions = xasprintf(
-			    "eth.dst = eth.src; "
-			    "eth.src = "ETH_ADDR_FMT"; "
-			    "arp.op = 2; /* ARP reply */ "
-			    "arp.tha = arp.sha; "
-			    "arp.sha = "ETH_ADDR_FMT"; "
-			    "arp.tpa = arp.spa; "
-			    "arp.spa = "IP_FMT"; "
-			    "outport = %s; "
-			    "inport = \"\"; /* Allow sending out inport. */ "
-			    "output;",
-			    ETH_ADDR_ARGS(op->mac),
-			    ETH_ADDR_ARGS(op->mac),
-			    IP_ARGS(ip),
-			    op->json_key);
-	ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
-		      match, actions);
-	free(match);
-	free(actions);
-      }
+            match = xasprintf(
+                "inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
+                op->json_key, IP_ARGS(ip));
+            actions = xasprintf(
+                "eth.dst = eth.src; "
+                "eth.src = "ETH_ADDR_FMT"; "
+                "arp.op = 2; /* ARP reply */ "
+                "arp.tha = arp.sha; "
+                "arp.sha = "ETH_ADDR_FMT"; "
+                "arp.tpa = arp.spa; "
+                "arp.spa = "IP_FMT"; "
+                "outport = %s; "
+                "inport = \"\"; /* Allow sending out inport. */ "
+                "output;",
+                ETH_ADDR_ARGS(op->mac),
+                ETH_ADDR_ARGS(op->mac),
+                IP_ARGS(ip),
+                op->json_key);
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
+                          match, actions);
+            free(match);
+            free(actions);
+        }
 
-      /* Drop IP traffic to this router, unless the router ip is used as
-       * SNAT ip. */
-      bool snat_ip_is_router_ip = false;
-      for (int i = 0; i < op->od->nbr->n_nat; i++) {
-	const struct nbrec_nat *nat;
-	ovs_be32 ip;
+        /* Drop IP traffic to this router, unless the router ip is used as
+         * SNAT ip. */
+        bool snat_ip_is_router_ip = false;
+        for (int i = 0; i < op->od->nbr->n_nat; i++) {
+            const struct nbrec_nat *nat;
+            ovs_be32 ip;
 
-	nat = op->od->nbr->nat[i];
-	if (strcmp(nat->type, "snat")) {
-	  continue;
-	}
+            nat = op->od->nbr->nat[i];
+            if (strcmp(nat->type, "snat")) {
+                continue;
+            }
 
-	if (!ip_parse(nat->external_ip, &ip) || !ip) {
-	  static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-	  VLOG_WARN_RL(&rl, "bad ip address %s in snat configuration "
-		       "for router %s", nat->external_ip, op->key);
-	  continue;
-	}
+            if (!ip_parse(nat->external_ip, &ip) || !ip) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+                VLOG_WARN_RL(&rl, "bad ip address %s in snat configuration "
+                         "for router %s", nat->external_ip, op->key);
+                continue;
+            }
 
-	if (ip == op->ip) {
-	  snat_ip_is_router_ip = true;
-	  break;
-	}
-      }
+            if (ip == op->ip) {
+                snat_ip_is_router_ip = true;
+                break;
+            }
+        }
 
-      if (!snat_ip_is_router_ip) {
-	match = xasprintf("ip4.dst == "IP_FMT, IP_ARGS(op->ip));
-	ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 60, match,
-		      "drop;");
-	free(match);
-      }
+        if (!snat_ip_is_router_ip) {
+            match = xasprintf("ip4.dst == "IP_FMT, IP_ARGS(op->ip));
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 60, match,
+                          "drop;");
+            free(match);
+        }
     }
 
     /* NAT in Gateway routers. */

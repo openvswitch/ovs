@@ -38,6 +38,7 @@
 #define OVS_TUNFLT_POOL_TAG             'WSVO'
 #define OVS_RECIRC_POOL_TAG             'CSVO'
 #define OVS_CT_POOL_TAG                 'CTVO'
+#define OVS_GENEVE_POOL_TAG             'GNVO'
 
 VOID *OvsAllocateMemory(size_t size);
 VOID *OvsAllocateMemoryWithTag(size_t size, ULONG tag);

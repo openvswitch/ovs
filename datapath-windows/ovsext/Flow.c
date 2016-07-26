@@ -21,6 +21,7 @@
 #include "Flow.h"
 #include "PacketParser.h"
 #include "Datapath.h"
+#include "Geneve.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
@@ -85,7 +86,7 @@ static NTSTATUS OvsDoDumpFlows(OvsFlowDumpInput *dumpInput,
                                UINT32 *replyLen);
 static NTSTATUS OvsProbeSupportedFeature(POVS_MESSAGE msgIn,
                                          PNL_ATTR keyAttr);
-
+static UINT16 OvsGetFlowL2Offset(const OvsIPv4TunnelKey *tunKey);
 
 #define OVS_FLOW_TABLE_SIZE 2048
 #define OVS_FLOW_TABLE_MASK (OVS_FLOW_TABLE_SIZE -1)
@@ -1029,6 +1030,14 @@ MapFlowTunKeyToNlKey(PNL_BUFFER nlBuf,
         goto done;
     }
 
+    if (tunKey->tunOptLen > 0 &&
+        !NlMsgPutTailUnspec(nlBuf, OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS,
+                            (PCHAR)TunnelKeyGetOptions(tunKey),
+                            tunKey->tunOptLen)) {
+        rc = STATUS_UNSUCCESSFUL;
+        goto done;
+    }
+
 done:
     NlMsgEndNested(nlBuf, offset);
 error_nested_start:
@@ -1638,6 +1647,120 @@ _MapKeyAttrToFlowPut(PNL_ATTR *keyAttrs,
 
 /*
  *----------------------------------------------------------------------------
+ *  OvsTunnelAttrToGeneveOptions --
+ *    Converts OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS attribute to tunKey->tunOpts.
+ *----------------------------------------------------------------------------
+ */
+static __inline NTSTATUS
+OvsTunnelAttrToGeneveOptions(PNL_ATTR attr,
+                             OvsIPv4TunnelKey *tunKey)
+{
+    UINT32 optLen = NlAttrGetSize(attr);
+    GeneveOptionHdr *option;
+    BOOLEAN isCritical = FALSE;
+    if (optLen > TUN_OPT_MAX_LEN) {
+        OVS_LOG_ERROR("Geneve option length err (len %d, max %Iu).",
+                      optLen, TUN_OPT_MAX_LEN);
+        return STATUS_INFO_LENGTH_MISMATCH;
+    } else if (optLen % 4 != 0) {
+        OVS_LOG_ERROR("Geneve opt len %d is not a multiple of 4.", optLen);
+        return STATUS_INFO_LENGTH_MISMATCH;
+    }
+    tunKey->tunOptLen = (UINT8)optLen;
+    option = (GeneveOptionHdr *)NlAttrData(attr);
+    while (optLen > 0) {
+        UINT32 len;
+        if (optLen < sizeof(*option)) {
+            return STATUS_INFO_LENGTH_MISMATCH;
+        }
+        len = sizeof(*option) + option->length * 4;
+        if (len > optLen) {
+            return STATUS_INFO_LENGTH_MISMATCH;
+        }
+        if (option->type & GENEVE_CRIT_OPT_TYPE) {
+            isCritical = TRUE;
+        }
+        option = (GeneveOptionHdr *)((UINT8 *)option + len);
+        optLen -= len;
+    }
+    memcpy(TunnelKeyGetOptions(tunKey), option, optLen);
+    if (isCritical) {
+        tunKey->flags |= OVS_TNL_F_CRT_OPT;
+    }
+    return STATUS_SUCCESS;
+}
+
+
+/*
+ *----------------------------------------------------------------------------
+ *  OvsTunnelAttrToIPv4TunnelKey --
+ *    Converts OVS_KEY_ATTR_TUNNEL attribute to tunKey.
+ *----------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsTunnelAttrToIPv4TunnelKey(PNL_ATTR attr,
+                             OvsIPv4TunnelKey *tunKey)
+{
+    PNL_ATTR a;
+    INT rem;
+    INT hasOpt = 0;
+    NTSTATUS status;
+
+    memset(tunKey, 0, OVS_WIN_TUNNEL_KEY_SIZE);
+    ASSERT(NlAttrType(attr) == OVS_KEY_ATTR_TUNNEL);
+
+    NL_ATTR_FOR_EACH_UNSAFE(a, rem, NlAttrData(attr),
+        NlAttrGetSize(attr)) {
+        switch (NlAttrType(a)) {
+        case OVS_TUNNEL_KEY_ATTR_ID:
+            tunKey->tunnelId = NlAttrGetBe64(a);
+            tunKey->flags |= OVS_TNL_F_KEY;
+            break;
+        case OVS_TUNNEL_KEY_ATTR_IPV4_SRC:
+            tunKey->src = NlAttrGetBe32(a);
+            break;
+        case OVS_TUNNEL_KEY_ATTR_IPV4_DST:
+            tunKey->dst = NlAttrGetBe32(a);
+            break;
+        case OVS_TUNNEL_KEY_ATTR_TOS:
+            tunKey->tos = NlAttrGetU8(a);
+            break;
+        case OVS_TUNNEL_KEY_ATTR_TTL:
+            tunKey->ttl = NlAttrGetU8(a);
+            break;
+        case OVS_TUNNEL_KEY_ATTR_DONT_FRAGMENT:
+            tunKey->flags |= OVS_TNL_F_DONT_FRAGMENT;
+            break;
+        case OVS_TUNNEL_KEY_ATTR_CSUM:
+            tunKey->flags |= OVS_TNL_F_CSUM;
+            break;
+        case OVS_TUNNEL_KEY_ATTR_OAM:
+            tunKey->flags |= OVS_TNL_F_OAM;
+            break;
+        case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS:
+            if (hasOpt) {
+                /* Duplicate options attribute is not allowed. */
+                return NDIS_STATUS_FAILURE;
+            }
+            status = OvsTunnelAttrToGeneveOptions(a, tunKey);
+            if (!SUCCEEDED(status)) {
+                return status;
+            }
+            tunKey->flags |= OVS_TNL_F_GENEVE_OPT;
+            hasOpt = 1;
+            break;
+        default:
+            // XXX: Support OVS_TUNNEL_KEY_ATTR_VXLAN_OPTS
+            return STATUS_INVALID_PARAMETER;
+        }
+    }
+
+    return STATUS_SUCCESS;
+}
+
+
+/*
+ *----------------------------------------------------------------------------
  *  MapTunAttrToFlowPut --
  *    Converts FLOW_TUNNEL_KEY attribute to OvsFlowKey->tunKey.
  *----------------------------------------------------------------------------
@@ -1647,8 +1770,10 @@ MapTunAttrToFlowPut(PNL_ATTR *keyAttrs,
                     PNL_ATTR *tunAttrs,
                     OvsFlowKey *destKey)
 {
+    memset(&destKey->tunKey, 0, OVS_WIN_TUNNEL_KEY_SIZE);
     if (keyAttrs[OVS_KEY_ATTR_TUNNEL]) {
-
+        /* XXX: This blocks performs same functionality as
+           OvsTunnelAttrToIPv4TunnelKey. Consider refactoring the code.*/
         if (tunAttrs[OVS_TUNNEL_KEY_ATTR_ID]) {
             destKey->tunKey.tunnelId =
                 NlAttrGetU64(tunAttrs[OVS_TUNNEL_KEY_ATTR_ID]);
@@ -1683,13 +1808,21 @@ MapTunAttrToFlowPut(PNL_ATTR *keyAttrs,
                 NlAttrGetU8(tunAttrs[OVS_TUNNEL_KEY_ATTR_TTL]);
         }
 
-        destKey->tunKey.pad = 0;
-        destKey->l2.offset = 0;
+        if (tunAttrs[OVS_TUNNEL_KEY_ATTR_OAM]) {
+        destKey->tunKey.flags |= OVS_TNL_F_OAM;
+        }
+
+        if (tunAttrs[OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS]) {
+        NTSTATUS status = OvsTunnelAttrToGeneveOptions(
+                          tunAttrs[OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS],
+                          &destKey->tunKey);
+        if (SUCCEEDED(status)) {
+            destKey->tunKey.flags |= OVS_TNL_F_GENEVE_OPT;
+        }
+        }
+        destKey->l2.offset = OvsGetFlowL2Offset(&destKey->tunKey);
     } else {
-        destKey->tunKey.attr[0] = 0;
-        destKey->tunKey.attr[1] = 0;
-        destKey->tunKey.attr[2] = 0;
-        destKey->l2.offset = sizeof destKey->tunKey;
+        destKey->l2.offset = OvsGetFlowL2Offset(NULL);
     }
 }
 
@@ -1853,6 +1986,19 @@ OvsGetFlowMetadata(OvsFlowKey *key,
     return status;
 }
 
+UINT16
+OvsGetFlowL2Offset(const OvsIPv4TunnelKey *tunKey)
+{
+    if (tunKey != NULL) {
+        // Align with int64 boundary
+        if (tunKey->tunOptLen == 0) {
+            return (TUN_OPT_MAX_LEN + 1) / 8 * 8;
+        }
+        return TunnelKeyGetOptionsOffset(tunKey) / 8 * 8;
+    } else {
+        return OVS_WIN_TUNNEL_KEY_SIZE;
+    }
+}
 
 /*
 *----------------------------------------------------------------------------
@@ -2057,16 +2203,17 @@ OvsExtractFlow(const NET_BUFFER_LIST *packet,
 
     if (tunKey) {
         ASSERT(tunKey->dst != 0);
-        RtlMoveMemory(&flow->tunKey, tunKey, sizeof flow->tunKey);
-        flow->l2.offset = 0;
+        UINT8 optOffset = TunnelKeyGetOptionsOffset(tunKey);
+        RtlMoveMemory(((UINT8 *)&flow->tunKey) + optOffset,
+                      ((UINT8 *)tunKey) + optOffset,
+                      TunnelKeyGetRealSize(tunKey));
     } else {
         flow->tunKey.dst = 0;
-        flow->l2.offset = OVS_WIN_TUNNEL_KEY_SIZE;
     }
-
+    flow->l2.offset = OvsGetFlowL2Offset(tunKey);
     flow->l2.inPort = inPort;
 
-    if ( OvsPacketLenNBL(packet) < ETH_HEADER_LEN_DIX) {
+    if (OvsPacketLenNBL(packet) < ETH_HEADER_LEN_DIX) {
         flow->l2.keyLen = OVS_WIN_TUNNEL_KEY_SIZE + 8 - flow->l2.offset;
         return NDIS_STATUS_SUCCESS;
     }
@@ -2390,8 +2537,8 @@ OvsLookupFlow(OVS_DATAPATH *datapath,
     UINT16 size = key->l2.keyLen;
     UINT8 *start;
 
-    ASSERT(key->tunKey.dst || offset == sizeof (OvsIPv4TunnelKey));
-    ASSERT(!key->tunKey.dst || offset == 0);
+    ASSERT(key->tunKey.dst || offset == sizeof(OvsIPv4TunnelKey));
+    ASSERT(!key->tunKey.dst || offset == OvsGetFlowL2Offset(&key->tunKey));
 
     start = (UINT8 *)key + offset;
 
@@ -2447,7 +2594,7 @@ OvsHashFlow(const OvsFlowKey *key)
     UINT16 size = key->l2.keyLen;
     UINT8 *start;
 
-    ASSERT(key->tunKey.dst || offset == sizeof (OvsIPv4TunnelKey));
+    ASSERT(key->tunKey.dst || offset == sizeof(OvsIPv4TunnelKey));
     ASSERT(!key->tunKey.dst || offset == 0);
     start = (UINT8 *)key + offset;
     return OvsJhashBytes(start, size, 0);

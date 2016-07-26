@@ -18,6 +18,7 @@
 
 #include <stdint.h>
 #include "hmap.h"
+#include "uuid.h"
 
 struct ovsdb_idl;
 struct sbrec_datapath_binding;
@@ -32,15 +33,24 @@ struct sbrec_datapath_binding;
 struct lport_index {
     struct hmap by_name;
     struct hmap by_key;
+    struct hmap by_uuid;
 };
 
-void lport_index_init(struct lport_index *, struct ovsdb_idl *);
+void lport_index_reset(void);
+void lport_index_init(struct lport_index *);
+void lport_index_fill(struct lport_index *, struct ovsdb_idl *);
+void lport_index_remove(struct lport_index *, const struct uuid *);
+void lport_index_clear(struct lport_index *);
 void lport_index_destroy(struct lport_index *);
 
 const struct sbrec_port_binding *lport_lookup_by_name(
     const struct lport_index *, const char *name);
 const struct sbrec_port_binding *lport_lookup_by_key(
     const struct lport_index *, uint32_t dp_key, uint16_t port_key);
+
+const struct lport *lport_lookup_by_uuid(
+    const struct lport_index *, const struct uuid *uuid);
+
 
 /* Multicast group index
  * =====================
@@ -54,14 +64,22 @@ const struct sbrec_port_binding *lport_lookup_by_key(
 
 struct mcgroup_index {
     struct hmap by_dp_name;
+    struct hmap by_uuid;
 };
 
-void mcgroup_index_init(struct mcgroup_index *, struct ovsdb_idl *);
+void mcgroup_index_reset(void);
+void mcgroup_index_init(struct mcgroup_index *);
+void mcgroup_index_fill(struct mcgroup_index *, struct ovsdb_idl *);
+void mcgroup_index_remove(struct mcgroup_index *, const struct uuid *);
+void mcgroup_index_clear(struct mcgroup_index *);
 void mcgroup_index_destroy(struct mcgroup_index *);
 
 const struct sbrec_multicast_group *mcgroup_lookup_by_dp_name(
     const struct mcgroup_index *,
     const struct sbrec_datapath_binding *,
     const char *name);
+
+const struct mcgroup *mcgroup_lookup_by_uuid(
+    const struct mcgroup_index *, const struct uuid *uuid);
 
 #endif /* ovn/lport.h */

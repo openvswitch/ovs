@@ -10,6 +10,7 @@ ovn_lib_libovn_la_SOURCES = \
 	ovn/lib/expr.h \
 	ovn/lib/lex.c \
 	ovn/lib/lex.h \
+	ovn/lib/ovn-dhcp.h \
 	ovn/lib/ovn-util.c \
 	ovn/lib/ovn-util.h \
 	ovn/lib/logical-fields.h

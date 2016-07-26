@@ -27,6 +27,7 @@
 #include "User.h"
 #include "Vport.h"
 #include "Vxlan.h"
+#include "Geneve.h"
 
 #ifdef OVS_DBG_MOD
 #undef OVS_DBG_MOD
@@ -530,14 +531,14 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
     vport->numaNodeId = nicParam->NumaNodeId;
 
     if (nameChanged) {
-        OVS_EVENT_ENTRY event;
-        event.portNo = vport->portNo;
-        event.ovsType = vport->ovsType;
-        event.upcallPid = vport->upcallPid;
-        RtlCopyMemory(&event.ovsName, &vport->ovsName, sizeof event.ovsName);
-        event.type = OVS_EVENT_LINK_DOWN;
+        OVS_EVENT_ENTRY evt;
+        evt.portNo = vport->portNo;
+        evt.ovsType = vport->ovsType;
+        evt.upcallPid = vport->upcallPid;
+        RtlCopyMemory(&evt.ovsName, &vport->ovsName, sizeof evt.ovsName);
+        evt.type = OVS_EVENT_LINK_DOWN;
         OvsRemoveAndDeleteVport(NULL, switchContext, vport, FALSE, TRUE);
-        OvsPostEvent(&event);
+        OvsPostEvent(&evt);
     }
 
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
@@ -1075,6 +1076,9 @@ OvsInitTunnelVport(PVOID userContext,
     case OVS_VPORT_TYPE_STT:
         status = OvsInitSttTunnel(vport, dstPort);
         break;
+    case OVS_VPORT_TYPE_GENEVE:
+        status = OvsInitGeneveTunnel(vport, dstPort);
+        break;
     default:
         ASSERT(0);
     }
@@ -1218,6 +1222,7 @@ InitOvsVportCommon(POVS_SWITCH_CONTEXT switchContext,
     case OVS_VPORT_TYPE_GRE:
     case OVS_VPORT_TYPE_VXLAN:
     case OVS_VPORT_TYPE_STT:
+    case OVS_VPORT_TYPE_GENEVE:
     {
         UINT16 dstPort = GetPortFromPriv(vport);
         hash = OvsJhashBytes(&dstPort,
@@ -1301,6 +1306,9 @@ OvsRemoveAndDeleteVport(PVOID usrParamsContext,
             return status;
         }
     }
+    case OVS_VPORT_TYPE_GENEVE:
+        OvsCleanupGeneveTunnel(vport);
+        break;
     case OVS_VPORT_TYPE_STT:
         OvsCleanupSttTunnel(vport);
         break;
@@ -1362,9 +1370,7 @@ OvsRemoveAndDeleteVport(PVOID usrParamsContext,
         InitializeListHead(&vport->ovsNameLink);
         RemoveEntryList(&vport->portNoLink);
         InitializeListHead(&vport->portNoLink);
-        if (OVS_VPORT_TYPE_VXLAN == vport->ovsType ||
-            OVS_VPORT_TYPE_STT == vport->ovsType   ||
-            OVS_VPORT_TYPE_GRE == vport->ovsType) {
+        if (OvsIsTunnelVportType(vport->ovsType)) {
             RemoveEntryList(&vport->tunnelVportLink);
             InitializeListHead(&vport->tunnelVportLink);
         }
@@ -2255,7 +2261,7 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
         if (OvsIsTunnelVportType(portType)) {
             UINT16 transportPortDest = 0;
-            UINT8 nwProto;
+            UINT8 nwProto = IPPROTO_NONE;
             POVS_VPORT_ENTRY dupVport;
 
             switch (portType) {
@@ -2265,6 +2271,9 @@ OvsNewVportCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
             case OVS_VPORT_TYPE_VXLAN:
                 transportPortDest = VXLAN_UDP_PORT;
                 nwProto = IPPROTO_UDP;
+                break;
+            case OVS_VPORT_TYPE_GENEVE:
+                transportPortDest = GENEVE_UDP_PORT;
                 break;
             case OVS_VPORT_TYPE_STT:
                 transportPortDest = STT_TCP_PORT;
@@ -2392,6 +2401,9 @@ Cleanup:
                         break;
                     case OVS_VPORT_TYPE_STT:
                         OvsCleanupSttTunnel(vport);
+                        break;
+                    case OVS_VPORT_TYPE_GENEVE:
+                        OvsCleanupGeneveTunnel(vport);
                         break;
                     default:
                         ASSERT(!"Invalid tunnel port type");

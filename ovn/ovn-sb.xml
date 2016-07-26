@@ -1063,6 +1063,51 @@
 
           <p><b>Example:</b> <code>put_arp(inport, arp.spa, arp.sha);</code></p>
         </dd>
+
+        <dt>
+          <code><var>R</var> = put_dhcp_opts(<code>offerip</code> = <var>IP</var>, <var>D1</var> = <var>V1</var>, <var>D2</var> = <var>V2</var>, ..., <var>Dn</var> = <var>Vn</var>);</code>
+        </dt>
+
+        <dd>
+          <p>
+            <b>Parameters</b>: one or more DHCP option/value pairs, the first
+            of which must set a value for the offered IP, <code>offerip</code>.
+          </p>
+
+          <p>
+            <b>Result</b>: stored to a 1-bit subfield <var>R</var>.
+          </p>
+
+          <p>
+            Valid only in the ingress pipeline.
+          </p>
+
+          <p>
+            When this action is applied to a DHCP request packet (DHCPDISCOVER
+            or DHCPREQUEST), it changes the packet into a DHCP reply (DHCPOFFER
+            or DHCPACK, respectively), replaces the options by those specified
+            as parameters, and stores 1 in <var>R</var>.
+          </p>
+
+          <p>
+            When this action is applied to a non-DHCP packet or a DHCP packet
+            that is not DHCPDISCOVER or DHCPREQUEST, it leaves the packet
+            unchanged and stores 0 in <var>R</var>.
+          </p>
+
+          <p>
+            The contents of the <ref table="DHCP_Option"/> table control the
+            DHCP option names and values that this action supports.
+          </p>
+
+          <p>
+            <b>Example:</b>
+            <code>
+              reg0[0] = put_dhcp_opts(offerip = 10.0.0.2, router = 10.0.0.1,
+              netmask = 255.255.255.0, dns_server = {8.8.8.8, 7.7.7.7});
+            </code>
+          </p>
+        </dd>
       </dl>
 
       <p>
@@ -1585,6 +1630,159 @@ tcp.flags = RST;
 
     <column name="mac">
       The Ethernet address to which the IP is bound.
+    </column>
+  </table>
+
+  <table name="DHCP_Options" title="DHCP Options supported by native OVN DHCP">
+    <p>
+      Each row in this table stores the DHCP Options supported by native OVN
+      DHCP. <code>ovn-northd</code> populates this table with the supported
+      DHCP options. <code>ovn-controller</code> looks up this table to get the
+      DHCP codes of the DHCP options defined in the "put_dhcp_opts" action.
+      Please refer to the RFC 2132 <code>"https://tools.ietf.org/html/rfc2132"</code>
+      for the possible list of DHCP options that can be defined here.
+    </p>
+
+    <column name="name">
+      <p>
+        Name of the DHCP option.
+      </p>
+
+      <p>
+        Example. name="router"
+      </p>
+    </column>
+
+    <column name="code">
+      <p>
+        DHCP option code for the DHCP option as defined in the RFC 2132.
+      </p>
+
+      <p>
+        Example. code=3
+      </p>
+    </column>
+
+    <column name="type">
+      <p>
+        Data type of the DHCP option code.
+      </p>
+
+      <dl>
+        <dt><code>value: bool</code></dt>
+        <dd>
+          <p>
+            This indicates that the value of the DHCP option is a bool.
+          </p>
+
+          <p>
+            Example. "name=ip_forward_enable", "code=19", "type=bool".
+          </p>
+
+          <p>
+            put_dhcp_opts(..., ip_forward_enable = 1,...)
+          </p>
+        </dd>
+
+        <dt><code>value: uint8</code></dt>
+        <dd>
+          <p>
+            This indicates that the value of the DHCP option is an unsigned
+            int8 (8 bits)
+          </p>
+
+          <p>
+            Example. "name=default_ttl", "code=23", "type=uint8".
+          </p>
+
+          <p>
+            put_dhcp_opts(..., default_ttl = 50,...)
+          </p>
+        </dd>
+
+        <dt><code>value: uint16</code></dt>
+        <dd>
+          <p>
+            This indicates that the value of the DHCP option is an unsigned
+            int16 (16 bits).
+          </p>
+
+          <p>
+            Example. "name=mtu", "code=26", "type=uint16".
+          </p>
+
+          <p>
+            put_dhcp_opts(..., mtu = 1450,...)
+          </p>
+        </dd>
+
+        <dt><code>value: uint32</code></dt>
+        <dd>
+          <p>
+            This indicates that the value of the DHCP option is an unsigned
+            int32 (32 bits).
+          </p>
+
+          <p>
+            Example. "name=lease_time", "code=51", "type=uint32".
+          </p>
+
+          <p>
+            put_dhcp_opts(..., lease_time = 86400,...)
+          </p>
+        </dd>
+
+        <dt><code>value: ipv4</code></dt>
+        <dd>
+          <p>
+            This indicates that the value of the DHCP option is an IPv4
+            address or addresses.
+          </p>
+
+          <p>
+            Example. "name=router", "code=3", "type=ipv4".
+          </p>
+
+          <p>
+            put_dhcp_opts(..., router = 10.0.0.1,...)
+          </p>
+
+          <p>
+            Example. "name=dns_server", "code=6", "type=ipv4".
+          </p>
+
+          <p>
+            put_dhcp_opts(..., dns_server = {8.8.8.8 7.7.7.7},...)
+          </p>
+        </dd>
+
+        <dt><code>value: static_routes</code></dt>
+        <dd>
+          <p>
+            This indicates that the value of the DHCP option contains a pair of
+            IPv4 route and next hop addresses.
+          </p>
+
+          <p>
+            Example. "name=classless_static_route", "code=121", "type=static_routes".
+          </p>
+
+          <p>
+            put_dhcp_opts(..., classless_static_route = {30.0.0.0/24,10.0.0.4,0.0.0.0/0,10.0.0.1}...)
+          </p>
+        </dd>
+
+        <dt><code>value: str</code></dt>
+        <dd>
+          <p>
+            This indicates that the value of the DHCP option is a string.
+          </p>
+
+          <p>
+            Example. "name=host_name", "code=12", "type=str".
+          </p>
+        </dd>
+      </dl>
     </column>
   </table>
 </database>

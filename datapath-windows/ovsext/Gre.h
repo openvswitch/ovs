@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Cloudbase Solutions Srl
+ * Copyright (c) 2015, 2016 Cloudbase Solutions Srl
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -51,6 +51,8 @@ typedef struct GREHdr {
 /* GRE Flags*/
 #define GRE_CSUM    0x0080
 #define GRE_KEY     0x0020
+/* The maximum GRE header length that we can process */
+#define OVS_MAX_GRE_LGTH (sizeof(EthHdr) + sizeof(IPHdr) + sizeof(GREHdr) + 12)
 
 NTSTATUS OvsInitGreTunnel(POVS_VPORT_ENTRY vport);
 
@@ -76,11 +78,13 @@ OvsTunnelFlagsToGreFlags(UINT16 tunnelflags)
 {
     UINT16 flags = 0;
 
-    if (tunnelflags & OVS_TNL_F_CSUM)
+    if (tunnelflags & OVS_TNL_F_CSUM) {
         flags |= GRE_CSUM;
+    }
 
-    if (tunnelflags & OVS_TNL_F_KEY)
+    if (tunnelflags & OVS_TNL_F_KEY) {
         flags |= GRE_KEY;
+    }
 
     return flags;
 }
@@ -89,10 +93,8 @@ static __inline UINT32
 GreTunHdrSize(UINT16 flags)
 {
     UINT32 sum = sizeof(EthHdr) + sizeof(IPHdr) + sizeof(GREHdr);
-    sum += (flags & OVS_TNL_F_CSUM) ?
-           4 : 0;
-    sum += (flags & OVS_TNL_F_KEY) ?
-           4 : 0;
+    sum += (flags & GRE_CSUM) ? 4 : 0;
+    sum += (flags & GRE_KEY) ? 4 : 0;
 
     return sum;
 }

@@ -111,6 +111,7 @@ struct netdev_dummy {
     struct netdev_stats stats OVS_GUARDED;
     enum netdev_flags flags OVS_GUARDED;
     int ifindex OVS_GUARDED;
+    int numa_id OVS_GUARDED;
 
     struct dummy_packet_conn conn OVS_GUARDED;
 
@@ -123,8 +124,9 @@ struct netdev_dummy {
     /* The following properties are for dummy-pmd and they cannot be changed
      * when a device is running, so we remember the request and update them
      * next time netdev_dummy_reconfigure() is called. */
-    int requested_n_txq;
-    int requested_n_rxq;
+    int requested_n_txq OVS_GUARDED;
+    int requested_n_rxq OVS_GUARDED;
+    int requested_numa_id OVS_GUARDED;
 };
 
 /* Max 'recv_queue_len' in struct netdev_dummy. */
@@ -671,6 +673,7 @@ netdev_dummy_construct(struct netdev *netdev_)
     netdev->ifindex = -EOPNOTSUPP;
     netdev->requested_n_rxq = netdev_->n_rxq;
     netdev->requested_n_txq = netdev_->n_txq;
+    netdev->numa_id = 0;
 
     dummy_packet_conn_init(&netdev->conn);
 
@@ -818,7 +821,7 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     const char *pcap;
-    int new_n_rxq;
+    int new_n_rxq, new_numa_id;
 
     ovs_mutex_lock(&netdev->mutex);
     netdev->ifindex = smap_get_int(args, "ifindex", -EOPNOTSUPP);
@@ -855,8 +858,11 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
     }
 
     new_n_rxq = MAX(smap_get_int(args, "n_rxq", netdev->requested_n_rxq), 1);
-    if (new_n_rxq != netdev->requested_n_rxq) {
+    new_numa_id = smap_get_int(args, "numa_id", 0);
+    if (new_n_rxq != netdev->requested_n_rxq
+        || new_numa_id != netdev->requested_numa_id) {
         netdev->requested_n_rxq = new_n_rxq;
+        netdev->requested_numa_id = new_numa_id;
         netdev_request_reconfigure(netdev_);
     }
 
@@ -866,9 +872,15 @@ exit:
 }
 
 static int
-netdev_dummy_get_numa_id(const struct netdev *netdev_ OVS_UNUSED)
+netdev_dummy_get_numa_id(const struct netdev *netdev_)
 {
-    return 0;
+    struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
+
+    ovs_mutex_lock(&netdev->mutex);
+    int numa_id = netdev->numa_id;
+    ovs_mutex_unlock(&netdev->mutex);
+
+    return numa_id;
 }
 
 /* Requests the number of tx queues for the dummy PMD interface. */
@@ -901,6 +913,7 @@ netdev_dummy_reconfigure(struct netdev *netdev_)
 
     netdev_->n_txq = netdev->requested_n_txq;
     netdev_->n_rxq = netdev->requested_n_rxq;
+    netdev->numa_id = netdev->requested_numa_id;
 
     ovs_mutex_unlock(&netdev->mutex);
     return 0;
@@ -1043,6 +1056,8 @@ netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
     for (i = 0; i < cnt; i++) {
         const void *buffer = dp_packet_data(pkts[i]);
         size_t size = dp_packet_size(pkts[i]);
+
+        size -= dp_packet_get_cutlen(pkts[i]);
 
         if (size < ETH_HEADER_LEN) {
             error = EMSGSIZE;

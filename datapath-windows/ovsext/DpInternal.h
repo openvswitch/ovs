@@ -128,10 +128,18 @@ typedef struct L2Key {
 } L2Key; /* Size of 24 byte. */
 
 /* Number of packet attributes required to store OVS tunnel key. */
-#define NUM_PKT_ATTR_REQUIRED 3
+#define NUM_PKT_ATTR_REQUIRED 35
+#define TUN_OPT_MAX_LEN 255
 
 typedef union OvsIPv4TunnelKey {
+    /* Options should always be the first member of tunnel key.
+     * They are stored at the end of the array if they are less than the
+     * maximum size. This allows us to get the benefits of variable length
+     * matching for small options.
+     */
     struct {
+        UINT8 tunOpts[TUN_OPT_MAX_LEN];          /* Tunnel options. */
+        UINT8 tunOptLen;             /* Tunnel option length in byte. */
         ovs_be32 dst;
         ovs_be32 src;
         ovs_be64 tunnelId;
@@ -147,7 +155,22 @@ typedef union OvsIPv4TunnelKey {
         };
     };
     uint64_t attr[NUM_PKT_ATTR_REQUIRED];
-} OvsIPv4TunnelKey; /* Size of 24 byte. */
+} OvsIPv4TunnelKey; /* Size of 280 byte. */
+
+__inline uint8_t TunnelKeyGetOptionsOffset(const OvsIPv4TunnelKey *key)
+{
+    return TUN_OPT_MAX_LEN - key->tunOptLen;
+}
+
+__inline uint8_t* TunnelKeyGetOptions(OvsIPv4TunnelKey *key)
+{
+    return key->tunOpts + TunnelKeyGetOptionsOffset(key);
+}
+
+__inline uint16_t TunnelKeyGetRealSize(OvsIPv4TunnelKey *key)
+{
+    return sizeof(OvsIPv4TunnelKey) - TunnelKeyGetOptionsOffset(key);
+}
 
 typedef struct MplsKey {
     ovs_be32 lse;                /* MPLS topmost label stack entry. */
@@ -155,7 +178,7 @@ typedef struct MplsKey {
 } MplsKey; /* Size of 8 bytes. */
 
 typedef __declspec(align(8)) struct OvsFlowKey {
-    OvsIPv4TunnelKey tunKey;     /* 24 bytes */
+    OvsIPv4TunnelKey tunKey;     /* 280 bytes */
     L2Key l2;                    /* 24 bytes */
     union {
         /* These headers are mutually exclusive. */

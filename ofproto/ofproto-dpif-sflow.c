@@ -1140,6 +1140,7 @@ dpif_sflow_read_actions(const struct flow *flow,
 	    }
 	    break;
 
+	case OVS_ACTION_ATTR_TRUNC:
 	case OVS_ACTION_ATTR_USERSPACE:
 	case OVS_ACTION_ATTR_RECIRC:
 	case OVS_ACTION_ATTR_HASH:

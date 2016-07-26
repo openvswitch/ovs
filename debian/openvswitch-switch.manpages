@@ -3,6 +3,7 @@ utilities/ovs-ctl.8
 utilities/ovs-dpctl-top.8
 utilities/ovs-dpctl.8
 utilities/ovs-pcap.1
+utilities/ovs-tcpdump.8
 utilities/ovs-tcpundump.1
 utilities/ovs-vlan-test.8
 utilities/ovs-vsctl.8

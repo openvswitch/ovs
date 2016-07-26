@@ -1092,6 +1092,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
     struct dpif_execute_helper_aux *aux = aux_;
     int type = nl_attr_type(action);
     struct dp_packet *packet = packets_->packets[0];
+    struct dp_packet *trunc_packet = NULL, *orig_packet;
 
     ovs_assert(packets_->count == 1);
 
@@ -1106,7 +1107,8 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
         struct ofpbuf execute_actions;
         uint64_t stub[256 / 8];
         struct pkt_metadata *md = &packet->md;
-        bool dst_set;
+        bool dst_set, clone = false;
+        uint32_t cutlen = dp_packet_get_cutlen(packet);
 
         dst_set = flow_tnl_dst_is_set(&md->tunnel);
         if (dst_set) {
@@ -1124,6 +1126,22 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
             execute.actions_len = NLA_ALIGN(action->nla_len);
         }
 
+        orig_packet = packet;
+
+        if (cutlen > 0 && (type == OVS_ACTION_ATTR_OUTPUT ||
+            type == OVS_ACTION_ATTR_TUNNEL_PUSH ||
+            type == OVS_ACTION_ATTR_TUNNEL_POP ||
+            type == OVS_ACTION_ATTR_USERSPACE)) {
+            if (!may_steal) {
+                trunc_packet = dp_packet_clone(packet);
+                packet = trunc_packet;
+                clone = true;
+            }
+
+            dp_packet_set_size(packet, dp_packet_size(packet) - cutlen);
+            dp_packet_reset_cutlen(orig_packet);
+        }
+
         execute.packet = packet;
         execute.flow = aux->flow;
         execute.needs_help = false;
@@ -1134,6 +1152,10 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
 
         if (dst_set) {
             ofpbuf_uninit(&execute_actions);
+        }
+
+        if (clone) {
+            dp_packet_delete(trunc_packet);
         }
         break;
     }
@@ -1146,6 +1168,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
     case OVS_ACTION_ATTR_SET:
     case OVS_ACTION_ATTR_SET_MASKED:
     case OVS_ACTION_ATTR_SAMPLE:
+    case OVS_ACTION_ATTR_TRUNC:
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
         OVS_NOT_REACHED();

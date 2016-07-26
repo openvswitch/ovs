@@ -4057,12 +4057,16 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
     case OVS_ACTION_ATTR_TUNNEL_PUSH:
         if (*depth < MAX_RECIRC_DEPTH) {
             struct dp_packet_batch tnl_pkt;
+            struct dp_packet_batch *orig_packets_ = packets_;
             int err;
 
             if (!may_steal) {
                 dp_packet_batch_clone(&tnl_pkt, packets_);
                 packets_ = &tnl_pkt;
+                dp_packet_batch_reset_cutlen(orig_packets_);
             }
+
+            dp_packet_batch_apply_cutlen(packets_);
 
             err = push_tnl_action(pmd, a, packets_);
             if (!err) {
@@ -4076,6 +4080,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
 
     case OVS_ACTION_ATTR_TUNNEL_POP:
         if (*depth < MAX_RECIRC_DEPTH) {
+            struct dp_packet_batch *orig_packets_ = packets_;
             odp_port_t portno = u32_to_odp(nl_attr_get_u32(a));
 
             p = pmd_tx_port_cache_lookup(pmd, portno);
@@ -4084,9 +4089,12 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
                 int i;
 
                 if (!may_steal) {
-                   dp_packet_batch_clone(&tnl_pkt, packets_);
-                   packets_ = &tnl_pkt;
+                    dp_packet_batch_clone(&tnl_pkt, packets_);
+                    packets_ = &tnl_pkt;
+                    dp_packet_batch_reset_cutlen(orig_packets_);
                 }
+
+                dp_packet_batch_apply_cutlen(packets_);
 
                 netdev_pop_header(p->netdev, packets_);
                 if (!packets_->count) {
@@ -4107,15 +4115,30 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
 
     case OVS_ACTION_ATTR_USERSPACE:
         if (!fat_rwlock_tryrdlock(&dp->upcall_rwlock)) {
+            struct dp_packet_batch *orig_packets_ = packets_;
             struct dp_packet **packets = packets_->packets;
             const struct nlattr *userdata;
+            struct dp_packet_batch usr_pkt;
             struct ofpbuf actions;
             struct flow flow;
             ovs_u128 ufid;
+            bool clone = false;
             int i;
 
             userdata = nl_attr_find_nested(a, OVS_USERSPACE_ATTR_USERDATA);
             ofpbuf_init(&actions, 0);
+
+            if (packets_->trunc) {
+                if (!may_steal) {
+                    dp_packet_batch_clone(&usr_pkt, packets_);
+                    packets_ = &usr_pkt;
+                    packets = packets_->packets;
+                    clone = true;
+                    dp_packet_batch_reset_cutlen(orig_packets_);
+                }
+
+                dp_packet_batch_apply_cutlen(packets_);
+            }
 
             for (i = 0; i < packets_->count; i++) {
                 flow_extract(packets[i], &flow);
@@ -4123,6 +4146,11 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
                 dp_execute_userspace_action(pmd, packets[i], may_steal, &flow,
                                             &ufid, &actions, userdata);
             }
+
+            if (clone) {
+                dp_packet_delete_batch(packets_, true);
+            }
+
             ofpbuf_uninit(&actions);
             fat_rwlock_unlock(&dp->upcall_rwlock);
 
@@ -4170,6 +4198,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
     case OVS_ACTION_ATTR_SAMPLE:
     case OVS_ACTION_ATTR_HASH:
     case OVS_ACTION_ATTR_UNSPEC:
+    case OVS_ACTION_ATTR_TRUNC:
     case __OVS_ACTION_ATTR_MAX:
         OVS_NOT_REACHED();
     }

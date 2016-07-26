@@ -940,7 +940,7 @@ AT_CHECK([ovs-ofctl del-flows br0])
 
 AT_CHECK([ovs-ofctl monitor -OOpenFlow13 -P standard br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
-dnl Test that missed packets are droped
+dnl Test that missed packets are dropped
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(ack,syn)'
 done
@@ -1201,7 +1201,7 @@ AT_CHECK([ovs-ofctl -OOpenFlow11 mod-table br0 all drop])
 
 AT_CHECK([ovs-ofctl monitor -P standard br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
-dnl Test that missed packets are droped
+dnl Test that missed packets are dropped
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
@@ -1231,7 +1231,7 @@ AT_CHECK([ovs-ofctl -OOpenFlow11 mod-table br0 all drop])
 
 AT_CHECK([ovs-ofctl monitor -P standard br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
-dnl Test that missed packets are droped
+dnl Test that missed packets are dropped
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
@@ -1262,7 +1262,7 @@ AT_CHECK([ovs-ofctl -OOpenFlow11 mod-table br0 all drop])
 
 AT_CHECK([ovs-ofctl monitor -P standard br0 65534 --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
-dnl Test that missed packets are droped
+dnl Test that missed packets are dropped
 for i in 1 2 3 ; do
     ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=0,ttl=64,frag=no),tcp(src=8,dst=9),tcp_flags(0x010)'
 done
@@ -5321,6 +5321,130 @@ PORTNAME
 PORTNAME
 	portName=p2
 ])])
+
+AT_SETUP([ofproto-dpif - basic truncate action])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3 4 5
+
+AT_CHECK([ovs-vsctl -- set Interface p1 type=dummy options:pcap=p1.pcap])
+AT_CHECK([ovs-vsctl -- set Interface p2 type=dummy options:pstream=punix:p2.sock])
+AT_CHECK([ovs-vsctl -- set Interface p3 type=dummy   options:stream=unix:p2.sock])
+AT_CHECK([ovs-vsctl -- set Interface p4 type=dummy options:pstream=punix:p4.sock])
+AT_CHECK([ovs-vsctl -- set Interface p5 type=dummy   options:stream=unix:p4.sock])
+
+AT_DATA([flows.txt], [dnl
+in_port=3,actions=drop
+in_port=5,actions=drop
+in_port=1,actions=output(port=2,max_len=64),output:4
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Datapath actions
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+[Datapath actions: trunc(64),2,4
+])
+
+dnl An 170 byte packet
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '000c29c8a0a4005056c0000808004500009cb4a6000040019003c0a8da01c0a8da640800cb5fa762000556f431ad0009388e08090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f'])
+
+AT_CHECK([ovs-ofctl parse-pcap p1.pcap], [0], [dnl
+icmp,in_port=ANY,vlan_tci=0x0000,dl_src=00:50:56:c0:00:08,dl_dst=00:0c:29:c8:a0:a4,nw_src=192.168.218.1,nw_dst=192.168.218.100,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0
+])
+
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+dnl packet with truncated size
+AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=3" | sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=64
+])
+dnl packet with original size
+AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=5" | sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=170
+])
+
+dnl More complicated case
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_DATA([flows.txt], [dnl
+in_port=3,actions=drop
+in_port=5,actions=drop
+in_port=1,actions=output(port=2,max_len=64),output(port=2,max_len=128),output(port=4,max_len=60),output:2,output:4
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+dnl Datapath actions
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+[Datapath actions: trunc(64),2,trunc(128),2,trunc(60),4,2,4
+])
+
+dnl An 170 byte packet
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 '000c29c8a0a4005056c0000808004500009cb4a6000040019003c0a8da01c0a8da640800cb5fa762000556f431ad0009388e08090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f404142434445464748494a4b4c4d4e4f505152535455565758595a5b5c5d5e5f606162636465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f'])
+
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+dnl packet size: 64 + 128 + 170 = 362
+AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=3" | sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=362
+])
+dnl packet size: 60 + 170 = 230
+AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=5" | sed -n 's/.*\(n\_bytes=[[0-9]]*\).*/\1/p'], [0], [dnl
+n_bytes=230
+])
+
+dnl syntax checking
+AT_CHECK([ovs-ofctl add-flow br0 'actions=output(port=ALL,max_len=100)'], [1], [], [dnl
+ovs-ofctl: output to unsupported truncate port: ALL
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - truncate and output to patch port])
+OVS_VSWITCHD_START([add-br br1 \
+-- set bridge br1 datapath-type=dummy fail-mode=secure \
+-- add-port br1 pbr1 -- set int pbr1 type=patch options:peer=pbr0 ofport_request=1 \
+-- add-port br0 pbr0 -- set int pbr0 type=patch options:peer=pbr1])
+
+add_of_ports br0 2
+
+AT_CHECK([ovs-ofctl add-flow br0 actions='output(port=1,max_len=100),output:2'])
+AT_CHECK([ovs-ofctl add-flow br1 actions=NORMAL])
+
+AT_CHECK([ovs-appctl ofproto/trace br0 in_port=LOCAL,dl_src=10:20:30:40:50:60],
+[0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: 2
+])
+dnl the output(port=1,max_len=100) fails the translation, only output:2 in datapath
+AT_CHECK([grep "output_trunc does not support port: [[0-9]]*" stdout], [0], [stdout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - truncate and output to gre tunnel])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
+                    options:key=5 ofport_request=1\
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2])
+AT_DATA([flows.txt], [dnl
+actions=output(max_len=100, port=1)
+])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
+		br0 65534/100: (dummy)
+		p1 1/1: (gre: key=5, local_ip=2.2.2.2, remote_ip=1.1.1.1)
+		p2 2/2: (dummy)
+])
+
+dnl Basic
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: trunc(100),set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,ttl=64,flags(df|key))),1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
 
 AT_SETUP([ofproto-dpif - sFlow packet sampling - IPv4 collector])
 CHECK_SFLOW_SAMPLING_PACKET([127.0.0.1])

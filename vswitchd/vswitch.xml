@@ -3350,16 +3350,14 @@
           (<code>http://luxik.cdi.cz/~devik/qos/htb/manual/userg.htm</code>)
           for information on how this classifier works and how to configure it.
         </dd>
-      </dl>
-      <dl>
+
         <dt><code>linux-hfsc</code></dt>
         <dd>
           Linux "Hierarchical Fair Service Curve" classifier.
           See <code>http://linux-ip.net/articles/hfsc.en/</code> for
           information on how this classifier works.
         </dd>
-      </dl>
-      <dl>
+
         <dt><code>linux-sfq</code></dt>
         <dd>
           Linux ``Stochastic Fairness Queueing'' classifier. See
@@ -3367,8 +3365,7 @@
           <code>http://linux.die.net/man/8/tc-sfq</code>) for information on
           how this classifier works.
         </dd>
-      </dl>
-      <dl>
+
         <dt><code>linux-codel</code></dt>
         <dd>
           Linux ``Controlled Delay'' classifier. See <code>tc-codel</code>(8)
@@ -3376,8 +3373,7 @@
           <code>http://man7.org/linux/man-pages/man8/tc-codel.8.html</code>)
           for information on how this classifier works.
         </dd>
-      </dl>
-      <dl>
+
         <dt><code>linux-fq_codel</code></dt>
         <dd>
           Linux ``Fair Queuing with Controlled Delay'' classifier. See
@@ -3385,11 +3381,19 @@
           <code>http://man7.org/linux/man-pages/man8/tc-fq_codel.8.html</code>)
           for information on how this classifier works.
         </dd>
-      </dl>
-      <dl>
+
+        <dt><code>linux-noop</code></dt>
+        <dd>
+          Linux ``No operation.''  By default, Open vSwitch manages quality of
+          service on all of its configured ports.  This can be helpful, but
+          sometimes administrators prefer to use other software to manage QoS.
+          This <ref column="type"/> prevents Open vSwitch from changing the QoS
+          configuration for a port.
+        </dd>
+
         <dt><code>egress-policer</code></dt>
         <dd>
-          An egress policer algorithm. This implementation uses the DPDK
+          A DPDK egress policer algorithm using the DPDK
           rte_meter library. The rte_meter library provides an implementation
           which allows the metering and policing of traffic. The implementation
           in OVS essentially creates a single token bucket used to police
@@ -4740,6 +4744,39 @@
         sampling, and ignored otherwise.  Open vSwitch 2.5.90 and later support
         <ref column="other_config" key="enable-tunnel-sampling"/> for
         per-bridge and per-flow sampling.
+      </p>
+    </column>
+
+    <column name="other_config" key="virtual_obs_id"
+            type='{"type": "string"}'>
+      <p>
+        A string that accompanies each IPFIX flow record.  Its intended use is
+        for the ``virtual observation ID,'' an identifier of a virtual
+        observation point that is locally unique in a virtual network.  It
+        describes a location in the virtual network where IP packets can be
+        observed.  The maximum length is 254 bytes.  If not specified, the
+        field is omitted from the IPFIX flow record.
+      </p>
+
+      <p>
+        The following enterprise entity reports the specified virtual
+        observation ID:
+      </p>
+
+      <dl>
+        <dt>virtualObsID:</dt>
+        <dd>
+          <p>ID: 898, and enterprise ID 6876 (VMware).</p>
+          <p>type: variable-length string.</p>
+          <p>data type semantics: identifier.</p>
+          <p>description: A virtual observation domain ID that is locally
+          unique in a virtual network.
+          </p>
+        </dd>
+      </dl>
+
+      <p>
+        This feature was introduced in Open vSwitch 2.5.90.
       </p>
     </column>
 

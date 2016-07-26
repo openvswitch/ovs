@@ -248,6 +248,15 @@ struct expr_symbol {
     bool must_crossproduct;
 };
 
+/* A reference to a symbol or a subfield of a symbol.
+ *
+ * For string fields, ofs and n_bits are 0. */
+struct expr_field {
+    const struct expr_symbol *symbol; /* The symbol. */
+    int ofs;                          /* Starting bit offset. */
+    int n_bits;                       /* Number of bits. */
+};
+
 struct expr_symbol *expr_symtab_add_field(struct shash *symtab,
                                           const char *name, enum mf_field_id,
                                           const char *prereqs,
@@ -381,14 +390,67 @@ void expr_matches_print(const struct hmap *matches, FILE *);
 
 /* Action parsing helper. */
 
-char *expr_parse_assignment(struct lexer *lexer, const struct shash *symtab,
+char *expr_parse_assignment(struct lexer *lexer, struct expr_field *dst,
+                            const struct shash *symtab,
                             bool (*lookup_port)(const void *aux,
                                                 const char *port_name,
                                                 unsigned int *portp),
-                            const void *aux, struct ofpbuf *ofpacts,
-                            struct expr **prereqsp);
-char *expr_parse_field(struct lexer *, int n_bits, bool rw,
-                       const struct shash *symtab, struct mf_subfield *,
-                       struct expr **prereqsp);
+                            const void *aux,
+                            struct ofpbuf *ofpacts, struct expr **prereqsp)
+    OVS_WARN_UNUSED_RESULT;
+char *expr_parse_exchange(struct lexer *lexer, struct expr_field *dst,
+                          const struct shash *symtab,
+                          bool (*lookup_port)(const void *aux,
+                                              const char *port_name,
+                                              unsigned int *portp),
+                          const void *aux,
+                          struct ofpbuf *ofpacts, struct expr **prereqsp)
+    OVS_WARN_UNUSED_RESULT;
+char *expr_parse_field(struct lexer *lexer, const struct shash *symtab,
+                       struct expr_field *field)
+    OVS_WARN_UNUSED_RESULT;
+char *expr_expand_field(struct lexer *lexer, const struct shash *symtab,
+                        const struct expr_field *orig_field,
+                        int n_bits, bool rw,
+                        struct mf_subfield *sf, struct expr **prereqsp)
+    OVS_WARN_UNUSED_RESULT;
+
+/* Type of a "union expr_constant" or "struct expr_constant_set". */
+enum expr_constant_type {
+    EXPR_C_INTEGER,
+    EXPR_C_STRING
+};
+
+/* A string or integer constant (one must know which from context). */
+union expr_constant {
+    /* Integer constant.
+     *
+     * The width of a constant isn't always clear, e.g. if you write "1",
+     * there's no way to tell whether you mean for that to be a 1-bit constant
+     * or a 128-bit constant or somewhere in between. */
+    struct {
+        union mf_subvalue value;
+        union mf_subvalue mask; /* Only initialized if 'masked'. */
+        bool masked;
+
+        enum lex_format format; /* From the constant's lex_token. */
+    };
+
+    /* Null-terminated string constant. */
+    char *string;
+};
+
+/* A collection of "union expr_constant"s of the same type. */
+struct expr_constant_set {
+    union expr_constant *values;  /* Constants. */
+    size_t n_values;              /* Number of constants. */
+    enum expr_constant_type type; /* Type of the constants. */
+    bool in_curlies;              /* Whether the constants were in {}. */
+};
+
+char *expr_parse_constant_set(struct lexer *, const struct shash *symtab,
+                              struct expr_constant_set *cs)
+    OVS_WARN_UNUSED_RESULT;
+void expr_constant_set_destroy(struct expr_constant_set *cs);
 
 #endif /* ovn/expr.h */

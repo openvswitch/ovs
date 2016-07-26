@@ -108,6 +108,7 @@
     OFPACT(UNROLL_XLATE,    ofpact_unroll_xlate, ofpact, "unroll_xlate") \
     OFPACT(CT,              ofpact_conntrack,   ofpact, "ct")           \
     OFPACT(NAT,             ofpact_nat,         ofpact, "nat")          \
+    OFPACT(OUTPUT_TRUNC,    ofpact_output_trunc,ofpact, "output_trunc") \
                                                                         \
     /* Debugging actions.                                               \
      *                                                                  \
@@ -288,6 +289,15 @@ struct ofpact_output_reg {
     struct ofpact ofpact;
     uint16_t max_len;
     struct mf_subfield src;
+};
+
+/* OFPACT_OUTPUT_TRUNC.
+ *
+ * Used for NXAST_OUTPUT_TRUNC. */
+struct ofpact_output_trunc {
+    struct ofpact ofpact;
+    ofp_port_t port;            /* Output port. */
+    uint32_t max_len;           /* Max send len. */
 };
 
 /* Bundle slave choice algorithm to apply.

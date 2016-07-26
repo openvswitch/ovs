@@ -209,6 +209,8 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       [AC_DEFINE([VHOST_CUSE], [1], [DPDK vhost-cuse support enabled, vhost-user disabled.])
        DPDK_EXTRA_LIB="-lfuse"])
 
+    AC_SEARCH_LIBS([get_mempolicy],[numa],[],[AC_MSG_ERROR([unable to find libnuma, install the dependency package])])
+
     # On some systems we have to add -ldl to link with dpdk
     #
     # This code, at first, tries to link without -ldl (""),

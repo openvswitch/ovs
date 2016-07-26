@@ -41,6 +41,7 @@
 #define OVS_DBG_TUNFLT   BIT32(21)
 #define OVS_DBG_STT      BIT32(22)
 #define OVS_DBG_CONTRK   BIT32(23)
+#define OVS_DBG_GENEVE   BIT32(24)
 
 #define OVS_DBG_RESERVED BIT32(31)
 //Please add above OVS_DBG_RESERVED.

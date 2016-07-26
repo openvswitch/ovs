@@ -2226,7 +2226,15 @@ ovsdb_idl_txn_extract_mutations(struct ovsdb_idl_row *row,
         column = &class->columns[idx];
         key_type = column->type.key.type;
         value_type = column->type.value.type;
-        old_datum = ovsdb_idl_read(row, column);
+
+        /* Get the value to be changed */
+        if (row->new && row->written && bitmap_is_set(row->written,idx)) {
+            old_datum = &row->new[idx];
+        } else if (row->old != NULL) {
+            old_datum = &row->old[idx];
+        } else {
+            old_datum = ovsdb_datum_default(&column->type);
+        }
 
         del_set = json_array_create_empty();
         ins_map = json_array_create_empty();
@@ -3408,6 +3416,7 @@ ovsdb_idl_txn_write_partial_map(const struct ovsdb_idl_row *row_,
 
     if (!is_valid_partial_update(row, column, datum)) {
         ovsdb_datum_destroy(datum, &column->type);
+        free(datum);
         return;
     }
 
@@ -3438,6 +3447,7 @@ ovsdb_idl_txn_delete_partial_map(const struct ovsdb_idl_row *row_,
         struct ovsdb_type type_ = column->type;
         type_.value.type = OVSDB_TYPE_VOID;
         ovsdb_datum_destroy(datum, &type_);
+        free(datum);
         return;
     }
     ovsdb_idl_txn_add_map_op(row, column, datum, MAP_OP_DELETE);

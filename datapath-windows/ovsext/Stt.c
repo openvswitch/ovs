@@ -875,7 +875,7 @@ OvsDecapStt(POVS_SWITCH_CONTEXT switchContext,
     advanceCnt = hdrLen;
 
     ipHdr = NdisGetDataBuffer(curNb, sizeof *ipHdr, (PVOID) &ipBuf,
-                                                    1 /*no align*/, 0);
+                              1 /*no align*/, 0);
     ASSERT(ipHdr);
 
     TCPHdr *tcp = (TCPHdr *)((PCHAR)ipHdr + ipHdr->ihl * 4);

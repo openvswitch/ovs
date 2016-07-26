@@ -24,6 +24,7 @@
 #include "ovn-controller.h"
 #include "ovn/lib/actions.h"
 #include "ovn/lib/expr.h"
+#include "ovn/lib/ovn-dhcp.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "packets.h"
 #include "simap.h"
@@ -203,6 +204,13 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
 {
     uint32_t conj_id_ofs = 1;
 
+    struct hmap dhcp_opts = HMAP_INITIALIZER(&dhcp_opts);
+    const struct sbrec_dhcp_options *dhcp_opt_row;
+    SBREC_DHCP_OPTIONS_FOR_EACH(dhcp_opt_row, ctx->ovnsb_idl) {
+        dhcp_opt_add(&dhcp_opts, dhcp_opt_row->name, dhcp_opt_row->code,
+                     dhcp_opt_row->type);
+    }
+
     const struct sbrec_logical_flow *lflow;
     SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
         /* Determine translation of logical table IDs to physical table IDs. */
@@ -274,6 +282,7 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
         };
         struct action_params ap = {
             .symtab = &symtab,
+            .dhcp_opts = &dhcp_opts,
             .lookup_port = lookup_port_cb,
             .aux = &aux,
             .ct_zones = ct_zones,
@@ -357,6 +366,8 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
         ofpbuf_uninit(&ofpacts);
         conj_id_ofs += n_conjs;
     }
+
+    dhcp_opts_destroy(&dhcp_opts);
 }
 
 static void

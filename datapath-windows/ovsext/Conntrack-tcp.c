@@ -389,18 +389,18 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
 
         if (src->state >= CT_DPIF_TCPS_FIN_WAIT_2
             && dst->state >= CT_DPIF_TCPS_FIN_WAIT_2) {
-            OvsConntrackUpdateExpiration(conn, now, 30 * 10000000LL);
+            OvsConntrackUpdateExpiration(conn, now, 30 * CT_INTERVAL_SEC);
         } else if (src->state >= CT_DPIF_TCPS_CLOSING
                    && dst->state >= CT_DPIF_TCPS_CLOSING) {
-            OvsConntrackUpdateExpiration(conn, now, 45 * 10000000LL);
+            OvsConntrackUpdateExpiration(conn, now, 45 * CT_INTERVAL_SEC);
         } else if (src->state < CT_DPIF_TCPS_ESTABLISHED
                    || dst->state < CT_DPIF_TCPS_ESTABLISHED) {
-            OvsConntrackUpdateExpiration(conn, now, 30 * 10000000LL);
+            OvsConntrackUpdateExpiration(conn, now, 30 * CT_INTERVAL_SEC);
         } else if (src->state >= CT_DPIF_TCPS_CLOSING
                    || dst->state >= CT_DPIF_TCPS_CLOSING) {
-            OvsConntrackUpdateExpiration(conn, now, 15 * 60 * 10000000LL);
+            OvsConntrackUpdateExpiration(conn, now, 15 * 60 * CT_INTERVAL_SEC);
         } else {
-            OvsConntrackUpdateExpiration(conn, now, 24 * 60 * 60 * 10000000LL);
+            OvsConntrackUpdateExpiration(conn, now, 24 * 60 * 60 * CT_INTERVAL_SEC);
         }
     } else if ((dst->state < CT_DPIF_TCPS_SYN_SENT
                 || dst->state >= CT_DPIF_TCPS_FIN_WAIT_2
