@@ -757,7 +757,7 @@ static int geneve_build_skb(struct rtable *rt, struct sk_buff *skb,
 	if (unlikely(err))
 		goto free_rt;
 
-	err = udp_tunnel_handle_offloads(skb, udp_sum, false);
+	err = udp_tunnel_handle_offloads(skb, udp_sum);
 	if (err)
 		goto free_rt;
 
@@ -790,7 +790,7 @@ static int geneve6_build_skb(struct dst_entry *dst, struct sk_buff *skb,
 	if (unlikely(err))
 		goto free_dst;
 
-	err = udp_tunnel_handle_offloads(skb, udp_sum, false);
+	err = udp_tunnel_handle_offloads(skb, udp_sum);
 	if (err)
 		goto free_dst;
 

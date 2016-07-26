@@ -91,9 +91,6 @@ struct tnl_ptk_info {
 #undef TUNNEL_OPTIONS_PRESENT
 #define TUNNEL_OPTIONS_PRESENT (TUNNEL_GENEVE_OPT | TUNNEL_VXLAN_OPT)
 
-#define skb_is_encapsulated ovs_skb_is_encapsulated
-bool ovs_skb_is_encapsulated(struct sk_buff *skb);
-
 /* Used to memset ip_tunnel padding. */
 #define IP_TUNNEL_KEY_SIZE	offsetofend(struct ip_tunnel_key, tp_dst)
 
@@ -345,4 +342,8 @@ static inline int iptunnel_pull_offloads(struct sk_buff *skb)
 	return 0;
 }
 #endif /* USE_UPSTREAM_TUNNEL */
+
+#define skb_is_encapsulated ovs_skb_is_encapsulated
+bool ovs_skb_is_encapsulated(struct sk_buff *skb);
+
 #endif /* __NET_IP_TUNNELS_H */

@@ -134,10 +134,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     AC_MSG_RESULT([$kversion])
 
     if test "$version" -ge 4; then
-       if test "$version" = 4 && test "$patchlevel" -le 5; then
+       if test "$version" = 4 && test "$patchlevel" -le 6; then
           : # Linux 4.x
        else
-          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.5.x is not supported (please refer to the FAQ for advice)])
+          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.6.x is not supported (please refer to the FAQ for advice)])
        fi
     elif test "$version" = 3 && test "$patchlevel" -ge 10; then
        : # Linux 3.x
@@ -393,7 +393,6 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
 
   OVS_GREP_IFELSE([$KSRC/include/linux/etherdevice.h], [eth_hw_addr_random])
   OVS_GREP_IFELSE([$KSRC/include/linux/etherdevice.h], [ether_addr_copy])
-  OVS_GREP_IFELSE([$KSRC/nclude/linux/if_ether.h], [inner_eth_hdr])
 
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_link.h], [IFLA_GENEVE_TOS])
   OVS_GREP_IFELSE([$KSRC/include/uapi/linux/if_link.h], [rtnl_link_stats64])
@@ -640,6 +639,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                                    [OVS_DEFINE([HAVE_UDP_FLOW_SRC_PORT])])])
   OVS_GREP_IFELSE([$KSRC/include/net/udp.h], [udp_v4_check])
   OVS_GREP_IFELSE([$KSRC/include/net/udp_tunnel.h], [udp_tunnel_gro_complete])
+  OVS_GREP_IFELSE([$KSRC/include/net/udp_tunnel.h], [sk_buff.*udp_tunnel_handle_offloads],
+                  [OVS_DEFINE([HAVE_UDP_TUNNEL_HANDLE_OFFLOAD_RET_SKB])])
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/udp_tunnel.h], [udp_tunnel_sock_cfg],
                         [gro_receive])
 

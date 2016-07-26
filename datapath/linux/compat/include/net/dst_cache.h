@@ -7,7 +7,10 @@
 #include <net/ip6_fib.h>
 #endif
 
-#ifndef USE_UPSTREAM_TUNNEL
+#ifdef USE_UPSTREAM_TUNNEL
+#include_next <net/dst_cache.h>
+
+#else
 struct dst_cache {
 	struct dst_cache_pcpu __percpu *cache;
 	unsigned long reset_ts;

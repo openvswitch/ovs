@@ -48,7 +48,6 @@ static inline struct metadata_dst *metadata_dst_alloc(u8 optslen, gfp_t flags)
 }
 
 #define skb_tunnel_info ovs_skb_tunnel_info
-#endif
 
 static inline void ovs_tun_rx_dst(struct metadata_dst *md_dst, int optslen)
 {
@@ -99,6 +98,8 @@ static inline void ovs_ipv6_tun_rx_dst(struct metadata_dst *md_dst,
 	info->key.ttl = ip6h->hop_limit;
 	info->key.label = ip6_flowlabel(ip6h);
 }
+
+#endif /* USE_UPSTREAM_TUNNEL */
 
 void ovs_ip_tunnel_rcv(struct net_device *dev, struct sk_buff *skb,
 		      struct metadata_dst *tun_dst);
