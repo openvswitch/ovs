@@ -614,14 +614,15 @@ netdev_rxq_close(struct netdev_rxq *rx)
     }
 }
 
-/* Attempts to receive a batch of packets from 'rx'.  'pkts' should point to
- * the beginning of an array of MAX_RX_BATCH pointers to dp_packet.  If
- * successful, this function stores pointers to up to MAX_RX_BATCH dp_packets
- * into the array, transferring ownership of the packets to the caller, stores
- * the number of received packets into '*cnt', and returns 0.
+/* Attempts to receive a batch of packets from 'rx'.  'batch' should point to
+ * the beginning of an array of NETDEV_MAX_BURST pointers to dp_packet.  If
+ * successful, this function stores pointers to up to NETDEV_MAX_BURST
+ * dp_packets into the array, transferring ownership of the packets to the
+ * caller, stores the number of received packets in 'batch->count', and returns
+ * 0.
  *
  * The implementation does not necessarily initialize any non-data members of
- * 'pkts'.  That is, the caller must initialize layer pointers and metadata
+ * 'batch'.  That is, the caller must initialize layer pointers and metadata
  * itself, if desired, e.g. with pkt_metadata_init() and miniflow_extract().
  *
  * Returns EAGAIN immediately if no packet is ready to be received or another
@@ -631,7 +632,7 @@ netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet_batch *batch)
 {
     int retval;
 
-    retval = rx->netdev->netdev_class->rxq_recv(rx,  batch);
+    retval = rx->netdev->netdev_class->rxq_recv(rx, batch);
     if (!retval) {
         COVERAGE_INC(netdev_received);
     } else {

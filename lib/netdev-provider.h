@@ -730,8 +730,8 @@ struct netdev_class {
 
     /* Attempts to receive a batch of packets from 'rx'.  In 'batch', the
      * caller supplies 'packets' as the pointer to the beginning of an array
-     * of MAX_RX_BATCH pointers to dp_packet.  If successful, the
-     * implementation stores pointers to up to MAX_RX_BATCH dp_packets into
+     * of NETDEV_MAX_BURST pointers to dp_packet.  If successful, the
+     * implementation stores pointers to up to NETDEV_MAX_BURST dp_packets into
      * the array, transferring ownership of the packets to the caller, stores
      * the number of received packets into 'count', and returns 0.
      *
