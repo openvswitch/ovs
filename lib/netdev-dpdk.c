@@ -350,7 +350,7 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
 
         dmp->mp = rte_mempool_create(mp_name, mp_size, MBUF_SIZE(mtu),
                                      MP_CACHE_SZ,
-                                     sizeof(struct rte_pktmbuf_pool_private),
+                                     sizeof (struct dp_packet) - sizeof(struct rte_mbuf),
                                      rte_pktmbuf_pool_init, NULL,
                                      ovs_rte_pktmbuf_init, NULL,
                                      socket_id, 0);
