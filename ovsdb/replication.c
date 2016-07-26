@@ -365,6 +365,8 @@ get_initial_db_state(const struct db *database)
     if (msg->type == JSONRPC_REPLY) {
         process_notification(msg->result, database->db);
     }
+
+    jsonrpc_msg_destroy(msg);
 }
 
 static void
