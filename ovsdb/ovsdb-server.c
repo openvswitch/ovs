@@ -202,6 +202,7 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         }
     }
 
+    disconnect_remote_server();
     free(remotes_error);
 }
 

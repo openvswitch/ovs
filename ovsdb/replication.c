@@ -391,6 +391,7 @@ check_for_notifications(struct shash *all_dbs)
     if (error == EAGAIN) {
         return;
     } else if (error) {
+        jsonrpc_close(rpc);
         rpc = open_jsonrpc(remote_ovsdb_server);
         if (!rpc) {
             /* Remote server went down. */
