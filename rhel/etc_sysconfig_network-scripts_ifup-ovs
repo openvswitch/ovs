@@ -193,6 +193,15 @@ case "$TYPE" in
 			-- add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS \
 			-- set Interface "$DEVICE" type=dpdkvhostuser ${OVS_EXTRA+-- $OVS_EXTRA}
 		;;
+	OVSDPDKBond)
+		ifup_ovs_bridge
+		for _iface in $BOND_IFACES; do
+			IFACE_TYPES="${IFACE_TYPES} -- set interface ${_iface} type=dpdk"
+		done
+		ovs-vsctl -t ${TIMEOUT} \
+			-- --if-exists del-port "$OVS_BRIDGE" "$DEVICE" \
+			-- add-bond "$OVS_BRIDGE" "$DEVICE" ${BOND_IFACES} $OVS_OPTIONS ${IFACE_TYPES} ${OVS_EXTRA+-- $OVS_EXTRA}
+		;;
 	*)
 		echo $"Invalid OVS interface type $TYPE"
 		exit 1
