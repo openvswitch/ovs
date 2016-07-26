@@ -186,6 +186,8 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 	 * make copy of it to restore it back. */
 	memcpy(cb, skb->cb, sizeof(cb));
 
+	skb->encapsulation = 0;
+
 	/* We are handling offloads by segmenting l3 packet, so
 	 * no need to call OVS compat segmentation function. */
 
