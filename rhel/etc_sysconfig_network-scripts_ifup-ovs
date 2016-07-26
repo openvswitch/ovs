@@ -130,7 +130,10 @@ case "$TYPE" in
 		;;
 	OVSIntPort)
 		ifup_ovs_bridge
-		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=internal ${OVS_EXTRA+-- $OVS_EXTRA}
+		ovs-vsctl -t ${TIMEOUT} \
+			-- --if-exists del-port "$OVS_BRIDGE" "$DEVICE" \
+			-- add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS \
+			-- set Interface "$DEVICE" type=internal ${OVS_EXTRA+-- $OVS_EXTRA}
 		if [ -n "${OVSDHCPINTERFACES}" ]; then
 			for _iface in ${OVSDHCPINTERFACES}; do
 				/sbin/ifup ${_iface}
@@ -143,32 +146,52 @@ case "$TYPE" in
 		for _iface in $BOND_IFACES; do
 			/sbin/ifup ${_iface}
 		done
-		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-bond "$OVS_BRIDGE" "$DEVICE" ${BOND_IFACES} $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
+		ovs-vsctl -t ${TIMEOUT} \
+			-- --if-exists del-port "$OVS_BRIDGE" "$DEVICE" \
+			-- add-bond "$OVS_BRIDGE" "$DEVICE" ${BOND_IFACES} $OVS_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
 		OVSINTF=${DEVICE} /sbin/ifup "$OVS_BRIDGE"
 		;;
 	OVSTunnel)
 		ifup_ovs_bridge
-		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=$OVS_TUNNEL_TYPE $OVS_TUNNEL_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
+		ovs-vsctl -t ${TIMEOUT} \
+			-- --if-exists del-port "$OVS_BRIDGE" "$DEVICE" \
+			-- add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS \
+			-- set Interface "$DEVICE" type=$OVS_TUNNEL_TYPE $OVS_TUNNEL_OPTIONS ${OVS_EXTRA+-- $OVS_EXTRA}
 		;;
 	OVSPatchPort)
 		ifup_ovs_bridge
-		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=patch options:peer="${OVS_PATCH_PEER}" ${OVS_EXTRA+-- $OVS_EXTRA}
+		ovs-vsctl -t ${TIMEOUT} \
+			-- --if-exists del-port "$OVS_BRIDGE" "$DEVICE" \
+			-- add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS \
+			-- set Interface "$DEVICE" type=patch options:peer="${OVS_PATCH_PEER}" ${OVS_EXTRA+-- $OVS_EXTRA}
 		;;
 	OVSDPDKPort)
 		ifup_ovs_bridge
-		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=dpdk ${OVS_EXTRA+-- $OVS_EXTRA}
+		ovs-vsctl -t ${TIMEOUT} \
+			-- --if-exists del-port "$OVS_BRIDGE" "$DEVICE" \
+			-- add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS \
+			-- set Interface "$DEVICE" type=dpdk ${OVS_EXTRA+-- $OVS_EXTRA}
 		;;
 	OVSDPDKRPort)
 		ifup_ovs_bridge
-		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=dpdkr ${OVS_EXTRA+-- $OVS_EXTRA}
+		ovs-vsctl -t ${TIMEOUT} \
+			-- --if-exists del-port "$OVS_BRIDGE" "$DEVICE" \
+			-- add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS \
+			-- set Interface "$DEVICE" type=dpdkr ${OVS_EXTRA+-- $OVS_EXTRA}
 		;;
 	OVSDPDVhostPort)
 		ifup_ovs_bridge
-		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=dpdkvhost ${OVS_EXTRA+-- $OVS_EXTRA}
+		ovs-vsctl -t ${TIMEOUT} \
+			-- --if-exists del-port "$OVS_BRIDGE" "$DEVICE" \
+			-- add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS \
+			-- set Interface "$DEVICE" type=dpdkvhost ${OVS_EXTRA+-- $OVS_EXTRA}
 		;;
 	OVSDPDKVhostUserPort)
 		ifup_ovs_bridge
-		ovs-vsctl -t ${TIMEOUT} -- --may-exist add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS -- set Interface "$DEVICE" type=dpdkvhostuser ${OVS_EXTRA+-- $OVS_EXTRA}
+		ovs-vsctl -t ${TIMEOUT} \
+			-- --if-exists del-port "$OVS_BRIDGE" "$DEVICE" \
+			-- add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS \
+			-- set Interface "$DEVICE" type=dpdkvhostuser ${OVS_EXTRA+-- $OVS_EXTRA}
 		;;
 	*)
 		echo $"Invalid OVS interface type $TYPE"
