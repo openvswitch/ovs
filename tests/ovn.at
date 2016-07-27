@@ -912,6 +912,11 @@ done
 # set address for lp13 with invalid characters.
 # lp13 should be configured with only 192.168.0.13.
 ovn-nbctl lsp-set-addresses lp13 "f0:00:00:00:00:13 192.168.0.13 invalid 192.169.0.13"
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
 sip=`ip_to_hex 192 168 0 11`
 tip=`ip_to_hex 192 168 0 13`
 test_arp 11 f00000000011  $sip $tip f00000000013
@@ -2493,6 +2498,10 @@ as hv1 ovs-ofctl dump-flows br-int
 
 #Disable router R1
 ovn-nbctl set Logical_Router R1 enabled=false
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
 
 echo "---------SB dump-----"
 ovn-sbctl list datapath_binding
