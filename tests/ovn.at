@@ -9,6 +9,39 @@ m4_divert_text([PREPARE_TESTS],
    }
 ])
 
+# OVN_CHECK_PACKETS([PCAP], [EXPECTED])
+#
+# This compares packets read from PCAP, in pcap format, to those read
+# from EXPECTED, which is a text file containing packets as hex
+# strings, one per line.  If PCAP contains fewer packets than
+# EXPECTED, it waits up to 10 seconds for more packets to appear.
+#
+# The implementation is an m4 macro that is mostly implemented in
+# terms of a shell function.  This reduces the size of the generated
+# testsuite file since the shell function is only emitted once even
+# when this macro is invoked many times.
+m4_divert_text([PREPARE_TESTS],
+  [ovn_check_packets__ () {
+     echo
+     echo "checking packets in $1 against $2:"
+     rcv_pcap=$1
+     rcv_text=`echo "$rcv_pcap.packets" | sed 's/\.pcap//'`
+     exp_text=$2
+     exp_n=`wc -l < "$exp_text"`
+     ovs_wait_cond () {
+	  $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $rcv_pcap | trim_zeros > $rcv_text
+	  rcv_n=`wc -l < "$rcv_text"`
+	  test $rcv_n -ge $exp_n
+     }
+     ovs_wait || echo "expected $exp_n packets, only received $rcv_n"
+
+     trim_zeros $exp_text | sort > expout
+   }
+])
+m4_define([OVN_CHECK_PACKETS],
+  [ovn_check_packets__ "$1" "$2"
+   AT_CHECK([sort $rcv_text], [0], [expout])])
+
 AT_BANNER([OVN components])
 
 AT_SETUP([ovn -- lexer])
@@ -925,10 +958,6 @@ tip=`ip_to_hex 192 169 0 13`
 #arp request for 192.169.0.13 should be flooded
 test_arp 11 f00000000011  $sip $tip
 
-# Allow some time for packet forwarding.
-# XXX This can be improved.
-sleep 1
-
 # dump information and flows with counters
 ovn-sbctl dump-flows -- list multicast_group
 
@@ -943,15 +972,11 @@ as hv2 ovs-ofctl -O OpenFlow13 dump-flows br-int
 echo "------ hv3 dump ------"
 as hv3 ovs-vsctl show
 as hv3 ovs-ofctl -O OpenFlow13 dump-flows br-int
+
 # Now check the packets actually received against the ones expected.
 for i in 1 2 3; do
     for j in 1 2 3; do
-        file=hv$i/vif$i$j-tx.pcap
-        echo $file
-        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j.packets
-        sort $i$j.expected > expout
-        AT_CHECK([sort $i$j.packets], [0], [expout])
-        echo
+        OVN_CHECK_PACKETS([hv$i/vif$i$j-tx.pcap], [$i$j.expected])
     done
 done
 
@@ -1107,10 +1132,6 @@ test_packet 13 f00000000021 f00000000013 1321
 test_packet 23 f00000000011 f00000000023 2311
 test_packet 23 f00000000021 f00000000023 2321
 
-# Allow some time for packet forwarding.
-# XXX This can be improved.
-sleep 1
-
 # Dump a bunch of info helpful for debugging if there's a failure.
 
 echo "------ OVN dump ------"
@@ -1128,12 +1149,7 @@ as hv2 ovs-ofctl -O OpenFlow13 dump-flows br-int
 # Now check the packets actually received against the ones expected.
 for i in 1 2; do
     for j in 1 2 3 4 5; do
-        file=hv$i/vif$i$j-tx.pcap
-        echo $file
-        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j.packets
-        sort $i$j.expected > expout
-        AT_CHECK([sort $i$j.packets], [0], [expout])
-        echo
+        OVN_CHECK_PACKETS([hv$i/vif$i$j-tx.pcap], [$i$j.expected])
     done
 done
 
@@ -1279,10 +1295,6 @@ for s in 1 2 3; do
     test_packet $s f0000000ffff f0000000000$s 0${s}66 $unknown           #3
 done
 
-# Allow some time for packet forwarding.
-# XXX This can be improved.
-sleep 1
-
 # dump information with counters
 echo "------ OVN dump ------"
 ovn-nbctl show
@@ -1307,12 +1319,7 @@ AT_CHECK([as hv3 ovs-ofctl -O OpenFlow13 show br-int], [1], [],
 
 # Now check the packets actually received against the ones expected.
 for i in 1 2 3; do
-    file=hv$i/vif$i-tx.pcap
-    echo $file
-    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i.packets
-    sort $i.expected > expout
-    AT_CHECK([sort $i.packets], [0], [expout])
-    echo
+    OVN_CHECK_PACKETS([hv$i/vif$i-tx.pcap], [$i.expected])
 done
 
 # Gracefully terminate daemons
@@ -1433,10 +1440,6 @@ for s in 1 2 3 ; do
     test_packet $s f0000000ffff f0000000000$s 0${s}66 $unknown           #4
 done
 
-# Allow some time for packet forwarding.
-# XXX This can be improved.
-sleep 3
-
 echo "------ ovn-nbctl show ------"
 ovn-nbctl show
 echo "------ ovn-sbctl show ------"
@@ -1470,12 +1473,7 @@ as hv3 ovs-ofctl -O OpenFlow13 dump-flows br-phys
 
 # Now check the packets actually received against the ones expected.
 for i in 1 2 3; do
-    file=hv$i/vif$i-tx.pcap
-    echo $file
-    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i.packets
-    sort $i.expected > expout
-    AT_CHECK([sort $i.packets], [0], [expout])
-    echo
+    OVN_CHECK_PACKETS([hv$i/vif$i-tx.pcap], [$i.expected])
 done
 AT_CLEANUP
 
@@ -1870,10 +1868,6 @@ for is in 1 2 3; do
   done
 done
 
-# Allow some time for packet forwarding.
-# XXX This can be improved.
-sleep 1
-
 ovn-sbctl -f csv -d bare --no-heading \
     -- --columns=logical_port,ip,mac list mac_binding > mac_bindings
 
@@ -1881,12 +1875,8 @@ ovn-sbctl -f csv -d bare --no-heading \
 for i in 1 2 3; do
     for j in 1 2 3; do
         for k in 1 2 3; do
-            file=hv`vif_to_hv $i$j$k`/vif$i$j$k-tx.pcap
-            echo $file
-            $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j$k.packets
-            sort $i$j$k.expected > expout
-            AT_CHECK([sort $i$j$k.packets], [0], [expout])
-            echo
+	    OVN_CHECK_PACKETS([hv`vif_to_hv $i$j$k`/vif$i$j$k-tx.pcap],
+	                      [$i$j$k.expected])
         done
     done
 done
@@ -2249,11 +2239,6 @@ tip=`ip_to_hex 224 0 0 4`
 # with dst ip 224.0.0.4  should be received by lsp13
 test_ip 33 f00000000033 f00000000013 $sip $tip 13
 
-# Allow some time for packet forwarding.
-
-# XXX This can be improved.
-sleep 1
-
 #dump information including flow counters
 ovn-nbctl show
 ovn-sbctl dump-flows -- list multicast_group
@@ -2276,12 +2261,7 @@ as hv3 ovs-ofctl -O OpenFlow13 dump-flows br-int
 # Now check the packets actually received against the ones expected.
 for i in 1 2 3; do
     for j in 1 2 3; do
-        file=hv$i/vif$i$j-tx.pcap
-        echo $file
-        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j.packets
-        sort $i$j.expected > expout
-        AT_CHECK([sort $i$j.packets], [0], [expout])
-        echo
+        OVN_CHECK_PACKETS([hv$i/vif$i$j-tx.pcap], [$i$j.expected])
     done
 done
 
@@ -2403,11 +2383,9 @@ as hv2 ovs-ofctl dump-flows br-int
 # Packet to Expect
 src_mac="000000010204"
 dst_mac="f00000010204"
-expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
+echo "${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 
 OVN_CLEANUP([hv1],[hv2])
 
@@ -2517,11 +2495,9 @@ as hv1 ovs-appctl netdev-dummy/receive vif1 $packet
 # Packet to Expect
 expect_src_mac="000000010203"
 expect_dst_mac="f00000010204"
-expected=${expect_dst_mac}${expect_src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+echo "${expect_dst_mac}${expect_src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > received.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv1/vif2-tx.pcap], [expected])
 
 
 as hv1
@@ -2653,12 +2629,9 @@ as hv1 ovs-appctl netdev-dummy/receive vif1 $packet
 # Packet to Expect
 expect_src_mac="000000010204"
 expect_dst_mac="f00000010204"
-expected=${expect_dst_mac}${expect_src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+echo "${expect_dst_mac}${expect_src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > received.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received.packets], [0], [expout])
-
+OVN_CHECK_PACKETS([hv1/vif2-tx.pcap], [expected])
 
 OVN_CLEANUP([hv1])
 
@@ -2801,22 +2774,18 @@ src_mac="000000010205"
 dst_mac="f00000010205"
 src_ip=`ip_to_hex 192 168 1 2`
 dst_ip=`ip_to_hex 172 16 2 2`
-expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
+echo "${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 
 # Packet to Expect at alice1
 src_mac="000000010204"
 dst_mac="f00000010204"
 src_ip=`ip_to_hex 192 168 1 2`
 dst_ip=`ip_to_hex 172 16 1 2`
-expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
+echo "${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > received1.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received1.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv1/vif2-tx.pcap], [expected])
 
 OVN_CLEANUP([hv1],[hv2])
 
@@ -2853,12 +2822,8 @@ AT_CHECK([ovn-nbctl lsp-set-options ln_port network_name=physnet1])
 AT_CHECK([ovs-vsctl add-port br-int localvif1 -- set Interface localvif1 external_ids:iface-id=localvif1])
 
 # Wait for packet to be received.
-OVS_WAIT_UNTIL([test `wc -c < "hv/snoopvif-tx.pcap"` -ge 50])
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv/snoopvif-tx.pcap | trim_zeros > packets
-expected="fffffffffffff0000000000108060001080006040001f00000000001c0a80102000000000000c0a80102"
-echo $expected > expout
-AT_CHECK([sort packets], [0], [expout])
-cat packets
+echo "fffffffffffff0000000000108060001080006040001f00000000001c0a80102000000000000c0a80102" > expected
+OVN_CHECK_PACKETS([hv/snoopvif-tx.pcap], [expected])
 
 # Delete the localnet ports.
 AT_CHECK([ovs-vsctl del-port localvif1])
@@ -3029,22 +2994,18 @@ src_mac="000003010203"
 dst_mac="f00000010205"
 src_ip=`ip_to_hex 192 168 1 2`
 dst_ip=`ip_to_hex 10 32 1 2`
-expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
+echo "${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 
 # Packet to Expect at alice1
 src_mac="000002010203"
 dst_mac="f00000010204"
 src_ip=`ip_to_hex 192 168 1 2`
 dst_ip=`ip_to_hex 172 16 1 2`
-expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
+echo "${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > received1.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received1.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv1/vif2-tx.pcap], [expected])
 
 OVN_CLEANUP([hv1],[hv2])
 
@@ -3278,9 +3239,7 @@ test_dhcp 2 f00000000002 08 $offer_ip 1 1
 OVS_WAIT_UNTIL([test 3 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
 
 # vif1-tx.pcap should have received the DHCPv4 (invalid) request packet
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap | trim_zeros > 1.packets
-cat 1.expected > expout
-AT_CHECK([cat 1.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [1.expected])
 
 reset_pcap_file hv1-vif1 hv1/vif1
 reset_pcap_file hv1-vif2 hv1/vif2
@@ -3299,13 +3258,8 @@ test_dhcp 4 f00000000004 01 0 3
 # NXT_RESUMEs should be 3.
 OVS_WAIT_UNTIL([test 3 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif3-tx.pcap | trim_zeros > 3.packets
-cat 3.expected > expout
-AT_CHECK([cat 3.packets], [0], [expout])
-
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif4-tx.pcap | trim_zeros > 4.packets
-cat 4.expected > expout
-AT_CHECK([cat 4.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv1/vif3-tx.pcap], [3.expected])
+OVN_CHECK_PACKETS([hv1/vif4-tx.pcap], [4.expected])
 
 as hv1
 OVS_APP_EXIT_AND_WAIT([ovn-controller])
@@ -3468,9 +3422,8 @@ as hv2 ovs-ofctl show br-int
 as hv2 ovs-ofctl dump-flows br-int
 echo "----------------------------"
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received1.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received1.packets], [0], [expout])
+echo $expected > expected
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 
 # Delete the router and re-create it. Things should work as before.
 ovn-nbctl  lr-del R2
@@ -3498,9 +3451,8 @@ as hv2 ovs-ofctl show br-int
 as hv2 ovs-ofctl dump-flows br-int
 echo "----------------------------"
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received1.packets
-echo $expected | trim_zeros >> expout
-AT_CHECK([cat received1.packets], [0], [expout])
+echo $expected >> expected
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 
 OVN_CLEANUP([hv1],[hv2])
 
@@ -3645,11 +3597,7 @@ as hv1 ovs-ofctl dump-flows br-int
 
 # Now check the packets actually received against the ones expected.
 for inport in 1 2; do
-    file=hv1/vif${inport}-tx.pcap
-    echo $file
-    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > received.packets
-    cat vif$inport.expected | trim_zeros > expout
-    AT_CHECK([cat received.packets], [0], [expout])
+    OVN_CHECK_PACKETS([hv1/vif${inport}-tx.pcap], [vif$inport.expected])
 done
 
 OVN_CLEANUP([hv1])
@@ -3742,19 +3690,13 @@ na_packet=fa163e940598fa163ea1f9ae86dd6000000000203afffd81ce49a9480000f8163efffe
 as hv1 ovs-appctl netdev-dummy/receive vif1 $ns_packet
 echo $na_packet | trim_zeros >> 1.expected
 
-sleep 1
-
 echo "------ hv1 dump ------"
 as hv1 ovs-vsctl show
 as hv1 ovs-ofctl -O OpenFlow13 show br-int
 as hv1 ovs-ofctl -O OpenFlow13 dump-flows br-int
 
 for i in 1 2; do
-    file=hv1/vif$i-tx.pcap
-    echo $file
-    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i.packets
-    cat $i.expected > expout
-    AT_CHECK([cat $i.packets], [0], [expout])
+    OVN_CHECK_PACKETS([hv1/vif$i-tx.pcap], [$i.expected])
 done
 
 OVN_CLEANUP([hv1])
