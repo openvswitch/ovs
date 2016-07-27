@@ -45,6 +45,8 @@ Post-v2.5.0
        Old 'other_config:n-dpdk-rxqs' is no longer supported.
        Not supported by vHost interfaces. For them number of rx and tx queues
        is applied from connected virtio device.
+     * New 'other_config:pmd-rxq-affinity' field for PMD interfaces, that
+       allows to pin port's rx queues to desired cores.
      * New appctl command 'dpif-netdev/pmd-rxq-show' to check the port/rxq
        assignment.
      * Type of log messages from PMD threads changed from INFO to DBG.

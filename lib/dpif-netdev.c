@@ -53,7 +53,9 @@
 #include "openvswitch/list.h"
 #include "openvswitch/match.h"
 #include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-util.h"
 #include "openvswitch/ofpbuf.h"
+#include "openvswitch/shash.h"
 #include "openvswitch/vlog.h"
 #include "ovs-numa.h"
 #include "ovs-rcu.h"
@@ -62,7 +64,7 @@
 #include "pvector.h"
 #include "random.h"
 #include "seq.h"
-#include "openvswitch/shash.h"
+#include "smap.h"
 #include "sset.h"
 #include "timeval.h"
 #include "tnl-neigh-cache.h"
@@ -252,6 +254,12 @@ enum pmd_cycles_counter_type {
 
 #define XPS_TIMEOUT_MS 500LL
 
+/* Contained by struct dp_netdev_port's 'rxqs' member.  */
+struct dp_netdev_rxq {
+    struct netdev_rxq *rxq;
+    unsigned core_id;           /* Сore to which this queue is pinned. */
+};
+
 /* A port in a netdev-based datapath. */
 struct dp_netdev_port {
     odp_port_t port_no;
@@ -259,11 +267,12 @@ struct dp_netdev_port {
     struct hmap_node node;      /* Node in dp_netdev's 'ports'. */
     struct netdev_saved_flags *sf;
     unsigned n_rxq;             /* Number of elements in 'rxq' */
-    struct netdev_rxq **rxq;
+    struct dp_netdev_rxq *rxqs;
     bool dynamic_txqs;          /* If true XPS will be used. */
     unsigned *txq_used;         /* Number of threads that uses each tx queue. */
     struct ovs_mutex txq_used_mutex;
     char *type;                 /* Port type as requested by user. */
+    char *rxq_affinity_list;    /* Requested affinity of rx queues. */
 };
 
 /* Contained by struct dp_netdev_flow's 'stats' member.  */
@@ -450,6 +459,7 @@ struct dp_netdev_pmd_thread {
     pthread_t thread;
     unsigned core_id;               /* CPU core id of this pmd thread. */
     int numa_id;                    /* numa node id of this pmd thread. */
+    bool isolated;
 
     /* Queue id used by this pmd thread to send packets on all netdevs if
      * XPS disabled for this netdev. All static_tx_qid's are unique and less
@@ -544,6 +554,8 @@ static void dp_netdev_add_rxq_to_pmd(struct dp_netdev_pmd_thread *pmd,
 static struct dp_netdev_pmd_thread *
 dp_netdev_less_loaded_pmd_on_numa(struct dp_netdev *dp, int numa_id);
 static void dp_netdev_reset_pmd_threads(struct dp_netdev *dp)
+    OVS_REQUIRES(dp->port_mutex);
+static void reconfigure_pmd_threads(struct dp_netdev *dp)
     OVS_REQUIRES(dp->port_mutex);
 static bool dp_netdev_pmd_try_ref(struct dp_netdev_pmd_thread *pmd);
 static void dp_netdev_pmd_unref(struct dp_netdev_pmd_thread *pmd);
@@ -735,8 +747,10 @@ pmd_info_show_rxq(struct ds *reply, struct dp_netdev_pmd_thread *pmd)
         struct rxq_poll *poll;
         const char *prev_name = NULL;
 
-        ds_put_format(reply, "pmd thread numa_id %d core_id %u:\n",
-                      pmd->numa_id, pmd->core_id);
+        ds_put_format(reply,
+                      "pmd thread numa_id %d core_id %u:\n\tisolated : %s\n",
+                      pmd->numa_id, pmd->core_id, (pmd->isolated)
+                                                  ? "true" : "false");
 
         ovs_mutex_lock(&pmd->port_mutex);
         LIST_FOR_EACH (poll, node, &pmd->poll_list) {
@@ -1225,19 +1239,20 @@ port_create(const char *devname, const char *open_type, const char *type,
     port->port_no = port_no;
     port->netdev = netdev;
     port->n_rxq = netdev_n_rxq(netdev);
-    port->rxq = xcalloc(port->n_rxq, sizeof *port->rxq);
+    port->rxqs = xcalloc(port->n_rxq, sizeof *port->rxqs);
     port->txq_used = xcalloc(netdev_n_txq(netdev), sizeof *port->txq_used);
     port->type = xstrdup(type);
     ovs_mutex_init(&port->txq_used_mutex);
     port->dynamic_txqs = dynamic_txqs;
 
     for (i = 0; i < port->n_rxq; i++) {
-        error = netdev_rxq_open(netdev, &port->rxq[i], i);
+        error = netdev_rxq_open(netdev, &port->rxqs[i].rxq, i);
         if (error) {
             VLOG_ERR("%s: cannot receive packets on this network device (%s)",
                      devname, ovs_strerror(errno));
             goto out_rxq_close;
         }
+        port->rxqs[i].core_id = -1;
         n_open_rxqs++;
     }
 
@@ -1253,12 +1268,12 @@ port_create(const char *devname, const char *open_type, const char *type,
 
 out_rxq_close:
     for (i = 0; i < n_open_rxqs; i++) {
-        netdev_rxq_close(port->rxq[i]);
+        netdev_rxq_close(port->rxqs[i].rxq);
     }
     ovs_mutex_destroy(&port->txq_used_mutex);
     free(port->type);
     free(port->txq_used);
-    free(port->rxq);
+    free(port->rxqs);
     free(port);
 
 out:
@@ -1395,11 +1410,12 @@ port_destroy(struct dp_netdev_port *port)
     netdev_restore_flags(port->sf);
 
     for (unsigned i = 0; i < port->n_rxq; i++) {
-        netdev_rxq_close(port->rxq[i]);
+        netdev_rxq_close(port->rxqs[i].rxq);
     }
     ovs_mutex_destroy(&port->txq_used_mutex);
+    free(port->rxq_affinity_list);
     free(port->txq_used);
-    free(port->rxq);
+    free(port->rxqs);
     free(port->type);
     free(port);
 }
@@ -2577,6 +2593,96 @@ dpif_netdev_pmd_set(struct dpif *dpif, const char *cmask)
     return 0;
 }
 
+/* Parses affinity list and returns result in 'core_ids'. */
+static int
+parse_affinity_list(const char *affinity_list, unsigned *core_ids, int n_rxq)
+{
+    unsigned i;
+    char *list, *copy, *key, *value;
+    int error = 0;
+
+    for (i = 0; i < n_rxq; i++) {
+        core_ids[i] = -1;
+    }
+
+    if (!affinity_list) {
+        return 0;
+    }
+
+    list = copy = xstrdup(affinity_list);
+
+    while (ofputil_parse_key_value(&list, &key, &value)) {
+        int rxq_id, core_id;
+
+        if (!str_to_int(key, 0, &rxq_id) || rxq_id < 0
+            || !str_to_int(value, 0, &core_id) || core_id < 0) {
+            error = EINVAL;
+            break;
+        }
+
+        if (rxq_id < n_rxq) {
+            core_ids[rxq_id] = core_id;
+        }
+    }
+
+    free(copy);
+    return error;
+}
+
+/* Parses 'affinity_list' and applies configuration if it is valid. */
+static int
+dpif_netdev_port_set_rxq_affinity(struct dp_netdev_port *port,
+                                  const char *affinity_list)
+{
+    unsigned *core_ids, i;
+    int error = 0;
+
+    core_ids = xmalloc(port->n_rxq * sizeof *core_ids);
+    if (parse_affinity_list(affinity_list, core_ids, port->n_rxq)) {
+        error = EINVAL;
+        goto exit;
+    }
+
+    for (i = 0; i < port->n_rxq; i++) {
+        port->rxqs[i].core_id = core_ids[i];
+    }
+
+exit:
+    free(core_ids);
+    return error;
+}
+
+/* Changes the affinity of port's rx queues.  The changes are actually applied
+ * in dpif_netdev_run(). */
+static int
+dpif_netdev_port_set_config(struct dpif *dpif, odp_port_t port_no,
+                            const struct smap *cfg)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct dp_netdev_port *port;
+    int error = 0;
+    const char *affinity_list = smap_get(cfg, "pmd-rxq-affinity");
+
+    ovs_mutex_lock(&dp->port_mutex);
+    error = get_port_by_number(dp, port_no, &port);
+    if (error || !netdev_is_pmd(port->netdev)
+        || nullable_string_is_equal(affinity_list, port->rxq_affinity_list)) {
+        goto unlock;
+    }
+
+    error = dpif_netdev_port_set_rxq_affinity(port, affinity_list);
+    if (error) {
+        goto unlock;
+    }
+    free(port->rxq_affinity_list);
+    port->rxq_affinity_list = nullable_xstrdup(affinity_list);
+
+    dp_netdev_request_reconfigure(dp);
+unlock:
+    ovs_mutex_unlock(&dp->port_mutex);
+    return error;
+}
+
 static int
 dpif_netdev_queue_to_priority(const struct dpif *dpif OVS_UNUSED,
                               uint32_t queue_id, uint32_t *priority)
@@ -2684,8 +2790,8 @@ port_reconfigure(struct dp_netdev_port *port)
 
     /* Closes the existing 'rxq's. */
     for (i = 0; i < port->n_rxq; i++) {
-        netdev_rxq_close(port->rxq[i]);
-        port->rxq[i] = NULL;
+        netdev_rxq_close(port->rxqs[i].rxq);
+        port->rxqs[i].rxq = NULL;
     }
     port->n_rxq = 0;
 
@@ -2697,18 +2803,22 @@ port_reconfigure(struct dp_netdev_port *port)
         return err;
     }
     /* If the netdev_reconfigure() above succeeds, reopens the 'rxq's. */
-    port->rxq = xrealloc(port->rxq, sizeof *port->rxq * netdev_n_rxq(netdev));
+    port->rxqs = xrealloc(port->rxqs,
+                          sizeof *port->rxqs * netdev_n_rxq(netdev));
     /* Realloc 'used' counters for tx queues. */
     free(port->txq_used);
     port->txq_used = xcalloc(netdev_n_txq(netdev), sizeof *port->txq_used);
 
     for (i = 0; i < netdev_n_rxq(netdev); i++) {
-        err = netdev_rxq_open(netdev, &port->rxq[i], i);
+        err = netdev_rxq_open(netdev, &port->rxqs[i].rxq, i);
         if (err) {
             return err;
         }
         port->n_rxq++;
     }
+
+    /* Parse affinity list to apply configuration for new queues. */
+    dpif_netdev_port_set_rxq_affinity(port, port->rxq_affinity_list);
 
     return 0;
 }
@@ -2784,7 +2894,7 @@ dpif_netdev_run(struct dpif *dpif)
             int i;
 
             for (i = 0; i < port->n_rxq; i++) {
-                dp_netdev_process_rxq_port(non_pmd, port, port->rxq[i]);
+                dp_netdev_process_rxq_port(non_pmd, port, port->rxqs[i].rxq);
             }
         }
     }
@@ -2823,7 +2933,7 @@ dpif_netdev_wait(struct dpif *dpif)
             int i;
 
             for (i = 0; i < port->n_rxq; i++) {
-                netdev_rxq_wait(port->rxq[i]);
+                netdev_rxq_wait(port->rxqs[i].rxq);
             }
         }
     }
@@ -3324,9 +3434,9 @@ dp_netdev_del_port_from_all_pmds(struct dp_netdev *dp,
 }
 
 
-/* Returns PMD thread from this numa node with fewer rx queues to poll.
- * Returns NULL if there is no PMD threads on this numa node.
- * Can be called safely only by main thread. */
+/* Returns non-isolated PMD thread from this numa node with fewer
+ * rx queues to poll. Returns NULL if there is no non-isolated  PMD threads
+ * on this numa node. Can be called safely only by main thread. */
 static struct dp_netdev_pmd_thread *
 dp_netdev_less_loaded_pmd_on_numa(struct dp_netdev *dp, int numa_id)
 {
@@ -3334,7 +3444,7 @@ dp_netdev_less_loaded_pmd_on_numa(struct dp_netdev *dp, int numa_id)
     struct dp_netdev_pmd_thread *pmd, *res = NULL;
 
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
-        if (pmd->numa_id == numa_id
+        if (!pmd->isolated && pmd->numa_id == numa_id
             && (min_cnt > pmd->poll_cnt || res == NULL)) {
             min_cnt = pmd->poll_cnt;
             res = pmd;
@@ -3375,14 +3485,16 @@ dp_netdev_add_port_tx_to_pmd(struct dp_netdev_pmd_thread *pmd,
     ovs_mutex_unlock(&pmd->port_mutex);
 }
 
-/* Distribute all rx queues of 'port' between PMD threads in 'dp'. The pmd
- * threads that need to be restarted are inserted in 'to_reload'. */
+/* Distribute all {pinned|non-pinned} rx queues of 'port' between PMD
+ * threads in 'dp'. The pmd threads that need to be restarted are inserted
+ * in 'to_reload'. PMD threads with pinned queues marked as isolated. */
 static void
 dp_netdev_add_port_rx_to_pmds(struct dp_netdev *dp,
                               struct dp_netdev_port *port,
-                              struct hmapx *to_reload)
+                              struct hmapx *to_reload, bool pinned)
 {
     int numa_id = netdev_get_numa_id(port->netdev);
+    struct dp_netdev_pmd_thread *pmd;
     int i;
 
     if (!netdev_is_pmd(port->netdev)) {
@@ -3390,32 +3502,50 @@ dp_netdev_add_port_rx_to_pmds(struct dp_netdev *dp,
     }
 
     for (i = 0; i < port->n_rxq; i++) {
-        struct dp_netdev_pmd_thread *pmd;
-
-        pmd = dp_netdev_less_loaded_pmd_on_numa(dp, numa_id);
-        if (!pmd) {
-            VLOG_WARN("There's no pmd thread on numa node %d", numa_id);
-            break;
+        if (pinned) {
+            if (port->rxqs[i].core_id == -1) {
+                continue;
+            }
+            pmd = dp_netdev_get_pmd(dp, port->rxqs[i].core_id);
+            if (!pmd) {
+                VLOG_WARN("There is no PMD thread on core %d. "
+                          "Queue %d on port \'%s\' will not be polled.",
+                          port->rxqs[i].core_id, i,
+                          netdev_get_name(port->netdev));
+                continue;
+            }
+            pmd->isolated = true;
+            dp_netdev_pmd_unref(pmd);
+        } else {
+            if (port->rxqs[i].core_id != -1) {
+                continue;
+            }
+            pmd = dp_netdev_less_loaded_pmd_on_numa(dp, numa_id);
+            if (!pmd) {
+                VLOG_WARN("There's no available pmd thread on numa node %d",
+                          numa_id);
+                break;
+            }
         }
 
         ovs_mutex_lock(&pmd->port_mutex);
-        dp_netdev_add_rxq_to_pmd(pmd, port, port->rxq[i]);
+        dp_netdev_add_rxq_to_pmd(pmd, port, port->rxqs[i].rxq);
         ovs_mutex_unlock(&pmd->port_mutex);
 
         hmapx_add(to_reload, pmd);
     }
 }
 
-/* Distributes all rx queues of 'port' between all PMD threads in 'dp' and
- * inserts 'port' in the PMD threads 'tx_ports'. The pmd threads that need to
- * be restarted are inserted in 'to_reload'. */
+/* Distributes all non-pinned rx queues of 'port' between all PMD threads
+ * in 'dp' and inserts 'port' in the PMD threads 'tx_ports'. The pmd threads
+ * that need to be restarted are inserted in 'to_reload'. */
 static void
 dp_netdev_add_port_to_pmds__(struct dp_netdev *dp, struct dp_netdev_port *port,
                              struct hmapx *to_reload)
 {
     struct dp_netdev_pmd_thread *pmd;
 
-    dp_netdev_add_port_rx_to_pmds(dp, port, to_reload);
+    dp_netdev_add_port_rx_to_pmds(dp, port, to_reload, false);
 
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
         dp_netdev_add_port_tx_to_pmd(pmd, port);
@@ -3423,8 +3553,9 @@ dp_netdev_add_port_to_pmds__(struct dp_netdev *dp, struct dp_netdev_port *port,
     }
 }
 
-/* Distributes all rx queues of 'port' between all PMD threads in 'dp', inserts
- * 'port' in the PMD threads 'tx_ports' and reloads them, if needed. */
+/* Distributes all non-pinned rx queues of 'port' between all PMD threads
+ * in 'dp', inserts 'port' in the PMD threads 'tx_ports' and reloads them,
+ * if needed. */
 static void
 dp_netdev_add_port_to_pmds(struct dp_netdev *dp, struct dp_netdev_port *port)
 {
@@ -3509,7 +3640,13 @@ dp_netdev_reset_pmd_threads(struct dp_netdev *dp)
 
             dp_netdev_set_pmds_on_numa(dp, numa_id);
         }
-        dp_netdev_add_port_rx_to_pmds(dp, port, &to_reload);
+        /* Distribute only pinned rx queues first to mark threads as isolated */
+        dp_netdev_add_port_rx_to_pmds(dp, port, &to_reload, true);
+    }
+
+    /* Distribute remaining non-pinned rx queues to non-isolated PMD threads. */
+    HMAP_FOR_EACH (port, node, &dp->ports) {
+        dp_netdev_add_port_rx_to_pmds(dp, port, &to_reload, false);
     }
 
     HMAPX_FOR_EACH (node, &to_reload) {
@@ -4367,7 +4504,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_get_stats,
     dpif_netdev_port_add,
     dpif_netdev_port_del,
-    NULL,                       /* port_set_config */
+    dpif_netdev_port_set_config,
     dpif_netdev_port_query_by_number,
     dpif_netdev_port_query_by_name,
     NULL,                       /* port_get_pid */

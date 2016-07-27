@@ -289,14 +289,57 @@ advanced install guide [INSTALL.DPDK-ADVANCED.md]
      # Check current stats
        ovs-appctl dpif-netdev/pmd-stats-show
 
-     # Show port/rxq assignment
-       ovs-appctl dpif-netdev/pmd-rxq-show
-
      # Clear previous stats
        ovs-appctl dpif-netdev/pmd-stats-clear
      ```
 
-  7. Stop vswitchd & Delete bridge
+  7. Port/rxq assigment to PMD threads
+
+     ```
+     # Show port/rxq assignment
+       ovs-appctl dpif-netdev/pmd-rxq-show
+     ```
+
+     To change default rxq assignment to pmd threads rxqs may be manually
+     pinned to desired cores using:
+
+     ```
+     ovs-vsctl set Interface <iface> \
+               other_config:pmd-rxq-affinity=<rxq-affinity-list>
+     ```
+     where:
+
+     ```
+     <rxq-affinity-list> ::= NULL | <non-empty-list>
+     <non-empty-list> ::= <affinity-pair> |
+                          <affinity-pair> , <non-empty-list>
+     <affinity-pair> ::= <queue-id> : <core-id>
+     ```
+
+     Example:
+
+     ```
+     ovs-vsctl set interface dpdk0 options:n_rxq=4 \
+               other_config:pmd-rxq-affinity="0:3,1:7,3:8"
+
+     Queue #0 pinned to core 3;
+     Queue #1 pinned to core 7;
+     Queue #2 not pinned.
+     Queue #3 pinned to core 8;
+     ```
+
+     After that PMD threads on cores where RX queues was pinned will become
+     `isolated`. This means that this thread will poll only pinned RX queues.
+
+     WARNING: If there are no `non-isolated` PMD threads, `non-pinned` RX queues
+     will not be polled. Also, if provided `core_id` is not available (ex. this
+     `core_id` not in `pmd-cpu-mask`), RX queue will not be polled by any
+     PMD thread.
+
+     Isolation of PMD threads also can be checked using
+     `ovs-appctl dpif-netdev/pmd-rxq-show` command.
+
+  8. Stop vswitchd & Delete bridge
 
      ```
      ovs-appctl -t ovs-vswitchd exit

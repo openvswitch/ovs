@@ -2355,6 +2355,29 @@
           Not supported by DPDK vHost interfaces.
         </p>
       </column>
+
+      <column name="other_config" key="pmd-rxq-affinity">
+        <p>Specifies mapping of RX queues of this interface to CPU cores.</p>
+        <p>Value should be set in the following form:</p>
+        <p>
+          <code>other_config:pmd-rxq-affinity=&lt;rxq-affinity-list&gt;</code>
+        </p>
+        <p>where</p>
+        <p>
+          <ul>
+            <li>
+              &lt;rxq-affinity-list&gt; ::= NULL | &lt;non-empty-list&gt;
+            </li>
+            <li>
+              &lt;non-empty-list&gt; ::= &lt;affinity-pair&gt; |
+                                  &lt;affinity-pair&gt; , &lt;non-empty-list&gt;
+            </li>
+            <li>
+              &lt;affinity-pair&gt; ::= &lt;queue-id&gt; : &lt;core-id&gt;
+            </li>
+          </ul>
+        </p>
+      </column>
     </group>
 
     <group title="Interface Status">
