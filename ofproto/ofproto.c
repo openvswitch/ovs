@@ -2079,6 +2079,35 @@ ofproto_port_del(struct ofproto *ofproto, ofp_port_t ofp_port)
     return error;
 }
 
+/* Refreshes datapath configuration of port number 'ofp_port' in 'ofproto'.
+ *
+ * This function has no effect if 'ofproto' does not have a port 'ofp_port'. */
+void
+ofproto_port_set_config(struct ofproto *ofproto, ofp_port_t ofp_port,
+                        const struct smap *cfg)
+{
+    struct ofport *ofport;
+    int error;
+
+    ofport = ofproto_get_port(ofproto, ofp_port);
+    if (!ofport) {
+        VLOG_WARN("%s: cannot configure datapath on nonexistent port %"PRIu16,
+                  ofproto->name, ofp_port);
+        return;
+    }
+
+    error = (ofproto->ofproto_class->port_set_config
+             ? ofproto->ofproto_class->port_set_config(ofport, cfg)
+             : EOPNOTSUPP);
+    if (error) {
+        VLOG_WARN("%s: datapath configuration on port %"PRIu16
+                  " (%s) failed (%s)",
+                  ofproto->name, ofp_port, netdev_get_name(ofport->netdev),
+                  ovs_strerror(error));
+    }
+}
+
+
 static void
 flow_mod_init(struct ofputil_flow_mod *fm,
               const struct match *match, int priority,

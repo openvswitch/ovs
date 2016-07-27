@@ -610,6 +610,23 @@ dpif_port_exists(const struct dpif *dpif, const char *devname)
     return !error;
 }
 
+/* Refreshes configuration of 'dpif's port. */
+int
+dpif_port_set_config(struct dpif *dpif, odp_port_t port_no,
+                     const struct smap *cfg)
+{
+    int error = 0;
+
+    if (dpif->dpif_class->port_set_config) {
+        error = dpif->dpif_class->port_set_config(dpif, port_no, cfg);
+        if (error) {
+            log_operation(dpif, "port_set_config", error);
+        }
+    }
+
+    return error;
+}
+
 /* Looks up port number 'port_no' in 'dpif'.  On success, returns 0 and
  * initializes '*port' appropriately; on failure, returns a positive errno
  * value.

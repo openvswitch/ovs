@@ -4348,6 +4348,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_get_stats,
     dpif_netdev_port_add,
     dpif_netdev_port_del,
+    NULL,                       /* port_set_config */
     dpif_netdev_port_query_by_number,
     dpif_netdev_port_query_by_name,
     NULL,                       /* port_get_pid */

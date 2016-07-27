@@ -2348,6 +2348,7 @@ const struct dpif_class dpif_netlink_class = {
     dpif_netlink_get_stats,
     dpif_netlink_port_add,
     dpif_netlink_port_del,
+    NULL,                       /* port_set_config */
     dpif_netlink_port_query_by_number,
     dpif_netlink_port_query_by_name,
     dpif_netlink_port_get_pid,

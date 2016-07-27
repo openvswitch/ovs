@@ -3543,6 +3543,20 @@ port_del(struct ofproto *ofproto_, ofp_port_t ofp_port)
 }
 
 static int
+port_set_config(const struct ofport *ofport_, const struct smap *cfg)
+{
+    struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofport->up.ofproto);
+
+    if (sset_contains(&ofproto->ghost_ports,
+                      netdev_get_name(ofport->up.netdev))) {
+        return 0;
+    }
+
+    return dpif_port_set_config(ofproto->backer->dpif, ofport->odp_port, cfg);
+}
+
+static int
 port_get_stats(const struct ofport *ofport_, struct netdev_stats *stats)
 {
     struct ofport_dpif *ofport = ofport_dpif_cast(ofport_);
@@ -5610,6 +5624,7 @@ const struct ofproto_class ofproto_dpif_class = {
     port_query_by_name,
     port_add,
     port_del,
+    port_set_config,
     port_get_stats,
     port_dump_start,
     port_dump_next,

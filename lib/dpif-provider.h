@@ -167,6 +167,11 @@ struct dpif_class {
     /* Removes port numbered 'port_no' from 'dpif'. */
     int (*port_del)(struct dpif *dpif, odp_port_t port_no);
 
+    /* Refreshes configuration of 'dpif's port. The implementation might
+     * postpone applying the changes until run() is called. */
+    int (*port_set_config)(struct dpif *dpif, odp_port_t port_no,
+                           const struct smap *cfg);
+
     /* Queries 'dpif' for a port with the given 'port_no' or 'devname'.
      * If 'port' is not null, stores information about the port into
      * '*port' if successful.

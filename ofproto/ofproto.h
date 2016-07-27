@@ -293,6 +293,8 @@ const char *ofproto_port_open_type(const char *datapath_type,
                                    const char *port_type);
 int ofproto_port_add(struct ofproto *, struct netdev *, ofp_port_t *ofp_portp);
 int ofproto_port_del(struct ofproto *, ofp_port_t ofp_port);
+void ofproto_port_set_config(struct ofproto *, ofp_port_t ofp_port,
+                             const struct smap *cfg);
 int ofproto_port_get_stats(const struct ofport *, struct netdev_stats *stats);
 
 int ofproto_port_query_by_name(const struct ofproto *, const char *devname,

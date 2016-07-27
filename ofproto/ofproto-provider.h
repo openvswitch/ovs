@@ -972,6 +972,10 @@ struct ofproto_class {
      * convenient. */
     int (*port_del)(struct ofproto *ofproto, ofp_port_t ofp_port);
 
+    /* Refreshes datapath configuration of 'port'.
+     * Returns 0 if successful, otherwise a positive errno value. */
+    int (*port_set_config)(const struct ofport *port, const struct smap *cfg);
+
     /* Get port stats */
     int (*port_get_stats)(const struct ofport *port,
                           struct netdev_stats *stats);

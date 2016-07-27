@@ -655,6 +655,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                                      &iface->cfg->bfd);
                 ofproto_port_set_lldp(br->ofproto, iface->ofp_port,
                                       &iface->cfg->lldp);
+                ofproto_port_set_config(br->ofproto, iface->ofp_port,
+                                        &iface->cfg->other_config);
             }
         }
         bridge_configure_mirrors(br);
