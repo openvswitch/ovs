@@ -779,6 +779,7 @@ Please report problems to bugs@openvswitch.org.
 [INSTALL.RHEL.md]:INSTALL.RHEL.md
 [INSTALL.XenServer.md]:INSTALL.XenServer.md
 [INSTALL.NetBSD.md]:INSTALL.NetBSD.md
+[INSTALL.Windows.md]:INSTALL.Windows.md
 [INSTALL.DPDK.md]:INSTALL.DPDK.md
 [INSTALL.userspace.md]:INSTALL.userspace.md
 [FAQ.md]:FAQ.md
