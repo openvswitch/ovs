@@ -581,6 +581,8 @@ execute_delete(struct ovsdb_txn *txn, const char *uuid,
     }
 
     ovsdb_condition_destroy(&condition);
+    json_destroy(CONST_CAST(struct json *, where));
+
     return error;
 }
 
@@ -638,6 +640,7 @@ execute_update(struct ovsdb_txn *txn, const char *uuid,
     ovsdb_row_destroy(row);
     ovsdb_column_set_destroy(&columns);
     ovsdb_condition_destroy(&condition);
+    json_destroy(CONST_CAST(struct json *, where));
 
     return error;
 }
