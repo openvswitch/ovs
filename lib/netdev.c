@@ -655,9 +655,6 @@ netdev_rxq_drain(struct netdev_rxq *rx)
  * otherwise a positive errno value.
  *
  * 'n_txq' specifies the exact number of transmission queues to create.
- * If this function returns successfully, the caller can make 'n_txq'
- * concurrent calls to netdev_send() (each one with a different 'qid' in the
- * range [0..'n_txq'-1]).
  *
  * The change might not effective immediately.  The caller must check if a
  * reconfiguration is required with netdev_is_reconf_required() and eventually
@@ -694,6 +691,11 @@ netdev_set_tx_multiq(struct netdev *netdev, unsigned int n_txq)
  * If 'may_steal' is true, the caller transfers ownership of all the packets
  * to the network device, regardless of success.
  *
+ * If 'concurrent_txq' is true, the caller may perform concurrent calls
+ * to netdev_send() with the same 'qid'. The netdev provider is responsible
+ * for making sure that these concurrent calls do not create a race condition
+ * by using locking or other synchronization if required.
+ *
  * The network device is expected to maintain one or more packet
  * transmission queues, so that the caller does not ordinarily have to
  * do additional queuing of packets.  'qid' specifies the queue to use
@@ -704,14 +706,15 @@ netdev_set_tx_multiq(struct netdev *netdev, unsigned int n_txq)
  * cases this function will always return EOPNOTSUPP. */
 int
 netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
-            bool may_steal)
+            bool may_steal, bool concurrent_txq)
 {
     if (!netdev->netdev_class->send) {
         dp_packet_delete_batch(batch, may_steal);
         return EOPNOTSUPP;
     }
 
-    int error = netdev->netdev_class->send(netdev, qid, batch, may_steal);
+    int error = netdev->netdev_class->send(netdev, qid, batch, may_steal,
+                                           concurrent_txq);
     if (!error) {
         COVERAGE_INC(netdev_sent);
         if (!may_steal) {

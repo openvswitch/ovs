@@ -303,10 +303,6 @@ struct netdev_class {
      * otherwise a positive errno value.
      *
      * 'n_txq' specifies the exact number of transmission queues to create.
-     * The caller will call netdev_send() concurrently from 'n_txq' different
-     * threads (with different qid).  The netdev provider is responsible for
-     * making sure that these concurrent calls do not create a race condition
-     * by using multiple hw queues or locking.
      *
      * The caller will call netdev_reconfigure() (if necessary) before using
      * netdev_send() on any of the newly configured queues, giving the provider
@@ -328,6 +324,11 @@ struct netdev_class {
      * packets.  If 'may_steal' is true, the caller transfers ownership of all
      * the packets to the network device, regardless of success.
      *
+     * If 'concurrent_txq' is true, the caller may perform concurrent calls
+     * to netdev_send() with the same 'qid'. The netdev provider is responsible
+     * for making sure that these concurrent calls do not create a race
+     * condition by using locking or other synchronization if required.
+     *
      * The network device is expected to maintain one or more packet
      * transmission queues, so that the caller does not ordinarily have to
      * do additional queuing of packets.  'qid' specifies the queue to use
@@ -341,7 +342,7 @@ struct netdev_class {
      * datapath".  It will also prevent the OVS implementation of bonding from
      * working properly over 'netdev'.) */
     int (*send)(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
-                bool may_steal);
+                bool may_steal, bool concurrent_txq);
 
     /* Registers with the poll loop to wake up from the next call to
      * poll_block() when the packet transmission queue for 'netdev' has

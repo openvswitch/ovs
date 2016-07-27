@@ -248,6 +248,8 @@ enum pmd_cycles_counter_type {
     PMD_N_CYCLES
 };
 
+#define XPS_TIMEOUT_MS 500LL
+
 /* A port in a netdev-based datapath. */
 struct dp_netdev_port {
     odp_port_t port_no;
@@ -256,6 +258,9 @@ struct dp_netdev_port {
     struct netdev_saved_flags *sf;
     unsigned n_rxq;             /* Number of elements in 'rxq' */
     struct netdev_rxq **rxq;
+    bool dynamic_txqs;          /* If true XPS will be used. */
+    unsigned *txq_used;         /* Number of threads that uses each tx queue. */
+    struct ovs_mutex txq_used_mutex;
     char *type;                 /* Port type as requested by user. */
 };
 
@@ -384,8 +389,9 @@ struct rxq_poll {
 
 /* Contained by struct dp_netdev_pmd_thread's 'port_cache' or 'tx_ports'. */
 struct tx_port {
-    odp_port_t port_no;
-    struct netdev *netdev;
+    struct dp_netdev_port *port;
+    int qid;
+    long long last_used;
     struct hmap_node node;
 };
 
@@ -443,9 +449,10 @@ struct dp_netdev_pmd_thread {
     unsigned core_id;               /* CPU core id of this pmd thread. */
     int numa_id;                    /* numa node id of this pmd thread. */
 
-    /* Queue id used by this pmd thread to send packets on all netdevs.
-     * All tx_qid's are unique and less than 'ovs_numa_get_n_cores() + 1'. */
-    atomic_int tx_qid;
+    /* Queue id used by this pmd thread to send packets on all netdevs if
+     * XPS disabled for this netdev. All static_tx_qid's are unique and less
+     * than 'ovs_numa_get_n_cores() + 1'. */
+    atomic_int static_tx_qid;
 
     struct ovs_mutex port_mutex;    /* Mutex for 'poll_list' and 'tx_ports'. */
     /* List of rx queues to poll. */
@@ -498,7 +505,8 @@ static void dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
                                       struct dp_packet_batch *,
                                       bool may_steal,
                                       const struct nlattr *actions,
-                                      size_t actions_len);
+                                      size_t actions_len,
+                                      long long now);
 static void dp_netdev_input(struct dp_netdev_pmd_thread *,
                             struct dp_packet_batch *, odp_port_t port_no);
 static void dp_netdev_recirculate(struct dp_netdev_pmd_thread *,
@@ -540,6 +548,12 @@ static void dp_netdev_pmd_unref(struct dp_netdev_pmd_thread *pmd);
 static void dp_netdev_pmd_flow_flush(struct dp_netdev_pmd_thread *pmd);
 static void pmd_load_cached_ports(struct dp_netdev_pmd_thread *pmd)
     OVS_REQUIRES(pmd->port_mutex);
+
+static void
+dpif_netdev_xps_revalidate_pmd(const struct dp_netdev_pmd_thread *pmd,
+                               long long now, bool purge);
+static int dpif_netdev_xps_get_tx_qid(const struct dp_netdev_pmd_thread *pmd,
+                                      struct tx_port *tx, long long now);
 
 static inline bool emc_entry_alive(struct emc_entry *ce);
 static void emc_clear_entry(struct emc_entry *ce);
@@ -1137,7 +1151,9 @@ port_create(const char *devname, const char *open_type, const char *type,
     enum netdev_flags flags;
     struct netdev *netdev;
     int n_open_rxqs = 0;
+    int n_cores = 0;
     int i, error;
+    bool dynamic_txqs = false;
 
     *portp = NULL;
 
@@ -1156,7 +1172,7 @@ port_create(const char *devname, const char *open_type, const char *type,
     }
 
     if (netdev_is_pmd(netdev)) {
-        int n_cores = ovs_numa_get_n_cores();
+        n_cores = ovs_numa_get_n_cores();
 
         if (n_cores == OVS_CORE_UNSPEC) {
             VLOG_ERR("%s, cannot get cpu core info", devname);
@@ -1180,12 +1196,21 @@ port_create(const char *devname, const char *open_type, const char *type,
         }
     }
 
+    if (netdev_is_pmd(netdev)) {
+        if (netdev_n_txq(netdev) < n_cores + 1) {
+            dynamic_txqs = true;
+        }
+    }
+
     port = xzalloc(sizeof *port);
     port->port_no = port_no;
     port->netdev = netdev;
     port->n_rxq = netdev_n_rxq(netdev);
     port->rxq = xcalloc(port->n_rxq, sizeof *port->rxq);
+    port->txq_used = xcalloc(netdev_n_txq(netdev), sizeof *port->txq_used);
     port->type = xstrdup(type);
+    ovs_mutex_init(&port->txq_used_mutex);
+    port->dynamic_txqs = dynamic_txqs;
 
     for (i = 0; i < port->n_rxq; i++) {
         error = netdev_rxq_open(netdev, &port->rxq[i], i);
@@ -1211,7 +1236,9 @@ out_rxq_close:
     for (i = 0; i < n_open_rxqs; i++) {
         netdev_rxq_close(port->rxq[i]);
     }
+    ovs_mutex_destroy(&port->txq_used_mutex);
     free(port->type);
+    free(port->txq_used);
     free(port->rxq);
     free(port);
 
@@ -1351,7 +1378,8 @@ port_destroy(struct dp_netdev_port *port)
     for (unsigned i = 0; i < port->n_rxq; i++) {
         netdev_rxq_close(port->rxq[i]);
     }
-
+    ovs_mutex_destroy(&port->txq_used_mutex);
+    free(port->txq_used);
     free(port->rxq);
     free(port->type);
     free(port);
@@ -2476,7 +2504,7 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
 
     packet_batch_init_packet(&pp, execute->packet);
     dp_netdev_execute_actions(pmd, &pp, false, execute->actions,
-                              execute->actions_len);
+                              execute->actions_len, time_msec());
 
     if (pmd->core_id == NON_PMD_CORE_ID) {
         ovs_mutex_unlock(&dp->non_pmd_mutex);
@@ -2650,6 +2678,10 @@ port_reconfigure(struct dp_netdev_port *port)
     }
     /* If the netdev_reconfigure() above succeeds, reopens the 'rxq's. */
     port->rxq = xrealloc(port->rxq, sizeof *port->rxq * netdev_n_rxq(netdev));
+    /* Realloc 'used' counters for tx queues. */
+    free(port->txq_used);
+    port->txq_used = xcalloc(netdev_n_txq(netdev), sizeof *port->txq_used);
+
     for (i = 0; i < netdev_n_rxq(netdev); i++) {
         err = netdev_rxq_open(netdev, &port->rxq[i], i);
         if (err) {
@@ -2666,8 +2698,20 @@ reconfigure_pmd_threads(struct dp_netdev *dp)
     OVS_REQUIRES(dp->port_mutex)
 {
     struct dp_netdev_port *port, *next;
+    int n_cores;
 
     dp_netdev_destroy_all_pmds(dp);
+
+    /* Reconfigures the cpu mask. */
+    ovs_numa_set_cpu_mask(dp->requested_pmd_cmask);
+    free(dp->pmd_cmask);
+    dp->pmd_cmask = nullable_xstrdup(dp->requested_pmd_cmask);
+
+    n_cores = ovs_numa_get_n_cores();
+    if (n_cores == OVS_CORE_UNSPEC) {
+        VLOG_ERR("Cannot get cpu core info");
+        return;
+    }
 
     HMAP_FOR_EACH_SAFE (port, next, node, &dp->ports) {
         int err;
@@ -2677,13 +2721,10 @@ reconfigure_pmd_threads(struct dp_netdev *dp)
             hmap_remove(&dp->ports, &port->node);
             seq_change(dp->port_seq);
             port_destroy(port);
+        } else {
+            port->dynamic_txqs = netdev_n_txq(port->netdev) < n_cores + 1;
         }
     }
-    /* Reconfigures the cpu mask. */
-    ovs_numa_set_cpu_mask(dp->requested_pmd_cmask);
-    free(dp->pmd_cmask);
-    dp->pmd_cmask = nullable_xstrdup(dp->requested_pmd_cmask);
-
     /* Restores the non-pmd. */
     dp_netdev_set_nonpmd(dp);
     /* Restores all pmd threads. */
@@ -2727,6 +2768,7 @@ dpif_netdev_run(struct dpif *dpif)
             }
         }
     }
+    dpif_netdev_xps_revalidate_pmd(non_pmd, time_msec(), false);
     ovs_mutex_unlock(&dp->non_pmd_mutex);
 
     dp_netdev_pmd_unref(non_pmd);
@@ -2776,6 +2818,9 @@ pmd_free_cached_ports(struct dp_netdev_pmd_thread *pmd)
 {
     struct tx_port *tx_port_cached;
 
+    /* Free all used tx queue ids. */
+    dpif_netdev_xps_revalidate_pmd(pmd, 0, true);
+
     HMAP_FOR_EACH_POP (tx_port_cached, node, &pmd->port_cache) {
         free(tx_port_cached);
     }
@@ -2795,7 +2840,7 @@ pmd_load_cached_ports(struct dp_netdev_pmd_thread *pmd)
     HMAP_FOR_EACH (tx_port, node, &pmd->tx_ports) {
         tx_port_cached = xmemdup(tx_port, sizeof *tx_port_cached);
         hmap_insert(&pmd->port_cache, &tx_port_cached->node,
-                    hash_port_no(tx_port_cached->port_no));
+                    hash_port_no(tx_port_cached->port->port_no));
     }
 }
 
@@ -3011,7 +3056,7 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     pmd->numa_id = numa_id;
     pmd->poll_cnt = 0;
 
-    atomic_init(&pmd->tx_qid,
+    atomic_init(&pmd->static_tx_qid,
                 (core_id == NON_PMD_CORE_ID)
                 ? ovs_numa_get_n_cores()
                 : get_n_pmd_threads(dp));
@@ -3107,7 +3152,7 @@ dp_netdev_destroy_all_pmds(struct dp_netdev *dp)
 }
 
 /* Deletes all pmd threads on numa node 'numa_id' and
- * fixes tx_qids of other threads to keep them sequential. */
+ * fixes static_tx_qids of other threads to keep them sequential. */
 static void
 dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id)
 {
@@ -3125,7 +3170,7 @@ dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id)
          * 'dp->poll_threads' (while we're iterating it) and it
          * might quiesce. */
         if (pmd->numa_id == numa_id) {
-            atomic_read_relaxed(&pmd->tx_qid, &free_idx[k]);
+            atomic_read_relaxed(&pmd->static_tx_qid, &free_idx[k]);
             pmd_list[k] = pmd;
             ovs_assert(k < n_pmds_on_numa);
             k++;
@@ -3140,12 +3185,12 @@ dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id)
     CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
         int old_tx_qid;
 
-        atomic_read_relaxed(&pmd->tx_qid, &old_tx_qid);
+        atomic_read_relaxed(&pmd->static_tx_qid, &old_tx_qid);
 
         if (old_tx_qid >= n_pmds) {
             int new_tx_qid = free_idx[--k];
 
-            atomic_store_relaxed(&pmd->tx_qid, new_tx_qid);
+            atomic_store_relaxed(&pmd->static_tx_qid, new_tx_qid);
         }
     }
 
@@ -3178,7 +3223,7 @@ tx_port_lookup(const struct hmap *hmap, odp_port_t port_no)
     struct tx_port *tx;
 
     HMAP_FOR_EACH_IN_BUCKET (tx, node, hash_port_no(port_no), hmap) {
-        if (tx->port_no == port_no) {
+        if (tx->port->port_no == port_no) {
             return tx;
         }
     }
@@ -3303,11 +3348,11 @@ dp_netdev_add_port_tx_to_pmd(struct dp_netdev_pmd_thread *pmd,
 {
     struct tx_port *tx = xzalloc(sizeof *tx);
 
-    tx->netdev = port->netdev;
-    tx->port_no = port->port_no;
+    tx->port = port;
+    tx->qid = -1;
 
     ovs_mutex_lock(&pmd->port_mutex);
-    hmap_insert(&pmd->tx_ports, &tx->node, hash_port_no(tx->port_no));
+    hmap_insert(&pmd->tx_ports, &tx->node, hash_port_no(tx->port->port_no));
     ovs_mutex_unlock(&pmd->port_mutex);
 }
 
@@ -3648,7 +3693,7 @@ packet_batch_per_flow_execute(struct packet_batch_per_flow *batch,
     actions = dp_netdev_flow_get_actions(flow);
 
     dp_netdev_execute_actions(pmd, &batch->array, true,
-                              actions->actions, actions->size);
+                              actions->actions, actions->size, now);
 }
 
 static inline void
@@ -3736,7 +3781,7 @@ static inline void
 handle_packet_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet,
                      const struct netdev_flow_key *key,
                      struct ofpbuf *actions, struct ofpbuf *put_actions,
-                     int *lost_cnt)
+                     int *lost_cnt, long long now)
 {
     struct ofpbuf *add_actions;
     struct dp_packet_batch b;
@@ -3775,7 +3820,7 @@ handle_packet_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet,
      * we'll send the packet up twice. */
     packet_batch_init_packet(&b, packet);
     dp_netdev_execute_actions(pmd, &b, true,
-                              actions->data, actions->size);
+                              actions->data, actions->size, now);
 
     add_actions = put_actions->size ? put_actions : actions;
     if (OVS_LIKELY(error != ENOSPC)) {
@@ -3804,7 +3849,8 @@ static inline void
 fast_path_processing(struct dp_netdev_pmd_thread *pmd,
                      struct dp_packet_batch *packets_,
                      struct netdev_flow_key *keys,
-                     struct packet_batch_per_flow batches[], size_t *n_batches)
+                     struct packet_batch_per_flow batches[], size_t *n_batches,
+                     long long now)
 {
     int cnt = packets_->count;
 #if !defined(__CHECKER__) && !defined(_WIN32)
@@ -3850,8 +3896,8 @@ fast_path_processing(struct dp_netdev_pmd_thread *pmd,
             }
 
             miss_cnt++;
-            handle_packet_upcall(pmd, packets[i], &keys[i], &actions, &put_actions,
-                          &lost_cnt);
+            handle_packet_upcall(pmd, packets[i], &keys[i], &actions,
+                                 &put_actions, &lost_cnt, now);
         }
 
         ofpbuf_uninit(&actions);
@@ -3915,7 +3961,7 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
                             md_is_valid, port_no);
     if (OVS_UNLIKELY(newcnt)) {
         packets->count = newcnt;
-        fast_path_processing(pmd, packets, keys, batches, &n_batches);
+        fast_path_processing(pmd, packets, keys, batches, &n_batches, now);
     }
 
     for (i = 0; i < n_batches; i++) {
@@ -3944,6 +3990,7 @@ dp_netdev_recirculate(struct dp_netdev_pmd_thread *pmd,
 
 struct dp_netdev_execute_aux {
     struct dp_netdev_pmd_thread *pmd;
+    long long now;
 };
 
 static void
@@ -3962,6 +4009,77 @@ dpif_netdev_register_upcall_cb(struct dpif *dpif, upcall_callback *cb,
     struct dp_netdev *dp = get_dp_netdev(dpif);
     dp->upcall_aux = aux;
     dp->upcall_cb = cb;
+}
+
+static void
+dpif_netdev_xps_revalidate_pmd(const struct dp_netdev_pmd_thread *pmd,
+                               long long now, bool purge)
+{
+    struct tx_port *tx;
+    struct dp_netdev_port *port;
+    long long interval;
+
+    HMAP_FOR_EACH (tx, node, &pmd->port_cache) {
+        if (tx->port->dynamic_txqs) {
+            continue;
+        }
+        interval = now - tx->last_used;
+        if (tx->qid >= 0 && (purge || interval >= XPS_TIMEOUT_MS)) {
+            port = tx->port;
+            ovs_mutex_lock(&port->txq_used_mutex);
+            port->txq_used[tx->qid]--;
+            ovs_mutex_unlock(&port->txq_used_mutex);
+            tx->qid = -1;
+        }
+    }
+}
+
+static int
+dpif_netdev_xps_get_tx_qid(const struct dp_netdev_pmd_thread *pmd,
+                           struct tx_port *tx, long long now)
+{
+    struct dp_netdev_port *port;
+    long long interval;
+    int i, min_cnt, min_qid;
+
+    if (OVS_UNLIKELY(!now)) {
+        now = time_msec();
+    }
+
+    interval = now - tx->last_used;
+    tx->last_used = now;
+
+    if (OVS_LIKELY(tx->qid >= 0 && interval < XPS_TIMEOUT_MS)) {
+        return tx->qid;
+    }
+
+    port = tx->port;
+
+    ovs_mutex_lock(&port->txq_used_mutex);
+    if (tx->qid >= 0) {
+        port->txq_used[tx->qid]--;
+        tx->qid = -1;
+    }
+
+    min_cnt = -1;
+    min_qid = 0;
+    for (i = 0; i < netdev_n_txq(port->netdev); i++) {
+        if (port->txq_used[i] < min_cnt || min_cnt == -1) {
+            min_cnt = port->txq_used[i];
+            min_qid = i;
+        }
+    }
+
+    port->txq_used[min_qid]++;
+    tx->qid = min_qid;
+
+    ovs_mutex_unlock(&port->txq_used_mutex);
+
+    dpif_netdev_xps_revalidate_pmd(pmd, now, false);
+
+    VLOG_DBG("Core %d: New TX queue ID %d for port \'%s\'.",
+             pmd->core_id, tx->qid, netdev_get_name(tx->port->netdev));
+    return min_qid;
 }
 
 static struct tx_port *
@@ -3987,7 +4105,7 @@ push_tnl_action(const struct dp_netdev_pmd_thread *pmd,
         err = -EINVAL;
         goto error;
     }
-    err = netdev_push_header(tun_port->netdev, batch, data);
+    err = netdev_push_header(tun_port->port->netdev, batch, data);
     if (!err) {
         return 0;
     }
@@ -4001,7 +4119,7 @@ dp_execute_userspace_action(struct dp_netdev_pmd_thread *pmd,
                             struct dp_packet *packet, bool may_steal,
                             struct flow *flow, ovs_u128 *ufid,
                             struct ofpbuf *actions,
-                            const struct nlattr *userdata)
+                            const struct nlattr *userdata, long long now)
 {
     struct dp_packet_batch b;
     int error;
@@ -4014,7 +4132,7 @@ dp_execute_userspace_action(struct dp_netdev_pmd_thread *pmd,
     if (!error || error == ENOSPC) {
         packet_batch_init_packet(&b, packet);
         dp_netdev_execute_actions(pmd, &b, may_steal,
-                                  actions->data, actions->size);
+                                  actions->data, actions->size, now);
     } else if (may_steal) {
         dp_packet_delete(packet);
     }
@@ -4029,6 +4147,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
     struct dp_netdev_pmd_thread *pmd = aux->pmd;
     struct dp_netdev *dp = pmd->dp;
     int type = nl_attr_type(a);
+    long long now = aux->now;
     struct tx_port *p;
 
     switch ((enum ovs_action_attr)type) {
@@ -4036,10 +4155,17 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
         p = pmd_tx_port_cache_lookup(pmd, u32_to_odp(nl_attr_get_u32(a)));
         if (OVS_LIKELY(p)) {
             int tx_qid;
+            bool dynamic_txqs;
 
-            atomic_read_relaxed(&pmd->tx_qid, &tx_qid);
+            dynamic_txqs = p->port->dynamic_txqs;
+            if (dynamic_txqs) {
+                tx_qid = dpif_netdev_xps_get_tx_qid(pmd, p, now);
+            } else {
+                atomic_read_relaxed(&pmd->static_tx_qid, &tx_qid);
+            }
 
-            netdev_send(p->netdev, tx_qid, packets_, may_steal);
+            netdev_send(p->port->netdev, tx_qid, packets_, may_steal,
+                        dynamic_txqs);
             return;
         }
         break;
@@ -4086,7 +4212,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
 
                 dp_packet_batch_apply_cutlen(packets_);
 
-                netdev_pop_header(p->netdev, packets_);
+                netdev_pop_header(p->port->netdev, packets_);
                 if (!packets_->count) {
                     return;
                 }
@@ -4134,7 +4260,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
                 flow_extract(packets[i], &flow);
                 dpif_flow_hash(dp->dpif, &flow, sizeof flow, &ufid);
                 dp_execute_userspace_action(pmd, packets[i], may_steal, &flow,
-                                            &ufid, &actions, userdata);
+                                            &ufid, &actions, userdata, now);
             }
 
             if (clone) {
@@ -4200,9 +4326,10 @@ static void
 dp_netdev_execute_actions(struct dp_netdev_pmd_thread *pmd,
                           struct dp_packet_batch *packets,
                           bool may_steal,
-                          const struct nlattr *actions, size_t actions_len)
+                          const struct nlattr *actions, size_t actions_len,
+                          long long now)
 {
-    struct dp_netdev_execute_aux aux = { pmd };
+    struct dp_netdev_execute_aux aux = { pmd, now };
 
     odp_execute_actions(&aux, packets, may_steal, actions,
                         actions_len, dp_execute_cb);
