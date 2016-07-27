@@ -134,7 +134,7 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
     {
         netdev_close(r->remote_netdev);
 
-        retval = netdev_open(next_hop_dev, "system", &r->remote_netdev);
+        retval = netdev_open(next_hop_dev, NULL, &r->remote_netdev);
         if (retval) {
             VLOG_WARN_RL(&rl, "%s: cannot open netdev %s (next hop "
                          "to controller "IP_FMT"): %s",
