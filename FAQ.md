@@ -3,8 +3,22 @@ Frequently Asked Questions
 
 Open vSwitch <http://openvswitch.org>
 
-General
--------
+## Contents
+
+- [General](#general)
+- [Releases](#releases)
+- [Terminology](#terminology)
+- [Basic configuration](#basic-configuration)
+- [Implementation Details](#implementation-details)
+- [Performance](#performance)
+- [Configuration Problems](#configuration-problems)
+- [QOS](#qos)
+- [VLANs](#vlans)
+- [VXLANs](#vxlans)
+- [Using OpenFlow](#using-openflow)
+- [Development](#development)
+
+## General
 
 ### Q: What is Open vSwitch?
 
@@ -118,9 +132,7 @@ A: Starting in OVS 2.4, we switched the default ports to the
    cannot, all the programs allow overriding the default port.  See the
    appropriate man page.
 
-
-Releases
---------
+## Releases
 
 ### Q: What does it mean for an Open vSwitch release to be LTS (long-term support)?
 
@@ -356,8 +368,7 @@ A: Bridge compatibility was a feature of Open vSwitch 1.9 and earlier.
    the release.  Be sure to start the ovs-brcompatd daemon.
 
 
-Terminology
------------
+## Terminology
 
 ### Q: I thought Open vSwitch was a virtual Ethernet switch, but the documentation keeps talking about bridges.  What's a bridge?
 
@@ -369,9 +380,7 @@ A: In networking, the terms "bridge" and "switch" are synonyms.  Open
 
 A: See the "VLAN" section below.
 
-
-Basic Configuration
--------------------
+## Basic configuration
 
 ### Q: How do I configure a port as an access port?
 
@@ -578,9 +587,7 @@ A: First, why do you want to do this?  Two connected bridges are not
 A: Open vSwitch does not support such a configuration.
    Bridges always have their local ports.
 
-
-Implementation Details
-----------------------
+## Implementation Details
 
 ### Q: I hear OVS has a couple of kinds of flows.  Can you tell me about them?
 
@@ -670,9 +677,7 @@ A: No.  There are several reasons:
   please read "The Design and Implementation of Open vSwitch",
   published in USENIX NSDI 2015.
 
-
-Performance
------------
+## Performance
 
 ### Q: I just upgraded and I see a performance drop.  Why?
 
@@ -692,8 +697,7 @@ A: The OVS kernel datapath may have been updated to a newer version than
    userspace.
 
 
-Configuration Problems
-----------------------
+## Configuration Problems
 
 ### Q: I created a bridge and added my Ethernet port to it, using commands
    like these:
@@ -1048,8 +1052,7 @@ A: The short answer is that this is a misuse of a "tap" device.  Use
    type "system", the default, instead).
 
 
-Quality of Service (QoS)
-------------------------
+## QOS
 
 ### Q: Does OVS support Quality of Service (QoS)?
 
@@ -1205,9 +1208,7 @@ A: Since version 2.0, Open vSwitch has OpenFlow protocol support for
    vSwitch software switch (neither the kernel-based nor userspace
    switches).
 
-
-VLANs
------
+## VLANs
 
 ### Q: What's a VLAN?
 
@@ -1480,8 +1481,7 @@ A: Open vSwitch implements Independent VLAN Learning (IVL) for
    for each VLANs.
 
 
-VXLANs
------
+## VXLANs
 
 ### Q: What's a VXLAN?
 
@@ -1515,8 +1515,7 @@ A: By default, Open vSwitch will use the assigned IANA port for VXLAN, which
        options:dst_port=8472
 
 
-Using OpenFlow (Manually or Via Controller)
--------------------------------------------
+## Using OpenFlow
 
 ### Q: What versions of OpenFlow does Open vSwitch support?
 
@@ -2077,8 +2076,7 @@ A: By itself, the "learn" action can only put two kinds of actions
        Applications".
 
 
-Development
------------
+## Development
 
 ### Q: How do I implement a new OpenFlow message?
 
