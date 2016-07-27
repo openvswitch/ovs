@@ -274,7 +274,7 @@ tunnel_check_status_change__(struct netdev_vport *netdev)
     if (ovs_router_lookup(route, iface, NULL, &gw)) {
         struct netdev *egress_netdev;
 
-        if (!netdev_open(iface, "system", &egress_netdev)) {
+        if (!netdev_open(iface, NULL, &egress_netdev)) {
             status = netdev_get_carrier(egress_netdev);
             netdev_close(egress_netdev);
         }
