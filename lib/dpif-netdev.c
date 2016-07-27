@@ -974,7 +974,9 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     ovs_mutex_lock(&dp->port_mutex);
     dp_netdev_set_nonpmd(dp);
 
-    error = do_add_port(dp, name, "internal", ODPP_LOCAL);
+    error = do_add_port(dp, name, dpif_netdev_port_open_type(dp->class,
+                                                             "internal"),
+                        ODPP_LOCAL);
     ovs_mutex_unlock(&dp->port_mutex);
     if (error) {
         dp_netdev_free(dp);
@@ -1176,7 +1178,7 @@ hash_port_no(odp_port_t port_no)
 }
 
 static int
-port_create(const char *devname, const char *open_type, const char *type,
+port_create(const char *devname, const char *type,
             odp_port_t port_no, struct dp_netdev_port **portp)
 {
     struct netdev_saved_flags *sf;
@@ -1191,7 +1193,7 @@ port_create(const char *devname, const char *open_type, const char *type,
     *portp = NULL;
 
     /* Open and validate network device. */
-    error = netdev_open(devname, open_type, &netdev);
+    error = netdev_open(devname, type, &netdev);
     if (error) {
         return error;
     }
@@ -1294,8 +1296,7 @@ do_add_port(struct dp_netdev *dp, const char *devname, const char *type,
         return EEXIST;
     }
 
-    error = port_create(devname, dpif_netdev_port_open_type(dp->class, type),
-                        type, port_no, &port);
+    error = port_create(devname, type, port_no, &port);
     if (error) {
         return error;
     }
