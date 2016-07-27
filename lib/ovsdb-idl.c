@@ -3712,13 +3712,10 @@ ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *loop)
                 break;
 
             case TXN_SUCCESS:
-                /* If the database has already changed since we started the
-                 * commit, re-evaluate it immediately to avoid missing a change
-                 * for a while. */
+                /* Possibly some work on the database was deferred because no
+                 * further transaction could proceed.  Wake up again. */
                 loop->cur_cfg = loop->next_cfg;
-                if (ovsdb_idl_get_seqno(loop->idl) != loop->precommit_seqno) {
-                    poll_immediate_wake();
-                }
+                poll_immediate_wake();
                 break;
 
             case TXN_UNCHANGED:
