@@ -217,6 +217,21 @@ default CFLAGS plus "-mssse3", you might run configure as follows:
 
       `% ./configure CFLAGS="-g -O2 -mssse3"`
 
+For efficient hash computation special flags can be passed to leverage
+built-in intrinsics.  For example on X86_64 with SSE4.2 instruction set
+support, CRC32 intrinsics can be used by passing '-msse4.2'.
+
+      `% ./configure CFLAGS="-g -O2 -msse4.2"`
+
+If you are on a different processor and don't know what flags to choose, it
+is recommended to use '-march=native' settings.
+
+      `% ./configure CFLAGS="-g -O2 -march=native"`
+
+With this, GCC will detect the processor and automatically set appropriate
+flags for it.  This should not be used if you are compiling OVS outside the
+target machine.
+
 Note that these CFLAGS are not applied when building the Linux
 kernel module.  Custom CFLAGS for the kernel module are supplied
 using the EXTRA_CFLAGS variable when running make.  So, for example:
