@@ -1,15 +1,11 @@
-How to Use Open vSwitch with Docker
-====================================
+How to Use Open Virtual Networking With Docker
+==============================================
 
-This document describes how to use Open vSwitch with Docker 1.9.0 or
-later.  This document assumes that you installed Open vSwitch by following
-[INSTALL.md] or by using the distribution packages such as .deb or .rpm.
-Consult www.docker.com for instructions on how to install Docker.
-
-Docker 1.9.0 comes with support for multi-host networking.  Integration
-of Docker networking and Open vSwitch can be achieved via Open vSwitch
-virtual network (OVN).
-
+This document describes how to use Open Virtual Networking with Docker
+1.9.0 or later.  This document assumes that you have installed Open
+vSwitch by following [INSTALL.md] or by using the distribution packages
+such as .deb or.rpm.  Consult www.docker.com for instructions on how to
+install Docker.  Docker 1.9.0 comes with support for multi-host networking.
 
 Setup
 =====
