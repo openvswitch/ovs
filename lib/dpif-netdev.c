@@ -223,8 +223,10 @@ struct dp_netdev {
      * 'struct dp_netdev_pmd_thread' in 'per_pmd_key'. */
     ovsthread_key_t per_pmd_key;
 
+    struct seq *reconfigure_seq;
+    uint64_t last_reconfigure_seq;
+
     /* Cpu mask for pin of pmd threads. */
-    char *requested_pmd_cmask;
     char *pmd_cmask;
 
     uint64_t last_tnl_conf_seq;
@@ -943,6 +945,9 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     dp->port_seq = seq_create();
     fat_rwlock_init(&dp->upcall_rwlock);
 
+    dp->reconfigure_seq = seq_create();
+    dp->last_reconfigure_seq = seq_read(dp->reconfigure_seq);
+
     /* Disable upcalls by default. */
     dp_netdev_disable_upcall(dp);
     dp->upcall_aux = NULL;
@@ -965,6 +970,18 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     dp->last_tnl_conf_seq = seq_read(tnl_conf_seq);
     *dpp = dp;
     return 0;
+}
+
+static void
+dp_netdev_request_reconfigure(struct dp_netdev *dp)
+{
+    seq_change(dp->reconfigure_seq);
+}
+
+static bool
+dp_netdev_is_reconf_required(struct dp_netdev *dp)
+{
+    return seq_read(dp->reconfigure_seq) != dp->last_reconfigure_seq;
 }
 
 static int
@@ -1024,6 +1041,8 @@ dp_netdev_free(struct dp_netdev *dp)
     }
     ovs_mutex_unlock(&dp->port_mutex);
     cmap_destroy(&dp->poll_threads);
+
+    seq_destroy(dp->reconfigure_seq);
 
     seq_destroy(dp->port_seq);
     hmap_destroy(&dp->ports);
@@ -2549,9 +2568,10 @@ dpif_netdev_pmd_set(struct dpif *dpif, const char *cmask)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
 
-    if (!nullable_string_is_equal(dp->requested_pmd_cmask, cmask)) {
-        free(dp->requested_pmd_cmask);
-        dp->requested_pmd_cmask = nullable_xstrdup(cmask);
+    if (!nullable_string_is_equal(dp->pmd_cmask, cmask)) {
+        free(dp->pmd_cmask);
+        dp->pmd_cmask = nullable_xstrdup(cmask);
+        dp_netdev_request_reconfigure(dp);
     }
 
     return 0;
@@ -2700,12 +2720,12 @@ reconfigure_pmd_threads(struct dp_netdev *dp)
     struct dp_netdev_port *port, *next;
     int n_cores;
 
+    dp->last_reconfigure_seq = seq_read(dp->reconfigure_seq);
+
     dp_netdev_destroy_all_pmds(dp);
 
     /* Reconfigures the cpu mask. */
-    ovs_numa_set_cpu_mask(dp->requested_pmd_cmask);
-    free(dp->pmd_cmask);
-    dp->pmd_cmask = nullable_xstrdup(dp->requested_pmd_cmask);
+    ovs_numa_set_cpu_mask(dp->pmd_cmask);
 
     n_cores = ovs_numa_get_n_cores();
     if (n_cores == OVS_CORE_UNSPEC) {
@@ -2773,8 +2793,7 @@ dpif_netdev_run(struct dpif *dpif)
 
     dp_netdev_pmd_unref(non_pmd);
 
-    if (!nullable_string_is_equal(dp->pmd_cmask, dp->requested_pmd_cmask)
-        || ports_require_restart(dp)) {
+    if (dp_netdev_is_reconf_required(dp) || ports_require_restart(dp)) {
         reconfigure_pmd_threads(dp);
     }
     ovs_mutex_unlock(&dp->port_mutex);
