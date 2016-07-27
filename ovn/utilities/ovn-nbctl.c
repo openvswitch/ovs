@@ -402,9 +402,9 @@ DHCP Options commands:\n\
   dhcp-options-list        \n\
                            lists the DHCP_Options rows\n\
   dhcp-options-set-options DHCP_OPTIONS_UUID  KEY=VALUE [KEY=VALUE]...\n\
-                           set DHCP options to the DHCP_OPTIONS_UUID\n\
+                           set DHCP options for DHCP_OPTIONS_UUID\n\
   dhcp-options-get-options DHCO_OPTIONS_UUID \n\
-                           displays the DHCP options of th DHCP_OPTIONS_UUID\n\
+                           displays the DHCP options for DHCP_OPTIONS_UUID\n\
 \n\
 %s\
 \n\
