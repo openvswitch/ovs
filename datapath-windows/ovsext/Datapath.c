@@ -87,7 +87,8 @@ static NetlinkCmdHandler OvsPendEventCmdHandler,
                          OvsReadEventCmdHandler,
                          OvsNewDpCmdHandler,
                          OvsGetDpCmdHandler,
-                         OvsSetDpCmdHandler;
+                         OvsSetDpCmdHandler,
+                         OvsSockPropCmdHandler;
 
 NetlinkCmdHandler        OvsGetNetdevCmdHandler,
                          OvsGetVportCmdHandler,
@@ -96,7 +97,9 @@ NetlinkCmdHandler        OvsGetNetdevCmdHandler,
                          OvsDeleteVportCmdHandler,
                          OvsPendPacketCmdHandler,
                          OvsSubscribePacketCmdHandler,
-                         OvsReadPacketCmdHandler;
+                         OvsReadPacketCmdHandler,
+                         OvsCtDeleteCmdHandler,
+                         OvsCtDumpCmdHandler;
 
 static NTSTATUS HandleGetDpTransaction(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                                        UINT32 *replyLen);
@@ -144,6 +147,11 @@ NETLINK_CMD nlControlFamilyCmdOps[] = {
     { .cmd = OVS_CTRL_CMD_READ_NOTIFY,
       .handler = OvsReadPacketCmdHandler,
       .supportedDevOp = OVS_READ_DEV_OP,
+      .validateDpIndex = FALSE,
+    },
+    { .cmd = OVS_CTRL_CMD_SOCK_PROP,
+      .handler = OvsSockPropCmdHandler,
+      .supportedDevOp = OVS_TRANSACTION_DEV_OP,
       .validateDpIndex = FALSE,
     }
 };
@@ -273,6 +281,29 @@ NETLINK_FAMILY nlFLowFamilyOps = {
     .maxAttr  = OVS_FLOW_ATTR_MAX,
     .cmds     = nlFlowFamilyCmdOps,
     .opsCount = ARRAY_SIZE(nlFlowFamilyCmdOps)
+};
+
+/* Netlink Ct family. */
+NETLINK_CMD nlCtFamilyCmdOps[] = {
+    { .cmd              = IPCTNL_MSG_CT_DELETE,
+      .handler          = OvsCtDeleteCmdHandler,
+      .supportedDevOp   = OVS_TRANSACTION_DEV_OP,
+      .validateDpIndex  = FALSE
+    },
+    { .cmd              = IPCTNL_MSG_CT_GET,
+      .handler          = OvsCtDumpCmdHandler,
+      .supportedDevOp   = OVS_WRITE_DEV_OP | OVS_READ_DEV_OP,
+      .validateDpIndex  = FALSE
+    }
+};
+
+NETLINK_FAMILY nlCtFamilyOps = {
+    .name     = OVS_CT_FAMILY, /* Keep this for consistency*/
+    .id       = OVS_WIN_NL_CT_FAMILY_ID, /* Keep this for consistency*/
+    .version  = OVS_CT_VERSION, /* Keep this for consistency*/
+    .maxAttr  = OVS_NL_CT_ATTR_MAX,
+    .cmds     = nlCtFamilyCmdOps,
+    .opsCount = ARRAY_SIZE(nlCtFamilyCmdOps)
 };
 
 /* Netlink netdev family. */
@@ -878,6 +909,10 @@ OvsDeviceControl(PDEVICE_OBJECT deviceObject,
 
     ASSERT(ovsMsg);
     switch (ovsMsg->nlMsg.nlmsgType) {
+    case NFNL_TYPE_CT_GET:
+    case NFNL_TYPE_CT_DEL:
+        nlFamilyOps = &nlCtFamilyOps;
+        break;
     case OVS_WIN_NL_CTRL_FAMILY_ID:
         nlFamilyOps = &nlControlFamilyOps;
         break;
@@ -954,6 +989,30 @@ ValidateNetlinkCmd(UINT32 devOp,
         goto done;
     }
 
+    /*
+     *  Verify if the Netlink message is part of Netfilter Netlink
+     *  This is currently used by Conntrack
+     */
+    if (IS_NFNL_CMD(ovsMsg->nlMsg.nlmsgType)) {
+
+        /* Validate Netfilter Netlink version is 0 */
+        if (ovsMsg->nfGenMsg.version != NFNETLINK_V0) {
+            status = STATUS_INVALID_PARAMETER;
+            goto done;
+        }
+
+        /* Validate Netfilter Netlink Subsystem */
+        if (NFNL_SUBSYS_ID(ovsMsg->nlMsg.nlmsgType)
+            != NFNL_SUBSYS_CTNETLINK) {
+            status = STATUS_INVALID_PARAMETER;
+            goto done;
+        }
+
+        /* Exit the function because there aren't any other validations */
+        status = STATUS_SUCCESS;
+        goto done;
+    }
+
     for (i = 0; i < nlFamilyOps->opsCount; i++) {
         if (nlFamilyOps->cmds[i].cmd == ovsMsg->genlMsg.cmd) {
             /* Validate if the command is valid for the device operation. */
@@ -1014,9 +1073,17 @@ InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 {
     NTSTATUS status = STATUS_INVALID_PARAMETER;
     UINT16 i;
+    UINT8 cmd;
+
+    if (IS_NFNL_CMD(usrParamsCtx->ovsMsg->nlMsg.nlmsgType)) {
+        /* If nlMsg is of type Netfilter-Netlink parse the Cmd accordingly */
+        cmd = NFNL_MSG_TYPE(usrParamsCtx->ovsMsg->nlMsg.nlmsgType);
+    } else {
+        cmd = usrParamsCtx->ovsMsg->genlMsg.cmd;
+    }
 
     for (i = 0; i < nlFamilyOps->opsCount; i++) {
-        if (nlFamilyOps->cmds[i].cmd == usrParamsCtx->ovsMsg->genlMsg.cmd) {
+        if (nlFamilyOps->cmds[i].cmd == cmd) {
             NetlinkCmdHandler *handler = nlFamilyOps->cmds[i].handler;
             ASSERT(handler);
             if (handler) {
@@ -1048,8 +1115,9 @@ InvokeNetlinkCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
             POVS_MESSAGE_ERROR msgError = (POVS_MESSAGE_ERROR)
                 usrParamsCtx->outputBuffer;
 
-            if (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_EVENT_NOTIFY ||
-                usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_READ_NOTIFY) {
+            if (!IS_NFNL_CMD(usrParamsCtx->ovsMsg->nlMsg.nlmsgType) &&
+                (usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_EVENT_NOTIFY ||
+                 usrParamsCtx->ovsMsg->genlMsg.cmd == OVS_CTRL_CMD_READ_NOTIFY)) {
                 /* There's no input buffer associated with such requests. */
                 NL_BUFFER nlBuffer;
                 msgIn = &msgInTmp;
@@ -1622,4 +1690,100 @@ OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
 cleanup:
     return status;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ *  Command Handler for 'OVS_CTRL_CMD_SOCK_PROP'.
+ *
+ *  Handler to set and verify socket properties between userspace and kernel.
+ *
+ *  Protocol is passed down by the userspace. It refers to the NETLINK family
+ *  and could be of different types (NETLINK_GENERIC/NETLINK_NETFILTER etc.,)
+ *  This function parses out the protocol and adds it to the open instance.
+ *
+ *  PID is generated by the kernel and is set in userspace after querying the
+ *  kernel for it. This function does not modify PID set in the kernel,
+ *  instead it verifies if it was sent down correctly.
+ *
+ *  XXX -This method can be modified to handle all Socket properties thereby
+ *  eliminating the use of OVS_IOCTL_GET_PID
+ *
+ * --------------------------------------------------------------------------
+ */
+static NTSTATUS
+OvsSockPropCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
+                      UINT32 *replyLen)
+{
+    static const NL_POLICY ovsSocketPolicy[] = {
+        [OVS_NL_ATTR_SOCK_PROTO] = { .type = NL_A_U32, .optional = TRUE },
+        [OVS_NL_ATTR_SOCK_PID] = { .type = NL_A_U32, .optional = TRUE }
+    };
+    PNL_ATTR attrs[ARRAY_SIZE(ovsSocketPolicy)];
+
+    if (usrParamsCtx->outputLength < sizeof(OVS_MESSAGE)) {
+        return STATUS_NDIS_INVALID_LENGTH;
+    }
+
+    NL_BUFFER nlBuf;
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
+    POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
+    UINT32 protocol;
+    PNL_MSG_HDR nlMsg;
+    UINT32 pid;
+
+    /* Parse the input */
+    if (!NlAttrParse((PNL_MSG_HDR)msgIn,
+                     NLMSG_HDRLEN + GENL_HDRLEN + OVS_HDRLEN,
+                     NlMsgAttrsLen((PNL_MSG_HDR)msgIn),
+                     ovsSocketPolicy,
+                     ARRAY_SIZE(ovsSocketPolicy),
+                     attrs,
+                     ARRAY_SIZE(attrs))) {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    /* Set the Protocol if it was passed down */
+    if (attrs[OVS_NL_ATTR_SOCK_PROTO]) {
+        protocol = NlAttrGetU32(attrs[OVS_NL_ATTR_SOCK_PROTO]);
+        if (protocol) {
+            instance->protocol = protocol;
+        }
+    }
+
+    /* Verify if the PID sent down matches the kernel */
+    if (attrs[OVS_NL_ATTR_SOCK_PID]) {
+        pid = NlAttrGetU32(attrs[OVS_NL_ATTR_SOCK_PID]);
+        if (pid != instance->pid) {
+            OVS_LOG_ERROR("Received invalid pid:%d expected:%d",
+                          pid, instance->pid);
+            return STATUS_INVALID_PARAMETER;
+        }
+    }
+
+    /* Prepare the output */
+    NlBufInit(&nlBuf, usrParamsCtx->outputBuffer, usrParamsCtx->outputLength);
+    if(!NlFillOvsMsg(&nlBuf, msgIn->nlMsg.nlmsgType, NLM_F_MULTI,
+                      msgIn->nlMsg.nlmsgSeq, msgIn->nlMsg.nlmsgPid,
+                      msgIn->genlMsg.cmd, msgIn->genlMsg.version,
+                      gOvsSwitchContext->dpNo)){
+        return STATUS_INVALID_BUFFER_SIZE;
+    }
+
+    if (!NlMsgPutTailU32(&nlBuf, OVS_NL_ATTR_SOCK_PID,
+                         instance->pid)) {
+        return STATUS_INVALID_BUFFER_SIZE;
+    }
+
+    if (!NlMsgPutTailU32(&nlBuf, OVS_NL_ATTR_SOCK_PROTO,
+                         instance->protocol)) {
+        return STATUS_INVALID_BUFFER_SIZE;
+    }
+
+    nlMsg = (PNL_MSG_HDR)NlBufAt(&nlBuf, 0, 0);
+    nlMsg->nlmsgLen = NlBufSize(&nlBuf);
+    *replyLen = msgOut->nlMsg.nlmsgLen;
+
+    return STATUS_SUCCESS;
 }

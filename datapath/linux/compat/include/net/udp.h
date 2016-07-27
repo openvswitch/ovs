@@ -59,5 +59,4 @@ static inline __sum16 udp_v4_check(int len, __be32 saddr,
 void rpl_udp_set_csum(bool nocheck, struct sk_buff *skb,
 		      __be32 saddr, __be32 daddr, int len);
 #endif
-
 #endif

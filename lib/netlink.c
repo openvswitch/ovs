@@ -27,6 +27,7 @@
 #include "timeval.h"
 #include "unaligned.h"
 #include "openvswitch/vlog.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(netlink);
 
@@ -377,7 +378,7 @@ nl_msg_push_unspec(struct ofpbuf *msg, uint16_t type,
 void
 nl_msg_push_flag(struct ofpbuf *msg, uint16_t type)
 {
-    nl_msg_push_unspec(msg, type, NULL, 0);
+    nl_msg_push_unspec_uninit(msg, type, 0);
 }
 
 /* Prepends a Netlink attribute of the given 'type' and the given 8-bit 'value'

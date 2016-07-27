@@ -40,7 +40,7 @@
 #include "poll-loop.h"
 #include "route-table.h"
 #include "seq.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "sset.h"
 #include "timeval.h"
 #include "tnl-neigh-cache.h"

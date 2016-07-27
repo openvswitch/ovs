@@ -170,14 +170,14 @@ OVS_VSWITCHD_STOP(["/Not adding Unix domain socket controller/d"])
 AT_CLEANUP
 
 dnl ----------------------------------------------------------------------
-dnl OVSDB server before release version 2.5 does not support the monitor2
+dnl OVSDB server before release version 2.5 does not support the monitor_cond
 dnl method.  This test defeatures the OVSDB server to simulate an older
 dnl OVSDB server and make sure ovs-vswitchd can still work with it
-AT_SETUP([ovs-vswitchd -- Compatible with OVSDB server - w/o monitor2])
+AT_SETUP([ovs-vswitchd -- Compatible with OVSDB server - w/o monitor_cond])
 OVS_VSWITCHD_START
 
-dnl defeature OVSDB server -- no monitor2
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/disable-monitor2])
+dnl defeature OVSDB server -- no monitor_cond
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/disable-monitor-cond])
 
 sleep 1
 

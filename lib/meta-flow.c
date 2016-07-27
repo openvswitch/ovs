@@ -30,7 +30,7 @@
 #include "ovs-thread.h"
 #include "packets.h"
 #include "random.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "socket-util.h"
 #include "tun-metadata.h"
 #include "unaligned.h"
@@ -237,6 +237,10 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.regs[mf->id - MFF_REG0];
     CASE_MFF_XREGS:
         return !flow_get_xreg(&wc->masks, mf->id - MFF_XREG0);
+    CASE_MFF_XXREGS: {
+        ovs_u128 value = flow_get_xxreg(&wc->masks, mf->id - MFF_XXREG0);
+        return ovs_u128_is_zero(value);
+    }
     case MFF_ACTSET_OUTPUT:
         return !wc->masks.actset_output;
 
@@ -398,18 +402,11 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
         return is_icmpv6(flow, NULL);
 
     case MFP_ND:
-        return (is_icmpv6(flow, NULL)
-                && flow->tp_dst == htons(0)
-                && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
-                    flow->tp_src == htons(ND_NEIGHBOR_ADVERT)));
+        return is_nd(flow, NULL);
     case MFP_ND_SOLICIT:
-        return (is_icmpv6(flow, NULL)
-                && flow->tp_dst == htons(0)
-                && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)));
+        return is_nd(flow, NULL) && flow->tp_src == htons(ND_NEIGHBOR_SOLICIT);
     case MFP_ND_ADVERT:
-        return (is_icmpv6(flow, NULL)
-                && flow->tp_dst == htons(0)
-                && (flow->tp_src == htons(ND_NEIGHBOR_ADVERT)));
+        return is_nd(flow, NULL) && flow->tp_src == htons(ND_NEIGHBOR_ADVERT);
     }
 
     OVS_NOT_REACHED();
@@ -533,6 +530,7 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_CT_LABEL:
     CASE_MFF_REGS:
     CASE_MFF_XREGS:
+    CASE_MFF_XXREGS:
     case MFF_ETH_SRC:
     case MFF_ETH_DST:
     case MFF_ETH_TYPE:
@@ -710,6 +708,10 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     CASE_MFF_XREGS:
         value->be64 = htonll(flow_get_xreg(flow, mf->id - MFF_XREG0));
+        break;
+
+    CASE_MFF_XXREGS:
+        value->be128 = hton128(flow_get_xxreg(flow, mf->id - MFF_XXREG0));
         break;
 
     case MFF_ETH_SRC:
@@ -968,6 +970,10 @@ mf_set_value(const struct mf_field *mf,
 
     CASE_MFF_XREGS:
         match_set_xreg(match, mf->id - MFF_XREG0, ntohll(value->be64));
+        break;
+
+    CASE_MFF_XXREGS:
+        match_set_xxreg(match, mf->id - MFF_XXREG0, ntoh128(value->be128));
         break;
 
     case MFF_ETH_SRC:
@@ -1278,6 +1284,10 @@ mf_set_flow_value(const struct mf_field *mf,
 
     CASE_MFF_XREGS:
         flow_set_xreg(flow, mf->id - MFF_XREG0, ntohll(value->be64));
+        break;
+
+    CASE_MFF_XXREGS:
+        flow_set_xxreg(flow, mf->id - MFF_XXREG0, ntoh128(value->be128));
         break;
 
     case MFF_ETH_SRC:
@@ -1605,6 +1615,12 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
         match_set_xreg_masked(match, mf->id - MFF_XREG0, 0, 0);
         break;
 
+    CASE_MFF_XXREGS: {
+        match_set_xxreg_masked(match, mf->id - MFF_XXREG0, OVS_U128_ZERO,
+                               OVS_U128_ZERO);
+        break;
+    }
+
     case MFF_ETH_SRC:
         match->flow.dl_src = eth_addr_zero;
         match->wc.masks.dl_src = eth_addr_zero;
@@ -1869,6 +1885,12 @@ mf_set(const struct mf_field *mf,
         match_set_xreg_masked(match, mf->id - MFF_XREG0,
                               ntohll(value->be64), ntohll(mask->be64));
         break;
+
+    CASE_MFF_XXREGS: {
+        match_set_xxreg_masked(match, mf->id - MFF_XXREG0,
+                ntoh128(value->be128), ntoh128(mask->be128));
+        break;
+    }
 
     case MFF_PKT_MARK:
         match_set_pkt_mark_masked(match, ntohl(value->be32),

@@ -170,10 +170,7 @@ static int
 tnl_nd_snoop(const struct flow *flow, struct flow_wildcards *wc,
               const char name[IFNAMSIZ])
 {
-    if (flow->dl_type != htons(ETH_TYPE_IPV6) ||
-        flow->nw_proto != IPPROTO_ICMPV6 ||
-        flow->tp_dst != htons(0) ||
-        flow->tp_src != htons(ND_NEIGHBOR_ADVERT)) {
+    if (!is_nd(flow, NULL) || flow->tp_src != htons(ND_NEIGHBOR_ADVERT)) {
         return EINVAL;
     }
     /* - RFC4861 says Neighbor Advertisements sent in response to unicast Neighbor

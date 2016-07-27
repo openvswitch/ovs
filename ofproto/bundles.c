@@ -34,7 +34,7 @@
 #include "poll-loop.h"
 #include "pktbuf.h"
 #include "rconn.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "simap.h"
 #include "stream.h"
 #include "timeval.h"

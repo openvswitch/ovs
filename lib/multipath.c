@@ -29,6 +29,7 @@
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/ofp-util.h"
 #include "packets.h"
+#include "util.h"
 
 /* Checks that 'mp' is valid on flow.  Returns 0 if it is valid, otherwise an
  * OFPERR_*. */

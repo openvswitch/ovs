@@ -42,7 +42,7 @@ int mirror_set(struct mbridge *, void *aux, const char *name,
                struct ofbundle **srcs, size_t n_srcs,
                struct ofbundle **dsts, size_t n_dsts,
                unsigned long *src_vlans, struct ofbundle *out_bundle,
-               uint16_t out_vlan);
+               uint16_t snaplen, uint16_t out_vlan);
 void mirror_destroy(struct mbridge *, void *aux);
 int mirror_get_stats(struct mbridge *, void *aux, uint64_t *packets,
                      uint64_t *bytes);
@@ -50,6 +50,6 @@ void mirror_update_stats(struct mbridge*, mirror_mask_t, uint64_t packets,
                          uint64_t bytes);
 bool mirror_get(struct mbridge *, int index, const unsigned long **vlans,
                 mirror_mask_t *dup_mirrors, struct ofbundle **out,
-                int *out_vlan);
+                int *snaplen, int *out_vlan);
 
 #endif /* ofproto-dpif-mirror.h */

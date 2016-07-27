@@ -20,7 +20,7 @@
 
 #include <errno.h>
 
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
 #include "ovs-thread.h"
 #include "random.h"

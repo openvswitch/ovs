@@ -62,7 +62,7 @@
 
 #include "compat.h"
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 static void ip_tunnel_add(struct ip_tunnel_net *itn, struct ip_tunnel *t)
 {
 	if (t->collect_md)

@@ -24,6 +24,7 @@ Source: openvswitch-%{version}.tar.gz
 Buildroot: /tmp/openvswitch-rpm
 Requires: logrotate, python >= 2.7, python-six
 BuildRequires: openssl-devel
+BuildRequires: checkpolicy, selinux-policy-devel
 
 %bcond_without check
 
@@ -39,6 +40,15 @@ Group:          Development/Libraries
 %description devel
 This package provides openvswitch headers and libopenvswitch for developers.
 
+%package selinux-policy
+Summary: Open vSwitch SELinux policy
+License: ASL 2.0
+BuildArch: noarch
+Requires: selinux-policy-targeted
+
+%description selinux-policy
+Tailored Open vSwitch SELinux policy
+
 %prep
 %setup -q
 
@@ -46,6 +56,8 @@ This package provides openvswitch headers and libopenvswitch for developers.
 ./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} \
     --libdir=%{_libdir} --enable-ssl --enable-shared
 make %{_smp_mflags}
+cd selinux
+make -f %{_datadir}/selinux/devel/Makefile
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -62,6 +74,9 @@ rhel_cp etc_logrotate.d_openvswitch 0644
 rhel_cp etc_sysconfig_network-scripts_ifup-ovs 0755
 rhel_cp etc_sysconfig_network-scripts_ifdown-ovs 0755
 rhel_cp usr_share_openvswitch_scripts_sysconfig.template 0644
+
+install -p -m 644 -D selinux/openvswitch-custom.pp \
+    $RPM_BUILD_ROOT%{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp
 
 # Get rid of stuff we don't want to make RPM happy.
 rm \
@@ -132,6 +147,9 @@ fi
 /sbin/chkconfig --add openvswitch
 /sbin/chkconfig openvswitch on
 
+%post selinux-policy
+/usr/sbin/semodule -i %{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp &> /dev/null || :
+
 %preun
 if [ "$1" = "0" ]; then     # $1 = 0 for uninstall
     /sbin/service openvswitch stop
@@ -143,6 +161,11 @@ if [ "$1" = "0" ]; then     # $1 = 0 for uninstall
     rm -f /etc/openvswitch/conf.db
     rm -f /etc/sysconfig/openvswitch
     rm -f /etc/openvswitch/vswitchd.cacert
+fi
+
+%postun selinux-policy
+if [ $1 -eq 0 ] ; then
+  /usr/sbin/semodule -r openvswitch-custom &> /dev/null || :
 fi
 
 exit 0
@@ -216,3 +239,7 @@ exit 0
 %{_libdir}/lib*.a
 %{_libdir}/pkgconfig
 %{_includedir}/openvswitch/*
+
+%files selinux-policy
+%defattr(-,root,root)
+%{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp

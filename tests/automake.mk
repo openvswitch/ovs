@@ -60,6 +60,7 @@ TESTSUITE_AT = \
 	tests/ofproto-dpif.at \
 	tests/bridge.at \
 	tests/ofproto.at \
+	tests/netdev-type.at \
 	tests/ovsdb.at \
 	tests/ovsdb-log.at \
 	tests/ovsdb-types.at \
@@ -79,6 +80,7 @@ TESTSUITE_AT = \
 	tests/ovsdb-server.at \
 	tests/ovsdb-monitor.at \
 	tests/ovsdb-idl.at \
+	tests/ovsdb-lock.at \
 	tests/ovs-vsctl.at \
 	tests/ovs-monitor-ipsec.at \
 	tests/ovs-xapi-sync.at \
@@ -101,10 +103,12 @@ SYSTEM_KMOD_TESTSUITE_AT = \
 
 SYSTEM_USERSPACE_TESTSUITE_AT = \
 	tests/system-userspace-testsuite.at \
+	tests/system-ovn.at \
 	tests/system-userspace-macros.at
 
 SYSTEM_TESTSUITE_AT = \
 	tests/system-common-macros.at \
+	tests/system-ovn.at \
 	tests/system-traffic.at
 
 TESTSUITE = $(srcdir)/tests/testsuite

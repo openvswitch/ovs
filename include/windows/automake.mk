@@ -9,6 +9,12 @@ noinst_HEADERS += \
 	include/windows/arpa/inet.h \
 	include/windows/dirent.h \
 	include/windows/getopt.h \
+	include/windows/linux/netfilter/nf_conntrack_common.h \
+	include/windows/linux/netfilter/nf_conntrack_ftp.h \
+	include/windows/linux/netfilter/nf_conntrack_sctp.h \
+	include/windows/linux/netfilter/nf_conntrack_tcp.h \
+	include/windows/linux/netfilter/nfnetlink.h \
+	include/windows/linux/netfilter/nfnetlink_conntrack.h \
 	include/windows/linux/pkt_sched.h \
 	include/windows/linux/types.h \
 	include/windows/net/if.h \

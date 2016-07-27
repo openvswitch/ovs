@@ -19,8 +19,11 @@
 
 struct ovsdb_monitor;
 struct ovsdb_jsonrpc_monitor;
+struct ovsdb_monitor_session_condition;
+struct ovsdb_condition;
 
 enum ovsdb_monitor_selection {
+    OJMS_NONE = 0,              /* None for this iteration */
     OJMS_INITIAL = 1 << 0,      /* All rows when monitor is created. */
     OJMS_INSERT = 1 << 1,       /* New rows. */
     OJMS_DELETE = 1 << 2,       /* Deleted rows. */
@@ -52,19 +55,20 @@ void ovsdb_monitor_remove_jsonrpc_monitor(struct ovsdb_monitor *dbmon,
 void ovsdb_monitor_add_table(struct ovsdb_monitor *m,
                              const struct ovsdb_table *table);
 
-void ovsdb_monitor_add_column(struct ovsdb_monitor *dbmon,
-                              const struct ovsdb_table *table,
-                              const struct ovsdb_column *column,
-                              enum ovsdb_monitor_selection select,
-                              size_t *allocated_columns);
-
-const char * OVS_WARN_UNUSED_RESULT
-ovsdb_monitor_table_check_duplicates(struct ovsdb_monitor *,
-                          const struct ovsdb_table *);
+const char * ovsdb_monitor_add_column(struct ovsdb_monitor *dbmon,
+                                      const struct ovsdb_table *table,
+                                      const struct ovsdb_column *column,
+                                      enum ovsdb_monitor_selection select,
+                                      bool monitored);
+bool
+ovsdb_monitor_table_exists(struct ovsdb_monitor *m,
+                           const struct ovsdb_table *table);
 
 struct json *ovsdb_monitor_get_update(struct ovsdb_monitor *dbmon,
                                       bool initial,
+                                      bool cond_updated,
                                       uint64_t *unflushed_transaction,
+                                      struct ovsdb_monitor_session_condition *condition,
                                       enum ovsdb_monitor_version version);
 
 void ovsdb_monitor_table_add_select(struct ovsdb_monitor *dbmon,
@@ -77,4 +81,28 @@ bool ovsdb_monitor_needs_flush(struct ovsdb_monitor *dbmon,
 void ovsdb_monitor_get_initial(const struct ovsdb_monitor *dbmon);
 
 void ovsdb_monitor_get_memory_usage(struct simap *usage);
+
+struct ovsdb_monitor_session_condition *
+ovsdb_monitor_session_condition_create(void);
+
+void
+ovsdb_monitor_session_condition_destroy(
+                          struct ovsdb_monitor_session_condition *condition);
+struct ovsdb_error *
+ovsdb_monitor_table_condition_create(
+                          struct ovsdb_monitor_session_condition *condition,
+                          const struct ovsdb_table *table,
+                          const struct json *json_cnd);
+
+void
+ovsdb_monitor_condition_bind(struct ovsdb_monitor *dbmon,
+                             struct ovsdb_monitor_session_condition *cond);
+
+struct ovsdb_error *
+ovsdb_monitor_table_condition_update(
+                           struct ovsdb_monitor *dbmon,
+                           struct ovsdb_monitor_session_condition *condition,
+                           const struct ovsdb_table *table,
+                           const struct json *cond_json);
+
 #endif

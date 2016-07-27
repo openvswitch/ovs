@@ -36,6 +36,7 @@ enum lex_type {
     LEX_T_STRING,               /* "foo" */
     LEX_T_INTEGER,              /* 12345 or 1.2.3.4 or ::1 or 01:02:03:04:05 */
     LEX_T_MASKED_INTEGER,       /* 12345/10 or 1.2.0.0/16 or ::2/127 or... */
+    LEX_T_MACRO,                /* $NAME */
     LEX_T_ERROR,                /* invalid input */
 
     /* Bare tokens. */
@@ -60,6 +61,7 @@ enum lex_type {
     LEX_T_EQUALS,               /* = */
     LEX_T_EXCHANGE,             /* <-> */
     LEX_T_DECREMENT,            /* -- */
+    LEX_T_COLON,                /* : */
 };
 
 /* Subtype for LEX_T_INTEGER and LEX_T_MASKED_INTEGER tokens.
@@ -77,20 +79,32 @@ enum lex_format {
 };
 const char *lex_format_to_string(enum lex_format);
 
-/* A token.
- *
- * 's' may point to 'buffer'; otherwise, it points to malloc()ed memory owned
- * by the token. */
+/* A token. */
 struct lex_token {
-    enum lex_type type;         /* One of LEX_*. */
-    char *s;                    /* LEX_T_ID, LEX_T_STRING, LEX_T_ERROR only. */
-    enum lex_format format;     /* LEX_T_INTEGER, LEX_T_MASKED_INTEGER only. */
+    /* One of LEX_*. */
+    enum lex_type type;
+
+    /* Meaningful for LEX_T_ID, LEX_T_STRING, LEX_T_ERROR, LEX_T_MACRO only.
+     * For these token types, 's' may point to 'buffer'; otherwise, it points
+     * to malloc()ed memory owned by the token.
+     *
+     * Must be NULL for other token types.
+     *
+     * For LEX_T_MACRO, 's' does not include the leading $. */
+    char *s;
+
+    /* LEX_T_INTEGER, LEX_T_MASKED_INTEGER only. */
+    enum lex_format format;
+
     union {
+        /* LEX_T_INTEGER, LEX_T_MASKED_INTEGER only. */
         struct {
             union mf_subvalue value; /* LEX_T_INTEGER, LEX_T_MASKED_INTEGER. */
             union mf_subvalue mask;  /* LEX_T_MASKED_INTEGER only. */
         };
-        char buffer[256];            /* Buffer for LEX_T_ID/LEX_T_STRING. */
+
+        /* LEX_T_ID, LEX_T_STRING, LEX_T_ERROR, LEX_T_MACRO only. */
+        char buffer[256];
     };
 };
 

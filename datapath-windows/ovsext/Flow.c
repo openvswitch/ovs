@@ -1683,7 +1683,7 @@ OvsTunnelAttrToGeneveOptions(PNL_ATTR attr,
         option = (GeneveOptionHdr *)((UINT8 *)option + len);
         optLen -= len;
     }
-    memcpy(TunnelKeyGetOptions(tunKey), option, optLen);
+    memcpy(TunnelKeyGetOptions(tunKey), NlAttrData(attr), tunKey->tunOptLen);
     if (isCritical) {
         tunKey->flags |= OVS_TNL_F_CRT_OPT;
     }

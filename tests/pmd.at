@@ -25,8 +25,8 @@ dnl is greater or equal to 'n_cpu'. Without parameters checks that at
 dnl least one CPU discovered.
 m4_define([CHECK_CPU_DISCOVERED], [
     PATTERN="Discovered [[0-9]]* NUMA nodes and [[0-9]]* CPU cores"
-    OVS_WAIT_UNTIL([grep "$PATTERN" stderr])
-    N_CPU=$(grep "$PATTERN" stderr | sed -e 's/.* \([[0-9]]*\) CPU cores/\1/')
+    OVS_WAIT_UNTIL([grep "$PATTERN" ovs-vswitchd.log])
+    N_CPU=$(grep "$PATTERN" ovs-vswitchd.log | sed -e 's/.* \([[0-9]]*\) CPU cores/\1/')
     if [[ -z "$1" ]]
         then AT_CHECK([test "$N_CPU" -gt "0"])
         else AT_SKIP_IF([test "$N_CPU" -lt "$1"])

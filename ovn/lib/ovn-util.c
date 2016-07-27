@@ -15,53 +15,82 @@
 #include <config.h>
 #include "ovn-util.h"
 #include "openvswitch/vlog.h"
-#include "ovn/lib/ovn-sb-idl.h"
+#include "ovn/lib/ovn-nb-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(ovn_util);
 
-/*
- * Extracts the mac, ipv4 and ipv6 addresses from the input param 'address'
- * which should be of the format 'MAC [IP1 IP2 ..]" where IPn should be
- * a valid IPv4 or IPv6 address and stores them in the 'ipv4_addrs' and
- * 'ipv6_addrs' fields of input param 'laddrs'.
- * The caller has to free the 'ipv4_addrs' and 'ipv6_addrs' fields.
- * If input param 'store_ipv6' is true only then extracted ipv6 addresses
- * are stored in 'ipv6_addrs' fields.
- * Return true if at least 'MAC' is found in 'address', false otherwise.
- * Eg 1.
- * If 'address' = '00:00:00:00:00:01 10.0.0.4 fe80::ea2a:eaff:fe28:3390/64
- *                 30.0.0.3/23' and 'store_ipv6' = true
- * then returns true with laddrs->n_ipv4_addrs = 2, naddrs->n_ipv6_addrs = 1.
- *
- * Eg. 2
- * If 'address' = '00:00:00:00:00:01 10.0.0.4 fe80::ea2a:eaff:fe28:3390/64
- *                 30.0.0.3/23' and 'store_ipv6' = false
- * then returns true with laddrs->n_ipv4_addrs = 2, naddrs->n_ipv6_addrs = 0.
- *
- * Eg 3. If 'address' = '00:00:00:00:00:01 10.0.0.4 addr 30.0.0.4', then
- * returns true with laddrs->n_ipv4_addrs = 1 and laddrs->n_ipv6_addrs = 0.
- */
-bool
-extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
-                      bool store_ipv6)
+static void
+add_ipv4_netaddr(struct lport_addresses *laddrs, ovs_be32 addr,
+                 unsigned int plen)
 {
+    laddrs->n_ipv4_addrs++;
+    laddrs->ipv4_addrs = xrealloc(laddrs->ipv4_addrs,
+        laddrs->n_ipv4_addrs * sizeof *laddrs->ipv4_addrs);
+
+    struct ipv4_netaddr *na = &laddrs->ipv4_addrs[laddrs->n_ipv4_addrs - 1];
+
+    na->addr = addr;
+    na->mask = be32_prefix_mask(plen);
+    na->network = addr & na->mask;
+    na->plen = plen;
+
+    na->addr_s = xasprintf(IP_FMT, IP_ARGS(addr));
+    na->network_s = xasprintf(IP_FMT, IP_ARGS(na->network));
+    na->bcast_s = xasprintf(IP_FMT, IP_ARGS(addr | ~na->mask));
+}
+
+static void
+add_ipv6_netaddr(struct lport_addresses *laddrs, struct in6_addr addr,
+                 unsigned int plen)
+{
+    laddrs->n_ipv6_addrs++;
+    laddrs->ipv6_addrs = xrealloc(laddrs->ipv6_addrs,
+        laddrs->n_ipv6_addrs * sizeof *laddrs->ipv6_addrs);
+
+    struct ipv6_netaddr *na = &laddrs->ipv6_addrs[laddrs->n_ipv6_addrs - 1];
+
+    memcpy(&na->addr, &addr, sizeof na->addr);
+    na->mask = ipv6_create_mask(plen);
+    na->network = ipv6_addr_bitand(&addr, &na->mask);
+    na->plen = plen;
+    in6_addr_solicited_node(&na->sn_addr, &addr);
+
+    na->addr_s = xmalloc(INET6_ADDRSTRLEN);
+    inet_ntop(AF_INET6, &addr, na->addr_s, INET6_ADDRSTRLEN);
+    na->sn_addr_s = xmalloc(INET6_ADDRSTRLEN);
+    inet_ntop(AF_INET6, &na->sn_addr, na->sn_addr_s, INET6_ADDRSTRLEN);
+    na->network_s = xmalloc(INET6_ADDRSTRLEN);
+    inet_ntop(AF_INET6, &na->network, na->network_s, INET6_ADDRSTRLEN);
+}
+
+/* Extracts the mac, IPv4 and IPv6 addresses from * 'address' which
+ * should be of the format 'MAC [IP1 IP2 ..]" where IPn should be a
+ * valid IPv4 or IPv6 address and stores them in the 'ipv4_addrs' and
+ * 'ipv6_addrs' fields of 'laddrs'.
+ *
+ * Return true if at least 'MAC' is found in 'address', false otherwise.
+ *
+ * The caller must call destroy_lport_addresses(). */
+bool
+extract_lsp_addresses(char *address, struct lport_addresses *laddrs)
+{
+    memset(laddrs, 0, sizeof *laddrs);
+
     char *buf = address;
     int buf_index = 0;
     char *buf_end = buf + strlen(address);
     if (!ovs_scan_len(buf, &buf_index, ETH_ADDR_SCAN_FMT,
                       ETH_ADDR_SCAN_ARGS(laddrs->ea))) {
+        laddrs->ea = eth_addr_zero;
         return false;
     }
+
+    laddrs->ea_s = xasprintf(ETH_ADDR_FMT, ETH_ADDR_ARGS(laddrs->ea));
 
     ovs_be32 ip4;
     struct in6_addr ip6;
     unsigned int plen;
     char *error;
-
-    laddrs->n_ipv4_addrs = 0;
-    laddrs->n_ipv6_addrs = 0;
-    laddrs->ipv4_addrs = NULL;
-    laddrs->ipv6_addrs = NULL;
 
     /* Loop through the buffer and extract the IPv4/IPv6 addresses
      * and store in the 'laddrs'. Break the loop if invalid data is found.
@@ -71,28 +100,15 @@ extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
         buf_index = 0;
         error = ip_parse_cidr_len(buf, &buf_index, &ip4, &plen);
         if (!error) {
-            laddrs->n_ipv4_addrs++;
-            laddrs->ipv4_addrs = xrealloc(
-                laddrs->ipv4_addrs,
-                sizeof (struct ipv4_netaddr) * laddrs->n_ipv4_addrs);
-            laddrs->ipv4_addrs[laddrs->n_ipv4_addrs - 1].addr = ip4;
-            laddrs->ipv4_addrs[laddrs->n_ipv4_addrs - 1].plen = plen;
+            add_ipv4_netaddr(laddrs, ip4, plen);
             buf += buf_index;
             continue;
         }
         free(error);
         error = ipv6_parse_cidr_len(buf, &buf_index, &ip6, &plen);
-        if (!error && store_ipv6) {
-            laddrs->n_ipv6_addrs++;
-            laddrs->ipv6_addrs = xrealloc(
-                laddrs->ipv6_addrs,
-                sizeof(struct ipv6_netaddr) * laddrs->n_ipv6_addrs);
-            memcpy(&laddrs->ipv6_addrs[laddrs->n_ipv6_addrs - 1].addr, &ip6,
-                   sizeof(struct in6_addr));
-            laddrs->ipv6_addrs[laddrs->n_ipv6_addrs - 1].plen = plen;
-        }
-
-        if (error) {
+        if (!error) {
+            add_ipv6_netaddr(laddrs, ip6, plen);
+        } else {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_INFO_RL(&rl, "invalid syntax '%s' in address", address);
             free(error);
@@ -104,14 +120,90 @@ extract_lsp_addresses(char *address, struct lport_addresses *laddrs,
     return true;
 }
 
+/* Extracts the mac, IPv4 and IPv6 addresses from the
+ * "nbrec_logical_router_port" parameter 'lrp'.  Stores the IPv4 and
+ * IPv6 addresses in the 'ipv4_addrs' and 'ipv6_addrs' fields of
+ * 'laddrs', respectively.
+ *
+ * Return true if at least 'MAC' is found in 'lrp', false otherwise.
+ *
+ * The caller must call destroy_lport_addresses(). */
+bool
+extract_lrp_networks(const struct nbrec_logical_router_port *lrp,
+                     struct lport_addresses *laddrs)
+{
+    memset(laddrs, 0, sizeof *laddrs);
+
+    if (!eth_addr_from_string(lrp->mac, &laddrs->ea)) {
+        laddrs->ea = eth_addr_zero;
+        return false;
+    }
+    laddrs->ea_s = xasprintf(ETH_ADDR_FMT, ETH_ADDR_ARGS(laddrs->ea));
+
+    for (int i = 0; i < lrp->n_networks; i++) {
+        ovs_be32 ip4;
+        struct in6_addr ip6;
+        unsigned int plen;
+        char *error;
+
+        error = ip_parse_cidr(lrp->networks[i], &ip4, &plen);
+        if (!error) {
+            if (!ip4 || plen == 32) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+                VLOG_WARN_RL(&rl, "bad 'networks' %s", lrp->networks[i]);
+                continue;
+            }
+
+            add_ipv4_netaddr(laddrs, ip4, plen);
+            continue;
+        }
+        free(error);
+
+        error = ipv6_parse_cidr(lrp->networks[i], &ip6, &plen);
+        if (!error) {
+            if (plen == 128) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+                VLOG_WARN_RL(&rl, "bad 'networks' %s", lrp->networks[i]);
+                continue;
+            }
+            add_ipv6_netaddr(laddrs, ip6, plen);
+        } else {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_INFO_RL(&rl, "invalid syntax '%s' in networks",
+                         lrp->networks[i]);
+            free(error);
+        }
+    }
+
+    return true;
+}
+
+void
+destroy_lport_addresses(struct lport_addresses *laddrs)
+{
+    free(laddrs->ea_s);
+
+    for (int i = 0; i < laddrs->n_ipv4_addrs; i++) {
+        free(laddrs->ipv4_addrs[i].addr_s);
+        free(laddrs->ipv4_addrs[i].network_s);
+        free(laddrs->ipv4_addrs[i].bcast_s);
+    }
+    free(laddrs->ipv4_addrs);
+
+    for (int i = 0; i < laddrs->n_ipv6_addrs; i++) {
+        free(laddrs->ipv6_addrs[i].addr_s);
+        free(laddrs->ipv6_addrs[i].sn_addr_s);
+        free(laddrs->ipv6_addrs[i].network_s);
+    }
+    free(laddrs->ipv6_addrs);
+}
+
 /* Allocates a key for NAT conntrack zone allocation for a provided
- * 'port_binding' record and a 'type'.
+ * 'key' record and a 'type'.
  *
  * It is the caller's responsibility to free the allocated memory. */
 char *
-alloc_nat_zone_key(const struct sbrec_port_binding *port_binding,
-                   const char *type)
+alloc_nat_zone_key(const char *key, const char *type)
 {
-    return xasprintf(UUID_FMT"_%s",
-                     UUID_ARGS(&port_binding->datapath->header_.uuid), type);
+    return xasprintf("%s_%s", key, type);
 }

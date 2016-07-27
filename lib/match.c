@@ -133,6 +133,21 @@ match_set_xreg_masked(struct match *match, unsigned int xreg_idx,
 }
 
 void
+match_set_xxreg(struct match *match, unsigned int xxreg_idx, ovs_u128 value)
+{
+    match_set_xxreg_masked(match, xxreg_idx, value, OVS_U128_MAX);
+}
+
+void
+match_set_xxreg_masked(struct match *match, unsigned int xxreg_idx,
+                      ovs_u128 value, ovs_u128 mask)
+{
+    ovs_assert(xxreg_idx < FLOW_N_XXREGS);
+    flow_wildcards_set_xxreg_mask(&match->wc, xxreg_idx, mask);
+    flow_set_xxreg(&match->flow, xxreg_idx, ovs_u128_and(value, mask));
+}
+
+void
 match_set_actset_output(struct match *match, ofp_port_t actset_output)
 {
     match->wc.masks.actset_output = u16_to_ofp(UINT16_MAX);
@@ -1060,7 +1075,7 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 36);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "%spriority=%s%d,",

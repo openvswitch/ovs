@@ -19,7 +19,7 @@
 
 #include <config.h>
 #undef NDEBUG
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include <assert.h>
 #include <string.h>
 #include "hash.h"

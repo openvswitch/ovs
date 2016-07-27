@@ -81,5 +81,6 @@ AT_CHECK([sed 's/(.*)/(...)/' stderr], [0],
 ovs-appctl: ovs-vswitchd: server returned an error
 ])
 OVS_VSWITCHD_STOP(["/dummy@br0: port_del failed/d
-/dummy@br0: failed to add vif1.0 as port/d"])
+/dummy@br0: failed to add vif1.0 as port/d
+/Dropped 1 log messages in last/d"])
 AT_CLEANUP

@@ -494,7 +494,7 @@ OVSDB_CHECK_POSITIVE_CPY([strings no more than 2 characters long],
 constraint violation: "abc" length 3 is greater than maximum allowed length 2
 "de"]])
 
-AT_BANNER([OSVDB -- simple data])
+AT_BANNER([OVSDB -- simple data])
 
 OVSDB_CHECK_POSITIVE_CPY([integer JSON datum],
   [[parse-data '["integer"]' '[0]' '["set",[1]]' '[-1]']],

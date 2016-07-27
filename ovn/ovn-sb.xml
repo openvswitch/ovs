@@ -249,6 +249,17 @@
     </column>
   </table>
 
+  <table name="Address_Set" title="Address Sets">
+    <p>
+      See the documentation for the <ref table="Address_Set"
+      db="OVN_Northbound"/> table in the <ref db="OVN_Northbound"/> database
+      for details.
+    </p>
+
+    <column name="name"/>
+    <column name="addresses"/>
+  </table>
+
   <table name="Logical_Flow" title="Logical Network Flows">
     <p>
       Each row in this table represents one logical flow.
@@ -333,7 +344,7 @@
       the <code>output</code> as a no-op.  In the common case, where they are
       different, the packet enters the egress pipeline.  This transition to the
       egress pipeline discards register data, e.g. <code>reg0</code> ...
-      <code>reg4</code> and connection tracking state, to achieve
+      <code>reg9</code> and connection tracking state, to achieve
       uniform behavior regardless of whether the egress pipeline is on a
       different hypervisor (because registers aren't preserve across
       tunnel encapsulation).
@@ -656,6 +667,14 @@
         </code>...<code></code>''.
       </p>
 
+      <p>
+        You may refer to a set of IPv4, IPv6, or MAC addresses stored in the
+        <ref table="Address_Set"/> table by its <ref column="name"
+        table="Address_Set"/>.  An <ref table="Address_Set"/> with a name
+        of <code>set1</code> can be referred to as
+        <code>$set1</code>.
+      </p>
+
       <p><em>Miscellaneous</em></p>
 
       <p>
@@ -719,8 +738,20 @@
         symbols, only names within the flow's logical datapath may be used.
       </p>
 
+      <p>
+        The <code>reg</code><var>X</var> symbols are 32-bit integers.
+        The <code>xxreg</code><var>X</var> symbols are 128-bit integers,
+        which overlay four of the 32-bit registers: <code>xxreg0</code>
+        overlays <code>reg0</code> through <code>reg3</code>, with
+        <code>reg0</code> supplying the most-significant bits of
+        <code>xxreg0</code> and <code>reg3</code> the least-signficant.
+        <code>xxreg1</code> similarly overlays <code>reg4</code> through
+        <code>reg7</code>.
+      </p>
+
       <ul>
-        <li><code>reg0</code>...<code>reg4</code></li>
+        <li><code>reg0</code>...<code>reg9</code></li>
+        <li><code>xxreg0</code> <code>xxreg1</code></li>
         <li><code>inport</code> <code>outport</code></li>
         <li><code>eth.src</code> <code>eth.dst</code> <code>eth.type</code></li>
         <li><code>vlan.tci</code> <code>vlan.vid</code> <code>vlan.pcp</code> <code>vlan.present</code></li>
@@ -939,15 +970,30 @@
         </dd>
 
         <dt><code>ct_commit;</code></dt>
+        <dt><code>ct_commit(ct_mark=<var>value[/mask]</var>);</code></dt>
+        <dt><code>ct_commit(ct_label=<var>value[/mask]</var>);</code></dt>
+        <dt><code>ct_commit(ct_mark=<var>value[/mask]</var>, ct_label=<var>value[/mask]</var>);</code></dt>
         <dd>
           <p>
-            Commit the flow to the connection tracking entry associated
-            with it by a previous call to <code>ct_next</code>.
+            Commit the flow to the connection tracking entry associated with it
+            by a previous call to <code>ct_next</code>.  When
+            <code>ct_mark=<var>value[/mask]</var></code> and/or
+            <code>ct_label=<var>value[/mask]</var></code> are supplied,
+            <code>ct_mark</code> and/or <code>ct_label</code> will be set to the
+            values indicated by <var>value[/mask]</var> on the connection
+            tracking entry. <code>ct_mark</code> is a 32-bit field.
+            <code>ct_label</code> is a 128-bit field. The <var>value[/mask]</var>
+            should be specified in hex string if more than 64bits are to be used.
           </p>
+
           <p>
             Note that if you want processing to continue in the next table,
             you must execute the <code>next</code> action after
-            <code>ct_commit</code>.
+            <code>ct_commit</code>.  You may also leave out <code>next</code>
+            which will commit connection tracking state, and then drop the
+            packet.  This could be useful for setting <code>ct_mark</code>
+            on a connection tracking entry before dropping a packet,
+            for example.
           </p>
         </dd>
 
@@ -965,7 +1011,7 @@
           <p>
             <code>ct_dnat(<var>IP</var>)</code> sends the packet through the
             DNAT zone to change the destination IP address of the packet to
-            the one provided inside the parenthesis and commits the connection.
+            the one provided inside the parentheses and commits the connection.
             The packet is then automatically sent to the next tables as if
             followed by <code>next;</code> action.  The next tables will see
             the changes in the packet caused by the connection tracker.
@@ -1024,6 +1070,46 @@
           </p>
 
           <p><b>Prerequisite:</b> <code>ip4</code></p>
+        </dd>
+
+        <dt>
+          <code>na { <var>action</var>; </code>...<code> };</code>
+        </dt>
+
+        <dd>
+          <p>
+            Temporarily replaces the IPv6 packet being processed by an IPv6
+            neighbor advertisement (NA) packet and executes each nested
+            <var>action</var> on the NA packet.  Actions following the
+            <var>na</var> action, if any, apply to the original, unmodified
+            packet.
+          </p>
+
+          <p>
+            The NA packet that this action operates on is initialized based on
+            the IPv6 packet being processed, as follows. These are default
+            values that the nested actions will probably want to change:
+          </p>
+
+          <ul>
+            <li><code>eth.dst</code> exchanged with <code>eth.src</code></li>
+            <li><code>eth.type = 0x86dd</code></li>
+            <li><code>ip6.dst</code> copied from <code>ip6.src</code></li>
+            <li><code>ip6.src</code> copied from <code>nd.target</code></li>
+            <li><code>icmp6.type = 136</code> (Neighbor Advertisement)</li>
+            <li><code>nd.target</code> unchanged</li>
+            <li><code>nd.sll = 00:00:00:00:00:00</code></li>
+            <li><code>nd.tll</code> copied from <code>eth.dst</code></li>
+          </ul>
+
+          <p>
+            The ND packet has the same VLAN header, if any, as the IPv6 packet
+            it replaces.
+          </p>
+
+          <p>
+            <b>Prerequisite:</b> <code>nd</code>
+          </p>
         </dd>
 
         <dt><code>get_arp(<var>P</var>, <var>A</var>);</code></dt>
@@ -1106,6 +1192,31 @@
               reg0[0] = put_dhcp_opts(offerip = 10.0.0.2, router = 10.0.0.1,
               netmask = 255.255.255.0, dns_server = {8.8.8.8, 7.7.7.7});
             </code>
+          </p>
+        </dd>
+
+        <dt><code>ct_lb;</code></dt>
+        <dt><code>ct_lb(</code><var>ip</var>[<code>:</code><var>port</var>]...<code>);</code></dt>
+        <dd>
+          <p>
+            With one or more arguments, <code>ct_lb</code> commits the packet
+            to the connection tracking table and DNATs the packet's destination
+            IP address (and port) to the IP address or addresses (and optional
+            ports) specified in the string.  If multiple comma-separated IP
+            addresses are specified, each is given equal weight for picking the
+            DNAT address.  Processing automatically moves on to the next table,
+            as if <code>next;</code> were specified, and later tables act on
+            the packet as modified by the connection tracker.  Connection
+            tracking state is scoped by the logical port, so overlapping
+            addresses may be used.
+          </p>
+          <p>
+            Without arguments, <code>ct_lb</code> sends the packet to the
+            connection tracking table to NAT the packets.  If the packet is
+            part of an established connection that was previously committed to
+            the connection tracker via <code>ct_lb(</code>...<code>)</code>, it
+            will automatically get DNATed to the same IP address as the first
+            packet in that connection.
           </p>
         </dd>
       </dl>
@@ -1340,10 +1451,47 @@ tcp.flags = RST;
       </column>
 
       <column name="chassis">
-        The physical location of the logical port.  To successfully identify a
-        chassis, this column must be a <ref table="Chassis"/> record.  This is
-        populated by
-        <code>ovn-controller</code>/<code>ovn-controller-vtep</code>.
+        The meaning of this column depends on the value of the <ref column="type"/>
+        column.  This is the meaning for each <ref column="type"/>
+
+        <dl>
+          <dt>(empty string)</dt>
+          <dd>
+            The physical location of the logical port.  To successfully identify a
+            chassis, this column must be a <ref table="Chassis"/> record.  This is
+            populated by <code>ovn-controller</code>.
+          </dd>
+
+          <dt>vtep</dt>
+          <dd>
+            The physical location of the hardware_vtep gateway.  To successfully
+            identify a chassis, this column must be a <ref table="Chassis"/> record.
+            This is populated by <code>ovn-controller-vtep</code>.
+          </dd>
+
+          <dt>localnet</dt>
+          <dd>
+            Always empty.  A localnet port is realized on every chassis that has
+            connectivity to the corresponding physical network.
+          </dd>
+
+          <dt>gateway</dt>
+          <dd>
+            The physical location of the L3 gateway.  To successfully identify a
+            chassis, this column must be a <ref table="Chassis"/> record.  This is
+            populated by <code>ovn-controller</code> based on the value of
+            the <code>options:gateway-chassis</code> column in this table.
+          </dd>
+
+          <dt>l2gateway</dt>
+          <dd>
+            The physical location of this L2 gateway.  To successfully identify a
+            chassis, this column must be a <ref table="Chassis"/> record.
+            This is populated by <code>ovn-controller</code> based on the value
+            of the <code>options:l2gateway-chassis</code> column in this table.
+          </dd>
+        </dl>
+
       </column>
 
       <column name="tunnel_key">
@@ -1407,6 +1555,14 @@ tcp.flags = RST;
             to model direct connectivity to an existing network.
           </dd>
 
+          <dt><code>l2gateway</code></dt>
+          <dd>
+            An L2 connection to a physical network.  The chassis this
+            <ref table="Port_Binding"/> is bound to will serve as
+            an L2 gateway to the network named by
+            <ref column="options" table="Port_Binding"/>:<code>network_name</code>.
+          </dd>
+
           <dt><code>vtep</code></dt>
           <dd>
             A port to a logical switch on a VTEP gateway chassis.  In order to
@@ -1437,7 +1593,7 @@ tcp.flags = RST;
       </column>
     </group>
 
-    <group title="Gateway Options">
+    <group title="L3 Gateway Options">
       <p>
         These options apply to logical ports with <ref column="type"/> of
         <code>gateway</code>.
@@ -1485,6 +1641,40 @@ tcp.flags = RST;
       <column name="tag">
         If set, indicates that the port represents a connection to a specific
         VLAN on a locally accessible network. The VLAN ID is used to match
+        incoming traffic and is also added to outgoing traffic.
+      </column>
+    </group>
+
+    <group title="L2 Gateway Options">
+      <p>
+        These options apply to logical ports with <ref column="type"/> of
+        <code>l2gateway</code>.
+      </p>
+
+      <column name="options" key="network_name">
+        Required.  <code>ovn-controller</code> uses the configuration entry
+        <code>ovn-bridge-mappings</code> to determine how to connect to this
+        network.  <code>ovn-bridge-mappings</code> is a list of network names
+        mapped to a local OVS bridge that provides access to that network.  An
+        example of configuring <code>ovn-bridge-mappings</code> would be:
+
+        <pre>$ ovs-vsctl set open . external-ids:ovn-bridge-mappings=physnet1:br-eth0,physnet2:br-eth1</pre>
+
+        <p>
+          When a logical switch has a <code>l2gateway</code> port attached,
+          the chassis that the <code>l2gateway</code> port is bound to
+          must have a bridge mapping configured to reach the network
+          identified by <code>network_name</code>.
+        </p>
+      </column>
+
+      <column name="options" key="l2gateway-chassis">
+        Required. The <code>chassis</code> in which the port resides.
+      </column>
+
+      <column name="tag">
+        If set, indicates that the gateway is connected to a specific
+        VLAN on the physical network. The VLAN ID is used to match
         incoming traffic and is also added to outgoing traffic.
       </column>
     </group>
@@ -1546,7 +1736,8 @@ tcp.flags = RST;
 
         <p>
           This column is used for a different purpose when <ref column="type"/>
-          is <code>localnet</code> (see <code>Localnet Options</code>, above).
+          is <code>localnet</code> (see <code>Localnet Options</code>, above)
+          or <code>l2gateway</code> (see <code>L2 Gateway Options</code>, above).
         </p>
       </column>
     </group>
@@ -1630,6 +1821,9 @@ tcp.flags = RST;
 
     <column name="mac">
       The Ethernet address to which the IP is bound.
+    </column>
+    <column name="datapath">
+      The logical datapath to which the logical port belongs.
     </column>
   </table>
 

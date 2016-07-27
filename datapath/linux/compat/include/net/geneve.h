@@ -6,7 +6,7 @@
 #endif
 
 
-#ifdef HAVE_METADATA_DST
+#ifdef USE_UPSTREAM_TUNNEL
 #include_next <net/geneve.h>
 
 static inline int rpl_geneve_init_module(void)
@@ -90,5 +90,8 @@ netdev_tx_t rpl_geneve_xmit(struct sk_buff *skb);
 #endif
 #define geneve_init_module rpl_geneve_init_module
 #define geneve_cleanup_module rpl_geneve_cleanup_module
+
+#define geneve_fill_metadata_dst ovs_geneve_fill_metadata_dst
+int ovs_geneve_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
 
 #endif /*ifdef__NET_GENEVE_H */

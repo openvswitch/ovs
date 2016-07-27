@@ -47,7 +47,7 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "seq.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "smap.h"
 #include "sset.h"
 #include "svec.h"
@@ -625,7 +625,7 @@ netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet_batch *batch)
 {
     int retval;
 
-    retval = rx->netdev->netdev_class->rxq_recv(rx, batch->packets, &batch->count);
+    retval = rx->netdev->netdev_class->rxq_recv(rx,  batch);
     if (!retval) {
         COVERAGE_INC(netdev_received);
     } else {
@@ -711,9 +711,7 @@ netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
         return EOPNOTSUPP;
     }
 
-    int error = netdev->netdev_class->send(netdev, qid,
-                                           batch->packets, batch->count,
-                                           may_steal);
+    int error = netdev->netdev_class->send(netdev, qid, batch, may_steal);
     if (!error) {
         COVERAGE_INC(netdev_sent);
         if (!may_steal) {

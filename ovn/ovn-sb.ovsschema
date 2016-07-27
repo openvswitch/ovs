@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.4.0",
-    "cksum": "198773462 6073",
+    "version": "1.6.0",
+    "cksum": "1715817174 6541",
     "tables": {
         "Chassis": {
             "columns": {
@@ -28,6 +28,14 @@
                                      "min": 0,
                                      "max": "unlimited"}},
                 "ip": {"type": "string"}}},
+        "Address_Set": {
+            "columns": {
+                "name": {"type": "string"},
+                "addresses": {"type": {"key": "string",
+                                       "min": 0,
+                                       "max": "unlimited"}}},
+            "indexes": [["name"]],
+            "isRoot": true},
         "Logical_Flow": {
             "columns": {
                 "logical_datapath": {"type": {"key": {"type": "uuid",
@@ -108,7 +116,9 @@
             "columns": {
                 "logical_port": {"type": "string"},
                 "ip": {"type": "string"},
-                "mac": {"type": "string"}},
+                "mac": {"type": "string"},
+                "datapath": {"type": {"key": {"type": "uuid",
+                                              "refTable": "Datapath_Binding"}}}},
             "indexes": [["logical_port", "ip"]],
             "isRoot": true},
         "DHCP_Options": {

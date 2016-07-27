@@ -21,6 +21,7 @@
 #include "Stt.h"
 #include "Switch.h"
 #include "VxLan.h"
+#include "Geneve.h"
 
 #define OVS_MAX_DPPORTS             MAXUINT16
 #define OVS_DPPORT_NUMBER_INVALID   OVS_MAX_DPPORTS
@@ -183,6 +184,7 @@ static __inline BOOLEAN
 OvsIsTunnelVportType(OVS_VPORT_TYPE ovsType)
 {
     return ovsType == OVS_VPORT_TYPE_VXLAN ||
+           ovsType == OVS_VPORT_TYPE_GENEVE ||
            ovsType == OVS_VPORT_TYPE_STT ||
            ovsType == OVS_VPORT_TYPE_GRE;
 }
@@ -269,6 +271,9 @@ GetPortFromPriv(POVS_VPORT_ENTRY vport)
         break;
     case OVS_VPORT_TYPE_VXLAN:
         dstPort = ((POVS_VXLAN_VPORT)vportPriv)->dstPort;
+        break;
+    case OVS_VPORT_TYPE_GENEVE:
+        dstPort = ((POVS_GENEVE_VPORT) vportPriv)->dstPort;
         break;
     default:
         ASSERT(! "Port is not a tunnel port");

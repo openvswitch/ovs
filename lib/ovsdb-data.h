@@ -19,7 +19,7 @@
 #include <stdlib.h>
 #include "compiler.h"
 #include "ovsdb-types.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 
 struct ds;
 struct ovsdb_symbol_table;

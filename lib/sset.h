@@ -17,7 +17,7 @@
 #ifndef SSET_H
 #define SSET_H
 
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "util.h"
 
 #ifdef __cplusplus
@@ -42,6 +42,9 @@ void sset_destroy(struct sset *);
 void sset_clone(struct sset *, const struct sset *);
 void sset_swap(struct sset *, struct sset *);
 void sset_moved(struct sset *);
+
+void sset_from_delimited_string(struct sset *, const char *s,
+                                const char *delimiters);
 
 /* Count. */
 bool sset_is_empty(const struct sset *);

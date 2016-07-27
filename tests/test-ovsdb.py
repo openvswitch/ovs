@@ -391,6 +391,28 @@ def idl_set(idl, commands, step):
     sys.stdout.flush()
 
 
+def update_condition(idl, commands):
+    commands = commands.split(";")
+    for command in commands:
+        command = command[len("condition "):]
+        if "add" in command:
+            add_cmd = True
+            command = command[len("add "):]
+        else:
+            add_cmd = False
+            command = command[len("remove "):]
+
+        command = command.split(" ")
+        if(len(command) != 2):
+            sys.stderr.write("Error parsong condition %s\n" % command)
+            sys.exit(1)
+
+        table = command[0]
+        cond = ovs.json.from_string(command[1])
+
+        idl.cond_change(table, add_cmd, cond)
+
+
 def do_idl(schema_file, remote, *commands):
     schema_helper = ovs.db.idl.SchemaHelper(schema_file)
     if commands and commands[0].startswith("?"):
@@ -422,6 +444,14 @@ def do_idl(schema_file, remote, *commands):
     symtab = {}
     seqno = 0
     step = 0
+
+    commands = list(commands)
+    if len(commands) >= 1 and "condition" in commands[0]:
+        update_condition(idl, commands.pop(0))
+        sys.stdout.write("%03d: change conditions\n" % step)
+        sys.stdout.flush()
+        step += 1
+
     for command in commands:
         if command.startswith("+"):
             # The previous transaction didn't change anything.
@@ -446,6 +476,11 @@ def do_idl(schema_file, remote, *commands):
             sys.stdout.flush()
             step += 1
             idl.force_reconnect()
+        elif "condition" in command:
+            update_condition(idl, command)
+            sys.stdout.write("%03d: change conditions\n" % step)
+            sys.stdout.flush()
+            step += 1
         elif not command.startswith("["):
             idl_set(idl, command, step)
             step += 1

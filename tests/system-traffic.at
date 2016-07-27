@@ -290,7 +290,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 dnl use this file as payload file for ncat
 AT_CHECK([dd if=/dev/urandom of=payload200.bin bs=200 count=1 2> /dev/null])
 on_exit 'rm -f payload200.bin'
-NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 1234 < payload200.bin])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 1234 < payload200.bin])
 
 dnl packet with truncated size
 AT_CHECK([ovs-appctl revalidator/purge], [0])
@@ -312,7 +312,7 @@ in_port=1 dl_dst=e6:66:c1:22:22:22 actions=output(port=2,max_len=100),output:4,o
 ])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 1234 < payload200.bin])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 1234 < payload200.bin])
 
 dnl 100 + 100 + 242 + min(65535,242) = 684
 AT_CHECK([ovs-appctl revalidator/purge], [0])
@@ -334,19 +334,17 @@ dnl SLOW_ACTION test1: check datapatch actions
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-CHECK_KERNEL_DP(
-AT_CHECK([ovs-appctl ofproto/trace system 'in_port(2),eth(src=e6:66:c1:11:11:11,dst=e6:66:c1:22:22:22),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([ovs-appctl ofproto/trace br0 "in_port=1,dl_type=0x800,dl_src=e6:66:c1:11:11:11,dl_dst=e6:66:c1:22:22:22,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=6,tp_src=8,tp_dst=9"], [0], [stdout])
 AT_CHECK([tail -3 stdout], [0],
 [Datapath actions: trunc(100),3,5,trunc(100),3,trunc(100),5,3,trunc(200),5,trunc(65535),3
 This flow is handled by the userspace slow path because it:
 	- Uses action(s) not supported by datapath.
 ])
-)
 
 dnl SLOW_ACTION test2: check actual packet truncate
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
-NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 1234 < payload200.bin])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 1234 < payload200.bin])
 
 dnl 100 + 100 + 242 + min(65535,242) = 684
 AT_CHECK([ovs-appctl revalidator/purge], [0])
@@ -428,7 +426,7 @@ priority=1,actions=drop
 AT_CHECK([ovs-ofctl add-flows br-underlay flows-underlay.txt])
 
 dnl check tunnel push path, from at_ns1 to at_ns0
-NS_CHECK_EXEC([at_ns1], [nc -u 10.1.1.1 1234 < payload200.bin])
+NS_CHECK_EXEC([at_ns1], [nc $NC_EOF_OPT -u 10.1.1.1 1234 < payload200.bin])
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 
 dnl Before truncation = ETH(14) + IP(20) + UDP(8) + 200 = 242B
@@ -441,7 +439,7 @@ n_bytes=138
 ])
 
 dnl check tunnel pop path, from at_ns0 to at_ns1
-NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 5678 < payload200.bin])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 5678 < payload200.bin])
 dnl After truncation = 100 byte at loopback device p2(4)
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | awk --field-separator=', '  '{print $5}'], [0], [dnl
@@ -458,15 +456,6 @@ dnl SLOW_ACTION test1: check datapatch actions
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
-CHECK_KERNEL_DP(
-AT_CHECK([ovs-appctl ofproto/trace system 'in_port(5),eth(src=e6:66:c1:11:11:11,dst=e6:66:c1:22:22:22),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=17,tos=4,ttl=128,frag=no),udp(src=8,dst=9)'], [0], [stdout])
-AT_CHECK([tail -3 stdout], [0],
-[Datapath actions: trunc(100),set(tunnel(dst=172.31.1.1,ttl=64,flags(df))),4
-This flow is handled by the userspace slow path because it:
-	- Uses action(s) not supported by datapath.
-])
-)
-
 dnl SLOW_ACTION test2: check actual packet truncate
 AT_CHECK([ovs-ofctl del-flows br0])
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
@@ -474,7 +463,7 @@ AT_CHECK([ovs-ofctl del-flows br-underlay])
 AT_CHECK([ovs-ofctl add-flows br-underlay flows-underlay.txt])
 
 dnl check tunnel push path, from at_ns1 to at_ns0
-NS_CHECK_EXEC([at_ns1], [nc -u 10.1.1.1 1234 < payload200.bin])
+NS_CHECK_EXEC([at_ns1], [nc $NC_EOF_OPT -u 10.1.1.1 1234 < payload200.bin])
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 
 dnl Before truncation = ETH(14) + IP(20) + UDP(8) + 200 = 242B
@@ -487,7 +476,7 @@ n_bytes=138
 ])
 
 dnl check tunnel pop path, from at_ns0 to at_ns1
-NS_CHECK_EXEC([at_ns0], [nc -u 10.1.1.2 5678 < payload200.bin])
+NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 5678 < payload200.bin])
 dnl After truncation = 100 byte at loopback device p2(4)
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | awk --field-separator=', '  '{print $5}'], [0], [dnl
@@ -560,9 +549,6 @@ priority=100,in_port=2,ct_state=+trk+est,tcp,action=1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
-
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 >/dev/null])
 
 dnl HTTP requests from ns0->ns1 should work fine.
 NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
@@ -938,8 +924,8 @@ priority=100,in_port=LOCAL,ip,ct_state=-trk,action=drop
 priority=100,in_port=LOCAL,ip,ct_state=+trk+new,action=ct(commit,zone=1),ct(commit,zone=2),1
 priority=100,in_port=LOCAL,ip,ct_state=+trk+est,action=ct(commit,zone=1),ct(commit,zone=2),1
 priority=100,in_port=1,ip,ct_state=-trk,action=ct(table=1,zone=1)
-table=1,priority=100,in_port=1,ip,ct_state=+trk+est,ct_zone=1,action=ct(table=2,zone=2)
-table=2,priority=100,in_port=1,ip,ct_state=+trk+est,ct_zone=2,action=LOCAL
+table=1,in_port=1,ip,ct_state=+trk+est,ct_zone=1,action=ct(table=2,zone=2)
+table=2,in_port=1,ip,ct_state=+trk+est,ct_zone=2,action=LOCAL
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
@@ -1138,9 +1124,9 @@ table=0,priority=10,arp,action=normal
 table=0,priority=10,icmp,action=normal
 table=0,priority=100,in_port=1,tcp,action=ct(table=1)
 table=0,priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=1,commit,exec(set_field:0x2/0x6->ct_mark))
-table=1,priority=100,in_port=1,ct_state=+new,tcp,action=ct(commit,exec(set_field:0x5/0x5->ct_mark)),2
-table=1,priority=100,in_port=1,ct_state=-new,tcp,action=2
-table=1,priority=100,in_port=2,ct_state=+trk,ct_mark=3,tcp,action=1
+table=1,in_port=1,ct_state=+new,tcp,action=ct(commit,exec(set_field:0x5/0x5->ct_mark)),2
+table=1,in_port=1,ct_state=-new,tcp,action=2
+table=1,in_port=2,ct_state=+trk,ct_mark=3,tcp,action=1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
@@ -1258,9 +1244,9 @@ table=0,priority=10,arp,action=normal
 table=0,priority=10,icmp,action=normal
 table=0,priority=100,in_port=1,tcp,action=ct(table=1)
 table=0,priority=100,in_port=2,ct_state=-trk,tcp,action=ct(table=1,commit,exec(set_field:0x200000000/0x200000004->ct_label))
-table=1,priority=100,in_port=1,tcp,ct_state=+new,action=ct(commit,exec(set_field:0x5/0x5->ct_label)),2
-table=1,priority=100,in_port=1,tcp,ct_state=-new,action=2
-table=1,priority=100,in_port=2,ct_state=+trk,ct_label=0x200000001,tcp,action=1
+table=1,in_port=1,tcp,ct_state=+new,action=ct(commit,exec(set_field:0x5/0x5->ct_label)),2
+table=1,in_port=1,tcp,ct_state=-new,action=2
+table=1,in_port=2,ct_state=+trk,ct_label=0x200000001,tcp,action=1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
@@ -1295,9 +1281,9 @@ table=0,priority=10,arp,action=normal
 table=0,priority=10,icmp,action=normal
 table=0,priority=100,in_port=1,tcp,action=ct(zone=1,table=1)
 table=0,priority=100,in_port=2,ct_state=-trk,tcp,action=ct(zone=1,table=1,commit,exec(set_field:0x200000000/0x200000004->ct_label,set_field:0x2/0x6->ct_mark))
-table=1,priority=100,in_port=1,tcp,ct_state=+new,action=ct(zone=1,commit,exec(set_field:0x5/0x5->ct_label,set_field:0x5/0x5->ct_mark)),ct(commit,zone=2),2
-table=1,priority=100,in_port=1,tcp,ct_state=-new,action=ct(zone=2),2
-table=1,priority=100,in_port=2,tcp,action=ct(zone=2),1
+table=1,in_port=1,tcp,ct_state=+new,action=ct(zone=1,commit,exec(set_field:0x5/0x5->ct_label,set_field:0x5/0x5->ct_mark)),ct(commit,zone=2),2
+table=1,in_port=1,tcp,ct_state=-new,action=ct(zone=2),2
+table=1,in_port=2,tcp,action=ct(zone=2),1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
@@ -1405,27 +1391,31 @@ ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 
 dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
 AT_DATA([flows1.txt], [dnl
-priority=1,action=drop
-priority=10,arp,action=normal
-priority=10,icmp,action=normal
-priority=100,in_port=1,tcp,action=ct(alg=ftp,commit),2
-priority=100,in_port=2,tcp,ct_state=-trk,action=ct(table=0)
-priority=100,in_port=2,tcp,ct_state=+trk+est,action=1
-priority=100,in_port=2,tcp,ct_state=+trk+rel,action=1
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+table=0,priority=100,in_port=1,tcp,action=ct(alg=ftp,commit),2
+table=0,priority=100,in_port=2,tcp,action=ct(table=1)
+table=1,in_port=2,tcp,ct_state=+trk+est,action=1
+table=1,in_port=2,tcp,ct_state=+trk+rel,action=1
 ])
 
 dnl Similar policy but without allowing all traffic from ns0->ns1.
 AT_DATA([flows2.txt], [dnl
-priority=1,action=drop
-priority=10,arp,action=normal
-priority=10,icmp,action=normal
-priority=100,in_port=1,tcp,ct_state=-trk,action=ct(table=0)
-priority=100,in_port=1,tcp,ct_state=+trk+new,action=ct(commit,alg=ftp),2
-priority=100,in_port=1,tcp,ct_state=+trk+est,action=2
-priority=100,in_port=2,tcp,ct_state=-trk,action=ct(table=0)
-priority=100,in_port=2,tcp,ct_state=+trk+new+rel,action=ct(commit),1
-priority=100,in_port=2,tcp,ct_state=+trk+est,action=1
-priority=100,in_port=2,tcp,ct_state=+trk-new+rel,action=1
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+
+dnl Allow outgoing TCP connections, and treat them as FTP
+table=0,priority=100,in_port=1,tcp,action=ct(table=1)
+table=1,in_port=1,tcp,ct_state=+trk+new,action=ct(commit,alg=ftp),2
+table=1,in_port=1,tcp,ct_state=+trk+est,action=2
+
+dnl Allow incoming FTP data connections and responses to existing connections
+table=0,priority=100,in_port=2,tcp,action=ct(table=1)
+table=1,in_port=2,tcp,ct_state=+trk+new+rel,action=ct(commit),1
+table=1,in_port=2,tcp,ct_state=+trk+est,action=1
+table=1,in_port=2,tcp,ct_state=+trk-new+rel,action=1
 ])
 
 AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows1.txt])
@@ -1468,7 +1458,6 @@ AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 dnl Passive FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0-2.log])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
 ])
 
@@ -1544,19 +1533,23 @@ ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 
 dnl Dual-firewall, allow all from ns1->ns2, allow established and ftp ns2->ns1.
 AT_DATA([flows.txt], [dnl
-priority=1,action=drop
-priority=10,arp,action=normal
-priority=10,icmp,action=normal
-priority=100,in_port=1,tcp,ct_state=-trk,action=ct(table=0,zone=1)
-priority=100,in_port=1,tcp,ct_zone=1,ct_state=+trk+new,action=ct(commit,alg=ftp,zone=1),ct(commit,alg=ftp,zone=2),2
-priority=100,in_port=1,tcp,ct_zone=1,ct_state=+trk+est,action=ct(table=0,zone=2)
-priority=100,in_port=1,tcp,ct_zone=2,ct_state=+trk+new,action=ct(commit,alg=ftp,zone=2)
-priority=100,in_port=1,tcp,ct_zone=2,ct_state=+trk+est,action=2
-priority=100,in_port=2,tcp,ct_state=-trk,action=ct(table=0,zone=2)
-priority=100,in_port=2,tcp,ct_zone=2,ct_state=+trk+rel,action=ct(commit,zone=2),ct(commit,zone=1),1
-priority=100,in_port=2,tcp,ct_zone=2,ct_state=+trk+est,action=ct(table=0,zone=1)
-priority=100,in_port=2,tcp,ct_zone=1,ct_state=+trk+rel,action=ct(commit,zone=2),ct(commit,zone=1),1
-priority=100,in_port=2,tcp,ct_zone=1,ct_state=+trk+est,action=1
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+
+dnl Traffic from ns1
+table=0,priority=100,in_port=1,tcp,action=ct(table=1,zone=1)
+table=1,in_port=1,tcp,ct_zone=1,ct_state=+trk+new-rel,action=ct(commit,alg=ftp,zone=1),ct(commit,alg=ftp,zone=2),2
+table=1,in_port=1,tcp,ct_zone=1,ct_state=+trk+new+rel,action=ct(commit,zone=1),ct(commit,zone=2),2
+table=1,in_port=1,tcp,ct_zone=1,ct_state=+trk+est,action=ct(table=2,zone=2)
+table=2,in_port=1,tcp,ct_zone=2,ct_state=+trk+est,action=2
+
+dnl Traffic from ns2
+table=0,priority=100,in_port=2,tcp,action=ct(table=1,zone=2)
+table=1,in_port=2,tcp,ct_zone=2,ct_state=+trk+rel,action=ct(commit,zone=2),ct(commit,zone=1),1
+table=1,in_port=2,tcp,ct_zone=2,ct_state=+trk+est,action=ct(table=2,zone=1)
+table=2,in_port=2,tcp,ct_zone=1,ct_state=+trk+rel,action=ct(commit,zone=2),ct(commit,zone=1),1
+table=2,in_port=2,tcp,ct_zone=1,ct_state=+trk+est,action=1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
@@ -1613,11 +1606,6 @@ priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
-3 packets transmitted, 3 received, 0% packet loss, time 0ms
-])
-
 dnl Ipv4 fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
@@ -1653,11 +1641,6 @@ priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
-3 packets transmitted, 3 received, 0% packet loss, time 0ms
-])
-
 dnl Ipv4 fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 1 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 7 packets transmitted, 0 received, 100% packet loss, time 0ms
@@ -1687,11 +1670,6 @@ priority=100,in_port=2,ct_state=+trk+est-new,icmp,action=1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
-
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
-3 packets transmitted, 3 received, 0% packet loss, time 0ms
-])
 
 dnl Ipv4 fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
@@ -1731,11 +1709,6 @@ dnl Linux seems to take a little time to get its IPv6 stack in order. Without
 dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
-
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
-3 packets transmitted, 3 received, 0% packet loss, time 0ms
-])
 
 dnl Ipv6 fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
@@ -1780,11 +1753,6 @@ dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
-3 packets transmitted, 3 received, 0% packet loss, time 0ms
-])
-
 dnl Send an IPv6 fragment. Some time later, it should expire.
 NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 1 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
 7 packets transmitted, 0 received, 100% packet loss, time 0ms
@@ -1824,11 +1792,6 @@ dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
-dnl Basic connectivity check.
-NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PING], [0], [dnl
-3 packets transmitted, 3 received, 0% packet loss, time 0ms
-])
-
 dnl Ipv4 fragmentation connectivity check.
 NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00:1::4 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
@@ -1858,7 +1821,7 @@ priority=1,action=drop
 priority=10,arp,action=normal
 priority=100,in_port=1,icmp,action=ct(commit,zone=9),LOCAL
 priority=100,in_port=LOCAL,icmp,action=ct(table=1,zone=9)
-table=1,priority=100,in_port=LOCAL,ct_state=+trk+est,icmp,action=1
+table=1,in_port=LOCAL,ct_state=+trk+est,icmp,action=1
 ])
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
@@ -1908,7 +1871,7 @@ AT_DATA([flows.txt], [dnl
 priority=1,action=drop
 priority=100,in_port=1,ipv6,action=ct(commit,zone=9),LOCAL
 priority=100,in_port=LOCAL,ipv6,action=ct(table=1,zone=9)
-table=1,priority=100,in_port=LOCAL,ct_state=+trk+est,ipv6,action=1
+table=1,in_port=LOCAL,ct_state=+trk+est,ipv6,action=1
 
 dnl Neighbour Discovery
 priority=1000,icmp6,icmp_type=135,action=normal
@@ -1967,8 +1930,8 @@ AT_DATA([flows.txt], [dnl
 table=0,priority=150,arp,action=normal
 table=0,priority=100,ip,in_port=1,action=resubmit(,1),resubmit(,2)
 
-table=1,priority=100,ip,action=ct(table=3)
-table=2,priority=100,ip,action=ct(table=3)
+table=1,ip,action=ct(table=3)
+table=2,ip,action=ct(table=3)
 
 table=3,ip,action=drop
 ])
@@ -1982,8 +1945,8 @@ NS_CHECK_EXEC([at_ns0], [ping -q -c 1 10.1.1.2 | FORMAT_PING], [0], [dnl
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  n_packets=1, n_bytes=98, priority=100,ip,in_port=1 actions=resubmit(,1),resubmit(,2)
  n_packets=2, n_bytes=84, priority=150,arp actions=NORMAL
- table=1, n_packets=1, n_bytes=98, priority=100,ip actions=ct(table=3)
- table=2, n_packets=1, n_bytes=98, priority=100,ip actions=ct(table=3)
+ table=1, n_packets=1, n_bytes=98, ip actions=ct(table=3)
+ table=2, n_packets=1, n_bytes=98, ip actions=ct(table=3)
  table=3, n_packets=2, n_bytes=196, ip actions=drop
 NXST_FLOW reply:
 ])

@@ -24,7 +24,17 @@ static inline struct net_device *rpl_rtnl_create_link(struct net *net, const cha
 	return rtnl_create_link(net, (char *)ifname, ops, tb);
 }
 #endif
-#define rtnl_create_link rpl_rtnl_create_link
+#else
+/* This function is only defined to avoid warning related to ifname. Some backported
+ * function did not changed the name to const type. */
+static inline struct net_device *rpl_rtnl_create_link(struct net *net, const char *ifname,
+                                    unsigned char name_assign_type,
+                                    const struct rtnl_link_ops *ops,
+                                    struct nlattr *tb[])
+{
+	return rtnl_create_link(net, (char *) ifname, name_assign_type, ops, tb);
+}
 #endif
 
+#define rtnl_create_link rpl_rtnl_create_link
 #endif

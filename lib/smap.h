@@ -17,7 +17,7 @@
 
 #include <netinet/in.h>
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 
 struct json;
 struct uuid;

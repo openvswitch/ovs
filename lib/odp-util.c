@@ -2593,6 +2593,8 @@ format_odp_tun_attr(const struct nlattr *attr, const struct nlattr *mask_attr,
             format_odp_tun_geneve(a, ma, ds, verbose);
             ds_put_cstr(ds, "),");
             break;
+        case OVS_TUNNEL_KEY_ATTR_PAD:
+            break;
         case __OVS_TUNNEL_KEY_ATTR_MAX:
         default:
             format_unknown_key(ds, a, ma);
@@ -2991,6 +2993,12 @@ format_u128(struct ds *ds, const ovs_u128 *key, const ovs_u128 *mask,
     }
 }
 
+/* Read the string from 's_' as a 128-bit value.  If the string contains
+ * a "/", the rest of the string will be treated as a 128-bit mask.
+ *
+ * If either the value or mask is larger than 64 bits, the string must
+ * be in hexadecimal.
+ */
 static int
 scan_u128(const char *s_, ovs_u128 *value, ovs_u128 *mask)
 {
@@ -4420,9 +4428,7 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
             icmpv6_key->icmpv6_type = ntohs(data->tp_src);
             icmpv6_key->icmpv6_code = ntohs(data->tp_dst);
 
-            if (flow->tp_dst == htons(0)
-                && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)
-                    || flow->tp_src == htons(ND_NEIGHBOR_ADVERT))
+            if (is_nd(flow, NULL)
                 /* Even though 'tp_src' and 'tp_dst' are 16 bits wide, ICMP
                  * type and code are 8 bits wide.  Therefore, an exact match
                  * looks like htons(0xff), not htons(0xffff).  See
@@ -4957,9 +4963,7 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             flow->tp_src = htons(icmpv6_key->icmpv6_type);
             flow->tp_dst = htons(icmpv6_key->icmpv6_code);
             expected_bit = OVS_KEY_ATTR_ICMPV6;
-            if (src_flow->tp_dst == htons(0) &&
-                (src_flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
-                 src_flow->tp_src == htons(ND_NEIGHBOR_ADVERT))) {
+            if (is_nd(src_flow, NULL)) {
                 if (!is_mask) {
                     expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ND;
                 }

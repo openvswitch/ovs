@@ -125,12 +125,6 @@ large.
     (Neutron) where a port will be located, as opposed to the networking
     component discovering it.
 
-** Gratuitous ARP generation
-
-   ovn-controller should generate a GARP when a port is bound to a chassis.
-   This is needed when ports are migrated from one chassis to another, such
-   as live migrating a VM.
-
 * ovsdb-server
 
   ovsdb-server should have adequate features for OVN but it probably
@@ -241,3 +235,9 @@ large.
 ** Support reject action.
 
 ** Support log option.
+
+** We currently use ct_label[0] to mark connections that have been blocked
+   by an ACL.  It would be nice in the logical flow syntax to have a
+   symbolic name like "ct_label.blocked" to make things more clear, as
+   well as to change the implementation of "blocked" in the future
+   if needed.

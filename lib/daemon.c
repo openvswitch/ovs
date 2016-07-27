@@ -29,6 +29,13 @@ VLOG_DEFINE_THIS_MODULE(daemon);
  * /dev/null (if false) or keep it for the daemon to use (if true). */
 static bool save_fds[3];
 
+/* Self Confinement is a security feature that introduces additional
+ * layer of defense where OVS in self-denying manner would refuse to connect
+ * to or create unix domain sockets outside designated 'run' directory even
+ * if remote (or local) OVSDB manager asked it to do so.  This feature may
+ * be disabled if Mandatory Access Control is used. */
+static bool self_confine = true;
+
 /* Will daemonize() really detach? */
 bool
 get_detach(void)
@@ -57,6 +64,21 @@ set_pidfile(const char *name)
     assert_single_threaded();
     free(pidfile);
     pidfile = make_pidfile_name(name);
+}
+
+/* Disables self confinement. */
+void
+daemon_disable_self_confinement(void)
+{
+    self_confine = false;
+}
+
+/* Returns true, if self-confinement should be enforced.
+ * Otherwise, returns false. */
+bool
+daemon_should_self_confine(void)
+{
+    return self_confine;
 }
 
 /* A daemon doesn't normally have any use for the file descriptors for stdin,

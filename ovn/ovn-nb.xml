@@ -85,7 +85,12 @@
         Logical chains cannot currently cross logical switch boundaries.
       </p>
     </column>
-   
+  
+    <column name="load_balancer">
+      Load balance a virtual ipv4 address to a set of logical port endpoint
+      ipv4 addresses.
+    </column>
+
     <column name="acls">
       Access control rules that apply to packets within the logical switch.
     </column>
@@ -304,6 +309,11 @@
             to model direct connectivity to an existing network.
           </dd>
 
+          <dt><code>l2gateway</code></dt>
+          <dd>
+            A connection to a physical network.
+          </dd>
+
           <dt><code>vtep</code></dt>
           <dd>
             A port to a logical switch on a VTEP gateway.
@@ -343,6 +353,27 @@
           uses its local configuration to determine exactly how to connect to
           this locally accessible network.
         </column>
+      </group>
+
+      <group title="Options for l2gateway ports">
+        <p>
+          These options apply when <ref column="type"/> is
+          <code>l2gateway</code>.
+        </p>
+
+        <column name="options" key="network_name">
+          Required.  The name of the network to which the <code>l2gateway</code>
+          port is connected.  The L2 gateway, via <code>ovn-controller</code>,
+          uses its local configuration to determine exactly how to connect to
+          this network.
+        </column>
+
+        <column name="options" key="l2gateway-chassis">
+          Required. The chassis on which the <code>l2gateway</code> logical
+          port should be bound to. <code>ovn-controller</code> running on the
+          defined chassis will connect this logical port to the physical network.
+        </column>
+
       </group>
 
       <group title="Options for vtep ports">
@@ -648,6 +679,90 @@
     </group>
 
     <group title="Common Columns">
+      <column name="dhcpv4_options">
+        This column defines the DHCPv4 Options to be included by the
+        <code>ovn-controller</code> when it replies to the DHCPv4 requests.
+        Please see the <ref table="DHCP_Options"/> table.
+      </column>
+
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="Address_Set" title="Address Sets">
+    <p>
+      Each row in this table represents a named set of addresses.
+      An address set may contain Ethernet, IPv4, or IPv6 addresses
+      with optional bitwise or CIDR masks.
+      Address set may ultimately be used in ACLs to compare against
+      fields such as <code>ip4.src</code> or <code>ip6.src</code>.
+      A single address set must contain addresses of the
+      same type. As an example, the following would create an address set
+      with three IP addresses:
+    </p>
+
+    <pre>
+      ovn-nbctl create Address_Set name=set1 addresses='10.0.0.1 10.0.0.2 10.0.0.3'
+    </pre>
+
+    <p>
+      Address sets may be used in the <ref column="match" table="ACL"/> column
+      of the <ref table="ACL"/> table.  For syntax information, see the details
+      of the expression language used for the <ref column="match"
+      table="Logical_Flow" db="OVN_Southbound"/> column in the <ref
+      table="Logical_Flow" db="OVN_Southbound"/> table of the <ref
+      db="OVN_Southbound"/> database.
+    </p>
+
+    <column name="name">
+      A name for the address set.  This must be unique among all address sets.
+    </column>
+
+    <column name="addresses">
+      The set of addresses in string form.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="Load_Balancer" title="load balancer">
+    <p>
+      Each row represents one load balancer.
+    </p>
+
+    <column name="vips">
+      <p>
+        A map of virtual IPv4 addresses (and an optional port number with
+        <code>:</code> as a separator) associated with this load balancer and
+        their corresponding endpoint IPv4 addresses (and optional port numbers
+        with <code>:</code> as separators) separated by commas.  If
+        the destination IP address (and port number) of a packet leaving a
+        container or a VM matches the virtual IPv4 address (and port number)
+        provided here as a key, then OVN will statefully replace the
+        destination IP address by one of the provided IPv4 address (and port
+        number) in this map as a value.  Examples for keys are "192.168.1.4"
+        and "172.16.1.8:80".  Examples for value are "10.0.0.1, 10.0.0.2" and
+        "20.0.0.10:8800, 20.0.0.11:8800".
+      </p>
+    </column>
+
+    <column name="protocol">
+      <p>
+        Valid protocols are <code>tcp</code> or <code>udp</code>.  This column
+        is useful when a port number is provided as part of the
+        <code>vips</code> column.  If this column is empty and a port number
+        is provided as part of <code>vips</code> column, OVN assumes the
+        protocol to be <code>tcp</code>.
+      </p>
+    </column>
+
+    <group title="Common Columns">
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.
       </column>
@@ -790,10 +905,6 @@
       One or more static routes for the router.
     </column>
 
-    <column name="default_gw">
-      IP address to use as default gateway, if any.
-    </column>
-
     <column name="enabled">
       This column is used to administratively set router state.  If this column
       is empty or is set to <code>true</code>, the router is enabled.  If this
@@ -828,7 +939,7 @@
         </p>
       </column>
     </group>
-    
+
     <group title="Common Columns">
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.
@@ -859,11 +970,13 @@
       </p>
     </column>
 
-    <column name="network">
-      The IP address of the router and the netmask.  For example,
-      <code>192.168.0.1/24</code> indicates that the router's IP address is
-      192.168.0.1 and that packets destined to 192.168.0.<var>x</var> should be
-      routed to this port.
+    <column name="networks">
+      <p>
+        The IP addresses and netmasks of the router.  For example,
+        <code>192.168.0.1/24</code> indicates that the router's IP
+        address is 192.168.0.1 and that packets destined to
+        192.168.0.<var>x</var> should be routed to this port.
+      </p>
     </column>
 
     <column name="mac">
@@ -989,4 +1102,230 @@
     </column>
   </table>
 
+  <table name="DHCP_Options" title="DHCP options">
+    <p>
+      OVN implements a native DHCPv4 support which caters to the common
+      use case of providing an IPv4 address to a booting instance by
+      providing stateless replies to DHCPv4 requests based on statically
+      configured address mappings. To do this it allows a short list of
+      DHCPv4 options to be configured and applied at each compute host
+      running ovn-controller.
+    </p>
+
+    <column name="cidr">
+      <p>
+        The DHCPv4 options will be included if the logical port has the IPv4
+        address in this <ref column="cidr"/>.
+      </p>
+    </column>
+
+    <group title="DHCPv4 options">
+      <p>
+        CMS should define the set of DHCPv4 options as key/value pairs in the
+        <ref column="options"/> column of this table. For
+        <code>ovn-controller</code> to include these DHCPv4 options, the
+        <ref column="dhcpv4_options"/> of <ref table="Logical_Switch_Port"/>
+        should refer to an entry in this table.
+      </p>
+
+      <group title="Mandatory DHCPv4 options">
+        <p>
+          The following options must be defined.
+        </p>
+
+        <column name="options" key="server_id">
+          The IP address for the DHCP server to use.  This should be in the
+          subnet of the offered IP.  This is also included in the DHCP offer as
+          option 54, ``server identifier.''
+        </column>
+
+        <column name="options" key="server_mac">
+          The Ethernet address for the DHCP server to use.
+        </column>
+
+        <column name="options" key="router">
+          <p>
+            The IP address of a gateway for the client to use.  This should be
+            in the subnet of the offered IP.  The DHCPv4 option code for this
+            option is 3.
+          </p>
+        </column>
+
+        <column name="options" key="lease_time"
+                type='{"type": "integer", "minInteger": 0, "maxInteger": 4294967295}'>
+          <p>
+            The offered lease time in seconds, 
+          </p>
+
+          <p>
+            The DHCPv4 option code for this option is 51.
+          </p>
+        </column>
+      </group>
+
+      <group title="IPv4 DHCP Options">
+        <p>
+          Below are the supported DHCPv4 options whose values are an IPv4
+          address, e.g. <code>192.168.1.1</code>.  Some options accept multiple
+          IPv4 addresses enclosed within curly braces, e.g. <code>{192.168.1.2,
+          192.168.1.3}</code>. Please refer to RFC 2132 for more details on
+          DHCPv4 options and their codes.
+        </p>
+
+        <column name="options" key="netmask">
+          <p>
+            The DHCPv4 option code for this option is 1.
+          </p>
+        </column>
+
+        <column name="options" key="dns_server">
+          <p>
+            The DHCPv4 option code for this option is 6.
+          </p>
+        </column>
+
+        <column name="options" key="log_server">
+          <p>
+            The DHCPv4 option code for this option is 7.
+          </p>
+        </column>
+
+        <column name="options" key="lpr_server">
+          <p>
+            The DHCPv4 option code for this option is 9.
+          </p>
+        </column>
+
+        <column name="options" key="swap_server">
+          <p>
+            The DHCPv4 option code for this option is 16.
+          </p>
+        </column>
+
+        <column name="options" key="policy_filter">
+          <p>
+            The DHCPv4 option code for this option is 21.
+          </p>
+        </column>
+
+        <column name="options" key="router_solicitation">
+          <p>
+            The DHCPv4 option code for this option is 32.
+          </p>
+        </column>
+
+        <column name="options" key="nis_server">
+          <p>
+            The DHCPv4 option code for this option is 41.
+          </p>
+        </column>
+
+        <column name="options" key="ntp_server">
+          <p>
+            The DHCPv4 option code for this option is 42.
+          </p>
+        </column>
+
+        <column name="options" key="tftp_server">
+          <p>
+            The DHCPv4 option code for this option is 66.
+          </p>
+        </column>
+
+        <column name="options" key="classless_static_route">
+          <p>
+            The DHCPv4 option code for this option is 121.
+          </p>
+
+          <p>
+             This option can contain one or more static routes, each of which
+             consists of a destination descriptor and the IP address of the
+             router that should be used to reach that destination. Please see
+             RFC 3442 for more details.
+          </p>
+
+          <p>
+            Example: <code>{30.0.0.0/24,10.0.0.10, 0.0.0.0/0,10.0.0.1}</code>
+          </p>
+        </column>
+
+        <column name="options" key="ms_classless_static_route">
+          <p>
+            The DHCPv4 option code for this option is 249. This option is
+            similar to <code>classless_static_route</code> supported by
+            Microsoft Windows DHCPv4 clients.
+          </p>
+        </column>
+      </group>
+
+      <group title="Boolean DHCP Options">
+        <p>
+          These options accept a Boolean value, expressed as <code>0</code> for
+          false or <code>1</code> for true.
+        </p>
+
+        <column name="options" key="ip_forward_enable"
+                type='{"type": "string", "enum": ["set", ["0", "1"]]}'>
+          <p>
+            The DHCPv4 option code for this option is 19.
+          </p>
+        </column>
+
+        <column name="options" key="router_discovery"
+                type='{"type": "string", "enum": ["set", ["0", "1"]]}'>
+          <p>
+            The DHCPv4 option code for this option is 31.
+          </p>
+        </column>
+
+        <column name="options" key="ethernet_encap"
+                type='{"type": "string", "enum": ["set", ["0", "1"]]}'>
+          <p>
+            The DHCPv4 option code for this option is 36.
+          </p>
+        </column>
+      </group>
+
+      <group title="Integer DHCP Options">
+        <p>
+          These options accept a nonnegative integer value.
+        </p>
+
+        <column name="options" key="default_ttl"
+                type='{"type": "integer", "minInteger": 0, "maxInteger": 255}'>
+          The DHCPv4 option code for this option is 23.
+        </column>
+
+        <column name="options" key="tcp_ttl"
+                type='{"type": "integer", "minInteger": 0, "maxInteger": 255}'>
+          The DHCPv4 option code for this option is 37.
+        </column>
+
+        <column name="options" key="mtu"
+                type='{"type": "integer", "minInteger": 68, "maxInteger": 65535}'>
+          The DHCPv4 option code for this option is 26.
+        </column>
+
+        <column name="options" key="T1"
+                type='{"type": "integer", "minInteger": 68, "maxInteger": 4294967295}'>
+          This specifies the time interval from address assignment until the
+          client begins trying to renew its address.  The DHCPv4 option code
+          for this option is 58.
+        </column>
+
+        <column name="options" key="T2"
+                type='{"type": "integer", "minInteger": 68, "maxInteger": 4294967295}'>
+          This specifies the time interval from address assignment until the
+          client begins trying to rebind its address.  The DHCPv4 option code
+          for this option is 59.
+        </column>
+      </group>
+    </group>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
 </database>

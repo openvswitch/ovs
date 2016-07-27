@@ -44,7 +44,6 @@ typedef struct _OvsLayers {
     UINT32 l7Ofs;             // L4 protocol's payload.
 } OvsLayers;
 
-extern UINT64 ovsUserTimestampDelta;
 extern UINT64 ovsTimeIncrementPerTick;
 
 NDIS_STATUS OvsDeleteFlowTable(OVS_DATAPATH *datapath);

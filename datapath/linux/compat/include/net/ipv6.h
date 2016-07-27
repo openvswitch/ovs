@@ -9,12 +9,6 @@
 #define NEXTHDR_SCTP    132 /* Stream Control Transport Protocol */
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,3,0)
-#define ipv6_skip_exthdr rpl_ipv6_skip_exthdr
-extern int rpl_ipv6_skip_exthdr(const struct sk_buff *skb, int start,
-			        u8 *nexthdrp, __be16 *frag_offp);
-#endif
-
 #ifndef HAVE_IP6_FH_F_SKIP_RH
 
 enum {
@@ -53,5 +47,28 @@ static inline u32 __ipv6_addr_jhash(const struct in6_addr *a, const u32 unused)
        return ipv6_addr_jhash(a);
 }
 #endif
+
+#define ip6_flowlabel rpl_ip6_flowlabel
+static inline __be32 ip6_flowlabel(const struct ipv6hdr *hdr)
+{
+	return *(__be32 *)hdr & IPV6_FLOWLABEL_MASK;
+}
+
+#ifndef IPV6_TCLASS_SHIFT
+#define IPV6_TCLASS_MASK (IPV6_FLOWINFO_MASK & ~IPV6_FLOWLABEL_MASK)
+#define IPV6_TCLASS_SHIFT	20
+#endif
+
+#define ip6_tclass rpl_ip6_tclass
+static inline u8 ip6_tclass(__be32 flowinfo)
+{
+	return ntohl(flowinfo & IPV6_TCLASS_MASK) >> IPV6_TCLASS_SHIFT;
+}
+
+#define ip6_make_flowinfo rpl_ip6_make_flowinfo
+static inline __be32 ip6_make_flowinfo(unsigned int tclass, __be32 flowlabel)
+{
+	return htonl(tclass << IPV6_TCLASS_SHIFT) | flowlabel;
+}
 
 #endif

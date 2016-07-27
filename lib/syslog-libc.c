@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -64,7 +64,7 @@ syslog_libc_open(struct syslogger *this OVS_UNUSED, int facility)
      * 'program_name', so make a private copy just for openlog().  (We keep
      * a pointer to the private copy to suppress memory leak warnings in
      * case openlog() does make its own copy.) */
-    ident = program_name ? xstrdup(program_name) : NULL;
+    ident = nullable_xstrdup(program_name);
 
     openlog(ident, LOG_NDELAY, facility);
 }

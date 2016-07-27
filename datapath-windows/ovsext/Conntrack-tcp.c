@@ -128,27 +128,22 @@ enum ct_dpif_tcp_state {
 /* pf does this in in pf_normalize_tcp(), and it is called only if scrub
  * is enabled.  We're not scrubbing, but this check seems reasonable.  */
 static __inline BOOLEAN
-OvsConntrackValidateTcpFlags(const TCPHdr *tcp)
+OvsCtInvalidTcpFlags(uint16_t flags)
 {
-    if (tcp->syn) {
-        if (tcp->rst) {
-            return TRUE;
-        }
-        if (tcp->fin) {
-            /* Here pf removes the fin flag.  We simply mark the packet as
-             * invalid */
+    if (flags & TCP_SYN) {
+        if (flags & TCP_RST || flags & TCP_FIN) {
             return TRUE;
         }
     } else {
         /* Illegal packet */
-        if (!(tcp->ack || tcp->rst)) {
+        if (!(flags & (TCP_ACK|TCP_RST))) {
             return TRUE;
         }
     }
 
-    if (!(tcp->ack)) {
+    if (!(flags & TCP_ACK)) {
         /* These flags are only valid if ACK is set */
-        if ((tcp->fin) || (tcp->psh) || (tcp->urg)) {
+        if ((flags & TCP_FIN) || (flags & TCP_PSH) || (flags & TCP_URG)) {
             return TRUE;
         }
     }
@@ -165,10 +160,9 @@ OvsTcpGetWscale(const TCPHdr *tcp)
     uint8_t optlen;
 
     while (len >= 3) {
-        if (*opt == TCPOPT_EOL) {
-            break;
-        }
         switch (*opt) {
+        case TCPOPT_EOL:
+            return wscale;
         case TCPOPT_NOP:
             opt++;
             len--;
@@ -232,31 +226,33 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
     /* The peer that should receive 'pkt' */
     struct tcp_peer *dst = &conn->peer[reply ? 0 : 1];
     uint8_t sws = 0, dws = 0;
+    UINT16 tcp_flags = tcp->flags;
     uint16_t win = ntohs(tcp->window);
     uint32_t ack, end, seq, orig_seq;
     uint32_t p_len = OvsGetTcpPayloadLength(nbl);
     int ackskew;
 
-    if (OvsConntrackValidateTcpFlags(tcp)) {
+    if (OvsCtInvalidTcpFlags(tcp->flags)) {
         return CT_UPDATE_INVALID;
     }
 
-    if ((tcp->syn) && dst->state >= CT_DPIF_TCPS_FIN_WAIT_2 &&
-            src->state >= CT_DPIF_TCPS_FIN_WAIT_2) {
+    if (((tcp_flags & (TCP_SYN|TCP_ACK)) == TCP_SYN)
+            && dst->state >= CT_DPIF_TCPS_FIN_WAIT_2
+            && src->state >= CT_DPIF_TCPS_FIN_WAIT_2) {
         src->state = dst->state = CT_DPIF_TCPS_CLOSED;
         return CT_UPDATE_NEW;
     }
 
     if (src->wscale & CT_WSCALE_FLAG
         && dst->wscale & CT_WSCALE_FLAG
-        && !(tcp->syn)) {
+        && !(tcp_flags & TCP_SYN)) {
 
         sws = src->wscale & CT_WSCALE_MASK;
         dws = dst->wscale & CT_WSCALE_MASK;
 
     } else if (src->wscale & CT_WSCALE_UNKNOWN
         && dst->wscale & CT_WSCALE_UNKNOWN
-        && !(tcp->syn)) {
+        && !(tcp_flags & TCP_SYN)) {
 
         sws = TCP_MAX_WSCALE;
         dws = TCP_MAX_WSCALE;
@@ -275,7 +271,7 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
         ack = ntohl(tcp->ack);
 
         end = seq + p_len;
-        if (tcp->syn) {
+        if (tcp_flags & TCP_SYN) {
             end++;
             if (dst->wscale & CT_WSCALE_FLAG) {
                 src->wscale = OvsTcpGetWscale(tcp);
@@ -286,14 +282,13 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
                     dws = dst->wscale & CT_WSCALE_MASK;
                 } else {
                     /* fixup other window */
-                    dst->max_win <<= dst->wscale &
-                        CT_WSCALE_MASK;
+                    dst->max_win <<= dst->wscale & CT_WSCALE_MASK;
                     /* in case of a retrans SYN|ACK */
                     dst->wscale = 0;
                 }
             }
         }
-        if (tcp->fin) {
+        if (tcp_flags & TCP_FIN) {
             end++;
         }
 
@@ -305,8 +300,7 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
          * after establishment)
          */
         if (src->seqhi == 1 ||
-                SEQ_GEQ(end + MAX(1, dst->max_win << dws),
-                        src->seqhi)) {
+                SEQ_GEQ(end + MAX(1, dst->max_win << dws), src->seqhi)) {
             src->seqhi = end + MAX(1, dst->max_win << dws);
         }
         if (win > src->max_win) {
@@ -316,19 +310,19 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
     } else {
         ack = ntohl(tcp->ack);
         end = seq + p_len;
-        if (tcp->syn) {
+        if (tcp_flags & TCP_SYN) {
             end++;
         }
-        if (tcp->fin) {
+        if (tcp_flags & TCP_FIN) {
             end++;
         }
     }
 
-    if ((tcp->ack) == 0) {
+    if ((tcp_flags & TCP_ACK) == 0) {
         /* Let it pass through the ack skew check */
         ack = dst->seqlo;
     } else if ((ack == 0
-                && (tcp->ack && tcp->rst) == (TCP_ACK|TCP_RST))
+                && (tcp_flags & (TCP_ACK|TCP_RST)) == (TCP_ACK|TCP_RST))
                /* broken tcp stacks do not set ack */) {
         /* Many stacks (ours included) will set the ACK number in an
          * FIN|ACK if the SYN times out -- no sequence to ACK. */
@@ -351,7 +345,7 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
         /* Acking not more than one reassembled fragment backwards */
         && (ackskew <= (MAXACKWINDOW << sws))
         /* Acking not more than one window forward */
-        && ((tcp->rst) == 0 || orig_seq == src->seqlo
+        && ((tcp_flags & TCP_RST) == 0 || orig_seq == src->seqlo
             || (orig_seq == src->seqlo + 1)
             || (orig_seq + 1 == src->seqlo))) {
         /* Require an exact/+1 sequence match on resets when possible */
@@ -370,20 +364,20 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
         }
 
         /* update states */
-        if (tcp->syn && src->state < CT_DPIF_TCPS_SYN_SENT) {
+        if (tcp_flags & TCP_SYN && src->state < CT_DPIF_TCPS_SYN_SENT) {
                 src->state = CT_DPIF_TCPS_SYN_SENT;
         }
-        if (tcp->fin && src->state < CT_DPIF_TCPS_CLOSING) {
+        if (tcp_flags & TCP_FIN && src->state < CT_DPIF_TCPS_CLOSING) {
                 src->state = CT_DPIF_TCPS_CLOSING;
         }
-        if (tcp->ack) {
+        if (tcp_flags & TCP_ACK) {
             if (dst->state == CT_DPIF_TCPS_SYN_SENT) {
                 dst->state = CT_DPIF_TCPS_ESTABLISHED;
             } else if (dst->state == CT_DPIF_TCPS_CLOSING) {
                 dst->state = CT_DPIF_TCPS_FIN_WAIT_2;
             }
         }
-        if (tcp->rst) {
+        if (tcp_flags & TCP_RST) {
             src->state = dst->state = CT_DPIF_TCPS_TIME_WAIT;
         }
 
@@ -449,11 +443,11 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
          * SYN and not an already established connection.
          */
 
-        if (tcp->fin && src->state < CT_DPIF_TCPS_CLOSING) {
+        if (tcp_flags & TCP_FIN && src->state < CT_DPIF_TCPS_CLOSING) {
             src->state = CT_DPIF_TCPS_CLOSING;
         }
 
-        if (tcp->rst) {
+        if (tcp_flags & TCP_RST) {
             src->state = dst->state = CT_DPIF_TCPS_TIME_WAIT;
         }
     } else {
@@ -466,14 +460,14 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
 BOOLEAN
 OvsConntrackValidateTcpPacket(const TCPHdr *tcp)
 {
-    if (tcp == NULL || OvsConntrackValidateTcpFlags(tcp)) {
+    if (tcp == NULL || OvsCtInvalidTcpFlags(tcp->flags)) {
         return FALSE;
     }
 
     /* A syn+ack is not allowed to create a connection.  We want to allow
      * totally new connections (syn) or already established, not partially
      * open (syn+ack). */
-    if ((tcp->syn) && (tcp->ack)) {
+    if ((tcp->flags & TCP_SYN) && (tcp->flags & TCP_ACK)) {
         return FALSE;
     }
 
@@ -485,11 +479,15 @@ OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
                            PNET_BUFFER_LIST nbl,
                            UINT64 now)
 {
-    struct conn_tcp* newconn = NULL;
+    struct conn_tcp* newconn;
     struct tcp_peer *src, *dst;
 
     newconn = OvsAllocateMemoryWithTag(sizeof(struct conn_tcp),
                                        OVS_CT_POOL_TAG);
+    if (!newconn) {
+        return NULL;
+    }
+
     newconn->up = (OVS_CT_ENTRY) {0};
     src = &newconn->peer[0];
     dst = &newconn->peer[1];
@@ -497,7 +495,7 @@ OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
     src->seqlo = ntohl(tcp->seq);
     src->seqhi = src->seqlo + OvsGetTcpPayloadLength(nbl) + 1;
 
-    if (tcp->syn) {
+    if (tcp->flags & TCP_SYN) {
         src->seqhi++;
         src->wscale = OvsTcpGetWscale(tcp);
     } else {
@@ -508,10 +506,9 @@ OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
     if (src->wscale & CT_WSCALE_MASK) {
         /* Remove scale factor from initial window */
         uint8_t sws = src->wscale & CT_WSCALE_MASK;
-        src->max_win = DIV_ROUND_UP((uint32_t) src->max_win,
-                                    1 << sws);
+        src->max_win = DIV_ROUND_UP((uint32_t) src->max_win, 1 << sws);
     }
-    if (tcp->fin) {
+    if (tcp->flags & TCP_FIN) {
         src->seqhi++;
     }
     dst->seqhi = 1;
@@ -522,4 +519,63 @@ OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
     OvsConntrackUpdateExpiration(newconn, now, CT_ENTRY_TIMEOUT);
 
     return &newconn->up;
+}
+
+static __inline uint8_t
+OvsCtTcpPeerToProtoInfoFlags(const struct tcp_peer *peer)
+{
+    uint8_t res = 0;
+
+    if (peer->wscale & CT_WSCALE_FLAG) {
+        res |= CT_DPIF_TCPF_WINDOW_SCALE;
+    }
+
+    if (peer->wscale & CT_WSCALE_UNKNOWN) {
+        res |= CT_DPIF_TCPF_BE_LIBERAL;
+    }
+
+    return res;
+}
+
+NDIS_STATUS
+OvsCtMapTcpProtoInfoToNl(PNL_BUFFER nlBuf, OVS_CT_ENTRY *conn_)
+{
+    struct conn_tcp *conn = OvsCastConntrackEntryToTcpEntry(conn_);
+    NDIS_STATUS status = NDIS_STATUS_SUCCESS;
+    UINT32 offset = 0;
+
+    offset = NlMsgStartNested(nlBuf, CTA_PROTOINFO_TCP);
+    if (!offset) {
+        return NDIS_STATUS_FAILURE;
+    }
+
+    if (!NlMsgPutTailU8(nlBuf, CTA_PROTOINFO_TCP_STATE,
+                        conn->peer[0].state)) {
+        status = NDIS_STATUS_FAILURE;
+        goto done;
+    }
+    if (!NlMsgPutTailU8(nlBuf, CTA_PROTOINFO_TCP_WSCALE_ORIGINAL,
+                        (conn->peer[0].wscale & CT_WSCALE_MASK))) {
+        status = NDIS_STATUS_FAILURE;
+        goto done;
+    }
+    if (!NlMsgPutTailU8(nlBuf, CTA_PROTOINFO_TCP_WSCALE_REPLY,
+                        (conn->peer[1].wscale & CT_WSCALE_MASK))) {
+        status = NDIS_STATUS_FAILURE;
+        goto done;
+    }
+    if (!NlMsgPutTailU16(nlBuf, CTA_PROTOINFO_TCP_FLAGS_ORIGINAL,
+                         OvsCtTcpPeerToProtoInfoFlags(&conn->peer[0]))) {
+        status = NDIS_STATUS_FAILURE;
+        goto done;
+    }
+    if (!NlMsgPutTailU16(nlBuf, CTA_PROTOINFO_TCP_FLAGS_REPLY,
+                         OvsCtTcpPeerToProtoInfoFlags(&conn->peer[1]))) {
+        status = NDIS_STATUS_FAILURE;
+        goto done;
+    }
+
+done:
+    NlMsgEndNested(nlBuf, offset);
+    return status;
 }

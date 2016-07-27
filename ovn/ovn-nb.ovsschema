@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "3.2.0",
-    "cksum": "2612981904 11137",
+    "version": "5.2.0",
+    "cksum": "3383669132 13298",
     "tables": {
         "Logical_Switch": {
             "columns": {
@@ -26,6 +26,11 @@
                                           "refType": "strong"},
                                   "min": 0,
                                   "max": "unlimited"}},
+                "load_balancer": {"type": {"key": {"type": "uuid",
+                                                  "refTable": "Load_Balancer",
+                                                  "refType": "strong"},
+                                           "min": 0,
+                                           "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
@@ -53,6 +58,11 @@
                                            "max": "unlimited"}},
                 "up": {"type": {"key": "boolean", "min": 0, "max": 1}},
                 "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},
+                "dhcpv4_options": {"type": {"key": {"type": "uuid",
+                                            "refTable": "DHCP_Options",
+                                            "refType": "weak"},
+                                 "min": 0,
+                                 "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
@@ -137,6 +147,30 @@
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
             "isRoot": false},
+        "Address_Set": {
+            "columns": {
+                "name": {"type": "string"},
+                "addresses": {"type": {"key": "string",
+                                       "min": 0,
+                                       "max": "unlimited"}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "indexes": [["name"]],
+            "isRoot": true},
+        "Load_Balancer": {
+            "columns": {
+                "vips": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}},
+                "protocol": {
+                    "type": {"key": {"type": "string",
+                             "enum": ["set", ["tcp", "udp"]]},
+                             "min": 0, "max": 1}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "isRoot": true},
         "ACL": {
             "columns": {
                 "priority": {"type": {"key": {"type": "integer",
@@ -165,7 +199,6 @@
                                             "refType": "strong"},
                                    "min": 0,
                                    "max": "unlimited"}},
-                "default_gw": {"type": {"key": "string", "min": 0, "max": 1}},
                 "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},
                 "nat": {"type": {"key": {"type": "uuid",
                                          "refTable": "NAT",
@@ -184,7 +217,9 @@
         "Logical_Router_Port": {
             "columns": {
                 "name": {"type": "string"},
-                "network": {"type": "string"},
+                "networks": {"type": {"key": "string",
+                                      "min": 1,
+                                      "max": "unlimited"}},
                 "mac": {"type": "string"},
                 "peer": {"type": {"key": "string", "min": 0, "max": 1}},
                 "enabled": {"type": {"key": "boolean", "min": 0, "max": 1}},
@@ -208,6 +243,15 @@
                                                              "snat",
                                                              "dnat_and_snat"
                                                                ]]}}}},
-            "isRoot": false}
+            "isRoot": false},
+        "DHCP_Options": {
+            "columns": {
+                "cidr": {"type": "string"},
+                "options": {"type": {"key": "string", "value": "string",
+                                     "min": 0, "max": "unlimited"}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "isRoot": true}
     }
 }

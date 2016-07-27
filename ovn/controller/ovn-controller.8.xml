@@ -184,16 +184,39 @@
           The presence of this key identifies a patch port as one created by
           <code>ovn-controller</code> to connect the integration bridge and
           another bridge to implement a <code>localnet</code> logical port.
-          Its value is the name of the logical port with type=localnet that
-          the port implements.
-          See <code>external_ids:ovn-bridge-mappings</code>, above,
-          for more information.
+          Its value is the name of the logical port with <code>type</code>
+          set to <code>localnet</code> that the port implements. See
+          <code>external_ids:ovn-bridge-mappings</code>, above, for more
+          information.
         </p>
 
         <p>
           Each <code>localnet</code> logical port is implemented as a pair of
           patch ports, one in the integration bridge, one in a different
           bridge, with the same <code>external-ids:ovn-localnet-port</code>
+          value.
+        </p>
+      </dd>
+
+      <dt>
+        <code>external-ids:ovn-l2gateway-port</code> in the <code>Port</code>
+        table
+      </dt>
+      <dd>
+        <p>
+          The presence of this key identifies a patch port as one created by
+          <code>ovn-controller</code> to connect the integration bridge and
+          another bridge to implement a <code>l2gateway</code> logical port.
+          Its value is the name of the logical port with <code>type</code>
+          set to <code>l3gateway</code> that the port implements. See
+          <code>external_ids:ovn-bridge-mappings</code>, above, for more
+          information.
+        </p>
+
+        <p>
+          Each <code>l2gateway</code> logical port is implemented as a pair
+          of patch ports, one in the integration bridge, one in a different
+          bridge, with the same <code>external-ids:ovn-l2gateway-port</code>
           value.
         </p>
       </dd>

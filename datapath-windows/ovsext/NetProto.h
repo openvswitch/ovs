@@ -339,16 +339,21 @@ typedef struct TCPHdr {
    UINT16    dest;
    UINT32    seq;
    UINT32    ack_seq;
-   UINT16    res1:4,
-             doff:4,
-             fin:1,
-             syn:1,
-             rst:1,
-             psh:1,
-             ack:1,
-             urg:1,
-             ece:1,
-             cwr:1;
+   union {
+       struct {
+           UINT16 res1:4,
+                  doff:4,
+                  fin:1,
+                  syn:1,
+                  rst:1,
+                  psh:1,
+                  ack:1,
+                  urg:1,
+                  ece:1,
+                  cwr:1;
+       };
+       UINT16 flags;
+   };
    UINT16    window;
    UINT16    check;
    UINT16    urg_ptr;

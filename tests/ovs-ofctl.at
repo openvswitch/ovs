@@ -41,7 +41,20 @@ for test_case in \
     'reg6=6                                      NXM,OXM' \
     'reg6=6/1                                    NXM,OXM' \
     'reg7=7                                      NXM,OXM' \
-    'reg7=7/1                                    NXM,OXM' \
+    'reg8=8/1                                    NXM,OXM' \
+    'reg8=8                                      NXM,OXM' \
+    'reg9=9/1                                    NXM,OXM' \
+    'reg9=9                                      NXM,OXM' \
+    'reg10=10                                    NXM,OXM' \
+    'reg10=10/1                                  NXM,OXM' \
+    'reg11=11                                    NXM,OXM' \
+    'reg11=11/1                                  NXM,OXM' \
+    'reg12=12                                    NXM,OXM' \
+    'reg12=12/1                                  NXM,OXM' \
+    'reg13=13                                    NXM,OXM' \
+    'reg13=13/1                                  NXM,OXM' \
+    'reg14=14                                    NXM,OXM' \
+    'reg14=14/1                                  NXM,OXM' \
     'xreg0=0                                     NXM,OXM' \
     'xreg0=0/1                                   NXM,OXM' \
     'xreg1=1                                     NXM,OXM' \
@@ -50,6 +63,22 @@ for test_case in \
     'xreg2=2/3                                   NXM,OXM' \
     'xreg3=3                                     NXM,OXM' \
     'xreg3=3/5                                   NXM,OXM' \
+    'xreg4=4                                     NXM,OXM' \
+    'xreg4=4/1                                   NXM,OXM' \
+    'xreg5=5                                     NXM,OXM' \
+    'xreg5=5/1                                   NXM,OXM' \
+    'xreg6=6                                     NXM,OXM' \
+    'xreg6=6/1                                   NXM,OXM' \
+    'xreg7=7                                     NXM,OXM' \
+    'xreg7=7/1                                   NXM,OXM' \
+    'xxreg0=0                                    NXM,OXM' \
+    'xxreg0=0/1                                  NXM,OXM' \
+    'xxreg1=1                                    NXM,OXM' \
+    'xxreg1=1/1                                  NXM,OXM' \
+    'xxreg2=2                                    NXM,OXM' \
+    'xxreg2=2/1                                  NXM,OXM' \
+    'xxreg3=3                                    NXM,OXM' \
+    'xxreg3=3/1                                  NXM,OXM' \
     'dl_src=00:11:22:33:44:55                    any' \
     'dl_src=00:11:22:33:44:55/00:ff:ff:ff:ff:ff  NXM,OXM,OpenFlow11' \
     'dl_dst=00:11:22:33:44:55                    any' \
@@ -155,7 +184,7 @@ tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
 udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
-ip,actions=set_field:10.4.3.77->ip_src
+ip,actions=set_field:10.4.3.77->ip_src,mod_nw_ecn:2
 sctp actions=drop
 sctp actions=drop
 in_port=0 actions=resubmit:0
@@ -186,7 +215,7 @@ OFPT_FLOW_MOD: ADD tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:
 OFPT_FLOW_MOD: ADD udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 OFPT_FLOW_MOD: ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
 OFPT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
-OFPT_FLOW_MOD: ADD ip actions=mod_nw_src:10.4.3.77
+OFPT_FLOW_MOD: ADD ip actions=mod_nw_src:10.4.3.77,load:0x2->NXM_NX_IP_ECN[]
 OFPT_FLOW_MOD: ADD sctp actions=drop
 OFPT_FLOW_MOD: ADD sctp actions=drop
 OFPT_FLOW_MOD: ADD in_port=0 actions=resubmit:0
@@ -886,15 +915,6 @@ NXOXM_ET_DP_HASH(01234567)
 # Invalid field numbers (experimenter OXM).
 ffff020800002320(11112222)
 ffff030800002320(1111/3333)
-
-# Unimplemented registers.
-#
-# This test assumes that at least two registers, but fewer than 16,
-# registers are implemented.
-00010004(12345678)
-00010108(12345678/12345678)
-00011e04(12345678)
-00011f08(12345678/12345678)
 ])
 AT_CHECK([ovs-ofctl -vPATTERN:'console:%c|%p|%m' --strict parse-nx-match < nx-match.txt], [0], [dnl
 <any>
@@ -1189,15 +1209,6 @@ NXM_NX_DP_HASH(01234567)
 nx_pull_match() returned error OFPBMC_BAD_FIELD
 
 # Invalid field numbers (experimenter OXM).
-nx_pull_match() returned error OFPBMC_BAD_FIELD
-nx_pull_match() returned error OFPBMC_BAD_FIELD
-
-# Unimplemented registers.
-#
-# This test assumes that at least two registers, but fewer than 16,
-# registers are implemented.
-NXM_NX_REG0(12345678)
-NXM_NX_REG0_W(12345678/12345678)
 nx_pull_match() returned error OFPBMC_BAD_FIELD
 nx_pull_match() returned error OFPBMC_BAD_FIELD
 ], [stderr])

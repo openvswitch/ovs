@@ -18,10 +18,13 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include "actions.h"
+#include "bitmap.h"
 #include "byte-order.h"
 #include "compiler.h"
 #include "ovn-dhcp.h"
 #include "expr.h"
+#include "hash.h"
+#include "openvswitch/hmap.h"
 #include "lex.h"
 #include "logical-fields.h"
 #include "nx-match.h"
@@ -29,7 +32,7 @@
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofpbuf.h"
 #include "packets.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "simap.h"
 
 /* Context maintained during actions_parse(). */
@@ -208,7 +211,7 @@ add_prerequisite(struct action_context *ctx, const char *prerequisite)
     struct expr *expr;
     char *error;
 
-    expr = expr_parse_string(prerequisite, ctx->ap->symtab, &error);
+    expr = expr_parse_string(prerequisite, ctx->ap->symtab, NULL, &error);
     ovs_assert(!error);
     ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, expr);
 }
@@ -246,8 +249,11 @@ put_controller_op(struct ofpbuf *ofpacts, enum action_opcode opcode)
     finish_controller_op(ofpacts, ofs);
 }
 
+/* Implements the "arp" and "na" actions, which execute nested actions on a
+ * packet derived from the one being processed. */
 static void
-parse_arp_action(struct action_context *ctx)
+parse_nested_action(struct action_context *ctx, enum action_opcode opcode,
+                    const char *prereq)
 {
     if (!lexer_match(ctx->lexer, LEX_T_LCURLY)) {
         action_syntax_error(ctx, "expecting `{'");
@@ -272,13 +278,11 @@ parse_arp_action(struct action_context *ctx)
 
     ctx->ofpacts = outer_ofpacts;
 
-    /* Add a "controller" action with the actions nested inside "arp {...}",
+    /* Add a "controller" action with the actions nested inside "{...}",
      * converted to OpenFlow, as its userdata.  ovn-controller will convert the
-     * packet to an ARP and then send the packet and actions back to the switch
-     * inside an OFPT_PACKET_OUT message. */
-    /* controller. */
-    size_t oc_offset = start_controller_op(ctx->ofpacts, ACTION_OPCODE_ARP,
-                                           false);
+     * packet to ARP or NA and then send the packet and actions back to the
+     * switch inside an OFPT_PACKET_OUT message. */
+    size_t oc_offset = start_controller_op(ctx->ofpacts, opcode, false);
     ofpacts_put_openflow_actions(inner_ofpacts.data, inner_ofpacts.size,
                                  ctx->ofpacts, OFP13_VERSION);
     finish_controller_op(ctx->ofpacts, oc_offset);
@@ -286,7 +290,7 @@ parse_arp_action(struct action_context *ctx)
     /* Restore prerequisites. */
     expr_destroy(ctx->prereqs);
     ctx->prereqs = outer_prereqs;
-    add_prerequisite(ctx, "ip4");
+    add_prerequisite(ctx, prereq);
 
     /* Free memory. */
     ofpbuf_uninit(&inner_ofpacts);
@@ -623,8 +627,157 @@ parse_put_dhcp_opts_action(struct action_context *ctx,
     finish_controller_op(ctx->ofpacts, oc_offset);
 }
 
+static bool
+action_parse_port(struct action_context *ctx, uint16_t *port)
+{
+    if (lexer_is_int(ctx->lexer)) {
+        int value = ntohll(ctx->lexer->token.value.integer);
+        if (value <= UINT16_MAX) {
+            *port = value;
+            lexer_get(ctx->lexer);
+            return true;
+        }
+    }
+    action_syntax_error(ctx, "expecting port number");
+    return false;
+}
+
 static void
-emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
+parse_ct_lb_action(struct action_context *ctx)
+{
+    uint8_t recirc_table;
+    if (ctx->ap->cur_ltable < ctx->ap->n_tables) {
+        recirc_table = ctx->ap->first_ptable + ctx->ap->cur_ltable + 1;
+    } else {
+        action_error(ctx, "\"ct_lb\" action not allowed in last table.");
+        return;
+    }
+
+    if (!lexer_match(ctx->lexer, LEX_T_LPAREN)) {
+        /* ct_lb without parentheses means that this is an established
+         * connection and we just need to do a NAT. */
+        const size_t ct_offset = ctx->ofpacts->size;
+        ofpbuf_pull(ctx->ofpacts, ct_offset);
+
+        struct ofpact_conntrack *ct = ofpact_put_CT(ctx->ofpacts);
+        struct ofpact_nat *nat;
+        size_t nat_offset;
+        ct->zone_src.field = mf_from_id(MFF_LOG_CT_ZONE);
+        ct->zone_src.ofs = 0;
+        ct->zone_src.n_bits = 16;
+        ct->flags = 0;
+        ct->recirc_table = recirc_table;
+        ct->alg = 0;
+
+        add_prerequisite(ctx, "ip");
+
+        nat_offset = ctx->ofpacts->size;
+        ofpbuf_pull(ctx->ofpacts, nat_offset);
+
+        nat = ofpact_put_NAT(ctx->ofpacts);
+        nat->flags = 0;
+        nat->range_af = AF_UNSPEC;
+
+        ctx->ofpacts->header = ofpbuf_push_uninit(ctx->ofpacts, nat_offset);
+        ct = ctx->ofpacts->header;
+        ofpact_finish(ctx->ofpacts, &ct->ofpact);
+        ofpbuf_push_uninit(ctx->ofpacts, ct_offset);
+        return;
+    }
+
+    uint32_t group_id = 0, bucket_id = 0, hash;
+    struct group_info *group_info;
+    struct ofpact_group *og;
+
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    ds_put_format(&ds, "type=select");
+
+    BUILD_ASSERT(MFF_LOG_CT_ZONE >= MFF_REG0);
+    BUILD_ASSERT(MFF_LOG_CT_ZONE < MFF_REG0 + FLOW_N_REGS);
+    do {
+        if (ctx->lexer->token.type != LEX_T_INTEGER
+            || mf_subvalue_width(&ctx->lexer->token.value) > 32) {
+            action_syntax_error(ctx, "expecting IPv4 address");
+            ds_destroy(&ds);
+            return;
+        }
+        ovs_be32 ip = ctx->lexer->token.value.ipv4;
+        lexer_get(ctx->lexer);
+
+        uint16_t port = 0;
+        if (lexer_match(ctx->lexer, LEX_T_COLON)
+            && !action_parse_port(ctx, &port)) {
+            ds_destroy(&ds);
+            return;
+        }
+
+        bucket_id++;
+        ds_put_format(&ds, ",bucket=bucket_id=%u,weight:100,actions="
+                      "ct(nat(dst="IP_FMT, bucket_id, IP_ARGS(ip));
+        if (port) {
+            ds_put_format(&ds, ":%"PRIu16, port);
+        }
+        ds_put_format(&ds, "),commit,table=%d,zone=NXM_NX_REG%d[0..15])",
+                      recirc_table, MFF_LOG_CT_ZONE - MFF_REG0);
+
+        lexer_match(ctx->lexer, LEX_T_COMMA);
+    } while (!lexer_match(ctx->lexer, LEX_T_RPAREN));
+    add_prerequisite(ctx, "ip");
+
+    hash = hash_string(ds_cstr(&ds), 0);
+
+    /* Check whether we have non installed but allocated group_id. */
+    HMAP_FOR_EACH_WITH_HASH (group_info, hmap_node, hash,
+                             &ctx->ap->group_table->desired_groups) {
+        if (!strcmp(ds_cstr(&group_info->group), ds_cstr(&ds))) {
+            group_id = group_info->group_id;
+            break;
+        }
+    }
+
+    if (!group_id) {
+        /* Check whether we already have an installed entry for this
+         * combination. */
+        HMAP_FOR_EACH_WITH_HASH (group_info, hmap_node, hash,
+                                 &ctx->ap->group_table->existing_groups) {
+            if (!strcmp(ds_cstr(&group_info->group), ds_cstr(&ds))) {
+                group_id = group_info->group_id;
+            }
+        }
+
+        if (!group_id) {
+            /* Reserve a new group_id. */
+            group_id = bitmap_scan(ctx->ap->group_table->group_ids, 0, 1,
+                                   MAX_OVN_GROUPS + 1);
+        }
+
+        if (group_id == MAX_OVN_GROUPS + 1) {
+            ds_destroy(&ds);
+            action_error(ctx, "out of group ids.");
+            return;
+        }
+        bitmap_set1(ctx->ap->group_table->group_ids, group_id);
+
+        group_info = xmalloc(sizeof *group_info);
+        group_info->group = ds;
+        group_info->group_id = group_id;
+        group_info->hmap_node.hash = hash;
+
+        hmap_insert(&ctx->ap->group_table->desired_groups,
+                    &group_info->hmap_node, group_info->hmap_node.hash);
+    } else {
+        ds_destroy(&ds);
+    }
+
+    /* Create an action to set the group. */
+    og = ofpact_put_GROUP(ctx->ofpacts);
+    og->group_id = group_id;
+}
+
+static void
+emit_ct(struct action_context *ctx, bool recirc_next, bool commit,
+        int *ct_mark, int *ct_mark_mask,
+        ovs_be128 *ct_label, ovs_be128 *ct_label_mask)
 {
     struct ofpact_conntrack *ct = ofpact_put_CT(ctx->ofpacts);
     ct->flags |= commit ? NX_CT_F_COMMIT : 0;
@@ -650,6 +803,151 @@ emit_ct(struct action_context *ctx, bool recirc_next, bool commit)
 
     /* CT only works with IP, so set up a prerequisite. */
     add_prerequisite(ctx, "ip");
+
+    size_t set_field_offset = ctx->ofpacts->size;
+    ofpbuf_pull(ctx->ofpacts, set_field_offset);
+
+    if (ct_mark) {
+        struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ctx->ofpacts);
+        sf->field = mf_from_id(MFF_CT_MARK);
+        sf->value.be32 = htonl(*ct_mark);
+        sf->mask.be32 = ct_mark_mask ? htonl(*ct_mark_mask) : OVS_BE32_MAX;
+    }
+
+    if (ct_label) {
+        struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ctx->ofpacts);
+        sf->field = mf_from_id(MFF_CT_LABEL);
+        sf->value.be128 = *ct_label;
+        sf->mask.be128 = ct_label_mask ? *ct_label_mask : OVS_BE128_MAX;
+    }
+
+    ctx->ofpacts->header = ofpbuf_push_uninit(ctx->ofpacts, set_field_offset);
+    ct = ctx->ofpacts->header;
+    ofpact_finish(ctx->ofpacts, &ct->ofpact);
+}
+
+/* Parse an argument to the ct_commit(); action.  Supported arguments include:
+ *
+ *      ct_mark=<value>[/<mask>]
+ *      ct_label=<value>[/<mask>]
+ *
+ * If a comma separates the current argument from the next argument, this
+ * function will consume it.
+ *
+ * set_mark - This will be set to true if a value for ct_mark was successfully
+ *            parsed. Otherwise, it will be unchanged.
+ * mark_value - If set_mark was set to true, this will contain the value
+ *              parsed for ct_mark.
+ * mark_mask - If set_mark was set to true, this will contain the mask
+ *             for ct_mark if one was found.  Otherwise, it will be
+ *             unchanged, so the caller should initialize this to an
+ *             appropriate value.
+ * set_label - This will be set to true if a value for ct_label was successfully
+ *             parsed. Otherwise, it will be unchanged.
+ * label_value - If set_label was set to true, this will contain the value
+ *               parsed for ct_label.
+ * label_mask - If set_label was set to true, this will contain the mask
+ *              for ct_label if one was found.  Otherwise, it will be
+ *              unchanged, so the caller should initialize this to an
+ *              appropriate value.
+ *
+ * Return true after successfully parsing an argument.  false on failure. */
+static bool
+parse_ct_commit_arg(struct action_context *ctx,
+                    bool *set_mark, int *mark_value, int *mark_mask,
+                    bool *set_label, ovs_be128 *label_value,
+                    ovs_be128 *label_mask)
+{
+    if (lexer_match_id(ctx->lexer, "ct_mark")) {
+        if (!lexer_match(ctx->lexer, LEX_T_EQUALS)) {
+            action_error(ctx, "Expected '=' after argument to ct_commit");
+            return false;
+        }
+        if (ctx->lexer->token.type == LEX_T_INTEGER) {
+            *mark_value = ntohll(ctx->lexer->token.value.integer);
+        } else if (ctx->lexer->token.type == LEX_T_MASKED_INTEGER) {
+            *mark_value = ntohll(ctx->lexer->token.value.integer);
+            *mark_mask = ntohll(ctx->lexer->token.mask.integer);
+        } else {
+            action_error(ctx, "Expected integer after 'ct_mark='");
+            return false;
+        }
+        lexer_get(ctx->lexer);
+        *set_mark = true;
+    } else if (lexer_match_id(ctx->lexer, "ct_label")) {
+        if (!lexer_match(ctx->lexer, LEX_T_EQUALS)) {
+            action_error(ctx, "Expected '=' after argument to ct_commit");
+            return false;
+        }
+
+        /* ct_label is a 128-bit field.  The lexer supports 128-bit
+         * integers if its a hex string. The ct_label value should be specified
+         * in hex string if > 64-bits are to be used */
+        if (ctx->lexer->token.type == LEX_T_INTEGER) {
+            label_value->be64.lo = ctx->lexer->token.value.be128_int.be64.lo;
+            label_value->be64.hi = ctx->lexer->token.value.be128_int.be64.hi;
+        } else if (ctx->lexer->token.type == LEX_T_MASKED_INTEGER) {
+            label_value->be64.lo = ctx->lexer->token.value.be128_int.be64.lo;
+            label_value->be64.hi = ctx->lexer->token.value.be128_int.be64.hi;
+            label_mask->be64.lo = ctx->lexer->token.mask.be128_int.be64.lo;
+            label_mask->be64.hi = ctx->lexer->token.mask.be128_int.be64.hi;
+        } else {
+            action_error(ctx, "Expected integer after 'ct_label='");
+            return false;
+        }
+        lexer_get(ctx->lexer);
+        *set_label = true;
+    } else {
+        action_error(ctx, "Expected argument to ct_commit()");
+        return false;
+    }
+
+    if (lexer_match(ctx->lexer, LEX_T_COMMA)) {
+        /* A comma is valid after an argument, but only if another
+         * argument is present (not a closing paren) */
+        if (lexer_lookahead(ctx->lexer) == LEX_T_RPAREN) {
+            action_error(ctx, "Another argument to ct_commit() expected "
+                              "after comma.");
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static void
+parse_ct_commit_action(struct action_context *ctx)
+{
+    if (!lexer_match(ctx->lexer, LEX_T_LPAREN)) {
+        /* ct_commit; */
+        emit_ct(ctx, false, true, NULL, NULL, NULL, NULL);
+        return;
+    }
+
+    /* ct_commit();
+     * ct_commit(ct_mark=0);
+     * ct_commit(ct_label=0);
+     * ct_commit(ct_mark=0, ct_label=0); */
+
+    bool set_mark = false;
+    bool set_label = false;
+    int mark_value = 0;
+    int mark_mask = ~0;
+    ovs_be128 label_value = { .be32 = { 0, }, };
+    ovs_be128 label_mask = OVS_BE128_MAX;
+
+    while (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
+        if (!parse_ct_commit_arg(ctx, &set_mark, &mark_value, &mark_mask,
+                                 &set_label, &label_value, &label_mask)) {
+            return;
+        }
+    }
+
+    emit_ct(ctx, false, true,
+            set_mark ? &mark_value : NULL,
+            set_mark ? &mark_mask : NULL,
+            set_label ? &label_value : NULL,
+            set_label ? &label_mask : NULL);
 }
 
 static void
@@ -755,15 +1053,19 @@ parse_action(struct action_context *ctx)
             action_syntax_error(ctx, "expecting `--'");
         }
     } else if (lexer_match_id(ctx->lexer, "ct_next")) {
-        emit_ct(ctx, true, false);
+        emit_ct(ctx, true, false, NULL, NULL, NULL, NULL);
     } else if (lexer_match_id(ctx->lexer, "ct_commit")) {
-        emit_ct(ctx, false, true);
+        parse_ct_commit_action(ctx);
     } else if (lexer_match_id(ctx->lexer, "ct_dnat")) {
         parse_ct_nat(ctx, false);
     } else if (lexer_match_id(ctx->lexer, "ct_snat")) {
         parse_ct_nat(ctx, true);
+    } else if (lexer_match_id(ctx->lexer, "ct_lb")) {
+        parse_ct_lb_action(ctx);
     } else if (lexer_match_id(ctx->lexer, "arp")) {
-        parse_arp_action(ctx);
+        parse_nested_action(ctx, ACTION_OPCODE_ARP, "ip4");
+    } else if (lexer_match_id(ctx->lexer, "na")) {
+        parse_nested_action(ctx, ACTION_OPCODE_NA, "nd");
     } else if (lexer_match_id(ctx->lexer, "get_arp")) {
         parse_get_arp_action(ctx);
     } else if (lexer_match_id(ctx->lexer, "put_arp")) {

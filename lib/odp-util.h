@@ -23,7 +23,7 @@
 #include <string.h>
 #include "flow.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "odp-netlink.h"
 #include "openflow/openflow.h"
 #include "util.h"
@@ -141,7 +141,7 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  * add another field and forget to adjust this value.
  */
 #define ODPUTIL_FLOW_KEY_BYTES 640
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 36);
 
 /* A buffer with sufficient size and alignment to hold an nlattr-formatted flow
  * key.  An array of "struct nlattr" might not, in theory, be sufficiently

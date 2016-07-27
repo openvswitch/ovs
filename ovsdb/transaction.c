@@ -20,8 +20,8 @@
 #include "bitmap.h"
 #include "openvswitch/dynamic-string.h"
 #include "hash.h"
-#include "hmap.h"
-#include "json.h"
+#include "openvswitch/hmap.h"
+#include "openvswitch/json.h"
 #include "openvswitch/list.h"
 #include "ovsdb-error.h"
 #include "ovsdb.h"
@@ -436,9 +436,48 @@ ovsdb_txn_row_commit(struct ovsdb_txn *txn OVS_UNUSED,
     return NULL;
 }
 
+static struct ovsdb_error *
+ovsdb_txn_update_weak_refs(struct ovsdb_txn *txn OVS_UNUSED,
+                           struct ovsdb_txn_row *txn_row)
+{
+    struct ovsdb_weak_ref *weak, *next;
+
+    /* Remove the weak references originating in the old version of the row. */
+    if (txn_row->old) {
+        LIST_FOR_EACH_SAFE (weak, next, src_node, &txn_row->old->src_refs) {
+            ovs_list_remove(&weak->src_node);
+            ovs_list_remove(&weak->dst_node);
+            free(weak);
+        }
+    }
+
+    /* Although the originating rows have the responsibility of updating the
+     * weak references in the dst, it is possible that some source rows aren't
+     * part of the transaction.  In that situation this row needs to move the
+     * list of incoming weak references from the old row into the new one.
+     */
+    if (txn_row->old && txn_row->new) {
+        /* Move the incoming weak references from old to new. */
+        ovs_list_push_back_all(&txn_row->new->dst_refs,
+                               &txn_row->old->dst_refs);
+    }
+
+    /* Insert the weak references originating in the new version of the row. */
+    struct ovsdb_row *dst_row;
+    if (txn_row->new) {
+        LIST_FOR_EACH (weak, src_node, &txn_row->new->src_refs) {
+            /* dst_row MUST exist. */
+            dst_row = CONST_CAST(struct ovsdb_row *,
+                    ovsdb_table_get_row(weak->dst_table, &weak->dst));
+            ovs_list_insert(&dst_row->dst_refs, &weak->dst_node);
+        }
+    }
+
+    return NULL;
+}
+
 static void
-add_weak_ref(struct ovsdb_txn *txn,
-             const struct ovsdb_row *src_, const struct ovsdb_row *dst_)
+add_weak_ref(const struct ovsdb_row *src_, const struct ovsdb_row *dst_)
 {
     struct ovsdb_row *src = CONST_CAST(struct ovsdb_row *, src_);
     struct ovsdb_row *dst = CONST_CAST(struct ovsdb_row *, dst_);
@@ -447,8 +486,6 @@ add_weak_ref(struct ovsdb_txn *txn,
     if (src == dst) {
         return;
     }
-
-    dst = ovsdb_txn_row_modify(txn, dst);
 
     if (!ovs_list_is_empty(&dst->dst_refs)) {
         /* Omit duplicates. */
@@ -461,7 +498,10 @@ add_weak_ref(struct ovsdb_txn *txn,
 
     weak = xmalloc(sizeof *weak);
     weak->src = src;
-    ovs_list_push_back(&dst->dst_refs, &weak->dst_node);
+    weak->dst_table = dst->table;
+    weak->dst = *ovsdb_row_get_uuid(dst);
+    /* The dst_refs list is updated at commit time. */
+    ovs_list_init(&weak->dst_node);
     ovs_list_push_back(&src->src_refs, &weak->src_node);
 }
 
@@ -471,7 +511,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
     struct ovsdb_table *table;
     struct shash_node *node;
 
-    if (txn_row->old) {
+    if (txn_row->old && !txn_row->new) {
         /* Mark rows that have weak references to 'txn_row' as modified, so
          * that their weak references will get reassessed. */
         struct ovsdb_weak_ref *weak, *next;
@@ -506,7 +546,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
                 row = ovsdb_table_get_row(column->type.key.u.uuid.refTable,
                                           &datum->keys[i].uuid);
                 if (row) {
-                    add_weak_ref(txn, txn_row->new, row);
+                    add_weak_ref(txn_row->new, row);
                     i++;
                 } else {
                     if (uuid_is_zero(&datum->keys[i].uuid)) {
@@ -524,7 +564,7 @@ assess_weak_refs(struct ovsdb_txn *txn, struct ovsdb_txn_row *txn_row)
                 row = ovsdb_table_get_row(column->type.value.u.uuid.refTable,
                                           &datum->values[i].uuid);
                 if (row) {
-                    add_weak_ref(txn, txn_row->new, row);
+                    add_weak_ref(txn_row->new, row);
                     i++;
                 } else {
                     if (uuid_is_zero(&datum->values[i].uuid)) {
@@ -838,6 +878,7 @@ ovsdb_txn_commit_(struct ovsdb_txn *txn, bool durable)
 
     /* Finalize commit. */
     txn->db->run_triggers = true;
+    ovsdb_error_assert(for_each_txn_row(txn, ovsdb_txn_update_weak_refs));
     ovsdb_error_assert(for_each_txn_row(txn, ovsdb_txn_row_commit));
     ovsdb_txn_free(txn);
 

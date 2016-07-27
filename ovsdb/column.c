@@ -21,7 +21,7 @@
 
 #include "column.h"
 #include "openvswitch/dynamic-string.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"
 #include "table.h"

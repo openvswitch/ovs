@@ -39,7 +39,7 @@
 #include "openflow/openflow.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "socket-util.h"
 #include "util.h"
 #include "stream-provider.h"

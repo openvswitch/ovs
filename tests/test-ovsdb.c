@@ -26,7 +26,7 @@
 #include "byte-order.h"
 #include "command-line.h"
 #include "openvswitch/dynamic-string.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "jsonrpc.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
@@ -166,6 +166,12 @@ usage(void)
            "    parse each CONDITION on TABLE, and re-serialize\n"
            "  evaluate-conditions TABLE [CONDITION,...] [ROW,...]\n"
            "    test CONDITIONS on TABLE against each ROW, print results\n"
+           "  evaluate-conditions-any TABLE [CONDITION,...] [ROW,...]\n"
+           "    test CONDITIONS to match any of the CONDITONS on TABLE\n"
+           "    against each ROW, print results\n"
+           "  compare-conditions TABLE [CONDITION,...]\n"
+           "    mutually compare all of the CONDITION, print results for\n"
+           "    each pair\n"
            "  parse-mutations TABLE MUTATION...\n"
            "    parse each MUTATION on TABLE, and re-serialize\n"
            "  execute-mutations TABLE [MUTATION,...] [ROW,...]\n"
@@ -856,8 +862,11 @@ do_parse_conditions(struct ovs_cmdl_context *ctx)
     exit(exit_code);
 }
 
+#define OVSDB_CONDITION_EVERY 0
+#define OVSDB_CONDITION_ANY 1
+
 static void
-do_evaluate_conditions(struct ovs_cmdl_context *ctx)
+do_evaluate_condition__(struct ovs_cmdl_context *ctx, int mode)
 {
     struct ovsdb_table_schema *ts;
     struct ovsdb_table *table;
@@ -905,7 +914,15 @@ do_evaluate_conditions(struct ovs_cmdl_context *ctx)
     for (i = 0; i < n_conditions; i++) {
         printf("condition %2"PRIuSIZE":", i);
         for (j = 0; j < n_rows; j++) {
-            bool result = ovsdb_condition_evaluate(rows[j], &conditions[i]);
+            bool result;
+            if (mode == OVSDB_CONDITION_EVERY) {
+                result = ovsdb_condition_match_every_clause(rows[j],
+                                                  &conditions[i]);
+            } else {
+                result = ovsdb_condition_match_any_clause(rows[j]->fields,
+                                                          &conditions[i],
+                                                          NULL);
+            }
             if (j % 5 == 0) {
                 putchar(' ');
             }
@@ -922,6 +939,61 @@ do_evaluate_conditions(struct ovs_cmdl_context *ctx)
         ovsdb_row_destroy(rows[i]);
     }
     free(rows);
+    ovsdb_table_destroy(table); /* Also destroys 'ts'. */
+}
+
+static void
+do_evaluate_conditions(struct ovs_cmdl_context *ctx)
+{
+    do_evaluate_condition__(ctx, OVSDB_CONDITION_EVERY);
+}
+
+static void
+do_evaluate_conditions_any(struct ovs_cmdl_context *ctx)
+{
+    do_evaluate_condition__(ctx, OVSDB_CONDITION_ANY);
+}
+
+static void
+do_compare_conditions(struct ovs_cmdl_context *ctx)
+{
+    struct ovsdb_table_schema *ts;
+    struct ovsdb_table *table;
+    struct ovsdb_condition *conditions;
+    size_t n_conditions;
+    struct json *json;
+    size_t i;
+
+    /* Parse table schema, create table. */
+    json = unbox_json(parse_json(ctx->argv[1]));
+    check_ovsdb_error(ovsdb_table_schema_from_json(json, "mytable", &ts));
+    json_destroy(json);
+
+    table = ovsdb_table_create(ts);
+
+    /* Parse conditions. */
+    json = parse_json(ctx->argv[2]);
+    if (json->type != JSON_ARRAY) {
+        ovs_fatal(0, "CONDITION argument is not JSON array");
+    }
+    n_conditions = json->u.array.n;
+    conditions = xmalloc(n_conditions * sizeof *conditions);
+
+    for (i = 0; i < n_conditions; i++) {
+        check_ovsdb_error(ovsdb_condition_from_json(ts, json->u.array.elems[i],
+                                                    NULL, &conditions[i]));
+    }
+    json_destroy(json);
+
+    for (i = 0; i < n_conditions - 1; i++) {
+        int res = ovsdb_condition_cmp_3way(&conditions[i], &conditions[i + 1]);
+        printf("condition %"PRIuSIZE"-%"PRIuSIZE": %d\n", i, i + 1, res);
+    }
+
+    for (i = 0; i < n_conditions; i++) {
+        ovsdb_condition_destroy(&conditions[i]);
+    }
+    free(conditions);
     ovsdb_table_destroy(table); /* Also destroys 'ts'. */
 }
 
@@ -2073,6 +2145,208 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
     ovsdb_idl_txn_destroy(txn);
 }
 
+static const struct ovsdb_idl_table_class *
+find_table_class(const char *name)
+{
+    if (!strcmp(name, "simple")) {
+        return &idltest_table_simple;
+    } else if (!strcmp(name, "link1")) {
+        return &idltest_table_link1;
+    } else if (!strcmp(name, "link2")) {
+        return &idltest_table_link2;
+    }
+    return NULL;
+}
+
+static void
+parse_simple_json_clause(struct ovsdb_idl *idl, bool add_cmd,
+                         struct json *json)
+{
+    const char *c;
+    struct ovsdb_error *error;
+    enum ovsdb_function function;
+
+    if (json->type == JSON_TRUE) {
+        add_cmd ? idltest_simple_add_clause_true(idl) :
+            idltest_simple_remove_clause_true(idl);
+        return;
+    } else if (json->type == JSON_FALSE) {
+        add_cmd ? idltest_simple_add_clause_false(idl) :
+            idltest_simple_remove_clause_false(idl);
+        return;
+    }
+    if (json->type != JSON_ARRAY || json->u.array.n != 3) {
+        ovs_fatal(0, "Error parsing condition");
+    }
+
+    c = json_string(json->u.array.elems[0]);
+    error = ovsdb_function_from_string(json_string(json->u.array.elems[1]),
+                                       &function);
+    if (error) {
+        ovs_fatal(0, "Error parsing clause function %s",
+                  json_string(json->u.array.elems[1]));
+    }
+
+    /* add clause according to column */
+    if (!strcmp(c, "b")) {
+        add_cmd ? idltest_simple_add_clause_b(idl, function,
+                                     json_boolean(json->u.array.elems[2])) :
+            idltest_simple_remove_clause_b(idl, function,
+                                     json_boolean(json->u.array.elems[2]));
+    } else if (!strcmp(c, "i")) {
+        add_cmd ? idltest_simple_add_clause_i(idl, function,
+                                    json_integer(json->u.array.elems[2])) :
+            idltest_simple_remove_clause_i(idl, function,
+                                    json_integer(json->u.array.elems[2]));
+    } else if (!strcmp(c, "s")) {
+        add_cmd ? idltest_simple_add_clause_s(idl, function,
+                                    json_string(json->u.array.elems[2])) :
+            idltest_simple_remove_clause_s(idl, function,
+                                    json_string(json->u.array.elems[2]));
+    } else if (!strcmp(c, "u")) {
+        struct uuid uuid;
+        if (!uuid_from_string(&uuid,
+                              json_string(json->u.array.elems[2]))) {
+            ovs_fatal(0, "\"%s\" is not a valid UUID",
+                      json_string(json->u.array.elems[2]));
+        }
+        add_cmd ? idltest_simple_add_clause_u(idl, function, uuid) :
+            idltest_simple_remove_clause_u(idl, function, uuid);
+    } else if (!strcmp(c, "r")) {
+        add_cmd ? idltest_simple_add_clause_r(idl, function,
+                                    json_real(json->u.array.elems[2])) :
+            idltest_simple_remove_clause_r(idl, function,
+                                    json_real(json->u.array.elems[2]));
+    } else {
+        ovs_fatal(0, "Unsupported columns name %s", c);
+    }
+}
+
+static void
+parse_link1_json_clause(struct ovsdb_idl *idl, bool add_cmd,
+                        struct json *json)
+{
+    const char *c;
+    struct ovsdb_error *error;
+    enum ovsdb_function function;
+
+    if (json->type == JSON_TRUE) {
+        add_cmd ? idltest_link1_add_clause_true(idl) :
+            idltest_link1_remove_clause_true(idl);
+        return;
+    } else if (json->type == JSON_FALSE) {
+        add_cmd ? idltest_link1_add_clause_false(idl) :
+            idltest_link1_remove_clause_false(idl);
+        return;
+    }
+    if (json->type != JSON_ARRAY || json->u.array.n != 3) {
+        ovs_fatal(0, "Error parsing condition");
+    }
+
+    c = json_string(json->u.array.elems[0]);
+    error = ovsdb_function_from_string(json_string(json->u.array.elems[1]),
+                                       &function);
+    if (error) {
+        ovs_fatal(0, "Error parsing clause function %s",
+                  json_string(json->u.array.elems[1]));
+    }
+
+    /* add clause according to column */
+    if (!strcmp(c, "i")) {
+        add_cmd ? idltest_link1_add_clause_i(idl, function,
+                                    json_integer(json->u.array.elems[2])) :
+            idltest_link1_remove_clause_i(idl, function,
+                                    json_integer(json->u.array.elems[2]));
+    } else {
+        ovs_fatal(0, "Unsupported columns name %s", c);
+    }
+}
+
+static void
+parse_link2_json_clause(struct ovsdb_idl *idl, bool add_cmd, struct json *json)
+{
+    const char *c;
+    struct ovsdb_error *error;
+    enum ovsdb_function function;
+
+    if (json->type == JSON_TRUE) {
+        add_cmd ? idltest_link2_add_clause_true(idl) :
+            idltest_link2_remove_clause_true(idl);
+        return;
+    } else if (json->type == JSON_FALSE) {
+        add_cmd ? idltest_link2_add_clause_false(idl) :
+            idltest_link2_remove_clause_false(idl);
+        return;
+    }
+    if (json->type != JSON_ARRAY || json->u.array.n != 3) {
+        ovs_fatal(0, "Error parsing condition");
+    }
+
+    c = json_string(json->u.array.elems[0]);
+    error = ovsdb_function_from_string(json_string(json->u.array.elems[1]),
+                                       &function);
+    if (error) {
+        ovs_fatal(0, "Error parsing clause function %s",
+                  json_string(json->u.array.elems[1]));
+    }
+
+    /* add clause according to column */
+    if (!strcmp(c, "i")) {
+        add_cmd ? idltest_link2_add_clause_i(idl, function,
+                                    json_integer(json->u.array.elems[2])) :
+            idltest_link2_remove_clause_i(idl, function,
+                                    json_integer(json->u.array.elems[2]));
+    } else {
+        ovs_fatal(0, "Unsupported columns name %s", c);
+    }
+}
+
+static void
+update_conditions(struct ovsdb_idl *idl, char *commands)
+{
+    char *cmd, *save_ptr1 = NULL;
+    const struct ovsdb_idl_table_class *tc;
+    bool add_cmd = false;
+
+    for (cmd = strtok_r(commands, ";", &save_ptr1); cmd;
+         cmd = strtok_r(NULL, ";", &save_ptr1)) {
+        if (strstr(cmd, "condition add")) {
+            cmd += strlen("condition add ");
+            add_cmd = true;
+        } else if (strstr(cmd, "condition remove")) {
+            cmd += strlen("condition remove ");
+        } else {
+            ovs_fatal(0, "condition command should be add or remove");
+        }
+
+        char *save_ptr2 = NULL;
+        char *table_name = strtok_r(cmd, " ", &save_ptr2);
+        struct json *json = parse_json(save_ptr2);
+        int i;
+
+        if (json->type != JSON_ARRAY) {
+            ovs_fatal(0, "condition should be an array");
+        }
+
+        tc = find_table_class(table_name);
+        if (!tc) {
+            ovs_fatal(0, "Table %s does not exist", table_name);
+        }
+
+        //ovsdb_idl_condition_reset(idl, tc);
+
+        for (i = 0; i < json->u.array.n; i++) {
+            if (!strcmp(table_name, "simple")) {
+                parse_simple_json_clause(idl, add_cmd, json->u.array.elems[i]);
+            } else if (!strcmp(table_name, "link1")) {
+                parse_link1_json_clause(idl, add_cmd, json->u.array.elems[i]);
+            } else if (!strcmp(table_name, "link2")) {
+                parse_link2_json_clause(idl, add_cmd, json->u.array.elems[i]);
+            }
+        }
+    }
+}
+
 static void
 do_idl(struct ovs_cmdl_context *ctx)
 {
@@ -2111,7 +2385,14 @@ do_idl(struct ovs_cmdl_context *ctx)
     setvbuf(stdout, NULL, _IONBF, 0);
 
     symtab = ovsdb_symbol_table_create();
-    for (i = 2; i < ctx->argc; i++) {
+    if (ctx->argc > 2 && strstr(ctx->argv[2], "condition ")) {
+        update_conditions(idl, ctx->argv[2]);
+        printf("%03d: change conditions\n", step++);
+        i = 3;
+    } else {
+        i = 2;
+    }
+    for (; i < ctx->argc; i++) {
         char *arg = ctx->argv[i];
         struct jsonrpc_msg *request, *reply;
 
@@ -2145,6 +2426,9 @@ do_idl(struct ovs_cmdl_context *ctx)
         if (!strcmp(arg, "reconnect")) {
             printf("%03d: reconnect\n", step++);
             ovsdb_idl_force_reconnect(idl);
+        }  else if (strstr(arg, "condition ")) {
+            update_conditions(idl, arg);
+            printf("%03d: change conditions\n", step++);
         } else if (arg[0] != '[') {
             idl_set(idl, arg, step++);
         } else {
@@ -2244,7 +2528,7 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     /* Insert new elements in different map columns */
     myRow = idltest_simple2_first(idl);
     myTxn = ovsdb_idl_txn_create(idl);
-    smap = idltest_simple2_get_smap(myRow, OVSDB_TYPE_STRING,
+    idltest_simple2_get_smap(myRow, OVSDB_TYPE_STRING,
                                     OVSDB_TYPE_STRING);
     idltest_simple2_update_smap_setkey(myRow, "key1", "myList1");
     imap = idltest_simple2_get_imap(myRow, OVSDB_TYPE_INTEGER,
@@ -2311,6 +2595,8 @@ static struct ovs_cmdl_command all_commands[] = {
     { "compare-rows", NULL, 2, INT_MAX, do_compare_rows },
     { "parse-conditions", NULL, 2, INT_MAX, do_parse_conditions },
     { "evaluate-conditions", NULL, 3, 3, do_evaluate_conditions },
+    { "evaluate-conditions-any", NULL, 3, 3, do_evaluate_conditions_any },
+    { "compare-conditions", NULL, 2, 2, do_compare_conditions },
     { "parse-mutations", NULL, 2, INT_MAX, do_parse_mutations },
     { "execute-mutations", NULL, 3, 3, do_execute_mutations },
     { "query", NULL, 3, 3, do_query },

@@ -20,7 +20,7 @@
 #include "column.h"
 #include "condition.h"
 #include "file.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "mutation.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
@@ -352,7 +352,7 @@ ovsdb_execute_select(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 {
     struct ovsdb_table *table;
     const struct json *where, *columns_json, *sort_json;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
     struct ovsdb_column_set sort = OVSDB_COLUMN_SET_INITIALIZER;
     struct ovsdb_error *error;
@@ -420,7 +420,7 @@ ovsdb_execute_update(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 {
     struct ovsdb_table *table;
     const struct json *where, *row_json;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
     struct ovsdb_row *row = NULL;
     struct update_row_cbdata ur;
@@ -494,7 +494,7 @@ ovsdb_execute_mutate(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     struct ovsdb_table *table;
     const struct json *where;
     const struct json *mutations_json;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     struct ovsdb_mutation_set mutations = OVSDB_MUTATION_SET_INITIALIZER;
     struct ovsdb_row *row = NULL;
     struct mutate_row_cbdata mr;
@@ -551,7 +551,7 @@ ovsdb_execute_delete(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 {
     struct ovsdb_table *table;
     const struct json *where;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     struct ovsdb_error *error;
 
     where = ovsdb_parser_member(parser, "where", OP_ARRAY);
@@ -606,7 +606,7 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 {
     struct ovsdb_table *table;
     const struct json *timeout, *where, *columns_json, *until, *rows;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
     struct ovsdb_row_hash expected = OVSDB_ROW_HASH_INITIALIZER(expected);
     struct ovsdb_row_hash actual = OVSDB_ROW_HASH_INITIALIZER(actual);

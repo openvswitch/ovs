@@ -25,7 +25,7 @@
 #include <unistd.h>
 #include "ovs-thread.h"
 #include "poll-loop.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "sset.h"
 #include "signals.h"
 #include "socket-util.h"

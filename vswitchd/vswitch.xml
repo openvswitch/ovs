@@ -2346,12 +2346,13 @@
         Only PMD netdevs support these options.
       </p>
 
-      <column name="options" key="n_rxqs"
+      <column name="options" key="n_rxq"
               type='{"type": "integer", "minInteger": 1}'>
         <p>
           Specifies the maximum number of rx queues to be created for PMD
           netdev.  If not specified or specified to 0, one rx queue will
           be created by default.
+          Not supported by DPDK vHost interfaces.
         </p>
       </column>
     </group>
@@ -2717,6 +2718,13 @@
         <column name="bfd" key="bfd_dst_ip">
           Set to an IPv4 address to set the IP address used as destination
           for transmitted BFD packets.  The default is <code>169.254.1.0</code>.
+        </column>
+
+        <column name="bfd" key="oam">
+          Some tunnel protocols (such as Geneve) include a bit in the header
+          to indicate that the encapsulated packet is an OAM frame. By setting
+          this to true, BFD packets will be marked as OAM if encapsulated in
+          one of these tunnels.
         </column>
       </group>
 
@@ -3690,6 +3698,15 @@
         <p>
           Mirroring to a GRE tunnel has fewer caveats than mirroring to a
           VLAN and should generally be preferred.
+        </p>
+      </column>
+
+      <column name="snaplen">
+        <p>Maximum per-packet number of bytes to mirror.</p>
+        <p>A mirrored packet with size larger than <ref column="snaplen"/>
+           will be truncated in datapath to <ref column="snaplen"/> bytes
+           before sending to the mirror output port.  If omitted, packets
+           are not truncated.
         </p>
       </column>
     </group>

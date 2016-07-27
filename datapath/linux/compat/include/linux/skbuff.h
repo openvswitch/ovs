@@ -39,6 +39,13 @@ static inline void skb_copy_to_linear_data_offset(struct sk_buff *skb,
 
 #endif	/* !HAVE_SKB_COPY_FROM_LINEAR_DATA_OFFSET */
 
+#ifndef HAVE_SKB_INNER_TRANSPORT_OFFSET
+static inline int skb_inner_transport_offset(const struct sk_buff *skb)
+{
+	return skb_inner_transport_header(skb) - skb->data;
+}
+#endif
+
 #ifndef HAVE_SKB_RESET_TAIL_POINTER
 static inline void skb_reset_tail_pointer(struct sk_buff *skb)
 {
@@ -202,27 +209,7 @@ static inline int skb_orphan_frags(struct sk_buff *skb, gfp_t gfp_mask)
 #endif
 
 #ifndef HAVE_SKB_GET_HASH
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)
-#define __skb_get_hash rpl__skb_get_rxhash
-#define skb_get_hash rpl_skb_get_rxhash
-
-extern u32 __skb_get_hash(struct sk_buff *skb);
-static inline __u32 skb_get_hash(struct sk_buff *skb)
-{
-#ifdef HAVE_RXHASH
-	if (skb->rxhash)
-#ifndef HAVE_U16_RXHASH
-		return skb->rxhash;
-#else
-		return jhash_1word(skb->rxhash, 0);
-#endif
-#endif
-	return __skb_get_hash(skb);
-}
-
-#else
 #define skb_get_hash skb_get_rxhash
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0) */
 #endif /* HAVE_SKB_GET_HASH */
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,8,0)
@@ -333,4 +320,32 @@ static inline void skb_pop_mac_header(struct sk_buff *skb)
 {
 	skb->mac_header = skb->network_header;
 }
+
+#ifndef HAVE_SKB_CLEAR_HASH_IF_NOT_L4
+static inline void skb_clear_hash_if_not_l4(struct sk_buff *skb)
+{
+	if (!skb->l4_rxhash)
+		skb_clear_hash(skb);
+}
+#endif
+
+#ifndef HAVE_SKB_POSTPUSH_RCSUM
+static inline void skb_postpush_rcsum(struct sk_buff *skb,
+				      const void *start, unsigned int len)
+{
+	/* For performing the reverse operation to skb_postpull_rcsum(),
+	 * we can instead of ...
+	 *
+	 *   skb->csum = csum_add(skb->csum, csum_partial(start, len, 0));
+	 *
+	 * ... just use this equivalent version here to save a few
+	 * instructions. Feeding csum of 0 in csum_partial() and later
+	 * on adding skb->csum is equivalent to feed skb->csum in the
+	 * first place.
+	 */
+	if (skb->ip_summed == CHECKSUM_COMPLETE)
+		skb->csum = csum_partial(start, len, skb->csum);
+}
+#endif
+
 #endif

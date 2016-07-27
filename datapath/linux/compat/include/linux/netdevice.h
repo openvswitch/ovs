@@ -105,28 +105,15 @@ static inline bool netif_needs_gso(struct sk_buff *skb,
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
-
-/* XEN dom0 networking assumes dev->master is bond device
- * and it tries to access bond private structure from dev->master
- * ptr on receive path. This causes panic. Therefore it is better
- * not to backport this API.
- **/
-static inline int netdev_master_upper_dev_link(struct net_device *dev,
-					       struct net_device *upper_dev)
+#ifndef HAVE_NETDEV_MASTER_UPPER_DEV_LINK_PRIV
+static inline int rpl_netdev_master_upper_dev_link(struct net_device *dev,
+					       struct net_device *upper_dev,
+					       void *upper_priv, void *upper_info)
 {
-	return 0;
+	return netdev_master_upper_dev_link(dev, upper_dev);
 }
+#define netdev_master_upper_dev_link rpl_netdev_master_upper_dev_link
 
-static inline void netdev_upper_dev_unlink(struct net_device *dev,
-					   struct net_device *upper_dev)
-{
-}
-
-static inline struct net_device *netdev_master_upper_dev_get(struct net_device *dev)
-{
-	return NULL;
-}
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
@@ -247,6 +234,44 @@ do {								\
 	printk(KERN_INFO format, ##args);			\
 } while (0)
 
+#endif
+
+#ifndef USE_UPSTREAM_TUNNEL
+#define dev_fill_metadata_dst ovs_dev_fill_metadata_dst
+int ovs_dev_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
+#endif
+
+#ifndef NETDEV_OFFLOAD_PUSH_VXLAN
+#define NETDEV_OFFLOAD_PUSH_VXLAN       0x001C
+#endif
+
+#ifndef NETDEV_OFFLOAD_PUSH_GENEVE
+#define NETDEV_OFFLOAD_PUSH_GENEVE      0x001D
+#endif
+
+#ifndef HAVE_IFF_PHONY_HEADROOM
+
+#define IFF_PHONY_HEADROOM 0
+static inline unsigned netdev_get_fwd_headroom(struct net_device *dev)
+{
+	return 0;
+}
+
+static inline void netdev_set_rx_headroom(struct net_device *dev, int new_hr)
+{
+}
+
+/* set the device rx headroom to the dev's default */
+static inline void netdev_reset_rx_headroom(struct net_device *dev)
+{
+}
+
+#endif
+
+#ifdef IFF_NO_QUEUE
+#define HAVE_IFF_NO_QUEUE
+#else
+#define IFF_NO_QUEUE 0
 #endif
 
 #endif /* __LINUX_NETDEVICE_WRAPPER_H */

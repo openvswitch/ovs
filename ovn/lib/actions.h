@@ -20,6 +20,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "compiler.h"
+#include "openvswitch/hmap.h"
+#include "openvswitch/dynamic-string.h"
 #include "util.h"
 
 struct expr;
@@ -27,6 +29,22 @@ struct lexer;
 struct ofpbuf;
 struct shash;
 struct simap;
+
+#define MAX_OVN_GROUPS 65535
+
+struct group_table {
+    unsigned long *group_ids;  /* Used as a bitmap with value set
+                                * for allocated group ids in either
+                                * desired_groups or existing_groups. */
+    struct hmap desired_groups;
+    struct hmap existing_groups;
+};
+
+struct group_info {
+    struct hmap_node hmap_node;
+    struct ds group;
+    uint32_t group_id;
+};
 
 enum action_opcode {
     /* "arp { ...actions... }".
@@ -54,6 +72,12 @@ enum action_opcode {
      *   - Any number of DHCP options.
      */
     ACTION_OPCODE_PUT_DHCP_OPTS,
+
+    /* "na { ...actions... }".
+     *
+     * The actions, in OpenFlow 1.3 format, follow the action_header.
+     */
+    ACTION_OPCODE_NA,
 };
 
 /* Header. */
@@ -79,6 +103,9 @@ struct action_params {
 
     /* A map from a port name to its connection tracking zone. */
     const struct simap *ct_zones;
+
+    /* A struct to figure out the group_id for group actions. */
+    struct group_table *group_table;
 
     /* OVN maps each logical flow table (ltable), one-to-one, onto a physical
      * OpenFlow flow table (ptable).  A number of parameters describe this

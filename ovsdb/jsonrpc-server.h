@@ -71,6 +71,6 @@ void ovsdb_jsonrpc_server_get_memory_usage(const struct ovsdb_jsonrpc_server *,
 
 struct ovsdb_jsonrpc_monitor;
 void ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *);
-void ovsdb_jsonrpc_disable_monitor2(void);
+void ovsdb_jsonrpc_disable_monitor_cond(void);
 
 #endif /* ovsdb/jsonrpc-server.h */

@@ -389,6 +389,142 @@ OVSDB_CHECK_IDL([simple idl, destroy without commit or abort],
 004: done
 ]])
 
+OVSDB_CHECK_IDL([simple idl, conditional, false condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition remove simple [false]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, true condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition add simple [true]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, multiple clauses in condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}},
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 2,
+               "r": 3.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition add simple [["i","==",1],["i","==",2]]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+003: i=2 r=3 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+004: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, modify as insert due to condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition add simple [["i","==",1]]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, modify as delete due to condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition add simple [["i","==",1],["i","==",2]]' \
+    'condition remove simple [["i","==",1]]' \
+    '["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 2,
+               "r": 3.0,
+               "b": true}}]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: change conditions
+005: empty
+006: {"error":null,"result":[{"uuid":["uuid","<2>"]}]}
+007: i=2 r=3 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+008: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, multiple tables],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}},
+       {"op": "insert",
+       "table": "link1",
+       "row": {"i": 0, "k": ["named-uuid", "self"]},
+       "uuid-name": "self"},
+        {"op": "insert",
+       "table": "link2",
+       "row": {"i": 2},
+       "uuid-name": "row0"}]']],
+  [['condition add simple [false];condition add link1 [false];condition add link2 [false]' \
+    'condition add simple [["i","==",1]]' \
+    'condition add link1 [["i","==",0]]' \
+    'condition add link2 [["i","==",3]]' \
+    '+["idltest",
+       {"op": "insert",
+       "table": "link2",
+       "row": {"i": 3},
+        "uuid-name": "row0"}]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: change conditions
+005: i=0 k=0 ka=[] l2= uuid=<2>
+005: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+006: change conditions
+007: {"error":null,"result":[{"uuid":["uuid","<3>"]}]}
+008: i=0 k=0 ka=[] l2= uuid=<2>
+008: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+008: i=3 l1= uuid=<3>
+009: done
+]])
+
 OVSDB_CHECK_IDL([self-linking idl, consistent ops],
   [],
   [['["idltest",
@@ -649,13 +785,13 @@ test-ovsdb|ovsdb_idl|link1 table in idltest database lacks l2 column (database n
 # Check that ovsdb-idl sent on "monitor" request and that it didn't
 # mention that table or column, and (for paranoia) that it did mention another
 # table and column.
-AT_CHECK([grep -c '"monitor\|monitor2"' stderr], [0], [1
+AT_CHECK([grep -c '"monitor\|monitor_cond"' stderr], [0], [1
 ])
-AT_CHECK([grep '"monitor\|monitor2"' stderr | grep link2], [1])
-AT_CHECK([grep '"monitor\|monitor2"' stderr | grep l2], [1])
-AT_CHECK([grep '"monitor\|monitor2"' stderr | grep -c '"link1"'], [0], [1
+AT_CHECK([grep '"monitor\|monitor_cond"' stderr | grep link2], [1])
+AT_CHECK([grep '"monitor\|monitor_cond"' stderr | grep l2], [1])
+AT_CHECK([grep '"monitor\|monitor_cond"' stderr | grep -c '"link1"'], [0], [1
 ])
-AT_CHECK([grep '"monitor\|monitor2"' stderr | grep -c '"ua"'], [0], [1
+AT_CHECK([grep '"monitor\|monitor_cond"' stderr | grep -c '"ua"'], [0], [1
 ])
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
@@ -706,6 +842,103 @@ OVSDB_CHECK_IDL_FETCH_COLUMNS([simple idl, initially populated],
 002: i=0 r=0 uuid=<0>
 002: i=1 uuid=<1>
 003: done
+]])
+
+m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND_PY],
+  [AT_SETUP([$1 - Python])
+   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_KEYWORDS([ovsdb server idl Python monitor $4])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   AT_CHECK([ovs-appctl -t "`pwd`"/unixctl ovsdb-server/disable-monitor-cond])
+   AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$5],,, [[| $5]]),
+            [0], [$3], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+
+m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND],
+   [OVSDB_CHECK_IDL_WO_MONITOR_COND_PY($@)])
+
+
+OVSDB_CHECK_IDL_WO_MONITOR_COND([simple idl disable monitor-cond],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "mystring",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
+      {"op": "insert",
+       "table": "simple",
+       "row": {}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [],
+       "row": {"b": true}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [],
+       "row": {"r": 123.5}}]' \
+    '["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": -1,
+               "r": 125,
+               "b": false,
+               "s": "",
+               "ia": ["set", [1]],
+               "ra": ["set", [1.5]],
+               "ba": ["set", [false]],
+               "sa": ["set", []],
+               "ua": ["set", []]}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [["i", "<", 1]],
+       "row": {"s": "newstring"}}]' \
+    '["idltest",
+      {"op": "delete",
+       "table": "simple",
+       "where": [["i", "==", 0]]}]' \
+    'reconnect']],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
+002: i=0 r=0 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+002: i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+003: {"error":null,"result":[{"count":2}]}
+004: i=0 r=0 b=true s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+005: {"error":null,"result":[{"count":2}]}
+006: i=0 r=123.5 b=true s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+006: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+007: {"error":null,"result":[{"uuid":["uuid","<6>"]}]}
+008: i=-1 r=125 b=false s= u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+008: i=0 r=123.5 b=true s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+008: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+009: {"error":null,"result":[{"count":2}]}
+010: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+010: i=0 r=123.5 b=true s=newstring u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+010: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+011: {"error":null,"result":[{"count":1}]}
+012: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+012: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+013: reconnect
+014: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+014: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+015: done
 ]])
 
 m4_define([OVSDB_CHECK_IDL_TRACK_C],

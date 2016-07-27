@@ -40,5 +40,5 @@ ovs-vsctl add-port br-int lport2 -- set Interface lport2 external_ids:iface-id=s
 ovn-sbctl chassis-add fakechassis geneve 127.0.0.1
 
 # Bind sw0-port3 and sw0-port4 to the fake remote chassis.
-ovn-sbctl lport-bind sw0-port3 fakechassis
-ovn-sbctl lport-bind sw0-port4 fakechassis
+ovn-sbctl lsp-bind sw0-port3 fakechassis
+ovn-sbctl lsp-bind sw0-port4 fakechassis

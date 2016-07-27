@@ -558,6 +558,27 @@ AT_CHECK([tail -1 stdout], [0], [Datapath actions: 2
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+dnl Tests that the standardized xxregs are mapped onto the legacy OVS
+dnl registers in the manner documented in ovs-ofctl(8).
+AT_SETUP([ofproto-dpif - extended-extended registers])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+AT_DATA([flows.txt], [dnl
+table=0 actions=load:0x0123456789abcdeffedcba9876543210->NXM_NX_XXREG1[[]],resubmit(,1)
+table=1,reg4=0x01234567,reg5=0x89abcdef,reg6=0xfedcba98,reg7=0x76543210   actions=2
+
+# These low-priority rules shouldn't match.  They're here only to make really
+# sure that the test fails if either of the above rules fails to match.
+table=0,priority=0                        actions=3
+table=1,priority=0                        actions=3
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0], [Datapath actions: 2
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - load and move order])
 OVS_VSWITCHD_START
 add_of_ports br0 1 10 11
@@ -628,6 +649,10 @@ table=2,priority=10                  actions=5,goto_table(3)
 # Verify that xreg0 got copied properly from actset_output.
 table=3,priority=20,xreg0=2  actions=6,goto_table(4)
 table=3,priority=10          actions=7,goto_table(4)
+
+# Verify that xxreg0 got copied properly from actset_output.
+table=3,priority=20,xxreg0=2  actions=6,goto_table(4)
+table=3,priority=10           actions=7,goto_table(4)
 
 # Verify that adding a group action unsets actset_output,
 # even if output follows group.
@@ -4224,6 +4249,230 @@ AT_CHECK_UNQUOTED([tail -1 stdout], [0], [Datapath actions: 4
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+# Tests below verify the snaplen support for mirroring
+AT_SETUP([ofproto-dpif - mirroring, select_all with snaplen])
+AT_KEYWORDS([mirror mirrors mirroring])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+ovs-vsctl \
+        set Bridge br0 mirrors=@m --\
+        --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror select_all=true output_port=@p3 snaplen=100
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:2
+in_port=2 actions=output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: trunc(100),3,2
+])
+
+flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: trunc(100),3,1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - mirroring, select_src with snaplen])
+AT_KEYWORDS([mirror mirrors mirroring])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+ovs-vsctl \
+        set Bridge br0 mirrors=@m --\
+        --id=@p1 get Port p1 -- --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror select_src_port=@p1 output_port=@p3 snaplen=100
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:2
+in_port=2 actions=output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: trunc(100),3,2
+])
+
+flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - mirroring, OFPP_NONE ingress port with snaplen])
+AT_KEYWORDS([mirror mirrors mirroring])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+ovs-vsctl \
+        set Bridge br0 mirrors=@m --\
+        --id=@p2 get Port p2 --\
+        --id=@m create Mirror name=mymirror select_all=true output_port=@p2 snaplen=100
+
+AT_CHECK([ovs-ofctl add-flow br0 action=output:1])
+
+# "in_port" defaults to OFPP_NONE if it's not specified.
+flow="icmp,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_ttl=128,icmp_type=8,icmp_code=0"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 1,trunc(100),2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - mirroring, select_dst with snaplen])
+AT_KEYWORDS([mirror mirrors mirroring])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+ovs-vsctl \
+        set Bridge br0 mirrors=@m --\
+        --id=@p2 get Port p2 -- --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror select_dst_port=@p2 output_port=@p3 snaplen=100
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:2
+in_port=2 actions=output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 2,trunc(100),3
+])
+
+flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - mirroring, select_vlan with snaplen])
+AT_KEYWORDS([mirror mirrors mirroring])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+ovs-vsctl \
+        set Bridge br0 mirrors=@m --\
+        --id=@p2 get Port p2 -- --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror select_all=true select_vlan=11 output_port=@p3 snaplen=100
+
+AT_DATA([flows.txt], [dnl
+in_port=1, actions=output:2
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x8100),vlan(vid=10,pcp=0),encap(eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0))"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: 2
+])
+
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x8100),vlan(vid=11,pcp=0),encap(eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0))"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: trunc(100),3,2
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - mirroring, output_port with snaplen])
+AT_KEYWORDS([mirror mirrors mirroring])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+ovs-vsctl \
+        set Bridge br0 mirrors=@m --\
+        --id=@p3 get Port p3 --\
+        --id=@m create Mirror name=mymirror select_all=true output_port=@p3 snaplen=100
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=mod_vlan_vid:17,output:2
+in_port=2 actions=output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: trunc(100),3,push_vlan(vid=17,pcp=0),2
+])
+
+flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+AT_CHECK_UNQUOTED([tail -1 stdout], [0],
+  [Datapath actions: trunc(100),3,1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - mirroring, output_vlan with snaplen])
+AT_KEYWORDS([mirror mirrors mirroring])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2
+ovs-vsctl \
+        set Bridge br0 mirrors=@m --\
+        --id=@m create Mirror name=mymirror select_all=true output_vlan=12 snaplen=100
+
+AT_DATA([flows.txt], [dnl
+in_port=1 actions=output:2
+in_port=2 actions=mod_vlan_vid:17,output:1
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+flow="in_port(1),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+actual=`tail -1 stdout | sed 's/Datapath actions: //'`
+dnl Expect: "trunc(100),100,trunc(100),2,trunc(100),1", with different order
+AT_CHECK([echo "$actual" | sed -n 's/.*\(trunc([0-9]*),[0-9]*,trunc([0-9]*),[0-9]*,trunc([0-9]*),[0-9]*\)/\1/p'], [0])
+
+flow="in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy "$flow"], [0], [stdout])
+actual=`tail -1 stdout | sed 's/Datapath actions: //'`
+AT_CHECK([echo "$actual" | sed -n 's/.*\(trunc([0-9]*),[0-9]*,trunc([0-9]*),[0-9]*,trunc([0-9]*),[0-9]*\)/\1/p'], [0])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - multiple VLAN output mirrors with snaplen])
+AT_KEYWORDS([mirror mirrors mirroring])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3
+ovs-vsctl \
+        -- set Bridge br0 fail-mode=standalone mirrors=@m1,@m2 \
+       -- --id=@m1 create Mirror name=m1 select_all=true output_vlan=500 snaplen=200 \
+       -- --id=@m2 create Mirror name=m2 select_all=true output_vlan=501 snaplen=300 \
+       -- set Port br0 tag=0 \
+       -- set Port p1 tag=0 \
+       -- set Port p2 tag=500 \
+       -- set Port p3 tag=501
+
+flow="in_port=1"
+AT_CHECK([ovs-appctl ofproto/trace br0 "$flow"], [0], [stdout])
+AT_CHECK([tail -1 stdout | egrep "trunc\(200\),2,trunc\(300\),3,100|trunc\(300\),3,trunc\(200\),2,100"], [0], [stdout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 # This test verifies that the table ID is preserved across recirculation
 # when a resubmit action requires it (because the action is relative to
 # the current table rather than specifying a table).
@@ -5972,10 +6221,10 @@ for i in `seq 1 20`; do
 done
 
 dnl There are 4 extra IPFIX template packets.
-AT_CHECK([ovs-ofctl dump-ipfix-bridge br0], [0], [dnl
+AT_CHECK([ovs-ofctl dump-ipfix-bridge br0 | sed 's/tx pkts=[[0-9]]*/tx pkts=24/' | sed 's/tx errs=[[0-9]]*/tx errs=0/'], [0], [dnl
 NXST_IPFIX_BRIDGE reply (xid=0x2):
-  bridge ipfix: flows=20, current flows=0, sampled pkts=20, ipv4 ok=0, ipv6 ok=0, tx pkts=12
-                pkts errs=20, ipv4 errs=20, ipv6 errs=0, tx errs=12
+  bridge ipfix: flows=20, current flows=0, sampled pkts=20, ipv4 ok=0, ipv6 ok=0, tx pkts=24
+                pkts errs=20, ipv4 errs=20, ipv6 errs=0, tx errs=0
 ])
 
 dnl Remove the IPFIX configuration.
@@ -6037,7 +6286,6 @@ AT_CLEANUP
 
 dnl Flow IPFIX sanity check for tunnel set
 AT_SETUP([ofproto-dpif - Flow IPFIX sanity check - tunnel set])
-AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
                     options:key=5 ofport_request=1\
@@ -6137,10 +6385,10 @@ for i in `seq 1 20`; do
 done
 
 dnl There are 4 extra IPFIX template packets.
-AT_CHECK([ovs-ofctl dump-ipfix-flow br0], [0], [dnl
+AT_CHECK([ovs-ofctl dump-ipfix-flow br0 | sed 's/tx pkts=[[0-9]]*/tx pkts=24/' | sed 's/tx errs=[[0-9]]*/tx errs=0/'], [0], [dnl
 NXST_IPFIX_FLOW reply (xid=0x2): 1 ids
-  id   1: flows=20, current flows=0, sampled pkts=20, ipv4 ok=0, ipv6 ok=0, tx pkts=12
-          pkts errs=20, ipv4 errs=20, ipv6 errs=0, tx errs=12
+  id   1: flows=20, current flows=0, sampled pkts=20, ipv4 ok=0, ipv6 ok=0, tx pkts=24
+          pkts errs=20, ipv4 errs=20, ipv6 errs=0, tx errs=0
 ])
 
 dnl Remove the flow which contains sample action.

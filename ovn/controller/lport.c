@@ -28,7 +28,7 @@ struct lport {
     struct hmap_node name_node;  /* Index by name. */
     struct hmap_node key_node;   /* Index by (dp_key, port_key). */
     struct hmap_node uuid_node;  /* Index by row uuid. */
-    const struct uuid *uuid;
+    struct uuid uuid;
     const struct sbrec_port_binding *pb;
 };
 
@@ -48,7 +48,7 @@ lport_index_init(struct lport_index *lports)
     hmap_init(&lports->by_uuid);
 }
 
-void
+bool
 lport_index_remove(struct lport_index *lports, const struct uuid *uuid)
 {
     const struct lport *port_ = lport_lookup_by_uuid(lports, uuid);
@@ -58,7 +58,9 @@ lport_index_remove(struct lport_index *lports, const struct uuid *uuid)
         hmap_remove(&lports->by_key, &port->key_node);
         hmap_remove(&lports->by_uuid, &port->uuid_node);
         free(port);
+        return true;
     }
+    return false;
 }
 
 void
@@ -74,6 +76,7 @@ lport_index_clear(struct lport_index *lports)
         hmap_remove(&lports->by_uuid, &port->uuid_node);
         free(port);
     }
+    lflow_reset_processing();
 }
 
 static void
@@ -91,8 +94,9 @@ consider_lport_index(struct lport_index *lports,
                 hash_int(pb->tunnel_key, pb->datapath->tunnel_key));
     hmap_insert(&lports->by_uuid, &p->uuid_node,
                 uuid_hash(&pb->header_.uuid));
-    p->uuid = &pb->header_.uuid;
+    memcpy(&p->uuid, &pb->header_.uuid, sizeof p->uuid);
     p->pb = pb;
+    lflow_reset_processing();
 }
 
 void
@@ -108,7 +112,10 @@ lport_index_fill(struct lport_index *lports, struct ovsdb_idl *ovnsb_idl)
     } else {
         SBREC_PORT_BINDING_FOR_EACH_TRACKED (pb, ovnsb_idl) {
             if (sbrec_port_binding_is_deleted(pb)) {
-                lport_index_remove(lports, &pb->header_.uuid);
+                while (lport_index_remove(lports, &pb->header_.uuid)) {
+                    ;
+                }
+                lflow_reset_processing();
             } else {
                 consider_lport_index(lports, pb);
             }
@@ -148,7 +155,7 @@ lport_lookup_by_uuid(const struct lport_index *lports,
     const struct lport *lport;
     HMAP_FOR_EACH_WITH_HASH (lport, uuid_node, uuid_hash(uuid),
                              &lports->by_uuid) {
-        if (uuid_equals(uuid, lport->uuid)) {
+        if (uuid_equals(uuid, &lport->uuid)) {
             return lport;
         }
     }
@@ -173,7 +180,7 @@ lport_lookup_by_key(const struct lport_index *lports,
 struct mcgroup {
     struct hmap_node dp_name_node; /* Index by (logical datapath, name). */
     struct hmap_node uuid_node;    /* Index by insert uuid. */
-    const struct uuid *uuid;
+    struct uuid uuid;
     const struct sbrec_multicast_group *mg;
 };
 
@@ -202,6 +209,7 @@ mcgroup_index_remove(struct mcgroup_index *mcgroups, const struct uuid *uuid)
         hmap_remove(&mcgroups->by_uuid, &mcgroup->uuid_node);
         free(mcgroup);
     }
+    lflow_reset_processing();
 }
 
 void
@@ -229,8 +237,9 @@ consider_mcgroup_index(struct mcgroup_index *mcgroups,
                 hash_string(mg->name, uuid_hash(dp_uuid)));
     hmap_insert(&mcgroups->by_uuid, &m->uuid_node,
                 uuid_hash(&mg->header_.uuid));
-    m->uuid = &mg->header_.uuid;
+    memcpy(&m->uuid, &mg->header_.uuid, sizeof m->uuid);
     m->mg = mg;
+    lflow_reset_processing();
 }
 
 void
@@ -247,6 +256,7 @@ mcgroup_index_fill(struct mcgroup_index *mcgroups, struct ovsdb_idl *ovnsb_idl)
         SBREC_MULTICAST_GROUP_FOR_EACH_TRACKED (mg, ovnsb_idl) {
             if (sbrec_multicast_group_is_deleted(mg)) {
                 mcgroup_index_remove(mcgroups, &mg->header_.uuid);
+                lflow_reset_processing();
             } else {
                 consider_mcgroup_index(mcgroups, mg);
             }
@@ -269,7 +279,7 @@ mcgroup_lookup_by_uuid(const struct mcgroup_index *mcgroups,
     const struct mcgroup *mcgroup;
     HMAP_FOR_EACH_WITH_HASH (mcgroup, uuid_node, uuid_hash(uuid),
                              &mcgroups->by_uuid) {
-        if (uuid_equals(mcgroup->uuid, uuid)) {
+        if (uuid_equals(&mcgroup->uuid, uuid)) {
             return mcgroup;
         }
     }

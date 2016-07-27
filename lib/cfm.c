@@ -27,7 +27,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "netdev.h"
 #include "ovs-atomic.h"
 #include "packets.h"
@@ -38,6 +38,7 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(cfm);
 

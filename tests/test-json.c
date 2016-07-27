@@ -16,7 +16,7 @@
 
 #include <config.h>
 #undef NDEBUG
-#include "json.h"
+#include "openvswitch/json.h"
 #include <ctype.h>
 #include <errno.h>
 #include <getopt.h>

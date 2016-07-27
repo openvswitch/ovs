@@ -746,6 +746,28 @@ Instructions to setup travis-ci for your GitHub repository:
 4. Pushing a commit to the repository which breaks the build or the
    testsuite will now trigger a email sent to mylist@mydomain.org
 
+Static Code Analysis
+--------------------
+
+Static Analysis is a method of debugging Software by examining code rather
+than actually executing it. This can be done through 'scan-build' commandline
+utility which internally uses clang (or) gcc to compile the code and also
+invokes a static analyzer to do the code analysis. At the end of the build, the
+reports are aggregated in to a common folder and can later be analyzed using
+'scan-view'.
+
+Open vSwitch includes a Makefile target to trigger static code Analysis and
+the instructions are below.
+
+1. ./boot.sh
+2. ./configure CC=clang (when using clang compiler)
+   ./configure CC=gcc CFLAGS="-std=gnu99" (when using GCC)
+3. make clang-analyze
+
+You should invoke scan-view to view analysis results. The last line of output
+from 'make clang-analyze' shall list the command (containing results directory)
+that you should invoke to view the results on a browser.
+
 Bug Reporting
 =============
 

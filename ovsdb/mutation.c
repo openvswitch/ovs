@@ -22,9 +22,13 @@
 
 #include "column.h"
 #include "ovsdb-error.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "row.h"
+
+#include <string.h>
+
 #include "table.h"
+#include "util.h"
 
 struct ovsdb_error *
 ovsdb_mutator_from_string(const char *name, enum ovsdb_mutator *mutator)

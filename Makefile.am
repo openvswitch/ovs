@@ -73,6 +73,7 @@ docs = \
 	INSTALL.md \
 	INSTALL.Debian.md \
 	INSTALL.Docker.md \
+	INSTALL.DPDK-ADVANCED.md \
 	INSTALL.DPDK.md \
 	INSTALL.Fedora.md \
 	INSTALL.KVM.md \
@@ -93,7 +94,6 @@ docs = \
 	README-native-tunneling.md \
 	REPORTING-BUGS.md \
 	SECURITY.md \
-	TODO.md \
 	WHY-OVS.md
 EXTRA_DIST = \
 	$(docs) \
@@ -114,7 +114,8 @@ EXTRA_DIST = \
 	build-aux/xml2nroff \
 	$(MAN_FRAGMENTS) \
 	$(MAN_ROOTS) \
-	Vagrantfile
+	Vagrantfile \
+	Vagrantfile-FreeBSD
 bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =
@@ -399,6 +400,13 @@ ovsext_clean: datapath-windows/ovsext.sln
 	MSBuild.exe //maxcpucount datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8.1$(VSTUDIO_CONFIG)"
 endif
 .PHONY: ovsext
+
+clang-analyze: clean
+	@which clang scan-build >/dev/null 2>&1 || \
+		(echo "Unable to find clang/scan-build, Install clang,clang-analyzer packages"; exit 1)
+	@$(MKDIR_P) "$(srcdir)/tests/clang-analyzer-results"
+	@scan-build -o $(srcdir)/tests/clang-analyzer-results --use-cc=$(CC) $(MAKE)
+.PHONY: clang-analyze
 
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)

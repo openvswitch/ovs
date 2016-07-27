@@ -62,7 +62,7 @@
 #include "pvector.h"
 #include "random.h"
 #include "seq.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "sset.h"
 #include "timeval.h"
 #include "tnl-neigh-cache.h"
@@ -442,8 +442,10 @@ struct dp_netdev_pmd_thread {
     pthread_t thread;
     unsigned core_id;               /* CPU core id of this pmd thread. */
     int numa_id;                    /* numa node id of this pmd thread. */
-    atomic_int tx_qid;              /* Queue id used by this pmd thread to
-                                     * send packets on all netdevs */
+
+    /* Queue id used by this pmd thread to send packets on all netdevs.
+     * All tx_qid's are unique and less than 'ovs_numa_get_n_cores() + 1'. */
+    atomic_int tx_qid;
 
     struct ovs_mutex port_mutex;    /* Mutex for 'poll_list' and 'tx_ports'. */
     /* List of rx queues to poll. */
@@ -2512,16 +2514,6 @@ dpif_netdev_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
     }
 }
 
-static bool
-cmask_equals(const char *a, const char *b)
-{
-    if (a && b) {
-        return !strcmp(a, b);
-    }
-
-    return a == NULL && b == NULL;
-}
-
 /* Changes the number or the affinity of pmd threads.  The changes are actually
  * applied in dpif_netdev_run(). */
 static int
@@ -2529,9 +2521,9 @@ dpif_netdev_pmd_set(struct dpif *dpif, const char *cmask)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
 
-    if (!cmask_equals(dp->requested_pmd_cmask, cmask)) {
+    if (!nullable_string_is_equal(dp->requested_pmd_cmask, cmask)) {
         free(dp->requested_pmd_cmask);
-        dp->requested_pmd_cmask = cmask ? xstrdup(cmask) : NULL;
+        dp->requested_pmd_cmask = nullable_xstrdup(cmask);
     }
 
     return 0;
@@ -2690,9 +2682,7 @@ reconfigure_pmd_threads(struct dp_netdev *dp)
     /* Reconfigures the cpu mask. */
     ovs_numa_set_cpu_mask(dp->requested_pmd_cmask);
     free(dp->pmd_cmask);
-    dp->pmd_cmask = dp->requested_pmd_cmask
-                    ? xstrdup(dp->requested_pmd_cmask)
-                    : NULL;
+    dp->pmd_cmask = nullable_xstrdup(dp->requested_pmd_cmask);
 
     /* Restores the non-pmd. */
     dp_netdev_set_nonpmd(dp);
@@ -2741,7 +2731,7 @@ dpif_netdev_run(struct dpif *dpif)
 
     dp_netdev_pmd_unref(non_pmd);
 
-    if (!cmask_equals(dp->pmd_cmask, dp->requested_pmd_cmask)
+    if (!nullable_string_is_equal(dp->pmd_cmask, dp->requested_pmd_cmask)
         || ports_require_restart(dp)) {
         reconfigure_pmd_threads(dp);
     }
@@ -2844,7 +2834,6 @@ pmd_thread_main(void *f_)
     int poll_cnt;
     int i;
 
-    poll_cnt = 0;
     poll_list = NULL;
 
     /* Stores the pmd thread's 'pmd' to 'per_pmd_key'. */
@@ -2872,9 +2861,10 @@ reload:
 
             lc = 0;
 
-            emc_cache_slow_sweep(&pmd->flow_cache);
             coverage_try_clear();
-            ovsrcu_quiesce();
+            if (!ovsrcu_try_quiesce()) {
+                emc_cache_slow_sweep(&pmd->flow_cache);
+            }
 
             atomic_read_relaxed(&pmd->change_seq, &seq);
             if (seq != port_seq) {

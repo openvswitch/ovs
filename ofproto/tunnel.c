@@ -24,7 +24,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "fat-rwlock.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "netdev.h"
 #include "odp-util.h"
 #include "openvswitch/ofpbuf.h"
@@ -435,7 +435,8 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
             flow->tunnel.ipv6_dst = in6addr_any;
         }
     }
-    flow->pkt_mark = tnl_port->match.pkt_mark;
+    flow->pkt_mark |= tnl_port->match.pkt_mark;
+    wc->masks.pkt_mark |= tnl_port->match.pkt_mark;
 
     if (!cfg->out_key_flow) {
         flow->tunnel.tun_id = cfg->out_key;

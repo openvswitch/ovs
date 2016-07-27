@@ -22,7 +22,7 @@
 #include "colors.h"
 #include "compiler.h"
 #include "dummy.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "learn.h"
 #include "multipath.h"
 #include "nx-match.h"
@@ -196,8 +196,8 @@ enum ofp_raw_action_type {
     /* NX1.0(4), OF1.1+(21): uint32_t. */
     OFPAT_RAW_SET_QUEUE,
 
-    /* OF1.1+(22): uint32_t. */
-    OFPAT_RAW11_GROUP,
+    /* NX1.0(40), OF1.1+(22): uint32_t. */
+    OFPAT_RAW_GROUP,
 
     /* OF1.1+(23): uint8_t. */
     OFPAT_RAW11_SET_NW_TTL,
@@ -355,6 +355,9 @@ static enum ofperr ofpacts_verify(const struct ofpact[], size_t ofpacts_len,
 
 static void ofpact_put_set_field(struct ofpbuf *openflow, enum ofp_version,
                                  enum mf_field_id, uint64_t value);
+
+static void put_reg_load(struct ofpbuf *openflow,
+                         const struct mf_subfield *, uint64_t value);
 
 static enum ofperr ofpact_pull_raw(struct ofpbuf *, enum ofp_version,
                                    enum ofp_raw_action_type *, uint64_t *arg);
@@ -619,7 +622,7 @@ format_OUTPUT(const struct ofpact_output *a, struct ds *s)
 /* Group actions. */
 
 static enum ofperr
-decode_OFPAT_RAW11_GROUP(uint32_t group_id,
+decode_OFPAT_RAW_GROUP(uint32_t group_id,
                          enum ofp_version ofp_version OVS_UNUSED,
                          struct ofpbuf *out)
 {
@@ -631,11 +634,7 @@ static void
 encode_GROUP(const struct ofpact_group *group,
              enum ofp_version ofp_version, struct ofpbuf *out)
 {
-    if (ofp_version == OFP10_VERSION) {
-        /* XXX */
-    } else {
-        put_OFPAT11_GROUP(out, group->group_id);
-    }
+    put_OFPAT_GROUP(out, ofp_version, group->group_id);
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -994,7 +993,13 @@ encode_ENQUEUE(const struct ofpact_enqueue *enqueue,
         oae->port = htons(ofp_to_u16(enqueue->port));
         oae->queue_id = htonl(enqueue->queue);
     } else {
-        /* XXX */
+        put_OFPAT_SET_QUEUE(out, ofp_version, enqueue->queue);
+
+        struct ofp11_action_output *oao = put_OFPAT11_OUTPUT(out);
+        oao->port = ofputil_port_to_ofp11(enqueue->port);
+        oao->max_len = OVS_BE16_MAX;
+
+        put_NXAST_POP_QUEUE(out);
     }
 }
 
@@ -1911,7 +1916,9 @@ encode_SET_IP_ECN(const struct ofpact_ecn *ip_ecn,
 {
     uint8_t ecn = ip_ecn->ecn;
     if (ofp_version == OFP10_VERSION) {
-        /* XXX */
+        struct mf_subfield dst = { .field = mf_from_id(MFF_IP_ECN),
+                                   .ofs = 0, .n_bits = 2 };
+        put_reg_load(out, &dst, ecn);
     } else if (ofp_version == OFP11_VERSION) {
         put_OFPAT11_SET_NW_ECN(out, ecn);
     } else {
@@ -1963,7 +1970,9 @@ encode_SET_IP_TTL(const struct ofpact_ip_ttl *ttl,
     if (ofp_version >= OFP11_VERSION) {
         put_OFPAT11_SET_NW_TTL(out, ttl->ttl);
     } else {
-        /* XXX */
+        struct mf_subfield dst = { .field = mf_from_id(MFF_IP_TTL),
+                                   .ofs = 0, .n_bits = 8 };
+        put_reg_load(out, &dst, ttl->ttl);
     }
 }
 
@@ -2602,6 +2611,18 @@ ofpact_put_set_field(struct ofpbuf *openflow, enum ofp_version ofp_version,
     pad_ofpat(openflow, start_ofs);
 }
 
+static void
+put_reg_load(struct ofpbuf *openflow,
+             const struct mf_subfield *dst, uint64_t value)
+{
+    ovs_assert(dst->n_bits <= 64);
+
+    struct nx_action_reg_load *narl = put_NXAST_REG_LOAD(openflow);
+    narl->ofs_nbits = nxm_encode_ofs_nbits(dst->ofs, dst->n_bits);
+    narl->dst = htonl(mf_nxm_header(dst->field->id));
+    narl->value = htonll(value);
+}
+
 static bool
 next_load_segment(const struct ofpact_set_field *sf,
                   struct mf_subfield *dst, uint64_t *value)
@@ -2646,10 +2667,7 @@ set_field_to_nxast(const struct ofpact_set_field *sf, struct ofpbuf *openflow)
 
         dst.ofs = dst.n_bits = 0;
         while (next_load_segment(sf, &dst, &value)) {
-            struct nx_action_reg_load *narl = put_NXAST_REG_LOAD(openflow);
-            narl->ofs_nbits = nxm_encode_ofs_nbits(dst.ofs, dst.n_bits);
-            narl->dst = htonl(mf_nxm_header(dst.field->id));
-            narl->value = htonll(value);
+            put_reg_load(openflow, &dst, value);
         }
     }
 }
@@ -2755,6 +2773,10 @@ set_field_to_legacy_openflow(const struct ofpact_set_field *sf,
 
     case MFF_IP_DSCP_SHIFTED:
         put_OFPAT_SET_NW_TOS(out, ofp_version, sf->value.u8 << 2);
+        break;
+
+    case MFF_IP_ECN:
+        put_OFPAT11_SET_NW_ECN(out, sf->value.u8);
         break;
 
     case MFF_TCP_SRC:
@@ -7610,7 +7632,6 @@ ofpacts_format(const struct ofpact *ofpacts, size_t ofpacts_len,
                 ds_put_char(string, ',');
             }
 
-            /* XXX write-actions */
             ofpact_format(a, string);
         }
     }

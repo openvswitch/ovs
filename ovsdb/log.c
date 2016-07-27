@@ -24,7 +24,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
-#include "json.h"
+#include "openvswitch/json.h"
 #include "lockfile.h"
 #include "ovsdb.h"
 #include "ovsdb-error.h"

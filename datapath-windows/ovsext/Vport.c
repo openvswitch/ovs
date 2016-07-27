@@ -724,7 +724,8 @@ OvsFindTunnelVportByDstPortAndNWProto(POVS_SWITCH_CONTEXT switchContext,
         if (GetPortFromPriv(vport) == dstPort) {
             switch (nwProto) {
             case IPPROTO_UDP:
-                if (vport->ovsType != OVS_VPORT_TYPE_VXLAN) {
+                if (vport->ovsType != OVS_VPORT_TYPE_GENEVE &&
+                    vport->ovsType != OVS_VPORT_TYPE_VXLAN) {
                     continue;
                 }
                 break;

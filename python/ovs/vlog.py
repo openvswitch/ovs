@@ -298,10 +298,10 @@ class Vlog(object):
             return
 
         logger = logging.getLogger('syslog')
-        # If there is no infrastructure to support python syslog, increase
-        # the logging severity level to avoid repeated errors.
+        # If there is no infrastructure to support python syslog, disable
+        # the logger to avoid repeated errors.
         if not os.path.exists("/dev/log"):
-            logger.setLevel(logging.CRITICAL)
+            logger.disabled = True
             return
 
         if syslog_handler:

@@ -17,9 +17,9 @@
 #define OVSDB_OVSDB_H 1
 
 #include "compiler.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 
 struct json;
 struct ovsdb_log;

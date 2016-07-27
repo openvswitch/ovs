@@ -851,11 +851,9 @@ error:
 	return ERR_PTR(err);
 }
 
-static int skb_list_xmit(struct rtable *rt, struct sk_buff *skb, __be32 src,
-			 __be32 dst, __u8 tos, __u8 ttl, __be16 df)
+static void skb_list_xmit(struct rtable *rt, struct sk_buff *skb, __be32 src,
+			  __be32 dst, __u8 tos, __u8 ttl, __be16 df)
 {
-	int len = 0;
-
 	while (skb) {
 		struct sk_buff *next = skb->next;
 
@@ -863,12 +861,11 @@ static int skb_list_xmit(struct rtable *rt, struct sk_buff *skb, __be32 src,
 			dst_clone(&rt->dst);
 
 		skb->next = NULL;
-		len += iptunnel_xmit(NULL, rt, skb, src, dst, IPPROTO_TCP,
-				     tos, ttl, df, false);
+		iptunnel_xmit(NULL, rt, skb, src, dst, IPPROTO_TCP,
+			      tos, ttl, df, false);
 
 		skb = next;
 	}
-	return len;
 }
 
 static u8 parse_ipv6_l4_proto(struct sk_buff *skb)
@@ -909,9 +906,9 @@ static u8 skb_get_l4_proto(struct sk_buff *skb, __be16 l3_proto)
 }
 
 static int stt_xmit_skb(struct sk_buff *skb, struct rtable *rt,
-		 __be32 src, __be32 dst, __u8 tos,
-		 __u8 ttl, __be16 df, __be16 src_port, __be16 dst_port,
-		 __be64 tun_id)
+			__be32 src, __be32 dst, __u8 tos,
+			__u8 ttl, __be16 df, __be16 src_port, __be16 dst_port,
+			__be64 tun_id)
 {
 	struct ethhdr *eh = eth_hdr(skb);
 	int ret = 0, min_headroom;
@@ -966,18 +963,36 @@ static int stt_xmit_skb(struct sk_buff *skb, struct rtable *rt,
 		}
 
 		/* Push IP header. */
-		ret += skb_list_xmit(rt, skb, src, dst, tos, ttl, df);
+		skb_list_xmit(rt, skb, src, dst, tos, ttl, df);
 
 next:
 		skb = next_skb;
 	}
 
-	return ret;
+	return 0;
 
 err_free_rt:
 	ip_rt_put(rt);
 	kfree_skb(skb);
 	return ret;
+}
+
+static struct rtable *stt_get_rt(struct sk_buff *skb,
+				 struct net_device *dev,
+				 struct flowi4 *fl,
+				 const struct ip_tunnel_key *key)
+{
+	struct net *net = dev_net(dev);
+
+	/* Route lookup */
+	memset(fl, 0, sizeof(*fl));
+	fl->daddr = key->u.ipv4.dst;
+	fl->saddr = key->u.ipv4.src;
+	fl->flowi4_tos = RT_TOS(key->tos);
+	fl->flowi4_mark = skb->mark;
+	fl->flowi4_proto = IPPROTO_TCP;
+
+	return ip_route_output_key(net, fl);
 }
 
 netdev_tx_t ovs_stt_xmit(struct sk_buff *skb)
@@ -1002,14 +1017,7 @@ netdev_tx_t ovs_stt_xmit(struct sk_buff *skb)
 
 	tun_key = &tun_info->key;
 
-	/* Route lookup */
-	memset(&fl, 0, sizeof(fl));
-	fl.daddr = tun_key->u.ipv4.dst;
-	fl.saddr = tun_key->u.ipv4.src;
-	fl.flowi4_tos = RT_TOS(tun_key->tos);
-	fl.flowi4_mark = skb->mark;
-	fl.flowi4_proto = IPPROTO_TCP;
-	rt = ip_route_output_key(net, &fl);
+	rt = stt_get_rt(skb, dev, &fl, tun_key);
 	if (IS_ERR(rt)) {
 		err = PTR_ERR(rt);
 		goto error;
@@ -1019,10 +1027,9 @@ netdev_tx_t ovs_stt_xmit(struct sk_buff *skb)
 	sport = udp_flow_src_port(net, skb, 1, USHRT_MAX, true);
 	skb->ignore_df = 1;
 
-	err = stt_xmit_skb(skb, rt, fl.saddr, tun_key->u.ipv4.dst,
-			    tun_key->tos, tun_key->ttl,
-			    df, sport, dport, tun_key->tun_id);
-	iptunnel_xmit_stats(err, &dev->stats, (struct pcpu_sw_netstats __percpu *)dev->tstats);
+	stt_xmit_skb(skb, rt, fl.saddr, tun_key->u.ipv4.dst,
+		    tun_key->tos, tun_key->ttl,
+		    df, sport, dport, tun_key->tun_id);
 	return NETDEV_TX_OK;
 error:
 	kfree_skb(skb);
@@ -1401,12 +1408,12 @@ static void rcv_list(struct net_device *dev, struct sk_buff *skb,
 	} while ((skb = next));
 }
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 static int __stt_rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
 {
 	struct metadata_dst tun_dst;
 
-	ovs_ip_tun_rx_dst(&tun_dst.u.tun_info, skb, TUNNEL_KEY | TUNNEL_CSUM,
+	ovs_ip_tun_rx_dst(&tun_dst, skb, TUNNEL_KEY | TUNNEL_CSUM,
 			  get_unaligned(&stt_hdr(skb)->key), 0);
 	tun_dst.u.tun_info.key.tp_src = tcp_hdr(skb)->source;
 	tun_dst.u.tun_info.key.tp_dst = tcp_hdr(skb)->dest;
@@ -1451,7 +1458,8 @@ static void stt_rcv(struct stt_dev *stt_dev, struct sk_buff *skb)
 
 	err = iptunnel_pull_header(skb,
 				   sizeof(struct stthdr) + STT_ETH_PAD,
-				   htons(ETH_P_TEB));
+				   htons(ETH_P_TEB),
+				   !net_eq(stt_dev->net, dev_net(stt_dev->dev)));
 	if (unlikely(err))
 		goto drop;
 
@@ -1546,7 +1554,11 @@ static void clean_percpu(struct work_struct *work)
 #ifdef HAVE_NF_HOOKFN_ARG_OPS
 #define FIRST_PARAM const struct nf_hook_ops *ops
 #else
+#ifdef HAVE_NF_HOOKFN_ARG_PRIV
+#define FIRST_PARAM void *priv
+#else
 #define FIRST_PARAM unsigned int hooknum
+#endif
 #endif
 
 #ifdef HAVE_NF_HOOK_STATE
@@ -1592,7 +1604,9 @@ static unsigned int nf_ip_hook(FIRST_PARAM, struct sk_buff *skb, LAST_PARAM)
 
 static struct nf_hook_ops nf_hook_ops __read_mostly = {
 	.hook           = nf_ip_hook,
+#ifdef HAVE_NF_HOOKS_OPS_OWNER
 	.owner          = THIS_MODULE,
+#endif
 	.pf             = NFPROTO_IPV4,
 	.hooknum        = NF_INET_LOCAL_IN,
 	.priority       = INT_MAX,
@@ -1720,7 +1734,7 @@ out:
 
 static netdev_tx_t stt_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 {
-#ifdef HAVE_METADATA_DST
+#ifdef USE_UPSTREAM_TUNNEL
 	return ovs_stt_xmit(skb);
 #else
 	/* Drop All packets coming from networking stack. OVS-CB is
@@ -1802,6 +1816,31 @@ static int stt_change_mtu(struct net_device *dev, int new_mtu)
 	return __stt_change_mtu(dev, new_mtu, true);
 }
 
+int ovs_stt_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb)
+{
+	struct ip_tunnel_info *info = skb_tunnel_info(skb);
+	struct stt_dev *stt_dev = netdev_priv(dev);
+	struct net *net = stt_dev->net;
+	__be16 dport = stt_dev->dst_port;
+	struct flowi4 fl4;
+	struct rtable *rt;
+
+	if (ip_tunnel_info_af(info) != AF_INET)
+		return -EINVAL;
+
+	rt = stt_get_rt(skb, dev, &fl4, &info->key);
+	if (IS_ERR(rt))
+		return PTR_ERR(rt);
+
+	ip_rt_put(rt);
+
+	info->key.u.ipv4.src = fl4.saddr;
+	info->key.tp_src = udp_flow_src_port(net, skb, 1, USHRT_MAX, true);
+	info->key.tp_dst = dport;
+	return 0;
+}
+EXPORT_SYMBOL_GPL(ovs_stt_fill_metadata_dst);
+
 static const struct net_device_ops stt_netdev_ops = {
 	.ndo_init               = stt_init,
 	.ndo_uninit             = stt_uninit,
@@ -1812,6 +1851,11 @@ static const struct net_device_ops stt_netdev_ops = {
 	.ndo_change_mtu         = stt_change_mtu,
 	.ndo_validate_addr      = eth_validate_addr,
 	.ndo_set_mac_address    = eth_mac_addr,
+#ifdef USE_UPSTREAM_TUNNEL
+#ifdef HAVE_NDO_FILL_METADATA_DST
+	.ndo_fill_metadata_dst  = stt_fill_metadata_dst,
+#endif
+#endif
 };
 
 static void stt_get_drvinfo(struct net_device *dev,
@@ -1850,7 +1894,7 @@ static void stt_setup(struct net_device *dev)
 	dev->hw_features |= NETIF_F_SG | NETIF_F_HW_CSUM | NETIF_F_RXCSUM;
 	dev->hw_features |= NETIF_F_GSO_SOFTWARE;
 
-#ifdef HAVE_METADATA_DST
+#ifdef USE_UPSTREAM_TUNNEL
 	netif_keep_dst(dev);
 #endif
 	dev->priv_flags |= IFF_LIVE_ADDR_CHANGE | IFF_NO_QUEUE;

@@ -27,7 +27,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "svec.h"
 #include "openvswitch/vlog.h"
 #include "odp-netlink.h"

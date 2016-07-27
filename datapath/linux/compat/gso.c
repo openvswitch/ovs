@@ -25,6 +25,7 @@
 #include <linux/icmp.h>
 #include <linux/in.h>
 #include <linux/ip.h>
+#include <linux/ipv6.h>
 #include <linux/kernel.h>
 #include <linux/kmod.h>
 #include <linux/netdevice.h>
@@ -41,18 +42,6 @@
 #include "gso.h"
 
 #ifdef OVS_USE_COMPAT_GSO_SEGMENTATION
-static bool dev_supports_vlan_tx(struct net_device *dev)
-{
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37)
-	return true;
-#elif defined(HAVE_VLAN_BUG_WORKAROUND)
-	return dev->features & NETIF_F_HW_VLAN_TX;
-#else
-	/* Assume that the driver is buggy. */
-	return false;
-#endif
-}
-
 /* Strictly this is not needed and will be optimised out
  * as this code is guarded by if LINUX_VERSION_CODE < KERNEL_VERSION(3,19,0).
  * It is here to make things explicit should the compatibility
@@ -74,9 +63,9 @@ int rpl_dev_queue_xmit(struct sk_buff *skb)
 {
 #undef dev_queue_xmit
 	int err = -ENOMEM;
-	bool vlan, mpls;
+	bool mpls;
 
-	vlan = mpls = false;
+	mpls = false;
 
 	/* Avoid traversing any VLAN tags that are present to determine if
 	 * the ethtype is MPLS. Instead compare the mac_len (end of L2) and
@@ -85,21 +74,10 @@ int rpl_dev_queue_xmit(struct sk_buff *skb)
 	if (skb->mac_len != skb_network_offset(skb) && !supports_mpls_gso())
 		mpls = true;
 
-	if (skb_vlan_tag_present(skb) && !dev_supports_vlan_tx(skb->dev))
-		vlan = true;
-
-	if (vlan || mpls) {
+	if (mpls) {
 		int features;
 
 		features = netif_skb_features(skb);
-
-		if (vlan) {
-			skb = vlan_insert_tag_set_proto(skb, skb->vlan_proto,
-							skb_vlan_tag_get(skb));
-			if (unlikely(!skb))
-				return err;
-			skb->vlan_tci = 0;
-		}
 
 		/* As of v3.11 the kernel provides an mpls_features field in
 		 * struct net_device which allows devices to advertise which
@@ -179,16 +157,21 @@ static __be16 __skb_network_protocol(struct sk_buff *skb)
 
 static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 					   netdev_features_t features,
-					   bool tx_path)
+					   bool tx_path,
+					   sa_family_t sa_family)
 {
-	struct iphdr *iph = ip_hdr(skb);
+	void *iph = skb_network_header(skb);
 	int pkt_hlen = skb_inner_network_offset(skb); /* inner l2 + tunnel hdr. */
 	int mac_offset = skb_inner_mac_offset(skb);
+	int outer_l3_offset = skb_network_offset(skb);
+	int outer_l4_offset = skb_transport_offset(skb);
 	struct sk_buff *skb1 = skb;
+	struct dst_entry *dst = skb_dst(skb);
 	struct sk_buff *segs;
 	__be16 proto = skb->protocol;
 	char cb[sizeof(skb->cb)];
 
+	OVS_GSO_CB(skb)->ipv6 = (sa_family == AF_INET6);
 	/* setup whole inner packet to get protocol. */
 	__skb_pull(skb, mac_offset);
 	skb->protocol = __skb_network_protocol(skb);
@@ -221,15 +204,20 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 	while (skb) {
 		__skb_push(skb, pkt_hlen);
 		skb_reset_mac_header(skb);
-		skb_reset_network_header(skb);
-		skb_set_transport_header(skb, sizeof(struct iphdr));
+		skb_set_network_header(skb, outer_l3_offset);
+		skb_set_transport_header(skb, outer_l4_offset);
 		skb->mac_len = 0;
 
-		memcpy(ip_hdr(skb), iph, pkt_hlen);
+		memcpy(skb_network_header(skb), iph, pkt_hlen);
 		memcpy(skb->cb, cb, sizeof(cb));
-		OVS_GSO_CB(skb)->fix_segment(skb);
 
 		skb->protocol = proto;
+		if (skb->next)
+			dst = dst_clone(dst);
+
+		skb_dst_set(skb, dst);
+		OVS_GSO_CB(skb)->fix_segment(skb);
+
 		skb = skb->next;
 	}
 free:
@@ -252,7 +240,7 @@ static int output_ip(struct sk_buff *skb)
 	return ret;
 }
 
-int rpl_ip_local_out(struct sk_buff *skb)
+int rpl_ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	int ret = NETDEV_TX_OK;
 	int id = -1;
@@ -265,7 +253,7 @@ int rpl_ip_local_out(struct sk_buff *skb)
 
 		iph = ip_hdr(skb);
 		id = ntohs(iph->id);
-		skb = tnl_skb_gso_segment(skb, 0, false);
+		skb = tnl_skb_gso_segment(skb, 0, false, AF_INET);
 		if (!skb || IS_ERR(skb))
 			return 0;
 	}  else if (skb->ip_summed == CHECKSUM_PARTIAL) {
@@ -293,4 +281,47 @@ int rpl_ip_local_out(struct sk_buff *skb)
 }
 EXPORT_SYMBOL_GPL(rpl_ip_local_out);
 
+static int output_ipv6(struct sk_buff *skb)
+{
+	int ret = NETDEV_TX_OK;
+	int err;
+
+	memset(IP6CB(skb), 0, sizeof (*IP6CB(skb)));
+#undef ip6_local_out
+	err = ip6_local_out(skb);
+	if (unlikely(net_xmit_eval(err)))
+		ret = err;
+
+	return ret;
+}
+
+int rpl_ip6_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
+{
+	int ret = NETDEV_TX_OK;
+
+	if (!OVS_GSO_CB(skb)->fix_segment)
+		return output_ipv6(skb);
+
+	if (skb_is_gso(skb)) {
+		skb = tnl_skb_gso_segment(skb, 0, false, AF_INET6);
+		if (!skb || IS_ERR(skb))
+			return 0;
+	}  else if (skb->ip_summed == CHECKSUM_PARTIAL) {
+		int err;
+
+		err = skb_checksum_help(skb);
+		if (unlikely(err))
+			return 0;
+	}
+
+	while (skb) {
+		struct sk_buff *next_skb = skb->next;
+
+		skb->next = NULL;
+		ret = output_ipv6(skb);
+		skb = next_skb;
+	}
+	return ret;
+}
+EXPORT_SYMBOL_GPL(rpl_ip6_local_out);
 #endif /* 3.18 */

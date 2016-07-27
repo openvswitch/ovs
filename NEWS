@@ -1,7 +1,8 @@
 Post-v2.5.0
 ---------------------
    - ovsdb-server:
-     * New "monitor2" and "update2" extensions to RFC 7047.
+     * New "monitor_cond" "monitor_cond_update" and "update2" extensions to
+       RFC 7047.
    - OpenFlow:
      * OpenFlow 1.1+ OFPT_QUEUE_GET_CONFIG_REQUEST now supports OFPP_ANY.
      * OpenFlow 1.4+ OFPMP_QUEUE_DESC is now supported.
@@ -17,10 +18,18 @@ Post-v2.5.0
      * New OpenFlow extension NXM_NX_MPLS_TTL to provide access to MPLS TTL.
      * New output option, output(port=N,max_len=M), to allow truncating a
        packet to size M bytes when outputting to port N.
+     * New command OFPGC_ADD_OR_MOD for OFPT_GROUP_MOD message that adds a
+       new group or modifies an existing groups
+   - Improved OpenFlow version compatibility for actions:
+     * New OpenFlow extension to support the "group" action in OpenFlow 1.0.
+     * OpenFlow 1.0 "enqueue" action now properly translated to OpenFlow 1.1+.
+     * OpenFlow 1.1 "mod_nw_ecn" and OpenFlow 1.1+ "mod_nw_ttl" actions now
+       properly translated to OpenFlow 1.0.
    - ovs-ofctl:
      * queue-get-config command now allows a queue ID to be specified.
      * '--bundle' option can now be used with OpenFlow 1.3.
      * New option "--color" to produce colorized output for some commands.
+     * New option '--may-create' to use OFPGC_ADD_OR_MOD in mod-group command.
    - IPFIX:
      * New "sampling_port" option for "sample" action to allow sampling
        ingress and egress tunnel metadata with IPFIX.
@@ -34,6 +43,8 @@ Post-v2.5.0
    - DPDK:
      * New option "n_rxq" for PMD interfaces.
        Old 'other_config:n-dpdk-rxqs' is no longer supported.
+       Not supported by vHost interfaces. For them number of rx and tx queues
+       is applied from connected virtio device.
      * New appctl command 'dpif-netdev/pmd-rxq-show' to check the port/rxq
        assignment.
      * Type of log messages from PMD threads changed from INFO to DBG.
@@ -48,6 +59,7 @@ Post-v2.5.0
      * PMD threads servicing vHost User ports can now come from the NUMA
        node that device memory is located on if CONFIG_RTE_LIBRTE_VHOST_NUMA
        is enabled in DPDK.
+   - Increase number of registers to 16.
    - ovs-benchmark: This utility has been removed due to lack of use and
      bitrot.
    - ovs-appctl:
@@ -70,9 +82,15 @@ Post-v2.5.0
    - Tunnels:
      * Flow based tunnel match and action can be used for IPv6 address using
        tun_ipv6_src, tun_ipv6_dst fields.
-     * Added support for IPv6 tunnels to native tunneling.
+     * Added support for IPv6 tunnels, for details checkout FAQ.
    - A wrapper script, 'ovs-tcpdump', to easily port-mirror an OVS port and
      watch with tcpdump
+   - Introduce --no-self-confinement flag that allows daemons to work with
+     sockets outside their run directory.
+   - ovs-pki: Changed message digest algorithm from SHA-1 to SHA-512 because
+     SHA-1 is no longer secure and some operating systems have started to
+     disable it in OpenSSL.
+
 
 v2.5.0 - 26 Feb 2016
 ---------------------

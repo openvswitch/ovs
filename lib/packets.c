@@ -26,7 +26,7 @@
 #include "csum.h"
 #include "crc32c.h"
 #include "flow.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/dynamic-string.h"
 #include "ovs-thread.h"
 #include "odp-util.h"
@@ -674,23 +674,43 @@ ipv6_string_mapped(char *addr_str, const struct in6_addr *addr)
     }
 }
 
-struct in6_addr ipv6_addr_bitand(const struct in6_addr *a,
-                                 const struct in6_addr *b)
-{
-    int i;
-    struct in6_addr dst;
-
 #ifdef s6_addr32
-    for (i=0; i<4; i++) {
-        dst.s6_addr32[i] = a->s6_addr32[i] & b->s6_addr32[i];
-    }
+#define s6_addrX s6_addr32
+#define IPV6_FOR_EACH(VAR) for (int VAR = 0; VAR < 4; VAR++)
 #else
-    for (i=0; i<16; i++) {
-        dst.s6_addr[i] = a->s6_addr[i] & b->s6_addr[i];
-    }
+#define s6_addrX s6_addr
+#define IPV6_FOR_EACH(VAR) for (int VAR = 0; VAR < 16; VAR++)
 #endif
 
-    return dst;
+struct in6_addr
+ipv6_addr_bitand(const struct in6_addr *a, const struct in6_addr *b)
+{
+   struct in6_addr dst;
+   IPV6_FOR_EACH (i) {
+       dst.s6_addrX[i] = a->s6_addrX[i] & b->s6_addrX[i];
+   }
+   return dst;
+}
+
+struct in6_addr
+ipv6_addr_bitxor(const struct in6_addr *a, const struct in6_addr *b)
+{
+   struct in6_addr dst;
+   IPV6_FOR_EACH (i) {
+       dst.s6_addrX[i] = a->s6_addrX[i] ^ b->s6_addrX[i];
+   }
+   return dst;
+}
+
+bool
+ipv6_is_zero(const struct in6_addr *a)
+{
+   IPV6_FOR_EACH (i) {
+       if (a->s6_addrX[i]) {
+           return false;
+       }
+   }
+   return true;
 }
 
 /* Returns an in6_addr consisting of 'mask' high-order 1-bits and 128-N
@@ -1341,7 +1361,7 @@ compose_nd(struct dp_packet *b, const struct eth_addr eth_src,
 
     ns->icmph.icmp6_type = ND_NEIGHBOR_SOLICIT;
     ns->icmph.icmp6_code = 0;
-    put_16aligned_be32(&ns->rco_flags, htonl(0));
+    put_16aligned_be32(&ns->rso_flags, htonl(0));
 
     nd_opt = &ns->options[0];
     nd_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
@@ -1352,6 +1372,35 @@ compose_nd(struct dp_packet *b, const struct eth_addr eth_src,
     ns->icmph.icmp6_cksum = 0;
     icmp_csum = packet_csum_pseudoheader6(dp_packet_l3(b));
     ns->icmph.icmp6_cksum = csum_finish(csum_continue(icmp_csum, ns,
+                                                      ND_MSG_LEN + ND_OPT_LEN));
+}
+
+void
+compose_na(struct dp_packet *b,
+           const struct eth_addr eth_src, const struct eth_addr eth_dst,
+           const ovs_be32 ipv6_src[4], const ovs_be32 ipv6_dst[4],
+           ovs_be32 rso_flags)
+{
+    struct ovs_nd_msg *na;
+    struct ovs_nd_opt *nd_opt;
+    uint32_t icmp_csum;
+
+    eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6, IPV6_HEADER_LEN);
+    na = compose_ipv6(b, IPPROTO_ICMPV6, ipv6_src, ipv6_dst, 0, 0, 255,
+                      ND_MSG_LEN + ND_OPT_LEN);
+
+    na->icmph.icmp6_type = ND_NEIGHBOR_ADVERT;
+    na->icmph.icmp6_code = 0;
+    put_16aligned_be32(&na->rso_flags, rso_flags);
+
+    nd_opt = &na->options[0];
+    nd_opt->nd_opt_type = ND_OPT_TARGET_LINKADDR;
+    nd_opt->nd_opt_len = 1;
+
+    packet_set_nd(b, ipv6_src, eth_addr_zero, eth_src);
+    na->icmph.icmp6_cksum = 0;
+    icmp_csum = packet_csum_pseudoheader6(dp_packet_l3(b));
+    na->icmph.icmp6_cksum = csum_finish(csum_continue(icmp_csum, na,
                                                       ND_MSG_LEN + ND_OPT_LEN));
 }
 

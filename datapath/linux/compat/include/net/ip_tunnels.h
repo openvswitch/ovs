@@ -3,57 +3,51 @@
 
 #include <linux/version.h>
 
-#ifdef HAVE_METADATA_DST
+#ifdef USE_UPSTREAM_TUNNEL
 /* Block all ip_tunnel functions.
  * Only function that do not depend on ip_tunnel structure can
  * be used. Those needs to be explicitly defined in this header file. */
 #include_next <net/ip_tunnels.h>
-#endif
+#else
 
 #include <linux/if_tunnel.h>
 #include <linux/types.h>
 #include <net/dsfield.h>
+#include <net/dst_cache.h>
 #include <net/flow.h>
 #include <net/inet_ecn.h>
 #include <net/ip.h>
 #include <net/rtnetlink.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
-struct sk_buff *ovs_iptunnel_handle_offloads(struct sk_buff *skb,
-					     bool csum_help, int gso_type_mask,
-					     void (*fix_segment)(struct sk_buff *));
-
-#define iptunnel_xmit rpl_iptunnel_xmit
-int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
-		      __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
-		      __be16 df, bool xnet);
+#define __iptunnel_pull_header rpl___iptunnel_pull_header
+int rpl___iptunnel_pull_header(struct sk_buff *skb, int hdr_len,
+			   __be16 inner_proto, bool raw_proto, bool xnet);
 
 #define iptunnel_pull_header rpl_iptunnel_pull_header
-int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto);
+static inline int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len,
+				       __be16 inner_proto, bool xnet)
+{
+	return rpl___iptunnel_pull_header(skb, hdr_len, inner_proto, false, xnet);
+}
 
-#else
+int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
+				 bool csum_help, int gso_type_mask,
+				 void (*fix_segment)(struct sk_buff *));
 
-#define ovs_iptunnel_handle_offloads(skb, csum_help, gso_type_mask, fix_segment) \
-	iptunnel_handle_offloads(skb, csum_help, gso_type_mask)
-
-/* This macro is to make OVS build happy about declared functions name. */
-#define rpl_iptunnel_pull_header iptunnel_pull_header
-int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len, __be16 inner_proto);
-
-#define rpl_iptunnel_xmit iptunnel_xmit
-int rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
-		      __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
-		      __be16 df, bool xnet);
-
-#endif /* 3.18 */
-
-/* This is not required for OVS on kernel older than 3.18, but gre.h
- * header file needs this declaration for function gre_handle_offloads().
- * So it is defined for all kernel version.
+/* This is is required to compile upstream gre.h. gre_handle_offloads()
+ * is defined in gre.h and needs iptunnel_handle_offloads(). This provides
+ * default signature for this function.
+ * rpl prefix is to make OVS build happy.
  */
-#define rpl_iptunnel_handle_offloads iptunnel_handle_offloads
-struct sk_buff *rpl_iptunnel_handle_offloads(struct sk_buff *skb, bool gre_csum,
+#define iptunnel_handle_offloads rpl_iptunnel_handle_offloads
+struct sk_buff *rpl_iptunnel_handle_offloads(struct sk_buff *skb,
+					 bool csum_help,
 					 int gso_type_mask);
+
+#define iptunnel_xmit rpl_iptunnel_xmit
+void rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
+		       __be32 src, __be32 dst, __u8 proto, __u8 tos, __u8 ttl,
+		       __be16 df, bool xnet);
 
 #ifndef TUNNEL_CSUM
 #define TUNNEL_CSUM	__cpu_to_be16(0x01)
@@ -100,7 +94,6 @@ struct tnl_ptk_info {
 #define skb_is_encapsulated ovs_skb_is_encapsulated
 bool ovs_skb_is_encapsulated(struct sk_buff *skb);
 
-#ifndef HAVE_METADATA_DST
 /* Used to memset ip_tunnel padding. */
 #define IP_TUNNEL_KEY_SIZE	offsetofend(struct ip_tunnel_key, tp_dst)
 
@@ -125,6 +118,7 @@ struct ip_tunnel_key {
 	__be16			tun_flags;
 	u8			tos;		/* TOS for IPv4, TC for IPv6 */
 	u8			ttl;		/* TTL for IPv4, HL for IPv6 */
+	__be32                  label;          /* Flow Label for IPv6 */
 	__be16			tp_src;
 	__be16			tp_dst;
 };
@@ -135,6 +129,7 @@ struct ip_tunnel_key {
 
 struct ip_tunnel_info {
 	struct ip_tunnel_key	key;
+	struct dst_cache        dst_cache;
 	u8			options_len;
 	u8			mode;
 };
@@ -164,7 +159,7 @@ static inline void ip_tunnel_info_opts_set(struct ip_tunnel_info *info,
 
 static inline void ip_tunnel_key_init(struct ip_tunnel_key *key,
 				      __be32 saddr, __be32 daddr,
-				      u8 tos, u8 ttl,
+				      u8 tos, u8 ttl, __be32 label,
 				      __be16 tp_src, __be16 tp_dst,
 				      __be64 tun_id, __be16 tun_flags)
 {
@@ -175,6 +170,7 @@ static inline void ip_tunnel_key_init(struct ip_tunnel_key *key,
 	       0, IP_TUNNEL_KEY_IPV4_PAD_LEN);
 	key->tos = tos;
 	key->ttl = ttl;
+	key->label = label;
 	key->tun_flags = tun_flags;
 
 	/* For the tunnel types on the top of IPsec, the tp_src and tp_dst of
@@ -192,6 +188,23 @@ static inline void ip_tunnel_key_init(struct ip_tunnel_key *key,
 
 #define ip_tunnel_collect_metadata() true
 
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,6,0)
+#define TUNNEL_NOCACHE 0
+
+static inline bool
+ip_tunnel_dst_cache_usable(const struct sk_buff *skb,
+			   const struct ip_tunnel_info *info)
+{
+	if (skb->mark)
+		return false;
+	if (!info)
+		return true;
+	if (info->key.tun_flags & TUNNEL_NOCACHE)
+		return false;
+
+	return true;
+}
+#endif
 
 #define ip_tunnel rpl_ip_tunnel
 
@@ -255,41 +268,27 @@ static inline u8 ip_tunnel_ecn_encap(u8 tos, const struct iphdr *iph,
 	return INET_ECN_encapsulate(tos, inner);
 }
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,39)
-#define iptunnel_xmit_stats(err, stats, dummy)		\
-do {							\
-	if (err > 0) {					\
-		(stats)->tx_bytes += err;		\
-		(stats)->tx_packets++;			\
-	} else if (err < 0) {				\
-		(stats)->tx_errors++;			\
-		(stats)->tx_aborted_errors++;		\
-	} else {					\
-		(stats)->tx_dropped++;			\
-	}						\
-} while (0)
-
-#else
-#define iptunnel_xmit_stats rpl_iptunnel_xmit_stats
-static inline void iptunnel_xmit_stats(int err,
-		struct net_device_stats *err_stats,
-		struct pcpu_sw_netstats __percpu *stats)
+static inline void iptunnel_xmit_stats(struct net_device *dev, int pkt_len)
 {
-	if (err > 0) {
-		struct pcpu_sw_netstats *tstats = this_cpu_ptr(stats);
+	if (pkt_len > 0) {
+		struct pcpu_sw_netstats *tstats = get_cpu_ptr(dev->tstats);
 
 		u64_stats_update_begin(&tstats->syncp);
-		tstats->tx_bytes += err;
+		tstats->tx_bytes += pkt_len;
 		tstats->tx_packets++;
 		u64_stats_update_end(&tstats->syncp);
-	} else if (err < 0) {
-		err_stats->tx_errors++;
-		err_stats->tx_aborted_errors++;
+		put_cpu_ptr(tstats);
 	} else {
-		err_stats->tx_dropped++;
+		struct net_device_stats *err_stats = &dev->stats;
+
+		if (pkt_len < 0) {
+			err_stats->tx_errors++;
+			err_stats->tx_aborted_errors++;
+		} else {
+			err_stats->tx_dropped++;
+		}
 	}
 }
-#endif
 
 #define ip_tunnel_init rpl_ip_tunnel_init
 int rpl_ip_tunnel_init(struct net_device *dev);
@@ -326,11 +325,24 @@ int rpl_ip_tunnel_get_iflink(const struct net_device *dev);
 
 #define ip_tunnel_get_link_net rpl_ip_tunnel_get_link_net
 struct net *rpl_ip_tunnel_get_link_net(const struct net_device *dev);
-#endif /* HAVE_METADATA_DST */
 
-#ifndef HAVE___IP_TUNNEL_CHANGE_MTU
 #define __ip_tunnel_change_mtu rpl___ip_tunnel_change_mtu
 int rpl___ip_tunnel_change_mtu(struct net_device *dev, int new_mtu, bool strict);
-#endif
 
+static inline int iptunnel_pull_offloads(struct sk_buff *skb)
+{
+	if (skb_is_gso(skb)) {
+		int err;
+
+		err = skb_unclone(skb, GFP_ATOMIC);
+		if (unlikely(err))
+			return err;
+		skb_shinfo(skb)->gso_type &= ~(NETIF_F_GSO_ENCAP_ALL >>
+					       NETIF_F_GSO_SHIFT);
+	}
+
+	skb->encapsulation = 0;
+	return 0;
+}
+#endif /* USE_UPSTREAM_TUNNEL */
 #endif /* __NET_IP_TUNNELS_H */

@@ -57,7 +57,7 @@
 #include "ovs-thread.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "socket-util.h"
 #include "svec.h"
 #include "util.h"
@@ -618,8 +618,7 @@ netdev_rxq_bsd_recv_tap(struct netdev_rxq_bsd *rxq, struct dp_packet *buffer)
 }
 
 static int
-netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
-                    int *c)
+netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
 {
     struct netdev_rxq_bsd *rxq = netdev_rxq_bsd_cast(rxq_);
     struct netdev *netdev = rxq->up.netdev;
@@ -641,8 +640,8 @@ netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
         dp_packet_delete(packet);
     } else {
         dp_packet_pad(packet);
-        packets[0] = packet;
-        *c = 1;
+        batch->packets[0] = packet;
+        batch->count = 1;
     }
     return retval;
 }
@@ -681,7 +680,7 @@ netdev_bsd_rxq_drain(struct netdev_rxq *rxq_)
  */
 static int
 netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
-                struct dp_packet **pkts, int cnt, bool may_steal)
+                struct dp_packet_batch *batch, bool may_steal)
 {
     struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
     const char *name = netdev_get_name(netdev_);
@@ -695,12 +694,12 @@ netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
         error = 0;
     }
 
-    for (i = 0; i < cnt; i++) {
-        const void *data = dp_packet_data(pkts[i]);
-        size_t size = dp_packet_size(pkts[i]);
+    for (i = 0; i < batch->count; i++) {
+        const void *data = dp_packet_data(batch->packets[i]);
+        size_t size = dp_packet_size(batch->packets[i]);
 
         /* Truncate the packet if it is configured. */
-        size -= dp_packet_get_cutlen(pkts[i]);
+        size -= dp_packet_get_cutlen(batch->packets[i]);
 
         while (!error) {
             ssize_t retval;
@@ -731,11 +730,7 @@ netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
     }
 
     ovs_mutex_unlock(&dev->mutex);
-    if (may_steal) {
-        for (i = 0; i < cnt; i++) {
-            dp_packet_delete(pkts[i]);
-        }
-    }
+    dp_packet_delete_batch(batch, may_steal);
 
     return error;
 }

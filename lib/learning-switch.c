@@ -27,7 +27,7 @@
 #include "classifier.h"
 #include "dp-packet.h"
 #include "flow.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "mac-learning.h"
 #include "openflow/openflow.h"
 #include "openvswitch/ofp-actions.h"
@@ -41,7 +41,7 @@
 #include "openvswitch/vlog.h"
 #include "poll-loop.h"
 #include "rconn.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "simap.h"
 #include "timeval.h"
 

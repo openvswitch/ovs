@@ -50,7 +50,9 @@
           <code>--may-exist</code>, adding a duplicate name succeeds but does
           not create a new logical switch.  With <code>--add-duplicate</code>,
           the command really creates a new logical switch with a duplicate
-          name.  It is an error to specify both options.
+          name.  It is an error to specify both options.  If there are multiple
+          logical switches with a duplicate name, configure the logical switches
+          using the UUID instead of the <var>switch</var> name.
         </p>
       </dd>
 
@@ -267,7 +269,9 @@
           <code>--may-exist</code>, adding a duplicate name succeeds but does
           not create a new logical router.  With <code>--add-duplicate</code>,
           the command really creates a new logical router with a duplicate
-          name.  It is an error to specify both options.
+          name.  It is an error to specify both options.  If there are multiple
+          logical routers with a duplicate name, configure the logical routers
+          using the UUID instead of the <var>router</var> name.
         </p>
       </dd>
 
@@ -286,14 +290,23 @@
     <h1>Logical Router Port Commands</h1>
 
     <dl>
-      <dt>[<code>--may-exist</code>] <code>lrp-add</code> <var>router</var> <var>port</var> <var>mac</var> <var>network</var> [<var>peer</var>]</dt>
+      <dt>[<code>--may-exist</code>] <code>lrp-add</code> <var>router</var> <var>port</var> <var>mac</var> <var>network</var>... [<code>peer=</code><var>peer</var>]</dt>
       <dd>
         <p>
           Creates on <var>router</var> a new logical router port named
-          <var>port</var> with Ethernet address <var>mac</var> and IP
-          address/netmask <var>network</var>.  If <var>peer</var> is
-          specified, it identifies a logical router port that connects
-          to this one.
+          <var>port</var> with Ethernet address <var>mac</var> and one
+          or more IP address/netmask for each <var>network</var>.
+        </p>
+
+        <p>
+          The optional argument <code>peer</code> identifies a logical
+          router port that connects to this one.  The following example
+          adds a router port with an IPv4 and IPv6 address with peer
+          <code>lr1</code>:
+        </p>
+
+        <p>
+          <code>lrp-add lr0 lrp0 00:11:22:33:44:55 192.168.0.1/24 2001:db8::1/64 peer=lr1</code>
         </p>
 
         <p>
@@ -375,6 +388,36 @@
       <dt><code>lr-route-list</code> <var>router</var></dt>
       <dd>
         Lists the routes on <var>router</var>.
+      </dd>
+    </dl>
+
+    <h1>DHCP Options commands</h1>
+
+    <dl>
+      <dt><code>dhcp-options-create</code> <var>cidr</var> [<var>key=value</var>]</dt>
+      <dd>
+        Creates a new DHCP Options entry in the <code>DHCP_Options</code> table
+        with the specified <code>cidr</code> and optional <code>external-ids</code>.
+      </dd>
+
+      <dt><code>dhcp-options-list</code></dt>
+      <dd>
+        Lists the DHCP Options entries.
+      </dd>
+
+      <dt><code>dhcp-options-del</code> <var>dhcp-option</var></dt>
+      <dd>
+        Deletes the DHCP Options entry referred by <var>dhcp-option</var> UUID.
+      </dd>
+
+      <dt><code>dhcp-options-set-options</code> <var>dhcp-option</var> [<var>key=value</var>]...</dt>
+      <dd>
+        Set the DHCP Options for the <var>dhcp-option</var> UUID.
+      </dd>
+
+      <dt><code>dhcp-options-get-options</code> <var>dhcp-option</var></dt>
+      <dd>
+        Lists the DHCP Options for the <var>dhcp-option</var> UUID.
       </dd>
     </dl>
 

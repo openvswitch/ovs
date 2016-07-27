@@ -172,6 +172,7 @@ enum ofp11_group_mod_command {
     OFPGC11_ADD,          /* New group. */
     OFPGC11_MODIFY,       /* Modify all matching groups. */
     OFPGC11_DELETE,       /* Delete all matching groups. */
+    OFPGC11_ADD_OR_MOD = 0x8000, /* Create new or modify existing group. */
 };
 
 /* OpenFlow 1.1 specific capabilities supported by the datapath (struct

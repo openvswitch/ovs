@@ -59,6 +59,7 @@ enum ofp15_group_mod_command {
     /* OFPGCXX_YYY = 4, */    /* Reserved for future use. */
     OFPGC15_REMOVE_BUCKET = 5,/* Remove all action buckets or any specific
                                  action bucket from matching group */
+    OFPGC15_ADD_OR_MOD = 0x8000, /* Create new or modify existing group. */
 };
 
 /* Group bucket property types.  */

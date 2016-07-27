@@ -36,10 +36,11 @@
 #include "poll-loop.h"
 #include "pktbuf.h"
 #include "rconn.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "simap.h"
 #include "stream.h"
 #include "timeval.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(connmgr);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);

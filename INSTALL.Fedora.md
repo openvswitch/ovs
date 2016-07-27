@@ -18,7 +18,7 @@ documented in [INSTALL.md]. Specific packages (by package name) include:
   - rpm-build
   - autoconf automake libtool
   - systemd-units openssl openssl-devel
-  - python python-twisted-core python-zope-interface PyQt4 python-six
+  - python python-twisted-core python-zope-interface python-six
   - desktop-file-utils
   - groff graphviz
   - procps-ng

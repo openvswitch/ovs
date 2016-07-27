@@ -43,5 +43,5 @@ done
 ovs-vsctl add-port br-int lport1 -- set Interface lport1 external_ids:iface-id=provnet1-1-port1
 ovs-vsctl add-port br-int lport2 -- set Interface lport2 external_ids:iface-id=provnet1-2-port1
 
-ovn-sbctl lport-bind provnet1-3-port1 fakechassis
-ovn-sbctl lport-bind provnet1-4-port1 fakechassis
+ovn-sbctl lsp-bind provnet1-3-port1 fakechassis
+ovn-sbctl lsp-bind provnet1-4-port1 fakechassis

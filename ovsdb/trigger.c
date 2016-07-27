@@ -19,7 +19,7 @@
 
 #include <limits.h>
 
-#include "json.h"
+#include "openvswitch/json.h"
 #include "jsonrpc.h"
 #include "ovsdb.h"
 #include "poll-loop.h"

@@ -431,10 +431,14 @@ zero or more groups in the same syntax, one per line.
 .IQ "\fBadd\-groups \fIswitch file\fR"
 Add each group entry to \fIswitch\fR's tables.
 .
-.IP "\fBmod\-group \fIswitch group\fR"
-.IQ "\fBmod\-group \fIswitch \fB\- < \fIfile\fR"
+.IP "[\fB\-\-may\-create\fR] \fBmod\-group \fIswitch group\fR"
+.IQ "[\fB\-\-may\-create\fR] \fBmod\-group \fIswitch \fB\- < \fIfile\fR"
 Modify the action buckets in entries from \fIswitch\fR's tables for
-each group entry.
+each group entry.  If a specified group does not already exist, then
+without \fB\-\-may\-create\fR, this command has no effect; with
+\fB\-\-may\-create\fR, it creates a new group.  The
+\fB\-\-may\-create\fR option uses an Open vSwitch extension to
+OpenFlow only implemented in Open vSwitch 2.6 and later.
 .
 .IP "\fBdel\-groups \fIswitch\fR"
 .IQ "\fBdel\-groups \fIswitch \fR[\fIgroup\fR]"
@@ -1332,6 +1336,17 @@ just the ``packet registers,'' but Open vSwitch already had 32-bit
 registers by that name, which is why Open vSwitch refers to the
 standard registers as ``extended registers''.
 .
+.IP "\fBxxreg\fIidx\fB=\fIvalue\fR[\fB/\fImask\fR]"
+Matches \fIvalue\fR either exactly or with optional \fImask\fR in
+128-bit ``extended-extended register'' number \fIidx\fR.  Each of the
+128-bit extended registers overlays four of the 32-bit registers:
+\fBxxreg0\fR overlays \fBreg0\fR through \fBreg3\fR, with \fBreg0\fR
+supplying the most-significant bits of \fBxxreg0\fR and \fBreg3\fR the
+least-significant.  \fBxxreg1\fR similarly overlays \fBreg4\fR through
+\fBreg7\fR, and so on.
+.IP
+These fields were added in Open vSwitch 2.6.
+.
 .IP \fBpkt_mark=\fIvalue\fR[\fB/\fImask\fR]
 Matches packet metadata mark \fIvalue\fR either exactly or with optional
 \fImask\fR. The mark is associated data that may be passed into other
@@ -1519,8 +1534,10 @@ Packets larger than \fInbytes\fR will be trimmed to \fInbytes\fR while
 packets smaller than \fInbytes\fR remains the original size.
 .
 .IP \fBgroup:\fIgroup_id\fR
-Outputs the packet to the OpenFlow group \fIgroup_id\fR. Group tables
-are only supported in OpenFlow 1.1+. See Group Syntax for more details.
+Outputs the packet to the OpenFlow group \fIgroup_id\fR.  OpenFlow 1.1
+introduced support for groups; Open vSwitch 2.6 and later also
+supports output to groups as an extension to OpenFlow 1.0.  See
+\fBGroup Syntax\fR for more details.
 .
 .IP \fBnormal\fR
 Subjects the packet to the device's normal L2/L3 processing.  (This
@@ -1780,15 +1797,15 @@ modified with this option. For example:
 .
 .RS
 .IP \fBset_field:\fIvalue\fR[\fB/\fImask\fR]->ct_mark\fR
-Store a 32-bit metadata value with the connection. If the connection is
-committed, then subsequent lookups for packets in this connection will
-populate the \fBct_mark\fR flow field when the packet is sent to the
-connection tracker with the \fBtable\fR specified.
+Store a 32-bit metadata value with the connection.  Subsequent lookups
+for packets in this connection will populate the \fBct_mark\fR flow
+field when the packet is sent to the connection tracker with the
+\fBtable\fR specified.
 .IP \fBset_field:\fIvalue\fR[\fB/\fImask\fR]->ct_label\fR
-Store a 128-bit metadata value with the connection.  If the connection is
-committed, then subsequent lookups for packets in this connection will
-populate the \fBct_label\fR flow field when the packet is sent to the
-connection tracker with the \fBtable\fR specified.
+Store a 128-bit metadata value with the connection.  Subsequent
+lookups for packets in this connection will populate the
+\fBct_label\fR flow field when the packet is sent to the connection
+tracker with the \fBtable\fR specified.
 .RE
 .IP
 The \fBcommit\fR parameter must be specified to use \fBexec(...)\fR.
@@ -2329,7 +2346,7 @@ When sending samples to IPFIX collectors, the unsigned 32-bit integer
 Observation Point ID sent in every IPFIX flow record.  Defaults to 0.
 .IP "\fBsampling_port=\fIport\fR"
 Sample packets on the port.  It can be set as input port or output
-port.  When this option is omitted, or specified as \fBNONE\fB, IPFIX
+port.  When this option is omitted, or specified as \fBNONE\fR, IPFIX
 does not differentiate between ingress packets and egress packets and
 does not export egress tunnel information.  This option was added in
 Open vSwitch 2.5.90.

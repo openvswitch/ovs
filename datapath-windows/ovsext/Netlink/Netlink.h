@@ -27,10 +27,14 @@
  */
 typedef struct _OVS_MESSAGE {
     NL_MSG_HDR nlMsg;
-    GENL_MSG_HDR genlMsg;
+    union {
+        GENL_MSG_HDR genlMsg;
+        NF_GEN_MSG_HDR nfGenMsg;
+    };
     OVS_HDR ovsHdr;
     /* Variable length nl_attrs follow. */
 } OVS_MESSAGE, *POVS_MESSAGE;
+BUILD_ASSERT_DECL(sizeof(GENL_MSG_HDR) == sizeof(NF_GEN_MSG_HDR));
 
 /*
  * Structure of an error message sent as a reply from kernel.
@@ -91,6 +95,10 @@ BOOLEAN NlFillOvsMsg(PNL_BUFFER nlBuf,
                      UINT16 nlmsgType, UINT16 nlmsgFlags,
                      UINT32 nlmsgSeq, UINT32 nlmsgPid,
                      UINT8 genlCmd, UINT8 genlVer, UINT32 dpNo);
+BOOLEAN NlFillOvsMsgForNfGenMsg(PNL_BUFFER nlBuf, UINT16 nlmsgType,
+                                UINT16 nlmsgFlags, UINT32 nlmsgSeq,
+                                UINT32 nlmsgPid, UINT8 nfgenFamily,
+                                UINT8 nfGenVersion, UINT32 dpNo);
 BOOLEAN NlFillNlHdr(PNL_BUFFER nlBuf,
                     UINT16 nlmsgType, UINT16 nlmsgFlags,
                     UINT32 nlmsgSeq, UINT32 nlmsgPid);
@@ -107,6 +115,7 @@ PCHAR NlHdrPayload(const PNL_MSG_HDR nlh);
 UINT32 NlHdrPayloadLen(const PNL_MSG_HDR nlh);
 PNL_ATTR NlMsgAttrs(const PNL_MSG_HDR nlh);
 UINT32 NlMsgAttrsLen(const PNL_MSG_HDR nlh);
+UINT32 NlNfMsgAttrsLen(const PNL_MSG_HDR nlh);
 
 /* Netlink message parse */
 PNL_MSG_HDR NlMsgNext(const PNL_MSG_HDR nlh);
@@ -135,7 +144,7 @@ const PNL_ATTR NlAttrFindNested(const PNL_ATTR nla,
                                 UINT16 type);
 BOOLEAN NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
                     UINT32 totalAttrLen, const NL_POLICY policy[],
-                    const UINT32 numPolicy, PNL_ATTR attrs[], 
+                    const UINT32 numPolicy, PNL_ATTR attrs[],
                     UINT32 numAttrs);
 BOOLEAN NlAttrParseNested(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
                           UINT32 totalAttrLen, const NL_POLICY policy[],

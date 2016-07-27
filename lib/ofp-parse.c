@@ -38,6 +38,7 @@
 #include "packets.h"
 #include "simap.h"
 #include "socket-util.h"
+#include "util.h"
 
 /* Parses 'str' as an 8-bit unsigned integer into '*valuep'.
  *
@@ -1377,6 +1378,10 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
         break;
 
     case OFPGC11_MODIFY:
+        fields = F_GROUP_TYPE | F_BUCKETS;
+        break;
+
+    case OFPGC11_ADD_OR_MOD:
         fields = F_GROUP_TYPE | F_BUCKETS;
         break;
 

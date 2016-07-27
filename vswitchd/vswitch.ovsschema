@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
  "version": "7.13.0",
- "cksum": "2202834738 22577",
+ "cksum": "889248633 22774",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -404,6 +404,11 @@
          "type": {"key": {"type": "integer",
                           "minInteger": 1,
                           "maxInteger": 4095},
+                  "min": 0, "max": 1}},
+       "snaplen": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 14,
+                          "maxInteger": 65535},
                   "min": 0, "max": 1}},
        "statistics": {
          "type": {"key": "string", "value": "integer",

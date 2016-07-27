@@ -39,6 +39,7 @@
 #include "odp-util.h"
 #include "random.h"
 #include "unaligned.h"
+#include "util.h"
 
 COVERAGE_DEFINE(flow_extract);
 COVERAGE_DEFINE(miniflow_malloc);
@@ -124,7 +125,7 @@ struct mf_ctx {
  * away.  Some GCC versions gave warnings on ALWAYS_INLINE, so these are
  * defined as macros. */
 
-#if (FLOW_WC_SEQ != 35)
+#if (FLOW_WC_SEQ != 36)
 #define MINIFLOW_ASSERT(X) ovs_assert(X)
 BUILD_MESSAGE("FLOW_WC_SEQ changed: miniflow_extract() will have runtime "
                "assertions enabled. Consider updating FLOW_WC_SEQ after "
@@ -581,7 +582,7 @@ miniflow_extract(struct dp_packet *packet, struct miniflow *dst)
             goto out;
         }
         tot_len = ntohs(nh->ip_tot_len);
-        if (OVS_UNLIKELY(tot_len > size)) {
+        if (OVS_UNLIKELY(tot_len > size || ip_len > tot_len)) {
             goto out;
         }
         if (OVS_UNLIKELY(size - tot_len > UINT8_MAX)) {
@@ -842,7 +843,7 @@ flow_get_metadata(const struct flow *flow, struct match *flow_metadata)
 {
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 36);
 
     match_init_catchall(flow_metadata);
     if (flow->tunnel.tun_id != htonll(0)) {
@@ -1248,7 +1249,7 @@ void flow_wildcards_init_for_packet(struct flow_wildcards *wc,
     memset(&wc->masks, 0x0, sizeof wc->masks);
 
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 36);
 
     if (flow_tnl_dst_is_set(&flow->tunnel)) {
         if (flow->tunnel.flags & FLOW_TNL_F_KEY) {
@@ -1365,7 +1366,7 @@ void
 flow_wc_map(const struct flow *flow, struct flowmap *map)
 {
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 36);
 
     flowmap_init(map);
 
@@ -1449,7 +1450,7 @@ void
 flow_wildcards_clear_non_packet_fields(struct flow_wildcards *wc)
 {
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 36);
 
     memset(&wc->masks.metadata, 0, sizeof wc->masks.metadata);
     memset(&wc->masks.regs, 0, sizeof wc->masks.regs);
@@ -1578,13 +1579,22 @@ flow_wildcards_set_xreg_mask(struct flow_wildcards *wc, int idx, uint64_t mask)
     flow_set_xreg(&wc->masks, idx, mask);
 }
 
+/* Sets the wildcard mask for register 'idx' in 'wc' to 'mask'.
+ * (A 0-bit indicates a wildcard bit.) */
+void
+flow_wildcards_set_xxreg_mask(struct flow_wildcards *wc, int idx,
+                              ovs_u128 mask)
+{
+    flow_set_xxreg(&wc->masks, idx, mask);
+}
+
 /* Calculates the 5-tuple hash from the given miniflow.
  * This returns the same value as flow_hash_5tuple for the corresponding
  * flow. */
 uint32_t
 miniflow_hash_5tuple(const struct miniflow *flow, uint32_t basis)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 36);
     uint32_t hash = basis;
 
     if (flow) {
@@ -1631,7 +1641,7 @@ ASSERT_SEQUENTIAL(ipv6_src, ipv6_dst);
 uint32_t
 flow_hash_5tuple(const struct flow *flow, uint32_t basis)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 36);
     uint32_t hash = basis;
 
     if (flow) {
@@ -2098,7 +2108,7 @@ flow_push_mpls(struct flow *flow, int n, ovs_be16 mpls_eth_type,
         flow->mpls_lse[0] = set_mpls_lse_values(ttl, tc, 1, htonl(label));
 
         /* Clear all L3 and L4 fields and dp_hash. */
-        BUILD_ASSERT(FLOW_WC_SEQ == 35);
+        BUILD_ASSERT(FLOW_WC_SEQ == 36);
         memset((char *) flow + FLOW_SEGMENT_2_ENDS_AT, 0,
                sizeof(struct flow) - FLOW_SEGMENT_2_ENDS_AT);
         flow->dp_hash = 0;
@@ -2216,6 +2226,7 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow)
             icmp = dp_packet_put_zeros(p, l4_len);
             icmp->icmp_type = ntohs(flow->tp_src);
             icmp->icmp_code = ntohs(flow->tp_dst);
+            /* Checksum has already been zeroed by put_zeros call. */
             icmp->icmp_csum = csum(icmp, ICMP_HEADER_LEN);
         } else if (flow->nw_proto == IPPROTO_IGMP) {
             struct igmp_header *igmp;
@@ -2225,6 +2236,7 @@ flow_compose_l4(struct dp_packet *p, const struct flow *flow)
             igmp->igmp_type = ntohs(flow->tp_src);
             igmp->igmp_code = ntohs(flow->tp_dst);
             put_16aligned_be32(&igmp->group, flow->igmp_group_ip4);
+            /* Checksum has already been zeroed by put_zeros call. */
             igmp->igmp_csum = csum(igmp, IGMP_HEADER_LEN);
         } else if (flow->nw_proto == IPPROTO_ICMPV6) {
             struct icmp6_hdr *icmp;
@@ -2313,6 +2325,7 @@ flow_compose(struct dp_packet *p, const struct flow *flow)
 
         ip = dp_packet_l3(p);
         ip->ip_tot_len = htons(p->l4_ofs - p->l3_ofs + l4_len);
+        /* Checksum has already been zeroed by put_zeros call. */
         ip->ip_csum = csum(ip, sizeof *ip);
     } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
         struct ovs_16aligned_ip6_hdr *nh;

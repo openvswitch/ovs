@@ -8,8 +8,8 @@ Vagrant.require_version ">=1.7.0"
 $bootstrap_fedora = <<SCRIPT
 dnf -y update
 dnf -y install autoconf automake openssl-devel libtool \
-               python-twisted-core python-zope-interface PyQt4 \
-               desktop-file-utils groff graphviz rpmdevtools \
+               python-twisted-core python-zope-interface \
+               desktop-file-utils groff graphviz rpmdevtools nc \
                wget python-six pyftpdlib checkpolicy selinux-policy-devel \
                libcap-ng-devel kernel-devel-`uname -r`
 echo "search extra update built-in" >/etc/depmod.d/search_path.conf

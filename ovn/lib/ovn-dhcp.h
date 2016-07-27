@@ -17,7 +17,7 @@
 #ifndef OVN_DHCP_H
 #define OVN_DHCP_H 1
 
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "hash.h"
 
 struct dhcp_opts_map {

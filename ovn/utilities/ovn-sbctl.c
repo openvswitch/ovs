@@ -34,13 +34,13 @@
 #include "compiler.h"
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "ovsdb-data.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
 #include "process.h"
 #include "sset.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "stream-ssl.h"
 #include "stream.h"
 #include "table.h"
@@ -249,7 +249,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             }
             shash_add_nocopy(local_options,
                              xasprintf("--%s", options[idx].name),
-                             optarg ? xstrdup(optarg) : NULL);
+                             nullable_xstrdup(optarg));
             break;
 
         case 'h':
@@ -317,8 +317,8 @@ Chassis commands:\n\
                               and gateway_ports\n\
 \n\
 Port binding commands:\n\
-  lport-bind LPORT CHASSIS    bind logical port LPORT to CHASSIS\n\
-  lport-unbind LPORT          reset the port binding of logical port LPORT\n\
+  lsp-bind PORT CHASSIS       bind logical port PORT to CHASSIS\n\
+  lsp-unbind PORT             reset the port binding of logical port PORT\n\
 \n\
 Logical flow commands:\n\
   lflow-list [DATAPATH]       List logical flows for all or a single datapath\n\
@@ -548,14 +548,8 @@ cmd_chassis_add(struct ctl_context *ctx)
     check_conflicts(sbctl_ctx, ch_name,
                     xasprintf("cannot create a chassis named %s", ch_name));
 
-    char *tokstr = xstrdup(encap_types);
-    char *token, *save_ptr = NULL;
-    struct sset encap_set = SSET_INITIALIZER(&encap_set);
-    for (token = strtok_r(tokstr, ",", &save_ptr); token != NULL;
-         token = strtok_r(NULL, ",", &save_ptr)) {
-        sset_add(&encap_set, token);
-    }
-    free(tokstr);
+    struct sset encap_set;
+    sset_from_delimited_string(&encap_set, encap_types, ",");
 
     size_t n_encaps = sset_count(&encap_set);
     struct sbrec_encap **encaps = xmalloc(n_encaps * sizeof *encaps);
@@ -602,7 +596,7 @@ cmd_chassis_del(struct ctl_context *ctx)
 }
 
 static void
-cmd_lport_bind(struct ctl_context *ctx)
+cmd_lsp_bind(struct ctl_context *ctx)
 {
     struct sbctl_context *sbctl_ctx = sbctl_context_cast(ctx);
     bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
@@ -631,7 +625,7 @@ cmd_lport_bind(struct ctl_context *ctx)
 }
 
 static void
-cmd_lport_unbind(struct ctl_context *ctx)
+cmd_lsp_unbind(struct ctl_context *ctx)
 {
     struct sbctl_context *sbctl_ctx = sbctl_context_cast(ctx);
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
@@ -739,7 +733,7 @@ cmd_lflow_list(struct ctl_context *ctx)
         }
 
         const char *table_name = smap_get(&lflow->external_ids, "stage-name");
-        printf("  table=%" PRId64 "(%16s), priority=%5" PRId64
+        printf("  table=%-2" PRId64 "(%-19s), priority=%-5" PRId64
                ", match=(%s), action=(%s)\n",
                lflow->table_id, table_name ? table_name : "",
                lflow->priority, lflow->match, lflow->actions);
@@ -777,6 +771,10 @@ static const struct ctl_table_class tables[] = {
 
     {&sbrec_table_mac_binding,
      {{&sbrec_table_mac_binding, &sbrec_mac_binding_col_logical_port, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&sbrec_table_address_set,
+     {{&sbrec_table_address_set, &sbrec_address_set_col_name, NULL},
       {NULL, NULL, NULL}}},
 
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}
@@ -1022,9 +1020,9 @@ static const struct ctl_command_syntax sbctl_commands[] = {
      "--if-exists", RW},
 
     /* Port binding commands. */
-    {"lport-bind", 2, 2, "LPORT CHASSIS", pre_get_info, cmd_lport_bind, NULL,
+    {"lsp-bind", 2, 2, "PORT CHASSIS", pre_get_info, cmd_lsp_bind, NULL,
      "--may-exist", RW},
-    {"lport-unbind", 1, 1, "LPORT", pre_get_info, cmd_lport_unbind, NULL,
+    {"lsp-unbind", 1, 1, "PORT", pre_get_info, cmd_lsp_unbind, NULL,
      "--if-exists", RW},
 
     /* Logical flow commands */

@@ -17,6 +17,7 @@
 #include "encaps.h"
 #include "binding.h"
 #include "lflow.h"
+#include "lport.h"
 
 #include "lib/hash.h"
 #include "lib/sset.h"
@@ -74,7 +75,7 @@ static bool process_full_encaps = false;
 struct port_hash_node {
     struct hmap_node node;
     struct hmap_node uuid_node;
-    const struct uuid *uuid;
+    struct uuid uuid;
     const struct ovsrec_port *port;
     const struct ovsrec_bridge *bridge;
 };
@@ -102,6 +103,10 @@ port_hash_rec(const struct ovsrec_port *port)
 
     iface = port->interfaces[0];
     ip = smap_get(&iface->options, "remote_ip");
+    if (!ip) {
+        /* This should not happen for an OVN-created port. */
+        return 0;
+    }
 
     return port_hash(chassis_id, iface->type, ip);
 }
@@ -131,7 +136,7 @@ port_lookup_by_uuid(struct hmap *hmap_p, const struct uuid *uuid)
     struct port_hash_node *answer;
     HMAP_FOR_EACH_WITH_HASH (answer, uuid_node, uuid_hash(uuid),
                              hmap_p) {
-        if (uuid_equals(uuid, answer->uuid)) {
+        if (uuid_equals(uuid, &answer->uuid)) {
             return answer;
         }
     }
@@ -186,11 +191,12 @@ tunnel_add(const struct sbrec_chassis *chassis_rec,
             && !strcmp(encap->type, iface->type)
             && !strcmp(encap->ip, ip)) {
 
-            hash_node->uuid = &chassis_rec->header_.uuid;
+            memcpy(&hash_node->uuid, &chassis_rec->header_.uuid,
+                   sizeof hash_node->uuid);
             if (!port_lookup_by_uuid(&tc.tunnel_hmap_by_uuid,
-                                     hash_node->uuid)) {
+                                     &hash_node->uuid)) {
                 hmap_insert(&tc.tunnel_hmap_by_uuid, &hash_node->uuid_node,
-                            uuid_hash(hash_node->uuid));
+                            uuid_hash(&hash_node->uuid));
             }
             return;
         }
@@ -236,6 +242,9 @@ tunnel_add(const struct sbrec_chassis *chassis_rec,
     free(port_name);
     free(ports);
     binding_reset_processing();
+    lport_index_reset();
+    mcgroup_index_reset();
+    lflow_reset_processing();
     process_full_encaps = true;
 }
 
@@ -309,7 +318,8 @@ check_and_update_tunnel(const struct sbrec_chassis *chassis_rec)
         if (strcmp(encap->type, iface->type)) {
             ovsrec_interface_set_type(iface, encap->type);
         }
-        if (strcmp(encap->ip, smap_get(&iface->options, "remote_ip"))) {
+        const char *ip = smap_get(&iface->options, "remote_ip");
+        if (!ip || strcmp(encap->ip, ip)) {
             struct smap options = SMAP_INITIALIZER(&options);
             smap_add(&options, "remote_ip", encap->ip);
             smap_add(&options, "key", "flow");
@@ -317,8 +327,8 @@ check_and_update_tunnel(const struct sbrec_chassis *chassis_rec)
             smap_destroy(&options);
         }
 
-        if (strcmp(chassis_rec->name, smap_get(&port->external_ids,
-                                               "ovn-chassis-id"))) {
+        const char *chassis = smap_get(&port->external_ids, "ovn-chassis-id");
+        if (!chassis || strcmp(chassis_rec->name, chassis)) {
             const struct smap id = SMAP_CONST1(&id, "ovn-chassis-id",
                                                chassis_rec->name);
             ovsrec_port_set_external_ids(port, &id);
@@ -380,17 +390,19 @@ encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
         SBREC_CHASSIS_FOR_EACH (chassis_rec, ctx->ovnsb_idl) {
             check_and_add_tunnel(chassis_rec, chassis_id);
             struct port_hash_node *hash_node = xzalloc(sizeof *hash_node);
-            hash_node->uuid = &chassis_rec->header_.uuid;
+            memcpy(&hash_node->uuid, &chassis_rec->header_.uuid,
+                   sizeof hash_node->uuid);
             hmap_insert(&keep_tunnel_hmap_by_uuid, &hash_node->uuid_node,
-                        uuid_hash(hash_node->uuid));
+                        uuid_hash(&hash_node->uuid));
         }
 
         /* Delete any tunnels that weren't recreated above. */
         struct port_hash_node *old_hash_node, *next_hash_node;
         HMAP_FOR_EACH_SAFE (old_hash_node, next_hash_node,
                             node, &tc.tunnel_hmap) {
-            if (!port_lookup_by_uuid(&keep_tunnel_hmap_by_uuid,
-                                     old_hash_node->uuid)) {
+            if (!uuid_is_zero(&old_hash_node->uuid)
+                && !port_lookup_by_uuid(&keep_tunnel_hmap_by_uuid,
+                                        &old_hash_node->uuid)) {
                 bridge_delete_port(old_hash_node->bridge, old_hash_node->port);
                 sset_find_and_delete(&tc.port_names,
                                      old_hash_node->port->name);
@@ -418,6 +430,7 @@ encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                                 &port_hash->uuid_node);
                     free(port_hash);
                     binding_reset_processing();
+                    lflow_reset_processing();
                 }
             } else if (sbrec_chassis_is_new(chassis_rec)) {
                 check_and_add_tunnel(chassis_rec, chassis_id);

@@ -65,6 +65,13 @@
 #define OVS_WIN_NL_VPORT_FAMILY_ID           (NLMSG_MIN_TYPE + 4)
 #define OVS_WIN_NL_FLOW_FAMILY_ID            (NLMSG_MIN_TYPE + 5)
 #define OVS_WIN_NL_NETDEV_FAMILY_ID          (NLMSG_MIN_TYPE + 6)
+/*
+ * Conntrack Family is defined in OvsDpInterfaceCtExt.h
+ * OVS_WIN_NL_CT_FAMILY_ID is not used in the messages, but used internally
+ * in the kernel as a placeholder to enable parsing out the ct family cmds.
+ */
+
+#define OVS_WIN_NL_CT_FAMILY_ID              (NLMSG_MIN_TYPE + 7)
 
 #define OVS_WIN_NL_INVALID_MCGRP_ID          0
 #define OVS_WIN_NL_MCGRP_START_ID            100
@@ -85,9 +92,12 @@ enum ovs_win_control_cmd {
     OVS_CTRL_CMD_MC_SUBSCRIBE_REQ,
     OVS_CTRL_CMD_PACKET_SUBSCRIBE_REQ,
 
-    /* This command is logically belong to the Vport family */
+    /* This command logically belongs to the Vport family */
     OVS_CTRL_CMD_EVENT_NOTIFY,
-    OVS_CTRL_CMD_READ_NOTIFY
+    OVS_CTRL_CMD_READ_NOTIFY,
+
+    /* Used for Socket property */
+    OVS_CTRL_CMD_SOCK_PROP
 };
 
 /* NL Attributes for joining/unjoining an MC group */
@@ -155,5 +165,15 @@ enum ovs_win_netdev_attr {
 
 typedef struct ovs_dp_stats OVS_DP_STATS;
 typedef enum ovs_vport_type OVS_VPORT_TYPE;
+
+/* NL Attributes for setting socket attributes */
+enum ovs_nl_sock_attr {
+    /* (UINT32) Netlink Protocol set in Userspace and read in Kernel */
+    OVS_NL_ATTR_SOCK_PROTO,
+    /* (UINT32) Instance PID set in Kernel and read in Userspace */
+    OVS_NL_ATTR_SOCK_PID,
+    __OVS_NL_ATTR_SOCK_MAX
+};
+#define OVS_WIN_SOCK_ATTR_MAX (__OVS_NL_ATTR_SOCK_MAX - 1)
 
 #endif /* __OVS_DP_INTERFACE_EXT_H_ */

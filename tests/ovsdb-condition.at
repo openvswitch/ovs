@@ -184,6 +184,18 @@ OVSDB_CHECK_POSITIVE([condition sorting],
       ["_uuid", "==", ["uuid", "d50e85c6-8ae7-4b16-b69e-4395928bd9be"]]]']],
   [[[["_uuid","==",["uuid","d50e85c6-8ae7-4b16-b69e-4395928bd9be"]],["i","==",1],["i","includes",2],["i","<=",3],["i","<",4],["i",">=",5],["i",">",6],["i","excludes",7],["i","!=",8]]]])
 
+OVSDB_CHECK_POSITIVE([boolean condition],
+  [[parse-conditions \
+    '{"columns": {"name": {"type": "string"}}}' \
+    '[true]']],
+  [[[true]]])
+
+OVSDB_CHECK_POSITIVE([boolean condition],
+  [[parse-conditions \
+    '{"columns": {"name": {"type": "string"}}}' \
+    '[false]']],
+  [[[false]]])
+
 OVSDB_CHECK_POSITIVE([evaluating null condition],
   [[evaluate-conditions \
     '{"columns": {"i": {"type": "integer"}}}' \
@@ -657,3 +669,32 @@ condition  5: --T-
 condition  6: -T--
 condition  7: T-TT
 condition  8: -T-T], [condition])
+
+OVSDB_CHECK_POSITIVE([evaluating false boolean condition],
+  [[evaluate-conditions-any \
+    '{"columns": {"i": {"type": "integer"}}}' \
+    '[[false,["i","==",1]]]' \
+    '[{"i": 0},
+      {"i": 1},
+      {"i": 2}']]],
+  [condition  0: -T-])
+
+OVSDB_CHECK_POSITIVE([evaluating true boolean condition],
+  [[evaluate-conditions-any \
+    '{"columns": {"i": {"type": "integer"}}}' \
+    '[[true,["i","==",1]]]' \
+    '[{"i": 0},
+      {"i": 1},
+      {"i": 2}']]],
+  [condition  0: TTT])
+
+OVSDB_CHECK_POSITIVE([compare condition],
+  [[compare-conditions \
+    '{"columns": {"i": {"type": "integer"}}}' \
+    '[[true,["i","==",1],["i","==",2],["i","==",3]],
+      [["i","==",1],["i","==",3],["i","==",2],true],
+      [["i","==",1]],
+      [["i",">=",1]]']]],
+  [condition 0-1: 0
+condition 1-2: 1
+condition 2-3: -1])

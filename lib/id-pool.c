@@ -17,7 +17,7 @@
 
 #include <config.h>
 #include "id-pool.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "hash.h"
 
 struct id_node {

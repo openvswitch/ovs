@@ -17,8 +17,8 @@
 #ifndef SHASH_H
 #define SHASH_H 1
 
-#include "hmap.h"
-#include "util.h"
+#include "openvswitch/hmap.h"
+#include "openvswitch/util.h"
 
 #ifdef  __cplusplus
 extern "C" {

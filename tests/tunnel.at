@@ -142,6 +142,126 @@ AT_CHECK([tail -1 stdout], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([tunnel - unencrypted tunnel and not setting skb_mark])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
+                    options:key=5 ofport_request=1\
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2 ofport_request=2])
+AT_DATA([flows.txt], [dnl
+actions=output:1
+])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,ttl=64,flags(df|key))),1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - unencrypted tunnel and setting skb_mark to 1])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
+                    options:key=5 ofport_request=1\
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2 ofport_request=2])
+AT_DATA([flows.txt], [dnl
+actions=load:0x1->NXM_NX_PKT_MARK[[]],output:1
+])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,ttl=64,flags(df|key))),set(skb_mark(0x1)),1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - unencrypted tunnel and setting skb_mark to 2])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
+                    options:key=5 ofport_request=1\
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2 ofport_request=2])
+AT_DATA([flows.txt], [dnl
+actions=load:0x2->NXM_NX_PKT_MARK[[]],output:1
+])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,ttl=64,flags(df|key))),set(skb_mark(0x2)),1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - encrypted tunnel and not setting skb_mark])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([$non_ascii_cwd])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
+                    options:key=5 ofport_request=1\
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2 ofport_request=2])
+AT_DATA([flows.txt], [dnl
+actions=output:1
+])
+OVS_MONITOR_IPSEC_START
+AT_CHECK([ovs-vsctl set interface p1 type=ipsec_gre options:psk=1234567890])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,ttl=64,flags(df|key))),set(skb_mark(0x1/0x1)),1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - encrypted tunnel and setting skb_mark to 1])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([$non_ascii_cwd])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
+                    options:key=5 ofport_request=1\
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2 ofport_request=2])
+AT_DATA([flows.txt], [dnl
+actions=load:0x1->NXM_NX_PKT_MARK[[]],output:1
+])
+OVS_MONITOR_IPSEC_START
+AT_CHECK([ovs-vsctl set interface p1 type=ipsec_gre options:psk=1234567890])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,ttl=64,flags(df|key))),set(skb_mark(0x1)),1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([tunnel - encrypted tunnel and setting skb_mark to 2])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([$non_ascii_cwd])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
+                    options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
+                    options:key=5 ofport_request=1\
+                    -- add-port br0 p2 -- set Interface p2 type=dummy \
+                    ofport_request=2 ofport_request=2])
+AT_DATA([flows.txt], [dnl
+actions=load:0x2->NXM_NX_PKT_MARK[[]],output:1
+])
+OVS_MONITOR_IPSEC_START
+AT_CHECK([ovs-vsctl set interface p1 type=ipsec_gre options:psk=1234567890])
+OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(2),eth(src=50:54:00:00:00:05,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=6,tos=4,ttl=128,frag=no),tcp(src=8,dst=9)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,ttl=64,flags(df|key))),set(skb_mark(0x3)),1
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([tunnel - ToS and TTL inheritance])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     options:remote_ip=1.1.1.1 options:tos=inherit \

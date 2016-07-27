@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  * Copyright (c) 2009 InMon Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,7 +26,7 @@
 #include "compiler.h"
 #include "dpif.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "netdev.h"
 #include "netlink.h"
 #include "openvswitch/ofpbuf.h"
@@ -92,12 +92,6 @@ static void dpif_sflow_del_port__(struct dpif_sflow *,
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 static bool
-nullable_string_is_equal(const char *a, const char *b)
-{
-    return a ? b && !strcmp(a, b) : !b;
-}
-
-static bool
 ofproto_sflow_options_equal(const struct ofproto_sflow_options *a,
                          const struct ofproto_sflow_options *b)
 {
@@ -115,8 +109,8 @@ ofproto_sflow_options_clone(const struct ofproto_sflow_options *old)
 {
     struct ofproto_sflow_options *new = xmemdup(old, sizeof *old);
     sset_clone(&new->targets, &old->targets);
-    new->agent_device = old->agent_device ? xstrdup(old->agent_device) : NULL;
-    new->control_ip = old->control_ip ? xstrdup(old->control_ip) : NULL;
+    new->agent_device = nullable_xstrdup(old->agent_device);
+    new->control_ip = nullable_xstrdup(old->control_ip);
     return new;
 }
 

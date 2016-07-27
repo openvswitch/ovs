@@ -23,8 +23,12 @@ m4_define([OVN_NBCTL_TEST_STOP],
    # may immediately update the database.  this later update may cause database
    # sending update back to *ctl command if *ctl has not proceeded to exit yet.
    # and if *ctl command exits before database calling send, the send from
-   # database will fail with 'Broken pipe' error.
+   # database will fail with 'Broken pipe' error. Also removes all "connection
+   # reset" warning logs by a similar rationale (either EPIPE or ECONNRESET can
+   # be returned on a send depending on whether the peer had unconsumed data when
+   # it closed the socket).
    AT_CHECK([check_logs "$1
+/reset by peer/d
 /Broken pipe/d"])
    OVS_APP_EXIT_AND_WAIT([ovsdb-server])])
 
@@ -297,6 +301,14 @@ OVN_NBCTL_TEST_START
 
 AT_CHECK([ovn-nbctl lr-add lr0])
 AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24])
+
+AT_CHECK([ovn-nbctl show lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
+    router <0> (lr0)
+        port lrp0
+            mac: "00:00:00:01:02:03"
+            networks: [["192.168.1.1/24"]]
+])
+
 AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24], [1], [],
   [ovn-nbctl: lrp0: a port with this name already exists
 ])
@@ -305,7 +317,7 @@ AT_CHECK([ovn-nbctl lrp-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lrp0)
 ])
 
-AT_CHECK([ovn-nbctl lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 lrp1-peer])
+AT_CHECK([ovn-nbctl lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 peer=lrp1-peer])
 AT_CHECK([ovn-nbctl lrp-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lrp0)
 <1> (lrp1)
@@ -328,12 +340,24 @@ AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/2
   [ovn-nbctl: lrp1: port already exists with mismatching peer
 ])
 
-AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 lrp1-peer])
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 10.0.0.1/24 peer=lrp1-peer], [1], [],
+  [ovn-nbctl: lrp1: port already exists with different network
+])
+
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 peer=lrp1-peer])
 
 AT_CHECK([ovn-nbctl lrp-del lrp1])
 AT_CHECK([ovn-nbctl lrp-list lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl
 <0> (lrp0)
 ])
+
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 10.0.0.1/24 peer=lrp1-peer])
+
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 192.168.1.1/24 172.16.0.1/24 peer=lrp1-peer], [1], [],
+  [ovn-nbctl: lrp1: port already exists with different network
+])
+
+AT_CHECK([ovn-nbctl --may-exist lrp-add lr0 lrp1 00:00:00:01:02:03 10.0.0.1/24 192.168.1.1/24 peer=lrp1-peer])
 
 OVN_NBCTL_TEST_STOP
 AT_CLEANUP
@@ -388,6 +412,14 @@ IPv4 Routes
                 0.0.0.0/0               192.168.0.1
 ])
 
+AT_CHECK([ovn-nbctl --may-exist lr-route-add lr0 10.0.0.111/24 11.0.0.1 lp1])
+AT_CHECK([ovn-nbctl lr-route-list lr0], [0], [dnl
+IPv4 Routes
+              10.0.0.0/24                  11.0.0.1 lp1
+              10.0.1.0/24                  11.0.1.1 lp0
+                0.0.0.0/0               192.168.0.1
+])
+
 dnl Delete non-existent prefix
 AT_CHECK([ovn-nbctl lr-route-del lr0 10.0.2.1/24], [1], [],
   [ovn-nbctl: no matching prefix: 10.0.2.0/24
@@ -398,7 +430,7 @@ AT_CHECK([ovn-nbctl lr-route-del lr0 10.0.1.1/24])
 
 AT_CHECK([ovn-nbctl lr-route-list lr0], [0], [dnl
 IPv4 Routes
-              10.0.0.0/24                  11.0.0.1
+              10.0.0.0/24                  11.0.0.1 lp1
                 0.0.0.0/0               192.168.0.1
 ])
 
@@ -407,7 +439,7 @@ AT_CHECK([ovn-nbctl lr-route-list lr0], [0], [dnl
 ])
 
 dnl Check IPv6 routes
-AT_CHECK([ovn-nbctl lr-route-add lr0 ::/0 2001:0db8:0:f101::1])
+AT_CHECK([ovn-nbctl lr-route-add lr0 0:0:0:0:0:0:0:0/0 2001:0db8:0:f101::1])
 AT_CHECK([ovn-nbctl lr-route-add lr0 2001:0db8:0::/64 2001:0db8:0:f102::1 lp0])
 AT_CHECK([ovn-nbctl lr-route-add lr0 2001:0db8:1::/64 2001:0db8:0:f103::1])
 
@@ -434,7 +466,7 @@ dnl Check IPv4 and IPv6 routes
 AT_CHECK([ovn-nbctl lr-route-add lr0 0.0.0.0/0 192.168.0.1])
 AT_CHECK([ovn-nbctl lr-route-add lr0 10.0.1.1/24 11.0.1.1 lp0])
 AT_CHECK([ovn-nbctl lr-route-add lr0 10.0.0.1/24 11.0.0.1])
-AT_CHECK([ovn-nbctl lr-route-add lr0 ::/0 2001:0db8:0:f101::1])
+AT_CHECK([ovn-nbctl lr-route-add lr0 0:0:0:0:0:0:0:0/0 2001:0db8:0:f101::1])
 AT_CHECK([ovn-nbctl lr-route-add lr0 2001:0db8:0::/64 2001:0db8:0:f102::1 lp0])
 AT_CHECK([ovn-nbctl lr-route-add lr0 2001:0db8:1::/64 2001:0db8:0:f103::1])
 

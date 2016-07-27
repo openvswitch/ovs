@@ -23,7 +23,7 @@
 #include "byteq.h"
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "openvswitch/list.h"
 #include "openvswitch/ofpbuf.h"
 #include "ovs-thread.h"
@@ -512,7 +512,7 @@ jsonrpc_create(enum jsonrpc_msg_type type, const char *method,
 {
     struct jsonrpc_msg *msg = xmalloc(sizeof *msg);
     msg->type = type;
-    msg->method = method ? xstrdup(method) : NULL;
+    msg->method = nullable_xstrdup(method);
     msg->params = params;
     msg->result = result;
     msg->error = error;

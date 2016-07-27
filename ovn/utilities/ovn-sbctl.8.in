@@ -135,7 +135,7 @@ delete a chassis that does not exist has no effect.
 .
 These commands manipulate \fBOVN_Southbound\fR port bindings.
 .
-.IP "[\fB\-\-may\-exist\fR] \fBlport\-bind \fIlogical\-port\fR \fIchassis\fR"
+.IP "[\fB\-\-may\-exist\fR] \fBlsp\-bind \fIlogical\-port\fR \fIchassis\fR"
 Binds the logical port named \fIlogical\-port\fR to \fIchassis\fR.
 .IP
 Without \fB\-\-may\-exist\fR, attempting to bind a logical port that
@@ -143,7 +143,7 @@ has already been bound is an error.  With \fB\-\-may\-exist\fR, this
 command does nothing if \fIlogical\-port\fR has already been bound to
 a chassis.
 .
-.IP "[\fB\-\-if\-exists\fR] \fBlport\-unbind\fR \fIlogical\-port\fR"
+.IP "[\fB\-\-if\-exists\fR] \fBlsp\-unbind\fR \fIlogical\-port\fR"
 Resets the binding of \fIlogical\-port\fR to \fINULL\fR.
 .IP
 Without \fB\-\-if\-exists\fR, attempting to unbind a logical port

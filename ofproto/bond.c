@@ -27,7 +27,7 @@
 #include "coverage.h"
 #include "dp-packet.h"
 #include "flow.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "lacp.h"
 #include "netdev.h"
 #include "odp-util.h"
@@ -44,9 +44,10 @@
 #include "packets.h"
 #include "poll-loop.h"
 #include "seq.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "timeval.h"
 #include "unixctl.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(bond);
 

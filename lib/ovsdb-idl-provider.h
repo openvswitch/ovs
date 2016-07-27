@@ -16,12 +16,12 @@
 #ifndef OVSDB_IDL_PROVIDER_H
 #define OVSDB_IDL_PROVIDER_H 1
 
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/list.h"
 #include "ovsdb-idl.h"
 #include "ovsdb-map-op.h"
 #include "ovsdb-types.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "uuid.h"
 
 struct ovsdb_idl_row {
@@ -73,6 +73,8 @@ struct ovsdb_idl_table {
     struct ovsdb_idl *idl;   /* Containing idl. */
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
     struct ovs_list track_list; /* Tracked rows (ovsdb_idl_row.track_node). */
+    struct ovsdb_idl_condition condition;
+    bool cond_changed;
 };
 
 struct ovsdb_idl_class {

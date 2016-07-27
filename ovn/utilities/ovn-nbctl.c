@@ -23,12 +23,13 @@
 #include "db-ctl-base.h"
 #include "dirs.h"
 #include "fatal-signal.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "ovn/lib/ovn-nb-idl.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "process.h"
 #include "smap.h"
+#include "sset.h"
 #include "stream.h"
 #include "stream-ssl.h"
 #include "svec.h"
@@ -69,6 +70,8 @@ static void run_prerequisites(struct ctl_command[], size_t n_commands,
                               struct ovsdb_idl *);
 static bool do_nbctl(const char *args, struct ctl_command *, size_t n,
                      struct ovsdb_idl *);
+static const struct nbrec_dhcp_options *dhcp_options_get(
+    struct ctl_context *ctx, const char *id, bool must_exist);
 
 int
 main(int argc, char *argv[])
@@ -235,7 +238,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             }
             shash_add_nocopy(local_options,
                              xasprintf("--%s", options[idx].name),
-                             optarg ? xstrdup(optarg) : NULL);
+                             nullable_xstrdup(optarg));
             break;
 
         case 'h':
@@ -368,6 +371,9 @@ Logical switch port commands:\n\
   lsp-set-options PORT KEY=VALUE [KEY=VALUE]...\n\
                             set options related to the type of PORT\n\
   lsp-get-options PORT      get the type specific options for PORT\n\
+  lsp-set-dhcpv4-options PORT [DHCP_OPTIONS_UUID]\n\
+                            set dhcpv4 options for PORT\n\
+  lsp-get-dhcpv4-options PORT  get the dhcpv4 options for PORT\n\
 \n\
 Logical router commands:\n\
   lr-add [ROUTER]           create a logical router named ROUTER\n\
@@ -375,7 +381,7 @@ Logical router commands:\n\
   lr-list                   print the names of all logical routers\n\
 \n\
 Logical router port commands:\n\
-  lrp-add ROUTER PORT MAC NETWORK [PEER]\n\
+  lrp-add ROUTER PORT MAC NETWORK... [peer=PEER]\n\
                             add logical port PORT on ROUTER\n\
   lrp-del PORT              delete PORT from its attached router\n\
   lrp-list ROUTER           print the names of all ports on ROUTER\n\
@@ -391,6 +397,19 @@ Route commands:\n\
   lr-route-del ROUTER [PREFIX]\n\
                             remove routes from ROUTER\n\
   lr-route-list ROUTER      print routes for ROUTER\n\
+\n\
+\n\
+DHCP Options commands:\n\
+  dhcp-options-create CIDR [EXTERNAL_IDS]\n\
+                           create a DHCP options row with CIDR\n\
+  dhcp-options-del DHCP_OPTIONS_UUID\n\
+                           delete DHCP_OPTIONS_UUID\n\
+  dhcp-options-list        \n\
+                           lists the DHCP_Options rows\n\
+  dhcp-options-set-options DHCP_OPTIONS_UUID  KEY=VALUE [KEY=VALUE]...\n\
+                           set DHCP options to the DHCP_OPTIONS_UUID\n\
+  dhcp-options-get-options DHCO_OPTIONS_UUID \n\
+                           displays the DHCP options of th DHCP_OPTIONS_UUID\n\
 \n\
 %s\
 \n\
@@ -607,9 +626,17 @@ print_lr(const struct nbrec_logical_router *lr, struct ds *s)
         ds_put_format(s, "        port %s\n", lrp->name);
         if (lrp->mac) {
             ds_put_cstr(s, "            mac: ");
-            ds_put_format(s, "\"%s\"", lrp->mac);
+            ds_put_format(s, "\"%s\"\n", lrp->mac);
         }
-        ds_put_format(s, "\n");
+        if (lrp->n_networks) {
+            ds_put_cstr(s, "            networks: [");
+            for (size_t j = 0; j < lrp->n_networks; j++) {
+                ds_put_format(s, "%s\"%s\"",
+                        j == 0 ? "" : ", ",
+                        lrp->networks[j]);
+            }
+            ds_put_cstr(s, "]\n");
+        }
     }
 }
 
@@ -1824,6 +1851,45 @@ nbctl_lsp_get_options(struct ctl_context *ctx)
     }
 }
 
+static void
+nbctl_lsp_set_dhcpv4_options(struct ctl_context *ctx)
+{
+    const char *id = ctx->argv[1];
+    const struct nbrec_logical_switch_port *lsp;
+
+    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    const struct nbrec_dhcp_options *dhcp_opt = NULL;
+    if (ctx->argc == 3 ) {
+        dhcp_opt = dhcp_options_get(ctx, ctx->argv[2], true);
+    }
+
+    if (dhcp_opt) {
+        ovs_be32 ip;
+        unsigned int plen;
+        char *error = ip_parse_cidr(dhcp_opt->cidr, &ip, &plen);
+        if (error){
+            free(error);
+            ctl_fatal("DHCP options cidr '%s' is not IPv4", dhcp_opt->cidr);
+            return;
+        }
+    }
+    nbrec_logical_switch_port_set_dhcpv4_options(lsp, dhcp_opt);
+}
+
+static void
+nbctl_lsp_get_dhcpv4_options(struct ctl_context *ctx)
+{
+    const char *id = ctx->argv[1];
+    const struct nbrec_logical_switch_port *lsp;
+
+    lsp = lsp_by_name_or_uuid(ctx, id, true);
+    if (lsp->dhcpv4_options) {
+        ds_put_format(&ctx->output, UUID_FMT " (%s)\n",
+                      UUID_ARGS(&lsp->dhcpv4_options->header_.uuid),
+                      lsp->dhcpv4_options->cidr);
+    }
+}
+
 enum {
     DIR_FROM_LPORT,
     DIR_TO_LPORT
@@ -2080,6 +2146,126 @@ nbctl_lr_list(struct ctl_context *ctx)
     free(nodes);
 }
 
+static const struct nbrec_dhcp_options *
+dhcp_options_get(struct ctl_context *ctx, const char *id, bool must_exist)
+{
+    struct uuid dhcp_opts_uuid;
+    const struct nbrec_dhcp_options *dhcp_opts = NULL;
+    if (uuid_from_string(&dhcp_opts_uuid, id)) {
+        dhcp_opts = nbrec_dhcp_options_get_for_uuid(ctx->idl, &dhcp_opts_uuid);
+    }
+
+    if (!dhcp_opts && must_exist) {
+        ctl_fatal("%s: dhcp options UUID not found", id);
+    }
+    return dhcp_opts;
+}
+
+static void
+nbctl_dhcp_options_create(struct ctl_context *ctx)
+{
+    /* Validate the cidr */
+    ovs_be32 ip;
+    unsigned int plen;
+    char *error = ip_parse_cidr(ctx->argv[1], &ip, &plen);
+    if (error){
+        /* check if its IPv6 cidr */
+        free(error);
+        struct in6_addr ipv6;
+        error = ipv6_parse_cidr(ctx->argv[1], &ipv6, &plen);
+        if (error) {
+            free(error);
+            ctl_fatal("Invalid cidr format '%s'", ctx->argv[1]);
+            return;
+        }
+    }
+
+    struct nbrec_dhcp_options *dhcp_opts = nbrec_dhcp_options_insert(ctx->txn);
+    nbrec_dhcp_options_set_cidr(dhcp_opts, ctx->argv[1]);
+
+    struct smap ext_ids = SMAP_INITIALIZER(&ext_ids);
+    for (size_t i = 2; i < ctx->argc; i++) {
+        char *key, *value;
+        value = xstrdup(ctx->argv[i]);
+        key = strsep(&value, "=");
+        if (value) {
+            smap_add(&ext_ids, key, value);
+        }
+        free(key);
+    }
+
+    nbrec_dhcp_options_set_external_ids(dhcp_opts, &ext_ids);
+    smap_destroy(&ext_ids);
+}
+
+static void
+nbctl_dhcp_options_set_options(struct ctl_context *ctx)
+{
+    const struct nbrec_dhcp_options *dhcp_opts = dhcp_options_get(
+        ctx, ctx->argv[1], true);
+
+    struct smap dhcp_options = SMAP_INITIALIZER(&dhcp_options);
+    for (size_t i = 2; i < ctx->argc; i++) {
+        char *key, *value;
+        value = xstrdup(ctx->argv[i]);
+        key = strsep(&value, "=");
+        if (value) {
+            smap_add(&dhcp_options, key, value);
+        }
+        free(key);
+    }
+
+    nbrec_dhcp_options_set_options(dhcp_opts, &dhcp_options);
+    smap_destroy(&dhcp_options);
+}
+
+static void
+nbctl_dhcp_options_get_options(struct ctl_context *ctx)
+{
+    const struct nbrec_dhcp_options *dhcp_opts = dhcp_options_get(
+        ctx, ctx->argv[1], true);
+
+    struct smap_node *node;
+    SMAP_FOR_EACH(node, &dhcp_opts->options) {
+        ds_put_format(&ctx->output, "%s=%s\n", node->key, node->value);
+    }
+}
+
+static void
+nbctl_dhcp_options_del(struct ctl_context *ctx)
+{
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
+    const char *id = ctx->argv[1];
+    const struct nbrec_dhcp_options *dhcp_opts;
+
+    dhcp_opts = dhcp_options_get(ctx, id, must_exist);
+    if (!dhcp_opts) {
+        return;
+    }
+
+    nbrec_dhcp_options_delete(dhcp_opts);
+}
+
+static void
+nbctl_dhcp_options_list(struct ctl_context *ctx)
+{
+    const struct nbrec_dhcp_options *dhcp_opts;
+    struct smap dhcp_options;
+
+    smap_init(&dhcp_options);
+    NBREC_DHCP_OPTIONS_FOR_EACH(dhcp_opts, ctx->idl) {
+        smap_add_format(&dhcp_options, dhcp_opts->cidr, UUID_FMT,
+                        UUID_ARGS(&dhcp_opts->header_.uuid));
+    }
+    const struct smap_node **nodes = smap_sort(&dhcp_options);
+    for (size_t i = 0; i < smap_count(&dhcp_options); i++) {
+        const struct smap_node *node = nodes[i];
+        ds_put_format(&ctx->output, "%s\n", node->value);
+    }
+    smap_destroy(&dhcp_options);
+    free(nodes);
+}
+
 /* The caller must free the returned string. */
 static char *
 normalize_ipv4_prefix(ovs_be32 ipv4, unsigned int plen)
@@ -2189,6 +2375,10 @@ nbctl_lr_route_add(struct ctl_context *ctx)
         nbrec_logical_router_static_route_verify_nexthop(route);
         nbrec_logical_router_static_route_set_ip_prefix(route, prefix);
         nbrec_logical_router_static_route_set_nexthop(route, next_hop);
+        if (ctx->argc == 5) {
+            nbrec_logical_router_static_route_set_output_port(route,
+                                                              ctx->argv[4]);
+        }
         free(rt_prefix);
         free(next_hop);
         free(prefix);
@@ -2329,8 +2519,22 @@ nbctl_lrp_add(struct ctl_context *ctx)
 
     const char *lrp_name = ctx->argv[2];
     const char *mac = ctx->argv[3];
-    const char *network = ctx->argv[4];
-    const char *peer = (ctx->argc == 6) ? ctx->argv[5] : NULL;
+    const char **networks = (const char **) &ctx->argv[4];
+
+    int n_networks = ctx->argc - 4;
+    for (int i = 4; i < ctx->argc; i++) {
+        if (strchr(ctx->argv[i], '=')) {
+            n_networks = i - 4;
+            break;
+        }
+    }
+
+    if (!n_networks) {
+        ctl_fatal("%s: router port requires specifying a network", lrp_name);
+    }
+
+    char **settings = (char **) &ctx->argv[n_networks + 4];
+    int n_settings = ctx->argc - 4 - n_networks;
 
     const struct nbrec_logical_router_port *lrp;
     lrp = lrp_by_name_or_uuid(ctx, lrp_name, false);
@@ -2353,9 +2557,29 @@ nbctl_lrp_add(struct ctl_context *ctx)
                       lrp->mac);
         }
 
-        if (strcmp(network, lrp->network)) {
-            ctl_fatal("%s: port already exists with network %s", lrp_name,
-                      lrp->network);
+        struct sset new_networks = SSET_INITIALIZER(&new_networks);
+        for (int i = 0; i < n_networks; i++) {
+            sset_add(&new_networks, networks[i]);
+        }
+
+        struct sset orig_networks = SSET_INITIALIZER(&orig_networks);
+        sset_add_array(&orig_networks, lrp->networks, lrp->n_networks);
+
+        if (!sset_equals(&orig_networks, &new_networks)) {
+            ctl_fatal("%s: port already exists with different network",
+                      lrp_name);
+        }
+
+        sset_destroy(&orig_networks);
+        sset_destroy(&new_networks);
+
+        /* Special-case sanity-check of peer ports. */
+        const char *peer = NULL;
+        for (int i = 0; i < n_settings; i++) {
+            if (!strncmp(settings[i], "peer=", 5)) {
+                peer = settings[i] + 5;
+                break;
+            }
         }
 
         if ((!peer != !lrp->peer) ||
@@ -2369,19 +2593,22 @@ nbctl_lrp_add(struct ctl_context *ctx)
 
     struct eth_addr ea;
     if (!ovs_scan(mac, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(ea))) {
-        ctl_fatal("%s: invalid mac address.", mac);
+        ctl_fatal("%s: invalid mac address %s", lrp_name, mac);
     }
 
-    ovs_be32 ipv4;
-    unsigned int plen;
-    char *error = ip_parse_cidr(network, &ipv4, &plen);
-    if (error) {
-        free(error);
-        struct in6_addr ipv6;
-        error = ipv6_parse_cidr(network, &ipv6, &plen);
+    for (int i = 0; i < n_networks; i++) {
+        ovs_be32 ipv4;
+        unsigned int plen;
+        char *error = ip_parse_cidr(networks[i], &ipv4, &plen);
         if (error) {
             free(error);
-            ctl_fatal("%s: invalid network address.", network);
+            struct in6_addr ipv6;
+            error = ipv6_parse_cidr(networks[i], &ipv6, &plen);
+            if (error) {
+                free(error);
+                ctl_fatal("%s: invalid network address: %s", lrp_name,
+                          networks[i]);
+            }
         }
     }
 
@@ -2389,9 +2616,11 @@ nbctl_lrp_add(struct ctl_context *ctx)
     lrp = nbrec_logical_router_port_insert(ctx->txn);
     nbrec_logical_router_port_set_name(lrp, lrp_name);
     nbrec_logical_router_port_set_mac(lrp, mac);
-    nbrec_logical_router_port_set_network(lrp, network);
-    if (peer) {
-        nbrec_logical_router_port_set_peer(lrp, peer);
+    nbrec_logical_router_port_set_networks(lrp, networks, n_networks);
+
+    for (int i = 0; i < n_settings; i++) {
+        ctl_set_column("Logical_Router_Port", &lrp->header_, settings[i],
+                       ctx->symtab);
     }
 
     /* Insert the logical port into the logical router. */
@@ -2601,7 +2830,8 @@ nbctl_lr_route_list(struct ctl_context *ctx)
             free(error);
 
             struct in6_addr ipv6;
-            if (!ipv6_parse_cidr(route->ip_prefix, &ipv6, &plen)) {
+            error = ipv6_parse_cidr(route->ip_prefix, &ipv6, &plen);
+            if (!error) {
                 ipv6_routes[n_ipv6_routes].plen = plen;
                 ipv6_routes[n_ipv6_routes].addr = ipv6;
                 ipv6_routes[n_ipv6_routes].route = route;
@@ -2669,6 +2899,10 @@ static const struct ctl_table_class tables[] = {
      {{NULL, NULL, NULL},
       {NULL, NULL, NULL}}},
 
+    {&nbrec_table_load_balancer,
+     {{NULL, NULL, NULL},
+      {NULL, NULL, NULL}}},
+
     {&nbrec_table_logical_router,
      {{&nbrec_table_logical_router, &nbrec_logical_router_col_name, NULL},
       {NULL, NULL, NULL}}},
@@ -2685,6 +2919,15 @@ static const struct ctl_table_class tables[] = {
 
     {&nbrec_table_nat,
      {{&nbrec_table_nat, NULL,
+       NULL},
+      {NULL, NULL, NULL}}},
+
+    {&nbrec_table_address_set,
+     {{&nbrec_table_address_set, &nbrec_address_set_col_name, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&nbrec_table_dhcp_options,
+     {{&nbrec_table_dhcp_options, NULL,
        NULL},
       {NULL, NULL, NULL}}},
 
@@ -2977,6 +3220,10 @@ static const struct ctl_command_syntax nbctl_commands[] = {
       nbctl_lsp_set_options, NULL, "", RW },
     { "lsp-get-options", 1, 1, "PORT", NULL, nbctl_lsp_get_options, NULL,
       "", RO },
+    { "lsp-set-dhcpv4-options", 1, 2, "PORT [DHCP_OPT_UUID]", NULL,
+      nbctl_lsp_set_dhcpv4_options, NULL, "", RW },
+    { "lsp-get-dhcpv4-options", 1, 1, "PORT", NULL,
+      nbctl_lsp_get_dhcpv4_options, NULL, "", RO },
 
     /* logical router commands. */
     { "lr-add", 0, 1, "[ROUTER]", NULL, nbctl_lr_add, NULL,
@@ -2985,9 +3232,10 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     { "lr-list", 0, 0, "", NULL, nbctl_lr_list, NULL, "", RO },
 
     /* logical router port commands. */
-    { "lrp-add", 4, 5, "ROUTER PORT MAC NETWORK [PEER]", NULL, nbctl_lrp_add,
-      NULL, "--may-exist", RW },
-    { "lrp-del", 1, 1, "LPORT", NULL, nbctl_lrp_del, NULL, "--if-exists", RW },
+    { "lrp-add", 4, INT_MAX,
+      "ROUTER PORT MAC NETWORK... [COLUMN[:KEY]=VALUE]...",
+      NULL, nbctl_lrp_add, NULL, "--may-exist", RW },
+    { "lrp-del", 1, 1, "PORT", NULL, nbctl_lrp_del, NULL, "--if-exists", RW },
     { "lrp-list", 1, 1, "ROUTER", NULL, nbctl_lrp_list, NULL, "", RO },
     { "lrp-set-enabled", 2, 2, "PORT STATE", NULL, nbctl_lrp_set_enabled,
       NULL, "", RW },
@@ -3001,6 +3249,17 @@ static const struct ctl_command_syntax nbctl_commands[] = {
       NULL, "--if-exists", RW },
     { "lr-route-list", 1, 1, "ROUTER", NULL, nbctl_lr_route_list, NULL,
       "", RO },
+
+    /* DHCP_Options commands */
+    {"dhcp-options-create", 1, INT_MAX, "CIDR [EXTERNAL:IDS]", NULL,
+     nbctl_dhcp_options_create, NULL, "", RW },
+    {"dhcp-options-del", 1, 1, "DHCP_OPT_UUID", NULL,
+     nbctl_dhcp_options_del, NULL, "", RW},
+    {"dhcp-options-list", 0, 0, "", NULL, nbctl_dhcp_options_list, NULL, "", RO},
+    {"dhcp-options-set-options", 1, INT_MAX, "DHCP_OPT_UUID KEY=VALUE [KEY=VALUE]...",
+    NULL, nbctl_dhcp_options_set_options, NULL, "", RW },
+    {"dhcp-options-get-options", 1, 1, "DHCP_OPT_UUID", NULL,
+     nbctl_dhcp_options_get_options, NULL, "", RO },
 
     {NULL, 0, 0, NULL, NULL, NULL, NULL, "", RO},
 };

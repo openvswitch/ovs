@@ -18,8 +18,8 @@
 
 #include <stdbool.h>
 #include "compiler.h"
-#include "hmap.h"
-#include "shash.h"
+#include "openvswitch/hmap.h"
+#include "openvswitch/shash.h"
 
 struct json;
 struct uuid;

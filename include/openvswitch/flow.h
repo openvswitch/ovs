@@ -23,18 +23,24 @@
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 35
+#define FLOW_WC_SEQ 36
 
 /* Number of Open vSwitch extension 32-bit registers. */
-#define FLOW_N_REGS 8
+#define FLOW_N_REGS 16
 BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
-BUILD_ASSERT_DECL(FLOW_N_REGS % 2 == 0); /* Even. */
+BUILD_ASSERT_DECL(FLOW_N_REGS % 4 == 0); /* Handle xxregs. */
 
 /* Number of OpenFlow 1.5+ 64-bit registers.
  *
  * Each of these overlays a pair of Open vSwitch 32-bit registers, so there
  * are half as many of them.*/
 #define FLOW_N_XREGS (FLOW_N_REGS / 2)
+
+/* Number of 128-bit registers.
+ *
+ * Each of these overlays four Open vSwitch 32-bit registers, so there
+ * are a quarter as many of them.*/
+#define FLOW_N_XXREGS (FLOW_N_REGS / 4)
 
 /* Used for struct flow's dl_type member for frames that have no Ethernet
  * type, that is, pure 802.2 frames. */
@@ -129,8 +135,8 @@ BUILD_ASSERT_DECL(sizeof(struct flow_tnl) % sizeof(uint64_t) == 0);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, igmp_group_ip4) + sizeof(uint32_t)
-                  == sizeof(struct flow_tnl) + 216
-                  && FLOW_WC_SEQ == 35);
+                  == sizeof(struct flow_tnl) + 248
+                  && FLOW_WC_SEQ == 36);
 
 /* Incremental points at which flow classification may be performed in
  * segments.
@@ -180,6 +186,8 @@ void flow_wildcards_set_reg_mask(struct flow_wildcards *,
                                  int idx, uint32_t mask);
 void flow_wildcards_set_xreg_mask(struct flow_wildcards *,
                                   int idx, uint64_t mask);
+void flow_wildcards_set_xxreg_mask(struct flow_wildcards *,
+                                   int idx, ovs_u128 mask);
 
 void flow_wildcards_and(struct flow_wildcards *dst,
                         const struct flow_wildcards *src1,

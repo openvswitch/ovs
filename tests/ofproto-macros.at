@@ -110,6 +110,53 @@ as() {
     fi
 }
 
+# OVN_CLEANUP_VSWITCH(sim)
+#
+# Gracefully terminate vswitch daemons in the
+# specified sandbox.
+m4_define([OVN_CLEANUP_VSWITCH],[
+    as $1
+    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+])
+
+# OVN_CLEANUP_SBOX(sbox)
+#
+# Gracefully terminate OVN daemons in the specified
+# sandbox instance. The sandbox name "vtep" is treated
+# as a special case, and is assumed to have ovn-controller-vtep
+# and ovs-vtep daemons running instead of ovn-controller.
+m4_define([OVN_CLEANUP_SBOX],[
+    as $1
+    if test "$1" = "vtep"; then
+        OVS_APP_EXIT_AND_WAIT([ovn-controller-vtep])
+        OVS_APP_EXIT_AND_WAIT([ovs-vtep])
+    else
+        OVS_APP_EXIT_AND_WAIT([ovn-controller])
+    fi
+    OVN_CLEANUP_VSWITCH([$1])
+])
+
+# OVN_CLEANUP(sim [, sim ...])
+#
+# Gracefully terminate all OVN daemons, including those in the
+# specified sandbox instances.
+m4_define([OVN_CLEANUP],[
+    m4_foreach([sbox], [$@], [
+        OVN_CLEANUP_SBOX([sbox])
+    ])
+    as ovn-sb
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+    as ovn-nb
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+    as northd
+    OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+    OVN_CLEANUP_VSWITCH([main])
+])
+
 # ovn_init_db DATABASE
 #
 # Creates and initializes the given DATABASE (one of "ovn-sb" or "ovn-nb"),
@@ -418,3 +465,47 @@ m4_define([WAIT_FOR_DUMMY_PORTS], \
       [  \
 	 OVS_WAIT_WHILE([ovs-appctl netdev-dummy/conn-state dummy_port \
                   | grep 'unknown\|disconnected'])])])
+
+# OVS_MONITOR_IPSEC_START()
+#
+# Starts ovs-monitor-ipsec daemon.  Use this macro only after testing
+# that python is present on the system.
+m4_define([OVS_MONITOR_IPSEC_START],
+[
+cp "$top_srcdir/vswitchd/vswitch.ovsschema" .
+
+on_exit 'kill `cat pid ovs-monitor-ipsec.pid`'
+
+mkdir etc etc/init.d etc/racoon etc/racoon/certs
+mkdir usr usr/sbin
+
+AT_DATA([etc/init.d/racoon], [dnl
+#! /bin/sh
+echo "racoon: @S|@@" >&3
+exit 0
+])
+chmod +x etc/init.d/racoon
+
+AT_DATA([usr/sbin/setkey], [dnl
+#! /bin/sh
+exec >&3
+echo "setkey:"
+while read line; do
+      echo "> $line"
+done
+])
+chmod +x usr/sbin/setkey
+
+touch etc/racoon/certs/ovs-stale.pem
+
+###
+### Start ovs-monitor-ipsec and wait for it to delete the stale cert.
+###
+AT_CHECK(
+  [$PYTHON $top_srcdir/debian/ovs-monitor-ipsec "--root-prefix=`pwd`" \
+        "--pidfile=`pwd`/ovs-monitor-ipsec.pid" \
+        unix:$OVS_RUNDIR/db.sock 2>log 3>actions &])
+AT_CAPTURE_FILE([log])
+AT_CAPTURE_FILE([actions])
+OVS_WAIT_UNTIL([test ! -f etc/racoon/certs/ovs-stale.pem])
+])

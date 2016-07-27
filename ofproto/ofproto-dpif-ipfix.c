@@ -21,7 +21,7 @@
 #include "collectors.h"
 #include "flow.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "netdev.h"
 #include "openvswitch/list.h"
 #include "openvswitch/ofpbuf.h"
@@ -462,18 +462,6 @@ static void dpif_ipfix_cache_expire(struct dpif_ipfix_exporter *, bool,
 static void get_export_time_now(uint64_t *, uint32_t *);
 
 static void dpif_ipfix_cache_expire_now(struct dpif_ipfix_exporter *, bool);
-
-static bool
-nullable_string_is_equal(const char *a, const char *b)
-{
-    return a ? b && !strcmp(a, b) : !b;
-}
-
-static char *
-nullable_xstrdup(const char *s)
-{
-    return s ? xstrdup(s) : NULL;
-}
 
 static bool
 ofproto_ipfix_bridge_exporter_options_equal(

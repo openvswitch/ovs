@@ -17,7 +17,7 @@
 #include <config.h>
 #include "byte-order.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
 #include "openvswitch/dynamic-string.h"
@@ -25,6 +25,7 @@
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 #include "ovs-thread.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_msgs);
 

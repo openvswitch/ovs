@@ -12,11 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from __future__ import absolute_import
+import functools
+import json
 import re
 import sys
 
 import six
-from six.moves import range
 
 try:
     import ovs._json
@@ -25,112 +27,24 @@ except ImportError:
 
 __pychecker__ = 'no-stringiter'
 
-escapes = {ord('"'): u"\\\"",
-           ord("\\"): u"\\\\",
-           ord("\b"): u"\\b",
-           ord("\f"): u"\\f",
-           ord("\n"): u"\\n",
-           ord("\r"): u"\\r",
-           ord("\t"): u"\\t"}
-for esc in range(32):
-    if esc not in escapes:
-        escapes[esc] = u"\\u%04x" % esc
-
 SPACES_PER_LEVEL = 2
-
-
-class _Serializer(object):
-    def __init__(self, stream, pretty, sort_keys):
-        self.stream = stream
-        self.pretty = pretty
-        self.sort_keys = sort_keys
-        self.depth = 0
-
-    def __serialize_string(self, s):
-        self.stream.write(u'"%s"' % ''.join(escapes.get(ord(c), c) for c in s))
-
-    def __indent_line(self):
-        if self.pretty:
-            self.stream.write('\n')
-            self.stream.write(' ' * (SPACES_PER_LEVEL * self.depth))
-
-    def serialize(self, obj):
-        if obj is None:
-            self.stream.write(u"null")
-        elif obj is False:
-            self.stream.write(u"false")
-        elif obj is True:
-            self.stream.write(u"true")
-        elif isinstance(obj, six.integer_types):
-            self.stream.write(u"%d" % obj)
-        elif isinstance(obj, float):
-            self.stream.write("%.15g" % obj)
-        elif isinstance(obj, six.text_type):
-            # unicode() on Python 2, or str() in Python 3 (always unicode)
-            self.__serialize_string(obj)
-        elif isinstance(obj, str):
-            # This is for Python 2, where this comes out to unicode(str()).
-            # For Python 3, it's str(str()), but it's harmless.
-            self.__serialize_string(six.text_type(obj))
-        elif isinstance(obj, dict):
-            self.stream.write(u"{")
-
-            self.depth += 1
-            self.__indent_line()
-
-            if self.sort_keys:
-                items = sorted(obj.items())
-            else:
-                items = six.iteritems(obj)
-            for i, (key, value) in enumerate(items):
-                if i > 0:
-                    self.stream.write(u",")
-                    self.__indent_line()
-                self.__serialize_string(six.text_type(key))
-                self.stream.write(u":")
-                if self.pretty:
-                    self.stream.write(u' ')
-                self.serialize(value)
-
-            self.stream.write(u"}")
-            self.depth -= 1
-        elif isinstance(obj, (list, tuple)):
-            self.stream.write(u"[")
-            self.depth += 1
-
-            if obj:
-                self.__indent_line()
-
-                for i, value in enumerate(obj):
-                    if i > 0:
-                        self.stream.write(u",")
-                        self.__indent_line()
-                    self.serialize(value)
-
-            self.depth -= 1
-            self.stream.write(u"]")
-        else:
-            raise Exception("can't serialize %s as JSON" % obj)
+dumper = functools.partial(json.dumps, separators=(",", ":"),
+                           ensure_ascii=False)
 
 
 def to_stream(obj, stream, pretty=False, sort_keys=True):
-    _Serializer(stream, pretty, sort_keys).serialize(obj)
+    stream.write(dumper(obj, indent=SPACES_PER_LEVEL if pretty else None,
+                        sort_keys=sort_keys))
 
 
 def to_file(obj, name, pretty=False, sort_keys=True):
-    stream = open(name, "w")
-    try:
+    with open(name, "w") as stream:
         to_stream(obj, stream, pretty, sort_keys)
-    finally:
-        stream.close()
 
 
 def to_string(obj, pretty=False, sort_keys=True):
-    output = six.StringIO()
-    to_stream(obj, output, pretty, sort_keys)
-    s = output.getvalue()
-    output.close()
-    return s
+    return dumper(obj, indent=SPACES_PER_LEVEL if pretty else None,
+                  sort_keys=sort_keys)
 
 
 def from_stream(stream):
