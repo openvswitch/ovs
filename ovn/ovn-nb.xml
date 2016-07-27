@@ -119,6 +119,21 @@
       Access control rules that apply to packets within the logical switch.
     </column>
 
+    <group title="other_config">
+      <p>
+        Additional configuration options for the logical switch.
+      </p>
+
+      <column name="other_config" key="subnet">
+        Set this to an IPv4 subnet, e.g. <code>192.168.0.0/24</code>, to enable
+        <code>ovn-northd</code> to automatically assign IP addresses within
+        that subnet.  Use the <code>dynamic</code> keyword in the <ref
+        table="Logical_Switch_Port"/> table's <ref table="Logical_Switch_Port"
+        column="addresses"/> column to request dynamic address assignment for a
+        particular port.
+      </column>
+    </group>
+
     <group title="Common Columns">
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.
@@ -422,7 +437,29 @@
             ports) whose <ref column="addresses"/> columns include
             <code>unknown</code>.
           </dd>
+
+          <dt><code>dynamic</code></dt>
+          <dd>
+            Use this keyword to make <code>ovn-northd</code> generate a
+            globally unique MAC address and choose an unused IPv4 address with
+            the logical port's subnet and store them in the port's <ref
+            column="dynamic_addresses"/> column.  <code>ovn-northd</code> will
+            use the subnet specified in <ref table="Logical_Switch"
+            column="other_config" key="subnet"/> in the port's <ref
+            table="Logical_Switch"/>.
+          </dd>
         </dl>
+      </column>
+
+      <column name="dynamic_addresses">
+        <p>
+          Addresses assigned to the logical port by <code>ovn-northd</code>, if
+          <code>dynamic</code> is specified in <ref column="addresses"/>.
+          Addresses will be of the same format as those that populate the <ref
+          column="addresses"/> column.  Note that these addresses are
+          constructed and managed locally in ovn-northd, so they cannot be
+          reconstructed in the event that the database is lost.
+        </p>
       </column>
 
       <column name="port_security">

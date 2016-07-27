@@ -911,7 +911,7 @@ nbctl_lsp_set_addresses(struct ctl_context *ctx)
     for (i = 2; i < ctx->argc; i++) {
         struct eth_addr ea;
 
-        if (strcmp(ctx->argv[i], "unknown")
+        if (strcmp(ctx->argv[i], "unknown") && strcmp(ctx->argv[i], "dynamic")
             && !ovs_scan(ctx->argv[i], ETH_ADDR_SCAN_FMT,
                          ETH_ADDR_SCAN_ARGS(ea))) {
             ctl_fatal("%s: Invalid address format. See ovn-nb(5). "
