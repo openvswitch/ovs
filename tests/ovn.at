@@ -132,6 +132,33 @@ sed 's/.* => //' test-cases.txt > expout
 AT_CHECK([ovstest test-ovn lex < input.txt], [0], [expout])
 AT_CLEANUP
 
+dnl The OVN expression parser needs to know what fields overlap with one
+dnl another.  This test therefore verifies that all the smaller registers
+dnl are defined as terms of subfields of the larger ones.
+dnl
+dnl When we add or remove registers this test needs to be updated, of course.
+AT_SETUP([ovn -- registers])
+AT_CHECK([ovstest test-ovn dump-symtab | grep reg | sort], [0],
+[[reg0 = xxreg0[96..127]
+reg1 = xxreg0[64..95]
+reg2 = xxreg0[32..63]
+reg3 = xxreg0[0..31]
+reg4 = xxreg1[96..127]
+reg5 = xxreg1[64..95]
+reg6 = xxreg1[32..63]
+reg7 = xxreg1[0..31]
+reg8 = xreg4[32..63]
+reg9 = xreg4[0..31]
+xreg0 = xxreg0[64..127]
+xreg1 = xxreg0[0..63]
+xreg2 = xxreg1[64..127]
+xreg3 = xxreg1[0..63]
+xreg4 = OXM_OF_PKT_REG4
+xxreg0 = NXM_NX_XXREG0
+xxreg1 = NXM_NX_XXREG1
+]])
+AT_CLEANUP
+
 AT_SETUP([ovn -- expression parser])
 dnl For lines without =>, input and expected output are identical.
 dnl For lines with =>, input precedes => and expected output follows =>.
@@ -330,7 +357,7 @@ vlan.present => vlan.tci[12]
 
 !vlan.pcp => vlan.tci[13..15] == 0 && vlan.tci[12]
 vlan.pcp == 1 && vlan.vid == 2 => vlan.tci[13..15] == 0x1 && vlan.tci[12] && vlan.tci[0..11] == 0x2 && vlan.tci[12]
-!reg0 && !reg1 && !reg2 && !reg3 => xreg0[32..63] == 0 && xreg0[0..31] == 0 && xreg1[32..63] == 0 && xreg1[0..31] == 0
+!reg0 && !reg1 && !reg2 && !reg3 => xxreg0[96..127] == 0 && xxreg0[64..95] == 0 && xxreg0[32..63] == 0 && xxreg0[0..31] == 0
 
 ip.first_frag => ip.frag[0] && (eth.type == 0x800 || eth.type == 0x86dd) && (!ip.frag[1] || (eth.type != 0x800 && eth.type != 0x86dd))
 !ip.first_frag => !ip.frag[0] || (eth.type != 0x800 && eth.type != 0x86dd) || (ip.frag[1] && (eth.type == 0x800 || eth.type == 0x86dd))
@@ -575,9 +602,9 @@ self_recurse = 123; => Error parsing expression `self_recurse != 0' encountered 
 vlan.present = 0; => Predicate symbol vlan.present used where lvalue required.
 
 # Moving one field into another.
-reg0 = reg1; => actions=move:OXM_OF_PKT_REG0[0..31]->OXM_OF_PKT_REG0[32..63], prereqs=1
-vlan.pcp = reg0[0..2]; => actions=move:OXM_OF_PKT_REG0[32..34]->NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
-reg0[10] = vlan.pcp[1]; => actions=move:NXM_OF_VLAN_TCI[14]->OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]
+reg0 = reg1; => actions=move:NXM_NX_XXREG0[64..95]->NXM_NX_XXREG0[96..127], prereqs=1
+vlan.pcp = reg0[0..2]; => actions=move:NXM_NX_XXREG0[96..98]->NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
+reg0[10] = vlan.pcp[1]; => actions=move:NXM_OF_VLAN_TCI[14]->NXM_NX_XXREG0[106], prereqs=vlan.tci[12]
 outport = inport; => actions=move:NXM_NX_REG14[]->NXM_NX_REG15[], prereqs=1
 
 reg0[0] = vlan.present; => Predicate symbol vlan.present used where lvalue required.
@@ -587,9 +614,9 @@ inport = big_string; => String fields inport and big_string are incompatible for
 ip.proto = reg0[0..7]; => Field ip.proto is not modifiable.
 
 # Exchanging fields.
-reg0 <-> reg1; => actions=push:OXM_OF_PKT_REG0[0..31],push:OXM_OF_PKT_REG0[32..63],pop:OXM_OF_PKT_REG0[0..31],pop:OXM_OF_PKT_REG0[32..63], prereqs=1
-vlan.pcp <-> reg0[0..2]; => actions=push:OXM_OF_PKT_REG0[32..34],push:NXM_OF_VLAN_TCI[13..15],pop:OXM_OF_PKT_REG0[32..34],pop:NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
-reg0[10] <-> vlan.pcp[1]; => actions=push:NXM_OF_VLAN_TCI[14],push:OXM_OF_PKT_REG0[42],pop:NXM_OF_VLAN_TCI[14],pop:OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]
+reg0 <-> reg1; => actions=push:NXM_NX_XXREG0[64..95],push:NXM_NX_XXREG0[96..127],pop:NXM_NX_XXREG0[64..95],pop:NXM_NX_XXREG0[96..127], prereqs=1
+vlan.pcp <-> reg0[0..2]; => actions=push:NXM_NX_XXREG0[96..98],push:NXM_OF_VLAN_TCI[13..15],pop:NXM_NX_XXREG0[96..98],pop:NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
+reg0[10] <-> vlan.pcp[1]; => actions=push:NXM_OF_VLAN_TCI[14],push:NXM_NX_XXREG0[106],pop:NXM_OF_VLAN_TCI[14],pop:NXM_NX_XXREG0[106], prereqs=vlan.tci[12]
 outport <-> inport; => actions=push:NXM_NX_REG14[],push:NXM_NX_REG15[],pop:NXM_NX_REG14[],pop:NXM_NX_REG15[], prereqs=1
 
 reg0[0] <-> vlan.present; => Predicate symbol vlan.present used where lvalue required.
@@ -649,7 +676,7 @@ arp { eth.dst = ff:ff:ff:ff:ff:ff; output; }; => actions=controller(userdata=00.
 
 # get_arp
 get_arp(outport, ip4.dst); => actions=push:NXM_NX_REG0[],push:NXM_OF_IP_DST[],pop:NXM_NX_REG0[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_REG0[], prereqs=eth.type == 0x800
-get_arp(inport, reg0); => actions=push:NXM_NX_REG15[],push:NXM_NX_REG0[],push:OXM_OF_PKT_REG0[32..63],push:NXM_NX_REG14[],pop:NXM_NX_REG15[],pop:NXM_NX_REG0[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_REG0[],pop:NXM_NX_REG15[], prereqs=1
+get_arp(inport, reg0); => actions=push:NXM_NX_REG15[],push:NXM_NX_REG0[],push:NXM_NX_XXREG0[96..127],push:NXM_NX_REG14[],pop:NXM_NX_REG15[],pop:NXM_NX_REG0[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_REG0[],pop:NXM_NX_REG15[], prereqs=1
 get_arp; => Syntax error at `;' expecting `('.
 get_arp(); => Syntax error at `)' expecting field name.
 get_arp(inport); => Syntax error at `)' expecting `,'.
@@ -663,8 +690,8 @@ get_arp(reg0, ip4.dst); => Cannot use numeric field reg0 where string field is r
 put_arp(inport, arp.spa, arp.sha); => actions=push:NXM_NX_REG0[],push:NXM_OF_ETH_SRC[],push:NXM_NX_ARP_SHA[],push:NXM_OF_ARP_SPA[],pop:NXM_NX_REG0[],pop:NXM_OF_ETH_SRC[],controller(userdata=00.00.00.01.00.00.00.00),pop:NXM_OF_ETH_SRC[],pop:NXM_NX_REG0[], prereqs=eth.type == 0x806 && eth.type == 0x806
 
 # put_dhcp_opts
-reg1[0] = put_dhcp_opts(offerip = 1.2.3.4, router = 10.0.0.1); => actions=controller(userdata=00.00.00.02.00.00.00.00.80.01.00.08.00.00.00.00.01.02.03.04.03.04.0a.00.00.01,pause), prereqs=1
-reg2[5] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.254.0,mtu=1400,domain="ovn.org"); => actions=controller(userdata=00.00.00.02.00.00.00.00.80.01.02.08.00.00.00.25.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.fe.00.1a.02.05.78.0f.07.6f.76.6e.2e.6f.72.67,pause), prereqs=1
+reg1[0] = put_dhcp_opts(offerip = 1.2.3.4, router = 10.0.0.1); => actions=controller(userdata=00.00.00.02.00.00.00.00.00.01.de.10.00.00.00.40.01.02.03.04.03.04.0a.00.00.01,pause), prereqs=1
+reg2[5] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.254.0,mtu=1400,domain="ovn.org"); => actions=controller(userdata=00.00.00.02.00.00.00.00.00.01.de.10.00.00.00.25.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.fe.00.1a.02.05.78.0f.07.6f.76.6e.2e.6f.72.67,pause), prereqs=1
 # offerip=10.0.0.4             --> 0a.00.00.04
 # router=10.0.0.1              --> 03.04.0a.00.00.01
 # netmask=255.255.255.0        --> 01.04.ff.ff.ff.00
@@ -678,7 +705,7 @@ reg2[5] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.254.0,m
 #  0.0.0.0/0,10.0.0.1}         --> 00.0a.00.00.01
 # ethernet_encap=1             --> 24.01.01
 # router_discovery=0           --> 1f.01.00
-reg0[15] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.255.0,mtu=1400,ip_forward_enable=1,default_ttl=121,dns_server={8.8.8.8,7.7.7.7},classless_static_route={30.0.0.0/24,10.0.0.4,40.0.0.0/16,10.0.0.6,0.0.0.0/0,10.0.0.1},ethernet_encap=1,router_discovery=0); => actions=controller(userdata=00.00.00.02.00.00.00.00.80.01.00.08.00.00.00.2f.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.ff.00.1a.02.05.78.13.01.01.17.01.79.06.08.08.08.08.08.07.07.07.07.79.14.18.1e.00.00.0a.00.00.04.10.28.00.0a.00.00.06.00.0a.00.00.01.24.01.01.1f.01.00,pause), prereqs=1
+reg0[15] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.255.0,mtu=1400,ip_forward_enable=1,default_ttl=121,dns_server={8.8.8.8,7.7.7.7},classless_static_route={30.0.0.0/24,10.0.0.4,40.0.0.0/16,10.0.0.6,0.0.0.0/0,10.0.0.1},ethernet_encap=1,router_discovery=0); => actions=controller(userdata=00.00.00.02.00.00.00.00.00.01.de.10.00.00.00.6f.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.ff.00.1a.02.05.78.13.01.01.17.01.79.06.08.08.08.08.08.07.07.07.07.79.14.18.1e.00.00.0a.00.00.04.10.28.00.0a.00.00.06.00.0a.00.00.01.24.01.01.1f.01.00,pause), prereqs=1
 reg1[0..1] = put_dhcp_opts(offerip = 1.2.3.4, router = 10.0.0.1); => Cannot use 2-bit field reg1[0..1] where 1-bit field is required.
 reg1[0] = put_dhcp_opts(); => Syntax error at `)'.
 reg1[0] = put_dhcp_opts(x = 1.2.3.4, router = 10.0.0.1); => Syntax error at `x' expecting offerip option.

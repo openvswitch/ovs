@@ -18,6 +18,8 @@
 
 #include "openvswitch/meta-flow.h"
 
+struct shash;
+
 enum {
     MLF_ALLOW_LOOPBACK_BIT = 0
 };
@@ -47,5 +49,7 @@ enum {
  * Make sure these don't overlap with the logical fields! */
 #define MFF_LOG_REG0 MFF_REG0
 #define MFF_N_LOG_REGS 10
+
+void ovn_init_symtab(struct shash *symtab);
 
 #endif /* ovn/lib/logical-fields.h */

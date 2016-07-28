@@ -18,6 +18,7 @@
 #include "byte-order.h"
 #include "openvswitch/json.h"
 #include "logical-fields.h"
+#include "nx-match.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/match.h"
 #include "openvswitch/ofp-actions.h"
@@ -1116,6 +1117,37 @@ expr_parse_string(const char *s, const struct shash *symtab,
     return expr;
 }
 
+/* Appends to 's' a re-parseable representation of 'field'. */
+void
+expr_field_format(const struct expr_field *field, struct ds *s)
+{
+    ds_put_cstr(s, field->symbol->name);
+    if (field->ofs || field->n_bits != field->symbol->width) {
+        if (field->n_bits != 1) {
+            ds_put_format(s, "[%d..%d]",
+                          field->ofs, field->ofs + field->n_bits - 1);
+        } else {
+            ds_put_format(s, "[%d]", field->ofs);
+        }
+    }
+}
+
+void
+expr_symbol_format(const struct expr_symbol *symbol, struct ds *s)
+{
+    ds_put_format(s, "%s = ", symbol->name);
+    if (symbol->parent) {
+        struct expr_field f = { symbol->parent,
+                                symbol->parent_ofs,
+                                symbol->width };
+        expr_field_format(&f, s);
+    } else if (symbol->predicate) {
+        ds_put_cstr(s, symbol->predicate);
+    } else {
+        nx_format_field_name(symbol->field->id, OFP13_VERSION, s);
+    }
+}
+
 static struct expr_symbol *
 add_symbol(struct shash *symtab, const char *name, int width,
            const char *prereqs, enum expr_level level,

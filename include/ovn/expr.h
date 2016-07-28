@@ -253,6 +253,8 @@ struct expr_symbol {
     bool rw;
 };
 
+void expr_symbol_format(const struct expr_symbol *, struct ds *);
+
 /* A reference to a symbol or a subfield of a symbol.
  *
  * For string fields, ofs and n_bits are 0. */
@@ -261,6 +263,8 @@ struct expr_field {
     int ofs;                          /* Starting bit offset. */
     int n_bits;                       /* Number of bits. */
 };
+
+void expr_field_format(const struct expr_field *, struct ds *);
 
 struct expr_symbol *expr_symtab_add_field(struct shash *symtab,
                                           const char *name, enum mf_field_id,
