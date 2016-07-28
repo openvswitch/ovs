@@ -103,6 +103,11 @@ get_local_iface_ids(const struct ovsrec_bridge *br_int,
      * that has been removed. */
     if (!changed && !sset_is_empty(&old_local_ids)) {
         changed = true;
+
+        const char *cur_id;
+        SSET_FOR_EACH(cur_id, &old_local_ids) {
+            sset_find_and_delete(&local_ids, cur_id);
+        }
     }
 
     sset_destroy(&old_local_ids);
