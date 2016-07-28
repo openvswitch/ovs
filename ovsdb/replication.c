@@ -150,6 +150,7 @@ void
 disconnect_active_server(void)
 {
     jsonrpc_close(rpc);
+    rpc = NULL;
     sset_clear(&monitored_tables);
     sset_clear(&tables_blacklist);
 }
@@ -157,7 +158,7 @@ disconnect_active_server(void)
 void
 destroy_active_server(void)
 {
-    jsonrpc_close(rpc);
+    disconnect_active_server();
     sset_destroy(&monitored_tables);
     sset_destroy(&tables_blacklist);
 
