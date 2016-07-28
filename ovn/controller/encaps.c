@@ -309,12 +309,7 @@ check_and_update_tunnel(const struct sbrec_chassis *chassis_rec)
         const struct sbrec_encap *encap = preferred_encap(chassis_rec);
         const struct ovsrec_port *port = port_node->port;
         const struct ovsrec_interface *iface = port->interfaces[0];
-        char *port_name = tunnel_create_name(chassis_rec->name);
-        if (!port_name) {
-            VLOG_WARN("Unable to allocate unique name for '%s' tunnel",
-                      chassis_rec->name);
-            return;
-        }
+
         if (strcmp(encap->type, iface->type)) {
             ovsrec_interface_set_type(iface, encap->type);
         }
