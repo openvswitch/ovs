@@ -120,6 +120,7 @@ bugs@openvswitch.org
 [INSTALL.KVM.md]:INSTALL.KVM.md
 [INSTALL.Libvirt.md]:INSTALL.Libvirt.md
 [INSTALL.RHEL.md]:INSTALL.RHEL.md
+[INSTALL.SELinux.md]:INSTALL.SELinux.md
 [INSTALL.SSL.md]:INSTALL.SSL.md
 [INSTALL.userspace.md]:INSTALL.userspace.md
 [INSTALL.XenServer.md]:INSTALL.XenServer.md
