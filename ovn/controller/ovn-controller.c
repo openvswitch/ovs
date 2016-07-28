@@ -314,6 +314,11 @@ static struct hmap patched_datapaths = HMAP_INITIALIZER(&patched_datapaths);
 static struct lport_index lports;
 static struct mcgroup_index mcgroups;
 
+/* Contains the names of all logical ports currently bound to the chassis
+ * managed by this instance of ovn-controller. The contents are managed
+ * in binding.c, but consumed elsewhere. */
+static struct sset all_lports = SSET_INITIALIZER(&all_lports);
+
 int
 main(int argc, char *argv[])
 {
@@ -425,8 +430,6 @@ main(int argc, char *argv[])
 
         update_probe_interval(&ctx);
 
-        struct sset all_lports = SSET_INITIALIZER(&all_lports);
-
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
 
@@ -434,7 +437,8 @@ main(int argc, char *argv[])
         if (chassis_id) {
             chassis = chassis_run(&ctx, chassis_id);
             encaps_run(&ctx, br_int, chassis_id);
-            binding_run(&ctx, br_int, chassis_id, &local_datapaths);
+            binding_run(&ctx, br_int, chassis_id, &local_datapaths,
+                        &all_lports);
         }
 
         if (br_int && chassis_id) {
@@ -465,8 +469,6 @@ main(int argc, char *argv[])
                 }
             }
         }
-
-        sset_destroy(&all_lports);
 
         unixctl_server_run(unixctl);
 

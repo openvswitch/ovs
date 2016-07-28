@@ -29,7 +29,8 @@ struct sset;
 void binding_register_ovs_idl(struct ovsdb_idl *);
 void binding_reset_processing(void);
 void binding_run(struct controller_ctx *, const struct ovsrec_bridge *br_int,
-                 const char *chassis_id, struct hmap *local_datapaths);
+                 const char *chassis_id, struct hmap *local_datapaths,
+                 struct sset *all_lports);
 bool binding_cleanup(struct controller_ctx *, const char *chassis_id);
 
 #endif /* ovn/binding.h */
