@@ -750,6 +750,10 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     const struct sbrec_port_binding *binding;
     if (full_binding_processing) {
         SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
+            /* Because it is possible in the above code to enter this
+             * for loop without having cleared the flow table first, we
+             * should clear the old flows to avoid collisions. */
+            ofctrl_remove_flows(&binding->header_.uuid);
             consider_port_binding(mff_ovn_geneve, ct_zones, local_datapaths,
                                   patched_datapaths, binding, &ofpacts);
         }
@@ -773,11 +777,20 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     struct ofpbuf remote_ofpacts;
     ofpbuf_init(&remote_ofpacts, 0);
     SBREC_MULTICAST_GROUP_FOR_EACH (mc, ctx->ovnsb_idl) {
+        /* As multicast groups are always reprocessed each time,
+         * the first step is to clean the old flows for the group
+         * so that we avoid warning messages on collisions. */
+        ofctrl_remove_flows(&mc->header_.uuid);
         consider_mc_group(mff_ovn_geneve, ct_zones,
                           local_datapaths, mc, &ofpacts, &remote_ofpacts);
     }
 
     ofpbuf_uninit(&remote_ofpacts);
+
+    /* Because flows using the hard-coded uuid are recalculated each
+     * cycle, let's first remove the old flows to avoid duplicate flow
+     * warnings. */
+    ofctrl_remove_flows(hc_uuid);
 
     /* Table 0, priority 100.
      * ======================
