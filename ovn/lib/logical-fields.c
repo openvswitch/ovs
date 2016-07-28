@@ -93,19 +93,27 @@ ovn_init_symtab(struct shash *symtab)
     expr_symtab_add_field(symtab, "ct_mark", MFF_CT_MARK, NULL, false);
     expr_symtab_add_field(symtab, "ct_label", MFF_CT_LABEL, NULL, false);
     expr_symtab_add_field(symtab, "ct_state", MFF_CT_STATE, NULL, false);
-    char ct_state_str[16];
-    snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_TRACKED_BIT);
-    expr_symtab_add_predicate(symtab, "ct.trk", ct_state_str);
-    snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_NEW_BIT);
-    expr_symtab_add_subfield(symtab, "ct.new", "ct.trk", ct_state_str);
-    snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_ESTABLISHED_BIT);
-    expr_symtab_add_subfield(symtab, "ct.est", "ct.trk", ct_state_str);
-    snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_RELATED_BIT);
-    expr_symtab_add_subfield(symtab, "ct.rel", "ct.trk", ct_state_str);
-    snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_REPLY_DIR_BIT);
-    expr_symtab_add_subfield(symtab, "ct.rpl", "ct.trk", ct_state_str);
-    snprintf(ct_state_str, sizeof ct_state_str, "ct_state[%d]", CS_INVALID_BIT);
-    expr_symtab_add_subfield(symtab, "ct.inv", "ct.trk", ct_state_str);
+
+    struct ct_bit {
+        const char *name;
+        int bit;
+    };
+    static const struct ct_bit bits[] = {
+        {"trk", CS_TRACKED_BIT},
+        {"new", CS_NEW_BIT},
+        {"est", CS_ESTABLISHED_BIT},
+        {"rel", CS_RELATED_BIT},
+        {"rpl", CS_REPLY_DIR_BIT},
+        {"inv", CS_INVALID_BIT},
+    };
+    for (const struct ct_bit *b = bits; b < &bits[ARRAY_SIZE(bits)]; b++) {
+        char *name = xasprintf("ct.%s", b->name);
+        char *expansion = xasprintf("ct_state[%d]", b->bit);
+        const char *prereqs = b->bit == CS_TRACKED_BIT ? NULL : "ct.trk";
+        expr_symtab_add_subfield(symtab, name, prereqs, expansion);
+        free(expansion);
+        free(name);
+    }
 
     /* Data fields. */
     expr_symtab_add_field(symtab, "eth.src", MFF_ETH_SRC, NULL, false);

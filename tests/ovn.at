@@ -159,6 +159,21 @@ xxreg1 = NXM_NX_XXREG1
 ]])
 AT_CLEANUP
 
+dnl Check that the OVN conntrack field definitions are correct.
+AT_SETUP([ovn -- conntrack fields])
+AT_CHECK([ovstest test-ovn dump-symtab | grep ^ct | sort], [0],
+[[ct.est = ct_state[1]
+ct.inv = ct_state[4]
+ct.new = ct_state[0]
+ct.rel = ct_state[2]
+ct.rpl = ct_state[3]
+ct.trk = ct_state[5]
+ct_label = NXM_NX_CT_LABEL
+ct_mark = NXM_NX_CT_MARK
+ct_state = NXM_NX_CT_STATE
+]])
+AT_CLEANUP
+
 AT_SETUP([ovn -- expression parser])
 dnl For lines without =>, input and expected output are identical.
 dnl For lines with =>, input precedes => and expected output follows =>.
