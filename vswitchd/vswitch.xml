@@ -3146,6 +3146,30 @@
       </column>
     </group>
 
+    <group title="Flow control Configuration">
+      <p>
+        Ethernet flow control defined in IEEE 802.1Qbb provides link level flow
+        control using MAC pause frames.  Implemented only for interfaces with
+        type <code>dpdk</code>.
+      </p>
+
+      <column name="options" key="rx-flow-ctrl" type='{"type": "boolean"}'>
+        Set to <code>true</code> to enable Rx flow control on physical ports.
+        By default, Rx flow control is disabled.
+      </column>
+
+      <column name="options" key="tx-flow-ctrl" type='{"type": "boolean"}'>
+        Set to <code>true</code> to enable Tx flow control on physical ports.
+        By default, Tx flow control is disabled.
+      </column>
+
+      <column name="options" key="flow-ctrl-autoneg"
+              type='{"type": "boolean"}'>
+        Set to <code>true</code> to enable flow control auto negotiation on
+        physical ports. By default, auto-neg is disabled.
+      </column>
+    </group>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.

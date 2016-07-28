@@ -11,7 +11,8 @@ OVS DPDK ADVANCED INSTALL GUIDE
 6. [Vhost Walkthrough](#vhost)
 7. [QOS](#qos)
 8. [Rate Limiting](#rl)
-9. [Vsperf](#vsperf)
+9. [Flow Control](#fc)
+10. [Vsperf](#vsperf)
 
 ## <a name="overview"></a> 1. Overview
 
@@ -827,7 +828,41 @@ To clear the ingress policer configuration from the port use the following:
 
 For more details regarding ingress-policer see the vswitch.xml.
 
-## <a name="vsperf"></a> 9. Vsperf
+## <a name="fc"></a> 9. Flow control.
+Flow control can be enabled only on DPDK physical ports.
+To enable flow control support at tx side while adding a port, add the
+'tx-flow-ctrl' option to the 'ovs-vsctl add-port' as in the eg: below.
+
+```
+ovs-vsctl add-port br0 dpdk0 -- \
+set Interface dpdk0 type=dpdk options:tx-flow-ctrl=true
+```
+
+Similarly to enable rx flow control,
+
+```
+ovs-vsctl add-port br0 dpdk0 -- \
+set Interface dpdk0 type=dpdk options:rx-flow-ctrl=true
+```
+
+And to enable the flow control auto-negotiation,
+
+```
+ovs-vsctl add-port br0 dpdk0 -- \
+set Interface dpdk0 type=dpdk options:flow-ctrl-autoneg=true
+```
+
+To turn ON the tx flow control at run time(After the port is being added
+to OVS), the command-line input will be,
+
+`ovs-vsctl set Interface dpdk0 options:tx-flow-ctrl=true`
+
+The flow control parameters can be turned off by setting 'false' to the
+respective parameter. To disable the flow control at tx side,
+
+`ovs-vsctl set Interface dpdk0 options:tx-flow-ctrl=false`
+
+## <a name="vsperf"></a> 10. Vsperf
 
 Vsperf project goal is to develop vSwitch test framework that can be used to
 validate the suitability of different vSwitch implementations in a Telco deployment

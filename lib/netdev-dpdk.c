@@ -375,6 +375,9 @@ struct netdev_dpdk {
     OVSRCU_TYPE(struct ingress_policer *) ingress_policer;
     uint32_t policer_rate;
     uint32_t policer_burst;
+
+    /* DPDK-ETH Flow control */
+    struct rte_eth_fc_conf fc_conf;
 };
 
 struct netdev_rxq_dpdk {
@@ -628,6 +631,13 @@ dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
     return diag;
 }
 
+static void
+dpdk_eth_flow_ctrl_setup(struct netdev_dpdk *dev) OVS_REQUIRES(dev->mutex)
+{
+    if (rte_eth_dev_flow_ctrl_set(dev->port_id, &dev->fc_conf)) {
+        VLOG_WARN("Failed to enable flow control on device %d", dev->port_id);
+    }
+}
 
 static int
 dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
@@ -676,6 +686,14 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
     dev->buf_size = mbp_priv->mbuf_data_room_size - RTE_PKTMBUF_HEADROOM;
 
     dev->flags = NETDEV_UP | NETDEV_PROMISC;
+
+    /* Get the Flow control configuration for DPDK-ETH */
+    diag = rte_eth_dev_flow_ctrl_get(dev->port_id, &dev->fc_conf);
+    if (diag) {
+        VLOG_DBG("cannot get flow control parameters on port=%d, err=%d",
+                 dev->port_id, diag);
+    }
+
     return 0;
 }
 
@@ -765,6 +783,8 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
     dev->requested_n_rxq = netdev->n_rxq;
     dev->requested_n_txq = netdev->n_txq;
 
+    /* Initialize the flow control to NULL */
+    memset(&dev->fc_conf, 0, sizeof dev->fc_conf);
     if (type == DPDK_DEV_ETH) {
         err = dpdk_eth_dev_init(dev);
         if (err) {
@@ -982,6 +1002,22 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
     if (new_n_rxq != dev->requested_n_rxq) {
         dev->requested_n_rxq = new_n_rxq;
         netdev_request_reconfigure(netdev);
+    }
+
+    /* Flow control configuration for DPDK Ethernet ports. */
+    if (dev->type == DPDK_DEV_ETH) {
+        bool rx_fc_en = false;
+        bool tx_fc_en = false;
+        enum rte_eth_fc_mode fc_mode_set[2][2] =
+                                           {{RTE_FC_NONE, RTE_FC_TX_PAUSE},
+                                            {RTE_FC_RX_PAUSE, RTE_FC_FULL}
+                                           };
+        rx_fc_en = smap_get_bool(args, "rx-flow-ctrl", false);
+        tx_fc_en = smap_get_bool(args, "tx-flow-ctrl", false);
+        dev->fc_conf.autoneg = smap_get_bool(args, "flow-ctrl-autoneg", false);
+        dev->fc_conf.mode = fc_mode_set[tx_fc_en][rx_fc_en];
+
+        dpdk_eth_flow_ctrl_setup(dev);
     }
     ovs_mutex_unlock(&dev->mutex);
 
