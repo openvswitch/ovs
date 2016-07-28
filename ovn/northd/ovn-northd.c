@@ -2689,11 +2689,16 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         ds_put_cstr(&match, "ip4.dst == {");
         bool has_drop_ips = false;
         for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
+            bool snat_ip_is_router_ip = false;
             for (int j = 0; j < n_snat_ips; j++) {
                 /* Packets to SNAT IPs should not be dropped. */
                 if (op->lrp_networks.ipv4_addrs[i].addr == snat_ips[j]) {
-                    continue;
+                    snat_ip_is_router_ip = true;
+                    break;
                 }
+            }
+            if (snat_ip_is_router_ip) {
+                continue;
             }
             ds_put_format(&match, "%s, ",
                           op->lrp_networks.ipv4_addrs[i].addr_s);
