@@ -111,7 +111,7 @@ NS_CHECK_EXEC([alice1], [ping -q -c 3 -i 0.3 -w 2 30.0.0.2 | FORMAT_PING], \
 # Check conntrack entries.
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(172.16.1.2) | \
 sed -e 's/zone=[[0-9]]*/zone=<cleared>/'], [0], [dnl
-icmp,orig=(src=172.16.1.2,dst=30.0.0.2,id=<cleared>),reply=(src=192.168.1.2,dst=172.16.1.2,id=<cleared>),zone=<cleared>
+icmp,orig=(src=172.16.1.2,dst=30.0.0.2,id=<cleared>,type=8,code=0),reply=(src=192.168.1.2,dst=172.16.1.2,id=<cleared>,type=0,code=0),zone=<cleared>
 ])
 
 # South-North SNAT: 'bar1' pings 'alice1'. But 'alice1' receives traffic
@@ -124,7 +124,7 @@ NS_CHECK_EXEC([bar1], [ping -q -c 3 -i 0.3 -w 2 172.16.1.2 | FORMAT_PING], \
 # We verify that SNAT indeed happened via 'dump-conntrack' command.
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(30.0.0.1) | \
 sed -e 's/zone=[[0-9]]*/zone=<cleared>/'], [0], [dnl
-icmp,orig=(src=192.168.2.2,dst=172.16.1.2,id=<cleared>),reply=(src=172.16.1.2,dst=30.0.0.1,id=<cleared>),zone=<cleared>
+icmp,orig=(src=192.168.2.2,dst=172.16.1.2,id=<cleared>,type=8,code=0),reply=(src=172.16.1.2,dst=30.0.0.1,id=<cleared>,type=0,code=0),zone=<cleared>
 ])
 
 # Add static routes to handle east-west NAT.
@@ -143,14 +143,14 @@ NS_CHECK_EXEC([bar1], [ping -q -c 3 -i 0.3 -w 2 30.0.0.2 | FORMAT_PING], \
 # 30.0.0.2 to R2, it hits the DNAT rule and converts 30.0.0.2 to 192.168.1.2
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(30.0.0.2) | \
 sed -e 's/zone=[[0-9]]*/zone=<cleared>/'], [0], [dnl
-icmp,orig=(src=192.168.2.2,dst=30.0.0.2,id=<cleared>),reply=(src=192.168.1.2,dst=192.168.2.2,id=<cleared>),zone=<cleared>
+icmp,orig=(src=192.168.2.2,dst=30.0.0.2,id=<cleared>,type=8,code=0),reply=(src=192.168.1.2,dst=192.168.2.2,id=<cleared>,type=0,code=0),zone=<cleared>
 ])
 
 # As we have a SNAT rule that converts 192.168.2.2 to 30.0.0.1, the source is
 # SNATted and 'foo1' receives it.
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(30.0.0.1) | \
 sed -e 's/zone=[[0-9]]*/zone=<cleared>/'], [0], [dnl
-icmp,orig=(src=192.168.2.2,dst=192.168.1.2,id=<cleared>),reply=(src=192.168.1.2,dst=30.0.0.1,id=<cleared>),zone=<cleared>
+icmp,orig=(src=192.168.2.2,dst=192.168.1.2,id=<cleared>,type=8,code=0),reply=(src=192.168.1.2,dst=30.0.0.1,id=<cleared>,type=0,code=0),zone=<cleared>
 ])
 
 OVS_APP_EXIT_AND_WAIT([ovn-controller])
@@ -255,7 +255,7 @@ NS_CHECK_EXEC([foo1], [ping -q -c 3 -i 0.3 -w 2 172.16.1.2 | FORMAT_PING], \
 # We verify that SNAT indeed happened via 'dump-conntrack' command.
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(172.16.1.1) | \
 sed -e 's/zone=[[0-9]]*/zone=<cleared>/'], [0], [dnl
-icmp,orig=(src=192.168.1.2,dst=172.16.1.2,id=<cleared>),reply=(src=172.16.1.2,dst=172.16.1.1,id=<cleared>),zone=<cleared>
+icmp,orig=(src=192.168.1.2,dst=172.16.1.2,id=<cleared>,type=8,code=0),reply=(src=172.16.1.2,dst=172.16.1.1,id=<cleared>,type=0,code=0),zone=<cleared>
 ])
 
 OVS_APP_EXIT_AND_WAIT([ovn-controller])
