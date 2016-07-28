@@ -908,9 +908,9 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
      * registers (for consistent behavior with packets that get tunneled). */
     match_init_catchall(&match);
     ofpbuf_clear(&ofpacts);
-#define MFF_LOG_REG(ID) put_load(0, ID, 0, 32, &ofpacts);
-    MFF_LOG_REGS;
-#undef MFF_LOG_REGS
+    for (int i = 0; i < MFF_N_LOG_REGS; i++) {
+        put_load(0, MFF_REG0 + i, 0, 32, &ofpacts);
+    }
     put_resubmit(OFTABLE_LOG_EGRESS_PIPELINE, &ofpacts);
     ofctrl_add_flow(OFTABLE_CHECK_LOOPBACK, 0, &match, &ofpacts, hc_uuid);
 

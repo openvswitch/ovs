@@ -52,15 +52,6 @@ lflow_reset_processing(void)
     physical_reset_processing();
 }
 
-static void
-add_logical_register(struct shash *symtab, enum mf_field_id id)
-{
-    char name[8];
-
-    snprintf(name, sizeof name, "reg%d", id - MFF_REG0);
-    expr_symtab_add_field(symtab, name, id, NULL, false);
-}
-
 void
 lflow_init(void)
 {
@@ -74,9 +65,11 @@ lflow_init(void)
     expr_symtab_add_string(&symtab, "outport", MFF_LOG_OUTPORT, NULL);
 
     /* Logical registers. */
-#define MFF_LOG_REG(ID) add_logical_register(&symtab, ID);
-    MFF_LOG_REGS;
-#undef MFF_LOG_REG
+    for (int i = 0; i < MFF_N_LOG_REGS; i++) {
+        char *name = xasprintf("reg%d", i);
+        expr_symtab_add_field(&symtab, name, MFF_LOG_REG0 + i, NULL, false);
+        free(name);
+    }
 
     expr_symtab_add_field(&symtab, "xxreg0", MFF_XXREG0, NULL, false);
     expr_symtab_add_field(&symtab, "xxreg1", MFF_XXREG1, NULL, false);
