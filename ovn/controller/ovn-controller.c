@@ -482,6 +482,7 @@ main(int argc, char *argv[])
         ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
         ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop);
         ovsdb_idl_track_clear(ovnsb_idl_loop.idl);
+        ovsdb_idl_track_clear(ovs_idl_loop.idl);
         poll_block();
         if (should_service_stop()) {
             exiting = true;

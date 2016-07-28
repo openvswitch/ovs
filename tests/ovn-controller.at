@@ -216,3 +216,51 @@ as ovn-sb
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP
+
+# Checks that ovn-controller correctly maintains the mapping from the Encap
+# table in the Southbound database to OVS in the face of changes on both sides
+AT_SETUP([ovn-controller - change Encap properties])
+AT_KEYWORDS([ovn])
+ovn_init_db ovn-sb
+
+net_add n1
+sim_add hv
+as hv
+ovs-vsctl \
+    -- add-br br-phys \
+    -- add-br br-eth0 \
+    -- add-br br-eth1 \
+    -- add-br br-eth2
+ovn_attach n1 br-phys 192.168.0.1
+
+check_tunnel_property () {
+    test "`ovs-vsctl get interface ovn-fakech-0 $1`" = "$2"
+}
+
+# Start off with a remote chassis supporting STT
+ovn-sbctl chassis-add fakechassis stt 192.168.0.2
+OVS_WAIT_UNTIL([check_tunnel_property type stt])
+
+# See if we switch to Geneve as the first choice when it is available
+encap_uuid=$(ovn-sbctl add chassis fakechassis encaps @encap -- --id=@encap create encap type=geneve ip="127.0.0.1")
+OVS_WAIT_UNTIL([check_tunnel_property type geneve])
+
+# Check that changes within an encap row are propagated
+ovn-sbctl set encap ${encap_uuid} ip=192.168.0.2
+OVS_WAIT_UNTIL([check_tunnel_property options:remote_ip "\"192.168.0.2\""])
+
+# Change the type on the OVS side and check than OVN fixes it
+ovs-vsctl set interface ovn-fakech-0 type=vxlan
+OVS_WAIT_UNTIL([check_tunnel_property type geneve])
+
+# Delete the port entirely and it should be resurrected
+ovs-vsctl del-port ovn-fakech-0
+OVS_WAIT_UNTIL([check_tunnel_property type geneve])
+
+# Gracefully terminate daemons
+OVN_CLEANUP_SBOX([hv])
+OVN_CLEANUP_VSWITCH([main])
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+AT_CLEANUP
