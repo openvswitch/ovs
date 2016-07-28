@@ -140,8 +140,6 @@ static ovs_be32 queue_msg(struct ofpbuf *);
 static void ovn_flow_table_destroy(void);
 static struct ofpbuf *encode_flow_mod(struct ofputil_flow_mod *);
 
-static void ovn_group_table_clear(struct group_table *group_table,
-                                  bool existing);
 static struct ofpbuf *encode_group_mod(const struct ofputil_group_mod *);
 
 static void ofctrl_recv(const struct ofp_header *, enum ofptype);
@@ -150,12 +148,13 @@ static struct hmap match_flow_table = HMAP_INITIALIZER(&match_flow_table);
 static struct hindex uuid_flow_table = HINDEX_INITIALIZER(&uuid_flow_table);
 
 void
-ofctrl_init(void)
+ofctrl_init(struct group_table *group_table)
 {
     swconn = rconn_create(5, 0, DSCP_DEFAULT, 1 << OFP13_VERSION);
     tx_counter = rconn_packet_counter_create();
     hmap_init(&installed_flows);
     ovs_list_init(&flow_updates);
+    groups = group_table;
 }
 
 /* S_NEW, for a new connection.
@@ -680,6 +679,16 @@ ofctrl_remove_flows(const struct uuid *uuid)
             ovn_flow_destroy(f);
         }
     }
+
+    /* Remove any group_info information created by this logical flow. */
+    struct group_info *g, *next_g;
+    HMAP_FOR_EACH_SAFE (g, next_g, hmap_node, &groups->desired_groups) {
+        if (uuid_equals(&g->lflow_uuid, uuid)) {
+            hmap_remove(&groups->desired_groups, &g->hmap_node);
+            ds_destroy(&g->group);
+            free(g);
+        }
+    }
 }
 
 /* Shortcut to remove all flows matching the supplied UUID and add this
@@ -833,6 +842,17 @@ add_flow_mod(struct ofputil_flow_mod *fm, struct ovs_list *msgs)
 
 /* group_table. */
 
+static struct group_info *
+group_info_clone(struct group_info *source)
+{
+    struct group_info *clone = xmalloc(sizeof *clone);
+    ds_clone(&clone->group, &source->group);
+    clone->group_id = source->group_id;
+    clone->lflow_uuid = source->lflow_uuid;
+    clone->hmap_node.hash = source->hmap_node.hash;
+    return clone;
+}
+
 /* Finds and returns a group_info in 'existing_groups' whose key is identical
  * to 'target''s key, or NULL if there is none. */
 static struct group_info *
@@ -851,7 +871,7 @@ ovn_group_lookup(struct hmap *exisiting_groups,
 }
 
 /* Clear either desired_groups or existing_groups in group_table. */
-static void
+void
 ovn_group_table_clear(struct group_table *group_table, bool existing)
 {
     struct group_info *g, *next;
@@ -881,30 +901,24 @@ add_group_mod(const struct ofputil_group_mod *gm, struct ovs_list *msgs)
 }
 
 
-/* Replaces the flow table on the switch, if possible, by the flows in added
+/* Replaces the flow table on the switch, if possible, by the flows added
  * with ofctrl_add_flow().
  *
- * Replaces the group table on the switch, if possible, by the groups in
- * 'group_table->desired_groups'. Regardless of whether the group table
- * is updated, this deletes all the groups from the
- * 'group_table->desired_groups' and frees them. (The hmap itself isn't
- * destroyed.)
+ * Replaces the group table on the switch, if possible, by the groups added to
+ * the group table.  Regardless of whether the group table is updated, clears
+ * the gruop table.
  *
  * This should be called after ofctrl_run() within the main loop. */
 void
-ofctrl_put(struct group_table *group_table, int64_t nb_cfg)
+ofctrl_put(int64_t nb_cfg)
 {
-    if (!groups) {
-        groups = group_table;
-    }
-
     /* The flow table can be updated if the connection to the switch is up and
      * in the correct state and not backlogged with existing flow_mods.  (Our
      * criteria for being backlogged appear very conservative, but the socket
      * between ovn-controller and OVS provides some buffering.) */
     if (state != S_UPDATE_FLOWS
         || rconn_packet_counter_n_packets(tx_counter)) {
-        ovn_group_table_clear(group_table, false);
+        ovn_group_table_clear(groups, false);
         return;
     }
 
@@ -914,8 +928,8 @@ ofctrl_put(struct group_table *group_table, int64_t nb_cfg)
     /* Iterate through all the desired groups. If there are new ones,
      * add them to the switch. */
     struct group_info *desired;
-    HMAP_FOR_EACH(desired, hmap_node, &group_table->desired_groups) {
-        if (!ovn_group_lookup(&group_table->existing_groups, desired)) {
+    HMAP_FOR_EACH(desired, hmap_node, &groups->desired_groups) {
+        if (!ovn_group_lookup(&groups->existing_groups, desired)) {
             /* Create and install new group. */
             struct ofputil_group_mod gm;
             enum ofputil_protocol usable_protocols;
@@ -1030,8 +1044,8 @@ ofctrl_put(struct group_table *group_table, int64_t nb_cfg)
      * are not needed delete them. */
     struct group_info *installed, *next_group;
     HMAP_FOR_EACH_SAFE(installed, next_group, hmap_node,
-                       &group_table->existing_groups) {
-        if (!ovn_group_lookup(&group_table->desired_groups, installed)) {
+                       &groups->existing_groups) {
+        if (!ovn_group_lookup(&groups->desired_groups, installed)) {
             /* Delete the group. */
             struct ofputil_group_mod gm;
             enum ofputil_protocol usable_protocols;
@@ -1053,26 +1067,23 @@ ofctrl_put(struct group_table *group_table, int64_t nb_cfg)
             ds_destroy(&group_string);
             ofputil_uninit_group_mod(&gm);
 
-            /* Remove 'installed' from 'group_table->existing_groups' */
-            hmap_remove(&group_table->existing_groups, &installed->hmap_node);
+            /* Remove 'installed' from 'groups->existing_groups' */
+            hmap_remove(&groups->existing_groups, &installed->hmap_node);
             ds_destroy(&installed->group);
 
             /* Dealloc group_id. */
-            bitmap_set0(group_table->group_ids, installed->group_id);
+            bitmap_set0(groups->group_ids, installed->group_id);
             free(installed);
         }
     }
 
     /* Move the contents of desired_groups to existing_groups. */
     HMAP_FOR_EACH_SAFE(desired, next_group, hmap_node,
-                       &group_table->desired_groups) {
-        hmap_remove(&group_table->desired_groups, &desired->hmap_node);
-        if (!ovn_group_lookup(&group_table->existing_groups, desired)) {
-            hmap_insert(&group_table->existing_groups, &desired->hmap_node,
-                        desired->hmap_node.hash);
-        } else {
-            ds_destroy(&desired->group);
-            free(desired);
+                       &groups->desired_groups) {
+        if (!ovn_group_lookup(&groups->existing_groups, desired)) {
+            struct group_info *clone = group_info_clone(desired);
+            hmap_insert(&groups->existing_groups, &clone->hmap_node,
+                        clone->hmap_node.hash);
         }
     }
 

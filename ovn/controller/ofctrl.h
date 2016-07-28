@@ -30,9 +30,9 @@ struct ovsrec_bridge;
 struct group_table;
 
 /* Interface for OVN main loop. */
-void ofctrl_init(void);
+void ofctrl_init(struct group_table *group_table);
 enum mf_field_id ofctrl_run(const struct ovsrec_bridge *br_int);
-void ofctrl_put(struct group_table *group_table, int64_t nb_cfg);
+void ofctrl_put(int64_t nb_cfg);
 void ofctrl_wait(void);
 void ofctrl_destroy(void);
 int64_t ofctrl_get_cur_cfg(void);
@@ -53,5 +53,8 @@ void ofctrl_set_flow(uint8_t table_id, uint16_t priority,
 void ofctrl_flow_table_clear(void);
 
 void ovn_flow_table_clear(void);
+
+void ovn_group_table_clear(struct group_table *group_table,
+                           bool existing);
 
 #endif /* ovn/ofctrl.h */

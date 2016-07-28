@@ -263,6 +263,7 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
 
     if (full_flow_processing) {
         ovn_flow_table_clear();
+        ovn_group_table_clear(group_table, false);
         full_logical_flow_processing = true;
         full_neighbor_flow_processing = true;
         full_flow_processing = false;
@@ -395,6 +396,7 @@ consider_logical_flow(const struct lport_index *lports,
         .aux = &aux,
         .ct_zones = ct_zones,
         .group_table = group_table,
+        .lflow_uuid = lflow->header_.uuid,
 
         .n_tables = LOG_PIPELINE_LEN,
         .first_ptable = first_ptable,

@@ -762,6 +762,7 @@ parse_ct_lb_action(struct action_context *ctx)
         group_info = xmalloc(sizeof *group_info);
         group_info->group = ds;
         group_info->group_id = group_id;
+        group_info->lflow_uuid = ctx->ap->lflow_uuid;
         group_info->hmap_node.hash = hash;
 
         hmap_insert(&ctx->ap->group_table->desired_groups,

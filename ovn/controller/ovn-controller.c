@@ -350,7 +350,7 @@ main(int argc, char *argv[])
     ovsrec_init();
     sbrec_init();
 
-    ofctrl_init();
+    ofctrl_init(&group_table);
     pinctrl_init();
     lflow_init();
 
@@ -459,7 +459,7 @@ main(int argc, char *argv[])
                          br_int, chassis_id, &ct_zones,
                          &local_datapaths, &patched_datapaths);
 
-            ofctrl_put(&group_table, get_nb_cfg(ctx.ovnsb_idl));
+            ofctrl_put(get_nb_cfg(ctx.ovnsb_idl));
             if (ctx.ovnsb_idl_txn) {
                 int64_t cur_cfg = ofctrl_get_cur_cfg();
                 if (cur_cfg && cur_cfg != chassis->nb_cfg) {
