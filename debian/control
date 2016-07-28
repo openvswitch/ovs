@@ -113,6 +113,21 @@ Description: OVN common components
  .
  ovn-common provides components required by other OVN packages.
 
+Package: ovn-controller-vtep
+Architecture: linux-any
+Depends: ovn-common (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: OVN vtep controller
+ ovn-controller-vtep is the local controller daemon in
+ OVN, the Open Virtual Network, for VTEP enabled physical switches.
+ It connects up to the OVN Southbound database over the OVSDB protocol,
+ and down to the VTEP database over the OVSDB protocol.
+ .
+ ovn-controller-vtep provides the ovn-controller-vtep binary for controlling
+ vtep gateways.
+
+
 Package: ovn-host
 Architecture: linux-any
 Depends: openvswitch-switch (= ${binary:Version}),

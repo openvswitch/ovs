@@ -114,6 +114,12 @@ start_controller () {
     OVS_RUNDIR=${OVN_RUNDIR} start_daemon "$OVN_CONTROLLER_PRIORITY" "$OVN_CONTROLLER_WRAPPER" "$@"
 }
 
+start_controller_vtep () {
+    set ovn-controller-vtep "unix:$DB_SOCK"
+    set "$@" -vconsole:emer -vsyslog:err -vfile:info
+    OVS_RUNDIR=${OVN_RUNDIR} start_daemon "$OVN_CONTROLLER_PRIORITY" "$OVN_CONTROLLER_WRAPPER" "$@"
+}
+
 ## ---- ##
 ## stop ##
 ## ---- ##
@@ -130,6 +136,10 @@ stop_controller () {
     OVS_RUNDIR=${OVN_RUNDIR} stop_daemon ovn-controller
 }
 
+stop_controller_vtep () {
+    OVS_RUNDIR=${OVN_RUNDIR} stop_daemon ovn-controller-vtep
+}
+
 ## ------- ##
 ## restart ##
 ## ------- ##
@@ -142,6 +152,11 @@ restart_northd () {
 restart_controller () {
     stop_controller
     start_controller
+}
+
+restart_controller_vtep () {
+    stop_controller_vtep
+    start_controller_vtep
 }
 
 restart_ovsdb () {
@@ -214,15 +229,18 @@ This program is intended to be invoked internally by Open Virtual Network
 startup scripts.  System administrators should not normally invoke it directly.
 
 Commands:
-  start_northd           start ovn-northd
-  start_ovsdb            start ovn related ovsdb-server processes
-  start_controller       start ovn-controller
-  stop_northd            stop ovn-northd
-  stop_ovsdb             stop ovn related ovsdb-server processes
-  stop_controller        stop ovn-controller
-  restart_northd         restart ovn-northd
-  restart_ovsdb          restart ovn related ovsdb-server processes
-  restart_controller     restart ovn-controller
+  start_northd                start ovn-northd
+  start_ovsdb                 start ovn related ovsdb-server processes
+  start_controller            start ovn-controller
+  start_controller_vtep       start ovn-controller-vtep
+  stop_northd                 stop ovn-northd
+  stop_ovsdb                  stop ovn related ovsdb-server processes
+  stop_controller             stop ovn-controller
+  stop_controller_vtep        stop ovn-controller-vtep
+  restart_northd              restart ovn-northd
+  restart_ovsdb               restart ovn related ovsdb-server processes
+  restart_controller          restart ovn-controller
+  restart_controller_vtep     restart ovn-controller-vtep
 
 Options:
   --ovn-northd-priority=NICE     set ovn-northd's niceness (default: $OVN_NORTHD_PRIORITY)
@@ -317,6 +335,9 @@ case $command in
     start_controller)
         start_controller
         ;;
+    start_controller_vtep)
+        start_controller_vtep
+        ;;
     stop_northd)
         stop_northd
         ;;
@@ -325,6 +346,12 @@ case $command in
         ;;
     stop_controller)
         stop_controller
+        ;;
+    stop_controller)
+        stop_controller
+        ;;
+    stop_controller_vtep)
+        stop_controller_vtep
         ;;
     restart_northd)
         restart_northd
@@ -335,6 +362,9 @@ case $command in
     restart_controller)
         restart_controller
         ;;
+    restart_controller_vtep)
+        restart_controller_vtep
+        ;;
     status_northd)
         daemon_status ovn-northd || exit 1
         ;;
@@ -343,6 +373,9 @@ case $command in
         ;;
     status_controller)
         daemon_status ovn-controller || exit 1
+        ;;
+    status_controller_vtep)
+        daemon_status ovn-controller-vtep || exit 1
         ;;
     help)
         usage
