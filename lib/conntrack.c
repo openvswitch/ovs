@@ -460,7 +460,6 @@ next_bucket:
 
 /* Cleanup:
  *
- *
  * We must call conntrack_clean() periodically.  conntrack_clean() return
  * value gives an hint on when the next cleanup must be done (either because
  * there is an actual connection that expires, or because a new connection
@@ -468,16 +467,15 @@ next_bucket:
  *
  * The logic below has two goals:
  *
- * - Avoid calling conntrack_clean() too often.  If we call conntrack_clean()
- *   each time a connection expires, the thread will consume 100% CPU, so we
- *   try to call the function _at most_ once every CT_CLEAN_INTERVAL, to batch
- *   removal.
+ * - We want to reduce the number of wakeups and batch connection cleanup
+ *   when the load is not very high.  CT_CLEAN_INTERVAL ensures that if we
+ *   are coping with the current cleanup tasks, then we wait at least
+ *   5 seconds to do further cleanup.
  *
- * - On the other hand, it's not a good idea to keep the buckets locked for
- *   too long, as we might prevent traffic from flowing.  If conntrack_clean()
- *   returns a value which is in the past, it means that the internal limit
- *   has been reached and more cleanup is required.  In this case, just wait
- *   CT_CLEAN_MIN_INTERVAL before the next call.
+ * - We don't want to keep the buckets locked too long, as we might prevent
+ *   traffic from flowing.  CT_CLEAN_MIN_INTERVAL ensures that if cleanup is
+ *   behind, there is at least some 200ms blocks of time when buckets will be
+ *   left alone, so the datapath can operate unhindered.
  */
 #define CT_CLEAN_INTERVAL 5000 /* 5 seconds */
 #define CT_CLEAN_MIN_INTERVAL 200  /* 0.2 seconds */
