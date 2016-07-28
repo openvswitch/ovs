@@ -1078,29 +1078,29 @@ REPLICATION_EXAMPLES
 
 AT_BANNER([OVSDB -- ovsdb-server replication runtime management commands])
 
-#ovsdb-server/get-remote-ovsdb-server command
-AT_SETUP([ovsdb-server/get-remote-ovsdb-server])
-AT_KEYWORDS([ovsdb server replication get-remote])
+#ovsdb-server/get-active-ovsdb-server command
+AT_SETUP([ovsdb-server/get-active-ovsdb-server])
+AT_KEYWORDS([ovsdb server replication get-active])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --sync-from=tcp:127.0.0.1:9999 db])
 
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/get-remote-ovsdb-server],
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/get-active-ovsdb-server],
   [0], [tcp:127.0.0.1:9999
 ])
 AT_CLEANUP
 
-#*ovsdb-server/set-remote-ovsdb-server command
-AT_SETUP([ovsdb-server/set-remote-ovsdb-server])
-AT_KEYWORDS([ovsdb server replication set-remote])
+#*ovsdb-server/set-active-ovsdb-server command
+AT_SETUP([ovsdb-server/set-active-ovsdb-server])
+AT_KEYWORDS([ovsdb server replication set-active])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile db])
 
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/set-remote-ovsdb-server tcp:127.0.0.1:9999])
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/get-remote-ovsdb-server],
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/set-active-ovsdb-server tcp:127.0.0.1:9999])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/get-active-ovsdb-server],
   [0], [tcp:127.0.0.1:9999
 ])
 AT_CLEANUP
@@ -1167,9 +1167,9 @@ OVSDB_SERVER_SHUTDOWN
 OVSDB_SERVER_SHUTDOWN2
 AT_CLEANUP
 
-#ovsdb-server/connect-remote-ovsdb-server
-AT_SETUP([ovsdb-server/connect-remote-server])
-AT_KEYWORDS([ovsdb server replication connect-remote-server])
+#ovsdb-server/connect-active-ovsdb-server
+AT_SETUP([ovsdb-server/connect-active-server])
+AT_KEYWORDS([ovsdb server replication connect-active-server])
 replication_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
@@ -1178,9 +1178,9 @@ AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfil
 
 AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile="`pwd`"/pid2 --remote=punix:db2.sock --unixctl="`pwd`"/unixctl2 db2], [0], [ignore], [ignore])
 
-AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/set-remote-ovsdb-server unix:db.sock], [0], [ignore], [ignore], [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
+AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/set-active-ovsdb-server unix:db.sock], [0], [ignore], [ignore], [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
-AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/connect-remote-ovsdb-server], [0], [ignore], [ignore],
+AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/connect-active-ovsdb-server], [0], [ignore], [ignore],
         [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
 AT_CHECK([ovsdb-client transact unix:db.sock \
@@ -1204,9 +1204,9 @@ OVSDB_SERVER_SHUTDOWN
 OVSDB_SERVER_SHUTDOWN2
 AT_CLEANUP
 
-#ovsdb-server/disconnect-remote-server command
-AT_SETUP([ovsdb-server/disconnect-remote-server])
-AT_KEYWORDS([ovsdb server replication disconnect-remote-server])
+#ovsdb-server/disconnect-active-server command
+AT_SETUP([ovsdb-server/disconnect-active-server])
+AT_KEYWORDS([ovsdb server replication disconnect-active-server])
 replication_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
@@ -1224,7 +1224,7 @@ AT_CHECK([ovsdb-client transact unix:db.sock \
 
 OVS_WAIT_UNTIL([ovsdb-client dump unix:db2.sock | grep zero])
 
-AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/disconnect-remote-ovsdb-server], [0], [ignore], [ignore],
+AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/disconnect-active-ovsdb-server], [0], [ignore], [ignore],
         [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
 AT_CHECK([ovsdb-client transact unix:db.sock \
