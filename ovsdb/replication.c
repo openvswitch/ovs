@@ -112,6 +112,14 @@ replication_run(struct shash *all_dbs)
 }
 
 void
+replication_wait(void)
+{
+    if (rpc) {
+        jsonrpc_wait(rpc);
+    }
+}
+
+void
 set_active_ovsdb_server(const char *active_server)
 {
     active_ovsdb_server = nullable_xstrdup(active_server);

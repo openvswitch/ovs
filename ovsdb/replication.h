@@ -32,6 +32,7 @@ struct db {
 
 void replication_init(void);
 void replication_run(struct shash *dbs);
+void replication_wait(void);
 void set_active_ovsdb_server(const char *remote_server);
 const char *get_active_ovsdb_server(void);
 void set_tables_blacklist(const char *blacklist);
