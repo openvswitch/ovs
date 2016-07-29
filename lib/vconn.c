@@ -1040,12 +1040,13 @@ vconn_bundle_add_msg(struct vconn *vconn, struct ofputil_bundle_ctrl_msg *bc,
     struct ofpbuf *request;
     int error;
 
+    ofpmsg_update_length(msg);
+
     bam.bundle_id = bc->bundle_id;
     bam.flags = bc->flags;
     bam.msg = msg->data;
 
     request = ofputil_encode_bundle_add(vconn->version, &bam);
-    ofpmsg_update_length(request);
 
     error = vconn_send_block(vconn, request);
     if (!error) {
