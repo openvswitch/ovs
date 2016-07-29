@@ -1222,7 +1222,18 @@ AT_CHECK([ovsdb-client transact unix:db.sock \
    "row": {"number": 0, "name": "zero"}}]]'], [0], [stdout], [ignore],
 [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
+dnl Make sure the transaction shows up in db2. This also tests the back up server
+dnl can be read.
 OVS_WAIT_UNTIL([ovsdb-client dump unix:db2.sock | grep zero])
+
+dnl The backup server does not accept any write transaction
+AT_CHECK([ovsdb-client transact unix:db2.sock \
+'[["mydb",
+  {"op": "insert",
+   "table": "b",
+   "row": {"number": 1, "name": "one"}}]]'], [0],
+   [[[{"details":"insert operation not allowed when database server is in read only mode","error":"not allowed"}]]
+])
 
 AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/disconnect-active-ovsdb-server], [0], [ignore], [ignore],
         [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
@@ -1254,6 +1265,29 @@ AT_CHECK([${PERL} $srcdir/uuidfilt.pl output], [0], [7,9c7,8
 > _uuid name number
 > ----- ---- ------
 ], [ignore], [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
+
+
+dnl The backup server now become active, and can accept write transactions.
+AT_CHECK([ovsdb-client transact unix:db2.sock \
+'[["mydb",
+  {"op": "insert",
+   "table": "b",
+   "row": {"number": 1, "name": "one"}}]]'], [0], [stdout], [ignore],
+[test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
+
+AT_CHECK([ovsdb-client dump unix:db2.sock], [0], [stdout])
+cat stdout > output
+
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl output], [0], [a table
+_uuid                                name number
+------------------------------------ ---- ------
+<0> zero 0     @&t@
+
+b table
+_uuid                                name number
+------------------------------------ ---- ------
+<1> one  1     @&t@
+])
 
 OVSDB_SERVER_SHUTDOWN
 OVSDB_SERVER_SHUTDOWN2

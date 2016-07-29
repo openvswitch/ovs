@@ -153,7 +153,14 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         /* Run unixctl_server_run() before reconfigure_remotes() because
          * ovsdb-server/add-remote and ovsdb-server/remove-remote can change
          * the set of remotes that reconfigure_remotes() uses. */
+        bool last_role = is_backup_server;
         unixctl_server_run(unixctl);
+
+        /* In case unixctl commands change the role of ovsdb-server,
+         *  from active to backup or vise versa, recoonect jsonrpc server.  */
+        if (last_role != is_backup_server) {
+            ovsdb_jsonrpc_server_reconnect(jsonrpc, is_backup_server);
+        }
 
         report_error_if_changed(
             reconfigure_remotes(jsonrpc, all_dbs, remotes),
@@ -267,7 +274,7 @@ main(int argc, char *argv[])
 
     /* Load the saved config. */
     load_config(config_tmpfile, &remotes, &db_filenames);
-    jsonrpc = ovsdb_jsonrpc_server_create();
+    jsonrpc = ovsdb_jsonrpc_server_create(is_backup_server);
 
     shash_init(&all_dbs);
     server_config.all_dbs = &all_dbs;
@@ -348,14 +355,18 @@ main(int argc, char *argv[])
                               ovsdb_server_set_active_ovsdb_server, NULL);
     unixctl_command_register("ovsdb-server/get-active-ovsdb-server", "", 0, 0,
                               ovsdb_server_get_active_ovsdb_server, NULL);
-    unixctl_command_register("ovsdb-server/connect-active-ovsdb-server", "", 0, 0,
-                              ovsdb_server_connect_active_ovsdb_server, NULL);
-    unixctl_command_register("ovsdb-server/disconnect-active-ovsdb-server", "", 0, 0,
-                              ovsdb_server_disconnect_active_ovsdb_server, NULL);
-    unixctl_command_register("ovsdb-server/set-sync-excluded-tables", "", 0, 1,
-                              ovsdb_server_set_sync_excluded_tables, NULL);
-    unixctl_command_register("ovsdb-server/get-sync-excluded-tables", "", 0, 0,
-                              ovsdb_server_get_sync_excluded_tables, NULL);
+    unixctl_command_register("ovsdb-server/connect-active-ovsdb-server", "",
+                             0, 0, ovsdb_server_connect_active_ovsdb_server,
+                             NULL);
+    unixctl_command_register("ovsdb-server/disconnect-active-ovsdb-server", "",
+                             0, 0, ovsdb_server_disconnect_active_ovsdb_server,
+                             NULL);
+    unixctl_command_register("ovsdb-server/set-sync-excluded-tables", "",
+                             0, 1, ovsdb_server_set_sync_excluded_tables,
+                             NULL);
+    unixctl_command_register("ovsdb-server/get-sync-excluded-tables", "",
+                             0, 0, ovsdb_server_get_sync_excluded_tables,
+                             NULL);
 
     /* Simulate the behavior of OVS release prior to version 2.5 that
      * does not support the monitor_cond method.  */
@@ -1048,6 +1059,7 @@ ovsdb_server_set_active_ovsdb_server(struct unixctl_conn *conn,
 {
     set_active_ovsdb_server(argv[1]);
     is_backup_server = true;
+    VLOG_INFO("become a backup server");
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1087,6 +1099,7 @@ ovsdb_server_disconnect_active_ovsdb_server(struct unixctl_conn *conn,
 {
     disconnect_active_server();
     is_backup_server = false;
+    VLOG_INFO("become an active server");
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1161,7 +1174,7 @@ ovsdb_server_disable_monitor_cond(struct unixctl_conn *conn,
     struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
 
     ovsdb_jsonrpc_disable_monitor_cond();
-    ovsdb_jsonrpc_server_reconnect(jsonrpc);
+    ovsdb_jsonrpc_server_reconnect(jsonrpc, is_backup_server);
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1217,7 +1230,7 @@ ovsdb_server_reconnect(struct unixctl_conn *conn, int argc OVS_UNUSED,
 {
     struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
 
-    ovsdb_jsonrpc_server_reconnect(jsonrpc);
+    ovsdb_jsonrpc_server_reconnect(jsonrpc, is_backup_server);
     unixctl_command_reply(conn, NULL);
 }
 

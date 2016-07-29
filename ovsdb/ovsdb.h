@@ -72,7 +72,7 @@ void ovsdb_get_memory_usage(const struct ovsdb *, struct simap *usage);
 struct ovsdb_table *ovsdb_get_table(const struct ovsdb *, const char *);
 
 struct json *ovsdb_execute(struct ovsdb *, const struct ovsdb_session *,
-                           const struct json *params,
+                           const struct json *params, bool read_only,
                            long long int elapsed_msec,
                            long long int *timeout_msec);
 

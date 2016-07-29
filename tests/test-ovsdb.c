@@ -195,6 +195,9 @@ usage(void)
            "  execute SCHEMA TRANSACTION...\n"
            "    executes each TRANSACTION on an initially empty database\n"
            "    the specified SCHEMA\n"
+           "  execute-readonly SCHEMA TRANSACTION...\n"
+           "    same as execute, except the TRANSACTION will be executed\n"
+           "    against the database server that is in read only mode\n"
            "  trigger SCHEMA TRANSACTION...\n"
            "    executes each TRANSACTION on an initially empty database\n"
            "    the specified SCHEMA.   A TRANSACTION of the form\n"
@@ -1402,7 +1405,7 @@ do_parse_schema(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_execute(struct ovs_cmdl_context *ctx)
+do_execute__(struct ovs_cmdl_context *ctx, bool ro)
 {
     struct ovsdb_schema *schema;
     struct json *json;
@@ -1420,7 +1423,7 @@ do_execute(struct ovs_cmdl_context *ctx)
         char *s;
 
         params = parse_json(ctx->argv[i]);
-        result = ovsdb_execute(db, NULL, params, 0, NULL);
+        result = ovsdb_execute(db, NULL, params, ro,  0, NULL);
         s = json_to_string(result, JSSF_SORT);
         printf("%s\n", s);
         free(s);
@@ -1429,6 +1432,18 @@ do_execute(struct ovs_cmdl_context *ctx)
     }
 
     ovsdb_destroy(db);
+}
+
+static void
+do_execute_ro(struct ovs_cmdl_context *ctx)
+{
+    do_execute__(ctx, true);
+}
+
+static void
+do_execute(struct ovs_cmdl_context *ctx)
+{
+    do_execute__(ctx, false);
 }
 
 struct test_trigger {
@@ -1486,7 +1501,7 @@ do_trigger(struct ovs_cmdl_context *ctx)
             json_destroy(params);
         } else {
             struct test_trigger *t = xmalloc(sizeof *t);
-            ovsdb_trigger_init(&session, db, &t->trigger, params, now);
+            ovsdb_trigger_init(&session, db, &t->trigger, params, now, false);
             t->number = number++;
             if (ovsdb_trigger_is_complete(&t->trigger)) {
                 do_trigger_dump(t, now, "immediate");
@@ -2729,6 +2744,7 @@ static struct ovs_cmdl_command all_commands[] = {
     { "transact", NULL, 1, INT_MAX, do_transact },
     { "parse-schema", NULL, 1, 1, do_parse_schema },
     { "execute", NULL, 2, INT_MAX, do_execute },
+    { "execute-readonly", NULL, 2, INT_MAX, do_execute_ro },
     { "trigger", NULL, 2, INT_MAX, do_trigger },
     { "idl", NULL, 1, INT_MAX, do_idl },
     { "idl-partial-update-map-column", NULL, 1, INT_MAX,

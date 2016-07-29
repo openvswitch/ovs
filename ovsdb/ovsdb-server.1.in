@@ -36,6 +36,23 @@ If none is specified, the default is \fB@DBDIR@/conf.db\fR.  The database
 files must already have been created and initialized using, for
 example, \fBovsdb\-tool create\fR.
 .
+.SH "ACTIVE and BACKUP "
+\fBovsdb\-server\fR runs either as a backup server, or as an active server.
+When  \fBovsdb\-server\fR is running as a backup server, all transactions that
+can modify the database content, including the lock commands are rejected.
+Active server, on the other hand, accepts all ovsdb server transactions.
+When \fBovsdb\-server\fR role changes, all existing client connection are
+reset, requiring clients to reconnect to the server.
+.PP
+By default, \fBovsdb\-server\fR runs as an active server, except when the
+\fB\-\-sync\-from=\fIserver\fR command line option is specified.  During
+runtime, \fBovsdb\-server\fR role can be switch by using appctl commands.
+.PP
+\fBovsdb-server/connect\-active\-ovsdb\-server\fR switches
+\fBovsdb\-server\fR role into a backup server, Conversely,
+\fBovsdb-server/disconnect\-active\-ovsdb\-server\fR changes server into
+an active one.
+.
 .SH OPTIONS
 .
 .IP "\fB\-\-remote=\fIremote\fR"

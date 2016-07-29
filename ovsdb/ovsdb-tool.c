@@ -366,7 +366,7 @@ transact(bool read_only, int argc, char *argv[])
     check_ovsdb_error(ovsdb_file_open(db_file_name, read_only, &db, NULL));
 
     request = parse_json(transaction);
-    result = ovsdb_execute(db, NULL, request, 0, NULL);
+    result = ovsdb_execute(db, NULL, request, false, 0, NULL);
     json_destroy(request);
 
     print_and_free_json(result);
