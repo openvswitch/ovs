@@ -296,7 +296,8 @@ static void send_buffered_packet(const struct flow_mod_requester *,
 
 static bool ofproto_group_exists(const struct ofproto *, uint32_t group_id);
 static enum ofperr add_group(struct ofproto *,
-                             const struct ofputil_group_mod *);
+                             const struct ofputil_group_mod *)
+    OVS_REQUIRES(ofproto_mutex);
 static void handle_openflow(struct ofconn *, const struct ofpbuf *);
 static enum ofperr ofproto_flow_mod_start(struct ofproto *,
                                           struct ofproto_flow_mod *)
@@ -559,7 +560,6 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->connmgr = connmgr_create(ofproto, datapath_name, datapath_name);
     guarded_list_init(&ofproto->rule_executes);
     ofproto->min_mtu = INT_MAX;
-    ovs_rwlock_init(&ofproto->groups_rwlock);
     cmap_init(&ofproto->groups);
     ovs_mutex_unlock(&ofproto_mutex);
     ofproto->ogf.types = 0xf;
@@ -1575,7 +1575,8 @@ ofproto_flush__(struct ofproto *ofproto)
     ovs_mutex_unlock(&ofproto_mutex);
 }
 
-static void delete_group(struct ofproto *ofproto, uint32_t group_id);
+static void delete_group(struct ofproto *ofproto, uint32_t group_id)
+    OVS_REQUIRES(ofproto_mutex);
 
 static void
 ofproto_destroy__(struct ofproto *ofproto)
@@ -1586,7 +1587,6 @@ ofproto_destroy__(struct ofproto *ofproto)
     destroy_rule_executes(ofproto);
 
     guarded_list_destroy(&ofproto->rule_executes);
-    ovs_rwlock_destroy(&ofproto->groups_rwlock);
     cmap_destroy(&ofproto->groups);
 
     hmap_remove(&all_ofprotos, &ofproto->hmap_node);
@@ -2992,8 +2992,10 @@ group_destroy_cb(struct ofgroup *group)
 
 void
 ofproto_group_unref(struct ofgroup *group)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     if (group && ovs_refcount_unref_relaxed(&group->ref_count) == 1) {
+        ovs_assert(group->rules.n == 0);
         ovsrcu_postpone(group_destroy_cb, group);
     }
 }
@@ -3010,9 +3012,12 @@ rule_actions_create(const struct ofpact *ofpacts, size_t ofpacts_len)
 
     actions = xmalloc(sizeof *actions + ofpacts_len);
     actions->ofpacts_len = ofpacts_len;
-    actions->has_meter = ofpacts_get_meter(ofpacts, ofpacts_len) != 0;
     memcpy(actions->ofpacts, ofpacts, ofpacts_len);
-
+    actions->has_meter = ofpacts_get_meter(ofpacts, ofpacts_len) != 0;
+    actions->has_groups =
+        (ofpact_find_type_flattened(ofpacts, OFPACT_GROUP,
+                                    ofpact_end(ofpacts, ofpacts_len))
+         != NULL);
     actions->has_learn_with_delete = (next_learn_with_delete(actions, NULL)
                                       != NULL);
 
@@ -3441,7 +3446,6 @@ enum ofperr
 ofproto_check_ofpacts(struct ofproto *ofproto,
                       const struct ofpact ofpacts[], size_t ofpacts_len)
 {
-    const struct ofpact *a;
     uint32_t mid;
 
     mid = ofpacts_get_meter(ofpacts, ofpacts_len);
@@ -3449,9 +3453,9 @@ ofproto_check_ofpacts(struct ofproto *ofproto,
         return OFPERR_OFPMMFC_INVALID_METER;
     }
 
-    OFPACT_FOR_EACH_FLATTENED (a, ofpacts, ofpacts_len) {
-        if (a->type == OFPACT_GROUP
-            && !ofproto_group_exists(ofproto, ofpact_get_GROUP(a)->group_id)) {
+    const struct ofpact_group *a;
+    OFPACT_FOR_EACH_TYPE_FLATTENED (a, GROUP, ofpacts, ofpacts_len) {
+        if (!ofproto_group_exists(ofproto, a->group_id)) {
             return OFPERR_OFPBAC_BAD_OUT_GROUP;
         }
     }
@@ -3514,6 +3518,8 @@ handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
                                       0, p->n_tables,
                                       ofconn_get_protocol(ofconn));
     if (!error) {
+        /* Should hold ofproto_mutex to guarantee state don't
+         * change between the check and the execution. */
         error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len);
         if (!error) {
             error = p->ofproto_class->packet_out(p, payload, &flow,
@@ -4069,6 +4075,57 @@ rule_collection_add(struct rule_collection *rules, struct rule *rule)
 }
 
 void
+rule_collection_remove(struct rule_collection *rules, struct rule *rule)
+{
+    size_t i;
+
+    for (i = 0; i < rules->n; i++) {
+        if (rules->rules[i] == rule) {
+            break;
+        }
+    }
+    if (i == rules->n) {
+        return;
+    }
+
+    rules->n--;
+    /* Swap the last item in if needed. */
+    if (i != rules->n) {
+        rules->rules[i] = rules->rules[rules->n];
+    }
+
+    /* Shrink? Watermark at '/ 4' to get hysteresis and leave spare
+     * capacity. */
+    if (rules->rules != rules->stub && rules->n <= rules->capacity / 4) {
+        size_t actual_size, new_size;
+
+        actual_size = rules->n * sizeof *rules->rules;
+        rules->capacity /= 2;
+        new_size = rules->capacity * sizeof *rules->rules;
+
+        if (new_size <= sizeof(rules->stub)) {
+            memcpy(rules->stub, rules->rules, actual_size);
+            free(rules->rules);
+            rules->rules = rules->stub;
+        } else {
+            rules->rules = xrealloc(rules->rules, new_size);
+        }
+    }
+}
+
+void
+rule_collection_move(struct rule_collection *to, struct rule_collection *from)
+{
+    ovs_assert(to->n == 0);
+
+    *to = *from;
+    if (from->rules == from->stub) {
+        to->rules = to->stub;
+    }
+    rule_collection_init(from);
+}
+
+void
 rule_collection_ref(struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
@@ -4121,12 +4178,13 @@ rule_collection_destroy(struct rule_collection *rules)
 
 /* Schedules postponed removal of rules, destroys 'rules'. */
 static void
-rule_collection_remove_postponed(struct rule_collection *rules)
+remove_rules_postponed(struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
     if (rules->n > 0) {
         if (rules->n == 1) {
             ovsrcu_postpone(remove_rule_rcu, rules->rules[0]);
+            rules->n = 0;
         } else {
             ovsrcu_postpone(remove_rules_rcu, rule_collection_detach(rules));
         }
@@ -4940,8 +4998,8 @@ replace_rule_start(struct ofproto *ofproto, ovs_version_t version,
     } else {
         table->n_flows++;
     }
-    /* Insert flow to the classifier, so that later flow_mods may relate
-     * to it.  This is reversible, in case later errors require this to
+    /* Insert flow to ofproto data structures, so that later flow_mods may
+     * relate to it.  This is reversible, in case later errors require this to
      * be reverted. */
     ofproto_rule_insert__(ofproto, new_rule);
     /* Make the new rule visible for classifier lookups only from the next
@@ -4949,8 +5007,9 @@ replace_rule_start(struct ofproto *ofproto, ovs_version_t version,
     classifier_insert(&table->cls, &new_rule->cr, version, conjs, n_conjs);
 }
 
-static void replace_rule_revert(struct ofproto *ofproto,
-                                struct rule *old_rule, struct rule *new_rule)
+static void
+replace_rule_revert(struct ofproto *ofproto,
+                    struct rule *old_rule, struct rule *new_rule)
 {
     struct oftable *table = &ofproto->tables[new_rule->table_id];
 
@@ -5162,7 +5221,7 @@ modify_flows_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
                                 new_rules->rules[i], &dead_cookies);
         }
         learned_cookies_flush(ofproto, &dead_cookies);
-        rule_collection_remove_postponed(old_rules);
+        remove_rules_postponed(old_rules);
 
         send_buffered_packet(req, fm->buffer_id, new_rules->rules[0]);
         rule_collection_destroy(new_rules);
@@ -5245,7 +5304,7 @@ delete_flows_finish__(struct ofproto *ofproto,
             learned_cookies_dec(ofproto, rule_get_actions(rule),
                                 &dead_cookies);
         }
-        rule_collection_remove_postponed(rules);
+        remove_rules_postponed(rules);
 
         learned_cookies_flush(ofproto, &dead_cookies);
     }
@@ -5454,10 +5513,6 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
                                     &ofpacts,
                                     u16_to_ofp(ofproto->max_ports),
                                     ofproto->n_tables);
-    if (!error) {
-        error = ofproto_check_ofpacts(ofproto, ofm.fm.ofpacts,
-                                      ofm.fm.ofpacts_len);
-    }
     if (!error) {
         struct flow_mod_requester req;
 
@@ -6236,7 +6291,7 @@ ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id,
     return group;
 }
 
-/* Caller should hold 'ofproto->groups_rwlock' if it is important that the
+/* Caller should hold 'ofproto_mutex' if it is important that the
  * group is not removed by someone else. */
 static bool
 ofproto_group_exists(const struct ofproto *ofproto, uint32_t group_id)
@@ -6244,36 +6299,21 @@ ofproto_group_exists(const struct ofproto *ofproto, uint32_t group_id)
     return ofproto_group_lookup__(ofproto, group_id) != NULL;
 }
 
-/* XXX: This is potentially very expensive for large flow tables, and may be
- * called in a loop.  Maybe explicitly maintain the count of rules referring to
- * the group instead?. */
-static uint32_t
-group_get_ref_count(struct ofgroup *group)
-    OVS_EXCLUDED(ofproto_mutex)
+static void
+group_add_rule(struct ofgroup *group, struct rule *rule)
 {
-    struct ofproto *ofproto = CONST_CAST(struct ofproto *, group->ofproto);
-    struct rule_criteria criteria;
-    struct rule_collection rules;
-    struct match match;
-    enum ofperr error;
-    uint32_t count;
+    rule_collection_add(&group->rules, rule);
+}
 
-    match_init_catchall(&match);
-    rule_criteria_init(&criteria, 0xff, &match, 0, OVS_VERSION_MAX, htonll(0),
-                       htonll(0), OFPP_ANY, group->group_id);
-    ovs_mutex_lock(&ofproto_mutex);
-    error = collect_rules_loose(ofproto, &criteria, &rules);
-    ovs_mutex_unlock(&ofproto_mutex);
-    rule_criteria_destroy(&criteria);
-
-    count = !error && rules.n < UINT32_MAX ? rules.n : UINT32_MAX;
-
-    rule_collection_destroy(&rules);
-    return count;
+static void
+group_remove_rule(struct ofgroup *group, struct rule *rule)
+{
+    rule_collection_remove(&group->rules, rule);
 }
 
 static void
 append_group_stats(struct ofgroup *group, struct ovs_list *replies)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct ofputil_group_stats ogs;
     const struct ofproto *ofproto = group->ofproto;
@@ -6283,7 +6323,7 @@ append_group_stats(struct ofgroup *group, struct ovs_list *replies)
     ogs.bucket_stats = xmalloc(group->n_buckets * sizeof *ogs.bucket_stats);
 
     /* Provider sets the packet and byte counts, we do the rest. */
-    ogs.ref_count = group_get_ref_count(group);
+    ogs.ref_count = group->rules.n;
     ogs.n_buckets = group->n_buckets;
 
     error = (ofproto->ofproto_class->group_get_stats
@@ -6308,25 +6348,26 @@ static void
 handle_group_request(struct ofconn *ofconn,
                      const struct ofp_header *request, uint32_t group_id,
                      void (*cb)(struct ofgroup *, struct ovs_list *replies))
+    OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofgroup *group;
     struct ovs_list replies;
 
     ofpmp_init(&replies, request);
+    /* Must exclude modifications to guarantee iterating groups. */
+    ovs_mutex_lock(&ofproto_mutex);
     if (group_id == OFPG_ALL) {
-        /* Must exclude modifications to guarantee iterating all groups. */
-        ovs_rwlock_rdlock(&ofproto->groups_rwlock);
         CMAP_FOR_EACH (group, cmap_node, &ofproto->groups) {
             cb(group, &replies);
         }
-        ovs_rwlock_unlock(&ofproto->groups_rwlock);
     } else {
         group = ofproto_group_lookup__(ofproto, group_id);
         if (group) {
             cb(group, &replies);
         }
     }
+    ovs_mutex_unlock(&ofproto_mutex);
     ofconn_send_replies(ofconn, &replies);
 }
 
@@ -6495,6 +6536,7 @@ init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
     *CONST_CAST(long long int *, &((*ofgroup)->created)) = now;
     *CONST_CAST(long long int *, &((*ofgroup)->modified)) = now;
     ovs_refcount_init(&(*ofgroup)->ref_count);
+    (*ofgroup)->being_deleted = false;
 
     ovs_list_init(CONST_CAST(struct ovs_list *, &(*ofgroup)->buckets));
     ofputil_bucket_clone_list(CONST_CAST(struct ovs_list *,
@@ -6506,6 +6548,7 @@ init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
 
     memcpy(CONST_CAST(struct ofputil_group_props *, &(*ofgroup)->props),
            &gm->props, sizeof (struct ofputil_group_props));
+    rule_collection_init(&(*ofgroup)->rules);
 
     /* Construct called BEFORE any locks are held. */
     error = ofproto->ofproto_class->group_construct(*ofgroup);
@@ -6522,6 +6565,7 @@ init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
  * failure. */
 static enum ofperr
 add_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct ofgroup *ofgroup;
     enum ofperr error;
@@ -6531,10 +6575,6 @@ add_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
     if (error) {
         return error;
     }
-
-    /* We take the mutex as late as possible to minimize the time we jam any
-     * other threads: No visible state changes before acquiring the lock. */
-    ovs_rwlock_wrlock(&ofproto->groups_rwlock);
 
     if (ofproto->n_groups[gm->type] >= ofproto->ogf.max_groups[gm->type]) {
         error = OFPERR_OFPGMFC_OUT_OF_GROUPS;
@@ -6551,11 +6591,9 @@ add_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
                 hash_int(ofgroup->group_id, 0));
     ofproto->n_groups[ofgroup->type]++;
 
-    ovs_rwlock_unlock(&ofproto->groups_rwlock);
     return 0;
 
  unlock_out:
-    ovs_rwlock_unlock(&ofproto->groups_rwlock);
     group_destroy_cb(ofgroup);
     return error;
 }
@@ -6670,6 +6708,7 @@ copy_buckets_for_remove_bucket(const struct ofgroup *ofgroup,
  * the xlate module hold a pointer to the group. */
 static enum ofperr
 modify_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct ofgroup *ofgroup, *new_ofgroup, *retiring;
     enum ofperr error;
@@ -6681,7 +6720,6 @@ modify_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
 
     retiring = new_ofgroup;
 
-    ovs_rwlock_wrlock(&ofproto->groups_rwlock);
     ofgroup = ofproto_group_lookup__(ofproto, gm->group_id);
     if (!ofgroup) {
         error = OFPERR_OFPGMFC_UNKNOWN_GROUP;
@@ -6722,6 +6760,8 @@ modify_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
     /* Replace ofgroup in ofproto's groups hash map with new_ofgroup. */
     cmap_replace(&ofproto->groups, &ofgroup->cmap_node,
                  &new_ofgroup->cmap_node, hash_int(ofgroup->group_id, 0));
+    /* Transfer rules. */
+    rule_collection_move(&new_ofgroup->rules, &ofgroup->rules);
 
     if (ofgroup->type != new_ofgroup->type) {
         ofproto->n_groups[ofgroup->type]--;
@@ -6730,7 +6770,6 @@ modify_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
 
 out:
     ofproto_group_unref(retiring);
-    ovs_rwlock_unlock(&ofproto->groups_rwlock);
     return error;
 }
 
@@ -6738,53 +6777,50 @@ out:
  * exist yet and modifies it otherwise */
 static enum ofperr
 add_or_modify_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
+    OVS_REQUIRES(ofproto_mutex)
 {
     enum ofperr error;
     bool exists;
 
     exists = ofproto_group_exists(ofproto, gm->group_id);
 
-    /* XXX: Race: Should hold groups_rwlock here. */
-
     if (!exists) {
         error = add_group(ofproto, gm);
     } else {
         error = modify_group(ofproto, gm);
     }
+
     return error;
 }
 
 static void
 delete_group__(struct ofproto *ofproto, struct ofgroup *ofgroup)
-    OVS_RELEASES(ofproto->groups_rwlock)
+    OVS_REQUIRES(ofproto_mutex)
 {
-    struct match match;
-    struct ofproto_flow_mod ofm;
+    /* Makes flow deletion code leave the rule pointers in group's 'rules'
+     * intact, so that we can later refer to the rules deleted due to the group
+     * deletion.  Rule pointers will be removed from all other groups, if any,
+     * so we will never try to delete the same rule twice. */
+    ofgroup->being_deleted = true;
 
-    /* Delete all flow entries containing this group in a group action */
-    match_init_catchall(&match);
-    flow_mod_init(&ofm.fm, &match, 0, NULL, 0, OFPFC_DELETE);
-    ofm.fm.delete_reason = OFPRR_GROUP_DELETE;
-    ofm.fm.out_group = ofgroup->group_id;
-    ofm.fm.table_id = OFPTT_ALL;
-    handle_flow_mod__(ofproto, &ofm, NULL);
+    /* Delete all flow entries containing this group in a group action. */
+    delete_flows__(&ofgroup->rules, OFPRR_GROUP_DELETE, NULL);
 
     cmap_remove(&ofproto->groups, &ofgroup->cmap_node,
                 hash_int(ofgroup->group_id, 0));
     /* No-one can find this group any more, but current users may continue to
      * use it. */
     ofproto->n_groups[ofgroup->type]--;
-    ovs_rwlock_unlock(&ofproto->groups_rwlock);
     ofproto_group_unref(ofgroup);
 }
 
 /* Implements OFPGC11_DELETE. */
 static void
 delete_group(struct ofproto *ofproto, uint32_t group_id)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct ofgroup *ofgroup;
 
-    ovs_rwlock_wrlock(&ofproto->groups_rwlock);
     if (group_id == OFPG_ALL) {
         for (;;) {
             struct cmap_node *node = cmap_first(&ofproto->groups);
@@ -6792,10 +6828,7 @@ delete_group(struct ofproto *ofproto, uint32_t group_id)
                 break;
             }
             ofgroup = CONTAINER_OF(node, struct ofgroup, cmap_node);
-            delete_group__(ofproto, ofgroup); /* Releases the mutex. */
-            /* Lock for each node separately, so that we will not jam the
-             * other threads for too long time. */
-            ovs_rwlock_wrlock(&ofproto->groups_rwlock);
+            delete_group__(ofproto, ofgroup);
         }
     } else {
         CMAP_FOR_EACH_WITH_HASH (ofgroup, cmap_node,
@@ -6806,7 +6839,6 @@ delete_group(struct ofproto *ofproto, uint32_t group_id)
             }
         }
     }
-    ovs_rwlock_unlock(&ofproto->groups_rwlock);
 }
 
 /* Delete all groups from 'ofproto'.
@@ -6815,12 +6847,16 @@ delete_group(struct ofproto *ofproto, uint32_t group_id)
  * function. */
 void
 ofproto_group_delete_all(struct ofproto *ofproto)
+    OVS_EXCLUDED(ofproto_mutex)
 {
+    ovs_mutex_lock(&ofproto_mutex);
     delete_group(ofproto, OFPG_ALL);
+    ovs_mutex_unlock(&ofproto_mutex);
 }
 
 static enum ofperr
 handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
+    OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     struct ofputil_group_mod gm;
@@ -6836,6 +6872,7 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
+    ovs_mutex_lock(&ofproto_mutex);
     switch (gm.command) {
     case OFPGC11_ADD:
         error = add_group(ofproto, &gm);
@@ -6869,6 +6906,7 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         }
         error = OFPERR_OFPGMFC_BAD_COMMAND;
     }
+    ovs_mutex_unlock(&ofproto_mutex);
 
     if (!error) {
         struct ofputil_requestforward rf;
@@ -6993,6 +7031,13 @@ static enum ofperr
 ofproto_flow_mod_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
+    /* Must check actions while holding ofproto_mutex to avoid a race. */
+    enum ofperr error = ofproto_check_ofpacts(ofproto, ofm->fm.ofpacts,
+                                              ofm->fm.ofpacts_len);
+    if (error) {
+        return error;
+    }
+
     switch (ofm->fm.command) {
     case OFPFC_ADD:
         return add_flow_start(ofproto, ofm);
@@ -7272,11 +7317,6 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
                                         ofproto->n_tables);
         /* Move actions to heap. */
         bmsg->ofm.fm.ofpacts = ofpbuf_steal_data(&ofpacts);
-
-        if (!error && bmsg->ofm.fm.ofpacts_len) {
-            error = ofproto_check_ofpacts(ofproto, bmsg->ofm.fm.ofpacts,
-                                          bmsg->ofm.fm.ofpacts_len);
-        }
     } else {
         OVS_NOT_REACHED();
     }
@@ -7989,6 +8029,18 @@ ofproto_rule_insert__(struct ofproto *ofproto, struct rule *rule)
     if (actions->has_meter) {
         meter_insert_rule(rule);
     }
+    if (actions->has_groups) {
+        const struct ofpact_group *a;
+        OFPACT_FOR_EACH_TYPE_FLATTENED (a, GROUP, actions->ofpacts,
+                                        actions->ofpacts_len) {
+            struct ofgroup *group;
+
+            group = ofproto_group_lookup(ofproto, a->group_id, false);
+            ovs_assert(group != NULL);
+            group_add_rule(group, rule);
+        }
+    }
+
     rule->removed = false;
 }
 
@@ -8009,6 +8061,28 @@ ofproto_rule_remove__(struct ofproto *ofproto, struct rule *rule)
     if (!ovs_list_is_empty(&rule->meter_list_node)) {
         ovs_list_remove(&rule->meter_list_node);
         ovs_list_init(&rule->meter_list_node);
+    }
+
+    /* Remove the rule from any groups, except from the group that is being
+     * deleted, if any. */
+    const struct rule_actions *actions = rule_get_actions(rule);
+
+    if (actions->has_groups) {
+        const struct ofpact_group *a;
+
+        OFPACT_FOR_EACH_TYPE (a, GROUP, actions->ofpacts,
+                                        actions->ofpacts_len) {
+            struct ofgroup *group;
+
+            group = ofproto_group_lookup(ofproto, a->group_id, false);
+            ovs_assert(group);
+
+            /* Leave the rule for the group that is being deleted, if any,
+             * as we still need the list of rules for clean-up. */
+            if (!group->being_deleted) {
+                group_remove_rule(group, rule);
+            }
+        }
     }
 
     rule->removed = true;

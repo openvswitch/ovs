@@ -214,11 +214,51 @@ ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
     return (void *) ((uint8_t *) ofpacts + ofpacts_len);
 }
 
+static inline const struct ofpact *
+ofpact_find_type(const struct ofpact *a, enum ofpact_type type,
+                 const struct ofpact * const end)
+{
+    while (a < end) {
+        if (a->type == type) {
+            return a;
+        }
+        a = ofpact_next(a);
+    }
+    return NULL;
+}
+
+#define OFPACT_FIND_TYPE(A, TYPE, END) \
+    ofpact_get_##TYPE##_nullable(ofpact_find_type(A, OFPACT_##TYPE, END))
+
+static inline const struct ofpact *
+ofpact_find_type_flattened(const struct ofpact *a, enum ofpact_type type,
+                           const struct ofpact * const end)
+{
+    while (a < end) {
+        if (a->type == type) {
+            return a;
+        }
+        a = ofpact_next_flattened(a);
+    }
+    return NULL;
+}
+
+#define OFPACT_FIND_TYPE_FLATTENED(A, TYPE, END) \
+    ofpact_get_##TYPE##_nullable(                       \
+        ofpact_find_type_flattened(A, OFPACT_##TYPE, END))
+
 /* Assigns POS to each ofpact, in turn, in the OFPACTS_LEN bytes of ofpacts
  * starting at OFPACTS. */
 #define OFPACT_FOR_EACH(POS, OFPACTS, OFPACTS_LEN)                      \
     for ((POS) = (OFPACTS); (POS) < ofpact_end(OFPACTS, OFPACTS_LEN);  \
          (POS) = ofpact_next(POS))
+
+#define OFPACT_FOR_EACH_TYPE(POS, TYPE, OFPACTS, OFPACTS_LEN)           \
+    for ((POS) = OFPACT_FIND_TYPE(OFPACTS, TYPE,                        \
+                                  ofpact_end(OFPACTS, OFPACTS_LEN));    \
+         (POS);                                                         \
+         (POS) = OFPACT_FIND_TYPE(ofpact_next(&(POS)->ofpact), TYPE,    \
+                                  ofpact_end(OFPACTS, OFPACTS_LEN)))
 
 /* Assigns POS to each ofpact, in turn, in the OFPACTS_LEN bytes of ofpacts
  * starting at OFPACTS.
@@ -228,6 +268,14 @@ ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
 #define OFPACT_FOR_EACH_FLATTENED(POS, OFPACTS, OFPACTS_LEN)           \
     for ((POS) = (OFPACTS); (POS) < ofpact_end(OFPACTS, OFPACTS_LEN);  \
          (POS) = ofpact_next_flattened(POS))
+
+#define OFPACT_FOR_EACH_TYPE_FLATTENED(POS, TYPE, OFPACTS, OFPACTS_LEN) \
+    for ((POS) = OFPACT_FIND_TYPE_FLATTENED(OFPACTS, TYPE,              \
+                                  ofpact_end(OFPACTS, OFPACTS_LEN));    \
+         (POS);                                                         \
+         (POS) = OFPACT_FIND_TYPE_FLATTENED(                            \
+             ofpact_next_flattened(&(POS)->ofpact), TYPE,               \
+             ofpact_end(OFPACTS, OFPACTS_LEN)))
 
 /* Action structure for each OFPACT_*. */
 
@@ -973,6 +1021,13 @@ void *ofpact_finish(struct ofpbuf *, struct ofpact *);
     ofpact_get_##ENUM(const struct ofpact *ofpact)                      \
     {                                                                   \
         ovs_assert(ofpact->type == OFPACT_##ENUM);                      \
+        return ALIGNED_CAST(struct STRUCT *, ofpact);                   \
+    }                                                                   \
+                                                                        \
+    static inline struct STRUCT *                                       \
+    ofpact_get_##ENUM##_nullable(const struct ofpact *ofpact)           \
+    {                                                                   \
+        ovs_assert(!ofpact || ofpact->type == OFPACT_##ENUM);           \
         return ALIGNED_CAST(struct STRUCT *, ofpact);                   \
     }                                                                   \
                                                                         \

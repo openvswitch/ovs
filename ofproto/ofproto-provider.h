@@ -124,7 +124,6 @@ struct ofproto {
     int min_mtu;                    /* Current MTU of non-internal ports. */
 
     /* Groups. */
-    struct ovs_rwlock groups_rwlock;
     struct cmap groups;               /* Contains "struct ofgroup"s. */
     uint32_t n_groups[4] OVS_GUARDED; /* # of existing groups of each type. */
     struct ofputil_group_features ogf;
@@ -437,6 +436,7 @@ struct rule_actions {
      * action whose flags include NX_LEARN_F_DELETE_LEARNED. */
     bool has_meter;
     bool has_learn_with_delete;
+    bool has_groups;
 
     /* Actions. */
     uint32_t ofpacts_len;         /* Size of 'ofpacts', in bytes. */
@@ -455,11 +455,14 @@ struct rule_collection {
     size_t n;                   /* Number of rules collected. */
 
     size_t capacity;            /* Number of rules that will fit in 'rules'. */
-    struct rule *stub[64];      /* Preallocated rules to avoid malloc(). */
+    struct rule *stub[5];       /* Preallocated rules to avoid malloc(). */
 };
 
 void rule_collection_init(struct rule_collection *);
 void rule_collection_add(struct rule_collection *, struct rule *);
+void rule_collection_remove(struct rule_collection *, struct rule *);
+void rule_collection_move(struct rule_collection *to,
+                          struct rule_collection *from);
 void rule_collection_ref(struct rule_collection *) OVS_REQUIRES(ofproto_mutex);
 void rule_collection_unref(struct rule_collection *);
 void rule_collection_destroy(struct rule_collection *);
@@ -513,6 +516,7 @@ struct ofgroup {
     const struct ofproto *ofproto;  /* The ofproto that contains this group. */
     const uint32_t group_id;
     const enum ofp11_group_type type; /* One of OFPGT_*. */
+    bool being_deleted;               /* Group removal has begun. */
 
     const long long int created;      /* Creation time. */
     const long long int modified;     /* Time of last modification. */
@@ -521,6 +525,8 @@ struct ofgroup {
     const uint32_t n_buckets;
 
     const struct ofputil_group_props props;
+
+    struct rule_collection rules OVS_GUARDED;   /* Referring rules. */
 };
 
 struct ofgroup *ofproto_group_lookup(const struct ofproto *ofproto,
@@ -530,7 +536,8 @@ void ofproto_group_ref(struct ofgroup *);
 bool ofproto_group_try_ref(struct ofgroup *);
 void ofproto_group_unref(struct ofgroup *);
 
-void ofproto_group_delete_all(struct ofproto *);
+void ofproto_group_delete_all(struct ofproto *)
+    OVS_EXCLUDED(ofproto_mutex);
 
 /* ofproto class structure, to be defined by each ofproto implementation.
  *
