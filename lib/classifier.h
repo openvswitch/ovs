@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -340,7 +340,7 @@ struct classifier {
     uint8_t flow_segments[CLS_MAX_INDICES]; /* Flow segment boundaries to use
                                              * for staged lookup. */
     struct cmap subtables_map;      /* Contains "struct cls_subtable"s.  */
-    struct pvector subtables;
+    struct cpvector subtables;
     struct cmap partitions;         /* Contains "struct cls_partition"s. */
     struct cls_trie tries[CLS_MAX_TRIES]; /* Prefix tries. */
     unsigned int n_tries;
@@ -471,7 +471,7 @@ static inline void
 classifier_publish(struct classifier *cls)
 {
     cls->publish = true;
-    pvector_publish(&cls->subtables);
+    cpvector_publish(&cls->subtables);
 }
 
 #ifdef __cplusplus

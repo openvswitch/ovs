@@ -163,7 +163,7 @@ struct emc_cache {
 
 struct dpcls {
     struct cmap subtables_map;
-    struct pvector subtables;
+    struct pvector *subtables;
 };
 
 /* A rule to be inserted to the classifier. */
@@ -4770,13 +4770,13 @@ static void
 dpcls_init(struct dpcls *cls)
 {
     cmap_init(&cls->subtables_map);
-    pvector_init(&cls->subtables);
+    cls->subtables = pvector_alloc(4);
 }
 
 static void
 dpcls_destroy_subtable(struct dpcls *cls, struct dpcls_subtable *subtable)
 {
-    pvector_remove(&cls->subtables, subtable);
+    pvector_remove(cls->subtables, subtable);
     cmap_remove(&cls->subtables_map, &subtable->cmap_node,
                 subtable->mask.hash);
     cmap_destroy(&subtable->rules);
@@ -4797,7 +4797,7 @@ dpcls_destroy(struct dpcls *cls)
             dpcls_destroy_subtable(cls, subtable);
         }
         cmap_destroy(&cls->subtables_map);
-        pvector_destroy(&cls->subtables);
+        free(cls->subtables);
     }
 }
 
@@ -4812,8 +4812,7 @@ dpcls_create_subtable(struct dpcls *cls, const struct netdev_flow_key *mask)
     cmap_init(&subtable->rules);
     netdev_flow_key_clone(&subtable->mask, mask);
     cmap_insert(&cls->subtables_map, &subtable->cmap_node, mask->hash);
-    pvector_insert(&cls->subtables, subtable, 0);
-    pvector_publish(&cls->subtables);
+    pvector_push_back(&cls->subtables, subtable, 0);
 
     return subtable;
 }
@@ -4856,7 +4855,6 @@ dpcls_remove(struct dpcls *cls, struct dpcls_rule *rule)
     if (cmap_remove(&subtable->rules, &rule->cmap_node, rule->flow.hash)
         == 0) {
         dpcls_destroy_subtable(cls, subtable);
-        pvector_publish(&cls->subtables);
     }
 }
 
@@ -4910,7 +4908,7 @@ dpcls_lookup(const struct dpcls *cls, const struct netdev_flow_key keys[],
     }
     memset(rules, 0, cnt * sizeof *rules);
 
-    PVECTOR_FOR_EACH (subtable, &cls->subtables) {
+    PVECTOR_FOR_EACH (subtable, cls->subtables) {
         const struct netdev_flow_key *mkeys = keys;
         struct dpcls_rule **mrules = rules;
         map_type remains = 0;

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -472,12 +472,12 @@ destroy_classifier(struct classifier *cls)
 }
 
 static void
-pvector_verify(const struct pvector *pvec)
+cpvector_verify(const struct cpvector *cpvec)
 {
     void *ptr OVS_UNUSED;
     int prev_priority = INT_MAX;
 
-    PVECTOR_FOR_EACH (ptr, pvec) {
+    CPVECTOR_FOR_EACH (ptr, cpvec) {
         int priority = cursor__.vector[cursor__.entry_idx].priority;
         if (priority > prev_priority) {
             ovs_abort(0, "Priority vector is out of order (%u > %u)",
@@ -533,7 +533,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
     int found_visible_but_removable = 0;
     int found_rules2 = 0;
 
-    pvector_verify(&cls->subtables);
+    cpvector_verify(&cls->subtables);
     CMAP_FOR_EACH (table, cmap_node, &cls->subtables_map) {
         const struct cls_match *head;
         int max_priority = INT_MIN;
@@ -543,7 +543,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
         const struct cls_subtable *iter;
 
         /* Locate the subtable from 'subtables'. */
-        PVECTOR_FOR_EACH (iter, &cls->subtables) {
+        CPVECTOR_FOR_EACH (iter, &cls->subtables) {
             if (iter == table) {
                 if (found) {
                     ovs_abort(0, "Subtable %p duplicated in 'subtables'.",
@@ -647,7 +647,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
     }
 
     assert(found_tables == cmap_count(&cls->subtables_map));
-    assert(found_tables == pvector_count(&cls->subtables));
+    assert(found_tables == cpvector_count(&cls->subtables));
     assert(n_tables == -1 || n_tables == found_tables_with_visible_rules);
     assert(n_rules == -1 || found_rules == n_rules + found_invisible);
     assert(n_dups == -1 || found_dups == n_dups);
