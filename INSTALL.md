@@ -127,11 +127,13 @@ installing the following to obtain better warnings:
 
   - clang, version 3.4 or later
 
-  - “flake8”, along with the “hacking” flake8 plugin (for Python code).
-    The automatic flake8 check that runs against Python code has some
-    warnings enabled that come from the "hacking" flake8 plugin.  If it's
-    not installed, the warnings just won't occur until it's run on a system
-    with "hacking" installed.
+  - “flake8”, version 2.X, along with the “hacking” flake8 plugin (for Python
+    code).  The automatic flake8 check that runs against Python code has some
+    warnings enabled that come from the "hacking" flake8 plugin.  If it's not
+    installed, the warnings just won't occur until it's run on a system with
+    "hacking" installed.  Note that there are problems with flake8 3.0 and the
+    “hacking” plugin.  To ensure you get flake8 2.X, you can use
+    “pip install ‘flake8<3.0’”.
 
 Also, you may find the ovs-dev script found in utilities/ovs-dev.py useful.
 
