@@ -111,7 +111,6 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
     }
     fm->ofpacts = NULL;
     fm->ofpacts_len = 0;
-    fm->delete_reason = OFPRR_DELETE;
 
     if (learn->fin_idle_timeout || learn->fin_hard_timeout) {
         struct ofpact_fin_timeout *oft;

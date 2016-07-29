@@ -1576,10 +1576,6 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 {
     ovs_be16 raw_flags;
     enum ofperr error;
-
-    /* Ignored for non-delete actions */
-    fm->delete_reason = OFPRR_DELETE;
-
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     enum ofpraw raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT11_FLOW_MOD) {

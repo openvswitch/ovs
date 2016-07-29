@@ -3171,7 +3171,6 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
         .out_port = OFPP_ANY,
         .out_group = OFPG_ANY,
         .flags = version->flags,
-        .delete_reason = OFPRR_DELETE,
     };
     minimatch_expand(&fte->rule.match, &fm.match);
     if (command == OFPFC_ADD || command == OFPFC_MODIFY ||

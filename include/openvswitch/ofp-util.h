@@ -325,9 +325,6 @@ struct ofputil_flow_mod {
     uint16_t importance;     /* Eviction precedence. */
     struct ofpact *ofpacts;  /* Series of "struct ofpact"s. */
     size_t ofpacts_len;      /* Length of ofpacts, in bytes. */
-
-    /* Reason for delete; ignored for non-delete commands */
-    enum ofp_flow_removed_reason delete_reason;
 };
 
 enum ofperr ofputil_decode_flow_mod(struct ofputil_flow_mod *,

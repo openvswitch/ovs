@@ -340,7 +340,6 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         .buffer_id = UINT32_MAX,
         .out_port = OFPP_ANY,
         .out_group = OFPG_ANY,
-        .delete_reason = OFPRR_DELETE,
     };
     /* For modify, by default, don't update the cookie. */
     if (command == OFPFC_MODIFY || command == OFPFC_MODIFY_STRICT) {

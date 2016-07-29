@@ -2113,7 +2113,6 @@ flow_mod_init(struct ofputil_flow_mod *fm,
         .out_group = OFPG_ANY,
         .ofpacts = CONST_CAST(struct ofpact *, ofpacts),
         .ofpacts_len = ofpacts_len,
-        .delete_reason = OFPRR_DELETE,
     };
 }
 
@@ -4752,7 +4751,7 @@ add_flow_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
             eviction_group_remove_rule(rule);
             /* Marks '*old_rule' as an evicted rule rather than replaced rule.
              */
-            fm->delete_reason = OFPRR_EVICTION;
+            rule->removed_reason = OFPRR_EVICTION;
             *old_rule = rule;
         }
     } else {
@@ -4778,11 +4777,10 @@ static void
 add_flow_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofputil_flow_mod *fm = &ofm->fm;
     struct rule *old_rule = rule_collection_stub(&ofm->old_rules)[0];
     struct rule *new_rule = rule_collection_stub(&ofm->new_rules)[0];
 
-    if (old_rule && fm->delete_reason == OFPRR_EVICTION) {
+    if (old_rule && old_rule->removed_reason == OFPRR_EVICTION) {
         /* Revert the eviction. */
         eviction_group_add_rule(old_rule);
     }
@@ -4865,7 +4863,7 @@ replace_rule_create(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     rule->modify_seqno = 0;
 
     /* Copy values from old rule for modify semantics. */
-    if (old_rule && fm->delete_reason != OFPRR_EVICTION) {
+    if (old_rule && old_rule->removed_reason != OFPRR_EVICTION) {
         bool change_cookie = (fm->modify_cookie
                               && fm->new_cookie != OVS_BE64_MAX
                               && fm->new_cookie != old_rule->flow_cookie);
@@ -4962,7 +4960,8 @@ replace_rule_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     bool forward_counts = !(new_rule->flags & OFPUTIL_FF_RESET_COUNTS);
     struct rule *replaced_rule;
 
-    replaced_rule = fm->delete_reason != OFPRR_EVICTION ? old_rule : NULL;
+    replaced_rule = (old_rule && old_rule->removed_reason != OFPRR_EVICTION)
+        ? old_rule : NULL;
 
     /* Insert the new flow to the ofproto provider.  A non-NULL 'replaced_rule'
      * is a duplicate rule the 'new_rule' is replacing.  The provider should
@@ -4999,9 +4998,6 @@ replace_rule_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
             }
         } else {
             /* XXX: This is slight duplication with delete_flows_finish__() */
-
-            old_rule->removed_reason = OFPRR_EVICTION;
-
             ofmonitor_report(ofproto->connmgr, old_rule, NXFME_DELETED,
                              OFPRR_EVICTION,
                              req ? req->ofconn : NULL,
@@ -5056,10 +5052,6 @@ modify_flows_start__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
                  || fm->new_cookie == OVS_BE64_MAX)) {
         /* No match, add a new flow. */
         error = add_flow_start(ofproto, ofm);
-        if (!error) {
-            ovs_assert(fm->delete_reason == OFPRR_EVICTION
-                       || !rule_collection_rules(old_rules)[0]);
-        }
         new_rules->collection.n = 1;
     } else {
         error = 0;
@@ -5313,8 +5305,7 @@ delete_flows_finish(struct ofproto *ofproto,
                     const struct openflow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
-    delete_flows_finish__(ofproto, &ofm->old_rules, ofm->fm.delete_reason,
-                          req);
+    delete_flows_finish__(ofproto, &ofm->old_rules, OFPRR_DELETE, req);
 }
 
 /* Implements OFPFC_DELETE_STRICT. */
