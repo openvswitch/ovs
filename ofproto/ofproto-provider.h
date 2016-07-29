@@ -1842,6 +1842,13 @@ int ofproto_class_unregister(const struct ofproto_class *);
 struct ofproto_flow_mod {
     struct ofputil_flow_mod fm;
 
+    /* Replicate needed fields from ofputil_flow_mod to not need it after the
+     * flow has been created. */
+    uint32_t buffer_id;
+
+    bool modify_may_add_flow;
+    enum nx_flow_update_event event;
+
     ovs_version_t version;              /* Version in which changes take
                                          * effect. */
     struct rule_collection old_rules;   /* Affected rules. */

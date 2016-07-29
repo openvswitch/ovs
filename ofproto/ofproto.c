@@ -265,7 +265,7 @@ struct openflow_mod_requester {
 
 /* OpenFlow. */
 static enum ofperr replace_rule_create(struct ofproto *,
-                                       struct ofputil_flow_mod *,
+                                       const struct ofputil_flow_mod *,
                                        struct cls_rule *cr, uint8_t table_id,
                                        struct rule *old_rule,
                                        struct rule **new_rule)
@@ -280,7 +280,7 @@ static void replace_rule_revert(struct ofproto *, struct rule *old_rule,
                                 struct rule *new_rule)
     OVS_REQUIRES(ofproto_mutex);
 
-static void replace_rule_finish(struct ofproto *, struct ofputil_flow_mod *,
+static void replace_rule_finish(struct ofproto *, struct ofproto_flow_mod *,
                                 const struct openflow_mod_requester *,
                                 struct rule *old_rule, struct rule *new_rule,
                                 struct ovs_list *dead_cookies)
@@ -4794,12 +4794,11 @@ add_flow_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
                 const struct openflow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofputil_flow_mod *fm = &ofm->fm;
     struct rule *old_rule = rule_collection_stub(&ofm->old_rules)[0];
     struct rule *new_rule = rule_collection_stub(&ofm->new_rules)[0];
     struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
 
-    replace_rule_finish(ofproto, fm, req, old_rule, new_rule, &dead_cookies);
+    replace_rule_finish(ofproto, ofm, req, old_rule, new_rule, &dead_cookies);
     learned_cookies_flush(ofproto, &dead_cookies);
 
     if (old_rule) {
@@ -4813,7 +4812,7 @@ add_flow_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
         send_table_status(ofproto, new_rule->table_id);
     }
 
-    send_buffered_packet(req, fm->buffer_id, new_rule);
+    send_buffered_packet(req, ofm->buffer_id, new_rule);
 }
 
 /* OFPFC_MODIFY and OFPFC_MODIFY_STRICT. */
@@ -4822,7 +4821,7 @@ add_flow_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
  * and 'old_rule'.  Note that the rule is NOT inserted into a any data
  * structures yet.  Takes ownership of 'cr'. */
 static enum ofperr
-replace_rule_create(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+replace_rule_create(struct ofproto *ofproto, const struct ofputil_flow_mod *fm,
                     struct cls_rule *cr, uint8_t table_id,
                     struct rule *old_rule, struct rule **new_rule)
 {
@@ -4951,7 +4950,7 @@ replace_rule_revert(struct ofproto *ofproto,
 
 /* Adds the 'new_rule', replacing the 'old_rule'. */
 static void
-replace_rule_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
+replace_rule_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
                     const struct openflow_mod_requester *req,
                     struct rule *old_rule, struct rule *new_rule,
                     struct ovs_list *dead_cookies)
@@ -4974,27 +4973,25 @@ replace_rule_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 
     if (old_rule) {
         const struct rule_actions *old_actions = rule_get_actions(old_rule);
+        const struct rule_actions *new_actions = rule_get_actions(new_rule);
 
         learned_cookies_dec(ofproto, old_actions, dead_cookies);
 
         if (replaced_rule) {
-            enum nx_flow_update_event event = fm->command == OFPFC_ADD
-                ? NXFME_ADDED : NXFME_MODIFIED;
+            bool changed_cookie = (new_rule->flow_cookie
+                                   != old_rule->flow_cookie);
 
-            bool change_cookie = (fm->modify_cookie
-                                  && fm->new_cookie != OVS_BE64_MAX
-                                  && fm->new_cookie != old_rule->flow_cookie);
+            bool changed_actions = !ofpacts_equal(new_actions->ofpacts,
+                                                  new_actions->ofpacts_len,
+                                                  old_actions->ofpacts,
+                                                  old_actions->ofpacts_len);
 
-            bool change_actions = !ofpacts_equal(fm->ofpacts,
-                                                 fm->ofpacts_len,
-                                                 old_actions->ofpacts,
-                                                 old_actions->ofpacts_len);
-
-            if (event != NXFME_MODIFIED || change_actions || change_cookie) {
-                ofmonitor_report(ofproto->connmgr, new_rule, event, 0,
+            if (ofm->event != NXFME_MODIFIED || changed_actions
+                || changed_cookie) {
+                ofmonitor_report(ofproto->connmgr, new_rule, ofm->event, 0,
                                  req ? req->ofconn : NULL,
                                  req ? req->request->xid : 0,
-                                 change_actions ? old_actions : NULL);
+                                 changed_actions ? old_actions : NULL);
             }
         } else {
             /* XXX: This is slight duplication with delete_flows_finish__() */
@@ -5048,8 +5045,7 @@ modify_flows_start__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
                                conjs, n_conjs);
         }
         free(conjs);
-    } else if (!(fm->cookie_mask != htonll(0)
-                 || fm->new_cookie == OVS_BE64_MAX)) {
+    } else if (ofm->modify_may_add_flow) {
         /* No match, add a new flow. */
         error = add_flow_start(ofproto, ofm);
         new_rules->collection.n = 1;
@@ -5063,7 +5059,7 @@ modify_flows_start__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
 /* Implements OFPFC_MODIFY.  Returns 0 on success or an OpenFlow error code on
  * failure.
  *
- * 'ofconn' is used to retrieve the packet buffer specified in fm->buffer_id,
+ * 'ofconn' is used to retrieve the packet buffer specified in ofm->buffer_id,
  * if any. */
 static enum ofperr
 modify_flows_start_loose(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
@@ -5117,7 +5113,6 @@ modify_flows_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
                     const struct openflow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofputil_flow_mod *fm = &ofm->fm;
     struct rule_collection *old_rules = &ofm->old_rules;
     struct rule_collection *new_rules = &ofm->new_rules;
 
@@ -5132,13 +5127,13 @@ modify_flows_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
 
         struct rule *old_rule, *new_rule;
         RULE_COLLECTIONS_FOR_EACH (old_rule, new_rule, old_rules, new_rules) {
-            replace_rule_finish(ofproto, fm, req, old_rule, new_rule,
+            replace_rule_finish(ofproto, ofm, req, old_rule, new_rule,
                                 &dead_cookies);
         }
         learned_cookies_flush(ofproto, &dead_cookies);
         remove_rules_postponed(old_rules);
 
-        send_buffered_packet(req, fm->buffer_id,
+        send_buffered_packet(req, ofm->buffer_id,
                              rule_collection_rules(new_rules)[0]);
         rule_collection_destroy(new_rules);
     }
@@ -7034,19 +7029,29 @@ ofproto_flow_mod_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
         return error;
     }
 
+    /* Forward flow mod fields we need later. */
+    ofm->buffer_id = ofm->fm.buffer_id;
+
+    ofm->modify_may_add_flow = (ofm->fm.new_cookie != OVS_BE64_MAX
+                                && ofm->fm.cookie_mask == htonll(0));
+
     switch (ofm->fm.command) {
     case OFPFC_ADD:
+        ofm->event = NXFME_ADDED;
         return add_flow_start(ofproto, ofm);
         /* , &be->old_rules.stub[0],
            &be->new_rules.stub[0]); */
     case OFPFC_MODIFY:
+        ofm->event = NXFME_MODIFIED;
         return modify_flows_start_loose(ofproto, ofm);
     case OFPFC_MODIFY_STRICT:
+        ofm->event = NXFME_MODIFIED;
         return modify_flow_start_strict(ofproto, ofm);
     case OFPFC_DELETE:
+        ofm->event = NXFME_DELETED;
         return delete_flows_start_loose(ofproto, ofm);
-
     case OFPFC_DELETE_STRICT:
+        ofm->event = NXFME_DELETED;
         return delete_flow_start_strict(ofproto, ofm);
     }
 
