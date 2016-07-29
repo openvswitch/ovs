@@ -660,18 +660,60 @@ transact_multiple_noreply(struct vconn *vconn, struct ovs_list *requests)
     ofpbuf_delete(reply);
 }
 
+/* Frees the error messages as they are printed. */
 static void
-bundle_error_reporter(const struct ofp_header *oh)
+bundle_print_errors(struct ovs_list *errors, struct ovs_list *requests)
 {
-    ofp_print(stderr, oh, ntohs(oh->length), verbosity + 1);
+    struct vconn_bundle_error *error, *next;
+    struct ofpbuf *bmsg;
+
+    INIT_CONTAINER(bmsg, requests, list_node);
+
+    LIST_FOR_EACH_SAFE (error, next, list_node, errors) {
+        enum ofperr ofperr;
+        struct ofpbuf payload;
+
+        ofperr = ofperr_decode_msg(&error->ofp_msg, &payload);
+        if (!ofperr) {
+            fprintf(stderr, "***decode error***");
+        } else {
+            /* Default to the likely truncated message. */
+            const struct ofp_header *ofp_msg = payload.data;
+            size_t msg_len = payload.size;
+
+            /* Find the failing message from the requests list to be able to
+             * dump the whole message.  We assume the errors are returned in
+             * the same order as in which the messages are sent to get O(n)
+             * rather than O(n^2) processing here.  If this heuristics fails we
+             * may print the truncated hexdumps instead. */
+            LIST_FOR_EACH_CONTINUE (bmsg, list_node, requests) {
+                const struct ofp_header *oh = bmsg->data;
+
+                if (oh->xid == error->ofp_msg.xid) {
+                    ofp_msg = oh;
+                    msg_len = bmsg->size;
+                    break;
+                }
+            }
+            fprintf(stderr, "Error %s for: ", ofperr_get_name(ofperr));
+            ofp_print(stderr, ofp_msg, msg_len, verbosity + 1);
+        }
+        free(error);
+    }
     fflush(stderr);
 }
 
 static void
 bundle_transact(struct vconn *vconn, struct ovs_list *requests, uint16_t flags)
 {
-    run(vconn_bundle_transact(vconn, requests, flags, bundle_error_reporter),
-        "talking to %s", vconn_get_name(vconn));
+    struct ovs_list errors;
+    int retval = vconn_bundle_transact(vconn, requests, flags, &errors);
+
+    bundle_print_errors(&errors, requests);
+
+    if (retval) {
+        ovs_fatal(retval, "talking to %s", vconn_get_name(vconn));
+    }
 }
 
 /* Sends 'request', which should be a request that only has a reply if an error

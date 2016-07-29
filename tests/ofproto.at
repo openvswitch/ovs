@@ -4409,6 +4409,8 @@ OFPT_FLOW_MOD (OF1.4): ADD in_port=2,dl_src=00:88:99:aa:bb:cc idle:70 actions=ou
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
 OFPT_FLOW_MOD (OF1.4): DEL table:255 in_port=2,dl_src=00:88:99:aa:bb:cc actions=drop
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST (OF1.4):
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY (OF1.4):
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
@@ -4440,6 +4442,8 @@ OFPT_FLOW_MOD (OF1.4): MOD actions=drop
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
 OFPT_FLOW_MOD (OF1.4): MOD_STRICT in_port=2,dl_src=00:77:88:99:aa:bb actions=output:7
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST (OF1.4):
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY (OF1.4):
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
@@ -4474,6 +4478,8 @@ OFPT_FLOW_MOD (OF1.4): DEL_STRICT table:255 in_port=2,dl_src=00:66:77:88:99:aa a
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
 OFPT_FLOW_MOD (OF1.4): ADD in_port=2,dl_src=00:66:77:88:99:aa actions=drop
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST (OF1.4):
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY (OF1.4):
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
@@ -4528,15 +4534,11 @@ delete in_port=2 dl_src=00:88:99:aa:bb:cc
 add table=254 actions=drop
 ])
 
-AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt 2>&1 | sed '/|WARN|/d
-s/unix:.*br0\.mgmt/unix:br0.mgmt/' | sed 's/(.* error)/(error)/'],
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt 2>&1 | sed '/talking to/,$d'],
 [0], [dnl
-OFPT_ERROR (OF1.4) (xid=0xb): OFPBRC_EPERM
-OFPT_FLOW_MOD (OF1.4) (xid=0xb): ADD table:254 actions=drop
-OFPT_ERROR (OF1.4) (xid=0xd): OFPBFC_MSG_FAILED
-OFPT_BUNDLE_CONTROL (OF1.4) (xid=0xd):
+Error OFPBRC_EPERM for: OFPT_FLOW_MOD (OF1.4) (xid=0xb): ADD table:254 actions=drop
+Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.4) (xid=0xe):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
-ovs-ofctl: talking to unix:br0.mgmt (error)
 ])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
@@ -4894,6 +4896,8 @@ OFPT_FLOW_MOD (OF1.3): ADD in_port=2,dl_src=00:88:99:aa:bb:cc idle:70 actions=ou
 vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
  bundle_id=0 flags=atomic ordered
 OFPT_FLOW_MOD (OF1.3): DEL table:255 in_port=2,dl_src=00:88:99:aa:bb:cc actions=drop
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST (OF1.3):
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY (OF1.3):
 vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
@@ -4925,6 +4929,8 @@ OFPT_FLOW_MOD (OF1.3): MOD actions=drop
 vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
  bundle_id=0 flags=atomic ordered
 OFPT_FLOW_MOD (OF1.3): MOD_STRICT in_port=2,dl_src=00:77:88:99:aa:bb actions=output:7
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST (OF1.3):
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY (OF1.3):
 vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
@@ -4959,6 +4965,8 @@ OFPT_FLOW_MOD (OF1.3): DEL_STRICT table:255 in_port=2,dl_src=00:66:77:88:99:aa a
 vconn|DBG|unix: received: ONFT_BUNDLE_ADD_MESSAGE (OF1.3):
  bundle_id=0 flags=atomic ordered
 OFPT_FLOW_MOD (OF1.3): ADD in_port=2,dl_src=00:66:77:88:99:aa actions=drop
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST (OF1.3):
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY (OF1.3):
 vconn|DBG|unix: received: ONFT_BUNDLE_CONTROL (OF1.3):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): ONFT_BUNDLE_CONTROL (OF1.3):
@@ -4981,7 +4989,7 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 
-AT_SETUP([ofproto - failing bundle commit (OpenFlow 1.3)])
+AT_SETUP([ofproto - failing bundle add message (OpenFlow 1.3)])
 AT_KEYWORDS([monitor])
 OVS_VSWITCHD_START
 
@@ -5013,15 +5021,11 @@ delete in_port=2 dl_src=00:88:99:aa:bb:cc
 add table=254 actions=drop
 ])
 
-AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt 2>&1 | sed '/|WARN|/d
-s/unix:.*br0\.mgmt/unix:br0.mgmt/' | sed 's/(.* error)/(error)/'],
+AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt 2>&1 | sed '/talking to/,$d'],
 [0], [dnl
-OFPT_ERROR (OF1.3) (xid=0xb): OFPBRC_EPERM
-OFPT_FLOW_MOD (OF1.3) (xid=0xb): ADD table:254 actions=drop
-OFPT_ERROR (OF1.3) (xid=0xd): OFPBFC_MSG_FAILED
-ONFT_BUNDLE_CONTROL (OF1.3) (xid=0xd):
+Error OFPBRC_EPERM for: OFPT_FLOW_MOD (OF1.3) (xid=0xb): ADD table:254 actions=drop
+Error OFPBFC_MSG_FAILED for: ONFT_BUNDLE_CONTROL (OF1.3) (xid=0xe):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
-ovs-ofctl: talking to unix:br0.mgmt (error)
 ])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
