@@ -1509,7 +1509,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
+NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
@@ -2343,7 +2343,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
@@ -2411,7 +2411,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
@@ -2511,7 +2511,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
+NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
