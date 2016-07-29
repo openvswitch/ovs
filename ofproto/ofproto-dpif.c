@@ -97,6 +97,8 @@ struct rule_dpif {
     * 'rule->new_rule->stats_mutex' must be held together, acquire them in that
     * order, */
     struct rule_dpif *new_rule OVS_GUARDED;
+    bool forward_counts OVS_GUARDED;   /* Forward counts? 'used' time will be
+                                        * forwarded in all cases. */
 
     /* If non-zero then the recirculation id that has
      * been allocated for use with this rule.
@@ -3770,17 +3772,30 @@ ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
                                           ofpacts_len, 0, 0, packet);
 }
 
+static void
+rule_dpif_credit_stats__(struct rule_dpif *rule,
+                         const struct dpif_flow_stats *stats,
+                         bool credit_counts)
+    OVS_REQUIRES(rule->stats_mutex)
+{
+    if (credit_counts) {
+        rule->stats.n_packets += stats->n_packets;
+        rule->stats.n_bytes += stats->n_bytes;
+    }
+    rule->stats.used = MAX(rule->stats.used, stats->used);
+}
+
 void
 rule_dpif_credit_stats(struct rule_dpif *rule,
                        const struct dpif_flow_stats *stats)
 {
     ovs_mutex_lock(&rule->stats_mutex);
     if (OVS_UNLIKELY(rule->new_rule)) {
-        rule_dpif_credit_stats(rule->new_rule, stats);
+        ovs_mutex_lock(&rule->new_rule->stats_mutex);
+        rule_dpif_credit_stats__(rule->new_rule, stats, rule->forward_counts);
+        ovs_mutex_unlock(&rule->new_rule->stats_mutex);
     } else {
-        rule->stats.n_packets += stats->n_packets;
-        rule->stats.n_bytes += stats->n_bytes;
-        rule->stats.used = MAX(rule->stats.used, stats->used);
+        rule_dpif_credit_stats__(rule, stats, true);
     }
     ovs_mutex_unlock(&rule->stats_mutex);
 }
@@ -4111,17 +4126,18 @@ rule_construct(struct rule *rule_)
     rule->stats.used = rule->up.modified;
     rule->recirc_id = 0;
     rule->new_rule = NULL;
+    rule->forward_counts = false;
 
     return 0;
 }
 
 static void
-rule_insert(struct rule *rule_, struct rule *old_rule_, bool forward_stats)
+rule_insert(struct rule *rule_, struct rule *old_rule_, bool forward_counts)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_dpif *rule = rule_dpif_cast(rule_);
 
-    if (old_rule_ && forward_stats) {
+    if (old_rule_) {
         struct rule_dpif *old_rule = rule_dpif_cast(old_rule_);
 
         ovs_assert(!old_rule->new_rule);
@@ -4133,7 +4149,15 @@ rule_insert(struct rule *rule_, struct rule *old_rule_, bool forward_stats)
         ovs_mutex_lock(&old_rule->stats_mutex);
         ovs_mutex_lock(&rule->stats_mutex);
         old_rule->new_rule = rule;       /* Forward future stats. */
-        rule->stats = old_rule->stats;   /* Transfer stats to the new rule. */
+        old_rule->forward_counts = forward_counts;
+
+        if (forward_counts) {
+            rule->stats = old_rule->stats;   /* Transfer stats to the new
+                                              * rule. */
+        } else {
+            /* Used timestamp must be forwarded whenever a rule is modified. */
+            rule->stats.used = old_rule->stats.used;
+        }
         ovs_mutex_unlock(&rule->stats_mutex);
         ovs_mutex_unlock(&old_rule->stats_mutex);
     }

@@ -4824,17 +4824,18 @@ replace_rule_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
                     struct ovs_list *dead_cookies)
     OVS_REQUIRES(ofproto_mutex)
 {
-    bool forward_stats = !(fm->flags & OFPUTIL_FF_RESET_COUNTS);
+    bool forward_counts = !(fm->flags & OFPUTIL_FF_RESET_COUNTS);
     struct rule *replaced_rule;
 
     replaced_rule = fm->delete_reason != OFPRR_EVICTION ? old_rule : NULL;
 
     /* Insert the new flow to the ofproto provider.  A non-NULL 'replaced_rule'
      * is a duplicate rule the 'new_rule' is replacing.  The provider should
-     * link the stats from the old rule to the new one if 'forward_stats' is
-     * 'true'.  The 'replaced_rule' will be deleted right after this call. */
+     * link the packet and byte counts from the old rule to the new one if
+     * 'forward_counts' is 'true'.  The 'replaced_rule' will be deleted right
+     * after this call. */
     ofproto->ofproto_class->rule_insert(new_rule, replaced_rule,
-                                        forward_stats);
+                                        forward_counts);
     learned_cookies_inc(ofproto, rule_get_actions(new_rule));
 
     if (old_rule) {

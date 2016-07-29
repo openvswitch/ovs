@@ -1198,8 +1198,9 @@ struct ofproto_class {
      * must add the new rule to the datapath flow table and return only after
      * this is complete.  The 'new_rule' may be a duplicate of an 'old_rule'.
      * In this case the 'old_rule' is non-null, and the implementation should
-     * forward rule statistics from the 'old_rule' to the 'new_rule' if
-     * 'forward_stats' is 'true'.  This may not fail.
+     * forward rule statistics counts from the 'old_rule' to the 'new_rule' if
+     * 'forward_counts' is 'true', 'used' timestamp is always forwarded.  This
+     * may not fail.
      *
      *
      * Deletion
@@ -1222,7 +1223,7 @@ struct ofproto_class {
     enum ofperr (*rule_construct)(struct rule *rule)
         /* OVS_REQUIRES(ofproto_mutex) */;
     void (*rule_insert)(struct rule *rule, struct rule *old_rule,
-                        bool forward_stats)
+                        bool forward_counts)
         /* OVS_REQUIRES(ofproto_mutex) */;
     void (*rule_delete)(struct rule *rule) /* OVS_REQUIRES(ofproto_mutex) */;
     void (*rule_destruct)(struct rule *rule);
