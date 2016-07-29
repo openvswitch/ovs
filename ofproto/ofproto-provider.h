@@ -38,6 +38,7 @@
 #include "guarded-list.h"
 #include "heap.h"
 #include "hindex.h"
+#include "object-collection.h"
 #include "ofproto/ofproto.h"
 #include "openvswitch/list.h"
 #include "openvswitch/ofp-actions.h"
@@ -449,23 +450,39 @@ void rule_actions_destroy(const struct rule_actions *);
 bool ofproto_rule_has_out_port(const struct rule *, ofp_port_t port)
     OVS_REQUIRES(ofproto_mutex);
 
-/* A set of rules to which an OpenFlow operation applies. */
-struct rule_collection {
-    struct rule **rules;        /* The rules. */
-    size_t n;                   /* Number of rules collected. */
+#define DECL_OFPROTO_COLLECTION(TYPE, NAME)                             \
+    DECL_OBJECT_COLLECTION(TYPE, NAME)                                  \
+static inline void NAME##_collection_ref(struct NAME##_collection *coll)   \
+{                                                                       \
+    for (size_t i = 0; i < coll->collection.n; i++) {                   \
+        ofproto_##NAME##_ref((TYPE)coll->collection.objs[i]);           \
+    }                                                                   \
+}                                                                       \
+                                                                        \
+static inline void NAME##_collection_unref(struct NAME##_collection *coll) \
+{                                                                       \
+    for (size_t i = 0; i < coll->collection.n; i++) {                   \
+        ofproto_##NAME##_unref((TYPE)coll->collection.objs[i]);         \
+    }                                                                   \
+}
 
-    size_t capacity;            /* Number of rules that will fit in 'rules'. */
-    struct rule *stub[5];       /* Preallocated rules to avoid malloc(). */
-};
+DECL_OFPROTO_COLLECTION (struct rule *, rule)
 
-void rule_collection_init(struct rule_collection *);
-void rule_collection_add(struct rule_collection *, struct rule *);
-void rule_collection_remove(struct rule_collection *, struct rule *);
-void rule_collection_move(struct rule_collection *to,
-                          struct rule_collection *from);
-void rule_collection_ref(struct rule_collection *) OVS_REQUIRES(ofproto_mutex);
-void rule_collection_unref(struct rule_collection *);
-void rule_collection_destroy(struct rule_collection *);
+#define RULE_COLLECTION_FOR_EACH(RULE, RULES)                           \
+    for (size_t i__ = 0;                                                \
+         i__ < rule_collection_n(RULES)                                 \
+             ? (RULE = rule_collection_rules(RULES)[i__]) != NULL : false; \
+         i__++)
+
+/* Pairwise iteration through two rule collections that must be of the same
+ * size. */
+#define RULE_COLLECTIONS_FOR_EACH(RULE1, RULE2, RULES1, RULES2)        \
+    for (size_t i__ = 0;                                               \
+         i__ < rule_collection_n(RULES1)                               \
+             ? ((RULE1 = rule_collection_rules(RULES1)[i__]),          \
+                (RULE2 = rule_collection_rules(RULES2)[i__]) != NULL)  \
+             : false;                                                  \
+         i__++)
 
 /* Limits the number of flows allowed in the datapath. Only affects the
  * ofproto-dpif implementation. */

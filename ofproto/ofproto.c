@@ -2995,7 +2995,7 @@ ofproto_group_unref(struct ofgroup *group)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     if (group && ovs_refcount_unref_relaxed(&group->ref_count) == 1) {
-        ovs_assert(group->rules.n == 0);
+        ovs_assert(rule_collection_n(&group->rules) == 0);
         ovsrcu_postpone(group_destroy_cb, group);
     }
 }
@@ -4045,146 +4045,15 @@ rule_criteria_destroy(struct rule_criteria *criteria)
     cls_rule_destroy(&criteria->cr);
 }
 
-void
-rule_collection_init(struct rule_collection *rules)
-{
-    rules->rules = rules->stub;
-    rules->n = 0;
-    rules->capacity = ARRAY_SIZE(rules->stub);
-}
-
-void
-rule_collection_add(struct rule_collection *rules, struct rule *rule)
-{
-    if (rules->n >= rules->capacity) {
-        size_t old_size, new_size;
-
-        old_size = rules->capacity * sizeof *rules->rules;
-        rules->capacity *= 2;
-        new_size = rules->capacity * sizeof *rules->rules;
-
-        if (rules->rules == rules->stub) {
-            rules->rules = xmalloc(new_size);
-            memcpy(rules->rules, rules->stub, old_size);
-        } else {
-            rules->rules = xrealloc(rules->rules, new_size);
-        }
-    }
-
-    rules->rules[rules->n++] = rule;
-}
-
-void
-rule_collection_remove(struct rule_collection *rules, struct rule *rule)
-{
-    size_t i;
-
-    for (i = 0; i < rules->n; i++) {
-        if (rules->rules[i] == rule) {
-            break;
-        }
-    }
-    if (i == rules->n) {
-        return;
-    }
-
-    rules->n--;
-    /* Swap the last item in if needed. */
-    if (i != rules->n) {
-        rules->rules[i] = rules->rules[rules->n];
-    }
-
-    /* Shrink? Watermark at '/ 4' to get hysteresis and leave spare
-     * capacity. */
-    if (rules->rules != rules->stub && rules->n <= rules->capacity / 4) {
-        size_t actual_size, new_size;
-
-        actual_size = rules->n * sizeof *rules->rules;
-        rules->capacity /= 2;
-        new_size = rules->capacity * sizeof *rules->rules;
-
-        if (new_size <= sizeof(rules->stub)) {
-            memcpy(rules->stub, rules->rules, actual_size);
-            free(rules->rules);
-            rules->rules = rules->stub;
-        } else {
-            rules->rules = xrealloc(rules->rules, new_size);
-        }
-    }
-}
-
-void
-rule_collection_move(struct rule_collection *to, struct rule_collection *from)
-{
-    ovs_assert(to->n == 0);
-
-    *to = *from;
-    if (from->rules == from->stub) {
-        to->rules = to->stub;
-    }
-    rule_collection_init(from);
-}
-
-void
-rule_collection_ref(struct rule_collection *rules)
-    OVS_REQUIRES(ofproto_mutex)
-{
-    size_t i;
-
-    for (i = 0; i < rules->n; i++) {
-        ofproto_rule_ref(rules->rules[i]);
-    }
-}
-
-void
-rule_collection_unref(struct rule_collection *rules)
-{
-    size_t i;
-
-    for (i = 0; i < rules->n; i++) {
-        ofproto_rule_unref(rules->rules[i]);
-    }
-}
-
-/* Returns a NULL-terminated array of rule pointers,
- * destroys 'rules'. */
-static struct rule **
-rule_collection_detach(struct rule_collection *rules)
-{
-    struct rule **rule_array;
-
-    rule_collection_add(rules, NULL);
-
-    if (rules->rules == rules->stub) {
-        rules->rules = xmemdup(rules->rules, rules->n * sizeof *rules->rules);
-    }
-
-    rule_array = rules->rules;
-    rule_collection_init(rules);
-
-    return rule_array;
-}
-
-void
-rule_collection_destroy(struct rule_collection *rules)
-{
-    if (rules->rules != rules->stub) {
-        free(rules->rules);
-    }
-
-    /* Make repeated destruction harmless. */
-    rule_collection_init(rules);
-}
-
 /* Schedules postponed removal of rules, destroys 'rules'. */
 static void
 remove_rules_postponed(struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
-    if (rules->n > 0) {
-        if (rules->n == 1) {
-            ovsrcu_postpone(remove_rule_rcu, rules->rules[0]);
-            rules->n = 0;
+    if (rule_collection_n(rules) > 0) {
+        if (rule_collection_n(rules) == 1) {
+            ovsrcu_postpone(remove_rule_rcu, rule_collection_rules(rules)[0]);
+            rule_collection_init(rules);
         } else {
             ovsrcu_postpone(remove_rules_rcu, rule_collection_detach(rules));
         }
@@ -4266,7 +4135,7 @@ collect_rules_loose(struct ofproto *ofproto,
     }
 
 exit:
-    if (!error && !rules->n && n_readonly) {
+    if (!error && !rule_collection_n(rules) && n_readonly) {
         /* We didn't find any rules to modify.  We did find some read-only
          * rules that we're not allowed to modify, so report that. */
         error = OFPERR_OFPBRC_EPERM;
@@ -4324,7 +4193,7 @@ collect_rules_strict(struct ofproto *ofproto,
     }
 
 exit:
-    if (!error && !rules->n && n_readonly) {
+    if (!error && !rule_collection_n(rules) && n_readonly) {
         /* We didn't find any rules to modify.  We did find some read-only
          * rules that we're not allowed to modify, so report that. */
         error = OFPERR_OFPBRC_EPERM;
@@ -4356,7 +4225,6 @@ handle_flow_stats_request(struct ofconn *ofconn,
     struct rule_collection rules;
     struct ovs_list replies;
     enum ofperr error;
-    size_t i;
 
     error = ofputil_decode_flow_stats_request(&fsr, request);
     if (error) {
@@ -4380,8 +4248,8 @@ handle_flow_stats_request(struct ofconn *ofconn,
     }
 
     ofpmp_init(&replies, request);
-    for (i = 0; i < rules.n; i++) {
-        struct rule *rule = rules.rules[i];
+    struct rule *rule;
+    RULE_COLLECTION_FOR_EACH (rule, &rules) {
         long long int now = time_msec();
         struct ofputil_flow_stats fs;
         long long int created, used, modified;
@@ -4520,7 +4388,6 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     struct rule_collection rules;
     struct ofpbuf *reply;
     enum ofperr error;
-    size_t i;
 
     error = ofputil_decode_flow_stats_request(&request, oh);
     if (error) {
@@ -4545,8 +4412,9 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
 
     memset(&stats, 0, sizeof stats);
     unknown_packets = unknown_bytes = false;
-    for (i = 0; i < rules.n; i++) {
-        struct rule *rule = rules.rules[i];
+
+    struct rule *rule;
+    RULE_COLLECTION_FOR_EACH (rule, &rules) {
         uint64_t packet_count;
         uint64_t byte_count;
         long long int used;
@@ -4763,8 +4631,8 @@ add_flow_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofputil_flow_mod *fm = &ofm->fm;
-    struct rule **old_rule = &ofm->old_rules.stub[0];
-    struct rule **new_rule = &ofm->new_rules.stub[0];
+    struct rule **old_rule = rule_collection_stub(&ofm->old_rules);
+    struct rule **new_rule = rule_collection_stub(&ofm->new_rules);
     struct oftable *table;
     struct cls_rule cr;
     struct rule *rule;
@@ -4862,8 +4730,8 @@ add_flow_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofputil_flow_mod *fm = &ofm->fm;
-    struct rule *old_rule = ofm->old_rules.stub[0];
-    struct rule *new_rule = ofm->new_rules.stub[0];
+    struct rule *old_rule = rule_collection_stub(&ofm->old_rules)[0];
+    struct rule *new_rule = rule_collection_stub(&ofm->new_rules)[0];
 
     if (old_rule && fm->delete_reason == OFPRR_EVICTION) {
         /* Revert the eviction. */
@@ -4880,8 +4748,8 @@ add_flow_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofputil_flow_mod *fm = &ofm->fm;
-    struct rule *old_rule = ofm->old_rules.stub[0];
-    struct rule *new_rule = ofm->new_rules.stub[0];
+    struct rule *old_rule = rule_collection_stub(&ofm->old_rules)[0];
+    struct rule *new_rule = rule_collection_stub(&ofm->new_rules)[0];
     struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
 
     replace_rule_finish(ofproto, fm, req, old_rule, new_rule, &dead_cookies);
@@ -5103,14 +4971,13 @@ modify_flows_start__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
 
     rule_collection_init(new_rules);
 
-    if (old_rules->n > 0) {
+    if (rule_collection_n(old_rules) > 0) {
         struct cls_conjunction *conjs;
         size_t n_conjs;
-        size_t i;
 
         /* Create a new 'modified' rule for each old rule. */
-        for (i = 0; i < old_rules->n; i++) {
-            struct rule *old_rule = old_rules->rules[i];
+        struct rule *old_rule;
+        RULE_COLLECTION_FOR_EACH (old_rule, old_rules) {
             struct rule *new_rule;
             struct cls_rule cr;
 
@@ -5125,12 +4992,14 @@ modify_flows_start__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
                 return error;
             }
         }
-        ovs_assert(new_rules->n == old_rules->n);
+        ovs_assert(rule_collection_n(new_rules)
+                   == rule_collection_n(old_rules));
 
         get_conjunctions(fm, &conjs, &n_conjs);
-        for (i = 0; i < old_rules->n; i++) {
-            replace_rule_start(ofproto, ofm->version, old_rules->rules[i],
-                               new_rules->rules[i], conjs, n_conjs);
+        struct rule *new_rule;
+        RULE_COLLECTIONS_FOR_EACH (old_rule, new_rule, old_rules, new_rules) {
+            replace_rule_start(ofproto, ofm->version, old_rule, new_rule,
+                               conjs, n_conjs);
         }
         free(conjs);
     } else if (!(fm->cookie_mask != htonll(0)
@@ -5139,9 +5008,9 @@ modify_flows_start__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
         error = add_flow_start(ofproto, ofm);
         if (!error) {
             ovs_assert(fm->delete_reason == OFPRR_EVICTION
-                       || !old_rules->rules[0]);
+                       || !rule_collection_rules(old_rules)[0]);
         }
-        new_rules->n = 1;
+        new_rules->collection.n = 1;
     } else {
         error = 0;
     }
@@ -5188,12 +5057,13 @@ modify_flows_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     struct rule_collection *new_rules = &ofm->new_rules;
 
     /* Old rules were not changed yet, only need to revert new rules. */
-    if (old_rules->n == 0 && new_rules->n == 1) {
+    if (rule_collection_n(old_rules) == 0
+        && rule_collection_n(new_rules) == 1) {
         add_flow_revert(ofproto, ofm);
-    } else if (old_rules->n > 0) {
-        for (size_t i = 0; i < old_rules->n; i++) {
-            replace_rule_revert(ofproto, old_rules->rules[i],
-                                new_rules->rules[i]);
+    } else if (rule_collection_n(old_rules) > 0) {
+        struct rule *old_rule, *new_rule;
+        RULE_COLLECTIONS_FOR_EACH (old_rule, new_rule, old_rules, new_rules) {
+            replace_rule_revert(ofproto, old_rule, new_rule);
         }
         rule_collection_destroy(new_rules);
         rule_collection_destroy(old_rules);
@@ -5209,21 +5079,25 @@ modify_flows_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
     struct rule_collection *old_rules = &ofm->old_rules;
     struct rule_collection *new_rules = &ofm->new_rules;
 
-    if (old_rules->n == 0 && new_rules->n == 1) {
+    if (rule_collection_n(old_rules) == 0
+        && rule_collection_n(new_rules) == 1) {
         add_flow_finish(ofproto, ofm, req);
-    } else if (old_rules->n > 0) {
+    } else if (rule_collection_n(old_rules) > 0) {
         struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
 
-        ovs_assert(new_rules->n == old_rules->n);
+        ovs_assert(rule_collection_n(new_rules)
+                   == rule_collection_n(old_rules));
 
-        for (size_t i = 0; i < old_rules->n; i++) {
-            replace_rule_finish(ofproto, fm, req, old_rules->rules[i],
-                                new_rules->rules[i], &dead_cookies);
+        struct rule *old_rule, *new_rule;
+        RULE_COLLECTIONS_FOR_EACH (old_rule, new_rule, old_rules, new_rules) {
+            replace_rule_finish(ofproto, fm, req, old_rule, new_rule,
+                                &dead_cookies);
         }
         learned_cookies_flush(ofproto, &dead_cookies);
         remove_rules_postponed(old_rules);
 
-        send_buffered_packet(req, fm->buffer_id, new_rules->rules[0]);
+        send_buffered_packet(req, fm->buffer_id,
+                             rule_collection_rules(new_rules)[0]);
         rule_collection_destroy(new_rules);
     }
 }
@@ -5265,8 +5139,9 @@ delete_flows_start__(struct ofproto *ofproto, ovs_version_t version,
                      const struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
-    for (size_t i = 0; i < rules->n; i++) {
-        struct rule *rule = rules->rules[i];
+    struct rule *rule;
+
+    RULE_COLLECTION_FOR_EACH (rule, rules) {
         struct oftable *table = &ofproto->tables[rule->table_id];
 
         table->n_flows--;
@@ -5284,12 +5159,11 @@ delete_flows_finish__(struct ofproto *ofproto,
                       const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
-    if (rules->n) {
+    if (rule_collection_n(rules)) {
         struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
+        struct rule *rule;
 
-        for (size_t i = 0; i < rules->n; i++) {
-            struct rule *rule = rules->rules[i];
-
+        RULE_COLLECTION_FOR_EACH (rule, rules) {
             /* This value will be used to send the flow removed message right
              * before the rule is actually destroyed. */
             rule->removed_reason = reason;
@@ -5319,8 +5193,8 @@ delete_flows__(struct rule_collection *rules,
                const struct flow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
-    if (rules->n) {
-        struct ofproto *ofproto = rules->rules[0]->ofproto;
+    if (rule_collection_n(rules)) {
+        struct ofproto *ofproto = rule_collection_rules(rules)[0]->ofproto;
 
         delete_flows_start__(ofproto, ofproto->tables_version + 1, rules);
         ofproto_bump_tables_version(ofproto);
@@ -5359,9 +5233,9 @@ delete_flows_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule_collection *rules = &ofm->old_rules;
+    struct rule *rule;
 
-    for (size_t i = 0; i < rules->n; i++) {
-        struct rule *rule = rules->rules[i];
+    RULE_COLLECTION_FOR_EACH (rule, rules) {
         struct oftable *table = &ofproto->tables[rule->table_id];
 
         /* Add rule back to ofproto data structures. */
@@ -5451,9 +5325,8 @@ ofproto_rule_expire(struct rule *rule, uint8_t reason)
 {
     struct rule_collection rules;
 
-    rules.rules = rules.stub;
-    rules.n = 1;
-    rules.stub[0] = rule;
+    rule_collection_init(&rules);
+    rule_collection_add(&rules, rule);
     delete_flows__(&rules, reason, NULL);
 }
 
@@ -5728,10 +5601,9 @@ ofmonitor_compose_refresh_updates(struct rule_collection *rules,
                                   struct ovs_list *msgs)
     OVS_REQUIRES(ofproto_mutex)
 {
-    size_t i;
+    struct rule *rule;
 
-    for (i = 0; i < rules->n; i++) {
-        struct rule *rule = rules->rules[i];
+    RULE_COLLECTION_FOR_EACH (rule, rules) {
         enum nx_flow_monitor_flags flags = rule->monitor_flags;
         rule->monitor_flags = 0;
 
@@ -6323,7 +6195,7 @@ append_group_stats(struct ofgroup *group, struct ovs_list *replies)
     ogs.bucket_stats = xmalloc(group->n_buckets * sizeof *ogs.bucket_stats);
 
     /* Provider sets the packet and byte counts, we do the rest. */
-    ogs.ref_count = group->rules.n;
+    ogs.ref_count = rule_collection_n(&group->rules);
     ogs.n_buckets = group->n_buckets;
 
     error = (ofproto->ofproto_class->group_get_stats
