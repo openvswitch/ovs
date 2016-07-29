@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -62,10 +62,6 @@ struct pvector_entry {
     int priority;
     void *ptr;
 };
-
-/* Writers will preallocate space for some entries at the end to avoid future
- * reallocations. */
-enum { PVECTOR_EXTRA_ALLOC = 4 };
 
 struct pvector_impl {
     size_t size;       /* Number of entries in the vector. */
