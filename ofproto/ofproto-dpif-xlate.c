@@ -1503,7 +1503,8 @@ group_is_alive(const struct xlate_ctx *ctx, uint32_t group_id, int depth)
 {
     struct group_dpif *group;
 
-    group = group_dpif_lookup(ctx->xbridge->ofproto, group_id, false);
+    group = group_dpif_lookup(ctx->xbridge->ofproto, group_id,
+                              ctx->tables_version, false);
     if (group) {
         return group_first_live_bucket(ctx, group, depth) != NULL;
     }
@@ -3611,7 +3612,7 @@ xlate_group_action(struct xlate_ctx *ctx, uint32_t group_id)
 
         /* Take ref only if xcache exists. */
         group = group_dpif_lookup(ctx->xbridge->ofproto, group_id,
-                                  ctx->xin->xcache);
+                                  ctx->tables_version, ctx->xin->xcache);
         if (!group) {
             /* XXX: Should set ctx->error ? */
             return true;

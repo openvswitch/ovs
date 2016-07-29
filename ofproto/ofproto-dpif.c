@@ -4366,10 +4366,10 @@ group_get_stats(const struct ofgroup *group_, struct ofputil_group_stats *ogs)
  * a reference to the group. */
 struct group_dpif *
 group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
-                  bool take_ref)
+                  ovs_version_t version, bool take_ref)
 {
     struct ofgroup *ofgroup = ofproto_group_lookup(&ofproto->up, group_id,
-                                                   take_ref);
+                                                   version, take_ref);
     return ofgroup ? group_dpif_cast(ofgroup) : NULL;
 }
 

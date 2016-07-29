@@ -50,6 +50,7 @@
 #include "openvswitch/shash.h"
 #include "simap.h"
 #include "timeval.h"
+#include "versions.h"
 
 struct match;
 struct ofputil_flow_mod;
@@ -517,6 +518,9 @@ void ofproto_rule_reduce_timeouts(struct rule *rule, uint16_t idle_timeout,
 struct ofgroup {
     struct cmap_node cmap_node; /* In ofproto's "groups" cmap. */
 
+    /* Group versioning. */
+    struct versions versions;
+
     /* Number of references.
      *
      * This is needed to keep track of references to the group in the xlate
@@ -530,7 +534,7 @@ struct ofgroup {
 
     /* No lock is needed to protect the fields below since they are not
      * modified after construction. */
-    const struct ofproto *ofproto;  /* The ofproto that contains this group. */
+    struct ofproto * const ofproto;  /* The ofproto that contains this group. */
     const uint32_t group_id;
     const enum ofp11_group_type type; /* One of OFPGT_*. */
     bool being_deleted;               /* Group removal has begun. */
@@ -547,7 +551,8 @@ struct ofgroup {
 };
 
 struct ofgroup *ofproto_group_lookup(const struct ofproto *ofproto,
-                                      uint32_t group_id, bool take_ref);
+                                     uint32_t group_id, ovs_version_t version,
+                                     bool take_ref);
 
 void ofproto_group_ref(struct ofgroup *);
 bool ofproto_group_try_ref(struct ofgroup *);
@@ -1852,6 +1857,8 @@ struct ofproto_port_mod {
 struct ofproto_group_mod {
     struct ofputil_group_mod gm;
 
+    ovs_version_t version;              /* Version in which changes take
+                                         * effect. */
     struct ofgroup *new_group;          /* New group. */
     struct group_collection old_groups; /* Affected groups. */
 };

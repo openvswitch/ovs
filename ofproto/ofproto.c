@@ -2994,6 +2994,42 @@ ofproto_group_unref(struct ofgroup *group)
     }
 }
 
+static void
+remove_group_rcu__(struct ofgroup *group)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct ofproto *ofproto = group->ofproto;
+
+    ovs_assert(!versions_visible_in_version(&group->versions, OVS_VERSION_MAX));
+
+    cmap_remove(&ofproto->groups, &group->cmap_node,
+                hash_int(group->group_id, 0));
+    ofproto_group_unref(group);
+}
+
+static void
+remove_group_rcu(struct ofgroup *group)
+    OVS_EXCLUDED(ofproto_mutex)
+{
+    ovs_mutex_lock(&ofproto_mutex);
+    remove_group_rcu__(group);
+    ovs_mutex_unlock(&ofproto_mutex);
+}
+
+/* Removes and deletes groups from a NULL-terminated array of group
+ * pointers. */
+static void
+remove_groups_rcu(struct ofgroup **groups)
+    OVS_EXCLUDED(ofproto_mutex)
+{
+    ovs_mutex_lock(&ofproto_mutex);
+    for (struct ofgroup **g = groups; *g; g++) {
+        remove_group_rcu__(*g);
+    }
+    ovs_mutex_unlock(&ofproto_mutex);
+    free(groups);
+}
+
 static uint32_t get_provider_meter_id(const struct ofproto *,
                                       uint32_t of_meter_id);
 
@@ -4050,6 +4086,23 @@ remove_rules_postponed(struct rule_collection *rules)
             rule_collection_init(rules);
         } else {
             ovsrcu_postpone(remove_rules_rcu, rule_collection_detach(rules));
+        }
+    }
+}
+
+/* Schedules postponed removal of groups, destroys 'groups'. */
+static void
+remove_groups_postponed(struct group_collection *groups)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    if (group_collection_n(groups) > 0) {
+        if (group_collection_n(groups) == 1) {
+            ovsrcu_postpone(remove_group_rcu,
+                            group_collection_groups(groups)[0]);
+            group_collection_init(groups);
+        } else {
+            ovsrcu_postpone(remove_groups_rcu,
+                            group_collection_detach(groups));
         }
     }
 }
@@ -6114,13 +6167,15 @@ handle_meter_request(struct ofconn *ofconn, const struct ofp_header *request,
 
 /* Returned group is RCU protected. */
 static struct ofgroup *
-ofproto_group_lookup__(const struct ofproto *ofproto, uint32_t group_id)
+ofproto_group_lookup__(const struct ofproto *ofproto, uint32_t group_id,
+                       ovs_version_t version)
 {
     struct ofgroup *group;
 
     CMAP_FOR_EACH_WITH_HASH (group, cmap_node, hash_int(group_id, 0),
                              &ofproto->groups) {
-        if (group->group_id == group_id) {
+        if (group->group_id == group_id
+            && versions_visible_in_version(&group->versions, version)) {
             return group;
         }
     }
@@ -6134,11 +6189,11 @@ ofproto_group_lookup__(const struct ofproto *ofproto, uint32_t group_id)
  * a reference to the group. */
 struct ofgroup *
 ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id,
-                     bool take_ref)
+                     ovs_version_t version, bool take_ref)
 {
     struct ofgroup *group;
 
-    group = ofproto_group_lookup__(ofproto, group_id);
+    group = ofproto_group_lookup__(ofproto, group_id, version);
     if (group && take_ref) {
         /* Not holding a lock, so it is possible that another thread releases
          * the last reference just before we manage to get one. */
@@ -6152,7 +6207,7 @@ ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id,
 static bool
 ofproto_group_exists(const struct ofproto *ofproto, uint32_t group_id)
 {
-    return ofproto_group_lookup__(ofproto, group_id) != NULL;
+    return ofproto_group_lookup__(ofproto, group_id, OVS_VERSION_MAX) != NULL;
 }
 
 static void
@@ -6218,7 +6273,7 @@ handle_group_request(struct ofconn *ofconn,
             cb(group, &replies);
         }
     } else {
-        group = ofproto_group_lookup__(ofproto, group_id);
+        group = ofproto_group_lookup__(ofproto, group_id, OVS_VERSION_MAX);
         if (group) {
             cb(group, &replies);
         }
@@ -6368,7 +6423,7 @@ handle_queue_get_config_request(struct ofconn *ofconn,
 
 static enum ofperr
 init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
-           struct ofgroup **ofgroup)
+           ovs_version_t version, struct ofgroup **ofgroup)
 {
     enum ofperr error;
     const long long int now = time_msec();
@@ -6386,7 +6441,7 @@ init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
         return OFPERR_OFPGMFC_OUT_OF_GROUPS;
     }
 
-    (*ofgroup)->ofproto = ofproto;
+    *CONST_CAST(struct ofproto **, &(*ofgroup)->ofproto) = ofproto;
     *CONST_CAST(uint32_t *, &((*ofgroup)->group_id)) = gm->group_id;
     *CONST_CAST(enum ofp11_group_type *, &(*ofgroup)->type) = gm->type;
     *CONST_CAST(long long int *, &((*ofgroup)->created)) = now;
@@ -6405,6 +6460,10 @@ init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
     memcpy(CONST_CAST(struct ofputil_group_props *, &(*ofgroup)->props),
            &gm->props, sizeof (struct ofputil_group_props));
     rule_collection_init(&(*ofgroup)->rules);
+
+    /* Make group visible from 'version'. */
+    (*ofgroup)->versions = VERSIONS_INITIALIZER(version,
+                                                OVS_VERSION_NOT_REMOVED);
 
     /* Construct called BEFORE any locks are held. */
     error = ofproto->ofproto_class->group_construct(*ofgroup);
@@ -6435,7 +6494,7 @@ add_group_start(struct ofproto *ofproto, struct ofproto_group_mod *ogm)
     }
 
     /* Allocate new group and initialize it. */
-    error = init_group(ofproto, &ogm->gm, &ogm->new_group);
+    error = init_group(ofproto, &ogm->gm, ogm->version, &ogm->new_group);
     if (!error) {
         /* Insert new group. */
         cmap_insert(&ofproto->groups, &ogm->new_group->cmap_node,
@@ -6561,7 +6620,8 @@ modify_group_start(struct ofproto *ofproto, struct ofproto_group_mod *ogm)
     struct ofgroup *new_group;
     enum ofperr error;
 
-    old_group = ofproto_group_lookup__(ofproto, ogm->gm.group_id);
+    old_group = ofproto_group_lookup__(ofproto, ogm->gm.group_id,
+                                       OVS_VERSION_MAX);
     if (!old_group) {
         return OFPERR_OFPGMFC_UNKNOWN_GROUP;
     }
@@ -6572,7 +6632,7 @@ modify_group_start(struct ofproto *ofproto, struct ofproto_group_mod *ogm)
         return OFPERR_OFPGMFC_OUT_OF_GROUPS;
     }
 
-    error = init_group(ofproto, &ogm->gm, &ogm->new_group);
+    error = init_group(ofproto, &ogm->gm, ogm->version, &ogm->new_group);
     if (error) {
         return error;
     }
@@ -6596,10 +6656,11 @@ modify_group_start(struct ofproto *ofproto, struct ofproto_group_mod *ogm)
 
     group_collection_add(&ogm->old_groups, old_group);
 
-    /* Replace ofgroup in ofproto's groups hash map with new_ofgroup. */
-    cmap_replace(&ofproto->groups, &old_group->cmap_node,
-                 &new_group->cmap_node, hash_int(new_group->group_id, 0));
-
+    /* Mark the old group for deletion. */
+    versions_set_remove_version(&old_group->versions, ogm->version);
+    /* Insert replacement group. */
+    cmap_insert(&ofproto->groups, &new_group->cmap_node,
+                    hash_int(new_group->group_id, 0));
     /* Transfer rules. */
     rule_collection_move(&new_group->rules, &old_group->rules);
 
@@ -6633,8 +6694,8 @@ add_or_modify_group_start(struct ofproto *ofproto,
 }
 
 static void
-delete_group_start(struct ofproto *ofproto, struct group_collection *groups,
-                   struct ofgroup *group)
+delete_group_start(struct ofproto *ofproto, ovs_version_t version,
+                   struct group_collection *groups, struct ofgroup *group)
     OVS_REQUIRES(ofproto_mutex)
 {
     /* Makes flow deletion code leave the rule pointers in 'group->rules'
@@ -6644,9 +6705,9 @@ delete_group_start(struct ofproto *ofproto, struct group_collection *groups,
     group->being_deleted = true;
 
     /* Mark all the referring groups for deletion. */
-    delete_flows_start__(ofproto, ofproto->tables_version + 1,
-                         &group->rules);
+    delete_flows_start__(ofproto, version, &group->rules);
     group_collection_add(groups, group);
+    versions_set_remove_version(&group->versions, version);
     ofproto->n_groups[group->type]--;
 }
 
@@ -6658,11 +6719,7 @@ delete_group_finish(struct ofproto *ofproto, struct ofgroup *group)
      * action. */
     delete_flows_finish__(ofproto, &group->rules, OFPRR_GROUP_DELETE, NULL);
 
-    cmap_remove(&ofproto->groups, &group->cmap_node,
-                hash_int(group->group_id, 0));
-    /* No-one can find this group any more, but current users may
-     * continue to use it. */
-    ofproto_group_unref(group);
+    /* Group removal is postponed by the caller. */
 }
 
 /* Implements OFPGC11_DELETE. */
@@ -6674,16 +6731,15 @@ delete_groups_start(struct ofproto *ofproto, struct ofproto_group_mod *ogm)
 
     if (ogm->gm.group_id == OFPG_ALL) {
         CMAP_FOR_EACH (group, cmap_node, &ofproto->groups) {
-            delete_group_start(ofproto, &ogm->old_groups, group);
+            if (versions_visible_in_version(&group->versions, ogm->version)) {
+                delete_group_start(ofproto, ogm->version, &ogm->old_groups,
+                                   group);
+            }
         }
     } else {
-        CMAP_FOR_EACH_WITH_HASH (group, cmap_node,
-                                 hash_int(ogm->gm.group_id, 0),
-                                 &ofproto->groups) {
-            if (group->group_id == ogm->gm.group_id) {
-                delete_group_start(ofproto, &ogm->old_groups, group);
-                return;
-            }
+        group = ofproto_group_lookup__(ofproto, ogm->gm.group_id, ogm->version);
+        if (group) {
+            delete_group_start(ofproto, ogm->version, &ogm->old_groups, group);
         }
     }
 }
@@ -6743,23 +6799,19 @@ ofproto_group_mod_finish(struct ofproto *ofproto,
     struct ofgroup *new_group = ogm->new_group;
     struct ofgroup *old_group;
 
-    if (!new_group) {
-        /* Delete old groups. */
-        ofproto_bump_tables_version(ofproto);
-        GROUP_COLLECTION_FOR_EACH(old_group, &ogm->old_groups) {
-            delete_group_finish(ofproto, old_group);
-        }
-    } else if (group_collection_n(&ogm->old_groups)) {
+    if (new_group && group_collection_n(&ogm->old_groups)) {
         /* Modify a group. */
         ovs_assert(group_collection_n(&ogm->old_groups) == 1);
-        old_group = group_collection_groups(&ogm->old_groups)[0];
 
         /* XXX: OK to lose old group's stats? */
         ofproto->ofproto_class->group_modify(new_group);
-
-        ofproto_group_unref(old_group);
     }
-    group_collection_destroy(&ogm->old_groups);
+
+    /* Delete old groups. */
+    GROUP_COLLECTION_FOR_EACH(old_group, &ogm->old_groups) {
+        delete_group_finish(ofproto, old_group);
+    }
+    remove_groups_postponed(&ogm->old_groups);
 
     if (req) {
         struct ofputil_requestforward rf;
@@ -6784,7 +6836,9 @@ ofproto_group_delete_all(struct ofproto *ofproto)
     ogm.gm.group_id = OFPG_ALL;
 
     ovs_mutex_lock(&ofproto_mutex);
+    ogm.version = ofproto->tables_version + 1;
     ofproto_group_mod_start(ofproto, &ogm);
+    ofproto_bump_tables_version(ofproto);
     ofproto_group_mod_finish(ofproto, &ogm, NULL);
     ovs_mutex_unlock(&ofproto_mutex);
 }
@@ -6808,9 +6862,12 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 
     ovs_mutex_lock(&ofproto_mutex);
+    ogm.version = ofproto->tables_version + 1;
     error = ofproto_group_mod_start(ofproto, &ogm);
     if (!error) {
         struct openflow_mod_requester req = { ofconn, oh };
+
+        ofproto_bump_tables_version(ofproto);
         ofproto_group_mod_finish(ofproto, &ogm, &req);
     }
     ofmonitor_flush(ofproto->connmgr);
@@ -7941,7 +7998,8 @@ ofproto_rule_insert__(struct ofproto *ofproto, struct rule *rule)
                                         actions->ofpacts_len) {
             struct ofgroup *group;
 
-            group = ofproto_group_lookup(ofproto, a->group_id, false);
+            group = ofproto_group_lookup(ofproto, a->group_id, OVS_VERSION_MAX,
+                                         false);
             ovs_assert(group != NULL);
             group_add_rule(group, rule);
         }
@@ -7980,7 +8038,8 @@ ofproto_rule_remove__(struct ofproto *ofproto, struct rule *rule)
                                         actions->ofpacts_len) {
             struct ofgroup *group;
 
-            group = ofproto_group_lookup(ofproto, a->group_id, false);
+            group = ofproto_group_lookup(ofproto, a->group_id, OVS_VERSION_MAX,
+                                         false);
             ovs_assert(group);
 
             /* Leave the rule for the group that is being deleted, if any,
