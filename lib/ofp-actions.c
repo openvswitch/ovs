@@ -6893,7 +6893,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     case OFPACT_SET_FIELD:
         mf = ofpact_get_SET_FIELD(a)->field;
         /* Require OXM_OF_VLAN_VID to have an existing VLAN header. */
-        if (!mf_are_prereqs_ok(mf, flow) ||
+        if (!mf_are_prereqs_ok(mf, flow, NULL) ||
             (mf->id == MFF_VLAN_VID && !(flow->vlan_tci & htons(VLAN_CFI)))) {
             VLOG_WARN_RL(&rl, "set_field %s lacks correct prerequisities",
                          mf->name);

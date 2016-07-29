@@ -365,97 +365,47 @@ mf_is_mask_valid(const struct mf_field *mf, const union mf_value *mask)
     OVS_NOT_REACHED();
 }
 
-/* Returns true if 'flow' meets the prerequisites for 'mf', false otherwise. */
+/* Returns true if 'flow' meets the prerequisites for 'mf', false otherwise.
+ * Sets inspected bits in 'wc', if non-NULL. */
 bool
-mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow)
+mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow,
+                  struct flow_wildcards *wc)
 {
     switch (mf->prereqs) {
     case MFP_NONE:
         return true;
-
     case MFP_ARP:
-      return (flow->dl_type == htons(ETH_TYPE_ARP) ||
-              flow->dl_type == htons(ETH_TYPE_RARP));
+        return (flow->dl_type == htons(ETH_TYPE_ARP) ||
+                flow->dl_type == htons(ETH_TYPE_RARP));
     case MFP_IPV4:
         return flow->dl_type == htons(ETH_TYPE_IP);
     case MFP_IPV6:
         return flow->dl_type == htons(ETH_TYPE_IPV6);
     case MFP_VLAN_VID:
-        return (flow->vlan_tci & htons(VLAN_CFI)) != 0;
+        return is_vlan(flow, wc);
     case MFP_MPLS:
         return eth_type_mpls(flow->dl_type);
     case MFP_IP_ANY:
         return is_ip_any(flow);
-
     case MFP_TCP:
-        return is_ip_any(flow) && flow->nw_proto == IPPROTO_TCP
-            && !(flow->nw_frag & FLOW_NW_FRAG_LATER);
+        return is_tcp(flow, wc) && !(flow->nw_frag & FLOW_NW_FRAG_LATER);
     case MFP_UDP:
-        return is_ip_any(flow) && flow->nw_proto == IPPROTO_UDP
-            && !(flow->nw_frag & FLOW_NW_FRAG_LATER);
+        return is_udp(flow, wc) && !(flow->nw_frag & FLOW_NW_FRAG_LATER);
     case MFP_SCTP:
-        return is_ip_any(flow) && flow->nw_proto == IPPROTO_SCTP
-            && !(flow->nw_frag & FLOW_NW_FRAG_LATER);
+        return is_sctp(flow, wc) && !(flow->nw_frag & FLOW_NW_FRAG_LATER);
     case MFP_ICMPV4:
-        return is_icmpv4(flow, NULL);
+        return is_icmpv4(flow, wc);
     case MFP_ICMPV6:
-        return is_icmpv6(flow, NULL);
-
+        return is_icmpv6(flow, wc);
     case MFP_ND:
-        return is_nd(flow, NULL);
+        return is_nd(flow, wc);
     case MFP_ND_SOLICIT:
-        return is_nd(flow, NULL) && flow->tp_src == htons(ND_NEIGHBOR_SOLICIT);
+        return is_nd(flow, wc) && flow->tp_src == htons(ND_NEIGHBOR_SOLICIT);
     case MFP_ND_ADVERT:
-        return is_nd(flow, NULL) && flow->tp_src == htons(ND_NEIGHBOR_ADVERT);
+        return is_nd(flow, wc) && flow->tp_src == htons(ND_NEIGHBOR_ADVERT);
     }
 
     OVS_NOT_REACHED();
-}
-
-/* Set field and it's prerequisities in the mask.
- * This is only ever called for writeable 'mf's, but we do not make the
- * distinction here. */
-void
-mf_mask_field_and_prereqs(const struct mf_field *mf, struct flow_wildcards *wc)
-{
-    mf_mask_field_and_prereqs__(mf, &exact_match_mask, wc);
-}
-
-void
-mf_mask_field_and_prereqs__(const struct mf_field *mf,
-                            const union mf_value *mask,
-                            struct flow_wildcards *wc)
-{
-    mf_set_flow_value_masked(mf, &exact_match_mask, mask, &wc->masks);
-
-    switch (mf->prereqs) {
-    case MFP_ND:
-    case MFP_ND_SOLICIT:
-    case MFP_ND_ADVERT:
-        WC_MASK_FIELD(wc, tp_src);
-        WC_MASK_FIELD(wc, tp_dst);
-        /* Fall through. */
-    case MFP_TCP:
-    case MFP_UDP:
-    case MFP_SCTP:
-    case MFP_ICMPV4:
-    case MFP_ICMPV6:
-        /* nw_frag always unwildcarded. */
-        WC_MASK_FIELD(wc, nw_proto);
-        /* Fall through. */
-    case MFP_ARP:
-    case MFP_IPV4:
-    case MFP_IPV6:
-    case MFP_MPLS:
-    case MFP_IP_ANY:
-        /* dl_type always unwildcarded. */
-        break;
-    case MFP_VLAN_VID:
-        WC_MASK_FIELD_MASK(wc, vlan_tci, htons(VLAN_CFI));
-        break;
-    case MFP_NONE:
-        break;
-    }
 }
 
 /* Set bits of 'bm' corresponding to the field 'mf' and it's prerequisities. */
@@ -2039,7 +1989,7 @@ mf_check__(const struct mf_subfield *sf, const struct flow *flow,
                      "of %s field %s", sf->ofs, sf->n_bits,
                      sf->field->n_bits, type, sf->field->name);
         return OFPERR_OFPBAC_BAD_SET_LEN;
-    } else if (flow && !mf_are_prereqs_ok(sf->field, flow)) {
+    } else if (flow && !mf_are_prereqs_ok(sf->field, flow, NULL)) {
         VLOG_WARN_RL(&rl, "%s field %s lacks correct prerequisites",
                      type, sf->field->name);
         return OFPERR_OFPBAC_MATCH_INCONSISTENT;

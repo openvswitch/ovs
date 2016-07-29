@@ -505,7 +505,7 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
                 *cookie = value.be64;
                 *cookie_mask = mask.be64;
             }
-        } else if (!mf_are_prereqs_ok(field, &match->flow)) {
+        } else if (!mf_are_prereqs_ok(field, &match->flow, NULL)) {
             error = OFPERR_OFPBMC_BAD_PREREQ;
         } else if (!mf_is_all_wild(field, &match->wc)) {
             error = OFPERR_OFPBMC_DUP_FIELD;
@@ -1620,16 +1620,23 @@ void
 nxm_execute_reg_move(const struct ofpact_reg_move *move,
                      struct flow *flow, struct flow_wildcards *wc)
 {
-    union mf_value src_value;
-    union mf_value dst_value;
+    /* Check that the fields exist. */
+    if (mf_are_prereqs_ok(move->dst.field, flow, wc)
+        && mf_are_prereqs_ok(move->src.field, flow, wc)) {
+        union mf_value src_value;
+        union mf_value dst_value;
+        union mf_value mask;
 
-    mf_mask_field_and_prereqs(move->dst.field, wc);
-    mf_mask_field_and_prereqs(move->src.field, wc);
+        /* Should only mask the bits affected. */
+        memset(&mask, 0, sizeof mask);
+        bitwise_one(&mask, move->dst.field->n_bytes, move->dst.ofs,
+                    move->src.n_bits);
+        mf_mask_field_masked(move->dst.field, &mask, wc);
 
-    /* A flow may wildcard nw_frag.  Do nothing if setting a transport
-     * header field on a packet that does not have them. */
-    if (mf_are_prereqs_ok(move->dst.field, flow)
-        && mf_are_prereqs_ok(move->src.field, flow)) {
+        memset(&mask, 0, sizeof mask);
+        bitwise_one(&mask, move->src.field->n_bytes, move->src.ofs,
+                    move->src.n_bits);
+        mf_mask_field_masked(move->src.field, &mask, wc);
 
         mf_get_value(move->dst.field, flow, &dst_value);
         mf_get_value(move->src.field, flow, &src_value);

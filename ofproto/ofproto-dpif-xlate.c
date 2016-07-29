@@ -3517,7 +3517,7 @@ xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 
             /* Only hash a field if it and its pre-requisites are present
              * in the flow. */
-            if (!mf_are_prereqs_ok(mf, &ctx->xin->flow)) {
+            if (!mf_are_prereqs_ok(mf, &ctx->xin->flow, ctx->wc)) {
                 continue;
             }
 
@@ -4935,22 +4935,9 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             set_field = ofpact_get_SET_FIELD(a);
             mf = set_field->field;
 
-            /* Set field action only ever overwrites packet's outermost
-             * applicable header fields.  Do nothing if no header exists. */
-            if (mf->id == MFF_VLAN_VID) {
-                wc->masks.vlan_tci |= htons(VLAN_CFI);
-                if (!(flow->vlan_tci & htons(VLAN_CFI))) {
-                    break;
-                }
-            } else if ((mf->id == MFF_MPLS_LABEL || mf->id == MFF_MPLS_TC)
-                       /* 'dl_type' is already unwildcarded. */
-                       && !eth_type_mpls(flow->dl_type)) {
-                break;
-            }
-            /* A flow may wildcard nw_frag.  Do nothing if setting a transport
-             * header field on a packet that does not have them. */
-            mf_mask_field_and_prereqs__(mf, &set_field->mask, wc);
-            if (mf_are_prereqs_ok(mf, flow)) {
+            /* Set the field only if the packet actually has it. */
+            if (mf_are_prereqs_ok(mf, flow, wc)) {
+                mf_mask_field_masked(mf, &set_field->mask, wc);
                 mf_set_flow_value_masked(mf, &set_field->value,
                                          &set_field->mask, flow);
             }

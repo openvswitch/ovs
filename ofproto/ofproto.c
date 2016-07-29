@@ -7737,7 +7737,7 @@ eviction_group_hash_rule(struct rule *rule)
          sf < &table->eviction_fields[table->n_eviction_fields];
          sf++)
     {
-        if (mf_are_prereqs_ok(sf->field, &flow)) {
+        if (mf_are_prereqs_ok(sf->field, &flow, NULL)) {
             union mf_value value;
 
             mf_get_value(sf->field, &flow, &value);

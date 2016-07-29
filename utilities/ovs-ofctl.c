@@ -1200,8 +1200,10 @@ compare_flows(const void *afs_, const void *bfs_)
         } else {
             bool ina, inb;
 
-            ina = mf_are_prereqs_ok(f, &a->flow) && !mf_is_all_wild(f, &a->wc);
-            inb = mf_are_prereqs_ok(f, &b->flow) && !mf_is_all_wild(f, &b->wc);
+            ina = mf_are_prereqs_ok(f, &a->flow, NULL)
+                && !mf_is_all_wild(f, &a->wc);
+            inb = mf_are_prereqs_ok(f, &b->flow, NULL)
+                && !mf_is_all_wild(f, &b->wc);
             if (ina != inb) {
                 /* Skip the test for sc->order, so that missing fields always
                  * sort to the end whether we're sorting in ascending or

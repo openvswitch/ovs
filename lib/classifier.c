@@ -1973,7 +1973,7 @@ trie_lookup(const struct cls_trie *trie, const struct flow *flow,
     /* Check that current flow matches the prerequisites for the trie
      * field.  Some match fields are used for multiple purposes, so we
      * must check that the trie is relevant for this flow. */
-    if (mf_are_prereqs_ok(mf, flow)) {
+    if (mf_are_prereqs_ok(mf, flow, NULL)) {
         return trie_lookup_value(&trie->root,
                                  &((ovs_be32 *)flow)[mf->flow_be32ofs],
                                  &plens->be32, mf->n_bits);

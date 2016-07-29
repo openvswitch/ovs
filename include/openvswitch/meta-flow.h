@@ -2060,12 +2060,8 @@ void mf_get_mask(const struct mf_field *, const struct flow_wildcards *,
                  union mf_value *mask);
 
 /* Prerequisites. */
-bool mf_are_prereqs_ok(const struct mf_field *, const struct flow *);
-void mf_mask_field_and_prereqs(const struct mf_field *,
-                               struct flow_wildcards *);
-void mf_mask_field_and_prereqs__(const struct mf_field *,
-                                 const union mf_value *,
-                                 struct flow_wildcards *);
+bool mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow,
+                       struct flow_wildcards *wc);
 void mf_bitmap_set_field_and_prereqs(const struct mf_field *mf, struct
                                      mf_bitmap *bm);
 

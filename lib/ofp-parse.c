@@ -1169,7 +1169,7 @@ parse_ofp_exact_flow(struct flow *flow, struct flow_wildcards *wc,
                 goto exit;
             }
 
-            if (!mf_are_prereqs_ok(mf, flow)) {
+            if (!mf_are_prereqs_ok(mf, flow, NULL)) {
                 error = xasprintf("%s: prerequisites not met for setting %s",
                                   s, key);
                 goto exit;
