@@ -8205,7 +8205,6 @@ void
 ofputil_uninit_group_desc(struct ofputil_group_desc *gd)
 {
     ofputil_bucket_list_destroy(&gd->buckets);
-    free(&gd->props.fields);
 }
 
 /* Decodes the OpenFlow group description request in 'oh', returning the group
