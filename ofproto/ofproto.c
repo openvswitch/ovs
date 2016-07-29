@@ -252,13 +252,13 @@ static void ofproto_rule_insert__(struct ofproto *, struct rule *)
 static void ofproto_rule_remove__(struct ofproto *, struct rule *)
     OVS_REQUIRES(ofproto_mutex);
 
-/* The source of a flow_mod request, in the code that processes flow_mods.
+/* The source of an OpenFlow request.
  *
- * A flow table modification request can be generated externally, via OpenFlow,
- * or internally through a function call.  This structure indicates the source
- * of an OpenFlow-generated flow_mod.  For an internal flow_mod, it isn't
- * meaningful and thus supplied as NULL. */
-struct flow_mod_requester {
+ * A table modification request can be generated externally, via OpenFlow, or
+ * internally through a function call.  This structure indicates the source of
+ * an OpenFlow-generated table modification.  For an internal flow_mod, it
+ * isn't meaningful and thus supplied as NULL. */
+struct openflow_mod_requester {
     struct ofconn *ofconn;      /* Connection on which flow_mod arrived. */
     const struct ofp_header *request;
 };
@@ -281,16 +281,16 @@ static void replace_rule_revert(struct ofproto *, struct rule *old_rule,
     OVS_REQUIRES(ofproto_mutex);
 
 static void replace_rule_finish(struct ofproto *, struct ofputil_flow_mod *,
-                                const struct flow_mod_requester *,
+                                const struct openflow_mod_requester *,
                                 struct rule *old_rule, struct rule *new_rule,
                                 struct ovs_list *dead_cookies)
     OVS_REQUIRES(ofproto_mutex);
 static void delete_flows__(struct rule_collection *,
                            enum ofp_flow_removed_reason,
-                           const struct flow_mod_requester *)
+                           const struct openflow_mod_requester *)
     OVS_REQUIRES(ofproto_mutex);
 
-static void send_buffered_packet(const struct flow_mod_requester *,
+static void send_buffered_packet(const struct openflow_mod_requester *,
                                  uint32_t buffer_id, struct rule *)
     OVS_REQUIRES(ofproto_mutex);
 
@@ -304,11 +304,11 @@ static enum ofperr ofproto_flow_mod_start(struct ofproto *,
     OVS_REQUIRES(ofproto_mutex);
 static void ofproto_flow_mod_finish(struct ofproto *,
                                     struct ofproto_flow_mod *,
-                                    const struct flow_mod_requester *)
+                                    const struct openflow_mod_requester *)
     OVS_REQUIRES(ofproto_mutex);
 static enum ofperr handle_flow_mod__(struct ofproto *,
                                      struct ofproto_flow_mod *,
-                                     const struct flow_mod_requester *)
+                                     const struct openflow_mod_requester *)
     OVS_EXCLUDED(ofproto_mutex);
 static void calc_duration(long long int start, long long int now,
                           uint32_t *sec, uint32_t *nsec);
@@ -4744,7 +4744,7 @@ add_flow_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
 /* To be called after version bump. */
 static void
 add_flow_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
-                const struct flow_mod_requester *req)
+                const struct openflow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofputil_flow_mod *fm = &ofm->fm;
@@ -4905,7 +4905,7 @@ replace_rule_revert(struct ofproto *ofproto,
 /* Adds the 'new_rule', replacing the 'old_rule'. */
 static void
 replace_rule_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
-                    const struct flow_mod_requester *req,
+                    const struct openflow_mod_requester *req,
                     struct rule *old_rule, struct rule *new_rule,
                     struct ovs_list *dead_cookies)
     OVS_REQUIRES(ofproto_mutex)
@@ -5072,7 +5072,7 @@ modify_flows_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
 
 static void
 modify_flows_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
-                    const struct flow_mod_requester *req)
+                    const struct openflow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct ofputil_flow_mod *fm = &ofm->fm;
@@ -5156,7 +5156,7 @@ static void
 delete_flows_finish__(struct ofproto *ofproto,
                       struct rule_collection *rules,
                       enum ofp_flow_removed_reason reason,
-                      const struct flow_mod_requester *req)
+                      const struct openflow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     if (rule_collection_n(rules)) {
@@ -5190,7 +5190,7 @@ delete_flows_finish__(struct ofproto *ofproto,
 static void
 delete_flows__(struct rule_collection *rules,
                enum ofp_flow_removed_reason reason,
-               const struct flow_mod_requester *req)
+               const struct openflow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     if (rule_collection_n(rules)) {
@@ -5253,7 +5253,7 @@ delete_flows_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
 static void
 delete_flows_finish(struct ofproto *ofproto,
                     struct ofproto_flow_mod *ofm,
-                    const struct flow_mod_requester *req)
+                    const struct openflow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     delete_flows_finish__(ofproto, &ofm->old_rules, ofm->fm.delete_reason,
@@ -5387,10 +5387,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
                                     u16_to_ofp(ofproto->max_ports),
                                     ofproto->n_tables);
     if (!error) {
-        struct flow_mod_requester req;
-
-        req.ofconn = ofconn;
-        req.request = oh;
+        struct openflow_mod_requester req = { ofconn, oh };
         error = handle_flow_mod__(ofproto, &ofm, &req);
     }
     if (error) {
@@ -5407,7 +5404,7 @@ exit:
 
 static enum ofperr
 handle_flow_mod__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
-                  const struct flow_mod_requester *req)
+                  const struct openflow_mod_requester *req)
     OVS_EXCLUDED(ofproto_mutex)
 {
     enum ofperr error;
@@ -6956,7 +6953,7 @@ ofproto_flow_mod_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
 static void
 ofproto_flow_mod_finish(struct ofproto *ofproto,
                         struct ofproto_flow_mod *ofm,
-                        const struct flow_mod_requester *req)
+                        const struct openflow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
     switch (ofm->fm.command) {
@@ -7066,7 +7063,8 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
             /* 4. Finish. */
             LIST_FOR_EACH (be, node, &bundle->msg_list) {
                 if (be->type == OFPTYPE_FLOW_MOD) {
-                    struct flow_mod_requester req = { ofconn, be->ofp_msg };
+                    struct openflow_mod_requester req = { ofconn,
+                                                          be->ofp_msg };
 
                     /* Bump the lookup version to the one of the current
                      * message.  This makes all the changes in the bundle at
@@ -7459,8 +7457,8 @@ handle_openflow(struct ofconn *ofconn, const struct ofpbuf *ofp_msg)
 /* Asynchronous operations. */
 
 static void
-send_buffered_packet(const struct flow_mod_requester *req, uint32_t buffer_id,
-                     struct rule *rule)
+send_buffered_packet(const struct openflow_mod_requester *req,
+                     uint32_t buffer_id, struct rule *rule)
     OVS_REQUIRES(ofproto_mutex)
 {
     if (req && req->ofconn && buffer_id != UINT32_MAX) {
