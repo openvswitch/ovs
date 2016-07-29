@@ -4367,9 +4367,11 @@ group_get_stats(const struct ofgroup *group_, struct ofputil_group_stats *ogs)
  * Make sure to call group_dpif_unref() after no longer needing to maintain
  * a reference to the group. */
 struct group_dpif *
-group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id)
+group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
+                  bool take_ref)
 {
-    struct ofgroup *ofgroup = ofproto_group_lookup(&ofproto->up, group_id);
+    struct ofgroup *ofgroup = ofproto_group_lookup(&ofproto->up, group_id,
+                                                   take_ref);
     return ofgroup ? group_dpif_cast(ofgroup) : NULL;
 }
 

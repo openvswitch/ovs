@@ -1503,13 +1503,9 @@ group_is_alive(const struct xlate_ctx *ctx, uint32_t group_id, int depth)
 {
     struct group_dpif *group;
 
-    group = group_dpif_lookup(ctx->xbridge->ofproto, group_id);
+    group = group_dpif_lookup(ctx->xbridge->ofproto, group_id, false);
     if (group) {
-        struct ofputil_bucket *bucket;
-
-        bucket = group_first_live_bucket(ctx, group, depth);
-        group_dpif_unref(group);
-        return bucket != NULL;
+        return group_first_live_bucket(ctx, group, depth) != NULL;
     }
 
     return false;
@@ -3377,6 +3373,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
     }
 }
 
+/* Consumes the group reference, which is only taken if xcache exists. */
 static void
 xlate_group_stats(struct xlate_ctx *ctx, struct group_dpif *group,
                   struct ofputil_bucket *bucket)
@@ -3388,7 +3385,7 @@ xlate_group_stats(struct xlate_ctx *ctx, struct group_dpif *group,
         struct xc_entry *entry;
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_GROUP);
-        entry->u.group.group = group_dpif_ref(group);
+        entry->u.group.group = group;
         entry->u.group.bucket = bucket;
     }
 }
@@ -3466,6 +3463,8 @@ xlate_ff_group(struct xlate_ctx *ctx, struct group_dpif *group)
     if (bucket) {
         xlate_group_bucket(ctx, bucket);
         xlate_group_stats(ctx, group, bucket);
+    } else if (ctx->xin->xcache) {
+        group_dpif_unref(group);
     }
 }
 
@@ -3482,6 +3481,8 @@ xlate_default_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
     if (bucket) {
         xlate_group_bucket(ctx, bucket);
         xlate_group_stats(ctx, group, bucket);
+    } else if (ctx->xin->xcache) {
+        group_dpif_unref(group);
     }
 }
 
@@ -3551,6 +3552,8 @@ xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
     if (bucket) {
         xlate_group_bucket(ctx, bucket);
         xlate_group_stats(ctx, group, bucket);
+    } else if (ctx->xin->xcache) {
+        group_dpif_unref(group);
     }
 }
 
@@ -3596,7 +3599,6 @@ xlate_group_action__(struct xlate_ctx *ctx, struct group_dpif *group)
     default:
         OVS_NOT_REACHED();
     }
-    group_dpif_unref(group);
 
     ctx->in_group = was_in_group;
 }
@@ -3607,7 +3609,9 @@ xlate_group_action(struct xlate_ctx *ctx, uint32_t group_id)
     if (xlate_resubmit_resource_check(ctx)) {
         struct group_dpif *group;
 
-        group = group_dpif_lookup(ctx->xbridge->ofproto, group_id);
+        /* Take ref only if xcache exists. */
+        group = group_dpif_lookup(ctx->xbridge->ofproto, group_id,
+                                  ctx->xin->xcache);
         if (!group) {
             /* XXX: Should set ctx->error ? */
             return true;

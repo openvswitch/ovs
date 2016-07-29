@@ -137,7 +137,7 @@ void group_dpif_credit_stats(struct group_dpif *,
                              struct ofputil_bucket *,
                              const struct dpif_flow_stats *);
 struct group_dpif *group_dpif_lookup(struct ofproto_dpif *ofproto,
-                                     uint32_t group_id);
+                                     uint32_t group_id, bool take_ref);
 const struct ovs_list *group_dpif_get_buckets(const struct group_dpif *group);
 
 enum ofp11_group_type group_dpif_get_type(const struct group_dpif *group);

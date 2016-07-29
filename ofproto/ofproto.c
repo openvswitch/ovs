@@ -6215,17 +6215,18 @@ ofproto_group_lookup__(const struct ofproto *ofproto, uint32_t group_id)
  * Make sure to call ofproto_group_unref() after no longer needing to maintain
  * a reference to the group. */
 struct ofgroup *
-ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id)
+ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id,
+                     bool take_ref)
 {
     struct ofgroup *group;
 
     group = ofproto_group_lookup__(ofproto, group_id);
-    if (group) {
+    if (group && take_ref) {
         /* Not holding a lock, so it is possible that another thread releases
          * the last reference just before we manage to get one. */
         return ofproto_group_try_ref(group) ? group : NULL;
     }
-    return NULL;
+    return group;
 }
 
 /* Caller should hold 'ofproto->groups_rwlock' if it is important that the

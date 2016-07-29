@@ -524,7 +524,7 @@ struct ofgroup {
 };
 
 struct ofgroup *ofproto_group_lookup(const struct ofproto *ofproto,
-                                     uint32_t group_id);
+                                      uint32_t group_id, bool take_ref);
 
 void ofproto_group_ref(struct ofgroup *);
 bool ofproto_group_try_ref(struct ofgroup *);
