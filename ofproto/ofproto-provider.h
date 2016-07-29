@@ -93,7 +93,7 @@ struct ofproto {
     long long int eviction_group_timer; /* For rate limited reheapification. */
     struct oftable *tables;
     int n_tables;
-    cls_version_t tables_version;  /* Controls which rules are visible to
+    ovs_version_t tables_version;  /* Controls which rules are visible to
                                     * table lookups. */
 
     /* Rules indexed on their cookie values, in all flow tables. */
@@ -861,7 +861,7 @@ struct ofproto_class {
      * lookups.  This must be called with a new version number after each set
      * of flow table changes has been completed, so that datapath revalidation
      * can be triggered. */
-    void (*set_tables_version)(struct ofproto *ofproto, cls_version_t version);
+    void (*set_tables_version)(struct ofproto *ofproto, ovs_version_t version);
 
 /* ## ---------------- ## */
 /* ## ofport Functions ## */
@@ -1793,7 +1793,7 @@ int ofproto_class_unregister(const struct ofproto_class *);
 struct ofproto_flow_mod {
     struct ofputil_flow_mod fm;
 
-    cls_version_t version;              /* Version in which changes take
+    ovs_version_t version;              /* Version in which changes take
                                          * effect. */
     struct rule_collection old_rules;   /* Affected rules. */
     struct rule_collection new_rules;   /* Replacement rules. */

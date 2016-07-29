@@ -1009,7 +1009,7 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
             HMAP_FOR_EACH (m, hmap_node, &matches) {
                 test_rule = xmalloc(sizeof *test_rule);
                 cls_rule_init(&test_rule->cr, &m->match, 0);
-                classifier_insert(&cls, &test_rule->cr, CLS_MIN_VERSION,
+                classifier_insert(&cls, &test_rule->cr, OVS_VERSION_MIN,
                                   m->conjunctions, m->n);
             }
         }
@@ -1053,7 +1053,7 @@ test_tree_shape_exhaustively(struct expr *expr, struct shash *symtab,
                     f.regs[n_nvars + i] = ((subst >> (n_nvars * n_bits + i))
                                            & 1);
                 }
-                bool found = classifier_lookup(&cls, CLS_MIN_VERSION,
+                bool found = classifier_lookup(&cls, OVS_VERSION_MIN,
                                                &f, NULL) != NULL;
                 if (expected != found) {
                     struct ds expr_s, modified_s;

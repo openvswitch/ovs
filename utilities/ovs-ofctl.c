@@ -2867,7 +2867,7 @@ fte_insert(struct flow_tables *tables, const struct match *match,
     fte->versions[index] = version;
 
     old = fte_from_cls_rule(classifier_replace(cls, &fte->rule,
-                                               CLS_MIN_VERSION, NULL, 0));
+                                               OVS_VERSION_MIN, NULL, 0));
     if (old) {
         fte->versions[!index] = old->versions[!index];
         old->versions[!index] = NULL;

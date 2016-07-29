@@ -304,6 +304,7 @@
 #include "pvector.h"
 #include "rculist.h"
 #include "openvswitch/type-props.h"
+#include "versions.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -321,12 +322,6 @@ struct cls_trie {
     const struct mf_field *field; /* Trie field, or NULL. */
     rcu_trie_ptr root;            /* NULL if none. */
 };
-
-typedef uint64_t cls_version_t;
-
-#define CLS_MIN_VERSION 0                  /* Default version number to use. */
-#define CLS_MAX_VERSION (TYPE_MAXIMUM(cls_version_t) - 1)
-#define CLS_NOT_REMOVED_VERSION TYPE_MAXIMUM(cls_version_t)
 
 enum {
     CLS_MAX_INDICES = 3,   /* Maximum number of lookup indices per subtable. */
@@ -381,15 +376,15 @@ void cls_rule_destroy(struct cls_rule *);
 void cls_rule_set_conjunctions(struct cls_rule *,
                                const struct cls_conjunction *, size_t n);
 void cls_rule_make_invisible_in_version(const struct cls_rule *,
-                                        cls_version_t);
+                                        ovs_version_t);
 void cls_rule_restore_visibility(const struct cls_rule *);
 
 void classifier_insert(struct classifier *, const struct cls_rule *,
-                       cls_version_t, const struct cls_conjunction *,
+                       ovs_version_t, const struct cls_conjunction *,
                        size_t n_conjunctions);
 const struct cls_rule *classifier_replace(struct classifier *,
                                           const struct cls_rule *,
-                                          cls_version_t,
+                                          ovs_version_t,
                                           const struct cls_conjunction *,
                                           size_t n_conjunctions);
 const struct cls_rule *classifier_remove(struct classifier *,
@@ -400,17 +395,17 @@ static inline void classifier_publish(struct classifier *);
 /* Lookups.  These are RCU protected and may run concurrently with modifiers
  * and each other. */
 const struct cls_rule *classifier_lookup(const struct classifier *,
-                                         cls_version_t, struct flow *,
+                                         ovs_version_t, struct flow *,
                                          struct flow_wildcards *);
 bool classifier_rule_overlaps(const struct classifier *,
-                              const struct cls_rule *, cls_version_t);
+                              const struct cls_rule *, ovs_version_t);
 const struct cls_rule *classifier_find_rule_exactly(const struct classifier *,
                                                     const struct cls_rule *,
-                                                    cls_version_t);
+                                                    ovs_version_t);
 const struct cls_rule *classifier_find_match_exactly(const struct classifier *,
                                                      const struct match *,
                                                      int priority,
-                                                     cls_version_t);
+                                                     ovs_version_t);
 bool classifier_is_empty(const struct classifier *);
 int classifier_count(const struct classifier *);
 
@@ -421,7 +416,7 @@ void cls_rule_format(const struct cls_rule *, struct ds *);
 bool cls_rule_is_catchall(const struct cls_rule *);
 bool cls_rule_is_loose_match(const struct cls_rule *rule,
                              const struct minimatch *criteria);
-bool cls_rule_visible_in_version(const struct cls_rule *, cls_version_t);
+bool cls_rule_visible_in_version(const struct cls_rule *, ovs_version_t);
 
 /* Iteration.
  *
@@ -439,18 +434,18 @@ struct cls_cursor {
     const struct classifier *cls;
     const struct cls_subtable *subtable;
     const struct cls_rule *target;
-    cls_version_t version;   /* Version to iterate. */
+    ovs_version_t version;   /* Version to iterate. */
     struct pvector_cursor subtables;
     const struct cls_rule *rule;
 };
 
 struct cls_cursor cls_cursor_start(const struct classifier *,
                                    const struct cls_rule *target,
-                                   cls_version_t);
+                                   ovs_version_t);
 void cls_cursor_advance(struct cls_cursor *);
 
 #define CLS_FOR_EACH(RULE, MEMBER, CLS)             \
-    CLS_FOR_EACH_TARGET(RULE, MEMBER, CLS, NULL, CLS_MAX_VERSION)
+    CLS_FOR_EACH_TARGET(RULE, MEMBER, CLS, NULL, OVS_VERSION_MAX)
 #define CLS_FOR_EACH_TARGET(RULE, MEMBER, CLS, TARGET, VERSION)         \
     for (struct cls_cursor cursor__ = cls_cursor_start(CLS, TARGET, VERSION); \
          (cursor__.rule                                                 \

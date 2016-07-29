@@ -84,7 +84,7 @@ cls_conjunction_set_alloc(struct cls_match *match,
 }
 
 static struct cls_match *
-cls_match_alloc(const struct cls_rule *rule, cls_version_t version,
+cls_match_alloc(const struct cls_rule *rule, ovs_version_t version,
                 const struct cls_conjunction conj[], size_t n)
 {
     size_t count = miniflow_n_values(rule->match.flow);
@@ -95,9 +95,8 @@ cls_match_alloc(const struct cls_rule *rule, cls_version_t version,
     ovsrcu_init(&cls_match->next, NULL);
     *CONST_CAST(const struct cls_rule **, &cls_match->cls_rule) = rule;
     *CONST_CAST(int *, &cls_match->priority) = rule->priority;
-    *CONST_CAST(cls_version_t *, &cls_match->add_version) = version;
-    atomic_init(&cls_match->remove_version, version);   /* Initially
-                                                         * invisible. */
+    /* Make rule initially invisible. */
+    cls_match->versions = VERSIONS_INITIALIZER(version, version);
     miniflow_clone(CONST_CAST(struct miniflow *, &cls_match->flow),
                    rule->match.flow, count);
     ovsrcu_set_hidden(&cls_match->conj_set,
@@ -113,7 +112,7 @@ static struct cls_subtable *insert_subtable(struct classifier *cls,
 static void destroy_subtable(struct classifier *cls, struct cls_subtable *);
 
 static const struct cls_match *find_match_wc(const struct cls_subtable *,
-                                             cls_version_t version,
+                                             ovs_version_t version,
                                              const struct flow *,
                                              struct trie_ctx *,
                                              unsigned int n_tries,
@@ -126,7 +125,7 @@ static struct cls_match *find_equal(const struct cls_subtable *,
  * versioning is used at most one of them is ever visible for lookups on any
  * given 'version'. */
 static inline const struct cls_match *
-next_visible_rule_in_list(const struct cls_match *rule, cls_version_t version)
+next_visible_rule_in_list(const struct cls_match *rule, ovs_version_t version)
 {
     do {
         rule = cls_match_next(rule);
@@ -288,11 +287,11 @@ cls_rule_is_catchall(const struct cls_rule *rule)
  * This may only be called by the exclusive writer. */
 void
 cls_rule_make_invisible_in_version(const struct cls_rule *rule,
-                                   cls_version_t remove_version)
+                                   ovs_version_t remove_version)
 {
     struct cls_match *cls_match = get_cls_match_protected(rule);
 
-    ovs_assert(remove_version >= cls_match->add_version);
+    ovs_assert(remove_version >= cls_match->versions.add_version);
 
     cls_match_set_remove_version(cls_match, remove_version);
 }
@@ -305,14 +304,14 @@ void
 cls_rule_restore_visibility(const struct cls_rule *rule)
 {
     cls_match_set_remove_version(get_cls_match_protected(rule),
-                                 CLS_NOT_REMOVED_VERSION);
+                                 OVS_VERSION_NOT_REMOVED);
 }
 
 /* Return true if 'rule' is visible in 'version'.
  *
  * 'rule' must be in a classifier. */
 bool
-cls_rule_visible_in_version(const struct cls_rule *rule, cls_version_t version)
+cls_rule_visible_in_version(const struct cls_rule *rule, ovs_version_t version)
 {
     struct cls_match *cls_match = get_cls_match(rule);
 
@@ -516,7 +515,7 @@ static inline ovs_be32 minimatch_get_ports(const struct minimatch *match)
  */
 const struct cls_rule *
 classifier_replace(struct classifier *cls, const struct cls_rule *rule,
-                   cls_version_t version,
+                   ovs_version_t version,
                    const struct cls_conjunction *conjs, size_t n_conjs)
 {
     struct cls_match *new;
@@ -627,7 +626,7 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
                 /* No change in subtable's max priority or max count. */
 
                 /* Make 'new' visible to lookups in the appropriate version. */
-                cls_match_set_remove_version(new, CLS_NOT_REMOVED_VERSION);
+                cls_match_set_remove_version(new, OVS_VERSION_NOT_REMOVED);
 
                 /* Make rule visible to iterators (immediately). */
                 rculist_replace(CONST_CAST(struct rculist *, &rule->node),
@@ -644,7 +643,7 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
     }
 
     /* Make 'new' visible to lookups in the appropriate version. */
-    cls_match_set_remove_version(new, CLS_NOT_REMOVED_VERSION);
+    cls_match_set_remove_version(new, OVS_VERSION_NOT_REMOVED);
 
     /* Make rule visible to iterators (immediately). */
     rculist_push_back(&subtable->rules_list,
@@ -686,7 +685,7 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
  * such a rule. */
 void
 classifier_insert(struct classifier *cls, const struct cls_rule *rule,
-                  cls_version_t version, const struct cls_conjunction conj[],
+                  ovs_version_t version, const struct cls_conjunction conj[],
                   size_t n_conj)
 {
     const struct cls_rule *displaced_rule
@@ -929,7 +928,7 @@ free_conjunctive_matches(struct hmap *matches,
  * 'flow' is non-const to allow for temporary modifications during the lookup.
  * Any changes are restored before returning. */
 static const struct cls_rule *
-classifier_lookup__(const struct classifier *cls, cls_version_t version,
+classifier_lookup__(const struct classifier *cls, ovs_version_t version,
                     struct flow *flow, struct flow_wildcards *wc,
                     bool allow_conjunctive_matches)
 {
@@ -1157,7 +1156,7 @@ classifier_lookup__(const struct classifier *cls, cls_version_t version,
  * 'flow' is non-const to allow for temporary modifications during the lookup.
  * Any changes are restored before returning. */
 const struct cls_rule *
-classifier_lookup(const struct classifier *cls, cls_version_t version,
+classifier_lookup(const struct classifier *cls, ovs_version_t version,
                   struct flow *flow, struct flow_wildcards *wc)
 {
     return classifier_lookup__(cls, version, flow, wc, true);
@@ -1170,7 +1169,7 @@ classifier_lookup(const struct classifier *cls, cls_version_t version,
 const struct cls_rule *
 classifier_find_rule_exactly(const struct classifier *cls,
                              const struct cls_rule *target,
-                             cls_version_t version)
+                             ovs_version_t version)
 {
     const struct cls_match *head, *rule;
     const struct cls_subtable *subtable;
@@ -1205,7 +1204,7 @@ classifier_find_rule_exactly(const struct classifier *cls,
 const struct cls_rule *
 classifier_find_match_exactly(const struct classifier *cls,
                               const struct match *target, int priority,
-                              cls_version_t version)
+                              ovs_version_t version)
 {
     const struct cls_rule *retval;
     struct cls_rule cr;
@@ -1227,7 +1226,7 @@ classifier_find_match_exactly(const struct classifier *cls,
  * dl_type could match both, if the rules also have the same priority. */
 bool
 classifier_rule_overlaps(const struct classifier *cls,
-                         const struct cls_rule *target, cls_version_t version)
+                         const struct cls_rule *target, ovs_version_t version)
 {
     struct cls_subtable *subtable;
 
@@ -1301,7 +1300,7 @@ cls_rule_is_loose_match(const struct cls_rule *rule,
 
 static bool
 rule_matches(const struct cls_rule *rule, const struct cls_rule *target,
-             cls_version_t version)
+             ovs_version_t version)
 {
     /* Rule may only match a target if it is visible in target's version. */
     return cls_rule_visible_in_version(rule, version)
@@ -1340,7 +1339,7 @@ search_subtable(const struct cls_subtable *subtable,
  * Ignores target->priority. */
 struct cls_cursor
 cls_cursor_start(const struct classifier *cls, const struct cls_rule *target,
-                 cls_version_t version)
+                 ovs_version_t version)
 {
     struct cls_cursor cursor;
     struct cls_subtable *subtable;
@@ -1617,7 +1616,7 @@ miniflow_and_mask_matches_flow(const struct miniflow *flow,
 }
 
 static inline const struct cls_match *
-find_match(const struct cls_subtable *subtable, cls_version_t version,
+find_match(const struct cls_subtable *subtable, ovs_version_t version,
            const struct flow *flow, uint32_t hash)
 {
     const struct cls_match *head, *rule;
@@ -1639,7 +1638,7 @@ find_match(const struct cls_subtable *subtable, cls_version_t version,
 }
 
 static const struct cls_match *
-find_match_wc(const struct cls_subtable *subtable, cls_version_t version,
+find_match_wc(const struct cls_subtable *subtable, ovs_version_t version,
               const struct flow *flow, struct trie_ctx trie_ctx[CLS_MAX_TRIES],
               unsigned int n_tries, struct flow_wildcards *wc)
 {

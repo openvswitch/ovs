@@ -279,6 +279,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/vconn-provider.h \
 	lib/vconn-stream.c \
 	lib/vconn.c \
+	lib/versions.h \
 	lib/vlan-bitmap.c \
 	lib/vlan-bitmap.h \
 	lib/vlog.c \

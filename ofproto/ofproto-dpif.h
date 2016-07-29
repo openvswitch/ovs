@@ -100,10 +100,10 @@ struct dpif_backer_support {
 bool ofproto_dpif_get_enable_ufid(const struct dpif_backer *backer);
 struct dpif_backer_support *ofproto_dpif_get_support(const struct ofproto_dpif *);
 
-cls_version_t ofproto_dpif_get_tables_version(struct ofproto_dpif *);
+ovs_version_t ofproto_dpif_get_tables_version(struct ofproto_dpif *);
 
 struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
-                                              cls_version_t, struct flow *,
+                                              ovs_version_t, struct flow *,
                                               struct flow_wildcards *,
                                               const struct dpif_flow_stats *,
                                               uint8_t *table_id,

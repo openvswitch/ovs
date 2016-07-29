@@ -139,7 +139,7 @@ struct rule_criteria {
      * collect_rules_loose() and "strict" way by collect_rules_strict(), as
      * defined in the OpenFlow spec. */
     struct cls_rule cr;
-    cls_version_t version;
+    ovs_version_t version;
 
     /* Matching criteria for the OpenFlow cookie.  Consider a bit B in a rule's
      * cookie and the corresponding bits C in 'cookie' and M in 'cookie_mask'.
@@ -161,7 +161,7 @@ struct rule_criteria {
 
 static void rule_criteria_init(struct rule_criteria *, uint8_t table_id,
                                const struct match *match, int priority,
-                               cls_version_t version,
+                               ovs_version_t version,
                                ovs_be64 cookie, ovs_be64 cookie_mask,
                                ofp_port_t out_port, uint32_t out_group);
 static void rule_criteria_require_rw(struct rule_criteria *,
@@ -271,7 +271,7 @@ static enum ofperr replace_rule_create(struct ofproto *,
                                        struct rule **new_rule)
     OVS_REQUIRES(ofproto_mutex);
 
-static void replace_rule_start(struct ofproto *, cls_version_t version,
+static void replace_rule_start(struct ofproto *, ovs_version_t version,
                                struct rule *old_rule, struct rule *new_rule,
                                struct cls_conjunction *, size_t n_conjs)
     OVS_REQUIRES(ofproto_mutex);
@@ -557,7 +557,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ofproto->eviction_group_timer = LLONG_MIN;
     ofproto->tables = NULL;
     ofproto->n_tables = 0;
-    ofproto->tables_version = CLS_MIN_VERSION;
+    ofproto->tables_version = OVS_VERSION_MIN;
     hindex_init(&ofproto->cookies);
     hmap_init(&ofproto->learned_cookies);
     ovs_list_init(&ofproto->expirable);
@@ -1526,7 +1526,7 @@ ofproto_rule_delete(struct ofproto *ofproto, struct rule *rule)
 
     if (!rule->removed) {
         /* Make sure there is no postponed removal of the rule. */
-        ovs_assert(cls_rule_visible_in_version(&rule->cr, CLS_MAX_VERSION));
+        ovs_assert(cls_rule_visible_in_version(&rule->cr, OVS_VERSION_MAX));
 
         if (!classifier_remove(&rule->ofproto->tables[rule->table_id].cls,
                                &rule->cr)) {
@@ -2165,7 +2165,7 @@ ofproto_add_flow(struct ofproto *ofproto, const struct match *match,
      * with the actions that we want.  If it does, then we're done. */
     rule = rule_from_cls_rule(classifier_find_match_exactly(
                                   &ofproto->tables[0].cls, match, priority,
-                                  CLS_MAX_VERSION));
+                                  OVS_VERSION_MAX));
     if (rule) {
         const struct rule_actions *actions = rule_get_actions(rule);
         must_add = !ofpacts_equal(actions->ofpacts, actions->ofpacts_len,
@@ -2206,7 +2206,7 @@ ofproto_flow_mod(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
 
         rule = rule_from_cls_rule(classifier_find_match_exactly(
                                       &table->cls, &fm->match, fm->priority,
-                                      CLS_MAX_VERSION));
+                                      OVS_VERSION_MAX));
         if (rule) {
             /* Reading many of the rule fields and writing on 'modified'
              * requires the rule->mutex.  Also, rule->actions may change
@@ -2253,7 +2253,7 @@ ofproto_delete_flow(struct ofproto *ofproto,
     /* First do a cheap check whether the rule we're looking for has already
      * been deleted.  If so, then we're done. */
     rule = rule_from_cls_rule(classifier_find_match_exactly(
-                                  cls, target, priority, CLS_MAX_VERSION));
+                                  cls, target, priority, OVS_VERSION_MAX));
     if (!rule) {
         return;
     }
@@ -2910,7 +2910,7 @@ remove_rule_rcu__(struct rule *rule)
     struct ofproto *ofproto = rule->ofproto;
     struct oftable *table = &ofproto->tables[rule->table_id];
 
-    ovs_assert(!cls_rule_visible_in_version(&rule->cr, CLS_MAX_VERSION));
+    ovs_assert(!cls_rule_visible_in_version(&rule->cr, OVS_VERSION_MAX));
     if (!classifier_remove(&table->cls, &rule->cr)) {
         OVS_NOT_REACHED();
     }
@@ -3200,7 +3200,7 @@ learned_cookies_flush(struct ofproto *ofproto, struct ovs_list *dead_cookies)
         struct match match;
 
         match_init_catchall(&match);
-        rule_criteria_init(&criteria, c->table_id, &match, 0, CLS_MAX_VERSION,
+        rule_criteria_init(&criteria, c->table_id, &match, 0, OVS_VERSION_MAX,
                            c->cookie, OVS_BE64_MAX, OFPP_ANY, OFPG_ANY);
         rule_criteria_require_rw(&criteria, false);
         collect_rules_loose(ofproto, &criteria, &rules);
@@ -3983,7 +3983,7 @@ next_matching_table(const struct ofproto *ofproto,
 static void
 rule_criteria_init(struct rule_criteria *criteria, uint8_t table_id,
                    const struct match *match, int priority,
-                   cls_version_t version, ovs_be64 cookie,
+                   ovs_version_t version, ovs_be64 cookie,
                    ovs_be64 cookie_mask, ofp_port_t out_port,
                    uint32_t out_group)
 {
@@ -4294,7 +4294,7 @@ handle_flow_stats_request(struct ofconn *ofconn,
         return error;
     }
 
-    rule_criteria_init(&criteria, fsr.table_id, &fsr.match, 0, CLS_MAX_VERSION,
+    rule_criteria_init(&criteria, fsr.table_id, &fsr.match, 0, OVS_VERSION_MAX,
                        fsr.cookie, fsr.cookie_mask, fsr.out_port,
                        fsr.out_group);
 
@@ -4459,7 +4459,7 @@ handle_aggregate_stats_request(struct ofconn *ofconn,
     }
 
     rule_criteria_init(&criteria, request.table_id, &request.match, 0,
-                       CLS_MAX_VERSION, request.cookie, request.cookie_mask,
+                       OVS_VERSION_MAX, request.cookie, request.cookie_mask,
                        request.out_port, request.out_group);
 
     ovs_mutex_lock(&ofproto_mutex);
@@ -4913,7 +4913,7 @@ replace_rule_create(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
 }
 
 static void
-replace_rule_start(struct ofproto *ofproto, cls_version_t version,
+replace_rule_start(struct ofproto *ofproto, ovs_version_t version,
                    struct rule *old_rule, struct rule *new_rule,
                    struct cls_conjunction *conjs, size_t n_conjs)
 {
@@ -5091,7 +5091,7 @@ modify_flows_start_loose(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     struct rule_criteria criteria;
     enum ofperr error;
 
-    rule_criteria_init(&criteria, fm->table_id, &fm->match, 0, CLS_MAX_VERSION,
+    rule_criteria_init(&criteria, fm->table_id, &fm->match, 0, OVS_VERSION_MAX,
                        fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG_ANY);
     rule_criteria_require_rw(&criteria,
                              (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
@@ -5168,7 +5168,7 @@ modify_flow_start_strict(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     enum ofperr error;
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, fm->priority,
-                       CLS_MAX_VERSION, fm->cookie, fm->cookie_mask, OFPP_ANY,
+                       OVS_VERSION_MAX, fm->cookie, fm->cookie_mask, OFPP_ANY,
                        OFPG_ANY);
     rule_criteria_require_rw(&criteria,
                              (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
@@ -5189,7 +5189,7 @@ modify_flow_start_strict(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
 /* OFPFC_DELETE implementation. */
 
 static void
-delete_flows_start__(struct ofproto *ofproto, cls_version_t version,
+delete_flows_start__(struct ofproto *ofproto, ovs_version_t version,
                      const struct rule_collection *rules)
     OVS_REQUIRES(ofproto_mutex)
 {
@@ -5265,7 +5265,7 @@ delete_flows_start_loose(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     struct rule_criteria criteria;
     enum ofperr error;
 
-    rule_criteria_init(&criteria, fm->table_id, &fm->match, 0, CLS_MAX_VERSION,
+    rule_criteria_init(&criteria, fm->table_id, &fm->match, 0, OVS_VERSION_MAX,
                        fm->cookie, fm->cookie_mask, fm->out_port,
                        fm->out_group);
     rule_criteria_require_rw(&criteria,
@@ -5321,7 +5321,7 @@ delete_flow_start_strict(struct ofproto *ofproto,
     enum ofperr error;
 
     rule_criteria_init(&criteria, fm->table_id, &fm->match, fm->priority,
-                       CLS_MAX_VERSION, fm->cookie, fm->cookie_mask,
+                       OVS_VERSION_MAX, fm->cookie, fm->cookie_mask,
                        fm->out_port, fm->out_group);
     rule_criteria_require_rw(&criteria,
                              (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
@@ -5718,7 +5718,7 @@ ofproto_collect_ofmonitor_refresh_rules(const struct ofmonitor *m,
     FOR_EACH_MATCHING_TABLE (table, m->table_id, ofproto) {
         struct rule *rule;
 
-        CLS_FOR_EACH_TARGET (rule, cr, &table->cls, &target, CLS_MAX_VERSION) {
+        CLS_FOR_EACH_TARGET (rule, cr, &table->cls, &target, OVS_VERSION_MAX) {
             ofproto_collect_ofmonitor_refresh_rule(m, rule, seqno, rules);
         }
     }
@@ -6257,7 +6257,7 @@ group_get_ref_count(struct ofgroup *group)
     uint32_t count;
 
     match_init_catchall(&match);
-    rule_criteria_init(&criteria, 0xff, &match, 0, CLS_MAX_VERSION, htonll(0),
+    rule_criteria_init(&criteria, 0xff, &match, 0, OVS_VERSION_MAX, htonll(0),
                        htonll(0), OFPP_ANY, group->group_id);
     ovs_mutex_lock(&ofproto_mutex);
     error = collect_rules_loose(ofproto, &criteria, &rules);
@@ -7073,7 +7073,7 @@ static enum ofperr
 do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    cls_version_t version = ofproto->tables_version + 1;
+    ovs_version_t version = ofproto->tables_version + 1;
     struct ofp_bundle *bundle;
     struct ofp_bundle_entry *be;
     enum ofperr error;

@@ -406,7 +406,7 @@ get_value(unsigned int *x, unsigned n_values)
 
 static void
 compare_classifiers(struct classifier *cls, size_t n_invisible_rules,
-                    cls_version_t version, struct tcls *tcls)
+                    ovs_version_t version, struct tcls *tcls)
 {
     static const int confidence = 500;
     unsigned int i;
@@ -520,7 +520,7 @@ verify_tries(struct classifier *cls)
 
 static void
 check_tables(const struct classifier *cls, int n_tables, int n_rules,
-             int n_dups, int n_invisible, cls_version_t version)
+             int n_dups, int n_invisible, ovs_version_t version)
     OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     const struct cls_subtable *table;
@@ -564,7 +564,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
 
         CMAP_FOR_EACH (head, cmap_node, &table->rules) {
             int prev_priority = INT_MAX;
-            cls_version_t prev_version = 0;
+            ovs_version_t prev_version = 0;
             const struct cls_match *rule, *prev;
             bool found_visible_rules_in_list = false;
 
@@ -576,7 +576,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
             }
 
             FOR_EACH_RULE_IN_LIST_PROTECTED(rule, prev, head) {
-                cls_version_t rule_version;
+                ovs_version_t rule_version;
                 const struct cls_rule *found_rule;
 
                 /* Priority may not increase. */
@@ -601,7 +601,7 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
                 }
 
                 /* Rule must be visible in the version it was inserted. */
-                rule_version = rule->add_version;
+                rule_version = rule->versions.add_version;
                 assert(cls_match_visible_in_version(rule, rule_version));
 
                 /* We should always find the latest version of the rule,
@@ -616,12 +616,12 @@ check_tables(const struct classifier *cls, int n_tables, int n_rules,
                     assert(found_rule->priority == rule->priority);
 
                     /* Found rule may not have a lower version. */
-                    assert(cls_match->add_version >= rule_version);
+                    assert(cls_match->versions.add_version >= rule_version);
 
                     /* This rule must not be visible in the found rule's
                      * version. */
                     assert(!cls_match_visible_in_version(
-                               rule, cls_match->add_version));
+                               rule, cls_match->versions.add_version));
                 }
 
                 if (rule->priority == prev_priority) {
@@ -780,7 +780,7 @@ test_empty(struct ovs_cmdl_context *ctx OVS_UNUSED)
     tcls_init(&tcls);
     assert(classifier_is_empty(&cls));
     assert(tcls_is_empty(&tcls));
-    compare_classifiers(&cls, 0, CLS_MIN_VERSION, &tcls);
+    compare_classifiers(&cls, 0, OVS_VERSION_MIN, &tcls);
     classifier_destroy(&cls);
     tcls_destroy(&tcls);
 }
@@ -810,15 +810,15 @@ test_single_rule(struct ovs_cmdl_context *ctx OVS_UNUSED)
         tcls_init(&tcls);
         tcls_rule = tcls_insert(&tcls, rule);
 
-        classifier_insert(&cls, &rule->cls_rule, CLS_MIN_VERSION, NULL, 0);
-        compare_classifiers(&cls, 0, CLS_MIN_VERSION, &tcls);
-        check_tables(&cls, 1, 1, 0, 0, CLS_MIN_VERSION);
+        classifier_insert(&cls, &rule->cls_rule, OVS_VERSION_MIN, NULL, 0);
+        compare_classifiers(&cls, 0, OVS_VERSION_MIN, &tcls);
+        check_tables(&cls, 1, 1, 0, 0, OVS_VERSION_MIN);
 
         classifier_remove(&cls, &rule->cls_rule);
         tcls_remove(&tcls, tcls_rule);
         assert(classifier_is_empty(&cls));
         assert(tcls_is_empty(&tcls));
-        compare_classifiers(&cls, 0, CLS_MIN_VERSION, &tcls);
+        compare_classifiers(&cls, 0, OVS_VERSION_MIN, &tcls);
 
         ovsrcu_postpone(free_rule, rule);
         classifier_destroy(&cls);
@@ -847,20 +847,20 @@ test_rule_replacement(struct ovs_cmdl_context *ctx OVS_UNUSED)
         set_prefix_fields(&cls);
         tcls_init(&tcls);
         tcls_insert(&tcls, rule1);
-        classifier_insert(&cls, &rule1->cls_rule, CLS_MIN_VERSION, NULL, 0);
-        compare_classifiers(&cls, 0, CLS_MIN_VERSION, &tcls);
-        check_tables(&cls, 1, 1, 0, 0, CLS_MIN_VERSION);
+        classifier_insert(&cls, &rule1->cls_rule, OVS_VERSION_MIN, NULL, 0);
+        compare_classifiers(&cls, 0, OVS_VERSION_MIN, &tcls);
+        check_tables(&cls, 1, 1, 0, 0, OVS_VERSION_MIN);
         tcls_destroy(&tcls);
 
         tcls_init(&tcls);
         tcls_insert(&tcls, rule2);
 
         assert(test_rule_from_cls_rule(
-                   classifier_replace(&cls, &rule2->cls_rule, CLS_MIN_VERSION,
+                   classifier_replace(&cls, &rule2->cls_rule, OVS_VERSION_MIN,
                                       NULL, 0)) == rule1);
         ovsrcu_postpone(free_rule, rule1);
-        compare_classifiers(&cls, 0, CLS_MIN_VERSION, &tcls);
-        check_tables(&cls, 1, 1, 0, 0, CLS_MIN_VERSION);
+        compare_classifiers(&cls, 0, OVS_VERSION_MIN, &tcls);
+        check_tables(&cls, 1, 1, 0, 0, OVS_VERSION_MIN);
         classifier_defer(&cls);
         classifier_remove(&cls, &rule2->cls_rule);
 
@@ -950,7 +950,7 @@ test_many_rules_in_one_list (struct ovs_cmdl_context *ctx OVS_UNUSED)
             int pri_rules[N_RULES];
             struct classifier cls;
             struct tcls tcls;
-            cls_version_t version = CLS_MIN_VERSION;
+            ovs_version_t version = OVS_VERSION_MIN;
             size_t n_invisible_rules = 0;
 
             n_permutations++;
@@ -1095,7 +1095,7 @@ test_many_rules_in_one_table(struct ovs_cmdl_context *ctx OVS_UNUSED)
         struct test_rule *tcls_rules[N_RULES];
         struct classifier cls;
         struct tcls tcls;
-        cls_version_t version = CLS_MIN_VERSION;
+        ovs_version_t version = OVS_VERSION_MIN;
         size_t n_invisible_rules = 0;
         int value_pats[N_RULES];
         int value_mask;
@@ -1184,7 +1184,7 @@ test_many_rules_in_n_tables(int n_tables)
         int priorities[MAX_RULES];
         struct classifier cls;
         struct tcls tcls;
-        cls_version_t version = CLS_MIN_VERSION;
+        ovs_version_t version = OVS_VERSION_MIN;
         size_t n_invisible_rules = 0;
         struct ovs_list list = OVS_LIST_INITIALIZER(&list);
 
@@ -1351,7 +1351,7 @@ static void *
 lookup_classifier(void *aux_)
 {
     struct cls_aux *aux = aux_;
-    cls_version_t version = CLS_MIN_VERSION;
+    ovs_version_t version = OVS_VERSION_MIN;
     int hits = 0, old_hits;
     int misses = 0, old_misses;
     size_t i;
@@ -1389,7 +1389,7 @@ static void
 benchmark(bool use_wc)
 {
     struct classifier cls;
-    cls_version_t version = CLS_MIN_VERSION;
+    ovs_version_t version = OVS_VERSION_MIN;
     struct cls_aux aux;
     int *wcfs = xmalloc(n_tables * sizeof *wcfs);
     int *priorities = xmalloc(n_priorities * sizeof *priorities);
