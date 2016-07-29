@@ -1122,20 +1122,37 @@ mf_set_value(const struct mf_field *mf,
     }
 }
 
-/* Unwildcard 'mask' member field described by 'mf'.  The caller is
+/* Unwildcard the bits in 'mask' of the 'wc' member field described by 'mf'.
+ * The caller is responsible for ensuring that 'wc' meets 'mf''s
+ * prerequisites. */
+void
+mf_mask_field_masked(const struct mf_field *mf, const union mf_value *mask,
+                     struct flow_wildcards *wc)
+{
+    union mf_value temp_mask;
+    /* For MFF_DL_VLAN, we cannot send a all 1's to flow_set_dl_vlan() as that
+     * will be considered as OFP10_VLAN_NONE. So make sure the mask only has
+     * valid bits in this case. */
+    if (mf->id == MFF_DL_VLAN) {
+        temp_mask.be16 = htons(VLAN_VID_MASK) & mask->be16;
+        mask = &temp_mask;
+    }
+
+    union mf_value mask_value;
+
+    mf_get_value(mf, &wc->masks, &mask_value);
+    for (size_t i = 0; i < mf->n_bytes; i++) {
+        mask_value.b[i] |= mask->b[i];
+    }
+    mf_set_flow_value(mf, &mask_value, &wc->masks);
+}
+
+/* Unwildcard 'wc' member field described by 'mf'.  The caller is
  * responsible for ensuring that 'mask' meets 'mf''s prerequisites. */
 void
-mf_mask_field(const struct mf_field *mf, struct flow *mask)
+mf_mask_field(const struct mf_field *mf, struct flow_wildcards *wc)
 {
-    /* For MFF_DL_VLAN, we cannot send a all 1's to flow_set_dl_vlan()
-     * as that will be considered as OFP10_VLAN_NONE. So consider it as a
-     * special case. For the rest, calling mf_set_flow_value() is good
-     * enough. */
-    if (mf->id == MFF_DL_VLAN) {
-        flow_set_dl_vlan(mask, htons(VLAN_VID_MASK));
-    } else {
-        mf_set_flow_value(mf, &exact_match_mask, mask);
-    }
+    mf_mask_field_masked(mf, &exact_match_mask, wc);
 }
 
 static int

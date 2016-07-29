@@ -1115,23 +1115,23 @@ parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *fsr,
 /* Parses a specification of a flow from 's' into 'flow'.  's' must take the
  * form FIELD=VALUE[,FIELD=VALUE]... where each FIELD is the name of a
  * mf_field.  Fields must be specified in a natural order for satisfying
- * prerequisites. If 'mask' is specified, fills the mask field for each of the
+ * prerequisites. If 'wc' is specified, masks the field in 'wc' for each of the
  * field specified in flow. If the map, 'names_portno' is specfied, converts
  * the in_port name into port no while setting the 'flow'.
  *
  * Returns NULL on success, otherwise a malloc()'d string that explains the
  * problem. */
 char *
-parse_ofp_exact_flow(struct flow *flow, struct flow *mask, const char *s,
-                     const struct simap *portno_names)
+parse_ofp_exact_flow(struct flow *flow, struct flow_wildcards *wc,
+                     const char *s, const struct simap *portno_names)
 {
     char *pos, *key, *value_s;
     char *error = NULL;
     char *copy;
 
     memset(flow, 0, sizeof *flow);
-    if (mask) {
-        memset(mask, 0, sizeof *mask);
+    if (wc) {
+        memset(wc, 0, sizeof *wc);
     }
 
     pos = copy = xstrdup(s);
@@ -1143,8 +1143,8 @@ parse_ofp_exact_flow(struct flow *flow, struct flow *mask, const char *s,
                 goto exit;
             }
             flow->dl_type = htons(p->dl_type);
-            if (mask) {
-                mask->dl_type = OVS_BE16_MAX;
+            if (wc) {
+                wc->masks.dl_type = OVS_BE16_MAX;
             }
 
             if (p->nw_proto) {
@@ -1154,8 +1154,8 @@ parse_ofp_exact_flow(struct flow *flow, struct flow *mask, const char *s,
                     goto exit;
                 }
                 flow->nw_proto = p->nw_proto;
-                if (mask) {
-                    mask->nw_proto = UINT8_MAX;
+                if (wc) {
+                    wc->masks.nw_proto = UINT8_MAX;
                 }
             }
         } else {
@@ -1185,8 +1185,9 @@ parse_ofp_exact_flow(struct flow *flow, struct flow *mask, const char *s,
                 && simap_contains(portno_names, value_s)) {
                 flow->in_port.ofp_port = u16_to_ofp(
                     simap_get(portno_names, value_s));
-                if (mask) {
-                    mask->in_port.ofp_port = u16_to_ofp(ntohs(OVS_BE16_MAX));
+                if (wc) {
+                    wc->masks.in_port.ofp_port
+                        = u16_to_ofp(ntohs(OVS_BE16_MAX));
                 }
             } else {
                 field_error = mf_parse_value(mf, value_s, &value);
@@ -1198,8 +1199,8 @@ parse_ofp_exact_flow(struct flow *flow, struct flow *mask, const char *s,
                 }
 
                 mf_set_flow_value(mf, &value, flow);
-                if (mask) {
-                    mf_mask_field(mf, mask);
+                if (wc) {
+                    mf_mask_field(mf, wc);
                 }
             }
         }
@@ -1214,8 +1215,8 @@ exit:
 
     if (error) {
         memset(flow, 0, sizeof *flow);
-        if (mask) {
-            memset(mask, 0, sizeof *mask);
+        if (wc) {
+            memset(wc, 0, sizeof *wc);
         }
     }
     return error;

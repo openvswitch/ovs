@@ -3545,7 +3545,7 @@ xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
                 basis = hash_boolean(mf_is_set(mf, &ctx->xin->flow), basis);
             }
 
-            mf_mask_field(mf, &ctx->wc->masks);
+            mf_mask_field(mf, ctx->wc);
         }
     }
 
