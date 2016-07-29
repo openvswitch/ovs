@@ -1954,6 +1954,7 @@ struct mf_field {
 
 /* The representation of a field's value. */
 union mf_value {
+    uint8_t b[128];
     uint8_t tun_metadata[128];
     struct in6_addr ipv6;
     struct eth_addr mac;
