@@ -1352,7 +1352,7 @@ parse_select_group_field(char *s, struct field_array *fa,
 }
 
 static char * OVS_WARN_UNUSED_RESULT
-parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
+parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, int command,
                           char *string,
                           enum ofputil_protocol *usable_protocols)
 {
@@ -1368,6 +1368,31 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
     char *error = NULL;
 
     *usable_protocols = OFPUTIL_P_OF11_UP;
+
+    if (command == -2) {
+        size_t len;
+
+        string += strspn(string, " \t\r\n");   /* Skip white space. */
+        len = strcspn(string, ", \t\r\n"); /* Get length of the first token. */
+
+        if (!strncmp(string, "add", len)) {
+            command = OFPGC11_ADD;
+        } else if (!strncmp(string, "delete", len)) {
+            command = OFPGC11_DELETE;
+        } else if (!strncmp(string, "modify", len)) {
+            command = OFPGC11_MODIFY;
+        } else if (!strncmp(string, "add_or_mod", len)) {
+            command = OFPGC11_ADD_OR_MOD;
+        } else if (!strncmp(string, "insert_bucket", len)) {
+            command = OFPGC15_INSERT_BUCKET;
+        } else if (!strncmp(string, "remove_bucket", len)) {
+            command = OFPGC15_REMOVE_BUCKET;
+        } else {
+            len = 0;
+            command = OFPGC11_ADD;
+        }
+        string += len;
+    }
 
     switch (command) {
     case OFPGC11_ADD:
@@ -1594,8 +1619,12 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
     return error;
 }
 
+/* If 'command' is given as -2, each line may start with a command name ("add",
+ * "modify", "add_or_mod", "delete", "insert_bucket", or "remove_bucket").  A
+ * missing command name is treated as "add".
+ */
 char * OVS_WARN_UNUSED_RESULT
-parse_ofp_group_mod_str(struct ofputil_group_mod *gm, uint16_t command,
+parse_ofp_group_mod_str(struct ofputil_group_mod *gm, int command,
                         const char *str_,
                         enum ofputil_protocol *usable_protocols)
 {
@@ -1610,8 +1639,12 @@ parse_ofp_group_mod_str(struct ofputil_group_mod *gm, uint16_t command,
     return error;
 }
 
+/* If 'command' is given as -2, each line may start with a command name ("add",
+ * "modify", "add_or_mod", "delete", "insert_bucket", or "remove_bucket").  A
+ * missing command name is treated as "add".
+ */
 char * OVS_WARN_UNUSED_RESULT
-parse_ofp_group_mod_file(const char *file_name, uint16_t command,
+parse_ofp_group_mod_file(const char *file_name, int command,
                          struct ofputil_group_mod **gms, size_t *n_gms,
                          enum ofputil_protocol *usable_protocols)
 {
@@ -1673,6 +1706,119 @@ parse_ofp_group_mod_file(const char *file_name, uint16_t command,
     ds_destroy(&s);
     if (stream != stdin) {
         fclose(stream);
+    }
+    return NULL;
+}
+
+static void
+free_bundle_msgs(struct ofputil_bundle_msg **bms, size_t *n_bms)
+{
+    for (size_t i = 0; i < *n_bms; i++) {
+        switch ((int)(*bms)[i].type) {
+        case OFPTYPE_FLOW_MOD:
+            free(CONST_CAST(struct ofpact *, (*bms)[i].fm.ofpacts));
+            break;
+        case OFPTYPE_GROUP_MOD:
+            ofputil_uninit_group_mod(&(*bms)[i].gm);
+            break;
+        default:
+            break;
+        }
+    }
+    free(*bms);
+    *bms = NULL;
+    *n_bms = 0;
+}
+
+/* Opens file 'file_name' and reads each line as a flow_mod or a group_mod,
+ * depending on the first keyword on each line.  Stores each flow and group
+ * mods in '*bms', an array allocated on the caller's behalf, and the number of
+ * messages in '*n_bms'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * OVS_WARN_UNUSED_RESULT
+parse_ofp_bundle_file(const char *file_name,
+                      struct ofputil_bundle_msg **bms, size_t *n_bms,
+                      enum ofputil_protocol *usable_protocols)
+{
+    size_t allocated_bms;
+    char *error = NULL;
+    int line_number;
+    FILE *stream;
+    struct ds ds;
+
+    *usable_protocols = OFPUTIL_P_ANY;
+
+    *bms = NULL;
+    *n_bms = 0;
+
+    stream = !strcmp(file_name, "-") ? stdin : fopen(file_name, "r");
+    if (stream == NULL) {
+        return xasprintf("%s: open failed (%s)",
+                         file_name, ovs_strerror(errno));
+    }
+
+    allocated_bms = *n_bms;
+    ds_init(&ds);
+    line_number = 0;
+    while (!ds_get_preprocessed_line(&ds, stream, &line_number)) {
+        enum ofputil_protocol usable;
+        char *s = ds_cstr(&ds);
+        size_t len;
+
+        if (*n_bms >= allocated_bms) {
+            struct ofputil_bundle_msg *new_bms;
+
+            new_bms = x2nrealloc(*bms, &allocated_bms, sizeof **bms);
+            for (size_t i = 0; i < *n_bms; i++) {
+                if (new_bms[i].type == OFPTYPE_GROUP_MOD) {
+                    ovs_list_moved(&new_bms[i].gm.buckets,
+                                   &(*bms)[i].gm.buckets);
+                }
+            }
+            *bms = new_bms;
+        }
+
+        s += strspn(s, " \t\r\n");   /* Skip white space. */
+        len = strcspn(s, ", \t\r\n"); /* Get length of the first token. */
+
+        if (!strncmp(s, "flow", len)) {
+            s += len;
+            error = parse_ofp_flow_mod_str(&(*bms)[*n_bms].fm, s, -2, &usable);
+            if (error) {
+                break;
+            }
+            (*bms)[*n_bms].type = OFPTYPE_FLOW_MOD;
+        } else if (!strncmp(s, "group", len)) {
+            s += len;
+            error = parse_ofp_group_mod_str(&(*bms)[*n_bms].gm, -2, s,
+                                            &usable);
+            if (error) {
+                break;
+            }
+            (*bms)[*n_bms].type = OFPTYPE_GROUP_MOD;
+        } else {
+            error = xasprintf("Unsupported bundle message type: %.*s",
+                              (int)len, s);
+            break;
+        }
+
+        *usable_protocols &= usable; /* Each line can narrow the set. */
+        *n_bms += 1;
+    }
+
+    ds_destroy(&ds);
+    if (stream != stdin) {
+        fclose(stream);
+    }
+
+    if (error) {
+        char *err_msg = xasprintf("%s:%d: %s", file_name, line_number, error);
+        free(error);
+
+        free_bundle_msgs(bms, n_bms);
+        return err_msg;
     }
     return NULL;
 }

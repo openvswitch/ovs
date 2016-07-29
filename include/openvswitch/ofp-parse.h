@@ -33,6 +33,7 @@ struct ofputil_flow_stats_request;
 struct ofputil_group_mod;
 struct ofputil_meter_mod;
 struct ofputil_table_mod;
+struct ofputil_bundle_msg;
 struct ofputil_tlv_table_mod;
 struct simap;
 enum ofputil_protocol;
@@ -74,14 +75,19 @@ char *parse_flow_monitor_request(struct ofputil_flow_monitor_request *,
                                  enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 
-char *parse_ofp_group_mod_file(const char *file_name, uint16_t command,
+char *parse_ofp_group_mod_file(const char *file_name, int command,
                                struct ofputil_group_mod **gms, size_t *n_gms,
                                enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 
-char *parse_ofp_group_mod_str(struct ofputil_group_mod *, uint16_t command,
+char *parse_ofp_group_mod_str(struct ofputil_group_mod *, int command,
                               const char *string,
                               enum ofputil_protocol *usable_protocols)
+    OVS_WARN_UNUSED_RESULT;
+
+char *parse_ofp_bundle_file(const char *file_name,
+                            struct ofputil_bundle_msg **, size_t *n_bms,
+                            enum ofputil_protocol *)
     OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_tlv_table_mod_str(struct ofputil_tlv_table_mod *,

@@ -27,6 +27,7 @@
 #include "openvswitch/netdev.h"
 #include "openflow/netronome-ext.h"
 #include "openflow/nicira-ext.h"
+#include "openvswitch/ofp-msgs.h"
 #include "openvswitch/ofpbuf.h"
 #include "openvswitch/types.h"
 #include "openvswitch/type-props.h"
@@ -1327,8 +1328,6 @@ struct ofputil_bundle_add_msg {
     const struct ofp_header   *msg;
 };
 
-enum ofptype;
-
 enum ofperr ofputil_decode_bundle_ctrl(const struct ofp_header *,
                                        struct ofputil_bundle_ctrl_msg *);
 
@@ -1343,6 +1342,19 @@ struct ofpbuf *ofputil_encode_bundle_add(enum ofp_version ofp_version,
 enum ofperr ofputil_decode_bundle_add(const struct ofp_header *,
                                       struct ofputil_bundle_add_msg *,
                                       enum ofptype *type);
+
+struct ofputil_bundle_msg {
+    enum ofptype type;
+    union {
+        struct ofputil_flow_mod fm;
+        struct ofputil_group_mod gm;
+    };
+};
+
+/* Destroys 'bms'. */
+void ofputil_encode_bundle_msgs(struct ofputil_bundle_msg *bms, size_t n_bms,
+                                struct ovs_list *requests,
+                                enum ofputil_protocol);
 
 struct ofputil_tlv_map {
     struct ovs_list list_node;

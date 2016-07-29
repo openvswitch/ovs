@@ -393,7 +393,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn add-group br0 'group_id=1236,type=indir
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([ofproto - group_mod with mod and add_or_mod command])
+AT_SETUP([ofproto - group mod with mod and add_or_mod command])
 OVS_VSWITCHD_START
 dnl Check that mod-group for non-existing group fails without --may-create
 AT_DATA([stderr], [dnl
@@ -500,7 +500,7 @@ AT_CLEANUP
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
 dnl Actions definition listed in both supported formats (w/ actions=)
-AT_SETUP([ofproto - insert buckets])
+AT_SETUP([ofproto - insert group buckets])
 OVS_VSWITCHD_START
 # Add group with no buckets.
 AT_DATA([groups.txt], [dnl
@@ -596,7 +596,7 @@ AT_CLEANUP
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
 dnl Actions definition listed in both supported formats (w/ actions=)
-AT_SETUP([ofproto - remove buckets])
+AT_SETUP([ofproto - remove group buckets])
 OVS_VSWITCHD_START
 AT_DATA([groups.txt], [dnl
 group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15,bucket=bucket_id:16,actions=output:16
@@ -650,6 +650,313 @@ AT_CHECK([ovs-ofctl -O OpenFlow11 -vwarn remove-buckets br0 group_id=1234,comman
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - bundle del group (OpenFlow 1.3)])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1234,type=all,bucket=output:10
+group_id=1235,type=all,bucket=actions=output:10
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow13 -vwarn add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn dump-groups br0 ], [0], [stdout])
+AT_CHECK([strip_xids < stdout | sort], [0], [dnl
+ group_id=1234,type=all,bucket=actions=output:10
+ group_id=1235,type=all,bucket=actions=output:10
+OFPST_GROUP_DESC reply (OF1.3):
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow13 -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.3):
+ group_id=1235,type=all,bucket=actions=output:10
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow13 -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.3):
+ group_id=1235,type=all,bucket=actions=output:10
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow13 -vwarn del-groups br0], [0])
+AT_CHECK([ovs-ofctl -O OpenFlow13 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.3):
+])
+
+# Negative test.
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow13 -vwarn del-groups br0 group_id=0xfffffff0],
+  [1], [], [ovs-ofctl: invalid group id 4294967280
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle add indirect group])
+OVS_VSWITCHD_START
+dnl indirect group must have exactly one bucket
+AT_DATA([stderr], [dnl
+OFPT_ERROR (OF1.4) (xid=0x2): OFPGMFC_INVALID_GROUP
+OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x2):
+ bundle_id=0 flags=atomic ordered
+OFPT_GROUP_MOD (OF1.4) (xid=0x2): ***decode error: OFPGMFC_INVALID_GROUP***
+])
+AT_CHECK([ovs-ofctl --bundle -vwarn add-group br0 'group_id=1234,type=indirect'], [1], , [stderr])
+AT_CHECK([ovs-ofctl --bundle -vwarn add-group br0 'group_id=1235,type=indirect,bucket=output:10'])
+AT_CHECK([ovs-ofctl --bundle -vwarn add-group br0 'group_id=1236,type=indirect,bucket=output:10,bucket=output:11'], [1], , [stderr])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle group mod with mod and add_or_mod command])
+OVS_VSWITCHD_START
+dnl Check that mod-group for non-existing group fails without --may-create
+AT_DATA([stderr], [dnl
+OFPT_ERROR (OF1.4) (xid=0x2): OFPGMFC_UNKNOWN_GROUP
+OFPT_GROUP_MOD (OF1.4) (xid=0x2):
+ MOD group_id=1234,type=indirect,bucket=actions=output:2
+])
+AT_CHECK([ovs-ofctl --bundle -vwarn mod-group br0 'group_id=1234,type=indirect,bucket=actions=2'], [1], , [stderr])
+dnl Check that mod-group for non-existing group succeeds with --may-create
+AT_CHECK([ovs-ofctl --bundle -vwarn --may-create mod-group br0 'group_id=1234,type=indirect,bucket=actions=2'])
+AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.4):
+ group_id=1234,type=indirect,bucket=actions=output:2
+])
+dnl Check that mod-group for existing group succeeds with --may-create
+AT_CHECK([ovs-ofctl --bundle -vwarn --may-create mod-group br0 'group_id=1234,type=indirect,bucket=actions=3'])
+AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.4):
+ group_id=1234,type=indirect,bucket=actions=output:3
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle del group (OpenFlow 1.5)])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1233,type=select,selection_method=hash,bucket=output:10,bucket=output:11
+group_id=1234,type=select,selection_method=hash,fields(eth_dst,ip_dst,tcp_dst),bucket=output:10,bucket=output:11
+group_id=1235,type=all,bucket=actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=select,selection_method=hash,fields(eth_dst,ip_dst,tcp_dst),bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout | sort], [0], [dnl
+ group_id=1233,type=select,selection_method=hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+ group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+OFPST_GROUP_DESC reply (OF1.5):
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout | sort], [0], [dnl
+ group_id=1233,type=select,selection_method=hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+ group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+OFPST_GROUP_DESC reply (OF1.5):
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn del-groups br0], [0])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle del group deletes flows])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1234,type=all,bucket=output:10
+group_id=1235,type=all,bucket=output:10
+])
+AT_CHECK([ovs-ofctl --bundle -vwarn add-groups br0 groups.txt])
+AT_DATA([flows.txt], [dnl
+tcp actions=group:1234
+table=2 udp actions=group:1235
+])
+AT_CHECK([ovs-ofctl --bundle -vwarn add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn dump-flows br0 | ofctl_strip | sort],
+[0], [dnl
+ table=2, udp actions=group:1235
+ tcp actions=group:1234
+OFPST_FLOW reply (OF1.4):
+])
+AT_CHECK([ovs-ofctl --bundle -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn dump-flows br0 | ofctl_strip | sort],
+[0], [dnl
+ table=2, udp actions=group:1235
+OFPST_FLOW reply (OF1.4):
+])
+AT_CHECK([ovs-ofctl --bundle -vwarn del-groups br0 group_id=1234])
+AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn dump-flows br0 | ofctl_strip | sort],
+[0], [dnl
+ table=2, udp actions=group:1235
+OFPST_FLOW reply (OF1.4):
+])
+AT_CHECK([ovs-ofctl --bundle -vwarn del-groups br0])
+AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn dump-flows br0 | ofctl_strip | sort],
+[0], [dnl
+OFPST_FLOW reply (OF1.4):
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl This is really bare-bones.
+dnl It at least checks request and reply serialization and deserialization.
+dnl Actions definition listed in both supported formats (w/ actions=)
+AT_SETUP([ofproto - bundle insert group buckets])
+OVS_VSWITCHD_START
+# Add group with no buckets.
+AT_DATA([groups.txt], [dnl
+group_id=1234,type=all
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all
+])
+
+# Add two buckets, using "last".
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=last,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11])
+AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
+])
+
+# Start over again, then add two buckets using "first".
+AT_DATA([groups.txt], [dnl
+delete group_id=1234
+add group_id=1234,type=all
+insert_bucket group_id=1234,command_bucket_id=first,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
+])
+
+# Add two more buckets before the existing ones.
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=first,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11
+])
+
+# Add another bucket at the end.
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=last,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
+])
+
+# Verify that duplicate bucket IDs are rejected.
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=last,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15], [1], [], [stderr])
+AT_CHECK([strip_xids < stderr | sed '/talking to/,$d'], [0], [dnl
+Error OFPGMFC_BUCKET_EXISTS for: OFPT_GROUP_MOD (OF1.5):
+ INSERT_BUCKET command_bucket_id:last,group_id=1234,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
+Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.5):
+ bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
+])
+
+# Add another bucket just before bucket 15.
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=15])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
+])
+
+# Add two more buckets just before bucket 11,
+# getting the command from a file.
+AT_DATA([buckets.txt], [dnl
+group_id=1234,command_bucket_id=11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn insert-buckets br0 - < buckets.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
+])
+
+# Add yet two more buckets.
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=15,bucket=bucket_id:20,actions=output:20,bucket=bucket_id:21,actions=output:21])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15,bucket=bucket_id:20,actions=output:20,bucket=bucket_id:21,actions=output:21
+])
+
+# Negative tests.
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn insert-buckets br0 group_id=1234,command_bucket_id=0xffffff01,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1], [1], [],
+  [ovs-ofctl: invalid command bucket id 4294967041
+])
+AT_CHECK([ovs-ofctl --bundle -vwarn insert-buckets br0 group_id=1234,command_bucket_id=first,bucket=bucket_id:0,actions=output:0,bucket=bucket_id:1,actions=output:1], [1], [],
+  [ovs-ofctl: insert-bucket needs OpenFlow 1.5 or later ('-O OpenFlow15')
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle remove group buckets])
+OVS_VSWITCHD_START
+AT_DATA([groups.txt], [dnl
+group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15,bucket=bucket_id:16,actions=output:16
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn add-groups br0 groups.txt])
+AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:10,actions=output:10,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15,bucket=bucket_id:16,actions=output:16
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=first])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15,bucket=bucket_id:16,actions=output:16
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=last])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:13,actions=output:13,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=13])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all,bucket=bucket_id:11,actions=output:11,bucket=bucket_id:12,actions=output:12,bucket=bucket_id:14,actions=output:14,bucket=bucket_id:15,actions=output:15
+])
+AT_DATA([buckets.txt], [dnl
+group_id=1234
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn remove-buckets br0 - < buckets.txt])
+AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
+AT_CHECK([strip_xids < stdout], [0], [dnl
+OFPST_GROUP_DESC reply (OF1.5):
+ group_id=1234,type=all
+])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=first])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=last])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=all])
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow15 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=1], [1], [], [stderr])
+AT_CHECK([ofctl_strip < stderr | sed '/talking to/,$d'], [0], [dnl
+Error OFPGMFC_UNKNOWN_BUCKET for: OFPT_GROUP_MOD (OF1.5):
+ REMOVE_BUCKET command_bucket_id:1,group_id=1234
+Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.5):
+ bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
+])
+# Negative test.
+AT_CHECK([ovs-ofctl --bundle -O OpenFlow11 -vwarn remove-buckets br0 group_id=1234,command_bucket_id=last], [1], [],
+  [ovs-ofctl: remove-bucket needs OpenFlow 1.5 or later ('-O OpenFlow15')
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl This is really bare-bones.
 dnl It at least checks request and reply serialization and deserialization.
 AT_SETUP([ofproto - flow mod checks group availability])
@@ -674,6 +981,33 @@ AT_CHECK([sed '/truncated/d
 /^000000.0/d' stderr | strip_xids], [0],
   [OFPT_ERROR (OF1.1): OFPBAC_BAD_OUT_GROUP
 OFPT_FLOW_MOD (OF1.1):
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle flow mod checks group availability])
+OVS_VSWITCHD_START
+AT_DATA([bundle.txt], [dnl
+group add group_id=1234,type=all,bucket=output:10
+flow add tcp actions=group:1234
+flow add udp actions=group:1235
+])
+AT_CHECK([ovs-ofctl -vwarn bundle br0 bundle.txt], [1], [], [stderr])
+
+# The output should look like this:
+#
+# 00000000  02 0e 00 98 00 00 00 02-00 00 00 00 00 00 00 00 |................|
+# 00000010  00 00 00 00 00 00 00 00-ff 00 00 00 00 00 80 00 |................|
+# 00000020  ff ff ff ff ff ff ff ff-ff ff ff ff 00 00 00 00 |................|
+# 00000030  00 00 00 58 00 00 00 00-00 00 03 d7 00 00 00 00 |...X............|
+#
+# This 'sed' command captures the error message but drops details.
+AT_CHECK([sed '/truncated/d
+/^000000.0/d' stderr | ofctl_strip | sed '/talking to/,$d'], [0],
+  [dnl
+Error OFPBAC_BAD_OUT_GROUP for: OFPT_FLOW_MOD (OF1.4): ADD udp actions=group:1235
+Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.4):
+ bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -1575,6 +1909,56 @@ AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
 AT_CHECK([ovs-ofctl -O OpenFlow11 del-flows br0 out_group=1])
 (grep -v 'group:[[123]]' flows.txt; echo 'OFPST_FLOW reply (OF1.1):') > expout
 AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle flow_mod with out group matching (OpenFlow 1.4)])
+OVS_VSWITCHD_START
+AT_DATA([bundle.txt], [dnl
+group group_id=1,type=all,bucket=output:10
+group group_id=2,type=all,bucket=output:10
+group group_id=3,type=all,bucket=output:10
+flow in_port=1 actions=group:2,output:5
+flow in_port=2 actions=group:1,write_actions(group:2,group:3,output:6)
+flow in_port=3 actions=group:3,group:1,write_actions(group:2,output:3)
+flow in_port=4 actions=output:4
+flow in_port=5 actions=write_actions(output:4,group:3)
+flow in_port=6 actions=group:1
+])
+AT_CHECK([ovs-ofctl bundle br0 bundle.txt])
+
+# for checking
+AT_DATA([flows.txt], [dnl
+ in_port=1 actions=group:2,output:5
+ in_port=2 actions=group:1,write_actions(group:2,group:3,output:6)
+ in_port=3 actions=group:3,group:1,write_actions(group:2,output:3)
+ in_port=4 actions=output:4
+ in_port=5 actions=write_actions(output:4,group:3)
+ in_port=6 actions=group:1
+])
+
+(cat flows.txt; echo 'OFPST_FLOW reply (OF1.4):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+(grep 'output:3' flows.txt | grep 'group:2'; echo 'OFPST_FLOW reply (OF1.4):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 out_port=3,out_group=2 | ofctl_strip | sort], [0], [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow14 del-flows br0 out_group=2])
+(grep -v 'group:2' flows.txt; echo 'OFPST_FLOW reply (OF1.4):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow14 del-flows br0 out_group=3])
+(grep -v 'group:[[23]]' flows.txt; echo 'OFPST_FLOW reply (OF1.4):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sort], [0],
+  [expout])
+
+AT_CHECK([ovs-ofctl -O OpenFlow14 del-flows br0 out_group=1])
+(grep -v 'group:[[123]]' flows.txt; echo 'OFPST_FLOW reply (OF1.4):') > expout
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sort], [0],
   [expout])
 
 OVS_VSWITCHD_STOP
@@ -5032,6 +5416,34 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  idle_timeout=50, in_port=2,dl_src=00:66:77:88:99:aa actions=output:11
  idle_timeout=60, in_port=2,dl_src=00:77:88:99:aa:bb actions=output:22
  idle_timeout=70, in_port=2,dl_src=00:88:99:aa:bb:cc actions=output:33
+NXST_FLOW reply:
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([ofproto - failing bundle commit (OpenFlow 1.3)])
+AT_KEYWORDS([monitor])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-ofctl del-flows br0])
+
+# Invalid group numbers are detected at commit time
+AT_DATA([flows.txt], [dnl
+add idle_timeout=50 in_port=2 dl_src=00:66:77:88:99:aa actions=group:1
+add idle_timeout=60 in_port=2 dl_src=00:77:88:99:aa:bb actions=group:2
+add idle_timeout=70 in_port=2 dl_src=00:88:99:aa:bb:cc actions=group:3
+])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt 2>&1 | sed '/talking to/,$d'],
+[0], [dnl
+Error OFPBAC_BAD_OUT_GROUP for: OFPT_FLOW_MOD (OF1.3) (xid=0x2): ADD in_port=2,dl_src=00:66:77:88:99:aa idle:50 actions=group:1
+Error OFPBFC_MSG_FAILED for: ONFT_BUNDLE_CONTROL (OF1.3) (xid=0x7):
+ bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
+])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
 NXST_FLOW reply:
 ])
 

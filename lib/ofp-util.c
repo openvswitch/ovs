@@ -9496,6 +9496,36 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     return 0;
 }
 
+/* Destroys 'bms'. */
+void
+ofputil_encode_bundle_msgs(struct ofputil_bundle_msg *bms, size_t n_bms,
+                           struct ovs_list *requests,
+                           enum ofputil_protocol protocol)
+{
+    enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
+
+    for (size_t i = 0; i < n_bms; i++) {
+        struct ofpbuf *request = NULL;
+
+        switch ((int)bms[i].type) {
+        case OFPTYPE_FLOW_MOD:
+            request = ofputil_encode_flow_mod(&bms[i].fm, protocol);
+            free(CONST_CAST(struct ofpact *, bms[i].fm.ofpacts));
+            break;
+        case OFPTYPE_GROUP_MOD:
+            request = ofputil_encode_group_mod(version, &bms[i].gm);
+            ofputil_uninit_group_mod(&bms[i].gm);
+            break;
+        default:
+            break;
+        }
+        if (request) {
+            ovs_list_push_back(requests, &request->list_node);
+        }
+    }
+    free(bms);
+}
+
 /* Parse a queue status request message into 'oqsr'.
  * Returns 0 if successful, otherwise an OFPERR_* number. */
 enum ofperr
@@ -9879,11 +9909,12 @@ ofputil_is_bundlable(enum ofptype type)
         /* Minimum required by OpenFlow 1.4. */
     case OFPTYPE_PORT_MOD:
     case OFPTYPE_FLOW_MOD:
+        /* Other supported types. */
+    case OFPTYPE_GROUP_MOD:
         return true;
 
         /* Nice to have later. */
     case OFPTYPE_FLOW_MOD_TABLE_ID:
-    case OFPTYPE_GROUP_MOD:
     case OFPTYPE_TABLE_MOD:
     case OFPTYPE_METER_MOD:
     case OFPTYPE_PACKET_OUT:

@@ -5203,6 +5203,27 @@ delete_flows_start__(struct ofproto *ofproto, ovs_version_t version,
 }
 
 static void
+delete_flows_revert__(struct ofproto *ofproto,
+                      const struct rule_collection *rules)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct rule *rule;
+
+    RULE_COLLECTION_FOR_EACH (rule, rules) {
+        struct oftable *table = &ofproto->tables[rule->table_id];
+
+        /* Add rule back to ofproto data structures. */
+        ofproto_rule_insert__(ofproto, rule);
+
+        /* Restore table's rule count. */
+        table->n_flows++;
+
+        /* Restore the original visibility of the rule. */
+        cls_rule_restore_visibility(&rule->cr);
+    }
+}
+
+static void
 delete_flows_finish__(struct ofproto *ofproto,
                       struct rule_collection *rules,
                       enum ofp_flow_removed_reason reason,
@@ -5282,22 +5303,8 @@ static void
 delete_flows_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct rule_collection *rules = &ofm->old_rules;
-    struct rule *rule;
-
-    RULE_COLLECTION_FOR_EACH (rule, rules) {
-        struct oftable *table = &ofproto->tables[rule->table_id];
-
-        /* Add rule back to ofproto data structures. */
-        ofproto_rule_insert__(ofproto, rule);
-
-        /* Restore table's rule count. */
-        table->n_flows++;
-
-        /* Restore the original visibility of the rule. */
-        cls_rule_restore_visibility(&rule->cr);
-    }
-    rule_collection_destroy(rules);
+    delete_flows_revert__(ofproto, &ofm->old_rules);
+    rule_collection_destroy(&ofm->old_rules);
 }
 
 static void
@@ -6797,6 +6804,40 @@ ofproto_group_mod_start(struct ofproto *ofproto, struct ofproto_group_mod *ogm)
 }
 
 static void
+ofproto_group_mod_revert(struct ofproto *ofproto,
+                         struct ofproto_group_mod *ogm)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct ofgroup *new_group = ogm->new_group;
+    struct ofgroup *old_group;
+
+    /* Restore replaced or deleted groups. */
+    GROUP_COLLECTION_FOR_EACH (old_group, &ogm->old_groups) {
+        ofproto->n_groups[old_group->type]++;
+        if (new_group) {
+            ovs_assert(group_collection_n(&ogm->old_groups) == 1);
+            /* Transfer rules back. */
+            rule_collection_move(&old_group->rules, &new_group->rules);
+        } else {
+            old_group->being_deleted = false;
+            /* Revert rule deletion. */
+            delete_flows_revert__(ofproto, &old_group->rules);
+        }
+        /* Restore visibility. */
+        versions_set_remove_version(&old_group->versions,
+                                    OVS_VERSION_NOT_REMOVED);
+    }
+    if (new_group) {
+        /* Remove the new group immediately.  It was never visible to
+         * lookups. */
+        cmap_remove(&ofproto->groups, &new_group->cmap_node,
+                    hash_int(new_group->group_id, 0));
+        ofproto->n_groups[new_group->type]--;
+        ofproto_group_unref(new_group);
+    }
+}
+
+static void
 ofproto_group_mod_finish(struct ofproto *ofproto,
                          struct ofproto_group_mod *ogm,
                          const struct openflow_mod_requester *req)
@@ -7124,20 +7165,27 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                     prev_is_port_mod = true;
                     error = port_mod_start(ofconn, &be->opm.pm, &be->opm.port);
                 }
-            } else if (be->type == OFPTYPE_FLOW_MOD) {
-                /* Flow mods between port mods are applied as a single
-                 * version, but the versions are published only after
-                 * we know the commit is successful. */
+            } else {
+                /* Flow & group mods between port mods are applied as a single
+                 * version, but the versions are published only after we know
+                 * the commit is successful. */
                 if (prev_is_port_mod) {
+                    prev_is_port_mod = false;
                     ++version;
                 }
-                prev_is_port_mod = false;
-                /* Store the version in which the changes should take
-                 * effect. */
-                be->ofm.version = version;
-                error = ofproto_flow_mod_start(ofproto, &be->ofm);
-            } else {
-                OVS_NOT_REACHED();
+                if (be->type == OFPTYPE_FLOW_MOD) {
+                    /* Store the version in which the changes should take
+                     * effect. */
+                    be->ofm.version = version;
+                    error = ofproto_flow_mod_start(ofproto, &be->ofm);
+                } else if (be->type == OFPTYPE_GROUP_MOD) {
+                    /* Store the version in which the changes should take
+                     * effect. */
+                    be->ogm.version = version;
+                    error = ofproto_group_mod_start(ofproto, &be->ogm);
+                } else {
+                    OVS_NOT_REACHED();
+                }
             }
             if (error) {
                 break;
@@ -7155,27 +7203,16 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
             LIST_FOR_EACH_REVERSE_CONTINUE(be, node, &bundle->msg_list) {
                 if (be->type == OFPTYPE_FLOW_MOD) {
                     ofproto_flow_mod_revert(ofproto, &be->ofm);
+                } else if (be->type == OFPTYPE_GROUP_MOD) {
+                    ofproto_group_mod_revert(ofproto, &be->ogm);
                 }
+
                 /* Nothing needs to be reverted for a port mod. */
             }
         } else {
             /* 4. Finish. */
             LIST_FOR_EACH (be, node, &bundle->msg_list) {
-                if (be->type == OFPTYPE_FLOW_MOD) {
-                    struct openflow_mod_requester req = { ofconn,
-                                                          be->ofp_msg };
-
-                    /* Bump the lookup version to the one of the current
-                     * message.  This makes all the changes in the bundle at
-                     * this version visible to lookups at once. */
-                    if (ofproto->tables_version < be->ofm.version) {
-                        ofproto->tables_version = be->ofm.version;
-                        ofproto->ofproto_class->set_tables_version(
-                            ofproto, ofproto->tables_version);
-                    }
-
-                    ofproto_flow_mod_finish(ofproto, &be->ofm, &req);
-                } else if (be->type == OFPTYPE_PORT_MOD) {
+                if (be->type == OFPTYPE_PORT_MOD) {
                     /* Perform the actual port mod. This is not atomic, i.e.,
                      * the effects will be immediately seen by upcall
                      * processing regardless of the lookup version.  It should
@@ -7183,6 +7220,32 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                      * also from OVSDB changes asynchronously to all upcall
                      * processing. */
                     port_mod_finish(ofconn, &be->opm.pm, be->opm.port);
+                } else {
+                    struct openflow_mod_requester req = { ofconn,
+                                                          be->ofp_msg };
+                    if (be->type == OFPTYPE_FLOW_MOD) {
+                        /* Bump the lookup version to the one of the current
+                         * message.  This makes all the changes in the bundle
+                         * at this version visible to lookups at once. */
+                        if (ofproto->tables_version < be->ofm.version) {
+                            ofproto->tables_version = be->ofm.version;
+                            ofproto->ofproto_class->set_tables_version(
+                                ofproto, ofproto->tables_version);
+                        }
+
+                        ofproto_flow_mod_finish(ofproto, &be->ofm, &req);
+                    } else if (be->type == OFPTYPE_GROUP_MOD) {
+                        /* Bump the lookup version to the one of the current
+                         * message.  This makes all the changes in the bundle
+                         * at this version visible to lookups at once. */
+                        if (ofproto->tables_version < be->ogm.version) {
+                            ofproto->tables_version = be->ogm.version;
+                            ofproto->ofproto_class->set_tables_version(
+                                ofproto, ofproto->tables_version);
+                        }
+
+                        ofproto_group_mod_finish(ofproto, &be->ogm, &req);
+                    }
                 }
             }
         }
@@ -7286,6 +7349,8 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
                                         ofproto->n_tables);
         /* Move actions to heap. */
         bmsg->ofm.fm.ofpacts = ofpbuf_steal_data(&ofpacts);
+    } else if (type == OFPTYPE_GROUP_MOD) {
+        error = ofputil_decode_group_mod(badd.msg, &bmsg->ogm.gm);
     } else {
         OVS_NOT_REACHED();
     }

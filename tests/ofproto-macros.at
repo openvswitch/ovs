@@ -14,6 +14,8 @@ s/ idle_age=[0-9]*,//
 s/ hard_age=[0-9]*,//
 s/dp_hash=0x[0-9a-f]*\//dp_hash=0x0\//
 s/recirc_id=0x[0-9a-f]*,/recirc_id=0x0,/
+s/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z|//
+s/dir\/[0-9]*\/br0.mgmt/dir\/XXXX\/br0.mgmt/
 '
 }
 

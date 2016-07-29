@@ -2505,6 +2505,36 @@ ofctl_dump_ipfix_flow(struct ovs_cmdl_context *ctx)
 }
 
 static void
+bundle_group_mod__(const char *remote, struct ofputil_group_mod *gms,
+                   size_t n_gms, enum ofputil_protocol usable_protocols)
+{
+    enum ofputil_protocol protocol;
+    enum ofp_version version;
+    struct vconn *vconn;
+    struct ovs_list requests;
+    size_t i;
+
+    ovs_list_init(&requests);
+
+    /* Bundles need OpenFlow 1.3+. */
+    usable_protocols &= OFPUTIL_P_OF13_UP;
+    protocol = open_vconn_for_flow_mod(remote, &vconn, usable_protocols);
+    version = ofputil_protocol_to_ofp_version(protocol);
+
+    for (i = 0; i < n_gms; i++) {
+        struct ofputil_group_mod *gm = &gms[i];
+        struct ofpbuf *request = ofputil_encode_group_mod(version, gm);
+
+        ovs_list_push_back(&requests, &request->list_node);
+        ofputil_uninit_group_mod(gm);
+    }
+
+    bundle_transact(vconn, &requests, OFPBF_ORDERED | OFPBF_ATOMIC);
+    ofpbuf_list_delete(&requests);
+    vconn_close(vconn);
+}
+
+static void
 ofctl_group_mod__(const char *remote, struct ofputil_group_mod *gms,
                   size_t n_gms, enum ofputil_protocol usable_protocols)
 {
@@ -2516,30 +2546,38 @@ ofctl_group_mod__(const char *remote, struct ofputil_group_mod *gms,
     struct vconn *vconn;
     size_t i;
 
+    if (bundle) {
+        bundle_group_mod__(remote, gms, n_gms, usable_protocols);
+        return;
+    }
+
     protocol = open_vconn_for_flow_mod(remote, &vconn, usable_protocols);
     version = ofputil_protocol_to_ofp_version(protocol);
 
     for (i = 0; i < n_gms; i++) {
         gm = &gms[i];
         request = ofputil_encode_group_mod(version, gm);
-        if (request) {
-            transact_noreply(vconn, request);
-        }
+        transact_noreply(vconn, request);
         ofputil_uninit_group_mod(gm);
     }
 
     vconn_close(vconn);
 }
 
-
 static void
-ofctl_group_mod_file(int argc OVS_UNUSED, char *argv[], uint16_t command)
+ofctl_group_mod_file(int argc OVS_UNUSED, char *argv[], int command)
 {
     struct ofputil_group_mod *gms = NULL;
     enum ofputil_protocol usable_protocols;
     size_t n_gms = 0;
     char *error;
 
+    if (command == OFPGC11_ADD) {
+        /* Allow the file to specify a mix of commands.  If none specified at
+         * the beginning of any given line, then the default is OFPGC11_ADD, so
+         * this is backwards compatible. */
+        command = -2;
+    }
     error = parse_ofp_group_mod_file(argv[2], command, &gms, &n_gms,
                                      &usable_protocols);
     if (error) {
@@ -2669,6 +2707,48 @@ ofctl_dump_group_features(struct ovs_cmdl_context *ctx)
     if (request) {
         dump_transaction(vconn, request);
     }
+
+    vconn_close(vconn);
+}
+
+static void
+ofctl_bundle(struct ovs_cmdl_context *ctx)
+{
+    enum ofputil_protocol protocol, usable_protocols;
+    struct ofputil_bundle_msg *bms;
+    struct ovs_list requests;
+    struct vconn *vconn;
+    size_t n_bms;
+    char *error;
+
+    error = parse_ofp_bundle_file(ctx->argv[2], &bms, &n_bms,
+                                  &usable_protocols);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+
+    /* Implicit OpenFlow 1.4. */
+    if (!(get_allowed_ofp_versions() &
+          ofputil_protocols_to_version_bitmap(OFPUTIL_P_OF13_UP))) {
+
+        /* Add implicit allowance for OpenFlow 1.4. */
+        add_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
+                                     OFPUTIL_P_OF14_OXM));
+        /* Remove all versions that do not support bundles. */
+        mask_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
+                                     OFPUTIL_P_OF13_UP));
+        allowed_protocols = ofputil_protocols_from_version_bitmap(
+                                     get_allowed_ofp_versions());
+    }
+
+    /* Bundles need OpenFlow 1.3+. */
+    usable_protocols &= OFPUTIL_P_OF13_UP;
+    protocol = open_vconn_for_flow_mod(ctx->argv[1], &vconn, usable_protocols);
+
+    ovs_list_init(&requests);
+    ofputil_encode_bundle_msgs(bms, n_bms, &requests, protocol);
+    bundle_transact(vconn, &requests, OFPBF_ORDERED | OFPBF_ATOMIC);
+    ofpbuf_list_delete(&requests);
 
     vconn_close(vconn);
 }
@@ -4139,6 +4219,10 @@ static const struct ovs_cmdl_command all_commands[] = {
       1, 2, ofctl_dump_group_stats },
     { "dump-group-features", "switch",
       1, 1, ofctl_dump_group_features },
+
+    { "bundle", "switch file",
+      2, 2, ofctl_bundle },
+
     { "add-tlv-map", "switch map",
       2, 2, ofctl_add_tlv_map },
     { "del-tlv-map", "switch [map]",
