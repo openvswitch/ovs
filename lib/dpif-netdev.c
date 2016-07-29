@@ -4193,7 +4193,7 @@ dpif_netdev_xps_revalidate_pmd(const struct dp_netdev_pmd_thread *pmd,
     long long interval;
 
     HMAP_FOR_EACH (tx, node, &pmd->port_cache) {
-        if (tx->port->dynamic_txqs) {
+        if (!tx->port->dynamic_txqs) {
             continue;
         }
         interval = now - tx->last_used;
