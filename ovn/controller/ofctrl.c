@@ -365,7 +365,7 @@ run_S_CLEAR_FLOWS(void)
     gm.command_bucket_id = OFPG15_BUCKET_ALL;
     ovs_list_init(&gm.buckets);
     queue_msg(encode_group_mod(&gm));
-    ofputil_bucket_list_destroy(&gm.buckets);
+    ofputil_uninit_group_mod(&gm);
 
     /* Clear installed_flows, to match the state of the switch. */
     ovn_flow_table_clear();
@@ -936,7 +936,7 @@ ofctrl_put(struct group_table *group_table, int64_t nb_cfg)
                 free(error);
             }
             ds_destroy(&group_string);
-            ofputil_bucket_list_destroy(&gm.buckets);
+            ofputil_uninit_group_mod(&gm);
         }
     }
 
@@ -1051,7 +1051,7 @@ ofctrl_put(struct group_table *group_table, int64_t nb_cfg)
                 free(error);
             }
             ds_destroy(&group_string);
-            ofputil_bucket_list_destroy(&gm.buckets);
+            ofputil_uninit_group_mod(&gm);
 
             /* Remove 'installed' from 'group_table->existing_groups' */
             hmap_remove(&group_table->existing_groups, &installed->hmap_node);

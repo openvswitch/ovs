@@ -2586,7 +2586,7 @@ ofp_print_group_desc(struct ds *s, const struct ofp_header *oh)
         ds_put_char(s, ' ');
         ofp_print_group(s, gd.group_id, gd.type, &gd.buckets, &gd.props,
                         oh->version, false);
-        ofputil_bucket_list_destroy(&gd.buckets);
+        ofputil_uninit_group_desc(&gd);
      }
 }
 
@@ -2747,7 +2747,7 @@ ofp_print_group_mod(struct ds *s, const struct ofp_header *oh)
         return;
     }
     ofp_print_group_mod__(s, oh->version, &gm);
-    ofputil_bucket_list_destroy(&gm.buckets);
+    ofputil_uninit_group_mod(&gm);
 }
 
 static void

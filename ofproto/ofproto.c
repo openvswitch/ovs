@@ -6874,7 +6874,7 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     ofmonitor_flush(ofproto->connmgr);
     ovs_mutex_unlock(&ofproto_mutex);
 
-    ofputil_bucket_list_destroy(&ogm.gm.buckets);
+    ofputil_uninit_group_mod(&ogm.gm);
 
     return error;
 }

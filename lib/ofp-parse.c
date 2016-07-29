@@ -1590,7 +1590,7 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, uint16_t command,
 
     return NULL;
  out:
-    ofputil_bucket_list_destroy(&gm->buckets);
+    ofputil_uninit_group_mod(gm);
     return error;
 }
 
@@ -1605,7 +1605,7 @@ parse_ofp_group_mod_str(struct ofputil_group_mod *gm, uint16_t command,
     free(string);
 
     if (error) {
-        ofputil_bucket_list_destroy(&gm->buckets);
+        ofputil_uninit_group_mod(gm);
     }
     return error;
 }
@@ -1653,7 +1653,7 @@ parse_ofp_group_mod_file(const char *file_name, uint16_t command,
             size_t i;
 
             for (i = 0; i < *n_gms; i++) {
-                ofputil_bucket_list_destroy(&(*gms)[i].buckets);
+                ofputil_uninit_group_mod(&(*gms)[i]);
             }
             free(*gms);
             *gms = NULL;
