@@ -1117,7 +1117,6 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
         }
         dp_packet_delete(buffer);
     } else {
-        dp_packet_pad(buffer);
         batch->packets[0] = buffer;
         batch->count = 1;
     }

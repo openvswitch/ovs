@@ -1959,7 +1959,7 @@ done
 test_ip() {
     # This packet has bad checksums but logical L3 routing doesn't check.
     local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5
-    local packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}003511110008
+    local packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
     shift; shift; shift; shift; shift
     hv=`vif_to_hv $inport`
     as $hv ovs-appctl netdev-dummy/receive vif$inport $packet

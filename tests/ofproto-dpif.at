@@ -194,12 +194,12 @@ AT_CHECK([ovs-appctl revalidator/purge], [0])
 # Checks the flow stats in br1, should only be one flow with non-zero
 # 'n_packets' from internal table.
 AT_CHECK([ovs-appctl bridge/dump-flows br1 | ofctl_strip | grep -- "n_packets" | grep -- "table_id" | sed -e 's/output:[[0-9]][[0-9]]*/output/'] , [0], [dnl
-table_id=254, n_packets=1, n_bytes=64, priority=20,recirc_id=0x0,dp_hash=0x0/0xff,actions=output
+table_id=254, n_packets=1, n_bytes=38, priority=20,recirc_id=0x0,dp_hash=0x0/0xff,actions=output
 ])
 
 # Checks the flow stats in br-int, should be only one match.
 AT_CHECK([ovs-ofctl dump-flows br-int | ofctl_strip | sort], [0], [dnl
- n_packets=1, n_bytes=60, priority=1,in_port=5 actions=mod_vlan_vid:1,output:101
+ n_packets=1, n_bytes=34, priority=1,in_port=5 actions=mod_vlan_vid:1,output:101
  priority=2,in_port=5,dl_vlan=1 actions=drop
 NXST_FLOW reply:
 ])
@@ -475,7 +475,7 @@ for i in `seq 0 2`;
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-group-stats br0], [0], [stdout])
 AT_CHECK([strip_xids < stdout | sort], [0], [dnl
- group_id=1234,ref_count=1,packet_count=3,byte_count=180,bucket0:packet_count=3,byte_count=180,bucket1:packet_count=0,byte_count=0
+ group_id=1234,ref_count=1,packet_count=3,byte_count=126,bucket0:packet_count=3,byte_count=126,bucket1:packet_count=0,byte_count=0
 OFPST_GROUP reply (OF1.2):
 ])
 OVS_VSWITCHD_STOP
@@ -496,7 +496,7 @@ for i in `seq 0 2`;
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn dump-group-stats br0], [0], [stdout])
 AT_CHECK([strip_xids < stdout | sort], [0], [dnl
- group_id=1234,ref_count=1,packet_count=3,byte_count=180,bucket0:packet_count=3,byte_count=180,bucket1:packet_count=3,byte_count=180
+ group_id=1234,ref_count=1,packet_count=3,byte_count=126,bucket0:packet_count=3,byte_count=126,bucket1:packet_count=3,byte_count=126
 OFPST_GROUP reply (OF1.2):
 ])
 OVS_VSWITCHD_STOP
@@ -936,13 +936,13 @@ done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=syn tcp_csum:2e7e
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=syn tcp_csum:2e7e
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=syn tcp_csum:2e7e
 ])
 
@@ -999,19 +999,19 @@ done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=rst|urg tcp_csum:2e5c
 dnl
-OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=rst|urg tcp_csum:2e5c
 dnl
-OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=rst|urg tcp_csum:2e5c
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- n_packets=3, n_bytes=180, actions=goto_table:1
+ n_packets=3, n_bytes=162, actions=goto_table:1
 OFPST_FLOW reply (OF1.2):
 ])
 
@@ -1039,7 +1039,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- n_packets=3, n_bytes=180, actions=resubmit(1,1)
+ n_packets=3, n_bytes=162, actions=resubmit(1,1)
 OFPST_FLOW reply (OF1.2):
 ])
 
@@ -1066,13 +1066,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 ])
 
@@ -1086,19 +1086,19 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- table=1, n_packets=3, n_bytes=180, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
+ table=1, n_packets=3, n_bytes=162, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
 OFPST_FLOW reply (OF1.2):
 ])
 
@@ -1129,13 +1129,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): table_id=2 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=2 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=2 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=2 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=2 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=2 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 ])
 
@@ -1149,20 +1149,20 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=253 cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- n_packets=6, n_bytes=360, actions=goto_table:1
- table=2, n_packets=3, n_bytes=180, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
+ n_packets=6, n_bytes=324, actions=goto_table:1
+ table=2, n_packets=3, n_bytes=162, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
 OFPST_FLOW reply (OF1.2):
 ])
 
@@ -1207,7 +1207,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- n_packets=6, n_bytes=360, actions=resubmit(1,1)
+ n_packets=6, n_bytes=324, actions=resubmit(1,1)
  table=2, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
 OFPST_FLOW reply (OF1.2):
 ])
@@ -1267,7 +1267,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- n_packets=3, n_bytes=180, actions=goto_table:1
+ n_packets=3, n_bytes=162, actions=goto_table:1
 OFPST_FLOW reply (OF1.2):
 ])
 
@@ -1298,7 +1298,7 @@ AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -OOpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- n_packets=3, n_bytes=180, actions=resubmit(1,1)
+ n_packets=3, n_bytes=162, actions=resubmit(1,1)
 OFPST_FLOW reply (OF1.2):
 ])
 
@@ -1339,13 +1339,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 dnl
-OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 dnl
-OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=9,tcp_flags=ack tcp_csum:2e70
 ])
 
@@ -1359,13 +1359,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 ])
 
@@ -1379,13 +1379,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (xid=0x0): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
 tcp,dl_vlan=15,dl_vlan_pcp=0,dl_src=30:33:33:33:33:33,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=fin tcp_csum:2e7e
 dnl
-OFPT_PACKET_IN (xid=0x0): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
 tcp,dl_vlan=15,dl_vlan_pcp=0,dl_src=30:33:33:33:33:33,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=fin tcp_csum:2e7e
 dnl
-OFPT_PACKET_IN (xid=0x0): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
 tcp,dl_vlan=15,dl_vlan_pcp=0,dl_src=30:33:33:33:33:33,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=fin tcp_csum:2e7e
 ])
 
@@ -1399,13 +1399,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 ip,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:44:41,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=16,nw_tos=0,nw_ecn=0,nw_ttl=64
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 ip,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:44:41,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=16,nw_tos=0,nw_ecn=0,nw_ttl=64
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 ip,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:44:41,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=16,nw_tos=0,nw_ecn=0,nw_ttl=64
 ])
 
@@ -1419,31 +1419,31 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 18])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x1 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x1 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=20:22:22:22:22:22,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=11,tcp_flags=fin tcp_csum:2e7d
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x3 total_len=64 reg0=0x1,in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x3 total_len=58 reg0=0x1,in_port=1 (via action) data_len=58 (unbuffered)
 tcp,dl_vlan=80,dl_vlan_pcp=0,dl_src=20:22:22:22:22:22,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=11,tcp_flags=fin tcp_csum:2e7d
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=2 cookie=0x4 total_len=64 reg0=0x1,reg1=0x2,in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=2 cookie=0x4 total_len=58 reg0=0x1,reg1=0x2,in_port=1 (via action) data_len=58 (unbuffered)
 tcp,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=11,tcp_flags=fin tcp_csum:2e7d
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=3 cookie=0x5 total_len=64 reg0=0x1,reg1=0x2,reg2=0x3,in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=3 cookie=0x5 total_len=58 reg0=0x1,reg1=0x2,reg2=0x3,in_port=1 (via action) data_len=58 (unbuffered)
 tcp,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=11,tcp_flags=fin tcp_csum:2e7d
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=4 cookie=0x6 total_len=64 reg0=0x1,reg1=0x2,reg2=0x3,reg3=0x4,in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=4 cookie=0x6 total_len=58 reg0=0x1,reg1=0x2,reg2=0x3,reg3=0x4,in_port=1 (via action) data_len=58 (unbuffered)
 tcp,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=83.83.83.83,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=11,tcp_flags=fin tcp_csum:4880
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=5 cookie=0x7 total_len=64 reg0=0x1,reg1=0x2,reg2=0x3,reg3=0x4,reg4=0x5,tun_id=0x6,in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=5 cookie=0x7 total_len=58 reg0=0x1,reg1=0x2,reg2=0x3,reg3=0x4,reg4=0x5,tun_id=0x6,in_port=1 (via action) data_len=58 (unbuffered)
 tcp,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=83.83.83.83,nw_dst=84.84.84.84,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=11,tcp_flags=fin tcp_csum:6082
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=6 cookie=0x8 total_len=64 reg0=0x1,reg1=0x2,reg2=0x3,reg3=0x4,reg4=0x5,tun_id=0x6,in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=6 cookie=0x8 total_len=58 reg0=0x1,reg1=0x2,reg2=0x3,reg3=0x4,reg4=0x5,tun_id=0x6,in_port=1 (via action) data_len=58 (unbuffered)
 tcp,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=83.83.83.83,nw_dst=84.84.84.84,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=85,tp_dst=11,tcp_flags=fin tcp_csum:6035
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=64 reg0=0x1,reg1=0x2,reg2=0x3,reg3=0x4,reg4=0x5,tun_id=0x6,in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=58 reg0=0x1,reg1=0x2,reg2=0x3,reg3=0x4,reg4=0x5,tun_id=0x6,in_port=1 (via action) data_len=58 (unbuffered)
 tcp,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=83.83.83.83,nw_dst=84.84.84.84,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=85,tp_dst=86,tcp_flags=fin tcp_csum:5fea
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=64 reg0=0x1,reg1=0x2,reg2=0x3,reg3=0x4,reg4=0x5,tun_id=0x6,in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=7 cookie=0x9 total_len=58 reg0=0x1,reg1=0x2,reg2=0x3,reg3=0x4,reg4=0x5,tun_id=0x6,in_port=1 (via action) data_len=58 (unbuffered)
 tcp,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,nw_src=83.83.83.83,nw_dst=84.84.84.84,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=85,tp_dst=86,tcp_flags=fin tcp_csum:5fea
 ])
 
@@ -1495,23 +1495,23 @@ done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 18])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=1.1.1.1,arp_tpa=2.2.2.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=40:44:44:44:44:41
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=1.1.1.1,arp_tpa=2.2.2.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=40:44:44:44:44:41
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.128.1,arp_tpa=192.168.0.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
-NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xd total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=1.1.1.1,arp_tpa=2.2.2.2,arp_op=2,arp_sha=50:54:00:00:00:05,arp_tha=40:44:44:44:44:41
 ])
 
@@ -1557,18 +1557,18 @@ sctp,dl_vlan=80,dl_vlan_pcp=0,dl_src=80:81:81:81:81:81,dl_dst=82:82:82:82:82:82,
 ])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
- cookie=0x1, n_packets=3, n_bytes=218, dl_src=20:22:22:22:22:22 actions=CONTROLLER:65535,resubmit(80,1)
- cookie=0x2, n_packets=3, n_bytes=180, dl_src=30:33:33:33:33:33 actions=mod_vlan_vid:15,CONTROLLER:65535
- cookie=0x3, table=1, n_packets=3, n_bytes=218, in_port=80 actions=load:0x1->NXM_NX_REG0[[]],mod_vlan_vid:80,CONTROLLER:65535,resubmit(81,2)
- cookie=0x4, table=2, n_packets=3, n_bytes=218, in_port=81 actions=load:0x2->NXM_NX_REG1[[]],mod_dl_src:80:81:81:81:81:81,CONTROLLER:65535,resubmit(82,3)
- cookie=0x5, table=3, n_packets=3, n_bytes=218, in_port=82 actions=load:0x3->NXM_NX_REG2[[]],mod_dl_dst:82:82:82:82:82:82,CONTROLLER:65535,resubmit(83,4)
- cookie=0x6, table=4, n_packets=3, n_bytes=218, in_port=83 actions=load:0x4->NXM_NX_REG3[[]],mod_nw_src:83.83.83.83,CONTROLLER:65535,resubmit(84,5)
- cookie=0x7, table=5, n_packets=3, n_bytes=218, in_port=84 actions=load:0x5->NXM_NX_REG4[[]],load:0x6->NXM_NX_TUN_ID[[]],mod_nw_dst:84.84.84.84,CONTROLLER:65535,resubmit(85,6)
- cookie=0x8, table=6, n_packets=3, n_bytes=218, in_port=85 actions=mod_tp_src:85,CONTROLLER:65535,resubmit(86,7)
- cookie=0x9, table=7, n_packets=3, n_bytes=218, in_port=86 actions=mod_tp_dst:86,CONTROLLER:65535,CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:41 actions=mod_vlan_vid:99,mod_vlan_pcp:1,CONTROLLER:65535
- cookie=0xd, n_packets=3, n_bytes=180, arp,dl_src=80:88:88:88:88:88 actions=load:0x2->NXM_OF_ARP_OP[[]],CONTROLLER:65535,load:0xc0a88001->NXM_OF_ARP_SPA[[]],CONTROLLER:65535,load:0x404444444441->NXM_NX_ARP_THA[[]],load:0x1010101->NXM_OF_ARP_SPA[[]],load:0x2020202->NXM_OF_ARP_TPA[[]],CONTROLLER:65535
- n_packets=3, n_bytes=180, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
+ cookie=0x1, n_packets=3, n_bytes=212, dl_src=20:22:22:22:22:22 actions=CONTROLLER:65535,resubmit(80,1)
+ cookie=0x2, n_packets=3, n_bytes=162, dl_src=30:33:33:33:33:33 actions=mod_vlan_vid:15,CONTROLLER:65535
+ cookie=0x3, table=1, n_packets=3, n_bytes=212, in_port=80 actions=load:0x1->NXM_NX_REG0[[]],mod_vlan_vid:80,CONTROLLER:65535,resubmit(81,2)
+ cookie=0x4, table=2, n_packets=3, n_bytes=212, in_port=81 actions=load:0x2->NXM_NX_REG1[[]],mod_dl_src:80:81:81:81:81:81,CONTROLLER:65535,resubmit(82,3)
+ cookie=0x5, table=3, n_packets=3, n_bytes=212, in_port=82 actions=load:0x3->NXM_NX_REG2[[]],mod_dl_dst:82:82:82:82:82:82,CONTROLLER:65535,resubmit(83,4)
+ cookie=0x6, table=4, n_packets=3, n_bytes=212, in_port=83 actions=load:0x4->NXM_NX_REG3[[]],mod_nw_src:83.83.83.83,CONTROLLER:65535,resubmit(84,5)
+ cookie=0x7, table=5, n_packets=3, n_bytes=212, in_port=84 actions=load:0x5->NXM_NX_REG4[[]],load:0x6->NXM_NX_TUN_ID[[]],mod_nw_dst:84.84.84.84,CONTROLLER:65535,resubmit(85,6)
+ cookie=0x8, table=6, n_packets=3, n_bytes=212, in_port=85 actions=mod_tp_src:85,CONTROLLER:65535,resubmit(86,7)
+ cookie=0x9, table=7, n_packets=3, n_bytes=212, in_port=86 actions=mod_tp_dst:86,CONTROLLER:65535,CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=102, dl_src=40:44:44:44:44:41 actions=mod_vlan_vid:99,mod_vlan_pcp:1,CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=126, arp,dl_src=80:88:88:88:88:88 actions=load:0x2->NXM_OF_ARP_OP[[]],CONTROLLER:65535,load:0xc0a88001->NXM_OF_ARP_SPA[[]],CONTROLLER:65535,load:0x404444444441->NXM_NX_ARP_THA[[]],load:0x1010101->NXM_OF_ARP_SPA[[]],load:0x2020202->NXM_OF_ARP_TPA[[]],CONTROLLER:65535
+ n_packets=3, n_bytes=162, dl_src=10:11:11:11:11:11 actions=CONTROLLER:65535
 NXST_FLOW reply:
 ])
 
@@ -1644,13 +1644,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=46 in_port=1 (via action) data_len=46 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:42,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=46 in_port=1 (via action) data_len=46 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:42,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=46 in_port=1 (via action) data_len=46 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:42,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=1
 ])
 
@@ -1664,13 +1664,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=34 in_port=1 (via action) data_len=34 (unbuffered)
 ip,vlan_tci=0x0000,dl_src=41:44:44:44:44:42,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=16,nw_tos=0,nw_ecn=0,nw_ttl=64
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=34 in_port=1 (via action) data_len=34 (unbuffered)
 ip,vlan_tci=0x0000,dl_src=41:44:44:44:44:42,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=16,nw_tos=0,nw_ecn=0,nw_ttl=64
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=34 in_port=1 (via action) data_len=34 (unbuffered)
 ip,vlan_tci=0x0000,dl_src=41:44:44:44:44:42,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_proto=16,nw_tos=0,nw_ecn=0,nw_ttl=64
 ])
 
@@ -1686,13 +1686,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=22 in_port=1 (via action) data_len=22 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:43,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0,mpls_lse1=46912
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=22 in_port=1 (via action) data_len=22 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:43,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0,mpls_lse1=46912
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=22 in_port=1 (via action) data_len=22 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:43,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0,mpls_lse1=46912
 ])
 
@@ -1706,13 +1706,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=7,dl_src=40:44:44:44:44:44,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=7,dl_src=40:44:44:44:44:44,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=7,dl_src=40:44:44:44:44:44,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=1
 ])
 
@@ -1726,13 +1726,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:45,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=63,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:45,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=63,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:45,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=63,mpls_bos=1
 ])
 
@@ -1746,13 +1746,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:46,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=10,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:46,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=10,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:46,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=10,mpls_bos=1
 ])
 
@@ -1766,13 +1766,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:47,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=10,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:47,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=10,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:47,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=10,mpls_bos=1
 ])
 
@@ -1788,13 +1788,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=22 in_port=1 (via action) data_len=22 (unbuffered)
 mplsm,vlan_tci=0x0000,dl_src=40:44:44:44:44:49,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0,mpls_lse1=42816
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=22 in_port=1 (via action) data_len=22 (unbuffered)
 mplsm,vlan_tci=0x0000,dl_src=40:44:44:44:44:49,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0,mpls_lse1=42816
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=22 in_port=1 (via action) data_len=22 (unbuffered)
 mplsm,vlan_tci=0x0000,dl_src=40:44:44:44:44:49,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=64,mpls_bos=0,mpls_lse1=42816
 ])
 
@@ -1810,13 +1810,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:48,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=9,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:48,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=9,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xa total_len=38 in_port=1 (via action) data_len=38 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:44:48,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=3,mpls_ttl=9,mpls_bos=1
 ])
 
@@ -1830,13 +1830,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xb total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xb total_len=18 in_port=1 (via action) data_len=18 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=50:55:55:55:55:55,dl_dst=50:54:00:00:00:07,mpls_label=1000,mpls_tc=7,mpls_ttl=64,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xb total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xb total_len=18 in_port=1 (via action) data_len=18 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=50:55:55:55:55:55,dl_dst=50:54:00:00:00:07,mpls_label=1000,mpls_tc=7,mpls_ttl=64,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xb total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xb total_len=18 in_port=1 (via action) data_len=18 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=50:55:55:55:55:55,dl_dst=50:54:00:00:00:07,mpls_label=1000,mpls_tc=7,mpls_ttl=64,mpls_bos=1
 ])
 
@@ -1850,13 +1850,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xc total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xc total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
 mplsm,vlan_tci=0x0000,dl_src=70:77:77:77:77:77,dl_dst=50:54:00:00:00:07,mpls_label=1000,mpls_tc=7,mpls_ttl=128,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xc total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xc total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
 mplsm,vlan_tci=0x0000,dl_src=70:77:77:77:77:77,dl_dst=50:54:00:00:00:07,mpls_label=1000,mpls_tc=7,mpls_ttl=128,mpls_bos=1
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0xc total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0xc total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
 mplsm,vlan_tci=0x0000,dl_src=70:77:77:77:77:77,dl_dst=50:54:00:00:00:07,mpls_label=1000,mpls_tc=7,mpls_ttl=128,mpls_bos=1
 ])
 
@@ -2084,13 +2084,13 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([strip_metadata < ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0xd total_len=56 in_port=1 (via action) data_len=56 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0xd total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=60:66:66:66:00:08,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=255.255.255.255,arp_op=2,arp_sha=60:66:66:66:00:08,arp_tha=ff:ff:ff:ff:ff:ff
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0xd total_len=56 in_port=1 (via action) data_len=56 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0xd total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=60:66:66:66:00:08,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=255.255.255.255,arp_op=2,arp_sha=60:66:66:66:00:08,arp_tha=ff:ff:ff:ff:ff:ff
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0xd total_len=56 in_port=1 (via action) data_len=56 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0xd total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=60:66:66:66:00:08,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=255.255.255.255,arp_op=2,arp_sha=60:66:66:66:00:08,arp_tha=ff:ff:ff:ff:ff:ff
 ])
 
@@ -2582,18 +2582,18 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0x5, n_packets=3, n_bytes=186, dl_src=60:66:66:66:05:00 actions=push_mpls:0x8848,pop_mpls:0x8847,CONTROLLER:65535
  cookie=0x5, n_packets=3, n_bytes=186, dl_src=60:66:66:66:05:01 actions=push_mpls:0x8847,pop_mpls:0x8848,dec_mpls_ttl,CONTROLLER:65535
  cookie=0x5, n_packets=3, n_bytes=186, dl_src=60:66:66:66:05:10 actions=push_mpls:0x8848,dec_mpls_ttl,pop_mpls:0x8847,dec_mpls_ttl,CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:42 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:43 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:44 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:45 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],dec_mpls_ttl,CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:46 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],set_mpls_ttl(10),CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:47 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],dec_mpls_ttl,set_mpls_ttl(10),CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:44:48 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],set_mpls_ttl(10),dec_mpls_ttl,CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=41:44:44:44:44:42 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],pop_mpls:0x0800,CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, mpls,dl_src=40:44:44:44:44:49 actions=push_mpls:0x8848,load:0xa->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
- cookie=0xb, n_packets=3, n_bytes=180, mpls,dl_src=50:55:55:55:55:55 actions=load:0x3e8->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
- cookie=0xc, n_packets=3, n_bytes=180, dl_src=70:77:77:77:77:77 actions=push_mpls:0x8848,load:0x3e8->OXM_OF_MPLS_LABEL[[]],load:0x7->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
- cookie=0xd, n_packets=3, n_bytes=180, dl_src=60:66:66:66:00:08 actions=pop_mpls:0x0806,resubmit(1,1)
+ cookie=0xa, n_packets=3, n_bytes=102, dl_src=40:44:44:44:44:45 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],dec_mpls_ttl,CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=102, dl_src=40:44:44:44:44:46 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],set_mpls_ttl(10),CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=102, dl_src=40:44:44:44:44:47 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],dec_mpls_ttl,set_mpls_ttl(10),CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=102, dl_src=40:44:44:44:44:48 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],set_mpls_ttl(10),dec_mpls_ttl,CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=102, dl_src=41:44:44:44:44:42 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],pop_mpls:0x0800,CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=114, dl_src=40:44:44:44:44:44 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=126, dl_src=40:44:44:44:44:42 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=54, dl_src=40:44:44:44:44:43 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=54, mpls,dl_src=40:44:44:44:44:49 actions=push_mpls:0x8848,load:0xa->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
+ cookie=0xb, n_packets=3, n_bytes=54, mpls,dl_src=50:55:55:55:55:55 actions=load:0x3e8->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
+ cookie=0xc, n_packets=3, n_bytes=162, dl_src=70:77:77:77:77:77 actions=push_mpls:0x8848,load:0x3e8->OXM_OF_MPLS_LABEL[[]],load:0x7->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
+ cookie=0xd, n_packets=3, n_bytes=138, dl_src=60:66:66:66:00:08 actions=pop_mpls:0x0806,resubmit(1,1)
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:01 actions=pop_mpls:0x0800,dec_ttl,CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:02 actions=pop_mpls:0x0800,load:0xa000001->NXM_OF_IP_DST[[]],CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:03 actions=pop_mpls:0x0800,move:NXM_OF_IP_DST[[]]->NXM_OF_IP_SRC[[]],CONTROLLER:65535
@@ -2609,7 +2609,7 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:01:01 actions=pop_mpls:0x8847,dec_mpls_ttl,CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:01:02 actions=pop_mpls:0x8848,load:0x3->OXM_OF_MPLS_TC[[]],CONTROLLER:65535
  cookie=0xd, n_packets=3, n_bytes=198, dl_src=60:66:66:66:02:00 actions=pop_mpls:0x8847,pop_mpls:0x0800,CONTROLLER:65535
- cookie=0xd, table=1, n_packets=3, n_bytes=168, arp actions=CONTROLLER:65535
+ cookie=0xd, table=1, n_packets=3, n_bytes=126, arp actions=CONTROLLER:65535
  cookie=0xdeadbeef, table=2, n_packets=3, n_bytes=186, dl_src=60:66:66:66:00:09 actions=pop_mpls:0x0800,mod_nw_tos:48
  cookie=0xe, n_packets=3, n_bytes=198, dl_src=60:66:66:66:02:01 actions=pop_mpls:0x8848,pop_mpls:0x0800,dec_ttl,CONTROLLER:65535
  cookie=0xe, n_packets=3, n_bytes=198, dl_src=60:66:66:66:02:10 actions=pop_mpls:0x8847,dec_mpls_ttl,pop_mpls:0x0800,dec_ttl,CONTROLLER:65535
@@ -2741,19 +2741,19 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (xid=0x0): total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (xid=0x0): total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow10 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- n_packets=3, n_bytes=180, priority=0 actions=CONTROLLER:65535
+ n_packets=3, n_bytes=162, priority=0 actions=CONTROLLER:65535
 NXST_FLOW reply:
 ])
 
@@ -2783,19 +2783,19 @@ OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow13 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- n_packets=3, n_bytes=180, priority=0 actions=CONTROLLER:65535
+ n_packets=3, n_bytes=162, priority=0 actions=CONTROLLER:65535
 OFPST_FLOW reply (OF1.3):
 ])
 
@@ -2855,20 +2855,20 @@ send: OFPT_SET_ASYNC (OF1.3) (xid=0x2):
     TABLE_STATUS: (off)
   REQUESTFORWARD: (off)
 dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
 AT_CHECK([ovs-ofctl --protocols=OpenFlow13 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- n_packets=3, n_bytes=180, priority=0 actions=CONTROLLER:65535
+ n_packets=3, n_bytes=162, priority=0 actions=CONTROLLER:65535
 OFPST_FLOW reply (OF1.3):
 ])
 
@@ -2897,20 +2897,20 @@ OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.4) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.4) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.4) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.4) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.4) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via no_match) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.4) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via no_match) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
 AT_CHECK([ovs-ofctl --protocols=OpenFlow14 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- n_packets=3, n_bytes=180, priority=0 actions=CONTROLLER:65535
+ n_packets=3, n_bytes=162, priority=0 actions=CONTROLLER:65535
 OFPST_FLOW reply (OF1.4):
 ])
 
@@ -2945,40 +2945,40 @@ OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): table_id=1 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): table_id=2 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): table_id=2 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): table_id=1 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): table_id=2 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): table_id=2 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): table_id=1 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): table_id=2 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): table_id=2 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.3) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
 AT_CHECK([ovs-ofctl --protocols=OpenFlow13 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- n_packets=3, n_bytes=180, in_port=1 actions=write_actions(CONTROLLER:65535),goto_table:1
- table=1, n_packets=3, n_bytes=180, actions=CONTROLLER:65535,goto_table:2
- table=2, n_packets=3, n_bytes=180, actions=group:1234
+ n_packets=3, n_bytes=162, in_port=1 actions=write_actions(CONTROLLER:65535),goto_table:1
+ table=1, n_packets=3, n_bytes=162, actions=CONTROLLER:65535,goto_table:2
+ table=2, n_packets=3, n_bytes=162, actions=group:1234
 OFPST_FLOW reply (OF1.3):
 ])
 
@@ -3013,40 +3013,40 @@ OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.4) (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.4) (xid=0x0): table_id=1 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.4) (xid=0x0): table_id=2 cookie=0x0 total_len=60 in_port=1 (via group) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.4) (xid=0x0): table_id=2 cookie=0x0 total_len=54 in_port=1 (via group) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.4) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via action_set) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.4) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via action_set) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.4) (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.4) (xid=0x0): table_id=1 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.4) (xid=0x0): table_id=2 cookie=0x0 total_len=60 in_port=1 (via group) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.4) (xid=0x0): table_id=2 cookie=0x0 total_len=54 in_port=1 (via group) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.4) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via action_set) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.4) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via action_set) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.4) (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.4) (xid=0x0): table_id=1 cookie=0x0 total_len=54 in_port=1 (via action) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.4) (xid=0x0): table_id=2 cookie=0x0 total_len=60 in_port=1 (via group) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.4) (xid=0x0): table_id=2 cookie=0x0 total_len=54 in_port=1 (via group) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 dnl
-OFPT_PACKET_IN (OF1.4) (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via action_set) data_len=60 (unbuffered)
+OFPT_PACKET_IN (OF1.4) (xid=0x0): cookie=0x0 total_len=54 in_port=1 (via action_set) data_len=54 (unbuffered)
 tcp,vlan_tci=0x0000,dl_src=10:11:11:11:11:11,dl_dst=50:54:00:00:00:07,nw_src=192.168.0.1,nw_dst=192.168.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=8,tp_dst=10,tcp_flags=syn tcp_csum:2e7d
 ])
 
 AT_CHECK([ovs-appctl time/warp 5000], [0], [ignore])
 
 AT_CHECK([ovs-ofctl --protocols=OpenFlow14 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- n_packets=3, n_bytes=180, in_port=1 actions=write_actions(CONTROLLER:65535),goto_table:1
- table=1, n_packets=3, n_bytes=180, actions=CONTROLLER:65535,goto_table:2
- table=2, n_packets=3, n_bytes=180, actions=group:1234
+ n_packets=3, n_bytes=162, in_port=1 actions=write_actions(CONTROLLER:65535),goto_table:1
+ table=1, n_packets=3, n_bytes=162, actions=CONTROLLER:65535,goto_table:2
+ table=2, n_packets=3, n_bytes=162, actions=group:1234
 OFPST_FLOW reply (OF1.4):
 ])
 
@@ -3241,26 +3241,26 @@ OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:00:00,dl_dst=50:54:00:00:00:07,mpls_label=0,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 00 00 88 47 00 00
 00000010  01 40 45 00 00 28 00 00-00 00 40 06 f9 7c c0 a8
 00000020  00 01 c0 a8 00 02 00 00-00 00 00 00 00 00 00 00
-00000030  00 00 50 00 00 00 2e 91-00 00 00 00 00 00 00 00
+00000030  00 00 50 00 00 00 2e 91-00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:00:00,dl_dst=50:54:00:00:00:07,mpls_label=0,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 00 00 88 47 00 00
 00000010  01 40 45 00 00 28 00 00-00 00 40 06 f9 7c c0 a8
 00000020  00 01 c0 a8 00 02 00 00-00 00 00 00 00 00 00 00
-00000030  00 00 50 00 00 00 2e 91-00 00 00 00 00 00 00 00
+00000030  00 00 50 00 00 00 2e 91-00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=58 in_port=1 (via action) data_len=58 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:00:00,dl_dst=50:54:00:00:00:07,mpls_label=0,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 00 00 88 47 00 00
 00000010  01 40 45 00 00 28 00 00-00 00 40 06 f9 7c c0 a8
 00000020  00 01 c0 a8 00 02 00 00-00 00 00 00 00 00 00 00
-00000030  00 00 50 00 00 00 2e 91-00 00 00 00 00 00 00 00
+00000030  00 00 50 00 00 00 2e 91-00 00
 ])
 
 dnl In this test, we push an MPLS tag to an MPLS packet. The LSE should be
@@ -3274,26 +3274,20 @@ OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=22 in_port=1 (via action) data_len=22 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:00:01,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=0,mpls_lse1=41280
 00000000  50 54 00 00 00 07 40 44-44 44 00 01 88 47 00 00
-00000010  a0 40 00 00 a1 40 00 00-00 00 00 00 00 00 00 00
-00000020  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
+00000010  a0 40 00 00 a1 40
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=22 in_port=1 (via action) data_len=22 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:00:01,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=0,mpls_lse1=41280
 00000000  50 54 00 00 00 07 40 44-44 44 00 01 88 47 00 00
-00000010  a0 40 00 00 a1 40 00 00-00 00 00 00 00 00 00 00
-00000020  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
+00000010  a0 40 00 00 a1 40
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=22 in_port=1 (via action) data_len=22 (unbuffered)
 mpls,vlan_tci=0x0000,dl_src=40:44:44:44:00:01,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=0,mpls_lse1=41280
 00000000  50 54 00 00 00 07 40 44-44 44 00 01 88 47 00 00
-00000010  a0 40 00 00 a1 40 00 00-00 00 00 00 00 00 00 00
-00000020  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
+00000010  a0 40 00 00 a1 40
 ])
 
 dnl In this test, we push an MPLS tag to an MPLS packet. The LSE should be
@@ -3309,26 +3303,20 @@ OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=22 in_port=1 (via action) data_len=22 (unbuffered)
 mplsm,vlan_tci=0x0000,dl_src=40:44:44:44:00:02,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=0,mpls_lse1=41280
 00000000  50 54 00 00 00 07 40 44-44 44 00 02 88 48 00 00
-00000010  a0 40 00 00 a1 40 00 00-00 00 00 00 00 00 00 00
-00000020  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
+00000010  a0 40 00 00 a1 40
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=22 in_port=1 (via action) data_len=22 (unbuffered)
 mplsm,vlan_tci=0x0000,dl_src=40:44:44:44:00:02,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=0,mpls_lse1=41280
 00000000  50 54 00 00 00 07 40 44-44 44 00 02 88 48 00 00
-00000010  a0 40 00 00 a1 40 00 00-00 00 00 00 00 00 00 00
-00000020  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
+00000010  a0 40 00 00 a1 40
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=22 in_port=1 (via action) data_len=22 (unbuffered)
 mplsm,vlan_tci=0x0000,dl_src=40:44:44:44:00:02,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=0,mpls_lse1=41280
 00000000  50 54 00 00 00 07 40 44-44 44 00 02 88 48 00 00
-00000010  a0 40 00 00 a1 40 00 00-00 00 00 00 00 00 00 00
-00000020  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 00 00-00 00 00 00 00 00 00 00
+00000010  a0 40 00 00 a1 40
 ])
 
 OVS_VSWITCHD_STOP
@@ -3367,29 +3355,26 @@ OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:50,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 50 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
-00000040  00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:50,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 50 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
-00000040  00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:50,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 50 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
-00000040  00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 ])
 
 dnl Modified MPLS controller action.
@@ -3404,26 +3389,26 @@ OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:51,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 51 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:51,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 51 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:51,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 51 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 ])
 
 dnl Modified MPLS controller action.
@@ -3438,29 +3423,26 @@ OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:52,dl_dst=52:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  52 54 00 00 00 07 40 44-44 44 54 52 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
-00000040  00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:52,dl_dst=52:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  52 54 00 00 00 07 40 44-44 44 54 52 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
-00000040  00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:52,dl_dst=52:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  52 54 00 00 00 07 40 44-44 44 54 52 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
-00000040  00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 ])
 
 dnl Modified MPLS controller action.
@@ -3475,26 +3457,26 @@ OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:53,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 53 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:53,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 53 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:53,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 53 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 ])
 
 dnl Modified MPLS controller action.
@@ -3509,29 +3491,26 @@ OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:54,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 54 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
-00000040  00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:54,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 54 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
-00000040  00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:54,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 54 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
-00000040  00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 ])
 
 dnl Modified MPLS controller action.
@@ -3546,26 +3525,26 @@ OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:55,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 55 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:55,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 55 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:55,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 55 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 ])
 
 dnl Modified MPLS controller action.
@@ -3580,29 +3559,26 @@ OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:56,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 56 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
-00000040  00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:56,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 56 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
-00000040  00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=68 in_port=1 (via action) data_len=68 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:56,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 56 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
-00000040  00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 ])
 
 dnl Modified MPLS controller action.
@@ -3617,26 +3593,26 @@ OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:57,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 57 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:57,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 57 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:57,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 57 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 ])
 
 dnl Modified MPLS controller action.
@@ -3651,26 +3627,26 @@ OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT(ovs-ofctl)
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:58,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 58 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:58,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 58 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:58,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 58 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 ])
 
 dnl Modified MPLS controller action.
@@ -3685,40 +3661,40 @@ OVS_WAIT_UNTIL([test `grep OFPT_PACKET_IN ofctl_monitor.log | wc -l` -ge 3])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
 AT_CHECK([ofctl_strip < ofctl_monitor.log], [0], [dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:59,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 59 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:59,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 59 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 dnl
-OFPT_PACKET_IN (OF1.2): total_len=64 in_port=1 (via action) data_len=64 (unbuffered)
+OFPT_PACKET_IN (OF1.2): total_len=62 in_port=1 (via action) data_len=62 (unbuffered)
 mpls,dl_vlan=99,dl_vlan_pcp=1,dl_src=40:44:44:44:54:59,dl_dst=50:54:00:00:00:07,mpls_label=10,mpls_tc=0,mpls_ttl=64,mpls_bos=1
 00000000  50 54 00 00 00 07 40 44-44 44 54 59 81 00 20 63
 00000010  88 47 00 00 a1 40 45 00-00 28 00 00 00 00 40 06
 00000020  f9 7c c0 a8 00 01 c0 a8-00 02 00 00 00 00 00 00
-00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00 00 00
+00000030  00 00 00 00 00 00 50 00-00 00 2e 91 00 00
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl --protocols=OpenFlow12 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:54:50 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],push_vlan:0x8100,set_field:4195->vlan_vid,set_field:1->vlan_pcp,CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:54:51 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],push_vlan:0x8100,set_field:4195->vlan_vid,set_field:1->vlan_pcp,CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:54:52 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],push_vlan:0x8100,load:0x63->OXM_OF_VLAN_VID[[]],set_field:1->vlan_pcp,CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:54:53 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],push_vlan:0x8100,load:0x63->OXM_OF_VLAN_VID[[]],set_field:1->vlan_pcp,CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:54:54 actions=push_vlan:0x8100,set_field:4195->vlan_vid,set_field:1->vlan_pcp,push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:54:55 actions=push_vlan:0x8100,set_field:4195->vlan_vid,set_field:1->vlan_pcp,push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:54:56 actions=push_vlan:0x8100,load:0x63->OXM_OF_VLAN_VID[[]],set_field:1->vlan_pcp,push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, dl_src=40:44:44:44:54:57 actions=push_vlan:0x8100,load:0x63->OXM_OF_VLAN_VID[[]],set_field:1->vlan_pcp,push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, vlan_tci=0x1000/0x1000,dl_src=40:44:44:44:54:58 actions=load:0x63->OXM_OF_VLAN_VID[[]],set_field:1->vlan_pcp,push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
- cookie=0xa, n_packets=3, n_bytes=180, vlan_tci=0x1000/0x1000,dl_src=40:44:44:44:54:59 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],set_field:1->vlan_pcp,load:0x63->OXM_OF_VLAN_VID[[]],CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=162, dl_src=40:44:44:44:54:50 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],push_vlan:0x8100,set_field:4195->vlan_vid,set_field:1->vlan_pcp,CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=162, dl_src=40:44:44:44:54:52 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],push_vlan:0x8100,load:0x63->OXM_OF_VLAN_VID[[]],set_field:1->vlan_pcp,CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=162, dl_src=40:44:44:44:54:54 actions=push_vlan:0x8100,set_field:4195->vlan_vid,set_field:1->vlan_pcp,push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=162, dl_src=40:44:44:44:54:56 actions=push_vlan:0x8100,load:0x63->OXM_OF_VLAN_VID[[]],set_field:1->vlan_pcp,push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=174, dl_src=40:44:44:44:54:51 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],push_vlan:0x8100,set_field:4195->vlan_vid,set_field:1->vlan_pcp,CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=174, dl_src=40:44:44:44:54:53 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],push_vlan:0x8100,load:0x63->OXM_OF_VLAN_VID[[]],set_field:1->vlan_pcp,CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=174, dl_src=40:44:44:44:54:55 actions=push_vlan:0x8100,set_field:4195->vlan_vid,set_field:1->vlan_pcp,push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=174, dl_src=40:44:44:44:54:57 actions=push_vlan:0x8100,load:0x63->OXM_OF_VLAN_VID[[]],set_field:1->vlan_pcp,push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=174, vlan_tci=0x1000/0x1000,dl_src=40:44:44:44:54:58 actions=load:0x63->OXM_OF_VLAN_VID[[]],set_field:1->vlan_pcp,push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],CONTROLLER:65535
+ cookie=0xa, n_packets=3, n_bytes=174, vlan_tci=0x1000/0x1000,dl_src=40:44:44:44:54:59 actions=push_mpls:0x8847,load:0xa->OXM_OF_MPLS_LABEL[[]],set_field:1->vlan_pcp,load:0x63->OXM_OF_VLAN_VID[[]],CONTROLLER:65535
 OFPST_FLOW reply (OF1.2):
 ])
 
@@ -3933,7 +3909,7 @@ AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001
 flow-dump from non-dpdk interfaces:
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:60, used:0.001s, actions:1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:38, used:0.001s, actions:1
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
@@ -3948,7 +3924,7 @@ AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001
 flow-dump from non-dpdk interfaces:
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=no),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
 recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=first),tcp(src=0/0xff), packets:0, bytes:0, used:never, actions:set(tcp(src=42/0xff)),1
-recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:60, used:0.001s, actions:1
+recirc_id(0),in_port(90),eth_type(0x0800),ipv4(proto=6,frag=later), packets:1, bytes:34, used:0.001s, actions:1
 ])
 
 OVS_VSWITCHD_STOP
@@ -5313,10 +5289,10 @@ HEADER
 	out_ifindex=2
 	out_format=2
 	hdr_prot=1
-	pkt_len=64
+	pkt_len=46
 	stripped=4
-	hdr_len=60
-	hdr=FF-FF-FF-FF-FF-FF-50-54-00-00-00-05-08-06-00-01-08-00-06-04-00-01-50-54-00-00-00-05-C0-A8-00-02-00-00-00-00-00-00-C0-A8-00-01-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+	hdr_len=42
+	hdr=FF-FF-FF-FF-FF-FF-50-54-00-00-00-05-08-06-00-01-08-00-06-04-00-01-50-54-00-00-00-05-C0-A8-00-02-00-00-00-00-00-00-C0-A8-00-01
 HEADER
 	dgramSeqNo=1
 	ds=127.0.0.1>2:1000
@@ -5333,10 +5309,10 @@ HEADER
 	out_ifindex=2
 	out_format=2
 	hdr_prot=1
-	pkt_len=64
+	pkt_len=46
 	stripped=4
-	hdr_len=60
-	hdr=FF-FF-FF-FF-FF-FF-50-54-00-00-00-07-08-06-00-01-08-00-06-04-00-01-50-54-00-00-00-07-C0-A8-00-01-00-00-00-00-00-00-C0-A8-00-02-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+	hdr_len=42
+	hdr=FF-FF-FF-FF-FF-FF-50-54-00-00-00-07-08-06-00-01-08-00-06-04-00-01-50-54-00-00-00-07-C0-A8-00-01-00-00-00-00-00-00-C0-A8-00-02
 HEADER
 	dgramSeqNo=1
 	ds=127.0.0.1>2:1000
@@ -5353,10 +5329,10 @@ HEADER
 	out_ifindex=1003
 	out_format=0
 	hdr_prot=1
-	pkt_len=64
+	pkt_len=46
 	stripped=4
-	hdr_len=60
-	hdr=50-54-00-00-00-07-50-54-00-00-00-05-08-00-45-00-00-1C-00-00-00-00-40-01-F9-8D-C0-A8-00-01-C0-A8-00-02-08-00-F7-FF-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+	hdr_len=42
+	hdr=50-54-00-00-00-07-50-54-00-00-00-05-08-00-45-00-00-1C-00-00-00-00-40-01-F9-8D-C0-A8-00-01-C0-A8-00-02-08-00-F7-FF-00-00-00-00
 HEADER
 	dgramSeqNo=1
 	ds=127.0.0.1>2:1000
@@ -5373,10 +5349,10 @@ HEADER
 	out_ifindex=1004
 	out_format=0
 	hdr_prot=1
-	pkt_len=64
+	pkt_len=46
 	stripped=4
-	hdr_len=60
-	hdr=50-54-00-00-00-05-50-54-00-00-00-07-08-00-45-00-00-1C-00-00-00-00-40-01-F9-8D-C0-A8-00-02-C0-A8-00-01-00-00-FF-FF-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+	hdr_len=42
+	hdr=50-54-00-00-00-05-50-54-00-00-00-07-08-00-45-00-00-1C-00-00-00-00-40-01-F9-8D-C0-A8-00-02-C0-A8-00-01-00-00-FF-FF-00-00-00-00
 HEADER
 	dgramSeqNo=1
 	ds=127.0.0.1>2:1000
@@ -5393,10 +5369,10 @@ HEADER
 	out_ifindex=1004
 	out_format=0
 	hdr_prot=1
-	pkt_len=64
+	pkt_len=58
 	stripped=4
-	hdr_len=60
-	hdr=50-54-00-00-00-05-50-54-00-00-00-07-86-DD-67-00-00-00-00-00-0A-80-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-01-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-02-00-00-00-00-00-00
+	hdr_len=54
+	hdr=50-54-00-00-00-05-50-54-00-00-00-07-86-DD-67-00-00-00-00-00-0A-80-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-01-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-02
 ])
 
   AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'IFCOUNTERS|ERROR|PORTNAME|OPENFLOWPORT' | head -18 | sed 's/ /\
@@ -5417,7 +5393,7 @@ IFCOUNTERS
 	in_discards=4294967295
 	in_errors=4294967295
 	in_unknownprotos=4294967295
-	out_octets=120
+	out_octets=84
 	out_unicasts=2
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
@@ -5440,7 +5416,7 @@ IFCOUNTERS
 	in_discards=4294967295
 	in_errors=4294967295
 	in_unknownprotos=4294967295
-	out_octets=120
+	out_octets=84
 	out_unicasts=2
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
@@ -5463,7 +5439,7 @@ IFCOUNTERS
 	in_discards=4294967295
 	in_errors=4294967295
 	in_unknownprotos=4294967295
-	out_octets=180
+	out_octets=138
 	out_unicasts=3
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
@@ -5486,7 +5462,7 @@ IFCOUNTERS
 	in_discards=4294967295
 	in_errors=4294967295
 	in_unknownprotos=4294967295
-	out_octets=120
+	out_octets=84
 	out_unicasts=2
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
@@ -5509,7 +5485,7 @@ IFCOUNTERS
 	in_discards=4294967295
 	in_errors=4294967295
 	in_unknownprotos=4294967295
-	out_octets=120
+	out_octets=84
 	out_unicasts=2
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
@@ -5532,7 +5508,7 @@ IFCOUNTERS
 	in_discards=4294967295
 	in_errors=4294967295
 	in_unknownprotos=4294967295
-	out_octets=180
+	out_octets=138
 	out_unicasts=3
 	out_multicasts=4294967295
 	out_broadcasts=4294967295
@@ -5822,10 +5798,10 @@ HEADER
 	out_ifindex=1
 	out_format=2
 	hdr_prot=1
-	pkt_len=64
+	pkt_len=46
 	stripped=4
-	hdr_len=60
-	hdr=50-54-00-00-00-0A-50-54-00-00-00-09-08-00-45-01-00-1C-00-00-00-00-80-01-12-CA-0A-0A-0A-02-0A-0A-0A-01-08-00-F7-FF-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+	hdr_len=42
+	hdr=50-54-00-00-00-0A-50-54-00-00-00-09-08-00-45-01-00-1C-00-00-00-00-80-01-12-CA-0A-0A-0A-02-0A-0A-0A-01-08-00-F7-FF-00-00-00-00
 ])
 
 OVS_VSWITCHD_STOP
@@ -5924,10 +5900,10 @@ HEADER
 	out_ifindex=1
 	out_format=2
 	hdr_prot=1
-	pkt_len=64
+	pkt_len=46
 	stripped=4
-	hdr_len=60
-	hdr=50-54-00-00-00-0A-50-54-00-00-00-05-08-00-45-00-00-1C-00-00-00-00-80-01-B6-8D-C0-A8-01-01-C0-A8-02-02-08-00-F7-FF-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+	hdr_len=42
+	hdr=50-54-00-00-00-0A-50-54-00-00-00-05-08-00-45-00-00-1C-00-00-00-00-80-01-B6-8D-C0-A8-01-01-C0-A8-02-02-08-00-F7-FF-00-00-00-00
 ])
 
 OVS_VSWITCHD_STOP
@@ -5992,10 +5968,10 @@ HEADER
 	out_ifindex=1
 	out_format=2
 	hdr_prot=1
-	pkt_len=64
+	pkt_len=22
 	stripped=4
-	hdr_len=60
-	hdr=50-54-00-00-00-0A-50-54-00-00-00-09-88-47-00-00-B7-40-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+	hdr_len=18
+	hdr=50-54-00-00-00-0A-50-54-00-00-00-09-88-47-00-00-B7-40
 HEADER
 	dgramSeqNo=1
 	ds=127.0.0.1>2:1000
@@ -6016,10 +5992,10 @@ HEADER
 	out_ifindex=1
 	out_format=2
 	hdr_prot=1
-	pkt_len=64
+	pkt_len=38
 	stripped=4
-	hdr_len=60
-	hdr=50-54-00-00-00-0A-50-54-00-00-00-09-08-00-45-00-00-14-00-00-00-00-00-00-BA-EB-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00-00
+	hdr_len=34
+	hdr=50-54-00-00-00-0A-50-54-00-00-00-09-08-00-45-00-00-14-00-00-00-00-00-00-BA-EB-00-00-00-00-00-00-00-00
 ])
 
 OVS_VSWITCHD_STOP
@@ -6061,12 +6037,12 @@ m4_define([CHECK_NETFLOW_EXPIRATION],
   OVS_VSWITCHD_STOP
   OVS_APP_EXIT_AND_WAIT([test-netflow])
 
-  AT_CHECK([test `grep "192.168.0.1 > 192.168.0.2, if 1 > 65535, 1 pkts, 60 bytes, ICMP 8:0" netflow.log | wc -l` -eq 1])
+  AT_CHECK([test `grep "192.168.0.1 > 192.168.0.2, if 1 > 65535, 1 pkts, 42 bytes, ICMP 8:0" netflow.log | wc -l` -eq 1])
 
-  AT_CHECK([test `grep "192.168.0.1 > 192.168.0.2, if 1 > 2, 1 pkts, 60 bytes, ICMP 8:0" netflow.log | wc -l` -eq 1])
+  AT_CHECK([test `grep "192.168.0.1 > 192.168.0.2, if 1 > 2, 1 pkts, 42 bytes, ICMP 8:0" netflow.log | wc -l` -eq 1])
 
-  combined=`grep "192.168.0.2 > 192.168.0.1, if 2 > 1, 2 pkts, 120 bytes, ICMP 0:0" netflow.log | wc -l`
-  separate=`grep "192.168.0.2 > 192.168.0.1, if 2 > 1, 1 pkts, 60 bytes, ICMP 0:0" netflow.log | wc -l`
+  combined=`grep "192.168.0.2 > 192.168.0.1, if 2 > 1, 2 pkts, 84 bytes, ICMP 0:0" netflow.log | wc -l`
+  separate=`grep "192.168.0.2 > 192.168.0.1, if 2 > 1, 1 pkts, 42 bytes, ICMP 0:0" netflow.log | wc -l`
   AT_CHECK([test $separate = 2 || test $combined = 1], [0])])
 
 AT_SETUP([ofproto-dpif - NetFlow flow expiration - IPv4 collector])
@@ -6180,7 +6156,7 @@ for i in `seq 1 3`; do
 done
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-packets:2, bytes:120, used:0.001s, actions:sample(sample=100.0%,actions(userspace(pid=0,ipfix(output_port=4294967295))))
+packets:2, bytes:68, used:0.001s, actions:sample(sample=100.0%,actions(userspace(pid=0,ipfix(output_port=4294967295))))
 ])
 
 dnl Remove the IPFIX configuration.
@@ -6193,7 +6169,7 @@ for i in `seq 1 3`; do
 done
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-packets:2, bytes:120, used:0.001s, actions:drop
+packets:2, bytes:68, used:0.001s, actions:drop
 ])
 
 OVS_VSWITCHD_STOP(["/sending to collector failed/d"])
@@ -6265,7 +6241,7 @@ for i in `seq 1 3`; do
 done
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-packets:2, bytes:120, used:0.001s, actions:sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=4294967295)))),2
+packets:2, bytes:68, used:0.001s, actions:sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=4294967295)))),2
 ])
 
 dnl Remove the flow which contains sample action.
@@ -6278,7 +6254,7 @@ for i in `seq 1 3`; do
 done
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-packets:2, bytes:120, used:0.001s, actions:drop
+packets:2, bytes:68, used:0.001s, actions:drop
 ])
 
 OVS_VSWITCHD_STOP(["/sending to collector failed/d"])
@@ -6424,7 +6400,7 @@ AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl dump-flows br0], [0], [stdout])
 AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sort], [0], [dnl
  cookie=0x0, duration=0.0s, table=0, n_packets=0, n_bytes=0, idle_age=1, icmp actions=NORMAL
- cookie=0x0, duration=0.0s, table=0, n_packets=10, n_bytes=600, idle_age=1, ip actions=NORMAL
+ cookie=0x0, duration=0.0s, table=0, n_packets=10, n_bytes=540, idle_age=1, ip actions=NORMAL
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6447,7 +6423,7 @@ ovs-appctl time/warp 1000
 AT_CHECK([ovs-ofctl dump-flows br0], [0], [stdout])
 AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=0.0s/p' | sort], [0], [dnl
  cookie=0x0, duration=0.0s, table=0, n_packets=0, n_bytes=0, idle_age=1, icmp actions=NORMAL
- cookie=0x0, duration=0.0s, table=0, n_packets=10, n_bytes=600, idle_age=1, ip actions=NORMAL
+ cookie=0x0, duration=0.0s, table=0, n_packets=10, n_bytes=540, idle_age=1, ip actions=NORMAL
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6796,22 +6772,22 @@ recirc_id(0),in_port(101),eth_type(0x0800),ipv4(frag=no), actions:100,2,3
 ])
 
 AT_CHECK([grep -e 'in_port(100).*packets:9' ovs-vswitchd.log | strip_ufid | filter_flow_dump], [0], [dnl
-skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(100),eth(src=50:54:00:00:00:05/00:00:00:00:00:00,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.1/0.0.0.0,dst=192.168.0.2/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:9, bytes:540, used:0.0s, actions:101,3,2
+skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(100),eth(src=50:54:00:00:00:05/00:00:00:00:00:00,dst=50:54:00:00:00:07/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.1/0.0.0.0,dst=192.168.0.2/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:9, bytes:378, used:0.0s, actions:101,3,2
 ])
 AT_CHECK([grep -e 'in_port(101).*packets:4' ovs-vswitchd.log | strip_ufid | filter_flow_dump], [0], [dnl
-skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(101),eth(src=50:54:00:00:00:07/00:00:00:00:00:00,dst=50:54:00:00:00:05/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.2/0.0.0.0,dst=192.168.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:4, bytes:240, used:0.0s, actions:100,2,3
+skb_priority(0/0),skb_mark(0/0),ct_state(0/0),ct_zone(0/0),ct_mark(0/0),ct_label(0/0),recirc_id(0),dp_hash(0/0),in_port(101),eth(src=50:54:00:00:00:07/00:00:00:00:00:00,dst=50:54:00:00:00:05/00:00:00:00:00:00),eth_type(0x0800),ipv4(src=192.168.0.2/0.0.0.0,dst=192.168.0.1/0.0.0.0,proto=1/0,tos=0/0,ttl=64/0,frag=no),icmp(type=8/0,code=0/0), packets:4, bytes:168, used:0.0s, actions:100,2,3
 ])
 
 AT_CHECK([ovs-ofctl dump-ports br0 pbr0], [0], [dnl
 OFPST_PORT reply (xid=0x4): 1 ports
-  port  1: rx pkts=5, bytes=300, drop=?, errs=?, frame=?, over=?, crc=?
-           tx pkts=10, bytes=600, drop=?, errs=?, coll=?
+  port  1: rx pkts=5, bytes=210, drop=?, errs=?, frame=?, over=?, crc=?
+           tx pkts=10, bytes=420, drop=?, errs=?, coll=?
 ])
 
 AT_CHECK([ovs-ofctl dump-ports br1 pbr1], [0], [dnl
 OFPST_PORT reply (xid=0x4): 1 ports
-  port  1: rx pkts=10, bytes=600, drop=?, errs=?, frame=?, over=?, crc=?
-           tx pkts=5, bytes=300, drop=?, errs=?, coll=?
+  port  1: rx pkts=10, bytes=420, drop=?, errs=?, frame=?, over=?, crc=?
+           tx pkts=5, bytes=210, drop=?, errs=?, coll=?
 ])
 
 OVS_VSWITCHD_STOP
@@ -7410,8 +7386,8 @@ skb_priority(0),skb_mark(0),ct_state(-new-est-rel-rpl-inv-trk-snat-dnat),ct_zone
 skb_priority(0),skb_mark(0),ct_state(-new-est-rel-rpl-inv-trk-snat-dnat),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), actions:drop
 ])
    AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_dump | grep 'packets:3'], [0], [dnl
-skb_priority(0),skb_mark(0),ct_state(0/0xff),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:3, bytes:180, used:0.0s, actions:2
-skb_priority(0),skb_mark(0),ct_state(0/0xff),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:3, bytes:180, used:0.0s, actions:drop
+skb_priority(0),skb_mark(0),ct_state(0/0xff),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:3, bytes:126, used:0.0s, actions:2
+skb_priority(0),skb_mark(0),ct_state(0/0xff),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.4,dst=10.0.0.3,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0), packets:3, bytes:126, used:0.0s, actions:drop
 ])
    OVS_VSWITCHD_STOP
    AT_CLEANUP])
@@ -7809,20 +7785,20 @@ done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=14 in_port=1 (via action) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=14 in_port=1 (via action) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=14 in_port=1 (via action) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow13 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- n_packets=3, n_bytes=180, dl_dst=50:54:00:00:00:0a actions=goto_table:1
- table=1, n_packets=3, n_bytes=180, dl_dst=50:54:00:00:00:0a actions=CONTROLLER:65535
+ n_packets=3, n_bytes=42, dl_dst=50:54:00:00:00:0a actions=goto_table:1
+ table=1, n_packets=3, n_bytes=42, dl_dst=50:54:00:00:00:0a actions=CONTROLLER:65535
 OFPST_FLOW reply (OF1.3):
 ])
 
@@ -7860,19 +7836,19 @@ done
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 6])
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=14 in_port=1 (via action) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=14 in_port=1 (via action) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=14 in_port=1 (via action) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
 ])
 
 AT_CHECK([ovs-appctl revalidator/purge], [0])
 AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip | sort], [0], [dnl
- table=1, n_packets=3, n_bytes=180, dl_dst=50:54:00:00:00:0a actions=CONTROLLER:65535
+ table=1, n_packets=3, n_bytes=42, dl_dst=50:54:00:00:00:0a actions=CONTROLLER:65535
 OFPST_FLOW reply (OF1.1):
 ])
 
@@ -8006,7 +7982,7 @@ for i in 1 2; do
 done
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x1234), packets:2, bytes:120, used:0.0s, actions:push_vlan(vid=3,pcp=0),100
+recirc_id(0),in_port(1),eth_type(0x1234), packets:2, bytes:28, used:0.0s, actions:push_vlan(vid=3,pcp=0),100
 ])
 
 AT_CHECK([ovs-ofctl add-flow br0 priority=60000,in_port=1,actions=mod_vlan_vid:4,output:local])
@@ -8019,7 +7995,7 @@ for i in 1 2 3; do
 done
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x1234), packets:5, bytes:300, used:0.0s, actions:push_vlan(vid=4,pcp=0),100
+recirc_id(0),in_port(1),eth_type(0x1234), packets:5, bytes:70, used:0.0s, actions:push_vlan(vid=4,pcp=0),100
 ])
 
 AT_CHECK([grep 'modify' ovs-vswitchd.log | strip_ufid ], [0], [dnl
@@ -8051,7 +8027,7 @@ for i in 1 2; do
 done
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x1234), packets:2, bytes:120, used:0.0s, actions:100
+recirc_id(0),in_port(1),eth_type(0x1234), packets:2, bytes:28, used:0.0s, actions:100
 ])
 
 # Delete the flow.  Then check that the datapath flow is modified to
@@ -8067,7 +8043,7 @@ for i in 1 2 3; do
 done
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x1234), packets:5, bytes:300, used:0.0s, actions:drop
+recirc_id(0),in_port(1),eth_type(0x1234), packets:5, bytes:70, used:0.0s, actions:drop
 ])
 
 # Add a flow that matches the non-presence of a vlan tag, and check
@@ -8082,7 +8058,7 @@ for i in 1 2 3; do
 done
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x1234), packets:8, bytes:480, used:0.0s, actions:100
+recirc_id(0),in_port(1),eth_type(0x1234), packets:8, bytes:112, used:0.0s, actions:100
 ])
 
 # Check that VLAN packets will not hit the same datapath megaflow.
@@ -8095,8 +8071,8 @@ for i in 1 2; do
 done
 
 AT_CHECK([ovs-appctl dpif/dump-flows br0 | strip_ufid | strip_used | sort], [0], [dnl
-recirc_id(0),in_port(1),eth_type(0x1234), packets:8, bytes:480, used:0.0s, actions:100
-recirc_id(0),in_port(1),eth_type(0x8100),vlan(vid=99,pcp=7/0x0),encap(eth_type(0x1234)), packets:2, bytes:120, used:0.0s, actions:drop
+recirc_id(0),in_port(1),eth_type(0x1234), packets:8, bytes:112, used:0.0s, actions:100
+recirc_id(0),in_port(1),eth_type(0x8100),vlan(vid=99,pcp=7/0x0),encap(eth_type(0x1234)), packets:2, bytes:36, used:0.0s, actions:drop
 ])
 
 # Check that the new flow matches the CFI bit, while both vid and pcp
@@ -8158,10 +8134,10 @@ dnl Check this output. We only see the latter two packets, not the first.
 dnl Note that the first packet doesn't have the ct_state bits set. This
 dnl happens because the ct_state field is available only after recirc.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,in_port=2 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 ])
 
@@ -8181,10 +8157,10 @@ dnl Check this output. We should see both packets
 dnl Note that the first packet doesn't have the ct_state bits set. This
 dnl happens because the ct_state field is available only after recirc.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=3,tp_dst=4 udp_csum:e9d2
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,in_port=2 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4,tp_dst=3 udp_csum:e9d2
 ])
 
@@ -8319,7 +8295,7 @@ OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 dnl Check this output. Only one reply must be there
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,in_port=2 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 dnl
 OFPT_ECHO_REQUEST (xid=0x0): 0 bytes of payload
@@ -8353,7 +8329,7 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 1])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=inv|trk,in_port=2 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=inv|trk,in_port=2 (via action) data_len=42 (unbuffered)
 arp,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=192.168.0.2,arp_op=1,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
 ])
 
@@ -8403,16 +8379,16 @@ OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 dnl Check this output. We only see the latter two packets (for each zone), not the first.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,in_port=2 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 in_port=3 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 in_port=3 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,ct_zone=1,in_port=4 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_zone=1,in_port=4 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 ])
 
@@ -8454,10 +8430,10 @@ OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 dnl Check this output. We only see the latter two packets, not the first.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=new|trk,in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=new|trk,in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,in_port=2 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 ])
 
@@ -8544,19 +8520,19 @@ OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 dnl Check this output.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_mark=0x1,in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_mark=0x1,in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_mark=0x3,in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_mark=0x3,in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=3,tp_dst=4 udp_csum:e9d2
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_mark=0x5,in_port=1 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_mark=0x5,in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=5,tp_dst=6 udp_csum:e9ce
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,ct_mark=0x1,in_port=2 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_mark=0x1,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,ct_mark=0x3,in_port=2 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_mark=0x3,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4,tp_dst=3 udp_csum:e9d2
 ])
 
@@ -8596,10 +8572,10 @@ OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 dnl Check this output.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,ct_label=0x1,in_port=2 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_label=0x1,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=60 ct_state=est|rpl|trk,ct_label=0x2,in_port=2 (via action) data_len=60 (unbuffered)
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_label=0x2,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4,tp_dst=3 udp_csum:e9d2
 ])
 

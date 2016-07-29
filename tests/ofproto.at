@@ -2562,7 +2562,7 @@ AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
  idle_timeout=19, in_port=3 actions=drop
  idle_timeout=22, in_port=4 actions=drop
  in_port=5 actions=drop
- n_packets=1, n_bytes=60, idle_timeout=13, in_port=1 actions=drop
+ n_packets=1, n_bytes=14, idle_timeout=13, in_port=1 actions=drop
 NXST_FLOW reply:
 ])
 OVS_VSWITCHD_STOP

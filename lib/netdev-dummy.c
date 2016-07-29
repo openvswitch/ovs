@@ -993,8 +993,6 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
     netdev->stats.rx_bytes += dp_packet_size(packet);
     ovs_mutex_unlock(&netdev->mutex);
 
-    dp_packet_pad(packet);
-
     batch->packets[0] = packet;
     batch->count = 1;
     return 0;
