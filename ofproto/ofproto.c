@@ -265,6 +265,7 @@ struct openflow_mod_requester {
 
 /* OpenFlow. */
 static enum ofperr replace_rule_create(struct ofproto *,
+                                       struct ofproto_flow_mod *ofm,
                                        const struct ofputil_flow_mod *,
                                        struct cls_rule *cr, uint8_t table_id,
                                        struct rule *old_rule,
@@ -304,7 +305,7 @@ static void ofproto_flow_mod_finish(struct ofproto *,
                                     const struct openflow_mod_requester *)
     OVS_REQUIRES(ofproto_mutex);
 static enum ofperr handle_flow_mod__(struct ofproto *,
-                                     struct ofproto_flow_mod *,
+                                     const struct ofputil_flow_mod *,
                                      const struct openflow_mod_requester *)
     OVS_EXCLUDED(ofproto_mutex);
 static void calc_duration(long long int start, long long int now,
@@ -2122,11 +2123,11 @@ simple_flow_mod(struct ofproto *ofproto,
                 const struct ofpact *ofpacts, size_t ofpacts_len,
                 enum ofp_flow_mod_command command)
 {
-    struct ofproto_flow_mod ofm;
+    struct ofputil_flow_mod fm;
 
-    flow_mod_init(&ofm.fm, match, priority, ofpacts, ofpacts_len, command);
+    flow_mod_init(&fm, match, priority, ofpacts, ofpacts_len, command);
 
-    return handle_flow_mod__(ofproto, &ofm, NULL);
+    return handle_flow_mod__(ofproto, &fm, NULL);
 }
 
 /* Adds a flow to OpenFlow flow table 0 in 'p' that matches 'cls_rule' and
@@ -2178,11 +2179,9 @@ ofproto_add_flow(struct ofproto *ofproto, const struct match *match,
  * This is a helper function for in-band control and fail-open and the "learn"
  * action. */
 enum ofperr
-ofproto_flow_mod(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
+ofproto_flow_mod(struct ofproto *ofproto, const struct ofputil_flow_mod *fm)
     OVS_EXCLUDED(ofproto_mutex)
 {
-    struct ofputil_flow_mod *fm = &ofm->fm;
-
     /* Optimize for the most common case of a repeated learn action.
      * If an identical flow already exists we only need to update its
      * 'modified' time. */
@@ -2223,7 +2222,7 @@ ofproto_flow_mod(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
         }
     }
 
-    return handle_flow_mod__(ofproto, ofm, NULL);
+    return handle_flow_mod__(ofproto, fm, NULL);
 }
 
 /* Searches for a rule with matching criteria exactly equal to 'target' in
@@ -4755,11 +4754,11 @@ add_flow_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
             *old_rule = rule;
         }
     } else {
-        fm->modify_cookie = true;
+        ofm->modify_cookie = true;
     }
 
     /* Allocate new rule. */
-    error = replace_rule_create(ofproto, fm, &cr, table - ofproto->tables,
+    error = replace_rule_create(ofproto, ofm, fm, &cr, table - ofproto->tables,
                                 rule, new_rule);
     if (error) {
         return error;
@@ -4821,7 +4820,8 @@ add_flow_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
  * and 'old_rule'.  Note that the rule is NOT inserted into a any data
  * structures yet.  Takes ownership of 'cr'. */
 static enum ofperr
-replace_rule_create(struct ofproto *ofproto, const struct ofputil_flow_mod *fm,
+replace_rule_create(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
+                    const struct ofputil_flow_mod *fm,
                     struct cls_rule *cr, uint8_t table_id,
                     struct rule *old_rule, struct rule **new_rule)
 {
@@ -4863,7 +4863,7 @@ replace_rule_create(struct ofproto *ofproto, const struct ofputil_flow_mod *fm,
 
     /* Copy values from old rule for modify semantics. */
     if (old_rule && old_rule->removed_reason != OFPRR_EVICTION) {
-        bool change_cookie = (fm->modify_cookie
+        bool change_cookie = (ofm->modify_cookie
                               && fm->new_cookie != OVS_BE64_MAX
                               && fm->new_cookie != old_rule->flow_cookie);
 
@@ -5025,8 +5025,9 @@ modify_flows_start__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
             struct cls_rule cr;
 
             cls_rule_clone(&cr, &old_rule->cr);
-            error = replace_rule_create(ofproto, fm, &cr, old_rule->table_id,
-                                        old_rule, &new_rule);
+            error = replace_rule_create(ofproto, ofm, fm, &cr,
+                                        old_rule->table_id, old_rule,
+                                        &new_rule);
             if (!error) {
                 rule_collection_add(new_rules, new_rule);
             } else {
@@ -5414,7 +5415,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct ofproto_flow_mod ofm;
+    struct ofputil_flow_mod fm;
     uint64_t ofpacts_stub[1024 / 8];
     struct ofpbuf ofpacts;
     enum ofperr error;
@@ -5425,13 +5426,13 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     }
 
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
-    error = ofputil_decode_flow_mod(&ofm.fm, oh, ofconn_get_protocol(ofconn),
+    error = ofputil_decode_flow_mod(&fm, oh, ofconn_get_protocol(ofconn),
                                     &ofpacts,
                                     u16_to_ofp(ofproto->max_ports),
                                     ofproto->n_tables);
     if (!error) {
         struct openflow_mod_requester req = { ofconn, oh };
-        error = handle_flow_mod__(ofproto, &ofm, &req);
+        error = handle_flow_mod__(ofproto, &fm, &req);
     }
 
     ofpbuf_uninit(&ofpacts);
@@ -5439,18 +5440,21 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 }
 
 static enum ofperr
-handle_flow_mod__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
+handle_flow_mod__(struct ofproto *ofproto, const struct ofputil_flow_mod *fm,
                   const struct openflow_mod_requester *req)
     OVS_EXCLUDED(ofproto_mutex)
 {
+    struct ofproto_flow_mod ofm;
     enum ofperr error;
 
+    ofm.fm = *fm;
+
     ovs_mutex_lock(&ofproto_mutex);
-    ofm->version = ofproto->tables_version + 1;
-    error = ofproto_flow_mod_start(ofproto, ofm);
+    ofm.version = ofproto->tables_version + 1;
+    error = ofproto_flow_mod_start(ofproto, &ofm);
     if (!error) {
         ofproto_bump_tables_version(ofproto);
-        ofproto_flow_mod_finish(ofproto, ofm, req);
+        ofproto_flow_mod_finish(ofproto, &ofm, req);
     }
     ofmonitor_flush(ofproto->connmgr);
     ovs_mutex_unlock(&ofproto_mutex);
@@ -7031,6 +7035,7 @@ ofproto_flow_mod_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
 
     /* Forward flow mod fields we need later. */
     ofm->buffer_id = ofm->fm.buffer_id;
+    ofm->modify_cookie = ofm->fm.modify_cookie;
 
     ofm->modify_may_add_flow = (ofm->fm.new_cookie != OVS_BE64_MAX
                                 && ofm->fm.cookie_mask == htonll(0));

@@ -1845,6 +1845,7 @@ struct ofproto_flow_mod {
     /* Replicate needed fields from ofputil_flow_mod to not need it after the
      * flow has been created. */
     uint32_t buffer_id;
+    bool modify_cookie;
 
     bool modify_may_add_flow;
     enum nx_flow_update_event event;
@@ -1871,7 +1872,7 @@ struct ofproto_group_mod {
     struct group_collection old_groups; /* Affected groups. */
 };
 
-enum ofperr ofproto_flow_mod(struct ofproto *, struct ofproto_flow_mod *)
+enum ofperr ofproto_flow_mod(struct ofproto *, const struct ofputil_flow_mod *)
     OVS_EXCLUDED(ofproto_mutex);
 void ofproto_add_flow(struct ofproto *, const struct match *, int priority,
                       const struct ofpact *ofpacts, size_t ofpacts_len)

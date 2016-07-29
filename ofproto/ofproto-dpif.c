@@ -362,16 +362,7 @@ void
 ofproto_dpif_flow_mod(struct ofproto_dpif *ofproto,
                       const struct ofputil_flow_mod *fm)
 {
-    struct ofproto_flow_mod ofm;
-
-    /* Multiple threads may do this for the same 'fm' at the same time.
-     * Allocate ofproto_flow_mod with execution context from stack.
-     *
-     * Note: This copy could be avoided by making ofproto_flow_mod more
-     * complex, but that may not be desireable, and a learn action is not that
-     * fast to begin with. */
-    ofm.fm = *fm;
-    ofproto_flow_mod(&ofproto->up, &ofm);
+    ofproto_flow_mod(&ofproto->up, fm);
 }
 
 /* Appends 'am' to the queue of asynchronous messages to be sent to the
@@ -5546,11 +5537,11 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
                                const struct ofpbuf *ofpacts,
                                struct rule **rulep)
 {
-    struct ofproto_flow_mod ofm;
+    struct ofputil_flow_mod fm;
     struct rule_dpif *rule;
     int error;
 
-    ofm.fm = (struct ofputil_flow_mod) {
+    fm = (struct ofputil_flow_mod) {
         .match = *match,
         .priority = priority,
         .table_id = TBL_INTERNAL,
@@ -5561,7 +5552,7 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
         .ofpacts_len = ofpacts->size,
     };
 
-    error = ofproto_flow_mod(&ofproto->up, &ofm);
+    error = ofproto_flow_mod(&ofproto->up, &fm);
     if (error) {
         VLOG_ERR_RL(&rl, "failed to add internal flow (%s)",
                     ofperr_to_string(error));
@@ -5571,8 +5562,8 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
 
     rule = rule_dpif_lookup_in_table(ofproto,
                                      ofproto_dpif_get_tables_version(ofproto),
-                                     TBL_INTERNAL, &ofm.fm.match.flow,
-                                     &ofm.fm.match.wc);
+                                     TBL_INTERNAL, &fm.match.flow,
+                                     &fm.match.wc);
     if (rule) {
         *rulep = &rule->up;
     } else {
@@ -5585,10 +5576,10 @@ int
 ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
                                   struct match *match, int priority)
 {
-    struct ofproto_flow_mod ofm;
+    struct ofputil_flow_mod fm;
     int error;
 
-    ofm.fm = (struct ofputil_flow_mod) {
+    fm = (struct ofputil_flow_mod) {
         .match = *match,
         .priority = priority,
         .table_id = TBL_INTERNAL,
@@ -5596,7 +5587,7 @@ ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
         .command = OFPFC_DELETE_STRICT,
     };
 
-    error = ofproto_flow_mod(&ofproto->up, &ofm);
+    error = ofproto_flow_mod(&ofproto->up, &fm);
     if (error) {
         VLOG_ERR_RL(&rl, "failed to delete internal flow (%s)",
                     ofperr_to_string(error));
