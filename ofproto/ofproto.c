@@ -7034,13 +7034,14 @@ ofproto_flow_mod_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     }
 
     /* Forward flow mod fields we need later. */
+    ofm->command = ofm->fm.command;
     ofm->buffer_id = ofm->fm.buffer_id;
     ofm->modify_cookie = ofm->fm.modify_cookie;
 
     ofm->modify_may_add_flow = (ofm->fm.new_cookie != OVS_BE64_MAX
                                 && ofm->fm.cookie_mask == htonll(0));
 
-    switch (ofm->fm.command) {
+    switch (ofm->command) {
     case OFPFC_ADD:
         ofm->event = NXFME_ADDED;
         return add_flow_start(ofproto, ofm);
@@ -7067,7 +7068,7 @@ static void
 ofproto_flow_mod_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
-    switch (ofm->fm.command) {
+    switch (ofm->command) {
     case OFPFC_ADD:
         add_flow_revert(ofproto, ofm);
         break;
@@ -7093,7 +7094,7 @@ ofproto_flow_mod_finish(struct ofproto *ofproto,
                         const struct openflow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
-    switch (ofm->fm.command) {
+    switch (ofm->command) {
     case OFPFC_ADD:
         add_flow_finish(ofproto, ofm, req);
         break;
@@ -7113,7 +7114,7 @@ ofproto_flow_mod_finish(struct ofproto *ofproto,
     }
 
     if (req) {
-        ofconn_report_flow_mod(req->ofconn, ofm->fm.command);
+        ofconn_report_flow_mod(req->ofconn, ofm->command);
     }
 }
 

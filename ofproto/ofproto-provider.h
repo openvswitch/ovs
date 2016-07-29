@@ -1844,6 +1844,7 @@ struct ofproto_flow_mod {
 
     /* Replicate needed fields from ofputil_flow_mod to not need it after the
      * flow has been created. */
+    uint16_t command;
     uint32_t buffer_id;
     bool modify_cookie;
 
