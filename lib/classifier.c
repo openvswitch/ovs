@@ -960,7 +960,7 @@ classifier_lookup__(const struct classifier *cls, cls_version_t version,
 
     /* Main loop. */
     struct cls_subtable *subtable;
-    PVECTOR_FOR_EACH_PRIORITY (subtable, hard_pri, 2, sizeof *subtable,
+    PVECTOR_FOR_EACH_PRIORITY (subtable, hard_pri + 1, 2, sizeof *subtable,
                                &cls->subtables) {
         struct cls_conjunction_set *conj_set;
 
@@ -1232,7 +1232,7 @@ classifier_rule_overlaps(const struct classifier *cls,
     struct cls_subtable *subtable;
 
     /* Iterate subtables in the descending max priority order. */
-    PVECTOR_FOR_EACH_PRIORITY (subtable, target->priority - 1, 2,
+    PVECTOR_FOR_EACH_PRIORITY (subtable, target->priority, 2,
                                sizeof(struct cls_subtable), &cls->subtables) {
         struct {
             struct minimask mask;

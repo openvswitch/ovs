@@ -95,10 +95,6 @@ static void
 pvector_impl_sort(struct pvector_impl *impl)
 {
     qsort(impl->vector, impl->size, sizeof *impl->vector, pvector_entry_cmp);
-    /* Trim gaps. */
-    while (impl->size && impl->vector[impl->size - 1].priority == INT_MIN) {
-        impl->size = impl->size - 1;
-    }
 }
 
 /* Returns the index of the 'ptr' in the vector, or -1 if none is found. */
@@ -163,9 +159,11 @@ pvector_remove(struct pvector *pvec, void *ptr)
     index = pvector_impl_find(temp, ptr);
     ovs_assert(index >= 0);
     /* Now at the index of the entry to be deleted.
-     * Clear in place, publish will sort and clean these off. */
-    temp->vector[index].ptr = NULL;
-    temp->vector[index].priority = INT_MIN;
+     * Swap another entry in if needed, publish will sort anyway. */
+    temp->size--;
+    if (index != temp->size) {
+        temp->vector[index] = temp->vector[temp->size];
+    }
 }
 
 /* Change entry's 'priority' and keep the vector ordered. */
