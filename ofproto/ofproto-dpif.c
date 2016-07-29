@@ -4328,14 +4328,12 @@ group_destruct(struct ofgroup *group_)
     ovs_mutex_destroy(&group->stats_mutex);
 }
 
-static enum ofperr
+static void
 group_modify(struct ofgroup *group_)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(group_->ofproto);
 
     ofproto->backer->need_revalidate = REV_FLOW_TABLE;
-
-    return 0;
 }
 
 static enum ofperr

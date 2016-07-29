@@ -295,9 +295,6 @@ static void send_buffered_packet(const struct openflow_mod_requester *,
     OVS_REQUIRES(ofproto_mutex);
 
 static bool ofproto_group_exists(const struct ofproto *, uint32_t group_id);
-static enum ofperr add_group(struct ofproto *,
-                             const struct ofputil_group_mod *)
-    OVS_REQUIRES(ofproto_mutex);
 static void handle_openflow(struct ofconn *, const struct ofpbuf *);
 static enum ofperr ofproto_flow_mod_start(struct ofproto *,
                                           struct ofproto_flow_mod *)
@@ -1574,9 +1571,6 @@ ofproto_flush__(struct ofproto *ofproto)
      * 'ofproto_mutex'. */
     ovs_mutex_unlock(&ofproto_mutex);
 }
-
-static void delete_group(struct ofproto *ofproto, uint32_t group_id)
-    OVS_REQUIRES(ofproto_mutex);
 
 static void
 ofproto_destroy__(struct ofproto *ofproto)
@@ -6426,37 +6420,28 @@ init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
  * 'ofproto''s group table.  Returns 0 on success or an OpenFlow error code on
  * failure. */
 static enum ofperr
-add_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
+add_group_start(struct ofproto *ofproto, struct ofproto_group_mod *ogm)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofgroup *ofgroup;
     enum ofperr error;
 
+    if (ofproto_group_exists(ofproto, ogm->gm.group_id)) {
+        return OFPERR_OFPGMFC_GROUP_EXISTS;
+    }
+
+    if (ofproto->n_groups[ogm->gm.type]
+        >= ofproto->ogf.max_groups[ogm->gm.type]) {
+        return OFPERR_OFPGMFC_OUT_OF_GROUPS;
+    }
+
     /* Allocate new group and initialize it. */
-    error = init_group(ofproto, gm, &ofgroup);
-    if (error) {
-        return error;
+    error = init_group(ofproto, &ogm->gm, &ogm->new_group);
+    if (!error) {
+        /* Insert new group. */
+        cmap_insert(&ofproto->groups, &ogm->new_group->cmap_node,
+                    hash_int(ogm->new_group->group_id, 0));
+        ofproto->n_groups[ogm->new_group->type]++;
     }
-
-    if (ofproto->n_groups[gm->type] >= ofproto->ogf.max_groups[gm->type]) {
-        error = OFPERR_OFPGMFC_OUT_OF_GROUPS;
-        goto unlock_out;
-    }
-
-    if (ofproto_group_exists(ofproto, gm->group_id)) {
-        error = OFPERR_OFPGMFC_GROUP_EXISTS;
-        goto unlock_out;
-    }
-
-    /* Insert new group. */
-    cmap_insert(&ofproto->groups, &ofgroup->cmap_node,
-                hash_int(ofgroup->group_id, 0));
-    ofproto->n_groups[ofgroup->type]++;
-
-    return 0;
-
- unlock_out:
-    group_destroy_cb(ofgroup);
     return error;
 }
 
@@ -6569,137 +6554,219 @@ copy_buckets_for_remove_bucket(const struct ofgroup *ofgroup,
  * ofproto's ofgroup hash map. Thus, the group is never altered while users of
  * the xlate module hold a pointer to the group. */
 static enum ofperr
-modify_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
+modify_group_start(struct ofproto *ofproto, struct ofproto_group_mod *ogm)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofgroup *ofgroup, *new_ofgroup, *retiring;
+    struct ofgroup *old_group;          /* Modified group. */
+    struct ofgroup *new_group;
     enum ofperr error;
 
-    error = init_group(ofproto, gm, &new_ofgroup);
+    old_group = ofproto_group_lookup__(ofproto, ogm->gm.group_id);
+    if (!old_group) {
+        return OFPERR_OFPGMFC_UNKNOWN_GROUP;
+    }
+
+    if (old_group->type != ogm->gm.type
+        && (ofproto->n_groups[ogm->gm.type]
+            >= ofproto->ogf.max_groups[ogm->gm.type])) {
+        return OFPERR_OFPGMFC_OUT_OF_GROUPS;
+    }
+
+    error = init_group(ofproto, &ogm->gm, &ogm->new_group);
     if (error) {
         return error;
     }
-
-    retiring = new_ofgroup;
-
-    ofgroup = ofproto_group_lookup__(ofproto, gm->group_id);
-    if (!ofgroup) {
-        error = OFPERR_OFPGMFC_UNKNOWN_GROUP;
-        goto out;
-    }
-
-    /* Ofproto's group write lock is held now. */
-    if (ofgroup->type != gm->type
-        && ofproto->n_groups[gm->type] >= ofproto->ogf.max_groups[gm->type]) {
-        error = OFPERR_OFPGMFC_OUT_OF_GROUPS;
-        goto out;
-    }
+    new_group = ogm->new_group;
 
     /* Manipulate bucket list for bucket commands */
-    if (gm->command == OFPGC15_INSERT_BUCKET) {
-        error = copy_buckets_for_insert_bucket(ofgroup, new_ofgroup,
-                                               gm->command_bucket_id);
-    } else if (gm->command == OFPGC15_REMOVE_BUCKET) {
-        error = copy_buckets_for_remove_bucket(ofgroup, new_ofgroup,
-                                               gm->command_bucket_id);
+    if (ogm->gm.command == OFPGC15_INSERT_BUCKET) {
+        error = copy_buckets_for_insert_bucket(old_group, new_group,
+                                               ogm->gm.command_bucket_id);
+    } else if (ogm->gm.command == OFPGC15_REMOVE_BUCKET) {
+        error = copy_buckets_for_remove_bucket(old_group, new_group,
+                                               ogm->gm.command_bucket_id);
     }
     if (error) {
         goto out;
     }
 
     /* The group creation time does not change during modification. */
-    *CONST_CAST(long long int *, &(new_ofgroup->created)) = ofgroup->created;
-    *CONST_CAST(long long int *, &(new_ofgroup->modified)) = time_msec();
+    *CONST_CAST(long long int *, &(new_group->created)) = old_group->created;
+    *CONST_CAST(long long int *, &(new_group->modified)) = time_msec();
 
-    /* XXX: OK to lose old group's stats? */
+    group_collection_add(&ogm->old_groups, old_group);
 
-    error = ofproto->ofproto_class->group_modify(new_ofgroup);
-    if (error) {
-        goto out;
-    }
-
-    retiring = ofgroup;
     /* Replace ofgroup in ofproto's groups hash map with new_ofgroup. */
-    cmap_replace(&ofproto->groups, &ofgroup->cmap_node,
-                 &new_ofgroup->cmap_node, hash_int(ofgroup->group_id, 0));
-    /* Transfer rules. */
-    rule_collection_move(&new_ofgroup->rules, &ofgroup->rules);
+    cmap_replace(&ofproto->groups, &old_group->cmap_node,
+                 &new_group->cmap_node, hash_int(new_group->group_id, 0));
 
-    if (ofgroup->type != new_ofgroup->type) {
-        ofproto->n_groups[ofgroup->type]--;
-        ofproto->n_groups[new_ofgroup->type]++;
+    /* Transfer rules. */
+    rule_collection_move(&new_group->rules, &old_group->rules);
+
+    if (old_group->type != new_group->type) {
+        ofproto->n_groups[old_group->type]--;
+        ofproto->n_groups[new_group->type]++;
     }
+    return 0;
 
 out:
-    ofproto_group_unref(retiring);
+    ofproto_group_unref(new_group);
     return error;
 }
 
 /* Implements the OFPGC11_ADD_OR_MOD command which creates the group when it does not
  * exist yet and modifies it otherwise */
 static enum ofperr
-add_or_modify_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm)
+add_or_modify_group_start(struct ofproto *ofproto,
+                          struct ofproto_group_mod *ogm)
     OVS_REQUIRES(ofproto_mutex)
 {
     enum ofperr error;
-    bool exists;
 
-    exists = ofproto_group_exists(ofproto, gm->group_id);
-
-    if (!exists) {
-        error = add_group(ofproto, gm);
+    if (!ofproto_group_exists(ofproto, ogm->gm.group_id)) {
+        error = add_group_start(ofproto, ogm);
     } else {
-        error = modify_group(ofproto, gm);
+        error = modify_group_start(ofproto, ogm);
     }
 
     return error;
 }
 
 static void
-delete_group__(struct ofproto *ofproto, struct ofgroup *ofgroup)
+delete_group_start(struct ofproto *ofproto, struct group_collection *groups,
+                   struct ofgroup *group)
     OVS_REQUIRES(ofproto_mutex)
 {
-    /* Makes flow deletion code leave the rule pointers in group's 'rules'
+    /* Makes flow deletion code leave the rule pointers in 'group->rules'
      * intact, so that we can later refer to the rules deleted due to the group
      * deletion.  Rule pointers will be removed from all other groups, if any,
      * so we will never try to delete the same rule twice. */
-    ofgroup->being_deleted = true;
+    group->being_deleted = true;
 
-    /* Delete all flow entries containing this group in a group action. */
-    delete_flows__(&ofgroup->rules, OFPRR_GROUP_DELETE, NULL);
+    /* Mark all the referring groups for deletion. */
+    delete_flows_start__(ofproto, ofproto->tables_version + 1,
+                         &group->rules);
+    group_collection_add(groups, group);
+    ofproto->n_groups[group->type]--;
+}
 
-    cmap_remove(&ofproto->groups, &ofgroup->cmap_node,
-                hash_int(ofgroup->group_id, 0));
-    /* No-one can find this group any more, but current users may continue to
-     * use it. */
-    ofproto->n_groups[ofgroup->type]--;
-    ofproto_group_unref(ofgroup);
+static void
+delete_group_finish(struct ofproto *ofproto, struct ofgroup *group)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    /* Finish deletion of all flow entries containing this group in a group
+     * action. */
+    delete_flows_finish__(ofproto, &group->rules, OFPRR_GROUP_DELETE, NULL);
+
+    cmap_remove(&ofproto->groups, &group->cmap_node,
+                hash_int(group->group_id, 0));
+    /* No-one can find this group any more, but current users may
+     * continue to use it. */
+    ofproto_group_unref(group);
 }
 
 /* Implements OFPGC11_DELETE. */
 static void
-delete_group(struct ofproto *ofproto, uint32_t group_id)
+delete_groups_start(struct ofproto *ofproto, struct ofproto_group_mod *ogm)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofgroup *ofgroup;
+    struct ofgroup *group;
 
-    if (group_id == OFPG_ALL) {
-        for (;;) {
-            struct cmap_node *node = cmap_first(&ofproto->groups);
-            if (!node) {
-                break;
-            }
-            ofgroup = CONTAINER_OF(node, struct ofgroup, cmap_node);
-            delete_group__(ofproto, ofgroup);
+    if (ogm->gm.group_id == OFPG_ALL) {
+        CMAP_FOR_EACH (group, cmap_node, &ofproto->groups) {
+            delete_group_start(ofproto, &ogm->old_groups, group);
         }
     } else {
-        CMAP_FOR_EACH_WITH_HASH (ofgroup, cmap_node,
-                                 hash_int(group_id, 0), &ofproto->groups) {
-            if (ofgroup->group_id == group_id) {
-                delete_group__(ofproto, ofgroup);
+        CMAP_FOR_EACH_WITH_HASH (group, cmap_node,
+                                 hash_int(ogm->gm.group_id, 0),
+                                 &ofproto->groups) {
+            if (group->group_id == ogm->gm.group_id) {
+                delete_group_start(ofproto, &ogm->old_groups, group);
                 return;
             }
         }
+    }
+}
+
+static enum ofperr
+ofproto_group_mod_start(struct ofproto *ofproto, struct ofproto_group_mod *ogm)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    enum ofperr error;
+
+    ogm->new_group = NULL;
+    group_collection_init(&ogm->old_groups);
+
+    switch (ogm->gm.command) {
+    case OFPGC11_ADD:
+        error = add_group_start(ofproto, ogm);
+        break;
+
+    case OFPGC11_MODIFY:
+        error = modify_group_start(ofproto, ogm);
+        break;
+
+    case OFPGC11_ADD_OR_MOD:
+        error = add_or_modify_group_start(ofproto, ogm);
+        break;
+
+    case OFPGC11_DELETE:
+        delete_groups_start(ofproto, ogm);
+        error = 0;
+        break;
+
+    case OFPGC15_INSERT_BUCKET:
+        error = modify_group_start(ofproto, ogm);
+        break;
+
+    case OFPGC15_REMOVE_BUCKET:
+        error = modify_group_start(ofproto, ogm);
+        break;
+
+    default:
+        if (ogm->gm.command > OFPGC11_DELETE) {
+            VLOG_INFO_RL(&rl, "%s: Invalid group_mod command type %d",
+                         ofproto->name, ogm->gm.command);
+        }
+        error = OFPERR_OFPGMFC_BAD_COMMAND;
+        break;
+    }
+    return error;
+}
+
+static void
+ofproto_group_mod_finish(struct ofproto *ofproto,
+                         struct ofproto_group_mod *ogm,
+                         const struct openflow_mod_requester *req)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct ofgroup *new_group = ogm->new_group;
+    struct ofgroup *old_group;
+
+    if (!new_group) {
+        /* Delete old groups. */
+        ofproto_bump_tables_version(ofproto);
+        GROUP_COLLECTION_FOR_EACH(old_group, &ogm->old_groups) {
+            delete_group_finish(ofproto, old_group);
+        }
+    } else if (group_collection_n(&ogm->old_groups)) {
+        /* Modify a group. */
+        ovs_assert(group_collection_n(&ogm->old_groups) == 1);
+        old_group = group_collection_groups(&ogm->old_groups)[0];
+
+        /* XXX: OK to lose old group's stats? */
+        ofproto->ofproto_class->group_modify(new_group);
+
+        ofproto_group_unref(old_group);
+    }
+    group_collection_destroy(&ogm->old_groups);
+
+    if (req) {
+        struct ofputil_requestforward rf;
+        rf.xid = req->request->xid;
+        rf.reason = OFPRFR_GROUP_MOD;
+        rf.group_mod = &ogm->gm;
+        connmgr_send_requestforward(ofproto->connmgr, req->ofconn, &rf);
     }
 }
 
@@ -6711,8 +6778,14 @@ void
 ofproto_group_delete_all(struct ofproto *ofproto)
     OVS_EXCLUDED(ofproto_mutex)
 {
+    struct ofproto_group_mod ogm;
+
+    ogm.gm.command = OFPGC11_DELETE;
+    ogm.gm.group_id = OFPG_ALL;
+
     ovs_mutex_lock(&ofproto_mutex);
-    delete_group(ofproto, OFPG_ALL);
+    ofproto_group_mod_start(ofproto, &ogm);
+    ofproto_group_mod_finish(ofproto, &ogm, NULL);
     ovs_mutex_unlock(&ofproto_mutex);
 }
 
@@ -6721,7 +6794,7 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
-    struct ofputil_group_mod gm;
+    struct ofproto_group_mod ogm;
     enum ofperr error;
 
     error = reject_slave_controller(ofconn);
@@ -6729,55 +6802,21 @@ handle_group_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         return error;
     }
 
-    error = ofputil_decode_group_mod(oh, &gm);
+    error = ofputil_decode_group_mod(oh, &ogm.gm);
     if (error) {
         return error;
     }
 
     ovs_mutex_lock(&ofproto_mutex);
-    switch (gm.command) {
-    case OFPGC11_ADD:
-        error = add_group(ofproto, &gm);
-        break;
-
-    case OFPGC11_MODIFY:
-        error = modify_group(ofproto, &gm);
-        break;
-
-    case OFPGC11_ADD_OR_MOD:
-        error = add_or_modify_group(ofproto, &gm);
-        break;
-
-    case OFPGC11_DELETE:
-        delete_group(ofproto, gm.group_id);
-        error = 0;
-        break;
-
-    case OFPGC15_INSERT_BUCKET:
-        error = modify_group(ofproto, &gm);
-        break;
-
-    case OFPGC15_REMOVE_BUCKET:
-        error = modify_group(ofproto, &gm);
-        break;
-
-    default:
-        if (gm.command > OFPGC11_DELETE) {
-            VLOG_INFO_RL(&rl, "%s: Invalid group_mod command type %d",
-                         ofproto->name, gm.command);
-        }
-        error = OFPERR_OFPGMFC_BAD_COMMAND;
+    error = ofproto_group_mod_start(ofproto, &ogm);
+    if (!error) {
+        struct openflow_mod_requester req = { ofconn, oh };
+        ofproto_group_mod_finish(ofproto, &ogm, &req);
     }
+    ofmonitor_flush(ofproto->connmgr);
     ovs_mutex_unlock(&ofproto_mutex);
 
-    if (!error) {
-        struct ofputil_requestforward rf;
-        rf.xid = oh->xid;
-        rf.reason = OFPRFR_GROUP_MOD;
-        rf.group_mod = &gm;
-        connmgr_send_requestforward(ofproto->connmgr, ofconn, &rf);
-    }
-    ofputil_bucket_list_destroy(&gm.buckets);
+    ofputil_bucket_list_destroy(&ogm.gm.buckets);
 
     return error;
 }

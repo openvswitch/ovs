@@ -556,6 +556,24 @@ void ofproto_group_unref(struct ofgroup *);
 void ofproto_group_delete_all(struct ofproto *)
     OVS_EXCLUDED(ofproto_mutex);
 
+DECL_OFPROTO_COLLECTION (struct ofgroup *, group)
+
+#define GROUP_COLLECTION_FOR_EACH(GROUP, GROUPS)                        \
+    for (size_t i__ = 0;                                                \
+         i__ < group_collection_n(GROUPS)                               \
+             ? (GROUP = group_collection_groups(GROUPS)[i__]) != NULL: false; \
+         i__++)
+
+/* Pairwise iteration through two group collections that must be of the same
+ * size. */
+#define GROUP_COLLECTIONS_FOR_EACH(GROUP1, GROUP2, GROUPS1, GROUPS2)    \
+    for (size_t i__ = 0;                                                \
+         i__ < group_collection_n(GROUPS1)                              \
+             ? ((GROUP1 = group_collection_groups(GROUPS1)[i__]),       \
+                (GROUP2 = group_collection_groups(GROUPS2)[i__]) != NULL) \
+             : false;                                                   \
+         i__++)
+
 /* ofproto class structure, to be defined by each ofproto implementation.
  *
  *
@@ -1790,7 +1808,7 @@ struct ofproto_class {
     void (*group_destruct)(struct ofgroup *);
     void (*group_dealloc)(struct ofgroup *);
 
-    enum ofperr (*group_modify)(struct ofgroup *);
+    void (*group_modify)(struct ofgroup *);
 
     enum ofperr (*group_get_stats)(const struct ofgroup *,
                                    struct ofputil_group_stats *);
@@ -1828,6 +1846,14 @@ struct ofproto_flow_mod {
 struct ofproto_port_mod {
     struct ofputil_port_mod pm;
     struct ofport *port;                /* Affected port. */
+};
+
+/* flow_mod with execution context. */
+struct ofproto_group_mod {
+    struct ofputil_group_mod gm;
+
+    struct ofgroup *new_group;          /* New group. */
+    struct group_collection old_groups; /* Affected groups. */
 };
 
 enum ofperr ofproto_flow_mod(struct ofproto *, struct ofproto_flow_mod *)
