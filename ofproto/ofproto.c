@@ -4934,6 +4934,9 @@ replace_rule_start(struct ofproto *ofproto, ovs_version_t version,
     if (old_rule) {
         /* Mark the old rule for removal in the next version. */
         cls_rule_make_invisible_in_version(&old_rule->cr, version);
+
+        /* Remove the old rule from data structures. */
+        ofproto_rule_remove__(ofproto, old_rule);
     } else {
         table->n_flows++;
     }
@@ -4952,6 +4955,9 @@ static void replace_rule_revert(struct ofproto *ofproto,
     struct oftable *table = &ofproto->tables[new_rule->table_id];
 
     if (old_rule) {
+        /* Restore the old rule to data structures. */
+        ofproto_rule_insert__(ofproto, old_rule);
+
         /* Restore the original visibility of the old rule. */
         cls_rule_restore_visibility(&old_rule->cr);
     } else {
@@ -4993,10 +4999,6 @@ replace_rule_finish(struct ofproto *ofproto, struct ofputil_flow_mod *fm,
     if (old_rule) {
         const struct rule_actions *old_actions = rule_get_actions(old_rule);
 
-        /* Remove the old rule from data structures.  Removal from the
-         * classifier and the deletion of the rule is RCU postponed by the
-         * caller. */
-        ofproto_rule_remove__(ofproto, old_rule);
         learned_cookies_dec(ofproto, old_actions, dead_cookies);
 
         if (replaced_rule) {
@@ -5210,6 +5212,9 @@ delete_flows_start__(struct ofproto *ofproto, ovs_version_t version,
 
         table->n_flows--;
         cls_rule_make_invisible_in_version(&rule->cr, version);
+
+        /* Remove rule from ofproto data structures. */
+        ofproto_rule_remove__(ofproto, rule);
     }
 }
 
@@ -5237,7 +5242,6 @@ delete_flows_finish__(struct ofproto *ofproto,
             /* Send Vacancy Event for OF1.4+. */
             send_table_status(ofproto, rule->table_id);
 
-            ofproto_rule_remove__(ofproto, rule);
             learned_cookies_dec(ofproto, rule_get_actions(rule),
                                 &dead_cookies);
         }
@@ -5300,6 +5304,9 @@ delete_flows_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     for (size_t i = 0; i < rules->n; i++) {
         struct rule *rule = rules->rules[i];
         struct oftable *table = &ofproto->tables[rule->table_id];
+
+        /* Add rule back to ofproto data structures. */
+        ofproto_rule_insert__(ofproto, rule);
 
         /* Restore table's rule count. */
         table->n_flows++;
