@@ -1262,6 +1262,9 @@ struct ofputil_group_desc {
     struct ofputil_group_props props; /* Group properties. */
 };
 
+void ofputil_group_properties_destroy(struct ofputil_group_props *);
+void ofputil_group_properties_copy(struct ofputil_group_props *to,
+                                   const struct ofputil_group_props *from);
 void ofputil_bucket_list_destroy(struct ovs_list *buckets);
 void ofputil_bucket_clone_list(struct ovs_list *dest,
                                const struct ovs_list *src,

@@ -1178,12 +1178,15 @@ void
 oxm_format_field_array(struct ds *ds, const struct field_array *fa)
 {
     size_t start_len = ds->length;
-    int i;
+    size_t i, offset = 0;
 
-    for (i = 0; i < MFF_N_IDS; i++) {
-        if (bitmap_is_set(fa->used.bm, i)) {
-            nx_format_mask_tlv(ds, i, &fa->value[i]);
-        }
+    BITMAP_FOR_EACH_1 (i, MFF_N_IDS, fa->used.bm) {
+        const struct mf_field *mf = mf_from_id(i);
+        union mf_value value;
+
+        memcpy(&value, fa->values + offset, mf->n_bytes);
+        nx_format_mask_tlv(ds, i, &value);
+        offset += mf->n_bytes;
     }
 
     if (ds->length > start_len) {
@@ -1205,7 +1208,6 @@ oxm_put_field_array(struct ofpbuf *b, const struct field_array *fa,
                     enum ofp_version version)
 {
     size_t start_len = b->size;
-    int i;
 
     /* Field arrays are only used with the group selection method
      * property and group properties are only available in OpenFlow 1.5+.
@@ -1220,13 +1222,17 @@ oxm_put_field_array(struct ofpbuf *b, const struct field_array *fa,
      */
     ovs_assert(version >= OFP15_VERSION);
 
-    for (i = 0; i < MFF_N_IDS; i++) {
-        if (bitmap_is_set(fa->used.bm, i)) {
-            int len = mf_field_len(mf_from_id(i), &fa->value[i], NULL, NULL);
-            nxm_put__(b, i, version,
-                      &fa->value[i].u8 + mf_from_id(i)->n_bytes - len, NULL,
-                      len);
-        }
+    size_t i, offset = 0;
+
+    BITMAP_FOR_EACH_1 (i, MFF_N_IDS, fa->used.bm) {
+        const struct mf_field *mf = mf_from_id(i);
+        union mf_value value;
+
+        memcpy(&value, fa->values + offset, mf->n_bytes);
+
+        int len = mf_field_len(mf, &value, NULL, NULL);
+        nxm_put__(b, i, version, &value + mf->n_bytes - len, NULL, len);
+        offset += mf->n_bytes;
     }
 
     return b->size - start_len;

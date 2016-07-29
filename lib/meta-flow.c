@@ -2515,7 +2515,28 @@ void
 field_array_set(enum mf_field_id id, const union mf_value *value,
                 struct field_array *fa)
 {
+    size_t i, offset = 0;
+
     ovs_assert(id < MFF_N_IDS);
+
+    /* Find the spot for 'id'. */
+    BITMAP_FOR_EACH_1 (i, id, fa->used.bm) {
+        offset += mf_from_id(i)->n_bytes;
+    }
+
+    size_t value_size = mf_from_id(id)->n_bytes;
+
+    /* make room if necessary. */
+    if (!bitmap_is_set(fa->used.bm, id)) {
+        fa->values = xrealloc(fa->values, fa->values_size + value_size);
+        /* Move remainder forward, if any. */
+        if (offset < fa->values_size) {
+            memmove(fa->values + offset + value_size, fa->values + offset,
+                    fa->values_size - offset);
+        }
+        fa->values_size += value_size;
+    }
     bitmap_set1(fa->used.bm, id);
-    fa->value[id] = *value;
+
+    memcpy(fa->values + offset, value, value_size);
 }

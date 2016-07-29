@@ -3492,39 +3492,41 @@ xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
     const struct field_array *fields;
     struct ofputil_bucket *bucket;
+    const uint8_t *mask_values;
     uint32_t basis;
-    int i;
+    size_t i;
 
     fields = group_dpif_get_fields(group);
+    mask_values = fields->values;
     basis = hash_uint64(group_dpif_get_selection_method_param(group));
 
-    for (i = 0; i < MFF_N_IDS; i++) {
-        if (bitmap_is_set(fields->used.bm, i)) {
-            const struct mf_field *mf = mf_from_id(i);
+    BITMAP_FOR_EACH_1 (i, MFF_N_IDS, fields->used.bm) {
+        const struct mf_field *mf = mf_from_id(i);
 
-            /* Skip fields for which prerequisities are not met. */
-            if (!mf_are_prereqs_ok(mf, &ctx->xin->flow, ctx->wc)) {
-                continue;
-            }
-
-            union mf_value value;
-            union mf_value mask;
-
-            mf_get_value(mf, &ctx->xin->flow, &value);
-            /* This seems inefficient but so does apply_mask() */
-            for (int j = 0; j < mf->n_bytes; j++) {
-                mask.b[j] = fields->value[i].b[j];
-                value.b[j] &= mask.b[j];
-            }
-            basis = hash_bytes(&value, mf->n_bytes, basis);
-
-            /* For tunnels, hash in whether the field is present. */
-            if (mf_is_tun_metadata(mf)) {
-                basis = hash_boolean(mf_is_set(mf, &ctx->xin->flow), basis);
-            }
-
-            mf_mask_field_masked(mf, &mask, ctx->wc);
+        /* Skip fields for which prerequisities are not met. */
+        if (!mf_are_prereqs_ok(mf, &ctx->xin->flow, ctx->wc)) {
+            /* Skip the mask bytes for this field. */
+            mask_values += mf->n_bytes;
+            continue;
         }
+
+        union mf_value value;
+        union mf_value mask;
+
+        mf_get_value(mf, &ctx->xin->flow, &value);
+        /* Mask the value. */
+        for (int j = 0; j < mf->n_bytes; j++) {
+            mask.b[j] = *mask_values++;
+            value.b[j] &= mask.b[j];
+        }
+        basis = hash_bytes(&value, mf->n_bytes, basis);
+
+        /* For tunnels, hash in whether the field is present. */
+        if (mf_is_tun_metadata(mf)) {
+            basis = hash_boolean(mf_is_set(mf, &ctx->xin->flow), basis);
+        }
+
+        mf_mask_field_masked(mf, &mask, ctx->wc);
     }
 
     bucket = group_best_live_bucket(ctx, group, basis);

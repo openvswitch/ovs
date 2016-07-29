@@ -2035,10 +2035,12 @@ int mf_subvalue_width(const union mf_subvalue *);
 void mf_subvalue_shift(union mf_subvalue *, int n);
 void mf_subvalue_format(const union mf_subvalue *, struct ds *);
 
-/* An array of fields with values */
+/* Set of field values. 'values' only includes the actual data bytes for each
+ * field for which is used, as marked by 1-bits in 'used'. */
 struct field_array {
     struct mf_bitmap used;
-    union mf_value value[MFF_N_IDS];
+    size_t values_size;      /* Number of bytes currently in 'values'. */
+    uint8_t *values;     /* Dynamically allocated to the correct size. */
 };
 
 /* Finding mf_fields. */

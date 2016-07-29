@@ -2979,6 +2979,8 @@ static void
 group_destroy_cb(struct ofgroup *group)
 {
     group->ofproto->ofproto_class->group_destruct(group);
+    ofputil_group_properties_destroy(CONST_CAST(struct ofputil_group_props *,
+                                                &group->props));
     ofputil_bucket_list_destroy(CONST_CAST(struct ovs_list *,
                                            &group->buckets));
     group->ofproto->ofproto_class->group_dealloc(group);
@@ -6458,8 +6460,9 @@ init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
     *CONST_CAST(uint32_t *, &(*ofgroup)->n_buckets) =
         ovs_list_size(&(*ofgroup)->buckets);
 
-    memcpy(CONST_CAST(struct ofputil_group_props *, &(*ofgroup)->props),
-           &gm->props, sizeof (struct ofputil_group_props));
+    ofputil_group_properties_copy(CONST_CAST(struct ofputil_group_props *,
+                                             &(*ofgroup)->props),
+                                  &gm->props);
     rule_collection_init(&(*ofgroup)->rules);
 
     /* Make group visible from 'version'. */
@@ -6469,6 +6472,8 @@ init_group(struct ofproto *ofproto, const struct ofputil_group_mod *gm,
     /* Construct called BEFORE any locks are held. */
     error = ofproto->ofproto_class->group_construct(*ofgroup);
     if (error) {
+        ofputil_group_properties_destroy(CONST_CAST(struct ofputil_group_props *,
+                                                    &(*ofgroup)->props));
         ofputil_bucket_list_destroy(CONST_CAST(struct ovs_list *,
                                                &(*ofgroup)->buckets));
         ofproto->ofproto_class->group_dealloc(*ofgroup);

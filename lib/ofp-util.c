@@ -8205,6 +8205,7 @@ void
 ofputil_uninit_group_desc(struct ofputil_group_desc *gd)
 {
     ofputil_bucket_list_destroy(&gd->buckets);
+    ofputil_group_properties_destroy(&gd->props);
 }
 
 /* Decodes the OpenFlow group description request in 'oh', returning the group
@@ -8870,6 +8871,20 @@ ofputil_init_group_properties(struct ofputil_group_props *gp)
     memset(gp, 0, sizeof *gp);
 }
 
+void
+ofputil_group_properties_copy(struct ofputil_group_props *to,
+                              const struct ofputil_group_props *from)
+{
+    *to = *from;
+    to->fields.values = xmemdup(from->fields.values, from->fields.values_size);
+}
+
+void
+ofputil_group_properties_destroy(struct ofputil_group_props *gp)
+{
+    free(gp->fields.values);
+}
+
 static enum ofperr
 parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
                                       enum ofp11_group_type group_type,
@@ -9128,6 +9143,7 @@ void
 ofputil_uninit_group_mod(struct ofputil_group_mod *gm)
 {
     ofputil_bucket_list_destroy(&gm->buckets);
+    ofputil_group_properties_destroy(&gm->props);
 }
 
 static struct ofpbuf *
