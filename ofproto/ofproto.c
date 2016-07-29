@@ -5378,7 +5378,7 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 
     error = reject_slave_controller(ofconn);
     if (error) {
-        goto exit;
+        return error;
     }
 
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
@@ -5390,15 +5390,8 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
         struct openflow_mod_requester req = { ofconn, oh };
         error = handle_flow_mod__(ofproto, &ofm, &req);
     }
-    if (error) {
-        goto exit_free_ofpacts;
-    }
 
-    ofconn_report_flow_mod(ofconn, ofm.fm.command);
-
-exit_free_ofpacts:
     ofpbuf_uninit(&ofpacts);
-exit:
     return error;
 }
 
@@ -6973,6 +6966,10 @@ ofproto_flow_mod_finish(struct ofproto *ofproto,
 
     default:
         break;
+    }
+
+    if (req) {
+        ofconn_report_flow_mod(req->ofconn, ofm->fm.command);
     }
 }
 
