@@ -1,3 +1,14 @@
+# trim_zeros()
+#
+# Removes pairs of trailing zeros from lines of text.  Useful for
+# fairly comparing Ethernet packets that might have been padded out to
+# a minimum (e.g. 64-byte) length.
+m4_divert_text([PREPARE_TESTS],
+  [trim_zeros() {
+     sed 's/\(00\)\{1,\}$//' "$@"
+   }
+])
+
 AT_BANNER([OVN components])
 
 AT_SETUP([ovn -- lexer])
@@ -737,9 +748,6 @@ vif_to_hv() {
 # digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
 # more) list the VIFs on which the packet should be received.  INPORT and the
 # OUTPORTs are specified as logical switch port numbers, e.g. 11 for vif11.
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 for i in 1 2 3; do
     for j in 1 2 3; do
         : > $i$j.expected
@@ -1038,9 +1046,6 @@ vif_to_hv() {
 # digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
 # more) list the VIFs on which the packet should be received.  INPORT and the
 # OUTPORTs are specified as logical switch port numbers, e.g. 11 for vif11.
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 for i in 1 2; do
     for j in 1 2 3 4 5; do
         : > $i$j.expected
@@ -1223,9 +1228,6 @@ sleep 1
 # digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
 # more) list the VIFs on which the packet should be received.  INPORT and the
 # OUTPORTs are specified as logical switch port numbers, e.g. 1 for vif1.
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 for i in 1 2 3; do
     : > $i.expected
 done
@@ -1384,9 +1386,6 @@ sleep 1
 # digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
 # more) list the VIFs on which the packet should be received.  INPORT and the
 # OUTPORTs are specified as lport numbers, e.g. 1 for vif1.
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 for i in 1 2 3; do
     : > $i.expected
 done
@@ -1593,9 +1592,6 @@ sleep 1
 # digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
 # more) list the VIFs on which the packet should be received.  INPORT and the
 # OUTPORTs are specified as logical switch port numbers, e.g. 123 for vif123.
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 for i in 1 2 3; do
     for j in 1 2 3; do
         for k in 1 2 3; do
@@ -1951,10 +1947,6 @@ vif_to_hv() {
     echo hv${1%?}
 }
 
-
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 for i in 1 2 3; do
     for j in 1 2 3; do
         : > $i$j.expected
@@ -2372,9 +2364,6 @@ sleep 1
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
 }
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 
 # Packet to send.
 src_mac="f00000010203"
@@ -2473,9 +2462,6 @@ sleep 1
 # Send ip packets between the two ports.
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
-}
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
 }
 
 # Packet to send.
@@ -2609,9 +2595,6 @@ sleep 1
 # Send ip packets between the two ports.
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
-}
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
 }
 
 # Packet to send.
@@ -2768,9 +2751,6 @@ sleep 1
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
 }
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 
 # Send ip packets between foo1 and alice1
 src_mac="f00000010203"
@@ -2865,9 +2845,6 @@ AT_CHECK([ovs-vsctl add-port br-int localvif1 -- set Interface localvif1 externa
 
 # Wait for packet to be received.
 OVS_WAIT_UNTIL([test `wc -c < "hv/snoopvif-tx.pcap"` -ge 50])
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv/snoopvif-tx.pcap | trim_zeros > packets
 expected="fffffffffffff0000000000108060001080006040001f00000000001c0a80102000000000000c0a80102"
 echo $expected > expout
@@ -2995,9 +2972,6 @@ sleep 1
 
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
-}
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
 }
 
 # Send ip packets between foo1 and alice1
@@ -3137,10 +3111,6 @@ ovn_populate_arp
 sleep 2
 
 as hv1 ovs-vsctl show
-
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 
 # This shell function sends a DHCP request packet
 # test_dhcp INPORT SRC_MAC DHCP_TYPE OFFER_IP ...
@@ -3443,9 +3413,6 @@ sleep 2
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
 }
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 
 # Send ip packets between foo1 and alice1
 src_mac="f00000010203"
@@ -3589,9 +3556,6 @@ sleep 1
 
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
-}
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
 }
 for i in 1 2; do
     : > vif$i.expected
@@ -3755,9 +3719,6 @@ sleep 1
 # on which it is located.
 vif_to_hv() {
     echo hv1${1%?}
-}
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
 }
 for i in 1 2; do
     : > $i.expected
@@ -4049,9 +4010,6 @@ sleep 1
 
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
-}
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
 }
 
 # Send ip packets between foo1 and foo2
