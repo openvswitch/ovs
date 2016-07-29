@@ -3490,7 +3490,6 @@ xlate_default_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 static void
 xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
-    struct mf_bitmap hash_fields = MF_BITMAP_INITIALIZER;
     const struct field_array *fields;
     struct ofputil_bucket *bucket;
     uint32_t basis;
@@ -3499,44 +3498,23 @@ xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
     fields = group_dpif_get_fields(group);
     basis = hash_uint64(group_dpif_get_selection_method_param(group));
 
-    /* Determine which fields to hash */
     for (i = 0; i < MFF_N_IDS; i++) {
         if (bitmap_is_set(fields->used.bm, i)) {
-            const struct mf_field *mf;
+            const struct mf_field *mf = mf_from_id(i);
 
-            /* If the field is already present in 'hash_fields' then
-             * this loop has already checked that it and its pre-requisites
-             * are present in the flow and its pre-requisites have
-             * already been added to 'hash_fields'. There is nothing more
-             * to do here and as an optimisation the loop can continue. */
-            if (bitmap_is_set(hash_fields.bm, i)) {
-                continue;
-            }
-
-            mf = mf_from_id(i);
-
-            /* Only hash a field if it and its pre-requisites are present
-             * in the flow. */
+            /* Skip fields for which prerequisities are not met. */
             if (!mf_are_prereqs_ok(mf, &ctx->xin->flow, ctx->wc)) {
                 continue;
             }
 
-            /* Hash both the field and its pre-requisites */
-            mf_bitmap_set_field_and_prereqs(mf, &hash_fields);
-        }
-    }
-
-    /* Hash the fields */
-    for (i = 0; i < MFF_N_IDS; i++) {
-        if (bitmap_is_set(hash_fields.bm, i)) {
-            const struct mf_field *mf = mf_from_id(i);
             union mf_value value;
-            int j;
+            union mf_value mask;
 
             mf_get_value(mf, &ctx->xin->flow, &value);
             /* This seems inefficient but so does apply_mask() */
-            for (j = 0; j < mf->n_bytes; j++) {
-                ((uint8_t *) &value)[j] &= ((uint8_t *) &fields->value[i])[j];
+            for (int j = 0; j < mf->n_bytes; j++) {
+                mask.b[j] = fields->value[i].b[j];
+                value.b[j] &= mask.b[j];
             }
             basis = hash_bytes(&value, mf->n_bytes, basis);
 
@@ -3545,7 +3523,7 @@ xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
                 basis = hash_boolean(mf_is_set(mf, &ctx->xin->flow), basis);
             }
 
-            mf_mask_field(mf, ctx->wc);
+            mf_mask_field_masked(mf, &mask, ctx->wc);
         }
     }
 

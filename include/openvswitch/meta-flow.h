@@ -2062,8 +2062,6 @@ void mf_get_mask(const struct mf_field *, const struct flow_wildcards *,
 /* Prerequisites. */
 bool mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow,
                        struct flow_wildcards *wc);
-void mf_bitmap_set_field_and_prereqs(const struct mf_field *mf, struct
-                                     mf_bitmap *bm);
 
 static inline bool
 mf_is_l3_or_higher(const struct mf_field *mf)
