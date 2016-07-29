@@ -76,6 +76,9 @@ def socket_name_from_target(target):
     if target.startswith('/') or target.find(':') > -1:
         return 0, target
 
+    if not ovs.dirs.WITH_PID_SOCKET_PATH:
+        return 0, "%s/%s.ctl" % (ovs.dirs.RUNDIR, target)
+
     pidfile_name = "%s/%s.pid" % (ovs.dirs.RUNDIR, target)
     pid = ovs.daemon.read_pidfile(pidfile_name)
     if pid < 0:

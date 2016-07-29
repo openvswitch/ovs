@@ -73,6 +73,7 @@ ovs-install-data-local:
                 -e 's,[@]bindir[@],$(bindir),g' \
                 -e 's,[@]sysconfdir[@],$(sysconfdir),g' \
                 -e 's,[@]DBDIR[@],$(DBDIR),g' \
+                -e 's,[@]WITH_PID_SOCKET_PATH[@],$(WITH_PID_SOCKET_PATH),g' \
 		< $(srcdir)/python/ovs/dirs.py.template \
 		> python/ovs/dirs.py.tmp
 	$(MKDIR_P) $(DESTDIR)$(pkgdatadir)/python/ovs
@@ -101,7 +102,7 @@ $(srcdir)/python/ovs/version.py: config.status
 	if cmp -s $(@F).tmp $@; then touch $@; rm $(@F).tmp; else mv $(@F).tmp $@; fi
 
 ALL_LOCAL += $(srcdir)/python/ovs/dirs.py
-$(srcdir)/python/ovs/dirs.py: python/ovs/dirs.py.template
+$(srcdir)/python/ovs/dirs.py: python/ovs/dirs.py.template config.status
 	$(AM_V_GEN)sed \
 		-e '/^##/d' \
                 -e 's,[@]pkgdatadir[@],/usr/local/share/openvswitch,g' \
@@ -110,6 +111,7 @@ $(srcdir)/python/ovs/dirs.py: python/ovs/dirs.py.template
                 -e 's,[@]bindir[@],/usr/local/bin,g' \
                 -e 's,[@]sysconfdir[@],/usr/local/etc,g' \
                 -e 's,[@]DBDIR[@],/usr/local/etc/openvswitch,g' \
-		< $? > $@.tmp && \
-	mv $@.tmp $@
+                -e 's,[@]WITH_PID_SOCKET_PATH[@],$(WITH_PID_SOCKET_PATH),g' \
+		< $< > $(@F).tmp && \
+	if cmp -s $(@F).tmp $@; then touch $@; rm $(@F).tmp; else mv $(@F).tmp $@; fi
 EXTRA_DIST += python/ovs/dirs.py.template

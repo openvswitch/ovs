@@ -37,7 +37,7 @@ AT_CLEANUP
 OVSDB_CHECK_LOCK_SETUP([unlock], [positive])
 AT_CHECK([ovsdb-client --detach --pidfile lock unix:socket lock0 >c1-output 2>&1],
       [0], [], [])
-AT_CHECK([ovsdb-client --detach lock unix:socket lock0 >c2-output 2>&1],
+AT_CHECK([ovsdb-client --detach --unixctl=dummy.ctl lock unix:socket lock0 >c2-output 2>&1],
       [0], [], [])
 AT_CHECK([ovs-appctl -t ovsdb-client unlock lock0], [0], [], [])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])

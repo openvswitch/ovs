@@ -71,6 +71,8 @@ struct ovsdb_client_command {
 /* --timestamp: Print a timestamp before each update on "monitor" command? */
 static bool timestamp;
 
+static char *unixctl_path = NULL;
+
 /* Format for table output. */
 static struct table_style table_style = TABLE_STYLE_DEFAULT;
 
@@ -171,6 +173,7 @@ parse_options(int argc, char *argv[])
 {
     enum {
         OPT_BOOTSTRAP_CA_CERT = UCHAR_MAX + 1,
+        OPT_UNIXCTL,
         OPT_TIMESTAMP,
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS,
@@ -180,6 +183,7 @@ parse_options(int argc, char *argv[])
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
         {"timestamp", no_argument, NULL, OPT_TIMESTAMP},
+        {"unixctl", required_argument, NULL, OPT_UNIXCTL},
         VLOG_LONG_OPTIONS,
         DAEMON_LONG_OPTIONS,
 #ifdef HAVE_OPENSSL
@@ -218,6 +222,10 @@ parse_options(int argc, char *argv[])
 
         case OPT_TIMESTAMP:
             timestamp = true;
+            break;
+
+        case OPT_UNIXCTL:
+            unixctl_path = optarg;
             break;
 
         case '?':
@@ -288,6 +296,7 @@ usage(void)
     daemon_usage();
     vlog_usage();
     printf("\nOther options:\n"
+           "  --unixctl=SOCKET            override default control socket name\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
@@ -956,7 +965,7 @@ do_monitor__(struct jsonrpc *rpc, const char *database,
     if (get_detach()) {
         int error;
 
-        error = unixctl_server_create(NULL, &unixctl);
+        error = unixctl_server_create(unixctl_path, &unixctl);
         if (error) {
             ovs_fatal(error, "failed to create unixctl server");
         }
@@ -1470,7 +1479,7 @@ do_lock(struct jsonrpc *rpc, const char *method, const char *lock)
     if (get_detach()) {
         int error;
 
-        error = unixctl_server_create(NULL, &unixctl);
+        error = unixctl_server_create(unixctl_path, &unixctl);
         if (error) {
             ovs_fatal(error, "failed to create unixctl server");
         }

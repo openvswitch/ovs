@@ -9,6 +9,7 @@ AUTOMAKE_OPTIONS = foreign subdir-objects
 ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = datapath
 
+AM_DISTCHECK_CONFIGURE_FLAGS =
 AM_CPPFLAGS = $(SSL_CFLAGS)
 AM_LDFLAGS = $(SSL_LDFLAGS)
 AM_LDFLAGS += $(OVS_LDFLAGS)
@@ -40,6 +41,13 @@ endif
 if NDEBUG
 AM_CPPFLAGS += -DNDEBUG
 AM_CFLAGS += -fomit-frame-pointer
+endif
+
+if WITH_PID_SOCKET_PATH
+AM_DISTCHECK_CONFIGURE_FLAGS += '--enable-pid-socket-path'
+AM_CPPFLAGS += -DWITH_PID_SOCKET_PATH
+else
+AM_DISTCHECK_CONFIGURE_FLAGS += '--disable-pid-socket-path'
 endif
 
 if WIN32
