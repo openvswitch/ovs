@@ -48,6 +48,8 @@ do
     modname="$(basename ${module})"
     echo "override ${modname%.ko} * extra" >> \
         $RPM_BUILD_ROOT/etc/depmod.d/kmod-openvswitch.conf
+    echo "override ${modname%.ko} * weak-updates" >> \
+        $RPM_BUILD_ROOT/etc/depmod.d/kmod-openvswitch.conf
 done
 
 %clean
