@@ -125,7 +125,7 @@ struct ofproto {
 
     /* Groups. */
     struct ovs_rwlock groups_rwlock;
-    struct hmap groups OVS_GUARDED;   /* Contains "struct ofgroup"s. */
+    struct cmap groups;               /* Contains "struct ofgroup"s. */
     uint32_t n_groups[4] OVS_GUARDED; /* # of existing groups of each type. */
     struct ofputil_group_features ogf;
 };
@@ -490,12 +490,12 @@ void ofproto_rule_reduce_timeouts(struct rule *rule, uint16_t idle_timeout,
                                   uint16_t hard_timeout)
     OVS_EXCLUDED(ofproto_mutex);
 
-/* A group within a "struct ofproto".
+/* A group within a "struct ofproto", RCU-protected.
  *
  * With few exceptions, ofproto implementations may look at these fields but
  * should not modify them. */
 struct ofgroup {
-    struct hmap_node hmap_node OVS_GUARDED; /* In ofproto's "groups" hmap. */
+    struct cmap_node cmap_node; /* In ofproto's "groups" cmap. */
 
     /* Number of references.
      *
@@ -517,16 +517,17 @@ struct ofgroup {
     const long long int created;      /* Creation time. */
     const long long int modified;     /* Time of last modification. */
 
-    struct ovs_list buckets;        /* Contains "struct ofputil_bucket"s. */
+    const struct ovs_list buckets;    /* Contains "struct ofputil_bucket"s. */
     const uint32_t n_buckets;
 
     const struct ofputil_group_props props;
 };
 
-bool ofproto_group_lookup(const struct ofproto *ofproto, uint32_t group_id,
-                          struct ofgroup **group);
+struct ofgroup *ofproto_group_lookup(const struct ofproto *ofproto,
+                                     uint32_t group_id);
 
 void ofproto_group_ref(struct ofgroup *);
+bool ofproto_group_try_ref(struct ofgroup *);
 void ofproto_group_unref(struct ofgroup *);
 
 void ofproto_group_delete_all(struct ofproto *);

@@ -136,11 +136,10 @@ void rule_dpif_reduce_timeouts(struct rule_dpif *rule, uint16_t idle_timeout,
 void group_dpif_credit_stats(struct group_dpif *,
                              struct ofputil_bucket *,
                              const struct dpif_flow_stats *);
-bool group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
-                       struct group_dpif **group);
+struct group_dpif *group_dpif_lookup(struct ofproto_dpif *ofproto,
+                                     uint32_t group_id);
+const struct ovs_list *group_dpif_get_buckets(const struct group_dpif *group);
 
-void group_dpif_get_buckets(const struct group_dpif *group,
-                            const struct ovs_list **buckets);
 enum ofp11_group_type group_dpif_get_type(const struct group_dpif *group);
 const char *group_dpif_get_selection_method(const struct group_dpif *group);
 uint64_t group_dpif_get_selection_method_param(const struct group_dpif *group);

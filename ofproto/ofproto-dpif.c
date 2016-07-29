@@ -4279,7 +4279,7 @@ group_construct_stats(struct group_dpif *group)
     group->packet_count = 0;
     group->byte_count = 0;
 
-    group_dpif_get_buckets(group, &buckets);
+    buckets = group_dpif_get_buckets(group);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         bucket->stats.packet_count = 0;
         bucket->stats.byte_count = 0;
@@ -4300,7 +4300,7 @@ group_dpif_credit_stats(struct group_dpif *group,
     } else { /* Credit to all buckets */
         const struct ovs_list *buckets;
 
-        group_dpif_get_buckets(group, &buckets);
+        buckets = group_dpif_get_buckets(group);
         LIST_FOR_EACH (bucket, list_node, buckets) {
             bucket->stats.packet_count += stats->n_packets;
             bucket->stats.byte_count += stats->n_bytes;
@@ -4350,7 +4350,7 @@ group_get_stats(const struct ofgroup *group_, struct ofputil_group_stats *ogs)
     ogs->packet_count = group->packet_count;
     ogs->byte_count = group->byte_count;
 
-    group_dpif_get_buckets(group, &buckets);
+    buckets = group_dpif_get_buckets(group);
     bucket_stats = ogs->bucket_stats;
     LIST_FOR_EACH (bucket, list_node, buckets) {
         bucket_stats->packet_count = bucket->stats.packet_count;
@@ -4366,24 +4366,17 @@ group_get_stats(const struct ofgroup *group_, struct ofputil_group_stats *ogs)
  *
  * Make sure to call group_dpif_unref() after no longer needing to maintain
  * a reference to the group. */
-bool
-group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
-                  struct group_dpif **group)
+struct group_dpif *
+group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id)
 {
-    struct ofgroup *ofgroup;
-    bool found;
-
-    found = ofproto_group_lookup(&ofproto->up, group_id, &ofgroup);
-    *group = found ?  group_dpif_cast(ofgroup) : NULL;
-
-    return found;
+    struct ofgroup *ofgroup = ofproto_group_lookup(&ofproto->up, group_id);
+    return ofgroup ? group_dpif_cast(ofgroup) : NULL;
 }
 
-void
-group_dpif_get_buckets(const struct group_dpif *group,
-                       const struct ovs_list **buckets)
+const struct ovs_list *
+group_dpif_get_buckets(const struct group_dpif *group)
 {
-    *buckets = &group->up.buckets;
+    return &group->up.buckets;
 }
 
 enum ofp11_group_type
