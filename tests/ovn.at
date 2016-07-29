@@ -1,14 +1,3 @@
-# trim_zeros()
-#
-# Removes pairs of trailing zeros from lines of text.  Useful for
-# fairly comparing Ethernet packets that might have been padded out to
-# a minimum (e.g. 64-byte) length.
-m4_divert_text([PREPARE_TESTS],
-  [trim_zeros() {
-     sed 's/\(00\)\{1,\}$//' "$@"
-   }
-])
-
 # OVN_CHECK_PACKETS([PCAP], [EXPECTED])
 #
 # This compares packets read from PCAP, in pcap format, to those read
@@ -29,13 +18,13 @@ m4_divert_text([PREPARE_TESTS],
      exp_text=$2
      exp_n=`wc -l < "$exp_text"`
      ovs_wait_cond () {
-	  $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $rcv_pcap | trim_zeros > $rcv_text
+	  $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $rcv_pcap > $rcv_text
 	  rcv_n=`wc -l < "$rcv_text"`
 	  test $rcv_n -ge $exp_n
      }
      ovs_wait || echo "expected $exp_n packets, only received $rcv_n"
 
-     trim_zeros $exp_text | sort > expout
+     sort $exp_text > expout
    }
 ])
 m4_define([OVN_CHECK_PACKETS],
@@ -792,7 +781,7 @@ test_packet() {
     vif=vif$inport
     as $hv ovs-appctl netdev-dummy/receive $vif $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -1088,7 +1077,7 @@ test_packet() {
     vif=vif$inport
     as $hv ovs-appctl netdev-dummy/receive $vif $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -1259,7 +1248,7 @@ test_packet() {
     vif=vif$inport
     as $hv ovs-appctl netdev-dummy/receive $vif $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -1408,7 +1397,7 @@ test_packet() {
     vif=vif$inport
     as $hv ovs-appctl netdev-dummy/receive $vif $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -1622,7 +1611,7 @@ test_ip() {
             # (and checksum).
             out_lrp=`vif_to_lrp $outport`
             echo f00000000${outport}00000000ff${out_lrp}08004500001c00000000"3f1101"00${src_ip}${dst_ip}0035111100080000
-        fi | trim_zeros >> $outport.expected
+        fi >> $outport.expected
     done
 }
 
@@ -1701,7 +1690,7 @@ for is in 1 2 3; do
           arp=ffffffffffff${lrmac}08060001080006040001${lrmac}${lrip}000000000000${dip}
           for jd2 in 1 2 3; do
             for kd in 1 2 3; do
-              echo $arp | trim_zeros >> $id$jd2$kd.expected
+              echo $arp >> $id$jd2$kd.expected
             done
           done
         done
@@ -1861,7 +1850,7 @@ for is in 1 2 3; do
           host_mac=8000000000$o4
           outport=${id}11
           out_lrp=$id$jd
-          echo ${host_mac}00000000ff${out_lrp}08004500001c00000000"3f1101"00${sip}${dip}0035111100080000 | trim_zeros >> $outport.expected
+          echo ${host_mac}00000000ff${out_lrp}08004500001c00000000"3f1101"00${sip}${dip}0035111100080000 >> $outport.expected
         done
       done
     done
@@ -1965,7 +1954,7 @@ test_ip() {
     as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
     #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -2016,7 +2005,7 @@ test_ipv6() {
     as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
     #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -2031,7 +2020,7 @@ test_icmpv6() {
     as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
     #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -3144,7 +3133,7 @@ test_dhcp() {
     else
         shift; shift; shift; shift;
         for outport; do
-            echo $request | trim_zeros >> $outport.expected
+            echo $request >> $outport.expected
         done
     fi
     as hv1 ovs-appctl netdev-dummy/receive hv1-vif$inport $request
@@ -3688,7 +3677,7 @@ ns_packet=3333ffa1f9aefa163e94059886dd6000000000203afffd81ce49a9480000f8163efffe
 na_packet=fa163e940598fa163ea1f9ae86dd6000000000203afffd81ce49a9480000f8163efffea1f9aefd81ce49a9480000f8163efffe9405988800e9ed60000000fd81ce49a9480000f8163efffea1f9ae0201fa163ea1f9ae
 
 as hv1 ovs-appctl netdev-dummy/receive vif1 $ns_packet
-echo $na_packet | trim_zeros >> 1.expected
+echo $na_packet >> 1.expected
 
 echo "------ hv1 dump ------"
 as hv1 ovs-vsctl show
@@ -4003,8 +3992,8 @@ src_ip=`ip_to_hex 192 168 1 2`
 dst_ip=`ip_to_hex 192 168 1 3`
 expected=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > received1.packets
-echo $expected | trim_zeros > expout
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap > received1.packets
+echo $expected > expout
 AT_CHECK([cat received1.packets], [0], [expout])
 
 # Packet to Expect at alice1
@@ -4014,8 +4003,8 @@ src_ip=`ip_to_hex 192 168 1 2`
 dst_ip=`ip_to_hex 192 168 2 2`
 expected=${dst_mac}${src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif3-tx.pcap | trim_zeros > received2.packets
-echo $expected | trim_zeros > expout
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif3-tx.pcap > received2.packets
+echo $expected > expout
 AT_CHECK([cat received2.packets], [0], [expout])
 
 OVN_CLEANUP([hv1])
