@@ -415,45 +415,9 @@
     <p><em>Pipeline Stages</em></p>
 
     <p>
-      <code>ovn-northd</code> is responsible for populating the
-      <ref table="Logical_Flow"/> table, so the stages are an
-      implementation detail and subject to change.  This section
-      describes the current logical flow table.
+      <code>ovn-northd</code> populates the <ref table="Logical_Flow"/> table
+      with the logical flows described in detail in <code>ovn-northd</code>(8).
     </p>
-
-    <p>
-      The ingress pipeline consists of the following stages:
-    </p>
-    <ul>
-      <li>
-        Port Security (Table 0): Validates the source address, drops
-        packets with a VLAN tag, and, if configured, verifies that the
-        logical port is allowed to send with the source address.
-      </li>
-
-      <li>
-        L2 Destination Lookup (Table 1): Forwards known unicast
-        addresses to the appropriate logical port.  Unicast packets to
-        unknown hosts are forwarded to logical ports configured with the
-        special <code>unknown</code> mac address.  Broadcast, and
-        multicast are flooded to all ports in the logical switch.
-      </li>
-    </ul>
-
-    <p>
-      The egress pipeline consists of the following stages:
-    </p>
-    <ul>
-      <li>
-        ACL (Table 0): Applies any specified access control lists.
-      </li>
-
-      <li>
-        Port Security (Table 1): If configured, verifies that the
-        logical port is allowed to receive packets with the destination
-        address.
-      </li>
-    </ul>
 
     <column name="logical_datapath">
       The logical datapath to which the logical flow belongs.
