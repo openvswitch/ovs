@@ -433,7 +433,7 @@ main(int argc, char *argv[])
 
         const struct sbrec_chassis *chassis = NULL;
         if (chassis_id) {
-            chassis = chassis_run(&ctx, chassis_id);
+            chassis = chassis_run(&ctx, chassis_id, br_int);
             encaps_run(&ctx, br_int, chassis_id);
             binding_run(&ctx, br_int, chassis_id, &local_datapaths,
                         &all_lports);

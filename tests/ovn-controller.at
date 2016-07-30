@@ -151,3 +151,68 @@ OVS_APP_EXIT_AND_WAIT_BY_TARGET([$ovs_base/ovn-sb/ovsdb-server-2.ctl], [$ovs_bas
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP
+
+# Checks that ovn-controller populates datapath-type and iface-types
+# correctly in the Chassis external-ids column.
+AT_SETUP([ovn-controller - Chassis external_ids])
+AT_KEYWORDS([ovn])
+ovn_init_db ovn-sb
+
+net_add n1
+sim_add hv
+as hv
+ovs-vsctl \
+    -- add-br br-phys \
+    -- add-br br-eth0 \
+    -- add-br br-eth1 \
+    -- add-br br-eth2
+ovn_attach n1 br-phys 192.168.0.1
+
+sysid=$(ovs-vsctl get Open_vSwitch . external_ids:system-id)
+
+# Make sure that the datapath_type set in the Bridge table
+# is mirrored into the Chassis record in the OVN_Southbound db.
+check_datapath_type () {
+    datapath_type=$1
+    chassis_datapath_type=$(ovn-sbctl get Chassis ${sysid} external_ids:datapath-type | sed -e 's/"//g') #"
+    test "${datapath_type}" = "${chassis_datapath_type}"
+}
+
+OVS_WAIT_UNTIL([check_datapath_type ""])
+
+ovs-vsctl set Bridge br-int datapath-type=foo
+OVS_WAIT_UNTIL([check_datapath_type foo])
+
+# Change "ovn-bridge-mappings" value. It should not change the "datapath-type".
+ovs-vsctl set Open_vSwitch . external_ids:ovn-bridge-mappings=foo-mapping
+check_datapath_type foo
+
+ovs-vsctl set Bridge br-int datapath-type=bar
+OVS_WAIT_UNTIL([check_datapath_type bar])
+
+ovs-vsctl set Bridge br-int datapath-type=\"\"
+OVS_WAIT_UNTIL([check_datapath_type ""])
+
+# The following will need to be updated as OVS starts to support more
+# interface types.
+expected_iface_types="dummy,dummy-pmd,geneve,gre,internal,ipsec_gre,lisp,patch,stt,system,tap,vxlan"
+chassis_iface_types=$(ovn-sbctl get Chassis ${sysid} external_ids:iface-types | sed -e 's/\"//g')
+echo "chassis_iface_types = ${chassis_iface_types}"
+AT_CHECK([test "${expected_iface_types}" = "${chassis_iface_types}"])
+
+# Change the value of external_ids:iface-types using ovn-sbctl.
+# ovn-controller should again set it back to proper one.
+ovn-sbctl set Chassis ${sysid} external_ids:iface-types="foo"
+OVS_WAIT_UNTIL([
+    chassis_iface_types=$(ovn-sbctl get Chassis ${sysid} external_ids:iface-types | sed -e 's/\"//g')
+    echo "chassis_iface_types = ${chassis_iface_types}"
+    test "${expected_iface_types}" = "${chassis_iface_types}"
+])
+
+# Gracefully terminate daemons
+OVN_CLEANUP_SBOX([hv])
+OVN_CLEANUP_VSWITCH([main])
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+AT_CLEANUP

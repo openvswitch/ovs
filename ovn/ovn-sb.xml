@@ -213,6 +213,22 @@
       information.
     </column>
 
+    <column name="external_ids" key="datapath-type">
+      <code>ovn-controller</code> populates this key with the datapath type
+      configured in the <ref table="Bridge" column="datapath_type"/> column of
+      the Open_vSwitch database's <ref table="Bridge" db="Open_vSwitch"/>
+      table.  Other applications should treat this key as read-only. See
+      <code>ovn-controller</code>(8) for more information.
+    </column>
+
+    <column name="external_ids" key="iface-types">
+      <code>ovn-controller</code> populates this key with the interface types
+      configured in the <ref table="Open_vSwitch" column="iface_types"/> column
+      of the Open_vSwitch database's <ref table="Open_vSwitch"
+      db="Open_vSwitch"/> table.  Other applications should treat this key as
+      read-only. See <code>ovn-controller</code>(8) for more information.
+    </column>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.

@@ -156,6 +156,30 @@
       </dd>
     </dl>
 
+    <p>
+      <code>ovn-controller</code> reads the following values from the
+      <code>Open_vSwitch</code> database of the local OVS instance:
+    </p>
+
+    <dl>
+      <dt><code>datapath-type</code> from <ref table="Bridge" db="Open_vSwitch"/> table</dt>
+      <dd>
+        This value is read from local OVS integration bridge row of
+        <ref table="Bridge" db="Open_vSwitch"/> table and populated in
+        <ref key="datapath-type" table="Chassis" column="external_ids"
+        db="OVN_Southbound"/> of the <ref table="Chassis" db="OVN_Southbound"/>
+        table in the OVN_Southbound database.
+      </dd>
+
+      <dt><code>iface-types</code> from <ref table="Open_vSwitch" db="Open_vSwitch"/> table</dt>
+      <dd>
+        This value is populated in <ref key="iface-types" table="Chassis"
+        column="external_ids" db="OVN_Southbound"/> of the
+        <ref table="Chassis" db="OVN_Southbound"/> table in the OVN_Southbound
+        database.
+      </dd>
+    </dl>
+
     <h1>Open vSwitch Database Usage</h1>
 
     <p>
