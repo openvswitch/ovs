@@ -931,9 +931,12 @@ expr_parse_primary(struct expr_context *ctx, bool *atomic)
         }
 
         if (!expr_relop_from_token(ctx->lexer->token.type, &r)) {
-            if (f.n_bits > 1 && !ctx->not) {
+            if (!f.n_bits || ctx->lexer->token.type == LEX_T_EQUALS) {
+                expr_syntax_error(ctx, "expecting relational operator.");
+                return NULL;
+            } else if (f.n_bits > 1 && !ctx->not) {
                 expr_error(ctx, "Explicit `!= 0' is required for inequality "
-                           "test of multibit field against 0.");
+                            "test of multibit field against 0.");
                 return NULL;
             }
 

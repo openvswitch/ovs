@@ -240,6 +240,7 @@ inport == "eth0"
 
 ip4.src == "eth0" => Integer field ip4.src is not compatible with string constant.
 inport == 1 => String field inport is not compatible with integer constant.
+ip4.src = 1.2.3.4 => Syntax error at `=' expecting relational operator.
 
 ip4.src > {1, 2, 3} => Only == and != operators may be used with value sets.
 eth.type > 0x800 => Only == and != operators may be used with nominal field eth.type.
@@ -249,6 +250,7 @@ inport != "eth0" => Nominal field inport may only be tested for equality (taking
 !(inport == "eth0") => Nominal field inport may only be tested for equality (taking enclosing `!' operators into account).
 eth.type != 0x800 => Nominal field eth.type may only be tested for equality (taking enclosing `!' operators into account).
 !(eth.type == 0x800) => Nominal field eth.type may only be tested for equality (taking enclosing `!' operators into account).
+inport = "eth0" => Syntax error at `=' expecting relational operator.
 
 123 == 123 => Syntax error at `123' expecting field name.
 
