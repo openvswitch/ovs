@@ -351,7 +351,7 @@ Logical switch port commands:\n\
   lsp-get-tag PORT          get the PORT's tag if set\n\
   lsp-set-addresses PORT [ADDRESS]...\n\
                             set MAC or MAC+IP addresses for PORT.\n\
-  lsp-get-addresses PORT    get a list of MAC addresses on PORT\n\
+  lsp-get-addresses PORT    get a list of MAC or MAC+IP addresses on PORT\n\
   lsp-set-port-security PORT [ADDRS]...\n\
                             set port security addresses for PORT.\n\
   lsp-get-port-security PORT    get PORT's port security addresses\n\

@@ -168,12 +168,12 @@
       <dd>
         Sets the addresses associated with <var>port</var> to
         <var>address</var>.  Each <var>address</var> should be either an
-        Ethernet address or an Ethernet address followed by an IP address
-        (separated by a space and quoted to form a single command-line
+        Ethernet address or an Ethernet address followed by IP addresses
+        (separated by space and quoted to form a single command-line
         argument).  The special form <code>unknown</code> is also valid.
-        Multiple Ethernet addresses or Ethernet+IP pairs may be set. If no
-        <var>address</var> argument is given, <var>port</var> will have no
-        addresses associated with it.
+        Multiple Ethernet addresses or Ethernet+IPs combinations may be set.
+        If no <var>address</var> argument is given, <var>port</var> will have
+        no addresses associated with it.
       </dd>
 
       <dt><code>lsp-get-addresses</code> <var>port</var></dt>
