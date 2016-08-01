@@ -15,5 +15,7 @@
 
 set -o xtrace
 
-ovs-vsctl add-br br-eth1
-ovs-vsctl set open .  external-ids:ovn-bridge-mappings=physnet1:br-eth1
+# input from local vif, lport1 (ofport 1)
+# The destination MAC is not assigned to any host.
+# expect to go out via l2gateway port (ofport 3)
+ovs-appctl ofproto/trace br-int in_port=1,dl_src=00:00:00:00:00:01,dl_dst=00:00:00:00:00:03 -generate
