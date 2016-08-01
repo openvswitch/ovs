@@ -219,8 +219,9 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 	 * make copy of it to restore it back. */
 	memcpy(cb, skb->cb, sizeof(cb));
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0)
 	skb->encapsulation = 0;
-
+#endif
 	/* We are handling offloads by segmenting l3 packet, so
 	 * no need to call OVS compat segmentation function. */
 
