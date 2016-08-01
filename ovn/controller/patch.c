@@ -151,8 +151,8 @@ add_bridge_mappings(struct controller_ctx *ctx,
     cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
     if (cfg) {
         mappings_cfg = smap_get(&cfg->external_ids, "ovn-bridge-mappings");
-        if (!mappings_cfg) {
-            mappings_cfg = "";
+        if (!mappings_cfg || !mappings_cfg[0]) {
+            return;
         }
     }
 
