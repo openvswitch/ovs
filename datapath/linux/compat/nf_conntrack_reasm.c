@@ -285,6 +285,7 @@ found:
 		qp_flags(fq) |= INET_FRAG_FIRST_IN;
 	}
 
+	inet_frag_lru_move(&fq->q);
 	return 0;
 
 discard_fq:

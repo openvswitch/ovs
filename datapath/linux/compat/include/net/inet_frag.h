@@ -23,6 +23,12 @@ static inline bool inet_frag_evicting(struct inet_frag_queue *q)
 }
 #endif /* HAVE_INET_FRAG_EVICTING */
 
+/* Upstream commit 3fd588eb90bf ("inet: frag: remove lru list") dropped this
+ * function, but we call it from our compat code. Provide a noop version. */
+#ifndef HAVE_INET_FRAG_LRU_MOVE
+#define inet_frag_lru_move(q)
+#endif
+
 #ifndef HAVE_CORRECT_MRU_HANDLING
 static inline void rpl_sub_frag_mem_limit(struct netns_frags *nf, int i)
 {
