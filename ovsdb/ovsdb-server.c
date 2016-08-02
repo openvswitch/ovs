@@ -371,7 +371,7 @@ main(int argc, char *argv[])
     sset_destroy(&remotes);
     sset_destroy(&db_filenames);
     unixctl_server_destroy(unixctl);
-    disconnect_remote_server();
+    destroy_remote_server();
 
     if (run_process && process_exited(run_process)) {
         int status = process_status(run_process);

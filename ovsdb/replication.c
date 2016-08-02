@@ -142,6 +142,14 @@ void
 disconnect_remote_server(void)
 {
     jsonrpc_close(rpc);
+    sset_clear(&monitored_tables);
+    sset_clear(&tables_blacklist);
+}
+
+void
+destroy_remote_server(void)
+{
+    jsonrpc_close(rpc);
     sset_destroy(&monitored_tables);
     sset_destroy(&tables_blacklist);
 
@@ -452,15 +460,13 @@ process_notification(struct json *table_updates, struct ovsdb *database)
         error = ovsdb_txn_commit(txn, false);
         if (error) {
             ovsdb_error_assert(error);
-            sset_clear(&monitored_tables);
+            disconnect_remote_server();
         }
     } else {
         ovsdb_txn_abort(txn);
         ovsdb_error_assert(error);
-        sset_clear(&monitored_tables);
+        disconnect_remote_server();
     }
-
-    ovsdb_error_destroy(error);
 }
 
 static struct ovsdb_error *
@@ -499,6 +505,9 @@ process_table_update(struct json *table_update, const char *table_name,
             } else {
                 error = execute_update(txn, node->name, table, new);
             }
+        }
+        if (error) {
+            break;
         }
     }
     return error;

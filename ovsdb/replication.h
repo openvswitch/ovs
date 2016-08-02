@@ -37,6 +37,7 @@ const char *get_remote_ovsdb_server(void);
 void set_tables_blacklist(const char *blacklist);
 struct sset get_tables_blacklist(void);
 void disconnect_remote_server(void);
+void destroy_remote_server(void);
 const struct db *find_db(const struct shash *all_dbs, const char *db_name);
 void replication_usage(void);
 
