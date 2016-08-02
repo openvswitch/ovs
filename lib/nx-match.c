@@ -1623,37 +1623,6 @@ nxm_reg_move_check(const struct ofpact_reg_move *move, const struct flow *flow)
 /* nxm_execute_reg_move(). */
 
 void
-nxm_execute_reg_move(const struct ofpact_reg_move *move,
-                     struct flow *flow, struct flow_wildcards *wc)
-{
-    /* Check that the fields exist. */
-    if (mf_are_prereqs_ok(move->dst.field, flow, wc)
-        && mf_are_prereqs_ok(move->src.field, flow, wc)) {
-        union mf_value src_value;
-        union mf_value dst_value;
-        union mf_value mask;
-
-        /* Should only mask the bits affected. */
-        memset(&mask, 0, sizeof mask);
-        bitwise_one(&mask, move->dst.field->n_bytes, move->dst.ofs,
-                    move->src.n_bits);
-        mf_mask_field_masked(move->dst.field, &mask, wc);
-
-        memset(&mask, 0, sizeof mask);
-        bitwise_one(&mask, move->src.field->n_bytes, move->src.ofs,
-                    move->src.n_bits);
-        mf_mask_field_masked(move->src.field, &mask, wc);
-
-        mf_get_value(move->dst.field, flow, &dst_value);
-        mf_get_value(move->src.field, flow, &src_value);
-        bitwise_copy(&src_value, move->src.field->n_bytes, move->src.ofs,
-                     &dst_value, move->dst.field->n_bytes, move->dst.ofs,
-                     move->src.n_bits);
-        mf_set_flow_value(move->dst.field, &dst_value, flow);
-    }
-}
-
-void
 nxm_reg_load(const struct mf_subfield *dst, uint64_t src_data,
              struct flow *flow, struct flow_wildcards *wc)
 {

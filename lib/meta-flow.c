@@ -1962,6 +1962,80 @@ mf_check__(const struct mf_subfield *sf, const struct flow *flow,
     }
 }
 
+/* Sets all the bits in 'sf' to 1 within 'wc', if 'wc' is nonnull. */
+static void
+unwildcard_subfield(const struct mf_subfield *sf, struct flow_wildcards *wc)
+{
+    if (wc) {
+        union mf_value mask;
+
+        memset(&mask, 0, sizeof mask);
+        bitwise_one(&mask, sf->field->n_bytes, sf->ofs, sf->n_bits);
+        mf_mask_field_masked(sf->field, &mask, wc);
+    }
+}
+
+/* Copies 'src' into 'dst' within 'flow', and sets all the bits in 'src' and
+ * 'dst' to 1s in 'wc', if 'wc' is nonnull.
+ *
+ * 'src' and 'dst' may overlap. */
+void
+mf_subfield_copy(const struct mf_subfield *src,
+                 const struct mf_subfield *dst,
+                 struct flow *flow, struct flow_wildcards *wc)
+{
+    ovs_assert(src->n_bits == dst->n_bits);
+    if (mf_are_prereqs_ok(dst->field, flow, wc)
+        && mf_are_prereqs_ok(src->field, flow, wc)) {
+        unwildcard_subfield(src, wc);
+        unwildcard_subfield(dst, wc);
+
+        union mf_value src_value;
+        union mf_value dst_value;
+        mf_get_value(dst->field, flow, &dst_value);
+        mf_get_value(src->field, flow, &src_value);
+        bitwise_copy(&src_value, src->field->n_bytes, src->ofs,
+                     &dst_value, dst->field->n_bytes, dst->ofs,
+                     src->n_bits);
+        mf_set_flow_value(dst->field, &dst_value, flow);
+    }
+}
+
+/* Swaps the bits in 'src' and 'dst' within 'flow', and sets all the bits in
+ * 'src' and 'dst' to 1s in 'wc', if 'wc' is nonnull.
+ *
+ * 'src' and 'dst' may overlap. */
+void
+mf_subfield_swap(const struct mf_subfield *a,
+                 const struct mf_subfield *b,
+                 struct flow *flow, struct flow_wildcards *wc)
+{
+    ovs_assert(a->n_bits == b->n_bits);
+    if (mf_are_prereqs_ok(a->field, flow, wc)
+        && mf_are_prereqs_ok(b->field, flow, wc)) {
+        unwildcard_subfield(a, wc);
+        unwildcard_subfield(b, wc);
+
+        union mf_value a_value;
+        union mf_value b_value;
+        mf_get_value(a->field, flow, &a_value);
+        mf_get_value(b->field, flow, &b_value);
+        union mf_value b2_value = b_value;
+
+        /* Copy 'a' into 'b'. */
+        bitwise_copy(&a_value, a->field->n_bytes, a->ofs,
+                     &b_value, b->field->n_bytes, b->ofs,
+                     a->n_bits);
+        mf_set_flow_value(b->field, &b_value, flow);
+
+        /* Copy original 'b' into 'a'. */
+        bitwise_copy(&b2_value, b->field->n_bytes, b->ofs,
+                     &a_value, a->field->n_bytes, a->ofs,
+                     b->n_bits);
+        mf_set_flow_value(a->field, &a_value, flow);
+    }
+}
+
 /* Checks whether 'sf' is valid for reading a subfield out of 'flow'.  Returns
  * 0 if so, otherwise an OpenFlow error code (e.g. as returned by
  * ofp_mkerr()).  */

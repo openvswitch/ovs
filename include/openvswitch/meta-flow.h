@@ -2116,6 +2116,12 @@ void mf_read_subfield(const struct mf_subfield *, const struct flow *,
                       union mf_subvalue *);
 uint64_t mf_get_subfield(const struct mf_subfield *, const struct flow *);
 
+void mf_subfield_copy(const struct mf_subfield *src,
+                      const struct mf_subfield *dst,
+                      struct flow *, struct flow_wildcards *);
+void mf_subfield_swap(const struct mf_subfield *,
+                      const struct mf_subfield *,
+                      struct flow *flow, struct flow_wildcards *);
 
 enum ofperr mf_check_src(const struct mf_subfield *, const struct flow *);
 enum ofperr mf_check_dst(const struct mf_subfield *, const struct flow *);

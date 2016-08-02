@@ -4914,7 +4914,8 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_REG_MOVE:
-            nxm_execute_reg_move(ofpact_get_REG_MOVE(a), flow, wc);
+            mf_subfield_copy(&ofpact_get_REG_MOVE(a)->src,
+                             &ofpact_get_REG_MOVE(a)->dst, flow, wc);
             break;
 
         case OFPACT_SET_FIELD:
