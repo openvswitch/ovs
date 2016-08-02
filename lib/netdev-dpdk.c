@@ -2693,6 +2693,9 @@ netdev_dpdk_get_qos(const struct netdev *netdev,
         *typep = dev->qos_conf->ops->qos_name;
         error = (dev->qos_conf->ops->qos_get
                  ? dev->qos_conf->ops->qos_get(netdev, details): 0);
+    } else {
+        /* No QoS configuration set, return an empty string */
+        *typep = "";
     }
     ovs_mutex_unlock(&dev->mutex);
 
