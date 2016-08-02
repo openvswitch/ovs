@@ -315,7 +315,6 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
             arr[arrcnt++].bucket = bucket;
         } else {
             ULLONG_SET1(arr[bucket_list[bucket]].maps, i);
-            arr[bucket_list[bucket]].maps |= 1UL << i;
         }
     }
 
