@@ -3199,7 +3199,7 @@ qos_unixctl_show(struct unixctl_conn *conn, int argc OVS_UNUSED,
             unixctl_command_reply(conn, ds_cstr(&ds));
         } else {
             ds_put_format(&ds, "QoS not configured on %s\n", iface->name);
-            unixctl_command_reply_error(conn, ds_cstr(&ds));
+            unixctl_command_reply(conn, ds_cstr(&ds));
         }
     } else {
         ds_put_format(&ds, "%s: failed to retrieve QOS configuration (%s)\n",
