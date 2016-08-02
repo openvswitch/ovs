@@ -132,7 +132,7 @@ drop:
 EXPORT_SYMBOL_GPL(rpl_dev_queue_xmit);
 #endif /* OVS_USE_COMPAT_GSO_SEGMENTATION */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+#ifndef USE_UPSTREAM_TUNNEL_GSO
 static __be16 __skb_network_protocol(struct sk_buff *skb)
 {
 	__be16 type = skb->protocol;
@@ -310,4 +310,4 @@ int rpl_ip6_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 	return output_ipv6(skb);
 }
 EXPORT_SYMBOL_GPL(rpl_ip6_local_out);
-#endif /* 3.18 */
+#endif /* USE_UPSTREAM_TUNNEL_GSO */

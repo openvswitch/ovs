@@ -462,6 +462,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [__skb_gso_segment])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [can_checksum_protocol])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [ndo_get_iflink])
+  OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [ndo_features_check],
+                  [OVS_DEFINE([USE_UPSTREAM_TUNNEL_GSO])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [ndo_add_vxlan_port])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [ndo_add_geneve_port])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [netdev_features_t])

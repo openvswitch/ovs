@@ -11,7 +11,7 @@ struct ovs_gso_cb {
 #ifndef USE_UPSTREAM_TUNNEL
 	struct metadata_dst	*tun_dst;
 #endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+#ifndef USE_UPSTREAM_TUNNEL_GSO
 	gso_fix_segment_t fix_segment;
 #endif
 #ifndef HAVE_INNER_PROTOCOL
@@ -26,7 +26,7 @@ struct ovs_gso_cb {
 #define OVS_GSO_CB(skb) ((struct ovs_gso_cb *)(skb)->cb)
 
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+#ifndef USE_UPSTREAM_TUNNEL_GSO
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
 #include <net/protocol.h>
@@ -85,12 +85,13 @@ static inline void ovs_skb_set_inner_protocol(struct sk_buff *skb,
 #endif /* ENCAP_TYPE_ETHER */
 #endif /* HAVE_INNER_PROTOCOL */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+#define skb_inner_mac_offset rpl_skb_inner_mac_offset
 static inline int skb_inner_mac_offset(const struct sk_buff *skb)
 {
 	return skb_inner_mac_header(skb) - skb->data;
 }
 
+#ifndef USE_UPSTREAM_TUNNEL_GSO
 #define ip_local_out rpl_ip_local_out
 int rpl_ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb);
 
@@ -121,7 +122,7 @@ static inline int rpl_ip6_local_out(struct net *net, struct sock *sk, struct sk_
 }
 #define ip6_local_out rpl_ip6_local_out
 
-#endif /* 3.18 */
+#endif /* USE_UPSTREAM_TUNNEL_GSO */
 
 #ifndef USE_UPSTREAM_TUNNEL
 /* We need two separate functions to manage different dst in this case.

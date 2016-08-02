@@ -111,7 +111,7 @@ int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 			goto error;
 		skb_shinfo(skb)->gso_type |= gso_type_mask;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+#ifndef USE_UPSTREAM_TUNNEL_GSO
 		if (gso_type_mask)
 			fix_segment = NULL;
 
