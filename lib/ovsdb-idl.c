@@ -812,6 +812,7 @@ void ovsdb_idl_condition_remove_clause(struct ovsdb_idl *idl,
                                              arg, &column->type)))) {
             ovsdb_idl_clause_free(c);
             idl->cond_changed = table->cond_changed = true;
+            poll_immediate_wake();
             return;
         }
     }
