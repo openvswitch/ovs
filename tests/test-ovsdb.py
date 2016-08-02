@@ -17,7 +17,6 @@ from __future__ import print_function
 import getopt
 import re
 import os
-import signal
 import sys
 import uuid
 
@@ -29,6 +28,7 @@ import ovs.db.types
 import ovs.ovsuuid
 import ovs.poller
 import ovs.util
+from ovs.fatal_signal import signal_alarm
 import six
 
 
@@ -676,7 +676,7 @@ def main(argv):
             except TypeError:
                 raise error.Error("value %s on -t or --timeout is not at "
                                   "least 1" % value)
-            signal.alarm(timeout)
+            signal_alarm(timeout)
         else:
             sys.exit(0)
 
