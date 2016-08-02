@@ -17,6 +17,7 @@ import ovs.timeval
 import ovs.vlog
 import select
 import socket
+import os
 
 try:
     import eventlet.patcher
@@ -168,6 +169,11 @@ class Poller(object):
             try:
                 events = self.poll.poll(self.timeout)
                 self.__log_wakeup(events)
+            except OSError as e:
+                """ On Windows, the select function from poll raises OSError
+                exception if the polled array is empty."""
+                if e.errno != errno.EINTR:
+                    vlog.err("poll: %s" % os.strerror(e.errno))
             except select.error as e:
                 # XXX rate-limit
                 error, msg = e
