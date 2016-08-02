@@ -97,9 +97,7 @@ int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 
 	if (likely(!skb_is_encapsulated(skb))) {
 		skb_reset_inner_headers(skb);
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0)
 		skb->encapsulation = 1;
-#endif
 	} else if (skb_is_gso(skb)) {
 		err = -ENOSYS;
 		goto error;
@@ -120,7 +118,6 @@ int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 		return 0;
 	}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,8,0)
 	/* If packet is not gso and we are resolving any partial checksum,
 	 * clear encapsulation flag. This allows setting CHECKSUM_PARTIAL
 	 * on the outer header without confusing devices that implement
@@ -128,7 +125,6 @@ int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 	 */
 	if (csum_help)
 		skb->encapsulation = 0;
-#endif
 
 	if (skb->ip_summed == CHECKSUM_PARTIAL && csum_help) {
 		err = skb_checksum_help(skb);
@@ -190,7 +186,6 @@ EXPORT_SYMBOL_GPL(ovs_skb_is_encapsulated);
 void ovs_ip_tunnel_rcv(struct net_device *dev, struct sk_buff *skb,
 		       struct metadata_dst *tun_dst)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 	struct pcpu_sw_netstats *tstats;
 
 	tstats = this_cpu_ptr((struct pcpu_sw_netstats __percpu *)dev->tstats);
@@ -198,7 +193,6 @@ void ovs_ip_tunnel_rcv(struct net_device *dev, struct sk_buff *skb,
 	tstats->rx_packets++;
 	tstats->rx_bytes += skb->len;
 	u64_stats_update_end(&tstats->syncp);
-#endif
 
 	skb_reset_mac_header(skb);
 	skb_scrub_packet(skb, false);
@@ -214,7 +208,6 @@ void ovs_ip_tunnel_rcv(struct net_device *dev, struct sk_buff *skb,
 #endif
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 #ifndef HAVE_PCPU_SW_NETSTATS
 #define netdev_stats_to_stats64 rpl_netdev_stats_to_stats64
 static void netdev_stats_to_stats64(struct rtnl_link_stats64 *stats64,
@@ -283,4 +276,3 @@ void rpl_ip6tunnel_xmit(struct sock *sk, struct sk_buff *skb,
 	iptunnel_xmit_stats(dev, pkt_len);
 }
 EXPORT_SYMBOL_GPL(rpl_ip6tunnel_xmit);
-#endif
