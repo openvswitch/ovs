@@ -109,6 +109,7 @@ m4_define([OVSDB_CHECK_IDL_TCP_PY],
 m4_define([OVSDB_CHECK_IDL_TCP6_PYN],
   [AT_SETUP([$1 - tcp6])
    AT_SKIP_IF([test $7 = no])
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test $HAVE_IPV6 = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp6 socket $5])
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
