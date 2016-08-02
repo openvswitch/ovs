@@ -25,6 +25,9 @@
 
 set -o xtrace
 
+ovs-vsctl add-br br-eth1
+ovs-vsctl set open .  external-ids:ovn-bridge-mappings=physnet1:br-eth1
+
 ovn-sbctl chassis-add fakechassis geneve 127.0.0.1
 
 for n in 1 2 3 4; do
