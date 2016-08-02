@@ -1,6 +1,6 @@
 #include <linux/version.h>
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+#ifndef USE_UPSTREAM_TUNNEL
 
 #include <net/udp.h>
 
