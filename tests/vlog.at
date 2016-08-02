@@ -148,6 +148,9 @@ AT_CLEANUP
 
 m4_define([VLOG_REOPEN_PYN],
   [AT_SETUP([vlog - vlog/reopen - $1])
+   # This test won't work as-is on Windows because Windows doesn't allow
+   # files that are open to be renamed.
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test $2 = no])
    on_exit 'kill `cat test-unixctl.py.pid`'
 
