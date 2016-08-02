@@ -503,9 +503,9 @@ connectivity to that network.  We call these “bridge mappings”.  For our
 example, the following script creates a bridge called `br-eth1` and then
 configures `ovn-controller` with a bridge mapping from `physnet1` to `br-eth1`.
 
-We want to create a fake second chassis and then create the topology that tells 
+We want to create a fake second chassis and then create the topology that tells
 OVN we want both ports on both hypervisors connected to `physnet1`.  The way this
-is modeled in OVN is by creating a logical switch for each port.  The logical 
+is modeled in OVN is by creating a logical switch for each port.  The logical
 switch has the regular VIF port and a `localnet` port.
 
 [View ovn/env4/setup.sh][env4setup].
@@ -656,9 +656,9 @@ illustrates how the packets travel from `lport1` to `lport2`.
     `lport1` --> `patch-br-int-to-provnet1-1-physnet1`(OpenFlow port 3)
     --> `br-eth1` --> `patch-br-int-to-provnet1-2-physnet1` --> `lport2`(OpenFlow port 4)
 
-Similarly, We expect the packets from `provnet1-2-port1` to be sent out to 
-`provnet1-1-port1`.  We then expect the network to handle getting the packet to its 
-destination.  In practice, this will be optimized at `br-eth1` and the packet won’t 
+Similarly, We expect the packets from `provnet1-2-port1` to be sent out to
+`provnet1-1-port1`.  We then expect the network to handle getting the packet to its
+destination.  In practice, this will be optimized at `br-eth1` and the packet won’t
 actually go out and back on the network.
 
 [View ovn/env4/packet1.sh][env4packet1].
@@ -966,14 +966,14 @@ Start with a simple logical switch with 3 logical ports.
     $ ovn/env8/setup.sh
 
 This first example shows a packet originating from `lport1`, which is OpenFlow port 1.
-We expect all packets from `lport1` to be sent out to br-eth1 (`patch-br-int-to-sw0-port3`, 
+We expect all packets from `lport1` to be sent out to br-eth1 (`patch-br-int-to-sw0-port3`,
 OpenFlow port 3).  The patch port to br-eth1 provides connectivity to the physical network.
 
 [View ovn/env8/packet1.sh][env8packet1].
 
     $ ovn/env8/packet1.sh
 
-The last trace shows what happens when a broadcast packet arrives from the network. 
+The last trace shows what happens when a broadcast packet arrives from the network.
 In this case, it simulates a broadcast that originated from a port on the physical network
 and arrived at the local chassis via br-eth1. We should see it output to the local port `lport1`
 and `lport2`.
