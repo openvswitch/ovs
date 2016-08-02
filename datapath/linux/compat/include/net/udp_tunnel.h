@@ -154,10 +154,6 @@ static inline int rpl_udp_tunnel_handle_offloads(struct sk_buff *skb,
 
 	void (*fix_segment)(struct sk_buff *);
 
-	if (skb_is_gso(skb) && skb_is_encapsulated(skb)) {
-		return -ENOSYS;
-	}
-
 	type |= udp_csum ? SKB_GSO_UDP_TUNNEL_CSUM : SKB_GSO_UDP_TUNNEL;
 	if (!udp_csum)
 		fix_segment = ovs_udp_gso;
