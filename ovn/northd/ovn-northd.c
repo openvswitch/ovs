@@ -518,11 +518,23 @@ build_datapaths(struct northd_context *ctx, struct hmap *datapaths)
 
             od->sb = sbrec_datapath_binding_insert(ctx->ovnsb_txn);
 
+            /* Get the logical-switch or logical-router UUID to set in
+             * external-ids. */
             char uuid_s[UUID_LEN + 1];
             sprintf(uuid_s, UUID_FMT, UUID_ARGS(&od->key));
             const char *key = od->nbs ? "logical-switch" : "logical-router";
-            const struct smap id = SMAP_CONST1(&id, key, uuid_s);
-            sbrec_datapath_binding_set_external_ids(od->sb, &id);
+
+            /* Get name to set in external-ids. */
+            const char *name = od->nbs ? od->nbs->name : od->nbr->name;
+
+            /* Set external-ids. */
+            struct smap ids = SMAP_INITIALIZER(&ids);
+            smap_add(&ids, key, uuid_s);
+            if (*name) {
+                smap_add(&ids, "name", name);
+            }
+            sbrec_datapath_binding_set_external_ids(od->sb, &ids);
+            smap_destroy(&ids);
 
             sbrec_datapath_binding_set_tunnel_key(od->sb, tunnel_key);
         }

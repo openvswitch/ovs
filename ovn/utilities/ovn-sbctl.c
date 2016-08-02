@@ -489,6 +489,8 @@ pre_get_info(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_table_id);
     ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_match);
     ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_external_ids);
+
+    ovsdb_idl_add_column(ctx->idl, &sbrec_datapath_binding_col_external_ids);
 }
 
 static struct cmd_show_table cmd_show_tables[] = {
@@ -719,9 +721,11 @@ cmd_lflow_list(struct ctl_context *ctx)
             continue;
         }
         if (strcmp(cur_pipeline, lflow->pipeline)) {
-            printf("Datapath: " UUID_FMT "  Pipeline: %s\n",
-                    UUID_ARGS(&lflow->logical_datapath->header_.uuid),
-                    lflow->pipeline);
+            printf("Datapath: \"%s\" ("UUID_FMT")  Pipeline: %s\n",
+                   smap_get_def(&lflow->logical_datapath->external_ids,
+                                "name", ""),
+                   UUID_ARGS(&lflow->logical_datapath->header_.uuid),
+                   lflow->pipeline);
             cur_pipeline = lflow->pipeline;
         }
 

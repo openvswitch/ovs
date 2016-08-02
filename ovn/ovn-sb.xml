@@ -1524,6 +1524,13 @@ tcp.flags = RST;
         corresponding <ref table="Logical_Router" db="OVN_Northbound"/> row in
         the <ref db="OVN_Northbound"/> database.
       </column>
+
+      <column name="external_ids" key="name">
+        <code>ovn-northd</code> copies this from the <ref
+        table="Logical_Router" db="OVN_Northbound"/> or <ref
+        table="Logical_Switch" db="OVN_Northbound"/> table in the <ref
+        db="OVN_Northbound"/> database, when that column is nonempty.
+      </column>
     </group>
 
     <group title="Common Columns">
