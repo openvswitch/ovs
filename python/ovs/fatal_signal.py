@@ -129,9 +129,13 @@ def _init():
     global _inited
     if not _inited:
         _inited = True
+        if sys.platform == "win32":
+            signals = [signal.SIGTERM, signal.SIGINT]
+        else:
+            signals = [signal.SIGTERM, signal.SIGINT, signal.SIGHUP,
+                       signal.SIGALRM]
 
-        for signr in (signal.SIGTERM, signal.SIGINT,
-                      signal.SIGHUP, signal.SIGALRM):
+        for signr in signals:
             if signal.getsignal(signr) == signal.SIG_DFL:
                 signal.signal(signr, _signal_handler)
         atexit.register(_atexit_handler)
