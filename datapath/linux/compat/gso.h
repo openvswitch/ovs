@@ -17,7 +17,7 @@ struct ovs_gso_cb {
 #ifndef HAVE_INNER_PROTOCOL
 	__be16		inner_protocol;
 #endif
-#ifndef HAVE_NDO_FILL_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 	/* Keep original tunnel info during userspace action execution. */
 	struct metadata_dst *fill_md_dst;
 #endif
@@ -166,7 +166,7 @@ static inline void ovs_dst_release(struct dst_entry *dst)
 #define ovs_dst_release dst_release
 #endif
 
-#ifndef HAVE_NDO_FILL_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 #define SKB_INIT_FILL_METADATA_DST(skb)	OVS_GSO_CB(skb)->fill_md_dst = NULL;
 
 #define SKB_RESTORE_FILL_METADATA_DST(skb)	do {			\
