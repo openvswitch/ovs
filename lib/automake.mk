@@ -302,6 +302,7 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/latch-windows.c \
 	lib/route-table-stub.c \
 	lib/if-notifier-stub.c \
+	lib/stream-windows.c \
 	lib/strsep.c
 else
 lib_libopenvswitch_la_SOURCES += \

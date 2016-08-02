@@ -388,7 +388,7 @@ AT_CHECK([ovsdb-server --detach --no-chdir --pidfile db])
 AT_CHECK([test ! -e socket1])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-remote punix:socket1])
 if test "$IS_WIN32" = "yes"; then
-  OVS_WAIT_UNTIL([test -s socket1])
+  OVS_WAIT_UNTIL([test -e socket1])
 else
   OVS_WAIT_UNTIL([test -S socket1])
 fi
@@ -399,7 +399,7 @@ AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes],
 AT_CHECK([test ! -e socket2])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-remote punix:socket2])
 if test "$IS_WIN32" = "yes"; then
-  OVS_WAIT_UNTIL([test -s socket2])
+  OVS_WAIT_UNTIL([test -e socket2])
 else
   OVS_WAIT_UNTIL([test -S socket2])
 fi
@@ -416,7 +416,7 @@ ovs-appctl: ovsdb-server: server returned an error
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-remote punix:socket1])
 OVS_WAIT_UNTIL([test ! -e socket1])
 if test "$IS_WIN32" = "yes"; then
-  AT_CHECK([test -s socket2])
+  AT_CHECK([test -e socket2])
 else
   AT_CHECK([test -S socket2])
 fi
