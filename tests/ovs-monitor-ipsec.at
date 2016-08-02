@@ -2,6 +2,7 @@ AT_BANNER([ovs-monitor-ipsec])
 
 AT_SETUP([ovs-monitor-ipsec])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 AT_SKIP_IF([$non_ascii_cwd])
 
 trim () {  # Removes blank lines and lines starting with # from input.
