@@ -61,6 +61,7 @@
 
 struct ds;
 struct expr;
+struct flow;
 struct ofpbuf;
 struct shash;
 struct simap;
@@ -380,6 +381,11 @@ struct expr *expr_normalize(struct expr *);
 bool expr_honors_invariants(const struct expr *);
 bool expr_is_simplified(const struct expr *);
 bool expr_is_normalized(const struct expr *);
+
+bool expr_evaluate(const struct expr *, const struct flow *uflow,
+                   bool (*lookup_port)(const void *aux, const char *port_name,
+                                       unsigned int *portp),
+                   const void *aux);
 
 /* Converting expressions to OpenFlow flows. */
 

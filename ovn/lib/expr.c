@@ -119,6 +119,22 @@ expr_relop_invert(enum expr_relop relop)
     default: OVS_NOT_REACHED();
     }
 }
+
+/* Checks whether 'relop' is true for strcmp()-like 3-way comparison result
+ * 'cmp'. */
+static bool
+expr_relop_test(enum expr_relop relop, int cmp)
+{
+    switch (relop) {
+    case EXPR_R_EQ: return cmp == 0;
+    case EXPR_R_NE: return cmp != 0;
+    case EXPR_R_LT: return cmp < 0;
+    case EXPR_R_LE: return cmp <= 0;
+    case EXPR_R_GT: return cmp > 0;
+    case EXPR_R_GE: return cmp >= 0;
+    default: OVS_NOT_REACHED();
+    }
+}
 
 /* Constructing and manipulating expressions. */
 
@@ -2451,9 +2467,17 @@ expr_match_add(struct hmap *matches, struct expr_match *match)
     hmap_insert(matches, &match->hmap_node, hash);
 }
 
+/* Applies EXPR_T_CMP-typed 'expr' to 'm'.  This will only work properly if 'm'
+ * doesn't already match on 'expr->cmp.symbol', because it replaces any
+ * existing match on that symbol instead of intersecting with it.
+ *
+ * If 'expr' is a comparison on a string field, uses 'lookup_port' and 'aux' to
+ * convert the string to a port number.  In such a case, if the port can't be
+ * found, returns false.  In all other cases, returns true. */
 static bool
 constrain_match(const struct expr *expr,
-                bool (*lookup_port)(const void *aux, const char *port_name,
+                bool (*lookup_port)(const void *aux,
+                                    const char *port_name,
                                     unsigned int *portp),
                 const void *aux, struct match *m)
 {
@@ -2789,6 +2813,98 @@ expr_is_normalized(const struct expr *expr)
 
     case EXPR_T_BOOLEAN:
         return true;
+
+    default:
+        OVS_NOT_REACHED();
+    }
+}
+
+static bool
+expr_evaluate_andor(const struct expr *e, const struct flow *f,
+                    bool short_circuit,
+                    bool (*lookup_port)(const void *aux, const char *port_name,
+                                        unsigned int *portp),
+                    const void *aux)
+{
+    const struct expr *sub;
+
+    LIST_FOR_EACH (sub, node, &e->andor) {
+        if (expr_evaluate(sub, f, lookup_port, aux) == short_circuit) {
+            return short_circuit;
+        }
+    }
+    return !short_circuit;
+}
+
+static bool
+expr_evaluate_cmp(const struct expr *e, const struct flow *f,
+                  bool (*lookup_port)(const void *aux, const char *port_name,
+                                      unsigned int *portp),
+                  const void *aux)
+{
+    const struct expr_symbol *s = e->cmp.symbol;
+    const struct mf_field *field = s->field;
+
+    int cmp;
+    if (e->cmp.symbol->width) {
+        int n_bytes = field->n_bytes;
+        const uint8_t *cst = &e->cmp.value.u8[sizeof e->cmp.value - n_bytes];
+        const uint8_t *mask = &e->cmp.mask.u8[sizeof e->cmp.mask - n_bytes];
+
+        /* Get field value and mask off undesired bits. */
+        union mf_value value;
+        mf_get_value(field, f, &value);
+        for (int i = 0; i < field->n_bytes; i++) {
+            value.b[i] &= mask[i];
+        }
+
+        /* Compare against constant. */
+        cmp = memcmp(&value, cst, n_bytes);
+    } else {
+        /* Get field value. */
+        struct mf_subfield sf = { .field = field, .ofs = 0,
+                                  .n_bits = field->n_bits };
+        uint64_t value = mf_get_subfield(&sf, f);
+
+        /* Get constant. */
+        unsigned int cst;
+        if (!lookup_port(aux, e->cmp.string, &cst)) {
+            return false;
+        }
+
+        /* Compare. */
+        cmp = value < cst ? -1 : value > cst;
+    }
+
+    return expr_relop_test(e->cmp.relop, cmp);
+}
+
+/* Evaluates 'e' against microflow 'uflow' and returns the result.
+ *
+ * 'lookup_port' must be a function to map from a port name to a port number
+ * and 'aux' auxiliary data to pass to it; see expr_to_matches() for more
+ * details.
+ *
+ * This isn't particularly fast.  For performance-sensitive tasks, use
+ * expr_to_matches() and the classifier. */
+bool
+expr_evaluate(const struct expr *e, const struct flow *uflow,
+              bool (*lookup_port)(const void *aux, const char *port_name,
+                                  unsigned int *portp),
+              const void *aux)
+{
+    switch (e->type) {
+    case EXPR_T_CMP:
+        return expr_evaluate_cmp(e, uflow, lookup_port, aux);
+
+    case EXPR_T_AND:
+        return expr_evaluate_andor(e, uflow, false, lookup_port, aux);
+
+    case EXPR_T_OR:
+        return expr_evaluate_andor(e, uflow, true, lookup_port, aux);
+
+    case EXPR_T_BOOLEAN:
+        return e->boolean;
 
     default:
         OVS_NOT_REACHED();
