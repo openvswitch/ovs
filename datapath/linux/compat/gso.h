@@ -14,6 +14,7 @@ struct ovs_gso_cb {
 #ifndef USE_UPSTREAM_TUNNEL_GSO
 	gso_fix_segment_t fix_segment;
 #endif
+	bool ipv6;
 #ifndef HAVE_INNER_PROTOCOL
 	__be16		inner_protocol;
 #endif
@@ -21,7 +22,6 @@ struct ovs_gso_cb {
 	/* Keep original tunnel info during userspace action execution. */
 	struct metadata_dst *fill_md_dst;
 #endif
-	bool ipv6;
 };
 #define OVS_GSO_CB(skb) ((struct ovs_gso_cb *)(skb)->cb)
 
