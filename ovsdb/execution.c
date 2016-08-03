@@ -697,7 +697,8 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                                         "\"wait\" timed out after %lld ms",
                                         x->elapsed_msec);
                 } else {
-                    error = ovsdb_error("timed out", "\"wait\" timed out");
+                    error = ovsdb_error("timed out",
+                                        "\"where\" clause test failed");
                 }
             } else {
                 /* ovsdb_execute() will change this, if triggers really are

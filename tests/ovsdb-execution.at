@@ -471,7 +471,7 @@ OVSDB_CHECK_EXECUTION([equality wait with extra row],
        "rows": [{"name": "zero", "number": 0},
                 {"name": "one", "number": 1},
                 {"name": "two", "number": 2}]}]]]],
-  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"wait\" timed out","error":"timed out"}]
+  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"where\" clause test failed","error":"timed out"}]
 ]])
 
 OVSDB_CHECK_EXECUTION([equality wait with missing row],
@@ -490,7 +490,7 @@ OVSDB_CHECK_EXECUTION([equality wait with missing row],
        "columns": ["name", "number"],
        "until": "==",
        "rows": [{"name": "one", "number": 1}]}]]]],
-  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"wait\" timed out","error":"timed out"}]
+  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"where\" clause test failed","error":"timed out"}]
 ]])
 
 OVSDB_CHECK_EXECUTION([inequality wait with correct rows],
@@ -510,7 +510,7 @@ OVSDB_CHECK_EXECUTION([inequality wait with correct rows],
        "until": "!=",
        "rows": [{"name": "zero", "number": 0},
                 {"name": "one", "number": 1}]}]]]],
-  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"wait\" timed out","error":"timed out"}]
+  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"where\" clause test failed","error":"timed out"}]
 ]])
 
 OVSDB_CHECK_EXECUTION([inequality wait with extra row],
