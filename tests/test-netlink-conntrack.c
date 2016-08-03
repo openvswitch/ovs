@@ -16,6 +16,7 @@
 
 #include <config.h>
 
+#include <stdlib.h>
 #include <linux/netfilter/nfnetlink.h>
 
 #include "ct-dpif.h"
