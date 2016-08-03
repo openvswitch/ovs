@@ -1802,6 +1802,7 @@ crush_and_string(struct expr *expr, const struct expr_symbol *symbol)
     SSET_FOR_EACH (string, &result) {
         sub = xmalloc(sizeof *sub);
         sub->type = EXPR_T_CMP;
+        sub->cmp.relop = EXPR_R_EQ;
         sub->cmp.symbol = symbol;
         sub->cmp.string = xstrdup(string);
         ovs_list_push_back(&expr->andor, &sub->node);
