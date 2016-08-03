@@ -405,6 +405,7 @@ fi
 %{_libdir}/pkgconfig/*.pc
 %{_includedir}/openvswitch/*
 %{_includedir}/openflow/*
+%{_includedir}/ovn/*
 
 %files
 %defattr(-,root,root)
