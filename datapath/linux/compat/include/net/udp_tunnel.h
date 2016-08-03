@@ -150,21 +150,22 @@ void ovs_udp_csum_gso(struct sk_buff *skb);
 static inline int rpl_udp_tunnel_handle_offloads(struct sk_buff *skb,
 						 bool udp_csum)
 {
+	void (*fix_segment)(struct sk_buff *);
 	int type = 0;
 
-	void (*fix_segment)(struct sk_buff *);
-
 	type |= udp_csum ? SKB_GSO_UDP_TUNNEL_CSUM : SKB_GSO_UDP_TUNNEL;
+#ifndef USE_UPSTREAM_TUNNEL_GSO
 	if (!udp_csum)
 		fix_segment = ovs_udp_gso;
 	else
 		fix_segment = ovs_udp_csum_gso;
-#ifndef USE_UPSTREAM_TUNNEL_GSO
 	/* This functuin is not used by vxlan lan tunnel. On older
 	 * udp offload only supports vxlan, therefore fallback to software
 	 * segmentation.
 	 */
 	type = 0;
+#else
+	fix_segment = NULL;
 #endif
 
 	return ovs_iptunnel_handle_offloads(skb, udp_csum, type, fix_segment);

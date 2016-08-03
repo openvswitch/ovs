@@ -13,8 +13,8 @@ struct ovs_gso_cb {
 #endif
 #ifndef USE_UPSTREAM_TUNNEL_GSO
 	gso_fix_segment_t fix_segment;
-#endif
 	bool ipv6;
+#endif
 #ifndef HAVE_INNER_PROTOCOL
 	__be16		inner_protocol;
 #endif

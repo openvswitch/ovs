@@ -868,7 +868,11 @@ static int vxlan_build_skb(struct sk_buff *skb, struct dst_entry *dst,
 		return -ENOMEM;
 
 	type |= udp_sum ? SKB_GSO_UDP_TUNNEL_CSUM : SKB_GSO_UDP_TUNNEL;
+#ifndef USE_UPSTREAM_TUNNEL_GSO
 	fix_segment = !udp_sum ? ovs_udp_gso : ovs_udp_csum_gso;
+#else
+	fix_segment = NULL;
+#endif
 	err = ovs_iptunnel_handle_offloads(skb, udp_sum, type, fix_segment);
 	if (err)
 		goto out_free;

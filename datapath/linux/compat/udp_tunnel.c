@@ -266,6 +266,7 @@ int rpl_udp_tunnel6_xmit_skb(struct dst_entry *dst, struct sock *sk,
 }
 #endif
 
+#ifndef USE_UPSTREAM_TUNNEL_GSO
 void ovs_udp_gso(struct sk_buff *skb)
 {
 	int udp_offset = skb_transport_offset(skb);
@@ -300,5 +301,6 @@ void ovs_udp_csum_gso(struct sk_buff *skb)
 	}
 }
 EXPORT_SYMBOL_GPL(ovs_udp_csum_gso);
+#endif /* USE_UPSTREAM_TUNNEL_GSO */
 
 #endif
