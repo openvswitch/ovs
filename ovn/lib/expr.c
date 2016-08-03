@@ -1473,6 +1473,7 @@ expr_annotate_cmp(struct expr *expr, const struct shash *symtab,
         }
     }
 
+    *errorp = NULL;
     ovs_list_remove(&an.node);
     return prereqs ? expr_combine(EXPR_T_AND, expr, prereqs) : expr;
 
@@ -1532,8 +1533,10 @@ expr_annotate__(struct expr *expr, const struct shash *symtab,
  *
  * In each case, annotation occurs recursively as necessary.
  *
- * On failure, returns NULL and sets '*errorp' to an explanatory error
- * message, which the caller must free. */
+ * If successful, returns the annotated expression and sets '*errorp' to NULL.
+ * On failure, returns NULL and sets '*errorp' to an explanatory error message,
+ * which the caller must free.  In either case, the caller transfers ownership
+ * of 'expr' and receives ownership of the returned expression, if any. */
 struct expr *
 expr_annotate(struct expr *expr, const struct shash *symtab, char **errorp)
 {
