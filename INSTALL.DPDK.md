@@ -21,7 +21,7 @@ The DPDK support of Open vSwitch is considered 'experimental'.
 
 ### Prerequisites
 
-* Required: DPDK 16.04, libnuma
+* Required: DPDK 16.07, libnuma
 * Hardware: [DPDK Supported NICs] when physical ports in use
 
 ## <a name="build"></a> 2. Building and Installation
@@ -42,10 +42,10 @@ advanced install guide [INSTALL.DPDK-ADVANCED.md]
 
      ```
      cd /usr/src/
-     wget http://dpdk.org/browse/dpdk/snapshot/dpdk-16.04.zip
-     unzip dpdk-16.04.zip
+     wget http://dpdk.org/browse/dpdk/snapshot/dpdk-16.07.zip
+     unzip dpdk-16.07.zip
 
-     export DPDK_DIR=/usr/src/dpdk-16.04
+     export DPDK_DIR=/usr/src/dpdk-16.07
      cd $DPDK_DIR
      ```
 
@@ -372,9 +372,9 @@ can be found in [Vhost Walkthrough].
 
   ```
   cd /root/dpdk/
-  wget http://dpdk.org/browse/dpdk/snapshot/dpdk-16.04.zip
-  unzip dpdk-16.04.zip
-  export DPDK_DIR=/root/dpdk/dpdk-16.04
+  wget http://dpdk.org/browse/dpdk/snapshot/dpdk-16.07.zip
+  unzip dpdk-16.07.zip
+  export DPDK_DIR=/root/dpdk/dpdk-16.07
   export DPDK_TARGET=x86_64-native-linuxapp-gcc
   export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
   cd $DPDK_DIR
@@ -530,7 +530,7 @@ can be found in [Vhost Walkthrough].
            </disk>
            <disk type='dir' device='disk'>
              <driver name='qemu' type='fat'/>
-             <source dir='/usr/src/dpdk-16.04'/>
+             <source dir='/usr/src/dpdk-16.07'/>
              <target dev='vdb' bus='virtio'/>
              <readonly/>
            </disk>
@@ -600,9 +600,9 @@ can be found in [Vhost Walkthrough].
     DPDK. It is recommended that users update Network Interface firmware to
     match what has been validated for the DPDK release.
 
-    For DPDK 16.04, the list of validated firmware versions can be found at:
+    For DPDK 16.07, the list of validated firmware versions can be found at:
 
-    http://dpdk.org/doc/guides/rel_notes/release_16_04.html
+    http://dpdk.org/doc/guides/rel_notes/release_16.07.html
 
 
 Bug Reporting:

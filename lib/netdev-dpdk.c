@@ -30,7 +30,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <getopt.h>
-#include <numaif.h>
 
 #include "dirs.h"
 #include "dp-packet.h"
@@ -143,6 +142,7 @@ static char *cuse_dev_name = NULL;    /* Character device cuse_dev_name. */
 static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 
 #define VHOST_ENQ_RETRY_NUM 8
+#define IF_NAME_SZ (PATH_MAX > IFNAMSIZ ? PATH_MAX : IFNAMSIZ)
 
 static const struct rte_eth_conf port_conf = {
     .rxmode = {
@@ -349,8 +349,11 @@ struct netdev_dpdk {
     struct rte_eth_link link;
     int link_reset_cnt;
 
-    /* virtio-net structure for vhost device */
-    OVSRCU_TYPE(struct virtio_net *) virtio_dev;
+    /* virtio identifier for vhost devices */
+    ovsrcu_index vid;
+
+    /* True if vHost device is 'up' and has been reconfigured at least once */
+    bool vhost_reconfigured;
 
     /* Identifier used to distinguish vhost devices from each other */
     char vhost_id[PATH_MAX];
@@ -389,7 +392,7 @@ static bool dpdk_thread_is_pmd(void);
 
 static int netdev_dpdk_construct(struct netdev *);
 
-struct virtio_net * netdev_dpdk_get_virtio(const struct netdev_dpdk *dev);
+int netdev_dpdk_get_vid(const struct netdev_dpdk *dev);
 
 struct ingress_policer *
 netdev_dpdk_get_ingress_policer(const struct netdev_dpdk *dev);
@@ -761,6 +764,8 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
     dev->flags = 0;
     dev->mtu = ETHER_MTU;
     dev->max_packet_len = MTU_TO_FRAME_LEN(dev->mtu);
+    ovsrcu_index_init(&dev->vid, -1);
+    dev->vhost_reconfigured = false;
 
     buf_size = dpdk_buf_size(dev->mtu);
     dev->dpdk_mp = dpdk_mp_get(dev->socket_id, FRAME_LEN_TO_MTU(buf_size));
@@ -858,6 +863,7 @@ netdev_dpdk_vhost_user_construct(struct netdev *netdev)
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     const char *name = netdev->name;
     int err;
+    uint64_t flags = 0;
 
     /* 'name' is appended to 'vhost_sock_dir' and used to create a socket in
      * the file system. '/' or '\' would traverse directories, so they're not
@@ -880,7 +886,7 @@ netdev_dpdk_vhost_user_construct(struct netdev *netdev)
     snprintf(dev->vhost_id, sizeof(dev->vhost_id), "%s/%s",
              vhost_sock_dir, name);
 
-    err = rte_vhost_driver_register(dev->vhost_id);
+    err = rte_vhost_driver_register(dev->vhost_id, flags);
     if (err) {
         VLOG_ERR("vhost-user socket device setup failure for socket %s\n",
                  dev->vhost_id);
@@ -941,7 +947,7 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
     /* Guest becomes an orphan if still attached. */
-    if (netdev_dpdk_get_virtio(dev) != NULL) {
+    if (netdev_dpdk_get_vid(dev) >= 0) {
         VLOG_ERR("Removing port '%s' while vhost device still attached.",
                  netdev->name);
         VLOG_ERR("To restore connectivity after re-adding of port, VM on socket"
@@ -1172,9 +1178,9 @@ ingress_policer_run(struct ingress_policer *policer, struct rte_mbuf **pkts,
 }
 
 static bool
-is_vhost_running(struct virtio_net *virtio_dev)
+is_vhost_running(struct netdev_dpdk *dev)
 {
-    return (virtio_dev != NULL && (virtio_dev->flags & VIRTIO_DEV_RUNNING));
+    return (netdev_dpdk_get_vid(dev) >= 0 && dev->vhost_reconfigured);
 }
 
 static inline void
@@ -1246,18 +1252,18 @@ netdev_dpdk_vhost_rxq_recv(struct netdev_rxq *rxq,
                            struct dp_packet_batch *batch)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(rxq->netdev);
-    struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(dev);
     int qid = rxq->queue_id;
     struct ingress_policer *policer = netdev_dpdk_get_ingress_policer(dev);
     uint16_t nb_rx = 0;
     uint16_t dropped = 0;
 
-    if (OVS_UNLIKELY(!is_vhost_running(virtio_dev)
+    if (OVS_UNLIKELY(!is_vhost_running(dev)
                      || !(dev->flags & NETDEV_UP))) {
         return EAGAIN;
     }
 
-    nb_rx = rte_vhost_dequeue_burst(virtio_dev, qid * VIRTIO_QNUM + VIRTIO_TXQ,
+    nb_rx = rte_vhost_dequeue_burst(netdev_dpdk_get_vid(dev),
+                                    qid * VIRTIO_QNUM + VIRTIO_TXQ,
                                     dev->dpdk_mp->mp,
                                     (struct rte_mbuf **) batch->packets,
                                     NETDEV_MAX_BURST);
@@ -1358,7 +1364,6 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
                          bool may_steal)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(dev);
     struct rte_mbuf **cur_pkts = (struct rte_mbuf **) pkts;
     unsigned int total_pkts = cnt;
     unsigned int qos_pkts = cnt;
@@ -1366,7 +1371,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
 
     qid = dev->tx_q[qid % netdev->n_txq].map;
 
-    if (OVS_UNLIKELY(!is_vhost_running(virtio_dev) || qid < 0
+    if (OVS_UNLIKELY(!is_vhost_running(dev) || qid < 0
                      || !(dev->flags & NETDEV_UP))) {
         rte_spinlock_lock(&dev->stats_lock);
         dev->stats.tx_dropped+= cnt;
@@ -1384,8 +1389,8 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
         int vhost_qid = qid * VIRTIO_QNUM + VIRTIO_RXQ;
         unsigned int tx_pkts;
 
-        tx_pkts = rte_vhost_enqueue_burst(virtio_dev, vhost_qid,
-                                          cur_pkts, cnt);
+        tx_pkts = rte_vhost_enqueue_burst(netdev_dpdk_get_vid(dev),
+                                          vhost_qid, cur_pkts, cnt);
         if (OVS_LIKELY(tx_pkts)) {
             /* Packets have been sent.*/
             cnt -= tx_pkts;
@@ -1725,60 +1730,50 @@ netdev_dpdk_vhost_get_stats(const struct netdev *netdev,
 
 static void
 netdev_dpdk_convert_xstats(struct netdev_stats *stats,
-                           const struct rte_eth_xstats *xstats,
+                           const struct rte_eth_xstat *xstats,
+                           const struct rte_eth_xstat_name *names,
                            const unsigned int size)
 {
-    /* XXX Current implementation is simple search through an array
-     * to find hardcoded counter names. In future DPDK release (TBD)
-     * XSTATS API will change so each counter will be represented by
-     * unique ID instead of String. */
-
     for (unsigned int i = 0; i < size; i++) {
-        if (strcmp(XSTAT_RX_64_PACKETS, xstats[i].name) == 0) {
+        if (strcmp(XSTAT_RX_64_PACKETS, names[i].name) == 0) {
             stats->rx_1_to_64_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_65_TO_127_PACKETS, xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_RX_65_TO_127_PACKETS, names[i].name) == 0) {
             stats->rx_65_to_127_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_128_TO_255_PACKETS, xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_RX_128_TO_255_PACKETS, names[i].name) == 0) {
             stats->rx_128_to_255_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_256_TO_511_PACKETS, xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_RX_256_TO_511_PACKETS, names[i].name) == 0) {
             stats->rx_256_to_511_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_512_TO_1023_PACKETS,
-                          xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_RX_512_TO_1023_PACKETS, names[i].name) == 0) {
             stats->rx_512_to_1023_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_1024_TO_1522_PACKETS,
-                          xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_RX_1024_TO_1522_PACKETS, names[i].name) == 0) {
             stats->rx_1024_to_1522_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_1523_TO_MAX_PACKETS,
-                          xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_RX_1523_TO_MAX_PACKETS, names[i].name) == 0) {
             stats->rx_1523_to_max_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_64_PACKETS, xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_TX_64_PACKETS, names[i].name) == 0) {
             stats->tx_1_to_64_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_65_TO_127_PACKETS, xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_TX_65_TO_127_PACKETS, names[i].name) == 0) {
             stats->tx_65_to_127_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_128_TO_255_PACKETS, xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_TX_128_TO_255_PACKETS, names[i].name) == 0) {
             stats->tx_128_to_255_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_256_TO_511_PACKETS, xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_TX_256_TO_511_PACKETS, names[i].name) == 0) {
             stats->tx_256_to_511_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_512_TO_1023_PACKETS,
-                          xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_TX_512_TO_1023_PACKETS, names[i].name) == 0) {
             stats->tx_512_to_1023_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_1024_TO_1522_PACKETS,
-                          xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_TX_1024_TO_1522_PACKETS, names[i].name) == 0) {
             stats->tx_1024_to_1522_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_1523_TO_MAX_PACKETS,
-                          xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_TX_1523_TO_MAX_PACKETS, names[i].name) == 0) {
             stats->tx_1523_to_max_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_MULTICAST_PACKETS, xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_TX_MULTICAST_PACKETS, names[i].name) == 0) {
             stats->tx_multicast_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_BROADCAST_PACKETS, xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_RX_BROADCAST_PACKETS, names[i].name) == 0) {
             stats->rx_broadcast_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_TX_BROADCAST_PACKETS, xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_TX_BROADCAST_PACKETS, names[i].name) == 0) {
             stats->tx_broadcast_packets = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_UNDERSIZED_ERRORS, xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_RX_UNDERSIZED_ERRORS, names[i].name) == 0) {
             stats->rx_undersized_errors = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_FRAGMENTED_ERRORS, xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_RX_FRAGMENTED_ERRORS, names[i].name) == 0) {
             stats->rx_fragmented_errors = xstats[i].value;
-        } else if (strcmp(XSTAT_RX_JABBER_ERRORS, xstats[i].name) == 0) {
+        } else if (strcmp(XSTAT_RX_JABBER_ERRORS, names[i].name) == 0) {
             stats->rx_jabber_errors = xstats[i].value;
         }
     }
@@ -1794,8 +1789,9 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     netdev_dpdk_get_carrier(netdev, &gg);
     ovs_mutex_lock(&dev->mutex);
 
-    struct rte_eth_xstats *rte_xstats;
-    int rte_xstats_len, rte_xstats_ret;
+    struct rte_eth_xstat *rte_xstats = NULL;
+    struct rte_eth_xstat_name *rte_xstats_names = NULL;
+    int rte_xstats_len, rte_xstats_new_len, rte_xstats_ret;
 
     if (rte_eth_stats_get(dev->port_id, &rte_stats)) {
         VLOG_ERR("Can't get ETH statistics for port: %i.", dev->port_id);
@@ -1803,19 +1799,38 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
         return EPROTO;
     }
 
-    rte_xstats_len = rte_eth_xstats_get(dev->port_id, NULL, 0);
-    if (rte_xstats_len > 0) {
-        rte_xstats = dpdk_rte_mzalloc(sizeof(*rte_xstats) * rte_xstats_len);
-        memset(rte_xstats, 0xff, sizeof(*rte_xstats) * rte_xstats_len);
-        rte_xstats_ret = rte_eth_xstats_get(dev->port_id, rte_xstats,
-                                            rte_xstats_len);
-        if (rte_xstats_ret > 0 && rte_xstats_ret <= rte_xstats_len) {
-            netdev_dpdk_convert_xstats(stats, rte_xstats, rte_xstats_ret);
-        }
-        rte_free(rte_xstats);
-    } else {
-        VLOG_WARN("Can't get XSTATS counters for port: %i.", dev->port_id);
+    /* Get length of statistics */
+    rte_xstats_len = rte_eth_xstats_get_names(dev->port_id, NULL, 0);
+    if (rte_xstats_len < 0) {
+        VLOG_WARN("Cannot get XSTATS values for port: %i", dev->port_id);
+        goto out;
     }
+    /* Reserve memory for xstats names and values */
+    rte_xstats_names = xcalloc(rte_xstats_len, sizeof *rte_xstats_names);
+    rte_xstats = xcalloc(rte_xstats_len, sizeof *rte_xstats);
+
+    /* Retreive xstats names */
+    rte_xstats_new_len = rte_eth_xstats_get_names(dev->port_id,
+                                                  rte_xstats_names,
+                                                  rte_xstats_len);
+    if (rte_xstats_new_len != rte_xstats_len) {
+        VLOG_WARN("Cannot get XSTATS names for port: %i.", dev->port_id);
+        goto out;
+    }
+    /* Retreive xstats values */
+    memset(rte_xstats, 0xff, sizeof *rte_xstats * rte_xstats_len);
+    rte_xstats_ret = rte_eth_xstats_get(dev->port_id, rte_xstats,
+                                        rte_xstats_len);
+    if (rte_xstats_ret > 0 && rte_xstats_ret <= rte_xstats_len) {
+        netdev_dpdk_convert_xstats(stats, rte_xstats, rte_xstats_names,
+                                   rte_xstats_len);
+    } else {
+        VLOG_WARN("Cannot get XSTATS values for port: %i.", dev->port_id);
+    }
+
+out:
+    free(rte_xstats);
+    free(rte_xstats_names);
 
     stats->rx_packets = rte_stats.ipackets;
     stats->tx_packets = rte_stats.opackets;
@@ -1824,7 +1839,6 @@ netdev_dpdk_get_stats(const struct netdev *netdev, struct netdev_stats *stats)
     /* DPDK counts imissed as errors, but count them here as dropped instead */
     stats->rx_errors = rte_stats.ierrors - rte_stats.imissed;
     stats->tx_errors = rte_stats.oerrors;
-    stats->multicast = rte_stats.imcasts;
 
     rte_spinlock_lock(&dev->stats_lock);
     stats->tx_dropped = dev->stats.tx_dropped;
@@ -1991,11 +2005,10 @@ static int
 netdev_dpdk_vhost_get_carrier(const struct netdev *netdev, bool *carrier)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(dev);
 
     ovs_mutex_lock(&dev->mutex);
 
-    if (is_vhost_running(virtio_dev)) {
+    if (is_vhost_running(dev)) {
         *carrier = 1;
     } else {
         *carrier = 0;
@@ -2064,10 +2077,9 @@ netdev_dpdk_update_flags__(struct netdev_dpdk *dev,
         /* If DPDK_DEV_VHOST device's NETDEV_UP flag was changed and vhost is
          * running then change netdev's change_seq to trigger link state
          * update. */
-        struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(dev);
 
         if ((NETDEV_UP & ((*old_flagsp ^ on) | (*old_flagsp ^ off)))
-            && is_vhost_running(virtio_dev)) {
+            && is_vhost_running(dev)) {
             netdev_change_seq_changed(&dev->up);
 
             /* Clear statistics if device is getting up. */
@@ -2193,15 +2205,15 @@ netdev_dpdk_set_admin_state(struct unixctl_conn *conn, int argc,
  * Set virtqueue flags so that we do not receive interrupts.
  */
 static void
-set_irq_status(struct virtio_net *virtio_dev)
+set_irq_status(int vid)
 {
     uint32_t i;
     uint64_t idx;
 
-    for (i = 0; i < virtio_dev->virt_qp_nb; i++) {
+    for (i = 0; i < rte_vhost_get_queue_num(vid); i++) {
         idx = i * VIRTIO_QNUM;
-        rte_vhost_enable_guest_notification(virtio_dev, idx + VIRTIO_RXQ, 0);
-        rte_vhost_enable_guest_notification(virtio_dev, idx + VIRTIO_TXQ, 0);
+        rte_vhost_enable_guest_notification(vid, idx + VIRTIO_RXQ, 0);
+        rte_vhost_enable_guest_notification(vid, idx + VIRTIO_TXQ, 0);
     }
 }
 
@@ -2250,26 +2262,27 @@ netdev_dpdk_remap_txqs(struct netdev_dpdk *dev)
  * A new virtio-net device is added to a vhost port.
  */
 static int
-new_device(struct virtio_net *virtio_dev)
+new_device(int vid)
 {
     struct netdev_dpdk *dev;
     bool exists = false;
     int newnode = 0;
-    long err = 0;
+    char ifname[IF_NAME_SZ];
+
+    rte_vhost_get_ifname(vid, ifname, sizeof(ifname));
 
     ovs_mutex_lock(&dpdk_mutex);
     /* Add device to the vhost port with the same name as that passed down. */
     LIST_FOR_EACH(dev, list_node, &dpdk_list) {
-        if (strncmp(virtio_dev->ifname, dev->vhost_id, IF_NAME_SZ) == 0) {
-            uint32_t qp_num = virtio_dev->virt_qp_nb;
+        if (strncmp(ifname, dev->vhost_id, IF_NAME_SZ) == 0) {
+            uint32_t qp_num = rte_vhost_get_queue_num(vid);
 
             ovs_mutex_lock(&dev->mutex);
             /* Get NUMA information */
-            err = get_mempolicy(&newnode, NULL, 0, virtio_dev,
-                                MPOL_F_NODE | MPOL_F_ADDR);
-            if (err) {
+            newnode = rte_vhost_get_numa_node(vid);
+            if (newnode == -1) {
                 VLOG_INFO("Error getting NUMA info for vHost Device '%s'",
-                        virtio_dev->ifname);
+                          ifname);
                 newnode = dev->socket_id;
             }
 
@@ -2278,11 +2291,11 @@ new_device(struct virtio_net *virtio_dev)
             dev->requested_n_txq = qp_num;
             netdev_request_reconfigure(&dev->up);
 
-            ovsrcu_set(&dev->virtio_dev, virtio_dev);
+            ovsrcu_index_set(&dev->vid, vid);
             exists = true;
 
             /* Disable notifications. */
-            set_irq_status(virtio_dev);
+            set_irq_status(vid);
             netdev_change_seq_changed(&dev->up);
             ovs_mutex_unlock(&dev->mutex);
             break;
@@ -2291,14 +2304,14 @@ new_device(struct virtio_net *virtio_dev)
     ovs_mutex_unlock(&dpdk_mutex);
 
     if (!exists) {
-        VLOG_INFO("vHost Device '%s' %"PRIu64" can't be added - name not "
-                  "found", virtio_dev->ifname, virtio_dev->device_fh);
+        VLOG_INFO("vHost Device '%s' can't be added - name not found", ifname);
 
         return -1;
     }
 
-    VLOG_INFO("vHost Device '%s' %"PRIu64" has been added on numa node %i",
-              virtio_dev->ifname, virtio_dev->device_fh, newnode);
+    VLOG_INFO("vHost Device '%s' has been added on numa node %i",
+              ifname, newnode);
+
     return 0;
 }
 
@@ -2321,18 +2334,21 @@ netdev_dpdk_txq_map_clear(struct netdev_dpdk *dev)
  *  the device.
  */
 static void
-destroy_device(volatile struct virtio_net *virtio_dev)
+destroy_device(int vid)
 {
     struct netdev_dpdk *dev;
     bool exists = false;
+    char ifname[IF_NAME_SZ];
+
+    rte_vhost_get_ifname(vid, ifname, sizeof(ifname));
 
     ovs_mutex_lock(&dpdk_mutex);
     LIST_FOR_EACH (dev, list_node, &dpdk_list) {
-        if (netdev_dpdk_get_virtio(dev) == virtio_dev) {
+        if (netdev_dpdk_get_vid(dev) == vid) {
 
             ovs_mutex_lock(&dev->mutex);
-            virtio_dev->flags &= ~VIRTIO_DEV_RUNNING;
-            ovsrcu_set(&dev->virtio_dev, NULL);
+            dev->vhost_reconfigured = false;
+            ovsrcu_index_set(&dev->vid, -1);
             /* Clear tx/rx queue settings. */
             netdev_dpdk_txq_map_clear(dev);
             dev->requested_n_rxq = NR_QUEUE;
@@ -2348,7 +2364,7 @@ destroy_device(volatile struct virtio_net *virtio_dev)
 
     ovs_mutex_unlock(&dpdk_mutex);
 
-    if (exists == true) {
+    if (exists) {
         /*
          * Wait for other threads to quiesce after setting the 'virtio_dev'
          * to NULL, before returning.
@@ -2359,21 +2375,21 @@ destroy_device(volatile struct virtio_net *virtio_dev)
          * put thread back into quiescent state before returning.
          */
         ovsrcu_quiesce_start();
-        VLOG_INFO("vHost Device '%s' %"PRIu64" has been removed",
-                  virtio_dev->ifname, virtio_dev->device_fh);
+        VLOG_INFO("vHost Device '%s' has been removed", ifname);
     } else {
-        VLOG_INFO("vHost Device '%s' %"PRIu64" not found", virtio_dev->ifname,
-                  virtio_dev->device_fh);
+        VLOG_INFO("vHost Device '%s' not found", ifname);
     }
 }
 
 static int
-vring_state_changed(struct virtio_net *virtio_dev, uint16_t queue_id,
-                    int enable)
+vring_state_changed(int vid, uint16_t queue_id, int enable)
 {
     struct netdev_dpdk *dev;
     bool exists = false;
     int qid = queue_id / VIRTIO_QNUM;
+    char ifname[IF_NAME_SZ];
+
+    rte_vhost_get_ifname(vid, ifname, sizeof(ifname));
 
     if (queue_id % VIRTIO_QNUM == VIRTIO_TXQ) {
         return 0;
@@ -2381,7 +2397,7 @@ vring_state_changed(struct virtio_net *virtio_dev, uint16_t queue_id,
 
     ovs_mutex_lock(&dpdk_mutex);
     LIST_FOR_EACH (dev, list_node, &dpdk_list) {
-        if (strncmp(virtio_dev->ifname, dev->vhost_id, IF_NAME_SZ) == 0) {
+        if (strncmp(ifname, dev->vhost_id, IF_NAME_SZ) == 0) {
             ovs_mutex_lock(&dev->mutex);
             if (enable) {
                 dev->tx_q[qid].map = qid;
@@ -2397,23 +2413,21 @@ vring_state_changed(struct virtio_net *virtio_dev, uint16_t queue_id,
     ovs_mutex_unlock(&dpdk_mutex);
 
     if (exists) {
-        VLOG_INFO("State of queue %d ( tx_qid %d ) of vhost device '%s' %"
-                  PRIu64" changed to \'%s\'", queue_id, qid,
-                  virtio_dev->ifname, virtio_dev->device_fh,
+        VLOG_INFO("State of queue %d ( tx_qid %d ) of vhost device '%s'"
+                  "changed to \'%s\'", queue_id, qid, ifname,
                   (enable == 1) ? "enabled" : "disabled");
     } else {
-        VLOG_INFO("vHost Device '%s' %"PRIu64" not found", virtio_dev->ifname,
-                  virtio_dev->device_fh);
+        VLOG_INFO("vHost Device '%s' not found", ifname);
         return -1;
     }
 
     return 0;
 }
 
-struct virtio_net *
-netdev_dpdk_get_virtio(const struct netdev_dpdk *dev)
+int
+netdev_dpdk_get_vid(const struct netdev_dpdk *dev)
 {
-    return ovsrcu_get(struct virtio_net *, &dev->virtio_dev);
+    return ovsrcu_index_get(&dev->vid);
 }
 
 struct ingress_policer *
@@ -2865,7 +2879,6 @@ static int
 netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    struct virtio_net *virtio_dev = netdev_dpdk_get_virtio(dev);
     int err = 0;
 
     ovs_mutex_lock(&dpdk_mutex);
@@ -2891,8 +2904,8 @@ netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
         }
     }
 
-    if (virtio_dev) {
-        virtio_dev->flags |= VIRTIO_DEV_RUNNING;
+    if (netdev_dpdk_get_vid(dev) >= 0) {
+        dev->vhost_reconfigured = true;
     }
 
     ovs_mutex_unlock(&dev->mutex);
@@ -3359,7 +3372,7 @@ dpdk_init__(const struct smap *ovs_other_config)
     /* Register CUSE device to handle IOCTLs.
      * Unless otherwise specified, cuse_dev_name is set to vhost-net.
      */
-    err = rte_vhost_driver_register(cuse_dev_name);
+    err = rte_vhost_driver_register(cuse_dev_name, 0);
 
     if (err != 0) {
         VLOG_ERR("CUSE device setup failure.");
