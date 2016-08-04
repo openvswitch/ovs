@@ -55,7 +55,7 @@ m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
 # This is a workaround, and should be removed when offloads are properly
 # supported in netdev-linux.
 m4_define([CONFIGURE_VETH_OFFLOADS],
-    [ethtool -K $1 tx off]
+    [AT_CHECK([ethtool -K $1 tx off], [0], [ignore])]
 )
 
 # CHECK_CONNTRACK()
