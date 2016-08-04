@@ -675,6 +675,10 @@ AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
+dnl The above ping creates state in the connection tracker.  We're not
+dnl interested in that state.
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
 dnl Pings from ns1->ns0 should fail.
 NS_CHECK_EXEC([at_ns1], [ping6 -q -c 3 -i 0.3 -w 2 fc00::1 | FORMAT_PING], [0], [dnl
 7 packets transmitted, 0 received, 100% packet loss, time 0ms
