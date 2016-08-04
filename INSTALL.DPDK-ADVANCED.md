@@ -181,7 +181,7 @@ right PCIe slot.
   CONFIG_RTE_LIBRTE_VHOST_NUMA=y, vHost User ports automatically
   detect the NUMA socket of the QEMU vCPUs and will be serviced by a PMD
   from the same node provided a core on this node is enabled in the
-  pmd-cpu-mask.
+  pmd-cpu-mask. libnuma packages are required for this feature.
 
 ### 3.7 Compiler Optimizations
 

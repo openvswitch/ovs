@@ -21,7 +21,7 @@ The DPDK support of Open vSwitch is considered 'experimental'.
 
 ### Prerequisites
 
-* Required: DPDK 16.07, libnuma
+* Required: DPDK 16.07
 * Hardware: [DPDK Supported NICs] when physical ports in use
 
 ## <a name="build"></a> 2. Building and Installation
