@@ -2488,26 +2488,16 @@ vsctl_parent_process_info(void)
         procfile = xasprintf("/proc/%d/cmdline", parent_pid);
 
         f = fopen(procfile, "r");
-        if (!f) {
-            free(procfile);
-            return NULL;
-        }
         free(procfile);
-
-        for (;;) {
-            int c = getc(f);
-            if (!c || c == EOF) {
-            break;
-            }
-            ds_put_char(&s, c);
+        if (f) {
+            ds_get_line(&s, f);
+            fclose(f);
         }
-        fclose(f);
     } else {
         ds_put_cstr(&s, "init");
     }
 
     ds_put_format(&s, " (pid %d)", parent_pid);
-
     return ds_steal_cstr(&s);
 #else
     return NULL;
