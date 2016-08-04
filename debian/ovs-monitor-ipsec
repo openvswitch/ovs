@@ -44,7 +44,9 @@ import ovs.vlog
 vlog = ovs.vlog.Vlog("ovs-monitor-ipsec")
 root_prefix = ''                # Prefix for absolute file names, for testing.
 SETKEY = "/usr/sbin/setkey"
+IP = "/sbin/ip"
 exiting = False
+IPSEC_MARK = "1"
 
 
 def unixctl_exit(conn, unused_argv, unused_aux):
@@ -280,6 +282,12 @@ class IPsec:
         p.stdin.write(cmds)
         return p.communicate()[0]
 
+    def call_ip_xfrm(self, cmds):
+        exitcode = subprocess.call([root_prefix + IP, "xfrm"] + cmds)
+        if exitcode != 0:
+            vlog.err("couldn't install IPsec policy that prevents "
+                     "traffic from exiting unencrypted")
+
     def get_spi(self, local_ip, remote_ip, proto="esp"):
         # Run the setkey dump command to retrieve the SAD.  Then, parse
         # the output looking for SPI buried in the output.  Note that
@@ -321,6 +329,10 @@ class IPsec:
 
     def spd_flush(self):
         self.call_setkey("spdflush;\n")
+        self.call_ip_xfrm(["policy", "add", "src", "0.0.0.0/0", "dst",
+                           "0.0.0.0/0", "proto", "gre", "dir", "out",
+                           "mark", IPSEC_MARK, "mask", IPSEC_MARK,
+                           "action", "block", "priority", "4294967295"]);
 
     def spd_add(self, local_ip, remote_ip):
         cmds = ("spdadd %s %s gre -P out ipsec esp/transport//require;\n" %
@@ -412,14 +424,14 @@ def main():
     schema_helper.register_columns("SSL", ["certificate", "private_key"])
     idl = ovs.db.idl.Idl(remote, schema_helper)
 
+    ipsec = IPsec()
+
     ovs.daemon.daemonize()
 
     ovs.unixctl.command_register("exit", "", 0, 0, unixctl_exit, None)
     error, unixctl_server = ovs.unixctl.server.UnixctlServer.create(None)
     if error:
         ovs.util.ovs_fatal(error, "could not create unixctl server", vlog)
-
-    ipsec = IPsec()
 
     interfaces = {}
     seqno = idl.change_seqno    # Sequence number when we last processed the db
