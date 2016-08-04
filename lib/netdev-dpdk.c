@@ -506,23 +506,18 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
 }
 
 static void
-dpdk_mp_put(struct dpdk_mp *dmp)
+dpdk_mp_put(struct dpdk_mp *dmp) OVS_REQUIRES(dpdk_mutex)
 {
-
     if (!dmp) {
         return;
     }
 
-    dmp->refcount--;
-    ovs_assert(dmp->refcount >= 0);
+    ovs_assert(dmp->refcount);
 
-#if 0
-    /* I could not find any API to destroy mp. */
-    if (dmp->refcount == 0) {
-        list_delete(dmp->list_node);
-        /* destroy mp-pool. */
+    if (!--dmp->refcount) {
+        ovs_list_remove(&dmp->list_node);
+        rte_mempool_free(dmp->mp);
     }
-#endif
 }
 
 static void
@@ -928,16 +923,18 @@ netdev_dpdk_destruct(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
+    ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
+
     rte_eth_dev_stop(dev->port_id);
     free(ovsrcu_get_protected(struct ingress_policer *,
                               &dev->ingress_policer));
-    ovs_mutex_unlock(&dev->mutex);
 
-    ovs_mutex_lock(&dpdk_mutex);
     rte_free(dev->tx_q);
     ovs_list_remove(&dev->list_node);
     dpdk_mp_put(dev->dpdk_mp);
+
+    ovs_mutex_unlock(&dev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
 }
 
@@ -945,6 +942,9 @@ static void
 netdev_dpdk_vhost_destruct(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+    ovs_mutex_lock(&dpdk_mutex);
+    ovs_mutex_lock(&dev->mutex);
 
     /* Guest becomes an orphan if still attached. */
     if (netdev_dpdk_get_vid(dev) >= 0) {
@@ -961,15 +961,14 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
         fatal_signal_remove_file_to_unlink(dev->vhost_id);
     }
 
-    ovs_mutex_lock(&dev->mutex);
     free(ovsrcu_get_protected(struct ingress_policer *,
                               &dev->ingress_policer));
-    ovs_mutex_unlock(&dev->mutex);
 
-    ovs_mutex_lock(&dpdk_mutex);
     rte_free(dev->tx_q);
     ovs_list_remove(&dev->list_node);
     dpdk_mp_put(dev->dpdk_mp);
+
+    ovs_mutex_unlock(&dev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
 }
 
