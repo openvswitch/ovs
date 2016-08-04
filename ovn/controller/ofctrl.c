@@ -431,17 +431,12 @@ recv_S_UPDATE_FLOWS(const struct ofp_header *oh, enum ofptype type)
 enum mf_field_id
 ofctrl_run(const struct ovsrec_bridge *br_int)
 {
-    if (br_int) {
-        char *target;
-        target = xasprintf("unix:%s/%s.mgmt", ovs_rundir(), br_int->name);
-        if (strcmp(target, rconn_get_target(swconn))) {
-            VLOG_INFO("%s: connecting to switch", target);
-            rconn_connect(swconn, target, target);
-        }
-        free(target);
-    } else {
-        rconn_disconnect(swconn);
+    char *target = xasprintf("unix:%s/%s.mgmt", ovs_rundir(), br_int->name);
+    if (strcmp(target, rconn_get_target(swconn))) {
+        VLOG_INFO("%s: connecting to switch", target);
+        rconn_connect(swconn, target, target);
     }
+    free(target);
 
     rconn_run(swconn);
 

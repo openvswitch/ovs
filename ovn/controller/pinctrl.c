@@ -461,18 +461,12 @@ pinctrl_run(struct controller_ctx *ctx, const struct lport_index *lports,
             const char *chassis_id,
             struct hmap *local_datapaths)
 {
-    if (br_int) {
-        char *target;
-
-        target = xasprintf("unix:%s/%s.mgmt", ovs_rundir(), br_int->name);
-        if (strcmp(target, rconn_get_target(swconn))) {
-            VLOG_INFO("%s: connecting to switch", target);
-            rconn_connect(swconn, target, target);
-        }
-        free(target);
-    } else {
-        rconn_disconnect(swconn);
+    char *target = xasprintf("unix:%s/%s.mgmt", ovs_rundir(), br_int->name);
+    if (strcmp(target, rconn_get_target(swconn))) {
+        VLOG_INFO("%s: connecting to switch", target);
+        rconn_connect(swconn, target, target);
     }
+    free(target);
 
     rconn_run(swconn);
 
