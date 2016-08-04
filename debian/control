@@ -181,6 +181,7 @@ Description: OVN Docker drivers
 Package: openvswitch-ipsec
 Architecture: linux-any
 Depends: ipsec-tools (>=0.8~alpha20101208),
+         iproute2,
          openvswitch-common (= ${binary:Version}),
          openvswitch-switch (= ${binary:Version}),
          python,

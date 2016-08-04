@@ -480,6 +480,7 @@ on_exit 'kill `cat pid ovs-monitor-ipsec.pid`'
 
 mkdir etc etc/init.d etc/racoon etc/racoon/certs
 mkdir usr usr/sbin
+mkdir sbin
 
 AT_DATA([etc/init.d/racoon], [dnl
 #! /bin/sh
@@ -497,6 +498,12 @@ while read line; do
 done
 ])
 chmod +x usr/sbin/setkey
+
+AT_DATA([sbin/ip], [dnl
+#! /bin/sh
+exit 0
+])
+chmod +x sbin/ip
 
 touch etc/racoon/certs/ovs-stale.pem
 
