@@ -147,15 +147,6 @@ netdev_vport_get_dpif_port(const struct netdev *netdev,
     }
 }
 
-char *
-netdev_vport_get_dpif_port_strdup(const struct netdev *netdev)
-{
-    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
-
-    return xstrdup(netdev_vport_get_dpif_port(netdev, namebuf,
-                                              sizeof namebuf));
-}
-
 /* Whenever the route-table change number is incremented,
  * netdev_vport_route_changed() should be called to update
  * the corresponding tunnel interface status. */
