@@ -113,7 +113,7 @@ ADD_VLAN(p1, at_ns1, 100, "fc00:1::2/96")
 dnl Linux seems to take a little time to get its IPv6 stack in order. Without
 dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00:1::2])
 
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
