@@ -90,6 +90,15 @@ enum action_opcode {
      *     MFF_ETH_SRC = mac
      */
     ACTION_OPCODE_PUT_ND,
+
+    /* "result = put_dhcpv6_opts(option, ...)".
+     *
+     * Arguments follow the action_header, in this format:
+     *   - A 32-bit or 64-bit OXM header designating the result field.
+     *   - A 32-bit integer specifying a bit offset within the result field.
+     *   - Any number of DHCPv6 options.
+     */
+    ACTION_OPCODE_PUT_DHCPV6_OPTS,
 };
 
 /* Header. */
@@ -106,6 +115,9 @@ struct action_params {
 
     /* hmap of 'struct dhcp_opts_map'  to support 'put_dhcp_opts' action */
     const struct hmap *dhcp_opts;
+
+    /* hmap of 'struct dhcp_opts_map'  to support 'put_dhcpv6_opts' action */
+    const struct hmap *dhcpv6_opts;
 
     /* Looks up logical port 'port_name'.  If found, stores its port number in
      * '*portp' and returns true; otherwise, returns false. */

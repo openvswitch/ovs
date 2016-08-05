@@ -1290,6 +1290,49 @@
           </p>
         </dd>
 
+        <dt>
+          <code><var>R</var> = put_dhcpv6_opts(<var>D1</var> = <var>V1</var>, <var>D2</var> = <var>V2</var>, ..., <var>Dn</var> = <var>Vn</var>);</code>
+        </dt>
+
+        <dd>
+          <p>
+            <b>Parameters</b>: one or more DHCPv6 option/value pairs.
+          </p>
+
+          <p>
+            <b>Result</b>: stored to a 1-bit subfield <var>R</var>.
+          </p>
+
+          <p>
+            Valid only in the ingress pipeline.
+          </p>
+
+          <p>
+            When this action is applied to a DHCPv6 request packet, it changes
+            the packet into a DHCPv6 reply, replaces the options by those
+            specified as parameters, and stores 1 in <var>R</var>.
+          </p>
+
+          <p>
+            When this action is applied to a non-DHCPv6 packet or an invalid
+            DHCPv6 request packet , it leaves the packet unchanged and stores
+            0 in <var>R</var>.
+          </p>
+
+          <p>
+            The contents of the <ref table="DHCPv6_Options"/> table control the
+            DHCPv6 option names and values that this action supports.
+          </p>
+
+          <p>
+            <b>Example:</b>
+            <code>
+              reg0[3] = put_dhcpv6_opts(ia_addr = aef0::4, server_id = 00:00:00:00:10:02,
+              dns_server={ae70::1,ae70::2});
+            </code>
+          </p>
+        </dd>
+
         <dt><code>ct_lb;</code></dt>
         <dt><code>ct_lb(</code><var>ip</var>[<code>:</code><var>port</var>]...<code>);</code></dt>
         <dd>
@@ -2069,6 +2112,92 @@ tcp.flags = RST;
 
           <p>
             Example. "name=host_name", "code=12", "type=str".
+          </p>
+        </dd>
+      </dl>
+    </column>
+  </table>
+
+  <table name="DHCPv6_Options" title="DHCPv6 Options supported by native OVN DHCPv6">
+    <p>
+      Each row in this table stores the DHCPv6 Options supported by native OVN
+      DHCPv6. <code>ovn-northd</code> populates this table with the supported
+      DHCPv6 options. <code>ovn-controller</code> looks up this table to get
+      the DHCPv6 codes of the DHCPv6 options defined in the
+      <code>put_dhcpv6_opts</code> action. Please refer to RFC 3315 and RFC
+      3646 for the list of DHCPv6 options that can be defined here.
+    </p>
+
+    <column name="name">
+      <p>
+        Name of the DHCPv6 option.
+      </p>
+
+      <p>
+        Example. name="ia_addr"
+      </p>
+    </column>
+
+    <column name="code">
+      <p>
+        DHCPv6 option code for the DHCPv6 option as defined in the appropriate
+        RFC.
+      </p>
+
+      <p>
+        Example. code=3
+      </p>
+    </column>
+
+    <column name="type">
+      <p>
+        Data type of the DHCPv6 option code.
+      </p>
+
+      <dl>
+        <dt><code>value: ipv6</code></dt>
+        <dd>
+          <p>
+            This indicates that the value of the DHCPv6 option is an IPv6
+            address(es).
+          </p>
+
+          <p>
+            Example. "name=ia_addr", "code=5", "type=ipv6".
+          </p>
+
+          <p>
+            put_dhcpv6_opts(..., ia_addr = ae70::4,...)
+          </p>
+        </dd>
+
+        <dt><code>value: str</code></dt>
+        <dd>
+          <p>
+            This indicates that the value of the DHCPv6 option is a string.
+          </p>
+
+          <p>
+            Example. "name=domain_search", "code=24", "type=str".
+          </p>
+
+          <p>
+            put_dhcpv6_opts(..., domain_search = ovn.domain,...)
+          </p>
+        </dd>
+
+        <dt><code>value: mac</code></dt>
+        <dd>
+          <p>
+            This indicates that the value of the DHCPv6 option is a MAC address.
+          </p>
+
+          <p>
+            Example. "name=server_id", "code=2", "type=mac".
+          </p>
+
+          <p>
+            put_dhcpv6_opts(..., server_id = 01:02:03:04L05:06,...)
           </p>
         </dd>
       </dl>

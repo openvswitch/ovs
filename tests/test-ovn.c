@@ -153,7 +153,7 @@ create_symtab(struct shash *symtab)
 }
 
 static void
-create_dhcp_opts(struct hmap *dhcp_opts)
+create_dhcp_opts(struct hmap *dhcp_opts, struct hmap *dhcpv6_opts)
 {
     hmap_init(dhcp_opts);
     dhcp_opt_add(dhcp_opts, "offerip", 0, "ipv4");
@@ -178,6 +178,13 @@ create_dhcp_opts(struct hmap *dhcp_opts)
     dhcp_opt_add(dhcp_opts, "tcp_ttl", 37, "uint8");
     dhcp_opt_add(dhcp_opts, "mtu", 26, "uint16");
     dhcp_opt_add(dhcp_opts, "lease_time",  51, "uint32");
+
+    /* DHCPv6 options. */
+    hmap_init(dhcpv6_opts);
+    dhcp_opt_add(dhcpv6_opts, "server_id",  2, "mac");
+    dhcp_opt_add(dhcpv6_opts, "ia_addr",  5, "ipv6");
+    dhcp_opt_add(dhcpv6_opts, "dns_server",  23, "ipv6");
+    dhcp_opt_add(dhcpv6_opts, "domain_search",  24, "str");
 }
 
 static void
@@ -1208,11 +1215,12 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
 {
     struct shash symtab;
     struct hmap dhcp_opts;
+    struct hmap dhcpv6_opts;
     struct simap ports, ct_zones;
     struct ds input;
 
     create_symtab(&symtab);
-    create_dhcp_opts(&dhcp_opts);
+    create_dhcp_opts(&dhcp_opts, &dhcpv6_opts);
 
     /* Initialize group ids. */
     struct group_table group_table;
@@ -1238,6 +1246,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
         struct action_params ap = {
             .symtab = &symtab,
             .dhcp_opts = &dhcp_opts,
+            .dhcpv6_opts = &dhcpv6_opts,
             .lookup_port = lookup_port_cb,
             .aux = &ports,
             .ct_zones = &ct_zones,
@@ -1278,6 +1287,8 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
     simap_destroy(&ct_zones);
     expr_symtab_destroy(&symtab);
     shash_destroy(&symtab);
+    dhcp_opts_destroy(&dhcp_opts);
+    dhcp_opts_destroy(&dhcpv6_opts);
 }
 
 static unsigned int

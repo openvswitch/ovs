@@ -218,6 +218,7 @@ static void consider_logical_flow(const struct lport_index *lports,
                                   struct group_table *group_table,
                                   const struct simap *ct_zones,
                                   struct hmap *dhcp_opts_p,
+                                  struct hmap *dhcpv6_opts_p,
                                   uint32_t *conj_id_ofs_p);
 
 static bool
@@ -271,17 +272,25 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
     }
 
     struct hmap dhcp_opts = HMAP_INITIALIZER(&dhcp_opts);
+    struct hmap dhcpv6_opts = HMAP_INITIALIZER(&dhcpv6_opts);
     const struct sbrec_dhcp_options *dhcp_opt_row;
     SBREC_DHCP_OPTIONS_FOR_EACH(dhcp_opt_row, ctx->ovnsb_idl) {
         dhcp_opt_add(&dhcp_opts, dhcp_opt_row->name, dhcp_opt_row->code,
                      dhcp_opt_row->type);
     }
 
+
+    const struct sbrec_dhcpv6_options *dhcpv6_opt_row;
+    SBREC_DHCPV6_OPTIONS_FOR_EACH(dhcpv6_opt_row, ctx->ovnsb_idl) {
+       dhcp_opt_add(&dhcpv6_opts, dhcpv6_opt_row->name, dhcpv6_opt_row->code,
+                    dhcpv6_opt_row->type);
+    }
+
     if (full_logical_flow_processing) {
         SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
             consider_logical_flow(lports, mcgroups, lflow, local_datapaths,
                                   patched_datapaths, group_table, ct_zones,
-                                  &dhcp_opts, &conj_id_ofs);
+                                  &dhcp_opts, &dhcpv6_opts, &conj_id_ofs);
         }
         full_logical_flow_processing = false;
     } else {
@@ -299,12 +308,13 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
                 consider_logical_flow(lports, mcgroups, lflow,
                                       local_datapaths, patched_datapaths,
                                       group_table, ct_zones,
-                                      &dhcp_opts, &conj_id_ofs);
+                                      &dhcp_opts, &dhcpv6_opts, &conj_id_ofs);
             }
         }
     }
 
     dhcp_opts_destroy(&dhcp_opts);
+    dhcp_opts_destroy(&dhcpv6_opts);
 }
 
 static void
@@ -316,6 +326,7 @@ consider_logical_flow(const struct lport_index *lports,
                       struct group_table *group_table,
                       const struct simap *ct_zones,
                       struct hmap *dhcp_opts_p,
+                      struct hmap *dhcpv6_opts_p,
                       uint32_t *conj_id_ofs_p)
 {
     /* Determine translation of logical table IDs to physical table IDs. */
@@ -388,6 +399,7 @@ consider_logical_flow(const struct lport_index *lports,
     struct action_params ap = {
         .symtab = &symtab,
         .dhcp_opts = dhcp_opts_p,
+        .dhcpv6_opts = dhcpv6_opts_p,
         .lookup_port = lookup_port_cb,
         .aux = &aux,
         .ct_zones = ct_zones,

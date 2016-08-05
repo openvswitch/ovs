@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.7.0",
-    "cksum": "3677179333 6917",
+    "version": "1.8.0",
+    "cksum": "59582657 7376",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -141,4 +141,15 @@
                         "type": "string",
                         "enum": ["set", ["bool", "uint8", "uint16", "uint32",
                                          "ipv4", "static_routes", "str"]]}}}},
+            "isRoot": true},
+        "DHCPv6_Options": {
+            "columns": {
+                "name": {"type": "string"},
+                "code": {
+                    "type": {"key": {"type": "integer",
+                                     "minInteger": 0, "maxInteger": 254}}},
+                "type": {
+                    "type": {"key": {
+                        "type": "string",
+                        "enum": ["set", ["ipv6", "str", "mac"]]}}}},
             "isRoot": true}}}
