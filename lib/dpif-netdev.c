@@ -4876,8 +4876,8 @@ dpcls_rule_matches_key(const struct dpcls_rule *rule,
     return true;
 }
 
-/* For each miniflow in 'flows' performs a classifier lookup writing the result
- * into the corresponding slot in 'rules'.  If a particular entry in 'flows' is
+/* For each miniflow in 'keys' performs a classifier lookup writing the result
+ * into the corresponding slot in 'rules'.  If a particular entry in 'keys' is
  * NULL it is skipped.
  *
  * This function is optimized for use in the userspace datapath and therefore
@@ -4885,12 +4885,15 @@ dpcls_rule_matches_key(const struct dpcls_rule *rule,
  * classifier_lookup() function.  Specifically, it does not implement
  * priorities, instead returning any rule which matches the flow.
  *
- * Returns true if all flows found a corresponding rule. */
+ * Returns true if all miniflows found a corresponding rule. */
 static bool
 dpcls_lookup(const struct dpcls *cls, const struct netdev_flow_key keys[],
              struct dpcls_rule **rules, const size_t cnt)
 {
-    /* The batch size 16 was experimentally found faster than 8 or 32. */
+    /* The received 'cnt' miniflows are the search-keys that will be processed
+     * in batches of 16 elements.  N_MAPS will contain the number of these
+     * 16-elements batches.  i.e. for 'cnt' = 32, N_MAPS will be 2.  The batch
+     * size 16 was experimentally found faster than 8 or 32. */
     typedef uint16_t map_type;
 #define MAP_BITS (sizeof(map_type) * CHAR_BIT)
 
@@ -4908,6 +4911,13 @@ dpcls_lookup(const struct dpcls *cls, const struct netdev_flow_key keys[],
     }
     memset(rules, 0, cnt * sizeof *rules);
 
+    /* The Datapath classifier - aka dpcls - is composed of subtables.
+     * Subtables are dynamically created as needed when new rules are inserted.
+     * Each subtable collects rules with matches on a specific subset of packet
+     * fields as defined by the subtable's mask.  We proceed to process every
+     * search-key against each subtable, but when a match is found for a
+     * search-key, the search for that key can stop because the rules are
+     * non-overlapping. */
     PVECTOR_FOR_EACH (subtable, cls->subtables) {
         const struct netdev_flow_key *mkeys = keys;
         struct dpcls_rule **mrules = rules;
@@ -4916,6 +4926,7 @@ dpcls_lookup(const struct dpcls *cls, const struct netdev_flow_key keys[],
 
         BUILD_ASSERT_DECL(sizeof remains == sizeof *maps);
 
+        /* Loops on each batch of 16 search-keys. */
         for (m = 0; m < N_MAPS; m++, mkeys += MAP_BITS, mrules += MAP_BITS) {
             uint32_t hashes[MAP_BITS];
             const struct cmap_node *nodes[MAP_BITS];
@@ -4926,14 +4937,20 @@ dpcls_lookup(const struct dpcls *cls, const struct netdev_flow_key keys[],
                 continue; /* Skip empty maps. */
             }
 
-            /* Compute hashes for the remaining keys. */
+            /* Compute hashes for the remaining keys.  Each search-key is
+             * masked with the subtable's mask to avoid hashing the wildcarded
+             * bits. */
             ULLONG_FOR_EACH_1(i, map) {
                 hashes[i] = netdev_flow_key_hash_in_mask(&mkeys[i],
                                                          &subtable->mask);
             }
             /* Lookup. */
             map = cmap_find_batch(&subtable->rules, map, hashes, nodes);
-            /* Check results. */
+            /* Check results.  When the i-th bit of map is set, it means that a
+             * set of nodes with a matching hash value was found for the i-th
+             * search-key.  Due to possible hash collisions we need to check
+             * which of the found rules, if any, really matches our masked
+             * search-key. */
             ULLONG_FOR_EACH_1(i, map) {
                 struct dpcls_rule *rule;
 
@@ -4943,6 +4960,8 @@ dpcls_lookup(const struct dpcls *cls, const struct netdev_flow_key keys[],
                         goto next;
                     }
                 }
+                /* None of the found rules was a match. Reset the i-th bit to
+                 * keep searching in the next subtable. */
                 ULLONG_SET0(map, i);  /* Did not match. */
             next:
                 ;                     /* Keep Sparse happy. */
