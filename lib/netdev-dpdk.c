@@ -355,8 +355,10 @@ struct netdev_dpdk {
     /* True if vHost device is 'up' and has been reconfigured at least once */
     bool vhost_reconfigured;
 
-    /* Identifier used to distinguish vhost devices from each other */
-    char vhost_id[PATH_MAX];
+    /* Identifier used to distinguish vhost devices from each other.  It does
+     * not change during the lifetime of a struct netdev_dpdk.  It can be read
+     * without holding any mutex. */
+    const char vhost_id[PATH_MAX];
 
     /* In dpdk_list. */
     struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
@@ -846,7 +848,8 @@ netdev_dpdk_vhost_cuse_construct(struct netdev *netdev)
     }
 
     ovs_mutex_lock(&dpdk_mutex);
-    strncpy(dev->vhost_id, netdev->name, sizeof(dev->vhost_id));
+    strncpy(CONST_CAST(char *, dev->vhost_id), netdev->name,
+            sizeof dev->vhost_id);
     err = vhost_construct_helper(netdev);
     ovs_mutex_unlock(&dpdk_mutex);
     return err;
@@ -878,7 +881,7 @@ netdev_dpdk_vhost_user_construct(struct netdev *netdev)
     /* Take the name of the vhost-user port and append it to the location where
      * the socket is to be created, then register the socket.
      */
-    snprintf(dev->vhost_id, sizeof(dev->vhost_id), "%s/%s",
+    snprintf(CONST_CAST(char *, dev->vhost_id), sizeof dev->vhost_id, "%s/%s",
              vhost_sock_dir, name);
 
     err = rte_vhost_driver_register(dev->vhost_id, flags);
@@ -938,6 +941,17 @@ netdev_dpdk_destruct(struct netdev *netdev)
     ovs_mutex_unlock(&dpdk_mutex);
 }
 
+/* rte_vhost_driver_unregister() can call back destroy_device(), which will
+ * try to acquire 'dpdk_mutex' and possibly 'dev->mutex'.  To avoid a
+ * deadlock, none of the mutexes must be held while calling this function. */
+static int
+dpdk_vhost_driver_unregister(struct netdev_dpdk *dev)
+    OVS_EXCLUDED(dpdk_mutex)
+    OVS_EXCLUDED(dev->mutex)
+{
+    return rte_vhost_driver_unregister(dev->vhost_id);
+}
+
 static void
 netdev_dpdk_vhost_destruct(struct netdev *netdev)
 {
@@ -955,12 +969,6 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
                  dev->vhost_id);
     }
 
-    if (rte_vhost_driver_unregister(dev->vhost_id)) {
-        VLOG_ERR("Unable to remove vhost-user socket %s", dev->vhost_id);
-    } else {
-        fatal_signal_remove_file_to_unlink(dev->vhost_id);
-    }
-
     free(ovsrcu_get_protected(struct ingress_policer *,
                               &dev->ingress_policer));
 
@@ -970,6 +978,12 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
 
     ovs_mutex_unlock(&dev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
+
+    if (dpdk_vhost_driver_unregister(dev)) {
+        VLOG_ERR("Unable to remove vhost-user socket %s", dev->vhost_id);
+    } else {
+        fatal_signal_remove_file_to_unlink(dev->vhost_id);
+    }
 }
 
 static void
