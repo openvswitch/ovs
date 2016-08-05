@@ -1808,6 +1808,72 @@ build_dhcpv4_action(struct ovn_port *op, ovs_be32 offer_ip,
 }
 
 static bool
+build_dhcpv6_action(struct ovn_port *op, struct in6_addr *offer_ip,
+                    struct ds *options_action, struct ds *response_action)
+{
+    if (!op->nbsp->dhcpv6_options) {
+        /* CMS has disabled native DHCPv6 for this lport. */
+        return false;
+    }
+
+    struct in6_addr host_ip, mask;
+
+    char *error = ipv6_parse_masked(op->nbsp->dhcpv6_options->cidr, &host_ip,
+                                        &mask);
+    if (error) {
+        free(error);
+        return false;
+    }
+    struct in6_addr ip6_mask = ipv6_addr_bitxor(offer_ip, &host_ip);
+    ip6_mask = ipv6_addr_bitand(&ip6_mask, &mask);
+    if (!ipv6_mask_is_any(&ip6_mask)) {
+        /* offer_ip doesn't belongs to the cidr defined in lport's DHCPv6
+         * options.*/
+        return false;
+    }
+
+    /* "server_id" should be the MAC address. */
+    const char *server_mac = smap_get(&op->nbsp->dhcpv6_options->options,
+                                      "server_id");
+    struct eth_addr ea;
+    if (!server_mac || !eth_addr_from_string(server_mac, &ea)) {
+        /* "server_id" should be present in the dhcpv6_options. */
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "server_id not present in the DHCPv6 options"
+                          " for lport %s", op->json_key);
+        return false;
+    }
+
+    /* Get the link local IP of the DHCPv6 server from the server MAC. */
+    struct in6_addr lla;
+    in6_generate_lla(ea, &lla);
+
+    char server_ip[INET6_ADDRSTRLEN + 1];
+    ipv6_string_mapped(server_ip, &lla);
+
+    char ia_addr[INET6_ADDRSTRLEN + 1];
+    ipv6_string_mapped(ia_addr, offer_ip);
+
+    ds_put_format(options_action,
+                  REGBIT_DHCP_OPTS_RESULT" = put_dhcpv6_opts(ia_addr = %s, ",
+                  ia_addr);
+    struct smap_node *node;
+    SMAP_FOR_EACH (node, &op->nbsp->dhcpv6_options->options) {
+        ds_put_format(options_action, "%s = %s, ", node->key, node->value);
+    }
+    ds_chomp(options_action, ' ');
+    ds_chomp(options_action, ',');
+    ds_put_cstr(options_action, "); next;");
+
+    ds_put_format(response_action, "eth.dst = eth.src; eth.src = %s; "
+                  "ip6.dst = ip6.src; ip6.src = %s; udp.src = 547; "
+                  "udp.dst = 546; outport = inport; flags.loopback = 1; "
+                  "output;",
+                  server_mac, server_ip);
+    return true;
+}
+
+static bool
 has_stateful_acl(struct ovn_datapath *od)
 {
     for (size_t i = 0; i < od->nbs->n_acls; i++) {
@@ -2238,6 +2304,32 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                         actions);
                 }
             }
+
+            if (od->nbs->ports[i]->dhcpv6_options) {
+                const char *server_mac = smap_get(
+                    &od->nbs->ports[i]->dhcpv6_options->options, "server_id");
+                struct eth_addr ea;
+                if (server_mac && eth_addr_from_string(server_mac, &ea)) {
+                    /* Get the link local IP of the DHCPv6 server from the
+                     * server MAC. */
+                    struct in6_addr lla;
+                    in6_generate_lla(ea, &lla);
+
+                    char server_ip[INET6_ADDRSTRLEN + 1];
+                    ipv6_string_mapped(server_ip, &lla);
+
+                    struct ds match = DS_EMPTY_INITIALIZER;
+                    const char *actions = has_stateful ? "ct_commit; next;" :
+                                        "next;";
+                    ds_put_format(&match, "outport == \"%s\" && eth.src == %s "
+                                  "&& ip6.src == %s && udp && udp.src == 547 "
+                                  "&& udp.dst == 546", od->nbs->ports[i]->name,
+                                  server_mac, server_ip);
+                    ovn_lflow_add(
+                        lflows, od, S_SWITCH_OUT_ACL, 34000, ds_cstr(&match),
+                        actions);
+                }
+            }
         }
     }
 }
@@ -2530,8 +2622,9 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        if (!op->nbsp->dhcpv4_options) {
-            /* CMS has disabled native DHCPv4 for this lport. */
+        if (!op->nbsp->dhcpv4_options && !op->nbsp->dhcpv6_options) {
+            /* CMS has disabled both native DHCPv4 and DHCPv6 for this lport.
+             */
             continue;
         }
 
@@ -2558,6 +2651,34 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     ovn_lflow_add(lflows, op->od, S_SWITCH_IN_DHCP_RESPONSE,
                                   100, ds_cstr(&match),
                                   ds_cstr(&response_action));
+                    ds_destroy(&match);
+                    ds_destroy(&options_action);
+                    ds_destroy(&response_action);
+                    break;
+                }
+            }
+
+            for (size_t j = 0; j < op->lsp_addrs[i].n_ipv6_addrs; j++) {
+                struct ds options_action = DS_EMPTY_INITIALIZER;
+                struct ds response_action = DS_EMPTY_INITIALIZER;
+                if (build_dhcpv6_action(
+                        op, &op->lsp_addrs[i].ipv6_addrs[j].addr,
+                        &options_action, &response_action)) {
+                    struct ds match = DS_EMPTY_INITIALIZER;
+                    ds_put_format(
+                        &match, "inport == %s && eth.src == %s"
+                        " && ip6.dst == ff02::1:2 && udp.src == 546 &&"
+                        " udp.dst == 547", op->json_key,
+                        op->lsp_addrs[i].ea_s);
+
+                    ovn_lflow_add(lflows, op->od, S_SWITCH_IN_DHCP_OPTIONS, 100,
+                                  ds_cstr(&match), ds_cstr(&options_action));
+
+                    /* If REGBIT_DHCP_OPTS_RESULT is set to 1, it means the
+                     * put_dhcpv6_opts action is successful */
+                    ds_put_cstr(&match, " && "REGBIT_DHCP_OPTS_RESULT);
+                    ovn_lflow_add(lflows, op->od, S_SWITCH_IN_DHCP_RESPONSE, 100,
+                                  ds_cstr(&match), ds_cstr(&response_action));
                     ds_destroy(&match);
                     ds_destroy(&options_action);
                     ds_destroy(&response_action);
@@ -3937,6 +4058,13 @@ static struct dhcp_opts_map supported_dhcp_opts[] = {
     DHCP_OPT_T2
 };
 
+static struct dhcp_opts_map supported_dhcpv6_opts[] = {
+    DHCPV6_OPT_IA_ADDR,
+    DHCPV6_OPT_SERVER_ID,
+    DHCPV6_OPT_DOMAIN_SEARCH,
+    DHCPV6_OPT_DNS_SERVER
+};
+
 static void
 check_and_add_supported_dhcp_opts_to_sb_db(struct northd_context *ctx)
 {
@@ -3968,6 +4096,39 @@ check_and_add_supported_dhcp_opts_to_sb_db(struct northd_context *ctx)
     }
 
     hmap_destroy(&dhcp_opts_to_add);
+}
+
+static void
+check_and_add_supported_dhcpv6_opts_to_sb_db(struct northd_context *ctx)
+{
+    struct hmap dhcpv6_opts_to_add = HMAP_INITIALIZER(&dhcpv6_opts_to_add);
+    for (size_t i = 0; (i < sizeof(supported_dhcpv6_opts) /
+                            sizeof(supported_dhcpv6_opts[0])); i++) {
+        hmap_insert(&dhcpv6_opts_to_add, &supported_dhcpv6_opts[i].hmap_node,
+                    dhcp_opt_hash(supported_dhcpv6_opts[i].name));
+    }
+
+    const struct sbrec_dhcpv6_options *opt_row, *opt_row_next;
+    SBREC_DHCPV6_OPTIONS_FOR_EACH_SAFE(opt_row, opt_row_next, ctx->ovnsb_idl) {
+        struct dhcp_opts_map *dhcp_opt =
+            dhcp_opts_find(&dhcpv6_opts_to_add, opt_row->name);
+        if (dhcp_opt) {
+            hmap_remove(&dhcpv6_opts_to_add, &dhcp_opt->hmap_node);
+        } else {
+            sbrec_dhcpv6_options_delete(opt_row);
+        }
+    }
+
+    struct dhcp_opts_map *opt;
+    HMAP_FOR_EACH(opt, hmap_node, &dhcpv6_opts_to_add) {
+        struct sbrec_dhcpv6_options *sbrec_dhcpv6_option =
+            sbrec_dhcpv6_options_insert(ctx->ovnsb_txn);
+        sbrec_dhcpv6_options_set_name(sbrec_dhcpv6_option, opt->name);
+        sbrec_dhcpv6_options_set_code(sbrec_dhcpv6_option, opt->code);
+        sbrec_dhcpv6_options_set_type(sbrec_dhcpv6_option, opt->type);
+    }
+
+    hmap_destroy(&dhcpv6_opts_to_add);
 }
 
 /* Updates the sb_cfg and hv_cfg columns in the northbound NB_Global table. */
@@ -4190,7 +4351,10 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dhcp_options_col_code);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dhcp_options_col_type);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dhcp_options_col_name);
-
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_dhcpv6_options);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dhcpv6_options_col_code);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dhcpv6_options_col_type);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dhcpv6_options_col_name);
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_address_set);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_address_set_col_name);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_address_set_col_addresses);
@@ -4212,6 +4376,7 @@ main(int argc, char *argv[])
         ovnsb_db_run(&ctx, &ovnsb_idl_loop);
         if (ctx.ovnsb_txn) {
             check_and_add_supported_dhcp_opts_to_sb_db(&ctx);
+            check_and_add_supported_dhcpv6_opts_to_sb_db(&ctx);
         }
 
         unixctl_server_run(unixctl);

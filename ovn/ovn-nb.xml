@@ -593,6 +593,12 @@
         Please see the <ref table="DHCP_Options"/> table.
       </column>
 
+      <column name="dhcpv6_options">
+        This column defines the DHCPv6 Options to be included by the
+        <code>ovn-controller</code> when it replies to the DHCPv6 requests.
+        Please see the <ref table="DHCP_Options"/> table.
+      </column>
+
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.
       </column>
@@ -1018,25 +1024,30 @@
 
   <table name="DHCP_Options" title="DHCP options">
     <p>
-      OVN implements a native DHCPv4 support which caters to the common
+      OVN implements native DHCPv4 support which caters to the common
       use case of providing an IPv4 address to a booting instance by
       providing stateless replies to DHCPv4 requests based on statically
       configured address mappings. To do this it allows a short list of
       DHCPv4 options to be configured and applied at each compute host
-      running ovn-controller.
+      running <code>ovn-controller</code>.
+    </p>
+
+    <p>
+      OVN also implements native DHCPv6 support which provides stateless
+      replies to DHCPv6 requests.
     </p>
 
     <column name="cidr">
       <p>
-        The DHCPv4 options will be included if the logical port has the IPv4
-        address in this <ref column="cidr"/>.
+        The DHCPv4/DHCPv6 options will be included if the logical port has its
+        IP address in this <ref column="cidr"/>.
       </p>
     </column>
 
     <group title="DHCPv4 options">
       <p>
-        CMS should define the set of DHCPv4 options as key/value pairs in the
-        <ref column="options"/> column of this table. For
+        The CMS should define the set of DHCPv4 options as key/value pairs
+        in the <ref column="options"/> column of this table. For
         <code>ovn-controller</code> to include these DHCPv4 options, the
         <ref column="dhcpv4_options"/> of <ref table="Logical_Switch_Port"/>
         should refer to an entry in this table.
@@ -1232,6 +1243,67 @@
           This specifies the time interval from address assignment until the
           client begins trying to rebind its address.  The DHCPv4 option code
           for this option is 59.
+        </column>
+      </group>
+    </group>
+
+    <group title="DHCPv6 options">
+      <p>
+        OVN also implements native DHCPv6 support. The CMS should define
+        the set of DHCPv6 options as key/value pairs. The define DHCPv6
+        options will be included in the DHCPv6 response to the DHCPv6
+        Solicit/Request/Confirm packet from the logical ports having the
+        IPv6 addresses in the <ref column="cidr"/>.
+      </p>
+
+      <group title="Mandatory DHCPv6 options">
+        <p>
+          The following options must be defined.
+        </p>
+
+        <column name="options" key="server_id">
+          <p>
+            The Ethernet address for the DHCP server to use. This is also
+            included in the DHCPv6 reply as option 2, ``Server Identifier''
+            to carry a DUID identifying a server between a client and a server.
+            <code>ovn-controller</code> defines DUID based on
+            Link-layer Address [DUID-LL].
+          </p>
+        </column>
+      </group>
+
+      <group title="IPv6 DHCPv6 options">
+        <p>
+          Below are the supported DHCPv6 options whose values are an IPv6
+          address, e.g. <code>aef0::4</code>.  Some options accept multiple
+          IPv6 addresses enclosed within curly braces, e.g. <code>{aef0::4,
+          aef0::5}</code>. Please refer to RFC 3315 for more details on
+          DHCPv6 options and their codes.
+        </p>
+
+        <column name="options" key="dns_server">
+          <p>
+            The DHCPv6 option code for this option is 23. This option specifies
+            the DNS servers that the VM should use.
+          </p>
+        </column>
+      </group>
+
+      <group title="String DHCPv6 options">
+        <p>
+          These options accept string values.
+        </p>
+
+        <column name="options" key="domain_search">
+          <p>
+            The DHCPv6 option code for this option is 24. This option specifies
+            the domain search list the client should use to resolve hostnames
+            with DNS.
+          </p>
+
+          <p>
+            Example: <code>"ovn.org"</code>.
+          </p>
         </column>
       </group>
     </group>

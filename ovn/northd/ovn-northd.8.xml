@@ -488,7 +488,8 @@ nd_na {
 
     <p>
       This table adds the DHCPv4 options to a DHCPv4 packet from the
-      logical ports configured with IPv4 address(es) and DHCPv4 options.
+      logical ports configured with IPv4 address(es) and DHCPv4 options,
+      and similarly for DHCPv6 options.
     </p>
 
     <ul>
@@ -501,18 +502,41 @@ nd_na {
         </p>
 
         <pre>
-reg0[3] = put_dhcp_opts(offer_ip = <var>O</var>, <i>options</i>...);
+reg0[3] = put_dhcp_opts(offer_ip = <var>ip</var>, <var>options</var>...);
 next;
         </pre>
 
         <p>
           For DHCPDISCOVER and DHCPREQUEST, this transforms the packet into a
-          DHCP reply, adds the DHCP offer IP <var>O</var> and options to the
+          DHCP reply, adds the DHCP offer IP <var>ip</var> and options to the
           packet, and stores 1 into reg0[3].  For other kinds of packets, it
           just stores 0 into reg0[3].  Either way, it continues to the next
           table.
         </p>
 
+      </li>
+
+      <li>
+        <p>
+          A priority-100 logical flow is added for these logical ports
+          which matches the IPv6 packet with <code>udp.src</code> = 546 and
+          <code>udp.dst</code> = 547 and applies the action
+          <code>put_dhcpv6_opts</code> and advances the packet to the next
+          table.
+        </p>
+
+        <pre>
+reg0[3] = put_dhcpv6_opts(ia_addr = <var>ip</var>, <var>options</var>...);
+next;
+        </pre>
+
+        <p>
+          For DHCPv6 Solicit/Request/Confirm packets, this transforms the
+          packet into a DHCPv6 Advertise/Reply, adds the DHCPv6 offer IP
+          <var>ip</var> and options to the packet, and stores 1 into reg0[3].
+          For other kinds of packets, it just stores 0 into reg0[3]. Either
+          way, it continues to the next table.
+        </p>
       </li>
 
       <li>
@@ -541,7 +565,7 @@ next;
         <pre>
 eth.dst = eth.src;
 eth.src = <var>E</var>;
-ip4.dst = <var>O</var>;
+ip4.dst = <var>A</var>;
 ip4.src = <var>S</var>;
 udp.src = 67;
 udp.dst = 68;
@@ -552,13 +576,48 @@ output;
 
         <p>
           where <var>E</var> is the server MAC address and <var>S</var> is the
-          server IPv4 address defined in the DHCPv4 options and <var>O</var> is
+          server IPv4 address defined in the DHCPv4 options and <var>A</var> is
           the IPv4 address defined in the logical port's addresses column.
         </p>
 
         <p>
           (This terminates ingress packet processing; the packet does not go
            to the next ingress table.)
+        </p>
+      </li>
+
+      <li>
+        <p>
+          A priority 100 logical flow is added for the logical ports configured
+          with DHCPv6 options which matches IPv6 packets with <code>udp.src == 546
+          &amp;&amp; udp.dst == 547 &amp;&amp; reg0[3] == 1</code> and
+          responds back to the <code>inport</code> after applying these
+          actions.  If <code>reg0[3]</code> is set to 1, it means that the
+          action <code>put_dhcpv6_opts</code> was successful.
+        </p>
+
+        <pre>
+eth.dst = eth.src;
+eth.src = <var>E</var>;
+ip6.dst = <var>A</var>;
+ip6.src = <var>S</var>;
+udp.src = 547;
+udp.dst = 546;
+outport = <var>P</var>;
+flags.loopback = 1;
+output;
+        </pre>
+
+        <p>
+          where <var>E</var> is the server MAC address and <var>S</var> is the
+          server IPv6 LLA address  generated from the <code>server_id</code>
+          defined in the DHCPv6 options and <var>A</var> is
+          the IPv6 address defined in the logical port's addresses column.
+        </p>
+
+        <p>
+          (This terminates packet processing; the packet does not go on the
+          next ingress table.)
         </p>
       </li>
 
@@ -643,7 +702,8 @@ output;
 
     <p>
       Also a priority 34000 logical flow is added for each logical port which
-      has DHCPv4 options defined to allow the DHCPv4 reply packet from the
+      has DHCPv4 options defined to allow the DHCPv4 reply packet and which has
+      DHCPv6 options defined to allow the DHCPv6 reply packet from the
       <code>Ingress Table 11: DHCP responses</code>.
     </p>
 
