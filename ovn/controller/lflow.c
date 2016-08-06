@@ -52,6 +52,20 @@ lflow_reset_processing(void)
     physical_reset_processing();
 }
 
+static void
+add_subregister(const char *name,
+                const char *parent_name, int parent_idx,
+                int width, int idx,
+                struct shash *symtab)
+{
+    int lsb = width * idx;
+    int msb = lsb + (width - 1);
+    char *expansion = xasprintf("%s%d[%d..%d]",
+                                parent_name, parent_idx, lsb, msb);
+    expr_symtab_add_subfield(symtab, name, NULL, expansion);
+    free(expansion);
+}
+
 void
 lflow_init(void)
 {
@@ -64,15 +78,41 @@ lflow_init(void)
     expr_symtab_add_string(&symtab, "inport", MFF_LOG_INPORT, NULL);
     expr_symtab_add_string(&symtab, "outport", MFF_LOG_OUTPORT, NULL);
 
-    /* Logical registers. */
+    /* Logical registers:
+     *     128-bit xxregs
+     *     64-bit xregs
+     *     32-bit regs
+     *
+     * The expression language doesn't handle overlapping fields properly
+     * unless they're formally defined as subfields.  It's a little awkward. */
+    for (int xxi = 0; xxi < MFF_N_LOG_REGS / 4; xxi++) {
+        char *xxname = xasprintf("xxreg%d", xxi);
+        expr_symtab_add_field(&symtab, xxname, MFF_XXREG0 + xxi, NULL, false);
+        free(xxname);
+    }
+    for (int xi = 0; xi < MFF_N_LOG_REGS / 2; xi++) {
+        char *xname = xasprintf("xreg%d", xi);
+        int xxi = xi / 2;
+        if (xxi < MFF_N_LOG_REGS / 4) {
+            add_subregister(xname, "xxreg", xxi, 64, 1 - xi % 2, &symtab);
+        } else {
+            expr_symtab_add_field(&symtab, xname, MFF_XREG0 + xi, NULL, false);
+        }
+        free(xname);
+    }
     for (int i = 0; i < MFF_N_LOG_REGS; i++) {
         char *name = xasprintf("reg%d", i);
-        expr_symtab_add_field(&symtab, name, MFF_LOG_REG0 + i, NULL, false);
+        int xxi = i / 4;
+        int xi = i / 2;
+        if (xxi < MFF_N_LOG_REGS / 4) {
+            add_subregister(name, "xxreg", xxi, 32, 3 - i % 4, &symtab);
+        } else if (xi < MFF_N_LOG_REGS / 2) {
+            add_subregister(name, "xreg", xi, 32, 1 - i % 2, &symtab);
+        } else {
+            expr_symtab_add_field(&symtab, name, MFF_REG0 + i, NULL, false);
+        }
         free(name);
     }
-
-    expr_symtab_add_field(&symtab, "xxreg0", MFF_XXREG0, NULL, false);
-    expr_symtab_add_field(&symtab, "xxreg1", MFF_XXREG1, NULL, false);
 
     /* Flags used in logical to physical transformation. */
     expr_symtab_add_field(&symtab, "flags", MFF_LOG_FLAGS, NULL, false);
