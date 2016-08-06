@@ -465,7 +465,6 @@ consider_logical_flow(const struct lport_index *lports,
             }
             ofctrl_add_flow(ptable, lflow->priority, &m->match, &conj,
                             &lflow->header_.uuid);
-                ofpbuf_uninit(&conj);
             ofpbuf_uninit(&conj);
         }
     }
