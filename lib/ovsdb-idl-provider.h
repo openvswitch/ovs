@@ -20,6 +20,7 @@
 #include "openvswitch/list.h"
 #include "ovsdb-idl.h"
 #include "ovsdb-map-op.h"
+#include "ovsdb-set-op.h"
 #include "ovsdb-types.h"
 #include "openvswitch/shash.h"
 #include "uuid.h"
@@ -39,6 +40,8 @@ struct ovsdb_idl_row {
     struct hmap_node txn_node;  /* Node in ovsdb_idl_txn's list. */
     unsigned long int *map_op_written; /* Bitmap of columns pending map ops. */
     struct map_op_list **map_op_lists; /* Per-column map operations. */
+    unsigned long int *set_op_written; /* Bitmap of columns pending set ops. */
+    struct set_op_list **set_op_lists; /* Per-column set operations. */
 
     /* Tracking data */
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];

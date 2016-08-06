@@ -134,6 +134,36 @@
           }
         }
       }
+    },
+    "simple3" : {
+      "columns" : {
+        "name" : {
+          "type": "string"
+        },
+        "uset": {
+          "type": {
+             "key": {"type": "uuid"},
+             "min": 0,
+             "max": "unlimited"
+          }
+        },
+        "uref": {
+          "type": {
+             "key": {"type": "uuid",
+                     "refTable": "simple4",
+                     "refType": "strong"},
+             "min": 0,
+             "max": "unlimited"
+          }
+        }
+      }
+    },
+    "simple4" : {
+      "columns" : {
+        "name" : {
+          "type": "string"
+        }
+      }
     }
   }
 }

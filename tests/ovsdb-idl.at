@@ -1108,6 +1108,42 @@ OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN([map, simple2 idl-partial-update-map-c
 010: End test
 ]])
 
+m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_SET_COLUMN],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl partial update set column positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   on_exit 'kill `cat pid`'
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-partial-update-set-column unix:socket $3],
+            [0], [stdout], [ignore])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_IDL_PARTIAL_UPDATE_SET_COLUMN([set, simple3 idl-partial-update-set-column, initially populated],
+[['["idltest", {"op":"insert", "table":"simple3",
+                "row":{"name":"mySet1","uset":["set", [[ "uuid", "0005b872-f9e5-43be-ae02-3184b9680e75" ], [ "uuid", "000d2f6a-76af-412f-b59d-e7bcd3e84eff" ]]]} }]']
+],
+[],
+[[000: Getting records
+001: name=mySet1 uset=[[<0>],[<1>]] uref=[]
+002: After rename+add new value
+003: name=String2 uset=[[<0>],[<1>],[<2>]] uref=[]
+004: After add new value
+005: name=String2 uset=[[<0>],[<1>],[<2>],[<3>]] uref=[]
+006: After delete value
+007: name=String2 uset=[[<0>],[<1>],[<3>]] uref=[]
+008: After trying to delete a deleted value
+009: name=String2 uset=[[<0>],[<1>],[<3>]] uref=[]
+010: After add to other table + set of strong ref
+011: name=String2 uset=[[<0>],[<1>],[<3>]] uref=[[<4>]]
+012: End test
+]])
+
 m4_define([OVSDB_CHECK_IDL_NOTIFY_PY],
   [AT_SETUP([$1 - Python])
    AT_SKIP_IF([test $HAVE_PYTHON = no])
