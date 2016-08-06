@@ -382,6 +382,14 @@ bool expr_honors_invariants(const struct expr *);
 bool expr_is_simplified(const struct expr *);
 bool expr_is_normalized(const struct expr *);
 
+char *expr_parse_microflow(const char *, const struct shash *symtab,
+                           const struct shash *macros,
+                           bool (*lookup_port)(const void *aux,
+                                               const char *port_name,
+                                               unsigned int *portp),
+                           const void *aux, struct flow *uflow)
+    OVS_WARN_UNUSED_RESULT;
+
 bool expr_evaluate(const struct expr *, const struct flow *uflow,
                    bool (*lookup_port)(const void *aux, const char *port_name,
                                        unsigned int *portp),

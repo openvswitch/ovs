@@ -2958,3 +2958,124 @@ expr_resolve_field(const struct expr_field *f)
     int n_bits = symbol->width ? f->n_bits : symbol->field->n_bits;
     return (struct mf_subfield) { symbol->field, ofs, n_bits };
 }
+
+static struct expr *
+expr_parse_microflow__(struct lexer *lexer,
+                       const struct shash *symtab,
+                       bool (*lookup_port)(const void *aux,
+                                           const char *port_name,
+                                           unsigned int *portp),
+                       const void *aux,
+                       struct expr *e, struct flow *uflow)
+{
+    char *error;
+    e = expr_annotate(e, symtab, &error);
+    if (error) {
+        lexer_error(lexer, "%s", error);
+        free(error);
+        return NULL;
+    }
+
+    struct ds annotated = DS_EMPTY_INITIALIZER;
+    expr_format(e, &annotated);
+
+    e = expr_simplify(e);
+    e = expr_normalize(e);
+
+    struct match m = MATCH_CATCHALL_INITIALIZER;
+
+    switch (e->type) {
+    case EXPR_T_BOOLEAN:
+        if (!e->boolean) {
+            lexer_error(lexer, "Constraints are contradictory.");
+        }
+        break;
+
+    case EXPR_T_OR:
+        lexer_error(lexer, "Constraints are ambiguous: %s.",
+                    ds_cstr(&annotated));
+        break;
+
+    case EXPR_T_CMP:
+        constrain_match(e, lookup_port, aux, &m);
+        break;
+
+    case EXPR_T_AND: {
+        struct expr *sub;
+        LIST_FOR_EACH (sub, node, &e->andor) {
+            if (sub->type == EXPR_T_CMP) {
+                constrain_match(sub, lookup_port, aux, &m);
+            } else {
+                ovs_assert(sub->type == EXPR_T_OR);
+                lexer_error(lexer, "Constraints are ambiguous: %s.",
+                            ds_cstr(&annotated));
+                break;
+            }
+        }
+    }
+        break;
+
+    default:
+        OVS_NOT_REACHED();
+    }
+    ds_destroy(&annotated);
+
+    *uflow = m.flow;
+    return e;
+}
+
+/* Parses 's' as a microflow, using symbols from 'symtab', macros from
+ * 'macros', and looking up port numbers using 'lookup_port' and 'aux'.  On
+ * success, stores the result in 'uflow' and returns NULL, otherwise zeros
+ * 'uflow' and returns an error message that the caller must free().
+ *
+ * A "microflow" is a description of a single stream of packets, such as half a
+ * TCP connection.  's' uses the syntax of an OVN logical expression to express
+ * constraints that describe the microflow.  For example, "ip4 && tcp.src ==
+ * 80" would set uflow->dl_type to ETH_TYPE_IP, uflow->nw_proto to IPPROTO_TCP,
+ * and uflow->tp_src to 80.
+ *
+ * Microflow expressions can be erroneous in two ways.  First, they can be
+ * ambiguous.  For example, "tcp.src == 80" is ambiguous because it does not
+ * state IPv4 or IPv6 as the Ethernet type.  "ip4 && tcp.src > 1024" is also
+ * ambiguous because it does not constrain bits of tcp.src to particular
+ * values.  Second, they can be contradictory, e.g. "ip4 && ip6".  This
+ * function will report both types of errors.
+ *
+ * This function isn't that smart, so it can yield errors for some "clever"
+ * formulations of particular microflows that area accepted other ways.  For
+ * example, all of the following expressions are equivalent:
+ *     ip4 && tcp.src[1..15] == 0x28
+ *     ip4 && tcp.src > 79 && tcp.src < 82
+ *     ip4 && 80 <= tcp.src <= 81
+ *     ip4 && tcp.src == {80, 81}
+ * but as of this writing this function only accepts the first two, rejecting
+ * the last two as ambiguous.  Just don't be too clever. */
+char * OVS_WARN_UNUSED_RESULT
+expr_parse_microflow(const char *s, const struct shash *symtab,
+                     const struct shash *macros,
+                     bool (*lookup_port)(const void *aux,
+                                         const char *port_name,
+                                         unsigned int *portp),
+                     const void *aux, struct flow *uflow)
+{
+    struct lexer lexer;
+    lexer_init(&lexer, s);
+    lexer_get(&lexer);
+
+    struct expr *e = expr_parse(&lexer, symtab, macros);
+    lexer_force_end(&lexer);
+
+    if (e) {
+        e = expr_parse_microflow__(&lexer, symtab, lookup_port, aux, e, uflow);
+    }
+
+    char *error = lexer_steal_error(&lexer);
+    lexer_destroy(&lexer);
+    expr_destroy(e);
+
+    if (error) {
+        memset(uflow, 0, sizeof *uflow);
+    }
+    return error;
+}

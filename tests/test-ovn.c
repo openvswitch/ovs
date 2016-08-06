@@ -345,21 +345,17 @@ lookup_atoi_cb(const void *aux OVS_UNUSED, const char *port_name,
 static void
 test_evaluate_expr(struct ovs_cmdl_context *ctx)
 {
-    int a = atoi(ctx->argv[1]);
-    int b = atoi(ctx->argv[2]);
-    int c = atoi(ctx->argv[3]);
-    struct flow uflow = { .regs = { a, b, c } };
-
     struct shash symtab;
     struct ds input;
 
-    shash_init(&symtab);
-    expr_symtab_add_field(&symtab, "reg0", MFF_REG0, NULL, false);
-    expr_symtab_add_field(&symtab, "reg1", MFF_REG1, NULL, false);
-    expr_symtab_add_field(&symtab, "reg2", MFF_REG1, NULL, false);
-    expr_symtab_add_subfield(&symtab, "a", NULL, "reg0[0..2]");
-    expr_symtab_add_subfield(&symtab, "b", NULL, "reg1[0..2]");
-    expr_symtab_add_subfield(&symtab, "c", NULL, "reg2[0..2]");
+    ovn_init_symtab(&symtab);
+
+    struct flow uflow;
+    char *error = expr_parse_microflow(ctx->argv[1], &symtab, NULL,
+                                       lookup_atoi_cb, NULL, &uflow);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
 
     ds_init(&input);
     while (!ds_get_test_line(&input, stdin)) {
@@ -1296,10 +1292,16 @@ expr-to-flows\n\
   differing degrees of analysis.  Available fields are based on packet\n\
   headers.\n\
 \n\
-evaluate-expr A B C\n\
-  Parses OVN expressions from stdin, evaluate them with assigned values,\n\
-  and print the results on stdout.  Available fields are 'a', 'b', and 'c'\n\
-  of 3 bits each.  A, B, and C should be in the range 0 to 7.\n\
+evaluate-expr MICROFLOW\n\
+  Parses OVN expressions from stdin and evaluates them against the flow\n\
+  specified in MICROFLOW, which must be an expression that constrains\n\
+  the packet, e.g. \"ip4 && tcp.src == 80\" for a TCP packet with source\n\
+  port 80, and prints the results on stdout, either 1 for true or 0 for\n\
+  false.  Use quoted integers, e.g. \"123\", for string fields.\n\
+\n\
+  Example: for MICROFLOW of \"ip4 && tcp.src == 80\", \"eth.type == 0x800\"\n\
+  evaluates to true, \"udp\" evaluates to false, and \"udp || tcp\"\n\
+  evaluates to true.\n\
 \n\
 composition N\n\
   Prints all the compositions of N on stdout.\n\
