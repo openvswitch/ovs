@@ -18,6 +18,7 @@ import uuid
 import six
 
 import ovs.jsonrpc
+import ovs.db.data as data
 import ovs.db.parser
 import ovs.db.schema
 from ovs.db import error
@@ -588,8 +589,7 @@ class Idl(object):
                 continue
 
             try:
-                datum_diff = ovs.db.data.Datum.from_json(column.type,
-                                                         datum_diff_json)
+                datum_diff = data.Datum.from_json(column.type, datum_diff_json)
             except error.Error as e:
                 # XXX rate-limit
                 vlog.warn("error parsing column %s in table %s: %s"
@@ -614,7 +614,7 @@ class Idl(object):
                 continue
 
             try:
-                datum = ovs.db.data.Datum.from_json(column.type, datum_json)
+                datum = data.Datum.from_json(column.type, datum_json)
             except error.Error as e:
                 # XXX rate-limit
                 vlog.warn("error parsing column %s in table %s: %s"
@@ -730,6 +730,24 @@ class Row(object):
         #   - None, if this transaction deletes this row.
         self.__dict__["_changes"] = {}
 
+        # _mutations describes changes to this row to be handled via a
+        # mutate operation on the wire.  It takes the following values:
+        #
+        #   - {}, the empty dictionary, if no transaction is active or if the
+        #     row has yet not been mutated within this transaction.
+        #
+        #   - A dictionary that contains two keys:
+        #
+        #     - "_inserts" contains a dictionary that maps column names to
+        #       new keys/key-value pairs that should be inserted into the
+        #       column
+        #     - "_removes" contains a dictionary that maps column names to
+        #       the keys/key-value pairs that should be removed from the
+        #       column
+        #
+        #   - None, if this transaction deletes this row.
+        self.__dict__["_mutations"] = {}
+
         # A dictionary whose keys are the names of columns that must be
         # verified as prerequisites when the transaction commits.  The values
         # in the dictionary are all None.
@@ -750,17 +768,47 @@ class Row(object):
 
     def __getattr__(self, column_name):
         assert self._changes is not None
+        assert self._mutations is not None
 
         datum = self._changes.get(column_name)
+        inserts = None
+        if '_inserts' in self._mutations.keys():
+            inserts = self._mutations['_inserts'].get(column_name)
+        removes = None
+        if '_removes' in self._mutations.keys():
+            removes = self._mutations['_removes'].get(column_name)
         if datum is None:
             if self._data is None:
-                raise AttributeError("%s instance has no attribute '%s'" %
-                                     (self.__class__.__name__, column_name))
+                if inserts is None:
+                    raise AttributeError("%s instance has no attribute '%s'" %
+                                         (self.__class__.__name__,
+                                          column_name))
+                else:
+                    datum = inserts
             if column_name in self._data:
                 datum = self._data[column_name]
+                try:
+                    if inserts is not None:
+                        datum.extend(inserts)
+                    if removes is not None:
+                        datum = [x for x in datum if x not in removes]
+                except error.Error:
+                    pass
+                try:
+                    if inserts is not None:
+                        datum.merge(inserts)
+                    if removes is not None:
+                        for key in removes.keys():
+                            del datum[key]
+                except error.Error:
+                    pass
             else:
-                raise AttributeError("%s instance has no attribute '%s'" %
-                                     (self.__class__.__name__, column_name))
+                if inserts is None:
+                    raise AttributeError("%s instance has no attribute '%s'" %
+                                         (self.__class__.__name__,
+                                          column_name))
+                else:
+                    datum = inserts
 
         return datum.to_python(_uuid_to_row)
 
@@ -776,14 +824,81 @@ class Row(object):
 
         column = self._table.columns[column_name]
         try:
-            datum = ovs.db.data.Datum.from_python(column.type, value,
-                                                  _row_to_uuid)
+            datum = data.Datum.from_python(column.type, value, _row_to_uuid)
         except error.Error as e:
             # XXX rate-limit
             vlog.err("attempting to write bad value to column %s (%s)"
                      % (column_name, e))
             return
         self._idl.txn._write(self, column, datum)
+
+    def _init_mutations_if_needed(self):
+        if '_inserts' not in self._mutations.keys():
+            self._mutations['_inserts'] = {}
+        if '_removes' not in self._mutations.keys():
+            self._mutations['_removes'] = {}
+        return
+
+    def addvalue(self, column_name, key):
+        self._idl.txn._txn_rows[self.uuid] = self
+        self._init_mutations_if_needed()
+        if column_name in self._data.keys():
+            if column_name not in self._mutations['_inserts'].keys():
+                self._mutations['_inserts'][column_name] = []
+            self._mutations['_inserts'][column_name].append(key)
+
+    def delvalue(self, column_name, key):
+        self._idl.txn._txn_rows[self.uuid] = self
+        self._init_mutations_if_needed()
+        if column_name in self._data.keys():
+            if column_name not in self._mutations['_removes'].keys():
+                self._mutations['_removes'][column_name] = []
+            self._mutations['_removes'][column_name].append(key)
+
+    def setkey(self, column_name, key, value):
+        self._idl.txn._txn_rows[self.uuid] = self
+        column = self._table.columns[column_name]
+        try:
+            datum = data.Datum.from_python(column.type, {key: value},
+                                           _row_to_uuid)
+        except error.Error as e:
+            # XXX rate-limit
+            vlog.err("attempting to write bad value to column %s (%s)"
+                     % (column_name, e))
+            return
+        self._init_mutations_if_needed()
+        if column_name in self._data.keys():
+            if column_name not in self._mutations['_removes'].keys():
+                self._mutations['_removes'][column_name] = []
+            self._mutations['_removes'][column_name].append(key)
+        if self._mutations['_inserts'] is None:
+            self._mutations['_inserts'] = {}
+        self._mutations['_inserts'][column_name] = datum
+
+    def delkey(self, column_name, key):
+        self._idl.txn._txn_rows[self.uuid] = self
+        self._init_mutations_if_needed()
+        if column_name not in self._mutations['_removes'].keys():
+            self._mutations['_removes'][column_name] = []
+        self._mutations['_removes'][column_name].append(key)
+
+    def delkey(self, column_name, key, value):
+        self._idl.txn._txn_rows[self.uuid] = self
+        try:
+            old_value = data.Datum.to_python(self._data[column_name],
+                                             _uuid_to_row)
+        except error.Error:
+            return
+        if key not in old_value.keys():
+            return
+        if old_value[key] != value:
+            return
+
+        self._init_mutations_if_needed()
+        if column_name not in self._mutations['_removes'].keys():
+            self._mutations['_removes'][column_name] = []
+        self._mutations['_removes'][column_name].append(key)
+        return
 
     @classmethod
     def from_json(cls, idl, table, uuid, row_json):
@@ -1024,6 +1139,7 @@ class Transaction(object):
             elif row._data is None:
                 del row._table.rows[row.uuid]
             row.__dict__["_changes"] = {}
+            row.__dict__["_mutations"] = {}
             row.__dict__["_prereqs"] = {}
         self._txn_rows = {}
 
@@ -1155,6 +1271,57 @@ class Transaction(object):
 
                 if row._data is None or row_json:
                     operations.append(op)
+            if row._mutations:
+                addop = False
+                op = {"table": row._table.name}
+                op["op"] = "mutate"
+                op["where"] = _where_uuid_equals(row.uuid)
+                op["mutations"] = []
+                if '_removes' in row._mutations.keys():
+                    for col, dat in six.iteritems(row._mutations['_removes']):
+                        column = row._table.columns[col]
+                        if column.type.is_map():
+                            opdat = ["set"]
+                            opdat.append(dat)
+                        else:
+                            opdat = ["set"]
+                            inner_opdat = []
+                            for ele in dat:
+                                try:
+                                    datum = data.Datum.from_python(column.type,
+                                        ele, _row_to_uuid)
+                                except error.Error:
+                                    return
+                                inner_opdat.append(
+                                    self._substitute_uuids(datum.to_json()))
+                            opdat.append(inner_opdat)
+                        mutation = [col, "delete", opdat]
+                        op["mutations"].append(mutation)
+                        addop = True
+                if '_inserts' in row._mutations.keys():
+                    for col, dat in six.iteritems(row._mutations['_inserts']):
+                        column = row._table.columns[col]
+                        if column.type.is_map():
+                            opdat = ["map"]
+                            opdat.append(dat.as_list())
+                        else:
+                            opdat = ["set"]
+                            inner_opdat = []
+                            for ele in dat:
+                                try:
+                                    datum = data.Datum.from_python(column.type,
+                                        ele, _row_to_uuid)
+                                except error.Error:
+                                    return
+                                inner_opdat.append(
+                                    self._substitute_uuids(datum.to_json()))
+                            opdat.append(inner_opdat)
+                        mutation = [col, "insert", opdat]
+                        op["mutations"].append(mutation)
+                        addop = True
+                if addop:
+                    operations.append(op)
+                    any_updates = True
 
         if self._fetch_requests:
             for fetch in self._fetch_requests:
@@ -1281,6 +1448,7 @@ class Transaction(object):
 
     def _write(self, row, column, datum):
         assert row._changes is not None
+        assert row._mutations is not None
 
         txn = row._idl.txn
 
@@ -1303,7 +1471,13 @@ class Transaction(object):
                 return
 
         txn._txn_rows[row.uuid] = row
-        row._changes[column.name] = datum.copy()
+        if '_inserts' in row._mutations.keys():
+            if column.name in row._mutations['_inserts']:
+                row._mutations['_inserts'][column.name] = datum.copy()
+            else:
+                row._changes[column.name] = datum.copy()
+        else:
+            row._changes[column.name] = datum.copy()
 
     def insert(self, table, new_uuid=None):
         """Inserts and returns a new row in 'table', which must be one of the
@@ -1419,7 +1593,7 @@ class Transaction(object):
 
             column = table.columns.get(column_name)
             datum_json = fetched_row.get(column_name)
-            datum = ovs.db.data.Datum.from_json(column.type, datum_json)
+            datum = data.Datum.from_json(column.type, datum_json)
 
             row._data[column_name] = datum
             update = True
