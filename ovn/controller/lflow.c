@@ -285,18 +285,14 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
         }
         full_logical_flow_processing = false;
     } else {
-        /* First, remove any flows that should be removed. */
         SBREC_LOGICAL_FLOW_FOR_EACH_TRACKED (lflow, ctx->ovnsb_idl) {
+            /* Remove any flows that should be removed. */
             if (sbrec_logical_flow_is_deleted(lflow)) {
                 ofctrl_remove_flows(&lflow->header_.uuid);
-            }
-        }
-
-        /* Now, add/modify existing flows. */
-        SBREC_LOGICAL_FLOW_FOR_EACH_TRACKED (lflow, ctx->ovnsb_idl) {
-            if (!sbrec_logical_flow_is_deleted(lflow)) {
-                /* if the logical flow is a modification, just remove
-                 * the flows for this row, and then add new flows. */
+            } else {
+                /* Now, add/modify existing flows. If the logical
+                 * flow is a modification, just remove the flows
+                 * for this row, and then add new flows. */
                 if (!sbrec_logical_flow_is_new(lflow)) {
                     ofctrl_remove_flows(&lflow->header_.uuid);
                 }
