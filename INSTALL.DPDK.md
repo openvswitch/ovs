@@ -153,8 +153,8 @@ advanced install guide [INSTALL.DPDK-ADVANCED.md]
     modprobe vfio-pci
     sudo /usr/bin/chmod a+x /dev/vfio
     sudo /usr/bin/chmod 0666 /dev/vfio/*
-    $DPDK_DIR/tools/dpdk_nic_bind.py --bind=vfio-pci eth1
-    $DPDK_DIR/tools/dpdk_nic_bind.py --status
+    $DPDK_DIR/tools/dpdk-devbind.py --bind=vfio-pci eth1
+    $DPDK_DIR/tools/dpdk-devbind.py --status
     ```
 
   Note: If running kernels < 3.6 UIO drivers to be used,
@@ -398,8 +398,8 @@ can be found in [Vhost Walkthrough].
   mount -t hugetlbfs hugetlbfs /dev/hugepages (only if not already mounted)
   modprobe uio
   insmod $DPDK_BUILD/kmod/igb_uio.ko
-  $DPDK_DIR/tools/dpdk_nic_bind.py --status
-  $DPDK_DIR/tools/dpdk_nic_bind.py -b igb_uio 00:03.0 00:04.0
+  $DPDK_DIR/tools/dpdk-devbind.py --status
+  $DPDK_DIR/tools/dpdk-devbind.py -b igb_uio 00:03.0 00:04.0
   ```
 
   vhost ports pci ids can be retrieved using `lspci | grep Ethernet` cmd.
@@ -570,18 +570,18 @@ can be found in [Vhost Walkthrough].
        ```
        cd $DPDK_DIR/app/test-pmd;
        ./testpmd -c 0x3 -n 4 --socket-mem 1024 -- --burst=64 -i --txqflags=0xf00 --disable-hw-vlan
-       set fwd mac_retry
+       set fwd mac retry
        start
        ```
 
        * Bind vNIC back to kernel once the test is completed.
 
        ```
-       $DPDK_DIR/tools/dpdk_nic_bind.py --bind=virtio-pci 0000:00:03.0
-       $DPDK_DIR/tools/dpdk_nic_bind.py --bind=virtio-pci 0000:00:04.0
+       $DPDK_DIR/tools/dpdk-devbind.py --bind=virtio-pci 0000:00:03.0
+       $DPDK_DIR/tools/dpdk-devbind.py --bind=virtio-pci 0000:00:04.0
        ```
        Note: Appropriate PCI IDs to be passed in above example. The PCI IDs can be
-       retrieved using '$DPDK_DIR/tools/dpdk_nic_bind.py --status' cmd.
+       retrieved using '$DPDK_DIR/tools/dpdk-devbind.py --status' cmd.
 
 ### 5.3 PHY-VM-PHY [IVSHMEM]
 
