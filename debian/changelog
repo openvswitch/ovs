@@ -1,9 +1,117 @@
-openvswitch (2.5.90-1) unstable; urgency=low
+openvswitch (2.6.0-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-   - Nothing yet!  Try NEWS...
+   - First supported release of OVN.  See ovn-architecture(7) for more
+     details.
+   - ovsdb-server:
+     * New "monitor_cond" "monitor_cond_update" and "update2" extensions to
+       RFC 7047.
+   - OpenFlow:
+     * OpenFlow 1.3+ bundles are now supported for group mods as well as
+       flow mods and port mods.  Both 'atomic' and 'ordered' bundle
+       flags are supported for group mods as well as flow mods.
+     * OpenFlow 1.1+ OFPT_QUEUE_GET_CONFIG_REQUEST now supports OFPP_ANY.
+     * OpenFlow 1.4+ OFPMP_QUEUE_DESC is now supported.
+     * OpenFlow 1.4+ OFPT_TABLE_STATUS is now supported.
+     * New property-based packet-in message format NXT_PACKET_IN2 with support
+       for arbitrary user-provided data and for serializing flow table
+       traversal into a continuation for later resumption.
+     * New extension message NXT_SET_ASYNC_CONFIG2 to allow OpenFlow 1.4-like
+       control over asynchronous messages in earlier versions of OpenFlow.
+     * OpenFlow 1.3 Extension 230, adding OpenFlow Bundles support, is
+       now implemented.  Only flow mod and port mod messages are supported
+       in bundles.
+     * New OpenFlow extension NXM_NX_MPLS_TTL to provide access to MPLS TTL.
+     * New output option, output(port=N,max_len=M), to allow truncating a
+       packet to size M bytes when outputting to port N.
+     * New command OFPGC_ADD_OR_MOD for OFPT_GROUP_MOD message that adds a
+       new group or modifies an existing groups
+   - Improved OpenFlow version compatibility for actions:
+     * New OpenFlow extension to support the "group" action in OpenFlow 1.0.
+     * OpenFlow 1.0 "enqueue" action now properly translated to OpenFlow 1.1+.
+     * OpenFlow 1.1 "mod_nw_ecn" and OpenFlow 1.1+ "mod_nw_ttl" actions now
+       properly translated to OpenFlow 1.0.
+   - ovs-ofctl:
+     * queue-get-config command now allows a queue ID to be specified.
+     * '--bundle' option can now be used with OpenFlow 1.3 and with group mods.
+     * New "bundle" command allows executing a mixture of flow and group mods
+       as a single atomic transaction.
+     * New option "--color" to produce colorized output for some commands.
+     * New option '--may-create' to use OFPGC_ADD_OR_MOD in mod-group command.
+   - IPFIX:
+     * New "sampling_port" option for "sample" action to allow sampling
+       ingress and egress tunnel metadata with IPFIX.
+     * New ovs-ofctl commands "dump-ipfix-bridge" and "dump-ipfix-flow" to
+       dump bridge IPFIX statistics and flow based IPFIX statistics.
+     * New setting other-config:virtual_obs_id to add an arbitrary string
+       to IPFIX records.
+   - Linux:
+     * New QoS type "linux-noop" that prevents Open vSwitch from trying to
+       manage QoS for a given port (useful when other software manages QoS).
+   - DPDK:
+     * New option "n_rxq" for PMD interfaces.
+       Old 'other_config:n-dpdk-rxqs' is no longer supported.
+       Not supported by vHost interfaces. For them number of rx and tx queues
+       is applied from connected virtio device.
+     * New 'other_config:pmd-rxq-affinity' field for PMD interfaces, that
+       allows to pin port's rx queues to desired cores.
+     * New appctl command 'dpif-netdev/pmd-rxq-show' to check the port/rxq
+       assignment.
+     * Type of log messages from PMD threads changed from INFO to DBG.
+     * QoS functionality with sample egress-policer implementation.
+     * The mechanism for configuring DPDK has changed to use database
+     * Sensible defaults have been introduced for many of the required
+       configuration options
+     * DB entries have been added for many of the DPDK EAL command line
+       arguments. Additional arguments can be passed via the dpdk-extra
+       entry.
+     * Add ingress policing functionality.
+     * PMD threads servicing vHost User ports can now come from the NUMA
+       node that device memory is located on if CONFIG_RTE_LIBRTE_VHOST_NUMA
+       is enabled in DPDK.
+     * Basic connection tracking for the userspace datapath (no ALG,
+       fragmentation or NAT support yet)
+     * Support for DPDK 16.07
+     * Optional support for DPDK pdump enabled.
+     * Jumbo frame support
+     * Remove dpdkvhostcuse port type.
+     * OVS client mode for vHost and vHost reconnect (Requires QEMU 2.7)
+   - Increase number of registers to 16.
+   - ovs-benchmark: This utility has been removed due to lack of use and
+     bitrot.
+   - ovs-appctl:
+     * New "vlog/close" command.
+   - ovs-ctl:
+     * Added the ability to selectively start the forwarding and database
+       functions (ovs-vswitchd and ovsdb-server, respectively).
+   - ovsdb-server:
+     * Remove max number of sessions limit, to enable connection scaling
+       testing.
+   - python:
+     * Added support for Python 3.4+ in addition to existing support
+       for 2.7+.
+   - SELinux:
+     * Introduced SELinux policy package.
+   - Datapath Linux kernel compatibility.
+     * Dropped support for kernel older than 3.10.
+     * Removed VLAN splinters feature.
+     * Support for truncate action.
+     * Datapath supports kernel upto 4.6.
+   - Tunnels:
+     * Flow based tunnel match and action can be used for IPv6 address using
+       tun_ipv6_src, tun_ipv6_dst fields.
+     * Added support for IPv6 tunnels, for details checkout FAQ.
+   - A wrapper script, 'ovs-tcpdump', to easily port-mirror an OVS port and
+     watch with tcpdump
+   - Introduce --no-self-confinement flag that allows daemons to work with
+     sockets outside their run directory.
+   - ovs-pki: Changed message digest algorithm from SHA-1 to SHA-512 because
+     SHA-1 is no longer secure and some operating systems have started to
+     disable it in OpenSSL.
+   - Add 'mtu_request' column to the Interface table. It can be used to
+     configure the MTU of non-internal ports.
 
- -- Open vSwitch team <dev@openvswitch.org>  Thu, 03 Dec 2015 23:17:44 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Mon, 15 Aug 2016 19:53:13 -0700
 
 openvswitch (2.5.0-1) unstable; urgency=low
    [ Open vSwitch team ]
