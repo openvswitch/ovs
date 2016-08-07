@@ -3069,7 +3069,7 @@ extra_dpdk_args(const char *ovs_extra_config, char ***argv, int argc)
 {
     int ret = argc;
     char *release_tok = xstrdup(ovs_extra_config);
-    char *tok = release_tok, *endptr = NULL;
+    char *tok, *endptr = NULL;
 
     for (tok = strtok_r(release_tok, " ", &endptr); tok != NULL;
          tok = strtok_r(NULL, " ", &endptr)) {
