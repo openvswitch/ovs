@@ -1,5 +1,7 @@
 Post-v2.5.0
 ---------------------
+   - First supported release of OVN.  See ovn-architecture(7) for more
+     details.
    - ovsdb-server:
      * New "monitor_cond" "monitor_cond_update" and "update2" extensions to
        RFC 7047.
