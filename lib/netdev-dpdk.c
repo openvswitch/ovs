@@ -2299,10 +2299,17 @@ new_device(int vid)
                 newnode = dev->socket_id;
             }
 
-            dev->requested_socket_id = newnode;
-            dev->requested_n_rxq = qp_num;
-            dev->requested_n_txq = qp_num;
-            netdev_request_reconfigure(&dev->up);
+            if (dev->requested_n_txq != qp_num
+                || dev->requested_n_rxq != qp_num
+                || dev->requested_socket_id != newnode) {
+                dev->requested_socket_id = newnode;
+                dev->requested_n_rxq = qp_num;
+                dev->requested_n_txq = qp_num;
+                netdev_request_reconfigure(&dev->up);
+            } else {
+                /* Reconfiguration not required. */
+                dev->vhost_reconfigured = true;
+            }
 
             ovsrcu_index_set(&dev->vid, vid);
             exists = true;
@@ -2362,11 +2369,7 @@ destroy_device(int vid)
             ovs_mutex_lock(&dev->mutex);
             dev->vhost_reconfigured = false;
             ovsrcu_index_set(&dev->vid, -1);
-            /* Clear tx/rx queue settings. */
             netdev_dpdk_txq_map_clear(dev);
-            dev->requested_n_rxq = NR_QUEUE;
-            dev->requested_n_txq = NR_QUEUE;
-            netdev_request_reconfigure(&dev->up);
 
             netdev_change_seq_changed(&dev->up);
             ovs_mutex_unlock(&dev->mutex);
