@@ -3,7 +3,7 @@
     <h1>Name</h1>
     <p>ovn-nbctl -- Open Virtual Network northbound db management utility</p>
 
-    <h1>Synopsys</h1>
+    <h1>Synopsis</h1>
     <p><code>ovn-nbctl</code> [<var>options</var>] <var>command</var> [<var>arg</var>...]</p>
 
     <h1>Description</h1>
