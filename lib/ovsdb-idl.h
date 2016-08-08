@@ -251,7 +251,8 @@ void ovsdb_idl_txn_add_comment(struct ovsdb_idl_txn *, const char *, ...)
 void ovsdb_idl_txn_set_dry_run(struct ovsdb_idl_txn *);
 void ovsdb_idl_txn_increment(struct ovsdb_idl_txn *,
                              const struct ovsdb_idl_row *,
-                             const struct ovsdb_idl_column *);
+                             const struct ovsdb_idl_column *,
+                             bool force);
 void ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *);
 void ovsdb_idl_txn_wait(const struct ovsdb_idl_txn *);
 enum ovsdb_idl_txn_status ovsdb_idl_txn_commit(struct ovsdb_idl_txn *);

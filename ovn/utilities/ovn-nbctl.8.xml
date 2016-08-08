@@ -475,6 +475,22 @@
 
     <xi:include href="lib/db-ctl-base.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
+    <h1>Synchronization Commands</h1>
+
+    <dl>
+      <dt>sync</dt>
+      <dd>
+        Ordinarily, <code>--wait=sb</code> or <code>--wait=hv</code> only waits
+        for changes by the current <code>ovn-nbctl</code> invocation to take
+        effect.  This means that, if none of the commands supplied to
+        <code>ovn-nbctl</code> change the database, then the command does not
+        wait at all.  With the <code>sync</code> command, however,
+        <code>ovn-nbctl</code> waits even for earlier changes to the database
+        to propagate down to the southbound database or all of the OVN chassis,
+        according to the argument to <code>--wait</code>.
+      </dd>
+    </dl>
+
     <h1>Options</h1>
 
     <dl>
@@ -507,6 +523,15 @@
           additionally waits for all OVN chassis (hypervisors and gateways) to
           become up-to-date with the northbound database updates.  (This can
           become an indefinite wait if any chassis is malfunctioning.)
+        </p>
+
+        <p>
+          Ordinarily, <code>--wait=sb</code> or <code>--wait=hv</code> only
+          waits for changes by the current <code>ovn-nbctl</code> invocation to
+          take effect.  This means that, if none of the commands supplied to
+          <code>ovn-nbctl</code> change the database, then the command does not
+          wait at all.  Use the <code>sync</code> command to override this
+          behavior.
         </p>
       </dd>
 

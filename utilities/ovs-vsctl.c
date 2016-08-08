@@ -2544,7 +2544,7 @@ do_vsctl(const char *args, struct ctl_command *commands, size_t n_commands,
 
     if (wait_for_reload) {
         ovsdb_idl_txn_increment(txn, &ovs->header_,
-                                &ovsrec_open_vswitch_col_next_cfg);
+                                &ovsrec_open_vswitch_col_next_cfg, false);
     }
 
     post_db_reload_check_init();

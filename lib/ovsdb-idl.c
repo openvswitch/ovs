@@ -125,6 +125,7 @@ struct ovsdb_idl_txn {
     const char *inc_table;
     const char *inc_column;
     struct uuid inc_row;
+    bool inc_force;
     unsigned int inc_index;
     int64_t inc_new_value;
 
@@ -2234,6 +2235,12 @@ ovsdb_idl_txn_set_dry_run(struct ovsdb_idl_txn *txn)
  * successfully, the client may retrieve the final (incremented) value of
  * 'column' with ovsdb_idl_txn_get_increment_new_value().
  *
+ * If at time of commit the transaction is otherwise empty, that is, it doesn't
+ * change the database, then 'force' is important.  If 'force' is false in this
+ * case, the IDL suppresses the increment and skips a round trip to the
+ * database server.  If 'force' is true, the IDL will still increment the
+ * column.
+ *
  * The client could accomplish something similar with ovsdb_idl_read(),
  * ovsdb_idl_txn_verify() and ovsdb_idl_txn_write(), or with ovsdb-idlc
  * generated wrappers for these functions.  However, ovsdb_idl_txn_increment()
@@ -2244,7 +2251,8 @@ ovsdb_idl_txn_set_dry_run(struct ovsdb_idl_txn *txn)
 void
 ovsdb_idl_txn_increment(struct ovsdb_idl_txn *txn,
                         const struct ovsdb_idl_row *row,
-                        const struct ovsdb_idl_column *column)
+                        const struct ovsdb_idl_column *column,
+                        bool force)
 {
     ovs_assert(!txn->inc_table);
     ovs_assert(column->type.key.type == OVSDB_TYPE_INTEGER);
@@ -2253,6 +2261,7 @@ ovsdb_idl_txn_increment(struct ovsdb_idl_txn *txn,
     txn->inc_table = row->table->class->name;
     txn->inc_column = column->name;
     txn->inc_row = row->uuid;
+    txn->inc_force = force;
 }
 
 /* Destroys 'txn' and frees all associated memory.  If ovsdb_idl_txn_commit()
@@ -2740,12 +2749,11 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     }
 
     /* Add increment. */
-    if (txn->inc_table && any_updates) {
-        struct json *op;
-
+    if (txn->inc_table && (any_updates || txn->inc_force)) {
+        any_updates = true;
         txn->inc_index = operations->u.array.n - 1;
 
-        op = json_object_create();
+        struct json *op = json_object_create();
         json_object_put_string(op, "op", "mutate");
         json_object_put_string(op, "table", txn->inc_table);
         json_object_put(op, "where",
