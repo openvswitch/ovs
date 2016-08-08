@@ -433,8 +433,11 @@ EXTRA_DIST += \
 	lib/dh1024.pem \
 	lib/dh2048.pem \
 	lib/dh4096.pem \
+	lib/common.xml \
 	lib/dirs.c.in \
-	lib/db-ctl-base.xml
+	lib/db-ctl-base.xml \
+	lib/ssl.xml \
+	lib/vlog.xml
 
 MAN_FRAGMENTS += \
 	lib/colors.man \

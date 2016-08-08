@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<dl>
+  <dt><code>-h</code></dt>
+  <dt><code>--help</code></dt>
+  <dd>
+    Prints a brief help message to the console.
+  </dd>
+
+  <dt><code>-V</code></dt>
+  <dt><code>--version</code></dt>
+  <dd>
+    Prints version information to the console.
+  </dd>
+</dl>

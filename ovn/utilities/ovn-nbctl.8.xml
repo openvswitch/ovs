@@ -543,25 +543,19 @@
       default is unlikely to be useful outside of single-machine OVN test
       environments.
     </dd>
-
-    <dt><code>-h</code> | <code>--help</code></dt>
-    <dt><code>-o</code> | <code>--options</code></dt>
-    <dt><code>-V</code> | <code>--version</code></dt>
     </dl>
 
     <h1>Logging options</h1>
-    <dl>
-    <dt><code>-v</code><var>spec</var>, <code>--verbose=</code><var>spec</var></dt>
-    <dt><code>-v</code>, <code>--verbose</code></dt>
-    <dt><code>--log-file</code>[<code>=</code><var>file</var>]</dt>
-    <dt><code>--syslog-target=</code><var>host</var><code>:</code><var>port</var></dt>
-    </dl>
+    <xi:include href="lib/vlog.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+    <h2>PKI Options</h2>
+    <p>
+      PKI configuration is required to use SSL for the connection to the
+      database.
+    </p>
+    <xi:include href="lib/ssl.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
-    <h1>PKI configuration (required to use SSL)</h1>
-    <dl>
-    <dt><code>-p</code>, <code>--private-key=</code><var>file</var>  file with private key</dt>
-    <dt><code>-c</code>, <code>--certificate=</code><var>file</var>  file with certificate for private key</dt>
-    <dt><code>-C</code>, <code>--ca-cert=</code><var>file</var>      file with peer CA certificate</dt>
-    </dl>
+    <h2>Other Options</h2>
+
+    <xi:include href="lib/common.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
 </manpage>
