@@ -1213,8 +1213,8 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 	struct rtable *rt = NULL;
 	const struct iphdr *old_iph;
 	struct flowi4 fl4;
-	union vxlan_addr *dst;
-	union vxlan_addr remote_ip;
+	union vxlan_addr *dst, *src;
+	union vxlan_addr remote_ip, local_ip;
 	struct vxlan_metadata _md;
 	struct vxlan_metadata *md = &_md;
 	__be16 src_port = 0, dst_port;
@@ -1230,6 +1230,7 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 		dst_port = rdst->remote_port ? rdst->remote_port : vxlan->cfg.dst_port;
 		vni = rdst->remote_vni;
 		dst = &rdst->remote_ip;
+		src = &vxlan->cfg.saddr;
 	} else {
 		if (!info) {
 			WARN_ONCE(1, "%s: Missing encapsulation instructions\n",
@@ -1242,11 +1243,18 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 		dst_port = info->key.tp_dst ? : vxlan->cfg.dst_port;
 		vni = be64_to_cpu(info->key.tun_id);
 		remote_ip.sa.sa_family = family;
-		if (family == AF_INET)
+
+		/* memset is called to avoid compiler warning.*/
+		memset(&local_ip, 0, sizeof(local_ip));
+		if (family == AF_INET) {
 			remote_ip.sin.sin_addr.s_addr = info->key.u.ipv4.dst;
-		else
+			local_ip.sin.sin_addr.s_addr = info->key.u.ipv4.src;
+		} else {
 			remote_ip.sin6.sin6_addr = info->key.u.ipv6.dst;
+			local_ip.sin6.sin6_addr = info->key.u.ipv6.src;
+		}
 		dst = &remote_ip;
+		src = &local_ip;
 	}
 
 	if (vxlan_addr_any(dst)) {
@@ -1296,7 +1304,7 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 		fl4.flowi4_mark = skb->mark;
 		fl4.flowi4_proto = IPPROTO_UDP;
 		fl4.daddr = dst->sin.sin_addr.s_addr;
-		fl4.saddr = vxlan->cfg.saddr.sin.sin_addr.s_addr;
+		fl4.saddr = src->sin.sin_addr.s_addr;
 
 		rt = ip_route_output_key(vxlan->net, &fl4);
 		if (IS_ERR(rt)) {
@@ -1352,7 +1360,7 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 		memset(&fl6, 0, sizeof(fl6));
 		fl6.flowi6_oif = rdst ? rdst->remote_ifindex : 0;
 		fl6.daddr = dst->sin6.sin6_addr;
-		fl6.saddr = vxlan->cfg.saddr.sin6.sin6_addr;
+		fl6.saddr = src->sin6.sin6_addr;
 		fl6.flowi6_mark = skb->mark;
 		fl6.flowi6_proto = IPPROTO_UDP;
 
