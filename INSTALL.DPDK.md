@@ -590,7 +590,6 @@ can be found in [Vhost Walkthrough].
 
 ## <a name="ovslimits"></a> 6. Limitations
 
-  - Supports MTU size 1500, MTU setting for DPDK netdevs will be in future OVS release.
   - Currently DPDK ports does not use HW offload functionality.
   - Network Interface Firmware requirements:
     Each release of DPDK is validated against a specific firmware version for

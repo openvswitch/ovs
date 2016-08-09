@@ -1,5 +1,5 @@
 OVS DPDK ADVANCED INSTALL GUIDE
-=================================
+===============================
 
 ## Contents
 
@@ -13,7 +13,8 @@ OVS DPDK ADVANCED INSTALL GUIDE
 8. [Rate Limiting](#rl)
 9. [Flow Control](#fc)
 10. [Pdump](#pdump)
-11. [Vsperf](#vsperf)
+11. [Jumbo Frames](#jumbo)
+12. [Vsperf](#vsperf)
 
 ## <a name="overview"></a> 1. Overview
 
@@ -981,7 +982,58 @@ tcpdump. Issue the following command to view the contents of 'pkts.pcap':
 A performance decrease is expected when using a monitoring application like
 the DPDK pdump app.
 
-## <a name="vsperf"></a> 11. Vsperf
+## <a name="jumbo"></a> 11. Jumbo Frames
+
+By default, DPDK ports are configured with standard Ethernet MTU (1500B). To
+enable Jumbo Frames support for a DPDK port, change the Interface's `mtu_request`
+attribute to a sufficiently large value.
+
+e.g. Add a DPDK Phy port with MTU of 9000:
+
+`ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk -- set Interface dpdk0 mtu_request=9000`
+
+e.g. Change the MTU of an existing port to 6200:
+
+`ovs-vsctl set Interface dpdk0 mtu_request=6200`
+
+When Jumbo Frames are enabled, the size of a DPDK port's mbuf segments are
+increased, such that a full Jumbo Frame of a specific size may be accommodated
+within a single mbuf segment.
+
+Jumbo frame support has been validated against 9728B frames (largest frame size
+supported by Fortville NIC), using the DPDK `i40e` driver, but larger frames
+(particularly in use cases involving East-West traffic only), and other DPDK NIC
+drivers may be supported.
+
+### 9.1 vHost Ports and Jumbo Frames
+
+Some additional configuration is needed to take advantage of jumbo frames with
+vhost ports:
+
+    1. `mergeable buffers` must be enabled for vHost ports, as demonstrated in
+        the QEMU command line snippet below:
+
+        ```
+        '-netdev type=vhost-user,id=mynet1,chardev=char0,vhostforce \'
+        '-device virtio-net-pci,mac=00:00:00:00:00:01,netdev=mynet1,mrg_rxbuf=on'
+        ```
+
+    2. Where virtio devices are bound to the Linux kernel driver in a guest
+       environment (i.e. interfaces are not bound to an in-guest DPDK driver),
+       the MTU of those logical network interfaces must also be increased to a
+       sufficiently large value. This avoids segmentation of Jumbo Frames
+       received in the guest. Note that 'MTU' refers to the length of the IP
+       packet only, and not that of the entire frame.
+
+       To calculate the exact MTU of a standard IPv4 frame, subtract the L2
+       header and CRC lengths (i.e. 18B) from the max supported frame size.
+       So, to set the MTU for a 9018B Jumbo Frame:
+
+       ```
+       ifconfig eth1 mtu 9000
+       ```
+
+## <a name="vsperf"></a> 12. Vsperf
 
 Vsperf project goal is to develop vSwitch test framework that can be used to
 validate the suitability of different vSwitch implementations in a Telco deployment
