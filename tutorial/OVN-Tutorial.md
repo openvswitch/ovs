@@ -25,12 +25,17 @@ environment:
   1. Creates the `OVN_Northbound` and `OVN_Southbound` databases as described in
      [ovn-nb(5)] and [ovn-sb(5)].
 
-  2. Creates the `hardware_vtep` database as described in [vtep(5)].
+  2. Creates a backup server for `OVN_Southbond` database. Sandbox launch
+     screen provides the instructions on accessing the backup database.
+     However access to the backup server is not required to go through the
+     tutorial.
 
-  3. Runs the [ovn-northd(8)], [ovn-controller(8)], and [ovn-controller-vtep(8)]
+  3. Creates the `hardware_vtep` database as described in [vtep(5)].
+
+  4. Runs the [ovn-northd(8)], [ovn-controller(8)], and [ovn-controller-vtep(8)]
      daemons.
 
-  4. Makes OVN and VTEP utilities available for use in the environment,
+  5. Makes OVN and VTEP utilities available for use in the environment,
      including [vtep-ctl(8)], [ovn-nbctl(8)], and [ovn-sbctl(8)].
 
 Note that each of these demos assumes you start with a fresh sandbox
