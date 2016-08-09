@@ -1382,7 +1382,7 @@ netdev_linux_get_mtu(const struct netdev *netdev_, int *mtup)
  * networking ioctl interface.
  */
 static int
-netdev_linux_set_mtu(const struct netdev *netdev_, int mtu)
+netdev_linux_set_mtu(struct netdev *netdev_, int mtu)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct ifreq ifr;

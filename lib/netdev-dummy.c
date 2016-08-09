@@ -1144,7 +1144,7 @@ netdev_dummy_get_mtu(const struct netdev *netdev, int *mtup)
 }
 
 static int
-netdev_dummy_set_mtu(const struct netdev *netdev, int mtu)
+netdev_dummy_set_mtu(struct netdev *netdev, int mtu)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 

@@ -383,7 +383,7 @@ struct netdev_class {
      * If 'netdev' does not have an MTU (e.g. as some tunnels do not), then
      * this function should return EOPNOTSUPP.  This function may be set to
      * null if it would always return EOPNOTSUPP. */
-    int (*set_mtu)(const struct netdev *netdev, int mtu);
+    int (*set_mtu)(struct netdev *netdev, int mtu);
 
     /* Returns the ifindex of 'netdev', if successful, as a positive number.
      * On failure, returns a negative errno value.

@@ -869,7 +869,7 @@ netdev_get_mtu(const struct netdev *netdev, int *mtup)
  * MTU (as e.g. some tunnels do not).  On other failure, returns a positive
  * errno value. */
 int
-netdev_set_mtu(const struct netdev *netdev, int mtu)
+netdev_set_mtu(struct netdev *netdev, int mtu)
 {
     const struct netdev_class *class = netdev->netdev_class;
     int error;

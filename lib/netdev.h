@@ -132,7 +132,7 @@ const char *netdev_get_name(const struct netdev *);
 const char *netdev_get_type(const struct netdev *);
 const char *netdev_get_type_from_name(const char *);
 int netdev_get_mtu(const struct netdev *, int *mtup);
-int netdev_set_mtu(const struct netdev *, int mtu);
+int netdev_set_mtu(struct netdev *, int mtu);
 int netdev_get_ifindex(const struct netdev *);
 int netdev_set_tx_multiq(struct netdev *, unsigned int n_txq);
 
