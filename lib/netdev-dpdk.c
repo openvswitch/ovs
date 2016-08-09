@@ -2745,11 +2745,15 @@ netdev_dpdk_set_qos(struct netdev *netdev,
 
             /* Install new QoS configuration. */
             error = new_ops->qos_construct(netdev, details);
-            ovs_assert((error == 0) == (dev->qos_conf != NULL));
         }
     } else {
         error = new_ops->qos_construct(netdev, details);
-        ovs_assert((error == 0) == (dev->qos_conf != NULL));
+    }
+
+    ovs_assert((error == 0) == (dev->qos_conf != NULL));
+    if (error) {
+        VLOG_ERR("Failed to set QoS type %s on port %s, returned error: %s",
+                 type, netdev->name, rte_strerror(-error));
     }
 
     ovs_mutex_unlock(&dev->mutex);
@@ -2788,6 +2792,15 @@ egress_policer_qos_construct(struct netdev *netdev,
     policer->app_srtcm_params.ebs = 0;
     err = rte_meter_srtcm_config(&policer->egress_meter,
                                     &policer->app_srtcm_params);
+
+    if (err < 0) {
+        /* Error occurred during rte_meter creation, destroy the policer
+         * and set the qos configuration for the netdev dpdk to NULL
+         */
+        free(policer);
+        dev->qos_conf = NULL;
+        err = -err;
+    }
     rte_spinlock_unlock(&dev->qos_lock);
 
     return err;
@@ -2818,14 +2831,26 @@ static int
 egress_policer_qos_set(struct netdev *netdev, const struct smap *details)
 {
     struct egress_policer *policer;
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     int err = 0;
 
     policer = egress_policer_get__(netdev);
+    rte_spinlock_lock(&dev->qos_lock);
     policer->app_srtcm_params.cir = smap_get_ullong(details, "cir", 0);
     policer->app_srtcm_params.cbs = smap_get_ullong(details, "cbs", 0);
     policer->app_srtcm_params.ebs = 0;
     err = rte_meter_srtcm_config(&policer->egress_meter,
                                     &policer->app_srtcm_params);
+
+    if (err < 0) {
+        /* Error occurred during rte_meter creation, destroy the policer
+         * and set the qos configuration for the netdev dpdk to NULL
+         */
+        free(policer);
+        dev->qos_conf = NULL;
+        err = -err;
+    }
+    rte_spinlock_unlock(&dev->qos_lock);
 
     return err;
 }
