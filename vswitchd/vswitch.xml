@@ -2380,6 +2380,44 @@
       </column>
     </group>
 
+    <group title="MTU">
+      <p>
+        The MTU (maximum transmission unit) is the largest amount of data
+        that can fit into a single Ethernet frame.  The standard Ethernet
+        MTU is 1500 bytes.  Some physical media and many kinds of virtual
+        interfaces can be configured with higher MTUs.
+      </p>
+
+      <p>
+        A client may change a non-internal interface MTU by filling in
+        <ref column="mtu_request"/>.  Internal interfaces MTU, instead, is set
+        by Open vSwitch to the minimum of non-internal interfaces MTU in the
+        bridge. In any case, Open vSwitch then reports in <ref column="mtu"/>
+        the currently configured value.
+      </p>
+
+      <column name="mtu">
+        <p>
+          This column will be empty for an interface that does not
+          have an MTU as, for example, some kinds of tunnels do not.
+        </p>
+
+        <p>
+          Open vSwitch sets this column's value, so other clients should treat
+          it as read-only.
+        </p>
+      </column>
+
+      <column name="mtu_request"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          Requested MTU (Maximum Transmission Unit) for the interface. A client
+          can fill this column to change the MTU of a non-internal interface.
+        </p>
+    </column>
+
+    </group>
+
     <group title="Interface Status">
       <p>
         Status information about interfaces attached to bridges, updated every
@@ -2419,20 +2457,6 @@
       <column name="duplex">
         <p>
           The duplex mode of the physical network link.
-        </p>
-      </column>
-
-      <column name="mtu">
-        <p>
-          The MTU (maximum transmission unit); i.e. the largest
-          amount of data that can fit into a single Ethernet frame.
-          The standard Ethernet MTU is 1500 bytes.  Some physical media
-          and many kinds of virtual interfaces can be configured with
-          higher MTUs.
-        </p>
-        <p>
-          This column will be empty for an interface that does not
-          have an MTU as, for example, some kinds of tunnels do not.
         </p>
       </column>
 

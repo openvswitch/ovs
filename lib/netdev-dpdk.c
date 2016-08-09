@@ -1650,57 +1650,6 @@ netdev_dpdk_get_mtu(const struct netdev *netdev, int *mtup)
 }
 
 static int
-netdev_dpdk_set_mtu(const struct netdev *netdev, int mtu)
-{
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int old_mtu, err, dpdk_mtu;
-    struct dpdk_mp *old_mp;
-    struct dpdk_mp *mp;
-    uint32_t buf_size;
-
-    ovs_mutex_lock(&dpdk_mutex);
-    ovs_mutex_lock(&dev->mutex);
-    if (dev->mtu == mtu) {
-        err = 0;
-        goto out;
-    }
-
-    buf_size = dpdk_buf_size(mtu);
-    dpdk_mtu = FRAME_LEN_TO_MTU(buf_size);
-
-    mp = dpdk_mp_get(dev->socket_id, dpdk_mtu);
-    if (!mp) {
-        err = ENOMEM;
-        goto out;
-    }
-
-    rte_eth_dev_stop(dev->port_id);
-
-    old_mtu = dev->mtu;
-    old_mp = dev->dpdk_mp;
-    dev->dpdk_mp = mp;
-    dev->mtu = mtu;
-    dev->max_packet_len = MTU_TO_FRAME_LEN(dev->mtu);
-
-    err = dpdk_eth_dev_init(dev);
-    if (err) {
-        dpdk_mp_put(mp);
-        dev->mtu = old_mtu;
-        dev->dpdk_mp = old_mp;
-        dev->max_packet_len = MTU_TO_FRAME_LEN(dev->mtu);
-        dpdk_eth_dev_init(dev);
-        goto out;
-    }
-
-    dpdk_mp_put(old_mp);
-    netdev_change_seq_changed(netdev);
-out:
-    ovs_mutex_unlock(&dev->mutex);
-    ovs_mutex_unlock(&dpdk_mutex);
-    return err;
-}
-
-static int
 netdev_dpdk_get_carrier(const struct netdev *netdev, bool *carrier);
 
 static int
@@ -2995,7 +2944,7 @@ netdev_dpdk_vhost_cuse_reconfigure(struct netdev *netdev)
     netdev_dpdk_set_etheraddr,                                \
     netdev_dpdk_get_etheraddr,                                \
     netdev_dpdk_get_mtu,                                      \
-    netdev_dpdk_set_mtu,                                      \
+    NULL,                       /* set_mtu */                 \
     netdev_dpdk_get_ifindex,                                  \
     GET_CARRIER,                                              \
     netdev_dpdk_get_carrier_resets,                           \

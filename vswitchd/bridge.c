@@ -775,6 +775,15 @@ bridge_delete_or_reconfigure_ports(struct bridge *br)
             goto delete;
         }
 
+        if (iface->cfg->n_mtu_request == 1
+            && strcmp(iface->type,
+                      ofproto_port_open_type(br->type, "internal"))) {
+            /* Try to set the MTU to the requested value.  This is not done
+             * for internal interfaces, since their MTU is decided by the
+             * ofproto module, based on other ports in the bridge. */
+            netdev_set_mtu(iface->netdev, *iface->cfg->mtu_request);
+        }
+
         /* If the requested OpenFlow port for 'iface' changed, and it's not
          * already the correct port, then we might want to temporarily delete
          * this interface, so we can add it back again with the new OpenFlow
