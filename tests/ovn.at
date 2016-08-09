@@ -1271,6 +1271,9 @@ sleep 1
 
 vtep-ctl bind-ls br-vtep br-vtep_n2 0 lsw0
 
+OVS_WAIT_UNTIL([test -n "`as vtep vtep-ctl get-replication-mode lsw0 |
+               grep -- source`"])
+# It takes more time for the update to be processed by ovs-vtep.
 sleep 1
 
 # Add hv3 on the other side of the vtep

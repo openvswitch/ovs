@@ -20,15 +20,6 @@
 
 struct shash;
 
-enum {
-    MLF_ALLOW_LOOPBACK_BIT = 0
-};
-
-enum {
-    MLF_ALLOW_LOOPBACK = (1 << MLF_ALLOW_LOOPBACK_BIT) /* Allow outputting
-                                                          back to inport. */
-};
-
 /* Logical fields.
  *
  * These values are documented in ovn-architecture(7), please update the
@@ -51,5 +42,23 @@ enum {
 #define MFF_N_LOG_REGS 10
 
 void ovn_init_symtab(struct shash *symtab);
+
+/* MFF_LOG_FLAGS_REG bit assignments */
+enum mff_log_flags_bits {
+    MLF_ALLOW_LOOPBACK_BIT = 0,
+    MLF_RCV_FROM_VXLAN_BIT = 1,
+};
+
+/* MFF_LOG_FLAGS_REG flag assignments */
+enum mff_log_flags {
+    /* Allow outputting back to inport. */
+    MLF_ALLOW_LOOPBACK = (1 << MLF_ALLOW_LOOPBACK_BIT),
+
+    /* Indicate that a packet was received from a VXLAN tunnel to
+     * compensate for the lack of egress port information available in
+     * VXLAN encapsulation.  Egress port information is available for
+     * Geneve and STT tunnel types. */
+    MLF_RCV_FROM_VXLAN = (1 << MLF_RCV_FROM_VXLAN_BIT),
+};
 
 #endif /* ovn/lib/logical-fields.h */

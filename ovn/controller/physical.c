@@ -474,13 +474,31 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
                         &match, ofpacts_p, &binding->header_.uuid);
     } else {
         /* Remote port connected by tunnel */
-        /* Table 32, priority 100.
-         * =======================
+
+        /* Table 32, priority 150 and 100.
+         * ===============================
          *
-         * Implements output to remote hypervisors.  Each flow matches an
-         * output port that includes a logical port on a remote hypervisor,
-         * and tunnels the packet to that hypervisor.
+         * Priority 150 is for packets received from a VXLAN tunnel
+         * which get resubmitted to OFTABLE_LOG_INGRESS_PIPELINE due to
+         * lack of needed metadata in VXLAN, explicitly skip sending
+         * back out any tunnels and resubmit to table 33 for local
+         * delivery.
+         *
+         * Priority 100 is for all other traffic which need to be sent
+         * to a remote hypervisor.  Each flow matches an output port
+         * that includes a logical port on a remote hypervisor, and
+         * tunnels the packet to that hypervisor.
          */
+        match_init_catchall(&match);
+        ofpbuf_clear(ofpacts_p);
+        match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
+                             MLF_RCV_FROM_VXLAN, MLF_RCV_FROM_VXLAN);
+
+        /* Resubmit to table 33. */
+        put_resubmit(OFTABLE_LOCAL_OUTPUT, ofpacts_p);
+        ofctrl_add_flow(OFTABLE_REMOTE_OUTPUT, 150, &match, ofpacts_p,
+                        &binding->header_.uuid);
+
 
         match_init_catchall(&match);
         ofpbuf_clear(ofpacts_p);
@@ -859,11 +877,7 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
      * metadata, we only support VXLAN for connections to gateways.  The
      * VNI is used to populate MFF_LOG_DATAPATH.  The gateway's logical
      * port is set to MFF_LOG_INPORT.  Then the packet is resubmitted to
-     * table 16 to determine the logical egress port.
-     *
-     * xxx Due to resubmitting to table 16, broadcasts will be re-sent to
-     * xxx all logical ports, including non-local ones which could cause
-     * xxx duplicate packets to be received by multiply-connected gateways. */
+     * table 16 to determine the logical egress port. */
     HMAP_FOR_EACH (tun, hmap_node, &tunnels) {
         if (tun->type != VXLAN) {
             continue;
@@ -883,6 +897,9 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             ofpbuf_clear(&ofpacts);
             put_move(MFF_TUN_ID, 0,  MFF_LOG_DATAPATH, 0, 24, &ofpacts);
             put_load(binding->tunnel_key, MFF_LOG_INPORT, 0, 15, &ofpacts);
+            /* For packets received from a vxlan tunnel, set a flag to that
+             * effect. */
+            put_load(1, MFF_LOG_FLAGS, MLF_RCV_FROM_VXLAN_BIT, 1, &ofpacts);
             put_resubmit(OFTABLE_LOG_INGRESS_PIPELINE, &ofpacts);
 
             ofctrl_add_flow(OFTABLE_PHY_TO_LOG, 100, &match, &ofpacts, hc_uuid);
