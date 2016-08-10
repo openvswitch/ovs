@@ -325,7 +325,7 @@ classifier_init(struct classifier *cls, const uint8_t *flow_segments)
 {
     cls->n_rules = 0;
     cmap_init(&cls->subtables_map);
-    cpvector_init(&cls->subtables);
+    pvector_init(&cls->subtables);
     cls->n_flow_segments = 0;
     if (flow_segments) {
         while (cls->n_flow_segments < CLS_MAX_INDICES
@@ -359,7 +359,7 @@ classifier_destroy(struct classifier *cls)
         }
         cmap_destroy(&cls->subtables_map);
 
-        cpvector_destroy(&cls->subtables);
+        pvector_destroy(&cls->subtables);
     }
 }
 
@@ -658,20 +658,20 @@ classifier_replace(struct classifier *cls, const struct cls_rule *rule,
     if (n_rules == 1) {
         subtable->max_priority = rule->priority;
         subtable->max_count = 1;
-        cpvector_insert(&cls->subtables, subtable, rule->priority);
+        pvector_insert(&cls->subtables, subtable, rule->priority);
     } else if (rule->priority == subtable->max_priority) {
         ++subtable->max_count;
     } else if (rule->priority > subtable->max_priority) {
         subtable->max_priority = rule->priority;
         subtable->max_count = 1;
-        cpvector_change_priority(&cls->subtables, subtable, rule->priority);
+        pvector_change_priority(&cls->subtables, subtable, rule->priority);
     }
 
     /* Nothing was replaced. */
     cls->n_rules++;
 
     if (cls->publish) {
-        cpvector_publish(&cls->subtables);
+        pvector_publish(&cls->subtables);
     }
 
     return NULL;
@@ -803,12 +803,12 @@ check_priority:
                 }
             }
             subtable->max_priority = max_priority;
-            cpvector_change_priority(&cls->subtables, subtable, max_priority);
+            pvector_change_priority(&cls->subtables, subtable, max_priority);
         }
     }
 
     if (cls->publish) {
-        cpvector_publish(&cls->subtables);
+        pvector_publish(&cls->subtables);
     }
 
     /* free the rule. */
@@ -959,8 +959,8 @@ classifier_lookup__(const struct classifier *cls, ovs_version_t version,
 
     /* Main loop. */
     struct cls_subtable *subtable;
-    CPVECTOR_FOR_EACH_PRIORITY (subtable, hard_pri + 1, 2, sizeof *subtable,
-                                &cls->subtables) {
+    PVECTOR_FOR_EACH_PRIORITY (subtable, hard_pri + 1, 2, sizeof *subtable,
+                               &cls->subtables) {
         struct cls_conjunction_set *conj_set;
 
         /* Skip subtables with no match, or where the match is lower-priority
@@ -1231,8 +1231,8 @@ classifier_rule_overlaps(const struct classifier *cls,
     struct cls_subtable *subtable;
 
     /* Iterate subtables in the descending max priority order. */
-    CPVECTOR_FOR_EACH_PRIORITY (subtable, target->priority, 2,
-                                sizeof(struct cls_subtable), &cls->subtables) {
+    PVECTOR_FOR_EACH_PRIORITY (subtable, target->priority, 2,
+                               sizeof(struct cls_subtable), &cls->subtables) {
         struct {
             struct minimask mask;
             uint64_t storage[FLOW_U64S];
@@ -1350,8 +1350,8 @@ cls_cursor_start(const struct classifier *cls, const struct cls_rule *target,
     cursor.rule = NULL;
 
     /* Find first rule. */
-    CPVECTOR_CURSOR_FOR_EACH (subtable, &cursor.subtables,
-                              &cursor.cls->subtables) {
+    PVECTOR_CURSOR_FOR_EACH (subtable, &cursor.subtables,
+                             &cursor.cls->subtables) {
         const struct cls_rule *rule = search_subtable(subtable, &cursor);
 
         if (rule) {
@@ -1378,7 +1378,7 @@ cls_cursor_next(struct cls_cursor *cursor)
         }
     }
 
-    CPVECTOR_CURSOR_FOR_EACH_CONTINUE (subtable, &cursor->subtables) {
+    PVECTOR_CURSOR_FOR_EACH_CONTINUE (subtable, &cursor->subtables) {
         rule = search_subtable(subtable, cursor);
         if (rule) {
             cursor->subtable = subtable;
@@ -1510,7 +1510,7 @@ destroy_subtable(struct classifier *cls, struct cls_subtable *subtable)
 {
     int i;
 
-    cpvector_remove(&cls->subtables, subtable);
+    pvector_remove(&cls->subtables, subtable);
     cmap_remove(&cls->subtables_map, &subtable->cmap_node,
                 minimask_hash(&subtable->mask, 0));
 

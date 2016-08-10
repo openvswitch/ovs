@@ -49,7 +49,7 @@
  * values, or decrement the 'size' on a copy that readers have access to.
  *
  * Most modifications are internally staged at the 'temp' vector, from which
- * they can be published at 'impl' by calling cpvector_publish().  This saves
+ * they can be published at 'impl' by calling pvector_publish().  This saves
  * unnecessary memory allocations when many changes are done back-to-back.
  * 'temp' may contain NULL pointers and it may be in unsorted order.  It is
  * sorted before it is published at 'impl', which also removes the NULLs from
@@ -61,17 +61,33 @@ struct pvector_entry {
     void *ptr;
 };
 
-/* Non-concurrent priority vector. */
-struct pvector {
+struct pvector_impl {
     size_t size;       /* Number of entries in the vector. */
     size_t allocated;  /* Number of allocated entries. */
     struct pvector_entry vector[];
 };
 
-struct pvector *pvector_alloc(size_t);
-void pvector_push_back(struct pvector **, void *ptr, int priority);
-void pvector_remove(struct pvector *, void *ptr);
-void pvector_sort(struct pvector *);
+/* Concurrent priority vector. */
+struct pvector {
+    OVSRCU_TYPE(struct pvector_impl *) impl;
+    struct pvector_impl *temp;
+};
+
+/* Initialization. */
+void pvector_init(struct pvector *);
+void pvector_destroy(struct pvector *);
+
+/* Insertion and deletion.  These work on 'temp'.  */
+void pvector_insert(struct pvector *, void *, int priority);
+void pvector_change_priority(struct pvector *, void *, int priority);
+void pvector_remove(struct pvector *, void *);
+
+/* Make the modified pvector available for iteration. */
+static inline void pvector_publish(struct pvector *);
+
+/* Count.  These operate on the published pvector. */
+static inline size_t pvector_count(const struct pvector *);
+static inline bool pvector_is_empty(const struct pvector *);
 
 /* Iteration.
  *
@@ -79,9 +95,8 @@ void pvector_sort(struct pvector *);
  * Thread-safety
  * =============
  *
- * These iterators operate on the non-concurrent pvector, and are not thread
- * safe.  Any entry may be skipped if entires are removed (with
- * pvector_remove()) during iteration.
+ * Iteration is safe even in a pvector that is changing concurrently.
+ * Multiple writers must exclude each other via e.g., a mutex.
  *
  * Example
  * =======
@@ -91,28 +106,32 @@ void pvector_sort(struct pvector *);
  *     };
  *
  *     struct my_node elem1, elem2, *iter;
- *     struct pvector *my_pvector;
+ *     struct pvector my_pvector;
  *
- *     my_pvector = pvector_alloc(0);
+ *     pvector_init(&my_pvector);
  *     ...add data...
- *     pvector_push_back(&my_pvector, &elem1, 1);
- *     pvector_push_back(&my_pvector, &elem2, 2);
- *     ...sort...
- *     pvector_sort(my_pvector);
+ *     pvector_insert(&my_pvector, &elem1, 1);
+ *     pvector_insert(&my_pvector, &elem2, 2);
  *     ...
- *     PVECTOR_FOR_EACH (iter, &my_cpvector) {
+ *     PVECTOR_FOR_EACH (iter, &my_pvector) {
  *         ...operate on '*iter'...
  *         ...elem2 to be seen before elem1...
  *     }
- *     ...remove entries...
- *     pvector_remove(my_pvector, &elem1);
  *     ...
- *     free(my_pvector);
+ *     pvector_destroy(&my_pvector);
  *
- * Currently there is no PVECTOR_FOR_EACH_SAFE variant.
+ * There is no PVECTOR_FOR_EACH_SAFE variant as iteration is performed on RCU
+ * protected instance of the priority vector.  Any concurrent modifications
+ * that would be disruptive for readers (such as deletions), will be performed
+ * on a new instance.  To see any of the modifications, a new iteration loop
+ * has to be started.
  *
  * The PVECTOR_FOR_EACH_PRIORITY limits the iteration to entries with higher
  * than or equal to the given priority and allows for object lookahead.
+ *
+ * The iteration loop must be completed without entering the OVS RCU quiescent
+ * period.  That is, an old iteration loop must not be continued after any
+ * blocking IO (VLOG is non-blocking, so that is OK).
  */
 struct pvector_cursor {
     size_t size;        /* Number of entries in the vector. */
@@ -124,7 +143,7 @@ static inline struct pvector_cursor pvector_cursor_init(const struct pvector *,
                                                         size_t n_ahead,
                                                         size_t obj_size);
 static inline void *pvector_cursor_next(struct pvector_cursor *,
-                                        int stop_at_priority,
+                                        int lowest_priority,
                                         size_t n_ahead, size_t obj_size);
 static inline void pvector_cursor_lookahead(const struct pvector_cursor *,
                                             int n, size_t size);
@@ -139,109 +158,29 @@ static inline void pvector_cursor_lookahead(const struct pvector_cursor *,
     for (struct pvector_cursor cursor__ = pvector_cursor_init(PVECTOR, N, SZ); \
          ((PTR) = pvector_cursor_next(&cursor__, PRIORITY, N, SZ)) != NULL; )
 
-#define PVECTOR_CURSOR_FOR_EACH(PTR, CURSOR, PVECTOR)                   \
-    for (*(CURSOR) = pvector_cursor_init(PVECTOR, 0, 0);                \
+#define PVECTOR_CURSOR_FOR_EACH(PTR, CURSOR, PVECTOR)                \
+    for (*(CURSOR) = pvector_cursor_init(PVECTOR, 0, 0);             \
          ((PTR) = pvector_cursor_next(CURSOR, INT_MIN, 0, 0)) != NULL; )
 
 #define PVECTOR_CURSOR_FOR_EACH_CONTINUE(PTR, CURSOR)                   \
     for (; ((PTR) = pvector_cursor_next(CURSOR, INT_MIN, 0, 0)) != NULL; )
 
 
-/* Concurrent priority vector. */
-struct cpvector {
-    OVSRCU_TYPE(struct pvector *) impl;
-    struct pvector *temp;
-};
-
-/* Initialization. */
-void cpvector_init(struct cpvector *);
-void cpvector_destroy(struct cpvector *);
-
-/* Insertion and deletion.  These work on 'temp'.  */
-void cpvector_insert(struct cpvector *, void *, int priority);
-void cpvector_change_priority(struct cpvector *, void *, int priority);
-void cpvector_remove(struct cpvector *, void *);
-
-/* Make the modified cpvector available for iteration. */
-static inline void cpvector_publish(struct cpvector *);
-
-/* Count.  These operate on the published cpvector. */
-static inline size_t cpvector_count(const struct cpvector *);
-static inline bool cpvector_is_empty(const struct cpvector *);
-
-static inline struct pvector *cpvector_get_pvector(const struct cpvector *);
-
-/* Iteration.
- *
- *
- * Thread-safety
- * =============
- *
- * Iteration is safe even in a cpvector that is changing concurrently.
- * Multiple writers must exclude each other via e.g., a mutex.
- *
- * Example
- * =======
- *
- *     struct my_node {
- *         int data;
- *     };
- *
- *     struct my_node elem1, elem2, *iter;
- *     struct cpvector my_cpvector;
- *
- *     cpvector_init(&my_cpvector);
- *     ...add data...
- *     cpvector_insert(&my_cpvector, &elem1, 1);
- *     cpvector_insert(&my_cpvector, &elem2, 2);
- *     ...
- *     CPVECTOR_FOR_EACH (iter, &my_cpvector) {
- *         ...operate on '*iter'...
- *         ...elem2 to be seen before elem1...
- *     }
- *     ...
- *     cpvector_destroy(&my_cpvector);
- *
- * There is no CPVECTOR_FOR_EACH_SAFE variant as iteration is performed on RCU
- * protected instance of the priority vector.  Any concurrent modifications
- * that would be disruptive for readers (such as deletions), will be performed
- * on a new instance.  To see any of the modifications, a new iteration loop
- * has to be started.
- *
- * The CPVECTOR_FOR_EACH_PRIORITY limits the iteration to entries with higher
- * than or equal to the given priority and allows for object lookahead.
- *
- * The iteration loop must be completed without entering the OVS RCU quiescent
- * period.  That is, an old iteration loop must not be continued after any
- * blocking IO (VLOG is non-blocking, so that is OK).
- */
-
-#define CPVECTOR_FOR_EACH(PTR, CPVECTOR)                \
-    PVECTOR_FOR_EACH(PTR, cpvector_get_pvector(CPVECTOR))
-
-#define CPVECTOR_FOR_EACH_PRIORITY(PTR, PRIORITY, N, SZ, CPVECTOR)      \
-    PVECTOR_FOR_EACH_PRIORITY(PTR, PRIORITY, N, SZ,                     \
-                              cpvector_get_pvector(CPVECTOR))
-
-#define CPVECTOR_CURSOR_FOR_EACH(PTR, CURSOR, CPVECTOR)                 \
-    PVECTOR_CURSOR_FOR_EACH(PTR, CURSOR, cpvector_get_pvector(CPVECTOR))
-
-#define CPVECTOR_CURSOR_FOR_EACH_CONTINUE(PTR, CURSOR)  \
-    PVECTOR_CURSOR_FOR_EACH_CONTINUE(PTR, CURSOR)
-
-
 /* Inline implementations. */
 
 static inline struct pvector_cursor
-pvector_cursor_init(const struct pvector *pvec, size_t n_ahead,
-                    size_t obj_size)
+pvector_cursor_init(const struct pvector *pvec,
+                    size_t n_ahead, size_t obj_size)
 {
+    const struct pvector_impl *impl;
     struct pvector_cursor cursor;
 
-    ovs_prefetch_range(pvec->vector, pvec->size * sizeof pvec->vector[0]);
+    impl = ovsrcu_get(struct pvector_impl *, &pvec->impl);
 
-    cursor.size = pvec->size;
-    cursor.vector = pvec->vector;
+    ovs_prefetch_range(impl->vector, impl->size * sizeof impl->vector[0]);
+
+    cursor.size = impl->size;
+    cursor.vector = impl->vector;
     cursor.entry_idx = -1;
 
     for (size_t i = 0; i < n_ahead; i++) {
@@ -273,29 +212,23 @@ static inline void pvector_cursor_lookahead(const struct pvector_cursor *cursor,
     }
 }
 
-static inline struct pvector *
-cpvector_get_pvector(const struct cpvector *cpvec)
+static inline size_t pvector_count(const struct pvector *pvec)
 {
-    return ovsrcu_get(struct pvector *, &cpvec->impl);
+    return ovsrcu_get(struct pvector_impl *, &pvec->impl)->size;
 }
 
-static inline size_t cpvector_count(const struct cpvector *cpvec)
+static inline bool pvector_is_empty(const struct pvector *pvec)
 {
-    return cpvector_get_pvector(cpvec)->size;
+    return pvector_count(pvec) == 0;
 }
 
-static inline bool cpvector_is_empty(const struct cpvector *cpvec)
-{
-    return cpvector_count(cpvec) == 0;
-}
+void pvector_publish__(struct pvector *);
 
-void cpvector_publish__(struct cpvector *);
-
-/* Make the modified cpvector available for iteration. */
-static inline void cpvector_publish(struct cpvector *cpvec)
+/* Make the modified pvector available for iteration. */
+static inline void pvector_publish(struct pvector *pvec)
 {
-    if (cpvec->temp) {
-        cpvector_publish__(cpvec);
+    if (pvec->temp) {
+        pvector_publish__(pvec);
     }
 }
 
