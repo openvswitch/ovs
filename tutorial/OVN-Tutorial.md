@@ -17,7 +17,7 @@ section of [Tutorial.md].
 pass the `--ovn` flag.  For example, if running it straight from the ovs git
 tree you would run:
 
-    $ make sandbox SANDBOXFLAGS=”--ovn”
+    $ make sandbox SANDBOXFLAGS="--ovn"
 
 Running the sandbox with OVN enabled does the following additional steps to the
 environment:
