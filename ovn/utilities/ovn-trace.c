@@ -85,12 +85,12 @@ main(int argc, char *argv[])
     if (get_detach()) {
         if (argc != 0) {
             ovs_fatal(0, "non-option arguments not supported with --detach "
-                      "(use --help for help");
+                      "(use --help for help)");
         }
     } else {
         if (argc != 2) {
             ovs_fatal(0, "exactly two non-option arguments are required "
-                      "(use --help for help");
+                      "(use --help for help)");
         }
     }
 
