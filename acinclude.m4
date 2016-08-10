@@ -221,6 +221,29 @@ AC_DEFUN([OVS_CHECK_DPDK], [
       [AC_SEARCH_LIBS([get_mempolicy],[numa],[],[AC_MSG_ERROR([unable to find libnuma, install the dependency package])])
        DPDK_EXTRA_LIB="-lnuma"])
 
+    AC_COMPILE_IFELSE([
+      AC_LANG_PROGRAM(
+        [
+          #include <rte_config.h>
+#if RTE_LIBRTE_PMD_PCAP
+#error
+#endif
+        ], [])
+      ], [],
+      [AC_SEARCH_LIBS([pcap_dump],[pcap],[],[AC_MSG_ERROR([unable to find libpcap, install the dependency package])])
+       DPDK_EXTRA_LIB="-lpcap"
+       AC_COMPILE_IFELSE([
+         AC_LANG_PROGRAM(
+           [
+             #include <rte_config.h>
+#if RTE_LIBRTE_PDUMP
+#error
+#endif
+         ], [])
+       ], [],
+       [AC_DEFINE([DPDK_PDUMP], [1], [DPDK pdump enabled in OVS.])])
+     ])
+
     # On some systems we have to add -ldl to link with dpdk
     #
     # This code, at first, tries to link without -ldl (""),

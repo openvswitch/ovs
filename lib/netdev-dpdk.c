@@ -57,6 +57,9 @@
 #include "rte_config.h"
 #include "rte_mbuf.h"
 #include "rte_meter.h"
+#ifdef DPDK_PDUMP
+#include "rte_pdump.h"
+#endif
 #include "rte_virtio_net.h"
 
 VLOG_DEFINE_THIS_MODULE(dpdk);
@@ -3411,6 +3414,22 @@ dpdk_init__(const struct smap *ovs_other_config)
 #endif
 
     dpdk_vhost_class_init();
+
+#ifdef DPDK_PDUMP
+    VLOG_INFO("DPDK pdump packet capture enabled");
+    err = rte_pdump_init(ovs_rundir());
+    if (err) {
+        VLOG_INFO("Error initialising DPDK pdump");
+        rte_pdump_uninit();
+    } else {
+        char *server_socket_path;
+
+        server_socket_path = xasprintf("%s/%s", ovs_rundir(),
+                                       "pdump_server_socket");
+        fatal_signal_add_file_to_unlink(server_socket_path);
+        free(server_socket_path);
+    }
+#endif
 
     /* Finally, register the dpdk classes */
     netdev_dpdk_register();

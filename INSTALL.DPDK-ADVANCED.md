@@ -12,7 +12,8 @@ OVS DPDK ADVANCED INSTALL GUIDE
 7. [QOS](#qos)
 8. [Rate Limiting](#rl)
 9. [Flow Control](#fc)
-10. [Vsperf](#vsperf)
+10. [Pdump](#pdump)
+11. [Vsperf](#vsperf)
 
 ## <a name="overview"></a> 1. Overview
 
@@ -947,7 +948,40 @@ respective parameter. To disable the flow control at tx side,
 
 `ovs-vsctl set Interface dpdk0 options:tx-flow-ctrl=false`
 
-## <a name="vsperf"></a> 10. Vsperf
+## <a name="pdump"></a> 10. Pdump
+
+Pdump allows you to listen on DPDK ports and view the traffic that is
+passing on them. To use this utility, one must have libpcap installed
+on the system. Furthermore, DPDK must be built with CONFIG_RTE_LIBRTE_PDUMP=y
+and CONFIG_RTE_LIBRTE_PMD_PCAP=y.
+
+To use pdump, simply launch OVS as usual. Then, navigate to the 'app/pdump'
+directory in DPDK, 'make' the application and run like so:
+
+```
+sudo ./build/app/dpdk_pdump --
+--pdump port=0,queue=0,rx-dev=/tmp/pkts.pcap
+--server-socket-path=/usr/local/var/run/openvswitch
+```
+
+The above command captures traffic received on queue 0 of port 0 and stores
+it in /tmp/pkts.pcap. Other combinations of port numbers, queues numbers and
+pcap locations are of course also available to use. 'server-socket-path' must
+be set to the value of ovs_rundir() which typically resolves to
+'/usr/local/var/run/openvswitch'.
+More information on the pdump app and its usage can be found in the below link.
+
+http://dpdk.org/doc/guides/sample_app_ug/pdump.html
+
+Many tools are available to view the contents of the pcap file. Once example is
+tcpdump. Issue the following command to view the contents of 'pkts.pcap':
+
+`tcpdump -r pkts.pcap`
+
+A performance decrease is expected when using a monitoring application like
+the DPDK pdump app.
+
+## <a name="vsperf"></a> 11. Vsperf
 
 Vsperf project goal is to develop vSwitch test framework that can be used to
 validate the suitability of different vSwitch implementations in a Telco deployment
