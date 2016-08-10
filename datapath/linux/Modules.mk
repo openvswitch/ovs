@@ -82,6 +82,7 @@ openvswitch_headers += \
 	linux/compat/include/net/mpls.h \
 	linux/compat/include/net/net_namespace.h \
 	linux/compat/include/net/netlink.h \
+	linux/compat/include/net/protocol.h \
 	linux/compat/include/net/route.h \
 	linux/compat/include/net/rtnetlink.h \
 	linux/compat/include/net/udp.h \

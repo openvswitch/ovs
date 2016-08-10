@@ -667,6 +667,10 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/udp.h], [no_check6_tx])
   OVS_GREP_IFELSE([$KSRC/include/linux/utsrelease.h], [el6],
                   [OVS_DEFINE([HAVE_RHEL6_PER_CPU])])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/protocol.h],
+                        [udp_add_offload], [net],
+                        [OVS_DEFINE([HAVE_UDP_ADD_OFFLOAD_TAKES_NET])])
+
 
   if cmp -s datapath/linux/kcompat.h.new \
             datapath/linux/kcompat.h >/dev/null 2>&1; then
