@@ -1373,14 +1373,13 @@ netdev_dpdk_vhost_update_tx_counters(struct netdev_stats *stats,
 
 static void
 __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
-                         struct dp_packet **pkts, int cnt,
-                         bool may_steal)
+                         struct dp_packet **pkts, int cnt)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_mbuf **cur_pkts = (struct rte_mbuf **) pkts;
     unsigned int total_pkts = cnt;
-    unsigned int qos_pkts = cnt;
-    int retries = 0;
+    unsigned int qos_pkts = 0;
+    int i, retries = 0;
 
     qid = dev->tx_q[qid % netdev->n_txq].map;
 
@@ -1396,7 +1395,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
 
     /* Check has QoS has been configured for the netdev */
     cnt = netdev_dpdk_qos_run__(dev, cur_pkts, cnt);
-    qos_pkts -= cnt;
+    qos_pkts = total_pkts - cnt;
 
     do {
         int vhost_qid = qid * VIRTIO_QNUM + VIRTIO_RXQ;
@@ -1423,12 +1422,8 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
     rte_spinlock_unlock(&dev->stats_lock);
 
 out:
-    if (may_steal) {
-        int i;
-
-        for (i = 0; i < total_pkts; i++) {
-            dp_packet_delete(pkts[i]);
-        }
+    for (i = 0; i < total_pkts - qos_pkts; i++) {
+        dp_packet_delete(pkts[i]);
     }
 }
 
@@ -1488,7 +1483,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
 
     if (dev->type == DPDK_DEV_VHOST) {
         __netdev_dpdk_vhost_send(netdev, qid, (struct dp_packet **) mbufs,
-                                 newcnt, true);
+                                 newcnt);
     } else {
         unsigned int qos_pkts = newcnt;
 
@@ -1516,13 +1511,12 @@ netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
                        bool may_steal, bool concurrent_txq OVS_UNUSED)
 {
 
-    if (OVS_UNLIKELY(batch->packets[0]->source != DPBUF_DPDK)) {
+    if (OVS_UNLIKELY(!may_steal || batch->packets[0]->source != DPBUF_DPDK)) {
         dpdk_do_tx_copy(netdev, qid, batch);
         dp_packet_delete_batch(batch, may_steal);
     } else {
         dp_packet_batch_apply_cutlen(batch);
-        __netdev_dpdk_vhost_send(netdev, qid, batch->packets, batch->count,
-                                 may_steal);
+        __netdev_dpdk_vhost_send(netdev, qid, batch->packets, batch->count);
     }
     return 0;
 }
