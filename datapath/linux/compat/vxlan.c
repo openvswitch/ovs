@@ -373,65 +373,56 @@ static int vxlan_gro_complete(struct sk_buff *skb, int nhoff,
 /* Notify netdevs that UDP port started listening */
 static void vxlan_notify_add_rx_port(struct vxlan_sock *vs)
 {
-#ifdef HAVE_NDO_ADD_VXLAN_PORT
 	struct net_device *dev;
 	struct sock *sk = vs->sock->sk;
 	struct net *net = sock_net(sk);
 	sa_family_t sa_family = vxlan_get_sk_family(vs);
-	__be16 port = inet_sk(sk)->inet_sport;
 
-	rcu_read_lock();
-	for_each_netdev_rcu(net, dev) {
-		if (dev->netdev_ops->ndo_add_vxlan_port)
-			dev->netdev_ops->ndo_add_vxlan_port(dev, sa_family,
-							    port);
-	}
-	rcu_read_unlock();
-#else
-
-#ifdef HAVE_UDP_OFFLOAD
-	struct net_device *dev;
-	struct sock *sk = vs->sock->sk;
-	sa_family_t sa_family = vxlan_get_sk_family(vs);
 
 	if (sa_family == AF_INET) {
 		int err;
 
-		err = udp_add_offload(&vs->udp_offloads);
+		err = udp_add_offload(net, &vs->udp_offloads);
 		if (err)
 			pr_warn("vxlan: udp_add_offload failed with status %d\n", err);
 	}
 
+	rcu_read_lock();
+	for_each_netdev_rcu(net, dev) {
+#ifdef HAVE_NDO_ADD_VXLAN_PORT
+		__be16 port = inet_sk(sk)->inet_sport;
+
+		if (dev->netdev_ops->ndo_add_vxlan_port)
+			dev->netdev_ops->ndo_add_vxlan_port(dev, sa_family,
+					port);
 #endif
-#endif
+	}
+	rcu_read_unlock();
 }
 
 /* Notify netdevs that UDP port is no more listening */
 static void vxlan_notify_del_rx_port(struct vxlan_sock *vs)
 {
-#ifdef HAVE_NDO_ADD_VXLAN_PORT
 	struct net_device *dev;
 	struct sock *sk = vs->sock->sk;
 	struct net *net = sock_net(sk);
 	sa_family_t sa_family = vxlan_get_sk_family(vs);
-	__be16 port = inet_sk(sk)->inet_sport;
 
 	rcu_read_lock();
 	for_each_netdev_rcu(net, dev) {
+#ifdef HAVE_NDO_ADD_VXLAN_PORT
+		__be16 port = inet_sk(sk)->inet_sport;
+
 		if (dev->netdev_ops->ndo_del_vxlan_port)
 			dev->netdev_ops->ndo_del_vxlan_port(dev, sa_family,
-							    port);
+					port);
+#endif
 	}
 	rcu_read_unlock();
-#else
-#ifdef HAVE_UDP_OFFLOAD
-	struct sock *sk = vs->sock->sk;
-	sa_family_t sa_family = vxlan_get_sk_family(vs);
 
 	if (sa_family == AF_INET) {
 		udp_del_offload(&vs->udp_offloads);
-#endif
-#endif
+	}
 }
 
 /* See if multicast group is already in use by other ID */
