@@ -159,7 +159,7 @@
     <h1>Open vSwitch Database Usage</h1>
 
     <p>
-      <code>ovn-controller</code> uses a number of <code>external-ids</code>
+      <code>ovn-controller</code> uses a number of <code>external_ids</code>
       keys in the Open vSwitch database to keep track of ports and interfaces.
       For proper operation, users should not change or clear these keys:
     </p>
@@ -176,7 +176,7 @@
       </dd>
 
       <dt>
-        <code>external-ids:ovn-localnet-port</code> in the <code>Port</code>
+        <code>external_ids:ovn-localnet-port</code> in the <code>Port</code>
         table
       </dt>
       <dd>
@@ -193,13 +193,13 @@
         <p>
           Each <code>localnet</code> logical port is implemented as a pair of
           patch ports, one in the integration bridge, one in a different
-          bridge, with the same <code>external-ids:ovn-localnet-port</code>
+          bridge, with the same <code>external_ids:ovn-localnet-port</code>
           value.
         </p>
       </dd>
 
       <dt>
-        <code>external-ids:ovn-l2gateway-port</code> in the <code>Port</code>
+        <code>external_ids:ovn-l2gateway-port</code> in the <code>Port</code>
         table
       </dt>
       <dd>
@@ -216,13 +216,13 @@
         <p>
           Each <code>l2gateway</code> logical port is implemented as a pair
           of patch ports, one in the integration bridge, one in a different
-          bridge, with the same <code>external-ids:ovn-l2gateway-port</code>
+          bridge, with the same <code>external_ids:ovn-l2gateway-port</code>
           value.
         </p>
       </dd>
 
       <dt>
-        <code>external-ids:ovn-logical-patch-port</code> in the
+        <code>external_ids:ovn-logical-patch-port</code> in the
         <code>Port</code> table
       </dt>
 

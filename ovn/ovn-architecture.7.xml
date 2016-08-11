@@ -447,7 +447,7 @@
       where the VM is powered on, the integration between the hypervisor and
       Open vSwitch (described in <code>IntegrationGuide.md</code>) adds the VIF
       to the OVN integration bridge and stores <var>vif-id</var> in
-      <code>external-ids</code>:<code>iface-id</code> to indicate that the
+      <code>external_ids</code>:<code>iface-id</code> to indicate that the
       interface is an instantiation of the new VIF.  (None of this code is new
       in OVN; this is pre-existing integration work that has already been done
       on hypervisors that support OVS.)
@@ -455,10 +455,10 @@
 
     <li>
       On the hypervisor where the VM is powered on, <code>ovn-controller</code>
-      notices <code>external-ids</code>:<code>iface-id</code> in the new
+      notices <code>external_ids</code>:<code>iface-id</code> in the new
       Interface. In response, in the OVN Southbound DB, it updates the
       <code>Binding</code> table's <code>chassis</code> column for the
-      row that links the logical port from <code>external-ids</code>:<code>
+      row that links the logical port from <code>external_ids</code>:<code>
       iface-id</code> to the hypervisor. Afterward, <code>ovn-controller</code>
       updates the local hypervisor's OpenFlow tables so that packets to and from
       the VIF are properly handled.
@@ -632,7 +632,7 @@
       <code>parent_port</code> column of <code>Binding</code> table, the
       <code>ovn-controller</code> in the hypervisor whose OVN integration bridge
       has that same value in <var>vif-id</var> in
-      <code>external-ids</code>:<code>iface-id</code>
+      <code>external_ids</code>:<code>iface-id</code>
       updates the local hypervisor's OpenFlow tables so that packets to and
       from the VIF with the particular VLAN <code>tag</code> are properly
       handled.  Afterward it updates the <code>chassis</code> column of
