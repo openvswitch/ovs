@@ -187,8 +187,6 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 	 * make copy of it to restore it back. */
 	memcpy(cb, skb->cb, sizeof(cb));
 
-	skb->encapsulation = 0;
-
 	/* We are handling offloads by segmenting l3 packet, so
 	 * no need to call OVS compat segmentation function. */
 
@@ -238,6 +236,9 @@ static int output_ip(struct sk_buff *skb)
 
 int rpl_ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
+	/* This bit set can confuse some drivers on old kernel. */
+	skb->encapsulation = 0;
+
 	if (!OVS_GSO_CB(skb)->fix_segment)
 		return output_ip(skb);
 
@@ -281,6 +282,8 @@ static int output_ipv6(struct sk_buff *skb)
 
 int rpl_ip6_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
+	/* This bit set can confuse some drivers on old kernel. */
+	skb->encapsulation = 0;
 
 	if (!OVS_GSO_CB(skb)->fix_segment)
 		return output_ipv6(skb);
