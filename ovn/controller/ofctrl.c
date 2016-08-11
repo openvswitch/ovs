@@ -20,6 +20,7 @@
 #include "flow.h"
 #include "hash.h"
 #include "hindex.h"
+#include "lflow.h"
 #include "ofctrl.h"
 #include "openflow/openflow.h"
 #include "openvswitch/dynamic-string.h"
@@ -368,6 +369,7 @@ run_S_CLEAR_FLOWS(void)
 
     /* Clear installed_flows, to match the state of the switch. */
     ovn_flow_table_clear();
+    lflow_reset_processing();
 
     /* Clear existing groups, to match the state of the switch. */
     if (groups) {
@@ -805,6 +807,11 @@ ovn_flow_table_clear(void)
     HMAP_FOR_EACH_SAFE (f, next, match_hmap_node, &match_flow_table) {
         hmap_remove(&match_flow_table, &f->match_hmap_node);
         hindex_remove(&uuid_flow_table, &f->uuid_hindex_node);
+        ovn_flow_destroy(f);
+    }
+
+    HMAP_FOR_EACH_SAFE (f, next, match_hmap_node, &installed_flows) {
+        hmap_remove(&installed_flows, &f->match_hmap_node);
         ovn_flow_destroy(f);
     }
 }

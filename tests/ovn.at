@@ -4309,3 +4309,98 @@ AT_CHECK([cat received2.packets], [0], [expout])
 OVN_CLEANUP([hv1])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- ovs-vswitchd restart])
+AT_KEYWORDS([vswitchd restart])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl ls-add ls1
+
+ovn-nbctl lsp-add ls1 ls1-lp1 \
+-- lsp-set-addresses ls1-lp1 "f0:00:00:00:00:01 10.0.0.4"
+
+ovn-nbctl lsp-set-port-security ls1-lp1 "f0:00:00:00:00:01 10.0.0.4"
+
+net_add n1
+sim_add hv1
+
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=ls1-lp1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+ovn_populate_arp
+sleep 2
+
+as hv1 ovs-vsctl show
+
+echo "---------------------"
+ovn-sbctl dump-flows
+echo "---------------------"
+
+echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl dump-flows br-int
+total_flows=`as hv1 ovs-ofctl dump-flows br-int | wc -l`
+
+echo "Total flows before vswitchd restart = " $total_flows
+
+# Code taken from ovs-save utility
+save_flows () {
+    echo "ovs-ofctl add-flows br-int - << EOF" > restore_flows.sh
+    as hv1 ovs-ofctl dump-flows "br-int" | sed -e '/NXST_FLOW/d' \
+            -e 's/\(idle\|hard\)_age=[^,]*,//g' >> restore_flows.sh
+    echo "EOF" >> restore_flows.sh
+}
+
+restart_vswitchd () {
+    restore_flows=$1
+
+    if test $restore_flows = true; then
+        save_flows
+    fi
+
+    as hv1
+    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+
+    if test $restore_flows = true; then
+        as hv1
+        ovs-vsctl --no-wait set open_vswitch . other_config:flow-restore-wait="true"
+    fi
+
+    as hv1
+    start_daemon ovs-vswitchd --enable-dummy=system -vvconn -vofproto_dpif -vunixctl
+    ovs-ofctl dump-flows br-int
+
+    if test $restore_flows = true; then
+        sh ./restore_flows.sh
+        echo "Flows after restore"
+        as hv1
+        ovs-ofctl dump-flows br-int
+        ovs-vsctl --no-wait --if-exists remove open_vswitch . other_config \
+            flow-restore-wait="true"
+    fi
+}
+
+# Save the flows, restart vswitchd and restore the flows
+restart_vswitchd true
+OVS_WAIT_UNTIL([
+    total_flows_after_restart=`as hv1 ovs-ofctl dump-flows br-int | wc -l`
+    echo "Total flows after vswitchd restart = " $total_flows_after_restart
+    test "${total_flows}" = "${total_flows_after_restart}"
+])
+
+# Restart vswitchd without restoring
+restart_vswitchd false
+OVS_WAIT_UNTIL([
+    total_flows_after_restart=`as hv1 ovs-ofctl dump-flows br-int | wc -l`
+    echo "Total flows after vswitchd restart = " $total_flows_after_restart
+    test "${total_flows}" = "${total_flows_after_restart}"
+])
+
+OVN_CLEANUP([hv1])
+AT_CLEANUP
