@@ -217,7 +217,7 @@ Tunnel - Geneve       |      3.18      |       YES      |    YES    |   YES   |
 Tunnel - GRE-IPv6     |      NO        |       NO       |    YES    |   NO    |
 Tunnel - VXLAN-IPv6   |      4.3       |       YES      |    YES    |   NO    |
 Tunnel - Geneve-IPv6  |      4.4       |       YES      |    YES    |   NO    |
-QoS - Policing        |      YES       |       YES      |    NO     |   NO    |
+QoS - Policing        |      YES       |       YES      |    YES    |   NO    |
 QoS - Shaping         |      YES       |       YES      |    NO     |   NO    |
 sFlow                 |      YES       |       YES      |    YES    |   NO    |
 IPFIX                 |      3.10      |       YES      |    YES    |   NO    |
@@ -261,7 +261,7 @@ A: The following table lists the DPDK version against which the
 |    2.3.x     | 1.6
 |    2.4.x     | 2.0
 |    2.5.x     | 2.2
-|    2.6.x     | 16.04
+|    2.6.x     | 16.07
 
 ### Q: I get an error like this when I configure Open vSwitch:
 
