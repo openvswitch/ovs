@@ -401,7 +401,7 @@ struct dpif_class {
     /* Conntrack entry dumping interface.
      *
      * These functions are used by ct-dpif.c to provide a datapath-agnostic
-     * dumping interface to the connection trackes provided by the
+     * dumping interface to the connection trackers provided by the
      * datapaths.
      *
      * ct_dump_start() should put in '*state' a pointer to a newly allocated
@@ -412,11 +412,11 @@ struct dpif_class {
      * ct_dump_next() should fill 'entry' with information from a connection
      * and prepare to dump the next one on a subsequest invocation.
      *
-     * ct_dump_done should perform any cleanup necessary (including
+     * ct_dump_done() should perform any cleanup necessary (including
      * deallocating the 'state' structure, if applicable). */
     int (*ct_dump_start)(struct dpif *, struct ct_dpif_dump_state **state,
                          const uint16_t *zone);
-    int (*ct_dump_next)(struct dpif *, struct ct_dpif_dump_state *,
+    int (*ct_dump_next)(struct dpif *, struct ct_dpif_dump_state *state,
                         struct ct_dpif_entry *entry);
     int (*ct_dump_done)(struct dpif *, struct ct_dpif_dump_state *state);
 
