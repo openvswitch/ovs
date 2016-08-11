@@ -1645,7 +1645,6 @@ AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows1.txt])
 
 OVS_START_L7([at_ns0], [ftp])
 OVS_START_L7([at_ns1], [ftp])
-OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p1->p0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
@@ -1730,7 +1729,6 @@ dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 
 OVS_START_L7([at_ns1], [ftp])
-OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
@@ -2537,7 +2535,6 @@ m4_define([CHECK_FTP_NAT],
     AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
     OVS_START_L7([at_ns1], [ftp])
-    OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
     dnl FTP requests from p0->p1 should work fine.
     NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
@@ -2775,7 +2772,6 @@ dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 
 OVS_START_L7([at_ns1], [ftp])
-OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
 NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
