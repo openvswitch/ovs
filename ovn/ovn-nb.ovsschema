@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
     "version": "5.3.1",
-    "cksum": "3864094809 9343",
+    "cksum": "1921908091 9353",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -30,7 +30,7 @@
                                                   "refTable": "Load_Balancer",
                                                   "refType": "strong"},
                                            "min": 0,
-                                           "max": 1}},
+                                           "max": "unlimited"}},
                 "other_config": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}},

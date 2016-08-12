@@ -2004,11 +2004,11 @@ build_pre_lb(struct ovn_datapath *od, struct hmap *lflows)
     ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_LB, 0, "1", "next;");
 
     struct sset all_ips = SSET_INITIALIZER(&all_ips);
-    if (od->nbs->load_balancer) {
-        struct nbrec_load_balancer *lb = od->nbs->load_balancer;
+    bool vip_configured = false;
+    for (int i = 0; i < od->nbs->n_load_balancer; i++) {
+        struct nbrec_load_balancer *lb = od->nbs->load_balancer[i];
         struct smap *vips = &lb->vips;
         struct smap_node *node;
-        bool vip_configured = false;
 
         SMAP_FOR_EACH (node, vips) {
             vip_configured = true;
@@ -2032,23 +2032,23 @@ build_pre_lb(struct ovn_datapath *od, struct hmap *lflows)
              * the packet through ct() action to de-fragment. In stateful
              * table, we will eventually look at L4 information. */
         }
+    }
 
-        /* 'REGBIT_CONNTRACK_DEFRAG' is set to let the pre-stateful table send
-         * packet to conntrack for defragmentation. */
-        const char *ip_address;
-        SSET_FOR_EACH(ip_address, &all_ips) {
-            char *match = xasprintf("ip && ip4.dst == %s", ip_address);
-            ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_LB,
-                          100, match, REGBIT_CONNTRACK_DEFRAG" = 1; next;");
-            free(match);
-        }
+    /* 'REGBIT_CONNTRACK_DEFRAG' is set to let the pre-stateful table send
+     * packet to conntrack for defragmentation. */
+    const char *ip_address;
+    SSET_FOR_EACH(ip_address, &all_ips) {
+        char *match = xasprintf("ip && ip4.dst == %s", ip_address);
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_LB,
+                      100, match, REGBIT_CONNTRACK_DEFRAG" = 1; next;");
+        free(match);
+    }
 
-        sset_destroy(&all_ips);
+    sset_destroy(&all_ips);
 
-        if (vip_configured) {
-            ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_LB,
-                          100, "ip", REGBIT_CONNTRACK_DEFRAG" = 1; next;");
-        }
+    if (vip_configured) {
+        ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_LB,
+                      100, "ip", REGBIT_CONNTRACK_DEFRAG" = 1; next;");
     }
 }
 
@@ -2389,8 +2389,8 @@ build_stateful(struct ovn_datapath *od, struct hmap *lflows)
      * a higher priority rule for load balancing below also commits the
      * connection, so it is okay if we do not hit the above match on
      * REGBIT_CONNTRACK_COMMIT. */
-    if (od->nbs->load_balancer) {
-        struct nbrec_load_balancer *lb = od->nbs->load_balancer;
+    for (int i = 0; i < od->nbs->n_load_balancer; i++) {
+        struct nbrec_load_balancer *lb = od->nbs->load_balancer[i];
         struct smap *vips = &lb->vips;
         struct smap_node *node;
 
