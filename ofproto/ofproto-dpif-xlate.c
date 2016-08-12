@@ -637,7 +637,7 @@ static struct vlog_rate_limit error_report_rl = VLOG_RATE_LIMIT_INIT(1, 5);
             ds_put_format(&ds, __VA_ARGS__);                    \
             ds_put_cstr(&ds, ": ");                             \
             flow_format(&ds, &ctx->base_flow);                  \
-            VLOG_ERR_RL(&error_report_rl, ds_cstr(&ds));        \
+            VLOG_ERR_RL(&error_report_rl, "%s", ds_cstr(&ds));  \
             ds_destroy(&ds);                                    \
         }                                                       \
     } while (0)
