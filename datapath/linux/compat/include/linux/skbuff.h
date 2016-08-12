@@ -388,7 +388,7 @@ static inline unsigned char *skb_pull_rcsum(struct sk_buff *skb, unsigned int le
 
 #endif
 
-#ifndef HAVE_SKB_SCRUB_PACKET_XNET
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0)
 #define skb_scrub_packet rpl_skb_scrub_packet
 void rpl_skb_scrub_packet(struct sk_buff *skb, bool xnet);
 #endif

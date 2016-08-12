@@ -282,7 +282,7 @@ void rpl_kfree_skb_list(struct sk_buff *segs)
 EXPORT_SYMBOL(rpl_kfree_skb_list);
 #endif
 
-#ifndef HAVE_SKB_SCRUB_PACKET_XNET
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0)
 
 #define nf_reset_trace rpl_nf_reset_trace
 static void nf_reset_trace(struct sk_buff *skb)
