@@ -431,6 +431,7 @@ pwindows_accept(struct pstream *pstream, struct stream **new_streamp)
             } else {
                 VLOG_ERR_RL(&rl, "Could not connect named pipe. Last "
                             "error: %s", ovs_lasterror_to_string());
+                DisconnectNamedPipe(p->fd);
                 return EINVAL;
             }
         }
@@ -446,6 +447,7 @@ pwindows_accept(struct pstream *pstream, struct stream **new_streamp)
         } else if (last_error != ERROR_PIPE_CONNECTED) {
             VLOG_ERR_RL(&rl, "Could not connect synchronous named pipe. Last "
                         "error: %s", ovs_lasterror_to_string());
+            DisconnectNamedPipe(p->fd);
             return EINVAL;
         } else {
             /* If the pipe is connected, signal an event. */
