@@ -701,7 +701,7 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
     int diag;
     int n_rxq, n_txq;
 
-    if (dev->port_id < 0 || dev->port_id >= rte_eth_dev_count()) {
+    if (!rte_eth_dev_is_valid_port(dev->port_id)) {
         return ENODEV;
     }
 
@@ -2160,8 +2160,9 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_eth_dev_info dev_info;
 
-    if (dev->port_id < 0)
+    if (!rte_eth_dev_is_valid_port(dev->port_id)) {
         return ENODEV;
+    }
 
     ovs_mutex_lock(&dev->mutex);
     rte_eth_dev_info_get(dev->port_id, &dev_info);
