@@ -86,12 +86,11 @@ Release Scheduling
 Open vSwitch makes releases at the following six-month cadence, which
 of course is subject to change.
 
-time      
-(months)  approx dates    event
---------  -------------   -----------------------------------------
-T         Apr 1  Oct 1    release cycle for version x.y begins
-T + 4     Aug 1  Feb 1    branch-x.y forks from master
-T + 5.5   Sep 15 Mar 15   branch-x.y released as version x.y.0
+| Time (months) | Approximate Dates | Event                                |
+|---------------|-------------------|--------------------------------------|
+| T             | Apr 1, Oct 1      | Release cycle for version x.y begins |
+| T + 4         | Aug 1, Feb 1      | branch-x.y forks from master         |
+| T + 5.5       | Sep 15, Mar 15    | branch-x.y released as version x.y.0 |
 
 Contact
 -------
