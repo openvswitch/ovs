@@ -4911,7 +4911,7 @@ dpcls_create_subtable(struct dpcls *cls, const struct netdev_flow_key *mask)
     cmap_insert(&cls->subtables_map, &subtable->cmap_node, mask->hash);
     /* Add the new subtable at the end of the pvector (with no hits yet) */
     pvector_insert(&cls->subtables, subtable, 0);
-    VLOG_DBG("Creating %lu. subtable %p for in_port %d",
+    VLOG_DBG("Creating %"PRIuSIZE". subtable %p for in_port %d",
              cmap_count(&cls->subtables_map), subtable, cls->in_port);
     pvector_publish(&cls->subtables);
 
