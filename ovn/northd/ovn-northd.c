@@ -1117,7 +1117,7 @@ join_logical_ports(struct northd_context *ctx,
             if (peer) {
                 if (peer->nbrp) {
                     op->peer = peer;
-                } else {
+                } else if (peer->nbsp) {
                     /* An ovn_port for a switch port of type "router" does have
                      * a router port as its peer (see the case above for
                      * "router" ports), but this is set via options:router-port
