@@ -773,7 +773,6 @@ void ovsdb_idl_condition_add_clause(struct ovsdb_idl *idl,
                                     struct ovsdb_datum *arg)
 {
     struct ovsdb_idl_table *table = ovsdb_idl_table_from_class(idl, tc);
-    struct ovsdb_idl_clause *clause = xzalloc(sizeof *clause);
     const struct ovsdb_type *type = NULL;
     struct ovsdb_idl_clause *c;
 
@@ -786,6 +785,7 @@ void ovsdb_idl_condition_add_clause(struct ovsdb_idl *idl,
         }
     }
 
+    struct ovsdb_idl_clause *clause = xzalloc(sizeof *clause);
     ovs_list_init(&clause->node);
     clause->function = function;
     clause->column = column;
