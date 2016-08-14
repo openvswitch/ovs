@@ -1808,6 +1808,14 @@ struct mf_bitmap {
 #error "Need to update CASE_MFF_XXREGS to match FLOW_N_XXREGS"
 #endif
 
+static inline bool
+mf_is_register(enum mf_field_id id)
+{
+    return ((id >= MFF_REG0   && id < MFF_REG0   + FLOW_N_REGS) ||
+            (id >= MFF_XREG0  && id < MFF_XREG0  + FLOW_N_XREGS) ||
+            (id >= MFF_XXREG0 && id < MFF_XXREG0 + FLOW_N_XXREGS));
+}
+
 /* Use this macro as CASE_MFF_TUN_METADATA: in a switch statement to choose
  * all of the MFF_TUN_METADATAn cases. */
 #define CASE_MFF_TUN_METADATA                         \

@@ -436,6 +436,7 @@ EXTRA_DIST += \
 	lib/dh2048.pem \
 	lib/dh4096.pem \
 	lib/common.xml \
+	lib/daemon.xml \
 	lib/dirs.c.in \
 	lib/db-ctl-base.xml \
 	lib/ssl.xml \

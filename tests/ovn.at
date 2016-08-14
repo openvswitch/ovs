@@ -1106,6 +1106,7 @@ ip_to_hex() {
 # 9. ARP requests to known IPs are responded directly.
 #
 # 10. No response to ARP requests for unknown IPs.
+
 for is in 1 2 3; do
     for js in 1 2 3; do
         s=$is$js
@@ -1225,6 +1226,221 @@ for i in 1 2 3; do
 done
 
 OVN_CLEANUP([hv1],[hv2],[hv3])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- trace 1 LS, 3 LSPs])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Create a logical switch and some logical ports.
+# Turn on port security on all lports except ls1.
+# Make ls1 a destination for unknown MACs.
+# Add some ACLs for Ethertypes 1234, 1235, 1236.
+ovn-nbctl ls-add lsw0
+ovn-sbctl chassis-add hv0 geneve 127.0.0.1
+for i in 1 2 3; do
+    ovn-nbctl lsp-add lsw0 lp$i
+    ovn-sbctl lsp-bind lp$i hv0
+    if test $i = 1; then
+	ovn-nbctl lsp-set-addresses lp$i "f0:00:00:00:00:0$i 192.168.0.$i" unknown
+    else
+	if test $i = 3; then
+	    ip_addrs="192.168.0.$i fe80::ea2a:eaff:fe28:$i/64 192.169.0.$i"
+	else
+	    ip_addrs="192.168.0.$i"
+	fi
+	ovn-nbctl lsp-set-addresses lp$i "f0:00:00:00:00:$i $ip_addrs"
+	ovn-nbctl lsp-set-port-security lp$i f0:00:00:00:00:$i
+    fi
+done
+ovn-nbctl acl-add lsw0 from-lport 1000 'eth.type == 0x1234' drop
+ovn-nbctl acl-add lsw0 from-lport 1000 'eth.type == 0x1235 && inport == "lp1"' drop
+ovn-nbctl acl-add lsw0 to-lport 1000 'eth.type == 0x1236 && outport == "lp3"' drop
+ovn-nbctl create Address_Set name=set1 addresses=\"f0:00:00:00:00:01\",\"f0:00:00:00:00:02\"
+ovn-nbctl acl-add lsw0 to-lport 1000 'eth.type == 0x1237 && eth.src == $set1 && outport == "lp3"' drop
+
+ovn-nbctl --wait=sb sync
+on_exit 'kill `cat ovn-trace.pid`'
+ovn-trace --detach --pidfile --no-chdir
+
+# test_packet INPORT DST SRC [-vlan] [-eth TYPE] OUTPORT...
+#
+# This shell function causes a packet to be received on INPORT.  The packet's
+# content has Ethernet destination DST and source SRC (each exactly 12 hex
+# digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
+# more) list the VIFs on which the packet should be received.  INPORT and the
+# OUTPORTs are specified as logical switch port numbers, e.g. 11 for vif11.
+test_packet() {
+    local inport=$1 eth_dst=$2 eth_src=$3; shift; shift; shift
+    uflow="inport==\"lp$inport\" && eth.dst==$eth_dst && eth.src==$eth_src"
+    while :; do
+    	case $1 in # (
+	    -vlan) uflow="$uflow && vlan.vid == 1234"; shift ;; # (
+	    -eth) uflow="$uflow && eth.type == 0x$2"; shift; shift ;; # (
+	    *) break ;;
+	esac
+    done
+    for outport; do
+	echo "output(\"lp$outport\");"
+    done > expout
+
+    AT_CAPTURE_FILE([trace])
+    AT_CHECK([ovs-appctl -t ovn-trace trace --all lsw0 "$uflow" | tee trace | sed '1,/Minimal trace/d'], [0], [expout])
+}
+
+# test_arp INPORT SHA SPA TPA [REPLY_HA]
+#
+# Causes a packet to be received on INPORT.  The packet is an ARP
+# request with SHA, SPA, and TPA as specified.  If REPLY_HA is provided, then
+# it should be the hardware address of the target to expect to receive in an
+# ARP reply; otherwise no reply is expected.
+#
+# INPORT is an logical switch port number, e.g. 11 for vif11.
+# SHA and REPLY_HA are each 12 hex digits.
+# SPA and TPA are each 8 hex digits.
+test_arp() {
+    local inport=$1 sha=$2 spa=$3 tpa=$4 reply_ha=$5
+
+    local request="inport == \"lp$inport\"
+                   && eth.dst == ff:ff:ff:ff:ff:ff && eth.src == $sha
+                   && arp.op == 1 && arp.sha == $sha && arp.spa == $spa
+		   && arp.tha == ff:ff:ff:ff:ff:ff && arp.tpa == $tpa"
+
+    if test -z "$reply_ha"; then
+        reply=
+	local i
+	for i in 1 2 3; do
+	    if test $i != $inport; then
+		reply="${reply}output(\"lp$i\");
+"
+	    fi
+	done
+    else
+        reply="\
+eth.dst = $sha;
+eth.src = $reply_ha;
+arp.op = 2;
+arp.tha = $sha;
+arp.sha = $reply_ha;
+arp.tpa = $spa;
+arp.spa = $tpa;
+output(\"lp$inport\");
+"
+    fi
+
+    AT_CAPTURE_FILE([trace])
+    AT_CHECK_UNQUOTED([ovs-appctl -t ovn-trace trace --all lsw0 "$request" | tee trace | sed '1,/Minimal trace/d'], [0], [$reply])
+}
+
+# Send packets between all pairs of source and destination ports:
+#
+# 1. Unicast packets are delivered to exactly one logical switch port
+#    (except that packets destined to their input ports are dropped).
+#
+# 2. Broadcast and multicast are delivered to all logical switch ports
+#    except the input port.
+#
+# 3. When port security is turned on, the switch drops packets from the wrong
+#    MAC address.
+#
+# 4. The switch drops all packets with a VLAN tag.
+#
+# 5. The switch drops all packets with a multicast source address.  (This only
+#    affects behavior when port security is turned off, since otherwise port
+#    security would drop the packet anyway.)
+#
+# 6. The switch delivers packets with an unknown destination to logical
+#    switch ports with "unknown" among their MAC addresses (and port
+#    security disabled).
+#
+# 7. The switch drops unicast packets that violate an ACL.
+#
+# 8. The switch drops multicast and broadcast packets that violate an ACL.
+#
+# 9. ARP requests to known IPs are responded directly.
+#
+# 10. No response to ARP requests for unknown IPs.
+
+for s in 1 2 3; do
+    bcast=
+    unknown=
+    bacl2=
+    bacl3=
+    for d in 1 2 3; do
+	echo
+	echo "lp$s -> lp$d"
+	if test $d != $s; then unicast=$d; else unicast=; fi
+	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s $unicast      #1
+
+	if test $d != $s && test $s = 1; then
+	    impersonate=$d
+	else
+	    impersonate=
+	fi
+	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:55 $impersonate   #3
+
+	if test $d != $s && test $s != 1; then acl2=$d; else acl2=; fi
+	if test $d != $s && test $d != 3; then acl3=$d; else acl3=; fi
+	if test $d = $s || ( (test $s = 1 || test $s = 2) && test $d = 3); then
+	    # Source of 1 or 2 and dest of 3 should be dropped
+	    # due to the 4th ACL that uses address_set(set1).
+	    acl4=
+	else
+	    acl4=$d
+	fi
+
+	#7, acl1 to acl4:
+	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1234
+	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1235 $acl2
+	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1236 $acl3
+	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1237 $acl4
+
+	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:55 -vlan          #4
+	test_packet $s f0:00:00:00:00:0$d 01:00:00:00:00:0$s               #5
+
+	if test $d != $s && test $d = 1; then
+	    unknown="$unknown $d"
+	fi
+	bcast="$bcast $unicast"
+	bacl2="$bacl2 $acl2"
+	bacl3="$bacl3 $acl3"
+
+	sip=192.168.0.$s
+	tip=192.168.0.$d
+	tip_unknown=11.11.11.11
+	test_arp $s f0:00:00:00:00:0$s $sip $tip f0:00:00:00:00:0$d        #9
+	test_arp $s f0:00:00:00:00:0$s $sip $tip_unknown                   #10
+
+	if test $d = 3; then
+	    # lp3 has an additional ip 192.169.0.[123]3.
+	    tip=192.169.0.$d
+	    test_arp $s f0:00:00:00:00:0$s $sip $tip f0:00:00:00:00:0$d    #9
+	fi
+    done
+
+    # Broadcast and multicast.
+    test_packet $s ff:ff:ff:ff:ff:ff f0:00:00:00:00:0$s $bcast             #2
+    test_packet $s 01:00:00:00:00:00 f0:00:00:00:00:0$s $bcast             #2
+    if test $s = 1; then
+	bcast_impersonate=$bcast
+    else
+	bcast_impersonate=
+    fi
+    test_packet $s 01:00:00:00:00:00 f0:00:00:00:00:44 $bcast_impersonate  #3
+
+    test_packet $s f0:00:00:00:ff:ff f0:00:00:00:00:0$s $unknown           #6
+
+    #8, acl1 to acl3:
+    test_packet $s ff:ff:ff:ff:ff:ff f0:00:00:00:00:0$s -eth 1234
+    test_packet $s ff:ff:ff:ff:ff:ff f0:00:00:00:00:0$s -eth 1235 $bacl2
+    test_packet $s ff:ff:ff:ff:ff:ff f0:00:00:00:00:0$s -eth 1236 $bacl3
+
+    #8, acl1 to acl3:
+    test_packet $s 01:00:00:00:00:00 f0:00:00:00:00:0$s -eth 1234
+    test_packet $s 01:00:00:00:00:00 f0:00:00:00:00:0$s -eth 1235 $bacl2
+    test_packet $s 01:00:00:00:00:00 f0:00:00:00:00:0$s -eth 1236 $bacl3
+done
 
 AT_CLEANUP
 

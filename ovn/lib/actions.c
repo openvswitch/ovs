@@ -339,15 +339,17 @@ format_LOAD(const struct ovnact_load *load, struct ds *s)
     ds_put_char(s, ';');
 }
 
-static void
-encode_LOAD(const struct ovnact_load *load,
-            const struct ovnact_encode_params *ep,
-            struct ofpbuf *ofpacts)
+void
+ovnact_load_to_ofpact_set_field(const struct ovnact_load *load,
+                                bool (*lookup_port)(const void *aux,
+                                                    const char *port_name,
+                                                    unsigned int *portp),
+                                const void *aux,
+                                struct ofpact_set_field *sf)
 {
     const union expr_constant *c = &load->imm;
     struct mf_subfield dst = expr_resolve_field(&load->dst);
 
-    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
     sf->field = dst.field;
 
     if (load->dst.symbol->width) {
@@ -364,13 +366,22 @@ encode_LOAD(const struct ovnact_load *load,
         }
     } else {
         uint32_t port;
-        if (!ep->lookup_port(ep->aux, load->imm.string, &port)) {
+        if (!lookup_port(aux, load->imm.string, &port)) {
             port = 0;
         }
         bitwise_put(port, &sf->value,
                     sf->field->n_bytes, 0, sf->field->n_bits);
         bitwise_one(&sf->mask, sf->field->n_bytes, 0, sf->field->n_bits);
     }
+}
+
+static void
+encode_LOAD(const struct ovnact_load *load,
+            const struct ovnact_encode_params *ep,
+            struct ofpbuf *ofpacts)
+{
+    ovnact_load_to_ofpact_set_field(load, ep->lookup_port, ep->aux,
+                                    ofpact_put_SET_FIELD(ofpacts));
 }
 
 static void
