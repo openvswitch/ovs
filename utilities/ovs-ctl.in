@@ -534,6 +534,10 @@ set_defaults () {
         SYSTEM_TYPE=unknown
         SYSTEM_VERSION=unknown
     fi
+    temp=${SYSTEM_TYPE#\"}
+    SYSTEM_TYPE=${temp%\"}
+    temp={$SYSTEM_VERSION#\"}
+    SYSTEM_VERSION=${temp%\"}
 }
 
 usage () {
