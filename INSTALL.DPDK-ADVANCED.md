@@ -1005,33 +1005,33 @@ supported by Fortville NIC), using the DPDK `i40e` driver, but larger frames
 (particularly in use cases involving East-West traffic only), and other DPDK NIC
 drivers may be supported.
 
-### 9.1 vHost Ports and Jumbo Frames
+### 11.1 vHost Ports and Jumbo Frames
 
 Some additional configuration is needed to take advantage of jumbo frames with
 vhost ports:
 
-    1. `mergeable buffers` must be enabled for vHost ports, as demonstrated in
-        the QEMU command line snippet below:
+  1. `mergeable buffers` must be enabled for vHost ports, as demonstrated in
+       the QEMU command line snippet below:
 
-        ```
-        '-netdev type=vhost-user,id=mynet1,chardev=char0,vhostforce \'
-        '-device virtio-net-pci,mac=00:00:00:00:00:01,netdev=mynet1,mrg_rxbuf=on'
-        ```
+      ```
+      '-netdev type=vhost-user,id=mynet1,chardev=char0,vhostforce \'
+      '-device virtio-net-pci,mac=00:00:00:00:00:01,netdev=mynet1,mrg_rxbuf=on'
+      ```
 
-    2. Where virtio devices are bound to the Linux kernel driver in a guest
-       environment (i.e. interfaces are not bound to an in-guest DPDK driver),
-       the MTU of those logical network interfaces must also be increased to a
-       sufficiently large value. This avoids segmentation of Jumbo Frames
-       received in the guest. Note that 'MTU' refers to the length of the IP
-       packet only, and not that of the entire frame.
+  2. Where virtio devices are bound to the Linux kernel driver in a guest
+     environment (i.e. interfaces are not bound to an in-guest DPDK driver),
+     the MTU of those logical network interfaces must also be increased to a
+     sufficiently large value. This avoids segmentation of Jumbo Frames
+     received in the guest. Note that 'MTU' refers to the length of the IP
+     packet only, and not that of the entire frame.
 
-       To calculate the exact MTU of a standard IPv4 frame, subtract the L2
-       header and CRC lengths (i.e. 18B) from the max supported frame size.
-       So, to set the MTU for a 9018B Jumbo Frame:
+     To calculate the exact MTU of a standard IPv4 frame, subtract the L2
+     header and CRC lengths (i.e. 18B) from the max supported frame size.
+     So, to set the MTU for a 9018B Jumbo Frame:
 
-       ```
-       ifconfig eth1 mtu 9000
-       ```
+     ```
+     ifconfig eth1 mtu 9000
+     ```
 
 ## <a name="vsperf"></a> 12. Vsperf
 
