@@ -753,7 +753,6 @@ ovsdb_idl_condition_reset(struct ovsdb_idl *idl,
     struct ovsdb_idl_table *table = ovsdb_idl_table_from_class(idl, tc);
 
     LIST_FOR_EACH_SAFE (c, next, node, &table->condition.clauses) {
-        ovs_list_remove(&c->node);
         ovsdb_idl_clause_free(c);
     }
     idl->cond_changed = table->cond_changed = true;
