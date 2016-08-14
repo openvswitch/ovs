@@ -715,6 +715,13 @@ ovsdb_idl_add_table(struct ovsdb_idl *idl,
 
     OVS_NOT_REACHED();
 }
+
+struct ovsdb_idl_clause {
+    struct ovs_list node;
+    enum ovsdb_function function;
+    const struct ovsdb_idl_column *column;
+    struct ovsdb_datum arg;
+};
 
 static struct json *
 ovsdb_idl_clause_to_json(const struct ovsdb_idl_clause *clause)
@@ -745,6 +752,10 @@ ovsdb_idl_clause_free(struct ovsdb_idl_clause *clause)
     free(clause);
 }
 
+/* Clears all of the conditional clauses from table 'tc', so that all of the
+ * rows in the table will be replicated.  (This is the default, so this
+ * function has an effect only if some clauses were added to 'tc' using
+ * ovsdb_idl_condition_add_clause().) */
 void
 ovsdb_idl_condition_reset(struct ovsdb_idl *idl,
                           const struct ovsdb_idl_table_class *tc)
@@ -766,59 +777,90 @@ ovsdb_idl_condition_init(struct ovsdb_idl_condition *cnd,
     ovs_list_init(&cnd->clauses);
 }
 
-void ovsdb_idl_condition_add_clause(struct ovsdb_idl *idl,
-                                    const struct ovsdb_idl_table_class *tc,
-                                    enum ovsdb_function function,
-                                    const struct ovsdb_idl_column *column,
-                                    struct ovsdb_datum *arg)
+static struct ovsdb_idl_clause *
+ovsdb_idl_condition_find_clause(struct ovsdb_idl_table *table,
+                                enum ovsdb_function function,
+                                const struct ovsdb_idl_column *column,
+                                const struct ovsdb_datum *arg)
 {
-    struct ovsdb_idl_table *table = ovsdb_idl_table_from_class(idl, tc);
-    const struct ovsdb_type *type = NULL;
     struct ovsdb_idl_clause *c;
-
-    LIST_FOR_EACH(c, node, &table->condition.clauses) {
+    LIST_FOR_EACH (c, node, &table->condition.clauses) {
         if (c->function == function &&
             (!column || (c->column == column &&
                          ovsdb_datum_equals(&c->arg,
                                              arg, &column->type)))) {
-            return;
+            return c;
         }
+    }
+    return NULL;
+}
+
+/* Adds a clause to the condition for replicating the table with class 'tc' in
+ * 'idl'.
+ *
+ * By default, a table has no clauses, and in that case the IDL replicates all
+ * its rows.  When a table has one or more clauses, the IDL replicates only
+ * rows that satisfy at least one clause.
+ *
+ * Two distinct of clauses can be added:
+ *
+ *    - A 'function' of OVSDB_F_FALSE or OVSDB_F_TRUE adds a Boolean clause.  A
+ *      "false" clause by itself prevents any rows from being replicated; in
+ *      combination with other clauses it has no effect.  A "true" clause
+ *      causes every row to be replicated, regardless of whether other clauses
+ *      exist (thus, a condition that includes "true" is like a condition
+ *      without any clauses at all).
+ *
+ *      'column' should be NULL and 'arg' should be an empty datum (initialized
+ *      with ovsdb_datum_init_empty()).
+ *
+ *    - Other 'functions' add a clause of the form "<column> <function> <arg>",
+ *      e.g. "column == 5" or "column <= 10".  In this case, 'arg' must have a
+ *      type that is compatible with 'column'.
+ */
+void
+ovsdb_idl_condition_add_clause(struct ovsdb_idl *idl,
+                               const struct ovsdb_idl_table_class *tc,
+                               enum ovsdb_function function,
+                               const struct ovsdb_idl_column *column,
+                               const struct ovsdb_datum *arg)
+{
+    struct ovsdb_idl_table *table = ovsdb_idl_table_from_class(idl, tc);
+
+    /* Return without doing anything, if this would be a duplicate clause. */
+    if (ovsdb_idl_condition_find_clause(table, function, column, arg)) {
+        return;
     }
 
     struct ovsdb_idl_clause *clause = xzalloc(sizeof *clause);
     ovs_list_init(&clause->node);
     clause->function = function;
     clause->column = column;
-    if (column) {
-        type = &column->type;
-    } else {
-        type = &ovsdb_type_boolean;
-    }
-    ovsdb_datum_clone(&clause->arg, arg, type);
+    ovsdb_datum_clone(&clause->arg, arg,
+                      column ? &column->type : &ovsdb_type_boolean);
     ovs_list_push_back(&table->condition.clauses, &clause->node);
     idl->cond_changed = table->cond_changed = true;
     poll_immediate_wake();
 }
 
-void ovsdb_idl_condition_remove_clause(struct ovsdb_idl *idl,
-                                       const struct ovsdb_idl_table_class *tc,
-                                       enum ovsdb_function function,
-                                       const struct ovsdb_idl_column *column,
-                                       struct ovsdb_datum *arg)
+/* If a clause matching (function, column, arg) is included in the condition
+ * for 'tc' within 'idl', removes it.  (If this was the last clause included in
+ * the table's condition, then this means that the IDL will begin replicating
+ * every row in the table.) */
+void
+ovsdb_idl_condition_remove_clause(struct ovsdb_idl *idl,
+                                  const struct ovsdb_idl_table_class *tc,
+                                  enum ovsdb_function function,
+                                  const struct ovsdb_idl_column *column,
+                                  const struct ovsdb_datum *arg)
 {
-    struct ovsdb_idl_clause *c, *next;
     struct ovsdb_idl_table *table = ovsdb_idl_table_from_class(idl, tc);
-
-    LIST_FOR_EACH_SAFE(c, next, node, &table->condition.clauses) {
-        if (c->function == function &&
-            (!column || (c->column == column &&
-                         ovsdb_datum_equals(&c->arg,
-                                             arg, &column->type)))) {
-            ovsdb_idl_clause_free(c);
-            idl->cond_changed = table->cond_changed = true;
-            poll_immediate_wake();
-            return;
-        }
+    struct ovsdb_idl_clause *c
+        = ovsdb_idl_condition_find_clause(table, function, column, arg);
+    if (c) {
+        ovsdb_idl_clause_free(c);
+        idl->cond_changed = table->cond_changed = true;
+        poll_immediate_wake();
     }
 }
 
@@ -831,13 +873,13 @@ ovsdb_idl_condition_to_json(const struct ovsdb_idl_condition *cnd)
 
     clauses = xmalloc(n_clauses * sizeof *clauses);
     LIST_FOR_EACH (c, node, &cnd->clauses) {
-           clauses[i++] = ovsdb_idl_clause_to_json(c);
+        clauses[i++] = ovsdb_idl_clause_to_json(c);
     }
 
     return json_array_create(clauses, n_clauses);
 }
 
-static struct json*
+static struct json *
 ovsdb_idl_create_cond_change_req(struct ovsdb_idl_table *table)
 {
     const struct ovsdb_idl_condition *cond = &table->condition;
