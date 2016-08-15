@@ -90,7 +90,7 @@ void rpl_iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 EXPORT_SYMBOL_GPL(rpl_iptunnel_xmit);
 
 int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
-				 bool csum_help, int gso_type_mask,
+				 int gso_type_mask,
 				 void (*fix_segment)(struct sk_buff *))
 {
 	int err;
@@ -117,14 +117,6 @@ int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 #endif
 		return 0;
 	}
-
-	/* If packet is not gso and we are resolving any partial checksum,
-	 * clear encapsulation flag. This allows setting CHECKSUM_PARTIAL
-	 * on the outer header without confusing devices that implement
-	 * NETIF_F_IP_CSUM with encapsulation.
-	 */
-	if (csum_help)
-		skb->encapsulation = 0;
 
 	if (skb->ip_summed != CHECKSUM_PARTIAL) {
 		skb->ip_summed = CHECKSUM_NONE;
