@@ -2975,6 +2975,9 @@ depending on its configuration.
 \fB\-\-strict\fR
 Uses strict matching when running flow modification commands.
 .
+.IP "\fB\-\-read-only\fR"
+Do not execute read/write commands.
+.
 .IP "\fB\-\-bundle\fR"
 Execute flow mods as an OpenFlow 1.4 atomic bundle transaction.
 .RS

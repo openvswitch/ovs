@@ -461,16 +461,16 @@ test_heap_raw_delete(struct ovs_cmdl_context *ctx OVS_UNUSED)
 
 static const struct ovs_cmdl_command commands[] = {
     { "insert-delete-same-order", NULL, 0, 0,
-      test_heap_insert_delete_same_order, },
+      test_heap_insert_delete_same_order, OVS_RO },
     { "insert-delete-reverse-order", NULL, 0, 0,
-      test_heap_insert_delete_reverse_order, },
+      test_heap_insert_delete_reverse_order, OVS_RO },
     { "insert-delete-every-order", NULL, 0, 0,
-      test_heap_insert_delete_every_order, },
+      test_heap_insert_delete_every_order, OVS_RO },
     { "insert-delete-same-order-with-dups", NULL, 0, 0,
-      test_heap_insert_delete_same_order_with_dups, },
-    { "raw-insert", NULL, 0, 0, test_heap_raw_insert, },
-    { "raw-delete", NULL, 0, 0, test_heap_raw_delete, },
-    { NULL, NULL, 0, 0, NULL, },
+      test_heap_insert_delete_same_order_with_dups, OVS_RO },
+    { "raw-insert", NULL, 0, 0, test_heap_raw_insert, OVS_RO },
+    { "raw-delete", NULL, 0, 0, test_heap_raw_delete, OVS_RO },
+    { NULL, NULL, 0, 0, NULL, OVS_RO },
 };
 
 static void

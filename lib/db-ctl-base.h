@@ -120,7 +120,7 @@ struct ctl_command_syntax {
      * empty string if the command does not support any options. */
     const char *options;
 
-    enum { RO, RW } mode;       /* Does this command modify the database? */
+    enum { RO, RW } mode;   /* Does this command modify the database? */
 };
 
 /* A command extracted from command-line input plus the structs for

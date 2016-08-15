@@ -1149,25 +1149,25 @@ test_file_name(struct ovs_cmdl_context *ctx)
 #endif /* _WIN32 */
 
 static const struct ovs_cmdl_command commands[] = {
-    {"ctz", NULL, 0, 0, test_ctz},
-    {"clz", NULL, 0, 0, test_clz},
-    {"round_up_pow2", NULL, 0, 0, test_round_up_pow2},
-    {"round_down_pow2", NULL, 0, 0, test_round_down_pow2},
-    {"count_1bits", NULL, 0, 0, test_count_1bits},
-    {"log_2_floor", NULL, 0, 0, test_log_2_floor},
-    {"bitwise_copy", NULL, 0, 0, test_bitwise_copy},
-    {"bitwise_zero", NULL, 0, 0, test_bitwise_zero},
-    {"bitwise_one", NULL, 0, 0, test_bitwise_one},
-    {"bitwise_is_all_zeros", NULL, 0, 0, test_bitwise_is_all_zeros},
-    {"bitwise_rscan", NULL, 0, 0, test_bitwise_rscan},
-    {"follow-symlinks", NULL, 1, INT_MAX, test_follow_symlinks},
-    {"assert", NULL, 0, 0, test_assert},
-    {"ovs_scan", NULL, 0, 0, test_ovs_scan},
-    {"snprintf", NULL, 0, 0, test_snprintf},
+    {"ctz", NULL, 0, 0, test_ctz, OVS_RO},
+    {"clz", NULL, 0, 0, test_clz, OVS_RO},
+    {"round_up_pow2", NULL, 0, 0, test_round_up_pow2, OVS_RO},
+    {"round_down_pow2", NULL, 0, 0, test_round_down_pow2, OVS_RO},
+    {"count_1bits", NULL, 0, 0, test_count_1bits, OVS_RO},
+    {"log_2_floor", NULL, 0, 0, test_log_2_floor, OVS_RO},
+    {"bitwise_copy", NULL, 0, 0, test_bitwise_copy, OVS_RO},
+    {"bitwise_zero", NULL, 0, 0, test_bitwise_zero, OVS_RO},
+    {"bitwise_one", NULL, 0, 0, test_bitwise_one, OVS_RO},
+    {"bitwise_is_all_zeros", NULL, 0, 0, test_bitwise_is_all_zeros, OVS_RO},
+    {"bitwise_rscan", NULL, 0, 0, test_bitwise_rscan, OVS_RO},
+    {"follow-symlinks", NULL, 1, INT_MAX, test_follow_symlinks, OVS_RO},
+    {"assert", NULL, 0, 0, test_assert, OVS_RO},
+    {"ovs_scan", NULL, 0, 0, test_ovs_scan, OVS_RO},
+    {"snprintf", NULL, 0, 0, test_snprintf, OVS_RO},
 #ifndef _WIN32
-    {"file_name", NULL, 1, INT_MAX, test_file_name},
+    {"file_name", NULL, 1, INT_MAX, test_file_name, OVS_RO},
 #endif
-    {NULL, NULL, 0, 0, NULL},
+    {NULL, NULL, 0, 0, NULL, OVS_RO},
 };
 
 static void

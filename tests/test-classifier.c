@@ -1838,23 +1838,23 @@ static void help(struct ovs_cmdl_context *ctx);
 
 static const struct ovs_cmdl_command commands[] = {
     /* Classifier tests. */
-    {"empty", NULL, 0, 0, test_empty},
-    {"destroy-null", NULL, 0, 0, test_destroy_null},
-    {"single-rule", NULL, 0, 0, test_single_rule},
-    {"rule-replacement", NULL, 0, 0, test_rule_replacement},
-    {"many-rules-in-one-list", NULL, 0, 1, test_many_rules_in_one_list},
-    {"many-rules-in-one-table", NULL, 0, 1, test_many_rules_in_one_table},
-    {"many-rules-in-two-tables", NULL, 0, 0, test_many_rules_in_two_tables},
-    {"many-rules-in-five-tables", NULL, 0, 0, test_many_rules_in_five_tables},
-    {"benchmark", NULL, 0, 5, run_benchmarks},
+    {"empty", NULL, 0, 0, test_empty, OVS_RO },
+    {"destroy-null", NULL, 0, 0, test_destroy_null, OVS_RO },
+    {"single-rule", NULL, 0, 0, test_single_rule, OVS_RO },
+    {"rule-replacement", NULL, 0, 0, test_rule_replacement, OVS_RO },
+    {"many-rules-in-one-list", NULL, 0, 1, test_many_rules_in_one_list, OVS_RO },
+    {"many-rules-in-one-table", NULL, 0, 1, test_many_rules_in_one_table, OVS_RO },
+    {"many-rules-in-two-tables", NULL, 0, 0, test_many_rules_in_two_tables, OVS_RO },
+    {"many-rules-in-five-tables", NULL, 0, 0, test_many_rules_in_five_tables, OVS_RO },
+    {"benchmark", NULL, 0, 5, run_benchmarks, OVS_RO },
 
     /* Miniflow and minimask tests. */
-    {"miniflow", NULL, 0, 0, test_miniflow},
-    {"minimask_has_extra", NULL, 0, 0, test_minimask_has_extra},
-    {"minimask_combine", NULL, 0, 0, test_minimask_combine},
+    {"miniflow", NULL, 0, 0, test_miniflow, OVS_RO },
+    {"minimask_has_extra", NULL, 0, 0, test_minimask_has_extra, OVS_RO },
+    {"minimask_combine", NULL, 0, 0, test_minimask_combine, OVS_RO },
 
-    {"--help", NULL, 0, 0, help},
-    {NULL, NULL, 0, 0, NULL},
+    {"--help", NULL, 0, 0, help, OVS_RO },
+    {NULL, NULL, 0, 0, NULL, OVS_RO },
 };
 
 static void

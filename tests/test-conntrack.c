@@ -260,13 +260,13 @@ static const struct ovs_cmdl_command commands[] = {
      * is '1', each packet in a batch will have a different source and
      * destination port */
     {"benchmark", "n_threads n_pkts batch_size [change_connection]", 3, 4,
-     test_benchmark},
+     test_benchmark, OVS_RO},
     /* Reads packets from 'file' and sends them to the connection tracker,
      * 'batch_size' (1 by default) per call, with the commit flag set.
      * Prints the ct_state of each packet. */
-    {"pcap", "file [batch_size]", 1, 2, test_pcap},
+    {"pcap", "file [batch_size]", 1, 2, test_pcap, OVS_RO},
 
-    {NULL, NULL, 0, 0, NULL},
+    {NULL, NULL, 0, 0, NULL, OVS_RO},
 };
 
 static void

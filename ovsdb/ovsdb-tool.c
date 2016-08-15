@@ -573,20 +573,20 @@ do_list_commands(struct ovs_cmdl_context *ctx OVS_UNUSED)
 }
 
 static const struct ovs_cmdl_command all_commands[] = {
-    { "create", "[db [schema]]", 0, 2, do_create },
-    { "compact", "[db [dst]]", 0, 2, do_compact },
-    { "convert", "[db [schema [dst]]]", 0, 3, do_convert },
-    { "needs-conversion", NULL, 0, 2, do_needs_conversion },
-    { "db-version", "[db]",  0, 1, do_db_version },
-    { "db-cksum", "[db]", 0, 1, do_db_cksum },
-    { "schema-version", "[schema]", 0, 1, do_schema_version },
-    { "schema-cksum", "[schema]", 0, 1, do_schema_cksum },
-    { "query", "[db] trns", 1, 2, do_query },
-    { "transact", "[db] trns", 1, 2, do_transact },
-    { "show-log", "[db]", 0, 1, do_show_log },
-    { "help", NULL, 0, INT_MAX, do_help },
-    { "list-commands", NULL, 0, INT_MAX, do_list_commands },
-    { NULL, NULL, 0, 0, NULL },
+    { "create", "[db [schema]]", 0, 2, do_create, OVS_RW },
+    { "compact", "[db [dst]]", 0, 2, do_compact, OVS_RW },
+    { "convert", "[db [schema [dst]]]", 0, 3, do_convert, OVS_RW },
+    { "needs-conversion", NULL, 0, 2, do_needs_conversion, OVS_RO },
+    { "db-version", "[db]",  0, 1, do_db_version, OVS_RO },
+    { "db-cksum", "[db]", 0, 1, do_db_cksum, OVS_RO },
+    { "schema-version", "[schema]", 0, 1, do_schema_version, OVS_RO },
+    { "schema-cksum", "[schema]", 0, 1, do_schema_cksum, OVS_RO },
+    { "query", "[db] trns", 1, 2, do_query, OVS_RO },
+    { "transact", "[db] trns", 1, 2, do_transact, OVS_RO },
+    { "show-log", "[db]", 0, 1, do_show_log, OVS_RO },
+    { "help", NULL, 0, INT_MAX, do_help, OVS_RO },
+    { "list-commands", NULL, 0, INT_MAX, do_list_commands, OVS_RO },
+    { NULL, NULL, 0, 0, NULL, OVS_RO },
 };
 
 static const struct ovs_cmdl_command *get_all_commands(void)

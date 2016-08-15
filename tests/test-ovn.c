@@ -1513,26 +1513,26 @@ test_ovn_main(int argc, char *argv[])
 
     static const struct ovs_cmdl_command commands[] = {
         /* Lexer. */
-        {"lex", NULL, 0, 0, test_lex},
+        {"lex", NULL, 0, 0, test_lex, OVS_RO},
 
         /* Symbol table. */
-        {"dump-symtab", NULL, 0, 0, test_dump_symtab},
+        {"dump-symtab", NULL, 0, 0, test_dump_symtab, OVS_RO},
 
         /* Expressions. */
-        {"parse-expr", NULL, 0, 0, test_parse_expr},
-        {"annotate-expr", NULL, 0, 0, test_annotate_expr},
-        {"simplify-expr", NULL, 0, 0, test_simplify_expr},
-        {"normalize-expr", NULL, 0, 0, test_normalize_expr},
-        {"expr-to-flows", NULL, 0, 0, test_expr_to_flows},
-        {"evaluate-expr", NULL, 1, 1, test_evaluate_expr},
-        {"composition", NULL, 1, 1, test_composition},
-        {"tree-shape", NULL, 1, 1, test_tree_shape},
-        {"exhaustive", NULL, 1, 1, test_exhaustive},
+        {"parse-expr", NULL, 0, 0, test_parse_expr, OVS_RO},
+        {"annotate-expr", NULL, 0, 0, test_annotate_expr, OVS_RO},
+        {"simplify-expr", NULL, 0, 0, test_simplify_expr, OVS_RO},
+        {"normalize-expr", NULL, 0, 0, test_normalize_expr, OVS_RO},
+        {"expr-to-flows", NULL, 0, 0, test_expr_to_flows, OVS_RO},
+        {"evaluate-expr", NULL, 1, 1, test_evaluate_expr, OVS_RO},
+        {"composition", NULL, 1, 1, test_composition, OVS_RO},
+        {"tree-shape", NULL, 1, 1, test_tree_shape, OVS_RO},
+        {"exhaustive", NULL, 1, 1, test_exhaustive, OVS_RO},
 
         /* Actions. */
-        {"parse-actions", NULL, 0, 0, test_parse_actions},
+        {"parse-actions", NULL, 0, 0, test_parse_actions, OVS_RO},
 
-        {NULL, NULL, 0, 0, NULL},
+        {NULL, NULL, 0, 0, NULL, OVS_RO},
     };
     struct ovs_cmdl_context ctx;
     ctx.argc = argc - optind;
