@@ -204,7 +204,7 @@ static int rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 	else
 		fix_segment = gre_nop_fix;
 
-	return ovs_iptunnel_handle_offloads(skb, gre_csum, type, fix_segment);
+	return ovs_iptunnel_handle_offloads(skb, type, fix_segment);
 }
 #else
 

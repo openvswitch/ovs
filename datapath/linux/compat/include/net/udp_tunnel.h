@@ -168,7 +168,7 @@ static inline int rpl_udp_tunnel_handle_offloads(struct sk_buff *skb,
 	fix_segment = NULL;
 #endif
 
-	return ovs_iptunnel_handle_offloads(skb, udp_csum, type, fix_segment);
+	return ovs_iptunnel_handle_offloads(skb, type, fix_segment);
 }
 
 #define udp_tunnel_handle_offloads rpl_udp_tunnel_handle_offloads
