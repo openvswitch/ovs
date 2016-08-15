@@ -1838,24 +1838,63 @@ extern const struct ofproto_class ofproto_dpif_class;
 int ofproto_class_register(const struct ofproto_class *);
 int ofproto_class_unregister(const struct ofproto_class *);
 
+/* Criteria that flow_mod and other operations use for selecting rules on
+ * which to operate. */
+struct rule_criteria {
+    /* An OpenFlow table or 255 for all tables. */
+    uint8_t table_id;
+
+    /* OpenFlow matching criteria.  Interpreted different in "loose" way by
+     * collect_rules_loose() and "strict" way by collect_rules_strict(), as
+     * defined in the OpenFlow spec. */
+    struct cls_rule cr;
+    ovs_version_t version;
+
+    /* Matching criteria for the OpenFlow cookie.  Consider a bit B in a rule's
+     * cookie and the corresponding bits C in 'cookie' and M in 'cookie_mask'.
+     * The rule will not be selected if M is 1 and B != C.  */
+    ovs_be64 cookie;
+    ovs_be64 cookie_mask;
+
+    /* Selection based on actions within a rule:
+     *
+     * If out_port != OFPP_ANY, selects only rules that output to out_port.
+     * If out_group != OFPG_ALL, select only rules that output to out_group. */
+    ofp_port_t out_port;
+    uint32_t out_group;
+
+    /* If true, collects only rules that are modifiable. */
+    bool include_hidden;
+    bool include_readonly;
+};
+
 /* flow_mod with execution context. */
 struct ofproto_flow_mod {
-    struct ofputil_flow_mod fm;
+    /* Allocated by 'init' phase, may be freed after 'start' phase, as these
+     * are not needed for 'revert' nor 'finish'. */
+    struct rule *temp_rule;
+    struct rule_criteria criteria;
+    struct cls_conjunction *conjs;
+    size_t n_conjs;
 
     /* Replicate needed fields from ofputil_flow_mod to not need it after the
      * flow has been created. */
     uint16_t command;
     uint32_t buffer_id;
     bool modify_cookie;
-
+    /* Fields derived from ofputil_flow_mod. */
     bool modify_may_add_flow;
     enum nx_flow_update_event event;
 
+    /* These are only used during commit execution.
+     * ofproto_flow_mod_uninit() does NOT clean these up. */
     ovs_version_t version;              /* Version in which changes take
                                          * effect. */
     struct rule_collection old_rules;   /* Affected rules. */
     struct rule_collection new_rules;   /* Replacement rules. */
 };
+
+void ofproto_flow_mod_uninit(struct ofproto_flow_mod *);
 
 /* port_mod with execution context. */
 struct ofproto_port_mod {

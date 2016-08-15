@@ -129,36 +129,6 @@ static void eviction_group_add_rule(struct rule *)
 static void eviction_group_remove_rule(struct rule *)
     OVS_REQUIRES(ofproto_mutex);
 
-/* Criteria that flow_mod and other operations use for selecting rules on
- * which to operate. */
-struct rule_criteria {
-    /* An OpenFlow table or 255 for all tables. */
-    uint8_t table_id;
-
-    /* OpenFlow matching criteria.  Interpreted different in "loose" way by
-     * collect_rules_loose() and "strict" way by collect_rules_strict(), as
-     * defined in the OpenFlow spec. */
-    struct cls_rule cr;
-    ovs_version_t version;
-
-    /* Matching criteria for the OpenFlow cookie.  Consider a bit B in a rule's
-     * cookie and the corresponding bits C in 'cookie' and M in 'cookie_mask'.
-     * The rule will not be selected if M is 1 and B != C.  */
-    ovs_be64 cookie;
-    ovs_be64 cookie_mask;
-
-    /* Selection based on actions within a rule:
-     *
-     * If out_port != OFPP_ANY, selects only rules that output to out_port.
-     * If out_group != OFPG_ALL, select only rules that output to out_group. */
-    ofp_port_t out_port;
-    uint32_t out_group;
-
-    /* If true, collects only rules that are modifiable. */
-    bool include_hidden;
-    bool include_readonly;
-};
-
 static void rule_criteria_init(struct rule_criteria *, uint8_t table_id,
                                const struct match *match, int priority,
                                ovs_version_t version,
@@ -265,17 +235,19 @@ struct openflow_mod_requester {
 };
 
 /* OpenFlow. */
-static enum ofperr replace_rule_create(struct ofproto *,
-                                       struct ofproto_flow_mod *ofm,
-                                       const struct ofputil_flow_mod *,
-                                       struct cls_rule *cr, uint8_t table_id,
-                                       struct rule *old_rule,
+static enum ofperr ofproto_rule_create(struct ofproto *, struct cls_rule *,
+                                       uint8_t table_id, ovs_be64 new_cookie,
+                                       uint16_t idle_timeout,
+                                       uint16_t hard_timeout,
+                                       enum ofputil_flow_mod_flags flags,
+                                       uint16_t importance,
+                                       const struct ofpact *ofpacts,
+                                       size_t ofpacts_len,
                                        struct rule **new_rule)
-    OVS_REQUIRES(ofproto_mutex);
+    OVS_NO_THREAD_SAFETY_ANALYSIS;
 
-static void replace_rule_start(struct ofproto *, ovs_version_t version,
-                               struct rule *old_rule, struct rule *new_rule,
-                               struct cls_conjunction *, size_t n_conjs)
+static void replace_rule_start(struct ofproto *, struct ofproto_flow_mod *,
+                               struct rule *old_rule, struct rule *new_rule)
     OVS_REQUIRES(ofproto_mutex);
 
 static void replace_rule_revert(struct ofproto *, struct rule *old_rule,
@@ -298,6 +270,10 @@ static void send_buffered_packet(const struct openflow_mod_requester *,
 
 static bool ofproto_group_exists(const struct ofproto *, uint32_t group_id);
 static void handle_openflow(struct ofconn *, const struct ofpbuf *);
+static enum ofperr ofproto_flow_mod_init(struct ofproto *,
+                                         struct ofproto_flow_mod *,
+                                         const struct ofputil_flow_mod *fm)
+    OVS_EXCLUDED(ofproto_mutex);
 static enum ofperr ofproto_flow_mod_start(struct ofproto *,
                                           struct ofproto_flow_mod *)
     OVS_REQUIRES(ofproto_mutex);
@@ -2197,8 +2173,7 @@ ofproto_flow_mod(struct ofproto *ofproto, const struct ofputil_flow_mod *fm)
                                       OVS_VERSION_MAX));
         if (rule) {
             /* Reading many of the rule fields and writing on 'modified'
-             * requires the rule->mutex.  Also, rule->actions may change
-             * if rule->mutex is not held. */
+             * requires the rule->mutex. */
             const struct rule_actions *actions;
 
             ovs_mutex_lock(&rule->mutex);
@@ -4075,6 +4050,7 @@ static void
 rule_criteria_destroy(struct rule_criteria *criteria)
 {
     cls_rule_destroy(&criteria->cr);
+    criteria->version = OVS_VERSION_NOT_REMOVED; /* Mark as destroyed. */
 }
 
 /* Schedules postponed removal of rules, destroys 'rules'. */
@@ -4629,7 +4605,6 @@ evict_rules_from_table(struct oftable *table)
 static void
 get_conjunctions(const struct ofputil_flow_mod *fm,
                  struct cls_conjunction **conjsp, size_t *n_conjsp)
-    OVS_REQUIRES(ofproto_mutex)
 {
     struct cls_conjunction *conjs = NULL;
     int n_conjs = 0;
@@ -4664,35 +4639,34 @@ get_conjunctions(const struct ofputil_flow_mod *fm,
     *n_conjsp = n_conjs;
 }
 
-/* Implements OFPFC_ADD and the cases for OFPFC_MODIFY and OFPFC_MODIFY_STRICT
+/* add_flow_init(), add_flow_start(), add_flow_revert(), and add_flow_finish()
+ * implement OFPFC_ADD and the cases for OFPFC_MODIFY and OFPFC_MODIFY_STRICT
  * in which no matching flow already exists in the flow table.
  *
- * Adds the flow specified by 'fm', to the ofproto's flow table.  Returns 0 on
- * success, or an OpenFlow error code on failure.
+ * add_flow_init() creates a new flow according to 'fm' and stores it to 'ofm'
+ * for later reference.  If the flow replaces other flow, it will be updated to
+ * match modify semantics later by add_flow_start() (by calling
+ * replace_rule_start()).
  *
- * On successful return the caller must complete the operation either by
- * calling add_flow_finish(), or add_flow_revert() if the operation needs to
- * be reverted.
+ * Returns 0 on success, or an OpenFlow error code on failure.
  *
- * The caller retains ownership of 'fm->ofpacts'. */
+ * On successful return the caller must complete the operation by calling
+ * add_flow_start(), and if that succeeds, then either add_flow_finish(), or
+ * add_flow_revert() if the operation needs to be reverted due to a later
+ * failure.
+ */
 static enum ofperr
-add_flow_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
-    OVS_REQUIRES(ofproto_mutex)
+add_flow_init(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
+              const struct ofputil_flow_mod *fm)
+    OVS_EXCLUDED(ofproto_mutex)
 {
-    struct ofputil_flow_mod *fm = &ofm->fm;
-    struct rule **old_rule = rule_collection_stub(&ofm->old_rules);
-    struct rule **new_rule = rule_collection_stub(&ofm->new_rules);
     struct oftable *table;
     struct cls_rule cr;
-    struct rule *rule;
     uint8_t table_id;
-    struct cls_conjunction *conjs;
-    size_t n_conjs;
     enum ofperr error;
 
     if (!check_table_id(ofproto, fm->table_id)) {
-        error = OFPERR_OFPBRC_BAD_TABLE_ID;
-        return error;
+        return OFPERR_OFPBRC_BAD_TABLE_ID;
     }
 
     /* Pick table. */
@@ -4729,47 +4703,71 @@ add_flow_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
 
     cls_rule_init(&cr, &fm->match, fm->priority);
 
+    /* Allocate new rule.  Destroys 'cr'. */
+    error = ofproto_rule_create(ofproto, &cr, table - ofproto->tables,
+                                fm->new_cookie, fm->idle_timeout,
+                                fm->hard_timeout, fm->flags, fm->importance,
+                                fm->ofpacts, fm->ofpacts_len, &ofm->temp_rule);
+    if (error) {
+        return error;
+    }
+
+    get_conjunctions(fm, &ofm->conjs, &ofm->n_conjs);
+    return 0;
+}
+
+static enum ofperr
+add_flow_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct rule *old_rule = NULL;
+    struct rule *new_rule = ofm->temp_rule;
+    const struct rule_actions *actions = rule_get_actions(new_rule);
+    struct oftable *table = &ofproto->tables[new_rule->table_id];
+    enum ofperr error;
+
+    /* Must check actions while holding ofproto_mutex to avoid a race. */
+    error = ofproto_check_ofpacts(ofproto, actions->ofpacts,
+                                  actions->ofpacts_len);
+    if (error) {
+        return error;
+    }
+
     /* Check for the existence of an identical rule.
      * This will not return rules earlier marked for removal. */
-    rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls, &cr,
-                                                           ofm->version));
-    *old_rule = rule;
-    if (!rule) {
+    old_rule = rule_from_cls_rule(classifier_find_rule_exactly(&table->cls,
+                                                               &new_rule->cr,
+                                                               ofm->version));
+    if (!old_rule) {
         /* Check for overlap, if requested. */
-        if (fm->flags & OFPUTIL_FF_CHECK_OVERLAP
-            && classifier_rule_overlaps(&table->cls, &cr, ofm->version)) {
-            cls_rule_destroy(&cr);
+        if (new_rule->flags & OFPUTIL_FF_CHECK_OVERLAP
+            && classifier_rule_overlaps(&table->cls, &new_rule->cr,
+                                        ofm->version)) {
             return OFPERR_OFPFMFC_OVERLAP;
         }
 
         /* If necessary, evict an existing rule to clear out space. */
         if (table->n_flows >= table->max_flows) {
-            if (!choose_rule_to_evict(table, &rule)) {
-                error = OFPERR_OFPFMFC_TABLE_FULL;
-                cls_rule_destroy(&cr);
-                return error;
+            if (!choose_rule_to_evict(table, &old_rule)) {
+                return OFPERR_OFPFMFC_TABLE_FULL;
             }
-            eviction_group_remove_rule(rule);
-            /* Marks '*old_rule' as an evicted rule rather than replaced rule.
+            eviction_group_remove_rule(old_rule);
+            /* Marks 'old_rule' as an evicted rule rather than replaced rule.
              */
-            rule->removed_reason = OFPRR_EVICTION;
-            *old_rule = rule;
+            old_rule->removed_reason = OFPRR_EVICTION;
         }
     } else {
         ofm->modify_cookie = true;
     }
 
-    /* Allocate new rule. */
-    error = replace_rule_create(ofproto, ofm, fm, &cr, table - ofproto->tables,
-                                rule, new_rule);
-    if (error) {
-        return error;
+    if (old_rule) {
+        rule_collection_add(&ofm->old_rules, old_rule);
     }
+    /* Take ownership of the temp_rule. */
+    rule_collection_stub(&ofm->new_rules)[0] = new_rule;
+    ofm->temp_rule = NULL;
 
-    get_conjunctions(fm, &conjs, &n_conjs);
-    replace_rule_start(ofproto, ofm->version, rule, *new_rule, conjs, n_conjs);
-    free(conjs);
-
+    replace_rule_start(ofproto, ofm, old_rule, new_rule);
     return 0;
 }
 
@@ -4778,13 +4776,9 @@ static void
 add_flow_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct rule *old_rule = rule_collection_stub(&ofm->old_rules)[0];
+    struct rule *old_rule = rule_collection_n(&ofm->old_rules)
+        ? rule_collection_stub(&ofm->old_rules)[0] : NULL;
     struct rule *new_rule = rule_collection_stub(&ofm->new_rules)[0];
-
-    if (old_rule && old_rule->removed_reason == OFPRR_EVICTION) {
-        /* Revert the eviction. */
-        eviction_group_add_rule(old_rule);
-    }
 
     replace_rule_revert(ofproto, old_rule, new_rule);
 }
@@ -4795,7 +4789,8 @@ add_flow_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
                 const struct openflow_mod_requester *req)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct rule *old_rule = rule_collection_stub(&ofm->old_rules)[0];
+    struct rule *old_rule = rule_collection_n(&ofm->old_rules)
+        ? rule_collection_stub(&ofm->old_rules)[0] : NULL;
     struct rule *new_rule = rule_collection_stub(&ofm->new_rules)[0];
     struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
 
@@ -4818,14 +4813,16 @@ add_flow_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
 
 /* OFPFC_MODIFY and OFPFC_MODIFY_STRICT. */
 
-/* Create a new rule based on attributes in 'fm', match in 'cr', 'table_id',
- * and 'old_rule'.  Note that the rule is NOT inserted into a any data
+/* Create a new rule.  Note that the rule is NOT inserted into a any data
  * structures yet.  Takes ownership of 'cr'. */
 static enum ofperr
-replace_rule_create(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
-                    const struct ofputil_flow_mod *fm,
-                    struct cls_rule *cr, uint8_t table_id,
-                    struct rule *old_rule, struct rule **new_rule)
+ofproto_rule_create(struct ofproto *ofproto, struct cls_rule *cr,
+                    uint8_t table_id, ovs_be64 new_cookie,
+                    uint16_t idle_timeout, uint16_t hard_timeout,
+                    enum ofputil_flow_mod_flags flags, uint16_t importance,
+                    const struct ofpact *ofpacts, size_t ofpacts_len,
+                    struct rule **new_rule)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct rule *rule;
     enum ofperr error;
@@ -4842,46 +4839,28 @@ replace_rule_create(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
     *CONST_CAST(struct ofproto **, &rule->ofproto) = ofproto;
     cls_rule_move(CONST_CAST(struct cls_rule *, &rule->cr), cr);
     ovs_refcount_init(&rule->ref_count);
-    rule->flow_cookie = fm->new_cookie;
-    rule->created = rule->modified = time_msec();
 
     ovs_mutex_init(&rule->mutex);
     ovs_mutex_lock(&rule->mutex);
-    rule->idle_timeout = fm->idle_timeout;
-    rule->hard_timeout = fm->hard_timeout;
-    *CONST_CAST(uint16_t *, &rule->importance) = fm->importance;
+    rule->flow_cookie = new_cookie;
+    rule->created = rule->modified = time_msec();
+    rule->idle_timeout = idle_timeout;
+    rule->hard_timeout = hard_timeout;
+    *CONST_CAST(uint16_t *, &rule->importance) = importance;
     rule->removed_reason = OVS_OFPRR_NONE;
 
     *CONST_CAST(uint8_t *, &rule->table_id) = table_id;
-    rule->flags = fm->flags & OFPUTIL_FF_STATE;
+    rule->flags = flags & OFPUTIL_FF_STATE;
+
     *CONST_CAST(const struct rule_actions **, &rule->actions)
-        = rule_actions_create(fm->ofpacts, fm->ofpacts_len);
+        = rule_actions_create(ofpacts, ofpacts_len);
+
     ovs_list_init(&rule->meter_list_node);
     rule->eviction_group = NULL;
-    ovs_list_init(&rule->expirable);
     rule->monitor_flags = 0;
     rule->add_seqno = 0;
     rule->modify_seqno = 0;
-
-    /* Copy values from old rule for modify semantics. */
-    if (old_rule && old_rule->removed_reason != OFPRR_EVICTION) {
-        bool change_cookie = (ofm->modify_cookie
-                              && fm->new_cookie != OVS_BE64_MAX
-                              && fm->new_cookie != old_rule->flow_cookie);
-
-        ovs_mutex_lock(&old_rule->mutex);
-        if (fm->command != OFPFC_ADD) {
-            rule->idle_timeout = old_rule->idle_timeout;
-            rule->hard_timeout = old_rule->hard_timeout;
-            *CONST_CAST(uint16_t *, &rule->importance) = old_rule->importance;
-            rule->flags = old_rule->flags;
-            rule->created = old_rule->created;
-        }
-        if (!change_cookie) {
-            rule->flow_cookie = old_rule->flow_cookie;
-        }
-        ovs_mutex_unlock(&old_rule->mutex);
-    }
+    ovs_list_init(&rule->expirable);
     ovs_mutex_unlock(&rule->mutex);
 
     /* Construct rule, initializing derived state. */
@@ -4898,16 +4877,37 @@ replace_rule_create(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
 }
 
 static void
-replace_rule_start(struct ofproto *ofproto, ovs_version_t version,
-                   struct rule *old_rule, struct rule *new_rule,
-                   struct cls_conjunction *conjs, size_t n_conjs)
+replace_rule_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
+                   struct rule *old_rule, struct rule *new_rule)
 {
     struct oftable *table = &ofproto->tables[new_rule->table_id];
 
     /* 'old_rule' may be either an evicted rule or replaced rule. */
     if (old_rule) {
+        /* Copy values from old rule for modify semantics. */
+        if (old_rule->removed_reason != OFPRR_EVICTION) {
+            bool change_cookie = (ofm->modify_cookie
+                                  && new_rule->flow_cookie != OVS_BE64_MAX
+                                  && new_rule->flow_cookie != old_rule->flow_cookie);
+
+            ovs_mutex_lock(&new_rule->mutex);
+            ovs_mutex_lock(&old_rule->mutex);
+            if (ofm->command != OFPFC_ADD) {
+                new_rule->idle_timeout = old_rule->idle_timeout;
+                new_rule->hard_timeout = old_rule->hard_timeout;
+                *CONST_CAST(uint16_t *, &new_rule->importance) = old_rule->importance;
+                new_rule->flags = old_rule->flags;
+                new_rule->created = old_rule->created;
+            }
+            if (!change_cookie) {
+                new_rule->flow_cookie = old_rule->flow_cookie;
+            }
+            ovs_mutex_unlock(&old_rule->mutex);
+            ovs_mutex_unlock(&new_rule->mutex);
+        }
+
         /* Mark the old rule for removal in the next version. */
-        cls_rule_make_invisible_in_version(&old_rule->cr, version);
+        cls_rule_make_invisible_in_version(&old_rule->cr, ofm->version);
 
         /* Remove the old rule from data structures. */
         ofproto_rule_remove__(ofproto, old_rule);
@@ -4920,7 +4920,8 @@ replace_rule_start(struct ofproto *ofproto, ovs_version_t version,
     ofproto_rule_insert__(ofproto, new_rule);
     /* Make the new rule visible for classifier lookups only from the next
      * version. */
-    classifier_insert(&table->cls, &new_rule->cr, version, conjs, n_conjs);
+    classifier_insert(&table->cls, &new_rule->cr, ofm->version, ofm->conjs,
+                      ofm->n_conjs);
 }
 
 static void
@@ -4930,6 +4931,11 @@ replace_rule_revert(struct ofproto *ofproto,
     struct oftable *table = &ofproto->tables[new_rule->table_id];
 
     if (old_rule) {
+        if (old_rule->removed_reason == OFPRR_EVICTION) {
+            /* Revert the eviction. */
+            eviction_group_add_rule(old_rule);
+        }
+
         /* Restore the old rule to data structures. */
         ofproto_rule_insert__(ofproto, old_rule);
 
@@ -4980,6 +4986,9 @@ replace_rule_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
         learned_cookies_dec(ofproto, old_actions, dead_cookies);
 
         if (replaced_rule) {
+            enum nx_flow_update_event event = ofm->command == OFPFC_ADD
+                ? NXFME_ADDED : NXFME_MODIFIED;
+
             bool changed_cookie = (new_rule->flow_cookie
                                    != old_rule->flow_cookie);
 
@@ -4988,9 +4997,9 @@ replace_rule_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
                                                   old_actions->ofpacts,
                                                   old_actions->ofpacts_len);
 
-            if (ofm->event != NXFME_MODIFIED || changed_actions
+            if (event != NXFME_MODIFIED || changed_actions
                 || changed_cookie) {
-                ofmonitor_report(ofproto->connmgr, new_rule, ofm->event, 0,
+                ofmonitor_report(ofproto->connmgr, new_rule, event, 0,
                                  req ? req->ofconn : NULL,
                                  req ? req->request->xid : 0,
                                  changed_actions ? old_actions : NULL);
@@ -5009,47 +5018,67 @@ static enum ofperr
 modify_flows_start__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofputil_flow_mod *fm = &ofm->fm;
     struct rule_collection *old_rules = &ofm->old_rules;
     struct rule_collection *new_rules = &ofm->new_rules;
     enum ofperr error;
 
-    rule_collection_init(new_rules);
-
     if (rule_collection_n(old_rules) > 0) {
-        struct cls_conjunction *conjs;
-        size_t n_conjs;
-
         /* Create a new 'modified' rule for each old rule. */
-        struct rule *old_rule;
-        RULE_COLLECTION_FOR_EACH (old_rule, old_rules) {
-            struct rule *new_rule;
-            struct cls_rule cr;
+        struct rule *old_rule, *new_rule;
+        const struct rule_actions *actions = rule_get_actions(ofm->temp_rule);
 
-            cls_rule_clone(&cr, &old_rule->cr);
-            error = replace_rule_create(ofproto, ofm, fm, &cr,
-                                        old_rule->table_id, old_rule,
-                                        &new_rule);
-            if (!error) {
-                rule_collection_add(new_rules, new_rule);
+        /* Must check actions while holding ofproto_mutex to avoid a race. */
+        error = ofproto_check_ofpacts(ofproto, actions->ofpacts,
+                                      actions->ofpacts_len);
+        if (error) {
+            return error;
+        }
+
+        /* Use the temp rule as the first new rule, and as the template for
+         * the rest. */
+        struct rule *temp = ofm->temp_rule;
+        ofm->temp_rule = NULL;   /* We consume the template. */
+
+        bool first = true;
+        RULE_COLLECTION_FOR_EACH (old_rule, old_rules) {
+            if (first) {
+                /* The template rule's match is possibly a loose one, so it
+                 * must be replaced with the old rule's match so that the new
+                 * rule actually replaces the old one. */
+                cls_rule_destroy(CONST_CAST(struct cls_rule *, &temp->cr));
+                cls_rule_clone(CONST_CAST(struct cls_rule *, &temp->cr),
+                               &old_rule->cr);
+                *CONST_CAST(uint8_t *, &temp->table_id) = old_rule->table_id;
+                rule_collection_add(new_rules, temp);
+                first = false;
             } else {
-                rule_collection_unref(new_rules);
-                rule_collection_destroy(new_rules);
-                return error;
+                struct cls_rule cr;
+                cls_rule_clone(&cr, &old_rule->cr);
+                error = ofproto_rule_create(ofproto, &cr, old_rule->table_id,
+                                            temp->flow_cookie,
+                                            temp->idle_timeout,
+                                            temp->hard_timeout, temp->flags,
+                                            temp->importance,
+                                            temp->actions->ofpacts,
+                                            temp->actions->ofpacts_len,
+                                            &new_rule);
+                if (!error) {
+                    rule_collection_add(new_rules, new_rule);
+                } else {
+                    rule_collection_unref(new_rules);
+                    rule_collection_destroy(new_rules);
+                    return error;
+                }
             }
         }
         ovs_assert(rule_collection_n(new_rules)
                    == rule_collection_n(old_rules));
 
-        get_conjunctions(fm, &conjs, &n_conjs);
-        struct rule *new_rule;
         RULE_COLLECTIONS_FOR_EACH (old_rule, new_rule, old_rules, new_rules) {
-            replace_rule_start(ofproto, ofm->version, old_rule, new_rule,
-                               conjs, n_conjs);
+            replace_rule_start(ofproto, ofm, old_rule, new_rule);
         }
-        free(conjs);
     } else if (ofm->modify_may_add_flow) {
-        /* No match, add a new flow. */
+        /* No match, add a new flow, consumes 'temp'. */
         error = add_flow_start(ofproto, ofm);
         new_rules->collection.n = 1;
     } else {
@@ -5057,6 +5086,24 @@ modify_flows_start__(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     }
 
     return error;
+}
+
+static enum ofperr
+modify_flows_init_loose(struct ofproto *ofproto,
+                        struct ofproto_flow_mod *ofm,
+                        const struct ofputil_flow_mod *fm)
+    OVS_EXCLUDED(ofproto_mutex)
+{
+    rule_criteria_init(&ofm->criteria, fm->table_id, &fm->match, 0,
+                       OVS_VERSION_MAX, fm->cookie, fm->cookie_mask, OFPP_ANY,
+                       OFPG_ANY);
+    rule_criteria_require_rw(&ofm->criteria,
+                             (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
+    /* Must create a new flow in advance for the case that no matches are
+     * found.  Also used for template for multiple modified flows. */
+    add_flow_init(ofproto, ofm, fm);
+
+    return 0;
 }
 
 /* Implements OFPFC_MODIFY.  Returns 0 on success or an OpenFlow error code on
@@ -5068,17 +5115,10 @@ static enum ofperr
 modify_flows_start_loose(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofputil_flow_mod *fm = &ofm->fm;
     struct rule_collection *old_rules = &ofm->old_rules;
-    struct rule_criteria criteria;
     enum ofperr error;
 
-    rule_criteria_init(&criteria, fm->table_id, &fm->match, 0, OVS_VERSION_MAX,
-                       fm->cookie, fm->cookie_mask, OFPP_ANY, OFPG_ANY);
-    rule_criteria_require_rw(&criteria,
-                             (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
-    error = collect_rules_loose(ofproto, &criteria, old_rules);
-    rule_criteria_destroy(&criteria);
+    error = collect_rules_loose(ofproto, &ofm->criteria, old_rules);
 
     if (!error) {
         error = modify_flows_start__(ofproto, ofm);
@@ -5087,6 +5127,7 @@ modify_flows_start_loose(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     if (error) {
         rule_collection_destroy(old_rules);
     }
+
     return error;
 }
 
@@ -5098,10 +5139,7 @@ modify_flows_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     struct rule_collection *new_rules = &ofm->new_rules;
 
     /* Old rules were not changed yet, only need to revert new rules. */
-    if (rule_collection_n(old_rules) == 0
-        && rule_collection_n(new_rules) == 1) {
-        add_flow_revert(ofproto, ofm);
-    } else if (rule_collection_n(old_rules) > 0) {
+    if (rule_collection_n(old_rules) > 0) {
         struct rule *old_rule, *new_rule;
         RULE_COLLECTIONS_FOR_EACH (old_rule, new_rule, old_rules, new_rules) {
             replace_rule_revert(ofproto, old_rule, new_rule);
@@ -5142,33 +5180,40 @@ modify_flows_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
     }
 }
 
+static enum ofperr
+modify_flow_init_strict(struct ofproto *ofproto OVS_UNUSED,
+                        struct ofproto_flow_mod *ofm,
+                        const struct ofputil_flow_mod *fm)
+    OVS_EXCLUDED(ofproto_mutex)
+{
+    rule_criteria_init(&ofm->criteria, fm->table_id, &fm->match, fm->priority,
+                       OVS_VERSION_MAX, fm->cookie, fm->cookie_mask, OFPP_ANY,
+                       OFPG_ANY);
+    rule_criteria_require_rw(&ofm->criteria,
+                             (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
+    /* Must create a new flow in advance for the case that no matches are
+     * found.  Also used for template for multiple modified flows. */
+    add_flow_init(ofproto, ofm, fm);
+
+    return 0;
+}
+
 /* Implements OFPFC_MODIFY_STRICT.  Returns 0 on success or an OpenFlow error
  * code on failure. */
 static enum ofperr
 modify_flow_start_strict(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
-    struct ofputil_flow_mod *fm = &ofm->fm;
     struct rule_collection *old_rules = &ofm->old_rules;
-    struct rule_criteria criteria;
     enum ofperr error;
 
-    rule_criteria_init(&criteria, fm->table_id, &fm->match, fm->priority,
-                       OVS_VERSION_MAX, fm->cookie, fm->cookie_mask, OFPP_ANY,
-                       OFPG_ANY);
-    rule_criteria_require_rw(&criteria,
-                             (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
-    error = collect_rules_strict(ofproto, &criteria, old_rules);
-    rule_criteria_destroy(&criteria);
+    error = collect_rules_strict(ofproto, &ofm->criteria, old_rules);
 
     if (!error) {
         /* collect_rules_strict() can return max 1 rule. */
         error = modify_flows_start__(ofproto, ofm);
     }
 
-    if (error) {
-        rule_collection_destroy(old_rules);
-    }
     return error;
 }
 
@@ -5264,23 +5309,29 @@ delete_flows__(struct rule_collection *rules,
     }
 }
 
+static enum ofperr
+delete_flows_init_loose(struct ofproto *ofproto OVS_UNUSED,
+                        struct ofproto_flow_mod *ofm,
+                        const struct ofputil_flow_mod *fm)
+    OVS_EXCLUDED(ofproto_mutex)
+{
+    rule_criteria_init(&ofm->criteria, fm->table_id, &fm->match, 0,
+                       OVS_VERSION_MAX, fm->cookie, fm->cookie_mask,
+                       fm->out_port, fm->out_group);
+    rule_criteria_require_rw(&ofm->criteria,
+                             (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
+    return 0;
+}
+
 /* Implements OFPFC_DELETE. */
 static enum ofperr
 delete_flows_start_loose(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
-    const struct ofputil_flow_mod *fm = &ofm->fm;
     struct rule_collection *rules = &ofm->old_rules;
-    struct rule_criteria criteria;
     enum ofperr error;
 
-    rule_criteria_init(&criteria, fm->table_id, &fm->match, 0, OVS_VERSION_MAX,
-                       fm->cookie, fm->cookie_mask, fm->out_port,
-                       fm->out_group);
-    rule_criteria_require_rw(&criteria,
-                             (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
-    error = collect_rules_loose(ofproto, &criteria, rules);
-    rule_criteria_destroy(&criteria);
+    error = collect_rules_loose(ofproto, &ofm->criteria, rules);
 
     if (!error) {
         delete_flows_start__(ofproto, ofm->version, rules);
@@ -5294,7 +5345,6 @@ delete_flows_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
     delete_flows_revert__(ofproto, &ofm->old_rules);
-    rule_collection_destroy(&ofm->old_rules);
 }
 
 static void
@@ -5306,24 +5356,30 @@ delete_flows_finish(struct ofproto *ofproto,
     delete_flows_finish__(ofproto, &ofm->old_rules, OFPRR_DELETE, req);
 }
 
+static enum ofperr
+delete_flows_init_strict(struct ofproto *ofproto OVS_UNUSED,
+                         struct ofproto_flow_mod *ofm,
+                         const struct ofputil_flow_mod *fm)
+    OVS_EXCLUDED(ofproto_mutex)
+{
+    rule_criteria_init(&ofm->criteria, fm->table_id, &fm->match, fm->priority,
+                       OVS_VERSION_MAX, fm->cookie, fm->cookie_mask,
+                       fm->out_port, fm->out_group);
+    rule_criteria_require_rw(&ofm->criteria,
+                             (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
+    return 0;
+}
+
 /* Implements OFPFC_DELETE_STRICT. */
 static enum ofperr
 delete_flow_start_strict(struct ofproto *ofproto,
                          struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
-    const struct ofputil_flow_mod *fm = &ofm->fm;
     struct rule_collection *rules = &ofm->old_rules;
-    struct rule_criteria criteria;
     enum ofperr error;
 
-    rule_criteria_init(&criteria, fm->table_id, &fm->match, fm->priority,
-                       OVS_VERSION_MAX, fm->cookie, fm->cookie_mask,
-                       fm->out_port, fm->out_group);
-    rule_criteria_require_rw(&criteria,
-                             (fm->flags & OFPUTIL_FF_NO_READONLY) != 0);
-    error = collect_rules_strict(ofproto, &criteria, rules);
-    rule_criteria_destroy(&criteria);
+    error = collect_rules_strict(ofproto, &ofm->criteria, rules);
 
     if (!error) {
         delete_flows_start__(ofproto, ofm->version, rules);
@@ -5449,7 +5505,10 @@ handle_flow_mod__(struct ofproto *ofproto, const struct ofputil_flow_mod *fm,
     struct ofproto_flow_mod ofm;
     enum ofperr error;
 
-    ofm.fm = *fm;
+    error = ofproto_flow_mod_init(ofproto, &ofm, fm);
+    if (error) {
+        return error;
+    }
 
     ovs_mutex_lock(&ofproto_mutex);
     ofm.version = ofproto->tables_version + 1;
@@ -7024,46 +7083,107 @@ handle_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     return table_mod(ofproto, &tm);
 }
 
+/* Free resources that may be allocated by ofproto_flow_mod_init(). */
+void
+ofproto_flow_mod_uninit(struct ofproto_flow_mod *ofm)
+{
+    if (ofm->temp_rule) {
+        ofproto_rule_unref(ofm->temp_rule);
+        ofm->temp_rule = NULL;
+    }
+    if (ofm->criteria.version != OVS_VERSION_NOT_REMOVED) {
+        rule_criteria_destroy(&ofm->criteria);
+    }
+    if (ofm->conjs) {
+        free(ofm->conjs);
+        ofm->conjs = NULL;
+        ofm->n_conjs = 0;
+    }
+}
+
+static enum ofperr
+ofproto_flow_mod_init(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
+                      const struct ofputil_flow_mod *fm)
+    OVS_EXCLUDED(ofproto_mutex)
+{
+    enum ofperr error;
+
+    /* Forward flow mod fields we need later. */
+    ofm->command = fm->command;
+    ofm->buffer_id = fm->buffer_id;
+    ofm->modify_cookie = fm->modify_cookie;
+
+    ofm->modify_may_add_flow = (fm->new_cookie != OVS_BE64_MAX
+                                && fm->cookie_mask == htonll(0));
+
+    /* Initialize state needed by ofproto_flow_mod_uninit(). */
+    ofm->temp_rule = NULL;
+    ofm->criteria.version = OVS_VERSION_NOT_REMOVED;
+    ofm->conjs = NULL;
+    ofm->n_conjs = 0;
+
+    switch (ofm->command) {
+    case OFPFC_ADD:
+        error = add_flow_init(ofproto, ofm, fm);
+        break;
+    case OFPFC_MODIFY:
+        error = modify_flows_init_loose(ofproto, ofm, fm);
+        break;
+    case OFPFC_MODIFY_STRICT:
+        error = modify_flow_init_strict(ofproto, ofm, fm);
+        break;
+    case OFPFC_DELETE:
+        error = delete_flows_init_loose(ofproto, ofm, fm);
+        break;
+    case OFPFC_DELETE_STRICT:
+        error = delete_flows_init_strict(ofproto, ofm, fm);
+        break;
+    default:
+        error = OFPERR_OFPFMFC_BAD_COMMAND;
+        break;
+    }
+    if (error) {
+        ofproto_flow_mod_uninit(ofm);
+    }
+    return error;
+}
+
 static enum ofperr
 ofproto_flow_mod_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
-    /* Must check actions while holding ofproto_mutex to avoid a race. */
-    enum ofperr error = ofproto_check_ofpacts(ofproto, ofm->fm.ofpacts,
-                                              ofm->fm.ofpacts_len);
-    if (error) {
-        return error;
-    }
+    enum ofperr error;
 
-    /* Forward flow mod fields we need later. */
-    ofm->command = ofm->fm.command;
-    ofm->buffer_id = ofm->fm.buffer_id;
-    ofm->modify_cookie = ofm->fm.modify_cookie;
-
-    ofm->modify_may_add_flow = (ofm->fm.new_cookie != OVS_BE64_MAX
-                                && ofm->fm.cookie_mask == htonll(0));
+    rule_collection_init(&ofm->old_rules);
+    rule_collection_init(&ofm->new_rules);
 
     switch (ofm->command) {
     case OFPFC_ADD:
-        ofm->event = NXFME_ADDED;
-        return add_flow_start(ofproto, ofm);
-        /* , &be->old_rules.stub[0],
-           &be->new_rules.stub[0]); */
+        error = add_flow_start(ofproto, ofm);
+        break;
     case OFPFC_MODIFY:
-        ofm->event = NXFME_MODIFIED;
-        return modify_flows_start_loose(ofproto, ofm);
+        error = modify_flows_start_loose(ofproto, ofm);
+        break;
     case OFPFC_MODIFY_STRICT:
-        ofm->event = NXFME_MODIFIED;
-        return modify_flow_start_strict(ofproto, ofm);
+        error = modify_flow_start_strict(ofproto, ofm);
+        break;
     case OFPFC_DELETE:
-        ofm->event = NXFME_DELETED;
-        return delete_flows_start_loose(ofproto, ofm);
+        error = delete_flows_start_loose(ofproto, ofm);
+        break;
     case OFPFC_DELETE_STRICT:
-        ofm->event = NXFME_DELETED;
-        return delete_flow_start_strict(ofproto, ofm);
+        error = delete_flow_start_strict(ofproto, ofm);
+        break;
+    default:
+        OVS_NOT_REACHED();
     }
+    /* Release resources not needed after start. */
+    ofproto_flow_mod_uninit(ofm);
 
-    return OFPERR_OFPFMFC_BAD_COMMAND;
+    if (error) {
+        rule_collection_destroy(&ofm->old_rules);
+        rule_collection_destroy(&ofm->new_rules);
+    }
+    return error;
 }
 
 static void
@@ -7088,6 +7208,8 @@ ofproto_flow_mod_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     default:
         break;
     }
+    rule_collection_destroy(&ofm->old_rules);
+    rule_collection_destroy(&ofm->new_rules);
 }
 
 static void
@@ -7114,6 +7236,9 @@ ofproto_flow_mod_finish(struct ofproto *ofproto,
     default:
         break;
     }
+
+    rule_collection_destroy(&ofm->old_rules);
+    rule_collection_destroy(&ofm->new_rules);
 
     if (req) {
         ofconn_report_flow_mod(req->ofconn, ofm->command);
@@ -7320,6 +7445,7 @@ handle_bundle_control(struct ofconn *ofconn, const struct ofp_header *oh)
 
 static enum ofperr
 handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
+    OVS_EXCLUDED(ofproto_mutex)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     enum ofperr error;
@@ -7342,17 +7468,20 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
     if (type == OFPTYPE_PORT_MOD) {
         error = ofputil_decode_port_mod(badd.msg, &bmsg->opm.pm, false);
     } else if (type == OFPTYPE_FLOW_MOD) {
+        struct ofputil_flow_mod fm;
         struct ofpbuf ofpacts;
         uint64_t ofpacts_stub[1024 / 8];
 
         ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
-        error = ofputil_decode_flow_mod(&bmsg->ofm.fm, badd.msg,
+        error = ofputil_decode_flow_mod(&fm, badd.msg,
                                         ofconn_get_protocol(ofconn),
                                         &ofpacts,
                                         u16_to_ofp(ofproto->max_ports),
                                         ofproto->n_tables);
-        /* Move actions to heap. */
-        bmsg->ofm.fm.ofpacts = ofpbuf_steal_data(&ofpacts);
+        if (!error) {
+            error = ofproto_flow_mod_init(ofproto, &bmsg->ofm, &fm);
+        }
+        ofpbuf_uninit(&ofpacts);
     } else if (type == OFPTYPE_GROUP_MOD) {
         error = ofputil_decode_group_mod(badd.msg, &bmsg->ogm.gm);
     } else {

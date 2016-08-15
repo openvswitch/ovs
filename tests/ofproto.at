@@ -4921,8 +4921,6 @@ add table=254 actions=drop
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt 2>&1 | sed '/talking to/,$d'],
 [0], [dnl
 Error OFPBRC_EPERM for: OFPT_FLOW_MOD (OF1.4) (xid=0xb): ADD table:254 actions=drop
-Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.4) (xid=0xe):
- bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 ])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
@@ -5408,8 +5406,6 @@ add table=254 actions=drop
 AT_CHECK([ovs-ofctl -O OpenFlow13 --bundle add-flows br0 flows.txt 2>&1 | sed '/talking to/,$d'],
 [0], [dnl
 Error OFPBRC_EPERM for: OFPT_FLOW_MOD (OF1.3) (xid=0xb): ADD table:254 actions=drop
-Error OFPBFC_MSG_FAILED for: ONFT_BUNDLE_CONTROL (OF1.3) (xid=0xe):
- bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 ])
 
 AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip | sort], [0], [dnl
