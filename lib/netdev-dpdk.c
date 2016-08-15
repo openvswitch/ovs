@@ -875,7 +875,7 @@ dpdk_dev_parse_name(const char dev_name[], const char prefix[],
 }
 
 static int
-netdev_dpdk_vhost_user_construct(struct netdev *netdev)
+netdev_dpdk_vhost_construct(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     const char *name = netdev->name;
@@ -2506,12 +2506,6 @@ dpdk_vhost_class_init(void)
     return 0;
 }
 
-static int
-dpdk_vhost_user_class_init(void)
-{
-    return 0;
-}
-
 static void
 dpdk_common_init(void)
 {
@@ -2934,7 +2928,7 @@ out:
 }
 
 static int
-netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
+netdev_dpdk_vhost_reconfigure(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
@@ -2968,7 +2962,7 @@ netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
     return 0;
 }
 
-#define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT, DESTRUCT,    \
+#define NETDEV_DPDK_CLASS(NAME, CONSTRUCT, DESTRUCT,          \
                           SET_CONFIG, SET_TX_MULTIQ, SEND,    \
                           GET_CARRIER, GET_STATS,             \
                           GET_FEATURES, GET_STATUS,           \
@@ -2976,7 +2970,7 @@ netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
 {                                                             \
     NAME,                                                     \
     true,                       /* is_pmd */                  \
-    INIT,                       /* init */                    \
+    NULL,                       /* init */                    \
     NULL,                       /* netdev_dpdk_run */         \
     NULL,                       /* netdev_dpdk_wait */        \
                                                               \
@@ -3433,7 +3427,6 @@ dpdk_init(const struct smap *ovs_other_config)
 static const struct netdev_class dpdk_class =
     NETDEV_DPDK_CLASS(
         "dpdk",
-        NULL,
         netdev_dpdk_construct,
         netdev_dpdk_destruct,
         netdev_dpdk_set_config,
@@ -3449,7 +3442,6 @@ static const struct netdev_class dpdk_class =
 static const struct netdev_class dpdk_ring_class =
     NETDEV_DPDK_CLASS(
         "dpdkr",
-        NULL,
         netdev_dpdk_ring_construct,
         netdev_dpdk_destruct,
         netdev_dpdk_ring_set_config,
@@ -3462,11 +3454,10 @@ static const struct netdev_class dpdk_ring_class =
         netdev_dpdk_reconfigure,
         netdev_dpdk_rxq_recv);
 
-static const struct netdev_class dpdk_vhost_user_class =
+static const struct netdev_class dpdk_vhost_class =
     NETDEV_DPDK_CLASS(
         "dpdkvhostuser",
-        dpdk_vhost_user_class_init,
-        netdev_dpdk_vhost_user_construct,
+        netdev_dpdk_vhost_construct,
         netdev_dpdk_vhost_destruct,
         NULL,
         NULL,
@@ -3475,7 +3466,7 @@ static const struct netdev_class dpdk_vhost_user_class =
         netdev_dpdk_vhost_get_stats,
         NULL,
         NULL,
-        netdev_dpdk_vhost_user_reconfigure,
+        netdev_dpdk_vhost_reconfigure,
         netdev_dpdk_vhost_rxq_recv);
 
 void
@@ -3484,7 +3475,7 @@ netdev_dpdk_register(void)
     dpdk_common_init();
     netdev_register_provider(&dpdk_class);
     netdev_register_provider(&dpdk_ring_class);
-    netdev_register_provider(&dpdk_vhost_user_class);
+    netdev_register_provider(&dpdk_vhost_class);
 }
 
 void
