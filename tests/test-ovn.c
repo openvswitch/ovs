@@ -1218,6 +1218,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
     struct hmap dhcpv6_opts;
     struct simap ports, ct_zones;
     struct ds input;
+    bool ok = true;
 
     create_symtab(&symtab);
     create_dhcp_opts(&dhcp_opts, &dhcpv6_opts);
@@ -1237,49 +1238,89 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
 
     ds_init(&input);
     while (!ds_get_test_line(&input, stdin)) {
-        struct ofpbuf ofpacts;
+        struct ofpbuf ovnacts;
         struct expr *prereqs;
         char *error;
 
-        ofpbuf_init(&ofpacts, 0);
+        puts(ds_cstr(&input));
 
-        struct action_params ap = {
+        ofpbuf_init(&ovnacts, 0);
+
+        const struct ovnact_parse_params pp = {
             .symtab = &symtab,
             .dhcp_opts = &dhcp_opts,
             .dhcpv6_opts = &dhcpv6_opts,
-            .lookup_port = lookup_port_cb,
-            .aux = &ports,
-            .ct_zones = &ct_zones,
-            .group_table = &group_table,
-
             .n_tables = 16,
-            .first_ptable = 16,
             .cur_ltable = 10,
-            .output_ptable = 64,
-            .mac_bind_ptable = 65,
         };
-        error = actions_parse_string(ds_cstr(&input), &ap, &ofpacts, &prereqs);
+        error = ovnacts_parse_string(ds_cstr(&input), &pp, &ovnacts, &prereqs);
         if (!error) {
-            struct ds output;
-
-            ds_init(&output);
-            ds_put_cstr(&output, "actions=");
-            ofpacts_format(ofpacts.data, ofpacts.size, &output);
-            ds_put_cstr(&output, ", prereqs=");
-            if (prereqs) {
-                expr_format(prereqs, &output);
-            } else {
-                ds_put_char(&output, '1');
+            /* Convert the parsed representation back to a string and print it,
+             * if it's different from the input. */
+            struct ds ovnacts_s = DS_EMPTY_INITIALIZER;
+            ovnacts_format(ovnacts.data, ovnacts.size, &ovnacts_s);
+            if (strcmp(ds_cstr(&input), ds_cstr(&ovnacts_s))) {
+                printf("    formats as %s\n", ds_cstr(&ovnacts_s));
             }
-            puts(ds_cstr(&output));
-            ds_destroy(&output);
+
+            /* Encode the actions into OpenFlow and print. */
+            const struct ovnact_encode_params ep = {
+                .lookup_port = lookup_port_cb,
+                .aux = &ports,
+                .ct_zones = &ct_zones,
+                .group_table = &group_table,
+
+                .first_ptable = 16,
+                .output_ptable = 64,
+                .mac_bind_ptable = 65,
+            };
+            struct ofpbuf ofpacts;
+            ofpbuf_init(&ofpacts, 0);
+            ovnacts_encode(ovnacts.data, ovnacts.size, &ep, &ofpacts);
+            struct ds ofpacts_s = DS_EMPTY_INITIALIZER;
+            ofpacts_format(ofpacts.data, ofpacts.size, &ofpacts_s);
+            printf("    encodes as %s\n", ds_cstr(&ofpacts_s));
+            ds_destroy(&ofpacts_s);
+            ofpbuf_uninit(&ofpacts);
+
+            /* Print prerequisites if any. */
+            if (prereqs) {
+                struct ds prereqs_s = DS_EMPTY_INITIALIZER;
+                expr_format(prereqs, &prereqs_s);
+                printf("    has prereqs %s\n", ds_cstr(&prereqs_s));
+                ds_destroy(&prereqs_s);
+            }
+
+            /* Now re-parse and re-format the string to verify that it's
+             * round-trippable. */
+            struct ofpbuf ovnacts2;
+            struct expr *prereqs2;
+            ofpbuf_init(&ovnacts2, 0);
+            error = ovnacts_parse_string(ds_cstr(&ovnacts_s), &pp, &ovnacts2,
+                                         &prereqs2);
+            if (!error) {
+                struct ds ovnacts2_s = DS_EMPTY_INITIALIZER;
+                ovnacts_format(ovnacts2.data, ovnacts2.size, &ovnacts2_s);
+                if (strcmp(ds_cstr(&ovnacts_s), ds_cstr(&ovnacts2_s))) {
+                    printf("    bad reformat: %s\n", ds_cstr(&ovnacts2_s));
+                    ok = false;
+                }
+                ds_destroy(&ovnacts2_s);
+            } else {
+                printf("    reparse error: %s\n", error);
+                free(error);
+                ok = false;
+            }
+            expr_destroy(prereqs2);
+
+            ds_destroy(&ovnacts_s);
         } else {
-            puts(error);
+            printf("    %s\n", error);
             free(error);
         }
 
         expr_destroy(prereqs);
-        ofpbuf_uninit(&ofpacts);
+        ofpbuf_uninit(&ovnacts);
     }
     ds_destroy(&input);
 
@@ -1289,6 +1330,8 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
     shash_destroy(&symtab);
     dhcp_opts_destroy(&dhcp_opts);
     dhcp_opts_destroy(&dhcpv6_opts);
+
+    exit(ok ? EXIT_SUCCESS : EXIT_FAILURE);
 }
 
 static unsigned int

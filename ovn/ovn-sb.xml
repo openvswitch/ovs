@@ -1246,13 +1246,13 @@
         </dd>
 
         <dt>
-          <code><var>R</var> = put_dhcp_opts(<code>offerip</code> = <var>IP</var>, <var>D1</var> = <var>V1</var>, <var>D2</var> = <var>V2</var>, ..., <var>Dn</var> = <var>Vn</var>);</code>
+          <code><var>R</var> = put_dhcp_opts(<var>D1</var> = <var>V1</var>, <var>D2</var> = <var>V2</var>, ..., <var>Dn</var> = <var>Vn</var>);</code>
         </dt>
 
         <dd>
           <p>
-            <b>Parameters</b>: one or more DHCP option/value pairs, the first
-            of which must set a value for the offered IP, <code>offerip</code>.
+            <b>Parameters</b>: one or more DHCP option/value pairs, which must
+            include an <code>offerip</code> option (with code 0).
           </p>
 
           <p>

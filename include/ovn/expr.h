@@ -60,6 +60,7 @@
 #include "openvswitch/meta-flow.h"
 
 struct ds;
+struct expr;
 struct ofpbuf;
 struct shash;
 struct simap;
@@ -264,6 +265,9 @@ struct expr_field {
     int n_bits;                       /* Number of bits. */
 };
 
+char *expr_field_parse(struct lexer *lexer, const struct shash *symtab,
+                       struct expr_field *field, struct expr **prereqsp)
+    OVS_WARN_UNUSED_RESULT;
 void expr_field_format(const struct expr_field *, struct ds *);
 
 struct expr_symbol *expr_symtab_add_field(struct shash *symtab,
@@ -401,30 +405,9 @@ void expr_matches_print(const struct hmap *matches, FILE *);
 
 /* Action parsing helper. */
 
-char *expr_parse_assignment(struct lexer *lexer, struct expr_field *dst,
-                            const struct shash *symtab,
-                            bool (*lookup_port)(const void *aux,
-                                                const char *port_name,
-                                                unsigned int *portp),
-                            const void *aux,
-                            struct ofpbuf *ofpacts, struct expr **prereqsp)
+char *expr_type_check(const struct expr_field *, int n_bits, bool rw)
     OVS_WARN_UNUSED_RESULT;
-char *expr_parse_exchange(struct lexer *lexer, struct expr_field *dst,
-                          const struct shash *symtab,
-                          bool (*lookup_port)(const void *aux,
-                                              const char *port_name,
-                                              unsigned int *portp),
-                          const void *aux,
-                          struct ofpbuf *ofpacts, struct expr **prereqsp)
-    OVS_WARN_UNUSED_RESULT;
-char *expr_parse_field(struct lexer *lexer, const struct shash *symtab,
-                       struct expr_field *field)
-    OVS_WARN_UNUSED_RESULT;
-char *expr_expand_field(struct lexer *lexer, const struct shash *symtab,
-                        const struct expr_field *orig_field,
-                        int n_bits, bool rw,
-                        struct mf_subfield *sf, struct expr **prereqsp)
-    OVS_WARN_UNUSED_RESULT;
+struct mf_subfield expr_resolve_field(const struct expr_field *);
 
 /* Type of a "union expr_constant" or "struct expr_constant_set". */
 enum expr_constant_type {
@@ -451,6 +434,14 @@ union expr_constant {
     char *string;
 };
 
+char *expr_constant_parse(struct lexer *, const struct expr_field *,
+                          union expr_constant *)
+    OVS_WARN_UNUSED_RESULT;
+void expr_constant_format(const union expr_constant *,
+                          enum expr_constant_type, struct ds *);
+void expr_constant_destroy(const union expr_constant *,
+                           enum expr_constant_type);
+
 /* A collection of "union expr_constant"s of the same type. */
 struct expr_constant_set {
     union expr_constant *values;  /* Constants. */
@@ -459,9 +450,9 @@ struct expr_constant_set {
     bool in_curlies;              /* Whether the constants were in {}. */
 };
 
-char *expr_parse_constant_set(struct lexer *, const struct shash *symtab,
-                              struct expr_constant_set *cs)
+char *expr_constant_set_parse(struct lexer *, struct expr_constant_set *cs)
     OVS_WARN_UNUSED_RESULT;
+void expr_constant_set_format(const struct expr_constant_set *, struct ds *);
 void expr_constant_set_destroy(struct expr_constant_set *cs);
 
 
