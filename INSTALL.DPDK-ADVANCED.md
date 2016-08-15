@@ -570,6 +570,49 @@ For users wanting to do packet forwarding using kernel stack below are the steps
        where `-L`: Changes the numbers of channels of the specified network device
        and `combined`: Changes the number of multi-purpose channels.
 
+    4. OVS vHost client-mode & vHost reconnect (OPTIONAL)
+
+       By default, OVS DPDK acts as the vHost socket server for dpdkvhostuser
+       ports and QEMU acts as the vHost client. This means OVS creates and
+       manages the vHost socket and QEMU is the client which connects to the
+       vHost server (OVS). In QEMU v2.7 the option is available for QEMU to act
+       as the vHost server meaning the roles can be reversed and OVS can become
+       the vHost client. To enable client mode for a given dpdkvhostuserport,
+       one must specify a valid 'vhost-server-path' like so:
+
+       ```
+       ovs-vsctl set Interface dpdkvhostuser0 options:vhost-server-path=/path/to/socket
+       ```
+
+       Setting this value automatically switches the port to client mode (from
+       OVS' perspective). 'vhost-server-path' reflects the full path of the
+       socket that has been or will be created by QEMU for the given vHost User
+       port. Once a path is specified, the port will remain in 'client' mode
+       for the remainder of it's lifetime ie. it cannot be reverted back to
+       server mode.
+
+       One must append ',server' to the 'chardev' arguments on the QEMU command
+       line, to instruct QEMU to use vHost server mode for a given interface,
+       like so:
+
+       ````
+       -chardev socket,id=char0,path=/path/to/socket,server
+       ````
+
+       If the corresponding dpdkvhostuser port has not yet been configured in
+       OVS with vhost-server-path=/path/to/socket, QEMU will print a log
+       similar to the following:
+
+       `QEMU waiting for connection on: disconnected:unix:/path/to/socket,server`
+
+       QEMU will wait until the port is created sucessfully in OVS to boot the
+       VM.
+
+       One benefit of using this mode is the ability for vHost ports to
+       'reconnect' in event of the switch crashing or being brought down. Once
+       it is brought back up, the vHost ports will reconnect automatically and
+       normal service will resume.
+
   - VM Configuration with libvirt
 
     * change the user/group, access control policty and restart libvirtd.
