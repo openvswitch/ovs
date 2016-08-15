@@ -1061,34 +1061,53 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
     return 0;
 }
 
+static void
+dpdk_set_rxq_config(struct netdev_dpdk *dev, const struct smap *args)
+{
+    int new_n_rxq;
+
+    new_n_rxq = MAX(smap_get_int(args, "n_rxq", dev->requested_n_rxq), 1);
+    if (new_n_rxq != dev->requested_n_rxq) {
+        dev->requested_n_rxq = new_n_rxq;
+        netdev_request_reconfigure(&dev->up);
+    }
+}
+
 static int
 netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int new_n_rxq;
 
     ovs_mutex_lock(&dev->mutex);
-    new_n_rxq = MAX(smap_get_int(args, "n_rxq", dev->requested_n_rxq), 1);
-    if (new_n_rxq != dev->requested_n_rxq) {
-        dev->requested_n_rxq = new_n_rxq;
-        netdev_request_reconfigure(netdev);
-    }
 
-    /* Flow control configuration for DPDK Ethernet ports. */
-    if (dev->type == DPDK_DEV_ETH) {
-        bool rx_fc_en = false;
-        bool tx_fc_en = false;
-        enum rte_eth_fc_mode fc_mode_set[2][2] =
-                                           {{RTE_FC_NONE, RTE_FC_TX_PAUSE},
-                                            {RTE_FC_RX_PAUSE, RTE_FC_FULL}
-                                           };
-        rx_fc_en = smap_get_bool(args, "rx-flow-ctrl", false);
-        tx_fc_en = smap_get_bool(args, "tx-flow-ctrl", false);
-        dev->fc_conf.autoneg = smap_get_bool(args, "flow-ctrl-autoneg", false);
-        dev->fc_conf.mode = fc_mode_set[tx_fc_en][rx_fc_en];
+    dpdk_set_rxq_config(dev, args);
 
-        dpdk_eth_flow_ctrl_setup(dev);
-    }
+    /* Flow control support is only available for DPDK Ethernet ports. */
+    bool rx_fc_en = false;
+    bool tx_fc_en = false;
+    enum rte_eth_fc_mode fc_mode_set[2][2] =
+                                       {{RTE_FC_NONE, RTE_FC_TX_PAUSE},
+                                        {RTE_FC_RX_PAUSE, RTE_FC_FULL}
+                                       };
+    rx_fc_en = smap_get_bool(args, "rx-flow-ctrl", false);
+    tx_fc_en = smap_get_bool(args, "tx-flow-ctrl", false);
+    dev->fc_conf.autoneg = smap_get_bool(args, "flow-ctrl-autoneg", false);
+    dev->fc_conf.mode = fc_mode_set[tx_fc_en][rx_fc_en];
+
+    dpdk_eth_flow_ctrl_setup(dev);
+
+    ovs_mutex_unlock(&dev->mutex);
+
+    return 0;
+}
+
+static int
+netdev_dpdk_ring_set_config(struct netdev *netdev, const struct smap *args)
+{
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+    ovs_mutex_lock(&dev->mutex);
+    dpdk_set_rxq_config(dev, args);
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -3513,7 +3532,7 @@ static const struct netdev_class dpdk_ring_class =
         NULL,
         netdev_dpdk_ring_construct,
         netdev_dpdk_destruct,
-        netdev_dpdk_set_config,
+        netdev_dpdk_ring_set_config,
         netdev_dpdk_set_tx_multiq,
         netdev_dpdk_ring_send,
         netdev_dpdk_get_carrier,
