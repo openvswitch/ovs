@@ -832,72 +832,68 @@ class Row(object):
             return
         self._idl.txn._write(self, column, datum)
 
-    def _init_mutations_if_needed(self):
-        if '_inserts' not in self._mutations.keys():
-            self._mutations['_inserts'] = {}
-        if '_removes' not in self._mutations.keys():
-            self._mutations['_removes'] = {}
-        return
-
     def addvalue(self, column_name, key):
-        self._idl.txn._txn_rows[self.uuid] = self
-        self._init_mutations_if_needed()
-        if column_name in self._data.keys():
-            if column_name not in self._mutations['_inserts'].keys():
-                self._mutations['_inserts'][column_name] = []
-            self._mutations['_inserts'][column_name].append(key)
-
-    def delvalue(self, column_name, key):
-        self._idl.txn._txn_rows[self.uuid] = self
-        self._init_mutations_if_needed()
-        if column_name in self._data.keys():
-            if column_name not in self._mutations['_removes'].keys():
-                self._mutations['_removes'][column_name] = []
-            self._mutations['_removes'][column_name].append(key)
-
-    def setkey(self, column_name, key, value):
         self._idl.txn._txn_rows[self.uuid] = self
         column = self._table.columns[column_name]
         try:
-            datum = data.Datum.from_python(column.type, {key: value},
-                                           _row_to_uuid)
+            data.Datum.from_python(column.type, key, _row_to_uuid)
         except error.Error as e:
             # XXX rate-limit
             vlog.err("attempting to write bad value to column %s (%s)"
                      % (column_name, e))
             return
-        self._init_mutations_if_needed()
-        if column_name in self._data.keys():
-            if column_name not in self._mutations['_removes'].keys():
-                self._mutations['_removes'][column_name] = []
-            self._mutations['_removes'][column_name].append(key)
-        if self._mutations['_inserts'] is None:
-            self._mutations['_inserts'] = {}
-        self._mutations['_inserts'][column_name] = datum
+        inserts = self._mutations.setdefault('_inserts', {})
+        column_value = inserts.setdefault(column_name, set())
+        column_value.add(key)
 
-    def delkey(self, column_name, key):
+    def delvalue(self, column_name, key):
         self._idl.txn._txn_rows[self.uuid] = self
-        self._init_mutations_if_needed()
-        if column_name not in self._mutations['_removes'].keys():
-            self._mutations['_removes'][column_name] = []
-        self._mutations['_removes'][column_name].append(key)
-
-    def delkey(self, column_name, key, value):
-        self._idl.txn._txn_rows[self.uuid] = self
+        column = self._table.columns[column_name]
         try:
-            old_value = data.Datum.to_python(self._data[column_name],
-                                             _uuid_to_row)
-        except error.Error:
+            data.Datum.from_python(column.type, key, _row_to_uuid)
+        except error.Error as e:
+            # XXX rate-limit
+            vlog.err("attempting to delete bad value from column %s (%s)"
+                     % (column_name, e))
             return
-        if key not in old_value.keys():
-            return
-        if old_value[key] != value:
-            return
+        removes = self._mutations.setdefault('_removes', {})
+        column_value = removes.setdefault(column_name, set())
+        column_value.add(key)
 
-        self._init_mutations_if_needed()
-        if column_name not in self._mutations['_removes'].keys():
-            self._mutations['_removes'][column_name] = []
-        self._mutations['_removes'][column_name].append(key)
+    def setkey(self, column_name, key, value):
+        self._idl.txn._txn_rows[self.uuid] = self
+        column = self._table.columns[column_name]
+        try:
+            data.Datum.from_python(column.type, {key: value}, _row_to_uuid)
+        except error.Error as e:
+            # XXX rate-limit
+            vlog.err("attempting to write bad value to column %s (%s)"
+                     % (column_name, e))
+            return
+        if column_name in self._data:
+            # Remove existing key/value before updating.
+            removes = self._mutations.setdefault('_removes', {})
+            column_value = removes.setdefault(column_name, set())
+            column_value.add(key)
+        inserts = self._mutations.setdefault('_inserts', {})
+        column_value = inserts.setdefault(column_name, {})
+        column_value[key] = value
+
+    def delkey(self, column_name, key, value=None):
+        self._idl.txn._txn_rows[self.uuid] = self
+        if value:
+            try:
+                old_value = data.Datum.to_python(self._data[column_name],
+                                                 _uuid_to_row)
+            except error.Error:
+                return
+            if key not in old_value:
+                return
+            if old_value[key] != value:
+                return
+        removes = self._mutations.setdefault('_removes', {})
+        column_value = removes.setdefault(column_name, set())
+        column_value.add(key)
         return
 
     @classmethod
@@ -1282,7 +1278,7 @@ class Transaction(object):
                         column = row._table.columns[col]
                         if column.type.is_map():
                             opdat = ["set"]
-                            opdat.append(dat)
+                            opdat.append(list(dat))
                         else:
                             opdat = ["set"]
                             inner_opdat = []
@@ -1299,15 +1295,17 @@ class Transaction(object):
                         op["mutations"].append(mutation)
                         addop = True
                 if '_inserts' in row._mutations.keys():
-                    for col, dat in six.iteritems(row._mutations['_inserts']):
+                    for col, val in six.iteritems(row._mutations['_inserts']):
                         column = row._table.columns[col]
                         if column.type.is_map():
                             opdat = ["map"]
-                            opdat.append(dat.as_list())
+                            datum = data.Datum.from_python(column.type, val,
+                                                           _row_to_uuid)
+                            opdat.append(datum.as_list())
                         else:
                             opdat = ["set"]
                             inner_opdat = []
-                            for ele in dat:
+                            for ele in val:
                                 try:
                                     datum = data.Datum.from_python(column.type,
                                         ele, _row_to_uuid)
@@ -1471,13 +1469,11 @@ class Transaction(object):
                 return
 
         txn._txn_rows[row.uuid] = row
-        if '_inserts' in row._mutations.keys():
-            if column.name in row._mutations['_inserts']:
-                row._mutations['_inserts'][column.name] = datum.copy()
-            else:
-                row._changes[column.name] = datum.copy()
-        else:
-            row._changes[column.name] = datum.copy()
+        if '_inserts' in row._mutations:
+            row._mutations['_inserts'].pop(column.name, None)
+        if '_removes' in row._mutations:
+            row._mutations['_removes'].pop(column.name, None)
+        row._changes[column.name] = datum.copy()
 
     def insert(self, table, new_uuid=None):
         """Inserts and returns a new row in 'table', which must be one of the

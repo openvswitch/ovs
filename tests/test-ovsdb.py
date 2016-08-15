@@ -149,14 +149,15 @@ def do_parse_schema(schema_string):
     print(ovs.json.to_string(schema.to_json(), sort_keys=True))
 
 
-def get_simple_table_printable_row(row):
-    simple_columns = ["i", "r", "b", "s", "u", "ia",
-                      "ra", "ba", "sa", "ua", "uuid"]
+def get_simple_printable_row_string(row, columns):
     s = ""
-    for column in simple_columns:
+    for column in columns:
         if hasattr(row, column) and not (type(getattr(row, column))
                                          is ovs.db.data.Atom):
-            s += "%s=%s " % (column, getattr(row, column))
+            value = getattr(row, column)
+            if isinstance(value, dict):
+                value = sorted(value.items())
+            s += "%s=%s " % (column, value)
     s = s.strip()
     s = re.sub('""|,|u?\'', "", s)
     s = re.sub('UUID\(([^)]+)\)', r'\1', s)
@@ -164,38 +165,22 @@ def get_simple_table_printable_row(row):
     s = re.sub('True', 'true', s)
     s = re.sub(r'(ba)=([^[][^ ]*) ', r'\1=[\2] ', s)
     return s
+
+
+def get_simple_table_printable_row(row):
+    simple_columns = ["i", "r", "b", "s", "u", "ia",
+                      "ra", "ba", "sa", "ua", "uuid"]
+    return get_simple_printable_row_string(row, simple_columns)
 
 
 def get_simple2_table_printable_row(row):
     simple2_columns = ["name", "smap", "imap"]
-    s = ""
-    for column in simple2_columns:
-        if hasattr(row, column) and not (type(getattr(row, column))
-                                         is ovs.db.data.Atom):
-            s += "%s=%s " % (column, getattr(row, column))
-    s = s.strip()
-    s = re.sub('""|,|u?\'', "", s)
-    s = re.sub('UUID\(([^)]+)\)', r'\1', s)
-    s = re.sub('False', 'false', s)
-    s = re.sub('True', 'true', s)
-    s = re.sub(r'(ba)=([^[][^ ]*) ', r'\1=[\2] ', s)
-    return s
+    return get_simple_printable_row_string(row, simple2_columns)
 
 
 def get_simple3_table_printable_row(row):
     simple3_columns = ["name", "uset"]
-    s = ""
-    for column in simple3_columns:
-        if hasattr(row, column) and not (type(getattr(row, column))
-                                         is ovs.db.data.Atom):
-            s += "%s=%s " % (column, getattr(row, column))
-    s = s.strip()
-    s = re.sub('""|,|u?\'', "", s)
-    s = re.sub('UUID\(([^)]+)\)', r'\1', s)
-    s = re.sub('False', 'false', s)
-    s = re.sub('True', 'true', s)
-    s = re.sub(r'(ba)=([^[][^ ]*) ', r'\1=[\2] ', s)
-    return s
+    return get_simple_printable_row_string(row, simple3_columns)
 
 
 def print_idl(idl, step):
@@ -448,16 +433,24 @@ def idl_set(idl, commands, step):
             row.setkey('smap', 'key1', 'myList1')
             row.setkey('imap', 3, 'myids2')
             row.__setattr__('name', 'String2')
-        elif name == 'partialmapdelelement':
+        elif name == 'partialmapinsertmultipleelements':
+            row = idltest_find_simple2(idl, 'String2')
+            row.setkey('smap', 'key2', 'myList2')
+            row.setkey('smap', 'key3', 'myList3')
+        elif name == 'partialmapdelelements':
             row = idltest_find_simple2(idl, 'String2')
             row.delkey('smap', 'key1', 'myList1')
+            row.delkey('smap', 'key2', 'wrongvalue')
+            row.delkey('smap', 'key3')
         elif name == 'partialrenamesetadd':
             row = idltest_find_simple3(idl, 'mySet1')
             row.addvalue('uset',
                          uuid.UUID("001e43d2-dd3f-4616-ab6a-83a490bb0991"))
             row.__setattr__('name', 'String2')
-        elif name == 'partialsetadd2':
+        elif name == 'partialduplicateadd':
             row = idltest_find_simple3(idl, 'String2')
+            row.addvalue('uset',
+                         uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8"))
             row.addvalue('uset',
                          uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8"))
         elif name == 'partialsetdel':
@@ -469,6 +462,14 @@ def idl_set(idl, commands, step):
             new_row.__setattr__('name', 'test')
             row = idltest_find_simple3(idl, 'String2')
             row.addvalue('uref', new_row.uuid)
+        elif name == 'partialsetoverrideops':
+            row = idltest_find_simple3(idl, 'String2')
+            row.addvalue('uset',
+                         uuid.UUID("579e978d-776c-4f19-a225-268e5890e670"))
+            row.delvalue('uset',
+                         uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8"))
+            row.__setattr__('uset',
+                [uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8")])
         else:
             sys.stderr.write("unknown command %s\n" % name)
             sys.exit(1)

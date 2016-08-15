@@ -1110,15 +1110,17 @@ OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN([map, simple2 idl-partial-update-map-c
 
 OVSDB_CHECK_IDL_PY([partial-map idl],
 [['["idltest", {"op":"insert", "table":"simple2",
-                "row":{"name":"myString1","smap":["map",[["key1","value1"]]]} }]']
+                "row":{"name":"myString1","smap":["map",[["key1","value1"],["key2","value2"]]]} }]']
 ],
-  [?simple2:name,smap,imap 'partialmapinsertelement' 'partialmapdelelement'],
-[[000: name=myString1 smap={key1: value1} imap={}
+  [?simple2:name,smap,imap 'partialmapinsertelement' 'partialmapinsertmultipleelements' 'partialmapdelelements'],
+[[000: name=myString1 smap=[(key1 value1) (key2 value2)] imap=[]
 001: commit, status=success
-002: name=String2 smap={key1: myList1} imap={3: myids2}
+002: name=String2 smap=[(key1 myList1) (key2 value2)] imap=[(3 myids2)]
 003: commit, status=success
-004: name=String2 smap={} imap={3: myids2}
-005: done
+004: name=String2 smap=[(key1 myList1) (key2 myList2) (key3 myList3)] imap=[(3 myids2)]
+005: commit, status=success
+006: name=String2 smap=[(key2 myList2)] imap=[(3 myids2)]
+007: done
 ]])
 
 m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_SET_COLUMN],
@@ -1161,7 +1163,7 @@ OVSDB_CHECK_IDL_PY([partial-set idl],
 [['["idltest", {"op":"insert", "table":"simple3",
                 "row":{"name":"mySet1","uset":["set", [[ "uuid", "0005b872-f9e5-43be-ae02-3184b9680e75" ], [ "uuid", "000d2f6a-76af-412f-b59d-e7bcd3e84eff" ]]]} }, {"op":"insert", "table":"simple4", "row":{"name":"seed"}}]']
 ],
-  ['partialrenamesetadd' 'partialsetadd2' 'partialsetdel' 'partialsetref'],
+  ['partialrenamesetadd' 'partialduplicateadd' 'partialsetdel' 'partialsetref' 'partialsetoverrideops'],
 [[000: name=mySet1 uset=[<0> <1>]
 001: commit, status=success
 002: name=String2 uset=[<0> <1> <2>]
@@ -1171,7 +1173,9 @@ OVSDB_CHECK_IDL_PY([partial-set idl],
 006: name=String2 uset=[<0> <1> <3>]
 007: commit, status=success
 008: name=String2 uset=[<0> <1> <3>]
-009: done
+009: commit, status=success
+010: name=String2 uset=[<3>]
+011: done
 ]])
 
 m4_define([OVSDB_CHECK_IDL_NOTIFY_PY],
