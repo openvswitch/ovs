@@ -140,9 +140,6 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 #define OVS_VHOST_QUEUE_DISABLED    (-2) /* Queue was disabled by guest and not
                                           * yet mapped to another queue. */
 
-#ifdef VHOST_CUSE
-static char *cuse_dev_name = NULL;    /* Character device cuse_dev_name. */
-#endif
 static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 
 #define VHOST_ENQ_RETRY_NUM 8
@@ -878,34 +875,6 @@ dpdk_dev_parse_name(const char dev_name[], const char prefix[],
 }
 
 static int
-vhost_construct_helper(struct netdev *netdev) OVS_REQUIRES(dpdk_mutex)
-{
-    if (rte_eal_init_ret) {
-        return rte_eal_init_ret;
-    }
-
-    return netdev_dpdk_init(netdev, -1, DPDK_DEV_VHOST);
-}
-
-static int
-netdev_dpdk_vhost_cuse_construct(struct netdev *netdev)
-{
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int err;
-
-    if (rte_eal_init_ret) {
-        return rte_eal_init_ret;
-    }
-
-    ovs_mutex_lock(&dpdk_mutex);
-    strncpy(CONST_CAST(char *, dev->vhost_id), netdev->name,
-            sizeof dev->vhost_id);
-    err = vhost_construct_helper(netdev);
-    ovs_mutex_unlock(&dpdk_mutex);
-    return err;
-}
-
-static int
 netdev_dpdk_vhost_user_construct(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
@@ -942,7 +911,7 @@ netdev_dpdk_vhost_user_construct(struct netdev *netdev)
         fatal_signal_add_file_to_unlink(dev->vhost_id);
         VLOG_INFO("Socket %s created for vhost-user port %s\n",
                   dev->vhost_id, name);
-        err = vhost_construct_helper(netdev);
+        err = netdev_dpdk_init(netdev, -1, DPDK_DEV_VHOST);
     }
 
     ovs_mutex_unlock(&dpdk_mutex);
@@ -2519,7 +2488,7 @@ static void *
 start_vhost_loop(void *dummy OVS_UNUSED)
 {
      pthread_detach(pthread_self());
-     /* Put the cuse thread into quiescent state. */
+     /* Put the vhost thread into quiescent state. */
      ovsrcu_quiesce_start();
      rte_vhost_driver_session_start();
      return NULL;
@@ -2534,12 +2503,6 @@ dpdk_vhost_class_init(void)
                             | 1ULL << VIRTIO_NET_F_CSUM);
 
     ovs_thread_create("vhost_thread", start_vhost_loop, NULL);
-    return 0;
-}
-
-static int
-dpdk_vhost_cuse_class_init(void)
-{
     return 0;
 }
 
@@ -3005,29 +2968,6 @@ netdev_dpdk_vhost_user_reconfigure(struct netdev *netdev)
     return 0;
 }
 
-static int
-netdev_dpdk_vhost_cuse_reconfigure(struct netdev *netdev)
-{
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-
-    ovs_mutex_lock(&dpdk_mutex);
-    ovs_mutex_lock(&dev->mutex);
-
-    netdev->n_txq = dev->requested_n_txq;
-    netdev->n_rxq = 1;
-
-    if (dev->requested_mtu != dev->mtu) {
-        if (!netdev_dpdk_mempool_configure(dev)) {
-            netdev_change_seq_changed(netdev);
-        }
-    }
-
-    ovs_mutex_unlock(&dev->mutex);
-    ovs_mutex_unlock(&dpdk_mutex);
-
-    return 0;
-}
-
 #define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT, DESTRUCT,    \
                           SET_CONFIG, SET_TX_MULTIQ, SEND,    \
                           GET_CARRIER, GET_STATS,             \
@@ -3111,8 +3051,8 @@ process_vhost_flags(char *flag, char *default_val, int size,
 
     val = smap_get(ovs_other_config, flag);
 
-    /* Depending on which version of vhost is in use, process the vhost-specific
-     * flag if it is provided, otherwise resort to default value.
+    /* Process the vhost-sock-dir flag if it is provided, otherwise resort to
+     * default value.
      */
     if (val && (strlen(val) <= size)) {
         changed = 1;
@@ -3336,9 +3276,7 @@ dpdk_init__(const struct smap *ovs_other_config)
     bool auto_determine = true;
     int err = 0;
     cpu_set_t cpuset;
-#ifndef VHOST_CUSE
     char *sock_dir_subcomponent;
-#endif
 
     if (!smap_get_bool(ovs_other_config, "dpdk-init", false)) {
         VLOG_INFO("DPDK Disabled - to change this requires a restart.\n");
@@ -3346,11 +3284,6 @@ dpdk_init__(const struct smap *ovs_other_config)
     }
 
     VLOG_INFO("DPDK Enabled, initializing");
-
-#ifdef VHOST_CUSE
-    if (process_vhost_flags("cuse-dev-name", xstrdup("vhost-net"),
-                            PATH_MAX, ovs_other_config, &cuse_dev_name)) {
-#else
     if (process_vhost_flags("vhost-sock-dir", xstrdup(ovs_rundir()),
                             NAME_MAX, ovs_other_config,
                             &sock_dir_subcomponent)) {
@@ -3373,7 +3306,6 @@ dpdk_init__(const struct smap *ovs_other_config)
         free(sock_dir_subcomponent);
     } else {
         vhost_sock_dir = sock_dir_subcomponent;
-#endif
     }
 
     argv = grow_argv(&argv, 0, 1);
@@ -3465,18 +3397,6 @@ dpdk_init__(const struct smap *ovs_other_config)
 
     ovs_thread_create("dpdk_watchdog", dpdk_watchdog, NULL);
 
-#ifdef VHOST_CUSE
-    /* Register CUSE device to handle IOCTLs.
-     * Unless otherwise specified, cuse_dev_name is set to vhost-net.
-     */
-    err = rte_vhost_driver_register(cuse_dev_name, 0);
-
-    if (err != 0) {
-        VLOG_ERR("CUSE device setup failure.");
-        return;
-    }
-#endif
-
     dpdk_vhost_class_init();
 
 #ifdef DPDK_PDUMP
@@ -3542,23 +3462,7 @@ static const struct netdev_class dpdk_ring_class =
         netdev_dpdk_reconfigure,
         netdev_dpdk_rxq_recv);
 
-static const struct netdev_class OVS_UNUSED dpdk_vhost_cuse_class =
-    NETDEV_DPDK_CLASS(
-        "dpdkvhostcuse",
-        dpdk_vhost_cuse_class_init,
-        netdev_dpdk_vhost_cuse_construct,
-        netdev_dpdk_vhost_destruct,
-        NULL,
-        NULL,
-        netdev_dpdk_vhost_send,
-        netdev_dpdk_vhost_get_carrier,
-        netdev_dpdk_vhost_get_stats,
-        NULL,
-        NULL,
-        netdev_dpdk_vhost_cuse_reconfigure,
-        netdev_dpdk_vhost_rxq_recv);
-
-static const struct netdev_class OVS_UNUSED dpdk_vhost_user_class =
+static const struct netdev_class dpdk_vhost_user_class =
     NETDEV_DPDK_CLASS(
         "dpdkvhostuser",
         dpdk_vhost_user_class_init,
@@ -3580,11 +3484,7 @@ netdev_dpdk_register(void)
     dpdk_common_init();
     netdev_register_provider(&dpdk_class);
     netdev_register_provider(&dpdk_ring_class);
-#ifdef VHOST_CUSE
-    netdev_register_provider(&dpdk_vhost_cuse_class);
-#else
     netdev_register_provider(&dpdk_vhost_user_class);
-#endif
 }
 
 void

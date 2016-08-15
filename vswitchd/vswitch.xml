@@ -286,18 +286,6 @@
         </p>
       </column>
 
-      <column name="other_config" key="cuse-dev-name"
-              type='{"type": "string"}'>
-        <p>
-          Specifies the name of the vhost-cuse character device to open for
-          vhost-cuse support.
-        </p>
-        <p>
-          The default is vhost-net. Changing this value requires restarting
-          the daemon.
-        </p>
-      </column>
-
       <column name="other_config" key="vhost-sock-dir"
               type='{"type": "string"}'>
         <p>

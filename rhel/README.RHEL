@@ -36,8 +36,6 @@ assignments.  The following OVS-specific variable names are supported:
         * "OVSDPDKRPort", if <name> is a DPDK ring port (name must
           start with dpdkr and end with portid, eg "dpdkr0")
 
-        * "OVSDPDKVhostPort" if <name> is a DPDK vhost-cuse port
-
         * "OVSDPDKVhostUserPort" if <name> is a DPDK vhost-user port
 
         * "OVSDPDKBond" if <name> is an OVS DPDK bond.

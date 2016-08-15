@@ -179,13 +179,6 @@ case "$TYPE" in
 			-- add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS \
 			-- set Interface "$DEVICE" type=dpdkr ${OVS_EXTRA+-- $OVS_EXTRA}
 		;;
-	OVSDPDVhostPort)
-		ifup_ovs_bridge
-		ovs-vsctl -t ${TIMEOUT} \
-			-- --if-exists del-port "$OVS_BRIDGE" "$DEVICE" \
-			-- add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS \
-			-- set Interface "$DEVICE" type=dpdkvhost ${OVS_EXTRA+-- $OVS_EXTRA}
-		;;
 	OVSDPDKVhostUserPort)
 		ifup_ovs_bridge
 		ovs-vsctl -t ${TIMEOUT} \
