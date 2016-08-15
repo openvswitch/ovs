@@ -1110,14 +1110,14 @@ OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN([map, simple2 idl-partial-update-map-c
 
 OVSDB_CHECK_IDL_PY([partial-map idl],
 [['["idltest", {"op":"insert", "table":"simple2",
-                "row":{"name":"myString1","smap":["map",[["key1","value1"],["key2","value2"]]]} }]']
+                "row":{"name":"myString1","smap":["map",[["key1","value1"]]]} }]']
 ],
   [?simple2:name,smap,imap 'partialmapinsertelement' 'partialmapdelelement'],
-[[000: name=myString1 smap={key2: value2 key1: value1} imap={}
+[[000: name=myString1 smap={key1: value1} imap={}
 001: commit, status=success
-002: name=String2 smap={key2: value2 key1: myList1} imap={3: myids2}
+002: name=String2 smap={key1: myList1} imap={3: myids2}
 003: commit, status=success
-004: name=String2 smap={key1: myList1} imap={3: myids2}
+004: name=String2 smap={} imap={3: myids2}
 005: done
 ]])
 

@@ -450,7 +450,7 @@ def idl_set(idl, commands, step):
             row.__setattr__('name', 'String2')
         elif name == 'partialmapdelelement':
             row = idltest_find_simple2(idl, 'String2')
-            row.delkey('smap', 'key2', 'value2')
+            row.delkey('smap', 'key1', 'myList1')
         elif name == 'partialrenamesetadd':
             row = idltest_find_simple3(idl, 'mySet1')
             row.addvalue('uset',
