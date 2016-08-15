@@ -20,6 +20,7 @@
 #include "lflow.h"
 #include "lib/poll-loop.h"
 #include "ofctrl.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/match.h"
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/ofpbuf.h"
@@ -57,6 +58,15 @@ physical_register_ovs_idl(struct ovsdb_idl *ovs_idl)
 static struct simap localvif_to_ofport =
     SIMAP_INITIALIZER(&localvif_to_ofport);
 static struct hmap tunnels = HMAP_INITIALIZER(&tunnels);
+
+struct uuid_hash_node {
+    struct hmap_node node;
+    struct uuid uuid;
+};
+
+static struct hmap port_binding_uuids = HMAP_INITIALIZER(&port_binding_uuids);
+static struct hmap multicast_group_uuids =
+    HMAP_INITIALIZER(&multicast_group_uuids);
 
 /* UUID to identify OF flows not associated with ovsdb rows. */
 static struct uuid *hc_uuid = NULL;
@@ -636,6 +646,35 @@ consider_mc_group(enum mf_field_id mff_ovn_geneve,
     sset_destroy(&remote_chassis);
 }
 
+static bool
+find_uuid_in_hmap(struct hmap *hmap_p, struct uuid *uuid)
+{
+    struct uuid_hash_node *candidate;
+    HMAP_FOR_EACH_WITH_HASH (candidate, node, uuid_hash(uuid), hmap_p) {
+        if (uuid_equals(uuid, &candidate->uuid)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/* Deletes the flows whose UUIDs are in 'old' but not 'new', and then replaces
+ * 'old' by 'new'. */
+static void
+rationalize_hmap_and_delete_flows(struct hmap *old, struct hmap *new)
+{
+    struct uuid_hash_node *uuid_node, *old_node;
+    HMAP_FOR_EACH_SAFE (uuid_node, old_node, node, old) {
+        if (!find_uuid_in_hmap(new, &uuid_node->uuid)) {
+            ofctrl_remove_flows(&uuid_node->uuid);
+        }
+    }
+    hmap_swap(old, new);
+    HMAP_FOR_EACH_POP(uuid_node, node, new) {
+        free(uuid_node);
+    }
+}
+
 void
 physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
              const struct ovsrec_bridge *br_int, const char *this_chassis_id,
@@ -791,6 +830,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
      * 64 for logical-to-physical translation. */
     const struct sbrec_port_binding *binding;
     if (full_binding_processing) {
+        struct hmap new_port_binding_uuids =
+            HMAP_INITIALIZER(&new_port_binding_uuids);
         SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
             /* Because it is possible in the above code to enter this
              * for loop without having cleared the flow table first, we
@@ -798,7 +839,14 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             ofctrl_remove_flows(&binding->header_.uuid);
             consider_port_binding(mff_ovn_geneve, ct_zones, local_datapaths,
                                   patched_datapaths, binding, &ofpacts);
+            struct uuid_hash_node *hash_node = xzalloc(sizeof *hash_node);
+            hash_node->uuid = binding->header_.uuid;
+            hmap_insert(&new_port_binding_uuids, &hash_node->node,
+                        uuid_hash(&hash_node->uuid));
         }
+        rationalize_hmap_and_delete_flows(&port_binding_uuids,
+                                          &new_port_binding_uuids);
+        hmap_destroy(&new_port_binding_uuids);
         full_binding_processing = false;
     } else {
         SBREC_PORT_BINDING_FOR_EACH_TRACKED (binding, ctx->ovnsb_idl) {
@@ -818,6 +866,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     const struct sbrec_multicast_group *mc;
     struct ofpbuf remote_ofpacts;
     ofpbuf_init(&remote_ofpacts, 0);
+    struct hmap new_multicast_group_uuids =
+        HMAP_INITIALIZER(&new_multicast_group_uuids);
     SBREC_MULTICAST_GROUP_FOR_EACH (mc, ctx->ovnsb_idl) {
         /* As multicast groups are always reprocessed each time,
          * the first step is to clean the old flows for the group
@@ -825,7 +875,14 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         ofctrl_remove_flows(&mc->header_.uuid);
         consider_mc_group(mff_ovn_geneve, ct_zones,
                           local_datapaths, mc, &ofpacts, &remote_ofpacts);
+        struct uuid_hash_node *hash_node = xzalloc(sizeof *hash_node);
+        hash_node->uuid = mc->header_.uuid;
+        hmap_insert(&new_multicast_group_uuids, &hash_node->node,
+                    uuid_hash(&hash_node->uuid));
     }
+    rationalize_hmap_and_delete_flows(&multicast_group_uuids,
+                                      &new_multicast_group_uuids);
+    hmap_destroy(&new_multicast_group_uuids);
 
     ofpbuf_uninit(&remote_ofpacts);
 
