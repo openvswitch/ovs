@@ -1114,8 +1114,7 @@ on_exit 'kill `cat *.pid`'
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --sync-exclude-tables=mydb:db1,mydb:db2 db])
 
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/get-sync-excluded-tables],
-  [0], [mydb:db2
-mydb:db1
+  [0], [mydb:db1,mydb:db2
 ])
 AT_CLEANUP
 
