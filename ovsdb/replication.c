@@ -20,6 +20,7 @@
 #include "replication.h"
 
 #include "condition.h"
+#include "openvswitch/dynamic-string.h"
 #include "openvswitch/json.h"
 #include "openvswitch/vlog.h"
 #include "jsonrpc.h"
@@ -38,7 +39,6 @@ VLOG_DEFINE_THIS_MODULE(replication);
 static char *active_ovsdb_server;
 static struct jsonrpc *rpc;
 static struct sset monitored_tables = SSET_INITIALIZER(&monitored_tables);
-static struct sset tables_blacklist = SSET_INITIALIZER(&tables_blacklist);
 static bool reset_dbs = true;
 
 static struct jsonrpc *open_jsonrpc(const char *server);
@@ -76,11 +76,20 @@ static struct ovsdb_error *execute_update(struct ovsdb_txn *txn,
                                           struct ovsdb_table *table,
                                           struct json *new);
 
+/* Maps from db name to sset of table names. */
+static struct shash blacklist_tables = SHASH_INITIALIZER(&blacklist_tables);
+
+static void blacklist_tables_clear(void);
+static void blacklist_tables_add(const char *database, const char *table);
+static bool blacklist_tables_find(const char *database, const char* table);
+
+
 void
 replication_init(void)
 {
-    sset_init(&monitored_tables);
-    sset_init(&tables_blacklist);
+    if (rpc) {
+        disconnect_active_server();
+    }
     reset_dbs = true;
 }
 
@@ -135,19 +144,117 @@ get_active_ovsdb_server(void)
     return active_ovsdb_server;
 }
 
-void
-set_tables_blacklist(const char *blacklist)
+/* Parse 'blacklist' to rebuild 'blacklist_tables'.  If 'dryrun' is false, the
+ * current black list tables will be wiped out, regardless of whether
+ * 'blacklist' can be parsed.  If 'dryrun' is true, only parses 'blacklist' and
+ * reports any errors, without modifying the blacklist.
+ *
+ * On error, returns the error string, which the caller is
+ * responsible for freeing. Returns NULL otherwise. */
+char * OVS_WARN_UNUSED_RESULT
+set_blacklist_tables(const char *blacklist, bool dryrun)
 {
-    replication_init();
+    struct sset set = SSET_INITIALIZER(&set);
+    char *err = NULL;
+
     if (blacklist) {
-        sset_from_delimited_string(&tables_blacklist, blacklist, ",");
+        const char *longname;
+
+        if (!dryrun) {
+            blacklist_tables_clear();
+        }
+
+        sset_from_delimited_string(&set, blacklist, " ,");
+        SSET_FOR_EACH (longname, &set) {
+            char *database = xstrdup(longname), *table = NULL;
+            strtok_r(database, ":", &table);
+            if (table && !dryrun) {
+                blacklist_tables_add(database, table);
+            }
+
+            free(database);
+            if (!table) {
+                err = xasprintf("Can't parse black list table: %s", longname);
+                goto done;
+            }
+        }
     }
+
+done:
+    sset_destroy(&set);
+    if (err && !dryrun) {
+        /* On error, destroy the partially built 'blacklist_tables'. */
+        blacklist_tables_clear();
+    }
+    return err;
 }
 
-struct sset
-get_tables_blacklist(void)
+char * OVS_WARN_UNUSED_RESULT
+get_blacklist_tables(void)
 {
-    return tables_blacklist;
+    struct shash_node *node;
+    struct sset set = SSET_INITIALIZER(&set);
+
+    SHASH_FOR_EACH (node, &blacklist_tables) {
+        const char *database = node->name;
+        const char *table;
+        struct sset *tables = node->data;
+
+        SSET_FOR_EACH (table, tables) {
+            sset_add_and_free(&set, xasprintf("%s:%s", database, table));
+        }
+    }
+
+    /* Output the table list in an sorted order, so that
+     * the output string will not depend on the hash function
+     * that used to implement the hmap data structure. This is
+     * only useful for writting unit tests.  */
+    const char **sorted = sset_sort(&set);
+    struct ds ds = DS_EMPTY_INITIALIZER;
+    size_t i;
+    for (i = 0; i < sset_count(&set); i++) {
+        ds_put_format(&ds, "%s,", sorted[i]);
+    }
+
+    ds_chomp(&ds, ',');
+
+    free(sorted);
+    sset_destroy(&set);
+
+    return ds_steal_cstr(&ds);
+}
+
+static void
+blacklist_tables_clear(void)
+{
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, &blacklist_tables) {
+        struct sset *tables = node->data;
+        sset_destroy(tables);
+    }
+
+    shash_clear_free_data(&blacklist_tables);
+}
+
+static void
+blacklist_tables_add(const char *database, const char *table)
+{
+    struct sset *tables = shash_find_data(&blacklist_tables, database);
+
+    if (!tables) {
+        tables = xmalloc(sizeof *tables);
+        sset_init(tables);
+        shash_add(&blacklist_tables, database, tables);
+    }
+
+    sset_add(tables, table);
+}
+
+static bool
+blacklist_tables_find(const char *database, const char *table)
+{
+    struct sset *tables = shash_find_data(&blacklist_tables, database);
+    return tables && sset_contains(tables, table);
 }
 
 void
@@ -156,15 +263,15 @@ disconnect_active_server(void)
     jsonrpc_close(rpc);
     rpc = NULL;
     sset_clear(&monitored_tables);
-    sset_clear(&tables_blacklist);
 }
 
 void
-destroy_active_server(void)
+replication_destroy(void)
 {
     disconnect_active_server();
     sset_destroy(&monitored_tables);
-    sset_destroy(&tables_blacklist);
+    blacklist_tables_clear();
+    shash_destroy(&blacklist_tables);
 
     if (active_ovsdb_server) {
         free(active_ovsdb_server);
@@ -209,18 +316,14 @@ reset_database(struct ovsdb *db, struct ovsdb_txn *txn)
     struct shash_node *table_node;
 
     SHASH_FOR_EACH (table_node, &db->tables) {
-        struct ovsdb_table *table = table_node->data;
-        struct ovsdb_row *row;
-
-        /* Do not reset if table is blacklisted. */
-        char *blacklist_item = xasprintf(
-            "%s%s%s", db->schema->name, ":", table_node->name);
-        if (!sset_contains(&tables_blacklist, blacklist_item)) {
+        /* Delete all rows if the table is not blacklisted. */
+        if (!blacklist_tables_find(db->schema->name, table_node->name)) {
+            struct ovsdb_table *table = table_node->data;
+            struct ovsdb_row *row;
             HMAP_FOR_EACH (row, hmap_node, &table->rows) {
                 ovsdb_txn_row_delete(txn, row);
             }
         }
-        free(blacklist_item);
     }
 }
 
@@ -351,13 +454,10 @@ send_monitor_requests(struct shash *all_dbs)
                 for (int j = 0; j < n; j++) {
                     struct ovsdb_table_schema *table = nodes[j]->data;
 
-                    /* Check if table is not blacklisted. */
-                    char *blacklist_item = xasprintf(
-                        "%s%s%s", db_name, ":", table->name);
-                    if (!sset_contains(&tables_blacklist, blacklist_item)) {
+                    /* Monitor all tables not blacklisted. */
+                    if (!blacklist_tables_find(db_name, table->name)) {
                         add_monitored_table(table, monitor_request);
                     }
-                    free(blacklist_item);
                 }
                 free(nodes);
 
