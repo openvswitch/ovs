@@ -37,7 +37,7 @@ struct simap;
  *
  * Keep these in sync with the documentation in ovn-architecture(7). */
 #define OVN_GENEVE_CLASS 0x0102  /* Assigned Geneve class for OVN. */
-#define OVN_GENEVE_TYPE 0
+#define OVN_GENEVE_TYPE 0x80     /* Critical option. */
 #define OVN_GENEVE_LEN 4
 
 void physical_register_ovs_idl(struct ovsdb_idl *);
