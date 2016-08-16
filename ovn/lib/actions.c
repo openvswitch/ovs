@@ -175,7 +175,6 @@ put_load(uint64_t value, enum mf_field_id dst, int ofs, int n_bits,
 struct action_context {
     const struct ovnact_parse_params *pp; /* Parameters. */
     struct lexer *lexer;        /* Lexer for pulling more tokens. */
-    char *error;                /* Error, if any, otherwise NULL. */
     struct ofpbuf *ovnacts;     /* Actions. */
     struct expr *prereqs;       /* Prerequisites to apply to match. */
 };
@@ -183,112 +182,21 @@ struct action_context {
 static bool parse_action(struct action_context *);
 
 static bool
-action_error_handle_common(struct action_context *ctx)
-{
-    if (ctx->error) {
-        /* Already have an error, suppress this one since the cascade seems
-         * unlikely to be useful. */
-        return true;
-    } else if (ctx->lexer->token.type == LEX_T_ERROR) {
-        /* The lexer signaled an error.  Nothing at the action level
-         * accepts an error token, so we'll inevitably end up here with some
-         * meaningless parse error.  Report the lexical error instead. */
-        ctx->error = xstrdup(ctx->lexer->token.s);
-        return true;
-    } else {
-        return false;
-    }
-}
-
-static void OVS_PRINTF_FORMAT(2, 3)
-action_error(struct action_context *ctx, const char *message, ...)
-{
-    if (action_error_handle_common(ctx)) {
-        return;
-    }
-
-    va_list args;
-    va_start(args, message);
-    ctx->error = xvasprintf(message, args);
-    va_end(args);
-}
-
-static void OVS_PRINTF_FORMAT(2, 3)
-action_syntax_error(struct action_context *ctx, const char *message, ...)
-{
-    if (action_error_handle_common(ctx)) {
-        return;
-    }
-
-    struct ds s;
-
-    ds_init(&s);
-    ds_put_cstr(&s, "Syntax error");
-    if (ctx->lexer->token.type == LEX_T_END) {
-        ds_put_cstr(&s, " at end of input");
-    } else if (ctx->lexer->start) {
-        ds_put_format(&s, " at `%.*s'",
-                      (int) (ctx->lexer->input - ctx->lexer->start),
-                      ctx->lexer->start);
-    }
-
-    if (message) {
-        ds_put_char(&s, ' ');
-
-        va_list args;
-        va_start(args, message);
-        ds_put_format_valist(&s, message, args);
-        va_end(args);
-    }
-    ds_put_char(&s, '.');
-
-    ctx->error = ds_steal_cstr(&s);
-}
-
-static bool
-action_force_match(struct action_context *ctx, enum lex_type t)
-{
-    if (lexer_match(ctx->lexer, t)) {
-        return true;
-    } else {
-        struct lex_token token = { .type = t };
-        struct ds s = DS_EMPTY_INITIALIZER;
-        lex_token_format(&token, &s);
-
-        action_syntax_error(ctx, "expecting `%s'", ds_cstr(&s));
-
-        ds_destroy(&s);
-
-        return false;
-    }
-}
-
-static bool
 action_parse_field(struct action_context *ctx,
                    int n_bits, bool rw, struct expr_field *f)
 {
-    char *error = expr_field_parse(ctx->lexer, ctx->pp->symtab, f,
-                                   &ctx->prereqs);
-    if (!error) {
-        error = expr_type_check(f, n_bits, rw);
-        if (!error) {
-            return true;
-        }
+    if (!expr_field_parse(ctx->lexer, ctx->pp->symtab, f, &ctx->prereqs)) {
+        return false;
     }
 
-    action_error(ctx, "%s", error);
-    free(error);
-    return false;
-}
-
-static bool
-action_get_int(struct action_context *ctx, int *value)
-{
-    bool ok = lexer_get_int(ctx->lexer, value);
-    if (!ok) {
-        action_syntax_error(ctx, "expecting small integer");
+    char *error = expr_type_check(f, n_bits, rw);
+    if (error) {
+        lexer_error(ctx->lexer, "%s", error);
+        free(error);
+        return false;
     }
-    return ok;
+
+    return true;
 }
 
 static bool
@@ -302,7 +210,7 @@ action_parse_port(struct action_context *ctx, uint16_t *port)
             return true;
         }
     }
-    action_syntax_error(ctx, "expecting port number");
+    lexer_syntax_error(ctx->lexer, "expecting port number");
     return false;
 }
 
@@ -350,20 +258,18 @@ static void
 parse_NEXT(struct action_context *ctx)
 {
     if (!ctx->pp->n_tables) {
-        action_error(ctx, "\"next\" action not allowed here.");
+        lexer_error(ctx->lexer, "\"next\" action not allowed here.");
     } else if (lexer_match(ctx->lexer, LEX_T_LPAREN)) {
         int ltable;
 
-        if (!action_get_int(ctx, &ltable)) {
-            return;
-        }
-        if (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
-            action_syntax_error(ctx, "expecting `)'");
+        if (!lexer_force_int(ctx->lexer, &ltable) ||
+            !lexer_force_match(ctx->lexer, LEX_T_RPAREN)) {
             return;
         }
 
         if (ltable >= ctx->pp->n_tables) {
-            action_error(ctx, "\"next\" argument must be in range 0 to %d.",
+            lexer_error(ctx->lexer,
+                        "\"next\" argument must be in range 0 to %d.",
                          ctx->pp->n_tables - 1);
             return;
         }
@@ -373,7 +279,8 @@ parse_NEXT(struct action_context *ctx)
         if (ctx->pp->cur_ltable < ctx->pp->n_tables) {
             ovnact_put_NEXT(ctx->ovnacts)->ltable = ctx->pp->cur_ltable + 1;
         } else {
-            action_error(ctx, "\"next\" action not allowed in last table.");
+            lexer_error(ctx->lexer,
+                        "\"next\" action not allowed in last table.");
         }
     }
 }
@@ -403,14 +310,17 @@ parse_LOAD(struct action_context *ctx, const struct expr_field *lhs)
     size_t ofs = ctx->ovnacts->size;
     struct ovnact_load *load = ovnact_put_LOAD(ctx->ovnacts);
     load->dst = *lhs;
+
     char *error = expr_type_check(lhs, lhs->n_bits, true);
-    if (!error) {
-        error = expr_constant_parse(ctx->lexer, lhs, &load->imm);
-    }
     if (error) {
         ctx->ovnacts->size = ofs;
-        action_error(ctx, "%s", error);
+        lexer_error(ctx->lexer, "%s", error);
         free(error);
+        return;
+    }
+    if (!expr_constant_parse(ctx->lexer, lhs, &load->imm)) {
+        ctx->ovnacts->size = ofs;
+        return;
     }
 }
 
@@ -496,11 +406,7 @@ parse_assignment_action(struct action_context *ctx, bool exchange,
                         const struct expr_field *lhs)
 {
     struct expr_field rhs;
-    char *error = expr_field_parse(ctx->lexer, ctx->pp->symtab, &rhs,
-                                   &ctx->prereqs);
-    if (error) {
-        action_error(ctx, "%s", error);
-        free(error);
+    if (!expr_field_parse(ctx->lexer, ctx->pp->symtab, &rhs, &ctx->prereqs)) {
         return;
     }
 
@@ -508,47 +414,48 @@ parse_assignment_action(struct action_context *ctx, bool exchange,
     const struct expr_symbol *rs = rhs.symbol;
     if ((ls->width != 0) != (rs->width != 0)) {
         if (exchange) {
-            action_error(ctx,
-                         "Can't exchange %s field (%s) with %s field (%s).",
-                         ls->width ? "integer" : "string",
-                         ls->name,
-                         rs->width ? "integer" : "string",
-                         rs->name);
+            lexer_error(ctx->lexer,
+                        "Can't exchange %s field (%s) with %s field (%s).",
+                        ls->width ? "integer" : "string",
+                        ls->name,
+                        rs->width ? "integer" : "string",
+                        rs->name);
         } else {
-            action_error(ctx,
-                         "Can't assign %s field (%s) to %s field (%s).",
-                         rs->width ? "integer" : "string",
-                         rs->name,
-                         ls->width ? "integer" : "string",
-                         ls->name);
+            lexer_error(ctx->lexer,
+                        "Can't assign %s field (%s) to %s field (%s).",
+                        rs->width ? "integer" : "string",
+                        rs->name,
+                        ls->width ? "integer" : "string",
+                        ls->name);
         }
         return;
     }
 
     if (lhs->n_bits != rhs.n_bits) {
         if (exchange) {
-            action_error(ctx, "Can't exchange %d-bit field with %d-bit field.",
-                         lhs->n_bits, rhs.n_bits);
+            lexer_error(ctx->lexer,
+                        "Can't exchange %d-bit field with %d-bit field.",
+                        lhs->n_bits, rhs.n_bits);
         } else {
-            action_error(ctx,
-                         "Can't assign %d-bit value to %d-bit destination.",
-                         rhs.n_bits, lhs->n_bits);
+            lexer_error(ctx->lexer,
+                        "Can't assign %d-bit value to %d-bit destination.",
+                        rhs.n_bits, lhs->n_bits);
         }
         return;
     } else if (!lhs->n_bits &&
                ls->field->n_bits != rs->field->n_bits) {
-        action_error(ctx, "String fields %s and %s are incompatible for "
-                     "%s.", ls->name, rs->name,
-                     exchange ? "exchange" : "assignment");
+        lexer_error(ctx->lexer, "String fields %s and %s are incompatible for "
+                    "%s.", ls->name, rs->name,
+                    exchange ? "exchange" : "assignment");
         return;
     }
 
-    error = expr_type_check(lhs, lhs->n_bits, true);
+    char *error = expr_type_check(lhs, lhs->n_bits, true);
     if (!error) {
         error = expr_type_check(&rhs, rhs.n_bits, true);
     }
     if (error) {
-        action_error(ctx, "%s", error);
+        lexer_error(ctx->lexer, "%s", error);
         free(error);
         return;
     }
@@ -595,7 +502,7 @@ free_EXCHANGE(struct ovnact_move *xchg OVS_UNUSED)
 static void
 parse_DEC_TTL(struct action_context *ctx)
 {
-    action_force_match(ctx, LEX_T_DECREMENT);
+    lexer_force_match(ctx->lexer, LEX_T_DECREMENT);
     ovnact_put_DEC_TTL(ctx->ovnacts);
     add_prerequisite(ctx, "ip");
 }
@@ -623,7 +530,8 @@ static void
 parse_CT_NEXT(struct action_context *ctx)
 {
     if (ctx->pp->cur_ltable >= ctx->pp->n_tables) {
-        action_error(ctx, "\"ct_next\" action not allowed in last table.");
+        lexer_error(ctx->lexer,
+                    "\"ct_next\" action not allowed in last table.");
         return;
     }
 
@@ -660,7 +568,7 @@ parse_ct_commit_arg(struct action_context *ctx,
                     struct ovnact_ct_commit *cc)
 {
     if (lexer_match_id(ctx->lexer, "ct_mark")) {
-        if (!action_force_match(ctx, LEX_T_EQUALS)) {
+        if (!lexer_force_match(ctx->lexer, LEX_T_EQUALS)) {
             return;
         }
         if (ctx->lexer->token.type == LEX_T_INTEGER) {
@@ -670,12 +578,12 @@ parse_ct_commit_arg(struct action_context *ctx,
             cc->ct_mark = ntohll(ctx->lexer->token.value.integer);
             cc->ct_mark_mask = ntohll(ctx->lexer->token.mask.integer);
         } else {
-            action_syntax_error(ctx, "expecting integer");
+            lexer_syntax_error(ctx->lexer, "expecting integer");
             return;
         }
         lexer_get(ctx->lexer);
     } else if (lexer_match_id(ctx->lexer, "ct_label")) {
-        if (!action_force_match(ctx, LEX_T_EQUALS)) {
+        if (!lexer_force_match(ctx->lexer, LEX_T_EQUALS)) {
             return;
         }
         if (ctx->lexer->token.type == LEX_T_INTEGER) {
@@ -685,12 +593,12 @@ parse_ct_commit_arg(struct action_context *ctx,
             cc->ct_label = ctx->lexer->token.value.be128_int;
             cc->ct_label_mask = ctx->lexer->token.mask.be128_int;
         } else {
-            action_syntax_error(ctx, "expecting integer");
+            lexer_syntax_error(ctx->lexer, "expecting integer");
             return;
         }
         lexer_get(ctx->lexer);
     } else {
-        action_syntax_error(ctx, NULL);
+        lexer_syntax_error(ctx->lexer, NULL);
     }
 }
 
@@ -703,7 +611,7 @@ parse_CT_COMMIT(struct action_context *ctx)
     if (lexer_match(ctx->lexer, LEX_T_LPAREN)) {
         while (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
             parse_ct_commit_arg(ctx, ct_commit);
-            if (ctx->error) {
+            if (ctx->lexer->error) {
                 return;
             }
             lexer_match(ctx->lexer, LEX_T_COMMA);
@@ -785,7 +693,8 @@ parse_ct_nat(struct action_context *ctx, const char *name,
     add_prerequisite(ctx, "ip");
 
     if (ctx->pp->cur_ltable >= ctx->pp->n_tables) {
-        action_error(ctx, "\"%s\" action not allowed in last table.", name);
+        lexer_error(ctx->lexer,
+                    "\"%s\" action not allowed in last table.", name);
         return;
     }
     cn->ltable = ctx->pp->cur_ltable + 1;
@@ -793,13 +702,13 @@ parse_ct_nat(struct action_context *ctx, const char *name,
     if (lexer_match(ctx->lexer, LEX_T_LPAREN)) {
         if (ctx->lexer->token.type != LEX_T_INTEGER
             || ctx->lexer->token.format != LEX_F_IPV4) {
-            action_syntax_error(ctx, "expecting IPv4 address");
+            lexer_syntax_error(ctx->lexer, "expecting IPv4 address");
             return;
         }
         cn->ip = ctx->lexer->token.value.ipv4;
         lexer_get(ctx->lexer);
 
-        if (!action_force_match(ctx, LEX_T_RPAREN)) {
+        if (!lexer_force_match(ctx->lexer, LEX_T_RPAREN)) {
             return;
         }
     }
@@ -925,7 +834,7 @@ static void
 parse_ct_lb_action(struct action_context *ctx)
 {
     if (ctx->pp->cur_ltable >= ctx->pp->n_tables) {
-        action_error(ctx, "\"ct_lb\" action not allowed in last table.");
+        lexer_error(ctx->lexer, "\"ct_lb\" action not allowed in last table.");
         return;
     }
 
@@ -939,7 +848,7 @@ parse_ct_lb_action(struct action_context *ctx)
         while (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
             if (ctx->lexer->token.type != LEX_T_INTEGER
                 || mf_subvalue_width(&ctx->lexer->token.value) > 32) {
-                action_syntax_error(ctx, "expecting IPv4 address");
+                lexer_syntax_error(ctx->lexer, "expecting IPv4 address");
                 return;
             }
 
@@ -1113,7 +1022,7 @@ static void
 parse_nested_action(struct action_context *ctx, enum ovnact_type type,
                     const char *prereq)
 {
-    if (!action_force_match(ctx, LEX_T_LCURLY)) {
+    if (!lexer_force_match(ctx->lexer, LEX_T_LCURLY)) {
         return;
     }
 
@@ -1123,7 +1032,6 @@ parse_nested_action(struct action_context *ctx, enum ovnact_type type,
     struct action_context inner_ctx = {
         .pp = ctx->pp,
         .lexer = ctx->lexer,
-        .error = NULL,
         .ovnacts = &nested,
         .prereqs = NULL
     };
@@ -1137,8 +1045,7 @@ parse_nested_action(struct action_context *ctx, enum ovnact_type type,
      * actions. */
     expr_destroy(inner_ctx.prereqs);
 
-    if (inner_ctx.error) {
-        ctx->error = inner_ctx.error;
+    if (inner_ctx.lexer->error) {
         ovnacts_free(nested.data, nested.size);
         ofpbuf_uninit(&nested);
         return;
@@ -1247,11 +1154,11 @@ static void
 parse_get_mac_bind(struct action_context *ctx, int width,
                    struct ovnact_get_mac_bind *get_mac)
 {
-    action_force_match(ctx, LEX_T_LPAREN);
+    lexer_force_match(ctx->lexer, LEX_T_LPAREN);
     action_parse_field(ctx, 0, false, &get_mac->port);
-    action_force_match(ctx, LEX_T_COMMA);
+    lexer_force_match(ctx->lexer, LEX_T_COMMA);
     action_parse_field(ctx, width, false, &get_mac->ip);
-    action_force_match(ctx, LEX_T_RPAREN);
+    lexer_force_match(ctx->lexer, LEX_T_RPAREN);
 }
 
 static void
@@ -1325,13 +1232,13 @@ static void
 parse_put_mac_bind(struct action_context *ctx, int width,
                    struct ovnact_put_mac_bind *put_mac)
 {
-    action_force_match(ctx, LEX_T_LPAREN);
+    lexer_force_match(ctx->lexer, LEX_T_LPAREN);
     action_parse_field(ctx, 0, false, &put_mac->port);
-    action_force_match(ctx, LEX_T_COMMA);
+    lexer_force_match(ctx->lexer, LEX_T_COMMA);
     action_parse_field(ctx, width, false, &put_mac->ip);
-    action_force_match(ctx, LEX_T_COMMA);
+    lexer_force_match(ctx->lexer, LEX_T_COMMA);
     action_parse_field(ctx, 48, false, &put_mac->mac);
-    action_force_match(ctx, LEX_T_RPAREN);
+    lexer_force_match(ctx->lexer, LEX_T_RPAREN);
 }
 
 static void
@@ -1405,7 +1312,7 @@ parse_dhcp_opt(struct action_context *ctx, struct ovnact_dhcp_option *o,
                bool v6)
 {
     if (ctx->lexer->token.type != LEX_T_ID) {
-        action_syntax_error(ctx, NULL);
+        lexer_syntax_error(ctx->lexer, NULL);
         return;
     }
 
@@ -1413,33 +1320,30 @@ parse_dhcp_opt(struct action_context *ctx, struct ovnact_dhcp_option *o,
     const struct hmap *map = v6 ? ctx->pp->dhcpv6_opts : ctx->pp->dhcp_opts;
     o->option = dhcp_opts_find(map, ctx->lexer->token.s);
     if (!o->option) {
-        action_syntax_error(ctx, "expecting %s option name", name);
+        lexer_syntax_error(ctx->lexer, "expecting %s option name", name);
         return;
     }
     lexer_get(ctx->lexer);
 
-    if (!action_force_match(ctx, LEX_T_EQUALS)) {
+    if (!lexer_force_match(ctx->lexer, LEX_T_EQUALS)) {
         return;
     }
 
-    char *error = expr_constant_set_parse(ctx->lexer, &o->value);
-    if (error) {
+    if (!expr_constant_set_parse(ctx->lexer, &o->value)) {
         memset(&o->value, 0, sizeof o->value);
-        action_error(ctx, "%s", error);
-        free(error);
         return;
     }
 
     if (!strcmp(o->option->type, "str")) {
         if (o->value.type != EXPR_C_STRING) {
-            action_error(ctx, "%s option %s requires string value.",
-                         name, o->option->name);
+            lexer_error(ctx->lexer, "%s option %s requires string value.",
+                        name, o->option->name);
             return;
         }
     } else {
         if (o->value.type != EXPR_C_INTEGER) {
-            action_error(ctx, "%s option %s requires numeric value.",
-                         name, o->option->name);
+            lexer_error(ctx->lexer, "%s option %s requires numeric value.",
+                        name, o->option->name);
             return;
         }
     }
@@ -1479,7 +1383,7 @@ parse_put_dhcp_opts(struct action_context *ctx,
     /* Validate that the destination is a 1-bit, modifiable field. */
     char *error = expr_type_check(dst, 1, true);
     if (error) {
-        action_error(ctx, "%s", error);
+        lexer_error(ctx->lexer, "%s", error);
         free(error);
         return;
     }
@@ -1495,7 +1399,7 @@ parse_put_dhcp_opts(struct action_context *ctx,
         struct ovnact_dhcp_option *o = &pdo->options[pdo->n_options++];
         memset(o, 0, sizeof *o);
         parse_dhcp_opt(ctx, o, pdo->ovnact.type == OVNACT_PUT_DHCPV6_OPTS);
-        if (ctx->error) {
+        if (ctx->lexer->error) {
             return;
         }
 
@@ -1504,7 +1408,8 @@ parse_put_dhcp_opts(struct action_context *ctx,
 
     if (pdo->ovnact.type == OVNACT_PUT_DHCPV4_OPTS
         && !find_offerip(pdo->options, pdo->n_options)) {
-        action_error(ctx, "put_dhcp_opts requires offerip to be specified.");
+        lexer_error(ctx->lexer,
+                    "put_dhcp_opts requires offerip to be specified.");
         return;
     }
 }
@@ -1711,40 +1616,29 @@ free_PUT_DHCPV6_OPTS(struct ovnact_put_dhcp_opts *pdo)
 static void
 parse_set_action(struct action_context *ctx)
 {
-    struct expr *prereqs = NULL;
     struct expr_field lhs;
-    char *error;
-
-    error = expr_field_parse(ctx->lexer, ctx->pp->symtab, &lhs, &ctx->prereqs);
-    if (!error) {
-        if (lexer_match(ctx->lexer, LEX_T_EXCHANGE)) {
-            parse_assignment_action(ctx, true, &lhs);
-        } else if (lexer_match(ctx->lexer, LEX_T_EQUALS)) {
-            if (ctx->lexer->token.type != LEX_T_ID) {
-                parse_LOAD(ctx, &lhs);
-            } else if (!strcmp(ctx->lexer->token.s, "put_dhcp_opts")
-                       && lexer_lookahead(ctx->lexer) == LEX_T_LPAREN) {
-                parse_put_dhcp_opts(ctx, &lhs, ovnact_put_PUT_DHCPV4_OPTS(
-                                        ctx->ovnacts));
-            } else if (!strcmp(ctx->lexer->token.s, "put_dhcpv6_opts")
-                       && lexer_lookahead(ctx->lexer) == LEX_T_LPAREN) {
-                parse_put_dhcp_opts(ctx, &lhs, ovnact_put_PUT_DHCPV6_OPTS(
-                                        ctx->ovnacts));
-            } else {
-                parse_assignment_action(ctx, false, &lhs);
-            }
-        } else {
-            action_syntax_error(ctx, "expecting `=' or `<->'");
-        }
-        if (!error) {
-            ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, prereqs);
-        }
+    if (!expr_field_parse(ctx->lexer, ctx->pp->symtab, &lhs, &ctx->prereqs)) {
+        return;
     }
 
-    if (error) {
-        expr_destroy(prereqs);
-        action_error(ctx, "%s", error);
-        free(error);
+    if (lexer_match(ctx->lexer, LEX_T_EXCHANGE)) {
+        parse_assignment_action(ctx, true, &lhs);
+    } else if (lexer_match(ctx->lexer, LEX_T_EQUALS)) {
+        if (ctx->lexer->token.type != LEX_T_ID) {
+            parse_LOAD(ctx, &lhs);
+        } else if (!strcmp(ctx->lexer->token.s, "put_dhcp_opts")
+                   && lexer_lookahead(ctx->lexer) == LEX_T_LPAREN) {
+            parse_put_dhcp_opts(ctx, &lhs, ovnact_put_PUT_DHCPV4_OPTS(
+                                    ctx->ovnacts));
+        } else if (!strcmp(ctx->lexer->token.s, "put_dhcpv6_opts")
+                   && lexer_lookahead(ctx->lexer) == LEX_T_LPAREN) {
+            parse_put_dhcp_opts(ctx, &lhs, ovnact_put_PUT_DHCPV6_OPTS(
+                                    ctx->ovnacts));
+        } else {
+            parse_assignment_action(ctx, false, &lhs);
+        }
+    } else {
+        lexer_syntax_error(ctx->lexer, "expecting `=' or `<->'");
     }
 }
 
@@ -1752,7 +1646,7 @@ static bool
 parse_action(struct action_context *ctx)
 {
     if (ctx->lexer->token.type != LEX_T_ID) {
-        action_syntax_error(ctx, NULL);
+        lexer_syntax_error(ctx->lexer, NULL);
         return false;
     }
 
@@ -1789,12 +1683,10 @@ parse_action(struct action_context *ctx)
     } else if (lexer_match_id(ctx->lexer, "put_nd")) {
         parse_put_mac_bind(ctx, 128, ovnact_put_PUT_ND(ctx->ovnacts));
     } else {
-        action_syntax_error(ctx, "expecting action");
+        lexer_syntax_error(ctx->lexer, "expecting action");
     }
-    if (!lexer_match(ctx->lexer, LEX_T_SEMICOLON)) {
-        action_syntax_error(ctx, "expecting ';'");
-    }
-    return !ctx->error;
+    lexer_force_match(ctx->lexer, LEX_T_SEMICOLON);
+    return !ctx->lexer->error;
 }
 
 static void
@@ -1807,9 +1699,7 @@ parse_actions(struct action_context *ctx)
         && lexer_lookahead(ctx->lexer) == LEX_T_SEMICOLON) {
         lexer_get(ctx->lexer);  /* Skip "drop". */
         lexer_get(ctx->lexer);  /* Skip ";". */
-        if (ctx->lexer->token.type != LEX_T_END) {
-            action_syntax_error(ctx, "expecting end of input");
-        }
+        lexer_force_end(ctx->lexer);
         return;
     }
 
@@ -1832,12 +1722,10 @@ parse_actions(struct action_context *ctx)
  * it sets '*prereqsp' to NULL.  The caller owns '*prereqsp' and must
  * eventually free it.
  *
- * Returns NULL on success, otherwise a malloc()'d error message that the
- * caller must free.  On failure, 'ovnacts' has the same contents and
- * '*prereqsp' is set to NULL, but some tokens may have been consumed from
- * 'lexer'.
+ * Returns true if successful, false if an error occurred.  Upon return,
+ * returns true if and only if lexer->error is NULL.
  */
-char * OVS_WARN_UNUSED_RESULT
+bool
 ovnacts_parse(struct lexer *lexer, const struct ovnact_parse_params *pp,
               struct ofpbuf *ovnacts, struct expr **prereqsp)
 {
@@ -1846,15 +1734,16 @@ ovnacts_parse(struct lexer *lexer, const struct ovnact_parse_params *pp,
     struct action_context ctx = {
         .pp = pp,
         .lexer = lexer,
-        .error = NULL,
         .ovnacts = ovnacts,
         .prereqs = NULL,
     };
-    parse_actions(&ctx);
+    if (!lexer->error) {
+        parse_actions(&ctx);
+    }
 
-    if (!ctx.error) {
+    if (!lexer->error) {
         *prereqsp = ctx.prereqs;
-        return NULL;
+        return true;
     } else {
         ofpbuf_pull(ovnacts, ovnacts_start);
         ovnacts_free(ovnacts->data, ovnacts->size);
@@ -1863,7 +1752,7 @@ ovnacts_parse(struct lexer *lexer, const struct ovnact_parse_params *pp,
         ovnacts->size = ovnacts_start;
         expr_destroy(ctx.prereqs);
         *prereqsp = NULL;
-        return ctx.error;
+        return false;
     }
 }
 
@@ -1873,11 +1762,11 @@ ovnacts_parse_string(const char *s, const struct ovnact_parse_params *pp,
                      struct ofpbuf *ofpacts, struct expr **prereqsp)
 {
     struct lexer lexer;
-    char *error;
 
     lexer_init(&lexer, s);
     lexer_get(&lexer);
-    error = ovnacts_parse(&lexer, pp, ofpacts, prereqsp);
+    ovnacts_parse(&lexer, pp, ofpacts, prereqsp);
+    char *error = lexer_steal_error(&lexer);
     lexer_destroy(&lexer);
 
     return error;

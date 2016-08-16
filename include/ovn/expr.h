@@ -265,9 +265,8 @@ struct expr_field {
     int n_bits;                       /* Number of bits. */
 };
 
-char *expr_field_parse(struct lexer *lexer, const struct shash *symtab,
-                       struct expr_field *field, struct expr **prereqsp)
-    OVS_WARN_UNUSED_RESULT;
+bool expr_field_parse(struct lexer *, const struct shash *symtab,
+                      struct expr_field *, struct expr **prereqsp);
 void expr_field_format(const struct expr_field *, struct ds *);
 
 struct expr_symbol *expr_symtab_add_field(struct shash *symtab,
@@ -365,8 +364,7 @@ expr_from_node(const struct ovs_list *node)
 void expr_format(const struct expr *, struct ds *);
 void expr_print(const struct expr *);
 struct expr *expr_parse(struct lexer *, const struct shash *symtab,
-                        const struct shash *macros,
-                        char **errorp);
+                        const struct shash *macros);
 struct expr *expr_parse_string(const char *, const struct shash *symtab,
                                const struct shash *macros,
                                char **errorp);
@@ -434,9 +432,8 @@ union expr_constant {
     char *string;
 };
 
-char *expr_constant_parse(struct lexer *, const struct expr_field *,
-                          union expr_constant *)
-    OVS_WARN_UNUSED_RESULT;
+bool expr_constant_parse(struct lexer *, const struct expr_field *,
+                         union expr_constant *);
 void expr_constant_format(const union expr_constant *,
                           enum expr_constant_type, struct ds *);
 void expr_constant_destroy(const union expr_constant *,
@@ -450,8 +447,7 @@ struct expr_constant_set {
     bool in_curlies;              /* Whether the constants were in {}. */
 };
 
-char *expr_constant_set_parse(struct lexer *, struct expr_constant_set *cs)
-    OVS_WARN_UNUSED_RESULT;
+bool expr_constant_set_parse(struct lexer *, struct expr_constant_set *);
 void expr_constant_set_format(const struct expr_constant_set *, struct ds *);
 void expr_constant_set_destroy(struct expr_constant_set *cs);
 

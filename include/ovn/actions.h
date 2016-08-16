@@ -383,9 +383,8 @@ struct ovnact_parse_params {
     uint8_t cur_ltable;         /* 0 <= cur_ltable < n_tables. */
 };
 
-char *ovnacts_parse(struct lexer *, const struct ovnact_parse_params *,
-                    struct ofpbuf *ovnacts, struct expr **prereqsp)
-    OVS_WARN_UNUSED_RESULT;
+bool ovnacts_parse(struct lexer *, const struct ovnact_parse_params *,
+                    struct ofpbuf *ovnacts, struct expr **prereqsp);
 char *ovnacts_parse_string(const char *s, const struct ovnact_parse_params *,
                            struct ofpbuf *ovnacts, struct expr **prereqsp)
     OVS_WARN_UNUSED_RESULT;

@@ -124,6 +124,7 @@ struct lexer {
     const char *input;          /* Remaining input (not owned by lexer). */
     const char *start;          /* Start of current token in 'input'. */
     struct lex_token token;     /* Current token (owned by lexer). */
+    char *error;                /* Error message, if any (owned by lexer). */
 };
 
 void lexer_init(struct lexer *, const char *input);
@@ -132,8 +133,19 @@ void lexer_destroy(struct lexer *);
 enum lex_type lexer_get(struct lexer *);
 enum lex_type lexer_lookahead(const struct lexer *);
 bool lexer_match(struct lexer *, enum lex_type);
+bool lexer_force_match(struct lexer *, enum lex_type);
 bool lexer_match_id(struct lexer *, const char *id);
 bool lexer_is_int(const struct lexer *);
 bool lexer_get_int(struct lexer *, int *value);
+bool lexer_force_int(struct lexer *, int *value);
+
+void lexer_force_end(struct lexer *);
+
+void lexer_error(struct lexer *, const char *message, ...)
+    OVS_PRINTF_FORMAT(2, 3);
+void lexer_syntax_error(struct lexer *, const char *message, ...)
+    OVS_PRINTF_FORMAT(2, 3);
+
+char *lexer_steal_error(struct lexer *);
 
 #endif /* ovn/lex.h */

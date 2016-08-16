@@ -341,7 +341,7 @@ ip4.src == ::1 => 128-bit constant is not compatible with 32-bit field ip4.src.
 
 1 == eth.type == 2 => Range expressions must have the form `x < field < y' or `x > field > y', with each `<' optionally replaced by `<=' or `>' by `>=').
 
-eth.dst[40] x => Extra tokens at end of input.
+eth.dst[40] x => Syntax error at `x' expecting end of input.
 
 ip4.src == {1.2.3.4, $set1, $unknownset} => Syntax error at `$unknownset' expecting address set name.
 eth.src == {$set3, badmac, 00:00:00:00:00:01} => Syntax error at `badmac' expecting constant.
@@ -952,7 +952,7 @@ next; 123;
 next; xyzzy;
     Syntax error at `xyzzy' expecting action.
 next
-    Syntax error at end of input expecting ';'.
+    Syntax error at end of input expecting `;'.
 ]])
 sed '/^[[ 	]]/d' test-cases.txt > input.txt
 cp test-cases.txt expout
