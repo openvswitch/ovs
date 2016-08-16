@@ -166,7 +166,8 @@ as northd
 OVS_APP_EXIT_AND_WAIT([ovn-northd])
 
 as
-OVS_TRAFFIC_VSWITCHD_STOP(["/failed to query port patch-.*/d"])
+OVS_TRAFFIC_VSWITCHD_STOP(["/failed to query port patch-.*/d
+/connection dropped.*/d"])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 2 LRs connected via LS, gateway router, easy SNAT])
@@ -247,6 +248,8 @@ ovn-nbctl lsp-add alice alice1 \
 ovn-nbctl -- --id=@nat create nat type="snat" logical_ip=192.168.1.2 \
     external_ip=172.16.1.1 -- add logical_router R2 nat @nat
 
+OVS_WAIT_UNTIL([ovs-ofctl dump-flows br-int | grep ct\( | grep nat])
+
 # South-North SNAT: 'foo1' pings 'alice1'. But 'alice1' receives traffic
 # from 172.16.1.1
 NS_CHECK_EXEC([foo1], [ping -q -c 3 -i 0.3 -w 2 172.16.1.2 | FORMAT_PING], \
@@ -272,7 +275,8 @@ as northd
 OVS_APP_EXIT_AND_WAIT([ovn-northd])
 
 as
-OVS_TRAFFIC_VSWITCHD_STOP(["/failed to query port patch-.*/d"])
+OVS_TRAFFIC_VSWITCHD_STOP(["/failed to query port patch-.*/d
+/connection dropped.*/d"])
 AT_CLEANUP
 
 AT_SETUP([ovn -- load-balancing])
