@@ -232,7 +232,7 @@
           <code>ovn-controller</code> to connect the integration bridge and
           another bridge to implement a <code>l2gateway</code> logical port.
           Its value is the name of the logical port with <code>type</code>
-          set to <code>l3gateway</code> that the port implements. See
+          set to <code>l2gateway</code> that the port implements. See
           <code>external_ids:ovn-bridge-mappings</code>, above, for more
           information.
         </p>
@@ -246,7 +246,23 @@
       </dd>
 
       <dt>
-        <code>external_ids:ovn-logical-patch-port</code> in the
+        <code>external-ids:ovn-l3gateway-port</code> in the <code>Port</code>
+        table
+      </dt>
+
+      <dd>
+        <p>
+          This key identifies a patch port as one created by
+          <code>ovn-controller</code> to implement a <code>l3gateway</code>
+          logical port. Its value is the name of the logical port with type
+          set to <code>l3gateway</code>. This patch port is similar to
+          the OVN logical patch port, except that <code>l3gateway</code>
+          port can only be bound to a paticular chassis.
+        </p>
+      </dd>
+
+      <dt>
+        <code>external-ids:ovn-logical-patch-port</code> in the
         <code>Port</code> table
       </dt>
 

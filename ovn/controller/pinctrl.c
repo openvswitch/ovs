@@ -1010,10 +1010,24 @@ destroy_send_garps(void)
     shash_destroy_free_data(&send_garp_data);
 }
 
+static void
+add_garp(const char *name, ofp_port_t ofport,
+         const struct eth_addr ea, ovs_be32 ip)
+{
+    struct garp_data *garp = xmalloc(sizeof *garp);
+    garp->ea = ea;
+    garp->ipv4 = ip;
+    garp->announce_time = time_msec() + 1000;
+    garp->backoff = 1;
+    garp->ofport = ofport;
+    shash_add(&send_garp_data, name, garp);
+}
+
 /* Add or update a vif for which GARPs need to be announced. */
 static void
 send_garp_update(const struct sbrec_port_binding *binding_rec,
-                 struct simap *localnet_ofports, struct hmap *local_datapaths)
+                 struct simap *localnet_ofports, struct hmap *local_datapaths,
+                 struct shash *nat_addresses)
 {
     /* Find the localnet ofport to send this GARP. */
     struct local_datapath *ld
@@ -1025,9 +1039,32 @@ send_garp_update(const struct sbrec_port_binding *binding_rec,
     ofp_port_t ofport = u16_to_ofp(simap_get(localnet_ofports,
                                              ld->localnet_port->logical_port));
 
-    /* Update GARP if it exists. */
-    struct garp_data *garp = shash_find_data(&send_garp_data,
-                                             binding_rec->logical_port);
+    volatile struct garp_data *garp = NULL;
+    /* Update GARP for NAT IP if it exists. */
+    if (!strcmp(binding_rec->type, "l3gateway")) {
+        struct lport_addresses *laddrs = NULL;
+        laddrs = shash_find_data(nat_addresses, binding_rec->logical_port);
+        if (!laddrs) {
+            return;
+        }
+        int i;
+        for (i = 0; i < laddrs->n_ipv4_addrs; i++) {
+            char *name = xasprintf("%s-%s", binding_rec->logical_port,
+                                            laddrs->ipv4_addrs[i].addr_s);
+            garp = shash_find_data(&send_garp_data, name);
+            if (garp) {
+                garp->ofport = ofport;
+            } else {
+                add_garp(name, ofport, laddrs->ea, laddrs->ipv4_addrs[i].addr);
+            }
+            free(name);
+        }
+        destroy_lport_addresses(laddrs);
+        return;
+    }
+
+    /* Update GARP for vif if it exists. */
+    garp = shash_find_data(&send_garp_data, binding_rec->logical_port);
     if (garp) {
         garp->ofport = ofport;
         return;
@@ -1042,13 +1079,8 @@ send_garp_update(const struct sbrec_port_binding *binding_rec,
             continue;
         }
 
-        struct garp_data *garp = xmalloc(sizeof *garp);
-        garp->ea = laddrs.ea;
-        garp->ipv4 = laddrs.ipv4_addrs[0].addr;
-        garp->announce_time = time_msec() + 1000;
-        garp->backoff = 1;
-        garp->ofport = ofport;
-        shash_add(&send_garp_data, binding_rec->logical_port, garp);
+        add_garp(binding_rec->logical_port, ofport,
+                 laddrs.ea, laddrs.ipv4_addrs[0].addr);
 
         destroy_lport_addresses(&laddrs);
         break;
@@ -1107,14 +1139,15 @@ send_garp(struct garp_data *garp, long long int current_time)
     return garp->announce_time;
 }
 
-/* Get localnet vifs, and ofport for localnet patch ports. */
+/* Get localnet vifs, local l3gw ports and ofport for localnet patch ports. */
 static void
-get_localnet_vifs(const struct ovsrec_bridge *br_int,
+get_localnet_vifs_l3gwports(const struct ovsrec_bridge *br_int,
                   const char *this_chassis_id,
                   const struct lport_index *lports,
                   struct hmap *local_datapaths,
                   struct sset *localnet_vifs,
-                  struct simap *localnet_ofports)
+                  struct simap *localnet_ofports,
+                  struct sset *local_l3gw_ports)
 {
     for (int i = 0; i < br_int->n_ports; i++) {
         const struct ovsrec_port *port_rec = br_int->ports[i];
@@ -1128,6 +1161,8 @@ get_localnet_vifs(const struct ovsrec_bridge *br_int,
         }
         const char *localnet = smap_get(&port_rec->external_ids,
                                         "ovn-localnet-port");
+        const char *l3_gateway_port = smap_get(&port_rec->external_ids,
+                                               "ovn-l3gateway-port");
         for (int j = 0; j < port_rec->n_interfaces; j++) {
             const struct ovsrec_interface *iface_rec = port_rec->interfaces[j];
             if (!iface_rec->n_ofport) {
@@ -1139,6 +1174,10 @@ get_localnet_vifs(const struct ovsrec_bridge *br_int,
                     continue;
                 }
                 simap_put(localnet_ofports, localnet, ofport);
+                continue;
+            }
+            if (l3_gateway_port) {
+                sset_add(local_l3gw_ports, l3_gateway_port);
                 continue;
             }
             const char *iface_id = smap_get(&iface_rec->external_ids,
@@ -1162,6 +1201,41 @@ get_localnet_vifs(const struct ovsrec_bridge *br_int,
 }
 
 static void
+get_nat_addresses_and_keys(struct sset *nat_address_keys,
+                           struct sset *local_l3gw_ports,
+                           const struct lport_index *lports,
+                           struct shash *nat_addresses)
+{
+    const char *gw_port;
+    SSET_FOR_EACH(gw_port, local_l3gw_ports) {
+        const struct sbrec_port_binding *pb = lport_lookup_by_name(lports,
+                                                                   gw_port);
+        if (!pb) {
+            continue;
+        }
+        const char *nat_addresses_options = smap_get(&pb->options,
+                                                     "nat-addresses");
+        if (!nat_addresses_options) {
+            continue;
+        }
+
+        struct lport_addresses *laddrs = xmalloc(sizeof *laddrs);
+        if (!extract_lsp_addresses(nat_addresses_options, laddrs)) {
+            free(laddrs);
+            continue;
+        }
+        int i;
+        for (i = 0; i < laddrs->n_ipv4_addrs; i++) {
+            char *name = xasprintf("%s-%s", pb->logical_port,
+                                            laddrs->ipv4_addrs[i].addr_s);
+            sset_add(nat_address_keys, name);
+            free(name);
+        }
+        shash_add(nat_addresses, pb->logical_port, laddrs);
+    }
+}
+
+static void
 send_garp_wait(void)
 {
     poll_timer_wait_until(send_garp_time);
@@ -1173,15 +1247,23 @@ send_garp_run(const struct ovsrec_bridge *br_int, const char *chassis_id,
               struct hmap *local_datapaths)
 {
     struct sset localnet_vifs = SSET_INITIALIZER(&localnet_vifs);
+    struct sset local_l3gw_ports = SSET_INITIALIZER(&local_l3gw_ports);
+    struct sset nat_ip_keys = SSET_INITIALIZER(&nat_ip_keys);
     struct simap localnet_ofports = SIMAP_INITIALIZER(&localnet_ofports);
+    struct shash nat_addresses;
 
-    get_localnet_vifs(br_int, chassis_id, lports, local_datapaths,
-                      &localnet_vifs, &localnet_ofports);
+    shash_init(&nat_addresses);
 
-    /* For deleted ports, remove from send_garp_data. */
+    get_localnet_vifs_l3gwports(br_int, chassis_id, lports, local_datapaths,
+                      &localnet_vifs, &localnet_ofports, &local_l3gw_ports);
+
+    get_nat_addresses_and_keys(&nat_ip_keys, &local_l3gw_ports, lports,
+                               &nat_addresses);
+    /* For deleted ports and deleted nat ips, remove from send_garp_data. */
     struct shash_node *iter, *next;
     SHASH_FOR_EACH_SAFE (iter, next, &send_garp_data) {
-        if (!sset_contains(&localnet_vifs, iter->name)) {
+        if (!sset_contains(&localnet_vifs, iter->name) &&
+            !sset_contains(&nat_ip_keys, iter->name)) {
             send_garp_delete(iter->name);
         }
     }
@@ -1192,7 +1274,19 @@ send_garp_run(const struct ovsrec_bridge *br_int, const char *chassis_id,
         const struct sbrec_port_binding *pb = lport_lookup_by_name(lports,
                                                                    iface_id);
         if (pb) {
-            send_garp_update(pb, &localnet_ofports, local_datapaths);
+            send_garp_update(pb, &localnet_ofports, local_datapaths,
+                             &nat_addresses);
+        }
+    }
+
+    /* Update send_garp_data for nat-addresses. */
+    const char *gw_port;
+    SSET_FOR_EACH (gw_port, &local_l3gw_ports) {
+        const struct sbrec_port_binding *pb = lport_lookup_by_name(lports,
+                                                                gw_port);
+        if (pb) {
+            send_garp_update(pb, &localnet_ofports, local_datapaths,
+                             &nat_addresses);
         }
     }
 
@@ -1206,7 +1300,9 @@ send_garp_run(const struct ovsrec_bridge *br_int, const char *chassis_id,
         }
     }
     sset_destroy(&localnet_vifs);
+    sset_destroy(&local_l3gw_ports);
     simap_destroy(&localnet_ofports);
+    shash_destroy_free_data(&nat_addresses);
 }
 
 static void

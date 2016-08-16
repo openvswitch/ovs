@@ -709,6 +709,8 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
                                         "ovn-localnet-port");
         const char *l2gateway = smap_get(&port_rec->external_ids,
                                         "ovn-l2gateway-port");
+        const char *l3gateway = smap_get(&port_rec->external_ids,
+                                        "ovn-l3gateway-port");
         const char *logpatch = smap_get(&port_rec->external_ids,
                                         "ovn-logical-patch-port");
 
@@ -734,6 +736,10 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
             } else if (is_patch && l2gateway) {
                 /* L2 gateway patch ports can be handled just like VIFs. */
                 simap_put(&new_localvif_to_ofport, l2gateway, ofport);
+                break;
+            } else if (is_patch && l3gateway) {
+                /* L3 gateway patch ports can be handled just like VIFs. */
+                simap_put(&new_localvif_to_ofport, l3gateway, ofport);
                 break;
             } else if (is_patch && logpatch) {
                 /* Logical patch ports can be handled just like VIFs. */
