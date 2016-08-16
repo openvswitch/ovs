@@ -1195,6 +1195,20 @@ ovn_port_update_sbrec(const struct ovn_port *op)
             if (chassis) {
                 smap_add(&new, "l3gateway-chassis", chassis);
             }
+
+            const char *nat_addresses = smap_get(&op->nbsp->options,
+                                           "nat-addresses");
+            if (nat_addresses) {
+                struct lport_addresses laddrs;
+                if (!extract_lsp_addresses(nat_addresses, &laddrs)) {
+                    static struct vlog_rate_limit rl =
+                        VLOG_RATE_LIMIT_INIT(1, 1);
+                    VLOG_WARN_RL(&rl, "Error extracting nat-addresses.");
+                } else {
+                    smap_add(&new, "nat-addresses", nat_addresses);
+                    destroy_lport_addresses(&laddrs);
+                }
+            }
             sbrec_port_binding_set_options(op->sb, &new);
             smap_destroy(&new);
         }

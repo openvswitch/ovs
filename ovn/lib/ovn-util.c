@@ -71,13 +71,13 @@ add_ipv6_netaddr(struct lport_addresses *laddrs, struct in6_addr addr,
  *
  * The caller must call destroy_lport_addresses(). */
 bool
-extract_lsp_addresses(char *address, struct lport_addresses *laddrs)
+extract_lsp_addresses(const char *address, struct lport_addresses *laddrs)
 {
     memset(laddrs, 0, sizeof *laddrs);
 
-    char *buf = address;
+    const char *buf = address;
     int buf_index = 0;
-    char *buf_end = buf + strlen(address);
+    const char *buf_end = buf + strlen(address);
     if (!ovs_scan_len(buf, &buf_index, ETH_ADDR_SCAN_FMT,
                       ETH_ADDR_SCAN_ARGS(laddrs->ea))) {
         laddrs->ea = eth_addr_zero;

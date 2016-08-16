@@ -232,8 +232,13 @@ consider_local_datapath(struct controller_ctx *ctx,
             sset_add(all_lports, binding_rec->logical_port);
             add_local_datapath(local_datapaths, binding_rec);
         }
-    } else if (chassis_rec && binding_rec->chassis == chassis_rec
-               && strcmp(binding_rec->type, "l3gateway")) {
+    } else if (!strcmp(binding_rec->type, "l3gateway")) {
+        const char *chassis = smap_get(&binding_rec->options,
+                                       "l3gateway-chassis");
+        if (!strcmp(chassis, chassis_rec->name) && ctx->ovnsb_idl_txn) {
+            add_local_datapath(local_datapaths, binding_rec);
+        }
+    } else if (chassis_rec && binding_rec->chassis == chassis_rec) {
         if (ctx->ovnsb_idl_txn) {
             VLOG_INFO("Releasing lport %s from this chassis.",
                       binding_rec->logical_port);
