@@ -21,6 +21,7 @@
 
 #include "condition.h"
 #include "openvswitch/json.h"
+#include "openvswitch/vlog.h"
 #include "jsonrpc.h"
 #include "ovsdb.h"
 #include "ovsdb-error.h"
@@ -31,6 +32,8 @@
 #include "svec.h"
 #include "table.h"
 #include "transaction.h"
+
+VLOG_DEFINE_THIS_MODULE(replication);
 
 static char *active_ovsdb_server;
 static struct jsonrpc *rpc;
@@ -88,12 +91,13 @@ replication_run(struct shash *all_dbs)
         /* Reset local databases. */
         if (reset_dbs) {
             struct ovsdb_error *error = reset_databases(all_dbs);
-            if (!error) {
-                reset_dbs = false;
+            if (error) {
+                /* In case reset DB fails, log the error before exiting.  */
+                char *msg = ovsdb_error_to_string(error);
+                ovsdb_error_destroy(error);
+                VLOG_FATAL("Failed to reset DB (%s).", msg);
             }
-            /* In case of success reseting the databases,
-             * return in order to notify monitors. */
-            return;
+            reset_dbs = false;
         }
 
         /* Open JSON-RPC. */
