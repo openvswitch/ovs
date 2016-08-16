@@ -339,8 +339,11 @@ class BaseType(object):
 
         return english
 
-    def toCType(self, prefix):
+    def toCType(self, prefix, refTable=True):
         if self.ref_table_name:
+            if not refTable:
+                assert self.type == UuidType
+                return 'struct uuid *'
             return "struct %s%s *" % (prefix, self.ref_table_name.lower())
         else:
             return {IntegerType: 'int64_t ',
@@ -352,18 +355,22 @@ class BaseType(object):
     def toAtomicType(self):
         return "OVSDB_TYPE_%s" % self.type.to_string().upper()
 
-    def copyCValue(self, dst, src):
+    def copyCValue(self, dst, src, refTable=True):
         args = {'dst': dst, 'src': src}
         if self.ref_table_name:
+            if not refTable:
+                return "%(dst)s = *%(src)s;" % args
             return ("%(dst)s = %(src)s->header_.uuid;") % args
         elif self.type == StringType:
             return "%(dst)s = xstrdup(%(src)s);" % args
         else:
             return "%(dst)s = %(src)s;" % args
 
-    def assign_c_value_casting_away_const(self, dst, src):
+    def assign_c_value_casting_away_const(self, dst, src, refTable=True):
         args = {'dst': dst, 'src': src}
         if self.ref_table_name:
+            if not refTable:
+                return "%(dst)s = *%(src)s;" % args
             return ("%(dst)s = %(src)s->header_.uuid;") % args
         elif self.type == StringType:
             return "%(dst)s = CONST_CAST(char *, %(src)s);" % args
