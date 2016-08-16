@@ -3790,6 +3790,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                       "arp { "
                       "eth.dst = ff:ff:ff:ff:ff:ff; "
                       "arp.spa = reg1; "
+                      "arp.tpa = reg0; "
                       "arp.op = 1; " /* ARP request */
                       "output; "
                       "};");

@@ -4805,3 +4805,114 @@ OVS_WAIT_UNTIL([
 
 OVN_CLEANUP([hv1])
 AT_CLEANUP
+
+AT_SETUP([ovn -- send arp for nexthop])
+AT_KEYWORDS([ovn])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Topology: Two LSs - ls1 and ls2 are connected via router r0
+
+# Create logical switches
+ovn-nbctl ls-add ls1
+ovn-nbctl ls-add ls2
+
+# Create  router
+ovn-nbctl create Logical_Router name=lr0
+
+# Add router ls1p1 port to gateway router
+ovn-nbctl lrp-add lr0 lrp-ls1lp1 f0:00:00:00:00:01 192.168.0.1/24
+ovn-nbctl lsp-add ls1 ls1lp1 -- set Logical_Switch_Port ls1lp1  \
+    type=router options:router-port=lrp-ls1lp1 \
+    addresses='"f0:00:00:00:00:01 192.168.0.1"'
+
+# Add router ls2p2 port to gateway router
+ovn-nbctl lrp-add lr0 lrp-ls2lp1 f0:00:00:00:00:02 192.168.1.1/24
+ovn-nbctl lsp-add ls2 ls2lp1 -- set Logical_Switch_Port ls2lp1 \
+    type=router options:router-port=lrp-ls2lp1 \
+    addresses='"f0:00:00:00:00:02 192.168.1.1"'
+
+# Set default gateway (nexthop) to 192.168.1.254
+ovn-nbctl lr-route-add lr0 "0.0.0.0/0" 192.168.1.254 lrp-ls2lp1
+
+# Create logical port ls1lp2 in ls1
+ovn-nbctl lsp-add ls1 ls1lp2 \
+-- lsp-set-addresses ls1lp2 "f0:00:00:00:00:03 192.168.0.2"
+
+# Create logical port ls2lp2 in ls2
+ovn-nbctl lsp-add ls2 ls2lp2 \
+-- lsp-set-addresses ls2lp2 "f0:00:00:00:00:04 192.168.1.10"
+
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-ls1lp2 -- \
+    set interface hv1-ls1lp2 external-ids:iface-id=ls1lp2 \
+    options:tx_pcap=hv1/ls1lp2-tx.pcap \
+    options:rxq_pcap=hv1/ls1lp2-rx.pcap \
+    ofport-request=1
+ovs-vsctl -- add-port br-int hv1-ls2lp2 -- \
+    set interface hv1-ls2lp2 external-ids:iface-id=ls2lp2 \
+    options:tx_pcap=hv1/ls2lp2-tx.pcap \
+    options:rxq_pcap=hv1/ls2lp2-rx.pcap \
+    ofport-request=2
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+echo "---------NB dump-----"
+ovn-nbctl show
+echo "---------------------"
+ovn-nbctl list logical_router
+echo "---------------------"
+ovn-nbctl list logical_router_port
+echo "---------------------"
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list port_binding
+echo "---------------------"
+ovn-sbctl dump-flows
+echo "---------------------"
+ovn-sbctl list chassis
+ovn-sbctl list encap
+echo "---------------------"
+
+echo "------Flows dump-----"
+as hv1
+ovs-ofctl dump-flows
+echo "---------------------"
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+src_mac="f00000000003"
+dst_mac="f00000000001"
+src_ip=`ip_to_hex 192 168 0 2`
+dst_ip=`ip_to_hex 8 8 8 8`
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+
+# Send IP packet destined to 8.8.8.8 from lsp1lp2
+as hv1 ovs-appctl netdev-dummy/receive hv1-ls1lp2 $packet
+
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+# ARP packet should be received with Target IP Address set to 192.168.1.254 and
+# not 8.8.8.8
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/ls2lp2-tx.pcap | trim_zeros > packets
+expected="fffffffffffff0000000000208060001080006040001f00000000002c0a80101000000000000c0a801fe"
+echo $expected > expout
+AT_CHECK([cat packets], [0], [expout])
+cat packets
+
+OVN_CLEANUP([hv1])
+
+AT_CLEANUP

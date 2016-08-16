@@ -1133,9 +1133,10 @@ icmp4 {
       address (leaving <code>ip4.dst</code> or <code>ip6.dst</code>, the
       packet's final destination, unchanged) and advances to the next
       table for ARP resolution.  It also sets <code>reg1</code> (or
-      <code>xxreg1</code> to the IP address owned by the selected router
-      port (which is used later in table 6 as the IP source address for
-      an ARP request, if needed).
+      <code>xxreg1</code>) to the IP address owned by the selected router
+      port (Table 6 will generate ARP request, if needed, with
+      <code>reg0</code> as the target protocol address and <code>reg1</code>
+      as the source protocol address).
     </p>
 
     <p>
@@ -1315,6 +1316,7 @@ next;
 arp {
     eth.dst = ff:ff:ff:ff:ff:ff;
     arp.spa = reg1;
+    arp.tpa = reg0;
     arp.op = 1;  /* ARP request. */
     output;
 };
@@ -1322,7 +1324,8 @@ arp {
 
         <p>
           (Ingress table 4 initialized <code>reg1</code> with the IP address
-          owned by <code>outport</code>.)
+          owned by <code>outport</code> and <code>reg0</code> with the next-hop
+          IP address)
         </p>
 
         <p>
