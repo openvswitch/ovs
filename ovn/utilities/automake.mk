@@ -25,7 +25,8 @@ EXTRA_DIST += \
 DISTCLEANFILES += \
     ovn/utilities/ovn-ctl.8 \
     ovn/utilities/ovn-nbctl.8 \
-    ovn/utilities/ovn-sbctl.8
+    ovn/utilities/ovn-sbctl.8 \
+    ovn/utilities/ovn-trace.8
 
 # ovn-nbctl
 bin_PROGRAMS += ovn/utilities/ovn-nbctl
