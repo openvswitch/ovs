@@ -339,8 +339,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
     if (!netdev) {
         struct netdev_registered_class *rc;
 
-        type = type && type[0] ? type : "system";
-        rc = netdev_lookup_class(type);
+        rc = netdev_lookup_class(type && type[0] ? type : "system");
         if (rc && ovs_refcount_try_ref_rcu(&rc->refcnt)) {
             netdev = rc->class->alloc();
             if (netdev) {
@@ -377,11 +376,6 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                       name, type);
             error = EAFNOSUPPORT;
         }
-    } else if (type && strcmp(type, netdev_get_type(netdev))) {
-        VLOG_WARN("trying to create netdev %s of different type %s,"
-                  " already is %s\n",
-                  name, type, netdev_get_type(netdev));
-        error = EEXIST;
     } else {
         error = 0;
     }
