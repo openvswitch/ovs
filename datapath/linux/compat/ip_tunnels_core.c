@@ -126,12 +126,10 @@ int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
 	if (csum_help)
 		skb->encapsulation = 0;
 
-	if (skb->ip_summed == CHECKSUM_PARTIAL && csum_help) {
-		err = skb_checksum_help(skb);
-		if (unlikely(err))
-			goto error;
-	} else if (skb->ip_summed != CHECKSUM_PARTIAL)
+	if (skb->ip_summed != CHECKSUM_PARTIAL) {
 		skb->ip_summed = CHECKSUM_NONE;
+		skb->encapsulation = 0;
+	}
 
 	return 0;
 error:
