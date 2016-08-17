@@ -17,19 +17,20 @@
 
 #include <config.h>
 
-#include "replication.h"
 
 #include "condition.h"
+#include "jsonrpc.h"
 #include "openvswitch/dynamic-string.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/json.h"
 #include "openvswitch/vlog.h"
-#include "jsonrpc.h"
-#include "ovsdb.h"
 #include "ovsdb-error.h"
+#include "ovsdb.h"
 #include "query.h"
+#include "replication.h"
 #include "row.h"
-#include "stream.h"
 #include "sset.h"
+#include "stream.h"
 #include "svec.h"
 #include "table.h"
 #include "transaction.h"
@@ -84,6 +85,20 @@ static void blacklist_tables_add(const char *database, const char *table);
 static bool blacklist_tables_find(const char *database, const char* table);
 
 
+/* Keep track of request IDs of all outstanding OVSDB requests. */
+static struct hmap request_ids = HMAP_INITIALIZER(&request_ids);
+
+struct request_ids_hmap_node {
+    struct hmap_node hmap;
+    struct json *request_id;
+    struct ovsdb *db;          /* associated database */
+};
+void request_ids_add(const struct json *id, struct ovsdb *db);
+bool request_ids_lookup_and_free(const struct json *id, struct ovsdb **db);
+static void request_ids_destroy(void);
+void request_ids_clear(void);
+
+
 void
 replication_init(void)
 {
@@ -277,6 +292,8 @@ replication_destroy(void)
         free(active_ovsdb_server);
         active_ovsdb_server = NULL;
     }
+
+    request_ids_destroy();
 }
 
 const struct db *
@@ -756,6 +773,61 @@ execute_update(struct ovsdb_txn *txn, const char *uuid,
     json_destroy(CONST_CAST(struct json *, where));
 
     return error;
+}
+
+void
+request_ids_add(const struct json *id, struct ovsdb *db)
+{
+    struct request_ids_hmap_node *node = xmalloc(sizeof *node);
+
+    node->request_id = json_clone(id);
+    node->db = db;
+    hmap_insert(&request_ids, &node->hmap, json_hash(id, 0));
+}
+
+/* Look up 'id' from 'request_ids', if found, remove the found id from
+ * 'request_ids' and free its memory. If not found, 'request_ids' does
+ * not change.  Sets '*db' to the database for the request (NULL if not
+ * found).
+ *
+ * Return true if 'id' is found, false otherwise.
+ */
+bool
+request_ids_lookup_and_free(const struct json *id, struct ovsdb **db)
+{
+    struct request_ids_hmap_node *node;
+
+    HMAP_FOR_EACH_WITH_HASH (node, hmap, json_hash(id, 0), &request_ids) {
+        if (json_equal(id, node->request_id)) {
+            hmap_remove(&request_ids, &node->hmap);
+            *db = node->db;
+            json_destroy(node->request_id);
+            free(node);
+            return true;
+        }
+    }
+
+    *db = NULL;
+    return false;
+}
+
+static void
+request_ids_destroy(void)
+{
+    struct request_ids_hmap_node *node;
+
+    HMAP_FOR_EACH_POP (node, hmap, &request_ids) {
+        json_destroy(node->request_id);
+        free(node);
+    }
+    hmap_destroy(&request_ids);
+}
+
+void
+request_ids_clear(void)
+{
+    request_ids_destroy();
+    hmap_init(&request_ids);
 }
 
 void
