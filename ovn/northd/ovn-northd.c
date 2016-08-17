@@ -1931,11 +1931,9 @@ has_stateful_acl(struct ovn_datapath *od)
 }
 
 static void
-build_pre_acls(struct ovn_datapath *od, struct hmap *lflows,
-               struct hmap *ports)
+build_pre_acls(struct ovn_datapath *od, struct hmap *lflows)
 {
     bool has_stateful = has_stateful_acl(od);
-    struct ovn_port *op;
 
     /* Ingress and Egress Pre-ACL Table (Priority 0): Packets are
      * allowed by default. */
@@ -1946,33 +1944,32 @@ build_pre_acls(struct ovn_datapath *od, struct hmap *lflows,
      * send all IP packets through the conntrack action, which handles
      * defragmentation, in order to match L4 headers. */
     if (has_stateful) {
-        HMAP_FOR_EACH (op, key_node, ports) {
-            if (op->od == od && !strcmp(op->nbsp->type, "router")) {
-                /* Can't use ct() for router ports. Consider the
-                 * following configuration: lp1(10.0.0.2) on
-                 * hostA--ls1--lr0--ls2--lp2(10.0.1.2) on hostB, For a
-                 * ping from lp1 to lp2, First, the response will go
-                 * through ct() with a zone for lp2 in the ls2 ingress
-                 * pipeline on hostB.  That ct zone knows about this
-                 * connection. Next, it goes through ct() with the zone
-                 * for the router port in the egress pipeline of ls2 on
-                 * hostB.  This zone does not know about the connection,
-                 * as the icmp request went through the logical router
-                 * on hostA, not hostB. This would only work with
-                 * distributed conntrack state across all chassis. */
-                struct ds match_in = DS_EMPTY_INITIALIZER;
-                struct ds match_out = DS_EMPTY_INITIALIZER;
+        for (size_t i = 0; i < od->n_router_ports; i++) {
+            struct ovn_port *op = od->router_ports[i];
+            /* Can't use ct() for router ports. Consider the
+             * following configuration: lp1(10.0.0.2) on
+             * hostA--ls1--lr0--ls2--lp2(10.0.1.2) on hostB, For a
+             * ping from lp1 to lp2, First, the response will go
+             * through ct() with a zone for lp2 in the ls2 ingress
+             * pipeline on hostB.  That ct zone knows about this
+             * connection. Next, it goes through ct() with the zone
+             * for the router port in the egress pipeline of ls2 on
+             * hostB.  This zone does not know about the connection,
+             * as the icmp request went through the logical router
+             * on hostA, not hostB. This would only work with
+             * distributed conntrack state across all chassis. */
+            struct ds match_in = DS_EMPTY_INITIALIZER;
+            struct ds match_out = DS_EMPTY_INITIALIZER;
 
-                ds_put_format(&match_in, "ip && inport == %s", op->json_key);
-                ds_put_format(&match_out, "ip && outport == %s", op->json_key);
-                ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 110,
-                              ds_cstr(&match_in), "next;");
-                ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 110,
-                              ds_cstr(&match_out), "next;");
+            ds_put_format(&match_in, "ip && inport == %s", op->json_key);
+            ds_put_format(&match_out, "ip && outport == %s", op->json_key);
+            ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 110,
+                          ds_cstr(&match_in), "next;");
+            ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 110,
+                          ds_cstr(&match_out), "next;");
 
-                ds_destroy(&match_in);
-                ds_destroy(&match_out);
-            }
+            ds_destroy(&match_in);
+            ds_destroy(&match_out);
         }
         /* Ingress and Egress Pre-ACL Table (Priority 110).
          *
@@ -2487,7 +2484,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
-        build_pre_acls(od, lflows, ports);
+        build_pre_acls(od, lflows);
         build_pre_lb(od, lflows);
         build_pre_stateful(od, lflows);
         build_acls(od, lflows);
