@@ -207,7 +207,8 @@ AC_DEFUN([OVS_CHECK_DPDK], [
         ], [])
       ], [],
       [AC_SEARCH_LIBS([get_mempolicy],[numa],[],[AC_MSG_ERROR([unable to find libnuma, install the dependency package])])
-       DPDK_EXTRA_LIB="-lnuma"])
+       DPDK_EXTRA_LIB="-lnuma"
+       AC_DEFINE([VHOST_NUMA], [1], [NUMA Aware vHost support detected in DPDK.])])
 
     AC_COMPILE_IFELSE([
       AC_LANG_PROGRAM(

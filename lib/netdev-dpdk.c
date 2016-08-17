@@ -2367,8 +2367,10 @@ new_device(int vid)
             /* Get NUMA information */
             newnode = rte_vhost_get_numa_node(vid);
             if (newnode == -1) {
+#ifdef VHOST_NUMA
                 VLOG_INFO("Error getting NUMA info for vHost Device '%s'",
                           ifname);
+#endif
                 newnode = dev->socket_id;
             }
 
