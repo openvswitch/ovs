@@ -2303,55 +2303,53 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
 
     /* Add 34000 priority flow to allow DHCP reply from ovn-controller to all
      * logical ports of the datapath if the CMS has configured DHCPv4 options*/
-    if (od->nbs && od->nbs->n_ports) {
-        for (size_t i = 0; i < od->nbs->n_ports; i++) {
-            if (od->nbs->ports[i]->dhcpv4_options) {
-                const char *server_id = smap_get(
-                    &od->nbs->ports[i]->dhcpv4_options->options, "server_id");
-                const char *server_mac = smap_get(
-                    &od->nbs->ports[i]->dhcpv4_options->options, "server_mac");
-                const char *lease_time = smap_get(
-                    &od->nbs->ports[i]->dhcpv4_options->options, "lease_time");
-                const char *router = smap_get(
-                    &od->nbs->ports[i]->dhcpv4_options->options, "router");
-                if (server_id && server_mac && lease_time && router) {
-                    struct ds match = DS_EMPTY_INITIALIZER;
-                    const char *actions =
-                        has_stateful ? "ct_commit; next;" : "next;";
-                    ds_put_format(&match, "outport == \"%s\" && eth.src == %s "
-                                  "&& ip4.src == %s && udp && udp.src == 67 "
-                                  "&& udp.dst == 68", od->nbs->ports[i]->name,
-                                  server_mac, server_id);
-                    ovn_lflow_add(
-                        lflows, od, S_SWITCH_OUT_ACL, 34000, ds_cstr(&match),
-                        actions);
-                }
+    for (size_t i = 0; i < od->nbs->n_ports; i++) {
+        if (od->nbs->ports[i]->dhcpv4_options) {
+            const char *server_id = smap_get(
+                &od->nbs->ports[i]->dhcpv4_options->options, "server_id");
+            const char *server_mac = smap_get(
+                &od->nbs->ports[i]->dhcpv4_options->options, "server_mac");
+            const char *lease_time = smap_get(
+                &od->nbs->ports[i]->dhcpv4_options->options, "lease_time");
+            const char *router = smap_get(
+                &od->nbs->ports[i]->dhcpv4_options->options, "router");
+            if (server_id && server_mac && lease_time && router) {
+                struct ds match = DS_EMPTY_INITIALIZER;
+                const char *actions =
+                    has_stateful ? "ct_commit; next;" : "next;";
+                ds_put_format(&match, "outport == \"%s\" && eth.src == %s "
+                              "&& ip4.src == %s && udp && udp.src == 67 "
+                              "&& udp.dst == 68", od->nbs->ports[i]->name,
+                              server_mac, server_id);
+                ovn_lflow_add(
+                    lflows, od, S_SWITCH_OUT_ACL, 34000, ds_cstr(&match),
+                    actions);
             }
+        }
 
-            if (od->nbs->ports[i]->dhcpv6_options) {
-                const char *server_mac = smap_get(
-                    &od->nbs->ports[i]->dhcpv6_options->options, "server_id");
-                struct eth_addr ea;
-                if (server_mac && eth_addr_from_string(server_mac, &ea)) {
-                    /* Get the link local IP of the DHCPv6 server from the
-                     * server MAC. */
-                    struct in6_addr lla;
-                    in6_generate_lla(ea, &lla);
+        if (od->nbs->ports[i]->dhcpv6_options) {
+            const char *server_mac = smap_get(
+                &od->nbs->ports[i]->dhcpv6_options->options, "server_id");
+            struct eth_addr ea;
+            if (server_mac && eth_addr_from_string(server_mac, &ea)) {
+                /* Get the link local IP of the DHCPv6 server from the
+                 * server MAC. */
+                struct in6_addr lla;
+                in6_generate_lla(ea, &lla);
 
-                    char server_ip[INET6_ADDRSTRLEN + 1];
-                    ipv6_string_mapped(server_ip, &lla);
+                char server_ip[INET6_ADDRSTRLEN + 1];
+                ipv6_string_mapped(server_ip, &lla);
 
-                    struct ds match = DS_EMPTY_INITIALIZER;
-                    const char *actions = has_stateful ? "ct_commit; next;" :
-                                        "next;";
-                    ds_put_format(&match, "outport == \"%s\" && eth.src == %s "
-                                  "&& ip6.src == %s && udp && udp.src == 547 "
-                                  "&& udp.dst == 546", od->nbs->ports[i]->name,
-                                  server_mac, server_ip);
-                    ovn_lflow_add(
-                        lflows, od, S_SWITCH_OUT_ACL, 34000, ds_cstr(&match),
-                        actions);
-                }
+                struct ds match = DS_EMPTY_INITIALIZER;
+                const char *actions = has_stateful ? "ct_commit; next;" :
+                    "next;";
+                ds_put_format(&match, "outport == \"%s\" && eth.src == %s "
+                              "&& ip6.src == %s && udp && udp.src == 547 "
+                              "&& udp.dst == 546", od->nbs->ports[i]->name,
+                              server_mac, server_ip);
+                ovn_lflow_add(
+                    lflows, od, S_SWITCH_OUT_ACL, 34000, ds_cstr(&match),
+                    actions);
             }
         }
     }
