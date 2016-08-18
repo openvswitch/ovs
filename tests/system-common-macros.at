@@ -118,22 +118,23 @@ m4_define([ADD_OVS_TUNNEL],
 )
 
 # ADD_NATIVE_TUNNEL([type], [port], [namespace], [remote-addr], [overlay-addr],
-#                   [link-args])
+#                   [type-args], [link-args])
 #
 # Add a native tunnel device within 'namespace', with name 'port' and type
 # 'type'. The tunnel device will be configured as point-to-point with the
 # 'remote-addr' as the underlay address of the remote tunnel endpoint (as
 # viewed from the perspective of that namespace).
 #
-# 'port' will be configured with the address 'overlay-addr'. 'link-args' is
-# made available so that additional arguments can be passed to "ip link",
-# for instance to configure the vxlan destination port.
+# 'port' will be configured with the address 'overlay-addr'. 'type-args' is
+# made available so that additional arguments can be passed to "ip link add"
+# for configuring specific link type's arguments, for instance to configure
+# the vxlan destination port. 'link-args' is made for arguments passed to
+# "ip link set", for instance to configure MAC address.
 #
 m4_define([ADD_NATIVE_TUNNEL],
    [NS_CHECK_EXEC([$3], [ip link add dev $2 type $1 remote $4 $6])
     NS_CHECK_EXEC([$3], [ip addr add dev $2 $5])
-    NS_CHECK_EXEC([$3], [ip link set dev $2 up])
-    NS_CHECK_EXEC([$3], [ip link set dev $2 mtu 1450])
+    NS_CHECK_EXEC([$3], [ip link set dev $2 mtu 1450 $7 up])
    ]
 )
 

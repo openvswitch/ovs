@@ -384,9 +384,9 @@ AT_CHECK([ip link set dev br-underlay up])
 dnl Set up tunnel endpoints on OVS outside the namespace and with a native
 dnl linux device inside the namespace.
 ADD_OVS_TUNNEL([gre], [br0], [at_gre0], [172.31.1.1], [10.1.1.100/24])
-ADD_NATIVE_TUNNEL([gretap], [ns_gre0], [at_ns0], [172.31.1.100], [10.1.1.1/24])
+ADD_NATIVE_TUNNEL([gretap], [ns_gre0], [at_ns0], [172.31.1.100], [10.1.1.1/24],
+                  [], [address e6:66:c1:11:11:11])
 AT_CHECK([ovs-vsctl -- set interface at_gre0 ofport_request=1])
-NS_CHECK_EXEC([at_ns0], [ip link set dev ns_gre0 address e6:66:c1:11:11:11])
 NS_CHECK_EXEC([at_ns0], [arp -s 10.1.1.2 e6:66:c1:22:22:22])
 
 dnl Set up (p1 and ovs-p1) at br0
