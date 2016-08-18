@@ -895,6 +895,26 @@ handle_ipfix_flow_stats_request(struct ofconn *ofconn,
     return error;
 }
 
+static enum ofperr
+handle_nxt_ct_flush_zone(struct ofconn *ofconn, const struct ofp_header *oh)
+{
+    struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
+    const struct nx_zone_id *nzi = ofpmsg_body(oh);
+
+    if (!is_all_zeros(nzi->zero, sizeof nzi->zero)) {
+        return OFPERR_NXBRC_MUST_BE_ZERO;
+    }
+
+    uint16_t zone = ntohs(nzi->zone_id);
+    if (ofproto->ofproto_class->ct_flush) {
+        ofproto->ofproto_class->ct_flush(ofproto, &zone);
+    } else {
+        return EOPNOTSUPP;
+    }
+
+    return 0;
+}
+
 void
 ofproto_set_flow_restore_wait(bool flow_restore_wait_db)
 {
@@ -7723,6 +7743,9 @@ handle_openflow__(struct ofconn *ofconn, const struct ofpbuf *msg)
 
     case OFPTYPE_IPFIX_FLOW_STATS_REQUEST:
         return handle_ipfix_flow_stats_request(ofconn, oh);
+
+    case OFPTYPE_CT_FLUSH_ZONE:
+        return handle_nxt_ct_flush_zone(ofconn, oh);
 
     case OFPTYPE_HELLO:
     case OFPTYPE_ERROR:
