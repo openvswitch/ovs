@@ -1133,6 +1133,33 @@ upcall_uninit(struct upcall *upcall)
     }
 }
 
+/* If there are less flows than the limit, and this is a miss upcall which
+ *
+ *      - Has no recirc_id, OR
+ *      - Has a recirc_id and we can get a reference on the recirc ctx,
+ *
+ * Then we should install the flow (true). Otherwise, return false. */
+static bool
+should_install_flow(struct udpif *udpif, struct upcall *upcall)
+{
+    unsigned int flow_limit;
+
+    if (upcall->type != DPIF_UC_MISS) {
+        return false;
+    } else if (upcall->recirc && !upcall->have_recirc_ref) {
+        VLOG_WARN_RL(&rl, "upcall: no reference for recirc flow");
+        return false;
+    }
+
+    atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
+    if (udpif_get_n_flows(udpif) >= flow_limit) {
+        VLOG_WARN_RL(&rl, "upcall: datapath flow limit reached");
+        return false;
+    }
+
+    return true;
+}
+
 static int
 upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufid,
           unsigned pmd_id, enum dpif_upcall_type type,
@@ -1141,13 +1168,11 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
     struct udpif *udpif = aux;
-    unsigned int flow_limit;
     struct upcall upcall;
     bool megaflow;
     int error;
 
     atomic_read_relaxed(&enable_megaflows, &megaflow);
-    atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
 
     error = upcall_receive(&upcall, udpif->backer, packet, type, userdata,
                            flow, 0, ufid, pmd_id);
@@ -1169,16 +1194,7 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
         flow_wildcards_init_for_packet(wc, flow);
     }
 
-    if (udpif_get_n_flows(udpif) >= flow_limit) {
-        VLOG_WARN_RL(&rl, "upcall_cb failure: datapath flow limit reached");
-        error = ENOSPC;
-        goto out;
-    }
-
-    /* Prevent miss flow installation if the key has recirculation ID but we
-     * were not able to get a reference on it. */
-    if (type == DPIF_UC_MISS && upcall.recirc && !upcall.have_recirc_ref) {
-        VLOG_WARN_RL(&rl, "upcall_cb failure: no reference for recirc flow");
+    if (!should_install_flow(udpif, &upcall)) {
         error = ENOSPC;
         goto out;
     }
@@ -1297,13 +1313,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
 {
     struct dpif_op *opsp[UPCALL_MAX_BATCH * 2];
     struct ukey_op ops[UPCALL_MAX_BATCH * 2];
-    unsigned int flow_limit;
     size_t n_ops, n_opsp, i;
-    bool may_put;
-
-    atomic_read_relaxed(&udpif->flow_limit, &flow_limit);
-
-    may_put = udpif_get_n_flows(udpif) < flow_limit;
 
     /* Handle the packets individually in order of arrival.
      *
@@ -1321,17 +1331,7 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
         const struct dp_packet *packet = upcall->packet;
         struct ukey_op *op;
 
-        /* Do not install a flow into the datapath if:
-         *
-         *    - The datapath already has too many flows.
-         *
-         *    - We received this packet via some flow installed in the kernel
-         *      already.
-         *
-         *    - Upcall was a recirculation but we do not have a reference to
-         *      to the recirculation ID. */
-        if (may_put && upcall->type == DPIF_UC_MISS &&
-            (!upcall->recirc || upcall->have_recirc_ref)) {
+        if (should_install_flow(udpif, upcall)) {
             struct udpif_key *ukey = upcall->ukey;
 
             upcall->ukey_persists = true;
