@@ -1646,51 +1646,17 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
         dpdk_do_tx_copy(netdev, qid, batch);
         dp_packet_delete_batch(batch, may_steal);
     } else {
-        int next_tx_idx = 0;
-        int dropped = 0;
-        unsigned int qos_pkts = 0;
-        unsigned int temp_cnt = 0;
+        int dropped;
         int cnt = batch->count;
+        struct rte_mbuf **cur_pkts = (struct rte_mbuf **) batch->packets;
 
         dp_packet_batch_apply_cutlen(batch);
 
-        for (int i = 0; i < cnt; i++) {
-            int size = dp_packet_size(batch->packets[i]);
+        cnt = netdev_dpdk_filter_packet_len(dev, cur_pkts, cnt);
+        cnt = netdev_dpdk_qos_run__(dev, cur_pkts, cnt);
+        dropped = batch->count - cnt;
 
-            if (OVS_UNLIKELY(size > dev->max_packet_len)) {
-                if (next_tx_idx != i) {
-                    temp_cnt = i - next_tx_idx;
-                    qos_pkts = temp_cnt;
-
-                    temp_cnt = netdev_dpdk_qos_run__(dev,
-                                        (struct rte_mbuf**)batch->packets,
-                                        temp_cnt);
-                    dropped += qos_pkts - temp_cnt;
-                    netdev_dpdk_eth_tx_burst(dev, qid,
-                            (struct rte_mbuf **)&batch->packets[next_tx_idx],
-                            temp_cnt);
-
-                }
-
-                VLOG_WARN_RL(&rl, "Too big size %d max_packet_len %d",
-                             (int)size , dev->max_packet_len);
-
-                dp_packet_delete(batch->packets[i]);
-                dropped++;
-                next_tx_idx = i + 1;
-            }
-        }
-        if (next_tx_idx != cnt) {
-            cnt -= next_tx_idx;
-            qos_pkts = cnt;
-
-            cnt = netdev_dpdk_qos_run__(dev,
-                    (struct rte_mbuf**)batch->packets, cnt);
-            dropped += qos_pkts - cnt;
-            netdev_dpdk_eth_tx_burst(dev, qid,
-                             (struct rte_mbuf **)&batch->packets[next_tx_idx],
-                             cnt);
-        }
+        netdev_dpdk_eth_tx_burst(dev, qid, cur_pkts, cnt);
 
         if (OVS_UNLIKELY(dropped)) {
             rte_spinlock_lock(&dev->stats_lock);
