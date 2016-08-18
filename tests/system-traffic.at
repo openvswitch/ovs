@@ -442,8 +442,8 @@ dnl check tunnel pop path, from at_ns0 to at_ns1
 NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 5678 < payload200.bin])
 dnl After truncation = 100 byte at loopback device p2(4)
 AT_CHECK([ovs-appctl revalidator/purge], [0])
-AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | awk --field-separator=', '  '{print $5}'], [0], [dnl
-n_bytes=100
+AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | ofctl_strip], [0], [dnl
+ n_packets=1, n_bytes=100, priority=1,ip,in_port=4 actions=drop
 ])
 
 dnl SLOW_ACTION: disable datapath truncate support
@@ -479,8 +479,8 @@ dnl check tunnel pop path, from at_ns0 to at_ns1
 NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 5678 < payload200.bin])
 dnl After truncation = 100 byte at loopback device p2(4)
 AT_CHECK([ovs-appctl revalidator/purge], [0])
-AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | awk --field-separator=', '  '{print $5}'], [0], [dnl
-n_bytes=100
+AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | ofctl_strip], [0], [dnl
+ n_packets=1, n_bytes=100, priority=1,ip,in_port=4 actions=drop
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
