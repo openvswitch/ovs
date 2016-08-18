@@ -450,6 +450,7 @@ usage(void)
            "  dump-tlv-map SWITCH      print TLV option mappings\n"
            "  dump-ipfix-bridge SWITCH    print ipfix stats of bridge\n"
            "  dump-ipfix-flow SWITCH      print flow ipfix of a bridge\n"
+           "  ct-flush-zone SWITCH ZONE   flush conntrack entries in ZONE\n"
            "\nFor OpenFlow switches and controllers:\n"
            "  probe TARGET                probe whether TARGET is up\n"
            "  ping TARGET [N]             latency of N-byte echos\n"
@@ -2606,6 +2607,27 @@ ofctl_dump_ipfix_bridge(struct ovs_cmdl_context *ctx)
 }
 
 static void
+ofctl_ct_flush_zone(struct ovs_cmdl_context *ctx)
+{
+    uint16_t zone_id;
+    char *error = str_to_u16(ctx->argv[2], "zone_id", &zone_id);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+
+    struct vconn *vconn;
+    open_vconn(ctx->argv[1], &vconn);
+    enum ofp_version version = vconn_get_version(vconn);
+
+    struct ofpbuf *msg = ofpraw_alloc(OFPRAW_NXT_CT_FLUSH_ZONE, version, 0);
+    struct nx_zone_id *nzi = ofpbuf_put_zeros(msg, sizeof *nzi);
+    nzi->zone_id = htons(zone_id);
+
+    transact_noreply(vconn, msg);
+    vconn_close(vconn);
+}
+
+static void
 ofctl_dump_ipfix_flow(struct ovs_cmdl_context *ctx)
 {
     dump_trivial_transaction(ctx->argv[1], OFPRAW_NXST_IPFIX_FLOW_REQUEST);
@@ -4487,6 +4509,9 @@ static const struct ovs_cmdl_command all_commands[] = {
       1, 1, ofctl_dump_ipfix_bridge, OVS_RO },
     { "dump-ipfix-flow", "switch",
       1, 1, ofctl_dump_ipfix_flow, OVS_RO },
+
+    { "ct-flush-zone", "switch zone",
+      2, 2, ofctl_ct_flush_zone, OVS_RO },
 
     { "ofp-parse", "file",
       1, 1, ofctl_ofp_parse, OVS_RW },

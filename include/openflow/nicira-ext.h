@@ -1128,5 +1128,14 @@ struct nx_tlv_table_reply {
                                 from the length field in the header. */
 };
 OFP_ASSERT(sizeof(struct nx_tlv_table_reply) == 16);
+
+/* NXT_CT_FLUSH_ZONE.
+ *
+ * Flushes the connection tracking table. */
+struct nx_zone_id {
+    uint8_t zero[6];            /* Must be zero. */
+    ovs_be16 zone_id;           /* Connection tracking zone. */
+};
+OFP_ASSERT(sizeof(struct nx_zone_id) == 8);
 
 #endif /* openflow/nicira-ext.h */

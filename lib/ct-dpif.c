@@ -15,12 +15,14 @@
  */
 
 #include <config.h>
+#include "dpif-provider.h"
 
 #include <errno.h>
 
 #include "ct-dpif.h"
+#include "openvswitch/vlog.h"
 
-#include "dpif-provider.h"
+VLOG_DEFINE_THIS_MODULE(ct_dpif);
 
 /* Declarations for conntrack entry formatting. */
 struct flags {
@@ -114,6 +116,12 @@ ct_dpif_dump_done(struct ct_dpif_dump_state *dump)
 int
 ct_dpif_flush(struct dpif *dpif, const uint16_t *zone)
 {
+    if (zone) {
+        VLOG_DBG("%s: ct_flush: %"PRIu16, dpif_name(dpif), *zone);
+    } else {
+        VLOG_DBG("%s: ct_flush: <all>", dpif_name(dpif));
+    }
+
     return (dpif->dpif_class->ct_flush
             ? dpif->dpif_class->ct_flush(dpif, zone)
             : EOPNOTSUPP);

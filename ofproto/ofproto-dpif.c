@@ -25,6 +25,7 @@
 #include "connmgr.h"
 #include "coverage.h"
 #include "cfm.h"
+#include "ct-dpif.h"
 #include "dpif.h"
 #include "fail-open.h"
 #include "guarded-list.h"
@@ -4656,6 +4657,14 @@ get_datapath_version(const struct ofproto *ofproto_)
     return ofproto->backer->dp_version_string;
 }
 
+static void
+ct_flush(const struct ofproto *ofproto_, const uint16_t *zone)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    ct_dpif_flush(ofproto->backer->dpif, zone);
+}
+
 static bool
 set_frag_handling(struct ofproto *ofproto_,
                   enum ofputil_frag_handling frag_handling)
@@ -5924,4 +5933,5 @@ const struct ofproto_class ofproto_dpif_class = {
     NULL,                       /* group_modify */
     group_get_stats,            /* group_get_stats */
     get_datapath_version,       /* get_datapath_version */
+    ct_flush,                   /* ct_flush */
 };

@@ -275,6 +275,12 @@ flow based IPFIX and collector set ids.
 This command uses an Open vSwitch extension that is only in Open
 vSwitch 2.6 and later.
 .
+.IP "\fBct\-flush\-zone \fIswitch zone\fR
+Flushes the connection tracking entries in \fIzone\fR on \fIswitch\fR.
+.IP
+This command uses an Open vSwitch extension that is only in Open
+vSwitch 2.6 and later.
+.
 .SS "OpenFlow 1.1+ Group Table Commands"
 .
 The following commands work only with switches that support OpenFlow
