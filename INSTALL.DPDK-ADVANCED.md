@@ -657,7 +657,7 @@ For users wanting to do packet forwarding using kernel stack below are the steps
 
       Note: For information on libvirt and further tuning refer [libvirt].
 
-### 6.3 DPDK backend inside VM
+### 6.2 DPDK backend inside VM
 
   Please note that additional configuration is required if you want to run
   ovs-vswitchd with DPDK backend inside a QEMU virtual machine. Ovs-vswitchd
