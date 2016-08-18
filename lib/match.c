@@ -999,9 +999,9 @@ format_flow_tunnel(struct ds *s, const struct match *match)
     if (wc->masks.tunnel.ip_ttl) {
         ds_put_format(s, "tun_ttl=%"PRIu8",", tnl->ip_ttl);
     }
-    if (wc->masks.tunnel.flags) {
+    if (wc->masks.tunnel.flags & FLOW_TNL_F_MASK) {
         format_flags_masked(s, "tun_flags", flow_tun_flag_to_string,
-                            tnl->flags,
+                            tnl->flags & FLOW_TNL_F_MASK,
                             wc->masks.tunnel.flags & FLOW_TNL_F_MASK,
                             FLOW_TNL_F_MASK);
         ds_put_char(s, ',');
