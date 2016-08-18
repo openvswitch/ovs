@@ -157,7 +157,7 @@ icmp,vlan_tci=0x0000,dl_src=be:b6:f4:e1:49:4a,dl_dst=fe:71:d8:83:72:4f,nw_src=30
 AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  5'], [0], [dnl
   port  5: rx pkts=1, bytes=98, drop=?, errs=?, frame=?, over=?, crc=?
 ])
-AT_CHECK([ovs-appctl dpif/dump-flows int-br], [0], [dnl
+AT_CHECK([ovs-appctl dpif/dump-flows int-br | grep 'in_port(6081)'], [0], [dnl
 tunnel(tun_id=0x7b,ipv6_src=2001:cafe::92,ipv6_dst=2001:cafe::88,geneve({class=0xffff,type=0x80,len=4,0xa/0xf}{class=0xffff,type=0,len=4}),flags(-df-csum+key)),skb_mark(0),recirc_id(0),in_port(6081),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
 ])
 
