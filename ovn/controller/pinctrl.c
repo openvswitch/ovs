@@ -1303,6 +1303,7 @@ send_garp_run(const struct ovsrec_bridge *br_int, const char *chassis_id,
     sset_destroy(&local_l3gw_ports);
     simap_destroy(&localnet_ofports);
     shash_destroy_free_data(&nat_addresses);
+    sset_destroy(&nat_ip_keys);
 }
 
 static void
