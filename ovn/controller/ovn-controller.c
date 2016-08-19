@@ -229,17 +229,6 @@ get_ovnsb_remote(struct ovsdb_idl *ovs_idl)
     }
 }
 
-enum ct_zone_pending_state {
-    CT_ZONE_DB_QUEUED,    /* Waiting for DB transaction to open. */
-    CT_ZONE_DB_SENT,      /* Sent and waiting for confirmation from DB. */
-};
-
-struct ct_zone_pending_entry {
-    enum ct_zone_pending_state state;
-    int zone;
-    bool add;             /* Is the entry being added? */
-};
-
 static void
 update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
                 struct simap *ct_zones, unsigned long *ct_zone_bitmap,
@@ -276,7 +265,7 @@ update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
                      ct_zone->data, ct_zone->name);
 
             struct ct_zone_pending_entry *pending = xmalloc(sizeof *pending);
-            pending->state = CT_ZONE_DB_QUEUED;
+            pending->state = CT_ZONE_DB_QUEUED; /* Skip flushing zone. */
             pending->zone = ct_zone->data;
             pending->add = false;
             shash_add(pending_ct_zones, ct_zone->name, pending);
@@ -310,17 +299,13 @@ update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
         VLOG_DBG("assigning ct zone %"PRId32" to '%s'", zone, user);
 
         struct ct_zone_pending_entry *pending = xmalloc(sizeof *pending);
-        pending->state = CT_ZONE_DB_QUEUED;
+        pending->state = CT_ZONE_OF_QUEUED;
         pending->zone = zone;
         pending->add = true;
         shash_add(pending_ct_zones, user, pending);
 
         bitmap_set1(ct_zone_bitmap, zone);
         simap_put(ct_zones, user, zone);
-
-        /* xxx We should erase any old entries for this
-         * xxx zone, but we need a generic interface to the conntrack
-         * xxx table. */
     }
 
     sset_destroy(&all_users);
@@ -552,7 +537,8 @@ main(int argc, char *argv[])
             lport_index_init(&lports, ctx.ovnsb_idl);
             mcgroup_index_init(&mcgroups, ctx.ovnsb_idl);
 
-            enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
+            enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int,
+                                                         &pending_ct_zones);
 
             pinctrl_run(&ctx, &lports, br_int, chassis_id, &local_datapaths);
             update_ct_zones(&all_lports, &patched_datapaths, &ct_zones,
@@ -568,7 +554,8 @@ main(int argc, char *argv[])
                          br_int, chassis_id, &ct_zones, &flow_table,
                          &local_datapaths, &patched_datapaths);
 
-            ofctrl_put(&flow_table, get_nb_cfg(ctx.ovnsb_idl));
+            ofctrl_put(&flow_table, &pending_ct_zones,
+                       get_nb_cfg(ctx.ovnsb_idl));
             hmap_destroy(&flow_table);
             if (ctx.ovnsb_idl_txn) {
                 int64_t cur_cfg = ofctrl_get_cur_cfg();
