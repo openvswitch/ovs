@@ -99,6 +99,7 @@ v2.6.0 - xx xxx xxxx
      * Jumbo frame support
      * Remove dpdkvhostcuse port type.
      * OVS client mode for vHost and vHost reconnect (Requires QEMU 2.7)
+     * 'dpdkvhostuserclient' port type.
    - Increase number of registers to 16.
    - ovs-benchmark: This utility has been removed due to lack of use and
      bitrot.
