@@ -321,6 +321,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
         SSET_FOR_EACH(cur_id, &removed_lports) {
             sset_find_and_delete(all_lports, cur_id);
         }
+        sset_destroy(&removed_lports);
 
         process_full_binding = false;
     } else {
