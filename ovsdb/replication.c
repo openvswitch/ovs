@@ -49,17 +49,16 @@ static void fetch_dbs(struct jsonrpc *rpc, struct svec *dbs);
 static struct ovsdb_schema *fetch_schema(struct jsonrpc *rpc,
                                          const char *database);
 
-static void send_monitor_requests(struct shash *all_dbs);
+static void send_monitor_requests(void);
 static void add_monitored_table(struct ovsdb_table_schema *table,
                                 struct json *monitor_requests);
 
-static void get_initial_db_state(const struct db *database);
+static void get_initial_db_state(struct ovsdb *db);
 static void reset_database(struct ovsdb *db, struct ovsdb_txn *txn);
-static struct ovsdb_error *reset_databases(struct shash *all_dbs);
+static struct ovsdb_error *reset_databases(void);
 
-static void check_for_notifications(struct shash *all_dbs);
-static void process_notification(struct json *table_updates,
-                                 struct ovsdb *database);
+static void check_for_notifications(void);
+static void process_notification(struct json *table_updates, struct ovsdb *db);
 static struct ovsdb_error *process_table_update(struct json *table_update,
                                                 const char *table_name,
                                                 struct ovsdb *database,
@@ -99,9 +98,18 @@ static void request_ids_destroy(void);
 void request_ids_clear(void);
 
 
+/* Currently replicating DBs.
+ *  replication_dbs is an shash of 'struct ovsdb *'s that stores the
+ *  replicating  dbs.  */
+static struct shash replication_dbs = SHASH_INITIALIZER(&replication_dbs);
+/* Find 'struct ovsdb' by name within 'replication_dbs' */
+static struct ovsdb* find_db(const char *db_name);
+
+
 void
 replication_init(void)
 {
+    shash_clear(&replication_dbs);
     if (rpc) {
         disconnect_active_server();
     }
@@ -109,12 +117,19 @@ replication_init(void)
 }
 
 void
-replication_run(struct shash *all_dbs)
+replication_add_db(const char *database, struct ovsdb *db)
+{
+    struct shash_node *node = xmalloc(sizeof *node);
+    shash_add_assert(&replication_dbs, database, db);
+}
+
+void
+replication_run(void)
 {
     if (sset_is_empty(&monitored_tables) && active_ovsdb_server) {
         /* Reset local databases. */
         if (reset_dbs) {
-            struct ovsdb_error *error = reset_databases(all_dbs);
+            struct ovsdb_error *error = reset_databases();
             if (error) {
                 /* In case reset DB fails, log the error before exiting.  */
                 char *msg = ovsdb_error_to_string(error);
@@ -132,10 +147,10 @@ replication_run(struct shash *all_dbs)
         }
 
         /* Send monitor requests. */
-        send_monitor_requests(all_dbs);
+        send_monitor_requests();
     }
     if (!sset_is_empty(&monitored_tables)) {
-        check_for_notifications(all_dbs);
+        check_for_notifications();
     }
 }
 
@@ -176,6 +191,7 @@ set_blacklist_tables(const char *blacklist, bool dryrun)
         const char *longname;
 
         if (!dryrun) {
+            /* Can only add to an empty shash. */
             blacklist_tables_clear();
         }
 
@@ -278,6 +294,7 @@ disconnect_active_server(void)
     jsonrpc_close(rpc);
     rpc = NULL;
     sset_clear(&monitored_tables);
+    shash_clear(&replication_dbs);
 }
 
 void
@@ -294,33 +311,25 @@ replication_destroy(void)
     }
 
     request_ids_destroy();
+    shash_destroy(&replication_dbs);
 }
 
-const struct db *
-find_db(const struct shash *all_dbs, const char *db_name)
+static struct ovsdb *
+find_db(const char *db_name)
 {
-    struct shash_node *node;
-
-    SHASH_FOR_EACH (node, all_dbs) {
-        struct db *db = node->data;
-        if (!strcmp(db->db->schema->name, db_name)) {
-            return db;
-        }
-    }
-
-    return NULL;
+    return shash_find_data(&replication_dbs, db_name);
 }
 
 static struct ovsdb_error *
-reset_databases(struct shash *all_dbs)
+reset_databases(void)
 {
     struct shash_node *db_node;
     struct ovsdb_error *error = NULL;
 
-    SHASH_FOR_EACH (db_node, all_dbs) {
-        struct db *db = db_node->data;
-        struct ovsdb_txn *txn = ovsdb_txn_create(db->db);
-        reset_database(db->db, txn);
+    SHASH_FOR_EACH (db_node, &replication_dbs) {
+        struct ovsdb *db = db_node->data;
+        struct ovsdb_txn *txn = ovsdb_txn_create(db);
+        reset_database(db, txn);
         error = ovsdb_txn_commit(txn, false);
     }
 
@@ -443,7 +452,7 @@ fetch_schema(struct jsonrpc *rpc, const char *database)
 }
 
 static void
-send_monitor_requests(struct shash *all_dbs)
+send_monitor_requests(void)
 {
     const char *db_name;
     struct svec dbs;
@@ -452,12 +461,12 @@ send_monitor_requests(struct shash *all_dbs)
     svec_init(&dbs);
     fetch_dbs(rpc, &dbs);
     SVEC_FOR_EACH (i, db_name, &dbs) {
-        const struct db *database = find_db(all_dbs, db_name);
+        struct ovsdb *db = find_db(db_name);
 
-        if (database) {
+        if (db) {
             struct ovsdb_schema *local_schema, *remote_schema;
 
-            local_schema = database->db->schema;
+            local_schema = db->schema;
             remote_schema = fetch_schema(rpc, db_name);
             if (ovsdb_schema_equal(local_schema, remote_schema)) {
                 struct jsonrpc_msg *request;
@@ -485,7 +494,7 @@ send_monitor_requests(struct shash *all_dbs)
                     monitor_request);
                 request = jsonrpc_create_request("monitor", monitor, NULL);
                 jsonrpc_send(rpc, request);
-                get_initial_db_state(database);
+                get_initial_db_state(db);
             }
             ovsdb_schema_destroy(remote_schema);
         }
@@ -494,14 +503,14 @@ send_monitor_requests(struct shash *all_dbs)
 }
 
 static void
-get_initial_db_state(const struct db *database)
+get_initial_db_state(struct ovsdb *db)
 {
     struct jsonrpc_msg *msg;
 
     jsonrpc_recv_block(rpc, &msg);
 
     if (msg->type == JSONRPC_REPLY) {
-        process_notification(msg->result, database->db);
+        process_notification(msg->result, db);
     }
 
     jsonrpc_msg_destroy(msg);
@@ -522,7 +531,7 @@ add_monitored_table(struct ovsdb_table_schema *table,
 }
 
 static void
-check_for_notifications(struct shash *all_dbs)
+check_for_notifications(void)
 {
     struct jsonrpc_msg *msg;
     int error;
@@ -549,9 +558,9 @@ check_for_notifications(struct shash *all_dbs)
         if (params->type == JSON_ARRAY
             && params->u.array.n == 2) {
             char *db_name = params->u.array.elems[0]->u.string;
-            const struct db *database = find_db(all_dbs, db_name);
-            if (database) {
-                process_notification(params->u.array.elems[1], database->db);
+            struct ovsdb *db = find_db(db_name);
+            if (db) {
+                process_notification(params->u.array.elems[1], db);
             }
         }
     }
@@ -560,7 +569,7 @@ check_for_notifications(struct shash *all_dbs)
 }
 
 static void
-process_notification(struct json *table_updates, struct ovsdb *database)
+process_notification(struct json *table_updates, struct ovsdb *db)
 {
     struct ovsdb_error *error;
     struct ovsdb_txn *txn;
@@ -570,7 +579,7 @@ process_notification(struct json *table_updates, struct ovsdb *database)
         return;
     }
 
-    txn = ovsdb_txn_create(database);
+    txn = ovsdb_txn_create(db);
     error = NULL;
 
     /* Process each table update. */
@@ -578,7 +587,7 @@ process_notification(struct json *table_updates, struct ovsdb *database)
     SHASH_FOR_EACH (node, json_object(table_updates)) {
         struct json *table_update = node->data;
         if (table_update) {
-            error = process_table_update(table_update, node->name, database, txn);
+            error = process_table_update(table_update, node->name, db, txn);
             if (error) {
                 break;
             }
