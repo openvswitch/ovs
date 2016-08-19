@@ -307,6 +307,12 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                 remove_local_datapath(local_datapaths, old_ld);
             }
         }
+        struct local_datapath *ld;
+        HMAP_FOR_EACH_SAFE (ld, next, uuid_hmap_node,
+                            &keep_local_datapath_by_uuid) {
+            hmap_remove(&keep_local_datapath_by_uuid, &ld->uuid_hmap_node);
+            free(ld);
+        }
         hmap_destroy(&keep_local_datapath_by_uuid);
 
         /* Any remaining entries in removed_lports are logical ports that
