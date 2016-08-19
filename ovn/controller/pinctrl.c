@@ -1059,7 +1059,6 @@ send_garp_update(const struct sbrec_port_binding *binding_rec,
             }
             free(name);
         }
-        destroy_lport_addresses(laddrs);
         return;
     }
 
@@ -1302,7 +1301,15 @@ send_garp_run(const struct ovsrec_bridge *br_int, const char *chassis_id,
     sset_destroy(&localnet_vifs);
     sset_destroy(&local_l3gw_ports);
     simap_destroy(&localnet_ofports);
-    shash_destroy_free_data(&nat_addresses);
+
+    SHASH_FOR_EACH_SAFE (iter, next, &nat_addresses) {
+        struct lport_addresses *laddrs = iter->data;
+        destroy_lport_addresses(laddrs);
+        shash_delete(&nat_addresses, iter);
+        free(laddrs);
+    }
+    shash_destroy(&nat_addresses);
+
     sset_destroy(&nat_ip_keys);
 }
 
