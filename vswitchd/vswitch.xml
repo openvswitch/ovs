@@ -2370,11 +2370,9 @@
       <column name="options" key="vhost-server-path"
               type='{"type": "string"}'>
         <p>
-          When specified, switches the given port permanently to 'client'
-          mode. The value specifies the path to the socket associated with a
-          vHost User client mode device that has been or will be created by
-          QEMU.
-          Only supported by DPDK vHost interfaces.
+          The value specifies the path to the socket associated with a vHost
+          User client mode device that has been or will be created by QEMU.
+          Only supported by dpdkvhostuserclient interfaces.
         </p>
       </column>
     </group>
