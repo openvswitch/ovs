@@ -242,7 +242,7 @@ void vlog_rate_limit(const struct vlog_module *, enum vlog_level,
 #define VLOG_LONG_OPTIONS                                               \
         {"verbose",       optional_argument, NULL, 'v'},                \
         {"log-file",      optional_argument, NULL, OPT_LOG_FILE},       \
-        {"syslog-method", optional_argument, NULL, OPT_SYSLOG_IMPL},    \
+        {"syslog-method", required_argument, NULL, OPT_SYSLOG_IMPL},    \
         {"syslog-target", required_argument, NULL, OPT_SYSLOG_TARGET}
 
 #define VLOG_OPTION_HANDLERS                    \
