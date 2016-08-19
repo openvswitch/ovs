@@ -60,7 +60,15 @@
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_server);
 
-struct db;
+struct db {
+    /* Initialized in main(). */
+    char *filename;
+    struct ovsdb_file *file;
+    struct ovsdb *db;
+
+    /* Only used by update_remote_status(). */
+    struct ovsdb_txn *txn;
+};
 
 /* SSL configuration. */
 static char *private_key_file;
@@ -68,7 +76,7 @@ static char *certificate_file;
 static char *ca_cert_file;
 static bool bootstrap_ca_cert;
 
-/* Replication configuration. */
+/* Replication current state. */
 static bool is_backup_server;
 
 static unixctl_cb_func ovsdb_server_exit;
@@ -123,6 +131,17 @@ static void load_config(FILE *config_file, struct sset *remotes,
                         struct sset *db_filenames);
 
 static void
+ovsdb_replication_init(struct shash *all_dbs)
+{
+    replication_init();
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, all_dbs) {
+        struct db *db = node->data;
+        replication_add_db(db->db->schema->name, db->db);
+    }
+}
+
+static void
 main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
           struct unixctl_server *unixctl, struct sset *remotes,
           struct process *run_process, bool *exiting)
@@ -169,7 +188,7 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         ovsdb_jsonrpc_server_run(jsonrpc);
 
         if (is_backup_server) {
-             replication_run(all_dbs);
+             replication_run();
         }
 
         SHASH_FOR_EACH(node, all_dbs) {
@@ -240,7 +259,6 @@ main(int argc, char *argv[])
     service_start(&argc, &argv);
     fatal_ignore_sigpipe();
     process_init();
-    replication_init();
 
     parse_options(&argc, &argv, &remotes, &unixctl_path, &run_command);
     daemon_become_new_user(false);
@@ -358,13 +376,13 @@ main(int argc, char *argv[])
                               ovsdb_server_get_active_ovsdb_server, NULL);
     unixctl_command_register("ovsdb-server/connect-active-ovsdb-server", "",
                              0, 0, ovsdb_server_connect_active_ovsdb_server,
-                             NULL);
+                             &all_dbs);
     unixctl_command_register("ovsdb-server/disconnect-active-ovsdb-server", "",
                              0, 0, ovsdb_server_disconnect_active_ovsdb_server,
                              NULL);
     unixctl_command_register("ovsdb-server/set-sync-excluded-tables", "",
                              0, 1, ovsdb_server_set_sync_excluded_tables,
-                             NULL);
+                             &all_dbs);
     unixctl_command_register("ovsdb-server/get-sync-excluded-tables", "",
                              0, 0, ovsdb_server_get_sync_excluded_tables,
                              NULL);
@@ -373,6 +391,10 @@ main(int argc, char *argv[])
      * does not support the monitor_cond method.  */
     unixctl_command_register("ovsdb-server/disable-monitor-cond", "", 0, 0,
                              ovsdb_server_disable_monitor_cond, jsonrpc);
+
+    if (is_backup_server) {
+        ovsdb_replication_init(&all_dbs);
+    }
 
     main_loop(jsonrpc, &all_dbs, unixctl, &remotes, run_process, &exiting);
 
@@ -468,6 +490,21 @@ open_db(struct server_config *config, const char *filename)
     ovsdb_error_destroy(db_error);
     close_db(db);
     return error;
+}
+
+static const struct db *
+find_db(const struct shash *all_dbs, const char *db_name)
+{
+    struct shash_node *node;
+
+    SHASH_FOR_EACH (node, all_dbs) {
+        struct db *db = node->data;
+        if (!strcmp(db->db->schema->name, db_name)) {
+            return db;
+        }
+    }
+
+    return NULL;
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -1059,8 +1096,6 @@ ovsdb_server_set_active_ovsdb_server(struct unixctl_conn *conn,
                                      void *arg_ OVS_UNUSED)
 {
     set_active_ovsdb_server(argv[1]);
-    is_backup_server = true;
-    VLOG_INFO("become a backup server");
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1077,10 +1112,12 @@ static void
 ovsdb_server_connect_active_ovsdb_server(struct unixctl_conn *conn,
                                          int argc OVS_UNUSED,
                                          const char *argv[] OVS_UNUSED,
-                                         void *arg_ OVS_UNUSED)
+                                         void *all_dbs_)
 {
-    if (is_backup_server) {
-        replication_init();
+    struct shash *all_dbs = all_dbs_;
+
+    if (!is_backup_server) {
+        ovsdb_replication_init(all_dbs);
     }
     is_backup_server = true;
     unixctl_command_reply(conn, NULL);
@@ -1094,7 +1131,6 @@ ovsdb_server_disconnect_active_ovsdb_server(struct unixctl_conn *conn,
 {
     disconnect_active_server();
     is_backup_server = false;
-    VLOG_INFO("become an active server");
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1102,13 +1138,14 @@ static void
 ovsdb_server_set_sync_excluded_tables(struct unixctl_conn *conn,
                                       int argc OVS_UNUSED,
                                       const char *argv[],
-                                      void *arg_ OVS_UNUSED)
+                                      void *all_dbs_)
 {
+    struct shash *all_dbs = all_dbs_;
     char *err = set_blacklist_tables(argv[1], true);
 
     if (!err) {
         if (is_backup_server) {
-            replication_init();
+            ovsdb_replication_init(all_dbs);
         }
         err = set_blacklist_tables(argv[1], false);
     }
