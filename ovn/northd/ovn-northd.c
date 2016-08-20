@@ -1921,7 +1921,7 @@ build_pre_acls(struct ovn_datapath *od, struct hmap *lflows,
     ovn_lflow_add(lflows, od, S_SWITCH_IN_PRE_ACL, 0, "1", "next;");
     ovn_lflow_add(lflows, od, S_SWITCH_OUT_PRE_ACL, 0, "1", "next;");
 
-    /* If there are any stateful ACL rules in this dapapath, we must
+    /* If there are any stateful ACL rules in this datapath, we must
      * send all IP packets through the conntrack action, which handles
      * defragmentation, in order to match L4 headers. */
     if (has_stateful) {
