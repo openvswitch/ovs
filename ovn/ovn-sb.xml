@@ -1345,8 +1345,10 @@
             DNAT address.  Processing automatically moves on to the next table,
             as if <code>next;</code> were specified, and later tables act on
             the packet as modified by the connection tracker.  Connection
-            tracking state is scoped by the logical port, so overlapping
-            addresses may be used.
+            tracking state is scoped by the logical port when the action is
+            used in a flow for a logical switch, so overlapping
+            addresses may be used.  Connection tracking state is scoped by the
+            logical topology when the action is used in a flow for a router.
           </p>
           <p>
             Without arguments, <code>ct_lb</code> sends the packet to the

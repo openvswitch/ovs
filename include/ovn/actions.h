@@ -397,6 +397,9 @@ struct ovnact_encode_params {
                         unsigned int *portp);
     const void *aux;
 
+    /* 'true' if the flow is for a switch. */
+    bool is_switch;
+
     /* A map from a port name to its connection tracking zone. */
     const struct simap *ct_zones;
 
