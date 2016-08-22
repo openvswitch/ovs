@@ -78,11 +78,6 @@ static inline TYPE* NAME##_collection_##NAME##s(const struct NAME##_collection *
     return (TYPE*)coll->collection.objs;                                \
 }                                                                       \
                                                                         \
-static inline TYPE* NAME##_collection_stub(struct NAME##_collection *coll) \
-{                                                                       \
-    return (TYPE*)coll->collection.stub;                                \
-}                                                                       \
-                                                                        \
 static inline size_t NAME##_collection_n(const struct NAME##_collection *coll) \
 {                                                                       \
     return coll->collection.n;                                          \

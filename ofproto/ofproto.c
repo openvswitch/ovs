@@ -4692,7 +4692,7 @@ add_flow_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
         rule_collection_add(&ofm->old_rules, old_rule);
     }
     /* Take ownership of the temp_rule. */
-    rule_collection_stub(&ofm->new_rules)[0] = new_rule;
+    rule_collection_add(&ofm->new_rules, new_rule);
     ofm->temp_rule = NULL;
 
     replace_rule_start(ofproto, ofm, old_rule, new_rule);
@@ -4705,8 +4705,8 @@ add_flow_revert(struct ofproto *ofproto, struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule *old_rule = rule_collection_n(&ofm->old_rules)
-        ? rule_collection_stub(&ofm->old_rules)[0] : NULL;
-    struct rule *new_rule = rule_collection_stub(&ofm->new_rules)[0];
+        ? rule_collection_rules(&ofm->old_rules)[0] : NULL;
+    struct rule *new_rule = rule_collection_rules(&ofm->new_rules)[0];
 
     replace_rule_revert(ofproto, old_rule, new_rule);
 }
@@ -4718,8 +4718,8 @@ add_flow_finish(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
     OVS_REQUIRES(ofproto_mutex)
 {
     struct rule *old_rule = rule_collection_n(&ofm->old_rules)
-        ? rule_collection_stub(&ofm->old_rules)[0] : NULL;
-    struct rule *new_rule = rule_collection_stub(&ofm->new_rules)[0];
+        ? rule_collection_rules(&ofm->old_rules)[0] : NULL;
+    struct rule *new_rule = rule_collection_rules(&ofm->new_rules)[0];
     struct ovs_list dead_cookies = OVS_LIST_INITIALIZER(&dead_cookies);
 
     replace_rule_finish(ofproto, ofm, req, old_rule, new_rule, &dead_cookies);
