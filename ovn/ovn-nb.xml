@@ -841,6 +841,11 @@
       Gateway routers.
     </column>
 
+    <column name="load_balancer">
+      Load balance a virtual ipv4 address to a set of logical port ipv4
+      addresses.  Load balancer rules only work on the Gateway routers.
+    </column>
+
     <group title="Options">
       <p>
         Additional options for the logical router.

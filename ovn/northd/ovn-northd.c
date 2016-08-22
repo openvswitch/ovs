@@ -121,11 +121,12 @@ enum ovn_stage {
     /* Logical router ingress stages. */                              \
     PIPELINE_STAGE(ROUTER, IN,  ADMISSION,   0, "lr_in_admission")    \
     PIPELINE_STAGE(ROUTER, IN,  IP_INPUT,    1, "lr_in_ip_input")     \
-    PIPELINE_STAGE(ROUTER, IN,  UNSNAT,      2, "lr_in_unsnat")       \
-    PIPELINE_STAGE(ROUTER, IN,  DNAT,        3, "lr_in_dnat")         \
-    PIPELINE_STAGE(ROUTER, IN,  IP_ROUTING,  4, "lr_in_ip_routing")   \
-    PIPELINE_STAGE(ROUTER, IN,  ARP_RESOLVE, 5, "lr_in_arp_resolve")  \
-    PIPELINE_STAGE(ROUTER, IN,  ARP_REQUEST, 6, "lr_in_arp_request")  \
+    PIPELINE_STAGE(ROUTER, IN,  DEFRAG,      2, "lr_in_defrag")       \
+    PIPELINE_STAGE(ROUTER, IN,  UNSNAT,      3, "lr_in_unsnat")       \
+    PIPELINE_STAGE(ROUTER, IN,  DNAT,        4, "lr_in_dnat")         \
+    PIPELINE_STAGE(ROUTER, IN,  IP_ROUTING,  5, "lr_in_ip_routing")   \
+    PIPELINE_STAGE(ROUTER, IN,  ARP_RESOLVE, 6, "lr_in_arp_resolve")  \
+    PIPELINE_STAGE(ROUTER, IN,  ARP_REQUEST, 7, "lr_in_arp_request")  \
                                                                       \
     /* Logical router egress stages. */                               \
     PIPELINE_STAGE(ROUTER, OUT, SNAT,      0, "lr_out_snat")          \
@@ -3287,6 +3288,66 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                           ds_cstr(&match), ds_cstr(&actions));
         }
 
+        /* A set to hold all load-balancer vips that need ARP responses. */
+        struct sset all_ips = SSET_INITIALIZER(&all_ips);
+
+        for (int i = 0; i < op->od->nbr->n_load_balancer; i++) {
+            struct nbrec_load_balancer *lb = op->od->nbr->load_balancer[i];
+            struct smap *vips = &lb->vips;
+            struct smap_node *node;
+
+            SMAP_FOR_EACH (node, vips) {
+                /* node->key contains IP:port or just IP. */
+                char *ip_address = NULL;
+                uint16_t port;
+
+                ip_address_and_port_from_lb_key(node->key, &ip_address, &port);
+                if (!ip_address) {
+                    continue;
+                }
+
+                if (!sset_contains(&all_ips, ip_address)) {
+                    sset_add(&all_ips, ip_address);
+                }
+
+                free(ip_address);
+            }
+        }
+
+        const char *ip_address;
+        SSET_FOR_EACH(ip_address, &all_ips) {
+            ovs_be32 ip;
+            if (!ip_parse(ip_address, &ip) || !ip) {
+                continue;
+            }
+
+            ds_clear(&match);
+            ds_put_format(&match,
+                          "inport == %s && arp.tpa == "IP_FMT" && arp.op == 1",
+                          op->json_key, IP_ARGS(ip));
+
+            ds_clear(&actions);
+            ds_put_format(&actions,
+                "eth.dst = eth.src; "
+                "eth.src = %s; "
+                "arp.op = 2; /* ARP reply */ "
+                "arp.tha = arp.sha; "
+                "arp.sha = %s; "
+                "arp.tpa = arp.spa; "
+                "arp.spa = "IP_FMT"; "
+                "outport = %s; "
+                "flags.loopback = 1; "
+                "output;",
+                op->lrp_networks.ea_s,
+                op->lrp_networks.ea_s,
+                IP_ARGS(ip),
+                op->json_key);
+            ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_INPUT, 90,
+                          ds_cstr(&match), ds_cstr(&actions));
+        }
+
+        sset_destroy(&all_ips);
+
         ovs_be32 *snat_ips = xmalloc(sizeof *snat_ips * op->od->nbr->n_nat);
         size_t n_snat_ips = 0;
         for (int i = 0; i < op->od->nbr->n_nat; i++) {
@@ -3441,21 +3502,89 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
 
-    /* NAT in Gateway routers. */
+    /* NAT, Defrag and load balancing in Gateway routers. */
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbr) {
             continue;
         }
 
         /* Packets are allowed by default. */
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_DEFRAG, 0, "1", "next;");
         ovn_lflow_add(lflows, od, S_ROUTER_IN_UNSNAT, 0, "1", "next;");
         ovn_lflow_add(lflows, od, S_ROUTER_OUT_SNAT, 0, "1", "next;");
         ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT, 0, "1", "next;");
 
-        /* NAT rules are only valid on Gateway routers. */
+        /* NAT rules, packet defrag and load balancing are only valid on
+         * Gateway routers. */
         if (!smap_get(&od->nbr->options, "chassis")) {
             continue;
         }
+
+        /* A set to hold all ips that need defragmentation and tracking. */
+        struct sset all_ips = SSET_INITIALIZER(&all_ips);
+
+        for (int i = 0; i < od->nbr->n_load_balancer; i++) {
+            struct nbrec_load_balancer *lb = od->nbr->load_balancer[i];
+            struct smap *vips = &lb->vips;
+            struct smap_node *node;
+
+            SMAP_FOR_EACH (node, vips) {
+                uint16_t port = 0;
+
+                /* node->key contains IP:port or just IP. */
+                char *ip_address = NULL;
+                ip_address_and_port_from_lb_key(node->key, &ip_address, &port);
+                if (!ip_address) {
+                    continue;
+                }
+
+                if (!sset_contains(&all_ips, ip_address)) {
+                    sset_add(&all_ips, ip_address);
+                }
+
+                /* Higher priority rules are added in DNAT table to match on
+                 * ct.new which in-turn have group id as an action for load
+                 * balancing. */
+                ds_clear(&actions);
+                ds_put_format(&actions, "ct_lb(%s);", node->value);
+
+                ds_clear(&match);
+                ds_put_format(&match, "ct.new && ip && ip4.dst == %s",
+                              ip_address);
+                free(ip_address);
+
+                if (port) {
+                    if (lb->protocol && !strcmp(lb->protocol, "udp")) {
+                        ds_put_format(&match, "&& udp && udp.dst == %d", port);
+                    } else {
+                        ds_put_format(&match, "&& tcp && tcp.dst == %d", port);
+                    }
+                    ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT,
+                                  120, ds_cstr(&match), ds_cstr(&actions));
+                } else {
+                    ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT,
+                                  110, ds_cstr(&match), ds_cstr(&actions));
+                }
+            }
+        }
+
+        /* If there are any load balancing rules, we should send the
+         * packet to conntrack for defragmentation and tracking.  This helps
+         * with two things.
+         *
+         * 1. With tracking, we can send only new connections to pick a
+         *    DNAT ip address from a group.
+         * 2. If there are L4 ports in load balancing rules, we need the
+         *    defragmentation to match on L4 ports. */
+        const char *ip_address;
+        SSET_FOR_EACH(ip_address, &all_ips) {
+            ds_clear(&match);
+            ds_put_format(&match, "ip && ip4.dst == %s", ip_address);
+            ovn_lflow_add(lflows, od, S_ROUTER_IN_DEFRAG,
+                          100, ds_cstr(&match), "ct_next;");
+        }
+
+        sset_destroy(&all_ips);
 
         for (int i = 0; i < od->nbr->n_nat; i++) {
             const struct nbrec_nat *nat;
@@ -3551,7 +3680,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         }
 
         /* Re-circulate every packet through the DNAT zone.
-        * This helps with two things.
+        * This helps with three things.
         *
         * 1. Any packet that needs to be unDNATed in the reverse
         * direction gets unDNATed. Ideally this could be done in
@@ -3560,7 +3689,10 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         * ip address being external IP address for IP routing,
         * we can do it here, saving a future re-circulation.
         *
-        * 2. Any packet that was sent through SNAT zone in the
+        * 2. Established load-balanced connections automatically get
+        * DNATed.
+        *
+        * 3. Any packet that was sent through SNAT zone in the
         * previous table automatically gets re-circulated to get
         * back the new destination IP address that is needed for
         * routing in the openflow pipeline. */
