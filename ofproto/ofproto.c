@@ -4877,8 +4877,6 @@ replace_rule_revert(struct ofproto *ofproto,
         OVS_NOT_REACHED();
     }
     ofproto_rule_remove__(ofproto, new_rule);
-    /* The rule was not inserted to the ofproto provider, so we can
-     * release it without deleting it from the ofproto provider. */
     ofproto_rule_unref(new_rule);
 }
 
