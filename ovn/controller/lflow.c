@@ -251,6 +251,7 @@ consider_logical_flow(const struct lport_index *lports,
     struct ovnact_encode_params ep = {
         .lookup_port = lookup_port_cb,
         .aux = &aux,
+        .is_switch = is_switch(ldp),
         .ct_zones = ct_zones,
         .group_table = group_table,
 

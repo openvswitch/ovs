@@ -1182,6 +1182,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
             const struct ovnact_encode_params ep = {
                 .lookup_port = lookup_port_cb,
                 .aux = &ports,
+                .is_switch = true,
                 .ct_zones = &ct_zones,
                 .group_table = &group_table,
 
