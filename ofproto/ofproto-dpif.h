@@ -161,7 +161,6 @@ int ofproto_dpif_send_packet(const struct ofport_dpif *, bool oam,
                              struct dp_packet *);
 void ofproto_dpif_flow_mod(struct ofproto_dpif *,
                            const struct ofputil_flow_mod *);
-struct rule_dpif *ofproto_dpif_refresh_rule(struct rule_dpif *);
 
 struct ofport_dpif *odp_port_to_ofport(const struct dpif_backer *, odp_port_t);
 struct ofport_dpif *ofp_port_to_ofport(const struct ofproto_dpif *,
