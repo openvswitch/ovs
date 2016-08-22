@@ -96,7 +96,7 @@ v2.6.0 - xx xxx xxxx
    - Datapath Linux kernel compatibility.
      * Dropped support for kernel older than 3.10.
      * Removed VLAN splinters feature.
-     * Datapath supports kernel upto 4.6.
+     * Datapath supports kernel upto 4.7.
    - Tunnels:
      * Flow based tunnel match and action can be used for IPv6 address using
        tun_ipv6_src, tun_ipv6_dst fields.
