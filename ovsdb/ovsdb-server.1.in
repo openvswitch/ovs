@@ -36,7 +36,7 @@ If none is specified, the default is \fB@DBDIR@/conf.db\fR.  The database
 files must already have been created and initialized using, for
 example, \fBovsdb\-tool create\fR.
 .
-.SH "ACTIVE and BACKUP "
+.SH "ACTIVE and BACKUP"
 \fBovsdb\-server\fR runs either as a backup server, or as an active server.
 When  \fBovsdb\-server\fR is running as a backup server, all transactions that
 can modify the database content, including the lock commands are rejected.
@@ -45,12 +45,12 @@ When \fBovsdb\-server\fR role changes, all existing client connection are
 reset, requiring clients to reconnect to the server.
 .PP
 By default, \fBovsdb\-server\fR runs as an active server, except when the
-\fB\-\-sync\-from=\fIserver\fR command line option is specified.  During
-runtime, \fBovsdb\-server\fR role can be switch by using appctl commands.
+\fB\-\-sync\-from=\fIserver\fR command line option is specified and without
+the \fB\-\-no\-sync option\fR.  During runtime, \fBovsdb\-server\fR role can be switch by using appctl commands.
 .PP
 \fBovsdb-server/connect\-active\-ovsdb\-server\fR switches
-\fBovsdb\-server\fR role into a backup server, Conversely,
-\fBovsdb-server/disconnect\-active\-ovsdb\-server\fR changes server into
+\fBovsdb\-server\fR into a backup server, Conversely,
+\fBovsdb-server/disconnect\-active\-ovsdb\-server\fR switches server into
 an active one.
 .
 .SH OPTIONS
@@ -220,11 +220,21 @@ specified by \fBovsdb\-server/set\-active\-ovsdb\-server\fR.
 .IP "\fBovsdb\-server/disconnect\-active\-ovsdb\-server"
 Causes \fBovsdb\-server\fR to  stop  synchronizing  its  databases with a active server.
 .
-.IP "\fBovsdb\-server/set\-sync\-excluded\-tables \fIdb\fB:\fItable\fR[\fB,\fIdb\fB:\fItable\fR]..."
+.IP "\fBovsdb\-server/set\-sync\-exclude\-tables \fIdb\fB:\fItable\fR[\fB,\fIdb\fB:\fItable\fR]..."
 Sets the \fItable\fR whitin \fIdb\fR that will be excluded from synchronization.
 .
-.IP "\fBovsdb\-server/get\-sync\-excluded\-tables"
+.IP "\fBovsdb\-server/get\-sync\-exclude\-tables"
 Gets  the  tables  that are currently excluded from synchronization.
+.
+.IP "\fBovsdb\-server/sync\-status"
+Prints a summary of replication run time information. The \fBstate\fR
+information is always provided, indicating whether the server is running
+in the \fIactive\fR or the \fIbackup\fR mode.
+When running in backup mode, replication connection status, which
+can be either \fIconnecting\fR, \fIreplicating\fR or \fIerror\fR, are shown.
+When the connection is in \fIreplicating\fR state, further output shows
+the list of databases currently replicating, and the tables that are
+excluded.
 .
 .so lib/vlog-unixctl.man
 .so lib/memory-unixctl.man

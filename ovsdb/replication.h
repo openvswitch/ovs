@@ -21,7 +21,30 @@
 #include <stdbool.h>
 struct ovsdb;
 
-void replication_init(void);
+/* Replication module runs when OVSDB server runs in the backup mode.
+ *
+ * API Usage
+ *===========
+ *
+ * - replication_init() needs to be called whenever OVSDB server switches into
+ *   the backup mode.
+ *
+ * - replication_add_local_db() should be called immediately after to add all
+ *   known database that OVSDB server owns, one at a time.
+ *
+ * - replication_destroy() should be called when OVSDB server shutdown to
+ *   reclaim resources.
+ *
+ * - replication_run(), replication_wait(), replication_is_alive() and
+ *   replication_get_last_error() should be call within the main loop
+ *   whenever OVSDB server runs in the backup mode.
+ *
+ *  - set_blacklist_tables(), get_blacklist_tables(),
+ *    disconnect_active_server() and replication_usage() are support functions
+ *    used mainly by uinxctl commands.
+ */
+
+void replication_init(const char *sync_from, const char *exclude_tables);
 void replication_run(void);
 void replication_wait(void);
 void replication_destroy(void);
@@ -29,9 +52,8 @@ void replication_usage(void);
 void replication_add_local_db(const char *databse, struct ovsdb *db);
 bool replication_is_alive(void);
 int replication_get_last_error(void);
+char *replication_status(void);
 
-void set_active_ovsdb_server(const char *remote_server);
-const char *get_active_ovsdb_server(void);
 char *set_blacklist_tables(const char *blacklist, bool dryrun)
     OVS_WARN_UNUSED_RESULT;
 char *get_blacklist_tables(void) OVS_WARN_UNUSED_RESULT;

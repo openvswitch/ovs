@@ -343,6 +343,12 @@ ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *svr, bool read_only)
     }
 }
 
+bool
+ovsdb_jsonrpc_server_is_read_only(struct ovsdb_jsonrpc_server *svr)
+{
+    return svr->read_only;
+}
+
 void
 ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *svr)
 {
