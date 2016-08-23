@@ -473,12 +473,14 @@ fi
 %files ovn-common
 %{_bindir}/ovn-nbctl
 %{_bindir}/ovn-sbctl
+%{_bindir}/ovn-trace
 %{_datadir}/openvswitch/scripts/ovn-ctl
 %{_datadir}/openvswitch/scripts/ovn-bugtool-nbctl-show
 %{_datadir}/openvswitch/scripts/ovn-bugtool-sbctl-lflow-list
 %{_datadir}/openvswitch/scripts/ovn-bugtool-sbctl-show
 %{_mandir}/man8/ovn-ctl.8*
 %{_mandir}/man8/ovn-nbctl.8*
+%{_mandir}/man8/ovn-trace.8*
 %{_mandir}/man7/ovn-architecture.7*
 %{_mandir}/man8/ovn-sbctl.8*
 %{_mandir}/man5/ovn-nb.5*
