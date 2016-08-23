@@ -26,7 +26,9 @@ void replication_run(void);
 void replication_wait(void);
 void replication_destroy(void);
 void replication_usage(void);
-void replication_add_db(const char *databse, struct ovsdb *db);
+void replication_add_local_db(const char *databse, struct ovsdb *db);
+bool replication_is_alive(void);
+int replication_get_last_error(void);
 
 void set_active_ovsdb_server(const char *remote_server);
 const char *get_active_ovsdb_server(void);

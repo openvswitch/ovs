@@ -137,7 +137,7 @@ ovsdb_replication_init(struct shash *all_dbs)
     struct shash_node *node;
     SHASH_FOR_EACH (node, all_dbs) {
         struct db *db = node->data;
-        replication_add_db(db->db->schema->name, db->db);
+        replication_add_local_db(db->db->schema->name, db->db);
     }
 }
 
@@ -188,7 +188,11 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         ovsdb_jsonrpc_server_run(jsonrpc);
 
         if (is_backup_server) {
-             replication_run();
+            replication_run();
+            if (!replication_is_alive()) {
+                int retval = replication_get_last_error();
+                ovs_fatal(retval, "replication connection failed");
+            }
         }
 
         SHASH_FOR_EACH(node, all_dbs) {
@@ -212,6 +216,7 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         if (is_backup_server) {
             replication_wait();
         }
+
         ovsdb_jsonrpc_server_wait(jsonrpc);
         unixctl_server_wait(unixctl);
         SHASH_FOR_EACH(node, all_dbs) {
@@ -231,7 +236,6 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         }
     }
 
-    disconnect_active_server();
     free(remotes_error);
 }
 
@@ -1346,6 +1350,9 @@ ovsdb_server_add_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
     error = open_db(config, filename);
     if (!error) {
         save_config(config);
+        if (is_backup_server) {
+            ovsdb_replication_init(config->all_dbs);
+        }
         unixctl_command_reply(conn, NULL);
     } else {
         unixctl_command_reply_error(conn, error);
@@ -1376,6 +1383,9 @@ ovsdb_server_remove_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
     shash_delete(config->all_dbs, node);
 
     save_config(config);
+    if (is_backup_server) {
+        ovsdb_replication_init(config->all_dbs);
+    }
     unixctl_command_reply(conn, NULL);
 }
 
