@@ -345,6 +345,7 @@ static struct %(s)s *
 static void
 %(s)s_parse_%(c)s(struct ovsdb_idl_row *row_, const struct ovsdb_datum *datum)
 {
+    ovs_assert(inited);
     struct %(s)s *row = %(s)s_cast(row_);''' % {'s': structName,
                                                 'c': columnName}
             type = column.type
@@ -356,7 +357,6 @@ static void
                 valueVar = None
 
             if type.is_smap():
-                print "    ovs_assert(inited);"
                 print "    smap_init(&row->%s);" % columnName
                 print "    for (size_t i = 0; i < datum->n; i++) {"
                 print "        smap_add(&row->%s," % columnName
@@ -365,7 +365,6 @@ static void
                 print "    }"
             elif (type.n_min == 1 and type.n_max == 1) or type.is_optional_pointer():
                 print
-                print "    ovs_assert(inited);"
                 print "    if (datum->n >= 1) {"
                 if not type.key.ref_table:
                     print "        %s = datum->keys[0].%s;" % (keyVar, type.key.type.to_string())
@@ -388,7 +387,6 @@ static void
                     nMax = "n"
                 else:
                     nMax = "datum->n"
-                print "    ovs_assert(inited);"
                 print "    %s = NULL;" % keyVar
                 if valueVar:
                     print "    %s = NULL;" % valueVar
@@ -706,18 +704,20 @@ const struct ovsdb_datum *
                     nVar = members[1]['name']
 
             print comment
-            print 'void'
-            print '%(s)s_set_%(c)s(const struct %(s)s *row, %(args)s)' % \
-                {'s': structName, 'c': columnName,
-                 'args': ', '.join(['%(type)s%(name)s' % m for m in members])}
-            print "{"
-            print "    struct ovsdb_datum datum;"
+            print """\
+void
+%(s)s_set_%(c)s(const struct %(s)s *row, %(args)s)
+{
+    ovs_assert(inited);
+    struct ovsdb_datum datum;""" % {'s': structName,
+                              'c': columnName,
+                              'args': ', '.join(['%(type)s%(name)s'
+                                                 % m for m in members])}
             if type.n_min == 1 and type.n_max == 1:
                 print "    union ovsdb_atom key;"
                 if type.value:
                     print "    union ovsdb_atom value;"
                 print
-                print "    ovs_assert(inited);"
                 print "    datum.n = 1;"
                 print "    datum.keys = &key;"
                 print "    " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar)
@@ -730,7 +730,6 @@ const struct ovsdb_datum *
             elif type.is_optional_pointer():
                 print "    union ovsdb_atom key;"
                 print
-                print "    ovs_assert(inited);"
                 print "    if (%s) {" % keyVar
                 print "        datum.n = 1;"
                 print "        datum.keys = &key;"
@@ -744,7 +743,6 @@ const struct ovsdb_datum *
             elif type.n_max == 1:
                 print "    union ovsdb_atom key;"
                 print
-                print "    ovs_assert(inited);"
                 print "    if (%s) {" % nVar
                 print "        datum.n = 1;"
                 print "        datum.keys = &key;"
@@ -757,7 +755,6 @@ const struct ovsdb_datum *
                 txn_write_func = "ovsdb_idl_txn_write_clone"
             else:
                 print
-                print "    ovs_assert(inited);"
                 print "    datum.n = %s;" % nVar
                 print "    datum.keys = %s ? xmalloc(%s * sizeof *datum.keys) : NULL;" % (nVar, nVar)
                 if type.value:
@@ -955,6 +952,7 @@ void
                 {'s': structName, 'c': columnName,
                  'args': ', '.join(['%(type)s%(name)s' % m for m in members])}
             print "{"
+            print "    ovs_assert(inited);"
             print "    struct ovsdb_datum datum;"
             free = []
             if type.n_min == 1 and type.n_max == 1:
@@ -962,7 +960,6 @@ void
                 if type.value:
                     print "    union ovsdb_atom value;"
                 print
-                print "    ovs_assert(inited);"
                 print "    datum.n = 1;"
                 print "    datum.keys = &key;"
                 print "    " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar, refTable=False)
@@ -974,7 +971,6 @@ void
             elif type.is_optional_pointer():
                 print "    union ovsdb_atom key;"
                 print
-                print "    ovs_assert(inited);"
                 print "    if (%s) {" % keyVar
                 print "        datum.n = 1;"
                 print "        datum.keys = &key;"
@@ -987,7 +983,6 @@ void
             elif type.n_max == 1:
                 print "    union ovsdb_atom key;"
                 print
-                print "    ovs_assert(inited);"
                 print "    if (%s) {" % nVar
                 print "        datum.n = 1;"
                 print "        datum.keys = &key;"
@@ -998,7 +993,6 @@ void
                 print "    }"
                 print "    datum.values = NULL;"
             else:
-                print "    ovs_assert(inited);"
                 print "    datum.n = %s;" % nVar
                 print "    datum.keys = %s ? xmalloc(%s * sizeof *datum.keys) : NULL;" % (nVar, nVar)
                 free += ['datum.keys']
@@ -1112,6 +1106,7 @@ void
                 {'s': structName, 'c': columnName,
                  'args': ', '.join(['%(type)s%(name)s' % m for m in members])}
             print "{"
+            print "    ovs_assert(inited);"
             print "    struct ovsdb_datum datum;"
             free = []
             if type.n_min == 1 and type.n_max == 1:
@@ -1119,7 +1114,6 @@ void
                 if type.value:
                     print "    union ovsdb_atom value;"
                 print
-                print "    ovs_assert(inited);"
                 print "    datum.n = 1;"
                 print "    datum.keys = &key;"
                 print "    " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar, refTable=False)
@@ -1131,7 +1125,6 @@ void
             elif type.is_optional_pointer():
                 print "    union ovsdb_atom key;"
                 print
-                print "    ovs_assert(inited);"
                 print "    if (%s) {" % keyVar
                 print "        datum.n = 1;"
                 print "        datum.keys = &key;"
@@ -1144,7 +1137,6 @@ void
             elif type.n_max == 1:
                 print "    union ovsdb_atom key;"
                 print
-                print "    ovs_assert(inited);"
                 print "    if (%s) {" % nVar
                 print "        datum.n = 1;"
                 print "        datum.keys = &key;"
@@ -1155,7 +1147,6 @@ void
                 print "    }"
                 print "    datum.values = NULL;"
             else:
-                print "    ovs_assert(inited);"
                 print "    datum.n = %s;" % nVar
                 print "    datum.keys = %s ? xmalloc(%s * sizeof *datum.keys) : NULL;" % (nVar, nVar)
                 free += ['datum.keys']
