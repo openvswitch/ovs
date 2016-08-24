@@ -4777,9 +4777,6 @@ main(int argc, char *argv[])
 
     daemonize_complete();
 
-    nbrec_init();
-    sbrec_init();
-
     /* We want to detect (almost) all changes to the ovn-nb db. */
     struct ovsdb_idl_loop ovnnb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnnb_db, &nbrec_idl_class, true, true));

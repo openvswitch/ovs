@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010, 2011, 2014 Nicira, Inc.
+# Copyright (c) 2009, 2010, 2011, 2014, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -198,19 +198,18 @@ class Atom(object):
 
     def cInitAtom(self, var):
         if self.type == ovs.db.types.IntegerType:
-            return ['%s.integer = %d;' % (var, self.value)]
+            return '.integer = %d' % self.value
         elif self.type == ovs.db.types.RealType:
-            return ['%s.real = %.15g;' % (var, self.value)]
+            return '.real = %.15g' % self.value
         elif self.type == ovs.db.types.BooleanType:
             if self.value:
-                return ['%s.boolean = true;']
+                return '.boolean = true'
             else:
-                return ['%s.boolean = false;']
+                return '.boolean = false'
         elif self.type == ovs.db.types.StringType:
-            return ['%s.string = xstrdup("%s");'
-                    % (var, escapeCString(self.value))]
+            return '.string = "%s"' % escapeCString(self.value)
         elif self.type == ovs.db.types.UuidType:
-            return ovs.ovsuuid.to_c_assignment(self.value, var)
+            return '.uuid = %s' % ovs.ovsuuid.to_c_assignment(self.value)
 
     def toEnglish(self, escapeLiteral=returnUnchanged):
         if self.type == ovs.db.types.IntegerType:
@@ -562,27 +561,26 @@ class Datum(object):
         n = len(self.values)
         return self.type.n_min <= n <= self.type.n_max
 
-    def cInitDatum(self, var):
-        if len(self.values) == 0:
-            return ["ovsdb_datum_init_empty(%s);" % var]
+    def cDeclareDatum(self, name):
+        n = len(self.values)
+        if n == 0:
+            return ["static struct ovsdb_datum %s = { .n = 0 };"]
 
-        s = ["%s->n = %d;" % (var, len(self.values))]
-        s += ["%s->keys = xmalloc(%d * sizeof *%s->keys);"
-              % (var, len(self.values), var)]
-
-        for i, key in enumerate(sorted(self.values)):
-            s += key.cInitAtom("%s->keys[%d]" % (var, i))
+        s = ["static union ovsdb_atom %s_keys[%d] = {" % (name, n)]
+        for key in sorted(self.values):
+            s += ["    { %s }," % key.cInitAtom(key)]
+        s += ["};"]
 
         if self.type.value:
-            s += ["%s->values = xmalloc(%d * sizeof *%s->values);"
-                  % (var, len(self.values), var)]
-            for i, (key, value) in enumerate(sorted(self.values.items())):
-                s += value.cInitAtom("%s->values[%d]" % (var, i))
-        else:
-            s += ["%s->values = NULL;" % var]
+            s = ["static union ovsdb_atom %s_values[%d] = {" % (name, n)]
+            for k, v in sorted(self.values.items()):
+                s += ["    { %s }," % v.cInitAtom(v)]
+            s += ["};"]
 
-        if len(self.values) > 1:
-            s += ["ovsdb_datum_sort_assert(%s, OVSDB_TYPE_%s);"
-                  % (var, self.type.key.type.to_string().upper())]
-
+        s += ["static struct ovsdb_datum %s = {" % name]
+        s += ["    .n = %d," % n]
+        s += ["    .keys = %s_keys," % name]
+        if self.type.value:
+            s += ["    .values = %s_values," % name]
+        s += ["};"]
         return s

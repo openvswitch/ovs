@@ -283,7 +283,6 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
     print "\nextern struct ovsdb_idl_table_class %stable_classes[%sN_TABLES];" % (prefix, prefix.upper())
 
     print "\nextern struct ovsdb_idl_class %sidl_class;" % prefix
-    print "\nvoid %sinit(void);" % prefix
 
     print "\nconst char * %sget_db_version(void);" % prefix
     print "\n#endif /* %(prefix)sIDL_HEADER */" % {'prefix': prefix.upper()}
@@ -319,7 +318,6 @@ enum { sizeof_bool = 1 };
 enum { sizeof_bool = sizeof(bool) };
 #endif
 
-static bool inited;
 ''' % schema.idlHeader
 
     # Cast functions.
@@ -345,7 +343,6 @@ static struct %(s)s *
 static void
 %(s)s_parse_%(c)s(struct ovsdb_idl_row *row_, const struct ovsdb_datum *datum)
 {
-    ovs_assert(inited);
     struct %(s)s *row = %(s)s_cast(row_);''' % {'s': structName,
                                                 'c': columnName}
             type = column.type
@@ -447,9 +444,8 @@ static void
 static void
 %(s)s_unparse_%(c)s(struct ovsdb_idl_row *row_)
 {
-    struct %(s)s *row = %(s)s_cast(row_);
-
-    ovs_assert(inited);''' % {'s': structName, 'c': columnName}
+    struct %(s)s *row = %(s)s_cast(row_);''' % {'s': structName,
+                                                'c': columnName}
 
                 if type.is_smap():
                     print "    smap_destroy(&row->%s);" % columnName
@@ -614,7 +610,6 @@ bool
 void
 %(s)s_verify_%(c)s(const struct %(s)s *row)
 {
-    ovs_assert(inited);
     ovsdb_idl_txn_verify(&row->header_, &%(s)s_col_%(c)s);
 }''' % {'s': structName,
         'S': structName.upper(),
@@ -675,7 +670,6 @@ const struct ovsdb_datum *
 {
     struct ovsdb_datum datum;
 
-    ovs_assert(inited);
     if (%(c)s) {
         ovsdb_datum_from_smap(&datum, %(c)s);
     } else {
@@ -708,11 +702,10 @@ const struct ovsdb_datum *
 void
 %(s)s_set_%(c)s(const struct %(s)s *row, %(args)s)
 {
-    ovs_assert(inited);
     struct ovsdb_datum datum;""" % {'s': structName,
-                              'c': columnName,
-                              'args': ', '.join(['%(type)s%(name)s'
-                                                 % m for m in members])}
+        'c': columnName,
+        'args': ', '.join(['%(type)s%(name)s'
+                           % m for m in members])}
             if type.n_min == 1 and type.n_max == 1:
                 print "    union ovsdb_atom key;"
                 if type.value:
@@ -793,8 +786,6 @@ void
 {
     struct ovsdb_datum *datum;
 
-    ovs_assert(inited);
-
     datum = xmalloc(sizeof *datum);
     datum->n = 1;
     datum->keys = xmalloc(datum->n * sizeof *datum->keys);
@@ -820,8 +811,6 @@ void
 %(s)s_update_%(c)s_delkey(const struct %(s)s *row, %(coltype)sdelete_key)
 {
     struct ovsdb_datum *datum;
-
-    ovs_assert(inited);
 
     datum = xmalloc(sizeof *datum);
     datum->n = 1;
@@ -851,8 +840,6 @@ void
 {
     struct ovsdb_datum *datum;
 
-    ovs_assert(inited);
-
     datum = xmalloc(sizeof *datum);
     datum->n = 1;
     datum->keys = xmalloc(datum->n * sizeof *datum->values);
@@ -876,8 +863,6 @@ void
 %(s)s_update_%(c)s_delvalue(const struct %(s)s *row, %(valtype)sdelete_value)
 {
     struct ovsdb_datum *datum;
-
-    ovs_assert(inited);
 
     datum = xmalloc(sizeof *datum);
     datum->n = 1;
@@ -910,7 +895,6 @@ void
 {
     struct ovsdb_datum datum;
 
-    ovs_assert(inited);
     if (%(c)s) {
         ovsdb_datum_from_smap(&datum, %(c)s);
     } else {
@@ -952,7 +936,6 @@ void
                 {'s': structName, 'c': columnName,
                  'args': ', '.join(['%(type)s%(name)s' % m for m in members])}
             print "{"
-            print "    ovs_assert(inited);"
             print "    struct ovsdb_datum datum;"
             free = []
             if type.n_min == 1 and type.n_max == 1:
@@ -1067,7 +1050,6 @@ void
 {
     struct ovsdb_datum datum;
 
-    ovs_assert(inited);
     if (%(c)s) {
         ovsdb_datum_from_smap(&datum, %(c)s);
     } else {
@@ -1106,7 +1088,6 @@ void
                 {'s': structName, 'c': columnName,
                  'args': ', '.join(['%(type)s%(name)s' % m for m in members])}
             print "{"
-            print "    ovs_assert(inited);"
             print "    struct ovsdb_datum datum;"
             free = []
             if type.n_min == 1 and type.n_max == 1:
@@ -1203,29 +1184,37 @@ void
         'P': prefix.upper(),}
 
         # Table columns.
-        print "\nstruct ovsdb_idl_column %s_columns[%s_N_COLUMNS];" % (
-            structName, structName.upper())
-        print """
-static void\n%s_columns_init(void)
-{
-    struct ovsdb_idl_column *c;\
-""" % structName
         for columnName, column in sorted_columns(table):
-            cs = "%s_col_%s" % (structName, columnName)
-            d = {'cs': cs, 'c': columnName, 's': structName}
+            prereqs = []
+            x = column.type.cInitType("%s_col_%s" % (tableName, columnName), prereqs)
+            if prereqs:
+                print '\n'.join(prereqs)
+        print "\nstruct ovsdb_idl_column %s_columns[%s_N_COLUMNS] = {" % (
+            structName, structName.upper())
+        for columnName, column in sorted_columns(table):
             if column.mutable:
                 mutable = "true"
             else:
                 mutable = "false"
-            print
-            print "    /* Initialize %(cs)s. */" % d
-            print "    c = &%(cs)s;" % d
-            print "    c->name = \"%(c)s\";" % d
-            print column.type.cInitType("    ", "c->type")
-            print "    c->mutable = %s;" % mutable
-            print "    c->parse = %(s)s_parse_%(c)s;" % d
-            print "    c->unparse = %(s)s_unparse_%(c)s;" % d
-        print "}"
+            type_init = '\n'.join("            " + x
+                                  for x in column.type.cInitType("%s_col_%s" % (tableName, columnName), prereqs))
+            print """\
+    [%(P)s%(T)s_COL_%(C)s] = {
+         .name = "%(c)s",
+         .type = {
+%(type)s
+         },
+         .mutable = %(mutable)s,
+         .parse = %(s)s_parse_%(c)s,
+         .unparse = %(s)s_unparse_%(c)s,
+    },\n""" % {'P': prefix.upper(),
+               'T': tableName.upper(),
+               'c': columnName,
+               'C': columnName.upper(),
+               's': structName,
+               'mutable': mutable,
+               'type': type_init}
+        print "};"
 
     # Table classes.
     print ""
@@ -1247,22 +1236,6 @@ static void\n%s_columns_init(void)
     print "    \"%s\", %stable_classes, ARRAY_SIZE(%stable_classes)" % (
         schema.name, prefix, prefix)
     print "};"
-
-    # global init function
-    print """
-void
-%sinit(void)
-{
-    if (inited) {
-        return;
-    }
-    assert_single_threaded();
-    inited = true;
-""" % prefix
-    for tableName, table in sorted(schema.tables.iteritems()):
-        structName = "%s%s" % (prefix, tableName.lower())
-        print "    %s_columns_init();" % structName
-    print "}"
 
     print """
 /* Return the schema version.  The caller must not free the returned value. */

@@ -105,7 +105,6 @@ main(int argc, char *argv[])
     fatal_ignore_sigpipe();
     vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
     vlog_set_levels_from_string_assert("reconnect:warn");
-    vteprec_init();
 
     vtep_ctl_cmd_init();
 

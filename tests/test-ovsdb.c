@@ -2381,8 +2381,6 @@ do_idl(struct ovs_cmdl_context *ctx)
     int i;
     bool track;
 
-    idltest_init();
-
     track = ((struct test_ovsdb_pvt_context *)(ctx->pvt))->track;
 
     idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
@@ -2530,7 +2528,6 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     int step = 0;
     char key_to_delete[100];
 
-    idltest_init();
     idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, false, true);
     ovsdb_idl_add_table(idl, &idltest_table_simple2);
     ovsdb_idl_add_column(idl, &idltest_simple2_col_name);
@@ -2638,7 +2635,6 @@ do_idl_partial_update_set_column(struct ovs_cmdl_context *ctx)
     const struct ovsdb_datum *uref OVS_UNUSED;
     int step = 0;
 
-    idltest_init();
     idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, false, true);
     ovsdb_idl_add_table(idl, &idltest_table_simple3);
     ovsdb_idl_add_column(idl, &idltest_simple3_col_name);

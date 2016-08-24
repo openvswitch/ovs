@@ -427,9 +427,6 @@ main(int argc, char *argv[])
 
     daemonize_complete();
 
-    ovsrec_init();
-    sbrec_init();
-
     ofctrl_init(&group_table);
     pinctrl_init();
     lflow_init();
