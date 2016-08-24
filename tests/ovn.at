@@ -18,9 +18,9 @@ m4_divert_text([PREPARE_TESTS],
      exp_text=$2
      exp_n=`wc -l < "$exp_text"`
      ovs_wait_cond () {
-	  $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $rcv_pcap > $rcv_text
-	  rcv_n=`wc -l < "$rcv_text"`
-	  test $rcv_n -ge $exp_n
+         $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $rcv_pcap > $rcv_text
+         rcv_n=`wc -l < "$rcv_text"`
+         test $rcv_n -ge $exp_n
      }
      ovs_wait || echo "expected $exp_n packets, only received $rcv_n"
 
@@ -1243,15 +1243,15 @@ for i in 1 2 3; do
     ovn-nbctl lsp-add lsw0 lp$i
     ovn-sbctl lsp-bind lp$i hv0
     if test $i = 1; then
-	ovn-nbctl lsp-set-addresses lp$i "f0:00:00:00:00:0$i 192.168.0.$i" unknown
+        ovn-nbctl lsp-set-addresses lp$i "f0:00:00:00:00:0$i 192.168.0.$i" unknown
     else
-	if test $i = 3; then
-	    ip_addrs="192.168.0.$i fe80::ea2a:eaff:fe28:$i/64 192.169.0.$i"
-	else
-	    ip_addrs="192.168.0.$i"
-	fi
-	ovn-nbctl lsp-set-addresses lp$i "f0:00:00:00:00:$i $ip_addrs"
-	ovn-nbctl lsp-set-port-security lp$i f0:00:00:00:00:$i
+        if test $i = 3; then
+           ip_addrs="192.168.0.$i fe80::ea2a:eaff:fe28:$i/64 192.169.0.$i"
+        else
+           ip_addrs="192.168.0.$i"
+        fi
+        ovn-nbctl lsp-set-addresses lp$i "f0:00:00:00:00:$i $ip_addrs"
+        ovn-nbctl lsp-set-port-security lp$i f0:00:00:00:00:$i
     fi
 done
 ovn-nbctl acl-add lsw0 from-lport 1000 'eth.type == 0x1234' drop
@@ -1275,14 +1275,14 @@ test_packet() {
     local inport=$1 eth_dst=$2 eth_src=$3; shift; shift; shift
     uflow="inport==\"lp$inport\" && eth.dst==$eth_dst && eth.src==$eth_src"
     while :; do
-    	case $1 in # (
-	    -vlan) uflow="$uflow && vlan.vid == 1234"; shift ;; # (
-	    -eth) uflow="$uflow && eth.type == 0x$2"; shift; shift ;; # (
-	    *) break ;;
-	esac
+        case $1 in # (
+            -vlan) uflow="$uflow && vlan.vid == 1234"; shift ;; # (
+            -eth) uflow="$uflow && eth.type == 0x$2"; shift; shift ;; # (
+            *) break ;;
+        esac
     done
     for outport; do
-	echo "output(\"lp$outport\");"
+        echo "output(\"lp$outport\");"
     done > expout
 
     AT_CAPTURE_FILE([trace])
@@ -1305,17 +1305,17 @@ test_arp() {
     local request="inport == \"lp$inport\"
                    && eth.dst == ff:ff:ff:ff:ff:ff && eth.src == $sha
                    && arp.op == 1 && arp.sha == $sha && arp.spa == $spa
-		   && arp.tha == ff:ff:ff:ff:ff:ff && arp.tpa == $tpa"
+                   && arp.tha == ff:ff:ff:ff:ff:ff && arp.tpa == $tpa"
 
     if test -z "$reply_ha"; then
         reply=
-	local i
-	for i in 1 2 3; do
-	    if test $i != $inport; then
-		reply="${reply}output(\"lp$i\");
+        local i
+        for i in 1 2 3; do
+            if test $i != $inport; then
+                reply="${reply}output(\"lp$i\");
 "
-	    fi
-	done
+            fi
+        done
     else
         reply="\
 eth.dst = $sha;
@@ -1368,64 +1368,64 @@ for s in 1 2 3; do
     bacl2=
     bacl3=
     for d in 1 2 3; do
-	echo
-	echo "lp$s -> lp$d"
-	if test $d != $s; then unicast=$d; else unicast=; fi
-	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s $unicast      #1
+        echo
+        echo "lp$s -> lp$d"
+        if test $d != $s; then unicast=$d; else unicast=; fi
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s $unicast      #1
 
-	if test $d != $s && test $s = 1; then
-	    impersonate=$d
-	else
-	    impersonate=
-	fi
-	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:55 $impersonate   #3
+        if test $d != $s && test $s = 1; then
+            impersonate=$d
+        else
+            impersonate=
+        fi
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:55 $impersonate   #3
 
-	if test $d != $s && test $s != 1; then acl2=$d; else acl2=; fi
-	if test $d != $s && test $d != 3; then acl3=$d; else acl3=; fi
-	if test $d = $s || ( (test $s = 1 || test $s = 2) && test $d = 3); then
-	    # Source of 1 or 2 and dest of 3 should be dropped
-	    # due to the 4th ACL that uses address_set(set1).
-	    acl4=
-	else
-	    acl4=$d
-	fi
+        if test $d != $s && test $s != 1; then acl2=$d; else acl2=; fi
+        if test $d != $s && test $d != 3; then acl3=$d; else acl3=; fi
+        if test $d = $s || ( (test $s = 1 || test $s = 2) && test $d = 3); then
+            # Source of 1 or 2 and dest of 3 should be dropped
+            # due to the 4th ACL that uses address_set(set1).
+            acl4=
+        else
+            acl4=$d
+        fi
 
-	#7, acl1 to acl4:
-	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1234
-	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1235 $acl2
-	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1236 $acl3
-	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1237 $acl4
+        #7, acl1 to acl4:
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1234
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1235 $acl2
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1236 $acl3
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1237 $acl4
 
-	test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:55 -vlan          #4
-	test_packet $s f0:00:00:00:00:0$d 01:00:00:00:00:0$s               #5
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:55 -vlan          #4
+        test_packet $s f0:00:00:00:00:0$d 01:00:00:00:00:0$s               #5
 
-	if test $d != $s && test $d = 1; then
-	    unknown="$unknown $d"
-	fi
-	bcast="$bcast $unicast"
-	bacl2="$bacl2 $acl2"
-	bacl3="$bacl3 $acl3"
+        if test $d != $s && test $d = 1; then
+            unknown="$unknown $d"
+        fi
+        bcast="$bcast $unicast"
+        bacl2="$bacl2 $acl2"
+        bacl3="$bacl3 $acl3"
 
-	sip=192.168.0.$s
-	tip=192.168.0.$d
-	tip_unknown=11.11.11.11
-	test_arp $s f0:00:00:00:00:0$s $sip $tip f0:00:00:00:00:0$d        #9
-	test_arp $s f0:00:00:00:00:0$s $sip $tip_unknown                   #10
+        sip=192.168.0.$s
+        tip=192.168.0.$d
+        tip_unknown=11.11.11.11
+        test_arp $s f0:00:00:00:00:0$s $sip $tip f0:00:00:00:00:0$d        #9
+        test_arp $s f0:00:00:00:00:0$s $sip $tip_unknown                   #10
 
-	if test $d = 3; then
-	    # lp3 has an additional ip 192.169.0.[123]3.
-	    tip=192.169.0.$d
-	    test_arp $s f0:00:00:00:00:0$s $sip $tip f0:00:00:00:00:0$d    #9
-	fi
+        if test $d = 3; then
+            # lp3 has an additional ip 192.169.0.[123]3.
+            tip=192.169.0.$d
+            test_arp $s f0:00:00:00:00:0$s $sip $tip f0:00:00:00:00:0$d    #9
+        fi
     done
 
     # Broadcast and multicast.
     test_packet $s ff:ff:ff:ff:ff:ff f0:00:00:00:00:0$s $bcast             #2
     test_packet $s 01:00:00:00:00:00 f0:00:00:00:00:0$s $bcast             #2
     if test $s = 1; then
-	bcast_impersonate=$bcast
+       bcast_impersonate=$bcast
     else
-	bcast_impersonate=
+       bcast_impersonate=
     fi
     test_packet $s 01:00:00:00:00:00 f0:00:00:00:00:44 $bcast_impersonate  #3
 
@@ -2338,8 +2338,8 @@ ovn-sbctl -f csv -d bare --no-heading \
 for i in 1 2 3; do
     for j in 1 2 3; do
         for k in 1 2 3; do
-	    OVN_CHECK_PACKETS([hv`vif_to_hv $i$j$k`/vif$i$j$k-tx.pcap],
-	                      [$i$j$k.expected])
+            OVN_CHECK_PACKETS([hv`vif_to_hv $i$j$k`/vif$i$j$k-tx.pcap],
+                              [$i$j$k.expected])
         done
     done
 done
