@@ -470,6 +470,12 @@ def idl_set(idl, commands, step):
                          uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8"))
             row.__setattr__('uset',
                 [uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8")])
+        elif name == 'partialsetmutatenew':
+            new_row41 = txn.insert(idl.tables["simple4"])
+            new_row41.__setattr__('name', 'new_row41')
+            new_row3 = txn.insert(idl.tables["simple3"])
+            setattr(new_row3, 'name', 'String3')
+            new_row3.addvalue('uset', new_row41.uuid)
         else:
             sys.stderr.write("unknown command %s\n" % name)
             sys.exit(1)

@@ -1271,7 +1271,13 @@ class Transaction(object):
                 addop = False
                 op = {"table": row._table.name}
                 op["op"] = "mutate"
-                op["where"] = _where_uuid_equals(row.uuid)
+                if row._data is None:
+                    # New row
+                    op["where"] = self._substitute_uuids(
+                        _where_uuid_equals(row.uuid))
+                else:
+                    # Existing row
+                    op["where"] = _where_uuid_equals(row.uuid)
                 op["mutations"] = []
                 if '_removes' in row._mutations.keys():
                     for col, dat in six.iteritems(row._mutations['_removes']):
