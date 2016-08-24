@@ -20,15 +20,16 @@
 
 #include "bitmap.h"
 #include "compiler.h"
-#include "hmap.h"
-#include "match.h"
+#include "openvswitch/hmap.h"
+#include "openvswitch/match.h"
 #include "nx-match.h"
 #include "odp-netlink.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 #include "ovs-thread.h"
 #include "ovs-rcu.h"
 #include "packets.h"
 #include "tun-metadata.h"
+#include "util.h"
 
 struct tun_meta_entry {
     struct hmap_node node;      /* In struct tun_table's key_hmap. */
@@ -208,7 +209,7 @@ tun_metadata_table_request(struct ofputil_tlv_table_reply *ttr)
 
     ttr->max_option_space = TUN_METADATA_TOT_OPT_SIZE;
     ttr->max_fields = TUN_METADATA_NUM_OPTS;
-    list_init(&ttr->mappings);
+    ovs_list_init(&ttr->mappings);
 
     for (i = 0; i < TUN_METADATA_NUM_OPTS; i++) {
         struct tun_meta_entry *entry = &map->entries[i];
@@ -224,7 +225,7 @@ tun_metadata_table_request(struct ofputil_tlv_table_reply *ttr)
         map->option_len = entry->loc.len;
         map->index = i;
 
-        list_push_back(&ttr->mappings, &map->list_node);
+        ovs_list_push_back(&ttr->mappings, &map->list_node);
     }
 }
 
@@ -490,7 +491,7 @@ memcpy_to_metadata(struct tun_metadata *dst, const void *src,
     int addr = 0;
 
     while (chain) {
-        memcpy(dst->opts.u8 + loc->c.offset + addr, (uint8_t *)src + addr,
+        memcpy(dst->opts.u8 + chain->offset, (uint8_t *)src + addr,
                chain->len);
         addr += chain->len;
         chain = chain->next;
@@ -507,7 +508,7 @@ memcpy_from_metadata(void *dst, const struct tun_metadata *src,
     int addr = 0;
 
     while (chain) {
-        memcpy((uint8_t *)dst + addr, src->opts.u8 + loc->c.offset + addr,
+        memcpy((uint8_t *)dst + addr, src->opts.u8 + chain->offset,
                chain->len);
         addr += chain->len;
         chain = chain->next;

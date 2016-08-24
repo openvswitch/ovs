@@ -22,7 +22,7 @@ void
 guarded_list_init(struct guarded_list *list)
 {
     ovs_mutex_init(&list->mutex);
-    list_init(&list->list);
+    ovs_list_init(&list->list);
     list->n = 0;
 }
 
@@ -57,7 +57,7 @@ guarded_list_push_back(struct guarded_list *list,
 
     ovs_mutex_lock(&list->mutex);
     if (list->n < max) {
-        list_push_back(&list->list, node);
+        ovs_list_push_back(&list->list, node);
         retval = ++list->n;
     }
     ovs_mutex_unlock(&list->mutex);
@@ -72,7 +72,7 @@ guarded_list_pop_front(struct guarded_list *list)
 
     ovs_mutex_lock(&list->mutex);
     if (list->n) {
-        node = list_pop_front(&list->list);
+        node = ovs_list_pop_front(&list->list);
         list->n--;
     }
     ovs_mutex_unlock(&list->mutex);
@@ -86,10 +86,10 @@ guarded_list_pop_all(struct guarded_list *list, struct ovs_list *elements)
     size_t n;
 
     ovs_mutex_lock(&list->mutex);
-    list_move(elements, &list->list);
+    ovs_list_move(elements, &list->list);
     n = list->n;
 
-    list_init(&list->list);
+    ovs_list_init(&list->list);
     list->n = 0;
     ovs_mutex_unlock(&list->mutex);
 

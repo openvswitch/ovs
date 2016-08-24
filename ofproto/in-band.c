@@ -15,7 +15,6 @@
  */
 
 #include <config.h>
-#include "in-band.h"
 #include <arpa/inet.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -26,18 +25,19 @@
 #include "classifier.h"
 #include "dhcp.h"
 #include "flow.h"
+#include "in-band.h"
 #include "netdev.h"
 #include "netlink.h"
 #include "odp-util.h"
-#include "ofp-actions.h"
 #include "ofproto.h"
-#include "ofpbuf.h"
 #include "ofproto-provider.h"
 #include "openflow/openflow.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "timeval.h"
-#include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(in_band);
 
@@ -134,7 +134,7 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
     {
         netdev_close(r->remote_netdev);
 
-        retval = netdev_open(next_hop_dev, "system", &r->remote_netdev);
+        retval = netdev_open(next_hop_dev, NULL, &r->remote_netdev);
         if (retval) {
             VLOG_WARN_RL(&rl, "%s: cannot open netdev %s (next hop "
                          "to controller "IP_FMT"): %s",
@@ -422,9 +422,10 @@ in_band_create(struct ofproto *ofproto, const char *local_name,
     struct in_band *in_band;
     struct netdev *local_netdev;
     int error;
+    const char *type = ofproto_port_open_type(ofproto->type, "internal");
 
     *in_bandp = NULL;
-    error = netdev_open(local_name, "internal", &local_netdev);
+    error = netdev_open(local_name, type, &local_netdev);
     if (error) {
         VLOG_ERR("%s: failed to initialize in-band control: cannot open "
                  "datapath local port %s (%s)", ofproto->name,
@@ -449,10 +450,9 @@ void
 in_band_destroy(struct in_band *ib)
 {
     if (ib) {
-        struct in_band_rule *rule, *next;
+        struct in_band_rule *rule;
 
-        HMAP_FOR_EACH_SAFE (rule, next, hmap_node, &ib->rules) {
-            hmap_remove(&ib->rules, &rule->hmap_node);
+        HMAP_FOR_EACH_POP (rule, hmap_node, &ib->rules) {
             free(rule);
         }
         hmap_destroy(&ib->rules);

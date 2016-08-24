@@ -23,7 +23,7 @@
 #include <string.h>
 #include "flow.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "odp-netlink.h"
 #include "openflow/openflow.h"
 #include "util.h"
@@ -141,7 +141,7 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  * add another field and forget to adjust this value.
  */
 #define ODPUTIL_FLOW_KEY_BYTES 640
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 36);
 
 /* A buffer with sufficient size and alignment to hold an nlattr-formatted flow
  * key.  An array of "struct nlattr" might not, in theory, be sufficiently
@@ -193,12 +193,6 @@ struct odp_flow_key_parms {
      * IPv6, etc. */
     const struct flow *flow;
     const struct flow *mask;
-
-   /* 'flow->in_port' is ignored (since it is likely to be an OpenFlow port
-    * number rather than a datapath port number).  Instead, if 'odp_in_port'
-    * is anything other than ODPP_NONE, it is included in 'buf' as the input
-    * port. */
-    odp_port_t odp_in_port;
 
     /* Indicates support for various fields. If the datapath supports a field,
      * then it will always be serialised. */
@@ -303,6 +297,7 @@ union user_action_cookie {
         uint32_t collector_set_id; /* ID of IPFIX collector set. */
         uint32_t obs_domain_id; /* Observation Domain ID. */
         uint32_t obs_point_id;  /* Observation Point ID. */
+        odp_port_t output_odp_port; /* The output odp port. */
     } flow_sample;
 
     struct {
@@ -310,7 +305,7 @@ union user_action_cookie {
         odp_port_t output_odp_port; /* The output odp port. */
     } ipfix;
 };
-BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 16);
+BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 20);
 
 size_t odp_put_userspace_action(uint32_t pid,
                                 const void *userdata, size_t userdata_size,

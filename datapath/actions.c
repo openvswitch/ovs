@@ -41,7 +41,6 @@
 #include "datapath.h"
 #include "conntrack.h"
 #include "gso.h"
-#include "vlan.h"
 #include "vport.h"
 
 static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
@@ -68,9 +67,7 @@ struct ovs_frag_data {
 	u8 l2_data[MAX_L2_LEN];
 };
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 static DEFINE_PER_CPU(struct ovs_frag_data, ovs_frag_data_storage);
-#endif
 
 #define DEFERRED_ACTION_FIFO_SIZE 10
 struct action_fifo {
@@ -81,9 +78,7 @@ struct action_fifo {
 };
 
 static struct action_fifo __percpu *action_fifos;
-#define EXEC_ACTIONS_LEVEL_LIMIT 4   /* limit used to detect packet
-				      *	looping by the network stack
-				      */
+
 static DEFINE_PER_CPU(int, exec_actions_level);
 
 static void action_fifo_init(struct action_fifo *fifo)
@@ -142,14 +137,26 @@ static bool is_flow_key_valid(const struct sw_flow_key *key)
 	return !!key->eth.type;
 }
 
+static void update_ethertype(struct sk_buff *skb, struct ethhdr *hdr,
+			     __be16 ethertype)
+{
+	if (skb->ip_summed == CHECKSUM_COMPLETE) {
+		__be16 diff[] = { ~(hdr->h_proto), ethertype };
+
+		skb->csum = ~csum_partial((char *)diff, sizeof(diff),
+					~skb->csum);
+	}
+
+	hdr->h_proto = ethertype;
+}
+
 static int push_mpls(struct sk_buff *skb, struct sw_flow_key *key,
 		     const struct ovs_action_push_mpls *mpls)
 {
 	__be32 *new_mpls_lse;
-	struct ethhdr *hdr;
 
 	/* Networking stack do not allow simultaneous Tunnel and MPLS GSO. */
-	if (skb_encapsulation(skb))
+	if (skb->encapsulation)
 		return -ENOTSUPP;
 
 	if (skb_cow_head(skb, MPLS_HLEN) < 0)
@@ -163,12 +170,9 @@ static int push_mpls(struct sk_buff *skb, struct sw_flow_key *key,
 	new_mpls_lse = (__be32 *)skb_mpls_header(skb);
 	*new_mpls_lse = mpls->mpls_lse;
 
-	if (skb->ip_summed == CHECKSUM_COMPLETE)
-		skb->csum = csum_add(skb->csum, csum_partial(new_mpls_lse,
-							     MPLS_HLEN, 0));
+	skb_postpush_rcsum(skb, new_mpls_lse, MPLS_HLEN);
 
-	hdr = eth_hdr(skb);
-	hdr->h_proto = mpls->mpls_ethertype;
+	update_ethertype(skb, eth_hdr(skb), mpls->mpls_ethertype);
 	if (!ovs_skb_get_inner_protocol(skb))
 		ovs_skb_set_inner_protocol(skb, skb->protocol);
 	skb->protocol = mpls->mpls_ethertype;
@@ -199,7 +203,7 @@ static int pop_mpls(struct sk_buff *skb, struct sw_flow_key *key,
 	 * field correctly in the presence of VLAN tags.
 	 */
 	hdr = (struct ethhdr *)(skb_mpls_header(skb) - ETH_HLEN);
-	hdr->h_proto = ethertype;
+	update_ethertype(skb, hdr, ethertype);
 	if (eth_p_mpls(skb->protocol))
 		skb->protocol = ethertype;
 
@@ -284,7 +288,7 @@ static int set_eth_addr(struct sk_buff *skb, struct sw_flow_key *flow_key,
 	ether_addr_copy_masked(eth_hdr(skb)->h_dest, key->eth_dst,
 			       mask->eth_dst);
 
-	ovs_skb_postpush_rcsum(skb, eth_hdr(skb), ETH_ALEN * 2);
+	skb_postpush_rcsum(skb, eth_hdr(skb), ETH_ALEN * 2);
 
 	ether_addr_copy(flow_key->eth.src, eth_hdr(skb)->h_source);
 	ether_addr_copy(flow_key->eth.dst, eth_hdr(skb)->h_dest);
@@ -302,14 +306,14 @@ static void update_ip_l4_checksum(struct sk_buff *skb, struct iphdr *nh,
 	if (nh->protocol == IPPROTO_TCP) {
 		if (likely(transport_len >= sizeof(struct tcphdr)))
 			inet_proto_csum_replace4(&tcp_hdr(skb)->check, skb,
-						 addr, new_addr, 1);
+						 addr, new_addr, true);
 	} else if (nh->protocol == IPPROTO_UDP) {
 		if (likely(transport_len >= sizeof(struct udphdr))) {
 			struct udphdr *uh = udp_hdr(skb);
 
 			if (uh->check || skb->ip_summed == CHECKSUM_PARTIAL) {
 				inet_proto_csum_replace4(&uh->check, skb,
-							 addr, new_addr, 1);
+							 addr, new_addr, true);
 				if (!uh->check)
 					uh->check = CSUM_MANGLED_0;
 			}
@@ -335,14 +339,14 @@ static void update_ipv6_checksum(struct sk_buff *skb, u8 l4_proto,
 	if (l4_proto == NEXTHDR_TCP) {
 		if (likely(transport_len >= sizeof(struct tcphdr)))
 			inet_proto_csum_replace16(&tcp_hdr(skb)->check, skb,
-						  addr, new_addr, 1);
+						  addr, new_addr, true);
 	} else if (l4_proto == NEXTHDR_UDP) {
 		if (likely(transport_len >= sizeof(struct udphdr))) {
 			struct udphdr *uh = udp_hdr(skb);
 
 			if (uh->check || skb->ip_summed == CHECKSUM_PARTIAL) {
 				inet_proto_csum_replace16(&uh->check, skb,
-							  addr, new_addr, 1);
+							  addr, new_addr, true);
 				if (!uh->check)
 					uh->check = CSUM_MANGLED_0;
 			}
@@ -350,7 +354,7 @@ static void update_ipv6_checksum(struct sk_buff *skb, u8 l4_proto,
 	} else if (l4_proto == NEXTHDR_ICMP) {
 		if (likely(transport_len >= sizeof(struct icmp6hdr)))
 			inet_proto_csum_replace16(&icmp6_hdr(skb)->icmp6_cksum,
-						  skb, addr, new_addr, 1);
+						  skb, addr, new_addr, true);
 	}
 }
 
@@ -468,7 +472,7 @@ static int set_ipv6(struct sk_buff *skb, struct sw_flow_key *flow_key,
 		mask_ipv6_addr(saddr, key->ipv6_src, mask->ipv6_src, masked);
 
 		if (unlikely(memcmp(saddr, masked, sizeof(masked)))) {
-			set_ipv6_addr(skb, key->ipv6_proto, saddr, masked,
+			set_ipv6_addr(skb, flow_key->ip.proto, saddr, masked,
 				      true);
 			memcpy(&flow_key->ipv6.addr.src, masked,
 			       sizeof(flow_key->ipv6.addr.src));
@@ -490,7 +494,7 @@ static int set_ipv6(struct sk_buff *skb, struct sw_flow_key *flow_key,
 							     NULL, &flags)
 					       != NEXTHDR_ROUTING);
 
-			set_ipv6_addr(skb, key->ipv6_proto, daddr, masked,
+			set_ipv6_addr(skb, flow_key->ip.proto, daddr, masked,
 				      recalc_csum);
 			memcpy(&flow_key->ipv6.addr.dst, masked,
 			       sizeof(flow_key->ipv6.addr.dst));
@@ -518,7 +522,7 @@ static int set_ipv6(struct sk_buff *skb, struct sw_flow_key *flow_key,
 static void set_tp_port(struct sk_buff *skb, __be16 *port,
 			__be16 new_port, __sum16 *check)
 {
-	inet_proto_csum_replace2(check, skb, *port, new_port, 0);
+	inet_proto_csum_replace2(check, skb, *port, new_port, false);
 	*port = new_port;
 }
 
@@ -625,10 +629,9 @@ static int set_sctp(struct sk_buff *skb, struct sw_flow_key *flow_key,
 	return 0;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
 static int ovs_vport_output(OVS_VPORT_OUTPUT_PARAMS)
 {
-	struct ovs_frag_data *data = get_pcpu_ptr(ovs_frag_data_storage);
+	struct ovs_frag_data *data = this_cpu_ptr(&ovs_frag_data_storage);
 	struct vport *vport = data->vport;
 
 	if (skb_cow_head(skb, data->l2_len) < 0) {
@@ -645,7 +648,7 @@ static int ovs_vport_output(OVS_VPORT_OUTPUT_PARAMS)
 	/* Reconstruct the MAC header.  */
 	skb_push(skb, data->l2_len);
 	memcpy(skb->data, &data->l2_data, data->l2_len);
-	ovs_skb_postpush_rcsum(skb, skb->data, data->l2_len);
+	skb_postpush_rcsum(skb, skb->data, data->l2_len);
 	skb_reset_mac_header(skb);
 
 	ovs_vport_send(vport, skb);
@@ -671,7 +674,7 @@ static void prepare_frag(struct vport *vport, struct sk_buff *skb)
 	unsigned int hlen = skb_network_offset(skb);
 	struct ovs_frag_data *data;
 
-	data = get_pcpu_ptr(ovs_frag_data_storage);
+	data = this_cpu_ptr(&ovs_frag_data_storage);
 	data->dst = (unsigned long) skb_dst(skb);
 	data->vport = vport;
 	data->cb = *OVS_GSO_CB(skb);
@@ -685,8 +688,8 @@ static void prepare_frag(struct vport *vport, struct sk_buff *skb)
 	skb_pull(skb, hlen);
 }
 
-static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
-			 __be16 ethertype)
+static void ovs_fragment(struct net *net, struct vport *vport,
+			 struct sk_buff *skb, u16 mru, __be16 ethertype)
 {
 	if (skb_network_offset(skb) > MAX_L2_LEN) {
 		OVS_NLERR(1, "L2 header too long to fragment");
@@ -706,7 +709,7 @@ static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
 		skb_dst_set_noref(skb, &ovs_dst);
 		IPCB(skb)->frag_max_size = mru;
 
-		ip_do_fragment(skb->sk, skb, ovs_vport_output);
+		ip_do_fragment(net, skb->sk, skb, ovs_vport_output);
 		refdst_drop(orig_dst);
 	} else if (ethertype == htons(ETH_P_IPV6)) {
 		const struct nf_ipv6_ops *v6ops = nf_get_ipv6_ops();
@@ -726,8 +729,11 @@ static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
 		orig_dst = (unsigned long) skb_dst(skb);
 		skb_dst_set_noref(skb, &ovs_rt.dst);
 		IP6CB(skb)->frag_max_size = mru;
-
+#ifdef HAVE_IP_LOCAL_OUT_TAKES_NET
+		v6ops->fragment(net, skb->sk, skb, ovs_vport_output);
+#else
 		v6ops->fragment(skb->sk, skb, ovs_vport_output);
+#endif
 		refdst_drop(orig_dst);
 	} else {
 		WARN_ONCE(1, "Failed fragment ->%s: eth=%04x, MRU=%d, MTU=%d.",
@@ -740,16 +746,6 @@ static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
 err:
 	kfree_skb(skb);
 }
-#else /* < 3.10 */
-static void ovs_fragment(struct vport *vport, struct sk_buff *skb, u16 mru,
-			 __be16 ethertype)
-{
-	WARN_ONCE(1, "Fragment unavailable ->%s: eth=%04x, MRU=%d, MTU=%d.",
-		  ovs_vport_name(vport), ntohs(ethertype), mru,
-		  vport->dev->mtu);
-	kfree_skb(skb);
-}
-#endif
 
 static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port,
 		      struct sw_flow_key *key)
@@ -758,10 +754,19 @@ static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port,
 
 	if (likely(vport)) {
 		u16 mru = OVS_CB(skb)->mru;
+		u32 cutlen = OVS_CB(skb)->cutlen;
+
+		if (unlikely(cutlen > 0)) {
+			if (skb->len - cutlen > ETH_HLEN)
+				pskb_trim(skb, skb->len - cutlen);
+			else
+				pskb_trim(skb, ETH_HLEN);
+		}
 
 		if (likely(!mru || (skb->len <= mru + ETH_HLEN))) {
 			ovs_vport_send(vport, skb);
 		} else if (mru <= vport->dev->mtu) {
+			struct net *net = ovs_dp_get_net(dp);
 			__be16 ethertype = key->eth.type;
 
 			if (!is_flow_key_valid(key)) {
@@ -771,7 +776,7 @@ static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port,
 					ethertype = vlan_get_protocol(skb);
 			}
 
-			ovs_fragment(vport, skb, mru, ethertype);
+			ovs_fragment(net, vport, skb, mru, ethertype);
 		} else {
 			OVS_NLERR(true, "Cannot fragment IP frames");
 			kfree_skb(skb);
@@ -780,19 +785,21 @@ static void do_output(struct datapath *dp, struct sk_buff *skb, int out_port,
 		kfree_skb(skb);
 	}
 }
+
 static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 			    struct sw_flow_key *key, const struct nlattr *attr,
-			    const struct nlattr *actions, int actions_len)
+			    const struct nlattr *actions, int actions_len,
+			    uint32_t cutlen)
 {
-	struct ip_tunnel_info info;
 	struct dp_upcall_info upcall;
 	const struct nlattr *a;
-	int rem;
+	int rem, err;
 
 	memset(&upcall, 0, sizeof(upcall));
 	upcall.cmd = OVS_PACKET_CMD_ACTION;
 	upcall.mru = OVS_CB(skb)->mru;
 
+	SKB_INIT_FILL_METADATA_DST(skb);
 	for (a = nla_data(attr), rem = nla_len(attr); rem > 0;
 		 a = nla_next(a, &rem)) {
 		switch (nla_type(a)) {
@@ -810,13 +817,9 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 
 			vport = ovs_vport_rcu(dp, nla_get_u32(a));
 			if (vport) {
-				int err;
-
-				upcall.egress_tun_info = &info;
-				err = ovs_vport_get_egress_tun_info(vport, skb,
-								    &upcall);
-				if (err)
-					upcall.egress_tun_info = NULL;
+				err = dev_fill_metadata_dst(vport->dev, skb);
+				if (!err)
+					upcall.egress_tun_info = skb_tunnel_info(skb);
 			}
 
 			break;
@@ -832,7 +835,9 @@ static int output_userspace(struct datapath *dp, struct sk_buff *skb,
 		} /* End of switch. */
 	}
 
-	return ovs_dp_upcall(dp, skb, key, &upcall);
+	err = ovs_dp_upcall(dp, skb, key, &upcall, cutlen);
+	SKB_RESTORE_FILL_METADATA_DST(skb);
+	return err;
 }
 
 static int sample(struct datapath *dp, struct sk_buff *skb,
@@ -842,6 +847,7 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 	const struct nlattr *acts_list = NULL;
 	const struct nlattr *a;
 	int rem;
+	u32 cutlen = 0;
 
 	for (a = nla_data(attr), rem = nla_len(attr); rem > 0;
 		 a = nla_next(a, &rem)) {
@@ -868,13 +874,24 @@ static int sample(struct datapath *dp, struct sk_buff *skb,
 		return 0;
 
 	/* The only known usage of sample action is having a single user-space
+	 * action, or having a truncate action followed by a single user-space
 	 * action. Treat this usage as a special case.
 	 * The output_userspace() should clone the skb to be sent to the
 	 * user space. This skb will be consumed by its caller.
 	 */
+	if (unlikely(nla_type(a) == OVS_ACTION_ATTR_TRUNC)) {
+		struct ovs_action_trunc *trunc = nla_data(a);
+
+		if (skb->len > trunc->max_len)
+			cutlen = skb->len - trunc->max_len;
+
+		a = nla_next(a, &rem);
+	}
+
 	if (likely(nla_type(a) == OVS_ACTION_ATTR_USERSPACE &&
 		   nla_is_last(a, rem)))
-		return output_userspace(dp, skb, key, a, actions, actions_len);
+		return output_userspace(dp, skb, key, a, actions,
+					actions_len, cutlen);
 
 	skb = skb_clone(skb, GFP_ATOMIC);
 	if (!skb)
@@ -1061,6 +1078,7 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			if (out_skb)
 				do_output(dp, out_skb, prev_port, key);
 
+			OVS_CB(skb)->cutlen = 0;
 			prev_port = -1;
 		}
 
@@ -1069,8 +1087,18 @@ static int do_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			prev_port = nla_get_u32(a);
 			break;
 
+		case OVS_ACTION_ATTR_TRUNC: {
+			struct ovs_action_trunc *trunc = nla_data(a);
+
+			if (skb->len > trunc->max_len)
+				OVS_CB(skb)->cutlen = skb->len - trunc->max_len;
+			break;
+		}
+
 		case OVS_ACTION_ATTR_USERSPACE:
-			output_userspace(dp, skb, key, a, attr, len);
+			output_userspace(dp, skb, key, a, attr,
+						     len, OVS_CB(skb)->cutlen);
+			OVS_CB(skb)->cutlen = 0;
 			break;
 
 		case OVS_ACTION_ATTR_HASH:
@@ -1178,31 +1206,26 @@ int ovs_execute_actions(struct datapath *dp, struct sk_buff *skb,
 			const struct sw_flow_actions *acts,
 			struct sw_flow_key *key)
 {
-	int level = this_cpu_read(exec_actions_level);
-	int err;
+	static const int ovs_recursion_limit = 4;
+	int err, level;
 
-	if (unlikely(level >= EXEC_ACTIONS_LEVEL_LIMIT)) {
-		if (net_ratelimit())
-			pr_warn("%s: packet loop detected, dropping.\n",
-				ovs_dp_name(dp));
-
+	level = __this_cpu_inc_return(exec_actions_level);
+	if (unlikely(level > ovs_recursion_limit)) {
+		net_crit_ratelimited("ovs: recursion limit reached on datapath %s, probable configuration error\n",
+				     ovs_dp_name(dp));
 		kfree_skb(skb);
-		return -ELOOP;
+		err = -ENETDOWN;
+		goto out;
 	}
 
-	this_cpu_inc(exec_actions_level);
 	err = do_execute_actions(dp, skb, key,
 				 acts->actions, acts->actions_len);
 
-	if (!level)
+	if (level == 1)
 		process_deferred_actions(dp);
 
-	this_cpu_dec(exec_actions_level);
-
-	/* This return status currently does not reflect the errors
-	 * encounted during deferred actions execution. Probably needs to
-	 * be fixed in the future.
-	 */
+out:
+	__this_cpu_dec(exec_actions_level);
 	return err;
 }
 

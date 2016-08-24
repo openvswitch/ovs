@@ -98,6 +98,14 @@ typedef struct _GENL_MSG_HDR {
 } GENL_MSG_HDR, *PGENL_MSG_HDR;
 BUILD_ASSERT_DECL(sizeof(GENL_MSG_HDR) == 4);
 
+/* Netfilter Generic Message */
+typedef struct _NF_GEN_MSG_HDR {
+    UINT8 nfgenFamily;   /* AF_xxx */
+    UINT8 version;       /* nfnetlink version */
+    UINT16 resId;        /* resource id */
+} NF_GEN_MSG_HDR, *PNF_GEN_MSG_HDR;
+BUILD_ASSERT_DECL(sizeof(NF_GEN_MSG_HDR) == 4);
+
 /* Netlink attributes */
 typedef struct _NL_ATTR {
     UINT16 nlaLen;
@@ -113,7 +121,11 @@ BUILD_ASSERT_DECL(sizeof(NL_ATTR) == 4);
 
 #define NLMSG_HDRLEN ((INT) NLMSG_ALIGN(sizeof(NL_MSG_HDR)))
 #define GENL_HDRLEN NLMSG_ALIGN(sizeof(GENL_MSG_HDR))
+#define NF_GEN_MSG_HDRLEN NLMSG_ALIGN(sizeof(NF_GEN_MSG_HDR))
 #define OVS_HDRLEN NLMSG_ALIGN(sizeof(OVS_HDR))
 #define NLA_HDRLEN ((INT) NLA_ALIGN(sizeof(NL_ATTR)))
+
+#define NETLINK_NETFILTER       12
+#define NETLINK_GENERIC         16
 
 #endif /* NetlinProto.h */

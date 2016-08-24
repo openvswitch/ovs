@@ -23,11 +23,7 @@ void __skb_warn_lro_forwarding(const struct sk_buff *skb)
 
 static inline bool head_frag(const struct sk_buff *skb)
 {
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3,5,0)
 	return skb->head_frag;
-#else
-	return false;
-#endif
 }
 
  /**
@@ -252,7 +248,7 @@ int rpl_pskb_expand_head(struct sk_buff *skb, int nhead, int ntail,
 
 	inner_mac_offset = skb_inner_mac_offset(skb);
 	inner_nw_offset = skb_inner_network_offset(skb);
-	inner_transport_offset = ovs_skb_inner_transport_offset(skb);
+	inner_transport_offset = skb_inner_transport_offset(skb);
 
 #undef pskb_expand_head
 	err = pskb_expand_head(skb, nhead, ntail, gfp_mask);
@@ -282,7 +278,7 @@ void rpl_kfree_skb_list(struct sk_buff *segs)
 EXPORT_SYMBOL(rpl_kfree_skb_list);
 #endif
 
-#ifndef HAVE_SKB_SCRUB_PACKET_XNET
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,1,0)
 
 #define nf_reset_trace rpl_nf_reset_trace
 static void nf_reset_trace(struct sk_buff *skb)
@@ -296,9 +292,7 @@ void rpl_skb_scrub_packet(struct sk_buff *skb, bool xnet)
 {
 	skb->tstamp.tv64 = 0;
 	skb->pkt_type = PACKET_HOST;
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 	skb->skb_iif = 0;
-#endif
 	skb->ignore_df = 0;
 	skb_dst_drop(skb);
 	secpath_reset(skb);

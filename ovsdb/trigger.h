@@ -16,7 +16,7 @@
 #ifndef OVSDB_TRIGGER_H
 #define OVSDB_TRIGGER_H 1
 
-#include "list.h"
+#include "openvswitch/list.h"
 
 struct ovsdb;
 
@@ -29,11 +29,13 @@ struct ovsdb_trigger {
     struct json *result;        /* Result (null if none yet). */
     long long int created;      /* Time created. */
     long long int timeout_msec; /* Max wait duration. */
+    bool read_only;             /* Database is in read only mode. */
 };
 
 void ovsdb_trigger_init(struct ovsdb_session *, struct ovsdb *,
                         struct ovsdb_trigger *,
-                        struct json *request, long long int now);
+                        struct json *request, long long int now,
+                        bool read_only);
 void ovsdb_trigger_destroy(struct ovsdb_trigger *);
 
 bool ovsdb_trigger_is_complete(const struct ovsdb_trigger *);

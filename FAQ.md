@@ -3,8 +3,22 @@ Frequently Asked Questions
 
 Open vSwitch <http://openvswitch.org>
 
-General
--------
+## Contents
+
+- [General](#general)
+- [Releases](#releases)
+- [Terminology](#terminology)
+- [Basic configuration](#basic-configuration)
+- [Implementation Details](#implementation-details)
+- [Performance](#performance)
+- [Configuration Problems](#configuration-problems)
+- [QOS](#qos)
+- [VLANs](#vlans)
+- [VXLANs](#vxlans)
+- [Using OpenFlow](#using-openflow)
+- [Development](#development)
+
+## General
 
 ### Q: What is Open vSwitch?
 
@@ -27,7 +41,7 @@ A: Open vSwitch is a production quality open source software switch
 ### Q: What virtualization platforms can use Open vSwitch?
 
 A: Open vSwitch can currently run on any Linux-based virtualization
-   platform (kernel 2.6.32 and newer), including: KVM, VirtualBox, Xen,
+   platform (kernel 3.10 and newer), including: KVM, VirtualBox, Xen,
    Xen Cloud Platform, XenServer. As of Linux 3.3 it is part of the
    mainline kernel.  The bulk of the code is written in platform-
    independent C and is easily ported to other environments.  We welcome
@@ -118,19 +132,20 @@ A: Starting in OVS 2.4, we switched the default ports to the
    cannot, all the programs allow overriding the default port.  See the
    appropriate man page.
 
-
-Releases
---------
+## Releases
 
 ### Q: What does it mean for an Open vSwitch release to be LTS (long-term support)?
 
 A: All official releases have been through a comprehensive testing
-   process and are suitable for production use.  Planned releases will
-   occur several times a year.  If a significant bug is identified in an
+   process and are suitable for production use.  Planned releases
+   occur twice a year.  If a significant bug is identified in an
    LTS release, we will provide an updated release that includes the
    fix.  Releases that are not LTS may not be fixed and may just be
    supplanted by the next major release.  The current LTS release is
    2.3.x.
+
+   For more information on the Open vSwitch release process, please
+   see [release-process.md].
 
 ### Q: What Linux kernel versions does each Open vSwitch release work with?
 
@@ -157,6 +172,7 @@ A: The following table lists the Linux kernel versions against which the
 |    2.3.x     | 2.6.32 to 3.14
 |    2.4.x     | 2.6.32 to 4.0
 |    2.5.x     | 2.6.32 to 4.3
+|    2.6.x     | 3.10 to 4.7
 
    Open vSwitch userspace should also work with the Linux kernel module
    built into Linux 3.3 and later.
@@ -179,13 +195,10 @@ A: Open vSwitch supports different datapaths on different platforms.  Each
                        Linux release whose OVS module supports the feature.
 
    * *Linux OVS tree*: The datapath implemented by the Linux kernel module
-                       distributed with the OVS source tree. Some features of
-                       this module rely on functionality not available in older
-                       kernels: in this case the minumum Linux version (against
-                       which the feature can be compiled) is listed.
+                       distributed with the OVS source tree.
 
    * *Userspace*: Also known as DPDK, dpif-netdev or dummy datapath. It is the
-                  only datapath that works on NetBSD and FreeBSD.
+                  only datapath that works on NetBSD, FreeBSD and Mac OSX.
 
    * *Hyper-V*: Also known as the Windows datapath.
 
@@ -194,15 +207,20 @@ A: Open vSwitch supports different datapaths on different platforms.  Each
 
 Feature               | Linux upstream | Linux OVS tree | Userspace | Hyper-V |
 ----------------------|:--------------:|:--------------:|:---------:|:-------:|
-Connection tracking   |      4.3       |       3.10     |    NO     |   NO    |
+NAT                   |      4.6       |       YES      |    NO     |   NO    |
+Connection tracking   |      4.3       |       YES      |  PARTIAL  | PARTIAL |
 Tunnel - LISP         |      NO        |       YES      |    NO     |   NO    |
-Tunnel - STT          |      NO        |       3.5      |    NO     |   YES   |
+Tunnel - STT          |      NO        |       YES      |    NO     |   YES   |
 Tunnel - GRE          |      3.11      |       YES      |    YES    |   YES   |
 Tunnel - VXLAN        |      3.12      |       YES      |    YES    |   YES   |
-Tunnel - Geneve       |      3.18      |       YES      |    YES    |   NO    |
-QoS - Policing        |      YES       |       YES      |    NO     |   NO    |
+Tunnel - Geneve       |      3.18      |       YES      |    YES    |   YES   |
+Tunnel - GRE-IPv6     |      NO        |       NO       |    YES    |   NO    |
+Tunnel - VXLAN-IPv6   |      4.3       |       YES      |    YES    |   NO    |
+Tunnel - Geneve-IPv6  |      4.4       |       YES      |    YES    |   NO    |
+QoS - Policing        |      YES       |       YES      |    YES    |   NO    |
 QoS - Shaping         |      YES       |       YES      |    NO     |   NO    |
 sFlow                 |      YES       |       YES      |    YES    |   NO    |
+IPFIX                 |      3.10      |       YES      |    YES    |   NO    |
 Set action            |      YES       |       YES      |    YES    | PARTIAL |
 NIC Bonding           |      YES       |       YES      |    YES    |   NO    |
 Multiple VTEPs        |      YES       |       YES      |    YES    |   NO    |
@@ -226,11 +244,24 @@ MPLS                  |      3.19      |       YES      |    YES    |   YES   |
 UFID                  |      4.0       |       YES      |    YES    |   NO    |
 Megaflows             |      3.12      |       YES      |    YES    |   NO    |
 Masked set action     |      4.0       |       YES      |    YES    |   NO    |
-Recirculation         |      3.19      |       YES      |    YES    |   NO    |
+Recirculation         |      3.19      |       YES      |    YES    |   YES   |
 TCP flags matching    |      3.13      |       YES      |    YES    |   NO    |
 Validate flow actions |      YES       |       YES      |    N/A    |   NO    |
 Multiple datapaths    |      YES       |       YES      |    YES    |   NO    |
 Tunnel TSO - STT      |      N/A       |       YES      |    NO     |   YES   |
+
+### Q: What DPDK version does each Open vSwitch release work with?
+
+A: The following table lists the DPDK version against which the
+   given versions of Open vSwitch will successfully build.
+
+| Open vSwitch | DPDK
+|:------------:|:-----:
+|    2.2.x     | 1.6
+|    2.3.x     | 1.6
+|    2.4.x     | 2.0
+|    2.5.x     | 2.2
+|    2.6.x     | 16.07
 
 ### Q: I get an error like this when I configure Open vSwitch:
 
@@ -309,12 +340,6 @@ A: Tunnel virtual ports are not supported, as described in the
    actions.  On Linux kernels before 2.6.39, maximum-sized VLAN packets
    may not be transmitted.
 
-### Q: What Linux kernel versions does IPFIX flow monitoring work with?
-
-A: IPFIX flow monitoring requires the Linux kernel module from Linux
-   3.10 or later, or the out-of-tree module from Open vSwitch version
-   1.10.90 or later.
-
 ### Q: Should userspace or kernel be upgraded first to minimize downtime?
 
    In general, the Open vSwitch userspace should be used with the
@@ -343,8 +368,7 @@ A: Bridge compatibility was a feature of Open vSwitch 1.9 and earlier.
    the release.  Be sure to start the ovs-brcompatd daemon.
 
 
-Terminology
------------
+## Terminology
 
 ### Q: I thought Open vSwitch was a virtual Ethernet switch, but the documentation keeps talking about bridges.  What's a bridge?
 
@@ -356,9 +380,7 @@ A: In networking, the terms "bridge" and "switch" are synonyms.  Open
 
 A: See the "VLAN" section below.
 
-
-Basic Configuration
--------------------
+## Basic configuration
 
 ### Q: How do I configure a port as an access port?
 
@@ -431,9 +453,9 @@ A: Yes.  How you configure it depends on what you mean by "promiscuous
 
 A: Firstly, you must have a DPDK-enabled version of Open vSwitch.
 
-   If your version is DPDK-enabled it will support the --dpdk
-   argument on the command line and will display lines with
-   "EAL:..." during startup when --dpdk is supplied.
+   If your version is DPDK-enabled it will support the other-config:dpdk-init
+   configuration in the database and will display lines with "EAL:..."
+   during startup when other_config:dpdk-init is set to 'true'.
 
    Secondly, when adding a DPDK port, unlike a system port, the
    type for the interface must be specified. For example;
@@ -565,9 +587,7 @@ A: First, why do you want to do this?  Two connected bridges are not
 A: Open vSwitch does not support such a configuration.
    Bridges always have their local ports.
 
-
-Implementation Details
-----------------------
+## Implementation Details
 
 ### Q: I hear OVS has a couple of kinds of flows.  Can you tell me about them?
 
@@ -657,9 +677,7 @@ A: No.  There are several reasons:
   please read "The Design and Implementation of Open vSwitch",
   published in USENIX NSDI 2015.
 
-
-Performance
------------
+## Performance
 
 ### Q: I just upgraded and I see a performance drop.  Why?
 
@@ -679,8 +697,7 @@ A: The OVS kernel datapath may have been updated to a newer version than
    userspace.
 
 
-Configuration Problems
-----------------------
+## Configuration Problems
 
 ### Q: I created a bridge and added my Ethernet port to it, using commands
    like these:
@@ -1034,9 +1051,21 @@ A: The short answer is that this is a misuse of a "tap" device.  Use
    users should not configure KVM "tap" devices as type "tap" (use
    type "system", the default, instead).
 
+### Q: I observe packet loss at the beginning of RFC2544 tests on a
+    server running few hundred container apps bridged to OVS with traffic
+    generated by HW traffic generator.  How can I fix this?
 
-Quality of Service (QoS)
-------------------------
+A: This is expected behavior on virtual switches.  RFC2544 tests were
+   designed for hardware switches, which don't have caches on the fastpath
+   that need to be heated.  Traffic generators in order to prime the switch
+   use learning phase to heat the caches before sending the actual traffic
+   in test phase.  In case of OVS the cache is flushed quickly and to
+   accommodate the traffic generator's delay between learning and test phase,
+   the max-idle timeout settings should be changed to 50000 ms.
+
+   ovs-vsctl --no-wait set Open_vSwitch . other_config:max-idle=50000
+
+## QOS
 
 ### Q: Does OVS support Quality of Service (QoS)?
 
@@ -1049,7 +1078,7 @@ A: Yes.  For traffic that egresses from a switch, OVS supports traffic
 
    Keep in mind that ingress and egress are from the perspective of the
    switch.  That means that egress shaping limits the rate at which
-   traffic is allowed to transmit from a physical interface, but the
+   traffic is allowed to transmit from a physical interface, but not the
    rate at which traffic will be received on a virtual machine's VIF.
    For ingress policing, the behavior is the opposite.
 
@@ -1123,7 +1152,7 @@ A: A policing policy can be configured on an interface to drop packets
    generate to 10Mbps:
 
        ovs-vsctl set interface vif1.0 ingress_policing_rate=10000
-       ovs-vsctl set interface vif1.0 ingress_policing_burst=1000
+       ovs-vsctl set interface vif1.0 ingress_policing_burst=8000
 
    Traffic policing can interact poorly with some network protocols and
    can have surprising results.  The "Ingress Policing" section of
@@ -1192,9 +1221,7 @@ A: Since version 2.0, Open vSwitch has OpenFlow protocol support for
    vSwitch software switch (neither the kernel-based nor userspace
    switches).
 
-
-VLANs
------
+## VLANs
 
 ### Q: What's a VLAN?
 
@@ -1263,7 +1290,7 @@ A: Many drivers in Linux kernels before version 3.3 had VLAN-related
 
    - Use a NIC whose driver does not have VLAN problems.
 
-   - Use "VLAN splinters", a feature in Open vSwitch 1.4 and later
+   - Use "VLAN splinters", a feature in Open vSwitch 1.4 upto 2.5
      that works around bugs in kernel drivers.  To enable VLAN
      splinters on interface eth0, use the command:
 
@@ -1467,8 +1494,7 @@ A: Open vSwitch implements Independent VLAN Learning (IVL) for
    for each VLANs.
 
 
-VXLANs
------
+## VXLANs
 
 ### Q: What's a VXLAN?
 
@@ -1502,33 +1528,39 @@ A: By default, Open vSwitch will use the assigned IANA port for VXLAN, which
        options:dst_port=8472
 
 
-Using OpenFlow (Manually or Via Controller)
--------------------------------------------
+## Using OpenFlow
 
 ### Q: What versions of OpenFlow does Open vSwitch support?
 
 A: The following table lists the versions of OpenFlow supported by
    each version of Open vSwitch:
 
-       Open vSwitch      OF1.0  OF1.1  OF1.2  OF1.3  OF1.4  OF1.5
-       ###============   =====  =====  =====  =====  =====  =====
-       1.9 and earlier    yes    ---    ---    ---    ---    ---
-       1.10               yes    ---    [*]    [*]    ---    ---
-       1.11               yes    ---    [*]    [*]    ---    ---
-       2.0                yes    [*]    [*]    [*]    ---    ---
-       2.1                yes    [*]    [*]    [*]    ---    ---
-       2.2                yes    [*]    [*]    [*]    [%]    [*]
-       2.3                yes    yes    yes    yes    [*]    [*]
+       Open vSwitch      OF1.0  OF1.1  OF1.2  OF1.3  OF1.4  OF1.5  OF1.6
+       ###============   =====  =====  =====  =====  =====  =====  =====
+       1.9 and earlier    yes    ---    ---    ---    ---    ---     ---
+       1.10               yes    ---    [*]    [*]    ---    ---     ---
+       1.11               yes    ---    [*]    [*]    ---    ---     ---
+       2.0                yes    [*]    [*]    [*]    ---    ---     ---
+       2.1                yes    [*]    [*]    [*]    ---    ---     ---
+       2.2                yes    [*]    [*]    [*]    [%]    [*]     ---
+       2.3                yes    yes    yes    yes    [*]    [*]     ---
+       2.4                yes    yes    yes    yes    [*]    [*]     ---
+       2.5                yes    yes    yes    yes    [*]    [*]     [*]
 
        [*] Supported, with one or more missing features.
        [%] Experimental, unsafe implementation.
 
    Open vSwitch 2.3 enables OpenFlow 1.0, 1.1, 1.2, and 1.3 by default
    in ovs-vswitchd.  In Open vSwitch 1.10 through 2.2, OpenFlow 1.1,
-   1.2, and 1.3 must be enabled manually in ovs-vswitchd.  OpenFlow
-   1.4 and 1.5 are also supported, with missing features, in Open
-   vSwitch 2.3 and later, but not enabled by default.  In any case,
-   the user may override the default:
+   1.2, and 1.3 must be enabled manually in ovs-vswitchd.
+
+   Some versions of OpenFlow are supported with missing features and
+   therefore not enabled by default: OpenFlow 1.4 and 1.5, in Open
+   vSwitch 2.3 and later, as well as OpenFlow 1.6 in Open vSwitch 2.5
+   and later.  Also, the OpenFlow 1.6 specification is still under
+   development and thus subject to change.
+
+   In any case, the user may override the default:
 
    - To enable OpenFlow 1.0, 1.1, 1.2, and 1.3 on bridge br0:
 
@@ -1595,7 +1627,7 @@ A: This is a Open vSwitch extension to OpenFlow error codes.  Open
    If you want to dissect the extended error message yourself, the
    format is documented in include/openflow/nicira-ext.h in the Open
    vSwitch source distribution.  The extended error codes are
-   documented in lib/ofp-errors.h.
+   documented in include/openvswitch/ofp-errors.h.
 
 Q1: Some of the traffic that I'd expect my OpenFlow controller to see
     doesn't actually appear through the OpenFlow connection, even
@@ -1998,9 +2030,66 @@ A: In Open vSwitch 2.3 and earlier, Open vSwitch used the destination
    vSwitch source tree.  (OpenFlow 1.5 support in Open vSwitch is still
    experimental.)
 
+### Q: I added a flow to accept packets on VLAN 123 and output them on
+   VLAN 456, like so:
 
-Development
------------
+       ovs-ofctl add-flow br0 dl_vlan=123,actions=output:1,mod_vlan_vid:456
+
+   but the packets are actually being output in VLAN 123.  Why?
+
+A: OpenFlow actions are executed in the order specified.  Thus, the
+   actions above first output the packet, then change its VLAN.  Since
+   the output occurs before changing the VLAN, the change in VLAN will
+   have no visible effect.
+
+   To solve this and similar problems, order actions so that changes
+   to headers happen before output, e.g.:
+
+       ovs-ofctl add-flow br0 dl_vlan=123,actions=mod_vlan_vid:456,output:1
+
+### Q: The "learn" action can't learn the action I want, can you improve it?
+
+A: By itself, the "learn" action can only put two kinds of actions
+   into the flows that it creates: "load" and "output" actions.  If
+   "learn" is used in isolation, these are severe limits.
+
+   However, "learn" is not meant to be used in isolation.  It is a
+   primitive meant to be used together with other Open vSwitch
+   features to accomplish a task.  Its existing features are enough to
+   accomplish most tasks.
+
+   Here is an outline of a typical pipeline structure that allows for
+   versatile behavior using "learn":
+
+     - Flows in table A contain a "learn" action, that populates flows
+       in table L, that use a "load" action to populate register R
+       with information about what was learned.
+
+     - Flows in table B contain two sequential resubmit actions: one
+       to table L and another one to table B+1.
+
+     - Flows in table B+1 match on register R and act differently
+       depending on what the flows in table L loaded into it.
+
+   This approach can be used to implement many "learn"-based features.
+   For example:
+
+     - Resubmit to a table selected based on learned information, e.g. see:
+       http://openvswitch.org/pipermail/discuss/2016-June/021694.html
+
+     - MAC learning in the middle of a pipeline, as described in
+       [Tutorial.md].
+
+     - TCP state based firewalling, by learning outgoing connections
+       based on SYN packets and matching them up with incoming
+       packets.
+
+     - At least some of the features described in T. A. Hoff,
+       "Extending Open vSwitch to Facilitate Creation of Stateful SDN
+       Applications".
+
+
+## Development
 
 ### Q: How do I implement a new OpenFlow message?
 
@@ -2020,11 +2109,12 @@ A: Add new members for your field to "struct flow" in lib/flow.h, and
    add new enumerations for your new field to "enum mf_field_id" in
    lib/meta-flow.h, following the existing pattern.  Also, add support
    to miniflow_extract() in lib/flow.c for extracting your new field
-   from a packet into struct miniflow.  Then recompile and fix all of
-   the new warnings, implementing new functionality for the new field
-   or header as needed.  (If you configure with --enable-Werror, as
-   described in [INSTALL.md], then it is impossible to miss any
-   warnings.)
+   from a packet into struct miniflow, and to nx_put_raw() in
+   lib/nx-match.c to output your new field in OXM matches.  Then
+   recompile and fix all of the new warnings, implementing new
+   functionality for the new field or header as needed.  (If you
+   configure with --enable-Werror, as described in [INSTALL.md], then
+   it is impossible to miss any warnings.)
 
    If you want kernel datapath support for your new field, you also
    need to modify the kernel module for the operating systems you are
@@ -2063,3 +2153,5 @@ http://openvswitch.org/
 [INSTALL.md]:INSTALL.md
 [OPENFLOW-1.1+.md]:OPENFLOW-1.1+.md
 [INSTALL.DPDK.md]:INSTALL.DPDK.md
+[Tutorial.md]:tutorial/Tutorial.md
+[release-process.md]:Documentation/release-process.md

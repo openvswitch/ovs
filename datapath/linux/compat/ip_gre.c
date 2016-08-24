@@ -52,7 +52,7 @@
 #include <net/gre.h>
 #include <net/dst_metadata.h>
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 #if IS_ENABLED(CONFIG_IPV6)
 #include <net/ipv6.h>
 #include <net/ip6_fib.h>
@@ -144,7 +144,7 @@ static int ipgre_rcv(struct sk_buff *skb, const struct tnl_ptk_info *tpi)
 		skb_pop_mac_header(skb);
 		flags = tpi->flags & (TUNNEL_CSUM | TUNNEL_KEY);
 		tun_id = key_to_tunnel_id(tpi->key);
-		ovs_ip_tun_rx_dst(&tun_dst.u.tun_info, skb, flags, tun_id, 0);
+		ovs_ip_tun_rx_dst(&tun_dst, skb, flags, tun_id, 0);
 
 		skb_reset_network_header(skb);
 		err = IP_ECN_decapsulate(iph, skb);
@@ -171,7 +171,8 @@ static int gre_rcv(struct sk_buff *skb, const struct tnl_ptk_info *tpi)
 	return 0;
 }
 
-#ifndef HAVE_GRE_HANDLE_OFFLOADS
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,7,0)
+/* gre_handle_offloads() has different return type on older kernsl. */
 static void gre_nop_fix(struct sk_buff *skb) { }
 
 static void gre_csum_fix(struct sk_buff *skb)
@@ -193,7 +194,7 @@ static bool is_gre_gso(struct sk_buff *skb)
 	return skb_is_gso(skb);
 }
 
-static struct sk_buff *rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
+static int rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 {
 	int type = gre_csum ? SKB_GSO_GRE_CSUM : SKB_GSO_GRE;
 	gso_fix_segment_t fix_segment;
@@ -203,7 +204,7 @@ static struct sk_buff *rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csu
 	else
 		fix_segment = gre_nop_fix;
 
-	return ovs_iptunnel_handle_offloads(skb, gre_csum, type, fix_segment);
+	return ovs_iptunnel_handle_offloads(skb, type, fix_segment);
 }
 #else
 
@@ -213,12 +214,11 @@ static bool is_gre_gso(struct sk_buff *skb)
 		(SKB_GSO_GRE | SKB_GSO_GRE_CSUM);
 }
 
-static struct sk_buff *rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
+static int rpl_gre_handle_offloads(struct sk_buff *skb, bool gre_csum)
 {
-	if (skb_is_gso(skb) && skb_is_encapsulated(skb)) {
-		kfree_skb(skb);
-		return ERR_PTR(-ENOSYS);
-	}
+	if (skb_is_gso(skb) && skb_is_encapsulated(skb))
+		return -ENOSYS;
+
 #undef gre_handle_offloads
 	return gre_handle_offloads(skb, gre_csum);
 }
@@ -256,11 +256,26 @@ static void build_header(struct sk_buff *skb, int hdr_len, __be16 flags,
 	ovs_skb_set_inner_protocol(skb, proto);
 }
 
+static struct rtable *gre_get_rt(struct sk_buff *skb,
+				 struct net_device *dev,
+				 struct flowi4 *fl,
+				 const struct ip_tunnel_key *key)
+{
+	struct net *net = dev_net(dev);
+
+	memset(fl, 0, sizeof(*fl));
+	fl->daddr = key->u.ipv4.dst;
+	fl->saddr = key->u.ipv4.src;
+	fl->flowi4_tos = RT_TOS(key->tos);
+	fl->flowi4_mark = skb->mark;
+	fl->flowi4_proto = IPPROTO_GRE;
+
+	return ip_route_output_key(net, fl);
+}
 
 netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb)
 {
 	struct net_device *dev = skb->dev;
-	struct net *net = dev_net(dev);
 	struct ip_tunnel_info *tun_info;
 	const struct ip_tunnel_key *key;
 	struct flowi4 fl;
@@ -276,20 +291,14 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb)
 		goto err_free_skb;
 
 	key = &tun_info->key;
-	memset(&fl, 0, sizeof(fl));
-	fl.daddr = key->u.ipv4.dst;
-	fl.saddr = key->u.ipv4.src;
-	fl.flowi4_tos = RT_TOS(key->tos);
-	fl.flowi4_mark = skb->mark;
-	fl.flowi4_proto = IPPROTO_GRE;
 
-	rt = ip_route_output_key(net, &fl);
+	rt = gre_get_rt(skb, dev, &fl, key);
 	if (IS_ERR(rt))
 		goto err_free_skb;
 
 	tunnel_hlen = ip_gre_calc_hlen(key->tun_flags);
 
-	min_headroom = LL_RESERVED_SPACE(rt_dst(rt).dev) + rt_dst(rt).header_len
+	min_headroom = LL_RESERVED_SPACE(rt->dst.dev) + rt->dst.header_len
 			+ tunnel_hlen + sizeof(struct iphdr)
 			+ (skb_vlan_tag_present(skb) ? VLAN_HLEN : 0);
 	if (skb_headroom(skb) < min_headroom || skb_header_cloned(skb)) {
@@ -309,21 +318,17 @@ netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb)
 	}
 
 	/* Push Tunnel header. */
-	skb = rpl_gre_handle_offloads(skb, !!(tun_info->key.tun_flags & TUNNEL_CSUM));
-	if (IS_ERR(skb)) {
-		skb = NULL;
+	err = rpl_gre_handle_offloads(skb, !!(tun_info->key.tun_flags & TUNNEL_CSUM));
+	if (err)
 		goto err_free_rt;
-	}
 
 	flags = tun_info->key.tun_flags & (TUNNEL_CSUM | TUNNEL_KEY);
 	build_header(skb, tunnel_hlen, flags, htons(ETH_P_TEB),
 		     tunnel_id_to_key(tun_info->key.tun_id), 0);
 
 	df = key->tun_flags & TUNNEL_DONT_FRAGMENT ?  htons(IP_DF) : 0;
-	err = iptunnel_xmit(skb->sk, rt, skb, fl.saddr,
-			    key->u.ipv4.dst, IPPROTO_GRE,
-			    key->tos, key->ttl, df, false);
-	iptunnel_xmit_stats(err, &dev->stats, (struct pcpu_sw_netstats __percpu *)dev->tstats);
+	iptunnel_xmit(skb->sk, rt, skb, fl.saddr, key->u.ipv4.dst, IPPROTO_GRE,
+		      key->tos, key->ttl, df, false);
 	return NETDEV_TX_OK;
 
 err_free_rt:
@@ -459,6 +464,25 @@ static netdev_tx_t gre_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 	return NETDEV_TX_OK;
 }
 
+int ovs_gre_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb)
+{
+	struct ip_tunnel_info *info = skb_tunnel_info(skb);
+	struct rtable *rt;
+	struct flowi4 fl4;
+
+	if (ip_tunnel_info_af(info) != AF_INET)
+		return -EINVAL;
+
+	rt = gre_get_rt(skb, dev, &fl4, &info->key);
+	if (IS_ERR(rt))
+		return PTR_ERR(rt);
+
+	ip_rt_put(rt);
+	info->key.u.ipv4.src = fl4.saddr;
+	return 0;
+}
+EXPORT_SYMBOL_GPL(ovs_gre_fill_metadata_dst);
+
 static const struct net_device_ops gre_tap_netdev_ops = {
 	.ndo_init		= gre_tap_init,
 	.ndo_uninit		= ip_tunnel_uninit,
@@ -471,6 +495,9 @@ static const struct net_device_ops gre_tap_netdev_ops = {
 #endif
 #ifdef HAVE_NDO_GET_IFLINK
 	.ndo_get_iflink		= ip_tunnel_get_iflink,
+#endif
+#ifdef HAVE_NDO_FILL_METADATA_DST
+	.ndo_fill_metadata_dst  = gre_fill_metadata_dst,
 #endif
 };
 
@@ -593,6 +620,7 @@ struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
 {
 	struct nlattr *tb[IFLA_MAX + 1];
 	struct net_device *dev;
+	LIST_HEAD(list_kill);
 	struct ip_tunnel *t;
 	int err;
 
@@ -606,13 +634,11 @@ struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
 	t = netdev_priv(dev);
 	t->collect_md = true;
 	/* Configure flow based GRE device. */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,39)
 	err = ipgre_newlink(net, dev, tb, NULL);
-#else
-	err = ipgre_newlink(dev, tb, NULL);
-#endif
-	if (err < 0)
-		goto out;
+	if (err < 0) {
+		free_netdev(dev);
+		return ERR_PTR(err);
+	}
 
 	/* openvswitch users expect packet sizes to be unrestricted,
 	 * so set the largest MTU we can.
@@ -623,7 +649,8 @@ struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
 
 	return dev;
 out:
-	free_netdev(dev);
+	ip_tunnel_dellink(dev, &list_kill);
+	unregister_netdevice_many(&list_kill);
 	return ERR_PTR(err);
 }
 EXPORT_SYMBOL_GPL(rpl_gretap_fb_dev_create);
@@ -646,8 +673,6 @@ static struct pernet_operations ipgre_tap_net_ops = {
 	.id   = &gre_tap_net_id,
 	.size = sizeof(struct ip_tunnel_net),
 };
-
-DEFINE_COMPAT_PNET_REG_FUNC(device);
 
 int rpl_ipgre_init(void)
 {

@@ -972,6 +972,9 @@ daemon_set_new_user(const char *user_spec)
             VLOG_FATAL("%s: Failed to retrive user %s's uid (%s), aborting.",
                        pidfile, user, ovs_strerror(e));
         }
+        if (res == NULL) {
+            VLOG_FATAL("%s: user %s not found, aborting.", pidfile, user);
+        }
     } else {
         /* User name is not specified, use current user.  */
         while ((e = getpwuid_r(uid, &pwd, buf, bufsize, &res)) == ERANGE) {
@@ -1011,6 +1014,10 @@ daemon_set_new_user(const char *user_spec)
                 VLOG_FATAL("%s: Failed to get group entry for %s, "
                            "(%s), aborting.", pidfile, grpstr,
                            ovs_strerror(e));
+            }
+            if (res == NULL) {
+                VLOG_FATAL("%s: group %s not found, aborting.", pidfile,
+                           grpstr);
             }
 
             if (gid != grp.gr_gid) {

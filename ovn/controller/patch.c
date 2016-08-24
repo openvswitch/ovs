@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,8 +18,10 @@
 #include "patch.h"
 
 #include "hash.h"
-#include "lib/hmap.h"
+#include "lflow.h"
 #include "lib/vswitch-idl.h"
+#include "lport.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/vlog.h"
 #include "ovn-controller.h"
 
@@ -93,6 +95,9 @@ create_patch_port(struct controller_ctx *ctx,
     ovsrec_bridge_verify_ports(src);
     ovsrec_bridge_set_ports(src, ports, src->n_ports + 1);
 
+    lport_index_reset();
+    mcgroup_index_reset();
+    lflow_reset_processing();
     free(ports);
 }
 
@@ -125,6 +130,9 @@ remove_port(struct controller_ctx *ctx,
             return;
         }
     }
+    lport_index_reset();
+    mcgroup_index_reset();
+    lflow_reset_processing();
 }
 
 /* Obtains external-ids:ovn-bridge-mappings from OVSDB and adds patch ports for
@@ -134,7 +142,8 @@ static void
 add_bridge_mappings(struct controller_ctx *ctx,
                     const struct ovsrec_bridge *br_int,
                     struct shash *existing_ports,
-                    struct hmap *local_datapaths)
+                    struct hmap *local_datapaths,
+                    const char *chassis_id)
 {
     /* Get ovn-bridge-mappings. */
     const char *mappings_cfg = "";
@@ -142,8 +151,8 @@ add_bridge_mappings(struct controller_ctx *ctx,
     cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
     if (cfg) {
         mappings_cfg = smap_get(&cfg->external_ids, "ovn-bridge-mappings");
-        if (!mappings_cfg) {
-            mappings_cfg = "";
+        if (!mappings_cfg || !mappings_cfg[0]) {
+            return;
         }
     }
 
@@ -175,58 +184,126 @@ add_bridge_mappings(struct controller_ctx *ctx,
 
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
-        if (strcmp(binding->type, "localnet")) {
-            /* Not a binding for a localnet port. */
-            continue;
-        }
+        const char *patch_port_id;
+        if (!strcmp(binding->type, "localnet")) {
+            struct local_datapath *ld
+                = get_local_datapath(local_datapaths,
+                                     binding->datapath->tunnel_key);
+            if (!ld) {
+                /* This localnet port is on a datapath with no
+                 * logical ports bound to this chassis, so there's no need
+                 * to create patch ports for it. */
+                continue;
+            }
 
-        struct local_datapath *ld;
-        ld = CONTAINER_OF(hmap_first_with_hash(local_datapaths,
-                          binding->datapath->tunnel_key),
-                          struct local_datapath, hmap_node);
-        if (!ld) {
-            /* This localnet port is on a datapath with no
-             * logical ports bound to this chassis, so there's no need
-             * to create patch ports for it. */
+            /* Under incremental processing, it is possible to re-enter the
+             * following block with a logical port that has already been
+             * recorded in binding->logical_port.  Rather than emit spurious
+             * warnings, add a check to see if the logical port name has
+             * actually changed. */
+
+            if (ld->localnet_port && strcmp(ld->localnet_port->logical_port,
+                                            binding->logical_port)) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+                VLOG_WARN_RL(&rl, "localnet port '%s' already set for datapath "
+                             "'%"PRId64"', skipping the new port '%s'.",
+                             ld->localnet_port->logical_port,
+                             binding->datapath->tunnel_key,
+                             binding->logical_port);
+                continue;
+            }
+            ld->localnet_port = binding;
+            patch_port_id = "ovn-localnet-port";
+        } else if (!strcmp(binding->type, "l2gateway")) {
+            if (!binding->chassis
+                || strcmp(chassis_id, binding->chassis->name)) {
+                /* This L2 gateway port is not bound to this chassis,
+                 * so we should not create any patch ports for it. */
+                continue;
+            }
+            patch_port_id = "ovn-l2gateway-port";
+        } else {
+            /* not a localnet or L2 gateway port. */
             continue;
         }
-        if (ld->localnet_port) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-            VLOG_WARN_RL(&rl, "localnet port '%s' already set for datapath "
-                         "'%"PRId64"', skipping the new port '%s'.",
-                         ld->localnet_port->logical_port,
-                         binding->datapath->tunnel_key,
-                         binding->logical_port);
-            continue;
-        }
-        ld->localnet_port = binding;
 
         const char *network = smap_get(&binding->options, "network_name");
         if (!network) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-            VLOG_ERR_RL(&rl, "localnet port '%s' has no network name.",
-                         binding->logical_port);
+            VLOG_ERR_RL(&rl, "%s port '%s' has no network name.",
+                         binding->type, binding->logical_port);
             continue;
         }
         struct ovsrec_bridge *br_ln = shash_find_data(&bridge_mappings, network);
         if (!br_ln) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-            VLOG_ERR_RL(&rl, "bridge not found for localnet port '%s' "
-                    "with network name '%s'", binding->logical_port, network);
+            VLOG_ERR_RL(&rl, "bridge not found for %s port '%s' "
+                    "with network name '%s'",
+                    binding->type, binding->logical_port, network);
             continue;
         }
 
         char *name1 = patch_port_name(br_int->name, binding->logical_port);
         char *name2 = patch_port_name(binding->logical_port, br_int->name);
-        create_patch_port(ctx, "ovn-localnet-port", binding->logical_port,
+        create_patch_port(ctx, patch_port_id, binding->logical_port,
                           br_int, name1, br_ln, name2, existing_ports);
-        create_patch_port(ctx, "ovn-localnet-port", binding->logical_port,
+        create_patch_port(ctx, patch_port_id, binding->logical_port,
                           br_ln, name2, br_int, name1, existing_ports);
         free(name1);
         free(name2);
     }
 
     shash_destroy(&bridge_mappings);
+}
+
+static void
+add_patched_datapath(struct hmap *patched_datapaths,
+                     const struct sbrec_port_binding *binding_rec, bool local)
+{
+    struct patched_datapath *pd = get_patched_datapath(patched_datapaths,
+                                       binding_rec->datapath->tunnel_key);
+    if (pd) {
+        /* If the patched datapath is referenced by a logical patch port it is
+         * not stale, by definition, so set 'stale' to false */
+        pd->stale = false;
+        return;
+    }
+
+    pd = xzalloc(sizeof *pd);
+    pd->local = local;
+    pd->key = xasprintf(UUID_FMT,
+                        UUID_ARGS(&binding_rec->datapath->header_.uuid));
+    /* stale is set to false. */
+    hmap_insert(patched_datapaths, &pd->hmap_node,
+                binding_rec->datapath->tunnel_key);
+}
+
+static void
+add_logical_patch_ports_preprocess(struct hmap *patched_datapaths)
+{
+    /* Mark all patched datapaths as stale for later cleanup by
+     * add_logical_patch_ports_postprocess(). */
+    struct patched_datapath *pd;
+    HMAP_FOR_EACH (pd, hmap_node, patched_datapaths) {
+        pd->stale = true;
+    }
+}
+
+/* This function should cleanup stale patched datapaths and any memory
+ * allocated for fields within a stale patched datapath. */
+static void
+add_logical_patch_ports_postprocess(struct hmap *patched_datapaths)
+{
+    /* Clean up stale patched datapaths. */
+    struct patched_datapath *pd_cur_node, *pd_next_node;
+    HMAP_FOR_EACH_SAFE (pd_cur_node, pd_next_node, hmap_node,
+                        patched_datapaths) {
+        if (pd_cur_node->stale == true) {
+            hmap_remove(patched_datapaths, &pd_cur_node->hmap_node);
+            free(pd_cur_node->key);
+            free(pd_cur_node);
+        }
+    }
 }
 
 /* Add one OVS patch port for each OVN logical patch port.
@@ -254,11 +331,32 @@ add_bridge_mappings(struct controller_ctx *ctx,
 static void
 add_logical_patch_ports(struct controller_ctx *ctx,
                         const struct ovsrec_bridge *br_int,
-                        struct shash *existing_ports)
+                        const char *local_chassis_id,
+                        struct shash *existing_ports,
+                        struct hmap *patched_datapaths)
 {
+    const struct sbrec_chassis *chassis_rec;
+    chassis_rec = get_chassis(ctx->ovnsb_idl, local_chassis_id);
+    if (!chassis_rec) {
+        return;
+    }
+
+    add_logical_patch_ports_preprocess(patched_datapaths);
+
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
-        if (!strcmp(binding->type, "patch")) {
+        const char *patch_port_id = "ovn-logical-patch-port";
+        bool local_port = false;
+        if (!strcmp(binding->type, "l3gateway")) {
+            const char *chassis = smap_get(&binding->options,
+                                           "l3gateway-chassis");
+            if (chassis && !strcmp(local_chassis_id, chassis)) {
+                local_port = true;
+                patch_port_id = "ovn-l3gateway-port";
+            }
+        }
+
+        if (!strcmp(binding->type, "patch") || local_port) {
             const char *local = binding->logical_port;
             const char *peer = smap_get(&binding->options, "peer");
             if (!peer) {
@@ -267,18 +365,26 @@ add_logical_patch_ports(struct controller_ctx *ctx,
 
             char *src_name = patch_port_name(local, peer);
             char *dst_name = patch_port_name(peer, local);
-            create_patch_port(ctx, "ovn-logical-patch-port", local,
+            create_patch_port(ctx, patch_port_id, local,
                               br_int, src_name, br_int, dst_name,
                               existing_ports);
             free(dst_name);
             free(src_name);
+            add_patched_datapath(patched_datapaths, binding, local_port);
+            if (local_port) {
+                if (binding->chassis != chassis_rec && ctx->ovnsb_idl_txn) {
+                    sbrec_port_binding_set_chassis(binding, chassis_rec);
+                }
+            }
         }
     }
+    add_logical_patch_ports_postprocess(patched_datapaths);
 }
 
 void
 patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
-          struct hmap *local_datapaths)
+          const char *chassis_id, struct hmap *local_datapaths,
+          struct hmap *patched_datapaths)
 {
     if (!ctx->ovs_idl_txn) {
         return;
@@ -288,8 +394,10 @@ patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     struct shash existing_ports = SHASH_INITIALIZER(&existing_ports);
     const struct ovsrec_port *port;
     OVSREC_PORT_FOR_EACH (port, ctx->ovs_idl) {
-        if (smap_get(&port->external_ids, "ovn-localnet-port") ||
-            smap_get(&port->external_ids, "ovn-logical-patch-port")) {
+        if (smap_get(&port->external_ids, "ovn-localnet-port")
+            || smap_get(&port->external_ids, "ovn-l2gateway-port")
+            || smap_get(&port->external_ids, "ovn-l3gateway-port")
+            || smap_get(&port->external_ids, "ovn-logical-patch-port")) {
             shash_add(&existing_ports, port->name, port);
         }
     }
@@ -297,8 +405,10 @@ patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     /* Create in the database any patch ports that should exist.  Remove from
      * 'existing_ports' any patch ports that do exist in the database and
      * should be there. */
-    add_bridge_mappings(ctx, br_int, &existing_ports, local_datapaths);
-    add_logical_patch_ports(ctx, br_int, &existing_ports);
+    add_bridge_mappings(ctx, br_int, &existing_ports, local_datapaths,
+                        chassis_id);
+    add_logical_patch_ports(ctx, br_int, chassis_id, &existing_ports,
+                            patched_datapaths);
 
     /* Now 'existing_ports' only still contains patch ports that exist in the
      * database but shouldn't.  Delete them from the database. */

@@ -11,6 +11,7 @@ ovstest_pyfiles = \
 ovs_pyfiles = \
 	python/ovs/__init__.py \
 	python/ovs/daemon.py \
+	python/ovs/fcntl_win.py \
 	python/ovs/db/__init__.py \
 	python/ovs/db/data.py \
 	python/ovs/db/error.py \
@@ -45,6 +46,9 @@ EXTRA_DIST += \
 EXTRA_DIST += \
 	python/README.rst \
 	python/setup.py
+
+# C extension support.
+EXTRA_DIST += python/ovs/_json.c
 
 PYFILES = $(ovs_pyfiles) python/ovs/dirs.py $(ovstest_pyfiles)
 EXTRA_DIST += $(PYFILES)

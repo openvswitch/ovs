@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,14 +25,14 @@
 #include "coverage.h"
 #include "netlink.h"
 #include "netlink-socket.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(netlink_notifier);
 
 COVERAGE_DEFINE(nln_changed);
 
-static void nln_report(struct nln *nln, void *change);
+static void nln_report(const struct nln *nln, void *change, int group);
 
 struct nln {
     struct nl_sock *notify_sock; /* Netlink socket. */
@@ -40,16 +40,16 @@ struct nln {
     bool has_run;                /* Guard for run and wait functions. */
 
     /* Passed in by nln_create(). */
-    int multicast_group;         /* Multicast group we listen on. */
     int protocol;                /* Protocol passed to nl_sock_create(). */
     nln_parse_func *parse;       /* Message parsing function. */
     void *change;                /* Change passed to parse. */
 };
 
 struct nln_notifier {
+    struct ovs_list node;        /* In struct nln's 'all_notifiers' list. */
     struct nln *nln;             /* Parent nln. */
 
-    struct ovs_list node;
+    int multicast_group;         /* Multicast group we listen on. */
     nln_notify_func *cb;
     void *aux;
 };
@@ -60,20 +60,18 @@ struct nln_notifier {
  * Incoming messages will be parsed with 'parse' which will be passed 'change'
  * as an argument. */
 struct nln *
-nln_create(int protocol, int multicast_group, nln_parse_func *parse,
-           void *change)
+nln_create(int protocol, nln_parse_func *parse, void *change)
 {
     struct nln *nln;
 
     nln = xzalloc(sizeof *nln);
     nln->notify_sock = NULL;
     nln->protocol = protocol;
-    nln->multicast_group = multicast_group;
     nln->parse = parse;
     nln->change = change;
     nln->has_run = false;
 
-    list_init(&nln->all_notifiers);
+    ovs_list_init(&nln->all_notifiers);
     return nln;
 }
 
@@ -86,7 +84,7 @@ void
 nln_destroy(struct nln *nln)
 {
     if (nln) {
-        ovs_assert(list_is_empty(&nln->all_notifiers));
+        ovs_assert(ovs_list_is_empty(&nln->all_notifiers));
         nl_sock_destroy(nln->notify_sock);
         free(nln);
     }
@@ -101,20 +99,17 @@ nln_destroy(struct nln *nln)
  *
  * Returns an initialized nln_notifier if successful, otherwise NULL. */
 struct nln_notifier *
-nln_notifier_create(struct nln *nln, nln_notify_func *cb, void *aux)
+nln_notifier_create(struct nln *nln, int multicast_group, nln_notify_func *cb,
+                    void *aux)
 {
     struct nln_notifier *notifier;
+    int error;
 
     if (!nln->notify_sock) {
         struct nl_sock *sock;
-        int error;
 
         error = nl_sock_create(nln->protocol, &sock);
-        if (!error) {
-            error = nl_sock_join_mcgroup(sock, nln->multicast_group);
-        }
         if (error) {
-            nl_sock_destroy(sock);
             VLOG_WARN("could not create netlink socket: %s",
                       ovs_strerror(error));
             return NULL;
@@ -126,11 +121,21 @@ nln_notifier_create(struct nln *nln, nln_notify_func *cb, void *aux)
         nln_run(nln);
     }
 
+    error = nl_sock_join_mcgroup(nln->notify_sock, multicast_group);
+    if (error) {
+        VLOG_WARN("could not join netlink multicast group: %s",
+                  ovs_strerror(error));
+        return NULL;
+    }
+
     notifier = xmalloc(sizeof *notifier);
-    list_push_back(&nln->all_notifiers, &notifier->node);
+    notifier->multicast_group = multicast_group;
     notifier->cb = cb;
     notifier->aux = aux;
     notifier->nln = nln;
+
+    ovs_list_push_back(&nln->all_notifiers, &notifier->node);
+
     return notifier;
 }
 
@@ -141,9 +146,22 @@ nln_notifier_destroy(struct nln_notifier *notifier)
 {
     if (notifier) {
         struct nln *nln = notifier->nln;
+        struct nln_notifier *iter;
+        int count = 0;
 
-        list_remove(&notifier->node);
-        if (list_is_empty(&nln->all_notifiers)) {
+        ovs_list_remove(&notifier->node);
+
+        /* Leave the group if no other notifier is interested in it. */
+        LIST_FOR_EACH (iter, node, &nln->all_notifiers) {
+            if (iter->multicast_group == notifier->multicast_group) {
+                count++;
+            }
+        }
+        if (count == 0) {
+            nl_sock_leave_mcgroup(nln->notify_sock, notifier->multicast_group);
+        }
+
+        if (ovs_list_is_empty(&nln->all_notifiers)) {
             nl_sock_destroy(nln->notify_sock);
             nln->notify_sock = NULL;
         }
@@ -171,11 +189,13 @@ nln_run(struct nln *nln)
         ofpbuf_use_stub(&buf, buf_stub, sizeof buf_stub);
         error = nl_sock_recv(nln->notify_sock, &buf, false);
         if (!error) {
-            if (nln->parse(&buf, nln->change)) {
-                nln_report(nln, nln->change);
+            int group = nln->parse(&buf, nln->change);
+
+            if (group != 0) {
+                nln_report(nln, nln->change, group);
             } else {
-                VLOG_WARN_RL(&rl, "received bad netlink message");
-                nln_report(nln, NULL);
+                VLOG_WARN_RL(&rl, "unexpected netlink message contents");
+                nln_report(nln, NULL, 0);
             }
             ofpbuf_uninit(&buf);
         } else if (error == EAGAIN) {
@@ -184,7 +204,7 @@ nln_run(struct nln *nln)
             if (error == ENOBUFS) {
                 /* The socket buffer might be full, there could be too many
                  * notifications, so it makes sense to call nln_report() */
-                nln_report(nln, NULL);
+                nln_report(nln, NULL, 0);
                 VLOG_WARN_RL(&rl, "netlink receive buffer overflowed");
             } else {
                 VLOG_WARN_RL(&rl, "error reading netlink socket: %s",
@@ -206,7 +226,7 @@ nln_wait(struct nln *nln)
 }
 
 static void
-nln_report(struct nln *nln, void *change)
+nln_report(const struct nln *nln, void *change, int group)
 {
     struct nln_notifier *notifier;
 
@@ -215,6 +235,8 @@ nln_report(struct nln *nln, void *change)
     }
 
     LIST_FOR_EACH (notifier, node, &nln->all_notifiers) {
-        notifier->cb(change, notifier->aux);
+        if (!change || group == notifier->multicast_group) {
+            notifier->cb(change, notifier->aux);
+        }
     }
 }

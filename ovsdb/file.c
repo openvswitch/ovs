@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,7 @@
 #include "bitmap.h"
 #include "column.h"
 #include "log.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "lockfile.h"
 #include "ovsdb.h"
 #include "ovsdb-error.h"
@@ -73,6 +73,7 @@ static struct ovsdb_error *ovsdb_file_create(struct ovsdb *,
                                              struct ovsdb_log *,
                                              const char *file_name,
                                              unsigned int n_transactions,
+                                             off_t snapshot_size,
                                              struct ovsdb_file **filep);
 
 /* Opens database 'file_name' and stores a pointer to the new database in
@@ -182,7 +183,6 @@ ovsdb_file_open__(const char *file_name,
                   struct ovsdb_file **filep)
 {
     enum ovsdb_log_open_mode open_mode;
-    unsigned int n_transactions;
     struct ovsdb_schema *schema = NULL;
     struct ovsdb_error *error;
     struct ovsdb_log *log;
@@ -201,7 +201,16 @@ ovsdb_file_open__(const char *file_name,
 
     db = ovsdb_create(schema ? schema : ovsdb_schema_clone(alternate_schema));
 
-    n_transactions = 0;
+    /* When a log gets big, we compact it into a new log that initially has
+     * only a single transaction that represents the entire state of the
+     * database.  Thus, we consider the first transaction in the database to be
+     * the snapshot.  We measure its size to later influence the minimum log
+     * size before compacting again.
+     *
+     * The schema precedes the snapshot in the log; we could compensate for its
+     * size, but it's just not that important. */
+    off_t snapshot_size = 0;
+    unsigned int n_transactions = 0;
     while ((error = ovsdb_log_read(log, &json)) == NULL && json) {
         struct ovsdb_txn *txn;
 
@@ -219,6 +228,10 @@ ovsdb_file_open__(const char *file_name,
             ovsdb_log_unread(log);
             break;
         }
+
+        if (n_transactions == 1) {
+            snapshot_size = ovsdb_log_get_offset(log);
+        }
     }
     if (error) {
         /* Log error but otherwise ignore it.  Probably the database just got
@@ -234,7 +247,8 @@ ovsdb_file_open__(const char *file_name,
     if (!read_only) {
         struct ovsdb_file *file;
 
-        error = ovsdb_file_create(db, log, file_name, n_transactions, &file);
+        error = ovsdb_file_create(db, log, file_name, n_transactions,
+                                  snapshot_size, &file);
         if (error) {
             goto error;
         }
@@ -500,6 +514,7 @@ struct ovsdb_file {
     long long int last_compact;
     long long int next_compact;
     unsigned int n_transactions;
+    off_t snapshot_size;
 };
 
 static const struct ovsdb_replica_class ovsdb_file_class;
@@ -507,7 +522,7 @@ static const struct ovsdb_replica_class ovsdb_file_class;
 static struct ovsdb_error *
 ovsdb_file_create(struct ovsdb *db, struct ovsdb_log *log,
                   const char *file_name,
-                  unsigned int n_transactions,
+                  unsigned int n_transactions, off_t snapshot_size,
                   struct ovsdb_file **filep)
 {
     struct ovsdb_file *file;
@@ -532,6 +547,7 @@ ovsdb_file_create(struct ovsdb *db, struct ovsdb_log *log,
     file->file_name = abs_name;
     file->last_compact = time_msec();
     file->next_compact = file->last_compact + COMPACT_MIN_MSEC;
+    file->snapshot_size = snapshot_size;
     file->n_transactions = n_transactions;
     ovsdb_add_replica(db, &file->replica);
 
@@ -582,10 +598,13 @@ ovsdb_file_commit(struct ovsdb_replica *replica,
     /* If it has been at least COMPACT_MIN_MSEC ms since the last time we
      * compacted (or at least COMPACT_RETRY_MSEC ms since the last time we
      * tried), and if there are at least 100 transactions in the database, and
-     * if the database is at least 10 MB, then compact the database. */
+     * if the database is at least 10 MB, and the database is at least 4x the
+     * size of the previous snapshot, then compact the database. */
+    off_t log_size = ovsdb_log_get_offset(file->log);
     if (time_msec() >= file->next_compact
         && file->n_transactions >= 100
-        && ovsdb_log_get_offset(file->log) >= 10 * 1024 * 1024)
+        && log_size >= 10 * 1024 * 1024
+        && log_size / 4 >= file->snapshot_size)
     {
         error = ovsdb_file_compact(file);
         if (error) {

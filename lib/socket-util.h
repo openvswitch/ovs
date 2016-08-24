@@ -21,6 +21,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/time.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include "openvswitch/types.h"
@@ -84,7 +85,7 @@ int drain_rcvbuf(int fd);
 
 int make_unix_socket(int style, bool nonblock,
                      const char *bind_path, const char *connect_path);
-int get_unix_name_len(socklen_t sun_len);
+int get_unix_name_len(const struct sockaddr_un *sun, socklen_t sun_len);
 
 /* Helpers for calling ioctl() on an AF_INET socket. */
 struct ifreq;

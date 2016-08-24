@@ -6,6 +6,7 @@ include/odp-netlink.h: datapath/linux/compat/include/linux/openvswitch.h \
 EXTRA_DIST += build-aux/extract-odp-netlink-h
 CLEANFILES += include/odp-netlink.h
 
+include include/ovn/automake.mk
 include include/openflow/automake.mk
 include include/openvswitch/automake.mk
 include include/sparse/automake.mk

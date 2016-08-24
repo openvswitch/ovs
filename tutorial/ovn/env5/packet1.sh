@@ -15,4 +15,7 @@
 
 set -o xtrace
 
-ovs-appctl ofproto/trace br-int in_port=5,dl_src=00:00:00:00:00:05,dl_dst=00:00:00:00:00:06 -generate
+# input from local vif, lport5 (ofport 6)
+# destination MAC is lport6
+# expect to go out via localnet port (ofport 7) and lport6 (ofport 8)
+ovs-appctl ofproto/trace br-int in_port=6,dl_src=00:00:00:00:00:05,dl_dst=00:00:00:00:00:06 -generate

@@ -36,10 +36,7 @@ vSwitch supports the following features:
 * Transactional configuration database with C and Python bindings
 * High-performance forwarding using a Linux kernel module
 
-The included Linux kernel module supports Linux 2.6.32 and up, with
-testing focused on 2.6.32 with Centos and Xen patches.  Open vSwitch
-also has special support for Citrix XenServer and Red Hat Enterprise
-Linux hosts.
+The included Linux kernel module supports Linux 3.10 and up.
 
 Open vSwitch can also operate, at a cost in performance, entirely in
 userspace, without assistance from a kernel module.  This userspace
@@ -97,6 +94,8 @@ To use Open vSwitch...
 
 - ...without using a kernel module, read [INSTALL.userspace.md].
 
+- ...with DPDK, read [INSTALL.DPDK.md].
+
 - ...with SELinux, read [INSTALL.SELinux.md].
 
 For answers to common questions, read [FAQ.md].
@@ -119,10 +118,12 @@ bugs@openvswitch.org
 [INSTALL.md]:INSTALL.md
 [INSTALL.Debian.md]:INSTALL.Debian.md
 [INSTALL.Docker.md]:INSTALL.Docker.md
+[INSTALL.DPDK.md]:INSTALL.DPDK.md
 [INSTALL.Fedora.md]:INSTALL.Fedora.md
 [INSTALL.KVM.md]:INSTALL.KVM.md
 [INSTALL.Libvirt.md]:INSTALL.Libvirt.md
 [INSTALL.RHEL.md]:INSTALL.RHEL.md
+[INSTALL.SELinux.md]:INSTALL.SELinux.md
 [INSTALL.SSL.md]:INSTALL.SSL.md
 [INSTALL.userspace.md]:INSTALL.userspace.md
 [INSTALL.XenServer.md]:INSTALL.XenServer.md

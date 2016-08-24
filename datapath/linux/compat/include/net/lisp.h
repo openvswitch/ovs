@@ -21,4 +21,7 @@ void rpl_lisp_cleanup_module(void);
 #define lisp_xmit rpl_lisp_xmit
 netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb);
 
+#define lisp_fill_metadata_dst ovs_lisp_fill_metadata_dst
+int ovs_lisp_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
+
 #endif /*ifdef__NET_LISP_H */

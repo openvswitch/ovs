@@ -21,8 +21,8 @@
 
 #include <time.h>
 #include "dp-packet.h"
-#include "hmap.h"
-#include "list.h"
+#include "openvswitch/hmap.h"
+#include "openvswitch/list.h"
 #include "ovs-atomic.h"
 #include "ovs-thread.h"
 #include "packets.h"

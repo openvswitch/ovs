@@ -25,16 +25,33 @@ environment:
   1. Creates the `OVN_Northbound` and `OVN_Southbound` databases as described in
      [ovn-nb(5)] and [ovn-sb(5)].
 
-  2. Creates the `hardware_vtep` database as described in [vtep(5)].
+  2. Creates a backup server for `OVN_Southbond` database. Sandbox launch
+     screen provides the instructions on accessing the backup database.
+     However access to the backup server is not required to go through the
+     tutorial.
 
-  3. Runs the [ovn-northd(8)], [ovn-controller(8)], and [ovn-controller-vtep(8)]
+  3. Creates the `hardware_vtep` database as described in [vtep(5)].
+
+  4. Runs the [ovn-northd(8)], [ovn-controller(8)], and [ovn-controller-vtep(8)]
      daemons.
 
-  4. Makes OVN and VTEP utilities available for use in the environment,
+  5. Makes OVN and VTEP utilities available for use in the environment,
      including [vtep-ctl(8)], [ovn-nbctl(8)], and [ovn-sbctl(8)].
 
 Note that each of these demos assumes you start with a fresh sandbox
-environment.  Re-run `ovs-sandbox` before starting each section.
+environment. **Re-run `ovs-sandbox` before starting each section.**
+
+Using GDB
+---------
+
+GDB support is not required to go through the tutorial. See the “Using GDB”
+section of [Tutorial.md] for more info. Additional flags exist for launching
+the debugger for the OVN programs:
+
+  --gdb-ovn-northd
+  --gdb-ovn-controller
+  --gdb-ovn-controller-vtep
+
 
 1) Simple two-port setup
 ------------------------
@@ -52,11 +69,11 @@ Start by running the setup script for this environment.
 You can use the `ovn-nbctl` utility to see an overview of the logical topology.
 
     $ ovn-nbctl show
-    lswitch 78687d53-e037-4555-bcd3-f4f8eaf3f2aa (sw0)
-        lport sw0-port1
-            addresses: 00:00:00:00:00:01
-        lport sw0-port2
-            addresses: 00:00:00:00:00:02
+    switch 78687d53-e037-4555-bcd3-f4f8eaf3f2aa (sw0)
+        port sw0-port1
+            addresses: [“00:00:00:00:00:01”]
+        port sw0-port2
+            addresses: [“00:00:00:00:00:02”]
 
 The `ovn-sbctl` utility can be used to see into the state stored in the
 `OVN_Southbound` database.  The `show` command shows that there is a single
@@ -77,20 +94,46 @@ that reflect its own local view of the network.  The `ovn-sbctl` command can
 show the logical flows.
 
     $ ovn-sbctl lflow-list
-    Datapath: d3466847-2b3a-4f17-8eb2-34f5b0727a70  Pipeline: ingress
-      table=0(port_sec), priority=  100, match=(eth.src[40]), action=(drop;)
-      table=0(port_sec), priority=  100, match=(vlan.present), action=(drop;)
-      table=0(port_sec), priority=   50, match=(inport == "sw0-port1" && eth.src == {00:00:00:00:00:01}), action=(next;)
-      table=0(port_sec), priority=   50, match=(inport == "sw0-port2" && eth.src == {00:00:00:00:00:02}), action=(next;)
-      table=1(     acl), priority=    0, match=(1), action=(next;)
-      table=2( l2_lkup), priority=  100, match=(eth.dst[40]), action=(outport = "_MC_flood"; output;)
-      table=2( l2_lkup), priority=   50, match=(eth.dst == 00:00:00:00:00:01), action=(outport = "sw0-port1"; output;)
-      table=2( l2_lkup), priority=   50, match=(eth.dst == 00:00:00:00:00:02), action=(outport = "sw0-port2"; output;)
-    Datapath: d3466847-2b3a-4f17-8eb2-34f5b0727a70  Pipeline: egress
-      table=0(     acl), priority=    0, match=(1), action=(next;)
-      table=1(port_sec), priority=  100, match=(eth.dst[40]), action=(output;)
-      table=1(port_sec), priority=   50, match=(outport == "sw0-port1" && eth.dst == {00:00:00:00:00:01}), action=(output;)
-      table=1(port_sec), priority=   50, match=(outport == "sw0-port2" && eth.dst == {00:00:00:00:00:02}), action=(output;)
+    Datapath: 2503dd42-14b1-414a-abbf-33e554e09ddc  Pipeline: ingress
+      table=0 (ls_in_port_sec_l2  ), priority=100  , match=(eth.src[40]), action=(drop;)
+      table=0 (ls_in_port_sec_l2  ), priority=100  , match=(vlan.present), action=(drop;)
+      table=0 (ls_in_port_sec_l2  ), priority=50   , match=(inport == “sw0-port1” && eth.src == {00:00:00:00:00:01}), action=(next;)
+      table=0 (ls_in_port_sec_l2  ), priority=50   , match=(inport == “sw0-port2” && eth.src == {00:00:00:00:00:02}), action=(next;)
+      table=1 (ls_in_port_sec_ip  ), priority=0    , match=(1), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=90   , match=(inport == “sw0-port1” && eth.src == 00:00:00:00:00:01 && arp.sha == 00:00:00:00:00:01), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=90   , match=(inport == “sw0-port1” && eth.src == 00:00:00:00:00:01 && ip6 && nd && ((nd.sll == 00:00:00:00:00:00 || nd.sll == 00:00:00:00:00:01) || ((nd.tll == 00:00:00:00:00:00 || nd.tll == 00:00:00:00:00:01)))), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=90   , match=(inport == “sw0-port2” && eth.src == 00:00:00:00:00:02 && arp.sha == 00:00:00:00:00:02), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=90   , match=(inport == “sw0-port2” && eth.src == 00:00:00:00:00:02 && ip6 && nd && ((nd.sll == 00:00:00:00:00:00 || nd.sll == 00:00:00:00:00:02) || ((nd.tll == 00:00:00:00:00:00 || nd.tll == 00:00:00:00:00:02)))), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=80   , match=(inport == “sw0-port1” && (arp || nd)), action=(drop;)
+      table=2 (ls_in_port_sec_nd  ), priority=80   , match=(inport == “sw0-port2” && (arp || nd)), action=(drop;)
+      table=2 (ls_in_port_sec_nd  ), priority=0    , match=(1), action=(next;)
+      table=3 (ls_in_pre_acl      ), priority=0    , match=(1), action=(next;)
+      table=4 (ls_in_pre_lb       ), priority=0    , match=(1), action=(next;)
+      table=5 (ls_in_pre_stateful ), priority=100  , match=(reg0[0] == 1), action=(ct_next;)
+      table=5 (ls_in_pre_stateful ), priority=0    , match=(1), action=(next;)
+      table=6 (ls_in_acl          ), priority=0    , match=(1), action=(next;)
+      table=7 (ls_in_lb           ), priority=0    , match=(1), action=(next;)
+      table=8 (ls_in_stateful     ), priority=100  , match=(reg0[1] == 1), action=(ct_commit; next;)
+      table=8 (ls_in_stateful     ), priority=100  , match=(reg0[2] == 1), action=(ct_lb;)
+      table=8 (ls_in_stateful     ), priority=0    , match=(1), action=(next;)
+      table=9 (ls_in_arp_rsp      ), priority=0    , match=(1), action=(next;)
+      table=10(ls_in_l2_lkup      ), priority=100  , match=(eth.mcast), action=(outport = “_MC_flood”; output;)
+      table=10(ls_in_l2_lkup      ), priority=50   , match=(eth.dst == 00:00:00:00:00:01), action=(outport = “sw0-port1”; output;)
+      table=10(ls_in_l2_lkup      ), priority=50   , match=(eth.dst == 00:00:00:00:00:02), action=(outport = “sw0-port2”; output;)
+    Datapath: 2503dd42-14b1-414a-abbf-33e554e09ddc  Pipeline: egress
+      table=0 (ls_out_pre_lb      ), priority=0    , match=(1), action=(next;)
+      table=1 (ls_out_pre_acl     ), priority=0    , match=(1), action=(next;)
+      table=2 (ls_out_pre_stateful), priority=100  , match=(reg0[0] == 1), action=(ct_next;)
+      table=2 (ls_out_pre_stateful), priority=0    , match=(1), action=(next;)
+      table=3 (ls_out_lb          ), priority=0    , match=(1), action=(next;)
+      table=4 (ls_out_acl         ), priority=0    , match=(1), action=(next;)
+      table=5 (ls_out_stateful    ), priority=100  , match=(reg0[1] == 1), action=(ct_commit; next;)
+      table=5 (ls_out_stateful    ), priority=100  , match=(reg0[2] == 1), action=(ct_lb;)
+      table=5 (ls_out_stateful    ), priority=0    , match=(1), action=(next;)
+      table=6 (ls_out_port_sec_ip ), priority=0    , match=(1), action=(next;)
+      table=7 (ls_out_port_sec_l2 ), priority=100  , match=(eth.mcast), action=(output;)
+      table=7 (ls_out_port_sec_l2 ), priority=50   , match=(outport == “sw0-port1” && eth.dst == {00:00:00:00:00:01}), action=(output;)
+      table=7 (ls_out_port_sec_l2 ), priority=50   , match=(outport == “sw0-port2” && eth.dst == {00:00:00:00:00:02}), action=(output;)
 
 Now we can start taking a closer look at how `ovn-controller` has programmed the
 local switch.  Before looking at the flows, we can use `ovs-ofctl` to verify the
@@ -125,27 +168,56 @@ fields have been omitted for brevity.
     OFPST_FLOW reply (OF1.3) (xid=0x2):
      table=0, priority=100,in_port=1 actions=set_field:0x1->metadata,set_field:0x1->reg6,resubmit(,16)
      table=0, priority=100,in_port=2 actions=set_field:0x1->metadata,set_field:0x2->reg6,resubmit(,16)
-     table=16, priority=100,metadata=0x1,dl_src=01:00:00:00:00:00/01:00:00:00:00:00 actions=drop
      table=16, priority=100,metadata=0x1,vlan_tci=0x1000/0x1000 actions=drop
+     table=16, priority=100,metadata=0x1,dl_src=01:00:00:00:00:00/01:00:00:00:00:00 actions=drop
      table=16, priority=50,reg6=0x1,metadata=0x1,dl_src=00:00:00:00:00:01 actions=resubmit(,17)
      table=16, priority=50,reg6=0x2,metadata=0x1,dl_src=00:00:00:00:00:02 actions=resubmit(,17)
      table=17, priority=0,metadata=0x1 actions=resubmit(,18)
-     table=18, priority=100,metadata=0x1,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00 actions=set_field:0xffff->reg7,resubmit(,32)
-     table=18, priority=50,metadata=0x1,dl_dst=00:00:00:00:00:01 actions=set_field:0x1->reg7,resubmit(,32)
-     table=18, priority=50,metadata=0x1,dl_dst=00:00:00:00:00:02 actions=set_field:0x2->reg7,resubmit(,32)
+     table=18, priority=90,icmp6,reg6=0x2,metadata=0x1,dl_src=00:00:00:00:00:02,icmp_type=136,icmp_code=0,nd_tll=00:00:00:00:00:00 actions=resubmit(,19)
+     table=18, priority=90,icmp6,reg6=0x2,metadata=0x1,dl_src=00:00:00:00:00:02,icmp_type=136,icmp_code=0,nd_tll=00:00:00:00:00:02 actions=resubmit(,19)
+     table=18, priority=90,icmp6,reg6=0x1,metadata=0x1,dl_src=00:00:00:00:00:01,icmp_type=136,icmp_code=0,nd_tll=00:00:00:00:00:00 actions=resubmit(,19)
+     table=18, priority=90,icmp6,reg6=0x1,metadata=0x1,dl_src=00:00:00:00:00:01,icmp_type=136,icmp_code=0,nd_tll=00:00:00:00:00:01 actions=resubmit(,19)
+     table=18, priority=90,icmp6,reg6=0x1,metadata=0x1,dl_src=00:00:00:00:00:01,icmp_type=135,icmp_code=0,nd_sll=00:00:00:00:00:01 actions=resubmit(,19)
+     table=18, priority=90,icmp6,reg6=0x1,metadata=0x1,dl_src=00:00:00:00:00:01,icmp_type=135,icmp_code=0,nd_sll=00:00:00:00:00:00 actions=resubmit(,19)
+     table=18, priority=90,icmp6,reg6=0x2,metadata=0x1,dl_src=00:00:00:00:00:02,icmp_type=135,icmp_code=0,nd_sll=00:00:00:00:00:00 actions=resubmit(,19)
+     table=18, priority=90,icmp6,reg6=0x2,metadata=0x1,dl_src=00:00:00:00:00:02,icmp_type=135,icmp_code=0,nd_sll=00:00:00:00:00:02 actions=resubmit(,19)
+     table=18, priority=90,arp,reg6=0x1,metadata=0x1,dl_src=00:00:00:00:00:01,arp_sha=00:00:00:00:00:01 actions=resubmit(,19)
+     table=18, priority=90,arp,reg6=0x2,metadata=0x1,dl_src=00:00:00:00:00:02,arp_sha=00:00:00:00:00:02 actions=resubmit(,19)
+     table=18, priority=80,icmp6,reg6=0x2,metadata=0x1,icmp_type=136,icmp_code=0 actions=drop
+     table=18, priority=80,icmp6,reg6=0x1,metadata=0x1,icmp_type=136,icmp_code=0 actions=drop
+     table=18, priority=80,icmp6,reg6=0x1,metadata=0x1,icmp_type=135,icmp_code=0 actions=drop
+     table=18, priority=80,icmp6,reg6=0x2,metadata=0x1,icmp_type=135,icmp_code=0 actions=drop
+     table=18, priority=80,arp,reg6=0x2,metadata=0x1 actions=drop
+     table=18, priority=80,arp,reg6=0x1,metadata=0x1 actions=drop
+     table=18, priority=0,metadata=0x1 actions=resubmit(,19)
+     table=19, priority=0,metadata=0x1 actions=resubmit(,20)
+     table=20, priority=0,metadata=0x1 actions=resubmit(,21)
+     table=21, priority=0,metadata=0x1 actions=resubmit(,22)
+     table=22, priority=0,metadata=0x1 actions=resubmit(,23)
+     table=23, priority=0,metadata=0x1 actions=resubmit(,24)
+     table=24, priority=0,metadata=0x1 actions=resubmit(,25)
+     table=25, priority=0,metadata=0x1 actions=resubmit(,26)
+     table=26, priority=100,metadata=0x1,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00 actions=set_field:0xffff->reg7,resubmit(,32)
+     table=26, priority=50,metadata=0x1,dl_dst=00:00:00:00:00:01 actions=set_field:0x1->reg7,resubmit(,32)
+     table=26, priority=50,metadata=0x1,dl_dst=00:00:00:00:00:02 actions=set_field:0x2->reg7,resubmit(,32)
      table=32, priority=0 actions=resubmit(,33)
      table=33, priority=100,reg7=0x1,metadata=0x1 actions=resubmit(,34)
-     table=33, priority=100,reg7=0xffff,metadata=0x1 actions=set_field:0x2->reg7,resubmit(,34),set_field:0x1->reg7,resubmit(,34)
+     table=33, priority=100,reg7=0xffff,metadata=0x1 actions=set_field:0x2->reg7,resubmit(,34),set_field:0x1->reg7,resubmit(,34),set_field:0xffff->reg7
      table=33, priority=100,reg7=0x2,metadata=0x1 actions=resubmit(,34)
      table=34, priority=100,reg6=0x1,reg7=0x1,metadata=0x1 actions=drop
      table=34, priority=100,reg6=0x2,reg7=0x2,metadata=0x1 actions=drop
-     table=34, priority=0 actions=set_field:0->reg0,set_field:0->reg1,set_field:0->reg2,set_field:0->reg3,set_field:0->reg4,set_field:0->reg5,resubmit(,48)
+     table=34, priority=0 actions=set_field:0->reg0,set_field:0->reg1,set_field:0->reg2,resubmit(,48)
      table=48, priority=0,metadata=0x1 actions=resubmit(,49)
-     table=49, priority=100,metadata=0x1,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00 actions=resubmit(,64)
-     table=49, priority=50,reg7=0x1,metadata=0x1,dl_dst=00:00:00:00:00:01 actions=resubmit(,64)
-     table=49, priority=50,reg7=0x2,metadata=0x1,dl_dst=00:00:00:00:00:02 actions=resubmit(,64)
+     table=49, priority=0,metadata=0x1 actions=resubmit(,50)
+     table=50, priority=0,metadata=0x1 actions=resubmit(,51)
+     table=51, priority=0,metadata=0x1 actions=resubmit(,52)
+     table=52, priority=0,metadata=0x1 actions=resubmit(,53)
+     table=53, priority=0,metadata=0x1 actions=resubmit(,54)
+     table=54, priority=0,metadata=0x1 actions=resubmit(,55)
+     table=55, priority=100,metadata=0x1,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00 actions=resubmit(,64)
+     table=55, priority=50,reg7=0x2,metadata=0x1,dl_dst=00:00:00:00:00:02 actions=resubmit(,64)
+     table=55, priority=50,reg7=0x1,metadata=0x1,dl_dst=00:00:00:00:00:01 actions=resubmit(,64)
      table=64, priority=100,reg7=0x1,metadata=0x1 actions=output:1
-     table=64, priority=100,reg7=0x2,metadata=0x1 actions=output:2
 
 The `ovs-appctl` command can be used to generate an OpenFlow trace of how a
 packet would be processed in this configuration.  This first trace shows a
@@ -175,6 +247,38 @@ that it is output to both ports `2` and `3`.
 
     $ ovn/env1/packet2.sh
 
+The logical port may have an unknown set of Ethernet addresses.  When an OVN logical
+switch processes a unicast Ethernet frame whose destination MAC address is not in any
+logical port’s addresses column, it delivers it to the port (or ports) whose addresses
+columns include unknown.
+
+[View ovn/env1/add-unknown-ports.sh][env1unknownports].
+
+    $ ovn/env1/add-unknown-ports.sh
+
+This trace shows a packet from `sw0-port1` to `sw0-port4`, `sw0-port5` whose addresses
+columns include unknown.  You will see that it is output to both ports `4` and `5`.
+
+[View ovn/env1/packet3.sh][env1packet3].
+
+    $ ovn/env1/packet3.sh
+
+The logical port would restrict the host to sending packets from and receiving packets
+to the ethernet addresses defined in the logical port’s port_security column.
+In addition to the restrictions described for Ethernet addresses above, such an element
+of port_security restricts the IPv4 or IPv6 addresses from which the host may send and
+to which it may receive packets to the specified addresses.
+
+[View ovn/env1/add-security-ip-ports.sh][env1securityport].
+
+    $ ovn/env1/add-security-ip-ports.sh
+
+This trace shows a packet from `sw0-port6` to `sw0-port7`.
+
+[View ovn/env1/packet4.sh][env1packet4].
+
+    $ ovn/env1/packet4.sh
+
 2) 2 switches, 4 ports
 ----------------------
 
@@ -191,15 +295,15 @@ switch.
 View the logical topology with `ovn-nbctl`.
 
     $ ovn-nbctl show
-    lswitch e3190dc2-89d1-44ed-9308-e7077de782b3 (sw0)
-        lport sw0-port1
+    switch e3190dc2-89d1-44ed-9308-e7077de782b3 (sw0)
+        port sw0-port1
             addresses: 00:00:00:00:00:01
-        lport sw0-port2
+        port sw0-port2
             addresses: 00:00:00:00:00:02
-    lswitch c8ed4c5f-9733-43f6-93da-795b1aabacb1 (sw1)
-        lport sw1-port1
+    switch c8ed4c5f-9733-43f6-93da-795b1aabacb1 (sw1)
+        port sw1-port1
             addresses: 00:00:00:00:00:03
-        lport sw1-port2
+        port sw1-port2
             addresses: 00:00:00:00:00:04
 
 Physically, all ports reside on the same chassis.
@@ -216,34 +320,86 @@ Physically, all ports reside on the same chassis.
 OVN creates separate logical flows for each logical switch.
 
     $ ovn-sbctl lflow-list
-    Datapath: 5aa8be0b-8369-49e2-a878-f68872a8d211  Pipeline: ingress
-      table=0(port_sec), priority=  100, match=(eth.src[40]), action=(drop;)
-      table=0(port_sec), priority=  100, match=(vlan.present), action=(drop;)
-      table=0(port_sec), priority=   50, match=(inport == "sw0-port1" && eth.src == {00:00:00:00:00:01}), action=(next;)
-      table=0(port_sec), priority=   50, match=(inport == "sw0-port2" && eth.src == {00:00:00:00:00:02}), action=(next;)
-      table=1(     acl), priority=    0, match=(1), action=(next;)
-      table=2( l2_lkup), priority=  100, match=(eth.dst[40]), action=(outport = "_MC_flood"; output;)
-      table=2( l2_lkup), priority=   50, match=(eth.dst == 00:00:00:00:00:01), action=(outport = "sw0-port1"; output;)
-      table=2( l2_lkup), priority=   50, match=(eth.dst == 00:00:00:00:00:02), action=(outport = "sw0-port2"; output;)
-    Datapath: 5aa8be0b-8369-49e2-a878-f68872a8d211  Pipeline: egress
-      table=0(     acl), priority=    0, match=(1), action=(next;)
-      table=1(port_sec), priority=  100, match=(eth.dst[40]), action=(output;)
-      table=1(port_sec), priority=   50, match=(outport == "sw0-port1" && eth.dst == {00:00:00:00:00:01}), action=(output;)
-      table=1(port_sec), priority=   50, match=(outport == "sw0-port2" && eth.dst == {00:00:00:00:00:02}), action=(output;)
-    Datapath: 631fb3c9-b0a3-4e56-bac3-1717c8cbb826  Pipeline: ingress
-      table=0(port_sec), priority=  100, match=(eth.src[40]), action=(drop;)
-      table=0(port_sec), priority=  100, match=(vlan.present), action=(drop;)
-      table=0(port_sec), priority=   50, match=(inport == "sw1-port1" && eth.src == {00:00:00:00:00:03}), action=(next;)
-      table=0(port_sec), priority=   50, match=(inport == "sw1-port2" && eth.src == {00:00:00:00:00:04}), action=(next;)
-      table=1(     acl), priority=    0, match=(1), action=(next;)
-      table=2( l2_lkup), priority=  100, match=(eth.dst[40]), action=(outport = "_MC_flood"; output;)
-      table=2( l2_lkup), priority=   50, match=(eth.dst == 00:00:00:00:00:03), action=(outport = "sw1-port1"; output;)
-      table=2( l2_lkup), priority=   50, match=(eth.dst == 00:00:00:00:00:04), action=(outport = "sw1-port2"; output;)
-    Datapath: 631fb3c9-b0a3-4e56-bac3-1717c8cbb826  Pipeline: egress
-      table=0(     acl), priority=    0, match=(1), action=(next;)
-      table=1(port_sec), priority=  100, match=(eth.dst[40]), action=(output;)
-      table=1(port_sec), priority=   50, match=(outport == "sw1-port1" && eth.dst == {00:00:00:00:00:03}), action=(output;)
-      table=1(port_sec), priority=   50, match=(outport == "sw1-port2" && eth.dst == {00:00:00:00:00:04}), action=(output;)
+    Datapath: 7ee908c1-b0d3-4d03-acc9-42cd7ef7f27d  Pipeline: ingress
+      table=0 (ls_in_port_sec_l2  ), priority=100  , match=(eth.src[40]), action=(drop;)
+      table=0 (ls_in_port_sec_l2  ), priority=100  , match=(vlan.present), action=(drop;)
+      table=0 (ls_in_port_sec_l2  ), priority=50   , match=(inport == "sw1-port1" && eth.src == {00:00:00:00:00:03}), action=(next;)
+      table=0 (ls_in_port_sec_l2  ), priority=50   , match=(inport == "sw1-port2" && eth.src == {00:00:00:00:00:04}), action=(next;)
+      table=1 (ls_in_port_sec_ip  ), priority=0    , match=(1), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=90   , match=(inport == "sw1-port1" && eth.src == 00:00:00:00:00:03 && arp.sha == 00:00:00:00:00:03), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=90   , match=(inport == "sw1-port1" && eth.src == 00:00:00:00:00:03 && ip6 && nd && ((nd.sll == 00:00:00:00:00:00 || nd.sll == 00:00:00:00:00:03) || ((nd.tll == 00:00:00:00:00:00 || nd.tll == 00:00:00:00:00:03)))), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=90   , match=(inport == "sw1-port2" && eth.src == 00:00:00:00:00:04 && arp.sha == 00:00:00:00:00:04), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=90   , match=(inport == "sw1-port2" && eth.src == 00:00:00:00:00:04 && ip6 && nd && ((nd.sll == 00:00:00:00:00:00 || nd.sll == 00:00:00:00:00:04) || ((nd.tll == 00:00:00:00:00:00 || nd.tll == 00:00:00:00:00:04)))), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=80   , match=(inport == "sw1-port1" && (arp || nd)), action=(drop;)
+      table=2 (ls_in_port_sec_nd  ), priority=80   , match=(inport == "sw1-port2" && (arp || nd)), action=(drop;)
+      table=2 (ls_in_port_sec_nd  ), priority=0    , match=(1), action=(next;)
+      table=3 (ls_in_pre_acl      ), priority=0    , match=(1), action=(next;)
+      table=4 (ls_in_pre_lb       ), priority=0    , match=(1), action=(next;)
+      table=5 (ls_in_pre_stateful ), priority=100  , match=(reg0[0] == 1), action=(ct_next;)
+      table=5 (ls_in_pre_stateful ), priority=0    , match=(1), action=(next;)
+      table=6 (ls_in_acl          ), priority=0    , match=(1), action=(next;)
+      table=7 (ls_in_lb           ), priority=0    , match=(1), action=(next;)
+      table=8 (ls_in_stateful     ), priority=100  , match=(reg0[1] == 1), action=(ct_commit; next;)
+      table=8 (ls_in_stateful     ), priority=100  , match=(reg0[2] == 1), action=(ct_lb;)
+      table=8 (ls_in_stateful     ), priority=0    , match=(1), action=(next;)
+      table=9 (ls_in_arp_rsp      ), priority=0    , match=(1), action=(next;)
+      table=10(ls_in_l2_lkup      ), priority=100  , match=(eth.mcast), action=(outport = "_MC_flood"; output;)
+      table=10(ls_in_l2_lkup      ), priority=50   , match=(eth.dst == 00:00:00:00:00:03), action=(outport = "sw1-port1"; output;)
+      table=10(ls_in_l2_lkup      ), priority=50   , match=(eth.dst == 00:00:00:00:00:04), action=(outport = "sw1-port2"; output;)
+    Datapath: 7ee908c1-b0d3-4d03-acc9-42cd7ef7f27d  Pipeline: egress
+      table=0 (ls_out_pre_lb      ), priority=0    , match=(1), action=(next;)
+      table=1 (ls_out_pre_acl     ), priority=0    , match=(1), action=(next;)
+      table=2 (ls_out_pre_stateful), priority=100  , match=(reg0[0] == 1), action=(ct_next;)
+      table=2 (ls_out_pre_stateful), priority=0    , match=(1), action=(next;)
+      table=3 (ls_out_lb          ), priority=0    , match=(1), action=(next;)
+      table=4 (ls_out_acl         ), priority=0    , match=(1), action=(next;)
+      table=5 (ls_out_stateful    ), priority=100  , match=(reg0[1] == 1), action=(ct_commit; next;)
+      table=5 (ls_out_stateful    ), priority=100  , match=(reg0[2] == 1), action=(ct_lb;)
+      table=5 (ls_out_stateful    ), priority=0    , match=(1), action=(next;)
+      table=6 (ls_out_port_sec_ip ), priority=0    , match=(1), action=(next;)
+      table=7 (ls_out_port_sec_l2 ), priority=100  , match=(eth.mcast), action=(output;)
+      table=7 (ls_out_port_sec_l2 ), priority=50   , match=(outport == "sw1-port1" && eth.dst == {00:00:00:00:00:03}), action=(output;)
+      table=7 (ls_out_port_sec_l2 ), priority=50   , match=(outport == "sw1-port2" && eth.dst == {00:00:00:00:00:04}), action=(output;)
+    Datapath: 9ea0c8f9-4f82-4be3-a6c7-6e6f9c2de583  Pipeline: ingress
+      table=0 (ls_in_port_sec_l2  ), priority=100  , match=(eth.src[40]), action=(drop;)
+      table=0 (ls_in_port_sec_l2  ), priority=100  , match=(vlan.present), action=(drop;)
+      table=0 (ls_in_port_sec_l2  ), priority=50   , match=(inport == "sw0-port1" && eth.src == {00:00:00:00:00:01}), action=(next;)
+      table=0 (ls_in_port_sec_l2  ), priority=50   , match=(inport == "sw0-port2" && eth.src == {00:00:00:00:00:02}), action=(next;)
+      table=1 (ls_in_port_sec_ip  ), priority=0    , match=(1), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=90   , match=(inport == "sw0-port1" && eth.src == 00:00:00:00:00:01 && arp.sha == 00:00:00:00:00:01), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=90   , match=(inport == "sw0-port1" && eth.src == 00:00:00:00:00:01 && ip6 && nd && ((nd.sll == 00:00:00:00:00:00 || nd.sll == 00:00:00:00:00:01) || ((nd.tll == 00:00:00:00:00:00 || nd.tll == 00:00:00:00:00:01)))), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=90   , match=(inport == "sw0-port2" && eth.src == 00:00:00:00:00:02 && arp.sha == 00:00:00:00:00:02), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=90   , match=(inport == "sw0-port2" && eth.src == 00:00:00:00:00:02 && ip6 && nd && ((nd.sll == 00:00:00:00:00:00 || nd.sll == 00:00:00:00:00:02) || ((nd.tll == 00:00:00:00:00:00 || nd.tll == 00:00:00:00:00:02)))), action=(next;)
+      table=2 (ls_in_port_sec_nd  ), priority=80   , match=(inport == "sw0-port1" && (arp || nd)), action=(drop;)
+      table=2 (ls_in_port_sec_nd  ), priority=80   , match=(inport == "sw0-port2" && (arp || nd)), action=(drop;)
+      table=2 (ls_in_port_sec_nd  ), priority=0    , match=(1), action=(next;)
+      table=3 (ls_in_pre_acl      ), priority=0    , match=(1), action=(next;)
+      table=4 (ls_in_pre_lb       ), priority=0    , match=(1), action=(next;)
+      table=5 (ls_in_pre_stateful ), priority=100  , match=(reg0[0] == 1), action=(ct_next;)
+      table=5 (ls_in_pre_stateful ), priority=0    , match=(1), action=(next;)
+      table=6 (ls_in_acl          ), priority=0    , match=(1), action=(next;)
+      table=7 (ls_in_lb           ), priority=0    , match=(1), action=(next;)
+      table=8 (ls_in_stateful     ), priority=100  , match=(reg0[1] == 1), action=(ct_commit; next;)
+      table=8 (ls_in_stateful     ), priority=100  , match=(reg0[2] == 1), action=(ct_lb;)
+      table=8 (ls_in_stateful     ), priority=0    , match=(1), action=(next;)
+      table=9 (ls_in_arp_rsp      ), priority=0    , match=(1), action=(next;)
+      table=10(ls_in_l2_lkup      ), priority=100  , match=(eth.mcast), action=(outport = "_MC_flood"; output;)
+      table=10(ls_in_l2_lkup      ), priority=50   , match=(eth.dst == 00:00:00:00:00:01), action=(outport = "sw0-port1"; output;)
+      table=10(ls_in_l2_lkup      ), priority=50   , match=(eth.dst == 00:00:00:00:00:02), action=(outport = "sw0-port2"; output;)
+    Datapath: 9ea0c8f9-4f82-4be3-a6c7-6e6f9c2de583  Pipeline: egress
+      table=0 (ls_out_pre_lb      ), priority=0    , match=(1), action=(next;)
+      table=1 (ls_out_pre_acl     ), priority=0    , match=(1), action=(next;)
+      table=2 (ls_out_pre_stateful), priority=100  , match=(reg0[0] == 1), action=(ct_next;)
+      table=2 (ls_out_pre_stateful), priority=0    , match=(1), action=(next;)
+      table=3 (ls_out_lb          ), priority=0    , match=(1), action=(next;)
+      table=4 (ls_out_acl         ), priority=0    , match=(1), action=(next;)
+      table=5 (ls_out_stateful    ), priority=100  , match=(reg0[1] == 1), action=(ct_commit; next;)
+      table=5 (ls_out_stateful    ), priority=100  , match=(reg0[2] == 1), action=(ct_lb;)
+      table=5 (ls_out_stateful    ), priority=0    , match=(1), action=(next;)
+      table=6 (ls_out_port_sec_ip ), priority=0    , match=(1), action=(next;)
+      table=7 (ls_out_port_sec_l2 ), priority=100  , match=(eth.mcast), action=(output;)
+      table=7 (ls_out_port_sec_l2 ), priority=50   , match=(outport == "sw0-port1" && eth.dst == {00:00:00:00:00:01}), action=(output;)
+      table=7 (ls_out_port_sec_l2 ), priority=50   , match=(outport == "sw0-port2" && eth.dst == {00:00:00:00:00:02}), action=(output;)
 
 In this setup, `sw0-port1` and `sw0-port2` can send packets to each other, but
 not to either of the ports on `sw1`.  This first trace shows a packet from
@@ -277,14 +433,14 @@ two hypervisors with two of the logical ports bound to each hypervisor.
 You can start by viewing the logical topology with `ovn-nbctl`.
 
     $ ovn-nbctl show
-    lswitch b977dc03-79a5-41ba-9665-341a80e1abfd (sw0)
-        lport sw0-port1
+    switch b977dc03-79a5-41ba-9665-341a80e1abfd (sw0)
+        port sw0-port1
             addresses: 00:00:00:00:00:01
-        lport sw0-port2
+        port sw0-port2
             addresses: 00:00:00:00:00:02
-        lport sw0-port4
+        port sw0-port4
             addresses: 00:00:00:00:00:04
-        lport sw0-port3
+        port sw0-port3
             addresses: 00:00:00:00:00:03
 
 Using `ovn-sbctl` to view the state of the system, we can see that there are two
@@ -352,91 +508,104 @@ connectivity to that network.  We call these “bridge mappings”.  For our
 example, the following script creates a bridge called `br-eth1` and then
 configures `ovn-controller` with a bridge mapping from `physnet1` to `br-eth1`.
 
-[View ovn/env4/setup1.sh][env4setup1].
+We want to create a fake second chassis and then create the topology that tells
+OVN we want both ports on both hypervisors connected to `physnet1`.  The way this
+is modeled in OVN is by creating a logical switch for each port.  The logical
+switch has the regular VIF port and a `localnet` port.
 
-    $ ovn/env4/setup1.sh
+[View ovn/env4/setup.sh][env4setup].
+
+    $ ovn/env4/setup.sh
 
 At this point we should be able to see that `ovn-controller` has automatically
 created patch ports between `br-int` and `br-eth1`.
 
     $ ovs-vsctl show
-    aea39214-ebec-4210-aa34-1ae7d6921720
+    c0a06d85-d70a-4e11-9518-76a92588b34e
+        Bridge "br-eth1"
+            Port "patch-provnet1-1-physnet1-to-br-int"
+                Interface "patch-provnet1-1-physnet1-to-br-int"
+                    type: patch
+                    options: {peer="patch-br-int-to-provnet1-1-physnet1"}
+            Port "br-eth1"
+                Interface "br-eth1"
+                    type: internal
+            Port "patch-provnet1-2-physnet1-to-br-int"
+                Interface "patch-provnet1-2-physnet1-to-br-int"
+                    type: patch
+                    options: {peer="patch-br-int-to-provnet1-2-physnet1"}
         Bridge br-int
             fail_mode: secure
-            Port “patch-br-int-to-br-eth1”
-                Interface “patch-br-int-to-br-eth1”
+            Port "ovn-fakech-0"
+                Interface "ovn-fakech-0"
+                    type: geneve
+                    options: {key=flow, remote_ip="127.0.0.1"}
+            Port "patch-br-int-to-provnet1-2-physnet1"
+                Interface "patch-br-int-to-provnet1-2-physnet1"
                     type: patch
-                    options: {peer=”patch-br-eth1-to-br-int”}
+                    options: {peer="patch-provnet1-2-physnet1-to-br-int"}
             Port br-int
                 Interface br-int
                     type: internal
-        Bridge “br-eth1”
-            Port “br-eth1”
-                Interface “br-eth1”
-                    type: internal
-            Port “patch-br-eth1-to-br-int”
-                Interface “patch-br-eth1-to-br-int”
+            Port "patch-br-int-to-provnet1-1-physnet1"
+                Interface "patch-br-int-to-provnet1-1-physnet1"
                     type: patch
-                    options: {peer=”patch-br-int-to-br-eth1”}
+                    options: {peer="patch-provnet1-1-physnet1-to-br-int"}
+            Port "lport2"
+                Interface "lport2"
+            Port "lport1"
+                Interface "lport1
 
-Now we can move on to the next setup phase for this example.  We want to create
-a fake second chassis and then create the topology that tells OVN we want both
-ports on both hypervisors connected to `physnet1`.  The way this is modeled in
-OVN is by creating a logical switch for each port.  The logical switch has the
-regular VIF port and a `localnet` port.
-
-[View ovn/env4/setup2.sh][env4setup2].
-
-    $ ovn/env4/setup2.sh
 
 The logical topology from `ovn-nbctl` should look like this.
 
     $ ovn-nbctl show
-        lswitch 5a652488-cfba-4f3e-929d-00010cdfde40 (provnet1-2)
-            lport provnet1-2-physnet1
-                addresses: unknown
-            lport provnet1-2-port1
-                addresses: 00:00:00:00:00:02
-        lswitch 5829b60a-eda8-4d78-94f6-7017ff9efcf0 (provnet1-4)
-            lport provnet1-4-port1
-                addresses: 00:00:00:00:00:04
-            lport provnet1-4-physnet1
-                addresses: unknown
-        lswitch 06cbbcb6-38e3-418d-a81e-634ec9b54ad6 (provnet1-1)
-            lport provnet1-1-port1
-                addresses: 00:00:00:00:00:01
-            lport provnet1-1-physnet1
-                addresses: unknown
-        lswitch 9cba3b3b-59ae-4175-95f5-b6f1cd9c2afb (provnet1-3)
-            lport provnet1-3-physnet1
-                addresses: unknown
-            lport provnet1-3-port1
-                addresses: 00:00:00:00:00:03
+        switch 9db81140-5504-4f60-be3d-2bee45b57e27 (provnet1-2)
+        port provnet1-2-port1
+            addresses: ["00:00:00:00:00:02"]
+        port provnet1-2-physnet1
+            addresses: ["unknown"]
+        switch cf175cb9-35c5-41cf-8bc7-2d322cdbead0 (provnet1-3)
+        port provnet1-3-physnet1
+            addresses: ["unknown"]
+        port provnet1-3-port1
+            addresses: ["00:00:00:00:00:03"]
+        switch b85f7af6-8055-4db2-ba93-efc7887cf38f (provnet1-1)
+        port provnet1-1-port1
+            addresses: ["00:00:00:00:00:01"]
+        port provnet1-1-physnet1
+            addresses: ["unknown"]
+        switch 63a5e276-8807-417d-bbec-a7e907e106b1 (provnet1-4)
+        port provnet1-4-port1
+            addresses: ["00:00:00:00:00:04"]
+        port provnet1-4-physnet1
+            addresses: ["unknown"]
 
 `port1` on each logical switch represents a regular logical port for a VIF on a
 hypervisor.  `physnet1` on each logical switch is the special `localnet` port.
 You can use `ovn-nbctl` to see that this port has a `type` and `options` set.
 
-    $ ovn-nbctl lport-get-type provnet1-1-physnet1
+    $ ovn-nbctl lsp-get-type provnet1-1-physnet1
     localnet
 
-    $ ovn-nbctl lport-get-options provnet1-1-physnet1
+    $ ovn-nbctl lsp-get-options provnet1-1-physnet1
     network_name=physnet1
 
 The physical topology should reflect that there are two regular ports on each
 chassis.
 
     $ ovn-sbctl show
+    Chassis "56b18105-5706-46ef-80c4-ff20979ab068"
+        hostname: sandbox
+        Encap geneve
+            ip: "127.0.0.1"
+        Port_Binding "provnet1-1-port1"
+        Port_Binding "provnet1-2-port1"
     Chassis fakechassis
         Encap geneve
-            ip: “127.0.0.1”
-        Port_Binding “provnet1-3-port1”
-        Port_Binding “provnet1-4-port1”
-    Chassis “56b18105-5706-46ef-80c4-ff20979ab068”
-        Encap geneve
-            ip: “127.0.0.1”
-        Port_Binding “provnet1-2-port1”
-        Port_Binding “provnet1-1-port1”
+            ip: "127.0.0.1"
+        Port_Binding "provnet1-3-port1"
+        Port_Binding "provnet1-4-port1"
 
 All four of our ports should be able to communicate with each other, but they do
 so through `physnet1`.  A packet from any of these ports to any destination
@@ -445,85 +614,87 @@ to `br-eth1`.
 
 This example assumes following OpenFlow port number mappings:
 
-* 1 = patch port to `br-eth1`
-* 2 = tunnel to the fake second chassis
-* 3 = lport1, which is the logical port named `provnet1-1-port1`
-* 4 = lport2, which is the logical port named `provnet1-2-port1`
+* 1 = tunnel to the fake second chassis
+* 2 = `lport1`, which is the logical port named `provnet1-1-port1`
+* 3 = `patch-br-int-to-provnet1-1-physnet1`, patch port to `br-eth1`
+* 4 = `lport2`, which is the logical port named `provnet1-2-port1`
+* 5 = `patch-br-int-to-provnet1-2-physnet1`, patch port to `br-eth1`
 
 We get those port numbers using `ovs-ofctl`:
 
     $ ovs-ofctl show br-int
-    OFPT_FEATURES_REPLY (xid=0x2): dpid:0000765054700040
+    OFPT_FEATURES_REPLY (xid=0x2): dpid:00002a84824b0d40
     n_tables:254, n_buffers:256
     capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
-    actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src
-    mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
-     1(patch-br-int-to): addr:de:29:14:95:8a:b8
+    actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst
+     1(ovn-fakech-0): addr:aa:55:aa:55:00:0e
+         config:     PORT_DOWN
+         state:      LINK_DOWN
+         speed: 0 Mbps now, 0 Mbps max
+     2(lport1): addr:aa:55:aa:55:00:0f
+         config:     PORT_DOWN
+         state:      LINK_DOWN
+         speed: 0 Mbps now, 0 Mbps max
+     3(patch-br-int-to): addr:7a:6f:8a:d5:69:2a
          config:     0
          state:      0
          speed: 0 Mbps now, 0 Mbps max
-     2(ovn-fakech-0): addr:aa:55:aa:55:00:08
+     4(lport2): addr:aa:55:aa:55:00:10
          config:     PORT_DOWN
          state:      LINK_DOWN
          speed: 0 Mbps now, 0 Mbps max
-     3(lport1): addr:aa:55:aa:55:00:09
-         config:     PORT_DOWN
-         state:      LINK_DOWN
+     5(patch-br-int-to): addr:4a:fd:c1:11:fc:a5
+         config:     0
+         state:      0
          speed: 0 Mbps now, 0 Mbps max
-     4(lport2): addr:aa:55:aa:55:00:0a
-         config:     PORT_DOWN
-         state:      LINK_DOWN
-         speed: 0 Mbps now, 0 Mbps max
-     LOCAL(br-int): addr:76:50:54:70:00:40
+     LOCAL(br-int): addr:2a:84:82:4b:0d:40
          config:     PORT_DOWN
          state:      LINK_DOWN
          speed: 0 Mbps now, 0 Mbps max
     OFPT_GET_CONFIG_REPLY (xid=0x4): frags=normal miss_send_len=0
 
 This first trace shows a packet from `provnet1-1-port1` with a destination MAC
-address of `provnet1-2-port1`.  Despite both of these ports being on the same
-local switch (`lport1` and `lport2`), we expect all packets to be sent out to
-`br-eth1` (OpenFlow port 1).  We then expect the network to handle getting the
-packet to its destination.  In practice, this will be optimized at `br-eth1` and
-the packet won’t actually go out and back on the network.
+address of `provnet1-2-port1`.  We expect the packets from `lport1`(OpenFlow port 2)
+to be sent out to `lport2`(OpenFlow port 4).  For example, the following topology
+illustrates how the packets travel from `lport1` to `lport2`.
+
+    `lport1` --> `patch-br-int-to-provnet1-1-physnet1`(OpenFlow port 3)
+    --> `br-eth1` --> `patch-br-int-to-provnet1-2-physnet1` --> `lport2`(OpenFlow port 4)
+
+Similarly, We expect the packets from `provnet1-2-port1` to be sent out to
+`provnet1-1-port1`.  We then expect the network to handle getting the packet to its
+destination.  In practice, this will be optimized at `br-eth1` and the packet won’t
+actually go out and back on the network.
 
 [View ovn/env4/packet1.sh][env4packet1].
 
     $ ovn/env4/packet1.sh
 
-This next trace is a continuation of the previous one.  This shows the packet
-coming back into `br-int` from `br-eth1`.  We now expect the packet to be output
-to `provnet1-2-port1`, which is OpenFlow port 4.
+This next trace shows an example of a packet being sent to a destination on another
+hypervisor.  The source is `provnet1-1-port1`, but the destination is `provnet1-3-port1`,
+which is on the other fake chassis.  As usual, we expect the output to be to `br-eth1`
+(`patch-br-int-to-provnet1-1-physnet1`, OpenFlow port 3).
 
 [View ovn/env4/packet2.sh][env4packet2].
 
     $ ovn/env4/packet2.sh
 
-This next trace shows an example of a packet being sent to a destination on
-another hypervisor.  The source is `provnet1-2-port1`, but the destination is
-`provnet1-3-port1`, which is on the other fake chassis.  As usual, we expect the
-output to be to OpenFlow port 1, the patch port to `br-et1`.
+This next test shows a broadcast packet.  The destination should still only be
+OpenFlow port 3 and 4.
 
-[View ovn/env4/packet3.sh][env4packet3].
+[View ovn/env4/packet3.sh][env4packet3]
 
     $ ovn/env4/packet3.sh
-
-This next test shows a broadcast packet.  The destination should still only be
-OpenFlow port 1.
-
-[View ovn/env4/packet4.sh][env4packet4]
-
-    $ ovn/env4/packet4.sh
 
 Finally, this last trace shows what happens when a broadcast packet arrives
 from the network.  In this case, it simulates a broadcast that originated from a
 port on the remote fake chassis and arrived at the local chassis via `br-eth1`.
 We should see it output to both local ports that are attached to this network
-(OpenFlow ports 3 and 4).
+(OpenFlow ports 2 and 4).
 
-[View ovn/env4/packet5.sh][env4packet5]
+[View ovn/env4/packet4.sh][env4packet4]
 
-    $ ovn/env4/packet5.sh
+    $ ovn/env4/packet4.sh
 
 5) Locally attached networks with VLANs
 ---------------------------------------
@@ -545,83 +716,89 @@ ports representing connectivity to VLAN 101 of `physnet1` have the `tag` field
 set to `101`.
 
     $ ovn-nbctl show
-        lswitch 12ea93d0-694b-48e9-adef-d0ddd3ec4ac9 (provnet1-7-101)
-            lport provnet1-7-physnet1-101
-                parent: , tag:101
-                addresses: unknown
-            lport provnet1-7-101-port1
-                addresses: 00:00:00:00:00:07
-        lswitch c9a5ce3a-15ec-48ea-a898-416013463589 (provnet1-4)
-            lport provnet1-4-port1
-                addresses: 00:00:00:00:00:04
-            lport provnet1-4-physnet1
-                addresses: unknown
-        lswitch e07d4f7a-2085-4fbb-9937-d6192b79a397 (provnet1-1)
-            lport provnet1-1-physnet1
-                addresses: unknown
-            lport provnet1-1-port1
-                addresses: 00:00:00:00:00:01
-        lswitch 6c098474-0509-4219-bc9b-eb4e28dd1aeb (provnet1-2)
-            lport provnet1-2-physnet1
-                addresses: unknown
-            lport provnet1-2-port1
-                addresses: 00:00:00:00:00:02
-        lswitch 723c4684-5d58-4202-b8e3-4ba99ad5ed9e (provnet1-8-101)
-            lport provnet1-8-101-port1
-                addresses: 00:00:00:00:00:08
-            lport provnet1-8-physnet1-101
-                parent: , tag:101
-                addresses: unknown
-        lswitch 8444e925-ceb2-4b02-ac20-eb2e4cfb954d (provnet1-6-101)
-            lport provnet1-6-physnet1-101
-                parent: , tag:101
-                addresses: unknown
-            lport provnet1-6-101-port1
-                addresses: 00:00:00:00:00:06
-        lswitch e11e5605-7c46-4395-b28d-cff57451fc7e (provnet1-3)
-            lport provnet1-3-port1
-                addresses: 00:00:00:00:00:03
-            lport provnet1-3-physnet1
-                addresses: unknown
-        lswitch 0706b697-6c92-4d54-bc0a-db5bababb74a (provnet1-5-101)
-            lport provnet1-5-101-port1
-                addresses: 00:00:00:00:00:05
-            lport provnet1-5-physnet1-101
-                parent: , tag:101
-                addresses: unknown
+        switch 3e60b940-00bf-44c6-9db6-04abf28d7e5f (provnet1-1)
+        port provnet1-1-physnet1
+            addresses: ["unknown"]
+        port provnet1-1-port1
+            addresses: ["00:00:00:00:00:01"]
+        switch 87f6bea0-f74d-4f39-aa65-ca1f94670429 (provnet1-2)
+        port provnet1-2-port1
+            addresses: ["00:00:00:00:00:02"]
+        port provnet1-2-physnet1
+            addresses: ["unknown"]
+        switch e6c9cb69-a056-428d-aa40-e903ce416dcd (provnet1-6-101)
+        port provnet1-6-101-port1
+            addresses: ["00:00:00:00:00:06"]
+        port provnet1-6-physnet1-101
+            parent:
+            tag: 101
+            addresses: ["unknown"]
+        switch 5f8f72ca-6030-4f66-baea-fe6174eb54df (provnet1-4)
+        port provnet1-4-port1
+            addresses: ["00:00:00:00:00:04"]
+        port provnet1-4-physnet1
+            addresses: ["unknown"]
+        switch 15d585eb-d2c1-45ea-a946-b08de0eb2f55 (provnet1-7-101)
+        port provnet1-7-physnet1-101
+            parent:
+            tag: 101
+            addresses: ["unknown"]
+        port provnet1-7-101-port1
+            addresses: ["00:00:00:00:00:07"]
+        switch 7be4aabe-1bb0-4e16-a755-a1f6d81c1c2f (provnet1-5-101)
+        port provnet1-5-101-port1
+            addresses: ["00:00:00:00:00:05"]
+        port provnet1-5-physnet1-101
+            parent:
+            tag: 101
+            addresses: ["unknown"]
+        switch 9bbdbf0e-50f3-4286-ba5a-29bf347531bb (provnet1-8-101)
+        port provnet1-8-101-port1
+            addresses: ["00:00:00:00:00:08"]
+        port provnet1-8-physnet1-101
+            parent:
+            tag: 101
+            addresses: ["unknown"]
+        switch 70d053f7-2bca-4dff-96ae-bd728d3ba1d2 (provnet1-3)
+        port provnet1-3-physnet1
+            addresses: ["unknown"]
+        port provnet1-3-port1
+            addresses: ["00:00:00:00:00:03"]
 
 The physical topology shows that we have 4 regular VIF ports on each simulated
 hypervisor.
 
     $ ovn-sbctl show
-    Chassis “56b18105-5706-46ef-80c4-ff20979ab068”
-        Encap geneve
-            ip: “127.0.0.1”
-        Port_Binding “provnet1-6-101-port1”
-        Port_Binding “provnet1-1-port1”
-        Port_Binding “provnet1-2-port1”
-        Port_Binding “provnet1-5-101-port1”
     Chassis fakechassis
         Encap geneve
-            ip: “127.0.0.1”
-        Port_Binding “provnet1-4-port1”
-        Port_Binding “provnet1-3-port1”
-        Port_Binding “provnet1-8-101-port1”
-        Port_Binding “provnet1-7-101-port1”
+        ip: "127.0.0.1"
+        Port_Binding "provnet1-3-port1"
+        Port_Binding "provnet1-8-101-port1"
+        Port_Binding "provnet1-7-101-port1"
+        Port_Binding "provnet1-4-port1"
+    Chassis "56b18105-5706-46ef-80c4-ff20979ab068"
+        hostname: sandbox
+        Encap geneve
+        ip: "127.0.0.1"
+        Port_Binding "provnet1-2-port1"
+        Port_Binding "provnet1-5-101-port1"
+        Port_Binding "provnet1-1-port1"
+        Port_Binding "provnet1-6-101-port1"
 
 All of the traces from the previous example, `env4`, should work in this
 environment and provide the same result.  Now we can show what happens for the
 ports connected to VLAN 101.  This first example shows a packet originating from
-`provnet1-5-101-port1`, which is OpenFlow port 5.  We should see VLAN tag 101
-pushed on the packet and then output to OpenFlow port 1, the patch port to
-`br-eth1` (the bridge providing connectivity to `physnet1`).
+`provnet1-5-101-port1`, which is OpenFlow port 6.  We should see VLAN tag 101
+pushed on the packet and then output to OpenFlow port 7, the patch port to
+`br-eth1` (the bridge providing connectivity to `physnet1`), and finally arrives
+on OpenFlow port 8.
 
 [View ovn/env5/packet1.sh][env5packet1].
 
     $ ovn/env5/packet1.sh
 
 If we look at a broadcast packet arriving on VLAN 101 of `physnet1`, we should
-see it output to OpenFlow ports 5 and 6 only.
+see it output to OpenFlow ports 6 and 8 only.
 
 [View ovn/env5/packet2.sh][env5packet2].
 
@@ -781,12 +958,44 @@ The second trace shows a packet from 'csw0-port2' to 'csw0-port1'.
 You can extend this setup by adding additional container ports with two
 hypervisors. Please see the tutorial 3 above.
 
+8) L2Gateway Ports
+------------------
+
+L2Gateway provides a way to connect logical switch ports of type `l2gateway` to
+a physical network.  The difference between `l2gateway` ports and `localnet` ports
+is that an `l2gateway` port is bound to a specific chassis.  A single chassis
+serves as the L2 gateway to the physical network and all traffic between
+chassis continues to go over geneve tunnels.
+
+Start with a simple logical switch with 3 logical ports.
+
+[View ovn/env8/setup.sh][env8setup].
+
+    $ ovn/env8/setup.sh
+
+This first example shows a packet originating from `lport1`, which is OpenFlow port 1.
+We expect all packets from `lport1` to be sent out to br-eth1 (`patch-br-int-to-sw0-port3`,
+OpenFlow port 3).  The patch port to br-eth1 provides connectivity to the physical network.
+
+[View ovn/env8/packet1.sh][env8packet1].
+
+    $ ovn/env8/packet1.sh
+
+The last trace shows what happens when a broadcast packet arrives from the network.
+In this case, it simulates a broadcast that originated from a port on the physical network
+and arrived at the local chassis via br-eth1. We should see it output to the local port `lport1`
+and `lport2`.
+
+[View ovn/env8/packet2.sh][env8packet2].
+
+    $ ovn/env8/packet2.sh
+
 [ovn-architecture(7)]:http://openvswitch.org/support/dist-docs/ovn-architecture.7.html
 [Tutorial.md]:https://github.com/openvswitch/ovs/blob/master/tutorial/Tutorial.md
 [ovn-nb(5)]:http://openvswitch.org/support/dist-docs/ovn-nb.5.html
 [ovn-sb(5)]:http://openvswitch.org/support/dist-docs/ovn-sb.5.html
 [vtep(5)]:http://openvswitch.org/support/dist-docs/vtep.5.html
-[ovn-northd(8)]:http://openvswitch.org/support/dist-docs/ovn-northd
+[ovn-northd(8)]:http://openvswitch.org/support/dist-docs/ovn-northd.8.html
 [ovn-controller(8)]:http://openvswitch.org/support/dist-docs/ovn-controller.8.html
 [ovn-controller-vtep(8)]:http://openvswitch.org/support/dist-docs/ovn-controller-vtep.8.html
 [vtep-ctl(8)]:http://openvswitch.org/support/dist-docs/vtep-ctl.8.html
@@ -796,19 +1005,21 @@ hypervisors. Please see the tutorial 3 above.
 [env1packet1]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env1/packet1.sh
 [env1packet2]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env1/packet2.sh
 [env1thirdport]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env1/add-third-port.sh
+[env1unknownports]:https://github.com/nickcooper-zhangtonghao/ovs/blob/master/tutorial/ovn/env1/add-unknown-ports.sh
+[env1securityport]:https://github.com/nickcooper-zhangtonghao/ovs/blob/master/tutorial/ovn/env1/add-security-ip-ports.sh
+[env1packet3]:https://github.com/nickcooper-zhangtonghao/ovs/blob/master/tutorial/ovn/env1/packet3.sh
+[env1packet4]:https://github.com/nickcooper-zhangtonghao/ovs/blob/master/tutorial/ovn/env1/packet4.sh
 [env2setup]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env2/setup.sh
 [env2packet1]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env2/packet1.sh
 [env2packet2]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env2/packet2.sh
 [env3setup]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env3/setup.sh
 [env3packet1]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env3/packet1.sh
 [env3packet2]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env3/packet2.sh
-[env4setup1]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env4/setup1.sh
-[env4setup2]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env4/setup2.sh
+[env4setup]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env4/setup.sh
 [env4packet1]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env4/packet1.sh
 [env4packet2]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env4/packet2.sh
 [env4packet3]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env4/packet3.sh
 [env4packet4]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env4/packet4.sh
-[env4packet5]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env4/packet5.sh
 [env5setup]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env5/setup.sh
 [env5packet1]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env5/packet1.sh
 [env5packet2]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env5/packet2.sh
@@ -818,5 +1029,8 @@ hypervisors. Please see the tutorial 3 above.
 [env7contports]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env7/add-container-ports.sh
 [env7packet1]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env7/packet1.sh
 [env7packet2]:https://github.com/openvswitch/ovs/blob/master/tutorial/ovn/env7/packet2.sh
+[env8setup]:https://github.com/nickcooper-zhangtonghao/ovs/blob/master/tutorial/ovn/env8/setup.sh
+[env8packet1]:https://github.com/nickcooper-zhangtonghao/ovs/blob/master/tutorial/ovn/env8/packet1.sh
+[env8packet2]:https://github.com/nickcooper-zhangtonghao/ovs/blob/master/tutorial/ovn/env8/packet2.sh
 [openstack-ovn-acl-blog]:http://blog.russellbryant.net/2015/10/22/openstack-security-groups-using-ovn-acls/
 [openvswitch-docker]:http://openvswitch.org/support/dist-docs/INSTALL.Docker.md.txt

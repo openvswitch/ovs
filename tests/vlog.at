@@ -148,6 +148,9 @@ AT_CLEANUP
 
 m4_define([VLOG_REOPEN_PYN],
   [AT_SETUP([vlog - vlog/reopen - $1])
+   # This test won't work as-is on Windows because Windows doesn't allow
+   # files that are open to be renamed.
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test $2 = no])
    on_exit 'kill `cat test-unixctl.py.pid`'
 
@@ -184,6 +187,7 @@ AT_CHECK([APPCTL -t test-unixctl vlog/reopen], [2], [],
   [Logging to file not configured
 ovs-appctl: test-unixctl: server returned an error
 ])
+OVS_APP_EXIT_AND_WAIT([test-unixctl])
 AT_CLEANUP
 
 m4_define([VLOG_REOPEN_WITHOUT_FILE_PYN],
@@ -277,8 +281,9 @@ on_exit 'kill `cat test-unixctl.pid`'
 AT_CAPTURE_FILE([log])
 AT_CAPTURE_FILE([log.old])
 AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
-  [0], [], [stderr])
-AT_CHECK([vlog_filt stderr], [0], [opened log file
+  [0], [], [ignore])
+AT_CHECK([vlog_filt log], [0], [opened log file
+Entering run loop.
 ])
 
 AT_CHECK([APPCTL -t test-unixctl log message])
@@ -354,12 +359,13 @@ on_exit 'kill `cat test-unixctl.pid`'
 
 AT_CAPTURE_FILE([log])
 AT_CHECK([ovstest test-unixctl --log-file=`pwd`/log --pidfile --detach],
-  [0], [], [stderr])
-AT_CHECK([vlog_filt stderr], [0], [opened log file
+  [0], [], [ignore])
+AT_CHECK([vlog_filt log], [0], [opened log file
+Entering run loop.
 ])
 
 AT_CHECK([APPCTL -t test-unixctl vlog/list | sed -n '1,2p
-/\(test_unixctl\|daemon\) /p'], [0], [dnl
+/test_unixctl /p; /daemon /p'], [0], [dnl
                  console    syslog    file
                  -------    ------    ------
 daemon             OFF       INFO       INFO
@@ -373,7 +379,7 @@ AT_CHECK([APPCTL -t test-unixctl vlog/set nonexistent], [2], [],
 ovs-appctl: test-unixctl: server returned an error
 ])
 AT_CHECK([APPCTL -t test-unixctl vlog/list | sed -n '1,2p
-/\(test_unixctl\|daemon\) /p'], [0], [dnl
+/test_unixctl /p; /daemon /p'], [0], [dnl
                  console    syslog    file
                  -------    ------    ------
 daemon             OFF        ERR        DBG
@@ -391,6 +397,7 @@ ovs-appctl: test-unixctl: server returned an error
 AT_CHECK([APPCTL -t test-unixctl vlog/set pattern:file:'I<3OVS|%m'])
 AT_CHECK([APPCTL -t test-unixctl log patterntest])
 AT_CHECK([grep -q 'I<3OVS' log])
+OVS_APP_EXIT_AND_WAIT([test-unixctl])
 AT_CLEANUP
 
 m4_define([VLOG_SET_AND_LIST_PYN],
@@ -458,7 +465,7 @@ AT_CHECK([ovsdb-tool create conf.db $abs_top_srcdir/vswitchd/vswitch.ovsschema])
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile \
           --remote=punix:$OVS_RUNDIR/db.sock -vPATTERN:file:"<%B>1 %A %m" \
           --log-file], [0], [], [stderr])
-AT_CHECK([ovs-appctl -t ovsdb-server exit])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 # A default facility of LOG_LOCAL0 while writing to file.
 AT_CHECK([head -1 ovsdb-server.log | awk '{print $1}'], [0], [<133>1
@@ -479,7 +486,7 @@ ovs-appctl: ovsdb-server: server returned an error
 
 AT_CHECK([ovs-appctl -t ovsdb-server vlog/set FACILITY:local7])
 AT_CHECK([ovs-appctl -t ovsdb-server vlog/set ANY:file:DBG])
-AT_CHECK([ovs-appctl -t ovsdb-server exit])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CHECK([tail -1 ovsdb-server.log | awk '{print $1}'], [0], [<191>1
 ])

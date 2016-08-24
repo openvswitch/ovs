@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,8 +26,8 @@
 #include "csum.h"
 #include "crc32c.h"
 #include "flow.h"
-#include "hmap.h"
-#include "dynamic-string.h"
+#include "openvswitch/hmap.h"
+#include "openvswitch/dynamic-string.h"
 #include "ovs-thread.h"
 #include "odp-util.h"
 #include "dp-packet.h"
@@ -140,6 +140,9 @@ eth_addr_is_reserved(const struct eth_addr ea)
     return false;
 }
 
+/* Attempts to parse 's' as an Ethernet address.  If successful, stores the
+ * address in 'ea' and returns true, otherwise zeros 'ea' and returns
+ * false.  */
 bool
 eth_addr_from_string(const char *s, struct eth_addr *ea)
 {
@@ -442,9 +445,9 @@ ip_parse_masked_len(const char *s, int *n, ovs_be32 *ip,
         /* OK. */
     } else if (ovs_scan_len(s, n, IP_SCAN_FMT"/%d",
                             IP_SCAN_ARGS(ip), &prefix)) {
-        if (prefix <= 0 || prefix > 32) {
-            return xasprintf("%s: network prefix bits not between 0 and "
-                             "32", s);
+        if (prefix < 0 || prefix > 32) {
+            return xasprintf("%s: IPv4 network prefix bits not between 0 and "
+                              "32, inclusive", s);
         }
         *mask = be32_prefix_mask(prefix);
     } else if (ovs_scan_len(s, n, IP_SCAN_FMT, IP_SCAN_ARGS(ip))) {
@@ -533,9 +536,9 @@ ipv6_parse_masked_len(const char *s, int *n, struct in6_addr *ip,
     if (ovs_scan_len(s, n, " "IPV6_SCAN_FMT, ipv6_s)
         && ipv6_parse(ipv6_s, ip)) {
         if (ovs_scan_len(s, n, "/%d", &prefix)) {
-            if (prefix <= 0 || prefix > 128) {
+            if (prefix < 0 || prefix > 128) {
                 return xasprintf("%s: IPv6 network prefix bits not between 0 "
-                                 "and 128", s);
+                                 "and 128, inclusive", s);
             }
             *mask = ipv6_create_mask(prefix);
         } else if (ovs_scan_len(s, n, "/"IPV6_SCAN_FMT, ipv6_s)) {
@@ -674,23 +677,43 @@ ipv6_string_mapped(char *addr_str, const struct in6_addr *addr)
     }
 }
 
-struct in6_addr ipv6_addr_bitand(const struct in6_addr *a,
-                                 const struct in6_addr *b)
-{
-    int i;
-    struct in6_addr dst;
-
 #ifdef s6_addr32
-    for (i=0; i<4; i++) {
-        dst.s6_addr32[i] = a->s6_addr32[i] & b->s6_addr32[i];
-    }
+#define s6_addrX s6_addr32
+#define IPV6_FOR_EACH(VAR) for (int VAR = 0; VAR < 4; VAR++)
 #else
-    for (i=0; i<16; i++) {
-        dst.s6_addr[i] = a->s6_addr[i] & b->s6_addr[i];
-    }
+#define s6_addrX s6_addr
+#define IPV6_FOR_EACH(VAR) for (int VAR = 0; VAR < 16; VAR++)
 #endif
 
-    return dst;
+struct in6_addr
+ipv6_addr_bitand(const struct in6_addr *a, const struct in6_addr *b)
+{
+   struct in6_addr dst;
+   IPV6_FOR_EACH (i) {
+       dst.s6_addrX[i] = a->s6_addrX[i] & b->s6_addrX[i];
+   }
+   return dst;
+}
+
+struct in6_addr
+ipv6_addr_bitxor(const struct in6_addr *a, const struct in6_addr *b)
+{
+   struct in6_addr dst;
+   IPV6_FOR_EACH (i) {
+       dst.s6_addrX[i] = a->s6_addrX[i] ^ b->s6_addrX[i];
+   }
+   return dst;
+}
+
+bool
+ipv6_is_zero(const struct in6_addr *a)
+{
+   IPV6_FOR_EACH (i) {
+       if (a->s6_addrX[i]) {
+           return false;
+       }
+   }
+   return true;
 }
 
 /* Returns an in6_addr consisting of 'mask' high-order 1-bits and 128-N
@@ -794,7 +817,7 @@ eth_compose(struct dp_packet *b, const struct eth_addr eth_dst,
     dp_packet_prealloc_tailroom(b, 2 + ETH_HEADER_LEN + VLAN_HEADER_LEN + size);
     dp_packet_reserve(b, 2 + VLAN_HEADER_LEN);
     eth = dp_packet_put_uninit(b, ETH_HEADER_LEN);
-    data = dp_packet_put_uninit(b, size);
+    data = dp_packet_put_zeros(b, size);
 
     eth->eth_dst = eth_dst;
     eth->eth_src = eth_src;
@@ -837,30 +860,28 @@ packet_set_ipv4_addr(struct dp_packet *packet,
  *
  * This function assumes that L3 and L4 offsets are set in the packet. */
 static bool
-packet_rh_present(struct dp_packet *packet)
+packet_rh_present(struct dp_packet *packet, uint8_t *nexthdr)
 {
     const struct ovs_16aligned_ip6_hdr *nh;
-    int nexthdr;
     size_t len;
     size_t remaining;
     uint8_t *data = dp_packet_l3(packet);
 
     remaining = packet->l4_ofs - packet->l3_ofs;
-
     if (remaining < sizeof *nh) {
         return false;
     }
     nh = ALIGNED_CAST(struct ovs_16aligned_ip6_hdr *, data);
     data += sizeof *nh;
     remaining -= sizeof *nh;
-    nexthdr = nh->ip6_nxt;
+    *nexthdr = nh->ip6_nxt;
 
     while (1) {
-        if ((nexthdr != IPPROTO_HOPOPTS)
-                && (nexthdr != IPPROTO_ROUTING)
-                && (nexthdr != IPPROTO_DSTOPTS)
-                && (nexthdr != IPPROTO_AH)
-                && (nexthdr != IPPROTO_FRAGMENT)) {
+        if ((*nexthdr != IPPROTO_HOPOPTS)
+                && (*nexthdr != IPPROTO_ROUTING)
+                && (*nexthdr != IPPROTO_DSTOPTS)
+                && (*nexthdr != IPPROTO_AH)
+                && (*nexthdr != IPPROTO_FRAGMENT)) {
             /* It's either a terminal header (e.g., TCP, UDP) or one we
              * don't understand.  In either case, we're done with the
              * packet, so use it to fill in 'nw_proto'. */
@@ -876,34 +897,34 @@ packet_rh_present(struct dp_packet *packet)
             return false;
         }
 
-        if (nexthdr == IPPROTO_AH) {
+        if (*nexthdr == IPPROTO_AH) {
             /* A standard AH definition isn't available, but the fields
              * we care about are in the same location as the generic
              * option header--only the header length is calculated
              * differently. */
             const struct ip6_ext *ext_hdr = (struct ip6_ext *)data;
 
-            nexthdr = ext_hdr->ip6e_nxt;
+            *nexthdr = ext_hdr->ip6e_nxt;
             len = (ext_hdr->ip6e_len + 2) * 4;
-        } else if (nexthdr == IPPROTO_FRAGMENT) {
+        } else if (*nexthdr == IPPROTO_FRAGMENT) {
             const struct ovs_16aligned_ip6_frag *frag_hdr
                 = ALIGNED_CAST(struct ovs_16aligned_ip6_frag *, data);
 
-            nexthdr = frag_hdr->ip6f_nxt;
+            *nexthdr = frag_hdr->ip6f_nxt;
             len = sizeof *frag_hdr;
-        } else if (nexthdr == IPPROTO_ROUTING) {
+        } else if (*nexthdr == IPPROTO_ROUTING) {
             const struct ip6_rthdr *rh = (struct ip6_rthdr *)data;
 
             if (rh->ip6r_segleft > 0) {
                 return true;
             }
 
-            nexthdr = rh->ip6r_nxt;
+            *nexthdr = rh->ip6r_nxt;
             len = (rh->ip6r_len + 1) * 8;
         } else {
             const struct ip6_ext *ext_hdr = (struct ip6_ext *)data;
 
-            nexthdr = ext_hdr->ip6e_nxt;
+            *nexthdr = ext_hdr->ip6e_nxt;
             len = (ext_hdr->ip6e_len + 1) * 8;
         }
 
@@ -1011,11 +1032,15 @@ packet_set_ipv4(struct dp_packet *packet, ovs_be32 src, ovs_be32 dst,
  * appropriate. 'packet' must contain a valid IPv6 packet with correctly
  * populated l[34] offsets. */
 void
-packet_set_ipv6(struct dp_packet *packet, uint8_t proto, const ovs_be32 src[4],
+packet_set_ipv6(struct dp_packet *packet, const ovs_be32 src[4],
                 const ovs_be32 dst[4], uint8_t key_tc, ovs_be32 key_fl,
                 uint8_t key_hl)
 {
     struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(packet);
+    uint8_t proto = 0;
+    bool rh_present;
+
+    rh_present = packet_rh_present(packet, &proto);
 
     if (memcmp(&nh->ip6_src, src, sizeof(ovs_be32[4]))) {
         packet_set_ipv6_addr(packet, proto, nh->ip6_src.be32, src, true);
@@ -1023,13 +1048,11 @@ packet_set_ipv6(struct dp_packet *packet, uint8_t proto, const ovs_be32 src[4],
 
     if (memcmp(&nh->ip6_dst, dst, sizeof(ovs_be32[4]))) {
         packet_set_ipv6_addr(packet, proto, nh->ip6_dst.be32, dst,
-                             !packet_rh_present(packet));
+                             !rh_present);
     }
 
     packet_set_ipv6_tc(&nh->ip6_flow, key_tc);
-
     packet_set_ipv6_flow_label(&nh->ip6_flow, key_fl);
-
     nh->ip6_hlim = key_hl;
 }
 
@@ -1116,7 +1139,8 @@ packet_set_icmp(struct dp_packet *packet, uint8_t type, uint8_t code)
 
 void
 packet_set_nd(struct dp_packet *packet, const ovs_be32 target[4],
-              const struct eth_addr sll, const struct eth_addr tll) {
+              const struct eth_addr sll, const struct eth_addr tll)
+{
     struct ovs_nd_msg *ns;
     struct ovs_nd_opt *nd_opt;
     int bytes_remain = dp_packet_l4_size(packet);
@@ -1254,68 +1278,145 @@ packet_format_tcp_flags(struct ds *s, uint16_t tcp_flags)
  * 'arp_op', 'arp_sha', 'arp_tha', 'arp_spa', and 'arp_tpa'.  The outer
  * Ethernet frame is initialized with Ethernet source 'arp_sha' and destination
  * 'arp_tha', except that destination ff:ff:ff:ff:ff:ff is used instead if
- * 'broadcast' is true. */
+ * 'broadcast' is true.  Points the L3 header to the ARP header. */
 void
 compose_arp(struct dp_packet *b, uint16_t arp_op,
             const struct eth_addr arp_sha, const struct eth_addr arp_tha,
             bool broadcast, ovs_be32 arp_spa, ovs_be32 arp_tpa)
 {
-    struct eth_header *eth;
-    struct arp_eth_header *arp;
+    compose_arp__(b);
 
+    struct eth_header *eth = dp_packet_l2(b);
+    eth->eth_dst = broadcast ? eth_addr_broadcast : arp_tha;
+    eth->eth_src = arp_sha;
+
+    struct arp_eth_header *arp = dp_packet_l3(b);
+    arp->ar_op = htons(arp_op);
+    arp->ar_sha = arp_sha;
+    arp->ar_tha = arp_tha;
+    put_16aligned_be32(&arp->ar_spa, arp_spa);
+    put_16aligned_be32(&arp->ar_tpa, arp_tpa);
+}
+
+/* Clears 'b' and replaces its contents by an ARP frame.  Sets the fields in
+ * the Ethernet and ARP headers that are fixed for ARP frames to those fixed
+ * values, and zeroes the other fields.  Points the L3 header to the ARP
+ * header. */
+void
+compose_arp__(struct dp_packet *b)
+{
     dp_packet_clear(b);
     dp_packet_prealloc_tailroom(b, ARP_PACKET_SIZE);
     dp_packet_reserve(b, 2 + VLAN_HEADER_LEN);
 
-    eth = dp_packet_put_uninit(b, sizeof *eth);
-    eth->eth_dst = broadcast ? eth_addr_broadcast : arp_tha;
-    eth->eth_src = arp_sha;
+    struct eth_header *eth = dp_packet_put_zeros(b, sizeof *eth);
     eth->eth_type = htons(ETH_TYPE_ARP);
 
-    arp = dp_packet_put_uninit(b, sizeof *arp);
+    struct arp_eth_header *arp = dp_packet_put_zeros(b, sizeof *arp);
     arp->ar_hrd = htons(ARP_HRD_ETHERNET);
     arp->ar_pro = htons(ARP_PRO_IP);
     arp->ar_hln = sizeof arp->ar_sha;
     arp->ar_pln = sizeof arp->ar_spa;
-    arp->ar_op = htons(arp_op);
-    arp->ar_sha = arp_sha;
-    arp->ar_tha = arp_tha;
-
-    put_16aligned_be32(&arp->ar_spa, arp_spa);
-    put_16aligned_be32(&arp->ar_tpa, arp_tpa);
 
     dp_packet_reset_offsets(b);
     dp_packet_set_l3(b, arp);
 }
 
+/* This function expects packet with ethernet header with correct
+ * l3 pointer set. */
+static void *
+compose_ipv6(struct dp_packet *packet, uint8_t proto,
+             const struct in6_addr *src, const struct in6_addr *dst,
+             uint8_t key_tc, ovs_be32 key_fl, uint8_t key_hl, int size)
+{
+    struct ip6_hdr *nh;
+    void *data;
+
+    /* Copy 'src' and 'dst' to temporary buffers to prevent misaligned
+     * accesses. */
+    ovs_be32 sbuf[4], dbuf[4];
+    memcpy(sbuf, src, sizeof sbuf);
+    memcpy(dbuf, dst, sizeof dbuf);
+
+    nh = dp_packet_l3(packet);
+    nh->ip6_vfc = 0x60;
+    nh->ip6_nxt = proto;
+    nh->ip6_plen = htons(size);
+    data = dp_packet_put_zeros(packet, size);
+    dp_packet_set_l4(packet, data);
+    packet_set_ipv6(packet, sbuf, dbuf, key_tc, key_fl, key_hl);
+    return data;
+}
+
+/* Compose an IPv6 Neighbor Discovery Neighbor Solicitation message. */
 void
-compose_nd(struct dp_packet *b, const struct eth_addr eth_src,
-           struct in6_addr * ipv6_src, struct in6_addr * ipv6_dst)
+compose_nd_ns(struct dp_packet *b, const struct eth_addr eth_src,
+              const struct in6_addr *ipv6_src, const struct in6_addr *ipv6_dst)
 {
     struct in6_addr sn_addr;
     struct eth_addr eth_dst;
     struct ovs_nd_msg *ns;
     struct ovs_nd_opt *nd_opt;
+    uint32_t icmp_csum;
 
     in6_addr_solicited_node(&sn_addr, ipv6_dst);
     ipv6_multicast_to_ethernet(&eth_dst, &sn_addr);
 
-    eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6,
-                IPV6_HEADER_LEN + ICMP6_HEADER_LEN + ND_OPT_LEN);
-    packet_set_ipv6(b, IPPROTO_ICMPV6,
-                    ALIGNED_CAST(ovs_be32 *, ipv6_src->s6_addr),
-                    ALIGNED_CAST(ovs_be32 *, sn_addr.s6_addr),
-                    0, 0, 255);
-
-    ns = dp_packet_l4(b);
-    nd_opt = &ns->options[0];
+    eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6, IPV6_HEADER_LEN);
+    ns = compose_ipv6(b, IPPROTO_ICMPV6, ipv6_src, &sn_addr,
+                      0, 0, 255, ND_MSG_LEN + ND_OPT_LEN);
 
     ns->icmph.icmp6_type = ND_NEIGHBOR_SOLICIT;
     ns->icmph.icmp6_code = 0;
+    put_16aligned_be32(&ns->rso_flags, htonl(0));
 
+    nd_opt = &ns->options[0];
     nd_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
-    packet_set_nd(b, ALIGNED_CAST(ovs_be32 *, ipv6_dst->s6_addr),
-                  eth_src, eth_addr_zero);
+    nd_opt->nd_opt_len = 1;
+
+    /* Copy target address to temp buffer to prevent misaligned access. */
+    ovs_be32 tbuf[4];
+    memcpy(tbuf, ipv6_dst->s6_addr, sizeof tbuf);
+    packet_set_nd(b, tbuf, eth_src, eth_addr_zero);
+
+    ns->icmph.icmp6_cksum = 0;
+    icmp_csum = packet_csum_pseudoheader6(dp_packet_l3(b));
+    ns->icmph.icmp6_cksum = csum_finish(csum_continue(icmp_csum, ns,
+                                                      ND_MSG_LEN + ND_OPT_LEN));
+}
+
+/* Compose an IPv6 Neighbor Discovery Neighbor Advertisement message. */
+void
+compose_nd_na(struct dp_packet *b,
+              const struct eth_addr eth_src, const struct eth_addr eth_dst,
+              const struct in6_addr *ipv6_src, const struct in6_addr *ipv6_dst,
+              ovs_be32 rso_flags)
+{
+    struct ovs_nd_msg *na;
+    struct ovs_nd_opt *nd_opt;
+    uint32_t icmp_csum;
+
+    eth_compose(b, eth_dst, eth_src, ETH_TYPE_IPV6, IPV6_HEADER_LEN);
+    na = compose_ipv6(b, IPPROTO_ICMPV6, ipv6_src, ipv6_dst,
+                      0, 0, 255, ND_MSG_LEN + ND_OPT_LEN);
+
+    na->icmph.icmp6_type = ND_NEIGHBOR_ADVERT;
+    na->icmph.icmp6_code = 0;
+    put_16aligned_be32(&na->rso_flags, rso_flags);
+
+    nd_opt = &na->options[0];
+    nd_opt->nd_opt_type = ND_OPT_TARGET_LINKADDR;
+    nd_opt->nd_opt_len = 1;
+
+    /* Copy target address to temp buffer to prevent misaligned access. */
+    ovs_be32 tbuf[4];
+    memcpy(tbuf, ipv6_src->s6_addr, sizeof tbuf);
+    packet_set_nd(b, tbuf, eth_addr_zero, eth_src);
+
+    na->icmph.icmp6_cksum = 0;
+    icmp_csum = packet_csum_pseudoheader6(dp_packet_l3(b));
+    na->icmph.icmp6_cksum = csum_finish(csum_continue(icmp_csum, na,
+                                                      ND_MSG_LEN + ND_OPT_LEN));
 }
 
 uint32_t
@@ -1342,16 +1443,36 @@ packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *ip6)
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[1])));
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[2])));
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[3])));
+
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[0])));
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[1])));
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[2])));
     partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[3])));
 
-    partial = csum_add16(partial, 0);
+    partial = csum_add16(partial, htons(ip6->ip6_nxt));
     partial = csum_add16(partial, ip6->ip6_plen);
-    partial = csum_add16(partial, 0);
-    partial = csum_add16(partial, ip6->ip6_nxt);
 
     return partial;
 }
 #endif
+
+void
+IP_ECN_set_ce(struct dp_packet *pkt, bool is_ipv6)
+{
+    if (is_ipv6) {
+        ovs_16aligned_be32 *ip6 = dp_packet_l3(pkt);
+
+        put_16aligned_be32(ip6, get_16aligned_be32(ip6) |
+                                htonl(IP_ECN_CE << 20));
+    } else {
+        struct ip_header *nh = dp_packet_l3(pkt);
+        uint8_t tos = nh->ip_tos;
+
+        tos |= IP_ECN_CE;
+        if (nh->ip_tos != tos) {
+            nh->ip_csum = recalc_csum16(nh->ip_csum, htons(nh->ip_tos),
+                                        htons((uint16_t) tos));
+            nh->ip_tos = tos;
+        }
+    }
+}

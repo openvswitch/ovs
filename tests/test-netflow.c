@@ -24,8 +24,8 @@
 #include <unistd.h>
 #include "command-line.h"
 #include "daemon.h"
-#include "dynamic-string.h"
-#include "ofpbuf.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovstest.h"
 #include "packets.h"
 #include "poll-loop.h"

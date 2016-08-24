@@ -123,6 +123,45 @@ EOF
 ]
 m4_divert_pop([PREPARE_TESTS])
 
+#
+# OVSDB_CHECK_EXECUTION_RO(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
+#
+# Runs "test-ovsdb execute-readonly" with the given SCHEMA and each of the
+# TRANSACTIONS (which should be a quoted list of quoted strings).
+#
+# Checks that the overall output is OUTPUT, but UUIDs in the output
+# are replaced by markers of the form <N> where N is a number.  The
+# first unique UUID is replaced by <0>, the next by <1>, and so on.
+# If a given UUID appears more than once it is always replaced by the
+# same marker.
+#
+# TITLE is provided to AT_SETUP and KEYWORDS to AT_KEYWORDS.
+m4_define([OVSDB_CHECK_EXECUTION_RO],
+  [AT_SETUP([$1])
+   AT_KEYWORDS([ovsdb execute execution positive $5])
+   AT_CHECK([test-ovsdb execute-readonly "`$2`" m4_foreach([txn], [$3],
+                                         [ 'txn'])], [0], [stdout], [])
+   AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [$4])
+   AT_CLEANUP])
+
+OVSDB_CHECK_EXECUTION_RO([block insert on read only DB],
+  [ordinal_schema],
+  [[[["ordinals",
+      {"op": "insert",
+       "table": "ordinals",
+       "row": {}}]]]],
+  [[[{"details":"insert operation not allowed when database server is in read only mode","error":"not allowed"}]
+]])
+
+OVSDB_CHECK_EXECUTION_RO([allow select on read only DB],
+  [ordinal_schema],
+  [[[["ordinals",
+      {"op": "select",
+       "table": "ordinals",
+       "where": []}]]]],
+  [[[{"rows":[]}]
+]])
+
 # OVSDB_CHECK_EXECUTION(TITLE, SCHEMA, TRANSACTIONS, OUTPUT, [KEYWORDS])
 #
 # Runs "test-ovsdb execute" with the given SCHEMA and each of the
@@ -471,7 +510,7 @@ OVSDB_CHECK_EXECUTION([equality wait with extra row],
        "rows": [{"name": "zero", "number": 0},
                 {"name": "one", "number": 1},
                 {"name": "two", "number": 2}]}]]]],
-  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"wait\" timed out","error":"timed out"}]
+  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"where\" clause test failed","error":"timed out"}]
 ]])
 
 OVSDB_CHECK_EXECUTION([equality wait with missing row],
@@ -490,7 +529,7 @@ OVSDB_CHECK_EXECUTION([equality wait with missing row],
        "columns": ["name", "number"],
        "until": "==",
        "rows": [{"name": "one", "number": 1}]}]]]],
-  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"wait\" timed out","error":"timed out"}]
+  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"where\" clause test failed","error":"timed out"}]
 ]])
 
 OVSDB_CHECK_EXECUTION([inequality wait with correct rows],
@@ -510,7 +549,7 @@ OVSDB_CHECK_EXECUTION([inequality wait with correct rows],
        "until": "!=",
        "rows": [{"name": "zero", "number": 0},
                 {"name": "one", "number": 1}]}]]]],
-  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"wait\" timed out","error":"timed out"}]
+  [[[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]},{"details":"\"where\" clause test failed","error":"timed out"}]
 ]])
 
 OVSDB_CHECK_EXECUTION([inequality wait with extra row],

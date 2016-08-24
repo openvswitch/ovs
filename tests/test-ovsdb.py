@@ -17,7 +17,6 @@ from __future__ import print_function
 import getopt
 import re
 import os
-import signal
 import sys
 import uuid
 
@@ -29,6 +28,7 @@ import ovs.db.types
 import ovs.ovsuuid
 import ovs.poller
 import ovs.util
+from ovs.fatal_signal import signal_alarm
 import six
 
 
@@ -149,23 +149,63 @@ def do_parse_schema(schema_string):
     print(ovs.json.to_string(schema.to_json(), sort_keys=True))
 
 
+def get_simple_printable_row_string(row, columns):
+    s = ""
+    for column in columns:
+        if hasattr(row, column) and not (type(getattr(row, column))
+                                         is ovs.db.data.Atom):
+            value = getattr(row, column)
+            if isinstance(value, dict):
+                value = sorted(value.items())
+            s += "%s=%s " % (column, value)
+    s = s.strip()
+    s = re.sub('""|,|u?\'', "", s)
+    s = re.sub('UUID\(([^)]+)\)', r'\1', s)
+    s = re.sub('False', 'false', s)
+    s = re.sub('True', 'true', s)
+    s = re.sub(r'(ba)=([^[][^ ]*) ', r'\1=[\2] ', s)
+    return s
+
+
+def get_simple_table_printable_row(row):
+    simple_columns = ["i", "r", "b", "s", "u", "ia",
+                      "ra", "ba", "sa", "ua", "uuid"]
+    return get_simple_printable_row_string(row, simple_columns)
+
+
+def get_simple2_table_printable_row(row):
+    simple2_columns = ["name", "smap", "imap"]
+    return get_simple_printable_row_string(row, simple2_columns)
+
+
+def get_simple3_table_printable_row(row):
+    simple3_columns = ["name", "uset"]
+    return get_simple_printable_row_string(row, simple3_columns)
+
+
 def print_idl(idl, step):
     n = 0
     if "simple" in idl.tables:
-        simple_columns = ["i", "r", "b", "s", "u", "ia",
-                          "ra", "ba", "sa", "ua", "uuid"]
         simple = idl.tables["simple"].rows
         for row in six.itervalues(simple):
-            s = "%03d:" % step
-            for column in simple_columns:
-                if hasattr(row, column) and not (type(getattr(row, column))
-                                                 is ovs.db.data.Atom):
-                    s += " %s=%s" % (column, getattr(row, column))
-            s = re.sub('""|,|u?\'', "", s)
-            s = re.sub('UUID\(([^)]+)\)', r'\1', s)
-            s = re.sub('False', 'false', s)
-            s = re.sub('True', 'true', s)
-            s = re.sub(r'(ba)=([^[][^ ]*) ', r'\1=[\2] ', s)
+            s = "%03d: " % step
+            s += get_simple_table_printable_row(row)
+            print(s)
+            n += 1
+
+    if "simple2" in idl.tables:
+        simple2 = idl.tables["simple2"].rows
+        for row in six.itervalues(simple2):
+            s = "%03d: " % step
+            s += get_simple2_table_printable_row(row)
+            print(s)
+            n += 1
+
+    if "simple3" in idl.tables:
+        simple3 = idl.tables["simple3"].rows
+        for row in six.itervalues(simple3):
+            s = "%03d: " % step
+            s += get_simple3_table_printable_row(row)
             print(s)
             n += 1
 
@@ -235,6 +275,20 @@ def parse_uuids(json, symtab):
 def idltest_find_simple(idl, i):
     for row in six.itervalues(idl.tables["simple"].rows):
         if row.i == i:
+            return row
+    return None
+
+
+def idltest_find_simple2(idl, i):
+    for row in six.itervalues(idl.tables["simple2"].rows):
+        if row.name == i:
+            return row
+    return None
+
+
+def idltest_find_simple3(idl, i):
+    for row in six.itervalues(idl.tables["simple3"].rows):
+        if row.name == i:
             return row
     return None
 
@@ -374,6 +428,48 @@ def idl_set(idl, commands, step):
             i = getattr(l1, 'i', 1)
             assert i == 2
             l1.k = [l1]
+        elif name == 'partialmapinsertelement':
+            row = idltest_find_simple2(idl, 'myString1')
+            row.setkey('smap', 'key1', 'myList1')
+            row.setkey('imap', 3, 'myids2')
+            row.__setattr__('name', 'String2')
+        elif name == 'partialmapinsertmultipleelements':
+            row = idltest_find_simple2(idl, 'String2')
+            row.setkey('smap', 'key2', 'myList2')
+            row.setkey('smap', 'key3', 'myList3')
+        elif name == 'partialmapdelelements':
+            row = idltest_find_simple2(idl, 'String2')
+            row.delkey('smap', 'key1', 'myList1')
+            row.delkey('smap', 'key2', 'wrongvalue')
+            row.delkey('smap', 'key3')
+        elif name == 'partialrenamesetadd':
+            row = idltest_find_simple3(idl, 'mySet1')
+            row.addvalue('uset',
+                         uuid.UUID("001e43d2-dd3f-4616-ab6a-83a490bb0991"))
+            row.__setattr__('name', 'String2')
+        elif name == 'partialduplicateadd':
+            row = idltest_find_simple3(idl, 'String2')
+            row.addvalue('uset',
+                         uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8"))
+            row.addvalue('uset',
+                         uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8"))
+        elif name == 'partialsetdel':
+            row = idltest_find_simple3(idl, 'String2')
+            row.delvalue('uset',
+                         uuid.UUID("001e43d2-dd3f-4616-ab6a-83a490bb0991"))
+        elif name == 'partialsetref':
+            new_row = txn.insert(idl.tables["simple4"])
+            new_row.__setattr__('name', 'test')
+            row = idltest_find_simple3(idl, 'String2')
+            row.addvalue('uref', new_row.uuid)
+        elif name == 'partialsetoverrideops':
+            row = idltest_find_simple3(idl, 'String2')
+            row.addvalue('uset',
+                         uuid.UUID("579e978d-776c-4f19-a225-268e5890e670"))
+            row.delvalue('uset',
+                         uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8"))
+            row.__setattr__('uset',
+                [uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8")])
         else:
             sys.stderr.write("unknown command %s\n" % name)
             sys.exit(1)
@@ -391,8 +487,36 @@ def idl_set(idl, commands, step):
     sys.stdout.flush()
 
 
+def update_condition(idl, commands):
+    commands = commands.split(";")
+    for command in commands:
+        command = command[len("condition "):]
+        if "add" in command:
+            add_cmd = True
+            command = command[len("add "):]
+        else:
+            add_cmd = False
+            command = command[len("remove "):]
+
+        command = command.split(" ")
+        if(len(command) != 2):
+            sys.stderr.write("Error parsong condition %s\n" % command)
+            sys.exit(1)
+
+        table = command[0]
+        cond = ovs.json.from_string(command[1])
+
+        idl.cond_change(table, add_cmd, cond)
+
+
 def do_idl(schema_file, remote, *commands):
     schema_helper = ovs.db.idl.SchemaHelper(schema_file)
+    track_notify = False
+
+    if commands and commands[0] == "track-notify":
+        commands = commands[1:]
+        track_notify = True
+
     if commands and commands[0].startswith("?"):
         readonly = {}
         for x in commands[0][1:].split("?"):
@@ -422,6 +546,30 @@ def do_idl(schema_file, remote, *commands):
     symtab = {}
     seqno = 0
     step = 0
+
+    def mock_notify(event, row, updates=None):
+        output = "%03d: " % step
+        output += "event:" + str(event) + ", row={"
+        output += get_simple_table_printable_row(row) + "}, updates="
+        if updates is None:
+            output += "None"
+        else:
+            output += "{" + get_simple_table_printable_row(updates) + "}"
+
+        output += '\n'
+        sys.stdout.write(output)
+        sys.stdout.flush()
+
+    if track_notify and "simple" in idl.tables:
+        idl.notify = mock_notify
+
+    commands = list(commands)
+    if len(commands) >= 1 and "condition" in commands[0]:
+        update_condition(idl, commands.pop(0))
+        sys.stdout.write("%03d: change conditions\n" % step)
+        sys.stdout.flush()
+        step += 1
+
     for command in commands:
         if command.startswith("+"):
             # The previous transaction didn't change anything.
@@ -446,6 +594,11 @@ def do_idl(schema_file, remote, *commands):
             sys.stdout.flush()
             step += 1
             idl.force_reconnect()
+        elif "condition" in command:
+            update_condition(idl, command)
+            sys.stdout.write("%03d: change conditions\n" % step)
+            sys.stdout.flush()
+            step += 1
         elif not command.startswith("["):
             idl_set(idl, command, step)
             step += 1
@@ -483,6 +636,51 @@ def do_idl(schema_file, remote, *commands):
         poller.block()
     print_idl(idl, step)
     step += 1
+    idl.close()
+    print("%03d: done" % step)
+
+
+def do_idl_passive(schema_file, remote, *commands):
+    symtab = {}
+    step = 0
+    schema_helper = ovs.db.idl.SchemaHelper(schema_file)
+    schema_helper.register_all()
+    idl = ovs.db.idl.Idl(remote, schema_helper)
+
+    while idl._session.rpc is None:
+        idl.run()
+
+    rpc = idl._session.rpc
+
+    print_idl(idl, step)
+    step += 1
+
+    for command in commands:
+        json = ovs.json.from_string(command)
+        if isinstance(json, six.string_types):
+            sys.stderr.write("\"%s\": %s\n" % (command, json))
+            sys.exit(1)
+        json = substitute_uuids(json, symtab)
+        request = ovs.jsonrpc.Message.create_request("transact", json)
+        error, reply = rpc.transact_block(request)
+        if error:
+            sys.stderr.write("jsonrpc transaction failed: %s"
+                             % os.strerror(error))
+            sys.exit(1)
+        elif reply.error is not None:
+            sys.stderr.write("jsonrpc transaction failed: %s"
+                             % reply.error)
+            sys.exit(1)
+
+        sys.stdout.write("%03d: " % step)
+        sys.stdout.flush()
+        step += 1
+        if reply.result is not None:
+            parse_uuids(reply.result, symtab)
+        reply.id = None
+        sys.stdout.write("%s\n" % ovs.json.to_string(reply.to_json()))
+        sys.stdout.flush()
+
     idl.close()
     print("%03d: done" % step)
 
@@ -567,7 +765,7 @@ def main(argv):
             except TypeError:
                 raise error.Error("value %s on -t or --timeout is not at "
                                   "least 1" % value)
-            signal.alarm(timeout)
+            signal_alarm(timeout)
         else:
             sys.exit(0)
 
@@ -587,7 +785,8 @@ def main(argv):
                 "parse-column": (do_parse_column, 2),
                 "parse-table": (do_parse_table, (2, 3)),
                 "parse-schema": (do_parse_schema, 1),
-                "idl": (do_idl, (2,))}
+                "idl": (do_idl, (2,)),
+                "idl_passive": (do_idl_passive, (2,))}
 
     command_name = args[0]
     args = args[1:]

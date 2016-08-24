@@ -15,7 +15,7 @@
  */
 
 #include <config.h>
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "hash.h"
 
 static struct shash_node *shash_find__(const struct shash *,

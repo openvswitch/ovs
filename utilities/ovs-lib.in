@@ -132,6 +132,22 @@ pid_comm_check () {
     [ "$1" = "`cat /proc/$2/comm`" ]
 }
 
+# version_geq version_a version_b
+#
+# Compare (dot separated) version numbers.  Returns true (exit code 0) if
+# version_a is greater or equal than version_b, otherwise false (exit code 1).
+version_geq() {
+    echo $1 $2 | awk '{
+        n1 = split($1, a, ".");
+        n2 = split($2, b, ".");
+        n = (n1 > n2) ? n1 : n2;
+        for (i = 1; i <= n; i++) {
+            if (a[i]+0 < b[i]+0) exit 1
+            if (a[i]+0 > b[i]+0) exit 0
+        }
+    }'
+}
+
 start_daemon () {
     priority=$1
     wrapper=$2
@@ -151,7 +167,8 @@ start_daemon () {
     # pidfile and monitoring
     test -d "$rundir" || install -d -m 755 -o root -g root "$rundir"
     set "$@" --pidfile="$rundir/$daemon.pid"
-    set "$@" --detach --monitor
+    set "$@" --detach
+    test X"$MONITOR" = Xno || set "$@" --monitor
 
     # wrapper
     case $wrapper in
@@ -202,10 +219,23 @@ start_daemon () {
 stop_daemon () {
     if test -e "$rundir/$1.pid"; then
         if pid=`cat "$rundir/$1.pid"`; then
-            for action in EXIT .1 .25 .65 1 \
-                          TERM .1 .25 .65 1 1 1 1 \
-                          KILL 1 1 1 2 10 15 30 \
-                          FAIL; do
+
+            graceful="EXIT .1 .25 .65 1"
+            actions="TERM .1 .25 .65 1 1 1 1 \
+                     KILL 1 1 1 2 10 15 30 \
+                     FAIL"
+            version=`ovs-appctl -T 1 -t $rundir/$1.$pid.ctl version \
+                     | awk 'NR==1{print $NF}'`
+
+            # Use `ovs-appctl exit` only if the running daemon version
+            # is >= 2.5.90.  This script might be used during upgrade to
+            # stop older versions of daemons which do not behave correctly
+            # with `ovs-appctl exit` (e.g. ovs-vswitchd <= 2.5.0 deletes
+            # internal ports).
+            if version_geq "$version" "2.5.90"; then
+                actions="$graceful $actions"
+            fi
+            for action in $actions; do
                 if pid_exists "$pid" >/dev/null 2>&1; then :; else
                     return 0
                 fi

@@ -18,6 +18,7 @@ EXTRA_DIST += \
 	debian/openvswitch-datapath-source.copyright \
 	debian/openvswitch-datapath-source.dirs \
 	debian/openvswitch-datapath-source.install \
+	debian/openvswitch-dev.install \
 	debian/openvswitch-ipsec.dirs \
 	debian/openvswitch-ipsec.init \
 	debian/openvswitch-ipsec.install \
@@ -57,9 +58,12 @@ EXTRA_DIST += \
 	debian/ovn-central.postinst \
 	debian/ovn-central.postrm \
 	debian/ovn-central.template \
+	debian/ovn-controller-vtep.init \
+	debian/ovn-controller-vtep.install \
+	debian/ovn-controller-vtep.manpages \
 	debian/ovn-common.install \
 	debian/ovn-common.manpages \
-    debian/ovn-docker.install \
+	debian/ovn-docker.install \
 	debian/ovn-host.dirs \
 	debian/ovn-host.init \
 	debian/ovn-host.install \

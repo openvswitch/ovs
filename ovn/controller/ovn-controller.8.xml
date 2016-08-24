@@ -78,6 +78,9 @@
       <dt><code>external_ids:system-id</code></dt>
       <dd>The chassis name to use in the Chassis table.</dd>
 
+      <dt><code>external_ids:hostname</code></dt>
+      <dd>The hostname to use in the Chassis table.</dd>
+
       <dt><code>external_ids:ovn-bridge</code></dt>
       <dd>
         The integration bridge to which logical ports are attached.  The
@@ -97,6 +100,20 @@
           Currently, <code>ovn-controller</code> does not support changing this
           setting mid-run.  If the value needs to change, the daemon must be
           restarted.  (This behavior should be improved.)
+        </p>
+      </dd>
+
+      <dt><code>external_ids:ovn-remote-probe-interval</code></dt>
+      <dd>
+        <p>
+          The inactivity probe interval of the connection to the OVN database,
+          in milliseconds.
+          If the value is zero, it disables the connection keepalive feature.
+        </p>
+
+        <p>
+          If the value is nonzero, then it will be forced to a value of
+          at least 1000 ms.
         </p>
       </dd>
 
@@ -139,10 +156,34 @@
       </dd>
     </dl>
 
+    <p>
+      <code>ovn-controller</code> reads the following values from the
+      <code>Open_vSwitch</code> database of the local OVS instance:
+    </p>
+
+    <dl>
+      <dt><code>datapath-type</code> from <ref table="Bridge" db="Open_vSwitch"/> table</dt>
+      <dd>
+        This value is read from local OVS integration bridge row of
+        <ref table="Bridge" db="Open_vSwitch"/> table and populated in
+        <ref key="datapath-type" table="Chassis" column="external_ids"
+        db="OVN_Southbound"/> of the <ref table="Chassis" db="OVN_Southbound"/>
+        table in the OVN_Southbound database.
+      </dd>
+
+      <dt><code>iface-types</code> from <ref table="Open_vSwitch" db="Open_vSwitch"/> table</dt>
+      <dd>
+        This value is populated in <ref key="iface-types" table="Chassis"
+        column="external_ids" db="OVN_Southbound"/> of the
+        <ref table="Chassis" db="OVN_Southbound"/> table in the OVN_Southbound
+        database.
+      </dd>
+    </dl>
+
     <h1>Open vSwitch Database Usage</h1>
 
     <p>
-      <code>ovn-controller</code> uses a number of <code>external-ids</code>
+      <code>ovn-controller</code> uses a number of <code>external_ids</code>
       keys in the Open vSwitch database to keep track of ports and interfaces.
       For proper operation, users should not change or clear these keys:
     </p>
@@ -159,7 +200,7 @@
       </dd>
 
       <dt>
-        <code>external-ids:ovn-localnet-port</code> in the <code>Port</code>
+        <code>external_ids:ovn-localnet-port</code> in the <code>Port</code>
         table
       </dt>
       <dd>
@@ -167,17 +208,56 @@
           The presence of this key identifies a patch port as one created by
           <code>ovn-controller</code> to connect the integration bridge and
           another bridge to implement a <code>localnet</code> logical port.
-          Its value is the name of the logical port with type=localnet that
-          the port implements.
-          See <code>external_ids:ovn-bridge-mappings</code>, above,
-          for more information.
+          Its value is the name of the logical port with <code>type</code>
+          set to <code>localnet</code> that the port implements. See
+          <code>external_ids:ovn-bridge-mappings</code>, above, for more
+          information.
         </p>
 
         <p>
           Each <code>localnet</code> logical port is implemented as a pair of
           patch ports, one in the integration bridge, one in a different
-          bridge, with the same <code>external-ids:ovn-localnet-port</code>
+          bridge, with the same <code>external_ids:ovn-localnet-port</code>
           value.
+        </p>
+      </dd>
+
+      <dt>
+        <code>external_ids:ovn-l2gateway-port</code> in the <code>Port</code>
+        table
+      </dt>
+      <dd>
+        <p>
+          The presence of this key identifies a patch port as one created by
+          <code>ovn-controller</code> to connect the integration bridge and
+          another bridge to implement a <code>l2gateway</code> logical port.
+          Its value is the name of the logical port with <code>type</code>
+          set to <code>l2gateway</code> that the port implements. See
+          <code>external_ids:ovn-bridge-mappings</code>, above, for more
+          information.
+        </p>
+
+        <p>
+          Each <code>l2gateway</code> logical port is implemented as a pair
+          of patch ports, one in the integration bridge, one in a different
+          bridge, with the same <code>external_ids:ovn-l2gateway-port</code>
+          value.
+        </p>
+      </dd>
+
+      <dt>
+        <code>external-ids:ovn-l3gateway-port</code> in the <code>Port</code>
+        table
+      </dt>
+
+      <dd>
+        <p>
+          This key identifies a patch port as one created by
+          <code>ovn-controller</code> to implement a <code>l3gateway</code>
+          logical port. Its value is the name of the logical port with type
+          set to <code>l3gateway</code>. This patch port is similar to
+          the OVN logical patch port, except that <code>l3gateway</code>
+          port can only be bound to a paticular chassis.
         </p>
       </dd>
 

@@ -15,12 +15,12 @@
 
 #include <config.h>
 #undef NDEBUG
-#include "bundle.h"
 #include <math.h>
 #include <stdlib.h>
+#include "bundle.h"
 #include "flow.h"
-#include "ofp-actions.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovstest.h"
 #include "util.h"
 

@@ -1,0 +1,518 @@
+AT_BANNER([PMD])
+
+m4_divert_push([PREPARE_TESTS])
+
+# Given the output of `ovs-appctl dpif-netdev/pmd-rxq-show`, prints a list
+# of every rxq (one per line) in the form:
+# port_name rxq_id numa_id core_id
+parse_pmd_rxq_show () {
+    awk '/pmd/ {numa=$4; core=substr($6, 1, length($6) - 1)} /\t/{for (i=4; i<=NF; i++) print  $2, $i, numa, core}' | sort
+}
+
+# Given the output of `ovs-appctl dpctl/dump-flows`, prints a list of flows
+# (one per line), with the pmd_id at the beginning of the line
+#
+flow_dump_prepend_pmd () {
+    awk '/flow-dump from non-dpdk/ {pmd_id=-1; next} /flow-dump from pmd/ {pmd_id=$7; next} {print pmd_id, $0}' | sort
+}
+
+m4_divert_pop([PREPARE_TESTS])
+
+dnl CHECK_CPU_DISCOVERED([n_cpu])
+dnl
+dnl Waits until CPUs discovered and checks if number of discovered CPUs
+dnl is greater or equal to 'n_cpu'. Without parameters checks that at
+dnl least one CPU discovered.
+m4_define([CHECK_CPU_DISCOVERED], [
+    PATTERN="Discovered [[0-9]]* NUMA nodes and [[0-9]]* CPU cores"
+    OVS_WAIT_UNTIL([grep "$PATTERN" ovs-vswitchd.log])
+    N_CPU=$(grep "$PATTERN" ovs-vswitchd.log | sed -e 's/.* \([[0-9]]*\) CPU cores/\1/')
+    if [[ -z "$1" ]]
+        then AT_CHECK([test "$N_CPU" -gt "0"])
+        else AT_SKIP_IF([test "$N_CPU" -lt "$1"])
+    fi
+])
+
+dnl CHECK_PMD_THREADS_CREATED([n_threads], [numa_id], [+line])
+dnl
+dnl Whaits for creation of 'n_threads' or at least 1 thread if $1 not
+dnl passed. Checking starts from line number 'line' in ovs-vswithd.log .
+m4_define([CHECK_PMD_THREADS_CREATED], [
+    PATTERN="Created [[0-9]]* pmd threads on numa node $2"
+    line_st=$3
+    if [[ -z "$line_st" ]]
+    then
+        line_st="+0"
+    fi
+    OVS_WAIT_UNTIL([tail -n $line_st ovs-vswitchd.log | grep "$PATTERN"])
+    N_THREADS=$(tail -n $line_st ovs-vswitchd.log | grep "$PATTERN" | tail -1 | sed -e 's/.* \([[0-9]]*\) pmd .*/\1/')
+    if [[ -z "$1" ]]
+        then AT_CHECK([test "$N_THREADS" -gt 0])
+        else AT_CHECK([test "$N_THREADS" -eq "$1"])
+    fi
+])
+
+m4_define([SED_NUMA_CORE_PATTERN], ["s/\(numa_id \)[[0-9]]*\( core_id \)[[0-9]]*:/\1<cleared>\2<cleared>:/"])
+m4_define([DUMMY_NUMA], [--dummy-numa="0,0,0,0,1,1,1,1"])
+
+AT_SETUP([PMD - creating a thread/add-port])
+OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy-pmd], [], [], [DUMMY_NUMA])
+
+CHECK_CPU_DISCOVERED()
+CHECK_PMD_THREADS_CREATED()
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
+pmd thread numa_id <cleared> core_id <cleared>:
+	isolated : false
+	port: p0	queue-id: 0
+])
+
+AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+	br0:
+		br0 65534/100: (dummy-internal)
+		p0 1/1: (dummy-pmd: configured_rx_queues=1, configured_tx_queues=<cleared>, requested_rx_queues=1, requested_tx_queues=<cleared>)
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([PMD - multiqueue support])
+OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy-pmd], [], [], [DUMMY_NUMA])
+
+CHECK_CPU_DISCOVERED()
+CHECK_PMD_THREADS_CREATED()
+
+AT_CHECK([ovs-vsctl set interface p0 options:n_rxq=8])
+
+AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+	br0:
+		br0 65534/100: (dummy-internal)
+		p0 1/1: (dummy-pmd: configured_rx_queues=8, configured_tx_queues=<cleared>, requested_rx_queues=8, requested_tx_queues=<cleared>)
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
+pmd thread numa_id <cleared> core_id <cleared>:
+	isolated : false
+	port: p0	queue-id: 0 1 2 3 4 5 6 7
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([PMD - pmd-cpu-mask/distribution of rx queues])
+OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy-pmd options:n_rxq=8],
+                   [], [], [DUMMY_NUMA])
+
+CHECK_CPU_DISCOVERED(2)
+CHECK_PMD_THREADS_CREATED()
+
+AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+	br0:
+		br0 65534/100: (dummy-internal)
+		p0 1/1: (dummy-pmd: configured_rx_queues=8, configured_tx_queues=<cleared>, requested_rx_queues=8, requested_tx_queues=<cleared>)
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
+pmd thread numa_id <cleared> core_id <cleared>:
+	isolated : false
+	port: p0	queue-id: 0 1 2 3 4 5 6 7
+])
+
+TMP=$(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=3])
+CHECK_PMD_THREADS_CREATED([2], [], [+$TMP])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
+pmd thread numa_id <cleared> core_id <cleared>:
+	isolated : false
+	port: p0	queue-id: 0 2 4 6
+pmd thread numa_id <cleared> core_id <cleared>:
+	isolated : false
+	port: p0	queue-id: 1 3 5 7
+])
+
+TMP=$(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=1])
+CHECK_PMD_THREADS_CREATED([1], [], [+$TMP])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
+pmd thread numa_id <cleared> core_id <cleared>:
+	isolated : false
+	port: p0	queue-id: 0 1 2 3 4 5 6 7
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+
+AT_SETUP([PMD - stats])
+OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 ofport_request=7 type=dummy-pmd options:n_rxq=4],
+                   [], [], [DUMMY_NUMA])
+
+CHECK_CPU_DISCOVERED()
+CHECK_PMD_THREADS_CREATED()
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+sleep 1
+
+AT_CHECK([ovs-appctl dpif/show | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+	br0:
+		br0 65534/100: (dummy-internal)
+		p0 7/1: (dummy-pmd: configured_rx_queues=4, configured_tx_queues=<cleared>, requested_rx_queues=4, requested_tx_queues=<cleared>)
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 5], [0], [dnl
+pmd thread numa_id <cleared> core_id <cleared>:
+	emc hits:0
+	megaflow hits:0
+	avg. subtable lookups per hit:0.00
+	miss:0
+	lost:0
+])
+
+ovs-appctl time/stop
+ovs-appctl time/warp 100
+(
+for i in `seq 0 19`;
+    do
+    pkt="in_port(7),eth(src=50:54:00:00:00:77,dst=50:54:00:00:01:78),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)"
+    AT_CHECK([ovs-appctl netdev-dummy/receive p0 $pkt])
+    done
+)
+ovs-appctl time/warp 100
+
+AT_CHECK([grep -A 1 'miss upcall' ovs-vswitchd.log | tail -n 1], [0], [dnl
+skb_priority(0),skb_mark(0),ct_state(0),ct_zone(0),ct_mark(0),ct_label(0),recirc_id(0),dp_hash(0),in_port(1),eth(src=50:54:00:00:00:77,dst=50:54:00:00:01:78),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)
+])
+AT_CHECK([cat ovs-vswitchd.log | filter_flow_install | strip_xout], [0], [dnl
+recirc_id(0),in_port(1),eth(src=50:54:00:00:00:77,dst=50:54:00:00:01:78),eth_type(0x0800),ipv4(frag=no), actions: <del>
+])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-stats-show | sed SED_NUMA_CORE_PATTERN | sed '/cycles/d' | grep pmd -A 5], [0], [dnl
+pmd thread numa_id <cleared> core_id <cleared>:
+	emc hits:19
+	megaflow hits:0
+	avg. subtable lookups per hit:0.00
+	miss:1
+	lost:0
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl Reconfigure the number of rx queues of a port, make sure that all the
+dnl queues are polled by the datapath and try to send a couple of packets.
+AT_SETUP([PMD - reconfigure n_rxq])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=2 -- \
+   add-port br0 p2 -- set Interface p2 type=dummy-pmd ofport_request=2
+], [], [], [--dummy-numa 0])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=controller])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 0
+p1 1 0 0
+p2 0 0 0
+])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 --qid 1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+])
+
+AT_CHECK([ovs-vsctl set interface p1 options:n_rxq=4])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 0
+p1 1 0 0
+p1 2 0 0
+p1 3 0 0
+p2 0 0 0
+])
+
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 --qid 3 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+dnl There was a bug where OVS failed to create a ukey and install a megaflow
+dnl if a packet with the exact same flow was received by two different pmd
+dnl threads.  This is a regression test for that bug.
+AT_SETUP([PMD - same flow multiple threads])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=2 -- \
+   set Open_vSwitch . other_config:pmd-cpu-mask=3
+], [], [], [--dummy-numa 0,0])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=controller])
+
+dnl Make sure that the queues are on different cores.  There's no way to
+dnl control which queue is on which thread, we just need to make sure that
+dnl two threads (core_id) show up in pmd-rxq-show
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show | cut -f 4 -d ' ' | sort], [0], [dnl
+0
+1
+])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 --qid 0 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 --qid 1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Make sure that both flows have been installed
+AT_CHECK([ovs-appctl dpctl/dump-flows | flow_dump_prepend_pmd], [0], [dnl
+0 recirc_id(0),in_port(1),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
+1 recirc_id(0),in_port(1),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
+])
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([PMD - change numa node])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=2 -- \
+   add-port br0 p2 -- set Interface p2 type=dummy-pmd ofport_request=2 options:n_rxq=2 -- \
+   set Open_vSwitch . other_config:pmd-cpu-mask=3
+], [], [], [--dummy-numa 0,1])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=controller])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 0
+p1 1 0 0
+p2 0 0 0
+p2 1 0 0
+])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 --qid 0 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 --qid 1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=2 (via action) data_len=42 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+])
+
+AT_CHECK([ovs-vsctl set Interface p2 options:numa_id=1])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 0
+p1 1 0 0
+p2 0 1 1
+p2 1 1 1
+])
+
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 --qid 1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 --qid 0 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=2 (via action) data_len=42 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([PMD - non pmd device])
+OVS_VSWITCHD_START(
+  [add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=1 -- \
+   add-port br0 p2 -- set Interface p2 type=dummy ofport_request=2 -- \
+   set Interface br0 options:tx_pcap=br0.pcap -- \
+   set Open_vSwitch . other_config:pmd-cpu-mask=1
+], [], [], [--dummy-numa 0,0])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+AT_CHECK([ovs-ofctl add-flow br0 actions=LOCAL])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 0
+])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 --qid 0 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 --qid 0 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+OVS_WAIT_UNTIL([test `ovs-pcap br0.pcap | wc -l` -ge 2])
+
+AT_CHECK([ovs-pcap br0.pcap], [0], [dnl
+50540000000a50540000000908004500001c00000000400166df0a0000020a0000010800f7ff00000000
+50540000000a50540000000908004500001c00000000400166df0a0000020a0000010800f7ff00000000
+])
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=2])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 1
+])
+
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 --qid 0 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 --qid 0 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+OVS_WAIT_UNTIL([test `ovs-pcap br0.pcap | wc -l` -ge 4])
+
+AT_CHECK([ovs-pcap br0.pcap], [0], [dnl
+50540000000a50540000000908004500001c00000000400166df0a0000020a0000010800f7ff00000000
+50540000000a50540000000908004500001c00000000400166df0a0000020a0000010800f7ff00000000
+50540000000a50540000000908004500001c00000000400166df0a0000020a0000010800f7ff00000000
+50540000000a50540000000908004500001c00000000400166df0a0000020a0000010800f7ff00000000
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([PMD - add remove ports])
+OVS_VSWITCHD_START(
+  [], [], [], [--dummy-numa 0,0])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+AT_CHECK([ovs-ofctl add-flow br0 actions=controller])
+
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=1])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 0
+])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 --qid 0 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+])
+
+AT_CHECK([ovs-vsctl del-port br0 p1])
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=1])
+
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 --qid 0 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([PMD - rxq affinity])
+OVS_VSWITCHD_START(
+  [], [], [], [--dummy-numa 0,0,0,0,0,0,0,0,0])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+AT_CHECK([ovs-ofctl add-flow br0 actions=controller])
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=1fe])
+
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=4 other_config:pmd-rxq-affinity="0:3,1:7,2:2,3:8"])
+
+dnl The rxqs should be on the requested cores.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 3
+p1 1 0 7
+p1 2 0 2
+p1 3 0 8
+])
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=6])
+
+dnl We removed the cores requested by some queues from pmd-cpu-mask.
+dnl Those queues will not be polled.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 2 0 2
+])
+
+AT_CHECK([ovs-vsctl remove Interface p1 other_config pmd-rxq-affinity])
+
+dnl We removed the rxq-affinity request.  dpif-netdev should assign queues
+dnl in a round robin fashion.  We just make sure that every rxq is being
+dnl polled again.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show | cut -f 1,2 -d ' ' | sort], [0], [dnl
+p1 0
+p1 1
+p1 2
+p1 3
+])
+
+AT_CHECK([ovs-vsctl set Interface p1 other_config:pmd-rxq-affinity='0:1'])
+
+dnl We explicitly requested core 1 for queue 0.  Core 1 becomes isolated and
+dnl every other queue goes to core 2.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 1
+p1 1 0 2
+p1 2 0 2
+p1 3 0 2
+])
+
+OVS_VSWITCHD_STOP(["/dpif_netdev|WARN|There is no PMD thread on core/d"])
+AT_CLEANUP

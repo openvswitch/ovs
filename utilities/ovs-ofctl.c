@@ -33,50 +33,63 @@
 #include "classifier.h"
 #include "command-line.h"
 #include "daemon.h"
+#include "colors.h"
 #include "compiler.h"
 #include "dirs.h"
-#include "dynamic-string.h"
+#include "dp-packet.h"
 #include "fatal-signal.h"
 #include "nx-match.h"
 #include "odp-util.h"
-#include "ofp-actions.h"
-#include "ofp-errors.h"
-#include "ofp-msgs.h"
-#include "ofp-parse.h"
-#include "ofp-print.h"
-#include "ofp-util.h"
 #include "ofp-version-opt.h"
-#include "ofpbuf.h"
 #include "ofproto/ofproto.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
-#include "dp-packet.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofp-parse.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vconn.h"
+#include "openvswitch/vlog.h"
 #include "packets.h"
 #include "pcap-file.h"
 #include "poll-loop.h"
 #include "random.h"
+#include "sort.h"
 #include "stream-ssl.h"
 #include "socket-util.h"
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
-#include "openvswitch/vconn.h"
-#include "openvswitch/vlog.h"
-#include "meta-flow.h"
-#include "sort.h"
 
 VLOG_DEFINE_THIS_MODULE(ofctl);
 
-/* --bundle: Use OpenFlow 1.4 bundle for making the flow table change atomic.
- * NOTE: Also the flow mod will use OpenFlow 1.4, so the semantics may be
- * different (see the comment in parse_options() for details).
+/* --bundle: Use OpenFlow 1.3+ bundle for making the flow table change atomic.
+ * NOTE: If OpenFlow 1.3 or higher is not selected with the '-O' option,
+ * OpenFlow 1.4 will be implicitly selected.  Also the flow mod will use
+ * OpenFlow 1.4, so the semantics may be different (see the comment in
+ * parse_options() for details).
  */
 static bool bundle = false;
+
+/* --color: Use color markers. */
+static bool enable_color;
+
+/* --read-only: Do not execute read only commands. */
+static bool read_only;
 
 /* --strict: Use strict matching for flow mod commands?  Additionally governs
  * use of nx_pull_match() instead of nx_pull_match_loose() in parse-nx-match.
  */
 static bool strict;
+
+/* --may-create: If true, the mod-group command creates a group that does not
+ * yet exist; otherwise, such a command has no effect. */
+static bool may_create;
 
 /* --readd: If true, on replace-flows, re-add even flows that have not changed
  * (to reset flow counters). */
@@ -132,7 +145,11 @@ main(int argc, char *argv[])
     ctx.argv = argv + optind;
 
     daemon_become_new_user(false);
-    ovs_cmdl_run_command(&ctx, get_all_commands());
+    if (read_only) {
+        ovs_cmdl_run_command_read_only(&ctx, get_all_commands());
+    } else {
+        ovs_cmdl_run_command(&ctx, get_all_commands());
+    }
     return 0;
 }
 
@@ -168,6 +185,9 @@ parse_options(int argc, char *argv[])
         OPT_RSORT,
         OPT_UNIXCTL,
         OPT_BUNDLE,
+        OPT_COLOR,
+        OPT_MAY_CREATE,
+        OPT_READ_ONLY,
         DAEMON_OPTION_ENUMS,
         OFP_VERSION_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
@@ -186,6 +206,9 @@ parse_options(int argc, char *argv[])
         {"help", no_argument, NULL, 'h'},
         {"option", no_argument, NULL, 'o'},
         {"bundle", no_argument, NULL, OPT_BUNDLE},
+        {"color", optional_argument, NULL, OPT_COLOR},
+        {"may-create", no_argument, NULL, OPT_MAY_CREATE},
+        {"read-only", no_argument, NULL, OPT_READ_ONLY},
         DAEMON_LONG_OPTIONS,
         OFP_VERSION_LONG_OPTIONS,
         VLOG_LONG_OPTIONS,
@@ -267,6 +290,10 @@ parse_options(int argc, char *argv[])
             strict = true;
             break;
 
+        case OPT_READ_ONLY:
+            read_only = true;
+            break;
+
         case OPT_READD:
             readd = true;
             break;
@@ -285,6 +312,34 @@ parse_options(int argc, char *argv[])
 
         case OPT_UNIXCTL:
             unixctl_path = optarg;
+            break;
+
+        case OPT_COLOR:
+            if (optarg) {
+                if (!strcasecmp(optarg, "always")
+                    || !strcasecmp(optarg, "yes")
+                    || !strcasecmp(optarg, "force")) {
+                    enable_color = true;
+                } else if (!strcasecmp(optarg, "never")
+                           || !strcasecmp(optarg, "no")
+                           || !strcasecmp(optarg, "none")) {
+                    enable_color = false;
+                } else if (!strcasecmp(optarg, "auto")
+                           || !strcasecmp(optarg, "tty")
+                           || !strcasecmp(optarg, "if-tty")) {
+                    /* Determine whether we need colors, i.e. whether standard
+                     * output is a tty. */
+                    enable_color = is_stdout_a_tty();
+                } else {
+                    ovs_fatal(0, "incorrect value `%s' for --color", optarg);
+                }
+            } else {
+                enable_color = is_stdout_a_tty();
+            }
+        break;
+
+        case OPT_MAY_CREATE:
+            may_create = true;
             break;
 
         DAEMON_OPTION_HANDLERS
@@ -308,13 +363,14 @@ parse_options(int argc, char *argv[])
     free(short_options);
 
     /* Implicit OpenFlow 1.4 with the '--bundle' option. */
-    if (bundle) {
+    if (bundle && !(get_allowed_ofp_versions() &
+                    ofputil_protocols_to_version_bitmap(OFPUTIL_P_OF13_UP))) {
         /* Add implicit allowance for OpenFlow 1.4. */
         add_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
                                      OFPUTIL_P_OF14_OXM));
-        /* Remove all prior versions. */
+        /* Remove all versions that do not support bundles. */
         mask_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
-                                     OFPUTIL_P_OF14_UP));
+                                     OFPUTIL_P_OF13_UP));
     }
     versions = get_allowed_ofp_versions();
     version_protocols = ofputil_protocols_from_version_bitmap(versions);
@@ -331,6 +387,8 @@ parse_options(int argc, char *argv[])
     allowed_protocols &= version_protocols;
     mask_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
                                   allowed_protocols));
+
+    colors_init(enable_color);
 }
 
 static void
@@ -371,7 +429,7 @@ usage(void)
            "  snoop SWITCH                snoop on SWITCH and its controller\n"
            "  add-group SWITCH GROUP      add group described by GROUP\n"
            "  add-groups SWITCH FILE      add group from FILE\n"
-           "  mod-group SWITCH GROUP      modify specific group\n"
+           "  [--may-create] mod-group SWITCH GROUP   modify specific group\n"
            "  del-groups SWITCH [GROUP]   delete matching GROUPs\n"
            "  insert-buckets SWITCH [GROUP] add buckets to GROUP\n"
            "  remove-buckets SWITCH [GROUP] remove buckets from GROUP\n"
@@ -390,6 +448,8 @@ usage(void)
            "  add-tlv-map SWITCH MAP      add TLV option MAPpings\n"
            "  del-tlv-map SWITCH [MAP] delete TLV option MAPpings\n"
            "  dump-tlv-map SWITCH      print TLV option mappings\n"
+           "  dump-ipfix-bridge SWITCH    print ipfix stats of bridge\n"
+           "  dump-ipfix-flow SWITCH      print flow ipfix of a bridge\n"
            "\nFor OpenFlow switches and controllers:\n"
            "  probe TARGET                probe whether TARGET is up\n"
            "  ping TARGET [N]             latency of N-byte echos\n"
@@ -405,6 +465,7 @@ usage(void)
     vlog_usage();
     printf("\nOther options:\n"
            "  --strict                    use strict match for flow commands\n"
+           "  --read-only                 do not execute read/write commands\n"
            "  --readd                     replace flows that haven't changed\n"
            "  -F, --flow-format=FORMAT    force particular flow format\n"
            "  -P, --packet-in-format=FRMT force particular packet in format\n"
@@ -414,6 +475,7 @@ usage(void)
            "  --sort[=field]              sort in ascending order\n"
            "  --rsort[=field]             sort in descending order\n"
            "  --unixctl=SOCKET            set control socket name\n"
+           "  --color[=always|never|auto] control use of color in output\n"
            "  -h, --help                  display this help message\n"
            "  -V, --version               display version information\n");
     exit(EXIT_SUCCESS);
@@ -612,18 +674,60 @@ transact_multiple_noreply(struct vconn *vconn, struct ovs_list *requests)
     ofpbuf_delete(reply);
 }
 
+/* Frees the error messages as they are printed. */
 static void
-bundle_error_reporter(const struct ofp_header *oh)
+bundle_print_errors(struct ovs_list *errors, struct ovs_list *requests)
 {
-    ofp_print(stderr, oh, ntohs(oh->length), verbosity + 1);
+    struct vconn_bundle_error *error, *next;
+    struct ofpbuf *bmsg;
+
+    INIT_CONTAINER(bmsg, requests, list_node);
+
+    LIST_FOR_EACH_SAFE (error, next, list_node, errors) {
+        enum ofperr ofperr;
+        struct ofpbuf payload;
+
+        ofperr = ofperr_decode_msg(&error->ofp_msg, &payload);
+        if (!ofperr) {
+            fprintf(stderr, "***decode error***");
+        } else {
+            /* Default to the likely truncated message. */
+            const struct ofp_header *ofp_msg = payload.data;
+            size_t msg_len = payload.size;
+
+            /* Find the failing message from the requests list to be able to
+             * dump the whole message.  We assume the errors are returned in
+             * the same order as in which the messages are sent to get O(n)
+             * rather than O(n^2) processing here.  If this heuristics fails we
+             * may print the truncated hexdumps instead. */
+            LIST_FOR_EACH_CONTINUE (bmsg, list_node, requests) {
+                const struct ofp_header *oh = bmsg->data;
+
+                if (oh->xid == error->ofp_msg.xid) {
+                    ofp_msg = oh;
+                    msg_len = bmsg->size;
+                    break;
+                }
+            }
+            fprintf(stderr, "Error %s for: ", ofperr_get_name(ofperr));
+            ofp_print(stderr, ofp_msg, msg_len, verbosity + 1);
+        }
+        free(error);
+    }
     fflush(stderr);
 }
 
 static void
 bundle_transact(struct vconn *vconn, struct ovs_list *requests, uint16_t flags)
 {
-    run(vconn_bundle_transact(vconn, requests, flags, bundle_error_reporter),
-        "talking to %s", vconn_get_name(vconn));
+    struct ovs_list errors;
+    int retval = vconn_bundle_transact(vconn, requests, flags, &errors);
+
+    bundle_print_errors(&errors, requests);
+
+    if (retval) {
+        ovs_fatal(retval, "talking to %s", vconn_get_name(vconn));
+    }
 }
 
 /* Sends 'request', which should be a request that only has a reply if an error
@@ -636,8 +740,8 @@ transact_noreply(struct vconn *vconn, struct ofpbuf *request)
 {
     struct ovs_list requests;
 
-    list_init(&requests);
-    list_push_back(&requests, &request->list_node);
+    ovs_list_init(&requests);
+    ovs_list_push_back(&requests, &request->list_node);
     transact_multiple_noreply(vconn, &requests);
 }
 
@@ -1110,8 +1214,10 @@ compare_flows(const void *afs_, const void *bfs_)
         } else {
             bool ina, inb;
 
-            ina = mf_are_prereqs_ok(f, &a->flow) && !mf_is_all_wild(f, &a->wc);
-            inb = mf_are_prereqs_ok(f, &b->flow) && !mf_is_all_wild(f, &b->wc);
+            ina = mf_are_prereqs_ok(f, &a->flow, NULL)
+                && !mf_is_all_wild(f, &a->wc);
+            inb = mf_are_prereqs_ok(f, &b->flow, NULL)
+                && !mf_is_all_wild(f, &b->wc);
             if (ina != inb) {
                 /* Skip the test for sc->order, so that missing fields always
                  * sort to the end whether we're sorting in ascending or
@@ -1315,17 +1421,17 @@ bundle_flow_mod__(const char *remote, struct ofputil_flow_mod *fms,
     struct ovs_list requests;
     size_t i;
 
-    list_init(&requests);
+    ovs_list_init(&requests);
 
-    /* Bundles need OpenFlow 1.4+. */
-    usable_protocols &= OFPUTIL_P_OF14_UP;
+    /* Bundles need OpenFlow 1.3+. */
+    usable_protocols &= OFPUTIL_P_OF13_UP;
     protocol = open_vconn_for_flow_mod(remote, &vconn, usable_protocols);
 
     for (i = 0; i < n_fms; i++) {
         struct ofputil_flow_mod *fm = &fms[i];
         struct ofpbuf *request = ofputil_encode_flow_mod(fm, protocol);
 
-        list_push_back(&requests, &request->list_node);
+        ovs_list_push_back(&requests, &request->list_node);
         free(CONST_CAST(struct ofpact *, fm->ofpacts));
     }
 
@@ -2401,6 +2507,48 @@ ofctl_benchmark(struct ovs_cmdl_context *ctx)
 }
 
 static void
+ofctl_dump_ipfix_bridge(struct ovs_cmdl_context *ctx)
+{
+    dump_trivial_transaction(ctx->argv[1], OFPRAW_NXST_IPFIX_BRIDGE_REQUEST);
+}
+
+static void
+ofctl_dump_ipfix_flow(struct ovs_cmdl_context *ctx)
+{
+    dump_trivial_transaction(ctx->argv[1], OFPRAW_NXST_IPFIX_FLOW_REQUEST);
+}
+
+static void
+bundle_group_mod__(const char *remote, struct ofputil_group_mod *gms,
+                   size_t n_gms, enum ofputil_protocol usable_protocols)
+{
+    enum ofputil_protocol protocol;
+    enum ofp_version version;
+    struct vconn *vconn;
+    struct ovs_list requests;
+    size_t i;
+
+    ovs_list_init(&requests);
+
+    /* Bundles need OpenFlow 1.3+. */
+    usable_protocols &= OFPUTIL_P_OF13_UP;
+    protocol = open_vconn_for_flow_mod(remote, &vconn, usable_protocols);
+    version = ofputil_protocol_to_ofp_version(protocol);
+
+    for (i = 0; i < n_gms; i++) {
+        struct ofputil_group_mod *gm = &gms[i];
+        struct ofpbuf *request = ofputil_encode_group_mod(version, gm);
+
+        ovs_list_push_back(&requests, &request->list_node);
+        ofputil_uninit_group_mod(gm);
+    }
+
+    bundle_transact(vconn, &requests, OFPBF_ORDERED | OFPBF_ATOMIC);
+    ofpbuf_list_delete(&requests);
+    vconn_close(vconn);
+}
+
+static void
 ofctl_group_mod__(const char *remote, struct ofputil_group_mod *gms,
                   size_t n_gms, enum ofputil_protocol usable_protocols)
 {
@@ -2412,40 +2560,44 @@ ofctl_group_mod__(const char *remote, struct ofputil_group_mod *gms,
     struct vconn *vconn;
     size_t i;
 
+    if (bundle) {
+        bundle_group_mod__(remote, gms, n_gms, usable_protocols);
+        return;
+    }
+
     protocol = open_vconn_for_flow_mod(remote, &vconn, usable_protocols);
     version = ofputil_protocol_to_ofp_version(protocol);
 
     for (i = 0; i < n_gms; i++) {
         gm = &gms[i];
         request = ofputil_encode_group_mod(version, gm);
-        if (request) {
-            transact_noreply(vconn, request);
-        }
+        transact_noreply(vconn, request);
+        ofputil_uninit_group_mod(gm);
     }
 
     vconn_close(vconn);
-
 }
 
-
 static void
-ofctl_group_mod_file(int argc OVS_UNUSED, char *argv[], uint16_t command)
+ofctl_group_mod_file(int argc OVS_UNUSED, char *argv[], int command)
 {
     struct ofputil_group_mod *gms = NULL;
     enum ofputil_protocol usable_protocols;
     size_t n_gms = 0;
     char *error;
-    int i;
 
+    if (command == OFPGC11_ADD) {
+        /* Allow the file to specify a mix of commands.  If none specified at
+         * the beginning of any given line, then the default is OFPGC11_ADD, so
+         * this is backwards compatible. */
+        command = -2;
+    }
     error = parse_ofp_group_mod_file(argv[2], command, &gms, &n_gms,
                                      &usable_protocols);
     if (error) {
         ovs_fatal(0, "%s", error);
     }
     ofctl_group_mod__(argv[1], gms, n_gms, usable_protocols);
-    for (i = 0; i < n_gms; i++) {
-        ofputil_bucket_list_destroy(&gms[i].buckets);
-    }
     free(gms);
 }
 
@@ -2465,7 +2617,6 @@ ofctl_group_mod(int argc, char *argv[], uint16_t command)
             ovs_fatal(0, "%s", error);
         }
         ofctl_group_mod__(argv[1], &gm, 1, usable_protocols);
-        ofputil_bucket_list_destroy(&gm.buckets);
     }
 }
 
@@ -2484,7 +2635,8 @@ ofctl_add_groups(struct ovs_cmdl_context *ctx)
 static void
 ofctl_mod_group(struct ovs_cmdl_context *ctx)
 {
-    ofctl_group_mod(ctx->argc, ctx->argv, OFPGC11_MODIFY);
+    ofctl_group_mod(ctx->argc, ctx->argv,
+                    may_create ? OFPGC11_ADD_OR_MOD : OFPGC11_MODIFY);
 }
 
 static void
@@ -2569,6 +2721,48 @@ ofctl_dump_group_features(struct ovs_cmdl_context *ctx)
     if (request) {
         dump_transaction(vconn, request);
     }
+
+    vconn_close(vconn);
+}
+
+static void
+ofctl_bundle(struct ovs_cmdl_context *ctx)
+{
+    enum ofputil_protocol protocol, usable_protocols;
+    struct ofputil_bundle_msg *bms;
+    struct ovs_list requests;
+    struct vconn *vconn;
+    size_t n_bms;
+    char *error;
+
+    error = parse_ofp_bundle_file(ctx->argv[2], &bms, &n_bms,
+                                  &usable_protocols);
+    if (error) {
+        ovs_fatal(0, "%s", error);
+    }
+
+    /* Implicit OpenFlow 1.4. */
+    if (!(get_allowed_ofp_versions() &
+          ofputil_protocols_to_version_bitmap(OFPUTIL_P_OF13_UP))) {
+
+        /* Add implicit allowance for OpenFlow 1.4. */
+        add_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
+                                     OFPUTIL_P_OF14_OXM));
+        /* Remove all versions that do not support bundles. */
+        mask_allowed_ofp_versions(ofputil_protocols_to_version_bitmap(
+                                     OFPUTIL_P_OF13_UP));
+        allowed_protocols = ofputil_protocols_from_version_bitmap(
+                                     get_allowed_ofp_versions());
+    }
+
+    /* Bundles need OpenFlow 1.3+. */
+    usable_protocols &= OFPUTIL_P_OF13_UP;
+    protocol = open_vconn_for_flow_mod(ctx->argv[1], &vconn, usable_protocols);
+
+    ovs_list_init(&requests);
+    ofputil_encode_bundle_msgs(bms, n_bms, &requests, protocol);
+    bundle_transact(vconn, &requests, OFPBF_ORDERED | OFPBF_ATOMIC);
+    ofpbuf_list_delete(&requests);
 
     vconn_close(vconn);
 }
@@ -2806,7 +3000,7 @@ fte_insert(struct flow_tables *tables, const struct match *match,
     fte->versions[index] = version;
 
     old = fte_from_cls_rule(classifier_replace(cls, &fte->rule,
-                                               CLS_MIN_VERSION, NULL, 0));
+                                               OVS_VERSION_MIN, NULL, 0));
     if (old) {
         fte->versions[!index] = old->versions[!index];
         old->versions[!index] = NULL;
@@ -2991,7 +3185,6 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
         .out_port = OFPP_ANY,
         .out_group = OFPG_ANY,
         .flags = version->flags,
-        .delete_reason = OFPRR_DELETE,
     };
     minimatch_expand(&fte->rule.match, &fm.match);
     if (command == OFPFC_ADD || command == OFPFC_MODIFY ||
@@ -3004,7 +3197,7 @@ fte_make_flow_mod(const struct fte *fte, int index, uint16_t command,
     }
 
     ofm = ofputil_encode_flow_mod(&fm, protocol);
-    list_push_back(packets, &ofm->list_node);
+    ovs_list_push_back(packets, &ofm->list_node);
 }
 
 static void
@@ -3026,7 +3219,7 @@ ofctl_replace_flows(struct ovs_cmdl_context *ctx)
 
     read_flows_from_switch(vconn, protocol, &tables, SWITCH_IDX);
 
-    list_init(&requests);
+    ovs_list_init(&requests);
 
     FOR_EACH_TABLE (cls, &tables) {
         /* Delete flows that exist on the switch but not in the file. */
@@ -3687,7 +3880,7 @@ ofctl_parse_pcap(struct ovs_cmdl_context *ctx)
                 ovs_error(error, "%s: read failed", filename);
             }
 
-            pkt_metadata_init(&packet->md, ODPP_NONE);
+            pkt_metadata_init(&packet->md, u32_to_odp(ofp_to_u16(OFPP_ANY)));
             flow_extract(packet, &flow);
             flow_print(stdout, &flow);
             putchar('\n');
@@ -3919,128 +4112,158 @@ ofctl_encode_hello(struct ovs_cmdl_context *ctx)
     ofpbuf_delete(hello);
 }
 
+static void
+ofctl_parse_key_value(struct ovs_cmdl_context *ctx)
+{
+    for (size_t i = 1; i < ctx->argc; i++) {
+        char *s = ctx->argv[i];
+        char *key, *value;
+        int j = 0;
+        while (ofputil_parse_key_value(&s, &key, &value)) {
+            if (j++) {
+                fputs(", ", stdout);
+            }
+            fputs(key, stdout);
+            if (value[0]) {
+                printf("=%s", value);
+            }
+        }
+        putchar('\n');
+    }
+}
+
 static const struct ovs_cmdl_command all_commands[] = {
     { "show", "switch",
-      1, 1, ofctl_show },
+      1, 1, ofctl_show, OVS_RO },
     { "monitor", "switch [misslen] [invalid_ttl] [watch:[...]]",
-      1, 3, ofctl_monitor },
+      1, 3, ofctl_monitor, OVS_RO },
     { "snoop", "switch",
-      1, 1, ofctl_snoop },
+      1, 1, ofctl_snoop, OVS_RO },
     { "dump-desc", "switch",
-      1, 1, ofctl_dump_desc },
+      1, 1, ofctl_dump_desc, OVS_RO },
     { "dump-tables", "switch",
-      1, 1, ofctl_dump_tables },
+      1, 1, ofctl_dump_tables, OVS_RO },
     { "dump-table-features", "switch",
-      1, 1, ofctl_dump_table_features },
+      1, 1, ofctl_dump_table_features, OVS_RO },
     { "dump-table-desc", "switch",
-      1, 1, ofctl_dump_table_desc },
+      1, 1, ofctl_dump_table_desc, OVS_RO },
     { "dump-flows", "switch",
-      1, 2, ofctl_dump_flows },
+      1, 2, ofctl_dump_flows, OVS_RO },
     { "dump-aggregate", "switch",
-      1, 2, ofctl_dump_aggregate },
+      1, 2, ofctl_dump_aggregate, OVS_RO },
     { "queue-stats", "switch [port [queue]]",
-      1, 3, ofctl_queue_stats },
+      1, 3, ofctl_queue_stats, OVS_RO },
     { "queue-get-config", "switch [port [queue]]",
-      1, 3, ofctl_queue_get_config },
+      1, 3, ofctl_queue_get_config, OVS_RO },
     { "add-flow", "switch flow",
-      2, 2, ofctl_add_flow },
+      2, 2, ofctl_add_flow, OVS_RW },
     { "add-flows", "switch file",
-      2, 2, ofctl_add_flows },
+      2, 2, ofctl_add_flows, OVS_RW },
     { "mod-flows", "switch flow",
-      2, 2, ofctl_mod_flows },
+      2, 2, ofctl_mod_flows, OVS_RW },
     { "del-flows", "switch [flow]",
-      1, 2, ofctl_del_flows },
+      1, 2, ofctl_del_flows, OVS_RW },
     { "replace-flows", "switch file",
-      2, 2, ofctl_replace_flows },
+      2, 2, ofctl_replace_flows, OVS_RW },
     { "diff-flows", "source1 source2",
-      2, 2, ofctl_diff_flows },
+      2, 2, ofctl_diff_flows, OVS_RW },
     { "add-meter", "switch meter",
-      2, 2, ofctl_add_meter },
+      2, 2, ofctl_add_meter, OVS_RW },
     { "mod-meter", "switch meter",
-      2, 2, ofctl_mod_meter },
+      2, 2, ofctl_mod_meter, OVS_RW },
     { "del-meter", "switch meter",
-      2, 2, ofctl_del_meters },
+      2, 2, ofctl_del_meters, OVS_RW },
     { "del-meters", "switch",
-      1, 1, ofctl_del_meters },
+      1, 1, ofctl_del_meters, OVS_RW },
     { "dump-meter", "switch meter",
-      2, 2, ofctl_dump_meters },
+      2, 2, ofctl_dump_meters, OVS_RO },
     { "dump-meters", "switch",
-      1, 1, ofctl_dump_meters },
+      1, 1, ofctl_dump_meters, OVS_RO },
     { "meter-stats", "switch [meter]",
-      1, 2, ofctl_meter_stats },
+      1, 2, ofctl_meter_stats, OVS_RO },
     { "meter-features", "switch",
-      1, 1, ofctl_meter_features },
+      1, 1, ofctl_meter_features, OVS_RO },
     { "packet-out", "switch in_port actions packet...",
-      4, INT_MAX, ofctl_packet_out },
+      4, INT_MAX, ofctl_packet_out, OVS_RW },
     { "dump-ports", "switch [port]",
-      1, 2, ofctl_dump_ports },
+      1, 2, ofctl_dump_ports, OVS_RO },
     { "dump-ports-desc", "switch [port]",
-      1, 2, ofctl_dump_ports_desc },
+      1, 2, ofctl_dump_ports_desc, OVS_RO },
     { "mod-port", "switch iface act",
-      3, 3, ofctl_mod_port },
+      3, 3, ofctl_mod_port, OVS_RW },
     { "mod-table", "switch mod",
-      3, 3, ofctl_mod_table },
+      3, 3, ofctl_mod_table, OVS_RW },
     { "get-frags", "switch",
-      1, 1, ofctl_get_frags },
+      1, 1, ofctl_get_frags, OVS_RO },
     { "set-frags", "switch frag_mode",
-      2, 2, ofctl_set_frags },
+      2, 2, ofctl_set_frags, OVS_RW },
     { "probe", "target",
-      1, 1, ofctl_probe },
+      1, 1, ofctl_probe, OVS_RO },
     { "ping", "target [n]",
-      1, 2, ofctl_ping },
+      1, 2, ofctl_ping, OVS_RO },
     { "benchmark", "target n count",
-      3, 3, ofctl_benchmark },
+      3, 3, ofctl_benchmark, OVS_RO },
+
+    { "dump-ipfix-bridge", "switch",
+      1, 1, ofctl_dump_ipfix_bridge, OVS_RO },
+    { "dump-ipfix-flow", "switch",
+      1, 1, ofctl_dump_ipfix_flow, OVS_RO },
 
     { "ofp-parse", "file",
-      1, 1, ofctl_ofp_parse },
+      1, 1, ofctl_ofp_parse, OVS_RW },
     { "ofp-parse-pcap", "pcap",
-      1, INT_MAX, ofctl_ofp_parse_pcap },
+      1, INT_MAX, ofctl_ofp_parse_pcap, OVS_RW },
 
     { "add-group", "switch group",
-      1, 2, ofctl_add_group },
+      1, 2, ofctl_add_group, OVS_RW },
     { "add-groups", "switch file",
-      1, 2, ofctl_add_groups },
+      1, 2, ofctl_add_groups, OVS_RW },
     { "mod-group", "switch group",
-      1, 2, ofctl_mod_group },
+      1, 2, ofctl_mod_group, OVS_RW },
     { "del-groups", "switch [group]",
-      1, 2, ofctl_del_groups },
+      1, 2, ofctl_del_groups, OVS_RW },
     { "insert-buckets", "switch [group]",
-      1, 2, ofctl_insert_bucket },
+      1, 2, ofctl_insert_bucket, OVS_RW },
     { "remove-buckets", "switch [group]",
-      1, 2, ofctl_remove_bucket },
+      1, 2, ofctl_remove_bucket, OVS_RW },
     { "dump-groups", "switch [group]",
-      1, 2, ofctl_dump_group_desc },
+      1, 2, ofctl_dump_group_desc, OVS_RO },
     { "dump-group-stats", "switch [group]",
-      1, 2, ofctl_dump_group_stats },
+      1, 2, ofctl_dump_group_stats, OVS_RO },
     { "dump-group-features", "switch",
-      1, 1, ofctl_dump_group_features },
+      1, 1, ofctl_dump_group_features, OVS_RO },
+
+    { "bundle", "switch file",
+      2, 2, ofctl_bundle, OVS_RW },
+
     { "add-tlv-map", "switch map",
-      2, 2, ofctl_add_tlv_map },
+      2, 2, ofctl_add_tlv_map, OVS_RO },
     { "del-tlv-map", "switch [map]",
-      1, 2, ofctl_del_tlv_map },
+      1, 2, ofctl_del_tlv_map, OVS_RO },
     { "dump-tlv-map", "switch",
-      1, 1, ofctl_dump_tlv_map },
-    { "help", NULL, 0, INT_MAX, ofctl_help },
-    { "list-commands", NULL, 0, INT_MAX, ofctl_list_commands },
+      1, 1, ofctl_dump_tlv_map, OVS_RO },
+    { "help", NULL, 0, INT_MAX, ofctl_help, OVS_RO },
+    { "list-commands", NULL, 0, INT_MAX, ofctl_list_commands, OVS_RO },
 
     /* Undocumented commands for testing. */
-    { "parse-flow", NULL, 1, 1, ofctl_parse_flow },
-    { "parse-flows", NULL, 1, 1, ofctl_parse_flows },
-    { "parse-nx-match", NULL, 0, 0, ofctl_parse_nxm },
-    { "parse-nxm", NULL, 0, 0, ofctl_parse_nxm },
-    { "parse-oxm", NULL, 1, 1, ofctl_parse_oxm },
-    { "parse-actions", NULL, 1, 1, ofctl_parse_actions },
-    { "parse-instructions", NULL, 1, 1, ofctl_parse_instructions },
-    { "parse-ofp10-match", NULL, 0, 0, ofctl_parse_ofp10_match },
-    { "parse-ofp11-match", NULL, 0, 0, ofctl_parse_ofp11_match },
-    { "parse-pcap", NULL, 1, INT_MAX, ofctl_parse_pcap },
-    { "check-vlan", NULL, 2, 2, ofctl_check_vlan },
-    { "print-error", NULL, 1, 1, ofctl_print_error },
-    { "encode-error-reply", NULL, 2, 2, ofctl_encode_error_reply },
-    { "ofp-print", NULL, 1, 2, ofctl_ofp_print },
-    { "encode-hello", NULL, 1, 1, ofctl_encode_hello },
+    { "parse-flow", NULL, 1, 1, ofctl_parse_flow, OVS_RW },
+    { "parse-flows", NULL, 1, 1, ofctl_parse_flows, OVS_RW },
+    { "parse-nx-match", NULL, 0, 0, ofctl_parse_nxm, OVS_RW },
+    { "parse-nxm", NULL, 0, 0, ofctl_parse_nxm, OVS_RW },
+    { "parse-oxm", NULL, 1, 1, ofctl_parse_oxm, OVS_RW },
+    { "parse-actions", NULL, 1, 1, ofctl_parse_actions, OVS_RW },
+    { "parse-instructions", NULL, 1, 1, ofctl_parse_instructions, OVS_RW },
+    { "parse-ofp10-match", NULL, 0, 0, ofctl_parse_ofp10_match, OVS_RW },
+    { "parse-ofp11-match", NULL, 0, 0, ofctl_parse_ofp11_match, OVS_RW },
+    { "parse-pcap", NULL, 1, INT_MAX, ofctl_parse_pcap, OVS_RW },
+    { "check-vlan", NULL, 2, 2, ofctl_check_vlan, OVS_RW },
+    { "print-error", NULL, 1, 1, ofctl_print_error, OVS_RW },
+    { "encode-error-reply", NULL, 2, 2, ofctl_encode_error_reply, OVS_RW },
+    { "ofp-print", NULL, 1, 2, ofctl_ofp_print, OVS_RW },
+    { "encode-hello", NULL, 1, 1, ofctl_encode_hello, OVS_RW },
+    { "parse-key-value", NULL, 1, INT_MAX, ofctl_parse_key_value, OVS_RW },
 
-    { NULL, NULL, 0, 0, NULL },
+    { NULL, NULL, 0, 0, NULL, OVS_RO },
 };
 
 static const struct ovs_cmdl_command *get_all_commands(void)

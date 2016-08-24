@@ -15,7 +15,9 @@
 #ifndef SMAP_H
 #define SMAP_H 1
 
-#include "hmap.h"
+#include <netinet/in.h>
+#include "hash.h"
+#include "openvswitch/hmap.h"
 
 struct json;
 struct uuid;
@@ -80,10 +82,14 @@ void smap_remove_node(struct smap *, struct smap_node *);
 void smap_steal(struct smap *, struct smap_node *, char **keyp, char **valuep);
 void smap_clear(struct smap *);
 
-const char *smap_get(const struct smap *, const char *);
+const char *smap_get(const struct smap *, const char *key);
+const char *smap_get_def(const struct smap *, const char *key,
+                         const char *def);
 struct smap_node *smap_get_node(const struct smap *, const char *);
 bool smap_get_bool(const struct smap *smap, const char *key, bool def);
 int smap_get_int(const struct smap *smap, const char *key, int def);
+unsigned long long int smap_get_ullong(const struct smap *, const char *key,
+                                       unsigned long long def);
 bool smap_get_uuid(const struct smap *, const char *key, struct uuid *);
 
 bool smap_is_empty(const struct smap *);

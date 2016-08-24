@@ -1,15 +1,11 @@
-How to Use Open vSwitch with Docker
-====================================
+How to Use Open Virtual Networking With Docker
+==============================================
 
-This document describes how to use Open vSwitch with Docker 1.9.0 or
-later.  This document assumes that you installed Open vSwitch by following
-[INSTALL.md] or by using the distribution packages such as .deb or .rpm.
-Consult www.docker.com for instructions on how to install Docker.
-
-Docker 1.9.0 comes with support for multi-host networking.  Integration
-of Docker networking and Open vSwitch can be achieved via Open vSwitch
-virtual network (OVN).
-
+This document describes how to use Open Virtual Networking with Docker
+1.9.0 or later.  This document assumes that you have installed Open
+vSwitch by following [INSTALL.md] or by using the distribution packages
+such as .deb or.rpm.  Consult www.docker.com for instructions on how to
+install Docker.  Docker 1.9.0 comes with support for multi-host networking.
 
 Setup
 =====
@@ -56,12 +52,6 @@ in a database.  On one of your machines, with an IP Address of $CENTRAL_IP,
 where you have installed and started Open vSwitch, you will need to start some
 central components.
 
-Begin by making ovsdb-server listen on a TCP port by running:
-
-```
-ovs-appctl -t ovsdb-server ovsdb-server/add-remote ptcp:6640
-```
-
 Start ovn-northd daemon.  This daemon translates networking intent from Docker
 stored in the OVN_Northbound database to logical flows in OVN_Southbound
 database.
@@ -89,8 +79,8 @@ support in upstream Linux.  You can verify whether you have the support in your
 kernel by doing a "lsmod | grep $ENCAP_TYPE".)
 
 ```
-ovs-vsctl set Open_vSwitch . external_ids:ovn-remote="tcp:$CENTRAL_IP:6640" \
-  external_ids:ovn-encap-ip=$LOCAL_IP external_ids:ovn-encap-type="$ENCAP_TYPE"
+ovs-vsctl set Open_vSwitch . external_ids:ovn-remote="tcp:$CENTRAL_IP:6642" \
+  external_ids:ovn-nb="tcp:$CENTRAL_IP:6641" external_ids:ovn-encap-ip=$LOCAL_IP external_ids:ovn-encap-type="$ENCAP_TYPE"
 ```
 
 And finally, start the ovn-controller.  (You need to run the below command
@@ -116,10 +106,11 @@ pip install Flask
 ```
 
 Start the Open vSwitch driver on every host where you plan to create your
-containers.
+containers.  (Please read a note on $OVS_PYTHON_LIBS_PATH that is used below
+at the end of this document.)
 
 ```
-ovn-docker-overlay-driver --detach
+PYTHONPATH=$OVS_PYTHON_LIBS_PATH ovn-docker-overlay-driver --detach
 ```
 
 Docker has inbuilt primitives that closely match OVN's logical switches
@@ -144,7 +135,7 @@ You can also look at this logical switch in OVN's northbound database by
 running the following command.
 
 ```
-ovn-nbctl --db=tcp:$CENTRAL_IP:6640 lswitch-list
+ovn-nbctl --db=tcp:$CENTRAL_IP:6640 ls-list
 ```
 
 * Docker creates your logical port and attaches it to the logical network
@@ -163,7 +154,7 @@ Docker currently does not have a CLI command to list all your logical ports.
 But you can look at them in the OVN database, by running:
 
 ```
-ovn-nbctl --db=tcp:$CENTRAL_IP:6640 lport-list $NID
+ovn-nbctl --db=tcp:$CENTRAL_IP:6640 lsp-list $NID
 ```
 
 * You can also create a logical port and attach it to a running container.
@@ -263,10 +254,12 @@ Source the openrc file. e.g.:
 ```
 
 Start the network driver and provide your OpenStack tenant password
-when prompted.
+when prompted.  (Please read a note on $OVS_PYTHON_LIBS_PATH that is used below
+at the end of this document.)
 
 ```
-ovn-docker-underlay-driver --bridge breth0 --detach
+PYTHONPATH=$OVS_PYTHON_LIBS_PATH ovn-docker-underlay-driver --bridge breth0 \
+--detach
 ```
 
 From here-on you can use the same Docker commands as described in the
@@ -274,6 +267,18 @@ section 'The "overlay" mode'.
 
 Please read 'man ovn-architecture' to understand OVN's architecture in
 detail.
+
+Note on $OVS_PYTHON_LIBS_PATH
+=============================
+
+$OVS_PYTHON_LIBS_PATH should point to the directory where Open vSwitch
+python modules are installed.  If you installed Open vSwitch python
+modules via the debian package of 'python-openvswitch' or via pip by
+running 'pip install ovs', you do not need to specify the path.
+If you installed it by following the instructions in INSTALL.md, you
+should specify the path.  The path in that case depends on the options passed
+to ./configure.  (It is usually either '/usr/share/openvswitch/python' or
+'/usr/local/share/openvswitch/python'.)
 
 [INSTALL.md]: INSTALL.md
 [openvswitch-switch.README.Debian]: debian/openvswitch-switch.README.Debian

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,12 @@
  */
 
 #include <config.h>
-#include "lex.h"
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
-#include "dynamic-string.h"
-#include "json.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/json.h"
+#include "ovn/lex.h"
 #include "packets.h"
 #include "util.h"
 
@@ -56,7 +56,10 @@ lex_token_init(struct lex_token *token)
 void
 lex_token_destroy(struct lex_token *token)
 {
-    free(token->s);
+    if (token->s != token->buffer) {
+        free(token->s);
+    }
+    token->s = NULL;
 }
 
 /* Exchanges 'a' and 'b'. */
@@ -66,6 +69,48 @@ lex_token_swap(struct lex_token *a, struct lex_token *b)
     struct lex_token tmp = *a;
     *a = *b;
     *b = tmp;
+
+    /* Before swap, if 's' was pointed to 'buffer', its value shall be changed
+     * to point to the 'buffer' with the copied value. */
+    if (a->s == b->buffer) {
+        a->s = a->buffer;
+    }
+    if (b->s == a->buffer) {
+        b->s = b->buffer;
+    }
+}
+
+/* The string 's' need not be null-terminated at 'length'. */
+void
+lex_token_strcpy(struct lex_token *token, const char *s, size_t length)
+{
+    lex_token_destroy(token);
+    token->s = (length + 1 <= sizeof token->buffer
+                ? token->buffer
+                : xmalloc(length + 1));
+    memcpy(token->s, s, length);
+    token->buffer[length] = '\0';
+}
+
+void
+lex_token_strset(struct lex_token *token, char *s)
+{
+    lex_token_destroy(token);
+    token->s = s;
+}
+
+void
+lex_token_vsprintf(struct lex_token *token, const char *format, va_list args)
+{
+    lex_token_destroy(token);
+
+    va_list args2;
+    va_copy(args2, args);
+    token->s = (vsnprintf(token->buffer, sizeof token->buffer, format, args)
+                < sizeof token->buffer
+                ? token->buffer
+                : xvasprintf(format, args2));
+    va_end(args2);
 }
 
 /* lex_token_format(). */
@@ -182,6 +227,10 @@ lex_token_format(const struct lex_token *token, struct ds *s)
         lex_token_format_masked_integer(token, s);
         break;
 
+    case LEX_T_MACRO:
+        ds_put_format(s, "$%s", token->s);
+        break;
+
     case LEX_T_LPAREN:
         ds_put_cstr(s, "(");
         break;
@@ -245,6 +294,9 @@ lex_token_format(const struct lex_token *token, struct ds *s)
     case LEX_T_DECREMENT:
         ds_put_cstr(s, "--");
         break;
+    case LEX_T_COLON:
+        ds_put_char(s, ':');
+        break;
     default:
         OVS_NOT_REACHED();
     }
@@ -261,7 +313,7 @@ lex_error(struct lex_token *token, const char *message, ...)
 
     va_list args;
     va_start(args, message);
-    token->s = xvasprintf(message, args);
+    lex_token_vsprintf(token, message, args);
     va_end(args);
 }
 
@@ -293,10 +345,37 @@ lex_parse_integer__(const char *p, struct lex_token *token)
     lex_token_init(token);
     token->type = LEX_T_INTEGER;
     memset(&token->value, 0, sizeof token->value);
+
+    /* Find the extent of an "integer" token, which can be in decimal or
+     * hexadecimal, or an Ethernet address or IPv4 or IPv6 address, as 'start'
+     * through 'end'.
+     *
+     * Special cases we handle here are:
+     *
+     *     - The ellipsis token "..", used as e.g. 123..456.  A doubled dot
+     *       is never valid syntax as part of an "integer", so we stop if
+     *       we encounter two dots in a row.
+     *
+     *     - Syntax like 1.2.3.4:1234 to indicate an IPv4 address followed by a
+     *       port number should be considered three tokens: 1.2.3.4 : 1234.
+     *       The obvious approach is to allow just dots or just colons within a
+     *       given integer, but that would disallow IPv4-mapped IPv6 addresses,
+     *       e.g. ::ffff:192.0.2.128.  However, even in those addresses, a
+     *       colon never follows a dot, so we stop if we encounter a colon
+     *       after a dot.
+     *
+     *       (There is no corresponding way to parse an IPv6 address followed
+     *       by a port number: ::1:2:3:4:1234 is unavoidably ambiguous.)
+     */
     const char *start = p;
     const char *end = start;
-    while (isalnum((unsigned char) *end) || *end == ':'
+    bool saw_dot = false;
+    while (isalnum((unsigned char) *end)
+           || (*end == ':' && !saw_dot)
            || (*end == '.' && end[1] != '.')) {
+        if (*end == '.') {
+            saw_dot = true;
+        }
         end++;
     }
     size_t len = end - start;
@@ -428,6 +507,7 @@ static const char *
 lex_parse_string(const char *p, struct lex_token *token)
 {
     const char *start = ++p;
+    char * s = NULL;
     for (;;) {
         switch (*p) {
         case '\0':
@@ -435,8 +515,9 @@ lex_parse_string(const char *p, struct lex_token *token)
             return p;
 
         case '"':
-            token->type = (json_string_unescape(start, p - start, &token->s)
+            token->type = (json_string_unescape(start, p - start, &s)
                            ? LEX_T_STRING : LEX_T_ERROR);
+            lex_token_strset(token, s);
             return p + 1;
 
         case '\\':
@@ -467,7 +548,7 @@ lex_is_idn(unsigned char c)
 }
 
 static const char *
-lex_parse_id(const char *p, struct lex_token *token)
+lex_parse_id(const char *p, enum lex_type type, struct lex_token *token)
 {
     const char *start = p;
 
@@ -475,9 +556,21 @@ lex_parse_id(const char *p, struct lex_token *token)
         p++;
     } while (lex_is_idn(*p));
 
-    token->type = LEX_T_ID;
-    token->s = xmemdup0(start, p - start);
+    token->type = type;
+    lex_token_strcpy(token, start, p - start);
     return p;
+}
+
+static const char *
+lex_parse_macro(const char *p, struct lex_token *token)
+{
+    p++;
+    if (!lex_is_id1(*p)) {
+        lex_error(token, "`$' must be followed by a valid identifier.");
+        return p;
+    }
+
+    return lex_parse_id(p, LEX_T_MACRO, token);
 }
 
 /* Initializes 'token' and parses the first token from the beginning of
@@ -650,9 +743,19 @@ next:
         }
         break;
 
+    case '$':
+        p = lex_parse_macro(p, token);
+        break;
+
+    case ':':
+        if (p[1] != ':') {
+            token->type = LEX_T_COLON;
+            p++;
+            break;
+        }
+        /* IPv6 address beginning with "::".  Fall through. */
     case '0': case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9':
-    case ':':
         p = lex_parse_integer(p, token);
         break;
 
@@ -668,12 +771,12 @@ next:
          * digits followed by a colon, but identifiers never do. */
         p = (p[strspn(p, "0123456789abcdefABCDEF")] == ':'
              ? lex_parse_integer(p, token)
-             : lex_parse_id(p, token));
+             : lex_parse_id(p, LEX_T_ID, token));
         break;
 
     default:
         if (lex_is_id1(*p)) {
-            p = lex_parse_id(p, token);
+            p = lex_parse_id(p, LEX_T_ID, token);
         } else {
             if (isprint((unsigned char) *p)) {
                 lex_error(token, "Invalid character `%c' in input.", *p);
@@ -700,6 +803,7 @@ lexer_init(struct lexer *lexer, const char *input)
     lexer->input = input;
     lexer->start = NULL;
     lex_token_init(&lexer->token);
+    lexer->error = NULL;
 }
 
 /* Frees storage associated with 'lexer'. */
@@ -707,6 +811,7 @@ void
 lexer_destroy(struct lexer *lexer)
 {
     lex_token_destroy(&lexer->token);
+    free(lexer->error);
 }
 
 /* Obtains the next token from 'lexer' into 'lexer->token', and returns the
@@ -748,6 +853,24 @@ lexer_match(struct lexer *lexer, enum lex_type type)
     }
 }
 
+bool
+lexer_force_match(struct lexer *lexer, enum lex_type t)
+{
+    if (lexer_match(lexer, t)) {
+        return true;
+    } else {
+        struct lex_token token = { .type = t };
+        struct ds s = DS_EMPTY_INITIALIZER;
+        lex_token_format(&token, &s);
+
+        lexer_syntax_error(lexer, "expecting `%s'", ds_cstr(&s));
+
+        ds_destroy(&s);
+
+        return false;
+    }
+}
+
 /* If 'lexer''s current token is the identifier given in 'id', advances 'lexer'
  * to the next token and returns true.  Otherwise returns false.  */
 bool
@@ -780,4 +903,93 @@ lexer_get_int(struct lexer *lexer, int *value)
         *value = 0;
         return false;
     }
+}
+
+bool
+lexer_force_int(struct lexer *lexer, int *value)
+{
+    bool ok = lexer_get_int(lexer, value);
+    if (!ok) {
+        lexer_syntax_error(lexer, "expecting small integer");
+    }
+    return ok;
+}
+
+void
+lexer_force_end(struct lexer *lexer)
+{
+    if (lexer->token.type != LEX_T_END) {
+        lexer_syntax_error(lexer, "expecting end of input");
+    }
+}
+
+static bool
+lexer_error_handle_common(struct lexer *lexer)
+{
+    if (lexer->error) {
+        /* Already have an error, suppress this one since the cascade seems
+         * unlikely to be useful. */
+        return true;
+    } else if (lexer->token.type == LEX_T_ERROR) {
+        /* The lexer signaled an error.  Nothing at a higher level accepts an
+         * error token, so we'll inevitably end up here with some meaningless
+         * parse error.  Report the lexical error instead. */
+        lexer->error = xstrdup(lexer->token.s);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void OVS_PRINTF_FORMAT(2, 3)
+lexer_error(struct lexer *lexer, const char *message, ...)
+{
+    if (lexer_error_handle_common(lexer)) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, message);
+    lexer->error = xvasprintf(message, args);
+    va_end(args);
+}
+
+void OVS_PRINTF_FORMAT(2, 3)
+lexer_syntax_error(struct lexer *lexer, const char *message, ...)
+{
+    if (lexer_error_handle_common(lexer)) {
+        return;
+    }
+
+    struct ds s;
+
+    ds_init(&s);
+    ds_put_cstr(&s, "Syntax error");
+    if (lexer->token.type == LEX_T_END) {
+        ds_put_cstr(&s, " at end of input");
+    } else if (lexer->start) {
+        ds_put_format(&s, " at `%.*s'",
+                      (int) (lexer->input - lexer->start),
+                      lexer->start);
+    }
+
+    if (message) {
+        ds_put_char(&s, ' ');
+
+        va_list args;
+        va_start(args, message);
+        ds_put_format_valist(&s, message, args);
+        va_end(args);
+    }
+    ds_put_char(&s, '.');
+
+    lexer->error = ds_steal_cstr(&s);
+}
+
+char *
+lexer_steal_error(struct lexer *lexer)
+{
+    char *error = lexer->error;
+    lexer->error = NULL;
+    return error;
 }

@@ -19,7 +19,7 @@
 
 #include <limits.h>
 
-#include "json.h"
+#include "openvswitch/json.h"
 #include "column.h"
 #include "ovsdb-error.h"
 #include "ovsdb-parser.h"

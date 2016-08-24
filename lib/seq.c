@@ -22,9 +22,9 @@
 
 #include "coverage.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "latch.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
 
@@ -100,18 +100,59 @@ seq_destroy(struct seq *seq)
     ovs_mutex_unlock(&seq_mutex);
 }
 
+int
+seq_try_lock(void)
+{
+    return ovs_mutex_trylock(&seq_mutex);
+}
+
+void
+seq_lock(void)
+    OVS_ACQUIRES(seq_mutex)
+{
+    ovs_mutex_lock(&seq_mutex);
+}
+
+void
+seq_unlock(void)
+    OVS_RELEASES(seq_mutex)
+{
+    ovs_mutex_unlock(&seq_mutex);
+}
+
+/* Increments 'seq''s sequence number, waking up any threads that are waiting
+ * on 'seq'. */
+void
+seq_change_protected(struct seq *seq)
+    OVS_REQUIRES(seq_mutex)
+{
+    COVERAGE_INC(seq_change);
+
+    seq->value = seq_next++;
+    seq_wake_waiters(seq);
+}
+
 /* Increments 'seq''s sequence number, waking up any threads that are waiting
  * on 'seq'. */
 void
 seq_change(struct seq *seq)
     OVS_EXCLUDED(seq_mutex)
 {
-    COVERAGE_INC(seq_change);
-
     ovs_mutex_lock(&seq_mutex);
-    seq->value = seq_next++;
-    seq_wake_waiters(seq);
+    seq_change_protected(seq);
     ovs_mutex_unlock(&seq_mutex);
+}
+
+/* Returns 'seq''s current sequence number (which could change immediately).
+ *
+ * seq_read() and seq_wait() can be used together to yield a race-free wakeup
+ * when an object changes, even without an ability to lock the object.  See
+ * Usage in seq.h for details. */
+uint64_t
+seq_read_protected(const struct seq *seq)
+    OVS_REQUIRES(seq_mutex)
+{
+    return seq->value;
 }
 
 /* Returns 'seq''s current sequence number (which could change immediately).
@@ -126,7 +167,7 @@ seq_read(const struct seq *seq)
     uint64_t value;
 
     ovs_mutex_lock(&seq_mutex);
-    value = seq->value;
+    value = seq_read_protected(seq);
     ovs_mutex_unlock(&seq_mutex);
 
     return value;
@@ -159,7 +200,7 @@ seq_wait__(struct seq *seq, uint64_t value, const char *where)
     waiter->ovsthread_id = id;
     waiter->value = value;
     waiter->thread = seq_thread_get();
-    list_push_back(&waiter->thread->waiters, &waiter->list_node);
+    ovs_list_push_back(&waiter->thread->waiters, &waiter->list_node);
 
     if (!waiter->thread->waiting) {
         latch_wait_at(&waiter->thread->latch, where);
@@ -230,7 +271,7 @@ seq_thread_get(void)
     struct seq_thread *thread = pthread_getspecific(seq_thread_key);
     if (!thread) {
         thread = xmalloc(sizeof *thread);
-        list_init(&thread->waiters);
+        ovs_list_init(&thread->waiters);
         latch_init(&thread->latch);
         thread->waiting = false;
 
@@ -270,7 +311,7 @@ seq_waiter_destroy(struct seq_waiter *waiter)
     OVS_REQUIRES(seq_mutex)
 {
     hmap_remove(&waiter->seq->waiters, &waiter->hmap_node);
-    list_remove(&waiter->list_node);
+    ovs_list_remove(&waiter->list_node);
     free(waiter);
 }
 

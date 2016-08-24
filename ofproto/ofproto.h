@@ -25,7 +25,7 @@
 #include "cfm.h"
 #include "classifier.h"
 #include "flow.h"
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 #include "netflow.h"
 #include "rstp.h"
 #include "smap.h"
@@ -82,6 +82,7 @@ struct ofproto_ipfix_bridge_exporter_options {
     bool enable_tunnel_sampling;
     bool enable_input_sampling;
     bool enable_output_sampling;
+    char *virtual_obs_id;
 };
 
 struct ofproto_ipfix_flow_exporter_options {
@@ -89,6 +90,8 @@ struct ofproto_ipfix_flow_exporter_options {
     struct sset targets;
     uint32_t cache_active_timeout;
     uint32_t cache_max_flows;
+    bool enable_tunnel_sampling;
+    char *virtual_obs_id;
 };
 
 struct ofproto_rstp_status {
@@ -290,6 +293,8 @@ const char *ofproto_port_open_type(const char *datapath_type,
                                    const char *port_type);
 int ofproto_port_add(struct ofproto *, struct netdev *, ofp_port_t *ofp_portp);
 int ofproto_port_del(struct ofproto *, ofp_port_t ofp_port);
+void ofproto_port_set_config(struct ofproto *, ofp_port_t ofp_port,
+                             const struct smap *cfg);
 int ofproto_port_get_stats(const struct ofport *, struct netdev_stats *stats);
 
 int ofproto_port_query_by_name(const struct ofproto *, const char *devname,
@@ -399,14 +404,6 @@ struct ofproto_bundle_settings {
 
     struct lacp_settings *lacp;              /* Nonnull to enable LACP. */
     struct lacp_slave_settings *lacp_slaves; /* Array of n_slaves elements. */
-
-    /* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
-     *
-     * This is deprecated.  It is only for compatibility with broken device
-     * drivers in old versions of Linux that do not properly support VLANs when
-     * VLAN devices are not used.  When broken device drivers are no longer in
-     * widespread use, we will delete these interfaces. */
-    ofp_port_t realdev_ofp_port;/* OpenFlow port number of real device. */
 };
 
 int ofproto_bundle_register(struct ofproto *, void *aux,
@@ -432,6 +429,8 @@ struct ofproto_mirror_settings {
     /* Output (mutually exclusive). */
     void *out_bundle;           /* A registered ofbundle handle or NULL. */
     uint16_t out_vlan;          /* Output VLAN, only if out_bundle is NULL. */
+    uint16_t snaplen;           /* Max packet size of a mirrored packet
+                                   in byte, set to 0 equals 65535. */
 };
 
 int ofproto_mirror_register(struct ofproto *, void *aux,
@@ -503,18 +502,6 @@ bool ofproto_port_cfm_status_changed(struct ofproto *, ofp_port_t ofp_port);
 int ofproto_port_get_cfm_status(const struct ofproto *,
                                 ofp_port_t ofp_port,
                                 struct cfm_status *);
-
-/* Linux VLAN device support (e.g. "eth0.10" for VLAN 10.)
- *
- * This is deprecated.  It is only for compatibility with broken device drivers
- * in old versions of Linux that do not properly support VLANs when VLAN
- * devices are not used.  When broken device drivers are no longer in
- * widespread use, we will delete these interfaces. */
-
-void ofproto_get_vlan_usage(struct ofproto *, unsigned long int *vlan_bitmap);
-bool ofproto_has_vlan_usage_changed(const struct ofproto *);
-int ofproto_port_set_realdev(struct ofproto *, ofp_port_t vlandev_ofp_port,
-                             ofp_port_t realdev_ofp_port, int vid);
 
 /* Table configuration */
 

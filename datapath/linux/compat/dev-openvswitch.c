@@ -3,6 +3,11 @@
 #include <linux/version.h>
 #include <net/rtnetlink.h>
 
+#include "gso.h"
+#include "vport.h"
+#include "vport-internal_dev.h"
+#include "vport-netdev.h"
+
 #ifndef HAVE_DEV_DISABLE_LRO
 
 #ifdef NETIF_F_LRO
@@ -34,84 +39,45 @@ void dev_disable_lro(struct net_device *dev) { }
 
 #endif /* HAVE_DEV_DISABLE_LRO */
 
-#if !defined HAVE_NETDEV_RX_HANDLER_REGISTER || \
-    defined HAVE_RHEL_OVS_HOOK
-
-static int nr_bridges;
-
-#ifdef HAVE_RHEL_OVS_HOOK
-int rpl_netdev_rx_handler_register(struct net_device *dev,
-				   openvswitch_handle_frame_hook_t *hook,
-				   void *rx_handler_data)
-{
-	nr_bridges++;
-	rcu_assign_pointer(dev->ax25_ptr, rx_handler_data);
-
-	if (nr_bridges == 1)
-		rcu_assign_pointer(openvswitch_handle_frame_hook, hook);
-	return 0;
-}
-EXPORT_SYMBOL_GPL(rpl_netdev_rx_handler_register);
-#else
-
-int rpl_netdev_rx_handler_register(struct net_device *dev,
-				   struct sk_buff *(*hook)(struct net_bridge_port *p,
-							   struct sk_buff *skb),
-				   void *rx_handler_data)
-{
-	nr_bridges++;
-	if (dev->br_port)
-		return -EBUSY;
-
-	rcu_assign_pointer(dev->br_port, rx_handler_data);
-
-	if (nr_bridges == 1)
-		br_handle_frame_hook = hook;
-	return 0;
-}
-EXPORT_SYMBOL_GPL(rpl_netdev_rx_handler_register);
-#endif
-
-void rpl_netdev_rx_handler_unregister(struct net_device *dev)
-{
-	nr_bridges--;
-#ifdef HAVE_RHEL_OVS_HOOK
-	rcu_assign_pointer(dev->ax25_ptr, NULL);
-
-	if (nr_bridges)
-		return;
-
-	rcu_assign_pointer(openvswitch_handle_frame_hook, NULL);
-#else
-	rcu_assign_pointer(dev->br_port, NULL);
-
-	if (nr_bridges)
-		return;
-
-	br_handle_frame_hook = NULL;
-#endif
-}
-EXPORT_SYMBOL_GPL(rpl_netdev_rx_handler_unregister);
-
-#endif
-
 int rpl_rtnl_delete_link(struct net_device *dev)
 {
 	const struct rtnl_link_ops *ops;
+	LIST_HEAD(list_kill);
 
 	ops = dev->rtnl_link_ops;
 	if (!ops || !ops->dellink)
 		return -EOPNOTSUPP;
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
-	ops->dellink(dev);
-#else
-	{
-		LIST_HEAD(list_kill);
+	ops->dellink(dev, &list_kill);
+	unregister_netdevice_many(&list_kill);
 
-		ops->dellink(dev, &list_kill);
-		unregister_netdevice_many(&list_kill);
-	}
-#endif
 	return 0;
 }
+EXPORT_SYMBOL_GPL(rpl_rtnl_delete_link);
+
+#ifndef USE_UPSTREAM_TUNNEL
+int ovs_dev_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb)
+{
+	struct ip_tunnel_info *info;
+	struct vport *vport;
+
+	if (!SKB_SETUP_FILL_METADATA_DST(skb))
+		return -ENOMEM;
+
+	vport = ovs_netdev_get_vport(dev);
+	if (!vport)
+		return -EINVAL;
+
+	if (!vport->ops->fill_metadata_dst)
+		return -EINVAL;
+
+	info = skb_tunnel_info(skb);
+	if (!info)
+		return -ENOMEM;
+	if (unlikely(!(info->mode & IP_TUNNEL_INFO_TX)))
+		return -EINVAL;
+
+	return vport->ops->fill_metadata_dst(dev, skb);
+}
+EXPORT_SYMBOL_GPL(ovs_dev_fill_metadata_dst);
+#endif

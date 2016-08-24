@@ -32,28 +32,28 @@ ovn-sbctl chassis-add fakechassis geneve 127.0.0.1
 
 for n in 1 2 3 4 5 6 7 8; do
     if [ $n -gt 4 ] ; then
-        lswitch_name="provnet1-$n-101"
-        lport_name="$lswitch_name-port1"
+        ls_name="provnet1-$n-101"
+        lsp_name="$ls_name-port1"
     else
-        lswitch_name="provnet1-$n"
+        ls_name="provnet1-$n"
     fi
-    ovn-nbctl lswitch-add $lswitch_name
+    ovn-nbctl ls-add $ls_name
 
-    lport_name="$lswitch_name-port1"
-    ovn-nbctl lport-add $lswitch_name $lport_name
-    ovn-nbctl lport-set-addresses $lport_name 00:00:00:00:00:0$n
-    ovn-nbctl lport-set-port-security $lport_name 00:00:00:00:00:0$n
+    lsp_name="$ls_name-port1"
+    ovn-nbctl lsp-add $ls_name $lsp_name
+    ovn-nbctl lsp-set-addresses $lsp_name 00:00:00:00:00:0$n
+    ovn-nbctl lsp-set-port-security $lsp_name 00:00:00:00:00:0$n
 
     if [ $n -gt 4 ] ; then
-        lport_name="provnet1-$n-physnet1-101"
-        ovn-nbctl lport-add $lswitch_name $lport_name "" 101
+        lsp_name="provnet1-$n-physnet1-101"
+        ovn-nbctl lsp-add $ls_name $lsp_name "" 101
     else
-        lport_name="provnet1-$n-physnet1"
-        ovn-nbctl lport-add $lswitch_name $lport_name
+        lsp_name="provnet1-$n-physnet1"
+        ovn-nbctl lsp-add $ls_name $lsp_name
     fi
-    ovn-nbctl lport-set-addresses $lport_name unknown
-    ovn-nbctl lport-set-type $lport_name localnet
-    ovn-nbctl lport-set-options $lport_name network_name=physnet1
+    ovn-nbctl lsp-set-addresses $lsp_name unknown
+    ovn-nbctl lsp-set-type $lsp_name localnet
+    ovn-nbctl lsp-set-options $lsp_name network_name=physnet1
 done
 
 ovs-vsctl add-port br-int lport1 -- set Interface lport1 external_ids:iface-id=provnet1-1-port1
@@ -61,7 +61,7 @@ ovs-vsctl add-port br-int lport2 -- set Interface lport2 external_ids:iface-id=p
 ovs-vsctl add-port br-int lport5 -- set Interface lport5 external_ids:iface-id=provnet1-5-101-port1
 ovs-vsctl add-port br-int lport6 -- set Interface lport6 external_ids:iface-id=provnet1-6-101-port1
 
-ovn-sbctl lport-bind provnet1-3-port1 fakechassis
-ovn-sbctl lport-bind provnet1-4-port1 fakechassis
-ovn-sbctl lport-bind provnet1-7-101-port1 fakechassis
-ovn-sbctl lport-bind provnet1-8-101-port1 fakechassis
+ovn-sbctl lsp-bind provnet1-3-port1 fakechassis
+ovn-sbctl lsp-bind provnet1-4-port1 fakechassis
+ovn-sbctl lsp-bind provnet1-7-101-port1 fakechassis
+ovn-sbctl lsp-bind provnet1-8-101-port1 fakechassis

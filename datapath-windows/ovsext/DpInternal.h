@@ -20,7 +20,6 @@
 #include <netioapi.h>
 #define IFNAMSIZ IF_NAMESIZE
 #include "../ovsext/Netlink/Netlink.h"
-#include "Mpls.h"
 
 #define OVS_DP_NUMBER   ((uint32_t) 0)
 
@@ -129,10 +128,18 @@ typedef struct L2Key {
 } L2Key; /* Size of 24 byte. */
 
 /* Number of packet attributes required to store OVS tunnel key. */
-#define NUM_PKT_ATTR_REQUIRED 3
+#define NUM_PKT_ATTR_REQUIRED 35
+#define TUN_OPT_MAX_LEN 255
 
 typedef union OvsIPv4TunnelKey {
+    /* Options should always be the first member of tunnel key.
+     * They are stored at the end of the array if they are less than the
+     * maximum size. This allows us to get the benefits of variable length
+     * matching for small options.
+     */
     struct {
+        UINT8 tunOpts[TUN_OPT_MAX_LEN];          /* Tunnel options. */
+        UINT8 tunOptLen;             /* Tunnel option length in byte. */
         ovs_be32 dst;
         ovs_be32 src;
         ovs_be64 tunnelId;
@@ -148,7 +155,22 @@ typedef union OvsIPv4TunnelKey {
         };
     };
     uint64_t attr[NUM_PKT_ATTR_REQUIRED];
-} OvsIPv4TunnelKey; /* Size of 24 byte. */
+} OvsIPv4TunnelKey; /* Size of 280 byte. */
+
+__inline uint8_t TunnelKeyGetOptionsOffset(const OvsIPv4TunnelKey *key)
+{
+    return TUN_OPT_MAX_LEN - key->tunOptLen;
+}
+
+__inline uint8_t* TunnelKeyGetOptions(OvsIPv4TunnelKey *key)
+{
+    return key->tunOpts + TunnelKeyGetOptionsOffset(key);
+}
+
+__inline uint16_t TunnelKeyGetRealSize(OvsIPv4TunnelKey *key)
+{
+    return sizeof(OvsIPv4TunnelKey) - TunnelKeyGetOptionsOffset(key);
+}
 
 typedef struct MplsKey {
     ovs_be32 lse;                /* MPLS topmost label stack entry. */
@@ -156,7 +178,7 @@ typedef struct MplsKey {
 } MplsKey; /* Size of 8 bytes. */
 
 typedef __declspec(align(8)) struct OvsFlowKey {
-    OvsIPv4TunnelKey tunKey;     /* 24 bytes */
+    OvsIPv4TunnelKey tunKey;     /* 280 bytes */
     L2Key l2;                    /* 24 bytes */
     union {
         /* These headers are mutually exclusive. */
@@ -166,6 +188,15 @@ typedef __declspec(align(8)) struct OvsFlowKey {
         Icmp6Key icmp6Key;       /* size 72 */
         MplsKey mplsKey;         /* size 8 */
     };
+    UINT32 recircId;             /* Recirculation ID.  */
+    UINT32 dpHash;               /* Datapath calculated hash value. */
+    struct {
+        /* Connection tracking fields. */
+        UINT16 zone;
+        UINT32 mark;
+        UINT32 state;
+        struct ovs_key_ct_labels labels;
+    } ct;                        /* Connection Tracking Flags */
 } OvsFlowKey;
 
 #define OVS_WIN_TUNNEL_KEY_SIZE (sizeof (OvsIPv4TunnelKey))
@@ -179,7 +210,7 @@ typedef __declspec(align(8)) struct OvsFlowKey {
 typedef struct OvsFlowStats {
     Ovs64AlignedU64 packetCount;
     Ovs64AlignedU64 byteCount;
-    uint32_t used;
+    uint64_t used;
     uint8_t tcpFlags;
 } OvsFlowStats;
 
@@ -267,8 +298,10 @@ typedef struct OvsPacketExecute {
 
    uint32_t packetLen;
    uint32_t actionsLen;
+   PNL_MSG_HDR nlMsgHdr;
    PCHAR packetBuf;
    PNL_ATTR actions;
+   PNL_ATTR *keyAttrs;
 } OvsPacketExecute;
 
 
@@ -277,6 +310,8 @@ typedef struct _OVS_EVENT_SUBSCRIBE {
     uint32_t dpNo;
     uint32_t subscribe;
     uint32_t mask;
+    uint32_t mcastGrp;
+    uint32_t protocol;
 } OVS_EVENT_SUBSCRIBE, *POVS_EVENT_SUBSCRIBE;
 
 typedef struct _OVS_EVENT_POLL {
@@ -294,20 +329,28 @@ enum {
     OVS_EVENT_MASK_ALL      = 0x3f,
 };
 
+enum {
+    OVS_EVENT_CT_NEW        = (1 << 0),
+    OVS_EVENT_CT_DELETE     = (1 << 1),
+    OVS_EVENT_CT_MASK_ALL   = 0x3
+};
 
-typedef struct _OVS_EVENT_ENTRY {
+/* Supported mcast event groups */
+enum OVS_MCAST_EVENT_TYPES {
+    OVS_MCAST_VPORT_EVENT,
+    OVS_MCAST_CT_EVENT,
+    __OVS_MCAST_EVENT_TYPES_MAX
+};
+#define OVS_MCAST_EVENT_TYPES_MAX (__OVS_MCAST_EVENT_TYPES_MAX \
+                                   - OVS_MCAST_VPORT_EVENT)
+
+typedef struct _OVS_VPORT_EVENT_ENTRY {
     UINT32 portNo;
     OVS_VPORT_TYPE ovsType;
     UINT32 upcallPid;
     CHAR ovsName[OVS_MAX_PORT_NAME_LENGTH];
     UINT32 type;
-} OVS_EVENT_ENTRY, *POVS_EVENT_ENTRY;
-
-
-typedef struct _OVS_EVENT_STATUS {
-    uint32_t numberEntries;
-    OVS_EVENT_ENTRY eventEntries[0];
-} OVS_EVENT_STATUS, *POVS_EVENT_STATUS;
+} OVS_VPORT_EVENT_ENTRY, *POVS_VPORT_EVENT_ENTRY;
 
 #pragma pack(pop)
 

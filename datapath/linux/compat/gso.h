@@ -8,26 +8,25 @@ typedef void (*gso_fix_segment_t)(struct sk_buff *);
 
 struct ovs_gso_cb {
 	struct ovs_skb_cb dp_cb;
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 	struct metadata_dst	*tun_dst;
 #endif
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+#ifndef USE_UPSTREAM_TUNNEL_GSO
 	gso_fix_segment_t fix_segment;
+	bool ipv6;
 #endif
 #ifndef HAVE_INNER_PROTOCOL
 	__be16		inner_protocol;
 #endif
-#ifndef HAVE_INNER_MAC_HEADER
-	unsigned int	inner_mac_header;
-#endif
-#ifndef HAVE_INNER_NETWORK_HEADER
-	unsigned int	inner_network_header;
+#ifndef USE_UPSTREAM_TUNNEL
+	/* Keep original tunnel info during userspace action execution. */
+	struct metadata_dst *fill_md_dst;
 #endif
 };
 #define OVS_GSO_CB(skb) ((struct ovs_gso_cb *)(skb)->cb)
 
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+#ifndef USE_UPSTREAM_TUNNEL_GSO
 #include <linux/netdevice.h>
 #include <linux/skbuff.h>
 #include <net/protocol.h>
@@ -42,59 +41,6 @@ static inline void skb_clear_ovs_gso_cb(struct sk_buff *skb)
 
 }
 #endif
-
-#ifndef HAVE_INNER_MAC_HEADER
-static inline unsigned char *skb_inner_mac_header(const struct sk_buff *skb)
-{
-	return skb->head + OVS_GSO_CB(skb)->inner_mac_header;
-}
-
-static inline void skb_set_inner_mac_header(const struct sk_buff *skb,
-					    int offset)
-{
-	OVS_GSO_CB(skb)->inner_mac_header = (skb->data - skb->head) + offset;
-}
-#endif /* HAVE_INNER_MAC_HEADER */
-
-#ifndef HAVE_INNER_NETWORK_HEADER
-static inline unsigned char *skb_inner_network_header(const struct sk_buff *skb)
-{
-	return skb->head + OVS_GSO_CB(skb)->inner_network_header;
-}
-
-static inline int skb_inner_network_offset(const struct sk_buff *skb)
-{
-	return skb_inner_network_header(skb) - skb->data;
-}
-
-/* We don't actually store the transport offset on backports because
- * we don't use it anywhere. Slightly rename this version to avoid
- * future users from picking it up accidentially.
- */
-static inline int ovs_skb_inner_transport_offset(const struct sk_buff *skb)
-{
-	return 0;
-}
-
-static inline void skb_set_inner_network_header(const struct sk_buff *skb,
-						int offset)
-{
-	OVS_GSO_CB(skb)->inner_network_header = (skb->data - skb->head)
-						+ offset;
-}
-
-static inline void skb_set_inner_transport_header(const struct sk_buff *skb,
-						  int offset)
-{ }
-
-#else
-
-static inline int ovs_skb_inner_transport_offset(const struct sk_buff *skb)
-{
-	return skb_inner_transport_header(skb) - skb->data;
-}
-
-#endif /* HAVE_INNER_NETWORK_HEADER */
 
 #ifndef HAVE_INNER_PROTOCOL
 static inline void ovs_skb_init_inner_protocol(struct sk_buff *skb)
@@ -137,28 +83,48 @@ static inline void ovs_skb_set_inner_protocol(struct sk_buff *skb,
 	skb->inner_protocol = ethertype;
 }
 #endif /* ENCAP_TYPE_ETHER */
-#endif /* 3.11 */
+#endif /* HAVE_INNER_PROTOCOL */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
-#define ip_local_out rpl_ip_local_out
-int rpl_ip_local_out(struct sk_buff *skb);
-
+#define skb_inner_mac_offset rpl_skb_inner_mac_offset
 static inline int skb_inner_mac_offset(const struct sk_buff *skb)
 {
 	return skb_inner_mac_header(skb) - skb->data;
 }
 
-#define skb_reset_inner_headers rpl_skb_reset_inner_headers
-static inline void skb_reset_inner_headers(struct sk_buff *skb)
-{
-	BUILD_BUG_ON(sizeof(struct ovs_gso_cb) > FIELD_SIZEOF(struct sk_buff, cb));
-	skb_set_inner_mac_header(skb, skb_mac_header(skb) - skb->data);
-	skb_set_inner_network_header(skb, skb_network_offset(skb));
-	skb_set_inner_transport_header(skb, skb_transport_offset(skb));
-}
-#endif /* 3.18 */
+#ifndef USE_UPSTREAM_TUNNEL_GSO
+#define ip_local_out rpl_ip_local_out
+int rpl_ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb);
 
-#ifndef HAVE_METADATA_DST
+#define ip6_local_out rpl_ip6_local_out
+int rpl_ip6_local_out(struct net *net, struct sock *sk, struct sk_buff *skb);
+#else
+
+static inline int rpl_ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
+{
+	memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
+#ifdef HAVE_IP_LOCAL_OUT_TAKES_NET
+	/* net and sk parameters are added at same time. */
+	return ip_local_out(net, sk, skb);
+#else
+	return ip_local_out(skb);
+#endif
+}
+#define ip_local_out rpl_ip_local_out
+
+static inline int rpl_ip6_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
+{
+	memset(IP6CB(skb), 0, sizeof (*IP6CB(skb)));
+#ifdef HAVE_IP_LOCAL_OUT_TAKES_NET
+	return ip6_local_out(net, sk, skb);
+#else
+	return ip6_local_out(skb);
+#endif
+}
+#define ip6_local_out rpl_ip6_local_out
+
+#endif /* USE_UPSTREAM_TUNNEL_GSO */
+
+#ifndef USE_UPSTREAM_TUNNEL
 /* We need two separate functions to manage different dst in this case.
  * First is dst_entry and second is tunnel-dst.
  * So define ovs_* separate functions for tun_dst.
@@ -187,6 +153,9 @@ static inline void ovs_dst_hold(void *dst)
 
 static inline void ovs_dst_release(struct dst_entry *dst)
 {
+	struct metadata_dst *tun_dst = (struct metadata_dst *) dst;
+
+	dst_cache_destroy(&tun_dst->u.tun_info.dst_cache);
 	kfree(dst);
 }
 
@@ -195,6 +164,46 @@ static inline void ovs_dst_release(struct dst_entry *dst)
 #define ovs_skb_dst_drop skb_dst_drop
 #define ovs_dst_hold dst_hold
 #define ovs_dst_release dst_release
+#endif
+
+#ifndef USE_UPSTREAM_TUNNEL
+#define SKB_INIT_FILL_METADATA_DST(skb)	OVS_GSO_CB(skb)->fill_md_dst = NULL;
+
+#define SKB_RESTORE_FILL_METADATA_DST(skb)	do {			\
+	if (OVS_GSO_CB(skb)->fill_md_dst) {					\
+		kfree(OVS_GSO_CB(skb)->tun_dst);			\
+		OVS_GSO_CB(skb)->tun_dst = OVS_GSO_CB(skb)->fill_md_dst;	\
+	}								\
+} while (0)
+
+
+#define SKB_SETUP_FILL_METADATA_DST(skb) ({			\
+	struct metadata_dst *new_md_dst;			\
+	struct metadata_dst *md_dst;				\
+	int md_size;						\
+	int ret = 1;						\
+								\
+	SKB_RESTORE_FILL_METADATA_DST(skb); 			\
+	new_md_dst = kmalloc(sizeof(struct metadata_dst) + 256, GFP_ATOMIC); \
+	if (new_md_dst) {						\
+		md_dst = OVS_GSO_CB(skb)->tun_dst;			\
+		md_size = new_md_dst->u.tun_info.options_len;		\
+		memcpy(&new_md_dst->u.tun_info, &md_dst->u.tun_info,	\
+			sizeof(struct ip_tunnel_info) + md_size);	\
+									\
+		OVS_GSO_CB(skb)->fill_md_dst = md_dst;				\
+		OVS_GSO_CB(skb)->tun_dst = new_md_dst;			\
+		ret = 1;						\
+	} else {							\
+		ret = 0;						\
+	}								\
+	ret;								\
+})
+
+#else
+#define SKB_INIT_FILL_METADATA_DST(skb)		do {} while(0)
+#define SKB_SETUP_FILL_METADATA_DST(skb)	(true)
+#define SKB_RESTORE_FILL_METADATA_DST(skb)	do {} while(0)
 #endif
 
 #endif

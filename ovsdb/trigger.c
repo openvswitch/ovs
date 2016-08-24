@@ -19,7 +19,7 @@
 
 #include <limits.h>
 
-#include "json.h"
+#include "openvswitch/json.h"
 #include "jsonrpc.h"
 #include "ovsdb.h"
 #include "poll-loop.h"
@@ -31,22 +31,24 @@ static void ovsdb_trigger_complete(struct ovsdb_trigger *);
 void
 ovsdb_trigger_init(struct ovsdb_session *session, struct ovsdb *db,
                    struct ovsdb_trigger *trigger,
-                   struct json *request, long long int now)
+                   struct json *request, long long int now,
+                   bool read_only)
 {
     trigger->session = session;
     trigger->db = db;
-    list_push_back(&trigger->db->triggers, &trigger->node);
+    ovs_list_push_back(&trigger->db->triggers, &trigger->node);
     trigger->request = request;
     trigger->result = NULL;
     trigger->created = now;
     trigger->timeout_msec = LLONG_MAX;
+    trigger->read_only = read_only;
     ovsdb_trigger_try(trigger, now);
 }
 
 void
 ovsdb_trigger_destroy(struct ovsdb_trigger *trigger)
 {
-    list_remove(&trigger->node);
+    ovs_list_remove(&trigger->node);
     json_destroy(trigger->request);
     json_destroy(trigger->result);
 }
@@ -111,7 +113,8 @@ static bool
 ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
 {
     t->result = ovsdb_execute(t->db, t->session,
-                              t->request, now - t->created, &t->timeout_msec);
+                              t->request, t->read_only,
+                              now - t->created, &t->timeout_msec);
     if (t->result) {
         ovsdb_trigger_complete(t);
         return true;
@@ -124,6 +127,6 @@ static void
 ovsdb_trigger_complete(struct ovsdb_trigger *t)
 {
     ovs_assert(t->result != NULL);
-    list_remove(&t->node);
-    list_push_back(&t->session->completions, &t->node);
+    ovs_list_remove(&t->node);
+    ovs_list_push_back(&t->session->completions, &t->node);
 }

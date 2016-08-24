@@ -1,0 +1,24 @@
+AT_BANNER([netdev-type])
+
+dnl Setting MAC address of netdev internal port fails
+AT_SETUP([bridge - set MAC address of internal port])
+OVS_VSWITCHD_START
+
+# Add an internal port and make sure that it shows up in the datapath.
+add_of_ports br0 1
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+	br0:
+		br0 65534/100: (dummy-internal)
+		p1 1/1: (dummy)
+])
+#
+# Set MAC address of dummy device and check that it has been set
+AT_CHECK([ovs-vsctl set Interface p1 type=internal mac=\"aa:55:c0:ff:ee:00\"])
+AT_CHECK([ovs-vsctl get Interface p1 mac_in_use], [0], [dnl
+"aa:55:c0:ff:ee:00"
+])
+
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CLEANUP

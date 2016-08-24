@@ -200,6 +200,80 @@
 +-------------------------------+     +-------------------------------+
   </pre>
 
+  <h2>Information Flow in OVN</h2>
+
+  <p>
+    Configuration data in OVN flows from north to south.  The CMS, through its
+    OVN/CMS plugin, passes the logical network configuration to
+    <code>ovn-northd</code> via the northbound database.  In turn,
+    <code>ovn-northd</code> compiles the configuration into a lower-level form
+    and passes it to all of the chassis via the southbound database.
+  </p>
+
+  <p>
+    Status information in OVN flows from south to north.  OVN currently
+    provides only a few forms of status information.  First,
+    <code>ovn-northd</code> populates the <code>up</code> column in the
+    northbound <code>Logical_Switch_Port</code> table: if a logical port's
+    <code>chassis</code> column in the southbound <code>Port_Binding</code>
+    table is nonempty, it sets <code>up</code> to <code>true</code>, otherwise
+    to <code>false</code>.  This allows the CMS to detect when a VM's
+    networking has come up.
+  </p>
+
+  <p>
+    Second, OVN provides feedback to the CMS on the realization of its
+    configuration, that is, whether the configuration provided by the CMS has
+    taken effect.  This feature requires the CMS to participate in a sequence
+    number protocol, which works the following way:
+  </p>
+
+  <ol>
+    <li>
+      When the CMS updates the configuration in the northbound database, as
+      part of the same transaction, it increments the value of the
+      <code>nb_cfg</code> column in the <code>NB_Global</code> table.  (This is
+      only necessary if the CMS wants to know when the configuration has been
+      realized.)
+    </li>
+
+    <li>
+      When <code>ovn-northd</code> updates the southbound database based on a
+      given snapshot of the northbound database, it copies <code>nb_cfg</code>
+      from northbound <code>NB_Global</code> into the southbound database
+      <code>SB_Global</code> table, as part of the same transaction.  (Thus, an
+      observer monitoring both databases can determine when the southbound
+      database is caught up with the northbound.)
+    </li>
+
+    <li>
+      After <code>ovn-northd</code> receives confirmation from the southbound
+      database server that its changes have committed, it updates
+      <code>sb_cfg</code> in the northbound <code>NB_Global</code> table to the
+      <code>nb_cfg</code> version that was pushed down.  (Thus, the CMS or
+      another observer can determine when the southbound database is caught up
+      without a connection to the southbound database.)
+    </li>
+
+    <li>
+      The <code>ovn-controller</code> process on each chassis receives the
+      updated southbound database, with the updated <code>nb_cfg</code>.  This
+      process in turn updates the physical flows installed in the chassis's
+      Open vSwitch instances.  When it receives confirmation from Open vSwitch
+      that the physical flows have been updated, it updates <code>nb_cfg</code>
+      in its own <code>Chassis</code> record in the southbound database.
+    </li>
+
+    <li>
+      <code>ovn-northd</code> monitors the <code>nb_cfg</code> column in all of
+      the <code>Chassis</code> records in the southbound database.  It keeps
+      track of the minimum value among all the records and copies it into the
+      <code>hv_cfg</code> column in the northbound <code>NB_Global</code>
+      table.  (Thus, the CMS or another observer can determine when all of the
+      hypervisors have caught up to the northbound configuration.)
+    </li>
+  </ol>
+
   <h2>Chassis Setup</h2>
 
   <p>
@@ -340,10 +414,11 @@
 
     <li>
       The CMS plugin updates the OVN Northbound database to include the new
-      VIF, by adding a row to the <code>Logical_Port</code> table.  In the new
-      row, <code>name</code> is <var>vif-id</var>, <code>mac</code> is
-      <var>mac</var>, <code>switch</code> points to the OVN logical switch's
-      Logical_Switch record, and other columns are initialized appropriately.
+      VIF, by adding a row to the <code>Logical_Switch_Port</code>
+      table.  In the new row, <code>name</code> is <var>vif-id</var>,
+      <code>mac</code> is <var>mac</var>, <code>switch</code> points to
+      the OVN logical switch's Logical_Switch record, and other columns
+      are initialized appropriately.
     </li>
 
     <li>
@@ -372,7 +447,7 @@
       where the VM is powered on, the integration between the hypervisor and
       Open vSwitch (described in <code>IntegrationGuide.md</code>) adds the VIF
       to the OVN integration bridge and stores <var>vif-id</var> in
-      <code>external-ids</code>:<code>iface-id</code> to indicate that the
+      <code>external_ids</code>:<code>iface-id</code> to indicate that the
       interface is an instantiation of the new VIF.  (None of this code is new
       in OVN; this is pre-existing integration work that has already been done
       on hypervisors that support OVS.)
@@ -380,13 +455,13 @@
 
     <li>
       On the hypervisor where the VM is powered on, <code>ovn-controller</code>
-      notices <code>external-ids</code>:<code>iface-id</code> in the new
-      Interface.  In response, it updates the local hypervisor's OpenFlow
-      tables so that packets to and from the VIF are properly handled.
-      Afterward, in the OVN Southbound DB, it updates the
+      notices <code>external_ids</code>:<code>iface-id</code> in the new
+      Interface. In response, in the OVN Southbound DB, it updates the
       <code>Binding</code> table's <code>chassis</code> column for the
-      row that links the logical port from
-      <code>external-ids</code>:<code>iface-id</code> to the hypervisor.
+      row that links the logical port from <code>external_ids</code>:<code>
+      iface-id</code> to the hypervisor. Afterward, <code>ovn-controller</code>
+      updates the local hypervisor's OpenFlow tables so that packets to and from
+      the VIF are properly handled.
     </li>
 
     <li>
@@ -394,11 +469,11 @@
       networking is ready.  To support this, <code>ovn-northd</code> notices
       the <code>chassis</code> column updated for the row in
       <code>Binding</code> table and pushes this upward by updating the
-      <ref column="up" table="Logical_Port" db="OVN_NB"/> column in the OVN
-      Northbound database's <ref table="Logical_Port" db="OVN_NB"/> table to
-      indicate that the VIF is now up.  The CMS, if it uses this feature, can
-      then
-      react by allowing the VM's execution to proceed.
+      <ref column="up" table="Logical_Switch_Port" db="OVN_NB"/> column
+      in the OVN Northbound database's <ref table="Logical_Switch_Port"
+      db="OVN_NB"/> table to indicate that the VIF is now up.  The CMS,
+      if it uses this feature, can then react by allowing the VM's
+      execution to proceed.
     </li>
 
     <li>
@@ -440,7 +515,7 @@
 
     <li>
       The CMS plugin removes the VIF from the OVN Northbound database,
-      by deleting its row in the <code>Logical_Port</code> table.
+      by deleting its row in the <code>Logical_Switch_Port</code> table.
     </li>
 
     <li>
@@ -533,10 +608,11 @@
       The container spawning entity (either directly or through the CMS that
       manages the underlying infrastructure) updates the OVN Northbound
       database to include the new CIF, by adding a row to the
-      <code>Logical_Port</code> table.  In the new row, <code>name</code> is
-      any unique identifier, <code>parent_name</code> is the <var>vif-id</var>
-      of the VM through which the CIF's network traffic is expected to go
-      through and the <code>tag</code> is the VLAN tag that identifies the
+      <code>Logical_Switch_Port</code> table.  In the new row,
+      <code>name</code> is any unique identifier,
+      <code>parent_name</code> is the <var>vif-id</var> of the VM
+      through which the CIF's network traffic is expected to go through
+      and the <code>tag</code> is the VLAN tag that identifies the
       network traffic of that CIF.
     </li>
 
@@ -556,7 +632,7 @@
       <code>parent_port</code> column of <code>Binding</code> table, the
       <code>ovn-controller</code> in the hypervisor whose OVN integration bridge
       has that same value in <var>vif-id</var> in
-      <code>external-ids</code>:<code>iface-id</code>
+      <code>external_ids</code>:<code>iface-id</code>
       updates the local hypervisor's OpenFlow tables so that packets to and
       from the VIF with the particular VLAN <code>tag</code> are properly
       handled.  Afterward it updates the <code>chassis</code> column of
@@ -567,9 +643,9 @@
       One can only start the application inside the container after the
       underlying network is ready.  To support this, <code>ovn-northd</code>
       notices the updated <code>chassis</code> column in <code>Binding</code>
-      table and updates the <ref column="up" table="Logical_Port"
+      table and updates the <ref column="up" table="Logical_Switch_Port"
       db="OVN_NB"/> column in the OVN Northbound database's
-      <ref table="Logical_Port" db="OVN_NB"/> table to indicate that the
+      <ref table="Logical_Switch_Port" db="OVN_NB"/> table to indicate that the
       CIF is now up.  The entity responsible to start the container application
       queries this value and starts the application.
     </li>
@@ -577,7 +653,7 @@
     <li>
       Eventually the entity that created and started the container, stops it.
       The entity, through the CMS (or directly) deletes its row in the
-      <code>Logical_Port</code> table.
+      <code>Logical_Switch_Port</code> table.
     </li>
 
     <li>
@@ -639,7 +715,7 @@
         entered the logical datapath.
         <!-- Keep the following in sync with MFF_LOG_INPORT in
              ovn/lib/logical-fields.h. -->
-        OVN stores this in Nicira extension register number 6.
+        OVN stores this in Open vSwitch extension register number 14.
       </p>
 
       <p>
@@ -660,21 +736,54 @@
         beginning of the logical ingress pipeline.
         <!-- Keep the following in sync with MFF_LOG_OUTPORT in
              ovn/lib/logical-fields.h. -->
-        OVN stores this in Nicira extension register number 7.
+        OVN stores this in Open vSwitch extension register number 15.
       </p>
 
       <p>
         Geneve and STT tunnels pass this field as part of the tunnel key.
         VXLAN tunnels do not transmit the logical output port field.
+        Since VXLAN tunnels do not carry a logical output port field in
+        the tunnel key, when a packet is received from VXLAN tunnel by
+        an OVN hypervisor, the packet is resubmitted to table 16 to
+        determine the output port(s);  when the packet reaches table 32,
+        these packets are resubmitted to table 33 for local delivery by
+        checking a MLF_RCV_FROM_VXLAN flag, which is set when the packet
+        arrives from a VXLAN tunnel.
       </p>
     </dd>
 
-    <dt>conntrack zone field</dt>
+    <dt>conntrack zone field for logical ports</dt>
     <dd>
-      A field that denotes the connection tracking zone.  The value only
-      has local significance and is not meaningful between chassis.
-      This is initialized to 0 at the beginning of the logical ingress
-      pipeline.  OVN stores this in Nicira extension register number 5.
+      A field that denotes the connection tracking zone for logical ports.
+      The value only has local significance and is not meaningful between
+      chassis.  This is initialized to 0 at the beginning of the logical
+        <!-- Keep the following in sync with MFF_LOG_CT_ZONE in
+             ovn/lib/logical-fields.h. -->
+      ingress pipeline.  OVN stores this in Open vSwitch extension register
+      number 13.
+    </dd>
+
+    <dt>conntrack zone fields for Gateway router</dt>
+    <dd>
+      Fields that denote the connection tracking zones for Gateway routers.
+      These values only have local significance (only on chassis that have
+      Gateway routers instantiated) and is not meaningful between
+      chassis.  OVN stores the zone information for DNATting in Open vSwitch
+        <!-- Keep the following in sync with MFF_LOG_DNAT_ZONE and
+        MFF_LOG_SNAT_ZONE in ovn/lib/logical-fields.h. -->
+      extension register number 11 and zone information for SNATing in
+      Open vSwitch extension register number 12.
+    </dd>
+
+    <dt>logical flow flags</dt>
+    <dd>
+      The logical flags are intended to handle keeping context between
+      tables in order to decide which rules in subsequent tables are
+      matched.  These values only have local significance and are not
+      meaningful between chassis.  OVN stores the logical flags in
+        <!-- Keep the following in sync with MFF_LOG_FLAGS in
+             ovn/lib/logical-fields.h. -->
+      Open vSwitch extension register number 10.
     </dd>
 
     <dt>VLAN ID</dt>
@@ -733,32 +842,64 @@
         <code>ovn-controller</code>'s job is to translate them into equivalent
         OpenFlow (in particular it translates the table numbers:
         <code>Logical_Flow</code> tables 0 through 15 become OpenFlow tables 16
-        through 31).  For a given packet, the logical ingress pipeline
-        eventually executes zero or more <code>output</code> actions:
+        through 31).
       </p>
 
-      <ul>
-        <li>
-          If the pipeline executes no <code>output</code> actions at all, the
-          packet is effectively dropped.
-        </li>
+      <p>
+        Most OVN actions have fairly obvious implementations in OpenFlow (with
+        OVS extensions), e.g. <code>next;</code> is implemented as
+        <code>resubmit</code>, <code><var>field</var> =
+        <var>constant</var>;</code> as <code>set_field</code>.  A few are worth
+        describing in more detail:
+      </p>
 
-        <li>
-          Most commonly, the pipeline executes one <code>output</code> action,
-          which <code>ovn-controller</code> implements by resubmitting the
-          packet to table 32.
-        </li>
+      <dl>
+        <dt><code>output:</code></dt>
+        <dd>
+          Implemented by resubmitting the packet to table 32.  If the pipeline
+          executes more than one <code>output</code> action, then each one is
+          separately resubmitted to table 32.  This can be used to send
+          multiple copies of the packet to multiple ports.  (If the packet was
+          not modified between the <code>output</code> actions, and some of the
+          copies are destined to the same hypervisor, then using a logical
+          multicast output port would save bandwidth between hypervisors.)
+        </dd>
 
-        <li>
-          If the pipeline can execute more than one <code>output</code> action,
-          then each one is separately resubmitted to table 32.  This can be
-          used to send multiple copies of the packet to multiple ports.  (If
-          the packet was not modified between the <code>output</code> actions,
-          and some of the copies are destined to the same hypervisor, then
-          using a logical multicast output port would save bandwidth between
-          hypervisors.)
-        </li>
-      </ul>
+        <dt><code>get_arp(<var>P</var>, <var>A</var>);</code></dt>
+        <dt><code>get_nd(<var>P</var>, <var>A</var>);</code></dt>
+        <dd>
+          <p>
+            Implemented by storing arguments into OpenFlow fields, then
+            resubmitting to table 66, which <code>ovn-controller</code>
+            populates with flows generated from the <code>MAC_Binding</code>
+            table in the OVN Southbound database.  If there is a match in table
+            66, then its actions store the bound MAC in the Ethernet
+            destination address field.
+          </p>
+
+          <p>
+            (The OpenFlow actions save and restore the OpenFlow fields used for
+            the arguments, so that the OVN actions do not have to be aware of
+            this temporary use.)
+          </p>
+        </dd>
+
+        <dt><code>put_arp(<var>P</var>, <var>A</var>, <var>E</var>);</code></dt>
+        <dt><code>put_nd(<var>P</var>, <var>A</var>, <var>E</var>);</code></dt>
+        <dd>
+          <p>
+            Implemented by storing the arguments into OpenFlow fields, then
+            outputting a packet to <code>ovn-controller</code>, which updates
+            the <code>MAC_Binding</code> table.
+          </p>
+
+          <p>
+            (The OpenFlow actions save and restore the OpenFlow fields used for
+            the arguments, so that the OVN actions do not have to be aware of
+            this temporary use.)
+          </p>
+        </dd>
+      </dl>
     </li>
 
     <li>
@@ -766,8 +907,8 @@
         OpenFlow tables 32 through 47 implement the <code>output</code> action
         in the logical ingress pipeline.  Specifically, table 32 handles
         packets to remote hypervisors, table 33 handles packets to the local
-        hypervisor, and table 34 discards packets whose logical ingress and
-        egress port are the same.
+        hypervisor, and table 34 checks whether packets whose logical ingress
+        and egress port are the same should be discarded.
       </p>
 
       <p>
@@ -796,7 +937,12 @@
         multicast group includes a logical port or ports on the local
         hypervisor, then its actions also resubmit to table 33.  Table 32 also
         includes a fallback flow that resubmits to table 33 if there is no
-        other match.
+        other match.  Table 32 also contains a higher priority rule to match
+        packets received from VXLAN tunnels, based on flag MLF_RCV_FROM_VXLAN
+        and resubmit these packets to table 33 for local delivery. Packets
+        received from VXLAN tunnels reach here because of a lack of logical
+        output port field in the tunnel key and thus these packets needed to
+        be submitted to table 16 to determine the output port.
       </p>
 
       <p>
@@ -820,7 +966,8 @@
 
       <p>
         Table 34 matches and drops packets for which the logical input and
-        output ports are the same.  It resubmits other packets to table 48.
+        output ports are the same and the MLF_ALLOW_LOOPBACK flag is not
+        set.  It resubmits other packets to table 48.
       </p>
     </li>
 
@@ -843,8 +990,22 @@
     </li>
 
     <li>
+     <p>
+       Table 64 bypasses OpenFlow loopback when MLF_ALLOW_LOOPBACK is set.
+       Logical loopback was handled in table 34, but OpenFlow by default also
+       prevents loopback to the OpenFlow ingress port.  Thus, when
+       MLF_ALLOW_LOOPBACK is set, OpenFlow table 64 saves the OpenFlow ingress
+       port, sets it to zero, resubmits to table 65 for logical-to-physical
+       transformation, and then restores the OpenFlow ingress port,
+       effectively disabling OpenFlow loopback prevents.  When
+       MLF_ALLOW_LOOPBACK is unset, table 64 flow simply resubmits to table
+       65.
+     </p>
+    </li>
+
+    <li>
       <p>
-        OpenFlow table 64 performs logical-to-physical translation, the
+        OpenFlow table 65 performs logical-to-physical translation, the
         opposite of table 0.  It matches the packet's logical egress port.  Its
         actions output the packet to the port attached to the OVN integration
         bridge that represents that logical port.  If the logical egress port
@@ -853,7 +1014,7 @@
       </p>
 
       <p>
-        If the logical egress port is a logical patch port, then table 64
+        If the logical egress port is a logical patch port, then table 65
         outputs to an OVS patch port that represents the logical patch port.
         The packet re-enters the OpenFlow flow table from the OVS patch port's
         peer in table 0, which identifies the logical datapath and logical
@@ -903,7 +1064,7 @@
     <li>
       Now, the administrator can use the CMS to add a VTEP logical switch
       to the OVN logical network.  To do that, the CMS must first create a
-      new <code>Logical_Port</code> table entry in the <code>
+      new <code>Logical_Switch_Port</code> table entry in the <code>
       OVN_Northbound</code> database.  Then, the <var>type</var> column
       of this entry must be set to "vtep".  Next, the <var>
       vtep-logical-switch</var> and <var>vtep-physical-switch</var> keys
@@ -1019,7 +1180,7 @@
 
     <!-- Keep the following in sync with ovn/controller/physical.h. -->
     OVN transmits the logical ingress and logical egress ports in a TLV with
-    class 0x0102, type 0, and a 32-bit value encoded as follows, from MSB to
+    class 0x0102, type 0x80, and a 32-bit value encoded as follows, from MSB to
     LSB:
   </p>
 

@@ -38,7 +38,7 @@
 #include <sys/types.h>
 #include "byte-order.h"
 #include "connectivity.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "dp-packet.h"
 #include "packets.h"
 #include "seq.h"

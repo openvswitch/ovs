@@ -14,8 +14,10 @@ m4_define([_ADD_BR], [[add-br $1 -- set Bridge $1 datapath_type="netdev" protoco
 # specifies the expected output after filtering through uuidfilt.pl.
 m4_define([OVS_TRAFFIC_VSWITCHD_START],
   [
+   OVS_WAIT_WHILE([ip link show ovs-netdev])
    _OVS_VSWITCHD_START([--disable-system])
    dnl Add bridges, ports, etc.
+   OVS_WAIT_WHILE([ip link show br0])
    AT_CHECK([ovs-vsctl -- _ADD_BR([br0]) -- $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
 ])
 
@@ -38,11 +40,68 @@ m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
    AT_CHECK([:; $2])
   ])
 
+# CONFIGURE_VETH_OFFLOADS([VETH])
+#
+# Disable TX offloads for veths.  The userspace datapath uses the AF_PACKET
+# socket to receive packets for veths.  Unfortunately, the AF_PACKET socket
+# doesn't play well with offloads:
+# 1. GSO packets are received without segmentation and therefore discarded.
+# 2. Packets with offloaded partial checksum are received with the wrong
+#    checksum, therefore discarded by the receiver.
+#
+# By disabling tx offloads in the non-OVS side of the veth peer we make sure
+# that the AF_PACKET socket will not receive bad packets.
+#
+# This is a workaround, and should be removed when offloads are properly
+# supported in netdev-linux.
+m4_define([CONFIGURE_VETH_OFFLOADS],
+    [AT_CHECK([ethtool -K $1 tx off], [0], [ignore])]
+)
+
 # CHECK_CONNTRACK()
 #
-# Perform requirements checks for running conntrack tests, and flush the
-# kernel conntrack tables when the test is finished.
+# Perform requirements checks for running conntrack tests.
 #
 m4_define([CHECK_CONNTRACK],
-    [AT_SKIP_IF(true)]
+    [AT_SKIP_IF([test $HAVE_PYTHON = no])]
 )
+
+# CHECK_CONNTRACK_ALG()
+#
+# Perform requirements checks for running conntrack ALG tests. The userspace
+# doesn't support ALGs yet, so skip the tests
+#
+m4_define([CHECK_CONNTRACK_ALG],
+[
+    AT_SKIP_IF([:])
+])
+
+# CHECK_CONNTRACK_FRAG()
+#
+# Perform requirements checks for running conntrack fragmentations tests.
+# The userspace doesn't support fragmentation yet, so skip the tests.
+m4_define([CHECK_CONNTRACK_FRAG],
+[
+    AT_SKIP_IF([:])
+])
+
+# CHECK_CONNTRACK_LOCAL_STACK()
+#
+# Perform requirements checks for running conntrack tests with local stack.
+# While the kernel connection tracker automatically passes all the connection
+# tracking state from an internal port to the OpenvSwitch kernel module, there
+# is simply no way of doing that with the userspace, so skip the tests.
+m4_define([CHECK_CONNTRACK_LOCAL_STACK],
+[
+    AT_SKIP_IF([:])
+])
+
+# CHECK_CONNTRACK_NAT()
+#
+# Perform requirements checks for running conntrack NAT tests. The userspace
+# doesn't support NATs yet, so skip the tests
+#
+m4_define([CHECK_CONNTRACK_NAT],
+[
+    AT_SKIP_IF([:])
+])

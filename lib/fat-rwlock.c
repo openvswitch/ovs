@@ -20,8 +20,8 @@
 
 #include <errno.h>
 
-#include "hmap.h"
-#include "list.h"
+#include "openvswitch/hmap.h"
+#include "openvswitch/list.h"
 #include "ovs-thread.h"
 #include "random.h"
 
@@ -66,7 +66,7 @@ free_slot(struct fat_rwlock_slot *slot)
         abort();
     }
 
-    list_remove(&slot->list_node);
+    ovs_list_remove(&slot->list_node);
     free_cacheline(slot);
 }
 
@@ -88,7 +88,7 @@ fat_rwlock_init(struct fat_rwlock *rwlock)
     ovsthread_key_create(&rwlock->key, slot_destructor);
     ovs_mutex_init(&rwlock->mutex);
     ovs_mutex_lock(&rwlock->mutex);
-    list_init(&rwlock->threads);
+    ovs_list_init(&rwlock->threads);
     ovs_mutex_unlock(&rwlock->mutex);
 }
 
@@ -129,7 +129,7 @@ fat_rwlock_get_slot__(struct fat_rwlock *rwlock)
     slot->depth = 0;
 
     ovs_mutex_lock(&rwlock->mutex);
-    list_push_back(&rwlock->threads, &slot->list_node);
+    ovs_list_push_back(&rwlock->threads, &slot->list_node);
     ovs_mutex_unlock(&rwlock->mutex);
 
     ovsthread_setspecific(rwlock->key, slot);
@@ -181,7 +181,7 @@ fat_rwlock_try_get_slot__(struct fat_rwlock *rwlock)
         ovs_mutex_init(&slot->mutex);
         slot->depth = 0;
 
-        list_push_back(&rwlock->threads, &slot->list_node);
+        ovs_list_push_back(&rwlock->threads, &slot->list_node);
         ovs_mutex_unlock(&rwlock->mutex);
         ovsthread_setspecific(rwlock->key, slot);
     }

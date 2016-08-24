@@ -5,7 +5,7 @@
 #include <linux/skbuff.h>
 #include <net/ip_tunnels.h>
 
-#ifdef HAVE_METADATA_DST
+#ifdef USE_UPSTREAM_TUNNEL
 #include_next <net/gre.h>
 
 static inline int rpl_ipgre_init(void)
@@ -61,9 +61,12 @@ struct net_device *rpl_gretap_fb_dev_create(struct net *net, const char *name,
 
 #define gre_fb_xmit rpl_gre_fb_xmit
 netdev_tx_t rpl_gre_fb_xmit(struct sk_buff *skb);
-#endif /* HAVE_METADATA_DST */
+#endif /* USE_UPSTREAM_TUNNEL */
 
 #define ipgre_init rpl_ipgre_init
 #define ipgre_fini rpl_ipgre_fini
+
+#define gre_fill_metadata_dst ovs_gre_fill_metadata_dst
+int ovs_gre_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
 
 #endif

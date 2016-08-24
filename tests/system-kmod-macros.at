@@ -20,7 +20,8 @@ m4_define([OVS_TRAFFIC_VSWITCHD_START],
    on_exit 'modprobe -r openvswitch'
    m4_foreach([mod], [[vport_geneve], [vport_gre], [vport_lisp], [vport_stt], [vport_vxlan]],
               [modprobe -q mod || echo "Module mod not loaded."
-               on_exit 'modprobe -q -r mod'])
+               on_exit 'modprobe -q -r mod'
+              ])
    on_exit 'ovs-dpctl del-dp ovs-system'
    _OVS_VSWITCHD_START([])
    dnl Add bridges, ports, etc.
@@ -44,6 +45,13 @@ m4_define([OVS_TRAFFIC_VSWITCHD_STOP],
    AT_CHECK([:; $2])
   ])
 
+# CONFIGURE_VETH_OFFLOADS([VETH])
+#
+# The kernel datapath has no problem with offloads and veths. Nothing
+# to do here.
+m4_define([CONFIGURE_VETH_OFFLOADS],
+)
+
 # CHECK_CONNTRACK()
 #
 # Perform requirements checks for running conntrack tests, and flush the
@@ -55,6 +63,35 @@ m4_define([CHECK_CONNTRACK],
                 [modprobe mod || echo "Module mod not loaded."
                  on_exit 'modprobe -r mod'
                 ])
+     sysctl -w net.netfilter.nf_conntrack_helper=0
      on_exit 'ovstest test-netlink-conntrack flush'
     ]
 )
+
+# CHECK_CONNTRACK_ALG()
+#
+# Perform requirements checks for running conntrack ALG tests. The kernel
+# supports ALG, so no check is needed.
+#
+m4_define([CHECK_CONNTRACK_ALG])
+
+# CHECK_CONNTRACK_FRAG()
+#
+# Perform requirements checks for running conntrack fragmentations tests.
+# The kernel always supports fragmentation, so no check is needed.
+m4_define([CHECK_CONNTRACK_FRAG])
+
+# CHECK_CONNTRACK_LOCAL_STACK()
+#
+# Perform requirements checks for running conntrack tests with local stack.
+# The kernel always supports reading the connection state of an skb coming
+# from an internal port, without an explicit ct() action, so no check is
+# needed.
+m4_define([CHECK_CONNTRACK_LOCAL_STACK])
+
+# CHECK_CONNTRACK_NAT()
+#
+# Perform requirements checks for running conntrack NAT tests. The kernel
+# always supports NAT, so no check is needed.
+#
+m4_define([CHECK_CONNTRACK_NAT])

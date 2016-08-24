@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,7 +27,7 @@
 #include "command-line.h"
 #include "fat-rwlock.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "ovstest.h"
 #include "ovs-thread.h"
 #include "random.h"
@@ -210,10 +210,9 @@ test_cmap_insert_replace_delete(hash_func *hash)
     struct element elements[N_ELEMS];
     struct element copies[N_ELEMS];
     int values[N_ELEMS];
-    struct cmap cmap;
+    struct cmap cmap = CMAP_INITIALIZER;
     size_t i;
 
-    cmap_init(&cmap);
     for (i = 0; i < N_ELEMS; i++) {
         elements[i].value = i;
         cmap_insert(&cmap, &elements[i].node, hash(i));
@@ -637,9 +636,9 @@ benchmark_hmap(void)
 }
 
 static const struct ovs_cmdl_command commands[] = {
-    {"check", NULL, 0, 1, run_tests},
-    {"benchmark", NULL, 3, 4, run_benchmarks},
-    {NULL, NULL, 0, 0, NULL},
+    {"check", NULL, 0, 1, run_tests, OVS_RO},
+    {"benchmark", NULL, 3, 4, run_benchmarks, OVS_RO},
+    {NULL, NULL, 0, 0, NULL, OVS_RO},
 };
 
 static void

@@ -23,11 +23,11 @@
 #include <string.h>
 
 #include "classifier.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "hash.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "netdev.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-thread.h"
 #include "odp-util.h"
 #include "ovs-thread.h"
@@ -40,8 +40,8 @@ static struct classifier cls;   /* Tunnel ports. */
 struct ip_device {
     struct netdev *dev;
     struct eth_addr mac;
-    ovs_be32 addr4;
-    struct in6_addr addr6;
+    struct in6_addr *addr;
+    int n_addr;
     uint64_t change_seq;
     struct ovs_list node;
     char dev_name[IFNAMSIZ];
@@ -51,7 +51,8 @@ static struct ovs_list addr_list;
 
 struct tnl_port {
     odp_port_t port;
-    ovs_be16 udp_port;
+    ovs_be16 tp_port;
+    uint8_t nw_proto;
     char dev_name[IFNAMSIZ];
     struct ovs_list node;
 };
@@ -82,7 +83,7 @@ tnl_port_free(struct tnl_port_in *p)
 
 static void
 tnl_port_init_flow(struct flow *flow, struct eth_addr mac,
-                   struct in6_addr *addr, ovs_be16 udp_port)
+                   struct in6_addr *addr, uint8_t nw_proto, ovs_be16 tp_port)
 {
     memset(flow, 0, sizeof *flow);
 
@@ -95,27 +96,23 @@ tnl_port_init_flow(struct flow *flow, struct eth_addr mac,
         flow->ipv6_dst = *addr;
     }
 
-    if (udp_port) {
-        flow->nw_proto = IPPROTO_UDP;
-    } else {
-        flow->nw_proto = IPPROTO_GRE;
-    }
-    flow->tp_dst = udp_port;
+    flow->nw_proto = nw_proto;
+    flow->tp_dst = tp_port;
 }
 
 static void
 map_insert(odp_port_t port, struct eth_addr mac, struct in6_addr *addr,
-           ovs_be16 udp_port, const char dev_name[])
+           uint8_t nw_proto, ovs_be16 tp_port, const char dev_name[])
 {
     const struct cls_rule *cr;
     struct tnl_port_in *p;
     struct match match;
 
     memset(&match, 0, sizeof match);
-    tnl_port_init_flow(&match.flow, mac, addr, udp_port);
+    tnl_port_init_flow(&match.flow, mac, addr, nw_proto, tp_port);
 
     do {
-        cr = classifier_lookup(&cls, CLS_MAX_VERSION, &match.flow, NULL);
+        cr = classifier_lookup(&cls, OVS_VERSION_MAX, &match.flow, NULL);
         p = tnl_port_cast(cr);
         /* Try again if the rule was released before we get the reference. */
     } while (p && !ovs_refcount_try_ref_rcu(&p->ref_cnt));
@@ -129,9 +126,9 @@ map_insert(odp_port_t port, struct eth_addr mac, struct in6_addr *addr,
          /* XXX: No fragments support. */
         match.wc.masks.nw_frag = FLOW_NW_FRAG_MASK;
 
-        /* 'udp_port' is zero for non-UDP tunnels (e.g. GRE). In this case it
+        /* 'tp_port' is zero for GRE tunnels. In this case it
          * doesn't make sense to match on UDP port numbers. */
-        if (udp_port) {
+        if (tp_port) {
             match.wc.masks.tp_dst = OVS_BE16_MAX;
         }
         if (IN6_IS_ADDR_V4MAPPED(addr)) {
@@ -146,40 +143,71 @@ map_insert(odp_port_t port, struct eth_addr mac, struct in6_addr *addr,
         ovs_refcount_init(&p->ref_cnt);
         ovs_strlcpy(p->dev_name, dev_name, sizeof p->dev_name);
 
-        classifier_insert(&cls, &p->cr, CLS_MIN_VERSION, NULL, 0);
+        classifier_insert(&cls, &p->cr, OVS_VERSION_MIN, NULL, 0);
     }
 }
 
+static void
+map_insert_ipdev__(struct ip_device *ip_dev, char dev_name[],
+                   odp_port_t port, uint8_t nw_proto, ovs_be16 tp_port)
+{
+    if (ip_dev->n_addr) {
+        int i;
+
+        for (i = 0; i < ip_dev->n_addr; i++) {
+            map_insert(port, ip_dev->mac, &ip_dev->addr[i],
+                       nw_proto, tp_port, dev_name);
+        }
+    }
+}
+
+static uint8_t
+tnl_type_to_nw_proto(const char type[])
+{
+    if (!strcmp(type, "geneve")) {
+        return IPPROTO_UDP;
+    }
+    if (!strcmp(type, "stt")) {
+        return IPPROTO_TCP;
+    }
+    if (!strcmp(type, "gre")) {
+        return IPPROTO_GRE;
+    }
+    if (!strcmp(type, "vxlan")) {
+        return IPPROTO_UDP;
+    }
+    return 0;
+}
+
 void
-tnl_port_map_insert(odp_port_t port,
-                    ovs_be16 udp_port, const char dev_name[])
+tnl_port_map_insert(odp_port_t port, ovs_be16 tp_port,
+                    const char dev_name[], const char type[])
 {
     struct tnl_port *p;
     struct ip_device *ip_dev;
+    uint8_t nw_proto;
+
+    nw_proto = tnl_type_to_nw_proto(type);
+    if (!nw_proto) {
+        return;
+    }
 
     ovs_mutex_lock(&mutex);
     LIST_FOR_EACH(p, node, &port_list) {
-        if (udp_port == p->udp_port) {
+        if (tp_port == p->tp_port && p->nw_proto == nw_proto) {
              goto out;
         }
     }
 
     p = xzalloc(sizeof *p);
     p->port = port;
-    p->udp_port = udp_port;
+    p->tp_port = tp_port;
+    p->nw_proto = nw_proto;
     ovs_strlcpy(p->dev_name, dev_name, sizeof p->dev_name);
-    list_insert(&port_list, &p->node);
+    ovs_list_insert(&port_list, &p->node);
 
     LIST_FOR_EACH(ip_dev, node, &addr_list) {
-        if (ip_dev->addr4 != INADDR_ANY) {
-            struct in6_addr addr4 = in6_addr_mapped_ipv4(ip_dev->addr4);
-            map_insert(p->port, ip_dev->mac, &addr4,
-                       p->udp_port, p->dev_name);
-        }
-        if (ipv6_addr_is_set(&ip_dev->addr6)) {
-            map_insert(p->port, ip_dev->mac, &ip_dev->addr6,
-                       p->udp_port, p->dev_name);
-        }
+        map_insert_ipdev__(ip_dev, p->dev_name, p->port, p->nw_proto, p->tp_port);
     }
 
 out:
@@ -199,28 +227,44 @@ tnl_port_unref(const struct cls_rule *cr)
 }
 
 static void
-map_delete(struct eth_addr mac, struct in6_addr *addr, ovs_be16 udp_port)
+map_delete(struct eth_addr mac, struct in6_addr *addr,
+           ovs_be16 tp_port, uint8_t nw_proto)
 {
     const struct cls_rule *cr;
     struct flow flow;
 
-    tnl_port_init_flow(&flow, mac, addr, udp_port);
+    tnl_port_init_flow(&flow, mac, addr, nw_proto, tp_port);
 
-    cr = classifier_lookup(&cls, CLS_MAX_VERSION, &flow, NULL);
+    cr = classifier_lookup(&cls, OVS_VERSION_MAX, &flow, NULL);
     tnl_port_unref(cr);
 }
 
+static void
+ipdev_map_delete(struct ip_device *ip_dev, ovs_be16 tp_port, uint8_t nw_proto)
+{
+    if (ip_dev->n_addr) {
+        int i;
+
+        for (i = 0; i < ip_dev->n_addr; i++) {
+            map_delete(ip_dev->mac, &ip_dev->addr[i], tp_port, nw_proto);
+        }
+    }
+}
+
 void
-tnl_port_map_delete(ovs_be16 udp_port)
+tnl_port_map_delete(ovs_be16 tp_port, const char type[])
 {
     struct tnl_port *p, *next;
     struct ip_device *ip_dev;
     bool found = false;
+    uint8_t nw_proto;
+
+    nw_proto = tnl_type_to_nw_proto(type);
 
     ovs_mutex_lock(&mutex);
     LIST_FOR_EACH_SAFE(p, next, node, &port_list) {
-        if (p->udp_port == udp_port) {
-            list_remove(&p->node);
+        if (p->tp_port == tp_port && p->nw_proto == nw_proto) {
+            ovs_list_remove(&p->node);
             found = true;
             break;
         }
@@ -230,13 +274,7 @@ tnl_port_map_delete(ovs_be16 udp_port)
         goto out;
     }
     LIST_FOR_EACH(ip_dev, node, &addr_list) {
-        if (ip_dev->addr4 != INADDR_ANY) {
-            struct in6_addr addr4 = in6_addr_mapped_ipv4(ip_dev->addr4);
-            map_delete(ip_dev->mac, &addr4, udp_port);
-        }
-        if (ipv6_addr_is_set(&ip_dev->addr6)) {
-            map_delete(ip_dev->mac, &ip_dev->addr6, udp_port);
-        }
+        ipdev_map_delete(ip_dev, p->tp_port, p->nw_proto);
     }
 
     free(p);
@@ -249,7 +287,7 @@ out:
 odp_port_t
 tnl_port_map_lookup(struct flow *flow, struct flow_wildcards *wc)
 {
-    const struct cls_rule *cr = classifier_lookup(&cls, CLS_MAX_VERSION, flow,
+    const struct cls_rule *cr = classifier_lookup(&cls, OVS_VERSION_MAX, flow,
                                                   wc);
 
     return (cr) ? tnl_port_cast(cr)->portno : ODPP_NONE;
@@ -278,7 +316,6 @@ tnl_port_show_v(struct ds *ds)
         miniflow_expand(p->cr.match.flow, &flow);
 
         /* Key. */
-        odp_parms.odp_in_port = flow.in_port.odp_port;
         odp_parms.support.recirc = true;
         ofpbuf_use_stack(&buf, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&odp_parms, &buf);
@@ -286,7 +323,6 @@ tnl_port_show_v(struct ds *ds)
         key_len = buf.size;
 
         /* mask*/
-        odp_parms.odp_in_port = wc.masks.in_port.odp_port;
         odp_parms.support.recirc = false;
         ofpbuf_use_stack(&buf, &maskbuf, sizeof maskbuf);
         odp_flow_key_from_mask(&odp_parms, &buf);
@@ -331,56 +367,64 @@ map_insert_ipdev(struct ip_device *ip_dev)
     struct tnl_port *p;
 
     LIST_FOR_EACH(p, node, &port_list) {
-        if (ip_dev->addr4 != INADDR_ANY) {
-            struct in6_addr addr4 = in6_addr_mapped_ipv4(ip_dev->addr4);
-            map_insert(p->port, ip_dev->mac, &addr4,
-                       p->udp_port, p->dev_name);
-        }
-        if (ipv6_addr_is_set(&ip_dev->addr6)) {
-            map_insert(p->port, ip_dev->mac, &ip_dev->addr6,
-                       p->udp_port, p->dev_name);
-        }
+        map_insert_ipdev__(ip_dev, p->dev_name, p->port, p->nw_proto, p->tp_port);
     }
+}
+
+static void
+insert_ipdev__(struct netdev *dev,
+               struct in6_addr *addr, int n_addr)
+{
+    struct ip_device *ip_dev;
+    enum netdev_flags flags;
+    int error;
+
+    error = netdev_get_flags(dev, &flags);
+    if (error || (flags & NETDEV_LOOPBACK)) {
+        goto err;
+    }
+
+    ip_dev = xzalloc(sizeof *ip_dev);
+    ip_dev->dev = netdev_ref(dev);
+    ip_dev->change_seq = netdev_get_change_seq(dev);
+    error = netdev_get_etheraddr(ip_dev->dev, &ip_dev->mac);
+    if (error) {
+        goto err_free_ipdev;
+    }
+    ip_dev->addr = addr;
+    ip_dev->n_addr = n_addr;
+    ovs_strlcpy(ip_dev->dev_name, netdev_get_name(dev), sizeof ip_dev->dev_name);
+    ovs_list_insert(&addr_list, &ip_dev->node);
+    map_insert_ipdev(ip_dev);
+    return;
+
+err_free_ipdev:
+    netdev_close(ip_dev->dev);
+    free(ip_dev);
+err:
+    free(addr);
 }
 
 static void
 insert_ipdev(const char dev_name[])
 {
-    struct ip_device *ip_dev;
-    enum netdev_flags flags;
+    struct in6_addr *addr, *mask;
     struct netdev *dev;
-    int error;
-    int error4, error6;
+    int error, n_in6;
 
     error = netdev_open(dev_name, NULL, &dev);
     if (error) {
         return;
     }
 
-    error = netdev_get_flags(dev, &flags);
-    if (error || (flags & NETDEV_LOOPBACK)) {
+    error = netdev_get_addr_list(dev, &addr, &mask, &n_in6);
+    if (error) {
         netdev_close(dev);
         return;
     }
-
-    ip_dev = xzalloc(sizeof *ip_dev);
-    ip_dev->dev = dev;
-    ip_dev->change_seq = netdev_get_change_seq(dev);
-    error = netdev_get_etheraddr(ip_dev->dev, &ip_dev->mac);
-    if (error) {
-        free(ip_dev);
-        return;
-    }
-    error4 = netdev_get_in4(ip_dev->dev, (struct in_addr *)&ip_dev->addr4, NULL);
-    error6 = netdev_get_in6(ip_dev->dev, &ip_dev->addr6);
-    if (error4 && error6) {
-        free(ip_dev);
-        return;
-    }
-    ovs_strlcpy(ip_dev->dev_name, netdev_get_name(dev), sizeof ip_dev->dev_name);
-
-    list_insert(&addr_list, &ip_dev->node);
-    map_insert_ipdev(ip_dev);
+    free(mask);
+    insert_ipdev__(dev, addr, n_in6);
+    netdev_close(dev);
 }
 
 static void
@@ -389,17 +433,12 @@ delete_ipdev(struct ip_device *ip_dev)
     struct tnl_port *p;
 
     LIST_FOR_EACH(p, node, &port_list) {
-        if (ip_dev->addr4 != INADDR_ANY) {
-            struct in6_addr addr4 = in6_addr_mapped_ipv4(ip_dev->addr4);
-            map_delete(ip_dev->mac, &addr4, p->udp_port);
-        }
-        if (ipv6_addr_is_set(&ip_dev->addr6)) {
-            map_delete(ip_dev->mac, &ip_dev->addr6, p->udp_port);
-        }
+        ipdev_map_delete(ip_dev, p->tp_port, p->nw_proto);
     }
 
-    list_remove(&ip_dev->node);
+    ovs_list_remove(&ip_dev->node);
     netdev_close(ip_dev->dev);
+    free(ip_dev->addr);
     free(ip_dev);
 }
 
@@ -417,7 +456,6 @@ tnl_port_map_insert_ipdev(const char dev_name[])
             }
             /* Address changed. */
             delete_ipdev(ip_dev);
-            break;
         }
     }
     insert_ipdev(dev_name);
@@ -465,7 +503,7 @@ void
 tnl_port_map_init(void)
 {
     classifier_init(&cls, flow_segment_u64s);
-    list_init(&addr_list);
-    list_init(&port_list);
+    ovs_list_init(&addr_list);
+    ovs_list_init(&port_list);
     unixctl_command_register("tnl/ports/show", "-v", 0, 1, tnl_port_show, NULL);
 }

@@ -3,7 +3,7 @@
     <h1>Name</h1>
     <p>ovn-nbctl -- Open Virtual Network northbound db management utility</p>
 
-    <h1>Synopsys</h1>
+    <h1>Synopsis</h1>
     <p><code>ovn-nbctl</code> [<var>options</var>] <var>command</var> [<var>arg</var>...]</p>
 
     <h1>Description</h1>
@@ -12,39 +12,73 @@
     <h1>General Commands</h1>
 
     <dl>
-      <dt><code>show [<var>lswitch</var>]</code></dt>
+      <dt><code>init</code></dt>
+      <dd>
+        Initializes the database, if it is empty.  If the database has already
+        been initialized, this command has no effect.
+      </dd>
+
+      <dt><code>show [<var>switch</var> | <var>router</var>]</code></dt>
       <dd>
         Prints a brief overview of the database contents.  If
-        <var>lswitch</var> is provided, only records related to that
-        logical switch are shown.
+        <var>switch</var> is provided, only records related to that
+        logical switch are shown. If
+        <var>router</var> is provided, only records related to that
+        logical router are shown.
       </dd>
     </dl>
 
     <h1>Logical Switch Commands</h1>
 
     <dl>
-      <dt><code>lswitch-add</code> [<var>lswitch</var>]</dt> <dd> Creates a new logical switch named <var>lswitch</var>.  If
-        <var>lswitch</var> is not provided, the switch will not have a
-        name so other commands must refer to this switch by its UUID.
-        Initially the switch will have no ports.
-      </dd>
-
-      <dt><code>lswitch-del</code> <var>lswitch</var></dt>
+      <dt><code>ls-add</code></dt>
       <dd>
-        Deletes <var>lswitch</var>.
+        <p>
+          Creates a new, unnamed logical switch, which initially has no ports.
+          The switch does not have a name, other commands must refer to this
+          switch by its UUID.
+        </p>
       </dd>
 
-      <dt><code>lswitch-list</code></dt>
+      <dt>[<code>--may-exist</code> | <code>--add-duplicate</code>] <code>ls-add</code> <var>switch</var></dt>
+      <dd>
+        <p>
+          Creates a new logical switch named <var>switch</var>, which
+          initially has no ports.
+        </p>
+
+        <p>
+          The OVN northbound database schema does not require logical switch
+          names to be unique, but the whole point to the names is to provide an
+          easy way for humans to refer to the switches, making duplicate names
+          unhelpful.  Thus, without any options, this command regards it as an
+          error if <var>switch</var> is a duplicate name.  With
+          <code>--may-exist</code>, adding a duplicate name succeeds but does
+          not create a new logical switch.  With <code>--add-duplicate</code>,
+          the command really creates a new logical switch with a duplicate
+          name.  It is an error to specify both options.  If there are multiple
+          logical switches with a duplicate name, configure the logical switches
+          using the UUID instead of the <var>switch</var> name.
+        </p>
+      </dd>
+
+      <dt>[<code>--if-exists</code>] <code>ls-del</code> <var>switch</var></dt>
+      <dd>
+        Deletes <var>switch</var>.  It is an error if <var>switch</var> does
+        not exist, unless <code>--if-exists</code> is specified.
+      </dd>
+
+      <dt><code>ls-list</code></dt>
       <dd>
         Lists all existing switches on standard output, one per line.
       </dd>
     </dl>
 
-    <h1>ACL Commands</h1>
+    <h1>Logical Switch ACL Commands</h1>
     <dl>
-      <dt>[<code>--log</code>] <code>acl-add</code> <var>lswitch</var> <var>direction</var> <var>priority</var> <var>match</var> <var>action</var></dt>
+      <dt>[<code>--log</code>] <code>acl-add</code> <var>switch</var> <var>direction</var> <var>priority</var> <var>match</var> <var>action</var></dt>
       <dd>
-        Adds the specified ACL to <var>lswitch</var>.
+        Adds the specified ACL to <var>switch</var>.
         <var>direction</var> must be either <code>from-lport</code> or
         <code>to-lport</code>.  <var>priority</var> must be between
         <code>1</code> and <code>65534</code>, inclusive.  If
@@ -52,144 +86,345 @@
         ACL.  A full description of the fields are in <code>ovn-nb</code>(5).
       </dd>
 
-      <dt><code>acl-del</code> <var>lswitch</var> [<var>direction</var> [<var>priority</var> <var>match</var>]]</dt>
+      <dt><code>acl-del</code> <var>switch</var> [<var>direction</var> [<var>priority</var> <var>match</var>]]</dt>
       <dd>
-        Deletes ACLs from <var>lswitch</var>.  If only
-        <var>lswitch</var> is supplied, all the ACLs from the logical
+        Deletes ACLs from <var>switch</var>.  If only
+        <var>switch</var> is supplied, all the ACLs from the logical
         switch are deleted.  If <var>direction</var> is also specified,
         then all the flows in that direction will be deleted from the
         logical switch.  If all the fields are given, then a single flow
         that matches all the fields will be deleted.
       </dd>
 
-      <dt><code>acl-list</code> <var>lswitch</var></dt>
+      <dt><code>acl-list</code> <var>switch</var></dt>
       <dd>
-        Lists the ACLs on <var>lswitch</var>.
+        Lists the ACLs on <var>switch</var>.
       </dd>
     </dl>
 
-    <h1>Logical Port Commands</h1>
+    <h1>Logical Switch Port Commands</h1>
     <dl>
-      <dt><code>lport-add</code> <var>lswitch</var> <var>lport</var></dt>
+      <dt>[<code>--may-exist</code>] <code>lsp-add</code> <var>switch</var> <var>port</var></dt>
       <dd>
-        Creates on <var>lswitch</var> a new logical port named
-        <var>lport</var>.
+        <p>
+          Creates on <var>lswitch</var> a new logical switch port named
+          <var>port</var>.
+        </p>
+
+        <p>
+          It is an error if a logical port named <var>port</var> already
+          exists, unless <code>--may-exist</code> is specified.  Regardless of
+          <code>--may-exist</code>, it is an error if the existing port is in
+          some logical switch other than <var>switch</var> or if it has a
+          parent port.
+        </p>
       </dd>
 
-      <dt><code>lport-add</code> <var>lswitch</var> <var>lport</var> <var>parent</var> <var>tag</var></dt>
+      <dt>[<code>--may-exist</code>] <code>lsp-add</code> <var>switch</var> <var>port</var> <var>parent</var> <var>tag</var></dt>
       <dd>
-        Creates on <var>lswitch</var> a logical port named <var>lport</var>
-        that is a child of <var>parent</var> that is identifed with VLAN ID
-        <var>tag</var>.  This is useful in cases such as virtualized
-        container environments where Open vSwitch does not have a direct
-        connection to the container's port and it must be shared with
-        the virtual machine's port.
+        <p>
+          Creates on <var>switch</var> a logical switch port named
+          <var>port</var> that is a child of <var>parent</var> that is
+          identifed with VLAN ID <var>tag</var>.  This is useful in
+          cases such as virtualized container environments where Open
+          vSwitch does not have a direct connection to the container's
+          port and it must be shared with the virtual machine's port.
+        </p>
+
+        <p>
+          It is an error if a logical port named <var>port</var> already
+          exists, unless <code>--may-exist</code> is specified.  Regardless of
+          <code>--may-exist</code>, it is an error if the existing port is not
+          in <var>switch</var> or if it does not have the specified
+          <var>parent</var> and <var>tag</var>.
+        </p>
       </dd>
 
-      <dt><code>lport-del</code> <var>lport</var></dt>
+      <dt>[<code>--if-exists</code>] <code>lsp-del</code> <var>port</var></dt>
       <dd>
-        Deletes <var>lport</var>.
+        Deletes <var>port</var>.  It is an error if <var>port</var> does
+        not exist, unless <code>--if-exists</code> is specified.
       </dd>
 
-      <dt><code>lport-list</code> <var>lswitch</var></dt>
+      <dt><code>lsp-list</code> <var>switch</var></dt>
       <dd>
-        Lists all the logical ports within <var>lswitch</var> on
+        Lists all the logical switch ports within <var>switch</var> on
         standard output, one per line.
       </dd>
 
-      <dt><code>lport-get-parent</code> <var>lport</var></dt>
+      <dt><code>lsp-get-parent</code> <var>port</var></dt>
       <dd>
-        If set, get the parent port of <var>lport</var>.  If not set, print
+        If set, get the parent port of <var>port</var>.  If not set, print
         nothing.
       </dd>
 
-      <dt><code>lport-get-tag</code> <var>lport</var></dt>
+      <dt><code>lsp-get-tag</code> <var>port</var></dt>
       <dd>
-        If set, get the tag for <var>lport</var> traffic.  If not set, print
+        If set, get the tag for <var>port</var> traffic.  If not set, print
         nothing.
       </dd>
 
-      <dt><code>lport-set-addresses</code> <var>lport</var> [<var>address</var>]...</dt>
+      <dt><code>lsp-set-addresses</code> <var>port</var> [<var>address</var>]...</dt>
       <dd>
-        Sets the addresses associated with <var>lport</var> to
+        Sets the addresses associated with <var>port</var> to
         <var>address</var>.  Each <var>address</var> should be either an
-        Ethernet address or an Ethernet address followed by an IP address
-        (separated by a space and quoted to form a single command-line
+        Ethernet address or an Ethernet address followed by IP addresses
+        (separated by space and quoted to form a single command-line
         argument).  The special form <code>unknown</code> is also valid.
-        Multiple Ethernet addresses or Ethernet+IP pairs may be set. If no
-        <var>address</var> argument is given, <var>lport</var> will have no
-        addresses associated with it.
+        Multiple Ethernet addresses or Ethernet+IPs combinations may be set.
+        If no <var>address</var> argument is given, <var>port</var> will have
+        no addresses associated with it.
       </dd>
 
-      <dt><code>lport-get-addresses</code> <var>lport</var></dt>
+      <dt><code>lsp-get-addresses</code> <var>port</var></dt>
       <dd>
-        Lists all the addresses associated with <var>lport</var> on standard
+        Lists all the addresses associated with <var>port</var> on standard
         output, one per line.
       </dd>
 
-      <dt><code>lport-set-port-security</code> <var>lport</var> [<var>addrs</var>]...</dt>
+      <dt><code>lsp-set-port-security</code> <var>port</var> [<var>addrs</var>]...</dt>
       <dd>
         <p>
-          Sets the port security addresses associated with <var>lport</var> to
+          Sets the port security addresses associated with <var>port</var> to
           <var>addrs</var>.  Multiple sets of addresses may be set by using
           multiple <var>addrs</var> arguments.  If no <var>addrs</var> argument
-          is given, <var>lport</var> will not have port security enabled.
+          is given, <var>port</var> will not have port security enabled.
         </p>
 
         <p>
           Port security limits the addresses from which a logical port may send
           packets and to which it may receive packets.  See the
           <code>ovn-nb</code>(5) documentation for the <ref
-          column="port_security" table="Logical_Port"/> column in the <ref
-          table="Logical_Port"/> table for details.
+          column="port_security" table="Logical_Switch_Port"/> column in
+          the <ref table="Logical_Switch_Port"/> table for details.
         </p>
       </dd>
 
-      <dt><code>lport-get-port-security</code> <var>lport</var></dt>
+      <dt><code>lsp-get-port-security</code> <var>port</var></dt>
       <dd>
-        Lists all the port security addresses associated with <var>lport</var>
+        Lists all the port security addresses associated with <var>port</var>
         on standard output, one per line.
       </dd>
 
-      <dt><code>lport-get-up</code> <var>lport</var></dt>
+      <dt><code>lsp-get-up</code> <var>port</var></dt>
       <dd>
-        Prints the state of <var>lport</var>, either <code>up</code> or
+        Prints the state of <var>port</var>, either <code>up</code> or
         <code>down</code>.
       </dd>
 
-      <dt><code>lport-set-enabled</code> <var>lport</var> <var>state</var></dt>
+      <dt><code>lsp-set-enabled</code> <var>port</var> <var>state</var></dt>
       <dd>
-        Set the administrative state of <var>lport</var>, either <code>enabled</code>
+        Set the administrative state of <var>port</var>, either <code>enabled</code>
         or <code>disabled</code>.  When a port is disabled, no traffic is allowed into
         or out of the port.
       </dd>
 
-      <dt><code>lport-get-enabled</code> <var>lport</var></dt>
+      <dt><code>lsp-get-enabled</code> <var>port</var></dt>
       <dd>
-        Prints the administrative state of <var>lport</var>, either <code>enabled</code>
+        Prints the administrative state of <var>port</var>, either <code>enabled</code>
         or <code>disabled</code>.
       </dd>
 
-      <dt><code>lport-set-type</code> <var>lport</var> <var>type</var></dt>
+      <dt><code>lsp-set-type</code> <var>port</var> <var>type</var></dt>
       <dd>
         Set the type for the logical port.  No special types have been implemented yet.
       </dd>
 
-      <dt><code>lport-get-type</code> <var>lport</var></dt>
+      <dt><code>lsp-get-type</code> <var>port</var></dt>
       <dd>
         Get the type for the logical port.
       </dd>
 
-      <dt><code>lport-set-options</code> <var>lport</var> [<var>key=value</var>]...</dt>
+      <dt><code>lsp-set-options</code> <var>port</var> [<var>key=value</var>]...</dt>
       <dd>
         Set type-specific key-value options for the logical port.
       </dd>
 
-      <dt><code>lport-get-options</code> <var>lport</var></dt>
+      <dt><code>lsp-get-options</code> <var>port</var></dt>
       <dd>
         Get the type-specific options for the logical port.
       </dd>
 
+    </dl>
+
+    <h1>Logical Router Commands</h1>
+
+    <dl>
+      <dt><code>lr-add</code></dt>
+      <dd>
+        <p>
+          Creates a new, unnamed logical router, which initially has no ports.
+          The router does not have a name, other commands must refer to this
+          router by its UUID.
+        </p>
+      </dd>
+
+      <dt>[<code>--may-exist</code> | <code>--add-duplicate</code>] <code>lr-add</code> <var>router</var></dt>
+      <dd>
+        <p>
+          Creates a new logical router named <var>router</var>, which
+          initially has no ports.
+        </p>
+
+        <p>
+          The OVN northbound database schema does not require logical router
+          names to be unique, but the whole point to the names is to provide an
+          easy way for humans to refer to the routers, making duplicate names
+          unhelpful.  Thus, without any options, this command regards it as an
+          error if <var>router</var> is a duplicate name.  With
+          <code>--may-exist</code>, adding a duplicate name succeeds but does
+          not create a new logical router.  With <code>--add-duplicate</code>,
+          the command really creates a new logical router with a duplicate
+          name.  It is an error to specify both options.  If there are multiple
+          logical routers with a duplicate name, configure the logical routers
+          using the UUID instead of the <var>router</var> name.
+        </p>
+      </dd>
+
+      <dt>[<code>--if-exists</code>] <code>lr-del</code> <var>router</var></dt>
+      <dd>
+        Deletes <var>router</var>.  It is an error if <var>router</var> does
+        not exist, unless <code>--if-exists</code> is specified.
+      </dd>
+
+      <dt><code>lr-list</code></dt>
+      <dd>
+        Lists all existing routers on standard output, one per line.
+      </dd>
+    </dl>
+
+    <h1>Logical Router Port Commands</h1>
+
+    <dl>
+      <dt>[<code>--may-exist</code>] <code>lrp-add</code> <var>router</var> <var>port</var> <var>mac</var> <var>network</var>... [<code>peer=</code><var>peer</var>]</dt>
+      <dd>
+        <p>
+          Creates on <var>router</var> a new logical router port named
+          <var>port</var> with Ethernet address <var>mac</var> and one
+          or more IP address/netmask for each <var>network</var>.
+        </p>
+
+        <p>
+          The optional argument <code>peer</code> identifies a logical
+          router port that connects to this one.  The following example
+          adds a router port with an IPv4 and IPv6 address with peer
+          <code>lr1</code>:
+        </p>
+
+        <p>
+          <code>lrp-add lr0 lrp0 00:11:22:33:44:55 192.168.0.1/24 2001:db8::1/64 peer=lr1</code>
+        </p>
+
+        <p>
+          It is an error if a logical router port named <var>port</var>
+          already exists, unless <code>--may-exist</code> is specified.
+          Regardless of <code>--may-exist</code>, it is an error if the
+          existing router port is in some logical router other than
+          <var>router</var>.
+        </p>
+      </dd>
+
+      <dt>[<code>--if-exists</code>] <code>lrp-del</code> <var>port</var></dt>
+      <dd>
+        Deletes <var>port</var>.  It is an error if <var>port</var> does
+        not exist, unless <code>--if-exists</code> is specified.
+      </dd>
+
+      <dt><code>lrp-list</code> <var>router</var></dt>
+      <dd>
+        Lists all the logical router ports within <var>router</var> on
+        standard output, one per line.
+      </dd>
+
+      <dt><code>lrp-set-enabled</code> <var>port</var> <var>state</var></dt>
+      <dd>
+        Set the administrative state of <var>port</var>, either
+        <code>enabled</code> or <code>disabled</code>.  When a port is
+        disabled, no traffic is allowed into or out of the port.
+      </dd>
+
+      <dt><code>lrp-get-enabled</code> <var>port</var></dt>
+      <dd>
+        Prints the administrative state of <var>port</var>, either
+        <code>enabled</code> or <code>disabled</code>.
+      </dd>
+    </dl>
+
+    <h1>Logical Router Static Route Commands</h1>
+
+    <dl>
+      <dt>[<code>--may-exist</code>] <code>lr-route-add</code> <var>router</var> <var>prefix</var> <var>nexthop</var> [<var>port</var>]</dt>
+      <dd>
+        <p>
+          Adds the specified route to <var>router</var>.
+          <var>prefix</var> describes an IPv4 or IPv6 prefix for this
+          route, such as <code>192.168.100.0/24</code>.
+          <var>nexthop</var> specifies the gateway to use for this
+          route, which should be the IP address of one of
+          <var>router</var> logical router ports or the IP address of a
+          logical port.  If <var>port</var> is specified, packets that
+          match this route will be sent out that port.  When
+          <var>port</var> is omitted, OVN infers the output port based
+          on <var>nexthop</var>.
+        </p>
+
+        <p>
+          It is an error if a route with <var>prefix</var> already exists,
+          unless <code>--may-exist</code> is specified.
+        </p>
+      </dd>
+
+      <dt>[<code>--if-exists</code>] <code>lr-route-del</code> <var>router</var> [<var>prefix</var>]</dt>
+      <dd>
+        <p>
+          Deletes routes from <var>router</var>.  If only <var>router</var>
+          is supplied, all the routes from the logical router are
+          deleted.  If <var>prefix</var> is also specified, then all the
+          routes that match the prefix will be deleted from the logical
+          router.
+        </p>
+
+        <p>
+          It is an error if <code>prefix</code> is specified and there
+          is no matching route entry, unless <code>--if-exists</code> is
+          specified.
+        </p>
+      </dd>
+
+      <dt><code>lr-route-list</code> <var>router</var></dt>
+      <dd>
+        Lists the routes on <var>router</var>.
+      </dd>
+    </dl>
+
+    <h1>DHCP Options commands</h1>
+
+    <dl>
+      <dt><code>dhcp-options-create</code> <var>cidr</var> [<var>key=value</var>]</dt>
+      <dd>
+        Creates a new DHCP Options entry in the <code>DHCP_Options</code> table
+        with the specified <code>cidr</code> and optional <code>external-ids</code>.
+      </dd>
+
+      <dt><code>dhcp-options-list</code></dt>
+      <dd>
+        Lists the DHCP Options entries.
+      </dd>
+
+      <dt><code>dhcp-options-del</code> <var>dhcp-option</var></dt>
+      <dd>
+        Deletes the DHCP Options entry referred by <var>dhcp-option</var> UUID.
+      </dd>
+
+      <dt><code>dhcp-options-set-options</code> <var>dhcp-option</var> [<var>key=value</var>]...</dt>
+      <dd>
+        Set the DHCP Options for the <var>dhcp-option</var> UUID.
+      </dd>
+
+      <dt><code>dhcp-options-get-options</code> <var>dhcp-option</var></dt>
+      <dd>
+        Lists the DHCP Options for the <var>dhcp-option</var> UUID.
+      </dd>
     </dl>
 
     <h1>Database Commands</h1>
@@ -211,7 +446,7 @@
         An L2 logical switch.  Records may be identified by name.
       </dd>
 
-      <dt><code>Logical_Port</code></dt>
+      <dt><code>Logical_Switch_Port</code></dt>
       <dd>
         A port within an L2 logical switch.  Records may be identified by name.
       </dd>
@@ -231,13 +466,75 @@
         A port within an L3 logical router.  Records may be identified by name.
       </dd>
 
+    <dt><code>Logical_Router_Static_Route</code></dt>
+    <dd>
+      A static route belonging to an L3 logical router.
+    </dd>
+
     </dl>
 
     <xi:include href="lib/db-ctl-base.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
+    <h1>Synchronization Commands</h1>
+
+    <dl>
+      <dt>sync</dt>
+      <dd>
+        Ordinarily, <code>--wait=sb</code> or <code>--wait=hv</code> only waits
+        for changes by the current <code>ovn-nbctl</code> invocation to take
+        effect.  This means that, if none of the commands supplied to
+        <code>ovn-nbctl</code> change the database, then the command does not
+        wait at all.  With the <code>sync</code> command, however,
+        <code>ovn-nbctl</code> waits even for earlier changes to the database
+        to propagate down to the southbound database or all of the OVN chassis,
+        according to the argument to <code>--wait</code>.
+      </dd>
+    </dl>
+
     <h1>Options</h1>
 
     <dl>
+      <dt><code>--no-wait</code> | <code>--wait=none</code></dt>
+      <dt><code>--wait=sb</code></dt>
+      <dt><code>--wait=hv</code></dt>
+
+      <dd>
+        <p>
+          These options control whether and how <code>ovn-nbctl</code> waits
+          for the OVN system to become up-to-date with changes made in an
+          <code>ovn-nbctl</code> invocation.
+        </p>
+
+        <p>
+          By default, or if <code>--no-wait</code> or <code>--wait=none</code>,
+          <code>ovn-nbctl</code> exits immediately after confirming that
+          changes have been committed to the northbound database, without
+          waiting.
+        </p>
+
+        <p>
+          With <code>--wait=sb</code>, before <code>ovn-nbctl</code> exits, it
+          waits for <code>ovn-northd</code> to bring the southbound database
+          up-to-date with the northbound database updates.
+        </p>
+
+        <p>
+          With <code>--wait=hv</code>, before <code>ovn-nbctl</code> exits, it
+          additionally waits for all OVN chassis (hypervisors and gateways) to
+          become up-to-date with the northbound database updates.  (This can
+          become an indefinite wait if any chassis is malfunctioning.)
+        </p>
+
+        <p>
+          Ordinarily, <code>--wait=sb</code> or <code>--wait=hv</code> only
+          waits for changes by the current <code>ovn-nbctl</code> invocation to
+          take effect.  This means that, if none of the commands supplied to
+          <code>ovn-nbctl</code> change the database, then the command does not
+          wait at all.  Use the <code>sync</code> command to override this
+          behavior.
+        </p>
+      </dd>
+
     <dt><code>--db</code> <var>database</var></dt>
     <dd>
       The OVSDB database remote to contact.  If the <env>OVN_NB_DB</env>
@@ -246,25 +543,19 @@
       default is unlikely to be useful outside of single-machine OVN test
       environments.
     </dd>
-
-    <dt><code>-h</code> | <code>--help</code></dt>
-    <dt><code>-o</code> | <code>--options</code></dt>
-    <dt><code>-V</code> | <code>--version</code></dt>
     </dl>
 
     <h1>Logging options</h1>
-    <dl>
-    <dt><code>-v</code><var>spec</var>, <code>--verbose=</code><var>spec</var></dt>
-    <dt><code>-v</code>, <code>--verbose</code></dt>
-    <dt><code>--log-file</code>[<code>=</code><var>file</var>]</dt>
-    <dt><code>--syslog-target=</code><var>host</var><code>:</code><var>port</var></dt>
-    </dl>
+    <xi:include href="lib/vlog.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+    <h2>PKI Options</h2>
+    <p>
+      PKI configuration is required to use SSL for the connection to the
+      database.
+    </p>
+    <xi:include href="lib/ssl.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
-    <h1>PKI configuration (required to use SSL)</h1>
-    <dl>
-    <dt><code>-p</code>, <code>--private-key=</code><var>file</var>  file with private key</dt>
-    <dt><code>-c</code>, <code>--certificate=</code><var>file</var>  file with certificate for private key</dt>
-    <dt><code>-C</code>, <code>--ca-cert=</code><var>file</var>      file with peer CA certificate</dt>
-    </dl>
+    <h2>Other Options</h2>
+
+    <xi:include href="lib/common.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
 </manpage>

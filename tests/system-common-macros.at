@@ -15,8 +15,9 @@ m4_define([DEL_NAMESPACES],
 m4_define([ADD_NAMESPACES],
    [m4_foreach([ns], [$@],
                [DEL_NAMESPACES(ns)
-                AT_CHECK([ip netns add ns])
-		on_exit 'DEL_NAMESPACES(ns)'
+                AT_CHECK([ip netns add ns || return 77])
+                on_exit 'DEL_NAMESPACES(ns)'
+                ip netns exec ns sysctl -w net.netfilter.nf_conntrack_helper=0
                ])
    ]
 )
@@ -55,7 +56,7 @@ m4_define([ADD_INT],
     ]
 )
 
-# ADD_VETH([port], [namespace], [ovs-br], [ip_addr])
+# ADD_VETH([port], [namespace], [ovs-br], [ip_addr] [mac_addr [gateway]])
 #
 # Add a pair of veth ports. 'port' will be added to name space 'namespace',
 # and "ovs-'port'" will be added to ovs bridge 'ovs-br'.
@@ -63,15 +64,26 @@ m4_define([ADD_INT],
 # The 'port' in 'namespace' will be brought up with static IP address
 # with 'ip_addr' in CIDR notation.
 #
+# Optionally, one can specify the 'mac_addr' for 'port' and the default
+# 'gateway'.
+#
 # The existing 'port' or 'ovs-port' will be removed before new ones are added.
 #
 m4_define([ADD_VETH],
-    [ AT_CHECK([ip link add $1 type veth peer name ovs-$1])
+    [ AT_CHECK([ip link add $1 type veth peer name ovs-$1 || return 77])
+      CONFIGURE_VETH_OFFLOADS([$1])
       AT_CHECK([ip link set $1 netns $2])
       AT_CHECK([ip link set dev ovs-$1 up])
-      AT_CHECK([ovs-vsctl add-port $3 ovs-$1])
+      AT_CHECK([ovs-vsctl add-port $3 ovs-$1 -- \
+                set interface ovs-$1 external-ids:iface-id="$1"])
       NS_CHECK_EXEC([$2], [ip addr add $4 dev $1])
       NS_CHECK_EXEC([$2], [ip link set dev $1 up])
+      if test -n "$5"; then
+        NS_CHECK_EXEC([$2], [ip link set dev $1 address $5])
+      fi
+      if test -n "$6"; then
+        NS_CHECK_EXEC([$2], [ip route add default via $6])
+      fi
       on_exit 'ip link del ovs-$1'
     ]
 )
@@ -106,22 +118,23 @@ m4_define([ADD_OVS_TUNNEL],
 )
 
 # ADD_NATIVE_TUNNEL([type], [port], [namespace], [remote-addr], [overlay-addr],
-#                   [link-args])
+#                   [type-args], [link-args])
 #
 # Add a native tunnel device within 'namespace', with name 'port' and type
 # 'type'. The tunnel device will be configured as point-to-point with the
 # 'remote-addr' as the underlay address of the remote tunnel endpoint (as
 # viewed from the perspective of that namespace).
 #
-# 'port' will be configured with the address 'overlay-addr'. 'link-args' is
-# made available so that additional arguments can be passed to "ip link",
-# for instance to configure the vxlan destination port.
+# 'port' will be configured with the address 'overlay-addr'. 'type-args' is
+# made available so that additional arguments can be passed to "ip link add"
+# for configuring specific link type's arguments, for instance to configure
+# the vxlan destination port. 'link-args' is made for arguments passed to
+# "ip link set", for instance to configure MAC address.
 #
 m4_define([ADD_NATIVE_TUNNEL],
    [NS_CHECK_EXEC([$3], [ip link add dev $2 type $1 remote $4 $6])
     NS_CHECK_EXEC([$3], [ip addr add dev $2 $5])
-    NS_CHECK_EXEC([$3], [ip link set dev $2 up])
-    NS_CHECK_EXEC([$3], [ip link set dev $2 mtu 1450])
+    NS_CHECK_EXEC([$3], [ip link set dev $2 mtu 1450 $7 up])
    ]
 )
 
@@ -137,7 +150,7 @@ m4_define([FORMAT_PING], [grep "transmitted" | sed 's/time.*ms$/time 0ms/'])
 # and limit the output to the rows containing 'ip-addr'.
 #
 m4_define([FORMAT_CT],
-    [[grep "dst=$1" | sed -e 's/port=[0-9]*/port=<cleared>/g' -e 's/id=[0-9]*/id=<cleared>/g' | sort | uniq]])
+    [[grep "dst=$1" | sed -e 's/port=[0-9]*/port=<cleared>/g' -e 's/id=[0-9]*/id=<cleared>/g' -e 's/state=[0-9_A-Z]*/state=<cleared>/g' | sort | uniq]])
 
 # NETNS_DAEMONIZE([namespace], [command], [pidfile])
 #
@@ -155,3 +168,11 @@ m4_define([NETNS_DAEMONIZE],
 # Do basic check for vxlan functionality, skip the test if it's not there.
 m4_define([OVS_CHECK_VXLAN],
     [AT_SKIP_IF([! ip link add foo type vxlan help 2>&1 | grep dstport >/dev/null])])
+
+# OVS_CHECK_GRE()
+m4_define([OVS_CHECK_GRE],
+    [AT_SKIP_IF([! ip link add foo type gretap help 2>&1 | grep gre >/dev/null])])
+
+# OVS_CHECK_GENEVE()
+m4_define([OVS_CHECK_GENEVE],
+    [AT_SKIP_IF([! ip link add foo type geneve help 2>&1 | grep geneve >/dev/null])])

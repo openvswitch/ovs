@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# Copyright (C) 2011, 2012 Nicira, Inc.
+# Copyright (C) 2011, 2012, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -90,11 +90,6 @@ restart () {
             LOADED_SRCVERSION=`cat /sys/module/openvswitch/srcversion \
                                2>/dev/null`
             LOADED_VERSION=`cat /sys/module/openvswitch/version \
-                            2>/dev/null`
-        elif [ -e /sys/module/openvswitch_mod ]; then
-            LOADED_SRCVERSION=`cat /sys/module/openvswitch_mod/srcversion \
-                               2>/dev/null`
-            LOADED_VERSION=`cat /sys/module/openvswitch_mod/version \
                             2>/dev/null`
         fi
         SRCVERSION=`modinfo -F srcversion openvswitch 2>/dev/null`

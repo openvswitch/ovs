@@ -19,7 +19,7 @@
 
 #include <stddef.h>
 #include "compiler.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-thread.h"
 
 struct guarded_list {

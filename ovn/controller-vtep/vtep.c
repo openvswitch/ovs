@@ -18,8 +18,8 @@
 #include "vtep.h"
 
 #include "lib/hash.h"
-#include "lib/hmap.h"
-#include "lib/shash.h"
+#include "openvswitch/hmap.h"
+#include "openvswitch/shash.h"
 #include "lib/smap.h"
 #include "lib/sset.h"
 #include "lib/util.h"
@@ -29,6 +29,16 @@
 #include "vtep/vtep-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(vtep);
+
+struct vtep_rec_physical_locator_list_entry {
+    struct ovs_list locators_node;
+    const struct vteprec_physical_locator *vteprec_ploc;
+};
+
+struct mmr_hash_node_data {
+    const struct vteprec_mcast_macs_remote *mmr;
+    struct shash physical_locators;
+};
 
 /*
  * Scans through the Binding table in ovnsb, and updates the vtep logical
@@ -61,9 +71,9 @@ static struct vteprec_ucast_macs_remote *
 create_umr(struct ovsdb_idl_txn *vtep_idl_txn, const char *mac,
            const struct vteprec_logical_switch *vtep_ls)
 {
-    struct vteprec_ucast_macs_remote *new_umr;
+    struct vteprec_ucast_macs_remote *new_umr =
+        vteprec_ucast_macs_remote_insert(vtep_idl_txn);
 
-    new_umr = vteprec_ucast_macs_remote_insert(vtep_idl_txn);
     vteprec_ucast_macs_remote_set_MAC(new_umr, mac);
     vteprec_ucast_macs_remote_set_logical_switch(new_umr, vtep_ls);
 
@@ -74,16 +84,101 @@ create_umr(struct ovsdb_idl_txn *vtep_idl_txn, const char *mac,
 static struct vteprec_physical_locator *
 create_pl(struct ovsdb_idl_txn *vtep_idl_txn, const char *chassis_ip)
 {
-    struct vteprec_physical_locator *new_pl;
+    struct vteprec_physical_locator *new_pl =
+        vteprec_physical_locator_insert(vtep_idl_txn);
 
-    new_pl = vteprec_physical_locator_insert(vtep_idl_txn);
     vteprec_physical_locator_set_dst_ip(new_pl, chassis_ip);
     vteprec_physical_locator_set_encapsulation_type(new_pl, VTEP_ENCAP_TYPE);
 
     return new_pl;
 }
-
 
+/* Creates a new 'Mcast_Macs_Remote'. */
+static void
+vtep_create_mmr(struct ovsdb_idl_txn *vtep_idl_txn, const char *mac,
+                const struct vteprec_logical_switch *vtep_ls,
+                const struct vteprec_physical_locator_set *ploc_set)
+{
+    struct vteprec_mcast_macs_remote *new_mmr =
+       vteprec_mcast_macs_remote_insert(vtep_idl_txn);
+
+    vteprec_mcast_macs_remote_set_MAC(new_mmr, mac);
+    vteprec_mcast_macs_remote_set_logical_switch(new_mmr, vtep_ls);
+    vteprec_mcast_macs_remote_set_locator_set(new_mmr, ploc_set);
+}
+
+/* Compares previous and new mmr locator sets and returns true if they
+ * differ and false otherwise. This function also preps a new locator
+ * set for database write.
+ *
+ * 'locators_list' is the new set of locators for the associated
+ * 'Mcast_Macs_Remote' entry passed in and is queried to generate the
+ * new set of locators in vtep database format. */
+static bool
+vtep_process_pls(const struct ovs_list *locators_list,
+                 const struct mmr_hash_node_data *mmr_ext,
+                 struct vteprec_physical_locator **locators)
+{
+    size_t n_locators_prev = 0;
+    size_t n_locators_new = ovs_list_size(locators_list);
+    bool locator_lists_differ = false;
+
+    if (mmr_ext) {
+        n_locators_prev = mmr_ext->mmr->locator_set->n_locators;
+    }
+    if (n_locators_prev != n_locators_new) {
+        locator_lists_differ = true;
+    }
+
+    if (n_locators_new) {
+        int i = 0;
+        struct vtep_rec_physical_locator_list_entry *ploc_entry;
+        LIST_FOR_EACH (ploc_entry, locators_node, locators_list) {
+            locators[i] = (struct vteprec_physical_locator *)
+                           ploc_entry->vteprec_ploc;
+            if (mmr_ext && !shash_find_data(&mmr_ext->physical_locators,
+                                            locators[i]->dst_ip)) {
+                    locator_lists_differ = true;
+            }
+            i++;
+        }
+    }
+
+    return locator_lists_differ;
+}
+
+/* Creates a new 'Mcast_Macs_Remote' entry if needed and also cleans up
+ * out-dated remote mcast mac entries as needed. */
+static void
+vtep_update_mmr(struct ovsdb_idl_txn *vtep_idl_txn,
+                struct ovs_list *locators_list,
+                const struct vteprec_logical_switch *vtep_ls,
+                const struct mmr_hash_node_data *mmr_ext)
+{
+    struct vteprec_physical_locator **locators = NULL;
+    size_t n_locators_new = ovs_list_size(locators_list);
+    bool mmr_changed;
+
+    locators = xmalloc(n_locators_new * sizeof *locators);
+
+    mmr_changed = vtep_process_pls(locators_list, mmr_ext, locators);
+
+    if (mmr_ext && !n_locators_new) {
+        vteprec_mcast_macs_remote_delete(mmr_ext->mmr);
+    } else if ((mmr_ext && mmr_changed) ||
+               (!mmr_ext && n_locators_new)) {
+
+        const struct vteprec_physical_locator_set *ploc_set =
+            vteprec_physical_locator_set_insert(vtep_idl_txn);
+
+        vtep_create_mmr(vtep_idl_txn, "unknown-dst", vtep_ls, ploc_set);
+
+        vteprec_physical_locator_set_set_locators(ploc_set, locators,
+                                                  n_locators_new);
+    }
+    free(locators);
+}
+
 /* Updates the vtep Logical_Switch table entries' tunnel keys based
  * on the port bindings. */
 static void
@@ -109,7 +204,7 @@ vtep_lswitch_run(struct shash *vtep_pbs, struct sset *vtep_pswitches,
          * and 'lswitch_name' must also exist. */
         if (!pswitch_name || !lswitch_name) {
             /* This could only happen when someone directly modifies the
-             * database.  (e.g. using ovn-sbctl) */
+             * database,  (e.g. using ovn-sbctl). */
             VLOG_ERR("logical port (%s) with no 'options:vtep-physical-"
                      "switch' or 'options:vtep-logical-switch' specified "
                      "is bound to chassis (%s).",
@@ -136,6 +231,11 @@ vtep_lswitch_run(struct shash *vtep_pbs, struct sset *vtep_pswitches,
                          vtep_ls->tunnel_key[0], tnl_key);
             }
             vteprec_logical_switch_set_tunnel_key(vtep_ls, &tnl_key, 1);
+
+            /* OVN is expected to always use source node replication mode,
+             * hence the replication mode is hard-coded for each logical
+             * switch in the context of ovn-controller-vtep. */
+            vteprec_logical_switch_set_replication_mode(vtep_ls, "source_node");
             sset_add(&used_ls, lswitch_name);
         }
     }
@@ -149,12 +249,12 @@ vtep_lswitch_run(struct shash *vtep_pbs, struct sset *vtep_pswitches,
     sset_destroy(&used_ls);
 }
 
-/* Updates the vtep 'Ucast_Macs_Remote' table based on non-vtep port
- * bindings. */
+/* Updates the vtep 'Ucast_Macs_Remote' and 'Mcast_Macs_Remote' tables based
+ * on non-vtep port bindings. */
 static void
 vtep_macs_run(struct ovsdb_idl_txn *vtep_idl_txn, struct shash *ucast_macs_rmts,
-              struct shash *physical_locators, struct shash *vtep_lswitches,
-              struct shash *non_vtep_pbs)
+              struct shash *mcast_macs_rmts, struct shash *physical_locators,
+              struct shash *vtep_lswitches, struct shash *non_vtep_pbs)
 {
     struct shash_node *node;
     struct hmap ls_map;
@@ -162,12 +262,20 @@ vtep_macs_run(struct ovsdb_idl_txn *vtep_idl_txn, struct shash *ucast_macs_rmts,
     /* Maps from ovn logical datapath tunnel key (which is also the vtep
      * logical switch tunnel key) to the corresponding vtep logical switch
      * instance.  Also, the shash map 'added_macs' is used for checking
-     * duplicated MAC addresses in the same ovn logical datapath. */
+     * duplicated MAC addresses in the same ovn logical datapath. 'mmr_ext'
+     * is used to track mmr info per LS that needs creation/update and
+     * 'locators_list' collects the new physical locators to be bound for
+     * an mmr_ext; 'physical_locators' is used to track existing locators and
+     * filter duplicates per logical switch. */
     struct ls_hash_node {
         struct hmap_node hmap_node;
 
         const struct vteprec_logical_switch *vtep_ls;
         struct shash added_macs;
+
+        struct ovs_list locators_list;
+        struct shash physical_locators;
+        struct mmr_hash_node_data *mmr_ext;
     };
 
     hmap_init(&ls_map);
@@ -181,6 +289,9 @@ vtep_macs_run(struct ovsdb_idl_txn *vtep_idl_txn, struct shash *ucast_macs_rmts,
         ls_node = xmalloc(sizeof *ls_node);
         ls_node->vtep_ls = vtep_ls;
         shash_init(&ls_node->added_macs);
+        shash_init(&ls_node->physical_locators);
+        ovs_list_init(&ls_node->locators_list);
+        ls_node->mmr_ext = NULL;
         hmap_insert(&ls_map, &ls_node->hmap_node,
                     hash_uint64((uint64_t) vtep_ls->tunnel_key[0]));
     }
@@ -222,17 +333,40 @@ vtep_macs_run(struct ovsdb_idl_txn *vtep_idl_txn, struct shash *ucast_macs_rmts,
             continue;
         }
 
+        const struct vteprec_physical_locator *pl =
+            shash_find_data(physical_locators, chassis_ip);
+        if (!pl) {
+            pl = create_pl(vtep_idl_txn, chassis_ip);
+            shash_add(physical_locators, chassis_ip, pl);
+        }
+
+        const struct vteprec_physical_locator *ls_pl =
+            shash_find_data(&ls_node->physical_locators, chassis_ip);
+        if (!ls_pl) {
+            struct vtep_rec_physical_locator_list_entry *ploc_entry =
+                xmalloc(sizeof *ploc_entry);
+            ploc_entry->vteprec_ploc = pl;
+            ovs_list_push_back(&ls_node->locators_list,
+                               &ploc_entry->locators_node);
+            shash_add(&ls_node->physical_locators, chassis_ip, pl);
+        }
+
+        char *mac_tnlkey = xasprintf("%s_%"PRId64, "unknown-dst", tnl_key);
+        ls_node->mmr_ext = shash_find_data(mcast_macs_rmts, mac_tnlkey);
+
+        if (ls_node->mmr_ext &&
+            ls_node->mmr_ext->mmr->logical_switch == ls_node->vtep_ls) {
+
+            /* Delete the entry from the hash table so the mmr does not get
+             * removed from the DB later on during stale checking. */
+            shash_find_and_delete(mcast_macs_rmts, mac_tnlkey);
+        }
+        free(mac_tnlkey);
+
         for (i = 0; i < port_binding_rec->n_mac; i++) {
             const struct vteprec_ucast_macs_remote *umr;
-            const struct vteprec_physical_locator *pl;
             const struct sbrec_port_binding *conflict;
             char *mac = port_binding_rec->mac[i];
-
-            /* xxx Need to address this later when we support
-             * update of 'Mcast_Macs_Remote' table in VTEP. */
-            if (!strcmp(mac, "unknown")) {
-                continue;
-            }
 
             /* Checks for duplicate MAC in the same vtep logical switch. */
             conflict = shash_find_data(&ls_node->added_macs, mac);
@@ -257,19 +391,8 @@ vtep_macs_run(struct ovsdb_idl_txn *vtep_idl_txn, struct shash *ucast_macs_rmts,
                 shash_find_and_delete(ucast_macs_rmts, mac_ip_tnlkey);
             } else {
                 const struct vteprec_ucast_macs_remote *new_umr;
-
                 new_umr = create_umr(vtep_idl_txn, mac, ls_node->vtep_ls);
-                pl = shash_find_data(physical_locators, chassis_ip);
-                if (pl) {
-                    vteprec_ucast_macs_remote_set_locator(new_umr, pl);
-                } else {
-                    const struct vteprec_physical_locator *new_pl;
-
-                    new_pl = create_pl(vtep_idl_txn, chassis_ip);
-                    vteprec_ucast_macs_remote_set_locator(new_umr, new_pl);
-                    /* Updates the 'physical_locators'. */
-                    shash_add(physical_locators, chassis_ip, new_pl);
-                }
+                vteprec_ucast_macs_remote_set_locator(new_umr, pl);
             }
             free(mac_ip_tnlkey);
         }
@@ -281,11 +404,26 @@ vtep_macs_run(struct ovsdb_idl_txn *vtep_idl_txn, struct shash *ucast_macs_rmts,
     }
     struct ls_hash_node *iter, *next;
     HMAP_FOR_EACH_SAFE (iter, next, hmap_node, &ls_map) {
+        struct vtep_rec_physical_locator_list_entry *ploc_entry;
+        vtep_update_mmr(vtep_idl_txn, &iter->locators_list,
+                        iter->vtep_ls, iter->mmr_ext);
+        LIST_FOR_EACH_POP(ploc_entry, locators_node,
+                          &iter->locators_list) {
+            free(ploc_entry);
+        }
         hmap_remove(&ls_map, &iter->hmap_node);
         shash_destroy(&iter->added_macs);
+        shash_destroy(&iter->physical_locators);
         free(iter);
     }
     hmap_destroy(&ls_map);
+
+    /* Clean stale 'Mcast_Macs_Remote' */
+    struct mmr_hash_node_data *mmr_ext;
+    SHASH_FOR_EACH (node, mcast_macs_rmts) {
+        mmr_ext = node->data;
+        vteprec_mcast_macs_remote_delete(mmr_ext->mmr);
+    }
 }
 
 /* Resets all logical switches' 'tunnel_key' to NULL */
@@ -305,10 +443,10 @@ vtep_lswitch_cleanup(struct ovsdb_idl *vtep_idl)
     return done;
 }
 
-/* Removes all entries in the 'Ucast_Macs_Remote' table in vtep database.
- * Returns true when all done (no entry to remove). */
+/* Removes all entries in the 'Ucast_Macs_Remote' table in the vtep database.
+ * Returns true when all done (i.e. no entry to remove). */
 static bool
-vtep_macs_cleanup(struct ovsdb_idl *vtep_idl)
+vtep_ucast_macs_cleanup(struct ovsdb_idl *vtep_idl)
 {
     const struct vteprec_ucast_macs_remote *umr;
 
@@ -316,6 +454,22 @@ vtep_macs_cleanup(struct ovsdb_idl *vtep_idl)
         vteprec_ucast_macs_remote_delete(umr);
         return false;
     }
+
+    return true;
+}
+
+/* Removes all entries in the 'Mcast_Macs_Remote' table in vtep database.
+ * Returns true when all done (i.e. no entry to remove). */
+static bool
+vtep_mcast_macs_cleanup(struct ovsdb_idl *vtep_idl)
+{
+    const struct vteprec_mcast_macs_remote *mmr;
+
+    VTEPREC_MCAST_MACS_REMOTE_FOR_EACH (mmr, vtep_idl) {
+        vteprec_mcast_macs_remote_delete(mmr);
+        return false;
+    }
+
     return true;
 }
 
@@ -330,14 +484,16 @@ vtep_run(struct controller_vtep_ctx *ctx)
     struct sset vtep_pswitches = SSET_INITIALIZER(&vtep_pswitches);
     struct shash vtep_lswitches = SHASH_INITIALIZER(&vtep_lswitches);
     struct shash ucast_macs_rmts = SHASH_INITIALIZER(&ucast_macs_rmts);
+    struct shash mcast_macs_rmts = SHASH_INITIALIZER(&mcast_macs_rmts);
     struct shash physical_locators = SHASH_INITIALIZER(&physical_locators);
     struct shash vtep_pbs = SHASH_INITIALIZER(&vtep_pbs);
     struct shash non_vtep_pbs = SHASH_INITIALIZER(&non_vtep_pbs);
     const struct vteprec_physical_switch *vtep_ps;
     const struct vteprec_logical_switch *vtep_ls;
     const struct vteprec_ucast_macs_remote *umr;
-    const struct vteprec_physical_locator *pl;
     const struct sbrec_port_binding *port_binding_rec;
+    const struct vteprec_mcast_macs_remote *mmr;
+    struct shash_node *node;
 
     /* Collects 'Physical_Switch's. */
     VTEPREC_PHYSICAL_SWITCH_FOR_EACH (vtep_ps, ctx->vtep_idl) {
@@ -360,10 +516,34 @@ vtep_run(struct controller_vtep_ctx *ctx)
         shash_add(&ucast_macs_rmts, mac_ip_tnlkey, umr);
         free(mac_ip_tnlkey);
     }
+
+    /* Collects 'Mcast_Macs_Remote's. */
+    VTEPREC_MCAST_MACS_REMOTE_FOR_EACH (mmr, ctx->vtep_idl) {
+        struct mmr_hash_node_data *mmr_ext = xmalloc(sizeof *mmr_ext);;
+        char *mac_tnlkey =
+            xasprintf("%s_%"PRId64, mmr->MAC,
+                      mmr->logical_switch && mmr->logical_switch->n_tunnel_key
+                          ? mmr->logical_switch->tunnel_key[0] : INT64_MAX);
+
+        shash_add(&mcast_macs_rmts, mac_tnlkey, mmr_ext);
+        mmr_ext->mmr = mmr;
+
+        shash_init(&mmr_ext->physical_locators);
+        for (size_t i = 0; i < mmr->locator_set->n_locators; i++) {
+            shash_add(&mmr_ext->physical_locators,
+                      mmr->locator_set->locators[i]->dst_ip,
+                      mmr->locator_set->locators[i]);
+        }
+
+        free(mac_tnlkey);
+    }
+
     /* Collects 'Physical_Locator's. */
+    const struct vteprec_physical_locator *pl;
     VTEPREC_PHYSICAL_LOCATOR_FOR_EACH (pl, ctx->vtep_idl) {
         shash_add(&physical_locators, pl->dst_ip, pl);
     }
+
     /* Collects and classifies 'Port_Binding's. */
     SBREC_PORT_BINDING_FOR_EACH(port_binding_rec, ctx->ovnsb_idl) {
         struct shash *target =
@@ -380,19 +560,26 @@ vtep_run(struct controller_vtep_ctx *ctx)
                               "tunnel keys and 'ucast_macs_remote's");
 
     vtep_lswitch_run(&vtep_pbs, &vtep_pswitches, &vtep_lswitches);
-    vtep_macs_run(ctx->vtep_idl_txn, &ucast_macs_rmts, &physical_locators,
+    vtep_macs_run(ctx->vtep_idl_txn, &ucast_macs_rmts,
+                  &mcast_macs_rmts, &physical_locators,
                   &vtep_lswitches, &non_vtep_pbs);
 
     sset_destroy(&vtep_pswitches);
     shash_destroy(&vtep_lswitches);
     shash_destroy(&ucast_macs_rmts);
+    SHASH_FOR_EACH (node, &mcast_macs_rmts) {
+        struct mmr_hash_node_data *mmr_ext = node->data;
+        shash_destroy(&mmr_ext->physical_locators);
+        free(mmr_ext);
+    }
+    shash_destroy(&mcast_macs_rmts);
     shash_destroy(&physical_locators);
     shash_destroy(&vtep_pbs);
     shash_destroy(&non_vtep_pbs);
 }
 
-/* Cleans up all related entries in vtep.  Returns true when done (i.e.
- * there is no change made to 'ctx->vtep_idl'), otherwise returns false. */
+/* Cleans up all related entries in vtep.  Returns true when done (i.e. there
+ * is no change made to 'ctx->vtep_idl'), otherwise returns false. */
 bool
 vtep_cleanup(struct controller_vtep_ctx *ctx)
 {
@@ -406,7 +593,8 @@ vtep_cleanup(struct controller_vtep_ctx *ctx)
                               "ovn-controller-vtep: cleaning up vtep "
                               "configuration");
     all_done = vtep_lswitch_cleanup(ctx->vtep_idl);
-    all_done = vtep_macs_cleanup(ctx->vtep_idl) && all_done;
+    all_done = vtep_ucast_macs_cleanup(ctx->vtep_idl) && all_done;
+    all_done = vtep_mcast_macs_cleanup(ctx->vtep_idl) && all_done;
 
     return all_done;
 }

@@ -1,6 +1,8 @@
 *.debhelper
 *.debhelper.log
 *.substvars
+/autoreconf.after
+/autoreconf.before
 /control
 /copyright
 /files
@@ -11,6 +13,7 @@
 /openvswitch-datapath-source
 /openvswitch-datapath-dkms
 /openvswitch-dbg
+/openvswitch-dev
 /openvswitch-ipsec
 /openvswitch-pki
 /openvswitch-switch

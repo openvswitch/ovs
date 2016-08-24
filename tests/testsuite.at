@@ -14,6 +14,8 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.])
 
+m4_ifdef([AT_COLOR_TESTS], [AT_COLOR_TESTS])
+
 m4_include([tests/ovs-macros.at])
 m4_include([tests/ovsdb-macros.at])
 m4_include([tests/ofproto-macros.at])
@@ -54,10 +56,11 @@ m4_include([tests/reconnect.at])
 m4_include([tests/ovs-vswitchd.at])
 m4_include([tests/ofproto.at])
 m4_include([tests/dpif-netdev.at])
+m4_include([tests/pmd.at])
 m4_include([tests/dpctl.at])
 m4_include([tests/ofproto-dpif.at])
 m4_include([tests/bridge.at])
-m4_include([tests/vlan-splinters.at])
+m4_include([tests/netdev-type.at])
 m4_include([tests/ovsdb.at])
 m4_include([tests/ovs-vsctl.at])
 m4_include([tests/ovs-monitor-ipsec.at])

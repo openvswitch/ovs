@@ -7,11 +7,11 @@ not used at all, the default socket is
 \fB@RUNDIR@/\*(PN.\fIpid\fB.ctl\fR, where \fIpid\fR is \fB\*(PN\fR's
 process ID.
 .IP
-On Windows, uses a kernel chosen TCP port on the localhost to listen
-for runtime management commands.  The kernel chosen TCP port value is written
-in a file whose absolute path is pointed by \fIsocket\fR. If \fB\-\-unixctl\fR
-is not used at all, the file is created as \fB\*(PN.ctl\fR in the configured
-\fIOVS_RUNDIR\fR directory.
+On Windows a local named pipe is used to listen for runtime management
+commands.  A file is created in the absolute path as pointed by
+\fIsocket\fR or if \fB\-\-unixctl\fR is not used at all, a file is
+created as \fB\*(PN.ctl\fR in the configured \fIOVS_RUNDIR\fR
+directory.  The file exists just to mimic the behavior of a Unix domain socket.
 .IP
 Specifying \fBnone\fR for \fIsocket\fR disables the control socket
 feature.

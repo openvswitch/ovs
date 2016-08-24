@@ -3,7 +3,7 @@
 
 #include <openflow/openflow-common.h>
 #include "util.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 
 #define OFP_VERSION_LONG_OPTIONS                                \
         {"version",     no_argument, NULL, 'V'},                \

@@ -31,7 +31,7 @@
 
 #include <linux/version.h>
 
-#if !defined(HAVE_NF_IPV6_OPS_FRAGMENT) && defined(OVS_FRAGMENT_BACKPORT)
+#ifndef HAVE_NF_IPV6_OPS_FRAGMENT
 
 #include <linux/errno.h>
 #include <linux/kernel.h>
@@ -467,4 +467,4 @@ void ip6_output_exit(void)
 	kfree(ip_idents);
 }
 
-#endif /* OVS_FRAGMENT_BACKPORT */
+#endif /* !HAVE_NF_IPV6_OPS_FRAGMENT */

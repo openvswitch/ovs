@@ -15,17 +15,32 @@
 
 #include <config.h>
 #include "binding.h"
+#include "lflow.h"
+#include "lport.h"
 
 #include "lib/bitmap.h"
-#include "lib/hmap.h"
+#include "lib/poll-loop.h"
 #include "lib/sset.h"
 #include "lib/util.h"
 #include "lib/vswitch-idl.h"
+#include "openvswitch/hmap.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn-controller.h"
 
 VLOG_DEFINE_THIS_MODULE(binding);
+
+/* A set of the iface-id values of local interfaces on this chassis. */
+static struct sset local_ids = SSET_INITIALIZER(&local_ids);
+
+/* When this gets set to true, the next run will re-check all binding records. */
+static bool process_full_binding = false;
+
+void
+binding_reset_processing(void)
+{
+    process_full_binding = true;
+}
 
 void
 binding_register_ovs_idl(struct ovsdb_idl *ovs_idl)
@@ -49,10 +64,16 @@ binding_register_ovs_idl(struct ovsdb_idl *ovs_idl)
                          &ovsrec_interface_col_ingress_policing_burst);
 }
 
-static void
-get_local_iface_ids(const struct ovsrec_bridge *br_int, struct shash *lports)
+static bool
+get_local_iface_ids(const struct ovsrec_bridge *br_int,
+                    struct shash *lport_to_iface,
+                    struct sset *all_lports)
 {
     int i;
+    bool changed = false;
+
+    struct sset old_local_ids = SSET_INITIALIZER(&old_local_ids);
+    sset_clone(&old_local_ids, &local_ids);
 
     for (i = 0; i < br_int->n_ports; i++) {
         const struct ovsrec_port *port_rec = br_int->ports[i];
@@ -71,68 +92,73 @@ get_local_iface_ids(const struct ovsrec_bridge *br_int, struct shash *lports)
             if (!iface_id) {
                 continue;
             }
-            shash_add(lports, iface_id, iface_rec);
+            shash_add(lport_to_iface, iface_id, iface_rec);
+            if (!sset_find_and_delete(&old_local_ids, iface_id)) {
+                sset_add(&local_ids, iface_id);
+                sset_add(all_lports, iface_id);
+                changed = true;
+            }
         }
     }
+
+    /* Any item left in old_local_ids is an ID for an interface
+     * that has been removed. */
+    if (!changed && !sset_is_empty(&old_local_ids)) {
+        changed = true;
+
+        const char *cur_id;
+        SSET_FOR_EACH(cur_id, &old_local_ids) {
+            sset_find_and_delete(&local_ids, cur_id);
+            sset_find_and_delete(all_lports, cur_id);
+        }
+    }
+
+    sset_destroy(&old_local_ids);
+
+    return changed;
+}
+
+static struct local_datapath *
+local_datapath_lookup_by_uuid(struct hmap *hmap_p, const struct uuid *uuid)
+{
+    struct local_datapath *ld;
+    HMAP_FOR_EACH_WITH_HASH(ld, uuid_hmap_node, uuid_hash(uuid), hmap_p) {
+        if (uuid_equals(&ld->uuid, uuid)) {
+            return ld;
+        }
+    }
+    return NULL;
 }
 
 static void
-update_ct_zones(struct sset *lports, struct simap *ct_zones,
-                unsigned long *ct_zone_bitmap)
+remove_local_datapath(struct hmap *local_datapaths, struct local_datapath *ld)
 {
-    struct simap_node *ct_zone, *ct_zone_next;
-    const char *iface_id;
-    int scan_start = 1;
-
-    /* xxx This is wasteful to assign a zone to each port--even if no
-     * xxx security policy is applied. */
-
-    /* Delete any zones that are associated with removed ports. */
-    SIMAP_FOR_EACH_SAFE(ct_zone, ct_zone_next, ct_zones) {
-        if (!sset_contains(lports, ct_zone->name)) {
-            bitmap_set0(ct_zone_bitmap, ct_zone->data);
-            simap_delete(ct_zones, ct_zone);
-        }
+    if (ld->logical_port) {
+        free(ld->logical_port);
+        ld->logical_port = NULL;
     }
-
-    /* Assign a unique zone id for each logical port. */
-    SSET_FOR_EACH(iface_id, lports) {
-        size_t zone;
-
-        if (simap_contains(ct_zones, iface_id)) {
-            continue;
-        }
-
-        /* We assume that there are 64K zones and that we own them all. */
-        zone = bitmap_scan(ct_zone_bitmap, 0, scan_start, MAX_CT_ZONES + 1);
-        if (zone == MAX_CT_ZONES + 1) {
-            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-            VLOG_WARN_RL(&rl, "exhausted all ct zones");
-            return;
-        }
-        scan_start = zone + 1;
-
-        bitmap_set1(ct_zone_bitmap, zone);
-        simap_put(ct_zones, iface_id, zone);
-
-        /* xxx We should erase any old entries for this
-         * xxx zone, but we need a generic interface to the conntrack
-         * xxx table. */
-    }
+    hmap_remove(local_datapaths, &ld->hmap_node);
+    free(ld);
+    lflow_reset_processing();
 }
 
 static void
 add_local_datapath(struct hmap *local_datapaths,
         const struct sbrec_port_binding *binding_rec)
 {
-    if (hmap_first_with_hash(local_datapaths,
-                             binding_rec->datapath->tunnel_key)) {
+    if (get_local_datapath(local_datapaths,
+                           binding_rec->datapath->tunnel_key)) {
         return;
     }
 
     struct local_datapath *ld = xzalloc(sizeof *ld);
+    ld->logical_port = xstrdup(binding_rec->logical_port);
+    memcpy(&ld->uuid, &binding_rec->header_.uuid, sizeof ld->uuid);
     hmap_insert(local_datapaths, &ld->hmap_node,
                 binding_rec->datapath->tunnel_key);
+    lport_index_reset();
+    mcgroup_index_reset();
+    lflow_reset_processing();
 }
 
 static void
@@ -146,88 +172,178 @@ update_qos(const struct ovsrec_interface *iface_rec,
     ovsrec_interface_set_ingress_policing_burst(iface_rec, MAX(0, burst));
 }
 
+static void
+consider_local_datapath(struct controller_ctx *ctx,
+                        const struct sbrec_chassis *chassis_rec,
+                        const struct sbrec_port_binding *binding_rec,
+                        struct hmap *local_datapaths,
+                        struct shash *lport_to_iface,
+                        struct sset *all_lports)
+{
+    const struct ovsrec_interface *iface_rec
+        = shash_find_data(lport_to_iface, binding_rec->logical_port);
+
+    if (iface_rec
+        || (binding_rec->parent_port && binding_rec->parent_port[0] &&
+            sset_contains(&local_ids, binding_rec->parent_port))) {
+        add_local_datapath(local_datapaths, binding_rec);
+        if (iface_rec && ctx->ovs_idl_txn) {
+            update_qos(iface_rec, binding_rec);
+        }
+        if (binding_rec->chassis == chassis_rec) {
+            return;
+        }
+        if (ctx->ovnsb_idl_txn) {
+            if (binding_rec->chassis) {
+                VLOG_INFO("Changing chassis for lport %s from %s to %s.",
+                          binding_rec->logical_port,
+                          binding_rec->chassis->name,
+                          chassis_rec->name);
+            } else {
+                VLOG_INFO("Claiming lport %s for this chassis.",
+                          binding_rec->logical_port);
+            }
+            sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
+            if (binding_rec->parent_port && binding_rec->parent_port[0]) {
+                sset_add(all_lports, binding_rec->logical_port);
+            }
+        }
+    } else if (!strcmp(binding_rec->type, "l2gateway")) {
+        const char *chassis_id = smap_get(&binding_rec->options,
+                                          "l2gateway-chassis");
+        if (!chassis_id || strcmp(chassis_id, chassis_rec->name)) {
+            if (binding_rec->chassis == chassis_rec && ctx->ovnsb_idl_txn) {
+                VLOG_INFO("Releasing l2gateway port %s from this chassis.",
+                          binding_rec->logical_port);
+                sbrec_port_binding_set_chassis(binding_rec, NULL);
+                sset_find_and_delete(all_lports, binding_rec->logical_port);
+            }
+            return;
+        }
+
+        if (binding_rec->chassis == chassis_rec) {
+            return;
+        }
+
+        if (!strcmp(chassis_id, chassis_rec->name) && ctx->ovnsb_idl_txn) {
+            VLOG_INFO("Claiming l2gateway port %s for this chassis.",
+                      binding_rec->logical_port);
+            sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
+            sset_add(all_lports, binding_rec->logical_port);
+            add_local_datapath(local_datapaths, binding_rec);
+        }
+    } else if (!strcmp(binding_rec->type, "l3gateway")) {
+        const char *chassis = smap_get(&binding_rec->options,
+                                       "l3gateway-chassis");
+        if (!strcmp(chassis, chassis_rec->name) && ctx->ovnsb_idl_txn) {
+            add_local_datapath(local_datapaths, binding_rec);
+        }
+    } else if (chassis_rec && binding_rec->chassis == chassis_rec) {
+        if (ctx->ovnsb_idl_txn) {
+            VLOG_INFO("Releasing lport %s from this chassis.",
+                      binding_rec->logical_port);
+            sbrec_port_binding_set_chassis(binding_rec, NULL);
+            sset_find_and_delete(all_lports, binding_rec->logical_port);
+        }
+    } else if (!binding_rec->chassis
+               && !strcmp(binding_rec->type, "localnet")) {
+        /* Add all localnet ports to all_lports so that we allocate ct zones
+         * for them. */
+        sset_add(all_lports, binding_rec->logical_port);
+    }
+}
+
 void
 binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
-            const char *chassis_id, struct simap *ct_zones,
-            unsigned long *ct_zone_bitmap, struct hmap *local_datapaths)
+            const char *chassis_id, struct hmap *local_datapaths,
+            struct sset *all_lports)
 {
     const struct sbrec_chassis *chassis_rec;
     const struct sbrec_port_binding *binding_rec;
-
-    if (!ctx->ovnsb_idl_txn) {
-        return;
-    }
+    struct shash lport_to_iface = SHASH_INITIALIZER(&lport_to_iface);
 
     chassis_rec = get_chassis(ctx->ovnsb_idl, chassis_id);
     if (!chassis_rec) {
         return;
     }
 
-    struct shash lports = SHASH_INITIALIZER(&lports);
     if (br_int) {
-        get_local_iface_ids(br_int, &lports);
+        if (ctx->ovnsb_idl_txn && get_local_iface_ids(br_int, &lport_to_iface,
+                                                      all_lports)) {
+            process_full_binding = true;
+        }
     } else {
         /* We have no integration bridge, therefore no local logical ports.
          * We'll remove our chassis from all port binding records below. */
+        process_full_binding = true;
     }
-
-    struct sset all_lports = SSET_INITIALIZER(&all_lports);
-    struct shash_node *node;
-    SHASH_FOR_EACH (node, &lports) {
-        sset_add(&all_lports, node->name);
-    }
-
-    ovsdb_idl_txn_add_comment(
-        ctx->ovnsb_idl_txn,"ovn-controller: updating port bindings for '%s'",
-        chassis_id);
 
     /* Run through each binding record to see if it is resident on this
      * chassis and update the binding accordingly.  This includes both
      * directly connected logical ports and children of those ports. */
-    SBREC_PORT_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
-        const struct ovsrec_interface *iface_rec
-            = shash_find_and_delete(&lports, binding_rec->logical_port);
-        if (iface_rec
-            || (binding_rec->parent_port && binding_rec->parent_port[0] &&
-                sset_contains(&all_lports, binding_rec->parent_port))) {
-            if (binding_rec->parent_port && binding_rec->parent_port[0]) {
-                /* Add child logical port to the set of all local ports. */
-                sset_add(&all_lports, binding_rec->logical_port);
+    if (process_full_binding) {
+        /* Detect any entries in all_lports that have been deleted.
+         * In particular, this will catch localnet ports that we
+         * put in all_lports. */
+        struct sset removed_lports = SSET_INITIALIZER(&removed_lports);
+        sset_clone(&removed_lports, all_lports);
+
+        struct hmap keep_local_datapath_by_uuid =
+            HMAP_INITIALIZER(&keep_local_datapath_by_uuid);
+        SBREC_PORT_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
+            sset_find_and_delete(&removed_lports, binding_rec->logical_port);
+            consider_local_datapath(ctx, chassis_rec, binding_rec,
+                                    local_datapaths, &lport_to_iface,
+                                    all_lports);
+            struct local_datapath *ld = xzalloc(sizeof *ld);
+            memcpy(&ld->uuid, &binding_rec->header_.uuid, sizeof ld->uuid);
+            hmap_insert(&keep_local_datapath_by_uuid, &ld->uuid_hmap_node,
+                        uuid_hash(&ld->uuid));
+        }
+        struct local_datapath *old_ld, *next;
+        HMAP_FOR_EACH_SAFE (old_ld, next, hmap_node, local_datapaths) {
+            if (!local_datapath_lookup_by_uuid(&keep_local_datapath_by_uuid,
+                                               &old_ld->uuid)) {
+                remove_local_datapath(local_datapaths, old_ld);
             }
-            add_local_datapath(local_datapaths, binding_rec);
-            if (iface_rec && ctx->ovs_idl_txn) {
-                update_qos(iface_rec, binding_rec);
+        }
+        struct local_datapath *ld;
+        HMAP_FOR_EACH_SAFE (ld, next, uuid_hmap_node,
+                            &keep_local_datapath_by_uuid) {
+            hmap_remove(&keep_local_datapath_by_uuid, &ld->uuid_hmap_node);
+            free(ld);
+        }
+        hmap_destroy(&keep_local_datapath_by_uuid);
+
+        /* Any remaining entries in removed_lports are logical ports that
+         * have been deleted and should also be removed from all_ports. */
+        const char *cur_id;
+        SSET_FOR_EACH(cur_id, &removed_lports) {
+            sset_find_and_delete(all_lports, cur_id);
+        }
+        sset_destroy(&removed_lports);
+
+        process_full_binding = false;
+    } else {
+        SBREC_PORT_BINDING_FOR_EACH_TRACKED(binding_rec, ctx->ovnsb_idl) {
+            if (sbrec_port_binding_is_deleted(binding_rec)) {
+                /* If a port binding was bound to this chassis and removed before
+                 * the ovs interface was removed, we'll catch that here and trigger
+                 * a full bindings refresh.  This is to see if we need to clear
+                 * an entry out of local_datapaths. */
+                if (binding_rec->chassis == chassis_rec) {
+                    process_full_binding = true;
+                    poll_immediate_wake();
+                }
+            } else {
+                consider_local_datapath(ctx, chassis_rec, binding_rec,
+                                        local_datapaths, &lport_to_iface,
+                                        all_lports);
             }
-            if (binding_rec->chassis == chassis_rec) {
-                continue;
-            }
-            if (binding_rec->chassis) {
-                VLOG_INFO("Changing chassis for lport %s from %s to %s",
-                          binding_rec->logical_port,
-                          binding_rec->chassis->name,
-                          chassis_rec->name);
-            }
-            sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
-        } else if (binding_rec->chassis == chassis_rec) {
-            sbrec_port_binding_set_chassis(binding_rec, NULL);
-        } else if (!binding_rec->chassis
-                   && !strcmp(binding_rec->type, "localnet")) {
-            /* localnet ports will never be bound to a chassis, but we want
-             * to list them in all_lports because we want to allocate
-             * a conntrack zone ID for each one, as we'll be creating
-             * a patch port for each one. */
-            sset_add(&all_lports, binding_rec->logical_port);
         }
     }
 
-    SHASH_FOR_EACH (node, &lports) {
-        VLOG_DBG("No port binding record for lport %s", node->name);
-    }
-
-    update_ct_zones(&all_lports, ct_zones, ct_zone_bitmap);
-
-    shash_destroy(&lports);
-    sset_destroy(&all_lports);
+    shash_destroy(&lport_to_iface);
 }
 
 /* Returns true if the database is all cleaned up, false if more work is

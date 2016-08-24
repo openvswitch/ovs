@@ -26,14 +26,14 @@
 #include "csum.h"
 #include "dp-packet.h"
 #include "dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
-#include "hmap.h"
-#include "list.h"
+#include "openvswitch/hmap.h"
+#include "openvswitch/list.h"
 #include "netdev.h"
 #include "odp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-thread.h"
 #include "openvswitch/types.h"
 #include "packets.h"
@@ -168,6 +168,8 @@ struct bfd {
     enum flags flags;             /* Flags sent on messages. */
     enum flags rmt_flags;         /* Flags last received. */
 
+    bool oam;                     /* Set tunnel OAM flag if applicable. */
+
     uint32_t rmt_disc;            /* bfd.RemoteDiscr. */
 
     struct eth_addr local_eth_src; /* Local eth src address. */
@@ -233,7 +235,7 @@ static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 static struct hmap all_bfds__ = HMAP_INITIALIZER(&all_bfds__);
 static struct hmap *const all_bfds OVS_GUARDED_BY(mutex) = &all_bfds__;
 
-static bool bfd_lookup_ip(const char *host_name, struct in_addr *)
+static void bfd_lookup_ip(const char *host_name, ovs_be32 def, ovs_be32 *ip)
     OVS_REQUIRES(mutex);
 static bool bfd_forwarding__(struct bfd *) OVS_REQUIRES(mutex);
 static bool bfd_in_poll(const struct bfd *) OVS_REQUIRES(mutex);
@@ -352,9 +354,6 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     bool need_poll = false;
     bool cfg_min_rx_changed = false;
     bool cpath_down, forwarding_if_rx;
-    const char *hwaddr, *ip_src, *ip_dst;
-    struct in_addr in_addr;
-    struct eth_addr ea;
 
     if (!cfg || !smap_get_bool(cfg, "enable", false)) {
         bfd_unref(bfd);
@@ -389,6 +388,8 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
 
         bfd_status_changed(bfd);
     }
+
+    bfd->oam = smap_get_bool(cfg, "oam", false);
 
     atomic_store_relaxed(&bfd->check_tnl_key,
                          smap_get_bool(cfg, "check_tnl_key", false));
@@ -437,40 +438,17 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
         need_poll = true;
     }
 
-    hwaddr = smap_get(cfg, "bfd_local_src_mac");
-    if (hwaddr && eth_addr_from_string(hwaddr, &ea)) {
-        bfd->local_eth_src = ea;
-    } else {
-        bfd->local_eth_src = eth_addr_zero;
-    }
+    eth_addr_from_string(smap_get_def(cfg, "bfd_local_src_mac", ""),
+                         &bfd->local_eth_src);
+    eth_addr_from_string(smap_get_def(cfg, "bfd_local_dst_mac", ""),
+                         &bfd->local_eth_dst);
+    eth_addr_from_string(smap_get_def(cfg, "bfd_remote_dst_mac", ""),
+                         &bfd->rmt_eth_dst);
 
-    hwaddr = smap_get(cfg, "bfd_local_dst_mac");
-    if (hwaddr && eth_addr_from_string(hwaddr, &ea)) {
-        bfd->local_eth_dst = ea;
-    } else {
-        bfd->local_eth_dst = eth_addr_zero;
-    }
-
-    hwaddr = smap_get(cfg, "bfd_remote_dst_mac");
-    if (hwaddr && eth_addr_from_string(hwaddr, &ea)) {
-        bfd->rmt_eth_dst = ea;
-    } else {
-        bfd->rmt_eth_dst = eth_addr_zero;
-    }
-
-    ip_src = smap_get(cfg, "bfd_src_ip");
-    if (ip_src && bfd_lookup_ip(ip_src, &in_addr)) {
-        memcpy(&bfd->ip_src, &in_addr, sizeof in_addr);
-    } else {
-        bfd->ip_src = htonl(0xA9FE0101); /* 169.254.1.1. */
-    }
-
-    ip_dst = smap_get(cfg, "bfd_dst_ip");
-    if (ip_dst && bfd_lookup_ip(ip_dst, &in_addr)) {
-        memcpy(&bfd->ip_dst, &in_addr, sizeof in_addr);
-    } else {
-        bfd->ip_dst = htonl(0xA9FE0100); /* 169.254.1.0. */
-    }
+    bfd_lookup_ip(smap_get_def(cfg, "bfd_src_ip", ""),
+                  htonl(0xA9FE0101) /* 169.254.1.1 */, &bfd->ip_src);
+    bfd_lookup_ip(smap_get_def(cfg, "bfd_dst_ip", ""),
+                  htonl(0xA9FE0100) /* 169.254.1.0 */, &bfd->ip_dst);
 
     forwarding_if_rx = smap_get_bool(cfg, "forwarding_if_rx", false);
     if (bfd->forwarding_if_rx != forwarding_if_rx) {
@@ -586,7 +564,7 @@ bfd_should_send_packet(const struct bfd *bfd) OVS_EXCLUDED(mutex)
 
 void
 bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
-               const struct eth_addr eth_src) OVS_EXCLUDED(mutex)
+               const struct eth_addr eth_src, bool *oam) OVS_EXCLUDED(mutex)
 {
     long long int min_tx, min_rx;
     struct udp_header *udp;
@@ -625,6 +603,7 @@ bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
     ip->ip_proto = IPPROTO_UDP;
     put_16aligned_be32(&ip->ip_src, bfd->ip_src);
     put_16aligned_be32(&ip->ip_dst, bfd->ip_dst);
+    /* Checksum has already been zeroed by put_zeros call. */
     ip->ip_csum = csum(ip, sizeof *ip);
 
     udp = dp_packet_put_zeros(p, sizeof *udp);
@@ -654,6 +633,7 @@ bfd_put_packet(struct bfd *bfd, struct dp_packet *p,
     msg->min_rx = htonl(min_rx * 1000);
 
     bfd->flags &= ~FLAG_FINAL;
+    *oam = bfd->oam;
 
     log_msg(VLL_DBG, msg, "Sending BFD Message", bfd);
 
@@ -936,14 +916,16 @@ bfd_forwarding__(struct bfd *bfd) OVS_REQUIRES(mutex)
 }
 
 /* Helpers. */
-static bool
-bfd_lookup_ip(const char *host_name, struct in_addr *addr)
+static void
+bfd_lookup_ip(const char *host_name, ovs_be32 def, ovs_be32 *addr)
 {
-    if (!ip_parse(host_name, &addr->s_addr)) {
+    if (host_name[0]) {
+        if (ip_parse(host_name, addr)) {
+            return;
+        }
         VLOG_ERR_RL(&rl, "\"%s\" is not a valid IP address", host_name);
-        return false;
     }
-    return true;
+    *addr = def;
 }
 
 static bool

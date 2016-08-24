@@ -21,17 +21,18 @@
 
 #include "connectivity.h"
 #include "netdev.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-numa.h"
 #include "packets.h"
 #include "seq.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "smap.h"
 
 #ifdef  __cplusplus
 extern "C" {
 #endif
 
+struct netdev_tnl_build_header_params;
 #define NETDEV_NUMA_UNSPEC OVS_NUMA_UNSPEC
 
 /* A network device (e.g. an Ethernet device).
@@ -52,19 +53,27 @@ struct netdev {
      * 'netdev''s flags, features, ethernet address, or carrier changes. */
     uint64_t change_seq;
 
+    /* A netdev provider might be unable to change some of the device's
+     * parameter (n_rxq, mtu) when the device is in use.  In this case
+     * the provider can notify the upper layer by calling
+     * netdev_request_reconfigure().  The upper layer will react by stopping
+     * the operations on the device and calling netdev_reconfigure() to allow
+     * the configuration changes.  'last_reconfigure_seq' remembers the value
+     * of 'reconfigure_seq' when the last reconfiguration happened. */
+    struct seq *reconfigure_seq;
+    uint64_t last_reconfigure_seq;
+
     /* The core netdev code initializes these at netdev construction and only
      * provide read-only access to its client.  Netdev implementations may
      * modify them. */
     int n_txq;
     int n_rxq;
-    /* Number of rx queues requested by user. */
-    int requested_n_rxq;
     int ref_cnt;                        /* Times this devices was opened. */
     struct shash_node *node;            /* Pointer to element in global map. */
     struct ovs_list saved_flags_list; /* Contains "struct netdev_saved_flags". */
 };
 
-static void
+static inline void
 netdev_change_seq_changed(const struct netdev *netdev_)
 {
     struct netdev *netdev = CONST_CAST(struct netdev *, netdev_);
@@ -73,6 +82,12 @@ netdev_change_seq_changed(const struct netdev *netdev_)
     if (!netdev->change_seq) {
         netdev->change_seq++;
     }
+}
+
+static inline void
+netdev_request_reconfigure(struct netdev *netdev)
+{
+    seq_change(netdev->reconfigure_seq);
 }
 
 const char *netdev_get_type(const struct netdev *);
@@ -205,6 +220,9 @@ struct netdev_class {
      * the system. */
     const char *type;
 
+    /* If 'true' then this netdev should be polled by PMD threads. */
+    bool is_pmd;
+
 /* ## ------------------- ## */
 /* ## Top-Level Functions ## */
 /* ## ------------------- ## */
@@ -218,15 +236,21 @@ struct netdev_class {
     int (*init)(void);
 
     /* Performs periodic work needed by netdevs of this class.  May be null if
-     * no periodic work is necessary. */
-    void (*run)(void);
+     * no periodic work is necessary.
+     *
+     * 'netdev_class' points to the class.  It is useful in case the same
+     * function is used to implement different classes. */
+    void (*run)(const struct netdev_class *netdev_class);
 
     /* Arranges for poll_block() to wake up if the "run" member function needs
      * to be called.  Implementations are additionally required to wake
      * whenever something changes in any of its netdevs which would cause their
      * ->change_seq() function to change its result.  May be null if nothing is
-     * needed here. */
-    void (*wait)(void);
+     * needed here.
+     *
+     * 'netdev_class' points to the class.  It is useful in case the same
+     * function is used to implement different classes. */
+    void (*wait)(const struct netdev_class *netdev_class);
 
 /* ## ---------------- ## */
 /* ## netdev Functions ## */
@@ -259,10 +283,10 @@ struct netdev_class {
     const struct netdev_tunnel_config *
         (*get_tunnel_config)(const struct netdev *netdev);
 
-    /* Build Partial Tunnel header.  Ethernet and ip header is already built,
-     * build_header() is suppose build protocol specific part of header. */
+    /* Build Tunnel header.  Ethernet and ip header parameters are passed to
+     * tunnel implementation to build entire outer header for given flow. */
     int (*build_header)(const struct netdev *, struct ovs_action_push_tnl *data,
-                        const struct flow *tnl_flow);
+                        const struct netdev_tnl_build_header_params *params);
 
     /* build_header() can not build entire header for all packets for given
      * flow.  Push header is called for packet to build header specific to
@@ -272,33 +296,26 @@ struct netdev_class {
                         const struct ovs_action_push_tnl *data);
 
     /* Pop tunnel header from packet, build tunnel metadata and resize packet
-     * for further processing. */
-    int (*pop_header)(struct dp_packet *packet);
+     * for further processing.
+     * Returns NULL in case of error or tunnel implementation queued packet for further
+     * processing. */
+    struct dp_packet * (*pop_header)(struct dp_packet *packet);
 
     /* Returns the id of the numa node the 'netdev' is on.  If there is no
      * such info, returns NETDEV_NUMA_UNSPEC. */
     int (*get_numa_id)(const struct netdev *netdev);
 
-    /* Configures the number of tx queues and rx queues of 'netdev'.
-     * Return 0 if successful, otherwise a positive errno value.
-     *
-     * 'n_rxq' specifies the maximum number of receive queues to create.
-     * The netdev provider might choose to create less (e.g. if the hardware
-     * supports only a smaller number).  The actual number of queues created
-     * is stored in the 'netdev->n_rxq' field.
+    /* Configures the number of tx queues of 'netdev'. Returns 0 if successful,
+     * otherwise a positive errno value.
      *
      * 'n_txq' specifies the exact number of transmission queues to create.
-     * The caller will call netdev_send() concurrently from 'n_txq' different
-     * threads (with different qid).  The netdev provider is responsible for
-     * making sure that these concurrent calls do not create a race condition
-     * by using multiple hw queues or locking.
      *
-     * On error, the tx queue and rx queue configuration is indeterminant.
-     * Caller should make decision on whether to restore the previous or
-     * the default configuration.  Also, caller must make sure there is no
-     * other thread accessing the queues at the same time. */
-    int (*set_multiq)(struct netdev *netdev, unsigned int n_txq,
-                      unsigned int n_rxq);
+     * The caller will call netdev_reconfigure() (if necessary) before using
+     * netdev_send() on any of the newly configured queues, giving the provider
+     * a chance to adjust its settings.
+     *
+     * On error, the tx queue configuration is unchanged. */
+    int (*set_tx_multiq)(struct netdev *netdev, unsigned int n_txq);
 
     /* Sends buffers on 'netdev'.
      * Returns 0 if successful (for every buffer), otherwise a positive errno
@@ -313,6 +330,11 @@ struct netdev_class {
      * packets.  If 'may_steal' is true, the caller transfers ownership of all
      * the packets to the network device, regardless of success.
      *
+     * If 'concurrent_txq' is true, the caller may perform concurrent calls
+     * to netdev_send() with the same 'qid'. The netdev provider is responsible
+     * for making sure that these concurrent calls do not create a race
+     * condition by using locking or other synchronization if required.
+     *
      * The network device is expected to maintain one or more packet
      * transmission queues, so that the caller does not ordinarily have to
      * do additional queuing of packets.  'qid' specifies the queue to use
@@ -325,8 +347,8 @@ struct netdev_class {
      * network device from being usefully used by the netdev-based "userspace
      * datapath".  It will also prevent the OVS implementation of bonding from
      * working properly over 'netdev'.) */
-    int (*send)(struct netdev *netdev, int qid, struct dp_packet **buffers,
-                int cnt, bool may_steal);
+    int (*send)(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
+                bool may_steal, bool concurrent_txq);
 
     /* Registers with the poll loop to wake up from the next call to
      * poll_block() when the packet transmission queue for 'netdev' has
@@ -367,7 +389,7 @@ struct netdev_class {
      * If 'netdev' does not have an MTU (e.g. as some tunnels do not), then
      * this function should return EOPNOTSUPP.  This function may be set to
      * null if it would always return EOPNOTSUPP. */
-    int (*set_mtu)(const struct netdev *netdev, int mtu);
+    int (*set_mtu)(struct netdev *netdev, int mtu);
 
     /* Returns the ifindex of 'netdev', if successful, as a positive number.
      * On failure, returns a negative errno value.
@@ -614,20 +636,6 @@ struct netdev_class {
                                        void *aux),
                             void *aux);
 
-    /* If 'netdev' has an assigned IPv4 address, sets '*address' to that
-     * address and '*netmask' to the associated netmask.
-     *
-     * The following error values have well-defined meanings:
-     *
-     *   - EADDRNOTAVAIL: 'netdev' has no assigned IPv4 address.
-     *
-     *   - EOPNOTSUPP: No IPv4 network stack attached to 'netdev'.
-     *
-     * This function may be set to null if it would always return EOPNOTSUPP
-     * anyhow. */
-    int (*get_in4)(const struct netdev *netdev, struct in_addr *address,
-                   struct in_addr *netmask);
-
     /* Assigns 'addr' as 'netdev''s IPv4 address and 'mask' as its netmask.  If
      * 'addr' is INADDR_ANY, 'netdev''s IPv4 address is cleared.
      *
@@ -636,7 +644,11 @@ struct netdev_class {
     int (*set_in4)(struct netdev *netdev, struct in_addr addr,
                    struct in_addr mask);
 
-    /* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address.
+    /* Returns all assigned IP address to  'netdev' and returns 0.
+     * API allocates array of address and masks and set it to
+     * '*addr' and '*mask'.
+     * Otherwise, returns a positive errno value and sets '*addr', '*mask
+     * and '*n_addr' to NULL.
      *
      * The following error values have well-defined meanings:
      *
@@ -644,9 +656,9 @@ struct netdev_class {
      *
      *   - EOPNOTSUPP: No IPv6 network stack attached to 'netdev'.
      *
-     * This function may be set to null if it would always return EOPNOTSUPP
-     * anyhow. */
-    int (*get_in6)(const struct netdev *netdev, struct in6_addr *in6);
+     * 'addr' may be null, in which case the address itself is not reported. */
+    int (*get_addr_list)(const struct netdev *netdev, struct in6_addr **in,
+                         struct in6_addr **mask, int *n_in6);
 
     /* Adds 'router' as a default IP gateway for the TCP/IP stack that
      * corresponds to 'netdev'.
@@ -699,6 +711,15 @@ struct netdev_class {
     int (*update_flags)(struct netdev *netdev, enum netdev_flags off,
                         enum netdev_flags on, enum netdev_flags *old_flags);
 
+    /* If the provider called netdev_request_reconfigure(), the upper layer
+     * will eventually call this.  The provider can update the device
+     * configuration knowing that the upper layer will not call rxq_recv() or
+     * send() until this function returns.
+     *
+     * On error, the configuration is indeterminant and the device cannot be
+     * used to send and receive packets until a successful configuration is
+     * applied. */
+    int (*reconfigure)(struct netdev *netdev);
 /* ## -------------------- ## */
 /* ## netdev_rxq Functions ## */
 /* ## -------------------- ## */
@@ -713,23 +734,28 @@ struct netdev_class {
     void (*rxq_destruct)(struct netdev_rxq *);
     void (*rxq_dealloc)(struct netdev_rxq *);
 
-    /* Attempts to receive batch of packets from 'rx' and place array of
-     * pointers into '*pkts'. netdev is responsible for allocating buffers.
-     * '*cnt' points to packet count for given batch. Once packets are returned
-     * to caller, netdev should give up ownership of ofpbuf data.
+    /* Attempts to receive a batch of packets from 'rx'.  In 'batch', the
+     * caller supplies 'packets' as the pointer to the beginning of an array
+     * of NETDEV_MAX_BURST pointers to dp_packet.  If successful, the
+     * implementation stores pointers to up to NETDEV_MAX_BURST dp_packets into
+     * the array, transferring ownership of the packets to the caller, stores
+     * the number of received packets into 'count', and returns 0.
      *
-     * Implementations should allocate buffer with DP_NETDEV_HEADROOM headroom
-     * and add a VLAN header which is obtained out-of-band to the packet.
+     * The implementation does not necessarily initialize any non-data members
+     * of 'packets' in 'batch'.  That is, the caller must initialize layer
+     * pointers and metadata itself, if desired, e.g. with pkt_metadata_init()
+     * and miniflow_extract().
      *
-     * Caller is expected to pass array of size MAX_RX_BATCH.
-     * This function may be set to null if it would always return EOPNOTSUPP
-     * anyhow. */
-    int (*rxq_recv)(struct netdev_rxq *rx, struct dp_packet **pkts,
-                    int *cnt);
+     * Implementations should allocate buffers with DP_NETDEV_HEADROOM bytes of
+     * headroom.
+     *
+     * Returns EAGAIN immediately if no packet is ready to be received or
+     * another positive errno value if an error was encountered. */
+    int (*rxq_recv)(struct netdev_rxq *rx, struct dp_packet_batch *batch);
 
     /* Registers with the poll loop to wake up from the next call to
-     * poll_block() when a packet is ready to be received with netdev_rxq_recv()
-     * on 'rx'. */
+     * poll_block() when a packet is ready to be received with
+     * netdev_rxq_recv() on 'rx'. */
     void (*rxq_wait)(struct netdev_rxq *rx);
 
     /* Discards all packets waiting to be received from 'rx'. */

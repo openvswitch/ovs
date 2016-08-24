@@ -25,14 +25,14 @@
 #include <unistd.h>
 #include "ovs-thread.h"
 #include "poll-loop.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "sset.h"
 #include "signals.h"
 #include "socket-util.h"
 #include "util.h"
 #include "openvswitch/vlog.h"
 
-#include "type-props.h"
+#include "openvswitch/type-props.h"
 
 #ifndef SIG_ATOMIC_MAX
 #define SIG_ATOMIC_MAX TYPE_MAXIMUM(sig_atomic_t)

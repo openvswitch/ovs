@@ -21,16 +21,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include "coverage.h"
-#include "ofp-msgs.h"
-#include "ofp-util.h"
-#include "ofpbuf.h"
 #include "openflow/openflow.h"
-#include "poll-loop.h"
-#include "sat-math.h"
-#include "timeval.h"
-#include "util.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
+#include "poll-loop.h"
+#include "sat-math.h"
+#include "stream.h"
+#include "timeval.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(rconn);
 
@@ -251,7 +252,7 @@ rconn_create(int probe_interval, int max_backoff, uint8_t dscp,
     rc->target = xstrdup("void");
     rc->reliable = false;
 
-    list_init(&rc->txq);
+    ovs_list_init(&rc->txq);
 
     rc->backoff = 0;
     rc->max_backoff = max_backoff ? max_backoff : 8;
@@ -339,6 +340,9 @@ rconn_connect(struct rconn *rc, const char *target, const char *name)
     rconn_disconnect__(rc);
     rconn_set_target__(rc, target, name);
     rc->reliable = true;
+    if (!stream_or_pstream_needs_probes(target)) {
+        rc->probe_interval = 0;
+    }
     reconnect(rc);
     ovs_mutex_unlock(&rc->mutex);
 }
@@ -521,17 +525,17 @@ static void
 do_tx_work(struct rconn *rc)
     OVS_REQUIRES(rc->mutex)
 {
-    if (list_is_empty(&rc->txq)) {
+    if (ovs_list_is_empty(&rc->txq)) {
         return;
     }
-    while (!list_is_empty(&rc->txq)) {
+    while (!ovs_list_is_empty(&rc->txq)) {
         int error = try_send(rc);
         if (error) {
             break;
         }
         rc->last_activity = time_now();
     }
-    if (list_is_empty(&rc->txq)) {
+    if (ovs_list_is_empty(&rc->txq)) {
         poll_immediate_wake();
     }
 }
@@ -672,7 +676,7 @@ rconn_run_wait(struct rconn *rc)
     ovs_mutex_lock(&rc->mutex);
     if (rc->vconn) {
         vconn_run_wait(rc->vconn);
-        if ((rc->state & (S_ACTIVE | S_IDLE)) && !list_is_empty(&rc->txq)) {
+        if ((rc->state & (S_ACTIVE | S_IDLE)) && !ovs_list_is_empty(&rc->txq)) {
             vconn_wait(rc->vconn, WAIT_SEND);
         }
     }
@@ -751,7 +755,7 @@ rconn_send__(struct rconn *rc, struct ofpbuf *b,
         /* Reuse 'frame' as a private pointer while 'b' is in txq. */
         b->header = counter;
 
-        list_push_back(&rc->txq, &b->list_node);
+        ovs_list_push_back(&rc->txq, &b->list_node);
 
         /* If the queue was empty before we added 'b', try to send some
          * packets.  (But if the queue had packets in it, it's because the
@@ -1005,7 +1009,7 @@ rconn_count_txqlen(const struct rconn *rc)
     unsigned int len;
 
     ovs_mutex_lock(&rc->mutex);
-    len = list_size(&rc->txq);
+    len = ovs_list_size(&rc->txq);
     ovs_mutex_unlock(&rc->mutex);
 
     return len;
@@ -1120,13 +1124,13 @@ try_send(struct rconn *rc)
     /* Eagerly remove 'msg' from the txq.  We can't remove it from the list
      * after sending, if sending is successful, because it is then owned by the
      * vconn, which might have freed it already. */
-    list_remove(&msg->list_node);
+    ovs_list_remove(&msg->list_node);
     msg->header = NULL;
 
     retval = vconn_send(rc->vconn, msg);
     if (retval) {
         msg->header = counter;
-        list_push_front(&rc->txq, &msg->list_node);
+        ovs_list_push_front(&rc->txq, &msg->list_node);
         if (retval != EAGAIN) {
             report_error(rc, retval);
             disconnect(rc, retval);
@@ -1221,11 +1225,11 @@ static void
 flush_queue(struct rconn *rc)
     OVS_REQUIRES(rc->mutex)
 {
-    if (list_is_empty(&rc->txq)) {
+    if (ovs_list_is_empty(&rc->txq)) {
         return;
     }
-    while (!list_is_empty(&rc->txq)) {
-        struct ofpbuf *b = ofpbuf_from_list(list_pop_front(&rc->txq));
+    while (!ovs_list_is_empty(&rc->txq)) {
+        struct ofpbuf *b = ofpbuf_from_list(ovs_list_pop_front(&rc->txq));
         struct rconn_packet_counter *counter = b->header;
         if (counter) {
             rconn_packet_counter_dec(counter, b->size);
@@ -1422,6 +1426,10 @@ is_admitted_msg(const struct ofpbuf *b)
     case OFPTYPE_NXT_TLV_TABLE_REQUEST:
     case OFPTYPE_NXT_TLV_TABLE_REPLY:
     case OFPTYPE_NXT_RESUME:
+    case OFPTYPE_IPFIX_BRIDGE_STATS_REQUEST:
+    case OFPTYPE_IPFIX_BRIDGE_STATS_REPLY:
+    case OFPTYPE_IPFIX_FLOW_STATS_REQUEST:
+    case OFPTYPE_IPFIX_FLOW_STATS_REPLY:
     default:
         return true;
     }

@@ -1,6 +1,6 @@
 #! /bin/sh
 
-# Copyright (c) 2011, 2013 Nicira, Inc.
+# Copyright (c) 2011, 2013, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -33,8 +33,6 @@ Commands:
                         configuration.
  save-flows             Outputs a shell script on stdout that will restore
                         OpenFlow flows of each Open vSwitch bridge.
- save-ofports           Outputs a shell script on stdout that will restore
-                        the ofport value across a force-reload-kmod.
 This script is meant as a helper for the Open vSwitch init script commands.
 EOF
 }
@@ -67,7 +65,7 @@ save_interfaces () {
         if expr "$state" : '.*\bdynamic\b' > /dev/null; then
             linkcmd="$linkcmd dynamic"
         fi
-        if qlen=`expr "$state" : '.*qlen \([0-9]+\)'`; then
+        if qlen=`expr "$state" : '.*qlen \([0-9]\+\)'`; then
             linkcmd="$linkcmd txqueuelen $qlen"
         fi
         if hwaddr=`expr "$state" : '.*link/ether \([^ ]*\)'`; then
@@ -76,7 +74,7 @@ save_interfaces () {
         if brd=`expr "$state" : '.*brd \([^ ]*\)'`; then
             linkcmd="$linkcmd broadcast $brd"
         fi
-        if mtu=`expr "$state" : '.*mtu \([0-9]+\)'`; then
+        if mtu=`expr "$state" : '.*mtu \([0-9]\+\)'`; then
             linkcmd="$linkcmd mtu $mtu"
         fi
         if test -n "$linkcmd"; then
@@ -115,33 +113,6 @@ save_flows () {
     done
 }
 
-ovs_vsctl () {
-    ovs-vsctl --no-wait "$@"
-}
-
-save_ofports ()
-{
-    if (ovs-vsctl --version) > /dev/null 2>&1; then :; else
-        echo "$0: ovs-vsctl not found in $PATH" >&2
-        exit 1
-    fi
-
-    for bridge in "$@"; do
-        count=0
-        for iface in `ovs_vsctl list-ifaces ${bridge}`; do
-            ofport=`ovs_vsctl get interface ${iface} ofport`
-            [ "${count}" -eq 0 ] && cmd="ovs-vsctl --no-wait"
-            cmd="${cmd} -- --if-exists set interface "${iface}" \
-                     ofport_request="${ofport}""
-
-            # Run set interface command on 50 ports at a time.
-            count=`expr ${count} + 1`
-            [ "${count}" -eq 50 ] && count=0 && echo "${cmd}" && cmd=""
-        done
-        echo "${cmd}"
-    done
-}
-
 while [ $# -ne 0 ]
 do
     case $1 in
@@ -153,11 +124,6 @@ do
         "save-interfaces")
             shift
             save_interfaces "$@"
-            exit 0
-            ;;
-        "save-ofports")
-            shift
-            save_ofports "$@"
             exit 0
             ;;
         -h | --help)

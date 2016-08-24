@@ -38,7 +38,7 @@
 
 #include "gso.h"
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 #if IS_ENABLED(CONFIG_NET_IPGRE_DEMUX)
 
 #ifndef HAVE_GRE_HANDLE_OFFLOADS
@@ -243,7 +243,7 @@ static int parse_gre_header(struct sk_buff *skb, struct tnl_ptk_info *tpi,
 		}
 	}
 
-	return iptunnel_pull_header(skb, hdr_len, tpi->proto);
+	return iptunnel_pull_header(skb, hdr_len, tpi->proto, false);
 }
 
 static struct gre_cisco_protocol __rcu *gre_cisco_proto;
@@ -310,4 +310,4 @@ EXPORT_SYMBOL_GPL(rpl_gre_cisco_unregister);
 #endif
 
 #endif /* CONFIG_NET_IPGRE_DEMUX */
-#endif /* HAVE_METADATA_DST */
+#endif /* USE_UPSTREAM_TUNNEL */

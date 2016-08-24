@@ -27,23 +27,23 @@
 #include "classifier.h"
 #include "dp-packet.h"
 #include "flow.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "mac-learning.h"
-#include "ofpbuf.h"
-#include "ofp-actions.h"
-#include "ofp-errors.h"
-#include "ofp-msgs.h"
-#include "ofp-parse.h"
-#include "ofp-print.h"
-#include "ofp-util.h"
 #include "openflow/openflow.h"
-#include "poll-loop.h"
-#include "rconn.h"
-#include "shash.h"
-#include "simap.h"
-#include "timeval.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofp-parse.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
+#include "poll-loop.h"
+#include "rconn.h"
+#include "openvswitch/shash.h"
+#include "simap.h"
+#include "timeval.h"
 
 VLOG_DEFINE_THIS_MODULE(learning_switch);
 
@@ -269,11 +269,10 @@ void
 lswitch_destroy(struct lswitch *sw)
 {
     if (sw) {
-        struct lswitch_port *node, *next;
+        struct lswitch_port *node;
 
         rconn_destroy(sw->rconn);
-        HMAP_FOR_EACH_SAFE (node, next, hmap_node, &sw->queue_numbers) {
-            hmap_remove(&sw->queue_numbers, &node->hmap_node);
+        HMAP_FOR_EACH_POP (node, hmap_node, &sw->queue_numbers) {
             free(node);
         }
         shash_destroy(&sw->queue_names);

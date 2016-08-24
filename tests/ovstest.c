@@ -22,7 +22,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include "command-line.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "ovstest.h"
 #include "util.h"
 
@@ -33,7 +33,7 @@ static size_t allocated_commands = 0;
 static void
 add_command(struct ovs_cmdl_command *cmd)
 {
-    const struct ovs_cmdl_command nil = {NULL, NULL, 0, 0, NULL};
+    const struct ovs_cmdl_command nil = {NULL, NULL, 0, 0, NULL, OVS_RO};
 
     while (n_commands + 1 >= allocated_commands) {
         commands = x2nrealloc(commands, &allocated_commands,
@@ -86,7 +86,7 @@ help(struct ovs_cmdl_context *ctx OVS_UNUSED)
 static void
 add_top_level_commands(void)
 {
-    struct ovs_cmdl_command help_cmd = {"--help", NULL, 0, 0, help};
+    struct ovs_cmdl_command help_cmd = {"--help", NULL, 0, 0, help, OVS_RO };
 
     add_command(&help_cmd);
 }

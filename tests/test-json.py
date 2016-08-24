@@ -59,7 +59,7 @@ def main(argv):
     argv0 = argv[0]
 
     # When this is used with Python 3, the program produces no output.
-    if sys.version_info[0] == 2:
+    if six.PY2:
         # Make stdout and stderr UTF-8, even if they are redirected to a file.
         sys.stdout = codecs.getwriter("utf-8")(sys.stdout)
         sys.stderr = codecs.getwriter("utf-8")(sys.stderr)

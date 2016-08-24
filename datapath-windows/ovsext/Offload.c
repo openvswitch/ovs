@@ -578,12 +578,14 @@ OvsValidateUDPChecksum(PNET_BUFFER_LIST curNbl, BOOLEAN udpCsumZero)
 {
     NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
 
-    csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl, TcpIpChecksumNetBufferListInfo);
+    csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl,
+                                          TcpIpChecksumNetBufferListInfo);
 
     if (udpCsumZero) {
         /* Zero is valid checksum. */
         csumInfo.Receive.UdpChecksumFailed = 0;
-        NET_BUFFER_LIST_INFO(curNbl, TcpIpChecksumNetBufferListInfo) = csumInfo.Value;
+        NET_BUFFER_LIST_INFO(curNbl, TcpIpChecksumNetBufferListInfo) =
+            csumInfo.Value;
         return NDIS_STATUS_SUCCESS;
     }
 
@@ -597,9 +599,54 @@ OvsValidateUDPChecksum(PNET_BUFFER_LIST curNbl, BOOLEAN udpCsumZero)
 
 
 /*
+ *----------------------------------------------------------------------------
+ * OvsCalculateUDPChecksum
+ *     Calculate UDP checksum
+ *----------------------------------------------------------------------------
+ */
+NDIS_STATUS
+OvsCalculateUDPChecksum(PNET_BUFFER_LIST curNbl,
+                        PNET_BUFFER curNb,
+                        IPHdr *ipHdr,
+                        UDPHdr *udpHdr,
+                        UINT32 packetLength)
+{
+    NDIS_TCP_IP_CHECKSUM_NET_BUFFER_LIST_INFO csumInfo;
+    UINT16 checkSum;
+
+    csumInfo.Value = NET_BUFFER_LIST_INFO(curNbl, TcpIpChecksumNetBufferListInfo);
+
+    /* Next check if UDP checksum has been calculated. */
+    if (!csumInfo.Receive.UdpChecksumSucceeded) {
+        UINT32 l4Payload;
+
+        checkSum = udpHdr->check;
+
+        l4Payload = packetLength - sizeof(EthHdr) - ipHdr->ihl * 4;
+        udpHdr->check = 0;
+        udpHdr->check =
+            IPPseudoChecksum((UINT32 *)&ipHdr->saddr,
+                             (UINT32 *)&ipHdr->daddr,
+                             IPPROTO_UDP, (UINT16)l4Payload);
+        udpHdr->check = CalculateChecksumNB(curNb, (UINT16)l4Payload,
+                                            sizeof(EthHdr) + ipHdr->ihl * 4);
+        if (checkSum != udpHdr->check) {
+            OVS_LOG_TRACE("UDP checksum incorrect.");
+            return NDIS_STATUS_INVALID_PACKET;
+        }
+    }
+
+    csumInfo.Receive.UdpChecksumSucceeded = 1;
+    NET_BUFFER_LIST_INFO(curNbl, TcpIpChecksumNetBufferListInfo) = csumInfo.Value;
+    return NDIS_STATUS_SUCCESS;
+}
+
+
+
+/*
  * OvsApplySWChecksumOnNB --
  *
- * This function calculates and sets the required sofware offloads given by
+ * This function calculates and sets the required software offloads given by
  * csumInfo for a given NBL(nbl) with a single NB.
  *
  */

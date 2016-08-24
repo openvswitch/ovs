@@ -22,5 +22,5 @@ an IPv6 address, then wrap \fIip\fR with square brackets, e.g.:
 On POSIX, listen on the Unix domain server socket named \fIfile\fR for a
 connection.
 .IP
-On Windows, listen on a kernel chosen TCP port on the localhost. The kernel
-chosen TCP port value is written in \fIfile\fR.
+On Windows, listen on a local named pipe.  A file is created in the
+path \fIfile\fR to mimic the behavior of a Unix domain socket.

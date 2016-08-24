@@ -17,6 +17,9 @@
 #ifndef OPENVSWITCH_COMPILER_H
 #define OPENVSWITCH_COMPILER_H 1
 
+#include <stddef.h>
+#include <stdbool.h>
+
 #ifndef __has_feature
   #define __has_feature(x) 0
 #endif
@@ -180,18 +183,23 @@
 #define OVS_PACKED(DECL) __pragma(pack(push, 1)) DECL __pragma(pack(pop))
 #endif
 
-/* For defining a structure whose instances should aligned on an N-byte
- * boundary.
- *
- * e.g. The following:
+/* OVS_ALIGNED_STRUCT may be used to define a structure whose instances should
+ * aligned on an N-byte boundary.  This:
  *     OVS_ALIGNED_STRUCT(64, mystruct) { ... };
  * is equivalent to the following except that it specifies 64-byte alignment:
  *     struct mystruct { ... };
+ *
+ * OVS_ALIGNED_VAR defines a variable aligned on an N-byte boundary.  For
+ * example,
+ *     OVS_ALIGNED_VAR(64) int x;
+ * defines a "int" variable that is aligned on a 64-byte boundary.
  */
 #ifndef _MSC_VER
 #define OVS_ALIGNED_STRUCT(N, TAG) struct __attribute__((aligned(N))) TAG
+#define OVS_ALIGNED_VAR(N) __attribute__((aligned(N)))
 #else
 #define OVS_ALIGNED_STRUCT(N, TAG) __declspec(align(N)) struct TAG
+#define OVS_ALIGNED_VAR(N) __declspec(align(N))
 #endif
 
 /* Supplies code to be run at startup time before invoking main().
@@ -227,5 +235,35 @@
 #define OVS_PREFETCH(addr)
 #define OVS_PREFETCH_WRITE(addr)
 #endif
+
+/* Build assertions. */
+#ifdef __CHECKER__
+#define BUILD_ASSERT(EXPR) ((void) 0)
+#define BUILD_ASSERT_DECL(EXPR) extern int (*build_assert(void))[1]
+#elif !defined(__cplusplus)
+/* Build-time assertion building block. */
+#define BUILD_ASSERT__(EXPR) \
+        sizeof(struct { unsigned int build_assert_failed : (EXPR) ? 1 : -1; })
+
+/* Build-time assertion for use in a statement context. */
+#define BUILD_ASSERT(EXPR) (void) BUILD_ASSERT__(EXPR)
+
+/* Build-time assertion for use in a declaration context. */
+#define BUILD_ASSERT_DECL(EXPR) \
+        extern int (*build_assert(void))[BUILD_ASSERT__(EXPR)]
+#else /* __cplusplus */
+#include <boost/static_assert.hpp>
+#define BUILD_ASSERT BOOST_STATIC_ASSERT
+#define BUILD_ASSERT_DECL BOOST_STATIC_ASSERT
+#endif /* __cplusplus */
+
+#ifdef __GNUC__
+#define BUILD_ASSERT_GCCONLY(EXPR) BUILD_ASSERT(EXPR)
+#define BUILD_ASSERT_DECL_GCCONLY(EXPR) BUILD_ASSERT_DECL(EXPR)
+#else
+#define BUILD_ASSERT_GCCONLY(EXPR) ((void) 0)
+#define BUILD_ASSERT_DECL_GCCONLY(EXPR) ((void) 0)
+#endif
+
 
 #endif /* compiler.h */

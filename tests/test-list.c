@@ -15,12 +15,13 @@
  */
 
 /* A non-exhaustive test for some of the functions and macros declared in
- * list.h. */
+ * openvswitch/list.h. */
 
 #include <config.h>
 #undef NDEBUG
-#include "list.h"
+#include "openvswitch/list.h"
 #include <assert.h>
+#include <stdio.h>
 #include <string.h>
 #include "ovstest.h"
 
@@ -38,10 +39,10 @@ make_list(struct ovs_list *list, struct element elements[],
 {
     size_t i;
 
-    list_init(list);
+    ovs_list_init(list);
     for (i = 0; i < n; i++) {
         elements[i].value = i;
-        list_push_back(list, &elements[i].node);
+        ovs_list_push_back(list, &elements[i].node);
         values[i] = i;
     }
 }
@@ -72,10 +73,10 @@ check_list(struct ovs_list *list, const int values[], size_t n)
     assert(&e->node == list);
     assert(i == n);
 
-    assert(list_is_empty(list) == !n);
-    assert(list_is_singleton(list) == (n == 1));
-    assert(list_is_short(list) == (n < 2));
-    assert(list_size(list) == n);
+    assert(ovs_list_is_empty(list) == !n);
+    assert(ovs_list_is_singleton(list) == (n == 1));
+    assert(ovs_list_is_short(list) == (n < 2));
+    assert(ovs_list_size(list) == n);
 }
 
 #if 0
@@ -136,7 +137,7 @@ test_list_for_each_safe(void)
             LIST_FOR_EACH_SAFE (e, next, node, &list) {
                 assert(i < n);
                 if (pattern & (1ul << i)) {
-                    list_remove(&e->node);
+                    ovs_list_remove(&e->node);
                     n_remaining--;
                     memmove(&values[values_idx], &values[values_idx + 1],
                             sizeof *values * (n_remaining - values_idx));
@@ -184,6 +185,46 @@ test_list_for_each_pop(void)
     }
 }
 
+/* Tests the transplant of one list into another  */
+static void
+test_list_push_back_all(void)
+{
+    struct ovs_list list_a, list_b;
+    struct element a, b, c, d;
+
+    a.value = 0;
+    b.value = 1;
+    c.value = 2;
+    d.value = 3;
+
+    ovs_list_init(&list_a);
+    ovs_list_init(&list_b);
+
+    ovs_list_insert(&list_a, &a.node);
+    ovs_list_insert(&list_a, &b.node);
+    ovs_list_insert(&list_b, &c.node);
+    ovs_list_insert(&list_b, &d.node);
+
+    /* Check test preconditions */
+    assert(2 == ovs_list_size(&list_a));
+    assert(2 == ovs_list_size(&list_b));
+
+    /* Perform transplant */
+    ovs_list_push_back_all(&list_a, &list_b);
+
+    /* Check expected result */
+    assert(4 == ovs_list_size(&list_a));
+    assert(0 == ovs_list_size(&list_b));
+
+    struct element *node;
+    int n = 0;
+    LIST_FOR_EACH(node, node, &list_a) {
+        assert(n == node->value);
+        n++;
+    }
+    assert(n == 4);
+}
+
 static void
 run_test(void (*function)(void))
 {
@@ -197,6 +238,7 @@ test_list_main(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     run_test(test_list_construction);
     run_test(test_list_for_each_safe);
     run_test(test_list_for_each_pop);
+    run_test(test_list_push_back_all);
     printf("\n");
 }
 

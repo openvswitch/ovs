@@ -25,7 +25,7 @@
  * two pipelines.
  */
 
-#include "meta-flow.h"
+#include "openvswitch/meta-flow.h"
 
 struct controller_ctx;
 struct hmap;
@@ -37,13 +37,14 @@ struct simap;
  *
  * Keep these in sync with the documentation in ovn-architecture(7). */
 #define OVN_GENEVE_CLASS 0x0102  /* Assigned Geneve class for OVN. */
-#define OVN_GENEVE_TYPE 0
+#define OVN_GENEVE_TYPE 0x80     /* Critical option. */
 #define OVN_GENEVE_LEN 4
 
 void physical_register_ovs_idl(struct ovsdb_idl *);
 void physical_run(struct controller_ctx *, enum mf_field_id mff_ovn_geneve,
                   const struct ovsrec_bridge *br_int, const char *chassis_id,
-                  const struct simap *ct_zones, struct hmap *flow_table,
-                  struct hmap *local_datapaths);
+                  const struct simap *ct_zones,
+                  struct hmap *local_datapaths, struct hmap *patched_datapaths);
+void physical_reset_processing(void);
 
 #endif /* ovn/physical.h */

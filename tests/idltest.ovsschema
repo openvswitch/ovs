@@ -6,7 +6,7 @@
       "columns": {
         "i": {
           "type": "integer"
-        }, 
+        },
         "k": {
           "type": {
             "key": {
@@ -14,17 +14,17 @@
               "refTable": "link1"
             }
           }
-        }, 
+        },
         "ka": {
           "type": {
             "key": {
               "type": "uuid",
               "refTable": "link1"
             },
-            "max": "unlimited", 
+            "max": "unlimited",
             "min": 0
           }
-        }, 
+        },
         "l2": {
           "type": {
             "key": {
@@ -35,12 +35,12 @@
           }
         }
       }
-    }, 
+    },
     "link2": {
       "columns": {
         "i": {
           "type": "integer"
-        }, 
+        },
         "l1": {
           "type": {
             "key": {
@@ -51,58 +51,117 @@
           }
         }
       }
-    }, 
+    },
     "simple": {
       "columns": {
         "b": {
           "type": "boolean"
-        }, 
+        },
         "ba": {
           "type": {
-            "key": "boolean", 
+            "key": "boolean",
             "max": 1,
             "min": 0
           }
-        }, 
+        },
         "i": {
           "type": "integer"
-        }, 
+        },
         "ia": {
           "type": {
-            "key": "integer", 
-            "max": "unlimited", 
+            "key": "integer",
+            "max": "unlimited",
             "min": 0
           }
-        }, 
+        },
         "r": {
           "type": "real"
-        }, 
+        },
         "ra": {
           "type": {
-            "key": "real", 
-            "max": "unlimited", 
+            "key": "real",
+            "max": "unlimited",
             "min": 0
           }
-        }, 
+        },
         "s": {
           "type": "string"
-        }, 
+        },
         "sa": {
           "type": {
-            "key": "string", 
-            "max": "unlimited", 
+            "key": "string",
+            "max": "unlimited",
             "min": 0
           }
-        }, 
+        },
         "u": {
           "type": "uuid"
-        }, 
+        },
         "ua": {
           "type": {
-            "key": "uuid", 
-            "max": "unlimited", 
+            "key": "uuid",
+            "max": "unlimited",
             "min": 0
           }
+        }
+      }
+    },
+    "simple2" : {
+      "columns" : {
+        "name" : {
+          "type": "string"
+        },
+        "smap" : {
+          "type": {
+            "key" : "string",
+            "value": "string",
+            "min": 0,
+            "max": "unlimited"
+          }
+        },
+        "imap": {
+          "type" : {
+            "key": {
+              "type" : "integer",
+              "minInteger" : 0,
+              "maxInteger" : 4095
+            },
+            "value": {
+              "type" : "string"
+            },
+            "min": 0,
+            "max": "unlimited"
+          }
+        }
+      }
+    },
+    "simple3" : {
+      "columns" : {
+        "name" : {
+          "type": "string"
+        },
+        "uset": {
+          "type": {
+             "key": {"type": "uuid"},
+             "min": 0,
+             "max": "unlimited"
+          }
+        },
+        "uref": {
+          "type": {
+             "key": {"type": "uuid",
+                     "refTable": "simple4",
+                     "refType": "strong"},
+             "min": 0,
+             "max": "unlimited"
+          }
+        }
+      }
+    },
+    "simple4" : {
+      "columns" : {
+        "name" : {
+          "type": "string"
         }
       }
     }

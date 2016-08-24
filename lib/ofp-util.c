@@ -15,7 +15,6 @@
  */
 
 #include <config.h>
-#include "ofp-print.h"
 #include <ctype.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -23,31 +22,35 @@
 #include <netinet/in.h>
 #include <netinet/icmp6.h>
 #include <stdlib.h>
+#include "bitmap.h"
 #include "bundle.h"
 #include "byte-order.h"
 #include "classifier.h"
-#include "dynamic-string.h"
 #include "learn.h"
-#include "meta-flow.h"
 #include "multipath.h"
 #include "netdev.h"
 #include "nx-match.h"
 #include "id-pool.h"
-#include "ofp-actions.h"
-#include "ofp-errors.h"
-#include "ofp-msgs.h"
-#include "ofp-prop.h"
-#include "ofp-util.h"
-#include "ofpbuf.h"
 #include "openflow/netronome-ext.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-prop.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/type-props.h"
+#include "openvswitch/vlog.h"
+#include "openflow/intel-ext.h"
 #include "packets.h"
 #include "pktbuf.h"
 #include "random.h"
 #include "tun-metadata.h"
 #include "unaligned.h"
-#include "type-props.h"
-#include "openvswitch/vlog.h"
-#include "bitmap.h"
+#include "util.h"
+#include "uuid.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_util);
 
@@ -99,7 +102,7 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
 void
 ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 36);
 
     /* Initialize most of wc. */
     flow_wildcards_init_catchall(wc);
@@ -575,6 +578,7 @@ ofputil_match_typical_len(enum ofputil_protocol protocol)
     case OFPUTIL_P_OF13_OXM:
     case OFPUTIL_P_OF14_OXM:
     case OFPUTIL_P_OF15_OXM:
+    case OFPUTIL_P_OF16_OXM:
         return NXM_TYPICAL_LEN;
 
     default:
@@ -617,6 +621,7 @@ ofputil_put_ofp11_match(struct ofpbuf *b, const struct match *match,
     case OFPUTIL_P_OF13_OXM:
     case OFPUTIL_P_OF14_OXM:
     case OFPUTIL_P_OF15_OXM:
+    case OFPUTIL_P_OF16_OXM:
         return oxm_put_match(b, match,
                              ofputil_protocol_to_ofp_version(protocol));
     }
@@ -664,6 +669,7 @@ static const struct proto_abbrev proto_abbrevs[] = {
 #define N_PROTO_ABBREVS ARRAY_SIZE(proto_abbrevs)
 
 enum ofputil_protocol ofputil_flow_dump_protocols[] = {
+    OFPUTIL_P_OF16_OXM,
     OFPUTIL_P_OF15_OXM,
     OFPUTIL_P_OF14_OXM,
     OFPUTIL_P_OF13_OXM,
@@ -694,6 +700,8 @@ ofputil_protocols_from_ofp_version(enum ofp_version version)
         return OFPUTIL_P_OF14_OXM;
     case OFP15_VERSION:
         return OFPUTIL_P_OF15_OXM;
+    case OFP16_VERSION:
+        return OFPUTIL_P_OF16_OXM;
     default:
         return 0;
     }
@@ -731,6 +739,8 @@ ofputil_protocol_to_ofp_version(enum ofputil_protocol protocol)
         return OFP14_VERSION;
     case OFPUTIL_P_OF15_OXM:
         return OFP15_VERSION;
+    case OFPUTIL_P_OF16_OXM:
+        return OFP16_VERSION;
     }
 
     OVS_NOT_REACHED();
@@ -813,6 +823,9 @@ ofputil_protocol_set_tid(enum ofputil_protocol protocol, bool enable)
     case OFPUTIL_P_OF15_OXM:
         return OFPUTIL_P_OF15_OXM;
 
+    case OFPUTIL_P_OF16_OXM:
+        return OFPUTIL_P_OF16_OXM;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -859,6 +872,9 @@ ofputil_protocol_set_base(enum ofputil_protocol cur,
     case OFPUTIL_P_OF15_OXM:
         return ofputil_protocol_set_tid(OFPUTIL_P_OF15_OXM, tid);
 
+    case OFPUTIL_P_OF16_OXM:
+        return ofputil_protocol_set_tid(OFPUTIL_P_OF16_OXM, tid);
+
     default:
         OVS_NOT_REACHED();
     }
@@ -901,6 +917,9 @@ ofputil_protocol_to_string(enum ofputil_protocol protocol)
 
     case OFPUTIL_P_OF15_OXM:
         return "OXM-OpenFlow15";
+
+    case OFPUTIL_P_OF16_OXM:
+        return "OXM-OpenFlow16";
     }
 
     /* Check abbreviations. */
@@ -1042,6 +1061,9 @@ ofputil_version_from_string(const char *s)
     if (!strcasecmp(s, "OpenFlow15")) {
         return OFP15_VERSION;
     }
+    if (!strcasecmp(s, "OpenFlow16")) {
+        return OFP16_VERSION;
+    }
     return 0;
 }
 
@@ -1116,6 +1138,8 @@ ofputil_version_to_string(enum ofp_version ofp_version)
         return "OpenFlow14";
     case OFP15_VERSION:
         return "OpenFlow15";
+    case OFP16_VERSION:
+        return "OpenFlow16";
     default:
         OVS_NOT_REACHED();
     }
@@ -1357,6 +1381,7 @@ ofputil_encode_set_protocol(enum ofputil_protocol current,
         case OFPUTIL_P_OF13_OXM:
         case OFPUTIL_P_OF14_OXM:
         case OFPUTIL_P_OF15_OXM:
+        case OFPUTIL_P_OF16_OXM:
             /* There is only one variant of each OpenFlow 1.1+ protocol, and we
              * verified above that we're not trying to change versions. */
             OVS_NOT_REACHED();
@@ -1551,10 +1576,6 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 {
     ovs_be16 raw_flags;
     enum ofperr error;
-
-    /* Ignored for non-delete actions */
-    fm->delete_reason = OFPRR_DELETE;
-
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     enum ofpraw raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT11_FLOW_MOD) {
@@ -1879,7 +1900,7 @@ void
 ofputil_append_meter_config(struct ovs_list *replies,
                             const struct ofputil_meter_config *mc)
 {
-    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *msg = ofpbuf_from_list(ovs_list_back(replies));
     size_t start_ofs = msg->size;
     struct ofp13_meter_config *reply;
 
@@ -2132,7 +2153,8 @@ ofputil_encode_flow_mod(const struct ofputil_flow_mod *fm,
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
     case OFPUTIL_P_OF14_OXM:
-    case OFPUTIL_P_OF15_OXM: {
+    case OFPUTIL_P_OF15_OXM:
+    case OFPUTIL_P_OF16_OXM: {
         struct ofp11_flow_mod *ofm;
         int tailroom;
 
@@ -2418,8 +2440,8 @@ ofputil_start_queue_get_config_reply(const struct ofp_header *request,
         OVS_NOT_REACHED();
     }
 
-    list_init(replies);
-    list_push_back(replies, &reply->list_node);
+    ovs_list_init(replies);
+    ovs_list_push_back(replies, &reply->list_node);
 }
 
 static void
@@ -2450,7 +2472,7 @@ ofputil_append_queue_get_config_reply(const struct ofputil_queue_config *qc,
                                       struct ovs_list *replies)
 {
     enum ofp_version ofp_version = ofpmp_version(replies);
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     size_t start_ofs = reply->size;
     size_t len_ofs;
     ovs_be16 *len;
@@ -2735,7 +2757,8 @@ ofputil_encode_flow_stats_request(const struct ofputil_flow_stats_request *fsr,
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
     case OFPUTIL_P_OF14_OXM:
-    case OFPUTIL_P_OF15_OXM: {
+    case OFPUTIL_P_OF15_OXM:
+    case OFPUTIL_P_OF16_OXM: {
         struct ofp11_flow_stats_request *ofsr;
 
         raw = (fsr->aggregate
@@ -2995,7 +3018,7 @@ void
 ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *fs,
                                 struct ovs_list *replies)
 {
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     size_t start_ofs = reply->size;
     enum ofp_version version = ofpmp_version(replies);
     enum ofpraw raw = ofpmp_decode_raw(replies);
@@ -3229,7 +3252,8 @@ ofputil_encode_flow_removed(const struct ofputil_flow_removed *fr,
     case OFPUTIL_P_OF12_OXM:
     case OFPUTIL_P_OF13_OXM:
     case OFPUTIL_P_OF14_OXM:
-    case OFPUTIL_P_OF15_OXM: {
+    case OFPUTIL_P_OF15_OXM:
+    case OFPUTIL_P_OF16_OXM: {
         struct ofp12_flow_removed *ofr;
 
         msg = ofpraw_alloc_xid(OFPRAW_OFPT11_FLOW_REMOVED,
@@ -3890,6 +3914,7 @@ ofputil_encode_packet_in_private(const struct ofputil_packet_in_private *pin,
         case OFPUTIL_P_OF13_OXM:
         case OFPUTIL_P_OF14_OXM:
         case OFPUTIL_P_OF15_OXM:
+        case OFPUTIL_P_OF16_OXM:
             msg = ofputil_encode_ofp12_packet_in(&pin->public, version, buffer_id);
             break;
 
@@ -4473,6 +4498,7 @@ ofputil_put_phy_port(enum ofp_version ofp_version,
 
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         ofputil_put_ofp14_port(pp, b);
         break;
 
@@ -4516,7 +4542,8 @@ ofputil_encode_port_desc_stats_request(enum ofp_version ofp_version,
         request = ofpraw_alloc(OFPRAW_OFPST10_PORT_DESC_REQUEST,
                                ofp_version, 0);
         break;
-    case OFP15_VERSION:{
+    case OFP15_VERSION:
+    case OFP16_VERSION:{
         struct ofp15_port_desc_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST15_PORT_DESC_REQUEST,
                                ofp_version, 0);
@@ -4535,7 +4562,7 @@ void
 ofputil_append_port_desc_stats_reply(const struct ofputil_phy_port *pp,
                                      struct ovs_list *replies)
 {
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     size_t start_ofs = reply->size;
 
     ofputil_put_phy_port(ofpmp_version(replies), pp, reply);
@@ -4640,6 +4667,7 @@ ofputil_capabilities_mask(enum ofp_version ofp_version)
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         return OFPC_COMMON | OFPC12_PORT_BLOCKED;
     default:
         /* Caller needs to check osf->header.version itself */
@@ -4754,6 +4782,7 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         raw = OFPRAW_OFPT13_FEATURES_REPLY;
         break;
     default:
@@ -4779,6 +4808,7 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         osf->auxiliary_id = features->auxiliary_id;
         /* fall through */
     case OFP11_VERSION:
@@ -4865,6 +4895,7 @@ ofputil_encode_port_status(const struct ofputil_port_status *ps,
 
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         raw = OFPRAW_OFPT14_PORT_STATUS;
         break;
 
@@ -5011,7 +5042,8 @@ ofputil_encode_port_mod(const struct ofputil_port_mod *pm,
         break;
     }
     case OFP14_VERSION:
-    case OFP15_VERSION: {
+    case OFP15_VERSION:
+    case OFP16_VERSION: {
         struct ofp14_port_mod *opm;
 
         b = ofpraw_alloc(OFPRAW_OFPT14_PORT_MOD, ofp_version, 0);
@@ -5331,6 +5363,7 @@ ofputil_encode_table_features_request(enum ofp_version ofp_version)
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         request = ofpraw_alloc(OFPRAW_OFPST13_TABLE_FEATURES_REQUEST,
                                ofp_version, 0);
         break;
@@ -5403,7 +5436,7 @@ void
 ofputil_append_table_features_reply(const struct ofputil_table_features *tf,
                                     struct ovs_list *replies)
 {
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     enum ofp_version version = ofpmp_version(replies);
     size_t start_ofs = reply->size;
     struct ofp13_table_features *otf;
@@ -5549,7 +5582,7 @@ ofputil_append_table_desc_reply(const struct ofputil_table_desc *td,
                                 struct ovs_list *replies,
                                 enum ofp_version version)
 {
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     size_t start_otd;
     struct ofp14_table_desc *otd;
 
@@ -5684,6 +5717,7 @@ ofputil_encode_table_config(enum ofputil_table_miss miss,
 
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         /* OpenFlow 1.4 introduced OFPTC14_EVICTION and
          * OFPTC14_VACANCY_EVENTS. */
         if (eviction == OFPUTIL_TABLE_EVICTION_ON) {
@@ -5820,7 +5854,8 @@ ofputil_encode_table_mod(const struct ofputil_table_mod *tm,
         break;
     }
     case OFP14_VERSION:
-    case OFP15_VERSION: {
+    case OFP15_VERSION:
+    case OFP16_VERSION: {
         struct ofp14_table_mod *otm;
 
         b = ofpraw_alloc(OFPRAW_OFPT14_TABLE_MOD, ofp_version, 0);
@@ -6351,6 +6386,7 @@ ofputil_append_table_stats_reply(struct ofpbuf *reply,
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         ofputil_put_ofp13_table_stats(stats, reply);
         break;
 
@@ -6521,6 +6557,7 @@ ofputil_decode_table_stats_reply(struct ofpbuf *msg,
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         return ofputil_decode_ofp13_table_stats(msg, stats, features);
 
     default:
@@ -6744,8 +6781,8 @@ ofputil_start_flow_update(struct ovs_list *replies)
     msg = ofpraw_alloc_xid(OFPRAW_NXST_FLOW_MONITOR_REPLY, OFP10_VERSION,
                            htonl(0), 1024);
 
-    list_init(replies);
-    list_push_back(replies, &msg->list_node);
+    ovs_list_init(replies);
+    ovs_list_push_back(replies, &msg->list_node);
 }
 
 void
@@ -6757,7 +6794,7 @@ ofputil_append_flow_update(const struct ofputil_flow_update *update,
     struct ofpbuf *msg;
     size_t start_ofs;
 
-    msg = ofpbuf_from_list(list_back(replies));
+    msg = ofpbuf_from_list(ovs_list_back(replies));
     start_ofs = msg->size;
 
     if (update->event == NXFME_ABBREV) {
@@ -6825,7 +6862,8 @@ ofputil_encode_packet_out(const struct ofputil_packet_out *po,
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
-    case OFP15_VERSION: {
+    case OFP15_VERSION:
+    case OFP16_VERSION: {
         struct ofp11_packet_out *opo;
         size_t len;
 
@@ -6881,6 +6919,7 @@ ofputil_encode_barrier_request(enum ofp_version ofp_version)
     enum ofpraw type;
 
     switch (ofp_version) {
+    case OFP16_VERSION:
     case OFP15_VERSION:
     case OFP14_VERSION:
     case OFP13_VERSION:
@@ -7173,6 +7212,7 @@ ofputil_pull_phy_port(enum ofp_version ofp_version, struct ofpbuf *b,
     }
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         return b->size ? ofputil_pull_ofp14_port(pp, b) : EOF;
     default:
         OVS_NOT_REACHED();
@@ -7312,6 +7352,38 @@ ofputil_normalize_match_quiet(struct match *match)
     ofputil_normalize_match__(match, false);
 }
 
+static size_t
+parse_value(const char *s, const char *delimiters)
+{
+    size_t n = 0;
+
+    /* Iterate until we reach a delimiter.
+     *
+     * strchr(s, '\0') returns s+strlen(s), so this test handles the null
+     * terminator at the end of 's'.  */
+    while (!strchr(delimiters, s[n])) {
+        if (s[n] == '(') {
+            int level = 0;
+            do {
+                switch (s[n]) {
+                case '\0':
+                    return n;
+                case '(':
+                    level++;
+                    break;
+                case ')':
+                    level--;
+                    break;
+                }
+                n++;
+            } while (level > 0);
+        } else {
+            n++;
+        }
+    }
+    return n;
+}
+
 /* Parses a key or a key-value pair from '*stringp'.
  *
  * On success: Stores the key into '*keyp'.  Stores the value, if present, into
@@ -7325,58 +7397,49 @@ ofputil_normalize_match_quiet(struct match *match)
 bool
 ofputil_parse_key_value(char **stringp, char **keyp, char **valuep)
 {
-    char *pos, *key, *value;
-    size_t key_len;
-
-    pos = *stringp;
-    pos += strspn(pos, ", \t\r\n");
-    if (*pos == '\0') {
+    /* Skip white space and delimiters.  If that brings us to the end of the
+     * input string, we are done and there are no more key-value pairs. */
+    *stringp += strspn(*stringp, ", \t\r\n");
+    if (**stringp == '\0') {
         *keyp = *valuep = NULL;
         return false;
     }
 
-    key = pos;
-    key_len = strcspn(pos, ":=(, \t\r\n");
-    if (key[key_len] == ':' || key[key_len] == '=') {
-        /* The value can be separated by a colon. */
-        size_t value_len;
-
-        value = key + key_len + 1;
-        value_len = strcspn(value, ", \t\r\n");
-        pos = value + value_len + (value[value_len] != '\0');
-        value[value_len] = '\0';
-    } else if (key[key_len] == '(') {
-        /* The value can be surrounded by balanced parentheses.  The outermost
-         * set of parentheses is removed. */
-        int level = 1;
-        size_t value_len;
-
-        value = key + key_len + 1;
-        for (value_len = 0; level > 0; value_len++) {
-            switch (value[value_len]) {
-            case '\0':
-                level = 0;
-                break;
-
-            case '(':
-                level++;
-                break;
-
-            case ')':
-                level--;
-                break;
-            }
-        }
-        value[value_len - 1] = '\0';
-        pos = value + value_len;
-    } else {
-        /* There might be no value at all. */
-        value = key + key_len;  /* Will become the empty string below. */
-        pos = key + key_len + (key[key_len] != '\0');
-    }
+    /* Extract the key and the delimiter that ends the key-value pair or begins
+     * the value.  Advance the input position past the key and delimiter. */
+    char *key = *stringp;
+    size_t key_len = strcspn(key, ":=(, \t\r\n");
+    char key_delim = key[key_len];
     key[key_len] = '\0';
+    *stringp += key_len + (key_delim != '\0');
 
-    *stringp = pos;
+    /* Figure out what delimiter ends the value:
+     *
+     *     - If key_delim is ":" or "=", the value extends until white space
+     *       or a comma.
+     *
+     *     - If key_delim is "(", the value extends until ")".
+     *
+     * If there is no value, we are done. */
+    const char *value_delims;
+    if (key_delim == ':' || key_delim == '=') {
+        value_delims = ", \t\r\n";
+    } else if (key_delim == '(') {
+        value_delims = ")";
+    } else {
+        *keyp = key;
+        *valuep = key + key_len; /* Empty string. */
+        return true;
+    }
+
+    /* Extract the value.  Advance the input position past the value and
+     * delimiter. */
+    char *value = *stringp;
+    size_t value_len = parse_value(value, value_delims);
+    char value_delim = value[value_len];
+    value[value_len] = '\0';
+    *stringp += value_len + (value_delim != '\0');
+
     *keyp = key;
     *valuep = value;
     return true;
@@ -7402,7 +7465,8 @@ ofputil_encode_dump_ports_request(enum ofp_version ofp_version, ofp_port_t port)
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
-    case OFP15_VERSION: {
+    case OFP15_VERSION:
+    case OFP16_VERSION: {
         struct ofp11_port_stats_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST11_PORT_REQUEST, ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
@@ -7470,13 +7534,16 @@ ofputil_append_ofp14_port_stats(const struct ofputil_port_stats *ops,
                                 struct ovs_list *replies)
 {
     struct ofp14_port_stats_prop_ethernet *eth;
+    struct intel_port_stats_rfc2819 *stats_rfc2819;
     struct ofp14_port_stats *ps14;
     struct ofpbuf *reply;
 
-    reply = ofpmp_reserve(replies, sizeof *ps14 + sizeof *eth);
+    reply = ofpmp_reserve(replies, sizeof *ps14 + sizeof *eth +
+                          sizeof *stats_rfc2819);
 
     ps14 = ofpbuf_put_uninit(reply, sizeof *ps14);
-    ps14->length = htons(sizeof *ps14 + sizeof *eth);
+    ps14->length = htons(sizeof *ps14 + sizeof *eth +
+                         sizeof *stats_rfc2819);
     memset(ps14->pad, 0, sizeof ps14->pad);
     ps14->port_no = ofputil_port_to_ofp11(ops->port_no);
     ps14->duration_sec = htonl(ops->duration_sec);
@@ -7495,6 +7562,56 @@ ofputil_append_ofp14_port_stats(const struct ofputil_port_stats *ops,
     eth->rx_over_err = htonll(ops->stats.rx_over_errors);
     eth->rx_crc_err = htonll(ops->stats.rx_crc_errors);
     eth->collisions = htonll(ops->stats.collisions);
+
+    uint64_t prop_type = OFPPROP_EXP(INTEL_VENDOR_ID,
+                                     INTEL_PORT_STATS_RFC2819);
+
+    stats_rfc2819 = ofpprop_put_zeros(reply, prop_type,
+                                      sizeof *stats_rfc2819);
+
+    memset(stats_rfc2819->pad, 0, sizeof stats_rfc2819->pad);
+    stats_rfc2819->rx_1_to_64_packets = htonll(ops->stats.rx_1_to_64_packets);
+    stats_rfc2819->rx_65_to_127_packets =
+        htonll(ops->stats.rx_65_to_127_packets);
+    stats_rfc2819->rx_128_to_255_packets =
+        htonll(ops->stats.rx_128_to_255_packets);
+    stats_rfc2819->rx_256_to_511_packets =
+        htonll(ops->stats.rx_256_to_511_packets);
+    stats_rfc2819->rx_512_to_1023_packets =
+        htonll(ops->stats.rx_512_to_1023_packets);
+    stats_rfc2819->rx_1024_to_1522_packets =
+        htonll(ops->stats.rx_1024_to_1522_packets);
+    stats_rfc2819->rx_1523_to_max_packets =
+        htonll(ops->stats.rx_1523_to_max_packets);
+
+    stats_rfc2819->tx_1_to_64_packets = htonll(ops->stats.tx_1_to_64_packets);
+    stats_rfc2819->tx_65_to_127_packets =
+        htonll(ops->stats.tx_65_to_127_packets);
+    stats_rfc2819->tx_128_to_255_packets =
+        htonll(ops->stats.tx_128_to_255_packets);
+    stats_rfc2819->tx_256_to_511_packets =
+        htonll(ops->stats.tx_256_to_511_packets);
+    stats_rfc2819->tx_512_to_1023_packets =
+        htonll(ops->stats.tx_512_to_1023_packets);
+    stats_rfc2819->tx_1024_to_1522_packets =
+        htonll(ops->stats.tx_1024_to_1522_packets);
+    stats_rfc2819->tx_1523_to_max_packets =
+        htonll(ops->stats.tx_1523_to_max_packets);
+
+    stats_rfc2819->tx_multicast_packets =
+        htonll(ops->stats.tx_multicast_packets);
+    stats_rfc2819->rx_broadcast_packets =
+        htonll(ops->stats.rx_broadcast_packets);
+    stats_rfc2819->tx_broadcast_packets =
+        htonll(ops->stats.tx_broadcast_packets);
+    stats_rfc2819->rx_undersized_errors =
+        htonll(ops->stats.rx_undersized_errors);
+    stats_rfc2819->rx_oversize_errors =
+        htonll(ops->stats.rx_oversize_errors);
+    stats_rfc2819->rx_fragmented_errors =
+        htonll(ops->stats.rx_fragmented_errors);
+    stats_rfc2819->rx_jabber_errors =
+        htonll(ops->stats.rx_jabber_errors);
 }
 
 /* Encode a ports stat for 'ops' and append it to 'replies'. */
@@ -7523,6 +7640,7 @@ ofputil_append_port_stat(struct ovs_list *replies,
 
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         ofputil_append_ofp14_port_stats(ops, replies);
         break;
 
@@ -7535,7 +7653,6 @@ static enum ofperr
 ofputil_port_stats_from_ofp10(struct ofputil_port_stats *ops,
                               const struct ofp10_port_stats *ps10)
 {
-    memset(ops, 0, sizeof *ops);
 
     ops->port_no = u16_to_ofp(ntohs(ps10->port_no));
     ops->stats.rx_packets = ntohll(get_32aligned_be64(&ps10->rx_packets));
@@ -7562,7 +7679,6 @@ ofputil_port_stats_from_ofp11(struct ofputil_port_stats *ops,
 {
     enum ofperr error;
 
-    memset(ops, 0, sizeof *ops);
     error = ofputil_port_from_ofp11(ps11->port_no, &ops->port_no);
     if (error) {
         return error;
@@ -7616,6 +7732,68 @@ parse_ofp14_port_stats_ethernet_property(const struct ofpbuf *payload,
 }
 
 static enum ofperr
+parse_intel_port_stats_rfc2819_property(const struct ofpbuf *payload,
+                                        struct ofputil_port_stats *ops)
+{
+    const struct intel_port_stats_rfc2819 *rfc2819 = payload->data;
+
+    if (payload->size != sizeof *rfc2819) {
+        return OFPERR_OFPBPC_BAD_LEN;
+    }
+    ops->stats.rx_1_to_64_packets = ntohll(rfc2819->rx_1_to_64_packets);
+    ops->stats.rx_65_to_127_packets = ntohll(rfc2819->rx_65_to_127_packets);
+    ops->stats.rx_128_to_255_packets = ntohll(rfc2819->rx_128_to_255_packets);
+    ops->stats.rx_256_to_511_packets = ntohll(rfc2819->rx_256_to_511_packets);
+    ops->stats.rx_512_to_1023_packets =
+        ntohll(rfc2819->rx_512_to_1023_packets);
+    ops->stats.rx_1024_to_1522_packets =
+        ntohll(rfc2819->rx_1024_to_1522_packets);
+    ops->stats.rx_1523_to_max_packets =
+        ntohll(rfc2819->rx_1523_to_max_packets);
+
+    ops->stats.tx_1_to_64_packets = ntohll(rfc2819->tx_1_to_64_packets);
+    ops->stats.tx_65_to_127_packets = ntohll(rfc2819->tx_65_to_127_packets);
+    ops->stats.tx_128_to_255_packets = ntohll(rfc2819->tx_128_to_255_packets);
+    ops->stats.tx_256_to_511_packets = ntohll(rfc2819->tx_256_to_511_packets);
+    ops->stats.tx_512_to_1023_packets =
+        ntohll(rfc2819->tx_512_to_1023_packets);
+    ops->stats.tx_1024_to_1522_packets =
+        ntohll(rfc2819->tx_1024_to_1522_packets);
+    ops->stats.tx_1523_to_max_packets =
+        ntohll(rfc2819->tx_1523_to_max_packets);
+
+    ops->stats.tx_multicast_packets = ntohll(rfc2819->tx_multicast_packets);
+    ops->stats.rx_broadcast_packets = ntohll(rfc2819->rx_broadcast_packets);
+    ops->stats.tx_broadcast_packets = ntohll(rfc2819->tx_broadcast_packets);
+    ops->stats.rx_undersized_errors = ntohll(rfc2819->rx_undersized_errors);
+
+    ops->stats.rx_oversize_errors = ntohll(rfc2819->rx_oversize_errors);
+    ops->stats.rx_fragmented_errors = ntohll(rfc2819->rx_fragmented_errors);
+    ops->stats.rx_jabber_errors = ntohll(rfc2819->rx_jabber_errors);
+
+    return 0;
+}
+
+static enum ofperr
+parse_intel_port_stats_property(const struct ofpbuf *payload,
+                                uint32_t exp_type,
+                                struct ofputil_port_stats *ops)
+{
+    enum ofperr error;
+
+    switch (exp_type) {
+    case INTEL_PORT_STATS_RFC2819:
+        error = parse_intel_port_stats_rfc2819_property(payload, ops);
+        break;
+    default:
+        error = OFPERR_OFPBPC_BAD_EXP_TYPE;
+        break;
+    }
+
+    return error;
+}
+
+static enum ofperr
 ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
                               struct ofpbuf *msg)
 {
@@ -7645,28 +7823,28 @@ ofputil_pull_ofp14_port_stats(struct ofputil_port_stats *ops,
     ops->stats.tx_dropped = ntohll(ps14->tx_dropped);
     ops->stats.rx_errors = ntohll(ps14->rx_errors);
     ops->stats.tx_errors = ntohll(ps14->tx_errors);
-    ops->stats.rx_frame_errors = UINT64_MAX;
-    ops->stats.rx_over_errors = UINT64_MAX;
-    ops->stats.rx_crc_errors = UINT64_MAX;
-    ops->stats.collisions = UINT64_MAX;
+
 
     struct ofpbuf properties = ofpbuf_const_initializer(ofpbuf_pull(msg, len),
                                                         len);
     while (properties.size > 0) {
         struct ofpbuf payload;
         enum ofperr error;
-        uint64_t type;
+        uint64_t type = 0;
 
         error = ofpprop_pull(&properties, &payload, &type);
         if (error) {
             return error;
         }
-
         switch (type) {
         case OFPPSPT14_ETHERNET:
             error = parse_ofp14_port_stats_ethernet_property(&payload, ops);
             break;
-
+        case OFPPROP_EXP(INTEL_VENDOR_ID, INTEL_PORT_STATS_RFC2819):
+            error = parse_intel_port_stats_property(&payload,
+                                                    INTEL_PORT_STATS_RFC2819,
+                                                    ops);
+            break;
         default:
             error = OFPPROP_UNKNOWN(true, "port stats", type);
             break;
@@ -7712,6 +7890,8 @@ ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
     enum ofperr error;
     enum ofpraw raw;
 
+    memset(&(ps->stats), 0xFF, sizeof (ps->stats));
+
     error = (msg->header ? ofpraw_decode(&raw, msg->header)
              : ofpraw_pull(&raw, msg));
     if (error) {
@@ -7724,7 +7904,6 @@ ofputil_decode_port_stats(struct ofputil_port_stats *ps, struct ofpbuf *msg)
         return ofputil_pull_ofp14_port_stats(ps, msg);
     } else if (raw == OFPRAW_OFPST13_PORT_REPLY) {
         const struct ofp13_port_stats *ps13;
-
         ps13 = ofpbuf_try_pull(msg, sizeof *ps13);
         if (!ps13) {
             goto bad_len;
@@ -7764,6 +7943,7 @@ ofputil_decode_port_stats_request(const struct ofp_header *request,
                                   ofp_port_t *ofp10_port)
 {
     switch ((enum ofp_version)request->version) {
+    case OFP16_VERSION:
     case OFP15_VERSION:
     case OFP14_VERSION:
     case OFP13_VERSION:
@@ -7782,6 +7962,92 @@ ofputil_decode_port_stats_request(const struct ofp_header *request,
     default:
         OVS_NOT_REACHED();
     }
+}
+
+static void
+ofputil_ipfix_stats_to_reply(const struct ofputil_ipfix_stats *ois,
+                            struct nx_ipfix_stats_reply *reply)
+{
+    reply->collector_set_id = htonl(ois->collector_set_id);
+    reply->total_flows = htonll(ois->total_flows);
+    reply->current_flows = htonll(ois->current_flows);
+    reply->pkts = htonll(ois->pkts);
+    reply->ipv4_pkts = htonll(ois->ipv4_pkts);
+    reply->ipv6_pkts = htonll(ois->ipv6_pkts);
+    reply->error_pkts = htonll(ois->error_pkts);
+    reply->ipv4_error_pkts = htonll(ois->ipv4_error_pkts);
+    reply->ipv6_error_pkts = htonll(ois->ipv6_error_pkts);
+    reply->tx_pkts = htonll(ois->tx_pkts);
+    reply->tx_errors = htonll(ois->tx_errors);
+    memset(reply->pad, 0, sizeof reply->pad);
+}
+
+/* Encode a ipfix stat for 'ois' and append it to 'replies'. */
+void
+ofputil_append_ipfix_stat(struct ovs_list *replies,
+                         const struct ofputil_ipfix_stats *ois)
+{
+    struct nx_ipfix_stats_reply *reply = ofpmp_append(replies, sizeof *reply);
+    ofputil_ipfix_stats_to_reply(ois, reply);
+}
+
+static enum ofperr
+ofputil_ipfix_stats_from_nx(struct ofputil_ipfix_stats *is,
+                            const struct nx_ipfix_stats_reply *reply)
+{
+    is->collector_set_id = ntohl(reply->collector_set_id);
+    is->total_flows = ntohll(reply->total_flows);
+    is->current_flows = ntohll(reply->current_flows);
+    is->pkts = ntohll(reply->pkts);
+    is->ipv4_pkts = ntohll(reply->ipv4_pkts);
+    is->ipv6_pkts = ntohll(reply->ipv6_pkts);
+    is->error_pkts = ntohll(reply->error_pkts);
+    is->ipv4_error_pkts = ntohll(reply->ipv4_error_pkts);
+    is->ipv6_error_pkts = ntohll(reply->ipv6_error_pkts);
+    is->tx_pkts = ntohll(reply->tx_pkts);
+    is->tx_errors = ntohll(reply->tx_errors);
+
+    return 0;
+}
+
+int
+ofputil_pull_ipfix_stats(struct ofputil_ipfix_stats *is, struct ofpbuf *msg)
+{
+    enum ofperr error;
+    enum ofpraw raw;
+
+    memset(is, 0xFF, sizeof (*is));
+
+    error = (msg->header ? ofpraw_decode(&raw, msg->header)
+             : ofpraw_pull(&raw, msg));
+    if (error) {
+        return error;
+    }
+
+    if (!msg->size) {
+        return EOF;
+    } else if (raw == OFPRAW_NXST_IPFIX_BRIDGE_REPLY ||
+               raw == OFPRAW_NXST_IPFIX_FLOW_REPLY) {
+        struct nx_ipfix_stats_reply *reply;
+
+        reply = ofpbuf_try_pull(msg, sizeof *reply);
+        return ofputil_ipfix_stats_from_nx(is, reply);
+    } else {
+        OVS_NOT_REACHED();
+    }
+}
+
+
+/* Returns the number of ipfix stats elements in
+ * OFPTYPE_IPFIX_BRIDGE_STATS_REPLY or OFPTYPE_IPFIX_FLOW_STATS_REPLY
+ * message 'oh'. */
+size_t
+ofputil_count_ipfix_stats(const struct ofp_header *oh)
+{
+    struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
+    ofpraw_pull_assert(&b);
+
+    return b.size / sizeof(struct ofputil_ipfix_stats);
 }
 
 /* Frees all of the "struct ofputil_bucket"s in the 'buckets' list. */
@@ -7828,7 +8094,7 @@ ofputil_bucket_clone_list(struct ovs_list *dest, const struct ovs_list *src,
         }
 
         new_bucket = ofputil_bucket_clone_data(bucket);
-        list_push_back(dest, &new_bucket->list_node);
+        ovs_list_push_back(dest, &new_bucket->list_node);
     }
 }
 
@@ -7880,7 +8146,7 @@ ofputil_bucket_list_front(const struct ovs_list *buckets)
 {
     static struct ofputil_bucket *bucket;
 
-    ASSIGN_CONTAINER(bucket, list_front(buckets), list_node);
+    ASSIGN_CONTAINER(bucket, ovs_list_front(buckets), list_node);
 
     return bucket;
 }
@@ -7892,7 +8158,7 @@ ofputil_bucket_list_back(const struct ovs_list *buckets)
 {
     static struct ofputil_bucket *bucket;
 
-    ASSIGN_CONTAINER(bucket, list_back(buckets), list_node);
+    ASSIGN_CONTAINER(bucket, ovs_list_back(buckets), list_node);
 
     return bucket;
 }
@@ -7916,7 +8182,8 @@ ofputil_encode_group_stats_request(enum ofp_version ofp_version,
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
-    case OFP15_VERSION: {
+    case OFP15_VERSION:
+    case OFP16_VERSION: {
         struct ofp11_group_stats_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST11_GROUP_REQUEST, ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
@@ -7934,7 +8201,7 @@ void
 ofputil_uninit_group_desc(struct ofputil_group_desc *gd)
 {
     ofputil_bucket_list_destroy(&gd->buckets);
-    free(&gd->props.fields);
+    ofputil_group_properties_destroy(&gd->props);
 }
 
 /* Decodes the OpenFlow group description request in 'oh', returning the group
@@ -7979,7 +8246,8 @@ ofputil_encode_group_desc_request(enum ofp_version ofp_version,
         request = ofpraw_alloc(OFPRAW_OFPST11_GROUP_DESC_REQUEST,
                                ofp_version, 0);
         break;
-    case OFP15_VERSION:{
+    case OFP15_VERSION:
+    case OFP16_VERSION: {
         struct ofp15_group_desc_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST15_GROUP_DESC_REQUEST,
                                ofp_version, 0);
@@ -8058,7 +8326,8 @@ ofputil_append_group_stats(struct ovs_list *replies,
 
     case OFP13_VERSION:
     case OFP14_VERSION:
-    case OFP15_VERSION: {
+    case OFP15_VERSION:
+    case OFP16_VERSION: {
             struct ofp13_group_stats *gs13;
 
             length = sizeof *gs13 + bucket_counter_size;
@@ -8089,6 +8358,7 @@ ofputil_encode_group_features_request(enum ofp_version ofp_version)
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         request = ofpraw_alloc(OFPRAW_OFPST12_GROUP_FEATURES_REQUEST,
                                ofp_version, 0);
         break;
@@ -8318,7 +8588,7 @@ ofputil_append_ofp11_group_desc_reply(const struct ofputil_group_desc *gds,
                                       struct ovs_list *replies,
                                       enum ofp_version version)
 {
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     struct ofp11_group_desc_stats *ogds;
     struct ofputil_bucket *bucket;
     size_t start_ogds;
@@ -8342,7 +8612,7 @@ ofputil_append_ofp15_group_desc_reply(const struct ofputil_group_desc *gds,
                                       struct ovs_list *replies,
                                       enum ofp_version version)
 {
-    struct ofpbuf *reply = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *reply = ofpbuf_from_list(ovs_list_back(replies));
     struct ofp15_group_desc_stats *ogds;
     struct ofputil_bucket *bucket;
     size_t start_ogds, start_buckets;
@@ -8364,6 +8634,7 @@ ofputil_append_ofp15_group_desc_reply(const struct ofputil_group_desc *gds,
         ofputil_put_group_prop_ntr_selection_method(version, &gds->props,
                                                     reply);
     }
+    ogds = ofpbuf_at_assert(reply, start_ogds, sizeof *ogds);
     ogds->length = htons(reply->size - start_ogds);
 
     ofpmp_postappend(replies, start_ogds);
@@ -8389,6 +8660,7 @@ ofputil_append_group_desc_reply(const struct ofputil_group_desc *gds,
         break;
 
     case OFP15_VERSION:
+    case OFP16_VERSION:
         ofputil_append_ofp15_group_desc_reply(gds, buckets, replies, version);
         break;
 
@@ -8405,7 +8677,7 @@ ofputil_pull_ofp11_buckets(struct ofpbuf *msg, size_t buckets_length,
     struct ofp11_bucket *ob;
     uint32_t bucket_id = 0;
 
-    list_init(buckets);
+    ovs_list_init(buckets);
     while (buckets_length > 0) {
         struct ofputil_bucket *bucket;
         struct ofpbuf ofpacts;
@@ -8456,7 +8728,7 @@ ofputil_pull_ofp11_buckets(struct ofpbuf *msg, size_t buckets_length,
 
         bucket->ofpacts = ofpbuf_steal_data(&ofpacts);
         bucket->ofpacts_len = ofpacts.size;
-        list_push_back(buckets, &bucket->list_node);
+        ovs_list_push_back(buckets, &bucket->list_node);
     }
 
     return 0;
@@ -8469,7 +8741,7 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
 {
     struct ofp15_bucket *ob;
 
-    list_init(buckets);
+    ovs_list_init(buckets);
     while (buckets_length > 0) {
         struct ofputil_bucket *bucket = NULL;
         struct ofpbuf ofpacts;
@@ -8569,7 +8841,7 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
 
         bucket->ofpacts = ofpbuf_steal_data(&ofpacts);
         bucket->ofpacts_len = ofpacts.size;
-        list_push_back(buckets, &bucket->list_node);
+        ovs_list_push_back(buckets, &bucket->list_node);
 
         continue;
 
@@ -8593,6 +8865,20 @@ static void
 ofputil_init_group_properties(struct ofputil_group_props *gp)
 {
     memset(gp, 0, sizeof *gp);
+}
+
+void
+ofputil_group_properties_copy(struct ofputil_group_props *to,
+                              const struct ofputil_group_props *from)
+{
+    *to = *from;
+    to->fields.values = xmemdup(from->fields.values, from->fields.values_size);
+}
+
+void
+ofputil_group_properties_destroy(struct ofputil_group_props *gp)
+{
+    free(gp->fields.values);
 }
 
 static enum ofperr
@@ -8621,6 +8907,7 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
     switch (group_cmd) {
     case OFPGC15_ADD:
     case OFPGC15_MODIFY:
+    case OFPGC15_ADD_OR_MOD:
         break;
     case OFPGC15_DELETE:
     case OFPGC15_INSERT_BUCKET:
@@ -8839,6 +9126,7 @@ ofputil_decode_group_desc_reply(struct ofputil_group_desc *gd,
         return ofputil_decode_ofp11_group_desc_reply(gd, msg, version);
 
     case OFP15_VERSION:
+    case OFP16_VERSION:
         return ofputil_decode_ofp15_group_desc_reply(gd, msg, version);
 
     case OFP10_VERSION:
@@ -8851,6 +9139,7 @@ void
 ofputil_uninit_group_mod(struct ofputil_group_mod *gm)
 {
     ofputil_bucket_list_destroy(&gm->buckets);
+    ofputil_group_properties_destroy(&gm->props);
 }
 
 static struct ofpbuf *
@@ -8948,6 +9237,7 @@ bad_group_cmd(enum ofp15_group_mod_command cmd)
     switch (cmd) {
     case OFPGC15_ADD:
     case OFPGC15_MODIFY:
+    case OFPGC15_ADD_OR_MOD:
     case OFPGC15_DELETE:
         version = "1.1";
         opt_version = "11";
@@ -8969,6 +9259,7 @@ bad_group_cmd(enum ofp15_group_mod_command cmd)
         break;
 
     case OFPGC15_MODIFY:
+    case OFPGC15_ADD_OR_MOD:
         cmd_str = "mod-group";
         break;
 
@@ -9008,12 +9299,13 @@ ofputil_encode_group_mod(enum ofp_version ofp_version,
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
-        if (gm->command > OFPGC11_DELETE) {
+        if (gm->command > OFPGC11_DELETE && gm->command != OFPGC11_ADD_OR_MOD) {
             bad_group_cmd(gm->command);
         }
         return ofputil_encode_ofp11_group_mod(ofp_version, gm);
 
     case OFP15_VERSION:
+    case OFP16_VERSION:
         return ofputil_encode_ofp15_group_mod(ofp_version, gm);
 
     default:
@@ -9041,7 +9333,7 @@ ofputil_pull_ofp11_group_mod(struct ofpbuf *msg, enum ofp_version ofp_version,
     if (!error
         && ofp_version >= OFP13_VERSION
         && gm->command == OFPGC11_DELETE
-        && !list_is_empty(&gm->buckets)) {
+        && !ovs_list_is_empty(&gm->buckets)) {
         error = OFPERR_OFPGMFC_INVALID_GROUP;
     }
 
@@ -9078,6 +9370,7 @@ ofputil_pull_ofp15_group_mod(struct ofpbuf *msg, enum ofp_version ofp_version,
 
     case OFPGC11_ADD:
     case OFPGC11_MODIFY:
+    case OFPGC11_ADD_OR_MOD:
     case OFPGC11_DELETE:
     default:
         if (gm->command_bucket_id == OFPG15_BUCKET_ALL) {
@@ -9126,6 +9419,7 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
         break;
 
     case OFP15_VERSION:
+    case OFP16_VERSION:
         err = ofputil_pull_ofp15_group_mod(&msg, ofp_version, gm);
         break;
 
@@ -9139,7 +9433,8 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
 
     switch (gm->type) {
     case OFPGT11_INDIRECT:
-        if (!list_is_singleton(&gm->buckets)) {
+        if (gm->command != OFPGC11_DELETE
+            && !ovs_list_is_singleton(&gm->buckets) ) {
             return OFPERR_OFPGMFC_INVALID_GROUP;
         }
         break;
@@ -9154,11 +9449,12 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     switch (gm->command) {
     case OFPGC11_ADD:
     case OFPGC11_MODIFY:
+    case OFPGC11_ADD_OR_MOD:
     case OFPGC11_DELETE:
     case OFPGC15_INSERT_BUCKET:
         break;
     case OFPGC15_REMOVE_BUCKET:
-        if (!list_is_empty(&gm->buckets)) {
+        if (!ovs_list_is_empty(&gm->buckets)) {
             return OFPERR_OFPGMFC_BAD_BUCKET;
         }
         break;
@@ -9196,6 +9492,36 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     return 0;
 }
 
+/* Destroys 'bms'. */
+void
+ofputil_encode_bundle_msgs(struct ofputil_bundle_msg *bms, size_t n_bms,
+                           struct ovs_list *requests,
+                           enum ofputil_protocol protocol)
+{
+    enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
+
+    for (size_t i = 0; i < n_bms; i++) {
+        struct ofpbuf *request = NULL;
+
+        switch ((int)bms[i].type) {
+        case OFPTYPE_FLOW_MOD:
+            request = ofputil_encode_flow_mod(&bms[i].fm, protocol);
+            free(CONST_CAST(struct ofpact *, bms[i].fm.ofpacts));
+            break;
+        case OFPTYPE_GROUP_MOD:
+            request = ofputil_encode_group_mod(version, &bms[i].gm);
+            ofputil_uninit_group_mod(&bms[i].gm);
+            break;
+        default:
+            break;
+        }
+        if (request) {
+            ovs_list_push_back(requests, &request->list_node);
+        }
+    }
+    free(bms);
+}
+
 /* Parse a queue status request message into 'oqsr'.
  * Returns 0 if successful, otherwise an OFPERR_* number. */
 enum ofperr
@@ -9203,6 +9529,7 @@ ofputil_decode_queue_stats_request(const struct ofp_header *request,
                                    struct ofputil_queue_stats_request *oqsr)
 {
     switch ((enum ofp_version)request->version) {
+    case OFP16_VERSION:
     case OFP15_VERSION:
     case OFP14_VERSION:
     case OFP13_VERSION:
@@ -9243,7 +9570,8 @@ ofputil_encode_queue_stats_request(enum ofp_version ofp_version,
     case OFP12_VERSION:
     case OFP13_VERSION:
     case OFP14_VERSION:
-    case OFP15_VERSION: {
+    case OFP15_VERSION:
+    case OFP16_VERSION: {
         struct ofp11_queue_stats_request *req;
         request = ofpraw_alloc(OFPRAW_OFPST11_QUEUE_REQUEST, ofp_version, 0);
         req = ofpbuf_put_zeros(request, sizeof *req);
@@ -9487,7 +9815,8 @@ ofputil_append_queue_stat(struct ovs_list *replies,
     }
 
     case OFP14_VERSION:
-    case OFP15_VERSION: {
+    case OFP15_VERSION:
+    case OFP16_VERSION: {
         struct ofp14_queue_stats *reply = ofpmp_append(replies, sizeof *reply);
         ofputil_queue_stats_to_ofp14(oqs, reply);
         break;
@@ -9504,7 +9833,8 @@ ofputil_decode_bundle_ctrl(const struct ofp_header *oh,
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     enum ofpraw raw = ofpraw_pull_assert(&b);
-    ovs_assert(raw == OFPRAW_OFPT14_BUNDLE_CONTROL);
+    ovs_assert(raw == OFPRAW_OFPT14_BUNDLE_CONTROL
+               || raw == OFPRAW_ONFT13_BUNDLE_CONTROL);
 
     const struct ofp14_bundle_ctrl_msg *m = b.msg;
     msg->bundle_id = ntohl(m->bundle_id);
@@ -9525,12 +9855,15 @@ ofputil_encode_bundle_ctrl_request(enum ofp_version ofp_version,
     case OFP10_VERSION:
     case OFP11_VERSION:
     case OFP12_VERSION:
-    case OFP13_VERSION:
-        ovs_fatal(0, "bundles need OpenFlow 1.4 or later "
+        ovs_fatal(0, "bundles need OpenFlow 1.3 or later "
                      "(\'-O OpenFlow14\')");
+    case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
-        request = ofpraw_alloc(OFPRAW_OFPT14_BUNDLE_CONTROL, ofp_version, 0);
+    case OFP16_VERSION:
+        request = ofpraw_alloc(ofp_version == OFP13_VERSION
+                               ? OFPRAW_ONFT13_BUNDLE_CONTROL
+                               : OFPRAW_OFPT14_BUNDLE_CONTROL, ofp_version, 0);
         m = ofpbuf_put_zeros(request, sizeof *m);
 
         m->bundle_id = htonl(bc->bundle_id);
@@ -9551,7 +9884,9 @@ ofputil_encode_bundle_ctrl_reply(const struct ofp_header *oh,
     struct ofpbuf *buf;
     struct ofp14_bundle_ctrl_msg *m;
 
-    buf = ofpraw_alloc_reply(OFPRAW_OFPT14_BUNDLE_CONTROL, oh, 0);
+    buf = ofpraw_alloc_reply(oh->version == OFP13_VERSION
+                             ? OFPRAW_ONFT13_BUNDLE_CONTROL
+                             : OFPRAW_OFPT14_BUNDLE_CONTROL, oh, 0);
     m = ofpbuf_put_zeros(buf, sizeof *m);
 
     m->bundle_id = htonl(msg->bundle_id);
@@ -9570,11 +9905,12 @@ ofputil_is_bundlable(enum ofptype type)
         /* Minimum required by OpenFlow 1.4. */
     case OFPTYPE_PORT_MOD:
     case OFPTYPE_FLOW_MOD:
+        /* Other supported types. */
+    case OFPTYPE_GROUP_MOD:
         return true;
 
         /* Nice to have later. */
     case OFPTYPE_FLOW_MOD_TABLE_ID:
-    case OFPTYPE_GROUP_MOD:
     case OFPTYPE_TABLE_MOD:
     case OFPTYPE_METER_MOD:
     case OFPTYPE_PACKET_OUT:
@@ -9649,6 +9985,10 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_NXT_TLV_TABLE_REQUEST:
     case OFPTYPE_NXT_TLV_TABLE_REPLY:
     case OFPTYPE_NXT_RESUME:
+    case OFPTYPE_IPFIX_BRIDGE_STATS_REQUEST:
+    case OFPTYPE_IPFIX_BRIDGE_STATS_REPLY:
+    case OFPTYPE_IPFIX_FLOW_STATS_REQUEST:
+    case OFPTYPE_IPFIX_FLOW_STATS_REPLY:
         break;
     }
 
@@ -9662,7 +10002,8 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
 {
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     enum ofpraw raw = ofpraw_pull_assert(&b);
-    ovs_assert(raw == OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE);
+    ovs_assert(raw == OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE
+               || raw == OFPRAW_ONFT13_BUNDLE_ADD_MESSAGE);
 
     const struct ofp14_bundle_ctrl_msg *m = ofpbuf_pull(&b, sizeof *m);
     msg->bundle_id = ntohl(m->bundle_id);
@@ -9670,7 +10011,7 @@ ofputil_decode_bundle_add(const struct ofp_header *oh,
 
     msg->msg = b.data;
     if (msg->msg->version != oh->version) {
-        return OFPERR_NXBFC_BAD_VERSION;
+        return OFPERR_OFPBFC_BAD_VERSION;
     }
     size_t inner_len = ntohs(msg->msg->length);
     if (inner_len < sizeof(struct ofp_header) || inner_len > b.size) {
@@ -9709,14 +10050,17 @@ ofputil_encode_bundle_add(enum ofp_version ofp_version,
     struct ofp14_bundle_ctrl_msg *m;
 
     /* Must use the same xid as the embedded message. */
-    request = ofpraw_alloc_xid(OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE, ofp_version,
-                               msg->msg->xid, 0);
+    request = ofpraw_alloc_xid(ofp_version == OFP13_VERSION
+                               ? OFPRAW_ONFT13_BUNDLE_ADD_MESSAGE
+                               : OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE, ofp_version,
+                               msg->msg->xid, ntohs(msg->msg->length));
     m = ofpbuf_put_zeros(request, sizeof *m);
 
     m->bundle_id = htonl(msg->bundle_id);
     m->flags = htons(msg->flags);
     ofpbuf_put(request, msg->msg, ntohs(msg->msg->length));
 
+    ofpmsg_update_length(request);
     return request;
 }
 
@@ -9755,7 +10099,7 @@ static enum ofperr
 decode_tlv_table_mappings(struct ofpbuf *msg, unsigned int max_fields,
                              struct ovs_list *mappings)
 {
-    list_init(mappings);
+    ovs_list_init(mappings);
 
     while (msg->size) {
         struct nx_tlv_map *nx_map;
@@ -9763,7 +10107,7 @@ decode_tlv_table_mappings(struct ofpbuf *msg, unsigned int max_fields,
 
         nx_map = ofpbuf_pull(msg, sizeof *nx_map);
         map = xmalloc(sizeof *map);
-        list_push_back(mappings, &map->list_node);
+        ovs_list_push_back(mappings, &map->list_node);
 
         map->option_class = ntohs(nx_map->option_class);
         map->option_type = nx_map->option_type;

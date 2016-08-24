@@ -25,9 +25,9 @@
 #include "guarded-list.h"
 #include "hash.h"
 #include "heap.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "latch.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto-dpif.h"
 #include "ovs-lldp.h"
 #include "ovs-thread.h"
@@ -277,17 +277,19 @@ monitor_mport_run(struct mport *mport, struct dp_packet *packet)
     if (mport->cfm && cfm_should_send_ccm(mport->cfm)) {
         dp_packet_clear(packet);
         cfm_compose_ccm(mport->cfm, packet, mport->hw_addr);
-        ofproto_dpif_send_packet(mport->ofport, packet);
+        ofproto_dpif_send_packet(mport->ofport, false, packet);
     }
     if (mport->bfd && bfd_should_send_packet(mport->bfd)) {
+        bool oam;
+
         dp_packet_clear(packet);
-        bfd_put_packet(mport->bfd, packet, mport->hw_addr);
-        ofproto_dpif_send_packet(mport->ofport, packet);
+        bfd_put_packet(mport->bfd, packet, mport->hw_addr, &oam);
+        ofproto_dpif_send_packet(mport->ofport, oam, packet);
     }
     if (mport->lldp && lldp_should_send_packet(mport->lldp)) {
         dp_packet_clear(packet);
         lldp_put_packet(mport->lldp, packet, mport->hw_addr);
-        ofproto_dpif_send_packet(mport->ofport, packet);
+        ofproto_dpif_send_packet(mport->ofport, false, packet);
     }
 
     if (mport->cfm) {

@@ -12,6 +12,7 @@ bin_SCRIPTS += \
 	utilities/ovs-l3ping \
 	utilities/ovs-parse-backtrace \
 	utilities/ovs-pcap \
+	utilities/ovs-tcpdump \
 	utilities/ovs-tcpundump \
 	utilities/ovs-test \
 	utilities/ovs-vlan-test
@@ -52,11 +53,12 @@ EXTRA_DIST += \
 	utilities/ovs-pipegen.py \
 	utilities/ovs-pki.in \
 	utilities/ovs-save \
+	utilities/ovs-tcpdump.in \
 	utilities/ovs-tcpundump.in \
 	utilities/ovs-test.in \
 	utilities/ovs-vlan-test.in \
 	utilities/ovs-vsctl-bashcomp.bash \
-	utilities/qemu-wrap.py
+	utilities/checkpatch.py
 MAN_ROOTS += \
 	utilities/ovs-appctl.8.in \
 	utilities/ovs-testcontroller.8.in \
@@ -68,6 +70,7 @@ MAN_ROOTS += \
 	utilities/ovs-parse-backtrace.8 \
 	utilities/ovs-pcap.1.in \
 	utilities/ovs-pki.8.in \
+	utilities/ovs-tcpdump.8.in \
 	utilities/ovs-tcpundump.1.in \
 	utilities/ovs-vlan-bug-workaround.8.in \
 	utilities/ovs-test.8.in \
@@ -93,6 +96,8 @@ DISTCLEANFILES += \
 	utilities/ovs-pki.8 \
 	utilities/ovs-sim \
 	utilities/ovs-sim.1 \
+	utilities/ovs-tcpdump \
+	utilities/ovs-tcpdump.8 \
 	utilities/ovs-tcpundump \
 	utilities/ovs-tcpundump.1 \
 	utilities/ovs-test \
@@ -113,6 +118,7 @@ man_MANS += \
 	utilities/ovs-parse-backtrace.8 \
 	utilities/ovs-pcap.1 \
 	utilities/ovs-pki.8 \
+	utilities/ovs-tcpdump.8 \
 	utilities/ovs-tcpundump.1 \
 	utilities/ovs-vlan-bug-workaround.8 \
 	utilities/ovs-test.8 \
@@ -146,6 +152,8 @@ utilities_nlmon_SOURCES = utilities/nlmon.c
 utilities_nlmon_LDADD = lib/libopenvswitch.la
 endif
 
-FLAKE8_PYFILES += utilities/ovs-pcap.in
+FLAKE8_PYFILES += utilities/ovs-pcap.in \
+	utilities/checkpatch.py utilities/ovs-dev.py \
+	utilities/ovs-tcpdump.in
 
 include utilities/bugtool/automake.mk

@@ -20,7 +20,7 @@
 #include "column.h"
 #include "condition.h"
 #include "file.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "mutation.h"
 #include "ovsdb-data.h"
 #include "ovsdb-error.h"
@@ -61,24 +61,25 @@ static ovsdb_operation_executor ovsdb_execute_comment;
 static ovsdb_operation_executor ovsdb_execute_assert;
 
 static ovsdb_operation_executor *
-lookup_executor(const char *name)
+lookup_executor(const char *name, bool *read_only)
 {
     struct ovsdb_operation {
         const char *name;
+        bool read_only;
         ovsdb_operation_executor *executor;
     };
 
     static const struct ovsdb_operation operations[] = {
-        { "insert", ovsdb_execute_insert },
-        { "select", ovsdb_execute_select },
-        { "update", ovsdb_execute_update },
-        { "mutate", ovsdb_execute_mutate },
-        { "delete", ovsdb_execute_delete },
-        { "wait", ovsdb_execute_wait },
-        { "commit", ovsdb_execute_commit },
-        { "abort", ovsdb_execute_abort },
-        { "comment", ovsdb_execute_comment },
-        { "assert", ovsdb_execute_assert },
+        { "insert", false, ovsdb_execute_insert },
+        { "select", true, ovsdb_execute_select },
+        { "update", false, ovsdb_execute_update },
+        { "mutate", false, ovsdb_execute_mutate },
+        { "delete", false, ovsdb_execute_delete },
+        { "wait", true, ovsdb_execute_wait },
+        { "commit", false, ovsdb_execute_commit },
+        { "abort", true, ovsdb_execute_abort },
+        { "comment", true, ovsdb_execute_comment },
+        { "assert", true, ovsdb_execute_assert },
     };
 
     size_t i;
@@ -86,6 +87,7 @@ lookup_executor(const char *name)
     for (i = 0; i < ARRAY_SIZE(operations); i++) {
         const struct ovsdb_operation *c = &operations[i];
         if (!strcmp(c->name, name)) {
+            *read_only = c->read_only;
             return c->executor;
         }
     }
@@ -94,7 +96,7 @@ lookup_executor(const char *name)
 
 struct json *
 ovsdb_execute(struct ovsdb *db, const struct ovsdb_session *session,
-              const struct json *params,
+              const struct json *params, bool read_only,
               long long int elapsed_msec, long long int *timeout_msec)
 {
     struct ovsdb_execution x;
@@ -137,15 +139,18 @@ ovsdb_execute(struct ovsdb *db, const struct ovsdb_session *session,
         struct ovsdb_parser parser;
         struct json *result;
         const struct json *op;
+        const char *op_name = NULL;
+        bool ro = false;
 
         /* Parse and execute operation. */
         ovsdb_parser_init(&parser, operation,
-                          "ovsdb operation %"PRIuSIZE" of %"PRIuSIZE, i, n_operations);
+                          "ovsdb operation %"PRIuSIZE" of %"PRIuSIZE, i,
+                          n_operations);
         op = ovsdb_parser_member(&parser, "op", OP_ID);
         result = json_object_create();
         if (op) {
-            const char *op_name = json_string(op);
-            ovsdb_operation_executor *executor = lookup_executor(op_name);
+            op_name = json_string(op);
+            ovsdb_operation_executor *executor = lookup_executor(op_name, &ro);
             if (executor) {
                 error = executor(&x, &parser, result);
             } else {
@@ -162,6 +167,13 @@ ovsdb_execute(struct ovsdb *db, const struct ovsdb_session *session,
         if (parse_error) {
             ovsdb_error_destroy(error);
             error = parse_error;
+        }
+        /* Create read-only violation error if there is one. */
+        if (!error && read_only && !ro) {
+            error = ovsdb_error("not allowed",
+                                "%s operation not allowed when "
+                                "database server is in read only mode",
+                                op_name);
         }
         if (error) {
             json_destroy(result);
@@ -352,7 +364,7 @@ ovsdb_execute_select(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 {
     struct ovsdb_table *table;
     const struct json *where, *columns_json, *sort_json;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
     struct ovsdb_column_set sort = OVSDB_COLUMN_SET_INITIALIZER;
     struct ovsdb_error *error;
@@ -420,7 +432,7 @@ ovsdb_execute_update(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 {
     struct ovsdb_table *table;
     const struct json *where, *row_json;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
     struct ovsdb_row *row = NULL;
     struct update_row_cbdata ur;
@@ -494,7 +506,7 @@ ovsdb_execute_mutate(struct ovsdb_execution *x, struct ovsdb_parser *parser,
     struct ovsdb_table *table;
     const struct json *where;
     const struct json *mutations_json;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     struct ovsdb_mutation_set mutations = OVSDB_MUTATION_SET_INITIALIZER;
     struct ovsdb_row *row = NULL;
     struct mutate_row_cbdata mr;
@@ -551,7 +563,7 @@ ovsdb_execute_delete(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 {
     struct ovsdb_table *table;
     const struct json *where;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     struct ovsdb_error *error;
 
     where = ovsdb_parser_member(parser, "where", OP_ARRAY);
@@ -606,7 +618,7 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
 {
     struct ovsdb_table *table;
     const struct json *timeout, *where, *columns_json, *until, *rows;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER;
+    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
     struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
     struct ovsdb_row_hash expected = OVSDB_ROW_HASH_INITIALIZER(expected);
     struct ovsdb_row_hash actual = OVSDB_ROW_HASH_INITIALIZER(actual);
@@ -697,7 +709,8 @@ ovsdb_execute_wait(struct ovsdb_execution *x, struct ovsdb_parser *parser,
                                         "\"wait\" timed out after %lld ms",
                                         x->elapsed_msec);
                 } else {
-                    error = ovsdb_error("timed out", "\"wait\" timed out");
+                    error = ovsdb_error("timed out",
+                                        "\"where\" clause test failed");
                 }
             } else {
                 /* ovsdb_execute() will change this, if triggers really are

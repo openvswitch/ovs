@@ -18,6 +18,7 @@ s/_LINUX_OPENVSWITCH_H/ODP_NETLINK_H/
 $i\
 #ifdef _WIN32\
 #include "OvsDpInterfaceExt.h"\
+#include "OvsDpInterfaceCtExt.h"\
 #endif\
 
 # Use OVS's own struct eth_addr instead of a 6-byte char array.

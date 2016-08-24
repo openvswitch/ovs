@@ -38,6 +38,7 @@
 #include <linux/genetlink.h>
 
 #else
+#define NETLINK_NETFILTER       12
 #define NETLINK_GENERIC         16
 
 /* nlmsg_flags bits. */

@@ -18,8 +18,8 @@
 #define DB_CTL_BASE_H 1
 
 #include "compiler.h"
-#include "dynamic-string.h"
-#include "shash.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/shash.h"
 
 struct ctl_context;
 struct option;
@@ -120,7 +120,7 @@ struct ctl_command_syntax {
      * empty string if the command does not support any options. */
     const char *options;
 
-    enum { RO, RW } mode;       /* Does this command modify the database? */
+    enum { RO, RW } mode;   /* Does this command modify the database? */
 };
 
 /* A command extracted from command-line input plus the structs for

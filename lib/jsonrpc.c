@@ -21,11 +21,11 @@
 #include <errno.h>
 
 #include "byteq.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
-#include "json.h"
-#include "list.h"
-#include "ofpbuf.h"
+#include "openvswitch/json.h"
+#include "openvswitch/list.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
 #include "reconnect.h"
@@ -87,7 +87,7 @@ jsonrpc_open(struct stream *stream)
     rpc->name = xstrdup(stream_get_name(stream));
     rpc->stream = stream;
     byteq_init(&rpc->input, rpc->input_buffer, sizeof rpc->input_buffer);
-    list_init(&rpc->output);
+    ovs_list_init(&rpc->output);
 
     return rpc;
 }
@@ -113,7 +113,7 @@ jsonrpc_run(struct jsonrpc *rpc)
     }
 
     stream_run(rpc->stream);
-    while (!list_is_empty(&rpc->output)) {
+    while (!ovs_list_is_empty(&rpc->output)) {
         struct ofpbuf *buf = ofpbuf_from_list(rpc->output.next);
         int retval;
 
@@ -122,7 +122,7 @@ jsonrpc_run(struct jsonrpc *rpc)
             rpc->backlog -= retval;
             ofpbuf_pull(buf, retval);
             if (!buf->size) {
-                list_remove(&buf->list_node);
+                ovs_list_remove(&buf->list_node);
                 rpc->output_count--;
                 ofpbuf_delete(buf);
             }
@@ -144,7 +144,7 @@ jsonrpc_wait(struct jsonrpc *rpc)
 {
     if (!rpc->status) {
         stream_run_wait(rpc->stream);
-        if (!list_is_empty(&rpc->output)) {
+        if (!ovs_list_is_empty(&rpc->output)) {
             stream_send_wait(rpc->stream);
         }
     }
@@ -255,7 +255,7 @@ jsonrpc_send(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
 
     buf = xmalloc(sizeof *buf);
     ofpbuf_use_ds(buf, &ds);
-    list_push_back(&rpc->output, &buf->list_node);
+    ovs_list_push_back(&rpc->output, &buf->list_node);
     rpc->output_count++;
     rpc->backlog += length;
 
@@ -384,7 +384,7 @@ jsonrpc_send_block(struct jsonrpc *rpc, struct jsonrpc_msg *msg)
 
     for (;;) {
         jsonrpc_run(rpc);
-        if (list_is_empty(&rpc->output) || rpc->status) {
+        if (ovs_list_is_empty(&rpc->output) || rpc->status) {
             return rpc->status;
         }
         jsonrpc_wait(rpc);
@@ -512,7 +512,7 @@ jsonrpc_create(enum jsonrpc_msg_type type, const char *method,
 {
     struct jsonrpc_msg *msg = xmalloc(sizeof *msg);
     msg->type = type;
-    msg->method = method ? xstrdup(method) : NULL;
+    msg->method = nullable_xstrdup(method);
     msg->params = params;
     msg->result = result;
     msg->error = error;

@@ -166,13 +166,39 @@ vtep-ctl bind-ls br0 p0 0 ls0
 vtep-ctl set Logical_Switch ls0 tunnel_key=33
       ```
 
-3. Direct unknown destinations out a tunnel:
+3. Direct unknown destinations out a tunnel.
+
+   For handling L2 broadcast, multicast and unknown unicast traffic,
+   packets can be sent to all members of a logical switch referenced by
+   a physical switch.  The "unknown-dst" address below is used to
+   represent these packets.  There are different modes to replicate the
+   packets.  The default mode of replication is to send the traffic to a
+   service node, which can be a hypervisor, server or appliance, and let
+   the service node handle replication to other transport nodes
+   (hypervisors or other VTEP physical switches).  This mode is called
+   _service node_ replication.  An alternate mode of replication, called
+   _source node_ replication, involves the source node sending to all
+   other transport nodes.  Hypervisors are always responsible for doing
+   their own replication for locally attached VMs in both modes.
+   Service node mode is the default.  Service node replication mode is
+   considered a basic requirement because it only requires sending the
+   packet to a single transport node.  The following configuration is
+   for service node replication mode as only a single transport node
+   destination is specified for the unknown-dst address:
 
       ```
 vtep-ctl add-mcast-remote ls0 unknown-dst 10.2.2.2
       ```
 
-4. Direct unicast destinations out a different tunnel:
+4. Optionally, change the replication mode from a default of
+"service\_node" to "source\_node", which can be done at the logical
+switch level:
+
+      ```
+vtep-ctl set-replication-mode ls0 source_node
+      ```
+
+5. Direct unicast destinations out a different tunnel:
 
       ```
 vtep-ctl add-ucast-remote ls0 00:11:22:33:44:55 10.2.2.3

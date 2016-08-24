@@ -266,7 +266,7 @@ done
 
     <pre>
 ovn_start
-ovn-nbctl lswitch-add lsw0
+ovn-nbctl ls-add lsw0
 
 net_add n1
 for i in 0 1; do
@@ -275,8 +275,8 @@ for i in 0 1; do
     ovs-vsctl add-br br-phys
     ovn_attach n1 br-phys 192.168.0.`expr $i + 1`
     ovs-vsctl add-port br-int vif$i -- set Interface vif$i external-ids:iface-id=lp$i
-    ovn-nbctl lport-add lsw0 lp$i
-    ovn-nbctl lport-set-addresses lp$i f0:00:00:00:00:0$i
+    ovn-nbctl lsp-add lsw0 lp$i
+    ovn-nbctl lsp-set-addresses lp$i f0:00:00:00:00:0$i
 done
     </pre>
     
@@ -289,7 +289,7 @@ done
 n=200; export n
 ovn_start
 net_add n1
-ovn-nbctl lswitch-add br0
+ovn-nbctl ls-add br0
 for i in `seq $n`; do
     (sim_add hv$i
     as hv$i
@@ -306,8 +306,8 @@ wait
 for i in `seq $n`; do
     yy=$(printf %02x $(expr $i / 256))
     xx=$(printf $02x $(expr $i % 256))
-    ovn-nbctl lport-add br0 lp$i
-    ovn-nbctl lport-set-addresses lp$i f0:00:00:00:$yy:$xx
+    ovn-nbctl lsp-add br0 lp$i
+    ovn-nbctl lsp-set-addresses lp$i f0:00:00:00:$yy:$xx
 done
     </pre>
 
@@ -317,7 +317,7 @@ done
     </p>
 
     <pre>
-watch 'for i in `seq $n`; do if test `ovn-nbctl lport-get-up lp$i` != up; then echo $i; fi; done'
+watch 'for i in `seq $n`; do if test `ovn-nbctl lsp-get-up lp$i` != up; then echo $i; fi; done'
     </pre>
 
 </manpage>

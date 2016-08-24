@@ -11,4 +11,6 @@ If \fIport\fR is not specified, it defaults to 6653.
 \fBunix:\fIfile\fR
 On POSIX, a Unix domain server socket named \fIfile\fR.
 .IP
-On Windows, a localhost TCP port written in \fIfile\fR.
+On Windows, connect to a local named pipe that is represented by a
+file created in the path \fIfile\fR to mimic the behavior of a Unix
+domain socket.

@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# Copyright (c) 2013, 2015 Nicira, Inc.
+# Copyright (c) 2013, 2015, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -316,12 +316,33 @@ if $ovn; then
     touch "$sandbox"/.ovnsb.db.~lock~
     touch "$sandbox"/.ovnnb.db.~lock~
     run ovsdb-tool create ovnsb.db "$ovnsb_schema"
+    run ovsdb-tool create ovnsb2.db "$ovnsb_schema"
     run ovsdb-tool create ovnnb.db "$ovnnb_schema"
     run ovsdb-tool create vtep.db "$vtep_schema"
-    ovsdb_server_args="ovnsb.db ovnnb.db vtep.db conf.db"
+    ovsdb_server_args="vtep.db conf.db"
+    ovsdb_sb_server_args="ovnsb.db"
+    ovsdb_sb_backup_server_args="ovnsb2.db"
+    ovsdb_nb_server_args="ovnnb.db"
 fi
 rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
     --remote=punix:"$sandbox"/db.sock $ovsdb_server_args
+if $ovn; then
+    rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
+        --pidfile="$sandbox"/ovnnb_db.pid -vconsole:off \
+        --log-file="$sandbox"/ovnnb_db.log \
+        --remote=punix:"$sandbox"/ovnnb_db.sock $ovsdb_nb_server_args
+    rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
+        --pidfile="$sandbox"/ovnsb_db.pid -vconsole:off \
+        --log-file="$sandbox"/ovnsb_db.log \
+        --remote=punix:"$sandbox"/ovnsb_db.sock $ovsdb_sb_server_args
+    # Start SB back up server
+    rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
+        --pidfile="$sandbox"/ovnsb_db2.pid  -vconsole:off \
+        --log-file="$sandbox"/ovnsb_db2.log \
+        --remote=punix:"$sandbox"/ovnsb_db2.sock \
+        --unixctl="$sandbox"/sb_backup_unixctl \
+        --sync-from=unix:"$sandbox"/ovnsb_db.sock $ovsdb_sb_backup_server_args
+fi
 
 #Add a small delay to allow ovsdb-server to launch.
 sleep 0.1
@@ -344,13 +365,23 @@ rungdb $gdb_vswitchd $gdb_vswitchd_ex ovs-vswitchd --detach --no-chdir --pidfile
 
 if $ovn; then
     ovs-vsctl set open . external-ids:system-id=56b18105-5706-46ef-80c4-ff20979ab068
-    ovs-vsctl set open . external-ids:ovn-remote=unix:"$sandbox"/db.sock
+    ovs-vsctl set open . external-ids:hostname=sandbox
+    ovs-vsctl set open . external-ids:ovn-remote=unix:"$sandbox"/ovnsb_db.sock
     ovs-vsctl set open . external-ids:ovn-encap-type=geneve
     ovs-vsctl set open . external-ids:ovn-encap-ip=127.0.0.1
 
-    rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach --no-chdir --pidfile -vconsole:off --log-file
-    rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller --detach --no-chdir --pidfile -vconsole:off --log-file
-    rungdb $gdb_ovn_controller_vtep $gdb_ovn_controller_vtep_ex ovn-controller-vtep --detach --no-chdir --pidfile -vconsole:off --log-file
+    ovn-nbctl init
+    ovn-sbctl init
+
+    rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach \
+        --no-chdir --pidfile -vconsole:off --log-file \
+        --ovnsb-db=unix:"$sandbox"/ovnsb_db.sock \
+        --ovnnb-db=unix:"$sandbox"/ovnnb_db.sock
+    rungdb $gdb_ovn_controller $gdb_ovn_controller_ex ovn-controller \
+        --detach --no-chdir --pidfile -vconsole:off --log-file
+    rungdb $gdb_ovn_controller_vtep $gdb_ovn_controller_vtep_ex \
+        ovn-controller-vtep --detach --no-chdir --pidfile -vconsole:off \
+        --log-file --ovnsb-db=unix:"$sandbox"/ovnsb_db.sock
 fi
 
 cat <<EOF
@@ -360,8 +391,22 @@ cat <<EOF
 ----------------------------------------------------------------------
 You are running in a dummy Open vSwitch environment.  You can use
 ovs-vsctl, ovs-ofctl, ovs-appctl, and other tools to work with the
-dummy switch.  
+dummy switch.
 
+EOF
+if $ovn; then cat << EOF
+This environment also has the OVN daemons and databases enabled.
+You can use ovn-nbctl and ovn-sbctl to interact with the OVN databases.
+
+The backup server of OVN SB can be accessed by:
+* ovn-sbctl --db=unix:`pwd`/sandbox/ovnsb_db2.sock
+* ovs-appctl -t `pwd`/sandbox/sb_backup_unixctl
+The backup database file is "sandbox"/ovnsb2.db
+
+
+EOF
+fi
+cat <<EOF
 Log files, pidfiles, and the configuration database are in the
 "sandbox" subdirectory.
 

@@ -16,8 +16,6 @@
 
 #include "precomp.h"
 
-#include "Switch.h"
-#include "User.h"
 #include "Datapath.h"
 #include "Vport.h"
 #include "Event.h"
@@ -28,36 +26,62 @@
 #define OVS_DBG_MOD OVS_DBG_EVENT
 #include "Debug.h"
 
-LIST_ENTRY ovsEventQueue;
-static NDIS_SPIN_LOCK eventQueueLock;
-UINT32 ovsNumEventQueue;
+LIST_ENTRY ovsEventQueueArr[OVS_MCAST_EVENT_TYPES_MAX];
+static NDIS_SPIN_LOCK eventQueueLockArr[OVS_MCAST_EVENT_TYPES_MAX];
+UINT32 ovsNumEventQueueArr[OVS_MCAST_EVENT_TYPES_MAX];
 
 NTSTATUS
 OvsInitEventQueue()
 {
-    InitializeListHead(&ovsEventQueue);
-    NdisAllocateSpinLock(&eventQueueLock);
+    for (int i = 0; i < OVS_MCAST_EVENT_TYPES_MAX; i++) {
+        InitializeListHead(&ovsEventQueueArr[i]);
+        NdisAllocateSpinLock(&eventQueueLockArr[i]);
+    }
     return STATUS_SUCCESS;
 }
 
 VOID
 OvsCleanupEventQueue()
 {
-    ASSERT(IsListEmpty(&ovsEventQueue));
-    ASSERT(ovsNumEventQueue == 0);
-    NdisFreeSpinLock(&eventQueueLock);
+    for (int i = 0; i < OVS_MCAST_EVENT_TYPES_MAX; i++) {
+        ASSERT(IsListEmpty(&ovsEventQueueArr[i]));
+        ASSERT(ovsNumEventQueueArr[i] == 0);
+        NdisFreeSpinLock(&eventQueueLockArr[i]);
+    }
 }
 
 static __inline VOID
-OvsAcquireEventQueueLock()
+OvsAcquireEventQueueLock(int eventId)
 {
-    NdisAcquireSpinLock(&eventQueueLock);
+    NdisAcquireSpinLock(&eventQueueLockArr[eventId]);
 }
 
 static __inline VOID
-OvsReleaseEventQueueLock()
+OvsReleaseEventQueueLock(int eventId)
 {
-   NdisReleaseSpinLock(&eventQueueLock);
+   NdisReleaseSpinLock(&eventQueueLockArr[eventId]);
+}
+
+NDIS_STATUS
+OvsGetMcastEventId(UINT32 protocol, UINT32 mcastMask, UINT32 *eventId)
+{
+    switch (protocol) {
+    case NETLINK_GENERIC:
+        *eventId = OVS_MCAST_VPORT_EVENT;
+        return NDIS_STATUS_SUCCESS;
+    case NETLINK_NETFILTER:
+        if ((mcastMask & OVS_EVENT_CT_NEW)
+            || (mcastMask & OVS_EVENT_CT_DELETE)) {
+            *eventId =  OVS_MCAST_CT_EVENT;
+            return NDIS_STATUS_SUCCESS;
+        }
+        break;
+    default:
+        goto error;
+    }
+
+error:
+    return NDIS_STATUS_INVALID_PARAMETER;
 }
 
 /*
@@ -70,14 +94,17 @@ OvsCleanupEvent(POVS_OPEN_INSTANCE instance)
 {
     POVS_EVENT_QUEUE queue;
     PIRP irp = NULL;
+    UINT32 eventId;
     queue = (POVS_EVENT_QUEUE)instance->eventQueue;
     if (queue) {
         POVS_EVENT_QUEUE_ELEM elem;
         PLIST_ENTRY link, next;
 
-        OvsAcquireEventQueueLock();
+        /* Handle the error */
+        OvsGetMcastEventId(instance->protocol, instance->mcastMask, &eventId);
+        OvsAcquireEventQueueLock(eventId);
         RemoveEntryList(&queue->queueLink);
-        ovsNumEventQueue--;
+        ovsNumEventQueueArr[eventId]--;
         if (queue->pendingIrp) {
             PDRIVER_CANCEL cancelRoutine;
             irp = queue->pendingIrp;
@@ -88,7 +115,7 @@ OvsCleanupEvent(POVS_OPEN_INSTANCE instance)
             }
         }
         instance->eventQueue = NULL;
-        OvsReleaseEventQueueLock();
+        OvsReleaseEventQueueLock(eventId);
         if (irp) {
             OvsCompleteIrpRequest(irp, 0, STATUS_SUCCESS);
         }
@@ -111,13 +138,13 @@ OvsCleanupEvent(POVS_OPEN_INSTANCE instance)
  * --------------------------------------------------------------------------
  */
 VOID
-OvsPostEvent(POVS_EVENT_ENTRY event)
+OvsPostVportEvent(POVS_VPORT_EVENT_ENTRY event)
 {
     POVS_EVENT_QUEUE_ELEM elem;
     POVS_EVENT_QUEUE queue;
     PLIST_ENTRY link;
     LIST_ENTRY list;
-   PLIST_ENTRY entry;
+    PLIST_ENTRY entry;
     PIRP irp;
 
     InitializeListHead(&list);
@@ -125,9 +152,9 @@ OvsPostEvent(POVS_EVENT_ENTRY event)
     OVS_LOG_TRACE("Enter: portNo: %#x, status: %#x", event->portNo,
                   event->type);
 
-    OvsAcquireEventQueueLock();
+    OvsAcquireEventQueueLock(OVS_MCAST_VPORT_EVENT);
 
-    LIST_FORALL(&ovsEventQueue, link) {
+    LIST_FORALL(&ovsEventQueueArr[OVS_MCAST_VPORT_EVENT], link) {
         queue = CONTAINING_RECORD(link, OVS_EVENT_QUEUE, queueLink);
         if ((event->type & queue->mask) == 0) {
             continue;
@@ -136,7 +163,14 @@ OvsPostEvent(POVS_EVENT_ENTRY event)
 
         elem = (POVS_EVENT_QUEUE_ELEM)OvsAllocateMemoryWithTag(
             sizeof(*elem), OVS_EVENT_POOL_TAG);
-        RtlCopyMemory(&elem->event, event, sizeof elem->event);
+
+        if (elem == NULL) {
+            OVS_LOG_WARN("Fail to allocate memory for event");
+            OvsReleaseEventQueueLock(OVS_MCAST_VPORT_EVENT);
+            return;
+        }
+
+        RtlCopyMemory(&elem->vportEvent, event, sizeof elem->vportEvent);
         InsertTailList(&queue->elemList, &elem->link);
         queue->numElems++;
         OVS_LOG_INFO("Queue: %p, numElems: %d",
@@ -152,7 +186,7 @@ OvsPostEvent(POVS_EVENT_ENTRY event)
             }
         }
     }
-    OvsReleaseEventQueueLock();
+    OvsReleaseEventQueueLock(OVS_MCAST_VPORT_EVENT);
     while (!IsListEmpty(&list)) {
         entry = RemoveHeadList(&list);
         irp = CONTAINING_RECORD(entry, IRP, Tail.Overlay.ListEntry);
@@ -184,17 +218,25 @@ OvsSubscribeEventIoctl(PFILE_OBJECT fileObject,
     NTSTATUS status = STATUS_SUCCESS;
     POVS_OPEN_INSTANCE instance;
     POVS_EVENT_QUEUE queue = NULL;
+    UINT32 eventId;
 
     OVS_LOG_TRACE("Enter: fileObject: %p, inputLength: %d", fileObject,
                   inputLength);
 
-    if (inputLength < sizeof (OVS_EVENT_SUBSCRIBE) ||
-        (request->mask & OVS_EVENT_MASK_ALL) == 0) {
-        OVS_LOG_TRACE("Exit: subscribe failed with invalid request.");
+    if (request->protocol == NETLINK_GENERIC) {
+        if (inputLength < sizeof (OVS_EVENT_SUBSCRIBE) ||
+            (request->mask & OVS_EVENT_MASK_ALL) == 0) {
+            OVS_LOG_TRACE("Exit: subscribe failed with invalid request.");
+            return STATUS_INVALID_PARAMETER;
+        }
+    }
+
+    status = OvsGetMcastEventId(request->protocol, request->mask, &eventId);
+    if (status != NDIS_STATUS_SUCCESS) {
         return STATUS_INVALID_PARAMETER;
     }
 
-    OvsAcquireEventQueueLock();
+    OvsAcquireEventQueueLock(eventId);
 
     instance = OvsGetOpenInstance(fileObject, request->dpNo);
 
@@ -209,12 +251,25 @@ OvsSubscribeEventIoctl(PFILE_OBJECT fileObject,
      */
     queue = (POVS_EVENT_QUEUE)instance->eventQueue;
     if (request->subscribe && queue) {
-        if (queue->mask != request->mask) {
+        if (request->protocol == NETLINK_GENERIC
+            && queue->mask != request->mask) {
             status = STATUS_INVALID_PARAMETER;
-            OVS_LOG_WARN("Can not chnage mask when the queue is subscribed");
+            OVS_LOG_WARN("Can not change mask when the queue is subscribed");
+            goto done_event_subscribe;
         }
-        status = STATUS_SUCCESS;
-        goto done_event_subscribe;
+        if (request->protocol == NETLINK_NETFILTER) {
+            if (queue->mask == request->mask) {
+                /* Resubscribing to subscribed event */
+                status = STATUS_SUCCESS;
+                goto done_event_subscribe;
+            } else {
+                /* Update the instance and queue mask to reflect this */
+                queue->mask |= request->mask;
+                instance->mcastMask |= request->mask;
+            }
+            status = STATUS_SUCCESS;
+            goto done_event_subscribe;
+        }
     } else if (!request->subscribe && queue == NULL) {
         status = STATUS_SUCCESS;
         goto done_event_subscribe;
@@ -230,20 +285,28 @@ OvsSubscribeEventIoctl(PFILE_OBJECT fileObject,
         }
         InitializeListHead(&queue->elemList);
         queue->mask = request->mask;
+        queue->mcastEventId = eventId;
         queue->pendingIrp = NULL;
         queue->numElems = 0;
-        InsertHeadList(&ovsEventQueue, &queue->queueLink);
-        ovsNumEventQueue++;
+        InsertHeadList(&ovsEventQueueArr[eventId], &queue->queueLink);
+        ovsNumEventQueueArr[eventId]++;
         instance->eventQueue = queue;
+        instance->mcastMask = request->mask;
         queue->instance = instance;
     } else {
         queue = (POVS_EVENT_QUEUE)instance->eventQueue;
-        RemoveEntryList(&queue->queueLink);
-        ovsNumEventQueue--;
-        instance->eventQueue = NULL;
+        queue->mask &= ~(request->mask);
+        instance->mcastMask &= ~(request->mask);
+        if (!queue->mask) {
+            /* No other mcast group exists */
+            RemoveEntryList(&queue->queueLink);
+            ovsNumEventQueueArr[eventId]--;
+            instance->eventQueue = NULL;
+            instance->mcastMask = 0;
+        }
     }
 done_event_subscribe:
-    if (!request->subscribe && queue) {
+    if (!request->subscribe && queue && !queue->mask) {
         POVS_EVENT_QUEUE_ELEM elem;
         PLIST_ENTRY link, next;
         PIRP irp = NULL;
@@ -256,7 +319,7 @@ done_event_subscribe:
                 irp = NULL;
             }
         }
-        OvsReleaseEventQueueLock();
+        OvsReleaseEventQueueLock(eventId);
         if (irp) {
             OvsCompleteIrpRequest(queue->pendingIrp, 0, STATUS_SUCCESS);
         }
@@ -266,7 +329,7 @@ done_event_subscribe:
         }
         OvsFreeMemoryWithTag(queue, OVS_EVENT_POOL_TAG);
     } else {
-        OvsReleaseEventQueueLock();
+        OvsReleaseEventQueueLock(eventId);
     }
     OVS_LOG_TRACE("Exit: subscribe event with status: %#x.", status);
     return status;
@@ -290,6 +353,8 @@ OvsCancelIrp(PDEVICE_OBJECT deviceObject,
     PFILE_OBJECT fileObject;
     POVS_EVENT_QUEUE queue;
     POVS_OPEN_INSTANCE instance;
+    UINT32 eventId;
+    NDIS_STATUS status;
 
     UNREFERENCED_PARAMETER(deviceObject);
 
@@ -301,17 +366,30 @@ OvsCancelIrp(PDEVICE_OBJECT deviceObject,
     if (fileObject == NULL) {
         goto done;
     }
-    OvsAcquireEventQueueLock();
+
     instance = (POVS_OPEN_INSTANCE)fileObject->FsContext;
-    if (instance == NULL || instance->eventQueue == NULL) {
-        OvsReleaseEventQueueLock();
+    if (instance == NULL) {
         goto done;
     }
+
+    status = OvsGetMcastEventId(instance->protocol,
+                                instance->mcastMask,
+                                &eventId);
+    if (status != NDIS_STATUS_SUCCESS) {
+        goto done;
+    }
+
+    OvsAcquireEventQueueLock(eventId);
+    if (instance->eventQueue == NULL) {
+        OvsReleaseEventQueueLock(eventId);
+        goto done;
+    }
+
     queue = instance->eventQueue;
     if (queue->pendingIrp == irp) {
         queue->pendingIrp = NULL;
     }
-    OvsReleaseEventQueueLock();
+    OvsReleaseEventQueueLock(eventId);
 done:
     OvsCompleteIrpRequest(irp, 0, STATUS_CANCELLED);
 }
@@ -342,6 +420,7 @@ OvsWaitEventIoctl(PIRP irp,
     POVS_OPEN_INSTANCE instance;
     BOOLEAN cancelled = FALSE;
     PDRIVER_CANCEL cancelRoutine;
+    UINT32 eventId;
 
     OVS_LOG_TRACE("Enter: inputLength: %u", inputLength);
 
@@ -351,14 +430,20 @@ OvsWaitEventIoctl(PIRP irp,
     }
     poll = (POVS_EVENT_POLL)inputBuffer;
 
-    OvsAcquireEventQueueLock();
-
     instance = OvsGetOpenInstance(fileObject, poll->dpNo);
     if (instance == NULL) {
         OVS_LOG_TRACE("Exit: Can not find open instance, dpNo: %d",
                       poll->dpNo);
         return STATUS_INVALID_PARAMETER;
     }
+
+    status = OvsGetMcastEventId(instance->protocol,
+                                instance->mcastMask,
+                                &eventId);
+    if (status != NDIS_STATUS_SUCCESS) {
+        return STATUS_INVALID_PARAMETER;
+    }
+    OvsAcquireEventQueueLock(eventId);
 
     queue = (POVS_EVENT_QUEUE)instance->eventQueue;
     if (queue == NULL) {
@@ -385,7 +470,7 @@ OvsWaitEventIoctl(PIRP irp,
     }
 
 unlock:
-    OvsReleaseEventQueueLock();
+    OvsReleaseEventQueueLock(eventId);
     if (cancelled) {
         OvsCompleteIrpRequest(irp, 0, STATUS_CANCELLED);
         OVS_LOG_INFO("Event IRP cancelled: %p", irp);
@@ -404,14 +489,14 @@ unlock:
  * --------------------------------------------------------------------------
  */
 NTSTATUS
-OvsRemoveEventEntry(POVS_OPEN_INSTANCE instance,
-                    POVS_EVENT_ENTRY entry)
+OvsRemoveVportEventEntry(POVS_OPEN_INSTANCE instance,
+                         POVS_VPORT_EVENT_ENTRY entry)
 {
     NTSTATUS status = STATUS_UNSUCCESSFUL;
     POVS_EVENT_QUEUE queue;
     POVS_EVENT_QUEUE_ELEM elem;
 
-    OvsAcquireEventQueueLock();
+    OvsAcquireEventQueueLock(OVS_MCAST_VPORT_EVENT);
 
     queue = (POVS_EVENT_QUEUE)instance->eventQueue;
 
@@ -422,13 +507,112 @@ OvsRemoveEventEntry(POVS_OPEN_INSTANCE instance,
 
     if (queue->numElems) {
         elem = (POVS_EVENT_QUEUE_ELEM)RemoveHeadList(&queue->elemList);
-        *entry = elem->event;
+        *entry = elem->vportEvent;
         OvsFreeMemoryWithTag(elem, OVS_EVENT_POOL_TAG);
         queue->numElems--;
         status = STATUS_SUCCESS;
     }
 
 remove_event_done:
-    OvsReleaseEventQueueLock();
+    OvsReleaseEventQueueLock(OVS_MCAST_VPORT_EVENT);
+    return status;
+}
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsPostCtEvent - used to post a Conntrack related event
+ *
+ * Side effects: User thread may be woken up.
+ * XXX - Try to consolidate PostEvent for Vport/Ct events
+ * --------------------------------------------------------------------------
+ */
+VOID
+OvsPostCtEvent(POVS_CT_EVENT_ENTRY ctEvent)
+{
+    POVS_EVENT_QUEUE_ELEM elem;
+    POVS_EVENT_QUEUE queue;
+    PLIST_ENTRY link;
+    LIST_ENTRY list;
+    PLIST_ENTRY entry;
+    PIRP irp;
+
+    InitializeListHead(&list);
+
+    OvsAcquireEventQueueLock(OVS_MCAST_CT_EVENT);
+
+    LIST_FORALL(&ovsEventQueueArr[OVS_MCAST_CT_EVENT], link) {
+        queue = CONTAINING_RECORD(link, OVS_EVENT_QUEUE, queueLink);
+        if ((ctEvent->type & queue->mask) == 0) {
+            continue;
+        }
+        ctEvent->type &= queue->mask;
+
+        elem = (POVS_EVENT_QUEUE_ELEM)OvsAllocateMemoryWithTag(
+            sizeof(*elem), OVS_EVENT_POOL_TAG);
+
+        if (elem == NULL) {
+            OvsReleaseEventQueueLock(OVS_MCAST_CT_EVENT);
+            return;
+        }
+
+        RtlCopyMemory(&elem->ctEvent, ctEvent, sizeof elem->ctEvent);
+        InsertTailList(&queue->elemList, &elem->link);
+        queue->numElems++;
+
+        if (queue->pendingIrp != NULL) {
+            PDRIVER_CANCEL cancelRoutine;
+            irp = queue->pendingIrp;
+            queue->pendingIrp = NULL;
+            cancelRoutine = IoSetCancelRoutine(irp, NULL);
+            if (cancelRoutine) {
+                InsertTailList(&list, &irp->Tail.Overlay.ListEntry);
+            }
+        }
+    }
+
+    OvsReleaseEventQueueLock(OVS_MCAST_CT_EVENT);
+    while (!IsListEmpty(&list)) {
+        entry = RemoveHeadList(&list);
+        irp = CONTAINING_RECORD(entry, IRP, Tail.Overlay.ListEntry);
+        OvsCompleteIrpRequest(irp, 0, STATUS_SUCCESS);
+    }
+}
+
+/*
+ *--------------------------------------------------------------------------
+ * Poll event queued in the event queue.always synchronous.
+ *
+ * Results:
+ *     STATUS_SUCCESS event was dequeued
+ *     STATUS_UNSUCCESSFUL the queue is empty.
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsRemoveCtEventEntry(POVS_OPEN_INSTANCE instance,
+                      POVS_CT_EVENT_ENTRY entry)
+{
+    NTSTATUS status = STATUS_UNSUCCESSFUL;
+    POVS_EVENT_QUEUE queue;
+    POVS_EVENT_QUEUE_ELEM elem;
+
+    OvsAcquireEventQueueLock(OVS_MCAST_CT_EVENT);
+
+    queue = (POVS_EVENT_QUEUE)instance->eventQueue;
+
+    if (queue == NULL) {
+        ASSERT(queue);
+        goto remove_event_done;
+    }
+
+    if (queue->numElems) {
+        elem = (POVS_EVENT_QUEUE_ELEM)RemoveHeadList(&queue->elemList);
+        *entry = elem->ctEvent;
+        OvsFreeMemoryWithTag(elem, OVS_EVENT_POOL_TAG);
+        queue->numElems--;
+        status = STATUS_SUCCESS;
+    }
+
+remove_event_done:
+    OvsReleaseEventQueueLock(OVS_MCAST_CT_EVENT);
     return status;
 }

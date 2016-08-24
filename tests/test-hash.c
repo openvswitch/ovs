@@ -162,7 +162,7 @@ check_hash_bytes128(void (*hash)(const void *, size_t, uint32_t, ovs_u128 *),
         set_bit128(&in1, i, n_bits);
         hash(in0, sizeof(ovs_u128), 0, &out0);
         hash(&in1, sizeof(ovs_u128), 0, &out1);
-        if (!ovs_u128_equals(&out0, &out1)) {
+        if (!ovs_u128_equals(out0, out1)) {
             printf("%s hash not the same for non-64 aligned data "
                    "%016"PRIx64"%016"PRIx64" != %016"PRIx64"%016"PRIx64"\n",
                    name, out0.u64.lo, out0.u64.hi, out1.u64.lo, out1.u64.hi);
@@ -214,7 +214,7 @@ check_256byte_hash(void (*hash)(const void *, size_t, uint32_t, ovs_u128 *),
         set_bit128(in1, i, n_bits);
         hash(in0, sizeof(ovs_u128) * 16, 0, &out0);
         hash(in1, sizeof(ovs_u128) * 16, 0, &out1);
-        if (!ovs_u128_equals(&out0, &out1)) {
+        if (!ovs_u128_equals(out0, out1)) {
             printf("%s hash not the same for non-64 aligned data "
                    "%016"PRIx64"%016"PRIx64" != %016"PRIx64"%016"PRIx64"\n",
                    name, out0.u64.lo, out0.u64.hi, out1.u64.lo, out1.u64.hi);

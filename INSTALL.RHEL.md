@@ -167,4 +167,5 @@ Reporting Bugs
 Please report problems to bugs@openvswitch.org.
 
 [INSTALL.md]:INSTALL.md
+[INSTALL.Fedora.md]:INSTALL.Fedora.md
 [rhel/README.RHEL]:rhel/README.RHEL

@@ -77,7 +77,7 @@ AT_CHECK_UNQUOTED([GET_AVAIL(${INPUT})],
 [0], [dnl
 ${MATCH}
 ])])
-AT_CHECK([ovs-appctl --target ovs-ofctl exit])
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 

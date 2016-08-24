@@ -1,0 +1,53 @@
+#! /bin/sh
+#
+### BEGIN INIT INFO
+# Provides:          ovn-controller-vtep
+# Required-Start:    openvswitch-switch $remote_fs $syslog
+# Required-Stop:     $remote_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: OVN Controller for VTEP enabled devices
+# Description:       ovn-controller-vtep provides the userspace
+#                    components and utilities for OVN that can be run on
+#                    hosts taht connect to VTEP enabled devices.
+### END INIT INFO
+
+test -x /usr/bin/ovn-controller-vtep  || exit 0
+test -x /usr/share/openvswitch/scripts/ovn-ctl || exit 0
+
+_SYSTEMCTL_SKIP_REDIRECT=yes
+
+. /usr/share/openvswitch/scripts/ovs-lib
+if [ -e /etc/default/ovn-controller-vtep ]; then
+    . /etc/default/ovn-controller-vtep
+fi
+
+start () {
+    set /usr/share/openvswitch/scripts/ovn-ctl ${1-start_controller_vtep}
+    set "$@" $OVN_CTL_OPTS
+    "$@" || exit $?
+}
+
+case $1 in
+    start)
+        start
+        ;;
+    stop | force-stop)
+        /usr/share/openvswitch/scripts/ovn-ctl stop_controller_vtep
+        ;;
+    restart)
+        start restart_controller_vtep
+        ;;
+    status)
+        /usr/share/openvswitch/scripts/ovn-ctl status_controller_vtep
+        exit $?
+        ;;
+    reload | force-reload)
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|reload|force-reload|restart|status}" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

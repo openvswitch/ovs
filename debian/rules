@@ -13,7 +13,7 @@
 
 PACKAGE=openvswitch
 PACKAGE_DKMS=openvswitch-datapath-dkms
-DEB_UPSTREAM_VERSION=$(shell dpkg-parsechangelog | sed -rne 's,^Version: ([0-9]:)*([^-]+).*,\2,p')
+DEB_UPSTREAM_VERSION=$(shell dpkg-parsechangelog | sed -rne 's,^Version: ([0-9]+:)?([0-9][a-zA-Z0-9.+:~-]*)(-[a-zA-Z0-9*.~]*),\2,p')
 
 ifneq (,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
 PARALLEL = -j$(patsubst parallel=%,%,$(filter parallel=%,$(DEB_BUILD_OPTIONS)))
@@ -30,7 +30,7 @@ override_dh_autoreconf:
 	dh_autoreconf $(DH_AS_NEEDED)
 
 override_dh_auto_configure:
-	dh_auto_configure -- --enable-ssl $(DATAPATH_CONFIGURE_OPTS)
+	dh_auto_configure -- --enable-ssl --enable-shared $(DATAPATH_CONFIGURE_OPTS)
 
 override_dh_auto_test:
 ifeq (,$(filter nocheck,$(DEB_BUILD_OPTIONS)))
@@ -91,3 +91,5 @@ override_dh_installinit:
 
 override_dh_strip:
 	dh_strip --dbg-package=openvswitch-dbg
+
+override_dh_usrlocal:

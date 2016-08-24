@@ -24,6 +24,7 @@ Source: openvswitch-%{version}.tar.gz
 Buildroot: /tmp/openvswitch-rpm
 Requires: logrotate, python >= 2.7, python-six
 BuildRequires: openssl-devel
+BuildRequires: checkpolicy, selinux-policy-devel
 
 %bcond_without check
 
@@ -32,12 +33,31 @@ Open vSwitch provides standard network bridging functions and
 support for the OpenFlow protocol for remote per-flow control of
 traffic.
 
+%package devel
+Summary:        Open vSwitch development package
+Group:          Development/Libraries
+
+%description devel
+This package provides openvswitch headers and libopenvswitch for developers.
+
+%package selinux-policy
+Summary: Open vSwitch SELinux policy
+License: ASL 2.0
+BuildArch: noarch
+Requires: selinux-policy-targeted
+
+%description selinux-policy
+Tailored Open vSwitch SELinux policy
+
 %prep
 %setup -q
 
 %build
-./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} --enable-ssl
+./configure --prefix=/usr --sysconfdir=/etc --localstatedir=%{_localstatedir} \
+    --libdir=%{_libdir} --enable-ssl --enable-shared
 make %{_smp_mflags}
+cd selinux
+make -f %{_datadir}/selinux/devel/Makefile
 
 %install
 rm -rf $RPM_BUILD_ROOT
@@ -55,6 +75,9 @@ rhel_cp etc_sysconfig_network-scripts_ifup-ovs 0755
 rhel_cp etc_sysconfig_network-scripts_ifdown-ovs 0755
 rhel_cp usr_share_openvswitch_scripts_sysconfig.template 0644
 
+install -p -m 644 -D selinux/openvswitch-custom.pp \
+    $RPM_BUILD_ROOT%{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp
+
 # Get rid of stuff we don't want to make RPM happy.
 rm \
     $RPM_BUILD_ROOT/usr/bin/ovs-testcontroller \
@@ -69,10 +92,28 @@ rm \
     $RPM_BUILD_ROOT/usr/share/man/man?/ovn-* \
     $RPM_BUILD_ROOT/usr/share/openvswitch/ovn-* \
     $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovn-*
-(cd "$RPM_BUILD_ROOT" && rm -rf usr/lib)
+(cd "$RPM_BUILD_ROOT" && rm -rf usr/%{_lib}/*.la)
 (cd "$RPM_BUILD_ROOT" && rm -rf usr/include)
 
 install -d -m 755 $RPM_BUILD_ROOT/var/lib/openvswitch
+
+copy_headers() {
+    src=$1
+    dst=$RPM_BUILD_ROOT/$2
+    install -d -m 0755 $dst
+    install -m 0644 $src/*.h $dst
+}
+copy_headers include %{_includedir}/openvswitch
+copy_headers include/openflow %{_includedir}/openvswitch/openflow
+copy_headers include/openvswitch %{_includedir}/openvswitch/openvswitch
+copy_headers include/sparse %{_includedir}/openvswitch/sparse
+copy_headers include/sparse/arpa %{_includedir}/openvswitch/sparse/arpa
+copy_headers include/sparse/netinet %{_includedir}/openvswitch/sparse/netinet
+copy_headers include/sparse/sys %{_includedir}/openvswitch/sparse/sys
+copy_headers lib %{_includedir}/openvswitch/lib
+
+install -D -m 0644 lib/.libs/libopenvswitch.a \
+    $RPM_BUILD_ROOT/%{_libdir}/libopenvswitch.a
 
 %check
 %if %{with check}
@@ -106,6 +147,9 @@ fi
 /sbin/chkconfig --add openvswitch
 /sbin/chkconfig openvswitch on
 
+%post selinux-policy
+/usr/sbin/semodule -i %{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp &> /dev/null || :
+
 %preun
 if [ "$1" = "0" ]; then     # $1 = 0 for uninstall
     /sbin/service openvswitch stop
@@ -117,6 +161,11 @@ if [ "$1" = "0" ]; then     # $1 = 0 for uninstall
     rm -f /etc/openvswitch/conf.db
     rm -f /etc/sysconfig/openvswitch
     rm -f /etc/openvswitch/vswitchd.cacert
+fi
+
+%postun selinux-policy
+if [ $1 -eq 0 ] ; then
+  /usr/sbin/semodule -r openvswitch-custom &> /dev/null || :
 fi
 
 exit 0
@@ -138,12 +187,14 @@ exit 0
 /usr/bin/ovs-parse-backtrace
 /usr/bin/ovs-pcap
 /usr/bin/ovs-pki
+/usr/bin/ovs-tcpdump
 /usr/bin/ovs-tcpundump
 /usr/bin/ovs-vlan-test
 /usr/bin/ovs-vsctl
 /usr/bin/ovsdb-client
 /usr/bin/ovsdb-tool
 /usr/bin/vtep-ctl
+%{_libdir}/lib*.so.*
 /usr/sbin/ovs-bugtool
 /usr/sbin/ovs-vswitchd
 /usr/sbin/ovsdb-server
@@ -162,6 +213,7 @@ exit 0
 /usr/share/man/man8/ovs-ofctl.8.gz
 /usr/share/man/man8/ovs-parse-backtrace.8.gz
 /usr/share/man/man8/ovs-pki.8.gz
+/usr/share/man/man8/ovs-tcpdump.8.gz
 /usr/share/man/man8/ovs-vlan-test.8.gz
 /usr/share/man/man8/ovs-vsctl.8.gz
 /usr/share/man/man8/ovs-vswitchd.8.gz
@@ -181,3 +233,13 @@ exit 0
 %doc INSTALL.DPDK.md rhel/README.RHEL README-native-tunneling.md
 /var/lib/openvswitch
 /var/log/openvswitch
+
+%files devel
+%{_libdir}/lib*.so
+%{_libdir}/lib*.a
+%{_libdir}/pkgconfig
+%{_includedir}/openvswitch/*
+
+%files selinux-policy
+%defattr(-,root,root)
+%{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp

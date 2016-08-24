@@ -73,6 +73,7 @@ docs = \
 	INSTALL.md \
 	INSTALL.Debian.md \
 	INSTALL.Docker.md \
+	INSTALL.DPDK-ADVANCED.md \
 	INSTALL.DPDK.md \
 	INSTALL.Fedora.md \
 	INSTALL.KVM.md \
@@ -93,25 +94,28 @@ docs = \
 	README-native-tunneling.md \
 	REPORTING-BUGS.md \
 	SECURITY.md \
-	TODO.md \
 	WHY-OVS.md
 EXTRA_DIST = \
 	$(docs) \
 	NOTICE \
 	.travis.yml \
-	.travis/build.sh \
-	.travis/prepare.sh \
+	.travis/linux-build.sh \
+	.travis/linux-prepare.sh \
+	.travis/osx-build.sh \
+	.travis/osx-prepare.sh \
 	appveyor.yml \
 	boot.sh \
 	build-aux/cccl \
 	build-aux/cksum-schema-check \
+	build-aux/calculate-schema-cksum \
 	build-aux/dist-docs \
 	build-aux/sodepends.pl \
 	build-aux/soexpand.pl \
 	build-aux/xml2nroff \
 	$(MAN_FRAGMENTS) \
 	$(MAN_ROOTS) \
-	Vagrantfile
+	Vagrantfile \
+	Vagrantfile-FreeBSD
 bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =
@@ -248,7 +252,7 @@ config-h-check:
 	@cd $(srcdir); \
 	if test -e .git && (git --version) >/dev/null 2>&1 && \
 	   git --no-pager grep -L '#include <config\.h>' `git ls-files | grep '\.c$$' | \
-               grep -vE '^datapath|^lib/sflow|^third-party|^datapath-windows'`; \
+               grep -vE '^datapath|^lib/sflow|^third-party|^datapath-windows|^python'`; \
 	then \
 	    echo "See above for list of violations of the rule that"; \
 	    echo "every C source file must #include <config.h>."; \
@@ -396,6 +400,13 @@ ovsext_clean: datapath-windows/ovsext.sln
 	MSBuild.exe //maxcpucount datapath-windows/ovsext.sln /target:Clean /property:Configuration="Win8.1$(VSTUDIO_CONFIG)"
 endif
 .PHONY: ovsext
+
+clang-analyze: clean
+	@which clang scan-build >/dev/null 2>&1 || \
+		(echo "Unable to find clang/scan-build, Install clang,clang-analyzer packages"; exit 1)
+	@$(MKDIR_P) "$(srcdir)/tests/clang-analyzer-results"
+	@scan-build -o $(srcdir)/tests/clang-analyzer-results --use-cc=$(CC) $(MAKE)
+.PHONY: clang-analyze
 
 dist-hook: $(DIST_HOOKS)
 all-local: $(ALL_LOCAL)

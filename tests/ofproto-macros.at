@@ -14,6 +14,8 @@ s/ idle_age=[0-9]*,//
 s/ hard_age=[0-9]*,//
 s/dp_hash=0x[0-9a-f]*\//dp_hash=0x0\//
 s/recirc_id=0x[0-9a-f]*,/recirc_id=0x0,/
+s/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T[0-9][0-9]:[0-9][0-9]:[0-9][0-9]Z|//
+s/dir\/[0-9]*\/br0.mgmt/dir\/XXXX\/br0.mgmt/
 '
 }
 
@@ -30,7 +32,6 @@ prt==1 { sub(/[ \t]*$/, ""); print $0 }
 vconn_sub() {
     sed '
 s/tcp:127.0.0.1:[0-9][0-9]*:/unix:/
-s/No error/Success/
 '
 }
 ]
@@ -96,7 +97,7 @@ sim_add () {
    as $1 ovs-vsctl --no-wait -- init || return 1
 
    # Start ovs-vswitchd
-   as $1 start_daemon ovs-vswitchd --enable-dummy=system -vvconn -vofproto_dpif
+   as $1 start_daemon ovs-vswitchd --enable-dummy=system -vvconn -vofproto_dpif -vunixctl
 }
 
 # "as $1" sets the OVS_*DIR environment variables to point to $ovs_base/$1.
@@ -104,12 +105,59 @@ sim_add () {
 # "as $1 COMMAND..." sets those variables in a subshell and invokes COMMAND
 # there.
 as() {
-    if test "X$1" != X; then
+    if test "X$2" != X; then
         (ovs_setenv $1; shift; $@)
     else
         ovs_setenv $1
     fi
 }
+
+# OVN_CLEANUP_VSWITCH(sim)
+#
+# Gracefully terminate vswitch daemons in the
+# specified sandbox.
+m4_define([OVN_CLEANUP_VSWITCH],[
+    as $1
+    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+])
+
+# OVN_CLEANUP_SBOX(sbox)
+#
+# Gracefully terminate OVN daemons in the specified
+# sandbox instance. The sandbox name "vtep" is treated
+# as a special case, and is assumed to have ovn-controller-vtep
+# and ovs-vtep daemons running instead of ovn-controller.
+m4_define([OVN_CLEANUP_SBOX],[
+    as $1
+    if test "$1" = "vtep"; then
+        OVS_APP_EXIT_AND_WAIT([ovn-controller-vtep])
+        OVS_APP_EXIT_AND_WAIT([ovs-vtep])
+    else
+        OVS_APP_EXIT_AND_WAIT([ovn-controller])
+    fi
+    OVN_CLEANUP_VSWITCH([$1])
+])
+
+# OVN_CLEANUP(sim [, sim ...])
+#
+# Gracefully terminate all OVN daemons, including those in the
+# specified sandbox instances.
+m4_define([OVN_CLEANUP],[
+    m4_foreach([sbox], [$@], [
+        OVN_CLEANUP_SBOX([sbox])
+    ])
+    as ovn-sb
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+    as ovn-nb
+    OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+    as northd
+    OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+    OVN_CLEANUP_VSWITCH([main])
+])
 
 # ovn_init_db DATABASE
 #
@@ -137,8 +185,8 @@ ovn_init_db () {
 # ovn-sbctl and ovn-nbctl use them by default, and starts ovn-northd running
 # against them.
 ovn_start () {
-    ovn_init_db ovn-sb
-    ovn_init_db ovn-nb
+    ovn_init_db ovn-sb; ovn-sbctl init
+    ovn_init_db ovn-nb; ovn-nbctl init
 
     echo "starting ovn-northd"
     mkdir "$ovs_base"/northd
@@ -272,7 +320,7 @@ m4_define([_OVS_VSWITCHD_START],
    AT_CHECK([ovs-vsctl --no-wait init])
 
    dnl Start ovs-vswitchd.
-   AT_CHECK([ovs-vswitchd $1 --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif], [0], [], [stderr])
+   AT_CHECK([ovs-vswitchd $1 --detach --no-chdir --pidfile --log-file -vvconn -vofproto_dpif -vunixctl], [0], [], [stderr])
    AT_CAPTURE_FILE([ovs-vswitchd.log])
    on_exit "kill `cat ovs-vswitchd.pid`"
    AT_CHECK([[sed < stderr '
@@ -282,10 +330,12 @@ m4_define([_OVS_VSWITCHD_START],
 /reconnect|INFO|/d
 /ofproto|INFO|using datapath ID/d
 /netdev_linux|INFO|.*device has unknown hardware address family/d
-/ofproto|INFO|datapath ID changed to fedcba9876543210/d']])
+/ofproto|INFO|datapath ID changed to fedcba9876543210/d
+/dpdk|INFO|DPDK Disabled - to change this requires a restart./d']])
 ])
 
-# OVS_VSWITCHD_START([vsctl-args], [vsctl-output], [=override])
+# OVS_VSWITCHD_START([vsctl-args], [vsctl-output], [=override],
+#                    [vswitchd-aux-args])
 #
 # Creates a database and starts ovsdb-server, starts ovs-vswitchd
 # connected to that database, calls ovs-vsctl to create a bridge named
@@ -298,8 +348,11 @@ m4_define([_OVS_VSWITCHD_START],
 # =override (literally) as the third argument.  Otherwise, system devices
 # won't work at all (which makes sense because tests should not access a
 # system's real Ethernet devices).
+#
+# 'vswitchd-aux-args' provides a way to pass extra command line arguments
+# to ovs-vswitchd
 m4_define([OVS_VSWITCHD_START],
-  [_OVS_VSWITCHD_START([--enable-dummy$3 --disable-system])
+  [_OVS_VSWITCHD_START([--enable-dummy$3 --disable-system $4])
    AT_CHECK([add_of_br 0 $1 m4_if([$2], [], [], [| ${PERL} $srcdir/uuidfilt.pl])], [0], [$2])
 ])
 
@@ -340,36 +393,52 @@ add_of_br () {
 			  other-config:datapath-id=$dpid \
 			  other-config:hwaddr=$mac \
 			  protocols="[[OpenFlow10,OpenFlow11,OpenFlow12,\
-                                       OpenFlow13,OpenFlow14,OpenFlow15]]" \
+                                       OpenFlow13,OpenFlow14,OpenFlow15,\
+                                       OpenFlow16]]" \
         -- "$@"
 }
 
-# add_of_ports [--pcap] BRIDGE PNUM...
+# add_of_ports__ PORT_TYPE [--pcap] BRIDGE PNUM...
 #
-# Creates dummy interfaces in BRIDGE named pPNUM, OpenFlow port number
+# Creates PORT_TYPE interfaces in BRIDGE named pPNUM, OpenFlow port number
 # PNUM, and datapath port number PNUM (the latter is a consequence of
 # the dummy implementation, which tries to assign datapath port
 # numbers based on port names).
 #
 # If --pcap is supplied then packets received from the interface will
 # be written to $port-rx.pcap and those sent to it to $port-tx.pcap.
-add_of_ports () {
+add_of_ports__ () {
     local args
     local pcap=false
+    local ptype=$1
+    shift
     if test "$1" = --pcap; then
         pcap=:
-	shift
+    shift
     fi
     local br=$1; shift
     for pnum; do
-        AS_VAR_APPEND([args], [" -- add-port $br p$pnum -- set Interface p$pnum type=dummy ofport_request=$pnum"])
-	if $pcap; then
-	    AS_VAR_APPEND([args], [" -- set Interface p$pnum options:rxq_pcap=p$pnum-rx.pcap options:tx_pcap=p$pnum-tx.pcap"])
-	fi
+        AS_VAR_APPEND([args], [" -- add-port $br p$pnum -- set Interface p$pnum type=$ptype ofport_request=$pnum"])
+    if $pcap; then
+        AS_VAR_APPEND([args], [" -- set Interface p$pnum options:rxq_pcap=p$pnum-rx.pcap options:tx_pcap=p$pnum-tx.pcap"])
+    fi
     done
     echo ovs-vsctl $args
     ovs-vsctl $args
 }
+
+# add_of_ports [--pcap] BRIDGE PNUM...
+#
+add_of_ports () {
+    add_of_ports__ dummy $@
+}
+
+# add_pmd_of_ports [--pcap] BRIDGE PNUM...
+#
+add_pmd_of_ports () {
+    add_of_ports__ dummy-pmd $@
+}
+
 m4_divert_pop([PREPARE_TESTS])
 
 # OVS_VSWITCHD_STOP([WHITELIST])
@@ -382,8 +451,8 @@ m4_divert_pop([PREPARE_TESTS])
 #   OVS_VSWITCHD_STOP(["/expected error/d"])
 m4_define([OVS_VSWITCHD_STOP],
   [AT_CHECK([check_logs $1])
-   AT_CHECK([ovs-appctl -t ovs-vswitchd exit])
-   AT_CHECK([ovs-appctl -t ovsdb-server exit])])
+   OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+   OVS_APP_EXIT_AND_WAIT([ovsdb-server])])
 
 m4_define([OVS_VSWITCHD_DISABLE_TUNNEL_PUSH_POP],
   [AT_CHECK([ovs-appctl ofproto/tnl-push-pop off], [0], [dnl
@@ -398,3 +467,47 @@ m4_define([WAIT_FOR_DUMMY_PORTS], \
       [  \
 	 OVS_WAIT_WHILE([ovs-appctl netdev-dummy/conn-state dummy_port \
                   | grep 'unknown\|disconnected'])])])
+
+# OVS_MONITOR_IPSEC_START()
+#
+# Starts ovs-monitor-ipsec daemon.  Use this macro only after testing
+# that python is present on the system.
+m4_define([OVS_MONITOR_IPSEC_START],
+[
+cp "$top_srcdir/vswitchd/vswitch.ovsschema" .
+
+on_exit 'kill `cat pid ovs-monitor-ipsec.pid`'
+
+mkdir etc etc/init.d etc/racoon etc/racoon/certs
+mkdir usr usr/sbin
+
+AT_DATA([etc/init.d/racoon], [dnl
+#! /bin/sh
+echo "racoon: @S|@@" >&3
+exit 0
+])
+chmod +x etc/init.d/racoon
+
+AT_DATA([usr/sbin/setkey], [dnl
+#! /bin/sh
+exec >&3
+echo "setkey:"
+while read line; do
+      echo "> $line"
+done
+])
+chmod +x usr/sbin/setkey
+
+touch etc/racoon/certs/ovs-stale.pem
+
+###
+### Start ovs-monitor-ipsec and wait for it to delete the stale cert.
+###
+AT_CHECK(
+  [$PYTHON $top_srcdir/debian/ovs-monitor-ipsec "--root-prefix=`pwd`" \
+        "--pidfile=`pwd`/ovs-monitor-ipsec.pid" \
+        unix:$OVS_RUNDIR/db.sock 2>log 3>actions &])
+AT_CAPTURE_FILE([log])
+AT_CAPTURE_FILE([actions])
+OVS_WAIT_UNTIL([test ! -f etc/racoon/certs/ovs-stale.pem])
+])

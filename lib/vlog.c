@@ -31,8 +31,8 @@
 #include "async-append.h"
 #include "coverage.h"
 #include "dirs.h"
-#include "dynamic-string.h"
-#include "ofpbuf.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofpbuf.h"
 #include "ovs-thread.h"
 #include "sat-math.h"
 #include "socket-util.h"
@@ -215,7 +215,7 @@ void
 vlog_insert_module(struct ovs_list *vlog)
 {
     ovs_mutex_lock(&log_file_mutex);
-    list_insert(&vlog_modules, vlog);
+    ovs_list_insert(&vlog_modules, vlog);
     ovs_mutex_unlock(&log_file_mutex);
 }
 
@@ -426,7 +426,7 @@ vlog_reopen_log_file(void)
     char *fn;
 
     ovs_mutex_lock(&log_file_mutex);
-    fn = log_file_name ? xstrdup(log_file_name) : NULL;
+    fn = nullable_xstrdup(log_file_name);
     ovs_mutex_unlock(&log_file_mutex);
 
     if (fn) {

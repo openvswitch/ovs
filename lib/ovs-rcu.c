@@ -15,14 +15,16 @@
  */
 
 #include <config.h>
+#include <errno.h>
 #include "ovs-rcu.h"
 #include "fatal-signal.h"
 #include "guarded-list.h"
-#include "list.h"
+#include "openvswitch/list.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
 #include "seq.h"
 #include "timeval.h"
+#include "util.h"
 #include "openvswitch/vlog.h"
 
 VLOG_DEFINE_THIS_MODULE(ovs_rcu);
@@ -57,6 +59,7 @@ static struct guarded_list flushed_cbsets;
 static struct seq *flushed_cbsets_seq;
 
 static void ovsrcu_init_module(void);
+static void ovsrcu_flush_cbset__(struct ovsrcu_perthread *, bool);
 static void ovsrcu_flush_cbset(struct ovsrcu_perthread *);
 static void ovsrcu_unregister__(struct ovsrcu_perthread *);
 static bool ovsrcu_call_postponed(void);
@@ -81,7 +84,7 @@ ovsrcu_perthread_get(void)
                     sizeof perthread->name);
 
         ovs_mutex_lock(&ovsrcu_threads_mutex);
-        list_push_back(&ovsrcu_threads, &perthread->list_node);
+        ovs_list_push_back(&ovsrcu_threads, &perthread->list_node);
         ovs_mutex_unlock(&ovsrcu_threads_mutex);
 
         pthread_setspecific(perthread_key, perthread);
@@ -149,6 +152,27 @@ ovsrcu_quiesce(void)
     seq_change(global_seqno);
 
     ovsrcu_quiesced();
+}
+
+int
+ovsrcu_try_quiesce(void)
+{
+    struct ovsrcu_perthread *perthread;
+    int ret = EBUSY;
+
+    ovs_assert(!single_threaded());
+    perthread = ovsrcu_perthread_get();
+    if (!seq_try_lock()) {
+        perthread->seqno = seq_read_protected(global_seqno);
+        if (perthread->cbset) {
+            ovsrcu_flush_cbset__(perthread, true);
+        }
+        seq_change_protected(global_seqno);
+        seq_unlock();
+        ovsrcu_quiesced();
+        ret = 0;
+    }
+    return ret;
 }
 
 bool
@@ -257,7 +281,7 @@ ovsrcu_call_postponed(void)
     struct ovs_list cbsets;
 
     guarded_list_pop_all(&flushed_cbsets, &cbsets);
-    if (list_is_empty(&cbsets)) {
+    if (ovs_list_is_empty(&cbsets)) {
         return false;
     }
 
@@ -292,7 +316,7 @@ ovsrcu_postpone_thread(void *arg OVS_UNUSED)
 }
 
 static void
-ovsrcu_flush_cbset(struct ovsrcu_perthread *perthread)
+ovsrcu_flush_cbset__(struct ovsrcu_perthread *perthread, bool protected)
 {
     struct ovsrcu_cbset *cbset = perthread->cbset;
 
@@ -300,8 +324,18 @@ ovsrcu_flush_cbset(struct ovsrcu_perthread *perthread)
         guarded_list_push_back(&flushed_cbsets, &cbset->list_node, SIZE_MAX);
         perthread->cbset = NULL;
 
-        seq_change(flushed_cbsets_seq);
+        if (protected) {
+            seq_change_protected(flushed_cbsets_seq);
+        } else {
+            seq_change(flushed_cbsets_seq);
+        }
     }
+}
+
+static void
+ovsrcu_flush_cbset(struct ovsrcu_perthread *perthread)
+{
+    ovsrcu_flush_cbset__(perthread, false);
 }
 
 static void
@@ -312,7 +346,7 @@ ovsrcu_unregister__(struct ovsrcu_perthread *perthread)
     }
 
     ovs_mutex_lock(&ovsrcu_threads_mutex);
-    list_remove(&perthread->list_node);
+    ovs_list_remove(&perthread->list_node);
     ovs_mutex_unlock(&ovsrcu_threads_mutex);
 
     ovs_mutex_destroy(&perthread->mutex);
@@ -347,7 +381,7 @@ ovsrcu_init_module(void)
         global_seqno = seq_create();
         xpthread_key_create(&perthread_key, ovsrcu_thread_exit_cb);
         fatal_signal_add_hook(ovsrcu_cancel_thread_exit_cb, NULL, NULL, true);
-        list_init(&ovsrcu_threads);
+        ovs_list_init(&ovsrcu_threads);
         ovs_mutex_init(&ovsrcu_threads_mutex);
 
         guarded_list_init(&flushed_cbsets);

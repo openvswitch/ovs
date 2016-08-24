@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manpage program="ovn-trace" section="8" title="ovn-trace">
+  <h1>Name</h1>
+  <p>ovn-trace -- Open Virtual Network logical network tracing utility</p>
+
+  <h1>Synopsis</h1>
+  <p><code>ovn-trace</code> [<var>options</var>] <var>datapath</var> <var>microflow</var></p>
+  <p><code>ovn-trace</code> [<var>options</var>] <code>--detach</code></p>
+  
+  <h1>Description</h1>
+  <p>
+    This utility simulates packet forwarding within an OVN logical network.
+    It can be used to run through ``what-if'' scenarios: if a packet
+    originates at a logical port, what will happen to it and where will it
+    ultimately end up?  Users already familiar with the Open vSwitch
+    <code>ofproto/trace</code> command described in
+    <code>ovs-vswitch</code>(8) will find <code>ovn-trace</code> to be a
+    similar tool for logical networks.
+  </p>
+
+  <p>
+    <code>ovn-trace</code> works by reading the <code>Logical_Flow</code> and
+    other tables from the OVN southbound database (see
+    <code>ovn-sb</code>(5)).  It simulates a packet's path through logical
+    networks by repeatedly looking it up in the logical flow table, following
+    the entire tree of possibilities.
+  </p>
+
+  <p>
+    <code>ovn-trace</code> simulates only the OVN logical network.  It does
+    not simulate the physical elements on which the logical network is
+    layered.  This means that, for example, it is unimportant how VMs are
+    distributed among hypervisors, or whether their hypervisors are
+    functioning and reachable, so <code>ovn-trace</code> will yield the same
+    results regardless.  There is one important exception:
+    <code>ovn-northd</code>, the daemon that generates the logical flows that
+    <code>ovn-trace</code> simulates, treats logical ports differently based
+    on whether they are up or down.  Thus, if you see surprising results,
+    ensure that the ports involved in a simulation are up.
+  </p>
+
+  <p>
+    The simplest way to use <code>ovn-trace</code> is to provide
+    <var>datapath</var> and <var>microflow</var> arguments on the command
+    line.  In this case, it simulates the behavior of a single packet and
+    exits.  For an alternate usage model, see <code>Daemon Mode</code> below.
+  </p>
+
+  <p>
+    The <var>datapath</var> argument specifies the name of a logical
+    datapath.  Acceptable names are the <code>name</code> from the northbound
+    <code>Logical_Switch</code> or <code>Logical_Router</code> table, the
+    UUID of a record from one of those tables, or the UUID of a record from
+    the southbound <code>Datapath_Binding</code> table.
+  </p>
+
+  <p>
+    The <var>microflow</var> argument describes the packet whose forwarding
+    is to be simulated, in the syntax of an OVN logical expression, as
+    described in <code>ovn-sb</code>(5), to express constraints.  The parser
+    understands prerequisites; for example, if the expression refers to
+    <code>ip4.src</code>, there is no need to explicitly state
+    <code>ip4</code> or <code>eth.type == 0x800</code>.
+  </p>
+
+  <p>
+    For reasonable L2 behavior, the microflow should include at least
+    <code>inport</code> and <code>eth.dst</code>, plus <code>eth.src</code>
+    if port security is enabled.  For example:
+  </p>
+  <pre>
+    inport == "lp11" &amp;&amp; eth.src == 00:01:02:03:04:05 &amp;&amp; eth.dst == ff:ff:ff:ff:ff:ff
+  </pre>
+
+  <p>
+    For reasonable L3 behavior, <var>microflow</var> should also include
+    <code>ip4.src</code> and <code>ip4.dst</code> (or <code>ip6.src</code>
+    and <code>ip6.dst</code>) and <code>ip.ttl</code>.  For example:
+  </p>
+  <pre>
+    inport == "lp111" &amp;&amp; eth.src == f0:00:00:00:01:11 &amp;&amp; eth.dst == 00:00:00:00:ff:11
+    &amp;&amp; ip4.src == 192.168.11.1 &amp;&amp; ip4.dst == 192.168.22.2 &amp;&amp; ip.ttl == 64
+  </pre>
+
+  <p>Here's an ARP microflow example:</p>
+  <pre>
+    inport == "lp123"
+    &amp;&amp; eth.dst == ff:ff:ff:ff:ff:ff &amp;&amp; eth.src == f0:00:00:00:01:11
+    &amp;&amp; arp.op == 1 &amp;&amp; arp.sha == f0:00:00:00:01:11 &amp;&amp; arp.spa == 192.168.1.11
+    &amp;&amp; arp.tha == ff:ff:ff:ff:ff:ff &amp;&amp; arp.tpa == 192.168.2.22
+  </pre>
+
+  <p>
+    <code>ovn-trace</code> will reject erroneous microflow expressions, which
+    beyond syntax errors fall into two categories.  First, they can be
+    ambiguous.  For example, <code>tcp.src == 80</code> is ambiguous because
+    it does not state IPv4 or IPv6 as the Ethernet type.  <code>ip4
+    &amp;&amp; tcp.src > 1024</code> is also ambiguous because it does not
+    constrain bits of <code>tcp.src</code> to particular values.  Second,
+    they can be contradictory, e.g. <code>ip4 &amp;&amp; ip6</code>.
+  </p>
+
+  <h1>Output</h1>
+
+  <p>
+    <code>ovn-trace</code> supports the three different forms of output, each
+    described in a separate section below.  Regardless of the selected output
+    format, <code>ovn-trace</code> starts the output with a line that shows
+    the microflow being traced in OpenFlow syntax.
+  </p>
+
+  <h2>Detailed Output</h2>
+
+  <p>
+    The detailed form of output is also the default form.  This form groups
+    output into sections headed up by the ingress or egress pipeline being
+    traversed.  Each pipeline lists each table that was visited (by number
+    and name), the match expression and priority of the logical flow that was
+    matched, and the actions that were executed.
+  </p>
+
+  <p>
+    The execution of OVN logical actions naturally forms a ``control stack''
+    that resembles that of a program in conventional programming languages
+    such as C or Java.  Because the <code>next</code> action that calls into
+    another logical flow table for a lookup is a recursive construct, OVN
+    ``programs'' in practice tend to form deep control stacks that, displayed
+    in the obvious way using additional indentation for each level, quickly
+    use up the horizontal space on all but the widest displays.  To make
+    detailed output more readable, without loss of generality,
+    <code>ovn-trace</code> omits indentation for ``tail recursion,'' that is,
+    when <code>next</code> is the last action in a logical flow, it does not
+    indent details of the next table lookup more deeply.  Output still uses
+    indentation when it is needed for clarity.
+  </p>
+
+  <p>
+    OVN ``programs'' traces also tend to encounter long strings of logical
+    flows with match expression <code>1</code> (which matches every packet)
+    the single action <code>next;</code>.  These are uninteresting and merely
+    clutter output, so <code>ovn-trace</code> omits them entirely even from
+    detailed output.
+  </p>
+
+  <p>
+    The following excerpt from detailed <code>ovn-trace</code> output shows a
+    section for a packet traversing the ingress pipeline of logical datapath
+    <code>ls1</code> with ingress logical port <code>lp111</code>.  The
+    packet matches a logical flow in table 0 (aka
+    <code>ls_in_port_sec_l2</code>) with priority 50 and executes
+    <code>next(1);</code> to pass to table 1.  Tables 1 through 11 are
+    trivial and omitted.  In table 12 (aka <code>ls_in_l2_lkup</code>), the
+    packet matches a flow with priority 50 based on its Ethernet destination
+    address and the flow's actions output the packet to the
+    <code>lrp11-attachement</code> logical port.
+  </p>
+
+  <pre fixed="yes">
+    ingress(dp="ls1", inport="lp111")
+    ---------------------------------
+    0. ls_in_port_sec_l2: inport == "lp111", priority 50
+    next(1);
+    12. ls_in_l2_lkup: eth.dst == 00:00:00:00:ff:11, priority 50
+    outport = "lrp11-attachment";
+    output;
+  </pre>
+
+  <h2>Summary Output</h2>
+
+  <p>
+    Summary output includes the logical pipelines visited by a packet and the
+    logical actions executed on it.  Compared to the detailed output,
+    however, it removes details of tables and logical flows traversed by a
+    packet.  It uses a format closer to that of a programming language and
+    does not attempt to avoid indentation.  The summary output equivalent to
+    the above detailed output fragment is:
+  </p>
+
+  <pre fixed="yes">
+    ingress(dp="ls1", inport="lp111") {
+    outport = "lrp11-attachment";
+    output;
+    ...
+    };
+  </pre>
+
+  <h2>Minimal Output</h2>
+
+  <p>
+    Minimal output includes only actions that modify packet data (not
+    including OVN registers or metadata such as <code>outport</code>) and
+    <code>output</code> actions that actually deliver a packet to a logical
+    port (excluding patch ports).  The operands of actions that modify packet
+    data are displayed reduced to constants, e.g. <code>ip4.dst =
+    reg0;</code> might be show as <code>ip4.dst = 192.168.0.1;</code> if that
+    was the value actually loaded.  This yields output even simpler than the
+    summary format.  (Users familiar with Open vSwitch may recognize this as
+    similar in spirit to the datapath actions listed at the bottom of
+    <code>ofproto/trace</code> output.)
+  </p>
+
+  <p>
+    The minimal output format reflects the externally seen behavior of the
+    logical networks more than it does the implementation.  This makes this
+    output format the most suitable for use in regression tests, because it
+    is least likely to change when logical flow tables are rearranged without
+    semantic change.
+  </p>
+
+  <h1>Daemon Mode</h1>
+
+  <p>
+    If <code>ovn-trace</code> is invoked with the <code>--detach</code> option
+    (see <code>Daemon Options</code>, below), it runs in the background as a
+    daemon and accepts commands from <code>ovs-appctl</code> (or another
+    JSON-RPC client) indefinitely.  The currently supported commands are
+    described below.
+  </p>
+
+  <p>
+    
+  </p>
+
+  <dl>
+    <dt><code>trace</code> [<var>options</var>] <var>datapath</var> <var>microflow</var></dt>
+    <dd>
+      Traces <var>microflow</var> through <var>datapath</var> and replies with
+      the results of the trace.  Accepts the <var>options</var> described under
+      <code>Trace Options</code> below.
+    </dd>
+
+    <dt><code>exit</code></dt>
+    <dd>Causes <code>ovn-trace</code> to gracefully terminate.</dd>
+  </dl>
+
+  <h1>Options</h1>
+  
+  <h2>Trace Options</h2>
+
+  <dl>
+    <dt><code>--detailed</code></dt>
+    <dt><code>--summary</code></dt>
+    <dt><code>--minimal</code></dt>
+    <dd>
+      These options control the form and level of detail in
+      <code>ovn-trace</code> output.  If more than one of these options is
+      specified, all of the selected forms are output, in the order listed
+      above, each headed by a banner line.  If none of these options is
+      given, <code>--detailed</code> is the default.  See
+      <code>Output</code>, above, for a description of each kind of output.
+    </dd>
+
+    <dt><code>--all</code></dt>
+    <dd>
+      Selects all three forms of output.
+    </dd>
+  </dl>
+
+  <h2>Daemon Options</h2>
+  <xi:include href="lib/daemon.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+
+  <h2>Logging Options</h2>
+  <xi:include href="lib/vlog.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+
+  <h2>PKI Options</h2>
+  <p>
+    PKI configuration is required to use SSL for the connection to the
+    database.
+  </p>
+  <xi:include href="lib/ssl.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+
+  <h2>Other Options</h2>
+
+  <dl>
+    <dt><code>--db</code> <var>database</var></dt>
+    <dd>
+      The OVSDB database remote to contact.  If the <env>OVN_SB_DB</env>
+      environment variable is set, its value is used as the default.
+      Otherwise, the default is <code>unix:@RUNDIR@/db.sock</code>, but this
+      default is unlikely to be useful outside of single-machine OVN test
+      environments.
+    </dd>
+  </dl>
+  
+  <xi:include href="lib/common.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+
+</manpage>

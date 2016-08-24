@@ -16,24 +16,7 @@
 #ifndef UUID_H
 #define UUID_H 1
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include "util.h"
-
-#define UUID_BIT 128            /* Number of bits in a UUID. */
-#define UUID_OCTET (UUID_BIT / 8) /* Number of bytes in a UUID. */
-
-/* A Universally Unique IDentifier (UUID) compliant with RFC 4122.
- *
- * Each of the parts is stored in host byte order, but the parts themselves are
- * ordered from left to right.  That is, (parts[0] >> 24) is the first 8 bits
- * of the UUID when output in the standard form, and (parts[3] & 0xff) is the
- * final 8 bits. */
-struct uuid {
-    uint32_t parts[4];
-};
-BUILD_ASSERT_DECL(sizeof(struct uuid) == UUID_OCTET);
+#include "openvswitch/uuid.h"
 
 /* Formats a UUID as a string, in the conventional format.
  *

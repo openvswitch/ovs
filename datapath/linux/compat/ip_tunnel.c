@@ -62,7 +62,7 @@
 
 #include "compat.h"
 
-#ifndef HAVE_METADATA_DST
+#ifndef USE_UPSTREAM_TUNNEL
 static void ip_tunnel_add(struct ip_tunnel_net *itn, struct ip_tunnel *t)
 {
 	if (t->collect_md)
@@ -113,7 +113,7 @@ static int ip_tunnel_bind_dev(struct net_device *dev)
 		rt = ip_route_output_key(tunnel->net, &fl4);
 
 		if (!IS_ERR(rt)) {
-			tdev = rt_dst(rt).dev;
+			tdev = rt->dst.dev;
 			ip_rt_put(rt);
 		}
 		if (dev->type != ARPHRD_ETHER)
@@ -164,9 +164,7 @@ int rpl_ip_tunnel_change_mtu(struct net_device *dev, int new_mtu)
 
 static void ip_tunnel_dev_free(struct net_device *dev)
 {
-#ifdef HAVE_DEV_TSTATS
 	free_percpu(dev->tstats);
-#endif
 	free_netdev(dev);
 }
 
@@ -261,11 +259,9 @@ int rpl_ip_tunnel_init(struct net_device *dev)
 	struct iphdr *iph = &tunnel->parms.iph;
 
 	dev->destructor	= ip_tunnel_dev_free;
-#ifdef HAVE_DEV_TSTATS
 	dev->tstats = (typeof(dev->tstats)) netdev_alloc_pcpu_stats(struct pcpu_sw_netstats);
 	if (!dev->tstats)
 		return -ENOMEM;
-#endif
 	tunnel->dev = dev;
 	tunnel->net = dev_net(dev);
 	strcpy(tunnel->parms.name, dev->name);

@@ -96,7 +96,7 @@ check_received_aa(struct lldpd_port *sport,
            sport->p_element.system_id.rsvd2[1]);
 
     /* Should receive 2 mappings */
-    assert(!list_is_empty(&rport->p_isid_vlan_maps));
+    assert(!ovs_list_is_empty(&rport->p_isid_vlan_maps));
 
     /* For each received isid/vlan mapping */
     LIST_FOR_EACH (received_map, m_entries, &rport->p_isid_vlan_maps) {
@@ -187,7 +187,7 @@ test_aa_send(void)
     lldp = lldp_create_dummy();
     if ((lldp == NULL) ||
         (lldp->lldpd == NULL) ||
-        list_is_empty(&lldp->lldpd->g_hardware)) {
+        ovs_list_is_empty(&lldp->lldpd->g_hardware)) {
         printf("Error: unable to create dummy lldp instance");
         return 1;
     }
@@ -235,9 +235,9 @@ test_aa_send(void)
     map[1].isid_vlan_data.vlan    = map_init[1].isid_vlan_data.vlan;
     map[1].isid_vlan_data.isid    = map_init[1].isid_vlan_data.isid;
 
-    list_init(&hw->h_lport.p_isid_vlan_maps);
-    list_push_back(&hw->h_lport.p_isid_vlan_maps, &map[0].m_entries);
-    list_push_back(&hw->h_lport.p_isid_vlan_maps, &map[1].m_entries);
+    ovs_list_init(&hw->h_lport.p_isid_vlan_maps);
+    ovs_list_push_back(&hw->h_lport.p_isid_vlan_maps, &map[0].m_entries);
+    ovs_list_push_back(&hw->h_lport.p_isid_vlan_maps, &map[1].m_entries);
 
     /* Construct LLDPPDU (including Ethernet header) */
     eth_compose(&packet, eth_addr_lldp, eth_src, ETH_TYPE_LLDP, 0);

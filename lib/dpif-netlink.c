@@ -34,7 +34,7 @@
 
 #include "bitmap.h"
 #include "dpif-provider.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "fat-rwlock.h"
 #include "netdev.h"
@@ -45,11 +45,11 @@
 #include "netlink-socket.h"
 #include "netlink.h"
 #include "odp-util.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "sset.h"
 #include "timeval.h"
 #include "unaligned.h"
@@ -2274,7 +2274,6 @@ dpif_netlink_get_datapath_version(void)
     return version_str;
 }
 
-#ifdef __linux__
 struct dpif_netlink_ct_dump_state {
     struct ct_dpif_dump_state up;
     struct nl_ct_dump_state *nl_ct_dump;
@@ -2335,7 +2334,6 @@ dpif_netlink_ct_flush(struct dpif *dpif OVS_UNUSED, const uint16_t *zone)
         return nl_ct_flush();
     }
 }
-#endif
 
 const struct dpif_class dpif_netlink_class = {
     "system",
@@ -2350,6 +2348,7 @@ const struct dpif_class dpif_netlink_class = {
     dpif_netlink_get_stats,
     dpif_netlink_port_add,
     dpif_netlink_port_del,
+    NULL,                       /* port_set_config */
     dpif_netlink_port_query_by_number,
     dpif_netlink_port_query_by_name,
     dpif_netlink_port_get_pid,
@@ -2377,17 +2376,10 @@ const struct dpif_class dpif_netlink_class = {
     NULL,                       /* enable_upcall */
     NULL,                       /* disable_upcall */
     dpif_netlink_get_datapath_version, /* get_datapath_version */
-#ifdef __linux__
     dpif_netlink_ct_dump_start,
     dpif_netlink_ct_dump_next,
     dpif_netlink_ct_dump_done,
-    dpif_netlink_ct_flush,
-#else
-    NULL,                       /* ct_dump_start */
-    NULL,                       /* ct_dump_next */
-    NULL,                       /* ct_dump_done */
-    NULL,                       /* ct_flush */
-#endif
+    dpif_netlink_ct_flush
 };
 
 static int
@@ -2400,9 +2392,9 @@ dpif_netlink_init(void)
         error = nl_lookup_genl_family(OVS_DATAPATH_FAMILY,
                                       &ovs_datapath_family);
         if (error) {
-            VLOG_ERR("Generic Netlink family '%s' does not exist. "
-                     "The Open vSwitch kernel module is probably not loaded.",
-                     OVS_DATAPATH_FAMILY);
+            VLOG_WARN("Generic Netlink family '%s' does not exist. "
+                      "The Open vSwitch kernel module is probably not loaded.",
+                      OVS_DATAPATH_FAMILY);
         }
         if (!error) {
             error = nl_lookup_genl_family(OVS_VPORT_FAMILY, &ovs_vport_family);
@@ -2442,7 +2434,7 @@ dpif_netlink_is_internal_device(const char *name)
 
     return reply.type == OVS_VPORT_TYPE_INTERNAL;
 }
-
+
 /* Parses the contents of 'buf', which contains a "struct ovs_header" followed
  * by Netlink attributes, into 'vport'.  Returns 0 if successful, otherwise a
  * positive errno value.
@@ -2946,7 +2938,7 @@ dpif_netlink_flow_get_stats(const struct dpif_netlink_flow *flow,
     stats->used = flow->used ? get_32aligned_u64(flow->used) : 0;
     stats->tcp_flags = flow->tcp_flags ? *flow->tcp_flags : 0;
 }
-
+
 /* Logs information about a packet that was recently lost in 'ch' (in
  * 'dpif_'). */
 static void

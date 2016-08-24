@@ -1,17 +1,30 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.0.0",
-    "cksum": "1392129391 5060",
+    "version": "1.8.0",
+    "cksum": "59582657 7376",
     "tables": {
+        "SB_Global": {
+            "columns": {
+                "nb_cfg": {"type": {"key": "integer"}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "maxRows": 1,
+            "isRoot": true},
         "Chassis": {
             "columns": {
                 "name": {"type": "string"},
+                "hostname": {"type": "string"},
                 "encaps": {"type": {"key": {"type": "uuid",
                                             "refTable": "Encap"},
                                     "min": 1, "max": "unlimited"}},
                 "vtep_logical_switches" : {"type": {"key": "string",
                                                     "min": 0,
-                                                    "max": "unlimited"}}},
+                                                    "max": "unlimited"}},
+                "nb_cfg": {"type": {"key": "integer"}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
             "isRoot": true,
             "indexes": [["name"]]},
         "Encap": {
@@ -24,6 +37,14 @@
                                      "min": 0,
                                      "max": "unlimited"}},
                 "ip": {"type": "string"}}},
+        "Address_Set": {
+            "columns": {
+                "name": {"type": "string"},
+                "addresses": {"type": {"key": "string",
+                                       "min": 0,
+                                       "max": "unlimited"}}},
+            "indexes": [["name"]],
+            "isRoot": true},
         "Logical_Flow": {
             "columns": {
                 "logical_datapath": {"type": {"key": {"type": "uuid",
@@ -99,6 +120,36 @@
                                  "min": 0,
                                  "max": "unlimited"}}},
             "indexes": [["datapath", "tunnel_key"], ["logical_port"]],
-            "isRoot": true}
-    }
-}
+            "isRoot": true},
+        "MAC_Binding": {
+            "columns": {
+                "logical_port": {"type": "string"},
+                "ip": {"type": "string"},
+                "mac": {"type": "string"},
+                "datapath": {"type": {"key": {"type": "uuid",
+                                              "refTable": "Datapath_Binding"}}}},
+            "indexes": [["logical_port", "ip"]],
+            "isRoot": true},
+        "DHCP_Options": {
+            "columns": {
+                "name": {"type": "string"},
+                "code": {
+                    "type": {"key": {"type": "integer",
+                                     "minInteger": 0, "maxInteger": 254}}},
+                "type": {
+                    "type": {"key": {
+                        "type": "string",
+                        "enum": ["set", ["bool", "uint8", "uint16", "uint32",
+                                         "ipv4", "static_routes", "str"]]}}}},
+            "isRoot": true},
+        "DHCPv6_Options": {
+            "columns": {
+                "name": {"type": "string"},
+                "code": {
+                    "type": {"key": {"type": "integer",
+                                     "minInteger": 0, "maxInteger": 254}}},
+                "type": {
+                    "type": {"key": {
+                        "type": "string",
+                        "enum": ["set", ["ipv6", "str", "mac"]]}}}},
+            "isRoot": true}}}

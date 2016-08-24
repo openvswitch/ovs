@@ -17,7 +17,7 @@
 #ifndef SSET_H
 #define SSET_H
 
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "util.h"
 
 #ifdef __cplusplus
@@ -43,6 +43,9 @@ void sset_clone(struct sset *, const struct sset *);
 void sset_swap(struct sset *, struct sset *);
 void sset_moved(struct sset *);
 
+void sset_from_delimited_string(struct sset *, const char *s,
+                                const char *delimiters);
+
 /* Count. */
 bool sset_is_empty(const struct sset *);
 size_t sset_count(const struct sset *);
@@ -64,8 +67,13 @@ char *sset_pop(struct sset *);
 struct sset_node *sset_find(const struct sset *, const char *);
 bool sset_contains(const struct sset *, const char *);
 bool sset_equals(const struct sset *, const struct sset *);
+
+struct sset_position {
+    struct hmap_position pos;
+};
+
 struct sset_node *sset_at_position(const struct sset *,
-                                   uint32_t *bucketp, uint32_t *offsetp);
+                                   struct sset_position *);
 
 /* Set operations. */
 void sset_intersect(struct sset *, const struct sset *);

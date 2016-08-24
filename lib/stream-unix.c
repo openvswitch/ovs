@@ -110,7 +110,7 @@ punix_accept(int fd, const struct sockaddr_storage *ss, size_t ss_len,
              struct stream **streamp)
 {
     const struct sockaddr_un *sun = (const struct sockaddr_un *) ss;
-    int name_len = get_unix_name_len(ss_len);
+    int name_len = get_unix_name_len(sun, ss_len);
     char name[128];
 
     if (name_len > 0) {

@@ -3,7 +3,7 @@
     <h1>Name</h1>
     <p>ovn-ctl -- Open Virtual Network northbound daemon lifecycle utility</p>
 
-    <h1>Synopsys</h1>
+    <h1>Synopsis</h1>
     <p><code>ovn-ctl</code> [<var>options</var>] <var>command</var></p>
 
     <h1>Description</h1>
@@ -15,10 +15,13 @@
     <dl>
       <dt><code>start_northd</code></dt>
       <dt><code>start_controller</code></dt>
+      <dt><code>start_controller_vtep</code></dt>
       <dt><code>stop_northd</code></dt>
       <dt><code>stop_controller</code></dt>
+      <dt><code>stop_controller_vtep</code></dt>
       <dt><code>restart_northd</code></dt>
       <dt><code>restart_controller</code></dt>
+      <dt><code>restart_controller_vtep</code></dt>
     </dl>
 
     <h1>Options</h1>

@@ -42,8 +42,7 @@
  * A "quiescent state" is a time at which a thread holds no pointers to memory
  * that is managed by RCU; that is, when the thread is known not to reference
  * memory that might be an old version of some object freed via RCU.  For
- * example, poll_block() includes a quiescent state, as does
- * ovs_mutex_cond_wait().
+ * example, poll_block() includes a quiescent state.
  *
  * The following functions manage the recognition of quiescent states:
  *
@@ -56,7 +55,8 @@
  *
  *         Brackets a time period during which the current thread is quiescent.
  *
- * A newly created thread is initially active, not quiescent.
+ * A newly created thread is initially active, not quiescent. When a process
+ * becomes multithreaded, the main thread becomes active, not quiescent.
  *
  * When a quiescient state has occurred in every thread, we say that a "grace
  * period" has occurred.  Following a grace period, all of the callbacks
@@ -123,6 +123,36 @@
  *                         ovsrcu_get_protected(struct flow *, &flowp));
  *         ovsrcu_set(&flowp, new_flow);
  *         ovs_mutex_unlock(&mutex);
+ *     }
+ *
+ * In some rare cases an object may not be addressable with a pointer, but only
+ * through an array index (e.g. because it's provided by another library).  It
+ * is still possible to have RCU semantics by using the ovsrcu_index type.
+ *
+ *     static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
+ *
+ *     ovsrcu_index port_id;
+ *
+ *     void tx()
+ *     {
+ *         int id = ovsrcu_index_get(&port_id);
+ *         if (id == -1) {
+ *             return;
+ *         }
+ *         port_tx(id);
+ *     }
+ *
+ *     void delete()
+ *     {
+ *         int id;
+ *
+ *         ovs_mutex_lock(&mutex);
+ *         id = ovsrcu_index_get_protected(&port_id);
+ *         ovsrcu_index_set(&port_id, -1);
+ *         ovs_mutex_unlock(&mutex);
+ *
+ *         ovsrcu_synchronize();
+ *         port_delete(id);
  *     }
  *
  */
@@ -213,10 +243,65 @@ void ovsrcu_postpone__(void (*function)(void *aux), void *aux);
      (void) sizeof(*(ARG)),                                     \
      ovsrcu_postpone__((void (*)(void *))(FUNCTION), ARG))
 
+/* An array index protected by RCU semantics.  This is an easier alternative to
+ * an RCU protected pointer to a malloc'd int. */
+typedef struct { atomic_int v; } ovsrcu_index;
+
+static inline int ovsrcu_index_get__(const ovsrcu_index *i, memory_order order)
+{
+    int ret;
+    atomic_read_explicit(CONST_CAST(atomic_int *, &i->v), &ret, order);
+    return ret;
+}
+
+/* Returns the index contained in 'i'.  The returned value can be used until
+ * the next grace period. */
+static inline int ovsrcu_index_get(const ovsrcu_index *i)
+{
+    return ovsrcu_index_get__(i, memory_order_consume);
+}
+
+/* Returns the index contained in 'i'.  This is an alternative to
+ * ovsrcu_index_get() that can be used when there's no possible concurrent
+ * writer. */
+static inline int ovsrcu_index_get_protected(const ovsrcu_index *i)
+{
+    return ovsrcu_index_get__(i, memory_order_relaxed);
+}
+
+static inline void ovsrcu_index_set__(ovsrcu_index *i, int value,
+                                      memory_order order)
+{
+    atomic_store_explicit(&i->v, value, order);
+}
+
+/* Writes the index 'value' in 'i'.  The previous value of 'i' may still be
+ * used by readers until the next grace period. */
+static inline void ovsrcu_index_set(ovsrcu_index *i, int value)
+{
+    ovsrcu_index_set__(i, value, memory_order_release);
+}
+
+/* Writes the index 'value' in 'i'.  This is an alternative to
+ * ovsrcu_index_set() that can be used when there's no possible concurrent
+ * reader. */
+static inline void ovsrcu_index_set_hidden(ovsrcu_index *i, int value)
+{
+    ovsrcu_index_set__(i, value, memory_order_relaxed);
+}
+
+/* Initializes 'i' with 'value'.  This is safe to call as long as there are no
+ * concurrent readers. */
+static inline void ovsrcu_index_init(ovsrcu_index *i, int value)
+{
+    atomic_init(&i->v, value);
+}
+
 /* Quiescent states. */
 void ovsrcu_quiesce_start(void);
 void ovsrcu_quiesce_end(void);
 void ovsrcu_quiesce(void);
+int ovsrcu_try_quiesce(void);
 bool ovsrcu_is_quiescent(void);
 
 /* Synchronization.  Waits for all non-quiescent threads to quiesce at least

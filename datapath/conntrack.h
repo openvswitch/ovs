@@ -20,7 +20,7 @@
 struct ovs_conntrack_info;
 enum ovs_key_attr;
 
-#if IS_ENABLED(CONFIG_NF_CONNTRACK) && LINUX_VERSION_CODE >= KERNEL_VERSION(3,10,0)
+#if IS_ENABLED(CONFIG_NF_CONNTRACK)
 void ovs_ct_init(struct net *);
 void ovs_ct_exit(struct net *);
 bool ovs_ct_verify(struct net *, enum ovs_key_attr attr);
@@ -38,7 +38,8 @@ void ovs_ct_free_action(const struct nlattr *a);
 
 #define CT_SUPPORTED_MASK (OVS_CS_F_NEW | OVS_CS_F_ESTABLISHED | \
 			   OVS_CS_F_RELATED | OVS_CS_F_REPLY_DIR | \
-			   OVS_CS_F_INVALID | OVS_CS_F_TRACKED)
+			   OVS_CS_F_INVALID | OVS_CS_F_TRACKED | \
+			   OVS_CS_F_SRC_NAT | OVS_CS_F_DST_NAT)
 #else
 #include <linux/errno.h>
 

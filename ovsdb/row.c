@@ -19,12 +19,13 @@
 
 #include <stddef.h>
 
-#include "dynamic-string.h"
-#include "json.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/json.h"
 #include "ovsdb-error.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "sort.h"
 #include "table.h"
+#include "util.h"
 
 static struct ovsdb_row *
 allocate_row(const struct ovsdb_table *table)
@@ -37,8 +38,8 @@ allocate_row(const struct ovsdb_table *table)
     struct ovsdb_row *row = xmalloc(row_size);
     row->table = CONST_CAST(struct ovsdb_table *, table);
     row->txn_row = NULL;
-    list_init(&row->src_refs);
-    list_init(&row->dst_refs);
+    ovs_list_init(&row->src_refs);
+    ovs_list_init(&row->dst_refs);
     row->n_refs = 0;
     return row;
 }
@@ -85,14 +86,14 @@ ovsdb_row_destroy(struct ovsdb_row *row)
         const struct shash_node *node;
 
         LIST_FOR_EACH_SAFE (weak, next, dst_node, &row->dst_refs) {
-            list_remove(&weak->src_node);
-            list_remove(&weak->dst_node);
+            ovs_list_remove(&weak->src_node);
+            ovs_list_remove(&weak->dst_node);
             free(weak);
         }
 
         LIST_FOR_EACH_SAFE (weak, next, src_node, &row->src_refs) {
-            list_remove(&weak->src_node);
-            list_remove(&weak->dst_node);
+            ovs_list_remove(&weak->src_node);
+            ovs_list_remove(&weak->dst_node);
             free(weak);
         }
 
@@ -341,10 +342,9 @@ ovsdb_row_hash_init(struct ovsdb_row_hash *rh,
 void
 ovsdb_row_hash_destroy(struct ovsdb_row_hash *rh, bool destroy_rows)
 {
-    struct ovsdb_row_hash_node *node, *next;
+    struct ovsdb_row_hash_node *node;
 
-    HMAP_FOR_EACH_SAFE (node, next, hmap_node, &rh->rows) {
-        hmap_remove(&rh->rows, &node->hmap_node);
+    HMAP_FOR_EACH_POP (node, hmap_node, &rh->rows) {
         if (destroy_rows) {
             ovsdb_row_destroy(CONST_CAST(struct ovsdb_row *, node->row));
         }

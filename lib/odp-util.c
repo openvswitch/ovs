@@ -29,10 +29,10 @@
 #include "byte-order.h"
 #include "coverage.h"
 #include "dpif.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "netlink.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "packets.h"
 #include "simap.h"
 #include "timeval.h"
@@ -107,6 +107,7 @@ odp_action_len(uint16_t type)
 
     switch ((enum ovs_action_attr) type) {
     case OVS_ACTION_ATTR_OUTPUT: return sizeof(uint32_t);
+    case OVS_ACTION_ATTR_TRUNC: return sizeof(struct ovs_action_trunc);
     case OVS_ACTION_ATTR_TUNNEL_PUSH: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_TUNNEL_POP: return sizeof(uint32_t);
     case OVS_ACTION_ATTR_USERSPACE: return ATTR_LEN_VARIABLE;
@@ -311,11 +312,13 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
                 ds_put_format(ds, ",flow_sample(probability=%"PRIu16
                               ",collector_set_id=%"PRIu32
                               ",obs_domain_id=%"PRIu32
-                              ",obs_point_id=%"PRIu32")",
+                              ",obs_point_id=%"PRIu32
+                              ",output_port=%"PRIu32")",
                               cookie.flow_sample.probability,
                               cookie.flow_sample.collector_set_id,
                               cookie.flow_sample.obs_domain_id,
-                              cookie.flow_sample.obs_point_id);
+                              cookie.flow_sample.obs_point_id,
+                              cookie.flow_sample.output_odp_port);
             } else if (userdata_len >= sizeof cookie.ipfix
                        && cookie.type == USER_ACTION_COOKIE_IPFIX) {
                 ds_put_format(ds, ",ipfix(output_port=%"PRIu32")",
@@ -775,6 +778,14 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
     case OVS_ACTION_ATTR_OUTPUT:
         ds_put_format(ds, "%"PRIu32, nl_attr_get_u32(a));
         break;
+    case OVS_ACTION_ATTR_TRUNC: {
+        const struct ovs_action_trunc *trunc =
+                       nl_attr_get_unspec(a, sizeof *trunc);
+
+        ds_put_format(ds, "trunc(%"PRIu32")", trunc->max_len);
+        break;
+    }
+    break;
     case OVS_ACTION_ATTR_TUNNEL_POP:
         ds_put_format(ds, "tnl_pop(%"PRIu32")", nl_attr_get_u32(a));
         break;
@@ -951,9 +962,11 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
         } else if (ovs_scan(&s[n], ",flow_sample(probability=%"SCNi32","
                             "collector_set_id=%"SCNi32","
                             "obs_domain_id=%"SCNi32","
-                            "obs_point_id=%"SCNi32")%n",
+                            "obs_point_id=%"SCNi32","
+                            "output_port=%"SCNi32")%n",
                             &probability, &collector_set_id,
-                            &obs_domain_id, &obs_point_id, &n1)) {
+                            &obs_domain_id, &obs_point_id,
+                            &output, &n1)) {
             n += n1;
 
             cookie.type = USER_ACTION_COOKIE_FLOW_SAMPLE;
@@ -961,6 +974,7 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             cookie.flow_sample.collector_set_id = collector_set_id;
             cookie.flow_sample.obs_domain_id = obs_domain_id;
             cookie.flow_sample.obs_point_id = obs_point_id;
+            cookie.flow_sample.output_odp_port = u32_to_odp(output);
             user_data = &cookie;
             user_data_size = sizeof cookie.flow_sample;
         } else if (ovs_scan(&s[n], ",ipfix(output_port=%"SCNi32")%n",
@@ -1492,7 +1506,7 @@ find_end:
             nl_msg_put_unspec(actions, OVS_CT_ATTR_MARK, &ct_mark,
                               sizeof(ct_mark));
         }
-        if (!ovs_u128_is_zero(&ct_label.mask)) {
+        if (!ovs_u128_is_zero(ct_label.mask)) {
             nl_msg_put_unspec(actions, OVS_CT_ATTR_LABELS, &ct_label,
                               sizeof ct_label);
         }
@@ -1519,6 +1533,20 @@ parse_odp_action(const char *s, const struct simap *port_names,
 
         if (ovs_scan(s, "%"SCNi32"%n", &port, &n)) {
             nl_msg_put_u32(actions, OVS_ACTION_ATTR_OUTPUT, port);
+            return n;
+        }
+    }
+
+    {
+        uint32_t max_len;
+        int n;
+
+        if (ovs_scan(s, "trunc(%"SCNi32")%n", &max_len, &n)) {
+            struct ovs_action_trunc *trunc;
+
+            trunc = nl_msg_put_unspec_uninit(actions,
+                     OVS_ACTION_ATTR_TRUNC, sizeof *trunc);
+            trunc->max_len = max_len;
             return n;
         }
     }
@@ -2081,10 +2109,9 @@ odp_portno_names_get(const struct hmap *portno_names, odp_port_t port_no)
 void
 odp_portno_names_destroy(struct hmap *portno_names)
 {
-    struct odp_portno_names *odp_portno_names, *odp_portno_names_next;
-    HMAP_FOR_EACH_SAFE (odp_portno_names, odp_portno_names_next,
-                        hmap_node, portno_names) {
-        hmap_remove(portno_names, &odp_portno_names->hmap_node);
+    struct odp_portno_names *odp_portno_names;
+
+    HMAP_FOR_EACH_POP (odp_portno_names, hmap_node, portno_names) {
         free(odp_portno_names->name);
         free(odp_portno_names);
     }
@@ -2366,7 +2393,7 @@ format_odp_tun_vxlan_opt(const struct nlattr *attr,
         case OVS_VXLAN_EXT_GBP: {
             uint32_t key = nl_attr_get_u32(a);
             ovs_be16 id, id_mask;
-            uint8_t flags, flags_mask;
+            uint8_t flags, flags_mask = 0;
 
             id = htons(key & 0xFFFF);
             flags = (key >> 16) & 0xFF;
@@ -2565,6 +2592,8 @@ format_odp_tun_attr(const struct nlattr *attr, const struct nlattr *mask_attr,
             ds_put_cstr(ds, "geneve(");
             format_odp_tun_geneve(a, ma, ds, verbose);
             ds_put_cstr(ds, "),");
+            break;
+        case OVS_TUNNEL_KEY_ATTR_PAD:
             break;
         case __OVS_TUNNEL_KEY_ATTR_MAX:
         default:
@@ -2951,12 +2980,12 @@ static void
 format_u128(struct ds *ds, const ovs_u128 *key, const ovs_u128 *mask,
             bool verbose)
 {
-    if (verbose || (mask && !ovs_u128_is_zero(mask))) {
+    if (verbose || (mask && !ovs_u128_is_zero(*mask))) {
         ovs_be128 value;
 
         value = hton128(*key);
         ds_put_hex(ds, &value, sizeof value);
-        if (mask && !(ovs_u128_is_ones(mask))) {
+        if (mask && !(ovs_u128_is_ones(*mask))) {
             value = hton128(*mask);
             ds_put_char(ds, '/');
             ds_put_hex(ds, &value, sizeof value);
@@ -2964,6 +2993,12 @@ format_u128(struct ds *ds, const ovs_u128 *key, const ovs_u128 *mask,
     }
 }
 
+/* Read the string from 's_' as a 128-bit value.  If the string contains
+ * a "/", the rest of the string will be treated as a 128-bit mask.
+ *
+ * If either the value or mask is larger than 64 bits, the string must
+ * be in hexadecimal.
+ */
 static int
 scan_u128(const char *s_, ovs_u128 *value, ovs_u128 *mask)
 {
@@ -4052,7 +4087,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
 
     SCAN_SINGLE("eth_type(", ovs_be16, be16, OVS_KEY_ATTR_ETHERTYPE);
 
-    SCAN_BEGIN_ARRAY("mpls(", struct ovs_key_mpls, 3) {
+    SCAN_BEGIN_ARRAY("mpls(", struct ovs_key_mpls, FLOW_MAX_MPLS_LABELS) {
         SCAN_FIELD_ARRAY("label=", mpls_label, mpls_lse);
         SCAN_FIELD_ARRAY("tc=", mpls_tc, mpls_lse);
         SCAN_FIELD_ARRAY("ttl=", mpls_ttl, mpls_lse);
@@ -4275,10 +4310,10 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
         nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, data->dp_hash);
     }
 
-    /* Add an ingress port attribute if this is a mask or 'odp_in_port'
+    /* Add an ingress port attribute if this is a mask or 'in_port.odp_port'
      * is not the magical value "ODPP_NONE". */
-    if (export_mask || parms->odp_in_port != ODPP_NONE) {
-        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, parms->odp_in_port);
+    if (export_mask || flow->in_port.odp_port != ODPP_NONE) {
+        nl_msg_put_odp_port(buf, OVS_KEY_ATTR_IN_PORT, data->in_port.odp_port);
     }
 
     eth_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ETHERNET,
@@ -4393,9 +4428,7 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
             icmpv6_key->icmpv6_type = ntohs(data->tp_src);
             icmpv6_key->icmpv6_code = ntohs(data->tp_dst);
 
-            if (flow->tp_dst == htons(0)
-                && (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT)
-                    || flow->tp_src == htons(ND_NEIGHBOR_ADVERT))
+            if (is_nd(flow, NULL)
                 /* Even though 'tp_src' and 'tp_dst' are 16 bits wide, ICMP
                  * type and code are 8 bits wide.  Therefore, an exact match
                  * looks like htons(0xff), not htons(0xffff).  See
@@ -4465,7 +4498,7 @@ odp_key_from_pkt_metadata(struct ofpbuf *buf, const struct pkt_metadata *md)
         if (md->ct_mark) {
             nl_msg_put_u32(buf, OVS_KEY_ATTR_CT_MARK, md->ct_mark);
         }
-        if (!ovs_u128_is_zero(&md->ct_label)) {
+        if (!ovs_u128_is_zero(md->ct_label)) {
             nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_LABELS, &md->ct_label,
                               sizeof(md->ct_label));
         }
@@ -4930,9 +4963,7 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
             flow->tp_src = htons(icmpv6_key->icmpv6_type);
             flow->tp_dst = htons(icmpv6_key->icmpv6_code);
             expected_bit = OVS_KEY_ATTR_ICMPV6;
-            if (src_flow->tp_dst == htons(0) &&
-                (src_flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
-                 src_flow->tp_src == htons(ND_NEIGHBOR_ADVERT))) {
+            if (is_nd(src_flow, NULL)) {
                 if (!is_mask) {
                     expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_ND;
                 }
@@ -5720,9 +5751,9 @@ commit_set_icmp_action(const struct flow *flow, struct flow *base_flow,
     struct ovs_key_icmp key, mask, base;
     enum ovs_key_attr attr;
 
-    if (is_icmpv4(flow)) {
+    if (is_icmpv4(flow, NULL)) {
         attr = OVS_KEY_ATTR_ICMP;
-    } else if (is_icmpv6(flow)) {
+    } else if (is_icmpv6(flow, NULL)) {
         attr = OVS_KEY_ATTR_ICMPV6;
     } else {
         return 0;

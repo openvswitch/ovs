@@ -25,6 +25,8 @@
 #define DHCP_SERVER_PORT        67       /* Port used by DHCP server. */
 #define DHCP_CLIENT_PORT        68       /* Port used by DHCP client. */
 
+#define DHCP_MAGIC_COOKIE 0x63825363
+
 #define DHCP_HEADER_LEN 236
 struct dhcp_header {
     uint8_t op;                 /* DHCP_BOOTREQUEST or DHCP_BOOTREPLY. */
@@ -44,5 +46,16 @@ struct dhcp_header {
     /* Followed by variable-length options field. */
 };
 BUILD_ASSERT_DECL(DHCP_HEADER_LEN == sizeof(struct dhcp_header));
+
+#define DHCP_OP_REQUEST    1
+#define DHCP_OP_REPLY      2
+
+#define DHCP_MSG_DISCOVER  1
+#define DHCP_MSG_OFFER     2
+#define DHCP_MSG_REQUEST   3
+#define DHCP_MSG_ACK       5
+
+#define DHCP_OPT_MSG_TYPE  53
+#define DHCP_OPT_END       255
 
 #endif /* dhcp.h */

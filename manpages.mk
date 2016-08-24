@@ -64,7 +64,9 @@ ovsdb/ovsdb-server.1: \
 	lib/vlog-unixctl.man \
 	lib/vlog.man \
 	ovsdb/remote-active.man \
-	ovsdb/remote-passive.man
+	ovsdb/remote-passive.man \
+	ovsdb/replication-syn.man \
+	ovsdb/replication.man
 ovsdb/ovsdb-server.1.in:
 lib/common-syn.man:
 lib/common.man:
@@ -87,6 +89,8 @@ lib/vlog-unixctl.man:
 lib/vlog.man:
 ovsdb/remote-active.man:
 ovsdb/remote-passive.man:
+ovsdb/replication-syn.man:
+ovsdb/replication.man:
 
 ovsdb/ovsdb-tool.1: \
 	ovsdb/ovsdb-tool.1.in \
@@ -134,6 +138,7 @@ lib/common.man:
 
 utilities/ovs-ofctl.8: \
 	utilities/ovs-ofctl.8.in \
+	lib/colors.man \
 	lib/common.man \
 	lib/daemon.man \
 	lib/ofp-version.man \
@@ -142,6 +147,7 @@ utilities/ovs-ofctl.8: \
 	lib/vconn-active.man \
 	lib/vlog.man
 utilities/ovs-ofctl.8.in:
+lib/colors.man:
 lib/common.man:
 lib/daemon.man:
 lib/ofp-version.man:
@@ -161,6 +167,12 @@ lib/common.man:
 utilities/ovs-pki.8: \
 	utilities/ovs-pki.8.in
 utilities/ovs-pki.8.in:
+
+utilities/ovs-tcpdump.8: \
+	utilities/ovs-tcpdump.8.in \
+	lib/common.man
+utilities/ovs-tcpdump.8.in:
+lib/common.man:
 
 utilities/ovs-tcpundump.1: \
 	utilities/ovs-tcpundump.1.in \

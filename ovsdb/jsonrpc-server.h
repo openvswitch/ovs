@@ -23,7 +23,7 @@ struct ovsdb;
 struct shash;
 struct simap;
 
-struct ovsdb_jsonrpc_server *ovsdb_jsonrpc_server_create(void);
+struct ovsdb_jsonrpc_server *ovsdb_jsonrpc_server_create(bool read_only);
 bool ovsdb_jsonrpc_server_add_db(struct ovsdb_jsonrpc_server *,
                                  struct ovsdb *);
 bool ovsdb_jsonrpc_server_remove_db(struct ovsdb_jsonrpc_server *,
@@ -61,7 +61,7 @@ bool ovsdb_jsonrpc_server_get_remote_status(
 void ovsdb_jsonrpc_server_free_remote_status(
     struct ovsdb_jsonrpc_remote_status *);
 
-void ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *);
+void ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *, bool read_only);
 
 void ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *);
 void ovsdb_jsonrpc_server_wait(struct ovsdb_jsonrpc_server *);
@@ -71,6 +71,6 @@ void ovsdb_jsonrpc_server_get_memory_usage(const struct ovsdb_jsonrpc_server *,
 
 struct ovsdb_jsonrpc_monitor;
 void ovsdb_jsonrpc_monitor_destroy(struct ovsdb_jsonrpc_monitor *);
-void ovsdb_jsonrpc_disable_monitor2(void);
+void ovsdb_jsonrpc_disable_monitor_cond(void);
 
 #endif /* ovsdb/jsonrpc-server.h */

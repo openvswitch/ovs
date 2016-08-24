@@ -16,17 +16,17 @@
 set -o xtrace
 
 # create a logical switch
-ovn-nbctl lswitch-add csw0
+ovn-nbctl ls-add csw0
 
 # create a container port with parent set to sw0-port1
-ovn-nbctl lport-add csw0 csw0-cport1 sw0-port1 42
-ovn-nbctl lport-set-addresses csw0-cport1 00:00:00:00:01:01
-ovn-nbctl lport-set-port-security csw0-cport1 00:00:00:00:01:01
+ovn-nbctl lsp-add csw0 csw0-cport1 sw0-port1 42
+ovn-nbctl lsp-set-addresses csw0-cport1 00:00:00:00:01:01
+ovn-nbctl lsp-set-port-security csw0-cport1 00:00:00:00:01:01
 
 # create another container port with parent set to sw0-port1
-ovn-nbctl lport-add csw0 csw0-cport2 sw0-port2 43
-ovn-nbctl lport-set-addresses csw0-cport2 00:00:00:00:01:02
-ovn-nbctl lport-set-port-security csw0-cport2 00:00:00:00:01:02
+ovn-nbctl lsp-add csw0 csw0-cport2 sw0-port2 43
+ovn-nbctl lsp-set-addresses csw0-cport2 00:00:00:00:01:02
+ovn-nbctl lsp-set-port-security csw0-cport2 00:00:00:00:01:02
 
 
 # Make lport1 as a patch port, other end connected to br-vmport1

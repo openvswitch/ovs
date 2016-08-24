@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "7.12.1",
- "cksum": "2211824403 22535",
+ "version": "7.14.0",
+ "cksum": "3974332717 22936",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -97,7 +97,8 @@
                             "OpenFlow12",
                             "OpenFlow13",
                             "OpenFlow14",
-                            "OpenFlow15"]]},
+                            "OpenFlow15",
+                            "OpenFlow16"]]},
 	   "min": 0, "max": "unlimited"}},
        "fail_mode": {
          "type": {"key": {"type": "string",
@@ -320,6 +321,12 @@
        "mtu": {
          "type": {"key": "integer", "min": 0, "max": 1},
          "ephemeral": true},
+       "mtu_request": {
+         "type": {
+           "key": {"type": "integer",
+                   "minInteger": 1},
+           "min": 0,
+           "max": 1}},
        "error": {
          "type": {"key": "string", "min": 0, "max": 1}}},
      "indexes": [["name"]]},
@@ -403,6 +410,11 @@
          "type": {"key": {"type": "integer",
                           "minInteger": 1,
                           "maxInteger": 4095},
+                  "min": 0, "max": 1}},
+       "snaplen": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 14,
+                          "maxInteger": 65535},
                   "min": 0, "max": 1}},
        "statistics": {
          "type": {"key": "string", "value": "integer",

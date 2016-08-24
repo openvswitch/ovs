@@ -15,16 +15,17 @@
  */
 
 #include <config.h>
-#include "ofp-msgs.h"
 #include "byte-order.h"
-#include "dynamic-string.h"
 #include "hash.h"
-#include "hmap.h"
-#include "ofpbuf.h"
+#include "openvswitch/hmap.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
-#include "ovs-thread.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofpbuf.h"
 #include "openvswitch/vlog.h"
+#include "ovs-thread.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_msgs);
 
@@ -327,6 +328,7 @@ ofp_is_stat_request(enum ofp_version version, uint8_t type)
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         return type == OFPT11_STATS_REQUEST;
     }
 
@@ -344,6 +346,7 @@ ofp_is_stat_reply(enum ofp_version version, uint8_t type)
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         return type == OFPT11_STATS_REPLY;
     }
 
@@ -385,6 +388,7 @@ ofphdrs_len(const struct ofphdrs *hdrs)
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         if (hdrs->type == OFPT11_STATS_REQUEST ||
             hdrs->type == OFPT11_STATS_REPLY) {
             return (hdrs->stat == OFPST_VENDOR
@@ -810,6 +814,7 @@ ofpraw_stats_request_to_reply(enum ofpraw raw, uint8_t version)
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         ovs_assert(hdrs.type == OFPT11_STATS_REQUEST);
         hdrs.type = OFPT11_STATS_REPLY;
         break;
@@ -921,10 +926,10 @@ ofpmp_init(struct ovs_list *replies, const struct ofp_header *request)
 {
     struct ofpbuf *msg;
 
-    list_init(replies);
+    ovs_list_init(replies);
 
     msg = ofpraw_alloc_stats_reply(request, 1000);
-    list_push_back(replies, &msg->list_node);
+    ovs_list_push_back(replies, &msg->list_node);
 }
 
 /* Prepares to append up to 'len' bytes to the series of statistics replies in
@@ -937,7 +942,7 @@ ofpmp_init(struct ovs_list *replies, const struct ofp_header *request)
 struct ofpbuf *
 ofpmp_reserve(struct ovs_list *replies, size_t len)
 {
-    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *msg = ofpbuf_from_list(ovs_list_back(replies));
 
     if (msg->size + len <= UINT16_MAX) {
         ofpbuf_prealloc_tailroom(msg, len);
@@ -954,7 +959,7 @@ ofpmp_reserve(struct ovs_list *replies, size_t len)
         ofpbuf_put(next, msg->data, hdrs_len);
         next->header = next->data;
         next->msg = ofpbuf_tail(next);
-        list_push_back(replies, &next->list_node);
+        ovs_list_push_back(replies, &next->list_node);
 
         *ofpmp_flags__(msg->data) |= htons(OFPSF_REPLY_MORE);
 
@@ -983,7 +988,7 @@ ofpmp_append(struct ovs_list *replies, size_t len)
 void
 ofpmp_postappend(struct ovs_list *replies, size_t start_ofs)
 {
-    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *msg = ofpbuf_from_list(ovs_list_back(replies));
 
     ovs_assert(start_ofs <= UINT16_MAX);
     if (msg->size > UINT16_MAX) {
@@ -999,7 +1004,7 @@ ofpmp_postappend(struct ovs_list *replies, size_t start_ofs)
 enum ofp_version
 ofpmp_version(struct ovs_list *replies)
 {
-    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *msg = ofpbuf_from_list(ovs_list_back(replies));
     const struct ofp_header *oh = msg->data;
 
     return oh->version;
@@ -1010,7 +1015,7 @@ ofpmp_version(struct ovs_list *replies)
 enum ofpraw
 ofpmp_decode_raw(struct ovs_list *replies)
 {
-    struct ofpbuf *msg = ofpbuf_from_list(list_back(replies));
+    struct ofpbuf *msg = ofpbuf_from_list(ovs_list_back(replies));
     enum ofperr error;
     enum ofpraw raw;
 
@@ -1030,6 +1035,7 @@ ofpmp_flags__(const struct ofp_header *oh)
     case OFP13_VERSION:
     case OFP14_VERSION:
     case OFP15_VERSION:
+    case OFP16_VERSION:
         return &((struct ofp11_stats_msg *) oh)->flags;
     default:
         OVS_NOT_REACHED();

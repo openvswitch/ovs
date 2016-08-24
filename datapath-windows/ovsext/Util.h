@@ -36,10 +36,14 @@
 #define OVS_STT_POOL_TAG                'RSVO'
 #define OVS_GRE_POOL_TAG                'GSVO'
 #define OVS_TUNFLT_POOL_TAG             'WSVO'
+#define OVS_RECIRC_POOL_TAG             'CSVO'
+#define OVS_CT_POOL_TAG                 'CTVO'
+#define OVS_GENEVE_POOL_TAG             'GNVO'
 
 VOID *OvsAllocateMemory(size_t size);
 VOID *OvsAllocateMemoryWithTag(size_t size, ULONG tag);
 VOID *OvsAllocateAlignedMemory(size_t size, UINT16 align);
+VOID *OvsAllocateMemoryPerCpu(size_t size, size_t count, ULONG tag);
 VOID OvsFreeMemory(VOID *ptr);
 VOID OvsFreeMemoryWithTag(VOID *ptr, ULONG tag);
 VOID OvsFreeAlignedMemory(VOID *ptr);
@@ -66,7 +70,7 @@ VOID OvsFreeAlignedMemory(VOID *ptr);
 
 VOID OvsAppendList(PLIST_ENTRY dst, PLIST_ENTRY src);
 
-
+#define MAX(_a, _b) ((_a) > (_b) ? (_a) : (_b))
 #define MIN(_a, _b) ((_a) > (_b) ? (_b) : (_a))
 #define ARRAY_SIZE(_x)  ((sizeof(_x))/sizeof (_x)[0])
 #define OVS_SWITCH_PORT_ID_INVALID  (NDIS_SWITCH_PORT_ID)(-1)
@@ -76,6 +80,10 @@ VOID OvsAppendList(PLIST_ENTRY dst, PLIST_ENTRY src);
 #define ntohs(_x)    _byteswap_ushort((USHORT)(_x))
 #define htonl(_x)    _byteswap_ulong((ULONG)(_x))
 #define ntohl(_x)    _byteswap_ulong((ULONG)(_x))
+#define htonll(_x)    ((1==htonl(1)) ? (_x) : \
+                           ((uint64_t) htonl(_x) << 32) | htonl(_x >> 32))
+#define ntohll(_x)    ((1==ntohl(1)) ? (_x) : \
+                           ((uint64_t) ntohl(_x) << 32) | ntohl(_x >> 32))
 #endif
 
 #define OVS_INIT_OBJECT_HEADER(_obj, _type, _revision, _size) \
@@ -91,5 +99,50 @@ VOID OvsAppendList(PLIST_ENTRY dst, PLIST_ENTRY src);
 #define BIT32(_x)                       ((UINT32)0x1 << (_x))
 
 BOOLEAN OvsCompareString(PVOID string1, PVOID string2);
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsPerCpuDataInit --
+ *     The function allocates necessary per-processor resources.
+ * --------------------------------------------------------------------------
+ */
+NTSTATUS
+OvsPerCpuDataInit();
+
+/*
+ * --------------------------------------------------------------------------
+ * OvsPerCpuDataCleanup --
+ *     The function frees all per-processor resources.
+ * --------------------------------------------------------------------------
+ */
+VOID
+OvsPerCpuDataCleanup();
+
+static LARGE_INTEGER seed;
+
+/*
+ *----------------------------------------------------------------------------
+ *  SRand --
+ *    This function sets the starting seed value for the pseudorandom number
+ *    generator.
+ *----------------------------------------------------------------------------
+ */
+static __inline
+VOID SRand()
+{
+    KeQuerySystemTime(&seed);
+}
+
+/*
+ *----------------------------------------------------------------------------
+ *  Rand --
+ *    This function generates a pseudorandom number between 0 to UINT_MAX.
+ *----------------------------------------------------------------------------
+ */
+static __inline
+UINT32 Rand()
+{
+    return seed.LowPart *= 0x8088405 + 1;
+}
 
 #endif /* __UTIL_H_ */

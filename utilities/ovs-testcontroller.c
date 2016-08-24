@@ -29,9 +29,8 @@
 #include "daemon.h"
 #include "fatal-signal.h"
 #include "learning-switch.h"
-#include "ofp-parse.h"
 #include "ofp-version-opt.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "poll-loop.h"
 #include "rconn.h"
@@ -40,10 +39,11 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "util.h"
+#include "openvswitch/ofp-parse.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "socket-util.h"
-#include "ofp-util.h"
+#include "openvswitch/ofp-util.h"
 
 VLOG_DEFINE_THIS_MODULE(controller);
 

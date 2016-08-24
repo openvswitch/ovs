@@ -25,7 +25,7 @@
 #include "dpif.h"
 #include "flow.h"
 #include "lib/netflow.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto.h"
 #include "ofproto/netflow.h"
 #include "packets.h"

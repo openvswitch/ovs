@@ -4,18 +4,6 @@
 
 ** New OVN logical actions
 
-*** arp
-
-Generates an ARP packet based on the current IPv4 packet and allows it
-to be processed as part of the current pipeline (and then pop back to
-processing the original IPv4 packet).
-
-TCP/IP stacks typically limit the rate at which ARPs are sent, e.g. to
-one per second for a given target.  We might need to do this too.
-
-We probably need to buffer the packet that generated the ARP.  I don't
-know where to do that.
-
 *** icmp4 { action... }
 
 Generates an ICMPv4 packet based on the current IPv4 packet and
@@ -52,45 +40,37 @@ the "arp" action, and an action for generating
 
 ** IPv6
 
-*** ND versus ARP
+*** Drop invalid source IPv6 addresses
 
-*** IPv6 routing
+*** Don't forward non-routable addresses
 
-*** ICMPv6
+*** ICMPv6 action
+
+Similar to the ICMPv4 action, ICMPv6 messages should be generated.
+
+*** Neighbor Discovery
+
+**** ND Router Advertisements
+
+The router ports should periodically send out ND Router Advertisements
+and respond to Router Solicitations.
+
+**** Learn MAC bindings on ND Solicitations
+
+**** Properly set RSO flags
 
 ** Dynamic IP to MAC bindings
 
-Some bindings from IP address to MAC will undoubtedly need to be
-discovered dynamically through ARP requests.  It's straightforward
-enough for a logical L3 router to generate ARP requests and forward
-them to the appropriate switch.
+OVN has basic support for establishing IP to MAC bindings dynamically,
+using ARP.
 
-It's more difficult to figure out where the reply should be processed
-and stored.  It might seem at first that a first-cut implementation
-could just keep track of the binding on the hypervisor that needs to
-know, but that can't happen easily because the VM that sends the reply
-might not be on the same HV as the VM that needs the answer (that is,
-the VM that sent the packet that needs the binding to be resolved) and
-there isn't an easy way for it to know which HV needs the answer.
+*** Ratelimiting.
 
-Thus, the HV that processes the ARP reply (which is unknown when the
-ARP is sent) has to tell all the HVs the binding.  The most obvious
-place for this in the OVN_Southbound database.
+From casual observation, Linux appears to generate at most one ARP per
+second per destination.
 
-Details need to be worked out, including:
-
-*** OVN_Southbound schema changes.
-
-Possibly bindings could be added to the Port_Binding table by adding
-or modifying columns.  Another possibility is that another table
-should be added.
-
-*** Logical_Flow representation
-
-It would be really nice to maintain the general-purpose nature of
-logical flows, but these bindings might have to include some
-hard-coded special cases, especially when it comes to the relationship
-with populating the bindings into the OVN_Southbound table.
+This might be supported by adding a new OVN logical action for
+rate-limiting.
 
 *** Tracking queries
 
@@ -104,16 +84,15 @@ into the database.
 Something needs to make sure that bindings remain valid and expire
 those that become stale.
 
+One way to do this might be to add some support for time to the
+database server itself.
+
+*** Table size limiting.
+
+The table of MAC bindings must not be allowed to grow unreasonably
+large.
+
 ** MTU handling (fragmentation on output)
-
-** Ratelimiting.
-
-*** ARP.
-
-*** ICMP error generation, TCP reset, UDP unreachable, protocol unreachable, ...
-
-As a point of comparison, Linux doesn't ratelimit TCP resets but I
-think it does everything else.
 
 * ovn-controller
 
@@ -158,12 +137,6 @@ think it does everything else.
     The part of OpenStack that manages VMs (Nova) tells the networking component
     (Neutron) where a port will be located, as opposed to the networking
     component discovering it.
-
-** Gratuitous ARP generation
-
-   ovn-controller should generate a GARP when a port is bound to a chassis.
-   This is needed when ports are migrated from one chassis to another, such
-   as live migrating a VM.
 
 * ovsdb-server
 
@@ -275,3 +248,9 @@ think it does everything else.
 ** Support reject action.
 
 ** Support log option.
+
+** We currently use ct_label[0] to mark connections that have been blocked
+   by an ACL.  It would be nice in the logical flow syntax to have a
+   symbolic name like "ct_label.blocked" to make things more clear, as
+   well as to change the implementation of "blocked" in the future
+   if needed.

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2013, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2013, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,8 @@
 
 #include "netlink.h"
 #include "netlink-notifier.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
+#include "packets.h"
 
 static struct nln *nln = NULL;
 static struct rtnetlink_change rtn_change;
@@ -100,7 +101,7 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
          * There are *many* more fields in these messages, but currently we
          * only care about these fields. */
         static const struct nl_policy policy[] = {
-            [IFA_LABEL] = { .type = NL_A_STRING, .optional = false },
+            [IFA_LABEL] = { .type = NL_A_STRING, .optional = true },
         };
 
         struct nlattr *attrs[ARRAY_SIZE(policy)];
@@ -115,17 +116,20 @@ rtnetlink_parse(struct ofpbuf *buf, struct rtnetlink_change *change)
 
             change->nlmsg_type     = nlmsg->nlmsg_type;
             change->if_index       = ifaddr->ifa_index;
-            change->ifname         = nl_attr_get_string(attrs[IFA_LABEL]);
+            change->ifname         = (attrs[IFA_LABEL]
+                                      ? nl_attr_get_string(attrs[IFA_LABEL])
+                                      : NULL);
         }
     }
 
     return parsed;
 }
 
-static bool
+/* Return RTNLGRP_LINK on success, 0 on parse error. */
+static int
 rtnetlink_parse_cb(struct ofpbuf *buf, void *change)
 {
-    return rtnetlink_parse(buf, change);
+    return rtnetlink_parse(buf, change) ? RTNLGRP_LINK : 0;
 }
 
 /* Registers 'cb' to be called with auxiliary data 'aux' with network device
@@ -143,11 +147,10 @@ struct nln_notifier *
 rtnetlink_notifier_create(rtnetlink_notify_func *cb, void *aux)
 {
     if (!nln) {
-        nln = nln_create(NETLINK_ROUTE, RTNLGRP_LINK, rtnetlink_parse_cb,
-                         &rtn_change);
+        nln = nln_create(NETLINK_ROUTE, rtnetlink_parse_cb, &rtn_change);
     }
 
-    return nln_notifier_create(nln, (nln_notify_func *) cb, aux);
+    return nln_notifier_create(nln, RTNLGRP_LINK, (nln_notify_func *) cb, aux);
 }
 
 /* Destroys 'notifier', which must have previously been created with

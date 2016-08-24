@@ -32,7 +32,7 @@
 #include <sys/uio.h>
 #include <sys/un.h>
 #include <unistd.h>
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "ovs-thread.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -359,6 +359,7 @@ parse_sockaddr_components(struct sockaddr_storage *ss,
     if (port_s && port_s[0]) {
         if (!str_to_int(port_s, 10, &port) || port < 0 || port > 65535) {
             VLOG_ERR("%s: bad port number \"%s\"", s, port_s);
+            goto exit;
         }
     } else {
         port = default_port;

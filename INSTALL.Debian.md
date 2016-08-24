@@ -56,6 +56,15 @@ You do not need to be the superuser to build the Debian packages.
 
        `DEB_BUILD_OPTIONS='parallel=8 nocheck' fakeroot debian/rules binary`
 
+   (There are a few pitfalls in the Debian packaging building system
+   so that, occasionally, you may find that in a tree that you have
+   using for a while, the build command above exits immediately
+   without actually building anything.  To fix the problem, run
+
+       `fakeroot debian/rules clean`
+
+   or start over from a fresh copy of the source tree.)
+
 5. The generated .deb files will be in the parent directory of the
    Open vSwitch source distribution.
 

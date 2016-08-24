@@ -33,8 +33,8 @@
 #include <net/lisp.h>
 #include <net/gre.h>
 #include <net/geneve.h>
-#include <net/vxlan.h>
 #include <net/stt.h>
+#include <net/vxlan.h>
 
 #include "datapath.h"
 #include "gso.h"
@@ -375,14 +375,6 @@ int ovs_vport_get_options(const struct vport *vport, struct sk_buff *skb)
 	return 0;
 }
 
-static void vport_portids_destroy_rcu_cb(struct rcu_head *rcu)
-{
-	struct vport_portids *ids = container_of(rcu, struct vport_portids,
-						 rcu);
-
-	kfree(ids);
-}
-
 /**
  *	ovs_vport_set_upcall_portids - set upcall portids of @vport.
  *
@@ -417,7 +409,7 @@ int ovs_vport_set_upcall_portids(struct vport *vport, const struct nlattr *ids)
 	rcu_assign_pointer(vport->upcall_portids, vport_portids);
 
 	if (old)
-		call_rcu(&old->rcu, vport_portids_destroy_rcu_cb);
+		kfree_rcu(old, rcu);
 	return 0;
 }
 
@@ -494,6 +486,7 @@ int ovs_vport_receive(struct vport *vport, struct sk_buff *skb,
 
 	OVS_CB(skb)->input_vport = vport;
 	OVS_CB(skb)->mru = 0;
+	OVS_CB(skb)->cutlen = 0;
 	if (unlikely(dev_net(skb->dev) != ovs_dp_get_net(vport->dp))) {
 		u32 mark;
 
@@ -531,64 +524,6 @@ void ovs_vport_deferred_free(struct vport *vport)
 	call_rcu(&vport->rcu, free_vport_rcu);
 }
 EXPORT_SYMBOL_GPL(ovs_vport_deferred_free);
-
-int ovs_tunnel_get_egress_info(struct dp_upcall_info *upcall,
-			       struct net *net,
-			       struct sk_buff *skb,
-			       u8 ipproto,
-			       __be16 tp_src,
-			       __be16 tp_dst)
-{
-	struct ip_tunnel_info *egress_tun_info = upcall->egress_tun_info;
-	struct ip_tunnel_info *tun_info = skb_tunnel_info(skb);
-	const struct ip_tunnel_key *tun_key;
-	u32 skb_mark = skb->mark;
-	struct rtable *rt;
-	struct flowi4 fl;
-
-	if (unlikely(!tun_info))
-		return -EINVAL;
-	if (ip_tunnel_info_af(tun_info) != AF_INET)
-		return -EINVAL;
-
-	tun_key = &tun_info->key;
-
-	/* Route lookup to get srouce IP address.
-	 * The process may need to be changed if the corresponding process
-	 * in vports ops changed.
-	 */
-	rt = ovs_tunnel_route_lookup(net, tun_key, skb_mark, &fl, ipproto);
-	if (IS_ERR(rt))
-		return PTR_ERR(rt);
-
-	ip_rt_put(rt);
-
-	/* Generate egress_tun_info based on tun_info,
-	 * saddr, tp_src and tp_dst
-	 */
-	ip_tunnel_key_init(&egress_tun_info->key,
-			   fl.saddr, tun_key->u.ipv4.dst,
-			   tun_key->tos,
-			   tun_key->ttl,
-			   tp_src, tp_dst,
-			   tun_key->tun_id,
-			   tun_key->tun_flags);
-	egress_tun_info->options_len = tun_info->options_len;
-	egress_tun_info->mode = tun_info->mode;
-	upcall->egress_tun_opts = ip_tunnel_info_opts(tun_info);
-	return 0;
-}
-EXPORT_SYMBOL_GPL(ovs_tunnel_get_egress_info);
-
-int ovs_vport_get_egress_tun_info(struct vport *vport, struct sk_buff *skb,
-				  struct dp_upcall_info *upcall)
-{
-	/* get_egress_tun_info() is only implemented on tunnel ports. */
-	if (unlikely(!vport->ops->get_egress_tun_info))
-		return -EINVAL;
-
-	return vport->ops->get_egress_tun_info(vport, skb, upcall);
-}
 
 static unsigned int packet_length(const struct sk_buff *skb)
 {

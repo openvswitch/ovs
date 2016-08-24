@@ -33,13 +33,14 @@
 
 #include "daemon.h"
 #include "dirs.h"
-#include "dynamic-string.h"
-#include "json.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/json.h"
 #include "latch.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
+#include "ovs-rcu.h"
 #include "ovs-thread.h"
 #include "poll-loop.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "smap.h"
 #include "timeval.h"
 #include "openvswitch/vlog.h"
@@ -615,7 +616,12 @@ system_stats_thread_func(void *arg OVS_UNUSED)
 
         ovs_mutex_lock(&mutex);
         while (!enabled) {
+            /* The thread is sleeping, potentially for a long time, and it's
+             * not holding RCU protected references, so it makes sense to
+             * quiesce */
+            ovsrcu_quiesce_start();
             ovs_mutex_cond_wait(&cond, &mutex);
+            ovsrcu_quiesce_end();
         }
         ovs_mutex_unlock(&mutex);
 

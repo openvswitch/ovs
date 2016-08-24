@@ -18,13 +18,16 @@
 
 #include <sys/types.h>
 #include <netinet/in.h>
+#include <netinet/icmp6.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
 #include "bitmap.h"
 #include "byte-order.h"
+#include "openvswitch/compiler.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
+#include "openvswitch/flow.h"
 #include "packets.h"
 #include "hash.h"
 #include "util.h"
@@ -37,114 +40,6 @@ struct dp_packet;
 struct pkt_metadata;
 struct match;
 
-/* This sequence number should be incremented whenever anything involving flows
- * or the wildcarding of flows changes.  This will cause build assertion
- * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 35
-
-/* Number of Open vSwitch extension 32-bit registers. */
-#define FLOW_N_REGS 8
-BUILD_ASSERT_DECL(FLOW_N_REGS <= NXM_NX_MAX_REGS);
-BUILD_ASSERT_DECL(FLOW_N_REGS % 2 == 0); /* Even. */
-
-/* Number of OpenFlow 1.5+ 64-bit registers.
- *
- * Each of these overlays a pair of Open vSwitch 32-bit registers, so there
- * are half as many of them.*/
-#define FLOW_N_XREGS (FLOW_N_REGS / 2)
-
-/* Used for struct flow's dl_type member for frames that have no Ethernet
- * type, that is, pure 802.2 frames. */
-#define FLOW_DL_TYPE_NONE 0x5ff
-
-/* Fragment bits, used for IPv4 and IPv6, always zero for non-IP flows. */
-#define FLOW_NW_FRAG_ANY   (1 << 0) /* Set for any IP frag. */
-#define FLOW_NW_FRAG_LATER (1 << 1) /* Set for IP frag with nonzero offset. */
-#define FLOW_NW_FRAG_MASK  (FLOW_NW_FRAG_ANY | FLOW_NW_FRAG_LATER)
-
-BUILD_ASSERT_DECL(FLOW_NW_FRAG_ANY == NX_IP_FRAG_ANY);
-BUILD_ASSERT_DECL(FLOW_NW_FRAG_LATER == NX_IP_FRAG_LATER);
-
-BUILD_ASSERT_DECL(FLOW_TNL_F_OAM == NX_TUN_FLAG_OAM);
-
-const char *flow_tun_flag_to_string(uint32_t flags);
-
-/* Maximum number of supported MPLS labels. */
-#define FLOW_MAX_MPLS_LABELS 3
-
-/*
- * A flow in the network.
- *
- * Must be initialized to all zeros to make any compiler-induced padding
- * zeroed.  Helps also in keeping unused fields (such as mutually exclusive
- * IPv4 and IPv6 addresses) zeroed out.
- *
- * The meaning of 'in_port' is context-dependent.  In most cases, it is a
- * 16-bit OpenFlow 1.0 port number.  In the software datapath interface (dpif)
- * layer and its implementations (e.g. dpif-netlink, dpif-netdev), it is
- * instead a 32-bit datapath port number.
- *
- * The fields are organized in four segments to facilitate staged lookup, where
- * lower layer fields are first used to determine if the later fields need to
- * be looked at.  This enables better wildcarding for datapath flows.
- *
- * NOTE: Order of the fields is significant, any change in the order must be
- * reflected in miniflow_extract()!
- */
-struct flow {
-    /* Metadata */
-    struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. */
-    ovs_be64 metadata;          /* OpenFlow Metadata. */
-    uint32_t regs[FLOW_N_REGS]; /* Registers. */
-    uint32_t skb_priority;      /* Packet priority for QoS. */
-    uint32_t pkt_mark;          /* Packet mark. */
-    uint32_t dp_hash;           /* Datapath computed hash value. The exact
-                                 * computation is opaque to the user space. */
-    union flow_in_port in_port; /* Input port.*/
-    uint32_t recirc_id;         /* Must be exact match. */
-    uint16_t ct_state;          /* Connection tracking state. */
-    uint16_t ct_zone;           /* Connection tracking zone. */
-    uint32_t ct_mark;           /* Connection mark.*/
-    uint8_t pad1[4];            /* Pad to 64 bits. */
-    ovs_u128 ct_label;          /* Connection label. */
-    uint32_t conj_id;           /* Conjunction ID. */
-    ofp_port_t actset_output;   /* Output port in action set. */
-    uint8_t pad2[2];            /* Pad to 64 bits. */
-
-    /* L2, Order the same as in the Ethernet header! (64-bit aligned) */
-    struct eth_addr dl_dst;     /* Ethernet destination address. */
-    struct eth_addr dl_src;     /* Ethernet source address. */
-    ovs_be16 dl_type;           /* Ethernet frame type. */
-    ovs_be16 vlan_tci;          /* If 802.1Q, TCI | VLAN_CFI; otherwise 0. */
-    ovs_be32 mpls_lse[ROUND_UP(FLOW_MAX_MPLS_LABELS, 2)]; /* MPLS label stack
-                                                             (with padding). */
-    /* L3 (64-bit aligned) */
-    ovs_be32 nw_src;            /* IPv4 source address. */
-    ovs_be32 nw_dst;            /* IPv4 destination address. */
-    struct in6_addr ipv6_src;   /* IPv6 source address. */
-    struct in6_addr ipv6_dst;   /* IPv6 destination address. */
-    ovs_be32 ipv6_label;        /* IPv6 flow label. */
-    uint8_t nw_frag;            /* FLOW_FRAG_* flags. */
-    uint8_t nw_tos;             /* IP ToS (including DSCP and ECN). */
-    uint8_t nw_ttl;             /* IP TTL/Hop Limit. */
-    uint8_t nw_proto;           /* IP protocol or low 8 bits of ARP opcode. */
-    struct in6_addr nd_target;  /* IPv6 neighbor discovery (ND) target. */
-    struct eth_addr arp_sha;    /* ARP/ND source hardware address. */
-    struct eth_addr arp_tha;    /* ARP/ND target hardware address. */
-    ovs_be16 tcp_flags;         /* TCP flags. With L3 to avoid matching L4. */
-    ovs_be16 pad3;              /* Pad to 64 bits. */
-
-    /* L4 (64-bit aligned) */
-    ovs_be16 tp_src;            /* TCP/UDP/SCTP source port/ICMP type. */
-    ovs_be16 tp_dst;            /* TCP/UDP/SCTP destination port/ICMP code. */
-    ovs_be32 igmp_group_ip4;    /* IGMP group IPv4 address.
-                                 * Keep last for BUILD_ASSERT_DECL below. */
-};
-BUILD_ASSERT_DECL(sizeof(struct flow) % sizeof(uint64_t) == 0);
-BUILD_ASSERT_DECL(sizeof(struct flow_tnl) % sizeof(uint64_t) == 0);
-
-#define FLOW_U64S (sizeof(struct flow) / sizeof(uint64_t))
-
 /* Some flow fields are mutually exclusive or only appear within the flow
  * pipeline.  IPv6 headers are bigger than IPv4 and MPLS, and IPv6 ND packets
  * are bigger than TCP,UDP and IGMP packets. */
@@ -155,30 +50,6 @@ BUILD_ASSERT_DECL(sizeof(struct flow_tnl) % sizeof(uint64_t) == 0);
                               - FLOW_U64_SIZE(mpls_lse)                   \
     /* L4 */                  - FLOW_U64_SIZE(tp_src)                     \
                              )
-
-/* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
-BUILD_ASSERT_DECL(offsetof(struct flow, igmp_group_ip4) + sizeof(uint32_t)
-                  == sizeof(struct flow_tnl) + 216
-                  && FLOW_WC_SEQ == 35);
-
-/* Incremental points at which flow classification may be performed in
- * segments.
- * This is located here since this is dependent on the structure of the
- * struct flow defined above:
- * Each offset must be on a distinct, successive U64 boundary strictly
- * within the struct flow. */
-enum {
-    FLOW_SEGMENT_1_ENDS_AT = offsetof(struct flow, dl_dst),
-    FLOW_SEGMENT_2_ENDS_AT = offsetof(struct flow, nw_src),
-    FLOW_SEGMENT_3_ENDS_AT = offsetof(struct flow, tp_src),
-};
-BUILD_ASSERT_DECL(FLOW_SEGMENT_1_ENDS_AT % sizeof(uint64_t) == 0);
-BUILD_ASSERT_DECL(FLOW_SEGMENT_2_ENDS_AT % sizeof(uint64_t) == 0);
-BUILD_ASSERT_DECL(FLOW_SEGMENT_3_ENDS_AT % sizeof(uint64_t) == 0);
-BUILD_ASSERT_DECL(                     0 < FLOW_SEGMENT_1_ENDS_AT);
-BUILD_ASSERT_DECL(FLOW_SEGMENT_1_ENDS_AT < FLOW_SEGMENT_2_ENDS_AT);
-BUILD_ASSERT_DECL(FLOW_SEGMENT_2_ENDS_AT < FLOW_SEGMENT_3_ENDS_AT);
-BUILD_ASSERT_DECL(FLOW_SEGMENT_3_ENDS_AT < sizeof(struct flow));
 
 extern const uint8_t flow_segment_u64s[];
 
@@ -235,6 +106,10 @@ void flow_set_mpls_lse(struct flow *, int idx, ovs_be32 lse);
 
 void flow_compose(struct dp_packet *, const struct flow *);
 
+bool parse_ipv6_ext_hdrs(const void **datap, size_t *sizep, uint8_t *nw_proto,
+                         uint8_t *nw_frag);
+ovs_be16 parse_dl_type(const struct eth_header *data_, size_t size);
+
 static inline uint64_t
 flow_get_xreg(const struct flow *flow, int idx)
 {
@@ -246,6 +121,28 @@ flow_set_xreg(struct flow *flow, int idx, uint64_t value)
 {
     flow->regs[idx * 2] = value >> 32;
     flow->regs[idx * 2 + 1] = value;
+}
+
+static inline ovs_u128
+flow_get_xxreg(const struct flow *flow, int idx)
+{
+    ovs_u128 value;
+
+    value.u64.hi = (uint64_t) flow->regs[idx * 4] << 32;
+    value.u64.hi |= flow->regs[idx * 4 + 1];
+    value.u64.lo = (uint64_t) flow->regs[idx * 4 + 2] << 32;
+    value.u64.lo |= flow->regs[idx * 4 + 3];
+
+    return value;
+}
+
+static inline void
+flow_set_xxreg(struct flow *flow, int idx, ovs_u128 value)
+{
+    flow->regs[idx * 4] = value.u64.hi >> 32;
+    flow->regs[idx * 4 + 1] = value.u64.hi;
+    flow->regs[idx * 4 + 2] = value.u64.lo >> 32;
+    flow->regs[idx * 4 + 3] = value.u64.lo;
 }
 
 static inline int
@@ -314,47 +211,6 @@ hash_odp_port(odp_port_t odp_port)
     return hash_int(odp_to_u32(odp_port), 0);
 }
 
-/* Wildcards for a flow.
- *
- * A 1-bit in each bit in 'masks' indicates that the corresponding bit of
- * the flow is significant (must match).  A 0-bit indicates that the
- * corresponding bit of the flow is wildcarded (need not match). */
-struct flow_wildcards {
-    struct flow masks;
-};
-
-#define WC_MASK_FIELD(WC, FIELD) \
-    memset(&(WC)->masks.FIELD, 0xff, sizeof (WC)->masks.FIELD)
-#define WC_MASK_FIELD_MASK(WC, FIELD, MASK)     \
-    ((WC)->masks.FIELD |= (MASK))
-#define WC_UNMASK_FIELD(WC, FIELD) \
-    memset(&(WC)->masks.FIELD, 0, sizeof (WC)->masks.FIELD)
-
-void flow_wildcards_init_catchall(struct flow_wildcards *);
-
-void flow_wildcards_init_for_packet(struct flow_wildcards *,
-                                    const struct flow *);
-
-void flow_wildcards_clear_non_packet_fields(struct flow_wildcards *);
-
-bool flow_wildcards_is_catchall(const struct flow_wildcards *);
-
-void flow_wildcards_set_reg_mask(struct flow_wildcards *,
-                                 int idx, uint32_t mask);
-void flow_wildcards_set_xreg_mask(struct flow_wildcards *,
-                                  int idx, uint64_t mask);
-
-void flow_wildcards_and(struct flow_wildcards *dst,
-                        const struct flow_wildcards *src1,
-                        const struct flow_wildcards *src2);
-void flow_wildcards_or(struct flow_wildcards *dst,
-                       const struct flow_wildcards *src1,
-                       const struct flow_wildcards *src2);
-bool flow_wildcards_has_extra(const struct flow_wildcards *,
-                              const struct flow_wildcards *);
-uint32_t flow_wildcards_hash(const struct flow_wildcards *, uint32_t basis);
-bool flow_wildcards_equal(const struct flow_wildcards *,
-                          const struct flow_wildcards *);
 uint32_t flow_hash_5tuple(const struct flow *flow, uint32_t basis);
 uint32_t flow_hash_symmetric_l4(const struct flow *flow, uint32_t basis);
 uint32_t flow_hash_symmetric_l3l4(const struct flow *flow, uint32_t basis,
@@ -998,46 +854,136 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
     md->ct_label = flow->ct_label;
 }
 
+static inline bool is_vlan(const struct flow *flow,
+                           struct flow_wildcards *wc)
+{
+    if (wc) {
+        WC_MASK_FIELD_MASK(wc, vlan_tci, htons(VLAN_CFI));
+    }
+    return (flow->vlan_tci & htons(VLAN_CFI)) != 0;
+}
+
 static inline bool is_ip_any(const struct flow *flow)
 {
     return dl_type_is_ip_any(flow->dl_type);
 }
 
-static inline bool is_icmpv4(const struct flow *flow)
+static inline bool is_ip_proto(const struct flow *flow, uint8_t ip_proto,
+                               struct flow_wildcards *wc)
 {
-    return (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IPPROTO_ICMP);
+    if (is_ip_any(flow)) {
+        if (wc) {
+            WC_MASK_FIELD(wc, nw_proto);
+        }
+        return flow->nw_proto == ip_proto;
+    }
+    return false;
 }
 
-static inline bool is_icmpv6(const struct flow *flow)
+static inline bool is_tcp(const struct flow *flow,
+                          struct flow_wildcards *wc)
 {
-    return (flow->dl_type == htons(ETH_TYPE_IPV6)
-            && flow->nw_proto == IPPROTO_ICMPV6);
+    return is_ip_proto(flow, IPPROTO_TCP, wc);
 }
 
-static inline bool is_igmp(const struct flow *flow)
+static inline bool is_udp(const struct flow *flow,
+                          struct flow_wildcards *wc)
 {
-    return (flow->dl_type == htons(ETH_TYPE_IP)
-            && flow->nw_proto == IPPROTO_IGMP);
+    return is_ip_proto(flow, IPPROTO_UDP, wc);
 }
 
-static inline bool is_mld(const struct flow *flow)
+static inline bool is_sctp(const struct flow *flow,
+                           struct flow_wildcards *wc)
 {
-    return is_icmpv6(flow)
-           && (flow->tp_src == htons(MLD_QUERY)
-               || flow->tp_src == htons(MLD_REPORT)
-               || flow->tp_src == htons(MLD_DONE)
-               || flow->tp_src == htons(MLD2_REPORT));
+    return is_ip_proto(flow, IPPROTO_SCTP, wc);
 }
 
-static inline bool is_mld_query(const struct flow *flow)
+static inline bool is_icmpv4(const struct flow *flow,
+                             struct flow_wildcards *wc)
 {
-    return is_icmpv6(flow) && flow->tp_src == htons(MLD_QUERY);
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        if (wc) {
+            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+        }
+        return flow->nw_proto == IPPROTO_ICMP;
+    }
+    return false;
 }
 
-static inline bool is_mld_report(const struct flow *flow)
+static inline bool is_icmpv6(const struct flow *flow,
+                             struct flow_wildcards *wc)
 {
-    return is_mld(flow) && !is_mld_query(flow);
+    if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+        if (wc) {
+            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+        }
+        return flow->nw_proto == IPPROTO_ICMPV6;
+    }
+    return false;
+}
+
+static inline bool is_nd(const struct flow *flow,
+                         struct flow_wildcards *wc)
+{
+    if (is_icmpv6(flow, wc)) {
+        if (wc) {
+            memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
+        }
+        if (flow->tp_dst != htons(0)) {
+            return false;
+        }
+
+        if (wc) {
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+        }
+        return (flow->tp_src == htons(ND_NEIGHBOR_SOLICIT) ||
+                flow->tp_src == htons(ND_NEIGHBOR_ADVERT));
+    }
+    return false;
+}
+
+static inline bool is_igmp(const struct flow *flow, struct flow_wildcards *wc)
+{
+    if (flow->dl_type == htons(ETH_TYPE_IP)) {
+        if (wc) {
+            memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
+        }
+        return flow->nw_proto == IPPROTO_IGMP;
+    }
+    return false;
+}
+
+static inline bool is_mld(const struct flow *flow,
+                          struct flow_wildcards *wc)
+{
+    if (is_icmpv6(flow, wc)) {
+        if (wc) {
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+        }
+        return (flow->tp_src == htons(MLD_QUERY)
+                || flow->tp_src == htons(MLD_REPORT)
+                || flow->tp_src == htons(MLD_DONE)
+                || flow->tp_src == htons(MLD2_REPORT));
+    }
+    return false;
+}
+
+static inline bool is_mld_query(const struct flow *flow,
+                                struct flow_wildcards *wc)
+{
+    if (is_icmpv6(flow, wc)) {
+        if (wc) {
+            memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
+        }
+        return flow->tp_src == htons(MLD_QUERY);
+    }
+    return false;
+}
+
+static inline bool is_mld_report(const struct flow *flow,
+                                 struct flow_wildcards *wc)
+{
+    return is_mld(flow, wc) && !is_mld_query(flow, wc);
 }
 
 static inline bool is_stp(const struct flow *flow)

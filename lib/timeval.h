@@ -18,7 +18,7 @@
 #define TIMEVAL_H 1
 
 #include <time.h>
-#include "type-props.h"
+#include "openvswitch/type-props.h"
 #include "util.h"
 
 #ifdef  __cplusplus

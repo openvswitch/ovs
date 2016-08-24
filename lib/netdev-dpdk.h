@@ -4,6 +4,7 @@
 #include <config.h>
 
 struct dp_packet;
+struct smap;
 
 #ifdef DPDK_NETDEV
 
@@ -22,25 +23,15 @@ struct dp_packet;
 
 #define NON_PMD_CORE_ID LCORE_ID_ANY
 
-int dpdk_init(int argc, char **argv);
 void netdev_dpdk_register(void);
 void free_dpdk_buf(struct dp_packet *);
-int pmd_thread_setaffinity_cpu(unsigned cpu);
+void dpdk_set_lcore_id(unsigned cpu);
 
 #else
 
 #define NON_PMD_CORE_ID UINT32_MAX
 
 #include "util.h"
-
-static inline int
-dpdk_init(int argc, char **argv)
-{
-    if (argc >= 2 && !strcmp(argv[1], "--dpdk")) {
-        ovs_fatal(0, "DPDK support not built into this copy of Open vSwitch.");
-    }
-    return 0;
-}
 
 static inline void
 netdev_dpdk_register(void)
@@ -54,11 +45,14 @@ free_dpdk_buf(struct dp_packet *buf OVS_UNUSED)
     /* Nothing */
 }
 
-static inline int
-pmd_thread_setaffinity_cpu(unsigned cpu OVS_UNUSED)
+static inline void
+dpdk_set_lcore_id(unsigned cpu OVS_UNUSED)
 {
-    return 0;
+    /* Nothing */
 }
 
 #endif /* DPDK_NETDEV */
+
+void dpdk_init(const struct smap *ovs_other_config);
+
 #endif

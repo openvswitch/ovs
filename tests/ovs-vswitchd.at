@@ -20,6 +20,8 @@ AT_CHECK([ovs-vswitchd --detach --no-chdir --pidfile --enable-dummy --disable-sy
 AT_CAPTURE_FILE([ovs-vswitchd.log])
 
 dnl ovs-vswitchd detached OK or we wouldn't have made it this far.  Success.
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 
@@ -68,13 +70,14 @@ AT_SETUP([ovs-vswitchd -- start additional ovs-vswitchd process])
 OVS_VSWITCHD_START
 
 # start another ovs-vswitchd process.
-ovs-vswitchd --log-file=fakelog --unixctl="`pwd`"/unixctl &
+ovs-vswitchd --log-file=fakelog --unixctl="`pwd`"/unixctl --pidfile=`pwd`/ovs-vswitchd-2.pid &
+on_exit 'kill `cat ovs-vswitchd-2.pid`'
 
 # sleep for a while
 sleep 5
 
 # stop the process.
-ovs-appctl -t `pwd`/unixctl exit
+OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/unixctl], [`pwd`/ovs-vswitchd-2.pid])
 
 # check the fakelog, should only see one ERR for reporting
 # the existing ovs-vswitchd process.
@@ -92,7 +95,8 @@ AT_SETUP([ovs-vswitchd -- switch over to another ovs-vswitchd process])
 OVS_VSWITCHD_START
 
 # start a new ovs-vswitchd process.
-ovs-vswitchd --log-file=fakelog --enable-dummy --unixctl="`pwd`"/unixctl &
+ovs-vswitchd --log-file=fakelog --enable-dummy --unixctl="`pwd`"/unixctl --pidfile=ovs-vswitchd-2.pid &
+on_exit 'kill `cat ovs-vswitchd-2.pid`'
 
 # sleep for a while.
 sleep 5
@@ -110,7 +114,7 @@ bridge br0: using datapath ID
 ])
 
 # stop the process.
-ovs-appctl -t `pwd`/unixctl exit
+OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/unixctl], [ovs-vswitchd-2.pid])
 
 # check the fakelog, should not see WARN/ERR/EMER log other than the one
 # for reporting the existing ovs-vswitchd process and the one for killing
@@ -130,13 +134,14 @@ dnl ----------------------------------------------------------------------
 AT_SETUP([ovs-vswitchd -- invalid database path])
 
 # start an ovs-vswitchd process with invalid db path.
-ovs-vswitchd unix:invalid.db.sock --log-file=fakelog --enable-dummy --unixctl="`pwd`"/unixctl &
+ovs-vswitchd unix:invalid.db.sock --log-file=fakelog --enable-dummy --unixctl="`pwd`"/unixctl --pidfile=ovs-vswitchd-2.pid &
+on_exit 'kill `cat ovs-vswitchd-2.pid`'
 
 # sleep for a while.
 sleep 10
 
 # stop the process.
-ovs-appctl -t `pwd`/unixctl exit
+OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/unixctl], [ovs-vswitchd-2.pid])
 
 # should not see this log (which indicates high cpu utilization).
 AT_CHECK([grep "wakeup due to" fakelog], [ignore])
@@ -165,14 +170,14 @@ OVS_VSWITCHD_STOP(["/Not adding Unix domain socket controller/d"])
 AT_CLEANUP
 
 dnl ----------------------------------------------------------------------
-dnl OVSDB server before release version 2.5 does not support the monitor2
+dnl OVSDB server before release version 2.5 does not support the monitor_cond
 dnl method.  This test defeatures the OVSDB server to simulate an older
 dnl OVSDB server and make sure ovs-vswitchd can still work with it
-AT_SETUP([ovs-vswitchd -- Compatible with OVSDB server - w/o monitor2])
+AT_SETUP([ovs-vswitchd -- Compatible with OVSDB server - w/o monitor_cond])
 OVS_VSWITCHD_START
 
-dnl defeature OVSDB server -- no monitor2
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/disable-monitor2])
+dnl defeature OVSDB server -- no monitor_cond
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/disable-monitor-cond])
 
 sleep 1
 
@@ -181,9 +186,9 @@ AT_CHECK([ovs-vsctl add-port br0 p1  -- set interface p1 type=internal])
 
 dnl ovs-vswitchd should still 'see' ovsdb change with the 'monitor' method
 AT_CHECK([ovs-appctl dpif/show | tail -n +3], [0], [dnl
-		br0 65534/100: (dummy)
-		p0 1/1: (dummy)
-		p1 2/2: (dummy)
+		br0 65534/100: (dummy-internal)
+		p0 1/1: (dummy-internal)
+		p1 2/2: (dummy-internal)
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP

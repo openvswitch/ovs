@@ -21,6 +21,9 @@ Upstream Copyright Holders:
 	Copyright (c) 2014 Michael Chapman
 	Copyright (c) 2014 WindRiver, Inc.
 	Copyright (c) 2014 Avaya, Inc.
+	Copyright (c) 2001 Daniel Hartmeier
+	Copyright (c) 2002 - 2008 Henning Brauer
+	Copyright (c) 2012 Gleb Smirnoff <glebius@FreeBSD.org>
 
 License:
 
@@ -89,6 +92,8 @@ License:
 
 	lib/getopt_long.c
 	include/windows/getopt.h
+	datapath-windows/ovsext/Conntrack-tcp.c
+	lib/conntrack-tcp.c
 
 * The following files are licensed under the 3-clause BSD-license
 

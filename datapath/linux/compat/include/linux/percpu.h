@@ -25,10 +25,15 @@
 #define this_cpu_dec(ptr) percpu_sub(ptr, 1)
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,34)
-#define get_pcpu_ptr(name) ((void *)this_cpu_ptr(&__pcpu_unique_##name))
-#else
-#define get_pcpu_ptr(name) (this_cpu_ptr(&name))
+#ifndef alloc_percpu_gfp
+#define NEED_ALLOC_PERCPU_GFP
+
+void __percpu *__alloc_percpu_gfp(size_t size, size_t align, gfp_t gfp);
+
+#define alloc_percpu_gfp(type, gfp)                                     \
+        (typeof(type) __percpu *)__alloc_percpu_gfp(sizeof(type),       \
+                                                __alignof__(type), gfp)
 #endif
+
 
 #endif

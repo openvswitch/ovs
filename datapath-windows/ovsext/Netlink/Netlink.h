@@ -27,10 +27,14 @@
  */
 typedef struct _OVS_MESSAGE {
     NL_MSG_HDR nlMsg;
-    GENL_MSG_HDR genlMsg;
+    union {
+        GENL_MSG_HDR genlMsg;
+        NF_GEN_MSG_HDR nfGenMsg;
+    };
     OVS_HDR ovsHdr;
     /* Variable length nl_attrs follow. */
 } OVS_MESSAGE, *POVS_MESSAGE;
+BUILD_ASSERT_DECL(sizeof(GENL_MSG_HDR) == sizeof(NF_GEN_MSG_HDR));
 
 /*
  * Structure of an error message sent as a reply from kernel.
@@ -72,6 +76,7 @@ typedef struct _NL_POLICY
 /* This macro is careful to check for attributes with bad lengths. */
 #define NL_ATTR_FOR_EACH(ITER, LEFT, ATTRS, ATTRS_LEN)                  \
     for ((ITER) = (ATTRS), (LEFT) = (ATTRS_LEN);                        \
+         ((INT)LEFT) >= (INT)NLA_ALIGN(sizeof(NL_ATTR)) &&              \
          NlAttrIsValid(ITER, LEFT);                                     \
          (LEFT) -= NlAttrLenPad(ITER, LEFT), (ITER) = NlAttrNext(ITER))
 
@@ -80,7 +85,7 @@ typedef struct _NL_POLICY
  * already been validated (e.g. with NL_ATTR_FOR_EACH).  */
 #define NL_ATTR_FOR_EACH_UNSAFE(ITER, LEFT, ATTRS, ATTRS_LEN)           \
     for ((ITER) = (ATTRS), (LEFT) = (ATTRS_LEN);                        \
-         (LEFT) > 0;                                                    \
+         ((INT)LEFT) >= (INT)NLA_ALIGN(sizeof(NL_ATTR));                \
          (LEFT) -= NLA_ALIGN((ITER)->nlaLen), (ITER) = NlAttrNext(ITER))
 
 #define NL_ATTR_GET_AS(NLA, TYPE) \
@@ -90,12 +95,16 @@ BOOLEAN NlFillOvsMsg(PNL_BUFFER nlBuf,
                      UINT16 nlmsgType, UINT16 nlmsgFlags,
                      UINT32 nlmsgSeq, UINT32 nlmsgPid,
                      UINT8 genlCmd, UINT8 genlVer, UINT32 dpNo);
+BOOLEAN NlFillOvsMsgForNfGenMsg(PNL_BUFFER nlBuf, UINT16 nlmsgType,
+                                UINT16 nlmsgFlags, UINT32 nlmsgSeq,
+                                UINT32 nlmsgPid, UINT8 nfgenFamily,
+                                UINT8 nfGenVersion, UINT32 dpNo);
 BOOLEAN NlFillNlHdr(PNL_BUFFER nlBuf,
                     UINT16 nlmsgType, UINT16 nlmsgFlags,
                     UINT32 nlmsgSeq, UINT32 nlmsgPid);
 
-VOID NlBuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgOut,
-                     UINT errorCode);
+VOID NlBuildErrorMsg(POVS_MESSAGE msgIn, POVS_MESSAGE_ERROR msgError,
+                     UINT errorCode, UINT32 *msgLen);
 
 /* Netlink message accessing the payload */
 PVOID NlMsgAt(const PNL_MSG_HDR nlh, UINT32 offset);
@@ -106,6 +115,7 @@ PCHAR NlHdrPayload(const PNL_MSG_HDR nlh);
 UINT32 NlHdrPayloadLen(const PNL_MSG_HDR nlh);
 PNL_ATTR NlMsgAttrs(const PNL_MSG_HDR nlh);
 UINT32 NlMsgAttrsLen(const PNL_MSG_HDR nlh);
+UINT32 NlNfMsgAttrsLen(const PNL_MSG_HDR nlh);
 
 /* Netlink message parse */
 PNL_MSG_HDR NlMsgNext(const PNL_MSG_HDR nlh);
@@ -134,7 +144,7 @@ const PNL_ATTR NlAttrFindNested(const PNL_ATTR nla,
                                 UINT16 type);
 BOOLEAN NlAttrParse(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
                     UINT32 totalAttrLen, const NL_POLICY policy[],
-                    const UINT32 numPolicy, PNL_ATTR attrs[], 
+                    const UINT32 numPolicy, PNL_ATTR attrs[],
                     UINT32 numAttrs);
 BOOLEAN NlAttrParseNested(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
                           UINT32 totalAttrLen, const NL_POLICY policy[],
@@ -173,8 +183,24 @@ static __inline NlAttrTotalSize(UINT32 payloadSize)
     return NLA_ALIGN(NlAttrSize(payloadSize));
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * Returns true if the last attribute is reached.
+ * ---------------------------------------------------------------------------
+ */
+BOOLEAN
+static __inline NlAttrIsLast(const PNL_ATTR nla, int rem)
+{
+    return nla->nlaLen == rem;
+}
+
 /* Netlink attribute validation */
 BOOLEAN NlAttrValidate(const PNL_ATTR, const PNL_POLICY);
+
+/* Netlink attribute stream validation */
+BOOLEAN NlValidateAllAttrs(const PNL_MSG_HDR nlMsg, UINT32 attrOffset,
+                       UINT32 totalAttrLen,
+                       const NL_POLICY policy[], const UINT32 numPolicy);
 
 /* Put APis */
 BOOLEAN NlMsgPutNlHdr(PNL_BUFFER buf, PNL_MSG_HDR nlMsg);

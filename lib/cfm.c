@@ -24,10 +24,10 @@
 #include "byte-order.h"
 #include "connectivity.h"
 #include "dp-packet.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "flow.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "netdev.h"
 #include "ovs-atomic.h"
 #include "packets.h"
@@ -38,6 +38,7 @@
 #include "timeval.h"
 #include "unixctl.h"
 #include "openvswitch/vlog.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(cfm);
 
@@ -374,7 +375,7 @@ cfm_create(const struct netdev *netdev) OVS_EXCLUDED(mutex)
 void
 cfm_unref(struct cfm *cfm) OVS_EXCLUDED(mutex)
 {
-    struct remote_mp *rmp, *rmp_next;
+    struct remote_mp *rmp;
 
     if (!cfm) {
         return;
@@ -389,8 +390,7 @@ cfm_unref(struct cfm *cfm) OVS_EXCLUDED(mutex)
     hmap_remove(all_cfms, &cfm->hmap_node);
     ovs_mutex_unlock(&mutex);
 
-    HMAP_FOR_EACH_SAFE (rmp, rmp_next, node, &cfm->remote_mps) {
-        hmap_remove(&cfm->remote_mps, &rmp->node);
+    HMAP_FOR_EACH_POP (rmp, node, &cfm->remote_mps) {
         free(rmp);
     }
 

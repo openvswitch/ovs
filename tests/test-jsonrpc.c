@@ -24,7 +24,7 @@
 #include <stdlib.h>
 #include "command-line.h"
 #include "daemon.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "ovstest.h"
 #include "poll-loop.h"
 #include "stream-ssl.h"
@@ -331,11 +331,11 @@ do_help(struct ovs_cmdl_context *ctx OVS_UNUSED)
 }
 
 static struct ovs_cmdl_command all_commands[] = {
-    { "listen", NULL, 1, 1, do_listen },
-    { "request", NULL, 3, 3, do_request },
-    { "notify", NULL, 3, 3, do_notify },
-    { "help", NULL, 0, INT_MAX, do_help },
-    { NULL, NULL, 0, 0, NULL },
+    { "listen", NULL, 1, 1, do_listen, OVS_RO },
+    { "request", NULL, 3, 3, do_request, OVS_RO },
+    { "notify", NULL, 3, 3, do_notify, OVS_RO },
+    { "help", NULL, 0, INT_MAX, do_help, OVS_RO },
+    { NULL, NULL, 0, 0, NULL, OVS_RO },
 };
 
 static struct ovs_cmdl_command *

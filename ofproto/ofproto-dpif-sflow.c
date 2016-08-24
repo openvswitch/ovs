@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  * Copyright (c) 2009 InMon Corp.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,10 +26,10 @@
 #include "compiler.h"
 #include "dpif.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "netdev.h"
 #include "netlink.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto.h"
 #include "packets.h"
 #include "poll-loop.h"
@@ -92,12 +92,6 @@ static void dpif_sflow_del_port__(struct dpif_sflow *,
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 static bool
-nullable_string_is_equal(const char *a, const char *b)
-{
-    return a ? b && !strcmp(a, b) : !b;
-}
-
-static bool
 ofproto_sflow_options_equal(const struct ofproto_sflow_options *a,
                          const struct ofproto_sflow_options *b)
 {
@@ -115,8 +109,8 @@ ofproto_sflow_options_clone(const struct ofproto_sflow_options *old)
 {
     struct ofproto_sflow_options *new = xmemdup(old, sizeof *old);
     sset_clone(&new->targets, &old->targets);
-    new->agent_device = old->agent_device ? xstrdup(old->agent_device) : NULL;
-    new->control_ip = old->control_ip ? xstrdup(old->control_ip) : NULL;
+    new->agent_device = nullable_xstrdup(old->agent_device);
+    new->control_ip = nullable_xstrdup(old->control_ip);
     return new;
 }
 
@@ -453,10 +447,12 @@ sflow_choose_agent_address(const char *agent_device,
 
         if (inet_parse_active(target, SFL_DEFAULT_COLLECTOR_PORT, &sa.ss)
             && sa.ss.ss_family == AF_INET) {
-            ovs_be32 gw;
+            struct in6_addr addr6, src, gw;
 
-            if (ovs_router_lookup4(sa.sin.sin_addr.s_addr, name, &gw)
-                && !netdev_get_in4_by_name(name, &in4)) {
+            in6_addr_set_mapped_ipv4(&addr6, sa.sin.sin_addr.s_addr);
+            if (ovs_router_lookup(&addr6, name, &src, &gw)) {
+
+                in4.s_addr = in6_addr_get_mapped_ipv4(&src);
                 goto success;
             }
         }
@@ -1138,6 +1134,7 @@ dpif_sflow_read_actions(const struct flow *flow,
 	    }
 	    break;
 
+	case OVS_ACTION_ATTR_TRUNC:
 	case OVS_ACTION_ATTR_USERSPACE:
 	case OVS_ACTION_ATTR_RECIRC:
 	case OVS_ACTION_ATTR_HASH:

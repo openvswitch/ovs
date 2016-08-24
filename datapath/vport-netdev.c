@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2015 Nicira, Inc.
+ * Copyright (c) 2007-2012 Nicira, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of version 2 of the GNU General Public
@@ -26,6 +26,7 @@
 #include <linux/rtnetlink.h>
 #include <linux/skbuff.h>
 #include <linux/openvswitch.h>
+#include <linux/export.h>
 
 #include <net/ip_tunnels.h>
 #include <net/rtnetlink.h>
@@ -58,20 +59,13 @@ void netdev_port_receive(struct sk_buff *skb, struct ip_tunnel_info *tun_info)
 		return;
 
 	skb_push(skb, ETH_HLEN);
-	ovs_skb_postpush_rcsum(skb, skb->data, ETH_HLEN);
+	skb_postpush_rcsum(skb, skb->data, ETH_HLEN);
 	ovs_vport_receive(vport, skb, tun_info);
 	return;
 error:
 	kfree_skb(skb);
 }
 
-#ifndef HAVE_METADATA_DST
-#define port_receive(skb)  netdev_port_receive(skb, NULL)
-#else
-#define port_receive(skb)  netdev_port_receive(skb, skb_tunnel_info(skb))
-#endif
-
-#if defined HAVE_RX_HANDLER_PSKB  /* 2.6.39 and above or backports */
 /* Called with rcu_read_lock and bottom-halves disabled. */
 static rx_handler_result_t netdev_frame_hook(struct sk_buff **pskb)
 {
@@ -80,35 +74,13 @@ static rx_handler_result_t netdev_frame_hook(struct sk_buff **pskb)
 	if (unlikely(skb->pkt_type == PACKET_LOOPBACK))
 		return RX_HANDLER_PASS;
 
-	port_receive(skb);
+#ifndef USE_UPSTREAM_TUNNEL
+	netdev_port_receive(skb, NULL);
+#else
+	netdev_port_receive(skb, skb_tunnel_info(skb));
+#endif
 	return RX_HANDLER_CONSUMED;
 }
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,36) || \
-      defined HAVE_RHEL_OVS_HOOK
-/* Called with rcu_read_lock and bottom-halves disabled. */
-static struct sk_buff *netdev_frame_hook(struct sk_buff *skb)
-{
-	if (unlikely(skb->pkt_type == PACKET_LOOPBACK))
-		return skb;
-
-	port_receive(skb);
-	return NULL;
-}
-#elif LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,32)
-/*
- * Used as br_handle_frame_hook.  (Cannot run bridge at the same time, even on
- * different set of devices!)
- */
-/* Called with rcu_read_lock and bottom-halves disabled. */
-static struct sk_buff *netdev_frame_hook(struct net_bridge_port *p,
-					 struct sk_buff *skb)
-{
-	port_receive(skb);
-	return NULL;
-}
-#else
-#error
-#endif
 
 static struct net_device *get_dpdev(const struct datapath *dp)
 {
@@ -138,7 +110,7 @@ struct vport *ovs_netdev_link(struct vport *vport, const char *name)
 
 	rtnl_lock();
 	err = netdev_master_upper_dev_link(vport->dev,
-					   get_dpdev(vport->dp));
+					   get_dpdev(vport->dp), NULL, NULL);
 	if (err)
 		goto error_unlock;
 
@@ -217,10 +189,8 @@ void ovs_netdev_tunnel_destroy(struct vport *vport)
 	 * underlying netdev deregistration; delete the link only
 	 * if it's not already shutting down.
 	 */
-
 	if (vport->dev->reg_state == NETREG_REGISTERED)
 		rtnl_delete_link(vport->dev);
-
 	dev_put(vport->dev);
 	vport->dev = NULL;
 	rtnl_unlock();
@@ -232,28 +202,11 @@ EXPORT_SYMBOL_GPL(ovs_netdev_tunnel_destroy);
 /* Returns null if this device is not attached to a datapath. */
 struct vport *ovs_netdev_get_vport(struct net_device *dev)
 {
-#if defined HAVE_NETDEV_RX_HANDLER_REGISTER || \
-    defined HAVE_RHEL_OVS_HOOK
-#ifdef HAVE_OVS_DATAPATH
 	if (likely(dev->priv_flags & IFF_OVS_DATAPATH))
-#else
-	if (likely(rcu_access_pointer(dev->rx_handler) == netdev_frame_hook))
-#endif
-#ifdef HAVE_RHEL_OVS_HOOK
-		return (struct vport *)rcu_dereference_rtnl(dev->ax25_ptr);
-#else
-#ifdef HAVE_NET_DEVICE_EXTENDED
 		return (struct vport *)
-			rcu_dereference_rtnl(netdev_extended(dev)->rx_handler_data);
-#else
-		return (struct vport *)rcu_dereference_rtnl(dev->rx_handler_data);
-#endif
-#endif
+			rcu_dereference_rtnl(dev->rx_handler_data);
 	else
 		return NULL;
-#else
-	return (struct vport *)rcu_dereference_rtnl(dev->br_port);
-#endif
 }
 
 static struct vport_ops ovs_netdev_vport_ops = {
@@ -272,23 +225,3 @@ void ovs_netdev_exit(void)
 {
 	ovs_vport_ops_unregister(&ovs_netdev_vport_ops);
 }
-
-#if !defined HAVE_NETDEV_RX_HANDLER_REGISTER && \
-    !defined HAVE_RHEL_OVS_HOOK
-/*
- * Enforces, mutual exclusion with the Linux bridge module, by declaring and
- * exporting br_should_route_hook.  Because the bridge module also exports the
- * same symbol, the module loader will refuse to load both modules at the same
- * time (e.g. "bridge: exports duplicate symbol br_should_route_hook (owned by
- * openvswitch)").
- *
- * Before Linux 2.6.36, Open vSwitch cannot safely coexist with the Linux
- * bridge module, so openvswitch uses this macro in those versions.  In
- * Linux 2.6.36 and later, Open vSwitch can coexist with the bridge module.
- *
- * The use of "typeof" here avoids the need to track changes in the type of
- * br_should_route_hook over various kernel versions.
- */
-typeof(br_should_route_hook) br_should_route_hook;
-EXPORT_SYMBOL(br_should_route_hook);
-#endif

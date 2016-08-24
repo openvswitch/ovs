@@ -41,7 +41,20 @@ for test_case in \
     'reg6=6                                      NXM,OXM' \
     'reg6=6/1                                    NXM,OXM' \
     'reg7=7                                      NXM,OXM' \
-    'reg7=7/1                                    NXM,OXM' \
+    'reg8=8/1                                    NXM,OXM' \
+    'reg8=8                                      NXM,OXM' \
+    'reg9=9/1                                    NXM,OXM' \
+    'reg9=9                                      NXM,OXM' \
+    'reg10=10                                    NXM,OXM' \
+    'reg10=10/1                                  NXM,OXM' \
+    'reg11=11                                    NXM,OXM' \
+    'reg11=11/1                                  NXM,OXM' \
+    'reg12=12                                    NXM,OXM' \
+    'reg12=12/1                                  NXM,OXM' \
+    'reg13=13                                    NXM,OXM' \
+    'reg13=13/1                                  NXM,OXM' \
+    'reg14=14                                    NXM,OXM' \
+    'reg14=14/1                                  NXM,OXM' \
     'xreg0=0                                     NXM,OXM' \
     'xreg0=0/1                                   NXM,OXM' \
     'xreg1=1                                     NXM,OXM' \
@@ -50,6 +63,22 @@ for test_case in \
     'xreg2=2/3                                   NXM,OXM' \
     'xreg3=3                                     NXM,OXM' \
     'xreg3=3/5                                   NXM,OXM' \
+    'xreg4=4                                     NXM,OXM' \
+    'xreg4=4/1                                   NXM,OXM' \
+    'xreg5=5                                     NXM,OXM' \
+    'xreg5=5/1                                   NXM,OXM' \
+    'xreg6=6                                     NXM,OXM' \
+    'xreg6=6/1                                   NXM,OXM' \
+    'xreg7=7                                     NXM,OXM' \
+    'xreg7=7/1                                   NXM,OXM' \
+    'xxreg0=0                                    NXM,OXM' \
+    'xxreg0=0/1                                  NXM,OXM' \
+    'xxreg1=1                                    NXM,OXM' \
+    'xxreg1=1/1                                  NXM,OXM' \
+    'xxreg2=2                                    NXM,OXM' \
+    'xxreg2=2/1                                  NXM,OXM' \
+    'xxreg3=3                                    NXM,OXM' \
+    'xxreg3=3/1                                  NXM,OXM' \
     'dl_src=00:11:22:33:44:55                    any' \
     'dl_src=00:11:22:33:44:55/00:ff:ff:ff:ff:ff  NXM,OXM,OpenFlow11' \
     'dl_dst=00:11:22:33:44:55                    any' \
@@ -155,11 +184,12 @@ tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
 udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
-ip,actions=set_field:10.4.3.77->ip_src
+ip,actions=set_field:10.4.3.77->ip_src,mod_nw_ecn:2
 sctp actions=drop
 sctp actions=drop
 in_port=0 actions=resubmit:0
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 actions=ct(nat)
 actions=ct(commit,nat(dst))
 actions=ct(commit,nat(src))
@@ -185,11 +215,12 @@ OFPT_FLOW_MOD: ADD tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:
 OFPT_FLOW_MOD: ADD udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
 OFPT_FLOW_MOD: ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
 OFPT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
-OFPT_FLOW_MOD: ADD ip actions=mod_nw_src:10.4.3.77
+OFPT_FLOW_MOD: ADD ip actions=mod_nw_src:10.4.3.77,load:0x2->NXM_NX_IP_ECN[]
 OFPT_FLOW_MOD: ADD sctp actions=drop
 OFPT_FLOW_MOD: ADD sctp actions=drop
 OFPT_FLOW_MOD: ADD in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 OFPT_FLOW_MOD: ADD actions=ct(nat)
 OFPT_FLOW_MOD: ADD actions=ct(commit,nat(dst))
 OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src))
@@ -219,6 +250,7 @@ sctp actions=drop
 sctp actions=drop
 in_port=0 actions=resubmit:0
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 ]])
 
 AT_CHECK([ovs-ofctl --protocols OpenFlow11 parse-flows flows.txt
@@ -238,6 +270,7 @@ OFPT_FLOW_MOD (OF1.1): ADD sctp actions=drop
 OFPT_FLOW_MOD (OF1.1): ADD sctp actions=drop
 OFPT_FLOW_MOD (OF1.1): ADD in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD (OF1.1): ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+OFPT_FLOW_MOD (OF1.1): ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 ]])
 AT_CLEANUP
 
@@ -260,6 +293,7 @@ ip actions=mod_nw_src:10.1.1.2,mod_nw_dst:192.168.10.1,mod_nw_ttl:1,mod_nw_tos:1
 in_port=0 actions=mod_dl_src:11:22:33:44:55:66,mod_dl_dst:10:20:30:40:50:60
 in_port=0 actions=resubmit:0
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 ]])
 
 AT_CHECK([ovs-ofctl --protocols OpenFlow12 parse-flows flows.txt
@@ -283,6 +317,7 @@ OFPT_FLOW_MOD (OF1.2): ADD ip actions=set_field:10.1.1.2->ip_src,set_field:192.1
 OFPT_FLOW_MOD (OF1.2): ADD in_port=0 actions=set_field:11:22:33:44:55:66->eth_src,set_field:10:20:30:40:50:60->eth_dst
 OFPT_FLOW_MOD (OF1.2): ADD in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD (OF1.2): ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+OFPT_FLOW_MOD (OF1.2): ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 ]])
 AT_CLEANUP
 
@@ -375,12 +410,17 @@ check_overlap,actions=output:1,exit,output:2
 tcp,actions=fin_timeout(idle_timeout=5,hard_timeout=15)
 actions=controller(max_len=123,reason=invalid_ttl,id=555)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[])))
 ip,actions=ct(commit,exec(load(0x1->NXM_NX_CT_LABEL[])))
 ip,actions=ct(commit,exec(load(0x1234567890ABCDEF->NXM_NX_CT_LABEL[32..95])))
 ip,actions=ct(commit,exec(set_field(0x1->ct_label)))
 ip,ct_state=+trk,ct_label=0x1234567890abcdef12345678,actions=ct(commit)
+actions=output(max_len=100,port=123)
+actions=output(port=100,max_len=123)
+actions=output(port=LOCAL,max_len=123)
+actions=output(port=IN_PORT,max_len=123)
 ]])
 
 AT_CHECK([ovs-ofctl parse-flows flows.txt
@@ -417,12 +457,17 @@ NXT_FLOW_MOD: ADD table:255 check_overlap actions=output:1,exit,output:2
 NXT_FLOW_MOD: ADD table:255 tcp actions=fin_timeout(idle_timeout=5,hard_timeout=15)
 NXT_FLOW_MOD: ADD table:255 actions=controller(reason=invalid_ttl,max_len=123,id=555)
 NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,zone=5)
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[]))
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1234567890abcdef->NXM_NX_CT_LABEL[32..95]))
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
 NXT_FLOW_MOD: ADD table:255 ct_state=+trk,ct_label=0x1234567890abcdef12345678,ip actions=ct(commit)
+NXT_FLOW_MOD: ADD table:255 actions=output(port=123,max_len=100)
+NXT_FLOW_MOD: ADD table:255 actions=output(port=100,max_len=123)
+NXT_FLOW_MOD: ADD table:255 actions=output(port=65534,max_len=123)
+NXT_FLOW_MOD: ADD table:255 actions=output(port=65528,max_len=123)
 ]])
 AT_CLEANUP
 
@@ -457,6 +502,7 @@ dl_dst=00:00:00:00:00:00/01:00:00:00:00:00,actions=drop
 dl_dst=aa:bb:cc:dd:ee:ff/fe:ff:ff:ff:ff:ff,actions=drop
 dl_dst=aa:bb:cc:dd:ee:ff/00:00:00:00:00:00,actions=drop
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[[]])))
 ip,actions=ct(commit,exec(load(0x1->NXM_NX_CT_LABEL[[]])))
@@ -493,6 +539,7 @@ NXT_FLOW_MOD: ADD dl_dst=00:00:00:00:00:00/01:00:00:00:00:00 actions=drop
 NXT_FLOW_MOD: ADD dl_dst=aa:bb:cc:dd:ee:ff/fe:ff:ff:ff:ff:ff actions=drop
 NXT_FLOW_MOD: ADD actions=drop
 NXT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+NXT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 NXT_FLOW_MOD: ADD ip actions=ct(commit,zone=5)
 NXT_FLOW_MOD: ADD ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[[]]))
 NXT_FLOW_MOD: ADD ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[[0..63]],load:0->NXM_NX_CT_LABEL[[64..127]]))
@@ -529,6 +576,7 @@ actions=move:OXM_OF_ETH_DST[]->OXM_OF_ETH_SRC[]
 actions=push:NXM_NX_REG0[0..31],pop:NXM_NX_REG0[]
 vlan_tci=0x1123/0x1fff,actions=drop
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[])))
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_LABEL[])))
@@ -565,6 +613,7 @@ NXT_FLOW_MOD: ADD <any> actions=move:NXM_OF_ETH_DST[]->NXM_OF_ETH_SRC[]
 NXT_FLOW_MOD: ADD <any> actions=push:NXM_NX_REG0[],pop:NXM_NX_REG0[]
 NXT_FLOW_MOD: ADD NXM_OF_VLAN_TCI_W(1123/1fff) actions=drop
 NXT_FLOW_MOD: ADD <any> actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+NXT_FLOW_MOD: ADD <any> actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,zone=5)
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[]))
 NXT_FLOW_MOD: ADD NXM_OF_ETH_TYPE(0800) actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
@@ -866,15 +915,6 @@ NXOXM_ET_DP_HASH(01234567)
 # Invalid field numbers (experimenter OXM).
 ffff020800002320(11112222)
 ffff030800002320(1111/3333)
-
-# Unimplemented registers.
-#
-# This test assumes that at least two registers, but fewer than 16,
-# registers are implemented.
-00010004(12345678)
-00010108(12345678/12345678)
-00011e04(12345678)
-00011f08(12345678/12345678)
 ])
 AT_CHECK([ovs-ofctl -vPATTERN:'console:%c|%p|%m' --strict parse-nx-match < nx-match.txt], [0], [dnl
 <any>
@@ -1169,15 +1209,6 @@ NXM_NX_DP_HASH(01234567)
 nx_pull_match() returned error OFPBMC_BAD_FIELD
 
 # Invalid field numbers (experimenter OXM).
-nx_pull_match() returned error OFPBMC_BAD_FIELD
-nx_pull_match() returned error OFPBMC_BAD_FIELD
-
-# Unimplemented registers.
-#
-# This test assumes that at least two registers, but fewer than 16,
-# registers are implemented.
-NXM_NX_REG0(12345678)
-NXM_NX_REG0_W(12345678/12345678)
 nx_pull_match() returned error OFPBMC_BAD_FIELD
 nx_pull_match() returned error OFPBMC_BAD_FIELD
 ], [stderr])
@@ -2908,11 +2939,11 @@ dnl Check logs for OpenFlow trace
 OVS_WAIT_UNTIL([vconn_sub < ovs-vswitchd.log | test `grep -- "|vconn|DBG|unix: sent (Success): OFPST_FLOW reply" | wc -l` -ge 2])
 # AT_CHECK([sed -n "s/^.*\(|vconn|DBG|.*xid=.*:\).*$/\1/p" ovs-vswitchd.log], [0], [dnl
 AT_CHECK([print_vconn_debug | vconn_sub | ofctl_strip], [0], [dnl
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
 vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
  version bitmap: 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x07 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=OPEN_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
@@ -2941,15 +2972,17 @@ OFPT_FLOW_MOD (OF1.4): ADD table:7 dl_vlan=7 importance:7 actions=drop
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
 OFPT_FLOW_MOD (OF1.4): ADD table:8 dl_vlan=8 importance:8 actions=drop
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST (OF1.4):
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY (OF1.4):
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REPLY flags=0
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
 vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
  version bitmap: 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x07 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPST_FLOW request (OF1.4):
 vconn|DBG|unix: sent (Success): OFPST_FLOW reply (OF1.4):
  table=1, importance=1, dl_vlan=1 actions=drop
@@ -2988,15 +3021,17 @@ OFPT_FLOW_MOD (OF1.4): ADD table:7 dl_vlan=7 importance:17 actions=drop
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
 OFPT_FLOW_MOD (OF1.4): DEL_STRICT table:8 dl_vlan=8 actions=drop
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST (OF1.4):
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY (OF1.4):
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REPLY flags=0
-vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.5):
- version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06
+vconn|DBG|unix: sent (Success): OFPT_HELLO (OF1.6):
+ version bitmap: 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07
 vconn|DBG|unix: received: OFPT_HELLO (OF1.4):
  version bitmap: 0x05
-vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x06 and earlier, peer supports version 0x05)
+vconn|DBG|unix: negotiated OpenFlow version 0x05 (we support version 0x07 and earlier, peer supports version 0x05)
 vconn|DBG|unix: received: OFPST_FLOW request (OF1.4):
 vconn|DBG|unix: sent (Success): OFPST_FLOW reply (OF1.4):
  table=1, importance=11, dl_vlan=1 actions=drop

@@ -17,7 +17,7 @@
 #ifndef SIMAP_H
 #define SIMAP_H 1
 
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 
 #ifdef  __cplusplus
 extern "C" {

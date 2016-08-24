@@ -24,10 +24,10 @@
 #include "coverage.h"
 #include "fatal-signal.h"
 #include "netdev-provider.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "svec.h"
 #include "openvswitch/vlog.h"
 #include "odp-netlink.h"
@@ -490,6 +490,7 @@ netdev_windows_internal_construct(struct netdev *netdev_)
 #define NETDEV_WINDOWS_CLASS(NAME, CONSTRUCT)                           \
 {                                                                       \
     .type               = NAME,                                         \
+    .is_pmd             = false,                                        \
     .alloc              = netdev_windows_alloc,                         \
     .construct          = CONSTRUCT,                                    \
     .destruct           = netdev_windows_destruct,                      \

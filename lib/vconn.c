@@ -23,21 +23,21 @@
 #include <stdlib.h>
 #include <string.h>
 #include "coverage.h"
-#include "dynamic-string.h"
 #include "fatal-signal.h"
 #include "flow.h"
-#include "ofp-errors.h"
-#include "ofp-msgs.h"
-#include "ofp-print.h"
-#include "ofp-util.h"
-#include "ofpbuf.h"
 #include "openflow/nicira-ext.h"
 #include "openflow/openflow.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/ofp-errors.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "random.h"
 #include "util.h"
-#include "openvswitch/vlog.h"
 #include "socket-util.h"
 
 VLOG_DEFINE_THIS_MODULE(vconn);
@@ -744,9 +744,21 @@ vconn_recv_block(struct vconn *vconn, struct ofpbuf **msgp)
     return retval;
 }
 
+static void
+vconn_add_bundle_error(const struct ofp_header *oh, struct ovs_list *errors)
+{
+    if (errors) {
+        struct vconn_bundle_error *err = xmalloc(sizeof *err);
+        size_t len = ntohs(oh->length);
+
+        memcpy(err->ofp_msg_data, oh, MIN(len, sizeof err->ofp_msg_data));
+        ovs_list_push_back(errors, &err->list_node);
+    }
+}
+
 static int
 vconn_recv_xid__(struct vconn *vconn, ovs_be32 xid, struct ofpbuf **replyp,
-                 void (*error_reporter)(const struct ofp_header *))
+                 struct ovs_list *errors)
 {
     for (;;) {
         ovs_be32 recv_xid;
@@ -768,8 +780,8 @@ vconn_recv_xid__(struct vconn *vconn, ovs_be32 xid, struct ofpbuf **replyp,
         }
 
         error = ofptype_decode(&type, oh);
-        if (!error && type == OFPTYPE_ERROR && error_reporter) {
-            error_reporter(oh);
+        if (!error && type == OFPTYPE_ERROR) {
+            vconn_add_bundle_error(oh, errors);
         } else {
             VLOG_DBG_RL(&bad_ofmsg_rl, "%s: received reply with xid %08"PRIx32
                         " != expected %08"PRIx32,
@@ -793,8 +805,7 @@ vconn_recv_xid(struct vconn *vconn, ovs_be32 xid, struct ofpbuf **replyp)
 
 static int
 vconn_transact__(struct vconn *vconn, struct ofpbuf *request,
-                 struct ofpbuf **replyp,
-                 void (*error_reporter)(const struct ofp_header *))
+                 struct ofpbuf **replyp, struct ovs_list *errors)
 {
     ovs_be32 send_xid = ((struct ofp_header *) request->data)->xid;
     int error;
@@ -804,8 +815,7 @@ vconn_transact__(struct vconn *vconn, struct ofpbuf *request,
     if (error) {
         ofpbuf_delete(request);
     }
-    return error ? error : vconn_recv_xid__(vconn, send_xid, replyp,
-                                            error_reporter);
+    return error ? error : vconn_recv_xid__(vconn, send_xid, replyp, errors);
 }
 
 /* Sends 'request' to 'vconn' and blocks until it receives a reply with a
@@ -825,6 +835,22 @@ vconn_transact(struct vconn *vconn, struct ofpbuf *request,
     return vconn_transact__(vconn, request, replyp, NULL);
 }
 
+static int
+vconn_send_barrier(struct vconn *vconn, ovs_be32 *barrier_xid)
+{
+    struct ofpbuf *barrier;
+    int error;
+
+    /* Send barrier. */
+    barrier = ofputil_encode_barrier_request(vconn_get_version(vconn));
+    *barrier_xid = ((struct ofp_header *) barrier->data)->xid;
+    error = vconn_send_block(vconn, barrier);
+    if (error) {
+        ofpbuf_delete(barrier);
+    }
+    return error;
+}
+
 /* Sends 'request' followed by a barrier request to 'vconn', then blocks until
  * it receives a reply to the barrier.  If successful, stores the reply to
  * 'request' in '*replyp', if one was received, and otherwise NULL, then
@@ -842,7 +868,6 @@ vconn_transact_noreply(struct vconn *vconn, struct ofpbuf *request,
 {
     ovs_be32 request_xid;
     ovs_be32 barrier_xid;
-    struct ofpbuf *barrier;
     int error;
 
     *replyp = NULL;
@@ -856,11 +881,8 @@ vconn_transact_noreply(struct vconn *vconn, struct ofpbuf *request,
     }
 
     /* Send barrier. */
-    barrier = ofputil_encode_barrier_request(vconn_get_version(vconn));
-    barrier_xid = ((struct ofp_header *) barrier->data)->xid;
-    error = vconn_send_block(vconn, barrier);
+    error = vconn_send_barrier(vconn, &barrier_xid);
     if (error) {
-        ofpbuf_delete(barrier);
         return error;
     }
 
@@ -924,7 +946,7 @@ vconn_transact_multiple_noreply(struct vconn *vconn, struct ovs_list *requests,
 static enum ofperr
 vconn_bundle_reply_validate(struct ofpbuf *reply,
                             struct ofputil_bundle_ctrl_msg *request,
-                            void (*error_reporter)(const struct ofp_header *))
+                            struct ovs_list *errors)
 {
     const struct ofp_header *oh;
     enum ofptype type;
@@ -938,7 +960,7 @@ vconn_bundle_reply_validate(struct ofpbuf *reply,
     }
 
     if (type == OFPTYPE_ERROR) {
-        error_reporter(oh);
+        vconn_add_bundle_error(oh, errors);
         return ofperr_decode_msg(oh, NULL);
     }
     if (type != OFPTYPE_BUNDLE_CONTROL) {
@@ -964,15 +986,15 @@ vconn_bundle_reply_validate(struct ofpbuf *reply,
 /* Send bundle control message 'bc' of 'type' via 'vconn', and wait for either
  * an error or the corresponding bundle control message response.
  *
- * 'error_reporter' is called for any error responses received, which may be
- * also regarding earlier OpenFlow messages than this bundle control message.
+ * 'errors' is a list to which any OpenFlow errors relating to bundle
+ * processing are appended.  Caller is responsible for releasing the memory of
+ * each node in the list on return.
  *
  * Returns errno value, or 0 when successful. */
 static int
 vconn_bundle_control_transact(struct vconn *vconn,
                               struct ofputil_bundle_ctrl_msg *bc,
-                              uint16_t type,
-                              void (*error_reporter)(const struct ofp_header *))
+                              uint16_t type, struct ovs_list *errors)
 {
     struct ofpbuf *request, *reply;
     int error;
@@ -981,21 +1003,12 @@ vconn_bundle_control_transact(struct vconn *vconn,
     bc->type = type;
     request = ofputil_encode_bundle_ctrl_request(vconn->version, bc);
     ofpmsg_update_length(request);
-    error = vconn_transact__(vconn, request, &reply, error_reporter);
+    error = vconn_transact__(vconn, request, &reply, errors);
     if (error) {
         return error;
     }
 
-    ofperr = vconn_bundle_reply_validate(reply, bc, error_reporter);
-    if (ofperr) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "Bundle %s failed (%s).",
-                     type == OFPBCT_OPEN_REQUEST ? "open"
-                     : type == OFPBCT_CLOSE_REQUEST ? "close"
-                     : type == OFPBCT_COMMIT_REQUEST ? "commit"
-                     : type == OFPBCT_DISCARD_REQUEST ? "discard"
-                     : "control message",
-                     ofperr_to_string(ofperr));
-    }
+    ofperr = vconn_bundle_reply_validate(reply, bc, errors);
     ofpbuf_delete(reply);
 
     return ofperr ? EPROTO : 0;
@@ -1003,8 +1016,7 @@ vconn_bundle_control_transact(struct vconn *vconn,
 
 /* Checks if error responses can be received on 'vconn'. */
 static void
-vconn_recv_error(struct vconn *vconn,
-                 void (*error_reporter)(const struct ofp_header *))
+vconn_recv_error(struct vconn *vconn, struct ovs_list *errors)
 {
     int error;
 
@@ -1020,7 +1032,7 @@ vconn_recv_error(struct vconn *vconn,
             oh = reply->data;
             ofperr = ofptype_decode(&type, oh);
             if (!ofperr && type == OFPTYPE_ERROR) {
-                error_reporter(oh);
+                vconn_add_bundle_error(oh, errors);
             } else {
                 VLOG_DBG_RL(&bad_ofmsg_rl,
                             "%s: received unexpected reply with xid %08"PRIx32,
@@ -1031,65 +1043,98 @@ vconn_recv_error(struct vconn *vconn,
     } while (!error);
 }
 
+/* Sends a barrier and waits for the barrier response and stores any errors
+ * that are received before the barrier response. */
+static int
+vconn_bundle_barrier_transact(struct vconn *vconn, struct ovs_list *errors)
+{
+    struct ofpbuf *reply;
+    ovs_be32 barrier_xid;
+    int error;
+
+    error = vconn_send_barrier(vconn, &barrier_xid);
+    if (error) {
+        return error;
+    }
+
+    error = vconn_recv_xid__(vconn, barrier_xid, &reply, errors);
+    if (error) {
+        return error;
+    }
+    ofpbuf_delete(reply);
+    return 0;
+}
+
 static int
 vconn_bundle_add_msg(struct vconn *vconn, struct ofputil_bundle_ctrl_msg *bc,
                      struct ofpbuf *msg,
-                     void (*error_reporter)(const struct ofp_header *))
+                     struct ovs_list *errors)
 {
     struct ofputil_bundle_add_msg bam;
     struct ofpbuf *request;
     int error;
+
+    ofpmsg_update_length(msg);
 
     bam.bundle_id = bc->bundle_id;
     bam.flags = bc->flags;
     bam.msg = msg->data;
 
     request = ofputil_encode_bundle_add(vconn->version, &bam);
-    ofpmsg_update_length(request);
 
     error = vconn_send_block(vconn, request);
     if (!error) {
         /* Check for an error return, so that the socket buffer does not become
          * full of errors. */
-        vconn_recv_error(vconn, error_reporter);
+        vconn_recv_error(vconn, errors);
     }
     return error;
 }
 
 int
 vconn_bundle_transact(struct vconn *vconn, struct ovs_list *requests,
-                      uint16_t flags,
-                      void (*error_reporter)(const struct ofp_header *))
+                      uint16_t flags, struct ovs_list *errors)
 {
     struct ofputil_bundle_ctrl_msg bc;
     struct ofpbuf *request;
     int error;
 
+    ovs_list_init(errors);
+
     memset(&bc, 0, sizeof bc);
     bc.flags = flags;
     error = vconn_bundle_control_transact(vconn, &bc, OFPBCT_OPEN_REQUEST,
-                                          error_reporter);
+                                          errors);
     if (error) {
         return error;
     }
 
     LIST_FOR_EACH (request, list_node, requests) {
-        error = vconn_bundle_add_msg(vconn, &bc, request, error_reporter);
+        error = vconn_bundle_add_msg(vconn, &bc, request, errors);
         if (error) {
             break;
         }
     }
 
     if (!error) {
+        /* A failing message does not invalidate the bundle, but the message is
+         * simply not added to the bundle.  Since we do not want to commit if
+         * any of the messages failed, we need to explicitly sync with barrier
+         * before we issue the commit message. */
+        error = vconn_bundle_barrier_transact(vconn, errors);
+    }
+    if (!error && !ovs_list_is_empty(errors)) {
+        error = EPROTO;
+    }
+
+    /* Commit only if no errors are received. */
+    if (!error) {
         error = vconn_bundle_control_transact(vconn, &bc,
                                               OFPBCT_COMMIT_REQUEST,
-                                              error_reporter);
+                                              errors);
     } else {
-        /* Do not overwrite the error code from vconn_bundle_add_msg().
-         * Any error in discard should be either reported or logged, so it
-         * should not get lost. */
         vconn_bundle_control_transact(vconn, &bc, OFPBCT_DISCARD_REQUEST,
-                                      error_reporter);
+                                      errors);
     }
     return error;
 }

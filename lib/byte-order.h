@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2010, 2011, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2010, 2011, 2013, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@
 #include "openvswitch/types.h"
 
 #ifndef __CHECKER__
-#ifndef _WIN32
+#if !(defined(_WIN32) || defined(htonll))
 static inline ovs_be64
 htonll(uint64_t n)
 {
@@ -34,7 +34,7 @@ ntohll(ovs_be64 n)
 {
     return htonl(1) == 1 ? n : ((uint64_t) ntohl(n) << 32) | ntohl(n >> 32);
 }
-#endif /* _WIN32 */
+#endif /* !(defined(_WIN32) || defined(htonll)) */
 #else
 /* Making sparse happy with these functions also makes them unreadable, so
  * don't bother to show it their implementations. */
@@ -108,6 +108,35 @@ uint32_byteswap(uint32_t crc) {
     (OVS_FORCE ovs_be32)((uint32_t)(B1) | (B2) << 8 | (B3) << 16 | (B4) << 24)
 #define BE16S_TO_BE32(B1, B2) \
     (OVS_FORCE ovs_be32)((uint32_t)(B1) | (B2) << 16)
+#endif
+
+/* These functions zero-extend big-endian values to longer ones,
+ * or truncate long big-endian value to shorter ones. */
+#ifndef __CHECKER__
+#if WORDS_BIGENDIAN
+static inline ovs_be32 be16_to_be32(ovs_be16 x) { return x; }
+static inline ovs_be64 be16_to_be64(ovs_be16 x) { return x; }
+static inline ovs_be64 be32_to_be64(ovs_be32 x) { return x; }
+static inline ovs_be32 be64_to_be32(ovs_be64 x) { return x; }
+static inline ovs_be16 be64_to_be16(ovs_be64 x) { return x; }
+static inline ovs_be16 be32_to_be16(ovs_be32 x) { return x; }
+#else /* !WORDS_BIGENDIAN */
+static inline ovs_be32 be16_to_be32(ovs_be16 x) { return (ovs_be32) x << 16; }
+static inline ovs_be64 be16_to_be64(ovs_be16 x) { return (ovs_be64) x << 48; }
+static inline ovs_be64 be32_to_be64(ovs_be32 x) { return (ovs_be64) x << 32; }
+static inline ovs_be32 be64_to_be32(ovs_be64 x) { return x >> 32; }
+static inline ovs_be16 be64_to_be16(ovs_be64 x) { return x >> 48; }
+static inline ovs_be16 be32_to_be16(ovs_be32 x) { return x >> 16; }
+#endif /* !WORDS_BIGENDIAN */
+#else /* __CHECKER__ */
+/* Making sparse happy with these functions also makes them unreadable, so
+ * don't bother to show it their implementations. */
+ovs_be32 be16_to_be32(ovs_be16);
+ovs_be64 be16_to_be64(ovs_be16);
+ovs_be64 be32_to_be64(ovs_be32);
+ovs_be32 be64_to_be32(ovs_be64);
+ovs_be16 be64_to_be16(ovs_be64);
+ovs_be16 be32_to_be16(ovs_be32);
 #endif
 
 #endif /* byte-order.h */

@@ -14,7 +14,7 @@
 # Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 #
 # Copyright (c) 2005, 2007 XenSource Ltd.
-# Copyright (c) 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
+# Copyright (c) 2010, 2011, 2012, 2013, 2015, 2016 Nicira, Inc.
 
 #
 # To add new entries to the bugtool, you need to:
@@ -33,8 +33,8 @@
 # or func_output().
 #
 
-import warnings
-warnings.filterwarnings(action="ignore", category=DeprecationWarning)
+from __future__ import print_function
+from six.moves import input
 
 import getopt
 import re
@@ -44,19 +44,16 @@ import sys
 import tarfile
 import time
 import commands
-import pprint
 from xml.dom.minidom import parse, getDOMImplementation
 import zipfile
 from subprocess import Popen, PIPE
 from select import select
-from signal import SIGTERM, SIGUSR1
-import md5
+from signal import SIGTERM
+import hashlib
 import platform
 import fcntl
-import glob
-import urllib
-import socket
-import base64
+import warnings
+warnings.filterwarnings(action="ignore", category=DeprecationWarning)
 
 OS_RELEASE = platform.release()
 
@@ -109,8 +106,8 @@ HOSTS_ALLOW = '/etc/hosts.allow'
 HOSTS_DENY = '/etc/hosts.deny'
 DHCP_LEASE_DIR = ['/var/lib/dhclient', '/var/lib/dhcp3']
 OPENVSWITCH_LOG_DIR = '@LOGDIR@/'
-OPENVSWITCH_DEFAULT_SWITCH = '/etc/default/openvswitch-switch' # Debian
-OPENVSWITCH_SYSCONFIG_SWITCH = '/etc/sysconfig/openvswitch'    # RHEL
+OPENVSWITCH_DEFAULT_SWITCH = '/etc/default/openvswitch-switch'  # Debian
+OPENVSWITCH_SYSCONFIG_SWITCH = '/etc/sysconfig/openvswitch'     # RHEL
 OPENVSWITCH_CONF_DB = '@DBDIR@/conf.db'
 OPENVSWITCH_COMPACT_DB = '@DBDIR@/bugtool-compact-conf.db'
 OPENVSWITCH_VSWITCHD_PID = '@RUNDIR@/ovs-vswitchd.pid'
@@ -123,7 +120,8 @@ YUM_REPOS_DIR = '/etc/yum.repos.d'
 # External programs
 #
 
-os.environ['PATH'] = '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:@pkgdatadir@/scripts'
+os.environ['PATH'] = '/usr/local/sbin:/usr/local/bin:' \
+                     '/usr/sbin:/usr/bin:/sbin:/bin:@pkgdatadir@/scripts'
 ARP = 'arp'
 CAT = 'cat'
 CHKCONFIG = 'chkconfig'
@@ -141,7 +139,6 @@ ISCSIADM = 'iscsiadm'
 LOSETUP = 'losetup'
 LS = 'ls'
 LSPCI = 'lspci'
-MD5SUM = 'md5sum'
 MODINFO = 'modinfo'
 MPPUTIL = 'mppUtil'
 MULTIPATHD = 'multipathd'
@@ -153,6 +150,7 @@ PS = 'ps'
 ROUTE = 'route'
 RPM = 'rpm'
 SG_MAP = 'sg_map'
+SHA256_SUM = 'sha256sum'
 SYSCTL = 'sysctl'
 TC = 'tc'
 UPTIME = 'uptime'
@@ -173,19 +171,19 @@ ZCAT = 'zcat'
 # scripts in dom0.
 #
 
-PII_NO            = 'no'
-PII_YES           = 'yes'
-PII_MAYBE         = 'maybe'
+PII_NO = 'no'
+PII_YES = 'yes'
+PII_MAYBE = 'maybe'
 PII_IF_CUSTOMIZED = 'if_customized'
-KEY      = 0
-PII      = 1
+KEY = 0
+PII = 1
 MIN_SIZE = 2
 MAX_SIZE = 3
 MIN_TIME = 4
 MAX_TIME = 5
-MIME     = 6
-CHECKED  = 7
-HIDDEN   = 8
+MIME = 6
+CHECKED = 7
+HIDDEN = 8
 
 MIME_DATA = 'application/data'
 MIME_TEXT = 'text/plain'
@@ -197,20 +195,20 @@ CAP_XML_ROOT = "system-status-capabilities"
 CAP_XML_ELEMENT = 'capability'
 
 
-CAP_BOOT_LOADER          = 'boot-loader'
-CAP_DISK_INFO            = 'disk-info'
-CAP_HARDWARE_INFO        = 'hardware-info'
-CAP_KERNEL_INFO          = 'kernel-info'
-CAP_LOSETUP_A            = 'loopback-devices'
-CAP_MULTIPATH            = 'multipath'
-CAP_NETWORK_CONFIG       = 'network-config'
-CAP_NETWORK_INFO         = 'network-info'
-CAP_NETWORK_STATUS       = 'network-status'
-CAP_OPENVSWITCH_LOGS     = 'ovs-system-logs'
-CAP_PROCESS_LIST         = 'process-list'
-CAP_SYSTEM_LOGS          = 'system-logs'
-CAP_SYSTEM_SERVICES      = 'system-services'
-CAP_YUM                  = 'yum'
+CAP_BOOT_LOADER = 'boot-loader'
+CAP_DISK_INFO = 'disk-info'
+CAP_HARDWARE_INFO = 'hardware-info'
+CAP_KERNEL_INFO = 'kernel-info'
+CAP_LOSETUP_A = 'loopback-devices'
+CAP_MULTIPATH = 'multipath'
+CAP_NETWORK_CONFIG = 'network-config'
+CAP_NETWORK_INFO = 'network-info'
+CAP_NETWORK_STATUS = 'network-status'
+CAP_OPENVSWITCH_LOGS = 'ovs-system-logs'
+CAP_PROCESS_LIST = 'process-list'
+CAP_SYSTEM_LOGS = 'system-logs'
+CAP_SYSTEM_SERVICES = 'system-services'
+CAP_YUM = 'yum'
 
 KB = 1024
 MB = 1024 * 1024
@@ -224,6 +222,7 @@ log_days = 20
 log_last_mod_time = None
 free_disk_space = None
 
+
 def cap(key, pii=PII_MAYBE, min_size=-1, max_size=-1, min_time=-1,
         max_time=-1, mime=MIME_TEXT, checked=True, hidden=False):
     caps[key] = (key, pii, min_size, max_size, min_time, max_time, mime,
@@ -231,33 +230,20 @@ def cap(key, pii=PII_MAYBE, min_size=-1, max_size=-1, min_time=-1,
     cap_sizes[key] = 0
 
 
-cap(CAP_BOOT_LOADER,         PII_NO,                    max_size=3*KB,
-    max_time=5)
-cap(CAP_DISK_INFO,           PII_MAYBE,                 max_size=50*KB,
-    max_time=20)
-cap(CAP_HARDWARE_INFO,       PII_MAYBE,                 max_size=2*MB,
-    max_time=20)
-cap(CAP_KERNEL_INFO,         PII_MAYBE,                 max_size=120*KB,
-    max_time=5)
-cap(CAP_LOSETUP_A,           PII_MAYBE,                 max_size=KB, max_time=5)
-cap(CAP_MULTIPATH,           PII_MAYBE,                 max_size=20*KB,
-    max_time=10)
-cap(CAP_NETWORK_CONFIG,      PII_IF_CUSTOMIZED,
-                                        min_size=0,     max_size=5*MB)
-cap(CAP_NETWORK_INFO,        PII_YES,                   max_size=50*MB,
-    max_time=30)
-cap(CAP_NETWORK_STATUS,      PII_YES,                   max_size=-1,
-    max_time=30)
-cap(CAP_OPENVSWITCH_LOGS,    PII_MAYBE,                 max_size=-1,
-    max_time=5)
-cap(CAP_PROCESS_LIST,        PII_YES,                   max_size=30*KB,
-    max_time=20)
-cap(CAP_SYSTEM_LOGS,         PII_MAYBE,                 max_size=200*MB,
-    max_time=5)
-cap(CAP_SYSTEM_SERVICES,     PII_NO,                    max_size=5*KB,
-    max_time=20)
-cap(CAP_YUM,                 PII_IF_CUSTOMIZED,         max_size=10*KB,
-    max_time=30)
+cap(CAP_BOOT_LOADER, PII_NO, max_size=3 * KB, max_time=5)
+cap(CAP_DISK_INFO, PII_MAYBE, max_size=50 * KB, max_time=20)
+cap(CAP_HARDWARE_INFO, PII_MAYBE, max_size=2 * MB, max_time=20)
+cap(CAP_KERNEL_INFO, PII_MAYBE, max_size=120 * KB, max_time=5)
+cap(CAP_LOSETUP_A, PII_MAYBE, max_size=KB, max_time=5)
+cap(CAP_MULTIPATH, PII_MAYBE, max_size=20 * KB, max_time=10)
+cap(CAP_NETWORK_CONFIG, PII_IF_CUSTOMIZED, min_size=0, max_size=5 * MB)
+cap(CAP_NETWORK_INFO, PII_YES, max_size=50 * MB, max_time=30)
+cap(CAP_NETWORK_STATUS, PII_YES, max_size=-1, max_time=30)
+cap(CAP_OPENVSWITCH_LOGS, PII_MAYBE, max_size=-1, max_time=5)
+cap(CAP_PROCESS_LIST, PII_YES, max_size=30 * KB, max_time=20)
+cap(CAP_SYSTEM_LOGS, PII_MAYBE, max_size=200 * MB, max_time=5)
+cap(CAP_SYSTEM_SERVICES, PII_NO, max_size=5 * KB, max_time=20)
+cap(CAP_YUM, PII_IF_CUSTOMIZED, max_size=10 * KB, max_time=30)
 
 ANSWER_YES_TO_ALL = False
 SILENT_MODE = False
@@ -265,13 +251,16 @@ entries = None
 data = {}
 dev_null = open('/dev/null', 'r+')
 
+
 def output(x):
     global SILENT_MODE
     if not SILENT_MODE:
-        print x
+        print(x)
+
 
 def output_ts(x):
     output("[%s]  %s" % (time.strftime("%x %X %Z"), x))
+
 
 def cmd_output(cap, args, label=None, filter=None, binary=False):
     if cap in entries:
@@ -297,12 +286,15 @@ def file_output(cap, path_list, newest_first=False, last_mod_time=None):
         for path in path_list:
             try:
                 s = os.stat(path)
-            except OSError, e:
+            except OSError:
                 continue
             if last_mod_time is None or s.st_mtime >= last_mod_time:
                 path_entries.append((path, s))
 
-        mtime = lambda(path, stat): stat.st_mtime
+        def mtime(arg):
+            (path, stat) = arg
+            return stat.st_mtime
+
         path_entries.sort(key=mtime, reverse=newest_first)
         for p in path_entries:
             if check_space(cap, p[0], p[1].st_size):
@@ -338,22 +330,22 @@ def prefix_output(cap, prefix, newest_first=False, last_mod_time=None):
 
 def func_output(cap, label, func):
     if cap in entries:
-        t = str(func).split()
         data[label] = {'cap': cap, 'func': func}
+
 
 def collect_data():
     process_lists = {}
 
     for (k, v) in data.items():
         cap = v['cap']
-        if v.has_key('cmd_args'):
+        if 'cmd_args' in v:
             v['output'] = StringIOmtime()
-            if not process_lists.has_key(cap):
+            if cap not in process_lists:
                 process_lists[cap] = []
             process_lists[cap].append(
                 ProcOutput(v['cmd_args'], caps[cap][MAX_TIME], v['output'],
                            v['filter'], v['binary']))
-        elif v.has_key('filename') and v['filename'].startswith('/proc/'):
+        elif 'filename' in v and v['filename'].startswith('/proc/'):
             # proc files must be read into memory
             try:
                 f = open(v['filename'], 'r')
@@ -363,10 +355,10 @@ def collect_data():
                     v['output'] = StringIOmtime(s)
             except:
                 pass
-        elif v.has_key('func'):
+        elif 'func' in v:
             try:
                 s = v['func'](cap)
-            except Exception, e:
+            except Exception as e:
                 s = str(e)
             if check_space(cap, k, len(s)):
                 v['output'] = StringIOmtime(s)
@@ -384,7 +376,7 @@ def main(argv=None):
     collect_all_info = True
 
     if '--help' in sys.argv:
-        print """\
+        print("""
 %(argv0)s: create status report bundles to assist in problem diagnosis
 usage: %(argv0)s OPTIONS
 
@@ -409,12 +401,12 @@ Output options:
   --outfd=FD                 write output to FD (requires --output=tar)
   --unlimited                ignore default limits on sizes of data collected
   --debug                    print ovs-bugtool debug info on stdout\
-""" % {'argv0': sys.argv[0]}
+""" % {'argv0': sys.argv[0]})
         sys.exit(0)
 
     # we need access to privileged files, exit if we are not running as root
     if os.getuid() != 0:
-        print >>sys.stderr, "Error: ovs-bugtool must be run as root"
+        print("Error: ovs-bugtool must be run as root", file=sys.stderr)
         return 1
 
     output_file = None
@@ -429,8 +421,8 @@ Output options:
             argv, 'sy', ['capabilities', 'silent', 'yestoall', 'entries=',
                          'output=', 'outfd=', 'outfile=', 'all', 'unlimited',
                          'debug', 'ovs', 'log-days='])
-    except getopt.GetoptError, opterr:
-        print >>sys.stderr, opterr
+    except getopt.GetoptError as opterr:
+        print(opterr, file=sys.stderr)
         return 2
 
     try:
@@ -447,10 +439,10 @@ Output options:
             return 0
 
         if k == '--output':
-            if  v in ['tar', 'tar.bz2', 'tar.gz', 'zip']:
+            if v in ['tar', 'tar.bz2', 'tar.gz', 'zip']:
                 output_type = v
             else:
-                print >>sys.stderr, "Invalid output format '%s'" % v
+                print("Invalid output format '%s'" % v, file=sys.stderr)
                 return 2
 
         # "-s" or "--silent" means suppress output (except for the final
@@ -472,7 +464,8 @@ Output options:
                 old = fcntl.fcntl(output_fd, fcntl.F_GETFD)
                 fcntl.fcntl(output_fd, fcntl.F_SETFD, old | fcntl.FD_CLOEXEC)
             except:
-                print >>sys.stderr, "Invalid output file descriptor", output_fd
+                print("Invalid output file descriptor", output_fd,
+                      file=sys.stderr)
                 return 2
 
         if k == '--outfile':
@@ -493,17 +486,17 @@ Output options:
         if k == '--log-days':
             log_days = int(v)
 
-
     if len(params) != 1:
-        print >>sys.stderr, "Invalid additional arguments", str(params)
+        print("Invalid additional arguments", str(params), file=sys.stderr)
         return 2
 
     if output_fd != -1 and output_type != 'tar':
-        print >>sys.stderr, "Option '--outfd' only valid with '--output=tar'"
+        print("Option '--outfd' only valid with '--output=tar'",
+              file=sys.stderr)
         return 2
 
     if output_fd != -1 and output_file is not None:
-        print >>sys.stderr, "Cannot set both '--outfd' and '--outfile'"
+        print("Cannot set both '--outfd' and '--outfile'", file=sys.stderr)
         return 2
 
     if output_file is not None and not unlimited_data:
@@ -512,7 +505,8 @@ Output options:
     log_last_mod_time = int(time.time()) - log_days * 86400
 
     if ANSWER_YES_TO_ALL:
-        output("Warning: '--yestoall' argument provided, will not prompt for individual files.")
+        output("Warning: '--yestoall' argument provided, will not prompt "
+               "for individual files.")
 
     output('''
 This application will collate dmesg output, details of the
@@ -532,7 +526,8 @@ exclude those logs from the archive.
 
     file_output(CAP_BOOT_LOADER, [GRUB_CONFIG])
     cmd_output(CAP_BOOT_LOADER, [LS, '-lR', '/boot'])
-    cmd_output(CAP_BOOT_LOADER, [MD5SUM, BOOT_KERNEL, BOOT_INITRD], label='vmlinuz-initrd.md5sum')
+    cmd_output(CAP_BOOT_LOADER, [SHA256_SUM, BOOT_KERNEL, BOOT_INITRD],
+               label='vmlinuz-initrd.sha256sum')
 
     cmd_output(CAP_DISK_INFO, [FDISK, '-l'])
     file_output(CAP_DISK_INFO, [PROC_PARTITIONS, PROC_MOUNTS])
@@ -547,7 +542,8 @@ exclude those logs from the archive.
     cmd_output(CAP_DISK_INFO, [SG_MAP, '-x'])
     func_output(CAP_DISK_INFO, 'scsi-hosts', dump_scsi_hosts)
 
-    file_output(CAP_HARDWARE_INFO, [PROC_CPUINFO, PROC_MEMINFO, PROC_IOPORTS, PROC_INTERRUPTS])
+    file_output(CAP_HARDWARE_INFO,
+                [PROC_CPUINFO, PROC_MEMINFO, PROC_IOPORTS, PROC_INTERRUPTS])
     cmd_output(CAP_HARDWARE_INFO, [DMIDECODE])
     cmd_output(CAP_HARDWARE_INFO, [LSPCI, '-n'])
     cmd_output(CAP_HARDWARE_INFO, [LSPCI, '-vv'])
@@ -555,9 +551,8 @@ exclude those logs from the archive.
     file_output(CAP_HARDWARE_INFO, [SYSCONFIG_HWCONF])
     cmd_output(CAP_HARDWARE_INFO, [LS, '-lR', '/dev'])
 
-
-    file_output(CAP_KERNEL_INFO, [PROC_VERSION, PROC_MODULES, PROC_DEVICES,
-                                  PROC_FILESYSTEMS, PROC_CMDLINE])
+    file_output(CAP_KERNEL_INFO, [PROC_VERSION, PROC_MODULES,
+                PROC_DEVICES, PROC_FILESYSTEMS, PROC_CMDLINE])
     cmd_output(CAP_KERNEL_INFO, [ZCAT, PROC_CONFIG], label='config')
     cmd_output(CAP_KERNEL_INFO, [SYSCTL, '-A'])
     file_output(CAP_KERNEL_INFO, [MODPROBE_CONF])
@@ -575,8 +570,10 @@ exclude those logs from the archive.
 
     tree_output(CAP_NETWORK_CONFIG, SYSCONFIG_NETWORK_SCRIPTS, IFCFG_RE)
     tree_output(CAP_NETWORK_CONFIG, SYSCONFIG_NETWORK_SCRIPTS, ROUTE_RE)
-    file_output(CAP_NETWORK_CONFIG, [SYSCONFIG_NETWORK, RESOLV_CONF, NSSWITCH_CONF, HOSTS])
-    file_output(CAP_NETWORK_CONFIG, [NTP_CONF, IPTABLES_CONFIG, HOSTS_ALLOW, HOSTS_DENY])
+    file_output(CAP_NETWORK_CONFIG,
+                [SYSCONFIG_NETWORK, RESOLV_CONF, NSSWITCH_CONF, HOSTS])
+    file_output(CAP_NETWORK_CONFIG,
+                [NTP_CONF, IPTABLES_CONFIG, HOSTS_ALLOW, HOSTS_DENY])
     file_output(CAP_NETWORK_CONFIG, [OPENVSWITCH_DEFAULT_SWITCH,
                 OPENVSWITCH_SYSCONFIG_SWITCH])
 
@@ -617,22 +614,26 @@ exclude those logs from the archive.
         for d in dp_list():
             cmd_output(CAP_NETWORK_STATUS, [OVS_DPCTL, 'dump-flows', '-m', d])
 
-    cmd_output(CAP_PROCESS_LIST, [PS, 'wwwaxf', '-eo', 'pid,tty,stat,time,nice,psr,pcpu,pmem,nwchan,wchan:25,args'], label='process-tree')
+    cmd_output(CAP_PROCESS_LIST, [PS, 'wwwaxf', '-eo',
+               'pid,tty,stat,time,nice,psr,pcpu,pmem,nwchan,wchan:25,args'],
+               label='process-tree')
     func_output(CAP_PROCESS_LIST, 'fd_usage', fd_usage)
 
-    system_logs = ([ VAR_LOG_DIR + x for x in
+    system_logs = ([VAR_LOG_DIR + x for x in
         ['crit.log', 'kern.log', 'daemon.log', 'user.log',
         'syslog', 'messages', 'secure', 'debug', 'dmesg', 'boot']])
     for log in system_logs:
         prefix_output(CAP_SYSTEM_LOGS, log, last_mod_time=log_last_mod_time)
 
-    ovs_logs = ([ OPENVSWITCH_LOG_DIR + x for x in
+    ovs_logs = ([OPENVSWITCH_LOG_DIR + x for x in
         ['ovs-vswitchd.log', 'ovsdb-server.log',
         'ovs-xapi-sync.log', 'ovs-monitor-ipsec.log', 'ovs-ctl.log']])
     for log in ovs_logs:
-        prefix_output(CAP_OPENVSWITCH_LOGS, log, last_mod_time=log_last_mod_time)
+        prefix_output(CAP_OPENVSWITCH_LOGS, log,
+                      last_mod_time=log_last_mod_time)
 
-    if not os.path.exists('/var/log/dmesg') and not os.path.exists('/var/log/boot'):
+    if not os.path.exists('/var/log/dmesg') and \
+       not os.path.exists('/var/log/boot'):
         cmd_output(CAP_SYSTEM_LOGS, [DMESG])
 
     cmd_output(CAP_SYSTEM_SERVICES, [CHKCONFIG, '--list'])
@@ -644,7 +645,8 @@ exclude those logs from the archive.
     cmd_output(CAP_YUM, [RPM, '-qa'])
     file_output(CAP_YUM, [APT_SOURCES_LIST])
     tree_output(CAP_YUM, APT_SOURCES_LIST_D)
-    cmd_output(CAP_YUM, [DPKG_QUERY, '-W', '-f=${Package} ${Version} ${Status}\n'], 'dpkg-packages')
+    cmd_output(CAP_YUM, [DPKG_QUERY, '-W',
+               '-f=${Package} ${Version} ${Status}\n'], 'dpkg-packages')
 
     # Filter out ovs relevant information if --ovs option passed
     # else collect all information
@@ -677,13 +679,13 @@ exclude those logs from the archive.
     # permit the user to filter out data
     # We cannot use iteritems, since we modify 'data' as we pass through
     for (k, v) in sorted(data.items()):
-       cap = v['cap']
-       if 'filename' in v:
-           key = k[0]
-       else:
-           key = k
-       if not ANSWER_YES_TO_ALL and not yes("Include '%s'? [Y/n]: " % key):
-           del data[k]
+        cap = v['cap']
+        if 'filename' in v:
+            key = k[0]
+        else:
+            key = k
+        if not ANSWER_YES_TO_ALL and not yes("Include '%s'? [Y/n]: " % key):
+            del data[k]
 
     # collect selected data now
     output_ts('Running commands to collect data')
@@ -692,7 +694,8 @@ exclude those logs from the archive.
     subdir = "bug-report-%s" % time.strftime("%Y%m%d%H%M%S")
 
     # include inventory
-    data['inventory.xml'] = {'cap': None, 'output': StringIOmtime(make_inventory(data, subdir))}
+    data['inventory.xml'] = {'cap': None,
+                        'output': StringIOmtime(make_inventory(data, subdir))}
 
     # create archive
     if output_fd == -1:
@@ -715,13 +718,14 @@ exclude those logs from the archive.
         make_zip(subdir, output_file)
 
     if dbg:
-        print >>sys.stderr, "Category sizes (max, actual):\n"
+        print("Category sizes (max, actual):\n", file=sys.stderr)
         for c in caps.keys():
-            print >>sys.stderr, "    %s (%d, %d)" % (c, caps[c][MAX_SIZE],
-                                                     cap_sizes[c])
+            print("    %s (%d, %d)" % (c, caps[c][MAX_SIZE], cap_sizes[c]),
+                  file=sys.stderr)
 
     cleanup_ovsdb()
     return 0
+
 
 def dump_scsi_hosts(cap):
     output = ''
@@ -744,10 +748,12 @@ def dump_scsi_hosts(cap):
         except:
                 pass
 
-        output += "%s:\n" %h
-        output += "    %s%s\n" % (procname, modelname and (" -> %s" % modelname) or '')
+        output += "%s:\n" % h
+        output += "    %s%s\n" \
+                  % (procname, modelname and (" -> %s" % modelname) or '')
 
     return output
+
 
 def module_info(cap):
     output = StringIO.StringIO()
@@ -756,7 +762,8 @@ def module_info(cap):
 
     for line in modules:
         module = line.split()[0]
-        procs.append(ProcOutput([MODINFO, module], caps[cap][MAX_TIME], output))
+        procs.append(ProcOutput([MODINFO, module],
+                     caps[cap][MAX_TIME], output))
     modules.close()
 
     run_procs([procs])
@@ -771,9 +778,11 @@ def multipathd_topology(cap):
 
     return stdout
 
+
 def dp_list():
     output = StringIO.StringIO()
-    procs = [ProcOutput([OVS_DPCTL, 'dump-dps'], caps[CAP_NETWORK_STATUS][MAX_TIME], output)]
+    procs = [ProcOutput([OVS_DPCTL, 'dump-dps'],
+             caps[CAP_NETWORK_STATUS][MAX_TIME], output)]
 
     run_procs([procs])
 
@@ -781,11 +790,12 @@ def dp_list():
         return output.getvalue().splitlines()
     return []
 
+
 def collect_ovsdb():
     if not os.path.isfile(OPENVSWITCH_CONF_DB):
         return
 
-    max_size = 10*MB
+    max_size = 10 * MB
 
     try:
         if os.path.getsize(OPENVSWITCH_CONF_DB) > max_size:
@@ -801,8 +811,9 @@ def collect_ovsdb():
             file_output(CAP_NETWORK_STATUS, [OPENVSWITCH_COMPACT_DB])
         else:
             file_output(CAP_NETWORK_STATUS, [OPENVSWITCH_CONF_DB])
-    except OSError, e:
+    except OSError:
         return
+
 
 def cleanup_ovsdb():
     try:
@@ -811,16 +822,17 @@ def cleanup_ovsdb():
     except:
         return
 
+
 def fd_usage(cap):
     output = ''
     fd_dict = {}
     for d in [p for p in os.listdir('/proc') if p.isdigit()]:
         try:
-            fh = open('/proc/'+d+'/cmdline')
+            fh = open('/proc/' + d + '/cmdline')
             name = fh.readline()
-            num_fds = len(os.listdir(os.path.join('/proc/'+d+'/fd')))
+            num_fds = len(os.listdir(os.path.join('/proc/' + d + '/fd')))
             if num_fds > 0:
-                if not num_fds in fd_dict:
+                if num_fds not in fd_dict:
                     fd_dict[num_fds] = []
                 fd_dict[num_fds].append(name.replace('\0', ' ').strip())
         finally:
@@ -830,6 +842,7 @@ def fd_usage(cap):
     for k in keys:
         output += "%s: %s\n" % (k, str(fd_dict[k]))
     return output
+
 
 def dump_rdac_groups(cap):
     output = StringIO.StringIO()
@@ -848,8 +861,10 @@ def dump_rdac_groups(cap):
                 group, _ = line.split(None, 1)
                 cmd_output(cap, [MPPUTIL, '-g', group])
 
+
 def load_plugins(just_capabilities=False, filter=None):
     global log_last_mod_time
+
     def getText(nodelist):
         rc = ""
         for node in nodelist:
@@ -864,32 +879,38 @@ def load_plugins(just_capabilities=False, filter=None):
             ret = val in ['true', 'yes']
         return ret
 
-    for dir in [d for d in os.listdir(PLUGIN_DIR) if os.path.isdir(os.path.join(PLUGIN_DIR, d))]:
-        if not caps.has_key(dir):
+    for dir in [d for d in os.listdir(PLUGIN_DIR)
+                if os.path.isdir(os.path.join(PLUGIN_DIR, d))]:
+        if dir not in caps:
             if not os.path.exists("%s/%s.xml" % (PLUGIN_DIR, dir)):
                 continue
             xmldoc = parse("%s/%s.xml" % (PLUGIN_DIR, dir))
             assert xmldoc.documentElement.tagName == "capability"
 
             pii, min_size, max_size, min_time, max_time, mime = \
-                 PII_MAYBE, -1,-1,-1,-1, MIME_TEXT
+                 PII_MAYBE, -1, -1, -1, -1, MIME_TEXT
 
-            if xmldoc.documentElement.getAttribute("pii") in [PII_NO, PII_YES, PII_MAYBE, PII_IF_CUSTOMIZED]:
+            if xmldoc.documentElement.getAttribute("pii") in \
+               [PII_NO, PII_YES, PII_MAYBE, PII_IF_CUSTOMIZED]:
                 pii = xmldoc.documentElement.getAttribute("pii")
             if xmldoc.documentElement.getAttribute("min_size") != '':
-                min_size = long(xmldoc.documentElement.getAttribute("min_size"))
+                min_size = int(
+                            xmldoc.documentElement.getAttribute("min_size"))
             if xmldoc.documentElement.getAttribute("max_size") != '':
-                max_size = long(xmldoc.documentElement.getAttribute("max_size"))
+                max_size = int(
+                            xmldoc.documentElement.getAttribute("max_size"))
             if xmldoc.documentElement.getAttribute("min_time") != '':
                 min_time = int(xmldoc.documentElement.getAttribute("min_time"))
             if xmldoc.documentElement.getAttribute("max_time") != '':
                 max_time = int(xmldoc.documentElement.getAttribute("max_time"))
-            if xmldoc.documentElement.getAttribute("mime") in [MIME_DATA, MIME_TEXT]:
+            if xmldoc.documentElement.getAttribute("mime") in \
+               [MIME_DATA, MIME_TEXT]:
                 mime = xmldoc.documentElement.getAttribute("mime")
             checked = getBoolAttr(xmldoc.documentElement, 'checked', True)
             hidden = getBoolAttr(xmldoc.documentElement, 'hidden', False)
 
-            cap(dir, pii, min_size, max_size, min_time, max_time, mime, checked, hidden)
+            cap(dir, pii, min_size, max_size, min_time, max_time, mime,
+                checked, hidden)
 
         if just_capabilities:
             continue
@@ -918,7 +939,8 @@ def load_plugins(just_capabilities=False, filter=None):
                                     newest_first=newest_first)
                 elif el.tagName == "directory":
                     pattern = el.getAttribute("pattern")
-                    if pattern == '': pattern = None
+                    if pattern == '':
+                        pattern = None
                     negate = getBoolAttr(el, 'negate')
                     newest_first = getBoolAttr(el, 'newest_first')
                     if el.getAttribute("type") == "logs":
@@ -932,9 +954,12 @@ def load_plugins(just_capabilities=False, filter=None):
                                     negate=negate, newest_first=newest_first)
                 elif el.tagName == "command":
                     label = el.getAttribute("label")
-                    if label == '': label = None
+                    if label == '':
+                        label = None
                     binary = getBoolAttr(el, 'binary')
-                    cmd_output(dir, getText(el.childNodes), label, binary=binary)
+                    cmd_output(dir,
+                               getText(el.childNodes), label, binary=binary)
+
 
 def make_tar(subdir, suffix, output_fd, output_file):
     global SILENT_MODE, data
@@ -950,7 +975,7 @@ def make_tar(subdir, suffix, output_fd, output_file):
             filename = "%s/%s.%s" % (BUG_DIR, subdir, suffix)
         else:
             filename = output_file
-        old_umask = os.umask(0077)
+        old_umask = os.umask(0o077)
         tf = tarfile.open(filename, mode)
         os.umask(old_umask)
     else:
@@ -965,25 +990,25 @@ def make_tar(subdir, suffix, output_fd, output_file):
                 ti.uname = 'root'
                 ti.gname = 'root'
 
-                if v.has_key('output'):
+                if 'output' in v:
                     ti.mtime = v['output'].mtime
                     ti.size = len(v['output'].getvalue())
                     v['output'].seek(0)
                     tf.addfile(ti, v['output'])
-                elif v.has_key('filename'):
+                elif 'filename' in v:
                     s = os.stat(v['filename'])
                     ti.mtime = s.st_mtime
                     ti.size = s.st_size
-                    tf.addfile(ti, file(v['filename']))
+                    tf.addfile(ti, open(v['filename']))
             except:
                 pass
     finally:
         tf.close()
 
     if output_fd == -1:
-        output ('Writing tarball %s successful.' % filename)
+        output('Writing tarball %s successful.' % filename)
         if SILENT_MODE:
-            print filename
+            print(filename)
 
 
 def make_zip(subdir, output_file):
@@ -993,7 +1018,7 @@ def make_zip(subdir, output_file):
         filename = "%s/%s.zip" % (BUG_DIR, subdir)
     else:
         filename = output_file
-    old_umask = os.umask(0077)
+    old_umask = os.umask(0o077)
     zf = zipfile.ZipFile(filename, 'w', zipfile.ZIP_DEFLATED)
     os.umask(old_umask)
 
@@ -1002,7 +1027,7 @@ def make_zip(subdir, output_file):
             try:
                 dest = os.path.join(subdir, construct_filename(k, v))
 
-                if v.has_key('output'):
+                if 'output' in v:
                     zf.writestr(dest, v['output'].getvalue())
                 else:
                     if os.stat(v['filename']).st_size < 50:
@@ -1015,9 +1040,9 @@ def make_zip(subdir, output_file):
     finally:
         zf.close()
 
-    output ('Writing archive %s successful.' % filename)
+    output('Writing archive %s successful.' % filename)
     if SILENT_MODE:
-        print filename
+        print(filename)
 
 
 def make_inventory(inventory, subdir):
@@ -1035,37 +1060,39 @@ def make_inventory(inventory, subdir):
     s.setAttribute('uptime', commands.getoutput(UPTIME))
     document.getElementsByTagName(INVENTORY_XML_ROOT)[0].appendChild(s)
 
-    map(lambda (k, v): inventory_entry(document, subdir, k, v),
+    map(lambda k_v: inventory_entry(document, subdir, k_v[0], k_v[1]),
         inventory.items())
     return document.toprettyxml()
+
 
 def inventory_entry(document, subdir, k, v):
     try:
         el = document.createElement(INVENTORY_XML_ELEMENT)
         el.setAttribute('capability', v['cap'])
-        el.setAttribute('filename', os.path.join(subdir, construct_filename(k, v)))
-        el.setAttribute('md5sum', md5sum(v))
+        el.setAttribute('filename',
+                        os.path.join(subdir, construct_filename(k, v)))
+        el.setAttribute('sha256sum', sha256(v))
         document.getElementsByTagName(INVENTORY_XML_ROOT)[0].appendChild(el)
     except:
         pass
 
 
-def md5sum(d):
-    m = md5.new()
-    if d.has_key('filename'):
+def sha256(d):
+    m = hashlib.sha256()
+    if 'filename' in d:
         f = open(d['filename'])
         data = f.read(1024)
         while len(data) > 0:
             m.update(data)
             data = f.read(1024)
         f.close()
-    elif d.has_key('output'):
+    elif 'output' in d:
         m.update(d['output'].getvalue())
     return m.hexdigest()
 
 
 def construct_filename(k, v):
-    if v.has_key('filename'):
+    if 'filename' in v:
         if v['filename'][0] == '/':
             return v['filename'][1:]
         else:
@@ -1078,8 +1105,10 @@ def construct_filename(k, v):
 
     return s
 
+
 def update_capabilities():
     pass
+
 
 def update_cap_size(cap, size):
     update_cap(cap, MIN_SIZE, size)
@@ -1123,8 +1152,10 @@ def size_of(f, pattern, negate):
 def print_capabilities():
     document = getDOMImplementation().createDocument(
         "ns", CAP_XML_ROOT, None)
-    map(lambda key: capability(document, key), [k for k in caps.keys() if not caps[k][HIDDEN]])
-    print document.toprettyxml()
+    map(lambda key: capability(document, key),
+        [k for k in caps.keys() if not caps[k][HIDDEN]])
+    print(document.toprettyxml())
+
 
 def capability(document, key):
     c = caps[key]
@@ -1146,12 +1177,13 @@ def prettyDict(d):
 
 
 def yes(prompt):
-    yn = raw_input(prompt)
+    yn = input(prompt)
 
     return len(yn) == 0 or yn.lower()[0] == 'y'
 
 
 partition_re = re.compile(r'(.*[0-9]+$)|(^xvd)')
+
 
 def disk_list():
     disks = []
@@ -1169,10 +1201,11 @@ def disk_list():
     return disks
 
 
-class ProcOutput:
+class ProcOutput(object):
     debug = False
 
-    def __init__(self, command, max_time, inst=None, filter=None, binary=False):
+    def __init__(self, command, max_time, inst=None, filter=None,
+                 binary=False):
         self.command = command
         self.max_time = max_time
         self.inst = inst
@@ -1192,7 +1225,8 @@ class ProcOutput:
         self.terminate()
 
     def cmdAsStr(self):
-        return isinstance(self.command, list) and ' '.join(self.command) or self.command
+        return isinstance(self.command, list) \
+                and ' '.join(self.command) or self.command
 
     def run(self):
         self.timed_out = False
@@ -1203,7 +1237,8 @@ class ProcOutput:
                               stdin=dev_null, stdout=PIPE, stderr=dev_null,
                               shell=isinstance(self.command, str))
             old = fcntl.fcntl(self.proc.stdout.fileno(), fcntl.F_GETFD)
-            fcntl.fcntl(self.proc.stdout.fileno(), fcntl.F_SETFD, old | fcntl.FD_CLOEXEC)
+            fcntl.fcntl(self.proc.stdout.fileno(),
+                        fcntl.F_SETFD, old | fcntl.FD_CLOEXEC)
             self.running = True
             self.failed = False
         except:
@@ -1240,6 +1275,7 @@ class ProcOutput:
             if self.inst:
                 self.inst.write(line)
 
+
 def run_procs(procs):
     while True:
         pipes = []
@@ -1251,7 +1287,7 @@ def run_procs(procs):
                     active_procs.append(p)
                     pipes.append(p.proc.stdout)
                     break
-                elif p.status == None and not p.failed and not p.timed_out:
+                elif p.status is None and not p.failed and not p.timed_out:
                     p.run()
                     if p.running:
                         active_procs.append(p)
@@ -1331,5 +1367,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except KeyboardInterrupt:
-        print "\nInterrupted."
+        print("\nInterrupted.")
         sys.exit(3)

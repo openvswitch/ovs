@@ -48,7 +48,6 @@
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "lib/vswitch-idl.h"
-#include "lib/netdev-dpdk.h"
 
 VLOG_DEFINE_THIS_MODULE(vswitchd);
 
@@ -71,13 +70,6 @@ main(int argc, char *argv[])
     int retval;
 
     set_program_name(argv[0]);
-    retval = dpdk_init(argc,argv);
-    if (retval < 0) {
-        return retval;
-    }
-
-    argc -= retval;
-    argv += retval;
 
     ovs_cmdl_proctitle_init(argc, argv);
     service_start(&argc, &argv);
@@ -153,6 +145,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         OPT_DISABLE_SYSTEM,
         DAEMON_OPTION_ENUMS,
         OPT_DPDK,
+        OPT_DUMMY_NUMA,
     };
     static const struct option long_options[] = {
         {"help",        no_argument, NULL, 'h'},
@@ -166,7 +159,8 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         {"bootstrap-ca-cert", required_argument, NULL, OPT_BOOTSTRAP_CA_CERT},
         {"enable-dummy", optional_argument, NULL, OPT_ENABLE_DUMMY},
         {"disable-system", no_argument, NULL, OPT_DISABLE_SYSTEM},
-        {"dpdk", required_argument, NULL, OPT_DPDK},
+        {"dpdk", optional_argument, NULL, OPT_DPDK},
+        {"dummy-numa", required_argument, NULL, OPT_DUMMY_NUMA},
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
@@ -219,7 +213,11 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
             exit(EXIT_FAILURE);
 
         case OPT_DPDK:
-            ovs_fatal(0, "--dpdk must be given at beginning of command line.");
+            ovs_fatal(0, "Using --dpdk to configure DPDK is not supported.");
+            break;
+
+        case OPT_DUMMY_NUMA:
+            ovs_numa_set_dummy(optarg);
             break;
 
         default:
@@ -256,18 +254,9 @@ usage(void)
     daemon_usage();
     vlog_usage();
     printf("\nDPDK options:\n"
-           "  --dpdk [VHOST] [DPDK]     Initialize DPDK datapath.\n"
-           "  where DPDK are options for initializing DPDK lib and VHOST is\n"
-#ifdef VHOST_CUSE
-           "  option to override default character device name used for\n"
-           "  for use with userspace vHost\n"
-           "    -cuse_dev_name NAME\n"
-#else
-           "  option to override default directory where vhost-user\n"
-           "  sockets are created.\n"
-           "    -vhost_sock_dir DIR\n"
-#endif
-           );
+           "Configuration of DPDK via command-line is removed from this\n"
+           "version of Open vSwitch. DPDK is configured through ovsdb.\n"
+          );
     printf("\nOther options:\n"
            "  --unixctl=SOCKET          override default control socket name\n"
            "  -h, --help                display this help message\n"

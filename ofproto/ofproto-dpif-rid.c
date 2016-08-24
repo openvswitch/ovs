@@ -16,7 +16,7 @@
 
 #include <config.h>
 
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "ofproto-dpif.h"
 #include "ofproto-dpif-rid.h"
 #include "ofproto-provider.h"
@@ -24,39 +24,21 @@
 
 VLOG_DEFINE_THIS_MODULE(ofproto_dpif_rid);
 
-static struct ovs_mutex mutex;
+static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 
-static struct cmap id_map;
-static struct cmap metadata_map;
+static struct cmap id_map = CMAP_INITIALIZER;
+static struct cmap metadata_map = CMAP_INITIALIZER;
 
-static struct ovs_list expiring OVS_GUARDED_BY(mutex);
-static struct ovs_list expired OVS_GUARDED_BY(mutex);
+static struct ovs_list expiring OVS_GUARDED_BY(mutex)
+    = OVS_LIST_INITIALIZER(&expiring);
+static struct ovs_list expired OVS_GUARDED_BY(mutex)
+    = OVS_LIST_INITIALIZER(&expired);
 
-static uint32_t next_id OVS_GUARDED_BY(mutex); /* Possible next free id. */
+static uint32_t next_id OVS_GUARDED_BY(mutex) = 1; /* Possible next free id. */
 
 #define RECIRC_POOL_STATIC_IDS 1024
 
 static void recirc_id_node_free(struct recirc_id_node *);
-
-void
-recirc_init(void)
-{
-    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
-
-    if (ovsthread_once_start(&once)) {
-        ovs_mutex_init(&mutex);
-        ovs_mutex_lock(&mutex);
-        next_id = 1; /* 0 is not a valid ID. */
-        cmap_init(&id_map);
-        cmap_init(&metadata_map);
-        list_init(&expiring);
-        list_init(&expired);
-        ovs_mutex_unlock(&mutex);
-
-        ovsthread_once_done(&once);
-    }
-
-}
 
 /* This should be called by the revalidator once at each round (every 500ms or
  * more). */
@@ -93,9 +75,9 @@ recirc_run(void)
             ovsrcu_postpone(recirc_id_node_free, node);
         }
 
-        if (!list_is_empty(&expiring)) {
+        if (!ovs_list_is_empty(&expiring)) {
             /* 'expired' is now empty, move nodes in 'expiring' to it. */
-            list_splice(&expired, list_front(&expiring), &expiring);
+            ovs_list_splice(&expired, ovs_list_front(&expiring), &expiring);
         }
     }
     ovs_mutex_unlock(&mutex);
@@ -329,7 +311,7 @@ recirc_id_node_unref(const struct recirc_id_node *node_)
         cmap_remove(&metadata_map, &node->metadata_node, node->hash);
         /* We keep the node in the 'id_map' so that it can be found as long
          * as it lingers, and add it to the 'expiring' list. */
-        list_insert(&expiring, &node->exp_node);
+        ovs_list_insert(&expiring, &node->exp_node);
         ovs_mutex_unlock(&mutex);
     }
 }

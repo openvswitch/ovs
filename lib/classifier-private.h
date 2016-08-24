@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #ifndef CLASSIFIER_PRIVATE_H
 #define CLASSIFIER_PRIVATE_H 1
 
+#include "ccmap.h"
 #include "cmap.h"
 #include "flow.h"
 #include "hash.h"
@@ -44,7 +45,7 @@ struct cls_subtable {
     unsigned int trie_plen[CLS_MAX_TRIES];  /* Trie prefix length in 'mask'
                                              * (runtime configurable). */
     const int ports_mask_len;
-    struct cmap indices[CLS_MAX_INDICES];   /* Staged lookup indices. */
+    struct ccmap indices[CLS_MAX_INDICES];  /* Staged lookup indices. */
     rcu_trie_ptr ports_trie;                /* NULL if none. */
 
     /* These fields are accessed by all readers. */
@@ -67,56 +68,51 @@ struct cls_match {
 
     /* Accessed by readers interested in wildcarding. */
     const int priority;         /* Larger numbers are higher priorities. */
-    struct cmap_node index_nodes[CLS_MAX_INDICES]; /* Within subtable's
-                                                    * 'indices'. */
+
     /* Accessed by all readers. */
     struct cmap_node cmap_node; /* Within struct cls_subtable 'rules'. */
 
-    /* Rule versioning.
-     *
-     * CLS_NOT_REMOVED_VERSION has a special meaning for 'remove_version',
-     * meaning that the rule has been added but not yet removed.
-     */
-    const cls_version_t add_version;        /* Version rule was added in. */
-    ATOMIC(cls_version_t) remove_version;   /* Version rule is removed in. */
+    /* Rule versioning. */
+    struct versions versions;
 
     const struct cls_rule *cls_rule;
     const struct miniflow flow; /* Matching rule. Mask is in the subtable. */
     /* 'flow' must be the last field. */
 };
 
+/* Utilities for accessing the 'cls_match' member of struct cls_rule. */
+static inline struct cls_match *
+get_cls_match_protected(const struct cls_rule *rule)
+{
+    return ovsrcu_get_protected(struct cls_match *, &rule->cls_match);
+}
+
+static inline struct cls_match *
+get_cls_match(const struct cls_rule *rule)
+{
+    return ovsrcu_get(struct cls_match *, &rule->cls_match);
+}
+
 /* Must be RCU postponed. */
 void cls_match_free_cb(struct cls_match *);
 
 static inline void
-cls_match_set_remove_version(struct cls_match *rule, cls_version_t version)
+cls_match_set_remove_version(struct cls_match *rule, ovs_version_t version)
 {
-    atomic_store_relaxed(&rule->remove_version, version);
+    versions_set_remove_version(&rule->versions, version);
 }
 
 static inline bool
 cls_match_visible_in_version(const struct cls_match *rule,
-                             cls_version_t version)
+                             ovs_version_t version)
 {
-    cls_version_t remove_version;
-
-    /* C11 does not want to access an atomic via a const object pointer. */
-    atomic_read_relaxed(&CONST_CAST(struct cls_match *, rule)->remove_version,
-                        &remove_version);
-
-    return rule->add_version <= version && version < remove_version;
+    return versions_visible_in_version(&rule->versions, version);
 }
 
 static inline bool
 cls_match_is_eventually_invisible(const struct cls_match *rule)
 {
-    cls_version_t remove_version;
-
-    /* C11 does not want to access an atomic via a const object pointer. */
-    atomic_read_relaxed(&CONST_CAST(struct cls_match *, rule)->remove_version,
-                        &remove_version);
-
-    return remove_version <= CLS_MAX_VERSION;
+    return versions_is_eventually_invisible(&rule->versions);
 }
 
 

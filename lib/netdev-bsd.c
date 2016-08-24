@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 
+#if !defined(__MACH__)
 #include <config.h>
 
 #include "netdev-provider.h"
@@ -50,13 +51,13 @@
 #include "coverage.h"
 #include "dp-packet.h"
 #include "dpif-netdev.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "openflow/openflow.h"
 #include "ovs-thread.h"
 #include "packets.h"
 #include "poll-loop.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "socket-util.h"
 #include "svec.h"
 #include "util.h"
@@ -90,9 +91,6 @@ struct netdev_bsd {
 
     int ifindex;
     struct eth_addr etheraddr;
-    struct in_addr in4;
-    struct in_addr netmask;
-    struct in6_addr in6;
     int mtu;
     int carrier;
 
@@ -105,12 +103,11 @@ struct netdev_bsd {
 
 
 enum {
-    VALID_IFINDEX = 1 << 0,
+    VALID_IFINDEX   = 1 << 0,
     VALID_ETHERADDR = 1 << 1,
-    VALID_IN4 = 1 << 2,
-    VALID_IN6 = 1 << 3,
-    VALID_MTU = 1 << 4,
-    VALID_CARRIER = 1 << 5
+    VALID_IN        = 1 << 2,
+    VALID_MTU       = 1 << 3,
+    VALID_CARRIER   = 1 << 4
 };
 
 #define PCAP_SNAPLEN 2048
@@ -149,7 +146,7 @@ static void ifr_set_flags(struct ifreq *, int flags);
 static int af_link_ioctl(unsigned long command, const void *arg);
 #endif
 
-static void netdev_bsd_run(void);
+static void netdev_bsd_run(const struct netdev_class *);
 static int netdev_bsd_get_mtu(const struct netdev *netdev_, int *mtup);
 
 static bool
@@ -183,7 +180,7 @@ netdev_get_kernel_name(const struct netdev *netdev)
  * interface status changes, and eventually calls all the user callbacks.
  */
 static void
-netdev_bsd_run(void)
+netdev_bsd_run(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     rtbsd_notifier_run();
 }
@@ -193,7 +190,7 @@ netdev_bsd_run(void)
  * be called.
  */
 static void
-netdev_bsd_wait(void)
+netdev_bsd_wait(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     rtbsd_notifier_wait();
 }
@@ -621,8 +618,7 @@ netdev_rxq_bsd_recv_tap(struct netdev_rxq_bsd *rxq, struct dp_packet *buffer)
 }
 
 static int
-netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
-                    int *c)
+netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
 {
     struct netdev_rxq_bsd *rxq = netdev_rxq_bsd_cast(rxq_);
     struct netdev *netdev = rxq->up.netdev;
@@ -643,10 +639,8 @@ netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
     if (retval) {
         dp_packet_delete(packet);
     } else {
-        dp_packet_pad(packet);
-        dp_packet_rss_invalidate(packet);
-        packets[0] = packet;
-        *c = 1;
+        batch->packets[0] = packet;
+        batch->count = 1;
     }
     return retval;
 }
@@ -685,7 +679,8 @@ netdev_bsd_rxq_drain(struct netdev_rxq *rxq_)
  */
 static int
 netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
-                struct dp_packet **pkts, int cnt, bool may_steal)
+                struct dp_packet_batch *batch, bool may_steal,
+                bool concurrent_txq OVS_UNUSED)
 {
     struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
     const char *name = netdev_get_name(netdev_);
@@ -699,9 +694,12 @@ netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
         error = 0;
     }
 
-    for (i = 0; i < cnt; i++) {
-        const void *data = dp_packet_data(pkts[i]);
-        size_t size = dp_packet_size(pkts[i]);
+    for (i = 0; i < batch->count; i++) {
+        const void *data = dp_packet_data(batch->packets[i]);
+        size_t size = dp_packet_size(batch->packets[i]);
+
+        /* Truncate the packet if it is configured. */
+        size -= dp_packet_get_cutlen(batch->packets[i]);
 
         while (!error) {
             ssize_t retval;
@@ -732,11 +730,7 @@ netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
     }
 
     ovs_mutex_unlock(&dev->mutex);
-    if (may_steal) {
-        for (i = 0; i < cnt; i++) {
-            dp_packet_delete(pkts[i]);
-        }
-    }
+    dp_packet_delete_batch(batch, may_steal);
 
     return error;
 }
@@ -1173,46 +1167,6 @@ cleanup:
 }
 
 /*
- * If 'netdev' has an assigned IPv4 address, sets '*in4' to that address and
- * '*netmask' to its netmask and returns true.  Otherwise, returns false.
- */
-static int
-netdev_bsd_get_in4(const struct netdev *netdev_, struct in_addr *in4,
-                   struct in_addr *netmask)
-{
-    struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
-    int error = 0;
-
-    ovs_mutex_lock(&netdev->mutex);
-    if (!(netdev->cache_valid & VALID_IN4)) {
-        struct ifreq ifr;
-
-        ifr.ifr_addr.sa_family = AF_INET;
-        error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev_), &ifr,
-                                    SIOCGIFADDR, "SIOCGIFADDR");
-        if (!error) {
-            const struct sockaddr_in *sin;
-
-            sin = ALIGNED_CAST(struct sockaddr_in *, &ifr.ifr_addr);
-            netdev->in4 = sin->sin_addr;
-            netdev->cache_valid |= VALID_IN4;
-            error = af_inet_ifreq_ioctl(netdev_get_kernel_name(netdev_), &ifr,
-                                        SIOCGIFNETMASK, "SIOCGIFNETMASK");
-            if (!error) {
-                *netmask = sin->sin_addr;
-            }
-        }
-    }
-    if (!error) {
-        *in4 = netdev->in4;
-        *netmask = netdev->netmask;
-    }
-    ovs_mutex_unlock(&netdev->mutex);
-
-    return error ? error : in4->s_addr == INADDR_ANY ? EADDRNOTAVAIL : 0;
-}
-
-/*
  * Assigns 'addr' as 'netdev''s IPv4 address and 'mask' as its netmask.  If
  * 'addr' is INADDR_ANY, 'netdev''s IPv4 address is cleared.  Returns a
  * positive errno value.
@@ -1230,11 +1184,6 @@ netdev_bsd_set_in4(struct netdev *netdev_, struct in_addr addr,
         if (addr.s_addr != INADDR_ANY) {
             error = do_set_addr(netdev_, SIOCSIFNETMASK,
                                 "SIOCSIFNETMASK", mask);
-            if (!error) {
-                netdev->cache_valid |= VALID_IN4;
-                netdev->in4 = addr;
-                netdev->netmask = mask;
-            }
         }
         netdev_change_seq_changed(netdev_);
     }
@@ -1244,37 +1193,20 @@ netdev_bsd_set_in4(struct netdev *netdev_, struct in_addr addr,
 }
 
 static int
-netdev_bsd_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
+netdev_bsd_get_addr_list(const struct netdev *netdev_,
+                         struct in6_addr **addr, struct in6_addr **mask, int *n_cnt)
 {
     struct netdev_bsd *netdev = netdev_bsd_cast(netdev_);
-    if (!(netdev->cache_valid & VALID_IN6)) {
-        struct ifaddrs *ifa, *head;
-        struct sockaddr_in6 *sin6;
-        const char *netdev_name = netdev_get_name(netdev_);
+    int error;
 
-        if (getifaddrs(&head) != 0) {
-            VLOG_ERR("getifaddrs on %s device failed: %s", netdev_name,
-                    ovs_strerror(errno));
-            return errno;
-        }
-
-        for (ifa = head; ifa; ifa = ifa->ifa_next) {
-            if (ifa->ifa_addr->sa_family == AF_INET6 &&
-                    !strcmp(ifa->ifa_name, netdev_name)) {
-                sin6 = ALIGNED_CAST(struct sockaddr_in6 *, ifa->ifa_addr);
-                if (sin6) {
-                    memcpy(&netdev->in6, &sin6->sin6_addr, sin6->sin6_len);
-                    netdev->cache_valid |= VALID_IN6;
-                    *in6 = netdev->in6;
-                    freeifaddrs(head);
-                    return 0;
-                }
-            }
-        }
-        return EADDRNOTAVAIL;
+    if (!(netdev->cache_valid & VALID_IN)) {
+        netdev_get_addrs_list_flush();
     }
-    *in6 = netdev->in6;
-    return 0;
+    error = netdev_get_addrs(netdev_get_name(netdev_), addr, mask, n_cnt);
+    if (!error) {
+        netdev->cache_valid |= VALID_IN;
+    }
+    return error;
 }
 
 #if defined(__NetBSD__)
@@ -1547,6 +1479,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
                          GET_FEATURES)               \
 {                                                    \
     NAME,                                            \
+    false, /* is_pmd */                              \
                                                      \
     NULL, /* init */                                 \
     netdev_bsd_run,                                  \
@@ -1562,7 +1495,7 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     NULL, /* push header */                          \
     NULL, /* pop header */                           \
     NULL, /* get_numa_id */                          \
-    NULL, /* set_multiq */                           \
+    NULL, /* set_tx_multiq */                        \
                                                      \
     netdev_bsd_send,                                 \
     netdev_bsd_send_wait,                            \
@@ -1593,15 +1526,15 @@ netdev_bsd_update_flags(struct netdev *netdev_, enum netdev_flags off,
     NULL, /* queue_dump_done */                      \
     NULL, /* dump_queue_stats */                     \
                                                      \
-    netdev_bsd_get_in4,                              \
     netdev_bsd_set_in4,                              \
-    netdev_bsd_get_in6,                              \
+    netdev_bsd_get_addr_list,                        \
     NULL, /* add_router */                           \
     netdev_bsd_get_next_hop,                         \
     NULL, /* get_status */                           \
     netdev_bsd_arp_lookup, /* arp_lookup */          \
                                                      \
     netdev_bsd_update_flags,                         \
+    NULL, /* reconfigure */                          \
                                                      \
     netdev_bsd_rxq_alloc,                            \
     netdev_bsd_rxq_construct,                        \
@@ -1825,3 +1758,4 @@ af_link_ioctl(unsigned long command, const void *arg)
             : 0);
 }
 #endif
+#endif /* !defined(__MACH__) */

@@ -28,12 +28,18 @@ start () {
     "$@" || exit $?
 }
 
+stop_northd () {
+    set /usr/share/openvswitch/scripts/ovn-ctl ${1-stop_northd}
+    set "$@" $OVN_CTL_OPTS
+    "$@" || exit $?
+}
+
 case $1 in
     start)
         start
         ;;
     stop)
-        /usr/share/openvswitch/scripts/ovn-ctl stop_northd
+        stop_northd
         ;;
     restart)
         start restart_northd

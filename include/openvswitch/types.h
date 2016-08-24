@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -103,10 +103,15 @@ typedef union {
 /* MSVC2015 doesn't support designated initializers when compiling C++,
  * and doesn't support ternary operators with non-designated initializers.
  * So we use these static definitions rather than using initializer macros. */
+static const ovs_u128 OVS_U128_ZERO = { { 0, 0, 0, 0 } };
 static const ovs_u128 OVS_U128_MAX = { { UINT32_MAX, UINT32_MAX,
                                          UINT32_MAX, UINT32_MAX } };
 static const ovs_be128 OVS_BE128_MAX OVS_UNUSED = { { OVS_BE32_MAX, OVS_BE32_MAX,
                                            OVS_BE32_MAX, OVS_BE32_MAX } };
+static const ovs_u128 OVS_U128_MIN OVS_UNUSED = { {0, 0, 0, 0} };
+static const ovs_u128 OVS_BE128_MIN OVS_UNUSED = { {0, 0, 0, 0} };
+
+#define OVS_U128_ZERO OVS_U128_MIN
 
 /* A 64-bit value, in network byte order, that is only aligned on a 32-bit
  * boundary. */
@@ -114,10 +119,21 @@ typedef struct {
         ovs_be32 hi, lo;
 } ovs_32aligned_be64;
 
-/* ofp_port_t represents the port number of a OpenFlow switch.
- * odp_port_t represents the port number on the datapath.
- * ofp11_port_t represents the OpenFlow-1.1 port number. */
-typedef uint16_t OVS_BITWISE ofp_port_t;
+/* Port numbers
+ * ------------
+ *
+ * None of these types are directly interchangeable, hence the OVS_BITWISE
+ * annotation.
+ *
+ * ofp_port_t is an OpenFlow 1.0 port number.  It uses a 16-bit range, even
+ * though it is a 32-bit type.  This allows it to be overlaid on an odp_port_t
+ * for a few situations where this is useful, e.g. in union flow_in_port.
+ *
+ * ofp11_port_t is an OpenFlow-1.1 port number.
+ *
+ * odp_port_t is a port number within a datapath (e.g. see lib/dpif.h).
+ */
+typedef uint32_t OVS_BITWISE ofp_port_t;
 typedef uint32_t OVS_BITWISE odp_port_t;
 typedef uint32_t OVS_BITWISE ofp11_port_t;
 

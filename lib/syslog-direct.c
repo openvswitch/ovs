@@ -21,7 +21,7 @@
 #include <unistd.h>
 
 #include "compiler.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "socket-util.h"
 #include "syslog-provider.h"
 #include "util.h"

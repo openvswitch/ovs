@@ -18,7 +18,7 @@
 
 #include <stdbool.h>
 #include "compiler.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "sset.h"
 #include "util.h"
 

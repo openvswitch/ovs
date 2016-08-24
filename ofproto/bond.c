@@ -23,31 +23,31 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include "ofp-util.h"
-#include "ofp-actions.h"
-#include "ofpbuf.h"
-#include "ofproto/ofproto-provider.h"
-#include "ofproto/ofproto-dpif.h"
-#include "ofproto/ofproto-dpif-rid.h"
 #include "connectivity.h"
 #include "coverage.h"
-#include "dynamic-string.h"
+#include "dp-packet.h"
 #include "flow.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "lacp.h"
-#include "list.h"
 #include "netdev.h"
 #include "odp-util.h"
-#include "ofpbuf.h"
+#include "ofproto/ofproto-dpif.h"
+#include "ofproto/ofproto-dpif-rid.h"
+#include "ofproto/ofproto-provider.h"
+#include "openvswitch/dynamic-string.h"
+#include "openvswitch/list.h"
+#include "openvswitch/match.h"
+#include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vlog.h"
 #include "packets.h"
-#include "dp-packet.h"
 #include "poll-loop.h"
 #include "seq.h"
-#include "match.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "timeval.h"
 #include "unixctl.h"
-#include "openvswitch/vlog.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(bond);
 
@@ -234,11 +234,9 @@ bond_create(const struct bond_settings *s, struct ofproto_dpif *ofproto)
     bond = xzalloc(sizeof *bond);
     bond->ofproto = ofproto;
     hmap_init(&bond->slaves);
-    list_init(&bond->enabled_slaves);
+    ovs_list_init(&bond->enabled_slaves);
     ovs_mutex_init(&bond->mutex);
     ovs_refcount_init(&bond->ref_cnt);
-
-    bond->recirc_id = 0;
     hmap_init(&bond->pr_rule_ops);
 
     bond_reconfigure(bond, s);
@@ -260,8 +258,8 @@ bond_ref(const struct bond *bond_)
 void
 bond_unref(struct bond *bond)
 {
-    struct bond_slave *slave, *next_slave;
-    struct bond_pr_rule_op *pr_op, *next_op;
+    struct bond_pr_rule_op *pr_op;
+    struct bond_slave *slave;
 
     if (!bond || ovs_refcount_unref_relaxed(&bond->ref_cnt) != 1) {
         return;
@@ -271,8 +269,7 @@ bond_unref(struct bond *bond)
     hmap_remove(all_bonds, &bond->hmap_node);
     ovs_rwlock_unlock(&rwlock);
 
-    HMAP_FOR_EACH_SAFE (slave, next_slave, hmap_node, &bond->slaves) {
-        hmap_remove(&bond->slaves, &slave->hmap_node);
+    HMAP_FOR_EACH_POP (slave, hmap_node, &bond->slaves) {
         /* Client owns 'slave->netdev'. */
         free(slave->name);
         free(slave);
@@ -283,8 +280,7 @@ bond_unref(struct bond *bond)
     free(bond->hash);
     free(bond->name);
 
-    HMAP_FOR_EACH_SAFE(pr_op, next_op, hmap_node, &bond->pr_rule_ops) {
-        hmap_remove(&bond->pr_rule_ops, &pr_op->hmap_node);
+    HMAP_FOR_EACH_POP (pr_op, hmap_node, &bond->pr_rule_ops) {
         free(pr_op);
     }
     hmap_destroy(&bond->pr_rule_ops);
@@ -1000,12 +996,12 @@ log_bals(struct bond *bond, const struct ovs_list *bals)
             if (!slave->enabled) {
                 ds_put_cstr(&ds, " (disabled)");
             }
-            if (!list_is_empty(&slave->entries)) {
+            if (!ovs_list_is_empty(&slave->entries)) {
                 struct bond_entry *e;
 
                 ds_put_cstr(&ds, " (");
                 LIST_FOR_EACH (e, list_node, &slave->entries) {
-                    if (&e->list_node != list_front(&slave->entries)) {
+                    if (&e->list_node != ovs_list_front(&slave->entries)) {
                         ds_put_cstr(&ds, " + ");
                     }
                     ds_put_format(&ds, "h%"PRIdPTR": %"PRIu64"kB",
@@ -1058,7 +1054,7 @@ choose_entry_to_migrate(const struct bond_slave *from, uint64_t to_tx_bytes)
 {
     struct bond_entry *e;
 
-    if (list_is_short(&from->entries)) {
+    if (ovs_list_is_short(&from->entries)) {
         /* 'from' carries no more than one MAC hash, so shifting load away from
          * it would be pointless. */
         return NULL;
@@ -1102,7 +1098,7 @@ insert_bal(struct ovs_list *bals, struct bond_slave *slave)
             break;
         }
     }
-    list_insert(&pos->bal_node, &slave->bal_node);
+    ovs_list_insert(&pos->bal_node, &slave->bal_node);
 }
 
 /* Removes 'slave' from its current list and then inserts it into 'bals' so
@@ -1110,7 +1106,7 @@ insert_bal(struct ovs_list *bals, struct bond_slave *slave)
 static void
 reinsert_bal(struct ovs_list *bals, struct bond_slave *slave)
 {
-    list_remove(&slave->bal_node);
+    ovs_list_remove(&slave->bal_node);
     insert_bal(bals, slave);
 }
 
@@ -1146,12 +1142,12 @@ bond_rebalance(struct bond *bond)
      * Compute each slave's tx_bytes as the sum of its entries' tx_bytes. */
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         slave->tx_bytes = 0;
-        list_init(&slave->entries);
+        ovs_list_init(&slave->entries);
     }
     for (e = &bond->hash[0]; e <= &bond->hash[BOND_MASK]; e++) {
         if (e->slave && e->tx_bytes) {
             e->slave->tx_bytes += e->tx_bytes;
-            list_push_back(&e->slave->entries, &e->list_node);
+            ovs_list_push_back(&e->slave->entries, &e->list_node);
         }
     }
 
@@ -1159,7 +1155,7 @@ bond_rebalance(struct bond *bond)
      *
      * XXX This is O(n**2) in the number of slaves but it could be O(n lg n)
      * with a proper list sort algorithm. */
-    list_init(&bals);
+    ovs_list_init(&bals);
     HMAP_FOR_EACH (slave, hmap_node, &bond->slaves) {
         if (slave->enabled) {
             insert_bal(&bals, slave);
@@ -1168,9 +1164,9 @@ bond_rebalance(struct bond *bond)
     log_bals(bond, &bals);
 
     /* Shift load from the most-loaded slaves to the least-loaded slaves. */
-    while (!list_is_short(&bals)) {
-        struct bond_slave *from = bond_slave_from_bal_node(list_front(&bals));
-        struct bond_slave *to = bond_slave_from_bal_node(list_back(&bals));
+    while (!ovs_list_is_short(&bals)) {
+        struct bond_slave *from = bond_slave_from_bal_node(ovs_list_front(&bals));
+        struct bond_slave *to = bond_slave_from_bal_node(ovs_list_back(&bals));
         uint64_t overload;
 
         overload = from->tx_bytes - to->tx_bytes;
@@ -1192,7 +1188,7 @@ bond_rebalance(struct bond *bond)
              * We don't add the element to to->hashes.  That would only allow
              * 'e' to be migrated to another slave in this rebalancing run, and
              * there is no point in doing that. */
-            list_remove(&e->list_node);
+            ovs_list_remove(&e->list_node);
 
             /* Re-sort 'bals'. */
             reinsert_bal(&bals, from);
@@ -1201,7 +1197,7 @@ bond_rebalance(struct bond *bond)
         } else {
             /* Can't usefully migrate anything away from 'from'.
              * Don't reconsider it. */
-            list_remove(&from->bal_node);
+            ovs_list_remove(&from->bal_node);
         }
     }
 
@@ -1656,9 +1652,9 @@ bond_enable_slave(struct bond_slave *slave, bool enable)
 
         ovs_mutex_lock(&slave->bond->mutex);
         if (enable) {
-            list_insert(&slave->bond->enabled_slaves, &slave->list_node);
+            ovs_list_insert(&slave->bond->enabled_slaves, &slave->list_node);
         } else {
-            list_remove(&slave->list_node);
+            ovs_list_remove(&slave->list_node);
         }
         ovs_mutex_unlock(&slave->bond->mutex);
 
@@ -1746,13 +1742,13 @@ get_enabled_slave(struct bond *bond)
     struct ovs_list *node;
 
     ovs_mutex_lock(&bond->mutex);
-    if (list_is_empty(&bond->enabled_slaves)) {
+    if (ovs_list_is_empty(&bond->enabled_slaves)) {
         ovs_mutex_unlock(&bond->mutex);
         return NULL;
     }
 
-    node = list_pop_front(&bond->enabled_slaves);
-    list_push_back(&bond->enabled_slaves, node);
+    node = ovs_list_pop_front(&bond->enabled_slaves);
+    ovs_list_push_back(&bond->enabled_slaves, node);
     ovs_mutex_unlock(&bond->mutex);
 
     return CONTAINER_OF(node, struct bond_slave, list_node);

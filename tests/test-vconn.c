@@ -16,7 +16,6 @@
 
 #include <config.h>
 #undef NDEBUG
-#include "openvswitch/vconn.h"
 #include <assert.h>
 #include <errno.h>
 #include <inttypes.h>
@@ -25,10 +24,12 @@
 #include <unistd.h>
 #include "command-line.h"
 #include "fatal-signal.h"
-#include "ofp-msgs.h"
-#include "ofp-util.h"
-#include "ofpbuf.h"
 #include "openflow/openflow.h"
+#include "openvswitch/ofp-msgs.h"
+#include "openvswitch/ofp-util.h"
+#include "openvswitch/ofpbuf.h"
+#include "openvswitch/vconn.h"
+#include "openvswitch/vlog.h"
 #include "ovstest.h"
 #include "poll-loop.h"
 #include "socket-util.h"
@@ -36,7 +37,6 @@
 #include "stream-ssl.h"
 #include "timeval.h"
 #include "util.h"
-#include "openvswitch/vlog.h"
 
 struct fake_pvconn {
     const char *type;
@@ -432,15 +432,15 @@ test_send_invalid_version_hello(struct ovs_cmdl_context *ctx)
 }
 
 static const struct ovs_cmdl_command commands[] = {
-    {"refuse-connection", NULL, 1, 1, test_refuse_connection},
-    {"accept-then-close", NULL, 1, 1, test_accept_then_close},
-    {"read-hello", NULL, 1, 1, test_read_hello},
-    {"send-plain-hello", NULL, 1, 1, test_send_plain_hello},
-    {"send-long-hello", NULL, 1, 1, test_send_long_hello},
-    {"send-echo-hello", NULL, 1, 1, test_send_echo_hello},
-    {"send-short-hello", NULL, 1, 1, test_send_short_hello},
-    {"send-invalid-version-hello", NULL, 1, 1, test_send_invalid_version_hello},
-    {NULL, NULL, 0, 0, NULL},
+    {"refuse-connection", NULL, 1, 1, test_refuse_connection, OVS_RO},
+    {"accept-then-close", NULL, 1, 1, test_accept_then_close, OVS_RO},
+    {"read-hello", NULL, 1, 1, test_read_hello, OVS_RO},
+    {"send-plain-hello", NULL, 1, 1, test_send_plain_hello, OVS_RO},
+    {"send-long-hello", NULL, 1, 1, test_send_long_hello, OVS_RO},
+    {"send-echo-hello", NULL, 1, 1, test_send_echo_hello, OVS_RO},
+    {"send-short-hello", NULL, 1, 1, test_send_short_hello, OVS_RO},
+    {"send-invalid-version-hello", NULL, 1, 1, test_send_invalid_version_hello, OVS_RO},
+    {NULL, NULL, 0, 0, NULL, OVS_RO},
 };
 
 static void

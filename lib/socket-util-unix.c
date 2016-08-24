@@ -387,9 +387,10 @@ error:
 }
 
 int
-get_unix_name_len(socklen_t sun_len)
+get_unix_name_len(const struct sockaddr_un *sun, socklen_t sun_len)
 {
-    return (sun_len >= offsetof(struct sockaddr_un, sun_path)
+    return (sun_len >= offsetof(struct sockaddr_un, sun_path) &&
+            sun->sun_path[0] != 0
             ? sun_len - offsetof(struct sockaddr_un, sun_path)
             : 0);
 }

@@ -30,6 +30,7 @@ print-build-modules:
 	fi
 	@echo "$(build_modules)" | tr '_' '-';
 
+if !WIN32
 COMPAT_GET_FUNCTIONS := find $(top_srcdir)/datapath/linux/compat -name "*.h" \
 	-exec sed -n '/^[a-z][a-z]* \*\?[A-Za-z0-9_][A-Za-z0-9_]*([a-z]/p; /^struct [a-z0-9_][a-z0-9_]* \*\?[A-Za-z0-9_][A-Za-z0-9_]*([a-z]/p' {} \; | tr -d '*' | cut -d '(' -f1 | rev | cut -d ' ' -f1 | rev
 COMPAT_GET_EXPORTS := find $(top_srcdir)/datapath/linux/compat -name "*.c" \
@@ -56,3 +57,4 @@ check-export-symbol:
 	done
 
 all-local: check-export-symbol
+endif

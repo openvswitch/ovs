@@ -28,6 +28,12 @@ typedef uint64 __u64, __be64;
 typedef uint32 __u32, __be32;
 typedef uint16 __u16, __be16;
 typedef uint8 __u8;
+typedef union ovs_u128 {
+    uint32_t u32[4];
+    struct {
+        uint64_t lo, hi;
+    } u64;
+} ovs_u128;
 
 /* Defines the  userspace specific data types for file
  * included within kernel only. */

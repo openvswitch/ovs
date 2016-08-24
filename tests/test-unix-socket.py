@@ -19,6 +19,7 @@ import socket
 import sys
 
 import ovs.socket_util
+from ovs.fatal_signal import signal_alarm
 
 
 def main(argv):
@@ -33,7 +34,7 @@ def main(argv):
         sockname2 = sockname1
 
     signal.signal(signal.SIGALRM, signal.SIG_DFL)
-    signal.alarm(5)
+    signal_alarm(5)
 
     # Create a listening socket under name 'sockname1'.
     error, sock1 = ovs.socket_util.make_unix_socket(socket.SOCK_STREAM, False,

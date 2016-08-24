@@ -40,5 +40,31 @@ static void rpl_nf_ct_tmpl_free(struct nf_conn *tmpl)
 	kfree(tmpl);
 }
 #define nf_ct_tmpl_free rpl_nf_ct_tmpl_free
-#endif /* HAVE_NF_CT_TMPL_ALLOC */
+
+static inline struct nf_conntrack_tuple_hash *
+rpl_nf_conntrack_find_get(struct net *net,
+			  const struct nf_conntrack_zone *zone,
+			  const struct nf_conntrack_tuple *tuple)
+{
+	return nf_conntrack_find_get(net, zone->id, tuple);
+}
+#define nf_conntrack_find_get rpl_nf_conntrack_find_get
+#endif /* HAVE_NF_CT_TMPL_ALLOC_TAKES_STRUCT_ZONE */
+
+#ifndef HAVE_NF_CT_GET_TUPLEPR_TAKES_STRUCT_NET
+static inline bool rpl_nf_ct_get_tuple(const struct sk_buff *skb,
+				       unsigned int nhoff,
+				       unsigned int dataoff, u_int16_t l3num,
+				       u_int8_t protonum,
+				       struct net *net,
+				       struct nf_conntrack_tuple *tuple,
+				       const struct nf_conntrack_l3proto *l3proto,
+				       const struct nf_conntrack_l4proto *l4proto)
+{
+	return nf_ct_get_tuple(skb, nhoff, dataoff, l3num, protonum, tuple,
+			       l3proto, l4proto);
+}
+#define nf_ct_get_tuple rpl_nf_ct_get_tuple
+#endif /* HAVE_NF_CT_GET_TUPLEPR_TAKES_STRUCT_NET */
+
 #endif /* _NF_CONNTRACK_CORE_WRAPPER_H */

@@ -21,9 +21,9 @@
 #include <stdint.h>
 
 #include "cmap.h"
-#include "list.h"
-#include "ofp-actions.h"
 #include "ofproto-dpif-mirror.h"
+#include "openvswitch/list.h"
+#include "openvswitch/ofp-actions.h"
 #include "ovs-thread.h"
 #include "uuid.h"
 
@@ -99,7 +99,7 @@ struct rule;
 /* Metadata for restoring pipeline context after recirculation.  Helpers
  * are inlined below to keep them together with the definition for easier
  * updates. */
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 35);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 36);
 
 struct frozen_metadata {
     /* Metadata in struct flow. */
@@ -175,8 +175,6 @@ struct recirc_id_node {
     /* Storage for tunnel metadata. */
     struct flow_tnl state_metadata_tunnel;
 };
-
-void recirc_init(void);
 
 /* This is only used for bonds and will go away when bonds implementation is
  * updated to use this mechanism instead of internal rules. */

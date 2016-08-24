@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -52,27 +52,28 @@
 #include "dp-packet.h"
 #include "dpif-netlink.h"
 #include "dpif-netdev.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 #include "netdev-provider.h"
 #include "netdev-vport.h"
 #include "netlink-notifier.h"
 #include "netlink-socket.h"
 #include "netlink.h"
-#include "ofpbuf.h"
+#include "openvswitch/ofpbuf.h"
 #include "openflow/openflow.h"
 #include "ovs-atomic.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "rtnetlink.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "socket-util.h"
 #include "sset.h"
 #include "timer.h"
 #include "unaligned.h"
 #include "openvswitch/vlog.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(netdev_linux);
 
@@ -220,13 +221,12 @@ struct rtnl_link_stats64 {
 enum {
     VALID_IFINDEX           = 1 << 0,
     VALID_ETHERADDR         = 1 << 1,
-    VALID_IN4               = 1 << 2,
-    VALID_IN6               = 1 << 3,
-    VALID_MTU               = 1 << 4,
-    VALID_POLICING          = 1 << 5,
-    VALID_VPORT_STAT_ERROR  = 1 << 6,
-    VALID_DRVINFO           = 1 << 7,
-    VALID_FEATURES          = 1 << 8,
+    VALID_IN                = 1 << 2,
+    VALID_MTU               = 1 << 3,
+    VALID_POLICING          = 1 << 4,
+    VALID_VPORT_STAT_ERROR  = 1 << 5,
+    VALID_DRVINFO           = 1 << 6,
+    VALID_FEATURES          = 1 << 7,
 };
 
 /* Traffic control. */
@@ -419,6 +419,7 @@ static const struct tc_ops tc_ops_codel;
 static const struct tc_ops tc_ops_fqcodel;
 static const struct tc_ops tc_ops_sfq;
 static const struct tc_ops tc_ops_default;
+static const struct tc_ops tc_ops_noop;
 static const struct tc_ops tc_ops_other;
 
 static const struct tc_ops *const tcs[] = {
@@ -427,6 +428,7 @@ static const struct tc_ops *const tcs[] = {
     &tc_ops_codel,              /* Controlled delay */
     &tc_ops_fqcodel,            /* Fair queue controlled delay */
     &tc_ops_sfq,                /* Stochastic fair queueing */
+    &tc_ops_noop,               /* Non operating qos type. */
     &tc_ops_default,            /* Default qdisc (see tc-pfifo_fast(8)). */
     &tc_ops_other,              /* Some other qdisc. */
     NULL
@@ -482,8 +484,6 @@ struct netdev_linux {
      * when the corresponding VALID_* bit in 'cache_valid' is set. */
     int ifindex;
     struct eth_addr etheraddr;
-    struct in_addr address, netmask;
-    struct in6_addr in6;
     int mtu;
     unsigned int ifi_flags;
     long long int carrier_resets;
@@ -496,8 +496,6 @@ struct netdev_linux {
     int netdev_policing_error;  /* Cached error code from set policing. */
     int get_features_error;     /* Cached error code from ETHTOOL_GSET. */
     int get_ifindex_error;      /* Cached error code from SIOCGIFINDEX. */
-    int in4_error;              /* Cached error code from reading in4 addr. */
-    int in6_error;              /* Cached error code from reading in6 addr. */
 
     enum netdev_features current;    /* Cached from ETHTOOL_GSET. */
     enum netdev_features advertised; /* Cached from ETHTOOL_GSET. */
@@ -528,12 +526,10 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
  * changes in the device miimon status, so we can use atomic_count. */
 static atomic_count miimon_cnt = ATOMIC_COUNT_INIT(0);
 
-static void netdev_linux_run(void);
+static void netdev_linux_run(const struct netdev_class *);
 
 static int netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *,
                                    int cmd, const char *cmd_name);
-static int netdev_linux_get_ipv4(const struct netdev *, struct in_addr *,
-                                 int cmd, const char *cmd_name);
 static int get_flags(const struct netdev *, unsigned int *flags);
 static int set_flags(const char *, unsigned int flags);
 static int update_flags(struct netdev_linux *netdev, enum netdev_flags off,
@@ -595,8 +591,8 @@ netdev_linux_notify_sock(void)
 {
     static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
     static struct nl_sock *sock;
-    unsigned int mcgroups[3] = {RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR,
-                                RTNLGRP_IPV6_IFADDR};
+    unsigned int mcgroups[] = {RTNLGRP_LINK, RTNLGRP_IPV4_IFADDR,
+                                RTNLGRP_IPV6_IFADDR, RTNLGRP_IPV6_IFINFO};
 
     if (ovsthread_once_start(&once)) {
         int error;
@@ -627,7 +623,7 @@ netdev_linux_miimon_enabled(void)
 }
 
 static void
-netdev_linux_run(void)
+netdev_linux_run(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     struct nl_sock *sock;
     int error;
@@ -652,7 +648,16 @@ netdev_linux_run(void)
             struct rtnetlink_change change;
 
             if (rtnetlink_parse(&buf, &change)) {
-                struct netdev *netdev_ = netdev_from_name(change.ifname);
+                struct netdev *netdev_ = NULL;
+                char dev_name[IFNAMSIZ];
+
+                if (!change.ifname) {
+                     change.ifname = if_indextoname(change.if_index, dev_name);
+                }
+
+                if (change.ifname) {
+                    netdev_ = netdev_from_name(change.ifname);
+                }
                 if (netdev_ && is_netdev_linux_class(netdev_->netdev_class)) {
                     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
 
@@ -692,7 +697,7 @@ netdev_linux_run(void)
 }
 
 static void
-netdev_linux_wait(void)
+netdev_linux_wait(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     struct nl_sock *sock;
 
@@ -718,6 +723,9 @@ netdev_linux_changed(struct netdev_linux *dev,
     dev->ifi_flags = ifi_flags;
 
     dev->cache_valid &= mask;
+    if (!(mask & VALID_IN)) {
+        netdev_get_addrs_list_flush();
+    }
 }
 
 static void
@@ -727,9 +735,9 @@ netdev_linux_update(struct netdev_linux *dev,
 {
     if (rtnetlink_type_is_rtnlgrp_link(change->nlmsg_type)){
         if (change->nlmsg_type == RTM_NEWLINK) {
-            /* Keep drv-info, in4, in6. */
+            /* Keep drv-info, and ip addresses. */
             netdev_linux_changed(dev, change->ifi_flags,
-                                 VALID_DRVINFO | VALID_IN4 | VALID_IN6);
+                                 VALID_DRVINFO | VALID_IN);
 
             /* Update netdev from rtnl-change msg. */
             if (change->mtu) {
@@ -752,8 +760,7 @@ netdev_linux_update(struct netdev_linux *dev,
         }
     } else if (rtnetlink_type_is_rtnlgrp_addr(change->nlmsg_type)) {
         /* Invalidates in4, in6. */
-        netdev_linux_changed(dev, dev->ifi_flags,
-                             ~(VALID_IN4 | VALID_IN6));
+        netdev_linux_changed(dev, dev->ifi_flags, ~VALID_IN);
     } else {
         OVS_NOT_REACHED();
     }
@@ -1085,8 +1092,7 @@ netdev_linux_rxq_recv_tap(int fd, struct dp_packet *buffer)
 }
 
 static int
-netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
-                      int *c)
+netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
 {
     struct netdev_rxq_linux *rx = netdev_rxq_linux_cast(rxq_);
     struct netdev *netdev = rx->up.netdev;
@@ -1111,10 +1117,8 @@ netdev_linux_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
         }
         dp_packet_delete(buffer);
     } else {
-        dp_packet_pad(buffer);
-        dp_packet_rss_invalidate(buffer);
-        packets[0] = buffer;
-        *c = 1;
+        batch->packets[0] = buffer;
+        batch->count = 1;
     }
 
     return retval;
@@ -1156,16 +1160,20 @@ netdev_linux_rxq_drain(struct netdev_rxq *rxq_)
  * expected to do additional queuing of packets. */
 static int
 netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
-                  struct dp_packet **pkts, int cnt, bool may_steal)
+                  struct dp_packet_batch *batch, bool may_steal,
+                  bool concurrent_txq OVS_UNUSED)
 {
     int i;
     int error = 0;
 
     /* 'i' is incremented only if there's no error */
-    for (i = 0; i < cnt;) {
-        const void *data = dp_packet_data(pkts[i]);
-        size_t size = dp_packet_size(pkts[i]);
+    for (i = 0; i < batch->count;) {
+        const void *data = dp_packet_data(batch->packets[i]);
+        size_t size = dp_packet_size(batch->packets[i]);
         ssize_t retval;
+
+        /* Truncate the packet if it is configured. */
+        size -= dp_packet_get_cutlen(batch->packets[i]);
 
         if (!is_tap_netdev(netdev_)) {
             /* Use our AF_PACKET socket to send to this device. */
@@ -1215,15 +1223,20 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
         }
 
         if (retval < 0) {
-            /* The Linux AF_PACKET implementation never blocks waiting for room
-             * for packets, instead returning ENOBUFS.  Translate this into
-             * EAGAIN for the caller. */
-            error = errno == ENOBUFS ? EAGAIN : errno;
-            if (error == EINTR) {
-                /* continue without incrementing 'i', i.e. retry this packet */
+            if (errno == EINTR) {
+                /* The send was interrupted by a signal.  Retry the packet by
+                 * continuing without incrementing 'i'.*/
                 continue;
+            } else if (errno == EIO && is_tap_netdev(netdev_)) {
+                /* The Linux tap driver returns EIO if the device is not up.
+                 * From the OVS side this is not an error, so ignore it. */
+            } else {
+                /* The Linux AF_PACKET implementation never blocks waiting for
+                 * room for packets, instead returning ENOBUFS.  Translate this
+                 * into EAGAIN for the caller. */
+                error = errno == ENOBUFS ? EAGAIN : errno;
+                break;
             }
-            break;
         } else if (retval != size) {
             VLOG_WARN_RL(&rl, "sent partial Ethernet packet (%"PRIuSIZE" bytes"
                               " of %"PRIuSIZE") on %s", retval, size,
@@ -1236,11 +1249,7 @@ netdev_linux_send(struct netdev *netdev_, int qid OVS_UNUSED,
         i++;
     }
 
-    if (may_steal) {
-        for (i = 0; i < cnt; i++) {
-            dp_packet_delete(pkts[i]);
-        }
-    }
+    dp_packet_delete_batch(batch, may_steal);
 
     if (error && error != EAGAIN) {
             VLOG_WARN_RL(&rl, "error sending Ethernet packet on %s: %s",
@@ -1373,7 +1382,7 @@ netdev_linux_get_mtu(const struct netdev *netdev_, int *mtup)
  * networking ioctl interface.
  */
 static int
-netdev_linux_set_mtu(const struct netdev *netdev_, int mtu)
+netdev_linux_set_mtu(struct netdev *netdev_, int mtu)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     struct ifreq ifr;
@@ -2042,7 +2051,7 @@ netdev_linux_set_policing(struct netdev *netdev_,
     int error;
 
     kbits_burst = (!kbits_rate ? 0       /* Force to 0 if no rate specified. */
-                   : !kbits_burst ? 1000 /* Default to 1000 kbits if 0. */
+                   : !kbits_burst ? 8000 /* Default to 8000 kbits if 0. */
                    : kbits_burst);       /* Stick with user-specified value. */
 
     ovs_mutex_lock(&netdev->mutex);
@@ -2098,7 +2107,6 @@ netdev_linux_get_qos_types(const struct netdev *netdev OVS_UNUSED,
                            struct sset *types)
 {
     const struct tc_ops *const *opsp;
-
     for (opsp = tcs; *opsp != NULL; opsp++) {
         const struct tc_ops *ops = *opsp;
         if (ops->tc_install && ops->ovs_name[0] != '\0') {
@@ -2201,6 +2209,10 @@ netdev_linux_set_qos(struct netdev *netdev_,
     new_ops = tc_lookup_ovs_name(type);
     if (!new_ops || !new_ops->tc_install) {
         return EOPNOTSUPP;
+    }
+
+    if (new_ops == &tc_ops_noop) {
+        return new_ops->tc_install(netdev_, details);
     }
 
     ovs_mutex_lock(&netdev->mutex);
@@ -2464,40 +2476,6 @@ netdev_linux_dump_queue_stats(const struct netdev *netdev_,
 }
 
 static int
-netdev_linux_get_in4(const struct netdev *netdev_,
-                     struct in_addr *address, struct in_addr *netmask)
-{
-    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    int error;
-
-    ovs_mutex_lock(&netdev->mutex);
-    if (!(netdev->cache_valid & VALID_IN4)) {
-        error = netdev_linux_get_ipv4(netdev_, &netdev->address,
-                                      SIOCGIFADDR, "SIOCGIFADDR");
-        if (!error) {
-            error = netdev_linux_get_ipv4(netdev_, &netdev->netmask,
-                                          SIOCGIFNETMASK, "SIOCGIFNETMASK");
-        }
-        netdev->in4_error = error;
-        netdev->cache_valid |= VALID_IN4;
-    } else {
-        error = netdev->in4_error;
-    }
-
-    if (!error) {
-        if (netdev->address.s_addr != INADDR_ANY) {
-            *address = netdev->address;
-            *netmask = netdev->netmask;
-        } else {
-            error = EADDRNOTAVAIL;
-        }
-    }
-    ovs_mutex_unlock(&netdev->mutex);
-
-    return error;
-}
-
-static int
 netdev_linux_set_in4(struct netdev *netdev_, struct in_addr address,
                      struct in_addr netmask)
 {
@@ -2507,80 +2485,29 @@ netdev_linux_set_in4(struct netdev *netdev_, struct in_addr address,
     ovs_mutex_lock(&netdev->mutex);
     error = do_set_addr(netdev_, SIOCSIFADDR, "SIOCSIFADDR", address);
     if (!error) {
-        netdev->address = address;
-        netdev->netmask = netmask;
         if (address.s_addr != INADDR_ANY) {
             error = do_set_addr(netdev_, SIOCSIFNETMASK,
                                 "SIOCSIFNETMASK", netmask);
         }
     }
 
-    if (!error) {
-        netdev->cache_valid |= VALID_IN4;
-        netdev->in4_error = 0;
-    } else {
-        netdev->cache_valid &= ~VALID_IN4;
-    }
     ovs_mutex_unlock(&netdev->mutex);
 
     return error;
-}
-
-static bool
-parse_if_inet6_line(const char *line,
-                    struct in6_addr *in6, char ifname[16 + 1])
-{
-    uint8_t *s6 = in6->s6_addr;
-#define X8 "%2"SCNx8
-    return ovs_scan(line,
-                    " "X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8 X8
-                    "%*x %*x %*x %*x %16s\n",
-                    &s6[0], &s6[1], &s6[2], &s6[3],
-                    &s6[4], &s6[5], &s6[6], &s6[7],
-                    &s6[8], &s6[9], &s6[10], &s6[11],
-                    &s6[12], &s6[13], &s6[14], &s6[15],
-                    ifname);
 }
 
 /* If 'netdev' has an assigned IPv6 address, sets '*in6' to that address.
  * Otherwise, sets '*in6' to 'in6addr_any' and returns the corresponding
  * error. */
 static int
-netdev_linux_get_in6(const struct netdev *netdev_, struct in6_addr *in6)
+netdev_linux_get_addr_list(const struct netdev *netdev_,
+                          struct in6_addr **addr, struct in6_addr **mask, int *n_cnt)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
     int error;
 
     ovs_mutex_lock(&netdev->mutex);
-    if (!(netdev->cache_valid & VALID_IN6)) {
-        FILE *file;
-        char line[128];
-
-        netdev->in6 = in6addr_any;
-        netdev->in6_error = EADDRNOTAVAIL;
-
-        file = fopen("/proc/net/if_inet6", "r");
-        if (file != NULL) {
-            const char *name = netdev_get_name(netdev_);
-            while (fgets(line, sizeof line, file)) {
-                struct in6_addr in6_tmp;
-                char ifname[16 + 1];
-                if (parse_if_inet6_line(line, &in6_tmp, ifname)
-                    && !strcmp(name, ifname))
-                {
-                    netdev->in6 = in6_tmp;
-                    netdev->in6_error = 0;
-                    break;
-                }
-            }
-            fclose(file);
-        } else {
-            netdev->in6_error = EOPNOTSUPP;
-        }
-        netdev->cache_valid |= VALID_IN6;
-    }
-    *in6 = netdev->in6;
-    error = netdev->in6_error;
+    error = netdev_get_addrs(netdev_get_name(netdev_), addr, mask, n_cnt);
     ovs_mutex_unlock(&netdev->mutex);
 
     return error;
@@ -2831,6 +2758,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
                            GET_FEATURES, GET_STATUS)            \
 {                                                               \
     NAME,                                                       \
+    false,                      /* is_pmd */                    \
                                                                 \
     NULL,                                                       \
     netdev_linux_run,                                           \
@@ -2847,7 +2775,7 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     NULL,                       /* push header */               \
     NULL,                       /* pop header */                \
     NULL,                       /* get_numa_id */               \
-    NULL,                       /* set_multiq */                \
+    NULL,                       /* set_tx_multiq */             \
                                                                 \
     netdev_linux_send,                                          \
     netdev_linux_send_wait,                                     \
@@ -2879,15 +2807,15 @@ netdev_linux_update_flags(struct netdev *netdev_, enum netdev_flags off,
     netdev_linux_queue_dump_done,                               \
     netdev_linux_dump_queue_stats,                              \
                                                                 \
-    netdev_linux_get_in4,                                       \
     netdev_linux_set_in4,                                       \
-    netdev_linux_get_in6,                                       \
+    netdev_linux_get_addr_list,                                 \
     netdev_linux_add_router,                                    \
     netdev_linux_get_next_hop,                                  \
     GET_STATUS,                                                 \
     netdev_linux_arp_lookup,                                    \
                                                                 \
     netdev_linux_update_flags,                                  \
+    NULL,                       /* reconfigure */               \
                                                                 \
     netdev_linux_rxq_alloc,                                     \
     netdev_linux_rxq_construct,                                 \
@@ -3009,17 +2937,9 @@ static void
 codel_parse_qdisc_details__(struct netdev *netdev OVS_UNUSED,
                             const struct smap *details, struct codel *codel)
 {
-    const char *target_s;
-    const char *limit_s;
-    const char *interval_s;
-
-    target_s = smap_get(details, "target");
-    limit_s = smap_get(details, "limit");
-    interval_s = smap_get(details, "interval");
-
-    codel->target = target_s ? strtoull(target_s, NULL, 10) : 0;
-    codel->limit = limit_s ? strtoull(limit_s, NULL, 10) : 0;
-    codel->interval = interval_s ? strtoull(interval_s, NULL, 10) : 0;
+    codel->target = smap_get_ullong(details, "target", 0);
+    codel->limit = smap_get_ullong(details, "limit", 0);
+    codel->interval = smap_get_ullong(details, "interval", 0);
 
     if (!codel->target) {
         codel->target = 5000;
@@ -3240,22 +3160,12 @@ static void
 fqcodel_parse_qdisc_details__(struct netdev *netdev OVS_UNUSED,
                           const struct smap *details, struct fqcodel *fqcodel)
 {
-    const char *target_s;
-    const char *limit_s;
-    const char *interval_s;
-    const char *flows_s;
-    const char *quantum_s;
+    fqcodel->target = smap_get_ullong(details, "target", 0);
+    fqcodel->limit = smap_get_ullong(details, "limit", 0);
+    fqcodel->interval = smap_get_ullong(details, "interval", 0);
+    fqcodel->flows = smap_get_ullong(details, "flows", 0);
+    fqcodel->quantum = smap_get_ullong(details, "quantum", 0);
 
-    target_s = smap_get(details, "target");
-    limit_s = smap_get(details, "limit");
-    interval_s = smap_get(details, "interval");
-    flows_s = smap_get(details, "flows");
-    quantum_s = smap_get(details, "quantum");
-    fqcodel->target = target_s ? strtoull(target_s, NULL, 10) : 0;
-    fqcodel->limit = limit_s ? strtoull(limit_s, NULL, 10) : 0;
-    fqcodel->interval = interval_s ? strtoull(interval_s, NULL, 10) : 0;
-    fqcodel->flows = flows_s ? strtoull(flows_s, NULL, 10) : 0;
-    fqcodel->quantum = quantum_s ? strtoull(quantum_s, NULL, 10) : 0;
     if (!fqcodel->target) {
         fqcodel->target = 5000;
     }
@@ -3476,27 +3386,20 @@ static void
 sfq_parse_qdisc_details__(struct netdev *netdev,
                           const struct smap *details, struct sfq *sfq)
 {
-    const char *perturb_s;
-    const char *quantum_s;
-    int mtu;
-    int mtu_error;
+    sfq->perturb = smap_get_ullong(details, "perturb", 0);
+    sfq->quantum = smap_get_ullong(details, "quantum", 0);
 
-    perturb_s = smap_get(details, "perturb");
-    quantum_s = smap_get(details, "quantum");
-    sfq->perturb = perturb_s ? strtoull(perturb_s, NULL, 10) : 0;
-    sfq->quantum = quantum_s ? strtoull(quantum_s, NULL, 10) : 0;
     if (!sfq->perturb) {
         sfq->perturb = 10;
     }
 
     if (!sfq->quantum) {
-        mtu_error = netdev_linux_get_mtu__(netdev_linux_cast(netdev), &mtu);
-        if (!mtu_error) {
+        int mtu;
+        if (!netdev_linux_get_mtu__(netdev_linux_cast(netdev), &mtu)) {
             sfq->quantum = mtu;
         } else {
             VLOG_WARN_RL(&rl, "when using SFQ, you must specify quantum on a "
                          "device without mtu");
-            return;
         }
     }
 }
@@ -3769,10 +3672,8 @@ htb_parse_qdisc_details__(struct netdev *netdev_,
                           const struct smap *details, struct htb_class *hc)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    const char *max_rate_s;
 
-    max_rate_s = smap_get(details, "max-rate");
-    hc->max_rate = max_rate_s ? strtoull(max_rate_s, NULL, 10) / 8 : 0;
+    hc->max_rate = smap_get_ullong(details, "max-rate", 0) / 8;
     if (!hc->max_rate) {
         enum netdev_features current;
 
@@ -3790,10 +3691,6 @@ htb_parse_class_details__(struct netdev *netdev,
                           const struct smap *details, struct htb_class *hc)
 {
     const struct htb *htb = htb_get__(netdev);
-    const char *min_rate_s = smap_get(details, "min-rate");
-    const char *max_rate_s = smap_get(details, "max-rate");
-    const char *burst_s = smap_get(details, "burst");
-    const char *priority_s = smap_get(details, "priority");
     int mtu, error;
 
     error = netdev_linux_get_mtu__(netdev_linux_cast(netdev), &mtu);
@@ -3805,14 +3702,15 @@ htb_parse_class_details__(struct netdev *netdev,
 
     /* HTB requires at least an mtu sized min-rate to send any traffic even
      * on uncongested links. */
-    hc->min_rate = min_rate_s ? strtoull(min_rate_s, NULL, 10) / 8 : 0;
+    hc->min_rate = smap_get_ullong(details, "min-rate", 0) / 8;
     hc->min_rate = MAX(hc->min_rate, mtu);
     hc->min_rate = MIN(hc->min_rate, htb->max_rate);
 
     /* max-rate */
-    hc->max_rate = (max_rate_s
-                    ? strtoull(max_rate_s, NULL, 10) / 8
-                    : htb->max_rate);
+    hc->max_rate = smap_get_ullong(details, "max-rate", 0) / 8;
+    if (!hc->max_rate) {
+        hc->max_rate = htb->max_rate;
+    }
     hc->max_rate = MAX(hc->max_rate, hc->min_rate);
     hc->max_rate = MIN(hc->max_rate, htb->max_rate);
 
@@ -3825,11 +3723,11 @@ htb_parse_class_details__(struct netdev *netdev,
      * doesn't include the Ethernet header, we need to add at least 14 (18?) to
      * the MTU.  We actually add 64, instead of 14, as a guard against
      * additional headers get tacked on somewhere that we're not aware of. */
-    hc->burst = burst_s ? strtoull(burst_s, NULL, 10) / 8 : 0;
+    hc->burst = smap_get_ullong(details, "burst", 0) / 8;
     hc->burst = MAX(hc->burst, mtu + 64);
 
     /* priority */
-    hc->priority = priority_s ? strtoul(priority_s, NULL, 10) : 0;
+    hc->priority = smap_get_ullong(details, "priority", 0);
 
     return 0;
 }
@@ -3933,10 +3831,9 @@ static void
 htb_tc_destroy(struct tc *tc)
 {
     struct htb *htb = CONTAINER_OF(tc, struct htb, tc);
-    struct htb_class *hc, *next;
+    struct htb_class *hc;
 
-    HMAP_FOR_EACH_SAFE (hc, next, tc_queue.hmap_node, &htb->tc.queues) {
-        hmap_remove(&htb->tc.queues, &hc->tc_queue.hmap_node);
+    HMAP_FOR_EACH_POP (hc, tc_queue.hmap_node, &htb->tc.queues) {
         free(hc);
     }
     tc_destroy(tc);
@@ -4248,12 +4145,8 @@ hfsc_parse_qdisc_details__(struct netdev *netdev_, const struct smap *details,
                            struct hfsc_class *class)
 {
     struct netdev_linux *netdev = netdev_linux_cast(netdev_);
-    uint32_t max_rate;
-    const char *max_rate_s;
 
-    max_rate_s = smap_get(details, "max-rate");
-    max_rate   = max_rate_s ? strtoull(max_rate_s, NULL, 10) / 8 : 0;
-
+    uint32_t max_rate = smap_get_ullong(details, "max-rate", 0) / 8;
     if (!max_rate) {
         enum netdev_features current;
 
@@ -4273,19 +4166,14 @@ hfsc_parse_class_details__(struct netdev *netdev,
 {
     const struct hfsc *hfsc;
     uint32_t min_rate, max_rate;
-    const char *min_rate_s, *max_rate_s;
 
     hfsc       = hfsc_get__(netdev);
-    min_rate_s = smap_get(details, "min-rate");
-    max_rate_s = smap_get(details, "max-rate");
 
-    min_rate = min_rate_s ? strtoull(min_rate_s, NULL, 10) / 8 : 0;
+    min_rate = smap_get_ullong(details, "min-rate", 0) / 8;
     min_rate = MAX(min_rate, 1);
     min_rate = MIN(min_rate, hfsc->max_rate);
 
-    max_rate = (max_rate_s
-                ? strtoull(max_rate_s, NULL, 10) / 8
-                : hfsc->max_rate);
+    max_rate = smap_get_ullong(details, "max-rate", hfsc->max_rate * 8) / 8;
     max_rate = MAX(max_rate, min_rate);
     max_rate = MIN(max_rate, hfsc->max_rate);
 
@@ -4571,6 +4459,48 @@ static const struct tc_ops tc_ops_hfsc = {
     hfsc_class_dump_stats       /* class_dump_stats */
 };
 
+/* "linux-noop" traffic control class. */
+
+static void
+noop_install__(struct netdev *netdev_)
+{
+    struct netdev_linux *netdev = netdev_linux_cast(netdev_);
+    static const struct tc tc = TC_INITIALIZER(&tc, &tc_ops_default);
+
+    netdev->tc = CONST_CAST(struct tc *, &tc);
+}
+
+static int
+noop_tc_install(struct netdev *netdev,
+                   const struct smap *details OVS_UNUSED)
+{
+    noop_install__(netdev);
+    return 0;
+}
+
+static int
+noop_tc_load(struct netdev *netdev, struct ofpbuf *nlmsg OVS_UNUSED)
+{
+    noop_install__(netdev);
+    return 0;
+}
+
+static const struct tc_ops tc_ops_noop = {
+    NULL,                       /* linux_name */
+    "linux-noop",               /* ovs_name */
+    0,                          /* n_queues */
+    noop_tc_install,
+    noop_tc_load,
+    NULL,                       /* tc_destroy */
+    NULL,                       /* qdisc_get */
+    NULL,                       /* qdisc_set */
+    NULL,                       /* class_get */
+    NULL,                       /* class_set */
+    NULL,                       /* class_delete */
+    NULL,                       /* class_get_stats */
+    NULL                        /* class_dump_stats */
+};
+
 /* "linux-default" traffic control class.
  *
  * This class represents the default, unnamed Linux qdisc.  It corresponds to
@@ -4802,21 +4732,15 @@ tc_add_policer(struct netdev *netdev,
     tc_police.mtu = mtu;
     tc_fill_rate(&tc_police.rate, ((uint64_t) kbits_rate * 1000)/8, mtu);
 
-    /* The following appears wrong in two ways:
-     *
-     * - tc_bytes_to_ticks() should take "bytes" as quantity for both of its
-     *   arguments (or at least consistently "bytes" as both or "bits" as
-     *   both), but this supplies bytes for the first argument and bits for the
-     *   second.
-     *
-     * - In networking a kilobit is usually 1000 bits but this uses 1024 bits.
+    /* The following appears wrong in one way: In networking a kilobit is
+     * usually 1000 bits but this uses 1024 bits.
      *
      * However if you "fix" those problems then "tc filter show ..." shows
      * "125000b", meaning 125,000 bits, when OVS configures it for 1000 kbit ==
      * 1,000,000 bits, whereas this actually ends up doing the right thing from
      * tc's point of view.  Whatever. */
     tc_police.burst = tc_bytes_to_ticks(
-        tc_police.rate.rate, MIN(UINT32_MAX / 1024, kbits_burst) * 1024);
+        tc_police.rate.rate, MIN(UINT32_MAX / 1024, kbits_burst) * 1024 / 8);
 
     tcmsg = tc_make_request(netdev, RTM_NEWTFILTER,
                             NLM_F_EXCL | NLM_F_CREATE, &request);
@@ -5450,6 +5374,9 @@ get_stats_via_netlink(const struct netdev *netdev_, struct netdev_stats *stats)
     struct ofpbuf *reply;
     int error;
 
+    /* Filtering all counters by default */
+    memset(stats, 0xFF, sizeof(struct netdev_stats));
+
     ofpbuf_init(&request, 0);
     nl_msg_put_nlmsghdr(&request,
                         sizeof(struct ifinfomsg) + NL_ATTR_SIZE(IFNAMSIZ),
@@ -5620,23 +5547,6 @@ netdev_linux_do_ethtool(const char *name, struct ethtool_cmd *ecmd,
             /* The device doesn't support this operation.  That's pretty
              * common, so there's no point in logging anything. */
         }
-    }
-    return error;
-}
-
-static int
-netdev_linux_get_ipv4(const struct netdev *netdev, struct in_addr *ip,
-                      int cmd, const char *cmd_name)
-{
-    struct ifreq ifr;
-    int error;
-
-    ifr.ifr_addr.sa_family = AF_INET;
-    error = af_inet_ifreq_ioctl(netdev_get_name(netdev), &ifr, cmd, cmd_name);
-    if (!error) {
-        const struct sockaddr_in *sin = ALIGNED_CAST(struct sockaddr_in *,
-                                                     &ifr.ifr_addr);
-        *ip = sin->sin_addr;
     }
     return error;
 }

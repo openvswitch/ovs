@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,7 @@
 #include "compiler.h"
 #include "daemon.h"
 #include "dirs.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "poll-loop.h"
 #include "stream.h"
@@ -35,6 +35,7 @@
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "ovn/lib/ovn-sb-idl.h"
+#include "ovn/lib/ovn-util.h"
 #include "vtep/vtep-idl.h"
 
 #include "binding.h"
@@ -230,11 +231,8 @@ parse_options(int argc, char *argv[])
     }
     free(short_options);
 
-    argc -= optind;
-    argv += optind;
-
     if (!ovnsb_remote) {
-        ovnsb_remote = xstrdup(default_db());
+        ovnsb_remote = xstrdup(default_sb_db());
     }
 
     if (!vtep_remote) {

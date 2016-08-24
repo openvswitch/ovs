@@ -127,6 +127,9 @@ ffff 0020 00002320 0015 000500000000 80003039005A02fd 0400000000000000
 # actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 ffff 0018 00002320 001d 3039 00005BA0 00008707 0000B26E
 
+# actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+ffff 0020 00002320 0026 3039 00005BA0 00008707 0000B26E DDD50000 00000000
+
 # bad OpenFlow10 actions: OFPBAC_BAD_LEN
 & ofp_actions|WARN|OpenFlow action OFPAT_OUTPUT length 240 exceeds action buffer length 8
 & ofp_actions|WARN|bad action at offset 0 (OFPBAC_BAD_LEN):
@@ -238,6 +241,12 @@ fe800000 00000000 020c 29ff fe88 0001 dnl
 fe800000 00000000 020c 29ff fe88 a18b dnl
 00ff1000 00000000
 
+# actions=output(port=1,max_len=100)
+ffff 0010 00002320 0027 0001 00000064
+
+# actions=group:5
+ffff 0010 00002320 0028 0000 00000005
+
 # bad OpenFlow10 actions: NXBRC_MUST_BE_ZERO
 ffff 0018 00002320 0025 0000 0005 0000 1122334455 000005
 
@@ -319,6 +328,9 @@ AT_DATA([test-data], [dnl
 
 # actions=mod_nw_tos:48
 0007 0008 30 000000
+
+# actions=mod_nw_ecn:2
+0008 0008 02 000000
 
 # actions=mod_tp_src:80
 0009 0008 0050 0000
@@ -742,3 +754,75 @@ NXST_FLOW reply:
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([enqueue action for OF1.1+])
+AT_KEYWORDS([ofp-actions])
+OVS_VSWITCHD_START
+dnl OpenFlow 1.0 has an "enqueue" action.  For OpenFlow 1.1+, we translate
+dnl it to a series of actions that accomplish the same thing.
+AT_CHECK([ovs-ofctl -O OpenFlow10 add-flow br0 'actions=enqueue(123,456)'])
+AT_CHECK([ovs-ofctl -O OpenFlow10 dump-flows br0 | ofctl_strip], [0], [dnl
+NXST_FLOW reply:
+ actions=enqueue:123:456
+])
+AT_CHECK([ovs-ofctl -O OpenFlow13 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.3):
+ reset_counts actions=set_queue:456,output:123,pop_queue
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([mod_nw_ttl action for OF1.0])
+AT_KEYWORDS([ofp-actions])
+OVS_VSWITCHD_START
+dnl OpenFlow 1.1+ have a mod_nw_ttl action.  For OpenFlow 1.0, we translate
+dnl it to an Open vSwitch extension.
+AT_CHECK([ovs-ofctl -O OpenFlow11 add-flow br0 'ip,actions=mod_nw_ttl:123'])
+AT_CHECK([ovs-ofctl -O OpenFlow10 dump-flows br0 | ofctl_strip], [0], [dnl
+NXST_FLOW reply:
+ ip actions=load:0x7b->NXM_NX_IP_TTL[[]]
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.1):
+ ip actions=mod_nw_ttl:123
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([mod_nw_ecn action translation])
+AT_KEYWORDS([ofp-actions])
+OVS_VSWITCHD_START
+
+dnl OpenFlow 1.1, but no other version, has a "mod_nw_ecn" action.
+dnl Check that we translate it properly for OF1.0 and OF1.2.
+dnl (OF1.3+ should be the same as OF1.2.)
+AT_CHECK([ovs-ofctl -O OpenFlow11 add-flow br0 'ip,actions=mod_nw_ecn:2'])
+AT_CHECK([ovs-ofctl -O OpenFlow10 dump-flows br0 | ofctl_strip], [0], [dnl
+NXST_FLOW reply:
+ ip actions=load:0x2->NXM_NX_IP_ECN[[]]
+])
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.1):
+ ip actions=mod_nw_ecn:2
+])
+AT_CHECK([ovs-ofctl -O OpenFlow12 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.2):
+ ip actions=set_field:2->nw_ecn
+])
+
+dnl Check that OF1.2+ set_field to set ECN is translated into the OF1.1
+dnl mod_nw_ecn action.
+dnl
+dnl We don't do anything equivalent for OF1.0 reg_load because we prefer
+dnl that anything that comes in as reg_load gets translated back to reg_load
+dnl on output.  Perhaps this is somewhat inconsistent but it's what OVS
+dnl has done for multiple versions.
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl -O OpenFlow12 add-flow br0 'ip,actions=set_field:2->ip_ecn'])
+AT_CHECK([ovs-ofctl -O OpenFlow11 dump-flows br0 | ofctl_strip], [0], [dnl
+OFPST_FLOW reply (OF1.1):
+ ip actions=mod_nw_ecn:2
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+

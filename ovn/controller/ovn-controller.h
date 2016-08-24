@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -38,8 +38,27 @@ struct controller_ctx {
  * the localnet port */
 struct local_datapath {
     struct hmap_node hmap_node;
+    struct hmap_node uuid_hmap_node;
+    struct uuid uuid;
+    char *logical_port;
     const struct sbrec_port_binding *localnet_port;
 };
+
+struct local_datapath *get_local_datapath(const struct hmap *,
+                                          uint32_t tunnel_key);
+
+/* Contains hmap_node whose hash values are the tunnel_key of datapaths
+ * with at least one logical patch port binding. */
+struct patched_datapath {
+    struct hmap_node hmap_node;
+    char *key;  /* Holds the uuid of the corresponding datapath. */
+    bool local; /* 'True' if the datapath is for gateway router. */
+    bool stale; /* 'True' if the datapath is not referenced by any patch
+                 * port. */
+};
+
+struct patched_datapath *get_patched_datapath(const struct hmap *,
+                                              uint32_t tunnel_key);
 
 const struct ovsrec_bridge *get_bridge(struct ovsdb_idl *,
                                        const char *br_name);

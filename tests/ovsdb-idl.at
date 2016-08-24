@@ -22,12 +22,13 @@ m4_define([OVSDB_CHECK_IDL_C],
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   on_exit 'kill `cat pid`'
    m4_if([$2], [], [],
-     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $3],
-            [0], [stdout], [ignore], [kill `cat pid`])
+            [0], [stdout], [ignore])
    AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
-            [0], [$4], [], [kill `cat pid`])
+            [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -39,12 +40,13 @@ m4_define([OVSDB_CHECK_IDL_PYN],
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   on_exit 'kill `cat pid`'
    m4_if([$2], [], [],
-     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $3],
-            [0], [stdout], [ignore], [kill `cat pid`])
+            [0], [stdout], [ignore])
    AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
-            [0], [$4], [], [kill `cat pid`])
+            [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -61,12 +63,13 @@ m4_define([OVSDB_CHECK_IDL_REGISTER_COLUMNS_PYN],
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   on_exit 'kill `cat pid`'
    m4_if([$2], [], [],
-     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket ?simple:b,ba,i,ia,r,ra,s,sa,u,ua?link1:i,k,ka,l2?link2:i,l1 $3],
-            [0], [stdout], [ignore], [kill `cat pid`])
+            [0], [stdout], [ignore])
    AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
-            [0], [$4], [], [kill `cat pid`])
+            [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -84,14 +87,15 @@ m4_define([OVSDB_CHECK_IDL_TCP_PYN],
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server --log-file '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   on_exit 'kill `cat pid`'
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
 
    m4_if([$2], [], [],
-     [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT $2], [0], [ignore], [ignore], [kill `cat pid`])])
+     [AT_CHECK([ovsdb-client transact tcp:127.0.0.1:$TCP_PORT $2], [0], [ignore], [ignore])])
    AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema tcp:127.0.0.1:$TCP_PORT $3],
-            [0], [stdout], [ignore], [kill `cat pid`])
+            [0], [stdout], [ignore])
    AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
-            [0], [$4], [], [kill `cat pid`])
+            [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -105,20 +109,22 @@ m4_define([OVSDB_CHECK_IDL_TCP_PY],
 m4_define([OVSDB_CHECK_IDL_TCP6_PYN],
   [AT_SETUP([$1 - tcp6])
    AT_SKIP_IF([test $7 = no])
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test $HAVE_IPV6 = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp6 socket $5])
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server --log-file '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=ptcp:0:[[::1]] --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   on_exit 'kill `cat pid`'
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
    echo "TCP_PORT=$TCP_PORT"
 
    m4_if([$2], [], [],
-     [AT_CHECK([ovsdb-client transact "tcp:[[::1]]:$TCP_PORT" $2], [0], [ignore], [ignore], [kill `cat pid`])])
+     [AT_CHECK([ovsdb-client transact "tcp:[[::1]]:$TCP_PORT" $2], [0], [ignore], [ignore])])
    AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema tcp:[[::1]]:$TCP_PORT $3],
-            [0], [stdout], [ignore], [kill `cat pid`])
+            [0], [stdout], [ignore])
    AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
-            [0], [$4], [], [kill `cat pid`])
+            [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -134,6 +140,37 @@ m4_define([OVSDB_CHECK_IDL],
    OVSDB_CHECK_IDL_REGISTER_COLUMNS_PY($@)
    OVSDB_CHECK_IDL_TCP_PY($@)
    OVSDB_CHECK_IDL_TCP6_PY($@)])
+
+# This test uses the Python IDL implementation with passive tcp
+m4_define([OVSDB_CHECK_IDL_PASSIVE_TCP_PY],
+  [AT_SETUP([$1 - Python ptcp])
+   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_KEYWORDS([ovsdb server idl positive Python with tcp socket $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   # find free TCP port
+   AT_CHECK([ovsdb-server --log-file '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   on_exit 'kill `cat pid`'
+   PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
+   OVSDB_SERVER_SHUTDOWN
+
+   # start OVSDB server in passive mode
+   AT_CHECK([ovsdb-server --log-file '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --remote=tcp:127.0.0.1:$TCP_PORT --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   AT_CHECK([$PYTHON $srcdir/test-ovsdb.py -t10 idl_passive $srcdir/idltest.ovsschema ptcp:127.0.0.1:$TCP_PORT $3],
+      [0], [stdout], [ignore])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP
+   ])
+
+OVSDB_CHECK_IDL_PASSIVE_TCP_PY([simple passive idl, initially empty, select empty],
+  [],
+  [['["idltest",{"op":"select","table":"link1","where":[]}]']],
+  [[000: empty
+001: {"error":null,"result":[{"rows":[]}]}
+002: done
+]])
 
 OVSDB_CHECK_IDL([simple idl, initially empty, no ops],
   [],
@@ -353,6 +390,142 @@ OVSDB_CHECK_IDL([simple idl, destroy without commit or abort],
 004: done
 ]])
 
+OVSDB_CHECK_IDL([simple idl, conditional, false condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition remove simple [false]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, true condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition add simple [true]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, multiple clauses in condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}},
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 2,
+               "r": 3.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition add simple [["i","==",1],["i","==",2]]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+003: i=2 r=3 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+004: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, modify as insert due to condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition add simple [["i","==",1]]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, modify as delete due to condition],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}}]']],
+  [['condition add simple [false]' \
+    'condition add simple [["i","==",1],["i","==",2]]' \
+    'condition remove simple [["i","==",1]]' \
+    '["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 2,
+               "r": 3.0,
+               "b": true}}]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: change conditions
+005: empty
+006: {"error":null,"result":[{"uuid":["uuid","<2>"]}]}
+007: i=2 r=3 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<2>
+008: done
+]])
+
+OVSDB_CHECK_IDL([simple idl, conditional, multiple tables],
+  [['["idltest",
+       {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true}},
+       {"op": "insert",
+       "table": "link1",
+       "row": {"i": 0, "k": ["named-uuid", "self"]},
+       "uuid-name": "self"},
+        {"op": "insert",
+       "table": "link2",
+       "row": {"i": 2},
+       "uuid-name": "row0"}]']],
+  [['condition add simple [false];condition add link1 [false];condition add link2 [false]' \
+    'condition add simple [["i","==",1]]' \
+    'condition add link1 [["i","==",0]]' \
+    'condition add link2 [["i","==",3]]' \
+    '+["idltest",
+       {"op": "insert",
+       "table": "link2",
+       "row": {"i": 3},
+        "uuid-name": "row0"}]']],
+  [[000: change conditions
+001: empty
+002: change conditions
+003: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: change conditions
+005: i=0 k=0 ka=[] l2= uuid=<2>
+005: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+006: change conditions
+007: {"error":null,"result":[{"uuid":["uuid","<3>"]}]}
+008: i=0 k=0 ka=[] l2= uuid=<2>
+008: i=1 r=2 b=true s= u=<0> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+008: i=3 l1= uuid=<3>
+009: done
+]])
+
 OVSDB_CHECK_IDL([self-linking idl, consistent ops],
   [],
   [['["idltest",
@@ -559,6 +732,7 @@ AT_KEYWORDS([ovsdb server idl positive])
 AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest2.ovsschema],
     [0], [stdout], [ignore])
 AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+on_exit 'kill `cat pid`'
 AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket ['["idltest",
       {"op": "insert",
        "table": "link1",
@@ -583,7 +757,7 @@ AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl uni
        "table": "link1",
        "where": [],
        "row": {"k": ["uuid", "#0#"]}}]']],
-	 [0], [stdout], [stderr], [kill `cat pid`])
+	 [0], [stdout], [stderr])
 AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl], [0],
     [[000: empty
 001: {"error":null,"result":[{"uuid":["uuid","<0>"]}]}
@@ -601,7 +775,7 @@ AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl], [0],
 008: i=1 k=0 ka=[] l2= uuid=<1>
 008: i=2 k=0 ka=[] l2= uuid=<2>
 009: done
-]], [], [kill `cat pid`])
+]])
 
 # Check that ovsdb-idl figured out that table link2 and column l2 are missing.
 AT_CHECK([grep ovsdb_idl stderr | sort], [0], [dnl
@@ -612,13 +786,13 @@ test-ovsdb|ovsdb_idl|link1 table in idltest database lacks l2 column (database n
 # Check that ovsdb-idl sent on "monitor" request and that it didn't
 # mention that table or column, and (for paranoia) that it did mention another
 # table and column.
-AT_CHECK([grep -c '"monitor\|monitor2"' stderr], [0], [1
+AT_CHECK([grep -c '"monitor\|monitor_cond"' stderr], [0], [1
 ])
-AT_CHECK([grep '"monitor\|monitor2"' stderr | grep link2], [1])
-AT_CHECK([grep '"monitor\|monitor2"' stderr | grep l2], [1])
-AT_CHECK([grep '"monitor\|monitor2"' stderr | grep -c '"link1"'], [0], [1
+AT_CHECK([grep '"monitor\|monitor_cond"' stderr | grep link2], [1])
+AT_CHECK([grep '"monitor\|monitor_cond"' stderr | grep l2], [1])
+AT_CHECK([grep '"monitor\|monitor_cond"' stderr | grep -c '"link1"'], [0], [1
 ])
-AT_CHECK([grep '"monitor\|monitor2"' stderr | grep -c '"ua"'], [0], [1
+AT_CHECK([grep '"monitor\|monitor_cond"' stderr | grep -c '"ua"'], [0], [1
 ])
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
@@ -630,12 +804,13 @@ m4_define([OVSDB_CHECK_IDL_FETCH_COLUMNS_PY],
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   on_exit 'kill `cat pid`'
    m4_if([$2], [], [],
-     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket [$3] $4],
-            [0], [stdout], [ignore], [kill `cat pid`])
+            [0], [stdout], [ignore])
    AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$7],,, [[| $7]]),
-            [0], [$5], [], [kill `cat pid`])
+            [0], [$5])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -670,18 +845,116 @@ OVSDB_CHECK_IDL_FETCH_COLUMNS([simple idl, initially populated],
 003: done
 ]])
 
+m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND_PY],
+  [AT_SETUP([$1 - Python])
+   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_KEYWORDS([ovsdb server idl Python monitor $4])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   AT_CHECK([ovs-appctl -t "`pwd`"/unixctl ovsdb-server/disable-monitor-cond])
+   AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$5],,, [[| $5]]),
+            [0], [$3], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+
+m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND],
+   [OVSDB_CHECK_IDL_WO_MONITOR_COND_PY($@)])
+
+
+OVSDB_CHECK_IDL_WO_MONITOR_COND([simple idl disable monitor-cond],
+  [['["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "mystring",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
+      {"op": "insert",
+       "table": "simple",
+       "row": {}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [],
+       "row": {"b": true}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [],
+       "row": {"r": 123.5}}]' \
+    '["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": -1,
+               "r": 125,
+               "b": false,
+               "s": "",
+               "ia": ["set", [1]],
+               "ra": ["set", [1.5]],
+               "ba": ["set", [false]],
+               "sa": ["set", []],
+               "ua": ["set", []]}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [["i", "<", 1]],
+       "row": {"s": "newstring"}}]' \
+    '["idltest",
+      {"op": "delete",
+       "table": "simple",
+       "where": [["i", "==", 0]]}]' \
+    'reconnect']],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
+002: i=0 r=0 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+002: i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+003: {"error":null,"result":[{"count":2}]}
+004: i=0 r=0 b=true s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+005: {"error":null,"result":[{"count":2}]}
+006: i=0 r=123.5 b=true s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+006: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+007: {"error":null,"result":[{"uuid":["uuid","<6>"]}]}
+008: i=-1 r=125 b=false s= u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+008: i=0 r=123.5 b=true s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+008: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+009: {"error":null,"result":[{"count":2}]}
+010: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+010: i=0 r=123.5 b=true s=newstring u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+010: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+011: {"error":null,"result":[{"count":1}]}
+012: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+012: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+013: reconnect
+014: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+014: i=1 r=123.5 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+015: done
+]])
+
 m4_define([OVSDB_CHECK_IDL_TRACK_C],
   [AT_SETUP([$1 - C])
    AT_KEYWORDS([ovsdb server idl tracking positive $5])
    AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
                   [0], [stdout], [ignore])
    AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   on_exit 'kill `cat pid`'
    m4_if([$2], [], [],
-     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore], [kill `cat pid`])])
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl unix:socket $3],
-            [0], [stdout], [ignore], [kill `cat pid`])
+            [0], [stdout], [ignore])
    AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
-            [0], [$4], [], [kill `cat pid`])
+            [0], [$4])
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
@@ -798,5 +1071,217 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
 014: i=1 r=123.5 b=true s=mystring u=<2> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<3> <4>] uuid=<0>
 014: updated columns: b ba i ia r ra s sa u ua
 014: updated columns: ba i ia r ra s
+015: done
+]])
+
+m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl partial update map column positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   on_exit 'kill `cat pid`'
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-partial-update-map-column unix:socket $3],
+            [0], [stdout], [ignore])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN([map, simple2 idl-partial-update-map-column, initially populated],
+[['["idltest", {"op":"insert", "table":"simple2",
+                "row":{"name":"myString1","smap":["map",[["key1","value1"],["key2","value2"]]]} }]']
+],
+[],
+[[000: Getting records
+001: name=myString1 smap=[[key1 : value1],[key2 : value2]] imap=[]
+002: After insert element
+003: name=String2 smap=[[key1 : myList1],[key2 : value2]] imap=[[3 : myids2]]
+004: After insert duplicated element
+005: name=String2 smap=[[key1 : myList1],[key2 : value2]] imap=[[3 : myids2]]
+006: After delete element
+007: name=String2 smap=[[key2 : value2]] imap=[[3 : myids2]]
+008: After trying to delete a deleted element
+009: name=String2 smap=[[key2 : value2]] imap=[[3 : myids2]]
+010: End test
+]])
+
+OVSDB_CHECK_IDL_PY([partial-map idl],
+[['["idltest", {"op":"insert", "table":"simple2",
+                "row":{"name":"myString1","smap":["map",[["key1","value1"],["key2","value2"]]]} }]']
+],
+  [?simple2:name,smap,imap 'partialmapinsertelement' 'partialmapinsertmultipleelements' 'partialmapdelelements'],
+[[000: name=myString1 smap=[(key1 value1) (key2 value2)] imap=[]
+001: commit, status=success
+002: name=String2 smap=[(key1 myList1) (key2 value2)] imap=[(3 myids2)]
+003: commit, status=success
+004: name=String2 smap=[(key1 myList1) (key2 myList2) (key3 myList3)] imap=[(3 myids2)]
+005: commit, status=success
+006: name=String2 smap=[(key2 myList2)] imap=[(3 myids2)]
+007: done
+]])
+
+m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_SET_COLUMN],
+  [AT_SETUP([$1 - C])
+   AT_KEYWORDS([ovsdb server idl partial update set column positive $5])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   on_exit 'kill `cat pid`'
+   m4_if([$2], [], [],
+     [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
+   AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-partial-update-set-column unix:socket $3],
+            [0], [stdout], [ignore])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
+            [0], [$4])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+OVSDB_CHECK_IDL_PARTIAL_UPDATE_SET_COLUMN([set, simple3 idl-partial-update-set-column, initially populated],
+[['["idltest", {"op":"insert", "table":"simple3",
+                "row":{"name":"mySet1","uset":["set", [[ "uuid", "0005b872-f9e5-43be-ae02-3184b9680e75" ], [ "uuid", "000d2f6a-76af-412f-b59d-e7bcd3e84eff" ]]]} }]']
+],
+[],
+[[000: Getting records
+001: name=mySet1 uset=[[<0>],[<1>]] uref=[]
+002: After rename+add new value
+003: name=String2 uset=[[<0>],[<1>],[<2>]] uref=[]
+004: After add new value
+005: name=String2 uset=[[<0>],[<1>],[<2>],[<3>]] uref=[]
+006: After delete value
+007: name=String2 uset=[[<0>],[<1>],[<3>]] uref=[]
+008: After trying to delete a deleted value
+009: name=String2 uset=[[<0>],[<1>],[<3>]] uref=[]
+010: After add to other table + set of strong ref
+011: name=String2 uset=[[<0>],[<1>],[<3>]] uref=[[<4>]]
+012: End test
+]])
+
+OVSDB_CHECK_IDL_PY([partial-set idl],
+[['["idltest", {"op":"insert", "table":"simple3",
+                "row":{"name":"mySet1","uset":["set", [[ "uuid", "0005b872-f9e5-43be-ae02-3184b9680e75" ], [ "uuid", "000d2f6a-76af-412f-b59d-e7bcd3e84eff" ]]]} }, {"op":"insert", "table":"simple4", "row":{"name":"seed"}}]']
+],
+  ['partialrenamesetadd' 'partialduplicateadd' 'partialsetdel' 'partialsetref' 'partialsetoverrideops'],
+[[000: name=mySet1 uset=[<0> <1>]
+001: commit, status=success
+002: name=String2 uset=[<0> <1> <2>]
+003: commit, status=success
+004: name=String2 uset=[<0> <1> <2> <3>]
+005: commit, status=success
+006: name=String2 uset=[<0> <1> <3>]
+007: commit, status=success
+008: name=String2 uset=[<0> <1> <3>]
+009: commit, status=success
+010: name=String2 uset=[<3>]
+011: done
+]])
+
+m4_define([OVSDB_CHECK_IDL_NOTIFY_PY],
+  [AT_SETUP([$1 - Python])
+   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   AT_KEYWORDS([ovsdb server idl Python notify $4])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+                  [0], [stdout], [ignore])
+   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$5],,, [[| $5]]),
+            [0], [$3], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
+
+
+m4_define([OVSDB_CHECK_IDL_NOTIFY],
+   [OVSDB_CHECK_IDL_NOTIFY_PY($@)])
+
+
+OVSDB_CHECK_IDL_NOTIFY([simple idl verify notify],
+  [['track-notify' \
+    '["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": 1,
+               "r": 2.0,
+               "b": true,
+               "s": "mystring",
+               "u": ["uuid", "84f5c8f5-ac76-4dbc-a24f-8860eb407fc1"],
+               "ia": ["set", [1, 2, 3]],
+               "ra": ["set", [-0.5]],
+               "ba": ["set", [true]],
+               "sa": ["set", ["abc", "def"]],
+               "ua": ["set", [["uuid", "69443985-7806-45e2-b35f-574a04e720f9"],
+                              ["uuid", "aad11ef0-816a-4b01-93e6-03b8b4256b98"]]]}},
+      {"op": "insert",
+       "table": "simple",
+       "row": {}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [],
+       "row": {"b": false}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [],
+       "row": {"r": 123.5}}]' \
+    '["idltest",
+      {"op": "insert",
+       "table": "simple",
+       "row": {"i": -1,
+               "r": 125,
+               "b": false,
+               "s": "",
+               "ia": ["set", [1]],
+               "ra": ["set", [1.5]],
+               "ba": ["set", [false]],
+               "sa": ["set", []],
+               "ua": ["set", []]}}]' \
+    '["idltest",
+      {"op": "update",
+       "table": "simple",
+       "where": [["i", "<", 1]],
+       "row": {"s": "newstring"}}]' \
+    '["idltest",
+      {"op": "delete",
+       "table": "simple",
+       "where": [["i", "==", 0]]}]' \
+    'reconnect']],
+  [[000: empty
+001: {"error":null,"result":[{"uuid":["uuid","<0>"]},{"uuid":["uuid","<1>"]}]}
+002: event:create, row={i=0 r=0 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>}, updates=None
+002: event:create, row={i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>}, updates=None
+002: i=0 r=0 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+002: i=1 r=2 b=true s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+003: {"error":null,"result":[{"count":2}]}
+004: event:update, row={i=1 r=2 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>}, updates={b=true uuid=<0>}
+004: i=0 r=0 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+004: i=1 r=2 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+005: {"error":null,"result":[{"count":2}]}
+006: event:update, row={i=0 r=123.5 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>}, updates={r=0 uuid=<1>}
+006: event:update, row={i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>}, updates={r=2 uuid=<0>}
+006: i=0 r=123.5 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+006: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+007: {"error":null,"result":[{"uuid":["uuid","<6>"]}]}
+008: event:create, row={i=-1 r=125 b=false s= u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>}, updates=None
+008: i=-1 r=125 b=false s= u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+008: i=0 r=123.5 b=false s= u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+008: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+009: {"error":null,"result":[{"count":2}]}
+010: event:update, row={i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>}, updates={s= uuid=<6>}
+010: event:update, row={i=0 r=123.5 b=false s=newstring u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>}, updates={s= uuid=<1>}
+010: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+010: i=0 r=123.5 b=false s=newstring u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>
+010: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+011: {"error":null,"result":[{"count":1}]}
+012: event:delete, row={i=0 r=123.5 b=false s=newstring u=<2> ia=[] ra=[] ba=[] sa=[] ua=[] uuid=<1>}, updates=None
+012: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+012: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
+013: reconnect
+014: event:create, row={i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>}, updates=None
+014: event:create, row={i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>}, updates=None
+014: i=-1 r=125 b=false s=newstring u=<2> ia=[1] ra=[1.5] ba=[false] sa=[] ua=[] uuid=<6>
+014: i=1 r=123.5 b=false s=mystring u=<3> ia=[1 2 3] ra=[-0.5] ba=[true] sa=[abc def] ua=[<4> <5>] uuid=<0>
 015: done
 ]])

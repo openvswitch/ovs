@@ -70,15 +70,19 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" />
   </ImportGroup>
   <ItemGroup Label="WrappedTaskItems">
+    <ClInclude Include="..\include\OvsDpInterfaceCtExt.h" />
     <ClInclude Include="..\include\OvsDpInterfaceExt.h" />
+    <ClInclude Include="Actions.h" />
     <ClInclude Include="Atomic.h" />
     <ClInclude Include="BufferMgmt.h" />
+    <ClInclude Include="Conntrack.h" />
     <ClInclude Include="Datapath.h" />
     <ClInclude Include="Debug.h" />
     <ClInclude Include="DpInternal.h" />
     <ClInclude Include="Ethernet.h" />
     <ClInclude Include="Event.h" />
     <ClInclude Include="Flow.h" />
+    <ClInclude Include="Geneve.h" />
     <ClInclude Include="Gre.h" />
     <ClInclude Include="IpHelper.h" />
     <ClInclude Include="Jhash.h" />
@@ -93,6 +97,7 @@
     <ClInclude Include="PacketIO.h" />
     <ClInclude Include="PacketParser.h" />
     <ClInclude Include="precomp.h" />
+    <ClInclude Include="Recirc.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Stt.h" />
     <ClInclude Include="Switch.h" />
@@ -173,10 +178,14 @@
   <ItemGroup>
     <ClCompile Include="Actions.c" />
     <ClCompile Include="BufferMgmt.c" />
+    <ClCompile Include="Conntrack-other.c" />
+    <ClCompile Include="Conntrack-tcp.c" />
+    <ClCompile Include="Conntrack.c" />
     <ClCompile Include="Debug.c" />
     <ClCompile Include="Driver.c" />
     <ClCompile Include="Event.c" />
     <ClCompile Include="Flow.c" />
+    <ClCompile Include="Geneve.c" />
     <ClCompile Include="Gre.c" />
     <ClCompile Include="IpHelper.c" />
     <ClCompile Include="Jhash.c" />
@@ -193,6 +202,7 @@
       <PreCompiledHeader>Create</PreCompiledHeader>
       <PreCompiledHeaderOutputFile>$(IntDir)\precomp.h.pch</PreCompiledHeaderOutputFile>
     </ClCompile>
+    <ClCompile Include="Recirc.c" />
     <ClCompile Include="Stt.c" />
     <ClCompile Include="Switch.c" />
     <ClCompile Include="Tunnel.c" />

@@ -31,10 +31,10 @@
 
 #include "command-line.h"
 #include "compiler.h"
-#include "dynamic-string.h"
+#include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
-#include "json.h"
+#include "openvswitch/json.h"
 #include "ovsdb-data.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
@@ -237,7 +237,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             }
             shash_add_nocopy(local_options,
                              xasprintf("--%s", options[idx].name),
-                             optarg ? xstrdup(optarg) : NULL);
+                             nullable_xstrdup(optarg));
             break;
 
         case 'h':
@@ -335,6 +335,8 @@ Logical Switch commands:\n\
   bind-ls PS PORT VLAN LS     bind LS to VLAN on PORT\n\
   unbind-ls PS PORT VLAN      unbind logical switch on VLAN from PORT\n\
   list-bindings PS PORT       list bindings for PORT on PS\n\
+  set-replication-mode LS MODE  set replication mode on LS\n\
+  get-replication-mode LS       get replication mode on LS\n\
 \n\
 Logical Router commands:\n\
   add-lr LR                   create a new logical router named LR\n\
@@ -521,7 +523,7 @@ add_port_to_cache(struct vtep_ctl_context *vtepctl_ctx,
     struct vtep_ctl_port *port;
 
     port = xmalloc(sizeof *port);
-    list_push_back(&ps->ports, &port->ports_node);
+    ovs_list_push_back(&ps->ports, &port->ports_node);
     port->port_cfg = port_cfg;
     port->ps = ps;
     shash_add(&vtepctl_ctx->ports, cache_name, port);
@@ -537,7 +539,7 @@ del_cached_port(struct vtep_ctl_context *vtepctl_ctx,
 {
     char *cache_name = xasprintf("%s+%s", port->ps->name, port->port_cfg->name);
 
-    list_remove(&port->ports_node);
+    ovs_list_remove(&port->ports_node);
     shash_find_and_delete(&vtepctl_ctx->ports, cache_name);
     vteprec_physical_port_delete(port->port_cfg);
     free(cache_name);
@@ -551,7 +553,7 @@ add_pswitch_to_cache(struct vtep_ctl_context *vtepctl_ctx,
     struct vtep_ctl_pswitch *ps = xmalloc(sizeof *ps);
     ps->ps_cfg = ps_cfg;
     ps->name = xstrdup(ps_cfg->name);
-    list_init(&ps->ports);
+    ovs_list_init(&ps->ports);
     shash_add(&vtepctl_ctx->pswitches, ps->name, ps);
 }
 
@@ -576,7 +578,7 @@ vtep_delete_pswitch(const struct vteprec_global *vtep_global,
 static void
 del_cached_pswitch(struct vtep_ctl_context *ctx, struct vtep_ctl_pswitch *ps)
 {
-    ovs_assert(list_is_empty(&ps->ports));
+    ovs_assert(ovs_list_is_empty(&ps->ports));
     if (ps->ps_cfg) {
         vteprec_physical_switch_delete(ps->ps_cfg);
         vtep_delete_pswitch(ctx->vtep_global, ps->ps_cfg);
@@ -723,7 +725,7 @@ add_ploc_to_mcast_mac(struct vtep_ctl_mcast_mac *mcast_mac,
 
     ploc = xmalloc(sizeof *ploc);
     ploc->ploc_cfg = ploc_cfg;
-    list_push_back(&mcast_mac->locators, &ploc->locators_node);
+    ovs_list_push_back(&mcast_mac->locators, &ploc->locators_node);
 }
 
 static void
@@ -734,7 +736,7 @@ del_ploc_from_mcast_mac(struct vtep_ctl_mcast_mac *mcast_mac,
 
     LIST_FOR_EACH (ploc, locators_node, &mcast_mac->locators) {
         if (ploc->ploc_cfg == ploc_cfg) {
-            list_remove(&ploc->locators_node);
+            ovs_list_remove(&ploc->locators_node);
             free(ploc);
             return;
         }
@@ -755,7 +757,7 @@ add_mcast_mac_to_cache(struct vtep_ctl_context *vtepctl_ctx,
     mcast_shash = local ? &ls->mcast_local : &ls->mcast_remote;
 
     mcast_mac->ploc_set_cfg = ploc_set_cfg;
-    list_init(&mcast_mac->locators);
+    ovs_list_init(&mcast_mac->locators);
     shash_add(mcast_shash, mac, mcast_mac);
 
     for (i = 0; i < ploc_set_cfg->n_locators; i++) {
@@ -851,6 +853,8 @@ pre_get_info(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &vteprec_physical_port_col_vlan_bindings);
 
     ovsdb_idl_add_column(ctx->idl, &vteprec_logical_switch_col_name);
+    ovsdb_idl_add_column(ctx->idl,
+                         &vteprec_logical_switch_col_replication_mode);
 
     ovsdb_idl_add_column(ctx->idl, &vteprec_logical_router_col_name);
 
@@ -1523,6 +1527,39 @@ cmd_unbind_ls(struct ctl_context *ctx)
     vtep_ctl_context_invalidate_cache(ctx);
 }
 
+static void
+cmd_set_replication_mode(struct ctl_context *ctx)
+{
+    struct vtep_ctl_context *vtepctl_ctx = vtep_ctl_context_cast(ctx);
+    struct vtep_ctl_lswitch *ls;
+    const char *ls_name = ctx->argv[1];
+
+    vtep_ctl_context_populate_cache(ctx);
+
+    if (strcmp(ctx->argv[2], "service_node") &&
+        strcmp(ctx->argv[2], "source_node")) {
+        ctl_fatal("Replication mode must be 'service_node' or 'source_node'");
+    }
+
+    ls = find_lswitch(vtepctl_ctx, ls_name, true);
+    vteprec_logical_switch_set_replication_mode(ls->ls_cfg, ctx->argv[2]);
+
+    vtep_ctl_context_invalidate_cache(ctx);
+}
+
+static void
+cmd_get_replication_mode(struct ctl_context *ctx)
+{
+    struct vtep_ctl_context *vtepctl_ctx = vtep_ctl_context_cast(ctx);
+    struct vtep_ctl_lswitch *ls;
+    const char *ls_name = ctx->argv[1];
+
+    vtep_ctl_context_populate_cache(ctx);
+
+    ls = find_lswitch(vtepctl_ctx, ls_name, true);
+    ds_put_format(&ctx->output, "%s\n", ls->ls_cfg->replication_mode);
+}
+
 static struct vtep_ctl_lrouter *
 find_lrouter(struct vtep_ctl_context *vtepctl_ctx,
              const char *name, bool must_exist)
@@ -1732,7 +1769,7 @@ commit_mcast_entries(struct vtep_ctl_mcast_mac *mcast_mac)
     size_t n_locators;
     int i;
 
-    n_locators = list_size(&mcast_mac->locators);
+    n_locators = ovs_list_size(&mcast_mac->locators);
     ovs_assert(n_locators);
 
     locators = xmalloc(n_locators * sizeof *locators);
@@ -1841,7 +1878,7 @@ del_mcast_entry(struct ctl_context *ctx,
     mcast_mac->ploc_set_cfg = ploc_set_cfg;
 
     del_ploc_from_mcast_mac(mcast_mac, ploc_cfg);
-    if (list_is_empty(&mcast_mac->locators)) {
+    if (ovs_list_is_empty(&mcast_mac->locators)) {
         struct shash_node *node = shash_find(mcast_shash, mac);
 
         vteprec_physical_locator_set_delete(ploc_set_cfg);
@@ -2459,6 +2496,10 @@ static const struct ctl_command_syntax vtep_commands[] = {
     {"list-bindings", 2, 2, NULL, pre_get_info, cmd_list_bindings, NULL, "", RO},
     {"bind-ls", 4, 4, NULL, pre_get_info, cmd_bind_ls, NULL, "", RO},
     {"unbind-ls", 3, 3, NULL, pre_get_info, cmd_unbind_ls, NULL, "", RO},
+    {"set-replication-mode", 2, 2, "LS MODE", pre_get_info,
+        cmd_set_replication_mode, NULL, "", RW},
+    {"get-replication-mode", 1, 1, "LS", pre_get_info,
+        cmd_get_replication_mode, NULL, "", RO},
 
     /* Logical Router commands. */
     {"add-lr", 1, 1, NULL, pre_get_info, cmd_add_lr, NULL, "--may-exist", RW},

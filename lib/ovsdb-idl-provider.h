@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,13 @@
 #ifndef OVSDB_IDL_PROVIDER_H
 #define OVSDB_IDL_PROVIDER_H 1
 
-#include "hmap.h"
-#include "list.h"
+#include "openvswitch/hmap.h"
+#include "openvswitch/list.h"
 #include "ovsdb-idl.h"
+#include "ovsdb-map-op.h"
+#include "ovsdb-set-op.h"
 #include "ovsdb-types.h"
-#include "shash.h"
+#include "openvswitch/shash.h"
 #include "uuid.h"
 
 struct ovsdb_idl_row {
@@ -36,6 +38,10 @@ struct ovsdb_idl_row {
     unsigned long int *prereqs; /* Bitmap of columns to verify in "old". */
     unsigned long int *written; /* Bitmap of columns from "new" to write. */
     struct hmap_node txn_node;  /* Node in ovsdb_idl_txn's list. */
+    unsigned long int *map_op_written; /* Bitmap of columns pending map ops. */
+    struct map_op_list **map_op_lists; /* Per-column map operations. */
+    unsigned long int *set_op_written; /* Bitmap of columns pending set ops. */
+    struct set_op_list **set_op_lists; /* Per-column set operations. */
 
     /* Tracking data */
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
@@ -60,6 +66,11 @@ struct ovsdb_idl_table_class {
     void (*row_init)(struct ovsdb_idl_row *);
 };
 
+struct ovsdb_idl_condition {
+    const struct ovsdb_idl_table_class *tc;
+    struct ovs_list clauses;
+};
+
 struct ovsdb_idl_table {
     const struct ovsdb_idl_table_class *class;
     unsigned char *modes;    /* OVSDB_IDL_* bitmasks, indexed by column. */
@@ -70,6 +81,8 @@ struct ovsdb_idl_table {
     struct ovsdb_idl *idl;   /* Containing idl. */
     unsigned int change_seqno[OVSDB_IDL_CHANGE_MAX];
     struct ovs_list track_list; /* Tracked rows (ovsdb_idl_row.track_node). */
+    struct ovsdb_idl_condition condition;
+    bool cond_changed;
 };
 
 struct ovsdb_idl_class {

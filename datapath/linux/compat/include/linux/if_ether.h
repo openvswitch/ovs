@@ -11,4 +11,9 @@
 #define ETH_P_8021AD    0x88A8          /* 802.1ad Service VLAN         */
 #endif
 
+#define inner_eth_hdr rpl_inner_eth_hdr
+static inline struct ethhdr *inner_eth_hdr(const struct sk_buff *skb)
+{
+	return (struct ethhdr *)skb_inner_mac_header(skb);
+}
 #endif

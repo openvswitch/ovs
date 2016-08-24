@@ -55,6 +55,18 @@ is not a good directory to use.
 This option has no effect when \fB\-\-detach\fR is not specified.
 .
 .TP
+\fB\-\-no\-self\-confinement\fR
+By default daemon will try to self-confine itself to work with
+files under well-know, at build-time whitelisted directories.  It
+is better to stick with this default behavior and not to use this
+flag unless some other Access Control is used to confine daemon.
+Note that in contrast to other access control implementations that
+are typically enforced from kernel-space (e.g. DAC or MAC),
+self-confinement is imposed from the user-space daemon itself and
+hence should not be considered as a full confinement strategy, but
+instead should be viewed as an additional layer of security.
+.
+.TP
 \fB\-\-user\fR
 Causes \fB\*(PN\fR to run as a different user specified in "user:group", thus
 dropping most of the root privileges. Short forms "user" and ":group" are also

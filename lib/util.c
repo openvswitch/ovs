@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -149,6 +149,18 @@ char *
 xstrdup(const char *s)
 {
     return xmemdup0(s, strlen(s));
+}
+
+char * MALLOC_LIKE
+nullable_xstrdup(const char *s)
+{
+    return s ? xstrdup(s) : NULL;
+}
+
+bool
+nullable_string_is_equal(const char *a, const char *b)
+{
+    return a ? b && !strcmp(a, b) : !b;
 }
 
 char *
@@ -413,6 +425,21 @@ ovs_strerror(int error)
     char *buffer;
     char *s;
 
+    if (error == 0) {
+        /*
+         * strerror(0) varies among platforms:
+         *
+         *   Success
+         *   No error
+         *   Undefined error: 0
+         *
+         * We want to provide a consistent result here because
+         * our testsuite has test cases which strictly matches
+         * log messages containing this string.
+         */
+        return "Success";
+    }
+
     save_errno = errno;
     buffer = strerror_buffer_get()->s;
 
@@ -446,14 +473,9 @@ ovs_strerror(int error)
  * vSwitch.  Otherwise, it is assumed to be an external program linking against
  * the Open vSwitch libraries.
  *
- * The 'date' and 'time' arguments should likely be called with
- * "__DATE__" and "__TIME__" to use the time the binary was built.
- * Alternatively, the "ovs_set_program_name" macro may be called to do this
- * automatically.
  */
 void
-ovs_set_program_name__(const char *argv0, const char *version, const char *date,
-                       const char *time)
+ovs_set_program_name(const char *argv0, const char *version)
 {
     char *basename;
 #ifdef _WIN32
@@ -481,14 +503,12 @@ ovs_set_program_name__(const char *argv0, const char *version, const char *date,
 
     free(program_version);
     if (!strcmp(version, VERSION)) {
-        program_version = xasprintf("%s (Open vSwitch) "VERSION"\n"
-                                    "Compiled %s %s\n",
-                                    program_name, date, time);
+        program_version = xasprintf("%s (Open vSwitch) "VERSION"\n",
+                                    program_name);
     } else {
         program_version = xasprintf("%s %s\n"
-                                    "Open vSwitch Library "VERSION"\n"
-                                    "Compiled %s %s\n",
-                                    program_name, version, date, time);
+                                    "Open vSwitch Library "VERSION"\n",
+                                    program_name, version);
     }
 }
 
@@ -900,12 +920,19 @@ base_name(const char *file_name)
  * which itself must be absolute.  'dir' may be null or the empty string, in
  * which case the current working directory is used.
  *
+ * Additionally on Windows, if 'file_name' has a ':', returns a copy of
+ * 'file_name'
+ *
  * Returns a null pointer if 'dir' is null and getcwd() fails. */
 char *
 abs_file_name(const char *dir, const char *file_name)
 {
     if (file_name[0] == '/') {
         return xstrdup(file_name);
+#ifdef _WIN32
+    } else if (strchr(file_name, ':')) {
+        return xstrdup(file_name);
+#endif
     } else if (dir && dir[0]) {
         char *separator = dir[strlen(dir) - 1] == '/' ? "" : "/";
         return xasprintf("%s%s%s", dir, separator, file_name);
@@ -1400,14 +1427,45 @@ bitwise_scan(const void *p, unsigned int len, bool target, unsigned int start,
 int
 bitwise_rscan(const void *p, unsigned int len, bool target, int start, int end)
 {
+    const uint8_t *s = p;
+    int start_byte = len - (start / 8 + 1);
+    int end_byte = len - (end / 8 + 1);
+    int ofs_byte;
     int ofs;
+    uint8_t the_byte;
 
-    for (ofs = start; ofs > end; ofs--) {
-        if (bitwise_get_bit(p, len, ofs) == target) {
+    /* Find the target in the start_byte from starting offset */
+    ofs_byte = start_byte;
+    the_byte = s[ofs_byte];
+    for (ofs = start % 8; ofs >= 0; ofs--) {
+        if (((the_byte & (1u << ofs)) != 0) == target) {
             break;
         }
     }
-    return ofs;
+    if (ofs < 0) {
+        /* Target not found in start byte, continue searching byte by byte */
+        for (ofs_byte = start_byte + 1; ofs_byte <= end_byte; ofs_byte++) {
+            if ((target && s[ofs_byte])
+                    || (!target && (s[ofs_byte] != 0xff))) {
+               break;
+            }
+        }
+        if (ofs_byte > end_byte) {
+            return end;
+        }
+        the_byte = s[ofs_byte];
+        /* Target is in the_byte, find it bit by bit */
+        for (ofs = 7; ofs >= 0; ofs--) {
+            if (((the_byte & (1u << ofs)) != 0) == target) {
+                break;
+            }
+        }
+    }
+    int ret = (len - ofs_byte) * 8 - (8 - ofs);
+    if (ret < end) {
+        return end;
+    }
+    return ret;
 }
 
 /* Copies the 'n_bits' low-order bits of 'value' into the 'n_bits' bits
@@ -2041,6 +2099,17 @@ xsleep(unsigned int seconds)
     ovsrcu_quiesce_end();
 }
 
+/* Determine whether standard output is a tty or not. This is useful to decide
+ * whether to use color output or not when --color option for utilities is set
+ * to `auto`.
+ */
+bool
+is_stdout_a_tty(void)
+{
+    char const *t = getenv("TERM");
+    return (isatty(STDOUT_FILENO) && t && strcmp(t, "dumb") != 0);
+}
+
 #ifdef _WIN32
 
 char *
@@ -2048,6 +2117,11 @@ ovs_format_message(int error)
 {
     enum { BUFSIZE = sizeof strerror_buffer_get()->s };
     char *buffer = strerror_buffer_get()->s;
+
+    if (error == 0) {
+        /* See ovs_strerror */
+        return "Success";
+    }
 
     FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
                   NULL, error, 0, buffer, BUFSIZE, NULL);

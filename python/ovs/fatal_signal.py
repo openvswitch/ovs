@@ -15,6 +15,7 @@
 import atexit
 import os
 import signal
+import sys
 
 import ovs.vlog
 
@@ -128,9 +129,35 @@ def _init():
     global _inited
     if not _inited:
         _inited = True
+        if sys.platform == "win32":
+            signals = [signal.SIGTERM, signal.SIGINT]
+        else:
+            signals = [signal.SIGTERM, signal.SIGINT, signal.SIGHUP,
+                       signal.SIGALRM]
 
-        for signr in (signal.SIGTERM, signal.SIGINT,
-                      signal.SIGHUP, signal.SIGALRM):
+        for signr in signals:
             if signal.getsignal(signr) == signal.SIG_DFL:
                 signal.signal(signr, _signal_handler)
         atexit.register(_atexit_handler)
+
+
+def signal_alarm(timeout):
+    if sys.platform == "win32":
+        import os
+        import time
+        import threading
+
+        class Alarm (threading.Thread):
+            def __init__(self, timeout):
+                super(Alarm, self).__init__()
+                self.timeout = timeout
+                self.setDaemon(True)
+
+            def run(self):
+                time.sleep(self.timeout)
+                os._exit(1)
+
+        alarm = Alarm(timeout)
+        alarm.start()
+    else:
+        signal.alarm(timeout)

@@ -17,7 +17,7 @@
 #ifndef HMAPX_H
 #define HMAPX_H
 
-#include "hmap.h"
+#include "openvswitch/hmap.h"
 
 struct hmapx_node {
     struct hmap_node hmap_node;

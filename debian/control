@@ -14,7 +14,6 @@ Build-Depends: graphviz,
                openssl,
                procps,
                python-all (>= 2.7),
-               python-qt4,
                python-twisted-conch,
                python-zopeinterface,
                python-six
@@ -63,6 +62,8 @@ Depends: openssl,
          ${misc:Depends},
          ${shlibs:Depends}
 Suggests: ethtool
+Replaces: openvswitch-switch (<< 2.5.90)
+Breaks: openvswitch-switch (<< 2.5.90)
 Description: Open vSwitch common components
  Open vSwitch is a production quality, multilayer, software-based,
  Ethernet virtual switch. It is designed to enable massive network
@@ -111,6 +112,21 @@ Description: OVN common components
  overlays and security groups.
  .
  ovn-common provides components required by other OVN packages.
+
+Package: ovn-controller-vtep
+Architecture: linux-any
+Depends: ovn-common (= ${binary:Version}),
+         ${misc:Depends},
+         ${shlibs:Depends}
+Description: OVN vtep controller
+ ovn-controller-vtep is the local controller daemon in
+ OVN, the Open Virtual Network, for VTEP enabled physical switches.
+ It connects up to the OVN Southbound database over the OVSDB protocol,
+ and down to the VTEP database over the OVSDB protocol.
+ .
+ ovn-controller-vtep provides the ovn-controller-vtep binary for controlling
+ vtep gateways.
+
 
 Package: ovn-host
 Architecture: linux-any
@@ -239,7 +255,7 @@ Description: Debug symbols for Open vSwitch packages
 Package: python-openvswitch
 Architecture: all
 Section: python
-Depends: ${misc:Depends}, ${python:Depends}
+Depends: ${misc:Depends}, ${python:Depends}, python-six
 Description: Python bindings for Open vSwitch
  Open vSwitch is a production quality, multilayer, software-based,
  Ethernet virtual switch. It is designed to enable massive network
@@ -288,3 +304,19 @@ Description: Open vSwitch VTEP utilities
  .
  This package provides utilities that are useful to interact with a
  VTEP-configured database and a VTEP emulator.
+
+Package: openvswitch-dev
+Architecture: linux-any
+Depends:
+ openvswitch-common (>= ${binary:Version}),
+ ${misc:Depends}
+Description: Open vSwitch development package
+ Open vSwitch is a production quality, multilayer, software-based, Ethernet
+ virtual switch. It is designed to enable massive network automation through
+ programmatic extension, while still supporting standard management interfaces
+ and protocols (e.g. NetFlow, sFlow, SPAN, RSPAN, CLI, LACP, 802.1ag). In
+ addition, it is designed to support distribution across multiple physical
+ servers similar to VMware's vNetwork distributed vswitch or Cisco's Nexus
+ 1000V.
+ .
+ This package provides openvswitch headers and libopenvswitch for developers.

@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<dl>
+  <dt><code>--pidfile</code>[<code>=</code><var>pidfile</var>]</dt>
+  <dd>
+    <p>
+      Causes a file (by default, <code><var>program</var>.pid</code>) to be
+      created indicating the PID of the running process.  If the
+      <var>pidfile</var> argument is not specified, or if it does not begin
+      with <code>/</code>, then it is created in <code>@RUNDIR@</code>.
+    </p>
+
+    <p>
+      If <code>--pidfile</code> is not specified, no pidfile is created.
+    </p>
+  </dd>
+
+  <dt><code>--overwrite-pidfile</code></dt>
+  <dd>
+    <p>
+      By default, when <code>--pidfile</code> is specified and the specified
+      pidfile already exists and is locked by a running process, the daemon
+      refuses to start.  Specify <code>--overwrite-pidfile</code> to cause it
+      to instead overwrite the pidfile.
+    </p>
+
+    <p>
+      When <code>--pidfile</code> is not specified, this option has no effect.
+    </p>
+  </dd>
+
+  <dt><code>--detach</code></dt>
+  <dd>
+    Runs this program as a background process.  The process forks, and in the
+    child it starts a new session, closes the standard file descriptors (which
+    has the side effect of disabling logging to the console), and changes its
+    current directory to the root (unless <code>--no-chdir</code> is
+    specified).  After the child completes its initialization, the parent
+    exits.
+  </dd>
+
+  <dt><code>--monitor</code></dt>
+  <dd>
+    <p>
+      Creates an additional process to monitor this program.  If it dies due to
+      a signal that indicates a programming error (<code>SIGABRT</code>,
+      <code>SIGALRM</code>, <code>SIGBUS</code>, <code>SIGFPE</code>,
+      <code>SIGILL</code>, <code>SIGPIPE</code>, <code>SIGSEGV</code>,
+      <code>SIGXCPU</code>, or <code>SIGXFSZ</code>) then the monitor process
+      starts a new copy of it.  If the daemon dies or exits for another reason,
+      the monitor process exits.
+    </p>
+
+    <p>
+      This option is normally used with <code>--detach</code>, but it also
+      functions without it.
+    </p>
+  </dd>
+
+  <dt><code>--no-chdir</code></dt>
+  <dd>
+    <p>
+      By default, when <code>--detach</code> is specified, the deamon changes
+      its current working directory to the root directory after it detaches.
+      Otherwise, invoking the daemon from a carelessly chosen directory would
+      prevent the administrator from unmounting the file system that holds that
+      directory.
+    </p>
+
+    <p>
+      Specifying <code>--no-chdir</code> suppresses this behavior, preventing
+      the daemon from changing its current working directory.  This may be
+      useful for collecting core files, since it is common behavior to write
+      core dumps into the current working directory and the root directory is
+      not a good directory to use.
+    </p>
+
+    <p>
+      This option has no effect when <code>--detach</code> is not specified.
+    </p>
+  </dd>
+
+  <dt><code>--no-self-confinement</code></dt>
+  <dd>
+    By default this daemon will try to self-confine itself to work with files
+    under well-known directories whitelisted at build time.  It is better to
+    stick with this default behavior and not to use this flag unless some other
+    Access Control is used to confine daemon.  Note that in contrast to other
+    access control implementations that are typically enforced from
+    kernel-space (e.g. DAC or MAC), self-confinement is imposed from the
+    user-space daemon itself and hence should not be considered as a full
+    confinement strategy, but instead should be viewed as an additional layer
+    of security.
+  </dd>
+
+  <dt><code>--user=</code><var>user</var><code>:</code><var>group</var></dt>
+  <dd>
+    <p>
+      Causes this program to run as a different user specified in
+      <var>user</var><code>:</code><var>group</var>, thus dropping most of the
+      root privileges. Short forms <var>user</var> and
+      <code>:</code><var>group</var> are also allowed, with current user or
+      group assumed, respectively.  Only daemons started by the root user
+      accepts this argument.
+    </p>
+
+    <p>
+      On Linux, daemons will be granted <code>CAP_IPC_LOCK</code> and
+      <code>CAP_NET_BIND_SERVICES</code> before dropping root privileges.
+      Daemons interact with datapath, such as <code>ovs-vswitchd</code>, will
+      be granted two additional capabilities, namely <code>CAP_NET_ADMIN</code>
+      and <code>CAP_NET_RAW</code>.  The capability change will apply even if
+      the new user is root.
+    </p>
+
+    <p>
+      On Windows, this option is not currently supported.  For security
+      reasons, specifying this option will cause the daemon process not to
+      start.
+    </p>
+  </dd>
+</dl>

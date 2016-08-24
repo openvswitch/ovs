@@ -22,8 +22,8 @@
 #include <netinet/in.h>
 #include "compiler.h"
 #include "flow.h"
-#include "meta-flow.h"
-#include "ofp-errors.h"
+#include "openvswitch/meta-flow.h"
+#include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 
 struct ds;
@@ -107,8 +107,6 @@ void nxm_format_reg_move(const struct ofpact_reg_move *, struct ds *);
 enum ofperr nxm_reg_move_check(const struct ofpact_reg_move *,
                                const struct flow *);
 
-void nxm_execute_reg_move(const struct ofpact_reg_move *, struct flow *,
-                          struct flow_wildcards *);
 void nxm_reg_load(const struct mf_subfield *, uint64_t src_data,
                   struct flow *, struct flow_wildcards *);
 

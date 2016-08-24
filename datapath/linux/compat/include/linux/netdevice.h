@@ -49,30 +49,6 @@ struct net;
 extern void dev_disable_lro(struct net_device *dev);
 #endif
 
-#if !defined HAVE_NETDEV_RX_HANDLER_REGISTER || \
-    defined HAVE_RHEL_OVS_HOOK
-
-#ifdef HAVE_RHEL_OVS_HOOK
-typedef struct sk_buff *(openvswitch_handle_frame_hook_t)(struct sk_buff *skb);
-extern openvswitch_handle_frame_hook_t *openvswitch_handle_frame_hook;
-
-#define netdev_rx_handler_register rpl_netdev_rx_handler_register
-int rpl_netdev_rx_handler_register(struct net_device *dev,
-				   openvswitch_handle_frame_hook_t *hook,
-				   void *rx_handler_data);
-#else
-
-#define netdev_rx_handler_register rpl_netdev_rx_handler_register
-int rpl_netdev_rx_handler_register(struct net_device *dev,
-				   struct sk_buff *(*netdev_hook)(struct net_bridge_port *p,
-							   struct sk_buff *skb),
-				   void *rx_handler_data);
-#endif
-
-#define netdev_rx_handler_unregister rpl_netdev_rx_handler_unregister
-void rpl_netdev_rx_handler_unregister(struct net_device *dev);
-#endif
-
 #ifndef HAVE_DEV_GET_BY_INDEX_RCU
 static inline struct net_device *dev_get_by_index_rcu(struct net *net, int ifindex)
 {
@@ -129,28 +105,15 @@ static inline bool netif_needs_gso(struct sk_buff *skb,
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,9,0)
-
-/* XEN dom0 networking assumes dev->master is bond device
- * and it tries to access bond private structure from dev->master
- * ptr on receive path. This causes panic. Therefore it is better
- * not to backport this API.
- **/
-static inline int netdev_master_upper_dev_link(struct net_device *dev,
-					       struct net_device *upper_dev)
+#ifndef HAVE_NETDEV_MASTER_UPPER_DEV_LINK_PRIV
+static inline int rpl_netdev_master_upper_dev_link(struct net_device *dev,
+					       struct net_device *upper_dev,
+					       void *upper_priv, void *upper_info)
 {
-	return 0;
+	return netdev_master_upper_dev_link(dev, upper_dev);
 }
+#define netdev_master_upper_dev_link rpl_netdev_master_upper_dev_link
 
-static inline void netdev_upper_dev_unlink(struct net_device *dev,
-					   struct net_device *upper_dev)
-{
-}
-
-static inline struct net_device *netdev_master_upper_dev_get(struct net_device *dev)
-{
-	return NULL;
-}
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,16,0)
@@ -166,16 +129,7 @@ static inline struct net_device *netdev_notifier_info_to_dev(void *info)
 #endif
 
 #ifndef HAVE_PCPU_SW_NETSTATS
-
-#include <linux/u64_stats_sync.h>
-
-struct pcpu_sw_netstats {
-	u64     rx_packets;
-	u64     rx_bytes;
-	u64     tx_packets;
-	u64     tx_bytes;
-	struct u64_stats_sync   syncp;
-};
+#define pcpu_sw_netstats pcpu_tstats
 #endif
 
 #if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(8,0)
@@ -258,12 +212,6 @@ static inline void *skb_gro_remcsum_process(struct sk_buff *skb, void *ptr,
 #define dev_get_stats rpl_dev_get_stats
 struct rtnl_link_stats64 *rpl_dev_get_stats(struct net_device *dev,
 					struct rtnl_link_stats64 *storage);
-
-#else
-#define HAVE_DEV_TSTATS
-#if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)
-#undef HAVE_DEV_TSTATS
-#endif
 #endif
 
 #if RHEL_RELEASE_CODE < RHEL_RELEASE_VERSION(7,0)
@@ -286,6 +234,44 @@ do {								\
 	printk(KERN_INFO format, ##args);			\
 } while (0)
 
+#endif
+
+#ifndef USE_UPSTREAM_TUNNEL
+#define dev_fill_metadata_dst ovs_dev_fill_metadata_dst
+int ovs_dev_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb);
+#endif
+
+#ifndef NETDEV_OFFLOAD_PUSH_VXLAN
+#define NETDEV_OFFLOAD_PUSH_VXLAN       0x001C
+#endif
+
+#ifndef NETDEV_OFFLOAD_PUSH_GENEVE
+#define NETDEV_OFFLOAD_PUSH_GENEVE      0x001D
+#endif
+
+#ifndef HAVE_IFF_PHONY_HEADROOM
+
+#define IFF_PHONY_HEADROOM 0
+static inline unsigned netdev_get_fwd_headroom(struct net_device *dev)
+{
+	return 0;
+}
+
+static inline void netdev_set_rx_headroom(struct net_device *dev, int new_hr)
+{
+}
+
+/* set the device rx headroom to the dev's default */
+static inline void netdev_reset_rx_headroom(struct net_device *dev)
+{
+}
+
+#endif
+
+#ifdef IFF_NO_QUEUE
+#define HAVE_IFF_NO_QUEUE
+#else
+#define IFF_NO_QUEUE 0
 #endif
 
 #endif /* __LINUX_NETDEVICE_WRAPPER_H */

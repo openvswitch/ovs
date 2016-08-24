@@ -30,6 +30,47 @@
     </dd>
   </dl>
 
+  <table name="NB_Global" title="Northbound configuration">
+    <p>
+      Northbound configuration for an OVN system.  This table must have exactly
+      one row.
+    </p>
+
+    <group title="Status">
+      These columns allow a client to track the overall configuration state of
+      the system.
+
+      <column name="nb_cfg">
+        Sequence number for client to increment.  When a client modifies any
+        part of the northbound database configuration and wishes to wait for
+        <code>ovn-northd</code> and possibly all of the hypervisors to finish
+        applying the changes, it may increment this sequence number.
+      </column>
+
+      <column name="sb_cfg">
+        Sequence number that <code>ovn-northd</code> sets to the value of <ref
+        column="nb_cfg"/> after it finishes applying the corresponding
+        configuration changes to the <ref db="OVN_Southbound"/> database.
+      </column>
+
+      <column name="hv_cfg">
+        Sequence number that <code>ovn-northd</code> sets to the smallest
+        sequence number of all the chassis in the system, as reported in the
+        <code>Chassis</code> table in the southbound database.  Thus, <ref
+        column="hv_cfg"/> equals <ref column="nb_cfg"/> if all chassis are
+        caught up with the northbound configuration (which may never happen, if
+        any chassis is down).  This value can regress, if a chassis was removed
+        from the system and rejoins before catching up.
+      </column>
+    </group>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
   <table name="Logical_Switch" title="L2 logical switch">
     <p>
       Each row represents one L2 logical switch.
@@ -69,9 +110,29 @@
       </p>
     </column>
 
+    <column name="load_balancer">
+      Load balance a virtual ipv4 address to a set of logical port endpoint
+      ipv4 addresses.
+    </column>
+
     <column name="acls">
       Access control rules that apply to packets within the logical switch.
     </column>
+
+    <group title="other_config">
+      <p>
+        Additional configuration options for the logical switch.
+      </p>
+
+      <column name="other_config" key="subnet">
+        Set this to an IPv4 subnet, e.g. <code>192.168.0.0/24</code>, to enable
+        <code>ovn-northd</code> to automatically assign IP addresses within
+        that subnet.  Use the <code>dynamic</code> keyword in the <ref
+        table="Logical_Switch_Port"/> table's <ref table="Logical_Switch_Port"
+        column="addresses"/> column to request dynamic address assignment for a
+        particular port.
+      </column>
+    </group>
 
     <group title="Common Columns">
       <column name="external_ids">
@@ -80,7 +141,7 @@
     </group>
   </table>
 
-  <table name="Logical_Port" title="L2 logical switch port">
+  <table name="Logical_Switch_Port" title="L2 logical switch port">
     <p>
       A port within an L2 logical switch.
     </p>
@@ -134,6 +195,11 @@
             to model direct connectivity to an existing network.
           </dd>
 
+          <dt><code>l2gateway</code></dt>
+          <dd>
+            A connection to a physical network.
+          </dd>
+
           <dt><code>vtep</code></dt>
           <dd>
             A port to a logical switch on a VTEP gateway.
@@ -154,17 +220,20 @@
           These options apply when <ref column="type"/> is <code>router</code>.
         </p>
 
-        <p>
-          If a given logical switch has multiple <code>router</code> ports, the
-          <ref table="Logical_Router_Port"/> rows that they reference must be
-          all on the same <ref table="Logical_Router"/> (for different
-          subnets).
-        </p>
-
         <column name="options" key="router-port">
           Required.  The <ref column="name"/> of the <ref
           table="Logical_Router_Port"/> to which this logical switch port is
           connected.
+        </column>
+
+        <column name="options" key="nat-addresses">
+          MAC address of the <code>router-port</code> followed by a list of
+          SNAT and DNAT IP addresses. This is used to send gratuitous ARPs for
+          SNAT and DNAT IP addresses via <code>localnet</code> and is valid for
+          only L3 gateway ports.  Example: <code>80:fa:5b:06:72:b7 158.36.44.22
+          158.36.44.24</code>. This would result in generation of gratuitous
+          ARPs for IP addresses 158.36.44.22 and 158.36.44.24 with a MAC
+          address of 80:fa:5b:06:72:b7.
         </column>
       </group>
 
@@ -180,6 +249,27 @@
           uses its local configuration to determine exactly how to connect to
           this locally accessible network.
         </column>
+      </group>
+
+      <group title="Options for l2gateway ports">
+        <p>
+          These options apply when <ref column="type"/> is
+          <code>l2gateway</code>.
+        </p>
+
+        <column name="options" key="network_name">
+          Required.  The name of the network to which the <code>l2gateway</code>
+          port is connected.  The L2 gateway, via <code>ovn-controller</code>,
+          uses its local configuration to determine exactly how to connect to
+          this network.
+        </column>
+
+        <column name="options" key="l2gateway-chassis">
+          Required. The chassis on which the <code>l2gateway</code> logical
+          port should be bound to. <code>ovn-controller</code> running on the
+          defined chassis will connect this logical port to the physical network.
+        </column>
+
       </group>
 
       <group title="Options for vtep ports">
@@ -234,7 +324,7 @@
       <column name="parent_name">
         The VM interface through which the nested container sends its network
         traffic.  This must match the <ref column="name"/> column for some
-        other <ref table="Logical_Port"/>.
+        other <ref table="Logical_Switch_Port"/>.
       </column>
 
       <column name="tag">
@@ -357,28 +447,244 @@
             ports) whose <ref column="addresses"/> columns include
             <code>unknown</code>.
           </dd>
+
+          <dt><code>dynamic</code></dt>
+          <dd>
+            Use this keyword to make <code>ovn-northd</code> generate a
+            globally unique MAC address and choose an unused IPv4 address with
+            the logical port's subnet and store them in the port's <ref
+            column="dynamic_addresses"/> column.  <code>ovn-northd</code> will
+            use the subnet specified in <ref table="Logical_Switch"
+            column="other_config" key="subnet"/> in the port's <ref
+            table="Logical_Switch"/>.
+          </dd>
         </dl>
+      </column>
+
+      <column name="dynamic_addresses">
+        <p>
+          Addresses assigned to the logical port by <code>ovn-northd</code>, if
+          <code>dynamic</code> is specified in <ref column="addresses"/>.
+          Addresses will be of the same format as those that populate the <ref
+          column="addresses"/> column.  Note that these addresses are
+          constructed and managed locally in ovn-northd, so they cannot be
+          reconstructed in the event that the database is lost.
+        </p>
       </column>
 
       <column name="port_security">
         <p>
-          A set of L2 (Ethernet) addresses from which the logical port is
-          allowed to send packets and to which it is allowed to receive
-          packets.  If this column is empty, all addresses are permitted.
-          Logical ports are always allowed to receive packets addressed to
-          multicast and broadcast addresses.
+          This column controls the addresses from which the host attached to the
+          logical port (``the host'') is allowed to send packets and to which it
+          is allowed to receive packets.  If this column is empty, all addresses
+          are permitted.
         </p>
 
         <p>
-          Each member of the set is an Ethernet address in the form
-          <var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>:<var>xx</var>.
+          Each element in the set must begin with one Ethernet address.
+          This would restrict the host to sending packets from and receiving
+          packets to the ethernet addresses defined in the logical port's
+          <ref column="port_security"/> column. It also restricts the inner
+          source MAC addresses that the host may send in ARP and IPv6
+          Neighbor Discovery packets. The host is always allowed to receive packets
+          to multicast and broadcast Ethernet addresses.
         </p>
 
         <p>
-          This specification will be extended to support L3 port security.
+          Each element in the set may additionally contain one or more IPv4 or
+          IPv6 addresses (or both), with optional masks.  If a mask is given, it
+          must be a CIDR mask.  In addition to the restrictions described for
+          Ethernet addresses above, such an element restricts the IPv4 or IPv6
+          addresses from which the host may send and to which it may receive
+          packets to the specified addresses.  A masked address, if the host part
+          is zero, indicates that the host is allowed to use any address in the
+          subnet; if the host part is nonzero, the mask simply indicates the size
+          of the subnet. In addition:
         </p>
+
+        <ul>
+          <li>
+            <p>
+              If any IPv4 address is given, the host is also allowed to receive
+              packets to the IPv4 local broadcast address 255.255.255.255 and to
+              IPv4 multicast addresses (224.0.0.0/4).  If an IPv4 address with a
+              mask is given, the host is also allowed to receive packets to the
+              broadcast address in that specified subnet.
+            </p>
+
+            <p>
+              If any IPv4 address is given, the host is additionally restricted
+              to sending ARP packets with the specified source IPv4 address.
+              (RARP is not restricted.)
+            </p>
+          </li>
+
+          <li>
+            <p>
+              If any IPv6 address is given, the host is also allowed to receive
+              packets to IPv6 multicast addresses (ff00::/8).
+            </p>
+
+            <p>
+              If any IPv6 address is given, the host is additionally restricted
+              to sending IPv6 Neighbor Discovery Solicitation or Advertisement
+              packets with the specified source address or, for solicitations,
+              the unspecified address.
+            </p>
+          </li>
+        </ul>
+
+        <p>
+          If an element includes an IPv4 address, but no IPv6 addresses, then
+          IPv6 traffic is not allowed.  If an element includes an IPv6 address,
+          but no IPv4 address, then IPv4 and ARP traffic is not allowed.
+        </p>
+
+        <p>
+          This column uses the same lexical syntax as the <ref column="match"
+          table="Pipeline" db="OVN_Southbound"/> column in the OVN Southbound
+          database's <ref table="Pipeline" db="OVN_Southbound"/> table.  Multiple
+          addresses within an element may be space or comma separated.
+        </p>
+
+        <p>
+          This column is provided as a convenience to cloud management systems,
+          but all of the features that it implements can be implemented as ACLs
+          using the <ref table="ACL"/> table.
+        </p>
+
+        <p>
+          Examples:
+        </p>
+
+        <dl>
+          <dt><code>80:fa:5b:06:72:b7</code></dt>
+          <dd>
+            The host may send traffic from and receive traffic to the specified
+            MAC address, and to receive traffic to Ethernet multicast and
+            broadcast addresses, but not otherwise.  The host may not send ARP or
+            IPv6 Neighbor Discovery packets with inner source Ethernet addresses
+            other than the one specified.
+          </dd>
+
+          <dt><code>80:fa:5b:06:72:b7 192.168.1.10/24</code></dt>
+          <dd>
+            This adds further restrictions to the first example.  The host may
+            send IPv4 packets from or receive IPv4 packets to only 192.168.1.10,
+            except that it may also receive IPv4 packets to 192.168.1.255 (based
+            on the subnet mask), 255.255.255.255, and any address in 224.0.0.0/4.
+            The host may not send ARPs with a source Ethernet address other than
+            80:fa:5b:06:72:b7 or source IPv4 address other than 192.168.1.10.
+            The host may not send or receive any IPv6 (including IPv6 Neighbor
+            Discovery) traffic.
+          </dd>
+
+          <dt><code>"80:fa:5b:12:42:ba", "80:fa:5b:06:72:b7 192.168.1.10/24"</code></dt>
+          <dd>
+            The host may send traffic from and receive traffic to the
+            specified MAC addresses, and
+            to receive traffic to Ethernet multicast and broadcast addresses,
+            but not otherwise.   With MAC 80:fa:5b:12:42:ba, the host may
+            send traffic from and receive traffic to any L3 address.
+            With MAC 80:fa:5b:06:72:b7, the host may send IPv4 packets from or
+            receive IPv4 packets to only 192.168.1.10, except that it may also
+            receive IPv4 packets to 192.168.1.255 (based on the subnet mask),
+            255.255.255.255, and any address in 224.0.0.0/4.  The host may not
+            send or receive any IPv6 (including IPv6 Neighbor Discovery) traffic.
+          </dd>
+        </dl>
       </column>
     </group>
+
+    <group title="Common Columns">
+      <column name="dhcpv4_options">
+        This column defines the DHCPv4 Options to be included by the
+        <code>ovn-controller</code> when it replies to the DHCPv4 requests.
+        Please see the <ref table="DHCP_Options"/> table.
+      </column>
+
+      <column name="dhcpv6_options">
+        This column defines the DHCPv6 Options to be included by the
+        <code>ovn-controller</code> when it replies to the DHCPv6 requests.
+        Please see the <ref table="DHCP_Options"/> table.
+      </column>
+
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="Address_Set" title="Address Sets">
+    <p>
+      Each row in this table represents a named set of addresses.
+      An address set may contain Ethernet, IPv4, or IPv6 addresses
+      with optional bitwise or CIDR masks.
+      Address set may ultimately be used in ACLs to compare against
+      fields such as <code>ip4.src</code> or <code>ip6.src</code>.
+      A single address set must contain addresses of the
+      same type. As an example, the following would create an address set
+      with three IP addresses:
+    </p>
+
+    <pre>
+      ovn-nbctl create Address_Set name=set1 addresses='10.0.0.1 10.0.0.2 10.0.0.3'
+    </pre>
+
+    <p>
+      Address sets may be used in the <ref column="match" table="ACL"/> column
+      of the <ref table="ACL"/> table.  For syntax information, see the details
+      of the expression language used for the <ref column="match"
+      table="Logical_Flow" db="OVN_Southbound"/> column in the <ref
+      table="Logical_Flow" db="OVN_Southbound"/> table of the <ref
+      db="OVN_Southbound"/> database.
+    </p>
+
+    <column name="name">
+      A name for the address set.  This must be unique among all address sets.
+    </column>
+
+    <column name="addresses">
+      The set of addresses in string form.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="Load_Balancer" title="load balancer">
+    <p>
+      Each row represents one load balancer.
+    </p>
+
+    <column name="vips">
+      <p>
+        A map of virtual IPv4 addresses (and an optional port number with
+        <code>:</code> as a separator) associated with this load balancer and
+        their corresponding endpoint IPv4 addresses (and optional port numbers
+        with <code>:</code> as separators) separated by commas.  If
+        the destination IP address (and port number) of a packet leaving a
+        container or a VM matches the virtual IPv4 address (and port number)
+        provided here as a key, then OVN will statefully replace the
+        destination IP address by one of the provided IPv4 address (and port
+        number) in this map as a value.  Examples for keys are "192.168.1.4"
+        and "172.16.1.8:80".  Examples for value are "10.0.0.1, 10.0.0.2" and
+        "20.0.0.10:8800, 20.0.0.11:8800".
+      </p>
+    </column>
+
+    <column name="protocol">
+      <p>
+        Valid protocols are <code>tcp</code> or <code>udp</code>.  This column
+        is useful when a port number is provided as part of the
+        <code>vips</code> column.  If this column is empty and a port number
+        is provided as part of <code>vips</code> column, OVN assumes the
+        protocol to be <code>tcp</code>.
+      </p>
+    </column>
 
     <group title="Common Columns">
       <column name="external_ids">
@@ -519,9 +825,44 @@
       The router's ports.
     </column>
 
-    <column name="default_gw">
-      IP address to use as default gateway, if any.
+    <column name="static_routes">
+      One or more static routes for the router.
     </column>
+
+    <column name="enabled">
+      This column is used to administratively set router state.  If this column
+      is empty or is set to <code>true</code>, the router is enabled.  If this
+      column is set to <code>false</code>, the router is disabled.  A disabled
+      router has all ingress and egress traffic dropped.
+    </column>
+
+    <column name="nat">
+      One or more NAT rules for the router. NAT rules only work on the
+      Gateway routers.
+    </column>
+
+    <group title="Options">
+      <p>
+        Additional options for the logical router.
+      </p>
+
+      <column name="options" key="chassis">
+        <p>
+          If set, indicates that the logical router in question is a Gateway
+          router (which is centralized) and resides in the set chassis.  The
+          same value is also used by <code>ovn-controller</code> to
+          uniquely identify the chassis in the OVN deployment and
+          comes from <code>external_ids:system-id</code> in the
+          <code>Open_vSwitch</code> table of Open_vSwitch database.
+        </p>
+
+        <p>
+          The Gateway router can only be connected to a distributed router
+          via a switch if SNAT and DNAT are to be configured in the Gateway
+          router.
+        </p>
+      </column>
+    </group>
 
     <group title="Common Columns">
       <column name="external_ids">
@@ -548,16 +889,24 @@
       <p>
         In addition to provide convenience for human interaction with the
         ovn-nb database, this column is used as reference by its patch port in
-        <ref table="Logical_Port"/> or another logical router port in <ref
-        table="Logical_Router_Port"/>.
+        <ref table="Logical_Switch_Port"/> or another logical router port in
+        <ref table="Logical_Router_Port"/>.
       </p>
     </column>
 
-    <column name="network">
-      The IP address of the router and the netmask.  For example,
-      <code>192.168.0.1/24</code> indicates that the router's IP address is
-      192.168.0.1 and that packets destined to 192.168.0.<var>x</var> should be
-      routed to this port.
+    <column name="networks">
+      <p>
+        The IP addresses and netmasks of the router.  For example,
+        <code>192.168.0.1/24</code> indicates that the router's IP
+        address is 192.168.0.1 and that packets destined to
+        192.168.0.<var>x</var> should be routed to this port.
+      </p>
+
+      <p>
+        A logical router port always adds a link-local IPv6 address
+        (fe80::/64) automatically generated from the interface's MAC
+        address using the modified EUI-64 format.
+      </p>
     </column>
 
     <column name="mac">
@@ -580,10 +929,11 @@
         <li>
           To attach a logical switch to a logical router.  A logical router
           port of this type is referenced by exactly one <ref
-          table="Logical_Port"/> of type <code>router</code>.  The value of
-          <ref column="name"/> is set as <code>router-port</code> in column
-          <ref column="options"/> of <ref table="Logical_Port"/>.
-          In this case <ref column="peer"/> column is empty.
+          table="Logical_Switch_Port"/> of type <code>router</code>.
+          The value of <ref column="name"/> is set as
+          <code>router-port</code> in column <ref column="options"/> of
+          <ref table="Logical_Switch_Port"/>.  In this case <ref
+          column="peer"/> column is empty.
         </li>
 
         <li>
@@ -605,6 +955,367 @@
           For a router port attached to a logical switch, this column is empty.
         </p>
       </column>
+    </group>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="Logical_Router_Static_Route" title="Logical router static routes">
+    <p>
+      Each record represents a static route.
+    </p>
+
+    <column name="ip_prefix">
+      <p>
+        IP prefix of this route (e.g. 192.168.100.0/24).
+      </p>
+    </column>
+
+    <column name="nexthop">
+      <p>
+        Nexthop IP address for this route.  Nexthop IP address should be the IP
+        address of a connected router port or the IP address of a logical port.
+      </p>
+    </column>
+
+    <column name="output_port">
+      <p>
+        The name of the <ref table="Logical_Router_Port"/> via which the packet
+        needs to be sent out.  This is optional and when not specified,
+        OVN will automatically figure this out based on the
+        <ref column="nexthop"/>.
+      </p>
+    </column>
+  </table>
+
+  <table name="NAT" title="NAT rules for a Gateway router.">
+    <p>
+      Each record represents a NAT rule in a Gateway router.
+    </p>
+
+    <column name="type">
+      <p>Type of the NAT rule.</p>
+      <ul>
+        <li>
+          When <ref column="type"/> is <code>dnat</code>, the externally
+          visible IP address <ref column="external_ip"/> is DNATted to the IP
+          address <ref column="logical_ip"/> in the logical space.
+        </li>
+        <li>
+          When <ref column="type"/> is <code>snat</code>, IP packets
+          with their source IP address that either matches the IP address
+          in <ref column="logical_ip"/> or is in the network provided by
+          <ref column="logical_ip"/> is SNATed into the IP address in
+          <ref column="external_ip"/>.
+        </li>
+        <li>
+          When <ref column="type"/> is <code>dnat_and_snat</code>, the
+          externally visible IP address <ref column="external_ip"/> is
+          DNATted to the IP address <ref column="logical_ip"/> in the
+          logical space. In addition, IP packets with the source IP
+          address that matches <ref column="logical_ip"/> is SNATed into
+          the IP address in <ref column="external_ip"/>.
+        </li>
+      </ul>
+    </column>
+
+    <column name="external_ip">
+      An IPv4 address.
+    </column>
+
+    <column name="logical_ip">
+      An IPv4 network (e.g 192.168.1.0/24) or an IPv4 address.
+    </column>
+  </table>
+
+  <table name="DHCP_Options" title="DHCP options">
+    <p>
+      OVN implements native DHCPv4 support which caters to the common
+      use case of providing an IPv4 address to a booting instance by
+      providing stateless replies to DHCPv4 requests based on statically
+      configured address mappings. To do this it allows a short list of
+      DHCPv4 options to be configured and applied at each compute host
+      running <code>ovn-controller</code>.
+    </p>
+
+    <p>
+      OVN also implements native DHCPv6 support which provides stateless
+      replies to DHCPv6 requests.
+    </p>
+
+    <column name="cidr">
+      <p>
+        The DHCPv4/DHCPv6 options will be included if the logical port has its
+        IP address in this <ref column="cidr"/>.
+      </p>
+    </column>
+
+    <group title="DHCPv4 options">
+      <p>
+        The CMS should define the set of DHCPv4 options as key/value pairs
+        in the <ref column="options"/> column of this table. For
+        <code>ovn-controller</code> to include these DHCPv4 options, the
+        <ref column="dhcpv4_options"/> of <ref table="Logical_Switch_Port"/>
+        should refer to an entry in this table.
+      </p>
+
+      <group title="Mandatory DHCPv4 options">
+        <p>
+          The following options must be defined.
+        </p>
+
+        <column name="options" key="server_id">
+          The IP address for the DHCP server to use.  This should be in the
+          subnet of the offered IP.  This is also included in the DHCP offer as
+          option 54, ``server identifier.''
+        </column>
+
+        <column name="options" key="server_mac">
+          The Ethernet address for the DHCP server to use.
+        </column>
+
+        <column name="options" key="router">
+          <p>
+            The IP address of a gateway for the client to use.  This should be
+            in the subnet of the offered IP.  The DHCPv4 option code for this
+            option is 3.
+          </p>
+        </column>
+
+        <column name="options" key="lease_time"
+                type='{"type": "integer", "minInteger": 0, "maxInteger": 4294967295}'>
+          <p>
+            The offered lease time in seconds, 
+          </p>
+
+          <p>
+            The DHCPv4 option code for this option is 51.
+          </p>
+        </column>
+      </group>
+
+      <group title="IPv4 DHCP Options">
+        <p>
+          Below are the supported DHCPv4 options whose values are an IPv4
+          address, e.g. <code>192.168.1.1</code>.  Some options accept multiple
+          IPv4 addresses enclosed within curly braces, e.g. <code>{192.168.1.2,
+          192.168.1.3}</code>. Please refer to RFC 2132 for more details on
+          DHCPv4 options and their codes.
+        </p>
+
+        <column name="options" key="netmask">
+          <p>
+            The DHCPv4 option code for this option is 1.
+          </p>
+        </column>
+
+        <column name="options" key="dns_server">
+          <p>
+            The DHCPv4 option code for this option is 6.
+          </p>
+        </column>
+
+        <column name="options" key="log_server">
+          <p>
+            The DHCPv4 option code for this option is 7.
+          </p>
+        </column>
+
+        <column name="options" key="lpr_server">
+          <p>
+            The DHCPv4 option code for this option is 9.
+          </p>
+        </column>
+
+        <column name="options" key="swap_server">
+          <p>
+            The DHCPv4 option code for this option is 16.
+          </p>
+        </column>
+
+        <column name="options" key="policy_filter">
+          <p>
+            The DHCPv4 option code for this option is 21.
+          </p>
+        </column>
+
+        <column name="options" key="router_solicitation">
+          <p>
+            The DHCPv4 option code for this option is 32.
+          </p>
+        </column>
+
+        <column name="options" key="nis_server">
+          <p>
+            The DHCPv4 option code for this option is 41.
+          </p>
+        </column>
+
+        <column name="options" key="ntp_server">
+          <p>
+            The DHCPv4 option code for this option is 42.
+          </p>
+        </column>
+
+        <column name="options" key="tftp_server">
+          <p>
+            The DHCPv4 option code for this option is 66.
+          </p>
+        </column>
+
+        <column name="options" key="classless_static_route">
+          <p>
+            The DHCPv4 option code for this option is 121.
+          </p>
+
+          <p>
+             This option can contain one or more static routes, each of which
+             consists of a destination descriptor and the IP address of the
+             router that should be used to reach that destination. Please see
+             RFC 3442 for more details.
+          </p>
+
+          <p>
+            Example: <code>{30.0.0.0/24,10.0.0.10, 0.0.0.0/0,10.0.0.1}</code>
+          </p>
+        </column>
+
+        <column name="options" key="ms_classless_static_route">
+          <p>
+            The DHCPv4 option code for this option is 249. This option is
+            similar to <code>classless_static_route</code> supported by
+            Microsoft Windows DHCPv4 clients.
+          </p>
+        </column>
+      </group>
+
+      <group title="Boolean DHCP Options">
+        <p>
+          These options accept a Boolean value, expressed as <code>0</code> for
+          false or <code>1</code> for true.
+        </p>
+
+        <column name="options" key="ip_forward_enable"
+                type='{"type": "string", "enum": ["set", ["0", "1"]]}'>
+          <p>
+            The DHCPv4 option code for this option is 19.
+          </p>
+        </column>
+
+        <column name="options" key="router_discovery"
+                type='{"type": "string", "enum": ["set", ["0", "1"]]}'>
+          <p>
+            The DHCPv4 option code for this option is 31.
+          </p>
+        </column>
+
+        <column name="options" key="ethernet_encap"
+                type='{"type": "string", "enum": ["set", ["0", "1"]]}'>
+          <p>
+            The DHCPv4 option code for this option is 36.
+          </p>
+        </column>
+      </group>
+
+      <group title="Integer DHCP Options">
+        <p>
+          These options accept a nonnegative integer value.
+        </p>
+
+        <column name="options" key="default_ttl"
+                type='{"type": "integer", "minInteger": 0, "maxInteger": 255}'>
+          The DHCPv4 option code for this option is 23.
+        </column>
+
+        <column name="options" key="tcp_ttl"
+                type='{"type": "integer", "minInteger": 0, "maxInteger": 255}'>
+          The DHCPv4 option code for this option is 37.
+        </column>
+
+        <column name="options" key="mtu"
+                type='{"type": "integer", "minInteger": 68, "maxInteger": 65535}'>
+          The DHCPv4 option code for this option is 26.
+        </column>
+
+        <column name="options" key="T1"
+                type='{"type": "integer", "minInteger": 68, "maxInteger": 4294967295}'>
+          This specifies the time interval from address assignment until the
+          client begins trying to renew its address.  The DHCPv4 option code
+          for this option is 58.
+        </column>
+
+        <column name="options" key="T2"
+                type='{"type": "integer", "minInteger": 68, "maxInteger": 4294967295}'>
+          This specifies the time interval from address assignment until the
+          client begins trying to rebind its address.  The DHCPv4 option code
+          for this option is 59.
+        </column>
+      </group>
+    </group>
+
+    <group title="DHCPv6 options">
+      <p>
+        OVN also implements native DHCPv6 support. The CMS should define
+        the set of DHCPv6 options as key/value pairs. The define DHCPv6
+        options will be included in the DHCPv6 response to the DHCPv6
+        Solicit/Request/Confirm packet from the logical ports having the
+        IPv6 addresses in the <ref column="cidr"/>.
+      </p>
+
+      <group title="Mandatory DHCPv6 options">
+        <p>
+          The following options must be defined.
+        </p>
+
+        <column name="options" key="server_id">
+          <p>
+            The Ethernet address for the DHCP server to use. This is also
+            included in the DHCPv6 reply as option 2, ``Server Identifier''
+            to carry a DUID identifying a server between a client and a server.
+            <code>ovn-controller</code> defines DUID based on
+            Link-layer Address [DUID-LL].
+          </p>
+        </column>
+      </group>
+
+      <group title="IPv6 DHCPv6 options">
+        <p>
+          Below are the supported DHCPv6 options whose values are an IPv6
+          address, e.g. <code>aef0::4</code>.  Some options accept multiple
+          IPv6 addresses enclosed within curly braces, e.g. <code>{aef0::4,
+          aef0::5}</code>. Please refer to RFC 3315 for more details on
+          DHCPv6 options and their codes.
+        </p>
+
+        <column name="options" key="dns_server">
+          <p>
+            The DHCPv6 option code for this option is 23. This option specifies
+            the DNS servers that the VM should use.
+          </p>
+        </column>
+      </group>
+
+      <group title="String DHCPv6 options">
+        <p>
+          These options accept string values.
+        </p>
+
+        <column name="options" key="domain_search">
+          <p>
+            The DHCPv6 option code for this option is 24. This option specifies
+            the domain search list the client should use to resolve hostnames
+            with DNS.
+          </p>
+
+          <p>
+            Example: <code>"ovn.org"</code>.
+          </p>
+        </column>
+      </group>
     </group>
 
     <group title="Common Columns">
