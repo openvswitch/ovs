@@ -117,6 +117,9 @@ def cMembers(prefix, tableName, columnName, column, const, refTable=True):
 
     return (comment, members)
 
+def sorted_columns(table):
+    return sorted(table.columns.items())
+
 def printCIDLHeader(schemaFile):
     schema = parseSchema(schemaFile)
     prefix = schema.idlPrefix
@@ -141,7 +144,7 @@ def printCIDLHeader(schemaFile):
         print "/* %s table. */" % tableName
         print "struct %s {" % structName
         print "\tstruct ovsdb_idl_row header_;"
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             print "\n\t/* %s column. */" % columnName
             comment, members = cMembers(prefix, tableName,
                                         columnName, column, False)
@@ -151,7 +154,7 @@ def printCIDLHeader(schemaFile):
 
         # Column indexes.
         printEnum("%s_column_id" % structName.lower(), ["%s_COL_%s" % (structName.upper(), columnName.upper())
-                   for columnName in sorted(table.columns)]
+                                                        for columnName, column in sorted_columns(table)]
                   + ["%s_N_COLUMNS" % structName.upper()])
 
         print
@@ -204,11 +207,11 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
 bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
 ''' % {'s': structName, 'S': structName.upper()}
 
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             print 'void %(s)s_verify_%(c)s(const struct %(s)s *);' % {'s': structName, 'c': columnName}
 
         print
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             if column.type.value:
                 valueParam = ', enum ovsdb_atomic_type value_type'
             else:
@@ -217,7 +220,7 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
                 's': structName, 'c': columnName, 'v': valueParam}
 
         print
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             print 'void %(s)s_set_%(c)s(const struct %(s)s *,' % {'s': structName, 'c': columnName},
             if column.type.is_smap():
                 args = ['const struct smap *']
@@ -228,7 +231,7 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
             print '%s);' % ', '.join(args)
 
         print
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             if column.type.is_map():
                 print 'void %(s)s_update_%(c)s_setkey(const struct %(s)s *, ' % {'s': structName, 'c': columnName},
                 print '%(coltype)s, %(valtype)s);' % {'coltype':column.type.key.to_const_c_type(prefix), 'valtype':column.type.value.to_const_c_type(prefix)}
@@ -253,7 +256,7 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
         print 'void %s_add_clause_false(struct ovsdb_idl *idl);' % structName
 
         print
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             print 'void %(s)s_remove_clause_%(c)s(struct ovsdb_idl *idl, enum ovsdb_function function,' % {'s': structName, 'c': columnName},
             if column.type.is_smap():
                 args = ['const struct smap *']
@@ -337,7 +340,7 @@ static struct %(s)s *
         print "/* %s table. */" % (tableName)
 
         # Parse functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             print '''
 static void
 %(s)s_parse_%(c)s(struct ovsdb_idl_row *row_, const struct ovsdb_datum *datum)
@@ -443,7 +446,7 @@ static void
             print "}"
 
         # Unparse functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             type = column.type
             if type.is_smap() or (type.n_min != 1 or type.n_max != 1) and not type.is_optional_pointer():
                 print '''
@@ -490,7 +493,7 @@ void
 %(s)s_init(struct %(s)s *row)
 {
     memset(row, 0, sizeof *row); """ % {'s': structName, 't': tableName}
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             if column.type.is_smap():
                 print "    smap_init(&row->%s);" % columnName
         print "}"
@@ -587,7 +590,7 @@ bool
         'T': tableName.upper()}
 
         # Verify functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             print '''
 /* Causes the original contents of column "%(c)s" in 'row' to be
  * verified as a prerequisite to completing the transaction.  That is, if
@@ -623,7 +626,7 @@ void
         'C': columnName.upper()}
 
         # Get functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             if column.type.value:
                 valueParam = ',\n\tenum ovsdb_atomic_type value_type OVS_UNUSED'
                 valueType = '\n    ovs_assert(value_type == %s);' % column.type.value.toAtomicType()
@@ -663,7 +666,7 @@ const struct ovsdb_datum *
        'v': valueParam, 'vt': valueType, 'vc': valueComment}
 
         # Set functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             type = column.type
 
             comment, members = cMembers(prefix, tableName, columnName,
@@ -783,7 +786,7 @@ const struct ovsdb_datum *
                    'C': columnName.upper()}
             print "}"
         # Update/Delete of partial map column functions
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             type = column.type
             if type.is_map():
                 print '''
@@ -904,7 +907,7 @@ void
         # End Update/Delete of partial set
 
         # Add clause functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             type = column.type
 
             comment, members = cMembers(prefix, tableName, columnName,
@@ -1066,7 +1069,7 @@ void
         'P': prefix.upper()}
 
         # Remove clause functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             type = column.type
 
             comment, members = cMembers(prefix, tableName, columnName,
@@ -1234,7 +1237,7 @@ static void\n%s_columns_init(void)
 {
     struct ovsdb_idl_column *c;\
 """ % structName
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             cs = "%s_col_%s" % (structName, columnName)
             d = {'cs': cs, 'c': columnName, 's': structName}
             if column.mutable:
