@@ -398,25 +398,27 @@ static void
                     print "    %s = NULL;" % valueVar
                 print "    row->n_%s = 0;" % columnName
                 print "    for (i = 0; i < %s; i++) {" % nMax
-                refs = []
                 if type.key.ref_table:
-                    print "        struct %s%s *keyRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[i].uuid));" % (prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower(), prefix, prefix.upper(), type.key.ref_table.name.upper())
+                    print """\
+        struct %s%s *keyRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[i].uuid));
+        if (!keyRow) {
+            continue;
+        }\
+""" % (prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower(), prefix, prefix.upper(), type.key.ref_table.name.upper())
                     keySrc = "keyRow"
-                    refs.append('keyRow')
                 else:
                     keySrc = "datum->keys[i].%s" % type.key.type.to_string()
                 if type.value and type.value.ref_table:
-                    print "        struct %s%s *valueRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[i].uuid));" % (prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower(), prefix, prefix.upper(), type.value.ref_table.name.upper())
+                    print """\
+        struct %s%s *valueRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[i].uuid));
+        if (!valueRow) {
+            continue;
+        }\
+""" % (prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower(), prefix, prefix.upper(), type.value.ref_table.name.upper())
                     valueSrc = "valueRow"
-                    refs.append('valueRow')
                 elif valueVar:
                     valueSrc = "datum->values[i].%s" % type.value.type.to_string()
-                if refs:
-                    print "        if (%s) {" % ' && '.join(refs)
-                    indent = "            "
-                else:
-                    indent = "        "
-                print "%sif (!row->n_%s) {" % (indent, columnName)
+                print "        if (!row->n_%s) {" % (columnName)
 
                 # Special case for boolean types.  This is only here because
                 # sparse does not like the "normal" case ("warning: expression
@@ -425,23 +427,21 @@ static void
                     sizeof = "sizeof_bool"
                 else:
                     sizeof = "sizeof *%s" % keyVar
-                print "%s    %s = xmalloc(%s * %s);" % (indent, keyVar, nMax,
-                                                        sizeof)
+                print "            %s = xmalloc(%s * %s);" % (keyVar, nMax,
+                                                              sizeof)
                 if valueVar:
                     # Special case for boolean types (see above).
                     if type.value.type == ovs.db.types.BooleanType:
                         sizeof = " * sizeof_bool"
                     else:
                         sizeof = "sizeof *%s" % valueVar
-                    print "%s    %s = xmalloc(%s * %s);" % (indent, valueVar,
-                                                            nMax, sizeof)
-                print "%s}" % indent
-                print "%s%s[row->n_%s] = %s;" % (indent, keyVar, columnName, keySrc)
+                    print "            %s = xmalloc(%s * %s);" % (valueVar,
+                                                                  nMax, sizeof)
+                print "        }"
+                print "        %s[row->n_%s] = %s;" % (keyVar, columnName, keySrc)
                 if valueVar:
-                    print "%s%s[row->n_%s] = %s;" % (indent, valueVar, columnName, valueSrc)
-                print "%srow->n_%s++;" % (indent, columnName)
-                if refs:
-                    print "        }"
+                    print "        %s[row->n_%s] = %s;" % (valueVar, columnName, valueSrc)
+                print "        row->n_%s++;" % columnName
                 print "    }"
             print "}"
 
