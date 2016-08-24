@@ -404,6 +404,7 @@ consider_logical_flow(const struct lport_index *lports,
         VLOG_WARN_RL(&rl, "error parsing actions \"%s\": %s",
                      lflow->actions, error);
         free(error);
+        ovnacts_free(ovnacts.data, ovnacts.size);
         ofpbuf_uninit(&ovnacts);
         return;
     }
@@ -428,6 +429,7 @@ consider_logical_flow(const struct lport_index *lports,
         .mac_bind_ptable = OFTABLE_MAC_BINDING,
     };
     ovnacts_encode(ovnacts.data, ovnacts.size, &ep, &ofpacts);
+    ovnacts_free(ovnacts.data, ovnacts.size);
     ofpbuf_uninit(&ovnacts);
 
     /* Translate OVN match into table of OpenFlow matches. */
