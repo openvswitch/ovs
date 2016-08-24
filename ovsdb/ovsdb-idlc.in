@@ -621,7 +621,7 @@ void
 %(s)s_verify_%(c)s(const struct %(s)s *row)
 {
     ovs_assert(inited);
-    ovsdb_idl_txn_verify(&row->header_, &%(s)s_columns[%(S)s_COL_%(C)s]);
+    ovsdb_idl_txn_verify(&row->header_, &%(s)s_col_%(c)s);
 }''' % {'s': structName,
         'S': structName.upper(),
         'c': columnName,
@@ -688,7 +688,7 @@ const struct ovsdb_datum *
         ovsdb_datum_init_empty(&datum);
     }
     ovsdb_idl_txn_write(&row->header_,
-                        &%(s)s_columns[%(S)s_COL_%(C)s],
+                        &%(s)s_col_%(c)s,
                         &datum);
 }
 """ % {'t': tableName,
@@ -781,11 +781,11 @@ const struct ovsdb_datum *
                 print "    ovsdb_datum_sort_unique(&datum, %s, %s);" % (
                     type.key.toAtomicType(), valueType)
                 txn_write_func = "ovsdb_idl_txn_write"
-            print "    %(f)s(&row->header_, &%(s)s_columns[%(S)s_COL_%(C)s], &datum);" \
+            print "    %(f)s(&row->header_, &%(s)s_col_%(c)s, &datum);" \
                 % {'f': txn_write_func,
                    's': structName,
                    'S': structName.upper(),
-                   'C': columnName.upper()}
+                   'c': columnName}
             print "}"
         # Update/Delete of partial map column functions
         for columnName, column in sorted_columns(table):
@@ -815,11 +815,10 @@ void
                 print "    "+ type.value.copyCValue("datum->values[0].%s" % type.value.type.to_string(), "new_value")
                 print '''
     ovsdb_idl_txn_write_partial_map(&row->header_,
-                                    &%(s)s_columns[%(S)s_COL_%(C)s],
+                                    &%(s)s_col_%(c)s,
                                     datum);
-}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
-        'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper(),
-        'C': columnName.upper()}
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
+        'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper()}
                 print '''
 /* Deletes an element of the "%(c)s" map column from the "%(t)s" table in 'row'
  * given the key value 'delete_key'.
@@ -843,11 +842,10 @@ void
                 print "    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "delete_key")
                 print '''
     ovsdb_idl_txn_delete_partial_map(&row->header_,
-                                    &%(s)s_columns[%(S)s_COL_%(C)s],
+                                    &%(s)s_col_%(c)s,
                                     datum);
-}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
-        'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper(),
-        'C': columnName.upper()}
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
+        'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper()}
         # End Update/Delete of partial maps
         # Update/Delete of partial set column functions
             if type.is_set():
@@ -873,11 +871,10 @@ void
                 print "    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "new_value")
                 print '''
     ovsdb_idl_txn_write_partial_set(&row->header_,
-                                    &%(s)s_columns[%(S)s_COL_%(C)s],
+                                    &%(s)s_col_%(c)s,
                                     datum);
-}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
-        'valtype':column.type.key.to_const_c_type(prefix), 'S': structName.upper(),
-        'C': columnName.upper()}
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
+        'valtype':column.type.key.to_const_c_type(prefix), 'S': structName.upper()}
                 print '''
 /* Deletes the value 'delete_value' from the "%(c)s" set column from the
  * "%(t)s" table in 'row'.
@@ -901,11 +898,10 @@ void
                 print "    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "delete_value")
                 print '''
     ovsdb_idl_txn_delete_partial_set(&row->header_,
-                                    &%(s)s_columns[%(S)s_COL_%(C)s],
+                                    &%(s)s_col_%(c)s,
                                     datum);
-}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
-        'valtype':column.type.key.to_const_c_type(prefix), 'S': structName.upper(),
-        'C': columnName.upper()}
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
+        'valtype':column.type.key.to_const_c_type(prefix), 'S': structName.upper()}
         # End Update/Delete of partial set
 
         # Add clause functions.
@@ -932,7 +928,7 @@ void
     ovsdb_idl_condition_add_clause(idl,
                                    &%(p)stable_%(tl)s,
                                    function,
-                                   &%(s)s_columns[%(S)s_COL_%(C)s],
+                                   &%(s)s_col_%(c)s,
                                    &datum);
 
     ovsdb_datum_destroy(&datum, &%(s)s_col_%(c)s.type);
@@ -944,8 +940,7 @@ void
        'P': prefix.upper(),
        's': structName,
        'S': structName.upper(),
-       'c': columnName,
-       'C': columnName.upper()}
+       'c': columnName}
                 continue
 
             keyVar = members[0]['name']
@@ -1033,7 +1028,7 @@ void
 
             print"""    ovsdb_idl_condition_add_clause(idl, &%(p)stable_%(tl)s,
                           function,
-                          &%(s)s_columns[%(S)s_COL_%(C)s],
+                          &%(s)s_col_%(c)s,
                           &datum);\
 """ % {'tl': tableName.lower(),
        'T': tableName.upper(),
@@ -1041,13 +1036,13 @@ void
        'P': prefix.upper(),
        's': structName,
        'S': structName.upper(),
-       'c': columnName,
-       'C': columnName.upper()}
+       'c': columnName}
             for var in free:
                 print "    free(%s);" % var
             print "}"
 
-        print """void
+        print """\
+void
 %(s)s_add_clause_false(struct ovsdb_idl *idl)
 {
     struct ovsdb_datum datum;
@@ -1094,7 +1089,7 @@ void
 
     ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s,
                                       function,
-                                      &%(s)s_columns[%(S)s_COL_%(C)s],
+                                      &%(s)s_col_%(c)s,
                                       &datum);
 
     ovsdb_datum_destroy(&datum, &%(s)s_col_%(c)s.type);
@@ -1104,8 +1099,7 @@ void
        'P': prefix.upper(),
        's': structName,
        'S': structName.upper(),
-       'c': columnName,
-       'C': columnName.upper()}
+       'c': columnName}
                 continue
 
             keyVar = members[0]['name']
@@ -1193,15 +1187,14 @@ void
 
             print"""    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s,
                           function,
-                          &%(s)s_columns[%(S)s_COL_%(C)s],
+                          &%(s)s_col_%(c)s,
                           &datum);\
 """ % {'tl': tableName.lower(),
        'p': prefix,
        'P': prefix.upper(),
        's': structName,
        'S': structName.upper(),
-       'c': columnName,
-       'C': columnName.upper()}
+       'c': columnName}
             for var in free:
                 print "    free(%s);" % var
             print "}"
@@ -1213,12 +1206,9 @@ void
 
     ovsdb_datum_init_empty(&datum);
     ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s, OVSDB_F_FALSE, NULL, &datum);
-}""" % {'s': structName,
-       'tl': tableName.lower(),
-       'p': prefix,
-       'P': prefix.upper()}
+}
 
-        print """void
+void
 %(s)s_remove_clause_true(struct ovsdb_idl *idl)
 {
     struct ovsdb_datum datum;
