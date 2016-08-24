@@ -356,11 +356,9 @@ static void
                 valueVar = None
 
             if type.is_smap():
-                print "    size_t i;"
-                print
                 print "    ovs_assert(inited);"
                 print "    smap_init(&row->%s);" % columnName
-                print "    for (i = 0; i < datum->n; i++) {"
+                print "    for (size_t i = 0; i < datum->n; i++) {"
                 print "        smap_add(&row->%s," % columnName
                 print "                 datum->keys[i].string,"
                 print "                 datum->values[i].string);"
@@ -390,14 +388,12 @@ static void
                     nMax = "n"
                 else:
                     nMax = "datum->n"
-                print "    size_t i;"
-                print
                 print "    ovs_assert(inited);"
                 print "    %s = NULL;" % keyVar
                 if valueVar:
                     print "    %s = NULL;" % valueVar
                 print "    row->n_%s = 0;" % columnName
-                print "    for (i = 0; i < %s; i++) {" % nMax
+                print "    for (size_t i = 0; i < %s; i++) {" % nMax
                 if type.key.ref_table:
                     print """\
         struct %s%s *keyRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->keys[i].uuid));
@@ -760,7 +756,6 @@ const struct ovsdb_datum *
                 print "    datum.values = NULL;"
                 txn_write_func = "ovsdb_idl_txn_write_clone"
             else:
-                print "    size_t i;"
                 print
                 print "    ovs_assert(inited);"
                 print "    datum.n = %s;" % nVar
@@ -769,7 +764,7 @@ const struct ovsdb_datum *
                     print "    datum.values = xmalloc(%s * sizeof *datum.values);" % nVar
                 else:
                     print "    datum.values = NULL;"
-                print "    for (i = 0; i < %s; i++) {" % nVar
+                print "    for (size_t i = 0; i < %s; i++) {" % nVar
                 print "        " + type.key.copyCValue("datum.keys[i].%s" % type.key.type.to_string(), "%s[i]" % keyVar)
                 if type.value:
                     print "        " + type.value.copyCValue("datum.values[i].%s" % type.value.type.to_string(), "%s[i]" % valueVar)
@@ -1003,8 +998,6 @@ void
                 print "    }"
                 print "    datum.values = NULL;"
             else:
-                print "    size_t i;"
-                print
                 print "    ovs_assert(inited);"
                 print "    datum.n = %s;" % nVar
                 print "    datum.keys = %s ? xmalloc(%s * sizeof *datum.keys) : NULL;" % (nVar, nVar)
@@ -1014,7 +1007,7 @@ void
                     free += ['datum.values']
                 else:
                     print "    datum.values = NULL;"
-                print "    for (i = 0; i < %s; i++) {" % nVar
+                print "    for (size_t i = 0; i < %s; i++) {" % nVar
                 print "        " + type.key.assign_c_value_casting_away_const("datum.keys[i].%s" % type.key.type.to_string(), "%s[i]" % keyVar, refTable=False)
                 if type.value:
                     print "        " + type.value.assign_c_value_casting_away_const("datum.values[i].%s" % type.value.type.to_string(), "%s[i]" % valueVar, refTable=False)
@@ -1162,8 +1155,6 @@ void
                 print "    }"
                 print "    datum.values = NULL;"
             else:
-                print "    size_t i;"
-                print
                 print "    ovs_assert(inited);"
                 print "    datum.n = %s;" % nVar
                 print "    datum.keys = %s ? xmalloc(%s * sizeof *datum.keys) : NULL;" % (nVar, nVar)
@@ -1173,7 +1164,7 @@ void
                     print "    datum.values = xmalloc(%s * sizeof *datum.values);" % nVar
                 else:
                     print "    datum.values = NULL;"
-                print "    for (i = 0; i < %s; i++) {" % nVar
+                print "    for (size_t i = 0; i < %s; i++) {" % nVar
                 print "        " + type.key.assign_c_value_casting_away_const("datum.keys[i].%s" % type.key.type.to_string(), "%s[i]" % keyVar, refTable=False)
                 if type.value:
                     print "        " + type.value.assign_c_value_casting_away_const("datum.values[i].%s" % type.value.type.to_string(), "%s[i]" % valueVar, refTable=False)
