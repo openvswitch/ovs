@@ -372,13 +372,13 @@ static void
                 if not type.key.ref_table:
                     print "        %s = datum->keys[0].%s;" % (keyVar, type.key.type.to_string())
                 else:
-                    print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[0].uuid));" % (keyVar, prefix, type.key.ref_table.name.lower(), prefix, prefix.upper(), type.key.ref_table.name.upper())
+                    print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->keys[0].uuid));" % (keyVar, prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower())
 
                 if valueVar:
                     if not type.value.ref_table:
                         print "        %s = datum->values[0].%s;" % (valueVar, type.value.type.to_string())
                     else:
-                        print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[0].uuid));" % (valueVar, prefix, type.value.ref_table.name.lower(), prefix, prefix.upper(), type.value.ref_table.name.upper())
+                        print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->values[0].uuid));" % (valueVar, prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower())
                 print "    } else {"
                 print "        %s" % type.key.initCDefault(keyVar, type.n_min == 0)
                 if valueVar:
@@ -400,21 +400,21 @@ static void
                 print "    for (i = 0; i < %s; i++) {" % nMax
                 if type.key.ref_table:
                     print """\
-        struct %s%s *keyRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[i].uuid));
+        struct %s%s *keyRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->keys[i].uuid));
         if (!keyRow) {
             continue;
         }\
-""" % (prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower(), prefix, prefix.upper(), type.key.ref_table.name.upper())
+""" % (prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower())
                     keySrc = "keyRow"
                 else:
                     keySrc = "datum->keys[i].%s" % type.key.type.to_string()
                 if type.value and type.value.ref_table:
                     print """\
-        struct %s%s *valueRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[i].uuid));
+        struct %s%s *valueRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->values[i].uuid));
         if (!valueRow) {
             continue;
         }\
-""" % (prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower(), prefix, prefix.upper(), type.value.ref_table.name.upper())
+""" % (prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower())
                     valueSrc = "valueRow"
                 elif valueVar:
                     valueSrc = "datum->values[i].%s" % type.value.type.to_string()
@@ -505,7 +505,7 @@ void
 const struct %(s)s *
 %(s)s_get_for_uuid(const struct ovsdb_idl *idl, const struct uuid *uuid)
 {
-    return %(s)s_cast(ovsdb_idl_get_row_for_uuid(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s], uuid));
+    return %(s)s_cast(ovsdb_idl_get_row_for_uuid(idl, &%(p)stable_%(tl)s, uuid));
 }
 
 /* Returns a row in table "%(t)s" in 'idl', or a null pointer if that
@@ -517,7 +517,7 @@ const struct %(s)s *
 const struct %(s)s *
 %(s)s_first(const struct ovsdb_idl *idl)
 {
-    return %(s)s_cast(ovsdb_idl_first_row(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]));
+    return %(s)s_cast(ovsdb_idl_first_row(idl, &%(p)stable_%(tl)s));
 }
 
 /* Returns a row following 'row' within its table, or a null pointer if 'row'
@@ -530,7 +530,7 @@ const struct %(s)s *
 
 unsigned int %(s)s_get_seqno(const struct ovsdb_idl *idl)
 {
-    return ovsdb_idl_table_get_seqno(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]);
+    return ovsdb_idl_table_get_seqno(idl, &%(p)stable_%(tl)s);
 }
 
 unsigned int %(s)s_row_get_seqno(const struct %(s)s *row, enum ovsdb_idl_change change)
@@ -541,7 +541,7 @@ unsigned int %(s)s_row_get_seqno(const struct %(s)s *row, enum ovsdb_idl_change 
 const struct %(s)s *
 %(s)s_track_get_first(const struct ovsdb_idl *idl)
 {
-    return %(s)s_cast(ovsdb_idl_track_get_first(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]));
+    return %(s)s_cast(ovsdb_idl_track_get_first(idl, &%(p)stable_%(tl)s));
 }
 
 const struct %(s)s
@@ -552,6 +552,7 @@ const struct %(s)s
         'p': prefix,
         'P': prefix.upper(),
         't': tableName,
+        'tl': tableName.lower(),
         'T': tableName.upper()}
 
         print '''
@@ -576,7 +577,7 @@ void
 struct %(s)s *
 %(s)s_insert(struct ovsdb_idl_txn *txn)
 {
-    return %(s)s_cast(ovsdb_idl_txn_insert(txn, &%(p)stable_classes[%(P)sTABLE_%(T)s], NULL));
+    return %(s)s_cast(ovsdb_idl_txn_insert(txn, &%(p)stable_%(tl)s, NULL));
 }
 
 bool
@@ -587,6 +588,7 @@ bool
         'p': prefix,
         'P': prefix.upper(),
         't': tableName,
+        'tl': tableName.lower(),
         'T': tableName.upper()}
 
         # Verify functions.
@@ -928,7 +930,7 @@ void
     }
 
     ovsdb_idl_condition_add_clause(idl,
-                                   &%(p)stable_classes[%(P)sTABLE_%(T)s],
+                                   &%(p)stable_%(tl)s,
                                    function,
                                    &%(s)s_columns[%(S)s_COL_%(C)s],
                                    &datum);
@@ -936,6 +938,7 @@ void
     ovsdb_datum_destroy(&datum, &%(s)s_col_%(c)s.type);
 }
 """ % {'t': tableName,
+       'tl': tableName.lower(),
        'T': tableName.upper(),
        'p': prefix,
        'P': prefix.upper(),
@@ -1028,11 +1031,11 @@ void
                 print "    ovsdb_datum_sort_unique(&datum, %s, %s);" % (
                     type.key.toAtomicType(), valueType)
 
-            print"""    ovsdb_idl_condition_add_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s],
+            print"""    ovsdb_idl_condition_add_clause(idl, &%(p)stable_%(tl)s,
                           function,
                           &%(s)s_columns[%(S)s_COL_%(C)s],
                           &datum);\
-""" % {'t': tableName,
+""" % {'tl': tableName.lower(),
        'T': tableName.upper(),
        'p': prefix,
        'P': prefix.upper(),
@@ -1050,9 +1053,9 @@ void
     struct ovsdb_datum datum;
 
     ovsdb_datum_init_empty(&datum);
-    ovsdb_idl_condition_add_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s], OVSDB_F_FALSE, NULL, &datum);
+    ovsdb_idl_condition_add_clause(idl, &%(p)stable_%(tl)s, OVSDB_F_FALSE, NULL, &datum);
 }""" % {'s': structName,
-        'T': tableName.upper(),
+        'tl': tableName.lower(),
         'p': prefix,
         'P': prefix.upper()}
 
@@ -1062,9 +1065,9 @@ void
     struct ovsdb_datum datum;
 
     ovsdb_datum_init_empty(&datum);
-    ovsdb_idl_condition_add_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s], OVSDB_F_TRUE, NULL, &datum);
+    ovsdb_idl_condition_add_clause(idl, &%(p)stable_%(tl)s, OVSDB_F_TRUE, NULL, &datum);
 }""" % {'s': structName,
-        'T': tableName.upper(),
+        'tl': tableName.lower(),
         'p': prefix,
         'P': prefix.upper()}
 
@@ -1089,15 +1092,14 @@ void
         ovsdb_datum_init_empty(&datum);
     }
 
-    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s],
+    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s,
                                       function,
                                       &%(s)s_columns[%(S)s_COL_%(C)s],
                                       &datum);
 
     ovsdb_datum_destroy(&datum, &%(s)s_col_%(c)s.type);
 }
-""" % {'t': tableName,
-       'T': tableName.upper(),
+""" % {'tl': tableName.lower(),
        'p': prefix,
        'P': prefix.upper(),
        's': structName,
@@ -1189,12 +1191,11 @@ void
                 print "    ovsdb_datum_sort_unique(&datum, %s, %s);" % (
                     type.key.toAtomicType(), valueType)
 
-            print"""    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s],
+            print"""    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s,
                           function,
                           &%(s)s_columns[%(S)s_COL_%(C)s],
                           &datum);\
-""" % {'t': tableName,
-       'T': tableName.upper(),
+""" % {'tl': tableName.lower(),
        'p': prefix,
        'P': prefix.upper(),
        's': structName,
@@ -1211,9 +1212,9 @@ void
     struct ovsdb_datum datum;
 
     ovsdb_datum_init_empty(&datum);
-    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s], OVSDB_F_FALSE, NULL, &datum);
+    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s, OVSDB_F_FALSE, NULL, &datum);
 }""" % {'s': structName,
-       'T': tableName.upper(),
+       'tl': tableName.lower(),
        'p': prefix,
        'P': prefix.upper()}
 
@@ -1223,9 +1224,9 @@ void
     struct ovsdb_datum datum;
 
     ovsdb_datum_init_empty(&datum);
-    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s], OVSDB_F_TRUE, NULL, &datum);
+    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s, OVSDB_F_TRUE, NULL, &datum);
 }""" % {'s': structName,
-        'T': tableName.upper(),
+        'tl': tableName.lower(),
         'p': prefix,
         'P': prefix.upper(),}
 
