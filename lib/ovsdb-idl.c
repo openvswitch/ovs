@@ -2041,7 +2041,7 @@ ovsdb_idl_table_from_class(const struct ovsdb_idl *idl,
 /* Called by ovsdb-idlc generated code. */
 struct ovsdb_idl_row *
 ovsdb_idl_get_row_arc(struct ovsdb_idl_row *src,
-                      struct ovsdb_idl_table_class *dst_table_class,
+                      const struct ovsdb_idl_table_class *dst_table_class,
                       const struct uuid *dst_uuid)
 {
     struct ovsdb_idl *idl = src->table->idl;
