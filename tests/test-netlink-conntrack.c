@@ -16,6 +16,7 @@
 
 #include <config.h>
 
+#include <stdlib.h>
 #include <linux/netfilter/nfnetlink.h>
 
 #include "ct-dpif.h"
@@ -160,14 +161,14 @@ static const struct ovs_cmdl_command commands[] = {
     /* Linux netlink connection tracker interface test. */
 
     /* Prints all the entries in the connection table and exits. */
-    {"dump", "[zone=zone]", 0, 1, test_nl_ct_dump},
+    {"dump", "[zone=zone]", 0, 1, test_nl_ct_dump, OVS_RO},
     /* Listens to all the connection tracking events and prints them to
      * standard output until killed. */
-    {"monitor", "", 0, 0, test_nl_ct_monitor},
+    {"monitor", "", 0, 0, test_nl_ct_monitor, OVS_RO},
     /* Flushes all the entries from all the tables.. */
-    {"flush", "[zone=zone]", 0, 1, test_nl_ct_flush},
+    {"flush", "[zone=zone]", 0, 1, test_nl_ct_flush, OVS_RO},
 
-    {NULL, NULL, 0, 0, NULL},
+    {NULL, NULL, 0, 0, NULL, OVS_RO},
 };
 
 static void

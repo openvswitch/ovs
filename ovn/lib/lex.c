@@ -15,12 +15,12 @@
  */
 
 #include <config.h>
-#include "lex.h"
 #include <ctype.h>
 #include <errno.h>
 #include <stdarg.h>
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/json.h"
+#include "ovn/lex.h"
 #include "packets.h"
 #include "util.h"
 
@@ -803,6 +803,7 @@ lexer_init(struct lexer *lexer, const char *input)
     lexer->input = input;
     lexer->start = NULL;
     lex_token_init(&lexer->token);
+    lexer->error = NULL;
 }
 
 /* Frees storage associated with 'lexer'. */
@@ -810,6 +811,7 @@ void
 lexer_destroy(struct lexer *lexer)
 {
     lex_token_destroy(&lexer->token);
+    free(lexer->error);
 }
 
 /* Obtains the next token from 'lexer' into 'lexer->token', and returns the
@@ -851,6 +853,24 @@ lexer_match(struct lexer *lexer, enum lex_type type)
     }
 }
 
+bool
+lexer_force_match(struct lexer *lexer, enum lex_type t)
+{
+    if (lexer_match(lexer, t)) {
+        return true;
+    } else {
+        struct lex_token token = { .type = t };
+        struct ds s = DS_EMPTY_INITIALIZER;
+        lex_token_format(&token, &s);
+
+        lexer_syntax_error(lexer, "expecting `%s'", ds_cstr(&s));
+
+        ds_destroy(&s);
+
+        return false;
+    }
+}
+
 /* If 'lexer''s current token is the identifier given in 'id', advances 'lexer'
  * to the next token and returns true.  Otherwise returns false.  */
 bool
@@ -883,4 +903,93 @@ lexer_get_int(struct lexer *lexer, int *value)
         *value = 0;
         return false;
     }
+}
+
+bool
+lexer_force_int(struct lexer *lexer, int *value)
+{
+    bool ok = lexer_get_int(lexer, value);
+    if (!ok) {
+        lexer_syntax_error(lexer, "expecting small integer");
+    }
+    return ok;
+}
+
+void
+lexer_force_end(struct lexer *lexer)
+{
+    if (lexer->token.type != LEX_T_END) {
+        lexer_syntax_error(lexer, "expecting end of input");
+    }
+}
+
+static bool
+lexer_error_handle_common(struct lexer *lexer)
+{
+    if (lexer->error) {
+        /* Already have an error, suppress this one since the cascade seems
+         * unlikely to be useful. */
+        return true;
+    } else if (lexer->token.type == LEX_T_ERROR) {
+        /* The lexer signaled an error.  Nothing at a higher level accepts an
+         * error token, so we'll inevitably end up here with some meaningless
+         * parse error.  Report the lexical error instead. */
+        lexer->error = xstrdup(lexer->token.s);
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void OVS_PRINTF_FORMAT(2, 3)
+lexer_error(struct lexer *lexer, const char *message, ...)
+{
+    if (lexer_error_handle_common(lexer)) {
+        return;
+    }
+
+    va_list args;
+    va_start(args, message);
+    lexer->error = xvasprintf(message, args);
+    va_end(args);
+}
+
+void OVS_PRINTF_FORMAT(2, 3)
+lexer_syntax_error(struct lexer *lexer, const char *message, ...)
+{
+    if (lexer_error_handle_common(lexer)) {
+        return;
+    }
+
+    struct ds s;
+
+    ds_init(&s);
+    ds_put_cstr(&s, "Syntax error");
+    if (lexer->token.type == LEX_T_END) {
+        ds_put_cstr(&s, " at end of input");
+    } else if (lexer->start) {
+        ds_put_format(&s, " at `%.*s'",
+                      (int) (lexer->input - lexer->start),
+                      lexer->start);
+    }
+
+    if (message) {
+        ds_put_char(&s, ' ');
+
+        va_list args;
+        va_start(args, message);
+        ds_put_format_valist(&s, message, args);
+        va_end(args);
+    }
+    ds_put_char(&s, '.');
+
+    lexer->error = ds_steal_cstr(&s);
+}
+
+char *
+lexer_steal_error(struct lexer *lexer)
+{
+    char *error = lexer->error;
+    lexer->error = NULL;
+    return error;
 }

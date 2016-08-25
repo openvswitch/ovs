@@ -16,11 +16,11 @@ OVS_VSWITCHD_START(
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p0 1/1: (dummy)
 		p1 2/none: (patch: peer=p2)
 	br1:
-		br1 65534/101: (dummy)
+		br1 65534/101: (dummy-internal)
 		p2 1/none: (patch: peer=p1)
 ])
 

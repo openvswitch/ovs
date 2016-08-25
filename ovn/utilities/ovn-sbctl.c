@@ -27,27 +27,27 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "db-ctl-base.h"
-#include "dirs.h"
-
 #include "command-line.h"
 #include "compiler.h"
-#include "openvswitch/dynamic-string.h"
+#include "db-ctl-base.h"
+#include "dirs.h"
 #include "fatal-signal.h"
+#include "openvswitch/dynamic-string.h"
 #include "openvswitch/json.h"
+#include "openvswitch/shash.h"
+#include "openvswitch/vlog.h"
+#include "ovn/lib/ovn-sb-idl.h"
+#include "ovn/lib/ovn-util.h"
 #include "ovsdb-data.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
 #include "process.h"
 #include "sset.h"
-#include "openvswitch/shash.h"
 #include "stream-ssl.h"
 #include "stream.h"
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
-#include "openvswitch/vlog.h"
-#include "ovn/lib/ovn-sb-idl.h"
 
 VLOG_DEFINE_THIS_MODULE(sbctl);
 
@@ -78,7 +78,6 @@ OVS_NO_RETURN static void sbctl_exit(int status);
 static void sbctl_cmd_init(void);
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
-static const char *sbctl_default_db(void);
 static void run_prerequisites(struct ctl_command[], size_t n_commands,
                               struct ovsdb_idl *);
 static bool do_sbctl(const char *args, struct ctl_command *, size_t n,
@@ -151,19 +150,6 @@ main(int argc, char *argv[])
     }
 }
 
-static const char *
-sbctl_default_db(void)
-{
-    static char *def;
-    if (!def) {
-        def = getenv("OVN_SB_DB");
-        if (!def) {
-            def = xasprintf("unix:%s/ovnsb_db.sock", ovs_rundir());
-        }
-    }
-    return def;
-}
-
 static void
 parse_options(int argc, char *argv[], struct shash *local_options)
 {
@@ -172,7 +158,6 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         OPT_ONELINE,
         OPT_NO_SYSLOG,
         OPT_DRY_RUN,
-        OPT_PEER_CA_CERT,
         OPT_LOCAL,
         OPT_COMMANDS,
         OPT_OPTIONS,
@@ -287,7 +272,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     free(short_options);
 
     if (!db) {
-        db = sbctl_default_db();
+        db = default_sb_db();
     }
 
     for (i = n_global_long_options; options[i].name; i++) {
@@ -332,7 +317,8 @@ Options:\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
-           program_name, program_name, ctl_get_db_cmd_usage(), sbctl_default_db());
+           program_name, program_name, ctl_get_db_cmd_usage(),
+           default_sb_db());
     vlog_usage();
     printf("\
   --no-syslog             equivalent to --verbose=sbctl:syslog:warn\n");
@@ -503,6 +489,8 @@ pre_get_info(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_table_id);
     ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_match);
     ovsdb_idl_add_column(ctx->idl, &sbrec_logical_flow_col_external_ids);
+
+    ovsdb_idl_add_column(ctx->idl, &sbrec_datapath_binding_col_external_ids);
 }
 
 static struct cmd_show_table cmd_show_tables[] = {
@@ -524,6 +512,11 @@ static struct cmd_show_table cmd_show_tables[] = {
 
     {NULL, NULL, {NULL, NULL, NULL}, {NULL, NULL, NULL}},
 };
+
+static void
+sbctl_init(struct ctl_context *ctx OVS_UNUSED)
+{
+}
 
 static void
 cmd_chassis_add(struct ctl_context *ctx)
@@ -553,6 +546,7 @@ cmd_chassis_add(struct ctl_context *ctx)
 
     size_t n_encaps = sset_count(&encap_set);
     struct sbrec_encap **encaps = xmalloc(n_encaps * sizeof *encaps);
+    const struct smap options = SMAP_CONST1(&options, "csum", "true");
     const char *encap_type;
     int i = 0;
     SSET_FOR_EACH (encap_type, &encap_set){
@@ -560,6 +554,7 @@ cmd_chassis_add(struct ctl_context *ctx)
 
         sbrec_encap_set_type(encaps[i], encap_type);
         sbrec_encap_set_ip(encaps[i], encap_ip);
+        sbrec_encap_set_options(encaps[i], &options);
         i++;
     }
     sset_destroy(&encap_set);
@@ -726,16 +721,18 @@ cmd_lflow_list(struct ctl_context *ctx)
             continue;
         }
         if (strcmp(cur_pipeline, lflow->pipeline)) {
-            printf("Datapath: " UUID_FMT "  Pipeline: %s\n",
-                    UUID_ARGS(&lflow->logical_datapath->header_.uuid),
-                    lflow->pipeline);
+            printf("Datapath: \"%s\" ("UUID_FMT")  Pipeline: %s\n",
+                   smap_get_def(&lflow->logical_datapath->external_ids,
+                                "name", ""),
+                   UUID_ARGS(&lflow->logical_datapath->header_.uuid),
+                   lflow->pipeline);
             cur_pipeline = lflow->pipeline;
         }
 
-        const char *table_name = smap_get(&lflow->external_ids, "stage-name");
         printf("  table=%-2" PRId64 "(%-19s), priority=%-5" PRId64
                ", match=(%s), action=(%s)\n",
-               lflow->table_id, table_name ? table_name : "",
+               lflow->table_id,
+               smap_get_def(&lflow->external_ids, "stage-name", ""),
                lflow->priority, lflow->match, lflow->actions);
     }
 
@@ -744,6 +741,10 @@ cmd_lflow_list(struct ctl_context *ctx)
 
 
 static const struct ctl_table_class tables[] = {
+    {&sbrec_table_sb_global,
+     {{&sbrec_table_sb_global, NULL, NULL},
+      {NULL, NULL, NULL}}},
+
     {&sbrec_table_chassis,
      {{&sbrec_table_chassis, &sbrec_chassis_col_name, NULL},
       {NULL, NULL, NULL}}},
@@ -817,9 +818,9 @@ static void
 run_prerequisites(struct ctl_command *commands, size_t n_commands,
                   struct ovsdb_idl *idl)
 {
-    struct ctl_command *c;
+    ovsdb_idl_add_table(idl, &sbrec_table_sb_global);
 
-    for (c = commands; c < &commands[n_commands]; c++) {
+    for (struct ctl_command *c = commands; c < &commands[n_commands]; c++) {
         if (c->syntax->prerequisites) {
             struct sbctl_context sbctl_ctx;
 
@@ -854,6 +855,12 @@ do_sbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     }
 
     ovsdb_idl_txn_add_comment(txn, "ovs-sbctl: %s", args);
+
+    const struct sbrec_sb_global *sb = sbrec_sb_global_first(idl);
+    if (!sb) {
+        /* XXX add verification that table is empty */
+        sb = sbrec_sb_global_insert(txn);
+    }
 
     symtab = ovsdb_symbol_table_create();
     for (c = commands; c < &commands[n_commands]; c++) {
@@ -1013,6 +1020,8 @@ sbctl_exit(int status)
 }
 
 static const struct ctl_command_syntax sbctl_commands[] = {
+    { "init", 0, 0, "", NULL, sbctl_init, NULL, "", RW },
+
     /* Chassis commands. */
     {"chassis-add", 3, 3, "CHASSIS ENCAP-TYPE ENCAP-IP", pre_get_info,
      cmd_chassis_add, NULL, "--may-exist", RW},

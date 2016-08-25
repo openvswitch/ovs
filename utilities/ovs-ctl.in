@@ -499,6 +499,7 @@ set_defaults () {
     FORCE_COREFILES=yes
     MLOCKALL=yes
     SELF_CONFINEMENT=yes
+    MONITOR=yes
     OVSDB_SERVER=yes
     OVS_VSWITCHD=yes
     OVSDB_SERVER_PRIORITY=-10
@@ -521,6 +522,9 @@ set_defaults () {
     if test -e "$type_file" ; then
         SYSTEM_TYPE=`cat $type_file`
         SYSTEM_VERSION=`cat $version_file`
+    elif test -e "@sysconfdir@/os-release"; then
+        SYSTEM_TYPE=`. '@sysconfdir@/os-release' && echo "$ID"`
+        SYSTEM_VERSION=`. '@sysconfdir@/os-release' && echo "$VERSION_ID"`
     elif (lsb_release --id) >/dev/null 2>&1; then
         SYSTEM_TYPE=`lsb_release --id -s`
         system_release=`lsb_release --release -s`

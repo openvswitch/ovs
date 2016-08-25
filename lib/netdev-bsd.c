@@ -146,7 +146,7 @@ static void ifr_set_flags(struct ifreq *, int flags);
 static int af_link_ioctl(unsigned long command, const void *arg);
 #endif
 
-static void netdev_bsd_run(void);
+static void netdev_bsd_run(const struct netdev_class *);
 static int netdev_bsd_get_mtu(const struct netdev *netdev_, int *mtup);
 
 static bool
@@ -180,7 +180,7 @@ netdev_get_kernel_name(const struct netdev *netdev)
  * interface status changes, and eventually calls all the user callbacks.
  */
 static void
-netdev_bsd_run(void)
+netdev_bsd_run(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     rtbsd_notifier_run();
 }
@@ -190,7 +190,7 @@ netdev_bsd_run(void)
  * be called.
  */
 static void
-netdev_bsd_wait(void)
+netdev_bsd_wait(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     rtbsd_notifier_wait();
 }
@@ -639,7 +639,6 @@ netdev_bsd_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
     if (retval) {
         dp_packet_delete(packet);
     } else {
-        dp_packet_pad(packet);
         batch->packets[0] = packet;
         batch->count = 1;
     }
@@ -680,7 +679,8 @@ netdev_bsd_rxq_drain(struct netdev_rxq *rxq_)
  */
 static int
 netdev_bsd_send(struct netdev *netdev_, int qid OVS_UNUSED,
-                struct dp_packet_batch *batch, bool may_steal)
+                struct dp_packet_batch *batch, bool may_steal,
+                bool concurrent_txq OVS_UNUSED)
 {
     struct netdev_bsd *dev = netdev_bsd_cast(netdev_);
     const char *name = netdev_get_name(netdev_);

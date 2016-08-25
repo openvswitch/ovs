@@ -2474,33 +2474,30 @@ vsctl_parent_process_info(void)
 {
 #ifdef __linux__
     pid_t parent_pid;
-    char *procfile;
     struct ds s;
-    FILE *f;
 
     parent_pid = getppid();
-    procfile = xasprintf("/proc/%d/cmdline", parent_pid);
-
-    f = fopen(procfile, "r");
-    if (!f) {
-        VLOG_WARN("%s: open failed (%s)", procfile, ovs_strerror(errno));
-        free(procfile);
-        return NULL;
-    }
-    free(procfile);
-
     ds_init(&s);
-    for (;;) {
-        int c = getc(f);
-        if (!c || c == EOF) {
-            break;
+
+    /* Retrive the command line of the parent process, except the init
+     * process since /proc/0 does not exist. */
+    if (parent_pid) {
+        char *procfile;
+        FILE *f;
+
+        procfile = xasprintf("/proc/%d/cmdline", parent_pid);
+
+        f = fopen(procfile, "r");
+        free(procfile);
+        if (f) {
+            ds_get_line(&s, f);
+            fclose(f);
         }
-        ds_put_char(&s, c);
+    } else {
+        ds_put_cstr(&s, "init");
     }
-    fclose(f);
 
     ds_put_format(&s, " (pid %d)", parent_pid);
-
     return ds_steal_cstr(&s);
 #else
     return NULL;
@@ -2544,7 +2541,7 @@ do_vsctl(const char *args, struct ctl_command *commands, size_t n_commands,
 
     if (wait_for_reload) {
         ovsdb_idl_txn_increment(txn, &ovs->header_,
-                                &ovsrec_open_vswitch_col_next_cfg);
+                                &ovsrec_open_vswitch_col_next_cfg, false);
     }
 
     post_db_reload_check_init();

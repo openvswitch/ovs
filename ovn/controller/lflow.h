@@ -51,10 +51,11 @@ struct uuid;
 #define OFTABLE_LOG_INGRESS_PIPELINE 16 /* First of LOG_PIPELINE_LEN tables. */
 #define OFTABLE_REMOTE_OUTPUT        32
 #define OFTABLE_LOCAL_OUTPUT         33
-#define OFTABLE_DROP_LOOPBACK        34
+#define OFTABLE_CHECK_LOOPBACK       34
 #define OFTABLE_LOG_EGRESS_PIPELINE  48 /* First of LOG_PIPELINE_LEN tables. */
-#define OFTABLE_LOG_TO_PHY           64
-#define OFTABLE_MAC_BINDING          65
+#define OFTABLE_SAVE_INPORT          64
+#define OFTABLE_LOG_TO_PHY           65
+#define OFTABLE_MAC_BINDING          66
 
 /* The number of tables for the ingress and egress pipelines. */
 #define LOG_PIPELINE_LEN 16

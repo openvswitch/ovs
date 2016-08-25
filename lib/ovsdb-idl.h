@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -48,7 +48,6 @@ struct ovsdb_idl_class;
 struct ovsdb_idl_row;
 struct ovsdb_idl_column;
 struct ovsdb_idl_table_class;
-struct ovsdb_idl_condition;
 struct uuid;
 
 struct ovsdb_idl *ovsdb_idl_create(const char *remote,
@@ -251,7 +250,8 @@ void ovsdb_idl_txn_add_comment(struct ovsdb_idl_txn *, const char *, ...)
 void ovsdb_idl_txn_set_dry_run(struct ovsdb_idl_txn *);
 void ovsdb_idl_txn_increment(struct ovsdb_idl_txn *,
                              const struct ovsdb_idl_row *,
-                             const struct ovsdb_idl_column *);
+                             const struct ovsdb_idl_column *,
+                             bool force);
 void ovsdb_idl_txn_destroy(struct ovsdb_idl_txn *);
 void ovsdb_idl_txn_wait(const struct ovsdb_idl_txn *);
 enum ovsdb_idl_txn_status ovsdb_idl_txn_commit(struct ovsdb_idl_txn *);
@@ -276,6 +276,12 @@ void ovsdb_idl_txn_write_partial_map(const struct ovsdb_idl_row *,
 void ovsdb_idl_txn_delete_partial_map(const struct ovsdb_idl_row *,
                                       const struct ovsdb_idl_column *,
                                       struct ovsdb_datum *);
+void ovsdb_idl_txn_write_partial_set(const struct ovsdb_idl_row *,
+                                     const struct ovsdb_idl_column *,
+                                     struct ovsdb_datum *);
+void ovsdb_idl_txn_delete_partial_set(const struct ovsdb_idl_row *,
+                                      const struct ovsdb_idl_column *,
+                                      struct ovsdb_datum *);
 void ovsdb_idl_txn_delete(const struct ovsdb_idl_row *);
 const struct ovsdb_idl_row *ovsdb_idl_txn_insert(
     struct ovsdb_idl_txn *, const struct ovsdb_idl_table_class *,
@@ -295,6 +301,14 @@ struct ovsdb_idl_loop {
     unsigned int precommit_seqno;
 
     struct ovsdb_idl_txn *open_txn;
+
+    /* These members allow a client a simple, stateless way to keep track of
+     * transactions that commit: when a transaction commits successfully,
+     * ovsdb_idl_loop_commit_and_wait() copies 'next_cfg' to 'cur_cfg'.  Thus,
+     * the client can set 'next_cfg' to a value that indicates a successful
+     * commit and check 'cur_cfg' on each iteration. */
+    int64_t cur_cfg;
+    int64_t next_cfg;
 };
 
 #define OVSDB_IDL_LOOP_INITIALIZER(IDL) { .idl = (IDL) }
@@ -302,18 +316,15 @@ struct ovsdb_idl_loop {
 void ovsdb_idl_loop_destroy(struct ovsdb_idl_loop *);
 struct ovsdb_idl_txn *ovsdb_idl_loop_run(struct ovsdb_idl_loop *);
 void ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *);
-
-struct ovsdb_idl_condition {
-    const struct ovsdb_idl_table_class *tc;
-    struct ovs_list clauses;
-};
-
-struct ovsdb_idl_clause {
-    struct ovs_list node;
-    enum ovsdb_function function;
-    const struct ovsdb_idl_column *column;
-    struct ovsdb_datum arg;
-};
+
+/* Conditional Replication
+ * =======================
+ *
+ * By default, when the IDL replicates a particular table in the database, it
+ * replicates every row in the table.  These functions allow the client to
+ * specify that only selected rows should be replicated, by constructing a
+ * per-table condition that specifies the rows to replicate.
+ */
 
 void ovsdb_idl_condition_reset(struct ovsdb_idl *idl,
                                const struct ovsdb_idl_table_class *tc);
@@ -321,11 +332,11 @@ void ovsdb_idl_condition_add_clause(struct ovsdb_idl *idl,
                                     const struct ovsdb_idl_table_class *tc,
                                     enum ovsdb_function function,
                                     const struct ovsdb_idl_column *column,
-                                    struct ovsdb_datum *arg);
+                                    const struct ovsdb_datum *arg);
 void ovsdb_idl_condition_remove_clause(struct ovsdb_idl *idl,
                                        const struct ovsdb_idl_table_class *tc,
                                        enum ovsdb_function function,
                                        const struct ovsdb_idl_column *column,
-                                       struct ovsdb_datum *arg);
+                                       const struct ovsdb_datum *arg);
 
 #endif /* ovsdb-idl.h */

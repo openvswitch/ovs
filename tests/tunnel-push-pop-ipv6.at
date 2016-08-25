@@ -17,10 +17,10 @@ AT_CHECK([ovs-vsctl add-port int-br t2 -- set Interface t2 type=vxlan \
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p0 1/1: (dummy)
 	int-br:
-		int-br 65534/2: (dummy)
+		int-br 65534/2: (dummy-internal)
 		t1 3/3: (gre: key=456, remote_ip=2001:cafe::92)
 		t2 2/4789: (vxlan: key=123, remote_ip=2001:cafe::92)
 		t3 4/4789: (vxlan: csum=true, out_key=flow, remote_ip=2001:cafe::93)
@@ -157,7 +157,7 @@ icmp,vlan_tci=0x0000,dl_src=be:b6:f4:e1:49:4a,dl_dst=fe:71:d8:83:72:4f,nw_src=30
 AT_CHECK([ovs-ofctl dump-ports int-br | grep 'port  5'], [0], [dnl
   port  5: rx pkts=1, bytes=98, drop=?, errs=?, frame=?, over=?, crc=?
 ])
-AT_CHECK([ovs-appctl dpif/dump-flows int-br], [0], [dnl
+AT_CHECK([ovs-appctl dpif/dump-flows int-br | grep 'in_port(6081)'], [0], [dnl
 tunnel(tun_id=0x7b,ipv6_src=2001:cafe::92,ipv6_dst=2001:cafe::88,geneve({class=0xffff,type=0x80,len=4,0xa/0xf}{class=0xffff,type=0,len=4}),flags(-df-csum+key)),skb_mark(0),recirc_id(0),in_port(6081),eth_type(0x0800),ipv4(frag=no), packets:0, bytes:0, used:never, actions:userspace(pid=0,slow_path(controller))
 ])
 

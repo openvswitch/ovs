@@ -22,6 +22,18 @@ function install_kernel()
     cd linux-${1}
     make allmodconfig
 
+    # Cannot use CONFIG_KCOV: -fsanitize-coverage=trace-pc is not supported by compiler
+    sed -i 's/CONFIG_KCOV=y/CONFIG_KCOV=n/' .config
+
+    # stack validation depends on tools/objtool, but objtool does not compile on travis.
+    # It is giving following error.
+    #  >>> GEN      arch/x86/insn/inat-tables.c
+    #  >>> Semantic error at 40: Unknown imm opnd: AL
+    # So for now disable stack-validation for the build.
+
+    sed -i 's/CONFIG_STACK_VALIDATION=y/CONFIG_STACK_VALIDATION=n/' .config
+    make oldconfig
+
     # Older kernels do not include openvswitch
     if [ -d "net/openvswitch" ]; then
         make net/openvswitch/
@@ -68,7 +80,7 @@ fi
 
 if [ "$DPDK" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="16.04"
+        DPDK_VER="16.07"
     fi
     install_dpdk $DPDK_VER
     if [ "$CC" = "clang" ]; then

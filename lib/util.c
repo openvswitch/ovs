@@ -920,12 +920,19 @@ base_name(const char *file_name)
  * which itself must be absolute.  'dir' may be null or the empty string, in
  * which case the current working directory is used.
  *
+ * Additionally on Windows, if 'file_name' has a ':', returns a copy of
+ * 'file_name'
+ *
  * Returns a null pointer if 'dir' is null and getcwd() fails. */
 char *
 abs_file_name(const char *dir, const char *file_name)
 {
     if (file_name[0] == '/') {
         return xstrdup(file_name);
+#ifdef _WIN32
+    } else if (strchr(file_name, ':')) {
+        return xstrdup(file_name);
+#endif
     } else if (dir && dir[0]) {
         char *separator = dir[strlen(dir) - 1] == '/' ? "" : "/";
         return xasprintf("%s%s%s", dir, separator, file_name);

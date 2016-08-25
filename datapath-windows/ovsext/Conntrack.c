@@ -23,6 +23,7 @@
 #include "Jhash.h"
 #include "PacketParser.h"
 #include "Debug.h"
+#include "Event.h"
 
 #define WINDOWS_TICK 10000000
 #define SEC_TO_UNIX_EPOCH 11644473600LL
@@ -154,6 +155,15 @@ OvsCtUpdateFlowKey(struct OvsFlowKey *key,
 }
 
 static __inline VOID
+OvsPostCtEventEntry(POVS_CT_ENTRY entry, UINT8 type)
+{
+    OVS_CT_EVENT_ENTRY ctEventEntry = {0};
+    NdisMoveMemory(&ctEventEntry.entry, entry, sizeof(OVS_CT_ENTRY));
+    ctEventEntry.type = type;
+    OvsPostCtEvent(&ctEventEntry);
+}
+
+static __inline VOID
 OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx, UINT64 now)
 {
     NdisMoveMemory(&entry->key, &ctx->key, sizeof (OVS_CT_KEY));
@@ -162,6 +172,7 @@ OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx, UINT64 now)
     entry->timestampStart = now;
     InsertHeadList(&ovsConntrackTable[ctx->hash & CT_HASH_TABLE_MASK],
                    &entry->link);
+    OvsPostCtEventEntry(entry, OVS_EVENT_CT_NEW);
     ctTotalEntries++;
 }
 
@@ -253,6 +264,7 @@ OvsCtUpdateEntry(OVS_CT_ENTRY* entry,
 static __inline VOID
 OvsCtEntryDelete(POVS_CT_ENTRY entry)
 {
+    OvsPostCtEventEntry(entry, OVS_EVENT_CT_DELETE);
     RemoveEntryList(&entry->link);
     OvsFreeMemoryWithTag(entry, OVS_CT_POOL_TAG);
     ctTotalEntries--;
@@ -934,12 +946,15 @@ WindowsTickToUnixSeconds(long long windowsTicks)
                         - SEC_TO_UNIX_EPOCH));
 }
 
-static NTSTATUS
+NTSTATUS
 OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
-                          POVS_MESSAGE msgIn,
                           PVOID outBuffer,
                           UINT32 outBufLen,
-                          int dpIfIndex)
+                          UINT8 eventType,
+                          UINT32 nlmsgSeq,
+                          UINT32 nlmsgPid,
+                          UINT8 nfGenVersion,
+                          UINT32 dpIfIndex)
 {
     NL_BUFFER nlBuf;
     BOOLEAN ok;
@@ -947,6 +962,7 @@ OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
     UINT32 timeout;
     NDIS_STATUS status;
     UINT64 currentTime, expiration;
+    UINT16 nlmsgType;
     NdisGetCurrentSystemTime((LARGE_INTEGER *)&currentTime);
     UINT8 nfgenFamily = 0;
     if (entry->key.dl_type == htons(ETH_TYPE_IPV4)) {
@@ -957,13 +973,17 @@ OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
 
     NlBufInit(&nlBuf, outBuffer, outBufLen);
     /* Mimic netfilter */
-    UINT16 nlmsgType = (NFNL_SUBSYS_CTNETLINK << 8 | IPCTNL_MSG_CT_NEW);
+    if (eventType == OVS_EVENT_CT_NEW) {
+        nlmsgType = (UINT16) (NFNL_SUBSYS_CTNETLINK << 8 | IPCTNL_MSG_CT_NEW);
+    } else if (eventType == OVS_EVENT_CT_DELETE) {
+        nlmsgType = (UINT16) (NFNL_SUBSYS_CTNETLINK << 8 | IPCTNL_MSG_CT_DELETE);
+    } else {
+        return STATUS_INVALID_PARAMETER;
+    }
+
     ok = NlFillOvsMsgForNfGenMsg(&nlBuf, nlmsgType, NLM_F_CREATE,
-                                 msgIn->nlMsg.nlmsgSeq,
-                                 msgIn->nlMsg.nlmsgPid,
-                                 nfgenFamily,
-                                 msgIn->nfGenMsg.version,
-                                 dpIfIndex);
+                                 nlmsgSeq, nlmsgPid, nfgenFamily,
+                                 nfGenVersion, dpIfIndex);
     if (!ok) {
         return STATUS_INVALID_BUFFER_SIZE;
     }
@@ -1130,9 +1150,13 @@ OvsCtDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                 if (outIndex >= inIndex) {
                     entry = CONTAINING_RECORD(link, OVS_CT_ENTRY, link);
 
-                    rc = OvsCreateNlMsgFromCtEntry(entry, msgIn,
+                    rc = OvsCreateNlMsgFromCtEntry(entry,
                                                    usrParamsCtx->outputBuffer,
                                                    usrParamsCtx->outputLength,
+                                                   OVS_EVENT_CT_NEW,
+                                                   msgIn->nlMsg.nlmsgSeq,
+                                                   msgIn->nlMsg.nlmsgPid,
+                                                   msgIn->nfGenMsg.version,
                                                    0);
 
                     if (rc != NDIS_STATUS_SUCCESS) {

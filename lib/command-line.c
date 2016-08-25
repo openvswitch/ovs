@@ -87,20 +87,10 @@ ovs_cmdl_print_options(const struct option options[])
     ds_destroy(&ds);
 }
 
-/* Runs the command designated by argv[0] within the command table specified by
- * 'commands', which must be terminated by a command whose 'name' member is a
- * null pointer.
- *
- * Command-line options should be stripped off, so that a typical invocation
- * looks like:
- *    struct ovs_cmdl_context ctx = {
- *        .argc = argc - optind,
- *        .argv = argv + optind,
- *    };
- *    ovs_cmdl_run_command(&ctx, my_commands);
- * */
-void
-ovs_cmdl_run_command(struct ovs_cmdl_context *ctx, const struct ovs_cmdl_command commands[])
+static void
+ovs_cmdl_run_command__(struct ovs_cmdl_context *ctx,
+                       const struct ovs_cmdl_command commands[],
+                       bool read_only)
 {
     const struct ovs_cmdl_command *p;
 
@@ -118,6 +108,10 @@ ovs_cmdl_run_command(struct ovs_cmdl_context *ctx, const struct ovs_cmdl_command
                 VLOG_FATAL("'%s' command takes at most %d arguments",
                            p->name, p->max_args);
             } else {
+                if (p->mode == OVS_RW && read_only) {
+                    VLOG_FATAL("'%s' command does not work in read only mode",
+                               p->name);
+                }
                 p->handler(ctx);
                 if (ferror(stdout)) {
                     VLOG_FATAL("write to stdout failed");
@@ -131,6 +125,32 @@ ovs_cmdl_run_command(struct ovs_cmdl_context *ctx, const struct ovs_cmdl_command
     }
 
     VLOG_FATAL("unknown command '%s'; use --help for help", ctx->argv[0]);
+}
+
+/* Runs the command designated by argv[0] within the command table specified by
+ * 'commands', which must be terminated by a command whose 'name' member is a
+ * null pointer.
+ *
+ * Command-line options should be stripped off, so that a typical invocation
+ * looks like:
+ *    struct ovs_cmdl_context ctx = {
+ *        .argc = argc - optind,
+ *        .argv = argv + optind,
+ *    };
+ *    ovs_cmdl_run_command(&ctx, my_commands);
+ * */
+void
+ovs_cmdl_run_command(struct ovs_cmdl_context *ctx,
+                     const struct ovs_cmdl_command commands[])
+{
+    ovs_cmdl_run_command__(ctx, commands, false);
+}
+
+void
+ovs_cmdl_run_command_read_only(struct ovs_cmdl_context *ctx,
+                               const struct ovs_cmdl_command commands[])
+{
+    ovs_cmdl_run_command__(ctx, commands, true);
 }
 
 /* Process title. */

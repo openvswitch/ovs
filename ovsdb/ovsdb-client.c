@@ -1120,6 +1120,7 @@ do_monitor_cond(struct jsonrpc *rpc, const char *database,
                                                     NULL, &cnd));
     ovsdb_condition_destroy(&cnd);
     do_monitor__(rpc, database, OVSDB_MONITOR_V2, --argc, ++argv, condition);
+    ovsdb_schema_destroy(schema);
 }
 
 struct dump_table_aux {

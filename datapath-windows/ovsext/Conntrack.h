@@ -116,4 +116,13 @@ enum CT_UPDATE_RES OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
 enum ct_update_res OvsConntrackUpdateOtherEntry(OVS_CT_ENTRY *conn_,
                                                 BOOLEAN reply,
                                                 UINT64 now);
+NTSTATUS
+OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
+                          PVOID outBuffer,
+                          UINT32 outBufLen,
+                          UINT8 eventType,
+                          UINT32 nlmsgSeq,
+                          UINT32 nlmsgPid,
+                          UINT8 nfGenVersion,
+                          UINT32 dpIfIndex);
 #endif /* __OVS_CONNTRACK_H_ */

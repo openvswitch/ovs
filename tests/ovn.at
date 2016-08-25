@@ -1,3 +1,36 @@
+# OVN_CHECK_PACKETS([PCAP], [EXPECTED])
+#
+# This compares packets read from PCAP, in pcap format, to those read
+# from EXPECTED, which is a text file containing packets as hex
+# strings, one per line.  If PCAP contains fewer packets than
+# EXPECTED, it waits up to 10 seconds for more packets to appear.
+#
+# The implementation is an m4 macro that is mostly implemented in
+# terms of a shell function.  This reduces the size of the generated
+# testsuite file since the shell function is only emitted once even
+# when this macro is invoked many times.
+m4_divert_text([PREPARE_TESTS],
+  [ovn_check_packets__ () {
+     echo
+     echo "checking packets in $1 against $2:"
+     rcv_pcap=$1
+     rcv_text=`echo "$rcv_pcap.packets" | sed 's/\.pcap//'`
+     exp_text=$2
+     exp_n=`wc -l < "$exp_text"`
+     ovs_wait_cond () {
+         $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $rcv_pcap > $rcv_text
+         rcv_n=`wc -l < "$rcv_text"`
+         test $rcv_n -ge $exp_n
+     }
+     ovs_wait || echo "expected $exp_n packets, only received $rcv_n"
+
+     sort $exp_text > expout
+   }
+])
+m4_define([OVN_CHECK_PACKETS],
+  [ovn_check_packets__ "$1" "$2"
+   AT_CHECK([sort $rcv_text], [0], [expout])])
+
 AT_BANNER([OVN components])
 
 AT_SETUP([ovn -- lexer])
@@ -97,6 +130,48 @@ AT_CAPTURE_FILE([input.txt])
 sed 's/ =>.*//' test-cases.txt > input.txt
 sed 's/.* => //' test-cases.txt > expout
 AT_CHECK([ovstest test-ovn lex < input.txt], [0], [expout])
+AT_CLEANUP
+
+dnl The OVN expression parser needs to know what fields overlap with one
+dnl another.  This test therefore verifies that all the smaller registers
+dnl are defined as terms of subfields of the larger ones.
+dnl
+dnl When we add or remove registers this test needs to be updated, of course.
+AT_SETUP([ovn -- registers])
+AT_CHECK([ovstest test-ovn dump-symtab | grep reg | sort], [0],
+[[reg0 = xxreg0[96..127]
+reg1 = xxreg0[64..95]
+reg2 = xxreg0[32..63]
+reg3 = xxreg0[0..31]
+reg4 = xxreg1[96..127]
+reg5 = xxreg1[64..95]
+reg6 = xxreg1[32..63]
+reg7 = xxreg1[0..31]
+reg8 = xreg4[32..63]
+reg9 = xreg4[0..31]
+xreg0 = xxreg0[64..127]
+xreg1 = xxreg0[0..63]
+xreg2 = xxreg1[64..127]
+xreg3 = xxreg1[0..63]
+xreg4 = OXM_OF_PKT_REG4
+xxreg0 = NXM_NX_XXREG0
+xxreg1 = NXM_NX_XXREG1
+]])
+AT_CLEANUP
+
+dnl Check that the OVN conntrack field definitions are correct.
+AT_SETUP([ovn -- conntrack fields])
+AT_CHECK([ovstest test-ovn dump-symtab | grep ^ct | sort], [0],
+[[ct.est = ct_state[1]
+ct.inv = ct_state[4]
+ct.new = ct_state[0]
+ct.rel = ct_state[2]
+ct.rpl = ct_state[3]
+ct.trk = ct_state[5]
+ct_label = NXM_NX_CT_LABEL
+ct_mark = NXM_NX_CT_MARK
+ct_state = NXM_NX_CT_STATE
+]])
 AT_CLEANUP
 
 AT_SETUP([ovn -- expression parser])
@@ -207,6 +282,7 @@ inport == "eth0"
 
 ip4.src == "eth0" => Integer field ip4.src is not compatible with string constant.
 inport == 1 => String field inport is not compatible with integer constant.
+ip4.src = 1.2.3.4 => Syntax error at `=' expecting relational operator.
 
 ip4.src > {1, 2, 3} => Only == and != operators may be used with value sets.
 eth.type > 0x800 => Only == and != operators may be used with nominal field eth.type.
@@ -216,6 +292,7 @@ inport != "eth0" => Nominal field inport may only be tested for equality (taking
 !(inport == "eth0") => Nominal field inport may only be tested for equality (taking enclosing `!' operators into account).
 eth.type != 0x800 => Nominal field eth.type may only be tested for equality (taking enclosing `!' operators into account).
 !(eth.type == 0x800) => Nominal field eth.type may only be tested for equality (taking enclosing `!' operators into account).
+inport = "eth0" => Syntax error at `=' expecting relational operator.
 
 123 == 123 => Syntax error at `123' expecting field name.
 
@@ -264,7 +341,7 @@ ip4.src == ::1 => 128-bit constant is not compatible with 32-bit field ip4.src.
 
 1 == eth.type == 2 => Range expressions must have the form `x < field < y' or `x > field > y', with each `<' optionally replaced by `<=' or `>' by `>=').
 
-eth.dst[40] x => Extra tokens at end of input.
+eth.dst[40] x => Syntax error at `x' expecting end of input.
 
 ip4.src == {1.2.3.4, $set1, $unknownset} => Syntax error at `$unknownset' expecting address set name.
 eth.src == {$set3, badmac, 00:00:00:00:00:01} => Syntax error at `badmac' expecting constant.
@@ -295,7 +372,7 @@ vlan.present => vlan.tci[12]
 
 !vlan.pcp => vlan.tci[13..15] == 0 && vlan.tci[12]
 vlan.pcp == 1 && vlan.vid == 2 => vlan.tci[13..15] == 0x1 && vlan.tci[12] && vlan.tci[0..11] == 0x2 && vlan.tci[12]
-!reg0 && !reg1 && !reg2 && !reg3 => xreg0[32..63] == 0 && xreg0[0..31] == 0 && xreg1[32..63] == 0 && xreg1[0..31] == 0
+!reg0 && !reg1 && !reg2 && !reg3 => xxreg0[96..127] == 0 && xxreg0[64..95] == 0 && xxreg0[32..63] == 0 && xxreg0[0..31] == 0
 
 ip.first_frag => ip.frag[0] && (eth.type == 0x800 || eth.type == 0x86dd) && (!ip.frag[1] || (eth.type != 0x800 && eth.type != 0x86dd))
 !ip.first_frag => !ip.frag[0] || (eth.type != 0x800 && eth.type != 0x86dd) || (ip.frag[1] && (eth.type == 0x800 || eth.type == 0x86dd))
@@ -500,174 +577,385 @@ dl_src=ba:be:be:ef:de:ad
 AT_CLEANUP
 
 AT_SETUP([ovn -- action parsing])
-dnl Text before => is input, text after => is expected output.
-AT_DATA([test-cases.txt], [[
-# drop
-drop; => actions=drop, prereqs=1
-drop; next; => Syntax error at `next' expecting end of input.
-next; drop; => Syntax error at `drop' expecting action.
+dnl Unindented text is input (a set of OVN logical actions).
+dnl Indented text is expected output.
+AT_DATA([test-cases.txt],
+[[# drop
+drop;
+    encodes as drop
+drop; next;
+    Syntax error at `next' expecting end of input.
+next; drop;
+    Syntax error at `drop' expecting action.
 
 # output
-output; => actions=resubmit(,64), prereqs=1
+output;
+    encodes as resubmit(,64)
 
 # next
-next; => actions=resubmit(,27), prereqs=1
-next(0); => actions=resubmit(,16), prereqs=1
-next(15); => actions=resubmit(,31), prereqs=1
+next;
+    formats as next(11);
+    encodes as resubmit(,27)
+next(11);
+    encodes as resubmit(,27)
+next(0);
+    encodes as resubmit(,16)
+next(15);
+    encodes as resubmit(,31)
 
-next(); => Syntax error at `)' expecting small integer.
-next(10; => Syntax error at `;' expecting `)'.
-next(16); => "next" argument must be in range 0 to 15.
+next();
+    Syntax error at `)' expecting small integer.
+next(10;
+    Syntax error at `;' expecting `)'.
+next(16);
+    "next" argument must be in range 0 to 15.
 
 # Loading a constant value.
-tcp.dst=80; => actions=set_field:80->tcp_dst, prereqs=ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
-eth.dst[40] = 1; => actions=set_field:01:00:00:00:00:00/01:00:00:00:00:00->eth_dst, prereqs=1
-vlan.pcp = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=vlan.tci[12]
-vlan.tci[13..15] = 2; => actions=set_field:0x4000/0xe000->vlan_tci, prereqs=1
-inport = ""; => actions=set_field:0->reg14,set_field:0->in_port, prereqs=1
-ip.ttl = 4; => actions=set_field:4->nw_ttl, prereqs=eth.type == 0x800 || eth.type == 0x86dd
-outport="eth0"; next; outport="LOCAL"; next; => actions=set_field:0x5->reg15,resubmit(,27),set_field:0xfffe->reg15,resubmit(,27), prereqs=1
+tcp.dst=80;
+    formats as tcp.dst = 80;
+    encodes as set_field:80->tcp_dst
+    has prereqs ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
+eth.dst[40] = 1;
+    encodes as set_field:01:00:00:00:00:00/01:00:00:00:00:00->eth_dst
+vlan.pcp = 2;
+    encodes as set_field:0x4000/0xe000->vlan_tci
+    has prereqs vlan.tci[12]
+vlan.tci[13..15] = 2;
+    encodes as set_field:0x4000/0xe000->vlan_tci
+inport = "";
+    encodes as set_field:0->reg14
+ip.ttl=4;
+    formats as ip.ttl = 4;
+    encodes as set_field:4->nw_ttl
+    has prereqs eth.type == 0x800 || eth.type == 0x86dd
+outport="eth0"; next; outport="LOCAL"; next;
+    formats as outport = "eth0"; next(11); outport = "LOCAL"; next(11);
+    encodes as set_field:0x5->reg15,resubmit(,27),set_field:0xfffe->reg15,resubmit(,27)
 
-inport[1] = 1; => Cannot select subfield of string field inport.
-ip.proto[1] = 1; => Cannot select subfield of nominal field ip.proto.
-eth.dst[40] == 1; => Syntax error at `==' expecting `=' or `<->'.
-ip = 1; => Predicate symbol ip used where lvalue required.
-ip.proto = 6; => Field ip.proto is not modifiable.
-inport = {"a", "b"}; => Assignments require a single value.
-inport = {}; => Syntax error at `}' expecting constant.
-bad_prereq = 123; => Error parsing expression `xyzzy' encountered as prerequisite or predicate of initial expression: Syntax error at `xyzzy' expecting field name.
-self_recurse = 123; => Error parsing expression `self_recurse != 0' encountered as prerequisite or predicate of initial expression: Error parsing expression `self_recurse != 0' encountered as prerequisite or predicate of initial expression: Recursive expansion of symbol `self_recurse'.
-vlan.present = 0; => Predicate symbol vlan.present used where lvalue required.
+inport[1] = 1;
+    Cannot select subfield of string field inport.
+ip.proto[1] = 1;
+    Cannot select subfield of nominal field ip.proto.
+eth.dst[40] == 1;
+    Syntax error at `==' expecting `=' or `<->'.
+ip = 1;
+    Predicate symbol ip used where lvalue required.
+ip.proto = 6;
+    Field ip.proto is not modifiable.
+inport = {"a", "b"};
+    Syntax error at `{' expecting constant.
+inport = {};
+    Syntax error at `{' expecting constant.
+bad_prereq = 123;
+    Error parsing expression `xyzzy' encountered as prerequisite or predicate of initial expression: Syntax error at `xyzzy' expecting field name.
+self_recurse = 123;
+    Error parsing expression `self_recurse != 0' encountered as prerequisite or predicate of initial expression: Error parsing expression `self_recurse != 0' encountered as prerequisite or predicate of initial expression: Recursive expansion of symbol `self_recurse'.
+vlan.present = 0;
+    Predicate symbol vlan.present used where lvalue required.
 
 # Moving one field into another.
-reg0 = reg1; => actions=move:OXM_OF_PKT_REG0[0..31]->OXM_OF_PKT_REG0[32..63], prereqs=1
-vlan.pcp = reg0[0..2]; => actions=move:OXM_OF_PKT_REG0[32..34]->NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
-reg0[10] = vlan.pcp[1]; => actions=move:NXM_OF_VLAN_TCI[14]->OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]
-outport = inport; => actions=move:NXM_NX_REG14[]->NXM_NX_REG15[], prereqs=1
+reg0=reg1;
+    formats as reg0 = reg1;
+    encodes as move:NXM_NX_XXREG0[64..95]->NXM_NX_XXREG0[96..127]
+vlan.pcp = reg0[0..2];
+    encodes as move:NXM_NX_XXREG0[96..98]->NXM_OF_VLAN_TCI[13..15]
+    has prereqs vlan.tci[12]
+reg0[10] = vlan.pcp[1];
+    encodes as move:NXM_OF_VLAN_TCI[14]->NXM_NX_XXREG0[106]
+    has prereqs vlan.tci[12]
+outport = inport;
+    encodes as move:NXM_NX_REG14[]->NXM_NX_REG15[]
 
-reg0[0] = vlan.present; => Predicate symbol vlan.present used where lvalue required.
-reg0 = reg1[0..10]; => Can't assign 11-bit value to 32-bit destination.
-inport = reg0; => Can't assign integer field (reg0) to string field (inport).
-inport = big_string; => String fields inport and big_string are incompatible for assignment.
-ip.proto = reg0[0..7]; => Field ip.proto is not modifiable.
+reg0[0] = vlan.present;
+    Predicate symbol vlan.present used where lvalue required.
+reg0 = reg1[0..10];
+    Can't assign 11-bit value to 32-bit destination.
+inport = reg0;
+    Can't assign integer field (reg0) to string field (inport).
+inport = big_string;
+    String fields inport and big_string are incompatible for assignment.
+ip.proto = reg0[0..7];
+    Field ip.proto is not modifiable.
 
 # Exchanging fields.
-reg0 <-> reg1; => actions=push:OXM_OF_PKT_REG0[0..31],push:OXM_OF_PKT_REG0[32..63],pop:OXM_OF_PKT_REG0[0..31],pop:OXM_OF_PKT_REG0[32..63], prereqs=1
-vlan.pcp <-> reg0[0..2]; => actions=push:OXM_OF_PKT_REG0[32..34],push:NXM_OF_VLAN_TCI[13..15],pop:OXM_OF_PKT_REG0[32..34],pop:NXM_OF_VLAN_TCI[13..15], prereqs=vlan.tci[12]
-reg0[10] <-> vlan.pcp[1]; => actions=push:NXM_OF_VLAN_TCI[14],push:OXM_OF_PKT_REG0[42],pop:NXM_OF_VLAN_TCI[14],pop:OXM_OF_PKT_REG0[42], prereqs=vlan.tci[12]
-outport <-> inport; => actions=push:NXM_NX_REG14[],push:NXM_NX_REG15[],pop:NXM_NX_REG14[],pop:NXM_NX_REG15[], prereqs=1
+reg0 <-> reg1;
+    encodes as push:NXM_NX_XXREG0[64..95],push:NXM_NX_XXREG0[96..127],pop:NXM_NX_XXREG0[64..95],pop:NXM_NX_XXREG0[96..127]
+vlan.pcp <-> reg0[0..2];
+    encodes as push:NXM_NX_XXREG0[96..98],push:NXM_OF_VLAN_TCI[13..15],pop:NXM_NX_XXREG0[96..98],pop:NXM_OF_VLAN_TCI[13..15]
+    has prereqs vlan.tci[12]
+reg0[10] <-> vlan.pcp[1];
+    encodes as push:NXM_OF_VLAN_TCI[14],push:NXM_NX_XXREG0[106],pop:NXM_OF_VLAN_TCI[14],pop:NXM_NX_XXREG0[106]
+    has prereqs vlan.tci[12]
+outport <-> inport;
+    encodes as push:NXM_NX_REG14[],push:NXM_NX_REG15[],pop:NXM_NX_REG14[],pop:NXM_NX_REG15[]
 
-reg0[0] <-> vlan.present; => Predicate symbol vlan.present used where lvalue required.
-reg0 <-> reg1[0..10]; => Can't exchange 32-bit field with 11-bit field.
-inport <-> reg0; => Can't exchange string field (inport) with integer field (reg0).
-inport <-> big_string; => String fields inport and big_string are incompatible for exchange.
-ip.proto <-> reg0[0..7]; => Field ip.proto is not modifiable.
-reg0[0..7] <-> ip.proto; => Field ip.proto is not modifiable.
+reg0[0] <-> vlan.present;
+    Predicate symbol vlan.present used where lvalue required.
+reg0 <-> reg1[0..10];
+    Can't exchange 32-bit field with 11-bit field.
+inport <-> reg0;
+    Can't exchange string field (inport) with integer field (reg0).
+inport <-> big_string;
+    String fields inport and big_string are incompatible for exchange.
+ip.proto <-> reg0[0..7];
+    Field ip.proto is not modifiable.
+reg0[0..7] <-> ip.proto;
+    Field ip.proto is not modifiable.
 
 # TTL decrement.
-ip.ttl--; => actions=dec_ttl, prereqs=ip
-ip.ttl => Syntax error at end of input expecting `--'.
+ip.ttl--;
+    encodes as dec_ttl
+    has prereqs ip
+ip.ttl
+    Syntax error at end of input expecting `--'.
 
 # load balancing.
-ct_lb; => actions=ct(table=27,zone=NXM_NX_REG13[0..15],nat), prereqs=ip
-ct_lb(); => Syntax error at `)' expecting IPv4 address.
-ct_lb(192.168.1.2:80, 192.168.1.3:80); => actions=group:1, prereqs=ip
-ct_lb(192.168.1.2, 192.168.1.3, ); => actions=group:2, prereqs=ip
-ct_lb(192.168.1.2:); => Syntax error at `)' expecting port number.
-ct_lb(192.168.1.2:123456); => Syntax error at `123456' expecting port number.
-ct_lb(foo); => Syntax error at `foo' expecting IPv4 address.
+ct_lb;
+    encodes as ct(table=27,zone=NXM_NX_REG13[0..15],nat)
+    has prereqs ip
+ct_lb();
+    formats as ct_lb;
+    encodes as ct(table=27,zone=NXM_NX_REG13[0..15],nat)
+    has prereqs ip
+ct_lb(192.168.1.2:80, 192.168.1.3:80);
+    encodes as group:1
+    has prereqs ip
+ct_lb(192.168.1.2, 192.168.1.3, );
+    formats as ct_lb(192.168.1.2, 192.168.1.3);
+    encodes as group:2
+    has prereqs ip
 
-# conntrack
-ct_next; => actions=ct(table=27,zone=NXM_NX_REG13[0..15]), prereqs=ip
-ct_commit; => actions=ct(commit,zone=NXM_NX_REG13[0..15]), prereqs=ip
-ct_commit(); => actions=ct(commit,zone=NXM_NX_REG13[0..15]), prereqs=ip
-ct_commit(ct_mark=1); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1->ct_mark)), prereqs=ip
-ct_commit(ct_mark=1/1); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1/0x1->ct_mark)), prereqs=ip
-ct_commit(ct_label=1); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1->ct_label)), prereqs=ip
-ct_commit(ct_label=1/1); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1/0x1->ct_label)), prereqs=ip
-ct_commit(ct_label=0x01020304050607080910111213141516); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1020304050607080910111213141516->ct_label)), prereqs=ip
-ct_commit(ct_label=0x181716151413121110090807060504030201); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x16151413121110090807060504030201->ct_label)), prereqs=ip
-ct_commit(ct_label=0x01000000000000000000000000000000/0x01000000000000000000000000000000); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1000000000000000000000000000000/0x1000000000000000000000000000000->ct_label)), prereqs=ip
-ct_commit(ct_label=18446744073709551615); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0xffffffffffffffff->ct_label)), prereqs=ip
-ct_commit(ct_label=18446744073709551616); => Decimal constants must be less than 2**64.
-ct_commit(ct_mark=1, ct_label=2); => actions=ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1->ct_mark,set_field:0x2->ct_label)), prereqs=ip
+ct_lb(192.168.1.2:);
+    Syntax error at `)' expecting port number.
+ct_lb(192.168.1.2:123456);
+    Syntax error at `123456' expecting port number.
+ct_lb(foo);
+    Syntax error at `foo' expecting IPv4 address.
 
-# dnat
-ct_dnat; => actions=ct(table=27,zone=NXM_NX_REG11[0..15],nat), prereqs=ip
-ct_dnat(192.168.1.2); => actions=ct(commit,table=27,zone=NXM_NX_REG11[0..15],nat(dst=192.168.1.2)), prereqs=ip
-ct_dnat(192.168.1.2, 192.168.1.3); => Syntax error at `,' expecting `)'.
-ct_dnat(foo); => Syntax error at `foo' invalid ip.
-ct_dnat(foo, bar); => Syntax error at `foo' invalid ip.
-ct_dnat(); => Syntax error at `)' invalid ip.
+# ct_next
+ct_next;
+    encodes as ct(table=27,zone=NXM_NX_REG13[0..15])
+    has prereqs ip
 
-# snat
-ct_snat; => actions=ct(zone=NXM_NX_REG12[0..15],nat), prereqs=ip
-ct_snat(192.168.1.2); => actions=ct(commit,table=27,zone=NXM_NX_REG12[0..15],nat(src=192.168.1.2)), prereqs=ip
-ct_snat(192.168.1.2, 192.168.1.3); => Syntax error at `,' expecting `)'.
-ct_snat(foo); => Syntax error at `foo' invalid ip.
-ct_snat(foo, bar); => Syntax error at `foo' invalid ip.
-ct_snat(); => Syntax error at `)' invalid ip.
+# ct_commit
+ct_commit;
+    encodes as ct(commit,zone=NXM_NX_REG13[0..15])
+    has prereqs ip
+ct_commit();
+    formats as ct_commit;
+    encodes as ct(commit,zone=NXM_NX_REG13[0..15])
+    has prereqs ip
+ct_commit(ct_mark=1);
+    formats as ct_commit(ct_mark=0x1);
+    encodes as ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1->ct_mark))
+    has prereqs ip
+ct_commit(ct_mark=1/1);
+    formats as ct_commit(ct_mark=0x1/0x1);
+    encodes as ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1/0x1->ct_mark))
+    has prereqs ip
+ct_commit(ct_label=1);
+    formats as ct_commit(ct_label=0x1);
+    encodes as ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1->ct_label))
+    has prereqs ip
+ct_commit(ct_label=1/1);
+    formats as ct_commit(ct_label=0x1/0x1);
+    encodes as ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1/0x1->ct_label))
+    has prereqs ip
+ct_commit(ct_mark=1, ct_label=2);
+    formats as ct_commit(ct_mark=0x1, ct_label=0x2);
+    encodes as ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1->ct_mark,set_field:0x2->ct_label))
+    has prereqs ip
 
+ct_commit(ct_label=0x01020304050607080910111213141516);
+    formats as ct_commit(ct_label=0x1020304050607080910111213141516);
+    encodes as ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1020304050607080910111213141516->ct_label))
+    has prereqs ip
+ct_commit(ct_label=0x181716151413121110090807060504030201);
+    formats as ct_commit(ct_label=0x16151413121110090807060504030201);
+    encodes as ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x16151413121110090807060504030201->ct_label))
+    has prereqs ip
+ct_commit(ct_label=0x1000000000000000000000000000000/0x1000000000000000000000000000000);
+    encodes as ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0x1000000000000000000000000000000/0x1000000000000000000000000000000->ct_label))
+    has prereqs ip
+ct_commit(ct_label=18446744073709551615);
+    formats as ct_commit(ct_label=0xffffffffffffffff);
+    encodes as ct(commit,zone=NXM_NX_REG13[0..15],exec(set_field:0xffffffffffffffff->ct_label))
+    has prereqs ip
+ct_commit(ct_label=18446744073709551616);
+    Decimal constants must be less than 2**64.
+
+# ct_dnat
+ct_dnat;
+    encodes as ct(table=27,zone=NXM_NX_REG11[0..15],nat)
+    has prereqs ip
+ct_dnat(192.168.1.2);
+    encodes as ct(commit,table=27,zone=NXM_NX_REG11[0..15],nat(dst=192.168.1.2))
+    has prereqs ip
+
+ct_dnat(192.168.1.2, 192.168.1.3);
+    Syntax error at `,' expecting `)'.
+ct_dnat(foo);
+    Syntax error at `foo' expecting IPv4 address.
+ct_dnat(foo, bar);
+    Syntax error at `foo' expecting IPv4 address.
+ct_dnat();
+    Syntax error at `)' expecting IPv4 address.
+
+# ct_snat
+ct_snat;
+    encodes as ct(zone=NXM_NX_REG12[0..15],nat)
+    has prereqs ip
+ct_snat(192.168.1.2);
+    encodes as ct(commit,table=27,zone=NXM_NX_REG12[0..15],nat(src=192.168.1.2))
+    has prereqs ip
+
+ct_snat(192.168.1.2, 192.168.1.3);
+    Syntax error at `,' expecting `)'.
+ct_snat(foo);
+    Syntax error at `foo' expecting IPv4 address.
+ct_snat(foo, bar);
+    Syntax error at `foo' expecting IPv4 address.
+ct_snat();
+    Syntax error at `)' expecting IPv4 address.
 
 # arp
-arp { eth.dst = ff:ff:ff:ff:ff:ff; output; }; => actions=controller(userdata=00.00.00.00.00.00.00.00.00.19.00.10.80.00.06.06.ff.ff.ff.ff.ff.ff.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00), prereqs=ip4
+arp { eth.dst = ff:ff:ff:ff:ff:ff; output; };
+    encodes as controller(userdata=00.00.00.00.00.00.00.00.00.19.00.10.80.00.06.06.ff.ff.ff.ff.ff.ff.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00)
+    has prereqs ip4
 
 # get_arp
-get_arp(outport, ip4.dst); => actions=push:NXM_NX_REG0[],push:NXM_OF_IP_DST[],pop:NXM_NX_REG0[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_REG0[], prereqs=eth.type == 0x800
-get_arp(inport, reg0); => actions=push:NXM_NX_REG15[],push:NXM_NX_REG0[],push:OXM_OF_PKT_REG0[32..63],push:NXM_NX_REG14[],pop:NXM_NX_REG15[],pop:NXM_NX_REG0[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_REG0[],pop:NXM_NX_REG15[], prereqs=1
-get_arp; => Syntax error at `;' expecting `('.
-get_arp(); => Syntax error at `)' expecting field name.
-get_arp(inport); => Syntax error at `)' expecting `,'.
-get_arp(inport ip4.dst); => Syntax error at `ip4.dst' expecting `,'.
-get_arp(inport, ip4.dst; => Syntax error at `;' expecting `)'.
-get_arp(inport, eth.dst); => Cannot use 48-bit field eth.dst[0..47] where 32-bit field is required.
-get_arp(inport, outport); => Cannot use string field outport where numeric field is required.
-get_arp(reg0, ip4.dst); => Cannot use numeric field reg0 where string field is required.
+get_arp(outport, ip4.dst);
+    encodes as push:NXM_NX_REG0[],push:NXM_OF_IP_DST[],pop:NXM_NX_REG0[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_REG0[]
+    has prereqs eth.type == 0x800
+get_arp(inport, reg0);
+    encodes as push:NXM_NX_REG15[],push:NXM_NX_REG0[],push:NXM_NX_XXREG0[96..127],push:NXM_NX_REG14[],pop:NXM_NX_REG15[],pop:NXM_NX_REG0[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_REG0[],pop:NXM_NX_REG15[]
+
+get_arp;
+    Syntax error at `;' expecting `('.
+get_arp();
+    Syntax error at `)' expecting field name.
+get_arp(inport);
+    Syntax error at `)' expecting `,'.
+get_arp(inport ip4.dst);
+    Syntax error at `ip4.dst' expecting `,'.
+get_arp(inport, ip4.dst;
+    Syntax error at `;' expecting `)'.
+get_arp(inport, eth.dst);
+    Cannot use 48-bit field eth.dst[0..47] where 32-bit field is required.
+get_arp(inport, outport);
+    Cannot use string field outport where numeric field is required.
+get_arp(reg0, ip4.dst);
+    Cannot use numeric field reg0 where string field is required.
 
 # put_arp
-put_arp(inport, arp.spa, arp.sha); => actions=push:NXM_NX_REG0[],push:NXM_OF_ETH_SRC[],push:NXM_NX_ARP_SHA[],push:NXM_OF_ARP_SPA[],pop:NXM_NX_REG0[],pop:NXM_OF_ETH_SRC[],controller(userdata=00.00.00.01.00.00.00.00),pop:NXM_OF_ETH_SRC[],pop:NXM_NX_REG0[], prereqs=eth.type == 0x806 && eth.type == 0x806
+put_arp(inport, arp.spa, arp.sha);
+    encodes as push:NXM_NX_REG0[],push:NXM_OF_ETH_SRC[],push:NXM_NX_ARP_SHA[],push:NXM_OF_ARP_SPA[],pop:NXM_NX_REG0[],pop:NXM_OF_ETH_SRC[],controller(userdata=00.00.00.01.00.00.00.00),pop:NXM_OF_ETH_SRC[],pop:NXM_NX_REG0[]
+    has prereqs eth.type == 0x806 && eth.type == 0x806
 
 # put_dhcp_opts
-reg1[0] = put_dhcp_opts(offerip = 1.2.3.4, router = 10.0.0.1); => actions=controller(userdata=00.00.00.02.00.00.00.00.80.01.00.08.00.00.00.00.01.02.03.04.03.04.0a.00.00.01,pause), prereqs=1
-reg2[5] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.254.0,mtu=1400,domain="ovn.org"); => actions=controller(userdata=00.00.00.02.00.00.00.00.80.01.02.08.00.00.00.25.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.fe.00.1a.02.05.78.0f.07.6f.76.6e.2e.6f.72.67,pause), prereqs=1
-# offerip=10.0.0.4             --> 0a.00.00.04
-# router=10.0.0.1              --> 03.04.0a.00.00.01
-# netmask=255.255.255.0        --> 01.04.ff.ff.ff.00
-# mtu=1400                     --> 1a.02.05.78
-# ip_forward_enable-1          --> 13.01.01
-# default_ttl=121              --> 17.01.79
-# dns_server={8.8.8.8,7.7.7.7} --> 06.08.08.08.08.08.07.07.07.07
-# classless_static_route=      --> 79.14
-# {30.0.0.0/24,10.0.0.4        --> 18.1e.00.00.0a.00.00.04
-#  40.0.0.0/16,10.0.0.6        --> 10.28.00.0a.00.00.06
-#  0.0.0.0/0,10.0.0.1}         --> 00.0a.00.00.01
-# ethernet_encap=1             --> 24.01.01
-# router_discovery=0           --> 1f.01.00
-reg0[15] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.255.0,mtu=1400,ip_forward_enable=1,default_ttl=121,dns_server={8.8.8.8,7.7.7.7},classless_static_route={30.0.0.0/24,10.0.0.4,40.0.0.0/16,10.0.0.6,0.0.0.0/0,10.0.0.1},ethernet_encap=1,router_discovery=0); => actions=controller(userdata=00.00.00.02.00.00.00.00.80.01.00.08.00.00.00.2f.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.ff.00.1a.02.05.78.13.01.01.17.01.79.06.08.08.08.08.08.07.07.07.07.79.14.18.1e.00.00.0a.00.00.04.10.28.00.0a.00.00.06.00.0a.00.00.01.24.01.01.1f.01.00,pause), prereqs=1
-reg1[0..1] = put_dhcp_opts(offerip = 1.2.3.4, router = 10.0.0.1); => Cannot use 2-bit field reg1[0..1] where 1-bit field is required.
-reg1[0] = put_dhcp_opts(); => Syntax error at `)'.
-reg1[0] = put_dhcp_opts(x = 1.2.3.4, router = 10.0.0.1); => Syntax error at `x' expecting offerip option.
-reg1[0] = put_dhcp_opts(offerip=1.2.3.4, "hi"); => Syntax error at `"hi"'.
-reg1[0] = put_dhcp_opts(offerip=1.2.3.4, xyzzy); => Syntax error at `xyzzy' expecting DHCP option name.
-reg1[0] = put_dhcp_opts(offerip="xyzzy"); => DHCP option offerip requires numeric value.
-reg1[0] = put_dhcp_opts(offerip=1.2.3.4, domain=1.2.3.4); => DHCP option domain requires string value.
+reg1[0] = put_dhcp_opts(offerip = 1.2.3.4, router = 10.0.0.1);
+    encodes as controller(userdata=00.00.00.02.00.00.00.00.00.01.de.10.00.00.00.40.01.02.03.04.03.04.0a.00.00.01,pause)
+reg2[5] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.254.0,mtu=1400,domain="ovn.org");
+    formats as reg2[5] = put_dhcp_opts(offerip = 10.0.0.4, router = 10.0.0.1, netmask = 255.255.254.0, mtu = 1400, domain = "ovn.org");
+    encodes as controller(userdata=00.00.00.02.00.00.00.00.00.01.de.10.00.00.00.25.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.fe.00.1a.02.05.78.0f.07.6f.76.6e.2e.6f.72.67,pause)
+reg0[15] = put_dhcp_opts(offerip=10.0.0.4,router=10.0.0.1,netmask=255.255.255.0,mtu=1400,ip_forward_enable=1,default_ttl=121,dns_server={8.8.8.8,7.7.7.7},classless_static_route={30.0.0.0/24,10.0.0.4,40.0.0.0/16,10.0.0.6,0.0.0.0/0,10.0.0.1},ethernet_encap=1,router_discovery=0);
+    formats as reg0[15] = put_dhcp_opts(offerip = 10.0.0.4, router = 10.0.0.1, netmask = 255.255.255.0, mtu = 1400, ip_forward_enable = 1, default_ttl = 121, dns_server = {8.8.8.8, 7.7.7.7}, classless_static_route = {30.0.0.0/24, 10.0.0.4, 40.0.0.0/16, 10.0.0.6, 0.0.0.0/0, 10.0.0.1}, ethernet_encap = 1, router_discovery = 0);
+    encodes as controller(userdata=00.00.00.02.00.00.00.00.00.01.de.10.00.00.00.6f.0a.00.00.04.03.04.0a.00.00.01.01.04.ff.ff.ff.00.1a.02.05.78.13.01.01.17.01.79.06.08.08.08.08.08.07.07.07.07.79.14.18.1e.00.00.0a.00.00.04.10.28.00.0a.00.00.06.00.0a.00.00.01.24.01.01.1f.01.00,pause)
 
-# na
-na { eth.src = 12:34:56:78:9a:bc; nd.tll = 12:34:56:78:9a:bc; outport = inport; inport = ""; /* Allow sending out inport. */ output; }; => actions=controller(userdata=00.00.00.03.00.00.00.00.00.19.00.10.80.00.08.06.12.34.56.78.9a.bc.00.00.00.19.00.10.80.00.42.06.12.34.56.78.9a.bc.00.00.ff.ff.00.18.00.00.23.20.00.06.00.20.00.00.00.00.00.01.1c.04.00.01.1e.04.00.19.00.10.00.01.1c.04.00.00.00.00.00.00.00.00.00.19.00.10.00.00.00.02.00.00.00.00.00.00.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00), prereqs=nd
+reg1[0..1] = put_dhcp_opts(offerip = 1.2.3.4, router = 10.0.0.1);
+    Cannot use 2-bit field reg1[0..1] where 1-bit field is required.
+reg1[0] = put_dhcp_opts();
+    put_dhcp_opts requires offerip to be specified.
+reg1[0] = put_dhcp_opts(x = 1.2.3.4, router = 10.0.0.1);
+    Syntax error at `x' expecting DHCPv4 option name.
+reg1[0] = put_dhcp_opts(router = 10.0.0.1);
+    put_dhcp_opts requires offerip to be specified.
+reg1[0] = put_dhcp_opts(offerip=1.2.3.4, "hi");
+    Syntax error at `"hi"'.
+reg1[0] = put_dhcp_opts(offerip=1.2.3.4, xyzzy);
+    Syntax error at `xyzzy' expecting DHCPv4 option name.
+reg1[0] = put_dhcp_opts(offerip="xyzzy");
+    DHCPv4 option offerip requires numeric value.
+reg1[0] = put_dhcp_opts(offerip=1.2.3.4, domain=1.2.3.4);
+    DHCPv4 option domain requires string value.
+
+# nd_na
+nd_na { eth.src = 12:34:56:78:9a:bc; nd.tll = 12:34:56:78:9a:bc; outport = inport; inport = ""; /* Allow sending out inport. */ output; };
+    formats as nd_na { eth.src = 12:34:56:78:9a:bc; nd.tll = 12:34:56:78:9a:bc; outport = inport; inport = ""; output; };
+    encodes as controller(userdata=00.00.00.03.00.00.00.00.00.19.00.10.80.00.08.06.12.34.56.78.9a.bc.00.00.00.19.00.10.80.00.42.06.12.34.56.78.9a.bc.00.00.ff.ff.00.18.00.00.23.20.00.06.00.20.00.00.00.00.00.01.1c.04.00.01.1e.04.00.19.00.10.00.01.1c.04.00.00.00.00.00.00.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00)
+    has prereqs nd_ns
+
+# get_nd
+get_nd(outport, ip6.dst);
+    encodes as push:NXM_NX_XXREG0[],push:NXM_NX_IPV6_DST[],pop:NXM_NX_XXREG0[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_XXREG0[]
+    has prereqs eth.type == 0x86dd
+get_nd(inport, xxreg0);
+    encodes as push:NXM_NX_REG15[],push:NXM_NX_REG14[],pop:NXM_NX_REG15[],set_field:00:00:00:00:00:00->eth_dst,resubmit(,65),pop:NXM_NX_REG15[]
+get_nd;
+    Syntax error at `;' expecting `('.
+get_nd();
+    Syntax error at `)' expecting field name.
+get_nd(inport);
+    Syntax error at `)' expecting `,'.
+get_nd(inport ip6.dst);
+    Syntax error at `ip6.dst' expecting `,'.
+get_nd(inport, ip6.dst;
+    Syntax error at `;' expecting `)'.
+get_nd(inport, eth.dst);
+    Cannot use 48-bit field eth.dst[0..47] where 128-bit field is required.
+get_nd(inport, outport);
+    Cannot use string field outport where numeric field is required.
+get_nd(xxreg0, ip6.dst);
+    Cannot use numeric field xxreg0 where string field is required.
+
+# put_nd
+put_nd(inport, nd.target, nd.sll);
+    encodes as push:NXM_NX_XXREG0[],push:NXM_OF_ETH_SRC[],push:NXM_NX_ND_SLL[],push:NXM_NX_ND_TARGET[],pop:NXM_NX_XXREG0[],pop:NXM_OF_ETH_SRC[],controller(userdata=00.00.00.04.00.00.00.00),pop:NXM_OF_ETH_SRC[],pop:NXM_NX_XXREG0[]
+    has prereqs ((icmp6.type == 0x87 && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd)) || (icmp6.type == 0x88 && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd))) && icmp6.code == 0 && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd) && ip.ttl == 0xff && (eth.type == 0x800 || eth.type == 0x86dd) && icmp6.type == 0x87 && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd) && icmp6.code == 0 && eth.type == 0x86dd && ip.proto == 0x3a && (eth.type == 0x800 || eth.type == 0x86dd) && ip.ttl == 0xff && (eth.type == 0x800 || eth.type == 0x86dd)
+
+# put_dhcpv6_opts
+reg1[0] = put_dhcpv6_opts(ia_addr = ae70::4, server_id = 00:00:00:00:10:02);
+    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.05.00.10.00.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.04.02.00.06.00.00.00.00.00.10.02,pause)
+reg1[0] = put_dhcpv6_opts();
+    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40,pause)
+reg1[0] = put_dhcpv6_opts(dns_server={ae70::1,ae70::2});
+    formats as reg1[0] = put_dhcpv6_opts(dns_server = {ae70::1, ae70::2});
+    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.17.00.20.00.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.01.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.02,pause)
+reg1[0] = put_dhcpv6_opts(domain_search = "ovn.org");
+    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.18.00.07.00.6f.76.6e.2e.6f.72.67,pause)
+reg1[0] = put_dhcpv6_opts(x = 1.2.3.4);
+    Syntax error at `x' expecting DHCPv6 option name.
+reg1[0] = put_dhcpv6_opts(ia_addr=ae70::4, "hi");
+    Syntax error at `"hi"'.
+reg1[0] = put_dhcpv6_opts(ia_addr=ae70::4, xyzzy);
+    Syntax error at `xyzzy' expecting DHCPv6 option name.
+reg1[0] = put_dhcpv6_opts(ia_addr="ae70::4");
+    DHCPv6 option ia_addr requires numeric value.
+reg1[0] = put_dhcpv6_opts(ia_addr=ae70::4, domain_search=ae70::1);
+    DHCPv6 option domain_search requires string value.
 
 # Contradictionary prerequisites (allowed but not useful):
-ip4.src = ip6.src[0..31]; => actions=move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
-ip4.src <-> ip6.src[0..31]; => actions=push:NXM_NX_IPV6_SRC[0..31],push:NXM_OF_IP_SRC[],pop:NXM_NX_IPV6_SRC[0..31],pop:NXM_OF_IP_SRC[], prereqs=eth.type == 0x800 && eth.type == 0x86dd
+ip4.src = ip6.src[0..31];
+    encodes as move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[]
+    has prereqs eth.type == 0x800 && eth.type == 0x86dd
+ip4.src <-> ip6.src[0..31];
+    encodes as push:NXM_NX_IPV6_SRC[0..31],push:NXM_OF_IP_SRC[],pop:NXM_NX_IPV6_SRC[0..31],pop:NXM_OF_IP_SRC[]
+    has prereqs eth.type == 0x800 && eth.type == 0x86dd
 
-## Miscellaneous negative tests.
-; => Syntax error at `;'.
-xyzzy; => Syntax error at `xyzzy' expecting action.
-next; 123; => Syntax error at `123'.
-next; xyzzy; => Syntax error at `xyzzy' expecting action.
-next => Syntax error at end of input expecting ';'.
+# Miscellaneous negative tests.
+;
+    Syntax error at `;'.
+xyzzy;
+    Syntax error at `xyzzy' expecting action.
+next; 123;
+    Syntax error at `123'.
+next; xyzzy;
+    Syntax error at `xyzzy' expecting action.
+next
+    Syntax error at end of input expecting `;'.
 ]])
-sed 's/ =>.*//' test-cases.txt > input.txt
-sed 's/.* => //' test-cases.txt > expout
+sed '/^[[ 	]]/d' test-cases.txt > input.txt
+cp test-cases.txt expout
 AT_CHECK([ovstest test-ovn parse-actions < input.txt], [0], [expout])
 AT_CLEANUP
 
@@ -737,9 +1025,6 @@ vif_to_hv() {
 # digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
 # more) list the VIFs on which the packet should be received.  INPORT and the
 # OUTPORTs are specified as logical switch port numbers, e.g. 11 for vif11.
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 for i in 1 2 3; do
     for j in 1 2 3; do
         : > $i$j.expected
@@ -751,7 +1036,7 @@ test_packet() {
     vif=vif$inport
     as $hv ovs-appctl netdev-dummy/receive $vif $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -821,6 +1106,7 @@ ip_to_hex() {
 # 9. ARP requests to known IPs are responded directly.
 #
 # 10. No response to ARP requests for unknown IPs.
+
 for is in 1 2 3; do
     for js in 1 2 3; do
         s=$is$js
@@ -904,6 +1190,11 @@ done
 # set address for lp13 with invalid characters.
 # lp13 should be configured with only 192.168.0.13.
 ovn-nbctl lsp-set-addresses lp13 "f0:00:00:00:00:13 192.168.0.13 invalid 192.169.0.13"
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
 sip=`ip_to_hex 192 168 0 11`
 tip=`ip_to_hex 192 168 0 13`
 test_arp 11 f00000000011  $sip $tip f00000000013
@@ -911,10 +1202,6 @@ test_arp 11 f00000000011  $sip $tip f00000000013
 tip=`ip_to_hex 192 169 0 13`
 #arp request for 192.169.0.13 should be flooded
 test_arp 11 f00000000011  $sip $tip
-
-# Allow some time for packet forwarding.
-# XXX This can be improved.
-sleep 1
 
 # dump information and flows with counters
 ovn-sbctl dump-flows -- list multicast_group
@@ -930,19 +1217,230 @@ as hv2 ovs-ofctl -O OpenFlow13 dump-flows br-int
 echo "------ hv3 dump ------"
 as hv3 ovs-vsctl show
 as hv3 ovs-ofctl -O OpenFlow13 dump-flows br-int
+
 # Now check the packets actually received against the ones expected.
 for i in 1 2 3; do
     for j in 1 2 3; do
-        file=hv$i/vif$i$j-tx.pcap
-        echo $file
-        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j.packets
-        sort $i$j.expected > expout
-        AT_CHECK([sort $i$j.packets], [0], [expout])
-        echo
+        OVN_CHECK_PACKETS([hv$i/vif$i$j-tx.pcap], [$i$j.expected])
     done
 done
 
 OVN_CLEANUP([hv1],[hv2],[hv3])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- trace 1 LS, 3 LSPs])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Create a logical switch and some logical ports.
+# Turn on port security on all lports except ls1.
+# Make ls1 a destination for unknown MACs.
+# Add some ACLs for Ethertypes 1234, 1235, 1236.
+ovn-nbctl ls-add lsw0
+ovn-sbctl chassis-add hv0 geneve 127.0.0.1
+for i in 1 2 3; do
+    ovn-nbctl lsp-add lsw0 lp$i
+    ovn-sbctl lsp-bind lp$i hv0
+    if test $i = 1; then
+        ovn-nbctl lsp-set-addresses lp$i "f0:00:00:00:00:0$i 192.168.0.$i" unknown
+    else
+        if test $i = 3; then
+           ip_addrs="192.168.0.$i fe80::ea2a:eaff:fe28:$i/64 192.169.0.$i"
+        else
+           ip_addrs="192.168.0.$i"
+        fi
+        ovn-nbctl lsp-set-addresses lp$i "f0:00:00:00:00:$i $ip_addrs"
+        ovn-nbctl lsp-set-port-security lp$i f0:00:00:00:00:$i
+    fi
+done
+ovn-nbctl acl-add lsw0 from-lport 1000 'eth.type == 0x1234' drop
+ovn-nbctl acl-add lsw0 from-lport 1000 'eth.type == 0x1235 && inport == "lp1"' drop
+ovn-nbctl acl-add lsw0 to-lport 1000 'eth.type == 0x1236 && outport == "lp3"' drop
+ovn-nbctl create Address_Set name=set1 addresses=\"f0:00:00:00:00:01\",\"f0:00:00:00:00:02\"
+ovn-nbctl acl-add lsw0 to-lport 1000 'eth.type == 0x1237 && eth.src == $set1 && outport == "lp3"' drop
+
+ovn-nbctl --wait=sb sync
+on_exit 'kill `cat ovn-trace.pid`'
+ovn-trace --detach --pidfile --no-chdir
+
+# test_packet INPORT DST SRC [-vlan] [-eth TYPE] OUTPORT...
+#
+# This shell function causes a packet to be received on INPORT.  The packet's
+# content has Ethernet destination DST and source SRC (each exactly 12 hex
+# digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
+# more) list the VIFs on which the packet should be received.  INPORT and the
+# OUTPORTs are specified as logical switch port numbers, e.g. 11 for vif11.
+test_packet() {
+    local inport=$1 eth_dst=$2 eth_src=$3; shift; shift; shift
+    uflow="inport==\"lp$inport\" && eth.dst==$eth_dst && eth.src==$eth_src"
+    while :; do
+        case $1 in # (
+            -vlan) uflow="$uflow && vlan.vid == 1234"; shift ;; # (
+            -eth) uflow="$uflow && eth.type == 0x$2"; shift; shift ;; # (
+            *) break ;;
+        esac
+    done
+    for outport; do
+        echo "output(\"lp$outport\");"
+    done > expout
+
+    AT_CAPTURE_FILE([trace])
+    AT_CHECK([ovs-appctl -t ovn-trace trace --all lsw0 "$uflow" | tee trace | sed '1,/Minimal trace/d'], [0], [expout])
+}
+
+# test_arp INPORT SHA SPA TPA [REPLY_HA]
+#
+# Causes a packet to be received on INPORT.  The packet is an ARP
+# request with SHA, SPA, and TPA as specified.  If REPLY_HA is provided, then
+# it should be the hardware address of the target to expect to receive in an
+# ARP reply; otherwise no reply is expected.
+#
+# INPORT is an logical switch port number, e.g. 11 for vif11.
+# SHA and REPLY_HA are each 12 hex digits.
+# SPA and TPA are each 8 hex digits.
+test_arp() {
+    local inport=$1 sha=$2 spa=$3 tpa=$4 reply_ha=$5
+
+    local request="inport == \"lp$inport\"
+                   && eth.dst == ff:ff:ff:ff:ff:ff && eth.src == $sha
+                   && arp.op == 1 && arp.sha == $sha && arp.spa == $spa
+                   && arp.tha == ff:ff:ff:ff:ff:ff && arp.tpa == $tpa"
+
+    if test -z "$reply_ha"; then
+        reply=
+        local i
+        for i in 1 2 3; do
+            if test $i != $inport; then
+                reply="${reply}output(\"lp$i\");
+"
+            fi
+        done
+    else
+        reply="\
+eth.dst = $sha;
+eth.src = $reply_ha;
+arp.op = 2;
+arp.tha = $sha;
+arp.sha = $reply_ha;
+arp.tpa = $spa;
+arp.spa = $tpa;
+output(\"lp$inport\");
+"
+    fi
+
+    AT_CAPTURE_FILE([trace])
+    AT_CHECK_UNQUOTED([ovs-appctl -t ovn-trace trace --all lsw0 "$request" | tee trace | sed '1,/Minimal trace/d'], [0], [$reply])
+}
+
+# Send packets between all pairs of source and destination ports:
+#
+# 1. Unicast packets are delivered to exactly one logical switch port
+#    (except that packets destined to their input ports are dropped).
+#
+# 2. Broadcast and multicast are delivered to all logical switch ports
+#    except the input port.
+#
+# 3. When port security is turned on, the switch drops packets from the wrong
+#    MAC address.
+#
+# 4. The switch drops all packets with a VLAN tag.
+#
+# 5. The switch drops all packets with a multicast source address.  (This only
+#    affects behavior when port security is turned off, since otherwise port
+#    security would drop the packet anyway.)
+#
+# 6. The switch delivers packets with an unknown destination to logical
+#    switch ports with "unknown" among their MAC addresses (and port
+#    security disabled).
+#
+# 7. The switch drops unicast packets that violate an ACL.
+#
+# 8. The switch drops multicast and broadcast packets that violate an ACL.
+#
+# 9. ARP requests to known IPs are responded directly.
+#
+# 10. No response to ARP requests for unknown IPs.
+
+for s in 1 2 3; do
+    bcast=
+    unknown=
+    bacl2=
+    bacl3=
+    for d in 1 2 3; do
+        echo
+        echo "lp$s -> lp$d"
+        if test $d != $s; then unicast=$d; else unicast=; fi
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s $unicast      #1
+
+        if test $d != $s && test $s = 1; then
+            impersonate=$d
+        else
+            impersonate=
+        fi
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:55 $impersonate   #3
+
+        if test $d != $s && test $s != 1; then acl2=$d; else acl2=; fi
+        if test $d != $s && test $d != 3; then acl3=$d; else acl3=; fi
+        if test $d = $s || ( (test $s = 1 || test $s = 2) && test $d = 3); then
+            # Source of 1 or 2 and dest of 3 should be dropped
+            # due to the 4th ACL that uses address_set(set1).
+            acl4=
+        else
+            acl4=$d
+        fi
+
+        #7, acl1 to acl4:
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1234
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1235 $acl2
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1236 $acl3
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:0$s -eth 1237 $acl4
+
+        test_packet $s f0:00:00:00:00:0$d f0:00:00:00:00:55 -vlan          #4
+        test_packet $s f0:00:00:00:00:0$d 01:00:00:00:00:0$s               #5
+
+        if test $d != $s && test $d = 1; then
+            unknown="$unknown $d"
+        fi
+        bcast="$bcast $unicast"
+        bacl2="$bacl2 $acl2"
+        bacl3="$bacl3 $acl3"
+
+        sip=192.168.0.$s
+        tip=192.168.0.$d
+        tip_unknown=11.11.11.11
+        test_arp $s f0:00:00:00:00:0$s $sip $tip f0:00:00:00:00:0$d        #9
+        test_arp $s f0:00:00:00:00:0$s $sip $tip_unknown                   #10
+
+        if test $d = 3; then
+            # lp3 has an additional ip 192.169.0.[123]3.
+            tip=192.169.0.$d
+            test_arp $s f0:00:00:00:00:0$s $sip $tip f0:00:00:00:00:0$d    #9
+        fi
+    done
+
+    # Broadcast and multicast.
+    test_packet $s ff:ff:ff:ff:ff:ff f0:00:00:00:00:0$s $bcast             #2
+    test_packet $s 01:00:00:00:00:00 f0:00:00:00:00:0$s $bcast             #2
+    if test $s = 1; then
+       bcast_impersonate=$bcast
+    else
+       bcast_impersonate=
+    fi
+    test_packet $s 01:00:00:00:00:00 f0:00:00:00:00:44 $bcast_impersonate  #3
+
+    test_packet $s f0:00:00:00:ff:ff f0:00:00:00:00:0$s $unknown           #6
+
+    #8, acl1 to acl3:
+    test_packet $s ff:ff:ff:ff:ff:ff f0:00:00:00:00:0$s -eth 1234
+    test_packet $s ff:ff:ff:ff:ff:ff f0:00:00:00:00:0$s -eth 1235 $bacl2
+    test_packet $s ff:ff:ff:ff:ff:ff f0:00:00:00:00:0$s -eth 1236 $bacl3
+
+    #8, acl1 to acl3:
+    test_packet $s 01:00:00:00:00:00 f0:00:00:00:00:0$s -eth 1234
+    test_packet $s 01:00:00:00:00:00 f0:00:00:00:00:0$s -eth 1235 $bacl2
+    test_packet $s 01:00:00:00:00:00 f0:00:00:00:00:0$s -eth 1236 $bacl3
+done
 
 AT_CLEANUP
 
@@ -1038,9 +1536,6 @@ vif_to_hv() {
 # digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
 # more) list the VIFs on which the packet should be received.  INPORT and the
 # OUTPORTs are specified as logical switch port numbers, e.g. 11 for vif11.
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 for i in 1 2; do
     for j in 1 2 3 4 5; do
         : > $i$j.expected
@@ -1053,7 +1548,7 @@ test_packet() {
     vif=vif$inport
     as $hv ovs-appctl netdev-dummy/receive $vif $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -1097,10 +1592,6 @@ test_packet 13 f00000000021 f00000000013 1321
 test_packet 23 f00000000011 f00000000023 2311
 test_packet 23 f00000000021 f00000000023 2321
 
-# Allow some time for packet forwarding.
-# XXX This can be improved.
-sleep 1
-
 # Dump a bunch of info helpful for debugging if there's a failure.
 
 echo "------ OVN dump ------"
@@ -1118,12 +1609,7 @@ as hv2 ovs-ofctl -O OpenFlow13 dump-flows br-int
 # Now check the packets actually received against the ones expected.
 for i in 1 2; do
     for j in 1 2 3 4 5; do
-        file=hv$i/vif$i$j-tx.pcap
-        echo $file
-        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j.packets
-        sort $i$j.expected > expout
-        AT_CHECK([sort $i$j.packets], [0], [expout])
-        echo
+        OVN_CHECK_PACKETS([hv$i/vif$i$j-tx.pcap], [$i$j.expected])
     done
 done
 
@@ -1197,6 +1683,9 @@ sleep 1
 
 vtep-ctl bind-ls br-vtep br-vtep_n2 0 lsw0
 
+OVS_WAIT_UNTIL([test -n "`as vtep vtep-ctl get-replication-mode lsw0 |
+               grep -- source`"])
+# It takes more time for the update to be processed by ovs-vtep.
 sleep 1
 
 # Add hv3 on the other side of the vtep
@@ -1223,9 +1712,6 @@ sleep 1
 # digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
 # more) list the VIFs on which the packet should be received.  INPORT and the
 # OUTPORTs are specified as logical switch port numbers, e.g. 1 for vif1.
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 for i in 1 2 3; do
     : > $i.expected
 done
@@ -1236,7 +1722,7 @@ test_packet() {
     vif=vif$inport
     as $hv ovs-appctl netdev-dummy/receive $vif $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -1272,10 +1758,6 @@ for s in 1 2 3; do
     test_packet $s f0000000ffff f0000000000$s 0${s}66 $unknown           #3
 done
 
-# Allow some time for packet forwarding.
-# XXX This can be improved.
-sleep 1
-
 # dump information with counters
 echo "------ OVN dump ------"
 ovn-nbctl show
@@ -1300,12 +1782,7 @@ AT_CHECK([as hv3 ovs-ofctl -O OpenFlow13 show br-int], [1], [],
 
 # Now check the packets actually received against the ones expected.
 for i in 1 2 3; do
-    file=hv$i/vif$i-tx.pcap
-    echo $file
-    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i.packets
-    sort $i.expected > expout
-    AT_CHECK([sort $i.packets], [0], [expout])
-    echo
+    OVN_CHECK_PACKETS([hv$i/vif$i-tx.pcap], [$i.expected])
 done
 
 # Gracefully terminate daemons
@@ -1384,9 +1861,6 @@ sleep 1
 # digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
 # more) list the VIFs on which the packet should be received.  INPORT and the
 # OUTPORTs are specified as lport numbers, e.g. 1 for vif1.
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 for i in 1 2 3; do
     : > $i.expected
 done
@@ -1397,7 +1871,7 @@ test_packet() {
     vif=vif$inport
     as $hv ovs-appctl netdev-dummy/receive $vif $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -1428,10 +1902,6 @@ for s in 1 2 3 ; do
     test_packet $s 010000000000 f0000000000$s 0${s}ff $bcast             #3
     test_packet $s f0000000ffff f0000000000$s 0${s}66 $unknown           #4
 done
-
-# Allow some time for packet forwarding.
-# XXX This can be improved.
-sleep 3
 
 echo "------ ovn-nbctl show ------"
 ovn-nbctl show
@@ -1466,12 +1936,7 @@ as hv3 ovs-ofctl -O OpenFlow13 dump-flows br-phys
 
 # Now check the packets actually received against the ones expected.
 for i in 1 2 3; do
-    file=hv$i/vif$i-tx.pcap
-    echo $file
-    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i.packets
-    sort $i.expected > expout
-    AT_CHECK([sort $i.packets], [0], [expout])
-    echo
+    OVN_CHECK_PACKETS([hv$i/vif$i-tx.pcap], [$i.expected])
 done
 AT_CLEANUP
 
@@ -1593,9 +2058,6 @@ sleep 1
 # digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
 # more) list the VIFs on which the packet should be received.  INPORT and the
 # OUTPORTs are specified as logical switch port numbers, e.g. 123 for vif123.
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 for i in 1 2 3; do
     for j in 1 2 3; do
         for k in 1 2 3; do
@@ -1623,7 +2085,7 @@ test_ip() {
             # (and checksum).
             out_lrp=`vif_to_lrp $outport`
             echo f00000000${outport}00000000ff${out_lrp}08004500001c00000000"3f1101"00${src_ip}${dst_ip}0035111100080000
-        fi | trim_zeros >> $outport.expected
+        fi >> $outport.expected
     done
 }
 
@@ -1702,7 +2164,7 @@ for is in 1 2 3; do
           arp=ffffffffffff${lrmac}08060001080006040001${lrmac}${lrip}000000000000${dip}
           for jd2 in 1 2 3; do
             for kd in 1 2 3; do
-              echo $arp | trim_zeros >> $id$jd2$kd.expected
+              echo $arp >> $id$jd2$kd.expected
             done
           done
         done
@@ -1862,16 +2324,12 @@ for is in 1 2 3; do
           host_mac=8000000000$o4
           outport=${id}11
           out_lrp=$id$jd
-          echo ${host_mac}00000000ff${out_lrp}08004500001c00000000"3f1101"00${sip}${dip}0035111100080000 | trim_zeros >> $outport.expected
+          echo ${host_mac}00000000ff${out_lrp}08004500001c00000000"3f1101"00${sip}${dip}0035111100080000 >> $outport.expected
         done
       done
     done
   done
 done
-
-# Allow some time for packet forwarding.
-# XXX This can be improved.
-sleep 1
 
 ovn-sbctl -f csv -d bare --no-heading \
     -- --columns=logical_port,ip,mac list mac_binding > mac_bindings
@@ -1880,12 +2338,8 @@ ovn-sbctl -f csv -d bare --no-heading \
 for i in 1 2 3; do
     for j in 1 2 3; do
         for k in 1 2 3; do
-            file=hv`vif_to_hv $i$j$k`/vif$i$j$k-tx.pcap
-            echo $file
-            $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j$k.packets
-            sort $i$j$k.expected > expout
-            AT_CHECK([sort $i$j$k.packets], [0], [expout])
-            echo
+            OVN_CHECK_PACKETS([hv`vif_to_hv $i$j$k`/vif$i$j$k-tx.pcap],
+                              [$i$j$k.expected])
         done
     done
 done
@@ -1951,10 +2405,6 @@ vif_to_hv() {
     echo hv${1%?}
 }
 
-
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 for i in 1 2 3; do
     for j in 1 2 3; do
         : > $i$j.expected
@@ -1972,13 +2422,13 @@ done
 test_ip() {
     # This packet has bad checksums but logical L3 routing doesn't check.
     local inport=$1 src_mac=$2 dst_mac=$3 src_ip=$4 dst_ip=$5
-    local packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}003511110008
+    local packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
     shift; shift; shift; shift; shift
     hv=`vif_to_hv $inport`
     as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
     #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -2029,7 +2479,7 @@ test_ipv6() {
     as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
     #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -2044,7 +2494,7 @@ test_icmpv6() {
     as $hv ovs-appctl netdev-dummy/receive vif$inport $packet
     #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $packet
     for outport; do
-        echo $packet | trim_zeros >> $outport.expected
+        echo $packet >> $outport.expected
     done
 }
 
@@ -2252,11 +2702,6 @@ tip=`ip_to_hex 224 0 0 4`
 # with dst ip 224.0.0.4  should be received by lsp13
 test_ip 33 f00000000033 f00000000013 $sip $tip 13
 
-# Allow some time for packet forwarding.
-
-# XXX This can be improved.
-sleep 1
-
 #dump information including flow counters
 ovn-nbctl show
 ovn-sbctl dump-flows -- list multicast_group
@@ -2279,12 +2724,7 @@ as hv3 ovs-ofctl -O OpenFlow13 dump-flows br-int
 # Now check the packets actually received against the ones expected.
 for i in 1 2 3; do
     for j in 1 2 3; do
-        file=hv$i/vif$i$j-tx.pcap
-        echo $file
-        $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i$j.packets
-        sort $i$j.expected > expout
-        AT_CHECK([sort $i$j.packets], [0], [expout])
-        echo
+        OVN_CHECK_PACKETS([hv$i/vif$i$j-tx.pcap], [$i$j.expected])
     done
 done
 
@@ -2372,9 +2812,6 @@ sleep 1
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
 }
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 
 # Packet to send.
 src_mac="f00000010203"
@@ -2409,11 +2846,9 @@ as hv2 ovs-ofctl dump-flows br-int
 # Packet to Expect
 src_mac="000000010204"
 dst_mac="f00000010204"
-expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
+echo "${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 
 OVN_CLEANUP([hv1],[hv2])
 
@@ -2474,9 +2909,6 @@ sleep 1
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
 }
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 
 # Packet to send.
 src_mac="f00000010203"
@@ -2508,6 +2940,10 @@ as hv1 ovs-ofctl dump-flows br-int
 #Disable router R1
 ovn-nbctl set Logical_Router R1 enabled=false
 
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
 echo "---------SB dump-----"
 ovn-sbctl list datapath_binding
 echo "---------------------"
@@ -2522,11 +2958,9 @@ as hv1 ovs-appctl netdev-dummy/receive vif1 $packet
 # Packet to Expect
 expect_src_mac="000000010203"
 expect_dst_mac="f00000010204"
-expected=${expect_dst_mac}${expect_src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+echo "${expect_dst_mac}${expect_src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > received.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv1/vif2-tx.pcap], [expected])
 
 
 as hv1
@@ -2610,9 +3044,6 @@ sleep 1
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
 }
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 
 # Packet to send.
 src_mac="f00000010203"
@@ -2661,12 +3092,9 @@ as hv1 ovs-appctl netdev-dummy/receive vif1 $packet
 # Packet to Expect
 expect_src_mac="000000010204"
 expect_dst_mac="f00000010204"
-expected=${expect_dst_mac}${expect_src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+echo "${expect_dst_mac}${expect_src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > received.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received.packets], [0], [expout])
-
+OVN_CHECK_PACKETS([hv1/vif2-tx.pcap], [expected])
 
 OVN_CLEANUP([hv1])
 
@@ -2768,9 +3196,6 @@ sleep 1
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
 }
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 
 # Send ip packets between foo1 and alice1
 src_mac="f00000010203"
@@ -2812,22 +3237,18 @@ src_mac="000000010205"
 dst_mac="f00000010205"
 src_ip=`ip_to_hex 192 168 1 2`
 dst_ip=`ip_to_hex 172 16 2 2`
-expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
+echo "${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 
 # Packet to Expect at alice1
 src_mac="000000010204"
 dst_mac="f00000010204"
 src_ip=`ip_to_hex 192 168 1 2`
 dst_ip=`ip_to_hex 172 16 1 2`
-expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
+echo "${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > received1.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received1.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv1/vif2-tx.pcap], [expected])
 
 OVN_CLEANUP([hv1],[hv2])
 
@@ -2864,15 +3285,8 @@ AT_CHECK([ovn-nbctl lsp-set-options ln_port network_name=physnet1])
 AT_CHECK([ovs-vsctl add-port br-int localvif1 -- set Interface localvif1 external_ids:iface-id=localvif1])
 
 # Wait for packet to be received.
-OVS_WAIT_UNTIL([test `wc -c < "hv/snoopvif-tx.pcap"` -ge 50])
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv/snoopvif-tx.pcap | trim_zeros > packets
-expected="fffffffffffff0000000000108060001080006040001f00000000001c0a80102000000000000c0a80102"
-echo $expected > expout
-AT_CHECK([sort packets], [0], [expout])
-cat packets
+echo "fffffffffffff0000000000108060001080006040001f00000000001c0a80102000000000000c0a80102" > expected
+OVN_CHECK_PACKETS([hv/snoopvif-tx.pcap], [expected])
 
 # Delete the localnet ports.
 AT_CHECK([ovs-vsctl del-port localvif1])
@@ -2996,9 +3410,6 @@ sleep 1
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
 }
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 
 # Send ip packets between foo1 and alice1
 src_mac="f00000010203"
@@ -3046,22 +3457,18 @@ src_mac="000003010203"
 dst_mac="f00000010205"
 src_ip=`ip_to_hex 192 168 1 2`
 dst_ip=`ip_to_hex 10 32 1 2`
-expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
+echo "${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 
 # Packet to Expect at alice1
 src_mac="000002010203"
 dst_mac="f00000010204"
 src_ip=`ip_to_hex 192 168 1 2`
 dst_ip=`ip_to_hex 172 16 1 2`
-expected=${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000
+echo "${dst_mac}${src_mac}08004500001c000000003e110200${src_ip}${dst_ip}0035111100080000" > expected
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > received1.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received1.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv1/vif2-tx.pcap], [expected])
 
 OVN_CLEANUP([hv1],[hv2])
 
@@ -3138,10 +3545,6 @@ sleep 2
 
 as hv1 ovs-vsctl show
 
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
-
 # This shell function sends a DHCP request packet
 # test_dhcp INPORT SRC_MAC DHCP_TYPE OFFER_IP ...
 test_dhcp() {
@@ -3204,7 +3607,7 @@ test_dhcp() {
     else
         shift; shift; shift; shift;
         for outport; do
-            echo $request | trim_zeros >> $outport.expected
+            echo $request >> $outport.expected
         done
     fi
     as hv1 ovs-appctl netdev-dummy/receive hv1-vif$inport $request
@@ -3299,9 +3702,7 @@ test_dhcp 2 f00000000002 08 $offer_ip 1 1
 OVS_WAIT_UNTIL([test 3 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
 
 # vif1-tx.pcap should have received the DHCPv4 (invalid) request packet
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap | trim_zeros > 1.packets
-cat 1.expected > expout
-AT_CHECK([cat 1.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv1/vif1-tx.pcap], [1.expected])
 
 reset_pcap_file hv1-vif1 hv1/vif1
 reset_pcap_file hv1-vif2 hv1/vif2
@@ -3320,10 +3721,231 @@ test_dhcp 4 f00000000004 01 0 3
 # NXT_RESUMEs should be 3.
 OVS_WAIT_UNTIL([test 3 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif3-tx.pcap | trim_zeros > 3.packets
-cat 3.expected > expout
-AT_CHECK([cat 3.packets], [0], [expout])
+OVN_CHECK_PACKETS([hv1/vif3-tx.pcap], [3.expected])
+OVN_CHECK_PACKETS([hv1/vif4-tx.pcap], [4.expected])
 
+as hv1
+OVS_APP_EXIT_AND_WAIT([ovn-controller])
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+as main
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- dhcpv6 : 1 HV, 2 LS, 2 LSPs/LS])
+AT_KEYWORDS([dhcpv6])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl ls-add ls1
+ovn-nbctl lsp-add ls1 ls1-lp1 \
+-- lsp-set-addresses ls1-lp1 "f0:00:00:00:00:01 10.0.0.4 ae70::4"
+
+ovn-nbctl lsp-set-port-security ls1-lp1 "f0:00:00:00:00:01 10.0.0.4 ae70::4"
+
+ovn-nbctl lsp-add ls1 ls1-lp2 \
+-- lsp-set-addresses ls1-lp2 "f0:00:00:00:00:02 ae70::5"
+
+ovn-nbctl lsp-set-port-security ls1-lp2 "f0:00:00:00:00:02 ae70::5"
+
+ovn-nbctl -- --id=@d1 create DHCP_Options cidr="ae70\:\:/64" \
+options="\"server_id\"=\"00:00:00:10:00:01\"" \
+-- add Logical_Switch_Port ls1-lp1 dhcpv6_options @d1 \
+-- add Logical_Switch_Port ls1-lp2 dhcpv6_options @d1
+
+ovn-nbctl ls-add ls2
+ovn-nbctl lsp-add ls2 ls2-lp1 \
+-- lsp-set-addresses ls2-lp1 "f0:00:00:00:00:03 be70::3"
+ovn-nbctl lsp-set-port-security ls2-lp1 "f0:00:00:00:00:03 be70::3"
+ovn-nbctl lsp-add ls2 ls2-lp2 \
+-- lsp-set-addresses ls2-lp2 "f0:00:00:00:00:04 be70::4"
+ovn-nbctl lsp-set-port-security ls2-lp2 "f0:00:00:00:00:04 be70::4"
+
+net_add n1
+sim_add hv1
+
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=ls1-lp1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int hv1-vif2 -- \
+    set interface hv1-vif2 external-ids:iface-id=ls1-lp2 \
+    options:tx_pcap=hv1/vif2-tx.pcap \
+    options:rxq_pcap=hv1/vif2-rx.pcap \
+    ofport-request=2
+
+ovs-vsctl -- add-port br-int hv1-vif3 -- \
+    set interface hv1-vif3 external-ids:iface-id=ls2-lp1 \
+    options:tx_pcap=hv1/vif3-tx.pcap \
+    options:rxq_pcap=hv1/vif3-rx.pcap \
+    ofport-request=3
+
+ovs-vsctl -- add-port br-int hv1-vif4 -- \
+    set interface hv1-vif4 external-ids:iface-id=ls2-lp2 \
+    options:tx_pcap=hv1/vif4-tx.pcap \
+    options:rxq_pcap=hv1/vif4-rx.pcap \
+    ofport-request=4
+
+ovn_populate_arp
+
+sleep 2
+
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+# This shell function sends a DHCPv6 request packet
+# test_dhcp INPORT SRC_MAC DHCPv6_MSG_TYPE OUTPORT...
+# The OUTPORTs (zero or more) list the VIFs on which the original DHCP
+# packet should be received twice (one from ovn-controller and the other
+# from the "ovs-ofctl monitor br-int resume"
+test_dhcpv6() {
+    local inport=$1 src_mac=$2 src_lla=$3 msg_code=$4 offer_ip=$5
+    local request=ffffffffffff${src_mac}86dd00000000002a1101${src_lla}
+    # dst ip ff02::1:2
+    request+=ff020000000000000000000000010002
+    # udp header and dhcpv6 header
+    request+=02220223002affff${msg_code}010203
+    # Client identifier
+    request+=0001000a00030001${src_mac}
+    # IA-NA (Identity Association for Non Temporary Address)
+    request+=0003000c0102030400000e1000001518
+    shift; shift; shift; shift; shift;
+    if test $offer_ip != 0; then
+        local server_mac=000000100001
+        local server_lla=fe80000000000000020000fffe100001
+        local reply_code=07
+        if test $msg_code = 01; then
+            reply_code=02
+        fi
+        local reply=${src_mac}${server_mac}86dd0000000000541101${server_lla}${src_lla}
+        # udp header and dhcpv6 header
+        reply+=022302220054ffff${reply_code}010203
+        # Client identifier
+        reply+=0001000a00030001${src_mac}
+        # IA-NA
+        reply+=0003002801020304ffffffffffffffff00050018${offer_ip}ffffffffffffffff
+        # Server identifier
+        reply+=0002000a00030001${server_mac}
+        echo $reply | trim_zeros >> $inport.expected
+    else
+        for outport; do
+            echo $request | trim_zeros >> $outport.expected
+        done
+    fi
+
+    as hv1 ovs-appctl netdev-dummy/receive hv1-vif$inport $request
+}
+
+reset_pcap_file() {
+    local iface=$1
+    local pcap_file=$2
+    ovs-vsctl -- set Interface $iface options:tx_pcap=dummy-tx.pcap \
+options:rxq_pcap=dummy-rx.pcap
+    rm -f ${pcap_file}*.pcap
+    ovs-vsctl -- set Interface $iface options:tx_pcap=${pcap_file}-tx.pcap \
+options:rxq_pcap=${pcap_file}-rx.pcap
+}
+
+AT_CAPTURE_FILE([ofctl_monitor0.log])
+as hv1 ovs-ofctl monitor br-int resume --detach --no-chdir \
+--pidfile=ovs-ofctl0.pid 2> ofctl_monitor0.log
+
+echo "---------NB dump-----"
+ovn-nbctl show
+echo "---------------------"
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list logical_flow
+echo "---------------------"
+
+echo "---------------------"
+ovn-sbctl dump-flows
+echo "---------------------"
+
+echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl dump-flows br-int
+
+src_mac=f00000000001
+src_lla=fe80000000000000f20000fffe000001
+offer_ip=ae700000000000000000000000000004
+test_dhcpv6 1 $src_mac $src_lla 01 $offer_ip
+
+# NXT_RESUMEs should be 1.
+OVS_WAIT_UNTIL([test 1 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap | trim_zeros > 1.packets
+# cat 1.expected | trim_zeros > expout
+cat 1.expected | cut -c -120 > expout
+AT_CHECK([cat 1.packets | cut -c -120], [0], [expout])
+# Skipping the UDP checksum
+cat 1.expected | cut -c 125- > expout
+AT_CHECK([cat 1.packets | cut -c 125-], [0], [expout])
+
+rm  1.expected
+
+# Send invalid packet on ls1-lp2. ovn-controller should resume the packet
+# without any modifications and the packet should be received by ls1-lp1.
+# ls1-lp1 will receive the packet twice, one from the ovn-controller after the
+# resume and the other from ovs-ofctl monitor resume.
+
+reset_pcap_file hv1-vif1 hv1/vif1
+reset_pcap_file hv1-vif2 hv1/vif2
+
+src_mac=f00000000002
+src_lla=fe80000000000000f20000fffe000002
+offer_ip=ae700000000000000000000000000005
+# Set invalid msg_type
+
+test_dhcpv6 2 $src_mac $src_lla 10 0 1 1
+
+# NXT_RESUMEs should be 2.
+OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+# vif2-tx.pcap should not have received the DHCPv6 reply packet
+rm 2.packets
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap | trim_zeros > 2.packets
+AT_CHECK([cat 2.packets], [0], [])
+
+# vif1-tx.pcap should have received the DHCPv6 (invalid) request packet
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif1-tx.pcap | trim_zeros > 1.packets
+cat 1.expected > expout
+AT_CHECK([cat 1.packets], [0], [expout])
+
+# Send DHCPv6 packet on ls2-lp1. native DHCPv6 is disabled on this port.
+# There should be no DHCPv6 reply from ovn-controller and the request packet
+# should be received by ls2-lp2.
+
+src_mac=f00000000003
+src_lla=fe80000000000000f20000fffe000003
+test_dhcpv6 3 $src_mac $src_lla 01 0 4
+
+# NXT_RESUMEs should be 2 only.
+OVS_WAIT_UNTIL([test 2 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+# vif3-tx.pcap should not have received the DHCPv6 reply packet
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif3-tx.pcap | trim_zeros > 3.packets
+AT_CHECK([cat 3.packets], [0], [])
+
+# vif4-tx.pcap should have received the DHCPv6 request packet
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif4-tx.pcap | trim_zeros > 4.packets
 cat 4.expected > expout
 AT_CHECK([cat 4.packets], [0], [expout])
@@ -3443,9 +4065,6 @@ sleep 2
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
 }
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 
 # Send ip packets between foo1 and alice1
 src_mac="f00000010203"
@@ -3492,9 +4111,8 @@ as hv2 ovs-ofctl show br-int
 as hv2 ovs-ofctl dump-flows br-int
 echo "----------------------------"
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received1.packets
-echo $expected | trim_zeros > expout
-AT_CHECK([cat received1.packets], [0], [expout])
+echo $expected > expected
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 
 # Delete the router and re-create it. Things should work as before.
 ovn-nbctl  lr-del R2
@@ -3522,9 +4140,8 @@ as hv2 ovs-ofctl show br-int
 as hv2 ovs-ofctl dump-flows br-int
 echo "----------------------------"
 
-$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv2/vif1-tx.pcap | trim_zeros > received1.packets
-echo $expected | trim_zeros >> expout
-AT_CHECK([cat received1.packets], [0], [expout])
+echo $expected >> expected
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [expected])
 
 OVN_CLEANUP([hv1],[hv2])
 
@@ -3589,9 +4206,6 @@ sleep 1
 
 ip_to_hex() {
     printf "%02x%02x%02x%02x" "$@"
-}
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
 }
 for i in 1 2; do
     : > vif$i.expected
@@ -3672,11 +4286,7 @@ as hv1 ovs-ofctl dump-flows br-int
 
 # Now check the packets actually received against the ones expected.
 for inport in 1 2; do
-    file=hv1/vif${inport}-tx.pcap
-    echo $file
-    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > received.packets
-    cat vif$inport.expected | trim_zeros > expout
-    AT_CHECK([cat received.packets], [0], [expout])
+    OVN_CHECK_PACKETS([hv1/vif${inport}-tx.pcap], [vif$inport.expected])
 done
 
 OVN_CLEANUP([hv1])
@@ -3709,8 +4319,8 @@ OVN_CLEANUP([hv1])
 
 AT_CLEANUP
 
-AT_SETUP([ovn -- nd ])
-AT_KEYWORDS([ovn-nd])
+AT_SETUP([ovn -- nd_na ])
+AT_KEYWORDS([ovn-nd_na])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -3756,9 +4366,6 @@ sleep 1
 vif_to_hv() {
     echo hv1${1%?}
 }
-trim_zeros() {
-    sed 's/\(00\)\{1,\}$//'
-}
 for i in 1 2; do
     : > $i.expected
 done
@@ -3770,9 +4377,7 @@ ns_packet=3333ffa1f9aefa163e94059886dd6000000000203afffd81ce49a9480000f8163efffe
 na_packet=fa163e940598fa163ea1f9ae86dd6000000000203afffd81ce49a9480000f8163efffea1f9aefd81ce49a9480000f8163efffe9405988800e9ed60000000fd81ce49a9480000f8163efffea1f9ae0201fa163ea1f9ae
 
 as hv1 ovs-appctl netdev-dummy/receive vif1 $ns_packet
-echo $na_packet | trim_zeros >> 1.expected
-
-sleep 1
+echo $na_packet >> 1.expected
 
 echo "------ hv1 dump ------"
 as hv1 ovs-vsctl show
@@ -3780,11 +4385,7 @@ as hv1 ovs-ofctl -O OpenFlow13 show br-int
 as hv1 ovs-ofctl -O OpenFlow13 dump-flows br-int
 
 for i in 1 2; do
-    file=hv1/vif$i-tx.pcap
-    echo $file
-    $PYTHON "$top_srcdir/utilities/ovs-pcap.in" $file | trim_zeros > $i.packets
-    cat $i.expected > expout
-    AT_CHECK([cat $i.packets], [0], [expout])
+    OVN_CHECK_PACKETS([hv1/vif$i-tx.pcap], [$i.expected])
 done
 
 OVN_CLEANUP([hv1])
@@ -3814,6 +4415,552 @@ sleep 1
 # that ovn-controller is at least still running after
 # creating, updating, and deleting an address set.
 AT_CHECK([ovs-appctl -t ovn-controller version], [0], [ignore])
+
+OVN_CLEANUP([hv1])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- ipam])
+AT_KEYWORDS([ovnipam])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Add a port to a switch that does not have a subnet set, then set the
+# subnet which should result in an address being allocated for the port.
+ovn-nbctl ls-add sw0
+ovn-nbctl lsp-add sw0 p0 -- lsp-set-addresses p0 dynamic
+ovn-nbctl add Logical-Switch sw0 other_config subnet=192.168.1.0/24
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p0 dynamic_addresses], [0],
+    ["0a:00:00:00:00:01 192.168.1.2"
+])
+
+# Add 9 more ports to sw0, addresses should all be unique.
+for n in `seq 1 9`; do
+    ovn-nbctl lsp-add sw0 "p$n" -- lsp-set-addresses "p$n" dynamic
+done
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p1 dynamic_addresses], [0],
+    ["0a:00:00:00:00:02 192.168.1.3"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p2 dynamic_addresses], [0],
+    ["0a:00:00:00:00:03 192.168.1.4"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p3 dynamic_addresses], [0],
+    ["0a:00:00:00:00:04 192.168.1.5"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p4 dynamic_addresses], [0],
+    ["0a:00:00:00:00:05 192.168.1.6"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p5 dynamic_addresses], [0],
+    ["0a:00:00:00:00:06 192.168.1.7"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p6 dynamic_addresses], [0],
+    ["0a:00:00:00:00:07 192.168.1.8"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p7 dynamic_addresses], [0],
+    ["0a:00:00:00:00:08 192.168.1.9"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p8 dynamic_addresses], [0],
+    ["0a:00:00:00:00:09 192.168.1.10"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p9 dynamic_addresses], [0],
+    ["0a:00:00:00:00:0a 192.168.1.11"
+])
+
+# Trying similar tests with a second switch. MAC addresses should be unique
+# across both switches but IP's only need to be unique within the same switch.
+ovn-nbctl ls-add sw1
+ovn-nbctl lsp-add sw1 p10 -- lsp-set-addresses p10 dynamic
+ovn-nbctl add Logical-Switch sw1 other_config subnet=192.168.1.0/24
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p10 dynamic_addresses], [0],
+     ["0a:00:00:00:00:0b 192.168.1.2"
+])
+
+for n in `seq 11 19`; do
+    ovn-nbctl lsp-add sw1 "p$n" -- lsp-set-addresses "p$n" dynamic
+done
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p11 dynamic_addresses], [0],
+     ["0a:00:00:00:00:0c 192.168.1.3"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p12 dynamic_addresses], [0],
+     ["0a:00:00:00:00:0d 192.168.1.4"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p13 dynamic_addresses], [0],
+     ["0a:00:00:00:00:0e 192.168.1.5"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p14 dynamic_addresses], [0],
+     ["0a:00:00:00:00:0f 192.168.1.6"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p15 dynamic_addresses], [0],
+     ["0a:00:00:00:00:10 192.168.1.7"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p16 dynamic_addresses], [0],
+     ["0a:00:00:00:00:11 192.168.1.8"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p17 dynamic_addresses], [0],
+     ["0a:00:00:00:00:12 192.168.1.9"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p18 dynamic_addresses], [0],
+     ["0a:00:00:00:00:13 192.168.1.10"
+])
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p19 dynamic_addresses], [0],
+     ["0a:00:00:00:00:14 192.168.1.11"
+])
+
+# Change a port's address to test for multiple ip's for a single address entry
+# and addresses set by the user.
+ovn-nbctl lsp-set-addresses p0 "0a:00:00:00:00:15 192.168.1.12 192.168.1.14"
+ovn-nbctl lsp-add sw0 p20 -- lsp-set-addresses p20 dynamic
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p20 dynamic_addresses], [0],
+     ["0a:00:00:00:00:16 192.168.1.13"
+])
+
+# Test for logical router port address management.
+ovn-nbctl create Logical_Router name=R1
+ovn-nbctl -- --id=@lrp create Logical_Router_port name=sw0 \
+network="192.168.1.1/24" mac=\"0a:00:00:00:00:17\" \
+-- add Logical_Router R1 ports @lrp -- lsp-add sw0 rp-sw0 \
+-- set Logical_Switch_Port rp-sw0 type=router options:router-port=sw0
+ovn-nbctl lsp-add sw0 p21 -- lsp-set-addresses p21 dynamic
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p21 dynamic_addresses], [0],
+     ["0a:00:00:00:00:18 192.168.1.15"
+])
+
+# Test for address reuse after logical port is deleted.
+ovn-nbctl lsp-del p0
+ovn-nbctl lsp-add sw0 p23 -- lsp-set-addresses p23 dynamic
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p23 dynamic_addresses], [0],
+     ["0a:00:00:00:00:19 192.168.1.2"
+])
+
+# Test for multiple addresses to one logical port.
+ovn-nbctl lsp-add sw0 p25 -- lsp-set-addresses p25 \
+"0a:00:00:00:00:1a 192.168.1.12" "0a:00:00:00:00:1b 192.168.1.14"
+ovn-nbctl lsp-add sw0 p26 -- lsp-set-addresses p26 dynamic
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p26 dynamic_addresses], [0],
+     ["0a:00:00:00:00:1c 192.168.1.16"
+])
+
+# Test for exhausting subnet address space.
+ovn-nbctl ls-add sw2 -- add Logical-Switch sw2 other_config subnet=172.16.1.0/30
+ovn-nbctl lsp-add sw2 p27 -- lsp-set-addresses p27 dynamic
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p27 dynamic_addresses], [0],
+     ["0a:00:00:00:00:1d 172.16.1.2"
+])
+
+ovn-nbctl lsp-add sw2 p28 -- lsp-set-addresses p28 dynamic
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p28 dynamic_addresses], [0],
+     [[[]]
+])
+
+# Test that address management does not add duplicate MAC for lsp/lrp peers.
+ovn-nbctl create Logical_Router name=R2
+ovn-nbctl ls-add sw3
+ovn-nbctl lsp-add sw3 p29 -- lsp-set-addresses p29 \
+"0a:00:00:00:00:1e"
+ovn-nbctl -- --id=@lrp create Logical_Router_port name=sw3 \
+network="192.168.2.1/24" mac=\"0a:00:00:00:00:1f\" \
+-- add Logical_Router R2 ports @lrp -- lsp-add sw3 rp-sw3 \
+-- set Logical_Switch_Port rp-sw3 type=router options:router-port=sw3
+ovn-nbctl lsp-add sw0 p30 -- lsp-set-addresses p30 dynamic
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p30 dynamic_addresses], [0],
+     ["0a:00:00:00:00:20 192.168.1.17"
+])
+
+as ovn-sb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as ovn-nb
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- ipam connectivity])
+AT_KEYWORDS([ovnipamconnectivity])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl lr-add R1
+
+# Test for a ping using dynamically allocated addresses.
+ovn-nbctl ls-add foo -- add Logical_Switch foo other_config subnet=192.168.1.0/24
+ovn-nbctl ls-add alice -- add Logical_Switch alice other_config subnet=192.168.2.0/24
+
+# Connect foo to R1
+ovn-nbctl lrp-add R1 foo 00:00:00:01:02:03 192.168.1.1/24
+ovn-nbctl lsp-add foo rp-foo -- set Logical_Switch_Port rp-foo type=router \
+          options:router-port=foo addresses=\"00:00:00:01:02:03\"
+
+# Connect alice to R1
+ovn-nbctl lrp-add R1 alice 00:00:00:01:02:04 192.168.2.1/24
+ovn-nbctl lsp-add alice rp-alice -- set Logical_Switch_Port rp-alice type=router \
+          options:router-port=alice addresses=\"00:00:00:01:02:04\"
+
+# Create logical port foo1 in foo
+ovn-nbctl lsp-add foo foo1 \
+-- lsp-set-addresses foo1 "dynamic"
+AT_CHECK([ovn-nbctl get Logical-Switch-Port foo1 dynamic_addresses], [0],
+     ["0a:00:00:00:00:01 192.168.1.2"
+])
+
+# Create logical port alice1 in alice
+ovn-nbctl lsp-add alice alice1 \
+-- lsp-set-addresses alice1 "dynamic"
+AT_CHECK([ovn-nbctl get Logical-Switch-Port alice1 dynamic_addresses], [0],
+     ["0a:00:00:00:00:02 192.168.2.2"
+])
+
+# Create logical port foo2 in foo
+ovn-nbctl lsp-add foo foo2 \
+-- lsp-set-addresses foo2 "dynamic"
+AT_CHECK([ovn-nbctl get Logical-Switch-Port foo2 dynamic_addresses], [0],
+     ["0a:00:00:00:00:03 192.168.1.3"
+])
+
+# Create a hypervisor and create OVS ports corresponding to logical ports.
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=foo1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int hv1-vif2 -- \
+    set interface hv1-vif2 external-ids:iface-id=foo2 \
+    options:tx_pcap=hv1/vif2-tx.pcap \
+    options:rxq_pcap=hv1/vif2-rx.pcap \
+    ofport-request=2
+
+ovs-vsctl -- add-port br-int hv1-vif3 -- \
+    set interface hv1-vif3 external-ids:iface-id=alice1 \
+    options:tx_pcap=hv1/vif3-tx.pcap \
+    options:rxq_pcap=hv1/vif3-rx.pcap \
+    ofport-request=3
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+# Send ip packets between foo1 and foo2
+src_mac="0a0000000001"
+dst_mac="0a0000000003"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 192 168 1 3`
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+
+# Send ip packets between foo1 and alice1
+src_mac="0a0000000001"
+dst_mac="000000010203"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 192 168 2 2`
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+
+echo "---------NB dump-----"
+ovn-nbctl show
+echo "---------------------"
+ovn-nbctl list logical_router
+echo "---------------------"
+ovn-nbctl list logical_router_port
+echo "---------------------"
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list port_binding
+echo "---------------------"
+
+echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl dump-flows br-int
+
+# Packet to Expect at foo2
+src_mac="0a0000000001"
+dst_mac="0a0000000003"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 192 168 1 3`
+expected=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif2-tx.pcap > received1.packets
+echo $expected > expout
+AT_CHECK([cat received1.packets], [0], [expout])
+
+# Packet to Expect at alice1
+src_mac="000000010204"
+dst_mac="0a0000000002"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 192 168 2 2`
+expected=${dst_mac}${src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif3-tx.pcap > received2.packets
+echo $expected > expout
+AT_CHECK([cat received2.packets], [0], [expout])
+
+OVN_CLEANUP([hv1])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- ovs-vswitchd restart])
+AT_KEYWORDS([vswitchd restart])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+ovn-nbctl ls-add ls1
+
+ovn-nbctl lsp-add ls1 ls1-lp1 \
+-- lsp-set-addresses ls1-lp1 "f0:00:00:00:00:01 10.0.0.4"
+
+ovn-nbctl lsp-set-port-security ls1-lp1 "f0:00:00:00:00:01 10.0.0.4"
+
+net_add n1
+sim_add hv1
+
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=ls1-lp1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+ovn_populate_arp
+sleep 2
+
+as hv1 ovs-vsctl show
+
+echo "---------------------"
+ovn-sbctl dump-flows
+echo "---------------------"
+
+echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl dump-flows br-int
+total_flows=`as hv1 ovs-ofctl dump-flows br-int | wc -l`
+
+echo "Total flows before vswitchd restart = " $total_flows
+
+# Code taken from ovs-save utility
+save_flows () {
+    echo "ovs-ofctl add-flows br-int - << EOF" > restore_flows.sh
+    as hv1 ovs-ofctl dump-flows "br-int" | sed -e '/NXST_FLOW/d' \
+            -e 's/\(idle\|hard\)_age=[^,]*,//g' >> restore_flows.sh
+    echo "EOF" >> restore_flows.sh
+}
+
+restart_vswitchd () {
+    restore_flows=$1
+
+    if test $restore_flows = true; then
+        save_flows
+    fi
+
+    as hv1
+    OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
+
+    if test $restore_flows = true; then
+        as hv1
+        ovs-vsctl --no-wait set open_vswitch . other_config:flow-restore-wait="true"
+    fi
+
+    as hv1
+    start_daemon ovs-vswitchd --enable-dummy=system -vvconn -vofproto_dpif -vunixctl
+    ovs-ofctl dump-flows br-int
+
+    if test $restore_flows = true; then
+        sh ./restore_flows.sh
+        echo "Flows after restore"
+        as hv1
+        ovs-ofctl dump-flows br-int
+        ovs-vsctl --no-wait --if-exists remove open_vswitch . other_config \
+            flow-restore-wait="true"
+    fi
+}
+
+# Save the flows, restart vswitchd and restore the flows
+restart_vswitchd true
+OVS_WAIT_UNTIL([
+    total_flows_after_restart=`as hv1 ovs-ofctl dump-flows br-int | wc -l`
+    echo "Total flows after vswitchd restart = " $total_flows_after_restart
+    test "${total_flows}" = "${total_flows_after_restart}"
+])
+
+# Restart vswitchd without restoring
+restart_vswitchd false
+OVS_WAIT_UNTIL([
+    total_flows_after_restart=`as hv1 ovs-ofctl dump-flows br-int | wc -l`
+    echo "Total flows after vswitchd restart = " $total_flows_after_restart
+    test "${total_flows}" = "${total_flows_after_restart}"
+])
+
+OVN_CLEANUP([hv1])
+AT_CLEANUP
+
+AT_SETUP([ovn -- send arp for nexthop])
+AT_KEYWORDS([ovn])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Topology: Two LSs - ls1 and ls2 are connected via router r0
+
+# Create logical switches
+ovn-nbctl ls-add ls1
+ovn-nbctl ls-add ls2
+
+# Create  router
+ovn-nbctl create Logical_Router name=lr0
+
+# Add router ls1p1 port to gateway router
+ovn-nbctl lrp-add lr0 lrp-ls1lp1 f0:00:00:00:00:01 192.168.0.1/24
+ovn-nbctl lsp-add ls1 ls1lp1 -- set Logical_Switch_Port ls1lp1  \
+    type=router options:router-port=lrp-ls1lp1 \
+    addresses='"f0:00:00:00:00:01 192.168.0.1"'
+
+# Add router ls2p2 port to gateway router
+ovn-nbctl lrp-add lr0 lrp-ls2lp1 f0:00:00:00:00:02 192.168.1.1/24
+ovn-nbctl lsp-add ls2 ls2lp1 -- set Logical_Switch_Port ls2lp1 \
+    type=router options:router-port=lrp-ls2lp1 \
+    addresses='"f0:00:00:00:00:02 192.168.1.1"'
+
+# Set default gateway (nexthop) to 192.168.1.254
+ovn-nbctl lr-route-add lr0 "0.0.0.0/0" 192.168.1.254 lrp-ls2lp1
+
+# Create logical port ls1lp2 in ls1
+ovn-nbctl lsp-add ls1 ls1lp2 \
+-- lsp-set-addresses ls1lp2 "f0:00:00:00:00:03 192.168.0.2"
+
+# Create logical port ls2lp2 in ls2
+ovn-nbctl lsp-add ls2 ls2lp2 \
+-- lsp-set-addresses ls2lp2 "f0:00:00:00:00:04 192.168.1.10"
+
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-ls1lp2 -- \
+    set interface hv1-ls1lp2 external-ids:iface-id=ls1lp2 \
+    options:tx_pcap=hv1/ls1lp2-tx.pcap \
+    options:rxq_pcap=hv1/ls1lp2-rx.pcap \
+    ofport-request=1
+ovs-vsctl -- add-port br-int hv1-ls2lp2 -- \
+    set interface hv1-ls2lp2 external-ids:iface-id=ls2lp2 \
+    options:tx_pcap=hv1/ls2lp2-tx.pcap \
+    options:rxq_pcap=hv1/ls2lp2-rx.pcap \
+    ofport-request=2
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+echo "---------NB dump-----"
+ovn-nbctl show
+echo "---------------------"
+ovn-nbctl list logical_router
+echo "---------------------"
+ovn-nbctl list logical_router_port
+echo "---------------------"
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list port_binding
+echo "---------------------"
+ovn-sbctl dump-flows
+echo "---------------------"
+ovn-sbctl list chassis
+ovn-sbctl list encap
+echo "---------------------"
+
+echo "------Flows dump-----"
+as hv1
+ovs-ofctl dump-flows
+echo "---------------------"
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+src_mac="f00000000003"
+dst_mac="f00000000001"
+src_ip=`ip_to_hex 192 168 0 2`
+dst_ip=`ip_to_hex 8 8 8 8`
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+
+# Send IP packet destined to 8.8.8.8 from lsp1lp2
+as hv1 ovs-appctl netdev-dummy/receive hv1-ls1lp2 $packet
+
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+
+# ARP packet should be received with Target IP Address set to 192.168.1.254 and
+# not 8.8.8.8
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/ls2lp2-tx.pcap | trim_zeros > packets
+expected="fffffffffffff0000000000208060001080006040001f00000000002c0a80101000000000000c0a801fe"
+echo $expected > expout
+AT_CHECK([cat packets], [0], [expout])
+cat packets
+
+OVN_CLEANUP([hv1])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- send gratuitous arp for nat ips in localnet])
+AT_KEYWORDS([ovn])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+# Create logical switch
+ovn-nbctl ls-add ls0
+# Create gateway router
+ovn-nbctl create Logical_Router name=lr0 options:chassis=hv1
+# Add router port to gateway router
+ovn-nbctl lrp-add lr0 lrp0 f0:00:00:00:00:01 192.168.0.1/24
+ovn-nbctl lsp-add ls0 lrp0-rp -- set Logical_Switch_Port lrp0-rp \
+    type=router options:router-port=lrp0-rp addresses='"f0:00:00:00:00:01"'
+# Add nat-address option
+ovn-nbctl lsp-set-options lrp0-rp router-port=lrp0 nat-addresses="f0:00:00:00:00:01 192.168.0.2"
+
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl \
+    -- add-br br-phys \
+    -- add-br br-eth0
+
+ovn_attach n1 br-phys 192.168.0.1
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-eth0])
+AT_CHECK([ovs-vsctl add-port br-eth0 snoopvif -- set Interface snoopvif options:tx_pcap=hv1/snoopvif-tx.pcap options:rxq_pcap=hv1/snoopvif-rx.pcap])
+
+# Create a localnet port.
+AT_CHECK([ovn-nbctl lsp-add ls0 ln_port])
+AT_CHECK([ovn-nbctl lsp-set-addresses ln_port unknown])
+AT_CHECK([ovn-nbctl lsp-set-type ln_port localnet])
+AT_CHECK([ovn-nbctl lsp-set-options ln_port network_name=physnet1])
+
+
+# Wait for packet to be received.
+OVS_WAIT_UNTIL([test `wc -c < "hv1/snoopvif-tx.pcap"` -ge 50])
+trim_zeros() {
+    sed 's/\(00\)\{1,\}$//'
+}
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/snoopvif-tx.pcap | trim_zeros > packets
+expected="fffffffffffff0000000000108060001080006040001f00000000001c0a80002000000000000c0a80002"
+echo $expected > expout
+AT_CHECK([sort packets], [0], [expout])
+cat packets
 
 OVN_CLEANUP([hv1])
 

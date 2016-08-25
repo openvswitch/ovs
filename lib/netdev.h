@@ -132,7 +132,7 @@ const char *netdev_get_name(const struct netdev *);
 const char *netdev_get_type(const struct netdev *);
 const char *netdev_get_type_from_name(const char *);
 int netdev_get_mtu(const struct netdev *, int *mtup);
-int netdev_set_mtu(const struct netdev *, int mtu);
+int netdev_set_mtu(struct netdev *, int mtu);
 int netdev_get_ifindex(const struct netdev *);
 int netdev_set_tx_multiq(struct netdev *, unsigned int n_txq);
 
@@ -149,7 +149,7 @@ int netdev_rxq_drain(struct netdev_rxq *);
 
 /* Packet transmission. */
 int netdev_send(struct netdev *, int qid, struct dp_packet_batch *,
-                bool may_steal);
+                bool may_steal, bool concurrent_txq);
 void netdev_send_wait(struct netdev *, int qid);
 
 /* native tunnel APIs */

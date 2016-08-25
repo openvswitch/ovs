@@ -290,6 +290,26 @@ static struct rtable *lisp_get_rt(struct sk_buff *skb,
 	return ip_route_output_key(net, fl);
 }
 
+/* this is to handle the return type change in handle-offload
+ * functions.
+ */
+#if !defined(HAVE_UDP_TUNNEL_HANDLE_OFFLOAD_RET_SKB) || !defined(USE_UPSTREAM_TUNNEL)
+static struct sk_buff *
+__udp_tunnel_handle_offloads(struct sk_buff *skb, bool udp_csum)
+{
+	int err;
+
+	err = udp_tunnel_handle_offloads(skb, udp_csum);
+	if (err) {
+		kfree_skb(skb);
+		return NULL;
+	}
+	return skb;
+}
+#else
+#define __udp_tunnel_handle_offloads udp_tunnel_handle_offloads
+#endif
+
 netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb)
 {
 	struct net_device *dev = skb->dev;
@@ -344,9 +364,12 @@ netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb)
 	skb_reset_mac_header(skb);
 	skb->vlan_tci = 0;
 
-	err = udp_tunnel_handle_offloads(skb, false, false);
-	if (err)
+	if (skb_is_gso(skb) && skb_is_encapsulated(skb))
 		goto err_free_rt;
+
+	skb = __udp_tunnel_handle_offloads(skb, false);
+	if (!skb)
+		return NETDEV_TX_OK;
 
 	src_port = htons(get_src_port(net, skb));
 	dst_port = lisp_dev->dst_port;

@@ -132,7 +132,7 @@ drop:
 EXPORT_SYMBOL_GPL(rpl_dev_queue_xmit);
 #endif /* OVS_USE_COMPAT_GSO_SEGMENTATION */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
+#ifndef USE_UPSTREAM_TUNNEL_GSO
 static __be16 __skb_network_protocol(struct sk_buff *skb)
 {
 	__be16 type = skb->protocol;
@@ -171,6 +171,7 @@ static struct sk_buff *tnl_skb_gso_segment(struct sk_buff *skb,
 	__be16 proto = skb->protocol;
 	char cb[sizeof(skb->cb)];
 
+	BUILD_BUG_ON(sizeof(struct ovs_gso_cb) > FIELD_SIZEOF(struct sk_buff, cb));
 	OVS_GSO_CB(skb)->ipv6 = (sa_family == AF_INET6);
 	/* setup whole inner packet to get protocol. */
 	__skb_pull(skb, mac_offset);
@@ -227,101 +228,90 @@ free:
 
 static int output_ip(struct sk_buff *skb)
 {
-	int ret = NETDEV_TX_OK;
-	int err;
-
 	memset(IPCB(skb), 0, sizeof(*IPCB(skb)));
 
 #undef ip_local_out
-	err = ip_local_out(skb);
-	if (unlikely(net_xmit_eval(err)))
-		ret = err;
-
-	return ret;
+	return ip_local_out(skb);
 }
 
 int rpl_ip_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
-	int ret = NETDEV_TX_OK;
-	int id = -1;
-
 	if (!OVS_GSO_CB(skb)->fix_segment)
 		return output_ip(skb);
 
-	if (skb_is_gso(skb)) {
-		struct iphdr *iph;
+	/* This bit set can confuse some drivers on old kernel. */
+	skb->encapsulation = 0;
 
-		iph = ip_hdr(skb);
-		id = ntohs(iph->id);
+	if (skb_is_gso(skb)) {
+		int ret;
+		int id;
+
 		skb = tnl_skb_gso_segment(skb, 0, false, AF_INET);
 		if (!skb || IS_ERR(skb))
-			return 0;
+			return NET_XMIT_DROP;
+
+		id = ntohs(ip_hdr(skb)->id);
+		do {
+			struct sk_buff *next_skb = skb->next;
+
+			skb->next = NULL;
+			ip_hdr(skb)->id = htons(id++);
+
+			ret = output_ip(skb);
+			skb = next_skb;
+		} while (skb);
+		return ret;
 	}  else if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		int err;
 
 		err = skb_checksum_help(skb);
 		if (unlikely(err))
-			return 0;
+			return NET_XMIT_DROP;
 	}
 
-	while (skb) {
-		struct sk_buff *next_skb = skb->next;
-		struct iphdr *iph;
-
-		skb->next = NULL;
-
-		iph = ip_hdr(skb);
-		if (id >= 0)
-			iph->id = htons(id++);
-
-		ret = output_ip(skb);
-		skb = next_skb;
-	}
-	return ret;
+	return output_ip(skb);
 }
 EXPORT_SYMBOL_GPL(rpl_ip_local_out);
 
 static int output_ipv6(struct sk_buff *skb)
 {
-	int ret = NETDEV_TX_OK;
-	int err;
-
 	memset(IP6CB(skb), 0, sizeof (*IP6CB(skb)));
 #undef ip6_local_out
-	err = ip6_local_out(skb);
-	if (unlikely(net_xmit_eval(err)))
-		ret = err;
-
-	return ret;
+	return ip6_local_out(skb);
 }
 
 int rpl_ip6_local_out(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
-	int ret = NETDEV_TX_OK;
-
 	if (!OVS_GSO_CB(skb)->fix_segment)
 		return output_ipv6(skb);
 
+	/* This bit set can confuse some drivers on old kernel. */
+	skb->encapsulation = 0;
+
 	if (skb_is_gso(skb)) {
+		int ret;
+
 		skb = tnl_skb_gso_segment(skb, 0, false, AF_INET6);
 		if (!skb || IS_ERR(skb))
-			return 0;
+			return NET_XMIT_DROP;
+
+		do {
+			struct sk_buff *next_skb = skb->next;
+
+			skb->next = NULL;
+			ret = output_ipv6(skb);
+			skb = next_skb;
+		} while (skb);
+		return ret;
 	}  else if (skb->ip_summed == CHECKSUM_PARTIAL) {
 		int err;
 
 		err = skb_checksum_help(skb);
 		if (unlikely(err))
-			return 0;
+			return NET_XMIT_DROP;
 	}
 
-	while (skb) {
-		struct sk_buff *next_skb = skb->next;
-
-		skb->next = NULL;
-		ret = output_ipv6(skb);
-		skb = next_skb;
-	}
-	return ret;
+	return output_ipv6(skb);
 }
 EXPORT_SYMBOL_GPL(rpl_ip6_local_out);
-#endif /* 3.18 */
+#endif /* USE_UPSTREAM_TUNNEL_GSO */

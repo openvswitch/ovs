@@ -272,22 +272,22 @@ do_listen_error(struct ovs_cmdl_context *ctx)
 }
 
 static const struct ovs_cmdl_command all_commands[] = {
-    { "enable", NULL, 0, 0, do_enable },
-    { "disable", NULL, 0, 0, do_disable },
-    { "force-reconnect", NULL, 0, 0, do_force_reconnect },
-    { "disconnected", NULL, 0, 1, do_disconnected },
-    { "connecting", NULL, 0, 0, do_connecting },
-    { "connect-failed", NULL, 0, 1, do_connect_failed },
-    { "connected", NULL, 0, 0, do_connected },
-    { "activity", NULL, 0, 0, do_activity },
-    { "run", NULL, 0, 1, do_run },
-    { "advance", NULL, 1, 1, do_advance },
-    { "timeout", NULL, 0, 0, do_timeout },
-    { "set-max-tries", NULL, 1, 1, do_set_max_tries },
-    { "passive", NULL, 0, 0, do_set_passive },
-    { "listening", NULL, 0, 0, do_listening },
-    { "listen-error", NULL, 1, 1, do_listen_error },
-    { NULL, NULL, 0, 0, NULL },
+    { "enable", NULL, 0, 0, do_enable, OVS_RO },
+    { "disable", NULL, 0, 0, do_disable, OVS_RO },
+    { "force-reconnect", NULL, 0, 0, do_force_reconnect, OVS_RO },
+    { "disconnected", NULL, 0, 1, do_disconnected, OVS_RO },
+    { "connecting", NULL, 0, 0, do_connecting, OVS_RO },
+    { "connect-failed", NULL, 0, 1, do_connect_failed, OVS_RO },
+    { "connected", NULL, 0, 0, do_connected, OVS_RO },
+    { "activity", NULL, 0, 0, do_activity, OVS_RO },
+    { "run", NULL, 0, 1, do_run, OVS_RO },
+    { "advance", NULL, 1, 1, do_advance, OVS_RO },
+    { "timeout", NULL, 0, 0, do_timeout, OVS_RO },
+    { "set-max-tries", NULL, 1, 1, do_set_max_tries, OVS_RO },
+    { "passive", NULL, 0, 0, do_set_passive, OVS_RO },
+    { "listening", NULL, 0, 0, do_listening, OVS_RO },
+    { "listen-error", NULL, 1, 1, do_listen_error, OVS_RO },
+    { NULL, NULL, 0, 0, NULL, OVS_RO },
 };
 
 static const struct ovs_cmdl_command *

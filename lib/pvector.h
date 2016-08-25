@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,18 +54,12 @@
  * 'temp' may contain NULL pointers and it may be in unsorted order.  It is
  * sorted before it is published at 'impl', which also removes the NULLs from
  * the published vector.
- *
- * Clients should not use priority INT_MIN.
  */
 
 struct pvector_entry {
     int priority;
     void *ptr;
 };
-
-/* Writers will preallocate space for some entries at the end to avoid future
- * reallocations. */
-enum { PVECTOR_EXTRA_ALLOC = 4 };
 
 struct pvector_impl {
     size_t size;       /* Number of entries in the vector. */
@@ -133,7 +127,7 @@ static inline bool pvector_is_empty(const struct pvector *);
  * has to be started.
  *
  * The PVECTOR_FOR_EACH_PRIORITY limits the iteration to entries with higher
- * than given priority and allows for object lookahead.
+ * than or equal to the given priority and allows for object lookahead.
  *
  * The iteration loop must be completed without entering the OVS RCU quiescent
  * period.  That is, an old iteration loop must not be continued after any
@@ -149,7 +143,7 @@ static inline struct pvector_cursor pvector_cursor_init(const struct pvector *,
                                                         size_t n_ahead,
                                                         size_t obj_size);
 static inline void *pvector_cursor_next(struct pvector_cursor *,
-                                        int stop_at_priority,
+                                        int lowest_priority,
                                         size_t n_ahead, size_t obj_size);
 static inline void pvector_cursor_lookahead(const struct pvector_cursor *,
                                             int n, size_t size);
@@ -158,8 +152,8 @@ static inline void pvector_cursor_lookahead(const struct pvector_cursor *,
     for (struct pvector_cursor cursor__ = pvector_cursor_init(PVECTOR, 0, 0); \
          ((PTR) = pvector_cursor_next(&cursor__, INT_MIN, 0, 0)) != NULL; )
 
-/* Loop while priority is higher than 'PRIORITY' and prefetch objects
- * of size 'SZ' 'N' objects ahead from the current object. */
+/* Loop while priority is higher than or equal to 'PRIORITY' and prefetch
+ * objects of size 'SZ' 'N' objects ahead from the current object. */
 #define PVECTOR_FOR_EACH_PRIORITY(PTR, PRIORITY, N, SZ, PVECTOR)        \
     for (struct pvector_cursor cursor__ = pvector_cursor_init(PVECTOR, N, SZ); \
          ((PTR) = pvector_cursor_next(&cursor__, PRIORITY, N, SZ)) != NULL; )
@@ -197,11 +191,11 @@ pvector_cursor_init(const struct pvector *pvec,
 }
 
 static inline void *pvector_cursor_next(struct pvector_cursor *cursor,
-                                        int stop_at_priority,
+                                        int lowest_priority,
                                         size_t n_ahead, size_t obj_size)
 {
     if (++cursor->entry_idx < cursor->size &&
-        cursor->vector[cursor->entry_idx].priority > stop_at_priority) {
+        cursor->vector[cursor->entry_idx].priority >= lowest_priority) {
         if (n_ahead) {
             pvector_cursor_lookahead(cursor, n_ahead, obj_size);
         }

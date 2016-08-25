@@ -636,9 +636,9 @@ benchmark_hmap(void)
 }
 
 static const struct ovs_cmdl_command commands[] = {
-    {"check", NULL, 0, 1, run_tests},
-    {"benchmark", NULL, 3, 4, run_benchmarks},
-    {NULL, NULL, 0, 0, NULL},
+    {"check", NULL, 0, 1, run_tests, OVS_RO},
+    {"benchmark", NULL, 3, 4, run_benchmarks, OVS_RO},
+    {NULL, NULL, 0, 0, NULL, OVS_RO},
 };
 
 static void

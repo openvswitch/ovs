@@ -292,7 +292,7 @@ HvDeletePort(POVS_SWITCH_CONTEXT switchContext,
      * delete will delete the vport.
     */
     if (vport) {
-        OVS_EVENT_ENTRY event;
+        OVS_VPORT_EVENT_ENTRY event;
 
         event.portNo = vport->portNo;
         event.ovsType = vport->ovsType;
@@ -300,7 +300,7 @@ HvDeletePort(POVS_SWITCH_CONTEXT switchContext,
         RtlCopyMemory(&event.ovsName, &vport->ovsName, sizeof event.ovsName);
         event.type = OVS_EVENT_LINK_DOWN;
         OvsRemoveAndDeleteVport(NULL, switchContext, vport, TRUE, FALSE);
-        OvsPostEvent(&event);
+        OvsPostVportEvent(&event);
     } else {
         OVS_LOG_WARN("Vport not present.");
     }
@@ -531,14 +531,14 @@ HvUpdateNic(POVS_SWITCH_CONTEXT switchContext,
     vport->numaNodeId = nicParam->NumaNodeId;
 
     if (nameChanged) {
-        OVS_EVENT_ENTRY evt;
+        OVS_VPORT_EVENT_ENTRY evt;
         evt.portNo = vport->portNo;
         evt.ovsType = vport->ovsType;
         evt.upcallPid = vport->upcallPid;
         RtlCopyMemory(&evt.ovsName, &vport->ovsName, sizeof evt.ovsName);
         evt.type = OVS_EVENT_LINK_DOWN;
         OvsRemoveAndDeleteVport(NULL, switchContext, vport, FALSE, TRUE);
-        OvsPostEvent(&evt);
+        OvsPostVportEvent(&evt);
     }
 
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
@@ -567,7 +567,7 @@ HvDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
     POVS_VPORT_ENTRY vport;
     LOCK_STATE_EX lockState;
     BOOLEAN isInternalPort = FALSE;
-    OVS_EVENT_ENTRY event;
+    OVS_VPORT_EVENT_ENTRY event;
 
     VPORT_NIC_ENTER(nicParam);
 
@@ -609,7 +609,7 @@ HvDisconnectNic(POVS_SWITCH_CONTEXT switchContext,
      */
     if (OvsIsRealExternalVport(vport)) {
         OvsRemoveAndDeleteVport(NULL, switchContext, vport, FALSE, TRUE);
-        OvsPostEvent(&event);
+        OvsPostVportEvent(&event);
     }
     NdisReleaseRWLock(switchContext->dispatchLock, &lockState);
 

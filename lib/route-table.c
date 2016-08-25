@@ -25,6 +25,7 @@
 #include <net/if.h>
 
 #include "hash.h"
+#include "netdev.h"
 #include "netlink.h"
 #include "netlink-notifier.h"
 #include "netlink-socket.h"
@@ -151,6 +152,7 @@ route_table_reset(void)
     struct ofpbuf request, reply, buf;
 
     route_map_clear();
+    netdev_get_addrs_list_flush();
     route_table_valid = true;
     rt_change_seq++;
 

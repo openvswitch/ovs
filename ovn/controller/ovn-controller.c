@@ -39,7 +39,7 @@
 #include "ofctrl.h"
 #include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
-#include "ovn/lib/actions.h"
+#include "ovn/actions.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-util.h"
 #include "patch.h"
@@ -178,10 +178,8 @@ get_br_int(struct controller_ctx *ctx)
         return NULL;
     }
 
-    const char *br_int_name = smap_get(&cfg->external_ids, "ovn-bridge");
-    if (!br_int_name) {
-        br_int_name = DEFAULT_BRIDGE_NAME;
-    }
+    const char *br_int_name = smap_get_def(&cfg->external_ids, "ovn-bridge",
+                                           DEFAULT_BRIDGE_NAME);
 
     const struct ovsrec_bridge *br;
     br = get_bridge(ctx->ovs_idl, br_int_name);
@@ -299,6 +297,13 @@ update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
     sset_destroy(&all_users);
 }
 
+static int64_t
+get_nb_cfg(struct ovsdb_idl *idl)
+{
+    const struct sbrec_sb_global *sb = sbrec_sb_global_first(idl);
+    return sb ? sb->nb_cfg : 0;
+}
+
 /* Contains "struct local_datapath" nodes whose hash values are the
  * tunnel_key of datapaths with at least one local port binding. */
 static struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
@@ -306,6 +311,11 @@ static struct hmap patched_datapaths = HMAP_INITIALIZER(&patched_datapaths);
 
 static struct lport_index lports;
 static struct mcgroup_index mcgroups;
+
+/* Contains the names of all logical ports currently bound to the chassis
+ * managed by this instance of ovn-controller. The contents are managed
+ * in binding.c, but consumed elsewhere. */
+static struct sset all_lports = SSET_INITIALIZER(&all_lports);
 
 int
 main(int argc, char *argv[])
@@ -340,7 +350,7 @@ main(int argc, char *argv[])
     ovsrec_init();
     sbrec_init();
 
-    ofctrl_init();
+    ofctrl_init(&group_table);
     pinctrl_init();
     lflow_init();
 
@@ -378,6 +388,7 @@ main(int argc, char *argv[])
     char *ovnsb_remote = get_ovnsb_remote(ovs_idl_loop.idl);
     struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
+    ovsdb_idl_omit_alert(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
 
     /* Track the southbound idl. */
     ovsdb_idl_track_add_all(ovnsb_idl_loop.idl);
@@ -417,15 +428,15 @@ main(int argc, char *argv[])
 
         update_probe_interval(&ctx);
 
-        struct sset all_lports = SSET_INITIALIZER(&all_lports);
-
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
 
+        const struct sbrec_chassis *chassis = NULL;
         if (chassis_id) {
-            chassis_run(&ctx, chassis_id);
+            chassis = chassis_run(&ctx, chassis_id, br_int);
             encaps_run(&ctx, br_int, chassis_id);
-            binding_run(&ctx, br_int, chassis_id, &local_datapaths);
+            binding_run(&ctx, br_int, chassis_id, &local_datapaths,
+                        &all_lports);
         }
 
         if (br_int && chassis_id) {
@@ -448,10 +459,14 @@ main(int argc, char *argv[])
                          br_int, chassis_id, &ct_zones,
                          &local_datapaths, &patched_datapaths);
 
-            ofctrl_put(&group_table);
+            ofctrl_put(get_nb_cfg(ctx.ovnsb_idl));
+            if (ctx.ovnsb_idl_txn) {
+                int64_t cur_cfg = ofctrl_get_cur_cfg();
+                if (cur_cfg && cur_cfg != chassis->nb_cfg) {
+                    sbrec_chassis_set_nb_cfg(chassis, cur_cfg);
+                }
+            }
         }
-
-        sset_destroy(&all_lports);
 
         unixctl_server_run(unixctl);
 
@@ -467,6 +482,7 @@ main(int argc, char *argv[])
         ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
         ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop);
         ovsdb_idl_track_clear(ovnsb_idl_loop.idl);
+        ovsdb_idl_track_clear(ovs_idl_loop.idl);
         poll_block();
         if (should_service_stop()) {
             exiting = true;

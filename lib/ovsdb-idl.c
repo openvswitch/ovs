@@ -125,6 +125,7 @@ struct ovsdb_idl_txn {
     const char *inc_table;
     const char *inc_column;
     struct uuid inc_row;
+    bool inc_force;
     unsigned int inc_index;
     int64_t inc_new_value;
 
@@ -184,6 +185,7 @@ static struct ovsdb_idl_row *ovsdb_idl_row_create(struct ovsdb_idl_table *,
 static void ovsdb_idl_row_destroy(struct ovsdb_idl_row *);
 static void ovsdb_idl_row_destroy_postprocess(struct ovsdb_idl *);
 static void ovsdb_idl_destroy_all_map_op_lists(struct ovsdb_idl_row *);
+static void ovsdb_idl_destroy_all_set_op_lists(struct ovsdb_idl_row *);
 
 static void ovsdb_idl_row_parse(struct ovsdb_idl_row *);
 static void ovsdb_idl_row_unparse(struct ovsdb_idl_row *);
@@ -200,6 +202,10 @@ static void ovsdb_idl_txn_add_map_op(struct ovsdb_idl_row *,
                                      const struct ovsdb_idl_column *,
                                      struct ovsdb_datum *,
                                      enum map_op_type);
+static void ovsdb_idl_txn_add_set_op(struct ovsdb_idl_row *,
+                                     const struct ovsdb_idl_column *,
+                                     struct ovsdb_datum *,
+                                     enum set_op_type);
 
 static void ovsdb_idl_send_lock_request(struct ovsdb_idl *);
 static void ovsdb_idl_send_unlock_request(struct ovsdb_idl *);
@@ -709,6 +715,13 @@ ovsdb_idl_add_table(struct ovsdb_idl *idl,
 
     OVS_NOT_REACHED();
 }
+
+struct ovsdb_idl_clause {
+    struct ovs_list node;
+    enum ovsdb_function function;
+    const struct ovsdb_idl_column *column;
+    struct ovsdb_datum arg;
+};
 
 static struct json *
 ovsdb_idl_clause_to_json(const struct ovsdb_idl_clause *clause)
@@ -739,6 +752,10 @@ ovsdb_idl_clause_free(struct ovsdb_idl_clause *clause)
     free(clause);
 }
 
+/* Clears all of the conditional clauses from table 'tc', so that all of the
+ * rows in the table will be replicated.  (This is the default, so this
+ * function has an effect only if some clauses were added to 'tc' using
+ * ovsdb_idl_condition_add_clause().) */
 void
 ovsdb_idl_condition_reset(struct ovsdb_idl *idl,
                           const struct ovsdb_idl_table_class *tc)
@@ -747,7 +764,6 @@ ovsdb_idl_condition_reset(struct ovsdb_idl *idl,
     struct ovsdb_idl_table *table = ovsdb_idl_table_from_class(idl, tc);
 
     LIST_FOR_EACH_SAFE (c, next, node, &table->condition.clauses) {
-        ovs_list_remove(&c->node);
         ovsdb_idl_clause_free(c);
     }
     idl->cond_changed = table->cond_changed = true;
@@ -761,58 +777,90 @@ ovsdb_idl_condition_init(struct ovsdb_idl_condition *cnd,
     ovs_list_init(&cnd->clauses);
 }
 
-void ovsdb_idl_condition_add_clause(struct ovsdb_idl *idl,
-                                    const struct ovsdb_idl_table_class *tc,
-                                    enum ovsdb_function function,
-                                    const struct ovsdb_idl_column *column,
-                                    struct ovsdb_datum *arg)
+static struct ovsdb_idl_clause *
+ovsdb_idl_condition_find_clause(struct ovsdb_idl_table *table,
+                                enum ovsdb_function function,
+                                const struct ovsdb_idl_column *column,
+                                const struct ovsdb_datum *arg)
 {
-    struct ovsdb_idl_table *table = ovsdb_idl_table_from_class(idl, tc);
-    struct ovsdb_idl_clause *clause = xzalloc(sizeof *clause);
-    const struct ovsdb_type *type = NULL;
     struct ovsdb_idl_clause *c;
-
-    LIST_FOR_EACH(c, node, &table->condition.clauses) {
+    LIST_FOR_EACH (c, node, &table->condition.clauses) {
         if (c->function == function &&
             (!column || (c->column == column &&
                          ovsdb_datum_equals(&c->arg,
                                              arg, &column->type)))) {
-            return;
+            return c;
         }
     }
+    return NULL;
+}
 
+/* Adds a clause to the condition for replicating the table with class 'tc' in
+ * 'idl'.
+ *
+ * By default, a table has no clauses, and in that case the IDL replicates all
+ * its rows.  When a table has one or more clauses, the IDL replicates only
+ * rows that satisfy at least one clause.
+ *
+ * Two distinct of clauses can be added:
+ *
+ *    - A 'function' of OVSDB_F_FALSE or OVSDB_F_TRUE adds a Boolean clause.  A
+ *      "false" clause by itself prevents any rows from being replicated; in
+ *      combination with other clauses it has no effect.  A "true" clause
+ *      causes every row to be replicated, regardless of whether other clauses
+ *      exist (thus, a condition that includes "true" is like a condition
+ *      without any clauses at all).
+ *
+ *      'column' should be NULL and 'arg' should be an empty datum (initialized
+ *      with ovsdb_datum_init_empty()).
+ *
+ *    - Other 'functions' add a clause of the form "<column> <function> <arg>",
+ *      e.g. "column == 5" or "column <= 10".  In this case, 'arg' must have a
+ *      type that is compatible with 'column'.
+ */
+void
+ovsdb_idl_condition_add_clause(struct ovsdb_idl *idl,
+                               const struct ovsdb_idl_table_class *tc,
+                               enum ovsdb_function function,
+                               const struct ovsdb_idl_column *column,
+                               const struct ovsdb_datum *arg)
+{
+    struct ovsdb_idl_table *table = ovsdb_idl_table_from_class(idl, tc);
+
+    /* Return without doing anything, if this would be a duplicate clause. */
+    if (ovsdb_idl_condition_find_clause(table, function, column, arg)) {
+        return;
+    }
+
+    struct ovsdb_idl_clause *clause = xzalloc(sizeof *clause);
     ovs_list_init(&clause->node);
     clause->function = function;
     clause->column = column;
-    if (column) {
-        type = &column->type;
-    } else {
-        type = &ovsdb_type_boolean;
-    }
-    ovsdb_datum_clone(&clause->arg, arg, type);
+    ovsdb_datum_clone(&clause->arg, arg,
+                      column ? &column->type : &ovsdb_type_boolean);
     ovs_list_push_back(&table->condition.clauses, &clause->node);
     idl->cond_changed = table->cond_changed = true;
     poll_immediate_wake();
 }
 
-void ovsdb_idl_condition_remove_clause(struct ovsdb_idl *idl,
-                                       const struct ovsdb_idl_table_class *tc,
-                                       enum ovsdb_function function,
-                                       const struct ovsdb_idl_column *column,
-                                       struct ovsdb_datum *arg)
+/* If a clause matching (function, column, arg) is included in the condition
+ * for 'tc' within 'idl', removes it.  (If this was the last clause included in
+ * the table's condition, then this means that the IDL will begin replicating
+ * every row in the table.) */
+void
+ovsdb_idl_condition_remove_clause(struct ovsdb_idl *idl,
+                                  const struct ovsdb_idl_table_class *tc,
+                                  enum ovsdb_function function,
+                                  const struct ovsdb_idl_column *column,
+                                  const struct ovsdb_datum *arg)
 {
-    struct ovsdb_idl_clause *c, *next;
     struct ovsdb_idl_table *table = ovsdb_idl_table_from_class(idl, tc);
-
-    LIST_FOR_EACH_SAFE(c, next, node, &table->condition.clauses) {
-        if (c->function == function &&
-            (!column || (c->column == column &&
-                         ovsdb_datum_equals(&c->arg,
-                                             arg, &column->type)))) {
-            ovsdb_idl_clause_free(c);
-            idl->cond_changed = table->cond_changed = true;
-            return;
-        }
+    struct ovsdb_idl_clause *c
+        = ovsdb_idl_condition_find_clause(table, function, column, arg);
+    if (c) {
+        ovsdb_idl_clause_free(c);
+        idl->cond_changed = table->cond_changed = true;
+        poll_immediate_wake();
     }
 }
 
@@ -825,13 +873,13 @@ ovsdb_idl_condition_to_json(const struct ovsdb_idl_condition *cnd)
 
     clauses = xmalloc(n_clauses * sizeof *clauses);
     LIST_FOR_EACH (c, node, &cnd->clauses) {
-           clauses[i++] = ovsdb_idl_clause_to_json(c);
+        clauses[i++] = ovsdb_idl_clause_to_json(c);
     }
 
     return json_array_create(clauses, n_clauses);
 }
 
-static struct json*
+static struct json *
 ovsdb_idl_create_cond_change_req(struct ovsdb_idl_table *table)
 {
     const struct ovsdb_idl_condition *cond = &table->condition;
@@ -1812,6 +1860,8 @@ ovsdb_idl_row_create(struct ovsdb_idl_table *table, const struct uuid *uuid)
     row->table = table;
     row->map_op_written = NULL;
     row->map_op_lists = NULL;
+    row->set_op_written = NULL;
+    row->set_op_lists = NULL;
     return row;
 }
 
@@ -1822,6 +1872,7 @@ ovsdb_idl_row_destroy(struct ovsdb_idl_row *row)
         ovsdb_idl_row_clear_old(row);
         hmap_remove(&row->table->rows, &row->hmap_node);
         ovsdb_idl_destroy_all_map_op_lists(row);
+        ovsdb_idl_destroy_all_set_op_lists(row);
         if (ovsdb_idl_track_is_set(row->table)) {
             row->change_seqno[OVSDB_IDL_CHANGE_DELETE]
                 = row->table->change_seqno[OVSDB_IDL_CHANGE_DELETE]
@@ -1852,6 +1903,27 @@ ovsdb_idl_destroy_all_map_op_lists(struct ovsdb_idl_row *row)
         bitmap_free(row->map_op_written);
         row->map_op_lists = NULL;
         row->map_op_written = NULL;
+    }
+}
+
+static void
+ovsdb_idl_destroy_all_set_op_lists(struct ovsdb_idl_row *row)
+{
+    if (row->set_op_written) {
+        /* Clear Set Operation Lists */
+        size_t idx, n_columns;
+        const struct ovsdb_idl_column *columns;
+        const struct ovsdb_type *type;
+        n_columns = row->table->class->n_columns;
+        columns = row->table->class->columns;
+        BITMAP_FOR_EACH_1 (idx, n_columns, row->set_op_written) {
+            type = &columns[idx].type;
+            set_op_list_destroy(row->set_op_lists[idx], type);
+        }
+        free(row->set_op_lists);
+        bitmap_free(row->set_op_written);
+        row->set_op_lists = NULL;
+        row->set_op_written = NULL;
     }
 }
 
@@ -2234,6 +2306,12 @@ ovsdb_idl_txn_set_dry_run(struct ovsdb_idl_txn *txn)
  * successfully, the client may retrieve the final (incremented) value of
  * 'column' with ovsdb_idl_txn_get_increment_new_value().
  *
+ * If at time of commit the transaction is otherwise empty, that is, it doesn't
+ * change the database, then 'force' is important.  If 'force' is false in this
+ * case, the IDL suppresses the increment and skips a round trip to the
+ * database server.  If 'force' is true, the IDL will still increment the
+ * column.
+ *
  * The client could accomplish something similar with ovsdb_idl_read(),
  * ovsdb_idl_txn_verify() and ovsdb_idl_txn_write(), or with ovsdb-idlc
  * generated wrappers for these functions.  However, ovsdb_idl_txn_increment()
@@ -2244,7 +2322,8 @@ ovsdb_idl_txn_set_dry_run(struct ovsdb_idl_txn *txn)
 void
 ovsdb_idl_txn_increment(struct ovsdb_idl_txn *txn,
                         const struct ovsdb_idl_row *row,
-                        const struct ovsdb_idl_column *column)
+                        const struct ovsdb_idl_column *column,
+                        bool force)
 {
     ovs_assert(!txn->inc_table);
     ovs_assert(column->type.key.type == OVSDB_TYPE_INTEGER);
@@ -2253,6 +2332,7 @@ ovsdb_idl_txn_increment(struct ovsdb_idl_txn *txn,
     txn->inc_table = row->table->class->name;
     txn->inc_column = column->name;
     txn->inc_row = row->uuid;
+    txn->inc_force = force;
 }
 
 /* Destroys 'txn' and frees all associated memory.  If ovsdb_idl_txn_commit()
@@ -2383,6 +2463,7 @@ ovsdb_idl_txn_disassemble(struct ovsdb_idl_txn *txn)
 
     HMAP_FOR_EACH_SAFE (row, next, txn_node, &txn->txn_rows) {
         ovsdb_idl_destroy_all_map_op_lists(row);
+        ovsdb_idl_destroy_all_set_op_lists(row);
         if (row->old) {
             if (row->written) {
                 ovsdb_idl_row_unparse(row);
@@ -2419,111 +2500,188 @@ ovsdb_idl_txn_extract_mutations(struct ovsdb_idl_row *row,
     size_t idx;
     bool any_mutations = false;
 
-    BITMAP_FOR_EACH_1(idx, class->n_columns, row->map_op_written) {
-        struct map_op_list *map_op_list;
-        const struct ovsdb_idl_column *column;
-        const struct ovsdb_datum *old_datum;
-        enum ovsdb_atomic_type key_type, value_type;
-        struct json *mutation, *map, *col_name, *mutator;
-        struct json *del_set, *ins_map;
-        bool any_del, any_ins;
+    if (row->map_op_written) {
+        BITMAP_FOR_EACH_1(idx, class->n_columns, row->map_op_written) {
+            struct map_op_list *map_op_list;
+            const struct ovsdb_idl_column *column;
+            const struct ovsdb_datum *old_datum;
+            enum ovsdb_atomic_type key_type, value_type;
+            struct json *mutation, *map, *col_name, *mutator;
+            struct json *del_set, *ins_map;
+            bool any_del, any_ins;
 
-        map_op_list = row->map_op_lists[idx];
-        column = &class->columns[idx];
-        key_type = column->type.key.type;
-        value_type = column->type.value.type;
+            map_op_list = row->map_op_lists[idx];
+            column = &class->columns[idx];
+            key_type = column->type.key.type;
+            value_type = column->type.value.type;
 
-        /* Get the value to be changed */
-        if (row->new && row->written && bitmap_is_set(row->written,idx)) {
-            old_datum = &row->new[idx];
-        } else if (row->old != NULL) {
-            old_datum = &row->old[idx];
-        } else {
-            old_datum = ovsdb_datum_default(&column->type);
-        }
+            /* Get the value to be changed */
+            if (row->new && row->written && bitmap_is_set(row->written,idx)) {
+                old_datum = &row->new[idx];
+            } else if (row->old != NULL) {
+                old_datum = &row->old[idx];
+            } else {
+                old_datum = ovsdb_datum_default(&column->type);
+            }
 
-        del_set = json_array_create_empty();
-        ins_map = json_array_create_empty();
-        any_del = false;
-        any_ins = false;
+            del_set = json_array_create_empty();
+            ins_map = json_array_create_empty();
+            any_del = false;
+            any_ins = false;
 
-        for (struct map_op *map_op = map_op_list_first(map_op_list); map_op;
-             map_op = map_op_list_next(map_op_list, map_op)) {
+            for (struct map_op *map_op = map_op_list_first(map_op_list); map_op;
+                 map_op = map_op_list_next(map_op_list, map_op)) {
 
-            if (map_op_type(map_op) == MAP_OP_UPDATE) {
-                /* Find out if value really changed. */
-                struct ovsdb_datum *new_datum;
-                unsigned int pos;
-                new_datum = map_op_datum(map_op);
-                pos = ovsdb_datum_find_key(old_datum,
-                                           &new_datum->keys[0],
-                                           key_type);
-                if (ovsdb_atom_equals(&new_datum->values[0],
-                                      &old_datum->values[pos],
-                                      value_type)) {
-                    /* No change in value. Move on to next update. */
-                    continue;
+                if (map_op_type(map_op) == MAP_OP_UPDATE) {
+                    /* Find out if value really changed. */
+                    struct ovsdb_datum *new_datum;
+                    unsigned int pos;
+                    new_datum = map_op_datum(map_op);
+                    pos = ovsdb_datum_find_key(old_datum,
+                                               &new_datum->keys[0],
+                                               key_type);
+                    if (ovsdb_atom_equals(&new_datum->values[0],
+                                          &old_datum->values[pos],
+                                          value_type)) {
+                        /* No change in value. Move on to next update. */
+                        continue;
+                    }
+                } else if (map_op_type(map_op) == MAP_OP_DELETE){
+                    /* Verify that there is a key to delete. */
+                    unsigned int pos;
+                    pos = ovsdb_datum_find_key(old_datum,
+                                               &map_op_datum(map_op)->keys[0],
+                                               key_type);
+                    if (pos == UINT_MAX) {
+                        /* No key to delete.  Move on to next update. */
+                        VLOG_WARN("Trying to delete a key that doesn't "
+                                  "exist in the map.");
+                        continue;
+                    }
                 }
-            } else if (map_op_type(map_op) == MAP_OP_DELETE){
-                /* Verify that there is a key to delete. */
-                unsigned int pos;
-                pos = ovsdb_datum_find_key(old_datum,
-                                           &map_op_datum(map_op)->keys[0],
-                                           key_type);
-                if (pos == UINT_MAX) {
-                    /* No key to delete.  Move on to next update. */
-                    VLOG_WARN("Trying to delete a key that doesn't "
-                              "exist in the map.");
-                    continue;
+
+                if (map_op_type(map_op) == MAP_OP_INSERT) {
+                    map = json_array_create_2(
+                        ovsdb_atom_to_json(&map_op_datum(map_op)->keys[0],
+                                           key_type),
+                        ovsdb_atom_to_json(&map_op_datum(map_op)->values[0],
+                                           value_type));
+                    json_array_add(ins_map, map);
+                    any_ins = true;
+                } else { /* MAP_OP_UPDATE or MAP_OP_DELETE */
+                    map = ovsdb_atom_to_json(&map_op_datum(map_op)->keys[0],
+                                             key_type);
+                    json_array_add(del_set, map);
+                    any_del = true;
+                }
+
+                /* Generate an additional insert mutate for updates. */
+                if (map_op_type(map_op) == MAP_OP_UPDATE) {
+                    map = json_array_create_2(
+                        ovsdb_atom_to_json(&map_op_datum(map_op)->keys[0],
+                                           key_type),
+                        ovsdb_atom_to_json(&map_op_datum(map_op)->values[0],
+                                           value_type));
+                    json_array_add(ins_map, map);
+                    any_ins = true;
                 }
             }
 
-            if (map_op_type(map_op) == MAP_OP_INSERT) {
-                map = json_array_create_2(
-                    ovsdb_atom_to_json(&map_op_datum(map_op)->keys[0],
-                                       key_type),
-                    ovsdb_atom_to_json(&map_op_datum(map_op)->values[0],
-                                       value_type));
-                json_array_add(ins_map, map);
-                any_ins = true;
-            } else { /* MAP_OP_UPDATE or MAP_OP_DELETE */
-                map = ovsdb_atom_to_json(&map_op_datum(map_op)->keys[0],
-                                         key_type);
-                json_array_add(del_set, map);
-                any_del = true;
+            if (any_del) {
+                col_name = json_string_create(column->name);
+                mutator = json_string_create("delete");
+                map = json_array_create_2(json_string_create("set"), del_set);
+                mutation = json_array_create_3(col_name, mutator, map);
+                json_array_add(mutations, mutation);
+                any_mutations = true;
+            } else {
+                json_destroy(del_set);
             }
-
-            /* Generate an additional insert mutate for updates. */
-            if (map_op_type(map_op) == MAP_OP_UPDATE) {
-                map = json_array_create_2(
-                    ovsdb_atom_to_json(&map_op_datum(map_op)->keys[0],
-                                       key_type),
-                    ovsdb_atom_to_json(&map_op_datum(map_op)->values[0],
-                                       value_type));
-                json_array_add(ins_map, map);
-                any_ins = true;
+            if (any_ins) {
+                col_name = json_string_create(column->name);
+                mutator = json_string_create("insert");
+                map = json_array_create_2(json_string_create("map"), ins_map);
+                mutation = json_array_create_3(col_name, mutator, map);
+                json_array_add(mutations, mutation);
+                any_mutations = true;
+            } else {
+                json_destroy(ins_map);
             }
         }
+    }
+    if (row->set_op_written) {
+        BITMAP_FOR_EACH_1(idx, class->n_columns, row->set_op_written) {
+            struct set_op_list *set_op_list;
+            const struct ovsdb_idl_column *column;
+            const struct ovsdb_datum *old_datum;
+            enum ovsdb_atomic_type key_type;
+            struct json *mutation, *set, *col_name, *mutator;
+            struct json *del_set, *ins_set;
+            bool any_del, any_ins;
 
-        if (any_del) {
-            col_name = json_string_create(column->name);
-            mutator = json_string_create("delete");
-            map = json_array_create_2(json_string_create("set"), del_set);
-            mutation = json_array_create_3(col_name, mutator, map);
-            json_array_add(mutations, mutation);
-            any_mutations = true;
-        } else {
-            json_destroy(del_set);
-        }
-        if (any_ins) {
-            col_name = json_string_create(column->name);
-            mutator = json_string_create("insert");
-            map = json_array_create_2(json_string_create("map"), ins_map);
-            mutation = json_array_create_3(col_name, mutator, map);
-            json_array_add(mutations, mutation);
-            any_mutations = true;
-        } else {
-            json_destroy(ins_map);
+            set_op_list = row->set_op_lists[idx];
+            column = &class->columns[idx];
+            key_type = column->type.key.type;
+
+            /* Get the value to be changed */
+            if (row->new && row->written && bitmap_is_set(row->written,idx)) {
+                old_datum = &row->new[idx];
+            } else if (row->old != NULL) {
+                old_datum = &row->old[idx];
+            } else {
+                old_datum = ovsdb_datum_default(&column->type);
+            }
+
+            del_set = json_array_create_empty();
+            ins_set = json_array_create_empty();
+            any_del = false;
+            any_ins = false;
+
+            for (struct set_op *set_op = set_op_list_first(set_op_list); set_op;
+                 set_op = set_op_list_next(set_op_list, set_op)) {
+                if (set_op_type(set_op) == SET_OP_INSERT) {
+                    set = ovsdb_atom_to_json(&set_op_datum(set_op)->keys[0],
+                                             key_type);
+                    json_array_add(ins_set, set);
+                    any_ins = true;
+                } else { /* SETP_OP_DELETE */
+                    /* Verify that there is a key to delete. */
+                    unsigned int pos;
+                    pos = ovsdb_datum_find_key(old_datum,
+                                               &set_op_datum(set_op)->keys[0],
+                                               key_type);
+                    if (pos == UINT_MAX) {
+                        /* No key to delete.  Move on to next update. */
+                        VLOG_WARN("Trying to delete a key that doesn't "
+                                  "exist in the set.");
+                        continue;
+                    }
+                    set = ovsdb_atom_to_json(&set_op_datum(set_op)->keys[0],
+                                             key_type);
+                    json_array_add(del_set, set);
+                    any_del = true;
+                }
+            }
+            if (any_del) {
+                col_name = json_string_create(column->name);
+                mutator = json_string_create("delete");
+                set = json_array_create_2(json_string_create("set"), del_set);
+                mutation = json_array_create_3(col_name, mutator, set);
+                json_array_add(mutations, mutation);
+                any_mutations = true;
+            } else {
+                json_destroy(del_set);
+            }
+            if (any_ins) {
+                col_name = json_string_create(column->name);
+                mutator = json_string_create("insert");
+                set = json_array_create_2(json_string_create("set"), ins_set);
+                mutation = json_array_create_3(col_name, mutator, set);
+                json_array_add(mutations, mutation);
+                any_mutations = true;
+            } else {
+                json_destroy(ins_set);
+            }
         }
     }
     return any_mutations;
@@ -2716,8 +2874,8 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
             }
         }
 
-        /* Add mutate operation, for partial map updates. */
-        if (row->map_op_written) {
+        /* Add mutate operation, for partial map or partial set updates. */
+        if (row->map_op_written || row->set_op_written) {
             struct json *op, *mutations;
             bool any_mutations;
 
@@ -2740,12 +2898,11 @@ ovsdb_idl_txn_commit(struct ovsdb_idl_txn *txn)
     }
 
     /* Add increment. */
-    if (txn->inc_table && any_updates) {
-        struct json *op;
-
+    if (txn->inc_table && (any_updates || txn->inc_force)) {
+        any_updates = true;
         txn->inc_index = operations->u.array.n - 1;
 
-        op = json_object_create();
+        struct json *op = json_object_create();
         json_object_put_string(op, "op", "mutate");
         json_object_put_string(op, "table", txn->inc_table);
         json_object_put(op, "where",
@@ -3581,6 +3738,42 @@ ovsdb_idl_txn_add_map_op(struct ovsdb_idl_row *row,
     }
 }
 
+/* Inserts a new Set Operation into current transaction. */
+static void
+ovsdb_idl_txn_add_set_op(struct ovsdb_idl_row *row,
+                         const struct ovsdb_idl_column *column,
+                         struct ovsdb_datum *datum,
+                         enum set_op_type op_type)
+{
+    const struct ovsdb_idl_table_class *class;
+    size_t column_idx;
+    struct set_op *set_op;
+
+    class = row->table->class;
+    column_idx = column - class->columns;
+
+    /* Check if a set operation list exists for this column. */
+    if (!row->set_op_written) {
+        row->set_op_written = bitmap_allocate(class->n_columns);
+        row->set_op_lists = xzalloc(class->n_columns *
+                                    sizeof *row->set_op_lists);
+    }
+    if (!row->set_op_lists[column_idx]) {
+        row->set_op_lists[column_idx] = set_op_list_create();
+    }
+
+    /* Add a set operation to the corresponding list. */
+    set_op = set_op_create(datum, op_type);
+    bitmap_set1(row->set_op_written, column_idx);
+    set_op_list_add(row->set_op_lists[column_idx], set_op, &column->type);
+
+    /* Add this row to the transactions's list of rows. */
+    if (hmap_node_is_null(&row->txn_node)) {
+        hmap_insert(&row->table->idl->txn->txn_rows, &row->txn_node,
+                    uuid_hash(&row->uuid));
+    }
+}
+
 static bool
 is_valid_partial_update(const struct ovsdb_idl_row *row,
                         const struct ovsdb_idl_column *column,
@@ -3600,6 +3793,55 @@ is_valid_partial_update(const struct ovsdb_idl_row *row,
     }
 
     return true;
+}
+
+/* Inserts the value described in 'datum' into the map in 'column' in
+ * 'row_'. If the value doesn't already exist in 'column' then it's value
+ * is added.  The value in 'datum' must be of the same type as the values
+ * in 'column'.  This function takes ownership of 'datum'.
+ *
+ * Usually this function is used indirectly through one of the "update"
+ * functions generated by vswitch-idl. */
+void
+ovsdb_idl_txn_write_partial_set(const struct ovsdb_idl_row *row_,
+                                const struct ovsdb_idl_column *column,
+                                struct ovsdb_datum *datum)
+{
+    struct ovsdb_idl_row *row = CONST_CAST(struct ovsdb_idl_row *, row_);
+    enum set_op_type op_type;
+
+    if (!is_valid_partial_update(row, column, datum)) {
+        ovsdb_datum_destroy(datum, &column->type);
+        free(datum);
+        return;
+    }
+
+    op_type = SET_OP_INSERT;
+
+    ovsdb_idl_txn_add_set_op(row, column, datum, op_type);
+}
+
+/* Deletes the value specified in 'datum' from the set in 'column' in 'row_'.
+ * The value in 'datum' must be of the same type as the keys in 'column'.
+ * This function takes ownership of 'datum'.
+ *
+ * Usually this function is used indirectly through one of the "update"
+ * functions generated by vswitch-idl. */
+void
+ovsdb_idl_txn_delete_partial_set(const struct ovsdb_idl_row *row_,
+                                 const struct ovsdb_idl_column *column,
+                                 struct ovsdb_datum *datum)
+{
+    struct ovsdb_idl_row *row = CONST_CAST(struct ovsdb_idl_row *, row_);
+
+    if (!is_valid_partial_update(row, column, datum)) {
+        struct ovsdb_type type_ = column->type;
+        type_.value.type = OVSDB_TYPE_VOID;
+        ovsdb_datum_destroy(datum, &type_);
+        free(datum);
+        return;
+    }
+    ovsdb_idl_txn_add_set_op(row, column, datum, SET_OP_DELETE);
 }
 
 /* Inserts the key-value specified in 'datum' into the map in 'column' in
@@ -3704,15 +3946,16 @@ ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *loop)
                 break;
 
             case TXN_SUCCESS:
-                /* If the database has already changed since we started the
-                 * commit, re-evaluate it immediately to avoid missing a change
-                 * for a while. */
-                if (ovsdb_idl_get_seqno(loop->idl) != loop->precommit_seqno) {
-                    poll_immediate_wake();
-                }
+                /* Possibly some work on the database was deferred because no
+                 * further transaction could proceed.  Wake up again. */
+                loop->cur_cfg = loop->next_cfg;
+                poll_immediate_wake();
                 break;
 
             case TXN_UNCHANGED:
+                loop->cur_cfg = loop->next_cfg;
+                break;
+
             case TXN_ABORTED:
             case TXN_NOT_LOCKED:
             case TXN_ERROR:
@@ -3721,7 +3964,6 @@ ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *loop)
             case TXN_UNCOMMITTED:
             case TXN_INCOMPLETE:
                 OVS_NOT_REACHED();
-
             }
             ovsdb_idl_txn_destroy(txn);
             loop->committing_txn = NULL;

@@ -41,12 +41,16 @@ struct ovs_cmdl_command {
     int min_args;
     int max_args;
     ovs_cmdl_handler handler;
+    enum { OVS_RO, OVS_RW } mode;    /* Does this command modify things? */
 };
 
 char *ovs_cmdl_long_options_to_short_options(const struct option *options);
 void ovs_cmdl_print_options(const struct option *options);
 void ovs_cmdl_print_commands(const struct ovs_cmdl_command *commands);
-void ovs_cmdl_run_command(struct ovs_cmdl_context *, const struct ovs_cmdl_command[]);
+void ovs_cmdl_run_command(struct ovs_cmdl_context *,
+                          const struct ovs_cmdl_command[]);
+void ovs_cmdl_run_command_read_only(struct ovs_cmdl_context *,
+                                    const struct ovs_cmdl_command[]);
 
 void ovs_cmdl_proctitle_init(int argc, char **argv);
 #if defined(__FreeBSD__) || defined(__NetBSD__)

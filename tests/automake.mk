@@ -243,7 +243,7 @@ EXTRA_DIST += tests/run-ryu
 
 # Run kmod tests. Assume kernel modules has been installed or linked into the kernel
 check-kernel: all tests/atconfig tests/atlocal $(SYSTEM_KMOD_TESTSUITE)
-	$(SHELL) '$(SYSTEM_KMOD_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' -d $(TESTSUITEFLAGS) -j1
+	$(SHELL) '$(SYSTEM_KMOD_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' $(TESTSUITEFLAGS) -j1
 
 # Testing the out of tree Kernel module
 check-kmod: all tests/atconfig tests/atlocal $(SYSTEM_KMOD_TESTSUITE)
@@ -328,6 +328,7 @@ tests_ovstest_SOURCES = \
 	tests/test-classifier.c \
 	tests/test-ccmap.c \
 	tests/test-cmap.c \
+	tests/test-conntrack.c \
 	tests/test-csum.c \
 	tests/test-flows.c \
 	tests/test-hash.c \

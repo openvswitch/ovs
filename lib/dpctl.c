@@ -59,6 +59,7 @@ struct dpctl_command {
     int min_args;
     int max_args;
     dpctl_command_handler *handler;
+    enum { DP_RO, DP_RW} mode;
 };
 static const struct dpctl_command *get_all_dpctl_commands(void);
 static void dpctl_print(struct dpctl_params *dpctl_p, const char *fmt, ...)
@@ -802,8 +803,8 @@ dpctl_dump_flows(int argc, const char *argv[], struct dpctl_params *dpctl_p)
     }
 
     if (filter) {
-        char *err = parse_ofp_exact_flow(&flow_filter, &wc_filter.masks,
-                                         filter, &names_portno);
+        char *err = parse_ofp_exact_flow(&flow_filter, &wc_filter, filter,
+                                         &names_portno);
         if (err) {
             dpctl_error(dpctl_p, 0, "Failed to parse filter (%s)", err);
             error = EINVAL;
@@ -1615,29 +1616,29 @@ out:
 }
 
 static const struct dpctl_command all_commands[] = {
-    { "add-dp", "add-dp dp [iface...]", 1, INT_MAX, dpctl_add_dp },
-    { "del-dp", "del-dp dp", 1, 1, dpctl_del_dp },
-    { "add-if", "add-if dp iface...", 2, INT_MAX, dpctl_add_if },
-    { "del-if", "del-if dp iface...", 2, INT_MAX, dpctl_del_if },
-    { "set-if", "set-if dp iface...", 2, INT_MAX, dpctl_set_if },
-    { "dump-dps", "", 0, 0, dpctl_dump_dps },
-    { "show", "[dp...]", 0, INT_MAX, dpctl_show },
-    { "dump-flows", "[dp]", 0, 2, dpctl_dump_flows },
-    { "add-flow", "add-flow [dp] flow actions", 2, 3, dpctl_add_flow },
-    { "mod-flow", "mod-flow [dp] flow actions", 2, 3, dpctl_mod_flow },
-    { "get-flow", "get-flow [dp] ufid", 1, 2, dpctl_get_flow },
-    { "del-flow", "del-flow [dp] flow", 1, 2, dpctl_del_flow },
-    { "del-flows", "[dp]", 0, 1, dpctl_del_flows },
-    { "dump-conntrack", "[dp] [zone=N]", 0, 2, dpctl_dump_conntrack },
-    { "flush-conntrack", "[dp] [zone=N]", 0, 2, dpctl_flush_conntrack },
-    { "help", "", 0, INT_MAX, dpctl_help },
-    { "list-commands", "", 0, INT_MAX, dpctl_list_commands },
+    { "add-dp", "add-dp dp [iface...]", 1, INT_MAX, dpctl_add_dp, DP_RW },
+    { "del-dp", "del-dp dp", 1, 1, dpctl_del_dp, DP_RW },
+    { "add-if", "add-if dp iface...", 2, INT_MAX, dpctl_add_if, DP_RW },
+    { "del-if", "del-if dp iface...", 2, INT_MAX, dpctl_del_if, DP_RW },
+    { "set-if", "set-if dp iface...", 2, INT_MAX, dpctl_set_if, DP_RW },
+    { "dump-dps", "", 0, 0, dpctl_dump_dps, DP_RO },
+    { "show", "[dp...]", 0, INT_MAX, dpctl_show, DP_RO },
+    { "dump-flows", "[dp]", 0, 2, dpctl_dump_flows, DP_RO },
+    { "add-flow", "add-flow [dp] flow actions", 2, 3, dpctl_add_flow, DP_RW },
+    { "mod-flow", "mod-flow [dp] flow actions", 2, 3, dpctl_mod_flow, DP_RW },
+    { "get-flow", "get-flow [dp] ufid", 1, 2, dpctl_get_flow, DP_RO },
+    { "del-flow", "del-flow [dp] flow", 1, 2, dpctl_del_flow, DP_RW },
+    { "del-flows", "[dp]", 0, 1, dpctl_del_flows, DP_RW },
+    { "dump-conntrack", "[dp] [zone=N]", 0, 2, dpctl_dump_conntrack, DP_RO },
+    { "flush-conntrack", "[dp] [zone=N]", 0, 2, dpctl_flush_conntrack, DP_RW },
+    { "help", "", 0, INT_MAX, dpctl_help, DP_RO },
+    { "list-commands", "", 0, INT_MAX, dpctl_list_commands, DP_RO },
 
     /* Undocumented commands for testing. */
-    { "parse-actions", "actions", 1, INT_MAX, dpctl_parse_actions },
-    { "normalize-actions", "actions", 2, INT_MAX, dpctl_normalize_actions },
+    { "parse-actions", "actions", 1, INT_MAX, dpctl_parse_actions, DP_RO },
+    { "normalize-actions", "actions", 2, INT_MAX, dpctl_normalize_actions, DP_RO },
 
-    { NULL, NULL, 0, 0, NULL },
+    { NULL, NULL, 0, 0, NULL, DP_RO },
 };
 
 static const struct dpctl_command *get_all_dpctl_commands(void)
@@ -1672,6 +1673,12 @@ dpctl_run_command(int argc, const char *argv[], struct dpctl_params *dpctl_p)
                             p->name, p->max_args);
                 return EINVAL;
             } else {
+                if (p->mode == DP_RW && dpctl_p->read_only) {
+                    dpctl_error(dpctl_p, 0,
+                                "'%s' command does not work in read only mode",
+                                p->name);
+                    return EINVAL;
+                }
                 return p->handler(argc, argv, dpctl_p);
             }
         }

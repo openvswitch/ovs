@@ -25,6 +25,7 @@
 #include "fatal-signal.h"
 #include "openvswitch/json.h"
 #include "ovn/lib/ovn-nb-idl.h"
+#include "ovn/lib/ovn-util.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "process.h"
@@ -49,6 +50,18 @@ static bool oneline;
 /* --dry-run: Do not commit any changes. */
 static bool dry_run;
 
+/* --wait=TYPE: Wait for configuration change to take effect? */
+enum nbctl_wait_type {
+    NBCTL_WAIT_NONE,            /* Do not wait. */
+    NBCTL_WAIT_SB,              /* Wait for southbound database updates. */
+    NBCTL_WAIT_HV               /* Wait for hypervisors to catch up. */
+};
+static enum nbctl_wait_type wait_type = NBCTL_WAIT_NONE;
+
+/* Should we wait (if specified by 'wait_type') even if the commands don't
+ * change the database at all? */
+static bool force_wait = false;
+
 /* --timeout: Time to wait for a connection to 'db'. */
 static int timeout;
 
@@ -65,7 +78,6 @@ OVS_NO_RETURN static void nbctl_exit(int status);
 static void nbctl_cmd_init(void);
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[], struct shash *local_options);
-static const char *nbctl_default_db(void);
 static void run_prerequisites(struct ctl_command[], size_t n_commands,
                               struct ovsdb_idl *);
 static bool do_nbctl(const char *args, struct ctl_command *, size_t n,
@@ -141,25 +153,14 @@ main(int argc, char *argv[])
     }
 }
 
-static const char *
-nbctl_default_db(void)
-{
-    static char *def;
-    if (!def) {
-        def = getenv("OVN_NB_DB");
-        if (!def) {
-            def = xasprintf("unix:%s/ovnnb_db.sock", ovs_rundir());
-        }
-    }
-    return def;
-}
-
 static void
 parse_options(int argc, char *argv[], struct shash *local_options)
 {
     enum {
         OPT_DB = UCHAR_MAX + 1,
         OPT_NO_SYSLOG,
+        OPT_NO_WAIT,
+        OPT_WAIT,
         OPT_DRY_RUN,
         OPT_ONELINE,
         OPT_LOCAL,
@@ -171,6 +172,8 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     static const struct option global_long_options[] = {
         {"db", required_argument, NULL, OPT_DB},
         {"no-syslog", no_argument, NULL, OPT_NO_SYSLOG},
+        {"no-wait", no_argument, NULL, OPT_NO_WAIT},
+        {"wait", required_argument, NULL, OPT_WAIT},
         {"dry-run", no_argument, NULL, OPT_DRY_RUN},
         {"oneline", no_argument, NULL, OPT_ONELINE},
         {"timeout", required_argument, NULL, 't'},
@@ -227,6 +230,23 @@ parse_options(int argc, char *argv[], struct shash *local_options)
             vlog_set_levels(&this_module, VLF_SYSLOG, VLL_WARN);
             break;
 
+        case OPT_NO_WAIT:
+            wait_type = NBCTL_WAIT_NONE;
+            break;
+
+        case OPT_WAIT:
+            if (!strcmp(optarg, "none")) {
+                wait_type = NBCTL_WAIT_NONE;
+            } else if (!strcmp(optarg, "sb")) {
+                wait_type = NBCTL_WAIT_SB;
+            } else if (!strcmp(optarg, "hv")) {
+                wait_type = NBCTL_WAIT_HV;
+            } else {
+                ctl_fatal("argument to --wait must be "
+                          "\"none\", \"sb\", or \"hv\"");
+            }
+            break;
+
         case OPT_DRY_RUN:
             dry_run = true;
             break;
@@ -277,7 +297,7 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     free(short_options);
 
     if (!db) {
-        db = nbctl_default_db();
+        db = default_nb_db();
     }
 
     for (i = n_global_long_options; options[i].name; i++) {
@@ -294,6 +314,7 @@ usage(void)
 usage: %s [OPTIONS] COMMAND [ARG...]\n\
 \n\
 General commands:\n\
+  init                      initialize the database\n\
   show                      print overview of database contents\n\
   show SWITCH               print overview of database contents for SWITCH\n\
   show ROUTER               print overview of database contents for ROUTER\n\
@@ -356,7 +377,7 @@ Logical switch port commands:\n\
   lsp-get-tag PORT          get the PORT's tag if set\n\
   lsp-set-addresses PORT [ADDRESS]...\n\
                             set MAC or MAC+IP addresses for PORT.\n\
-  lsp-get-addresses PORT    get a list of MAC addresses on PORT\n\
+  lsp-get-addresses PORT    get a list of MAC or MAC+IP addresses on PORT\n\
   lsp-set-port-security PORT [ADDRS]...\n\
                             set port security addresses for PORT.\n\
   lsp-get-port-security PORT    get PORT's port security addresses\n\
@@ -407,19 +428,26 @@ DHCP Options commands:\n\
   dhcp-options-list        \n\
                            lists the DHCP_Options rows\n\
   dhcp-options-set-options DHCP_OPTIONS_UUID  KEY=VALUE [KEY=VALUE]...\n\
-                           set DHCP options to the DHCP_OPTIONS_UUID\n\
+                           set DHCP options for DHCP_OPTIONS_UUID\n\
   dhcp-options-get-options DHCO_OPTIONS_UUID \n\
-                           displays the DHCP options of th DHCP_OPTIONS_UUID\n\
+                           displays the DHCP options for DHCP_OPTIONS_UUID\n\
 \n\
 %s\
+\n\
+Synchronization command (use with --wait=sb|hv):\n\
+  sync                     wait even for earlier changes to take effect\n\
 \n\
 Options:\n\
   --db=DATABASE               connect to DATABASE\n\
                               (default: %s)\n\
+  --no-wait, --wait=none      do not wait for OVN reconfiguration (default)\n\
+  --wait=sb                   wait for southbound database update\n\
+  --wait=hv                   wait for all chassis to catch up\n\
   -t, --timeout=SECS          wait at most SECS seconds\n\
   --dry-run                   do not commit changes to database\n\
   --oneline                   print exactly one line of output per command\n",
-           program_name, program_name, ctl_get_db_cmd_usage(), nbctl_default_db());
+           program_name, program_name, ctl_get_db_cmd_usage(),
+           default_nb_db());
     vlog_usage();
     printf("\
   --no-syslog             equivalent to --verbose=nbctl:syslog:warn\n");
@@ -666,6 +694,26 @@ print_ls(const struct nbrec_logical_switch *ls, struct ds *s)
             ds_put_cstr(s, "]\n");
         }
     }
+}
+
+static void
+nbctl_init(struct ctl_context *ctx OVS_UNUSED)
+{
+}
+
+static void
+nbctl_pre_sync(struct ctl_context *ctx OVS_UNUSED)
+{
+    if (wait_type != NBCTL_WAIT_NONE) {
+        force_wait = true;
+    } else {
+        VLOG_INFO("\"sync\" command has no effect without --wait");
+    }
+}
+
+static void
+nbctl_sync(struct ctl_context *ctx OVS_UNUSED)
+{
 }
 
 static void
@@ -1679,7 +1727,7 @@ nbctl_lsp_set_addresses(struct ctl_context *ctx)
     for (i = 2; i < ctx->argc; i++) {
         struct eth_addr ea;
 
-        if (strcmp(ctx->argv[i], "unknown")
+        if (strcmp(ctx->argv[i], "unknown") && strcmp(ctx->argv[i], "dynamic")
             && !ovs_scan(ctx->argv[i], ETH_ADDR_SCAN_FMT,
                          ETH_ADDR_SCAN_ARGS(ea))) {
             ctl_fatal("%s: Invalid address format. See ovn-nb(5). "
@@ -2870,6 +2918,10 @@ nbctl_lr_route_list(struct ctl_context *ctx)
 }
 
 static const struct ctl_table_class tables[] = {
+    {&nbrec_table_nb_global,
+     {{&nbrec_table_nb_global, NULL, NULL},
+      {NULL, NULL, NULL}}},
+
     {&nbrec_table_logical_switch,
      {{&nbrec_table_logical_switch, &nbrec_logical_switch_col_name, NULL},
       {NULL, NULL, NULL}}},
@@ -2938,9 +2990,14 @@ static void
 run_prerequisites(struct ctl_command *commands, size_t n_commands,
                   struct ovsdb_idl *idl)
 {
-    struct ctl_command *c;
+    ovsdb_idl_add_table(idl, &nbrec_table_nb_global);
+    if (wait_type == NBCTL_WAIT_SB) {
+        ovsdb_idl_add_column(idl, &nbrec_nb_global_col_sb_cfg);
+    } else if (wait_type == NBCTL_WAIT_HV) {
+        ovsdb_idl_add_column(idl, &nbrec_nb_global_col_hv_cfg);
+    }
 
-    for (c = commands; c < &commands[n_commands]; c++) {
+    for (struct ctl_command *c = commands; c < &commands[n_commands]; c++) {
         if (c->syntax->prerequisites) {
             struct ctl_context ctx;
 
@@ -2967,6 +3024,7 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     struct ctl_context ctx;
     struct ctl_command *c;
     struct shash_node *node;
+    int64_t next_cfg = 0;
     char *error = NULL;
 
     txn = the_idl_txn = ovsdb_idl_txn_create(idl);
@@ -2975,6 +3033,17 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     }
 
     ovsdb_idl_txn_add_comment(txn, "ovs-nbctl: %s", args);
+
+    const struct nbrec_nb_global *nb = nbrec_nb_global_first(idl);
+    if (!nb) {
+        /* XXX add verification that table is empty */
+        nb = nbrec_nb_global_insert(txn);
+    }
+
+    if (wait_type != NBCTL_WAIT_NONE) {
+        ovsdb_idl_txn_increment(txn, &nb->header_, &nbrec_nb_global_col_nb_cfg,
+                                force_wait);
+    }
 
     symtab = ovsdb_symbol_table_create();
     for (c = commands; c < &commands[n_commands]; c++) {
@@ -3017,6 +3086,9 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
     }
 
     status = ovsdb_idl_txn_commit_block(txn);
+    if (wait_type != NBCTL_WAIT_NONE && status == TXN_SUCCESS) {
+        next_cfg = ovsdb_idl_txn_get_increment_new_value(txn);
+    }
     if (status == TXN_UNCHANGED || status == TXN_SUCCESS) {
         for (c = commands; c < &commands[n_commands]; c++) {
             if (c->syntax->postprocess) {
@@ -3093,6 +3165,25 @@ do_nbctl(const char *args, struct ctl_command *commands, size_t n_commands,
         shash_destroy_free_data(&c->options);
     }
     free(commands);
+
+    if (wait_type != NBCTL_WAIT_NONE && status != TXN_UNCHANGED) {
+        ovsdb_idl_enable_reconnect(idl);
+        for (;;) {
+            ovsdb_idl_run(idl);
+            NBREC_NB_GLOBAL_FOR_EACH (nb, idl) {
+                int64_t cur_cfg = (wait_type == NBCTL_WAIT_SB
+                                   ? nb->sb_cfg
+                                   : nb->hv_cfg);
+                if (cur_cfg >= next_cfg) {
+                    goto done;
+                }
+            }
+            ovsdb_idl_wait(idl);
+            poll_block();
+        }
+    done: ;
+    }
+
     ovsdb_idl_txn_destroy(txn);
     ovsdb_idl_destroy(idl);
 
@@ -3134,6 +3225,8 @@ nbctl_exit(int status)
 }
 
 static const struct ctl_command_syntax nbctl_commands[] = {
+    { "init", 0, 0, "", NULL, nbctl_init, NULL, "", RW },
+    { "sync", 0, 0, "", nbctl_pre_sync, nbctl_sync, NULL, "", RO },
     { "show", 0, 1, "[SWITCH]", NULL, nbctl_show, NULL, "", RO },
 
     /* lport-chain commands. */

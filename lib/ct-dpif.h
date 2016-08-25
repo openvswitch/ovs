@@ -183,7 +183,6 @@ int ct_dpif_flush(struct dpif *, const uint16_t *zone);
 void ct_dpif_entry_uninit(struct ct_dpif_entry *);
 void ct_dpif_format_entry(const struct ct_dpif_entry *, struct ds *,
                           bool verbose, bool print_stats);
-void ct_dpif_format_tuple(struct ds *, const struct ct_dpif_tuple *,
-                          bool verbose);
+void ct_dpif_format_tuple(struct ds *, const struct ct_dpif_tuple *);
 
 #endif /* CT_DPIF_H */

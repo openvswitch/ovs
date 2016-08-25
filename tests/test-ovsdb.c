@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -195,6 +195,9 @@ usage(void)
            "  execute SCHEMA TRANSACTION...\n"
            "    executes each TRANSACTION on an initially empty database\n"
            "    the specified SCHEMA\n"
+           "  execute-readonly SCHEMA TRANSACTION...\n"
+           "    same as execute, except the TRANSACTION will be executed\n"
+           "    against the database server that is in read only mode\n"
            "  trigger SCHEMA TRANSACTION...\n"
            "    executes each TRANSACTION on an initially empty database\n"
            "    the specified SCHEMA.   A TRANSACTION of the form\n"
@@ -208,6 +211,10 @@ usage(void)
            "  idl-partial-update-map-column SERVER \n"
            "    connect to SERVER and executes different operations to\n"
            "    test the capacity of updating elements inside a map column\n"
+           "    displaying the table information after each operation.\n"
+           "  idl-partial-update-set-column SERVER \n"
+           "    connect to SERVER and executes different operations to\n"
+           "    test the capacity of updating elements inside a set column\n"
            "    displaying the table information after each operation.\n",
            program_name, program_name);
     vlog_usage();
@@ -1398,7 +1405,7 @@ do_parse_schema(struct ovs_cmdl_context *ctx)
 }
 
 static void
-do_execute(struct ovs_cmdl_context *ctx)
+do_execute__(struct ovs_cmdl_context *ctx, bool ro)
 {
     struct ovsdb_schema *schema;
     struct json *json;
@@ -1416,7 +1423,7 @@ do_execute(struct ovs_cmdl_context *ctx)
         char *s;
 
         params = parse_json(ctx->argv[i]);
-        result = ovsdb_execute(db, NULL, params, 0, NULL);
+        result = ovsdb_execute(db, NULL, params, ro,  0, NULL);
         s = json_to_string(result, JSSF_SORT);
         printf("%s\n", s);
         free(s);
@@ -1425,6 +1432,18 @@ do_execute(struct ovs_cmdl_context *ctx)
     }
 
     ovsdb_destroy(db);
+}
+
+static void
+do_execute_ro(struct ovs_cmdl_context *ctx)
+{
+    do_execute__(ctx, true);
+}
+
+static void
+do_execute(struct ovs_cmdl_context *ctx)
+{
+    do_execute__(ctx, false);
 }
 
 struct test_trigger {
@@ -1482,7 +1501,7 @@ do_trigger(struct ovs_cmdl_context *ctx)
             json_destroy(params);
         } else {
             struct test_trigger *t = xmalloc(sizeof *t);
-            ovsdb_trigger_init(&session, db, &t->trigger, params, now);
+            ovsdb_trigger_init(&session, db, &t->trigger, params, now, false);
             t->number = number++;
             if (ovsdb_trigger_is_complete(&t->trigger)) {
                 do_trigger_dump(t, now, "immediate");
@@ -1667,13 +1686,13 @@ static void
 do_transact(struct ovs_cmdl_context *ctx)
 {
     static const struct ovs_cmdl_command do_transact_commands[] = {
-        { "commit", NULL, 0, 0, do_transact_commit },
-        { "abort", NULL, 0, 0, do_transact_abort },
-        { "insert", NULL, 2, 3, do_transact_insert },
-        { "delete", NULL, 1, 1, do_transact_delete },
-        { "modify", NULL, 2, 3, do_transact_modify },
-        { "print", NULL, 0, 0, do_transact_print },
-        { NULL, NULL, 0, 0, NULL },
+        { "commit", NULL, 0, 0, do_transact_commit, OVS_RO },
+        { "abort", NULL, 0, 0, do_transact_abort, OVS_RO },
+        { "insert", NULL, 2, 3, do_transact_insert, OVS_RO },
+        { "delete", NULL, 1, 1, do_transact_delete, OVS_RO },
+        { "modify", NULL, 2, 3, do_transact_modify, OVS_RO },
+        { "print", NULL, 0, 0, do_transact_print, OVS_RO },
+        { NULL, NULL, 0, 0, NULL, OVS_RO },
     };
 
     struct ovsdb_schema *schema;
@@ -2120,7 +2139,8 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
                           "i=%d", atoi(arg1));
             }
 
-            ovsdb_idl_txn_increment(txn, &s->header_, &idltest_simple_col_i);
+            ovsdb_idl_txn_increment(txn, &s->header_, &idltest_simple_col_i,
+                                    false);
             increment = true;
         } else if (!strcmp(name, "abort")) {
             ovsdb_idl_txn_abort(txn);
@@ -2344,6 +2364,7 @@ update_conditions(struct ovsdb_idl *idl, char *commands)
                 parse_link2_json_clause(idl, add_cmd, json->u.array.elems[i]);
             }
         }
+        json_destroy(json);
     }
 }
 
@@ -2499,7 +2520,6 @@ dump_simple2(struct ovsdb_idl *idl,
     }
 }
 
-
 static void
 do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
 {
@@ -2520,12 +2540,12 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     setvbuf(stdout, NULL, _IONBF, 0);
     ovsdb_idl_run(idl);
 
-    /* Display original data in table */
+    /* Display original data in table. */
     myRow = NULL;
     printf("%03d: Getting records\n", step++);
     dump_simple2(idl, myRow, step++);
 
-    /* Insert new elements in different map columns */
+    /* Insert new elements in different map columns. */
     myRow = idltest_simple2_first(idl);
     myTxn = ovsdb_idl_txn_create(idl);
     idltest_simple2_get_smap(myRow, OVSDB_TYPE_STRING,
@@ -2541,7 +2561,7 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     printf("%03d: After insert element\n", step++);
     dump_simple2(idl, myRow, step++);
 
-    /* Insert duplicate element */
+    /* Insert duplicate element. */
     myTxn = ovsdb_idl_txn_create(idl);
     idltest_simple2_update_smap_setkey(myRow, "key1", "myList1");
     ovsdb_idl_txn_commit_block(myTxn);
@@ -2550,7 +2570,7 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     printf("%03d: After insert duplicated element\n", step++);
     dump_simple2(idl, myRow, step++);
 
-    /* deletes an element of a map column */
+    /* Deletes an element of a map column. */
     myRow = idltest_simple2_first(idl);
     myTxn = ovsdb_idl_txn_create(idl);
     smap = idltest_simple2_get_smap(myRow, OVSDB_TYPE_STRING,
@@ -2563,7 +2583,7 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     printf("%03d: After delete element\n", step++);
     dump_simple2(idl, myRow, step++);
 
-    /* try to delete a deleted element of a map column */
+    /* Try to delete a deleted element of a map column. */
     myTxn = ovsdb_idl_txn_create(idl);
     idltest_simple2_update_smap_delkey(myRow, key_to_delete);
     ovsdb_idl_txn_commit_block(myTxn);
@@ -2576,40 +2596,163 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     return;
 }
 
+static void
+print_idl_row_simple3(const struct idltest_simple3 *s, int step)
+{
+    size_t i;
+    const struct ovsdb_datum *uset;
+    const struct ovsdb_datum *uref;
+
+    uset = idltest_simple3_get_uset(s, OVSDB_TYPE_UUID);
+    printf("%03d: name=%s uset=[",
+           step, s->name);
+    for (i = 0; i < uset->n; i++) {
+        printf("["UUID_FMT"]%s", UUID_ARGS(&(uset->keys[i].uuid)), i < uset->n-1? ",": "");
+    }
+    uref = idltest_simple3_get_uref(s, OVSDB_TYPE_UUID);
+    printf("] uref=[");
+    for (i = 0; i < uref->n; i++) {
+        printf("["UUID_FMT"]%s", UUID_ARGS(&(uref->keys[i].uuid)), i < uref->n-1? ",": "");
+    }
+    printf("]\n");
+}
+
+static void
+dump_simple3(struct ovsdb_idl *idl,
+             const struct idltest_simple3 *myRow,
+             int step)
+{
+    IDLTEST_SIMPLE3_FOR_EACH(myRow, idl) {
+        print_idl_row_simple3(myRow, step);
+    }
+}
+
+static void
+do_idl_partial_update_set_column(struct ovs_cmdl_context *ctx)
+{
+    struct ovsdb_idl *idl;
+    struct ovsdb_idl_txn *myTxn;
+    const struct idltest_simple3 *myRow;
+    struct idltest_simple4 *myRow2;
+    const struct ovsdb_datum *uset OVS_UNUSED;
+    const struct ovsdb_datum *uref OVS_UNUSED;
+    int step = 0;
+
+    idltest_init();
+    idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, false, true);
+    ovsdb_idl_add_table(idl, &idltest_table_simple3);
+    ovsdb_idl_add_column(idl, &idltest_simple3_col_name);
+    ovsdb_idl_add_column(idl, &idltest_simple3_col_uset);
+    ovsdb_idl_add_column(idl, &idltest_simple3_col_uref);
+    ovsdb_idl_add_table(idl, &idltest_table_simple4);
+    ovsdb_idl_add_column(idl, &idltest_simple4_col_name);
+    ovsdb_idl_get_initial_snapshot(idl);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    ovsdb_idl_run(idl);
+
+    /* Display original data in table. */
+    myRow = NULL;
+    printf("%03d: Getting records\n", step++);
+    dump_simple3(idl, myRow, step++);
+
+    /* Insert new elements in different map columns. */
+    myRow = idltest_simple3_first(idl);
+    myTxn = ovsdb_idl_txn_create(idl);
+    idltest_simple3_get_uset(myRow, OVSDB_TYPE_UUID);
+    struct uuid uuid_to_add;
+    uuid_from_string(&uuid_to_add, "001e43d2-dd3f-4616-ab6a-83a490bb0991");
+    idltest_simple3_update_uset_addvalue(myRow, uuid_to_add);
+    idltest_simple3_set_name(myRow, "String2");
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After rename+add new value\n", step++);
+    dump_simple3(idl, myRow, step++);
+
+    /* Insert duplicate element. */
+    myTxn = ovsdb_idl_txn_create(idl);
+    struct uuid uuid_to_add2;
+    uuid_from_string(&uuid_to_add2, "0026b3ba-571b-4729-8227-d860a5210ab8");
+    idltest_simple3_update_uset_addvalue(myRow, uuid_to_add2);
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After add new value\n", step++);
+    dump_simple3(idl, myRow, step++);
+
+    /* Deletes an element of a set column. */
+    myRow = idltest_simple3_first(idl);
+    myTxn = ovsdb_idl_txn_create(idl);
+    uset = idltest_simple3_get_uset(myRow, OVSDB_TYPE_UUID);
+    idltest_simple3_update_uset_delvalue(myRow, uuid_to_add);
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After delete value\n", step++);
+    dump_simple3(idl, myRow, step++);
+
+    /* Try to delete a deleted element of a map column.  */
+    myRow = idltest_simple3_first(idl);
+    myTxn = ovsdb_idl_txn_create(idl);
+    idltest_simple3_update_uset_delvalue(myRow, uuid_to_add);
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After trying to delete a deleted value\n", step++);
+    dump_simple3(idl, myRow, step++);
+
+    /* Adds to a table and update a strong reference in another table. */
+    myRow = idltest_simple3_first(idl);
+    myTxn = ovsdb_idl_txn_create(idl);
+    myRow2 = idltest_simple4_insert(myTxn);
+    idltest_simple4_set_name(myRow2, "test");
+    idltest_simple3_update_uref_addvalue(myRow, myRow2);
+    ovsdb_idl_txn_commit_block(myTxn);
+    ovsdb_idl_txn_destroy(myTxn);
+    ovsdb_idl_get_initial_snapshot(idl);
+    printf("%03d: After add to other table + set of strong ref\n", step++);
+    dump_simple3(idl, myRow, step++);
+    printf("%03d: End test\n", step);
+    return;
+}
+
 static struct ovs_cmdl_command all_commands[] = {
-    { "log-io", NULL, 2, INT_MAX, do_log_io },
-    { "default-atoms", NULL, 0, 0, do_default_atoms },
-    { "default-data", NULL, 0, 0, do_default_data },
-    { "diff-data", NULL, 3, INT_MAX, do_diff_data},
-    { "parse-atomic-type", NULL, 1, 1, do_parse_atomic_type },
-    { "parse-base-type", NULL, 1, 1, do_parse_base_type },
-    { "parse-type", NULL, 1, 1, do_parse_type },
-    { "parse-atoms", NULL, 2, INT_MAX, do_parse_atoms },
-    { "parse-atom-strings", NULL, 2, INT_MAX, do_parse_atom_strings },
-    { "parse-data", NULL, 2, INT_MAX, do_parse_data },
-    { "parse-data-strings", NULL, 2, INT_MAX, do_parse_data_strings },
-    { "sort-atoms", NULL, 2, 2, do_sort_atoms },
-    { "parse-column", NULL, 2, 2, do_parse_column },
-    { "parse-table", NULL, 2, 3, do_parse_table },
-    { "parse-rows", NULL, 2, INT_MAX, do_parse_rows },
-    { "compare-rows", NULL, 2, INT_MAX, do_compare_rows },
-    { "parse-conditions", NULL, 2, INT_MAX, do_parse_conditions },
-    { "evaluate-conditions", NULL, 3, 3, do_evaluate_conditions },
-    { "evaluate-conditions-any", NULL, 3, 3, do_evaluate_conditions_any },
-    { "compare-conditions", NULL, 2, 2, do_compare_conditions },
-    { "parse-mutations", NULL, 2, INT_MAX, do_parse_mutations },
-    { "execute-mutations", NULL, 3, 3, do_execute_mutations },
-    { "query", NULL, 3, 3, do_query },
-    { "query-distinct", NULL, 4, 4, do_query_distinct },
-    { "transact", NULL, 1, INT_MAX, do_transact },
-    { "parse-schema", NULL, 1, 1, do_parse_schema },
-    { "execute", NULL, 2, INT_MAX, do_execute },
-    { "trigger", NULL, 2, INT_MAX, do_trigger },
-    { "idl", NULL, 1, INT_MAX, do_idl },
+    { "log-io", NULL, 2, INT_MAX, do_log_io, OVS_RO },
+    { "default-atoms", NULL, 0, 0, do_default_atoms, OVS_RO },
+    { "default-data", NULL, 0, 0, do_default_data, OVS_RO },
+    { "diff-data", NULL, 3, INT_MAX, do_diff_data, OVS_RO },
+    { "parse-atomic-type", NULL, 1, 1, do_parse_atomic_type, OVS_RO },
+    { "parse-base-type", NULL, 1, 1, do_parse_base_type, OVS_RO },
+    { "parse-type", NULL, 1, 1, do_parse_type, OVS_RO },
+    { "parse-atoms", NULL, 2, INT_MAX, do_parse_atoms, OVS_RO },
+    { "parse-atom-strings", NULL, 2, INT_MAX, do_parse_atom_strings, OVS_RO },
+    { "parse-data", NULL, 2, INT_MAX, do_parse_data, OVS_RO },
+    { "parse-data-strings", NULL, 2, INT_MAX, do_parse_data_strings, OVS_RO },
+    { "sort-atoms", NULL, 2, 2, do_sort_atoms, OVS_RO },
+    { "parse-column", NULL, 2, 2, do_parse_column, OVS_RO },
+    { "parse-table", NULL, 2, 3, do_parse_table, OVS_RO },
+    { "parse-rows", NULL, 2, INT_MAX, do_parse_rows, OVS_RO },
+    { "compare-rows", NULL, 2, INT_MAX, do_compare_rows, OVS_RO },
+    { "parse-conditions", NULL, 2, INT_MAX, do_parse_conditions, OVS_RO },
+    { "evaluate-conditions", NULL, 3, 3, do_evaluate_conditions, OVS_RO },
+    { "evaluate-conditions-any", NULL, 3, 3, do_evaluate_conditions_any, OVS_RO },
+    { "compare-conditions", NULL, 2, 2, do_compare_conditions, OVS_RO },
+    { "parse-mutations", NULL, 2, INT_MAX, do_parse_mutations, OVS_RO },
+    { "execute-mutations", NULL, 3, 3, do_execute_mutations, OVS_RO },
+    { "query", NULL, 3, 3, do_query, OVS_RO },
+    { "query-distinct", NULL, 4, 4, do_query_distinct, OVS_RO },
+    { "transact", NULL, 1, INT_MAX, do_transact, OVS_RO },
+    { "parse-schema", NULL, 1, 1, do_parse_schema, OVS_RO },
+    { "execute", NULL, 2, INT_MAX, do_execute, OVS_RO },
+    { "execute-readonly", NULL, 2, INT_MAX, do_execute_ro, OVS_RO },
+    { "trigger", NULL, 2, INT_MAX, do_trigger, OVS_RO },
+    { "idl", NULL, 1, INT_MAX, do_idl, OVS_RO },
     { "idl-partial-update-map-column", NULL, 1, INT_MAX,
-                                       do_idl_partial_update_map_column },
-    { "help", NULL, 0, INT_MAX, do_help },
-    { NULL, NULL, 0, 0, NULL },
+        do_idl_partial_update_map_column, OVS_RO },
+    { "idl-partial-update-set-column", NULL, 1, INT_MAX,
+        do_idl_partial_update_set_column, OVS_RO },
+    { "help", NULL, 0, INT_MAX, do_help, OVS_RO },
+    { NULL, NULL, 0, 0, NULL, OVS_RO },
 };
 
 static struct ovs_cmdl_command *

@@ -2972,6 +2972,8 @@ OFPT_FLOW_MOD (OF1.4): ADD table:7 dl_vlan=7 importance:7 actions=drop
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
 OFPT_FLOW_MOD (OF1.4): ADD table:8 dl_vlan=8 importance:8 actions=drop
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST (OF1.4):
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY (OF1.4):
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):
@@ -3019,6 +3021,8 @@ OFPT_FLOW_MOD (OF1.4): ADD table:7 dl_vlan=7 importance:17 actions=drop
 vconn|DBG|unix: received: OFPT_BUNDLE_ADD_MESSAGE (OF1.4):
  bundle_id=0 flags=atomic ordered
 OFPT_FLOW_MOD (OF1.4): DEL_STRICT table:8 dl_vlan=8 actions=drop
+vconn|DBG|unix: received: OFPT_BARRIER_REQUEST (OF1.4):
+vconn|DBG|unix: sent (Success): OFPT_BARRIER_REPLY (OF1.4):
 vconn|DBG|unix: received: OFPT_BUNDLE_CONTROL (OF1.4):
  bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
 vconn|DBG|unix: sent (Success): OFPT_BUNDLE_CONTROL (OF1.4):

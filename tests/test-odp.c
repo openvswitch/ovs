@@ -163,7 +163,7 @@ parse_filter(char *filter_parse)
         memset(&flow_filter, 0, sizeof(flow_filter));
         memset(&wc_filter, 0, sizeof(wc_filter));
 
-        error = parse_ofp_exact_flow(&flow_filter, &wc_filter.masks, filter,
+        error = parse_ofp_exact_flow(&flow_filter, &wc_filter, filter,
                                      NULL);
         if (error) {
             ovs_fatal(0, "Failed to parse filter (%s)", error);

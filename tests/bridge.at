@@ -12,7 +12,7 @@ add_of_ports br0 1 2
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p1 1/1: (dummy)
 		p2 2/2: (dummy)
 ])
@@ -23,7 +23,7 @@ AT_CHECK([ovs-appctl dpctl/del-if dummy@ovs-dummy p1])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p2 2/2: (dummy)
 ])
 
@@ -32,7 +32,7 @@ AT_CHECK([ovs-vsctl del-port p2])
 AT_CHECK([ovs-appctl dpif/show], [0], [dnl
 dummy@ovs-dummy: hit:0 missed:0
 	br0:
-		br0 65534/100: (dummy)
+		br0 65534/100: (dummy-internal)
 		p1 1/1: (dummy)
 ])
 OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])

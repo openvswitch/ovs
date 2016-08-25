@@ -31,7 +31,8 @@ static void ovsdb_trigger_complete(struct ovsdb_trigger *);
 void
 ovsdb_trigger_init(struct ovsdb_session *session, struct ovsdb *db,
                    struct ovsdb_trigger *trigger,
-                   struct json *request, long long int now)
+                   struct json *request, long long int now,
+                   bool read_only)
 {
     trigger->session = session;
     trigger->db = db;
@@ -40,6 +41,7 @@ ovsdb_trigger_init(struct ovsdb_session *session, struct ovsdb *db,
     trigger->result = NULL;
     trigger->created = now;
     trigger->timeout_msec = LLONG_MAX;
+    trigger->read_only = read_only;
     ovsdb_trigger_try(trigger, now);
 }
 
@@ -111,7 +113,8 @@ static bool
 ovsdb_trigger_try(struct ovsdb_trigger *t, long long int now)
 {
     t->result = ovsdb_execute(t->db, t->session,
-                              t->request, now - t->created, &t->timeout_msec);
+                              t->request, t->read_only,
+                              now - t->created, &t->timeout_msec);
     if (t->result) {
         ovsdb_trigger_complete(t);
         return true;

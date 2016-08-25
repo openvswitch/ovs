@@ -56,7 +56,7 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 /* Sessions. */
 static struct ovsdb_jsonrpc_session *ovsdb_jsonrpc_session_create(
-    struct ovsdb_jsonrpc_remote *, struct jsonrpc_session *);
+    struct ovsdb_jsonrpc_remote *, struct jsonrpc_session *, bool);
 static void ovsdb_jsonrpc_session_run_all(struct ovsdb_jsonrpc_remote *);
 static void ovsdb_jsonrpc_session_wait_all(struct ovsdb_jsonrpc_remote *);
 static void ovsdb_jsonrpc_session_get_memory_usage_all(
@@ -114,6 +114,8 @@ static struct jsonrpc_msg * ovsdb_jsonrpc_create_notify(
 struct ovsdb_jsonrpc_server {
     struct ovsdb_server up;
     unsigned int n_sessions;
+    bool read_only;            /* This server is does not accept any
+                                  transactions that can modify the database. */
     struct shash remotes;      /* Contains "struct ovsdb_jsonrpc_remote *"s. */
 };
 
@@ -138,11 +140,12 @@ static void ovsdb_jsonrpc_server_del_remote(struct shash_node *);
  * The caller must call ovsdb_jsonrpc_server_add_db() for each database to
  * which 'server' should provide access. */
 struct ovsdb_jsonrpc_server *
-ovsdb_jsonrpc_server_create(void)
+ovsdb_jsonrpc_server_create(bool read_only)
 {
     struct ovsdb_jsonrpc_server *server = xzalloc(sizeof *server);
     ovsdb_server_init(&server->up);
     shash_init(&server->remotes);
+    server->read_only = read_only;
     return server;
 }
 
@@ -160,7 +163,7 @@ ovsdb_jsonrpc_server_add_db(struct ovsdb_jsonrpc_server *svr, struct ovsdb *db)
      * If this is too big of a hammer in practice, we could be more selective,
      * e.g. disconnect only connections that actually tried to use a database
      * with 'db''s name. */
-    ovsdb_jsonrpc_server_reconnect(svr);
+    ovsdb_jsonrpc_server_reconnect(svr, svr->read_only);
 
     return ovsdb_server_add_db(&svr->up, db);
 }
@@ -177,7 +180,7 @@ ovsdb_jsonrpc_server_remove_db(struct ovsdb_jsonrpc_server *svr,
      *
      * If this is too big of a hammer in practice, we could be more selective,
      * e.g. disconnect only connections that actually reference 'db'. */
-    ovsdb_jsonrpc_server_reconnect(svr);
+    ovsdb_jsonrpc_server_reconnect(svr, svr->read_only);
 
     return ovsdb_server_remove_db(&svr->up, db);
 }
@@ -268,7 +271,8 @@ ovsdb_jsonrpc_server_add_remote(struct ovsdb_jsonrpc_server *svr,
     shash_add(&svr->remotes, name, remote);
 
     if (!listener) {
-        ovsdb_jsonrpc_session_create(remote, jsonrpc_session_open(name, true));
+        ovsdb_jsonrpc_session_create(remote, jsonrpc_session_open(name, true),
+                                      svr->read_only);
     }
     return remote;
 }
@@ -327,10 +331,11 @@ ovsdb_jsonrpc_server_free_remote_status(
 /* Forces all of the JSON-RPC sessions managed by 'svr' to disconnect and
  * reconnect. */
 void
-ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *svr)
+ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *svr, bool read_only)
 {
     struct shash_node *node;
 
+    svr->read_only = read_only;
     SHASH_FOR_EACH (node, &svr->remotes) {
         struct ovsdb_jsonrpc_remote *remote = node->data;
 
@@ -355,7 +360,7 @@ ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *svr)
                 struct jsonrpc_session *js;
                 js = jsonrpc_session_open_unreliably(jsonrpc_open(stream),
                                                      remote->dscp);
-                ovsdb_jsonrpc_session_create(remote, js);
+                ovsdb_jsonrpc_session_create(remote, js, svr->read_only);
             } else if (error != EAGAIN) {
                 VLOG_WARN_RL(&rl, "%s: accept failed: %s",
                              pstream_get_name(remote->listener),
@@ -415,6 +420,10 @@ struct ovsdb_jsonrpc_session {
     /* Network connectivity. */
     struct jsonrpc_session *js;  /* JSON-RPC session. */
     unsigned int js_seqno;       /* Last jsonrpc_session_get_seqno() value. */
+
+    /* Read only. */
+    bool read_only;             /*  When true, not allow to modify the
+                                    database. */
 };
 
 static void ovsdb_jsonrpc_session_close(struct ovsdb_jsonrpc_session *);
@@ -429,7 +438,7 @@ static void ovsdb_jsonrpc_session_got_notify(struct ovsdb_jsonrpc_session *,
 
 static struct ovsdb_jsonrpc_session *
 ovsdb_jsonrpc_session_create(struct ovsdb_jsonrpc_remote *remote,
-                             struct jsonrpc_session *js)
+                             struct jsonrpc_session *js, bool read_only)
 {
     struct ovsdb_jsonrpc_session *s;
 
@@ -441,6 +450,7 @@ ovsdb_jsonrpc_session_create(struct ovsdb_jsonrpc_remote *remote,
     hmap_init(&s->monitors);
     s->js = js;
     s->js_seqno = jsonrpc_session_get_seqno(js);
+    s->read_only = read_only;
 
     remote->server->n_sessions++;
 
@@ -746,6 +756,14 @@ ovsdb_jsonrpc_session_notify(struct ovsdb_session *session,
 }
 
 static struct jsonrpc_msg *
+jsonrpc_create_readonly_lock_error(const struct json *id)
+{
+    return jsonrpc_create_error(json_string_create(
+            "lock and unlock methods not allowed,"
+            " DB server is read only."), id);
+}
+
+static struct jsonrpc_msg *
 ovsdb_jsonrpc_session_lock(struct ovsdb_jsonrpc_session *s,
                            struct jsonrpc_msg *request,
                            enum ovsdb_lock_mode mode)
@@ -756,6 +774,10 @@ ovsdb_jsonrpc_session_lock(struct ovsdb_jsonrpc_session *s,
     struct ovsdb_session *victim;
     const char *lock_name;
     struct json *result;
+
+    if (s->read_only) {
+        return jsonrpc_create_readonly_lock_error(request->id);
+    }
 
     error = ovsdb_jsonrpc_session_parse_lock_name(request, &lock_name);
     if (error) {
@@ -826,6 +848,10 @@ ovsdb_jsonrpc_session_unlock(struct ovsdb_jsonrpc_session *s,
     struct jsonrpc_msg *reply;
     struct ovsdb_error *error;
     const char *lock_name;
+
+    if (s->read_only) {
+        return jsonrpc_create_readonly_lock_error(request->id);
+    }
 
     error = ovsdb_jsonrpc_session_parse_lock_name(request, &lock_name);
     if (error) {
@@ -995,7 +1021,8 @@ ovsdb_jsonrpc_trigger_create(struct ovsdb_jsonrpc_session *s, struct ovsdb *db,
 
     /* Insert into trigger table. */
     t = xmalloc(sizeof *t);
-    ovsdb_trigger_init(&s->up, db, &t->trigger, params, time_msec());
+    ovsdb_trigger_init(&s->up, db, &t->trigger, params, time_msec(),
+                       s->read_only);
     t->id = id;
     hmap_insert(&s->triggers, &t->hmap_node, hash);
 

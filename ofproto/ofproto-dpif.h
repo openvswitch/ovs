@@ -100,10 +100,10 @@ struct dpif_backer_support {
 bool ofproto_dpif_get_enable_ufid(const struct dpif_backer *backer);
 struct dpif_backer_support *ofproto_dpif_get_support(const struct ofproto_dpif *);
 
-cls_version_t ofproto_dpif_get_tables_version(struct ofproto_dpif *);
+ovs_version_t ofproto_dpif_get_tables_version(struct ofproto_dpif *);
 
 struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
-                                              cls_version_t, struct flow *,
+                                              ovs_version_t, struct flow *,
                                               struct flow_wildcards *,
                                               const struct dpif_flow_stats *,
                                               uint8_t *table_id,
@@ -136,11 +136,11 @@ void rule_dpif_reduce_timeouts(struct rule_dpif *rule, uint16_t idle_timeout,
 void group_dpif_credit_stats(struct group_dpif *,
                              struct ofputil_bucket *,
                              const struct dpif_flow_stats *);
-bool group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
-                       struct group_dpif **group);
+struct group_dpif *group_dpif_lookup(struct ofproto_dpif *ofproto,
+                                     uint32_t group_id, ovs_version_t version,
+                                     bool take_ref);
+const struct ovs_list *group_dpif_get_buckets(const struct group_dpif *group);
 
-void group_dpif_get_buckets(const struct group_dpif *group,
-                            const struct ovs_list **buckets);
 enum ofp11_group_type group_dpif_get_type(const struct group_dpif *group);
 const char *group_dpif_get_selection_method(const struct group_dpif *group);
 uint64_t group_dpif_get_selection_method_param(const struct group_dpif *group);

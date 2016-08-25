@@ -1576,10 +1576,6 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
 {
     ovs_be16 raw_flags;
     enum ofperr error;
-
-    /* Ignored for non-delete actions */
-    fm->delete_reason = OFPRR_DELETE;
-
     struct ofpbuf b = ofpbuf_const_initializer(oh, ntohs(oh->length));
     enum ofpraw raw = ofpraw_pull_assert(&b);
     if (raw == OFPRAW_OFPT11_FLOW_MOD) {
@@ -8205,7 +8201,7 @@ void
 ofputil_uninit_group_desc(struct ofputil_group_desc *gd)
 {
     ofputil_bucket_list_destroy(&gd->buckets);
-    free(&gd->props.fields);
+    ofputil_group_properties_destroy(&gd->props);
 }
 
 /* Decodes the OpenFlow group description request in 'oh', returning the group
@@ -8871,6 +8867,20 @@ ofputil_init_group_properties(struct ofputil_group_props *gp)
     memset(gp, 0, sizeof *gp);
 }
 
+void
+ofputil_group_properties_copy(struct ofputil_group_props *to,
+                              const struct ofputil_group_props *from)
+{
+    *to = *from;
+    to->fields.values = xmemdup(from->fields.values, from->fields.values_size);
+}
+
+void
+ofputil_group_properties_destroy(struct ofputil_group_props *gp)
+{
+    free(gp->fields.values);
+}
+
 static enum ofperr
 parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
                                       enum ofp11_group_type group_type,
@@ -9129,6 +9139,7 @@ void
 ofputil_uninit_group_mod(struct ofputil_group_mod *gm)
 {
     ofputil_bucket_list_destroy(&gm->buckets);
+    ofputil_group_properties_destroy(&gm->props);
 }
 
 static struct ofpbuf *
@@ -9479,6 +9490,36 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
     }
 
     return 0;
+}
+
+/* Destroys 'bms'. */
+void
+ofputil_encode_bundle_msgs(struct ofputil_bundle_msg *bms, size_t n_bms,
+                           struct ovs_list *requests,
+                           enum ofputil_protocol protocol)
+{
+    enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
+
+    for (size_t i = 0; i < n_bms; i++) {
+        struct ofpbuf *request = NULL;
+
+        switch ((int)bms[i].type) {
+        case OFPTYPE_FLOW_MOD:
+            request = ofputil_encode_flow_mod(&bms[i].fm, protocol);
+            free(CONST_CAST(struct ofpact *, bms[i].fm.ofpacts));
+            break;
+        case OFPTYPE_GROUP_MOD:
+            request = ofputil_encode_group_mod(version, &bms[i].gm);
+            ofputil_uninit_group_mod(&bms[i].gm);
+            break;
+        default:
+            break;
+        }
+        if (request) {
+            ovs_list_push_back(requests, &request->list_node);
+        }
+    }
+    free(bms);
 }
 
 /* Parse a queue status request message into 'oqsr'.
@@ -9864,11 +9905,12 @@ ofputil_is_bundlable(enum ofptype type)
         /* Minimum required by OpenFlow 1.4. */
     case OFPTYPE_PORT_MOD:
     case OFPTYPE_FLOW_MOD:
+        /* Other supported types. */
+    case OFPTYPE_GROUP_MOD:
         return true;
 
         /* Nice to have later. */
     case OFPTYPE_FLOW_MOD_TABLE_ID:
-    case OFPTYPE_GROUP_MOD:
     case OFPTYPE_TABLE_MOD:
     case OFPTYPE_METER_MOD:
     case OFPTYPE_PACKET_OUT:
@@ -10011,13 +10053,14 @@ ofputil_encode_bundle_add(enum ofp_version ofp_version,
     request = ofpraw_alloc_xid(ofp_version == OFP13_VERSION
                                ? OFPRAW_ONFT13_BUNDLE_ADD_MESSAGE
                                : OFPRAW_OFPT14_BUNDLE_ADD_MESSAGE, ofp_version,
-                               msg->msg->xid, 0);
+                               msg->msg->xid, ntohs(msg->msg->length));
     m = ofpbuf_put_zeros(request, sizeof *m);
 
     m->bundle_id = htonl(msg->bundle_id);
     m->flags = htons(msg->flags);
     ofpbuf_put(request, msg->msg, ntohs(msg->msg->length));
 
+    ofpmsg_update_length(request);
     return request;
 }
 

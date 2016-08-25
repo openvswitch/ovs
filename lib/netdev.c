@@ -160,7 +160,7 @@ netdev_run(void)
     struct netdev_registered_class *rc;
     CMAP_FOR_EACH (rc, cmap_node, &netdev_classes) {
         if (rc->class->run) {
-            rc->class->run();
+            rc->class->run(rc->class);
         }
     }
 }
@@ -178,7 +178,7 @@ netdev_wait(void)
     struct netdev_registered_class *rc;
     CMAP_FOR_EACH (rc, cmap_node, &netdev_classes) {
         if (rc->class->wait) {
-            rc->class->wait();
+            rc->class->wait(rc->class);
         }
     }
 }
@@ -608,14 +608,15 @@ netdev_rxq_close(struct netdev_rxq *rx)
     }
 }
 
-/* Attempts to receive a batch of packets from 'rx'.  'pkts' should point to
- * the beginning of an array of MAX_RX_BATCH pointers to dp_packet.  If
- * successful, this function stores pointers to up to MAX_RX_BATCH dp_packets
- * into the array, transferring ownership of the packets to the caller, stores
- * the number of received packets into '*cnt', and returns 0.
+/* Attempts to receive a batch of packets from 'rx'.  'batch' should point to
+ * the beginning of an array of NETDEV_MAX_BURST pointers to dp_packet.  If
+ * successful, this function stores pointers to up to NETDEV_MAX_BURST
+ * dp_packets into the array, transferring ownership of the packets to the
+ * caller, stores the number of received packets in 'batch->count', and returns
+ * 0.
  *
  * The implementation does not necessarily initialize any non-data members of
- * 'pkts'.  That is, the caller must initialize layer pointers and metadata
+ * 'batch'.  That is, the caller must initialize layer pointers and metadata
  * itself, if desired, e.g. with pkt_metadata_init() and miniflow_extract().
  *
  * Returns EAGAIN immediately if no packet is ready to be received or another
@@ -625,7 +626,7 @@ netdev_rxq_recv(struct netdev_rxq *rx, struct dp_packet_batch *batch)
 {
     int retval;
 
-    retval = rx->netdev->netdev_class->rxq_recv(rx,  batch);
+    retval = rx->netdev->netdev_class->rxq_recv(rx, batch);
     if (!retval) {
         COVERAGE_INC(netdev_received);
     } else {
@@ -655,9 +656,6 @@ netdev_rxq_drain(struct netdev_rxq *rx)
  * otherwise a positive errno value.
  *
  * 'n_txq' specifies the exact number of transmission queues to create.
- * If this function returns successfully, the caller can make 'n_txq'
- * concurrent calls to netdev_send() (each one with a different 'qid' in the
- * range [0..'n_txq'-1]).
  *
  * The change might not effective immediately.  The caller must check if a
  * reconfiguration is required with netdev_is_reconf_required() and eventually
@@ -694,6 +692,11 @@ netdev_set_tx_multiq(struct netdev *netdev, unsigned int n_txq)
  * If 'may_steal' is true, the caller transfers ownership of all the packets
  * to the network device, regardless of success.
  *
+ * If 'concurrent_txq' is true, the caller may perform concurrent calls
+ * to netdev_send() with the same 'qid'. The netdev provider is responsible
+ * for making sure that these concurrent calls do not create a race condition
+ * by using locking or other synchronization if required.
+ *
  * The network device is expected to maintain one or more packet
  * transmission queues, so that the caller does not ordinarily have to
  * do additional queuing of packets.  'qid' specifies the queue to use
@@ -704,14 +707,15 @@ netdev_set_tx_multiq(struct netdev *netdev, unsigned int n_txq)
  * cases this function will always return EOPNOTSUPP. */
 int
 netdev_send(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
-            bool may_steal)
+            bool may_steal, bool concurrent_txq)
 {
     if (!netdev->netdev_class->send) {
         dp_packet_delete_batch(batch, may_steal);
         return EOPNOTSUPP;
     }
 
-    int error = netdev->netdev_class->send(netdev, qid, batch, may_steal);
+    int error = netdev->netdev_class->send(netdev, qid, batch, may_steal,
+                                           concurrent_txq);
     if (!error) {
         COVERAGE_INC(netdev_sent);
         if (!may_steal) {
@@ -859,7 +863,7 @@ netdev_get_mtu(const struct netdev *netdev, int *mtup)
  * MTU (as e.g. some tunnels do not).  On other failure, returns a positive
  * errno value. */
 int
-netdev_set_mtu(const struct netdev *netdev, int mtu)
+netdev_set_mtu(struct netdev *netdev, int mtu)
 {
     const struct netdev_class *class = netdev->netdev_class;
     int error;

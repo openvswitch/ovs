@@ -33,6 +33,9 @@ struct dpctl_params {
     /* --may-create: Allow mod-flows command to create a new flow? */
     bool may_create;
 
+    /* --read-only: Do not run R/W commands? */
+    bool read_only;
+
     /* -m, --more: Increase output verbosity. */
     int verbosity;
 

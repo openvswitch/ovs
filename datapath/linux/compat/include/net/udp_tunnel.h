@@ -11,19 +11,6 @@
 #ifdef USE_UPSTREAM_TUNNEL
 #include_next <net/udp_tunnel.h>
 
-/* this is to handle the return type change in handle-offload
- * functions.
- */
-static inline int
-rpl_udp_tunnel_handle_offloads(struct sk_buff *skb, bool udp_csum,
-			       bool is_vxlan)
-{
-	if (skb_is_gso(skb) && skb_is_encapsulated(skb)) {
-		return -ENOSYS;
-	}
-	return udp_tunnel_handle_offloads(skb, udp_csum);
-}
-
 #else
 
 #include <net/addrconf.h>
@@ -161,31 +148,28 @@ void ovs_udp_gso(struct sk_buff *skb);
 void ovs_udp_csum_gso(struct sk_buff *skb);
 
 static inline int rpl_udp_tunnel_handle_offloads(struct sk_buff *skb,
-						 bool udp_csum,
-						 bool is_vxlan)
+						 bool udp_csum)
 {
+	void (*fix_segment)(struct sk_buff *);
 	int type = 0;
 
-	void (*fix_segment)(struct sk_buff *);
-
-	if (skb_is_gso(skb) && skb_is_encapsulated(skb)) {
-		return -ENOSYS;
-	}
-
 	type |= udp_csum ? SKB_GSO_UDP_TUNNEL_CSUM : SKB_GSO_UDP_TUNNEL;
+#ifndef USE_UPSTREAM_TUNNEL_GSO
 	if (!udp_csum)
 		fix_segment = ovs_udp_gso;
 	else
 		fix_segment = ovs_udp_csum_gso;
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3,18,0)
-	if (!is_vxlan)
-		type = 0;
+	/* This functuin is not used by vxlan lan tunnel. On older
+	 * udp offload only supports vxlan, therefore fallback to software
+	 * segmentation.
+	 */
+	type = 0;
+#else
+	fix_segment = NULL;
 #endif
 
-	return ovs_iptunnel_handle_offloads(skb, udp_csum, type, fix_segment);
+	return ovs_iptunnel_handle_offloads(skb, type, fix_segment);
 }
-#endif /* USE_UPSTREAM_TUNNEL */
 
 #define udp_tunnel_handle_offloads rpl_udp_tunnel_handle_offloads
 static inline void ovs_udp_tun_rx_dst(struct metadata_dst *md_dst,
@@ -205,5 +189,6 @@ static inline void ovs_udp_tun_rx_dst(struct metadata_dst *md_dst,
 	if (udp_hdr(skb)->check)
 		info->key.tun_flags |= TUNNEL_CSUM;
 }
+#endif /* USE_UPSTREAM_TUNNEL */
 
 #endif

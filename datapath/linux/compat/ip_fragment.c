@@ -76,12 +76,7 @@ struct ipfrag_skb_cb
 
 /* Describe an entry in the "incomplete datagrams" queue. */
 struct ipq {
-	union {
-		struct inet_frag_queue q;
-#ifndef HAVE_INET_FRAG_QUEUE_WITH_LIST_EVICTOR
-		struct ovs_inet_frag_queue oq;
-#endif
-	};
+	struct inet_frag_queue q;
 
 	u32		user;
 	__be32		saddr;
@@ -119,6 +114,12 @@ static unsigned int ipqhashfn(__be16 id, __be32 saddr, __be32 daddr, u8 prot)
 			    (__force u32)saddr, (__force u32)daddr,
 			    ip4_frags.rnd);
 }
+/* fb3cfe6e75b9 ("inet: frag: remove hash size assumptions from callers")
+ * shifted this logic into inet_fragment, but prior kernels still need this.
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#define ipqhashfn(a, b, c, d) (ipqhashfn(a, b, c, d) & (INETFRAGS_HASHSZ - 1))
+#endif
 
 #ifdef HAVE_INET_FRAGS_CONST
 static unsigned int ip4_hashfn(const struct inet_frag_queue *q)
@@ -267,6 +268,23 @@ out:
 	ipq_put(qp);
 }
 
+#ifdef HAVE_INET_FRAG_EVICTOR
+/* Memory limiting on fragments.  Evictor trashes the oldest
+ * fragment queue until we are back under the threshold.
+ *
+ * Necessary for kernels earlier than v3.17. Replaced in commit
+ * b13d3cbfb8e8 ("inet: frag: move eviction of queues to work queue").
+ */
+static void ip_evictor(struct net *net)
+{
+	int evicted;
+
+	evicted = inet_frag_evictor(&net->ipv4.frags, &ip4_frags, false);
+	if (evicted)
+		IP_ADD_STATS_BH(net, IPSTATS_MIB_REASMFAILS, evicted);
+}
+#endif
+
 /* Find the correct entry in the "incomplete datagrams" queue for
  * this IP datagram, and create new one, if nothing is found.
  */
@@ -281,6 +299,9 @@ static struct ipq *ip_find(struct net *net, struct iphdr *iph,
 	arg.user = user;
 	arg.vif = vif;
 
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
+	read_lock(&ip4_frags.lock);
+#endif
 	hash = ipqhashfn(iph->id, iph->saddr, iph->daddr, iph->protocol);
 
 	q = inet_frag_find(&net->ipv4.frags, &ip4_frags, &arg, hash);
@@ -531,6 +552,7 @@ found:
 	}
 
 	skb_dst_drop(skb);
+	inet_frag_lru_move(&qp->q);
 	return -EINPROGRESS;
 
 err:
@@ -683,6 +705,11 @@ int rpl_ip_defrag(struct net *net, struct sk_buff *skb, u32 user)
 	IP_INC_STATS_BH(net, IPSTATS_MIB_REASMREQDS);
 	skb_orphan(skb);
 
+#ifdef HAVE_INET_FRAG_EVICTOR
+	/* Start by cleaning up the memory. */
+	ip_evictor(net);
+#endif
+
 	/* Lookup (or create) queue header */
 	qp = ip_find(net, ip_hdr(skb), user, vif);
 	if (qp) {
@@ -701,14 +728,6 @@ int rpl_ip_defrag(struct net *net, struct sk_buff *skb, u32 user)
 	kfree_skb(skb);
 	return -ENOMEM;
 }
-EXPORT_SYMBOL_GPL(rpl_ip_defrag);
-
-static int __net_init ipv4_frags_init_net(struct net *net)
-{
-	nf_defrag_ipv4_enable();
-
-	return 0;
-}
 
 static void __net_exit ipv4_frags_exit_net(struct net *net)
 {
@@ -716,12 +735,12 @@ static void __net_exit ipv4_frags_exit_net(struct net *net)
 }
 
 static struct pernet_operations ip4_frags_ops = {
-	.init = ipv4_frags_init_net,
 	.exit = ipv4_frags_exit_net,
 };
 
 int __init rpl_ipfrag_init(void)
 {
+	nf_defrag_ipv4_enable();
 	register_pernet_subsys(&ip4_frags_ops);
 	ip4_frags.hashfn = ip4_hashfn;
 	ip4_frags.constructor = ip4_frag_init;

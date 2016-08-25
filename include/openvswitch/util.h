@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -161,6 +161,26 @@ OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
 
 /* Returns true if X is a power of 2, otherwise false. */
 #define IS_POW2(X) ((X) && !((X) & ((X) - 1)))
+
+/* Expands to an anonymous union that contains:
+ *
+ *    - MEMBERS in a nested anonymous struct.
+ *
+ *    - An array as large as MEMBERS plus padding to a multiple of UNIT bytes.
+ *
+ * The effect is to pad MEMBERS to a multiple of UNIT bytes.
+ *
+ * For example, the struct below is 8 bytes long, with 6 bytes of padding:
+ *
+ *     struct padded_struct {
+ *         PADDED_MEMBERS(8, uint8_t x; uint8_t y;);
+ *     };
+ */
+#define PADDED_MEMBERS(UNIT, MEMBERS)                               \
+    union {                                                         \
+        struct { MEMBERS };                                         \
+        uint8_t pad[ROUND_UP(sizeof(struct { MEMBERS }), UNIT)];    \
+    }
 
 static inline bool
 is_pow2(uintmax_t x)

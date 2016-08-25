@@ -521,12 +521,17 @@ POVS_OPEN_INSTANCE
 OvsGetOpenInstance(PFILE_OBJECT fileObject,
                    UINT32 dpNo)
 {
+    LOCK_STATE_EX lockState;
     POVS_OPEN_INSTANCE instance = (POVS_OPEN_INSTANCE)fileObject->FsContext;
     ASSERT(instance);
     ASSERT(instance->fileObject == fileObject);
+    NdisAcquireRWLockWrite(gOvsSwitchContext->dispatchLock, &lockState, 0);
+
     if (gOvsSwitchContext->dpNo != dpNo) {
-        return NULL;
+        instance = NULL;
     }
+
+    NdisReleaseRWLock(gOvsSwitchContext->dispatchLock, &lockState);
     return instance;
 }
 
@@ -1268,11 +1273,12 @@ OvsSubscribeEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     OVS_EVENT_SUBSCRIBE request;
     BOOLEAN rc;
     UINT8 join;
+    UINT32 mcastGrp;
     PNL_ATTR attrs[2];
     const NL_POLICY policy[] =  {
         [OVS_NL_ATTR_MCAST_GRP] = {.type = NL_A_U32 },
         [OVS_NL_ATTR_MCAST_JOIN] = {.type = NL_A_U8 },
-        };
+    };
 
     UNREFERENCED_PARAMETER(replyLen);
 
@@ -1288,11 +1294,25 @@ OvsSubscribeEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         goto done;
     }
 
-    /* XXX Ignore the MC group for now */
+    mcastGrp = NlAttrGetU32(attrs[OVS_NL_ATTR_MCAST_GRP]);
     join = NlAttrGetU8(attrs[OVS_NL_ATTR_MCAST_JOIN]);
     request.dpNo = msgIn->ovsHdr.dp_ifindex;
     request.subscribe = join;
-    request.mask = OVS_EVENT_MASK_ALL;
+    request.mcastGrp = mcastGrp;
+    request.protocol = instance->protocol;
+    request.mask = 0;
+
+    /* We currently support Vport and CT related events */
+    if (instance->protocol == NETLINK_GENERIC) {
+        request.mask = OVS_EVENT_MASK_ALL;
+    } else if (instance->protocol == NETLINK_NETFILTER) {
+        if (mcastGrp == NFNLGRP_CONNTRACK_NEW) {
+            request.mask = OVS_EVENT_CT_NEW;
+        }
+        if (mcastGrp == NFNLGRP_CONNTRACK_DESTROY) {
+            request.mask = OVS_EVENT_CT_DELETE;
+        }
+    }
 
     status = OvsSubscribeEventIoctl(instance->fileObject, &request,
                                     sizeof request);
@@ -1582,7 +1602,7 @@ MapIrpOutputBuffer(PIRP irp,
  */
 static NTSTATUS
 OvsPortFillInfo(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
-                POVS_EVENT_ENTRY eventEntry,
+                POVS_VPORT_EVENT_ENTRY eventEntry,
                 PNL_BUFFER nlBuf)
 {
     NTSTATUS status;
@@ -1652,14 +1672,12 @@ static NTSTATUS
 OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                        UINT32 *replyLen)
 {
-#ifdef DBG
     POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
+    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
     POVS_OPEN_INSTANCE instance =
         (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
-#endif
     NL_BUFFER nlBuf;
     NTSTATUS status;
-    OVS_EVENT_ENTRY eventEntry;
 
     ASSERT(usrParamsCtx->devOp == OVS_READ_DEV_OP);
 
@@ -1672,20 +1690,57 @@ OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
     /* Output buffer has been validated while validating read dev op. */
     ASSERT(msgOut != NULL && usrParamsCtx->outputLength >= sizeof *msgOut);
 
-    NlBufInit(&nlBuf, usrParamsCtx->outputBuffer, usrParamsCtx->outputLength);
+    if (instance->protocol == NETLINK_NETFILTER) {
+        if (!instance->mcastMask) {
+            status = STATUS_SUCCESS;
+            *replyLen = 0;
+            goto cleanup;
+        }
 
-    /* remove an event entry from the event queue */
-    status = OvsRemoveEventEntry(usrParamsCtx->ovsInstance, &eventEntry);
-    if (status != STATUS_SUCCESS) {
-        /* If there were not elements, read should return no data. */
-        status = STATUS_SUCCESS;
-        *replyLen = 0;
-        goto cleanup;
-    }
+        OVS_CT_EVENT_ENTRY ctEventEntry;
+        status = OvsRemoveCtEventEntry(usrParamsCtx->ovsInstance,
+                                       &ctEventEntry);
 
-    status = OvsPortFillInfo(usrParamsCtx, &eventEntry, &nlBuf);
-    if (status == NDIS_STATUS_SUCCESS) {
-        *replyLen = NlBufSize(&nlBuf);
+        if (status != STATUS_SUCCESS) {
+            /* If there were not elements, read should return no data. */
+            status = STATUS_SUCCESS;
+            *replyLen = 0;
+            goto cleanup;
+        }
+
+        status = OvsCreateNlMsgFromCtEntry(&ctEventEntry.entry,
+                                           usrParamsCtx->outputBuffer,
+                                           usrParamsCtx->outputLength,
+                                           ctEventEntry.type,
+                                           msgIn->nlMsg.nlmsgSeq,
+                                           usrParamsCtx->ovsInstance->pid,
+                                           NFNETLINK_V0,
+                                           gOvsSwitchContext->dpNo);
+        if (status == NDIS_STATUS_SUCCESS) {
+            *replyLen = msgOut->nlMsg.nlmsgLen;
+        }
+    } else if (instance->protocol == NETLINK_GENERIC) {
+        NlBufInit(&nlBuf,
+                  usrParamsCtx->outputBuffer,
+                  usrParamsCtx->outputLength);
+
+        OVS_VPORT_EVENT_ENTRY eventEntry;
+        /* remove vport event entry from the vport event queue */
+        status = OvsRemoveVportEventEntry(usrParamsCtx->ovsInstance,
+                                          &eventEntry);
+        if (status != STATUS_SUCCESS) {
+            /* If there were not elements, read should return no data. */
+            status = STATUS_SUCCESS;
+            *replyLen = 0;
+            goto cleanup;
+        }
+
+        status = OvsPortFillInfo(usrParamsCtx, &eventEntry, &nlBuf);
+        if (status == NDIS_STATUS_SUCCESS) {
+            *replyLen = NlBufSize(&nlBuf);
+        }
+    } else {
+        status = STATUS_INVALID_PARAMETER;
     }
 
 cleanup:

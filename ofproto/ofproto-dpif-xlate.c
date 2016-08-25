@@ -170,7 +170,7 @@ struct xlate_ctx {
     const struct xbridge *xbridge;
 
     /* Flow tables version at the beginning of the translation. */
-    cls_version_t tables_version;
+    ovs_version_t tables_version;
 
     /* Flow at the last commit. */
     struct flow base_flow;
@@ -627,13 +627,19 @@ xlate_report(struct xlate_ctx *ctx, const char *format, ...)
 
 static struct vlog_rate_limit error_report_rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-#define XLATE_REPORT_ERROR(CTX, ...)                    \
-    do {                                                \
-        if (OVS_UNLIKELY((CTX)->xin->report_hook)) {    \
-            xlate_report(CTX, __VA_ARGS__);             \
-        } else {                                        \
-            VLOG_ERR_RL(&error_report_rl, __VA_ARGS__); \
-        }                                               \
+#define XLATE_REPORT_ERROR(CTX, ...)                            \
+    do {                                                        \
+        if (OVS_UNLIKELY((CTX)->xin->report_hook)) {            \
+            xlate_report(CTX, __VA_ARGS__);                     \
+        } else {                                                \
+            struct ds ds = DS_EMPTY_INITIALIZER;                \
+                                                                \
+            ds_put_format(&ds, __VA_ARGS__);                    \
+            ds_put_cstr(&ds, ": ");                             \
+            flow_format(&ds, &(CTX)->base_flow);                \
+            VLOG_ERR_RL(&error_report_rl, "%s", ds_cstr(&ds));  \
+            ds_destroy(&ds);                                    \
+        }                                                       \
     } while (0)
 
 static inline void
@@ -1503,12 +1509,10 @@ group_is_alive(const struct xlate_ctx *ctx, uint32_t group_id, int depth)
 {
     struct group_dpif *group;
 
-    if (group_dpif_lookup(ctx->xbridge->ofproto, group_id, &group)) {
-        struct ofputil_bucket *bucket;
-
-        bucket = group_first_live_bucket(ctx, group, depth);
-        group_dpif_unref(group);
-        return bucket != NULL;
+    group = group_dpif_lookup(ctx->xbridge->ofproto, group_id,
+                              ctx->tables_version, false);
+    if (group) {
+        return group_first_live_bucket(ctx, group, depth) != NULL;
     }
 
     return false;
@@ -1542,7 +1546,7 @@ group_first_live_bucket(const struct xlate_ctx *ctx,
     struct ofputil_bucket *bucket;
     const struct ovs_list *buckets;
 
-    group_dpif_get_buckets(group, &buckets);
+    buckets = group_dpif_get_buckets(group);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         if (bucket_is_alive(ctx, bucket, depth)) {
             return bucket;
@@ -1563,7 +1567,7 @@ group_best_live_bucket(const struct xlate_ctx *ctx,
     struct ofputil_bucket *bucket;
     const struct ovs_list *buckets;
 
-    group_dpif_get_buckets(group, &buckets);
+    buckets = group_dpif_get_buckets(group);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         if (bucket_is_alive(ctx, bucket, 0)) {
             uint32_t score =
@@ -2875,7 +2879,7 @@ tnl_send_nd_request(struct xlate_ctx *ctx, const struct xport *out_dev,
     struct dp_packet packet;
 
     dp_packet_init(&packet, 0);
-    compose_nd(&packet, eth_src, ipv6_src, ipv6_dst);
+    compose_nd_ns(&packet, eth_src, ipv6_src, ipv6_dst);
     compose_table_xlate(ctx, out_dev, &packet);
     dp_packet_uninit(&packet);
 }
@@ -3050,7 +3054,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         struct flow old_flow = ctx->xin->flow;
         bool old_conntrack = ctx->conntracked;
         bool old_was_mpls = ctx->was_mpls;
-        cls_version_t old_version = ctx->tables_version;
+        ovs_version_t old_version = ctx->tables_version;
         struct ofpbuf old_stack = ctx->stack;
         union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];
         struct ofpbuf old_action_set = ctx->action_set;
@@ -3376,6 +3380,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
     }
 }
 
+/* Consumes the group reference, which is only taken if xcache exists. */
 static void
 xlate_group_stats(struct xlate_ctx *ctx, struct group_dpif *group,
                   struct ofputil_bucket *bucket)
@@ -3387,7 +3392,7 @@ xlate_group_stats(struct xlate_ctx *ctx, struct group_dpif *group,
         struct xc_entry *entry;
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_GROUP);
-        entry->u.group.group = group_dpif_ref(group);
+        entry->u.group.group = group;
         entry->u.group.bucket = bucket;
     }
 }
@@ -3449,8 +3454,7 @@ xlate_all_group(struct xlate_ctx *ctx, struct group_dpif *group)
     struct ofputil_bucket *bucket;
     const struct ovs_list *buckets;
 
-    group_dpif_get_buckets(group, &buckets);
-
+    buckets = group_dpif_get_buckets(group);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         xlate_group_bucket(ctx, bucket);
     }
@@ -3466,6 +3470,8 @@ xlate_ff_group(struct xlate_ctx *ctx, struct group_dpif *group)
     if (bucket) {
         xlate_group_bucket(ctx, bucket);
         xlate_group_stats(ctx, group, bucket);
+    } else if (ctx->xin->xcache) {
+        group_dpif_unref(group);
     }
 }
 
@@ -3482,75 +3488,59 @@ xlate_default_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
     if (bucket) {
         xlate_group_bucket(ctx, bucket);
         xlate_group_stats(ctx, group, bucket);
+    } else if (ctx->xin->xcache) {
+        group_dpif_unref(group);
     }
 }
 
 static void
 xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
-    struct mf_bitmap hash_fields = MF_BITMAP_INITIALIZER;
     const struct field_array *fields;
     struct ofputil_bucket *bucket;
+    const uint8_t *mask_values;
     uint32_t basis;
-    int i;
+    size_t i;
 
     fields = group_dpif_get_fields(group);
+    mask_values = fields->values;
     basis = hash_uint64(group_dpif_get_selection_method_param(group));
 
-    /* Determine which fields to hash */
-    for (i = 0; i < MFF_N_IDS; i++) {
-        if (bitmap_is_set(fields->used.bm, i)) {
-            const struct mf_field *mf;
+    BITMAP_FOR_EACH_1 (i, MFF_N_IDS, fields->used.bm) {
+        const struct mf_field *mf = mf_from_id(i);
 
-            /* If the field is already present in 'hash_fields' then
-             * this loop has already checked that it and its pre-requisites
-             * are present in the flow and its pre-requisites have
-             * already been added to 'hash_fields'. There is nothing more
-             * to do here and as an optimisation the loop can continue. */
-            if (bitmap_is_set(hash_fields.bm, i)) {
-                continue;
-            }
-
-            mf = mf_from_id(i);
-
-            /* Only hash a field if it and its pre-requisites are present
-             * in the flow. */
-            if (!mf_are_prereqs_ok(mf, &ctx->xin->flow)) {
-                continue;
-            }
-
-            /* Hash both the field and its pre-requisites */
-            mf_bitmap_set_field_and_prereqs(mf, &hash_fields);
+        /* Skip fields for which prerequisities are not met. */
+        if (!mf_are_prereqs_ok(mf, &ctx->xin->flow, ctx->wc)) {
+            /* Skip the mask bytes for this field. */
+            mask_values += mf->n_bytes;
+            continue;
         }
-    }
 
-    /* Hash the fields */
-    for (i = 0; i < MFF_N_IDS; i++) {
-        if (bitmap_is_set(hash_fields.bm, i)) {
-            const struct mf_field *mf = mf_from_id(i);
-            union mf_value value;
-            int j;
+        union mf_value value;
+        union mf_value mask;
 
-            mf_get_value(mf, &ctx->xin->flow, &value);
-            /* This seems inefficient but so does apply_mask() */
-            for (j = 0; j < mf->n_bytes; j++) {
-                ((uint8_t *) &value)[j] &= ((uint8_t *) &fields->value[i])[j];
-            }
-            basis = hash_bytes(&value, mf->n_bytes, basis);
-
-            /* For tunnels, hash in whether the field is present. */
-            if (mf_is_tun_metadata(mf)) {
-                basis = hash_boolean(mf_is_set(mf, &ctx->xin->flow), basis);
-            }
-
-            mf_mask_field(mf, &ctx->wc->masks);
+        mf_get_value(mf, &ctx->xin->flow, &value);
+        /* Mask the value. */
+        for (int j = 0; j < mf->n_bytes; j++) {
+            mask.b[j] = *mask_values++;
+            value.b[j] &= mask.b[j];
         }
+        basis = hash_bytes(&value, mf->n_bytes, basis);
+
+        /* For tunnels, hash in whether the field is present. */
+        if (mf_is_tun_metadata(mf)) {
+            basis = hash_boolean(mf_is_set(mf, &ctx->xin->flow), basis);
+        }
+
+        mf_mask_field_masked(mf, &mask, ctx->wc);
     }
 
     bucket = group_best_live_bucket(ctx, group, basis);
     if (bucket) {
         xlate_group_bucket(ctx, bucket);
         xlate_group_stats(ctx, group, bucket);
+    } else if (ctx->xin->xcache) {
+        group_dpif_unref(group);
     }
 }
 
@@ -3596,7 +3586,6 @@ xlate_group_action__(struct xlate_ctx *ctx, struct group_dpif *group)
     default:
         OVS_NOT_REACHED();
     }
-    group_dpif_unref(group);
 
     ctx->in_group = was_in_group;
 }
@@ -3606,14 +3595,15 @@ xlate_group_action(struct xlate_ctx *ctx, uint32_t group_id)
 {
     if (xlate_resubmit_resource_check(ctx)) {
         struct group_dpif *group;
-        bool got_group;
 
-        got_group = group_dpif_lookup(ctx->xbridge->ofproto, group_id, &group);
-        if (got_group) {
-            xlate_group_action__(ctx, group);
-        } else {
+        /* Take ref only if xcache exists. */
+        group = group_dpif_lookup(ctx->xbridge->ofproto, group_id,
+                                  ctx->tables_version, ctx->xin->xcache);
+        if (!group) {
+            /* XXX: Should set ctx->error ? */
             return true;
         }
+        xlate_group_action__(ctx, group);
     }
 
     return false;
@@ -4773,6 +4763,9 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
         case OFPACT_GROUP:
             if (xlate_group_action(ctx, ofpact_get_GROUP(a)->group_id)) {
                 /* Group could not be found. */
+
+                /* XXX: Terminates action list translation, but does not
+                 * terminate the pipeline. */
                 return;
             }
             break;
@@ -4921,29 +4914,17 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_REG_MOVE:
-            nxm_execute_reg_move(ofpact_get_REG_MOVE(a), flow, wc);
+            mf_subfield_copy(&ofpact_get_REG_MOVE(a)->src,
+                             &ofpact_get_REG_MOVE(a)->dst, flow, wc);
             break;
 
         case OFPACT_SET_FIELD:
             set_field = ofpact_get_SET_FIELD(a);
             mf = set_field->field;
 
-            /* Set field action only ever overwrites packet's outermost
-             * applicable header fields.  Do nothing if no header exists. */
-            if (mf->id == MFF_VLAN_VID) {
-                wc->masks.vlan_tci |= htons(VLAN_CFI);
-                if (!(flow->vlan_tci & htons(VLAN_CFI))) {
-                    break;
-                }
-            } else if ((mf->id == MFF_MPLS_LABEL || mf->id == MFF_MPLS_TC)
-                       /* 'dl_type' is already unwildcarded. */
-                       && !eth_type_mpls(flow->dl_type)) {
-                break;
-            }
-            /* A flow may wildcard nw_frag.  Do nothing if setting a transport
-             * header field on a packet that does not have them. */
-            mf_mask_field_and_prereqs__(mf, &set_field->mask, wc);
-            if (mf_are_prereqs_ok(mf, flow)) {
+            /* Set the field only if the packet actually has it. */
+            if (mf_are_prereqs_ok(mf, flow, wc)) {
+                mf_mask_field_masked(mf, &set_field->mask, wc);
                 mf_set_flow_value_masked(mf, &set_field->value,
                                          &set_field->mask, flow);
             }

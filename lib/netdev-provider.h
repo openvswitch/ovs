@@ -236,15 +236,21 @@ struct netdev_class {
     int (*init)(void);
 
     /* Performs periodic work needed by netdevs of this class.  May be null if
-     * no periodic work is necessary. */
-    void (*run)(void);
+     * no periodic work is necessary.
+     *
+     * 'netdev_class' points to the class.  It is useful in case the same
+     * function is used to implement different classes. */
+    void (*run)(const struct netdev_class *netdev_class);
 
     /* Arranges for poll_block() to wake up if the "run" member function needs
      * to be called.  Implementations are additionally required to wake
      * whenever something changes in any of its netdevs which would cause their
      * ->change_seq() function to change its result.  May be null if nothing is
-     * needed here. */
-    void (*wait)(void);
+     * needed here.
+     *
+     * 'netdev_class' points to the class.  It is useful in case the same
+     * function is used to implement different classes. */
+    void (*wait)(const struct netdev_class *netdev_class);
 
 /* ## ---------------- ## */
 /* ## netdev Functions ## */
@@ -303,10 +309,6 @@ struct netdev_class {
      * otherwise a positive errno value.
      *
      * 'n_txq' specifies the exact number of transmission queues to create.
-     * The caller will call netdev_send() concurrently from 'n_txq' different
-     * threads (with different qid).  The netdev provider is responsible for
-     * making sure that these concurrent calls do not create a race condition
-     * by using multiple hw queues or locking.
      *
      * The caller will call netdev_reconfigure() (if necessary) before using
      * netdev_send() on any of the newly configured queues, giving the provider
@@ -328,6 +330,11 @@ struct netdev_class {
      * packets.  If 'may_steal' is true, the caller transfers ownership of all
      * the packets to the network device, regardless of success.
      *
+     * If 'concurrent_txq' is true, the caller may perform concurrent calls
+     * to netdev_send() with the same 'qid'. The netdev provider is responsible
+     * for making sure that these concurrent calls do not create a race
+     * condition by using locking or other synchronization if required.
+     *
      * The network device is expected to maintain one or more packet
      * transmission queues, so that the caller does not ordinarily have to
      * do additional queuing of packets.  'qid' specifies the queue to use
@@ -341,7 +348,7 @@ struct netdev_class {
      * datapath".  It will also prevent the OVS implementation of bonding from
      * working properly over 'netdev'.) */
     int (*send)(struct netdev *netdev, int qid, struct dp_packet_batch *batch,
-                bool may_steal);
+                bool may_steal, bool concurrent_txq);
 
     /* Registers with the poll loop to wake up from the next call to
      * poll_block() when the packet transmission queue for 'netdev' has
@@ -382,7 +389,7 @@ struct netdev_class {
      * If 'netdev' does not have an MTU (e.g. as some tunnels do not), then
      * this function should return EOPNOTSUPP.  This function may be set to
      * null if it would always return EOPNOTSUPP. */
-    int (*set_mtu)(const struct netdev *netdev, int mtu);
+    int (*set_mtu)(struct netdev *netdev, int mtu);
 
     /* Returns the ifindex of 'netdev', if successful, as a positive number.
      * On failure, returns a negative errno value.
@@ -729,8 +736,8 @@ struct netdev_class {
 
     /* Attempts to receive a batch of packets from 'rx'.  In 'batch', the
      * caller supplies 'packets' as the pointer to the beginning of an array
-     * of MAX_RX_BATCH pointers to dp_packet.  If successful, the
-     * implementation stores pointers to up to MAX_RX_BATCH dp_packets into
+     * of NETDEV_MAX_BURST pointers to dp_packet.  If successful, the
+     * implementation stores pointers to up to NETDEV_MAX_BURST dp_packets into
      * the array, transferring ownership of the packets to the caller, stores
      * the number of received packets into 'count', and returns 0.
      *

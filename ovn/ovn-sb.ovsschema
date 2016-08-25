@@ -1,8 +1,16 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.6.0",
-    "cksum": "1715817174 6541",
+    "version": "1.8.0",
+    "cksum": "59582657 7376",
     "tables": {
+        "SB_Global": {
+            "columns": {
+                "nb_cfg": {"type": {"key": "integer"}},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "maxRows": 1,
+            "isRoot": true},
         "Chassis": {
             "columns": {
                 "name": {"type": "string"},
@@ -13,6 +21,7 @@
                 "vtep_logical_switches" : {"type": {"key": "string",
                                                     "min": 0,
                                                     "max": "unlimited"}},
+                "nb_cfg": {"type": {"key": "integer"}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},
@@ -132,4 +141,15 @@
                         "type": "string",
                         "enum": ["set", ["bool", "uint8", "uint16", "uint32",
                                          "ipv4", "static_routes", "str"]]}}}},
+            "isRoot": true},
+        "DHCPv6_Options": {
+            "columns": {
+                "name": {"type": "string"},
+                "code": {
+                    "type": {"key": {"type": "integer",
+                                     "minInteger": 0, "maxInteger": 254}}},
+                "type": {
+                    "type": {"key": {
+                        "type": "string",
+                        "enum": ["set", ["ipv6", "str", "mac"]]}}}},
             "isRoot": true}}}

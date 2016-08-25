@@ -1,6 +1,6 @@
 #! /usr/bin/env bash
 #
-# Copyright (c) 2013, 2015 Nicira, Inc.
+# Copyright (c) 2013, 2015, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -262,6 +262,9 @@ EOF
 
     OVN_NB_DB=unix:$sim_base/ovn-nb/ovn-nb.sock; export OVN_NB_DB
     OVN_SB_DB=unix:$sim_base/ovn-sb/ovn-sb.sock; export OVN_SB_DB
+
+    ovn-nbctl init
+    ovn-sbctl init
 
     mkdir "$sim_base"/northd
     as northd ovn-northd $daemon_opts \

@@ -388,7 +388,7 @@ AT_CHECK([ovsdb-server --detach --no-chdir --pidfile db])
 AT_CHECK([test ! -e socket1])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-remote punix:socket1])
 if test "$IS_WIN32" = "yes"; then
-  OVS_WAIT_UNTIL([test -s socket1])
+  OVS_WAIT_UNTIL([test -e socket1])
 else
   OVS_WAIT_UNTIL([test -S socket1])
 fi
@@ -399,7 +399,7 @@ AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/list-remotes],
 AT_CHECK([test ! -e socket2])
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/add-remote punix:socket2])
 if test "$IS_WIN32" = "yes"; then
-  OVS_WAIT_UNTIL([test -s socket2])
+  OVS_WAIT_UNTIL([test -e socket2])
 else
   OVS_WAIT_UNTIL([test -S socket2])
 fi
@@ -416,7 +416,7 @@ ovs-appctl: ovsdb-server: server returned an error
 AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/remove-remote punix:socket1])
 OVS_WAIT_UNTIL([test ! -e socket1])
 if test "$IS_WIN32" = "yes"; then
-  AT_CHECK([test -s socket2])
+  AT_CHECK([test -e socket2])
 else
   AT_CHECK([test -S socket2])
 fi
@@ -1078,29 +1078,29 @@ REPLICATION_EXAMPLES
 
 AT_BANNER([OVSDB -- ovsdb-server replication runtime management commands])
 
-#ovsdb-server/get-remote-ovsdb-server command
-AT_SETUP([ovsdb-server/get-remote-ovsdb-server])
-AT_KEYWORDS([ovsdb server replication get-remote])
+#ovsdb-server/get-active-ovsdb-server command
+AT_SETUP([ovsdb-server/get-active-ovsdb-server])
+AT_KEYWORDS([ovsdb server replication get-active])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --sync-from=tcp:127.0.0.1:9999 db])
 
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/get-remote-ovsdb-server],
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/get-active-ovsdb-server],
   [0], [tcp:127.0.0.1:9999
 ])
 AT_CLEANUP
 
-#*ovsdb-server/set-remote-ovsdb-server command
-AT_SETUP([ovsdb-server/set-remote-ovsdb-server])
-AT_KEYWORDS([ovsdb server replication set-remote])
+#*ovsdb-server/set-active-ovsdb-server command
+AT_SETUP([ovsdb-server/set-active-ovsdb-server])
+AT_KEYWORDS([ovsdb server replication set-active])
 ordinal_schema > schema
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 on_exit 'kill `cat *.pid`'
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile db])
 
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/set-remote-ovsdb-server tcp:127.0.0.1:9999])
-AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/get-remote-ovsdb-server],
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/set-active-ovsdb-server tcp:127.0.0.1:9999])
+AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/get-active-ovsdb-server],
   [0], [tcp:127.0.0.1:9999
 ])
 AT_CLEANUP
@@ -1167,9 +1167,9 @@ OVSDB_SERVER_SHUTDOWN
 OVSDB_SERVER_SHUTDOWN2
 AT_CLEANUP
 
-#ovsdb-server/connect-remote-ovsdb-server
-AT_SETUP([ovsdb-server/connect-remote-server])
-AT_KEYWORDS([ovsdb server replication connect-remote-server])
+#ovsdb-server/connect-active-ovsdb-server
+AT_SETUP([ovsdb-server/connect-active-server])
+AT_KEYWORDS([ovsdb server replication connect-active-server])
 replication_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
@@ -1178,9 +1178,9 @@ AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server1.log --pidfil
 
 AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server2.log --pidfile="`pwd`"/pid2 --remote=punix:db2.sock --unixctl="`pwd`"/unixctl2 db2], [0], [ignore], [ignore])
 
-AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/set-remote-ovsdb-server unix:db.sock], [0], [ignore], [ignore], [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
+AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/set-active-ovsdb-server unix:db.sock], [0], [ignore], [ignore], [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
-AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/connect-remote-ovsdb-server], [0], [ignore], [ignore],
+AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/connect-active-ovsdb-server], [0], [ignore], [ignore],
         [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
 AT_CHECK([ovsdb-client transact unix:db.sock \
@@ -1204,9 +1204,9 @@ OVSDB_SERVER_SHUTDOWN
 OVSDB_SERVER_SHUTDOWN2
 AT_CLEANUP
 
-#ovsdb-server/disconnect-remote-server command
-AT_SETUP([ovsdb-server/disconnect-remote-server])
-AT_KEYWORDS([ovsdb server replication disconnect-remote-server])
+#ovsdb-server/disconnect-active-server command
+AT_SETUP([ovsdb-server/disconnect-active-server])
+AT_KEYWORDS([ovsdb server replication disconnect-active-server])
 replication_schema > schema
 AT_CHECK([ovsdb-tool create db1 schema], [0], [stdout], [ignore])
 AT_CHECK([ovsdb-tool create db2 schema], [0], [stdout], [ignore])
@@ -1222,9 +1222,20 @@ AT_CHECK([ovsdb-client transact unix:db.sock \
    "row": {"number": 0, "name": "zero"}}]]'], [0], [stdout], [ignore],
 [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
+dnl Make sure the transaction shows up in db2. This also tests the back up server
+dnl can be read.
 OVS_WAIT_UNTIL([ovsdb-client dump unix:db2.sock | grep zero])
 
-AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/disconnect-remote-ovsdb-server], [0], [ignore], [ignore],
+dnl The backup server does not accept any write transaction
+AT_CHECK([ovsdb-client transact unix:db2.sock \
+'[["mydb",
+  {"op": "insert",
+   "table": "b",
+   "row": {"number": 1, "name": "one"}}]]'], [0],
+   [[[{"details":"insert operation not allowed when database server is in read only mode","error":"not allowed"}]]
+])
+
+AT_CHECK([ovs-appctl -t "`pwd`"/unixctl2 ovsdb-server/disconnect-active-ovsdb-server], [0], [ignore], [ignore],
         [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
 
 AT_CHECK([ovsdb-client transact unix:db.sock \
@@ -1254,6 +1265,29 @@ AT_CHECK([${PERL} $srcdir/uuidfilt.pl output], [0], [7,9c7,8
 > _uuid name number
 > ----- ---- ------
 ], [ignore], [test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
+
+
+dnl The backup server now become active, and can accept write transactions.
+AT_CHECK([ovsdb-client transact unix:db2.sock \
+'[["mydb",
+  {"op": "insert",
+   "table": "b",
+   "row": {"number": 1, "name": "one"}}]]'], [0], [stdout], [ignore],
+[test ! -e pid || kill `cat pid`; test ! -e pid2 || kill `cat pid2`])
+
+AT_CHECK([ovsdb-client dump unix:db2.sock], [0], [stdout])
+cat stdout > output
+
+AT_CHECK([${PERL} $srcdir/uuidfilt.pl output], [0], [a table
+_uuid                                name number
+------------------------------------ ---- ------
+<0> zero 0     @&t@
+
+b table
+_uuid                                name number
+------------------------------------ ---- ------
+<1> one  1     @&t@
+])
 
 OVSDB_SERVER_SHUTDOWN
 OVSDB_SERVER_SHUTDOWN2

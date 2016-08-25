@@ -31,7 +31,7 @@ static inline int rpl_iptunnel_pull_header(struct sk_buff *skb, int hdr_len,
 }
 
 int ovs_iptunnel_handle_offloads(struct sk_buff *skb,
-				 bool csum_help, int gso_type_mask,
+				 int gso_type_mask,
 				 void (*fix_segment)(struct sk_buff *));
 
 /* This is is required to compile upstream gre.h. gre_handle_offloads()
@@ -90,9 +90,6 @@ struct tnl_ptk_info {
 /* Older kernels defined TUNNEL_OPTIONS_PRESENT to GENEVE only */
 #undef TUNNEL_OPTIONS_PRESENT
 #define TUNNEL_OPTIONS_PRESENT (TUNNEL_GENEVE_OPT | TUNNEL_VXLAN_OPT)
-
-#define skb_is_encapsulated ovs_skb_is_encapsulated
-bool ovs_skb_is_encapsulated(struct sk_buff *skb);
 
 /* Used to memset ip_tunnel padding. */
 #define IP_TUNNEL_KEY_SIZE	offsetofend(struct ip_tunnel_key, tp_dst)
@@ -345,4 +342,8 @@ static inline int iptunnel_pull_offloads(struct sk_buff *skb)
 	return 0;
 }
 #endif /* USE_UPSTREAM_TUNNEL */
+
+#define skb_is_encapsulated ovs_skb_is_encapsulated
+bool ovs_skb_is_encapsulated(struct sk_buff *skb);
+
 #endif /* __NET_IP_TUNNELS_H */

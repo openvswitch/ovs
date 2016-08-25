@@ -113,7 +113,7 @@ ADD_VLAN(p1, at_ns1, 100, "fc00:1::2/96")
 dnl Linux seems to take a little time to get its IPv6 stack in order. Without
 dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
-OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00:1::2])
 
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
@@ -384,9 +384,9 @@ AT_CHECK([ip link set dev br-underlay up])
 dnl Set up tunnel endpoints on OVS outside the namespace and with a native
 dnl linux device inside the namespace.
 ADD_OVS_TUNNEL([gre], [br0], [at_gre0], [172.31.1.1], [10.1.1.100/24])
-ADD_NATIVE_TUNNEL([gretap], [ns_gre0], [at_ns0], [172.31.1.100], [10.1.1.1/24])
+ADD_NATIVE_TUNNEL([gretap], [ns_gre0], [at_ns0], [172.31.1.100], [10.1.1.1/24],
+                  [], [address e6:66:c1:11:11:11])
 AT_CHECK([ovs-vsctl -- set interface at_gre0 ofport_request=1])
-NS_CHECK_EXEC([at_ns0], [ip link set dev ns_gre0 address e6:66:c1:11:11:11])
 NS_CHECK_EXEC([at_ns0], [arp -s 10.1.1.2 e6:66:c1:22:22:22])
 
 dnl Set up (p1 and ovs-p1) at br0
@@ -442,8 +442,8 @@ dnl check tunnel pop path, from at_ns0 to at_ns1
 NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 5678 < payload200.bin])
 dnl After truncation = 100 byte at loopback device p2(4)
 AT_CHECK([ovs-appctl revalidator/purge], [0])
-AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | awk --field-separator=', '  '{print $5}'], [0], [dnl
-n_bytes=100
+AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | ofctl_strip], [0], [dnl
+ n_packets=1, n_bytes=100, priority=1,ip,in_port=4 actions=drop
 ])
 
 dnl SLOW_ACTION: disable datapath truncate support
@@ -479,8 +479,8 @@ dnl check tunnel pop path, from at_ns0 to at_ns1
 NS_CHECK_EXEC([at_ns0], [nc $NC_EOF_OPT -u 10.1.1.2 5678 < payload200.bin])
 dnl After truncation = 100 byte at loopback device p2(4)
 AT_CHECK([ovs-appctl revalidator/purge], [0])
-AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | awk --field-separator=', '  '{print $5}'], [0], [dnl
-n_bytes=100
+AT_CHECK([ovs-ofctl dump-flows br0 | grep "in_port=4" | ofctl_strip], [0], [dnl
+ n_packets=1, n_bytes=100, priority=1,ip,in_port=4 actions=drop
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -510,13 +510,13 @@ AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
 dnl Send an unsolicited reply from port 2. This should be dropped.
-AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) '50540000000a50540000000908004500001c00000000001100000a0101020a0101010002000100080000'])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) '50540000000a50540000000908004500001c000000000011a4cd0a0101020a0101010002000100080000'])
 
 dnl OK, now start a new connection from port 1.
-AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 1 ct\(commit\),controller '50540000000a50540000000908004500001c00000000001100000a0101010a0101020001000200080000'])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 1 ct\(commit\),controller '50540000000a50540000000908004500001c000000000011a4cd0a0101010a0101020001000200080000'])
 
 dnl Now try a reply from port 2.
-AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) '50540000000a50540000000908004500001c00000000001100000a0101020a0101010002000100080000'])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) '50540000000a50540000000908004500001c000000000011a4cd0a0101020a0101010002000100080000'])
 
 dnl Check this output. We only see the latter two packets, not the first.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
@@ -604,6 +604,94 @@ dnl HTTP requests from ns1->ns0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
 NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py http6]], [http1.pid])
 NS_CHECK_EXEC([at_ns1], [wget http://[[fc00::1]] -t 3 -T 1 -v -o wget1.log], [4])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - IPv4 ping])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+priority=1,action=drop
+priority=10,arp,action=normal
+priority=100,in_port=1,icmp,action=ct(commit),2
+priority=100,in_port=2,icmp,ct_state=-trk,action=ct(table=0)
+priority=100,in_port=2,icmp,ct_state=+trk+est,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Pings from ns0->ns1 should work fine.
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0)
+])
+
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+dnl Pings from ns1->ns0 should fail.
+NS_CHECK_EXEC([at_ns1], [ping -q -c 3 -i 0.3 -w 2 10.1.1.1 | FORMAT_PING], [0], [dnl
+7 packets transmitted, 0 received, 100% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - IPv6 ping])
+CHECK_CONNTRACK()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+
+AT_DATA([flows.txt], [dnl
+
+dnl ICMPv6 echo request and reply go to table 1.  The rest of the traffic goes
+dnl through normal action.
+table=0,priority=10,icmp6,icmp_type=128,action=goto_table:1
+table=0,priority=10,icmp6,icmp_type=129,action=goto_table:1
+table=0,priority=1,action=normal
+
+dnl Allow everything from ns0->ns1. Only allow return traffic from ns1->ns0.
+table=1,priority=100,in_port=1,icmp6,action=ct(commit),2
+table=1,priority=100,in_port=2,icmp6,ct_state=-trk,action=ct(table=0)
+table=1,priority=100,in_port=2,icmp6,ct_state=+trk+est,action=1
+table=1,priority=1,action=drop
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
+
+dnl The above ping creates state in the connection tracker.  We're not
+dnl interested in that state.
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+dnl Pings from ns1->ns0 should fail.
+NS_CHECK_EXEC([at_ns1], [ping6 -q -c 3 -i 0.3 -w 2 fc00::1 | FORMAT_PING], [0], [dnl
+7 packets transmitted, 0 received, 100% packet loss, time 0ms
+])
+
+dnl Pings from ns0->ns1 should work fine.
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00::2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
+icmpv6,orig=(src=fc00::1,dst=fc00::2,id=<cleared>,type=128,code=0),reply=(src=fc00::2,dst=fc00::1,id=<cleared>,type=129,code=0)
+])
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
@@ -906,6 +994,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - multiple zones, local])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_LOCAL_STACK()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0)
@@ -942,8 +1031,8 @@ dnl (again) HTTP requests from root namespace to  p0 should work fine.
 AT_CHECK([wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep "zone"], [0], [dnl
-icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>),zone=1
-icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>),zone=2
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0),zone=1
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0),zone=2
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=<cleared>)
 ])
@@ -953,6 +1042,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - multiple namespaces, internal ports])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_LOCAL_STACK()
 OVS_TRAFFIC_VSWITCHD_START(
    [set-fail-mode br0 secure -- ])
 
@@ -993,6 +1083,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - multi-stage pipeline, local])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_LOCAL_STACK()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0)
@@ -1051,8 +1142,8 @@ dnl (again) HTTP requests from root namespace to p0 should work fine.
 AT_CHECK([wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | grep "zone"], [0], [dnl
-icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>),zone=1
-icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>),zone=65534
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0),zone=1
+icmp,orig=(src=10.1.1.1,dst=10.1.1.2,id=<cleared>,type=8,code=0),reply=(src=10.1.1.2,dst=10.1.1.1,id=<cleared>,type=0,code=0),zone=65534
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>)
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=65534,protoinfo=(state=<cleared>)
 ])
@@ -1382,6 +1473,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - FTP])
 AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_ALG()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -1468,6 +1560,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - IPv6 FTP])
 AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_ALG()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -1509,7 +1602,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
+NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
@@ -1524,6 +1617,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - FTP with multiple expectations])
 AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_ALG()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -1588,6 +1682,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv4 fragmentation ])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_FRAG()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -1621,6 +1716,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv4 fragmentation expiry])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_FRAG()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -1651,6 +1747,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv4 fragmentation + vlan])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_FRAG()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -1686,6 +1783,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_FRAG()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -1725,6 +1823,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation expiry])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_FRAG()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -1765,6 +1864,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 fragmentation + vlan])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_FRAG()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -1808,6 +1908,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - Fragmentation over vxlan])
 OVS_CHECK_VXLAN()
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_FRAG()
 
 OVS_TRAFFIC_VSWITCHD_START()
 ADD_BR([br-underlay])
@@ -1859,6 +1960,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - IPv6 Fragmentation over vxlan])
 OVS_CHECK_VXLAN()
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_FRAG()
 
 OVS_TRAFFIC_VSWITCHD_START()
 ADD_BR([br-underlay])
@@ -1957,6 +2059,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - simple SNAT])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -2003,6 +2106,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - SNAT with port range])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -2050,6 +2154,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - more complex SNAT])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -2101,6 +2206,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - simple DNAT])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -2155,6 +2261,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - more complex DNAT])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -2215,6 +2322,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - ICMP related with NAT])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -2276,6 +2384,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - FTP with NAT])
 AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
 
 OVS_TRAFFIC_VSWITCHD_START()
 
@@ -2343,7 +2452,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
@@ -2357,6 +2466,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - FTP with NAT 2])
 AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -2411,7 +2521,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
@@ -2424,6 +2534,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - IPv6 HTTP with NAT])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -2467,6 +2578,7 @@ AT_CLEANUP
 AT_SETUP([conntrack - IPv6 FTP with NAT])
 AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns0, at_ns1)
@@ -2511,7 +2623,7 @@ NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-proxy --no-remove-listing -o wget0.log -d])
+NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
 
 dnl Discards CLOSE_WAIT and CLOSING
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
@@ -2524,6 +2636,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - DNAT load balancing])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns1, at_ns2, at_ns3, at_ns4)
@@ -2610,6 +2723,7 @@ AT_CLEANUP
 
 AT_SETUP([conntrack - DNAT load balancing with NC])
 CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
 
 ADD_NAMESPACES(at_ns1, at_ns2, at_ns3, at_ns4, at_ns5)

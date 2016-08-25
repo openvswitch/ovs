@@ -622,12 +622,15 @@ dummy_netdev_get_conn_state(struct dummy_packet_conn *conn)
 }
 
 static void
-netdev_dummy_run(void)
+netdev_dummy_run(const struct netdev_class *netdev_class)
 {
     struct netdev_dummy *dev;
 
     ovs_mutex_lock(&dummy_list_mutex);
     LIST_FOR_EACH (dev, list_node, &dummy_list) {
+        if (netdev_get_class(&dev->up) != netdev_class) {
+            continue;
+        }
         ovs_mutex_lock(&dev->mutex);
         dummy_packet_conn_run(dev);
         ovs_mutex_unlock(&dev->mutex);
@@ -636,12 +639,15 @@ netdev_dummy_run(void)
 }
 
 static void
-netdev_dummy_wait(void)
+netdev_dummy_wait(const struct netdev_class *netdev_class)
 {
     struct netdev_dummy *dev;
 
     ovs_mutex_lock(&dummy_list_mutex);
     LIST_FOR_EACH (dev, list_node, &dummy_list) {
+        if (netdev_get_class(&dev->up) != netdev_class) {
+            continue;
+        }
         ovs_mutex_lock(&dev->mutex);
         dummy_packet_conn_wait(&dev->conn);
         ovs_mutex_unlock(&dev->mutex);
@@ -993,8 +999,6 @@ netdev_dummy_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet_batch *batch)
     netdev->stats.rx_bytes += dp_packet_size(packet);
     ovs_mutex_unlock(&netdev->mutex);
 
-    dp_packet_pad(packet);
-
     batch->packets[0] = packet;
     batch->count = 1;
     return 0;
@@ -1034,7 +1038,8 @@ netdev_dummy_rxq_drain(struct netdev_rxq *rxq_)
 
 static int
 netdev_dummy_send(struct netdev *netdev, int qid OVS_UNUSED,
-                  struct dp_packet_batch *batch, bool may_steal)
+                  struct dp_packet_batch *batch, bool may_steal,
+                  bool concurrent_txq OVS_UNUSED)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
     int error = 0;
@@ -1145,12 +1150,15 @@ netdev_dummy_get_mtu(const struct netdev *netdev, int *mtup)
 }
 
 static int
-netdev_dummy_set_mtu(const struct netdev *netdev, int mtu)
+netdev_dummy_set_mtu(struct netdev *netdev, int mtu)
 {
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);
-    dev->mtu = mtu;
+    if (dev->mtu != mtu) {
+        dev->mtu = mtu;
+        netdev_change_seq_changed(netdev);
+    }
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -1380,6 +1388,9 @@ netdev_dummy_update_flags(struct netdev *netdev_,
 
 static const struct netdev_class dummy_class =
     NETDEV_DUMMY_CLASS("dummy", false, NULL);
+
+static const struct netdev_class dummy_internal_class =
+    NETDEV_DUMMY_CLASS("dummy-internal", false, NULL);
 
 static const struct netdev_class dummy_pmd_class =
     NETDEV_DUMMY_CLASS("dummy-pmd", true,
@@ -1752,6 +1763,7 @@ netdev_dummy_register(enum dummy_level level)
         netdev_dummy_override("system");
     }
     netdev_register_provider(&dummy_class);
+    netdev_register_provider(&dummy_internal_class);
     netdev_register_provider(&dummy_pmd_class);
 
     netdev_vport_tunnel_register();

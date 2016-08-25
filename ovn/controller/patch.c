@@ -151,8 +151,8 @@ add_bridge_mappings(struct controller_ctx *ctx,
     cfg = ovsrec_open_vswitch_first(ctx->ovs_idl);
     if (cfg) {
         mappings_cfg = smap_get(&cfg->external_ids, "ovn-bridge-mappings");
-        if (!mappings_cfg) {
-            mappings_cfg = "";
+        if (!mappings_cfg || !mappings_cfg[0]) {
+            return;
         }
     }
 
@@ -345,12 +345,14 @@ add_logical_patch_ports(struct controller_ctx *ctx,
 
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
+        const char *patch_port_id = "ovn-logical-patch-port";
         bool local_port = false;
-        if (!strcmp(binding->type, "gateway")) {
+        if (!strcmp(binding->type, "l3gateway")) {
             const char *chassis = smap_get(&binding->options,
-                                           "gateway-chassis");
+                                           "l3gateway-chassis");
             if (chassis && !strcmp(local_chassis_id, chassis)) {
                 local_port = true;
+                patch_port_id = "ovn-l3gateway-port";
             }
         }
 
@@ -363,7 +365,7 @@ add_logical_patch_ports(struct controller_ctx *ctx,
 
             char *src_name = patch_port_name(local, peer);
             char *dst_name = patch_port_name(peer, local);
-            create_patch_port(ctx, "ovn-logical-patch-port", local,
+            create_patch_port(ctx, patch_port_id, local,
                               br_int, src_name, br_int, dst_name,
                               existing_ports);
             free(dst_name);
@@ -394,6 +396,7 @@ patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     OVSREC_PORT_FOR_EACH (port, ctx->ovs_idl) {
         if (smap_get(&port->external_ids, "ovn-localnet-port")
             || smap_get(&port->external_ids, "ovn-l2gateway-port")
+            || smap_get(&port->external_ids, "ovn-l3gateway-port")
             || smap_get(&port->external_ids, "ovn-logical-patch-port")) {
             shash_add(&existing_ports, port->name, port);
         }
@@ -402,7 +405,8 @@ patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     /* Create in the database any patch ports that should exist.  Remove from
      * 'existing_ports' any patch ports that do exist in the database and
      * should be there. */
-    add_bridge_mappings(ctx, br_int, &existing_ports, local_datapaths, chassis_id);
+    add_bridge_mappings(ctx, br_int, &existing_ports, local_datapaths,
+                        chassis_id);
     add_logical_patch_ports(ctx, br_int, chassis_id, &existing_ports,
                             patched_datapaths);
 

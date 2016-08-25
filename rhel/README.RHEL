@@ -33,12 +33,12 @@ assignments.  The following OVS-specific variable names are supported:
         * "OVSDPDKPort", if <name> is a physical DPDK NIC port (name
           must start with "dpdk" and end with portid, eg "dpdk0")
 
-	* "OVSDPDKRPort", if <name> is a DPDK ring port (name must
+        * "OVSDPDKRPort", if <name> is a DPDK ring port (name must
           start with dpdkr and end with portid, eg "dpdkr0")
 
-        * "OVSDPDKVhostPort" if <name> is a DPDK vhost-cuse port
-
         * "OVSDPDKVhostUserPort" if <name> is a DPDK vhost-user port
+
+        * "OVSDPDKBond" if <name> is an OVS DPDK bond.
 
     - OVS_BRIDGE: If TYPE is anything other than "OVSBridge", set to
       the name of the OVS bridge to which the port should be attached.
@@ -53,8 +53,8 @@ assignments.  The following OVS-specific variable names are supported:
     - OVS_EXTRA: Optionally, additional ovs-vsctl commands, separated
       by "--" (double dash).
 
-    - BOND_IFACES: For "OVSBond" interfaces, a list of physical
-      interfaces to bond together.
+    - BOND_IFACES: For "OVSBond" and "OVSDPDKBond" interfaces, a list of
+      physical interfaces to bond together.
 
     - OVS_TUNNEL_TYPE: For "OVSTunnel" interfaces, the type of the tunnel.
       For example, "gre", "vxlan", etc.
@@ -249,6 +249,17 @@ ONBOOT=yes
 DEVICETYPE=ovs
 TYPE=OVSDPDKVhostUserPort
 OVS_BRIDGE=obr0
+
+==> ifcfg-bond0 <==
+DEVICE=bond0
+ONBOOT=yes
+DEVICETYPE=ovs
+TYPE=OVSDPDKBond
+OVS_BRIDGE=ovsbridge0
+BOOTPROTO=none
+BOND_IFACES="dpdk0 dpdk1"
+OVS_OPTIONS="bond_mode=active-backup"
+HOTPLUG=no
 
 Reporting Bugs
 --------------

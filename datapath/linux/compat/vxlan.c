@@ -373,65 +373,56 @@ static int vxlan_gro_complete(struct sk_buff *skb, int nhoff,
 /* Notify netdevs that UDP port started listening */
 static void vxlan_notify_add_rx_port(struct vxlan_sock *vs)
 {
-#ifdef HAVE_NDO_ADD_VXLAN_PORT
 	struct net_device *dev;
 	struct sock *sk = vs->sock->sk;
 	struct net *net = sock_net(sk);
 	sa_family_t sa_family = vxlan_get_sk_family(vs);
-	__be16 port = inet_sk(sk)->inet_sport;
 
-	rcu_read_lock();
-	for_each_netdev_rcu(net, dev) {
-		if (dev->netdev_ops->ndo_add_vxlan_port)
-			dev->netdev_ops->ndo_add_vxlan_port(dev, sa_family,
-							    port);
-	}
-	rcu_read_unlock();
-#else
-
-#ifdef HAVE_UDP_OFFLOAD
-	struct net_device *dev;
-	struct sock *sk = vs->sock->sk;
-	sa_family_t sa_family = vxlan_get_sk_family(vs);
 
 	if (sa_family == AF_INET) {
 		int err;
 
-		err = udp_add_offload(&vs->udp_offloads);
+		err = udp_add_offload(net, &vs->udp_offloads);
 		if (err)
 			pr_warn("vxlan: udp_add_offload failed with status %d\n", err);
 	}
 
+	rcu_read_lock();
+	for_each_netdev_rcu(net, dev) {
+#ifdef HAVE_NDO_ADD_VXLAN_PORT
+		__be16 port = inet_sk(sk)->inet_sport;
+
+		if (dev->netdev_ops->ndo_add_vxlan_port)
+			dev->netdev_ops->ndo_add_vxlan_port(dev, sa_family,
+					port);
 #endif
-#endif
+	}
+	rcu_read_unlock();
 }
 
 /* Notify netdevs that UDP port is no more listening */
 static void vxlan_notify_del_rx_port(struct vxlan_sock *vs)
 {
-#ifdef HAVE_NDO_ADD_VXLAN_PORT
 	struct net_device *dev;
 	struct sock *sk = vs->sock->sk;
 	struct net *net = sock_net(sk);
 	sa_family_t sa_family = vxlan_get_sk_family(vs);
-	__be16 port = inet_sk(sk)->inet_sport;
 
 	rcu_read_lock();
 	for_each_netdev_rcu(net, dev) {
+#ifdef HAVE_NDO_ADD_VXLAN_PORT
+		__be16 port = inet_sk(sk)->inet_sport;
+
 		if (dev->netdev_ops->ndo_del_vxlan_port)
 			dev->netdev_ops->ndo_del_vxlan_port(dev, sa_family,
-							    port);
+					port);
+#endif
 	}
 	rcu_read_unlock();
-#else
-#ifdef HAVE_UDP_OFFLOAD
-	struct sock *sk = vs->sock->sk;
-	sa_family_t sa_family = vxlan_get_sk_family(vs);
 
 	if (sa_family == AF_INET) {
 		udp_del_offload(&vs->udp_offloads);
-#endif
-#endif
+	}
 }
 
 /* See if multicast group is already in use by other ID */
@@ -868,8 +859,12 @@ static int vxlan_build_skb(struct sk_buff *skb, struct dst_entry *dst,
 		return -ENOMEM;
 
 	type |= udp_sum ? SKB_GSO_UDP_TUNNEL_CSUM : SKB_GSO_UDP_TUNNEL;
-	fix_segment = udp_sum ? ovs_udp_gso : ovs_udp_csum_gso;
-	err = ovs_iptunnel_handle_offloads(skb, udp_sum, type, fix_segment);
+#ifndef USE_UPSTREAM_TUNNEL_GSO
+	fix_segment = !udp_sum ? ovs_udp_gso : ovs_udp_csum_gso;
+#else
+	fix_segment = NULL;
+#endif
+	err = ovs_iptunnel_handle_offloads(skb, type, fix_segment);
 	if (err)
 		goto out_free;
 
@@ -931,7 +926,7 @@ static struct rtable *vxlan_get_route(struct vxlan_dev *vxlan,
 	fl4.flowi4_mark = skb->mark;
 	fl4.flowi4_proto = IPPROTO_UDP;
 	fl4.daddr = daddr;
-	fl4.saddr = vxlan->cfg.saddr.sin.sin_addr.s_addr;
+	fl4.saddr = *saddr;
 
 	rt = ip_route_output_key(vxlan->net, &fl4);
 	if (!IS_ERR(rt)) {
@@ -967,7 +962,7 @@ static struct dst_entry *vxlan6_get_route(struct vxlan_dev *vxlan,
 	memset(&fl6, 0, sizeof(fl6));
 	fl6.flowi6_oif = oif;
 	fl6.daddr = *daddr;
-	fl6.saddr = vxlan->cfg.saddr.sin6.sin6_addr;
+	fl6.saddr = *saddr;
 	fl6.flowlabel = ip6_make_flowinfo(RT_TOS(tos), label);
 	fl6.flowi6_mark = skb->mark;
 	fl6.flowi6_proto = IPPROTO_UDP;
@@ -1012,7 +1007,8 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 	struct rtable *rt = NULL;
 	const struct iphdr *old_iph;
 	union vxlan_addr *dst;
-	union vxlan_addr remote_ip;
+	union vxlan_addr remote_ip, local_ip;
+	union vxlan_addr *src;
 	struct vxlan_metadata _md;
 	struct vxlan_metadata *md = &_md;
 	__be16 src_port = 0, dst_port;
@@ -1030,6 +1026,7 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 		dst_port = rdst->remote_port ? rdst->remote_port : vxlan->cfg.dst_port;
 		vni = rdst->remote_vni;
 		dst = &rdst->remote_ip;
+		src = &vxlan->cfg.saddr;
 		dst_cache = &rdst->dst_cache;
 	} else {
 		if (!info) {
@@ -1040,11 +1037,15 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 		dst_port = info->key.tp_dst ? : vxlan->cfg.dst_port;
 		vni = vxlan_tun_id_to_vni(info->key.tun_id);
 		remote_ip.sa.sa_family = ip_tunnel_info_af(info);
-		if (remote_ip.sa.sa_family == AF_INET)
+		if (remote_ip.sa.sa_family == AF_INET) {
 			remote_ip.sin.sin_addr.s_addr = info->key.u.ipv4.dst;
-		else
+			local_ip.sin.sin_addr.s_addr = info->key.u.ipv4.src;
+		} else {
 			remote_ip.sin6.sin6_addr = info->key.u.ipv6.dst;
+			local_ip.sin6.sin6_addr = info->key.u.ipv6.src;
+		}
 		dst = &remote_ip;
+		src = &local_ip;
 		dst_cache = &info->dst_cache;
 	}
 
@@ -1084,15 +1085,14 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 	}
 
 	if (dst->sa.sa_family == AF_INET) {
-		__be32 saddr;
-
 		if (!vxlan->vn4_sock)
 			goto drop;
 		sk = vxlan->vn4_sock->sock->sk;
 
 		rt = vxlan_get_route(vxlan, skb,
 				     rdst ? rdst->remote_ifindex : 0, tos,
-				     dst->sin.sin_addr.s_addr, &saddr,
+				     dst->sin.sin_addr.s_addr,
+				     &src->sin.sin_addr.s_addr,
 				     dst_cache, info);
 		if (IS_ERR(rt)) {
 			netdev_dbg(dev, "no route to %pI4\n",
@@ -1109,7 +1109,7 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 		}
 
 		/* Bypass encapsulation if the destination is local */
-		if (rt->rt_flags & RTCF_LOCAL &&
+		if (!info && rt->rt_flags & RTCF_LOCAL &&
 		    !(rt->rt_flags & (RTCF_BROADCAST | RTCF_MULTICAST))) {
 			struct vxlan_dev *dst_vxlan;
 
@@ -1135,13 +1135,12 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 		if (err < 0)
 			goto xmit_tx_error;
 
-		udp_tunnel_xmit_skb(rt, sk, skb, saddr,
+		udp_tunnel_xmit_skb(rt, sk, skb, src->sin.sin_addr.s_addr,
 				    dst->sin.sin_addr.s_addr, tos, ttl, df,
 				    src_port, dst_port, xnet, !udp_sum);
 #if IS_ENABLED(CONFIG_IPV6)
 	} else {
 		struct dst_entry *ndst;
-		struct in6_addr saddr;
 		u32 rt6i_flags;
 
 		if (!vxlan->vn6_sock)
@@ -1150,7 +1149,8 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 
 		ndst = vxlan6_get_route(vxlan, skb,
 					rdst ? rdst->remote_ifindex : 0, tos,
-					label, &dst->sin6.sin6_addr, &saddr,
+					label, &dst->sin6.sin6_addr,
+					&src->sin6.sin6_addr,
 					dst_cache, info);
 		if (IS_ERR(ndst)) {
 			netdev_dbg(dev, "no route to %pI6\n",
@@ -1169,7 +1169,7 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 
 		/* Bypass encapsulation if the destination is local */
 		rt6i_flags = ((struct rt6_info *)ndst)->rt6i_flags;
-		if (rt6i_flags & RTF_LOCAL &&
+		if (!info && rt6i_flags & RTF_LOCAL &&
 		    !(rt6i_flags & (RTCF_BROADCAST | RTCF_MULTICAST))) {
 			struct vxlan_dev *dst_vxlan;
 
@@ -1196,7 +1196,8 @@ static void vxlan_xmit_one(struct sk_buff *skb, struct net_device *dev,
 			return;
 		}
 		udp_tunnel6_xmit_skb(ndst, sk, skb, dev,
-				     &saddr, &dst->sin6.sin6_addr, tos, ttl,
+				     &src->sin6.sin6_addr,
+				     &dst->sin6.sin6_addr, tos, ttl,
 				     label, src_port, dst_port, !udp_sum);
 #endif
 	}

@@ -66,7 +66,8 @@ binding_register_ovs_idl(struct ovsdb_idl *ovs_idl)
 
 static bool
 get_local_iface_ids(const struct ovsrec_bridge *br_int,
-                    struct shash *lport_to_iface)
+                    struct shash *lport_to_iface,
+                    struct sset *all_lports)
 {
     int i;
     bool changed = false;
@@ -94,6 +95,7 @@ get_local_iface_ids(const struct ovsrec_bridge *br_int,
             shash_add(lport_to_iface, iface_id, iface_rec);
             if (!sset_find_and_delete(&old_local_ids, iface_id)) {
                 sset_add(&local_ids, iface_id);
+                sset_add(all_lports, iface_id);
                 changed = true;
             }
         }
@@ -103,6 +105,12 @@ get_local_iface_ids(const struct ovsrec_bridge *br_int,
      * that has been removed. */
     if (!changed && !sset_is_empty(&old_local_ids)) {
         changed = true;
+
+        const char *cur_id;
+        SSET_FOR_EACH(cur_id, &old_local_ids) {
+            sset_find_and_delete(&local_ids, cur_id);
+            sset_find_and_delete(all_lports, cur_id);
+        }
     }
 
     sset_destroy(&old_local_ids);
@@ -169,7 +177,8 @@ consider_local_datapath(struct controller_ctx *ctx,
                         const struct sbrec_chassis *chassis_rec,
                         const struct sbrec_port_binding *binding_rec,
                         struct hmap *local_datapaths,
-                        struct shash *lport_to_iface)
+                        struct shash *lport_to_iface,
+                        struct sset *all_lports)
 {
     const struct ovsrec_interface *iface_rec
         = shash_find_data(lport_to_iface, binding_rec->logical_port);
@@ -195,6 +204,9 @@ consider_local_datapath(struct controller_ctx *ctx,
                           binding_rec->logical_port);
             }
             sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
+            if (binding_rec->parent_port && binding_rec->parent_port[0]) {
+                sset_add(all_lports, binding_rec->logical_port);
+            }
         }
     } else if (!strcmp(binding_rec->type, "l2gateway")) {
         const char *chassis_id = smap_get(&binding_rec->options,
@@ -204,6 +216,7 @@ consider_local_datapath(struct controller_ctx *ctx,
                 VLOG_INFO("Releasing l2gateway port %s from this chassis.",
                           binding_rec->logical_port);
                 sbrec_port_binding_set_chassis(binding_rec, NULL);
+                sset_find_and_delete(all_lports, binding_rec->logical_port);
             }
             return;
         }
@@ -216,21 +229,34 @@ consider_local_datapath(struct controller_ctx *ctx,
             VLOG_INFO("Claiming l2gateway port %s for this chassis.",
                       binding_rec->logical_port);
             sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
+            sset_add(all_lports, binding_rec->logical_port);
             add_local_datapath(local_datapaths, binding_rec);
         }
-    } else if (chassis_rec && binding_rec->chassis == chassis_rec
-               && strcmp(binding_rec->type, "gateway")) {
+    } else if (!strcmp(binding_rec->type, "l3gateway")) {
+        const char *chassis = smap_get(&binding_rec->options,
+                                       "l3gateway-chassis");
+        if (!strcmp(chassis, chassis_rec->name) && ctx->ovnsb_idl_txn) {
+            add_local_datapath(local_datapaths, binding_rec);
+        }
+    } else if (chassis_rec && binding_rec->chassis == chassis_rec) {
         if (ctx->ovnsb_idl_txn) {
             VLOG_INFO("Releasing lport %s from this chassis.",
                       binding_rec->logical_port);
             sbrec_port_binding_set_chassis(binding_rec, NULL);
+            sset_find_and_delete(all_lports, binding_rec->logical_port);
         }
+    } else if (!binding_rec->chassis
+               && !strcmp(binding_rec->type, "localnet")) {
+        /* Add all localnet ports to all_lports so that we allocate ct zones
+         * for them. */
+        sset_add(all_lports, binding_rec->logical_port);
     }
 }
 
 void
 binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
-            const char *chassis_id, struct hmap *local_datapaths)
+            const char *chassis_id, struct hmap *local_datapaths,
+            struct sset *all_lports)
 {
     const struct sbrec_chassis *chassis_rec;
     const struct sbrec_port_binding *binding_rec;
@@ -242,7 +268,8 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
     }
 
     if (br_int) {
-        if (ctx->ovnsb_idl_txn && get_local_iface_ids(br_int, &lport_to_iface)) {
+        if (ctx->ovnsb_idl_txn && get_local_iface_ids(br_int, &lport_to_iface,
+                                                      all_lports)) {
             process_full_binding = true;
         }
     } else {
@@ -255,11 +282,19 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
      * chassis and update the binding accordingly.  This includes both
      * directly connected logical ports and children of those ports. */
     if (process_full_binding) {
+        /* Detect any entries in all_lports that have been deleted.
+         * In particular, this will catch localnet ports that we
+         * put in all_lports. */
+        struct sset removed_lports = SSET_INITIALIZER(&removed_lports);
+        sset_clone(&removed_lports, all_lports);
+
         struct hmap keep_local_datapath_by_uuid =
             HMAP_INITIALIZER(&keep_local_datapath_by_uuid);
         SBREC_PORT_BINDING_FOR_EACH(binding_rec, ctx->ovnsb_idl) {
+            sset_find_and_delete(&removed_lports, binding_rec->logical_port);
             consider_local_datapath(ctx, chassis_rec, binding_rec,
-                                    local_datapaths, &lport_to_iface);
+                                    local_datapaths, &lport_to_iface,
+                                    all_lports);
             struct local_datapath *ld = xzalloc(sizeof *ld);
             memcpy(&ld->uuid, &binding_rec->header_.uuid, sizeof ld->uuid);
             hmap_insert(&keep_local_datapath_by_uuid, &ld->uuid_hmap_node,
@@ -272,7 +307,22 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                 remove_local_datapath(local_datapaths, old_ld);
             }
         }
+        struct local_datapath *ld;
+        HMAP_FOR_EACH_SAFE (ld, next, uuid_hmap_node,
+                            &keep_local_datapath_by_uuid) {
+            hmap_remove(&keep_local_datapath_by_uuid, &ld->uuid_hmap_node);
+            free(ld);
+        }
         hmap_destroy(&keep_local_datapath_by_uuid);
+
+        /* Any remaining entries in removed_lports are logical ports that
+         * have been deleted and should also be removed from all_ports. */
+        const char *cur_id;
+        SSET_FOR_EACH(cur_id, &removed_lports) {
+            sset_find_and_delete(all_lports, cur_id);
+        }
+        sset_destroy(&removed_lports);
+
         process_full_binding = false;
     } else {
         SBREC_PORT_BINDING_FOR_EACH_TRACKED(binding_rec, ctx->ovnsb_idl) {
@@ -287,7 +337,8 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                 }
             } else {
                 consider_local_datapath(ctx, chassis_rec, binding_rec,
-                                        local_datapaths, &lport_to_iface);
+                                        local_datapaths, &lport_to_iface,
+                                        all_lports);
             }
         }
     }

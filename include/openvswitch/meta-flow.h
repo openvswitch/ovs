@@ -1808,6 +1808,14 @@ struct mf_bitmap {
 #error "Need to update CASE_MFF_XXREGS to match FLOW_N_XXREGS"
 #endif
 
+static inline bool
+mf_is_register(enum mf_field_id id)
+{
+    return ((id >= MFF_REG0   && id < MFF_REG0   + FLOW_N_REGS) ||
+            (id >= MFF_XREG0  && id < MFF_XREG0  + FLOW_N_XREGS) ||
+            (id >= MFF_XXREG0 && id < MFF_XXREG0 + FLOW_N_XXREGS));
+}
+
 /* Use this macro as CASE_MFF_TUN_METADATA: in a switch statement to choose
  * all of the MFF_TUN_METADATAn cases. */
 #define CASE_MFF_TUN_METADATA                         \
@@ -1954,6 +1962,7 @@ struct mf_field {
 
 /* The representation of a field's value. */
 union mf_value {
+    uint8_t b[128];
     uint8_t tun_metadata[128];
     struct in6_addr ipv6;
     struct eth_addr mac;
@@ -1987,6 +1996,7 @@ union mf_subvalue {
     ovs_be16 be16[64];
     ovs_be32 be32[32];
     ovs_be64 be64[16];
+    ovs_be128 be128[8];
 
     /* Convenient access to just least-significant bits in various forms. */
     struct {
@@ -2034,10 +2044,12 @@ int mf_subvalue_width(const union mf_subvalue *);
 void mf_subvalue_shift(union mf_subvalue *, int n);
 void mf_subvalue_format(const union mf_subvalue *, struct ds *);
 
-/* An array of fields with values */
+/* Set of field values. 'values' only includes the actual data bytes for each
+ * field for which is used, as marked by 1-bits in 'used'. */
 struct field_array {
     struct mf_bitmap used;
-    union mf_value value[MFF_N_IDS];
+    size_t values_size;      /* Number of bytes currently in 'values'. */
+    uint8_t *values;     /* Dynamically allocated to the correct size. */
 };
 
 /* Finding mf_fields. */
@@ -2059,14 +2071,8 @@ void mf_get_mask(const struct mf_field *, const struct flow_wildcards *,
                  union mf_value *mask);
 
 /* Prerequisites. */
-bool mf_are_prereqs_ok(const struct mf_field *, const struct flow *);
-void mf_mask_field_and_prereqs(const struct mf_field *,
-                               struct flow_wildcards *);
-void mf_mask_field_and_prereqs__(const struct mf_field *,
-                                 const union mf_value *,
-                                 struct flow_wildcards *);
-void mf_bitmap_set_field_and_prereqs(const struct mf_field *mf, struct
-                                     mf_bitmap *bm);
+bool mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow,
+                       struct flow_wildcards *wc);
 
 static inline bool
 mf_is_l3_or_higher(const struct mf_field *mf)
@@ -2089,7 +2095,9 @@ void mf_set_flow_value_masked(const struct mf_field *,
                               struct flow *);
 bool mf_is_tun_metadata(const struct mf_field *);
 bool mf_is_set(const struct mf_field *, const struct flow *);
-void mf_mask_field(const struct mf_field *, struct flow *);
+void mf_mask_field(const struct mf_field *, struct flow_wildcards *);
+void mf_mask_field_masked(const struct mf_field *, const union mf_value *mask,
+                          struct flow_wildcards *);
 int mf_field_len(const struct mf_field *, const union mf_value *value,
                  const union mf_value *mask, bool *is_masked);
 
@@ -2116,6 +2124,12 @@ void mf_read_subfield(const struct mf_subfield *, const struct flow *,
                       union mf_subvalue *);
 uint64_t mf_get_subfield(const struct mf_subfield *, const struct flow *);
 
+void mf_subfield_copy(const struct mf_subfield *src,
+                      const struct mf_subfield *dst,
+                      struct flow *, struct flow_wildcards *);
+void mf_subfield_swap(const struct mf_subfield *,
+                      const struct mf_subfield *,
+                      struct flow *flow, struct flow_wildcards *);
 
 enum ofperr mf_check_src(const struct mf_subfield *, const struct flow *);
 enum ofperr mf_check_dst(const struct mf_subfield *, const struct flow *);

@@ -60,6 +60,8 @@
 #include "openvswitch/meta-flow.h"
 
 struct ds;
+struct expr;
+struct flow;
 struct ofpbuf;
 struct shash;
 struct simap;
@@ -106,20 +108,23 @@ const char *expr_level_to_string(enum expr_level);
  *   Fields:
  *
  *     One might, for example, define a field named "vlan.tci" to refer to
- *     MFF_VLAN_TCI.  For integer fields, 'field' specifies the referent; for
- *     string fields, 'field' is NULL.
+ *     MFF_VLAN_TCI.  'field' specifies the field.
  *
- *     'expansion' is NULL.
+ *     'parent' and 'predicate' are NULL, and 'parent_ofs' is 0.
  *
  *     Integer fields can be nominal or ordinal (see below).  String fields are
  *     always nominal.
  *
  *   Subfields:
  *
- *     'expansion' is a string that specifies a subfield of some larger field,
- *     e.g. "vlan.tci[0..11]" for a field that represents a VLAN VID.
+ *     'parent' specifies the field (which may itself be a subfield,
+ *     recursively) in which the subfield is embedded, and 'parent_ofs' a
+ *     bitwise offset from the least-significant bit of the parent.  The
+ *     subfield can contain a subset of the bits of the parent or all of them
+ *     (in the latter case the subfield is really just a synonym for the
+ *     parent).
  *
- *     'field' is NULL.
+ *     'field' and 'predicate' are NULL.
  *
  *     Only ordinal fields (see below) may have subfields, and subfields are
  *     always ordinal.
@@ -127,16 +132,15 @@ const char *expr_level_to_string(enum expr_level);
  *   Predicates:
  *
  *     A predicate is an arbitrary Boolean expression that can be used in an
- *     expression much like a 1-bit field.  'expansion' specifies the Boolean
+ *     expression much like a 1-bit field.  'predicate' specifies the Boolean
  *     expression, e.g. "ip4" might expand to "eth.type == 0x800".  The
- *     expansion of a predicate might refer to other predicates, e.g. "icmp4"
- *     might expand to "ip4 && ip4.proto == 1".
+ *     epxression might refer to other predicates, e.g. "icmp4" might expand to
+ *     "ip4 && ip4.proto == 1".
  *
- *     'field' is NULL.
+ *     'field' and 'parent' are NULL, and 'parent_ofs' is 0.
  *
- *     A predicate whose expansion refers to any nominal field or predicate
- *     (see below) is nominal; other predicates have Boolean level of
- *     measurement.
+ *     A predicate that refers to any nominal field or predicate (see below) is
+ *     nominal; other predicates have Boolean level of measurement.
  *
  *
  * Level of Measurement
@@ -239,14 +243,19 @@ struct expr_symbol {
     char *name;
     int width;
 
-    const struct mf_field *field;
-    char *expansion;
+    const struct mf_field *field;     /* Fields only, otherwise NULL. */
+    const struct expr_symbol *parent; /* Subfields only, otherwise NULL. */
+    int parent_ofs;                   /* Subfields only, otherwise 0. */
+    char *predicate;                  /* Predicates only, otherwise NULL. */
 
     enum expr_level level;
 
     char *prereqs;
     bool must_crossproduct;
+    bool rw;
 };
+
+void expr_symbol_format(const struct expr_symbol *, struct ds *);
 
 /* A reference to a symbol or a subfield of a symbol.
  *
@@ -256,6 +265,10 @@ struct expr_field {
     int ofs;                          /* Starting bit offset. */
     int n_bits;                       /* Number of bits. */
 };
+
+bool expr_field_parse(struct lexer *, const struct shash *symtab,
+                      struct expr_field *, struct expr **prereqsp);
+void expr_field_format(const struct expr_field *, struct ds *);
 
 struct expr_symbol *expr_symtab_add_field(struct shash *symtab,
                                           const char *name, enum mf_field_id,
@@ -352,8 +365,7 @@ expr_from_node(const struct ovs_list *node)
 void expr_format(const struct expr *, struct ds *);
 void expr_print(const struct expr *);
 struct expr *expr_parse(struct lexer *, const struct shash *symtab,
-                        const struct shash *macros,
-                        char **errorp);
+                        const struct shash *macros);
 struct expr *expr_parse_string(const char *, const struct shash *symtab,
                                const struct shash *macros,
                                char **errorp);
@@ -369,6 +381,19 @@ struct expr *expr_normalize(struct expr *);
 bool expr_honors_invariants(const struct expr *);
 bool expr_is_simplified(const struct expr *);
 bool expr_is_normalized(const struct expr *);
+
+char *expr_parse_microflow(const char *, const struct shash *symtab,
+                           const struct shash *macros,
+                           bool (*lookup_port)(const void *aux,
+                                               const char *port_name,
+                                               unsigned int *portp),
+                           const void *aux, struct flow *uflow)
+    OVS_WARN_UNUSED_RESULT;
+
+bool expr_evaluate(const struct expr *, const struct flow *uflow,
+                   bool (*lookup_port)(const void *aux, const char *port_name,
+                                       unsigned int *portp),
+                   const void *aux);
 
 /* Converting expressions to OpenFlow flows. */
 
@@ -392,30 +417,9 @@ void expr_matches_print(const struct hmap *matches, FILE *);
 
 /* Action parsing helper. */
 
-char *expr_parse_assignment(struct lexer *lexer, struct expr_field *dst,
-                            const struct shash *symtab,
-                            bool (*lookup_port)(const void *aux,
-                                                const char *port_name,
-                                                unsigned int *portp),
-                            const void *aux,
-                            struct ofpbuf *ofpacts, struct expr **prereqsp)
+char *expr_type_check(const struct expr_field *, int n_bits, bool rw)
     OVS_WARN_UNUSED_RESULT;
-char *expr_parse_exchange(struct lexer *lexer, struct expr_field *dst,
-                          const struct shash *symtab,
-                          bool (*lookup_port)(const void *aux,
-                                              const char *port_name,
-                                              unsigned int *portp),
-                          const void *aux,
-                          struct ofpbuf *ofpacts, struct expr **prereqsp)
-    OVS_WARN_UNUSED_RESULT;
-char *expr_parse_field(struct lexer *lexer, const struct shash *symtab,
-                       struct expr_field *field)
-    OVS_WARN_UNUSED_RESULT;
-char *expr_expand_field(struct lexer *lexer, const struct shash *symtab,
-                        const struct expr_field *orig_field,
-                        int n_bits, bool rw,
-                        struct mf_subfield *sf, struct expr **prereqsp)
-    OVS_WARN_UNUSED_RESULT;
+struct mf_subfield expr_resolve_field(const struct expr_field *);
 
 /* Type of a "union expr_constant" or "struct expr_constant_set". */
 enum expr_constant_type {
@@ -442,6 +446,13 @@ union expr_constant {
     char *string;
 };
 
+bool expr_constant_parse(struct lexer *, const struct expr_field *,
+                         union expr_constant *);
+void expr_constant_format(const union expr_constant *,
+                          enum expr_constant_type, struct ds *);
+void expr_constant_destroy(const union expr_constant *,
+                           enum expr_constant_type);
+
 /* A collection of "union expr_constant"s of the same type. */
 struct expr_constant_set {
     union expr_constant *values;  /* Constants. */
@@ -450,9 +461,8 @@ struct expr_constant_set {
     bool in_curlies;              /* Whether the constants were in {}. */
 };
 
-char *expr_parse_constant_set(struct lexer *, const struct shash *symtab,
-                              struct expr_constant_set *cs)
-    OVS_WARN_UNUSED_RESULT;
+bool expr_constant_set_parse(struct lexer *, struct expr_constant_set *);
+void expr_constant_set_format(const struct expr_constant_set *, struct ds *);
 void expr_constant_set_destroy(struct expr_constant_set *cs);
 
 

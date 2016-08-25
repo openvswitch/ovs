@@ -231,6 +231,11 @@ vtep_lswitch_run(struct shash *vtep_pbs, struct sset *vtep_pswitches,
                          vtep_ls->tunnel_key[0], tnl_key);
             }
             vteprec_logical_switch_set_tunnel_key(vtep_ls, &tnl_key, 1);
+
+            /* OVN is expected to always use source node replication mode,
+             * hence the replication mode is hard-coded for each logical
+             * switch in the context of ovn-controller-vtep. */
+            vteprec_logical_switch_set_replication_mode(vtep_ls, "source_node");
             sset_add(&used_ls, lswitch_name);
         }
     }

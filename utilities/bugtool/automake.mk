@@ -54,9 +54,12 @@ bugtool-uninstall-local:
 	  rm -f "$(DESTDIR)$(bugtoolpluginsdir)/$$stem"; \
 	done
 	for plugin in $(bugtool_plugins); do \
-	  stem=`echo "$$plugin" | sed 's,utilities/bugtool/plugins/,,'`; \
+	  stem=`echo "$$plugin" | sed 's,ovn/,,'`; \
+	  stem=`echo "$$stem" | sed 's,utilities/bugtool/plugins/,,'`; \
 	  dir=`expr "$$stem" : '\(.*\)/[^/]*$$'`; \
-	  rmdir "$(DESTDIR)$(bugtoolpluginsdir)/$$dir"; \
+	  if [ ! -z "$$dir" ]; then \
+	    rm -rf "$(DESTDIR)$(bugtoolpluginsdir)/$$dir"; \
+	  fi \
 	done; exit 0
 endif
 

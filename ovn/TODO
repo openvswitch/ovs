@@ -40,11 +40,24 @@ the "arp" action, and an action for generating
 
 ** IPv6
 
-*** ND versus ARP
+*** Drop invalid source IPv6 addresses
 
-*** IPv6 routing
+*** Don't forward non-routable addresses
 
-*** ICMPv6
+*** ICMPv6 action
+
+Similar to the ICMPv4 action, ICMPv6 messages should be generated.
+
+*** Neighbor Discovery
+
+**** ND Router Advertisements
+
+The router ports should periodically send out ND Router Advertisements
+and respond to Router Solicitations.
+
+**** Learn MAC bindings on ND Solicitations
+
+**** Properly set RSO flags
 
 ** Dynamic IP to MAC bindings
 

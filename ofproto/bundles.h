@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2013, 2014 Alexandru Copot <alex.mihai.c@gmail.com>, with support from IXIA.
  * Copyright (c) 2013, 2014 Daniel Baluta <dbaluta@ixiacom.com>
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,10 +33,12 @@ extern "C" {
 
 struct ofp_bundle_entry {
     struct ovs_list   node;
-    enum ofptype      type;  /* OFPTYPE_FLOW_MOD or OFPTYPE_PORT_MOD. */
+    enum ofptype      type;  /* OFPTYPE_FLOW_MOD, OFPTYPE_PORT_MOD, or
+                              * OFPTYPE_GROUP_MOD. */
     union {
-        struct ofproto_flow_mod ofm;   /* ofm.fm.ofpacts must be malloced. */
+        struct ofproto_flow_mod ofm;
         struct ofproto_port_mod opm;
+        struct ofproto_group_mod ogm;
     };
 
     /* OpenFlow header and some of the message contents for error reporting. */
@@ -88,7 +90,9 @@ ofp_bundle_entry_free(struct ofp_bundle_entry *entry)
 {
     if (entry) {
         if (entry->type == OFPTYPE_FLOW_MOD) {
-            free(entry->ofm.fm.ofpacts);
+            ofproto_flow_mod_uninit(&entry->ofm);
+        } else if (entry->type == OFPTYPE_GROUP_MOD) {
+            ofputil_uninit_group_mod(&entry->ogm.gm);
         }
         free(entry);
     }

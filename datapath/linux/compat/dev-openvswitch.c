@@ -53,6 +53,7 @@ int rpl_rtnl_delete_link(struct net_device *dev)
 
 	return 0;
 }
+EXPORT_SYMBOL_GPL(rpl_rtnl_delete_link);
 
 #ifndef USE_UPSTREAM_TUNNEL
 int ovs_dev_fill_metadata_dst(struct net_device *dev, struct sk_buff *skb)

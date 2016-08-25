@@ -80,6 +80,12 @@ static inline bool ovs_list_is_short(const struct ovs_list *);
     for (INIT_CONTAINER(ITER, (LIST)->prev, MEMBER);                    \
          &(ITER)->MEMBER != (LIST);                                     \
          ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.prev, MEMBER))
+#define LIST_FOR_EACH_REVERSE_SAFE(ITER, PREV, MEMBER, LIST)        \
+    for (INIT_CONTAINER(ITER, (LIST)->prev, MEMBER);                \
+         (&(ITER)->MEMBER != (LIST)                                 \
+          ? INIT_CONTAINER(PREV, (ITER)->MEMBER.prev, MEMBER), 1    \
+          : 0);                                                     \
+         (ITER) = (PREV))
 #define LIST_FOR_EACH_REVERSE_CONTINUE(ITER, MEMBER, LIST)              \
     for (ASSIGN_CONTAINER(ITER, (ITER)->MEMBER.prev, MEMBER);           \
          &(ITER)->MEMBER != (LIST);                                     \

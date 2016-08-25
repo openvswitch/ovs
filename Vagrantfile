@@ -11,7 +11,7 @@ dnf -y install autoconf automake openssl-devel libtool \
                python-twisted-core python-zope-interface \
                desktop-file-utils groff graphviz rpmdevtools nc \
                wget python-six pyftpdlib checkpolicy selinux-policy-devel \
-               libcap-ng-devel kernel-devel-`uname -r`
+               libcap-ng-devel kernel-devel-`uname -r` ethtool
 echo "search extra update built-in" >/etc/depmod.d/search_path.conf
 cd /vagrant
 ./boot.sh

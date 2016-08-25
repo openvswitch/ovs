@@ -456,3 +456,12 @@ ds_chomp(struct ds *ds, int c)
         return false;
     }
 }
+
+void
+ds_clone(struct ds *dst, struct ds *source)
+{
+    dst->length = source->length;
+    dst->allocated = dst->length;
+    dst->string = xmalloc(dst->allocated + 1);
+    memcpy(dst->string, source->string, dst->allocated + 1);
+}

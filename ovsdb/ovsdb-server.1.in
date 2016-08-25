@@ -36,6 +36,23 @@ If none is specified, the default is \fB@DBDIR@/conf.db\fR.  The database
 files must already have been created and initialized using, for
 example, \fBovsdb\-tool create\fR.
 .
+.SH "ACTIVE and BACKUP "
+\fBovsdb\-server\fR runs either as a backup server, or as an active server.
+When  \fBovsdb\-server\fR is running as a backup server, all transactions that
+can modify the database content, including the lock commands are rejected.
+Active server, on the other hand, accepts all ovsdb server transactions.
+When \fBovsdb\-server\fR role changes, all existing client connection are
+reset, requiring clients to reconnect to the server.
+.PP
+By default, \fBovsdb\-server\fR runs as an active server, except when the
+\fB\-\-sync\-from=\fIserver\fR command line option is specified.  During
+runtime, \fBovsdb\-server\fR role can be switch by using appctl commands.
+.PP
+\fBovsdb-server/connect\-active\-ovsdb\-server\fR switches
+\fBovsdb\-server\fR role into a backup server, Conversely,
+\fBovsdb-server/disconnect\-active\-ovsdb\-server\fR changes server into
+an active one.
+.
 .SH OPTIONS
 .
 .IP "\fB\-\-remote=\fIremote\fR"
@@ -188,20 +205,20 @@ again (with \fBovsdb\-server/add\-db\fR).
 Outputs a list of the currently configured databases added either through
 the command line or through the \fBovsdb\-server/add\-db\fR command.
 .
-.IP "\fBovsdb\-server/set\-remote\-ovsdb\-server \fIserver"
-Sets  the remote \fIserver\fR from which \fBovsdb\-server\fR connects through
-\fBovsdb\-server/connect\-remote\-ovsdb\-server\fR.
+.IP "\fBovsdb\-server/set\-active\-ovsdb\-server \fIserver"
+Sets  the active \fIserver\fR from which \fBovsdb\-server\fR connects through
+\fBovsdb\-server/connect\-active\-ovsdb\-server\fR.
 .
-.IP "\fBovsdb\-server/get\-remote\-ovsdb\-server"
-Gets the remote server from which \fBovsdb\-server\fR is currently synchronizing
+.IP "\fBovsdb\-server/get\-active\-ovsdb\-server"
+Gets the active server from which \fBovsdb\-server\fR is currently synchronizing
 its databases.
 .
-.IP "\fBovsdb\-server/connect\-remote\-ovsdb\-server"
+.IP "\fBovsdb\-server/connect\-active\-ovsdb\-server"
 Causes \fBovsdb\-server\fR to synchronize its databases with the server
-specified by \fBovsdb\-server/set\-remote\-ovsdb\-server\fR.
+specified by \fBovsdb\-server/set\-active\-ovsdb\-server\fR.
 .
-.IP "\fBovsdb\-server/disconnect\-remote\-ovsdb\-server"
-Causes \fBovsdb\-server\fR to  stop  synchronizing  its  databases with a remote server.
+.IP "\fBovsdb\-server/disconnect\-active\-ovsdb\-server"
+Causes \fBovsdb\-server\fR to  stop  synchronizing  its  databases with a active server.
 .
 .IP "\fBovsdb\-server/set\-sync\-excluded\-tables \fIdb\fB:\fItable\fR[\fB,\fIdb\fB:\fItable\fR]..."
 Sets the \fItable\fR whitin \fIdb\fR that will be excluded from synchronization.

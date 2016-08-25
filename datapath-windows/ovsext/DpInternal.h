@@ -310,6 +310,8 @@ typedef struct _OVS_EVENT_SUBSCRIBE {
     uint32_t dpNo;
     uint32_t subscribe;
     uint32_t mask;
+    uint32_t mcastGrp;
+    uint32_t protocol;
 } OVS_EVENT_SUBSCRIBE, *POVS_EVENT_SUBSCRIBE;
 
 typedef struct _OVS_EVENT_POLL {
@@ -327,20 +329,28 @@ enum {
     OVS_EVENT_MASK_ALL      = 0x3f,
 };
 
+enum {
+    OVS_EVENT_CT_NEW        = (1 << 0),
+    OVS_EVENT_CT_DELETE     = (1 << 1),
+    OVS_EVENT_CT_MASK_ALL   = 0x3
+};
 
-typedef struct _OVS_EVENT_ENTRY {
+/* Supported mcast event groups */
+enum OVS_MCAST_EVENT_TYPES {
+    OVS_MCAST_VPORT_EVENT,
+    OVS_MCAST_CT_EVENT,
+    __OVS_MCAST_EVENT_TYPES_MAX
+};
+#define OVS_MCAST_EVENT_TYPES_MAX (__OVS_MCAST_EVENT_TYPES_MAX \
+                                   - OVS_MCAST_VPORT_EVENT)
+
+typedef struct _OVS_VPORT_EVENT_ENTRY {
     UINT32 portNo;
     OVS_VPORT_TYPE ovsType;
     UINT32 upcallPid;
     CHAR ovsName[OVS_MAX_PORT_NAME_LENGTH];
     UINT32 type;
-} OVS_EVENT_ENTRY, *POVS_EVENT_ENTRY;
-
-
-typedef struct _OVS_EVENT_STATUS {
-    uint32_t numberEntries;
-    OVS_EVENT_ENTRY eventEntries[0];
-} OVS_EVENT_STATUS, *POVS_EVENT_STATUS;
+} OVS_VPORT_EVENT_ENTRY, *POVS_VPORT_EVENT_ENTRY;
 
 #pragma pack(pop)
 

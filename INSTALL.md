@@ -127,11 +127,13 @@ installing the following to obtain better warnings:
 
   - clang, version 3.4 or later
 
-  - “flake8”, along with the “hacking” flake8 plugin (for Python code).
-    The automatic flake8 check that runs against Python code has some
-    warnings enabled that come from the "hacking" flake8 plugin.  If it's
-    not installed, the warnings just won't occur until it's run on a system
-    with "hacking" installed.
+  - “flake8”, version 2.X, along with the “hacking” flake8 plugin (for Python
+    code).  The automatic flake8 check that runs against Python code has some
+    warnings enabled that come from the "hacking" flake8 plugin.  If it's not
+    installed, the warnings just won't occur until it's run on a system with
+    "hacking" installed.  Note that there are problems with flake8 3.0 and the
+    “hacking” plugin.  To ensure you get flake8 2.X, you can use
+    “pip install ‘flake8<3.0’”.
 
 Also, you may find the ovs-dev script found in utilities/ovs-dev.py useful.
 
@@ -216,6 +218,21 @@ you must include them yourself.  For example, to build with the
 default CFLAGS plus "-mssse3", you might run configure as follows:
 
       `% ./configure CFLAGS="-g -O2 -mssse3"`
+
+For efficient hash computation special flags can be passed to leverage
+built-in intrinsics.  For example on X86_64 with SSE4.2 instruction set
+support, CRC32 intrinsics can be used by passing '-msse4.2'.
+
+      `% ./configure CFLAGS="-g -O2 -msse4.2"`
+
+If you are on a different processor and don't know what flags to choose, it
+is recommended to use '-march=native' settings.
+
+      `% ./configure CFLAGS="-g -O2 -march=native"`
+
+With this, GCC will detect the processor and automatically set appropriate
+flags for it.  This should not be used if you are compiling OVS outside the
+target machine.
 
 Note that these CFLAGS are not applied when building the Linux
 kernel module.  Custom CFLAGS for the kernel module are supplied
@@ -779,6 +796,7 @@ Please report problems to bugs@openvswitch.org.
 [INSTALL.RHEL.md]:INSTALL.RHEL.md
 [INSTALL.XenServer.md]:INSTALL.XenServer.md
 [INSTALL.NetBSD.md]:INSTALL.NetBSD.md
+[INSTALL.Windows.md]:INSTALL.Windows.md
 [INSTALL.DPDK.md]:INSTALL.DPDK.md
 [INSTALL.userspace.md]:INSTALL.userspace.md
 [FAQ.md]:FAQ.md

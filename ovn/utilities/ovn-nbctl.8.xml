@@ -3,7 +3,7 @@
     <h1>Name</h1>
     <p>ovn-nbctl -- Open Virtual Network northbound db management utility</p>
 
-    <h1>Synopsys</h1>
+    <h1>Synopsis</h1>
     <p><code>ovn-nbctl</code> [<var>options</var>] <var>command</var> [<var>arg</var>...]</p>
 
     <h1>Description</h1>
@@ -12,6 +12,12 @@
     <h1>General Commands</h1>
 
     <dl>
+      <dt><code>init</code></dt>
+      <dd>
+        Initializes the database, if it is empty.  If the database has already
+        been initialized, this command has no effect.
+      </dd>
+
       <dt><code>show [<var>switch</var> | <var>router</var>]</code></dt>
       <dd>
         Prints a brief overview of the database contents.  If
@@ -162,12 +168,12 @@
       <dd>
         Sets the addresses associated with <var>port</var> to
         <var>address</var>.  Each <var>address</var> should be either an
-        Ethernet address or an Ethernet address followed by an IP address
-        (separated by a space and quoted to form a single command-line
+        Ethernet address or an Ethernet address followed by IP addresses
+        (separated by space and quoted to form a single command-line
         argument).  The special form <code>unknown</code> is also valid.
-        Multiple Ethernet addresses or Ethernet+IP pairs may be set. If no
-        <var>address</var> argument is given, <var>port</var> will have no
-        addresses associated with it.
+        Multiple Ethernet addresses or Ethernet+IPs combinations may be set.
+        If no <var>address</var> argument is given, <var>port</var> will have
+        no addresses associated with it.
       </dd>
 
       <dt><code>lsp-get-addresses</code> <var>port</var></dt>
@@ -469,9 +475,66 @@
 
     <xi:include href="lib/db-ctl-base.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
+    <h1>Synchronization Commands</h1>
+
+    <dl>
+      <dt>sync</dt>
+      <dd>
+        Ordinarily, <code>--wait=sb</code> or <code>--wait=hv</code> only waits
+        for changes by the current <code>ovn-nbctl</code> invocation to take
+        effect.  This means that, if none of the commands supplied to
+        <code>ovn-nbctl</code> change the database, then the command does not
+        wait at all.  With the <code>sync</code> command, however,
+        <code>ovn-nbctl</code> waits even for earlier changes to the database
+        to propagate down to the southbound database or all of the OVN chassis,
+        according to the argument to <code>--wait</code>.
+      </dd>
+    </dl>
+
     <h1>Options</h1>
 
     <dl>
+      <dt><code>--no-wait</code> | <code>--wait=none</code></dt>
+      <dt><code>--wait=sb</code></dt>
+      <dt><code>--wait=hv</code></dt>
+
+      <dd>
+        <p>
+          These options control whether and how <code>ovn-nbctl</code> waits
+          for the OVN system to become up-to-date with changes made in an
+          <code>ovn-nbctl</code> invocation.
+        </p>
+
+        <p>
+          By default, or if <code>--no-wait</code> or <code>--wait=none</code>,
+          <code>ovn-nbctl</code> exits immediately after confirming that
+          changes have been committed to the northbound database, without
+          waiting.
+        </p>
+
+        <p>
+          With <code>--wait=sb</code>, before <code>ovn-nbctl</code> exits, it
+          waits for <code>ovn-northd</code> to bring the southbound database
+          up-to-date with the northbound database updates.
+        </p>
+
+        <p>
+          With <code>--wait=hv</code>, before <code>ovn-nbctl</code> exits, it
+          additionally waits for all OVN chassis (hypervisors and gateways) to
+          become up-to-date with the northbound database updates.  (This can
+          become an indefinite wait if any chassis is malfunctioning.)
+        </p>
+
+        <p>
+          Ordinarily, <code>--wait=sb</code> or <code>--wait=hv</code> only
+          waits for changes by the current <code>ovn-nbctl</code> invocation to
+          take effect.  This means that, if none of the commands supplied to
+          <code>ovn-nbctl</code> change the database, then the command does not
+          wait at all.  Use the <code>sync</code> command to override this
+          behavior.
+        </p>
+      </dd>
+
     <dt><code>--db</code> <var>database</var></dt>
     <dd>
       The OVSDB database remote to contact.  If the <env>OVN_NB_DB</env>
@@ -480,25 +543,19 @@
       default is unlikely to be useful outside of single-machine OVN test
       environments.
     </dd>
-
-    <dt><code>-h</code> | <code>--help</code></dt>
-    <dt><code>-o</code> | <code>--options</code></dt>
-    <dt><code>-V</code> | <code>--version</code></dt>
     </dl>
 
     <h1>Logging options</h1>
-    <dl>
-    <dt><code>-v</code><var>spec</var>, <code>--verbose=</code><var>spec</var></dt>
-    <dt><code>-v</code>, <code>--verbose</code></dt>
-    <dt><code>--log-file</code>[<code>=</code><var>file</var>]</dt>
-    <dt><code>--syslog-target=</code><var>host</var><code>:</code><var>port</var></dt>
-    </dl>
+    <xi:include href="lib/vlog.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+    <h2>PKI Options</h2>
+    <p>
+      PKI configuration is required to use SSL for the connection to the
+      database.
+    </p>
+    <xi:include href="lib/ssl.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
-    <h1>PKI configuration (required to use SSL)</h1>
-    <dl>
-    <dt><code>-p</code>, <code>--private-key=</code><var>file</var>  file with private key</dt>
-    <dt><code>-c</code>, <code>--certificate=</code><var>file</var>  file with certificate for private key</dt>
-    <dt><code>-C</code>, <code>--ca-cert=</code><var>file</var>      file with peer CA certificate</dt>
-    </dl>
+    <h2>Other Options</h2>
+
+    <xi:include href="lib/common.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
 </manpage>

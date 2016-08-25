@@ -497,7 +497,7 @@ nl_ct_parse_tuple(struct nlattr *nla, struct ct_dpif_tuple *tuple,
             struct ds ds;
 
             ds_init(&ds);
-            ct_dpif_format_tuple(&ds, tuple, true);
+            ct_dpif_format_tuple(&ds, tuple);
 
             VLOG_ERR_RL(&rl, "Failed to parse tuple: %s", ds_cstr(&ds));
             ds_destroy(&ds);

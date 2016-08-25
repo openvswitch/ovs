@@ -119,7 +119,7 @@
     /* Instructions. */                                                 \
     OFPACT(METER,           ofpact_meter,       ofpact, "meter")        \
     OFPACT(CLEAR_ACTIONS,   ofpact_null,        ofpact, "clear_actions") \
-    OFPACT(WRITE_ACTIONS,   ofpact_nest,        ofpact, "write_actions") \
+    OFPACT(WRITE_ACTIONS,   ofpact_nest,        actions, "write_actions") \
     OFPACT(WRITE_METADATA,  ofpact_metadata,    ofpact, "write_metadata") \
     OFPACT(GOTO_TABLE,      ofpact_goto_table,  ofpact, "goto_table")
 
@@ -185,19 +185,7 @@ BUILD_ASSERT_DECL(sizeof(struct ofpact) == 4);
 /* Alignment. */
 #define OFPACT_ALIGNTO 8
 #define OFPACT_ALIGN(SIZE) ROUND_UP(SIZE, OFPACT_ALIGNTO)
-
-/* Expands to an anonymous union that contains:
- *
- *    - MEMBERS in a nested anonymous struct.
- *
- *    - An array as large as MEMBERS plus padding to a multiple of 8 bytes.
- *
- * The effect is to pad MEMBERS to a multiple of 8 bytes. */
-#define OFPACT_PADDED_MEMBERS(MEMBERS)                          \
-    union {                                                     \
-        struct { MEMBERS };                                     \
-        uint8_t pad[OFPACT_ALIGN(sizeof(struct { MEMBERS }))];  \
-    }
+#define OFPACT_PADDED_MEMBERS(MEMBERS) PADDED_MEMBERS(OFPACT_ALIGNTO, MEMBERS)
 
 /* Returns the ofpact following 'ofpact'. */
 static inline struct ofpact *
@@ -214,11 +202,51 @@ ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
     return (void *) ((uint8_t *) ofpacts + ofpacts_len);
 }
 
+static inline const struct ofpact *
+ofpact_find_type(const struct ofpact *a, enum ofpact_type type,
+                 const struct ofpact * const end)
+{
+    while (a < end) {
+        if (a->type == type) {
+            return a;
+        }
+        a = ofpact_next(a);
+    }
+    return NULL;
+}
+
+#define OFPACT_FIND_TYPE(A, TYPE, END) \
+    ofpact_get_##TYPE##_nullable(ofpact_find_type(A, OFPACT_##TYPE, END))
+
+static inline const struct ofpact *
+ofpact_find_type_flattened(const struct ofpact *a, enum ofpact_type type,
+                           const struct ofpact * const end)
+{
+    while (a < end) {
+        if (a->type == type) {
+            return a;
+        }
+        a = ofpact_next_flattened(a);
+    }
+    return NULL;
+}
+
+#define OFPACT_FIND_TYPE_FLATTENED(A, TYPE, END) \
+    ofpact_get_##TYPE##_nullable(                       \
+        ofpact_find_type_flattened(A, OFPACT_##TYPE, END))
+
 /* Assigns POS to each ofpact, in turn, in the OFPACTS_LEN bytes of ofpacts
  * starting at OFPACTS. */
 #define OFPACT_FOR_EACH(POS, OFPACTS, OFPACTS_LEN)                      \
     for ((POS) = (OFPACTS); (POS) < ofpact_end(OFPACTS, OFPACTS_LEN);  \
          (POS) = ofpact_next(POS))
+
+#define OFPACT_FOR_EACH_TYPE(POS, TYPE, OFPACTS, OFPACTS_LEN)           \
+    for ((POS) = OFPACT_FIND_TYPE(OFPACTS, TYPE,                        \
+                                  ofpact_end(OFPACTS, OFPACTS_LEN));    \
+         (POS);                                                         \
+         (POS) = OFPACT_FIND_TYPE(ofpact_next(&(POS)->ofpact), TYPE,    \
+                                  ofpact_end(OFPACTS, OFPACTS_LEN)))
 
 /* Assigns POS to each ofpact, in turn, in the OFPACTS_LEN bytes of ofpacts
  * starting at OFPACTS.
@@ -228,6 +256,14 @@ ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
 #define OFPACT_FOR_EACH_FLATTENED(POS, OFPACTS, OFPACTS_LEN)           \
     for ((POS) = (OFPACTS); (POS) < ofpact_end(OFPACTS, OFPACTS_LEN);  \
          (POS) = ofpact_next_flattened(POS))
+
+#define OFPACT_FOR_EACH_TYPE_FLATTENED(POS, TYPE, OFPACTS, OFPACTS_LEN) \
+    for ((POS) = OFPACT_FIND_TYPE_FLATTENED(OFPACTS, TYPE,              \
+                                  ofpact_end(OFPACTS, OFPACTS_LEN));    \
+         (POS);                                                         \
+         (POS) = OFPACT_FIND_TYPE_FLATTENED(                            \
+             ofpact_next_flattened(&(POS)->ofpact), TYPE,               \
+             ofpact_end(OFPACTS, OFPACTS_LEN)))
 
 /* Action structure for each OFPACT_*. */
 
@@ -973,6 +1009,13 @@ void *ofpact_finish(struct ofpbuf *, struct ofpact *);
     ofpact_get_##ENUM(const struct ofpact *ofpact)                      \
     {                                                                   \
         ovs_assert(ofpact->type == OFPACT_##ENUM);                      \
+        return ALIGNED_CAST(struct STRUCT *, ofpact);                   \
+    }                                                                   \
+                                                                        \
+    static inline struct STRUCT *                                       \
+    ofpact_get_##ENUM##_nullable(const struct ofpact *ofpact)           \
+    {                                                                   \
+        ovs_assert(!ofpact || ofpact->type == OFPACT_##ENUM);           \
         return ALIGNED_CAST(struct STRUCT *, ofpact);                   \
     }                                                                   \
                                                                         \

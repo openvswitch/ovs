@@ -235,7 +235,7 @@ static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
 static struct hmap all_bfds__ = HMAP_INITIALIZER(&all_bfds__);
 static struct hmap *const all_bfds OVS_GUARDED_BY(mutex) = &all_bfds__;
 
-static bool bfd_lookup_ip(const char *host_name, struct in_addr *)
+static void bfd_lookup_ip(const char *host_name, ovs_be32 def, ovs_be32 *ip)
     OVS_REQUIRES(mutex);
 static bool bfd_forwarding__(struct bfd *) OVS_REQUIRES(mutex);
 static bool bfd_in_poll(const struct bfd *) OVS_REQUIRES(mutex);
@@ -354,9 +354,6 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
     bool need_poll = false;
     bool cfg_min_rx_changed = false;
     bool cpath_down, forwarding_if_rx;
-    const char *hwaddr, *ip_src, *ip_dst;
-    struct in_addr in_addr;
-    struct eth_addr ea;
 
     if (!cfg || !smap_get_bool(cfg, "enable", false)) {
         bfd_unref(bfd);
@@ -441,40 +438,17 @@ bfd_configure(struct bfd *bfd, const char *name, const struct smap *cfg,
         need_poll = true;
     }
 
-    hwaddr = smap_get(cfg, "bfd_local_src_mac");
-    if (hwaddr && eth_addr_from_string(hwaddr, &ea)) {
-        bfd->local_eth_src = ea;
-    } else {
-        bfd->local_eth_src = eth_addr_zero;
-    }
+    eth_addr_from_string(smap_get_def(cfg, "bfd_local_src_mac", ""),
+                         &bfd->local_eth_src);
+    eth_addr_from_string(smap_get_def(cfg, "bfd_local_dst_mac", ""),
+                         &bfd->local_eth_dst);
+    eth_addr_from_string(smap_get_def(cfg, "bfd_remote_dst_mac", ""),
+                         &bfd->rmt_eth_dst);
 
-    hwaddr = smap_get(cfg, "bfd_local_dst_mac");
-    if (hwaddr && eth_addr_from_string(hwaddr, &ea)) {
-        bfd->local_eth_dst = ea;
-    } else {
-        bfd->local_eth_dst = eth_addr_zero;
-    }
-
-    hwaddr = smap_get(cfg, "bfd_remote_dst_mac");
-    if (hwaddr && eth_addr_from_string(hwaddr, &ea)) {
-        bfd->rmt_eth_dst = ea;
-    } else {
-        bfd->rmt_eth_dst = eth_addr_zero;
-    }
-
-    ip_src = smap_get(cfg, "bfd_src_ip");
-    if (ip_src && bfd_lookup_ip(ip_src, &in_addr)) {
-        memcpy(&bfd->ip_src, &in_addr, sizeof in_addr);
-    } else {
-        bfd->ip_src = htonl(0xA9FE0101); /* 169.254.1.1. */
-    }
-
-    ip_dst = smap_get(cfg, "bfd_dst_ip");
-    if (ip_dst && bfd_lookup_ip(ip_dst, &in_addr)) {
-        memcpy(&bfd->ip_dst, &in_addr, sizeof in_addr);
-    } else {
-        bfd->ip_dst = htonl(0xA9FE0100); /* 169.254.1.0. */
-    }
+    bfd_lookup_ip(smap_get_def(cfg, "bfd_src_ip", ""),
+                  htonl(0xA9FE0101) /* 169.254.1.1 */, &bfd->ip_src);
+    bfd_lookup_ip(smap_get_def(cfg, "bfd_dst_ip", ""),
+                  htonl(0xA9FE0100) /* 169.254.1.0 */, &bfd->ip_dst);
 
     forwarding_if_rx = smap_get_bool(cfg, "forwarding_if_rx", false);
     if (bfd->forwarding_if_rx != forwarding_if_rx) {
@@ -942,14 +916,16 @@ bfd_forwarding__(struct bfd *bfd) OVS_REQUIRES(mutex)
 }
 
 /* Helpers. */
-static bool
-bfd_lookup_ip(const char *host_name, struct in_addr *addr)
+static void
+bfd_lookup_ip(const char *host_name, ovs_be32 def, ovs_be32 *addr)
 {
-    if (!ip_parse(host_name, &addr->s_addr)) {
+    if (host_name[0]) {
+        if (ip_parse(host_name, addr)) {
+            return;
+        }
         VLOG_ERR_RL(&rl, "\"%s\" is not a valid IP address", host_name);
-        return false;
     }
-    return true;
+    *addr = def;
 }
 
 static bool

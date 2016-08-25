@@ -147,15 +147,6 @@ netdev_vport_get_dpif_port(const struct netdev *netdev,
     }
 }
 
-char *
-netdev_vport_get_dpif_port_strdup(const struct netdev *netdev)
-{
-    char namebuf[NETDEV_VPORT_NAME_BUFSIZE];
-
-    return xstrdup(netdev_vport_get_dpif_port(netdev, namebuf,
-                                              sizeof namebuf));
-}
-
 /* Whenever the route-table change number is incremented,
  * netdev_vport_route_changed() should be called to update
  * the corresponding tunnel interface status. */
@@ -274,7 +265,7 @@ tunnel_check_status_change__(struct netdev_vport *netdev)
     if (ovs_router_lookup(route, iface, NULL, &gw)) {
         struct netdev *egress_netdev;
 
-        if (!netdev_open(iface, "system", &egress_netdev)) {
+        if (!netdev_open(iface, NULL, &egress_netdev)) {
             status = netdev_get_carrier(egress_netdev);
             netdev_close(egress_netdev);
         }
@@ -321,7 +312,7 @@ netdev_vport_update_flags(struct netdev *netdev OVS_UNUSED,
 }
 
 static void
-netdev_vport_run(void)
+netdev_vport_run(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     uint64_t seq;
 
@@ -334,7 +325,7 @@ netdev_vport_run(void)
 }
 
 static void
-netdev_vport_wait(void)
+netdev_vport_wait(const struct netdev_class *netdev_class OVS_UNUSED)
 {
     uint64_t seq;
 

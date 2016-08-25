@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,7 +23,9 @@ struct ovsdb_idl;
 struct ovsrec_bridge;
 
 void chassis_register_ovs_idl(struct ovsdb_idl *);
-void chassis_run(struct controller_ctx *, const char *chassis_id);
+const struct sbrec_chassis *chassis_run(struct controller_ctx *,
+                                        const char *chassis_id,
+                                        const struct ovsrec_bridge *br_int);
 bool chassis_cleanup(struct controller_ctx *, const char *chassis_id);
 
 #endif /* ovn/chassis.h */

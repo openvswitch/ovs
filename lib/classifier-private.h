@@ -72,13 +72,8 @@ struct cls_match {
     /* Accessed by all readers. */
     struct cmap_node cmap_node; /* Within struct cls_subtable 'rules'. */
 
-    /* Rule versioning.
-     *
-     * CLS_NOT_REMOVED_VERSION has a special meaning for 'remove_version',
-     * meaning that the rule has been added but not yet removed.
-     */
-    const cls_version_t add_version;        /* Version rule was added in. */
-    ATOMIC(cls_version_t) remove_version;   /* Version rule is removed in. */
+    /* Rule versioning. */
+    struct versions versions;
 
     const struct cls_rule *cls_rule;
     const struct miniflow flow; /* Matching rule. Mask is in the subtable. */
@@ -102,34 +97,22 @@ get_cls_match(const struct cls_rule *rule)
 void cls_match_free_cb(struct cls_match *);
 
 static inline void
-cls_match_set_remove_version(struct cls_match *rule, cls_version_t version)
+cls_match_set_remove_version(struct cls_match *rule, ovs_version_t version)
 {
-    atomic_store_relaxed(&rule->remove_version, version);
+    versions_set_remove_version(&rule->versions, version);
 }
 
 static inline bool
 cls_match_visible_in_version(const struct cls_match *rule,
-                             cls_version_t version)
+                             ovs_version_t version)
 {
-    cls_version_t remove_version;
-
-    /* C11 does not want to access an atomic via a const object pointer. */
-    atomic_read_relaxed(&CONST_CAST(struct cls_match *, rule)->remove_version,
-                        &remove_version);
-
-    return rule->add_version <= version && version < remove_version;
+    return versions_visible_in_version(&rule->versions, version);
 }
 
 static inline bool
 cls_match_is_eventually_invisible(const struct cls_match *rule)
 {
-    cls_version_t remove_version;
-
-    /* C11 does not want to access an atomic via a const object pointer. */
-    atomic_read_relaxed(&CONST_CAST(struct cls_match *, rule)->remove_version,
-                        &remove_version);
-
-    return remove_version <= CLS_MAX_VERSION;
+    return versions_is_eventually_invisible(&rule->versions);
 }
 
 

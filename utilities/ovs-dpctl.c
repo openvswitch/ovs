@@ -77,12 +77,14 @@ parse_options(int argc, char *argv[])
     enum {
         OPT_CLEAR = UCHAR_MAX + 1,
         OPT_MAY_CREATE,
+        OPT_READ_ONLY,
         VLOG_OPTION_ENUMS
     };
     static const struct option long_options[] = {
         {"statistics", no_argument, NULL, 's'},
         {"clear", no_argument, NULL, OPT_CLEAR},
         {"may-create", no_argument, NULL, OPT_MAY_CREATE},
+        {"read-only", no_argument, NULL, OPT_READ_ONLY},
         {"more", no_argument, NULL, 'm'},
         {"timeout", required_argument, NULL, 't'},
         {"help", no_argument, NULL, 'h'},
@@ -113,6 +115,10 @@ parse_options(int argc, char *argv[])
 
         case OPT_MAY_CREATE:
             dpctl_p.may_create = true;
+            break;
+
+        case OPT_READ_ONLY:
+            dpctl_p.read_only = true;
             break;
 
         case 'm':
@@ -186,6 +192,7 @@ usage(void *userdata OVS_UNUSED)
            "  -m, --more                  increase verbosity of output\n"
            "\nOptions for mod-flow:\n"
            "  --may-create                create flow if it doesn't exist\n"
+           "  --read-only                 do not run read/write commands\n"
            "  --clear                     reset existing stats to zero\n"
            "\nOther options:\n"
            "  -t, --timeout=SECS          give up after SECS seconds\n"

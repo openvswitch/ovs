@@ -1,6 +1,6 @@
 #! /bin/sh
 #
-# Copyright (c) 2013, 2015 Nicira, Inc.
+# Copyright (c) 2013, 2015, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -316,10 +316,12 @@ if $ovn; then
     touch "$sandbox"/.ovnsb.db.~lock~
     touch "$sandbox"/.ovnnb.db.~lock~
     run ovsdb-tool create ovnsb.db "$ovnsb_schema"
+    run ovsdb-tool create ovnsb2.db "$ovnsb_schema"
     run ovsdb-tool create ovnnb.db "$ovnnb_schema"
     run ovsdb-tool create vtep.db "$vtep_schema"
     ovsdb_server_args="vtep.db conf.db"
     ovsdb_sb_server_args="ovnsb.db"
+    ovsdb_sb_backup_server_args="ovnsb2.db"
     ovsdb_nb_server_args="ovnnb.db"
 fi
 rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir --pidfile -vconsole:off --log-file \
@@ -333,6 +335,13 @@ if $ovn; then
         --pidfile="$sandbox"/ovnsb_db.pid -vconsole:off \
         --log-file="$sandbox"/ovnsb_db.log \
         --remote=punix:"$sandbox"/ovnsb_db.sock $ovsdb_sb_server_args
+    # Start SB back up server
+    rungdb $gdb_ovsdb $gdb_ovsdb_ex ovsdb-server --detach --no-chdir \
+        --pidfile="$sandbox"/ovnsb_db2.pid  -vconsole:off \
+        --log-file="$sandbox"/ovnsb_db2.log \
+        --remote=punix:"$sandbox"/ovnsb_db2.sock \
+        --unixctl="$sandbox"/sb_backup_unixctl \
+        --sync-from=unix:"$sandbox"/ovnsb_db.sock $ovsdb_sb_backup_server_args
 fi
 
 #Add a small delay to allow ovsdb-server to launch.
@@ -361,6 +370,9 @@ if $ovn; then
     ovs-vsctl set open . external-ids:ovn-encap-type=geneve
     ovs-vsctl set open . external-ids:ovn-encap-ip=127.0.0.1
 
+    ovn-nbctl init
+    ovn-sbctl init
+
     rungdb $gdb_ovn_northd $gdb_ovn_northd_ex ovn-northd --detach \
         --no-chdir --pidfile -vconsole:off --log-file \
         --ovnsb-db=unix:"$sandbox"/ovnsb_db.sock \
@@ -385,6 +397,12 @@ EOF
 if $ovn; then cat << EOF
 This environment also has the OVN daemons and databases enabled.
 You can use ovn-nbctl and ovn-sbctl to interact with the OVN databases.
+
+The backup server of OVN SB can be accessed by:
+* ovn-sbctl --db=unix:`pwd`/sandbox/ovnsb_db2.sock
+* ovs-appctl -t `pwd`/sandbox/sb_backup_unixctl
+The backup database file is "sandbox"/ovnsb2.db
+
 
 EOF
 fi

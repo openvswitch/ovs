@@ -149,9 +149,9 @@ run_benchmarks(struct ovs_cmdl_context *ctx)
 }
 
 static const struct ovs_cmdl_command commands[] = {
-    {"check", NULL, 0, 0, run_tests},
-    {"benchmark", NULL, 1, 1, run_benchmarks},
-    {NULL, NULL, 0, 0, NULL},
+    {"check", NULL, 0, 0, run_tests, OVS_RO},
+    {"benchmark", NULL, 1, 1, run_benchmarks, OVS_RO},
+    {NULL, NULL, 0, 0, NULL, OVS_RO},
 };
 
 static void

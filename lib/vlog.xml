@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<dl>
+  <dt><code>-v</code>[<var>spec</var>]</dt>
+  <dt><code>--verbose=</code>[<var>spec</var>]</dt>
+  <dd>
+    <p>
+      Sets logging levels.  Without any <var>spec</var>, sets the log level for
+      every module and destination to <code>dbg</code>.  Otherwise,
+      <var>spec</var> is a list of words separated by spaces or commas or
+      colons, up to one from each category below:
+    </p>
+
+    <ul>
+      <li>
+        A valid module name, as displayed by the <code>vlog/list</code> command
+        on <code>ovs-appctl</code>(8), limits the log level change to the
+        specified module.
+      </li>
+
+      <li>
+        <p>
+          <code>syslog</code>, <code>console</code>, or <code>file</code>, to
+          limit the log level change to only to the system log, to the console,
+          or to a file, respectively.  (If <code>--detach</code> is specified,
+          the daemon closes its standard file descriptors, so logging to the
+          console will have no effect.)
+        </p>
+
+        <p>
+          On Windows platform, <code>syslog</code> is accepted as a word and is
+          only useful along with the <code>--syslog-target</code> option (the
+          word has no effect otherwise).
+        </p>
+      </li>
+
+      <li>
+        <code>off</code>, <code>emer</code>, <code>err</code>,
+        <code>warn</code>, <code>info</code>, or <code>dbg</code>, to control
+        the log level.  Messages of the given severity or higher will be
+        logged, and messages of lower severity will be filtered out.
+        <code>off</code> filters out all messages.  See
+        <code>ovs-appctl</code>(8) for a definition of each log level.
+      </li>
+    </ul>
+
+    <p>
+      Case is not significant within <var>spec</var>.
+    </p>
+
+    <p>
+      Regardless of the log levels set for <code>file</code>, logging to a file
+      will not take place unless <code>--log-file</code> is also specified (see
+      below).
+    </p>
+
+    <p>
+      For compatibility with older versions of OVS, <code>any</code> is
+      accepted as a word but has no effect.
+    </p>
+  </dd>
+
+  <dt><code>-v</code></dt>
+  <dt><code>--verbose</code></dt>
+  <dd>
+    Sets the maximum logging verbosity level, equivalent to
+    <code>--verbose=dbg</code>.
+  </dd>
+
+  <dt><code>-vPATTERN:</code><var>destination</var><code>:</code><var>pattern</var></dt>
+  <dt><code>--verbose=PATTERN:</code><var>destination</var><code>:</code><var>pattern</var></dt>
+  <dd>
+    Sets the log pattern for <var>destination</var> to <var>pattern</var>.
+    Refer to <code>ovs-appctl</code>(8) for a description of the valid syntax
+    for <var>pattern</var>.
+  </dd>
+
+  <dt><code>-vFACILITY:</code><var>facility</var></dt>
+  <dt><code>--verbose=FACILITY:</code><var>facility</var></dt>
+  <dd>
+    Sets the RFC5424 facility of the log message. <var>facility</var> can be
+    one of <code>kern</code>, <code>user</code>, <code>mail</code>,
+    <code>daemon</code>, <code>auth</code>, <code>syslog</code>,
+    <code>lpr</code>, <code>news</code>, <code>uucp</code>, <code>clock</code>,
+    <code>ftp</code>, <code>ntp</code>, <code>audit</code>, <code>alert</code>,
+    <code>clock2</code>, <code>local0</code>, <code>local1</code>,
+    <code>local2</code>, <code>local3</code>, <code>local4</code>,
+    <code>local5</code>, <code>local6</code> or <code>local7</code>. If this
+    option is not specified, <code>daemon</code> is used as the default for the
+    local system syslog and <code>local0</code> is used while sending a message
+    to the target provided via the <code>--syslog-target</code> option.
+  </dd>
+
+  <dt><code>--log-file</code>[<code>=</code><var>file</var>]</dt>
+  <dd>
+    Enables logging to a file.  If <var>file</var> is specified, then it is
+    used as the exact name for the log file.  The default log file name used if
+    <var>file</var> is omitted is <code>@LOGDIR@/<var>program</var>.log</code>.
+  </dd>
+
+  <dt><code>--syslog-target=</code><var>host</var><code>:</code><var>port</var></dt>
+  <dd>
+    Send syslog messages to UDP <var>port</var> on <var>host</var>, in addition
+    to the system syslog.  The <var>host</var> must be a numerical IP address,
+    not a hostname.
+  </dd>
+
+  <dt><code>--syslog-method=</code><var>method</var></dt>
+  <dd>
+    <p>
+      Specify <var>method</var> as how syslog messages should be sent to syslog
+      daemon.  The following forms are supported:
+    </p>
+
+    <ul>
+      <li>
+        <code>libc</code>, to use the libc <code>syslog()</code> function.
+        This is the default behavior.  Downside of using this options is that
+        libc adds fixed prefix to every message before it is actually sent to
+        the syslog daemon over <code>/dev/log</code> UNIX domain socket.
+      </li>
+
+      <li>
+        <code>unix:<var>file</var></code>, to use a UNIX domain socket
+        directly.  It is possible to specify arbitrary message format with this
+        option.  However, <code>rsyslogd 8.9</code> and older versions use hard
+        coded parser function anyway that limits UNIX domain socket use.  If
+        you want to use arbitrary message format with older
+        <code>rsyslogd</code> versions, then use UDP socket to localhost IP
+        address instead.
+      </li>
+
+      <li>
+        <code>udp:<var>ip</var>:<var>port</var></code>, to use a UDP socket.
+        With this method it is possible to use arbitrary message format also
+        with older <code>rsyslogd</code>.  When sending syslog messages over
+        UDP socket extra precaution needs to be taken into account, for
+        example, syslog daemon needs to be configured to listen on the
+        specified UDP port, accidental iptables rules could be interfering with
+        local syslog traffic and there are some security considerations that
+        apply to UDP sockets, but do not apply to UNIX domain sockets.
+      </li>
+    </ul>
+  </dd>
+</dl>

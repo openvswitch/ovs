@@ -108,6 +108,10 @@ static const ovs_u128 OVS_U128_MAX = { { UINT32_MAX, UINT32_MAX,
                                          UINT32_MAX, UINT32_MAX } };
 static const ovs_be128 OVS_BE128_MAX OVS_UNUSED = { { OVS_BE32_MAX, OVS_BE32_MAX,
                                            OVS_BE32_MAX, OVS_BE32_MAX } };
+static const ovs_u128 OVS_U128_MIN OVS_UNUSED = { {0, 0, 0, 0} };
+static const ovs_u128 OVS_BE128_MIN OVS_UNUSED = { {0, 0, 0, 0} };
+
+#define OVS_U128_ZERO OVS_U128_MIN
 
 /* A 64-bit value, in network byte order, that is only aligned on a 32-bit
  * boundary. */

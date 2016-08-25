@@ -26,7 +26,8 @@ EXTRA_DIST += \
 	rhel/usr_share_openvswitch_scripts_sysconfig.template \
 	rhel/usr_share_openvswitch_scripts_systemd_sysconfig.template \
 	rhel/usr_lib_systemd_system_openvswitch.service \
-	rhel/usr_lib_systemd_system_openvswitch-nonetwork.service \
+	rhel/usr_lib_systemd_system_ovsdb-server.service \
+	rhel/usr_lib_systemd_system_ovs-vswitchd.service \
 	rhel/usr_lib_systemd_system_ovn-controller.service \
 	rhel/usr_lib_systemd_system_ovn-controller-vtep.service \
 	rhel/usr_lib_systemd_system_ovn-northd.service

@@ -3,8 +3,22 @@ Frequently Asked Questions
 
 Open vSwitch <http://openvswitch.org>
 
-General
--------
+## Contents
+
+- [General](#general)
+- [Releases](#releases)
+- [Terminology](#terminology)
+- [Basic configuration](#basic-configuration)
+- [Implementation Details](#implementation-details)
+- [Performance](#performance)
+- [Configuration Problems](#configuration-problems)
+- [QOS](#qos)
+- [VLANs](#vlans)
+- [VXLANs](#vxlans)
+- [Using OpenFlow](#using-openflow)
+- [Development](#development)
+
+## General
 
 ### Q: What is Open vSwitch?
 
@@ -118,19 +132,20 @@ A: Starting in OVS 2.4, we switched the default ports to the
    cannot, all the programs allow overriding the default port.  See the
    appropriate man page.
 
-
-Releases
---------
+## Releases
 
 ### Q: What does it mean for an Open vSwitch release to be LTS (long-term support)?
 
 A: All official releases have been through a comprehensive testing
-   process and are suitable for production use.  Planned releases will
-   occur several times a year.  If a significant bug is identified in an
+   process and are suitable for production use.  Planned releases
+   occur twice a year.  If a significant bug is identified in an
    LTS release, we will provide an updated release that includes the
    fix.  Releases that are not LTS may not be fixed and may just be
    supplanted by the next major release.  The current LTS release is
    2.3.x.
+
+   For more information on the Open vSwitch release process, please
+   see [release-process.md].
 
 ### Q: What Linux kernel versions does each Open vSwitch release work with?
 
@@ -157,7 +172,7 @@ A: The following table lists the Linux kernel versions against which the
 |    2.3.x     | 2.6.32 to 3.14
 |    2.4.x     | 2.6.32 to 4.0
 |    2.5.x     | 2.6.32 to 4.3
-|    2.6.x     | 3.10 to 4.3
+|    2.6.x     | 3.10 to 4.7
 
    Open vSwitch userspace should also work with the Linux kernel module
    built into Linux 3.3 and later.
@@ -193,7 +208,7 @@ A: Open vSwitch supports different datapaths on different platforms.  Each
 Feature               | Linux upstream | Linux OVS tree | Userspace | Hyper-V |
 ----------------------|:--------------:|:--------------:|:---------:|:-------:|
 NAT                   |      4.6       |       YES      |    NO     |   NO    |
-Connection tracking   |      4.3       |       YES      |    NO     | PARTIAL |
+Connection tracking   |      4.3       |       YES      |  PARTIAL  | PARTIAL |
 Tunnel - LISP         |      NO        |       YES      |    NO     |   NO    |
 Tunnel - STT          |      NO        |       YES      |    NO     |   YES   |
 Tunnel - GRE          |      3.11      |       YES      |    YES    |   YES   |
@@ -202,7 +217,7 @@ Tunnel - Geneve       |      3.18      |       YES      |    YES    |   YES   |
 Tunnel - GRE-IPv6     |      NO        |       NO       |    YES    |   NO    |
 Tunnel - VXLAN-IPv6   |      4.3       |       YES      |    YES    |   NO    |
 Tunnel - Geneve-IPv6  |      4.4       |       YES      |    YES    |   NO    |
-QoS - Policing        |      YES       |       YES      |    NO     |   NO    |
+QoS - Policing        |      YES       |       YES      |    YES    |   NO    |
 QoS - Shaping         |      YES       |       YES      |    NO     |   NO    |
 sFlow                 |      YES       |       YES      |    YES    |   NO    |
 IPFIX                 |      3.10      |       YES      |    YES    |   NO    |
@@ -246,7 +261,7 @@ A: The following table lists the DPDK version against which the
 |    2.3.x     | 1.6
 |    2.4.x     | 2.0
 |    2.5.x     | 2.2
-|    2.6.x     | 16.04
+|    2.6.x     | 16.07
 
 ### Q: I get an error like this when I configure Open vSwitch:
 
@@ -353,8 +368,7 @@ A: Bridge compatibility was a feature of Open vSwitch 1.9 and earlier.
    the release.  Be sure to start the ovs-brcompatd daemon.
 
 
-Terminology
------------
+## Terminology
 
 ### Q: I thought Open vSwitch was a virtual Ethernet switch, but the documentation keeps talking about bridges.  What's a bridge?
 
@@ -366,9 +380,7 @@ A: In networking, the terms "bridge" and "switch" are synonyms.  Open
 
 A: See the "VLAN" section below.
 
-
-Basic Configuration
--------------------
+## Basic configuration
 
 ### Q: How do I configure a port as an access port?
 
@@ -575,9 +587,7 @@ A: First, why do you want to do this?  Two connected bridges are not
 A: Open vSwitch does not support such a configuration.
    Bridges always have their local ports.
 
-
-Implementation Details
-----------------------
+## Implementation Details
 
 ### Q: I hear OVS has a couple of kinds of flows.  Can you tell me about them?
 
@@ -667,9 +677,7 @@ A: No.  There are several reasons:
   please read "The Design and Implementation of Open vSwitch",
   published in USENIX NSDI 2015.
 
-
-Performance
------------
+## Performance
 
 ### Q: I just upgraded and I see a performance drop.  Why?
 
@@ -689,8 +697,7 @@ A: The OVS kernel datapath may have been updated to a newer version than
    userspace.
 
 
-Configuration Problems
-----------------------
+## Configuration Problems
 
 ### Q: I created a bridge and added my Ethernet port to it, using commands
    like these:
@@ -1044,9 +1051,21 @@ A: The short answer is that this is a misuse of a "tap" device.  Use
    users should not configure KVM "tap" devices as type "tap" (use
    type "system", the default, instead).
 
+### Q: I observe packet loss at the beginning of RFC2544 tests on a
+    server running few hundred container apps bridged to OVS with traffic
+    generated by HW traffic generator.  How can I fix this?
 
-Quality of Service (QoS)
-------------------------
+A: This is expected behavior on virtual switches.  RFC2544 tests were
+   designed for hardware switches, which don't have caches on the fastpath
+   that need to be heated.  Traffic generators in order to prime the switch
+   use learning phase to heat the caches before sending the actual traffic
+   in test phase.  In case of OVS the cache is flushed quickly and to
+   accommodate the traffic generator's delay between learning and test phase,
+   the max-idle timeout settings should be changed to 50000 ms.
+
+   ovs-vsctl --no-wait set Open_vSwitch . other_config:max-idle=50000
+
+## QOS
 
 ### Q: Does OVS support Quality of Service (QoS)?
 
@@ -1202,9 +1221,7 @@ A: Since version 2.0, Open vSwitch has OpenFlow protocol support for
    vSwitch software switch (neither the kernel-based nor userspace
    switches).
 
-
-VLANs
------
+## VLANs
 
 ### Q: What's a VLAN?
 
@@ -1477,8 +1494,7 @@ A: Open vSwitch implements Independent VLAN Learning (IVL) for
    for each VLANs.
 
 
-VXLANs
------
+## VXLANs
 
 ### Q: What's a VXLAN?
 
@@ -1512,8 +1528,7 @@ A: By default, Open vSwitch will use the assigned IANA port for VXLAN, which
        options:dst_port=8472
 
 
-Using OpenFlow (Manually or Via Controller)
--------------------------------------------
+## Using OpenFlow
 
 ### Q: What versions of OpenFlow does Open vSwitch support?
 
@@ -2074,8 +2089,7 @@ A: By itself, the "learn" action can only put two kinds of actions
        Applications".
 
 
-Development
------------
+## Development
 
 ### Q: How do I implement a new OpenFlow message?
 
@@ -2140,3 +2154,4 @@ http://openvswitch.org/
 [OPENFLOW-1.1+.md]:OPENFLOW-1.1+.md
 [INSTALL.DPDK.md]:INSTALL.DPDK.md
 [Tutorial.md]:tutorial/Tutorial.md
+[release-process.md]:Documentation/release-process.md

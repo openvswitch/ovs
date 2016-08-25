@@ -195,7 +195,7 @@ unixctl_command_reply_error(struct unixctl_conn *conn, const char *error)
  *      - An absolute path (starting with '/') that gives the exact name of
  *        the Unix domain socket to listen on.
  *
- * For Windows, a kernel assigned TCP port is used and written in 'path'
+ * For Windows, a local named pipe is used. A file is created in 'path'
  * which may be:
  *
  *      - NULL, in which case <rundir>/<program>.ctl is used.
@@ -442,7 +442,8 @@ unixctl_server_destroy(struct unixctl_server *server)
  * be the name of a unixctl server socket.  If it does not start with '/', it
  * will be prefixed with the rundir (e.g. /usr/local/var/run/openvswitch).
  *
- * On Windows, connects to a localhost TCP port as written inside 'path'.
+ * On Windows, connects to a local named pipe. A file which resides in
+ * 'path' is used to mimic the behavior of a Unix domain socket.
  * 'path' should be an absolute path of the file.
  *
  * Returns 0 if successful, otherwise a positive errno value.  If successful,

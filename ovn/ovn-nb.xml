@@ -30,6 +30,47 @@
     </dd>
   </dl>
 
+  <table name="NB_Global" title="Northbound configuration">
+    <p>
+      Northbound configuration for an OVN system.  This table must have exactly
+      one row.
+    </p>
+
+    <group title="Status">
+      These columns allow a client to track the overall configuration state of
+      the system.
+
+      <column name="nb_cfg">
+        Sequence number for client to increment.  When a client modifies any
+        part of the northbound database configuration and wishes to wait for
+        <code>ovn-northd</code> and possibly all of the hypervisors to finish
+        applying the changes, it may increment this sequence number.
+      </column>
+
+      <column name="sb_cfg">
+        Sequence number that <code>ovn-northd</code> sets to the value of <ref
+        column="nb_cfg"/> after it finishes applying the corresponding
+        configuration changes to the <ref db="OVN_Southbound"/> database.
+      </column>
+
+      <column name="hv_cfg">
+        Sequence number that <code>ovn-northd</code> sets to the smallest
+        sequence number of all the chassis in the system, as reported in the
+        <code>Chassis</code> table in the southbound database.  Thus, <ref
+        column="hv_cfg"/> equals <ref column="nb_cfg"/> if all chassis are
+        caught up with the northbound configuration (which may never happen, if
+        any chassis is down).  This value can regress, if a chassis was removed
+        from the system and rejoins before catching up.
+      </column>
+    </group>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
   <table name="Logical_Switch" title="L2 logical switch">
     <p>
       Each row represents one L2 logical switch.
@@ -94,6 +135,21 @@
     <column name="acls">
       Access control rules that apply to packets within the logical switch.
     </column>
+
+    <group title="other_config">
+      <p>
+        Additional configuration options for the logical switch.
+      </p>
+
+      <column name="other_config" key="subnet">
+        Set this to an IPv4 subnet, e.g. <code>192.168.0.0/24</code>, to enable
+        <code>ovn-northd</code> to automatically assign IP addresses within
+        that subnet.  Use the <code>dynamic</code> keyword in the <ref
+        table="Logical_Switch_Port"/> table's <ref table="Logical_Switch_Port"
+        column="addresses"/> column to request dynamic address assignment for a
+        particular port.
+      </column>
+    </group>
 
     <group title="Common Columns">
       <column name="external_ids">
@@ -339,6 +395,16 @@
           table="Logical_Router_Port"/> to which this logical switch port is
           connected.
         </column>
+
+        <column name="options" key="nat-addresses">
+          MAC address of the <code>router-port</code> followed by a list of
+          SNAT and DNAT IP addresses. This is used to send gratuitous ARPs for
+          SNAT and DNAT IP addresses via <code>localnet</code> and is valid for
+          only L3 gateway ports.  Example: <code>80:fa:5b:06:72:b7 158.36.44.22
+          158.36.44.24</code>. This would result in generation of gratuitous
+          ARPs for IP addresses 158.36.44.22 and 158.36.44.24 with a MAC
+          address of 80:fa:5b:06:72:b7.
+        </column>
       </group>
 
       <group title="Options for localnet ports">
@@ -551,7 +617,29 @@
             ports) whose <ref column="addresses"/> columns include
             <code>unknown</code>.
           </dd>
+
+          <dt><code>dynamic</code></dt>
+          <dd>
+            Use this keyword to make <code>ovn-northd</code> generate a
+            globally unique MAC address and choose an unused IPv4 address with
+            the logical port's subnet and store them in the port's <ref
+            column="dynamic_addresses"/> column.  <code>ovn-northd</code> will
+            use the subnet specified in <ref table="Logical_Switch"
+            column="other_config" key="subnet"/> in the port's <ref
+            table="Logical_Switch"/>.
+          </dd>
         </dl>
+      </column>
+
+      <column name="dynamic_addresses">
+        <p>
+          Addresses assigned to the logical port by <code>ovn-northd</code>, if
+          <code>dynamic</code> is specified in <ref column="addresses"/>.
+          Addresses will be of the same format as those that populate the <ref
+          column="addresses"/> column.  Note that these addresses are
+          constructed and managed locally in ovn-northd, so they cannot be
+          reconstructed in the event that the database is lost.
+        </p>
       </column>
 
       <column name="port_security">
@@ -682,6 +770,12 @@
       <column name="dhcpv4_options">
         This column defines the DHCPv4 Options to be included by the
         <code>ovn-controller</code> when it replies to the DHCPv4 requests.
+        Please see the <ref table="DHCP_Options"/> table.
+      </column>
+
+      <column name="dhcpv6_options">
+        This column defines the DHCPv6 Options to be included by the
+        <code>ovn-controller</code> when it replies to the DHCPv6 requests.
         Please see the <ref table="DHCP_Options"/> table.
       </column>
 
@@ -977,6 +1071,12 @@
         address is 192.168.0.1 and that packets destined to
         192.168.0.<var>x</var> should be routed to this port.
       </p>
+
+      <p>
+        A logical router port always adds a link-local IPv6 address
+        (fe80::/64) automatically generated from the interface's MAC
+        address using the modified EUI-64 format.
+      </p>
     </column>
 
     <column name="mac">
@@ -1104,25 +1204,30 @@
 
   <table name="DHCP_Options" title="DHCP options">
     <p>
-      OVN implements a native DHCPv4 support which caters to the common
+      OVN implements native DHCPv4 support which caters to the common
       use case of providing an IPv4 address to a booting instance by
       providing stateless replies to DHCPv4 requests based on statically
       configured address mappings. To do this it allows a short list of
       DHCPv4 options to be configured and applied at each compute host
-      running ovn-controller.
+      running <code>ovn-controller</code>.
+    </p>
+
+    <p>
+      OVN also implements native DHCPv6 support which provides stateless
+      replies to DHCPv6 requests.
     </p>
 
     <column name="cidr">
       <p>
-        The DHCPv4 options will be included if the logical port has the IPv4
-        address in this <ref column="cidr"/>.
+        The DHCPv4/DHCPv6 options will be included if the logical port has its
+        IP address in this <ref column="cidr"/>.
       </p>
     </column>
 
     <group title="DHCPv4 options">
       <p>
-        CMS should define the set of DHCPv4 options as key/value pairs in the
-        <ref column="options"/> column of this table. For
+        The CMS should define the set of DHCPv4 options as key/value pairs
+        in the <ref column="options"/> column of this table. For
         <code>ovn-controller</code> to include these DHCPv4 options, the
         <ref column="dhcpv4_options"/> of <ref table="Logical_Switch_Port"/>
         should refer to an entry in this table.
@@ -1318,6 +1423,67 @@
           This specifies the time interval from address assignment until the
           client begins trying to rebind its address.  The DHCPv4 option code
           for this option is 59.
+        </column>
+      </group>
+    </group>
+
+    <group title="DHCPv6 options">
+      <p>
+        OVN also implements native DHCPv6 support. The CMS should define
+        the set of DHCPv6 options as key/value pairs. The define DHCPv6
+        options will be included in the DHCPv6 response to the DHCPv6
+        Solicit/Request/Confirm packet from the logical ports having the
+        IPv6 addresses in the <ref column="cidr"/>.
+      </p>
+
+      <group title="Mandatory DHCPv6 options">
+        <p>
+          The following options must be defined.
+        </p>
+
+        <column name="options" key="server_id">
+          <p>
+            The Ethernet address for the DHCP server to use. This is also
+            included in the DHCPv6 reply as option 2, ``Server Identifier''
+            to carry a DUID identifying a server between a client and a server.
+            <code>ovn-controller</code> defines DUID based on
+            Link-layer Address [DUID-LL].
+          </p>
+        </column>
+      </group>
+
+      <group title="IPv6 DHCPv6 options">
+        <p>
+          Below are the supported DHCPv6 options whose values are an IPv6
+          address, e.g. <code>aef0::4</code>.  Some options accept multiple
+          IPv6 addresses enclosed within curly braces, e.g. <code>{aef0::4,
+          aef0::5}</code>. Please refer to RFC 3315 for more details on
+          DHCPv6 options and their codes.
+        </p>
+
+        <column name="options" key="dns_server">
+          <p>
+            The DHCPv6 option code for this option is 23. This option specifies
+            the DNS servers that the VM should use.
+          </p>
+        </column>
+      </group>
+
+      <group title="String DHCPv6 options">
+        <p>
+          These options accept string values.
+        </p>
+
+        <column name="options" key="domain_search">
+          <p>
+            The DHCPv6 option code for this option is 24. This option specifies
+            the domain search list the client should use to resolve hostnames
+            with DNS.
+          </p>
+
+          <p>
+            Example: <code>"ovn.org"</code>.
+          </p>
         </column>
       </group>
     </group>

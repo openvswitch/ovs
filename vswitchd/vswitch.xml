@@ -286,18 +286,6 @@
         </p>
       </column>
 
-      <column name="other_config" key="cuse-dev-name"
-              type='{"type": "string"}'>
-        <p>
-          Specifies the name of the vhost-cuse character device to open for
-          vhost-cuse support.
-        </p>
-        <p>
-          The default is vhost-net. Changing this value requires restarting
-          the daemon.
-        </p>
-      </column>
-
       <column name="other_config" key="vhost-sock-dir"
               type='{"type": "string"}'>
         <p>
@@ -2355,6 +2343,78 @@
           Not supported by DPDK vHost interfaces.
         </p>
       </column>
+
+      <column name="other_config" key="pmd-rxq-affinity">
+        <p>Specifies mapping of RX queues of this interface to CPU cores.</p>
+        <p>Value should be set in the following form:</p>
+        <p>
+          <code>other_config:pmd-rxq-affinity=&lt;rxq-affinity-list&gt;</code>
+        </p>
+        <p>where</p>
+        <p>
+          <ul>
+            <li>
+              &lt;rxq-affinity-list&gt; ::= NULL | &lt;non-empty-list&gt;
+            </li>
+            <li>
+              &lt;non-empty-list&gt; ::= &lt;affinity-pair&gt; |
+                                  &lt;affinity-pair&gt; , &lt;non-empty-list&gt;
+            </li>
+            <li>
+              &lt;affinity-pair&gt; ::= &lt;queue-id&gt; : &lt;core-id&gt;
+            </li>
+          </ul>
+        </p>
+      </column>
+
+      <column name="options" key="vhost-server-path"
+              type='{"type": "string"}'>
+        <p>
+          When specified, switches the given port permanently to 'client'
+          mode. The value specifies the path to the socket associated with a
+          vHost User client mode device that has been or will be created by
+          QEMU.
+          Only supported by DPDK vHost interfaces.
+        </p>
+      </column>
+    </group>
+
+    <group title="MTU">
+      <p>
+        The MTU (maximum transmission unit) is the largest amount of data
+        that can fit into a single Ethernet frame.  The standard Ethernet
+        MTU is 1500 bytes.  Some physical media and many kinds of virtual
+        interfaces can be configured with higher MTUs.
+      </p>
+
+      <p>
+        A client may change a non-internal interface MTU by filling in
+        <ref column="mtu_request"/>.  Internal interfaces MTU, instead, is set
+        by Open vSwitch to the minimum of non-internal interfaces MTU in the
+        bridge. In any case, Open vSwitch then reports in <ref column="mtu"/>
+        the currently configured value.
+      </p>
+
+      <column name="mtu">
+        <p>
+          This column will be empty for an interface that does not
+          have an MTU as, for example, some kinds of tunnels do not.
+        </p>
+
+        <p>
+          Open vSwitch sets this column's value, so other clients should treat
+          it as read-only.
+        </p>
+      </column>
+
+      <column name="mtu_request"
+              type='{"type": "integer", "minInteger": 1}'>
+        <p>
+          Requested MTU (Maximum Transmission Unit) for the interface. A client
+          can fill this column to change the MTU of a non-internal interface.
+        </p>
+    </column>
+
     </group>
 
     <group title="Interface Status">
@@ -2396,20 +2456,6 @@
       <column name="duplex">
         <p>
           The duplex mode of the physical network link.
-        </p>
-      </column>
-
-      <column name="mtu">
-        <p>
-          The MTU (maximum transmission unit); i.e. the largest
-          amount of data that can fit into a single Ethernet frame.
-          The standard Ethernet MTU is 1500 bytes.  Some physical media
-          and many kinds of virtual interfaces can be configured with
-          higher MTUs.
-        </p>
-        <p>
-          This column will be empty for an interface that does not
-          have an MTU as, for example, some kinds of tunnels do not.
         </p>
       </column>
 
@@ -3120,6 +3166,30 @@
       <column name="lldp" key="enable" type='{"type": "boolean"}'>
         True to enable LLDP on this <ref table="Interface"/>.  If not
         specified, LLDP will be disabled by default.
+      </column>
+    </group>
+
+    <group title="Flow control Configuration">
+      <p>
+        Ethernet flow control defined in IEEE 802.1Qbb provides link level flow
+        control using MAC pause frames.  Implemented only for interfaces with
+        type <code>dpdk</code>.
+      </p>
+
+      <column name="options" key="rx-flow-ctrl" type='{"type": "boolean"}'>
+        Set to <code>true</code> to enable Rx flow control on physical ports.
+        By default, Rx flow control is disabled.
+      </column>
+
+      <column name="options" key="tx-flow-ctrl" type='{"type": "boolean"}'>
+        Set to <code>true</code> to enable Tx flow control on physical ports.
+        By default, Tx flow control is disabled.
+      </column>
+
+      <column name="options" key="flow-ctrl-autoneg"
+              type='{"type": "boolean"}'>
+        Set to <code>true</code> to enable flow control auto negotiation on
+        physical ports. By default, auto-neg is disabled.
       </column>
     </group>
 

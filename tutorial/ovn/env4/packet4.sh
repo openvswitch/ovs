@@ -15,4 +15,6 @@
 
 set -o xtrace
 
-ovs-appctl ofproto/trace br-int in_port=3,dl_src=00:00:00:00:00:01,dl_dst=ff:ff:ff:ff:ff:ff -generate
+# We use the LOCAL port of br-eth1 to simulate the port connected to network.
+# expect to arrive on lport1 (ofport 2) and lport2 (ofport 4)
+ovs-appctl ofproto/trace br-eth1 in_port=LOCAL,dl_src=00:00:00:00:00:03,dl_dst=ff:ff:ff:ff:ff:ff -generate

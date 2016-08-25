@@ -162,6 +162,11 @@ after reboot, but other ports need to be persisted in the database.
 .PP
 The following options are less important:
 .
+.IP "\fB\-\-no\-monitor\fR"
+By default \fBovs\-ctl\fR passes \fB\-\-monitor\fR to \fBovs\-vswitchd\fR and
+\fBovsdb\-server\fR, requesting that it spawn a process monitor which will
+restart the daemon if it crashes.  This option suppresses that behavior.
+.
 .IP "\fB\-\-daemon-cwd=\fIdirectory\fR"
 Specifies the current working directory that the OVS daemons should
 run from.  The default is \fB/\fR (the root directory) if this option

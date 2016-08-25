@@ -80,6 +80,12 @@ static unsigned int nf_hash_frag(__be32 id, const struct in6_addr *saddr,
 	return jhash_3words(ipv6_addr_hash(saddr), ipv6_addr_hash(daddr),
 			    (__force u32)id, nf_frags.rnd);
 }
+/* fb3cfe6e75b9 ("inet: frag: remove hash size assumptions from callers")
+ * shifted this logic into inet_fragment, but prior kernels still need this.
+ */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(3,17,0)
+#define nf_hash_frag(a, b, c) (nf_hash_frag(a, b, c) & (INETFRAGS_HASHSZ - 1))
+#endif
 
 #ifdef HAVE_INET_FRAGS_CONST
 static unsigned int nf_hashfn(const struct inet_frag_queue *q)
@@ -119,7 +125,11 @@ static inline struct frag_queue *fq_find(struct net *net, __be32 id,
 	arg.dst = dst;
 	arg.ecn = ecn;
 
+#ifdef HAVE_INET_FRAGS_WITH_RWLOCK
+	read_lock_bh(&nf_frags.lock);
+#else
 	local_bh_disable();
+#endif
 	hash = nf_hash_frag(id, src, dst);
 
 	q = inet_frag_find(&net->nf_frag.frags, &nf_frags, &arg, hash);
@@ -275,6 +285,7 @@ found:
 		qp_flags(fq) |= INET_FRAG_FIRST_IN;
 	}
 
+	inet_frag_lru_move(&fq->q);
 	return 0;
 
 discard_fq:
@@ -487,7 +498,7 @@ find_prev_fhdr(struct sk_buff *skb, u8 *prevhdrp, int *prevhoff, int *fhoff)
 	return 0;
 }
 
-int rpl_nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user)
+int nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user)
 {
 	struct net_device *dev = skb->dev;
 	int fhoff, nhoff, ret;
@@ -511,6 +522,13 @@ int rpl_nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user)
 	skb_set_transport_header(skb, fhoff);
 	hdr = ipv6_hdr(skb);
 	fhdr = (struct frag_hdr *)skb_transport_header(skb);
+
+/* See ip_evictor(). */
+#ifdef HAVE_INET_FRAG_EVICTOR
+	local_bh_disable();
+	inet_frag_evictor(&net->nf_frag.frags, &nf_frags, false);
+	local_bh_enable();
+#endif
 
 	fq = fq_find(net, fhdr->identification, user, &hdr->saddr, &hdr->daddr,
 		     ip6_frag_ecn(hdr));
@@ -538,54 +556,13 @@ out_unlock:
 	inet_frag_put(&fq->q, &nf_frags);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(rpl_nf_ct_frag6_gather);
-
-#ifdef HAVE_INET_FRAGS_CONST
-static void rpl_ip6_frag_init(struct inet_frag_queue *q, const void *a)
-#else
-static void rpl_ip6_frag_init(struct inet_frag_queue *q, void *a)
-#endif
-{
-	struct frag_queue *fq = container_of(q, struct frag_queue, q);
-	const struct ip6_create_arg *arg = a;
-
-	fq->id = arg->id;
-	fq->user = arg->user;
-	fq->saddr = *arg->src;
-	fq->daddr = *arg->dst;
-	fq->ecn = arg->ecn;
-}
-
-#ifdef HAVE_INET_FRAGS_CONST
-static bool rpl_ip6_frag_match(const struct inet_frag_queue *q, const void *a)
-#else
-static bool rpl_ip6_frag_match(struct inet_frag_queue *q, void *a)
-#endif
-{
-	const struct frag_queue *fq;
-	const struct ip6_create_arg *arg = a;
-
-	fq = container_of(q, struct frag_queue, q);
-	return	fq->id == arg->id &&
-		fq->user == arg->user &&
-		ipv6_addr_equal(&fq->saddr, arg->src) &&
-		ipv6_addr_equal(&fq->daddr, arg->dst);
-}
-
-static int nf_ct_net_init(struct net *net)
-{
-	nf_defrag_ipv6_enable();
-
-	return 0;
-}
 
 static void nf_ct_net_exit(struct net *net)
 {
-	inet_frags_exit_net(&net->ipv6.frags, &nf_frags);
+	inet_frags_exit_net(&net->nf_frag.frags, &nf_frags);
 }
 
 static struct pernet_operations nf_ct_net_ops = {
-	.init = nf_ct_net_init,
 	.exit = nf_ct_net_exit,
 };
 
@@ -593,11 +570,12 @@ int rpl_nf_ct_frag6_init(void)
 {
 	int ret = 0;
 
+	nf_defrag_ipv6_enable();
 	nf_frags.hashfn = nf_hashfn;
-	nf_frags.constructor = rpl_ip6_frag_init;
+	nf_frags.constructor = ip6_frag_init;
 	nf_frags.destructor = NULL;
 	nf_frags.qsize = sizeof(struct frag_queue);
-	nf_frags.match = rpl_ip6_frag_match;
+	nf_frags.match = ip6_frag_match;
 	nf_frags.frag_expire = nf_ct_frag6_expire;
 #ifdef HAVE_INET_FRAGS_WITH_FRAGS_WORK
 	nf_frags.frags_cache_name = nf_frags_cache_name;

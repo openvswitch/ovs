@@ -106,6 +106,10 @@ void flow_set_mpls_lse(struct flow *, int idx, ovs_be32 lse);
 
 void flow_compose(struct dp_packet *, const struct flow *);
 
+bool parse_ipv6_ext_hdrs(const void **datap, size_t *sizep, uint8_t *nw_proto,
+                         uint8_t *nw_frag);
+ovs_be16 parse_dl_type(const struct eth_header *data_, size_t size);
+
 static inline uint64_t
 flow_get_xreg(const struct flow *flow, int idx)
 {
@@ -850,9 +854,48 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
     md->ct_label = flow->ct_label;
 }
 
+static inline bool is_vlan(const struct flow *flow,
+                           struct flow_wildcards *wc)
+{
+    if (wc) {
+        WC_MASK_FIELD_MASK(wc, vlan_tci, htons(VLAN_CFI));
+    }
+    return (flow->vlan_tci & htons(VLAN_CFI)) != 0;
+}
+
 static inline bool is_ip_any(const struct flow *flow)
 {
     return dl_type_is_ip_any(flow->dl_type);
+}
+
+static inline bool is_ip_proto(const struct flow *flow, uint8_t ip_proto,
+                               struct flow_wildcards *wc)
+{
+    if (is_ip_any(flow)) {
+        if (wc) {
+            WC_MASK_FIELD(wc, nw_proto);
+        }
+        return flow->nw_proto == ip_proto;
+    }
+    return false;
+}
+
+static inline bool is_tcp(const struct flow *flow,
+                          struct flow_wildcards *wc)
+{
+    return is_ip_proto(flow, IPPROTO_TCP, wc);
+}
+
+static inline bool is_udp(const struct flow *flow,
+                          struct flow_wildcards *wc)
+{
+    return is_ip_proto(flow, IPPROTO_UDP, wc);
+}
+
+static inline bool is_sctp(const struct flow *flow,
+                           struct flow_wildcards *wc)
+{
+    return is_ip_proto(flow, IPPROTO_SCTP, wc);
 }
 
 static inline bool is_icmpv4(const struct flow *flow,

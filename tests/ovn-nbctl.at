@@ -9,6 +9,7 @@ m4_define([OVN_NBCTL_TEST_START],
    dnl Start ovsdb-server.
    AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --log-file --remote=punix:$OVS_RUNDIR/ovnnb_db.sock ovn-nb.db], [0], [], [stderr])
    on_exit "kill `cat ovsdb-server.pid`"
+   AT_CHECK([ovn-nbctl init])
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d
 /ovsdb_server|INFO|ovsdb-server (Open vSwitch)/d']])
