@@ -1329,7 +1329,6 @@ The following commands are supported:
   annotate SCHEMA ANNOTATIONS print SCHEMA combined with ANNOTATIONS
   c-idl-header IDL            print C header file for IDL
   c-idl-source IDL            print C source file for IDL implementation
-  nroff IDL                   print schema documentation in nroff format
 
 The following options are also available:
   -h, --help                  display this help message
