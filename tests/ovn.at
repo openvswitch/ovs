@@ -4965,3 +4965,36 @@ cat packets
 OVN_CLEANUP([hv1])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- delete mac bindings])
+AT_KEYWORDS([ovn])
+ovn_start
+net_add n1
+sim_add hv1
+as hv1
+ovs-vsctl -- add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+# Create logical switch ls0
+ovn-nbctl ls-add ls0
+# Create ports lp0, lp1 in ls0
+ovn-nbctl lsp-add ls0 lp0
+ovn-nbctl lsp-add ls0 lp1
+ovn-nbctl lsp-set-addresses lp0 "f0:00:00:00:00:01 192.168.0.1"
+ovn-nbctl lsp-set-addresses lp1 "f0:00:00:00:00:02 192.168.0.2"
+dp_uuid=`ovn-sbctl find datapath | grep uuid | cut -f2 -d ":" | cut -f2 -d " "`
+ovn-sbctl create MAC_Binding ip=10.0.0.1 datapath=$dp_uuid logical_port=lp0 mac="mac1"
+ovn-sbctl create MAC_Binding ip=10.0.0.1 datapath=$dp_uuid logical_port=lp1 mac="mac2"
+ovn-sbctl find MAC_Binding
+#Delete port lp0
+ovn-nbctl lsp-del lp0
+ovn-sbctl find MAC_Binding
+AT_CHECK([ovn-sbctl find MAC_Binding logical_port=lp0], [0], [])
+#Delete ls0. This will verify that the mac_bindings are cleaned up when a
+#datapath is deleted without explicitly removing the the logical ports
+ovn-nbctl ls-del ls0
+ovn-sbctl find MAC_Binding
+AT_CHECK([ovn-sbctl find MAC_Binding], [0], [])
+
+OVN_CLEANUP([hv1])
+
+AT_CLEANUP

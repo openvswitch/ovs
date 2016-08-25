@@ -1219,6 +1219,19 @@ ovn_port_update_sbrec(const struct ovn_port *op)
     }
 }
 
+/* Remove mac_binding entries that refer to logical_ports which are
+ * deleted. */
+static void
+cleanup_mac_bindings(struct northd_context *ctx, struct hmap *ports)
+{
+    const struct sbrec_mac_binding *b, *n;
+    SBREC_MAC_BINDING_FOR_EACH_SAFE (b, n, ctx->ovnsb_idl) {
+        if (!ovn_port_find(ports, b->logical_port)) {
+            sbrec_mac_binding_delete(b);
+        }
+    }
+}
+
 /* Updates the southbound Port_Binding table so that it contains the logical
  * switch ports specified by the northbound database.
  *
@@ -1259,11 +1272,19 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
         sbrec_port_binding_set_tunnel_key(op->sb, tunnel_key);
     }
 
+    bool remove_mac_bindings = false;
+    if (!ovs_list_is_empty(&sb_only)) {
+        remove_mac_bindings = true;
+    }
+
     /* Delete southbound records without northbound matches. */
     LIST_FOR_EACH_SAFE(op, next, list, &sb_only) {
         ovs_list_remove(&op->list);
         sbrec_port_binding_delete(op->sb);
         ovn_port_destroy(ports, op);
+    }
+    if (remove_mac_bindings) {
+        cleanup_mac_bindings(ctx, ports);
     }
 }
 
@@ -4347,6 +4368,12 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_options);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_mac);
     ovsdb_idl_add_column(ovnsb_idl_loop.idl, &sbrec_port_binding_col_chassis);
+    ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_mac_binding);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_mac_binding_col_datapath);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_mac_binding_col_ip);
+    add_column_noalert(ovnsb_idl_loop.idl, &sbrec_mac_binding_col_mac);
+    add_column_noalert(ovnsb_idl_loop.idl,
+                       &sbrec_mac_binding_col_logical_port);
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_dhcp_options);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dhcp_options_col_code);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dhcp_options_col_type);
