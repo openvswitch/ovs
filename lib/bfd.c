@@ -678,7 +678,7 @@ bfd_should_process_flow(const struct bfd *bfd_, const struct flow *flow,
 
     if (flow->dl_type == htons(ETH_TYPE_IP)) {
         memset(&wc->masks.nw_proto, 0xff, sizeof wc->masks.nw_proto);
-        if (flow->nw_proto == IPPROTO_UDP) {
+        if (flow->nw_proto == IPPROTO_UDP && !(flow->nw_frag & FLOW_NW_FRAG_LATER)) {
             memset(&wc->masks.tp_dst, 0xff, sizeof wc->masks.tp_dst);
             if (flow->tp_dst == htons(BFD_DEST_PORT)) {
                 bool check_tnl_key;
