@@ -8923,3 +8923,38 @@ AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1400])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto - fragment prerequisites])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+add_of_ports br0 1
+
+AT_DATA([flows.txt], [dnl
+priority=10,in_port=1,udp,tp_src=67,tp_dst=68,action=drop
+priority=1,in_port=1,udp,action=drop
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:max-idle=10000])
+
+ovs-appctl time/stop
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'recirc_id(0),in_port(1),eth_type(0x0800),ipv4(proto=17,frag=later)'])
+ovs-appctl time/warp 5000
+
+AT_CHECK([strip_ufid < ovs-vswitchd.log | filter_flow_install | strip_used], [0], [dnl
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(proto=17,frag=later), actions:drop
+])
+
+dnl Change the flow table.  This will trigger revalidation of all the flows.
+AT_CHECK([ovs-ofctl add-flow br0 priority=5,in_port=1,action=drop])
+AT_CHECK([ovs-appctl revalidator/wait], [0])
+
+dnl We don't want revalidators to delete any flow.  If the flow has been
+dnl deleted it means that there's some inconsistency with the revalidation.
+AT_CHECK([grep flow_del ovs-vswitchd.log], [1])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
