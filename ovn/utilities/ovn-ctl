@@ -53,7 +53,9 @@ start_ovsdb () {
         set ovsdb-server
 
         set "$@" --detach $OVN_NB_LOG --log-file=$OVN_NB_LOGFILE --remote=punix:$DB_NB_SOCK --remote=ptcp:$DB_NB_PORT:$DB_NB_ADDR --pidfile=$DB_NB_PID --unixctl=ovnnb_db.ctl
-
+        if test X"$OVN_NB_SYNC_FROM" != X; then
+            set "$@" --sync-from=$OVN_NB_SYNC_FROM 
+        fi
         $@ $DB_NB_FILE
     fi
 
@@ -204,6 +206,7 @@ set_defaults () {
     OVN_SB_LOG="-vconsole:off"
     OVN_NB_LOGFILE="$logdir/ovsdb-server-nb.log"
     OVN_SB_LOGFILE="$logdir/ovsdb-server-sb.log"
+    OVN_NB_SYNC_FROM=""
 }
 
 set_option () {
@@ -253,6 +256,7 @@ Options:
                                    this is set to "no", the "start_ovsdb" and
                                    "stop_ovsdb" commands must be used to start
                                    and stop the OVN databases.
+  --ovn-nb-sync-from=STRING        Databse from which to synch OVN Northbound db from (not included by default)
   --ovn-controller-log=STRING        ovn controller process logging params (default: $OVN_CONTROLLER_LOG)
   --ovn-northd-log=STRING            ovn northd process logging params (default: $OVN_NORTHD_LOG)
   --ovn-northd-logfile=STRING        ovn northd process log file (default: $OVN_NORTHD_LOGFILE)
