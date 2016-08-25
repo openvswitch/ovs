@@ -5298,6 +5298,17 @@ xlate_wc_finish(struct xlate_ctx *ctx)
     if (ctx->wc->masks.vlan_tci) {
         ctx->wc->masks.vlan_tci |= htons(VLAN_CFI);
     }
+
+    /* The classifier might return masks that match on tp_src and tp_dst even
+     * for later fragments.  This happens because there might be flows that
+     * match on tp_src or tp_dst without matching on the frag bits, because
+     * it is not a prerequisite for OpenFlow.  Since it is a prerequisite for
+     * datapath flows and since tp_src and tp_dst are always going to be 0,
+     * wildcard the fields here. */
+    if (ctx->xin->flow.nw_frag & FLOW_NW_FRAG_LATER) {
+        ctx->wc->masks.tp_src = 0;
+        ctx->wc->masks.tp_dst = 0;
+    }
 }
 
 /* Translates the flow, actions, or rule in 'xin' into datapath actions in
