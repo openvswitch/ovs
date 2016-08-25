@@ -1003,7 +1003,7 @@ conn_key_hash(const struct conn_key *key, uint32_t basis)
     hash = hsrc ^ hdst;
 
     /* Hash the rest of the key(L3 and L4 types and zone). */
-    hash = hash_words((uint32_t *) &key->dst + 1,
+    hash = hash_words((uint32_t *) (&key->dst + 1),
                       (uint32_t *) (key + 1) - (uint32_t *) (&key->dst + 1),
                       hash);
 
