@@ -2738,12 +2738,181 @@ fte_insert(struct flow_tables *tables, const struct match *match,
     }
 }
 
+/* A FTE entry that has been queued for later insertion after all
+ * flows have been scanned to correctly allocation tunnel metadata. */
+struct fte_pending {
+    struct match *match;
+    int priority;
+    struct fte_version *version;
+    int index;
+
+    struct ovs_list list_node;
+};
+
+/* Processing state during two stage processing of flow table entries.
+ * Tracks the maximum size seen for each tunnel metadata entry as well
+ * as a list of the pending FTE entries. */
+struct fte_state {
+    int tun_metadata_size[TUN_METADATA_NUM_OPTS];
+    struct ovs_list fte_pending_list;
+};
+
+/* Given a list of the field sizes for each tunnel metadata entry, install
+ * a mapping table for later operations. */
+static void
+generate_tun_metadata(struct fte_state *state)
+{
+    struct ofputil_tlv_table_mod ttm;
+    int i;
+
+    ttm.command = NXTTMC_ADD;
+    list_init(&ttm.mappings);
+
+    for (i = 0; i < TUN_METADATA_NUM_OPTS; i++) {
+        if (state->tun_metadata_size[i] != -1) {
+            struct ofputil_tlv_map *map = xmalloc(sizeof *map);
+
+            list_push_back(&ttm.mappings, &map->list_node);
+
+            /* We don't care about the actual option class and type since there
+             * won't be any lookup. We just need to make them unique. */
+            map->option_class = i / UINT8_MAX;
+            map->option_type = i;
+            map->option_len = ROUND_UP(state->tun_metadata_size[i], 4);
+            map->index = i;
+        }
+    }
+
+    tun_metadata_table_mod(&ttm);
+    ofputil_uninit_tlv_table(&ttm.mappings);
+}
+
+/* Once we have created a tunnel mapping table with a consistent overall
+ * allocation, we need to remap each flow to use this table from its own
+ * allocation. Since the mapping table has already been installed, we
+ * can just read the data from the match and rewrite it. On rewrite, it
+ * will use the new table. */
+static void
+remap_match(struct match *match)
+{
+    int i;
+
+    if (!match->tun_md.valid) {
+        return;
+    }
+
+    struct tun_metadata flow = match->flow.tunnel.metadata;
+    struct tun_metadata flow_mask = match->wc.masks.tunnel.metadata;
+    memset(&match->flow.tunnel.metadata, 0, sizeof match->flow.tunnel.metadata);
+    memset(&match->wc.masks.tunnel.metadata, 0,
+           sizeof match->wc.masks.tunnel.metadata);
+    match->tun_md.valid = false;
+
+    ULLONG_FOR_EACH_1 (i, flow_mask.present.map) {
+        const struct mf_field *field = mf_from_id(MFF_TUN_METADATA0 + i);
+        int offset = match->tun_md.entry[i].loc.c.offset;
+        int len = match->tun_md.entry[i].loc.len;
+        union mf_value value, mask;
+
+        memset(&value, 0, field->n_bytes - len);
+        memset(&mask, match->tun_md.entry[i].masked ? 0 : 0xff,
+               field->n_bytes - len);
+
+        memcpy(value.tun_metadata + field->n_bytes - len,
+               flow.opts.u8 + offset, len);
+        memcpy(mask.tun_metadata + field->n_bytes - len,
+               flow_mask.opts.u8 + offset, len);
+        mf_set(field, &value, &mask, match, NULL);
+    }
+}
+
+/* In order to correctly handle tunnel metadata, we need to have
+ * two passes over the flows. This happens because tunnel metadata
+ * doesn't have fixed locations in a flow entry but is instead dynamically
+ * allocated space. In the case of flows coming from a file, we don't
+ * even know the size of each field when we need to do the allocation.
+ * When the flows come in, each flow has an individual allocation based
+ * on its own fields. However, this allocation is not the same across
+ * different flows and therefore fields are not directly comparable.
+ *
+ * In the first pass, we record the maximum size of each tunnel metadata
+ * field as well as queue FTE entries for later processing.
+ *
+ * In the second pass, we use the metadata size information to create a
+ * tunnel mapping table and set that through the tunnel metadata processing
+ * code. We then remap all individual flows to use this common allocation
+ * scheme. Finally, we load the queued entries into the classifier for
+ * comparison.
+ *
+ * fte_state_init() should be called before processing any flows. */
+static void
+fte_state_init(struct fte_state *state)
+{
+    int i;
+
+    for (i = 0; i < TUN_METADATA_NUM_OPTS; i++) {
+        state->tun_metadata_size[i] = -1;
+    }
+
+    list_init(&state->fte_pending_list);
+}
+
+/* The first pass of the processing described in the comment about
+ * fte_state_init(). fte_queue() is the first pass to be called as each
+ * flow is read from its source. */
+static void
+fte_queue(struct fte_state *state, const struct match *match,
+          int priority, struct fte_version *version, int index)
+{
+    struct fte_pending *pending = xmalloc(sizeof *pending);
+    int i;
+
+    pending->match = xmemdup(match, sizeof *match);
+    pending->priority = priority;
+    pending->version = version;
+    pending->index = index;
+    list_push_back(&state->fte_pending_list, &pending->list_node);
+
+    if (!match->tun_md.valid) {
+        return;
+    }
+
+    ULLONG_FOR_EACH_1 (i, match->wc.masks.tunnel.metadata.present.map) {
+        if (match->tun_md.entry[i].loc.len > state->tun_metadata_size[i]) {
+            state->tun_metadata_size[i] = match->tun_md.entry[i].loc.len;
+        }
+    }
+}
+
+/* The second pass of the processing described in the comment about
+ * fte_state_init(). This should be called once all flows (from both
+ * sides of the comparison) have been added through fte_queue(). */
+static void
+fte_fill(struct fte_state *state, struct flow_tables *tables)
+{
+    struct fte_pending *pending;
+
+    generate_tun_metadata(state);
+
+    flow_tables_init(tables);
+    flow_tables_defer(tables);
+
+    LIST_FOR_EACH_POP(pending, list_node, &state->fte_pending_list) {
+        remap_match(pending->match);
+        fte_insert(tables, pending->match, pending->priority, pending->version,
+                   pending->index);
+        free(pending->match);
+        free(pending);
+    }
+
+    flow_tables_publish(tables);
+}
+
 /* Reads the flows in 'filename' as flow table entries in 'tables' for the
  * version with the specified 'index'.  Returns the flow formats able to
  * represent the flows that were read. */
 static enum ofputil_protocol
-read_flows_from_file(const char *filename, struct flow_tables *tables,
-                     int index)
+read_flows_from_file(const char *filename, struct fte_state *state, int index)
 {
     enum ofputil_protocol usable_protocols;
     int line_number;
@@ -2758,7 +2927,6 @@ read_flows_from_file(const char *filename, struct flow_tables *tables,
     ds_init(&s);
     usable_protocols = OFPUTIL_P_ANY;
     line_number = 0;
-    flow_tables_defer(tables);
     while (!ds_get_preprocessed_line(&s, file, &line_number)) {
         struct fte_version *version;
         struct ofputil_flow_mod fm;
@@ -2782,9 +2950,8 @@ read_flows_from_file(const char *filename, struct flow_tables *tables,
         version->ofpacts_len = fm.ofpacts_len;
         version->table_id = fm.table_id != OFPTT_ALL ? fm.table_id : 0;
 
-        fte_insert(tables, &fm.match, fm.priority, version, index);
+        fte_queue(state, &fm.match, fm.priority, version, index);
     }
-    flow_tables_publish(tables);
     ds_destroy(&s);
 
     if (file != stdin) {
@@ -2853,7 +3020,7 @@ recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
 static void
 read_flows_from_switch(struct vconn *vconn,
                        enum ofputil_protocol protocol,
-                       struct flow_tables *tables, int index)
+                       struct fte_state *state, int index)
 {
     struct ofputil_flow_stats_request fsr;
     struct ofputil_flow_stats fs;
@@ -2874,7 +3041,6 @@ read_flows_from_switch(struct vconn *vconn,
 
     reply = NULL;
     ofpbuf_init(&ofpacts, 0);
-    flow_tables_defer(tables);
     while (recv_flow_stats_reply(vconn, send_xid, &reply, &fs, &ofpacts)) {
         struct fte_version *version;
 
@@ -2888,9 +3054,8 @@ read_flows_from_switch(struct vconn *vconn,
         version->ofpacts = xmemdup(fs.ofpacts, fs.ofpacts_len);
         version->table_id = fs.table_id;
 
-        fte_insert(tables, &fs.match, fs.priority, version, index);
+        fte_queue(state, &fs.match, fs.priority, version, index);
     }
-    flow_tables_publish(tables);
     ofpbuf_uninit(&ofpacts);
 }
 
@@ -2936,19 +3101,22 @@ ofctl_replace_flows(struct ovs_cmdl_context *ctx)
 {
     enum { FILE_IDX = 0, SWITCH_IDX = 1 };
     enum ofputil_protocol usable_protocols, protocol;
+    struct fte_state fte_state;
     struct flow_tables tables;
     struct classifier *cls;
     struct ovs_list requests;
     struct vconn *vconn;
     struct fte *fte;
 
-    flow_tables_init(&tables);
-    usable_protocols = read_flows_from_file(ctx->argv[2], &tables, FILE_IDX);
+    fte_state_init(&fte_state);
+    usable_protocols = read_flows_from_file(ctx->argv[2], &fte_state, FILE_IDX);
 
     protocol = open_vconn(ctx->argv[1], &vconn);
     protocol = set_protocol_for_flow_dump(vconn, protocol, usable_protocols);
 
-    read_flows_from_switch(vconn, protocol, &tables, SWITCH_IDX);
+    read_flows_from_switch(vconn, protocol, &fte_state, SWITCH_IDX);
+
+    fte_fill(&fte_state, &tables);
 
     list_init(&requests);
 
@@ -2988,21 +3156,20 @@ ofctl_replace_flows(struct ovs_cmdl_context *ctx)
 }
 
 static void
-read_flows_from_source(const char *source, struct flow_tables *tables,
-                       int index)
+read_flows_from_source(const char *source, struct fte_state *state, int index)
 {
     struct stat s;
 
     if (source[0] == '/' || source[0] == '.'
         || (!strchr(source, ':') && !stat(source, &s))) {
-        read_flows_from_file(source, tables, index);
+        read_flows_from_file(source, state, index);
     } else {
         enum ofputil_protocol protocol;
         struct vconn *vconn;
 
         protocol = open_vconn(source, &vconn);
         protocol = set_protocol_for_flow_dump(vconn, protocol, OFPUTIL_P_ANY);
-        read_flows_from_switch(vconn, protocol, tables, index);
+        read_flows_from_switch(vconn, protocol, state, index);
         vconn_close(vconn);
     }
 }
@@ -3011,14 +3178,16 @@ static void
 ofctl_diff_flows(struct ovs_cmdl_context *ctx)
 {
     bool differences = false;
+    struct fte_state fte_state;
     struct flow_tables tables;
     struct classifier *cls;
     struct ds a_s, b_s;
     struct fte *fte;
 
-    flow_tables_init(&tables);
-    read_flows_from_source(ctx->argv[1], &tables, 0);
-    read_flows_from_source(ctx->argv[2], &tables, 1);
+    fte_state_init(&fte_state);
+    read_flows_from_source(ctx->argv[1], &fte_state, 0);
+    read_flows_from_source(ctx->argv[2], &fte_state, 1);
+    fte_fill(&fte_state, &tables);
 
     ds_init(&a_s);
     ds_init(&b_s);

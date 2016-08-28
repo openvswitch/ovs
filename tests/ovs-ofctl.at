@@ -2684,6 +2684,34 @@ AT_CHECK([ovs-ofctl diff-flows add-flows.txt br0 | sort], [0], [expout])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ovs-ofctl diff-flows - tunnel metadata])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0,{class=0xffff,type=1,len=8}->tun_metadata1"])
+
+# Tunnel metadata requires dynamic allocation of space in the metadata table.
+# To stress this, try flows with different sizes for metadata, in different
+# orders, and interspersed with other fields to see if they still compare
+# correctly.
+AT_DATA([flows.txt], [dnl
+priority=0,tun_metadata0=0,actions=drop
+priority=1,tun_metadata1=0xef/0xff,tun_metadata0=0xabcd,actions=drop
+priority=2,tun_metadata0=0xffffffff,actions=drop
+])
+
+AT_DATA([flows2.txt], [dnl
+priority=2,tun_metadata0=0xffffffff,actions=drop
+priority=0,tun_metadata0=0,actions=drop
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+AT_CHECK([ovs-ofctl diff-flows br0 flows2.txt], [2], [dnl
+-priority=1,tun_metadata0=0xabcd,tun_metadata1=0xef/0xff actions=drop
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl ofpacts that differ bytewise don't necessarily differ when
 dnl converted to another representation, such as OpenFlow 1.0
 dnl or to a string.  "resubmit(,1)" is an example of an action
