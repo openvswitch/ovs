@@ -1147,7 +1147,7 @@ should_install_flow(struct udpif *udpif, struct upcall *upcall)
     if (upcall->type != DPIF_UC_MISS) {
         return false;
     } else if (upcall->recirc && !upcall->have_recirc_ref) {
-        VLOG_WARN_RL(&rl, "upcall: no reference for recirc flow");
+        VLOG_DBG_RL(&rl, "upcall: no reference for recirc flow");
         return false;
     }
 
