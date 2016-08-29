@@ -226,13 +226,13 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
     /* The peer that should receive 'pkt' */
     struct tcp_peer *dst = &conn->peer[reply ? 0 : 1];
     uint8_t sws = 0, dws = 0;
-    UINT16 tcp_flags = tcp->flags;
+    UINT16 tcp_flags = ntohs(tcp->flags);
     uint16_t win = ntohs(tcp->window);
     uint32_t ack, end, seq, orig_seq;
     uint32_t p_len = OvsGetTcpPayloadLength(nbl);
     int ackskew;
 
-    if (OvsCtInvalidTcpFlags(tcp->flags)) {
+    if (OvsCtInvalidTcpFlags(tcp_flags)) {
         return CT_UPDATE_INVALID;
     }
 
@@ -268,7 +268,7 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
     if (src->state < CT_DPIF_TCPS_SYN_SENT) {
         /* First packet from this end. Set its state */
 
-        ack = ntohl(tcp->ack);
+        ack = ntohl(tcp->ack_seq);
 
         end = seq + p_len;
         if (tcp_flags & TCP_SYN) {
@@ -308,7 +308,7 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
         }
 
     } else {
-        ack = ntohl(tcp->ack);
+        ack = ntohl(tcp->ack_seq);
         end = seq + p_len;
         if (tcp_flags & TCP_SYN) {
             end++;
@@ -460,14 +460,16 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
 BOOLEAN
 OvsConntrackValidateTcpPacket(const TCPHdr *tcp)
 {
-    if (tcp == NULL || OvsCtInvalidTcpFlags(tcp->flags)) {
+    UINT16 tcp_flags = ntohs(tcp->flags);
+
+    if (tcp == NULL || OvsCtInvalidTcpFlags(tcp_flags)) {
         return FALSE;
     }
 
     /* A syn+ack is not allowed to create a connection.  We want to allow
      * totally new connections (syn) or already established, not partially
      * open (syn+ack). */
-    if ((tcp->flags & TCP_SYN) && (tcp->flags & TCP_ACK)) {
+    if ((tcp_flags & TCP_SYN) && (tcp_flags & TCP_ACK)) {
         return FALSE;
     }
 
