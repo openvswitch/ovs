@@ -2011,6 +2011,15 @@ A: When a switch sends a packet to an OpenFlow controller using a
    buffering that the OpenFlow specification requires implementations
    to document.
 
+   Note that the packet buffering support is deprecated in OVS 2.6
+   release, and will be removed in OVS 2.7.  After the change OVS
+   always sends the 'buffer_id' as 0xffffffff in "packet-in" messages
+   and will send an error response if any other value of this field is
+   included in "packet-out" and "flow mod" sent by a controller.
+   Controllers are already expected to work properly in cases where
+   the switch can not buffer packets, so this change should not affect
+   existing users.
+
 ### Q: How does OVS divide flows among buckets in an OpenFlow "select" group?
 
 A: In Open vSwitch 2.3 and earlier, Open vSwitch used the destination
