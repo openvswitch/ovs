@@ -88,8 +88,8 @@ struct ovsdb_idl {
     const struct ovsdb_idl_class *class;
     struct jsonrpc_session *session;
     struct uuid uuid;
-    struct shash table_by_name;
-    struct ovsdb_idl_table *tables; /* Contains "struct ovsdb_idl_table *"s.*/
+    struct shash table_by_name; /* Contains "struct ovsdb_idl_table *"s.*/
+    struct ovsdb_idl_table *tables; /* Array of ->class->n_tables elements. */
     unsigned int change_seqno;
     bool verify_write_only;
 
