@@ -2639,10 +2639,14 @@ priority=6,in_port=1027 actions=output:64
 priority=2,in_port=1025 actions=output:47
 priority=8,tcp,tp_src=5 actions=drop
 priority=9,tcp,tp_src=6 actions=drop
+priority=10,tun_metadata0=0xab actions=drop
+priority=11,tun_metadata0=0xcd actions=drop
 ]])
 
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0"])
 AT_CHECK([ovs-ofctl add-flows br0 allflows.txt
 ], [0], [ignore])
+
 AT_CHECK([ovs-ofctl --sort dump-flows br0 | ofctl_strip], [0], [dnl
  priority=1,in_port=1026 actions=output:45
  priority=2,in_port=1025 actions=output:47
@@ -2653,8 +2657,12 @@ AT_CHECK([ovs-ofctl --sort dump-flows br0 | ofctl_strip], [0], [dnl
  priority=7,in_port=1029 actions=output:43
  priority=8,tcp,tp_src=5 actions=drop
  priority=9,tcp,tp_src=6 actions=drop
+ priority=10,tun_metadata0=0xab actions=drop
+ priority=11,tun_metadata0=0xcd actions=drop
 ])
 AT_CHECK([ovs-ofctl --rsort dump-flows br0 | ofctl_strip], [0], [dnl
+ priority=11,tun_metadata0=0xcd actions=drop
+ priority=10,tun_metadata0=0xab actions=drop
  priority=9,tcp,tp_src=6 actions=drop
  priority=8,tcp,tp_src=5 actions=drop
  priority=7,in_port=1029 actions=output:43
@@ -2673,6 +2681,8 @@ AT_CHECK([ovs-ofctl --sort=in_port dump-flows br0 | ofctl_strip], [0], [dnl
  priority=7,in_port=1029 actions=output:43
  priority=5,in_port=1029 actions=output:43
  priority=4,in_port=23213 actions=output:42
+ priority=11,tun_metadata0=0xcd actions=drop
+ priority=10,tun_metadata0=0xab actions=drop
  priority=9,tcp,tp_src=6 actions=drop
  priority=8,tcp,tp_src=5 actions=drop
 ])
@@ -2684,12 +2694,16 @@ AT_CHECK([ovs-ofctl --rsort=in_port dump-flows br0 | ofctl_strip], [0], [dnl
  priority=6,in_port=1027 actions=output:64
  priority=1,in_port=1026 actions=output:45
  priority=2,in_port=1025 actions=output:47
+ priority=11,tun_metadata0=0xcd actions=drop
+ priority=10,tun_metadata0=0xab actions=drop
  priority=9,tcp,tp_src=6 actions=drop
  priority=8,tcp,tp_src=5 actions=drop
 ])
 AT_CHECK([ovs-ofctl --sort=tcp_src dump-flows br0 | ofctl_strip], [0], [dnl
  priority=8,tcp,tp_src=5 actions=drop
  priority=9,tcp,tp_src=6 actions=drop
+ priority=11,tun_metadata0=0xcd actions=drop
+ priority=10,tun_metadata0=0xab actions=drop
  priority=7,in_port=1029 actions=output:43
  priority=6,in_port=1027 actions=output:64
  priority=5,in_port=1029 actions=output:43
@@ -2699,7 +2713,7 @@ AT_CHECK([ovs-ofctl --sort=tcp_src dump-flows br0 | ofctl_strip], [0], [dnl
  priority=1,in_port=1026 actions=output:45
 ])
 AT_CHECK(
-  [ovs-ofctl --sort=in_port --sort=tcp_src dump-flows br0 | ofctl_strip], [0],
+  [ovs-ofctl --sort=in_port --sort=tcp_src --sort=tun_metadata0 dump-flows br0 | ofctl_strip], [0],
   [ priority=2,in_port=1025 actions=output:47
  priority=1,in_port=1026 actions=output:45
  priority=6,in_port=1027 actions=output:64
@@ -2709,6 +2723,8 @@ AT_CHECK(
  priority=4,in_port=23213 actions=output:42
  priority=8,tcp,tp_src=5 actions=drop
  priority=9,tcp,tp_src=6 actions=drop
+ priority=10,tun_metadata0=0xab actions=drop
+ priority=11,tun_metadata0=0xcd actions=drop
 ])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
