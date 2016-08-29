@@ -128,12 +128,15 @@ void sfl_agent_tick(SFLAgent *agent, time_t now)
     SFLSampler *sm = agent->samplers;
     SFLPoller *pl = agent->pollers;
     agent->now = now;
-    /* receivers use ticks to flush send data */
-    for(; rcv != NULL; rcv = rcv->nxt) sfl_receiver_tick(rcv, now);
     /* samplers use ticks to decide when they are sampling too fast */
     for(; sm != NULL; sm = sm->nxt) sfl_sampler_tick(sm, now);
     /* pollers use ticks to decide when to ask for counters */
     for(; pl != NULL; pl = pl->nxt) sfl_poller_tick(pl, now);
+    /* receivers use ticks to flush send data.  By doing this
+     * step last we ensure that fresh counters polled during
+     * sfl_poller_tick() above will be flushed promptly.
+     */
+    for(; rcv != NULL; rcv = rcv->nxt) sfl_receiver_tick(rcv, now);
 }
 
 /*_________________---------------------------__________________
