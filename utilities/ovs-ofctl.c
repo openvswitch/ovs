@@ -1099,6 +1099,26 @@ ofctl_dump_flows__(int argc, char *argv[], bool aggregate)
     vconn_close(vconn);
 }
 
+static void
+get_match_field(const struct mf_field *field, const struct match *match,
+                union mf_value *value)
+{
+    if (!match->tun_md.valid || (field->id < MFF_TUN_METADATA0 ||
+                                 field->id >= MFF_TUN_METADATA0 +
+                                              TUN_METADATA_NUM_OPTS)) {
+        mf_get_value(field, &match->flow, value);
+    } else {
+        const struct tun_metadata_loc *loc = &match->tun_md.entry[field->id -
+                                                         MFF_TUN_METADATA0].loc;
+
+        /* Since we don't have a tunnel mapping table, extract the value
+         * from the locally allocated location in the match. */
+        memset(value, 0, field->n_bytes - loc->len);
+        memcpy(value->tun_metadata + field->n_bytes - loc->len,
+               match->flow.tunnel.metadata.opts.u8 + loc->c.offset, loc->len);
+    }
+}
+
 static int
 compare_flows(const void *afs_, const void *bfs_)
 {
@@ -1129,8 +1149,8 @@ compare_flows(const void *afs_, const void *bfs_)
             } else {
                 union mf_value aval, bval;
 
-                mf_get_value(f, &a->flow, &aval);
-                mf_get_value(f, &b->flow, &bval);
+                get_match_field(f, a, &aval);
+                get_match_field(f, b, &bval);
                 ret = memcmp(&aval, &bval, f->n_bytes);
             }
         }
