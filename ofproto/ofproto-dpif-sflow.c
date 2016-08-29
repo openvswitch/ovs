@@ -1290,7 +1290,7 @@ dpif_sflow_received(struct dpif_sflow *ds, const struct dp_packet *packet,
     if (flow->tunnel.ip_dst) {
 	memset(&tnlInElem, 0, sizeof(tnlInElem));
 	tnlInElem.tag = SFLFLOW_EX_IPV4_TUNNEL_INGRESS;
-	tnlInProto = dpif_sflow_tunnel_proto(in_dsp->tunnel_type);
+	tnlInProto = in_dsp ? dpif_sflow_tunnel_proto(in_dsp->tunnel_type) : 0;
 	dpif_sflow_tunnel_v4(tnlInProto,
 			     &flow->tunnel,
 			     &tnlInElem.flowType.ipv4);
