@@ -24,6 +24,15 @@ v2.6.0 - xx xxx xxxx
        packet to size M bytes when outputting to port N.
      * New command OFPGC_ADD_OR_MOD for OFPT_GROUP_MOD message that adds a
        new group or modifies an existing groups
+     * The optional OpenFlow packet buffering feature is deprecated in
+       this release, and will be removed in the next OVS release
+       (2.7).  After the change OVS always sends the 'buffer_id' as
+       0xffffffff in packet-in messages and will send an error
+       response if any other value of this field is included in
+       packet-out and flow mod sent by a controller.  Controllers are
+       already expected to work properly in cases where the switch can
+       not buffer packets, so this change should not affect existing
+       users.
    - Improved OpenFlow version compatibility for actions:
      * New OpenFlow extension to support the "group" action in OpenFlow 1.0.
      * OpenFlow 1.0 "enqueue" action now properly translated to OpenFlow 1.1+.
