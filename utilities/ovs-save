@@ -106,6 +106,12 @@ save_flows () {
     fi
 
     for bridge in "$@"; do
+        echo -n "ovs-ofctl add-tlv-map ${bridge} '"
+        ovs-ofctl dump-tlv-map br-int | \
+        awk '/^ 0x/ {if (cnt != 0) printf ","; \
+             cnt++;printf "{class="$1",type="$2",len="$3"}->"$4}'
+        echo "'"
+
         echo "ovs-ofctl add-flows ${bridge} - << EOF"
         ovs-ofctl dump-flows "${bridge}" | sed -e '/NXST_FLOW/d' \
             -e 's/\(idle\|hard\)_age=[^,]*,//g'
