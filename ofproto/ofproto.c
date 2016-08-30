@@ -300,6 +300,8 @@ static void meter_insert_rule(struct rule *);
 /* unixctl. */
 static void ofproto_unixctl_init(void);
 
+static int find_min_mtu(struct ofproto *p);
+
 /* All registered ofproto classes, in probe order. */
 static const struct ofproto_class **ofproto_classes;
 static size_t n_ofproto_classes;
@@ -534,7 +536,7 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     ovs_list_init(&ofproto->expirable);
     ofproto->connmgr = connmgr_create(ofproto, datapath_name, datapath_name);
     guarded_list_init(&ofproto->rule_executes);
-    ofproto->min_mtu = INT_MAX;
+    ofproto->min_mtu = find_min_mtu(ofproto);
     cmap_init(&ofproto->groups);
     ovs_mutex_unlock(&ofproto_mutex);
     ofproto->ogf.types = 0xf;
@@ -2775,10 +2777,8 @@ update_mtu(struct ofproto *p, struct ofport *port)
         return;
     }
     if (ofport_is_internal(p, port)) {
-        if (dev_mtu > p->min_mtu) {
-           if (!netdev_set_mtu(port->netdev, p->min_mtu)) {
-               dev_mtu = p->min_mtu;
-           }
+        if (!netdev_set_mtu(port->netdev, p->min_mtu)) {
+            dev_mtu = p->min_mtu;
         }
         port->mtu = dev_mtu;
         return;
