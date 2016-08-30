@@ -311,13 +311,6 @@ def printCIDLSource(schemaFile):
 #include "ovsdb-error.h"
 #include "util.h"
 
-#ifdef __CHECKER__
-/* Sparse dislikes sizeof(bool) ("warning: expression using sizeof bool"). */
-enum { sizeof_bool = 1 };
-#else
-enum { sizeof_bool = sizeof(bool) };
-#endif
-
 ''' % schema.idlHeader
 
     # Cast functions.
@@ -411,23 +404,11 @@ static void
                     valueSrc = "datum->values[i].%s" % type.value.type.to_string()
                 print "        if (!row->n_%s) {" % (columnName)
 
-                # Special case for boolean types.  This is only here because
-                # sparse does not like the "normal" case ("warning: expression
-                # using sizeof bool").
-                if type.key.type == ovs.db.types.BooleanType:
-                    sizeof = "sizeof_bool"
-                else:
-                    sizeof = "sizeof *%s" % keyVar
-                print "            %s = xmalloc(%s * %s);" % (keyVar, nMax,
-                                                              sizeof)
+                print "            %s = xmalloc(%s * sizeof *%s);" % (
+                    keyVar, nMax, keyVar)
                 if valueVar:
-                    # Special case for boolean types (see above).
-                    if type.value.type == ovs.db.types.BooleanType:
-                        sizeof = " * sizeof_bool"
-                    else:
-                        sizeof = "sizeof *%s" % valueVar
-                    print "            %s = xmalloc(%s * %s);" % (valueVar,
-                                                                  nMax, sizeof)
+                    print "            %s = xmalloc(%s * sizeof *%s);" % (
+                        valueVar, nMax, valueVar)
                 print "        }"
                 print "        %s[row->n_%s] = %s;" % (keyVar, columnName, keySrc)
                 if valueVar:
