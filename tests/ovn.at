@@ -5169,3 +5169,73 @@ AT_CHECK([ovn-nbctl lsp-get-tag local1], [0], [50
 ])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- lsp deletion and broadcast-flow deletion on localnet])
+AT_KEYWORDS([ovn])
+ovn_start
+ovn-nbctl ls-add lsw0
+net_add n1
+for i in 1 2; do
+    sim_add hv$i
+    as hv$i
+    ovs-vsctl add-br br-phys
+    ovn_attach n1 br-phys 192.168.0.$i
+    ovs-vsctl add-br br-eth0
+    AT_CHECK([ovs-vsctl set Open_vSwitch . external-ids:ovn-bridge-mappings=physnet1:br-eth0])
+done
+
+# Create a localnet port.
+AT_CHECK([ovn-nbctl lsp-add lsw0 ln_port])
+AT_CHECK([ovn-nbctl lsp-set-addresses ln_port unknown])
+AT_CHECK([ovn-nbctl lsp-set-type ln_port localnet])
+AT_CHECK([ovn-nbctl lsp-set-options ln_port network_name=physnet1])
+
+
+# Create 3 vifs.
+AT_CHECK([ovn-nbctl lsp-add lsw0 localvif1])
+AT_CHECK([ovn-nbctl lsp-set-addresses localvif1 "f0:00:00:00:00:01 192.168.1.1"])
+AT_CHECK([ovn-nbctl lsp-set-port-security localvif1 "f0:00:00:00:00:01"])
+AT_CHECK([ovn-nbctl lsp-add lsw0 localvif2])
+AT_CHECK([ovn-nbctl lsp-set-addresses localvif2 "f0:00:00:00:00:01 192.168.1.2"])
+AT_CHECK([ovn-nbctl lsp-set-port-security localvif2 "f0:00:00:00:00:02"])
+AT_CHECK([ovn-nbctl lsp-add lsw0 localvif3])
+AT_CHECK([ovn-nbctl lsp-set-addresses localvif3 "f0:00:00:00:00:03 192.168.1.3"])
+AT_CHECK([ovn-nbctl lsp-set-port-security localvif3 "f0:00:00:00:00:03"])
+
+# Bind the localvif1 to hv1.
+as hv1
+AT_CHECK([ovs-vsctl add-port br-int localvif1 -- set Interface localvif1 external_ids:iface-id=localvif1])
+
+# On hv1, check that there are no flows outputting bcast to tunnel
+OVS_WAIT_UNTIL([test `ovs-ofctl dump-flows br-int table=32 | ofctl_strip | grep output | wc -l` -eq 0])
+
+# On hv2, check that there is 1 flow outputting bcast to tunnel to hv1.
+as hv2
+OVS_WAIT_UNTIL([test `ovs-ofctl dump-flows br-int table=32 | ofctl_strip | grep output | wc -l` -eq 1])
+
+# Now bind vif2 on hv2.
+AT_CHECK([ovs-vsctl add-port br-int localvif2 -- set Interface localvif2 external_ids:iface-id=localvif2])
+
+# At this point, the broadcast flow on vif2 should be deleted.
+# because, there is now a localnet vif bound (table=32 programming logic)
+OVS_WAIT_UNTIL([test `ovs-ofctl dump-flows br-int table=32 | ofctl_strip | grep output | wc -l` -eq 0])
+
+# Verify that the local net patch port exists on hv2.
+OVS_WAIT_UNTIL([test `ovs-vsctl show | grep "Port patch-br-int-to-ln_port" | wc -l` -eq 1])
+
+# Now bind vif3 on hv2.
+AT_CHECK([ovs-vsctl add-port br-int localvif3 -- set Interface localvif3 external_ids:iface-id=localvif3])
+
+# Verify that the local net patch port still exists on hv2
+OVS_WAIT_UNTIL([test `ovs-vsctl show | grep "Port patch-br-int-to-ln_port" | wc -l` -eq 1])
+
+# Delete localvif2
+AT_CHECK([ovn-nbctl lsp-del localvif2])
+
+# Verify that the local net patch port still exists on hv2,
+# because, localvif3 is still bound.
+OVS_WAIT_UNTIL([test `ovs-vsctl show | grep "Port patch-br-int-to-ln_port" | wc -l` -eq 1])
+
+
+OVN_CLEANUP([hv1],[hv2])
+AT_CLEANUP
