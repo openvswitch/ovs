@@ -1486,10 +1486,9 @@ netdev_linux_get_miimon(const char *name, bool *miimon)
 
         if (!error) {
             *miimon = !!(data.val_out & BMSR_LSTATUS);
-        } else {
-            VLOG_WARN_RL(&rl, "%s: failed to query MII", name);
         }
-    } else {
+    }
+    if (error) {
         struct ethtool_cmd ecmd;
 
         VLOG_DBG_RL(&rl, "%s: failed to query MII, falling back to ethtool",
