@@ -126,6 +126,8 @@ DAEMON_MONITOR_RESTART_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 m4_define([DAEMON_DETACH_PYN],
   [AT_SETUP([daemon --detach - $1])
    AT_SKIP_IF([test $2 = no])
+   # Skip this test for Windows, the pid file not removed if the daemon is killed
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_CAPTURE_FILE([pid])
    # Start the daemon and make sure that the pidfile exists immediately.
    # We don't wait for the pidfile to get created because the daemon is
