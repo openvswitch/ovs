@@ -36,7 +36,6 @@
 struct ofpbuf;
 union ofp_action;
 struct ofpact_set_field;
-struct pktbuf;
 
 /* Port numbers. */
 enum ofperr ofputil_port_from_ofp11(ovs_be32 ofp11_port,
@@ -498,8 +497,7 @@ struct ofputil_packet_in_private {
 struct ofpbuf *ofputil_encode_packet_in_private(
     const struct ofputil_packet_in_private *,
     enum ofputil_protocol protocol,
-    enum nx_packet_in_format,
-    uint16_t max_len, struct pktbuf *);
+    enum nx_packet_in_format);
 
 enum ofperr ofputil_decode_packet_in_private(
     const struct ofp_header *, bool loose,

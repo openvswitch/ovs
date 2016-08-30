@@ -144,7 +144,7 @@ OpenFlow port number of `1`.  Similarly, `lport2` has an OpenFlow port number of
 
     $ ovs-ofctl show br-int
     OFPT_FEATURES_REPLY (xid=0x2): dpid:00003e1ba878364d
-    n_tables:254, n_buffers:256
+    n_tables:254, n_buffers:0
     capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
     actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
      1(lport1): addr:aa:55:aa:55:00:07
@@ -624,7 +624,7 @@ We get those port numbers using `ovs-ofctl`:
 
     $ ovs-ofctl show br-int
     OFPT_FEATURES_REPLY (xid=0x2): dpid:00002a84824b0d40
-    n_tables:254, n_buffers:256
+    n_tables:254, n_buffers:0
     capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
     actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst
      1(ovn-fakech-0): addr:aa:55:aa:55:00:0e

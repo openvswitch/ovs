@@ -34,7 +34,7 @@ OVS_VSWITCHD_START
 AT_CHECK([ovs-ofctl -vwarn show br0], [0], [stdout])
 AT_CHECK([strip_xids < stdout], [0], [dnl
 OFPT_FEATURES_REPLY: dpid:fedcba9876543210
-n_tables:254, n_buffers:256
+n_tables:254, n_buffers:0
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
 actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
  LOCAL(br0): addr:aa:55:aa:55:00:00
@@ -56,7 +56,7 @@ s/ (xid=0x[0-9a-fA-F]*)//
 s/00:0.$/00:0x/' < stdout]],
       [0], [dnl
 OFPT_FEATURES_REPLY: dpid:fedcba9876543210
-n_tables:254, n_buffers:256
+n_tables:254, n_buffers:0
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
 actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
  1(p1): addr:aa:55:aa:55:00:0x
@@ -1174,7 +1174,7 @@ do
     AT_CHECK([ovs-ofctl -vwarn show br0], [0], [stdout])
     AT_CHECK_UNQUOTED([strip_xids < stdout], [0], [dnl
 OFPT_FEATURES_REPLY: dpid:fedcba9876543210
-n_tables:254, n_buffers:256
+n_tables:254, n_buffers:0
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS QUEUE_STATS ARP_MATCH_IP
 actions: output enqueue set_vlan_vid set_vlan_pcp strip_vlan mod_dl_src mod_dl_dst mod_nw_src mod_nw_dst mod_nw_tos mod_tp_src mod_tp_dst
  LOCAL(br0): addr:aa:55:aa:55:00:00
@@ -1206,7 +1206,7 @@ do
     AT_CHECK([ovs-ofctl -O OpenFlow12 -vwarn show br0], [0], [stdout])
     AT_CHECK_UNQUOTED([strip_xids < stdout], [0], [dnl
 OFPT_FEATURES_REPLY (OF1.2): dpid:fedcba9876543210
-n_tables:254, n_buffers:256
+n_tables:254, n_buffers:0
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS GROUP_STATS QUEUE_STATS
  LOCAL(br0): addr:aa:55:aa:55:00:00
      config:     $config
@@ -1237,7 +1237,7 @@ do
     AT_CHECK([ovs-ofctl -O OpenFlow14 -vwarn show br0], [0], [stdout])
     AT_CHECK_UNQUOTED([strip_xids < stdout], [0], [dnl
 OFPT_FEATURES_REPLY (OF1.4): dpid:fedcba9876543210
-n_tables:254, n_buffers:256
+n_tables:254, n_buffers:0
 capabilities: FLOW_STATS TABLE_STATS PORT_STATS GROUP_STATS QUEUE_STATS
 OFPST_PORT_DESC reply (OF1.4):
  LOCAL(br0): addr:aa:55:aa:55:00:00

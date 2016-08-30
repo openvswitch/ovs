@@ -115,14 +115,6 @@ struct ofproto {
     /* OpenFlow connections. */
     struct connmgr *connmgr;
 
-    /* Delayed rule executions.
-     *
-     * We delay calls to ->ofproto_class->rule_execute() past releasing
-     * ofproto_mutex during a flow_mod, because otherwise a "learn" action
-     * triggered by the executing the packet would try to recursively modify
-     * the flow table and reacquire the global lock. */
-    struct guarded_list rule_executes; /* Contains "struct rule_execute"s. */
-
     int min_mtu;                    /* Current MTU of non-internal ports. */
 
     /* Groups. */
@@ -1285,25 +1277,6 @@ struct ofproto_class {
                            uint64_t *byte_count, long long int *used)
         /* OVS_EXCLUDED(ofproto_mutex) */;
 
-    /* Applies the actions in 'rule' to 'packet'.  (This implements sending
-     * buffered packets for OpenFlow OFPT_FLOW_MOD commands.)
-     *
-     * Takes ownership of 'packet' (so it should eventually free it, with
-     * ofpbuf_delete()).
-     *
-     * 'flow' reflects the flow information for 'packet'.  All of the
-     * information in 'flow' is extracted from 'packet', except for
-     * flow->tunnel and flow->in_port, which are assigned the correct values
-     * for the incoming packet.  The register values are zeroed.  'packet''s
-     * header pointers and offsets (e.g. packet->l3) are appropriately
-     * initialized.  packet->l3 is aligned on a 32-bit boundary.
-     *
-     * The implementation should add the statistics for 'packet' into 'rule'.
-     *
-     * Returns 0 if successful, otherwise an OpenFlow error code. */
-    enum ofperr (*rule_execute)(struct rule *rule, const struct flow *flow,
-                                struct dp_packet *packet);
-
     /* Changes the OpenFlow IP fragment handling policy to 'frag_handling',
      * which takes one of the following values, with the corresponding
      * meanings:
@@ -1880,7 +1853,6 @@ struct ofproto_flow_mod {
     /* Replicate needed fields from ofputil_flow_mod to not need it after the
      * flow has been created. */
     uint16_t command;
-    uint32_t buffer_id;
     bool modify_cookie;
     /* Fields derived from ofputil_flow_mod. */
     bool modify_may_add_flow;

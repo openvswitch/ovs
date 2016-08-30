@@ -32,7 +32,6 @@
 #include "openvswitch/vlog.h"
 #include "pinsched.h"
 #include "poll-loop.h"
-#include "pktbuf.h"
 #include "rconn.h"
 #include "openvswitch/shash.h"
 #include "simap.h"

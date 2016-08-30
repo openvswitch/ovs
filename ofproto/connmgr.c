@@ -34,7 +34,6 @@
 #include "openvswitch/vlog.h"
 #include "pinsched.h"
 #include "poll-loop.h"
-#include "pktbuf.h"
 #include "rconn.h"
 #include "openvswitch/shash.h"
 #include "simap.h"
@@ -78,7 +77,6 @@ struct ofconn {
     struct rconn_packet_counter *packet_in_counter; /* # queued on 'rconn'. */
 #define N_SCHEDULERS 2
     struct pinsched *schedulers[N_SCHEDULERS];
-    struct pktbuf *pktbuf;         /* OpenFlow packet buffers. */
     int miss_send_len;             /* Bytes to send of buffered packets. */
     uint16_t controller_id;     /* Connection controller ID. */
 
@@ -416,7 +414,6 @@ connmgr_get_memory_usage(const struct connmgr *mgr, struct simap *usage)
             pinsched_get_stats(ofconn->schedulers[i], &stats);
             packets += stats.n_queued;
         }
-        packets += pktbuf_count_packets(ofconn->pktbuf);
     }
     simap_increase(usage, "ofconns", ofconns);
     simap_increase(usage, "packets", packets);
@@ -694,7 +691,6 @@ add_controller(struct connmgr *mgr, const char *target, uint8_t dscp,
 
     ofconn = ofconn_create(mgr, rconn_create(5, 8, dscp, allowed_versions),
                            OFCONN_PRIMARY, true);
-    ofconn->pktbuf = pktbuf_create();
     rconn_connect(ofconn->rconn, target, name);
     hmap_insert(&mgr->controllers, &ofconn->hmap_node, hash_string(target, 0));
 
@@ -1113,14 +1109,6 @@ ofconn_send_error(const struct ofconn *ofconn,
     ofconn_send_reply(ofconn, reply);
 }
 
-/* Same as pktbuf_retrieve(), using the pktbuf owned by 'ofconn'. */
-enum ofperr
-ofconn_pktbuf_retrieve(struct ofconn *ofconn, uint32_t id,
-                       struct dp_packet **bufferp, ofp_port_t *in_port)
-{
-    return pktbuf_retrieve(ofconn->pktbuf, id, bufferp, in_port);
-}
-
 /* Reports that a flow_mod operation of the type specified by 'command' was
  * successfully executed by 'ofconn', so that the connmgr can log it. */
 void
@@ -1261,10 +1249,6 @@ ofconn_flush(struct ofconn *ofconn)
             ofconn->schedulers[i] = pinsched_create(rate, burst);
         }
     }
-    if (ofconn->pktbuf) {
-        pktbuf_destroy(ofconn->pktbuf);
-        ofconn->pktbuf = pktbuf_create();
-    }
     ofconn->miss_send_len = (ofconn->type == OFCONN_PRIMARY
                              ? OFP_DEFAULT_MISS_SEND_LEN
                              : 0);
@@ -1308,7 +1292,6 @@ ofconn_destroy(struct ofconn *ofconn)
     rconn_destroy(ofconn->rconn);
     rconn_packet_counter_destroy(ofconn->packet_in_counter);
     rconn_packet_counter_destroy(ofconn->reply_counter);
-    pktbuf_destroy(ofconn->pktbuf);
     rconn_packet_counter_destroy(ofconn->monitor_counter);
     free(ofconn);
 }
@@ -1695,9 +1678,7 @@ connmgr_send_async_msg(struct connmgr *mgr,
         }
 
         struct ofpbuf *msg = ofputil_encode_packet_in_private(
-            &am->pin.up, protocol, ofconn->packet_in_format,
-            am->pin.max_len >= 0 ? am->pin.max_len : ofconn->miss_send_len,
-            ofconn->pktbuf);
+            &am->pin.up, protocol, ofconn->packet_in_format);
 
         struct ovs_list txq;
         bool is_miss = (am->pin.up.public.reason == OFPR_NO_MATCH ||

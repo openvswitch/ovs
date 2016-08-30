@@ -4247,24 +4247,6 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes,
     ovs_mutex_unlock(&rule->stats_mutex);
 }
 
-static void
-rule_dpif_execute(struct rule_dpif *rule, const struct flow *flow,
-                  struct dp_packet *packet)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(rule->up.ofproto);
-
-    ofproto_dpif_execute_actions(ofproto, flow, rule, NULL, 0, packet);
-}
-
-static enum ofperr
-rule_execute(struct rule *rule, const struct flow *flow,
-             struct dp_packet *packet)
-{
-    rule_dpif_execute(rule_dpif_cast(rule), flow, packet);
-    dp_packet_delete(packet);
-    return 0;
-}
-
 static struct group_dpif *group_dpif_cast(const struct ofgroup *group)
 {
     return group ? CONTAINER_OF(group, struct group_dpif, up) : NULL;
@@ -5542,6 +5524,7 @@ ofproto_dpif_add_internal_flow(struct ofproto_dpif *ofproto,
     int error;
 
     fm = (struct ofputil_flow_mod) {
+        .buffer_id = UINT32_MAX,
         .match = *match,
         .priority = priority,
         .table_id = TBL_INTERNAL,
@@ -5580,6 +5563,7 @@ ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
     int error;
 
     fm = (struct ofputil_flow_mod) {
+        .buffer_id = UINT32_MAX,
         .match = *match,
         .priority = priority,
         .table_id = TBL_INTERNAL,
@@ -5648,7 +5632,6 @@ const struct ofproto_class ofproto_dpif_class = {
     rule_destruct,
     rule_dealloc,
     rule_get_stats,
-    rule_execute,
     set_frag_handling,
     packet_out,
     nxt_resume,

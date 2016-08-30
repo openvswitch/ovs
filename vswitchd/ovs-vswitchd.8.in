@@ -285,10 +285,7 @@ documentation, both the amount of available buffering, and the length
 of time before buffers may be reused.
 .
 .PP
-Open vSwitch maintains a separate set of 256 packet buffers for each
-OpenFlow connection.  Any given packet buffer is preserved until it is
-referenced by an \fBOFPT_FLOW_MOD\fR or \fBOFPT_PACKET_OUT\fR request
-or for 5 seconds, whichever comes first.
+Open vSwitch does not maintains any packet buffers.
 .
 .SH "LIMITS"
 .

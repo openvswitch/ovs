@@ -31,7 +31,6 @@
 #include "openvswitch/vlog.h"
 #include "ofproto.h"
 #include "ofproto-provider.h"
-#include "pktbuf.h"
 #include "poll-loop.h"
 #include "rconn.h"
 #include "timeval.h"

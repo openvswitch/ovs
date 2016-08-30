@@ -128,9 +128,6 @@ void ofconn_send_replies(const struct ofconn *, struct ovs_list *);
 void ofconn_send_error(const struct ofconn *, const struct ofp_header *request,
                        enum ofperr);
 
-enum ofperr ofconn_pktbuf_retrieve(struct ofconn *, uint32_t id,
-                                   struct dp_packet **bufferp, ofp_port_t *in_port);
-
 struct ofp_bundle;
 
 struct ofp_bundle *ofconn_get_bundle(struct ofconn *, uint32_t id);

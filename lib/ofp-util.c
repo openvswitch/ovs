@@ -45,7 +45,6 @@
 #include "openvswitch/vlog.h"
 #include "openflow/intel-ext.h"
 #include "packets.h"
-#include "pktbuf.h"
 #include "random.h"
 #include "tun-metadata.h"
 #include "unaligned.h"
@@ -3588,16 +3587,13 @@ encode_packet_in_reason(enum ofp_packet_in_reason reason,
  * function omits it.  The caller can add it itself if desired. */
 static void
 ofputil_put_packet_in(const struct ofputil_packet_in *pin,
-                      enum ofp_version version, uint32_t buffer_id,
-                      size_t include_bytes, struct ofpbuf *msg)
+                      enum ofp_version version, size_t include_bytes,
+                      struct ofpbuf *msg)
 {
     /* Add packet properties. */
     ofpprop_put(msg, NXPINT_PACKET, pin->packet, include_bytes);
     if (include_bytes != pin->packet_len) {
         ofpprop_put_u32(msg, NXPINT_FULL_LEN, pin->packet_len);
-    }
-    if (buffer_id != UINT32_MAX) {
-        ofpprop_put_u32(msg, NXPINT_BUFFER_ID, buffer_id);
     }
 
     /* Add flow properties. */
@@ -3642,11 +3638,10 @@ enum nx_continuation_prop_type {
  * function omits it.  The caller can add it itself if desired. */
 static void
 ofputil_put_packet_in_private(const struct ofputil_packet_in_private *pin,
-                              enum ofp_version version, uint32_t buffer_id,
-                              size_t include_bytes, struct ofpbuf *msg)
+                              enum ofp_version version, size_t include_bytes,
+                              struct ofpbuf *msg)
 {
-    ofputil_put_packet_in(&pin->public, version, buffer_id,
-                          include_bytes, msg);
+    ofputil_put_packet_in(&pin->public, version, include_bytes, msg);
 
     size_t continuation_ofs = ofpprop_start_nested(msg, NXPINT_CONTINUATION);
     size_t inner_ofs = msg->size;
@@ -3734,8 +3729,7 @@ ofputil_put_packet_in_private(const struct ofputil_packet_in_private *pin,
 }
 
 static struct ofpbuf *
-ofputil_encode_ofp10_packet_in(const struct ofputil_packet_in *pin,
-                               uint32_t buffer_id)
+ofputil_encode_ofp10_packet_in(const struct ofputil_packet_in *pin)
 {
     struct ofp10_packet_in *opi;
     struct ofpbuf *msg;
@@ -3746,14 +3740,14 @@ ofputil_encode_ofp10_packet_in(const struct ofputil_packet_in *pin,
     opi->total_len = htons(pin->packet_len);
     opi->in_port = htons(ofp_to_u16(pin->flow_metadata.flow.in_port.ofp_port));
     opi->reason = encode_packet_in_reason(pin->reason, OFP10_VERSION);
-    opi->buffer_id = htonl(buffer_id);
+    opi->buffer_id = htonl(UINT32_MAX);
 
     return msg;
 }
 
 static struct ofpbuf *
 ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin,
-                            enum ofp_version version, uint32_t buffer_id)
+                            enum ofp_version version)
 {
     struct nx_packet_in *npi;
     struct ofpbuf *msg;
@@ -3767,7 +3761,7 @@ ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin,
     ofpbuf_put_zeros(msg, 2);
 
     npi = msg->msg;
-    npi->buffer_id = htonl(buffer_id);
+    npi->buffer_id = htonl(UINT32_MAX);
     npi->total_len = htons(pin->packet_len);
     npi->reason = encode_packet_in_reason(pin->reason, version);
     npi->table_id = pin->table_id;
@@ -3779,8 +3773,7 @@ ofputil_encode_nx_packet_in(const struct ofputil_packet_in *pin,
 
 static struct ofpbuf *
 ofputil_encode_nx_packet_in2(const struct ofputil_packet_in_private *pin,
-                             enum ofp_version version, uint32_t buffer_id,
-                             size_t include_bytes)
+                             enum ofp_version version, size_t include_bytes)
 {
     /* 'extra' is just an estimate of the space required. */
     size_t extra = (pin->public.packet_len
@@ -3792,7 +3785,7 @@ ofputil_encode_nx_packet_in2(const struct ofputil_packet_in_private *pin,
     struct ofpbuf *msg = ofpraw_alloc_xid(OFPRAW_NXT_PACKET_IN2, version,
                                           htonl(0), extra);
 
-    ofputil_put_packet_in_private(pin, version, buffer_id, include_bytes, msg);
+    ofputil_put_packet_in_private(pin, version, include_bytes, msg);
     if (pin->public.userdata_len) {
         ofpprop_put(msg, NXPINT_USERDATA, pin->public.userdata,
                     pin->public.userdata_len);
@@ -3803,8 +3796,7 @@ ofputil_encode_nx_packet_in2(const struct ofputil_packet_in_private *pin,
 }
 
 static struct ofpbuf *
-ofputil_encode_ofp11_packet_in(const struct ofputil_packet_in *pin,
-                               uint32_t buffer_id)
+ofputil_encode_ofp11_packet_in(const struct ofputil_packet_in *pin)
 {
     struct ofp11_packet_in *opi;
     struct ofpbuf *msg;
@@ -3812,7 +3804,7 @@ ofputil_encode_ofp11_packet_in(const struct ofputil_packet_in *pin,
     msg = ofpraw_alloc_xid(OFPRAW_OFPT11_PACKET_IN, OFP11_VERSION,
                            htonl(0), pin->packet_len);
     opi = ofpbuf_put_zeros(msg, sizeof *opi);
-    opi->buffer_id = htonl(buffer_id);
+    opi->buffer_id = htonl(UINT32_MAX);
     opi->in_port = ofputil_port_to_ofp11(
         pin->flow_metadata.flow.in_port.ofp_port);
     opi->in_phy_port = opi->in_port;
@@ -3825,8 +3817,7 @@ ofputil_encode_ofp11_packet_in(const struct ofputil_packet_in *pin,
 
 static struct ofpbuf *
 ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
-                               enum ofp_version version,
-                               uint32_t buffer_id)
+                               enum ofp_version version)
 {
     enum ofpraw raw = (version >= OFP13_VERSION
                        ? OFPRAW_OFPT13_PACKET_IN
@@ -3838,7 +3829,7 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
                            htonl(0), NXM_TYPICAL_LEN + 2 + pin->packet_len);
 
     struct ofp12_packet_in *opi = ofpbuf_put_zeros(msg, sizeof *opi);
-    opi->buffer_id = htonl(buffer_id);
+    opi->buffer_id = htonl(UINT32_MAX);
     opi->total_len = htons(pin->packet_len);
     opi->reason = encode_packet_in_reason(pin->reason, version);
     opi->table_id = pin->table_id;
@@ -3857,11 +3848,6 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
 /* Converts abstract ofputil_packet_in_private 'pin' into a PACKET_IN message
  * for 'protocol', using the packet-in format specified by 'packet_in_format'.
  *
- * If 'pkt_buf' is nonnull and 'max_len' allows the packet to be buffered, this
- * function will attempt to obtain a buffer ID from 'pktbuf' and truncate the
- * packet to 'max_len' bytes.  Otherwise, or if 'pktbuf' doesn't have a free
- * buffer, it will send the whole packet without buffering.
- *
  * This function is really meant only for use by ovs-vswitchd.  To any other
  * code, the "continuation" data, i.e. the data that is in struct
  * ofputil_packet_in_private but not in struct ofputil_packet_in, is supposed
@@ -3873,27 +3859,9 @@ ofputil_encode_ofp12_packet_in(const struct ofputil_packet_in *pin,
 struct ofpbuf *
 ofputil_encode_packet_in_private(const struct ofputil_packet_in_private *pin,
                                  enum ofputil_protocol protocol,
-                                 enum nx_packet_in_format packet_in_format,
-                                 uint16_t max_len, struct pktbuf *pktbuf)
+                                 enum nx_packet_in_format packet_in_format)
 {
     enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
-
-    /* Get buffer ID. */
-    ofp_port_t in_port = pin->public.flow_metadata.flow.in_port.ofp_port;
-    uint32_t buffer_id = (max_len != OFPCML12_NO_BUFFER && pktbuf
-                          ? pktbuf_save(pktbuf, pin->public.packet,
-                                        pin->public.packet_len, in_port)
-                          : UINT32_MAX);
-
-    /* Calculate the number of bytes of the packet to include in the
-     * packet-in:
-     *
-     *    - If not buffered, the whole thing.
-     *
-     *    - Otherwise, no more than 'max_len' bytes. */
-    size_t include_bytes = (buffer_id == UINT32_MAX
-                            ? pin->public.packet_len
-                            : MIN(max_len, pin->public.packet_len));
 
     struct ofpbuf *msg;
     switch (packet_in_format) {
@@ -3903,11 +3871,11 @@ ofputil_encode_packet_in_private(const struct ofputil_packet_in_private *pin,
         case OFPUTIL_P_OF10_STD_TID:
         case OFPUTIL_P_OF10_NXM:
         case OFPUTIL_P_OF10_NXM_TID:
-            msg = ofputil_encode_ofp10_packet_in(&pin->public, buffer_id);
+            msg = ofputil_encode_ofp10_packet_in(&pin->public);
             break;
 
         case OFPUTIL_P_OF11_STD:
-            msg = ofputil_encode_ofp11_packet_in(&pin->public, buffer_id);
+            msg = ofputil_encode_ofp11_packet_in(&pin->public);
             break;
 
         case OFPUTIL_P_OF12_OXM:
@@ -3915,7 +3883,7 @@ ofputil_encode_packet_in_private(const struct ofputil_packet_in_private *pin,
         case OFPUTIL_P_OF14_OXM:
         case OFPUTIL_P_OF15_OXM:
         case OFPUTIL_P_OF16_OXM:
-            msg = ofputil_encode_ofp12_packet_in(&pin->public, version, buffer_id);
+            msg = ofputil_encode_ofp12_packet_in(&pin->public, version);
             break;
 
         default:
@@ -3924,18 +3892,18 @@ ofputil_encode_packet_in_private(const struct ofputil_packet_in_private *pin,
         break;
 
     case NXPIF_NXT_PACKET_IN:
-        msg = ofputil_encode_nx_packet_in(&pin->public, version, buffer_id);
+        msg = ofputil_encode_nx_packet_in(&pin->public, version);
         break;
 
     case NXPIF_NXT_PACKET_IN2:
-        return ofputil_encode_nx_packet_in2(pin, version, buffer_id,
-                                            include_bytes);
+        return ofputil_encode_nx_packet_in2(pin, version,
+                                            pin->public.packet_len);
 
     default:
         OVS_NOT_REACHED();
     }
 
-    ofpbuf_put(msg, pin->public.packet, include_bytes);
+    ofpbuf_put(msg, pin->public.packet, pin->public.packet_len);
     ofpmsg_update_length(msg);
     return msg;
 }
@@ -4004,7 +3972,7 @@ ofputil_encode_resume(const struct ofputil_packet_in *pin,
     size_t extra = pin->packet_len + NXM_TYPICAL_LEN + continuation->size;
     struct ofpbuf *msg = ofpraw_alloc_xid(OFPRAW_NXT_RESUME, version,
                                           0, extra);
-    ofputil_put_packet_in(pin, version, UINT32_MAX, pin->packet_len, msg);
+    ofputil_put_packet_in(pin, version, pin->packet_len, msg);
     ofpprop_put_nested(msg, NXPINT_CONTINUATION, continuation);
     ofpmsg_update_length(msg);
     return msg;
