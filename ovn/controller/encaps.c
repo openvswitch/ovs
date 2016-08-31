@@ -68,11 +68,6 @@ static struct tunnel_ctx tc = {
     .port_names = SSET_INITIALIZER(&tc.port_names),
 };
 
-/* Iterate over the full set of tunnels in both the OVS and SB databases on
- * the next wakeup. This is necessary when we add or remove a port in OVS to
- * handle the case where validation fails. */
-static bool process_full_bridge = false;
-
 static char *
 tunnel_create_name(const char *chassis_id)
 {
@@ -229,11 +224,6 @@ tunnel_add(const struct sbrec_chassis *chassis_rec,
     sset_add(&tc.port_names, port_name);
     free(port_name);
     free(ports);
-    binding_reset_processing();
-    lport_index_reset();
-    mcgroup_index_reset();
-    lflow_reset_processing();
-    process_full_bridge = true;
 }
 
 static void
@@ -259,10 +249,6 @@ bridge_delete_port(const struct ovsrec_bridge *br,
         ovsrec_bridge_verify_ports(br);
         ovsrec_bridge_set_ports(br, ports, n);
         free(ports);
-
-        binding_reset_processing();
-        lflow_reset_processing();
-        process_full_bridge = true;
     }
 }
 
@@ -365,65 +351,61 @@ encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
      * common. It would also require more bookkeeping to match up ports and
      * interfaces. */
 
-    if (process_full_bridge || ovsrec_port_track_get_first(ctx->ovs_idl) ||
-        ovsrec_interface_track_get_first(ctx->ovs_idl)) {
-        const struct ovsrec_port *port_rec;
-        struct chassis_hash_node *chassis_node, *next;
+    const struct ovsrec_port *port_rec;
+    struct chassis_hash_node *chassis_node, *next;
 
-        process_full_bridge = false;
-        sset_clear(&tc.port_names);
+    sset_clear(&tc.port_names);
 
-        /* Find all of the tunnel ports to remote chassis.
-         * Delete the tunnel ports from unknown remote chassis. */
-        OVSREC_PORT_FOR_EACH (port_rec, ctx->ovs_idl) {
-            sset_add(&tc.port_names, port_rec->name);
-            for (int i = 0; i < port_rec->n_interfaces; i++) {
-                sset_add(&tc.port_names, port_rec->interfaces[i]->name);
-            }
-
-            const char *chassis_id = smap_get(&port_rec->external_ids,
-                                              "ovn-chassis-id");
-            if (chassis_id) {
-                chassis_node = lookup_chassis_id(chassis_id);
-                if (chassis_node) {
-                    /* Populate the port's UUID the first time we see it after
-                     * the port was added. */
-                    if (uuid_is_zero(&chassis_node->port_uuid)) {
-                        chassis_node->port_uuid = port_rec->header_.uuid;
-                    }
-                } else {
-                    for (int i = 0; i < port_rec->n_interfaces; i++) {
-                        sset_find_and_delete(&tc.port_names,
-                                             port_rec->interfaces[i]->name);
-                    }
-                    sset_find_and_delete(&tc.port_names, port_rec->name);
-                    bridge_delete_port(tc.br_int, port_rec, NULL);
-                }
-            }
+    /* Find all of the tunnel ports to remote chassis.
+     * Delete the tunnel ports from unknown remote chassis. */
+    OVSREC_PORT_FOR_EACH (port_rec, ctx->ovs_idl) {
+        sset_add(&tc.port_names, port_rec->name);
+        for (int i = 0; i < port_rec->n_interfaces; i++) {
+            sset_add(&tc.port_names, port_rec->interfaces[i]->name);
         }
 
-        /* For each chassis that we previously created, check that both the
-         * chassis and port still exist and are current. */
-        HMAP_FOR_EACH_SAFE (chassis_node, next, node, &tc.chassis_hmap) {
-            chassis_rec = sbrec_chassis_get_for_uuid(ctx->ovnsb_idl,
-                                                   &chassis_node->chassis_uuid);
-            port_rec = ovsrec_port_get_for_uuid(ctx->ovs_idl,
-                                                &chassis_node->port_uuid);
-
-            if (!chassis_rec) {
-                /* Delete tunnel port (if present) for missing chassis. */
-                bridge_delete_port(tc.br_int, port_rec, chassis_node);
-                continue;
-            }
-
-            if (!port_rec) {
-                /* Delete our representation of the chassis, then add back. */
-                bridge_delete_port(tc.br_int, NULL, chassis_node);
-                check_and_add_tunnel(chassis_rec, local_chassis_id);
+        const char *chassis_id = smap_get(&port_rec->external_ids,
+                                          "ovn-chassis-id");
+        if (chassis_id) {
+            chassis_node = lookup_chassis_id(chassis_id);
+            if (chassis_node) {
+                /* Populate the port's UUID the first time we see it after
+                 * the port was added. */
+                if (uuid_is_zero(&chassis_node->port_uuid)) {
+                    chassis_node->port_uuid = port_rec->header_.uuid;
+                }
             } else {
-                /* Update tunnel. */
-                check_and_update_tunnel(port_rec, chassis_rec);
+                for (int i = 0; i < port_rec->n_interfaces; i++) {
+                    sset_find_and_delete(&tc.port_names,
+                                         port_rec->interfaces[i]->name);
+                }
+                sset_find_and_delete(&tc.port_names, port_rec->name);
+                bridge_delete_port(tc.br_int, port_rec, NULL);
             }
+        }
+    }
+
+    /* For each chassis that we previously created, check that both the
+     * chassis and port still exist and are current. */
+    HMAP_FOR_EACH_SAFE (chassis_node, next, node, &tc.chassis_hmap) {
+        chassis_rec = sbrec_chassis_get_for_uuid(ctx->ovnsb_idl,
+                                               &chassis_node->chassis_uuid);
+        port_rec = ovsrec_port_get_for_uuid(ctx->ovs_idl,
+                                            &chassis_node->port_uuid);
+
+        if (!chassis_rec) {
+            /* Delete tunnel port (if present) for missing chassis. */
+            bridge_delete_port(tc.br_int, port_rec, chassis_node);
+            continue;
+        }
+
+        if (!port_rec) {
+            /* Delete our representation of the chassis, then add back. */
+            bridge_delete_port(tc.br_int, NULL, chassis_node);
+            check_and_add_tunnel(chassis_rec, local_chassis_id);
+        } else {
+            /* Update tunnel. */
+            check_and_update_tunnel(port_rec, chassis_rec);
         }
     }
 
@@ -444,7 +426,6 @@ encaps_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                      * new version and then iterate over everything to see if it
                      * is OK. */
                     delete_encap_uuid(encap_hash_node);
-                    process_full_bridge = true;
                     poll_immediate_wake();
                 }
 

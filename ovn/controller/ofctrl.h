@@ -32,7 +32,7 @@ struct group_table;
 /* Interface for OVN main loop. */
 void ofctrl_init(struct group_table *group_table);
 enum mf_field_id ofctrl_run(const struct ovsrec_bridge *br_int);
-void ofctrl_put(int64_t nb_cfg);
+void ofctrl_put(struct hmap *flow_table, int64_t nb_cfg);
 void ofctrl_wait(void);
 void ofctrl_destroy(void);
 int64_t ofctrl_get_cur_cfg(void);
@@ -40,19 +40,11 @@ int64_t ofctrl_get_cur_cfg(void);
 struct ovn_flow *ofctrl_dup_flow(struct ovn_flow *source);
 
 /* Flow table interfaces to the rest of ovn-controller. */
-void ofctrl_add_flow(uint8_t table_id, uint16_t priority,
-                     const struct match *, const struct ofpbuf *ofpacts,
-                     const struct uuid *uuid);
-
-void ofctrl_remove_flows(const struct uuid *uuid);
-
-void ofctrl_set_flow(uint8_t table_id, uint16_t priority,
-                     const struct match *, const struct ofpbuf *ofpacts,
-                     const struct uuid *uuid);
+void ofctrl_add_flow(struct hmap *desired_flows, uint8_t table_id,
+                     uint16_t priority, const struct match *,
+                     const struct ofpbuf *ofpacts);
 
 void ofctrl_flow_table_clear(void);
-
-void ovn_flow_table_clear(void);
 
 void ovn_group_table_clear(struct group_table *group_table,
                            bool existing);

@@ -4998,3 +4998,58 @@ AT_CHECK([ovn-sbctl find MAC_Binding], [0], [])
 OVN_CLEANUP([hv1])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- conntrack zone allocation])
+AT_KEYWORDS([ovnconntrack])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# 2 logical switches "foo" (192.168.1.0/24) and "bar" (172.16.1.0/24)
+# connected to a router R1.
+# foo has foo1 to act as a client.
+# bar has bar1, bar2, bar3 to act as servers.
+
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+for i in foo1 bar1 bar2 bar3; do
+    ovs-vsctl -- add-port br-int $i -- \
+        set interface $i external-ids:iface-id=$i \
+        options:tx_pcap=hv1/$i-tx.pcap \
+        options:rxq_pcap=hv1/$i-rx.pcap
+done
+
+ovn-nbctl create Logical_Router name=R1
+ovn-nbctl ls-add foo
+ovn-nbctl ls-add bar
+
+# Connect foo to R1
+ovn-nbctl lrp-add R1 foo 00:00:01:01:02:03 192.168.1.1/24
+ovn-nbctl lsp-add foo rp-foo -- set Logical_Switch_Port rp-foo \
+    type=router options:router-port=foo addresses=\"00:00:01:01:02:03\"
+
+# Connect bar to R1
+ovn-nbctl lrp-add R1 bar 00:00:01:01:02:04 172.16.1.1/24
+ovn-nbctl lsp-add bar rp-bar -- set Logical_Switch_Port rp-bar \
+    type=router options:router-port=bar addresses=\"00:00:01:01:02:04\"
+
+# Create logical port foo1 in foo
+ovn-nbctl lsp-add foo foo1 \
+-- lsp-set-addresses foo1 "f0:00:00:01:02:03 192.168.1.2"
+
+# Create logical port bar1, bar2 and bar3 in bar
+for i in `seq 1 3`; do
+    ip=`expr $i + 1`
+    ovn-nbctl lsp-add bar bar$i \
+    -- lsp-set-addresses bar$i "f0:00:0a:01:02:$i 172.16.1.$ip"
+done
+
+OVS_WAIT_UNTIL([test `ovs-ofctl dump-flows br-int table=0 | grep REG13 | wc -l` -eq 4])
+
+OVN_CLEANUP([hv1])
+
+AT_CLEANUP
