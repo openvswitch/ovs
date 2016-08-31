@@ -1007,7 +1007,6 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
         group_info = xmalloc(sizeof *group_info);
         group_info->group = ds;
         group_info->group_id = group_id;
-        group_info->lflow_uuid = ep->lflow_uuid;
         group_info->hmap_node.hash = hash;
 
         hmap_insert(&ep->group_table->desired_groups,

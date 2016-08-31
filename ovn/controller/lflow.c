@@ -41,17 +41,6 @@ static struct shash symtab;
 /* Contains an internal expr datastructure that represents an address set. */
 static struct shash expr_address_sets;
 
-static bool full_flow_processing = false;
-static bool full_logical_flow_processing = false;
-static bool full_neighbor_flow_processing = false;
-
-void
-lflow_reset_processing(void)
-{
-    full_flow_processing = true;
-    physical_reset_processing();
-}
-
 void
 lflow_init(void)
 {
@@ -219,7 +208,8 @@ static void consider_logical_flow(const struct lport_index *lports,
                                   const struct simap *ct_zones,
                                   struct hmap *dhcp_opts_p,
                                   struct hmap *dhcpv6_opts_p,
-                                  uint32_t *conj_id_ofs_p);
+                                  uint32_t *conj_id_ofs_p,
+                                  struct hmap *flow_table);
 
 static bool
 lookup_port_cb(const void *aux_, const char *port_name, unsigned int *portp)
@@ -257,19 +247,11 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
                   const struct hmap *local_datapaths,
                   const struct hmap *patched_datapaths,
                   struct group_table *group_table,
-                  const struct simap *ct_zones)
+                  const struct simap *ct_zones,
+                  struct hmap *flow_table)
 {
     uint32_t conj_id_ofs = 1;
     const struct sbrec_logical_flow *lflow;
-
-    if (full_flow_processing) {
-        ovn_flow_table_clear();
-        ovn_group_table_clear(group_table, false);
-        full_logical_flow_processing = true;
-        full_neighbor_flow_processing = true;
-        full_flow_processing = false;
-        physical_reset_processing();
-    }
 
     struct hmap dhcp_opts = HMAP_INITIALIZER(&dhcp_opts);
     struct hmap dhcpv6_opts = HMAP_INITIALIZER(&dhcpv6_opts);
@@ -286,31 +268,11 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
                     dhcpv6_opt_row->type);
     }
 
-    if (full_logical_flow_processing) {
-        SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
-            consider_logical_flow(lports, mcgroups, lflow, local_datapaths,
-                                  patched_datapaths, group_table, ct_zones,
-                                  &dhcp_opts, &dhcpv6_opts, &conj_id_ofs);
-        }
-        full_logical_flow_processing = false;
-    } else {
-        SBREC_LOGICAL_FLOW_FOR_EACH_TRACKED (lflow, ctx->ovnsb_idl) {
-            /* Remove any flows that should be removed. */
-            if (sbrec_logical_flow_is_deleted(lflow)) {
-                ofctrl_remove_flows(&lflow->header_.uuid);
-            } else {
-                /* Now, add/modify existing flows. If the logical
-                 * flow is a modification, just remove the flows
-                 * for this row, and then add new flows. */
-                if (!sbrec_logical_flow_is_new(lflow)) {
-                    ofctrl_remove_flows(&lflow->header_.uuid);
-                }
-                consider_logical_flow(lports, mcgroups, lflow,
-                                      local_datapaths, patched_datapaths,
-                                      group_table, ct_zones,
-                                      &dhcp_opts, &dhcpv6_opts, &conj_id_ofs);
-            }
-        }
+    SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
+        consider_logical_flow(lports, mcgroups, lflow, local_datapaths,
+                              patched_datapaths, group_table, ct_zones,
+                              &dhcp_opts, &dhcpv6_opts, &conj_id_ofs,
+                              flow_table);
     }
 
     dhcp_opts_destroy(&dhcp_opts);
@@ -327,7 +289,8 @@ consider_logical_flow(const struct lport_index *lports,
                       const struct simap *ct_zones,
                       struct hmap *dhcp_opts_p,
                       struct hmap *dhcpv6_opts_p,
-                      uint32_t *conj_id_ofs_p)
+                      uint32_t *conj_id_ofs_p,
+                      struct hmap *flow_table)
 {
     /* Determine translation of logical table IDs to physical table IDs. */
     bool ingress = !strcmp(lflow->pipeline, "ingress");
@@ -422,7 +385,6 @@ consider_logical_flow(const struct lport_index *lports,
         .aux = &aux,
         .ct_zones = ct_zones,
         .group_table = group_table,
-        .lflow_uuid = lflow->header_.uuid,
 
         .first_ptable = first_ptable,
         .output_ptable = output_ptable,
@@ -470,8 +432,8 @@ consider_logical_flow(const struct lport_index *lports,
             m->match.flow.conj_id += *conj_id_ofs_p;
         }
         if (!m->n) {
-            ofctrl_add_flow(ptable, lflow->priority, &m->match, &ofpacts,
-                            &lflow->header_.uuid);
+            ofctrl_add_flow(flow_table, ptable, lflow->priority, &m->match,
+                            &ofpacts);
         } else {
             uint64_t conj_stubs[64 / 8];
             struct ofpbuf conj;
@@ -486,8 +448,8 @@ consider_logical_flow(const struct lport_index *lports,
                 dst->clause = src->clause;
                 dst->n_clauses = src->n_clauses;
             }
-            ofctrl_add_flow(ptable, lflow->priority, &m->match, &conj,
-                            &lflow->header_.uuid);
+            ofctrl_add_flow(flow_table, ptable, lflow->priority, &m->match,
+                            &conj);
             ofpbuf_uninit(&conj);
         }
     }
@@ -515,7 +477,8 @@ static void
 consider_neighbor_flow(const struct lport_index *lports,
                        const struct sbrec_mac_binding *b,
                        struct ofpbuf *ofpacts_p,
-                       struct match *match_p)
+                       struct match *match_p,
+                       struct hmap *flow_table)
 {
     const struct sbrec_port_binding *pb
         = lport_lookup_by_name(lports, b->logical_port);
@@ -557,8 +520,7 @@ consider_neighbor_flow(const struct lport_index *lports,
     ofpbuf_clear(ofpacts_p);
     put_load(mac.ea, sizeof mac.ea, MFF_ETH_DST, 0, 48, ofpacts_p);
 
-    ofctrl_add_flow(OFTABLE_MAC_BINDING, 100, match_p, ofpacts_p,
-                    &b->header_.uuid);
+    ofctrl_add_flow(flow_table, OFTABLE_MAC_BINDING, 100, match_p, ofpacts_p);
 }
 
 /* Adds an OpenFlow flow to flow tables for each MAC binding in the OVN
@@ -566,7 +528,8 @@ consider_neighbor_flow(const struct lport_index *lports,
  * numbers. */
 static void
 add_neighbor_flows(struct controller_ctx *ctx,
-                   const struct lport_index *lports)
+                   const struct lport_index *lports,
+                   struct hmap *flow_table)
 {
     struct ofpbuf ofpacts;
     struct match match;
@@ -574,22 +537,8 @@ add_neighbor_flows(struct controller_ctx *ctx,
     ofpbuf_init(&ofpacts, 0);
 
     const struct sbrec_mac_binding *b;
-    if (full_neighbor_flow_processing) {
-        SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
-            consider_neighbor_flow(lports, b, &ofpacts, &match);
-        }
-        full_neighbor_flow_processing = false;
-    } else {
-        SBREC_MAC_BINDING_FOR_EACH_TRACKED (b, ctx->ovnsb_idl) {
-            if (sbrec_mac_binding_is_deleted(b)) {
-                ofctrl_remove_flows(&b->header_.uuid);
-            } else {
-                if (!sbrec_mac_binding_is_new(b)) {
-                    ofctrl_remove_flows(&b->header_.uuid);
-                }
-                consider_neighbor_flow(lports, b, &ofpacts, &match);
-            }
-        }
+    SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
+        consider_neighbor_flow(lports, b, &ofpacts, &match, flow_table);
     }
 
     ofpbuf_uninit(&ofpacts);
@@ -603,12 +552,13 @@ lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
           const struct hmap *local_datapaths,
           const struct hmap *patched_datapaths,
           struct group_table *group_table,
-          const struct simap *ct_zones)
+          const struct simap *ct_zones,
+          struct hmap *flow_table)
 {
     update_address_sets(ctx);
     add_logical_flows(ctx, lports, mcgroups, local_datapaths,
-                      patched_datapaths, group_table, ct_zones);
-    add_neighbor_flows(ctx, lports);
+                      patched_datapaths, group_table, ct_zones, flow_table);
+    add_neighbor_flows(ctx, lports, flow_table);
 }
 
 void
