@@ -4293,21 +4293,30 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
         }
 
         /* Get the source. */
+        const uint8_t *imm = NULL;
+        unsigned int imm_bytes = 0;
         if (spec->src_type == NX_LEARN_SRC_FIELD) {
             get_subfield(spec->n_bits, &p, &spec->src);
         } else {
             int p_bytes = 2 * DIV_ROUND_UP(spec->n_bits, 16);
-
-            bitwise_copy(p, p_bytes, 0,
-                         &spec->src_imm, sizeof spec->src_imm, 0,
-                         spec->n_bits);
             p = (const uint8_t *) p + p_bytes;
+
+            imm_bytes = DIV_ROUND_UP(spec->n_bits, 8);
+            imm = (const uint8_t *) p - imm_bytes;
         }
 
         /* Get the destination. */
         if (spec->dst_type == NX_LEARN_DST_MATCH ||
             spec->dst_type == NX_LEARN_DST_LOAD) {
             get_subfield(spec->n_bits, &p, &spec->dst);
+        }
+
+        if (imm) {
+            uint8_t *src_imm = ofpbuf_put_zeros(ofpacts,
+                                                OFPACT_ALIGN(imm_bytes));
+            memcpy(src_imm, imm, imm_bytes);
+
+            learn = ofpacts->header;
         }
     }
     ofpact_finish_LEARN(ofpacts, &learn);
@@ -4362,7 +4371,8 @@ encode_LEARN(const struct ofpact_learn *learn,
     nal->flags = htons(learn->flags);
     nal->table_id = learn->table_id;
 
-    for (spec = learn->specs; spec < &learn->specs[learn->n_specs]; spec++) {
+    for (spec = learn->specs; spec < &learn->specs[learn->n_specs];
+         spec = ofpact_learn_spec_next(spec)) {
         put_u16(out, spec->n_bits | spec->dst_type | spec->src_type);
 
         if (spec->src_type == NX_LEARN_SRC_FIELD) {
@@ -4371,9 +4381,9 @@ encode_LEARN(const struct ofpact_learn *learn,
         } else {
             size_t n_dst_bytes = 2 * DIV_ROUND_UP(spec->n_bits, 16);
             uint8_t *bits = ofpbuf_put_zeros(out, n_dst_bytes);
-            bitwise_copy(&spec->src_imm, sizeof spec->src_imm, 0,
-                         bits, n_dst_bytes, 0,
-                         spec->n_bits);
+            unsigned int n_bytes = DIV_ROUND_UP(spec->dst.n_bits, 8);
+
+            memcpy(bits + n_dst_bytes - n_bytes, spec->src_imm, n_bytes);
         }
 
         if (spec->dst_type == NX_LEARN_DST_MATCH ||
