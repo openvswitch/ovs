@@ -964,6 +964,7 @@ expr_macros_destroy(struct shash *macros)
 
         shash_delete(macros, node);
         expr_constant_set_destroy(cs);
+        free(cs);
     }
 }
 
