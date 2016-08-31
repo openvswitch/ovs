@@ -157,17 +157,20 @@ typedef union OvsIPv4TunnelKey {
     uint64_t attr[NUM_PKT_ATTR_REQUIRED];
 } OvsIPv4TunnelKey; /* Size of 280 byte. */
 
-__inline uint8_t TunnelKeyGetOptionsOffset(const OvsIPv4TunnelKey *key)
+static __inline uint8_t
+TunnelKeyGetOptionsOffset(const OvsIPv4TunnelKey *key)
 {
     return TUN_OPT_MAX_LEN - key->tunOptLen;
 }
 
-__inline uint8_t* TunnelKeyGetOptions(OvsIPv4TunnelKey *key)
+static __inline uint8_t *
+TunnelKeyGetOptions(OvsIPv4TunnelKey *key)
 {
     return key->tunOpts + TunnelKeyGetOptionsOffset(key);
 }
 
-__inline uint16_t TunnelKeyGetRealSize(OvsIPv4TunnelKey *key)
+static __inline uint16_t
+TunnelKeyGetRealSize(OvsIPv4TunnelKey *key)
 {
     return sizeof(OvsIPv4TunnelKey) - TunnelKeyGetOptionsOffset(key);
 }
