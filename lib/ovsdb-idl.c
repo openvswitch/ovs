@@ -3159,9 +3159,10 @@ discard_datum:
  * itself and the structs derived from it (e.g. the "struct ovsrec_*", for
  * ovs-vswitchd).
  *
- * 'datum' must have the correct type for its column.  The IDL does not check
- * that it meets schema constraints, but ovsdb-server will do so at commit time
- * so it had better be correct.
+ * 'datum' must have the correct type for its column, but it needs not be
+ * sorted or unique because this function will take care of that.  The IDL does
+ * not check that it meets schema constraints, but ovsdb-server will do so at
+ * commit time so it had better be correct.
  *
  * A transaction must be in progress.  Replication of 'column' must not have
  * been disabled (by calling ovsdb_idl_omit()).
@@ -3177,11 +3178,17 @@ ovsdb_idl_txn_write(const struct ovsdb_idl_row *row,
                     const struct ovsdb_idl_column *column,
                     struct ovsdb_datum *datum)
 {
+    ovsdb_datum_sort_unique(datum,
+                            column->type.key.type, column->type.value.type);
     ovsdb_idl_txn_write__(row, column, datum, true);
 }
 
-/* Similar to ovsdb_idl_txn_write(), except that the caller retains ownership
- * of 'datum' and what it points to. */
+/* Similar to ovsdb_idl_txn_write(), except:
+ *
+ *     - The caller retains ownership of 'datum' and what it points to.
+ *
+ *     - The caller must ensure that 'datum' is sorted and unique (e.g. via
+ *       ovsdb_datum_sort_unique().) */
 void
 ovsdb_idl_txn_write_clone(const struct ovsdb_idl_row *row,
                           const struct ovsdb_idl_column *column,

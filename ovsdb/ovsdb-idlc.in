@@ -763,8 +763,6 @@ void
                     valueType = type.value.toAtomicType()
                 else:
                     valueType = "OVSDB_TYPE_VOID"
-                print "    ovsdb_datum_sort_unique(&datum, %s, %s);" % (
-                    type.key.toAtomicType(), valueType)
                 txn_write_func = "ovsdb_idl_txn_write"
             print "    %(f)s(&row->header_, &%(s)s_col_%(c)s, &datum);" \
                 % {'f': txn_write_func,
