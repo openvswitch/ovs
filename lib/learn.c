@@ -41,7 +41,8 @@ learn_check(const struct ofpact_learn *learn, const struct flow *flow)
     struct match match;
 
     match_init_catchall(&match);
-    for (spec = learn->specs; spec < &learn->specs[learn->n_specs]; spec++) {
+    for (spec = learn->specs; spec < &learn->specs[learn->n_specs];
+         spec = ofpact_learn_spec_next(spec)) {
         enum ofperr error;
 
         /* Check the source. */
@@ -59,8 +60,7 @@ learn_check(const struct ofpact_learn *learn, const struct flow *flow)
             if (error) {
                 return error;
             }
-
-            mf_write_subfield(&spec->dst, &spec->src_imm, &match);
+            mf_write_subfield_value(&spec->dst, spec->src_imm, &match);
             break;
 
         case NX_LEARN_DST_LOAD:
@@ -120,14 +120,15 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
         oft->fin_hard_timeout = learn->fin_hard_timeout;
     }
 
-    for (spec = learn->specs; spec < &learn->specs[learn->n_specs]; spec++) {
+    for (spec = learn->specs; spec < &learn->specs[learn->n_specs];
+         spec = ofpact_learn_spec_next(spec)) {
         struct ofpact_set_field *sf;
         union mf_subvalue value;
 
         if (spec->src_type == NX_LEARN_SRC_FIELD) {
             mf_read_subfield(&spec->src, flow, &value);
         } else {
-            value = spec->src_imm;
+            mf_subvalue_from_value(&spec->dst, &value, spec->src_imm);
         }
 
         switch (spec->dst_type) {
@@ -175,7 +176,8 @@ learn_mask(const struct ofpact_learn *learn, struct flow_wildcards *wc)
     union mf_subvalue value;
 
     memset(&value, 0xff, sizeof value);
-    for (spec = learn->specs; spec < &learn->specs[learn->n_specs]; spec++) {
+    for (spec = learn->specs; spec < &learn->specs[learn->n_specs];
+         spec = ofpact_learn_spec_next(spec)) {
         if (spec->src_type == NX_LEARN_SRC_FIELD) {
             mf_write_subfield_flow(&spec->src, &value, &wc->masks);
         }
@@ -185,7 +187,8 @@ learn_mask(const struct ofpact_learn *learn, struct flow_wildcards *wc)
 /* Returns NULL if successful, otherwise a malloc()'d string describing the
  * error.  The caller is responsible for freeing the returned string. */
 static char * OVS_WARN_UNUSED_RESULT
-learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec)
+learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec,
+                           struct ofpbuf *ofpacts)
 {
     const char *full_s = s;
     struct mf_subfield dst;
@@ -220,9 +223,14 @@ learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec)
 
     spec->n_bits = dst.n_bits;
     spec->src_type = NX_LEARN_SRC_IMMEDIATE;
-    spec->src_imm = imm;
     spec->dst_type = NX_LEARN_DST_LOAD;
     spec->dst = dst;
+
+    /* Push value last, as this may reallocate 'spec'! */
+    unsigned int n_bytes = DIV_ROUND_UP(dst.n_bits, 8);
+    uint8_t *src_imm = ofpbuf_put_zeros(ofpacts, OFPACT_ALIGN(n_bytes));
+    memcpy(src_imm, &imm.u8[sizeof imm.u8 - n_bytes], n_bytes);
+
     return NULL;
 }
 
@@ -230,7 +238,8 @@ learn_parse_load_immediate(const char *s, struct ofpact_learn_spec *spec)
  * error.  The caller is responsible for freeing the returned string. */
 static char * OVS_WARN_UNUSED_RESULT
 learn_parse_spec(const char *orig, char *name, char *value,
-                 struct ofpact_learn_spec *spec)
+                 struct ofpact_learn_spec *spec,
+                 struct ofpbuf *ofpacts, struct match *match)
 {
     if (mf_from_name(name)) {
         const struct mf_field *dst = mf_from_name(name);
@@ -244,13 +253,19 @@ learn_parse_spec(const char *orig, char *name, char *value,
 
         spec->n_bits = dst->n_bits;
         spec->src_type = NX_LEARN_SRC_IMMEDIATE;
-        memset(&spec->src_imm, 0, sizeof spec->src_imm);
-        memcpy(&spec->src_imm.u8[sizeof spec->src_imm - dst->n_bytes],
-               &imm, dst->n_bytes);
         spec->dst_type = NX_LEARN_DST_MATCH;
         spec->dst.field = dst;
         spec->dst.ofs = 0;
         spec->dst.n_bits = dst->n_bits;
+
+        /* Update 'match' to allow for satisfying destination
+         * prerequisites. */
+        mf_set_value(dst, &imm, match, NULL);
+
+        /* Push value last, as this may reallocate 'spec'! */
+        uint8_t *src_imm = ofpbuf_put_zeros(ofpacts,
+                                            OFPACT_ALIGN(dst->n_bytes));
+        memcpy(src_imm, &imm, dst->n_bytes);
     } else if (strchr(name, '[')) {
         /* Parse destination and check prerequisites. */
         char *error;
@@ -284,7 +299,7 @@ learn_parse_spec(const char *orig, char *name, char *value,
         spec->dst_type = NX_LEARN_DST_MATCH;
     } else if (!strcmp(name, "load")) {
         if (value[strcspn(value, "[-")] == '-') {
-            char *error = learn_parse_load_immediate(value, spec);
+            char *error = learn_parse_load_immediate(value, spec, ofpacts);
             if (error) {
                 return error;
             }
@@ -363,20 +378,12 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
             char *error;
 
             spec = ofpbuf_put_zeros(ofpacts, sizeof *spec);
-            learn = ofpacts->header;
-            learn->n_specs++;
-
-            error = learn_parse_spec(orig, name, value, spec);
+            error = learn_parse_spec(orig, name, value, spec, ofpacts, &match);
             if (error) {
                 return error;
             }
-
-            /* Update 'match' to allow for satisfying destination
-             * prerequisites. */
-            if (spec->src_type == NX_LEARN_SRC_IMMEDIATE
-                && spec->dst_type == NX_LEARN_DST_MATCH) {
-                mf_write_subfield(&spec->dst, &spec->src_imm, &match);
-            }
+            learn = ofpacts->header;
+            learn->n_specs++;
         }
     }
     ofpact_finish_LEARN(ofpacts, &learn);
@@ -449,19 +456,20 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
                       colors.param, colors.end, ntohll(learn->cookie));
     }
 
-    for (spec = learn->specs; spec < &learn->specs[learn->n_specs]; spec++) {
+    for (spec = learn->specs; spec < &learn->specs[learn->n_specs];
+         spec = ofpact_learn_spec_next(spec)) {
+        unsigned int n_bytes = DIV_ROUND_UP(spec->dst.n_bits, 8);
         ds_put_char(s, ',');
 
         switch (spec->src_type | spec->dst_type) {
-        case NX_LEARN_SRC_IMMEDIATE | NX_LEARN_DST_MATCH:
+        case NX_LEARN_SRC_IMMEDIATE | NX_LEARN_DST_MATCH: {
             if (spec->dst.ofs == 0
                 && spec->dst.n_bits == spec->dst.field->n_bits) {
                 union mf_value value;
 
                 memset(&value, 0, sizeof value);
-                bitwise_copy(&spec->src_imm, sizeof spec->src_imm, 0,
-                             &value, spec->dst.field->n_bytes, 0,
-                             spec->dst.field->n_bits);
+                memcpy(&value.b[spec->dst.field->n_bytes - n_bytes],
+                       spec->src_imm, n_bytes);
                 ds_put_format(s, "%s%s=%s", colors.param,
                               spec->dst.field->name, colors.end);
                 mf_format(spec->dst.field, &value, NULL, s);
@@ -469,10 +477,10 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
                 ds_put_format(s, "%s", colors.param);
                 mf_format_subfield(&spec->dst, s);
                 ds_put_format(s, "=%s", colors.end);
-                mf_format_subvalue(&spec->src_imm, s);
+                ds_put_hex(s, spec->src_imm, n_bytes);
             }
             break;
-
+        }
         case NX_LEARN_SRC_FIELD | NX_LEARN_DST_MATCH:
             ds_put_format(s, "%s", colors.param);
             mf_format_subfield(&spec->dst, s);
@@ -486,7 +494,7 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
 
         case NX_LEARN_SRC_IMMEDIATE | NX_LEARN_DST_LOAD:
             ds_put_format(s, "%sload:%s", colors.special, colors.end);
-            mf_format_subvalue(&spec->src_imm, s);
+            ds_put_hex(s, spec->src_imm, n_bytes);
             ds_put_format(s, "%s->%s", colors.special, colors.end);
             mf_format_subfield(&spec->dst, s);
             break;
