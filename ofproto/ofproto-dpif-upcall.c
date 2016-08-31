@@ -1337,8 +1337,10 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
         if (should_install_flow(udpif, upcall)) {
             struct udpif_key *ukey = upcall->ukey;
 
-            upcall->ukey_persists = true;
-            put_op_init(&ops[n_ops++], ukey, DPIF_FP_CREATE);
+            if (ukey_install_start(udpif, ukey)) {
+                upcall->ukey_persists = true;
+                put_op_init(&ops[n_ops++], ukey, DPIF_FP_CREATE);
+            }
         }
 
         if (upcall->odp_actions.size) {
@@ -1365,16 +1367,6 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
      */
     n_opsp = 0;
     for (i = 0; i < n_ops; i++) {
-        struct udpif_key *ukey = ops[i].ukey;
-
-        if (ukey) {
-            /* If we can't install the ukey, don't install the flow. */
-            if (!ukey_install_start(udpif, ukey)) {
-                ukey_delete__(ukey);
-                ops[i].ukey = NULL;
-                continue;
-            }
-        }
         opsp[n_opsp++] = &ops[i].dop;
     }
     dpif_operate(udpif->dpif, opsp, n_opsp);
