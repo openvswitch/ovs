@@ -333,7 +333,7 @@ class IPsec(object):
         self.call_ip_xfrm(["policy", "add", "src", "0.0.0.0/0", "dst",
                            "0.0.0.0/0", "proto", "gre", "dir", "out",
                            "mark", IPSEC_MARK, "mask", IPSEC_MARK,
-                           "action", "block", "priority", "4294967295"]);
+                           "action", "block", "priority", "4294967295"])
 
     def spd_add(self, local_ip, remote_ip):
         cmds = ("spdadd %s %s gre -P out ipsec esp/transport//require;\n" %
