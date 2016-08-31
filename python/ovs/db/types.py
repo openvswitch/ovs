@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+# Copyright (c) 2009, 2010, 2011, 2012, 2013, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -351,6 +351,18 @@ class BaseType(object):
                     UuidType: 'struct uuid ',
                     BooleanType: 'bool ',
                     StringType: 'char *'}[self.type]
+
+    def to_const_c_type(self, prefix, refTable=True):
+        nonconst = self.toCType(prefix, refTable)
+
+        # A "const" prefix works OK for the types we use, but it's a little
+        # weird to write "const bool" as, e.g., a function parameter since
+        # there's no real "const"ness there.  So, omit the "const" except
+        # when a pointer is involved.
+        if '*' in nonconst:
+            return 'const ' + nonconst
+        else:
+            return nonconst
 
     def toAtomicType(self):
         return "OVSDB_TYPE_%s" % self.type.to_string().upper()

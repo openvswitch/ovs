@@ -231,14 +231,14 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
         for columnName, column in sorted(table.columns.iteritems()):
             if column.type.is_map():
                 print 'void %(s)s_update_%(c)s_setkey(const struct %(s)s *, ' % {'s': structName, 'c': columnName},
-                print '%(coltype)s, %(valtype)s);' % {'coltype':column.type.key.toCType(prefix), 'valtype':column.type.value.toCType(prefix)}
+                print '%(coltype)s, %(valtype)s);' % {'coltype':column.type.key.to_const_c_type(prefix), 'valtype':column.type.value.to_const_c_type(prefix)}
                 print 'void %(s)s_update_%(c)s_delkey(const struct %(s)s *, ' % {'s': structName, 'c': columnName},
-                print '%(coltype)s);' % {'coltype':column.type.key.toCType(prefix)}
+                print '%(coltype)s);' % {'coltype':column.type.key.to_const_c_type(prefix)}
             if column.type.is_set():
                 print 'void %(s)s_update_%(c)s_addvalue(const struct %(s)s *, ' % {'s': structName, 'c': columnName},
-                print '%(valtype)s);' % {'valtype':column.type.key.toCType(prefix)}
+                print '%(valtype)s);' % {'valtype':column.type.key.to_const_c_type(prefix)}
                 print 'void %(s)s_update_%(c)s_delvalue(const struct %(s)s *, ' % {'s': structName, 'c': columnName},
-                print '%(valtype)s);' % {'valtype':column.type.key.toCType(prefix)}
+                print '%(valtype)s);' % {'valtype':column.type.key.to_const_c_type(prefix)}
 
             print 'void %(s)s_add_clause_%(c)s(struct ovsdb_idl *idl, enum ovsdb_function function,' % {'s': structName, 'c': columnName},
             if column.type.is_smap():
@@ -817,8 +817,8 @@ void
     datum->n = 1;
     datum->keys = xmalloc(datum->n * sizeof *datum->keys);
     datum->values = xmalloc(datum->n * sizeof *datum->values);
-''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
-        'valtype':column.type.value.toCType(prefix), 'S': structName.upper(),
+''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
+        'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper(),
         'C': columnName.upper(), 't': tableName}
 
                 print "    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "new_key")
@@ -827,8 +827,8 @@ void
     ovsdb_idl_txn_write_partial_map(&row->header_,
                                     &%(s)s_columns[%(S)s_COL_%(C)s],
                                     datum);
-}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
-        'valtype':column.type.value.toCType(prefix), 'S': structName.upper(),
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
+        'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper(),
         'C': columnName.upper()}
                 print '''
 /* Deletes an element of the "%(c)s" map column from the "%(t)s" table in 'row'
@@ -846,8 +846,8 @@ void
     datum->n = 1;
     datum->keys = xmalloc(datum->n * sizeof *datum->keys);
     datum->values = NULL;
-''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
-        'valtype':column.type.value.toCType(prefix), 'S': structName.upper(),
+''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
+        'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper(),
         'C': columnName.upper(), 't': tableName}
 
                 print "    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "delete_key")
@@ -855,8 +855,8 @@ void
     ovsdb_idl_txn_delete_partial_map(&row->header_,
                                     &%(s)s_columns[%(S)s_COL_%(C)s],
                                     datum);
-}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
-        'valtype':column.type.value.toCType(prefix), 'S': structName.upper(),
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
+        'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper(),
         'C': columnName.upper()}
         # End Update/Delete of partial maps
         # Update/Delete of partial set column functions
@@ -878,15 +878,15 @@ void
     datum->keys = xmalloc(datum->n * sizeof *datum->values);
     datum->values = NULL;
 ''' % {'s': structName, 'c': columnName,
-        'valtype':column.type.key.toCType(prefix), 't': tableName}
+        'valtype':column.type.key.to_const_c_type(prefix), 't': tableName}
 
                 print "    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "new_value")
                 print '''
     ovsdb_idl_txn_write_partial_set(&row->header_,
                                     &%(s)s_columns[%(S)s_COL_%(C)s],
                                     datum);
-}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
-        'valtype':column.type.key.toCType(prefix), 'S': structName.upper(),
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
+        'valtype':column.type.key.to_const_c_type(prefix), 'S': structName.upper(),
         'C': columnName.upper()}
                 print '''
 /* Deletes the value 'delete_value' from the "%(c)s" set column from the
@@ -904,8 +904,8 @@ void
     datum->n = 1;
     datum->keys = xmalloc(datum->n * sizeof *datum->values);
     datum->values = NULL;
-''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
-        'valtype':column.type.key.toCType(prefix), 'S': structName.upper(),
+''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
+        'valtype':column.type.key.to_const_c_type(prefix), 'S': structName.upper(),
         'C': columnName.upper(), 't': tableName}
 
                 print "    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "delete_value")
@@ -913,8 +913,8 @@ void
     ovsdb_idl_txn_delete_partial_set(&row->header_,
                                     &%(s)s_columns[%(S)s_COL_%(C)s],
                                     datum);
-}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
-        'valtype':column.type.key.toCType(prefix), 'S': structName.upper(),
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
+        'valtype':column.type.key.to_const_c_type(prefix), 'S': structName.upper(),
         'C': columnName.upper()}
         # End Update/Delete of partial set
 
