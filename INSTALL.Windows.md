@@ -134,7 +134,7 @@ For example,
 Building the Kernel datapath module
 -----------------------------------
 * We directly use the Visual Studio 2013 IDE to compile the kernel datapath.
-You can open the extensions.sln file in the IDE and build the solution.
+You can open the ovsext.sln file in the IDE and build the solution.
 
 * The kernel datapath can be compiled from command line as well.  The top
 level 'make' will invoke building the kernel datapath, if the
