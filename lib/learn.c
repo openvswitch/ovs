@@ -137,13 +137,12 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
             break;
 
         case NX_LEARN_DST_LOAD:
-            sf = ofpact_put_reg_load(ofpacts);
-            sf->field = spec->dst.field;
+            sf = ofpact_put_reg_load(ofpacts, spec->dst.field, NULL, NULL);
             bitwise_copy(&value, sizeof value, 0,
-                         &sf->value, spec->dst.field->n_bytes, spec->dst.ofs,
+                         sf->value, spec->dst.field->n_bytes, spec->dst.ofs,
                          spec->n_bits);
-            bitwise_one(&sf->mask, spec->dst.field->n_bytes, spec->dst.ofs,
-                        spec->n_bits);
+            bitwise_one(ofpact_set_field_mask(sf), spec->dst.field->n_bytes,
+                        spec->dst.ofs, spec->n_bits);
             break;
 
         case NX_LEARN_DST_OUTPUT:

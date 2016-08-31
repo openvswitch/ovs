@@ -465,12 +465,11 @@ put_load(const uint8_t *data, size_t len,
          enum mf_field_id dst, int ofs, int n_bits,
          struct ofpbuf *ofpacts)
 {
-    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-    sf->field = mf_from_id(dst);
-    sf->flow_has_vlan = false;
-
-    bitwise_copy(data, len, 0, &sf->value, sf->field->n_bytes, ofs, n_bits);
-    bitwise_one(&sf->mask, sf->field->n_bytes, ofs, n_bits);
+    struct ofpact_set_field *sf = ofpact_put_set_field(ofpacts,
+                                                       mf_from_id(dst), NULL,
+                                                       NULL);
+    bitwise_copy(data, len, 0, sf->value, sf->field->n_bytes, ofs, n_bits);
+    bitwise_one(ofpact_set_field_mask(sf), sf->field->n_bytes, ofs, n_bits);
 }
 
 static void

@@ -913,23 +913,36 @@ execute_load(const struct ovnact_load *load,
              const struct ovntrace_datapath *dp, struct flow *uflow,
              struct ovs_list *super OVS_UNUSED)
 {
-    struct ofpact_set_field sf;
-    memset(&sf, 0, sizeof sf);
-    ovnact_load_to_ofpact_set_field(load, ovntrace_lookup_port, dp, &sf);
+    const struct ovnact_encode_params ep = {
+        .lookup_port = ovntrace_lookup_port,
+        .aux = dp,
+    };
+    uint64_t stub[512 / 8];
+    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(stub);
 
-    if (!mf_is_register(sf.field->id)) {
-        struct ds s = DS_EMPTY_INITIALIZER;
-        ovnacts_format(&load->ovnact, OVNACT_LOAD_SIZE, &s);
-        ds_chomp(&s, ';');
+    ovnacts_encode(&load->ovnact, sizeof *load, &ep, &ofpacts);
 
-        ovntrace_node_append(super, OVNTRACE_NODE_MODIFY, "%s", ds_cstr(&s));
+    struct ofpact *a;
+    OFPACT_FOR_EACH (a, ofpacts.data, ofpacts.size) {
+        struct ofpact_set_field *sf = ofpact_get_SET_FIELD(a);
 
-        ds_destroy(&s);
+        if (!mf_is_register(sf->field->id)) {
+            struct ds s = DS_EMPTY_INITIALIZER;
+            ovnacts_format(&load->ovnact, OVNACT_LOAD_SIZE, &s);
+            ds_chomp(&s, ';');
+
+            ovntrace_node_append(super, OVNTRACE_NODE_MODIFY, "%s",
+                                 ds_cstr(&s));
+
+            ds_destroy(&s);
+        }
+
+        if (mf_are_prereqs_ok(sf->field, uflow, NULL)) {
+            mf_set_flow_value_masked(sf->field, sf->value,
+                                     ofpact_set_field_mask(sf), uflow);
+        }
     }
-
-    if (mf_are_prereqs_ok(sf.field, uflow, NULL)) {
-        mf_set_flow_value_masked(sf.field, &sf.value, &sf.mask, uflow);
-    }
+    ofpbuf_uninit(&ofpacts);
 }
 
 static void

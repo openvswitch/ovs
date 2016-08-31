@@ -162,13 +162,12 @@ static void
 put_load(uint64_t value, enum mf_field_id dst, int ofs, int n_bits,
          struct ofpbuf *ofpacts)
 {
-    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-    sf->field = mf_from_id(dst);
-    sf->flow_has_vlan = false;
-
+    struct ofpact_set_field *sf = ofpact_put_set_field(ofpacts,
+                                                       mf_from_id(dst), NULL,
+                                                       NULL);
     ovs_be64 n_value = htonll(value);
-    bitwise_copy(&n_value, 8, 0, &sf->value, sf->field->n_bytes, ofs, n_bits);
-    bitwise_one(&sf->mask, sf->field->n_bytes, ofs, n_bits);
+    bitwise_copy(&n_value, 8, 0, sf->value, sf->field->n_bytes, ofs, n_bits);
+    bitwise_one(ofpact_set_field_mask(sf), sf->field->n_bytes, ofs, n_bits);
 }
 
 /* Context maintained during ovnacts_parse(). */
@@ -339,49 +338,38 @@ format_LOAD(const struct ovnact_load *load, struct ds *s)
     ds_put_char(s, ';');
 }
 
-void
-ovnact_load_to_ofpact_set_field(const struct ovnact_load *load,
-                                bool (*lookup_port)(const void *aux,
-                                                    const char *port_name,
-                                                    unsigned int *portp),
-                                const void *aux,
-                                struct ofpact_set_field *sf)
-{
-    const union expr_constant *c = &load->imm;
-    struct mf_subfield dst = expr_resolve_field(&load->dst);
-
-    sf->field = dst.field;
-
-    if (load->dst.symbol->width) {
-        bitwise_copy(&c->value, sizeof c->value, 0,
-                     &sf->value, dst.field->n_bytes, dst.ofs,
-                     dst.n_bits);
-        if (c->masked) {
-            bitwise_copy(&c->mask, sizeof c->mask, 0,
-                         &sf->mask, dst.field->n_bytes, dst.ofs,
-                         dst.n_bits);
-        } else {
-            bitwise_one(&sf->mask, dst.field->n_bytes,
-                        dst.ofs, dst.n_bits);
-        }
-    } else {
-        uint32_t port;
-        if (!lookup_port(aux, load->imm.string, &port)) {
-            port = 0;
-        }
-        bitwise_put(port, &sf->value,
-                    sf->field->n_bytes, 0, sf->field->n_bits);
-        bitwise_one(&sf->mask, sf->field->n_bytes, 0, sf->field->n_bits);
-    }
-}
-
 static void
 encode_LOAD(const struct ovnact_load *load,
             const struct ovnact_encode_params *ep,
             struct ofpbuf *ofpacts)
 {
-    ovnact_load_to_ofpact_set_field(load, ep->lookup_port, ep->aux,
-                                    ofpact_put_SET_FIELD(ofpacts));
+    const union expr_constant *c = &load->imm;
+    struct mf_subfield dst = expr_resolve_field(&load->dst);
+    struct ofpact_set_field *sf = ofpact_put_set_field(ofpacts, dst.field,
+                                                       NULL, NULL);
+
+    if (load->dst.symbol->width) {
+        bitwise_copy(&c->value, sizeof c->value, 0,
+                     sf->value, dst.field->n_bytes, dst.ofs,
+                     dst.n_bits);
+        if (c->masked) {
+            bitwise_copy(&c->mask, sizeof c->mask, 0,
+                         ofpact_set_field_mask(sf), dst.field->n_bytes,
+                         dst.ofs, dst.n_bits);
+        } else {
+            bitwise_one(ofpact_set_field_mask(sf), dst.field->n_bytes,
+                        dst.ofs, dst.n_bits);
+        }
+    } else {
+        uint32_t port;
+        if (!ep->lookup_port(ep->aux, load->imm.string, &port)) {
+            port = 0;
+        }
+        bitwise_put(port, sf->value,
+                    sf->field->n_bytes, 0, sf->field->n_bits);
+        bitwise_one(ofpact_set_field_mask(sf), sf->field->n_bytes, 0,
+                    sf->field->n_bits);
+    }
 }
 
 static void
@@ -674,17 +662,14 @@ encode_CT_COMMIT(const struct ovnact_ct_commit *cc,
     ofpbuf_pull(ofpacts, set_field_offset);
 
     if (cc->ct_mark_mask) {
-        struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-        sf->field = mf_from_id(MFF_CT_MARK);
-        sf->value.be32 = htonl(cc->ct_mark);
-        sf->mask.be32 = htonl(cc->ct_mark_mask);
+        const ovs_be32 value = htonl(cc->ct_mark);
+        const ovs_be32 mask = htonl(cc->ct_mark_mask);
+        ofpact_put_set_field(ofpacts, mf_from_id(MFF_CT_MARK), &value, &mask);
     }
 
     if (!ovs_be128_is_zero(cc->ct_label_mask)) {
-        struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-        sf->field = mf_from_id(MFF_CT_LABEL);
-        sf->value.be128 = cc->ct_label;
-        sf->mask.be128 = cc->ct_label_mask;
+        ofpact_put_set_field(ofpacts, mf_from_id(MFF_CT_LABEL), &cc->ct_label,
+                             &cc->ct_label_mask);
     }
 
     ofpacts->header = ofpbuf_push_uninit(ofpacts, set_field_offset);

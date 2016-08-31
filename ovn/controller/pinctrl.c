@@ -1342,11 +1342,9 @@ reload_metadata(struct ofpbuf *ofpacts, const struct match *md)
     for (size_t i = 0; i < ARRAY_SIZE(md_fields); i++) {
         const struct mf_field *field = mf_from_id(md_fields[i]);
         if (!mf_is_all_wild(field, &md->wc)) {
-            struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-            sf->field = field;
-            sf->flow_has_vlan = false;
-            mf_get_value(field, &md->flow, &sf->value);
-            memset(&sf->mask, 0xff, field->n_bytes);
+            union mf_value value;
+            mf_get_value(field, &md->flow, &value);
+            ofpact_put_set_field(ofpacts, field, &value, NULL);
         }
     }
 }
