@@ -4924,9 +4924,10 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
             /* Set the field only if the packet actually has it. */
             if (mf_are_prereqs_ok(mf, flow, wc)) {
-                mf_mask_field_masked(mf, &set_field->mask, wc);
-                mf_set_flow_value_masked(mf, &set_field->value,
-                                         &set_field->mask, flow);
+                mf_mask_field_masked(mf, ofpact_set_field_mask(set_field), wc);
+                mf_set_flow_value_masked(mf, set_field->value,
+                                         ofpact_set_field_mask(set_field),
+                                         flow);
             }
             break;
 
@@ -5754,11 +5755,8 @@ xlate_send_packet(const struct ofport_dpif *ofport, bool oam,
     }
 
     if (oam) {
-        struct ofpact_set_field *sf = ofpact_put_SET_FIELD(&ofpacts);
-
-        sf->field = mf_from_id(MFF_TUN_FLAGS);
-        sf->value.be16 = htons(NX_TUN_FLAG_OAM);
-        sf->mask.be16 = htons(NX_TUN_FLAG_OAM);
+        const ovs_be16 oam = htons(NX_TUN_FLAG_OAM);
+        ofpact_put_set_field(&ofpacts, mf_from_id(MFF_TUN_FLAGS), &oam, &oam);
     }
 
     ofpact_put_OUTPUT(&ofpacts)->port = xport->ofp_port;

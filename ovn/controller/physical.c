@@ -104,13 +104,12 @@ static void
 put_load(uint64_t value, enum mf_field_id dst, int ofs, int n_bits,
          struct ofpbuf *ofpacts)
 {
-    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-    sf->field = mf_from_id(dst);
-    sf->flow_has_vlan = false;
-
+    struct ofpact_set_field *sf = ofpact_put_set_field(ofpacts,
+                                                       mf_from_id(dst), NULL,
+                                                       NULL);
     ovs_be64 n_value = htonll(value);
-    bitwise_copy(&n_value, 8, 0, &sf->value, sf->field->n_bytes, ofs, n_bits);
-    bitwise_one(&sf->mask, sf->field->n_bytes, ofs, n_bits);
+    bitwise_copy(&n_value, 8, 0, sf->value, sf->field->n_bytes, ofs, n_bits);
+    bitwise_one(ofpact_set_field_mask(sf), sf->field->n_bytes, ofs, n_bits);
 }
 
 static void

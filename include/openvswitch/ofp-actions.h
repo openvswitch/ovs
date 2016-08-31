@@ -479,12 +479,23 @@ struct ofpact_stack {
  *
  * Used for NXAST_REG_LOAD and OFPAT12_SET_FIELD. */
 struct ofpact_set_field {
-    struct ofpact ofpact;
-    const struct mf_field *field;
-    bool flow_has_vlan;   /* VLAN present at action validation time. */
-    union mf_value value;
-    union mf_value mask;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        bool flow_has_vlan;   /* VLAN present at action validation time. */
+        const struct mf_field *field;
+    );
+    union mf_value value[];  /* Significant value bytes followed by
+                              * significant mask bytes. */
 };
+BUILD_ASSERT_DECL(offsetof(struct ofpact_set_field, value)
+                  % OFPACT_ALIGNTO == 0);
+BUILD_ASSERT_DECL(offsetof(struct ofpact_set_field, value)
+                  == sizeof(struct ofpact_set_field));
+
+/* Use macro to not have to deal with constness. */
+#define ofpact_set_field_mask(SF)                               \
+    ALIGNED_CAST(union mf_value *,                              \
+                 (uint8_t *)(SF)->value + (SF)->field->n_bytes)
 
 /* OFPACT_PUSH_VLAN/MPLS/PBB
  *
@@ -1058,7 +1069,18 @@ OFPACTS
 #undef OFPACT
 
 /* Additional functions for composing ofpacts. */
-struct ofpact_set_field *ofpact_put_reg_load(struct ofpbuf *ofpacts);
+struct ofpact_set_field *ofpact_put_set_field(struct ofpbuf *ofpacts,
+                                              const struct mf_field *,
+                                              const void *value,
+                                              const void *mask);
+struct ofpact_set_field *ofpact_put_reg_load(struct ofpbuf *ofpacts,
+                                             const struct mf_field *,
+                                             const void *value,
+                                             const void *mask);
+struct ofpact_set_field *ofpact_put_reg_load2(struct ofpbuf *ofpacts,
+                                              const struct mf_field *,
+                                              const void *value,
+                                              const void *mask);
 
 /* OpenFlow 1.1 instructions.
  * The order is sorted in execution order. Not in the value of OFPIT11_xxx.
