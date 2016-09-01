@@ -4431,9 +4431,10 @@ encode_LEARN(const struct ofpact_learn *learn,
         } else {
             size_t n_dst_bytes = 2 * DIV_ROUND_UP(spec->n_bits, 16);
             uint8_t *bits = ofpbuf_put_zeros(out, n_dst_bytes);
-            unsigned int n_bytes = DIV_ROUND_UP(spec->dst.n_bits, 8);
+            unsigned int n_bytes = DIV_ROUND_UP(spec->n_bits, 8);
 
-            memcpy(bits + n_dst_bytes - n_bytes, spec->src_imm, n_bytes);
+            memcpy(bits + n_dst_bytes - n_bytes, ofpact_learn_spec_imm(spec),
+                   n_bytes);
         }
 
         if (spec->dst_type == NX_LEARN_DST_MATCH ||

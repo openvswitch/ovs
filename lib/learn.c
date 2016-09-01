@@ -60,7 +60,10 @@ learn_check(const struct ofpact_learn *learn, const struct flow *flow)
             if (error) {
                 return error;
             }
-            mf_write_subfield_value(&spec->dst, spec->src_imm, &match);
+            if (spec->src_type & NX_LEARN_SRC_IMMEDIATE) {
+                mf_write_subfield_value(&spec->dst,
+                                        ofpact_learn_spec_imm(spec), &match);
+            }
             break;
 
         case NX_LEARN_DST_LOAD:
@@ -128,7 +131,8 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
         if (spec->src_type == NX_LEARN_SRC_FIELD) {
             mf_read_subfield(&spec->src, flow, &value);
         } else {
-            mf_subvalue_from_value(&spec->dst, &value, spec->src_imm);
+            mf_subvalue_from_value(&spec->dst, &value,
+                                   ofpact_learn_spec_imm(spec));
         }
 
         switch (spec->dst_type) {
@@ -457,7 +461,7 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
 
     for (spec = learn->specs; spec < &learn->specs[learn->n_specs];
          spec = ofpact_learn_spec_next(spec)) {
-        unsigned int n_bytes = DIV_ROUND_UP(spec->dst.n_bits, 8);
+        unsigned int n_bytes = DIV_ROUND_UP(spec->n_bits, 8);
         ds_put_char(s, ',');
 
         switch (spec->src_type | spec->dst_type) {
@@ -468,7 +472,7 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
 
                 memset(&value, 0, sizeof value);
                 memcpy(&value.b[spec->dst.field->n_bytes - n_bytes],
-                       spec->src_imm, n_bytes);
+                       ofpact_learn_spec_imm(spec), n_bytes);
                 ds_put_format(s, "%s%s=%s", colors.param,
                               spec->dst.field->name, colors.end);
                 mf_format(spec->dst.field, &value, NULL, s);
@@ -476,7 +480,7 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
                 ds_put_format(s, "%s", colors.param);
                 mf_format_subfield(&spec->dst, s);
                 ds_put_format(s, "=%s", colors.end);
-                ds_put_hex(s, spec->src_imm, n_bytes);
+                ds_put_hex(s, ofpact_learn_spec_imm(spec), n_bytes);
             }
             break;
         }
@@ -493,7 +497,7 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
 
         case NX_LEARN_SRC_IMMEDIATE | NX_LEARN_DST_LOAD:
             ds_put_format(s, "%sload:%s", colors.special, colors.end);
-            ds_put_hex(s, spec->src_imm, n_bytes);
+            ds_put_hex(s, ofpact_learn_spec_imm(spec), n_bytes);
             ds_put_format(s, "%s->%s", colors.special, colors.end);
             mf_format_subfield(&spec->dst, s);
             break;
