@@ -8863,11 +8863,6 @@ AT_CLEANUP
 AT_SETUP([ofproto - set mtu])
 OVS_VSWITCHD_START
 
-# Check that initial MTU is 1500 for 'br0'.
-AT_CHECK([ovs-vsctl get Interface br0 mtu], [0], [dnl
-1500
-])
-
 add_of_ports br0 1
 
 # Check that initial MTU is 1500 for 'br0' and 'p1'.
@@ -8896,10 +8891,6 @@ AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1500])
 AT_CHECK([ovs-vsctl add-port br0 p2 -- set int p2 type=dummy mtu_request=1600])
 AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface p2 mtu=1600])
 AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1600])
-
-# New internal port.  The MTU should be updated even for a newly added port.
-AT_CHECK([ovs-vsctl add-port br0 int1 -- set int int1 type=internal])
-AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface int1 mtu=1600])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
