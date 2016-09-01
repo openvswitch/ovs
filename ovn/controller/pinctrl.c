@@ -354,6 +354,13 @@ pinctrl_handle_put_dhcp_opts(
     pin->packet = dp_packet_data(&pkt_out);
     pin->packet_len = dp_packet_size(&pkt_out);
 
+    /* Log the response. */
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 40);
+    const struct eth_header *l2 = dp_packet_l2(&pkt_out);
+    VLOG_INFO_RL(&rl, "DHCP%s "ETH_ADDR_FMT" "IP_FMT"",
+                 msg_type == DHCP_MSG_OFFER ? "OFFER" : "ACK",
+                 ETH_ADDR_ARGS(l2->eth_src), IP_ARGS(*offer_ip));
+
     success = 1;
 exit:
     if (!ofperr) {
