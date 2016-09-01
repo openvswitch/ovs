@@ -708,29 +708,36 @@ enum nx_learn_flags {
 
 /* Part of struct ofpact_learn, below. */
 struct ofpact_learn_spec {
-    struct mf_subfield src;    /* NX_LEARN_SRC_FIELD only. */
-    struct mf_subfield dst;    /* NX_LEARN_DST_MATCH, NX_LEARN_DST_LOAD only. */
-    uint16_t src_type;         /* One of NX_LEARN_SRC_*. */
-    uint16_t dst_type;         /* One of NX_LEARN_DST_*. */
-    uint8_t n_bits;            /* Number of bits in source and dest. */
-    uint64_t src_imm[];        /* OFPACT_ALIGNTO (uint64_t) aligned. */
+    OFPACT_PADDED_MEMBERS(
+        struct mf_subfield src;    /* NX_LEARN_SRC_FIELD only. */
+        struct mf_subfield dst;    /* NX_LEARN_DST_MATCH,
+                                    * NX_LEARN_DST_LOAD only. */
+        uint16_t src_type;         /* One of NX_LEARN_SRC_*. */
+        uint16_t dst_type;         /* One of NX_LEARN_DST_*. */
+        uint8_t n_bits;            /* Number of bits in source and dest. */
+    );
+    /* Followed by 'DIV_ROUND_UP(n_bits, 8)' bytes of immediate data for
+     * match 'dst_type's NX_LEARN_DST_MATCH and NX_LEARN_DST_LOAD when
+     * NX_LEARN_SRC_IMMEDIATE is set in 'src_type', followed by zeroes to align
+     * to OFPACT_ALIGNTO. */
 };
-BUILD_ASSERT_DECL(offsetof(struct ofpact_learn_spec, src_imm)
-                  % OFPACT_ALIGNTO == 0);
-BUILD_ASSERT_DECL(offsetof(struct ofpact_learn_spec, src_imm)
-                  == sizeof(struct ofpact_learn_spec));
+BUILD_ASSERT_DECL(sizeof(struct ofpact_learn_spec) % OFPACT_ALIGNTO == 0);
+
+static inline const void *
+ofpact_learn_spec_imm(const struct ofpact_learn_spec *spec)
+{
+    return spec + 1;
+}
 
 static inline const struct ofpact_learn_spec *
 ofpact_learn_spec_next(const struct ofpact_learn_spec *spec)
 {
     if (spec->src_type == NX_LEARN_SRC_IMMEDIATE) {
-        unsigned int n_uint64s
-            = OFPACT_ALIGN(DIV_ROUND_UP(spec->n_bits, 8)) / sizeof (uint64_t);
-        return (const struct ofpact_learn_spec *)
-            ((const uint64_t *)(spec + 1) + n_uint64s);
-    } else {
-        return spec + 1;
+        unsigned int n_bytes = OFPACT_ALIGN(DIV_ROUND_UP(spec->n_bits, 8));
+        return ALIGNED_CAST(const struct ofpact_learn_spec *,
+                            (const uint8_t *)(spec + 1) + n_bytes);
     }
+    return spec + 1;
 }
 
 /* OFPACT_LEARN.
