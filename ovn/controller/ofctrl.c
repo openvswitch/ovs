@@ -199,83 +199,91 @@ run_S_TLV_TABLE_REQUESTED(void)
 {
 }
 
+static bool
+process_tlv_table_reply(const struct ofputil_tlv_table_reply *reply)
+{
+    const struct ofputil_tlv_map *map;
+    uint64_t md_free = UINT64_MAX;
+    BUILD_ASSERT(TUN_METADATA_NUM_OPTS == 64);
+
+    LIST_FOR_EACH (map, list_node, &reply->mappings) {
+        if (map->option_class == OVN_GENEVE_CLASS
+            && map->option_type == OVN_GENEVE_TYPE
+            && map->option_len == OVN_GENEVE_LEN) {
+            if (map->index >= TUN_METADATA_NUM_OPTS) {
+                VLOG_ERR("desired Geneve tunnel option 0x%"PRIx16","
+                         "%"PRIu8",%"PRIu8" already in use with "
+                         "unsupported index %"PRIu16,
+                         map->option_class, map->option_type,
+                         map->option_len, map->index);
+                return false;
+            } else {
+                mff_ovn_geneve = MFF_TUN_METADATA0 + map->index;
+                state = S_CLEAR_FLOWS;
+                return false;
+            }
+        }
+
+        if (map->index < TUN_METADATA_NUM_OPTS) {
+            md_free &= ~(UINT64_C(1) << map->index);
+        }
+    }
+
+    VLOG_DBG("OVN Geneve option not found");
+    if (!md_free) {
+        VLOG_ERR("no Geneve options free for use by OVN");
+        return false;
+    }
+
+    unsigned int index = rightmost_1bit_idx(md_free);
+    mff_ovn_geneve = MFF_TUN_METADATA0 + index;
+    struct ofputil_tlv_map tm;
+    tm.option_class = OVN_GENEVE_CLASS;
+    tm.option_type = OVN_GENEVE_TYPE;
+    tm.option_len = OVN_GENEVE_LEN;
+    tm.index = index;
+
+    struct ofputil_tlv_table_mod ttm;
+    ttm.command = NXTTMC_ADD;
+    ovs_list_init(&ttm.mappings);
+    ovs_list_push_back(&ttm.mappings, &tm.list_node);
+
+    xid = queue_msg(ofputil_encode_tlv_table_mod(OFP13_VERSION, &ttm));
+    xid2 = queue_msg(ofputil_encode_barrier_request(OFP13_VERSION));
+    state = S_TLV_TABLE_MOD_SENT;
+
+    return true;
+}
+
 static void
 recv_S_TLV_TABLE_REQUESTED(const struct ofp_header *oh, enum ofptype type)
 {
     if (oh->xid != xid) {
         ofctrl_recv(oh, type);
+        return;
     } else if (type == OFPTYPE_NXT_TLV_TABLE_REPLY) {
         struct ofputil_tlv_table_reply reply;
         enum ofperr error = ofputil_decode_tlv_table_reply(oh, &reply);
-        if (error) {
+        if (!error) {
+            bool ok = process_tlv_table_reply(&reply);
+            ofputil_uninit_tlv_table(&reply.mappings);
+            if (ok) {
+                return;
+            }
+        } else {
             VLOG_ERR("failed to decode TLV table request (%s)",
                      ofperr_to_string(error));
-            goto error;
         }
-
-        const struct ofputil_tlv_map *map;
-        uint64_t md_free = UINT64_MAX;
-        BUILD_ASSERT(TUN_METADATA_NUM_OPTS == 64);
-
-        LIST_FOR_EACH (map, list_node, &reply.mappings) {
-            if (map->option_class == OVN_GENEVE_CLASS
-                && map->option_type == OVN_GENEVE_TYPE
-                && map->option_len == OVN_GENEVE_LEN) {
-                if (map->index >= TUN_METADATA_NUM_OPTS) {
-                    VLOG_ERR("desired Geneve tunnel option 0x%"PRIx16","
-                             "%"PRIu8",%"PRIu8" already in use with "
-                             "unsupported index %"PRIu16,
-                             map->option_class, map->option_type,
-                             map->option_len, map->index);
-                    goto error;
-                } else {
-                    mff_ovn_geneve = MFF_TUN_METADATA0 + map->index;
-                    state = S_CLEAR_FLOWS;
-                    return;
-                }
-            }
-
-            if (map->index < TUN_METADATA_NUM_OPTS) {
-                md_free &= ~(UINT64_C(1) << map->index);
-            }
-        }
-
-        VLOG_DBG("OVN Geneve option not found");
-        if (!md_free) {
-            VLOG_ERR("no Geneve options free for use by OVN");
-            goto error;
-        }
-
-        unsigned int index = rightmost_1bit_idx(md_free);
-        mff_ovn_geneve = MFF_TUN_METADATA0 + index;
-        struct ofputil_tlv_map tm;
-        tm.option_class = OVN_GENEVE_CLASS;
-        tm.option_type = OVN_GENEVE_TYPE;
-        tm.option_len = OVN_GENEVE_LEN;
-        tm.index = index;
-
-        struct ofputil_tlv_table_mod ttm;
-        ttm.command = NXTTMC_ADD;
-        ovs_list_init(&ttm.mappings);
-        ovs_list_push_back(&ttm.mappings, &tm.list_node);
-
-        xid = queue_msg(ofputil_encode_tlv_table_mod(OFP13_VERSION, &ttm));
-        xid2 = queue_msg(ofputil_encode_barrier_request(OFP13_VERSION));
-        state = S_TLV_TABLE_MOD_SENT;
     } else if (type == OFPTYPE_ERROR) {
         VLOG_ERR("switch refused to allocate Geneve option (%s)",
                  ofperr_to_string(ofperr_decode_msg(oh, NULL)));
-        goto error;
     } else {
         char *s = ofp_to_string(oh, ntohs(oh->length), 1);
-        VLOG_ERR("unexpected reply to TLV table request (%s)",
-                 s);
+        VLOG_ERR("unexpected reply to TLV table request (%s)", s);
         free(s);
-        goto error;
     }
-    return;
 
-error:
+    /* Error path. */
     mff_ovn_geneve = 0;
     state = S_CLEAR_FLOWS;
 }
