@@ -2618,6 +2618,7 @@ run_system_stats(void)
 
         txn = ovsdb_idl_txn_create(idl);
         ovsdb_datum_from_smap(&datum, stats);
+        smap_destroy(stats);
         ovsdb_idl_txn_write(&cfg->header_, &ovsrec_open_vswitch_col_statistics,
                             &datum);
         ovsdb_idl_txn_commit(txn);

@@ -678,20 +678,7 @@ const struct ovsdb_datum *
 
     ovs_assert(inited);
     if (%(c)s) {
-        struct smap_node *node;
-        size_t i;
-
-        datum.n = smap_count(%(c)s);
-        datum.keys = xmalloc(datum.n * sizeof *datum.keys);
-        datum.values = xmalloc(datum.n * sizeof *datum.values);
-
-        i = 0;
-        SMAP_FOR_EACH (node, %(c)s) {
-            datum.keys[i].string = xstrdup(node->key);
-            datum.values[i].string = xstrdup(node->value);
-            i++;
-        }
-        ovsdb_datum_sort_unique(&datum, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
+        ovsdb_datum_from_smap(&datum, %(c)s);
     } else {
         ovsdb_datum_init_empty(&datum);
     }
@@ -932,20 +919,7 @@ void
 
     ovs_assert(inited);
     if (%(c)s) {
-        struct smap_node *node;
-        size_t i;
-
-        datum.n = smap_count(%(c)s);
-        datum.keys = xmalloc(datum.n * sizeof *datum.keys);
-        datum.values = xmalloc(datum.n * sizeof *datum.values);
-
-        i = 0;
-        SMAP_FOR_EACH (node, %(c)s) {
-            datum.keys[i].string = xstrdup(node->key);
-            datum.values[i].string = xstrdup(node->value);
-            i++;
-        }
-        ovsdb_datum_sort_unique(&datum, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
+        ovsdb_datum_from_smap(&datum, %(c)s);
     } else {
         ovsdb_datum_init_empty(&datum);
     }
@@ -1107,20 +1081,7 @@ void
 
     ovs_assert(inited);
     if (%(c)s) {
-        struct smap_node *node;
-        size_t i;
-
-        datum.n = smap_count(%(c)s);
-        datum.keys = xmalloc(datum.n * sizeof *datum.keys);
-        datum.values = xmalloc(datum.n * sizeof *datum.values);
-
-        i = 0;
-        SMAP_FOR_EACH (node, %(c)s) {
-            datum.keys[i].string = xstrdup(node->key);
-            datum.values[i].string = xstrdup(node->value);
-            i++;
-        }
-        ovsdb_datum_sort_unique(&datum, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
+        ovsdb_datum_from_smap(&datum, %(c)s);
     } else {
         ovsdb_datum_init_empty(&datum);
     }

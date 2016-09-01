@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2014 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1542,27 +1542,24 @@ ovsdb_datum_to_bare(const struct ovsdb_datum *datum,
     }
 }
 
-/* Initializes 'datum' as a string-to-string map whose contents are taken from
- * 'smap'.  Destroys 'smap'. */
+/* Initializes 'datum' as a string-to-string map whose contents are copied from
+ * 'smap', which is not modified. */
 void
-ovsdb_datum_from_smap(struct ovsdb_datum *datum, struct smap *smap)
+ovsdb_datum_from_smap(struct ovsdb_datum *datum, const struct smap *smap)
 {
-    struct smap_node *node, *next;
-    size_t i;
-
     datum->n = smap_count(smap);
     datum->keys = xmalloc(datum->n * sizeof *datum->keys);
     datum->values = xmalloc(datum->n * sizeof *datum->values);
 
-    i = 0;
-    SMAP_FOR_EACH_SAFE (node, next, smap) {
-        smap_steal(smap, node,
-                   &datum->keys[i].string, &datum->values[i].string);
+    struct smap_node *node;
+    size_t i = 0;
+    SMAP_FOR_EACH (node, smap) {
+        datum->keys[i].string = xstrdup(node->key);
+        datum->values[i].string = xstrdup(node->value);
         i++;
     }
     ovs_assert(i == datum->n);
 
-    smap_destroy(smap);
     ovsdb_datum_sort_unique(datum, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
 }
 
