@@ -198,9 +198,9 @@ destroy_lport_addresses(struct lport_addresses *laddrs)
  *
  * It is the caller's responsibility to free the allocated memory. */
 char *
-alloc_nat_zone_key(const char *key, const char *type)
+alloc_nat_zone_key(const struct uuid *key, const char *type)
 {
-    return xasprintf("%s_%s", key, type);
+    return xasprintf(UUID_FMT"_%s", UUID_ARGS(key), type);
 }
 
 const char *

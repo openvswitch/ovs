@@ -300,11 +300,9 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
         }
 
         int zone_id_dnat, zone_id_snat;
-        char *key = xasprintf(UUID_FMT,
-                              UUID_ARGS(&binding->datapath->header_.uuid));
+        const struct uuid *key = &binding->datapath->header_.uuid;
         char *dnat = alloc_nat_zone_key(key, "dnat");
         char *snat = alloc_nat_zone_key(key, "snat");
-        free(key);
 
         zone_id_dnat = simap_get(ct_zones, dnat);
         if (zone_id_dnat) {

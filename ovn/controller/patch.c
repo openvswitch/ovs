@@ -265,8 +265,7 @@ add_patched_datapath(struct hmap *patched_datapaths,
 
     pd = xzalloc(sizeof *pd);
     pd->local = local;
-    pd->key = xasprintf(UUID_FMT,
-                        UUID_ARGS(&binding_rec->datapath->header_.uuid));
+    pd->key = binding_rec->datapath->header_.uuid;
     /* stale is set to false. */
     hmap_insert(patched_datapaths, &pd->hmap_node,
                 binding_rec->datapath->tunnel_key);
@@ -294,7 +293,6 @@ add_logical_patch_ports_postprocess(struct hmap *patched_datapaths)
                         patched_datapaths) {
         if (pd_cur_node->stale == true) {
             hmap_remove(patched_datapaths, &pd_cur_node->hmap_node);
-            free(pd_cur_node->key);
             free(pd_cur_node);
         }
     }
