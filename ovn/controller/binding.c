@@ -143,6 +143,9 @@ consider_local_datapath(struct controller_ctx *ctx,
             } else {
                 VLOG_INFO("Claiming lport %s for this chassis.",
                           binding_rec->logical_port);
+                for (int i = 0; i < binding_rec->n_mac; i++) {
+                    VLOG_INFO("Claiming %s", binding_rec->mac[i]);
+                }
             }
             sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
         }
@@ -179,6 +182,9 @@ consider_local_datapath(struct controller_ctx *ctx,
         if (ctx->ovnsb_idl_txn) {
             VLOG_INFO("Releasing lport %s from this chassis.",
                       binding_rec->logical_port);
+            for (int i = 0; i < binding_rec->n_mac; i++) {
+                VLOG_INFO("Releasing %s", binding_rec->mac[i]);
+            }
             sbrec_port_binding_set_chassis(binding_rec, NULL);
             sset_find_and_delete(all_lports, binding_rec->logical_port);
         }
