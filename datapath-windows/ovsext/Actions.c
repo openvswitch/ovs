@@ -311,7 +311,7 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
          * - a VIF port
          * - a bridge-internal port (packets generated from userspace)
          * - no port.
-         *
+         * - tunnel port
          * If the packet will not be encapsulated, consume the tunnel context
          * by clearing it.
          */
@@ -322,7 +322,8 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
 
             if (!vport ||
                 (vport->ovsType != OVS_VPORT_TYPE_NETDEV &&
-                 !OvsIsBridgeInternalVport(vport))) {
+                 !OvsIsBridgeInternalVport(vport) &&
+                 !OvsIsTunnelVportType(vport->ovsType))) {
                 ovsFwdCtx->tunKey.dst = 0;
             }
         }
