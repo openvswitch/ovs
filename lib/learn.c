@@ -41,8 +41,7 @@ learn_check(const struct ofpact_learn *learn, const struct flow *flow)
     struct match match;
 
     match_init_catchall(&match);
-    for (spec = learn->specs; spec < &learn->specs[learn->n_specs];
-         spec = ofpact_learn_spec_next(spec)) {
+    OFPACT_LEARN_SPEC_FOR_EACH (spec, learn) {
         enum ofperr error;
 
         /* Check the source. */
@@ -123,8 +122,7 @@ learn_execute(const struct ofpact_learn *learn, const struct flow *flow,
         oft->fin_hard_timeout = learn->fin_hard_timeout;
     }
 
-    for (spec = learn->specs; spec < &learn->specs[learn->n_specs];
-         spec = ofpact_learn_spec_next(spec)) {
+    OFPACT_LEARN_SPEC_FOR_EACH (spec, learn) {
         struct ofpact_set_field *sf;
         union mf_subvalue value;
 
@@ -179,8 +177,7 @@ learn_mask(const struct ofpact_learn *learn, struct flow_wildcards *wc)
     union mf_subvalue value;
 
     memset(&value, 0xff, sizeof value);
-    for (spec = learn->specs; spec < &learn->specs[learn->n_specs];
-         spec = ofpact_learn_spec_next(spec)) {
+    OFPACT_LEARN_SPEC_FOR_EACH (spec, learn) {
         if (spec->src_type == NX_LEARN_SRC_FIELD) {
             mf_write_subfield_flow(&spec->src, &value, &wc->masks);
         }
@@ -386,7 +383,6 @@ learn_parse__(char *orig, char *arg, struct ofpbuf *ofpacts)
                 return error;
             }
             learn = ofpacts->header;
-            learn->n_specs++;
         }
     }
     ofpact_finish_LEARN(ofpacts, &learn);
@@ -459,8 +455,7 @@ learn_format(const struct ofpact_learn *learn, struct ds *s)
                       colors.param, colors.end, ntohll(learn->cookie));
     }
 
-    for (spec = learn->specs; spec < &learn->specs[learn->n_specs];
-         spec = ofpact_learn_spec_next(spec)) {
+    OFPACT_LEARN_SPEC_FOR_EACH (spec, learn) {
         unsigned int n_bytes = DIV_ROUND_UP(spec->n_bits, 8);
         ds_put_char(s, ',');
 
