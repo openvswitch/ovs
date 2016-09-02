@@ -5267,7 +5267,7 @@ m4_define([CHECK_SFLOW_SAMPLING_PACKET],
 
   dnl sleep long enough to get more than one counter sample
   dnl from each datasource so we can check sequence numbers
-  ovs-appctl time/warp 3000 100
+  ovs-appctl time/warp 2000 100
   OVS_VSWITCHD_STOP
   OVS_APP_EXIT_AND_WAIT([test-sflow])
 
@@ -5378,7 +5378,7 @@ HEADER
   AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'IFCOUNTERS|ERROR|PORTNAME|OPENFLOWPORT' | head -18 | sed 's/ /\
 	/g']], [0], [dnl
 IFCOUNTERS
-	dgramSeqNo=2
+	dgramSeqNo=1
 	ds=127.0.0.1>0:1002
 	csSeqNo=1
 	ifindex=1002
@@ -5401,7 +5401,7 @@ IFCOUNTERS
 	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
-	dgramSeqNo=2
+	dgramSeqNo=1
 	ds=127.0.0.1>0:1003
 	csSeqNo=1
 	ifindex=1003
@@ -5424,7 +5424,7 @@ IFCOUNTERS
 	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
-	dgramSeqNo=2
+	dgramSeqNo=1
 	ds=127.0.0.1>0:1004
 	csSeqNo=1
 	ifindex=1004
@@ -5447,7 +5447,7 @@ IFCOUNTERS
 	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
-	dgramSeqNo=3
+	dgramSeqNo=2
 	ds=127.0.0.1>0:1002
 	csSeqNo=2
 	ifindex=1002
@@ -5470,7 +5470,7 @@ IFCOUNTERS
 	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
-	dgramSeqNo=3
+	dgramSeqNo=2
 	ds=127.0.0.1>0:1003
 	csSeqNo=2
 	ifindex=1003
@@ -5493,7 +5493,7 @@ IFCOUNTERS
 	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
-	dgramSeqNo=3
+	dgramSeqNo=2
 	ds=127.0.0.1>0:1004
 	csSeqNo=2
 	ifindex=1004
