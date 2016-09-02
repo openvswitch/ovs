@@ -2346,6 +2346,7 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                     ovn_lflow_add(
                         lflows, od, S_SWITCH_OUT_ACL, 34000, ds_cstr(&match),
                         actions);
+                    ds_destroy(&match);
                 }
             }
 
@@ -2372,6 +2373,7 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                     ovn_lflow_add(
                         lflows, od, S_SWITCH_OUT_ACL, 34000, ds_cstr(&match),
                         actions);
+                    ds_destroy(&match);
                 }
             }
         }
