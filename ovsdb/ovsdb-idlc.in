@@ -372,7 +372,7 @@ static void
                     print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[0].uuid));" % (keyVar, prefix, type.key.ref_table.name.lower(), prefix, prefix.upper(), type.key.ref_table.name.upper())
 
                 if valueVar:
-                    if type.value.ref_table:
+                    if not type.value.ref_table:
                         print "        %s = datum->values[0].%s;" % (valueVar, type.value.type.to_string())
                     else:
                         print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[0].uuid));" % (valueVar, prefix, type.value.ref_table.name.lower(), prefix, prefix.upper(), type.value.ref_table.name.upper())
