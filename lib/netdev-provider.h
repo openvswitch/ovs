@@ -63,6 +63,10 @@ struct netdev {
     struct seq *reconfigure_seq;
     uint64_t last_reconfigure_seq;
 
+    /* If this is 'true', the user explicitly specified an MTU for this
+     * netdev.  Otherwise, Open vSwitch is allowed to override it. */
+    bool mtu_user_config;
+
     /* The core netdev code initializes these at netdev construction and only
      * provide read-only access to its client.  Netdev implementations may
      * modify them. */

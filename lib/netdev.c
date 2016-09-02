@@ -877,6 +877,27 @@ netdev_set_mtu(struct netdev *netdev, int mtu)
     return error;
 }
 
+/* If 'user_config' is true, the user wants to control 'netdev''s MTU and we
+ * should not override it.  If 'user_config' is false, we may adjust
+ * 'netdev''s MTU (e.g., if 'netdev' is internal). */
+void
+netdev_mtu_user_config(struct netdev *netdev, bool user_config)
+{
+    if (netdev->mtu_user_config != user_config) {
+        netdev_change_seq_changed(netdev);
+        netdev->mtu_user_config = user_config;
+    }
+}
+
+/* Returns 'true' if the user explicitly specified an MTU value for 'netdev'.
+ * Otherwise, returns 'false', in which case we are allowed to adjust the
+ * device MTU. */
+bool
+netdev_mtu_is_user_config(struct netdev *netdev)
+{
+    return netdev->mtu_user_config;
+}
+
 /* Returns the ifindex of 'netdev', if successful, as a positive number.  On
  * failure, returns a negative errno value.
  *

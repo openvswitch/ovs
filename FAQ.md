@@ -1065,6 +1065,33 @@ A: This is expected behavior on virtual switches.  RFC2544 tests were
 
    ovs-vsctl --no-wait set Open_vSwitch . other_config:max-idle=50000
 
+### Q: How can I configure the bridge internal interface MTU? Why does Open
+    vSwitch keep changing internal ports MTU?
+
+A: By default Open vSwitch overrides the internal interfaces (e.g. br0) MTU.
+   If you have just an internal interface (e.g. br0) and a physical interface
+   (e.g. eth0), then every change in MTU to eth0 will be reflected to br0.
+   Any manual MTU configuration using `ip` or `ifconfig` on internal interfaces
+   is going to be overridden by Open vSwitch to match the current bridge
+   minimum.
+
+   Sometimes this behavior is not desirable, for example with tunnels.  The
+   MTU of an internal interface can be explicitly set using the following
+   command:
+
+       ovs-vsctl set int br0 mtu_request=1450
+
+   After this, Open vSwitch will configure br0 MTU to 1450.  Since this
+   setting is in the database it will be persistent (compared to what
+   happens with `ip` or `ifconfig`).
+
+   The MTU configuration can be removed to restore the default behavior with
+
+       ovs-vsctl set int br0 mtu_request=[]
+
+   The mtu_request column can be used to configure MTU even for physical
+   interfaces (e.g. eth0).
+
 ## QOS
 
 ### Q: Does OVS support Quality of Service (QoS)?

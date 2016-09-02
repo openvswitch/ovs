@@ -122,7 +122,7 @@ v2.6.0 - xx xxx xxxx
      SHA-1 is no longer secure and some operating systems have started to
      disable it in OpenSSL.
    - Add 'mtu_request' column to the Interface table. It can be used to
-     configure the MTU of non-internal ports.
+     configure the MTU of the ports.
 
 
 v2.5.0 - 26 Feb 2016
