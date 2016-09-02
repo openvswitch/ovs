@@ -722,20 +722,20 @@ add_ofp_port(ofp_port_t port, ofp_port_t *ports, size_t *n, size_t *allocated)
 }
 
 /* Configures the MTU of 'netdev' based on the "mtu_request" column
- * in 'iface_cfg'.  'br_type' must be the datapath_type of the bridge
- * which contains 'netdev'. */
+ * in 'iface_cfg'. */
 static int
 iface_set_netdev_mtu(const struct ovsrec_interface *iface_cfg,
-                     const char *br_type, struct netdev *netdev)
+                     struct netdev *netdev)
 {
-    if (iface_cfg->n_mtu_request == 1
-        && strcmp(netdev_get_type(netdev),
-                  ofproto_port_open_type(br_type, "internal"))) {
-        /* Try to set the MTU to the requested value.  This is not done
-         * for internal interfaces, since their MTU is decided by the
-         * ofproto module, based on other ports in the bridge. */
+    if (iface_cfg->n_mtu_request == 1) {
+        /* The user explicitly asked for this MTU. */
+        netdev_mtu_user_config(netdev, true);
+        /* Try to set the MTU to the requested value. */
         return netdev_set_mtu(netdev, *iface_cfg->mtu_request);
     }
+
+    /* The user didn't explicitly asked for any MTU. */
+    netdev_mtu_user_config(netdev, false);
     return 0;
 }
 
@@ -793,7 +793,7 @@ bridge_delete_or_reconfigure_ports(struct bridge *br)
             goto delete;
         }
 
-        iface_set_netdev_mtu(iface->cfg, br->type, iface->netdev);
+        iface_set_netdev_mtu(iface->cfg, iface->netdev);
 
         /* If the requested OpenFlow port for 'iface' changed, and it's not
          * already the correct port, then we might want to temporarily delete
@@ -1736,7 +1736,7 @@ iface_do_create(const struct bridge *br,
         goto error;
     }
 
-    iface_set_netdev_mtu(iface_cfg, br->type, netdev);
+    iface_set_netdev_mtu(iface_cfg, netdev);
 
     *ofp_portp = iface_pick_ofport(iface_cfg);
     error = ofproto_port_add(br->ofproto, netdev, ofp_portp);

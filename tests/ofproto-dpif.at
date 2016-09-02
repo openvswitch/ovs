@@ -8892,5 +8892,20 @@ AT_CHECK([ovs-vsctl add-port br0 p2 -- set int p2 type=dummy mtu_request=1600])
 AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface p2 mtu=1600])
 AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1600])
 
+# Explicitly set mtu_request on the internal interface.  This should prevent
+# the MTU from being overriden.
+AT_CHECK([ovs-vsctl set int br0 mtu_request=1700])
+AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1700])
+
+# The new MTU on p2 should not affect br0.
+AT_CHECK([ovs-vsctl set int p2 mtu_request=1400])
+AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface p2 mtu=1400])
+AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1700])
+
+# Remove explicit mtu_request from br0.  Now it should track the bridge
+# minimum again.
+AT_CHECK([ovs-vsctl set int br0 mtu_request=[[]]])
+AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface br0 mtu=1400])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
