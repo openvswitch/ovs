@@ -253,7 +253,8 @@ check-kmod: all tests/atconfig tests/atlocal $(SYSTEM_KMOD_TESTSUITE)
 	$(MAKE) check-kernel
 
 check-system-userspace: all tests/atconfig tests/atlocal $(SYSTEM_USERSPACE_TESTSUITE)
-	$(SHELL) '$(SYSTEM_USERSPACE_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' $(TESTSUITEFLAGS) -j1
+	set $(SHELL) '$(SYSTEM_USERSPACE_TESTSUITE)' -C tests  AUTOTEST_PATH='$(AUTOTEST_PATH)' $(TESTSUITEFLAGS) -j1; \
+	"$$@" || (test X'$(RECHECK)' = Xyes && "$$@" --recheck)
 
 clean-local:
 	test ! -f '$(TESTSUITE)' || $(SHELL) '$(TESTSUITE)' -C tests --clean
