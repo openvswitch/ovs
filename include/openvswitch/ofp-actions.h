@@ -744,20 +744,33 @@ ofpact_learn_spec_next(const struct ofpact_learn_spec *spec)
  *
  * Used for NXAST_LEARN. */
 struct ofpact_learn {
-    struct ofpact ofpact;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
 
-    uint16_t idle_timeout;      /* Idle time before discarding (seconds). */
-    uint16_t hard_timeout;      /* Max time before discarding (seconds). */
-    uint16_t priority;          /* Priority level of flow entry. */
-    uint8_t table_id;           /* Table to insert flow entry. */
-    enum nx_learn_flags flags;  /* NX_LEARN_F_*. */
-    ovs_be64 cookie;            /* Cookie for new flow. */
-    uint16_t fin_idle_timeout;  /* Idle timeout after FIN, if nonzero. */
-    uint16_t fin_hard_timeout;  /* Hard timeout after FIN, if nonzero. */
+        uint16_t idle_timeout;     /* Idle time before discarding (seconds). */
+        uint16_t hard_timeout;     /* Max time before discarding (seconds). */
+        uint16_t priority;         /* Priority level of flow entry. */
+        uint8_t table_id;          /* Table to insert flow entry. */
+        enum nx_learn_flags flags; /* NX_LEARN_F_*. */
+        ovs_be64 cookie;           /* Cookie for new flow. */
+        uint16_t fin_idle_timeout; /* Idle timeout after FIN, if nonzero. */
+        uint16_t fin_hard_timeout; /* Hard timeout after FIN, if nonzero. */
+    );
 
-    unsigned int n_specs;
     struct ofpact_learn_spec specs[];
 };
+
+static inline const struct ofpact_learn_spec *
+ofpact_learn_spec_end(const struct ofpact_learn *learn)
+{
+    return ALIGNED_CAST(const struct ofpact_learn_spec *,
+                        ofpact_next(&learn->ofpact));
+}
+
+#define OFPACT_LEARN_SPEC_FOR_EACH(SPEC, LEARN) \
+    for ((SPEC) = (LEARN)->specs;               \
+         (SPEC) < ofpact_learn_spec_end(LEARN); \
+         (SPEC) = ofpact_learn_spec_next(SPEC))
 
 /* Multipath link choice algorithm to apply.
  *

@@ -4321,7 +4321,6 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
 
         spec = ofpbuf_put_zeros(ofpacts, sizeof *spec);
         learn = ofpacts->header;
-        learn->n_specs++;
 
         spec->src_type = header & NX_LEARN_SRC_MASK;
         spec->dst_type = header & NX_LEARN_DST_MASK;
@@ -4421,8 +4420,7 @@ encode_LEARN(const struct ofpact_learn *learn,
     nal->flags = htons(learn->flags);
     nal->table_id = learn->table_id;
 
-    for (spec = learn->specs; spec < &learn->specs[learn->n_specs];
-         spec = ofpact_learn_spec_next(spec)) {
+    OFPACT_LEARN_SPEC_FOR_EACH (spec, learn) {
         put_u16(out, spec->n_bits | spec->dst_type | spec->src_type);
 
         if (spec->src_type == NX_LEARN_SRC_FIELD) {
