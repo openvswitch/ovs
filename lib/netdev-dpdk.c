@@ -498,7 +498,7 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
     do {
         if (snprintf(mp_name, RTE_MEMPOOL_NAMESIZE, "ovs_mp_%d_%d_%u",
                      dmp->mtu, dmp->socket_id, mp_size) < 0) {
-            return NULL;
+            goto fail;
         }
 
         dmp->mp = rte_mempool_create(mp_name, mp_size, MBUF_SIZE(mtu),
@@ -510,13 +510,17 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
     } while (!dmp->mp && rte_errno == ENOMEM && (mp_size /= 2) >= MIN_NB_MBUF);
 
     if (dmp->mp == NULL) {
-        return NULL;
+        goto fail;
     } else {
         VLOG_DBG("Allocated \"%s\" mempool with %u mbufs", mp_name, mp_size );
     }
 
     ovs_list_push_back(&dpdk_mp_list, &dmp->list_node);
     return dmp;
+
+fail:
+    rte_free(dmp);
+    return NULL;
 }
 
 static void
@@ -531,6 +535,7 @@ dpdk_mp_put(struct dpdk_mp *dmp) OVS_REQUIRES(dpdk_mutex)
     if (!--dmp->refcount) {
         ovs_list_remove(&dmp->list_node);
         rte_mempool_free(dmp->mp);
+        rte_free(dmp);
     }
 }
 
