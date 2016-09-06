@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 
+#include "bitmap.h"
 #include "command-line.h"
 #include "daemon.h"
 #include "dirs.h"
@@ -62,6 +63,8 @@ static const char *ovnsb_db;
 /* MAC address management (macam) table of "struct eth_addr"s, that holds the
  * MAC addresses allocated by the OVN ipam module. */
 static struct hmap macam = HMAP_INITIALIZER(&macam);
+
+#define MAX_OVN_TAGS 4096
 
 /* Pipeline stages. */
 
@@ -886,18 +889,13 @@ ipam_allocate_addresses(struct ovn_datapath *od, struct ovn_port *op,
 }
 
 static void
-build_ipam(struct northd_context *ctx, struct hmap *datapaths,
-           struct hmap *ports)
+build_ipam(struct hmap *datapaths, struct hmap *ports)
 {
     /* IPAM generally stands for IP address management.  In non-virtualized
      * world, MAC addresses come with the hardware.  But, with virtualized
      * workloads, they need to be assigned and managed.  This function
      * does both IP address management (ipam) and MAC address management
      * (macam). */
-
-    if (!ctx->ovnnb_txn) {
-        return;
-    }
 
     /* If the switch's other_config:subnet is set, allocate new addresses for
      * ports that have the "dynamic" keyword in their addresses column. */
@@ -956,12 +954,110 @@ build_ipam(struct northd_context *ctx, struct hmap *datapaths,
     }
 }
 
+/* Tag allocation for nested containers.
+ *
+ * For a logical switch port with 'parent_name' and a request to allocate tags,
+ * keeps a track of all allocated tags. */
+struct tag_alloc_node {
+    struct hmap_node hmap_node;
+    char *parent_name;
+    unsigned long *allocated_tags;  /* A bitmap to track allocated tags. */
+};
+
+static void
+tag_alloc_destroy(struct hmap *tag_alloc_table)
+{
+    struct tag_alloc_node *node;
+    HMAP_FOR_EACH_POP (node, hmap_node, tag_alloc_table) {
+        bitmap_free(node->allocated_tags);
+        free(node->parent_name);
+        free(node);
+    }
+    hmap_destroy(tag_alloc_table);
+}
+
+static struct tag_alloc_node *
+tag_alloc_get_node(struct hmap *tag_alloc_table, const char *parent_name)
+{
+    /* If a node for the 'parent_name' exists, return it. */
+    struct tag_alloc_node *tag_alloc_node;
+    HMAP_FOR_EACH_WITH_HASH (tag_alloc_node, hmap_node,
+                             hash_string(parent_name, 0),
+                             tag_alloc_table) {
+        if (!strcmp(tag_alloc_node->parent_name, parent_name)) {
+            return tag_alloc_node;
+        }
+    }
+
+    /* Create a new node. */
+    tag_alloc_node = xmalloc(sizeof *tag_alloc_node);
+    tag_alloc_node->parent_name = xstrdup(parent_name);
+    tag_alloc_node->allocated_tags = bitmap_allocate(MAX_OVN_TAGS);
+    /* Tag 0 is invalid for nested containers. */
+    bitmap_set1(tag_alloc_node->allocated_tags, 0);
+    hmap_insert(tag_alloc_table, &tag_alloc_node->hmap_node,
+                hash_string(parent_name, 0));
+
+    return tag_alloc_node;
+}
+
+static void
+tag_alloc_add_existing_tags(struct hmap *tag_alloc_table,
+                            const struct nbrec_logical_switch_port *nbsp)
+{
+    /* Add the tags of already existing nested containers.  If there is no
+     * 'nbsp->parent_name' or no 'nbsp->tag' set, there is nothing to do. */
+    if (!nbsp->parent_name || !nbsp->parent_name[0] || !nbsp->tag) {
+        return;
+    }
+
+    struct tag_alloc_node *tag_alloc_node;
+    tag_alloc_node = tag_alloc_get_node(tag_alloc_table, nbsp->parent_name);
+    bitmap_set1(tag_alloc_node->allocated_tags, *nbsp->tag);
+}
+
+static void
+tag_alloc_create_new_tag(struct hmap *tag_alloc_table,
+                         const struct nbrec_logical_switch_port *nbsp)
+{
+    if (!nbsp->tag_request) {
+        return;
+    }
+
+    if (nbsp->parent_name && nbsp->parent_name[0]
+        && *nbsp->tag_request == 0) {
+        /* For nested containers that need allocation, do the allocation. */
+
+        if (nbsp->tag) {
+            /* This has already been allocated. */
+            return;
+        }
+
+        struct tag_alloc_node *tag_alloc_node;
+        int64_t tag;
+        tag_alloc_node = tag_alloc_get_node(tag_alloc_table,
+                                            nbsp->parent_name);
+        tag = bitmap_scan(tag_alloc_node->allocated_tags, 0, 1, MAX_OVN_TAGS);
+        if (tag == MAX_OVN_TAGS) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_ERR_RL(&rl, "out of vlans for logical switch ports with "
+                        "parent %s", nbsp->parent_name);
+            return;
+        }
+        bitmap_set1(tag_alloc_node->allocated_tags, tag);
+        nbrec_logical_switch_port_set_tag(nbsp, &tag, 1);
+    } else if (*nbsp->tag_request != 0) {
+        /* For everything else, copy the contents of 'tag_request' to 'tag'. */
+        nbrec_logical_switch_port_set_tag(nbsp, nbsp->tag_request, 1);
+    }
+}
+
 
 static void
 join_logical_ports(struct northd_context *ctx,
                    struct hmap *datapaths, struct hmap *ports,
-                   struct ovs_list *sb_only, struct ovs_list *nb_only,
-                   struct ovs_list *both)
+                   struct hmap *tag_alloc_table, struct ovs_list *sb_only,
+                   struct ovs_list *nb_only, struct ovs_list *both)
 {
     hmap_init(ports);
     ovs_list_init(sb_only);
@@ -1054,6 +1150,7 @@ join_logical_ports(struct northd_context *ctx,
 
                 op->od = od;
                 ipam_add_port_addresses(od, op);
+                tag_alloc_add_existing_tags(tag_alloc_table, nbsp);
             }
         } else {
             for (size_t i = 0; i < od->nbr->n_ports; i++) {
@@ -1244,13 +1341,21 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
             struct hmap *ports)
 {
     struct ovs_list sb_only, nb_only, both;
+    struct hmap tag_alloc_table;
+    hmap_init(&tag_alloc_table);
 
-    join_logical_ports(ctx, datapaths, ports, &sb_only, &nb_only, &both);
+    join_logical_ports(ctx, datapaths, ports, &tag_alloc_table, &sb_only,
+                       &nb_only, &both);
 
-    /* For logical ports that are in both databases, update the southbound
-     * record based on northbound data.  Also index the in-use tunnel_keys. */
     struct ovn_port *op, *next;
+    /* For logical ports that are in both databases, update the southbound
+     * record based on northbound data.  Also index the in-use tunnel_keys.
+     * For logical ports that are in NB database, do any tag allocation
+     * needed. */
     LIST_FOR_EACH_SAFE (op, next, list, &both) {
+        if (op->nbsp) {
+            tag_alloc_create_new_tag(&tag_alloc_table, op->nbsp);
+        }
         ovn_port_update_sbrec(op);
 
         add_tnlid(&op->od->port_tnlids, op->sb->tunnel_key);
@@ -1287,6 +1392,8 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
     if (remove_mac_bindings) {
         cleanup_mac_bindings(ctx, ports);
     }
+
+    tag_alloc_destroy(&tag_alloc_table);
 }
 
 #define OVN_MIN_MULTICAST 32768
@@ -4118,13 +4225,13 @@ sync_address_sets(struct northd_context *ctx)
 static void
 ovnnb_db_run(struct northd_context *ctx, struct ovsdb_idl_loop *sb_loop)
 {
-    if (!ctx->ovnsb_txn || !ovsdb_idl_has_ever_connected(ctx->ovnnb_idl)) {
+    if (!ctx->ovnsb_txn || !ctx->ovnnb_txn) {
         return;
     }
     struct hmap datapaths, ports;
     build_datapaths(ctx, &datapaths);
     build_ports(ctx, &datapaths, &ports);
-    build_ipam(ctx, &datapaths, &ports);
+    build_ipam(&datapaths, &ports);
     build_lflows(ctx, &datapaths, &ports);
 
     sync_address_sets(ctx);

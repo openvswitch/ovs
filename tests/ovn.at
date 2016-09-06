@@ -5053,3 +5053,119 @@ OVS_WAIT_UNTIL([test `ovs-ofctl dump-flows br-int table=0 | grep REG13 | wc -l` 
 OVN_CLEANUP([hv1])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- tag allocation])
+AT_KEYWORDS([ovntags])
+ovn_start
+
+AT_CHECK([ovn-nbctl ls-add ls0])
+AT_CHECK([ovn-nbctl lsp-add ls0 parent1])
+AT_CHECK([ovn-nbctl lsp-add ls0 parent2])
+AT_CHECK([ovn-nbctl ls-add ls1])
+
+dnl When a tag is provided, no allocation is done
+AT_CHECK([ovn-nbctl --wait=sb lsp-add ls1 c0 parent1 3])
+AT_CHECK([ovn-nbctl lsp-get-tag c0], [0], [3
+])
+dnl The same 'tag' gets created in southbound database.
+AT_CHECK([ovn-sbctl --data=bare --no-heading --columns=tag find port_binding \
+logical_port="c0"], [0], [3
+])
+
+dnl Allocate tags and see it getting created in both NB and SB
+AT_CHECK([ovn-nbctl --wait=sb lsp-add ls1 c1 parent1 0])
+AT_CHECK([ovn-nbctl lsp-get-tag c1], [0], [1
+])
+AT_CHECK([ovn-sbctl --data=bare --no-heading --columns=tag find port_binding \
+logical_port="c1"], [0], [1
+])
+
+AT_CHECK([ovn-nbctl --wait=sb lsp-add ls1 c2 parent1 0])
+AT_CHECK([ovn-nbctl lsp-get-tag c2], [0], [2
+])
+AT_CHECK([ovn-sbctl --data=bare --no-heading --columns=tag find port_binding \
+logical_port="c2"], [0], [2
+])
+AT_CHECK([ovn-nbctl --wait=sb lsp-add ls1 c3 parent1 0])
+AT_CHECK([ovn-nbctl lsp-get-tag c3], [0], [4
+])
+AT_CHECK([ovn-sbctl --data=bare --no-heading --columns=tag find port_binding \
+logical_port="c3"], [0], [4
+])
+
+dnl A different parent.
+AT_CHECK([ovn-nbctl --wait=sb lsp-add ls1 c4 parent2 0])
+AT_CHECK([ovn-nbctl lsp-get-tag c4], [0], [1
+])
+AT_CHECK([ovn-sbctl --data=bare --no-heading --columns=tag find port_binding \
+logical_port="c4"], [0], [1
+])
+
+AT_CHECK([ovn-nbctl --wait=sb lsp-add ls1 c5 parent2 0])
+AT_CHECK([ovn-nbctl lsp-get-tag c5], [0], [2
+])
+AT_CHECK([ovn-sbctl --data=bare --no-heading --columns=tag find port_binding \
+logical_port="c5"], [0], [2
+])
+
+dnl Delete a logical port and create a new one.
+AT_CHECK([ovn-nbctl --wait=sb lsp-del c1])
+AT_CHECK([ovn-nbctl --wait=sb lsp-add ls1 c6 parent1 0])
+AT_CHECK([ovn-nbctl lsp-get-tag c6], [0], [1
+])
+AT_CHECK([ovn-sbctl --data=bare --no-heading --columns=tag find port_binding \
+logical_port="c6"], [0], [1
+])
+
+dnl Restart northd to see that the same allocation remains.
+as northd
+OVS_APP_EXIT_AND_WAIT([ovn-northd])
+start_daemon ovn-northd \
+    --ovnnb-db=unix:"$ovs_base"/ovn-nb/ovn-nb.sock \
+    --ovnsb-db=unix:"$ovs_base"/ovn-sb/ovn-sb.sock
+
+dnl Create a switch to make sure that ovn-northd has run through the main loop.
+AT_CHECK([ovn-nbctl --wait=sb ls-add ls-dummy])
+AT_CHECK([ovn-nbctl lsp-get-tag c0], [0], [3
+])
+AT_CHECK([ovn-nbctl lsp-get-tag c6], [0], [1
+])
+AT_CHECK([ovn-nbctl lsp-get-tag c2], [0], [2
+])
+AT_CHECK([ovn-nbctl lsp-get-tag c3], [0], [4
+])
+AT_CHECK([ovn-nbctl lsp-get-tag c4], [0], [1
+])
+AT_CHECK([ovn-nbctl lsp-get-tag c5], [0], [2
+])
+
+dnl Create a switch port with a tag that has already been allocated.
+dnl It should go through fine with a duplicate tag.
+AT_CHECK([ovn-nbctl --wait=sb lsp-add ls1 c7 parent2 2])
+AT_CHECK([ovn-nbctl lsp-get-tag c7], [0], [2
+])
+AT_CHECK([ovn-sbctl --data=bare --no-heading --columns=tag find port_binding \
+logical_port="c7"], [0], [2
+])
+AT_CHECK([ovn-nbctl lsp-get-tag c5], [0], [2
+])
+
+AT_CHECK([ovn-nbctl ls-add ls2])
+dnl When there is no parent_name provided (for say, 'localnet'), 'tag_request'
+dnl gets copied to 'tag'
+AT_CHECK([ovn-nbctl --wait=sb lsp-add ls2 local0 "" 25])
+AT_CHECK([ovn-nbctl lsp-get-tag local0], [0], [25
+])
+dnl The same 'tag' gets created in southbound database.
+AT_CHECK([ovn-sbctl --data=bare --no-heading --columns=tag find port_binding \
+logical_port="local0"], [0], [25
+])
+dnl If 'tag_request' is 0 for localnet, nothing gets written to 'tag'
+AT_CHECK([ovn-nbctl --wait=sb lsp-add ls2 local1 "" 0])
+AT_CHECK([ovn-nbctl lsp-get-tag local1])
+dnl change the tag_request.
+AT_CHECK([ovn-nbctl --wait=sb  set logical_switch_port local1 tag_request=50])
+AT_CHECK([ovn-nbctl lsp-get-tag local1], [0], [50
+])
+
+AT_CLEANUP
