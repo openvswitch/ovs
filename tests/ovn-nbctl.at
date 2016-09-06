@@ -132,11 +132,11 @@ AT_CHECK([ovn-nbctl --may-exist lsp-add ls0 lp2 lp4 5], [1], [],
   [ovn-nbctl: lp2: port already exists with different parent lp3
 ])
 AT_CHECK([ovn-nbctl --may-exist lsp-add ls0 lp2 lp3 10], [1], [],
-  [ovn-nbctl: lp2: port already exists with different tag 5
+  [ovn-nbctl: lp2: port already exists with different tag_request 5
 ])
-AT_CHECK([ovn-nbctl clear Logical_Switch_Port lp2 tag])
+AT_CHECK([ovn-nbctl clear Logical_Switch_Port lp2 tag_request])
 AT_CHECK([ovn-nbctl --may-exist lsp-add ls0 lp2 lp3 5], [1], [],
-  [ovn-nbctl: lp2: port already exists but has no tag
+  [ovn-nbctl: lp2: port already exists but has no tag_request
 ])
 
 OVN_NBCTL_TEST_STOP

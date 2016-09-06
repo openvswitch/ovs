@@ -776,12 +776,13 @@ nbctl_lsp_add(struct ctl_context *ctx)
                           lsp_name, lsp->parent_name);
             }
 
-            if (!lsp->n_tag) {
-                ctl_fatal("%s: port already exists but has no tag",
+            if (!lsp->n_tag_request) {
+                ctl_fatal("%s: port already exists but has no tag_request",
                           lsp_name);
-            } else if (lsp->tag[0] != tag) {
+            } else if (lsp->tag_request[0] != tag) {
                 ctl_fatal("%s: port already exists with different "
-                          "tag %"PRId64, lsp_name, lsp->tag[0]);
+                          "tag_request %"PRId64, lsp_name,
+                          lsp->tag_request[0]);
             }
         } else {
             if (lsp->parent_name) {
@@ -798,7 +799,7 @@ nbctl_lsp_add(struct ctl_context *ctx)
     nbrec_logical_switch_port_set_name(lsp, lsp_name);
     if (tag >= 0) {
         nbrec_logical_switch_port_set_parent_name(lsp, parent_name);
-        nbrec_logical_switch_port_set_tag(lsp, &tag, 1);
+        nbrec_logical_switch_port_set_tag_request(lsp, &tag, 1);
     }
 
     /* Insert the logical port into the logical switch. */
