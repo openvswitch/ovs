@@ -2077,8 +2077,13 @@ OVS_REQ_RDLOCK(ml->rwlock)
     }
 
     if (is_gratuitous_arp(flow, wc)) {
-        /* We don't want to learn from gratuitous ARP packets that are
-         * reflected back over bond slaves so we lock the learning table. */
+        /* Gratuitous ARP packets received over non-bond interfaces could be
+         * reflected back over bond slaves.  We don't want to learn from these
+         * reflected packets, so we lock each entry for which a gratuitous ARP
+         * packet was received over a non-bond interface and refrain from
+         * learning from gratuitous ARP packets that arrive over bond
+         * interfaces for this entry while the lock is in effect.  See
+         * vswitchd/INTERNALS for more in-depth discussion on this topic. */
         if (!in_xbundle->bond) {
             return true;
         } else if (mac_entry_is_grat_arp_locked(mac)) {
