@@ -979,10 +979,12 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
             }
         }
 
+        bool new_group_id = false;
         if (!group_id) {
             /* Reserve a new group_id. */
             group_id = bitmap_scan(ep->group_table->group_ids, 0, 1,
                                    MAX_OVN_GROUPS + 1);
+            new_group_id = true;
         }
 
         if (group_id == MAX_OVN_GROUPS + 1) {
@@ -998,6 +1000,7 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
         group_info->group = ds;
         group_info->group_id = group_id;
         group_info->hmap_node.hash = hash;
+        group_info->new_group_id = new_group_id;
 
         hmap_insert(&ep->group_table->desired_groups,
                     &group_info->hmap_node, group_info->hmap_node.hash);

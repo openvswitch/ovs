@@ -744,7 +744,11 @@ ovn_group_table_clear(struct group_table *group_table, bool existing)
 
     HMAP_FOR_EACH_SAFE (g, next, hmap_node, target_group) {
         hmap_remove(target_group, &g->hmap_node);
-        bitmap_set0(group_table->group_ids, g->group_id);
+        /* Don't unset bitmap for desired group_info if the group_id
+         * was not freshly reserved. */
+        if (existing || g->new_group_id) {
+            bitmap_set0(group_table->group_ids, g->group_id);
+        }
         ds_destroy(&g->group);
         free(g);
     }
