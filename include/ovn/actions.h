@@ -291,6 +291,8 @@ struct group_info {
     struct hmap_node hmap_node;
     struct ds group;
     uint32_t group_id;
+    bool new_group_id;  /* 'True' if 'group_id' was reserved from
+                         * group_table's 'group_ids' bitmap. */
 };
 
 enum action_opcode {
