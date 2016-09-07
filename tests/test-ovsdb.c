@@ -2038,6 +2038,7 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
     bool increment = false;
 
     txn = ovsdb_idl_txn_create(idl);
+    ovsdb_idl_check_consistency(idl);
     for (cmd = strtok_r(commands, ",", &save_ptr1); cmd;
          cmd = strtok_r(NULL, ",", &save_ptr1)) {
         char *save_ptr2 = NULL;
@@ -2144,14 +2145,17 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
             increment = true;
         } else if (!strcmp(name, "abort")) {
             ovsdb_idl_txn_abort(txn);
+            ovsdb_idl_check_consistency(idl);
             break;
         } else if (!strcmp(name, "destroy")) {
             printf("%03d: destroy\n", step);
             ovsdb_idl_txn_destroy(txn);
+            ovsdb_idl_check_consistency(idl);
             return;
         } else {
             ovs_fatal(0, "unknown command %s", name);
         }
+        ovsdb_idl_check_consistency(idl);
     }
 
     status = ovsdb_idl_txn_commit_block(txn);
@@ -2163,6 +2167,7 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
     }
     putchar('\n');
     ovsdb_idl_txn_destroy(txn);
+    ovsdb_idl_check_consistency(idl);
 }
 
 static const struct ovsdb_idl_table_class *
@@ -2422,6 +2427,7 @@ do_idl(struct ovs_cmdl_context *ctx)
             /* Wait for update. */
             for (;;) {
                 ovsdb_idl_run(idl);
+                ovsdb_idl_check_consistency(idl);
                 if (ovsdb_idl_get_seqno(idl) != seqno) {
                     break;
                 }
@@ -2474,6 +2480,7 @@ do_idl(struct ovs_cmdl_context *ctx)
     }
     for (;;) {
         ovsdb_idl_run(idl);
+        ovsdb_idl_check_consistency(idl);
         if (ovsdb_idl_get_seqno(idl) != seqno) {
             break;
         }
