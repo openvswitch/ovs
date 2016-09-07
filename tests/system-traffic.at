@@ -2405,8 +2405,88 @@ udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
-
 AT_SETUP([conntrack - FTP with NAT])
+AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
+
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address 80:88:88:88:88:88])
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+
+AT_DATA([flows.txt], [dnl
+dnl track all IP traffic, de-mangle non-NEW connections
+table=0 in_port=1, ip, action=ct(table=1,nat)
+table=0 in_port=2, ip, action=ct(table=2,nat)
+dnl
+dnl ARP
+dnl
+table=0 priority=100 arp arp_op=1 action=move:OXM_OF_ARP_TPA[[]]->NXM_NX_REG2[[]],resubmit(,8),goto_table:10
+table=0 priority=10 arp action=normal
+table=0 priority=0 action=drop
+dnl
+dnl Table 1: port 1 -> 2
+dnl
+dnl Allow new FTP connections. These need to be commited.
+table=1 ct_state=+new, tcp, tp_dst=21, nw_src=10.1.1.1, action=ct(alg=ftp,commit,nat(src=10.1.1.9)),2
+dnl Allow established TCP connections, make sure they are NATted already.
+table=1 ct_state=+est, tcp, nw_src=10.1.1.9,     action=2
+dnl
+dnl Table 1: droppers
+dnl
+table=1 priority=10, tcp, action=drop
+table=1 priority=0,action=drop
+dnl
+dnl Table 2: port 2 -> 1
+dnl
+dnl Allow established TCP connections, make sure they are reverse NATted
+table=2 ct_state=+est, tcp, nw_dst=10.1.1.1, action=1
+dnl Allow (new) related (data) connections.  These need to be commited.
+table=2 ct_state=+new+rel, tcp, nw_dst=10.1.1.9, action=ct(commit,nat),1
+dnl Allow related ICMP packets, make sure they are reverse NATted
+table=2 ct_state=+rel, icmp, nw_dst=10.1.1.1, action=1
+dnl
+dnl Table 2: droppers
+dnl
+table=2 priority=10, tcp, action=drop
+table=2 priority=0, action=drop
+dnl
+dnl MAC resolution table for IP in reg2, stores mac in OXM_OF_PKT_REG0
+dnl
+table=8,reg2=0x0a010109/0xffffffff,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
+table=8,priority=0,action=load:0->OXM_OF_PKT_REG0[[]]
+dnl ARP responder mac filled in at OXM_OF_PKT_REG0, or 0 for normal action.
+dnl TPA IP in reg2.
+dnl Swaps the fields of the ARP message to turn a query to a response.
+table=10 priority=100 arp xreg0=0 action=normal
+table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
+table=10 priority=0 action=drop
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
+
+dnl FTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.9,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=10.1.1.9,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - FTP with NAT (seq-adj)])
 AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_NAT()
@@ -2486,7 +2566,6 @@ tcp,orig=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),reply=(sr
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
-
 
 AT_SETUP([conntrack - FTP with NAT 2])
 AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
