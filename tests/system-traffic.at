@@ -2405,22 +2405,55 @@ udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([conntrack - FTP with NAT])
-AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
-CHECK_CONNTRACK()
-CHECK_CONNTRACK_NAT()
+dnl CHECK_FTP_NAT(TITLE, IP_ADDR, FLOWS)
+dnl
+dnl Checks the implementation of conntrack with FTP ALGs in combination with
+dnl NAT, using the provided flow table.
+m4_define([CHECK_FTP_NAT],
+   [AT_SETUP([conntrack - FTP NAT $1])
+    AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
+    CHECK_CONNTRACK()
+    CHECK_CONNTRACK_NAT()
 
-OVS_TRAFFIC_VSWITCHD_START()
+    OVS_TRAFFIC_VSWITCHD_START()
 
-ADD_NAMESPACES(at_ns0, at_ns1)
+    ADD_NAMESPACES(at_ns0, at_ns1)
 
-ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
-NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address 80:88:88:88:88:88])
-ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+    ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+    NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address 80:88:88:88:88:88])
+    ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 
-dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+    dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+    AT_DATA([flows.txt], [$3
+])
 
-AT_DATA([flows.txt], [dnl
+    AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+    NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+    OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
+
+    dnl FTP requests from p0->p1 should work fine.
+    NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
+
+    dnl Discards CLOSE_WAIT and CLOSING
+    AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+])
+
+    OVS_TRAFFIC_VSWITCHD_STOP
+    AT_CLEANUP])
+
+dnl CHECK_FTP_NAT_PRE_RECIRC(TITLE, IP_ADDR, IP_ADDR_AS_HEX)
+dnl
+dnl Checks the implementation of conntrack with FTP ALGs in combination with
+dnl NAT, with flow tables that implement the NATing as part of handling of
+dnl initial incoming packets - ie, the first flow is ct(nat,table=foo).
+dnl
+dnl IP_ADDR must specify the NAT address in standard "10.1.1.x" format,
+dnl and IP_ADDR_AS_HEX must specify the same address as hex, eg 0x0a0101xx.
+m4_define([CHECK_FTP_NAT_PRE_RECIRC], [dnl
+   CHECK_FTP_NAT([prerecirc $1], [$2], [dnl
 dnl track all IP traffic, de-mangle non-NEW connections
 table=0 in_port=1, ip, action=ct(table=1,nat)
 table=0 in_port=2, ip, action=ct(table=2,nat)
@@ -2434,9 +2467,9 @@ dnl
 dnl Table 1: port 1 -> 2
 dnl
 dnl Allow new FTP connections. These need to be commited.
-table=1 ct_state=+new, tcp, tp_dst=21, nw_src=10.1.1.1, action=ct(alg=ftp,commit,nat(src=10.1.1.9)),2
+table=1 ct_state=+new, tcp, tp_dst=21, nw_src=10.1.1.1, action=ct(alg=ftp,commit,nat(src=$2)),2
 dnl Allow established TCP connections, make sure they are NATted already.
-table=1 ct_state=+est, tcp, nw_src=10.1.1.9,     action=2
+table=1 ct_state=+est, tcp, nw_src=$2,     action=2
 dnl
 dnl Table 1: droppers
 dnl
@@ -2448,7 +2481,7 @@ dnl
 dnl Allow established TCP connections, make sure they are reverse NATted
 table=2 ct_state=+est, tcp, nw_dst=10.1.1.1, action=1
 dnl Allow (new) related (data) connections.  These need to be commited.
-table=2 ct_state=+new+rel, tcp, nw_dst=10.1.1.9, action=ct(commit,nat),1
+table=2 ct_state=+new+rel, tcp, nw_dst=$2, action=ct(commit,nat),1
 dnl Allow related ICMP packets, make sure they are reverse NATted
 table=2 ct_state=+rel, icmp, nw_dst=10.1.1.1, action=1
 dnl
@@ -2459,7 +2492,7 @@ table=2 priority=0, action=drop
 dnl
 dnl MAC resolution table for IP in reg2, stores mac in OXM_OF_PKT_REG0
 dnl
-table=8,reg2=0x0a010109/0xffffffff,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
+table=8,reg2=$3/0xffffffff,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
 table=8,priority=0,action=load:0->OXM_OF_PKT_REG0[[]]
 dnl ARP responder mac filled in at OXM_OF_PKT_REG0, or 0 for normal action.
 dnl TPA IP in reg2.
@@ -2467,121 +2500,34 @@ dnl Swaps the fields of the ARP message to turn a query to a response.
 table=10 priority=100 arp xreg0=0 action=normal
 table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
 table=10 priority=0 action=drop
+    ])
 ])
 
-AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+dnl Check that ct(nat,table=foo) works without TCP sequence adjustment.
+CHECK_FTP_NAT_PRE_RECIRC([], [10.1.1.9], [0x0a010109])
 
-dnl NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
-OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
-
-dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
-
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.9,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
-tcp,orig=(src=10.1.1.2,dst=10.1.1.9,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
-])
-
-OVS_TRAFFIC_VSWITCHD_STOP
-AT_CLEANUP
-
-AT_SETUP([conntrack - FTP with NAT (seq-adj)])
-AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
-CHECK_CONNTRACK()
-CHECK_CONNTRACK_NAT()
-
-OVS_TRAFFIC_VSWITCHD_START()
-
-ADD_NAMESPACES(at_ns0, at_ns1)
-
-ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
-NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address 80:88:88:88:88:88])
-ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
-
-dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
-
-AT_DATA([flows.txt], [dnl
-dnl track all IP traffic, de-mangle non-NEW connections
-table=0 in_port=1, ip, action=ct(table=1,nat)
-table=0 in_port=2, ip, action=ct(table=2,nat)
+dnl Check that ct(nat,table=foo) works with TCP sequence adjustment.
 dnl
-dnl ARP
-dnl
-table=0 priority=100 arp arp_op=1 action=move:OXM_OF_ARP_TPA[[]]->NXM_NX_REG2[[]],resubmit(,8),goto_table:10
-table=0 priority=10 arp action=normal
-table=0 priority=0 action=drop
-dnl
-dnl Table 1: port 1 -> 2
-dnl
-dnl Allow new FTP connections. These need to be commited.
-table=1 ct_state=+new, tcp, tp_dst=21, nw_src=10.1.1.1, action=ct(alg=ftp,commit,nat(src=10.1.1.240)),2
-dnl Allow established TCP connections, make sure they are NATted already.
-table=1 ct_state=+est, tcp, nw_src=10.1.1.240,     action=2
-dnl
-dnl Table 1: droppers
-dnl
-table=1 priority=10, tcp, action=drop
-table=1 priority=0,action=drop
-dnl
-dnl Table 2: port 2 -> 1
-dnl
-dnl Allow established TCP connections, make sure they are reverse NATted
-table=2 ct_state=+est, tcp, nw_dst=10.1.1.1, action=1
-dnl Allow (new) related (data) connections.  These need to be commited.
-table=2 ct_state=+new+rel, tcp, nw_dst=10.1.1.240, action=ct(commit,nat),1
-dnl Allow related ICMP packets, make sure they are reverse NATted
-table=2 ct_state=+rel, icmp, nw_dst=10.1.1.1, action=1
-dnl
-dnl Table 2: droppers
-dnl
-table=2 priority=10, tcp, action=drop
-table=2 priority=0, action=drop
-dnl
-dnl MAC resolution table for IP in reg2, stores mac in OXM_OF_PKT_REG0
-dnl
-table=8,reg2=0x0a0101f0/0xfffffff0,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
-table=8,priority=0,action=load:0->OXM_OF_PKT_REG0[[]]
-dnl ARP responder mac filled in at OXM_OF_PKT_REG0, or 0 for normal action.
-dnl TPA IP in reg2.
-dnl Swaps the fields of the ARP message to turn a query to a response.
-table=10 priority=100 arp xreg0=0 action=normal
-table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
-table=10 priority=0 action=drop
-])
+dnl The FTP PORT command includes the ASCII representation of the address,
+dnl so when these messages need to be NATed between addresses that have
+dnl different lengths when represented in ASCII (such as the original address
+dnl of 10.1.1.1 used in the test and 10.1.1.240 here), the FTP NAT ALG must
+dnl resize the packet and adjust TCP sequence numbers. This test is kept
+dnl separate from the above to easier identify issues in this code on different
+dnl kernels.
+CHECK_FTP_NAT_PRE_RECIRC([seqadj], [10.1.1.240], [0x0a0101f0])
 
-AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
-
-dnl NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
-OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
-
-dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
-
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
-tcp,orig=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
-])
-
-OVS_TRAFFIC_VSWITCHD_STOP
-AT_CLEANUP
-
-AT_SETUP([conntrack - FTP with NAT 2])
-AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
-CHECK_CONNTRACK()
-CHECK_CONNTRACK_NAT()
-OVS_TRAFFIC_VSWITCHD_START()
-
-ADD_NAMESPACES(at_ns0, at_ns1)
-
-ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
-NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address 80:88:88:88:88:88])
-ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
-
-dnl Allow any traffic from ns0->ns1.
-dnl Only allow nd, return traffic from ns1->ns0.
-AT_DATA([flows.txt], [dnl
+dnl CHECK_FTP_NAT_POST_RECIRC(TITLE, IP_ADDR, IP_ADDR_AS_HEX)
+dnl
+dnl Checks the implementation of conntrack with FTP ALGs in combination with
+dnl NAT, with flow tables that implement the NATing after the first round
+dnl of recirculation - that is, the first flow ct(table=foo) then a subsequent
+dnl flow will implement the NATing with ct(nat..),output:foo.
+dnl
+dnl IP_ADDR must specify the NAT address in standard "10.1.1.x" format,
+dnl and IP_ADDR_AS_HEX must specify the same address as hex, eg 0x0a0101xx.
+m4_define([CHECK_FTP_NAT_POST_RECIRC], [dnl
+    CHECK_FTP_NAT([postrecirc $1], [$2], [dnl
 dnl track all IP traffic (this includes a helper call to non-NEW packets.)
 table=0 ip, action=ct(table=1)
 dnl
@@ -2595,7 +2541,7 @@ dnl Table 1
 dnl
 dnl Allow new FTP connections. These need to be commited.
 dnl This does helper for new packets.
-table=1 in_port=1 ct_state=+new, tcp, tp_dst=21, action=ct(alg=ftp,commit,nat(src=10.1.1.240)),2
+table=1 in_port=1 ct_state=+new, tcp, tp_dst=21, action=ct(alg=ftp,commit,nat(src=$2)),2
 dnl Allow and NAT established TCP connections
 table=1 in_port=1 ct_state=+est, tcp,     action=ct(nat),2
 table=1 in_port=2 ct_state=+est, tcp,     action=ct(nat),1
@@ -2609,7 +2555,7 @@ table=1 priority=0, action=drop
 dnl
 dnl MAC resolution table for IP in reg2, stores mac in OXM_OF_PKT_REG0
 dnl
-table=8,reg2=0x0a0101f0/0xfffffff0,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
+table=8,reg2=$3/0xffffffff,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
 table=8,priority=0,action=load:0->OXM_OF_PKT_REG0[[]]
 dnl ARP responder mac filled in at OXM_OF_PKT_REG0, or 0 for normal action.
 dnl TPA IP in reg2.
@@ -2617,24 +2563,22 @@ dnl Swaps the fields of the ARP message to turn a query to a response.
 table=10 priority=100 arp xreg0=0 action=normal
 table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
 table=10 priority=0 action=drop
+    ])
 ])
 
-AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+dnl Check that ct(nat,table=foo) works without TCP sequence adjustment.
+CHECK_FTP_NAT_POST_RECIRC([], [10.1.1.9], [0x0a010109])
 
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
-OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
-
-dnl FTP requests from p0->p1 should work fine.
-NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
-
-dnl Discards CLOSE_WAIT and CLOSING
-AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
-tcp,orig=(src=10.1.1.2,dst=10.1.1.240,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
-])
-
-OVS_TRAFFIC_VSWITCHD_STOP
-AT_CLEANUP
+dnl Check that ct(nat,table=foo) works with TCP sequence adjustment.
+dnl
+dnl The FTP PORT command includes the ASCII representation of the address,
+dnl so when these messages need to be NATed between addresses that have
+dnl different lengths when represented in ASCII (such as the original address
+dnl of 10.1.1.1 used in the test and 10.1.1.240 here), the FTP NAT ALG must
+dnl resize the packet and adjust TCP sequence numbers. This test is kept
+dnl separate from the above to easier identify issues in this code on different
+dnl kernels.
+CHECK_FTP_NAT_POST_RECIRC([seqadj], [10.1.1.240], [0x0a0101f0])
 
 AT_SETUP([conntrack - IPv6 HTTP with NAT])
 CHECK_CONNTRACK()
