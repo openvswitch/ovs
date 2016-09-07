@@ -125,24 +125,31 @@ class DbSchema(object):
 
 
 class IdlSchema(DbSchema):
-    def __init__(self, name, version, tables, idlPrefix, idlHeader):
+    def __init__(self, name, version, tables, idlPrefix, idlHeader,
+                 cDecls, hDecls):
         DbSchema.__init__(self, name, version, tables)
         self.idlPrefix = idlPrefix
         self.idlHeader = idlHeader
+        self.cDecls = cDecls
+        self.hDecls = hDecls
 
     @staticmethod
     def from_json(json):
         parser = ovs.db.parser.Parser(json, "IDL schema")
         idlPrefix = parser.get("idlPrefix", six.string_types)
         idlHeader = parser.get("idlHeader", six.string_types)
+        cDecls = parser.get_optional("cDecls", six.string_types, "")
+        hDecls = parser.get_optional("hDecls", six.string_types, "")
 
         subjson = dict(json)
         del subjson["idlPrefix"]
         del subjson["idlHeader"]
+        subjson.pop("cDecls", None)
+        subjson.pop("hDecls", None)
         schema = DbSchema.from_json(subjson)
 
         return IdlSchema(schema.name, schema.version, schema.tables,
-                         idlPrefix, idlHeader)
+                         idlPrefix, idlHeader, cDecls, hDecls)
 
 
 def column_set_from_json(json, columns):
