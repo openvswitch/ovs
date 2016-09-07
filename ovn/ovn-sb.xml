@@ -1333,6 +1333,29 @@
           </p>
         </dd>
 
+        <dt>
+          <code>set_queue(<var>queue_number</var>);</code>
+        </dt>
+
+        <dd>
+          <p>
+            <b>Parameters</b>: Queue number <var>queue_number</var>, in the range 0 to 61440.
+          </p>
+
+          <p>
+            This is a logical equivalent of the OpenFlow <code>set_queue</code>
+            action.  It affects packets that egress a hypervisor through a
+            physical interface.  For nonzero <var>queue_number</var>, it
+            configures packet queuing to match the settings configured for the
+            <ref table="Port_Binding"/> with
+            <code>options:qdisc_queue_id</code> matching
+            <var>queue_number</var>.  When <var>queue_number</var> is zero, it
+            resets queuing to the default strategy.
+          </p>
+
+          <p><b>Example:</b> <code>set_queue(10);</code></p>
+        </dd>
+
         <dt><code>ct_lb;</code></dt>
         <dt><code>ct_lb(</code><var>ip</var>[<code>:</code><var>port</var>]...<code>);</code></dt>
         <dd>
@@ -1858,14 +1881,21 @@ tcp.flags = RST;
         (empty string)
       </p>
 
-      <column name="options" key="policing_rate">
+      <column name="options" key="qos_max_rate">
         If set, indicates the maximum rate for data sent from this interface,
-        in kbps. Data exceeding this rate is dropped.
+        in bit/s. The traffic will be shaped according to this limit.
       </column>
 
-      <column name="options" key="policing_burst">
+      <column name="options" key="qos_burst">
         If set, indicates the maximum burst size for data sent from this
-        interface, in kb.
+        interface, in bits.
+      </column>
+
+      <column name="options" key="qdisc_queue_id"
+              type='{"type": "integer", "minInteger": 1, "maxInteger": 61440}'>
+        Indicates the queue number on the physical device. This is same as the
+        <code>queue_id</code> used in OpenFlow in <code>struct
+        ofp_action_enqueue</code>.
       </column>
     </group>
 

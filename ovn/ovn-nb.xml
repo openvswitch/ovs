@@ -292,14 +292,14 @@
           (empty string)
         </p>
 
-        <column name="options" key="policing_rate">
+        <column name="options" key="qos_max_rate">
           If set, indicates the maximum rate for data sent from this interface,
-          in kbps. Data exceeding this rate is dropped.
+          in bit/s. The traffic will be shaped according to this limit.
         </column>
 
-        <column name="options" key="policing_burst">
+        <column name="options" key="qos_burst">
           If set, indicates the maximum burst size for data sent from this
-          interface, in kb.
+          interface, in bits.
         </column>
       </group>
     </group>

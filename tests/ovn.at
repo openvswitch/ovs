@@ -938,6 +938,14 @@ reg1[0] = put_dhcpv6_opts(ia_addr="ae70::4");
 reg1[0] = put_dhcpv6_opts(ia_addr=ae70::4, domain_search=ae70::1);
     DHCPv6 option domain_search requires string value.
 
+# set_queue
+set_queue(0);
+    encodes as set_queue:0
+set_queue(61440);
+    encodes as set_queue:61440
+set_queue(65535);
+    Queue ID 65535 for set_queue is not in valid range 0 to 61440.
+
 # Contradictionary prerequisites (allowed but not useful):
 ip4.src = ip6.src[0..31];
     encodes as move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[]

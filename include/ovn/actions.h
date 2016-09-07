@@ -26,6 +26,7 @@
 #include "openvswitch/uuid.h"
 #include "util.h"
 
+struct expr;
 struct lexer;
 struct ofpbuf;
 struct shash;
@@ -66,7 +67,8 @@ struct simap;
     OVNACT(GET_ND,        ovnact_get_mac_bind)      \
     OVNACT(PUT_ND,        ovnact_put_mac_bind)      \
     OVNACT(PUT_DHCPV4_OPTS, ovnact_put_dhcp_opts)   \
-    OVNACT(PUT_DHCPV6_OPTS, ovnact_put_dhcp_opts)
+    OVNACT(PUT_DHCPV6_OPTS, ovnact_put_dhcp_opts)   \
+    OVNACT(SET_QUEUE,       ovnact_set_queue)
 
 /* enum ovnact_type, with a member OVNACT_<ENUM> for each action. */
 enum OVS_PACKED_ENUM ovnact_type {
@@ -217,6 +219,19 @@ struct ovnact_put_dhcp_opts {
     struct expr_field dst;      /* 1-bit destination field. */
     struct ovnact_dhcp_option *options;
     size_t n_options;
+};
+
+/* Valid arguments to SET_QUEUE action.
+ *
+ * QDISC_MIN_QUEUE_ID is the default queue, so user-defined queues should
+ * start at QDISC_MIN_QUEUE_ID+1. */
+#define QDISC_MIN_QUEUE_ID  0
+#define QDISC_MAX_QUEUE_ID  0xf000
+
+/* OVNACT_SET_QUEUE. */
+struct ovnact_set_queue {
+    struct ovnact ovnact;
+    uint16_t queue_id;
 };
 
 /* Internal use by the helpers below. */

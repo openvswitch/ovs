@@ -32,6 +32,7 @@
 #include "ovn/lib/ovn-nb-idl.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-util.h"
+#include "ovn/actions.h"
 #include "packets.h"
 #include "poll-loop.h"
 #include "smap.h"
@@ -274,6 +275,86 @@ allocate_tnlid(struct hmap *set, const char *name, uint32_t max,
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
     VLOG_WARN_RL(&rl, "all %s tunnel ids exhausted", name);
     return 0;
+}
+
+struct ovn_chassis_qdisc_queues {
+    struct hmap_node key_node;
+    uint32_t queue_id;
+    struct uuid chassis_uuid;
+};
+
+static void
+destroy_chassis_queues(struct hmap *set)
+{
+    struct ovn_chassis_qdisc_queues *node;
+    HMAP_FOR_EACH_POP (node, key_node, set) {
+        free(node);
+    }
+    hmap_destroy(set);
+}
+
+static void
+add_chassis_queue(struct hmap *set, struct uuid *chassis_uuid,
+                  uint32_t queue_id)
+{
+    struct ovn_chassis_qdisc_queues *node = xmalloc(sizeof *node);
+    node->queue_id = queue_id;
+    memcpy(&node->chassis_uuid, chassis_uuid, sizeof node->chassis_uuid);
+    hmap_insert(set, &node->key_node, uuid_hash(chassis_uuid));
+}
+
+static bool
+chassis_queueid_in_use(const struct hmap *set, struct uuid *chassis_uuid,
+                       uint32_t queue_id)
+{
+    const struct ovn_chassis_qdisc_queues *node;
+    HMAP_FOR_EACH_WITH_HASH (node, key_node, uuid_hash(chassis_uuid), set) {
+        if (uuid_equals(chassis_uuid, &node->chassis_uuid)
+            && node->queue_id == queue_id) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static uint32_t
+allocate_chassis_queueid(struct hmap *set, struct sbrec_chassis *chassis)
+{
+    for (uint32_t queue_id = QDISC_MIN_QUEUE_ID + 1;
+         queue_id <= QDISC_MAX_QUEUE_ID;
+         queue_id++) {
+        if (!chassis_queueid_in_use(set, &chassis->header_.uuid, queue_id)) {
+            add_chassis_queue(set, &chassis->header_.uuid, queue_id);
+            return queue_id;
+        }
+    }
+
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+    VLOG_WARN_RL(&rl, "all %s queue ids exhausted", chassis->name);
+    return 0;
+}
+
+static void
+free_chassis_queueid(struct hmap *set, struct sbrec_chassis *chassis,
+                     uint32_t queue_id)
+{
+    struct ovn_chassis_qdisc_queues *node;
+    HMAP_FOR_EACH_WITH_HASH (node, key_node,
+                             uuid_hash(&chassis->header_.uuid),
+                             set) {
+        if (uuid_equals(&chassis->header_.uuid, &node->chassis_uuid)
+            && node->queue_id == queue_id) {
+            hmap_remove(set, &node->key_node);
+            break;
+        }
+    }
+}
+
+static inline bool
+port_has_qos_params(const struct smap *opts)
+{
+    return (smap_get(opts, "qos_max_rate") ||
+            smap_get(opts, "qos_burst"));
 }
 
 /* The 'key' comes from nbs->header_.uuid or nbr->header_.uuid or
@@ -1056,6 +1137,7 @@ tag_alloc_create_new_tag(struct hmap *tag_alloc_table,
 static void
 join_logical_ports(struct northd_context *ctx,
                    struct hmap *datapaths, struct hmap *ports,
+                   struct hmap *chassis_qdisc_queues,
                    struct hmap *tag_alloc_table, struct ovs_list *sb_only,
                    struct ovs_list *nb_only, struct ovs_list *both)
 {
@@ -1088,6 +1170,15 @@ join_logical_ports(struct northd_context *ctx,
                     }
                     op->nbsp = nbsp;
                     ovs_list_remove(&op->list);
+
+                    uint32_t queue_id = smap_get_int(&op->sb->options,
+                                                     "qdisc_queue_id", 0);
+                    if (queue_id && op->sb->chassis) {
+                        add_chassis_queue(
+                             chassis_qdisc_queues, &op->sb->chassis->header_.uuid,
+                             queue_id);
+                    }
+
                     ovs_list_push_back(both, &op->list);
 
                     /* This port exists due to a SB binding, but should
@@ -1241,7 +1332,8 @@ join_logical_ports(struct northd_context *ctx,
 }
 
 static void
-ovn_port_update_sbrec(const struct ovn_port *op)
+ovn_port_update_sbrec(const struct ovn_port *op,
+                      struct hmap *chassis_qdisc_queues)
 {
     sbrec_port_binding_set_datapath(op->sb, op->od->sb);
     if (op->nbrp) {
@@ -1269,8 +1361,29 @@ ovn_port_update_sbrec(const struct ovn_port *op)
         sbrec_port_binding_set_mac(op->sb, NULL, 0);
     } else {
         if (strcmp(op->nbsp->type, "router")) {
+            uint32_t queue_id = smap_get_int(
+                    &op->sb->options, "qdisc_queue_id", 0);
+            bool has_qos = port_has_qos_params(&op->nbsp->options);
+            struct smap options;
+
+            if (op->sb->chassis && has_qos && !queue_id) {
+                queue_id = allocate_chassis_queueid(chassis_qdisc_queues,
+                                                    op->sb->chassis);
+            } else if (!has_qos && queue_id) {
+                free_chassis_queueid(chassis_qdisc_queues,
+                                     op->sb->chassis,
+                                     queue_id);
+                queue_id = 0;
+            }
+
+            smap_clone(&options, &op->nbsp->options);
+            if (queue_id) {
+                smap_add_format(&options,
+                                "qdisc_queue_id", "%d", queue_id);
+            }
+            sbrec_port_binding_set_options(op->sb, &options);
+            smap_destroy(&options);
             sbrec_port_binding_set_type(op->sb, op->nbsp->type);
-            sbrec_port_binding_set_options(op->sb, &op->nbsp->options);
         } else {
             const char *chassis = NULL;
             if (op->peer && op->peer->od && op->peer->od->nbr) {
@@ -1341,11 +1454,11 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
             struct hmap *ports)
 {
     struct ovs_list sb_only, nb_only, both;
-    struct hmap tag_alloc_table;
-    hmap_init(&tag_alloc_table);
+    struct hmap tag_alloc_table = HMAP_INITIALIZER(&tag_alloc_table);
+    struct hmap chassis_qdisc_queues = HMAP_INITIALIZER(&chassis_qdisc_queues);
 
-    join_logical_ports(ctx, datapaths, ports, &tag_alloc_table, &sb_only,
-                       &nb_only, &both);
+    join_logical_ports(ctx, datapaths, ports, &chassis_qdisc_queues,
+                       &tag_alloc_table, &sb_only, &nb_only, &both);
 
     struct ovn_port *op, *next;
     /* For logical ports that are in both databases, update the southbound
@@ -1356,7 +1469,7 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
         if (op->nbsp) {
             tag_alloc_create_new_tag(&tag_alloc_table, op->nbsp);
         }
-        ovn_port_update_sbrec(op);
+        ovn_port_update_sbrec(op, &chassis_qdisc_queues);
 
         add_tnlid(&op->od->port_tnlids, op->sb->tunnel_key);
         if (op->sb->tunnel_key > op->od->port_key_hint) {
@@ -1372,7 +1485,7 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
         }
 
         op->sb = sbrec_port_binding_insert(ctx->ovnsb_txn);
-        ovn_port_update_sbrec(op);
+        ovn_port_update_sbrec(op, &chassis_qdisc_queues);
 
         sbrec_port_binding_set_logical_port(op->sb, op->key);
         sbrec_port_binding_set_tunnel_key(op->sb, tunnel_key);
@@ -1394,6 +1507,7 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
     }
 
     tag_alloc_destroy(&tag_alloc_table);
+    destroy_chassis_queues(&chassis_qdisc_queues);
 }
 
 #define OVN_MIN_MULTICAST 32768
@@ -2653,11 +2767,18 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
 
         ds_clear(&match);
+        ds_clear(&actions);
         ds_put_format(&match, "inport == %s", op->json_key);
         build_port_security_l2("eth.src", op->ps_addrs, op->n_ps_addrs,
                                &match);
+
+        const char *queue_id = smap_get(&op->sb->options, "qdisc_queue_id");
+        if (queue_id) {
+            ds_put_format(&actions, "set_queue(%s); ", queue_id);
+        }
+        ds_put_cstr(&actions, "next;");
         ovn_lflow_add(lflows, op->od, S_SWITCH_IN_PORT_SEC_L2, 50,
-                      ds_cstr(&match), "next;");
+                      ds_cstr(&match), ds_cstr(&actions));
 
         if (op->nbsp->n_port_security) {
             build_port_security_ip(P_IN, op, lflows);

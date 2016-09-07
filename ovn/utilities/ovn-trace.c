@@ -1289,6 +1289,18 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
         case OVNACT_PUT_DHCPV6_OPTS:
             execute_put_dhcp_opts(ovnact_get_PUT_DHCPV6_OPTS(a), uflow);
             break;
+
+        case OVNACT_SET_QUEUE:
+            /* The set_queue action is slippery from a logical perspective.  It
+             * has no visible effect as long as the packet remains on the same
+             * chassis: it can bounce from one logical datapath to another
+             * retaining the queue and even end up at a VM on the same chassis.
+             * Without taking the physical arrangement into account, we can't
+             * do anything with this action other than just to note that it
+             * happened.  If we ever add some physical knowledge to ovn-trace,
+             * though, it would be easy enough to track the queue information
+             * by adjusting uflow->skb_priority. */
+            break;
         }
 
     }
