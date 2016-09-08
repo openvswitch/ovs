@@ -5060,15 +5060,14 @@ dp_uuid=`ovn-sbctl find datapath | grep uuid | cut -f2 -d ":" | cut -f2 -d " "`
 ovn-sbctl create MAC_Binding ip=10.0.0.1 datapath=$dp_uuid logical_port=lp0 mac="mac1"
 ovn-sbctl create MAC_Binding ip=10.0.0.1 datapath=$dp_uuid logical_port=lp1 mac="mac2"
 ovn-sbctl find MAC_Binding
-#Delete port lp0
+# Delete port lp0 and check that its MAC_Binding is deleted.
 ovn-nbctl lsp-del lp0
 ovn-sbctl find MAC_Binding
-AT_CHECK([ovn-sbctl find MAC_Binding logical_port=lp0], [0], [])
-#Delete ls0. This will verify that the mac_bindings are cleaned up when a
-#datapath is deleted without explicitly removing the the logical ports
+OVS_WAIT_UNTIL([test `ovn-sbctl find MAC_Binding logical_port=lp0 | wc -l` = 0])
+# Delete logical switch ls0 and check that its MAC_Binding is deleted.
 ovn-nbctl ls-del ls0
 ovn-sbctl find MAC_Binding
-AT_CHECK([ovn-sbctl find MAC_Binding], [0], [])
+OVS_WAIT_UNTIL([test `ovn-sbctl find MAC_Binding | wc -l` = 0])
 
 OVN_CLEANUP([hv1])
 
