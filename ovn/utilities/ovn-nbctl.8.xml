@@ -466,10 +466,35 @@
         A port within an L3 logical router.  Records may be identified by name.
       </dd>
 
-    <dt><code>Logical_Router_Static_Route</code></dt>
-    <dd>
-      A static route belonging to an L3 logical router.
-    </dd>
+      <dt><code>Logical_Router_Static_Route</code></dt>
+      <dd>
+        A static route belonging to an L3 logical router.
+      </dd>
+
+      <dt><code>Address_Set</code></dt>
+      <dd>
+        An address set that can be used in ACLs.
+      </dd>
+
+      <dt><code>Load_Balancer</code></dt>
+      <dd>
+        A load balancer for a logical switch that points to it through its <var>load_balancer</var> column.
+      </dd>
+
+      <dt><code>NAT</code></dt>
+      <dd>
+        A NAT rule for a Gateway router.
+      </dd>
+
+      <dt><code>DHCP_Options</code></dt>
+      <dd>
+        DHCP options.
+      </dd>
+
+      <dt><code>NB_Global</code></dt>
+      <dd>
+        North bound global configurations.
+      </dd>
 
     </dl>
 
