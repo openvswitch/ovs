@@ -134,7 +134,6 @@ replication_init(const char *sync_from_, const char *exclude_tables)
 void
 replication_add_local_db(const char *database, struct ovsdb *db)
 {
-    struct shash_node *node = xmalloc(sizeof *node);
     shash_add_assert(&local_dbs, database, db);
 }
 
