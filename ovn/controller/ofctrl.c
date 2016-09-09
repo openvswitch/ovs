@@ -220,7 +220,7 @@ process_tlv_table_reply(const struct ofputil_tlv_table_reply *reply)
             } else {
                 mff_ovn_geneve = MFF_TUN_METADATA0 + map->index;
                 state = S_CLEAR_FLOWS;
-                return false;
+                return true;
             }
         }
 
