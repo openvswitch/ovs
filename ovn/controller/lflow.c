@@ -343,8 +343,6 @@ put_load(const uint8_t *data, size_t len,
 static void
 consider_neighbor_flow(const struct lport_index *lports,
                        const struct sbrec_mac_binding *b,
-                       struct ofpbuf *ofpacts_p,
-                       struct match *match_p,
                        struct hmap *flow_table)
 {
     const struct sbrec_port_binding *pb
@@ -360,7 +358,7 @@ consider_neighbor_flow(const struct lport_index *lports,
         return;
     }
 
-
+    struct match match = MATCH_CATCHALL_INITIALIZER;
     if (strchr(b->ip, '.')) {
         ovs_be32 ip;
         if (!ip_parse(b->ip, &ip)) {
@@ -368,7 +366,7 @@ consider_neighbor_flow(const struct lport_index *lports,
             VLOG_WARN_RL(&rl, "bad 'ip' %s", b->ip);
             return;
         }
-        match_set_reg(match_p, 0, ntohl(ip));
+        match_set_reg(&match, 0, ntohl(ip));
     } else {
         struct in6_addr ip6;
         if (!ipv6_parse(b->ip, &ip6)) {
@@ -378,16 +376,17 @@ consider_neighbor_flow(const struct lport_index *lports,
         }
         ovs_be128 value;
         memcpy(&value, &ip6, sizeof(value));
-        match_set_xxreg(match_p, 0, ntoh128(value));
+        match_set_xxreg(&match, 0, ntoh128(value));
     }
 
-    match_set_metadata(match_p, htonll(pb->datapath->tunnel_key));
-    match_set_reg(match_p, MFF_LOG_OUTPORT - MFF_REG0, pb->tunnel_key);
+    match_set_metadata(&match, htonll(pb->datapath->tunnel_key));
+    match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, pb->tunnel_key);
 
-    ofpbuf_clear(ofpacts_p);
-    put_load(mac.ea, sizeof mac.ea, MFF_ETH_DST, 0, 48, ofpacts_p);
-
-    ofctrl_add_flow(flow_table, OFTABLE_MAC_BINDING, 100, match_p, ofpacts_p);
+    uint64_t stub[1024 / 8];
+    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(stub);
+    put_load(mac.ea, sizeof mac.ea, MFF_ETH_DST, 0, 48, &ofpacts);
+    ofctrl_add_flow(flow_table, OFTABLE_MAC_BINDING, 100, &match, &ofpacts);
+    ofpbuf_uninit(&ofpacts);
 }
 
 /* Adds an OpenFlow flow to flow tables for each MAC binding in the OVN
@@ -398,17 +397,10 @@ add_neighbor_flows(struct controller_ctx *ctx,
                    const struct lport_index *lports,
                    struct hmap *flow_table)
 {
-    struct ofpbuf ofpacts;
-    struct match match;
-    match_init_catchall(&match);
-    ofpbuf_init(&ofpacts, 0);
-
     const struct sbrec_mac_binding *b;
     SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
-        consider_neighbor_flow(lports, b, &ofpacts, &match, flow_table);
+        consider_neighbor_flow(lports, b, flow_table);
     }
-
-    ofpbuf_uninit(&ofpacts);
 }
 
 /* Translates logical flows in the Logical_Flow table in the OVN_SB database
