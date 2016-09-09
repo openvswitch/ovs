@@ -921,6 +921,9 @@ reg1[0] = put_dhcpv6_opts();
 reg1[0] = put_dhcpv6_opts(dns_server={ae70::1,ae70::2});
     formats as reg1[0] = put_dhcpv6_opts(dns_server = {ae70::1, ae70::2});
     encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.17.00.20.00.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.01.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.02,pause)
+reg1[0] = put_dhcpv6_opts(server_id=12:34:56:78:9a:bc, dns_server={ae70::1,ae89::2});
+    formats as reg1[0] = put_dhcpv6_opts(server_id = 12:34:56:78:9a:bc, dns_server = {ae70::1, ae89::2});
+    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.02.00.06.00.12.34.56.78.9a.bc.17.00.20.00.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.01.ae.89.00.00.00.00.00.00.00.00.00.00.00.00.00.02,pause)
 reg1[0] = put_dhcpv6_opts(domain_search = "ovn.org");
     encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.18.00.07.00.6f.76.6e.2e.6f.72.67,pause)
 reg1[0] = put_dhcpv6_opts(x = 1.2.3.4);
@@ -3744,7 +3747,7 @@ OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP
 
-AT_SETUP([ovn -- dhcpv6 : 1 HV, 2 LS, 2 LSPs/LS])
+AT_SETUP([ovn -- dhcpv6 : 1 HV, 2 LS, 5 LSPs])
 AT_KEYWORDS([dhcpv6])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
@@ -3760,10 +3763,19 @@ ovn-nbctl lsp-add ls1 ls1-lp2 \
 
 ovn-nbctl lsp-set-port-security ls1-lp2 "f0:00:00:00:00:02 ae70::5"
 
+ovn-nbctl lsp-add ls1 ls1-lp3 \
+-- lsp-set-addresses ls1-lp3 "f0:00:00:00:00:22 ae70::22"
+
+ovn-nbctl lsp-set-port-security ls1-lp3 "f0:00:00:00:00:22 ae70::22"
+
 ovn-nbctl -- --id=@d1 create DHCP_Options cidr="ae70\:\:/64" \
 options="\"server_id\"=\"00:00:00:10:00:01\"" \
 -- add Logical_Switch_Port ls1-lp1 dhcpv6_options @d1 \
 -- add Logical_Switch_Port ls1-lp2 dhcpv6_options @d1
+
+ovn-nbctl -- --id=@d2 create DHCP_Options cidr="ae70\:\:/64" \
+options="\"dhcpv6_stateless\"=\"true\" \"server_id\"=\"00:00:00:10:00:01\"" \
+-- add Logical_Switch_Port ls1-lp3 dhcpv6_options @d2
 
 ovn-nbctl ls-add ls2
 ovn-nbctl lsp-add ls2 ls2-lp1 \
@@ -3803,6 +3815,12 @@ ovs-vsctl -- add-port br-int hv1-vif4 -- \
     options:rxq_pcap=hv1/vif4-rx.pcap \
     ofport-request=4
 
+ovs-vsctl -- add-port br-int hv1-vif5 -- \
+    set interface hv1-vif5 external-ids:iface-id=ls1-lp3 \
+    options:tx_pcap=hv1/vif5-tx.pcap \
+    options:rxq_pcap=hv1/vif5-rx.pcap \
+    ofport-request=5
+
 ovn_populate_arp
 
 sleep 2
@@ -3812,8 +3830,8 @@ trim_zeros() {
 }
 
 # This shell function sends a DHCPv6 request packet
-# test_dhcp INPORT SRC_MAC DHCPv6_MSG_TYPE OUTPORT...
-# The OUTPORTs (zero or more) list the VIFs on which the original DHCP
+# test_dhcpv6 INPORT SRC_MAC SRC_LLA DHCPv6_MSG_TYPE OFFER_IP OUTPORT...
+# The OUTPORTs (zero or more) list the VIFs on which the original DHCPv6
 # packet should be received twice (one from ovn-controller and the other
 # from the "ovs-ofctl monitor br-int resume"
 test_dhcpv6() {
@@ -3835,13 +3853,19 @@ test_dhcpv6() {
         if test $msg_code = 01; then
             reply_code=02
         fi
-        local reply=${src_mac}${server_mac}86dd0000000000541101${server_lla}${src_lla}
+        local msg_len=54
+        if test $offer_ip = 1; then
+            msg_len=28
+        fi
+        local reply=${src_mac}${server_mac}86dd0000000000${msg_len}1101${server_lla}${src_lla}
         # udp header and dhcpv6 header
-        reply+=022302220054ffff${reply_code}010203
+        reply+=0223022200${msg_len}ffff${reply_code}010203
         # Client identifier
         reply+=0001000a00030001${src_mac}
         # IA-NA
-        reply+=0003002801020304ffffffffffffffff00050018${offer_ip}ffffffffffffffff
+        if test $offer_ip != 1; then
+            reply+=0003002801020304ffffffffffffffff00050018${offer_ip}ffffffffffffffff
+        fi
         # Server identifier
         reply+=0002000a00030001${server_mac}
         echo $reply | trim_zeros >> $inport.expected
@@ -3949,6 +3973,21 @@ AT_CHECK([cat 3.packets], [0], [])
 $PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif4-tx.pcap | trim_zeros > 4.packets
 cat 4.expected > expout
 AT_CHECK([cat 4.packets], [0], [expout])
+
+# Send DHCPv6 packet on ls1-lp3. native DHCPv6 works as stateless mode for this port.
+# The DHCPv6 reply should doesn't contian offer_ip.
+src_mac=f00000000022
+src_lla=fe80000000000000f20000fffe000022
+reset_pcap_file hv1-vif5 hv1/vif5
+test_dhcpv6 5 $src_mac $src_lla 01 1 5
+
+# NXT_RESUMEs should be 3.
+OVS_WAIT_UNTIL([test 3 = `cat ofctl_monitor*.log | grep -c NXT_RESUME`])
+
+$PYTHON "$top_srcdir/utilities/ovs-pcap.in" hv1/vif5-tx.pcap | trim_zeros > 5.packets
+# Skipping the UDP checksum
+cat 5.expected | cut -c 1-120,125- > expout
+AT_CHECK([cat 5.packets | cut -c 1-120,125- ], [0], [expout])
 
 as hv1
 OVS_APP_EXIT_AND_WAIT([ovn-controller])

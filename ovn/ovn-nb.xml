@@ -1336,6 +1336,17 @@
             Example: <code>"ovn.org"</code>.
           </p>
         </column>
+
+        <column name="options" key="dhcpv6_stateless">
+          <p>
+            This option specifies the OVN native DHCPv6 will work in stateless
+            mode, which means OVN native DHCPv6 will not offer IPv6 addresses
+            for VM/VIF ports, but only reply other configurations, such as
+            DNS and domain search list. When setting this option with string
+            value "true", VM/VIF will configure IPv6 addresses by stateless
+            way. Default value for this option is false.
+          </p>
+        </column>
       </group>
     </group>
 

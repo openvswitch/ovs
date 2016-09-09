@@ -2007,11 +2007,23 @@ build_dhcpv6_action(struct ovn_port *op, struct in6_addr *offer_ip,
     ipv6_string_mapped(ia_addr, offer_ip);
 
     ds_put_format(options_action,
-                  REGBIT_DHCP_OPTS_RESULT" = put_dhcpv6_opts(ia_addr = %s, ",
-                  ia_addr);
+                  REGBIT_DHCP_OPTS_RESULT" = put_dhcpv6_opts(");
+
+    /* Check whether the dhcpv6 options should be configured as stateful.
+     * Only reply with ia_addr option for dhcpv6 stateful address mode. */
+    if (!smap_get_bool(&op->nbsp->dhcpv6_options->options,
+                       "dhcpv6_stateless", false)) {
+        char ia_addr[INET6_ADDRSTRLEN + 1];
+        ipv6_string_mapped(ia_addr, offer_ip);
+
+        ds_put_format(options_action, "ia_addr = %s, ", ia_addr);
+    }
+
     struct smap_node *node;
     SMAP_FOR_EACH (node, &op->nbsp->dhcpv6_options->options) {
-        ds_put_format(options_action, "%s = %s, ", node->key, node->value);
+        if (strcmp(node->key, "dhcpv6_stateless")) {
+            ds_put_format(options_action, "%s = %s, ", node->key, node->value);
+        }
     }
     ds_chomp(options_action, ' ');
     ds_chomp(options_action, ',');
@@ -2022,6 +2034,7 @@ build_dhcpv6_action(struct ovn_port *op, struct in6_addr *offer_ip,
                   "udp.dst = 546; outport = inport; flags.loopback = 1; "
                   "output;",
                   server_mac, server_ip);
+
     return true;
 }
 
