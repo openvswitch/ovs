@@ -1215,7 +1215,9 @@ ovsdb_server_get_sync_exclude_tables(struct unixctl_conn *conn,
                                      const char *argv[] OVS_UNUSED,
                                      void *arg_ OVS_UNUSED)
 {
-    unixctl_command_reply(conn, get_blacklist_tables());
+    char *reply = get_blacklist_tables();
+    unixctl_command_reply(conn, reply);
+    free(reply);
 }
 
 static void
