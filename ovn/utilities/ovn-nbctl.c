@@ -1608,6 +1608,7 @@ nbctl_lr_route_add(struct ctl_context *ctx)
         }
 
         if (!may_exist) {
+            free(rt_prefix);
             ctl_fatal("duplicate prefix: %s", prefix);
         }
 
