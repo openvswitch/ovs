@@ -86,8 +86,8 @@ struct ovsdb_monitor_json_cache_node {
 };
 
 struct jsonrpc_monitor_node {
-    struct ovsdb_jsonrpc_monitor *jsonrpc_monitor;
     struct ovs_list node;
+    struct ovsdb_jsonrpc_monitor *jsonrpc_monitor;
 };
 
 /* A particular column being monitored. */
@@ -116,12 +116,12 @@ struct ovsdb_monitor_row {
  * 'transaction' stores the first update's transaction id.
  * */
 struct ovsdb_monitor_changes {
+    struct hmap_node hmap_node;  /* Element in ovsdb_monitor_tables' changes
+                                    hmap.  */
     struct ovsdb_monitor_table *mt;
     struct hmap rows;
     int n_refs;
     uint64_t transaction;
-    struct hmap_node hmap_node;  /* Element in ovsdb_monitor_tables' changes
-                                    hmap.  */
 };
 
 /* A particular table being monitored. */

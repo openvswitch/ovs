@@ -1102,9 +1102,9 @@ ovsdb_jsonrpc_trigger_complete_done(struct ovsdb_jsonrpc_session *s)
 
 /* Jsonrpc front end monitor. */
 struct ovsdb_jsonrpc_monitor {
+    struct hmap_node node;      /* In ovsdb_jsonrpc_session's "monitors". */
     struct ovsdb_jsonrpc_session *session;
     struct ovsdb *db;
-    struct hmap_node node;      /* In ovsdb_jsonrpc_session's "monitors". */
     struct json *monitor_id;
     struct ovsdb_monitor *dbmon;
     uint64_t unflushed;         /* The first transaction that has not been
