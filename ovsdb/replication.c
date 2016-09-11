@@ -54,14 +54,14 @@ static struct ovsdb_error *process_table_update(struct json *table_update,
                                                 struct ovsdb_txn *txn);
 
 static struct ovsdb_error *execute_insert(struct ovsdb_txn *txn,
-                                          const char *uuid,
+                                          const struct uuid *row_uuid,
                                           struct ovsdb_table *table,
                                           struct json *new);
 static struct ovsdb_error *execute_delete(struct ovsdb_txn *txn,
-                                          const char *uuid,
+                                          const struct uuid *row_uuid,
                                           struct ovsdb_table *table);
 static struct ovsdb_error *execute_update(struct ovsdb_txn *txn,
-                                          const char *uuid,
+                                          const struct uuid *row_uuid,
                                           struct ovsdb_table *table,
                                           struct json *new);
 
@@ -583,174 +583,104 @@ static struct ovsdb_error *
 process_table_update(struct json *table_update, const char *table_name,
                      struct ovsdb *database, struct ovsdb_txn *txn)
 {
-    struct shash_node *node;
-    struct ovsdb_table *table;
-    struct ovsdb_error *error;
+    struct ovsdb_table *table = ovsdb_get_table(database, table_name);
+    if (!table) {
+        return ovsdb_error("unknown table", "unknown table %s", table_name);
+    }
 
     if (table_update->type != JSON_OBJECT) {
         return ovsdb_error("Not a JSON object",
                            "<table-update> for table is not object");
     }
 
-    table = ovsdb_get_table(database, table_name);
-    error = NULL;
-
+    struct shash_node *node;
     SHASH_FOR_EACH (node, json_object(table_update)) {
         struct json *row_update = node->data;
         struct json *old, *new;
 
         if (row_update->type != JSON_OBJECT) {
-            error = ovsdb_error("NOt a JSON object",
-                                "<row-update> is not object");
-            break;
+            return ovsdb_error("Not a JSON object",
+                               "<row-update> is not object");
         }
+
+        struct uuid uuid;
+        if (!uuid_from_string(&uuid, node->name)) {
+            return ovsdb_syntax_error(table_update, "bad row UUID",
+                                      "<table-update> names must be UUIDs");
+        }
+
         old = shash_find_data(json_object(row_update), "old");
         new = shash_find_data(json_object(row_update), "new");
 
-        if (!old) {
-            error = execute_insert(txn, node->name, table, new);
-        } else{
-            if (!new) {
-                error = execute_delete(txn, node->name, table);
-            } else {
-                error = execute_update(txn, node->name, table, new);
-            }
-        }
+        struct ovsdb_error *error;
+        error = (!new ? execute_delete(txn, &uuid, table)
+                 : !old ? execute_insert(txn, &uuid, table, new)
+                 : execute_update(txn, &uuid, table, new));
         if (error) {
-            break;
+            return error;
         }
     }
-    return error;
+    return NULL;
 }
 
 static struct ovsdb_error *
-execute_insert(struct ovsdb_txn *txn, const char *uuid,
+execute_insert(struct ovsdb_txn *txn, const struct uuid *row_uuid,
                struct ovsdb_table *table, struct json *json_row)
 {
-    struct ovsdb_row *row = NULL;
-    struct uuid row_uuid;
-    struct ovsdb_error *error;
-
-    row = ovsdb_row_create(table);
-    error = ovsdb_row_from_json(row, json_row, NULL, NULL);
+    struct ovsdb_row *row = ovsdb_row_create(table);
+    struct ovsdb_error *error = ovsdb_row_from_json(row, json_row, NULL, NULL);
     if (!error) {
-        /* Add UUID to row. */
-        uuid_from_string(&row_uuid, uuid);
-        *ovsdb_row_get_uuid_rw(row) = row_uuid;
+        *ovsdb_row_get_uuid_rw(row) = *row_uuid;
         ovsdb_txn_row_insert(txn, row);
     } else {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "cannot add existing row "UUID_FMT" to table %s",
+                     UUID_ARGS(row_uuid), table->schema->name);
         ovsdb_row_destroy(row);
     }
 
     return error;
 }
 
-struct delete_row_cbdata {
-    size_t n_matches;
-    const struct ovsdb_table *table;
-    struct ovsdb_txn *txn;
-};
-
-static bool
-delete_row_cb(const struct ovsdb_row *row, void *dr_)
-{
-    struct delete_row_cbdata *dr = dr_;
-
-    dr->n_matches++;
-    ovsdb_txn_row_delete(dr->txn, row);
-
-    return true;
-}
-
 static struct ovsdb_error *
-execute_delete(struct ovsdb_txn *txn, const char *uuid,
+execute_delete(struct ovsdb_txn *txn, const struct uuid *row_uuid,
                struct ovsdb_table *table)
 {
-    const struct json *where;
-    struct ovsdb_error *error;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
-    char where_string[UUID_LEN+29];
-
-    if (!table) {
-        return OVSDB_BUG("null table");
+    const struct ovsdb_row *row = ovsdb_table_get_row(table, row_uuid);
+    if (row) {
+        ovsdb_txn_row_delete(txn, row);
+    } else {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "cannot delete missing row "UUID_FMT" from table %s",
+                     UUID_ARGS(row_uuid), table->schema->name);
     }
-
-    snprintf(where_string, sizeof where_string, "%s%s%s",
-             "[[\"_uuid\",\"==\",[\"uuid\",\"",uuid,"\"]]]");
-
-    where = json_from_string(where_string);
-    error = ovsdb_condition_from_json(table->schema, where, NULL, &condition);
-    if (!error) {
-        struct delete_row_cbdata dr;
-
-        dr.n_matches = 0;
-        dr.table = table;
-        dr.txn = txn;
-        ovsdb_query(table, &condition, delete_row_cb, &dr);
-    }
-
-    ovsdb_condition_destroy(&condition);
-    json_destroy(CONST_CAST(struct json *, where));
-
-    return error;
-}
-
-struct update_row_cbdata {
-    size_t n_matches;
-    struct ovsdb_txn *txn;
-    const struct ovsdb_row *row;
-    const struct ovsdb_column_set *columns;
-};
-
-static bool
-update_row_cb(const struct ovsdb_row *row, void *ur_)
-{
-    struct update_row_cbdata *ur = ur_;
-
-    ur->n_matches++;
-    if (!ovsdb_row_equal_columns(row, ur->row, ur->columns)) {
-        ovsdb_row_update_columns(ovsdb_txn_row_modify(ur->txn, row),
-                                 ur->row, ur->columns);
-    }
-
-    return true;
+    return NULL;
 }
 
 static struct ovsdb_error *
-execute_update(struct ovsdb_txn *txn, const char *uuid,
+execute_update(struct ovsdb_txn *txn, const struct uuid *row_uuid,
                struct ovsdb_table *table, struct json *json_row)
 {
+    const struct ovsdb_row *row = ovsdb_table_get_row(table, row_uuid);
+    if (!row) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        VLOG_WARN_RL(&rl, "cannot modify missing row "UUID_FMT" in table %s",
+                     UUID_ARGS(row_uuid), table->schema->name);
+        return NULL;
+    }
+
     struct ovsdb_column_set columns = OVSDB_COLUMN_SET_INITIALIZER;
-    struct ovsdb_condition condition = OVSDB_CONDITION_INITIALIZER(&condition);
-    struct update_row_cbdata ur;
-    struct ovsdb_row *row;
-    struct ovsdb_error *error;
-    const struct json *where;
-    char where_string[UUID_LEN+29];
+    struct ovsdb_row *update = ovsdb_row_create(table);
+    struct ovsdb_error *error = ovsdb_row_from_json(update, json_row,
+                                                    NULL, &columns);
 
-    snprintf(where_string, sizeof where_string, "%s%s%s",
-             "[[\"_uuid\",\"==\",[\"uuid\",\"",uuid,"\"]]]");
-    where = json_from_string(where_string);
-
-    row = ovsdb_row_create(table);
-    error = ovsdb_row_from_json(row, json_row, NULL, &columns);
-    if (!error) {
-        error = ovsdb_condition_from_json(table->schema, where, NULL,
-                                          &condition);
-    }
-    if (!error) {
-        ur.n_matches = 0;
-        ur.txn = txn;
-        ur.row = row;
-        ur.columns = &columns;
-        ovsdb_query(table, &condition, update_row_cb, &ur);
+    if (!error && !ovsdb_row_equal_columns(row, update, &columns)) {
+        ovsdb_row_update_columns(ovsdb_txn_row_modify(txn, row),
+                                 update, &columns);
     }
 
-    ovsdb_row_destroy(row);
     ovsdb_column_set_destroy(&columns);
-    ovsdb_condition_destroy(&condition);
-    json_destroy(CONST_CAST(struct json *, where));
-
+    ovsdb_row_destroy(update);
     return error;
 }
 
