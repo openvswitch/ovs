@@ -2614,13 +2614,13 @@ sip=`ip_to_hex 192 168 0 13`
 tip=`ip_to_hex 192 168 0 23`
 test_ip 13 f00000000113 f00000000023 $sip $tip
 
-# ipv6 packet should be received by lp[123]3 with mac f0000000{i}{i}3
-# and ip6.dst as fe80::ea2a:eaff:fe28:0{i}{i}3.
+# ipv6 packet should be received by lp[123]3 with mac f00000000${i}${i}3
+# and ip6.dst as fe80::ea2a:eaff:fe28:0${i}${i}3.
 # lp11 can send ipv6 traffic as there is no port security
 sip=ee800000000000000000000000000000
 for i in 1 2 3; do
-    tip=fe80000000000000ea2aeafffe2800{i}3
-    test_ipv6 11 f00000000011 f000000000{i}${i}3 $sip $tip {i}3
+    tip=fe80000000000000ea2aeafffe2800${i}3
+    test_ipv6 11 f00000000011 f00000000${i}${i}3 $sip $tip ${i}3
 done
 
 
@@ -2633,8 +2633,8 @@ sip=ee800000000000000000000000000000
 tip=fe80000000000000ea2aeafffe280023
 test_ipv6 11 f00000000011 f00000000333 $sip $tip
 
-# ipv6 packet should be allowed for lp[123]3 with mac f0000000{i}{i}3
-# and ip6.src fe80::ea2a:eaff:fe28:0{i}{i}3 and ip6.src ::.
+# ipv6 packet should be allowed for lp[123]3 with mac f0000000${i}${i}3
+# and ip6.src fe80::ea2a:eaff:fe28:0${i}${i}3 and ip6.src ::.
 # and should be dropped for any other ip6.src
 # lp21 can receive ipv6 traffic as there is no port security
 
