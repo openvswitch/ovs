@@ -190,8 +190,9 @@ do_start_ovsdb () {
 
 start_ovsdb() {
     if test X"$OVSDB_SERVER" = Xyes; then
-        do_start_ovsdb
+        do_start_ovsdb || return 1
     fi
+    return 0
 }
 
 add_managers () {
@@ -238,14 +239,16 @@ do_start_forwarding () {
         if test X"$SELF_CONFINEMENT" = Xno; then
             set "$@" --no-self-confinement
         fi
-        start_daemon "$OVS_VSWITCHD_PRIORITY" "$OVS_VSWITCHD_WRAPPER" "$@"
+        start_daemon "$OVS_VSWITCHD_PRIORITY" "$OVS_VSWITCHD_WRAPPER" "$@" ||
+            return 1
     fi
 }
 
 start_forwarding () {
     if test X"$OVS_VSWITCHD" = Xyes; then
-        do_start_forwarding
+        do_start_forwarding || return 1
     fi
+    return 0
 }
 
 ## ---- ##
@@ -364,7 +367,7 @@ force_reload_kmod () {
     # Restart the database first, since a large database may take a
     # while to load, and we want to minimize forwarding disruption.
     stop_ovsdb
-    start_ovsdb
+    start_ovsdb || return 1
 
     stop_forwarding
 
@@ -395,7 +398,7 @@ force_reload_kmod () {
 
     # Start vswitchd by asking it to wait till flow restore is finished.
     flow_restore_wait
-    start_forwarding
+    start_forwarding || return 1
 
     # Restore saved flows and inform vswitchd that we are done.
     restore_flows
@@ -422,13 +425,13 @@ restart () {
     # Restart the database first, since a large database may take a
     # while to load, and we want to minimize forwarding disruption.
     stop_ovsdb
-    start_ovsdb
+    start_ovsdb || return 1
 
     stop_forwarding
 
     # Start vswitchd by asking it to wait till flow restore is finished.
     flow_restore_wait
-    start_forwarding
+    start_forwarding || return 1
 
     # Restore saved flows and inform vswitchd that we are done.
     restore_flows
@@ -686,7 +689,7 @@ done
 case $command in
     start)
         start_ovsdb || exit 1
-        start_forwarding
+        start_forwarding || exit 1
         add_managers
         ;;
     stop)
