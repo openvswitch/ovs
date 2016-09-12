@@ -1673,7 +1673,6 @@ OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
                        UINT32 *replyLen)
 {
     POVS_MESSAGE msgOut = (POVS_MESSAGE)usrParamsCtx->outputBuffer;
-    POVS_MESSAGE msgIn = (POVS_MESSAGE)usrParamsCtx->inputBuffer;
     POVS_OPEN_INSTANCE instance =
         (POVS_OPEN_INSTANCE)usrParamsCtx->ovsInstance;
     NL_BUFFER nlBuf;
@@ -1708,11 +1707,12 @@ OvsReadEventCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
             goto cleanup;
         }
 
+        /* Driver intiated messages should have zero seq number */
         status = OvsCreateNlMsgFromCtEntry(&ctEventEntry.entry,
                                            usrParamsCtx->outputBuffer,
                                            usrParamsCtx->outputLength,
                                            ctEventEntry.type,
-                                           msgIn->nlMsg.nlmsgSeq,
+                                           0, /* No input msg */
                                            usrParamsCtx->ovsInstance->pid,
                                            NFNETLINK_V0,
                                            gOvsSwitchContext->dpNo);
