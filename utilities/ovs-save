@@ -109,7 +109,7 @@ save_flows () {
 
     for bridge in "$@"; do
         echo -n "ovs-ofctl add-tlv-map ${bridge} '"
-        ovs-ofctl dump-tlv-map br-int | \
+        ovs-ofctl dump-tlv-map ${bridge} | \
         awk '/^ 0x/ {if (cnt != 0) printf ","; \
              cnt++;printf "{class="$1",type="$2",len="$3"}->"$4}'
         echo "'"
