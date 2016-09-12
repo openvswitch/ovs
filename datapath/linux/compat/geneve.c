@@ -1574,7 +1574,7 @@ nla_put_failure:
 }
 
 static struct rtnl_link_ops geneve_link_ops __read_mostly = {
-	.kind		= "geneve",
+	.kind		= "ovs_geneve",
 	.maxtype	= IFLA_GENEVE_MAX,
 	.policy		= geneve_policy,
 	.priv_size	= sizeof(struct geneve_dev),
