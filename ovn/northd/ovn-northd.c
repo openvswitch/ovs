@@ -2575,6 +2575,7 @@ build_stateful(struct ovn_datapath *od, struct hmap *lflows)
                               110, ds_cstr(&match), action);
             }
 
+            free(ip_address);
             ds_destroy(&match);
             free(action);
        }
