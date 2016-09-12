@@ -34,7 +34,7 @@ BEGIN
             VALUE "FileDescription", "Open vSwitch Extension"
             VALUE "FileVersion", "6.3.9600.17298"
             VALUE "InternalName", "OVSExt.SYS"
-            VALUE "LegalCopyright", "� Licensed under the Apache License, Version 2.0 (the ""License"")"
+            VALUE "LegalCopyright", "Licensed under the Apache License, Version 2.0 (the ""License"")"
             VALUE "OriginalFilename", "OVSExt.SYS"
             VALUE "ProductName", "Open vSwitch 8/8.1 DDK driver"
             VALUE "ProductVersion", "6.3.9600.17298"
