@@ -215,7 +215,7 @@ start_daemon () {
         set nice -n "$priority" "$@"
     fi
 
-    action "Starting $daemon" "$@"
+    action "Starting $daemon" "$@" || return 1
 
     if test X"$strace" != X; then
         # Strace doesn't have the -D option so we attach after the fact.
