@@ -528,3 +528,4 @@ lib-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(PKIDIR)
 	$(MKDIR_P) $(DESTDIR)$(LOGDIR)
 	$(MKDIR_P) $(DESTDIR)$(DBDIR)
+	$(MKDIR_P) $(DESTDIR)$(sysconfdir)/openvswitch
