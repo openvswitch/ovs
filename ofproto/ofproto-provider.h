@@ -323,6 +323,19 @@ struct oftable {
  *      'rule->mutex', and safely written only by coding holding ofproto_mutex
  *      AND 'rule->mutex'.  These are marked OVS_GUARDED.
  */
+enum OVS_PACKED_ENUM rule_state {
+    RULE_INITIALIZED, /* Rule has been initialized, but not inserted to the
+                       * ofproto data structures.  Versioning makes sure the
+                       * rule is not visible to lookups by other threads, even
+                       * if the rule is added to a classifier. */
+    RULE_INSERTED,    /* Rule has been inserted to ofproto data structures and
+                       * may be visible to lookups by other threads. */
+    RULE_REMOVED,     /* Rule has been removed from ofproto data structures,
+                       * and may still be visible to lookups by other threads
+                       * until they quiesce, after which the rule will be
+                       * removed from the classifier as well. */
+};
+
 struct rule {
     /* Where this rule resides in an OpenFlow switch.
      *
@@ -330,8 +343,8 @@ struct rule {
     struct ofproto *const ofproto; /* The ofproto that contains this rule. */
     const struct cls_rule cr;      /* In owning ofproto's classifier. */
     const uint8_t table_id;        /* Index in ofproto's 'tables' array. */
-    bool removed;                  /* Rule has been removed from the ofproto
-                                    * data structures. */
+
+    enum rule_state state;
 
     /* Protects members marked OVS_GUARDED.
      * Readers only need to hold this mutex.
