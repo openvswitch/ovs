@@ -13,11 +13,26 @@ dnf -y install autoconf automake openssl-devel libtool \
                wget python-six pyftpdlib checkpolicy selinux-policy-devel \
                libcap-ng-devel kernel-devel-`uname -r` ethtool
 echo "search extra update built-in" >/etc/depmod.d/search_path.conf
-cd /vagrant
-./boot.sh
+SCRIPT
+
+$bootstrap_debian = <<SCRIPT
+aptitude -y update
+aptitude -y upgrade
+aptitude -y install -R \
+		build-essential dpkg-dev lintian devscripts fakeroot \
+		debhelper dh-autoreconf uuid-runtime \
+		autoconf automake libtool \
+		python-all python-twisted-core python-twisted-conch \
+		xdg-utils groff graphviz netcat \
+		wget python-six ethtool \
+		libcap-ng-dev libssl-dev python-dev openssl \
+		python-pyftpdlib python-flake8 \
+		linux-headers-`uname -r`
 SCRIPT
 
 $configure_ovs = <<SCRIPT
+cd /vagrant
+./boot.sh
 mkdir -p ~/build
 cd ~/build
 /vagrant/configure --with-linux=/lib/modules/`uname -r`/build --enable-silent-rules
@@ -48,12 +63,38 @@ systemctl start openvswitch
 systemctl status openvswitch
 SCRIPT
 
+$install_deb = <<SCRIPT
+cd ~/build
+PACKAGE_VERSION=`autom4te -l Autoconf -t 'AC_INIT:$2' /vagrant/configure.ac`
+make dist
+cd ~/
+ln -sf ~/build/openvswitch-$PACKAGE_VERSION.tar.gz openvswitch_$PACKAGE_VERSION.orig.tar.gz
+rm -rf ~/openvswitch-$PACKAGE_VERSION
+tar xzf openvswitch_$PACKAGE_VERSION.orig.tar.gz
+cd ~/openvswitch-$PACKAGE_VERSION
+debuild -us -uc
+dpkg -i ../openvswitch-{common,switch}*deb
+systemctl enable openvswitch-switch
+systemctl start openvswitch-switch
+systemctl status openvswitch-switch
+SCRIPT
+
 $test_ovs_system_userspace = <<SCRIPT
 cd ~/build
 make check-system-userspace
 SCRIPT
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
+  config.vm.define "debian-8" do |debian|
+       debian.vm.box = "debian/jessie64"
+       debian.vm.synced_folder ".", "/vagrant", type: "rsync"
+       debian.vm.provision "bootstrap", type: "shell", inline: $bootstrap_debian
+       debian.vm.provision "configure_ovs", type: "shell", inline: $configure_ovs
+       debian.vm.provision "build_ovs", type: "shell", inline: $build_ovs
+       debian.vm.provision "test_ovs_kmod", type: "shell", inline: $test_kmod
+       debian.vm.provision "test_ovs_system_userspace", type: "shell", inline: $test_ovs_system_userspace
+       debian.vm.provision "install_deb", type: "shell", inline: $install_deb
+  end
   config.vm.define "fedora-23" do |fedora|
        fedora.vm.box = "bento/fedora-23"
        fedora.vm.provision "bootstrap", type: "shell", inline: $bootstrap_fedora
