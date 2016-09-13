@@ -156,7 +156,6 @@ int ofproto_dpif_execute_actions__(struct ofproto_dpif *, const struct flow *,
                                    struct dp_packet *);
 void ofproto_dpif_send_async_msg(struct ofproto_dpif *,
                                  struct ofproto_async_msg *);
-bool ofproto_dpif_wants_packet_in_on_miss(struct ofproto_dpif *);
 int ofproto_dpif_send_packet(const struct ofport_dpif *, bool oam,
                              struct dp_packet *);
 void ofproto_dpif_flow_mod(struct ofproto_dpif *,

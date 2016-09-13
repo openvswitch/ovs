@@ -379,18 +379,6 @@ ofproto_dpif_send_async_msg(struct ofproto_dpif *ofproto,
     /* Wakes up main thread for packet-in I/O. */
     seq_change(ofproto->ams_seq);
 }
-
-/* The default "table-miss" behaviour for OpenFlow1.3+ is to drop the
- * packet rather than to send the packet to the controller.
- *
- * This function returns false to indicate that a packet_in message
- * for a "table-miss" should be sent to at least one controller.
- * False otherwise. */
-bool
-ofproto_dpif_wants_packet_in_on_miss(struct ofproto_dpif *ofproto)
-{
-    return connmgr_wants_packet_in_on_miss(ofproto->up.connmgr);
-}
 
 /* Factory functions. */
 
