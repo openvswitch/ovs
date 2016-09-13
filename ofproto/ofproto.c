@@ -7277,7 +7277,7 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
         if (error) {
             /* Send error referring to the original message. */
             if (error) {
-                ofconn_send_error(ofconn, be->ofp_msg, error);
+                ofconn_send_error(ofconn, &be->ofp_msg, error);
                 error = OFPERR_OFPBFC_MSG_FAILED;
             }
 
@@ -7304,7 +7304,7 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                     port_mod_finish(ofconn, &be->opm.pm, be->opm.port);
                 } else {
                     struct openflow_mod_requester req = { ofconn,
-                                                          be->ofp_msg };
+                                                          &be->ofp_msg };
                     if (be->type == OFPTYPE_FLOW_MOD) {
                         /* Bump the lookup version to the one of the current
                          * message.  This makes all the changes in the bundle
@@ -7362,8 +7362,8 @@ handle_bundle_control(struct ofconn *ofconn, const struct ofp_header *oh)
     reply.bundle_id = bctrl.bundle_id;
 
     switch (bctrl.type) {
-        case OFPBCT_OPEN_REQUEST:
-        error = ofp_bundle_open(ofconn, bctrl.bundle_id, bctrl.flags);
+    case OFPBCT_OPEN_REQUEST:
+        error = ofp_bundle_open(ofconn, bctrl.bundle_id, bctrl.flags, oh);
         reply.type = OFPBCT_OPEN_REPLY;
         break;
     case OFPBCT_CLOSE_REQUEST:
@@ -7441,7 +7441,7 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
 
     if (!error) {
         error = ofp_bundle_add_message(ofconn, badd.bundle_id, badd.flags,
-                                       bmsg);
+                                       bmsg, oh);
     }
 
     if (error) {

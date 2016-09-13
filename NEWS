@@ -1,6 +1,8 @@
 Post-v2.6.0
 ---------------------
-
+   - OpenFlow:
+     * Bundles now expire after 10 seconds since the last time the
+       bundle was either opened, modified, or closed.
 
 v2.6.0 - xx xxx xxxx
 ---------------------
