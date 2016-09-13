@@ -80,7 +80,7 @@ struct fail_open {
     bool fail_open_active;
 };
 
-static void fail_open_recover(struct fail_open *);
+static void fail_open_recover(struct fail_open *) OVS_REQUIRES(ofproto_mutex);
 
 /* Returns the number of seconds of disconnection after which fail-open mode
  * should activate. */
@@ -198,13 +198,15 @@ fail_open_maybe_recover(struct fail_open *fo)
 {
     if (fail_open_is_active(fo)
         && connmgr_is_any_controller_admitted(fo->connmgr)) {
+        ovs_mutex_lock(&ofproto_mutex);
         fail_open_recover(fo);
+        ovs_mutex_unlock(&ofproto_mutex);
     }
 }
 
 static void
 fail_open_recover(struct fail_open *fo)
-    OVS_EXCLUDED(ofproto_mutex)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct match match;
 
@@ -273,7 +275,7 @@ fail_open_create(struct ofproto *ofproto, struct connmgr *mgr)
 /* Destroys 'fo'. */
 void
 fail_open_destroy(struct fail_open *fo)
-    OVS_EXCLUDED(ofproto_mutex)
+    OVS_REQUIRES(ofproto_mutex)
 {
     if (fo) {
         if (fail_open_is_active(fo)) {

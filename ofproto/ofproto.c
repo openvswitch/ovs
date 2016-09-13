@@ -480,6 +480,7 @@ ofproto_bump_tables_version(struct ofproto *ofproto)
 int
 ofproto_create(const char *datapath_name, const char *datapath_type,
                struct ofproto **ofprotop)
+    OVS_EXCLUDED(ofproto_mutex)
 {
     const struct ofproto_class *class;
     struct ofproto *ofproto;
@@ -550,7 +551,10 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
     if (error) {
         VLOG_ERR("failed to open datapath %s: %s",
                  datapath_name, ovs_strerror(error));
+        ovs_mutex_lock(&ofproto_mutex);
         connmgr_destroy(ofproto->connmgr);
+        ofproto->connmgr = NULL;
+        ovs_mutex_unlock(&ofproto_mutex);
         ofproto_destroy__(ofproto);
         return error;
     }
@@ -1506,6 +1510,8 @@ ofproto_rule_delete(struct ofproto *ofproto, struct rule *rule)
         if (ofproto->ofproto_class->rule_delete) {
             ofproto->ofproto_class->rule_delete(rule);
         }
+
+        /* This may not be the last reference to the rule. */
         ofproto_rule_unref(rule);
     }
     ovs_mutex_unlock(&ofproto_mutex);
@@ -1628,9 +1634,13 @@ ofproto_destroy(struct ofproto *p, bool del)
     p->ofproto_class->destruct(p);
 
     /* We should not postpone this because it involves deleting a listening
-     * socket which we may want to reopen soon. 'connmgr' should not be used
-     * by other threads */
+     * socket which we may want to reopen soon. 'connmgr' may be used by other
+     * threads only if they take the ofproto_mutex and read a non-NULL
+     * 'ofproto->connmgr'. */
+    ovs_mutex_lock(&ofproto_mutex);
     connmgr_destroy(p->connmgr);
+    p->connmgr = NULL;
+    ovs_mutex_unlock(&ofproto_mutex);
 
     /* Destroying rules is deferred, must have 'ofproto' around for them. */
     ovsrcu_postpone(ofproto_destroy_defer__, p);
@@ -2208,7 +2218,7 @@ ofproto_flow_mod(struct ofproto *ofproto, const struct ofputil_flow_mod *fm)
 void
 ofproto_delete_flow(struct ofproto *ofproto,
                     const struct match *target, int priority)
-    OVS_EXCLUDED(ofproto_mutex)
+    OVS_REQUIRES(ofproto_mutex)
 {
     struct classifier *cls = &ofproto->tables[0].cls;
     struct rule *rule;
@@ -2221,10 +2231,12 @@ ofproto_delete_flow(struct ofproto *ofproto,
         return;
     }
 
-    /* Execute a flow mod.  We can't optimize this at all because we didn't
-     * take enough locks above to ensure that the flow table didn't already
-     * change beneath us. */
-    simple_flow_mod(ofproto, target, priority, NULL, 0, OFPFC_DELETE_STRICT);
+    struct rule_collection rules;
+
+    rule_collection_init(&rules);
+    rule_collection_add(&rules, rule);
+    delete_flows__(&rules, OFPRR_DELETE, NULL);
+    rule_collection_destroy(&rules);
 }
 
 /* Delete all of the flows from all of ofproto's flow tables, then reintroduce
@@ -5407,7 +5419,15 @@ ofproto_rule_send_removed(struct rule *rule)
     minimatch_expand(&rule->cr.match, &fr.match);
     fr.priority = rule->cr.priority;
 
+    /* Synchronize with connmgr_destroy() calls to prevent connmgr disappearing
+     * while we use it. */
     ovs_mutex_lock(&ofproto_mutex);
+    struct connmgr *connmgr = rule->ofproto->connmgr;
+    if (!connmgr) {
+        ovs_mutex_unlock(&ofproto_mutex);
+        return;
+    }
+
     fr.cookie = rule->flow_cookie;
     fr.reason = rule->removed_reason;
     fr.table_id = rule->table_id;
@@ -5419,7 +5439,7 @@ ofproto_rule_send_removed(struct rule *rule)
     ovs_mutex_unlock(&rule->mutex);
     rule->ofproto->ofproto_class->rule_get_stats(rule, &fr.packet_count,
                                                  &fr.byte_count, &used);
-    connmgr_send_flow_removed(rule->ofproto->connmgr, &fr);
+    connmgr_send_flow_removed(connmgr, &fr);
     ovs_mutex_unlock(&ofproto_mutex);
 }
 
