@@ -395,7 +395,9 @@ in_band_run(struct in_band *ib)
             break;
 
         case DEL:
+            ovs_mutex_lock(&ofproto_mutex);
             ofproto_delete_flow(ib->ofproto, &rule->match, rule->priority);
+            ovs_mutex_unlock(&ofproto_mutex);
             hmap_remove(&ib->rules, &rule->hmap_node);
             free(rule);
             break;
