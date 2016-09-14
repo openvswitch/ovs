@@ -496,8 +496,10 @@ struct xc_entry {
         } learn;
         struct {
             struct ofproto_dpif *ofproto;
-            struct flow *flow;
+            ofp_port_t in_port;
+            struct eth_addr dl_src;
             int vlan;
+            bool is_gratuitous_arp;
         } normal;
         struct {
             struct rule_dpif *rule;
@@ -2048,122 +2050,25 @@ is_admissible(struct xlate_ctx *ctx, struct xport *in_port,
     return true;
 }
 
-/* Checks whether a MAC learning update is necessary for MAC learning table
- * 'ml' given that a packet matching 'flow' was received  on 'in_xbundle' in
- * 'vlan'.
- *
- * Most packets processed through the MAC learning table do not actually
- * change it in any way.  This function requires only a read lock on the MAC
- * learning table, so it is much cheaper in this common case.
- *
- * Keep the code here synchronized with that in update_learning_table__()
- * below. */
-static bool
-is_mac_learning_update_needed(const struct mac_learning *ml,
-                              const struct flow *flow,
-                              struct flow_wildcards *wc,
-                              int vlan, struct xbundle *in_xbundle)
-OVS_REQ_RDLOCK(ml->rwlock)
-{
-    struct mac_entry *mac;
-
-    if (!mac_learning_may_learn(ml, flow->dl_src, vlan)) {
-        return false;
-    }
-
-    mac = mac_learning_lookup(ml, flow->dl_src, vlan);
-    if (!mac || mac_entry_age(ml, mac)) {
-        return true;
-    }
-
-    if (is_gratuitous_arp(flow, wc)) {
-        /* Gratuitous ARP packets received over non-bond interfaces could be
-         * reflected back over bond slaves.  We don't want to learn from these
-         * reflected packets, so we lock each entry for which a gratuitous ARP
-         * packet was received over a non-bond interface and refrain from
-         * learning from gratuitous ARP packets that arrive over bond
-         * interfaces for this entry while the lock is in effect.  See
-         * vswitchd/INTERNALS for more in-depth discussion on this topic. */
-        if (!in_xbundle->bond) {
-            return true;
-        } else if (mac_entry_is_grat_arp_locked(mac)) {
-            return false;
-        }
-    }
-
-    return mac_entry_get_port(ml, mac) != in_xbundle->ofbundle;
-}
-
-
-/* Updates MAC learning table 'ml' given that a packet matching 'flow' was
- * received on 'in_xbundle' in 'vlan'.
- *
- * This code repeats all the checks in is_mac_learning_update_needed() because
- * the lock was released between there and here and thus the MAC learning state
- * could have changed.
- *
- * Keep the code here synchronized with that in is_mac_learning_update_needed()
- * above. */
 static void
-update_learning_table__(const struct xbridge *xbridge,
-                        const struct flow *flow, struct flow_wildcards *wc,
-                        int vlan, struct xbundle *in_xbundle)
-OVS_REQ_WRLOCK(xbridge->ml->rwlock)
+update_learning_table(const struct xbridge *xbridge,
+                      struct xbundle *in_xbundle, struct eth_addr dl_src,
+                      int vlan, bool is_grat_arp)
 {
-    struct mac_entry *mac;
-
-    if (!mac_learning_may_learn(xbridge->ml, flow->dl_src, vlan)) {
+    if (in_xbundle == &ofpp_none_bundle) {
         return;
     }
 
-    mac = mac_learning_insert(xbridge->ml, flow->dl_src, vlan);
-    if (is_gratuitous_arp(flow, wc)) {
-        /* We don't want to learn from gratuitous ARP packets that are
-         * reflected back over bond slaves so we lock the learning table. */
-        if (!in_xbundle->bond) {
-            mac_entry_set_grat_arp_lock(mac);
-        } else if (mac_entry_is_grat_arp_locked(mac)) {
-            return;
-        }
-    }
-
-    if (mac_entry_get_port(xbridge->ml, mac) != in_xbundle->ofbundle) {
+    if (mac_learning_update(xbridge->ml, dl_src, vlan, is_grat_arp,
+                            in_xbundle->bond != NULL, in_xbundle->ofbundle)) {
         /* The log messages here could actually be useful in debugging,
          * so keep the rate limit relatively high. */
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
 
         VLOG_DBG_RL(&rl, "bridge %s: learned that "ETH_ADDR_FMT" is "
                     "on port %s in VLAN %d",
-                    xbridge->name, ETH_ADDR_ARGS(flow->dl_src),
-                    in_xbundle->name, vlan);
-
-        mac_entry_set_port(xbridge->ml, mac, in_xbundle->ofbundle);
-    }
-}
-
-static void
-update_learning_table(const struct xbridge *xbridge,
-                      const struct flow *flow, struct flow_wildcards *wc,
-                      int vlan, struct xbundle *in_xbundle)
-{
-    bool need_update;
-
-    /* Don't learn the OFPP_NONE port. */
-    if (in_xbundle == &ofpp_none_bundle) {
-        return;
-    }
-
-    /* First try the common case: no change to MAC learning table. */
-    ovs_rwlock_rdlock(&xbridge->ml->rwlock);
-    need_update = is_mac_learning_update_needed(xbridge->ml, flow, wc, vlan,
-                                                in_xbundle);
-    ovs_rwlock_unlock(&xbridge->ml->rwlock);
-
-    if (need_update) {
-        /* Slow path: MAC learning table might need an update. */
-        ovs_rwlock_wrlock(&xbridge->ml->rwlock);
-        update_learning_table__(xbridge, flow, wc, vlan, in_xbundle);
-        ovs_rwlock_unlock(&xbridge->ml->rwlock);
+                    xbridge->name, ETH_ADDR_ARGS(dl_src), in_xbundle->name,
+                    vlan);
     }
 }
 
@@ -2485,17 +2390,21 @@ xlate_normal(struct xlate_ctx *ctx)
     }
 
     /* Learn source MAC. */
+    bool is_grat_arp = is_gratuitous_arp(flow, wc);
     if (ctx->xin->may_learn) {
-        update_learning_table(ctx->xbridge, flow, wc, vlan, in_xbundle);
+        update_learning_table(ctx->xbridge, in_xbundle, flow->dl_src, vlan,
+                              is_grat_arp);
     }
-    if (ctx->xin->xcache) {
+    if (ctx->xin->xcache && in_xbundle != &ofpp_none_bundle) {
         struct xc_entry *entry;
 
-        /* Save enough info to update mac learning table later. */
+        /* Save just enough info to update mac learning table later. */
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_NORMAL);
         entry->u.normal.ofproto = ctx->xbridge->ofproto;
-        entry->u.normal.flow = xmemdup(flow, sizeof *flow);
+        entry->u.normal.in_port = flow->in_port.ofp_port;
+        entry->u.normal.dl_src = flow->dl_src;
         entry->u.normal.vlan = vlan;
+        entry->u.normal.is_gratuitous_arp = is_grat_arp;
     }
 
     /* Determine output bundle. */
@@ -5805,25 +5714,25 @@ xlate_cache_netdev(struct xc_entry *entry, const struct dpif_flow_stats *stats)
 }
 
 static void
-xlate_cache_normal(struct ofproto_dpif *ofproto, struct flow *flow, int vlan)
+xlate_mac_learning_update(const struct ofproto_dpif *ofproto,
+                          ofp_port_t in_port, struct eth_addr dl_src,
+                          int vlan, bool is_grat_arp)
 {
     struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     struct xbridge *xbridge;
     struct xbundle *xbundle;
-    struct flow_wildcards wc;
 
     xbridge = xbridge_lookup(xcfg, ofproto);
     if (!xbridge) {
         return;
     }
 
-    xbundle = lookup_input_bundle(xbridge, flow->in_port.ofp_port, false,
-                                  NULL);
+    xbundle = lookup_input_bundle(xbridge, in_port, false, NULL);
     if (!xbundle) {
         return;
     }
 
-    update_learning_table(xbridge, flow, &wc, vlan, xbundle);
+    update_learning_table(xbridge, xbundle, dl_src, vlan, is_grat_arp);
 }
 
 /* Push stats and perform side effects of flow translation. */
@@ -5864,8 +5773,11 @@ xlate_push_stats(struct xlate_cache *xcache,
             ofproto_dpif_flow_mod(entry->u.learn.ofproto, entry->u.learn.fm);
             break;
         case XC_NORMAL:
-            xlate_cache_normal(entry->u.normal.ofproto, entry->u.normal.flow,
-                               entry->u.normal.vlan);
+            xlate_mac_learning_update(entry->u.normal.ofproto,
+                                      entry->u.normal.in_port,
+                                      entry->u.normal.dl_src,
+                                      entry->u.normal.vlan,
+                                      entry->u.normal.is_gratuitous_arp);
             break;
         case XC_FIN_TIMEOUT:
             xlate_fin_timeout__(entry->u.fin.rule, stats->tcp_flags,
@@ -5941,7 +5853,6 @@ xlate_cache_clear(struct xlate_cache *xcache)
             ofpbuf_delete(entry->u.learn.ofpacts);
             break;
         case XC_NORMAL:
-            free(entry->u.normal.flow);
             break;
         case XC_FIN_TIMEOUT:
             /* 'u.fin.rule' is always already held as a XC_RULE, which
