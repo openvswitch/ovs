@@ -1078,7 +1078,9 @@ upcall_xlate(struct udpif *udpif, struct upcall *upcall,
     stats.used = time_msec();
     stats.tcp_flags = ntohs(upcall->flow->tcp_flags);
 
-    xlate_in_init(&xin, upcall->ofproto, upcall->flow, upcall->in_port, NULL,
+    xlate_in_init(&xin, upcall->ofproto,
+                  ofproto_dpif_get_tables_version(upcall->ofproto),
+                  upcall->flow, upcall->in_port, NULL,
                   stats.tcp_flags, upcall->packet, wc, odp_actions);
 
     if (upcall->type == DPIF_UC_MISS) {
@@ -1908,7 +1910,8 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
         ukey->xcache = xlate_cache_new();
     }
 
-    xlate_in_init(&xin, ofproto, &flow, ofp_in_port, NULL, push.tcp_flags,
+    xlate_in_init(&xin, ofproto, ofproto_dpif_get_tables_version(ofproto),
+                  &flow, ofp_in_port, NULL, push.tcp_flags,
                   NULL, need_revalidate ? &wc : NULL, odp_actions);
     if (push.n_packets) {
         xin.resubmit_stats = &push;
@@ -2086,7 +2089,9 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
             if (!error) {
                 struct xlate_in xin;
 
-                xlate_in_init(&xin, ofproto, &flow, ofp_in_port, NULL,
+                xlate_in_init(&xin, ofproto,
+                              ofproto_dpif_get_tables_version(ofproto),
+                              &flow, ofp_in_port, NULL,
                               push->tcp_flags, NULL, NULL, NULL);
                 xin.resubmit_stats = push->n_packets ? push : NULL;
                 xin.allow_side_effects = push->n_packets > 0;

@@ -46,6 +46,7 @@ struct xlate_out {
 
 struct xlate_in {
     struct ofproto_dpif *ofproto;
+    ovs_version_t        tables_version;   /* Lookup in this version. */
 
     /* Flow to which the OpenFlow actions apply.  xlate_actions() will modify
      * this flow when actions change header fields. */
@@ -202,7 +203,7 @@ const char *xlate_strerror(enum xlate_error error);
 
 enum xlate_error xlate_actions(struct xlate_in *, struct xlate_out *);
 
-void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
+void xlate_in_init(struct xlate_in *, struct ofproto_dpif *, ovs_version_t,
                    const struct flow *, ofp_port_t in_port, struct rule_dpif *,
                    uint16_t tcp_flags, const struct dp_packet *packet,
                    struct flow_wildcards *, struct ofpbuf *odp_actions);

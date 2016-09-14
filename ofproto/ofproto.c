@@ -3361,10 +3361,13 @@ reject_slave_controller(struct ofconn *ofconn)
  *
  *    - If they use any groups, then 'ofproto' has that group configured.
  *
- * Returns 0 if successful, otherwise an OpenFlow error. */
+ * Returns 0 if successful, otherwise an OpenFlow error.  Caller must hold
+ * 'ofproto_mutex' for the result to be valid also after this function
+ * returns. */
 enum ofperr
 ofproto_check_ofpacts(struct ofproto *ofproto,
                       const struct ofpact ofpacts[], size_t ofpacts_len)
+    OVS_REQUIRES(ofproto_mutex)
 {
     uint32_t mid;
 
@@ -3383,71 +3386,134 @@ ofproto_check_ofpacts(struct ofproto *ofproto,
     return 0;
 }
 
-static enum ofperr
-handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
+void
+ofproto_packet_out_uninit(struct ofproto_packet_out *opo)
 {
-    struct ofproto *p = ofconn_get_ofproto(ofconn);
-    struct ofputil_packet_out po;
-    struct dp_packet *payload;
-    uint64_t ofpacts_stub[1024 / 8];
-    struct ofpbuf ofpacts;
-    struct flow flow;
+    dp_packet_delete(opo->packet);
+    opo->packet = NULL;
+    free(opo->flow);
+    opo->flow = NULL;
+    free(opo->ofpacts);
+    opo->ofpacts = NULL;
+    opo->ofpacts_len = 0;
+    ovs_assert(!opo->aux);
+}
+
+/* Takes ownership of po->ofpacts, which must have been malloc'ed. */
+static enum ofperr
+ofproto_packet_out_init(struct ofproto *ofproto,
+                        struct ofconn *ofconn,
+                        struct ofproto_packet_out *opo,
+                        const struct ofputil_packet_out *po)
+{
     enum ofperr error;
 
-    COVERAGE_INC(ofproto_packet_out);
-
-    error = reject_slave_controller(ofconn);
-    if (error) {
-        goto exit;
-    }
-
-    /* Decode message. */
-    ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
-    error = ofputil_decode_packet_out(&po, oh, &ofpacts);
-    if (error) {
-        goto exit_free_ofpacts;
-    }
-    if (ofp_to_u16(po.in_port) >= p->max_ports
-        && ofp_to_u16(po.in_port) < ofp_to_u16(OFPP_MAX)) {
-        error = OFPERR_OFPBRC_BAD_PORT;
-        goto exit_free_ofpacts;
+    if (ofp_to_u16(po->in_port) >= ofproto->max_ports
+        && ofp_to_u16(po->in_port) < ofp_to_u16(OFPP_MAX)) {
+        return OFPERR_OFPBRC_BAD_PORT;
     }
 
     /* Get payload. */
-    if (po.buffer_id != UINT32_MAX) {
-        error = OFPERR_OFPBRC_BUFFER_UNKNOWN;
-        goto exit_free_ofpacts;
+    if (po->buffer_id != UINT32_MAX) {
+        return OFPERR_OFPBRC_BUFFER_UNKNOWN;
     }
-    /* Ensure that the L3 header is 32-bit aligned. */
-    payload = dp_packet_clone_data_with_headroom(po.packet, po.packet_len, 2);
 
-    /* Verify actions against packet, then send packet if successful. */
-    flow_extract(payload, &flow);
-    flow.in_port.ofp_port = po.in_port;
+    /* Ensure that the L3 header is 32-bit aligned. */
+    opo->packet = dp_packet_clone_data_with_headroom(po->packet,
+                                                     po->packet_len, 2);
+    /* Store struct flow. */
+    opo->flow = xmalloc(sizeof *opo->flow);
+    flow_extract(opo->packet, opo->flow);
+    opo->flow->in_port.ofp_port = po->in_port;
 
     /* Check actions like for flow mods.  We pass a 'table_id' of 0 to
      * ofproto_check_consistency(), which isn't strictly correct because these
      * actions aren't in any table.  This is OK as 'table_id' is only used to
      * check instructions (e.g., goto-table), which can't appear on the action
      * list of a packet-out. */
-    error = ofpacts_check_consistency(po.ofpacts, po.ofpacts_len,
-                                      &flow, u16_to_ofp(p->max_ports),
-                                      0, p->n_tables,
+    error = ofpacts_check_consistency(po->ofpacts, po->ofpacts_len,
+                                      opo->flow,
+                                      u16_to_ofp(ofproto->max_ports), 0,
+                                      ofproto->n_tables,
                                       ofconn_get_protocol(ofconn));
-    if (!error) {
-        /* Should hold ofproto_mutex to guarantee state don't
-         * change between the check and the execution. */
-        error = ofproto_check_ofpacts(p, po.ofpacts, po.ofpacts_len);
-        if (!error) {
-            error = p->ofproto_class->packet_out(p, payload, &flow,
-                                                 po.ofpacts, po.ofpacts_len);
-        }
+    if (error) {
+        dp_packet_delete(opo->packet);
+        free(opo->flow);
+        return error;
     }
-    dp_packet_delete(payload);
 
-exit_free_ofpacts:
-    ofpbuf_uninit(&ofpacts);
-exit:
+    opo->ofpacts = po->ofpacts;
+    opo->ofpacts_len = po->ofpacts_len;
+
+    opo->aux = NULL;
+    return 0;
+}
+
+static enum ofperr
+ofproto_packet_out_start(struct ofproto *ofproto,
+                         struct ofproto_packet_out *opo)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    enum ofperr error;
+
+    error = ofproto_check_ofpacts(ofproto, opo->ofpacts, opo->ofpacts_len);
+    if (error) {
+        return error;
+    }
+
+    return ofproto->ofproto_class->packet_xlate(ofproto, opo);
+}
+
+static void
+ofproto_packet_out_finish(struct ofproto *ofproto,
+                          struct ofproto_packet_out *opo)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    ofproto->ofproto_class->packet_execute(ofproto, opo);
+}
+
+static enum ofperr
+handle_packet_out(struct ofconn *ofconn, const struct ofp_header *oh)
+    OVS_EXCLUDED(ofproto_mutex)
+{
+    struct ofproto *p = ofconn_get_ofproto(ofconn);
+    struct ofputil_packet_out po;
+    struct ofproto_packet_out opo;
+    uint64_t ofpacts_stub[1024 / 8];
+    struct ofpbuf ofpacts;
+    enum ofperr error;
+
+    COVERAGE_INC(ofproto_packet_out);
+
+    error = reject_slave_controller(ofconn);
+    if (error) {
+        return error;
+    }
+
+    /* Decode message. */
+    ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
+    error = ofputil_decode_packet_out(&po, oh, &ofpacts);
+    if (error) {
+        ofpbuf_uninit(&ofpacts);
+        return error;
+    }
+
+    po.ofpacts = ofpbuf_steal_data(&ofpacts);   /* Move to heap. */
+    error = ofproto_packet_out_init(p, ofconn, &opo, &po);
+    if (error) {
+        free(po.ofpacts);
+        return error;
+    }
+
+    ovs_mutex_lock(&ofproto_mutex);
+    opo.version = p->tables_version;
+    error = ofproto_packet_out_start(p, &opo);
+    if (!error) {
+        ofproto_packet_out_finish(p, &opo);
+    }
+    ovs_mutex_unlock(&ofproto_mutex);
+
+    ofproto_packet_out_uninit(&opo);
     return error;
 }
 
@@ -4849,6 +4915,85 @@ ofproto_flow_mod_init_for_learn(struct ofproto *ofproto,
     return 0;
 }
 
+enum ofperr
+ofproto_flow_mod_learn_refresh(struct ofproto_flow_mod *ofm)
+{
+    enum ofperr error = 0;
+
+    /* ofm->temp_rule is our reference to the learned rule.  We have a
+     * reference to an existing rule, if it already was in the classifier,
+     * otherwise we may have a fresh rule that we need to insert. */
+    struct rule *rule = ofm->temp_rule;
+    if (!rule) {
+        return OFPERR_OFPFMFC_UNKNOWN;
+    }
+
+    /* Create a new rule if the current one has been removed from the
+     * classifier.  We need to do this since RCU does not allow a current rule
+     * to be reinserted before all threads have quiesced.
+     *
+     * It is possible that the rule is removed asynchronously, e.g., right
+     * after we have read the 'rule->state' below.  In this case the next time
+     * this function is executed the rule will be reinstated. */
+    if (rule->state == RULE_REMOVED) {
+        struct cls_rule cr;
+
+        cls_rule_clone(&cr, &rule->cr);
+        ovs_mutex_lock(&rule->mutex);
+        error = ofproto_rule_create(rule->ofproto, &cr, rule->table_id,
+                                    rule->flow_cookie,
+                                    rule->idle_timeout,
+                                    rule->hard_timeout, rule->flags,
+                                    rule->importance,
+                                    rule->actions->ofpacts,
+                                    rule->actions->ofpacts_len,
+                                    &ofm->temp_rule);
+        ovs_mutex_unlock(&rule->mutex);
+        if (!error) {
+            ofproto_rule_unref(rule);   /* Release old reference. */
+        }
+    } else {
+        /* Refresh the existing rule. */
+        ovs_mutex_lock(&rule->mutex);
+        rule->modified = time_msec();
+        ovs_mutex_unlock(&rule->mutex);
+    }
+    return error;
+}
+
+enum ofperr
+ofproto_flow_mod_learn_start(struct ofproto_flow_mod *ofm)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct rule *rule = ofm->temp_rule;
+
+    /* ofproto_flow_mod_start() consumes the reference, so we
+     * take a new one. */
+    ofproto_rule_ref(rule);
+    enum ofperr error = ofproto_flow_mod_start(rule->ofproto, ofm);
+    ofm->temp_rule = rule;
+
+    return error;
+}
+
+void
+ofproto_flow_mod_learn_finish(struct ofproto_flow_mod *ofm,
+                              struct ofproto *orig_ofproto)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct rule *rule = rule_collection_rules(&ofm->new_rules)[0];
+
+    /* If learning on a different bridge, must bump its version
+     * number and flush connmgr afterwards. */
+    if (rule->ofproto != orig_ofproto) {
+        ofproto_bump_tables_version(rule->ofproto);
+    }
+    ofproto_flow_mod_finish(rule->ofproto, ofm, NULL);
+    if (rule->ofproto != orig_ofproto) {
+        ofmonitor_flush(rule->ofproto->connmgr);
+    }
+}
+
 /* Refresh 'ofm->temp_rule', for which the caller holds a reference, if already
  * in the classifier, insert it otherwise.  If the rule has already been
  * removed from the classifier, a new rule is created using 'ofm->temp_rule' as
@@ -4862,74 +5007,20 @@ enum ofperr
 ofproto_flow_mod_learn(struct ofproto_flow_mod *ofm, bool keep_ref)
     OVS_EXCLUDED(ofproto_mutex)
 {
-    enum ofperr error = 0;
-
-    /* ofm->temp_rule is our reference to the learned rule.  We have a
-     * reference to an existing rule, if it already was in the classifier,
-     * otherwise we may have a fresh rule that we need to insert. */
+    enum ofperr error = ofproto_flow_mod_learn_refresh(ofm);
     struct rule *rule = ofm->temp_rule;
-    if (!rule) {
-        return OFPERR_OFPFMFC_UNKNOWN;
-    }
-    struct ofproto *ofproto = rule->ofproto;
-    enum rule_state state = rule->state;
 
-    /* Create a new rule if the current one has been removed from the
-     * classifier.  We need to do this since RCU does not allow a current rule
-     * to be reinserted before all threads have quiesced.
-     *
-     * It is possible that the rule is removed asynchronously, e.g., right
-     * after we have read the 'rule->state' above.  In this case the next time
-     * this function is executed the rule will be reinstated. */
-    if (state == RULE_REMOVED) {
-        struct cls_rule cr;
-
-        cls_rule_clone(&cr, &rule->cr);
-        ovs_mutex_lock(&rule->mutex);
-        error = ofproto_rule_create(ofproto, &cr, rule->table_id,
-                                    rule->flow_cookie,
-                                    rule->idle_timeout,
-                                    rule->hard_timeout, rule->flags,
-                                    rule->importance,
-                                    rule->actions->ofpacts,
-                                    rule->actions->ofpacts_len,
-                                    &ofm->temp_rule);
-        ovs_mutex_unlock(&rule->mutex);
-        if (error) {
-            goto error_out;
-        }
-        ofproto_rule_unref(rule);
-        rule = ofm->temp_rule;
-        state = rule->state;
-    }
-
-    /* Do we need to insert the rule?  In this case no-one else has the
-     * reference to this rule yet, but multiple threads may compete inserting
-     * duplicate rules.  This race is resolved by holding the ofproto_mutex and
-     * any possible old rule we don't know of yet being removed by the flow
-     * add. */
-    if (state == RULE_INITIALIZED) {
+    /* Do we need to insert the rule? */
+    if (!error && rule->state == RULE_INITIALIZED) {
         ovs_mutex_lock(&ofproto_mutex);
-        ofm->version = ofproto->tables_version + 1;
-        /* ofproto_flow_mod_start() consumes the reference, so we take a new
-         * one. */
-        ofproto_rule_ref(rule);
-        error = ofproto_flow_mod_start(ofproto, ofm);
-        ofm->temp_rule = rule;
+        ofm->version = rule->ofproto->tables_version + 1;
+        error = ofproto_flow_mod_learn_start(ofm);
         if (!error) {
-            ofproto_bump_tables_version(ofproto);
-            ofproto_flow_mod_finish(ofproto, ofm, NULL);
-            ofmonitor_flush(ofproto->connmgr);
+            ofproto_flow_mod_learn_finish(ofm, NULL);
         }
         ovs_mutex_unlock(&ofproto_mutex);
-    } else {
-        /* Refresh the existing rule. */
-        ovs_mutex_lock(&rule->mutex);
-        rule->modified = time_msec();
-        ovs_mutex_unlock(&rule->mutex);
     }
 
-error_out:
     if (!keep_ref) {
         ofproto_rule_unref(rule);
         ofm->temp_rule = NULL;
@@ -5512,6 +5603,26 @@ reduce_timeout(uint16_t max, uint16_t *timeout)
  * 'idle_timeout' seconds.  Similarly for 'hard_timeout'.
  *
  * Suitable for implementing OFPACT_FIN_TIMEOUT. */
+void
+ofproto_rule_reduce_timeouts__(struct rule *rule,
+                               uint16_t idle_timeout, uint16_t hard_timeout)
+    OVS_REQUIRES(ofproto_mutex)
+    OVS_EXCLUDED(rule->mutex)
+{
+    if (!idle_timeout && !hard_timeout) {
+        return;
+    }
+
+    if (ovs_list_is_empty(&rule->expirable)) {
+        ovs_list_insert(&rule->ofproto->expirable, &rule->expirable);
+    }
+
+    ovs_mutex_lock(&rule->mutex);
+    reduce_timeout(idle_timeout, &rule->idle_timeout);
+    reduce_timeout(hard_timeout, &rule->hard_timeout);
+    ovs_mutex_unlock(&rule->mutex);
+}
+
 void
 ofproto_rule_reduce_timeouts(struct rule *rule,
                              uint16_t idle_timeout, uint16_t hard_timeout)

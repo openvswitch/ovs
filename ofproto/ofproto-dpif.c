@@ -3748,7 +3748,7 @@ ofproto_dpif_set_packet_odp_port(const struct ofproto_dpif *ofproto,
 
 int
 ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
-                               const struct flow *flow,
+                               ovs_version_t version, const struct flow *flow,
                                struct rule_dpif *rule,
                                const struct ofpact *ofpacts, size_t ofpacts_len,
                                int indentation, int depth, int resubmits,
@@ -3770,7 +3770,7 @@ ofproto_dpif_execute_actions__(struct ofproto_dpif *ofproto,
 
     uint64_t odp_actions_stub[1024 / 8];
     struct ofpbuf odp_actions = OFPBUF_STUB_INITIALIZER(odp_actions_stub);
-    xlate_in_init(&xin, ofproto, flow, flow->in_port.ofp_port, rule,
+    xlate_in_init(&xin, ofproto, version, flow, flow->in_port.ofp_port, rule,
                   stats.tcp_flags, packet, NULL, &odp_actions);
     xin.ofpacts = ofpacts;
     xin.ofpacts_len = ofpacts_len;
@@ -3808,13 +3808,14 @@ out:
  * 'flow' must reflect the data in 'packet'. */
 int
 ofproto_dpif_execute_actions(struct ofproto_dpif *ofproto,
-                             const struct flow *flow,
+                             ovs_version_t version, const struct flow *flow,
                              struct rule_dpif *rule,
                              const struct ofpact *ofpacts, size_t ofpacts_len,
                              struct dp_packet *packet)
 {
-    return ofproto_dpif_execute_actions__(ofproto, flow, rule, ofpacts,
-                                          ofpacts_len, 0, 0, 0, packet);
+    return ofproto_dpif_execute_actions__(ofproto, version, flow, rule,
+                                          ofpacts, ofpacts_len, 0, 0, 0,
+                                          packet);
 }
 
 static void
@@ -3893,7 +3894,7 @@ rule_set_recirc_id(struct rule *rule_, uint32_t id)
 }
 
 ovs_version_t
-ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto OVS_UNUSED)
+ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto)
 {
     ovs_version_t version;
 
@@ -4271,6 +4272,183 @@ rule_get_stats(struct rule *rule_, uint64_t *packets, uint64_t *bytes,
     ovs_mutex_unlock(&rule->stats_mutex);
 }
 
+struct ofproto_dpif_packet_out {
+    struct xlate_cache xcache;
+    struct ofpbuf odp_actions;
+    struct recirc_refs rr;
+    bool needs_help;
+};
+
+
+static struct ofproto_dpif_packet_out *
+ofproto_dpif_packet_out_new(void)
+{
+    struct ofproto_dpif_packet_out *aux = xmalloc(sizeof *aux);
+    xlate_cache_init(&aux->xcache);
+    ofpbuf_init(&aux->odp_actions, 64);
+    aux->rr = RECIRC_REFS_EMPTY_INITIALIZER;
+    aux->needs_help = false;
+
+    return aux;
+}
+
+static void
+ofproto_dpif_packet_out_delete(struct ofproto_dpif_packet_out *aux)
+{
+    if (aux) {
+        xlate_cache_uninit(&aux->xcache);
+        ofpbuf_uninit(&aux->odp_actions);
+        recirc_refs_unref(&aux->rr);
+        free(aux);
+    }
+}
+
+static enum ofperr
+packet_xlate(struct ofproto *ofproto_, struct ofproto_packet_out *opo)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct xlate_out xout;
+    struct xlate_in xin;
+    enum ofperr error = 0;
+
+    struct ofproto_dpif_packet_out *aux = ofproto_dpif_packet_out_new();
+
+    xlate_in_init(&xin, ofproto, opo->version, opo->flow,
+                  opo->flow->in_port.ofp_port, NULL, 0, opo->packet, NULL,
+                  &aux->odp_actions);
+    xin.ofpacts = opo->ofpacts;
+    xin.ofpacts_len = opo->ofpacts_len;
+    /* No learning or stats, but collect side effects to xcache. */
+    xin.allow_side_effects = false;
+    xin.resubmit_stats = NULL;
+    xin.xcache = &aux->xcache;
+
+    if (xlate_actions(&xin, &xout) != XLATE_OK) {
+        error = OFPERR_OFPFMFC_UNKNOWN;   /* Error processing actions. */
+        goto error_out;
+    } else {
+        /* Prepare learn actions. */
+        struct xc_entry *entry;
+        struct ofpbuf entries = aux->xcache.entries;
+
+        XC_ENTRY_FOR_EACH (entry, &entries) {
+            if (entry->type == XC_LEARN) {
+                struct ofproto_flow_mod *ofm = entry->learn.ofm;
+
+                error = ofproto_flow_mod_learn_refresh(ofm);
+                if (error) {
+                    goto error_out;
+                }
+                struct rule *rule = ofm->temp_rule;
+                ofm->learn_adds_rule = (rule->state == RULE_INITIALIZED);
+                if (ofm->learn_adds_rule) {
+                    /* If learning on a different bridge, must use its next
+                     * version number. */
+                    ofm->version = (rule->ofproto == ofproto_)
+                        ? opo->version : rule->ofproto->tables_version + 1;
+                    error = ofproto_flow_mod_learn_start(ofm);
+                    if (error) {
+                        goto error_out;
+                    }
+                }
+            }
+        }
+
+        /* Success. */
+        aux->needs_help = (xout.slow & SLOW_ACTION) != 0;
+        recirc_refs_swap(&aux->rr, &xout.recircs); /* Hold recirc refs. */
+    }
+    xlate_out_uninit(&xout);
+    opo->aux = aux;
+    return 0;
+
+error_out:
+    xlate_out_uninit(&xout);
+    ofproto_dpif_packet_out_delete(aux);
+    opo->aux = NULL;
+    return error;
+}
+
+/* Push stats and perform side effects of flow translation. */
+static void
+ofproto_dpif_xcache_execute(struct ofproto_dpif *ofproto,
+                            struct xlate_cache *xcache,
+                            const struct dpif_flow_stats *stats)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct xc_entry *entry;
+    struct ofpbuf entries = xcache->entries;
+
+    XC_ENTRY_FOR_EACH (entry, &entries) {
+        switch (entry->type) {
+        case XC_LEARN:
+            /* Finish the learned flows. */
+            if (entry->learn.ofm->learn_adds_rule) {
+                ofproto_flow_mod_learn_finish(entry->learn.ofm, &ofproto->up);
+            }
+            break;
+        case XC_FIN_TIMEOUT:
+            if (stats->tcp_flags & (TCP_FIN | TCP_RST)) {
+                /* 'ofproto_mutex' already held */
+                ofproto_rule_reduce_timeouts__(&entry->fin.rule->up,
+                                               entry->fin.idle,
+                                               entry->fin.hard);
+            }
+            break;
+            /* All the rest can be dealt with by the xlate layer. */
+        case XC_TABLE:
+        case XC_RULE:
+        case XC_BOND:
+        case XC_NETDEV:
+        case XC_NETFLOW:
+        case XC_MIRROR:
+        case XC_NORMAL:
+        case XC_GROUP:
+        case XC_TNL_NEIGH:
+        case XC_CONTROLLER:
+            xlate_push_stats_entry(entry, stats);
+            break;
+        default:
+            OVS_NOT_REACHED();
+        }
+    }
+}
+
+static void
+packet_execute(struct ofproto *ofproto_, struct ofproto_packet_out *opo)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+    struct dpif_flow_stats stats;
+    struct dpif_execute execute;
+
+    struct ofproto_dpif_packet_out *aux = opo->aux;
+    ovs_assert(aux);
+
+    /* Run the side effects from the xcache. */
+    dpif_flow_stats_extract(opo->flow, opo->packet, time_msec(), &stats);
+    ofproto_dpif_xcache_execute(ofproto, &aux->xcache, &stats);
+
+    execute.actions = aux->odp_actions.data;
+    execute.actions_len = aux->odp_actions.size;
+
+    pkt_metadata_from_flow(&opo->packet->md, opo->flow);
+    execute.packet = opo->packet;
+    execute.flow = opo->flow;
+    execute.needs_help = aux->needs_help;
+    execute.probe = false;
+    execute.mtu = 0;
+
+    /* Fix up in_port. */
+    ofproto_dpif_set_packet_odp_port(ofproto, opo->flow->in_port.ofp_port,
+                                     opo->packet);
+
+    dpif_execute(ofproto->backer->dpif, &execute);
+    ofproto_dpif_packet_out_delete(aux);
+    opo->aux = NULL;
+}
+
 static struct group_dpif *group_dpif_cast(const struct ofgroup *group)
 {
     return group ? CONTAINER_OF(group, struct group_dpif, up) : NULL;
@@ -4466,18 +4644,6 @@ set_frag_handling(struct ofproto *ofproto_,
     } else {
         return false;
     }
-}
-
-static enum ofperr
-packet_out(struct ofproto *ofproto_, struct dp_packet *packet,
-           const struct flow *flow,
-           const struct ofpact *ofpacts, size_t ofpacts_len)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
-
-    ofproto_dpif_execute_actions(ofproto, flow, NULL, ofpacts,
-                                 ofpacts_len, packet);
-    return 0;
 }
 
 static enum ofperr
@@ -5161,9 +5327,10 @@ ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
     trace.result = ds;
     trace.key = flow; /* Original flow key, used for megaflow. */
     trace.flow = *flow; /* May be modified by actions. */
-    xlate_in_init(&trace.xin, ofproto, flow, flow->in_port.ofp_port, NULL,
-                  ntohs(flow->tcp_flags), packet, &trace.wc,
-                  &trace.odp_actions);
+    xlate_in_init(&trace.xin, ofproto,
+                  ofproto_dpif_get_tables_version(ofproto), flow,
+                  flow->in_port.ofp_port, NULL, ntohs(flow->tcp_flags),
+                  packet, &trace.wc, &trace.odp_actions);
     trace.xin.ofpacts = ofpacts;
     trace.xin.ofpacts_len = ofpacts_len;
     trace.xin.resubmit_hook = trace_resubmit;
@@ -5656,8 +5823,9 @@ const struct ofproto_class ofproto_dpif_class = {
     rule_destruct,
     rule_dealloc,
     rule_get_stats,
+    packet_xlate,
+    packet_execute,
     set_frag_handling,
-    packet_out,
     nxt_resume,
     set_netflow,
     get_netflow_ids,

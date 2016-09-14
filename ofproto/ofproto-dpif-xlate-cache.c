@@ -16,11 +16,11 @@
 
 #include "ofproto/ofproto-dpif-xlate-cache.h"
 
-#include <errno.h>
 #include <arpa/inet.h>
+#include <errno.h>
 #include <net/if.h>
-#include <sys/socket.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
 
 #include "bfd.h"
 #include "bitmap.h"
@@ -35,8 +35,8 @@
 #include "mac-learning.h"
 #include "netdev-vport.h"
 #include "ofproto/ofproto-dpif-mirror.h"
-#include "ofproto/ofproto-dpif.h"
 #include "ofproto/ofproto-dpif-xlate.h"
+#include "ofproto/ofproto-dpif.h"
 #include "ofproto/ofproto-provider.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/vlog.h"
@@ -47,12 +47,17 @@
 
 VLOG_DEFINE_THIS_MODULE(ofproto_xlate_cache);
 
+void
+xlate_cache_init(struct xlate_cache *xcache)
+{
+    ofpbuf_init(&xcache->entries, 120);
+}
+
 struct xlate_cache *
 xlate_cache_new(void)
 {
     struct xlate_cache *xcache = xmalloc(sizeof *xcache);
-
-    ofpbuf_init(&xcache->entries, 512);
+    xlate_cache_init(xcache);
     return xcache;
 }
 
@@ -261,9 +266,15 @@ xlate_cache_clear(struct xlate_cache *xcache)
 }
 
 void
-xlate_cache_delete(struct xlate_cache *xcache)
+xlate_cache_uninit(struct xlate_cache *xcache)
 {
     xlate_cache_clear(xcache);
     ofpbuf_uninit(&xcache->entries);
+}
+
+void
+xlate_cache_delete(struct xlate_cache *xcache)
+{
+    xlate_cache_uninit(xcache);
     free(xcache);
 }

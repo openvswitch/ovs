@@ -170,9 +170,6 @@ struct xlate_ctx {
 
     const struct xbridge *xbridge;
 
-    /* Flow tables version at the beginning of the translation. */
-    ovs_version_t tables_version;
-
     /* Flow at the last commit. */
     struct flow base_flow;
 
@@ -1432,7 +1429,7 @@ group_is_alive(const struct xlate_ctx *ctx, uint32_t group_id, int depth)
     struct group_dpif *group;
 
     group = group_dpif_lookup(ctx->xbridge->ofproto, group_id,
-                              ctx->tables_version, false);
+                              ctx->xin->tables_version, false);
     if (group) {
         return group_first_live_bucket(ctx, group, depth) != NULL;
     }
@@ -2699,8 +2696,9 @@ compose_table_xlate(struct xlate_ctx *ctx, const struct xport *out_dev,
     output.port = OFPP_TABLE;
     output.max_len = 0;
 
-    return ofproto_dpif_execute_actions__(xbridge->ofproto, &flow, NULL,
-                                          &output.ofpact, sizeof output,
+    return ofproto_dpif_execute_actions__(xbridge->ofproto,
+                                          ctx->xin->tables_version, &flow,
+                                          NULL, &output.ofpact, sizeof output,
                                           ctx->indentation, ctx->depth,
                                           ctx->resubmits, packet);
 }
@@ -2888,7 +2886,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         struct flow old_flow = ctx->xin->flow;
         bool old_conntrack = ctx->conntracked;
         bool old_was_mpls = ctx->was_mpls;
-        ovs_version_t old_version = ctx->tables_version;
+        ovs_version_t old_version = ctx->xin->tables_version;
         struct ofpbuf old_stack = ctx->stack;
         union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];
         struct ofpbuf old_action_set = ctx->action_set;
@@ -2906,7 +2904,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         clear_conntrack(flow);
 
         /* The bridge is now known so obtain its table version. */
-        ctx->tables_version
+        ctx->xin->tables_version
             = ofproto_dpif_get_tables_version(ctx->xbridge->ofproto);
 
         if (!process_special(ctx, peer) && may_receive(peer, ctx)) {
@@ -2943,7 +2941,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         ctx->stack = old_stack;
 
         /* Restore calling bridge's lookup version. */
-        ctx->tables_version = old_version;
+        ctx->xin->tables_version = old_version;
 
         /* The peer bridge popping MPLS should have no effect on the original
          * bridge. */
@@ -3184,7 +3182,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
         ctx->table_id = table_id;
 
         rule = rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
-                                           ctx->tables_version,
+                                           ctx->xin->tables_version,
                                            &ctx->xin->flow, ctx->wc,
                                            ctx->xin->resubmit_stats,
                                            &ctx->table_id, in_port,
@@ -3432,7 +3430,7 @@ xlate_group_action(struct xlate_ctx *ctx, uint32_t group_id)
 
         /* Take ref only if xcache exists. */
         group = group_dpif_lookup(ctx->xbridge->ofproto, group_id,
-                                  ctx->tables_version, ctx->xin->xcache);
+                                  ctx->xin->tables_version, ctx->xin->xcache);
         if (!group) {
             /* XXX: Should set ctx->error ? */
             return true;
@@ -4956,12 +4954,13 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
 void
 xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
-              const struct flow *flow, ofp_port_t in_port,
-              struct rule_dpif *rule, uint16_t tcp_flags,
+              ovs_version_t version, const struct flow *flow,
+              ofp_port_t in_port, struct rule_dpif *rule, uint16_t tcp_flags,
               const struct dp_packet *packet, struct flow_wildcards *wc,
               struct ofpbuf *odp_actions)
 {
     xin->ofproto = ofproto;
+    xin->tables_version = version;
     xin->flow = *flow;
     xin->flow.in_port.ofp_port = in_port;
     xin->flow.actset_output = OFPP_UNSET;
@@ -5314,6 +5313,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
                 goto exit;
             }
             ctx.xbridge = new_bridge;
+            /* The bridge is now known so obtain its table version. */
+            ctx.xin->tables_version
+                = ofproto_dpif_get_tables_version(ctx.xbridge->ofproto);
         }
 
         /* Set the thawed table id.  Note: A table lookup is done only if there
@@ -5364,12 +5366,10 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         ctx.error = XLATE_NO_RECIRCULATION_CONTEXT;
         goto exit;
     }
-    /* The bridge is now known so obtain its table version. */
-    ctx.tables_version = ofproto_dpif_get_tables_version(ctx.xbridge->ofproto);
 
     if (!xin->ofpacts && !ctx.rule) {
         ctx.rule = rule_dpif_lookup_from_table(
-            ctx.xbridge->ofproto, ctx.tables_version, flow, ctx.wc,
+            ctx.xbridge->ofproto, ctx.xin->tables_version, flow, ctx.wc,
             ctx.xin->resubmit_stats, &ctx.table_id,
             flow->in_port.ofp_port, true, true, ctx.xin->xcache);
         if (ctx.xin->resubmit_stats) {
@@ -5552,7 +5552,8 @@ xlate_resume(struct ofproto_dpif *ofproto,
     flow_extract(&packet, &flow);
 
     struct xlate_in xin;
-    xlate_in_init(&xin, ofproto, &flow, 0, NULL, ntohs(flow.tcp_flags),
+    xlate_in_init(&xin, ofproto, ofproto_dpif_get_tables_version(ofproto),
+                  &flow, 0, NULL, ntohs(flow.tcp_flags),
                   &packet, NULL, odp_actions);
 
     struct ofpact_note noop;
@@ -5630,7 +5631,10 @@ xlate_send_packet(const struct ofport_dpif *ofport, bool oam,
 
     ofpact_put_OUTPUT(&ofpacts)->port = xport->ofp_port;
 
-    return ofproto_dpif_execute_actions(xport->xbridge->ofproto, &flow, NULL,
+    /* Actions here are not referring to anything versionable (flow tables or
+     * groups) so we don't need to worry about the version here. */
+    return ofproto_dpif_execute_actions(xport->xbridge->ofproto,
+                                        OVS_VERSION_MAX, &flow, NULL,
                                         ofpacts.data, ofpacts.size, packet);
 }
 
