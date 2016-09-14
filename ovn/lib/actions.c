@@ -1321,7 +1321,7 @@ parse_dhcp_opt(struct action_context *ctx, struct ovnact_dhcp_option *o,
 
     const char *name = v6 ? "DHCPv6" : "DHCPv4";
     const struct hmap *map = v6 ? ctx->pp->dhcpv6_opts : ctx->pp->dhcp_opts;
-    o->option = dhcp_opts_find(map, ctx->lexer->token.s);
+    o->option = map ? dhcp_opts_find(map, ctx->lexer->token.s) : NULL;
     if (!o->option) {
         lexer_syntax_error(ctx->lexer, "expecting %s option name", name);
         return;
