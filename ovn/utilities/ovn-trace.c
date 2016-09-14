@@ -73,6 +73,7 @@ int
 main(int argc, char *argv[])
 {
     set_program_name(argv[0]);
+    service_start(&argc, &argv);
     fatal_ignore_sigpipe();
     vlog_set_levels_from_string_assert("reconnect:warn");
     sbrec_init();
