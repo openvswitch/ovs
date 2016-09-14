@@ -27,6 +27,7 @@
 #include "bond.h"
 #include "bundle.h"
 #include "byte-order.h"
+#include "connmgr.h"
 #include "coverage.h"
 #include "dp-packet.h"
 #include "dpif.h"
@@ -146,6 +147,13 @@ xlate_push_stats_entry(struct xc_entry *entry,
         tnl_neigh_lookup(entry->tnl_neigh_cache.br_name,
                          &entry->tnl_neigh_cache.d_ipv6, &dmac);
         break;
+    case XC_CONTROLLER:
+        if (entry->controller.am) {
+            ofproto_dpif_send_async_msg(entry->controller.ofproto,
+                                        entry->controller.am);
+            entry->controller.am = NULL; /* One time only. */
+        }
+        break;
     default:
         OVS_NOT_REACHED();
     }
@@ -224,6 +232,12 @@ xlate_cache_clear_entry(struct xc_entry *entry)
         group_dpif_unref(entry->group.group);
         break;
     case XC_TNL_NEIGH:
+        break;
+    case XC_CONTROLLER:
+        if (entry->controller.am) {
+            ofproto_async_msg_free(entry->controller.am);
+            entry->controller.am = NULL;
+        }
         break;
     default:
         OVS_NOT_REACHED();

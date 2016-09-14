@@ -2311,7 +2311,7 @@ xlate_normal(struct xlate_ctx *ctx)
 
     /* Learn source MAC. */
     bool is_grat_arp = is_gratuitous_arp(flow, wc);
-    if (ctx->xin->may_learn) {
+    if (ctx->xin->allow_side_effects) {
         update_learning_table(ctx->xbridge, in_xbundle, flow->dl_src, vlan,
                               is_grat_arp);
     }
@@ -2339,7 +2339,7 @@ xlate_normal(struct xlate_ctx *ctx)
             memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
             if (mcast_snooping_is_membership(flow->tp_src) ||
                 mcast_snooping_is_query(flow->tp_src)) {
-                if (ctx->xin->may_learn && ctx->xin->packet) {
+                if (ctx->xin->allow_side_effects && ctx->xin->packet) {
                     update_mcast_snooping_table(ctx->xbridge, flow, vlan,
                                                 in_xbundle, ctx->xin->packet);
                 }
@@ -2371,7 +2371,7 @@ xlate_normal(struct xlate_ctx *ctx)
             return;
         } else if (is_mld(flow, wc)) {
             ctx->xout->slow |= SLOW_ACTION;
-            if (ctx->xin->may_learn && ctx->xin->packet) {
+            if (ctx->xin->allow_side_effects && ctx->xin->packet) {
                 update_mcast_snooping_table(ctx->xbridge, flow, vlan,
                                             in_xbundle, ctx->xin->packet);
             }
@@ -3508,6 +3508,10 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
         return;
     }
 
+    if (!ctx->xin->allow_side_effects && !ctx->xin->xcache) {
+        return;
+    }
+
     packet = dp_packet_clone(ctx->xin->packet);
     packet_batch_init_packet(&batch, packet);
     odp_execute_actions(NULL, &batch, false,
@@ -3546,13 +3550,26 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     };
     flow_get_metadata(&ctx->xin->flow, &am->pin.up.public.flow_metadata);
 
-    ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
-    dp_packet_delete(packet);
+    /* Async messages are only sent once, so if we send one now, no
+     * xlate cache entry is created.  */
+    if (ctx->xin->allow_side_effects) {
+        ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
+    } else /* xcache */ {
+        struct xc_entry *entry;
+
+        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_CONTROLLER);
+        entry->controller.ofproto = ctx->xbridge->ofproto;
+        entry->controller.am = am;
+    }
 }
 
 static void
 emit_continuation(struct xlate_ctx *ctx, const struct frozen_state *state)
 {
+    if (!ctx->xin->allow_side_effects && !ctx->xin->xcache) {
+        return;
+    }
+
     struct ofproto_async_msg *am = xmalloc(sizeof *am);
     *am = (struct ofproto_async_msg) {
         .controller_id = ctx->pause->controller_id,
@@ -3584,7 +3601,18 @@ emit_continuation(struct xlate_ctx *ctx, const struct frozen_state *state)
         },
     };
     flow_get_metadata(&ctx->xin->flow, &am->pin.up.public.flow_metadata);
-    ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
+
+    /* Async messages are only sent once, so if we send one now, no
+     * xlate cache entry is created.  */
+    if (ctx->xin->allow_side_effects) {
+        ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
+    } else /* xcache */ {
+        struct xc_entry *entry;
+
+        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_CONTROLLER);
+        entry->controller.ofproto = ctx->xbridge->ofproto;
+        entry->controller.am = am;
+    }
 }
 
 static void
@@ -3985,7 +4013,7 @@ xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
 {
     learn_mask(learn, ctx->wc);
 
-    if (ctx->xin->xcache || ctx->xin->may_learn) {
+    if (ctx->xin->xcache || ctx->xin->allow_side_effects) {
         uint64_t ofpacts_stub[1024 / 8];
         struct ofputil_flow_mod fm;
         struct ofproto_flow_mod ofm__, *ofm;
@@ -4008,7 +4036,7 @@ xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
                                                      &fm, ofm);
         ofpbuf_uninit(&ofpacts);
 
-        if (!error && ctx->xin->may_learn) {
+        if (!error && ctx->xin->allow_side_effects) {
             error = ofproto_flow_mod_learn(ofm, ctx->xin->xcache != NULL);
         }
 
@@ -4034,8 +4062,10 @@ xlate_fin_timeout(struct xlate_ctx *ctx,
                   const struct ofpact_fin_timeout *oft)
 {
     if (ctx->rule) {
-        xlate_fin_timeout__(ctx->rule, ctx->xin->tcp_flags,
-                            oft->fin_idle_timeout, oft->fin_hard_timeout);
+        if (ctx->xin->allow_side_effects) {
+            xlate_fin_timeout__(ctx->rule, ctx->xin->tcp_flags,
+                                oft->fin_idle_timeout, oft->fin_hard_timeout);
+        }
         if (ctx->xin->xcache) {
             struct xc_entry *entry;
 
@@ -4936,7 +4966,7 @@ xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
     xin->flow.in_port.ofp_port = in_port;
     xin->flow.actset_output = OFPP_UNSET;
     xin->packet = packet;
-    xin->may_learn = packet != NULL;
+    xin->allow_side_effects = packet != NULL;
     xin->rule = rule;
     xin->xcache = NULL;
     xin->ofpacts = NULL;

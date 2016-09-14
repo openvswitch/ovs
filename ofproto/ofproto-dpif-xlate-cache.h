@@ -46,11 +46,12 @@ enum xc_type {
     XC_NETDEV,
     XC_NETFLOW,
     XC_MIRROR,
-    XC_LEARN,
+    XC_LEARN,            /* Calls back to ofproto. */
     XC_NORMAL,
-    XC_FIN_TIMEOUT,
+    XC_FIN_TIMEOUT,      /* Calls back to ofproto. */
     XC_GROUP,
     XC_TNL_NEIGH,
+    XC_CONTROLLER,
 };
 
 /* xlate_cache entries hold enough information to perform the side effects of
@@ -113,6 +114,10 @@ struct xc_entry {
             char br_name[IFNAMSIZ];
             struct in6_addr d_ipv6;
         } tnl_neigh_cache;
+        struct {
+            struct ofproto_dpif *ofproto;
+            struct ofproto_async_msg *am;
+        } controller;
     };
 };
 

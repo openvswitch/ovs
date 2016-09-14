@@ -1912,7 +1912,7 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
                   NULL, need_revalidate ? &wc : NULL, odp_actions);
     if (push.n_packets) {
         xin.resubmit_stats = &push;
-        xin.may_learn = true;
+        xin.allow_side_effects = true;
     }
     xin.xcache = ukey->xcache;
     xlate_actions(&xin, &xout);
@@ -2089,7 +2089,7 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
                 xlate_in_init(&xin, ofproto, &flow, ofp_in_port, NULL,
                               push->tcp_flags, NULL, NULL, NULL);
                 xin.resubmit_stats = push->n_packets ? push : NULL;
-                xin.may_learn = push->n_packets > 0;
+                xin.allow_side_effects = push->n_packets > 0;
                 xlate_actions_for_side_effects(&xin);
 
                 if (netflow) {

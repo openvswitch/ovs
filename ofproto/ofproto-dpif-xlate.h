@@ -56,12 +56,14 @@ struct xlate_in {
     const struct dp_packet *packet;
 
     /* Should OFPP_NORMAL update the MAC learning table?  Should "learn"
-     * actions update the flow table?
+     * actions update the flow table? Should FIN_TIMEOUT change the
+     * timeouts? Or should controller action send packet to the controller?
      *
      * We want to update these tables if we are actually processing a packet,
      * or if we are accounting for packets that the datapath has processed, but
-     * not if we are just revalidating. */
-    bool may_learn;
+     * not if we are just revalidating, or if we want to execute the
+     * side-effects later via the xlate cache. */
+    bool allow_side_effects;
 
     /* The rule initiating translation or NULL. If both 'rule' and 'ofpacts'
      * are NULL, xlate_actions() will do the initial rule lookup itself. */
