@@ -4475,7 +4475,7 @@ AT_CHECK([ovn-nbctl get Logical-Switch-Port p0 dynamic_addresses], [0],
 
 # Add 9 more ports to sw0, addresses should all be unique.
 for n in `seq 1 9`; do
-    ovn-nbctl lsp-add sw0 "p$n" -- lsp-set-addresses "p$n" dynamic
+    ovn-nbctl --wait=sb lsp-add sw0 "p$n" -- lsp-set-addresses "p$n" dynamic
 done
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p1 dynamic_addresses], [0],
     ["0a:00:00:00:00:02 192.168.1.3"
@@ -4509,13 +4509,13 @@ AT_CHECK([ovn-nbctl get Logical-Switch-Port p9 dynamic_addresses], [0],
 # across both switches but IP's only need to be unique within the same switch.
 ovn-nbctl ls-add sw1
 ovn-nbctl lsp-add sw1 p10 -- lsp-set-addresses p10 dynamic
-ovn-nbctl add Logical-Switch sw1 other_config subnet=192.168.1.0/24
+ovn-nbctl --wait=sb add Logical-Switch sw1 other_config subnet=192.168.1.0/24
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p10 dynamic_addresses], [0],
      ["0a:00:00:00:00:0b 192.168.1.2"
 ])
 
 for n in `seq 11 19`; do
-    ovn-nbctl lsp-add sw1 "p$n" -- lsp-set-addresses "p$n" dynamic
+    ovn-nbctl --wait=sb lsp-add sw1 "p$n" -- lsp-set-addresses "p$n" dynamic
 done
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p11 dynamic_addresses], [0],
      ["0a:00:00:00:00:0c 192.168.1.3"
@@ -4548,7 +4548,7 @@ AT_CHECK([ovn-nbctl get Logical-Switch-Port p19 dynamic_addresses], [0],
 # Change a port's address to test for multiple ip's for a single address entry
 # and addresses set by the user.
 ovn-nbctl lsp-set-addresses p0 "0a:00:00:00:00:15 192.168.1.12 192.168.1.14"
-ovn-nbctl lsp-add sw0 p20 -- lsp-set-addresses p20 dynamic
+ovn-nbctl --wait=sb lsp-add sw0 p20 -- lsp-set-addresses p20 dynamic
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p20 dynamic_addresses], [0],
      ["0a:00:00:00:00:16 192.168.1.13"
 ])
@@ -4559,14 +4559,14 @@ ovn-nbctl -- --id=@lrp create Logical_Router_port name=sw0 \
 network="192.168.1.1/24" mac=\"0a:00:00:00:00:17\" \
 -- add Logical_Router R1 ports @lrp -- lsp-add sw0 rp-sw0 \
 -- set Logical_Switch_Port rp-sw0 type=router options:router-port=sw0
-ovn-nbctl lsp-add sw0 p21 -- lsp-set-addresses p21 dynamic
+ovn-nbctl --wait=sb lsp-add sw0 p21 -- lsp-set-addresses p21 dynamic
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p21 dynamic_addresses], [0],
      ["0a:00:00:00:00:18 192.168.1.15"
 ])
 
 # Test for address reuse after logical port is deleted.
 ovn-nbctl lsp-del p0
-ovn-nbctl lsp-add sw0 p23 -- lsp-set-addresses p23 dynamic
+ovn-nbctl --wait=sb lsp-add sw0 p23 -- lsp-set-addresses p23 dynamic
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p23 dynamic_addresses], [0],
      ["0a:00:00:00:00:19 192.168.1.2"
 ])
@@ -4574,19 +4574,19 @@ AT_CHECK([ovn-nbctl get Logical-Switch-Port p23 dynamic_addresses], [0],
 # Test for multiple addresses to one logical port.
 ovn-nbctl lsp-add sw0 p25 -- lsp-set-addresses p25 \
 "0a:00:00:00:00:1a 192.168.1.12" "0a:00:00:00:00:1b 192.168.1.14"
-ovn-nbctl lsp-add sw0 p26 -- lsp-set-addresses p26 dynamic
+ovn-nbctl --wait=sb lsp-add sw0 p26 -- lsp-set-addresses p26 dynamic
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p26 dynamic_addresses], [0],
      ["0a:00:00:00:00:1c 192.168.1.16"
 ])
 
 # Test for exhausting subnet address space.
 ovn-nbctl ls-add sw2 -- add Logical-Switch sw2 other_config subnet=172.16.1.0/30
-ovn-nbctl lsp-add sw2 p27 -- lsp-set-addresses p27 dynamic
+ovn-nbctl --wait=sb lsp-add sw2 p27 -- lsp-set-addresses p27 dynamic
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p27 dynamic_addresses], [0],
      ["0a:00:00:00:00:1d 172.16.1.2"
 ])
 
-ovn-nbctl lsp-add sw2 p28 -- lsp-set-addresses p28 dynamic
+ovn-nbctl --wait=sb lsp-add sw2 p28 -- lsp-set-addresses p28 dynamic
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p28 dynamic_addresses], [0],
      [[[]]
 ])
@@ -4600,7 +4600,7 @@ ovn-nbctl -- --id=@lrp create Logical_Router_port name=sw3 \
 network="192.168.2.1/24" mac=\"0a:00:00:00:00:1f\" \
 -- add Logical_Router R2 ports @lrp -- lsp-add sw3 rp-sw3 \
 -- set Logical_Switch_Port rp-sw3 type=router options:router-port=sw3
-ovn-nbctl lsp-add sw0 p30 -- lsp-set-addresses p30 dynamic
+ovn-nbctl --wait=sb lsp-add sw0 p30 -- lsp-set-addresses p30 dynamic
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p30 dynamic_addresses], [0],
      ["0a:00:00:00:00:20 192.168.1.17"
 ])
