@@ -1313,6 +1313,11 @@ struct ofproto_class {
     enum ofperr (*packet_xlate)(struct ofproto *,
                                 struct ofproto_packet_out *opo);
 
+    /* Free resources taken by a successful packet_xlate().  If multiple
+     * packet_xlate() calls have been made in sequence, the corresponding
+     * packet_xlate_revert() calls have to be made in reverse order. */
+    void (*packet_xlate_revert)(struct ofproto *, struct ofproto_packet_out *);
+
     /* Executes the datapath actions, translation side-effects, and stats as
      * produced by ->packet_xlate().  The caller retains ownership of 'opo'.
      */
@@ -1906,6 +1911,8 @@ enum ofperr ofproto_flow_mod_learn(struct ofproto_flow_mod *, bool keep_ref)
     OVS_EXCLUDED(ofproto_mutex);
 enum ofperr ofproto_flow_mod_learn_refresh(struct ofproto_flow_mod *ofm);
 enum ofperr ofproto_flow_mod_learn_start(struct ofproto_flow_mod *ofm)
+    OVS_REQUIRES(ofproto_mutex);
+void ofproto_flow_mod_learn_revert(struct ofproto_flow_mod *ofm)
     OVS_REQUIRES(ofproto_mutex);
 void ofproto_flow_mod_learn_finish(struct ofproto_flow_mod *ofm,
                                           struct ofproto *orig_ofproto)

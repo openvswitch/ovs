@@ -259,6 +259,9 @@ static enum ofperr ofproto_flow_mod_init(struct ofproto *,
 static enum ofperr ofproto_flow_mod_start(struct ofproto *,
                                           struct ofproto_flow_mod *)
     OVS_REQUIRES(ofproto_mutex);
+static void ofproto_flow_mod_revert(struct ofproto *,
+                                    struct ofproto_flow_mod *)
+    OVS_REQUIRES(ofproto_mutex);
 static void ofproto_flow_mod_finish(struct ofproto *,
                                     struct ofproto_flow_mod *,
                                     const struct openflow_mod_requester *)
@@ -3465,6 +3468,14 @@ ofproto_packet_out_start(struct ofproto *ofproto,
 }
 
 static void
+ofproto_packet_out_revert(struct ofproto *ofproto,
+                          struct ofproto_packet_out *opo)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    ofproto->ofproto_class->packet_xlate_revert(ofproto, opo);
+}
+
+static void
 ofproto_packet_out_finish(struct ofproto *ofproto,
                           struct ofproto_packet_out *opo)
     OVS_REQUIRES(ofproto_mutex)
@@ -4974,6 +4985,14 @@ ofproto_flow_mod_learn_start(struct ofproto_flow_mod *ofm)
     ofm->temp_rule = rule;
 
     return error;
+}
+
+void
+ofproto_flow_mod_learn_revert(struct ofproto_flow_mod *ofm)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct rule *rule = rule_collection_rules(&ofm->new_rules)[0];
+    ofproto_flow_mod_revert(rule->ofproto, ofm);
 }
 
 void
@@ -7495,6 +7514,9 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                      * effect. */
                     be->ogm.version = version;
                     error = ofproto_group_mod_start(ofproto, &be->ogm);
+                } else if (be->type == OFPTYPE_PACKET_OUT) {
+                    be->opo.version = version;
+                    error = ofproto_packet_out_start(ofproto, &be->opo);
                 } else {
                     OVS_NOT_REACHED();
                 }
@@ -7517,8 +7539,9 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                     ofproto_flow_mod_revert(ofproto, &be->ofm);
                 } else if (be->type == OFPTYPE_GROUP_MOD) {
                     ofproto_group_mod_revert(ofproto, &be->ogm);
+                } else if (be->type == OFPTYPE_PACKET_OUT) {
+                    ofproto_packet_out_revert(ofproto, &be->opo);
                 }
-
                 /* Nothing needs to be reverted for a port mod. */
             }
         } else {
@@ -7533,30 +7556,30 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
                      * processing. */
                     port_mod_finish(ofconn, &be->opm.pm, be->opm.port);
                 } else {
+                    version =
+                        (be->type == OFPTYPE_FLOW_MOD) ? be->ofm.version :
+                        (be->type == OFPTYPE_GROUP_MOD) ? be->ogm.version :
+                        (be->type == OFPTYPE_PACKET_OUT) ? be->opo.version :
+                        version;
+
+                    /* Bump the lookup version to the one of the current
+                     * message.  This makes all the changes in the bundle at
+                     * this version visible to lookups at once. */
+                    if (ofproto->tables_version < version) {
+                        ofproto->tables_version = version;
+                        ofproto->ofproto_class->set_tables_version(
+                            ofproto, ofproto->tables_version);
+                    }
+
                     struct openflow_mod_requester req = { ofconn,
                                                           &be->ofp_msg };
-                    if (be->type == OFPTYPE_FLOW_MOD) {
-                        /* Bump the lookup version to the one of the current
-                         * message.  This makes all the changes in the bundle
-                         * at this version visible to lookups at once. */
-                        if (ofproto->tables_version < be->ofm.version) {
-                            ofproto->tables_version = be->ofm.version;
-                            ofproto->ofproto_class->set_tables_version(
-                                ofproto, ofproto->tables_version);
-                        }
 
+                    if (be->type == OFPTYPE_FLOW_MOD) {
                         ofproto_flow_mod_finish(ofproto, &be->ofm, &req);
                     } else if (be->type == OFPTYPE_GROUP_MOD) {
-                        /* Bump the lookup version to the one of the current
-                         * message.  This makes all the changes in the bundle
-                         * at this version visible to lookups at once. */
-                        if (ofproto->tables_version < be->ogm.version) {
-                            ofproto->tables_version = be->ogm.version;
-                            ofproto->ofproto_class->set_tables_version(
-                                ofproto, ofproto->tables_version);
-                        }
-
                         ofproto_group_mod_finish(ofproto, &be->ogm, &req);
+                    } else if (be->type == OFPTYPE_PACKET_OUT) {
+                        ofproto_packet_out_finish(ofproto, &be->opo);
                     }
                 }
             }
@@ -7646,14 +7669,15 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
 
     bmsg = ofp_bundle_entry_alloc(type, badd.msg);
 
+    struct ofpbuf ofpacts;
+    uint64_t ofpacts_stub[1024 / 8];
+    ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
+
     if (type == OFPTYPE_PORT_MOD) {
         error = ofputil_decode_port_mod(badd.msg, &bmsg->opm.pm, false);
     } else if (type == OFPTYPE_FLOW_MOD) {
         struct ofputil_flow_mod fm;
-        struct ofpbuf ofpacts;
-        uint64_t ofpacts_stub[1024 / 8];
 
-        ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
         error = ofputil_decode_flow_mod(&fm, badd.msg,
                                         ofconn_get_protocol(ofconn),
                                         &ofpacts,
@@ -7662,12 +7686,24 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
         if (!error) {
             error = ofproto_flow_mod_init(ofproto, &bmsg->ofm, &fm, NULL);
         }
-        ofpbuf_uninit(&ofpacts);
     } else if (type == OFPTYPE_GROUP_MOD) {
         error = ofputil_decode_group_mod(badd.msg, &bmsg->ogm.gm);
+    } else if (type == OFPTYPE_PACKET_OUT) {
+        struct ofputil_packet_out po;
+
+        COVERAGE_INC(ofproto_packet_out);
+
+        /* Decode message. */
+        error = ofputil_decode_packet_out(&po, badd.msg, &ofpacts);
+        if (!error) {
+            po.ofpacts = ofpbuf_steal_data(&ofpacts);   /* Move to heap. */
+            error = ofproto_packet_out_init(ofproto, ofconn, &bmsg->opo, &po);
+        }
     } else {
         OVS_NOT_REACHED();
     }
+
+    ofpbuf_uninit(&ofpacts);
 
     if (!error) {
         error = ofp_bundle_add_message(ofconn, badd.bundle_id, badd.flags,

@@ -304,7 +304,7 @@ BFD_CHECK_RX([p0], [3000ms], [3000ms], [500ms])
 for i in `seq 0 49`
 do
     ovs-appctl time/warp 100
-    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+    AT_CHECK([ovs-ofctl packet-out br1 "in_port=3 packet=90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202 actions=2"],
              [0], [stdout], [])
 done
 # after a decay interval (3000ms), the p0 min_rx will go back to
@@ -435,7 +435,7 @@ done
 for i in `seq 0 19`
 do
     ovs-appctl time/warp 100
-    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+    AT_CHECK([ovs-ofctl packet-out br1 "in_port=3 packet=90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202 actions=2"],
              [0], [stdout], [])
 done
 # the forwarding flag should be false, due to the demand_rx_bfd.
@@ -485,7 +485,7 @@ do
     BFD_CHECK([p0], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
     for i in `seq 0 4`
     do
-        AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+        AT_CHECK([ovs-ofctl packet-out br1 "in_port=3 packet=90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202 actions=2"],
                  [0], [stdout], [])
     done
 done
@@ -562,7 +562,7 @@ AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=false], [0])
 for i in `seq 0 7`
 do
     ovs-appctl time/warp 500
-    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+    AT_CHECK([ovs-ofctl packet-out br1 "in_port=3 packet=90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202 actions=2"],
              [0], [stdout], [])
 done
 BFD_CHECK([p0], [true], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
@@ -570,7 +570,7 @@ BFD_CHECK([p0], [true], [false], [none], [down], [Control Detection Time Expired
 # receive packet at 1/100ms rate for 1000ms.
 for i in `seq 0 9`
 do
-    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+    AT_CHECK([ovs-ofctl packet-out br1 "in_port=3 packet=90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202 actions=2"],
              [0], [stdout], [])
     ovs-appctl time/warp 100
     # the forwarding flag should always be true during this time.
@@ -629,7 +629,7 @@ AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=false], [0])
 for i in `seq 0 7`
 do
     ovs-appctl time/warp 500
-    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+    AT_CHECK([ovs-ofctl packet-out br1 "in_port=3 packet=90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202 actions=2"],
              [0], [stdout], [])
 done
 BFD_CHECK([p0], [true], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
@@ -640,7 +640,7 @@ BFD_CHECK([p0], [true], [false], [none], [down], [Control Detection Time Expired
 for i in `seq 0 120`
 do
     ovs-appctl time/warp 300
-    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+    AT_CHECK([ovs-ofctl packet-out br1 "in_port=3 packet=90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202 actions=2"],
              [0], [stdout], [])
 done
 BFD_CHECK([p0], [false], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
@@ -661,7 +661,7 @@ AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=false], [0])
 for i in `seq 0 120`
 do
     ovs-appctl time/warp 300
-    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+    AT_CHECK([ovs-ofctl packet-out br1 "in_port=3 packet=90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202 actions=2"],
              [0], [stdout], [])
 done
 BFD_CHECK([p0], [false], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
@@ -761,7 +761,7 @@ AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=false], [0])
 for i in `seq 0 39`
 do
     ovs-appctl time/warp 100
-    AT_CHECK([ovs-ofctl packet-out br1 3 2 "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+    AT_CHECK([ovs-ofctl packet-out br1 "in_port=3 packet=90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202 actions=2"],
              [0], [stdout], [])
 done
 BFD_CHECK([p0], [true], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
@@ -778,7 +778,7 @@ BFD_VSCTL_LIST_IFACE([p0], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["6"]
 for i in `seq 0 39`
 do
     ovs-appctl time/warp 100
-    AT_CHECK([ovs-ofctl packet-out br1 3 2 "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+    AT_CHECK([ovs-ofctl packet-out br1 "in_port=3 packet=90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202 actions=2"],
              [0], [stdout], [])
 done
 # forwarding should be false, since there is still no bfd control packet received.

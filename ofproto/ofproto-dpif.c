@@ -4370,6 +4370,28 @@ error_out:
     return error;
 }
 
+static void
+packet_xlate_revert(struct ofproto *ofproto OVS_UNUSED,
+                    struct ofproto_packet_out *opo)
+    OVS_REQUIRES(ofproto_mutex)
+{
+    struct ofproto_dpif_packet_out *aux = opo->aux;
+    ovs_assert(aux);
+
+    /* Revert the learned flows. */
+    struct xc_entry *entry;
+    struct ofpbuf entries = aux->xcache.entries;
+
+    XC_ENTRY_FOR_EACH (entry, &entries) {
+        if (entry->type == XC_LEARN && entry->learn.ofm->learn_adds_rule) {
+            ofproto_flow_mod_learn_revert(entry->learn.ofm);
+        }
+    }
+
+    ofproto_dpif_packet_out_delete(aux);
+    opo->aux = NULL;
+}
+
 /* Push stats and perform side effects of flow translation. */
 static void
 ofproto_dpif_xcache_execute(struct ofproto_dpif *ofproto,
@@ -5824,6 +5846,7 @@ const struct ofproto_class ofproto_dpif_class = {
     rule_dealloc,
     rule_get_stats,
     packet_xlate,
+    packet_xlate_revert,
     packet_execute,
     set_frag_handling,
     nxt_resume,

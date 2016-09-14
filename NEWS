@@ -6,6 +6,15 @@ Post-v2.6.0
    - OpenFlow:
      * Bundles now expire after 10 seconds since the last time the
        bundle was either opened, modified, or closed.
+     * OFPT_PACKET_OUT messages are now supported in bundles.
+   - ovs-ofctl:
+     * 'bundle' command now supports packet-out messages.
+     * New syntax for 'ovs-ofctl packet-out' command, which uses the
+       same string parser as the 'bundle' command.  The old 'packet-out'
+       syntax is deprecated and will be removed in a later OVS
+       release.
+     * New unixctl "ofctl/packet-out" command, which can be used to
+       instruct a flow monitor to issue OpenFlow packet-out messages.
 
 v2.6.0 - xx xxx xxxx
 ---------------------

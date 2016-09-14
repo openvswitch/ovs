@@ -3532,6 +3532,25 @@ OFPT_GROUP_MOD (OF1.5) (xid=0x3):
 ])
 AT_CLEANUP
 
+AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - PACKET_OUT])
+AT_KEYWORDS([ofp-print bundle packet-out])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 22 00 74 00 00 00 03 00 00 00 01 00 00 00 01 \
+05 0d 00 64 00 00 00 03 ff ff ff ff ff ff ff fe \
+00 10 00 00 00 00 00 00 00 00 00 10 ff ff ff fb \
+05 dc 00 00 00 00 00 00 50 54 00 00 00 05 50 54 \
+00 00 00 06 08 00 45 00 00 28 00 00 40 00 40 06 \
+b9 7c c0 a8 00 02 c0 a8 00 01 00 00 2b 60 00 00 \
+00 00 6a 4f 2b 58 50 14 00 00 6d 75 00 00 00 00 \
+00 00 00 00 \
+"], [0], [dnl
+OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x3):
+ bundle_id=0x1 flags=atomic
+OFPT_PACKET_OUT (OF1.4) (xid=0x3): in_port=LOCAL actions=FLOOD data_len=60
+tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=11104,tcp_flags=rst|ack tcp_csum:6d75
+])
+AT_CLEANUP
+
 AT_SETUP([NXST_IPFIX_BRIDGE - request])
 AT_KEYWORDS([ofp-print OFPT_STATS_REQUEST])
 AT_CHECK([ovs-ofctl ofp-print "\

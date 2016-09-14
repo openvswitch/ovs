@@ -22,6 +22,7 @@
 #include <netinet/in.h>
 
 #include "byte-order.h"
+#include "dp-packet.h"
 #include "learn.h"
 #include "multipath.h"
 #include "netdev.h"
@@ -544,6 +545,107 @@ parse_ofp_str(struct ofputil_flow_mod *fm, int command, const char *str_,
     if (error) {
         fm->ofpacts = NULL;
         fm->ofpacts_len = 0;
+    }
+
+    free(string);
+    return error;
+}
+
+/* Parse a string representation of a OFPT_PACKET_OUT to '*po'.  If successful,
+ * both 'po->ofpacts' and 'po->packet' must be free()d by the caller. */
+static char * OVS_WARN_UNUSED_RESULT
+parse_ofp_packet_out_str__(struct ofputil_packet_out *po, char *string,
+                           enum ofputil_protocol *usable_protocols)
+{
+    enum ofputil_protocol action_usable_protocols;
+    uint64_t stub[256 / 8];
+    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(stub);
+    struct dp_packet *packet = NULL;
+    char *act_str = NULL;
+    char *name, *value;
+    char *error = NULL;
+
+    *usable_protocols = OFPUTIL_P_ANY;
+
+    *po = (struct ofputil_packet_out) {
+        .buffer_id = UINT32_MAX,
+        .in_port = OFPP_CONTROLLER,
+    };
+
+    act_str = extract_actions(string);
+
+    while (ofputil_parse_key_value(&string, &name, &value)) {
+        if (!*value) {
+            error = xasprintf("field %s missing value", name);
+            goto out;
+        }
+
+        if (!strcmp(name, "in_port")) {
+            if (!ofputil_port_from_string(value, &po->in_port)) {
+                error = xasprintf("%s is not a valid OpenFlow port", value);
+                goto out;
+            }
+            if (po->in_port > OFPP_MAX && po->in_port != OFPP_LOCAL
+                && po->in_port != OFPP_NONE
+                && po->in_port != OFPP_CONTROLLER) {
+                error = xasprintf(
+                              "%s is not a valid OpenFlow port for PACKET_OUT",
+                              value);
+                goto out;
+            }
+        } else if (!strcmp(name, "packet")) {
+            const char *error_msg = eth_from_hex(value, &packet);
+            if (error_msg) {
+                error = xasprintf("%s: %s", name, error_msg);
+                goto out;
+            }
+        } else {
+            error = xasprintf("unknown keyword %s", name);
+            goto out;
+        }
+    }
+
+    if (!packet || !dp_packet_size(packet)) {
+        error = xstrdup("must specify packet");
+        goto out;
+    }
+
+    if (act_str) {
+        error = ofpacts_parse_actions(act_str, &ofpacts,
+                                      &action_usable_protocols);
+        *usable_protocols &= action_usable_protocols;
+        if (error) {
+            goto out;
+        }
+    }
+    po->ofpacts_len = ofpacts.size;
+    po->ofpacts = ofpbuf_steal_data(&ofpacts);
+
+    po->packet_len = dp_packet_size(packet);
+    po->packet = dp_packet_steal_data(packet);
+out:
+    ofpbuf_uninit(&ofpacts);
+    dp_packet_delete(packet);
+    return error;
+}
+
+/* Convert 'str_' (as described in the Packet-Out Syntax section of the
+ * ovs-ofctl man page) into 'po' for sending a OFPT_PACKET_OUT message to a
+ * switch.  Returns the set of usable protocols in '*usable_protocols'.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+char * OVS_WARN_UNUSED_RESULT
+parse_ofp_packet_out_str(struct ofputil_packet_out *po, const char *str_,
+                         enum ofputil_protocol *usable_protocols)
+{
+    char *string = xstrdup(str_);
+    char *error;
+
+    error = parse_ofp_packet_out_str__(po, string, usable_protocols);
+    if (error) {
+        po->ofpacts = NULL;
+        po->ofpacts_len = 0;
     }
 
     free(string);
@@ -1709,26 +1811,6 @@ parse_ofp_group_mod_file(const char *file_name, int command,
     return NULL;
 }
 
-static void
-free_bundle_msgs(struct ofputil_bundle_msg **bms, size_t *n_bms)
-{
-    for (size_t i = 0; i < *n_bms; i++) {
-        switch ((int)(*bms)[i].type) {
-        case OFPTYPE_FLOW_MOD:
-            free(CONST_CAST(struct ofpact *, (*bms)[i].fm.ofpacts));
-            break;
-        case OFPTYPE_GROUP_MOD:
-            ofputil_uninit_group_mod(&(*bms)[i].gm);
-            break;
-        default:
-            break;
-        }
-    }
-    free(*bms);
-    *bms = NULL;
-    *n_bms = 0;
-}
-
 /* Opens file 'file_name' and reads each line as a flow_mod or a group_mod,
  * depending on the first keyword on each line.  Stores each flow and group
  * mods in '*bms', an array allocated on the caller's behalf, and the number of
@@ -1797,6 +1879,13 @@ parse_ofp_bundle_file(const char *file_name,
                 break;
             }
             (*bms)[*n_bms].type = OFPTYPE_GROUP_MOD;
+        } else if (!strncmp(s, "packet-out", len)) {
+            s += len;
+            error = parse_ofp_packet_out_str(&(*bms)[*n_bms].po, s, &usable);
+            if (error) {
+                break;
+            }
+            (*bms)[*n_bms].type = OFPTYPE_PACKET_OUT;
         } else {
             error = xasprintf("Unsupported bundle message type: %.*s",
                               (int)len, s);
@@ -1816,7 +1905,9 @@ parse_ofp_bundle_file(const char *file_name,
         char *err_msg = xasprintf("%s:%d: %s", file_name, line_number, error);
         free(error);
 
-        free_bundle_msgs(bms, n_bms);
+        ofputil_free_bundle_msgs(*bms, *n_bms);
+        *bms = NULL;
+        *n_bms = 0;
         return err_msg;
     }
     return NULL;

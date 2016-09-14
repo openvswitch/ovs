@@ -1965,6 +1965,131 @@ AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sort], [0],
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto - bundle packet-out (OpenFlow 1.4)])
+OVS_VSWITCHD_START
+
+ovs-ofctl del-flows br0
+ovs-ofctl add-flow br0 priority=0,actions=drop
+
+# Start a monitor listening for packet-ins.
+AT_CHECK([ovs-ofctl -P standard monitor br0 --detach --no-chdir --pidfile])
+ovs-appctl -t ovs-ofctl ofctl/send 0109000c0123456700000080
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+AT_CAPTURE_FILE([monitor.log])
+
+# This bundle adds a group, a flow using that group and then a
+# packet-out that needs them both.  Finally the bundle deletes all
+# groups, which also deletes the flow, leaving only the drop flow in
+# the table.  If this works properly, the packet-out should get
+# translated and processed before the flow disappears.  Also, if the
+# bundle were to fail, the packet-in should not get executed.
+AT_DATA([bundle.txt], [dnl
+group group_id=1,type=all,bucket=output:controller
+flow in_port=6 actions=group:1
+packet-out in_port=6, packet=0001020304050010203040501234 actions=table
+group delete
+])
+AT_CHECK([ovs-ofctl bundle br0 bundle.txt])
+
+# Verify that only the drop flow remains.
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sort], [0],
+  [ reset_counts priority=0 actions=drop
+OFPST_FLOW reply (OF1.4):
+])
+
+# Verify that the packet-in was received via controller action.
+AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0],
+  [OFPT_PACKET_IN (xid=0x0): total_len=14 in_port=6 (via action) data_len=14 (unbuffered)
+vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle packet-out, failing bundle commit (OpenFlow 1.4)])
+OVS_VSWITCHD_START
+
+ovs-ofctl del-flows br0
+ovs-ofctl add-flow br0 priority=0,actions=drop
+
+# Start a monitor listening for packet-ins.
+AT_CHECK([ovs-ofctl -P standard monitor br0 --detach --no-chdir --pidfile])
+ovs-appctl -t ovs-ofctl ofctl/send 0109000c0123456700000080
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+AT_CAPTURE_FILE([monitor.log])
+
+# This bundle adds a flow using that group and then a packet-out that
+# needs them both.  Finally the bundle adds another flow that referes
+# to a non-existing group, causing the bundle to fail, and the
+# packet-in should not get executed.
+AT_DATA([bundle.txt], [dnl
+group group_id=1,type=all,bucket=output:controller
+flow in_port=6 actions=group:1
+packet-out in_port=6, packet=0001020304050010203040501234 actions=table
+flow in_port=7 actions=group:2
+])
+AT_CHECK([ovs-ofctl bundle br0 bundle.txt 2>&1 | sed '/talking to/,$d'], [], [dnl
+Error OFPBAC_BAD_OUT_GROUP for: OFPT_FLOW_MOD (OF1.4) (xid=0x5): ADD in_port=7 actions=group:2
+Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x8):
+ bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
+])
+
+# Verify that only the drop flow remains.
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sort], [0],
+  [ reset_counts priority=0 actions=drop
+OFPST_FLOW reply (OF1.4):
+])
+
+# Verify that the packet-in was NOT received via controller action.
+AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0], [])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto - bundle packet-out makes bundle commit to fail(OpenFlow 1.4)])
+OVS_VSWITCHD_START
+
+ovs-ofctl del-flows br0
+ovs-ofctl add-flow br0 priority=0,actions=drop
+
+# Start a monitor listening for packet-ins.
+AT_CHECK([ovs-ofctl -P standard monitor br0 --detach --no-chdir --pidfile])
+ovs-appctl -t ovs-ofctl ofctl/send 0109000c0123456700000080
+ovs-appctl -t ovs-ofctl ofctl/barrier
+ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
+AT_CAPTURE_FILE([monitor.log])
+
+# This bundle adds a flow using that group and then a packet-out that
+# needs them both.  Finally the bundle adds another flow that referes
+# to a non-existing group, causing the bundle to fail, and the
+# packet-in should not get executed.
+AT_DATA([bundle.txt], [dnl
+group group_id=1,type=all,bucket=output:controller
+flow in_port=6 actions=group:1
+packet-out in_port=6, packet=0001020304050010203040501234 actions=table
+packet-out in_port=6, packet=0001020304050010203040501234 actions=group:2
+])
+AT_CHECK([ovs-ofctl bundle br0 bundle.txt 2>&1 | sed '/talking to/,$d'], [], [dnl
+Error OFPBAC_BAD_OUT_GROUP for: OFPT_PACKET_OUT (OF1.4) (xid=0x5): in_port=6 actions=group:2 data_len=14
+vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
+Error OFPBFC_MSG_FAILED for: OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x8):
+ bundle_id=0 type=COMMIT_REQUEST flags=atomic ordered
+])
+
+# Verify that only the drop flow remains.
+AT_CHECK([ovs-ofctl -O OpenFlow14 dump-flows br0 | ofctl_strip | sort], [0],
+  [ reset_counts priority=0 actions=drop
+OFPST_FLOW reply (OF1.4):
+])
+
+# Verify that the packet-in was NOT received via controller action.
+AT_CHECK([sed 's/ (xid=0x[[1-9a-fA-F]][[0-9a-fA-F]]*)//' monitor.log], [0], [])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto - flow table configuration (OpenFlow 1.0)])
 OVS_VSWITCHD_START
 # Check the default configuration.
@@ -2979,7 +3104,7 @@ vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
     fi
 
     # OFPT_PACKET_IN, OFPR_INVALID_TTL (controller_id=0)
-    ovs-ofctl packet-out br0 controller dec_ttl '002583dfb4000026b98cb0f908004500003eb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00'
+    ovs-ofctl packet-out br0 "in_port=controller packet=002583dfb4000026b98cb0f908004500003eb7e200000011339bac11370dac100002d7730035002b8f6d86fb0100000100000000000006626c702d7873066e696369726103636f6d00000f00 actions=dec_ttl"
     if test X"$1" = X"OFPR_INVALID_TTL"; then shift;
         echo >>expout "OFPT_PACKET_IN: total_len=76 in_port=CONTROLLER (via invalid_ttl) data_len=76 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=00:26:b9:8c:b0:f9,dl_dst=00:25:83:df:b4:00,nw_src=172.17.55.13,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=55155,tp_dst=53 udp_csum:8f6d"
@@ -3777,8 +3902,8 @@ ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 AT_CAPTURE_FILE([monitor.log])
 
 # Send some packet-outs with OFPP_NONE and OFPP_CONTROLLER (65533) as in_port.
-AT_CHECK([ovs-ofctl packet-out br0 none controller,1 '0001020304050010203040501234'])
-AT_CHECK([ovs-ofctl packet-out br0 controller controller,1 '0001020304050010203040505678'])
+AT_CHECK([ovs-ofctl packet-out br0 "in_port=none packet=0001020304050010203040501234 actions=controller,1"])
+AT_CHECK([ovs-ofctl packet-out br0 "in_port=controller packet=0001020304050010203040505678 actions=controller,1"])
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
@@ -3844,15 +3969,16 @@ ovs-appctl -t ovs-ofctl ofctl/barrier
 ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 AT_CAPTURE_FILE([monitor.log])
 
-# Send some packet-outs with OFPP_NONE and OFPP_CONTROLLER (65533) as in_port.
-AT_CHECK([ovs-ofctl -O OpenFlow11 packet-out br0 none controller '0001020304050010203040501234'])
-AT_CHECK([ovs-ofctl -O OpenFlow11 packet-out br0 4294967293 controller '0001020304050010203040505678'])
+# Send some packet-outs with OFPP_NONE and OFPP_CONTROLLER as in_port.
+AT_CHECK([ovs-appctl -t ovs-ofctl ofctl/packet-out "in_port=none, packet=0001020304050010203040501234 actions=controller"])
+AT_CHECK([ovs-appctl -t ovs-ofctl ofctl/packet-out "in_port=controller packet=0001020304050010203040505678 actions=controller"])
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
 OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
 
-AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//' monitor.log], [0], [dnl
+AT_CHECK([sed 's/ (xid=0x[[0-9a-fA-F]]*)//
+/PACKET_OUT/d' monitor.log], [0], [dnl
 OFPT_PACKET_IN (OF1.1): total_len=14 in_port=ANY (via action) data_len=14 (unbuffered)
 vlan_tci=0x0000,dl_src=00:10:20:30:40:50,dl_dst=00:01:02:03:04:05,dl_type=0x1234
 OFPT_PACKET_IN (OF1.1): total_len=14 in_port=CONTROLLER (via action) data_len=14 (unbuffered)
@@ -3875,7 +4001,7 @@ ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 AT_CAPTURE_FILE([monitor.log])
 
 # Send a packet-out with a load action to set some metadata, and forward to controller
-AT_CHECK([ovs-ofctl packet-out br0 controller 'load(0xfafafafa5a5a5a5a->OXM_OF_METADATA[[0..63]]), load(0xaa->NXM_NX_PKT_MARK[[]]), controller(userdata=01.02.03.04.05)' '0001020304050010203040501234'])
+AT_CHECK([ovs-ofctl packet-out br0 "in_port=controller packet=0001020304050010203040501234 actions=load(0xfafafafa5a5a5a5a->OXM_OF_METADATA[[0..63]]),load(0xaa->NXM_NX_PKT_MARK[[]]),controller(userdata=01.02.03.04.05)"])
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier
@@ -3904,7 +4030,7 @@ ovs-appctl -t ovs-ofctl ofctl/set-output-file monitor.log
 AT_CAPTURE_FILE([monitor.log])
 
 # Send a packet-out with a load action to set some metadata, and forward to controller
-AT_CHECK([ovs-ofctl packet-out br0 controller 'load(0xfafafafa5a5a5a5a->OXM_OF_METADATA[[0..63]]), load(0xaa->NXM_NX_PKT_MARK[[]]), controller' '0001020304050010203040501234'])
+AT_CHECK([ovs-ofctl packet-out br0 "in_port=controller packet=0001020304050010203040501234 actions=load(0xfafafafa5a5a5a5a->OXM_OF_METADATA[[0..63]]),load(0xaa->NXM_NX_PKT_MARK[[]]),controller"])
 
 # Stop the monitor and check its output.
 ovs-appctl -t ovs-ofctl ofctl/barrier

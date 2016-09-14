@@ -1338,18 +1338,20 @@ enum ofperr ofputil_decode_bundle_add(const struct ofp_header *,
                                       struct ofputil_bundle_add_msg *,
                                       enum ofptype *type);
 
+/* Bundle message as produced by ofp-parse. */
 struct ofputil_bundle_msg {
     enum ofptype type;
     union {
         struct ofputil_flow_mod fm;
         struct ofputil_group_mod gm;
+        struct ofputil_packet_out po;
     };
 };
 
-/* Destroys 'bms'. */
-void ofputil_encode_bundle_msgs(struct ofputil_bundle_msg *bms, size_t n_bms,
-                                struct ovs_list *requests,
+void ofputil_encode_bundle_msgs(const struct ofputil_bundle_msg *bms,
+                                size_t n_bms, struct ovs_list *requests,
                                 enum ofputil_protocol);
+void ofputil_free_bundle_msgs(struct ofputil_bundle_msg *bms, size_t n_bms);
 
 struct ofputil_tlv_map {
     struct ovs_list list_node;

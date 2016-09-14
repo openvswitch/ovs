@@ -33,12 +33,13 @@ extern "C" {
 
 struct ofp_bundle_entry {
     struct ovs_list   node;
-    enum ofptype      type;  /* OFPTYPE_FLOW_MOD, OFPTYPE_PORT_MOD, or
-                              * OFPTYPE_GROUP_MOD. */
+    enum ofptype      type;  /* OFPTYPE_FLOW_MOD, OFPTYPE_PORT_MOD,
+                              * OFPTYPE_GROUP_MOD, OFPTYPE_PACKET_OUT. */
     union {
         struct ofproto_flow_mod ofm;
         struct ofproto_port_mod opm;
         struct ofproto_group_mod ogm;
+        struct ofproto_packet_out opo;
     };
 
     /* OpenFlow header and some of the message contents for error reporting. */
@@ -106,6 +107,8 @@ ofp_bundle_entry_free(struct ofp_bundle_entry *entry)
             ofproto_flow_mod_uninit(&entry->ofm);
         } else if (entry->type == OFPTYPE_GROUP_MOD) {
             ofputil_uninit_group_mod(&entry->ogm.gm);
+        } else if (entry->type == OFPTYPE_PACKET_OUT) {
+            ofproto_packet_out_uninit(&entry->opo);
         }
         free(entry);
     }

@@ -1682,6 +1682,58 @@ ofctl_send(struct unixctl_conn *conn, int argc,
     ds_destroy(&reply);
 }
 
+static void
+unixctl_packet_out(struct unixctl_conn *conn, int OVS_UNUSED argc,
+                   const char *argv[], void *vconn_)
+{
+    struct vconn *vconn = vconn_;
+    enum ofputil_protocol protocol
+        = ofputil_protocol_from_ofp_version(vconn_get_version(vconn));
+    struct ds reply = DS_EMPTY_INITIALIZER;
+    bool ok = true;
+
+    enum ofputil_protocol usable_protocols;
+    struct ofputil_packet_out po;
+    char *error_msg;
+
+    error_msg = parse_ofp_packet_out_str(&po, argv[1], &usable_protocols);
+    if (error_msg) {
+        ds_put_format(&reply, "%s\n", error_msg);
+        free(error_msg);
+        ok = false;
+    }
+
+    if (ok && !(usable_protocols & protocol)) {
+        ds_put_format(&reply, "PACKET_OUT actions are incompatible with the OpenFlow connection.\n");
+        ok = false;
+    }
+
+    if (ok) {
+        struct ofpbuf *msg = ofputil_encode_packet_out(&po, protocol);
+
+        ofp_print(stderr, msg->data, msg->size, verbosity);
+
+        int error = vconn_send_block(vconn, msg);
+        if (error) {
+            ofpbuf_delete(msg);
+            ds_put_format(&reply, "%s\n", ovs_strerror(error));
+            ok = false;
+        }
+    }
+
+    if (ok) {
+        unixctl_command_reply(conn, ds_cstr(&reply));
+    } else {
+        unixctl_command_reply_error(conn, ds_cstr(&reply));
+    }
+    ds_destroy(&reply);
+
+    if (!error_msg) {
+        free(CONST_CAST(void *, po.packet));
+        free(po.ofpacts);
+    }
+}
+
 struct barrier_aux {
     struct vconn *vconn;        /* OpenFlow connection for sending barrier. */
     struct unixctl_conn *conn;  /* Connection waiting for barrier response. */
@@ -1782,6 +1834,8 @@ monitor_vconn(struct vconn *vconn, bool reply_to_echo_requests,
     unixctl_command_register("exit", "", 0, 0, ofctl_exit, &exiting);
     unixctl_command_register("ofctl/send", "OFMSG...", 1, INT_MAX,
                              ofctl_send, vconn);
+    unixctl_command_register("ofctl/packet-out", "\"in_port=<port> packet=<hex data> actions=...\"", 1, 1,
+                             unixctl_packet_out, vconn);
     unixctl_command_register("ofctl/barrier", "", 0, 0,
                              ofctl_barrier, &barrier_aux);
     unixctl_command_register("ofctl/set-output-file", "FILE", 1, 1,
@@ -2041,44 +2095,63 @@ ofctl_probe(struct ovs_cmdl_context *ctx)
 static void
 ofctl_packet_out(struct ovs_cmdl_context *ctx)
 {
+    enum ofputil_protocol usable_protocols;
     enum ofputil_protocol protocol;
     struct ofputil_packet_out po;
-    struct ofpbuf ofpacts;
     struct vconn *vconn;
+    struct ofpbuf *opo;
     char *error;
-    int i;
-    enum ofputil_protocol usable_protocols; /* XXX: Use in proto selection */
 
-    ofpbuf_init(&ofpacts, 64);
-    error = ofpacts_parse_actions(ctx->argv[3], &ofpacts, &usable_protocols);
-    if (error) {
-        ovs_fatal(0, "%s", error);
-    }
+    /* Use the old syntax when more than 4 arguments are given. */
+    if (ctx->argc > 4) {
+        struct ofpbuf ofpacts;
+        int i;
 
-    po.buffer_id = UINT32_MAX;
-    po.in_port = str_to_port_no(ctx->argv[1], ctx->argv[2]);
-    po.ofpacts = ofpacts.data;
-    po.ofpacts_len = ofpacts.size;
-
-    protocol = open_vconn(ctx->argv[1], &vconn);
-    for (i = 4; i < ctx->argc; i++) {
-        struct dp_packet *packet;
-        struct ofpbuf *opo;
-        const char *error_msg;
-
-        error_msg = eth_from_hex(ctx->argv[i], &packet);
-        if (error_msg) {
-            ovs_fatal(0, "%s", error_msg);
+        ofpbuf_init(&ofpacts, 64);
+        error = ofpacts_parse_actions(ctx->argv[3], &ofpacts,
+                                      &usable_protocols);
+        if (error) {
+            ovs_fatal(0, "%s", error);
         }
 
-        po.packet = dp_packet_data(packet);
-        po.packet_len = dp_packet_size(packet);
+        po.buffer_id = UINT32_MAX;
+        po.in_port = str_to_port_no(ctx->argv[1], ctx->argv[2]);
+        po.ofpacts = ofpacts.data;
+        po.ofpacts_len = ofpacts.size;
+
+        protocol = open_vconn_for_flow_mod(ctx->argv[1], &vconn,
+                                           usable_protocols);
+        for (i = 4; i < ctx->argc; i++) {
+            struct dp_packet *packet;
+            const char *error_msg;
+
+            error_msg = eth_from_hex(ctx->argv[i], &packet);
+            if (error_msg) {
+                ovs_fatal(0, "%s", error_msg);
+            }
+
+            po.packet = dp_packet_data(packet);
+            po.packet_len = dp_packet_size(packet);
+            opo = ofputil_encode_packet_out(&po, protocol);
+            transact_noreply(vconn, opo);
+            dp_packet_delete(packet);
+        }
+        vconn_close(vconn);
+        ofpbuf_uninit(&ofpacts);
+    } else if (ctx->argc == 3) {
+        error = parse_ofp_packet_out_str(&po, ctx->argv[2], &usable_protocols);
+        if (error) {
+            ovs_fatal(0, "%s", error);
+        }
+        protocol = open_vconn_for_flow_mod(ctx->argv[1], &vconn,
+                                           usable_protocols);
         opo = ofputil_encode_packet_out(&po, protocol);
         transact_noreply(vconn, opo);
-        dp_packet_delete(packet);
+        free(CONST_CAST(void *, po.packet));
+        free(po.ofpacts);
+    } else {
+        ovs_fatal(0, "Too many arguments (%d)", ctx->argc);
     }
-    vconn_close(vconn);
-    ofpbuf_uninit(&ofpacts);
 }
 
 static void
@@ -2781,6 +2854,7 @@ ofctl_bundle(struct ovs_cmdl_context *ctx)
 
     ovs_list_init(&requests);
     ofputil_encode_bundle_msgs(bms, n_bms, &requests, protocol);
+    ofputil_free_bundle_msgs(bms, n_bms);
     bundle_transact(vconn, &requests, OFPBF_ORDERED | OFPBF_ATOMIC);
     ofpbuf_list_delete(&requests);
 
@@ -4372,8 +4446,8 @@ static const struct ovs_cmdl_command all_commands[] = {
       1, 2, ofctl_meter_stats, OVS_RO },
     { "meter-features", "switch",
       1, 1, ofctl_meter_features, OVS_RO },
-    { "packet-out", "switch in_port actions packet...",
-      4, INT_MAX, ofctl_packet_out, OVS_RW },
+    { "packet-out", "switch \"in_port=<port> packet=<hex data> actions=...\"",
+      2, INT_MAX, ofctl_packet_out, OVS_RW },
     { "dump-ports", "switch [port]",
       1, 2, ofctl_dump_ports, OVS_RO },
     { "dump-ports-desc", "switch [port]",

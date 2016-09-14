@@ -176,7 +176,7 @@ AT_CHECK([ovs-vsctl clear Interface p1 cfm_mpid])
 for i in `seq 0 200`
 do
     ovs-appctl time/warp 100
-    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+    AT_CHECK([ovs-ofctl packet-out br1 "in_port=3 packet=90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202 actions=2"],
              [0], [stdout], [])
 done
 CFM_CHECK_EXTENDED([p0], [1], [0], [up], [up], [300ms], [2], [up])
@@ -186,7 +186,7 @@ CFM_CHECK_EXTENDED([p0], [1], [0], [up], [up], [300ms], [2], [up])
 for i in `seq 0 200`
 do
     ovs-appctl time/warp 100
-    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+    AT_CHECK([ovs-ofctl packet-out br1 "in_port=3 packet=90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202 actions=2"],
              [0], [stdout], [])
 done
 CFM_CHECK_EXTENDED_FAULT([p0], [1], [recv], [0], [up], [up], [300ms])
@@ -204,7 +204,7 @@ AT_CHECK([ovs-vsctl clear Interface p1 cfm_mpid])
 for i in `seq 0 400`
 do
     ovs-appctl time/warp 100
-    AT_CHECK([ovs-ofctl packet-out br1 3 2  "90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202"],
+    AT_CHECK([ovs-ofctl packet-out br1 "in_port=3 packet=90e2ba01475000101856b2e80806000108000604000100101856b2e80202020300000000000002020202 actions=2"],
              [0], [stdout], [])
 done
 CFM_CHECK_EXTENDED_FAULT([p0], [1], [recv], [0], [up], [up], [300ms])

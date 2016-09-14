@@ -4131,6 +4131,9 @@ ofputil_packet_in_private_destroy(struct ofputil_packet_in_private *pin)
  * message's actions.  The caller must initialize 'ofpacts' and retains
  * ownership of it.  'po->ofpacts' will point into the 'ofpacts' buffer.
  *
+ * 'po->packet' refers to the packet data in 'oh', so the buffer containing
+ * 'oh' must not be destroyed while 'po' is being used.
+ *
  * Returns 0 if successful, otherwise an OFPERR_* value. */
 enum ofperr
 ofputil_decode_packet_out(struct ofputil_packet_out *po,
@@ -9462,8 +9465,30 @@ ofputil_decode_group_mod(const struct ofp_header *oh,
 
 /* Destroys 'bms'. */
 void
-ofputil_encode_bundle_msgs(struct ofputil_bundle_msg *bms, size_t n_bms,
-                           struct ovs_list *requests,
+ofputil_free_bundle_msgs(struct ofputil_bundle_msg *bms, size_t n_bms)
+{
+    for (size_t i = 0; i < n_bms; i++) {
+        switch ((int)bms[i].type) {
+        case OFPTYPE_FLOW_MOD:
+            free(CONST_CAST(struct ofpact *, bms[i].fm.ofpacts));
+            break;
+        case OFPTYPE_GROUP_MOD:
+            ofputil_uninit_group_mod(&bms[i].gm);
+            break;
+        case OFPTYPE_PACKET_OUT:
+            free(bms[i].po.ofpacts);
+            free(CONST_CAST(void *, bms[i].po.packet));
+            break;
+        default:
+            break;
+        }
+    }
+    free(bms);
+}
+
+void
+ofputil_encode_bundle_msgs(const struct ofputil_bundle_msg *bms,
+                           size_t n_bms, struct ovs_list *requests,
                            enum ofputil_protocol protocol)
 {
     enum ofp_version version = ofputil_protocol_to_ofp_version(protocol);
@@ -9474,11 +9499,12 @@ ofputil_encode_bundle_msgs(struct ofputil_bundle_msg *bms, size_t n_bms,
         switch ((int)bms[i].type) {
         case OFPTYPE_FLOW_MOD:
             request = ofputil_encode_flow_mod(&bms[i].fm, protocol);
-            free(CONST_CAST(struct ofpact *, bms[i].fm.ofpacts));
             break;
         case OFPTYPE_GROUP_MOD:
             request = ofputil_encode_group_mod(version, &bms[i].gm);
-            ofputil_uninit_group_mod(&bms[i].gm);
+            break;
+        case OFPTYPE_PACKET_OUT:
+            request = ofputil_encode_packet_out(&bms[i].po, protocol);
             break;
         default:
             break;
@@ -9487,7 +9513,6 @@ ofputil_encode_bundle_msgs(struct ofputil_bundle_msg *bms, size_t n_bms,
             ovs_list_push_back(requests, &request->list_node);
         }
     }
-    free(bms);
 }
 
 /* Parse a queue status request message into 'oqsr'.
@@ -9875,13 +9900,13 @@ ofputil_is_bundlable(enum ofptype type)
     case OFPTYPE_FLOW_MOD:
         /* Other supported types. */
     case OFPTYPE_GROUP_MOD:
+    case OFPTYPE_PACKET_OUT:
         return true;
 
         /* Nice to have later. */
     case OFPTYPE_FLOW_MOD_TABLE_ID:
     case OFPTYPE_TABLE_MOD:
     case OFPTYPE_METER_MOD:
-    case OFPTYPE_PACKET_OUT:
     case OFPTYPE_NXT_TLV_TABLE_MOD:
 
         /* Not to be bundlable. */
