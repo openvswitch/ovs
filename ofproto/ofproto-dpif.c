@@ -357,13 +357,16 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 /* Initial mappings of port to bridge mappings. */
 static struct shash init_ofp_ports = SHASH_INITIALIZER(&init_ofp_ports);
 
-/* Executes 'fm'.  The caller retains ownership of 'fm' and everything in
- * it. */
-void
-ofproto_dpif_flow_mod(struct ofproto_dpif *ofproto,
-                      const struct ofputil_flow_mod *fm)
+/* Initialize 'ofm' for a learn action.  If the rule already existed, reference
+ * to that rule is taken, otherwise a new rule is created.  'ofm' keeps the
+ * rule reference in both cases. */
+enum ofperr
+ofproto_dpif_flow_mod_init_for_learn(struct ofproto_dpif *ofproto,
+                                     const struct ofputil_flow_mod *fm,
+                                     struct ofproto_flow_mod *ofm)
 {
-    ofproto_flow_mod(&ofproto->up, fm);
+    /* This will not take the global 'ofproto_mutex'. */
+    return ofproto_flow_mod_init_for_learn(&ofproto->up, fm, ofm);
 }
 
 /* Appends 'am' to the queue of asynchronous messages to be sent to the

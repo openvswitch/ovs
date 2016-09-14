@@ -1899,6 +1899,12 @@ struct ofproto_group_mod {
 
 enum ofperr ofproto_flow_mod(struct ofproto *, const struct ofputil_flow_mod *)
     OVS_EXCLUDED(ofproto_mutex);
+enum ofperr ofproto_flow_mod_init_for_learn(struct ofproto *,
+                                            const struct ofputil_flow_mod *,
+                                            struct ofproto_flow_mod *)
+    OVS_EXCLUDED(ofproto_mutex);
+enum ofperr ofproto_flow_mod_learn(struct ofproto_flow_mod *, bool keep_ref)
+    OVS_EXCLUDED(ofproto_mutex);
 void ofproto_add_flow(struct ofproto *, const struct match *, int priority,
                       const struct ofpact *ofpacts, size_t ofpacts_len)
     OVS_EXCLUDED(ofproto_mutex);

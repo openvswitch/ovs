@@ -91,9 +91,7 @@ struct xc_entry {
             uint16_t vid;
         } bond;
         struct {
-            struct ofproto_dpif *ofproto;
-            struct ofputil_flow_mod *fm;
-            struct ofpbuf *ofpacts;
+            struct ofproto_flow_mod *ofm;
         } learn;
         struct {
             struct ofproto_dpif *ofproto;

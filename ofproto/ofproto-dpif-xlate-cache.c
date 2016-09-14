@@ -115,9 +115,15 @@ xlate_push_stats_entry(struct xc_entry *entry,
                             entry->mirror.mirrors,
                             stats->n_packets, stats->n_bytes);
         break;
-    case XC_LEARN:
-        ofproto_dpif_flow_mod(entry->learn.ofproto, entry->learn.fm);
+    case XC_LEARN: {
+        enum ofperr error;
+        error = ofproto_flow_mod_learn(entry->learn.ofm, true);
+        if (error) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_WARN_RL(&rl, "xcache LEARN action execution failed.");
+        }
         break;
+    }
     case XC_NORMAL:
         xlate_mac_learning_update(entry->normal.ofproto,
                                   entry->normal.in_port,
@@ -205,8 +211,8 @@ xlate_cache_clear_entry(struct xc_entry *entry)
         mbridge_unref(entry->mirror.mbridge);
         break;
     case XC_LEARN:
-        free(entry->learn.fm);
-        ofpbuf_delete(entry->learn.ofpacts);
+        ofproto_flow_mod_uninit(entry->learn.ofm);
+        free(entry->learn.ofm);
         break;
     case XC_NORMAL:
         break;
