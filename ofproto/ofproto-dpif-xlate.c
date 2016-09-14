@@ -3188,8 +3188,8 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                                            &ctx->xin->flow, ctx->wc,
                                            ctx->xin->resubmit_stats,
                                            &ctx->table_id, in_port,
-                                           may_packet_in, honor_table_miss);
-
+                                           may_packet_in, honor_table_miss,
+                                           ctx->xin->xcache);
         if (OVS_UNLIKELY(ctx->xin->resubmit_hook)) {
             ctx->xin->resubmit_hook(ctx->xin, rule, ctx->indentation + 1);
         }
@@ -5336,7 +5336,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         ctx.rule = rule_dpif_lookup_from_table(
             ctx.xbridge->ofproto, ctx.tables_version, flow, ctx.wc,
             ctx.xin->resubmit_stats, &ctx.table_id,
-            flow->in_port.ofp_port, true, true);
+            flow->in_port.ofp_port, true, true, ctx.xin->xcache);
         if (ctx.xin->resubmit_stats) {
             rule_dpif_credit_stats(ctx.rule, ctx.xin->resubmit_stats);
         }

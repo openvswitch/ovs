@@ -49,6 +49,7 @@
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-upcall.h"
 #include "ofproto-dpif-xlate.h"
+#include "ofproto-dpif-xlate-cache.h"
 #include "openvswitch/ofp-actions.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/meta-flow.h"
@@ -3914,6 +3915,21 @@ rule_dpif_lookup_in_table(struct ofproto_dpif *ofproto, ovs_version_t version,
                                                                flow, wc)));
 }
 
+void
+ofproto_dpif_credit_table_stats(struct ofproto_dpif *ofproto, uint8_t table_id,
+                                uint64_t n_matches, uint64_t n_misses)
+{
+    struct oftable *tbl = &ofproto->up.tables[table_id];
+    unsigned long orig;
+
+    if (n_matches) {
+        atomic_add_relaxed(&tbl->n_matched, n_matches, &orig);
+    }
+    if (n_misses) {
+        atomic_add_relaxed(&tbl->n_missed, n_misses, &orig);
+    }
+}
+
 /* Look up 'flow' in 'ofproto''s classifier version 'version', starting from
  * table '*table_id'.  Returns the rule that was found, which may be one of the
  * special rules according to packet miss hadling.  If 'may_packet_in' is
@@ -3945,7 +3961,8 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                             struct flow_wildcards *wc,
                             const struct dpif_flow_stats *stats,
                             uint8_t *table_id, ofp_port_t in_port,
-                            bool may_packet_in, bool honor_table_miss)
+                            bool may_packet_in, bool honor_table_miss,
+                            struct xlate_cache *xcache)
 {
     ovs_be16 old_tp_src = flow->tp_src, old_tp_dst = flow->tp_dst;
     ofp_port_t old_in_port = flow->in_port.ofp_port;
@@ -3970,6 +3987,14 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
                 unsigned long orig;
 
                 atomic_add_relaxed(&tbl->n_matched, stats->n_packets, &orig);
+            }
+            if (xcache) {
+                struct xc_entry *entry;
+
+                entry = xlate_cache_add_entry(xcache, XC_TABLE);
+                entry->table.ofproto = ofproto;
+                entry->table.id = *table_id;
+                entry->table.match = true;
             }
             return rule;
         }
@@ -3998,6 +4023,14 @@ rule_dpif_lookup_from_table(struct ofproto_dpif *ofproto,
 
             atomic_add_relaxed(rule ? &tbl->n_matched : &tbl->n_missed,
                                stats->n_packets, &orig);
+        }
+        if (xcache) {
+            struct xc_entry *entry;
+
+            entry = xlate_cache_add_entry(xcache, XC_TABLE);
+            entry->table.ofproto = ofproto;
+            entry->table.id = next_id;
+            entry->table.match = (rule != NULL);
         }
         if (rule) {
             goto out;   /* Match. */

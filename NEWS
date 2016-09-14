@@ -1,5 +1,8 @@
 Post-v2.6.0
 ---------------------
+   - Fixed regression in table stats maintenance introduced in OVS
+     2.3.0, wherein the number of OpenFlow table hits and misses was
+     not accurate.
    - OpenFlow:
      * Bundles now expire after 10 seconds since the last time the
        bundle was either opened, modified, or closed.

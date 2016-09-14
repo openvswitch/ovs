@@ -102,6 +102,11 @@ struct dpif_backer_support *ofproto_dpif_get_support(const struct ofproto_dpif *
 
 ovs_version_t ofproto_dpif_get_tables_version(struct ofproto_dpif *);
 
+void ofproto_dpif_credit_table_stats(struct ofproto_dpif *, uint8_t table_id,
+                                     uint64_t n_matches, uint64_t n_misses);
+
+struct xlate_cache;
+
 struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
                                               ovs_version_t, struct flow *,
                                               struct flow_wildcards *,
@@ -109,7 +114,8 @@ struct rule_dpif *rule_dpif_lookup_from_table(struct ofproto_dpif *,
                                               uint8_t *table_id,
                                               ofp_port_t in_port,
                                               bool may_packet_in,
-                                              bool honor_table_miss);
+                                              bool honor_table_miss,
+                                              struct xlate_cache *xcache);
 
 static inline void rule_dpif_ref(struct rule_dpif *);
 static inline void rule_dpif_unref(struct rule_dpif *);

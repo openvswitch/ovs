@@ -88,6 +88,14 @@ xlate_push_stats_entry(struct xc_entry *entry,
     struct eth_addr dmac;
 
     switch (entry->type) {
+    case XC_TABLE:
+        ofproto_dpif_credit_table_stats(entry->table.ofproto,
+                                        entry->table.id,
+                                        entry->table.match
+                                        ? stats->n_packets : 0,
+                                        entry->table.match
+                                        ? 0 : stats->n_packets);
+        break;
     case XC_RULE:
         rule_dpif_credit_stats(entry->rule, stats);
         break;
@@ -178,6 +186,8 @@ void
 xlate_cache_clear_entry(struct xc_entry *entry)
 {
     switch (entry->type) {
+    case XC_TABLE:
+        break;
     case XC_RULE:
         rule_dpif_unref(entry->rule);
         break;
