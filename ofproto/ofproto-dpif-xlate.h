@@ -213,10 +213,9 @@ enum ofperr xlate_resume(struct ofproto_dpif *,
 
 int xlate_send_packet(const struct ofport_dpif *, bool oam, struct dp_packet *);
 
-struct xlate_cache *xlate_cache_new(void);
-void xlate_push_stats(struct xlate_cache *, const struct dpif_flow_stats *);
-void xlate_cache_clear(struct xlate_cache *);
-void xlate_cache_delete(struct xlate_cache *);
+void xlate_mac_learning_update(const struct ofproto_dpif *ofproto,
+                               ofp_port_t in_port, struct eth_addr dl_src,
+                               int vlan, bool is_grat_arp);
 
 void xlate_txn_start(void);
 void xlate_txn_commit(void);

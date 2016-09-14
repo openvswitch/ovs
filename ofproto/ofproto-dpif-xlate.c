@@ -46,6 +46,7 @@
 #include "ofproto/ofproto-dpif-mirror.h"
 #include "ofproto/ofproto-dpif-monitor.h"
 #include "ofproto/ofproto-dpif-sflow.h"
+#include "ofproto/ofproto-dpif-xlate-cache.h"
 #include "ofproto/ofproto-dpif.h"
 #include "ofproto/ofproto-provider.h"
 #include "openvswitch/dynamic-string.h"
@@ -448,85 +449,6 @@ struct skb_priority_to_dscp {
     uint8_t dscp;               /* DSCP bits to mark outgoing traffic with. */
 };
 
-enum xc_type {
-    XC_RULE,
-    XC_BOND,
-    XC_NETDEV,
-    XC_NETFLOW,
-    XC_MIRROR,
-    XC_LEARN,
-    XC_NORMAL,
-    XC_FIN_TIMEOUT,
-    XC_GROUP,
-    XC_TNL_NEIGH,
-};
-
-/* xlate_cache entries hold enough information to perform the side effects of
- * xlate_actions() for a rule, without needing to perform rule translation
- * from scratch. The primary usage of these is to submit statistics to objects
- * that a flow relates to, although they may be used for other effects as well
- * (for instance, refreshing hard timeouts for learned flows). */
-struct xc_entry {
-    enum xc_type type;
-    union {
-        struct rule_dpif *rule;
-        struct {
-            struct netdev *tx;
-            struct netdev *rx;
-            struct bfd *bfd;
-        } dev;
-        struct {
-            struct netflow *netflow;
-            struct flow *flow;
-            ofp_port_t iface;
-        } nf;
-        struct {
-            struct mbridge *mbridge;
-            mirror_mask_t mirrors;
-        } mirror;
-        struct {
-            struct bond *bond;
-            struct flow *flow;
-            uint16_t vid;
-        } bond;
-        struct {
-            struct ofproto_dpif *ofproto;
-            struct ofputil_flow_mod *fm;
-            struct ofpbuf *ofpacts;
-        } learn;
-        struct {
-            struct ofproto_dpif *ofproto;
-            ofp_port_t in_port;
-            struct eth_addr dl_src;
-            int vlan;
-            bool is_gratuitous_arp;
-        } normal;
-        struct {
-            struct rule_dpif *rule;
-            uint16_t idle;
-            uint16_t hard;
-        } fin;
-        struct {
-            struct group_dpif *group;
-            struct ofputil_bucket *bucket;
-        } group;
-        struct {
-            char br_name[IFNAMSIZ];
-            struct in6_addr d_ipv6;
-        } tnl_neigh_cache;
-    } u;
-};
-
-#define XC_ENTRY_FOR_EACH(ENTRY, ENTRIES, XCACHE)               \
-    ENTRIES = XCACHE->entries;                                  \
-    for (ENTRY = ofpbuf_try_pull(&ENTRIES, sizeof *ENTRY);      \
-         ENTRY;                                                 \
-         ENTRY = ofpbuf_try_pull(&ENTRIES, sizeof *ENTRY))
-
-struct xlate_cache {
-    struct ofpbuf entries;
-};
-
 /* Xlate config contains hash maps of all bridges, bundles and ports.
  * Xcfgp contains the pointer to the current xlate configuration.
  * When the main thread needs to change the configuration, it copies xcfgp to
@@ -580,8 +502,6 @@ static size_t count_skb_priorities(const struct xport *);
 static bool dscp_from_skb_priority(const struct xport *, uint32_t skb_priority,
                                    uint8_t *dscp);
 
-static struct xc_entry *xlate_cache_add_entry(struct xlate_cache *xc,
-                                              enum xc_type type);
 static void xlate_xbridge_init(struct xlate_cfg *, struct xbridge *);
 static void xlate_xbundle_init(struct xlate_cfg *, struct xbundle *);
 static void xlate_xport_init(struct xlate_cfg *, struct xport *);
@@ -1698,8 +1618,8 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
         struct xc_entry *entry;
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_MIRROR);
-        entry->u.mirror.mbridge = mbridge_ref(xbridge->mbridge);
-        entry->u.mirror.mirrors = mirrors;
+        entry->mirror.mbridge = mbridge_ref(xbridge->mbridge);
+        entry->mirror.mirrors = mirrors;
     }
 
     /* 'mirrors' is a bit-mask of candidates for mirroring.  Iterate as long as
@@ -1940,9 +1860,9 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
 
                 flow = &ctx->xin->flow;
                 entry = xlate_cache_add_entry(ctx->xin->xcache, XC_BOND);
-                entry->u.bond.bond = bond_ref(out_xbundle->bond);
-                entry->u.bond.flow = xmemdup(flow, sizeof *flow);
-                entry->u.bond.vid = vid;
+                entry->bond.bond = bond_ref(out_xbundle->bond);
+                entry->bond.flow = xmemdup(flow, sizeof *flow);
+                entry->bond.vid = vid;
             }
         }
     }
@@ -2400,11 +2320,11 @@ xlate_normal(struct xlate_ctx *ctx)
 
         /* Save just enough info to update mac learning table later. */
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_NORMAL);
-        entry->u.normal.ofproto = ctx->xbridge->ofproto;
-        entry->u.normal.in_port = flow->in_port.ofp_port;
-        entry->u.normal.dl_src = flow->dl_src;
-        entry->u.normal.vlan = vlan;
-        entry->u.normal.is_gratuitous_arp = is_grat_arp;
+        entry->normal.ofproto = ctx->xbridge->ofproto;
+        entry->normal.in_port = flow->in_port.ofp_port;
+        entry->normal.dl_src = flow->dl_src;
+        entry->normal.vlan = vlan;
+        entry->normal.is_gratuitous_arp = is_grat_arp;
     }
 
     /* Determine output bundle. */
@@ -2868,9 +2788,9 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
         struct xc_entry *entry;
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_TNL_NEIGH);
-        ovs_strlcpy(entry->u.tnl_neigh_cache.br_name, out_dev->xbridge->name,
-                    sizeof entry->u.tnl_neigh_cache.br_name);
-        entry->u.tnl_neigh_cache.d_ipv6 = d_ip6;
+        ovs_strlcpy(entry->tnl_neigh_cache.br_name, out_dev->xbridge->name,
+                    sizeof entry->tnl_neigh_cache.br_name);
+        entry->tnl_neigh_cache.d_ipv6 = d_ip6;
     }
 
     xlate_report(ctx, "tunneling from "ETH_ADDR_FMT" %s"
@@ -3053,9 +2973,9 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx->xin->xcache, XC_NETDEV);
-            entry->u.dev.tx = netdev_ref(xport->netdev);
-            entry->u.dev.rx = netdev_ref(peer->netdev);
-            entry->u.dev.bfd = bfd_ref(peer->bfd);
+            entry->dev.tx = netdev_ref(xport->netdev);
+            entry->dev.rx = netdev_ref(peer->netdev);
+            entry->dev.bfd = bfd_ref(peer->bfd);
         }
         return;
     }
@@ -3097,7 +3017,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx->xin->xcache, XC_NETDEV);
-            entry->u.dev.tx = netdev_ref(xport->netdev);
+            entry->dev.tx = netdev_ref(xport->netdev);
         }
         out_port = odp_port;
         if (ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
@@ -3283,7 +3203,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                 struct xc_entry *entry;
 
                 entry = xlate_cache_add_entry(ctx->xin->xcache, XC_RULE);
-                entry->u.rule = rule;
+                entry->rule = rule;
                 rule_dpif_ref(rule);
             }
             xlate_recursively(ctx, rule, table_id <= old_table_id);
@@ -3306,8 +3226,8 @@ xlate_group_stats(struct xlate_ctx *ctx, struct group_dpif *group,
         struct xc_entry *entry;
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_GROUP);
-        entry->u.group.group = group;
-        entry->u.group.bucket = bucket;
+        entry->group.group = group;
+        entry->group.bucket = bucket;
     }
 }
 
@@ -4079,11 +3999,11 @@ xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
         struct xc_entry *entry;
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_LEARN);
-        entry->u.learn.ofproto = ctx->xbridge->ofproto;
-        entry->u.learn.fm = xmalloc(sizeof *entry->u.learn.fm);
-        entry->u.learn.ofpacts = ofpbuf_new(64);
-        xlate_learn_action__(ctx, learn, entry->u.learn.fm,
-                             entry->u.learn.ofpacts);
+        entry->learn.ofproto = ctx->xbridge->ofproto;
+        entry->learn.fm = xmalloc(sizeof *entry->learn.fm);
+        entry->learn.ofpacts = ofpbuf_new(64);
+        xlate_learn_action__(ctx, learn, entry->learn.fm,
+                             entry->learn.ofpacts);
     } else if (ctx->xin->may_learn) {
         uint64_t ofpacts_stub[1024 / 8];
         struct ofputil_flow_mod fm;
@@ -4117,9 +4037,9 @@ xlate_fin_timeout(struct xlate_ctx *ctx,
             entry = xlate_cache_add_entry(ctx->xin->xcache, XC_FIN_TIMEOUT);
             /* XC_RULE already holds a reference on the rule, none is taken
              * here. */
-            entry->u.fin.rule = ctx->rule;
-            entry->u.fin.idle = oft->fin_idle_timeout;
-            entry->u.fin.hard = oft->fin_hard_timeout;
+            entry->fin.rule = ctx->rule;
+            entry->fin.idle = oft->fin_idle_timeout;
+            entry->fin.hard = oft->fin_hard_timeout;
         }
     }
 }
@@ -5424,7 +5344,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx.xin->xcache, XC_RULE);
-            entry->u.rule = ctx.rule;
+            entry->rule = ctx.rule;
             rule_dpif_ref(ctx.rule);
         }
 
@@ -5450,8 +5370,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx.xin->xcache, XC_NETDEV);
-            entry->u.dev.rx = netdev_ref(in_port->netdev);
-            entry->u.dev.bfd = bfd_ref(in_port->bfd);
+            entry->dev.rx = netdev_ref(in_port->netdev);
+            entry->dev.bfd = bfd_ref(in_port->bfd);
         }
     }
 
@@ -5559,9 +5479,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx.xin->xcache, XC_NETFLOW);
-            entry->u.nf.netflow = netflow_ref(xbridge->netflow);
-            entry->u.nf.flow = xmemdup(flow, sizeof *flow);
-            entry->u.nf.iface = ctx.nf_output_iface;
+            entry->nf.netflow = netflow_ref(xbridge->netflow);
+            entry->nf.flow = xmemdup(flow, sizeof *flow);
+            entry->nf.iface = ctx.nf_output_iface;
         }
     }
 
@@ -5679,41 +5599,7 @@ xlate_send_packet(const struct ofport_dpif *ofport, bool oam,
                                         ofpacts.data, ofpacts.size, packet);
 }
 
-struct xlate_cache *
-xlate_cache_new(void)
-{
-    struct xlate_cache *xcache = xmalloc(sizeof *xcache);
-
-    ofpbuf_init(&xcache->entries, 512);
-    return xcache;
-}
-
-static struct xc_entry *
-xlate_cache_add_entry(struct xlate_cache *xcache, enum xc_type type)
-{
-    struct xc_entry *entry;
-
-    entry = ofpbuf_put_zeros(&xcache->entries, sizeof *entry);
-    entry->type = type;
-
-    return entry;
-}
-
-static void
-xlate_cache_netdev(struct xc_entry *entry, const struct dpif_flow_stats *stats)
-{
-    if (entry->u.dev.tx) {
-        netdev_vport_inc_tx(entry->u.dev.tx, stats);
-    }
-    if (entry->u.dev.rx) {
-        netdev_vport_inc_rx(entry->u.dev.rx, stats);
-    }
-    if (entry->u.dev.bfd) {
-        bfd_account_rx(entry->u.dev.bfd, stats);
-    }
-}
-
-static void
+void
 xlate_mac_learning_update(const struct ofproto_dpif *ofproto,
                           ofp_port_t in_port, struct eth_addr dl_src,
                           int vlan, bool is_grat_arp)
@@ -5733,148 +5619,4 @@ xlate_mac_learning_update(const struct ofproto_dpif *ofproto,
     }
 
     update_learning_table(xbridge, xbundle, dl_src, vlan, is_grat_arp);
-}
-
-/* Push stats and perform side effects of flow translation. */
-void
-xlate_push_stats(struct xlate_cache *xcache,
-                 const struct dpif_flow_stats *stats)
-{
-    struct xc_entry *entry;
-    struct ofpbuf entries = xcache->entries;
-    struct eth_addr dmac;
-
-    if (!stats->n_packets) {
-        return;
-    }
-
-    XC_ENTRY_FOR_EACH (entry, entries, xcache) {
-        switch (entry->type) {
-        case XC_RULE:
-            rule_dpif_credit_stats(entry->u.rule, stats);
-            break;
-        case XC_BOND:
-            bond_account(entry->u.bond.bond, entry->u.bond.flow,
-                         entry->u.bond.vid, stats->n_bytes);
-            break;
-        case XC_NETDEV:
-            xlate_cache_netdev(entry, stats);
-            break;
-        case XC_NETFLOW:
-            netflow_flow_update(entry->u.nf.netflow, entry->u.nf.flow,
-                                entry->u.nf.iface, stats);
-            break;
-        case XC_MIRROR:
-            mirror_update_stats(entry->u.mirror.mbridge,
-                                entry->u.mirror.mirrors,
-                                stats->n_packets, stats->n_bytes);
-            break;
-        case XC_LEARN:
-            ofproto_dpif_flow_mod(entry->u.learn.ofproto, entry->u.learn.fm);
-            break;
-        case XC_NORMAL:
-            xlate_mac_learning_update(entry->u.normal.ofproto,
-                                      entry->u.normal.in_port,
-                                      entry->u.normal.dl_src,
-                                      entry->u.normal.vlan,
-                                      entry->u.normal.is_gratuitous_arp);
-            break;
-        case XC_FIN_TIMEOUT:
-            xlate_fin_timeout__(entry->u.fin.rule, stats->tcp_flags,
-                                entry->u.fin.idle, entry->u.fin.hard);
-            break;
-        case XC_GROUP:
-            group_dpif_credit_stats(entry->u.group.group, entry->u.group.bucket,
-                                    stats);
-            break;
-        case XC_TNL_NEIGH:
-            /* Lookup neighbor to avoid timeout. */
-            tnl_neigh_lookup(entry->u.tnl_neigh_cache.br_name,
-                             &entry->u.tnl_neigh_cache.d_ipv6, &dmac);
-            break;
-        default:
-            OVS_NOT_REACHED();
-        }
-    }
-}
-
-static void
-xlate_dev_unref(struct xc_entry *entry)
-{
-    if (entry->u.dev.tx) {
-        netdev_close(entry->u.dev.tx);
-    }
-    if (entry->u.dev.rx) {
-        netdev_close(entry->u.dev.rx);
-    }
-    if (entry->u.dev.bfd) {
-        bfd_unref(entry->u.dev.bfd);
-    }
-}
-
-static void
-xlate_cache_clear_netflow(struct netflow *netflow, struct flow *flow)
-{
-    netflow_flow_clear(netflow, flow);
-    netflow_unref(netflow);
-    free(flow);
-}
-
-void
-xlate_cache_clear(struct xlate_cache *xcache)
-{
-    struct xc_entry *entry;
-    struct ofpbuf entries;
-
-    if (!xcache) {
-        return;
-    }
-
-    XC_ENTRY_FOR_EACH (entry, entries, xcache) {
-        switch (entry->type) {
-        case XC_RULE:
-            rule_dpif_unref(entry->u.rule);
-            break;
-        case XC_BOND:
-            free(entry->u.bond.flow);
-            bond_unref(entry->u.bond.bond);
-            break;
-        case XC_NETDEV:
-            xlate_dev_unref(entry);
-            break;
-        case XC_NETFLOW:
-            xlate_cache_clear_netflow(entry->u.nf.netflow, entry->u.nf.flow);
-            break;
-        case XC_MIRROR:
-            mbridge_unref(entry->u.mirror.mbridge);
-            break;
-        case XC_LEARN:
-            free(entry->u.learn.fm);
-            ofpbuf_delete(entry->u.learn.ofpacts);
-            break;
-        case XC_NORMAL:
-            break;
-        case XC_FIN_TIMEOUT:
-            /* 'u.fin.rule' is always already held as a XC_RULE, which
-             * has already released it's reference above. */
-            break;
-        case XC_GROUP:
-            group_dpif_unref(entry->u.group.group);
-            break;
-        case XC_TNL_NEIGH:
-            break;
-        default:
-            OVS_NOT_REACHED();
-        }
-    }
-
-    ofpbuf_clear(&xcache->entries);
-}
-
-void
-xlate_cache_delete(struct xlate_cache *xcache)
-{
-    xlate_cache_clear(xcache);
-    ofpbuf_uninit(&xcache->entries);
-    free(xcache);
 }

@@ -33,6 +33,7 @@
 #include "ofproto-dpif-ipfix.h"
 #include "ofproto-dpif-sflow.h"
 #include "ofproto-dpif-xlate.h"
+#include "ofproto-dpif-xlate-cache.h"
 #include "ovs-rcu.h"
 #include "packets.h"
 #include "poll-loop.h"

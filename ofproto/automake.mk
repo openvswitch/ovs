@@ -43,6 +43,8 @@ ofproto_libofproto_la_SOURCES = \
 	ofproto/ofproto-dpif-xlate.c \
 	ofproto/ofproto-dpif-xlate.h \
 	ofproto/ofproto-provider.h \
+	ofproto/ofproto-dpif-xlate-cache.c \
+	ofproto/ofproto-dpif-xlate-cache.h \
 	ofproto/pinsched.c \
 	ofproto/pinsched.h \
 	ofproto/tunnel.c \
