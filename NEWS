@@ -134,6 +134,25 @@ v2.6.0 - xx xxx xxxx
    - Add 'mtu_request' column to the Interface table. It can be used to
      configure the MTU of the ports.
 
+Known issues:
+   - Using openvswitch module in conjunction with upstream Linux tunnels:
+     * When using the openvswitch module distributed with OVS against kernel
+       versions 4.4 to 4.6, the openvswitch module cannot be loaded or used at
+       the same time as "ip_gre".
+   - Conntrack FTP ALGs: When using the openvswitch module distributed with
+     OVS, particular Linux distribution kernels versions may provide diminished
+     functionality. This typically affects active FTP data connections when
+     using "actions=ct(alg=ftp),..." in flow tables. Specifically:
+     * Centos 7.1 kernels (3.10.0-2xx) kernels are unable to correctly set
+       up expectations for FTP data connections in multiple zones,
+       eg "actions=ct(zone=1,alg=ftp),ct(zone=2,alg=ftp),...". Executing the
+       "ct" action for subsequent data connections may fail to determine that
+       the data connection is "related" to an existing connection.
+     * Centos 7.2 kernels (3.10.0-3xx) kernels may not establish FTP ALG state
+       correctly for NATed connections. As a result, flows that perform NAT,
+       eg "actions=ct(nat,ftp=alg,table=1),..." may fail to NAT the packet,
+       and will populate the "ct_state=inv" bit in the flow.
+
 
 v2.5.0 - 26 Feb 2016
 ---------------------
