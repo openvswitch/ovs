@@ -16,6 +16,14 @@ v2.6.0 - xx xxx xxxx
      * OpenFlow 1.3+ bundles are now supported for group mods as well as
        flow mods and port mods.  Both 'atomic' and 'ordered' bundle
        flags are supported for group mods as well as flow mods.
+     * Internal OpenFlow rule representation for load and set-field
+       actions is now much more memory efficient.  For a complex flow
+       table this can reduce rule memory consumption by 40%.
+     * Bundles are now much more memory efficient than in OVS 2.5.
+       Together with memory efficiency improvements in OpenFlow rule
+       representation, the peak OVS resident memory use during a
+       bundle commit for large complex set of flow mods can be only
+       25% of that in OVS 2.5 (4x lower).
      * OpenFlow 1.1+ OFPT_QUEUE_GET_CONFIG_REQUEST now supports OFPP_ANY.
      * OpenFlow 1.4+ OFPMP_QUEUE_DESC is now supported.
      * OpenFlow 1.4+ OFPT_TABLE_STATUS is now supported.
