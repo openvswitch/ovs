@@ -700,6 +700,7 @@ tap_ops_failed:
 add_proto_failed:
 	unregister_pernet_device(&ipgre_tap_net_ops);
 pnet_tap_faied:
+	pr_err("Error while initializing GRE %d\n", err);
 	return err;
 }
 
