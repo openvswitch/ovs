@@ -7590,7 +7590,7 @@ do_bundle_commit(struct ofconn *ofconn, uint32_t id, uint16_t flags)
     }
 
     /* The bundle is discarded regardless the outcome. */
-    ofp_bundle_remove__(ofconn, bundle, !error);
+    ofp_bundle_remove__(ofconn, bundle);
     return error;
 }
 

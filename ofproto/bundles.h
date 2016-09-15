@@ -83,7 +83,7 @@ enum ofperr ofp_bundle_add_message(struct ofconn *, uint32_t id,
                                    uint16_t flags, struct ofp_bundle_entry *,
                                    const struct ofp_header *);
 
-void ofp_bundle_remove__(struct ofconn *, struct ofp_bundle *, bool success);
+void ofp_bundle_remove__(struct ofconn *, struct ofp_bundle *);
 
 static inline struct ofp_bundle_entry *
 ofp_bundle_entry_alloc(enum ofptype type, const struct ofp_header *oh)
