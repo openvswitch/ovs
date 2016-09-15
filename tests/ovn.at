@@ -4358,6 +4358,73 @@ OVN_CLEANUP([hv1])
 
 AT_CLEANUP
 
+# 1 hypervisor, 1 port
+# make sure that the OF rules created to support a datapath are added/cleared
+# when logical switch is created and removed.
+AT_SETUP([ovn -- datapath rules added/removed])
+AT_KEYWORDS([ovn datapath cleanup])
+ovn_start
+
+net_add n1
+sim_add hv1
+as hv1 ovs-vsctl add-br br-phys
+as hv1 ovn_attach n1 br-phys 192.168.0.1
+
+# This shell function checks if OF rules in br-int have clauses
+# related to OVN datapaths. The caller determines if it should find
+# a match in the output, or not.
+#
+# EXPECT_DATAPATH param determines whether flows that refer to
+#                 datapath to should be present or not. 0 means
+#                 they should not be.
+# STAGE_INFO param is a simple string to help identify the stage
+#            in the test when this function was invoked.
+test_datapath_in_of_rules() {
+    local expect_datapath=$1 stage_info=$2
+    echo "------ ovn-nbctl show ${stage_info} ------"
+    ovn-nbctl show
+    echo "------ ovn-sbctl show ${stage_info} ------"
+    ovn-sbctl show
+    echo "------ OF rules ${stage_info} ------"
+    AT_CHECK([ovs-ofctl dump-flows br-int], [0], [stdout])
+    # if there is a datapath mentioned in the output, check for the
+    # magic keyword that represents one, based on the exit status of
+    # a quiet grep
+    if test $expect_datapath != 0; then
+       AT_CHECK([grep --quiet -i 'metadata=' stdout], [0], [ignore-nolog])
+    else
+       AT_CHECK([grep --quiet -i 'metadata=' stdout], [1], [ignore-nolog])
+    fi
+}
+
+test_datapath_in_of_rules 0 "before ls+port create"
+
+ovn-nbctl ls-add ls1
+ovn-nbctl lsp-add ls1 lp1
+ovn-nbctl lsp-set-addresses lp1 unknown
+
+as hv1 ovs-vsctl add-port br-int vif1 -- set Interface vif1 external-ids:iface-id=lp1
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up lp1` = xup])
+
+test_datapath_in_of_rules 1 "after port is bound"
+
+as hv1 ovs-vsctl del-port br-int vif1
+OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up lp1` = xdown])
+
+ovn-nbctl lsp-set-addresses lp1
+ovn-nbctl lsp-del lp1
+ovn-nbctl ls-del ls1
+
+# wait for earlier changes to take effect
+AT_CHECK([ovn-nbctl --timeout=3 --wait=sb sync], [0], [ignore])
+
+# ensure OF rules are no longer present. There used to be a bug here.
+test_datapath_in_of_rules 0 "after lport+ls removal"
+
+OVN_CLEANUP([hv1])
+
+AT_CLEANUP
+
 AT_SETUP([ovn -- nd_na ])
 AT_KEYWORDS([ovn-nd_na])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
