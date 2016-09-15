@@ -2259,6 +2259,7 @@ out3:
 out2:
 	unregister_pernet_subsys(&vxlan_net_ops);
 out1:
+	pr_err("Error while initializing VxLAN %d\n", rc);
 	return rc;
 }
 

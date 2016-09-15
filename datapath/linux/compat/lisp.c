@@ -783,6 +783,7 @@ int rpl_lisp_init_module(void)
 out2:
 	unregister_pernet_subsys(&lisp_net_ops);
 out1:
+	pr_err("Error while initializing LISP %d\n", rc);
 	return rc;
 }
 

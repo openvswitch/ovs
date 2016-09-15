@@ -2101,6 +2101,7 @@ int stt_init_module(void)
 out2:
 	unregister_pernet_subsys(&stt_net_ops);
 out1:
+	pr_err("Error while initializing STT %d\n", rc);
 	return rc;
 }
 

@@ -1711,6 +1711,7 @@ out3:
 out2:
 	unregister_pernet_subsys(&geneve_net_ops);
 out1:
+	pr_err("Error while initializing GENEVE %d\n", rc);
 	return rc;
 }
 
