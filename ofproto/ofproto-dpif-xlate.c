@@ -3062,7 +3062,6 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
         ofpbuf_use_stub(&ctx->stack, new_stack, sizeof new_stack);
         ofpbuf_use_stub(&ctx->action_set, actset_stub, sizeof actset_stub);
-        ctx->xbridge = peer->xbridge;
         flow->in_port.ofp_port = peer->ofp_port;
         flow->metadata = htonll(0);
         memset(&flow->tunnel, 0, sizeof flow->tunnel);
@@ -3070,6 +3069,26 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         flow->actset_output = OFPP_UNSET;
         ctx->conntracked = false;
         clear_conntrack(flow);
+
+        /* When the patch port points to a different bridge, then the mirrors
+         * for that bridge clearly apply independently to the packet, so we
+         * reset the mirror bitmap to zero and then restore it after the packet
+         * returns.
+         *
+         * When the patch port points to the same bridge, this is more of a
+         * design decision: can mirrors be re-applied to the packet after it
+         * re-enters the bridge, or should we treat that as doubly mirroring a
+         * single packet?  The former may be cleaner, since it respects the
+         * model in which a patch port is like a physical cable plugged from
+         * one switch port to another, but the latter may be less surprising to
+         * users.  We take the latter choice, for now at least.  (To use the
+         * former choice, hard-code 'independent_mirrors' to "true".) */
+        mirror_mask_t old_mirrors = ctx->mirrors;
+        bool independent_mirrors = peer->xbridge != ctx->xbridge;
+        if (independent_mirrors) {
+            ctx->mirrors = 0;
+        }
+        ctx->xbridge = peer->xbridge;
 
         /* The bridge is now known so obtain its table version. */
         ctx->tables_version
@@ -3089,10 +3108,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                  * the learning action look at the packet, then drop it. */
                 struct flow old_base_flow = ctx->base_flow;
                 size_t old_size = ctx->odp_actions->size;
-                mirror_mask_t old_mirrors = ctx->mirrors;
+                mirror_mask_t old_mirrors2 = ctx->mirrors;
 
                 xlate_table_action(ctx, flow->in_port.ofp_port, 0, true, true);
-                ctx->mirrors = old_mirrors;
+                ctx->mirrors = old_mirrors2;
                 ctx->base_flow = old_base_flow;
                 ctx->odp_actions->size = old_size;
 
@@ -3101,6 +3120,9 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             }
         }
 
+        if (independent_mirrors) {
+            ctx->mirrors = old_mirrors;
+        }
         ctx->xin->flow = old_flow;
         ctx->xbridge = xport->xbridge;
         ofpbuf_uninit(&ctx->action_set);
