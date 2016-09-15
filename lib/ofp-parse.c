@@ -585,7 +585,8 @@ parse_ofp_packet_out_str__(struct ofputil_packet_out *po, char *string,
                 error = xasprintf("%s is not a valid OpenFlow port", value);
                 goto out;
             }
-            if (po->in_port > OFPP_MAX && po->in_port != OFPP_LOCAL
+            if (ofp_to_u16(po->in_port) > ofp_to_u16(OFPP_MAX)
+                && po->in_port != OFPP_LOCAL
                 && po->in_port != OFPP_NONE
                 && po->in_port != OFPP_CONTROLLER) {
                 error = xasprintf(
