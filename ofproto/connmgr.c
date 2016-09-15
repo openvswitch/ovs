@@ -1210,7 +1210,7 @@ bundle_remove_all(struct ofconn *ofconn)
     struct ofp_bundle *b, *next;
 
     HMAP_FOR_EACH_SAFE (b, next, node, &ofconn->bundles) {
-        ofp_bundle_remove__(ofconn, b, false);
+        ofp_bundle_remove__(ofconn, b);
     }
 }
 
@@ -1223,7 +1223,7 @@ bundle_remove_expired(struct ofconn *ofconn, long long int now)
     HMAP_FOR_EACH_SAFE (b, next, node, &ofconn->bundles) {
         if (b->used <= limit) {
             ofconn_send_error(ofconn, &b->ofp_msg, OFPERR_OFPBFC_TIMEOUT);
-            ofp_bundle_remove__(ofconn, b, false);
+            ofp_bundle_remove__(ofconn, b);
         }
     }
 }
