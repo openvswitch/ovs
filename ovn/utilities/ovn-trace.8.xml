@@ -114,9 +114,10 @@
   <p>
     The detailed form of output is also the default form.  This form groups
     output into sections headed up by the ingress or egress pipeline being
-    traversed.  Each pipeline lists each table that was visited (by number
-    and name), the match expression and priority of the logical flow that was
-    matched, and the actions that were executed.
+    traversed.  Each pipeline lists each table that was visited (by number and
+    name), the <code>ovn-northd</code> source file and line number of the code
+    that added the flow, the match expression and priority of the logical flow
+    that was matched, and the actions that were executed.
   </p>
 
   <p>

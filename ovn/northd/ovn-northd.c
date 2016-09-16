@@ -1635,6 +1635,7 @@ struct ovn_lflow {
     uint16_t priority;
     char *match;
     char *actions;
+    const char *where;
 };
 
 static size_t
@@ -1658,29 +1659,35 @@ ovn_lflow_equal(const struct ovn_lflow *a, const struct ovn_lflow *b)
 
 static void
 ovn_lflow_init(struct ovn_lflow *lflow, struct ovn_datapath *od,
-              enum ovn_stage stage, uint16_t priority,
-              char *match, char *actions)
+               enum ovn_stage stage, uint16_t priority,
+               char *match, char *actions, const char *where)
 {
     lflow->od = od;
     lflow->stage = stage;
     lflow->priority = priority;
     lflow->match = match;
     lflow->actions = actions;
+    lflow->where = where;
 }
 
 /* Adds a row with the specified contents to the Logical_Flow table. */
 static void
-ovn_lflow_add(struct hmap *lflow_map, struct ovn_datapath *od,
-              enum ovn_stage stage, uint16_t priority,
-              const char *match, const char *actions)
+ovn_lflow_add_at(struct hmap *lflow_map, struct ovn_datapath *od,
+                 enum ovn_stage stage, uint16_t priority,
+                 const char *match, const char *actions, const char *where)
 {
     ovs_assert(ovn_stage_to_datapath_type(stage) == ovn_datapath_get_type(od));
 
     struct ovn_lflow *lflow = xmalloc(sizeof *lflow);
     ovn_lflow_init(lflow, od, stage, priority,
-                   xstrdup(match), xstrdup(actions));
+                   xstrdup(match), xstrdup(actions), where);
     hmap_insert(lflow_map, &lflow->hmap_node, ovn_lflow_hash(lflow));
 }
+
+/* Adds a row with the specified contents to the Logical_Flow table. */
+#define ovn_lflow_add(LFLOW_MAP, OD, STAGE, PRIORITY, MATCH, ACTIONS) \
+    ovn_lflow_add_at(LFLOW_MAP, OD, STAGE, PRIORITY, MATCH, ACTIONS,  \
+                     OVS_SOURCE_LOCATOR)
 
 static struct ovn_lflow *
 ovn_lflow_find(struct hmap *lflows, struct ovn_datapath *od,
@@ -1689,7 +1696,8 @@ ovn_lflow_find(struct hmap *lflows, struct ovn_datapath *od,
 {
     struct ovn_lflow target;
     ovn_lflow_init(&target, od, stage, priority,
-                   CONST_CAST(char *, match), CONST_CAST(char *, actions));
+                   CONST_CAST(char *, match), CONST_CAST(char *, actions),
+                   NULL);
 
     struct ovn_lflow *lflow;
     HMAP_FOR_EACH_WITH_HASH (lflow, hmap_node, ovn_lflow_hash(&target),
@@ -4337,8 +4345,22 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
         sbrec_logical_flow_set_match(sbflow, lflow->match);
         sbrec_logical_flow_set_actions(sbflow, lflow->actions);
 
-        const struct smap ids = SMAP_CONST1(&ids, "stage-name",
-                                            ovn_stage_to_str(lflow->stage));
+        /* Trim the source locator lflow->where, which looks something like
+         * "ovn/northd/ovn-northd.c:1234", down to just the part following the
+         * last slash, e.g. "ovn-northd.c:1234". */
+        const char *slash = strrchr(lflow->where, '/');
+#if _WIN32
+        const char *backslash = strrchr(lflow->where, '\\');
+        if (!slash || backslash > slash) {
+            slash = backslash;
+        }
+#endif
+        const char *where = slash ? slash + 1 : lflow->where;
+
+        const struct smap ids = SMAP_CONST2(
+            &ids,
+            "stage-name", ovn_stage_to_str(lflow->stage),
+            "source", where);
         sbrec_logical_flow_set_external_ids(sbflow, &ids);
 
         ovn_lflow_destroy(&lflows, lflow);
