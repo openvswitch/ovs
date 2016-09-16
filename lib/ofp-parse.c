@@ -1733,10 +1733,6 @@ parse_ofp_group_mod_str(struct ofputil_group_mod *gm, int command,
     char *error = parse_ofp_group_mod_str__(gm, command, string,
                                             usable_protocols);
     free(string);
-
-    if (error) {
-        ofputil_uninit_group_mod(gm);
-    }
     return error;
 }
 
