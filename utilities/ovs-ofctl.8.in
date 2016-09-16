@@ -2887,14 +2887,14 @@ when using Open vSwitch 2.4 and later with OpenFlow 1.5 and later.
 .IP \fBfields\fR=\fIfield\fR
 .IQ \fBfields(\fIfield\fR[\fB=\fImask\fR]\fR...\fB)\fR
 The field parameters to selection method selected by the
-\fBselection_method\fR field.  The syntax is described in \fBFlow Syntax\fR
-with the additional restrictions that if a value is provided it is
-treated as a wildcard mask and wildcard masks following a slash are
-prohibited. The pre-requisites of fields must be provided by any flows that
-output to the group. The use of the fields is defined by the lower-layer
-that implements the \fBselection_method\fR.  They are optional if the
-\fBselection_method\fR field is specified as a non-empty string.
-Prohibited otherwise. The default is no fields.
+\fBselection_method\fR field.  The syntax is described in \fBFlow
+Syntax\fR with the additional restrictions that if a value is provided
+it is treated as a wildcard mask and wildcard masks following a slash
+are prohibited. The pre-requisites of fields must be provided by any
+flows that output to the group.  The use of the fields is defined by
+the lower-layer that implements the \fBselection_method\fR.  They are
+optional if the \fBselection_method\fR field is specified as ``hash',
+prohibited otherwise.  The default is no fields.
 .IP
 This option will use a Netronome OpenFlow extension which is only supported
 when using Open vSwitch 2.4 and later with OpenFlow 1.5 and later.
