@@ -429,6 +429,7 @@ AT_DATA([groups.txt], [dnl
 group_id=1233,type=select,selection_method=hash,bucket=output:10,bucket=output:11
 group_id=1234,type=select,selection_method=hash,fields(eth_dst,ip_dst,tcp_dst),bucket=output:10,bucket=output:11
 group_id=1235,type=all,bucket=actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+group_id=1236,type=select,selection_method=dp_hash,bucket=output:10,bucket=output:11
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn add-groups br0 groups.txt])
 AT_CHECK([ovs-ofctl -F OXM-OpenFlow15 -O OpenFlow15 -vwarn dump-groups br0 1234], [0], [stdout])
@@ -441,6 +442,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([strip_xids < stdout | sort], [0], [dnl
  group_id=1233,type=select,selection_method=hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
  group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+ group_id=1236,type=select,selection_method=dp_hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
 OFPST_GROUP_DESC reply (OF1.5):
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn del-groups br0 group_id=1234])
@@ -448,6 +450,7 @@ AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn dump-groups br0], [0], [stdout])
 AT_CHECK([strip_xids < stdout | sort], [0], [dnl
  group_id=1233,type=select,selection_method=hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
  group_id=1235,type=all,bucket=bucket_id:2,actions=output:12,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
+ group_id=1236,type=select,selection_method=dp_hash,bucket=bucket_id:0,actions=output:10,bucket=bucket_id:1,actions=output:11
 OFPST_GROUP_DESC reply (OF1.5):
 ])
 AT_CHECK([ovs-ofctl -O OpenFlow15 -vwarn del-groups br0], [0])

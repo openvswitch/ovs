@@ -2867,9 +2867,41 @@ This is a string of 1 to 15 bytes in length known to lower layers.
 This field is optional for \fBadd\-group\fR, \fBadd\-groups\fR and
 \fBmod\-group\fR commands on groups of type \fBselect\fR. Prohibited
 otherwise. The default value is the empty string.
+.RS
+.IP \fBhash\fR
+Use a hash computed over the fields specified with the \fBfields\fR
+option, see below.  \fBhash\fR uses the \fBselection_method_param\fR
+as the hash basis.
 .IP
-Other than the empty string, \fBhash\fR is currently the only defined
-selection method.
+Note that the hashed fields become exact matched by the datapath
+flows.  For example, if the TCP source port is hashed, the created
+datapath flows will match the specific TCP source port value present
+in the packet received.  Since each TCP connection generally has a
+different source port value, a separate datapath flow will be need to
+be inserted for each TCP connection thus hashed to a select group
+bucket.
+.IP \fBdp_hash\fR
+Use a datapath computed hash value.  The hash algorithm varies accross
+different datapath implementations.  \fBdp_hash\fR uses the upper 32
+bits of the \fBselection_method_param\fR as the datapath hash
+algorithm selector, which currently must always be 0, corresponding to
+hash computation over the IP 5-tuple (selecting specific fields with
+the \fBfields\fR option is not allowed with \fBdp_hash\fR).  The lower
+32 bits are used as the hash basis.
+.IP
+Using \fBdp_hash\fR has the advantage that it does not require the
+generated datapath flows to exact match any additional packet header
+fields.  For example, even if multiple TCP connections thus hashed to
+different select group buckets have different source port numbers,
+generally all of them would be handled with a small set of already
+established datapath flows, resulting in less latency for TCP SYN
+packets.  The downside is that the shared datapath flows must match
+each packet twice, as the datapath hash value calculation happens only
+when needed, and a second match is required to match some bits of its
+value.  This double-matching incurs a small additional latency cost
+for each packet, but this latency is orders of magnitude less than the
+latency of creating new datapath flows for new TCP connections.
+.RE
 .IP
 This option will use a Netronome OpenFlow extension which is only supported
 when using Open vSwitch 2.4 and later with OpenFlow 1.5 and later.

@@ -5,6 +5,14 @@ Post-v2.6.0
      not accurate.
    - OpenFlow:
      * OFPT_PACKET_OUT messages are now supported in bundles.
+     * A new "selection_method=dp_hash" type for OpenFlow select group
+       bucket selection that uses the datapath computed 5-tuple hash
+       without making datapath flows match the 5-tuple fields, which
+       is useful for more efficient load balancing, for example.  This
+       uses the Netronome extension to OpenFlow 1.5+ that allows
+       control over the OpenFlow select groups selection method.  See
+       "selection_method" and related options in ovs-ofctl(8) for
+       details.
    - ovs-ofctl:
      * 'bundle' command now supports packet-out messages.
      * New syntax for 'ovs-ofctl packet-out' command, which uses the

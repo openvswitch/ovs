@@ -145,8 +145,8 @@ void group_dpif_credit_stats(struct group_dpif *,
 struct group_dpif *group_dpif_lookup(struct ofproto_dpif *ofproto,
                                      uint32_t group_id, ovs_version_t version,
                                      bool take_ref);
-const struct ovs_list *group_dpif_get_buckets(const struct group_dpif *group);
-
+const struct ovs_list *group_dpif_get_buckets(const struct group_dpif *group,
+                                              uint32_t *n_buckets);
 enum ofp11_group_type group_dpif_get_type(const struct group_dpif *group);
 const char *group_dpif_get_selection_method(const struct group_dpif *group);
 uint64_t group_dpif_get_selection_method_param(const struct group_dpif *group);

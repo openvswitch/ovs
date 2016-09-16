@@ -8904,28 +8904,24 @@ parse_group_prop_ntr_selection_method(struct ofpbuf *payload,
         return OFPERR_OFPBPC_BAD_VALUE;
     }
 
-    if (strcmp("hash", prop->selection_method)) {
+    if (strcmp("hash", prop->selection_method)
+        && strcmp("dp_hash", prop->selection_method)) {
         OFPPROP_LOG(&bad_ofmsg_rl, false,
                     "ntr selection method '%s' is not supported",
                     prop->selection_method);
         return OFPERR_OFPBPC_BAD_VALUE;
     }
+    /* 'method_len' is now non-zero. */
 
     strcpy(gp->selection_method, prop->selection_method);
     gp->selection_method_param = ntohll(prop->selection_method_param);
 
-    if (!method_len && gp->selection_method_param) {
-        OFPPROP_LOG(&bad_ofmsg_rl, false, "ntr selection method parameter is "
-                    "non-zero but selection method is empty");
-        return OFPERR_OFPBPC_BAD_VALUE;
-    }
-
     ofpbuf_pull(payload, sizeof *prop);
 
     fields_len = ntohs(prop->length) - sizeof *prop;
-    if (!method_len && fields_len) {
-        OFPPROP_LOG(&bad_ofmsg_rl, false, "ntr selection method parameter is "
-                    "zero but fields are provided");
+    if (fields_len && strcmp("hash", gp->selection_method)) {
+        OFPPROP_LOG(&bad_ofmsg_rl, false, "ntr selection method %s "
+                    "does not support fields", gp->selection_method);
         return OFPERR_OFPBPC_BAD_VALUE;
     }
 

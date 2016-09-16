@@ -462,6 +462,44 @@ ovs-ofctl: selection_method_param is only allowed with "selection_method"
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - select group with dp_hash selection method])
+OVS_VSWITCHD_START
+add_of_ports br0 1 10 11
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 'group_id=1234,type=select,selection_method=dp_hash,bucket=output:10,bucket=output:11'])
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-flow br0 'ip,nw_src=192.168.0.1 actions=group:1234'])
+
+# Try a bunch of different flows and make sure that they get distributed
+# at least somewhat.
+for d in 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+    pkt="in_port(1),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:01),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.1.$d,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 $pkt])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/dp_hash(.*\/0x1)/dp_hash(0xXXXX\/0x1)/' | sed 's/packets.*actions:1/actions:1/' | strip_ufid | strip_used | sort], [0], [dnl
+flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), packets:15, bytes:630, used:0.0s, actions:hash(hash_l4(0)),recirc(0x1)
+recirc_id(0x1),dp_hash(0xXXXX/0x1),in_port(1),eth_type(0x0800),ipv4(frag=no), actions:10
+recirc_id(0x1),dp_hash(0xXXXX/0x1),in_port(1),eth_type(0x0800),ipv4(frag=no), actions:11
+])
+
+AT_CHECK([ovs-appctl revalidator/purge], [0])
+
+# Try a bunch of different flows and make sure that they are not distributed
+# as they only vary a field that is not hashed
+for d in 0 1 2 3 4 5 6 7 8 9 a b c d e f; do
+    pkt="in_port(1),eth(src=50:54:00:00:00:$d,dst=50:54:00:00:00:07),eth_type(0x0800),ipv4(src=192.168.0.1,dst=192.168.0.2,proto=1,tos=0,ttl=128,frag=no),icmp(type=8,code=0)"
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 $pkt])
+done
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/dp_hash(.*\/0x1)/dp_hash(0xXXXX\/0x1)/' | strip_ufid | strip_used | sort], [0], [dnl
+flow-dump from non-dpdk interfaces:
+recirc_id(0),in_port(1),eth_type(0x0800),ipv4(src=192.168.0.1,frag=no), packets:15, bytes:630, used:0.0s, actions:hash(hash_l4(0)),recirc(0x2)
+recirc_id(0x2),dp_hash(0xXXXX/0x1),in_port(1),eth_type(0x0800),ipv4(frag=no), packets:15, bytes:630, used:0.0s, actions:11
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - fast failover group])
 OVS_VSWITCHD_START
 add_of_ports br0 1 10 11

@@ -346,6 +346,11 @@ struct xlate_ctx {
     * case at that point.
     */
     bool freezing;
+    bool recirc_update_dp_hash;    /* Generated recirculation will be preceded
+                                    * by datapath HASH action to get an updated
+                                    * dp_hash after recirculation. */
+    uint32_t dp_hash_alg;
+    uint32_t dp_hash_basis;
     struct ofpbuf frozen_actions;
     const struct ofpact_controller *pause;
 
@@ -408,6 +413,17 @@ ctx_trigger_freeze(struct xlate_ctx *ctx)
     ctx->freezing = true;
 }
 
+static void
+ctx_trigger_recirculate_with_hash(struct xlate_ctx *ctx, uint32_t type,
+                                  uint32_t basis)
+{
+    ctx->exit = true;
+    ctx->freezing = true;
+    ctx->recirc_update_dp_hash = true;
+    ctx->dp_hash_alg = type;
+    ctx->dp_hash_basis = basis;
+}
+
 static bool
 ctx_first_frozen_action(const struct xlate_ctx *ctx)
 {
@@ -419,6 +435,7 @@ ctx_cancel_freeze(struct xlate_ctx *ctx)
 {
     if (ctx->freezing) {
         ctx->freezing = false;
+        ctx->recirc_update_dp_hash = false;
         ofpbuf_clear(&ctx->frozen_actions);
         ctx->frozen_actions.header = NULL;
     }
@@ -1465,7 +1482,7 @@ group_first_live_bucket(const struct xlate_ctx *ctx,
     struct ofputil_bucket *bucket;
     const struct ovs_list *buckets;
 
-    buckets = group_dpif_get_buckets(group);
+    buckets = group_dpif_get_buckets(group, NULL);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         if (bucket_is_alive(ctx, bucket, depth)) {
             return bucket;
@@ -1486,7 +1503,7 @@ group_best_live_bucket(const struct xlate_ctx *ctx,
     struct ofputil_bucket *bucket;
     const struct ovs_list *buckets;
 
-    buckets = group_dpif_get_buckets(group);
+    buckets = group_dpif_get_buckets(group, NULL);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         if (bucket_is_alive(ctx, bucket, 0)) {
             uint32_t score =
@@ -3286,7 +3303,7 @@ xlate_all_group(struct xlate_ctx *ctx, struct group_dpif *group)
     struct ofputil_bucket *bucket;
     const struct ovs_list *buckets;
 
-    buckets = group_dpif_get_buckets(group);
+    buckets = group_dpif_get_buckets(group, NULL);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         xlate_group_bucket(ctx, bucket);
     }
@@ -3377,6 +3394,40 @@ xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 }
 
 static void
+xlate_dp_hash_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
+{
+    struct ofputil_bucket *bucket;
+
+    /* dp_hash value 0 is special since it means that the dp_hash has not been
+     * computed, as all computed dp_hash values are non-zero.  Therefore
+     * compare to zero can be used to decide if the dp_hash value is valid
+     * without masking the dp_hash field. */
+    if (!ctx->xin->flow.dp_hash) {
+        uint64_t param = group_dpif_get_selection_method_param(group);
+
+        ctx_trigger_recirculate_with_hash(ctx, param >> 32, (uint32_t)param);
+    } else {
+        uint32_t n_buckets;
+
+        group_dpif_get_buckets(group, &n_buckets);
+        if (n_buckets) {
+            /* Minimal mask to cover the number of buckets. */
+            uint32_t mask = (1 << log_2_ceil(n_buckets)) - 1;
+            /* Multiplier chosen to make the trivial 1 bit case to
+             * actually distribute amongst two equal weight buckets. */
+            uint32_t basis = 0xc2b73583 * (ctx->xin->flow.dp_hash & mask);
+
+            ctx->wc->masks.dp_hash |= mask;
+            bucket = group_best_live_bucket(ctx, group, basis);
+            if (bucket) {
+                xlate_group_bucket(ctx, bucket);
+                xlate_group_stats(ctx, group, bucket);
+            }
+        }
+    }
+}
+
+static void
 xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
     const char *selection_method = group_dpif_get_selection_method(group);
@@ -3392,6 +3443,8 @@ xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
         xlate_default_select_group(ctx, group);
     } else if (!strcasecmp("hash", selection_method)) {
         xlate_hash_fields_select_group(ctx, group);
+    } else if (!strcasecmp("dp_hash", selection_method)) {
+        xlate_dp_hash_select_group(ctx, group);
     } else {
         /* Parsing of groups should ensure this never happens */
         OVS_NOT_REACHED();
@@ -3650,6 +3703,16 @@ finish_freezing__(struct xlate_ctx *ctx, uint8_t table)
         }
         recirc_refs_add(&ctx->xout->recircs, id);
 
+        if (ctx->recirc_update_dp_hash) {
+            struct ovs_action_hash *act_hash;
+
+            /* Hash action. */
+            act_hash = nl_msg_put_unspec_uninit(ctx->odp_actions,
+                                                OVS_ACTION_ATTR_HASH,
+                                                sizeof *act_hash);
+            act_hash->hash_alg = OVS_HASH_ALG_L4;  /* Make configurable. */
+            act_hash->hash_basis = 0;              /* Make configurable. */
+        }
         nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC, id);
     }
 
@@ -5257,6 +5320,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .mirrors = 0,
 
         .freezing = false,
+        .recirc_update_dp_hash = false,
         .frozen_actions = OFPBUF_STUB_INITIALIZER(frozen_actions_stub),
         .pause = NULL,
 

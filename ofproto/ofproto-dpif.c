@@ -4500,7 +4500,7 @@ group_construct_stats(struct group_dpif *group)
     group->packet_count = 0;
     group->byte_count = 0;
 
-    buckets = group_dpif_get_buckets(group);
+    buckets = group_dpif_get_buckets(group, NULL);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         bucket->stats.packet_count = 0;
         bucket->stats.byte_count = 0;
@@ -4521,7 +4521,7 @@ group_dpif_credit_stats(struct group_dpif *group,
     } else { /* Credit to all buckets */
         const struct ovs_list *buckets;
 
-        buckets = group_dpif_get_buckets(group);
+        buckets = group_dpif_get_buckets(group, NULL);
         LIST_FOR_EACH (bucket, list_node, buckets) {
             bucket->stats.packet_count += stats->n_packets;
             bucket->stats.byte_count += stats->n_bytes;
@@ -4569,7 +4569,7 @@ group_get_stats(const struct ofgroup *group_, struct ofputil_group_stats *ogs)
     ogs->packet_count = group->packet_count;
     ogs->byte_count = group->byte_count;
 
-    buckets = group_dpif_get_buckets(group);
+    buckets = group_dpif_get_buckets(group, NULL);
     bucket_stats = ogs->bucket_stats;
     LIST_FOR_EACH (bucket, list_node, buckets) {
         bucket_stats->packet_count = bucket->stats.packet_count;
@@ -4595,8 +4595,11 @@ group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
 }
 
 const struct ovs_list *
-group_dpif_get_buckets(const struct group_dpif *group)
+group_dpif_get_buckets(const struct group_dpif *group, uint32_t *n_buckets)
 {
+    if (n_buckets) {
+        *n_buckets = group->up.n_buckets;
+    }
     return &group->up.buckets;
 }
 
