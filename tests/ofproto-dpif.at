@@ -449,6 +449,16 @@ AT_CHECK([sort results | uniq | sed 's/1[[01]]/1?/'], [0],
   [Datapath actions: 1?
 ])
 
+# Check that fields are rejected without "selection_method=hash".
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 'group_id=1235,type=select,fields(eth_dst,ip_dst,tcp_dst),bucket=output:10,bucket=output:11'], 1, [], [dnl
+ovs-ofctl: fields may only be specified with "selection_method=hash"
+])
+
+# Check that selection_method_param without selection_method is rejected.
+AT_CHECK([ovs-ofctl -O OpenFlow15 add-group br0 'group_id=1235,type=select,selection_method_param=1,bucket=output:10,bucket=output:11'], 1, [], [dnl
+ovs-ofctl: selection_method_param is only allowed with "selection_method"
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 

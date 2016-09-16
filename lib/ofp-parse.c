@@ -1566,6 +1566,18 @@ parse_ofp_group_mod_str__(struct ofputil_group_mod *gm, int command,
         goto out;
     }
 
+    /* Exclude fields for non "hash" selection method. */
+    if (strcmp(gm->props.selection_method, "hash") &&
+        gm->props.fields.values_size) {
+        error = xstrdup("fields may only be specified with \"selection_method=hash\"");
+        goto out;
+    }
+    /* Exclude selection_method_param if no selection_method is given. */
+    if (gm->props.selection_method[0] == 0
+        && gm->props.selection_method_param != 0) {
+        error = xstrdup("selection_method_param is only allowed with \"selection_method\"");
+        goto out;
+    }
     if (fields & F_COMMAND_BUCKET_ID) {
         if (!(fields & F_COMMAND_BUCKET_ID_ALL || had_command_bucket_id)) {
             error = xstrdup("must specify a command bucket id");
