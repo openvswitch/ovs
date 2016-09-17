@@ -363,6 +363,7 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
                     netdev_change_seq_changed(netdev);
                 } else {
                     ovs_refcount_unref(&rc->refcnt);
+                    seq_destroy(netdev->reconfigure_seq);
                     free(netdev->name);
                     ovs_assert(ovs_list_is_empty(&netdev->saved_flags_list));
                     shash_delete(&netdev_shash, netdev->node);
