@@ -45,7 +45,7 @@ SCRIPT
 
 $test_kmod = <<SCRIPT
 cd ~/build
-make check-kmod
+make check-kmod RECHECK=yes
 SCRIPT
 
 $install_rpm = <<SCRIPT
@@ -81,7 +81,7 @@ SCRIPT
 
 $test_ovs_system_userspace = <<SCRIPT
 cd ~/build
-make check-system-userspace
+make check-system-userspace RECHECK=yes
 SCRIPT
 
 Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
