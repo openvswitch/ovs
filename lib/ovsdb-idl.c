@@ -3193,9 +3193,7 @@ ovsdb_idl_txn_write_clone(const struct ovsdb_idl_row *row,
  * prerequisite to completing the transaction.  That is, if 'column' in 'row_'
  * changed (or if 'row_' was deleted) between the time that the IDL originally
  * read its contents and the time that the transaction commits, then the
- * transaction aborts and ovsdb_idl_txn_commit() returns TXN_AGAIN_WAIT or
- * TXN_AGAIN_NOW (depending on whether the database change has already been
- * received).
+ * transaction aborts and ovsdb_idl_txn_commit() returns TXN_TRY_AGAIN.
  *
  * The intention is that, to ensure that no transaction commits based on dirty
  * reads, an application should call ovsdb_idl_txn_verify() on each data item

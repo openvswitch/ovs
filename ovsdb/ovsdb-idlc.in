@@ -593,9 +593,7 @@ bool
  * verified as a prerequisite to completing the transaction.  That is, if
  * "%(c)s" in 'row' changed (or if 'row' was deleted) between the
  * time that the IDL originally read its contents and the time that the
- * transaction commits, then the transaction aborts and ovsdb_idl_txn_commit()
- * returns TXN_AGAIN_WAIT or TXN_AGAIN_NOW (depending on whether the database
- * change has already been received).
+ * transaction aborts and ovsdb_idl_txn_commit() returns TXN_TRY_AGAIN.
  *
  * The intention is that, to ensure that no transaction commits based on dirty
  * reads, an application should call this function any time "%(c)s" is
