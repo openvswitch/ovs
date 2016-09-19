@@ -4253,11 +4253,15 @@ ovnnb_db_run(struct northd_context *ctx, struct ovsdb_idl_loop *sb_loop)
      *
      * Also set up to update sb_cfg once our southbound transaction commits. */
     const struct nbrec_nb_global *nb = nbrec_nb_global_first(ctx->ovnnb_idl);
-    const struct sbrec_sb_global *sb = sbrec_sb_global_first(ctx->ovnsb_idl);
-    if (nb && sb) {
-        sbrec_sb_global_set_nb_cfg(sb, nb->nb_cfg);
-        sb_loop->next_cfg = nb->nb_cfg;
+    if (!nb) {
+        nb = nbrec_nb_global_insert(ctx->ovnnb_txn);
     }
+    const struct sbrec_sb_global *sb = sbrec_sb_global_first(ctx->ovnsb_idl);
+    if (!sb) {
+        sb = sbrec_sb_global_insert(ctx->ovnsb_txn);
+    }
+    sbrec_sb_global_set_nb_cfg(sb, nb->nb_cfg);
+    sb_loop->next_cfg = nb->nb_cfg;
 
     cleanup_macam(&macam);
 }
