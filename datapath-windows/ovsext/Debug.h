@@ -43,8 +43,8 @@
 #define OVS_DBG_CONTRK   BIT32(23)
 #define OVS_DBG_GENEVE   BIT32(24)
 
-#define OVS_DBG_RESERVED BIT32(31)
-//Please add above OVS_DBG_RESERVED.
+#define OVS_DBG_LAST     24  /* Set this to the last defined module number. */
+/* Please add above OVS_DBG_LAST. */
 
 #define OVS_DBG_ERROR    DPFLTR_ERROR_LEVEL
 #define OVS_DBG_WARN     DPFLTR_WARNING_LEVEL

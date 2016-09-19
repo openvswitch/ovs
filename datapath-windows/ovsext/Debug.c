@@ -25,6 +25,7 @@
 
 UINT32  ovsLogFlags = 0xffffffff;
 UINT32  ovsLogLevel = OVS_DBG_DEFAULT;
+BUILD_ASSERT(OVS_DBG_LAST < 31); /* 'ovsLogLevel' is 32 bits. */
 
 #define OVS_LOG_BUFFER_SIZE 384
 
