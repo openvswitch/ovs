@@ -543,6 +543,8 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
         static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
         static pid_t pid = 0;
 
+        VLOG_ERR("%s: OVS IPsec tunnel support is deprecated.", name);
+
 #ifndef _WIN32
         ovs_mutex_lock(&mutex);
         if (pid <= 0) {
