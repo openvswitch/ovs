@@ -8436,7 +8436,7 @@ ofproto_rule_remove__(struct ofproto *ofproto, struct rule *rule)
     if (actions->has_groups) {
         const struct ofpact_group *a;
 
-        OFPACT_FOR_EACH_TYPE (a, GROUP, actions->ofpacts,
+        OFPACT_FOR_EACH_TYPE_FLATTENED(a, GROUP, actions->ofpacts,
                                         actions->ofpacts_len) {
             struct ofgroup *group;
 
