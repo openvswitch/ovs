@@ -114,6 +114,7 @@ fi
 # need to remove the next block after porting is complete.
 if test "$IS_WIN32" = "yes"; then
     HAVE_PYTHON="no"
+    HAVE_PYTHON3="no"
 fi
 
 if test "$HAVE_PYTHON" = "yes" \
