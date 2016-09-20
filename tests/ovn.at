@@ -1259,6 +1259,9 @@ ovn-nbctl ls-add lsw0
 ovn-sbctl chassis-add hv0 geneve 127.0.0.1
 for i in 1 2 3; do
     ovn-nbctl lsp-add lsw0 lp$i
+done
+ovn-nbctl --wait=sb sync
+for i in 1 2 3; do
     ovn-sbctl lsp-bind lp$i hv0
     if test $i = 1; then
         ovn-nbctl lsp-set-addresses lp$i "f0:00:00:00:00:0$i 192.168.0.$i" unknown
