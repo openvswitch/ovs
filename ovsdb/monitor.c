@@ -1252,7 +1252,46 @@ ovsdb_monitor_changes_update(const struct ovsdb_row *old,
         change->new = clone_monitor_row_data(mt, new);
     } else {
         if (new) {
-            update_monitor_row_data(mt, new, change->new);
+            if (!change->new) {
+                /* Reinsert the row that was just deleted.
+                 *
+                 * This path won't be hit without replication.  Whenever OVSDB
+                 * server inserts a new row, It always generates a new UUID
+                 * that is different from the row just deleted.
+                 *
+                 * With replication, this path can be hit in a corner
+                 * case when two OVSDB servers are set up to replicate
+                 * each other. Not that is a useful set up, but can
+                 * happen in practice.
+                 *
+                 * An example of how this path can be hit is documented below.
+                 * The details is not as important to the correctness of the
+                 * logic, but added here to convince ourselves that this path
+                 * can be hit.
+                 *
+                 * Imagine two OVSDB servers that replicates from each
+                 * other. For each replication session, there is a
+                 * corresponding monitor at the other end of the replication
+                 * JSONRPC connection.
+                 *
+                 * The events can lead to a back to back deletion and
+                 * insertion operation of the same row for the monitor of
+                 * the first server are:
+                 *
+                 * 1. A row is inserted in the first OVSDB server.
+                 * 2. The row is then replicated to the remote OVSDB server.
+                 * 3. The row is now  deleted by the local OVSDB server. This
+                 *    deletion operation is replicated to the local monitor
+                 *    of the OVSDB server.
+                 * 4. The monitor now receives the same row, as an insertion,
+                 *    from the replication server. Because of
+                 *    replication, the row carries the same UUID as the row
+                 *    just deleted.
+                 */
+                change->new = clone_monitor_row_data(mt, new);
+            } else {
+                update_monitor_row_data(mt, new, change->new);
+            }
         } else {
             free_monitor_row_data(mt, change->new);
             change->new = NULL;
