@@ -3648,6 +3648,8 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
         entry->controller.ofproto = ctx->xbridge->ofproto;
         entry->controller.am = am;
     }
+
+    dp_packet_delete(packet);
 }
 
 static void
