@@ -200,6 +200,20 @@
       </dd>
 
       <dt>
+        <code>external_ids:ct-zone-*</code> in the <code>Bridge</code> table
+      </dt>
+      <dd>
+        Logical ports and gateway routers are assigned a connection
+        tracking zone by <code>ovn-controller</code> for stateful
+        services.  To keep state across restarts of
+        <code>ovn-controller</code>, these keys are stored in the
+        integration bridge's Bridge table.  The name contains a prefix
+        of <code>ct-zone-</code> followed by the name of the logical
+        port or gateway router's zone key.  The value for this key
+        identifies the zone used for this port.
+      </dd>
+
+      <dt>
         <code>external_ids:ovn-localnet-port</code> in the <code>Port</code>
         table
       </dt>
