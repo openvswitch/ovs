@@ -1850,23 +1850,22 @@ struct reval_context {
     struct flow flow;
 };
 
-/* Translates 'ukey->key' into a flow, populating 'ctx' as it goes along.
+/* Translates 'key' into a flow, populating 'ctx' as it goes along.
  *
  * Returns 0 on success, otherwise a positive errno value.
  *
  * The caller is responsible for uninitializing ctx->xout on success.
  */
 static int
-xlate_ukey(struct udpif *udpif, const struct udpif_key *ukey,
-           const struct dpif_flow_stats *push, struct reval_context *ctx)
+xlate_key(struct udpif *udpif, const struct nlattr *key, unsigned int len,
+          const struct dpif_flow_stats *push, struct reval_context *ctx)
 {
     struct ofproto_dpif *ofproto;
     ofp_port_t ofp_in_port;
     struct xlate_in xin;
     int error;
 
-    if (odp_flow_key_to_flow(ukey->key, ukey->key_len, &ctx->flow)
-        == ODP_FIT_ERROR) {
+    if (odp_flow_key_to_flow(key, len, &ctx->flow) == ODP_FIT_ERROR) {
         return EINVAL;
     }
 
@@ -1887,6 +1886,13 @@ xlate_ukey(struct udpif *udpif, const struct udpif_key *ukey,
     xlate_actions(&xin, &ctx->xout);
 
     return 0;
+}
+
+static int
+xlate_ukey(struct udpif *udpif, const struct udpif_key *ukey,
+           const struct dpif_flow_stats *push, struct reval_context *ctx)
+{
+    return xlate_key(udpif, ukey->key, ukey->key_len, push, ctx);
 }
 
 static enum reval_result
@@ -2127,10 +2133,10 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
         if (push->n_packets || netflow_exists()) {
             const struct nlattr *key = op->dop.u.flow_del.key;
             size_t key_len = op->dop.u.flow_del.key_len;
-            struct ofproto_dpif *ofproto;
             struct netflow *netflow;
-            ofp_port_t ofp_in_port;
-            struct flow flow;
+            struct reval_context ctx = {
+                .netflow = &netflow,
+            };
             int error;
 
             if (op->ukey) {
@@ -2145,26 +2151,16 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
                 key_len = op->ukey->key_len;
             }
 
-            if (odp_flow_key_to_flow(key, key_len, &flow)
-                == ODP_FIT_ERROR) {
-                continue;
-            }
+            error = xlate_key(udpif, key, key_len, push, &ctx);
+            if (error) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-            error = xlate_lookup(udpif->backer, &flow, &ofproto, NULL, NULL,
-                                 &netflow, &ofp_in_port);
-            if (!error) {
-                struct xlate_in xin;
-
-                xlate_in_init(&xin, ofproto,
-                              ofproto_dpif_get_tables_version(ofproto),
-                              &flow, ofp_in_port, NULL,
-                              push->tcp_flags, NULL, NULL, NULL);
-                xin.resubmit_stats = push->n_packets ? push : NULL;
-                xin.allow_side_effects = push->n_packets > 0;
-                xlate_actions_for_side_effects(&xin);
-
+                VLOG_WARN_RL(&rl, "xlate_actions failed (%s)!",
+                             xlate_strerror(error));
+            } else {
+                xlate_out_uninit(&ctx.xout);
                 if (netflow) {
-                    netflow_flow_clear(netflow, &flow);
+                    netflow_flow_clear(netflow, &ctx.flow);
                 }
             }
         }

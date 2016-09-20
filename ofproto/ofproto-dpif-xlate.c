@@ -5100,24 +5100,6 @@ xlate_out_uninit(struct xlate_out *xout)
         recirc_refs_unref(&xout->recircs);
     }
 }
-
-/* Translates the 'ofpacts_len' bytes of "struct ofpact"s starting at 'ofpacts'
- * into datapath actions, using 'ctx', and discards the datapath actions. */
-void
-xlate_actions_for_side_effects(struct xlate_in *xin)
-{
-    struct xlate_out xout;
-    enum xlate_error error;
-
-    error = xlate_actions(xin, &xout);
-    if (error) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-        VLOG_WARN_RL(&rl, "xlate_actions failed (%s)!", xlate_strerror(error));
-    }
-
-    xlate_out_uninit(&xout);
-}
 
 static struct skb_priority_to_dscp *
 get_skb_priority(const struct xport *xport, uint32_t skb_priority)
