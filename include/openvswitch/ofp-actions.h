@@ -203,22 +203,6 @@ ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
 }
 
 static inline const struct ofpact *
-ofpact_find_type(const struct ofpact *a, enum ofpact_type type,
-                 const struct ofpact * const end)
-{
-    while (a < end) {
-        if (a->type == type) {
-            return a;
-        }
-        a = ofpact_next(a);
-    }
-    return NULL;
-}
-
-#define OFPACT_FIND_TYPE(A, TYPE, END) \
-    ofpact_get_##TYPE##_nullable(ofpact_find_type(A, OFPACT_##TYPE, END))
-
-static inline const struct ofpact *
 ofpact_find_type_flattened(const struct ofpact *a, enum ofpact_type type,
                            const struct ofpact * const end)
 {
@@ -240,13 +224,6 @@ ofpact_find_type_flattened(const struct ofpact *a, enum ofpact_type type,
 #define OFPACT_FOR_EACH(POS, OFPACTS, OFPACTS_LEN)                      \
     for ((POS) = (OFPACTS); (POS) < ofpact_end(OFPACTS, OFPACTS_LEN);  \
          (POS) = ofpact_next(POS))
-
-#define OFPACT_FOR_EACH_TYPE(POS, TYPE, OFPACTS, OFPACTS_LEN)           \
-    for ((POS) = OFPACT_FIND_TYPE(OFPACTS, TYPE,                        \
-                                  ofpact_end(OFPACTS, OFPACTS_LEN));    \
-         (POS);                                                         \
-         (POS) = OFPACT_FIND_TYPE(ofpact_next(&(POS)->ofpact), TYPE,    \
-                                  ofpact_end(OFPACTS, OFPACTS_LEN)))
 
 /* Assigns POS to each ofpact, in turn, in the OFPACTS_LEN bytes of ofpacts
  * starting at OFPACTS.
