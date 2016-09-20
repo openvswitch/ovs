@@ -4343,14 +4343,6 @@ group_destruct(struct ofgroup *group_)
     ovs_mutex_destroy(&group->stats_mutex);
 }
 
-static void
-group_modify(struct ofgroup *group_)
-{
-    struct ofproto_dpif *ofproto = ofproto_dpif_cast(group_->ofproto);
-
-    ofproto->backer->need_revalidate = REV_FLOW_TABLE;
-}
-
 static enum ofperr
 group_get_stats(const struct ofgroup *group_, struct ofputil_group_stats *ogs)
 {
@@ -5698,7 +5690,7 @@ const struct ofproto_class ofproto_dpif_class = {
     group_construct,            /* group_construct */
     group_destruct,             /* group_destruct */
     group_dealloc,              /* group_dealloc */
-    group_modify,               /* group_modify */
+    NULL,                       /* group_modify */
     group_get_stats,            /* group_get_stats */
     get_datapath_version,       /* get_datapath_version */
 };
