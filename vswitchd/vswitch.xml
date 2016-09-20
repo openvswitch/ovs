@@ -2008,6 +2008,9 @@
           <dd>
             An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4/IPv6
             IPsec tunnel.
+            IPsec tunnel ports are deprecated. The support will be completely
+            removed in next version.
+
           </dd>
 
           <dt><code>vxlan</code></dt>

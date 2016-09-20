@@ -200,6 +200,7 @@ Description: Open vSwitch GRE-over-IPsec support
  .
  The ovs-monitor-ipsec script provides support for encrypting GRE
  tunnels with IPsec.
+ IPsec tunnels support is deprecated.
 
 Package: openvswitch-pki
 Architecture: all

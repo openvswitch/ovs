@@ -150,6 +150,7 @@ v2.6.0 - xx xxx xxxx
      * Flow based tunnel match and action can be used for IPv6 address using
        tun_ipv6_src, tun_ipv6_dst fields.
      * Added support for IPv6 tunnels, for details checkout FAQ.
+     * Deprecated support for IPsec tunnels ports.
    - A wrapper script, 'ovs-tcpdump', to easily port-mirror an OVS port and
      watch with tcpdump
    - Introduce --no-self-confinement flag that allows daemons to work with
