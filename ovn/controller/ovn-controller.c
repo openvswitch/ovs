@@ -427,7 +427,7 @@ main(int argc, char *argv[])
                         &all_lports);
         }
 
-        if (br_int && chassis_id) {
+        if (br_int && chassis) {
             patch_run(&ctx, br_int, chassis_id, &local_datapaths,
                       &patched_datapaths);
 
