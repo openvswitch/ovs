@@ -1922,12 +1922,10 @@ populate_xcache(struct udpif *udpif, struct udpif_key *ukey,
 }
 
 static enum reval_result
-revalidate_ukey__(struct udpif *udpif, struct udpif_key *ukey,
+revalidate_ukey__(struct udpif *udpif, const struct udpif_key *ukey,
                   uint16_t tcp_flags, struct ofpbuf *odp_actions,
-                  uint64_t reval_seq, struct recirc_refs *recircs)
-    OVS_REQUIRES(ukey->mutex)
+                  struct recirc_refs *recircs, struct xlate_cache *xcache)
 {
-    bool need_revalidate = (ukey->reval_seq != reval_seq);
     struct xlate_out *xoutp;
     struct netflow *netflow;
     struct flow_wildcards dp_mask, wc;
@@ -1935,29 +1933,18 @@ revalidate_ukey__(struct udpif *udpif, struct udpif_key *ukey,
     struct reval_context ctx = {
         .odp_actions = odp_actions,
         .netflow = &netflow,
-        .wc = need_revalidate ? &wc : NULL,
+        .xcache = xcache,
+        .wc = &wc,
     };
 
     result = UKEY_DELETE;
     xoutp = NULL;
     netflow = NULL;
 
-    if (need_revalidate) {
-        xlate_cache_clear(ukey->xcache);
-    }
-    if (!ukey->xcache) {
-        ukey->xcache = xlate_cache_new();
-    }
-    ctx.xcache = ukey->xcache;
     if (xlate_ukey(udpif, ukey, tcp_flags, &ctx)) {
         goto exit;
     }
     xoutp = &ctx.xout;
-
-    if (!need_revalidate) {
-        result = UKEY_KEEP;
-        goto exit;
-    }
 
     if (xoutp->slow) {
         ofpbuf_clear(odp_actions);
@@ -2039,28 +2026,28 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
                     ? stats->n_bytes - ukey->stats.n_bytes
                     : 0);
 
-    if (need_revalidate
-        && !should_revalidate(udpif, push.n_packets, ukey->stats.used)) {
-        goto exit;
+    if (need_revalidate) {
+        if (should_revalidate(udpif, push.n_packets, ukey->stats.used)) {
+            if (!ukey->xcache) {
+                ukey->xcache = xlate_cache_new();
+            } else {
+                xlate_cache_clear(ukey->xcache);
+            }
+            result = revalidate_ukey__(udpif, ukey, push.tcp_flags,
+                                       odp_actions, recircs, ukey->xcache);
+        } /* else delete; too expensive to revalidate */
+    } else if (!push.n_packets || ukey->xcache
+               || !populate_xcache(udpif, ukey, push.tcp_flags)) {
+        result = UKEY_KEEP;
     }
 
-    if (!need_revalidate) {
-        if (!push.n_packets || ukey->xcache
-            || !populate_xcache(udpif, ukey, push.tcp_flags)) {
-            result = UKEY_KEEP;
-            goto exit;
-        }
-    }
-
-    result = revalidate_ukey__(udpif, ukey, push.tcp_flags, odp_actions,
-                               reval_seq, recircs);
-exit:
     /* Stats for deleted flows will be attributed upon flow deletion. Skip. */
     if (result != UKEY_DELETE) {
         xlate_push_stats(ukey->xcache, &push);
         ukey->stats = *stats;
         ukey->reval_seq = reval_seq;
     }
+
     return result;
 }
 
