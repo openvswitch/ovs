@@ -169,6 +169,7 @@ ct.rel = ct_state[2]
 ct.rpl = ct_state[3]
 ct.trk = ct_state[5]
 ct_label = NXM_NX_CT_LABEL
+ct_label.blocked = ct_label[0]
 ct_mark = NXM_NX_CT_MARK
 ct_state = NXM_NX_CT_STATE
 ]])
