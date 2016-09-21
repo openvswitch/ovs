@@ -1468,7 +1468,6 @@ AT_CLEANUP
 # 2 locally attached networks (one flat, one vlan tagged over same device)
 # 2 ports per HV on each network
 AT_SETUP([ovn -- 2 HVs, 4 lports/HV, localnet ports])
-AT_KEYWORDS([ovn-localnet])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -2375,7 +2374,6 @@ AT_CLEANUP
 
 # 3 hypervisors, one logical switch, 3 logical ports per hypervisor
 AT_SETUP([ovn -- portsecurity : 3 HVs, 1 LS, 3 lports/HV])
-AT_KEYWORDS([portsecurity])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -2753,7 +2751,6 @@ OVN_CLEANUP([hv1],[hv2],[hv3])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 2 HVs, 2 LS, 1 lport/LS, 2 peer LRs])
-AT_KEYWORDS([ovnpeer])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -3121,7 +3118,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 2 HVs, 3 LS, 1 lport/LS, 2 peer LRs, static routes])
-AT_KEYWORDS([ovnstaticroutespeer])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -3275,7 +3271,6 @@ OVN_CLEANUP([hv1],[hv2])
 AT_CLEANUP
 
 AT_SETUP([ovn -- send gratuitous arp on localnet])
-AT_KEYWORDS([ovn])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 ovn-nbctl ls-add lsw0
@@ -3317,7 +3312,6 @@ OVN_CLEANUP([hv])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 2 HVs, 3 LRs connected via LS, static routes])
-AT_KEYWORDS([ovnstaticroutes])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -3495,7 +3489,6 @@ OVN_CLEANUP([hv1],[hv2])
 AT_CLEANUP
 
 AT_SETUP([ovn -- dhcpv4 : 1 HV, 2 LS, 2 LSPs/LS])
-AT_KEYWORDS([dhcpv4])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -3765,7 +3758,6 @@ OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovn -- dhcpv6 : 1 HV, 2 LS, 5 LSPs])
-AT_KEYWORDS([dhcpv6])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -4027,7 +4019,6 @@ OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 2 HVs, 2 LRs connected via LS, gateway router])
-AT_KEYWORDS([ovngatewayrouter])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -4353,7 +4344,6 @@ AT_CLEANUP
 # make sure that the port state is properly set to up and back down
 # when created and deleted.
 AT_SETUP([ovn -- port state up and down])
-AT_KEYWORDS([ovn])
 ovn_start
 
 ovn-nbctl ls-add ls1
@@ -4379,7 +4369,7 @@ AT_CLEANUP
 # make sure that the OF rules created to support a datapath are added/cleared
 # when logical switch is created and removed.
 AT_SETUP([ovn -- datapath rules added/removed])
-AT_KEYWORDS([ovn datapath cleanup])
+AT_KEYWORDS([cleanup])
 ovn_start
 
 net_add n1
@@ -4443,7 +4433,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- nd_na ])
-AT_KEYWORDS([ovn-nd_na])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -4516,7 +4505,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- address sets modification/removal smoke test])
-AT_KEYWORDS([ovn-addr])
 ovn_start
 
 net_add n1
@@ -4544,7 +4532,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- ipam])
-AT_KEYWORDS([ovnipam])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -4708,7 +4695,6 @@ OVS_APP_EXIT_AND_WAIT([ovn-northd])
 AT_CLEANUP
 
 AT_SETUP([ovn -- ipam connectivity])
-AT_KEYWORDS([ovnipamconnectivity])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -4836,7 +4822,7 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- ovs-vswitchd restart])
-AT_KEYWORDS([vswitchd restart])
+AT_KEYWORDS([vswitchd])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -4931,7 +4917,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- send arp for nexthop])
-AT_KEYWORDS([ovn])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -5042,7 +5027,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- send gratuitous arp for nat ips in localnet])
-AT_KEYWORDS([ovn])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 # Create logical switch
@@ -5091,7 +5075,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- delete mac bindings])
-AT_KEYWORDS([ovn])
 ovn_start
 net_add n1
 sim_add hv1
@@ -5123,7 +5106,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- conntrack zone allocation])
-AT_KEYWORDS([ovnconntrack])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -5178,7 +5160,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- tag allocation])
-AT_KEYWORDS([ovntags])
 ovn_start
 
 AT_CHECK([ovn-nbctl ls-add ls0])
@@ -5294,7 +5275,6 @@ AT_CHECK([ovn-nbctl lsp-get-tag local1], [0], [50
 AT_CLEANUP
 
 AT_SETUP([ovn -- lsp deletion and broadcast-flow deletion on localnet])
-AT_KEYWORDS([ovn])
 ovn_start
 ovn-nbctl ls-add lsw0
 net_add n1
