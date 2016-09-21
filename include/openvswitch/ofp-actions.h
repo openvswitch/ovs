@@ -203,22 +203,6 @@ ofpact_end(const struct ofpact *ofpacts, size_t ofpacts_len)
 }
 
 static inline const struct ofpact *
-ofpact_find_type(const struct ofpact *a, enum ofpact_type type,
-                 const struct ofpact * const end)
-{
-    while (a < end) {
-        if (a->type == type) {
-            return a;
-        }
-        a = ofpact_next(a);
-    }
-    return NULL;
-}
-
-#define OFPACT_FIND_TYPE(A, TYPE, END) \
-    ofpact_get_##TYPE##_nullable(ofpact_find_type(A, OFPACT_##TYPE, END))
-
-static inline const struct ofpact *
 ofpact_find_type_flattened(const struct ofpact *a, enum ofpact_type type,
                            const struct ofpact * const end)
 {
@@ -240,13 +224,6 @@ ofpact_find_type_flattened(const struct ofpact *a, enum ofpact_type type,
 #define OFPACT_FOR_EACH(POS, OFPACTS, OFPACTS_LEN)                      \
     for ((POS) = (OFPACTS); (POS) < ofpact_end(OFPACTS, OFPACTS_LEN);  \
          (POS) = ofpact_next(POS))
-
-#define OFPACT_FOR_EACH_TYPE(POS, TYPE, OFPACTS, OFPACTS_LEN)           \
-    for ((POS) = OFPACT_FIND_TYPE(OFPACTS, TYPE,                        \
-                                  ofpact_end(OFPACTS, OFPACTS_LEN));    \
-         (POS);                                                         \
-         (POS) = OFPACT_FIND_TYPE(ofpact_next(&(POS)->ofpact), TYPE,    \
-                                  ofpact_end(OFPACTS, OFPACTS_LEN)))
 
 /* Assigns POS to each ofpact, in turn, in the OFPACTS_LEN bytes of ofpacts
  * starting at OFPACTS.
@@ -479,12 +456,23 @@ struct ofpact_stack {
  *
  * Used for NXAST_REG_LOAD and OFPAT12_SET_FIELD. */
 struct ofpact_set_field {
-    struct ofpact ofpact;
-    const struct mf_field *field;
-    bool flow_has_vlan;   /* VLAN present at action validation time. */
-    union mf_value value;
-    union mf_value mask;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
+        bool flow_has_vlan;   /* VLAN present at action validation time. */
+        const struct mf_field *field;
+    );
+    union mf_value value[];  /* Significant value bytes followed by
+                              * significant mask bytes. */
 };
+BUILD_ASSERT_DECL(offsetof(struct ofpact_set_field, value)
+                  % OFPACT_ALIGNTO == 0);
+BUILD_ASSERT_DECL(offsetof(struct ofpact_set_field, value)
+                  == sizeof(struct ofpact_set_field));
+
+/* Use macro to not have to deal with constness. */
+#define ofpact_set_field_mask(SF)                               \
+    ALIGNED_CAST(union mf_value *,                              \
+                 (uint8_t *)(SF)->value + (SF)->field->n_bytes)
 
 /* OFPACT_PUSH_VLAN/MPLS/PBB
  *
@@ -651,19 +639,6 @@ struct ofpact_resubmit {
     uint8_t table_id;
 };
 
-/* Part of struct ofpact_learn, below. */
-struct ofpact_learn_spec {
-    int n_bits;                 /* Number of bits in source and dest. */
-
-    int src_type;               /* One of NX_LEARN_SRC_*. */
-    struct mf_subfield src;     /* NX_LEARN_SRC_FIELD only. */
-    union mf_subvalue src_imm;  /* NX_LEARN_SRC_IMMEDIATE only. */
-
-    int dst_type;             /* One of NX_LEARN_DST_*. */
-    struct mf_subfield dst;   /* NX_LEARN_DST_MATCH, NX_LEARN_DST_LOAD only. */
-};
-
-
 /* Bits for 'flags' in struct nx_action_learn.
  *
  * If NX_LEARN_F_SEND_FLOW_REM is set, then the learned flows will have their
@@ -708,24 +683,71 @@ enum nx_learn_flags {
 #define NX_LEARN_DST_RESERVED  (3 << 11) /* Not yet defined. */
 #define NX_LEARN_DST_MASK      (3 << 11)
 
+/* Part of struct ofpact_learn, below. */
+struct ofpact_learn_spec {
+    OFPACT_PADDED_MEMBERS(
+        struct mf_subfield src;    /* NX_LEARN_SRC_FIELD only. */
+        struct mf_subfield dst;    /* NX_LEARN_DST_MATCH,
+                                    * NX_LEARN_DST_LOAD only. */
+        uint16_t src_type;         /* One of NX_LEARN_SRC_*. */
+        uint16_t dst_type;         /* One of NX_LEARN_DST_*. */
+        uint8_t n_bits;            /* Number of bits in source and dest. */
+    );
+    /* Followed by 'DIV_ROUND_UP(n_bits, 8)' bytes of immediate data for
+     * match 'dst_type's NX_LEARN_DST_MATCH and NX_LEARN_DST_LOAD when
+     * NX_LEARN_SRC_IMMEDIATE is set in 'src_type', followed by zeroes to align
+     * to OFPACT_ALIGNTO. */
+};
+BUILD_ASSERT_DECL(sizeof(struct ofpact_learn_spec) % OFPACT_ALIGNTO == 0);
+
+static inline const void *
+ofpact_learn_spec_imm(const struct ofpact_learn_spec *spec)
+{
+    return spec + 1;
+}
+
+static inline const struct ofpact_learn_spec *
+ofpact_learn_spec_next(const struct ofpact_learn_spec *spec)
+{
+    if (spec->src_type == NX_LEARN_SRC_IMMEDIATE) {
+        unsigned int n_bytes = OFPACT_ALIGN(DIV_ROUND_UP(spec->n_bits, 8));
+        return ALIGNED_CAST(const struct ofpact_learn_spec *,
+                            (const uint8_t *)(spec + 1) + n_bytes);
+    }
+    return spec + 1;
+}
+
 /* OFPACT_LEARN.
  *
  * Used for NXAST_LEARN. */
 struct ofpact_learn {
-    struct ofpact ofpact;
+    OFPACT_PADDED_MEMBERS(
+        struct ofpact ofpact;
 
-    uint16_t idle_timeout;      /* Idle time before discarding (seconds). */
-    uint16_t hard_timeout;      /* Max time before discarding (seconds). */
-    uint16_t priority;          /* Priority level of flow entry. */
-    uint8_t table_id;           /* Table to insert flow entry. */
-    ovs_be64 cookie;            /* Cookie for new flow. */
-    enum nx_learn_flags flags;  /* NX_LEARN_F_*. */
-    uint16_t fin_idle_timeout;  /* Idle timeout after FIN, if nonzero. */
-    uint16_t fin_hard_timeout;  /* Hard timeout after FIN, if nonzero. */
+        uint16_t idle_timeout;     /* Idle time before discarding (seconds). */
+        uint16_t hard_timeout;     /* Max time before discarding (seconds). */
+        uint16_t priority;         /* Priority level of flow entry. */
+        uint8_t table_id;          /* Table to insert flow entry. */
+        enum nx_learn_flags flags; /* NX_LEARN_F_*. */
+        ovs_be64 cookie;           /* Cookie for new flow. */
+        uint16_t fin_idle_timeout; /* Idle timeout after FIN, if nonzero. */
+        uint16_t fin_hard_timeout; /* Hard timeout after FIN, if nonzero. */
+    );
 
-    unsigned int n_specs;
     struct ofpact_learn_spec specs[];
 };
+
+static inline const struct ofpact_learn_spec *
+ofpact_learn_spec_end(const struct ofpact_learn *learn)
+{
+    return ALIGNED_CAST(const struct ofpact_learn_spec *,
+                        ofpact_next(&learn->ofpact));
+}
+
+#define OFPACT_LEARN_SPEC_FOR_EACH(SPEC, LEARN) \
+    for ((SPEC) = (LEARN)->specs;               \
+         (SPEC) < ofpact_learn_spec_end(LEARN); \
+         (SPEC) = ofpact_learn_spec_next(SPEC))
 
 /* Multipath link choice algorithm to apply.
  *
@@ -1044,7 +1066,18 @@ OFPACTS
 #undef OFPACT
 
 /* Additional functions for composing ofpacts. */
-struct ofpact_set_field *ofpact_put_reg_load(struct ofpbuf *ofpacts);
+struct ofpact_set_field *ofpact_put_set_field(struct ofpbuf *ofpacts,
+                                              const struct mf_field *,
+                                              const void *value,
+                                              const void *mask);
+struct ofpact_set_field *ofpact_put_reg_load(struct ofpbuf *ofpacts,
+                                             const struct mf_field *,
+                                             const void *value,
+                                             const void *mask);
+struct ofpact_set_field *ofpact_put_reg_load2(struct ofpbuf *ofpacts,
+                                              const struct mf_field *,
+                                              const void *value,
+                                              const void *mask);
 
 /* OpenFlow 1.1 instructions.
  * The order is sorted in execution order. Not in the value of OFPIT11_xxx.

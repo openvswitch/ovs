@@ -18,28 +18,45 @@
 #ifndef REPLICATION_H
 #define REPLICATION_H 1
 
-#include "openvswitch/shash.h"
+#include <stdbool.h>
+struct ovsdb;
 
-struct db {
-    /* Initialized in main(). */
-    char *filename;
-    struct ovsdb_file *file;
-    struct ovsdb *db;
+/* Replication module runs when OVSDB server runs in the backup mode.
+ *
+ * API Usage
+ *===========
+ *
+ * - replication_init() needs to be called whenever OVSDB server switches into
+ *   the backup mode.
+ *
+ * - replication_add_local_db() should be called immediately after to add all
+ *   known database that OVSDB server owns, one at a time.
+ *
+ * - replication_destroy() should be called when OVSDB server shutdown to
+ *   reclaim resources.
+ *
+ * - replication_run(), replication_wait(), replication_is_alive() and
+ *   replication_get_last_error() should be call within the main loop
+ *   whenever OVSDB server runs in the backup mode.
+ *
+ *  - set_blacklist_tables(), get_blacklist_tables(),
+ *    disconnect_active_server() and replication_usage() are support functions
+ *    used mainly by uinxctl commands.
+ */
 
-    /* Only used by update_remote_status(). */
-    struct ovsdb_txn *txn;
-};
-
-void replication_init(void);
-void replication_run(struct shash *dbs);
+void replication_init(const char *sync_from, const char *exclude_tables);
+void replication_run(void);
 void replication_wait(void);
-void set_active_ovsdb_server(const char *remote_server);
-const char *get_active_ovsdb_server(void);
-void set_tables_blacklist(const char *blacklist);
-struct sset get_tables_blacklist(void);
-void disconnect_active_server(void);
-void destroy_active_server(void);
-const struct db *find_db(const struct shash *all_dbs, const char *db_name);
+void replication_destroy(void);
 void replication_usage(void);
+void replication_add_local_db(const char *databse, struct ovsdb *db);
+bool replication_is_alive(void);
+int replication_get_last_error(void);
+char *replication_status(void);
+
+char *set_blacklist_tables(const char *blacklist, bool dryrun)
+    OVS_WARN_UNUSED_RESULT;
+char *get_blacklist_tables(void) OVS_WARN_UNUSED_RESULT;
+void disconnect_active_server(void);
 
 #endif /* ovsdb/replication.h */

@@ -3,6 +3,8 @@ AT_BANNER([daemon unit tests - Python])
 m4_define([DAEMON_PYN],
   [AT_SETUP([daemon - $1])
    AT_SKIP_IF([test $2 = no])
+   # Skip this test for Windows, echo $! gives shell pid instead of parent process
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_KEYWORDS([python daemon])
    AT_CAPTURE_FILE([pid])
    AT_CAPTURE_FILE([expected])
@@ -26,6 +28,8 @@ DAEMON_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 m4_define([DAEMON_MONITOR_PYN],
   [AT_SETUP([daemon --monitor - $1])
    AT_SKIP_IF([test $2 = no])
+   # Skip this test for Windows, echo $! gives shell pid instead of parent process
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_CAPTURE_FILE([pid])
    AT_CAPTURE_FILE([parent])
    AT_CAPTURE_FILE([parentpid])
@@ -73,6 +77,8 @@ DAEMON_MONITOR_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 m4_define([DAEMON_MONITOR_RESTART_PYN],
   [AT_SETUP([daemon --monitor restart exit code - $1])
    AT_SKIP_IF([test $2 = no])
+   # Skip this test for Windows, echo $! gives shell pid instead of parent process
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_CAPTURE_FILE([pid])
    AT_CAPTURE_FILE([parent])
    AT_CAPTURE_FILE([parentpid])
@@ -120,6 +126,8 @@ DAEMON_MONITOR_RESTART_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 m4_define([DAEMON_DETACH_PYN],
   [AT_SETUP([daemon --detach - $1])
    AT_SKIP_IF([test $2 = no])
+   # Skip this test for Windows, the pid file not removed if the daemon is killed
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_CAPTURE_FILE([pid])
    # Start the daemon and make sure that the pidfile exists immediately.
    # We don't wait for the pidfile to get created because the daemon is
@@ -142,6 +150,8 @@ m4_define([CHECK],
 m4_define([DAEMON_DETACH_MONITOR_PYN],
   [AT_SETUP([daemon --detach --monitor - $1])
    AT_SKIP_IF([test $2 = no])
+   # Skip this test for Windows, uses Linux specific kill signal
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_CAPTURE_FILE([daemon])
    AT_CAPTURE_FILE([olddaemon])
    AT_CAPTURE_FILE([newdaemon])
@@ -219,6 +229,8 @@ DAEMON_DETACH_MONITOR_ERRORS_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 m4_define([DAEMON_DETACH_CLOSES_FDS_PYN],
   [AT_SETUP([daemon --detach closes standard fds - $1])
    AT_SKIP_IF([test $2 = no])
+   # Skip this test for Windows, uses Linux specific kill signal
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_CAPTURE_FILE([pid])
    AT_CAPTURE_FILE([status])
    AT_CAPTURE_FILE([stderr])
@@ -243,6 +255,8 @@ DAEMON_DETACH_CLOSES_FDS_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 m4_define([DAEMON_DETACH_MONITOR_CLOSES_FDS_PYN],
   [AT_SETUP([daemon --detach --monitor closes standard fds - $1])
    AT_SKIP_IF([test $2 = no])
+   # Skip this test for Windows, uses Linux specific kill signal
+   AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_CAPTURE_FILE([pid])
    AT_CAPTURE_FILE([status])
    AT_CAPTURE_FILE([stderr])

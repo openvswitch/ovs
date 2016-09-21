@@ -162,13 +162,12 @@ static void
 put_load(uint64_t value, enum mf_field_id dst, int ofs, int n_bits,
          struct ofpbuf *ofpacts)
 {
-    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-    sf->field = mf_from_id(dst);
-    sf->flow_has_vlan = false;
-
+    struct ofpact_set_field *sf = ofpact_put_set_field(ofpacts,
+                                                       mf_from_id(dst), NULL,
+                                                       NULL);
     ovs_be64 n_value = htonll(value);
-    bitwise_copy(&n_value, 8, 0, &sf->value, sf->field->n_bytes, ofs, n_bits);
-    bitwise_one(&sf->mask, sf->field->n_bytes, ofs, n_bits);
+    bitwise_copy(&n_value, 8, 0, sf->value, sf->field->n_bytes, ofs, n_bits);
+    bitwise_one(ofpact_set_field_mask(sf), sf->field->n_bytes, ofs, n_bits);
 }
 
 /* Context maintained during ovnacts_parse(). */
@@ -339,49 +338,38 @@ format_LOAD(const struct ovnact_load *load, struct ds *s)
     ds_put_char(s, ';');
 }
 
-void
-ovnact_load_to_ofpact_set_field(const struct ovnact_load *load,
-                                bool (*lookup_port)(const void *aux,
-                                                    const char *port_name,
-                                                    unsigned int *portp),
-                                const void *aux,
-                                struct ofpact_set_field *sf)
-{
-    const union expr_constant *c = &load->imm;
-    struct mf_subfield dst = expr_resolve_field(&load->dst);
-
-    sf->field = dst.field;
-
-    if (load->dst.symbol->width) {
-        bitwise_copy(&c->value, sizeof c->value, 0,
-                     &sf->value, dst.field->n_bytes, dst.ofs,
-                     dst.n_bits);
-        if (c->masked) {
-            bitwise_copy(&c->mask, sizeof c->mask, 0,
-                         &sf->mask, dst.field->n_bytes, dst.ofs,
-                         dst.n_bits);
-        } else {
-            bitwise_one(&sf->mask, dst.field->n_bytes,
-                        dst.ofs, dst.n_bits);
-        }
-    } else {
-        uint32_t port;
-        if (!lookup_port(aux, load->imm.string, &port)) {
-            port = 0;
-        }
-        bitwise_put(port, &sf->value,
-                    sf->field->n_bytes, 0, sf->field->n_bits);
-        bitwise_one(&sf->mask, sf->field->n_bytes, 0, sf->field->n_bits);
-    }
-}
-
 static void
 encode_LOAD(const struct ovnact_load *load,
             const struct ovnact_encode_params *ep,
             struct ofpbuf *ofpacts)
 {
-    ovnact_load_to_ofpact_set_field(load, ep->lookup_port, ep->aux,
-                                    ofpact_put_SET_FIELD(ofpacts));
+    const union expr_constant *c = &load->imm;
+    struct mf_subfield dst = expr_resolve_field(&load->dst);
+    struct ofpact_set_field *sf = ofpact_put_set_field(ofpacts, dst.field,
+                                                       NULL, NULL);
+
+    if (load->dst.symbol->width) {
+        bitwise_copy(&c->value, sizeof c->value, 0,
+                     sf->value, dst.field->n_bytes, dst.ofs,
+                     dst.n_bits);
+        if (c->masked) {
+            bitwise_copy(&c->mask, sizeof c->mask, 0,
+                         ofpact_set_field_mask(sf), dst.field->n_bytes,
+                         dst.ofs, dst.n_bits);
+        } else {
+            bitwise_one(ofpact_set_field_mask(sf), dst.field->n_bytes,
+                        dst.ofs, dst.n_bits);
+        }
+    } else {
+        uint32_t port;
+        if (!ep->lookup_port(ep->aux, load->imm.string, &port)) {
+            port = 0;
+        }
+        bitwise_put(port, sf->value,
+                    sf->field->n_bytes, 0, sf->field->n_bits);
+        bitwise_one(ofpact_set_field_mask(sf), sf->field->n_bytes, 0,
+                    sf->field->n_bits);
+    }
 }
 
 static void
@@ -674,17 +662,14 @@ encode_CT_COMMIT(const struct ovnact_ct_commit *cc,
     ofpbuf_pull(ofpacts, set_field_offset);
 
     if (cc->ct_mark_mask) {
-        struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-        sf->field = mf_from_id(MFF_CT_MARK);
-        sf->value.be32 = htonl(cc->ct_mark);
-        sf->mask.be32 = htonl(cc->ct_mark_mask);
+        const ovs_be32 value = htonl(cc->ct_mark);
+        const ovs_be32 mask = htonl(cc->ct_mark_mask);
+        ofpact_put_set_field(ofpacts, mf_from_id(MFF_CT_MARK), &value, &mask);
     }
 
     if (!ovs_be128_is_zero(cc->ct_label_mask)) {
-        struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-        sf->field = mf_from_id(MFF_CT_LABEL);
-        sf->value.be128 = cc->ct_label;
-        sf->mask.be128 = cc->ct_label_mask;
+        ofpact_put_set_field(ofpacts, mf_from_id(MFF_CT_LABEL), &cc->ct_label,
+                             &cc->ct_label_mask);
     }
 
     ofpacts->header = ofpbuf_push_uninit(ofpacts, set_field_offset);
@@ -927,7 +912,8 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
         struct ofpact_conntrack *ct = ofpact_put_CT(ofpacts);
         struct ofpact_nat *nat;
         size_t nat_offset;
-        ct->zone_src.field = mf_from_id(MFF_LOG_CT_ZONE);
+        ct->zone_src.field = ep->is_switch ? mf_from_id(MFF_LOG_CT_ZONE)
+                                : mf_from_id(MFF_LOG_DNAT_ZONE);
         ct->zone_src.ofs = 0;
         ct->zone_src.n_bits = 16;
         ct->flags = 0;
@@ -951,12 +937,16 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
     uint32_t group_id = 0, hash;
     struct group_info *group_info;
     struct ofpact_group *og;
+    uint32_t zone_reg = ep->is_switch ? MFF_LOG_CT_ZONE - MFF_REG0
+                            : MFF_LOG_DNAT_ZONE - MFF_REG0;
 
     struct ds ds = DS_EMPTY_INITIALIZER;
     ds_put_format(&ds, "type=select");
 
     BUILD_ASSERT(MFF_LOG_CT_ZONE >= MFF_REG0);
     BUILD_ASSERT(MFF_LOG_CT_ZONE < MFF_REG0 + FLOW_N_REGS);
+    BUILD_ASSERT(MFF_LOG_DNAT_ZONE >= MFF_REG0);
+    BUILD_ASSERT(MFF_LOG_DNAT_ZONE < MFF_REG0 + FLOW_N_REGS);
     for (size_t bucket_id = 0; bucket_id < cl->n_dsts; bucket_id++) {
         const struct ovnact_ct_lb_dst *dst = &cl->dsts[bucket_id];
         ds_put_format(&ds, ",bucket=bucket_id=%"PRIuSIZE",weight:100,actions="
@@ -965,7 +955,7 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
             ds_put_format(&ds, ":%"PRIu16, dst->port);
         }
         ds_put_format(&ds, "),commit,table=%d,zone=NXM_NX_REG%d[0..15])",
-                      recirc_table, MFF_LOG_CT_ZONE - MFF_REG0);
+                      recirc_table, zone_reg);
     }
 
     hash = hash_string(ds_cstr(&ds), 0);
@@ -989,10 +979,12 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
             }
         }
 
+        bool new_group_id = false;
         if (!group_id) {
             /* Reserve a new group_id. */
             group_id = bitmap_scan(ep->group_table->group_ids, 0, 1,
                                    MAX_OVN_GROUPS + 1);
+            new_group_id = true;
         }
 
         if (group_id == MAX_OVN_GROUPS + 1) {
@@ -1007,8 +999,8 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
         group_info = xmalloc(sizeof *group_info);
         group_info->group = ds;
         group_info->group_id = group_id;
-        group_info->lflow_uuid = ep->lflow_uuid;
         group_info->hmap_node.hash = hash;
+        group_info->new_group_id = new_group_id;
 
         hmap_insert(&ep->group_table->desired_groups,
                     &group_info->hmap_node, group_info->hmap_node.hash);
@@ -1329,7 +1321,7 @@ parse_dhcp_opt(struct action_context *ctx, struct ovnact_dhcp_option *o,
 
     const char *name = v6 ? "DHCPv6" : "DHCPv4";
     const struct hmap *map = v6 ? ctx->pp->dhcpv6_opts : ctx->pp->dhcp_opts;
-    o->option = dhcp_opts_find(map, ctx->lexer->token.s);
+    o->option = map ? dhcp_opts_find(map, ctx->lexer->token.s) : NULL;
     if (!o->option) {
         lexer_syntax_error(ctx->lexer, "expecting %s option name", name);
         return;

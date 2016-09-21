@@ -46,6 +46,7 @@
 #include "ofproto/ofproto-dpif-mirror.h"
 #include "ofproto/ofproto-dpif-monitor.h"
 #include "ofproto/ofproto-dpif-sflow.h"
+#include "ofproto/ofproto-dpif-xlate-cache.h"
 #include "ofproto/ofproto-dpif.h"
 #include "ofproto/ofproto-provider.h"
 #include "openvswitch/dynamic-string.h"
@@ -168,9 +169,6 @@ struct xlate_ctx {
     struct xlate_out *xout;
 
     const struct xbridge *xbridge;
-
-    /* Flow tables version at the beginning of the translation. */
-    ovs_version_t tables_version;
 
     /* Flow at the last commit. */
     struct flow base_flow;
@@ -348,6 +346,11 @@ struct xlate_ctx {
     * case at that point.
     */
     bool freezing;
+    bool recirc_update_dp_hash;    /* Generated recirculation will be preceded
+                                    * by datapath HASH action to get an updated
+                                    * dp_hash after recirculation. */
+    uint32_t dp_hash_alg;
+    uint32_t dp_hash_basis;
     struct ofpbuf frozen_actions;
     const struct ofpact_controller *pause;
 
@@ -396,6 +399,8 @@ const char *xlate_strerror(enum xlate_error error)
         return "Recirculation conflict";
     case XLATE_TOO_MANY_MPLS_LABELS:
         return "Too many MPLS labels";
+    case XLATE_INVALID_TUNNEL_METADATA:
+        return "Invalid tunnel metadata";
     }
     return "Unknown error";
 }
@@ -410,6 +415,17 @@ ctx_trigger_freeze(struct xlate_ctx *ctx)
     ctx->freezing = true;
 }
 
+static void
+ctx_trigger_recirculate_with_hash(struct xlate_ctx *ctx, uint32_t type,
+                                  uint32_t basis)
+{
+    ctx->exit = true;
+    ctx->freezing = true;
+    ctx->recirc_update_dp_hash = true;
+    ctx->dp_hash_alg = type;
+    ctx->dp_hash_basis = basis;
+}
+
 static bool
 ctx_first_frozen_action(const struct xlate_ctx *ctx)
 {
@@ -421,6 +437,7 @@ ctx_cancel_freeze(struct xlate_ctx *ctx)
 {
     if (ctx->freezing) {
         ctx->freezing = false;
+        ctx->recirc_update_dp_hash = false;
         ofpbuf_clear(&ctx->frozen_actions);
         ctx->frozen_actions.header = NULL;
     }
@@ -446,83 +463,6 @@ struct skb_priority_to_dscp {
     uint32_t skb_priority;      /* Priority of this queue (see struct flow). */
 
     uint8_t dscp;               /* DSCP bits to mark outgoing traffic with. */
-};
-
-enum xc_type {
-    XC_RULE,
-    XC_BOND,
-    XC_NETDEV,
-    XC_NETFLOW,
-    XC_MIRROR,
-    XC_LEARN,
-    XC_NORMAL,
-    XC_FIN_TIMEOUT,
-    XC_GROUP,
-    XC_TNL_NEIGH,
-};
-
-/* xlate_cache entries hold enough information to perform the side effects of
- * xlate_actions() for a rule, without needing to perform rule translation
- * from scratch. The primary usage of these is to submit statistics to objects
- * that a flow relates to, although they may be used for other effects as well
- * (for instance, refreshing hard timeouts for learned flows). */
-struct xc_entry {
-    enum xc_type type;
-    union {
-        struct rule_dpif *rule;
-        struct {
-            struct netdev *tx;
-            struct netdev *rx;
-            struct bfd *bfd;
-        } dev;
-        struct {
-            struct netflow *netflow;
-            struct flow *flow;
-            ofp_port_t iface;
-        } nf;
-        struct {
-            struct mbridge *mbridge;
-            mirror_mask_t mirrors;
-        } mirror;
-        struct {
-            struct bond *bond;
-            struct flow *flow;
-            uint16_t vid;
-        } bond;
-        struct {
-            struct ofproto_dpif *ofproto;
-            struct ofputil_flow_mod *fm;
-            struct ofpbuf *ofpacts;
-        } learn;
-        struct {
-            struct ofproto_dpif *ofproto;
-            struct flow *flow;
-            int vlan;
-        } normal;
-        struct {
-            struct rule_dpif *rule;
-            uint16_t idle;
-            uint16_t hard;
-        } fin;
-        struct {
-            struct group_dpif *group;
-            struct ofputil_bucket *bucket;
-        } group;
-        struct {
-            char br_name[IFNAMSIZ];
-            struct in6_addr d_ipv6;
-        } tnl_neigh_cache;
-    } u;
-};
-
-#define XC_ENTRY_FOR_EACH(ENTRY, ENTRIES, XCACHE)               \
-    ENTRIES = XCACHE->entries;                                  \
-    for (ENTRY = ofpbuf_try_pull(&ENTRIES, sizeof *ENTRY);      \
-         ENTRY;                                                 \
-         ENTRY = ofpbuf_try_pull(&ENTRIES, sizeof *ENTRY))
-
-struct xlate_cache {
-    struct ofpbuf entries;
 };
 
 /* Xlate config contains hash maps of all bridges, bundles and ports.
@@ -578,8 +518,6 @@ static size_t count_skb_priorities(const struct xport *);
 static bool dscp_from_skb_priority(const struct xport *, uint32_t skb_priority,
                                    uint8_t *dscp);
 
-static struct xc_entry *xlate_cache_add_entry(struct xlate_cache *xc,
-                                              enum xc_type type);
 static void xlate_xbridge_init(struct xlate_cfg *, struct xbridge *);
 static void xlate_xbundle_init(struct xlate_cfg *, struct xbundle *);
 static void xlate_xport_init(struct xlate_cfg *, struct xport *);
@@ -1510,7 +1448,7 @@ group_is_alive(const struct xlate_ctx *ctx, uint32_t group_id, int depth)
     struct group_dpif *group;
 
     group = group_dpif_lookup(ctx->xbridge->ofproto, group_id,
-                              ctx->tables_version, false);
+                              ctx->xin->tables_version, false);
     if (group) {
         return group_first_live_bucket(ctx, group, depth) != NULL;
     }
@@ -1546,7 +1484,7 @@ group_first_live_bucket(const struct xlate_ctx *ctx,
     struct ofputil_bucket *bucket;
     const struct ovs_list *buckets;
 
-    buckets = group_dpif_get_buckets(group);
+    buckets = group_dpif_get_buckets(group, NULL);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         if (bucket_is_alive(ctx, bucket, depth)) {
             return bucket;
@@ -1567,7 +1505,7 @@ group_best_live_bucket(const struct xlate_ctx *ctx,
     struct ofputil_bucket *bucket;
     const struct ovs_list *buckets;
 
-    buckets = group_dpif_get_buckets(group);
+    buckets = group_dpif_get_buckets(group, NULL);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         if (bucket_is_alive(ctx, bucket, 0)) {
             uint32_t score =
@@ -1696,8 +1634,8 @@ mirror_packet(struct xlate_ctx *ctx, struct xbundle *xbundle,
         struct xc_entry *entry;
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_MIRROR);
-        entry->u.mirror.mbridge = mbridge_ref(xbridge->mbridge);
-        entry->u.mirror.mirrors = mirrors;
+        entry->mirror.mbridge = mbridge_ref(xbridge->mbridge);
+        entry->mirror.mirrors = mirrors;
     }
 
     /* 'mirrors' is a bit-mask of candidates for mirroring.  Iterate as long as
@@ -1938,9 +1876,9 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
 
                 flow = &ctx->xin->flow;
                 entry = xlate_cache_add_entry(ctx->xin->xcache, XC_BOND);
-                entry->u.bond.bond = bond_ref(out_xbundle->bond);
-                entry->u.bond.flow = xmemdup(flow, sizeof *flow);
-                entry->u.bond.vid = vid;
+                entry->bond.bond = bond_ref(out_xbundle->bond);
+                entry->bond.flow = xmemdup(flow, sizeof *flow);
+                entry->bond.vid = vid;
             }
         }
     }
@@ -2048,117 +1986,25 @@ is_admissible(struct xlate_ctx *ctx, struct xport *in_port,
     return true;
 }
 
-/* Checks whether a MAC learning update is necessary for MAC learning table
- * 'ml' given that a packet matching 'flow' was received  on 'in_xbundle' in
- * 'vlan'.
- *
- * Most packets processed through the MAC learning table do not actually
- * change it in any way.  This function requires only a read lock on the MAC
- * learning table, so it is much cheaper in this common case.
- *
- * Keep the code here synchronized with that in update_learning_table__()
- * below. */
-static bool
-is_mac_learning_update_needed(const struct mac_learning *ml,
-                              const struct flow *flow,
-                              struct flow_wildcards *wc,
-                              int vlan, struct xbundle *in_xbundle)
-OVS_REQ_RDLOCK(ml->rwlock)
-{
-    struct mac_entry *mac;
-
-    if (!mac_learning_may_learn(ml, flow->dl_src, vlan)) {
-        return false;
-    }
-
-    mac = mac_learning_lookup(ml, flow->dl_src, vlan);
-    if (!mac || mac_entry_age(ml, mac)) {
-        return true;
-    }
-
-    if (is_gratuitous_arp(flow, wc)) {
-        /* We don't want to learn from gratuitous ARP packets that are
-         * reflected back over bond slaves so we lock the learning table. */
-        if (!in_xbundle->bond) {
-            return true;
-        } else if (mac_entry_is_grat_arp_locked(mac)) {
-            return false;
-        }
-    }
-
-    return mac_entry_get_port(ml, mac) != in_xbundle->ofbundle;
-}
-
-
-/* Updates MAC learning table 'ml' given that a packet matching 'flow' was
- * received on 'in_xbundle' in 'vlan'.
- *
- * This code repeats all the checks in is_mac_learning_update_needed() because
- * the lock was released between there and here and thus the MAC learning state
- * could have changed.
- *
- * Keep the code here synchronized with that in is_mac_learning_update_needed()
- * above. */
 static void
-update_learning_table__(const struct xbridge *xbridge,
-                        const struct flow *flow, struct flow_wildcards *wc,
-                        int vlan, struct xbundle *in_xbundle)
-OVS_REQ_WRLOCK(xbridge->ml->rwlock)
+update_learning_table(const struct xbridge *xbridge,
+                      struct xbundle *in_xbundle, struct eth_addr dl_src,
+                      int vlan, bool is_grat_arp)
 {
-    struct mac_entry *mac;
-
-    if (!mac_learning_may_learn(xbridge->ml, flow->dl_src, vlan)) {
+    if (in_xbundle == &ofpp_none_bundle) {
         return;
     }
 
-    mac = mac_learning_insert(xbridge->ml, flow->dl_src, vlan);
-    if (is_gratuitous_arp(flow, wc)) {
-        /* We don't want to learn from gratuitous ARP packets that are
-         * reflected back over bond slaves so we lock the learning table. */
-        if (!in_xbundle->bond) {
-            mac_entry_set_grat_arp_lock(mac);
-        } else if (mac_entry_is_grat_arp_locked(mac)) {
-            return;
-        }
-    }
-
-    if (mac_entry_get_port(xbridge->ml, mac) != in_xbundle->ofbundle) {
+    if (mac_learning_update(xbridge->ml, dl_src, vlan, is_grat_arp,
+                            in_xbundle->bond != NULL, in_xbundle->ofbundle)) {
         /* The log messages here could actually be useful in debugging,
          * so keep the rate limit relatively high. */
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(30, 300);
 
         VLOG_DBG_RL(&rl, "bridge %s: learned that "ETH_ADDR_FMT" is "
                     "on port %s in VLAN %d",
-                    xbridge->name, ETH_ADDR_ARGS(flow->dl_src),
-                    in_xbundle->name, vlan);
-
-        mac_entry_set_port(xbridge->ml, mac, in_xbundle->ofbundle);
-    }
-}
-
-static void
-update_learning_table(const struct xbridge *xbridge,
-                      const struct flow *flow, struct flow_wildcards *wc,
-                      int vlan, struct xbundle *in_xbundle)
-{
-    bool need_update;
-
-    /* Don't learn the OFPP_NONE port. */
-    if (in_xbundle == &ofpp_none_bundle) {
-        return;
-    }
-
-    /* First try the common case: no change to MAC learning table. */
-    ovs_rwlock_rdlock(&xbridge->ml->rwlock);
-    need_update = is_mac_learning_update_needed(xbridge->ml, flow, wc, vlan,
-                                                in_xbundle);
-    ovs_rwlock_unlock(&xbridge->ml->rwlock);
-
-    if (need_update) {
-        /* Slow path: MAC learning table might need an update. */
-        ovs_rwlock_wrlock(&xbridge->ml->rwlock);
-        update_learning_table__(xbridge, flow, wc, vlan, in_xbundle);
-        ovs_rwlock_unlock(&xbridge->ml->rwlock);
+                    xbridge->name, ETH_ADDR_ARGS(dl_src), in_xbundle->name,
+                    vlan);
     }
 }
 
@@ -2480,17 +2326,21 @@ xlate_normal(struct xlate_ctx *ctx)
     }
 
     /* Learn source MAC. */
-    if (ctx->xin->may_learn) {
-        update_learning_table(ctx->xbridge, flow, wc, vlan, in_xbundle);
+    bool is_grat_arp = is_gratuitous_arp(flow, wc);
+    if (ctx->xin->allow_side_effects) {
+        update_learning_table(ctx->xbridge, in_xbundle, flow->dl_src, vlan,
+                              is_grat_arp);
     }
-    if (ctx->xin->xcache) {
+    if (ctx->xin->xcache && in_xbundle != &ofpp_none_bundle) {
         struct xc_entry *entry;
 
-        /* Save enough info to update mac learning table later. */
+        /* Save just enough info to update mac learning table later. */
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_NORMAL);
-        entry->u.normal.ofproto = ctx->xbridge->ofproto;
-        entry->u.normal.flow = xmemdup(flow, sizeof *flow);
-        entry->u.normal.vlan = vlan;
+        entry->normal.ofproto = ctx->xbridge->ofproto;
+        entry->normal.in_port = flow->in_port.ofp_port;
+        entry->normal.dl_src = flow->dl_src;
+        entry->normal.vlan = vlan;
+        entry->normal.is_gratuitous_arp = is_grat_arp;
     }
 
     /* Determine output bundle. */
@@ -2505,7 +2355,7 @@ xlate_normal(struct xlate_ctx *ctx)
             memset(&wc->masks.tp_src, 0xff, sizeof wc->masks.tp_src);
             if (mcast_snooping_is_membership(flow->tp_src) ||
                 mcast_snooping_is_query(flow->tp_src)) {
-                if (ctx->xin->may_learn && ctx->xin->packet) {
+                if (ctx->xin->allow_side_effects && ctx->xin->packet) {
                     update_mcast_snooping_table(ctx->xbridge, flow, vlan,
                                                 in_xbundle, ctx->xin->packet);
                 }
@@ -2537,7 +2387,7 @@ xlate_normal(struct xlate_ctx *ctx)
             return;
         } else if (is_mld(flow, wc)) {
             ctx->xout->slow |= SLOW_ACTION;
-            if (ctx->xin->may_learn && ctx->xin->packet) {
+            if (ctx->xin->allow_side_effects && ctx->xin->packet) {
                 update_mcast_snooping_table(ctx->xbridge, flow, vlan,
                                             in_xbundle, ctx->xin->packet);
             }
@@ -2865,8 +2715,9 @@ compose_table_xlate(struct xlate_ctx *ctx, const struct xport *out_dev,
     output.port = OFPP_TABLE;
     output.max_len = 0;
 
-    return ofproto_dpif_execute_actions__(xbridge->ofproto, &flow, NULL,
-                                          &output.ofpact, sizeof output,
+    return ofproto_dpif_execute_actions__(xbridge->ofproto,
+                                          ctx->xin->tables_version, &flow,
+                                          NULL, &output.ofpact, sizeof output,
                                           ctx->indentation, ctx->depth,
                                           ctx->resubmits, packet);
 }
@@ -2954,9 +2805,9 @@ build_tunnel_send(struct xlate_ctx *ctx, const struct xport *xport,
         struct xc_entry *entry;
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_TNL_NEIGH);
-        ovs_strlcpy(entry->u.tnl_neigh_cache.br_name, out_dev->xbridge->name,
-                    sizeof entry->u.tnl_neigh_cache.br_name);
-        entry->u.tnl_neigh_cache.d_ipv6 = d_ip6;
+        ovs_strlcpy(entry->tnl_neigh_cache.br_name, out_dev->xbridge->name,
+                    sizeof entry->tnl_neigh_cache.br_name);
+        entry->tnl_neigh_cache.d_ipv6 = d_ip6;
     }
 
     xlate_report(ctx, "tunneling from "ETH_ADDR_FMT" %s"
@@ -3052,9 +2903,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
     if (xport->peer) {
         const struct xport *peer = xport->peer;
         struct flow old_flow = ctx->xin->flow;
+        struct flow_tnl old_flow_tnl_wc = ctx->wc->masks.tunnel;
         bool old_conntrack = ctx->conntracked;
         bool old_was_mpls = ctx->was_mpls;
-        ovs_version_t old_version = ctx->tables_version;
+        ovs_version_t old_version = ctx->xin->tables_version;
         struct ofpbuf old_stack = ctx->stack;
         union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];
         struct ofpbuf old_action_set = ctx->action_set;
@@ -3062,17 +2914,38 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
 
         ofpbuf_use_stub(&ctx->stack, new_stack, sizeof new_stack);
         ofpbuf_use_stub(&ctx->action_set, actset_stub, sizeof actset_stub);
-        ctx->xbridge = peer->xbridge;
         flow->in_port.ofp_port = peer->ofp_port;
         flow->metadata = htonll(0);
         memset(&flow->tunnel, 0, sizeof flow->tunnel);
+        flow->tunnel.metadata.tab = ofproto_dpif_get_tun_tab(peer->xbridge->ofproto);
+        ctx->wc->masks.tunnel.metadata.tab = flow->tunnel.metadata.tab;
         memset(flow->regs, 0, sizeof flow->regs);
         flow->actset_output = OFPP_UNSET;
         ctx->conntracked = false;
         clear_conntrack(flow);
 
+        /* When the patch port points to a different bridge, then the mirrors
+         * for that bridge clearly apply independently to the packet, so we
+         * reset the mirror bitmap to zero and then restore it after the packet
+         * returns.
+         *
+         * When the patch port points to the same bridge, this is more of a
+         * design decision: can mirrors be re-applied to the packet after it
+         * re-enters the bridge, or should we treat that as doubly mirroring a
+         * single packet?  The former may be cleaner, since it respects the
+         * model in which a patch port is like a physical cable plugged from
+         * one switch port to another, but the latter may be less surprising to
+         * users.  We take the latter choice, for now at least.  (To use the
+         * former choice, hard-code 'independent_mirrors' to "true".) */
+        mirror_mask_t old_mirrors = ctx->mirrors;
+        bool independent_mirrors = peer->xbridge != ctx->xbridge;
+        if (independent_mirrors) {
+            ctx->mirrors = 0;
+        }
+        ctx->xbridge = peer->xbridge;
+
         /* The bridge is now known so obtain its table version. */
-        ctx->tables_version
+        ctx->xin->tables_version
             = ofproto_dpif_get_tables_version(ctx->xbridge->ofproto);
 
         if (!process_special(ctx, peer) && may_receive(peer, ctx)) {
@@ -3089,10 +2962,10 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                  * the learning action look at the packet, then drop it. */
                 struct flow old_base_flow = ctx->base_flow;
                 size_t old_size = ctx->odp_actions->size;
-                mirror_mask_t old_mirrors = ctx->mirrors;
+                mirror_mask_t old_mirrors2 = ctx->mirrors;
 
                 xlate_table_action(ctx, flow->in_port.ofp_port, 0, true, true);
-                ctx->mirrors = old_mirrors;
+                ctx->mirrors = old_mirrors2;
                 ctx->base_flow = old_base_flow;
                 ctx->odp_actions->size = old_size;
 
@@ -3101,6 +2974,9 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             }
         }
 
+        if (independent_mirrors) {
+            ctx->mirrors = old_mirrors;
+        }
         ctx->xin->flow = old_flow;
         ctx->xbridge = xport->xbridge;
         ofpbuf_uninit(&ctx->action_set);
@@ -3109,7 +2985,16 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         ctx->stack = old_stack;
 
         /* Restore calling bridge's lookup version. */
-        ctx->tables_version = old_version;
+        ctx->xin->tables_version = old_version;
+
+        /* Since this packet came in on a patch port (from the perspective of
+         * the peer bridge), it cannot have useful tunnel information. As a
+         * result, any wildcards generated on that tunnel also cannot be valid.
+         * The tunnel wildcards must be restored to their original version since
+         * the peer bridge uses a separate tunnel metadata table and therefore
+         * any generated wildcards will be garbage in the context of our
+         * metadata table. */
+        ctx->wc->masks.tunnel = old_flow_tnl_wc;
 
         /* The peer bridge popping MPLS should have no effect on the original
          * bridge. */
@@ -3139,9 +3024,9 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx->xin->xcache, XC_NETDEV);
-            entry->u.dev.tx = netdev_ref(xport->netdev);
-            entry->u.dev.rx = netdev_ref(peer->netdev);
-            entry->u.dev.bfd = bfd_ref(peer->bfd);
+            entry->dev.tx = netdev_ref(xport->netdev);
+            entry->dev.rx = netdev_ref(peer->netdev);
+            entry->dev.bfd = bfd_ref(peer->bfd);
         }
         return;
     }
@@ -3183,7 +3068,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx->xin->xcache, XC_NETDEV);
-            entry->u.dev.tx = netdev_ref(xport->netdev);
+            entry->dev.tx = netdev_ref(xport->netdev);
         }
         out_port = odp_port;
         if (ovs_native_tunneling_is_on(ctx->xbridge->ofproto)) {
@@ -3350,12 +3235,12 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
         ctx->table_id = table_id;
 
         rule = rule_dpif_lookup_from_table(ctx->xbridge->ofproto,
-                                           ctx->tables_version,
+                                           ctx->xin->tables_version,
                                            &ctx->xin->flow, ctx->wc,
                                            ctx->xin->resubmit_stats,
                                            &ctx->table_id, in_port,
-                                           may_packet_in, honor_table_miss);
-
+                                           may_packet_in, honor_table_miss,
+                                           ctx->xin->xcache);
         if (OVS_UNLIKELY(ctx->xin->resubmit_hook)) {
             ctx->xin->resubmit_hook(ctx->xin, rule, ctx->indentation + 1);
         }
@@ -3369,7 +3254,7 @@ xlate_table_action(struct xlate_ctx *ctx, ofp_port_t in_port, uint8_t table_id,
                 struct xc_entry *entry;
 
                 entry = xlate_cache_add_entry(ctx->xin->xcache, XC_RULE);
-                entry->u.rule = rule;
+                entry->rule = rule;
                 rule_dpif_ref(rule);
             }
             xlate_recursively(ctx, rule, table_id <= old_table_id);
@@ -3392,8 +3277,8 @@ xlate_group_stats(struct xlate_ctx *ctx, struct group_dpif *group,
         struct xc_entry *entry;
 
         entry = xlate_cache_add_entry(ctx->xin->xcache, XC_GROUP);
-        entry->u.group.group = group;
-        entry->u.group.bucket = bucket;
+        entry->group.group = group;
+        entry->group.bucket = bucket;
     }
 }
 
@@ -3454,7 +3339,7 @@ xlate_all_group(struct xlate_ctx *ctx, struct group_dpif *group)
     struct ofputil_bucket *bucket;
     const struct ovs_list *buckets;
 
-    buckets = group_dpif_get_buckets(group);
+    buckets = group_dpif_get_buckets(group, NULL);
     LIST_FOR_EACH (bucket, list_node, buckets) {
         xlate_group_bucket(ctx, bucket);
     }
@@ -3545,6 +3430,40 @@ xlate_hash_fields_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 }
 
 static void
+xlate_dp_hash_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
+{
+    struct ofputil_bucket *bucket;
+
+    /* dp_hash value 0 is special since it means that the dp_hash has not been
+     * computed, as all computed dp_hash values are non-zero.  Therefore
+     * compare to zero can be used to decide if the dp_hash value is valid
+     * without masking the dp_hash field. */
+    if (!ctx->xin->flow.dp_hash) {
+        uint64_t param = group_dpif_get_selection_method_param(group);
+
+        ctx_trigger_recirculate_with_hash(ctx, param >> 32, (uint32_t)param);
+    } else {
+        uint32_t n_buckets;
+
+        group_dpif_get_buckets(group, &n_buckets);
+        if (n_buckets) {
+            /* Minimal mask to cover the number of buckets. */
+            uint32_t mask = (1 << log_2_ceil(n_buckets)) - 1;
+            /* Multiplier chosen to make the trivial 1 bit case to
+             * actually distribute amongst two equal weight buckets. */
+            uint32_t basis = 0xc2b73583 * (ctx->xin->flow.dp_hash & mask);
+
+            ctx->wc->masks.dp_hash |= mask;
+            bucket = group_best_live_bucket(ctx, group, basis);
+            if (bucket) {
+                xlate_group_bucket(ctx, bucket);
+                xlate_group_stats(ctx, group, bucket);
+            }
+        }
+    }
+}
+
+static void
 xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
 {
     const char *selection_method = group_dpif_get_selection_method(group);
@@ -3560,6 +3479,8 @@ xlate_select_group(struct xlate_ctx *ctx, struct group_dpif *group)
         xlate_default_select_group(ctx, group);
     } else if (!strcasecmp("hash", selection_method)) {
         xlate_hash_fields_select_group(ctx, group);
+    } else if (!strcasecmp("dp_hash", selection_method)) {
+        xlate_dp_hash_select_group(ctx, group);
     } else {
         /* Parsing of groups should ensure this never happens */
         OVS_NOT_REACHED();
@@ -3598,7 +3519,7 @@ xlate_group_action(struct xlate_ctx *ctx, uint32_t group_id)
 
         /* Take ref only if xcache exists. */
         group = group_dpif_lookup(ctx->xbridge->ofproto, group_id,
-                                  ctx->tables_version, ctx->xin->xcache);
+                                  ctx->xin->tables_version, ctx->xin->xcache);
         if (!group) {
             /* XXX: Should set ctx->error ? */
             return true;
@@ -3674,6 +3595,10 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
         return;
     }
 
+    if (!ctx->xin->allow_side_effects && !ctx->xin->xcache) {
+        return;
+    }
+
     packet = dp_packet_clone(ctx->xin->packet);
     packet_batch_init_packet(&batch, packet);
     odp_execute_actions(NULL, &batch, false,
@@ -3712,13 +3637,28 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     };
     flow_get_metadata(&ctx->xin->flow, &am->pin.up.public.flow_metadata);
 
-    ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
+    /* Async messages are only sent once, so if we send one now, no
+     * xlate cache entry is created.  */
+    if (ctx->xin->allow_side_effects) {
+        ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
+    } else /* xcache */ {
+        struct xc_entry *entry;
+
+        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_CONTROLLER);
+        entry->controller.ofproto = ctx->xbridge->ofproto;
+        entry->controller.am = am;
+    }
+
     dp_packet_delete(packet);
 }
 
 static void
 emit_continuation(struct xlate_ctx *ctx, const struct frozen_state *state)
 {
+    if (!ctx->xin->allow_side_effects && !ctx->xin->xcache) {
+        return;
+    }
+
     struct ofproto_async_msg *am = xmalloc(sizeof *am);
     *am = (struct ofproto_async_msg) {
         .controller_id = ctx->pause->controller_id,
@@ -3750,7 +3690,18 @@ emit_continuation(struct xlate_ctx *ctx, const struct frozen_state *state)
         },
     };
     flow_get_metadata(&ctx->xin->flow, &am->pin.up.public.flow_metadata);
-    ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
+
+    /* Async messages are only sent once, so if we send one now, no
+     * xlate cache entry is created.  */
+    if (ctx->xin->allow_side_effects) {
+        ofproto_dpif_send_async_msg(ctx->xbridge->ofproto, am);
+    } else /* xcache */ {
+        struct xc_entry *entry;
+
+        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_CONTROLLER);
+        entry->controller.ofproto = ctx->xbridge->ofproto;
+        entry->controller.am = am;
+    }
 }
 
 static void
@@ -3790,6 +3741,16 @@ finish_freezing__(struct xlate_ctx *ctx, uint8_t table)
         }
         recirc_refs_add(&ctx->xout->recircs, id);
 
+        if (ctx->recirc_update_dp_hash) {
+            struct ovs_action_hash *act_hash;
+
+            /* Hash action. */
+            act_hash = nl_msg_put_unspec_uninit(ctx->odp_actions,
+                                                OVS_ACTION_ATTR_HASH,
+                                                sizeof *act_hash);
+            act_hash->hash_alg = OVS_HASH_ALG_L4;  /* Make configurable. */
+            act_hash->hash_basis = 0;              /* Make configurable. */
+        }
         nl_msg_put_u32(ctx->odp_actions, OVS_ACTION_ATTR_RECIRC, id);
     }
 
@@ -4147,37 +4108,42 @@ xlate_bundle_action(struct xlate_ctx *ctx,
 }
 
 static void
-xlate_learn_action__(struct xlate_ctx *ctx, const struct ofpact_learn *learn,
-                     struct ofputil_flow_mod *fm, struct ofpbuf *ofpacts)
-{
-    learn_execute(learn, &ctx->xin->flow, fm, ofpacts);
-    if (ctx->xin->may_learn) {
-        ofproto_dpif_flow_mod(ctx->xbridge->ofproto, fm);
-    }
-}
-
-static void
 xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
 {
     learn_mask(learn, ctx->wc);
 
-    if (ctx->xin->xcache) {
-        struct xc_entry *entry;
-
-        entry = xlate_cache_add_entry(ctx->xin->xcache, XC_LEARN);
-        entry->u.learn.ofproto = ctx->xbridge->ofproto;
-        entry->u.learn.fm = xmalloc(sizeof *entry->u.learn.fm);
-        entry->u.learn.ofpacts = ofpbuf_new(64);
-        xlate_learn_action__(ctx, learn, entry->u.learn.fm,
-                             entry->u.learn.ofpacts);
-    } else if (ctx->xin->may_learn) {
+    if (ctx->xin->xcache || ctx->xin->allow_side_effects) {
         uint64_t ofpacts_stub[1024 / 8];
         struct ofputil_flow_mod fm;
+        struct ofproto_flow_mod ofm__, *ofm;
         struct ofpbuf ofpacts;
+        enum ofperr error;
+
+        if (ctx->xin->xcache) {
+            struct xc_entry *entry;
+
+            entry = xlate_cache_add_entry(ctx->xin->xcache, XC_LEARN);
+            entry->learn.ofm = xmalloc(sizeof *entry->learn.ofm);
+            ofm = entry->learn.ofm;
+        } else {
+            ofm = &ofm__;
+        }
 
         ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
-        xlate_learn_action__(ctx, learn, &fm, &ofpacts);
+        learn_execute(learn, &ctx->xin->flow, &fm, &ofpacts);
+        error = ofproto_dpif_flow_mod_init_for_learn(ctx->xbridge->ofproto,
+                                                     &fm, ofm);
         ofpbuf_uninit(&ofpacts);
+
+        if (!error && ctx->xin->allow_side_effects) {
+            error = ofproto_flow_mod_learn(ofm, ctx->xin->xcache != NULL);
+        }
+
+        if (error) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+            VLOG_WARN_RL(&rl, "%s: LEARN action execution failed (%s).",
+                         ctx->xbridge->name, ofperr_to_string(error));
+        }
     }
 }
 
@@ -4195,17 +4161,19 @@ xlate_fin_timeout(struct xlate_ctx *ctx,
                   const struct ofpact_fin_timeout *oft)
 {
     if (ctx->rule) {
-        xlate_fin_timeout__(ctx->rule, ctx->xin->tcp_flags,
-                            oft->fin_idle_timeout, oft->fin_hard_timeout);
+        if (ctx->xin->allow_side_effects) {
+            xlate_fin_timeout__(ctx->rule, ctx->xin->tcp_flags,
+                                oft->fin_idle_timeout, oft->fin_hard_timeout);
+        }
         if (ctx->xin->xcache) {
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx->xin->xcache, XC_FIN_TIMEOUT);
             /* XC_RULE already holds a reference on the rule, none is taken
              * here. */
-            entry->u.fin.rule = ctx->rule;
-            entry->u.fin.idle = oft->fin_idle_timeout;
-            entry->u.fin.hard = oft->fin_hard_timeout;
+            entry->fin.rule = ctx->rule;
+            entry->fin.idle = oft->fin_idle_timeout;
+            entry->fin.hard = oft->fin_hard_timeout;
         }
     }
 }
@@ -4924,9 +4892,10 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
             /* Set the field only if the packet actually has it. */
             if (mf_are_prereqs_ok(mf, flow, wc)) {
-                mf_mask_field_masked(mf, &set_field->mask, wc);
-                mf_set_flow_value_masked(mf, &set_field->value,
-                                         &set_field->mask, flow);
+                mf_mask_field_masked(mf, ofpact_set_field_mask(set_field), wc);
+                mf_set_flow_value_masked(mf, set_field->value,
+                                         ofpact_set_field_mask(set_field),
+                                         flow);
             }
             break;
 
@@ -5086,17 +5055,19 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
 void
 xlate_in_init(struct xlate_in *xin, struct ofproto_dpif *ofproto,
-              const struct flow *flow, ofp_port_t in_port,
-              struct rule_dpif *rule, uint16_t tcp_flags,
+              ovs_version_t version, const struct flow *flow,
+              ofp_port_t in_port, struct rule_dpif *rule, uint16_t tcp_flags,
               const struct dp_packet *packet, struct flow_wildcards *wc,
               struct ofpbuf *odp_actions)
 {
     xin->ofproto = ofproto;
+    xin->tables_version = version;
     xin->flow = *flow;
+    xin->upcall_flow = flow;
     xin->flow.in_port.ofp_port = in_port;
     xin->flow.actset_output = OFPP_UNSET;
     xin->packet = packet;
-    xin->may_learn = packet != NULL;
+    xin->allow_side_effects = packet != NULL;
     xin->rule = rule;
     xin->xcache = NULL;
     xin->ofpacts = NULL;
@@ -5388,6 +5359,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         .mirrors = 0,
 
         .freezing = false,
+        .recirc_update_dp_hash = false,
         .frozen_actions = OFPBUF_STUB_INITIALIZER(frozen_actions_stub),
         .pause = NULL,
 
@@ -5444,6 +5416,9 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
                 goto exit;
             }
             ctx.xbridge = new_bridge;
+            /* The bridge is now known so obtain its table version. */
+            ctx.xin->tables_version
+                = ofproto_dpif_get_tables_version(ctx.xbridge->ofproto);
         }
 
         /* Set the thawed table id.  Note: A table lookup is done only if there
@@ -5494,14 +5469,33 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         ctx.error = XLATE_NO_RECIRCULATION_CONTEXT;
         goto exit;
     }
-    /* The bridge is now known so obtain its table version. */
-    ctx.tables_version = ofproto_dpif_get_tables_version(ctx.xbridge->ofproto);
+
+    /* Tunnel metadata in udpif format must be normalized before translation. */
+    if (flow->tunnel.flags & FLOW_TNL_F_UDPIF) {
+        const struct tun_table *tun_tab = ofproto_dpif_get_tun_tab(xin->ofproto);
+        int err;
+
+        err = tun_metadata_from_geneve_udpif(tun_tab, &xin->upcall_flow->tunnel,
+                                             &xin->upcall_flow->tunnel,
+                                             &flow->tunnel);
+        if (err) {
+            XLATE_REPORT_ERROR(&ctx, "Invalid Geneve tunnel metadata");
+            ctx.error = XLATE_INVALID_TUNNEL_METADATA;
+            goto exit;
+        }
+    } else if (!flow->tunnel.metadata.tab) {
+        /* If the original flow did not come in on a tunnel, then it won't have
+         * FLOW_TNL_F_UDPIF set. However, we still need to have a metadata
+         * table in case we generate tunnel actions. */
+        flow->tunnel.metadata.tab = ofproto_dpif_get_tun_tab(xin->ofproto);
+    }
+    ctx.wc->masks.tunnel.metadata.tab = flow->tunnel.metadata.tab;
 
     if (!xin->ofpacts && !ctx.rule) {
         ctx.rule = rule_dpif_lookup_from_table(
-            ctx.xbridge->ofproto, ctx.tables_version, flow, ctx.wc,
+            ctx.xbridge->ofproto, ctx.xin->tables_version, flow, ctx.wc,
             ctx.xin->resubmit_stats, &ctx.table_id,
-            flow->in_port.ofp_port, true, true);
+            flow->in_port.ofp_port, true, true, ctx.xin->xcache);
         if (ctx.xin->resubmit_stats) {
             rule_dpif_credit_stats(ctx.rule, ctx.xin->resubmit_stats);
         }
@@ -5509,7 +5503,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx.xin->xcache, XC_RULE);
-            entry->u.rule = ctx.rule;
+            entry->rule = ctx.rule;
             rule_dpif_ref(ctx.rule);
         }
 
@@ -5535,8 +5529,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx.xin->xcache, XC_NETDEV);
-            entry->u.dev.rx = netdev_ref(in_port->netdev);
-            entry->u.dev.bfd = bfd_ref(in_port->bfd);
+            entry->dev.rx = netdev_ref(in_port->netdev);
+            entry->dev.bfd = bfd_ref(in_port->bfd);
         }
     }
 
@@ -5644,15 +5638,54 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
             struct xc_entry *entry;
 
             entry = xlate_cache_add_entry(ctx.xin->xcache, XC_NETFLOW);
-            entry->u.nf.netflow = netflow_ref(xbridge->netflow);
-            entry->u.nf.flow = xmemdup(flow, sizeof *flow);
-            entry->u.nf.iface = ctx.nf_output_iface;
+            entry->nf.netflow = netflow_ref(xbridge->netflow);
+            entry->nf.flow = xmemdup(flow, sizeof *flow);
+            entry->nf.iface = ctx.nf_output_iface;
+        }
+    }
+
+    /* Translate tunnel metadata masks to udpif format if necessary. */
+    if (xin->upcall_flow->tunnel.flags & FLOW_TNL_F_UDPIF) {
+        if (ctx.wc->masks.tunnel.metadata.present.map) {
+            const struct flow_tnl *upcall_tnl = &xin->upcall_flow->tunnel;
+            struct geneve_opt opts[TLV_TOT_OPT_SIZE /
+                                   sizeof(struct geneve_opt)];
+
+            tun_metadata_to_geneve_udpif_mask(&flow->tunnel,
+                                              &ctx.wc->masks.tunnel,
+                                              upcall_tnl->metadata.opts.gnv,
+                                              upcall_tnl->metadata.present.len,
+                                              opts);
+             memset(&ctx.wc->masks.tunnel.metadata, 0,
+                    sizeof ctx.wc->masks.tunnel.metadata);
+             memcpy(&ctx.wc->masks.tunnel.metadata.opts.gnv, opts,
+                    upcall_tnl->metadata.present.len);
+        }
+        ctx.wc->masks.tunnel.metadata.present.len = 0xff;
+        ctx.wc->masks.tunnel.metadata.tab = NULL;
+        ctx.wc->masks.tunnel.flags |= FLOW_TNL_F_UDPIF;
+    } else if (!xin->upcall_flow->tunnel.metadata.tab) {
+        /* If we didn't have options in UDPIF format and didn't have an existing
+         * metadata table, then it means that there were no options at all when
+         * we started processing and any wildcards we picked up were from
+         * action generation. Without options on the incoming packet, wildcards
+         * aren't meaningful. To avoid them possibly getting misinterpreted,
+         * just clear everything. */
+        if (ctx.wc->masks.tunnel.metadata.present.map) {
+            memset(&ctx.wc->masks.tunnel.metadata, 0,
+                   sizeof ctx.wc->masks.tunnel.metadata);
+        } else {
+            ctx.wc->masks.tunnel.metadata.tab = NULL;
         }
     }
 
     xlate_wc_finish(&ctx);
 
 exit:
+    /* Reset the table to what it was when we came in. If we only fetched
+     * it locally, then it has no meaning outside of flow translation. */
+    flow->tunnel.metadata.tab = xin->upcall_flow->tunnel.metadata.tab;
+
     ofpbuf_uninit(&ctx.stack);
     ofpbuf_uninit(&ctx.action_set);
     ofpbuf_uninit(&ctx.frozen_actions);
@@ -5682,7 +5715,8 @@ xlate_resume(struct ofproto_dpif *ofproto,
     flow_extract(&packet, &flow);
 
     struct xlate_in xin;
-    xlate_in_init(&xin, ofproto, &flow, 0, NULL, ntohs(flow.tcp_flags),
+    xlate_in_init(&xin, ofproto, ofproto_dpif_get_tables_version(ofproto),
+                  &flow, 0, NULL, ntohs(flow.tcp_flags),
                   &packet, NULL, odp_actions);
 
     struct ofpact_note noop;
@@ -5754,213 +5788,37 @@ xlate_send_packet(const struct ofport_dpif *ofport, bool oam,
     }
 
     if (oam) {
-        struct ofpact_set_field *sf = ofpact_put_SET_FIELD(&ofpacts);
-
-        sf->field = mf_from_id(MFF_TUN_FLAGS);
-        sf->value.be16 = htons(NX_TUN_FLAG_OAM);
-        sf->mask.be16 = htons(NX_TUN_FLAG_OAM);
+        const ovs_be16 oam = htons(NX_TUN_FLAG_OAM);
+        ofpact_put_set_field(&ofpacts, mf_from_id(MFF_TUN_FLAGS), &oam, &oam);
     }
 
     ofpact_put_OUTPUT(&ofpacts)->port = xport->ofp_port;
 
-    return ofproto_dpif_execute_actions(xport->xbridge->ofproto, &flow, NULL,
+    /* Actions here are not referring to anything versionable (flow tables or
+     * groups) so we don't need to worry about the version here. */
+    return ofproto_dpif_execute_actions(xport->xbridge->ofproto,
+                                        OVS_VERSION_MAX, &flow, NULL,
                                         ofpacts.data, ofpacts.size, packet);
 }
 
-struct xlate_cache *
-xlate_cache_new(void)
-{
-    struct xlate_cache *xcache = xmalloc(sizeof *xcache);
-
-    ofpbuf_init(&xcache->entries, 512);
-    return xcache;
-}
-
-static struct xc_entry *
-xlate_cache_add_entry(struct xlate_cache *xcache, enum xc_type type)
-{
-    struct xc_entry *entry;
-
-    entry = ofpbuf_put_zeros(&xcache->entries, sizeof *entry);
-    entry->type = type;
-
-    return entry;
-}
-
-static void
-xlate_cache_netdev(struct xc_entry *entry, const struct dpif_flow_stats *stats)
-{
-    if (entry->u.dev.tx) {
-        netdev_vport_inc_tx(entry->u.dev.tx, stats);
-    }
-    if (entry->u.dev.rx) {
-        netdev_vport_inc_rx(entry->u.dev.rx, stats);
-    }
-    if (entry->u.dev.bfd) {
-        bfd_account_rx(entry->u.dev.bfd, stats);
-    }
-}
-
-static void
-xlate_cache_normal(struct ofproto_dpif *ofproto, struct flow *flow, int vlan)
+void
+xlate_mac_learning_update(const struct ofproto_dpif *ofproto,
+                          ofp_port_t in_port, struct eth_addr dl_src,
+                          int vlan, bool is_grat_arp)
 {
     struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     struct xbridge *xbridge;
     struct xbundle *xbundle;
-    struct flow_wildcards wc;
 
     xbridge = xbridge_lookup(xcfg, ofproto);
     if (!xbridge) {
         return;
     }
 
-    xbundle = lookup_input_bundle(xbridge, flow->in_port.ofp_port, false,
-                                  NULL);
+    xbundle = lookup_input_bundle(xbridge, in_port, false, NULL);
     if (!xbundle) {
         return;
     }
 
-    update_learning_table(xbridge, flow, &wc, vlan, xbundle);
-}
-
-/* Push stats and perform side effects of flow translation. */
-void
-xlate_push_stats(struct xlate_cache *xcache,
-                 const struct dpif_flow_stats *stats)
-{
-    struct xc_entry *entry;
-    struct ofpbuf entries = xcache->entries;
-    struct eth_addr dmac;
-
-    if (!stats->n_packets) {
-        return;
-    }
-
-    XC_ENTRY_FOR_EACH (entry, entries, xcache) {
-        switch (entry->type) {
-        case XC_RULE:
-            rule_dpif_credit_stats(entry->u.rule, stats);
-            break;
-        case XC_BOND:
-            bond_account(entry->u.bond.bond, entry->u.bond.flow,
-                         entry->u.bond.vid, stats->n_bytes);
-            break;
-        case XC_NETDEV:
-            xlate_cache_netdev(entry, stats);
-            break;
-        case XC_NETFLOW:
-            netflow_flow_update(entry->u.nf.netflow, entry->u.nf.flow,
-                                entry->u.nf.iface, stats);
-            break;
-        case XC_MIRROR:
-            mirror_update_stats(entry->u.mirror.mbridge,
-                                entry->u.mirror.mirrors,
-                                stats->n_packets, stats->n_bytes);
-            break;
-        case XC_LEARN:
-            ofproto_dpif_flow_mod(entry->u.learn.ofproto, entry->u.learn.fm);
-            break;
-        case XC_NORMAL:
-            xlate_cache_normal(entry->u.normal.ofproto, entry->u.normal.flow,
-                               entry->u.normal.vlan);
-            break;
-        case XC_FIN_TIMEOUT:
-            xlate_fin_timeout__(entry->u.fin.rule, stats->tcp_flags,
-                                entry->u.fin.idle, entry->u.fin.hard);
-            break;
-        case XC_GROUP:
-            group_dpif_credit_stats(entry->u.group.group, entry->u.group.bucket,
-                                    stats);
-            break;
-        case XC_TNL_NEIGH:
-            /* Lookup neighbor to avoid timeout. */
-            tnl_neigh_lookup(entry->u.tnl_neigh_cache.br_name,
-                             &entry->u.tnl_neigh_cache.d_ipv6, &dmac);
-            break;
-        default:
-            OVS_NOT_REACHED();
-        }
-    }
-}
-
-static void
-xlate_dev_unref(struct xc_entry *entry)
-{
-    if (entry->u.dev.tx) {
-        netdev_close(entry->u.dev.tx);
-    }
-    if (entry->u.dev.rx) {
-        netdev_close(entry->u.dev.rx);
-    }
-    if (entry->u.dev.bfd) {
-        bfd_unref(entry->u.dev.bfd);
-    }
-}
-
-static void
-xlate_cache_clear_netflow(struct netflow *netflow, struct flow *flow)
-{
-    netflow_flow_clear(netflow, flow);
-    netflow_unref(netflow);
-    free(flow);
-}
-
-void
-xlate_cache_clear(struct xlate_cache *xcache)
-{
-    struct xc_entry *entry;
-    struct ofpbuf entries;
-
-    if (!xcache) {
-        return;
-    }
-
-    XC_ENTRY_FOR_EACH (entry, entries, xcache) {
-        switch (entry->type) {
-        case XC_RULE:
-            rule_dpif_unref(entry->u.rule);
-            break;
-        case XC_BOND:
-            free(entry->u.bond.flow);
-            bond_unref(entry->u.bond.bond);
-            break;
-        case XC_NETDEV:
-            xlate_dev_unref(entry);
-            break;
-        case XC_NETFLOW:
-            xlate_cache_clear_netflow(entry->u.nf.netflow, entry->u.nf.flow);
-            break;
-        case XC_MIRROR:
-            mbridge_unref(entry->u.mirror.mbridge);
-            break;
-        case XC_LEARN:
-            free(entry->u.learn.fm);
-            ofpbuf_delete(entry->u.learn.ofpacts);
-            break;
-        case XC_NORMAL:
-            free(entry->u.normal.flow);
-            break;
-        case XC_FIN_TIMEOUT:
-            /* 'u.fin.rule' is always already held as a XC_RULE, which
-             * has already released it's reference above. */
-            break;
-        case XC_GROUP:
-            group_dpif_unref(entry->u.group.group);
-            break;
-        case XC_TNL_NEIGH:
-            break;
-        default:
-            OVS_NOT_REACHED();
-        }
-    }
-
-    ofpbuf_clear(&xcache->entries);
-}
-
-void
-xlate_cache_delete(struct xlate_cache *xcache)
-{
-    xlate_cache_clear(xcache);
-    ofpbuf_uninit(&xcache->entries);
-    free(xcache);
+    update_learning_table(xbridge, xbundle, dl_src, vlan, is_grat_arp);
 }

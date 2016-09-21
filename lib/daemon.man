@@ -74,8 +74,8 @@ allowed, with current user or group are assumed respectively. Only daemons
 started by the root user accepts this argument.
 .IP
 On Linux, daemons will be granted CAP_IPC_LOCK and CAP_NET_BIND_SERVICES
-before dropping root privileges. Daemons interact with datapath,
-such as ovs-vswitchd, will be granted two additional capabilities, namely
+before dropping root privileges. Daemons that interact with a datapath,
+such as \fBovs\-vswitchd\fR, will be granted two additional capabilities, namely
 CAP_NET_ADMIN and CAP_NET_RAW. The capability change will apply even if
 new user is "root".
 .IP

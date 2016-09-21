@@ -3339,8 +3339,8 @@ NXST_FLOW_MONITOR reply (xid=0x4):
 AT_CLEANUP
 
 
-AT_SETUP([OFPT_BUNDLE_CONTROL - OPEN_REQUEST])
-AT_KEYWORDS([ofp-print])
+AT_SETUP([OFPT_BUNDLE_CONTROL - atomic OPEN_REQUEST])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 21 00 10 00 00 00 00 \
 00 00 00 01 00 00 00 01 \
@@ -3350,8 +3350,8 @@ OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x0):
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_BUNDLE_CONTROL - OPEN_REQUEST])
-AT_KEYWORDS([ofp-print])
+AT_SETUP([OFPT_BUNDLE_CONTROL - ordered OPEN_REQUEST])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 21 00 10 00 00 00 00 \
 00 00 00 01 00 00 00 02 \
@@ -3361,8 +3361,8 @@ OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x0):
 ])
 AT_CLEANUP
 
-AT_SETUP([OFPT_BUNDLE_CONTROL - OPEN_REQUEST])
-AT_KEYWORDS([ofp-print])
+AT_SETUP([OFPT_BUNDLE_CONTROL - atomic ordered OPEN_REQUEST])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 21 00 10 00 00 00 00 \
 00 00 00 01 00 00 00 03 \
@@ -3373,7 +3373,7 @@ OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x0):
 AT_CLEANUP
 
 AT_SETUP([OFPT_BUNDLE_CONTROL - OPEN_REPLY])
-AT_KEYWORDS([ofp-print])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 21 00 10 00 00 00 00 \
 00 00 00 01 00 01 00 01 \
@@ -3384,7 +3384,7 @@ OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x0):
 AT_CLEANUP
 
 AT_SETUP([OFPT_BUNDLE_CONTROL - CLOSE_REQUEST])
-AT_KEYWORDS([ofp-print])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 21 00 10 00 00 00 00 \
 00 00 00 01 00 02 00 01 \
@@ -3395,7 +3395,7 @@ OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x0):
 AT_CLEANUP
 
 AT_SETUP([OFPT_BUNDLE_CONTROL - CLOSE_REPLY])
-AT_KEYWORDS([ofp-print])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 21 00 10 00 00 00 00 \
 00 00 00 01 00 03 00 01 \
@@ -3406,7 +3406,7 @@ OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x0):
 AT_CLEANUP
 
 AT_SETUP([OFPT_BUNDLE_CONTROL - COMMIT_REQUEST])
-AT_KEYWORDS([ofp-print])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 21 00 10 00 00 00 00 \
 00 00 00 01 00 04 00 01 \
@@ -3417,7 +3417,7 @@ OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x0):
 AT_CLEANUP
 
 AT_SETUP([OFPT_BUNDLE_CONTROL - COMMIT_REPLY])
-AT_KEYWORDS([ofp-print])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 21 00 10 00 00 00 00 \
 00 00 00 01 00 05 00 01 \
@@ -3428,7 +3428,7 @@ OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x0):
 AT_CLEANUP
 
 AT_SETUP([OFPT_BUNDLE_CONTROL - DISCARD_REQUEST])
-AT_KEYWORDS([ofp-print])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 21 00 10 00 00 00 00 \
 00 00 00 01 00 06 00 01 \
@@ -3439,7 +3439,7 @@ OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x0):
 AT_CLEANUP
 
 AT_SETUP([OFPT_BUNDLE_CONTROL - DISCARD_REPLY])
-AT_KEYWORDS([ofp-print])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 21 00 10 00 00 00 00 \
 00 00 00 01 00 07 00 01 \
@@ -3450,7 +3450,7 @@ OFPT_BUNDLE_CONTROL (OF1.4) (xid=0x0):
 AT_CLEANUP
 
 AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - verify xid])
-AT_KEYWORDS([ofp-print])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 22 00 20 00 00 00 00 00 00 00 01 00 00 00 01 \
 05 00 00 08 00 00 00 01 00 00 00 00 00 00 00 00 \
@@ -3460,7 +3460,7 @@ OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x0): ***decode error: OFPBFC_MSG_BAD_XID**
 AT_CLEANUP
 
 AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - reject OFPT_HELLO])
-AT_KEYWORDS([ofp-print])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl '-vPATTERN:console:%c|%p|%m' ofp-print "\
 05 22 00 20 00 00 00 00 00 00 00 01 00 00 00 01 \
 05 00 00 10 00 00 00 00 00 00 00 00 00 00 00 00 \
@@ -3472,7 +3472,7 @@ ofp_util|WARN|OFPT_HELLO message not allowed inside OFPT14_BUNDLE_ADD_MESSAGE
 AT_CLEANUP
 
 AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - FLOW_MOD])
-AT_KEYWORDS([ofp-print])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 22 00 a0 00 00 00 02 00 00 00 01 00 00 00 01 \
 05 0e 00 90 00 00 00 02 00 00 00 00 00 00 00 00 \
@@ -3492,7 +3492,7 @@ OFPT_FLOW_MOD (OF1.4) (xid=0x2): ADD table:1 priority=65535,arp,in_port=1,vlan_t
 AT_CLEANUP
 
 AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - PORT_MOD])
-AT_KEYWORDS([ofp-print])
+AT_KEYWORDS([ofp-print bundle])
 AT_CHECK([ovs-ofctl ofp-print "\
 05 22 00 38 00 00 00 03 00 00 00 01 00 00 00 01 \
 05 10 00 28 00 00 00 03 00 00 00 03 00 00 00 00 \
@@ -3505,6 +3505,49 @@ OFPT_PORT_MOD (OF1.4) (xid=0x3): port: 3: addr:50:54:00:00:00:01
      config: PORT_DOWN
      mask:   PORT_DOWN
      advertise: 10MB-HD
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - GROUP_MOD])
+AT_KEYWORDS([ofp-print bundle])
+AT_CHECK([ovs-ofctl ofp-print "\
+06 22 00 c8 00 00 00 03 00 00 00 01 00 00 00 01 \
+06 0f 00 b8 00 00 00 03 00 00 01 00 87 65 43 21 \
+00 78 00 00 ff ff ff ff 00 28 00 10 00 00 00 00 \
+00 00 00 10 00 00 00 01 00 00 00 00 00 00 00 00 \
+00 00 00 08 00 64 00 00 00 01 00 08 00 00 00 01 \
+00 28 00 10 00 00 00 01 00 00 00 10 00 00 00 02 \
+00 00 00 00 00 00 00 00 00 00 00 08 00 c8 00 00 \
+00 01 00 08 00 00 00 02 00 28 00 10 00 00 00 02 \
+00 00 00 10 00 00 00 03 00 00 00 00 00 00 00 00 \
+00 00 00 08 00 c8 00 00 00 01 00 08 00 00 00 03 \
+ff ff 00 28 00 00 15 40 00 00 00 01 00 00 00 00 \
+68 61 73 68 00 00 00 00 00 00 00 00 00 00 00 00 \
+00 00 00 00 00 00 00 07 \
+"], [0], [dnl
+OFPT_BUNDLE_ADD_MESSAGE (OF1.5) (xid=0x3):
+ bundle_id=0x1 flags=atomic
+OFPT_GROUP_MOD (OF1.5) (xid=0x3):
+ ADD group_id=2271560481,type=select,selection_method=hash,selection_method_param=7,bucket=bucket_id:0,weight:100,watch_port:1,actions=output:1,bucket=bucket_id:1,weight:200,watch_port:2,actions=output:2,bucket=bucket_id:2,weight:200,watch_port:3,actions=output:3
+])
+AT_CLEANUP
+
+AT_SETUP([OFPT_BUNDLE_ADD_MESSAGE - PACKET_OUT])
+AT_KEYWORDS([ofp-print bundle packet-out])
+AT_CHECK([ovs-ofctl ofp-print "\
+05 22 00 74 00 00 00 03 00 00 00 01 00 00 00 01 \
+05 0d 00 64 00 00 00 03 ff ff ff ff ff ff ff fe \
+00 10 00 00 00 00 00 00 00 00 00 10 ff ff ff fb \
+05 dc 00 00 00 00 00 00 50 54 00 00 00 05 50 54 \
+00 00 00 06 08 00 45 00 00 28 00 00 40 00 40 06 \
+b9 7c c0 a8 00 02 c0 a8 00 01 00 00 2b 60 00 00 \
+00 00 6a 4f 2b 58 50 14 00 00 6d 75 00 00 00 00 \
+00 00 00 00 \
+"], [0], [dnl
+OFPT_BUNDLE_ADD_MESSAGE (OF1.4) (xid=0x3):
+ bundle_id=0x1 flags=atomic
+OFPT_PACKET_OUT (OF1.4) (xid=0x3): in_port=LOCAL actions=FLOOD data_len=60
+tcp,vlan_tci=0x0000,dl_src=50:54:00:00:00:06,dl_dst=50:54:00:00:00:05,nw_src=192.168.0.2,nw_dst=192.168.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=0,tp_dst=11104,tcp_flags=rst|ack tcp_csum:6d75
 ])
 AT_CLEANUP
 

@@ -198,6 +198,7 @@ AT_CLEANUP
 
 AT_SETUP([tunnel - encrypted tunnel and not setting skb_mark])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 AT_SKIP_IF([$non_ascii_cwd])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
@@ -220,6 +221,7 @@ AT_CLEANUP
 
 AT_SETUP([tunnel - encrypted tunnel and setting skb_mark to 1])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 AT_SKIP_IF([$non_ascii_cwd])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \
@@ -242,6 +244,7 @@ AT_CLEANUP
 
 AT_SETUP([tunnel - encrypted tunnel and setting skb_mark to 2])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test "$IS_WIN32" = "yes"])
 AT_SKIP_IF([$non_ascii_cwd])
 OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=gre \
                     options:remote_ip=1.1.1.1 options:local_ip=2.2.2.2 \

@@ -21,6 +21,12 @@
   <Product Id="{0DF60ED5-6C22-49A0-913E-77412D35C400}" Name="Open vSwitch for Hyper-V" Language="1033" Version="1.0.0.0"
            Manufacturer="Open vSwitch" UpgradeCode="da802b12-433d-4742-a7ae-783aa0c48222">
     <Package InstallerVersion="405" Compressed="yes" InstallScope="perMachine" InstallPrivileges="elevated" Platform="x64" />
+
+    <Property Id="Description" Value="Open vSwitch Extension" />
+    <Property Id="DriverID" Value="{583CC151-73EC-4A6A-8B47-578297AD7623}" />
+    <Property Id="DriverVersion" Value="6.3.9600.17298" />
+    <Property Id="ExtensionType" Value="Forwarding" />
+
     <Condition Message="This application is only supported on Windows 2012 or higher.">
        <![CDATA[Installed OR (VersionNT >= 602)]]>
     </Condition>

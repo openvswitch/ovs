@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+# Copyright (c) 2009, 2010, 2011, 2012, 2013, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -339,8 +339,11 @@ class BaseType(object):
 
         return english
 
-    def toCType(self, prefix):
+    def toCType(self, prefix, refTable=True):
         if self.ref_table_name:
+            if not refTable:
+                assert self.type == UuidType
+                return 'struct uuid *'
             return "struct %s%s *" % (prefix, self.ref_table_name.lower())
         else:
             return {IntegerType: 'int64_t ',
@@ -349,21 +352,37 @@ class BaseType(object):
                     BooleanType: 'bool ',
                     StringType: 'char *'}[self.type]
 
+    def to_const_c_type(self, prefix, refTable=True):
+        nonconst = self.toCType(prefix, refTable)
+
+        # A "const" prefix works OK for the types we use, but it's a little
+        # weird to write "const bool" as, e.g., a function parameter since
+        # there's no real "const"ness there.  So, omit the "const" except
+        # when a pointer is involved.
+        if '*' in nonconst:
+            return 'const ' + nonconst
+        else:
+            return nonconst
+
     def toAtomicType(self):
         return "OVSDB_TYPE_%s" % self.type.to_string().upper()
 
-    def copyCValue(self, dst, src):
+    def copyCValue(self, dst, src, refTable=True):
         args = {'dst': dst, 'src': src}
         if self.ref_table_name:
+            if not refTable:
+                return "%(dst)s = *%(src)s;" % args
             return ("%(dst)s = %(src)s->header_.uuid;") % args
         elif self.type == StringType:
             return "%(dst)s = xstrdup(%(src)s);" % args
         else:
             return "%(dst)s = %(src)s;" % args
 
-    def assign_c_value_casting_away_const(self, dst, src):
+    def assign_c_value_casting_away_const(self, dst, src, refTable=True):
         args = {'dst': dst, 'src': src}
         if self.ref_table_name:
+            if not refTable:
+                return "%(dst)s = *%(src)s;" % args
             return ("%(dst)s = %(src)s->header_.uuid;") % args
         elif self.type == StringType:
             return "%(dst)s = CONST_CAST(char *, %(src)s);" % args

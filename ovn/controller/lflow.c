@@ -38,170 +38,24 @@ VLOG_DEFINE_THIS_MODULE(lflow);
 /* Contains "struct expr_symbol"s for fields supported by OVN lflows. */
 static struct shash symtab;
 
-/* Contains an internal expr datastructure that represents an address set. */
-static struct shash expr_address_sets;
-
-static bool full_flow_processing = false;
-static bool full_logical_flow_processing = false;
-static bool full_neighbor_flow_processing = false;
-
-void
-lflow_reset_processing(void)
-{
-    full_flow_processing = true;
-    physical_reset_processing();
-}
-
 void
 lflow_init(void)
 {
     ovn_init_symtab(&symtab);
-    shash_init(&expr_address_sets);
 }
 
-/* Details of an address set currently in address_sets. We keep a cached
- * copy of sets still in their string form here to make it easier to compare
- * with the current values in the OVN_Southbound database. */
-struct address_set {
-    char **addresses;
-    size_t n_addresses;
-};
-
-/* struct address_set instances for address sets currently in the symtab,
- * hashed on the address set name. */
-static struct shash local_address_sets = SHASH_INITIALIZER(&local_address_sets);
-
-static int
-addr_cmp(const void *p1, const void *p2)
-{
-    const char *s1 = p1;
-    const char *s2 = p2;
-    return strcmp(s1, s2);
-}
-
-/* Return true if the address sets match, false otherwise. */
-static bool
-address_sets_match(const struct address_set *addr_set,
-                   const struct sbrec_address_set *addr_set_rec)
-{
-    char **addrs1;
-    char **addrs2;
-
-    if (addr_set->n_addresses != addr_set_rec->n_addresses) {
-        return false;
-    }
-    size_t n_addresses = addr_set->n_addresses;
-
-    addrs1 = xmemdup(addr_set->addresses,
-                     n_addresses * sizeof addr_set->addresses[0]);
-    addrs2 = xmemdup(addr_set_rec->addresses,
-                     n_addresses * sizeof addr_set_rec->addresses[0]);
-
-    qsort(addrs1, n_addresses, sizeof *addrs1, addr_cmp);
-    qsort(addrs2, n_addresses, sizeof *addrs2, addr_cmp);
-
-    bool res = true;
-    size_t i;
-    for (i = 0; i <  n_addresses; i++) {
-        if (strcmp(addrs1[i], addrs2[i])) {
-            res = false;
-            break;
-        }
-    }
-
-    free(addrs1);
-    free(addrs2);
-
-    return res;
-}
-
+/* Iterate address sets in the southbound database.  Create and update the
+ * corresponding symtab entries as necessary. */
 static void
-address_set_destroy(struct address_set *addr_set)
+update_address_sets(struct controller_ctx *ctx,
+                    struct shash *expr_address_sets_p)
+
 {
-    size_t i;
-    for (i = 0; i < addr_set->n_addresses; i++) {
-        free(addr_set->addresses[i]);
+    const struct sbrec_address_set *as;
+    SBREC_ADDRESS_SET_FOR_EACH (as, ctx->ovnsb_idl) {
+        expr_macros_add(expr_address_sets_p, as->name,
+                        (const char *const *) as->addresses, as->n_addresses);
     }
-    if (addr_set->n_addresses) {
-        free(addr_set->addresses);
-    }
-    free(addr_set);
-}
-
-static void
-update_address_sets(struct controller_ctx *ctx)
-{
-    /* Remember the names of all address sets currently in expr_address_sets
-     * so we can detect address sets that have been deleted. */
-    struct sset cur_addr_set_names = SSET_INITIALIZER(&cur_addr_set_names);
-
-    struct shash_node *node;
-    SHASH_FOR_EACH (node, &local_address_sets) {
-        sset_add(&cur_addr_set_names, node->name);
-    }
-
-    /* Iterate address sets in the southbound database.  Create and update the
-     * corresponding symtab entries as necessary. */
-    const struct sbrec_address_set *addr_set_rec;
-    SBREC_ADDRESS_SET_FOR_EACH (addr_set_rec, ctx->ovnsb_idl) {
-        struct address_set *addr_set =
-            shash_find_data(&local_address_sets, addr_set_rec->name);
-
-        bool create_set = false;
-        if (addr_set) {
-            /* This address set has already been added.  We must determine
-             * if the symtab entry needs to be updated due to a change. */
-            sset_find_and_delete(&cur_addr_set_names, addr_set_rec->name);
-            if (!address_sets_match(addr_set, addr_set_rec)) {
-                shash_find_and_delete(&local_address_sets, addr_set_rec->name);
-                expr_macros_remove(&expr_address_sets, addr_set_rec->name);
-                address_set_destroy(addr_set);
-                addr_set = NULL;
-                create_set = true;
-            }
-        } else {
-            /* This address set is not yet in the symtab, so add it. */
-            create_set = true;
-        }
-
-        if (create_set) {
-            /* The address set is either new or has changed.  Create a symbol
-             * that resolves to the full set of addresses.  Store it in
-             * address_sets to remember that we created this symbol. */
-            addr_set = xzalloc(sizeof *addr_set);
-            addr_set->n_addresses = addr_set_rec->n_addresses;
-            if (addr_set_rec->n_addresses) {
-                addr_set->addresses = xmalloc(addr_set_rec->n_addresses
-                                              * sizeof addr_set->addresses[0]);
-                size_t i;
-                for (i = 0; i < addr_set_rec->n_addresses; i++) {
-                    addr_set->addresses[i] = xstrdup(addr_set_rec->addresses[i]);
-                }
-            }
-            shash_add(&local_address_sets, addr_set_rec->name, addr_set);
-
-            expr_macros_add(&expr_address_sets, addr_set_rec->name,
-                            (const char * const *) addr_set->addresses,
-                            addr_set->n_addresses);
-        }
-    }
-
-    /* Anything remaining in cur_addr_set_names refers to an address set that
-     * has been deleted from the southbound database.  We should delete
-     * the corresponding symtab entry. */
-    const char *cur_node, *next_node;
-    SSET_FOR_EACH_SAFE (cur_node, next_node, &cur_addr_set_names) {
-        expr_macros_remove(&expr_address_sets, cur_node);
-
-        struct address_set *addr_set
-            = shash_find_and_delete(&local_address_sets, cur_node);
-        address_set_destroy(addr_set);
-
-        struct sset_node *sset_node = SSET_NODE_FROM_NAME(cur_node);
-        sset_delete(&cur_addr_set_names, sset_node);
-    }
-
-    sset_destroy(&cur_addr_set_names);
 }
 
 struct lookup_port_aux {
@@ -219,7 +73,9 @@ static void consider_logical_flow(const struct lport_index *lports,
                                   const struct simap *ct_zones,
                                   struct hmap *dhcp_opts_p,
                                   struct hmap *dhcpv6_opts_p,
-                                  uint32_t *conj_id_ofs_p);
+                                  uint32_t *conj_id_ofs_p,
+                                  struct hmap *flow_table,
+                                  struct shash *expr_address_sets_p);
 
 static bool
 lookup_port_cb(const void *aux_, const char *port_name, unsigned int *portp)
@@ -257,19 +113,12 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
                   const struct hmap *local_datapaths,
                   const struct hmap *patched_datapaths,
                   struct group_table *group_table,
-                  const struct simap *ct_zones)
+                  const struct simap *ct_zones,
+                  struct hmap *flow_table,
+                  struct shash *expr_address_sets_p)
 {
     uint32_t conj_id_ofs = 1;
     const struct sbrec_logical_flow *lflow;
-
-    if (full_flow_processing) {
-        ovn_flow_table_clear();
-        ovn_group_table_clear(group_table, false);
-        full_logical_flow_processing = true;
-        full_neighbor_flow_processing = true;
-        full_flow_processing = false;
-        physical_reset_processing();
-    }
 
     struct hmap dhcp_opts = HMAP_INITIALIZER(&dhcp_opts);
     struct hmap dhcpv6_opts = HMAP_INITIALIZER(&dhcpv6_opts);
@@ -286,31 +135,11 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
                     dhcpv6_opt_row->type);
     }
 
-    if (full_logical_flow_processing) {
-        SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
-            consider_logical_flow(lports, mcgroups, lflow, local_datapaths,
-                                  patched_datapaths, group_table, ct_zones,
-                                  &dhcp_opts, &dhcpv6_opts, &conj_id_ofs);
-        }
-        full_logical_flow_processing = false;
-    } else {
-        SBREC_LOGICAL_FLOW_FOR_EACH_TRACKED (lflow, ctx->ovnsb_idl) {
-            /* Remove any flows that should be removed. */
-            if (sbrec_logical_flow_is_deleted(lflow)) {
-                ofctrl_remove_flows(&lflow->header_.uuid);
-            } else {
-                /* Now, add/modify existing flows. If the logical
-                 * flow is a modification, just remove the flows
-                 * for this row, and then add new flows. */
-                if (!sbrec_logical_flow_is_new(lflow)) {
-                    ofctrl_remove_flows(&lflow->header_.uuid);
-                }
-                consider_logical_flow(lports, mcgroups, lflow,
-                                      local_datapaths, patched_datapaths,
-                                      group_table, ct_zones,
-                                      &dhcp_opts, &dhcpv6_opts, &conj_id_ofs);
-            }
-        }
+    SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
+        consider_logical_flow(lports, mcgroups, lflow, local_datapaths,
+                              patched_datapaths, group_table, ct_zones,
+                              &dhcp_opts, &dhcpv6_opts, &conj_id_ofs,
+                              flow_table, expr_address_sets_p);
     }
 
     dhcp_opts_destroy(&dhcp_opts);
@@ -327,7 +156,9 @@ consider_logical_flow(const struct lport_index *lports,
                       const struct simap *ct_zones,
                       struct hmap *dhcp_opts_p,
                       struct hmap *dhcpv6_opts_p,
-                      uint32_t *conj_id_ofs_p)
+                      uint32_t *conj_id_ofs_p,
+                      struct hmap *flow_table,
+                      struct shash *expr_address_sets_p)
 {
     /* Determine translation of logical table IDs to physical table IDs. */
     bool ingress = !strcmp(lflow->pipeline, "ingress");
@@ -404,6 +235,7 @@ consider_logical_flow(const struct lport_index *lports,
         VLOG_WARN_RL(&rl, "error parsing actions \"%s\": %s",
                      lflow->actions, error);
         free(error);
+        ovnacts_free(ovnacts.data, ovnacts.size);
         ofpbuf_uninit(&ovnacts);
         return;
     }
@@ -419,15 +251,16 @@ consider_logical_flow(const struct lport_index *lports,
     struct ovnact_encode_params ep = {
         .lookup_port = lookup_port_cb,
         .aux = &aux,
+        .is_switch = is_switch(ldp),
         .ct_zones = ct_zones,
         .group_table = group_table,
-        .lflow_uuid = lflow->header_.uuid,
 
         .first_ptable = first_ptable,
         .output_ptable = output_ptable,
         .mac_bind_ptable = OFTABLE_MAC_BINDING,
     };
     ovnacts_encode(ovnacts.data, ovnacts.size, &ep, &ofpacts);
+    ovnacts_free(ovnacts.data, ovnacts.size);
     ofpbuf_uninit(&ovnacts);
 
     /* Translate OVN match into table of OpenFlow matches. */
@@ -435,7 +268,7 @@ consider_logical_flow(const struct lport_index *lports,
     struct expr *expr;
 
     expr = expr_parse_string(lflow->match, &symtab,
-                             &expr_address_sets, &error);
+                             expr_address_sets_p, &error);
     if (!error) {
         if (prereqs) {
             expr = expr_combine(EXPR_T_AND, expr, prereqs);
@@ -468,8 +301,8 @@ consider_logical_flow(const struct lport_index *lports,
             m->match.flow.conj_id += *conj_id_ofs_p;
         }
         if (!m->n) {
-            ofctrl_add_flow(ptable, lflow->priority, &m->match, &ofpacts,
-                            &lflow->header_.uuid);
+            ofctrl_add_flow(flow_table, ptable, lflow->priority, &m->match,
+                            &ofpacts);
         } else {
             uint64_t conj_stubs[64 / 8];
             struct ofpbuf conj;
@@ -484,8 +317,8 @@ consider_logical_flow(const struct lport_index *lports,
                 dst->clause = src->clause;
                 dst->n_clauses = src->n_clauses;
             }
-            ofctrl_add_flow(ptable, lflow->priority, &m->match, &conj,
-                            &lflow->header_.uuid);
+            ofctrl_add_flow(flow_table, ptable, lflow->priority, &m->match,
+                            &conj);
             ofpbuf_uninit(&conj);
         }
     }
@@ -501,19 +334,17 @@ put_load(const uint8_t *data, size_t len,
          enum mf_field_id dst, int ofs, int n_bits,
          struct ofpbuf *ofpacts)
 {
-    struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-    sf->field = mf_from_id(dst);
-    sf->flow_has_vlan = false;
-
-    bitwise_copy(data, len, 0, &sf->value, sf->field->n_bytes, ofs, n_bits);
-    bitwise_one(&sf->mask, sf->field->n_bytes, ofs, n_bits);
+    struct ofpact_set_field *sf = ofpact_put_set_field(ofpacts,
+                                                       mf_from_id(dst), NULL,
+                                                       NULL);
+    bitwise_copy(data, len, 0, sf->value, sf->field->n_bytes, ofs, n_bits);
+    bitwise_one(ofpact_set_field_mask(sf), sf->field->n_bytes, ofs, n_bits);
 }
 
 static void
 consider_neighbor_flow(const struct lport_index *lports,
                        const struct sbrec_mac_binding *b,
-                       struct ofpbuf *ofpacts_p,
-                       struct match *match_p)
+                       struct hmap *flow_table)
 {
     const struct sbrec_port_binding *pb
         = lport_lookup_by_name(lports, b->logical_port);
@@ -528,7 +359,7 @@ consider_neighbor_flow(const struct lport_index *lports,
         return;
     }
 
-
+    struct match match = MATCH_CATCHALL_INITIALIZER;
     if (strchr(b->ip, '.')) {
         ovs_be32 ip;
         if (!ip_parse(b->ip, &ip)) {
@@ -536,7 +367,7 @@ consider_neighbor_flow(const struct lport_index *lports,
             VLOG_WARN_RL(&rl, "bad 'ip' %s", b->ip);
             return;
         }
-        match_set_reg(match_p, 0, ntohl(ip));
+        match_set_reg(&match, 0, ntohl(ip));
     } else {
         struct in6_addr ip6;
         if (!ipv6_parse(b->ip, &ip6)) {
@@ -546,17 +377,17 @@ consider_neighbor_flow(const struct lport_index *lports,
         }
         ovs_be128 value;
         memcpy(&value, &ip6, sizeof(value));
-        match_set_xxreg(match_p, 0, ntoh128(value));
+        match_set_xxreg(&match, 0, ntoh128(value));
     }
 
-    match_set_metadata(match_p, htonll(pb->datapath->tunnel_key));
-    match_set_reg(match_p, MFF_LOG_OUTPORT - MFF_REG0, pb->tunnel_key);
+    match_set_metadata(&match, htonll(pb->datapath->tunnel_key));
+    match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, pb->tunnel_key);
 
-    ofpbuf_clear(ofpacts_p);
-    put_load(mac.ea, sizeof mac.ea, MFF_ETH_DST, 0, 48, ofpacts_p);
-
-    ofctrl_add_flow(OFTABLE_MAC_BINDING, 100, match_p, ofpacts_p,
-                    &b->header_.uuid);
+    uint64_t stub[1024 / 8];
+    struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(stub);
+    put_load(mac.ea, sizeof mac.ea, MFF_ETH_DST, 0, 48, &ofpacts);
+    ofctrl_add_flow(flow_table, OFTABLE_MAC_BINDING, 100, &match, &ofpacts);
+    ofpbuf_uninit(&ofpacts);
 }
 
 /* Adds an OpenFlow flow to flow tables for each MAC binding in the OVN
@@ -564,33 +395,13 @@ consider_neighbor_flow(const struct lport_index *lports,
  * numbers. */
 static void
 add_neighbor_flows(struct controller_ctx *ctx,
-                   const struct lport_index *lports)
+                   const struct lport_index *lports,
+                   struct hmap *flow_table)
 {
-    struct ofpbuf ofpacts;
-    struct match match;
-    match_init_catchall(&match);
-    ofpbuf_init(&ofpacts, 0);
-
     const struct sbrec_mac_binding *b;
-    if (full_neighbor_flow_processing) {
-        SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
-            consider_neighbor_flow(lports, b, &ofpacts, &match);
-        }
-        full_neighbor_flow_processing = false;
-    } else {
-        SBREC_MAC_BINDING_FOR_EACH_TRACKED (b, ctx->ovnsb_idl) {
-            if (sbrec_mac_binding_is_deleted(b)) {
-                ofctrl_remove_flows(&b->header_.uuid);
-            } else {
-                if (!sbrec_mac_binding_is_new(b)) {
-                    ofctrl_remove_flows(&b->header_.uuid);
-                }
-                consider_neighbor_flow(lports, b, &ofpacts, &match);
-            }
-        }
+    SBREC_MAC_BINDING_FOR_EACH (b, ctx->ovnsb_idl) {
+        consider_neighbor_flow(lports, b, flow_table);
     }
-
-    ofpbuf_uninit(&ofpacts);
 }
 
 /* Translates logical flows in the Logical_Flow table in the OVN_SB database
@@ -601,12 +412,19 @@ lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
           const struct hmap *local_datapaths,
           const struct hmap *patched_datapaths,
           struct group_table *group_table,
-          const struct simap *ct_zones)
+          const struct simap *ct_zones,
+          struct hmap *flow_table)
 {
-    update_address_sets(ctx);
+    struct shash expr_address_sets = SHASH_INITIALIZER(&expr_address_sets);
+
+    update_address_sets(ctx, &expr_address_sets);
     add_logical_flows(ctx, lports, mcgroups, local_datapaths,
-                      patched_datapaths, group_table, ct_zones);
-    add_neighbor_flows(ctx, lports);
+                      patched_datapaths, group_table, ct_zones, flow_table,
+                      &expr_address_sets);
+    add_neighbor_flows(ctx, lports, flow_table);
+
+    expr_macros_destroy(&expr_address_sets);
+    shash_destroy(&expr_address_sets);
 }
 
 void
@@ -614,6 +432,4 @@ lflow_destroy(void)
 {
     expr_symtab_destroy(&symtab);
     shash_destroy(&symtab);
-    expr_macros_destroy(&expr_address_sets);
-    shash_destroy(&expr_address_sets);
 }

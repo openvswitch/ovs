@@ -137,9 +137,9 @@
   <p>
     OVN ``programs'' traces also tend to encounter long strings of logical
     flows with match expression <code>1</code> (which matches every packet)
-    the single action <code>next;</code>.  These are uninteresting and merely
-    clutter output, so <code>ovn-trace</code> omits them entirely even from
-    detailed output.
+    and the single action <code>next;</code>.  These are uninteresting
+    and merely clutter output, so <code>ovn-trace</code> omits them
+    entirely even from detailed output.
   </p>
 
   <p>

@@ -211,7 +211,8 @@ bool minimatch_equal(const struct minimatch *a, const struct minimatch *b);
 
 bool minimatch_matches_flow(const struct minimatch *, const struct flow *);
 
-void minimatch_format(const struct minimatch *, struct ds *, int priority);
+void minimatch_format(const struct minimatch *, const struct tun_table *,
+                      struct ds *, int priority);
 char *minimatch_to_string(const struct minimatch *, int priority);
 
 #endif /* match.h */

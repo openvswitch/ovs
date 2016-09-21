@@ -33,10 +33,15 @@ struct ofputil_tlv_table_mod;
 struct ofputil_tlv_table_reply;
 struct tun_table;
 
-void tun_metadata_init(void);
+struct tun_table *tun_metadata_alloc(const struct tun_table *old_map);
+void tun_metadata_free(struct tun_table *);
+void tun_metadata_postpone_free(struct tun_table *);
 
-enum ofperr tun_metadata_table_mod(struct ofputil_tlv_table_mod *);
-void tun_metadata_table_request(struct ofputil_tlv_table_reply *);
+enum ofperr tun_metadata_table_mod(struct ofputil_tlv_table_mod *,
+                                   const struct tun_table *old_tab,
+                                   struct tun_table **new_tab);
+void tun_metadata_table_request(const struct tun_table *,
+                                struct ofputil_tlv_table_reply *);
 
 void tun_metadata_read(const struct flow_tnl *,
                        const struct mf_field *, union mf_value *);
@@ -48,17 +53,15 @@ void tun_metadata_set_match(const struct mf_field *,
                             char **err_str);
 void tun_metadata_get_fmd(const struct flow_tnl *, struct match *flow_metadata);
 
-int tun_metadata_from_geneve_nlattr(const struct nlattr *attr,
-                                    const struct nlattr *flow_attrs,
-                                    size_t flow_attr_len,
-                                    const struct flow_tnl *flow_tun,
-                                    bool udpif, struct flow_tnl *tun);
+void tun_metadata_from_geneve_nlattr(const struct nlattr *attr, bool is_mask,
+                                     struct flow_tnl *tun);
 void tun_metadata_to_geneve_nlattr(const struct flow_tnl *tun,
                                    const struct flow_tnl *flow,
                                    const struct ofpbuf *key,
                                    struct ofpbuf *);
 
-int tun_metadata_from_geneve_udpif(const struct flow_tnl *flow,
+int tun_metadata_from_geneve_udpif(const struct tun_table *,
+                                   const struct flow_tnl *flow,
                                    const struct flow_tnl *src,
                                    struct flow_tnl *dst);
 void tun_metadata_to_geneve_udpif_mask(const struct flow_tnl *flow_src,

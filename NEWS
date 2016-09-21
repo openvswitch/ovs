@@ -1,6 +1,30 @@
 Post-v2.6.0
 ---------------------
-
+   - Fixed regression in table stats maintenance introduced in OVS
+     2.3.0, wherein the number of OpenFlow table hits and misses was
+     not accurate.
+   - OpenFlow:
+     * OFPT_PACKET_OUT messages are now supported in bundles.
+     * A new "selection_method=dp_hash" type for OpenFlow select group
+       bucket selection that uses the datapath computed 5-tuple hash
+       without making datapath flows match the 5-tuple fields, which
+       is useful for more efficient load balancing, for example.  This
+       uses the Netronome extension to OpenFlow 1.5+ that allows
+       control over the OpenFlow select groups selection method.  See
+       "selection_method" and related options in ovs-ofctl(8) for
+       details.
+   - ovs-ofctl:
+     * 'bundle' command now supports packet-out messages.
+     * New syntax for 'ovs-ofctl packet-out' command, which uses the
+       same string parser as the 'bundle' command.  The old 'packet-out'
+       syntax is deprecated and will be removed in a later OVS
+       release.
+     * New unixctl "ofctl/packet-out" command, which can be used to
+       instruct a flow monitor to issue OpenFlow packet-out messages.
+   - Tunnels:
+     * TLV mappings for protocols such as Geneve are now segregated on
+       a per-OpenFlow bridge basis rather than globally. (The interface
+       has not changed.)
 
 v2.6.0 - xx xxx xxxx
 ---------------------
@@ -10,11 +34,21 @@ v2.6.0 - xx xxx xxxx
      * New "monitor_cond" "monitor_cond_update" and "update2" extensions to
        RFC 7047.
    - OpenFlow:
+     * OpenFlow 1.3+ bundles now expire after 10 seconds since the
+       last time the bundle was either opened, modified, or closed.
      * OpenFlow 1.3 Extension 230, adding OpenFlow Bundles support, is
        now implemented.
      * OpenFlow 1.3+ bundles are now supported for group mods as well as
        flow mods and port mods.  Both 'atomic' and 'ordered' bundle
        flags are supported for group mods as well as flow mods.
+     * Internal OpenFlow rule representation for load and set-field
+       actions is now much more memory efficient.  For a complex flow
+       table this can reduce rule memory consumption by 40%.
+     * Bundles are now much more memory efficient than in OVS 2.5.
+       Together with memory efficiency improvements in OpenFlow rule
+       representation, the peak OVS resident memory use during a
+       bundle commit for large complex set of flow mods can be only
+       25% of that in OVS 2.5 (4x lower).
      * OpenFlow 1.1+ OFPT_QUEUE_GET_CONFIG_REQUEST now supports OFPP_ANY.
      * OpenFlow 1.4+ OFPMP_QUEUE_DESC is now supported.
      * OpenFlow 1.4+ OFPT_TABLE_STATUS is now supported.
@@ -28,6 +62,15 @@ v2.6.0 - xx xxx xxxx
        packet to size M bytes when outputting to port N.
      * New command OFPGC_ADD_OR_MOD for OFPT_GROUP_MOD message that adds a
        new group or modifies an existing groups
+     * The optional OpenFlow packet buffering feature is deprecated in
+       this release, and will be removed in the next OVS release
+       (2.7).  After the change OVS always sends the 'buffer_id' as
+       0xffffffff in packet-in messages and will send an error
+       response if any other value of this field is included in
+       packet-out and flow mod sent by a controller.  Controllers are
+       already expected to work properly in cases where the switch can
+       not buffer packets, so this change should not affect existing
+       users.
    - Improved OpenFlow version compatibility for actions:
      * New OpenFlow extension to support the "group" action in OpenFlow 1.0.
      * OpenFlow 1.0 "enqueue" action now properly translated to OpenFlow 1.1+.
@@ -81,6 +124,7 @@ v2.6.0 - xx xxx xxxx
      * Jumbo frame support
      * Remove dpdkvhostcuse port type.
      * OVS client mode for vHost and vHost reconnect (Requires QEMU 2.7)
+     * 'dpdkvhostuserclient' port type.
    - Increase number of registers to 16.
    - ovs-benchmark: This utility has been removed due to lack of use and
      bitrot.
@@ -113,7 +157,26 @@ v2.6.0 - xx xxx xxxx
      SHA-1 is no longer secure and some operating systems have started to
      disable it in OpenSSL.
    - Add 'mtu_request' column to the Interface table. It can be used to
-     configure the MTU of non-internal ports.
+     configure the MTU of the ports.
+
+Known issues:
+   - Using openvswitch module in conjunction with upstream Linux tunnels:
+     * When using the openvswitch module distributed with OVS against kernel
+       versions 4.4 to 4.6, the openvswitch module cannot be loaded or used at
+       the same time as "ip_gre".
+   - Conntrack FTP ALGs: When using the openvswitch module distributed with
+     OVS, particular Linux distribution kernels versions may provide diminished
+     functionality. This typically affects active FTP data connections when
+     using "actions=ct(alg=ftp),..." in flow tables. Specifically:
+     * Centos 7.1 kernels (3.10.0-2xx) kernels are unable to correctly set
+       up expectations for FTP data connections in multiple zones,
+       eg "actions=ct(zone=1,alg=ftp),ct(zone=2,alg=ftp),...". Executing the
+       "ct" action for subsequent data connections may fail to determine that
+       the data connection is "related" to an existing connection.
+     * Centos 7.2 kernels (3.10.0-3xx) kernels may not establish FTP ALG state
+       correctly for NATed connections. As a result, flows that perform NAT,
+       eg "actions=ct(nat,ftp=alg,table=1),..." may fail to NAT the packet,
+       and will populate the "ct_state=inv" bit in the flow.
 
 
 v2.5.0 - 26 Feb 2016

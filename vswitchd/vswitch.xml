@@ -2370,11 +2370,9 @@
       <column name="options" key="vhost-server-path"
               type='{"type": "string"}'>
         <p>
-          When specified, switches the given port permanently to 'client'
-          mode. The value specifies the path to the socket associated with a
-          vHost User client mode device that has been or will be created by
-          QEMU.
-          Only supported by DPDK vHost interfaces.
+          The value specifies the path to the socket associated with a vHost
+          User client mode device that has been or will be created by QEMU.
+          Only supported by dpdkvhostuserclient interfaces.
         </p>
       </column>
     </group>
@@ -2388,14 +2386,16 @@
       </p>
 
       <p>
-        A client may change a non-internal interface MTU by filling in
-        <ref column="mtu_request"/>.  Internal interfaces MTU, instead, is set
-        by Open vSwitch to the minimum of non-internal interfaces MTU in the
-        bridge. In any case, Open vSwitch then reports in <ref column="mtu"/>
-        the currently configured value.
+        A client may change an interface MTU by filling in
+        <ref column="mtu_request"/>.  Open vSwitch then reports in
+        <ref column="mtu"/> the currently configured value.
       </p>
 
       <column name="mtu">
+        <p>
+          The currently configured MTU for the interface.
+        </p>
+
         <p>
           This column will be empty for an interface that does not
           have an MTU as, for example, some kinds of tunnels do not.
@@ -2411,7 +2411,13 @@
               type='{"type": "integer", "minInteger": 1}'>
         <p>
           Requested MTU (Maximum Transmission Unit) for the interface. A client
-          can fill this column to change the MTU of a non-internal interface.
+          can fill this column to change the MTU of an interface.
+        </p>
+
+        <p>
+          If this is not set and if the interface has <code>internal</code>
+          type, Open vSwitch will change the MTU to match the minimum of the
+          other interfaces in the bridge.
         </p>
     </column>
 

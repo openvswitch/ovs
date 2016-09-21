@@ -28,6 +28,7 @@
 struct flow;
 struct ofpbuf;
 struct ofputil_flow_mod;
+struct ofputil_packet_out;
 struct ofputil_flow_monitor_request;
 struct ofputil_flow_stats_request;
 struct ofputil_group_mod;
@@ -47,6 +48,10 @@ char *parse_ofp_flow_mod_str(struct ofputil_flow_mod *, const char *string,
                              enum ofputil_protocol *usable_protocols)
     OVS_WARN_UNUSED_RESULT;
 
+char *parse_ofp_packet_out_str(struct ofputil_packet_out *po, const char *str_,
+                               enum ofputil_protocol *usable_protocols)
+    OVS_WARN_UNUSED_RESULT;
+
 char *parse_ofp_table_mod(struct ofputil_table_mod *,
                           const char *table_id, const char *flow_miss_handling,
                           uint32_t *usable_versions)
@@ -63,7 +68,8 @@ char *parse_ofp_flow_stats_request_str(struct ofputil_flow_stats_request *,
     OVS_WARN_UNUSED_RESULT;
 
 char *parse_ofp_exact_flow(struct flow *flow, struct flow_wildcards *wc,
-                           const char *s, const struct simap *portno_names);
+                           const struct tun_table *tun_table, const char *s,
+                           const struct simap *portno_names);
 
 char *parse_ofp_meter_mod_str(struct ofputil_meter_mod *, const char *string,
                               int command,

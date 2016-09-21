@@ -88,6 +88,43 @@ m4_define([ADD_VETH],
     ]
 )
 
+# ADD_VETH_BOND([ports], [namespace], [ovs-br], [bond], [mode], [ip_addr])
+#
+# Add a set of veth port pairs. Ports named in the list 'ports' will be added
+# to 'namespace', and the corresponding port names, prefixed by 'ovs-' will
+# be included in an OVS bond 'bond' which is added to bridge 'ovs-br'.
+#
+# The 'bond' in 'namespace' will be brought up with static IP address
+# with 'ip_addr' in CIDR notation.
+#
+m4_define([ADD_VETH_BOND],
+    [
+      BONDPORTS=""
+      for port in $1; do
+          AT_CHECK([ip link add $port type veth peer name ovs-$port])
+          CONFIGURE_VETH_OFFLOADS([$port])
+          AT_CHECK([ip link set $port netns $2])
+          AT_CHECK([ip link set dev ovs-$port up])
+          BONDPORTS="$BONDPORTS ovs-$port"
+          on_exit 'ip link del ovs-$port'
+      done
+      NS_CHECK_EXEC([$2], [ip link add name $4 type bond])
+      case "$(echo $5 | sed 's/.*lacp=//' | sed 's/ .*//')" in
+      active|passive)
+          NS_CHECK_EXEC([$2], [sh -c "echo 802.3ad > /sys/class/net/$4/bonding/mode"])
+          NS_CHECK_EXEC([$2], [sh -c "echo 100     > /sys/class/net/$4/bonding/miimon"])
+      ;;
+      esac
+      for port in $1; do
+          NS_CHECK_EXEC([$2], [ip link set dev $port master $4])
+      done
+      NS_CHECK_EXEC([$2], [ip addr add $6 dev $4])
+      NS_CHECK_EXEC([$2], [ip link set dev $4 up])
+      AT_CHECK([ovs-vsctl add-bond $3 ovs-$4 $BONDPORTS $5])
+      on_exit 'ip link del ovs-$4'
+    ]
+)
+
 # ADD_VLAN([port], [namespace], [vlan-id], [ip-addr])
 #
 # Add a VLAN device named 'port' within 'namespace'. It will be configured

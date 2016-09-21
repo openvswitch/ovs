@@ -33,8 +33,12 @@ OVSDB_CHECK_REPLICATION([insert monitored table, insert excluded table],
   [[["mydb",
       {"op": "insert",
        "table": "b",
+       "row": {"number": 1, "name": "one"}}]]],
+  [[["mydb",
+      {"op": "insert",
+       "table": "a",
        "row": {"number": 1, "name": "one"}}]]]],
-  [[7,9c7,8
+  [[8,10c8,9
 < _uuid                                name number
 < ------------------------------------ ---- ------
 < <0> one  1     @&t@
@@ -57,8 +61,12 @@ OVSDB_CHECK_REPLICATION([insert monitored table, update excluded table],
       {"op": "update",
        "table": "b",
        "where":[["name","==","one"]],
-       "row": {"number": 2, "name": "two"}}]]]],
-  [[7,9c7,8
+       "row": {"number": 2, "name": "two"}}]]],
+  [[["mydb",
+      {"op": "insert",
+       "table": "a",
+       "row": {"number": 1, "name": "one"}}]]]],
+  [[8,10c8,9
 < _uuid                                name number
 < ------------------------------------ ---- ------
 < <0> two  2     @&t@
@@ -133,8 +141,12 @@ OVSDB_CHECK_REPLICATION([delete monitored table, insert excluded table],
   [[["mydb",
       {"op": "insert",
        "table": "b",
+       "row": {"number": 1, "name": "one"}}]]],
+  [[["mydb",
+      {"op": "insert",
+       "table": "a",
        "row": {"number": 1, "name": "one"}}]]]],
-  [[6,8c6,7
+  [[7,9c7,8
 < _uuid                                name number
 < ------------------------------------ ---- ------
 < <0> one  1     @&t@
@@ -161,8 +173,12 @@ OVSDB_CHECK_REPLICATION([delete monitored table, update excluded table],
       {"op": "update",
        "table": "b",
        "where":[["name","==","one"]],
-       "row": {"number": 2, "name": "two"}}]]]],
-  [[6,8c6,7
+       "row": {"number": 2, "name": "two"}}]]],
+  [[["mydb",
+      {"op": "insert",
+       "table": "a",
+       "row": {"number": 1, "name": "one"}}]]]],
+  [[7,9c7,8
 < _uuid                                name number
 < ------------------------------------ ---- ------
 < <0> two  2     @&t@

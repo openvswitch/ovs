@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2013, 2014 Alexandru Copot <alex.mihai.c@gmail.com>, with support from IXIA.
  * Copyright (c) 2013, 2014 Daniel Baluta <dbaluta@ixiacom.com>
- * Copyright (c) 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -32,7 +32,6 @@
 #include "openvswitch/vlog.h"
 #include "pinsched.h"
 #include "poll-loop.h"
-#include "pktbuf.h"
 #include "rconn.h"
 #include "openvswitch/shash.h"
 #include "simap.h"
@@ -42,32 +41,32 @@
 VLOG_DEFINE_THIS_MODULE(bundles);
 
 static struct ofp_bundle *
-ofp_bundle_create(uint32_t id, uint16_t flags)
+ofp_bundle_create(uint32_t id, uint16_t flags, const struct ofp_header *oh)
 {
     struct ofp_bundle *bundle;
 
     bundle = xmalloc(sizeof(*bundle));
 
+    bundle->used = time_msec();
     bundle->id = id;
     bundle->flags = flags;
     bundle->state = BS_OPEN;
 
     ovs_list_init(&bundle->msg_list);
 
+    /* Max 64 bytes for error reporting. */
+    memcpy(bundle->ofp_msg_data, oh,
+           MIN(ntohs(oh->length), sizeof bundle->ofp_msg_data));
+
     return bundle;
 }
 
 void
-ofp_bundle_remove__(struct ofconn *ofconn, struct ofp_bundle *bundle,
-                    bool success)
+ofp_bundle_remove__(struct ofconn *ofconn, struct ofp_bundle *bundle)
 {
     struct ofp_bundle_entry *msg;
 
     LIST_FOR_EACH_POP (msg, node, &bundle->msg_list) {
-        if (success && msg->type == OFPTYPE_FLOW_MOD) {
-            /* Tell connmgr about successful flow mods. */
-            ofconn_report_flow_mod(ofconn, msg->ofm.command);
-        }
         ofp_bundle_entry_free(msg);
     }
 
@@ -76,7 +75,8 @@ ofp_bundle_remove__(struct ofconn *ofconn, struct ofp_bundle *bundle,
 }
 
 enum ofperr
-ofp_bundle_open(struct ofconn *ofconn, uint32_t id, uint16_t flags)
+ofp_bundle_open(struct ofconn *ofconn, uint32_t id, uint16_t flags,
+                const struct ofp_header *oh)
 {
     struct ofp_bundle *bundle;
     enum ofperr error;
@@ -85,12 +85,12 @@ ofp_bundle_open(struct ofconn *ofconn, uint32_t id, uint16_t flags)
 
     if (bundle) {
         VLOG_INFO("Bundle %x already exists.", id);
-        ofp_bundle_remove__(ofconn, bundle, false);
+        ofp_bundle_remove__(ofconn, bundle);
 
         return OFPERR_OFPBFC_BAD_ID;
     }
 
-    bundle = ofp_bundle_create(id, flags);
+    bundle = ofp_bundle_create(id, flags, oh);
     error = ofconn_insert_bundle(ofconn, bundle);
     if (error) {
         free(bundle);
@@ -111,15 +111,16 @@ ofp_bundle_close(struct ofconn *ofconn, uint32_t id, uint16_t flags)
     }
 
     if (bundle->state == BS_CLOSED) {
-        ofp_bundle_remove__(ofconn, bundle, false);
+        ofp_bundle_remove__(ofconn, bundle);
         return OFPERR_OFPBFC_BUNDLE_CLOSED;
     }
 
     if (bundle->flags != flags) {
-        ofp_bundle_remove__(ofconn, bundle, false);
+        ofp_bundle_remove__(ofconn, bundle);
         return OFPERR_OFPBFC_BAD_FLAGS;
     }
 
+    bundle->used = time_msec();
     bundle->state = BS_CLOSED;
     return 0;
 }
@@ -135,14 +136,14 @@ ofp_bundle_discard(struct ofconn *ofconn, uint32_t id)
         return OFPERR_OFPBFC_BAD_ID;
     }
 
-    ofp_bundle_remove__(ofconn, bundle, false);
-
+    ofp_bundle_remove__(ofconn, bundle);
     return 0;
 }
 
 enum ofperr
 ofp_bundle_add_message(struct ofconn *ofconn, uint32_t id, uint16_t flags,
-                       struct ofp_bundle_entry *bmsg)
+                       struct ofp_bundle_entry *bmsg,
+                       const struct ofp_header *oh)
 {
     struct ofp_bundle *bundle;
 
@@ -151,20 +152,21 @@ ofp_bundle_add_message(struct ofconn *ofconn, uint32_t id, uint16_t flags,
     if (!bundle) {
         enum ofperr error;
 
-        bundle = ofp_bundle_create(id, flags);
+        bundle = ofp_bundle_create(id, flags, oh);
         error = ofconn_insert_bundle(ofconn, bundle);
         if (error) {
             free(bundle);
             return error;
         }
     } else if (bundle->state == BS_CLOSED) {
-        ofp_bundle_remove__(ofconn, bundle, false);
+        ofp_bundle_remove__(ofconn, bundle);
         return OFPERR_OFPBFC_BUNDLE_CLOSED;
     } else if (flags != bundle->flags) {
-        ofp_bundle_remove__(ofconn, bundle, false);
+        ofp_bundle_remove__(ofconn, bundle);
         return OFPERR_OFPBFC_BAD_FLAGS;
     }
 
+    bundle->used = time_msec();
     ovs_list_push_back(&bundle->msg_list, &bmsg->node);
     return 0;
 }

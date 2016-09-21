@@ -120,15 +120,18 @@
         </p>
       </dd>
 
-      <dt>[<code>--may-exist</code>] <code>lsp-add</code> <var>switch</var> <var>port</var> <var>parent</var> <var>tag</var></dt>
+      <dt>[<code>--may-exist</code>] <code>lsp-add</code> <var>switch</var> <var>port</var> <var>parent</var> <var>tag_request</var></dt>
       <dd>
         <p>
           Creates on <var>switch</var> a logical switch port named
           <var>port</var> that is a child of <var>parent</var> that is
-          identifed with VLAN ID <var>tag</var>.  This is useful in
-          cases such as virtualized container environments where Open
-          vSwitch does not have a direct connection to the container's
-          port and it must be shared with the virtual machine's port.
+          identified with VLAN ID <var>tag_request</var>.  If
+          <var>tag_request</var> is <code>0</code>, <code>ovn-northd</code>
+          generates a tag that is unique in the scope of <var>parent</var>.
+          This is useful in cases such as virtualized container environments
+          where Open vSwitch does not have a direct connection to the
+          container's port and it must be shared with the virtual machine's
+          port.
         </p>
 
         <p>
@@ -136,7 +139,7 @@
           exists, unless <code>--may-exist</code> is specified.  Regardless of
           <code>--may-exist</code>, it is an error if the existing port is not
           in <var>switch</var> or if it does not have the specified
-          <var>parent</var> and <var>tag</var>.
+          <var>parent</var> and <var>tag_request</var>.
         </p>
       </dd>
 
@@ -466,10 +469,35 @@
         A port within an L3 logical router.  Records may be identified by name.
       </dd>
 
-    <dt><code>Logical_Router_Static_Route</code></dt>
-    <dd>
-      A static route belonging to an L3 logical router.
-    </dd>
+      <dt><code>Logical_Router_Static_Route</code></dt>
+      <dd>
+        A static route belonging to an L3 logical router.
+      </dd>
+
+      <dt><code>Address_Set</code></dt>
+      <dd>
+        An address set that can be used in ACLs.
+      </dd>
+
+      <dt><code>Load_Balancer</code></dt>
+      <dd>
+        A load balancer for a logical switch that points to it through its <var>load_balancer</var> column.
+      </dd>
+
+      <dt><code>NAT</code></dt>
+      <dd>
+        A NAT rule for a Gateway router.
+      </dd>
+
+      <dt><code>DHCP_Options</code></dt>
+      <dd>
+        DHCP options.
+      </dd>
+
+      <dt><code>NB_Global</code></dt>
+      <dd>
+        North bound global configurations.
+      </dd>
 
     </dl>
 

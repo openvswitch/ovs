@@ -91,6 +91,8 @@ ROUTE_RE = re.compile(r'^.*/route-.*')
 SYSCONFIG_HWCONF = '/etc/sysconfig/hwconf'
 SYSCONFIG_NETWORK = '/etc/sysconfig/network'
 SYSCONFIG_NETWORK_SCRIPTS = '/etc/sysconfig/network-scripts'
+INTERFACES = '/etc/network/interfaces'
+INTERFACESD = '/etc/network/interfaces.d'
 PROC_NET_VLAN_DIR = '/proc/net/vlan'
 PROC_NET_SOFTNET_STAT = '/proc/net/softnet_stat'
 MODPROBE_CONF = '/etc/modprobe.conf'
@@ -570,8 +572,9 @@ exclude those logs from the archive.
 
     tree_output(CAP_NETWORK_CONFIG, SYSCONFIG_NETWORK_SCRIPTS, IFCFG_RE)
     tree_output(CAP_NETWORK_CONFIG, SYSCONFIG_NETWORK_SCRIPTS, ROUTE_RE)
-    file_output(CAP_NETWORK_CONFIG,
-                [SYSCONFIG_NETWORK, RESOLV_CONF, NSSWITCH_CONF, HOSTS])
+    tree_output(CAP_NETWORK_CONFIG, INTERFACESD)
+    file_output(CAP_NETWORK_CONFIG, [SYSCONFIG_NETWORK, RESOLV_CONF,
+                NSSWITCH_CONF, HOSTS, INTERFACES])
     file_output(CAP_NETWORK_CONFIG,
                 [NTP_CONF, IPTABLES_CONFIG, HOSTS_ALLOW, HOSTS_DENY])
     file_output(CAP_NETWORK_CONFIG, [OPENVSWITCH_DEFAULT_SWITCH,

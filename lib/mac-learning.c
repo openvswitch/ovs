@@ -335,6 +335,132 @@ mac_learning_insert(struct mac_learning *ml,
     return e;
 }
 
+/* Checks whether a MAC learning update is necessary for MAC learning table
+ * 'ml' given that a packet matching 'src' was received on 'in_port' in 'vlan',
+ * and given that the packet was gratuitous ARP if 'is_gratuitous_arp' is
+ * 'true' and 'in_port' is a bond port if 'is_bond' is 'true'.
+ *
+ * Most packets processed through the MAC learning table do not actually
+ * change it in any way.  This function requires only a read lock on the MAC
+ * learning table, so it is much cheaper in this common case.
+ *
+ * Keep the code here synchronized with that in update_learning_table__()
+ * below. */
+static bool
+is_mac_learning_update_needed(const struct mac_learning *ml,
+                              struct eth_addr src, int vlan,
+                              bool is_gratuitous_arp, bool is_bond,
+                              void *in_port)
+    OVS_REQ_RDLOCK(ml->rwlock)
+{
+    struct mac_entry *mac;
+
+    if (!mac_learning_may_learn(ml, src, vlan)) {
+        return false;
+    }
+
+    mac = mac_learning_lookup(ml, src, vlan);
+    if (!mac || mac_entry_age(ml, mac)) {
+        return true;
+    }
+
+    if (is_gratuitous_arp) {
+        /* We don't want to learn from gratuitous ARP packets that are
+         * reflected back over bond slaves so we lock the learning table.  For
+         * more detail, see the bigger comment in update_learning_table__(). */
+        if (!is_bond) {
+            return true;   /* Need to set the gratuitous ARP lock. */
+        } else if (mac_entry_is_grat_arp_locked(mac)) {
+            return false;
+        }
+    }
+
+    return mac_entry_get_port(ml, mac) != in_port /* ofbundle */;
+}
+
+/* Updates MAC learning table 'ml' given that a packet matching 'src' was
+ * received on 'in_port' in 'vlan', and given that the packet was gratuitous
+ * ARP if 'is_gratuitous_arp' is 'true' and 'in_port' is a bond port if
+ * 'is_bond' is 'true'.
+ *
+ * This code repeats all the checks in is_mac_learning_update_needed() because
+ * the lock was released between there and here and thus the MAC learning state
+ * could have changed.
+ *
+ * Returns 'true' if 'ml' was updated, 'false' otherwise.
+ *
+ * Keep the code here synchronized with that in is_mac_learning_update_needed()
+ * above. */
+static bool
+update_learning_table__(struct mac_learning *ml, struct eth_addr src,
+                        int vlan, bool is_gratuitous_arp, bool is_bond,
+                        void *in_port)
+    OVS_REQ_WRLOCK(ml->rwlock)
+{
+    struct mac_entry *mac;
+
+    if (!mac_learning_may_learn(ml, src, vlan)) {
+        return false;
+    }
+
+    mac = mac_learning_insert(ml, src, vlan);
+    if (is_gratuitous_arp) {
+        /* Gratuitous ARP packets received over non-bond interfaces could be
+         * reflected back over bond slaves.  We don't want to learn from these
+         * reflected packets, so we lock each entry for which a gratuitous ARP
+         * packet was received over a non-bond interface and refrain from
+         * learning from gratuitous ARP packets that arrive over bond
+         * interfaces for this entry while the lock is in effect.  See
+         * vswitchd/INTERNALS for more in-depth discussion on this topic. */
+        if (!is_bond) {
+            mac_entry_set_grat_arp_lock(mac);
+        } else if (mac_entry_is_grat_arp_locked(mac)) {
+            return false;
+        }
+    }
+
+    if (mac_entry_get_port(ml, mac) != in_port) {
+        mac_entry_set_port(ml, mac, in_port);
+        return true;
+    }
+    return false;
+}
+
+/* Updates MAC learning table 'ml' given that a packet matching 'src' was
+ * received on 'in_port' in 'vlan', and given that the packet was gratuitous
+ * ARP if 'is_gratuitous_arp' is 'true' and 'in_port' is a bond port if
+ * 'is_bond' is 'true'.
+ *
+ * Returns 'true' if 'ml' was updated, 'false' otherwise. */
+bool
+mac_learning_update(struct mac_learning *ml, struct eth_addr src,
+                    int vlan, bool is_gratuitous_arp, bool is_bond,
+                    void *in_port)
+    OVS_EXCLUDED(ml->rwlock)
+{
+    bool need_update;
+    bool updated = false;
+
+    /* Don't learn the OFPP_NONE port. */
+    if (in_port != NULL) {
+        /* First try the common case: no change to MAC learning table. */
+        ovs_rwlock_rdlock(&ml->rwlock);
+        need_update = is_mac_learning_update_needed(ml, src, vlan,
+                                                    is_gratuitous_arp, is_bond,
+                                                    in_port);
+        ovs_rwlock_unlock(&ml->rwlock);
+
+        if (need_update) {
+            /* Slow path: MAC learning table might need an update. */
+            ovs_rwlock_wrlock(&ml->rwlock);
+            updated = update_learning_table__(ml, src, vlan, is_gratuitous_arp,
+                                              is_bond, in_port);
+            ovs_rwlock_unlock(&ml->rwlock);
+        }
+    }
+    return updated;
+}
+
 /* Looks up MAC 'dst' for VLAN 'vlan' in 'ml' and returns the associated MAC
  * learning entry, if any. */
 struct mac_entry *

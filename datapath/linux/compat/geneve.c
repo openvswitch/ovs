@@ -1574,7 +1574,7 @@ nla_put_failure:
 }
 
 static struct rtnl_link_ops geneve_link_ops __read_mostly = {
-	.kind		= "geneve",
+	.kind		= "ovs_geneve",
 	.maxtype	= IFLA_GENEVE_MAX,
 	.policy		= geneve_policy,
 	.priv_size	= sizeof(struct geneve_dev),
@@ -1711,6 +1711,7 @@ out3:
 out2:
 	unregister_pernet_subsys(&geneve_net_ops);
 out1:
+	pr_err("Error while initializing GENEVE %d\n", rc);
 	return rc;
 }
 

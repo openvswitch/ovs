@@ -343,6 +343,12 @@ ovsdb_jsonrpc_server_reconnect(struct ovsdb_jsonrpc_server *svr, bool read_only)
     }
 }
 
+bool
+ovsdb_jsonrpc_server_is_read_only(struct ovsdb_jsonrpc_server *svr)
+{
+    return svr->read_only;
+}
+
 void
 ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *svr)
 {
@@ -1096,9 +1102,9 @@ ovsdb_jsonrpc_trigger_complete_done(struct ovsdb_jsonrpc_session *s)
 
 /* Jsonrpc front end monitor. */
 struct ovsdb_jsonrpc_monitor {
+    struct hmap_node node;      /* In ovsdb_jsonrpc_session's "monitors". */
     struct ovsdb_jsonrpc_session *session;
     struct ovsdb *db;
-    struct hmap_node node;      /* In ovsdb_jsonrpc_session's "monitors". */
     struct json *monitor_id;
     struct ovsdb_monitor *dbmon;
     uint64_t unflushed;         /* The first transaction that has not been

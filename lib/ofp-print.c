@@ -118,7 +118,7 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
     size_t total_len;
     enum ofperr error;
 
-    error = ofputil_decode_packet_in_private(oh, true,
+    error = ofputil_decode_packet_in_private(oh, true, NULL,
                                              &pin, &total_len, &buffer_id);
     if (error) {
         ofp_print_error(string, error);
@@ -786,7 +786,7 @@ ofp_print_flow_mod(struct ds *s, const struct ofp_header *oh, int verbosity)
     protocol = ofputil_protocol_set_tid(protocol, true);
 
     ofpbuf_init(&ofpacts, 64);
-    error = ofputil_decode_flow_mod(&fm, oh, protocol, &ofpacts,
+    error = ofputil_decode_flow_mod(&fm, oh, protocol, NULL, &ofpacts,
                                     OFPP_MAX, 255);
     if (error) {
         ofpbuf_uninit(&ofpacts);
@@ -1591,7 +1591,7 @@ ofp_print_flow_stats_request(struct ds *string, const struct ofp_header *oh)
     struct ofputil_flow_stats_request fsr;
     enum ofperr error;
 
-    error = ofputil_decode_flow_stats_request(&fsr, oh);
+    error = ofputil_decode_flow_stats_request(&fsr, oh, NULL);
     if (error) {
         ofp_print_error(string, error);
         return;

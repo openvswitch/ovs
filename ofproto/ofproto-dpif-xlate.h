@@ -46,22 +46,29 @@ struct xlate_out {
 
 struct xlate_in {
     struct ofproto_dpif *ofproto;
+    ovs_version_t        tables_version;   /* Lookup in this version. */
 
     /* Flow to which the OpenFlow actions apply.  xlate_actions() will modify
      * this flow when actions change header fields. */
     struct flow flow;
+
+    /* Pointer to the original flow received during the upcall. xlate_actions()
+     * will never modify this flow. */
+    const struct flow *upcall_flow;
 
     /* The packet corresponding to 'flow', or a null pointer if we are
      * revalidating without a packet to refer to. */
     const struct dp_packet *packet;
 
     /* Should OFPP_NORMAL update the MAC learning table?  Should "learn"
-     * actions update the flow table?
+     * actions update the flow table? Should FIN_TIMEOUT change the
+     * timeouts? Or should controller action send packet to the controller?
      *
      * We want to update these tables if we are actually processing a packet,
      * or if we are accounting for packets that the datapath has processed, but
-     * not if we are just revalidating. */
-    bool may_learn;
+     * not if we are just revalidating, or if we want to execute the
+     * side-effects later via the xlate cache. */
+    bool allow_side_effects;
 
     /* The rule initiating translation or NULL. If both 'rule' and 'ofpacts'
      * are NULL, xlate_actions() will do the initial rule lookup itself. */
@@ -194,13 +201,14 @@ enum xlate_error {
     XLATE_NO_RECIRCULATION_CONTEXT,
     XLATE_RECIRCULATION_CONFLICT,
     XLATE_TOO_MANY_MPLS_LABELS,
+    XLATE_INVALID_TUNNEL_METADATA,
 };
 
 const char *xlate_strerror(enum xlate_error error);
 
 enum xlate_error xlate_actions(struct xlate_in *, struct xlate_out *);
 
-void xlate_in_init(struct xlate_in *, struct ofproto_dpif *,
+void xlate_in_init(struct xlate_in *, struct ofproto_dpif *, ovs_version_t,
                    const struct flow *, ofp_port_t in_port, struct rule_dpif *,
                    uint16_t tcp_flags, const struct dp_packet *packet,
                    struct flow_wildcards *, struct ofpbuf *odp_actions);
@@ -213,10 +221,9 @@ enum ofperr xlate_resume(struct ofproto_dpif *,
 
 int xlate_send_packet(const struct ofport_dpif *, bool oam, struct dp_packet *);
 
-struct xlate_cache *xlate_cache_new(void);
-void xlate_push_stats(struct xlate_cache *, const struct dpif_flow_stats *);
-void xlate_cache_clear(struct xlate_cache *);
-void xlate_cache_delete(struct xlate_cache *);
+void xlate_mac_learning_update(const struct ofproto_dpif *ofproto,
+                               ofp_port_t in_port, struct eth_addr dl_src,
+                               int vlan, bool is_grat_arp);
 
 void xlate_txn_start(void);
 void xlate_txn_commit(void);

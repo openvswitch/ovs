@@ -144,7 +144,7 @@ commands are the following.
     between the active server and frees the memory used for the replication
     configuration.
 
--   ovsdb-server/set-sync-excluded-tables {db:table,...}: sets the tables list
+-   ovsdb-server/set-sync-exclude-tables {db:table,...}: sets the tables list
     that will be excluded from being replicated.
 
 -   ovsdb-server/get-sync-excluded-tables: gets the tables list that is

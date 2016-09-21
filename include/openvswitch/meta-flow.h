@@ -19,6 +19,7 @@
 
 #include <limits.h>
 #include <stdarg.h>
+#include <string.h>
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <netinet/ip6.h>
@@ -2044,6 +2045,16 @@ int mf_subvalue_width(const union mf_subvalue *);
 void mf_subvalue_shift(union mf_subvalue *, int n);
 void mf_subvalue_format(const union mf_subvalue *, struct ds *);
 
+static inline void mf_subvalue_from_value(const struct mf_subfield *sf,
+                                          union mf_subvalue *sv,
+                                          const void *value)
+{
+    unsigned int n_bytes = DIV_ROUND_UP(sf->n_bits, 8);
+    memset(sv, 0, sizeof *sv - n_bytes);
+    memcpy(&sv->u8[sizeof sv->u8 - n_bytes], value, n_bytes);
+}
+
+
 /* Set of field values. 'values' only includes the actual data bytes for each
  * field for which is used, as marked by 1-bits in 'used'. */
 struct field_array {
@@ -2115,6 +2126,9 @@ void mf_write_subfield_flow(const struct mf_subfield *,
                             const union mf_subvalue *, struct flow *);
 void mf_write_subfield(const struct mf_subfield *, const union mf_subvalue *,
                        struct match *);
+void mf_write_subfield_value(const struct mf_subfield *, const void *src,
+                             struct match *);
+
 void mf_mask_subfield(const struct mf_field *,
                       const union mf_subvalue *value,
                       const union mf_subvalue *mask,

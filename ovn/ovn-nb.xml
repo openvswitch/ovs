@@ -497,10 +497,19 @@
         other <ref table="Logical_Switch_Port"/>.
       </column>
 
-      <column name="tag">
+      <column name="tag_request">
         <p>
           The VLAN tag in the network traffic associated with a container's
-          network interface.
+          network interface.  The client can request <code>ovn-northd</code>
+          to allocate a tag that is unique within the scope of a specific
+          parent (specified in <ref column="parent_name"/>) by setting a value
+          of <code>0</code> in this column.  The allocated value is written
+          by <code>ovn-northd</code> in the <ref column="tag"/> column.
+          (Note that these tags are allocated and managed locally in
+          <code>ovn-northd</code>, so they cannot be reconstructed in the event
+          that the database is lost.)  The client can also request a specific
+          non-zero tag and <code>ovn-northd</code> will honor it and copy that
+          value to the <ref column="tag"/> column.
         </p>
 
         <p>
@@ -508,6 +517,13 @@
           be set to indicate that the port represents a connection to a
           specific VLAN on a locally accessible network. The VLAN ID is used to
           match incoming traffic and is also added to outgoing traffic.
+        </p>
+      </column>
+
+      <column name="tag">
+        <p>
+          The VLAN tag allocated by <code>ovn-northd</code> based on the
+          contents of the <ref column="tag_request"/> column.
         </p>
       </column>
     </group>
@@ -1011,6 +1027,11 @@
       Gateway routers.
     </column>
 
+    <column name="load_balancer">
+      Load balance a virtual ipv4 address to a set of logical port ipv4
+      addresses.  Load balancer rules only work on the Gateway routers.
+    </column>
+
     <group title="Options">
       <p>
         Additional options for the logical router.
@@ -1483,6 +1504,17 @@
 
           <p>
             Example: <code>"ovn.org"</code>.
+          </p>
+        </column>
+
+        <column name="options" key="dhcpv6_stateless">
+          <p>
+            This option specifies the OVN native DHCPv6 will work in stateless
+            mode, which means OVN native DHCPv6 will not offer IPv6 addresses
+            for VM/VIF ports, but only reply other configurations, such as
+            DNS and domain search list. When setting this option with string
+            value "true", VM/VIF will configure IPv6 addresses by stateless
+            way. Default value for this option is false.
           </p>
         </column>
       </group>

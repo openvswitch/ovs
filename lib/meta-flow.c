@@ -2535,6 +2535,20 @@ mf_write_subfield(const struct mf_subfield *sf, const union mf_subvalue *x,
     mf_set(field, &value, &mask, match, NULL);
 }
 
+void
+mf_write_subfield_value(const struct mf_subfield *sf, const void *src,
+                        struct match *match)
+{
+    const struct mf_field *field = sf->field;
+    union mf_value value, mask;
+    unsigned int size = DIV_ROUND_UP(sf->n_bits, 8);
+
+    mf_get(field, match, &value, &mask);
+    bitwise_copy(src, size, 0, &value, field->n_bytes, sf->ofs, sf->n_bits);
+    bitwise_one (              &mask,  field->n_bytes, sf->ofs, sf->n_bits);
+    mf_set(field, &value, &mask, match, NULL);
+}
+
 /* 'v' and 'm' correspond to values of 'field'.  This function copies them into
  * 'match' in the correspond positions. */
 void

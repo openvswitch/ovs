@@ -27,7 +27,6 @@
 #include "util.h"
 
 struct lexer;
-struct ofpact_set_field;
 struct ofpbuf;
 struct shash;
 struct simap;
@@ -150,13 +149,6 @@ struct ovnact_load {
     struct expr_field dst;
     union expr_constant imm;
 };
-
-void ovnact_load_to_ofpact_set_field(const struct ovnact_load *,
-                                     bool (*lookup_port)(const void *aux,
-                                                         const char *port_name,
-                                                         unsigned int *portp),
-                                     const void *aux,
-                                     struct ofpact_set_field *);
 
 /* OVNACT_MOVE, OVNACT_EXCHANGE. */
 struct ovnact_move {
@@ -298,8 +290,9 @@ struct group_table {
 struct group_info {
     struct hmap_node hmap_node;
     struct ds group;
-    struct uuid lflow_uuid;
     uint32_t group_id;
+    bool new_group_id;  /* 'True' if 'group_id' was reserved from
+                         * group_table's 'group_ids' bitmap. */
 };
 
 enum action_opcode {
@@ -406,14 +399,14 @@ struct ovnact_encode_params {
                         unsigned int *portp);
     const void *aux;
 
+    /* 'true' if the flow is for a switch. */
+    bool is_switch;
+
     /* A map from a port name to its connection tracking zone. */
     const struct simap *ct_zones;
 
     /* A struct to figure out the group_id for group actions. */
     struct group_table *group_table;
-
-    /* The logical flow uuid that drove this action. */
-    struct uuid lflow_uuid;
 
     /* OVN maps each logical flow table (ltable), one-to-one, onto a physical
      * OpenFlow flow table (ptable).  A number of parameters describe this

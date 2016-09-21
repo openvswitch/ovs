@@ -1855,10 +1855,8 @@ ovs_frag_type_to_string(enum ovs_frag_type type)
 }
 
 static enum odp_key_fitness
-odp_tun_key_from_attr__(const struct nlattr *attr,
-                        const struct nlattr *flow_attrs, size_t flow_attr_len,
-                        const struct flow_tnl *src_tun, struct flow_tnl *tun,
-                        bool udpif)
+odp_tun_key_from_attr__(const struct nlattr *attr, bool is_mask,
+                        struct flow_tnl *tun)
 {
     unsigned int left;
     const struct nlattr *a;
@@ -1934,10 +1932,7 @@ odp_tun_key_from_attr__(const struct nlattr *attr,
             break;
         }
         case OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS:
-            if (tun_metadata_from_geneve_nlattr(a, flow_attrs, flow_attr_len,
-                                                src_tun, udpif, tun)) {
-                return ODP_FIT_ERROR;
-            }
+            tun_metadata_from_geneve_nlattr(a, is_mask, tun);
             break;
 
         default:
@@ -1958,11 +1953,10 @@ odp_tun_key_from_attr__(const struct nlattr *attr,
 }
 
 enum odp_key_fitness
-odp_tun_key_from_attr(const struct nlattr *attr, bool udpif,
-                      struct flow_tnl *tun)
+odp_tun_key_from_attr(const struct nlattr *attr, struct flow_tnl *tun)
 {
     memset(tun, 0, sizeof *tun);
-    return odp_tun_key_from_attr__(attr, NULL, 0, NULL, tun, udpif);
+    return odp_tun_key_from_attr__(attr, false, tun);
 }
 
 static void
@@ -4573,7 +4567,7 @@ odp_key_to_pkt_metadata(const struct nlattr *key, size_t key_len,
         case OVS_KEY_ATTR_TUNNEL: {
             enum odp_key_fitness res;
 
-            res = odp_tun_key_from_attr(nla, true, &md->tunnel);
+            res = odp_tun_key_from_attr(nla, &md->tunnel);
             if (res == ODP_FIT_ERROR) {
                 memset(&md->tunnel, 0, sizeof md->tunnel);
             } else if (res == ODP_FIT_PERFECT) {
@@ -5084,9 +5078,7 @@ parse_8021q_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
 
 static enum odp_key_fitness
 odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
-                       const struct nlattr *src_key, size_t src_key_len,
-                       struct flow *flow, const struct flow *src_flow,
-                       bool udpif)
+                       struct flow *flow, const struct flow *src_flow)
 {
     const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1];
     uint64_t expected_attrs;
@@ -5150,10 +5142,8 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_TUNNEL)) {
         enum odp_key_fitness res;
 
-        res = odp_tun_key_from_attr__(attrs[OVS_KEY_ATTR_TUNNEL],
-                                      is_mask ? src_key : NULL,
-                                      src_key_len, &src_flow->tunnel,
-                                      &flow->tunnel, udpif);
+        res = odp_tun_key_from_attr__(attrs[OVS_KEY_ATTR_TUNNEL], is_mask,
+                                      &flow->tunnel);
         if (res == ODP_FIT_ERROR) {
             return ODP_FIT_ERROR;
         } else if (res == ODP_FIT_PERFECT) {
@@ -5226,20 +5216,21 @@ enum odp_key_fitness
 odp_flow_key_to_flow(const struct nlattr *key, size_t key_len,
                      struct flow *flow)
 {
-   return odp_flow_key_to_flow__(key, key_len, NULL, 0, flow, flow, false);
+   return odp_flow_key_to_flow__(key, key_len, flow, flow);
 }
 
-static enum odp_key_fitness
-odp_flow_key_to_mask__(const struct nlattr *mask_key, size_t mask_key_len,
-                       const struct nlattr *flow_key, size_t flow_key_len,
-                       struct flow_wildcards *mask,
-                       const struct flow *src_flow,
-                       bool udpif)
+/* Converts the 'mask_key_len' bytes of OVS_KEY_ATTR_* attributes in 'mask_key'
+ * to a mask structure in 'mask'.  'flow' must be a previously translated flow
+ * corresponding to 'mask' and similarly flow_key/flow_key_len must be the
+ * attributes from that flow.  Returns an ODP_FIT_* value that indicates how
+ * well 'key' fits our expectations for what a flow key should contain. */
+enum odp_key_fitness
+odp_flow_key_to_mask(const struct nlattr *mask_key, size_t mask_key_len,
+                     struct flow_wildcards *mask, const struct flow *src_flow)
 {
     if (mask_key_len) {
         return odp_flow_key_to_flow__(mask_key, mask_key_len,
-                                      flow_key, flow_key_len,
-                                      &mask->masks, src_flow, udpif);
+                                      &mask->masks, src_flow);
 
     } else {
         /* A missing mask means that the flow should be exact matched.
@@ -5248,47 +5239,6 @@ odp_flow_key_to_mask__(const struct nlattr *mask_key, size_t mask_key_len,
 
         return ODP_FIT_PERFECT;
     }
-}
-/* Converts the 'mask_key_len' bytes of OVS_KEY_ATTR_* attributes in 'mask_key'
- * to a mask structure in 'mask'.  'flow' must be a previously translated flow
- * corresponding to 'mask' and similarly flow_key/flow_key_len must be the
- * attributes from that flow.  Returns an ODP_FIT_* value that indicates how
- * well 'key' fits our expectations for what a flow key should contain. */
-enum odp_key_fitness
-odp_flow_key_to_mask(const struct nlattr *mask_key, size_t mask_key_len,
-                     const struct nlattr *flow_key, size_t flow_key_len,
-                     struct flow_wildcards *mask, const struct flow *flow)
-{
-    return odp_flow_key_to_mask__(mask_key, mask_key_len,
-                                  flow_key, flow_key_len,
-                                  mask, flow, false);
-}
-
-/* These functions are similar to their non-"_udpif" variants but output a
- * 'flow' that is suitable for fast-path packet processing.
- *
- * Some fields have different representation for flow setup and per-
- * packet processing (i.e. different between ofproto-dpif and userspace
- * datapath). In particular, with the non-"_udpif" functions, struct
- * tun_metadata is in the per-flow format (using 'present.map' and 'opts.u8');
- * with these functions, struct tun_metadata is in the per-packet format
- * (using 'present.len' and 'opts.gnv'). */
-enum odp_key_fitness
-odp_flow_key_to_flow_udpif(const struct nlattr *key, size_t key_len,
-                           struct flow *flow)
-{
-   return odp_flow_key_to_flow__(key, key_len, NULL, 0, flow, flow, true);
-}
-
-enum odp_key_fitness
-odp_flow_key_to_mask_udpif(const struct nlattr *mask_key, size_t mask_key_len,
-                           const struct nlattr *flow_key, size_t flow_key_len,
-                           struct flow_wildcards *mask,
-                           const struct flow *flow)
-{
-    return odp_flow_key_to_mask__(mask_key, mask_key_len,
-                                  flow_key, flow_key_len,
-                                  mask, flow, true);
 }
 
 /* Returns 'fitness' as a string, for use in debug messages. */

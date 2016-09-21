@@ -2595,7 +2595,7 @@ OvsHashFlow(const OvsFlowKey *key)
     UINT8 *start;
 
     ASSERT(key->tunKey.dst || offset == sizeof(OvsIPv4TunnelKey));
-    ASSERT(!key->tunKey.dst || offset == 0);
+    ASSERT(!key->tunKey.dst || offset == OvsGetFlowL2Offset(&key->tunKey));
     start = (UINT8 *)key + offset;
     return OvsJhashBytes(start, size, 0);
 }

@@ -259,7 +259,7 @@
       in ingress table <code>LB</code> and <code>Stateful</code>.  It contains
       a priority-0 flow that simply moves traffic to the next table.  If load
       balancing rules with virtual IP addresses (and ports) are configured in
-      <code>OVN_Northbound</code> database for a logical datapath, a
+      <code>OVN_Northbound</code> database for a logical switch datapath, a
       priority-100 flow is added for each configured virtual IP address
       <var>VIP</var> with a match <code>ip &amp;&amp; ip4.dst == <var>VIP</var>
       </code> that sets an action <code>reg0[0] = 1; next;</code> to act as a
@@ -332,12 +332,12 @@
         A priority-65535 flow that allows any traffic in the reply
         direction for a connection that has been committed to the
         connection tracker (i.e., established flows), as long as
-        the committed flow does not have <code>ct_label[0]</code> set.
+        the committed flow does not have <code>ct_label.blocked</code> set.
         We only handle traffic in the reply direction here because
         we want all packets going in the request direction to still
         go through the flows that implement the currently defined
         policy based on ACLs.  If a connection is no longer allowed by
-        policy, <code>ct_label[0]</code> will get set and packets in the
+        policy, <code>ct_label.blocked</code> will get set and packets in the
         reply direction will no longer be allowed, either.
       </li>
 
@@ -345,7 +345,7 @@
         A priority-65535 flow that allows any traffic that is considered
         related to a committed flow in the connection tracker (e.g., an
         ICMP Port Unreachable from a non-listening UDP port), as long
-        as the committed flow does not have <code>ct_label[0]</code> set.
+        as the committed flow does not have <code>ct_label.blocked</code> set.
       </li>
 
       <li>
@@ -355,7 +355,7 @@
 
       <li>
         A priority-65535 flow that drops all trafic in the reply direction
-        with <code>ct_label[0]</code> set meaning that the connection
+        with <code>ct_label.blocked</code> set meaning that the connection
         should no longer be allowed due to a policy change.  Packets
         in the request direction are skipped here to let a newly created
         ACL re-allow this connection.
@@ -379,7 +379,7 @@
 
     <ul>
       <li>
-        For all the configured load balancing rules in
+        For all the configured load balancing rules for a switch in
         <code>OVN_Northbound</code> database that includes a L4 port
         <var>PORT</var> of protocol <var>P</var> and IPv4 address
         <var>VIP</var>, a priority-120 flow that matches on
@@ -390,7 +390,7 @@
         optional port numbers) to load balance to.
       </li>
       <li>
-        For all the configured load balancing rules in
+        For all the configured load balancing rules for a switch in
         <code>OVN_Northbound</code> database that includes just an IP address
         <var>VIP</var> to match on, a priority-110 flow that matches on
         <code>ct.new &amp;&amp; ip &amp;&amp; ip4.dst == <var>VIP</var></code>
@@ -880,8 +880,9 @@ output;
       <li>
         <p>
           These flows reply to ARP requests for the virtual IP addresses
-          configured in the router for DNAT. For a configured DNAT IP address
-          <var>A</var>, for each router port <var>P</var> with Ethernet
+          configured in the router for DNAT or load balancing.  For a
+          configured DNAT IP address or a load balancer VIP <var>A</var>,
+          for each router port <var>P</var> with Ethernet
           address <var>E</var>, a priority-90 flow matches
           <code>inport == <var>P</var> &amp;&amp; arp.op == 1 &amp;&amp;
           arp.tpa == <var>A</var></code> (ARP request)
@@ -1063,12 +1064,26 @@ icmp4 {
 
       <li>
         Next table.  A priority-0 flows match all packets that aren't already
-        handled and uses actions <code>next;</code> to feed them to the ingress
-        table for routing.
+        handled and uses actions <code>next;</code> to feed them to the next
+        table.
       </li>
     </ul>
 
-    <h3>Ingress Table 2: UNSNAT</h3>
+    <h3>Ingress Table 2: DEFRAG</h3>
+
+    <p>
+      This is to send packets to connection tracker for tracking and
+      defragmentation.  It contains a priority-0 flow that simply moves traffic
+      to the next table.  If load balancing rules with virtual IP addresses
+      (and ports) are configured in <code>OVN_Northbound</code> database for a
+      Gateway router, a priority-100 flow is added for each configured virtual
+      IP address <var>VIP</var> with a match <code>ip &amp;&amp;
+      ip4.dst == <var>VIP</var></code> that sets an action
+      <code>ct_next;</code> to send IP packets to the connection tracker for
+      packet de-fragmentation and tracking before sending it to the next table.
+    </p>
+
+    <h3>Ingress Table 3: UNSNAT</h3>
 
     <p>
       This is for already established connections' reverse traffic.
@@ -1094,7 +1109,7 @@ icmp4 {
       </li>
     </ul>
 
-    <h3>Ingress Table 3: DNAT</h3>
+    <h3>Ingress Table 4: DNAT</h3>
 
     <p>
       Packets enter the pipeline with destination IP address that needs to
@@ -1103,27 +1118,47 @@ icmp4 {
     </p>
     <ul>
       <li>
-        <p>
-          For each configuration in the OVN Northbound database, that asks
-          to change the destination IP address of a packet from <var>A</var> to
-          <var>B</var>, a priority-100 flow matches <code>ip &amp;&amp;
-          ip4.dst == <var>A</var></code> with an action
-          <code>flags.loopback = 1; ct_dnat(<var>B</var>);</code>.
-        </p>
+        For all the configured load balancing rules for Gateway router in
+        <code>OVN_Northbound</code> database that includes a L4 port
+        <var>PORT</var> of protocol <var>P</var> and IPv4 address
+        <var>VIP</var>, a priority-120 flow that matches on
+        <code>ct.new &amp;&amp; ip &amp;&amp; ip4.dst == <var>VIP</var>
+        &amp;&amp; <var>P</var> &amp;&amp; <var>P</var>.dst == <var>PORT
+        </var></code> with an action of <code>ct_lb(<var>args</var>)</code>,
+        where <var>args</var> contains comma separated IPv4 addresses (and
+        optional port numbers) to load balance to.
+      </li>
 
-        <p>
-          For all IP packets of a Gateway router, a priority-50 flow with an
-          action <code>flags.loopback = 1; ct_dnat;</code>.
-        </p>
+      <li>
+        For all the configured load balancing rules for Gateway router in
+        <code>OVN_Northbound</code> database that includes just an IP address
+        <var>VIP</var> to match on, a priority-110 flow that matches on
+        <code>ct.new &amp;&amp; ip &amp;&amp; ip4.dst ==
+        <var>VIP</var></code> with an action of
+        <code>ct_lb(<var>args</var>)</code>, where <var>args</var> contains
+        comma separated IPv4 addresses.
+      </li>
 
-        <p>
-          A priority-0 logical flow with match <code>1</code> has actions
-          <code>next;</code>.
-        </p>
+      <li>
+        For each configuration in the OVN Northbound database, that asks
+        to change the destination IP address of a packet from <var>A</var> to
+        <var>B</var>, a priority-100 flow matches <code>ip &amp;&amp;
+        ip4.dst == <var>A</var></code> with an action
+        <code>flags.loopback = 1; ct_dnat(<var>B</var>);</code>.
+      </li>
+
+      <li>
+        For all IP packets of a Gateway router, a priority-50 flow with an
+        action <code>flags.loopback = 1; ct_dnat;</code>.
+      </li>
+
+      <li>
+        A priority-0 logical flow with match <code>1</code> has actions
+        <code>next;</code>.
       </li>
     </ul>
 
-    <h3>Ingress Table 4: IP Routing</h3>
+    <h3>Ingress Table 5: IP Routing</h3>
 
     <p>
       A packet that arrives at this table is an IP packet that should be
@@ -1134,7 +1169,7 @@ icmp4 {
       packet's final destination, unchanged) and advances to the next
       table for ARP resolution.  It also sets <code>reg1</code> (or
       <code>xxreg1</code>) to the IP address owned by the selected router
-      port (Table 6 will generate ARP request, if needed, with
+      port (Table 7 will generate ARP request, if needed, with
       <code>reg0</code> as the target protocol address and <code>reg1</code>
       as the source protocol address).
     </p>
@@ -1215,7 +1250,7 @@ next;
       </li>
     </ul>
 
-    <h3>Ingress Table 5: ARP/ND Resolution</h3>
+    <h3>Ingress Table 6: ARP/ND Resolution</h3>
 
     <p>
       Any packet that reaches this table is an IP packet whose next-hop
@@ -1297,7 +1332,7 @@ next;
       </li>
     </ul>
 
-    <h3>Ingress Table 6: ARP Request</h3>
+    <h3>Ingress Table 7: ARP Request</h3>
 
     <p>
       In the common case where the Ethernet destination has been resolved, this

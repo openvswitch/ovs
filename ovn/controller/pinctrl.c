@@ -354,6 +354,13 @@ pinctrl_handle_put_dhcp_opts(
     pin->packet = dp_packet_data(&pkt_out);
     pin->packet_len = dp_packet_size(&pkt_out);
 
+    /* Log the response. */
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(20, 40);
+    const struct eth_header *l2 = dp_packet_l2(&pkt_out);
+    VLOG_INFO_RL(&rl, "DHCP%s "ETH_ADDR_FMT" "IP_FMT"",
+                 msg_type == DHCP_MSG_OFFER ? "OFFER" : "ACK",
+                 ETH_ADDR_ARGS(l2->eth_src), IP_ARGS(*offer_ip));
+
     success = 1;
 exit:
     if (!ofperr) {
@@ -658,7 +665,7 @@ process_packet_in(const struct ofp_header *msg)
 
     struct ofputil_packet_in pin;
     struct ofpbuf continuation;
-    enum ofperr error = ofputil_decode_packet_in(msg, true, &pin,
+    enum ofperr error = ofputil_decode_packet_in(msg, true, NULL, &pin,
                                                  NULL, NULL, &continuation);
 
     if (error) {
@@ -1342,11 +1349,9 @@ reload_metadata(struct ofpbuf *ofpacts, const struct match *md)
     for (size_t i = 0; i < ARRAY_SIZE(md_fields); i++) {
         const struct mf_field *field = mf_from_id(md_fields[i]);
         if (!mf_is_all_wild(field, &md->wc)) {
-            struct ofpact_set_field *sf = ofpact_put_SET_FIELD(ofpacts);
-            sf->field = field;
-            sf->flow_has_vlan = false;
-            mf_get_value(field, &md->flow, &sf->value);
-            memset(&sf->mask, 0xff, field->n_bytes);
+            union mf_value value;
+            mf_get_value(field, &md->flow, &value);
+            ofpact_put_set_field(ofpacts, field, &value, NULL);
         }
     }
 }

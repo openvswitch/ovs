@@ -201,8 +201,6 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/pcap-file.h \
 	lib/perf-counter.h \
 	lib/perf-counter.c \
-	lib/pktbuf.c \
-	lib/pktbuf.h \
 	lib/poll-loop.c \
 	lib/poll-loop.h \
 	lib/process.c \
@@ -530,3 +528,4 @@ lib-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(PKIDIR)
 	$(MKDIR_P) $(DESTDIR)$(LOGDIR)
 	$(MKDIR_P) $(DESTDIR)$(DBDIR)
+	$(MKDIR_P) $(DESTDIR)$(sysconfdir)/openvswitch

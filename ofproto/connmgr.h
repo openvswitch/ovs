@@ -71,7 +71,8 @@ void ofproto_async_msg_free(struct ofproto_async_msg *);
 /* Basics. */
 struct connmgr *connmgr_create(struct ofproto *ofproto,
                                const char *dpif_name, const char *local_name);
-void connmgr_destroy(struct connmgr *);
+void connmgr_destroy(struct connmgr *)
+    OVS_REQUIRES(ofproto_mutex);
 
 void connmgr_run(struct connmgr *,
                  void (*handle_openflow)(struct ofconn *,
@@ -128,9 +129,6 @@ void ofconn_send_replies(const struct ofconn *, struct ovs_list *);
 void ofconn_send_error(const struct ofconn *, const struct ofp_header *request,
                        enum ofperr);
 
-enum ofperr ofconn_pktbuf_retrieve(struct ofconn *, uint32_t id,
-                                   struct dp_packet **bufferp, ofp_port_t *in_port);
-
 struct ofp_bundle;
 
 struct ofp_bundle *ofconn_get_bundle(struct ofconn *, uint32_t id);
@@ -145,7 +143,8 @@ bool connmgr_wants_packet_in_on_miss(struct connmgr *mgr);
 void connmgr_send_port_status(struct connmgr *, struct ofconn *source,
                               const struct ofputil_phy_port *, uint8_t reason);
 void connmgr_send_flow_removed(struct connmgr *,
-                               const struct ofputil_flow_removed *);
+                               const struct ofputil_flow_removed *)
+    OVS_REQUIRES(ofproto_mutex);
 void connmgr_send_async_msg(struct connmgr *,
                             const struct ofproto_async_msg *);
 void ofconn_send_role_status(struct ofconn *ofconn, uint32_t role,

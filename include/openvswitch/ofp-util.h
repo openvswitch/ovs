@@ -36,7 +36,6 @@
 struct ofpbuf;
 union ofp_action;
 struct ofpact_set_field;
-struct pktbuf;
 
 /* Port numbers. */
 enum ofperr ofputil_port_from_ofp11(ovs_be32 ofp11_port,
@@ -221,7 +220,8 @@ void ofputil_normalize_match_quiet(struct match *);
 void ofputil_match_to_ofp10_match(const struct match *, struct ofp10_match *);
 
 /* Work with ofp11_match. */
-enum ofperr ofputil_pull_ofp11_match(struct ofpbuf *, struct match *,
+enum ofperr ofputil_pull_ofp11_match(struct ofpbuf *, const struct tun_table *,
+                                     struct match *,
                                      uint16_t *padded_match_len);
 enum ofperr ofputil_pull_ofp11_mask(struct ofpbuf *, struct match *,
                                     struct mf_bitmap *bm);
@@ -330,6 +330,7 @@ struct ofputil_flow_mod {
 enum ofperr ofputil_decode_flow_mod(struct ofputil_flow_mod *,
                                     const struct ofp_header *,
                                     enum ofputil_protocol,
+                                    const struct tun_table *,
                                     struct ofpbuf *ofpacts,
                                     ofp_port_t max_port,
                                     uint8_t max_table);
@@ -348,7 +349,8 @@ struct ofputil_flow_stats_request {
 };
 
 enum ofperr ofputil_decode_flow_stats_request(
-    struct ofputil_flow_stats_request *, const struct ofp_header *);
+    struct ofputil_flow_stats_request *, const struct ofp_header *,
+    const struct tun_table *);
 struct ofpbuf *ofputil_encode_flow_stats_request(
     const struct ofputil_flow_stats_request *, enum ofputil_protocol);
 
@@ -377,7 +379,8 @@ int ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *,
                                     bool flow_age_extension,
                                     struct ofpbuf *ofpacts);
 void ofputil_append_flow_stats_reply(const struct ofputil_flow_stats *,
-                                     struct ovs_list *replies);
+                                     struct ovs_list *replies,
+                                     const struct tun_table *);
 
 /* Aggregate stats reply, independent of protocol. */
 struct ofputil_aggregate_stats {
@@ -451,6 +454,7 @@ struct ofputil_packet_in {
 void ofputil_packet_in_destroy(struct ofputil_packet_in *);
 
 enum ofperr ofputil_decode_packet_in(const struct ofp_header *, bool loose,
+                                     const struct tun_table *,
                                      struct ofputil_packet_in *,
                                      size_t *total_len, uint32_t *buffer_id,
                                      struct ofpbuf *continuation);
@@ -498,11 +502,11 @@ struct ofputil_packet_in_private {
 struct ofpbuf *ofputil_encode_packet_in_private(
     const struct ofputil_packet_in_private *,
     enum ofputil_protocol protocol,
-    enum nx_packet_in_format,
-    uint16_t max_len, struct pktbuf *);
+    enum nx_packet_in_format);
 
 enum ofperr ofputil_decode_packet_in_private(
     const struct ofp_header *, bool loose,
+    const struct tun_table *,
     struct ofputil_packet_in_private *,
     size_t *total_len, uint32_t *buffer_id);
 
@@ -1340,18 +1344,20 @@ enum ofperr ofputil_decode_bundle_add(const struct ofp_header *,
                                       struct ofputil_bundle_add_msg *,
                                       enum ofptype *type);
 
+/* Bundle message as produced by ofp-parse. */
 struct ofputil_bundle_msg {
     enum ofptype type;
     union {
         struct ofputil_flow_mod fm;
         struct ofputil_group_mod gm;
+        struct ofputil_packet_out po;
     };
 };
 
-/* Destroys 'bms'. */
-void ofputil_encode_bundle_msgs(struct ofputil_bundle_msg *bms, size_t n_bms,
-                                struct ovs_list *requests,
+void ofputil_encode_bundle_msgs(const struct ofputil_bundle_msg *bms,
+                                size_t n_bms, struct ovs_list *requests,
                                 enum ofputil_protocol);
+void ofputil_free_bundle_msgs(struct ofputil_bundle_msg *bms, size_t n_bms);
 
 struct ofputil_tlv_map {
     struct ovs_list list_node;

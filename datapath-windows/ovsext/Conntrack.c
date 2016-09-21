@@ -463,7 +463,7 @@ OvsProcessConntrackEntry(PNET_BUFFER_LIST curNbl,
     if (ctx->related) {
         state |= OVS_CS_F_RELATED;
         if (ctx->reply) {
-            state = OVS_CS_F_REPLY_DIR;
+            state |= OVS_CS_F_REPLY_DIR;
         }
     } else {
         CT_UPDATE_RES result;

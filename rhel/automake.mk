@@ -60,7 +60,7 @@ rpm-fedora: dist $(srcdir)/rhel/openvswitch-fedora.spec
 	cp ${DIST_ARCHIVES} ${RPMBUILD_TOP}/SOURCES
 	rpmbuild ${RPMBUILD_OPT} \
                  -D "_topdir ${RPMBUILD_TOP}" \
-                 -bb $(srcdir)/rhel/openvswitch-fedora.spec
+                 -ba $(srcdir)/rhel/openvswitch-fedora.spec
 
 # Build kernel datapath RPM
 rpm-fedora-kmod: dist $(srcdir)/rhel/openvswitch-kmod-fedora.spec
@@ -68,4 +68,4 @@ rpm-fedora-kmod: dist $(srcdir)/rhel/openvswitch-kmod-fedora.spec
 	cp ${DIST_ARCHIVES} ${RPMBUILD_TOP}/SOURCES
 	rpmbuild -D "kversion $(shell uname -r)" ${RPMBUILD_OPT} \
                  -D "_topdir ${RPMBUILD_TOP}" \
-                 -bb $(srcdir)/rhel/openvswitch-kmod-fedora.spec
+                 -ba $(srcdir)/rhel/openvswitch-kmod-fedora.spec

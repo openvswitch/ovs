@@ -9,7 +9,17 @@
 #
 # If tests have to be skipped while building, specify the '--without check'
 # option. For example:
-# rpmbuild -bb --without check rhel/openvswitch.spec
+#     rpmbuild -bb --without check rhel/openvswitch.spec
+#
+# Support for executing kernel data path tests under rpmbuild is
+# provided, however this is intended for use only in test environments
+# and should not be used otherwise (these tests require root privileges).
+# These tests can be executed, for example, via:
+#    rpmbuild -rb --with check_datapath_kernel openvswitch.src.rpm
+#
+# These tests will use the currently installed OVS kernel modules, when
+# testing out of tree kernel modules the appropriate openvswitch-kmod
+# package should be installed first.
 
 Name: openvswitch
 Summary: Open vSwitch daemon/database/utilities
@@ -27,6 +37,7 @@ BuildRequires: openssl-devel
 BuildRequires: checkpolicy, selinux-policy-devel
 
 %bcond_without check
+%bcond_with check_datapath_kernel
 
 %description
 Open vSwitch provides standard network bridging functions and
@@ -120,6 +131,13 @@ install -D -m 0644 lib/.libs/libopenvswitch.a \
     if make check TESTSUITEFLAGS='%{_smp_mflags}' RECHECK=yes; then :;
     else
         cat tests/testsuite.log
+        exit 1
+    fi
+%endif
+%if %{with check_datapath_kernel}
+    if make check-kernel RECHECK=yes; then :;
+    else
+        cat tests/system-kmod-testsuite.log
         exit 1
     fi
 %endif

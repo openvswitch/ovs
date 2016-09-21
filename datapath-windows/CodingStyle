@@ -67,6 +67,8 @@ OvsDetectTunnelRxPkt(POVS_FORWARDING_CONTEXT ovsFwdCtx,
         flowKey->ipKey.l4.tpDst == VXLAN_UDP_PORT_NBO) {
         tunnelVport = OvsGetTunnelVport(OVSWIN_VPORT_TYPE_VXLAN);
         ovsActionStats.rxVxlan++;
+    } else {
+        return FALSE;
     }
 
     if (tunnelVport) {

@@ -328,6 +328,7 @@ test_dump_symtab(struct ovs_cmdl_context *ctx OVS_UNUSED)
         ds_destroy(&s);
     }
 
+    free(nodes);
     expr_symtab_destroy(&symtab);
     shash_destroy(&symtab);
 }
@@ -1181,6 +1182,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
             const struct ovnact_encode_params ep = {
                 .lookup_port = lookup_port_cb,
                 .aux = &ports,
+                .is_switch = true,
                 .ct_zones = &ct_zones,
                 .group_table = &group_table,
 
@@ -1227,6 +1229,8 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
             }
             expr_destroy(prereqs2);
 
+            ovnacts_free(ovnacts2.data, ovnacts2.size);
+            ofpbuf_uninit(&ovnacts2);
             ds_destroy(&ovnacts_s);
         } else {
             printf("    %s\n", error);
@@ -1234,6 +1238,7 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
         }
 
         expr_destroy(prereqs);
+        ovnacts_free(ovnacts.data, ovnacts.size);
         ofpbuf_uninit(&ovnacts);
     }
     ds_destroy(&input);

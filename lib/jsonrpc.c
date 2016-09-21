@@ -156,11 +156,11 @@ jsonrpc_wait(struct jsonrpc *rpc)
  * - >0: errno value
  * - EOF: end of file (remote end closed connection; not necessarily an error).
  *
- * When this functions nonzero, 'rpc' is effectively out of commission.  'rpc'
- * will not receive any more messages and any further messages that one
- * attempts to send with 'rpc' will be discarded.  The caller can keep 'rpc'
- * around as long as it wants, but it's not going to provide any more useful
- * services.
+ * When this function returns nonzero, 'rpc' is effectively out of
+ * commission.  'rpc' will not receive any more messages and any further
+ * messages that one attempts to send with 'rpc' will be discarded.  The
+ * caller can keep 'rpc' around as long as it wants, but it's not going
+ * to provide any more useful services.
  */
 int
 jsonrpc_get_status(const struct jsonrpc *rpc)

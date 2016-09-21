@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,16 +60,21 @@
 
 VLOG_DEFINE_THIS_MODULE(ovsdb_server);
 
-struct db;
+struct db {
+    /* Initialized in main(). */
+    char *filename;
+    struct ovsdb_file *file;
+    struct ovsdb *db;
+
+    /* Only used by update_remote_status(). */
+    struct ovsdb_txn *txn;
+};
 
 /* SSL configuration. */
 static char *private_key_file;
 static char *certificate_file;
 static char *ca_cert_file;
 static bool bootstrap_ca_cert;
-
-/* Replication configuration. */
-static bool is_backup_server;
 
 static unixctl_cb_func ovsdb_server_exit;
 static unixctl_cb_func ovsdb_server_compact;
@@ -81,13 +86,17 @@ static unixctl_cb_func ovsdb_server_set_active_ovsdb_server;
 static unixctl_cb_func ovsdb_server_get_active_ovsdb_server;
 static unixctl_cb_func ovsdb_server_connect_active_ovsdb_server;
 static unixctl_cb_func ovsdb_server_disconnect_active_ovsdb_server;
-static unixctl_cb_func ovsdb_server_set_sync_excluded_tables;
-static unixctl_cb_func ovsdb_server_get_sync_excluded_tables;
+static unixctl_cb_func ovsdb_server_set_sync_exclude_tables;
+static unixctl_cb_func ovsdb_server_get_sync_exclude_tables;
+static unixctl_cb_func ovsdb_server_get_sync_status;
 
 struct server_config {
     struct sset *remotes;
     struct shash *all_dbs;
     FILE *config_tmpfile;
+    char **sync_from;
+    char **sync_exclude;
+    bool *is_backup;
     struct ovsdb_jsonrpc_server *jsonrpc;
 };
 static unixctl_cb_func ovsdb_server_add_remote;
@@ -103,7 +112,8 @@ static void close_db(struct db *db);
 
 static void parse_options(int *argc, char **argvp[],
                           struct sset *remotes, char **unixctl_pathp,
-                          char **run_command);
+                          char **run_command, char **sync_from,
+                          char **sync_exclude, bool *is_backup);
 OVS_NO_RETURN static void usage(void);
 
 static char *reconfigure_remotes(struct ovsdb_jsonrpc_server *,
@@ -117,19 +127,35 @@ static void update_remote_status(const struct ovsdb_jsonrpc_server *jsonrpc,
                                  struct shash *all_dbs);
 
 static void save_config__(FILE *config_file, const struct sset *remotes,
-                          const struct sset *db_filenames);
+                          const struct sset *db_filenames,
+                          const char *sync_from, const char *sync_exclude,
+                          bool is_backup);
 static void save_config(struct server_config *);
 static void load_config(FILE *config_file, struct sset *remotes,
-                        struct sset *db_filenames);
+                        struct sset *db_filenames, char **sync_from,
+                        char **sync_exclude, bool *is_backup);
+
+static void
+ovsdb_replication_init(const char *sync_from, const char *exclude,
+                       struct shash *all_dbs)
+{
+    replication_init(sync_from, exclude);
+    struct shash_node *node;
+    SHASH_FOR_EACH (node, all_dbs) {
+        struct db *db = node->data;
+        replication_add_local_db(db->db->schema->name, db->db);
+    }
+}
 
 static void
 main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
           struct unixctl_server *unixctl, struct sset *remotes,
-          struct process *run_process, bool *exiting)
+          struct process *run_process, bool *exiting, bool *is_backup)
 {
     char *remotes_error, *ssl_error;
     struct shash_node *node;
     long long int status_timer = LLONG_MIN;
+    bool last_role = *is_backup;
 
     *exiting = false;
     ssl_error = NULL;
@@ -153,13 +179,13 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         /* Run unixctl_server_run() before reconfigure_remotes() because
          * ovsdb-server/add-remote and ovsdb-server/remove-remote can change
          * the set of remotes that reconfigure_remotes() uses. */
-        bool last_role = is_backup_server;
         unixctl_server_run(unixctl);
 
-        /* In case unixctl commands change the role of ovsdb-server,
-         *  from active to backup or vise versa, recoonect jsonrpc server.  */
-        if (last_role != is_backup_server) {
-            ovsdb_jsonrpc_server_reconnect(jsonrpc, is_backup_server);
+        /* In ovsdb-server's role (active or backup) has changed, restart
+         * the ovsdb jsonrpc server.  */
+        if (last_role != *is_backup) {
+            bool read_only = last_role = *is_backup;
+            ovsdb_jsonrpc_server_reconnect(jsonrpc, read_only);
         }
 
         report_error_if_changed(
@@ -168,8 +194,12 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         report_error_if_changed(reconfigure_ssl(all_dbs), &ssl_error);
         ovsdb_jsonrpc_server_run(jsonrpc);
 
-        if (is_backup_server) {
-             replication_run(all_dbs);
+        if (*is_backup) {
+            replication_run();
+            if (!replication_is_alive()) {
+                int retval = replication_get_last_error();
+                ovs_fatal(retval, "replication connection failed");
+            }
         }
 
         SHASH_FOR_EACH(node, all_dbs) {
@@ -190,9 +220,10 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         }
 
         memory_wait();
-        if (is_backup_server) {
+        if (*is_backup) {
             replication_wait();
         }
+
         ovsdb_jsonrpc_server_wait(jsonrpc);
         unixctl_server_wait(unixctl);
         SHASH_FOR_EACH(node, all_dbs) {
@@ -212,7 +243,6 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         }
     }
 
-    disconnect_active_server();
     free(remotes_error);
 }
 
@@ -224,6 +254,8 @@ main(int argc, char *argv[])
     struct unixctl_server *unixctl;
     struct ovsdb_jsonrpc_server *jsonrpc;
     struct sset remotes, db_filenames;
+    char *sync_from, *sync_exclude;
+    bool is_backup;
     const char *db_filename;
     struct process *run_process;
     bool exiting;
@@ -241,7 +273,11 @@ main(int argc, char *argv[])
     fatal_ignore_sigpipe();
     process_init();
 
-    parse_options(&argc, &argv, &remotes, &unixctl_path, &run_command);
+    bool active = false;
+    parse_options(&argc, &argv, &remotes, &unixctl_path, &run_command,
+                  &sync_from, &sync_exclude, &active);
+    is_backup = sync_from && !active;
+
     daemon_become_new_user(false);
 
     /* Create and initialize 'config_tmpfile' as a temporary file to hold
@@ -268,17 +304,26 @@ main(int argc, char *argv[])
     server_config.remotes = &remotes;
     server_config.config_tmpfile = config_tmpfile;
 
-    save_config__(config_tmpfile, &remotes, &db_filenames);
+    save_config__(config_tmpfile, &remotes, &db_filenames, sync_from,
+                  sync_exclude, is_backup);
 
     daemonize_start(false);
 
     /* Load the saved config. */
-    load_config(config_tmpfile, &remotes, &db_filenames);
-    jsonrpc = ovsdb_jsonrpc_server_create(is_backup_server);
+    load_config(config_tmpfile, &remotes, &db_filenames, &sync_from,
+                &sync_exclude, &is_backup);
+
+    /* Start ovsdb jsonrpc server. When running as a backup server,
+     * jsonrpc connections are read only. Otherwise, both read
+     * and write transactions are allowed.  */
+    jsonrpc = ovsdb_jsonrpc_server_create(is_backup);
 
     shash_init(&all_dbs);
     server_config.all_dbs = &all_dbs;
     server_config.jsonrpc = jsonrpc;
+    server_config.sync_from = &sync_from;
+    server_config.sync_exclude = &sync_exclude;
+    server_config.is_backup = &is_backup;
 
     perf_counters_init();
 
@@ -350,30 +395,39 @@ main(int argc, char *argv[])
                              ovsdb_server_perf_counters_show, NULL);
     unixctl_command_register("ovsdb-server/perf-counters-clear", "", 0, 0,
                              ovsdb_server_perf_counters_clear, NULL);
-
-    unixctl_command_register("ovsdb-server/set-active-ovsdb-server", "", 0, 1,
-                              ovsdb_server_set_active_ovsdb_server, NULL);
+    unixctl_command_register("ovsdb-server/set-active-ovsdb-server", "", 1, 1,
+                             ovsdb_server_set_active_ovsdb_server,
+                             &server_config);
     unixctl_command_register("ovsdb-server/get-active-ovsdb-server", "", 0, 0,
-                              ovsdb_server_get_active_ovsdb_server, NULL);
+                             ovsdb_server_get_active_ovsdb_server,
+                             &server_config);
     unixctl_command_register("ovsdb-server/connect-active-ovsdb-server", "",
                              0, 0, ovsdb_server_connect_active_ovsdb_server,
-                             NULL);
+                             &server_config);
     unixctl_command_register("ovsdb-server/disconnect-active-ovsdb-server", "",
                              0, 0, ovsdb_server_disconnect_active_ovsdb_server,
+                             &server_config);
+    unixctl_command_register("ovsdb-server/set-sync-exclude-tables", "",
+                             0, 1, ovsdb_server_set_sync_exclude_tables,
+                             &server_config);
+    unixctl_command_register("ovsdb-server/get-sync-exclude-tables", "",
+                             0, 0, ovsdb_server_get_sync_exclude_tables,
                              NULL);
-    unixctl_command_register("ovsdb-server/set-sync-excluded-tables", "",
-                             0, 1, ovsdb_server_set_sync_excluded_tables,
-                             NULL);
-    unixctl_command_register("ovsdb-server/get-sync-excluded-tables", "",
-                             0, 0, ovsdb_server_get_sync_excluded_tables,
-                             NULL);
+    unixctl_command_register("ovsdb-server/sync-status", "",
+                             0, 0, ovsdb_server_get_sync_status,
+                             &server_config);
 
     /* Simulate the behavior of OVS release prior to version 2.5 that
      * does not support the monitor_cond method.  */
     unixctl_command_register("ovsdb-server/disable-monitor-cond", "", 0, 0,
                              ovsdb_server_disable_monitor_cond, jsonrpc);
 
-    main_loop(jsonrpc, &all_dbs, unixctl, &remotes, run_process, &exiting);
+    if (is_backup) {
+        ovsdb_replication_init(sync_from, sync_exclude, &all_dbs);
+    }
+
+    main_loop(jsonrpc, &all_dbs, unixctl, &remotes, run_process, &exiting,
+              &is_backup);
 
     ovsdb_jsonrpc_server_destroy(jsonrpc);
     SHASH_FOR_EACH_SAFE(node, next, &all_dbs) {
@@ -384,8 +438,10 @@ main(int argc, char *argv[])
     shash_destroy(&all_dbs);
     sset_destroy(&remotes);
     sset_destroy(&db_filenames);
+    free(sync_from);
+    free(sync_exclude);
     unixctl_server_destroy(unixctl);
-    destroy_active_server();
+    replication_destroy();
 
     if (run_process && process_exited(run_process)) {
         int status = process_status(run_process);
@@ -467,6 +523,21 @@ open_db(struct server_config *config, const char *filename)
     ovsdb_error_destroy(db_error);
     close_db(db);
     return error;
+}
+
+static const struct db *
+find_db(const struct shash *all_dbs, const char *db_name)
+{
+    struct shash_node *node;
+
+    SHASH_FOR_EACH (node, all_dbs) {
+        struct db *db = node->data;
+        if (!strcmp(db->db->schema->name, db_name)) {
+            return db;
+        }
+    }
+
+    return NULL;
 }
 
 static char * OVS_WARN_UNUSED_RESULT
@@ -1055,11 +1126,16 @@ report_error_if_changed(char *error, char **last_errorp)
 static void
 ovsdb_server_set_active_ovsdb_server(struct unixctl_conn *conn,
                                      int argc OVS_UNUSED, const char *argv[],
-                                     void *arg_ OVS_UNUSED)
+                                     void *config_)
 {
-    set_active_ovsdb_server(argv[1]);
-    is_backup_server = true;
-    VLOG_INFO("become a backup server");
+    struct server_config *config = config_;
+
+    if (*config->sync_from) {
+        free(*config->sync_from);
+    }
+    *config->sync_from = xstrdup(argv[1]);
+    save_config(config);
+
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1067,69 +1143,81 @@ static void
 ovsdb_server_get_active_ovsdb_server(struct unixctl_conn *conn,
                                      int argc OVS_UNUSED,
                                      const char *argv[] OVS_UNUSED,
-                                     void *arg_ OVS_UNUSED)
+                                     void *config_ )
 {
-    struct ds s;
-    ds_init(&s);
+    struct server_config *config = config_;
 
-    ds_put_format(&s, "%s\n", get_active_ovsdb_server());
-
-    unixctl_command_reply(conn, ds_cstr(&s));
-    ds_destroy(&s);
+    unixctl_command_reply(conn, *config->sync_from);
 }
 
 static void
 ovsdb_server_connect_active_ovsdb_server(struct unixctl_conn *conn,
                                          int argc OVS_UNUSED,
                                          const char *argv[] OVS_UNUSED,
-                                         void *arg_ OVS_UNUSED)
+                                         void *config_)
 {
-    if (!is_backup_server) {
-        replication_init();
-        is_backup_server = true;
+    struct server_config *config = config_;
+    char *msg = NULL;
+
+    if ( !*config->sync_from) {
+        msg = "Unable to connect: active server is not specified.\n";
+    } else {
+        ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
+                               config->all_dbs);
+        if (!*config->is_backup) {
+            *config->is_backup = true;
+            save_config(config);
+        }
     }
-    unixctl_command_reply(conn, NULL);
+    unixctl_command_reply(conn, msg);
 }
 
 static void
 ovsdb_server_disconnect_active_ovsdb_server(struct unixctl_conn *conn,
                                             int argc OVS_UNUSED,
                                             const char *argv[] OVS_UNUSED,
-                                            void *arg_ OVS_UNUSED)
+                                            void *config_)
 {
+    struct server_config *config = config_;
+
     disconnect_active_server();
-    is_backup_server = false;
-    VLOG_INFO("become an active server");
+    *config->is_backup = false;
+    save_config(config);
     unixctl_command_reply(conn, NULL);
 }
 
 static void
-ovsdb_server_set_sync_excluded_tables(struct unixctl_conn *conn,
-                                      int argc OVS_UNUSED,
-                                      const char *argv[],
-                                      void *arg_ OVS_UNUSED)
+ovsdb_server_set_sync_exclude_tables(struct unixctl_conn *conn,
+                                     int argc OVS_UNUSED,
+                                     const char *argv[],
+                                     void *config_)
 {
-    set_tables_blacklist(argv[1]);
-    unixctl_command_reply(conn, NULL);
-}
+    struct server_config *config = config_;
 
-static void
-ovsdb_server_get_sync_excluded_tables(struct unixctl_conn *conn,
-                                 int argc OVS_UNUSED,
-                                 const char *argv[] OVS_UNUSED,
-                                 void *arg_ OVS_UNUSED)
-{
-    struct ds s;
-    const char *table_name;
-    struct sset table_blacklist = get_tables_blacklist();
-
-    ds_init(&s);
-
-    SSET_FOR_EACH(table_name, &table_blacklist) {
-        ds_put_format(&s, "%s\n", table_name);
+    char *err = set_blacklist_tables(argv[1], true);
+    if (!err) {
+        free(*config->sync_exclude);
+        *config->sync_exclude = xstrdup(argv[1]);
+        save_config(config);
+        if (*config->is_backup) {
+            ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
+                                   config->all_dbs);
+        }
+        err = set_blacklist_tables(argv[1], false);
     }
+    unixctl_command_reply(conn, err);
+    free(err);
+}
 
-    unixctl_command_reply(conn, ds_cstr(&s));
+static void
+ovsdb_server_get_sync_exclude_tables(struct unixctl_conn *conn,
+                                     int argc OVS_UNUSED,
+                                     const char *argv[] OVS_UNUSED,
+                                     void *arg_ OVS_UNUSED)
+{
+    char *reply = get_blacklist_tables();
+    unixctl_command_reply(conn, reply);
+    free(reply);
 }
 
 static void
@@ -1172,9 +1260,10 @@ ovsdb_server_disable_monitor_cond(struct unixctl_conn *conn,
                                   void *jsonrpc_)
 {
     struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
+    bool read_only = ovsdb_jsonrpc_server_is_read_only(jsonrpc);
 
     ovsdb_jsonrpc_disable_monitor_cond();
-    ovsdb_jsonrpc_server_reconnect(jsonrpc, is_backup_server);
+    ovsdb_jsonrpc_server_reconnect(jsonrpc, read_only);
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1229,8 +1318,9 @@ ovsdb_server_reconnect(struct unixctl_conn *conn, int argc OVS_UNUSED,
                        const char *argv[] OVS_UNUSED, void *jsonrpc_)
 {
     struct ovsdb_jsonrpc_server *jsonrpc = jsonrpc_;
+    bool read_only = ovsdb_jsonrpc_server_is_read_only(jsonrpc);
 
-    ovsdb_jsonrpc_server_reconnect(jsonrpc, is_backup_server);
+    ovsdb_jsonrpc_server_reconnect(jsonrpc, read_only);
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1316,6 +1406,10 @@ ovsdb_server_add_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
     error = open_db(config, filename);
     if (!error) {
         save_config(config);
+        if (*config->is_backup) {
+            ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
+                                   config->all_dbs);
+        }
         unixctl_command_reply(conn, NULL);
     } else {
         unixctl_command_reply_error(conn, error);
@@ -1346,6 +1440,10 @@ ovsdb_server_remove_database(struct unixctl_conn *conn, int argc OVS_UNUSED,
     shash_delete(config->all_dbs, node);
 
     save_config(config);
+    if (*config->is_backup) {
+        ovsdb_replication_init(*config->sync_from, *config->sync_exclude,
+                               config->all_dbs);
+    }
     unixctl_command_reply(conn, NULL);
 }
 
@@ -1372,8 +1470,27 @@ ovsdb_server_list_databases(struct unixctl_conn *conn, int argc OVS_UNUSED,
 }
 
 static void
+ovsdb_server_get_sync_status(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                             const char *argv[] OVS_UNUSED, void *config_)
+{
+    struct server_config *config = config_;
+    bool is_backup = *config->is_backup;
+    struct ds ds = DS_EMPTY_INITIALIZER;
+
+    ds_put_format(&ds, "state: %s\n", is_backup ? "backup" : "active");
+
+    if (is_backup) {
+        ds_put_and_free_cstr(&ds, replication_status());
+    }
+
+    unixctl_command_reply(conn, ds_cstr(&ds));
+    ds_destroy(&ds);
+}
+
+static void
 parse_options(int *argcp, char **argvp[],
-              struct sset *remotes, char **unixctl_pathp, char **run_command)
+              struct sset *remotes, char **unixctl_pathp, char **run_command,
+              char **sync_from, char **sync_exclude, bool *active)
 {
     enum {
         OPT_REMOTE = UCHAR_MAX + 1,
@@ -1383,6 +1500,7 @@ parse_options(int *argcp, char **argvp[],
         OPT_PEER_CA_CERT,
         OPT_SYNC_FROM,
         OPT_SYNC_EXCLUDE,
+        OPT_ACTIVE,
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS
     };
@@ -1403,12 +1521,15 @@ parse_options(int *argcp, char **argvp[],
         {"ca-cert",     required_argument, NULL, 'C'},
         {"sync-from",   required_argument, NULL, OPT_SYNC_FROM},
         {"sync-exclude-tables", required_argument, NULL, OPT_SYNC_EXCLUDE},
+        {"active", no_argument, NULL, OPT_ACTIVE},
         {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
     int argc = *argcp;
     char **argv = *argvp;
 
+    *sync_from = NULL;
+    *sync_exclude = NULL;
     sset_init(remotes);
     for (;;) {
         int c;
@@ -1464,12 +1585,19 @@ parse_options(int *argcp, char **argvp[],
             break;
 
         case OPT_SYNC_FROM:
-            set_active_ovsdb_server(optarg);
-            is_backup_server = true;
+            *sync_from = xstrdup(optarg);
             break;
 
-        case OPT_SYNC_EXCLUDE:
-            set_tables_blacklist(optarg);
+        case OPT_SYNC_EXCLUDE: {
+            char *err = set_blacklist_tables(optarg, false);
+            if (err) {
+                ovs_fatal(0, "%s", err);
+            }
+            *sync_exclude = xstrdup(optarg);
+            break;
+        }
+        case OPT_ACTIVE:
+            *active = true;
             break;
 
         case '?':
@@ -1524,7 +1652,8 @@ sset_to_json(const struct sset *sset)
  * 'remotes' and 'db_filenames'. */
 static void
 save_config__(FILE *config_file, const struct sset *remotes,
-              const struct sset *db_filenames)
+              const struct sset *db_filenames, const char *sync_from,
+              const char *sync_exclude, bool is_backup)
 {
     struct json *obj;
     char *s;
@@ -1537,6 +1666,15 @@ save_config__(FILE *config_file, const struct sset *remotes,
     obj = json_object_create();
     json_object_put(obj, "remotes", sset_to_json(remotes));
     json_object_put(obj, "db_filenames", sset_to_json(db_filenames));
+    if (sync_from) {
+        json_object_put(obj, "sync_from", json_string_create(sync_from));
+    }
+    if (sync_exclude) {
+        json_object_put(obj, "sync_exclude",
+                        json_string_create(sync_exclude));
+    }
+    json_object_put(obj, "is_backup", json_boolean_create(is_backup));
+
     s = json_to_string(obj, 0);
     json_destroy(obj);
 
@@ -1562,7 +1700,9 @@ save_config(struct server_config *config)
         sset_add(&db_filenames, db->filename);
     }
 
-    save_config__(config->config_tmpfile, config->remotes, &db_filenames);
+    save_config__(config->config_tmpfile, config->remotes, &db_filenames,
+                  *config->sync_from, *config->sync_exclude,
+                  *config->is_backup);
 
     sset_destroy(&db_filenames);
 }
@@ -1584,7 +1724,8 @@ sset_from_json(struct sset *sset, const struct json *array)
 /* Clears and replaces 'remotes' and 'dbnames' by a configuration read from
  * 'config_file', which must have been previously written by save_config(). */
 static void
-load_config(FILE *config_file, struct sset *remotes, struct sset *db_filenames)
+load_config(FILE *config_file, struct sset *remotes, struct sset *db_filenames,
+            char **sync_from, char **sync_exclude, bool *is_backup)
 {
     struct json *json;
 
@@ -1600,5 +1741,17 @@ load_config(FILE *config_file, struct sset *remotes, struct sset *db_filenames)
     sset_from_json(remotes, shash_find_data(json_object(json), "remotes"));
     sset_from_json(db_filenames,
                    shash_find_data(json_object(json), "db_filenames"));
+
+    struct json *string;
+    string = shash_find_data(json_object(json), "sync_from");
+    free(*sync_from);
+    *sync_from = string ? xstrdup(json_string(string)) : NULL;
+
+    string = shash_find_data(json_object(json), "sync_exclude");
+    free(*sync_exclude);
+    *sync_exclude = string ? xstrdup(json_string(string)) : NULL;
+
+    *is_backup = json_boolean(shash_find_data(json_object(json), "is_backup"));
+
     json_destroy(json);
 }
