@@ -3920,7 +3920,27 @@ ovsdb_idl_loop_run(struct ovsdb_idl_loop *loop)
     return loop->open_txn;
 }
 
-void
+/* Attempts to commit the current transaction, if one is open, and sets up the
+ * poll loop to wake up when some more work might be needed.
+ *
+ * If a transaction was open, in this or a previous iteration of the main loop,
+ * and had not before finished committing (successfully or unsuccessfully), the
+ * return value is one of:
+ *
+ *  1: The transaction committed successfully (or it did not change anything in
+ *     the database).
+ *  0: The transaction failed.
+ * -1: The commit is still in progress.
+ *
+ * Thus, the return value is -1 if the transaction is in progress and otherwise
+ * true for success, false for failure.
+ *
+ * (In the corner case where the IDL sends a transaction to the database and
+ * the database commits it, and the connection between the IDL and the database
+ * drops before the IDL receives the message confirming the commit, this
+ * function can return 0 even though the transaction succeeded.)
+ */
+int
 ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *loop)
 {
     if (loop->open_txn) {
@@ -3931,6 +3951,7 @@ ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *loop)
     }
 
     struct ovsdb_idl_txn *txn = loop->committing_txn;
+    int retval;
     if (txn) {
         enum ovsdb_idl_txn_status status = ovsdb_idl_txn_commit(txn);
         if (status != TXN_INCOMPLETE) {
@@ -3943,32 +3964,44 @@ ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *loop)
                 if (ovsdb_idl_get_seqno(loop->idl) != loop->skip_seqno) {
                     poll_immediate_wake();
                 }
+                retval = 0;
                 break;
 
             case TXN_SUCCESS:
                 /* Possibly some work on the database was deferred because no
                  * further transaction could proceed.  Wake up again. */
+                retval = 1;
                 loop->cur_cfg = loop->next_cfg;
                 poll_immediate_wake();
                 break;
 
             case TXN_UNCHANGED:
+                retval = 1;
                 loop->cur_cfg = loop->next_cfg;
                 break;
 
             case TXN_ABORTED:
             case TXN_NOT_LOCKED:
             case TXN_ERROR:
+                retval = 0;
                 break;
 
             case TXN_UNCOMMITTED:
             case TXN_INCOMPLETE:
+            default:
                 OVS_NOT_REACHED();
             }
             ovsdb_idl_txn_destroy(txn);
             loop->committing_txn = NULL;
+        } else {
+            retval = -1;
         }
+    } else {
+        /* Not a meaningful return value: no transaction was in progress. */
+        retval = 1;
     }
 
     ovsdb_idl_wait(loop->idl);
+
+    return retval;
 }
