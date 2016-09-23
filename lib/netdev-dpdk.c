@@ -1116,6 +1116,7 @@ netdev_dpdk_vhost_client_set_config(struct netdev *netdev,
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     const char *path;
 
+    ovs_mutex_lock(&dev->mutex);
     if (!(dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT)) {
         path = smap_get(args, "vhost-server-path");
         if (path && strcmp(path, dev->vhost_id)) {
@@ -1123,6 +1124,7 @@ netdev_dpdk_vhost_client_set_config(struct netdev *netdev,
             netdev_request_reconfigure(netdev);
         }
     }
+    ovs_mutex_unlock(&dev->mutex);
 
     return 0;
 }
