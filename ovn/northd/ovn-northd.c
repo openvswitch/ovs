@@ -2719,12 +2719,12 @@ build_stateful(struct ovn_datapath *od, struct hmap *lflows)
             /* New connections in Ingress table. */
             char *action = xasprintf("ct_lb(%s);", node->value);
             struct ds match = DS_EMPTY_INITIALIZER;
-            ds_put_format(&match, "ct.new && ip && ip4.dst == %s", ip_address);
+            ds_put_format(&match, "ct.new && ip4.dst == %s", ip_address);
             if (port) {
                 if (lb->protocol && !strcmp(lb->protocol, "udp")) {
-                    ds_put_format(&match, " && udp && udp.dst == %d", port);
+                    ds_put_format(&match, " && udp.dst == %d", port);
                 } else {
-                    ds_put_format(&match, " && tcp && tcp.dst == %d", port);
+                    ds_put_format(&match, " && tcp.dst == %d", port);
                 }
                 ovn_lflow_add(lflows, od, S_SWITCH_IN_STATEFUL,
                               120, ds_cstr(&match), action);
