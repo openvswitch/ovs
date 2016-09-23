@@ -177,8 +177,6 @@ enum dpdk_dev_type {
 
 static int rte_eal_init_ret = ENODEV;
 
-static struct ovs_mutex dpdk_mutex = OVS_MUTEX_INITIALIZER;
-
 /* Quality of Service */
 
 /* An instance of a QoS configuration.  Always associated with a particular
@@ -274,11 +272,16 @@ static const struct dpdk_qos_ops *const qos_confs[] = {
     NULL
 };
 
+static struct ovs_mutex dpdk_mutex = OVS_MUTEX_INITIALIZER;
+
 /* Contains all 'struct dpdk_dev's. */
 static struct ovs_list dpdk_list OVS_GUARDED_BY(dpdk_mutex)
     = OVS_LIST_INITIALIZER(&dpdk_list);
 
-static struct ovs_list dpdk_mp_list OVS_GUARDED_BY(dpdk_mutex)
+static struct ovs_mutex dpdk_mp_mutex OVS_ACQ_AFTER(dpdk_mutex)
+    = OVS_MUTEX_INITIALIZER;
+
+static struct ovs_list dpdk_mp_list OVS_GUARDED_BY(dpdk_mp_mutex)
     = OVS_LIST_INITIALIZER(&dpdk_mp_list);
 
 /* This mutex must be used by non pmd threads when allocating or freeing
@@ -290,7 +293,7 @@ struct dpdk_mp {
     int mtu;
     int socket_id;
     int refcount;
-    struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
+    struct ovs_list list_node OVS_GUARDED_BY(dpdk_mp_mutex);
 };
 
 /* There should be one 'struct dpdk_tx_queue' created for
@@ -463,17 +466,19 @@ ovs_rte_pktmbuf_init(struct rte_mempool *mp,
 }
 
 static struct dpdk_mp *
-dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
+dpdk_mp_get(int socket_id, int mtu)
 {
     struct dpdk_mp *dmp = NULL;
     char mp_name[RTE_MEMPOOL_NAMESIZE];
     unsigned mp_size;
     struct rte_pktmbuf_pool_private mbp_priv;
+    bool failed = false;
 
+    ovs_mutex_lock(&dpdk_mp_mutex);
     LIST_FOR_EACH (dmp, list_node, &dpdk_mp_list) {
         if (dmp->socket_id == socket_id && dmp->mtu == mtu) {
             dmp->refcount++;
-            return dmp;
+            goto out;
         }
     }
 
@@ -498,7 +503,8 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
     do {
         if (snprintf(mp_name, RTE_MEMPOOL_NAMESIZE, "ovs_mp_%d_%d_%u",
                      dmp->mtu, dmp->socket_id, mp_size) < 0) {
-            goto fail;
+            failed = true;
+            goto out;
         }
 
         dmp->mp = rte_mempool_create(mp_name, mp_size, MBUF_SIZE(mtu),
@@ -510,26 +516,32 @@ dpdk_mp_get(int socket_id, int mtu) OVS_REQUIRES(dpdk_mutex)
     } while (!dmp->mp && rte_errno == ENOMEM && (mp_size /= 2) >= MIN_NB_MBUF);
 
     if (dmp->mp == NULL) {
-        goto fail;
+        failed = true;
+        goto out;
     } else {
         VLOG_DBG("Allocated \"%s\" mempool with %u mbufs", mp_name, mp_size );
     }
 
     ovs_list_push_back(&dpdk_mp_list, &dmp->list_node);
-    return dmp;
 
-fail:
-    rte_free(dmp);
-    return NULL;
+out:
+    ovs_mutex_unlock(&dpdk_mp_mutex);
+
+    if (failed) {
+        rte_free(dmp);
+        return NULL;
+    }
+    return dmp;
 }
 
 static void
-dpdk_mp_put(struct dpdk_mp *dmp) OVS_REQUIRES(dpdk_mutex)
+dpdk_mp_put(struct dpdk_mp *dmp)
 {
     if (!dmp) {
         return;
     }
 
+    ovs_mutex_lock(&dpdk_mp_mutex);
     ovs_assert(dmp->refcount);
 
     if (!--dmp->refcount) {
@@ -537,6 +549,7 @@ dpdk_mp_put(struct dpdk_mp *dmp) OVS_REQUIRES(dpdk_mutex)
         rte_mempool_free(dmp->mp);
         rte_free(dmp);
     }
+    ovs_mutex_unlock(&dpdk_mp_mutex);
 }
 
 /* Tries to allocate new mempool on requested_socket_id with
@@ -545,7 +558,6 @@ dpdk_mp_put(struct dpdk_mp *dmp) OVS_REQUIRES(dpdk_mutex)
  * On error, device will be left unchanged. */
 static int
 netdev_dpdk_mempool_configure(struct netdev_dpdk *dev)
-    OVS_REQUIRES(dpdk_mutex)
     OVS_REQUIRES(dev->mutex)
 {
     uint32_t buf_size = dpdk_buf_size(dev->requested_mtu);
@@ -696,7 +708,8 @@ dpdk_eth_flow_ctrl_setup(struct netdev_dpdk *dev) OVS_REQUIRES(dev->mutex)
 }
 
 static int
-dpdk_eth_dev_init(struct netdev_dpdk *dev) OVS_REQUIRES(dpdk_mutex)
+dpdk_eth_dev_init(struct netdev_dpdk *dev)
+    OVS_REQUIRES(dev->mutex)
 {
     struct rte_pktmbuf_pool_private *mbp_priv;
     struct rte_eth_dev_info info;
@@ -2921,7 +2934,6 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     int err = 0;
 
-    ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
 
     if (netdev->n_txq == dev->requested_n_txq
@@ -2948,16 +2960,12 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
     netdev_change_seq_changed(netdev);
 
 out:
-
     ovs_mutex_unlock(&dev->mutex);
-    ovs_mutex_unlock(&dpdk_mutex);
-
     return err;
 }
 
 static void
 dpdk_vhost_reconfigure_helper(struct netdev_dpdk *dev)
-    OVS_REQUIRES(dpdk_mutex)
     OVS_REQUIRES(dev->mutex)
 {
     dev->up.n_txq = dev->requested_n_txq;
@@ -2987,14 +2995,9 @@ netdev_dpdk_vhost_reconfigure(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
-    ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
-
     dpdk_vhost_reconfigure_helper(dev);
-
     ovs_mutex_unlock(&dev->mutex);
-    ovs_mutex_unlock(&dpdk_mutex);
-
     return 0;
 }
 
@@ -3004,7 +3007,6 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     int err = 0;
 
-    ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
 
     dpdk_vhost_reconfigure_helper(dev);
@@ -3032,7 +3034,6 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
     }
 
     ovs_mutex_unlock(&dev->mutex);
-    ovs_mutex_unlock(&dpdk_mutex);
 
     return 0;
 }
