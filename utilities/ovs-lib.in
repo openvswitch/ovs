@@ -148,6 +148,14 @@ version_geq() {
     }'
 }
 
+install_dir () {
+    DIR="$1"
+    if test ! -d "$DIR"; then
+        install -d -m 755 -o root -g root "$DIR"
+        restorecon "$DIR" >/dev/null 2>&1
+    fi
+}
+
 start_daemon () {
     priority=$1
     wrapper=$2
@@ -156,16 +164,16 @@ start_daemon () {
     strace=""
 
     # drop core files in a sensible place
-    test -d "$DAEMON_CWD" || install -d -m 755 -o root -g root "$DAEMON_CWD"
+    install_dir "$DAEMON_CWD"
     set "$@" --no-chdir
     cd "$DAEMON_CWD"
 
     # log file
-    test -d "$logdir" || install -d -m 755 -o root -g root "$logdir"
+    install_dir "$logdir"
     set "$@" --log-file="$logdir/$daemon.log"
 
     # pidfile and monitoring
-    test -d "$rundir" || install -d -m 755 -o root -g root "$rundir"
+    install_dir "$rundir"
     set "$@" --pidfile="$rundir/$daemon.pid"
     set "$@" --detach
     test X"$MONITOR" = Xno || set "$@" --monitor
@@ -380,7 +388,7 @@ upgrade_db () {
     schemaver=`ovsdb_tool schema-version "$DB_SCHEMA"`
     if test ! -e "$DB_FILE"; then
         log_warning_msg "$DB_FILE does not exist"
-        install -d -m 755 -o root -g root `dirname $DB_FILE`
+        install_dir `dirname $DB_FILE`
         create_db "$DB_FILE" "$DB_SCHEMA"
     elif test X"`ovsdb_tool needs-conversion "$DB_FILE" "$DB_SCHEMA"`" != Xno; then
         # Back up the old version.
