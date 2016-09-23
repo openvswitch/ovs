@@ -87,6 +87,7 @@ AT_CHECK([ovn-nbctl ls-add br-test])
 AT_CHECK([ovn-nbctl lsp-add br-test vif0])
 AT_CHECK([ovn-nbctl lsp-set-addresses vif0 f0:ab:cd:ef:01:02])
 AT_CHECK([ovn-sbctl chassis-add ch0 stt 1.2.3.5])
+AT_CHECK([ovn-nbctl --wait=sb sync])
 AT_CHECK([ovn-sbctl lsp-bind vif0 ch0])
 
 AT_CHECK([ovn-sbctl show], [0], [dnl
@@ -98,7 +99,7 @@ Chassis "ch0"
 ])
 
 # adds another 'vif1'
-AT_CHECK([ovn-nbctl lsp-add br-test vif1])
+AT_CHECK([ovn-nbctl --wait=sb lsp-add br-test vif1])
 AT_CHECK([ovn-nbctl lsp-set-addresses vif1 f0:ab:cd:ef:01:03])
 AT_CHECK([ovn-sbctl lsp-bind vif1 ch0])
 
@@ -113,6 +114,7 @@ Chassis "ch0"
 
 # deletes 'vif1'
 AT_CHECK([ovn-nbctl lsp-del vif1])
+AT_CHECK([ovn-nbctl --wait=sb sync])
 
 AT_CHECK([ovn-sbctl show], [0], [dnl
 Chassis "ch0"
@@ -130,12 +132,12 @@ chassis             : ${uuid}
 ])
 
 # test the passing down of logical port type and options.
-AT_CHECK([ovn-nbctl lsp-add br-test vtep0])
+AT_CHECK([ovn-nbctl --wait=sb lsp-add br-test vtep0])
 AT_CHECK([ovn-nbctl lsp-set-type vtep0 vtep])
 AT_CHECK([ovn-nbctl lsp-set-options vtep0 vtep_physical_switch=p0 vtep_logical_switch=l0])
 
-OVS_WAIT_UNTIL([test -n "`ovn-sbctl --columns=logical_port list Port_Binding | grep vtep0`" ])
-AT_CHECK_UNQUOTED([ovn-sbctl --columns=logical_port,mac,type,options list Port_Binding vtep0], [0], [dnl
+AT_CHECK([ovn-sbctl --timeout=10 wait-until Port_Binding vtep0 options!={}])
+AT_CHECK([ovn-sbctl --columns=logical_port,mac,type,options list Port_Binding vtep0], [0], [dnl
 logical_port        : "vtep0"
 mac                 : [[]]
 type                : vtep
