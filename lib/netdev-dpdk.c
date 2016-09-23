@@ -1024,7 +1024,8 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
     ovs_mutex_unlock(&dpdk_mutex);
 
     if (dpdk_vhost_driver_unregister(dev, vhost_id)) {
-        VLOG_ERR("Unable to remove vhost-user socket %s", vhost_id);
+        VLOG_ERR("%s: Unable to unregister vhost driver for socket '%s'.\n",
+                 netdev->name, vhost_id);
     } else if (!(dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT)) {
         /* OVS server mode - remove this socket from list for deletion */
         fatal_signal_remove_file_to_unlink(vhost_id);
