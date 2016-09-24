@@ -195,7 +195,7 @@ OVS_WAIT_UNTIL([check_datapath_type ""])
 
 # The following will need to be updated as OVS starts to support more
 # interface types.
-expected_iface_types="dummy,dummy-internal,dummy-pmd,geneve,gre,internal,ipsec_gre,lisp,patch,stt,system,tap,vxlan"
+expected_iface_types="dummy,dummy-internal,dummy-pmd,geneve,gre,internal,lisp,patch,stt,system,tap,vxlan"
 chassis_iface_types=$(ovn-sbctl get Chassis ${sysid} external_ids:iface-types | sed -e 's/\"//g')
 echo "chassis_iface_types = ${chassis_iface_types}"
 AT_CHECK([test "${expected_iface_types}" = "${chassis_iface_types}"])

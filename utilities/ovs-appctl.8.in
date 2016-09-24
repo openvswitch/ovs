@@ -254,8 +254,8 @@ The default pattern for console and file output is \fB%D{%Y-%m-%dT
 %H:%M:%SZ}|%05N|%c|%p|%m\fR; for syslog output, \fB%05N|%c|%p|%m\fR.
 .
 .IP
-Daemons written in Python (e.g. \fBovs\-xapi\-sync\fR,
-\fBovs\-monitor\-ipsec) do not allow control over the log pattern.
+Daemons written in Python (e.g. \fBovs\-xapi\-sync\fR) do not allow
+control over the log pattern.
 .
 .IP "\fBvlog/set\fR FACILITY:\fIfacility\fR"
 Sets the RFC5424 facility of the log message. \fIfacility\fR can be one of

@@ -25,6 +25,7 @@ Post-v2.6.0
      * TLV mappings for protocols such as Geneve are now segregated on
        a per-OpenFlow bridge basis rather than globally. (The interface
        has not changed.)
+     * Removed support for IPsec tunnels.
 
 v2.6.0 - xx xxx xxxx
 ---------------------

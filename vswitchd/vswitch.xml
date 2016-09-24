@@ -2004,15 +2004,6 @@
             tunnel.
           </dd>
 
-          <dt><code>ipsec_gre</code></dt>
-          <dd>
-            An Ethernet over RFC 2890 Generic Routing Encapsulation over IPv4/IPv6
-            IPsec tunnel.
-            IPsec tunnel ports are deprecated. The support will be completely
-            removed in next version.
-
-          </dd>
-
           <dt><code>vxlan</code></dt>
           <dd>
             <p>
@@ -2075,8 +2066,8 @@
     <group title="Tunnel Options">
       <p>
         These options apply to interfaces with <ref column="type"/> of
-        <code>geneve</code>, <code>gre</code>, <code>ipsec_gre</code>,
-        <code>vxlan</code>, <code>lisp</code> and <code>stt</code>.
+        <code>geneve</code>, <code>gre</code>, <code>vxlan</code>,
+        <code>lisp</code> and <code>stt</code>.
       </p>
 
       <p>
@@ -2253,9 +2244,9 @@
 
       </group>
 
-      <group title="Tunnel Options: gre, ipsec_gre, geneve, and vxlan">
+      <group title="Tunnel Options: gre, geneve, and vxlan">
         <p>
-          <code>gre</code>, <code>ipsec_gre</code>, <code>geneve</code>, and
+          <code>gre</code>, <code>geneve</code>, and
           <code>vxlan</code> interfaces support these options.
         </p>
 
@@ -2277,43 +2268,6 @@
             is compatible with.
           </p>
 
-          <p>
-            This option is supported for <code>ipsec_gre</code>, but not useful
-            because GRE checksums are weaker than, and redundant with, IPsec
-            payload authentication.
-          </p>
-        </column>
-      </group>
-
-      <group title="Tunnel Options: ipsec_gre only">
-        <p>
-          Only <code>ipsec_gre</code> interfaces support these options.
-        </p>
-
-        <column name="options" key="peer_cert">
-          Required for certificate authentication.  A string containing the
-          peer's certificate in PEM format.  Additionally the host's
-          certificate must be specified with the <code>certificate</code>
-          option.
-        </column>
-
-        <column name="options" key="certificate">
-          Required for certificate authentication.  The name of a PEM file
-          containing a certificate that will be presented to the peer during
-          authentication.
-        </column>
-
-        <column name="options" key="private_key">
-          Optional for certificate authentication.  The name of a PEM file
-          containing the private key associated with <code>certificate</code>.
-          If <code>certificate</code> contains the private key, this option may
-          be omitted.
-        </column>
-
-        <column name="options" key="psk">
-          Required for pre-shared key authentication.  Specifies a pre-shared
-          key for authentication that must be identical on both sides of the
-          tunnel.
         </column>
       </group>
     </group>
@@ -4774,8 +4728,7 @@
           <p>type: unsigned 8-bit integer.</p>
           <p>data type semantics: identifier.</p>
           <p>description: Identifier of the layer 2 network overlay network
-          encapsulation type: 0x01 VxLAN, 0x02 GRE, 0x03 LISP, 0x05 IPsec+GRE,
-          0x07 GENEVE.</p>
+          encapsulation type: 0x01 VxLAN, 0x02 GRE, 0x03 LISP, 0x07 GENEVE.</p>
         </dd>
         <dt>tunnelKey:</dt>
         <dd>

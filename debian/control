@@ -178,30 +178,6 @@ Description: OVN Docker drivers
  .
  ovn-docker provides the docker drivers for OVN.
 
-Package: openvswitch-ipsec
-Architecture: linux-any
-Depends: ipsec-tools (>=0.8~alpha20101208),
-         iproute2,
-         openvswitch-common (= ${binary:Version}),
-         openvswitch-switch (= ${binary:Version}),
-         python,
-         python-openvswitch (= ${source:Version}),
-         racoon (>=0.8~alpha20101208),
-         ${misc:Depends},
-         ${shlibs:Depends}
-Description: Open vSwitch GRE-over-IPsec support
- Open vSwitch is a production quality, multilayer, software-based,
- Ethernet virtual switch. It is designed to enable massive network
- automation through programmatic extension, while still supporting
- standard management interfaces and protocols (e.g. NetFlow, IPFIX,
- sFlow, SPAN, RSPAN, CLI, LACP, 802.1ag). In addition, it is designed
- to support distribution across multiple physical servers similar to
- VMware's vNetwork distributed vswitch or Cisco's Nexus 1000V.
- .
- The ovs-monitor-ipsec script provides support for encrypting GRE
- tunnels with IPsec.
- IPsec tunnels support is deprecated.
-
 Package: openvswitch-pki
 Architecture: all
 Depends: openvswitch-common (<< ${source:Version}.1~),

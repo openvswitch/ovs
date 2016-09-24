@@ -19,9 +19,6 @@ EXTRA_DIST += \
 	debian/openvswitch-datapath-source.dirs \
 	debian/openvswitch-datapath-source.install \
 	debian/openvswitch-dev.install \
-	debian/openvswitch-ipsec.dirs \
-	debian/openvswitch-ipsec.init \
-	debian/openvswitch-ipsec.install \
 	debian/openvswitch-pki.dirs \
 	debian/openvswitch-pki.postinst \
 	debian/openvswitch-pki.postrm \
@@ -71,16 +68,12 @@ EXTRA_DIST += \
 	debian/ovn-host.postinst \
 	debian/ovn-host.postrm \
 	debian/ovn-host.template \
-	debian/ovs-monitor-ipsec \
 	debian/python-openvswitch.dirs \
 	debian/python-openvswitch.install \
 	debian/rules \
 	debian/rules.modules \
 	debian/ifupdown.sh \
 	debian/source/format
-
-FLAKE8_PYFILES += \
-	debian/ovs-monitor-ipsec
 
 check-debian-changelog-version:
 	@DEB_VERSION=`echo '$(VERSION)' | sed 's/pre/~pre/'`;		     \

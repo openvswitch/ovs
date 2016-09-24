@@ -41,15 +41,11 @@
 
 VLOG_DEFINE_THIS_MODULE(tunnel);
 
-/* skb mark used for IPsec tunnel packets */
-#define IPSEC_MARK 1
-
 struct tnl_match {
     ovs_be64 in_key;
     struct in6_addr ipv6_src;
     struct in6_addr ipv6_dst;
     odp_port_t odp_port;
-    uint32_t pkt_mark;
     bool in_key_flow;
     bool ip_src_flow;
     bool ip_dst_flow;
@@ -164,7 +160,6 @@ tnl_port_add__(const struct ofport_dpif *ofport, const struct netdev *netdev,
     tnl_port->match.ipv6_dst = cfg->ipv6_dst;
     tnl_port->match.ip_src_flow = cfg->ip_src_flow;
     tnl_port->match.ip_dst_flow = cfg->ip_dst_flow;
-    tnl_port->match.pkt_mark = cfg->ipsec ? IPSEC_MARK : 0;
     tnl_port->match.in_key_flow = cfg->in_key_flow;
     tnl_port->match.odp_port = odp_port;
 
@@ -357,7 +352,6 @@ tnl_process_ecn(struct flow *flow)
         flow->nw_tos |= IP_ECN_CE;
     }
 
-    flow->pkt_mark &= ~IPSEC_MARK;
     return true;
 }
 
@@ -382,8 +376,6 @@ tnl_wc_init(struct flow *flow, struct flow_wildcards *wc)
          * wildcarded, not to unwildcard them here. */
         wc->masks.tunnel.tp_src = 0;
         wc->masks.tunnel.tp_dst = 0;
-
-        memset(&wc->masks.pkt_mark, 0xff, sizeof wc->masks.pkt_mark);
 
         if (is_ip_any(flow)
             && IP_ECN_is_ce(flow->tunnel.ip_tos)) {
@@ -435,9 +427,6 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
             flow->tunnel.ipv6_dst = in6addr_any;
         }
     }
-    flow->pkt_mark |= tnl_port->match.pkt_mark;
-    wc->masks.pkt_mark |= tnl_port->match.pkt_mark;
-
     if (!cfg->out_key_flow) {
         flow->tunnel.tun_id = cfg->out_key;
     }
@@ -561,7 +550,6 @@ tnl_find(const struct flow *flow) OVS_REQ_RDLOCK(rwlock)
                         match.ipv6_dst = flow_tnl_src(&flow->tunnel);
                     }
                     match.odp_port = flow->in_port.odp_port;
-                    match.pkt_mark = flow->pkt_mark;
                     match.in_key_flow = in_key_flow;
                     match.ip_dst_flow = ip_dst_flow;
                     match.ip_src_flow = ip_src == IP_SRC_FLOW;
@@ -616,7 +604,6 @@ tnl_match_fmt(const struct tnl_match *match, struct ds *ds)
     }
 
     ds_put_format(ds, ", dp port=%"PRIu32, match->odp_port);
-    ds_put_format(ds, ", pkt mark=%"PRIu32, match->pkt_mark);
 }
 
 static void
