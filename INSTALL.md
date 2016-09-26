@@ -322,9 +322,30 @@ Building the Sources
 4. Run "make install" to install the executables and manpages into the
    running system, by default under /usr/local.
 
-5. If you built kernel modules, you may install and load them, e.g.:
+5. If you built kernel modules, you may install them, e.g.:
 
       `% make modules_install`
+
+    It is possible that you already had a Open vSwitch kernel module
+    installed on your machine that came from upstream Linux (in a
+    different directory).  To make sure that you load the Open vSwitch
+    kernel module you built from this repository, you should create a
+    depmod.d file that prefers your newly installed kernel modules over
+    the kernel modules from upstream Linux.  The following snippet of
+    code achieves the same.
+
+    ```
+    % config_file="/etc/depmod.d/openvswitch.conf"
+    % for module in datapath/linux/*.ko; do
+      modname="$(basename ${module})"
+      echo "override ${modname%.ko} * extra" >> "$config_file"
+      echo "override ${modname%.ko} * weak-updates" >> "$config_file"
+      done
+    % depmod -a
+    ```
+
+    Finally, load the kernel modules that you need.  e.g.:
+
       `% /sbin/modprobe openvswitch`
 
    To verify that the modules have been loaded, run "/sbin/lsmod" and
