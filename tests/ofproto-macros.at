@@ -370,6 +370,7 @@ check_logs () {
     done
 
     sed -n "$1
+/.*OVS IPsec tunnel support is deprecated./d
 /timeval.*Unreasonably long [[0-9]]*ms poll interval/d
 /timeval.*faults: [[0-9]]* minor, [[0-9]]* major/d
 /timeval.*disk: [[0-9]]* reads, [[0-9]]* writes/d
