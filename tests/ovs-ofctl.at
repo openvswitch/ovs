@@ -190,23 +190,23 @@ sctp actions=drop
 in_port=0 actions=resubmit:0
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
-actions=ct(nat)
-actions=ct(commit,nat(dst))
-actions=ct(commit,nat(src))
-actions=ct(commit,nat(src=10.0.0.240,random))
-actions=ct(commit,nat(src=10.0.0.240:32768-65535,random))
-actions=ct(commit,nat(dst=10.0.0.128-10.0.0.254,hash))
-actions=ct(commit,nat(src=10.0.0.240-10.0.0.254:32768-65535,persistent))
-actions=ct(commit,nat(src=fe80::20c:29ff:fe88:a18b,random))
-actions=ct(commit,nat(src=fe80::20c:29ff:fe88:1-fe80::20c:29ff:fe88:a18b,random))
-actions=ct(commit,nat(src=[fe80::20c:29ff:fe88:1]-[fe80::20c:29ff:fe88:a18b]:255-4096,random))
-actions=ct(commit,nat(src=10.1.1.240-10.1.1.255),alg=ftp)
+ip,actions=ct(nat)
+ip,actions=ct(commit,nat(dst))
+ip,actions=ct(commit,nat(src))
+ip,actions=ct(commit,nat(src=10.0.0.240,random))
+ip,actions=ct(commit,nat(src=10.0.0.240:32768-65535,random))
+ip,actions=ct(commit,nat(dst=10.0.0.128-10.0.0.254,hash))
+ip,actions=ct(commit,nat(src=10.0.0.240-10.0.0.254:32768-65535,persistent))
+ipv6,actions=ct(commit,nat(src=fe80::20c:29ff:fe88:a18b,random))
+ipv6,actions=ct(commit,nat(src=fe80::20c:29ff:fe88:1-fe80::20c:29ff:fe88:a18b,random))
+ipv6,actions=ct(commit,nat(src=[fe80::20c:29ff:fe88:1]-[fe80::20c:29ff:fe88:a18b]:255-4096,random))
+tcp,actions=ct(commit,nat(src=10.1.1.240-10.1.1.255),alg=ftp)
 ]])
 
 AT_CHECK([ovs-ofctl parse-flows flows.txt
 ], [0], [stdout])
 AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0],
-[[usable protocols: OpenFlow10,NXM
+[[usable protocols: any
 chosen protocol: OpenFlow10-table_id
 OFPT_FLOW_MOD: ADD tcp,tp_src=123 actions=FLOOD
 OFPT_FLOW_MOD: ADD in_port=LOCAL,dl_vlan=9,dl_src=00:0a:e4:25:6b:b0 actions=drop
@@ -221,17 +221,17 @@ OFPT_FLOW_MOD: ADD sctp actions=drop
 OFPT_FLOW_MOD: ADD in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
-OFPT_FLOW_MOD: ADD actions=ct(nat)
-OFPT_FLOW_MOD: ADD actions=ct(commit,nat(dst))
-OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src))
-OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=10.0.0.240,random))
-OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=10.0.0.240:32768-65535,random))
-OFPT_FLOW_MOD: ADD actions=ct(commit,nat(dst=10.0.0.128-10.0.0.254,hash))
-OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=10.0.0.240-10.0.0.254:32768-65535,persistent))
-OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=fe80::20c:29ff:fe88:a18b,random))
-OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=fe80::20c:29ff:fe88:1-fe80::20c:29ff:fe88:a18b,random))
-OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=[fe80::20c:29ff:fe88:1]-[fe80::20c:29ff:fe88:a18b]:255-4096,random))
-OFPT_FLOW_MOD: ADD actions=ct(commit,nat(src=10.1.1.240-10.1.1.255),alg=ftp)
+OFPT_FLOW_MOD: ADD ip actions=ct(nat)
+OFPT_FLOW_MOD: ADD ip actions=ct(commit,nat(dst))
+OFPT_FLOW_MOD: ADD ip actions=ct(commit,nat(src))
+OFPT_FLOW_MOD: ADD ip actions=ct(commit,nat(src=10.0.0.240,random))
+OFPT_FLOW_MOD: ADD ip actions=ct(commit,nat(src=10.0.0.240:32768-65535,random))
+OFPT_FLOW_MOD: ADD ip actions=ct(commit,nat(dst=10.0.0.128-10.0.0.254,hash))
+OFPT_FLOW_MOD: ADD ip actions=ct(commit,nat(src=10.0.0.240-10.0.0.254:32768-65535,persistent))
+OFPT_FLOW_MOD: ADD ipv6 actions=ct(commit,nat(src=fe80::20c:29ff:fe88:a18b,random))
+OFPT_FLOW_MOD: ADD ipv6 actions=ct(commit,nat(src=fe80::20c:29ff:fe88:1-fe80::20c:29ff:fe88:a18b,random))
+OFPT_FLOW_MOD: ADD ipv6 actions=ct(commit,nat(src=[fe80::20c:29ff:fe88:1]-[fe80::20c:29ff:fe88:a18b]:255-4096,random))
+OFPT_FLOW_MOD: ADD tcp actions=ct(commit,nat(src=10.1.1.240-10.1.1.255),alg=ftp)
 ]])
 AT_CLEANUP
 

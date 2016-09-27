@@ -7033,7 +7033,10 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         if (!dl_type_is_ip_any(flow->dl_type)
             || (flow->ct_state & CS_INVALID && oc->flags & NX_CT_F_COMMIT)
             || (oc->alg == IPPORT_FTP && flow->nw_proto != IPPROTO_TCP)) {
-            inconsistent_match(usable_protocols);
+            /* We can't downgrade to OF1.0 and expect inconsistent CT actions
+             * be silently discarded.  Instead, datapath flow install fails, so
+             * it is better to flag inconsistent CT actions as hard errors. */
+            return OFPERR_OFPBAC_MATCH_INCONSISTENT;
         }
 
         if (oc->zone_src.field) {
@@ -7052,7 +7055,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
             (on->range_af == AF_INET && flow->dl_type != htons(ETH_TYPE_IP)) ||
             (on->range_af == AF_INET6
              && flow->dl_type != htons(ETH_TYPE_IPV6))) {
-            inconsistent_match(usable_protocols);
+            return OFPERR_OFPBAC_MATCH_INCONSISTENT;
         }
         return 0;
     }
