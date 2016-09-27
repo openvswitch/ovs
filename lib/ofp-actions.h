@@ -512,7 +512,7 @@ struct {                                \
 }
 
 #if !defined(IPPORT_FTP)
-#define	IPPORT_FTP  21
+#define IPPORT_FTP  21
 #endif
 
 /* OFPACT_CT.
