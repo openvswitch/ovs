@@ -8361,7 +8361,7 @@ add_of_ports br0 1 2
 AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
 
 AT_DATA([flows.txt], [dnl
-ct_state=-trk,action=ct(table=0,zone=0)
+ipv6,ct_state=-trk,action=ct(table=0,zone=0)
 ct_state=+trk,action=controller
 ])
 
@@ -8372,14 +8372,14 @@ AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no
 
 AT_CHECK([ovs-appctl time/stop])
 
-AT_CHECK([ovs-appctl netdev-dummy/receive p2 'eth(src=80:88:88:88:88:88,dst=ff:ff:ff:ff:ff:ff),eth_type(0x0806),arp(sip=192.168.0.1,tip=192.168.0.2,op=1,sha=50:54:00:00:00:05,tha=00:00:00:00:00:00)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 '0060970769ea0000860580da86dd6000000000203afffe80000000000000020086fffe0580dafe80000000000000026097fffe0769ea870068bd00000000fe80000000000000026097fffe0769ea01010000860580da'])
 
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 1])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 ct_state=inv|trk,in_port=2 (via action) data_len=42 (unbuffered)
-arp,vlan_tci=0x0000,dl_src=80:88:88:88:88:88,dl_dst=ff:ff:ff:ff:ff:ff,arp_spa=192.168.0.1,arp_tpa=192.168.0.2,arp_op=1,arp_sha=50:54:00:00:00:05,arp_tha=00:00:00:00:00:00
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=86 ct_state=inv|trk,in_port=2 (via action) data_len=86 (unbuffered)
+icmp6,vlan_tci=0x0000,dl_src=00:00:86:05:80:da,dl_dst=00:60:97:07:69:ea,ipv6_src=fe80::200:86ff:fe05:80da,ipv6_dst=fe80::260:97ff:fe07:69ea,ipv6_label=0x00000,nw_tos=0,nw_ecn=0,nw_ttl=255,icmp_type=135,icmp_code=0,nd_target=fe80::260:97ff:fe07:69ea,nd_sll=00:00:86:05:80:da,nd_tll=00:00:00:00:00:00 icmp6_csum:68bd
 ])
 
 OVS_VSWITCHD_STOP
@@ -8510,8 +8510,8 @@ AT_DATA([flows.txt], [dnl
 dnl Table 0
 dnl
 table=0,priority=100,arp,action=normal
-table=0,priority=10,in_port=1,udp,action=ct(commit,table=1)
-table=0,priority=10,in_port=2,action=ct(table=1)
+table=0,priority=10,ip,in_port=1,udp,action=ct(commit,table=1)
+table=0,priority=10,ip,in_port=2,action=ct(table=1)
 table=0,priority=1,action=drop
 dnl
 dnl Table 1
@@ -8561,12 +8561,12 @@ dnl Allow new connections on p1->p2. Allow only established connections p2->p1
 AT_DATA([flows.txt], [dnl
 dnl Table 0
 dnl
-table=0,priority=100,arp,action=normal
-table=0,priority=10,in_port=1,udp,tp_src=1,action=ct(commit,exec(set_field:1->ct_mark)),controller
-table=0,priority=10,in_port=1,udp,tp_src=3,action=ct(commit,exec(set_field:3->ct_mark)),controller
-table=0,priority=10,in_port=1,udp,tp_src=5,action=ct(commit,exec(set_field:5->ct_mark)),controller
-table=0,priority=10,in_port=2,actions=ct(table=1)
-table=0,priority=1,action=drop
+table=0,arp,action=normal
+table=0,ip,in_port=1,udp,tp_src=1,action=ct(commit,exec(set_field:1->ct_mark)),controller
+table=0,ip,in_port=1,udp,tp_src=3,action=ct(commit,exec(set_field:3->ct_mark)),controller
+table=0,ip,in_port=1,udp,tp_src=5,action=ct(commit,exec(set_field:5->ct_mark)),controller
+table=0,ip,in_port=2,actions=ct(table=1)
+table=0,priority=0,action=drop
 dnl
 dnl Table 1
 dnl
@@ -8622,10 +8622,10 @@ dnl Allow new connections on p1->p2. Allow only established connections p2->p1
 AT_DATA([flows.txt], [dnl
 dnl Table 0
 dnl
-table=0,priority=100,arp,action=normal
-table=0,priority=10,in_port=1,udp,tp_src=1,action=ct(commit,exec(set_field:000000000000000001->ct_label))
-table=0,priority=10,in_port=1,udp,tp_src=3,action=ct(commit,exec(set_field:000000000000000002->ct_label))
-table=0,priority=10,in_port=2,actions=ct(table=1)
+table=0,arp,action=normal
+table=0,ip,in_port=1,udp,tp_src=1,action=ct(commit,exec(set_field:000000000000000001->ct_label))
+table=0,ip,in_port=1,udp,tp_src=3,action=ct(commit,exec(set_field:000000000000000002->ct_label))
+table=0,ip,in_port=2,actions=ct(table=1)
 dnl
 dnl Table 1
 dnl
@@ -8679,10 +8679,10 @@ dnl   subtables are visited, meaning consistent megaflows.
 dnl
 dnl Table 0
 dnl
-table=0,priority=100,arp,action=normal
-table=0,priority=10,in_port=1,udp,tp_src=1,action=ct(commit,exec(set_field:1->ct_label)),2
-table=0,priority=10,in_port=2,actions=ct(table=1)
-table=0,priority=1,action=drop
+table=0,arp,action=normal
+table=0,ip,in_port=1,udp,tp_src=1,action=ct(commit,exec(set_field:1->ct_label)),2
+table=0,ip,in_port=2,actions=ct(table=1)
+table=0,priority=0,action=drop
 dnl
 dnl Table 1
 dnl
