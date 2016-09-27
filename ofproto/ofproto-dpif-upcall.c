@@ -939,6 +939,21 @@ udpif_revalidator(void *arg)
             latch_wait(&udpif->exit_latch);
             latch_wait(&udpif->pause_latch);
             poll_block();
+
+            if (!latch_is_set(&udpif->pause_latch) &&
+                !latch_is_set(&udpif->exit_latch)) {
+                long long int now = time_msec();
+                /* Block again if we are woken up within 5ms of the last start
+                 * time. */
+                start_time += 5;
+
+                if (now < start_time) {
+                    poll_timer_wait_until(start_time);
+                    latch_wait(&udpif->exit_latch);
+                    latch_wait(&udpif->pause_latch);
+                    poll_block();
+                }
+            }
         }
     }
 
