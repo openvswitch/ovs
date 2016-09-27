@@ -1,9 +1,16 @@
 openvswitch (2.5.1-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-   - Nothing yet!
+   - DPDK:
+     * New appctl command 'dpif-netdev/pmd-rxq-show' to check the port/rxq
+       assignment.
+     * Type of log messages from PMD threads changed from INFO to DBG.
+   - ovs-pki: Changed message digest algorithm from SHA-1 to SHA-512 because
+     SHA-1 is no longer secure and some operating systems have started to
+     disable it in OpenSSL.
+   - Bug fixes
 
- -- Open vSwitch team <dev@openvswitch.org>  Fri, 26 Feb 2016 17:23:21 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Tue, 27 Sep 2016 10:18:23 -0700
 
 openvswitch (2.5.0-1) unstable; urgency=low
    [ Open vSwitch team ]
