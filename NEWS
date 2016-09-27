@@ -1,7 +1,4 @@
-
----------------------
-
-v2.6.0 - xx xxx xxxx
+v2.6.0 - 27 Sep 2016
 ---------------------
    - First supported release of OVN.  See ovn-architecture(7) for more
      details.
