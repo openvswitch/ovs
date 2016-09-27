@@ -579,7 +579,7 @@ enum nx_conntrack_flags {
 #define NX_CT_RECIRC_NONE OFPTT_ALL
 
 #if !defined(IPPORT_FTP)
-#define	IPPORT_FTP  21
+#define IPPORT_FTP  21
 #endif
 
 /* OFPACT_CT.
