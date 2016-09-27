@@ -4571,6 +4571,9 @@ m4_define([CHECK_CONTINUATION], [dnl
         m4_if([$3], [0], [],
             [AT_CHECK([echo "$actions1" | sed 's/pause/controller(pause)/g' | ovs-ofctl -O OpenFlow13 add-flows br1 -])])
 
+        # Make sure the datapath is up-to-date before sending the packet.
+        ovs-appctl revalidator/wait
+
         # Run a packet through the switch.
         AT_CHECK([ovs-appctl netdev-dummy/receive p1 "$flow"], [0], [stdout])
 
