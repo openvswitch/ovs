@@ -1905,6 +1905,13 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
         goto exit;
     }
 
+    if (need_revalidate) {
+        xlate_cache_clear(ukey->xcache);
+    }
+    if (!ukey->xcache) {
+        ukey->xcache = xlate_cache_new();
+    }
+
     if (odp_flow_key_to_flow(ukey->key, ukey->key_len, &flow)
         == ODP_FIT_ERROR) {
         goto exit;
@@ -1914,13 +1921,6 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
                          &ofp_in_port);
     if (error) {
         goto exit;
-    }
-
-    if (need_revalidate) {
-        xlate_cache_clear(ukey->xcache);
-    }
-    if (!ukey->xcache) {
-        ukey->xcache = xlate_cache_new();
     }
 
     xlate_in_init(&xin, ofproto, ofproto_dpif_get_tables_version(ofproto),
