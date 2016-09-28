@@ -2631,7 +2631,7 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
 	    VLOG_INFO("Logical dest port %p\n",fc->logical_destination_port);	    
 	    dst_port =  ovn_port_find(ports,fc->logical_destination_port->name);
 	  }
-	  VLOG_INFO("Setting src port in location %u\n",lpc->n_port_pair_groups);
+	  VLOG_INFO("Setting src port in location %"PRIuSIZE"\n",lpc->n_port_pair_groups);
 	  input_port_array[lpc->n_port_pair_groups] = src_port;
 	  output_port_array[lpc->n_port_pair_groups] = src_port;
 	  /*
