@@ -76,13 +76,15 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
  * The minimum mbuf size is limited to avoid scatter behaviour and drop in
  * performance for standard Ethernet MTU.
  */
-#define ETHER_HDR_MAX_LEN           (ETHER_HDR_LEN + ETHER_CRC_LEN + (2 * VLAN_HEADER_LEN))
+#define ETHER_HDR_MAX_LEN           (ETHER_HDR_LEN + ETHER_CRC_LEN \
+                                     + (2 * VLAN_HEADER_LEN))
 #define MTU_TO_FRAME_LEN(mtu)       ((mtu) + ETHER_HDR_LEN + ETHER_CRC_LEN)
 #define MTU_TO_MAX_FRAME_LEN(mtu)   ((mtu) + ETHER_HDR_MAX_LEN)
-#define FRAME_LEN_TO_MTU(frame_len) ((frame_len)- ETHER_HDR_LEN - ETHER_CRC_LEN)
-#define MBUF_SIZE(mtu)              ( MTU_TO_MAX_FRAME_LEN(mtu)   \
-                                    + sizeof(struct dp_packet)    \
-                                    + RTE_PKTMBUF_HEADROOM)
+#define FRAME_LEN_TO_MTU(frame_len) ((frame_len)                    \
+                                     - ETHER_HDR_LEN - ETHER_CRC_LEN)
+#define MBUF_SIZE(mtu)              (MTU_TO_MAX_FRAME_LEN(mtu)      \
+                                     + sizeof(struct dp_packet)     \
+                                     + RTE_PKTMBUF_HEADROOM)
 #define NETDEV_DPDK_MBUF_ALIGN      1024
 #define NETDEV_DPDK_MAX_PKT_LEN     9728
 
@@ -132,8 +134,10 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 
 #define SOCKET0              0
 
-#define NIC_PORT_RX_Q_SIZE 2048  /* Size of Physical NIC RX Queue, Max (n+32<=4096)*/
-#define NIC_PORT_TX_Q_SIZE 2048  /* Size of Physical NIC TX Queue, Max (n+32<=4096)*/
+/* Size of Physical NIC RX Queue, Max (n + 32 <= 4096) */
+#define NIC_PORT_RX_Q_SIZE 2048
+/* Size of Physical NIC TX Queue, Max (n + 32 <= 4096) */
+#define NIC_PORT_TX_Q_SIZE 2048
 
 #define OVS_VHOST_MAX_QUEUE_NUM 1024  /* Maximum number of vHost TX queues. */
 #define OVS_VHOST_QUEUE_MAP_UNKNOWN (-1) /* Mapping not initialized. */
@@ -417,8 +421,8 @@ is_dpdk_class(const struct netdev_class *class)
  * entirety. Furthermore, certain drivers need to ensure that there is also
  * sufficient space in the Rx buffer to accommodate two VLAN tags (for QinQ
  * frames). If the RX buffer is too small, then the driver enables scatter RX
- * behaviour, which reduces performance. To prevent this, use a buffer size that
- * is closest to 'mtu', but which satisfies the aforementioned criteria.
+ * behaviour, which reduces performance. To prevent this, use a buffer size
+ * that is closest to 'mtu', but which satisfies the aforementioned criteria.
  */
 static uint32_t
 dpdk_buf_size(int mtu)
@@ -487,12 +491,12 @@ dpdk_mp_get(int socket_id, int mtu)
     dmp->mtu = mtu;
     dmp->refcount = 1;
     mbp_priv.mbuf_data_room_size = MBUF_SIZE(mtu) - sizeof(struct dp_packet);
-    mbp_priv.mbuf_priv_size = sizeof (struct dp_packet)
-                              - sizeof (struct rte_mbuf);
+    mbp_priv.mbuf_priv_size = sizeof(struct dp_packet)
+                              - sizeof(struct rte_mbuf);
     /* XXX: this is a really rough method of provisioning memory.
      * It's impossible to determine what the exact memory requirements are when
-     * the number of ports and rxqs that utilize a particular mempool can change
-     * dynamically at runtime. For the moment, use this rough heurisitic.
+     * when the number of ports and rxqs that utilize a particular mempool can
+     * change dynamically at runtime. For now, use this rough heurisitic.
      */
     if (mtu >= ETHER_MTU) {
         mp_size = MAX_NB_MBUF;
@@ -594,7 +598,7 @@ check_link_status(struct netdev_dpdk *dev)
         dev->link = link;
         if (dev->link.link_status) {
             VLOG_DBG_RL(&rl, "Port %d Link Up - speed %u Mbps - %s",
-                        dev->port_id, (unsigned)dev->link.link_speed,
+                        dev->port_id, (unsigned) dev->link.link_speed,
                         (dev->link.link_duplex == ETH_LINK_FULL_DUPLEX) ?
                          ("full-duplex") : ("half-duplex"));
         } else {
@@ -1020,8 +1024,8 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
         && !(dev->vhost_driver_flags & RTE_VHOST_USER_CLIENT)) {
         VLOG_ERR("Removing port '%s' while vhost device still attached.",
                  netdev->name);
-        VLOG_ERR("To restore connectivity after re-adding of port, VM on socket"
-                 " '%s' must be restarted.", dev->vhost_id);
+        VLOG_ERR("To restore connectivity after re-adding of port, VM on "
+                 "socket '%s' must be restarted.", dev->vhost_id);
     }
 
     free(ovsrcu_get_protected(struct ingress_policer *,
@@ -1420,7 +1424,7 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet_batch *batch)
     if (policer) {
         dropped = nb_rx;
         nb_rx = ingress_policer_run(policer,
-                                    (struct rte_mbuf **)batch->packets,
+                                    (struct rte_mbuf **) batch->packets,
                                     nb_rx);
         dropped -= nb_rx;
     }
@@ -1585,7 +1589,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
 
         if (OVS_UNLIKELY(size > dev->max_packet_len)) {
             VLOG_WARN_RL(&rl, "Too big size %d max_packet_len %d",
-                         (int)size , dev->max_packet_len);
+                         (int) size, dev->max_packet_len);
 
             dropped++;
             continue;
@@ -1991,7 +1995,7 @@ netdev_dpdk_policer_construct(uint32_t rate, uint32_t burst)
     policer->app_srtcm_params.ebs = 0;
     err = rte_meter_srtcm_config(&policer->in_policer,
                                     &policer->app_srtcm_params);
-    if(err) {
+    if (err) {
         VLOG_ERR("Could not create rte meter for ingress policer");
         return NULL;
     }
@@ -2155,7 +2159,7 @@ netdev_dpdk_update_flags__(struct netdev_dpdk *dev,
             /* Clear statistics if device is getting up. */
             if (NETDEV_UP & on) {
                 rte_spinlock_lock(&dev->stats_lock);
-                memset(&dev->stats, 0, sizeof(dev->stats));
+                memset(&dev->stats, 0, sizeof dev->stats);
                 rte_spinlock_unlock(&dev->stats_lock);
             }
         }
@@ -2194,14 +2198,16 @@ netdev_dpdk_get_status(const struct netdev *netdev, struct smap *args)
     ovs_mutex_unlock(&dev->mutex);
 
     smap_add_format(args, "port_no", "%d", dev->port_id);
-    smap_add_format(args, "numa_id", "%d", rte_eth_dev_socket_id(dev->port_id));
+    smap_add_format(args, "numa_id", "%d",
+                           rte_eth_dev_socket_id(dev->port_id));
     smap_add_format(args, "driver_name", "%s", dev_info.driver_name);
     smap_add_format(args, "min_rx_bufsize", "%u", dev_info.min_rx_bufsize);
     smap_add_format(args, "max_rx_pktlen", "%u", dev->max_packet_len);
     smap_add_format(args, "max_rx_queues", "%u", dev_info.max_rx_queues);
     smap_add_format(args, "max_tx_queues", "%u", dev_info.max_tx_queues);
     smap_add_format(args, "max_mac_addrs", "%u", dev_info.max_mac_addrs);
-    smap_add_format(args, "max_hash_mac_addrs", "%u", dev_info.max_hash_mac_addrs);
+    smap_add_format(args, "max_hash_mac_addrs", "%u",
+                           dev_info.max_hash_mac_addrs);
     smap_add_format(args, "max_vfs", "%u", dev_info.max_vfs);
     smap_add_format(args, "max_vmdq_pools", "%u", dev_info.max_vmdq_pools);
 
@@ -2340,7 +2346,7 @@ new_device(int vid)
     int newnode = 0;
     char ifname[IF_NAME_SZ];
 
-    rte_vhost_get_ifname(vid, ifname, sizeof(ifname));
+    rte_vhost_get_ifname(vid, ifname, sizeof ifname);
 
     ovs_mutex_lock(&dpdk_mutex);
     /* Add device to the vhost port with the same name as that passed down. */
@@ -2421,7 +2427,7 @@ destroy_device(int vid)
     bool exists = false;
     char ifname[IF_NAME_SZ];
 
-    rte_vhost_get_ifname(vid, ifname, sizeof(ifname));
+    rte_vhost_get_ifname(vid, ifname, sizeof ifname);
 
     ovs_mutex_lock(&dpdk_mutex);
     LIST_FOR_EACH (dev, list_node, &dpdk_list) {
@@ -2466,7 +2472,7 @@ vring_state_changed(int vid, uint16_t queue_id, int enable)
     int qid = queue_id / VIRTIO_QNUM;
     char ifname[IF_NAME_SZ];
 
-    rte_vhost_get_ifname(vid, ifname, sizeof(ifname));
+    rte_vhost_get_ifname(vid, ifname, sizeof ifname);
 
     if (queue_id % VIRTIO_QNUM == VIRTIO_TXQ) {
         return 0;
@@ -2572,7 +2578,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
     }
 
     /* XXX: Add support for multiquque ring. */
-    err = snprintf(ring_name, sizeof(ring_name), "%s_tx", dev_name);
+    err = snprintf(ring_name, sizeof ring_name, "%s_tx", dev_name);
     if (err < 0) {
         return -err;
     }
@@ -2585,7 +2591,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
         return ENOMEM;
     }
 
-    err = snprintf(ring_name, sizeof(ring_name), "%s_rx", dev_name);
+    err = snprintf(ring_name, sizeof ring_name, "%s_rx", dev_name);
     if (err < 0) {
         return -err;
     }
@@ -2628,11 +2634,12 @@ dpdk_ring_open(const char dev_name[], unsigned int *eth_port_id)
         return err;
     }
 
-    /* look through our list to find the device */
+    /* Look through our list to find the device */
     LIST_FOR_EACH (ivshmem, list_node, &dpdk_ring_list) {
          if (ivshmem->user_port_id == port_no) {
             VLOG_INFO("Found dpdk ring device %s:", dev_name);
-            *eth_port_id = ivshmem->eth_port_id; /* really all that is needed */
+            /* Really all that is needed */
+            *eth_port_id = ivshmem->eth_port_id;
             return 0;
          }
     }
@@ -2648,10 +2655,10 @@ netdev_dpdk_ring_send(struct netdev *netdev, int qid,
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     unsigned i;
 
-    /* When using 'dpdkr' and sending to a DPDK ring, we want to ensure that the
-     * rss hash field is clear. This is because the same mbuf may be modified by
-     * the consumer of the ring and return into the datapath without recalculating
-     * the RSS hash. */
+    /* When using 'dpdkr' and sending to a DPDK ring, we want to ensure that
+     * the rss hash field is clear. This is because the same mbuf may be
+     * modified by the consumer of the ring and return into the datapath
+     * without recalculating the RSS hash. */
     for (i = 0; i < batch->count; i++) {
         dp_packet_rss_invalidate(batch->packets[i]);
     }
@@ -2756,7 +2763,7 @@ netdev_dpdk_get_qos(const struct netdev *netdev,
     int error = 0;
 
     ovs_mutex_lock(&dev->mutex);
-    if(dev->qos_conf) {
+    if (dev->qos_conf) {
         *typep = dev->qos_conf->ops->qos_name;
         error = (dev->qos_conf->ops->qos_get
                  ? dev->qos_conf->ops->qos_get(netdev, details): 0);
