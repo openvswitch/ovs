@@ -99,6 +99,20 @@ if test "$IS_WIN32" = "yes"; then
         return $retval
     }
 fi
+
+# parent_pid PID
+#
+# Prints the PID of the parent of process PID.
+parent_pid () {
+    # Using "ps" is portable to any POSIX system, but busybox "ps" (used in
+    # e.g. Alpine Linux) is noncompliant, so we use a Linux-specific approach
+    # when it's available.
+    if test ! -e /proc/$1/status; then
+        ps -o ppid= -p $1
+    else
+        sed -n 's/^PPid:	\([0-9]*\)/\1/p' /proc/$1/status
+    fi
+}
 ]
 m4_divert_pop([PREPARE_TESTS])
 
