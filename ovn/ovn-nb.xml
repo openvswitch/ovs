@@ -343,10 +343,11 @@
         </p>
 
         <p>
-          When <ref column="type"/> is set to <code>localnet</code>, this can
+          When <ref column="type"/> is set to <code>localnet</code> or
+          <code>l2gateway</code>, this can
           be set to indicate that the port represents a connection to a
-          specific VLAN on a locally accessible network. The VLAN ID is used to
-          match incoming traffic and is also added to outgoing traffic.
+          specific VLAN on a locally accessible network. The VLAN ID is used
+          to match incoming traffic and is also added to outgoing traffic.
         </p>
       </column>
 
