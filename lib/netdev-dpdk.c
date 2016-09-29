@@ -455,14 +455,14 @@ free_dpdk_buf(struct dp_packet *p)
 static void
 ovs_rte_pktmbuf_init(struct rte_mempool *mp,
                      void *opaque_arg OVS_UNUSED,
-                     void *_m,
+                     void *_p,
                      unsigned i OVS_UNUSED)
 {
-    struct rte_mbuf *m = _m;
+    struct rte_mbuf *pkt = _p;
 
-    rte_pktmbuf_init(mp, opaque_arg, _m, i);
+    rte_pktmbuf_init(mp, opaque_arg, _p, i);
 
-    dp_packet_init_dpdk((struct dp_packet *) m, m->buf_len);
+    dp_packet_init_dpdk((struct dp_packet *) pkt, pkt->buf_len);
 }
 
 static struct dpdk_mp *
@@ -1566,7 +1566,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    struct rte_mbuf *mbufs[PKT_ARRAY_SIZE];
+    struct rte_mbuf *pkts[PKT_ARRAY_SIZE];
     int dropped = 0;
     int newcnt = 0;
     int i;
@@ -1591,34 +1591,34 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
             continue;
         }
 
-        mbufs[newcnt] = rte_pktmbuf_alloc(dev->dpdk_mp->mp);
+        pkts[newcnt] = rte_pktmbuf_alloc(dev->dpdk_mp->mp);
 
-        if (!mbufs[newcnt]) {
+        if (!pkts[newcnt]) {
             dropped += batch->count - i;
             break;
         }
 
         /* We have to do a copy for now */
-        memcpy(rte_pktmbuf_mtod(mbufs[newcnt], void *),
+        memcpy(rte_pktmbuf_mtod(pkts[newcnt], void *),
                dp_packet_data(batch->packets[i]), size);
 
-        rte_pktmbuf_data_len(mbufs[newcnt]) = size;
-        rte_pktmbuf_pkt_len(mbufs[newcnt]) = size;
+        rte_pktmbuf_data_len(pkts[newcnt]) = size;
+        rte_pktmbuf_pkt_len(pkts[newcnt]) = size;
 
         newcnt++;
     }
 
     if (dev->type == DPDK_DEV_VHOST) {
-        __netdev_dpdk_vhost_send(netdev, qid, (struct dp_packet **) mbufs,
+        __netdev_dpdk_vhost_send(netdev, qid, (struct dp_packet **) pkts,
                                  newcnt);
     } else {
         unsigned int qos_pkts = newcnt;
 
         /* Check if QoS has been configured for this netdev. */
-        newcnt = netdev_dpdk_qos_run__(dev, mbufs, newcnt);
+        newcnt = netdev_dpdk_qos_run__(dev, pkts, newcnt);
 
         dropped += qos_pkts - newcnt;
-        netdev_dpdk_eth_tx_burst(dev, qid, mbufs, newcnt);
+        netdev_dpdk_eth_tx_burst(dev, qid, pkts, newcnt);
     }
 
     if (OVS_UNLIKELY(dropped)) {
@@ -1667,15 +1667,15 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
     } else {
         int dropped;
         int cnt = batch->count;
-        struct rte_mbuf **cur_pkts = (struct rte_mbuf **) batch->packets;
+        struct rte_mbuf **pkts = (struct rte_mbuf **) batch->packets;
 
         dp_packet_batch_apply_cutlen(batch);
 
-        cnt = netdev_dpdk_filter_packet_len(dev, cur_pkts, cnt);
-        cnt = netdev_dpdk_qos_run__(dev, cur_pkts, cnt);
+        cnt = netdev_dpdk_filter_packet_len(dev, pkts, cnt);
+        cnt = netdev_dpdk_qos_run__(dev, pkts, cnt);
         dropped = batch->count - cnt;
 
-        netdev_dpdk_eth_tx_burst(dev, qid, cur_pkts, cnt);
+        netdev_dpdk_eth_tx_burst(dev, qid, pkts, cnt);
 
         if (OVS_UNLIKELY(dropped)) {
             rte_spinlock_lock(&dev->stats_lock);
