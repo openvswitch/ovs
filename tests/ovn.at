@@ -4400,9 +4400,9 @@ test_datapath_in_of_rules() {
     # magic keyword that represents one, based on the exit status of
     # a quiet grep
     if test $expect_datapath != 0; then
-       AT_CHECK([grep --quiet -i 'metadata=' stdout], [0], [ignore-nolog])
+       AT_CHECK([grep -q -i 'metadata=' stdout], [0], [ignore-nolog])
     else
-       AT_CHECK([grep --quiet -i 'metadata=' stdout], [1], [ignore-nolog])
+       AT_CHECK([grep -q -i 'metadata=' stdout], [1], [ignore-nolog])
     fi
 }
 
