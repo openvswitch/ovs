@@ -508,7 +508,11 @@ ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[[]])))
 ip,actions=ct(commit,exec(load(0x1->NXM_NX_CT_LABEL[[]])))
 ])
 AT_CHECK([ovs-ofctl -F nxm parse-flows flows.txt], [0], [stdout])
-AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//' stdout]], [0], [dnl
+
+# The substitution for fec0:0: is because some libcs (e.g. MUSL)
+# abbreviate a single zero and others (e.g. glibc) don't.
+AT_CHECK([[sed 's/ (xid=0x[0-9a-fA-F]*)//
+s/fec0:0:/fec0::/g' stdout]], [0], [dnl
 usable protocols: NXM,OXM
 chosen protocol: NXM-table_id
 NXT_FLOW_MOD: ADD tcp,tp_src=123 actions=FLOOD
@@ -524,11 +528,11 @@ NXT_FLOW_MOD: ADD icmp6,in_port=3,ipv6_src=2001:db8:3c4d:1::1,icmp_type=134 acti
 NXT_FLOW_MOD: ADD udp,dl_vlan_pcp=7 idle:5 actions=strip_vlan,output:0
 NXT_FLOW_MOD: ADD tcp,nw_src=192.168.0.3,tp_dst=80 actions=set_queue:37,output:1
 NXT_FLOW_MOD: ADD udp,nw_src=192.168.0.3,tp_dst=53 actions=pop_queue,output:1
-NXT_FLOW_MOD: ADD icmp6,icmp_type=135,nd_target=fec0:0:1234:f045:8fff:1111:fe4e:571 actions=drop
-NXT_FLOW_MOD: ADD icmp6,icmp_type=135,nd_target=fec0:0:1234:f045:8fff:1111:fe4f:0/112 actions=drop
+NXT_FLOW_MOD: ADD icmp6,icmp_type=135,nd_target=fec0::1234:f045:8fff:1111:fe4e:571 actions=drop
+NXT_FLOW_MOD: ADD icmp6,icmp_type=135,nd_target=fec0::1234:f045:8fff:1111:fe4f:0/112 actions=drop
 NXT_FLOW_MOD: ADD icmp6,icmp_type=135,nd_sll=00:0a:e4:25:6b:b0 actions=drop
-NXT_FLOW_MOD: ADD icmp6,icmp_type=136,nd_target=fec0:0:1234:f045:8fff:1111:fe4e:571,nd_tll=00:0a:e4:25:6b:b1 actions=drop
-NXT_FLOW_MOD: ADD icmp6,icmp_type=136,nd_target=fec0:0:1234:f045:8fff:1111::/96,nd_tll=00:0a:e4:25:6b:b1 actions=drop
+NXT_FLOW_MOD: ADD icmp6,icmp_type=136,nd_target=fec0::1234:f045:8fff:1111:fe4e:571,nd_tll=00:0a:e4:25:6b:b1 actions=drop
+NXT_FLOW_MOD: ADD icmp6,icmp_type=136,nd_target=fec0::1234:f045:8fff:1111::/96,nd_tll=00:0a:e4:25:6b:b1 actions=drop
 NXT_FLOW_MOD: ADD priority=60000 cookie:0x123456789abcdef hard:10 actions=CONTROLLER:65535
 NXT_FLOW_MOD: ADD actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
 NXT_FLOW_MOD: ADD tun_id=0x1234 cookie:0x5678 actions=FLOOD
