@@ -134,10 +134,12 @@ BUILD_ASSERT_DECL((MAX_NB_MBUF / ROUND_DOWN_POW2(MAX_NB_MBUF/MIN_NB_MBUF))
 
 #define SOCKET0              0
 
-/* Size of Physical NIC RX Queue, Max (n + 32 <= 4096) */
-#define NIC_PORT_RX_Q_SIZE 2048
-/* Size of Physical NIC TX Queue, Max (n + 32 <= 4096) */
-#define NIC_PORT_TX_Q_SIZE 2048
+/* Default size of Physical NIC RXQ */
+#define NIC_PORT_DEFAULT_RXQ_SIZE 2048
+/* Default size of Physical NIC TXQ */
+#define NIC_PORT_DEFAULT_TXQ_SIZE 2048
+/* Maximum size of Physical NIC Queues */
+#define NIC_PORT_MAX_Q_SIZE 4096
 
 #define OVS_VHOST_MAX_QUEUE_NUM 1024  /* Maximum number of vHost TX queues. */
 #define OVS_VHOST_QUEUE_MAP_UNKNOWN (-1) /* Mapping not initialized. */
@@ -379,6 +381,12 @@ struct netdev_dpdk {
     int requested_mtu;
     int requested_n_txq;
     int requested_n_rxq;
+    int requested_rxq_size;
+    int requested_txq_size;
+
+    /* Number of rx/tx descriptors for physical devices */
+    int rxq_size;
+    int txq_size;
 
     /* Socket ID detected when vHost device is brought up */
     int requested_socket_id;
@@ -662,7 +670,7 @@ dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
         }
 
         for (i = 0; i < n_txq; i++) {
-            diag = rte_eth_tx_queue_setup(dev->port_id, i, NIC_PORT_TX_Q_SIZE,
+            diag = rte_eth_tx_queue_setup(dev->port_id, i, dev->txq_size,
                                           dev->socket_id, NULL);
             if (diag) {
                 VLOG_INFO("Interface %s txq(%d) setup error: %s",
@@ -678,7 +686,7 @@ dpdk_eth_dev_queue_setup(struct netdev_dpdk *dev, int n_rxq, int n_txq)
         }
 
         for (i = 0; i < n_rxq; i++) {
-            diag = rte_eth_rx_queue_setup(dev->port_id, i, NIC_PORT_RX_Q_SIZE,
+            diag = rte_eth_rx_queue_setup(dev->port_id, i, dev->rxq_size,
                                           dev->socket_id, NULL,
                                           dev->dpdk_mp->mp);
             if (diag) {
@@ -854,6 +862,10 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
     netdev->n_txq = NR_QUEUE;
     dev->requested_n_rxq = netdev->n_rxq;
     dev->requested_n_txq = netdev->n_txq;
+    dev->rxq_size = NIC_PORT_DEFAULT_RXQ_SIZE;
+    dev->txq_size = NIC_PORT_DEFAULT_TXQ_SIZE;
+    dev->requested_rxq_size = dev->rxq_size;
+    dev->requested_txq_size = dev->txq_size;
 
     /* Initialize the flow control to NULL */
     memset(&dev->fc_conf, 0, sizeof dev->fc_conf);
@@ -1069,6 +1081,12 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
     smap_add_format(args, "configured_rx_queues", "%d", netdev->n_rxq);
     smap_add_format(args, "requested_tx_queues", "%d", dev->requested_n_txq);
     smap_add_format(args, "configured_tx_queues", "%d", netdev->n_txq);
+    smap_add_format(args, "requested_rxq_descriptors", "%d",
+                    dev->requested_rxq_size);
+    smap_add_format(args, "configured_rxq_descriptors", "%d", dev->rxq_size);
+    smap_add_format(args, "requested_txq_descriptors", "%d",
+                    dev->requested_txq_size);
+    smap_add_format(args, "configured_txq_descriptors", "%d", dev->txq_size);
     smap_add_format(args, "mtu", "%d", dev->mtu);
     ovs_mutex_unlock(&dev->mutex);
 
@@ -1087,6 +1105,23 @@ dpdk_set_rxq_config(struct netdev_dpdk *dev, const struct smap *args)
     }
 }
 
+static void
+dpdk_process_queue_size(struct netdev *netdev, const struct smap *args,
+                        const char *flag, int default_size, int *new_size)
+{
+    int queue_size = smap_get_int(args, flag, default_size);
+
+    if (queue_size <= 0 || queue_size > NIC_PORT_MAX_Q_SIZE
+            || !is_pow2(queue_size)) {
+        queue_size = default_size;
+    }
+
+    if (queue_size != *new_size) {
+        *new_size = queue_size;
+        netdev_request_reconfigure(netdev);
+    }
+}
+
 static int
 netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
 {
@@ -1095,6 +1130,13 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
     ovs_mutex_lock(&dev->mutex);
 
     dpdk_set_rxq_config(dev, args);
+
+    dpdk_process_queue_size(netdev, args, "n_rxq_desc",
+                            NIC_PORT_DEFAULT_RXQ_SIZE,
+                            &dev->requested_rxq_size);
+    dpdk_process_queue_size(netdev, args, "n_txq_desc",
+                            NIC_PORT_DEFAULT_TXQ_SIZE,
+                            &dev->requested_txq_size);
 
     /* Flow control support is only available for DPDK Ethernet ports. */
     bool rx_fc_en = false;
@@ -2945,7 +2987,9 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
 
     if (netdev->n_txq == dev->requested_n_txq
         && netdev->n_rxq == dev->requested_n_rxq
-        && dev->mtu == dev->requested_mtu) {
+        && dev->mtu == dev->requested_mtu
+        && dev->rxq_size == dev->requested_rxq_size
+        && dev->txq_size == dev->requested_txq_size) {
         /* Reconfiguration is unnecessary */
 
         goto out;
@@ -2959,6 +3003,9 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
 
     netdev->n_txq = dev->requested_n_txq;
     netdev->n_rxq = dev->requested_n_rxq;
+
+    dev->rxq_size = dev->requested_rxq_size;
+    dev->txq_size = dev->requested_txq_size;
 
     rte_free(dev->tx_q);
     err = dpdk_eth_dev_init(dev);

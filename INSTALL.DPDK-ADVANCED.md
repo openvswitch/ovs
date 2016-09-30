@@ -257,7 +257,23 @@ needs to be affinitized accordingly.
   The rx queues are assigned to pmd threads on the same NUMA node in a
   round-robin fashion.
 
-### 4.4 Exact Match Cache
+### 4.4 DPDK Physical Port Queue Sizes
+  `ovs-vsctl set Interface dpdk0 options:n_rxq_desc=<integer>`
+  `ovs-vsctl set Interface dpdk0 options:n_txq_desc=<integer>`
+
+  The command above sets the number of rx/tx descriptors that the NIC
+  associated with dpdk0 will be initialised with.
+
+  Different 'n_rxq_desc' and 'n_txq_desc' configurations yield different
+  benefits in terms of throughput and latency for different scenarios.
+  Generally, smaller queue sizes can have a positive impact for latency at the
+  expense of throughput. The opposite is often true for larger queue sizes.
+  Note: increasing the number of rx descriptors eg. to 4096  may have a
+  negative impact on performance due to the fact that non-vectorised DPDK rx
+  functions may be used. This is dependant on the driver in use, but is true
+  for the commonly used i40e and ixgbe DPDK drivers.
+
+### 4.5 Exact Match Cache
 
   Each pmd thread contains one EMC. After initial flow setup in the
   datapath, the EMC contains a single table and provides the lowest level
@@ -274,7 +290,7 @@ needs to be affinitized accordingly.
   avoiding datapath classifier lookups is to have multiple pmd threads
   running. This can be done as described in section 4.2.
 
-### 4.5 Rx Mergeable buffers
+### 4.6 Rx Mergeable buffers
 
   Rx Mergeable buffers is a virtio feature that allows chaining of multiple
   virtio descriptors to handle large packet sizes. As such, large packets
