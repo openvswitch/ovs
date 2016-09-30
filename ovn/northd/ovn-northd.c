@@ -2720,6 +2720,22 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     op->lsp_addrs[i].ipv4_addrs[j].addr_s);
                 ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 50,
                               ds_cstr(&match), ds_cstr(&actions));
+
+                /* Do not reply to an ARP request from the port that owns the
+                 * address (otherwise a DHCP client that ARPs to check for a
+                 * duplicate address will fail).  Instead, forward it the usual
+                 * way.
+                 *
+                 * (Another alternative would be to simply drop the packet.  If
+                 * everything is working as it is configured, then this would
+                 * produce equivalent results, since no one should reply to the
+                 * request.  But ARPing for one's own IP address is intended to
+                 * detect situations where the network is not working as
+                 * configured, so dropping the request would frustrate that
+                 * intent.) */
+                ds_put_format(&match, " && inport == %s", op->json_key);
+                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 100,
+                              ds_cstr(&match), "next;");
             }
 
             /* For ND solicitations, we need to listen for both the
@@ -2750,6 +2766,12 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                         op->lsp_addrs[i].ea_s);
                 ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 50,
                               ds_cstr(&match), ds_cstr(&actions));
+
+                /* Do not reply to a solicitation from the port that owns the
+                 * address (otherwise DAD detection will fail). */
+                ds_put_format(&match, " && inport == %s", op->json_key);
+                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 100,
+                              ds_cstr(&match), "next;");
             }
         }
     }
