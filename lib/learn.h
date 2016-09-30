@@ -30,7 +30,7 @@ struct nx_action_learn;
 
 /* NXAST_LEARN helper functions.
  *
- * See include/openflow/nicira-ext.h for NXAST_LEARN specification.
+ * See lib/ofp-actions.c for NXAST_LEARN specification.
  */
 
 enum ofperr learn_check(const struct ofpact_learn *, const struct flow *);

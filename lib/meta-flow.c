@@ -416,7 +416,7 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow,
  * all.  For example, the MFF_VLAN_TCI field will never have a nonzero value
  * without the VLAN_CFI bit being set, but we can't reject those values because
  * it is still legitimate to test just for those bits (see the documentation
- * for NXM_OF_VLAN_TCI in nicira-ext.h).  On the other hand, there is never a
+ * for NXM_OF_VLAN_TCI in meta-flow.h).  On the other hand, there is never a
  * reason to set the low bit of MFF_IP_DSCP to 1, so we reject that. */
 bool
 mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)

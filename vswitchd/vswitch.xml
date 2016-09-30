@@ -3298,7 +3298,7 @@
           <code><var>field</var>[]</code> or
           <code><var>field</var>[<var>start</var>..<var>end</var>]</code>,
           e.g. <code>NXM_OF_IN_PORT[]</code>.  Please see
-          <code>nicira-ext.h</code> for a complete list of NXM field names.
+          <code>meta-flow.h</code> for a complete list of NXM field names.
         </p>
 
         <p>
