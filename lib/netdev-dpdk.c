@@ -1095,6 +1095,7 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
 
 static void
 dpdk_set_rxq_config(struct netdev_dpdk *dev, const struct smap *args)
+    OVS_REQUIRES(dev->mutex)
 {
     int new_n_rxq;
 
@@ -1126,6 +1127,12 @@ static int
 netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    bool rx_fc_en, tx_fc_en, autoneg;
+    enum rte_eth_fc_mode fc_mode;
+    static const enum rte_eth_fc_mode fc_mode_set[2][2] = {
+        {RTE_FC_NONE,     RTE_FC_TX_PAUSE},
+        {RTE_FC_RX_PAUSE, RTE_FC_FULL    }
+    };
 
     ovs_mutex_lock(&dev->mutex);
 
@@ -1138,19 +1145,16 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
                             NIC_PORT_DEFAULT_TXQ_SIZE,
                             &dev->requested_txq_size);
 
-    /* Flow control support is only available for DPDK Ethernet ports. */
-    bool rx_fc_en = false;
-    bool tx_fc_en = false;
-    enum rte_eth_fc_mode fc_mode_set[2][2] =
-                                       {{RTE_FC_NONE, RTE_FC_TX_PAUSE},
-                                        {RTE_FC_RX_PAUSE, RTE_FC_FULL}
-                                       };
     rx_fc_en = smap_get_bool(args, "rx-flow-ctrl", false);
     tx_fc_en = smap_get_bool(args, "tx-flow-ctrl", false);
-    dev->fc_conf.autoneg = smap_get_bool(args, "flow-ctrl-autoneg", false);
-    dev->fc_conf.mode = fc_mode_set[tx_fc_en][rx_fc_en];
+    autoneg = smap_get_bool(args, "flow-ctrl-autoneg", false);
 
-    dpdk_eth_flow_ctrl_setup(dev);
+    fc_mode = fc_mode_set[tx_fc_en][rx_fc_en];
+    if (dev->fc_conf.mode != fc_mode || autoneg != dev->fc_conf.autoneg) {
+        dev->fc_conf.mode = fc_mode;
+        dev->fc_conf.autoneg = autoneg;
+        dpdk_eth_flow_ctrl_setup(dev);
+    }
 
     ovs_mutex_unlock(&dev->mutex);
 
