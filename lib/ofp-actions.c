@@ -1200,7 +1200,8 @@ format_OUTPUT_REG(const struct ofpact_output_reg *a, struct ds *s)
  * generally take into account things like its carrier status and the results
  * of any link monitoring protocols which happen to be running on it.  In order
  * to give controllers a place-holder value, the OFPP_NONE port is always
- * considered live.
+ * considered live, that is, NXAST_BUNDLE_LOAD stores OFPP_NONE in the output
+ * register if no slave is live.
  *
  * Some slave selection strategies require the use of a hash function, in which
  * case the 'fields' and 'basis' parameters should be populated.  The 'fields'
