@@ -1107,7 +1107,8 @@ ip_to_hex() {
 #
 # 8. The switch drops multicast and broadcast packets that violate an ACL.
 #
-# 9. ARP requests to known IPs are responded directly.
+# 9. OVN generates responses to ARP requests for known IPs, except for
+#    requests from a port for the port's own IP.
 #
 # 10. No response to ARP requests for unknown IPs.
 
@@ -1159,13 +1160,18 @@ for is in 1 2 3; do
                 sip=`ip_to_hex 192 168 0 $i$j`
                 tip=`ip_to_hex 192 168 0 $id$jd`
                 tip_unknown=`ip_to_hex 11 11 11 11`
-                test_arp $s f000000000$s $sip $tip f000000000$d            #9
+                if test $d != $s; then
+                    reply_ha=f000000000$d
+                else
+                    reply_ha=
+                fi
+                test_arp $s f000000000$s $sip $tip $reply_ha               #9
                 test_arp $s f000000000$s $sip $tip_unknown                 #10
 
                 if test $jd = 3; then
                     # lsp[123]3 has an additional ip 192.169.0.[123]3.
                     tip=`ip_to_hex 192 169 0 $id$jd`
-                    test_arp $s f000000000$s $sip $tip f000000000$d        #9
+                    test_arp $s f000000000$s $sip $tip $reply_ha           #9
                 fi
             done
         done
@@ -1362,7 +1368,8 @@ output(\"lp$inport\");
 #
 # 8. The switch drops multicast and broadcast packets that violate an ACL.
 #
-# 9. ARP requests to known IPs are responded directly.
+# 9. OVN generates responses to ARP requests for known IPs, except for
+#    requests from a port for the port's own IP.
 #
 # 10. No response to ARP requests for unknown IPs.
 
@@ -1413,13 +1420,14 @@ for s in 1 2 3; do
         sip=192.168.0.$s
         tip=192.168.0.$d
         tip_unknown=11.11.11.11
-        test_arp $s f0:00:00:00:00:0$s $sip $tip f0:00:00:00:00:0$d        #9
+        if test $d != $s; then reply_ha=f0:00:00:00:00:0$d; else reply_ha=; fi
+        test_arp $s f0:00:00:00:00:0$s $sip $tip $reply_ha                 #9
         test_arp $s f0:00:00:00:00:0$s $sip $tip_unknown                   #10
 
         if test $d = 3; then
             # lp3 has an additional ip 192.169.0.[123]3.
             tip=192.169.0.$d
-            test_arp $s f0:00:00:00:00:0$s $sip $tip f0:00:00:00:00:0$d    #9
+            test_arp $s f0:00:00:00:00:0$s $sip $tip $reply_ha             #9
         fi
     done
 

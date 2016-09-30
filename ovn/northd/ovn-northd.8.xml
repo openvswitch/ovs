@@ -479,6 +479,29 @@ nd_na {
       </li>
 
       <li>
+        <p>
+          Priority-100 flows with match criteria like the ARP and ND flows
+          above, except that they only match packets from the
+          <code>inport</code> that owns the IP addresses in question, with
+          action <code>next;</code>.  These flows prevent OVN from replying to,
+          for example, an ARP request emitted by a VM for its own IP address.
+          A VM only makes this kind of request to attempt to detect a duplicate
+          IP address assignment, so sending a reply will prevent the VM from
+          accepting the IP address that it owns.
+        </p>
+
+        <p>
+          In place of <code>next;</code>, it would be reasonable to use
+          <code>drop;</code> for the flows' actions.  If everything is working
+          as it is configured, then this would produce equivalent results,
+          since no host should reply to the request.  But ARPing for one's own
+          IP address is intended to detect situations where the network is not
+          working as configured, so dropping the request would frustrate that
+          intent.
+        </p>
+      </li>
+
+      <li>
         One priority-0 fallback flow that matches all packets and advances to
         the next table.
       </li>
