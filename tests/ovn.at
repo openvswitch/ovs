@@ -3563,22 +3563,22 @@ test_dhcp() {
     local inport=$1 src_mac=$2 dhcp_type=$3 offer_ip=$4
     local request=ffffffffffff${src_mac}080045100110000000008011000000000000ffffffff
     # udp header and dhcp header
-    request+=0044004300fc0000
-    request+=010106006359aa760000000000000000000000000000000000000000${src_mac}
+    request=${request}0044004300fc0000
+    request=${request}010106006359aa760000000000000000000000000000000000000000${src_mac}
     # client hardware padding
-    request+=00000000000000000000
+    request=${request}00000000000000000000
     # server hostname
-    request+=0000000000000000000000000000000000000000000000000000000000000000
-    request+=0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
     # boot file name
-    request+=0000000000000000000000000000000000000000000000000000000000000000
-    request+=0000000000000000000000000000000000000000000000000000000000000000
-    request+=0000000000000000000000000000000000000000000000000000000000000000
-    request+=0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
     # dhcp magic cookie
-    request+=63825363
+    request=${request}63825363
     # dhcp message type
-    request+=3501${dhcp_type}ff
+    request=${request}3501${dhcp_type}ff
 
     if test $offer_ip != 0; then
         local srv_mac=$5 srv_ip=$6 expected_dhcp_opts=$7
@@ -3592,29 +3592,29 @@ test_dhcp() {
         local reply=${src_mac}${srv_mac}080045100${ip_len}000000008011XXXX${srv_ip}${offer_ip}
         # udp header and dhcp header.
         # $udp_len var will be in 3 digits. So adding a '0' before $udp_len
-        reply+=004300440${udp_len}0000020106006359aa760000000000000000
+        reply=${reply}004300440${udp_len}0000020106006359aa760000000000000000
         # your ip address
-        reply+=${offer_ip}
+        reply=${reply}${offer_ip}
         # next server ip address, relay agent ip address, client mac address
-        reply+=0000000000000000${src_mac}
+        reply=${reply}0000000000000000${src_mac}
         # client hardware padding
-        reply+=00000000000000000000
+        reply=${reply}00000000000000000000
         # server hostname
-        reply+=0000000000000000000000000000000000000000000000000000000000000000
-        reply+=0000000000000000000000000000000000000000000000000000000000000000
+        reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+        reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
         # boot file name
-        reply+=0000000000000000000000000000000000000000000000000000000000000000
-        reply+=0000000000000000000000000000000000000000000000000000000000000000
-        reply+=0000000000000000000000000000000000000000000000000000000000000000
-        reply+=0000000000000000000000000000000000000000000000000000000000000000
+        reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+        reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+        reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+        reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
         # dhcp magic cookie
-        reply+=63825363
+        reply=${reply}63825363
         # dhcp message type
         local dhcp_reply_type=02
         if test $dhcp_type = 03; then
             dhcp_reply_type=05
         fi
-        reply+=3501${dhcp_reply_type}${expected_dhcp_opts}00000000ff00000000
+        reply=${reply}3501${dhcp_reply_type}${expected_dhcp_opts}00000000ff00000000
         echo $reply >> $inport.expected
     else
         shift; shift; shift; shift;
@@ -3847,13 +3847,13 @@ test_dhcpv6() {
     local inport=$1 src_mac=$2 src_lla=$3 msg_code=$4 offer_ip=$5
     local request=ffffffffffff${src_mac}86dd00000000002a1101${src_lla}
     # dst ip ff02::1:2
-    request+=ff020000000000000000000000010002
+    request=${request}ff020000000000000000000000010002
     # udp header and dhcpv6 header
-    request+=02220223002affff${msg_code}010203
+    request=${request}02220223002affff${msg_code}010203
     # Client identifier
-    request+=0001000a00030001${src_mac}
+    request=${request}0001000a00030001${src_mac}
     # IA-NA (Identity Association for Non Temporary Address)
-    request+=0003000c0102030400000e1000001518
+    request=${request}0003000c0102030400000e1000001518
     shift; shift; shift; shift; shift;
     if test $offer_ip != 0; then
         local server_mac=000000100001
@@ -3868,15 +3868,15 @@ test_dhcpv6() {
         fi
         local reply=${src_mac}${server_mac}86dd0000000000${msg_len}1101${server_lla}${src_lla}
         # udp header and dhcpv6 header
-        reply+=0223022200${msg_len}ffff${reply_code}010203
+        reply=${reply}0223022200${msg_len}ffff${reply_code}010203
         # Client identifier
-        reply+=0001000a00030001${src_mac}
+        reply=${reply}0001000a00030001${src_mac}
         # IA-NA
         if test $offer_ip != 1; then
-            reply+=0003002801020304ffffffffffffffff00050018${offer_ip}ffffffffffffffff
+            reply=${reply}0003002801020304ffffffffffffffff00050018${offer_ip}ffffffffffffffff
         fi
         # Server identifier
-        reply+=0002000a00030001${server_mac}
+        reply=${reply}0002000a00030001${server_mac}
         echo $reply | trim_zeros >> $inport.expected
     else
         for outport; do
