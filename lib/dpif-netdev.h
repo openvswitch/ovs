@@ -33,13 +33,6 @@ extern "C" {
  * headers to be aligned on a 4-byte boundary.  */
 enum { DP_NETDEV_HEADROOM = 2 + VLAN_HEADER_LEN };
 
-static inline void dp_packet_pad(struct dp_packet *p)
-{
-    if (dp_packet_size(p) < ETH_TOTAL_MIN) {
-        dp_packet_put_zeros(p, ETH_TOTAL_MIN - dp_packet_size(p));
-    }
-}
-
 bool dpif_is_netdev(const struct dpif *);
 
 #define NR_QUEUE   1
