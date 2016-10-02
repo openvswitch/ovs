@@ -15,7 +15,6 @@
 import copy
 import errno
 import os
-import sys
 
 import six
 from six.moves import range
@@ -188,14 +187,11 @@ class UnixctlServer(object):
 
         if path is not None:
             path = "punix:%s" % ovs.util.abs_file_name(ovs.dirs.RUNDIR, path)
+        elif ovs.dirs.WITH_PID_SOCKET_PATH:
+            path = "punix:%s/%s.%d.ctl" % (ovs.dirs.RUNDIR,
+                                           ovs.util.PROGRAM_NAME, os.getpid())
         else:
-            if sys.platform == "win32":
-                path = "punix:%s/%s.ctl" % (ovs.dirs.RUNDIR,
-                                            ovs.util.PROGRAM_NAME)
-            else:
-                path = "punix:%s/%s.%d.ctl" % (ovs.dirs.RUNDIR,
-                                               ovs.util.PROGRAM_NAME,
-                                               os.getpid())
+            path = "punix:%s/%s.ctl" % (ovs.dirs.RUNDIR, ovs.util.PROGRAM_NAME)
 
         if version is None:
             version = ovs.version.VERSION

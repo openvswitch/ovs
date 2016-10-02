@@ -88,20 +88,22 @@ m4_define([UNIXCTL_BAD_TARGET_PYN],
   [AT_SETUP([unixctl bad target - $1])
    AT_SKIP_IF([test $2 = no])
 
-   AT_CHECK([PYAPPCTL_PYN([$3]) -t bogus doit], [1], [], [stderr])
-   AT_CHECK_UNQUOTED([tail -1 stderr], [0], [dnl
+   if test "$WITH_PID_SOCKET_PATH" = "yes"; then
+     AT_CHECK([PYAPPCTL_PYN([$3]) -t bogus doit], [1], [], [stderr])
+     AT_CHECK_UNQUOTED([tail -1 stderr], [0], [dnl
 appctl.py: cannot read pidfile "`pwd`/bogus.pid" (No such file or directory)
 ])
-   if test "$IS_WIN32" = "no"; then
-     AT_CHECK([PYAPPCTL_PYN([$3]) -t /bogus/path.pid doit], [1], [], [stderr])
-     AT_CHECK([tail -1 stderr], [0], [dnl
+     if test "$IS_WIN32" = "no"; then
+       AT_CHECK([PYAPPCTL_PYN([$3]) -t /bogus/path.pid doit], [1], [], [stderr])
+       AT_CHECK([tail -1 stderr], [0], [dnl
 appctl.py: cannot connect to "/bogus/path.pid" (No such file or directory)
 ])
-   else
-     AT_CHECK([PYAPPCTL_PYN([$3]) -t c:/bogus/path.pid doit], [1], [], [stderr])
-     AT_CHECK([tail -1 stderr], [0], [dnl
+     else
+       AT_CHECK([PYAPPCTL_PYN([$3]) -t c:/bogus/path.pid doit], [1], [], [stderr])
+       AT_CHECK([tail -1 stderr], [0], [dnl
 appctl.py: cannot connect to "c:/bogus/path.pid" (No such file or directory)
 ])
+     fi
    fi
 
    AT_CLEANUP])

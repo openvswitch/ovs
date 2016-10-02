@@ -188,6 +188,8 @@ unixctl_command_reply_error(struct unixctl_conn *conn, const char *error)
 /* Creates a unixctl server listening on 'path', which for POSIX may be:
  *
  *      - NULL, in which case <rundir>/<program>.<pid>.ctl is used.
+ *        If built with --disable-pid-socket-path it is instead
+ *        <rundir>/<program>.ctl.
  *
  *      - A name that does not start with '/', in which case it is put in
  *        <rundir>.
@@ -236,7 +238,7 @@ unixctl_server_create(const char *path, struct unixctl_server **serverp)
         punix_path = xasprintf("punix:%s", abs_path);
         free(abs_path);
     } else {
-#ifndef _WIN32
+#ifdef WITH_PID_SOCKET_PATH
         punix_path = xasprintf("punix:%s/%s.%ld.ctl", ovs_rundir(),
                                program_name, (long int) getpid());
 #else

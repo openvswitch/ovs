@@ -25,8 +25,8 @@ m4_define([OVN_CONTROLLER_VTEP_START],
 
    dnl Start ovsdb-server.
    AT_CHECK([ovsdb-server --detach --no-chdir --pidfile=$OVS_RUNDIR/ovsdb-server.pid --log-file --remote=punix:$OVS_RUNDIR/db.sock vswitchd.db vtep.db], [0], [], [stderr])
-   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile=$OVS_RUNDIR/ovsdb-nb-server.pid --log-file=ovsdb-nb-server.log --remote=punix:$OVS_RUNDIR/ovnnb_db.sock ovn-nb.db], [0], [], [stderr])
-   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile=$OVS_RUNDIR/ovsdb-sb-server.pid --log-file=ovsdb-sb-server.log --remote=punix:$OVS_RUNDIR/ovnsb_db.sock ovn-sb.db ovn-sb.db], [0], [], [stderr])
+   AT_CHECK([ovsdb-server --detach --no-chdir --unixctl=$OVS_RUNDIR/ovsdb-nb-server.ctl --pidfile=$OVS_RUNDIR/ovsdb-nb-server.pid --log-file=ovsdb-nb-server.log --remote=punix:$OVS_RUNDIR/ovnnb_db.sock ovn-nb.db], [0], [], [stderr])
+   AT_CHECK([ovsdb-server --detach --no-chdir --unixctl=$OVS_RUNDIR/ovsdb-sb-server.ctl --pidfile=$OVS_RUNDIR/ovsdb-sb-server.pid --log-file=ovsdb-sb-server.log --remote=punix:$OVS_RUNDIR/ovnsb_db.sock ovn-sb.db ovn-sb.db], [0], [], [stderr])
    on_exit "kill `cat ovsdb-server.pid` `cat ovsdb-nb-server.pid` `cat ovsdb-sb-server.pid`"
    AT_CHECK([[sed < stderr '
 /vlog|INFO|opened log file/d

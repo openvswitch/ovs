@@ -201,6 +201,12 @@ connect_to_target(const char *target)
 
 #ifndef _WIN32
     if (target[0] != '/') {
+#else
+    /* On windows, if the 'target' contains ':', we make an assumption that
+     * it is an absolute path. */
+    if (!strchr(target, ':')) {
+#endif
+#ifdef WITH_PID_SOCKET_PATH
         char *pidfile_name;
         pid_t pid;
 
@@ -213,9 +219,6 @@ connect_to_target(const char *target)
         socket_name = xasprintf("%s/%s.%ld.ctl",
                                 ovs_rundir(), target, (long int) pid);
 #else
-    /* On windows, if the 'target' contains ':', we make an assumption that
-     * it is an absolute path. */
-    if (!strchr(target, ':')) {
         socket_name = xasprintf("%s/%s.ctl", ovs_rundir(), target);
 #endif
     } else {

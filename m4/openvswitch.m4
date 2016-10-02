@@ -589,3 +589,29 @@ AC_DEFUN([OVS_CHECK_PRAGMA_MESSAGE],
      [AC_DEFINE(HAVE_PRAGMA_MESSAGE,1,[Define if compiler supports #pragma
      message directive])])
   ])
+
+dnl Checks if user wants to include PID in default socket path.
+AC_DEFUN([OVS_CHECK_PID_SOCKET_PATH],
+  [AC_ARG_ENABLE(
+     [pid-socket-path],
+     [AC_HELP_STRING([--disable-pid-socket-path],
+                     [Do not include PID in socket path])],
+     [case "${enableval}" in
+        (yes) with_pid_socket_path=yes ;;
+        (no)  with_pid_socket_path=no ;;
+        (*) AC_MSG_ERROR([bad value ${enableval} for
+--enable-pid-socket-path]) ;;
+      esac],
+     [if test "$WIN32" = yes; then
+        with_pid_socket_path=no
+      else
+        with_pid_socket_path=yes
+      fi])
+   AC_SUBST([WITH_PID_SOCKET_PATH])
+   if test $with_pid_socket_path != no; then
+     WITH_PID_SOCKET_PATH=yes
+   else
+     WITH_PID_SOCKET_PATH=no
+   fi
+   AM_CONDITIONAL([WITH_PID_SOCKET_PATH],
+                  [test x$with_pid_socket_path = xyes])])

@@ -21,6 +21,8 @@ PKGDATADIR = os.environ.get("OVS_PKGDATADIR", """/usr/local/share/openvswitch"""
 RUNDIR = os.environ.get("OVS_RUNDIR", """/var/run""")
 LOGDIR = os.environ.get("OVS_LOGDIR", """/usr/local/var/log""")
 BINDIR = os.environ.get("OVS_BINDIR", """/usr/local/bin""")
+WITH_PID_SOCKET_PATH = ("y" in
+    os.environ.get("OVS_WITH_PID_SOCKET_PATH", "yes"))
 
 DBDIR = os.environ.get("OVS_DBDIR")
 if not DBDIR:
