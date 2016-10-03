@@ -1113,7 +1113,6 @@ nbctl_lsp_set_dhcpv4_options(struct ctl_context *ctx)
         if (error){
             free(error);
             ctl_fatal("DHCP options cidr '%s' is not IPv4", dhcp_opt->cidr);
-            return;
         }
     }
     nbrec_logical_switch_port_set_dhcpv4_options(lsp, dhcp_opt);
@@ -1419,7 +1418,6 @@ nbctl_dhcp_options_create(struct ctl_context *ctx)
         if (error) {
             free(error);
             ctl_fatal("Invalid cidr format '%s'", ctx->argv[1]);
-            return;
         }
     }
 
