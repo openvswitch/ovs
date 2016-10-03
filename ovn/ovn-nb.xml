@@ -677,6 +677,12 @@
       Each row represents one load balancer.
     </p>
 
+    <column name="name">
+      A name for the load balancer.  This name has no special meaning or
+      purpose other than to provide convenience for human interaction with
+      the ovn-nb database.
+    </column>
+
     <column name="vips">
       <p>
         A map of virtual IPv4 addresses (and an optional port number with

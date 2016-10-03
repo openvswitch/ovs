@@ -427,6 +427,24 @@ ip_parse(const char *s, ovs_be32 *ip)
     return inet_pton(AF_INET, s, ip) == 1;
 }
 
+/* Parses string 's', which must be an IP address with a port number
+ * with ":" as a separator (e.g.: 192.168.1.2:80).
+ * Stores the IP address into '*ip' and port number to '*port'. */
+char * OVS_WARN_UNUSED_RESULT
+ip_parse_port(const char *s, ovs_be32 *ip, ovs_be16 *port)
+{
+    int n = 0;
+    if (!ovs_scan_len(s, &n, IP_PORT_SCAN_FMT,
+                IP_PORT_SCAN_ARGS(ip, port))) {
+        return xasprintf("%s: invalid IP address or port number", s);
+    }
+
+    if (s[n]) {
+        return xasprintf("%s: invalid IP address or port number", s);
+    }
+    return NULL;
+}
+
 /* Parses string 's', which must be an IP address with an optional netmask or
  * CIDR prefix length.  Stores the IP address into '*ip', netmask into '*mask',
  * (255.255.255.255, if 's' lacks a netmask), and number of scanned characters

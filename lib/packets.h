@@ -537,6 +537,14 @@ mpls_lse_to_bos(ovs_be32 mpls_lse)
         &((uint8_t *) ip)[2],                               \
         &((uint8_t *) ip)[3]
 
+#define IP_PORT_SCAN_FMT "%"SCNu8".%"SCNu8".%"SCNu8".%"SCNu8":%"SCNu16
+#define IP_PORT_SCAN_ARGS(ip, port)                                    \
+        ((void) (ovs_be32) *(ip), &((uint8_t *) ip)[0]),    \
+        &((uint8_t *) ip)[1],                               \
+        &((uint8_t *) ip)[2],                               \
+        &((uint8_t *) ip)[3],                               \
+        ((void) (ovs_be16) *(port), (uint16_t *) port)
+
 /* Returns true if 'netmask' is a CIDR netmask, that is, if it consists of N
  * high-order 1-bits and 32-N low-order 0-bits. */
 static inline bool
@@ -558,6 +566,8 @@ ip_is_local_multicast(ovs_be32 ip)
 int ip_count_cidr_bits(ovs_be32 netmask);
 void ip_format_masked(ovs_be32 ip, ovs_be32 mask, struct ds *);
 bool ip_parse(const char *s, ovs_be32 *ip);
+char *ip_parse_port(const char *s, ovs_be32 *ip, ovs_be16 *port)
+    OVS_WARN_UNUSED_RESULT;
 char *ip_parse_masked(const char *s, ovs_be32 *ip, ovs_be32 *mask)
     OVS_WARN_UNUSED_RESULT;
 char *ip_parse_cidr(const char *s, ovs_be32 *ip, unsigned int *plen)
