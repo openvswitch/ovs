@@ -538,20 +538,20 @@ lport_chain_by_name_or_uuid(struct ctl_context *ctx, const char *id)
     if (uuid_from_string(&lport_chain_uuid, id)) {
         is_uuid = true;
         lport_chain = nbrec_logical_port_chain_get_for_uuid(ctx->idl,
-                                                    &lport_chain_uuid);
-	printf("found lport_chain %s\n",id);
+                                                            &lport_chain_uuid);
+        printf("found lport_chain %s\n",id);
     }
 
     if (!lport_chain) {
         NBREC_LOGICAL_PORT_CHAIN_FOR_EACH(lport_chain, ctx->idl) {
             if (!strcmp(lport_chain->name, id)) {
                 break;
-	    }
-	}
+            }
+        }
     }
     if (!lport_chain) {
-      ctl_fatal("lport_chain not found for %s: '%s'",
-                is_uuid ? "UUID" : "name", id);
+        ctl_fatal("lport_chain not found for %s: '%s'",
+                  is_uuid ? "UUID" : "name", id);
     }
 
     return lport_chain;
@@ -566,20 +566,20 @@ lport_pair_group_by_name_or_uuid(struct ctl_context *ctx, const char *id)
     if (uuid_from_string(&lport_pair_group_uuid, id)) {
         is_uuid = true;
         lport_pair_group = nbrec_logical_port_pair_group_get_for_uuid(ctx->idl,
-                                                    &lport_pair_group_uuid);
-	printf("Found lport_pair_group %s\n",id);
+                                                                      &lport_pair_group_uuid);
+        printf("Found lport_pair_group %s\n",id);
     }
 
     if (!lport_pair_group) {
         NBREC_LOGICAL_PORT_PAIR_GROUP_FOR_EACH(lport_pair_group, ctx->idl) {
             if (!strcmp(lport_pair_group->name, id)) {
                 break;
-	    }
-	}
+            }
+        }
     }
     if (!lport_pair_group) {
-      ctl_fatal("lport_pair_group not found for %s: '%s'",
-                is_uuid ? "UUID" : "name", id);
+        ctl_fatal("lport_pair_group not found for %s: '%s'",
+                  is_uuid ? "UUID" : "name", id);
     }
 
     return lport_pair_group;
@@ -594,20 +594,20 @@ lport_pair_by_name_or_uuid(struct ctl_context *ctx, const char *id)
     if (uuid_from_string(&lport_pair_uuid, id)) {
         is_uuid = true;
         lport_pair = nbrec_logical_port_pair_get_for_uuid(ctx->idl,
-                                                    &lport_pair_uuid);
-	printf("found lport_pair %s\n",id);
+                                                          &lport_pair_uuid);
+        printf("found lport_pair %s\n",id);
     }
 
     if (!lport_pair) {
         NBREC_LOGICAL_PORT_PAIR_FOR_EACH(lport_pair, ctx->idl) {
             if (!strcmp(lport_pair->name, id)) {
                 break;
-	    }
-	}
+            }
+        }
     }
     if (!lport_pair) {
-      ctl_fatal("lport_pair not found for %s: '%s'",
-                is_uuid ? "UUID" : "name", id);
+        ctl_fatal("lport_pair not found for %s: '%s'",
+                  is_uuid ? "UUID" : "name", id);
     }
 
     return lport_pair;
@@ -622,20 +622,20 @@ lflow_classifier_by_name_or_uuid(struct ctl_context *ctx, const char *id)
     if (uuid_from_string(&lflow_classifier_uuid, id)) {
         is_uuid = true;
         lflow_classifier = nbrec_logical_flow_classifier_get_for_uuid(ctx->idl,
-                                                    &lflow_classifier_uuid);
-	printf("found lflow_classifier %s\n",id);
+                                                                      &lflow_classifier_uuid);
+        printf("found lflow_classifier %s\n",id);
     }
 
     if (!lflow_classifier) {
-      NBREC_LOGICAL_FLOW_CLASSIFIER_FOR_EACH(lflow_classifier, ctx->idl) {
+        NBREC_LOGICAL_FLOW_CLASSIFIER_FOR_EACH(lflow_classifier, ctx->idl) {
             if (!strcmp(lflow_classifier->name, id)) {
                 break;
-	    }
-	}
+            }
+        }
     }
     if (!lflow_classifier) {
-      ctl_fatal("lflow_classifier not found for %s: '%s'",
-                is_uuid ? "UUID" : "name", id);
+        ctl_fatal("lflow_classifier not found for %s: '%s'",
+                  is_uuid ? "UUID" : "name", id);
     }
 
     return lflow_classifier;
@@ -823,24 +823,24 @@ static void
 nbctl_lport_chain_add(struct ctl_context *ctx)
 {
 
-  const struct nbrec_logical_switch *lswitch;
+    const struct nbrec_logical_switch *lswitch;
 
-  if (ctx->argc < 2) {
-      /* ensure all arguments are present */
-      ctl_fatal("Invalid number of arguments: (%d), to lport-chain-add.",ctx->argc);
+    if (ctx->argc < 2) {
+        /* ensure all arguments are present */
+        ctl_fatal("Invalid number of arguments: (%d), to lport-chain-add.",ctx->argc);
     }
 
-  const char *lport_chain_name = ctx->argc == 3 ? ctx->argv[2] : NULL;
-  lswitch = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
+    const char *lport_chain_name = ctx->argc == 3 ? ctx->argv[2] : NULL;
+    lswitch = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
 
-  if (lport_chain_name) {
-            const struct nbrec_logical_port_chain *lport_chain;
-            NBREC_LOGICAL_PORT_CHAIN_FOR_EACH(lport_chain, ctx->idl) {
-                if (strcmp(lport_chain->name, lport_chain_name)) 
-                    ctl_fatal("%s: an lport_chain with this name already exists",
-                              lport_chain_name);
-                }
+    if (lport_chain_name) {
+        const struct nbrec_logical_port_chain *lport_chain;
+        NBREC_LOGICAL_PORT_CHAIN_FOR_EACH(lport_chain, ctx->idl) {
+            if (strcmp(lport_chain->name, lport_chain_name))
+                ctl_fatal("%s: an lport_chain with this name already exists",
+                          lport_chain_name);
         }
+    }
     struct nbrec_logical_port_chain *lport_chain;
     lport_chain = nbrec_logical_port_chain_insert(ctx->txn);
     if (lport_chain_name) {
@@ -851,7 +851,7 @@ nbctl_lport_chain_add(struct ctl_context *ctx)
 
     nbrec_logical_switch_verify_port_chains(lswitch);
     struct nbrec_logical_port_chain  **new_port_chain = xmalloc(sizeof *new_port_chain *
-                                                    (lswitch->n_port_chains + 1));
+                                                                (lswitch->n_port_chains + 1));
     memcpy(new_port_chain, lswitch->port_chains, sizeof *new_port_chain * lswitch->n_port_chains);
     new_port_chain[lswitch->n_port_chains] = CONST_CAST(struct nbrec_logical_port_chain *, lport_chain);
     nbrec_logical_switch_set_port_chains(lswitch, new_port_chain, lswitch->n_port_chains + 1);
@@ -862,13 +862,13 @@ nbctl_lport_chain_add(struct ctl_context *ctx)
 static void
 remove_lport_chain(const struct nbrec_logical_switch *lswitch, size_t idx)
 {
-  const struct nbrec_logical_port_chain *lport_chain = lswitch->port_chains[idx];
+    const struct nbrec_logical_port_chain *lport_chain = lswitch->port_chains[idx];
 
     /* First remove 'lport-chain' from the array of port-chains.  This is what will
      * actually cause the logical port-chain to be deleted when the transaction is
      * sent to the database server (due to garbage collection). */
     struct nbrec_logical_port_chain **new_port_chain
-      = xmemdup(lswitch->port_chains, sizeof *new_port_chain * lswitch->n_port_chains);
+        = xmemdup(lswitch->port_chains, sizeof *new_port_chain * lswitch->n_port_chains);
     new_port_chain[idx] = new_port_chain[lswitch->n_port_chains - 1];
     nbrec_logical_switch_verify_port_chains(lswitch);
     nbrec_logical_switch_set_port_chains(lswitch, new_port_chain, lswitch->n_port_chains - 1);
@@ -881,13 +881,13 @@ remove_lport_chain(const struct nbrec_logical_switch *lswitch, size_t idx)
 }
 
 static void
-nbctl_lport_chain_del(struct ctl_context *ctx) 
+nbctl_lport_chain_del(struct ctl_context *ctx)
 {
- const struct nbrec_logical_port_chain *lport_chain;
+    const struct nbrec_logical_port_chain *lport_chain;
 
     lport_chain = lport_chain_by_name_or_uuid(ctx, ctx->argv[1]);
     if (!lport_chain) {
-      ctl_fatal("Cannot find lport_chain: %s\n", ctx->argv[1]);
+        ctl_fatal("Cannot find lport_chain: %s\n", ctx->argv[1]);
     }
 
     /* Find the lswitch that contains 'port-chain', then delete it. */
@@ -895,11 +895,11 @@ nbctl_lport_chain_del(struct ctl_context *ctx)
     NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->idl) {
         for (size_t i = 0; i < lswitch->n_port_chains; i++) {
             if (lswitch->port_chains[i] == lport_chain) {
-	      remove_lport_chain(lswitch,i);
-	      printf("Deleted lport-chain: %s\n", ctx->argv[1]);
-              return;
-	    }
-	}
+                remove_lport_chain(lswitch,i);
+                printf("Deleted lport-chain: %s\n", ctx->argv[1]);
+                return;
+            }
+        }
     }
 }
 static const struct nbrec_logical_switch_port *
@@ -960,28 +960,28 @@ nbctl_lport_chain_list(struct ctl_context *ctx)
 
 static void
 print_lport_chain(const struct nbrec_logical_port_chain *lport_chain,
-		  struct ctl_context *ctx)
+                  struct ctl_context *ctx)
 {
-  const char *port_not_set="Not Set";
+    const char *port_not_set="Not Set";
     ds_put_format(&ctx->output, "    lport-chain "UUID_FMT" (%s)\n",
                   UUID_ARGS(&lport_chain->header_.uuid), lport_chain->name);
     for (size_t i = 0; i < lport_chain->n_port_pair_groups; i++) {
-        const struct nbrec_logical_port_pair_group *lport_pair_group 
-	  = lport_chain->port_pair_groups[i];
+        const struct nbrec_logical_port_pair_group *lport_pair_group
+            = lport_chain->port_pair_groups[i];
         ds_put_format(&ctx->output, "        lport-pair-group %s\n", lport_pair_group->name);
-	for (size_t j = 0; j < lport_pair_group->n_port_pairs; j++){
-	  const struct nbrec_logical_switch_port *linport;
-	  const struct nbrec_logical_switch_port *loutport;
-	  const struct nbrec_logical_port_pair *lport_pair 
-	    = lport_pair_group->port_pairs[j];
-	  ds_put_format(&ctx->output, "             lport-pair %s\n", lport_pair->name);
-      	  linport = lport_pair->inport;
-	  ds_put_format(&ctx->output, "                 lport-pair inport "UUID_FMT" (%s)\n",
-                  UUID_ARGS(&linport->header_.uuid), linport->name);
-	  loutport = lport_pair->outport;
-	  ds_put_format(&ctx->output, "                 lport-pair outport "UUID_FMT" (%s)\n",
-                  UUID_ARGS(&loutport->header_.uuid), loutport->name);
-	}
+        for (size_t j = 0; j < lport_pair_group->n_port_pairs; j++){
+            const struct nbrec_logical_switch_port *linport;
+            const struct nbrec_logical_switch_port *loutport;
+            const struct nbrec_logical_port_pair *lport_pair
+                = lport_pair_group->port_pairs[j];
+            ds_put_format(&ctx->output, "             lport-pair %s\n", lport_pair->name);
+            linport = lport_pair->inport;
+            ds_put_format(&ctx->output, "                 lport-pair inport "UUID_FMT" (%s)\n",
+                          UUID_ARGS(&linport->header_.uuid), linport->name);
+            loutport = lport_pair->outport;
+            ds_put_format(&ctx->output, "                 lport-pair outport "UUID_FMT" (%s)\n",
+                          UUID_ARGS(&loutport->header_.uuid), loutport->name);
+        }
     }
     printf("finished port pairs\n");
 
@@ -989,14 +989,14 @@ print_lport_chain(const struct nbrec_logical_port_chain *lport_chain,
     printf("Getting flow classifier: %s\n", lflow_classifier->name);
     ds_put_format(&ctx->output, "        lflow_classifier %s\n", lflow_classifier->name);
     if (lflow_classifier->logical_source_port == NULL){
-      ds_put_format(&ctx->output, "          logical-source-port %s\n", port_not_set);
+        ds_put_format(&ctx->output, "          logical-source-port %s\n", port_not_set);
     } else {
-      ds_put_format(&ctx->output, "          logical-source-port %s\n", lflow_classifier->logical_source_port->name);
+        ds_put_format(&ctx->output, "          logical-source-port %s\n", lflow_classifier->logical_source_port->name);
     }
     if (lflow_classifier->logical_destination_port == NULL){
-      ds_put_format(&ctx->output, "          logical-destination-port %s\n", port_not_set);
+        ds_put_format(&ctx->output, "          logical-destination-port %s\n", port_not_set);
     } else {
-      ds_put_format(&ctx->output, "          logical-destination-port %s\n", lflow_classifier->logical_destination_port->name);
+        ds_put_format(&ctx->output, "          logical-destination-port %s\n", lflow_classifier->logical_destination_port->name);
     }
     ds_put_format(&ctx->output, "          ethertype: %s\n", lflow_classifier->ethertype);
     ds_put_format(&ctx->output, "          protocol: %s\n", lflow_classifier->protocol);
@@ -1015,20 +1015,20 @@ nbctl_lport_chain_show(struct ctl_context *ctx)
     const struct nbrec_logical_port_chain *lport_chain;
     printf("\nIn lport-chain-show\n");
     if (ctx->argc < 2) {
-	/* ensure all arguments are present */
-      ctl_fatal("Invalid number of arguments: (%d), to lport-chain-show.",ctx->argc);
+        /* ensure all arguments are present */
+        ctl_fatal("Invalid number of arguments: (%d), to lport-chain-show.",ctx->argc);
     }
     lswitch = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
     ds_put_format(&ctx->output, " lswitch "UUID_FMT" (%s)\n",
                   UUID_ARGS(&lswitch->header_.uuid), lswitch->name);
     if (ctx->argc == 3) {
-      lport_chain = lport_chain_by_name_or_uuid(ctx, ctx->argv[2]);
+        lport_chain = lport_chain_by_name_or_uuid(ctx, ctx->argv[2]);
         if (lport_chain) {
-	  print_lport_chain(lport_chain, ctx);
+            print_lport_chain(lport_chain, ctx);
         }
     } else {
         NBREC_LOGICAL_PORT_CHAIN_FOR_EACH(lport_chain, ctx->idl) {
-	  print_lport_chain(lport_chain, ctx);
+            print_lport_chain(lport_chain, ctx);
         }
     }
 }
@@ -1037,24 +1037,24 @@ nbctl_lport_chain_show(struct ctl_context *ctx)
 static void
 nbctl_lport_chain_set_flow_classifier(struct ctl_context *ctx)
 {
-    
+
     const struct nbrec_logical_port_chain *lport_chain;
     const struct nbrec_logical_flow_classifier *lflow_classifier = NULL;
 
     if (ctx->argc < 3){
-      /* ensure all arguments are present */
-      ctl_fatal("Invalid number of arguments: (%d), to lport-chain-set-flow-classifier.",ctx->argc);
+        /* ensure all arguments are present */
+        ctl_fatal("Invalid number of arguments: (%d), to lport-chain-set-flow-classifier.",ctx->argc);
     }
-   
+
     lport_chain = lport_chain_by_name_or_uuid(ctx, ctx->argv[1]);
     if (!lport_chain){
-	ctl_fatal("Invalid port_chain %s ", ctx->argv[1]);
-      }
+        ctl_fatal("Invalid port_chain %s ", ctx->argv[1]);
+    }
     /* Check flow classifier exists*/
-      lflow_classifier = lflow_classifier_by_name_or_uuid(ctx, ctx->argv[2]);
-      if (!lflow_classifier){
-	ctl_fatal("Invalid flow_classifier %s ", ctx->argv[2]);
-      }
+    lflow_classifier = lflow_classifier_by_name_or_uuid(ctx, ctx->argv[2]);
+    if (!lflow_classifier){
+        ctl_fatal("Invalid flow_classifier %s ", ctx->argv[2]);
+    }
 
     /* Insert the logical flow-classifier into the logical port-chain. */
     nbrec_logical_port_chain_verify_flow_classifier(lport_chain);
@@ -1092,23 +1092,23 @@ nbctl_lport_pair_group_add(struct ctl_context *ctx)
     }
 
     if (ctx->argc < 2) {
-      /* ensure all arguments are present */
-      ctl_fatal("invalid number of arguments: %d to lport-pair-groups-add.", ctx->argc);
+        /* ensure all arguments are present */
+        ctl_fatal("invalid number of arguments: %d to lport-pair-groups-add.", ctx->argc);
     }
 
     /* create the logical port-pair-group. */
     lport_pair_group = nbrec_logical_port_pair_group_insert(ctx->txn);
     if (ctx->argc == 3){
-       nbrec_logical_port_pair_group_set_name(lport_pair_group, ctx->argv[2]);
+        nbrec_logical_port_pair_group_set_name(lport_pair_group, ctx->argv[2]);
     }
 
     /* Insert the logical port into the logical switch. */
     nbrec_logical_port_chain_verify_port_pair_groups(lport_chain);
     struct nbrec_logical_port_pair_group  **new_port_pair_group = xmalloc(sizeof *new_port_pair_group *
-                                                    (lport_chain->n_port_pair_groups + 1));
+                                                                          (lport_chain->n_port_pair_groups + 1));
     memcpy(new_port_pair_group, lport_chain->port_pair_groups, sizeof *new_port_pair_group * lport_chain->n_port_pair_groups);
-    new_port_pair_group[lport_chain->n_port_pair_groups] = 
-      CONST_CAST(struct nbrec_logical_port_pair_group *,lport_pair_group);
+    new_port_pair_group[lport_chain->n_port_pair_groups] =
+        CONST_CAST(struct nbrec_logical_port_pair_group *,lport_pair_group);
     nbrec_logical_port_chain_set_port_pair_groups(lport_chain, new_port_pair_group, lport_chain->n_port_pair_groups + 1);
     free(new_port_pair_group);
 }
@@ -1116,13 +1116,13 @@ nbctl_lport_pair_group_add(struct ctl_context *ctx)
 static void
 remove_lport_pair_group(const struct nbrec_logical_port_chain *lport_chain, size_t idx)
 {
-  const struct nbrec_logical_port_pair_group *lport_pair_group = lport_chain->port_pair_groups[idx];
+    const struct nbrec_logical_port_pair_group *lport_pair_group = lport_chain->port_pair_groups[idx];
 
     /* First remove 'lport-pair-group' from the array of port-pair-groups.  This is what will
      * actually cause the logical port-pair-group to be deleted when the transaction is
      * sent to the database server (due to garbage collection). */
     struct nbrec_logical_port_pair_group **new_port_pair_group
-      = xmemdup(lport_chain->port_pair_groups, sizeof *new_port_pair_group * lport_chain->n_port_pair_groups);
+        = xmemdup(lport_chain->port_pair_groups, sizeof *new_port_pair_group * lport_chain->n_port_pair_groups);
     new_port_pair_group[idx] = new_port_pair_group[lport_chain->n_port_pair_groups - 1];
     nbrec_logical_port_chain_verify_port_pair_groups(lport_chain);
     nbrec_logical_port_chain_set_port_pair_groups(lport_chain, new_port_pair_group, lport_chain->n_port_pair_groups - 1);
@@ -1137,11 +1137,11 @@ remove_lport_pair_group(const struct nbrec_logical_port_chain *lport_chain, size
 static void
 nbctl_lport_pair_group_del(struct ctl_context *ctx)
 {
- const struct nbrec_logical_port_pair_group *lport_pair_group;
+    const struct nbrec_logical_port_pair_group *lport_pair_group;
 
     lport_pair_group = lport_pair_group_by_name_or_uuid(ctx, ctx->argv[1]);
     if (!lport_pair_group) {
-      ctl_fatal("Cannot find lport_pair_group: %s\n", ctx->argv[1]);
+        ctl_fatal("Cannot find lport_pair_group: %s\n", ctx->argv[1]);
     }
 
     /* Find the port-chain that contains 'port-pair-group', then delete it. */
@@ -1149,9 +1149,9 @@ nbctl_lport_pair_group_del(struct ctl_context *ctx)
     NBREC_LOGICAL_PORT_CHAIN_FOR_EACH (lport_chain, ctx->idl) {
         for (size_t i = 0; i < lport_chain->n_port_pair_groups; i++) {
             if (lport_chain->port_pair_groups[i] == lport_pair_group) {
-	      remove_lport_pair_group(lport_chain,i);
-	      printf("Deleted lport-pair-group: %s\n", ctx->argv[1]);
-              return;
+                remove_lport_pair_group(lport_chain,i);
+                printf("Deleted lport-pair-group: %s\n", ctx->argv[1]);
+                return;
             }
         }
     }
@@ -1193,24 +1193,24 @@ nbctl_lport_pair_group_add_port_pair(struct ctl_context *ctx)
     const struct nbrec_logical_port_pair_group *lport_pair_group;
     const struct nbrec_logical_port_pair *lport_pair;
     const char *lport_pair_name;
-    
+
     lport_pair_group = lport_pair_group_by_name_or_uuid(ctx, ctx->argv[1]);
 
     if (ctx->argc < 3) {
-      /* ensure all arguments are present */
-      ctl_fatal("Invalid number of arguments: (%d), to lport-pair-group-add-port-pair.",ctx->argc);
+        /* ensure all arguments are present */
+        ctl_fatal("Invalid number of arguments: (%d), to lport-pair-group-add-port-pair.",ctx->argc);
     }
     /* Check that port-pair exists  */
     lport_pair_name = ctx->argv[2];
     lport_pair = lport_pair_by_name_or_uuid(ctx, lport_pair_name);
     if (!lport_pair){
-      ctl_fatal("%s: an lport-pair with this name does not exist",lport_pair_name);
+        ctl_fatal("%s: an lport-pair with this name does not exist",lport_pair_name);
     }
 
     /* Insert the logical port-pair into the logical port-pair-group. */
     nbrec_logical_port_pair_group_verify_port_pairs(lport_pair_group);
     struct nbrec_logical_port_pair  **new_port_pair = xmalloc(sizeof *new_port_pair *
-                                                    (lport_pair_group->n_port_pairs + 1));
+                                                              (lport_pair_group->n_port_pairs + 1));
     memcpy(new_port_pair, lport_pair_group->port_pairs, sizeof *new_port_pair * lport_pair_group->n_port_pairs);
     new_port_pair[lport_pair_group->n_port_pairs] = CONST_CAST(struct nbrec_logical_port_pair *, lport_pair);
     nbrec_logical_port_pair_group_set_port_pairs(lport_pair_group, new_port_pair, lport_pair_group->n_port_pairs + 1);
@@ -1221,13 +1221,13 @@ nbctl_lport_pair_group_add_port_pair(struct ctl_context *ctx)
 static void
 remove_lport_pair_from_port_pair_group(const struct nbrec_logical_port_pair_group *lport_pair_group, size_t idx)
 {
-  //TODO Check const struct nbrec_logical_port_pair *lport_pair = lport_pair_group->port_pairs[idx];
+    //TODO Check const struct nbrec_logical_port_pair *lport_pair = lport_pair_group->port_pairs[idx];
 
     /* First remove 'lport-pair' from the array of port-pairs.  This is what will
      * actually cause the logical port-pair to be deleted when the transaction is
      * sent to the database server (due to garbage collection). */
     struct nbrec_logical_port_pair **new_port_pair
-      = xmemdup(lport_pair_group->port_pairs, sizeof *new_port_pair * lport_pair_group->n_port_pairs);
+        = xmemdup(lport_pair_group->port_pairs, sizeof *new_port_pair * lport_pair_group->n_port_pairs);
     new_port_pair[idx] = new_port_pair[lport_pair_group->n_port_pairs - 1];
     nbrec_logical_port_pair_group_verify_port_pairs(lport_pair_group);
     nbrec_logical_port_pair_group_set_port_pairs(lport_pair_group, new_port_pair, lport_pair_group->n_port_pairs - 1);
@@ -1240,11 +1240,11 @@ remove_lport_pair_from_port_pair_group(const struct nbrec_logical_port_pair_grou
 static void
 nbctl_lport_pair_group_del_port_pair(struct ctl_context *ctx)
 {
- const struct nbrec_logical_port_pair *lport_pair;
+    const struct nbrec_logical_port_pair *lport_pair;
 
     lport_pair = lport_pair_by_name_or_uuid(ctx, ctx->argv[1]);
     if (!lport_pair) {
-      ctl_fatal("Cannot find lport_pair: %s\n", ctx->argv[1]);
+        ctl_fatal("Cannot find lport_pair: %s\n", ctx->argv[1]);
     }
 
     /* Find the port-pair_group that contains 'port-pair', then delete it. */
@@ -1252,9 +1252,9 @@ nbctl_lport_pair_group_del_port_pair(struct ctl_context *ctx)
     NBREC_LOGICAL_PORT_PAIR_GROUP_FOR_EACH (lport_pair_group, ctx->idl) {
         for (size_t i = 0; i < lport_pair_group->n_port_pairs; i++) {
             if (lport_pair_group->port_pairs[i] == lport_pair) {
-	      remove_lport_pair_from_port_pair_group(lport_pair_group,i);
-	      printf("Deleted lport-pair: %s from lport-group-pair \n", ctx->argv[1]);
-              return;
+                remove_lport_pair_from_port_pair_group(lport_pair_group,i);
+                printf("Deleted lport-pair: %s from lport-group-pair \n", ctx->argv[1]);
+                return;
             }
         }
     }
@@ -1269,8 +1269,8 @@ nbctl_lport_pair_group_del_port_pair(struct ctl_context *ctx)
 static void
 nbctl_lport_pair_add(struct ctl_context *ctx)
 {
-  const char *port_id_in = ctx->argv[2];
-  const char *port_id_out = ctx->argv[3];
+    const char *port_id_in = ctx->argv[2];
+    const char *port_id_out = ctx->argv[3];
 
     const struct nbrec_logical_switch *lswitch;
     const struct nbrec_logical_port_pair *lport_pair;
@@ -1279,17 +1279,17 @@ nbctl_lport_pair_add(struct ctl_context *ctx)
     lswitch = ls_by_name_or_uuid(ctx, ctx->argv[1], true);
 
     if (ctx->argc < 4) {
-      /* ensure all arguments are present */
-      ctl_fatal("Invalid number of arguments: (%d), to lport-pair-add.",ctx->argc);
+        /* ensure all arguments are present */
+        ctl_fatal("Invalid number of arguments: (%d), to lport-pair-add.",ctx->argc);
     }
     /* Check that ports exist in this switch */
     lport_in = lsp_by_name_or_uuid(ctx, port_id_in, false);
     if (!lport_in){
-      ctl_fatal("%s: an lport with this name does not exist",ctx->argv[2]);
+        ctl_fatal("%s: an lport with this name does not exist",ctx->argv[2]);
     }
     lport_out = lsp_by_name_or_uuid(ctx, port_id_out, false);
     if (!lport_out){
-      ctl_fatal("%s: an lport with this name does not exist",ctx->argv[3]);
+        ctl_fatal("%s: an lport with this name does not exist",ctx->argv[3]);
     }
 
     /* create the logical port-pair. */
@@ -1297,13 +1297,13 @@ nbctl_lport_pair_add(struct ctl_context *ctx)
     nbrec_logical_port_pair_set_inport(lport_pair, lport_in);
     nbrec_logical_port_pair_set_outport(lport_pair, lport_out);
     if (ctx->argc == 5){
-       nbrec_logical_port_pair_set_name(lport_pair, ctx->argv[4]);
+        nbrec_logical_port_pair_set_name(lport_pair, ctx->argv[4]);
     }
 
     /* Insert the logical port-pair into the logical port-pair-group. */
     nbrec_logical_switch_verify_port_pairs(lswitch);
     struct nbrec_logical_port_pair  **new_port_pair = xmalloc(sizeof *new_port_pair *
-                                                    (lswitch->n_port_pairs + 1));
+                                                              (lswitch->n_port_pairs + 1));
     memcpy(new_port_pair, lswitch->port_pairs, sizeof *new_port_pair * lswitch->n_port_pairs);
     new_port_pair[lswitch->n_port_pairs] = CONST_CAST(struct nbrec_logical_port_pair *, lport_pair);
     nbrec_logical_switch_set_port_pairs(lswitch, new_port_pair, lswitch->n_port_pairs + 1);
@@ -1313,13 +1313,13 @@ nbctl_lport_pair_add(struct ctl_context *ctx)
 static void
 remove_lport_pair(const struct nbrec_logical_switch *lswitch, size_t idx)
 {
-  const struct nbrec_logical_port_pair *lport_pair = lswitch->port_pairs[idx];
+    const struct nbrec_logical_port_pair *lport_pair = lswitch->port_pairs[idx];
 
     /* First remove 'lport-pair' from the array of port-pairs.  This is what will
      * actually cause the logical port-pair to be deleted when the transaction is
      * sent to the database server (due to garbage collection). */
     struct nbrec_logical_port_pair **new_port_pair
-      = xmemdup(lswitch->port_pairs, sizeof *new_port_pair * lswitch->n_port_pairs);
+        = xmemdup(lswitch->port_pairs, sizeof *new_port_pair * lswitch->n_port_pairs);
     new_port_pair[idx] = new_port_pair[lswitch->n_port_pairs - 1];
     nbrec_logical_switch_verify_port_pairs(lswitch);
     nbrec_logical_switch_set_port_pairs(lswitch, new_port_pair, lswitch->n_port_pairs - 1);
@@ -1334,11 +1334,11 @@ remove_lport_pair(const struct nbrec_logical_switch *lswitch, size_t idx)
 static void
 nbctl_lport_pair_del(struct ctl_context *ctx)
 {
- const struct nbrec_logical_port_pair *lport_pair;
+    const struct nbrec_logical_port_pair *lport_pair;
 
     lport_pair = lport_pair_by_name_or_uuid(ctx, ctx->argv[1]);
     if (!lport_pair) {
-      ctl_fatal("Cannot find lport_pair: %s\n", ctx->argv[1]);
+        ctl_fatal("Cannot find lport_pair: %s\n", ctx->argv[1]);
     }
 
     /* Find the port-pair_group that contains 'port-pair', then delete it. */
@@ -1346,9 +1346,9 @@ nbctl_lport_pair_del(struct ctl_context *ctx)
     NBREC_LOGICAL_SWITCH_FOR_EACH (lswitch, ctx->idl) {
         for (size_t i = 0; i < lswitch->n_port_pairs; i++) {
             if (lswitch->port_pairs[i] == lport_pair) {
-	      remove_lport_pair(lswitch,i);
-	      printf("Deleted lport-pair: %s\n", ctx->argv[1]);
-              return;
+                remove_lport_pair(lswitch,i);
+                printf("Deleted lport-pair: %s\n", ctx->argv[1]);
+                return;
             }
         }
     }
@@ -1390,31 +1390,31 @@ nbctl_lport_pair_list(struct ctl_context *ctx)
 static void
 nbctl_lflow_classifier_add(struct ctl_context *ctx)
 {
-    const struct nbrec_logical_port_chain *lport_chain; 
+    const struct nbrec_logical_port_chain *lport_chain;
     const struct nbrec_logical_switch_port *lport;
     const char *lport_name;
     const struct nbrec_logical_flow_classifier *lflow_classifier;
-   
+
 
     if (ctx->argc < 3) {
-      /* ensure all arguments are present */
-      ctl_fatal("Invalid number of arguments: (%d), to lflow_classifier-add",ctx->argc);
+        /* ensure all arguments are present */
+        ctl_fatal("Invalid number of arguments: (%d), to lflow_classifier-add",ctx->argc);
     }
     lport_chain = lport_chain_by_name_or_uuid(ctx, ctx->argv[1]);
     /* Check that logical source port exist in this switch */
     lport_name = ctx->argv[2];
     lport = lsp_by_name_or_uuid(ctx, lport_name, false);
     if (!lport){
-      ctl_fatal("%s: a lport with this name does not exist",lport_name);
+        ctl_fatal("%s: a lport with this name does not exist",lport_name);
     }
 
     /* create the logical flow_classifier. */
     lflow_classifier = nbrec_logical_flow_classifier_insert(ctx->txn);
     nbrec_logical_flow_classifier_set_logical_source_port(lflow_classifier, lport);
     if (ctx->argc == 4){
-       nbrec_logical_flow_classifier_set_name(lflow_classifier, ctx->argv[3]);
+        nbrec_logical_flow_classifier_set_name(lflow_classifier, ctx->argv[3]);
     }
- 
+
     /* Insert the logical flow_classifier into the logical switch. */
     nbrec_logical_port_chain_verify_flow_classifier(lport_chain);
     //struct nbrec_logical_flow_classifier  **new_flow_classifier = xmalloc(sizeof *new_flow_classifier);
@@ -1426,21 +1426,21 @@ nbctl_lflow_classifier_add(struct ctl_context *ctx)
 static void
 nbctl_lflow_classifier_del(struct ctl_context *ctx)
 {
- const struct nbrec_logical_flow_classifier *lflow_classifier;
+    const struct nbrec_logical_flow_classifier *lflow_classifier;
 
     lflow_classifier = lflow_classifier_by_name_or_uuid(ctx, ctx->argv[1]);
     if (!lflow_classifier) {
-      printf("Cannot find lflow_classifier: %s\n", ctx->argv[1]);
-      return;
+        printf("Cannot find lflow_classifier: %s\n", ctx->argv[1]);
+        return;
     }
 
     /* Find the switch that contains 'flow-classifier', then delete it. */
     const struct nbrec_logical_port_chain *lport_chain;
     NBREC_LOGICAL_PORT_CHAIN_FOR_EACH (lport_chain, ctx->idl) {
-            if (lport_chain->flow_classifier == lflow_classifier) {
-	      nbrec_logical_flow_classifier_delete(lflow_classifier);
-	      printf("Deleted lflow-classifier: %s\n", ctx->argv[1]);
-              return;
+        if (lport_chain->flow_classifier == lflow_classifier) {
+            nbrec_logical_flow_classifier_delete(lflow_classifier);
+            printf("Deleted lflow-classifier: %s\n", ctx->argv[1]);
+            return;
         }
     }
     ctl_fatal("logical flow-classifier %s is not part of any logical switch",
@@ -1452,7 +1452,7 @@ nbctl_lflow_classifier_list(struct ctl_context *ctx)
 {
     const char *id = ctx->argv[1];
     const struct nbrec_logical_port_chain *lport_chain;
-   
+
 
     lport_chain = lport_chain_by_name_or_uuid(ctx, id);
     if (!lport_chain) {
@@ -1464,8 +1464,8 @@ nbctl_lflow_classifier_list(struct ctl_context *ctx)
     ds_put_format(&ctx->output, "          logical-source-port %s\n", lflow_classifier->logical_source_port->name);
     ds_put_format(&ctx->output, "          ethertype: %s\n", lflow_classifier->ethertype);
     ds_put_format(&ctx->output, "          protocol: %s\n", lflow_classifier->protocol);
-    
-  
+
+
 }
 
 static void
@@ -1480,10 +1480,10 @@ nbctl_lflow_classifier_set_logical_destination_port(struct ctl_context *ctx)
 
     /* Check port exists if given*/
     if (!strcmp(ctx->argv[2],"") ){
-      lport = lsp_by_name_or_uuid(ctx, ctx->argv[2], true);
-      if (!lport){
-	ctl_fatal("Invalid port %s ", ctx->argv[2]);
-      }
+        lport = lsp_by_name_or_uuid(ctx, ctx->argv[2], true);
+        if (!lport){
+            ctl_fatal("Invalid port %s ", ctx->argv[2]);
+        }
     }
     nbrec_logical_flow_classifier_set_logical_destination_port(lflow_classifier,lport);
 }
@@ -3238,20 +3238,20 @@ static const struct ctl_command_syntax nbctl_commands[] = {
       NULL, "--if-exists", RW },
     { "lport-chain-list", 1, 1, "LSWITCH", NULL, nbctl_lport_chain_list, NULL, "", RO },
     { "lport-chain-show", 1, 2, "LSWITCH [LPORT-CHAIN]", NULL, nbctl_lport_chain_show, NULL, "", RO },
-    { "lport-chain-get-flow-classifier", 1, 1, "LPORT-CHAIN", NULL, 
+    { "lport-chain-get-flow-classifier", 1, 1, "LPORT-CHAIN", NULL,
       nbctl_lport_chain_get_flow_classifier, NULL, "", RO },
-    { "lport-chain-set-flow-classifier", 2, 2, "LPORT-CHAIN LFLOW-CLASSIFIER", NULL, 
+    { "lport-chain-set-flow-classifier", 2, 2, "LPORT-CHAIN LFLOW-CLASSIFIER", NULL,
       nbctl_lport_chain_set_flow_classifier, NULL, "", RW },
 
     /* lport-pair-group commands. */
-    { "lport-pair-group-add", 1, 2, "LPORT-CHAIN [LPORT-PAIR-GROUP]", 
+    { "lport-pair-group-add", 1, 2, "LPORT-CHAIN [LPORT-PAIR-GROUP]",
       NULL, nbctl_lport_pair_group_add, NULL, "", RW },
     { "lport-pair-group-del", 2, 2, "LPORT-CHAIN, LPORT-PAIR-GROUP", NULL, nbctl_lport_pair_group_del,
       NULL, "", RW },
     { "lport-pair-group-list", 1, 1, "LPORT_CHAIN", NULL, nbctl_lport_pair_group_list, NULL, "", RO },
-    { "lport-pair-group-add-port-pair", 2, 2, "LPORT-PAIR-GROUP LPORT-PAIR", 
+    { "lport-pair-group-add-port-pair", 2, 2, "LPORT-PAIR-GROUP LPORT-PAIR",
       NULL, nbctl_lport_pair_group_add_port_pair, NULL, "", RW },
-    { "lport-pair-group-del-port-pair", 2, 2, "LPORT-PAIR-GROUP LPORT-PAIR", 
+    { "lport-pair-group-del-port-pair", 2, 2, "LPORT-PAIR-GROUP LPORT-PAIR",
       NULL, nbctl_lport_pair_group_del_port_pair, NULL, "", RW },
 
     /* lport-pair commands. */
@@ -3261,16 +3261,16 @@ static const struct ctl_command_syntax nbctl_commands[] = {
       NULL, "", RW },
     { "lport-pair-list", 1, 1, "LSWITCH", NULL, nbctl_lport_pair_list, NULL, "", RO },
 
-   /* lflow-classifier commands. */
-    { "lflow-classifier-add", 2, 3, "LPORT-CHAIN LSOURCE_PORT [LFLOW-CLASSIFIER-NAME]", NULL, 
+    /* lflow-classifier commands. */
+    { "lflow-classifier-add", 2, 3, "LPORT-CHAIN LSOURCE_PORT [LFLOW-CLASSIFIER-NAME]", NULL,
       nbctl_lflow_classifier_add, NULL, "", RW },
-    { "lflow-classifier-del", 1, 1, "LFLOW-CLASSIFIER", NULL, 
+    { "lflow-classifier-del", 1, 1, "LFLOW-CLASSIFIER", NULL,
       nbctl_lflow_classifier_del, NULL, "", RW },
     { "lflow-classifier-list", 1, 1, "LPORT-CHAIN", NULL, nbctl_lflow_classifier_list,
       NULL, "", RO },
-    { "lflow-classifier-get-logical-destination-port", 1, 1, "LFLOW-CLASSIFIER", NULL, 
+    { "lflow-classifier-get-logical-destination-port", 1, 1, "LFLOW-CLASSIFIER", NULL,
       nbctl_lflow_classifier_get_logical_destination_port, NULL, "", RO },
-    { "lflow-classifier-set-logical-destination-port", 2, 2, "LFLOW-CLASSIFIER [LDESTINATION_PORT", NULL, 
+    { "lflow-classifier-set-logical-destination-port", 2, 2, "LFLOW-CLASSIFIER [LDESTINATION_PORT", NULL,
       nbctl_lflow_classifier_set_logical_destination_port, NULL, "", RO },
     /* TODO ADD OTHER FLOW-CLASSIFIER PARAMETERS */
 

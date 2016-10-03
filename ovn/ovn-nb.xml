@@ -89,6 +89,7 @@
       one and only one <code>localnet</code> port, which has only one special
       address <code>unknown</code>.
     </p>
+
     <column name="name">
       <p>
         A name for the logical switch.  This name has no special meaning or purpose
@@ -97,6 +98,7 @@
         logical switch's UUID should be used as the unique identifier.
       </p>
     </column>
+
     <column name="ports">
       <p>
         The logical ports connected to the logical switch.
@@ -126,7 +128,7 @@
         Logical chains cannot currently cross logical switch boundaries.
       </p>
     </column>
-  
+
     <column name="load_balancer">
       Load balance a virtual ipv4 address to a set of logical port endpoint
       ipv4 addresses.
@@ -203,7 +205,7 @@
      An ordered port pair list
    </p>
    <column name="name">
-     <p> 
+     <p>
        Logical port pair group name
      </p>
    </column>
@@ -223,7 +225,7 @@
      Ports pairs defining the service
    </p>
    <column name="name">
-     <p> 
+     <p>
        Logical port pair
      </p>
    </column>
@@ -249,7 +251,7 @@
      Flow classifier defining traffic steering rules
    </p>
    <column name="name">
-     <p> 
+     <p>
        Logical flow classifier
      </p>
    </column>
@@ -292,17 +294,17 @@
      <p>
        destination ip prefix
      </p>
-   </column> 
+   </column>
    <column name="protocol">
      <p>
        protocol
      </p>
-   </column> 
+   </column>
    <column name="ethertype">
      <p>
        ethertype
      </p>
-   </column> 
+   </column>
    <group title="Common Columns">
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.
