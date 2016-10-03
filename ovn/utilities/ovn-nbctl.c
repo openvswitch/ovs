@@ -1809,13 +1809,13 @@ nbctl_lrp_add(struct ctl_context *ctx)
         struct sset orig_networks = SSET_INITIALIZER(&orig_networks);
         sset_add_array(&orig_networks, lrp->networks, lrp->n_networks);
 
-        if (!sset_equals(&orig_networks, &new_networks)) {
+        bool same_networks = sset_equals(&orig_networks, &new_networks);
+        sset_destroy(&orig_networks);
+        sset_destroy(&new_networks);
+        if (!same_networks) {
             ctl_fatal("%s: port already exists with different network",
                       lrp_name);
         }
-
-        sset_destroy(&orig_networks);
-        sset_destroy(&new_networks);
 
         /* Special-case sanity-check of peer ports. */
         const char *peer = NULL;
