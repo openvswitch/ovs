@@ -72,20 +72,20 @@ m4_define([OVSDB_CHECK_MONITOR_COND],
    AT_CAPTURE_FILE([ovsdb-server-log])
    AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/server-pid --remote=punix:socket --unixctl="`pwd`"/unixctl --log-file="`pwd`"/ovsdb-server-log db >/dev/null 2>&1],
             [0], [], [])
-   if test "$IS_WIN32" = "yes"; then
-     AT_CHECK([ovsdb-client -vjsonrpc --pidfile="`pwd`"/client-pid -d json monitor-cond --format=csv unix:socket $4 '[$8]' $5 $9 > output &],
-              [0], [ignore], [ignore], [kill `cat server-pid`])
-     sleep 1
-   else
-     AT_CHECK([ ovsdb-client -vjsonrpc --detach --no-chdir --pidfile="`pwd`"/client-pid -d json monitor-cond --format=csv unix:socket $4 '[$8]' $5 $9 > output],
+   AT_CHECK([ ovsdb-client -vjsonrpc --detach --no-chdir --pidfile="`pwd`"/client-pid -d json monitor-cond --format=csv unix:socket $4 '[$8]' $5 $9 > output],
             [0], [ignore], [ignore], [kill `cat server-pid`])
-   fi
    m4_foreach([txn], [$6],
      [AT_CHECK([ovsdb-client transact unix:socket 'txn'], [0],
                      [ignore], [ignore], [kill `cat server-pid client-pid`])])
-   CLIENT_PID=`cat "$OVS_RUNDIR"/client-pid 2>/dev/null`
-   m4_foreach([cond], [$10],
-     [AT_CHECK([ovs-appctl -t "`pwd`"/ovsdb-client.$CLIENT_PID.ctl ovsdb-client/cond_change $5 'cond'], [0], [ignore], [ignore])])
+   if test "$IS_WIN32" = "yes"; then
+     :
+     m4_foreach([cond], [$10],
+       [AT_CHECK([ovs-appctl -t "`pwd`"/ovsdb-client.ctl ovsdb-client/cond_change $5 'cond'], [0], [ignore], [ignore])])
+   else
+     CLIENT_PID=`cat "$OVS_RUNDIR"/client-pid 2>/dev/null`
+     m4_foreach([cond], [$10],
+       [AT_CHECK([ovs-appctl -t "`pwd`"/ovsdb-client.$CLIENT_PID.ctl ovsdb-client/cond_change $5 'cond'], [0], [ignore], [ignore])])
+   fi
    AT_CHECK([ovsdb-client transact unix:socket '[["$4"]]'], [0],
             [ignore], [ignore], [kill `cat server-pid client-pid`])
    AT_CHECK([ovs-appctl -t "`pwd`"/unixctl -e exit], [0], [ignore], [ignore])
