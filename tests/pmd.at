@@ -516,3 +516,41 @@ p1 3 0 2
 
 OVS_VSWITCHD_STOP(["/dpif_netdev|WARN|There is no PMD thread on core/d"])
 AT_CLEANUP
+
+AT_SETUP([PMD - monitor threads])
+OVS_VSWITCHD_START(
+  [], [], [], [--dummy-numa 0,0])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+dnl The two devices are connected together externally using net.sock
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=1 options:pstream=punix:$OVS_RUNDIR/net.sock])
+AT_CHECK([ovs-vsctl add-port br0 p2 -- set Interface p2 type=dummy-pmd ofport_request=2 options:n_rxq=1 options:stream=unix:$OVS_RUNDIR/net.sock])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 0
+p2 0 0 0
+])
+
+dnl Enable bfd with a very aggressive interval. This will make the monitor very
+dnl busy, and uncover race conditions with the main thread.
+AT_CHECK([ovs-vsctl set Interface p1 bfd:enable=true bfd:min_rx=1 bfd:min_tx=1])
+AT_CHECK([ovs-vsctl set Interface p2 bfd:enable=true bfd:min_rx=1 bfd:min_tx=1])
+
+AT_CHECK([ovs-vsctl --timeout=10 wait-until Interface p1 bfd_status:forwarding=true \
+                              -- wait-until Interface p2 bfd_status:forwarding=true])
+
+dnl Trigger reconfiguration of the datapath
+AT_CHECK([ovs-vsctl set Interface p1 options:n_rxq=2])
+AT_CHECK([ovs-vsctl set Interface p2 options:n_rxq=2])
+
+dnl Make sure that reconfiguration succeded
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 0
+p1 1 0 0
+p2 0 0 0
+p2 1 0 0
+])
+
+dnl During reconfiguration some packets will be dropped. This is expected
+OVS_VSWITCHD_STOP(["/dpif(monitor[[0-9]]\+)|WARN|dummy@ovs-dummy: execute [[0-9]]\+ failed/d"])
+AT_CLEANUP
