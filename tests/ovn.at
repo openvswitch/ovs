@@ -5330,3 +5330,197 @@ OVS_WAIT_UNTIL([test `ovs-vsctl show | grep "Port patch-br-int-to-ln_port" | wc 
 
 OVN_CLEANUP([hv1],[hv2])
 AT_CLEANUP
+
+AT_SETUP([ovn -- nested containers])
+ovn_start
+
+# Physical network:
+# 2 HVs. HV1 has 2 VMs - "VM1" and "bar3". HV2 has 1 VM - "VM2"
+
+# Logical network:
+# 3 Logical switches - "mgmt" (172.16.1.0/24), "foo" (192.168.1.0/24)
+# and "bar" (192.168.2.0/24). They are all connected to router R1.
+
+ovn-nbctl lr-add R1
+ovn-nbctl ls-add mgmt
+ovn-nbctl ls-add foo
+ovn-nbctl ls-add bar
+
+# Connect mgmt to R1
+ovn-nbctl lrp-add R1 mgmt 00:00:00:01:02:02 172.16.1.1/24
+ovn-nbctl lsp-add mgmt rp-mgmt -- set Logical_Switch_Port rp-mgmt type=router \
+          options:router-port=mgmt addresses=\"00:00:00:01:02:02\"
+
+# Connect foo to R1
+ovn-nbctl lrp-add R1 foo 00:00:00:01:02:03 192.168.1.1/24
+ovn-nbctl lsp-add foo rp-foo -- set Logical_Switch_Port rp-foo type=router \
+          options:router-port=foo addresses=\"00:00:00:01:02:03\"
+
+# Connect bar to R1
+ovn-nbctl lrp-add R1 bar 00:00:00:01:02:04 192.168.2.1/24
+ovn-nbctl lsp-add bar rp-bar -- set Logical_Switch_Port rp-bar type=router \
+          options:router-port=bar addresses=\"00:00:00:01:02:04\"
+
+# "mgmt" has VM1 and VM2 connected
+ovn-nbctl lsp-add mgmt vm1 \
+-- lsp-set-addresses vm1 "f0:00:00:01:02:03 172.16.1.2"
+
+ovn-nbctl lsp-add mgmt vm2 \
+-- lsp-set-addresses vm2 "f0:00:00:01:02:04 172.16.1.3"
+
+# "foo1" and "foo2" are containers belonging to switch "foo"
+# "foo1" has "VM1" as parent_port and "foo2" has "VM2" as parent_port.
+ovn-nbctl lsp-add foo foo1 vm1 1 \
+-- lsp-set-addresses foo1 "f0:00:00:01:02:05 192.168.1.2"
+
+ovn-nbctl lsp-add foo foo2 vm2 2 \
+-- lsp-set-addresses foo2 "f0:00:00:01:02:06 192.168.1.3"
+
+# "bar1" and "bar2" are containers belonging to switch "bar"
+# "bar1" has "VM1" as parent_port and "bar2" has "VM2" as parent_port.
+ovn-nbctl lsp-add bar bar1 vm1 2 \
+-- lsp-set-addresses bar1 "f0:00:00:01:02:07 192.168.2.2"
+
+ovn-nbctl lsp-add bar bar2 vm2 1 \
+-- lsp-set-addresses bar2 "f0:00:00:01:02:08 192.168.2.3"
+
+# bar3 is a standalone VM belonging to switch "bar"
+ovn-nbctl lsp-add bar bar3 \
+-- lsp-set-addresses bar3 "f0:00:00:01:02:09 192.168.2.4"
+
+# Create two hypervisor and create OVS ports corresponding to logical ports.
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int vm1 -- \
+    set interface vm1 external-ids:iface-id=vm1 \
+    options:tx_pcap=hv1/vm1-tx.pcap \
+    options:rxq_pcap=hv1/vm1-rx.pcap \
+    ofport-request=1
+
+ovs-vsctl -- add-port br-int bar3 -- \
+    set interface bar3 external-ids:iface-id=bar3 \
+    options:tx_pcap=hv1/bar3-tx.pcap \
+    options:rxq_pcap=hv1/bar3-rx.pcap \
+    ofport-request=2
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+ovs-vsctl -- add-port br-int vm2 -- \
+    set interface vm2 external-ids:iface-id=vm2 \
+    options:tx_pcap=hv2/vm2-tx.pcap \
+    options:rxq_pcap=hv2/vm2-rx.pcap \
+    ofport-request=1
+
+# Pre-populate the hypervisors' ARP tables so that we don't lose any
+# packets for ARP resolution (native tunneling doesn't queue packets
+# for ARP resolution).
+ovn_populate_arp
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+# Send ip packets between foo1 and foo2 (same switch, different HVs and
+# different VLAN tags).
+src_mac="f00000010205"
+dst_mac="f00000010206"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 192 168 1 3`
+packet=${dst_mac}${src_mac}8100000108004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+as hv1 ovs-appctl netdev-dummy/receive vm1 $packet
+
+# expected packet at foo2
+packet=${dst_mac}${src_mac}8100000208004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+echo  $packet > expected
+OVN_CHECK_PACKETS([hv2/vm2-tx.pcap], [expected])
+
+# Send ip packets between foo1 and bar2 (different switch, different HV)
+src_mac="f00000010205"
+dst_mac="000000010203"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 192 168 2 3`
+packet=${dst_mac}${src_mac}8100000108004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+as hv1 ovs-appctl netdev-dummy/receive vm1 $packet
+
+# expected packet at bar2
+src_mac="000000010204"
+dst_mac="f00000010208"
+packet=${dst_mac}${src_mac}8100000108004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+echo  $packet >> expected
+OVN_CHECK_PACKETS([hv2/vm2-tx.pcap], [expected])
+
+# Send ip packets between foo1 and bar1
+# (different switch, loopback to same vm but different tag)
+src_mac="f00000010205"
+dst_mac="000000010203"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 192 168 2 2`
+packet=${dst_mac}${src_mac}8100000108004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+as hv1 ovs-appctl netdev-dummy/receive vm1 $packet
+
+# expected packet at bar1
+src_mac="000000010204"
+dst_mac="f00000010207"
+packet=${dst_mac}${src_mac}8100000208004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+echo  $packet > expected1
+OVN_CHECK_PACKETS([hv1/vm1-tx.pcap], [expected1])
+
+# Send ip packets between bar1 and bar3
+# (same switch. But one is container and another is a standalone VM)
+src_mac="f00000010207"
+dst_mac="f00000010209"
+src_ip=`ip_to_hex 192 168 2 2`
+dst_ip=`ip_to_hex 192 168 2 3`
+packet=${dst_mac}${src_mac}8100000208004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+as hv1 ovs-appctl netdev-dummy/receive vm1 $packet
+
+# expected packet at bar3
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+echo  $packet > expected
+OVN_CHECK_PACKETS([hv1/bar3-tx.pcap], [expected])
+
+# Send ip packets between foo1 and vm1.
+(different switch, container to the VM hosting it.)
+src_mac="f00000010205"
+dst_mac="000000010203"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 172 16 1 2`
+packet=${dst_mac}${src_mac}8100000108004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+as hv1 ovs-appctl netdev-dummy/receive vm1 $packet
+
+# expected packet at vm1
+src_mac="000000010202"
+dst_mac="f00000010203"
+packet=${dst_mac}${src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+echo  $packet >> expected1
+OVN_CHECK_PACKETS([hv1/vm1-tx.pcap], [expected1])
+
+# Send packets from vm1 to bar1.
+(different switch, A hosting VM to a container inside it)
+src_mac="f00000010203"
+dst_mac="000000010202"
+src_ip=`ip_to_hex 172 16 1 2`
+dst_ip=`ip_to_hex 192 168 2 2`
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+as hv1 ovs-appctl netdev-dummy/receive vm1 $packet
+
+# expected packet at vm1
+src_mac="000000010204"
+dst_mac="f00000010207"
+packet=${dst_mac}${src_mac}8100000208004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+echo  $packet >> expected1
+OVN_CHECK_PACKETS([hv1/vm1-tx.pcap], [expected1])
+
+OVN_CLEANUP([hv1],[hv2])
+
+AT_CLEANUP
