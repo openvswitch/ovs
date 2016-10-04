@@ -995,12 +995,14 @@ netdev_linux_rxq_dealloc(struct netdev_rxq *rxq_)
 }
 
 static ovs_be16
-auxdata_to_vlan_tpid(const struct tpacket_auxdata *aux)
+auxdata_to_vlan_tpid(const struct tpacket_auxdata *aux, bool double_tagged)
 {
     if (aux->tp_status & TP_STATUS_VLAN_TPID_VALID) {
         return htons(aux->tp_vlan_tpid);
+    } else if (double_tagged) {
+        return htons(ETH_TYPE_VLAN_8021AD);
     } else {
-        return htons(ETH_TYPE_VLAN);
+        return htons(ETH_TYPE_VLAN_8021Q);
     }
 }
 
@@ -1060,11 +1062,17 @@ netdev_linux_rxq_recv_sock(int fd, struct dp_packet *buffer)
 
         aux = ALIGNED_CAST(struct tpacket_auxdata *, CMSG_DATA(cmsg));
         if (auxdata_has_vlan_tci(aux)) {
+            struct eth_header *eth;
+            bool double_tagged;
+
             if (retval < ETH_HEADER_LEN) {
                 return EINVAL;
             }
 
-            eth_push_vlan(buffer, auxdata_to_vlan_tpid(aux),
+            eth = dp_packet_data(buffer);
+            double_tagged = eth->eth_type == htons(ETH_TYPE_VLAN_8021Q);
+
+            eth_push_vlan(buffer, auxdata_to_vlan_tpid(aux, double_tagged),
                           htons(aux->tp_vlan_tci));
             break;
         }
