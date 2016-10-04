@@ -2509,7 +2509,7 @@ install_port_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *po
      *  the default base rules.
      *
      * The first rule for both ingress and egress has higher priority than the second
-     *   to ensure that the service is always inserted first.
+     * to ensure that the service is always inserted first.
      *
      * The ingress rules are as follows:
      *     If the flow classifier matches send to the input port of the first port pair.
@@ -2526,7 +2526,7 @@ install_port_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *po
      *     * Load balancing support
      *     * ACL Table integration
      *     * Support all flow-classifier parameters
-     *     * bidirectional parameter support
+     *     * Bidirectional parameter support
      *     * Support modes of VNF (BitW, L2, L3)
      *     * Remove port-security on VNF Ports (if set by Openstack)
      */
@@ -2536,10 +2536,10 @@ install_port_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *po
      */
     bool bidirectional = true;
 
-    uint16_t ingress_inner_priority = 150;
-    uint16_t ingress_outer_priority = 100;
-    uint16_t egress_inner_priority = 150;
-    uint16_t egress_outer_priority = 125;
+    const uint16_t ingress_inner_priority = 150;
+    const uint16_t ingress_outer_priority = 100;
+    const uint16_t egress_inner_priority = 150;
+    const uint16_t egress_outer_priority = 125;
 
     const struct nbrec_logical_flow_classifier *fc;
 
@@ -2563,7 +2563,7 @@ install_port_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *po
      */
     ovn_lflow_add(lflows, od, S_SWITCH_IN_CHAIN, 0, "1", "next;");
     if (od->nbs->port_chains) {
-        VLOG_INFO("Iterating through %u port-chains \n", (unsigned int)od->nbs->n_port_chains);
+        VLOG_INFO("Iterating through %"PRIuSIZE" port-chains \n", od->nbs->n_port_chains);
         /*
          * Iterate through all the port-chains defined for this datapath.
          */
@@ -2573,7 +2573,7 @@ install_port_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *po
              * Allocate space for port-pairs
              */
             // TODO free malloc memory
-            VLOG_INFO("Iterating through %u port-pair-groups for %s\n", (unsigned int)lpc->n_port_pair_groups, lpc->name);
+            VLOG_INFO("Iterating through %"PRIuSIZE" port-pair-groups for %s\n", lpc->n_port_pair_groups, lpc->name);
             input_port_array = xmalloc(sizeof *src_port * lpc->n_port_pair_groups + 1);
             output_port_array = xmalloc(sizeof *dst_port * (lpc->n_port_pair_groups + 1));
             VLOG_INFO("Allocating port array\n");
@@ -2582,20 +2582,20 @@ install_port_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *po
              */
             for (size_t j = 0; j < lpc->n_port_pair_groups; j++){
                 lppg = lpc->port_pair_groups[j];
-                VLOG_INFO("Iterating through %u port-pair-group %s\n", (unsigned int)j, lppg->name);
+                VLOG_INFO("Iterating through %"PRIuSIZE" port-pair-group %s\n", j, lppg->name);
                 /*
                  * Todo: Need to add load balancing logic when LB becomes available.
                  *       Until LB is available just take the first PP in the PPG.
                  */
                 if (lppg->n_port_pairs > 1){
-                    VLOG_INFO("Error: Currently cannot have more than one port-pair %u\n", \
-                              (unsigned int)lppg->n_port_pairs);
+                    VLOG_INFO("Error: Currently lacking support for more than one port-pair %"PRIuSIZE"\n", \
+                              lppg->n_port_pairs);
                 } else {
                     for (size_t k = 0; k < lppg->n_port_pairs; k++){
                         lpp = lppg->port_pairs[k];
                         input_port_array[j] = ovn_port_find(ports,lpp->inport->name);
                         VLOG_INFO("In port for port-pair-group %s : %s\n",lppg->name,lpp->inport->name);
-                        output_port_array[j] =  ovn_port_find(ports,lpp->outport->name);
+                        output_port_array[j] = ovn_port_find(ports,lpp->outport->name);
                         VLOG_INFO("Out port for port-pair-group %s : %s\n", lppg->name,lpp->outport->name);
                     }
                 }
@@ -2621,10 +2621,14 @@ install_port_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *po
                 if (fc->logical_destination_port){
                     VLOG_INFO("Logical dest port %p\n",fc->logical_destination_port);
                     dst_port =  ovn_port_find(ports,fc->logical_destination_port->name);
+                } else {
+                    VLOG_INFO("Logical dest port is the same as the src port %s\n",
+                              fc->logical_source_port->name);
+                    dst_port = src_port;
                 }
-                VLOG_INFO("Setting src port in location %"PRIuSIZE"\n",lpc->n_port_pair_groups);
+                VLOG_INFO("Setting src port in location %"PRIuSIZE"\n", lpc->n_port_pair_groups);
                 input_port_array[lpc->n_port_pair_groups] = src_port;
-                output_port_array[lpc->n_port_pair_groups] = src_port;
+                output_port_array[lpc->n_port_pair_groups] = dst_port;
                 /*
                  * TODO - add all the flow-classification logic
                  *
@@ -3105,20 +3109,21 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_SWITCH_IN_DHCP_OPTIONS, 0, "1", "next;");
         ovn_lflow_add(lflows, od, S_SWITCH_IN_DHCP_RESPONSE, 0, "1", "next;");
     }
+
     /* Ingress table 12: Add override rules for service insertion
      *  If a service is defined send traffic destined for an application
      *  to the service first (both for ingress and egress)
      */
-    VLOG_INFO("just before service chaining\n");
+    VLOG_INFO("Just before service chaining\n"); // FIXME (ff): debug; remove this
     HMAP_FOR_EACH(od, key_node, datapaths) {
         if (!od->nbs) {
             continue;
         }
-        install_port_chain(od, lflows, ports);   
+        install_port_chain(od, lflows, ports);
     }
-    VLOG_INFO("Service Chaining complete\n");
+    VLOG_INFO("Service Chaining complete\n"); // FIXME (ff): debug; remove this
 
-    /* Ingress table 12: Destination lookup, broadcast and multicast handling
+    /* Ingress table 13: Destination lookup, broadcast and multicast handling
      * (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbsp) {

@@ -320,9 +320,9 @@ General commands:\n\
   show ROUTER               print overview of database contents for ROUTER\n\
 \n\
 Logical switch commands:\n\
-  ls-add [LSWITCH]     create a logical switch named LSWITCH\n\
-  ls-del LSWITCH       delete LSWITCH and all its ports\n\
-  ls-list              print the names of all logical switches\n\
+  ls-add [SWITCH]           create a logical switch named SWITCH\n\
+  ls-del SWITCH             delete SWITCH and all its ports\n\
+  ls-list                   print the names of all logical switches\n\
 \n\
 Logical port-chain commands:\n\
   lport-chain-add LSWITCH [LPORT-CHAIN]     create a logical port-chain named LPORT-CHAIN\n\
@@ -353,11 +353,6 @@ Logical flow-classifier commands:\n\
                                                   set the name of ldest port \n\
   lflow-classifier-get-logical-destination-port LFLOW_CLASSIFIER\n\
                                                   get the name of ldest port \n\
-\n\
-Logical router commands:\n\
-  lrouter-add [LROUTER]     create a logical router named LROUTER\n\
-  lrouter-del LROUTER       delete LROUTER and all its ports\n\
-  lrouter-list              print the names of all logical routers\n\
 \n\
 ACL commands:\n\
   acl-add SWITCH DIRECTION PRIORITY MATCH ACTION [log]\n\
@@ -539,7 +534,7 @@ lport_chain_by_name_or_uuid(struct ctl_context *ctx, const char *id)
         is_uuid = true;
         lport_chain = nbrec_logical_port_chain_get_for_uuid(ctx->idl,
                                                             &lport_chain_uuid);
-        printf("found lport_chain %s\n",id);
+        printf("found lport_chain %s\n",id);  // FIXME(ff): debug, remove this
     }
 
     if (!lport_chain) {
@@ -567,7 +562,7 @@ lport_pair_group_by_name_or_uuid(struct ctl_context *ctx, const char *id)
         is_uuid = true;
         lport_pair_group = nbrec_logical_port_pair_group_get_for_uuid(ctx->idl,
                                                                       &lport_pair_group_uuid);
-        printf("Found lport_pair_group %s\n",id);
+        printf("Found lport_pair_group %s\n",id);  // FIXME(ff): debug, remove this
     }
 
     if (!lport_pair_group) {
@@ -595,7 +590,7 @@ lport_pair_by_name_or_uuid(struct ctl_context *ctx, const char *id)
         is_uuid = true;
         lport_pair = nbrec_logical_port_pair_get_for_uuid(ctx->idl,
                                                           &lport_pair_uuid);
-        printf("found lport_pair %s\n",id);
+        printf("found lport_pair %s\n",id);  // FIXME(ff): debug, remove this
     }
 
     if (!lport_pair) {
@@ -623,7 +618,7 @@ lflow_classifier_by_name_or_uuid(struct ctl_context *ctx, const char *id)
         is_uuid = true;
         lflow_classifier = nbrec_logical_flow_classifier_get_for_uuid(ctx->idl,
                                                                       &lflow_classifier_uuid);
-        printf("found lflow_classifier %s\n",id);
+        printf("found lflow_classifier %s\n",id);  // FIXME(ff): debug, remove this
     }
 
     if (!lflow_classifier) {
@@ -816,6 +811,7 @@ nbctl_ls_list(struct ctl_context *ctx)
     smap_destroy(&lswitches);
     free(nodes);
 }
+
 /*
  * Port chain CLI Functions
  */
@@ -896,12 +892,13 @@ nbctl_lport_chain_del(struct ctl_context *ctx)
         for (size_t i = 0; i < lswitch->n_port_chains; i++) {
             if (lswitch->port_chains[i] == lport_chain) {
                 remove_lport_chain(lswitch,i);
-                printf("Deleted lport-chain: %s\n", ctx->argv[1]);
+                printf("Deleted lport-chain: %s\n", ctx->argv[1]);  // FIXME(ff): debug, remove this
                 return;
             }
         }
     }
 }
+
 static const struct nbrec_logical_switch_port *
 lsp_by_name_or_uuid(struct ctl_context *ctx, const char *id,
                     bool must_exist)
@@ -927,7 +924,6 @@ lsp_by_name_or_uuid(struct ctl_context *ctx, const char *id,
     }
 
     return lsp;
-
 }
 
 static void
@@ -983,10 +979,10 @@ print_lport_chain(const struct nbrec_logical_port_chain *lport_chain,
                           UUID_ARGS(&loutport->header_.uuid), loutport->name);
         }
     }
-    printf("finished port pairs\n");
+    printf("finished port pairs\n");  // FIXME(ff): debug, remove this
 
     const struct nbrec_logical_flow_classifier *lflow_classifier = lport_chain->flow_classifier;
-    printf("Getting flow classifier: %s\n", lflow_classifier->name);
+    printf("Getting flow classifier: %s\n", lflow_classifier->name);  // FIXME(ff): debug, remove this
     ds_put_format(&ctx->output, "        lflow_classifier %s\n", lflow_classifier->name);
     if (lflow_classifier->logical_source_port == NULL){
         ds_put_format(&ctx->output, "          logical-source-port %s\n", port_not_set);
@@ -1013,7 +1009,7 @@ nbctl_lport_chain_show(struct ctl_context *ctx)
 {
     const struct nbrec_logical_switch *lswitch;
     const struct nbrec_logical_port_chain *lport_chain;
-    printf("\nIn lport-chain-show\n");
+    printf("\nIn lport-chain-show\n");  // FIXME(ff): debug, remove this
     if (ctx->argc < 2) {
         /* ensure all arguments are present */
         ctl_fatal("Invalid number of arguments: (%d), to lport-chain-show.",ctx->argc);
@@ -1062,7 +1058,7 @@ nbctl_lport_chain_set_flow_classifier(struct ctl_context *ctx)
     //memcpy(new_flow_classifier, lport_chain->flow_classifier, sizeof *new_flow_classifier);
     //new_flow_classifier = CONST_CAST(struct nbrec_logical_flow_classifier *, lflow_classifier);
     //nbrec_logical_port_chain_set_flow_classifier(lport_chain, new_flow_classifier);
-    nbrec_logical_port_chain_set_flow_classifier(lport_chain, lflow_classifier);
+    nbrec_logical_port_chain_set_flow_classifier(lport_chain, lflow_classifier);  // FIXME (ff): should allow multiple classifiers to same port_chain
     //free(new_flow_classifier);
 }
 
@@ -1150,7 +1146,7 @@ nbctl_lport_pair_group_del(struct ctl_context *ctx)
         for (size_t i = 0; i < lport_chain->n_port_pair_groups; i++) {
             if (lport_chain->port_pair_groups[i] == lport_pair_group) {
                 remove_lport_pair_group(lport_chain,i);
-                printf("Deleted lport-pair-group: %s\n", ctx->argv[1]);
+                printf("Deleted lport-pair-group: %s\n", ctx->argv[1]);  // FIXME(ff): debug, remove this
                 return;
             }
         }
@@ -1253,7 +1249,7 @@ nbctl_lport_pair_group_del_port_pair(struct ctl_context *ctx)
         for (size_t i = 0; i < lport_pair_group->n_port_pairs; i++) {
             if (lport_pair_group->port_pairs[i] == lport_pair) {
                 remove_lport_pair_from_port_pair_group(lport_pair_group,i);
-                printf("Deleted lport-pair: %s from lport-group-pair \n", ctx->argv[1]);
+                printf("Deleted lport-pair: %s from lport-group-pair \n", ctx->argv[1]);  // FIXME(ff): debug, remove this
                 return;
             }
         }
@@ -1347,7 +1343,7 @@ nbctl_lport_pair_del(struct ctl_context *ctx)
         for (size_t i = 0; i < lswitch->n_port_pairs; i++) {
             if (lswitch->port_pairs[i] == lport_pair) {
                 remove_lport_pair(lswitch,i);
-                printf("Deleted lport-pair: %s\n", ctx->argv[1]);
+                printf("Deleted lport-pair: %s\n", ctx->argv[1]);  // FIXME(ff): debug, remove this
                 return;
             }
         }
@@ -1420,7 +1416,7 @@ nbctl_lflow_classifier_add(struct ctl_context *ctx)
     //struct nbrec_logical_flow_classifier  **new_flow_classifier = xmalloc(sizeof *new_flow_classifier);
     //memcpy(new_flow_classifier, lswitch->flow_classifiers, sizeof *new_flow_classifier * lswitch->n_flow_classifiers);
     //new_flow_classifier[lswitch->n_flow_classifiers] = CONST_CAST(struct nbrec_logical_flow_classifier *, lflow_classifier);
-    nbrec_logical_port_chain_set_flow_classifier(lport_chain, lflow_classifier);
+    nbrec_logical_port_chain_set_flow_classifier(lport_chain, lflow_classifier);  // FIXME (ff): should allow multiple classifiers to same port_chain
     //free(new_flow_classifier);
 }
 static void
@@ -1430,7 +1426,7 @@ nbctl_lflow_classifier_del(struct ctl_context *ctx)
 
     lflow_classifier = lflow_classifier_by_name_or_uuid(ctx, ctx->argv[1]);
     if (!lflow_classifier) {
-        printf("Cannot find lflow_classifier: %s\n", ctx->argv[1]);
+        printf("Cannot find lflow_classifier: %s\n", ctx->argv[1]);  // FIXME(ff): debug, remove this
         return;
     }
 
@@ -1439,7 +1435,7 @@ nbctl_lflow_classifier_del(struct ctl_context *ctx)
     NBREC_LOGICAL_PORT_CHAIN_FOR_EACH (lport_chain, ctx->idl) {
         if (lport_chain->flow_classifier == lflow_classifier) {
             nbrec_logical_flow_classifier_delete(lflow_classifier);
-            printf("Deleted lflow-classifier: %s\n", ctx->argv[1]);
+            printf("Deleted lflow-classifier: %s\n", ctx->argv[1]);  // FIXME(ff): debug, remove this
             return;
         }
     }
@@ -1459,7 +1455,7 @@ nbctl_lflow_classifier_list(struct ctl_context *ctx)
         return;
     }
     const struct nbrec_logical_flow_classifier *lflow_classifier = lport_chain->flow_classifier;
-    printf("Getting flow classifier: %s\n", lflow_classifier->name);
+    printf("Getting flow classifier: %s\n", lflow_classifier->name);  // FIXME(ff): debug, remove this
     ds_put_format(&ctx->output, "        lflow_classifier %s\n", lflow_classifier->name);
     ds_put_format(&ctx->output, "          logical-source-port %s\n", lflow_classifier->logical_source_port->name);
     ds_put_format(&ctx->output, "          ethertype: %s\n", lflow_classifier->ethertype);
@@ -3270,7 +3266,7 @@ static const struct ctl_command_syntax nbctl_commands[] = {
       NULL, "", RO },
     { "lflow-classifier-get-logical-destination-port", 1, 1, "LFLOW-CLASSIFIER", NULL,
       nbctl_lflow_classifier_get_logical_destination_port, NULL, "", RO },
-    { "lflow-classifier-set-logical-destination-port", 2, 2, "LFLOW-CLASSIFIER [LDESTINATION_PORT", NULL,
+    { "lflow-classifier-set-logical-destination-port", 2, 2, "LFLOW-CLASSIFIER LDESTINATION_PORT", NULL,
       nbctl_lflow_classifier_set_logical_destination_port, NULL, "", RO },
     /* TODO ADD OTHER FLOW-CLASSIFIER PARAMETERS */
 
