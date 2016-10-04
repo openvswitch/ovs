@@ -28,6 +28,9 @@ Post-v2.6.0
        a per-OpenFlow bridge basis rather than globally. (The interface
        has not changed.)
      * Removed support for IPsec tunnels.
+   - DPDK:
+     * New option 'n_rxq_desc' and 'n_txq_desc' fields for DPDK interfaces
+       which set the number of rx and tx descriptors to use for the given port.
 
 v2.6.0 - xx xxx xxxx
 ---------------------
@@ -129,8 +132,6 @@ v2.6.0 - xx xxx xxxx
      * Remove dpdkvhostcuse port type.
      * OVS client mode for vHost and vHost reconnect (Requires QEMU 2.7)
      * 'dpdkvhostuserclient' port type.
-     * New option 'n_rxq_desc' and 'n_txq_desc' fields for DPDK interfaces
-       which set the number of rx and tx descriptors to use for the given port.
    - Increase number of registers to 16.
    - ovs-benchmark: This utility has been removed due to lack of use and
      bitrot.
