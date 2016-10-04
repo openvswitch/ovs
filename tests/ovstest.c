@@ -101,6 +101,7 @@ ovstest_register(const char *test_name, ovs_cmdl_handler f)
     test_cmd.min_args = 0;
     test_cmd.max_args = INT_MAX;
     test_cmd.handler = f;
+    test_cmd.mode = OVS_RO;
 
     add_command(&test_cmd);
 }
