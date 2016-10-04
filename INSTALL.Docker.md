@@ -83,6 +83,19 @@ ovs-vsctl set Open_vSwitch . external_ids:ovn-remote="tcp:$CENTRAL_IP:6642" \
   external_ids:ovn-nb="tcp:$CENTRAL_IP:6641" external_ids:ovn-encap-ip=$LOCAL_IP external_ids:ovn-encap-type="$ENCAP_TYPE"
 ```
 
+Each Open vSwitch instance in an OVN deployment needs a unique, persistent
+identifier, called the "system-id".  If you install OVS from distribution
+packaging for Open vSwitch (e.g. .deb or .rpm packages), or if you use the
+ovs-ctl utility included with Open vSwitch, it automatically configures a
+system-id.  If you start Open vSwitch manually, you should set one up yourself,
+e.g.:
+
+```
+id_file=/etc/openvswitch/system-id.conf
+test -e $id_file || uuidgen > $id_file
+ovs-vsctl set Open_vSwitch . external_ids:system-id=$(cat $id_file)
+```
+
 And finally, start the ovn-controller.  (You need to run the below command
 on every boot)
 
