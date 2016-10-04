@@ -2603,6 +2603,9 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     pmd = ovsthread_getspecific(dp->per_pmd_key);
     if (!pmd) {
         pmd = dp_netdev_get_pmd(dp, NON_PMD_CORE_ID);
+        if (!pmd) {
+            return EBUSY;
+        }
     }
 
     /* If the current thread is non-pmd thread, acquires
@@ -2968,25 +2971,28 @@ dpif_netdev_run(struct dpif *dpif)
 {
     struct dp_netdev_port *port;
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    struct dp_netdev_pmd_thread *non_pmd = dp_netdev_get_pmd(dp,
-                                                             NON_PMD_CORE_ID);
+    struct dp_netdev_pmd_thread *non_pmd;
     uint64_t new_tnl_seq;
 
     ovs_mutex_lock(&dp->port_mutex);
-    ovs_mutex_lock(&dp->non_pmd_mutex);
-    HMAP_FOR_EACH (port, node, &dp->ports) {
-        if (!netdev_is_pmd(port->netdev)) {
-            int i;
+    non_pmd = dp_netdev_get_pmd(dp, NON_PMD_CORE_ID);
+    if (non_pmd) {
+        ovs_mutex_lock(&dp->non_pmd_mutex);
+        HMAP_FOR_EACH (port, node, &dp->ports) {
+            if (!netdev_is_pmd(port->netdev)) {
+                int i;
 
-            for (i = 0; i < port->n_rxq; i++) {
-                dp_netdev_process_rxq_port(non_pmd, port, port->rxqs[i].rxq);
+                for (i = 0; i < port->n_rxq; i++) {
+                    dp_netdev_process_rxq_port(non_pmd, port,
+                                               port->rxqs[i].rxq);
+                }
             }
         }
-    }
-    dpif_netdev_xps_revalidate_pmd(non_pmd, time_msec(), false);
-    ovs_mutex_unlock(&dp->non_pmd_mutex);
+        dpif_netdev_xps_revalidate_pmd(non_pmd, time_msec(), false);
+        ovs_mutex_unlock(&dp->non_pmd_mutex);
 
-    dp_netdev_pmd_unref(non_pmd);
+        dp_netdev_pmd_unref(non_pmd);
+    }
 
     if (dp_netdev_is_reconf_required(dp) || ports_require_restart(dp)) {
         reconfigure_pmd_threads(dp);
@@ -3190,7 +3196,8 @@ dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd)
 }
 
 /* Finds and refs the dp_netdev_pmd_thread on core 'core_id'.  Returns
- * the pointer if succeeds, otherwise, NULL.
+ * the pointer if succeeds, otherwise, NULL (it can return NULL even if
+ * 'core_id' is NON_PMD_CORE_ID).
  *
  * Caller must unrefs the returned reference.  */
 static struct dp_netdev_pmd_thread *
