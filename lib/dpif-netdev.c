@@ -2299,6 +2299,9 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
     pmd = ovsthread_getspecific(dp->per_pmd_key);
     if (!pmd) {
         pmd = dp_netdev_get_pmd(dp, NON_PMD_CORE_ID);
+        if (!pmd) {
+            return EBUSY;
+        }
     }
 
     /* If the current thread is non-pmd thread, acquires
@@ -2732,7 +2735,8 @@ dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd)
 }
 
 /* Finds and refs the dp_netdev_pmd_thread on core 'core_id'.  Returns
- * the pointer if succeeds, otherwise, NULL.
+ * the pointer if succeeds, otherwise, NULL (it can return NULL even if
+ * 'core_id' is NON_PMD_CORE_ID).
  *
  * Caller must unrefs the returned reference.  */
 static struct dp_netdev_pmd_thread *
