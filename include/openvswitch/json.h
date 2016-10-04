@@ -63,6 +63,7 @@ struct json_array {
 /* A JSON value. */
 struct json {
     enum json_type type;
+    size_t count;
     union {
         struct shash *object;   /* Contains "struct json *"s. */
         struct json_array array;
@@ -99,6 +100,7 @@ bool json_boolean(const struct json *);
 double json_real(const struct json *);
 int64_t json_integer(const struct json *);
 
+struct json *json_deep_clone(const struct json *);
 struct json *json_clone(const struct json *);
 void json_destroy(struct json *);
 

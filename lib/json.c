@@ -333,7 +333,7 @@ static void json_destroy_array(struct json_array *array);
 void
 json_destroy(struct json *json)
 {
-    if (json) {
+    if (json && !--json->count) {
         switch (json->type) {
         case JSON_OBJECT:
             json_destroy_object(json->u.object);
@@ -392,7 +392,7 @@ static struct json *json_clone_array(const struct json_array *array);
 
 /* Returns a deep copy of 'json'. */
 struct json *
-json_clone(const struct json *json)
+json_deep_clone(const struct json *json)
 {
     switch (json->type) {
     case JSON_OBJECT:
@@ -419,6 +419,15 @@ json_clone(const struct json *json)
     default:
         OVS_NOT_REACHED();
     }
+}
+
+/* Returns 'json', with the reference count incremented. */
+struct json *
+json_clone(const struct json *json_)
+{
+    struct json *json = CONST_CAST(struct json *, json_);
+    json->count++;
+    return json;
 }
 
 static struct json *
@@ -547,6 +556,10 @@ json_equal_array(const struct json_array *a, const struct json_array *b)
 bool
 json_equal(const struct json *a, const struct json *b)
 {
+    if (a == b) {
+        return true;
+    }
+
     if (a->type != b->type) {
         return false;
     }
@@ -1405,6 +1418,7 @@ json_create(enum json_type type)
 {
     struct json *json = xmalloc(sizeof *json);
     json->type = type;
+    json->count = 1;
     return json;
 }
 
