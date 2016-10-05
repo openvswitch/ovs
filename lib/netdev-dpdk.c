@@ -472,9 +472,9 @@ static struct dpdk_mp *
 dpdk_mp_create(int socket_id, int mtu)
 {
     struct rte_pktmbuf_pool_private mbp_priv;
-    char mp_name[RTE_MEMPOOL_NAMESIZE];
     struct dpdk_mp *dmp;
     unsigned mp_size;
+    char *mp_name;
 
     dmp = dpdk_rte_mzalloc(sizeof *dmp);
     if (!dmp) {
@@ -498,10 +498,8 @@ dpdk_mp_create(int socket_id, int mtu)
     }
 
     do {
-        if (snprintf(mp_name, RTE_MEMPOOL_NAMESIZE, "ovs_mp_%d_%d_%u",
-                     dmp->mtu, dmp->socket_id, mp_size) < 0) {
-            goto out;
-        }
+        mp_name = xasprintf("ovs_mp_%d_%d_%u", dmp->mtu, dmp->socket_id,
+                            mp_size);
 
         dmp->mp = rte_mempool_create(mp_name, mp_size, MBUF_SIZE(mtu),
                                      MP_CACHE_SZ,
@@ -509,17 +507,16 @@ dpdk_mp_create(int socket_id, int mtu)
                                      rte_pktmbuf_pool_init, &mbp_priv,
                                      ovs_rte_pktmbuf_init, NULL,
                                      socket_id, 0);
-    } while (!dmp->mp && rte_errno == ENOMEM && (mp_size /= 2) >= MIN_NB_MBUF);
+        if (dmp->mp) {
+            VLOG_DBG("Allocated \"%s\" mempool with %u mbufs",
+                     mp_name, mp_size);
+        }
+        free(mp_name);
+        if (dmp->mp) {
+            return dmp;
+        }
+    } while (rte_errno == ENOMEM && (mp_size /= 2) >= MIN_NB_MBUF);
 
-    if (dmp->mp == NULL) {
-        goto out;
-    } else {
-        VLOG_DBG("Allocated \"%s\" mempool with %u mbufs", mp_name, mp_size);
-    }
-
-    return dmp;
-
-out:
     rte_free(dmp);
     return NULL;
 }
@@ -2627,7 +2624,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
                  unsigned int *eth_port_id)
 {
     struct dpdk_ring *ivshmem;
-    char ring_name[RTE_RING_NAMESIZE];
+    char *ring_name;
     int err;
 
     ivshmem = dpdk_rte_mzalloc(sizeof *ivshmem);
@@ -2636,27 +2633,23 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
     }
 
     /* XXX: Add support for multiquque ring. */
-    err = snprintf(ring_name, sizeof ring_name, "%s_tx", dev_name);
-    if (err < 0) {
-        return -err;
-    }
+    ring_name = xasprintf("%s_tx", dev_name);
 
     /* Create single producer tx ring, netdev does explicit locking. */
     ivshmem->cring_tx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0,
                                         RING_F_SP_ENQ);
+    free(ring_name);
     if (ivshmem->cring_tx == NULL) {
         rte_free(ivshmem);
         return ENOMEM;
     }
 
-    err = snprintf(ring_name, sizeof ring_name, "%s_rx", dev_name);
-    if (err < 0) {
-        return -err;
-    }
+    ring_name = xasprintf("%s_rx", dev_name);
 
     /* Create single consumer rx ring, netdev does explicit locking. */
     ivshmem->cring_rx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0,
                                         RING_F_SC_DEQ);
+    free(ring_name);
     if (ivshmem->cring_rx == NULL) {
         rte_free(ivshmem);
         return ENOMEM;
