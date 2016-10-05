@@ -2563,24 +2563,42 @@ start_vhost_loop(void *dummy OVS_UNUSED)
 }
 
 static int
-dpdk_vhost_class_init(void)
+netdev_dpdk_class_init(void)
 {
-    rte_vhost_driver_callback_register(&virtio_net_device_ops);
-    rte_vhost_feature_disable(1ULL << VIRTIO_NET_F_HOST_TSO4
-                            | 1ULL << VIRTIO_NET_F_HOST_TSO6
-                            | 1ULL << VIRTIO_NET_F_CSUM);
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
-    ovs_thread_create("vhost_thread", start_vhost_loop, NULL);
+    /* This function can be called for different classes.  The initialization
+     * needs to be done only once */
+    if (ovsthread_once_start(&once)) {
+        ovs_thread_create("dpdk_watchdog", dpdk_watchdog, NULL);
+        unixctl_command_register("netdev-dpdk/set-admin-state",
+                                 "[netdev] up|down", 1, 2,
+                                 netdev_dpdk_set_admin_state, NULL);
+
+        ovsthread_once_done(&once);
+    }
+
     return 0;
 }
 
-static void
-dpdk_common_init(void)
+static int
+netdev_dpdk_vhost_class_init(void)
 {
-    unixctl_command_register("netdev-dpdk/set-admin-state",
-                             "[netdev] up|down", 1, 2,
-                             netdev_dpdk_set_admin_state, NULL);
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
+    /* This function can be called for different classes.  The initialization
+     * needs to be done only once */
+    if (ovsthread_once_start(&once)) {
+        rte_vhost_driver_callback_register(&virtio_net_device_ops);
+        rte_vhost_feature_disable(1ULL << VIRTIO_NET_F_HOST_TSO4
+                                  | 1ULL << VIRTIO_NET_F_HOST_TSO6
+                                  | 1ULL << VIRTIO_NET_F_CSUM);
+        ovs_thread_create("vhost_thread", start_vhost_loop, NULL);
+
+        ovsthread_once_done(&once);
+    }
+
+    return 0;
 }
 
 /* Client Rings */
@@ -3029,7 +3047,7 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
     return 0;
 }
 
-#define NETDEV_DPDK_CLASS(NAME, CONSTRUCT, DESTRUCT,          \
+#define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT, DESTRUCT,    \
                           SET_CONFIG, SET_TX_MULTIQ, SEND,    \
                           GET_CARRIER, GET_STATS,             \
                           GET_FEATURES, GET_STATUS,           \
@@ -3037,7 +3055,7 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
 {                                                             \
     NAME,                                                     \
     true,                       /* is_pmd */                  \
-    NULL,                       /* init */                    \
+    INIT,                       /* init */                    \
     NULL,                       /* netdev_dpdk_run */         \
     NULL,                       /* netdev_dpdk_wait */        \
                                                               \
@@ -3455,10 +3473,6 @@ dpdk_init__(const struct smap *ovs_other_config)
     /* We are called from the main thread here */
     RTE_PER_LCORE(_lcore_id) = NON_PMD_CORE_ID;
 
-    ovs_thread_create("dpdk_watchdog", dpdk_watchdog, NULL);
-
-    dpdk_vhost_class_init();
-
 #ifdef DPDK_PDUMP
     VLOG_INFO("DPDK pdump packet capture enabled");
     err = rte_pdump_init(ovs_rundir());
@@ -3493,6 +3507,7 @@ dpdk_init(const struct smap *ovs_other_config)
 static const struct netdev_class dpdk_class =
     NETDEV_DPDK_CLASS(
         "dpdk",
+        netdev_dpdk_class_init,
         netdev_dpdk_construct,
         netdev_dpdk_destruct,
         netdev_dpdk_set_config,
@@ -3508,6 +3523,7 @@ static const struct netdev_class dpdk_class =
 static const struct netdev_class dpdk_ring_class =
     NETDEV_DPDK_CLASS(
         "dpdkr",
+        netdev_dpdk_class_init,
         netdev_dpdk_ring_construct,
         netdev_dpdk_destruct,
         netdev_dpdk_ring_set_config,
@@ -3523,6 +3539,7 @@ static const struct netdev_class dpdk_ring_class =
 static const struct netdev_class dpdk_vhost_class =
     NETDEV_DPDK_CLASS(
         "dpdkvhostuser",
+        netdev_dpdk_vhost_class_init,
         netdev_dpdk_vhost_construct,
         netdev_dpdk_vhost_destruct,
         NULL,
@@ -3537,6 +3554,7 @@ static const struct netdev_class dpdk_vhost_class =
 static const struct netdev_class dpdk_vhost_client_class =
     NETDEV_DPDK_CLASS(
         "dpdkvhostuserclient",
+        netdev_dpdk_vhost_class_init,
         netdev_dpdk_vhost_client_construct,
         netdev_dpdk_vhost_destruct,
         netdev_dpdk_vhost_client_set_config,
@@ -3552,7 +3570,6 @@ static const struct netdev_class dpdk_vhost_client_class =
 void
 netdev_dpdk_register(void)
 {
-    dpdk_common_init();
     netdev_register_provider(&dpdk_class);
     netdev_register_provider(&dpdk_ring_class);
     netdev_register_provider(&dpdk_vhost_class);
