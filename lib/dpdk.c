@@ -273,12 +273,6 @@ dpdk_init__(const struct smap *ovs_other_config)
     cpu_set_t cpuset;
     char *sock_dir_subcomponent;
 
-    if (!smap_get_bool(ovs_other_config, "dpdk-init", false)) {
-        VLOG_INFO("DPDK Disabled - to change this requires a restart.\n");
-        return;
-    }
-
-    VLOG_INFO("DPDK Enabled, initializing");
     if (process_vhost_flags("vhost-sock-dir", xstrdup(ovs_rundir()),
                             NAME_MAX, ovs_other_config,
                             &sock_dir_subcomponent)) {
@@ -413,11 +407,28 @@ dpdk_init__(const struct smap *ovs_other_config)
 void
 dpdk_init(const struct smap *ovs_other_config)
 {
-    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
+    static bool enabled = false;
 
-    if (ovs_other_config && ovsthread_once_start(&once)) {
-        dpdk_init__(ovs_other_config);
-        ovsthread_once_done(&once);
+    if (enabled || !ovs_other_config) {
+        return;
+    }
+
+    if (smap_get_bool(ovs_other_config, "dpdk-init", false)) {
+        static struct ovsthread_once once_enable = OVSTHREAD_ONCE_INITIALIZER;
+
+        if (ovsthread_once_start(&once_enable)) {
+            VLOG_INFO("DPDK Enabled - initializing...");
+            dpdk_init__(ovs_other_config);
+            enabled = true;
+            VLOG_INFO("DPDK Enabled - initialized");
+            ovsthread_once_done(&once_enable);
+        }
+    } else {
+        static struct ovsthread_once once_disable = OVSTHREAD_ONCE_INITIALIZER;
+        if (ovsthread_once_start(&once_disable)) {
+            VLOG_INFO("DPDK Disabled - Use other_config:dpdk-init to enable");
+            ovsthread_once_done(&once_disable);
+        }
     }
 }
 
