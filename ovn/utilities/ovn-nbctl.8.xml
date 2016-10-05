@@ -169,14 +169,38 @@
 
       <dt><code>lsp-set-addresses</code> <var>port</var> [<var>address</var>]...</dt>
       <dd>
-        Sets the addresses associated with <var>port</var> to
-        <var>address</var>.  Each <var>address</var> should be either an
-        Ethernet address or an Ethernet address followed by IP addresses
-        (separated by space and quoted to form a single command-line
-        argument).  The special form <code>unknown</code> is also valid.
-        Multiple Ethernet addresses or Ethernet+IPs combinations may be set.
-        If no <var>address</var> argument is given, <var>port</var> will have
-        no addresses associated with it.
+        <p>
+          Sets the addresses associated with <var>port</var> to
+          <var>address</var>.  Each <var>address</var> should be one of the
+          following:
+        </p>
+
+        <dl>
+          <dt>an Ethernet address, optionally followed by a space and one or more IP addresses</dt>
+          <dd>
+            OVN delivers packets for the Ethernet address to this port.
+          </dd>
+
+          <dt><code>unknown</code></dt>
+          <dd>
+            OVN delivers unicast Ethernet packets whose destination MAC address
+            is not in any logical port's addresses column to ports with address
+            <code>unknown</code>.
+          </dd>
+
+          <dt><code>dynamic</code></dt>
+          <dd>
+            Use this keyword to make <code>ovn-northd</code> generate a
+            globally unique MAC address and choose an unused IPv4 address with
+            the logical port's subnet and store them in the port's
+            <code>dynamic_addresses</code> column.
+          </dd>
+        </dl>
+
+        <p>
+          Multiple addresses may be set.  If no <var>address</var> argument is
+          given, <var>port</var> will have no addresses associated with it.
+        </p>
       </dd>
 
       <dt><code>lsp-get-addresses</code> <var>port</var></dt>
