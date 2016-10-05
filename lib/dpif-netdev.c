@@ -31,6 +31,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifdef DPDK_NETDEV
+#include <rte_cycles.h>
+#endif
+
 #include "bitmap.h"
 #include "cmap.h"
 #include "conntrack.h"
@@ -46,7 +50,6 @@
 #include "hmapx.h"
 #include "latch.h"
 #include "netdev.h"
-#include "netdev-dpdk.h"
 #include "netdev-vport.h"
 #include "netlink.h"
 #include "odp-execute.h"

@@ -17,9 +17,10 @@
 #include <config.h>
 #include <stdlib.h>
 #include <string.h>
-#include "openvswitch/dynamic-string.h"
-#include "netdev-dpdk.h"
+
 #include "dp-packet.h"
+#include "netdev-dpdk.h"
+#include "openvswitch/dynamic-string.h"
 #include "util.h"
 
 static void

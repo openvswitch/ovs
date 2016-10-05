@@ -388,6 +388,8 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+
+#include "dpdk.h"
 #include "netdev.h"
 #include "dp-packet.h"
 #include "openflow/openflow.h"
