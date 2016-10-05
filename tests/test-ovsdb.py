@@ -27,6 +27,7 @@ from ovs.db import data
 import ovs.db.types
 import ovs.ovsuuid
 import ovs.poller
+import ovs.stream
 import ovs.util
 from ovs.fatal_signal import signal_alarm
 import six
@@ -518,6 +519,12 @@ def update_condition(idl, commands):
 def do_idl(schema_file, remote, *commands):
     schema_helper = ovs.db.idl.SchemaHelper(schema_file)
     track_notify = False
+
+    if remote.startswith("ssl:"):
+        ovs.stream.Stream.ssl_set_private_key_file(commands[0])
+        ovs.stream.Stream.ssl_set_certificate_file(commands[1])
+        ovs.stream.Stream.ssl_set_ca_cert_file(commands[2])
+        commands = commands[3:]
 
     if commands and commands[0] == "track-notify":
         commands = commands[1:]
