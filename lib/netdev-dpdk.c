@@ -193,6 +193,7 @@ static int rte_eal_init_ret = ENODEV;
  */
 struct qos_conf {
     const struct dpdk_qos_ops *ops;
+    rte_spinlock_t lock;
 };
 
 /* A particular implementation of dpdk QoS operations.
@@ -206,48 +207,45 @@ struct dpdk_qos_ops {
     /* Name of the QoS type */
     const char *qos_name;
 
-    /* Called to construct the QoS implementation on 'netdev'. The
-     * implementation should make the appropriate calls to configure QoS
-     * according to 'details'. The implementation may assume that any current
-     * QoS configuration already installed should be destroyed before
-     * constructing the new configuration.
+    /* Called to construct a qos_conf object. The implementation should make
+     * the appropriate calls to configure QoS according to 'details'.
      *
      * The contents of 'details' should be documented as valid for 'ovs_name'
      * in the "other_config" column in the "QoS" table in vswitchd/vswitch.xml
      * (which is built as ovs-vswitchd.conf.db(8)).
      *
-     * This function must return 0 if and only if it sets 'netdev->qos_conf'
-     * to an initialized 'struct qos_conf'.
+     * This function must return 0 if and only if it sets '*conf' to an
+     * initialized 'struct qos_conf'.
      *
      * For all QoS implementations it should always be non-null.
      */
-    int (*qos_construct)(struct netdev *netdev, const struct smap *details);
+    int (*qos_construct)(const struct smap *details, struct qos_conf **conf);
 
     /* Destroys the data structures allocated by the implementation as part of
-     * 'qos_conf.
+     * 'qos_conf'.
      *
      * For all QoS implementations it should always be non-null.
      */
-    void (*qos_destruct)(struct netdev *netdev, struct qos_conf *conf);
+    void (*qos_destruct)(struct qos_conf *conf);
 
-    /* Retrieves details of 'netdev->qos_conf' configuration into 'details'.
+    /* Retrieves details of 'conf' configuration into 'details'.
      *
      * The contents of 'details' should be documented as valid for 'ovs_name'
      * in the "other_config" column in the "QoS" table in vswitchd/vswitch.xml
      * (which is built as ovs-vswitchd.conf.db(8)).
      */
-    int (*qos_get)(const struct netdev *netdev, struct smap *details);
+    int (*qos_get)(const struct qos_conf *conf, struct smap *details);
 
-    /* Reconfigures 'netdev->qos_conf' according to 'details', performing any
-     * required calls to complete the reconfiguration.
+    /* Returns true if 'conf' is already configured according to 'details'.
      *
      * The contents of 'details' should be documented as valid for 'ovs_name'
      * in the "other_config" column in the "QoS" table in vswitchd/vswitch.xml
      * (which is built as ovs-vswitchd.conf.db(8)).
      *
-     * This function may be null if 'qos_conf' is not configurable.
+     * For all QoS implementations it should always be non-null.
      */
-    int (*qos_set)(struct netdev *netdev, const struct smap *details);
+    bool (*qos_is_equal)(const struct qos_conf *conf,
+                         const struct smap *details);
 
     /* Modify an array of rte_mbufs. The modification is specific to
      * each qos implementation.
@@ -262,8 +260,8 @@ struct dpdk_qos_ops {
      *
      * For all QoS implementations it should always be non-null.
      */
-    int (*qos_run)(struct netdev *netdev, struct rte_mbuf **pkts,
-                           int pkt_cnt);
+    int (*qos_run)(struct qos_conf *qos_conf, struct rte_mbuf **pkts,
+                   int pkt_cnt);
 };
 
 /* dpdk_qos_ops for each type of user space QoS implementation */
@@ -372,8 +370,7 @@ struct netdev_dpdk {
     struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
 
     /* QoS configuration and lock for the device */
-    struct qos_conf *qos_conf;
-    rte_spinlock_t qos_lock;
+    OVSRCU_TYPE(struct qos_conf *) qos_conf;
 
     /* The following properties cannot be changed when a device is running,
      * so we remember the request and update them next time
@@ -855,11 +852,8 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
         goto unlock;
     }
 
-    /* Initialise QoS configuration to NULL and qos lock to unlocked */
-    dev->qos_conf = NULL;
-    rte_spinlock_init(&dev->qos_lock);
+    ovsrcu_init(&dev->qos_conf, NULL);
 
-    /* Initialise rcu pointer for ingress policer to NULL */
     ovsrcu_init(&dev->ingress_policer, NULL);
     dev->policer_rate = 0;
     dev->policer_burst = 0;
@@ -1494,17 +1488,15 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet_batch *batch)
 }
 
 static inline int
-netdev_dpdk_qos_run__(struct netdev_dpdk *dev, struct rte_mbuf **pkts,
-                        int cnt)
+netdev_dpdk_qos_run(struct netdev_dpdk *dev, struct rte_mbuf **pkts,
+                    int cnt)
 {
-    struct netdev *netdev = &dev->up;
+    struct qos_conf *qos_conf = ovsrcu_get(struct qos_conf *, &dev->qos_conf);
 
-    if (dev->qos_conf != NULL) {
-        rte_spinlock_lock(&dev->qos_lock);
-        if (dev->qos_conf != NULL) {
-            cnt = dev->qos_conf->ops->qos_run(netdev, pkts, cnt);
-        }
-        rte_spinlock_unlock(&dev->qos_lock);
+    if (qos_conf) {
+        rte_spinlock_lock(&qos_conf->lock);
+        cnt = qos_conf->ops->qos_run(qos_conf, pkts, cnt);
+        rte_spinlock_unlock(&qos_conf->lock);
     }
 
     return cnt;
@@ -1577,7 +1569,7 @@ __netdev_dpdk_vhost_send(struct netdev *netdev, int qid,
 
     cnt = netdev_dpdk_filter_packet_len(dev, cur_pkts, cnt);
     /* Check has QoS has been configured for the netdev */
-    cnt = netdev_dpdk_qos_run__(dev, cur_pkts, cnt);
+    cnt = netdev_dpdk_qos_run(dev, cur_pkts, cnt);
     dropped = total_pkts - cnt;
 
     do {
@@ -1671,7 +1663,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
         unsigned int qos_pkts = newcnt;
 
         /* Check if QoS has been configured for this netdev. */
-        newcnt = netdev_dpdk_qos_run__(dev, pkts, newcnt);
+        newcnt = netdev_dpdk_qos_run(dev, pkts, newcnt);
 
         dropped += qos_pkts - newcnt;
         netdev_dpdk_eth_tx_burst(dev, qid, pkts, newcnt);
@@ -1728,7 +1720,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
         dp_packet_batch_apply_cutlen(batch);
 
         cnt = netdev_dpdk_filter_packet_len(dev, pkts, cnt);
-        cnt = netdev_dpdk_qos_run__(dev, pkts, cnt);
+        cnt = netdev_dpdk_qos_run(dev, pkts, cnt);
         dropped = batch->count - cnt;
 
         netdev_dpdk_eth_tx_burst(dev, qid, pkts, cnt);
@@ -2752,6 +2744,7 @@ static void
 qos_conf_init(struct qos_conf *conf, const struct dpdk_qos_ops *ops)
 {
     conf->ops = ops;
+    rte_spinlock_init(&conf->lock);
 }
 
 /*
@@ -2771,25 +2764,6 @@ qos_lookup_name(const char *name)
         }
     }
     return NULL;
-}
-
-/*
- * Call qos_destruct to clean up items associated with the netdevs
- * qos_conf. Set netdevs qos_conf to NULL.
- */
-static void
-qos_delete_conf(struct netdev *netdev)
-{
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-
-    rte_spinlock_lock(&dev->qos_lock);
-    if (dev->qos_conf) {
-        if (dev->qos_conf->ops->qos_destruct) {
-            dev->qos_conf->ops->qos_destruct(netdev, dev->qos_conf);
-        }
-        dev->qos_conf = NULL;
-    }
-    rte_spinlock_unlock(&dev->qos_lock);
 }
 
 static int
@@ -2812,13 +2786,15 @@ netdev_dpdk_get_qos(const struct netdev *netdev,
                     const char **typep, struct smap *details)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    struct qos_conf *qos_conf;
     int error = 0;
 
     ovs_mutex_lock(&dev->mutex);
-    if (dev->qos_conf) {
-        *typep = dev->qos_conf->ops->qos_name;
-        error = (dev->qos_conf->ops->qos_get
-                 ? dev->qos_conf->ops->qos_get(netdev, details): 0);
+    qos_conf = ovsrcu_get_protected(struct qos_conf *, &dev->qos_conf);
+    if (qos_conf) {
+        *typep = qos_conf->ops->qos_name;
+        error = (qos_conf->ops->qos_get
+                 ? qos_conf->ops->qos_get(qos_conf, details): 0);
     } else {
         /* No QoS configuration set, return an empty string */
         *typep = "";
@@ -2829,46 +2805,46 @@ netdev_dpdk_get_qos(const struct netdev *netdev,
 }
 
 static int
-netdev_dpdk_set_qos(struct netdev *netdev,
-                    const char *type, const struct smap *details)
+netdev_dpdk_set_qos(struct netdev *netdev, const char *type,
+                    const struct smap *details)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     const struct dpdk_qos_ops *new_ops = NULL;
+    struct qos_conf *qos_conf, *new_qos_conf = NULL;
     int error = 0;
-
-    /* If type is empty or unsupported then the current QoS configuration
-     * for the dpdk-netdev can be destroyed */
-    new_ops = qos_lookup_name(type);
-
-    if (type[0] == '\0' || !new_ops || !new_ops->qos_construct) {
-        qos_delete_conf(netdev);
-        return EOPNOTSUPP;
-    }
 
     ovs_mutex_lock(&dev->mutex);
 
-    if (dev->qos_conf) {
-        if (new_ops == dev->qos_conf->ops) {
-            error = new_ops->qos_set ? new_ops->qos_set(netdev, details) : 0;
-        } else {
-            /* Delete existing QoS configuration. */
-            qos_delete_conf(netdev);
-            ovs_assert(dev->qos_conf == NULL);
+    qos_conf = ovsrcu_get_protected(struct qos_conf *, &dev->qos_conf);
 
-            /* Install new QoS configuration. */
-            error = new_ops->qos_construct(netdev, details);
+    new_ops = qos_lookup_name(type);
+
+    if (!new_ops || !new_ops->qos_construct) {
+        new_qos_conf = NULL;
+        if (type && type[0]) {
+            error = EOPNOTSUPP;
         }
+    } else if (qos_conf->ops == new_ops
+               && qos_conf->ops->qos_is_equal(qos_conf, details)) {
+        new_qos_conf = qos_conf;
     } else {
-        error = new_ops->qos_construct(netdev, details);
+        error = new_ops->qos_construct(details, &new_qos_conf);
     }
 
-    ovs_assert((error == 0) == (dev->qos_conf != NULL));
     if (error) {
-        VLOG_ERR("Failed to set QoS type %s on port %s, returned error: %s",
-                 type, netdev->name, rte_strerror(-error));
+        VLOG_ERR("Failed to set QoS type %s on port %s: %s",
+                 type, netdev->name, rte_strerror(error));
+    }
+
+    if (new_qos_conf != qos_conf) {
+        ovsrcu_set(&dev->qos_conf, new_qos_conf);
+        if (qos_conf) {
+            ovsrcu_postpone(qos_conf->ops->qos_destruct, qos_conf);
+        }
     }
 
     ovs_mutex_unlock(&dev->mutex);
+
     return error;
 }
 
@@ -2880,98 +2856,77 @@ struct egress_policer {
     struct rte_meter_srtcm egress_meter;
 };
 
-static struct egress_policer *
-egress_policer_get__(const struct netdev *netdev)
+static void
+egress_policer_details_to_param(const struct smap *details,
+                                struct rte_meter_srtcm_params *params)
 {
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    return CONTAINER_OF(dev->qos_conf, struct egress_policer, qos_conf);
+    memset(params, 0, sizeof *params);
+    params->cir = smap_get_ullong(details, "cir", 0);
+    params->cbs = smap_get_ullong(details, "cbs", 0);
+    params->ebs = 0;
 }
 
 static int
-egress_policer_qos_construct(struct netdev *netdev,
-                             const struct smap *details)
+egress_policer_qos_construct(const struct smap *details,
+                             struct qos_conf **conf)
 {
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct egress_policer *policer;
     int err = 0;
 
-    rte_spinlock_lock(&dev->qos_lock);
     policer = xmalloc(sizeof *policer);
     qos_conf_init(&policer->qos_conf, &egress_policer_ops);
-    dev->qos_conf = &policer->qos_conf;
-    policer->app_srtcm_params.cir = smap_get_ullong(details, "cir", 0);
-    policer->app_srtcm_params.cbs = smap_get_ullong(details, "cbs", 0);
-    policer->app_srtcm_params.ebs = 0;
+    egress_policer_details_to_param(details, &policer->app_srtcm_params);
     err = rte_meter_srtcm_config(&policer->egress_meter,
-                                    &policer->app_srtcm_params);
-
-    if (err < 0) {
-        /* Error occurred during rte_meter creation, destroy the policer
-         * and set the qos configuration for the netdev dpdk to NULL
-         */
+                                 &policer->app_srtcm_params);
+    if (!err) {
+        *conf = &policer->qos_conf;
+    } else {
         free(policer);
-        dev->qos_conf = NULL;
+        *conf = NULL;
         err = -err;
     }
-    rte_spinlock_unlock(&dev->qos_lock);
 
     return err;
 }
 
 static void
-egress_policer_qos_destruct(struct netdev *netdev OVS_UNUSED,
-                        struct qos_conf *conf)
+egress_policer_qos_destruct(struct qos_conf *conf)
 {
     struct egress_policer *policer = CONTAINER_OF(conf, struct egress_policer,
-                                                qos_conf);
+                                                  qos_conf);
     free(policer);
 }
 
 static int
-egress_policer_qos_get(const struct netdev *netdev, struct smap *details)
+egress_policer_qos_get(const struct qos_conf *conf, struct smap *details)
 {
-    struct egress_policer *policer = egress_policer_get__(netdev);
-    smap_add_format(details, "cir", "%llu",
-                    1ULL * policer->app_srtcm_params.cir);
-    smap_add_format(details, "cbs", "%llu",
-                    1ULL * policer->app_srtcm_params.cbs);
+    struct egress_policer *policer =
+        CONTAINER_OF(conf, struct egress_policer, qos_conf);
+
+    smap_add_format(details, "cir", "%"PRIu64, policer->app_srtcm_params.cir);
+    smap_add_format(details, "cbs", "%"PRIu64, policer->app_srtcm_params.cbs);
 
     return 0;
 }
 
-static int
-egress_policer_qos_set(struct netdev *netdev, const struct smap *details)
+static bool
+egress_policer_qos_is_equal(const struct qos_conf *conf, const struct smap *details)
 {
-    struct egress_policer *policer;
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int err = 0;
+    struct egress_policer *policer =
+        CONTAINER_OF(conf, struct egress_policer, qos_conf);
+    struct rte_meter_srtcm_params params;
 
-    policer = egress_policer_get__(netdev);
-    rte_spinlock_lock(&dev->qos_lock);
-    policer->app_srtcm_params.cir = smap_get_ullong(details, "cir", 0);
-    policer->app_srtcm_params.cbs = smap_get_ullong(details, "cbs", 0);
-    policer->app_srtcm_params.ebs = 0;
-    err = rte_meter_srtcm_config(&policer->egress_meter,
-                                    &policer->app_srtcm_params);
+    egress_policer_details_to_param(details, &params);
 
-    if (err < 0) {
-        /* Error occurred during rte_meter creation, destroy the policer
-         * and set the qos configuration for the netdev dpdk to NULL
-         */
-        free(policer);
-        dev->qos_conf = NULL;
-        err = -err;
-    }
-    rte_spinlock_unlock(&dev->qos_lock);
-
-    return err;
+    return !memcmp(&params, &policer->app_srtcm_params, sizeof params);
 }
 
 static int
-egress_policer_run(struct netdev *netdev, struct rte_mbuf **pkts, int pkt_cnt)
+egress_policer_run(struct qos_conf *conf, struct rte_mbuf **pkts, int pkt_cnt)
 {
     int cnt = 0;
-    struct egress_policer *policer = egress_policer_get__(netdev);
+    struct egress_policer *policer =
+        CONTAINER_OF(conf, struct egress_policer, qos_conf);
 
     cnt = netdev_dpdk_policer_run(&policer->egress_meter, pkts, pkt_cnt);
 
@@ -2983,7 +2938,7 @@ static const struct dpdk_qos_ops egress_policer_ops = {
     egress_policer_qos_construct,
     egress_policer_qos_destruct,
     egress_policer_qos_get,
-    egress_policer_qos_set,
+    egress_policer_qos_is_equal,
     egress_policer_run
 };
 
