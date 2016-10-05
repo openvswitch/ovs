@@ -2039,17 +2039,22 @@ nbctl_lr_route_add(struct ctl_context *ctx)
 
     next_hop = normalize_prefix_str(ctx->argv[3]);
     if (!next_hop) {
+        free(prefix);
         ctl_fatal("bad next hop argument: %s", ctx->argv[3]);
     }
 
     if (strchr(prefix, '.')) {
         ovs_be32 hop_ipv4;
         if (!ip_parse(ctx->argv[3], &hop_ipv4)) {
+            free(prefix);
+            free(next_hop);
             ctl_fatal("bad IPv4 nexthop argument: %s", ctx->argv[3]);
         }
     } else {
         struct in6_addr hop_ipv6;
         if (!ipv6_parse(ctx->argv[3], &hop_ipv6)) {
+            free(prefix);
+            free(next_hop);
             ctl_fatal("bad IPv6 nexthop argument: %s", ctx->argv[3]);
         }
     }
@@ -2072,6 +2077,7 @@ nbctl_lr_route_add(struct ctl_context *ctx)
         }
 
         if (!may_exist) {
+            free(next_hop);
             free(rt_prefix);
             ctl_fatal("duplicate prefix: %s", prefix);
         }

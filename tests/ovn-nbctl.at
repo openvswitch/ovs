@@ -640,6 +640,22 @@ dnl Add overlapping route with 10.0.0.1/24
 AT_CHECK([ovn-nbctl lr-route-add lr0 10.0.0.111/24 11.0.0.1], [1], [],
   [ovn-nbctl: duplicate prefix: 10.0.0.0/24
 ])
+AT_CHECK([ovn-nbctl lr-route-add lr0 10.0.0.111a/24 11.0.0.1], [1], [],
+  [ovn-nbctl: bad prefix argument: 10.0.0.111a/24
+])
+AT_CHECK([ovn-nbctl lr-route-add lr0 10.0.0.111/24a 11.0.0.1], [1], [],
+  [ovn-nbctl: bad prefix argument: 10.0.0.111/24a
+])
+AT_CHECK([ovn-nbctl lr-route-add lr0 10.0.0.111/24 11.0.0.1a], [1], [],
+  [ovn-nbctl: bad next hop argument: 11.0.0.1a
+])
+AT_CHECK([ovn-nbctl lr-route-add lr0 10.0.0.111/24 11.0.0.1/24], [1], [],
+  [ovn-nbctl: bad IPv4 nexthop argument: 11.0.0.1/24
+])
+AT_CHECK([ovn-nbctl lr-route-add lr0 2001:0db8:1::/64 2001:0db8:0:f103::1/64], [1], [],
+  [ovn-nbctl: bad IPv6 nexthop argument: 2001:0db8:0:f103::1/64
+])
+
 AT_CHECK([ovn-nbctl --may-exist lr-route-add lr0 10.0.0.111/24 11.0.0.1])
 
 AT_CHECK([ovn-nbctl lr-route-list lr0], [0], [dnl
