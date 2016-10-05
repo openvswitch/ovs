@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.3.4",
-    "cksum": "1155817817 9975",
+    "version": "5.4.0",
+    "cksum": "4176761817 11225",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -23,6 +23,11 @@
                                    "max": "unlimited"}},
                 "acls": {"type": {"key": {"type": "uuid",
                                           "refTable": "ACL",
+                                          "refType": "strong"},
+                                  "min": 0,
+                                  "max": "unlimited"}},
+                "qos_rules": {"type": {"key": {"type": "uuid",
+                                          "refTable": "QoS",
                                           "refType": "strong"},
                                   "min": 0,
                                   "max": "unlimited"}},
@@ -120,6 +125,23 @@
                 "action": {"type": {"key": {"type": "string",
                                             "enum": ["set", ["allow", "allow-related", "drop", "reject"]]}}},
                 "log": {"type": "boolean"},
+                "external_ids": {
+                    "type": {"key": "string", "value": "string",
+                             "min": 0, "max": "unlimited"}}},
+            "isRoot": false},
+        "QoS": {
+            "columns": {
+                "priority": {"type": {"key": {"type": "integer",
+                                              "minInteger": 0,
+                                              "maxInteger": 32767}}},
+                "direction": {"type": {"key": {"type": "string",
+                                            "enum": ["set", ["from-lport", "to-lport"]]}}},
+                "match": {"type": "string"},
+                "action": {"type": {"key": {"type": "string",
+                                            "enum": ["set", ["dscp"]]},
+                                    "value": {"type": "integer",
+                                              "minInteger": 0,
+                                              "maxInteger": 63}}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},

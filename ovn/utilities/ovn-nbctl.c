@@ -2626,6 +2626,11 @@ static const struct ctl_table_class tables[] = {
        NULL},
       {NULL, NULL, NULL}}},
 
+    {&nbrec_table_qos,
+     {{&nbrec_table_qos, NULL,
+       NULL},
+      {NULL, NULL, NULL}}},
+
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}
 };
 

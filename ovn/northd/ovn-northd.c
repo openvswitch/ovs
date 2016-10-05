@@ -96,21 +96,22 @@ enum ovn_datapath_type {
  * form the stage's full name, e.g. S_SWITCH_IN_PORT_SEC_L2,
  * S_ROUTER_OUT_DELIVERY. */
 enum ovn_stage {
-#define PIPELINE_STAGES                                               \
-    /* Logical switch ingress stages. */                              \
-    PIPELINE_STAGE(SWITCH, IN,  PORT_SEC_L2,    0, "ls_in_port_sec_l2")     \
-    PIPELINE_STAGE(SWITCH, IN,  PORT_SEC_IP,    1, "ls_in_port_sec_ip")     \
-    PIPELINE_STAGE(SWITCH, IN,  PORT_SEC_ND,    2, "ls_in_port_sec_nd")     \
-    PIPELINE_STAGE(SWITCH, IN,  PRE_ACL,        3, "ls_in_pre_acl")      \
-    PIPELINE_STAGE(SWITCH, IN,  PRE_LB,         4, "ls_in_pre_lb")         \
-    PIPELINE_STAGE(SWITCH, IN,  PRE_STATEFUL,   5, "ls_in_pre_stateful")    \
-    PIPELINE_STAGE(SWITCH, IN,  ACL,            6, "ls_in_acl")          \
-    PIPELINE_STAGE(SWITCH, IN,  LB,             7, "ls_in_lb")           \
-    PIPELINE_STAGE(SWITCH, IN,  STATEFUL,       8, "ls_in_stateful")     \
-    PIPELINE_STAGE(SWITCH, IN,  ARP_ND_RSP,     9, "ls_in_arp_rsp")      \
-    PIPELINE_STAGE(SWITCH, IN,  DHCP_OPTIONS,   10, "ls_in_dhcp_options") \
-    PIPELINE_STAGE(SWITCH, IN,  DHCP_RESPONSE,  11, "ls_in_dhcp_response") \
-    PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,        12, "ls_in_l2_lkup")      \
+#define PIPELINE_STAGES                                                   \
+    /* Logical switch ingress stages. */                                  \
+    PIPELINE_STAGE(SWITCH, IN,  PORT_SEC_L2,    0, "ls_in_port_sec_l2")   \
+    PIPELINE_STAGE(SWITCH, IN,  PORT_SEC_IP,    1, "ls_in_port_sec_ip")   \
+    PIPELINE_STAGE(SWITCH, IN,  PORT_SEC_ND,    2, "ls_in_port_sec_nd")   \
+    PIPELINE_STAGE(SWITCH, IN,  PRE_ACL,        3, "ls_in_pre_acl")       \
+    PIPELINE_STAGE(SWITCH, IN,  PRE_LB,         4, "ls_in_pre_lb")        \
+    PIPELINE_STAGE(SWITCH, IN,  PRE_STATEFUL,   5, "ls_in_pre_stateful")  \
+    PIPELINE_STAGE(SWITCH, IN,  ACL,            6, "ls_in_acl")           \
+    PIPELINE_STAGE(SWITCH, IN,  QOS_MARK,       7, "ls_in_qos_mark")      \
+    PIPELINE_STAGE(SWITCH, IN,  LB,             8, "ls_in_lb")            \
+    PIPELINE_STAGE(SWITCH, IN,  STATEFUL,       9, "ls_in_stateful")      \
+    PIPELINE_STAGE(SWITCH, IN,  ARP_ND_RSP,    10, "ls_in_arp_rsp")       \
+    PIPELINE_STAGE(SWITCH, IN,  DHCP_OPTIONS,  11, "ls_in_dhcp_options")  \
+    PIPELINE_STAGE(SWITCH, IN,  DHCP_RESPONSE, 12, "ls_in_dhcp_response") \
+    PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,       13, "ls_in_l2_lkup")       \
                                                                       \
     /* Logical switch egress stages. */                               \
     PIPELINE_STAGE(SWITCH, OUT, PRE_LB,       0, "ls_out_pre_lb")     \
@@ -118,9 +119,10 @@ enum ovn_stage {
     PIPELINE_STAGE(SWITCH, OUT, PRE_STATEFUL, 2, "ls_out_pre_stateful")  \
     PIPELINE_STAGE(SWITCH, OUT, LB,           3, "ls_out_lb")            \
     PIPELINE_STAGE(SWITCH, OUT, ACL,          4, "ls_out_acl")            \
-    PIPELINE_STAGE(SWITCH, OUT, STATEFUL,     5, "ls_out_stateful")       \
-    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_IP,  6, "ls_out_port_sec_ip")    \
-    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_L2,  7, "ls_out_port_sec_l2")    \
+    PIPELINE_STAGE(SWITCH, OUT, QOS_MARK,     5, "ls_out_qos_mark")       \
+    PIPELINE_STAGE(SWITCH, OUT, STATEFUL,     6, "ls_out_stateful")       \
+    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_IP,  7, "ls_out_port_sec_ip")    \
+    PIPELINE_STAGE(SWITCH, OUT, PORT_SEC_L2,  8, "ls_out_port_sec_l2")    \
                                                                       \
     /* Logical router ingress stages. */                              \
     PIPELINE_STAGE(ROUTER, IN,  ADMISSION,   0, "lr_in_admission")    \
@@ -2611,6 +2613,29 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
 }
 
 static void
+build_qos(struct ovn_datapath *od, struct hmap *lflows) {
+    ovn_lflow_add(lflows, od, S_SWITCH_IN_QOS_MARK, 0, "1", "next;");
+    ovn_lflow_add(lflows, od, S_SWITCH_OUT_QOS_MARK, 0, "1", "next;");
+
+    for (size_t i = 0; i < od->nbs->n_qos_rules; i++) {
+        struct nbrec_qos *qos = od->nbs->qos_rules[i];
+        bool ingress = !strcmp(qos->direction, "from-lport") ? true :false;
+        enum ovn_stage stage = ingress ? S_SWITCH_IN_QOS_MARK : S_SWITCH_OUT_QOS_MARK;
+
+        if (!strcmp(qos->key_action, "dscp")) {
+            struct ds dscp_action = DS_EMPTY_INITIALIZER;
+
+            ds_put_format(&dscp_action, "ip.dscp = %d; next;",
+                          (uint8_t)qos->value_action);
+            ovn_lflow_add(lflows, od, stage,
+                          qos->priority,
+                          qos->match, ds_cstr(&dscp_action));
+            ds_destroy(&dscp_action);
+        }
+    }
+}
+
+static void
 build_lb(struct ovn_datapath *od, struct hmap *lflows)
 {
     /* Ingress and Egress LB Table (Priority 0): Packets are allowed by
@@ -2715,7 +2740,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
     struct ds actions = DS_EMPTY_INITIALIZER;
 
     /* Build pre-ACL and ACL tables for both ingress and egress.
-     * Ingress tables 3 and 4.  Egress tables 0 and 1. */
+     * Ingress tables 3 through 9.  Egress tables 0 through 6. */
     struct ovn_datapath *od;
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbs) {
@@ -2726,6 +2751,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         build_pre_lb(od, lflows);
         build_pre_stateful(od, lflows);
         build_acls(od, lflows);
+        build_qos(od, lflows);
         build_lb(od, lflows);
         build_stateful(od, lflows);
     }
@@ -2797,7 +2823,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_SWITCH_IN_PORT_SEC_IP, 0, "1", "next;");
     }
 
-    /* Ingress table 9: ARP/ND responder, skip requests coming from localnet
+    /* Ingress table 10: ARP/ND responder, skip requests coming from localnet
      * ports. (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbsp) {
@@ -2812,7 +2838,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
 
-    /* Ingress table 9: ARP/ND responder, reply for known IPs.
+    /* Ingress table 10: ARP/ND responder, reply for known IPs.
      * (priority 50). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbsp) {
@@ -2905,7 +2931,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
 
-    /* Ingress table 9: ARP/ND responder, by default goto next.
+    /* Ingress table 10: ARP/ND responder, by default goto next.
      * (priority 0)*/
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbs) {
@@ -2915,7 +2941,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_SWITCH_IN_ARP_ND_RSP, 0, "1", "next;");
     }
 
-    /* Logical switch ingress table 10 and 11: DHCP options and response
+    /* Logical switch ingress table 11 and 12: DHCP options and response
          * priority 100 flows. */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbsp) {
@@ -2994,7 +3020,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
 
-    /* Ingress table 10 and 11: DHCP options and response, by default goto next.
+    /* Ingress table 11 and 12: DHCP options and response, by default goto next.
      * (priority 0). */
 
     HMAP_FOR_EACH (od, key_node, datapaths) {
@@ -3006,7 +3032,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_SWITCH_IN_DHCP_RESPONSE, 0, "1", "next;");
     }
 
-    /* Ingress table 12: Destination lookup, broadcast and multicast handling
+    /* Ingress table 13: Destination lookup, broadcast and multicast handling
      * (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbsp) {
@@ -3026,7 +3052,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                       "outport = \""MC_FLOOD"\"; output;");
     }
 
-    /* Ingress table 12: Destination lookup, unicast handling (priority 50), */
+    /* Ingress table 13: Destination lookup, unicast handling (priority 50), */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbsp) {
             continue;
@@ -3073,7 +3099,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
 
-    /* Ingress table 12: Destination lookup for unknown MACs (priority 0). */
+    /* Ingress table 13: Destination lookup for unknown MACs (priority 0). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
         if (!od->nbs) {
             continue;

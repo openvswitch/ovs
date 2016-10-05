@@ -5359,6 +5359,90 @@ AT_CHECK([ovn-nbctl lsp-del localvif2])
 # because, localvif3 is still bound.
 OVS_WAIT_UNTIL([test `ovs-vsctl show | grep "Port patch-br-int-to-ln_port" | wc -l` -eq 1])
 
-
 OVN_CLEANUP([hv1],[hv2])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- DSCP marking check])
+AT_KEYWORDS([ovn])
+ovn_start
+
+ovn-nbctl ls-add lsw0
+ovn-nbctl --wait=sb lsp-add lsw0 lp1
+ovn-nbctl --wait=sb lsp-add lsw0 lp2
+ovn-nbctl lsp-set-addresses lp1 f0:00:00:00:00:01
+ovn-nbctl lsp-set-addresses lp2 f0:00:00:00:00:02
+ovn-nbctl lsp-set-port-security lp1 f0:00:00:00:00:01
+ovn-nbctl lsp-set-port-security lp2 f0:00:00:00:00:02
+ovn-nbctl --wait=sb sync
+net_add n1
+sim_add hv
+as hv
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl add-port br-int vif1 -- set Interface vif1 external-ids:iface-id=lp1 options:tx_pcap=vif1-tx.pcap options:rxq_pcap=vif1-rx.pcap ofport-request=1
+ovs-vsctl add-port br-int vif2 -- set Interface vif2 external-ids:iface-id=lp2 options:tx_pcap=vif2-tx.pcap options:rxq_pcap=vif2-rx.pcap ofport-request=2
+
+AT_CAPTURE_FILE([trace])
+ovn_trace () {
+    ovn-trace --all "$@" | tee trace | sed '1,/Minimal trace/d'
+}
+
+# Extracts nw_tos from the final flow from ofproto/trace output and prints
+# it on stdout.  Prints "none" if no nw_tos was included.
+get_final_nw_tos() {
+    if flow=$(grep '^Final flow:' stdout); then :; else
+       # The output didn't have a final flow.
+       return 99
+    fi
+
+    tos=$(echo "$flow" | sed -n 's/.*nw_tos=\([[0-9]]\{1,\}\).*/\1/p')
+    case $tos in
+        '') echo none ;;
+	*) echo $tos ;;
+    esac
+}
+
+# check_tos TOS
+#
+# Checks that a packet from 1.1.1.1 to 1.1.1.2 gets its DSCP set to TOS.
+check_tos() {
+    # First check with ovn-trace for logical flows.
+    echo "checking for tos $1"
+    (if test $1 != 0; then echo "ip.dscp = $1;"; fi;
+     echo 'output("lp2");') > expout
+    AT_CHECK_UNQUOTED([ovn_trace lsw0 'inport == "lp1" && eth.src == f0:00:00:00:00:01 && eth.dst == f0:00:00:00:00:02 && ip4.src == 1.1.1.1 && ip4.dst == 1.1.1.2'], [0], [expout])
+
+    # Then re-check with ofproto/trace for a physical packet.
+    AT_CHECK([ovs-appctl ofproto/trace br-int 'in_port=1,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02,dl_type=0x800,nw_src=1.1.1.1,nw_dst=1.1.1.2'], [0], [stdout-nolog])
+    AT_CHECK_UNQUOTED([get_final_nw_tos], [0], [`expr $1 \* 4`
+])
+}
+
+# check at L2
+AT_CHECK([ovn_trace lsw0 'inport == "lp1" && eth.src == f0:00:00:00:00:01 && eth.dst == f0:00:00:00:00:02'], [0], [output("lp2");
+])
+AT_CHECK([ovs-appctl ofproto/trace br-int 'in_port=1,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02'], [0], [stdout-nolog])
+AT_CHECK([get_final_nw_tos], [0], [none
+])
+
+# check at L3 without dscp marking
+check_tos 0
+
+# Mark DSCP with a valid value
+qos_id=$(ovn-nbctl --wait=hv -- --id=@lp1-qos create QoS priority=100 action=dscp=48 match="inport\=\=\"lp1\"" direction="from-lport" -- set Logical_Switch lsw0 qos_rules=@lp1-qos)
+check_tos 48
+
+# Update the DSCP marking
+ovn-nbctl --wait=hv set QoS $qos_id action=dscp=63
+check_tos 63
+
+ovn-nbctl --wait=hv set QoS $qos_id match="outport\=\=\"lp2\"" direction="to-lport"
+check_tos 63
+
+# Disable DSCP marking
+ovn-nbctl --wait=hv clear Logical_Switch lsw0 qos_rules
+check_tos 0
+
+OVN_CLEANUP([hv])
 AT_CLEANUP
