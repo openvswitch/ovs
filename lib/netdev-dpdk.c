@@ -478,21 +478,12 @@ ovs_rte_pktmbuf_init(struct rte_mempool *mp,
 }
 
 static struct dpdk_mp *
-dpdk_mp_get(int socket_id, int mtu)
+dpdk_mp_create(int socket_id, int mtu)
 {
-    struct dpdk_mp *dmp = NULL;
-    char mp_name[RTE_MEMPOOL_NAMESIZE];
-    unsigned mp_size;
     struct rte_pktmbuf_pool_private mbp_priv;
-    bool failed = false;
-
-    ovs_mutex_lock(&dpdk_mp_mutex);
-    LIST_FOR_EACH (dmp, list_node, &dpdk_mp_list) {
-        if (dmp->socket_id == socket_id && dmp->mtu == mtu) {
-            dmp->refcount++;
-            goto out;
-        }
-    }
+    char mp_name[RTE_MEMPOOL_NAMESIZE];
+    struct dpdk_mp *dmp;
+    unsigned mp_size;
 
     dmp = dpdk_rte_mzalloc(sizeof *dmp);
     dmp->socket_id = socket_id;
@@ -502,7 +493,7 @@ dpdk_mp_get(int socket_id, int mtu)
     mbp_priv.mbuf_priv_size = sizeof(struct dp_packet)
                               - sizeof(struct rte_mbuf);
     /* XXX: this is a really rough method of provisioning memory.
-     * It's impossible to determine what the exact memory requirements are when
+     * It's impossible to determine what the exact memory requirements are
      * when the number of ports and rxqs that utilize a particular mempool can
      * change dynamically at runtime. For now, use this rough heurisitic.
      */
@@ -515,7 +506,6 @@ dpdk_mp_get(int socket_id, int mtu)
     do {
         if (snprintf(mp_name, RTE_MEMPOOL_NAMESIZE, "ovs_mp_%d_%d_%u",
                      dmp->mtu, dmp->socket_id, mp_size) < 0) {
-            failed = true;
             goto out;
         }
 
@@ -528,21 +518,37 @@ dpdk_mp_get(int socket_id, int mtu)
     } while (!dmp->mp && rte_errno == ENOMEM && (mp_size /= 2) >= MIN_NB_MBUF);
 
     if (dmp->mp == NULL) {
-        failed = true;
         goto out;
     } else {
-        VLOG_DBG("Allocated \"%s\" mempool with %u mbufs", mp_name, mp_size );
+        VLOG_DBG("Allocated \"%s\" mempool with %u mbufs", mp_name, mp_size);
     }
 
+    return dmp;
+
+out:
+    rte_free(dmp);
+    return NULL;
+}
+
+static struct dpdk_mp *
+dpdk_mp_get(int socket_id, int mtu)
+{
+    struct dpdk_mp *dmp;
+
+    ovs_mutex_lock(&dpdk_mp_mutex);
+    LIST_FOR_EACH (dmp, list_node, &dpdk_mp_list) {
+        if (dmp->socket_id == socket_id && dmp->mtu == mtu) {
+            dmp->refcount++;
+            goto out;
+        }
+    }
+
+    dmp = dpdk_mp_create(socket_id, mtu);
     ovs_list_push_back(&dpdk_mp_list, &dmp->list_node);
 
 out:
     ovs_mutex_unlock(&dpdk_mp_mutex);
 
-    if (failed) {
-        rte_free(dmp);
-        return NULL;
-    }
     return dmp;
 }
 
