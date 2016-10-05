@@ -436,19 +436,13 @@ dpdk_buf_size(int mtu)
                      NETDEV_DPDK_MBUF_ALIGN);
 }
 
-/* XXX: use dpdk malloc for entire OVS. in fact huge page should be used
- * for all other segments data, bss and text. */
-
+/* Allocates an area of 'sz' bytes from DPDK.  The memory is zero'ed.
+ *
+ * Unlike xmalloc(), this function can return NULL on failure. */
 static void *
 dpdk_rte_mzalloc(size_t sz)
 {
-    void *ptr;
-
-    ptr = rte_zmalloc(OVS_VPORT_DPDK, sz, OVS_CACHE_LINE_SIZE);
-    if (ptr == NULL) {
-        out_of_memory();
-    }
-    return ptr;
+    return rte_zmalloc(OVS_VPORT_DPDK, sz, OVS_CACHE_LINE_SIZE);
 }
 
 /* XXX this function should be called only by pmd threads (or by non pmd
@@ -483,6 +477,9 @@ dpdk_mp_create(int socket_id, int mtu)
     unsigned mp_size;
 
     dmp = dpdk_rte_mzalloc(sizeof *dmp);
+    if (!dmp) {
+        return NULL;
+    }
     dmp->socket_id = socket_id;
     dmp->mtu = mtu;
     dmp->refcount = 1;
@@ -801,17 +798,22 @@ netdev_dpdk_alloc(void)
     return NULL;
 }
 
-static void
-netdev_dpdk_alloc_txq(struct netdev_dpdk *dev, unsigned int n_txqs)
+static struct dpdk_tx_queue *
+netdev_dpdk_alloc_txq(unsigned int n_txqs)
 {
+    struct dpdk_tx_queue *txqs;
     unsigned i;
 
-    dev->tx_q = dpdk_rte_mzalloc(n_txqs * sizeof *dev->tx_q);
-    for (i = 0; i < n_txqs; i++) {
-        /* Initialize map for vhost devices. */
-        dev->tx_q[i].map = OVS_VHOST_QUEUE_MAP_UNKNOWN;
-        rte_spinlock_init(&dev->tx_q[i].tx_lock);
+    txqs = dpdk_rte_mzalloc(n_txqs * sizeof *txqs);
+    if (txqs) {
+        for (i = 0; i < n_txqs; i++) {
+            /* Initialize map for vhost devices. */
+            txqs[i].map = OVS_VHOST_QUEUE_MAP_UNKNOWN;
+            rte_spinlock_init(&txqs[i].tx_lock);
+        }
     }
+
+    return txqs;
 }
 
 static int
@@ -874,11 +876,16 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
         if (err) {
             goto unlock;
         }
-        netdev_dpdk_alloc_txq(dev, netdev->n_txq);
+        dev->tx_q = netdev_dpdk_alloc_txq(netdev->n_txq);
     } else {
-        netdev_dpdk_alloc_txq(dev, OVS_VHOST_MAX_QUEUE_NUM);
+        dev->tx_q = netdev_dpdk_alloc_txq(OVS_VHOST_MAX_QUEUE_NUM);
         /* Enable DPDK_DEV_VHOST device and set promiscuous mode flag. */
         dev->flags = NETDEV_UP | NETDEV_PROMISC;
+    }
+
+    if (!dev->tx_q) {
+        err = ENOMEM;
+        goto unlock;
     }
 
     ovs_list_push_back(&dpdk_list, &dev->list_node);
@@ -1226,7 +1233,11 @@ netdev_dpdk_rxq_alloc(void)
 {
     struct netdev_rxq_dpdk *rx = dpdk_rte_mzalloc(sizeof *rx);
 
-    return &rx->up;
+    if (rx) {
+        return &rx->up;
+    }
+
+    return NULL;
 }
 
 static struct netdev_rxq_dpdk *
@@ -2352,7 +2363,7 @@ netdev_dpdk_remap_txqs(struct netdev_dpdk *dev)
     int *enabled_queues, n_enabled = 0;
     int i, k, total_txqs = dev->up.n_txq;
 
-    enabled_queues = dpdk_rte_mzalloc(total_txqs * sizeof *enabled_queues);
+    enabled_queues = xcalloc(total_txqs, sizeof *enabled_queues);
 
     for (i = 0; i < total_txqs; i++) {
         /* Enabled queues always mapped to themselves. */
@@ -2379,7 +2390,7 @@ netdev_dpdk_remap_txqs(struct netdev_dpdk *dev)
         VLOG_DBG("%2d --> %2d", i, dev->tx_q[i].map);
     }
 
-    rte_free(enabled_queues);
+    free(enabled_queues);
 }
 
 /*
@@ -2620,7 +2631,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
     int err;
 
     ivshmem = dpdk_rte_mzalloc(sizeof *ivshmem);
-    if (ivshmem == NULL) {
+    if (!ivshmem) {
         return ENOMEM;
     }
 
@@ -2977,7 +2988,10 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
 
     rte_free(dev->tx_q);
     err = dpdk_eth_dev_init(dev);
-    netdev_dpdk_alloc_txq(dev, netdev->n_txq);
+    dev->tx_q = netdev_dpdk_alloc_txq(netdev->n_txq);
+    if (!dev->tx_q) {
+        err = ENOMEM;
+    }
 
     netdev_change_seq_changed(netdev);
 
