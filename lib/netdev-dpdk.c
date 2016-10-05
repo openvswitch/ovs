@@ -1261,9 +1261,13 @@ netdev_dpdk_rxq_dealloc(struct netdev_rxq *rxq)
     rte_free(rx);
 }
 
-static inline void
+/* Tries to transmit 'pkts' to txq 'qid' of device 'dev'.  Takes ownership of
+ * 'pkts', even in case of failure.
+ *
+ * Returns the number of packets that weren't transmitted. */
+static inline int
 netdev_dpdk_eth_tx_burst(struct netdev_dpdk *dev, int qid,
-                             struct rte_mbuf **pkts, int cnt)
+                         struct rte_mbuf **pkts, int cnt)
 {
     uint32_t nb_tx = 0;
 
@@ -1279,17 +1283,16 @@ netdev_dpdk_eth_tx_burst(struct netdev_dpdk *dev, int qid,
     }
 
     if (OVS_UNLIKELY(nb_tx != cnt)) {
-        /* free buffers, which we couldn't transmit, one at a time (each
+        /* Free buffers, which we couldn't transmit, one at a time (each
          * packet could come from a different mempool) */
         int i;
 
         for (i = nb_tx; i < cnt; i++) {
             rte_pktmbuf_free(pkts[i]);
         }
-        rte_spinlock_lock(&dev->stats_lock);
-        dev->stats.tx_dropped += cnt - nb_tx;
-        rte_spinlock_unlock(&dev->stats_lock);
     }
+
+    return cnt - nb_tx;
 }
 
 static inline bool
@@ -1666,7 +1669,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
         newcnt = netdev_dpdk_qos_run(dev, pkts, newcnt);
 
         dropped += qos_pkts - newcnt;
-        netdev_dpdk_eth_tx_burst(dev, qid, pkts, newcnt);
+        dropped += netdev_dpdk_eth_tx_burst(dev, qid, pkts, newcnt);
     }
 
     if (OVS_UNLIKELY(dropped)) {
@@ -1723,7 +1726,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
         cnt = netdev_dpdk_qos_run(dev, pkts, cnt);
         dropped = batch->count - cnt;
 
-        netdev_dpdk_eth_tx_burst(dev, qid, pkts, cnt);
+        dropped += netdev_dpdk_eth_tx_burst(dev, qid, pkts, cnt);
 
         if (OVS_UNLIKELY(dropped)) {
             rte_spinlock_lock(&dev->stats_lock);
