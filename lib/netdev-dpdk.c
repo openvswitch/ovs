@@ -288,10 +288,6 @@ static struct ovs_mutex dpdk_mp_mutex OVS_ACQ_AFTER(dpdk_mutex)
 static struct ovs_list dpdk_mp_list OVS_GUARDED_BY(dpdk_mp_mutex)
     = OVS_LIST_INITIALIZER(&dpdk_mp_list);
 
-/* This mutex must be used by non pmd threads when allocating or freeing
- * mbufs through mempools. */
-static struct ovs_mutex nonpmd_mempool_mutex = OVS_MUTEX_INITIALIZER;
-
 struct dpdk_mp {
     struct rte_mempool *mp;
     int mtu;
@@ -405,8 +401,6 @@ struct netdev_rxq_dpdk {
     int port_id;
 };
 
-static bool dpdk_thread_is_pmd(void);
-
 static int netdev_dpdk_construct(struct netdev *);
 
 int netdev_dpdk_get_vid(const struct netdev_dpdk *dev);
@@ -445,8 +439,6 @@ dpdk_rte_mzalloc(size_t sz)
     return rte_zmalloc(OVS_VPORT_DPDK, sz, OVS_CACHE_LINE_SIZE);
 }
 
-/* XXX this function should be called only by pmd threads (or by non pmd
- * threads holding the nonpmd_mempool_mutex) */
 void
 free_dpdk_buf(struct dp_packet *p)
 {
@@ -1630,13 +1622,6 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
     int newcnt = 0;
     int i;
 
-    /* If we are on a non pmd thread we have to use the mempool mutex, because
-     * every non pmd thread shares the same mempool cache */
-
-    if (!dpdk_thread_is_pmd()) {
-        ovs_mutex_lock(&nonpmd_mempool_mutex);
-    }
-
     dp_packet_batch_apply_cutlen(batch);
 
     for (i = 0; i < batch->count; i++) {
@@ -1684,10 +1669,6 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet_batch *batch)
         rte_spinlock_lock(&dev->stats_lock);
         dev->stats.tx_dropped += dropped;
         rte_spinlock_unlock(&dev->stats_lock);
-    }
-
-    if (!dpdk_thread_is_pmd()) {
-        ovs_mutex_unlock(&nonpmd_mempool_mutex);
     }
 }
 
@@ -3604,10 +3585,4 @@ dpdk_set_lcore_id(unsigned cpu)
     /* NON_PMD_CORE_ID is reserved for use by non pmd threads. */
     ovs_assert(cpu != NON_PMD_CORE_ID);
     RTE_PER_LCORE(_lcore_id) = cpu;
-}
-
-static bool
-dpdk_thread_is_pmd(void)
-{
-    return rte_lcore_id() != NON_PMD_CORE_ID;
 }
