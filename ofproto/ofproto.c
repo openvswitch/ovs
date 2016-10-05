@@ -6192,10 +6192,22 @@ static void
 meter_delete(struct ofproto *ofproto, uint32_t first, uint32_t last)
     OVS_REQUIRES(ofproto_mutex)
 {
-    uint32_t mid;
-    for (mid = first; mid <= last; ++mid) {
+    for (uint32_t mid = first; mid <= last; ++mid) {
         struct meter *meter = ofproto->meters[mid];
         if (meter) {
+            /* First delete the rules that use this meter. */
+            if (!ovs_list_is_empty(&meter->rules)) {
+                struct rule_collection rules;
+                struct rule *rule;
+
+                rule_collection_init(&rules);
+
+                LIST_FOR_EACH (rule, meter_list_node, &meter->rules) {
+                    rule_collection_add(&rules, rule);
+                }
+                delete_flows__(&rules, OFPRR_METER_DELETE, NULL);
+            }
+
             ofproto->meters[mid] = NULL;
             ofproto->ofproto_class->meter_del(ofproto,
                                               meter->provider_meter_id);
@@ -6253,7 +6265,6 @@ handle_delete_meter(struct ofconn *ofconn, struct ofputil_meter_mod *mm)
 {
     struct ofproto *ofproto = ofconn_get_ofproto(ofconn);
     uint32_t meter_id = mm->meter.meter_id;
-    struct rule_collection rules;
     enum ofperr error = 0;
     uint32_t first, last;
 
@@ -6267,25 +6278,9 @@ handle_delete_meter(struct ofconn *ofconn, struct ofputil_meter_mod *mm)
         first = last = meter_id;
     }
 
-    /* First delete the rules that use this meter.  If any of those rules are
-     * currently being modified, postpone the whole operation until later. */
-    rule_collection_init(&rules);
-    ovs_mutex_lock(&ofproto_mutex);
-    for (meter_id = first; meter_id <= last; ++meter_id) {
-        struct meter *meter = ofproto->meters[meter_id];
-        if (meter && !ovs_list_is_empty(&meter->rules)) {
-            struct rule *rule;
-
-            LIST_FOR_EACH (rule, meter_list_node, &meter->rules) {
-                rule_collection_add(&rules, rule);
-            }
-        }
-    }
-    delete_flows__(&rules, OFPRR_METER_DELETE, NULL);
-
     /* Delete the meters. */
+    ovs_mutex_lock(&ofproto_mutex);
     meter_delete(ofproto, first, last);
-
     ovs_mutex_unlock(&ofproto_mutex);
 
     return error;
