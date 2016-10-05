@@ -181,8 +181,6 @@ enum dpdk_dev_type {
     DPDK_DEV_VHOST = 1,
 };
 
-static int rte_eal_init_ret = ENODEV;
-
 /* Quality of Service */
 
 /* An instance of a QoS configuration.  Always associated with a particular
@@ -778,12 +776,11 @@ netdev_dpdk_alloc(void)
 {
     struct netdev_dpdk *dev;
 
-    if (!rte_eal_init_ret) { /* Only after successful initialization */
-        dev = dpdk_rte_mzalloc(sizeof *dev);
-        if (dev) {
-            return &dev->up;
-        }
+    dev = dpdk_rte_mzalloc(sizeof *dev);
+    if (dev) {
+        return &dev->up;
     }
+
     return NULL;
 }
 
@@ -922,10 +919,6 @@ netdev_dpdk_vhost_construct(struct netdev *netdev)
         return EINVAL;
     }
 
-    if (rte_eal_init_ret) {
-        return rte_eal_init_ret;
-    }
-
     ovs_mutex_lock(&dpdk_mutex);
     /* Take the name of the vhost-user port and append it to the location where
      * the socket is to be created, then register the socket.
@@ -954,10 +947,6 @@ netdev_dpdk_vhost_client_construct(struct netdev *netdev)
 {
     int err;
 
-    if (rte_eal_init_ret) {
-        return rte_eal_init_ret;
-    }
-
     ovs_mutex_lock(&dpdk_mutex);
     err = netdev_dpdk_init(netdev, -1, DPDK_DEV_VHOST);
     ovs_mutex_unlock(&dpdk_mutex);
@@ -969,10 +958,6 @@ netdev_dpdk_construct(struct netdev *netdev)
 {
     unsigned int port_no;
     int err;
-
-    if (rte_eal_init_ret) {
-        return rte_eal_init_ret;
-    }
 
     /* Names always start with "dpdk" */
     err = dpdk_dev_parse_name(netdev->name, "dpdk", &port_no);
@@ -2705,10 +2690,6 @@ netdev_dpdk_ring_construct(struct netdev *netdev)
     unsigned int port_no = 0;
     int err = 0;
 
-    if (rte_eal_init_ret) {
-        return rte_eal_init_ret;
-    }
-
     ovs_mutex_lock(&dpdk_mutex);
 
     err = dpdk_ring_open(netdev->name, &port_no);
@@ -3470,7 +3451,6 @@ dpdk_init__(const struct smap *ovs_other_config)
     atexit(deferred_argv_release);
 
     rte_memzone_dump(stdout);
-    rte_eal_init_ret = 0;
 
     /* We are called from the main thread here */
     RTE_PER_LCORE(_lcore_id) = NON_PMD_CORE_ID;
