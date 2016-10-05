@@ -62,7 +62,7 @@
 #endif
 #include "rte_virtio_net.h"
 
-VLOG_DEFINE_THIS_MODULE(dpdk);
+VLOG_DEFINE_THIS_MODULE(netdev_dpdk);
 static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 20);
 
 #define DPDK_PORT_WATCHDOG_INTERVAL 5
