@@ -142,11 +142,13 @@ eth_addr_is_reserved(const struct eth_addr ea)
 
 /* Attempts to parse 's' as an Ethernet address.  If successful, stores the
  * address in 'ea' and returns true, otherwise zeros 'ea' and returns
- * false.  */
+ * false.  This function checks trailing characters. */
 bool
 eth_addr_from_string(const char *s, struct eth_addr *ea)
 {
-    if (ovs_scan(s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(*ea))) {
+    int n = 0;
+    if (ovs_scan(s, ETH_ADDR_SCAN_FMT"%n", ETH_ADDR_SCAN_ARGS(*ea), &n)
+        && !s[n]) {
         return true;
     } else {
         *ea = eth_addr_zero;

@@ -2299,7 +2299,7 @@ nbctl_lrp_add(struct ctl_context *ctx)
     }
 
     struct eth_addr ea;
-    if (!ovs_scan(mac, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(ea))) {
+    if (!eth_addr_from_string(mac, &ea)) {
         ctl_fatal("%s: invalid mac address %s", lrp_name, mac);
     }
 

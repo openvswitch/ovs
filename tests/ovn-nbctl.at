@@ -530,6 +530,13 @@ AT_SETUP([ovn-nbctl - basic logical router port commands])
 OVN_NBCTL_TEST_START
 
 AT_CHECK([ovn-nbctl lr-add lr0])
+AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02 192.168.1.1/24], [1], [],
+  [ovn-nbctl: lrp0: invalid mac address 00:00:00:01:02
+])
+AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03:04 192.168.1.1/24], [1], [],
+  [ovn-nbctl: lrp0: invalid mac address 00:00:00:01:02:03:04
+])
+
 AT_CHECK([ovn-nbctl lrp-add lr0 lrp0 00:00:00:01:02:03 192.168.1.1/24])
 
 AT_CHECK([ovn-nbctl show lr0 | ${PERL} $srcdir/uuidfilt.pl], [0], [dnl

@@ -3059,9 +3059,12 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
 
         for (size_t i = 0; i < op->nbsp->n_addresses; i++) {
+            /* Addresses are owned by the logical port.
+             * Ethernet address followed by zero or more IPv4
+             * or IPv6 addresses (or both). */
             struct eth_addr mac;
-
-            if (eth_addr_from_string(op->nbsp->addresses[i], &mac)) {
+            if (ovs_scan(op->nbsp->addresses[i],
+                        ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))) {
                 ds_clear(&match);
                 ds_put_format(&match, "eth.dst == "ETH_ADDR_FMT,
                               ETH_ADDR_ARGS(mac));
@@ -3077,8 +3080,8 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                 }
             } else if (!strcmp(op->nbsp->addresses[i], "dynamic")) {
                 if (!op->nbsp->dynamic_addresses
-                    || !eth_addr_from_string(op->nbsp->dynamic_addresses,
-                                            &mac)) {
+                    || !ovs_scan(op->nbsp->dynamic_addresses,
+                            ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))) {
                     continue;
                 }
                 ds_clear(&match);
