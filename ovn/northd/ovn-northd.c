@@ -815,7 +815,7 @@ ipam_insert_lsp_addresses(struct ovn_datapath *od, struct ovn_port *op,
                           char *address)
 {
     if (!od || !op || !address || !strcmp(address, "unknown")
-        || !strcmp(address, "dynamic")) {
+        || is_dynamic_lsp_address(address)) {
         return;
     }
 
@@ -940,7 +940,7 @@ ipam_get_unused_ip(struct ovn_datapath *od, uint32_t subnet, uint32_t mask)
 
 static bool
 ipam_allocate_addresses(struct ovn_datapath *od, struct ovn_port *op,
-                        ovs_be32 subnet, ovs_be32 mask)
+                        const char *addrspec, ovs_be32 subnet, ovs_be32 mask)
 {
     if (!od || !op || !op->nbsp) {
         return false;
@@ -952,16 +952,26 @@ ipam_allocate_addresses(struct ovn_datapath *od, struct ovn_port *op,
     }
 
     struct eth_addr mac;
-    uint64_t mac64 = ipam_get_unused_mac();
-    if (!mac64) {
-        return false;
+    bool check_mac;
+    int n = 0;
+
+    if (ovs_scan(addrspec, ETH_ADDR_SCAN_FMT" dynamic%n",
+                 ETH_ADDR_SCAN_ARGS(mac), &n)
+        && addrspec[n] == '\0') {
+        check_mac = true;
+    } else {
+        uint64_t mac64 = ipam_get_unused_mac();
+        if (!mac64) {
+            return false;
+        }
+        eth_addr_from_uint64(mac64, &mac);
+        check_mac = false;
     }
-    eth_addr_from_uint64(mac64, &mac);
 
     /* Add MAC/IP to MACAM/IPAM hmaps if both addresses were allocated
      * successfully. */
     ipam_insert_ip(od, ip, false);
-    ipam_insert_mac(&mac, false);
+    ipam_insert_mac(&mac, check_mac);
 
     char *new_addr = xasprintf(ETH_ADDR_FMT" "IP_FMT,
                                ETH_ADDR_ARGS(mac), IP_ARGS(htonl(ip)));
@@ -1018,9 +1028,10 @@ build_ipam(struct hmap *datapaths, struct hmap *ports)
                 }
 
                 for (size_t j = 0; j < nbsp->n_addresses; j++) {
-                    if (!strcmp(nbsp->addresses[j], "dynamic")
+                    if (is_dynamic_lsp_address(nbsp->addresses[j])
                         && !nbsp->dynamic_addresses) {
-                        if (!ipam_allocate_addresses(od, op, subnet, mask)
+                        if (!ipam_allocate_addresses(od, op,
+                                             nbsp->addresses[j], subnet, mask)
                             || !extract_lsp_addresses(nbsp->dynamic_addresses,
                                             &op->lsp_addrs[op->n_lsp_addrs])) {
                             static struct vlog_rate_limit rl
@@ -1197,7 +1208,7 @@ join_logical_ports(struct northd_context *ctx,
                     if (!strcmp(nbsp->addresses[j], "unknown")) {
                         continue;
                     }
-                    if (!strcmp(nbsp->addresses[j], "dynamic")) {
+                    if (is_dynamic_lsp_address(nbsp->addresses[j])) {
                         if (nbsp->dynamic_addresses) {
                             if (!extract_lsp_addresses(nbsp->dynamic_addresses,
                                             &op->lsp_addrs[op->n_lsp_addrs])) {
@@ -3078,7 +3089,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                     ovn_multicast_add(mcgroups, &mc_unknown, op);
                     op->od->has_unknown = true;
                 }
-            } else if (!strcmp(op->nbsp->addresses[i], "dynamic")) {
+            } else if (is_dynamic_lsp_address(op->nbsp->addresses[i])) {
                 if (!op->nbsp->dynamic_addresses
                     || !ovs_scan(op->nbsp->dynamic_addresses,
                             ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))) {

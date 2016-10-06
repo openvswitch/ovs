@@ -479,6 +479,35 @@
             column="other_config" key="subnet"/> in the port's <ref
             table="Logical_Switch"/>.
           </dd>
+
+          <dt><code>Ethernet address followed by keyword "dynamic"</code></dt>
+          <dd>
+
+            <p>
+              The keyword <code>dynamic</code> after the MAC address indicates
+              that <code>ovn-northd</code> should choose an unused IPv4 address
+              from the logical port's subnet and store it with the specified
+              MAC in the port's <ref column="dynamic_addresses"/> column.
+              <code>ovn-northd</code> will use the subnet specified in <ref
+              table="Logical_Switch" column="other_config" key="subnet"/> in
+              the port's <ref table="Logical_Switch"/> table.
+            </p>
+
+            <p>
+              Examples:
+            </p>
+
+            <dl>
+              <dt><code>80:fa:5b:06:72:b7 dynamic</code></dt>
+              <dd>
+                This indicates that the logical port owns the specified
+                MAC address and <code>ovn-northd</code> should allocate an
+                unused IPv4 address for the logical port from the corresponding
+                logical switch subnet.
+              </dd>
+            </dl>
+          </dd>
+
         </dl>
       </column>
 
@@ -487,9 +516,9 @@
           Addresses assigned to the logical port by <code>ovn-northd</code>, if
           <code>dynamic</code> is specified in <ref column="addresses"/>.
           Addresses will be of the same format as those that populate the <ref
-          column="addresses"/> column.  Note that these addresses are
-          constructed and managed locally in ovn-northd, so they cannot be
-          reconstructed in the event that the database is lost.
+          column="addresses"/> column.  Note that dynamically assigned
+          addresses are constructed and managed locally in ovn-northd, so they
+          cannot be reconstructed in the event that the database is lost.
         </p>
       </column>
 

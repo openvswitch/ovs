@@ -62,6 +62,26 @@ add_ipv6_netaddr(struct lport_addresses *laddrs, struct in6_addr addr,
     inet_ntop(AF_INET6, &na->network, na->network_s, sizeof na->network_s);
 }
 
+/* Returns true if specified address specifies a dynamic address,
+ * supporting the following formats:
+ *
+ *    "dynamic":
+ *        Both MAC and IP are to be allocated dynamically.
+ *
+ *    "xx:xx:xx:xx:xx:xx dynamic":
+ *        Use specified MAC address, but allocate an IP address
+ *        dynamically.
+ */
+bool
+is_dynamic_lsp_address(const char *address)
+{
+    struct eth_addr ea;
+    int n;
+    return (!strcmp(address, "dynamic")
+            || (ovs_scan(address, ETH_ADDR_SCAN_FMT" dynamic%n",
+                         ETH_ADDR_SCAN_ARGS(ea), &n) && address[n] == '\0'));
+}
+
 /* Extracts the mac, IPv4 and IPv6 addresses from * 'address' which
  * should be of the format 'MAC [IP1 IP2 ..]" where IPn should be a
  * valid IPv4 or IPv6 address and stores them in the 'ipv4_addrs' and

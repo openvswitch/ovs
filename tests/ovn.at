@@ -4689,6 +4689,13 @@ AT_CHECK([ovn-nbctl get Logical-Switch-Port p30 dynamic_addresses], [0],
      ["0a:00:00:00:00:20 192.168.1.17"
 ])
 
+# Test static MAC address with dynamically allocated IP
+ovn-nbctl --wait=sb lsp-add sw0 p31 -- lsp-set-addresses p31 \
+"fe:dc:ba:98:76:54 dynamic"
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p31 dynamic_addresses], [0],
+     ["fe:dc:ba:98:76:54 192.168.1.18"
+])
+
 as ovn-sb
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 

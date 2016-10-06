@@ -3,6 +3,7 @@ Post-v2.6.0
    - OVN:
      * QoS is now implemented via egress shaping rather than ingress policing.
      * DSCP marking is now supported, via the new northbound QoS table.
+     * IPAM now supports fixed MAC addresses.
    - Fixed regression in table stats maintenance introduced in OVS
      2.3.0, wherein the number of OpenFlow table hits and misses was
      not accurate.
