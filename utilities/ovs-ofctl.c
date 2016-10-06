@@ -190,7 +190,8 @@ parse_options(int argc, char *argv[])
         OPT_READ_ONLY,
         DAEMON_OPTION_ENUMS,
         OFP_VERSION_OPTION_ENUMS,
-        VLOG_OPTION_ENUMS
+        VLOG_OPTION_ENUMS,
+        SSL_OPTION_ENUMS,
     };
     static const struct option long_options[] = {
         {"timeout", required_argument, NULL, 't'},

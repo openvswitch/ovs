@@ -153,6 +153,7 @@ parse_options(int argc, char *argv[])
         OPT_MINIMAL,
         OPT_ALL,
         DAEMON_OPTION_ENUMS,
+        SSL_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
     };
     static const struct option long_options[] = {

@@ -1,0 +1,12 @@
+.IP "\fB\-\-ssl\-protocols=\fIprotocols\fR"
+Specifies, in a comma- or space-delimited list, the SSL protocols
+\fB\*(PN\fR will enable for SSL connections.  Supported
+\fIprotocols\fR include \fBTLSv1\fR, \fBTLSv1.1\fR, and \fBTLSv1.2\fR.
+Regardless of order, the highest protocol supported by both sides will
+be chosen when making the connection.  The default when this option is
+omitted is \fBTLSv1,TLSv1.1,TLSv1.2\fR.
+.
+.IP "\fB\-\-ssl\-ciphers=\fIciphers\fR"
+Specifies, in OpenSSL cipher string format, the ciphers \fB\*(PN\fR will 
+support for SSL connections.  The default when this option is omitted is
+\fBHIGH:!aNULL:!MD5\fR.

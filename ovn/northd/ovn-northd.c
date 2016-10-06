@@ -4696,6 +4696,7 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     enum {
         DAEMON_OPTION_ENUMS,
         VLOG_OPTION_ENUMS,
+        SSL_OPTION_ENUMS,
     };
     static const struct option long_options[] = {
         {"ovnsb-db", required_argument, NULL, 'd'},

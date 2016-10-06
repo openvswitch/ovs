@@ -20,6 +20,8 @@ ovsdb/ovsdb-client.1: \
 	lib/daemon.man \
 	lib/ssl-bootstrap-syn.man \
 	lib/ssl-bootstrap.man \
+	lib/ssl-connect-syn.man \
+	lib/ssl-connect.man \
 	lib/ssl-syn.man \
 	lib/ssl.man \
 	lib/table.man \
@@ -34,6 +36,8 @@ lib/daemon-syn.man:
 lib/daemon.man:
 lib/ssl-bootstrap-syn.man:
 lib/ssl-bootstrap.man:
+lib/ssl-connect-syn.man:
+lib/ssl-connect.man:
 lib/ssl-syn.man:
 lib/ssl.man:
 lib/table.man:
@@ -54,6 +58,8 @@ ovsdb/ovsdb-server.1: \
 	lib/service.man \
 	lib/ssl-bootstrap-syn.man \
 	lib/ssl-bootstrap.man \
+	lib/ssl-connect-syn.man \
+	lib/ssl-connect.man \
 	lib/ssl-peer-ca-cert-syn.man \
 	lib/ssl-peer-ca-cert.man \
 	lib/ssl-syn.man \
@@ -78,6 +84,8 @@ lib/service-syn.man:
 lib/service.man:
 lib/ssl-bootstrap-syn.man:
 lib/ssl-bootstrap.man:
+lib/ssl-connect-syn.man:
+lib/ssl-connect.man:
 lib/ssl-peer-ca-cert-syn.man:
 lib/ssl-peer-ca-cert.man:
 lib/ssl-syn.man:

@@ -162,6 +162,8 @@ struct ssl_config_file {
 static struct ssl_config_file private_key;
 static struct ssl_config_file certificate;
 static struct ssl_config_file ca_cert;
+static char *ssl_protocols = "TLSv1,TLSv1.1,TLSv1.2";
+static char *ssl_ciphers = "HIGH:!aNULL:!MD5";
 
 /* Ordinarily, the SSL client and server verify each other's certificates using
  * a CA certificate.  Setting this to false disables this behavior.  (This is a
@@ -966,6 +968,7 @@ do_ssl_init(void)
     SSL_CTX_set_verify(ctx, SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT,
                        NULL);
     SSL_CTX_set_session_cache_mode(ctx, SSL_SESS_CACHE_OFF);
+    SSL_CTX_set_cipher_list(ctx, "HIGH:!aNULL:!MD5");
 
     return 0;
 }
@@ -1112,6 +1115,68 @@ stream_ssl_set_key_and_cert(const char *private_key_file,
         stream_ssl_set_certificate_file__(certificate_file);
         stream_ssl_set_private_key_file__(private_key_file);
     }
+}
+
+/* Sets SSL ciphers based on string input. Aborts with an error message
+ * if 'arg' is invalid. */
+void
+stream_ssl_set_ciphers(const char *arg)
+{
+    if (ssl_init() || !arg || !strcmp(ssl_ciphers, arg)) {
+        return;
+    }
+    if (SSL_CTX_set_cipher_list(ctx,arg) == 0) {
+        VLOG_ERR("SSL_CTX_set_cipher_list: %s",
+                 ERR_error_string(ERR_get_error(), NULL));
+    }
+    ssl_ciphers = xstrdup(arg);
+}
+
+/* Set SSL protocols based on the string input. Aborts with an error message
+ * if 'arg' is invalid. */
+void
+stream_ssl_set_protocols(const char *arg)
+{
+    if (ssl_init() || !arg || !strcmp(arg, ssl_protocols)){
+        return;
+    }
+
+    /* Start with all the flags off and turn them on as requested. */
+    long protocol_flags = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1;
+    protocol_flags |= SSL_OP_NO_TLSv1_1 | SSL_OP_NO_TLSv1_2;
+
+    char *s = xstrdup(arg);
+    char *save_ptr = NULL;
+    char *word = strtok_r(s, " ,\t", &save_ptr);
+    if (word == NULL) {
+        VLOG_ERR("SSL protocol settings invalid");
+        goto exit;
+    }
+    while (word != NULL) {
+        long on_flag;
+        if (!strcasecmp(word, "TLSv1.2")){
+            on_flag = SSL_OP_NO_TLSv1_2;
+        } else if (!strcasecmp(word, "TLSv1.1")){
+            on_flag = SSL_OP_NO_TLSv1_1;
+        } else if (!strcasecmp(word, "TLSv1")){
+            on_flag = SSL_OP_NO_TLSv1;
+        } else {
+            VLOG_ERR("%s: SSL protocol not recognized", word);
+            goto exit;
+        }
+        /* Reverse the no flag and mask it out in the flags
+         * to turn on that protocol. */
+        protocol_flags &= ~on_flag;
+        word = strtok_r(NULL, " ,\t", &save_ptr);
+    };
+
+    /* Set the actual options. */
+    SSL_CTX_set_options(ctx, protocol_flags);
+
+    ssl_protocols = xstrdup(arg);
+
+exit:
+    free(s);
 }
 
 /* Reads the X509 certificate or certificates in file 'file_name'.  On success,

@@ -461,6 +461,8 @@ MAN_FRAGMENTS += \
 	lib/ssl-peer-ca-cert-syn.man \
 	lib/ssl.man \
 	lib/ssl-syn.man \
+	lib/ssl-connect.man \
+	lib/ssl-connect-syn.man \
 	lib/table.man \
 	lib/unixctl.man \
 	lib/unixctl-syn.man \

@@ -165,7 +165,8 @@ parse_options(int argc, char *argv[], struct shash *local_options)
         OPT_PEER_CA_CERT,
         OPT_LOCAL,
         VLOG_OPTION_ENUMS,
-        TABLE_OPTION_ENUMS
+        TABLE_OPTION_ENUMS,
+        SSL_OPTION_ENUMS,
     };
     static const struct option global_long_options[] = {
         {"db", required_argument, NULL, OPT_DB},

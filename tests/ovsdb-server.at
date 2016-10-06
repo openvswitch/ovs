@@ -513,9 +513,13 @@ AT_DATA([schema],
          "columns": {
            "private_key": {"type": "string"},
            "certificate": {"type": "string"},
-           "ca_cert": {"type": "string"}}}}}
+           "ca_cert": {"type": "string"},
+           "ssl_protocols" : {"type": "string"},
+           "ssl_ciphers" : {"type" : "string"}}}}}
 ]])
 AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+# The !ECDHE-ECDSA-AES256-GCM-SHA384 in the ssl_ciphers is so that
+# a cipher negotiation failure can be tested for later.
 AT_CHECK(
   [[ovsdb-tool transact db \
      '["mydb",
@@ -523,13 +527,17 @@ AT_CHECK(
         "table": "SSL",
         "row": {"private_key": "'"$PKIDIR/testpki-privkey2.pem"'",
                 "certificate": "'"$PKIDIR/testpki-cert2.pem"'",
-                "ca_cert": "'"$PKIDIR/testpki-cacert.pem"'"}}]']],
+                "ca_cert": "'"$PKIDIR/testpki-cacert.pem"'",
+                "ssl_protocols": "'"TLSv1.2,TLSv1.1"'",
+                "ssl_ciphers": "'"HIGH:!aNULL:!MD5:!ECDHE-ECDSA-AES256-GCM-SHA384"'"}}]']],
   [0], [ignore], [ignore])
 AT_CHECK(
   [ovsdb-server --log-file --detach --no-chdir --pidfile \
         --private-key=db:mydb,SSL,private_key \
         --certificate=db:mydb,SSL,certificate \
         --ca-cert=db:mydb,SSL,ca_cert \
+        --ssl-protocols=db:mydb,SSL,ssl_protocols \
+        --ssl-ciphers=db:mydb,SSL,ssl_ciphers \
         --remote=pssl:0:127.0.0.1 db],
   [0], [ignore], [ignore])
 PARSE_LISTENING_PORT([ovsdb-server.log], [SSL_PORT])
@@ -538,18 +546,74 @@ AT_CHECK(
         --private-key=$PKIDIR/testpki-privkey.pem \
         --certificate=$PKIDIR/testpki-cert.pem \
         --ca-cert=$PKIDIR/testpki-cacert.pem \
+        --ssl-protocols=TLSv1.2,TLSv1.1 \
+        --ssl-ciphers=HIGH:!aNULL:!MD5 \
         transact ssl:127.0.0.1:$SSL_PORT \
         '["mydb",
           {"op": "select",
            "table": "SSL",
            "where": [],
-           "columns": ["private_key"]}]']], 
+           "columns": ["private_key"]}]']],
   [0], [stdout], [ignore], [test ! -e pid || kill `cat pid`])
 cat stdout >> output
 AT_CHECK_UNQUOTED(
   [cat output], [0],
   [[@<:@{"rows":@<:@{"private_key":"$PKIDIR/testpki-privkey2.pem"}@:>@}@:>@
 ]], [ignore], [test ! -e pid || kill `cat pid`])
+# Check that when the server has TLSv1.1+ and the client has
+# TLSv1 that the connection fails.
+AT_CHECK(
+  [[ovsdb-client \
+        --private-key=$PKIDIR/testpki-privkey.pem \
+        --certificate=$PKIDIR/testpki-cert.pem \
+        --ca-cert=$PKIDIR/testpki-cacert.pem \
+        --ssl-protocols=TLSv1 \
+        --ssl-ciphers=HIGH:!aNULL:!MD5 \
+        transact ssl:127.0.0.1:$SSL_PORT \
+        '["mydb",
+          {"op": "select",
+           "table": "SSL",
+           "where": [],
+           "columns": ["private_key"]}]']], 
+  [1], [stdout], 
+  [stderr], 
+  [test ! -e pid || kill `cat pid`])
+cat stderr > output
+AT_CHECK_UNQUOTED(
+  [grep "failed to connect" output], [0],
+  [ovsdb-client: failed to connect to "ssl:127.0.0.1:$SSL_PORT" (Protocol error)
+], 
+  [ignore], [test ! -e pid || kill `cat pid`])
+# Check that when ciphers are not compatible, that a negotiation
+# failure occurs.
+AT_CHECK(
+  [[ovsdb-client \
+        --private-key=$PKIDIR/testpki-privkey.pem \
+        --certificate=$PKIDIR/testpki-cert.pem \
+        --ca-cert=$PKIDIR/testpki-cacert.pem \
+        --ssl-protocols=TLSv1.2,TLSv1.1 \
+        --ssl-ciphers=ECDHE-ECDSA-AES256-GCM-SHA384 \
+        transact ssl:127.0.0.1:$SSL_PORT \
+        '["mydb",
+          {"op": "select",
+           "table": "SSL",
+           "where": [],
+           "columns": ["private_key"]}]']], 
+  [1], [stdout], 
+  [stderr], 
+  [test ! -e pid || kill `cat pid`])
+cat stderr > output
+AT_CHECK_UNQUOTED(
+  [grep "failed to connect" output], [0],
+  [ovsdb-client: failed to connect to "ssl:127.0.0.1:$SSL_PORT" (Protocol error)
+], 
+  [ignore], [test ! -e pid || kill `cat pid`])
+# The error message for being unable to negotiate a shared ciphersuite
+# is 'sslv3 alert handshake failure'. This is not the clearest message.
+AT_CHECK_UNQUOTED(
+  [grep "sslv3 alert handshake failure" output], [0],
+  [stdout],
+  [ignore], [test ! -e pid || kill `cat pid`])
 OVSDB_SERVER_SHUTDOWN
 AT_CLEANUP
 

@@ -1,0 +1,5 @@
+.IP "SSL connection options:"
+[\fB\-\-ssl\-protocols=\fIprotocols\fR]
+.br
+[\fB\-\-ssl\-ciphers=\fIciphers\fR]
+.br
