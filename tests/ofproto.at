@@ -3683,7 +3683,7 @@ AT_CAPTURE_FILE([monitor2.log])
 AT_CAPTURE_FILE([expout2])
 AT_CAPTURE_FILE([experr2])
 for i in 1 2; do
-     AT_CHECK([ovs-ofctl -O OpenFlow12 monitor br0 --detach --no-chdir --pidfile=`pwd`/c$i.pid --unixctl=`pwd`/c$i])
+     AT_CHECK([ovs-ofctl -O OpenFlow12 monitor br0 --detach --no-chdir --pidfile=c$i.pid --unixctl=c$i])
     ovs-appctl -t `pwd`/c$i ofctl/barrier
     ovs-appctl -t `pwd`/c$i ofctl/set-output-file monitor$i.log
     : > expout$i
@@ -3748,7 +3748,7 @@ AT_CAPTURE_FILE([monitor2.log])
 AT_CAPTURE_FILE([expout2])
 AT_CAPTURE_FILE([experr2])
 for i in 1 2; do
-     AT_CHECK([ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile=`pwd`/c$i.pid --unixctl=`pwd`/c$i])
+     AT_CHECK([ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile=c$i.pid --unixctl=c$i])
     ovs-appctl -t `pwd`/c$i ofctl/barrier
     ovs-appctl -t `pwd`/c$i ofctl/set-output-file monitor$i.log
     : > expout$i
@@ -3813,9 +3813,9 @@ AT_CAPTURE_FILE([expout2])
 AT_CAPTURE_FILE([monitor3.log])
 AT_CAPTURE_FILE([expout3])
 
-ovs-ofctl -O OpenFlow15 monitor br0 --detach --no-chdir --pidfile=`pwd`/c1.pid --unixctl=`pwd`/c1
-ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile=`pwd`/c2.pid --unixctl=`pwd`/c2
-ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile=`pwd`/c3.pid --unixctl=`pwd`/c3
+ovs-ofctl -O OpenFlow15 monitor br0 --detach --no-chdir --pidfile=c1.pid --unixctl=c1
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile=c2.pid --unixctl=c2
+ovs-ofctl -O OpenFlow14 monitor br0 --detach --no-chdir --pidfile=c3.pid --unixctl=c3
 
 check_async () {
     for i in 1 3; do

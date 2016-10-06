@@ -4,12 +4,13 @@ dnl Creates an empty database in the current directory and then starts
 dnl an ovsdb-server on it for ovs-vsctl to connect to.
 m4_define([OVS_VSCTL_SETUP],
   [OVSDB_INIT([db])
-   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db >/dev/null 2>&1], [0], [ignore], [ignore])])
+   AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket db >/dev/null 2>&1], [0], [ignore], [ignore])
+   on_exit 'kill `cat ovsdb-server.pid`'])
 
 dnl OVS_VSCTL_CLEANUP
 dnl
 dnl Kills off the database server.
-m4_define([OVS_VSCTL_CLEANUP], [OVS_APP_EXIT_AND_WAIT_BY_TARGET(["`pwd`"/unixctl], ["`pwd`"/pid])])
+m4_define([OVS_VSCTL_CLEANUP], [OVS_APP_EXIT_AND_WAIT_BY_TARGET([ovsdb-server], [ovsdb-server.pid])])
 
 dnl RUN_OVS_VSCTL(COMMAND, ...)
 dnl
@@ -669,21 +670,21 @@ sflow               : []
 status              : {}
 stp_enable          : false
 <0>
-]], [ignore], [test ! -e pid || kill `cat pid`])
+]], [ignore])
 AT_CHECK(
   [RUN_OVS_VSCTL([--columns=fail_mode,name,datapath_type list bridge])],
   [0],
   [[fail_mode           : []
 name                : "br0"
 datapath_type       : ""
-]], [ignore], [test ! -e pid || kill `cat pid`])
+]], [ignore])
 AT_CHECK(
   [RUN_OVS_VSCTL([--columns=fail_mode,name,datapath_type find bridge])],
   [0],
   [[fail_mode           : []
 name                : "br0"
 datapath_type       : ""
-]], [ignore], [test ! -e pid || kill `cat pid`])
+]], [ignore])
 AT_CHECK([
   RUN_OVS_VSCTL_TOGETHER([--id=@br1 create bridge name=br1 datapath_type="foo"],
                          [--id=@br2 create bridge name=br2 external-ids:bar=quux],
@@ -691,7 +692,7 @@ AT_CHECK([
   [0], [stdout], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK(
   [RUN_OVS_VSCTL([--columns=name find bridge datapath_type!=foo])], [0], [stdout],
-  [ignore], [test ! -e pid || kill `cat pid`])
+  [ignore])
 AT_CHECK([sed -n '/./p' stdout | sort], [0],
   [[name                : "br0"
 name                : "br2"
@@ -779,7 +780,7 @@ engine_id           : []
 engine_type         : []
 external_ids        : {}
 targets             : ["1.2.3.4:567"]
-]], [ignore], [test ! -e pid || kill `cat pid`])
+]], [ignore])
 AT_CHECK([RUN_OVS_VSCTL([list interx x])],
   [1], [], [ovs-vsctl: unknown table "interx"
 ], [OVS_VSCTL_CLEANUP])
@@ -869,7 +870,6 @@ AT_CLEANUP
 
 AT_SETUP([database commands -- conditions])
 AT_KEYWORDS([ovs-vsctl])
-on_exit 'kill `cat pid`'
 OVS_VSCTL_SETUP
 AT_CHECK(
   [RUN_OVS_VSCTL_TOGETHER(
@@ -1168,7 +1168,7 @@ rstp_status         : {}
 sflow               : []
 status              : {}
 stp_enable          : false
-]], [ignore], [test ! -e pid || kill `cat pid`])
+]], [ignore])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -1291,6 +1291,7 @@ OVS_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([naming in db commands])
+AT_KEYWORDS([ovs-vsctl])
 OVS_VSCTL_SETUP
 
 dnl First check that the database commands can refer to row by database UUID.
@@ -1317,8 +1318,8 @@ AT_CHECK([$OVS_PKI -B 1024 init && $OVS_PKI -B 1024 req+sign vsctl switch && $OV
 
 dnl Create database.
 OVSDB_INIT([conf.db])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --private-key=$PKIDIR/ovsdbserver-privkey.pem --certificate=$PKIDIR/ovsdbserver-cert.pem --ca-cert=$PKIDIR/pki/switchca/cacert.pem --remote=pssl:0:127.0.0.1 --unixctl="`pwd`"/unixctl --log-file="`pwd`"/ovsdb-server.log conf.db], [0], [ignore], [ignore])
-on_exit "kill `cat pid`"
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --private-key=$PKIDIR/ovsdbserver-privkey.pem --certificate=$PKIDIR/ovsdbserver-cert.pem --ca-cert=$PKIDIR/pki/switchca/cacert.pem --remote=pssl:0:127.0.0.1 --log-file="`pwd`"/ovsdb-server.log conf.db], [0], [ignore], [ignore])
+on_exit "kill `cat ovsdb-server.pid`"
 PARSE_LISTENING_PORT([ovsdb-server.log], [SSL_PORT])
 
 # During bootstrap, the connection gets torn down. So the o/p of ovs-vsctl is error.
@@ -1344,8 +1345,8 @@ AT_CHECK([$OVS_PKI -B 1024 init && $OVS_PKI -B 1024 req+sign vsctl switch && $OV
 
 dnl Create database.
 OVSDB_INIT([conf.db])
-AT_CHECK([ovsdb-server --detach --no-chdir --pidfile="`pwd`"/pid --private-key=$PKIDIR/ovsdbserver-privkey.pem --certificate=$PKIDIR/ovsdbserver-cert.pem --ca-cert=$PKIDIR/pki/switchca/cacert.pem --peer-ca-cert=$PKIDIR/pki/controllerca/cacert.pem --remote=pssl:0:127.0.0.1 --unixctl="`pwd`"/unixctl --log-file="`pwd`"/ovsdb-server.log conf.db], [0], [ignore], [ignore])
-on_exit "kill `cat pid`"
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --private-key=$PKIDIR/ovsdbserver-privkey.pem --certificate=$PKIDIR/ovsdbserver-cert.pem --ca-cert=$PKIDIR/pki/switchca/cacert.pem --peer-ca-cert=$PKIDIR/pki/controllerca/cacert.pem --remote=pssl:0:127.0.0.1 --log-file="`pwd`"/ovsdb-server.log conf.db], [0], [ignore], [ignore])
+on_exit "kill `cat ovsdb-server.pid`"
 PARSE_LISTENING_PORT([ovsdb-server.log], [SSL_PORT])
 
 # During bootstrap, the connection gets torn down. So the o/p of ovs-vsctl is error.

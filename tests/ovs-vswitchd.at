@@ -70,14 +70,14 @@ AT_SETUP([ovs-vswitchd -- start additional ovs-vswitchd process])
 OVS_VSWITCHD_START
 
 # start another ovs-vswitchd process.
-ovs-vswitchd --log-file=fakelog --unixctl="`pwd`"/unixctl --pidfile=`pwd`/ovs-vswitchd-2.pid &
+ovs-vswitchd --log-file=fakelog --unixctl=unixctl2 --pidfile=ovs-vswitchd-2.pid &
 on_exit 'kill `cat ovs-vswitchd-2.pid`'
 
 # sleep for a while
 sleep 5
 
 # stop the process.
-OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/unixctl], [`pwd`/ovs-vswitchd-2.pid])
+OVS_APP_EXIT_AND_WAIT_BY_TARGET(["`pwd`"/unixctl2], [`pwd`/ovs-vswitchd-2.pid])
 
 # check the fakelog, should only see one ERR for reporting
 # the existing ovs-vswitchd process.
@@ -95,7 +95,7 @@ AT_SETUP([ovs-vswitchd -- switch over to another ovs-vswitchd process])
 OVS_VSWITCHD_START
 
 # start a new ovs-vswitchd process.
-ovs-vswitchd --log-file=fakelog --enable-dummy --unixctl="`pwd`"/unixctl --pidfile=ovs-vswitchd-2.pid &
+ovs-vswitchd --log-file=fakelog --enable-dummy --unixctl=unixctl2 --pidfile=ovs-vswitchd-2.pid &
 on_exit 'kill `cat ovs-vswitchd-2.pid`'
 
 # sleep for a while.
@@ -114,7 +114,7 @@ bridge br0: using datapath ID
 ])
 
 # stop the process.
-OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/unixctl], [ovs-vswitchd-2.pid])
+OVS_APP_EXIT_AND_WAIT_BY_TARGET(["`pwd`"/unixctl2], [ovs-vswitchd-2.pid])
 
 # check the fakelog, should not see WARN/ERR/EMER log other than the one
 # for reporting the existing ovs-vswitchd process and the one for killing
@@ -134,23 +134,23 @@ dnl ----------------------------------------------------------------------
 AT_SETUP([ovs-vswitchd -- invalid database path])
 
 # start an ovs-vswitchd process with invalid db path.
-ovs-vswitchd unix:invalid.db.sock --log-file=fakelog --enable-dummy --unixctl="`pwd`"/unixctl --pidfile=ovs-vswitchd-2.pid &
-on_exit 'kill `cat ovs-vswitchd-2.pid`'
+ovs-vswitchd unix:invalid.db.sock --log-file --enable-dummy --pidfile &
+on_exit 'kill `cat ovs-vswitchd.pid`'
 
 # sleep for a while.
 sleep 10
 
 # stop the process.
-OVS_APP_EXIT_AND_WAIT_BY_TARGET([`pwd`/unixctl], [ovs-vswitchd-2.pid])
+OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 
 # should not see this log (which indicates high cpu utilization).
-AT_CHECK([grep "wakeup due to" fakelog], [ignore])
+AT_CHECK([grep "wakeup due to" ovs-vswitchd.log], [ignore])
 
-# check the fakelog, should not see any WARN/ERR/EMER log.
+# check the log, should not see any WARN/ERR/EMER log.
 AT_CHECK([sed -n "
 /|WARN|/p
 /|ERR|/p
-/|EMER|/p" fakelog
+/|EMER|/p" ovs-vswitchd.log
 ])
 
 AT_CLEANUP

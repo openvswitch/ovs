@@ -1,45 +1,29 @@
 AT_BANNER([JSON-RPC - C])
 
 AT_SETUP([JSON-RPC request and successful reply])
-AT_CHECK([ovstest test-jsonrpc --detach --no-chdir --pidfile="`pwd`"/pid listen punix:socket])
-AT_CHECK([test -s pid])
-AT_CHECK([kill -0 `cat pid`])
+AT_CHECK([ovstest test-jsonrpc --detach --no-chdir --pidfile listen punix:socket])
+on_exit 'kill `cat test-jsonrpc.pid`'
 AT_CHECK(
   [[ovstest test-jsonrpc request unix:socket echo '[{"a": "b", "x": null}]']], [0],
   [[{"error":null,"id":0,"result":[{"a":"b","x":null}]}
-]], [], [test ! -e pid || kill `cat pid`])
-AT_CHECK([kill `cat pid`])
+]])
 AT_CLEANUP
 
 AT_SETUP([JSON-RPC request and error reply])
-AT_CHECK([ovstest test-jsonrpc --detach --no-chdir --pidfile="`pwd`"/pid listen punix:socket])
-AT_CHECK([test -s pid])
-AT_CHECK([kill -0 `cat pid`])
+AT_CHECK([ovstest test-jsonrpc --detach --no-chdir --pidfile listen punix:socket])
+on_exit 'kill `cat test-jsonrpc.pid`'
 AT_CHECK(
   [[ovstest test-jsonrpc request unix:socket bad-request '[]']], [0],
   [[{"error":{"error":"unknown method"},"id":0,"result":null}
-]], [], [test ! -e pid || kill `cat pid`])
-AT_CHECK([kill `cat pid`])
+]])
 AT_CLEANUP
 
 AT_SETUP([JSON-RPC notification])
-AT_CHECK([ovstest test-jsonrpc --detach --no-chdir --pidfile="`pwd`"/pid listen punix:socket])
-AT_CHECK([test -s pid])
-# When a daemon dies it deletes its pidfile, so make a copy.
-AT_CHECK([cp pid pid2])
-AT_CHECK([kill -0 `cat pid2`])
-AT_CHECK([[ovstest test-jsonrpc notify unix:socket shutdown '[]']], [0], [],
-  [], [kill `cat pid2`])
-AT_CHECK(
-  [pid=`cat pid2`
-   # First try a quick sleep, so that the test completes very quickly
-   # in the normal case.  POSIX doesn't require fractional times to
-   # work, so this might not work.
-   sleep 0.1; if kill -0 $pid; then :; else echo success; exit 0; fi
-   # Then wait up to 2 seconds.
-   sleep 1; if kill -0 $pid; then :; else echo success; exit 0; fi
-   sleep 1; if kill -0 $pid; then :; else echo success; exit 0; fi
-   echo failure; exit 1], [0], [success
-], [ignore])
-AT_CHECK([test ! -e pid])
+AT_CHECK([ovstest test-jsonrpc --detach --no-chdir --pidfile listen punix:socket])
+on_exit 'kill `cat test-jsonrpc.pid`'
+# Check that the pidfile got created.
+AT_CHECK([test -e test-jsonrpc.pid])
+AT_CHECK([[ovstest test-jsonrpc notify unix:socket shutdown '[]']])
+# Wait for test-jsonrpc to die, based on its pidfile disappearing
+OVS_WAIT_WHILE([test -e test-jsonrpc.pid])
 AT_CLEANUP
