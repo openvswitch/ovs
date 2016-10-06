@@ -380,7 +380,7 @@
     <h1>Logical Router Static Route Commands</h1>
 
     <dl>
-      <dt>[<code>--may-exist</code>] <code>lr-route-add</code> <var>router</var> <var>prefix</var> <var>nexthop</var> [<var>port</var>]</dt>
+      <dt>[<code>--may-exist</code>] [<code>--policy</code>=<var>POLICY</var>] <code>lr-route-add</code> <var>router</var> <var>prefix</var> <var>nexthop</var> [<var>port</var>]</dt>
       <dd>
         <p>
           Adds the specified route to <var>router</var>.
@@ -393,6 +393,12 @@
           match this route will be sent out that port.  When
           <var>port</var> is omitted, OVN infers the output port based
           on <var>nexthop</var>.
+        </p>
+
+        <p>
+          <code>--policy</code> describes the policy used to make routing
+          decisions.  This should be one of "dst-ip" or "src-ip".  If not
+          specified, the default is "dst-ip".
         </p>
 
         <p>

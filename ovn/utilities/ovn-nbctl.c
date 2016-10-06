@@ -377,7 +377,7 @@ Logical router port commands:\n\
                             ('enabled' or 'disabled')\n\
 \n\
 Route commands:\n\
-  lr-route-add ROUTER PREFIX NEXTHOP [PORT]\n\
+  [--policy=POLICY] lr-route-add ROUTER PREFIX NEXTHOP [PORT]\n\
                             add a route to ROUTER\n\
   lr-route-del ROUTER [PREFIX]\n\
                             remove routes from ROUTER\n\
@@ -2031,6 +2031,11 @@ nbctl_lr_route_add(struct ctl_context *ctx)
     lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
     char *prefix, *next_hop;
 
+    const char *policy = shash_find_data(&ctx->options, "--policy");
+    if (policy && strcmp(policy, "src-ip") && strcmp(policy, "dst-ip")) {
+        ctl_fatal("bad policy: %s", policy);
+    }
+
     prefix = normalize_prefix_str(ctx->argv[2]);
     if (!prefix) {
         ctl_fatal("bad prefix argument: %s", ctx->argv[2]);
@@ -2091,6 +2096,9 @@ nbctl_lr_route_add(struct ctl_context *ctx)
             nbrec_logical_router_static_route_set_output_port(route,
                                                               ctx->argv[4]);
         }
+        if (policy) {
+             nbrec_logical_router_static_route_set_policy(route, policy);
+        }
         free(rt_prefix);
         free(next_hop);
         free(prefix);
@@ -2103,6 +2111,9 @@ nbctl_lr_route_add(struct ctl_context *ctx)
     nbrec_logical_router_static_route_set_nexthop(route, next_hop);
     if (ctx->argc == 5) {
         nbrec_logical_router_static_route_set_output_port(route, ctx->argv[4]);
+    }
+    if (policy) {
+        nbrec_logical_router_static_route_set_policy(route, policy);
     }
 
     nbrec_logical_router_verify_static_routes(lr);
@@ -2457,7 +2468,7 @@ nbctl_lrp_get_enabled(struct ctl_context *ctx)
 }
 
 struct ipv4_route {
-    int plen;
+    int priority;
     ovs_be32 addr;
     const struct nbrec_logical_router_static_route *route;
 };
@@ -2468,8 +2479,8 @@ ipv4_route_cmp(const void *route1_, const void *route2_)
     const struct ipv4_route *route1p = route1_;
     const struct ipv4_route *route2p = route2_;
 
-    if (route1p->plen != route2p->plen) {
-        return route1p->plen > route2p->plen ? -1 : 1;
+    if (route1p->priority != route2p->priority) {
+        return route1p->priority > route2p->priority ? -1 : 1;
     } else if (route1p->addr != route2p->addr) {
         return ntohl(route1p->addr) < ntohl(route2p->addr) ? -1 : 1;
     } else {
@@ -2478,7 +2489,7 @@ ipv4_route_cmp(const void *route1_, const void *route2_)
 }
 
 struct ipv6_route {
-    int plen;
+    int priority;
     struct in6_addr addr;
     const struct nbrec_logical_router_static_route *route;
 };
@@ -2489,8 +2500,8 @@ ipv6_route_cmp(const void *route1_, const void *route2_)
     const struct ipv6_route *route1p = route1_;
     const struct ipv6_route *route2p = route2_;
 
-    if (route1p->plen != route2p->plen) {
-        return route1p->plen > route2p->plen ? -1 : 1;
+    if (route1p->priority != route2p->priority) {
+        return route1p->priority > route2p->priority ? -1 : 1;
     }
     return memcmp(&route1p->addr, &route2p->addr, sizeof(route1p->addr));
 }
@@ -2504,6 +2515,12 @@ print_route(const struct nbrec_logical_router_static_route *route, struct ds *s)
     ds_put_format(s, "%25s %25s", prefix, next_hop);
     free(prefix);
     free(next_hop);
+
+    if (route->policy) {
+        ds_put_format(s, " %s", route->policy);
+    } else {
+        ds_put_format(s, " %s", "dst-ip");
+    }
 
     if (route->output_port) {
         ds_put_format(s, " %s", route->output_port);
@@ -2530,11 +2547,13 @@ nbctl_lr_route_list(struct ctl_context *ctx)
             = lr->static_routes[i];
         unsigned int plen;
         ovs_be32 ipv4;
+        const char *policy = route->policy ? route->policy : "dst-ip";
         char *error;
-
         error = ip_parse_cidr(route->ip_prefix, &ipv4, &plen);
         if (!error) {
-            ipv4_routes[n_ipv4_routes].plen = plen;
+            ipv4_routes[n_ipv4_routes].priority = !strcmp(policy, "dst-ip")
+                                                    ? (2 * plen) + 1
+                                                    : 2 * plen;
             ipv4_routes[n_ipv4_routes].addr = ipv4;
             ipv4_routes[n_ipv4_routes].route = route;
             n_ipv4_routes++;
@@ -2544,7 +2563,9 @@ nbctl_lr_route_list(struct ctl_context *ctx)
             struct in6_addr ipv6;
             error = ipv6_parse_cidr(route->ip_prefix, &ipv6, &plen);
             if (!error) {
-                ipv6_routes[n_ipv6_routes].plen = plen;
+                ipv6_routes[n_ipv6_routes].priority = !strcmp(policy, "dst-ip")
+                                                        ? (2 * plen) + 1
+                                                        : 2 * plen;
                 ipv6_routes[n_ipv6_routes].addr = ipv6;
                 ipv6_routes[n_ipv6_routes].route = route;
                 n_ipv6_routes++;
@@ -2947,7 +2968,7 @@ static const struct ctl_command_syntax nbctl_commands[] = {
 
     /* logical router route commands. */
     { "lr-route-add", 3, 4, "ROUTER PREFIX NEXTHOP [PORT]", NULL,
-      nbctl_lr_route_add, NULL, "--may-exist", RW },
+      nbctl_lr_route_add, NULL, "--may-exist,--policy=", RW },
     { "lr-route-del", 1, 2, "ROUTER [PREFIX]", NULL, nbctl_lr_route_del,
       NULL, "--if-exists", RW },
     { "lr-route-list", 1, 1, "ROUTER", NULL, nbctl_lr_route_list, NULL,

@@ -3247,10 +3247,20 @@ find_lrp_member_ip(const struct ovn_port *op, const char *ip_s)
 static void
 add_route(struct hmap *lflows, const struct ovn_port *op,
           const char *lrp_addr_s, const char *network_s, int plen,
-          const char *gateway)
+          const char *gateway, const char *policy)
 {
     bool is_ipv4 = strchr(network_s, '.') ? true : false;
     struct ds match = DS_EMPTY_INITIALIZER;
+    const char *dir;
+    uint16_t priority;
+
+    if (policy && !strcmp(policy, "src-ip")) {
+        dir = "src";
+        priority = plen * 2;
+    } else {
+        dir = "dst";
+        priority = (plen * 2) + 1;
+    }
 
     /* IPv6 link-local addresses must be scoped to the local router port. */
     if (!is_ipv4) {
@@ -3260,7 +3270,7 @@ add_route(struct hmap *lflows, const struct ovn_port *op,
             ds_put_format(&match, "inport == %s && ", op->json_key);
         }
     }
-    ds_put_format(&match, "ip%s.dst == %s/%d", is_ipv4 ? "4" : "6",
+    ds_put_format(&match, "ip%s.%s == %s/%d", is_ipv4 ? "4" : "6", dir,
                   network_s, plen);
 
     struct ds actions = DS_EMPTY_INITIALIZER;
@@ -3284,7 +3294,7 @@ add_route(struct hmap *lflows, const struct ovn_port *op,
 
     /* The priority here is calculated to implement longest-prefix-match
      * routing. */
-    ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_ROUTING, plen,
+    ovn_lflow_add(lflows, op->od, S_ROUTER_IN_IP_ROUTING, priority,
                   ds_cstr(&match), ds_cstr(&actions));
     ds_destroy(&match);
     ds_destroy(&actions);
@@ -3397,7 +3407,9 @@ build_static_route_flow(struct hmap *lflows, struct ovn_datapath *od,
         goto free_prefix_s;
     }
 
-    add_route(lflows, out_port, lrp_addr_s, prefix_s, plen, route->nexthop);
+    char *policy = route->policy ? route->policy : "dst-ip";
+    add_route(lflows, out_port, lrp_addr_s, prefix_s, plen, route->nexthop,
+              policy);
 
 free_prefix_s:
     free(prefix_s);
@@ -4031,13 +4043,13 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         for (int i = 0; i < op->lrp_networks.n_ipv4_addrs; i++) {
             add_route(lflows, op, op->lrp_networks.ipv4_addrs[i].addr_s,
                       op->lrp_networks.ipv4_addrs[i].network_s,
-                      op->lrp_networks.ipv4_addrs[i].plen, NULL);
+                      op->lrp_networks.ipv4_addrs[i].plen, NULL, NULL);
         }
 
         for (int i = 0; i < op->lrp_networks.n_ipv6_addrs; i++) {
             add_route(lflows, op, op->lrp_networks.ipv6_addrs[i].addr_s,
                       op->lrp_networks.ipv6_addrs[i].network_s,
-                      op->lrp_networks.ipv6_addrs[i].plen, NULL);
+                      op->lrp_networks.ipv6_addrs[i].plen, NULL, NULL);
         }
     }
 

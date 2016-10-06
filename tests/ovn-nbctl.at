@@ -657,20 +657,23 @@ AT_CHECK([ovn-nbctl lr-route-add lr0 2001:0db8:1::/64 2001:0db8:0:f103::1/64], [
 ])
 
 AT_CHECK([ovn-nbctl --may-exist lr-route-add lr0 10.0.0.111/24 11.0.0.1])
+AT_CHECK([ovn-nbctl --policy=src-ip lr-route-add lr0 9.16.1.0/24 11.0.0.1])
 
 AT_CHECK([ovn-nbctl lr-route-list lr0], [0], [dnl
 IPv4 Routes
-              10.0.0.0/24                  11.0.0.1
-              10.0.1.0/24                  11.0.1.1 lp0
-                0.0.0.0/0               192.168.0.1
+              10.0.0.0/24                  11.0.0.1 dst-ip
+              10.0.1.0/24                  11.0.1.1 dst-ip lp0
+              9.16.1.0/24                  11.0.0.1 src-ip
+                0.0.0.0/0               192.168.0.1 dst-ip
 ])
 
 AT_CHECK([ovn-nbctl --may-exist lr-route-add lr0 10.0.0.111/24 11.0.0.1 lp1])
 AT_CHECK([ovn-nbctl lr-route-list lr0], [0], [dnl
 IPv4 Routes
-              10.0.0.0/24                  11.0.0.1 lp1
-              10.0.1.0/24                  11.0.1.1 lp0
-                0.0.0.0/0               192.168.0.1
+              10.0.0.0/24                  11.0.0.1 dst-ip lp1
+              10.0.1.0/24                  11.0.1.1 dst-ip lp0
+              9.16.1.0/24                  11.0.0.1 src-ip
+                0.0.0.0/0               192.168.0.1 dst-ip
 ])
 
 dnl Delete non-existent prefix
@@ -680,11 +683,12 @@ AT_CHECK([ovn-nbctl lr-route-del lr0 10.0.2.1/24], [1], [],
 AT_CHECK([ovn-nbctl --if-exists lr-route-del lr0 10.0.2.1/24])
 
 AT_CHECK([ovn-nbctl lr-route-del lr0 10.0.1.1/24])
+AT_CHECK([ovn-nbctl lr-route-del lr0 9.16.1.0/24])
 
 AT_CHECK([ovn-nbctl lr-route-list lr0], [0], [dnl
 IPv4 Routes
-              10.0.0.0/24                  11.0.0.1 lp1
-                0.0.0.0/0               192.168.0.1
+              10.0.0.0/24                  11.0.0.1 dst-ip lp1
+                0.0.0.0/0               192.168.0.1 dst-ip
 ])
 
 AT_CHECK([ovn-nbctl lr-route-del lr0])
@@ -698,17 +702,17 @@ AT_CHECK([ovn-nbctl lr-route-add lr0 2001:0db8:1::/64 2001:0db8:0:f103::1])
 
 AT_CHECK([ovn-nbctl lr-route-list lr0], [0], [dnl
 IPv6 Routes
-            2001:db8::/64        2001:db8:0:f102::1 lp0
-          2001:db8:1::/64        2001:db8:0:f103::1
-                     ::/0        2001:db8:0:f101::1
+            2001:db8::/64        2001:db8:0:f102::1 dst-ip lp0
+          2001:db8:1::/64        2001:db8:0:f103::1 dst-ip
+                     ::/0        2001:db8:0:f101::1 dst-ip
 ])
 
 AT_CHECK([ovn-nbctl lr-route-del lr0 2001:0db8:0::/64])
 
 AT_CHECK([ovn-nbctl lr-route-list lr0], [0], [dnl
 IPv6 Routes
-          2001:db8:1::/64        2001:db8:0:f103::1
-                     ::/0        2001:db8:0:f101::1
+          2001:db8:1::/64        2001:db8:0:f103::1 dst-ip
+                     ::/0        2001:db8:0:f101::1 dst-ip
 ])
 
 AT_CHECK([ovn-nbctl lr-route-del lr0])
@@ -725,14 +729,14 @@ AT_CHECK([ovn-nbctl lr-route-add lr0 2001:0db8:1::/64 2001:0db8:0:f103::1])
 
 AT_CHECK([ovn-nbctl lr-route-list lr0], [0], [dnl
 IPv4 Routes
-              10.0.0.0/24                  11.0.0.1
-              10.0.1.0/24                  11.0.1.1 lp0
-                0.0.0.0/0               192.168.0.1
+              10.0.0.0/24                  11.0.0.1 dst-ip
+              10.0.1.0/24                  11.0.1.1 dst-ip lp0
+                0.0.0.0/0               192.168.0.1 dst-ip
 
 IPv6 Routes
-            2001:db8::/64        2001:db8:0:f102::1 lp0
-          2001:db8:1::/64        2001:db8:0:f103::1
-                     ::/0        2001:db8:0:f101::1
+            2001:db8::/64        2001:db8:0:f102::1 dst-ip lp0
+          2001:db8:1::/64        2001:db8:0:f103::1 dst-ip
+                     ::/0        2001:db8:0:f101::1 dst-ip
 ])
 
 OVN_NBCTL_TEST_STOP
