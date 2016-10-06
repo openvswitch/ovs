@@ -433,6 +433,18 @@ AT_CHECK([simplify 'eth.dst == 0/0'], [0], [1
 ])
 AT_CHECK([simplify 'eth.dst != 0/0'], [0], [0
 ])
+AT_CHECK([simplify 'tcp.dst >= 0'], [0],
+    [ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
+])
+AT_CHECK([simplify 'tcp.dst <= 65535'], [0],
+    [ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
+])
+AT_CHECK([simplify 'tcp.dst > 0'], [0],
+    [[(tcp.dst[0] || tcp.dst[1] || tcp.dst[2] || tcp.dst[3] || tcp.dst[4] || tcp.dst[5] || tcp.dst[6] || tcp.dst[7] || tcp.dst[8] || tcp.dst[9] || tcp.dst[10] || tcp.dst[11] || tcp.dst[12] || tcp.dst[13] || tcp.dst[14] || tcp.dst[15]) && ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
+]])
+AT_CHECK([simplify 'tcp.dst < 65535'], [0],
+    [[(!tcp.dst[0] || !tcp.dst[1] || !tcp.dst[2] || !tcp.dst[3] || !tcp.dst[4] || !tcp.dst[5] || !tcp.dst[6] || !tcp.dst[7] || !tcp.dst[8] || !tcp.dst[9] || !tcp.dst[10] || !tcp.dst[11] || !tcp.dst[12] || !tcp.dst[13] || !tcp.dst[14] || !tcp.dst[15]) && ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
+]])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 4-term numeric expression normalization])
