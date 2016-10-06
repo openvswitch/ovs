@@ -4552,7 +4552,7 @@ ovn_start
 # subnet which should result in an address being allocated for the port.
 ovn-nbctl ls-add sw0
 ovn-nbctl lsp-add sw0 p0 -- lsp-set-addresses p0 dynamic
-ovn-nbctl add Logical-Switch sw0 other_config subnet=192.168.1.0/24
+ovn-nbctl --wait=sb add Logical-Switch sw0 other_config subnet=192.168.1.0/24
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p0 dynamic_addresses], [0],
     ["0a:00:00:00:00:01 192.168.1.2"
 ])
@@ -4722,21 +4722,21 @@ ovn-nbctl lsp-add alice rp-alice -- set Logical_Switch_Port rp-alice type=router
           options:router-port=alice addresses=\"00:00:00:01:02:04\"
 
 # Create logical port foo1 in foo
-ovn-nbctl lsp-add foo foo1 \
+ovn-nbctl --wait=sb lsp-add foo foo1 \
 -- lsp-set-addresses foo1 "dynamic"
 AT_CHECK([ovn-nbctl get Logical-Switch-Port foo1 dynamic_addresses], [0],
      ["0a:00:00:00:00:01 192.168.1.2"
 ])
 
 # Create logical port alice1 in alice
-ovn-nbctl lsp-add alice alice1 \
+ovn-nbctl --wait=sb lsp-add alice alice1 \
 -- lsp-set-addresses alice1 "dynamic"
 AT_CHECK([ovn-nbctl get Logical-Switch-Port alice1 dynamic_addresses], [0],
      ["0a:00:00:00:00:02 192.168.2.2"
 ])
 
 # Create logical port foo2 in foo
-ovn-nbctl lsp-add foo foo2 \
+ovn-nbctl --wait=sb lsp-add foo foo2 \
 -- lsp-set-addresses foo2 "dynamic"
 AT_CHECK([ovn-nbctl get Logical-Switch-Port foo2 dynamic_addresses], [0],
      ["0a:00:00:00:00:03 192.168.1.3"
