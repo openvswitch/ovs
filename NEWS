@@ -34,7 +34,7 @@ Post-v2.6.0
      * New option 'n_rxq_desc' and 'n_txq_desc' fields for DPDK interfaces
        which set the number of rx and tx descriptors to use for the given port.
 
-v2.6.0 - xx xxx xxxx
+v2.6.0 - 27 Sep 2016
 ---------------------
    - First supported release of OVN.  See ovn-architecture(7) for more
      details.
