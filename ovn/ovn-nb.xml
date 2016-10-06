@@ -180,7 +180,7 @@
       </p>
 
       <p>
-        It is an error for a port pair group to be empty
+        It is an error for a port pair group to be empty.
       </p>
     </column>
     <column name="flow_classifier">
@@ -189,8 +189,8 @@
       </p>
 
       <p>
-        It is an error for multiple logical switches to include the same
-        logical port.
+        It is an error for multiple logical port chains to include the same
+        flow classifier.
       </p>
     </column>
     <group title="Common Columns">
@@ -220,6 +220,7 @@
       </column>
     </group>
  </table>
+
  <table name="Logical_Port_Pair" title="logical port pairs">
    <p>
      Ports pairs defining the service
@@ -231,12 +232,12 @@
    </column>
    <column name="outport">
      <p>
-       out port for this port pair
+       Out logical port for this port pair. Can be the same value as inport.
      </p>
    </column>
    <column name="inport">
      <p>
-       in port for this port pair
+       In logical port for this port pair.
      </p>
    </column>
     <group title="Common Columns">
@@ -257,12 +258,12 @@
    </column>
    <column name="logical_source_port">
      <p>
-       source port for flow
+       Source port for flow
      </p>
    </column>
    <column name="logical_destination_port">
      <p>
-       destination port for flow
+       Destination port for flow
      </p>
    </column>
    <column name="source_port_range_min">

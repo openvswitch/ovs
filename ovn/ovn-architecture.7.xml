@@ -558,9 +558,9 @@
    The requirements on the VNF to be inserted are minimal, it must
    act as a <code>bump in the wire (BITW)</code> and can have one or two virtual network
    ports for traffic. If it has two network ports traffic is directed into one and out the other,
-   if it has only one traffic is bi-directional. The requirement for the VNF to act as a
-   BITW removes the need for the VNF to participate in L3/L2 networking which provides
-   improved agility adn reduces the coupling between OVN and the VNF.
+   if it has only one port, then traffic is bi-directional. The requirement for the VNF to act as
+   a BITW removes the need for the VNF to participate in L3/L2 networking which provides
+   improved agility and reduces the coupling between OVN and the VNF.
  </p>
  <p>
    The service insertion is implemented by adding 4 new flow rules into the ovn-nb database for
