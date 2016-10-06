@@ -1624,7 +1624,7 @@ json_serialize_array(const struct json_array *array, struct json_serializer *s)
     ds_put_char(ds, ']');
 }
 
-const char *chars_escaping[256] = {
+static const char *chars_escaping[256] = {
         "\\u0000", "\\u0001", "\\u0002", "\\u0003", "\\u0004", "\\u0005", "\\u0006", "\\u0007",
         "\\b", "\\t", "\\n", "\\u000b", "\\f", "\\r", "\\u000e", "\\u000f",
         "\\u0010", "\\u0011", "\\u0012", "\\u0013", "\\u0014", "\\u0015", "\\u0016", "\\u0017",
