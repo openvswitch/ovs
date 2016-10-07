@@ -1,5 +1,7 @@
 [Unit]
 Description=Open vSwitch
+Before=network.target network.service
+After=network-pre.target
 PartOf=network.target
 BindsTo=ovsdb-server.service
 BindsTo=ovs-vswitchd.service
