@@ -1560,9 +1560,16 @@ ovsdb_idl_send_monitor_request__(struct ovsdb_idl *idl,
         columns = table->need_table ? json_array_create_empty() : NULL;
         for (j = 0; j < tc->n_columns; j++) {
             const struct ovsdb_idl_column *column = &tc->columns[j];
-            if (table->modes[j] & OVSDB_IDL_MONITOR) {
-                if (table_schema
-                    && !sset_contains(table_schema, column->name)) {
+            bool db_has_column = (table_schema &&
+                                  sset_contains(table_schema, column->name));
+            if (column->is_synthetic) {
+                if (db_has_column) {
+                    VLOG_WARN("%s table in %s database has synthetic "
+                              "column %s", table->class_->name,
+                              idl->class_->database, column->name);
+                }
+            } else if (table->modes[j] & OVSDB_IDL_MONITOR) {
+                if (table_schema && !db_has_column) {
                     VLOG_WARN("%s table in %s database lacks %s column "
                               "(database needs upgrade?)",
                               table->class_->name, idl->class_->database,
@@ -3815,6 +3822,7 @@ ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
     size_t column_idx;
     bool write_only;
 
+    ovs_assert(!column->is_synthetic);
     if (ovsdb_idl_row_is_synthetic(row)) {
         goto discard_datum;
     }

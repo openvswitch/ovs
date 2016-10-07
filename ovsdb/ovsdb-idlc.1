@@ -55,8 +55,37 @@ after the \fB#include\fR directives in those files.
 This member is optional.  If specified, it is an object whose contents
 describes extensions to the OVSDB schema language, for the purpose of
 specifying interpretation by the IDL.
-No extensions are supported yet.
 .
+.IP "\fB""\fBsynthetic\fR"" member of <column-schema> ""\fBextensions\fR"" object"
+If this optional member is set to \fBtrue\fR, then it indicates that
+the column is not expected to be found in the actual database.
+Instead, code supplied by the IDL's client fills in the desired
+structure members based on the value of one or more other database
+columns.  This can be used to cache the result of a calculation, for
+example.
+.
+.IP "\fB""\fBparse\fR"" member of <column-schema> ""\fBextensions\fR"" object"
+This member should be present if and only if the column is synthetic.
+It should be a string that contains C code to set the value of the
+column's member in an object named \fBrow\fR, e.g. "\fBrow->column =
+1;" if the column's name is \fBcolumn\fR and has integer type.  The
+code may rely on the columns named in \fBdependencies\fR to be
+initialized.  The function can get called for rows that do not satisfy
+the constraints in the schema, e.g. that a pointer to another is
+nonnull, so it must not rely on those constraints.
+.
+.IP "\fB""\fBunparse\fR"" member of <column-schema> ""\fBextensions\fR"" object"
+This member is honored only if the column is synthetic.  It should be
+a string that contains C code to free the data in the column's member
+in an object named \fBrow\fR, e.g. "\fBfree(row->column);" if the
+column's name is \fBcolumn\fR and points to data that was allocated by
+the \fBparse\fR function and needs to be freed.
+.
+.IP "\fB""\fBdependencies\fR"" member of <column-schema> ""\fBextensions\fR"" object"
+This member should be a list of the names of columns whose values are
+used by the code in \fBparse\fR and \fBunparse\fR.  The IDL ensures
+that dependencies are parsed before the columns that depends on them,
+and vice versa for unparsing.
 .SS "Commands"
 .IP "\fBannotate\fI schema annotations\fR"
 Reads \fIschema\fR, which should be a file in JSON format (ordinarily
