@@ -1702,7 +1702,16 @@ expr_simplify_ne(struct expr *expr)
 
         new = expr_combine(EXPR_T_OR, new, e);
     }
-    ovs_assert(new);
+    if (!new) {
+        /* Handle a comparison like "ip4.dst != 0/0", where the mask has no
+         * 1-bits.
+         *
+         * The correct result for this expression may not be obvious.  It's
+         * easier to understand that "ip4.dst == 0/0" should be true, since 0/0
+         * matches every IPv4 address; then, "ip4.dst != 0/0" should have the
+         * opposite result. */
+        new = expr_create_boolean(false);
+    }
 
     expr_destroy(expr);
 

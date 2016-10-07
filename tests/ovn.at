@@ -430,6 +430,8 @@ simplify() {
 }
 AT_CHECK([simplify 'eth.dst == 0/0'], [0], [1
 ])
+AT_CHECK([simplify 'eth.dst != 0/0'], [0], [0
+])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 4-term numeric expression normalization])
