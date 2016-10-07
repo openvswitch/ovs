@@ -1669,6 +1669,18 @@ expr_annotate(struct expr *expr, const struct shash *symtab, char **errorp)
 }
 
 static struct expr *
+expr_simplify_eq(struct expr *expr)
+{
+    const union mf_subvalue *mask = &expr->cmp.mask;
+    if (is_all_zeros(mask, sizeof *mask)) {
+        /* Simplify "ip4.dst == 0/0" to just "1" (plus a prerequisite). */
+        expr_destroy(expr);
+        return expr_create_boolean(true);
+    }
+    return expr;
+}
+
+static struct expr *
 expr_simplify_ne(struct expr *expr)
 {
     struct expr *new = NULL;
@@ -1742,7 +1754,8 @@ expr_simplify(struct expr *expr)
 
     switch (expr->type) {
     case EXPR_T_CMP:
-        return (expr->cmp.relop == EXPR_R_EQ || !expr->cmp.symbol->width ? expr
+        return (!expr->cmp.symbol->width ? expr
+                : expr->cmp.relop == EXPR_R_EQ ? expr_simplify_eq(expr)
                 : expr->cmp.relop == EXPR_R_NE ? expr_simplify_ne(expr)
                 : expr_simplify_relational(expr));
 
