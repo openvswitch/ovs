@@ -396,19 +396,19 @@ AT_CLEANUP
 
 AT_SETUP([ovn -- 2-term expression conversion])
 AT_CHECK([ovstest test-ovn exhaustive --operation=convert 2], [0],
-  [Tested converting 570 expressions of 2 terminals with 2 numeric vars (each 3 bits) in terms of operators == != < <= > >= and 2 string vars.
+  [Tested converting 578 expressions of 2 terminals with 2 numeric vars (each 3 bits) in terms of operators == != < <= > >= and 2 string vars.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 3-term expression conversion])
 AT_CHECK([ovstest test-ovn exhaustive --operation=convert --bits=2 3], [0],
-  [Tested converting 62418 expressions of 3 terminals with 2 numeric vars (each 2 bits) in terms of operators == != < <= > >= and 2 string vars.
+  [Tested converting 67410 expressions of 3 terminals with 2 numeric vars (each 2 bits) in terms of operators == != < <= > >= and 2 string vars.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 3-term numeric expression simplification])
 AT_CHECK([ovstest test-ovn exhaustive --operation=simplify --nvars=2 --svars=0 3], [0],
-  [Tested simplifying 477138 expressions of 3 terminals with 2 numeric vars (each 3 bits) in terms of operators == != < <= > >=.
+  [Tested simplifying 490770 expressions of 3 terminals with 2 numeric vars (each 3 bits) in terms of operators == != < <= > >=.
 ])
 AT_CLEANUP
 
@@ -420,7 +420,7 @@ AT_CLEANUP
 
 AT_SETUP([ovn -- 3-term mixed expression simplification])
 AT_CHECK([ovstest test-ovn exhaustive --operation=simplify --nvars=1 --svars=1 3], [0],
-  [Tested simplifying 124410 expressions of 3 terminals with 1 numeric vars (each 3 bits) in terms of operators == != < <= > >= and 1 string vars.
+  [Tested simplifying 127890 expressions of 3 terminals with 1 numeric vars (each 3 bits) in terms of operators == != < <= > >= and 1 string vars.
 ])
 AT_CLEANUP
 
@@ -436,7 +436,7 @@ AT_CLEANUP
 
 AT_SETUP([ovn -- 4-term numeric expression normalization])
 AT_CHECK([ovstest test-ovn exhaustive --operation=normalize --nvars=3 --svars=0 --bits=1 4], [0],
-  [Tested normalizing 1207162 expressions of 4 terminals with 3 numeric vars (each 1 bits) in terms of operators == != < <= > >=.
+  [Tested normalizing 1874026 expressions of 4 terminals with 3 numeric vars (each 1 bits) in terms of operators == != < <= > >=.
 ])
 AT_CLEANUP
 
@@ -448,13 +448,13 @@ AT_CLEANUP
 
 AT_SETUP([ovn -- 4-term mixed expression normalization])
 AT_CHECK([ovstest test-ovn exhaustive --operation=normalize --nvars=1 --bits=1 --svars=2 4], [0],
-  [Tested normalizing 128282 expressions of 4 terminals with 1 numeric vars (each 1 bits) in terms of operators == != < <= > >= and 2 string vars.
+  [Tested normalizing 175978 expressions of 4 terminals with 1 numeric vars (each 1 bits) in terms of operators == != < <= > >= and 2 string vars.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 5-term numeric expression normalization])
 AT_CHECK([ovstest test-ovn exhaustive --operation=normalize --nvars=3 --svars=0 --bits=1 --relops='==' 5], [0],
-  [Tested normalizing 368550 expressions of 5 terminals with 3 numeric vars (each 1 bits) in terms of operators ==.
+  [Tested normalizing 1317600 expressions of 5 terminals with 3 numeric vars (each 1 bits) in terms of operators ==.
 ])
 AT_CLEANUP
 
@@ -466,35 +466,40 @@ AT_CLEANUP
 
 AT_SETUP([ovn -- 5-term mixed expression normalization])
 AT_CHECK([ovstest test-ovn exhaustive --operation=normalize --nvars=1 --svars=1 --bits=1 --relops='==' 5], [0],
-  [Tested normalizing 116550 expressions of 5 terminals with 1 numeric vars (each 1 bits) in terms of operators == and 1 string vars.
+  [Tested normalizing 216000 expressions of 5 terminals with 1 numeric vars (each 1 bits) in terms of operators == and 1 string vars.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 4-term numeric expressions to flows])
+AT_KEYWORDS([expression])
 AT_CHECK([ovstest test-ovn exhaustive --operation=flow --nvars=2 --svars=0 --bits=2 --relops='==' 4], [0],
-  [Tested converting to flows 128282 expressions of 4 terminals with 2 numeric vars (each 2 bits) in terms of operators ==.
+  [Tested converting to flows 175978 expressions of 4 terminals with 2 numeric vars (each 2 bits) in terms of operators ==.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 4-term string expressions to flows])
+AT_KEYWORDS([expression])
 AT_CHECK([ovstest test-ovn exhaustive --operation=flow --nvars=0 --svars=4 4], [0],
   [Tested converting to flows 21978 expressions of 4 terminals with 4 string vars.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 4-term mixed expressions to flows])
+AT_KEYWORDS([expression])
 AT_CHECK([ovstest test-ovn exhaustive --operation=flow --nvars=1 --bits=2 --svars=1 --relops='==' 4], [0],
-  [Tested converting to flows 37994 expressions of 4 terminals with 1 numeric vars (each 2 bits) in terms of operators == and 1 string vars.
+  [Tested converting to flows 48312 expressions of 4 terminals with 1 numeric vars (each 2 bits) in terms of operators == and 1 string vars.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 3-term numeric expressions to flows])
+AT_KEYWORDS([expression])
 AT_CHECK([ovstest test-ovn exhaustive --operation=flow --nvars=3 --svars=0 --bits=3 --relops='==' 3], [0],
-  [Tested converting to flows 38394 expressions of 3 terminals with 3 numeric vars (each 3 bits) in terms of operators ==.
+  [Tested converting to flows 41328 expressions of 3 terminals with 3 numeric vars (each 3 bits) in terms of operators ==.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- converting expressions to flows -- string fields])
+AT_KEYWORDS([expression])
 expr_to_flow () {
     echo "$1" | ovstest test-ovn expr-to-flows | sort
 }
@@ -531,6 +536,7 @@ AT_CHECK([expr_to_flow 'inport == "eth0" && inport == "eth1"'], [0], [dnl
 AT_CLEANUP
 
 AT_SETUP([ovn -- converting expressions to flows -- address sets])
+AT_KEYWORDS([expression])
 expr_to_flow () {
     echo "$1" | ovstest test-ovn expr-to-flows | sort
 }
