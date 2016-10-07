@@ -4731,23 +4731,17 @@ ovn-nbctl lsp-add alice rp-alice -- set Logical_Switch_Port rp-alice type=router
 # Create logical port foo1 in foo
 ovn-nbctl --wait=sb lsp-add foo foo1 \
 -- lsp-set-addresses foo1 "dynamic"
-AT_CHECK([ovn-nbctl get Logical-Switch-Port foo1 dynamic_addresses], [0],
-     ["0a:00:00:00:00:01 192.168.1.2"
-])
+AT_CHECK([ovn-nbctl --timeout=10 wait-until Logical-Switch-Port foo1 dynamic_addresses='"0a:00:00:00:00:01 192.168.1.2"'], [0])
 
 # Create logical port alice1 in alice
 ovn-nbctl --wait=sb lsp-add alice alice1 \
 -- lsp-set-addresses alice1 "dynamic"
-AT_CHECK([ovn-nbctl get Logical-Switch-Port alice1 dynamic_addresses], [0],
-     ["0a:00:00:00:00:02 192.168.2.2"
-])
+AT_CHECK([ovn-nbctl --timeout=10 wait-until Logical-Switch-Port alice1 dynamic_addresses='"0a:00:00:00:00:02 192.168.2.2"'])
 
 # Create logical port foo2 in foo
 ovn-nbctl --wait=sb lsp-add foo foo2 \
 -- lsp-set-addresses foo2 "dynamic"
-AT_CHECK([ovn-nbctl get Logical-Switch-Port foo2 dynamic_addresses], [0],
-     ["0a:00:00:00:00:03 192.168.1.3"
-])
+AT_CHECK([ovn-nbctl --timeout=10 wait-until Logical-Switch-Port foo2 dynamic_addresses='"0a:00:00:00:00:03 192.168.1.3"'])
 
 # Create a hypervisor and create OVS ports corresponding to logical ports.
 net_add n1
