@@ -1,6 +1,7 @@
 [Unit]
 Description=Open vSwitch Forwarding Unit
-After=ovsdb-server.service
+After=ovsdb-server.service network-pre.target
+Before=network.target network.service
 Requires=ovsdb-server.service
 ReloadPropagatedFrom=ovsdb-server.service
 AssertPathIsReadWrite=/var/run/openvswitch/db.sock

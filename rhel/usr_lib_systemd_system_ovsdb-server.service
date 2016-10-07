@@ -1,6 +1,7 @@
 [Unit]
 Description=Open vSwitch Database Unit
-After=syslog.target
+After=syslog.target network-pre.target
+Before=network.target network.service
 ReloadPropagatedFrom=openvswitch.service
 PartOf=openvswitch.service
 
