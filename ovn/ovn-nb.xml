@@ -691,7 +691,8 @@
     </p>
 
     <column name="name">
-      A name for the address set.  This must be unique among all address sets.
+      A name for the address set.  Names are ASCII and must match
+      <code>[a-zA-Z_.][a-zA-Z_.0-9]*</code>.
     </column>
 
     <column name="addresses">
