@@ -82,7 +82,7 @@ platform, please see one of these files:
 - [INSTALL.Debian.rst]
 - [INSTALL.Fedora.md]
 - [INSTALL.RHEL.md]
-- [INSTALL.XenServer.md]
+- [INSTALL.XenServer.rst]
 
 To use Open vSwitch...
 
@@ -126,6 +126,6 @@ bugs@openvswitch.org
 [INSTALL.SELinux.md]:INSTALL.SELinux.md
 [INSTALL.SSL.md]:INSTALL.SSL.md
 [INSTALL.userspace.rst]:INSTALL.userspace.rst
-[INSTALL.XenServer.md]:INSTALL.XenServer.md
+[INSTALL.XenServer.rst]:INSTALL.XenServer.rst
 [FAQ.md]:FAQ.md
 [tutorial/Tutorial.md]:tutorial/Tutorial.md

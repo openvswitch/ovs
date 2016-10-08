@@ -32,7 +32,7 @@ platform, refer to one of these installation guides:
 - `Debian <INSTALL.Debian.rst>`__
 - `Fedora <INSTALL.Fedora.md>`__
 - `RHEL <INSTALL.RHEL.md>`__
-- `XenServer <INSTALL.XenServer.md>`__
+- `XenServer <INSTALL.XenServer.rst>`__
 - `NetBSD <INSTALL.NetBSD.md>`__
 - `Windows <INSTALL.Windows.rst>`__
 - `DPDK <INSTALL.DPDK.rst>`__

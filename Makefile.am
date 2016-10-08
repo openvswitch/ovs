@@ -82,7 +82,7 @@ docs = \
 	INSTALL.RHEL.md \
 	INSTALL.SELinux.md \
 	INSTALL.SSL.md \
-	INSTALL.XenServer.md \
+	INSTALL.XenServer.rst \
 	INSTALL.userspace.rst \
 	INSTALL.Windows.rst \
 	IntegrationGuide.md \
