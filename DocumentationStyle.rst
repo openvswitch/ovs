@@ -39,8 +39,11 @@ generator.  Sphinx introduces a number of extensions to reST, like the
 not work correctly on GitHub. As such, these extensions should not be used in
 any documentation in the root level, such as the ``README``.
 
+reST Conventions
+----------------
+
 Basics
-------
+~~~~~~
 
 Many of the basic documentation guidelines match those of the `coding style
 guide <CodingStyle.md>`__.
@@ -75,7 +78,7 @@ guide <CodingStyle.md>`__.
   changes! Docs aren't unit testable, so visible inspection is necessary.
 
 File Names
-----------
+~~~~~~~~~~
 
 - Use hyphens as space delimiters. For example: ``my-readme-document.rst``
 
@@ -86,7 +89,7 @@ File Names
     project.
 
 Titles
-------
+~~~~~~
 
 - Use the following headers levels.
 
@@ -107,7 +110,7 @@ Titles
 - Use "title case" for headers.
 
 Code
-----
+~~~~
 
 - Use ``::``, the ``code`` role or the ``code-block:: <syntax>`` role to prefix
   code.
@@ -118,7 +121,7 @@ Code
   pre-requisites, explain what they are and how to achieve them.
 
 Admonitions
------------
+~~~~~~~~~~~
 
 - Use admonitions to call attention to important information.::
 
@@ -129,13 +132,15 @@ Admonitions
   Example admonitions include: ``warning``, ``important``, ``note``, ``tip`` or
   ``seealso``.
 
+- Use notes sparingly. Avoid having more than one per subsection.
+
 Tables
-------
+~~~~~~
 
 - Use either graphic tables, list tables or CSV tables.
 
 Graphic tables
-~~~~~~~~~~~~~~
+++++++++++++++
 
 ::
 
@@ -167,7 +172,7 @@ Graphic tables
   The ``table`` role (`` .. table:: <name>``) can be safely omitted.
 
 List tables
-~~~~~~~~~~~
++++++++++++
 
 ::
 
@@ -185,7 +190,7 @@ List tables
          - 2.6.18 to 3.2
 
 CSV tables
-~~~~~~~~~~
+++++++++++
 
 ::
 
@@ -198,7 +203,7 @@ CSV tables
        1.6.x, 2.6.18 to 3.2
 
 Cross-referencing
------------------
+~~~~~~~~~~~~~~~~~
 
 - To link to an external file or document, include as a link.::
 
@@ -243,7 +248,7 @@ Cross-referencing
     This is a Sphinx extension. Do not use this in any top-level documents.
 
 Figures and Other Media
------------------------
+~~~~~~~~~~~~~~~~~~~~~~~
 
 - All images should be in ASCII format and included in code-blocks to preserve
   formatting.
@@ -251,12 +256,75 @@ Figures and Other Media
 - Include other reStructuredText verbatim in a current document
 
 Comments
---------
+~~~~~~~~
 
 - Comments are indicated by means of the ``..`` marker.::
 
       .. TODO(stephenfin) This section needs some work. This TODO will not
          appear in the final generated document, however.
+
+Writing Style
+-------------
+
+Follow these guidelines to ensure readability and consistency of the Open
+vSwitch documentation. These guidelines are based on the `IBM Style Guide
+<http://www.redbooks.ibm.com/Redbooks.nsf/ibmpressisbn/9780132101301?Open>`__.
+
+- Use standard US English
+
+  Use a spelling and grammar checking tool as necessary.
+
+- Expand initialisms and acronyms on first usage.
+
+  Commonly used terms like CPU or RAM are allowed.
+
+  .. list-table:: Example
+     :header-rows: 1
+
+     * - Do not use
+       - Do use
+     * - OVS is a virtual switch. OVS has...
+       - Open vSwitch (OVS) is a virtual switch. OVS has...
+     * - The VTEP emulator is...
+       - The Virtual Tunnel Endpoint (VTEP) emulator is...
+
+- Write in the active voice
+
+  The subject should do the verb's action, rather than be acted upon.
+
+  .. list-table:: Example
+     :header-rows: 1
+
+     * - Do not use
+       - Do use
+     * - A bridge is created by you
+       - Create a bridge
+
+- Write in the present tense
+
+  .. list-table:: Example
+     :header-rows: 1
+
+     * - Do not use
+       - Do use
+     * - Once the bridge is created, you can create a port
+       - Once the bridge is created, create a port
+
+- Write in second person
+
+  .. list-table:: Example
+     :header-rows: 1
+
+     * - Do not use
+       - Do use
+     * - To create a bridge, the user runs:
+       - To create a bridge, run:
+
+- Keep sentences short and consise
+
+- Eliminate needless politeness
+
+  Avoid "please" and "thank you"
 
 Useful Links
 ------------
