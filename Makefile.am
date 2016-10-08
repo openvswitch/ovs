@@ -84,7 +84,7 @@ docs = \
 	INSTALL.SSL.md \
 	INSTALL.XenServer.md \
 	INSTALL.userspace.md \
-	INSTALL.Windows.md \
+	INSTALL.Windows.rst \
 	IntegrationGuide.md \
 	MAINTAINERS.md \
 	OPENFLOW-1.1+.md \

@@ -34,7 +34,7 @@ platform, refer to one of these installation guides:
 - `RHEL <INSTALL.RHEL.md>`__
 - `XenServer <INSTALL.XenServer.md>`__
 - `NetBSD <INSTALL.NetBSD.md>`__
-- `Windows <INSTALL.Windows.md>`__
+- `Windows <INSTALL.Windows.rst>`__
 - `DPDK <INSTALL.DPDK.rst>`__
 
 .. _general-build-reqs:
