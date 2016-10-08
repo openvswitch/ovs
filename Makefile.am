@@ -83,7 +83,7 @@ docs = \
 	INSTALL.SELinux.md \
 	INSTALL.SSL.md \
 	INSTALL.XenServer.md \
-	INSTALL.userspace.md \
+	INSTALL.userspace.rst \
 	INSTALL.Windows.rst \
 	IntegrationGuide.md \
 	MAINTAINERS.md \

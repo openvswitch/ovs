@@ -887,7 +887,7 @@ Bug Reporting:
 Please report problems to bugs@openvswitch.org.
 
 
-[INSTALL.userspace.md]:INSTALL.userspace.md
+[INSTALL.userspace.rst]:INSTALL.userspace.rst
 [INSTALL.rst]:INSTALL.rst
 [DPDK Linux GSG]: http://www.dpdk.org/doc/guides/linux_gsg/build_dpdk.html#binding-and-unbinding-network-ports-to-from-the-igb-uioor-vfio-modules
 [DPDK Docs]: http://dpdk.org/doc

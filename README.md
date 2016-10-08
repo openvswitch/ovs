@@ -92,7 +92,7 @@ To use Open vSwitch...
 
 - ...with Libvirt, read [INSTALL.Libvirt.md].
 
-- ...without using a kernel module, read [INSTALL.userspace.md].
+- ...without using a kernel module, read [INSTALL.userspace.rst].
 
 - ...with DPDK, read [INSTALL.DPDK.rst].
 
@@ -125,7 +125,7 @@ bugs@openvswitch.org
 [INSTALL.RHEL.md]:INSTALL.RHEL.md
 [INSTALL.SELinux.md]:INSTALL.SELinux.md
 [INSTALL.SSL.md]:INSTALL.SSL.md
-[INSTALL.userspace.md]:INSTALL.userspace.md
+[INSTALL.userspace.rst]:INSTALL.userspace.rst
 [INSTALL.XenServer.md]:INSTALL.XenServer.md
 [FAQ.md]:FAQ.md
 [tutorial/Tutorial.md]:tutorial/Tutorial.md

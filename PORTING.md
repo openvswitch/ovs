@@ -129,7 +129,7 @@ implementation built into Open vSwitch.  This ought to work, without
 writing any more code, as long as the netdev provider that you
 implemented supports receiving packets.  It yields poor performance,
 however, because every packet passes through the ovs-vswitchd process.
-See [INSTALL.userspace.md] for instructions on how to configure a
+See [INSTALL.userspace.rst] for instructions on how to configure a
 userspace switch.
 
 If the userspace switch is not the right choice for your port, then
@@ -323,4 +323,4 @@ Questions
 Please direct porting questions to dev@openvswitch.org.  We will try
 to use questions to improve this porting guide.
 
-[INSTALL.userspace.md]:INSTALL.userspace.md
+[INSTALL.userspace.rst]:INSTALL.userspace.rst
