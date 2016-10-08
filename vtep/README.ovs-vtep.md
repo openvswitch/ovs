@@ -15,7 +15,7 @@ can be done by either of the following methods.
 1. Follow the instructions in the INSTALL.md file of the Open vSwitch repository
 (don't start any daemons yet).
 
-2. Follow the instructions in INSTALL.Debian.md file and then install the
+2. Follow the instructions in INSTALL.Debian.rst file and then install the
 "openvswitch-vtep" package (if operating on a debian based machine). This
 will automatically start the daemons.
 

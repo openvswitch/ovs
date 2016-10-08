@@ -79,7 +79,7 @@ To install Open vSwitch on a regular Linux or FreeBSD host, please
 read [INSTALL.rst]. For specifics around installation on a specific
 platform, please see one of these files:
 
-- [INSTALL.Debian.md]
+- [INSTALL.Debian.rst]
 - [INSTALL.Fedora.md]
 - [INSTALL.RHEL.md]
 - [INSTALL.XenServer.md]
@@ -116,7 +116,7 @@ Contact
 bugs@openvswitch.org
 
 [INSTALL.rst]:INSTALL.rst
-[INSTALL.Debian.md]:INSTALL.Debian.md
+[INSTALL.Debian.rst]:INSTALL.Debian.rst
 [INSTALL.Docker.md]:INSTALL.Docker.md
 [INSTALL.DPDK.rst]:INSTALL.DPDK.rst
 [INSTALL.Fedora.md]:INSTALL.Fedora.md

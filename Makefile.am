@@ -71,7 +71,7 @@ docs = \
 	DESIGN.md \
 	FAQ.md \
 	INSTALL.rst \
-	INSTALL.Debian.md \
+	INSTALL.Debian.rst \
 	INSTALL.Docker.md \
 	INSTALL.DPDK-ADVANCED.md \
 	INSTALL.DPDK.rst \

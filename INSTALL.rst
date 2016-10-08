@@ -29,7 +29,7 @@ This document describes how to build and install Open vSwitch on a generic
 Linux, FreeBSD, or NetBSD host. For specifics around installation on a specific
 platform, refer to one of these installation guides:
 
-- `Debian <INSTALL.Debian.md>`__
+- `Debian <INSTALL.Debian.rst>`__
 - `Fedora <INSTALL.Fedora.md>`__
 - `RHEL <INSTALL.RHEL.md>`__
 - `XenServer <INSTALL.XenServer.md>`__
