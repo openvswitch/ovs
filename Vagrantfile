@@ -33,6 +33,7 @@ SCRIPT
 $configure_ovs = <<SCRIPT
 cd /vagrant
 ./boot.sh
+[ -f Makefile ] && ./configure && make distclean
 mkdir -p ~/build
 cd ~/build
 /vagrant/configure --with-linux=/lib/modules/`uname -r`/build --enable-silent-rules
