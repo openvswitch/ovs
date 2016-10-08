@@ -63,8 +63,8 @@ CLEAN_LOCAL =
 DISTCLEANFILES =
 PYCOV_CLEAN_FILES = build-aux/check-structs,cover
 
-# A list of Markdown-formatted documentation that will automatically be
-# included in the "make dist-docs" output.
+# A list of Markdown- or reStructuredText-formatted documentation that will
+# automatically be included in the "make dist-docs" output.
 docs = \
 	CONTRIBUTING.md \
 	CodingStyle.md \
