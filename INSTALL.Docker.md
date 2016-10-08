@@ -3,7 +3,7 @@ How to Use Open Virtual Networking With Docker
 
 This document describes how to use Open Virtual Networking with Docker
 1.9.0 or later.  This document assumes that you have installed Open
-vSwitch by following [INSTALL.md] or by using the distribution packages
+vSwitch by following [INSTALL.rst] or by using the distribution packages
 such as .deb or.rpm.  Consult www.docker.com for instructions on how to
 install Docker.  Docker 1.9.0 comes with support for multi-host networking.
 
@@ -288,11 +288,11 @@ $OVS_PYTHON_LIBS_PATH should point to the directory where Open vSwitch
 python modules are installed.  If you installed Open vSwitch python
 modules via the debian package of 'python-openvswitch' or via pip by
 running 'pip install ovs', you do not need to specify the path.
-If you installed it by following the instructions in INSTALL.md, you
+If you installed it by following the instructions in INSTALL.rst, you
 should specify the path.  The path in that case depends on the options passed
 to ./configure.  (It is usually either '/usr/share/openvswitch/python' or
 '/usr/local/share/openvswitch/python'.)
 
-[INSTALL.md]: INSTALL.md
+[INSTALL.rst]: INSTALL.rst
 [openvswitch-switch.README.Debian]: debian/openvswitch-switch.README.Debian
 [README.RHEL]: rhel/README.RHEL

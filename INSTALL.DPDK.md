@@ -108,7 +108,7 @@ advanced install guide [INSTALL.DPDK-ADVANCED.md]
      Note: Passing DPDK_BUILD can be skipped if DPDK library is installed in
      standard locations i.e `./configure --with-dpdk` should suffice.
 
-  Additional information can be found in [INSTALL.md].
+  Additional information can be found in [INSTALL.rst].
 
 ## <a name="ovssetup"></a> 3. Setup OVS with DPDK datapath
 
@@ -614,12 +614,12 @@ Please report problems to bugs@openvswitch.org.
 [Download DPDK]: http://dpdk.org/browse/dpdk/refs/
 [Download OVS]: http://openvswitch.org/releases/
 [DPDK Supported NICs]: http://dpdk.org/doc/nics
-[Build Requirements]: https://github.com/openvswitch/ovs/blob/master/INSTALL.md#build-requirements
+[Build Requirements]: https://github.com/openvswitch/ovs/blob/master/INSTALL.rst#build-requirements
 [INSTALL.DPDK-ADVANCED.md]: INSTALL.DPDK-ADVANCED.md
 [OVS Testcases]: INSTALL.DPDK-ADVANCED.md#ovstc
 [Vhost Walkthrough]: INSTALL.DPDK-ADVANCED.md#vhost
 [DPDK in the VM]: INSTALL.DPDK.md#builddpdk
-[INSTALL.md]:INSTALL.md
+[INSTALL.rst]:INSTALL.rst
 [INSTALL.Fedora.md]:INSTALL.Fedora.md
 [INSTALL.RHEL.md]:INSTALL.RHEL.md
 [INSTALL.Debian.md]:INSTALL.Debian.md

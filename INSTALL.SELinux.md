@@ -170,4 +170,4 @@ Reporting Bugs
 
 Please report problems to bugs@openvswitch.org.
 
-[INSTALL.md]:INSTALL.md
+[INSTALL.rst]:INSTALL.rst

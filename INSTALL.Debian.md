@@ -3,7 +3,7 @@ How to Build Debian Packages for Open vSwitch
 
 This document describes how to build Debian packages for Open vSwitch.
 To install Open vSwitch on Debian without building Debian packages,
-see [INSTALL.md] instead.
+see [INSTALL.rst] instead.
 
 These instructions should also work on Ubuntu and other Debian
 derivative distributions.
@@ -98,4 +98,4 @@ Bug Reporting
 
 Please report problems to bugs@openvswitch.org.
 
-[INSTALL.md]:INSTALL.md
+[INSTALL.rst]:INSTALL.rst

@@ -76,7 +76,7 @@ What other documentation is available?
 --------------------------------------
 
 To install Open vSwitch on a regular Linux or FreeBSD host, please
-read [INSTALL.md]. For specifics around installation on a specific
+read [INSTALL.rst]. For specifics around installation on a specific
 platform, please see one of these files:
 
 - [INSTALL.Debian.md]
@@ -88,7 +88,7 @@ To use Open vSwitch...
 
 - ...with Docker on Linux, read [INSTALL.Docker.md]
 
-- ...with KVM on Linux, read [INSTALL.md], read [INSTALL.KVM.md]
+- ...with KVM on Linux, read [INSTALL.rst], read [INSTALL.KVM.md]
 
 - ...with Libvirt, read [INSTALL.Libvirt.md].
 
@@ -115,7 +115,7 @@ Contact
 
 bugs@openvswitch.org
 
-[INSTALL.md]:INSTALL.md
+[INSTALL.rst]:INSTALL.rst
 [INSTALL.Debian.md]:INSTALL.Debian.md
 [INSTALL.Docker.md]:INSTALL.Docker.md
 [INSTALL.DPDK.md]:INSTALL.DPDK.md

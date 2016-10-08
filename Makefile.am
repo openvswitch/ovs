@@ -70,7 +70,7 @@ docs = \
 	CodingStyle.md \
 	DESIGN.md \
 	FAQ.md \
-	INSTALL.md \
+	INSTALL.rst \
 	INSTALL.Debian.md \
 	INSTALL.Docker.md \
 	INSTALL.DPDK-ADVANCED.md \

@@ -4,7 +4,7 @@ How to Install Open vSwitch on Fedora Linux
 This document provides instructions for building and installing Open vSwitch
 RPM packages on a Fedora Linux host.  Instructions for the installation of
 Open vSwitch on a Fedora Linux host without using RPM packages can be found
-in [INSTALL.md].
+in [INSTALL.rst].
 
 These instructions have been tested with Fedora 23, and are also applicable
 for RHEL 7.x and its derivatives, including CentOS 7.x and Scientific Linux
@@ -13,7 +13,7 @@ for RHEL 7.x and its derivatives, including CentOS 7.x and Scientific Linux
 Build Requirements
 ------------------
 The tools and packages that are required for building Open vSwitch are
-documented in [INSTALL.md]. Specific packages (by package name) include:
+documented in [INSTALL.rst]. Specific packages (by package name) include:
 
   - rpm-build
   - autoconf automake libtool
@@ -125,6 +125,6 @@ Reporting Bugs
 
 Please report problems to bugs@openvswitch.org.
 
-[INSTALL.md]:INSTALL.md
+[INSTALL.rst]:INSTALL.rst
 [FAQ.md]:FAQ.md
 [README.RHEL]:rhel/README.RHEL
