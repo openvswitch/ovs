@@ -94,7 +94,7 @@ To use Open vSwitch...
 
 - ...without using a kernel module, read [INSTALL.userspace.md].
 
-- ...with DPDK, read [INSTALL.DPDK.md].
+- ...with DPDK, read [INSTALL.DPDK.rst].
 
 - ...with SELinux, read [INSTALL.SELinux.md].
 
@@ -118,7 +118,7 @@ bugs@openvswitch.org
 [INSTALL.rst]:INSTALL.rst
 [INSTALL.Debian.md]:INSTALL.Debian.md
 [INSTALL.Docker.md]:INSTALL.Docker.md
-[INSTALL.DPDK.md]:INSTALL.DPDK.md
+[INSTALL.DPDK.rst]:INSTALL.DPDK.rst
 [INSTALL.Fedora.md]:INSTALL.Fedora.md
 [INSTALL.KVM.md]:INSTALL.KVM.md
 [INSTALL.Libvirt.md]:INSTALL.Libvirt.md

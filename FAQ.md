@@ -465,7 +465,7 @@ A: Firstly, you must have a DPDK-enabled version of Open vSwitch.
 
    Finally, it is required that DPDK port names begin with 'dpdk'.
 
-   See [INSTALL.DPDK.md] for more information on enabling and using DPDK with
+   See [INSTALL.DPDK.rst] for more information on enabling and using DPDK with
    Open vSwitch.
 
 ### Q: How do I configure a VLAN as an RSPAN VLAN, that is, enable mirroring of all traffic to that VLAN?
@@ -778,7 +778,7 @@ A: More than likely, you've looped your network.  Probably, eth0 and
      for all the details.
 
      Configuration for DPDK-enabled interfaces is slightly less
-     straightforward: see [INSTALL.DPDK.md].
+     straightforward: see [INSTALL.DPDK.rst].
 
    - Perhaps you don't actually need eth0 and eth1 to be on the
      same bridge.  For example, if you simply want to be able to
@@ -2153,6 +2153,6 @@ http://openvswitch.org/
 [WHY-OVS.md]:WHY-OVS.md
 [INSTALL.rst]:INSTALL.rst
 [OPENFLOW-1.1+.md]:OPENFLOW-1.1+.md
-[INSTALL.DPDK.md]:INSTALL.DPDK.md
+[INSTALL.DPDK.rst]:INSTALL.DPDK.rst
 [Tutorial.md]:tutorial/Tutorial.md
 [release-process.md]:Documentation/release-process.md

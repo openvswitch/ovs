@@ -85,7 +85,7 @@ unavailable or unsuccessful.
 .
 .SS "DPDK Options"
 For details on initializing the \fBovs\-vswitchd\fR DPDK datapath,
-refer to INSTALL.DPDK.md or \fBovs\-vswitchd.conf.db\fR(5) for
+refer to INSTALL.DPDK.rst or \fBovs\-vswitchd.conf.db\fR(5) for
 details.
 .SS "Daemon Options"
 .ds DD \

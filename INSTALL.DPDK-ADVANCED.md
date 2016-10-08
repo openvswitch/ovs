@@ -892,7 +892,7 @@ Please report problems to bugs@openvswitch.org.
 [DPDK Linux GSG]: http://www.dpdk.org/doc/guides/linux_gsg/build_dpdk.html#binding-and-unbinding-network-ports-to-from-the-igb-uioor-vfio-modules
 [DPDK Docs]: http://dpdk.org/doc
 [libvirt]: http://libvirt.org/formatdomain.html
-[Guest VM using libvirt]: INSTALL.DPDK.md#ovstc
-[Vhost walkthrough]: INSTALL.DPDK.md#vhost
-[INSTALL DPDK]: INSTALL.DPDK.md#build
-[INSTALL OVS]: INSTALL.DPDK.md#build
+[Guest VM using libvirt]: INSTALL.DPDK.rst#ovstc
+[Vhost walkthrough]: INSTALL.DPDK.rst#vhost
+[INSTALL DPDK]: INSTALL.DPDK.rst#build
+[INSTALL OVS]: INSTALL.DPDK.rst#build

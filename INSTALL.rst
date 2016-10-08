@@ -35,7 +35,7 @@ platform, refer to one of these installation guides:
 - `XenServer <INSTALL.XenServer.md>`__
 - `NetBSD <INSTALL.NetBSD.md>`__
 - `Windows <INSTALL.Windows.md>`__
-- `DPDK <INSTALL.DPDK.md>`__
+- `DPDK <INSTALL.DPDK.rst>`__
 
 .. _general-build-reqs:
 

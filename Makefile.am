@@ -74,7 +74,7 @@ docs = \
 	INSTALL.Debian.md \
 	INSTALL.Docker.md \
 	INSTALL.DPDK-ADVANCED.md \
-	INSTALL.DPDK.md \
+	INSTALL.DPDK.rst \
 	INSTALL.Fedora.md \
 	INSTALL.KVM.md \
 	INSTALL.Libvirt.md \
