@@ -88,7 +88,7 @@ To use Open vSwitch...
 
 - ...with Docker on Linux, read [INSTALL.Docker.rst]
 
-- ...with KVM on Linux, read [INSTALL.rst], read [INSTALL.KVM.md]
+- ...with KVM on Linux, read [INSTALL.rst], read [INSTALL.KVM.rst]
 
 - ...with Libvirt, read [INSTALL.Libvirt.md].
 
@@ -120,7 +120,7 @@ bugs@openvswitch.org
 [INSTALL.Docker.rst]:INSTALL.Docker.rst
 [INSTALL.DPDK.rst]:INSTALL.DPDK.rst
 [INSTALL.Fedora.md]:INSTALL.Fedora.md
-[INSTALL.KVM.md]:INSTALL.KVM.md
+[INSTALL.KVM.rst]:INSTALL.KVM.rst
 [INSTALL.Libvirt.md]:INSTALL.Libvirt.md
 [INSTALL.RHEL.md]:INSTALL.RHEL.md
 [INSTALL.SELinux.md]:INSTALL.SELinux.md

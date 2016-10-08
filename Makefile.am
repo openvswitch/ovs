@@ -76,7 +76,7 @@ docs = \
 	INSTALL.DPDK-ADVANCED.md \
 	INSTALL.DPDK.rst \
 	INSTALL.Fedora.md \
-	INSTALL.KVM.md \
+	INSTALL.KVM.rst \
 	INSTALL.Libvirt.md \
 	INSTALL.NetBSD.md \
 	INSTALL.RHEL.md \
