@@ -1033,4 +1033,4 @@ and `lport2`.
 [env8packet1]:https://github.com/nickcooper-zhangtonghao/ovs/blob/master/tutorial/ovn/env8/packet1.sh
 [env8packet2]:https://github.com/nickcooper-zhangtonghao/ovs/blob/master/tutorial/ovn/env8/packet2.sh
 [openstack-ovn-acl-blog]:http://blog.russellbryant.net/2015/10/22/openstack-security-groups-using-ovn-acls/
-[openvswitch-docker]:http://openvswitch.org/support/dist-docs/INSTALL.Docker.md.txt
+[openvswitch-docker]:http://openvswitch.org/support/dist-docs/INSTALL.Docker.rst.txt

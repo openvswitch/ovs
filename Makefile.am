@@ -72,7 +72,7 @@ docs = \
 	FAQ.md \
 	INSTALL.rst \
 	INSTALL.Debian.rst \
-	INSTALL.Docker.md \
+	INSTALL.Docker.rst \
 	INSTALL.DPDK-ADVANCED.md \
 	INSTALL.DPDK.rst \
 	INSTALL.Fedora.md \

@@ -86,7 +86,7 @@ platform, please see one of these files:
 
 To use Open vSwitch...
 
-- ...with Docker on Linux, read [INSTALL.Docker.md]
+- ...with Docker on Linux, read [INSTALL.Docker.rst]
 
 - ...with KVM on Linux, read [INSTALL.rst], read [INSTALL.KVM.md]
 
@@ -117,7 +117,7 @@ bugs@openvswitch.org
 
 [INSTALL.rst]:INSTALL.rst
 [INSTALL.Debian.rst]:INSTALL.Debian.rst
-[INSTALL.Docker.md]:INSTALL.Docker.md
+[INSTALL.Docker.rst]:INSTALL.Docker.rst
 [INSTALL.DPDK.rst]:INSTALL.DPDK.rst
 [INSTALL.Fedora.md]:INSTALL.Fedora.md
 [INSTALL.KVM.md]:INSTALL.KVM.md
