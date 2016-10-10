@@ -556,7 +556,6 @@ OvsActivateSwitch(POVS_SWITCH_CONTEXT switchContext)
     OVS_LOG_TRACE("Enter: activate switch %p, dpNo: %ld",
                   switchContext, switchContext->dpNo);
 
-    switchContext->isActivated = TRUE;
     status = OvsAddConfiguredSwitchPorts(switchContext);
 
     if (status != NDIS_STATUS_SUCCESS) {
@@ -572,11 +571,9 @@ OvsActivateSwitch(POVS_SWITCH_CONTEXT switchContext)
         goto cleanup;
     }
 
-cleanup:
-    if (status != NDIS_STATUS_SUCCESS) {
-        switchContext->isActivated = TRUE;
-    }
+    switchContext->isActivated = TRUE;
 
+cleanup:
     OVS_LOG_TRACE("Exit: activate switch:%p, isActivated: %s, status = %lx",
                   switchContext,
                   (switchContext->isActivated ? "TRUE" : "FALSE"), status);
