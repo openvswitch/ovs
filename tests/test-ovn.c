@@ -452,11 +452,11 @@ next_composition(unsigned int *state, int s[], int sn)
             j++;
         } else {
             j--;
-            s[j] = s[j + 1];
-            s[j - 1]++;
             if (!j) {
                 return 0;
             }
+            s[j] = s[j + 1];
+            s[j - 1]++;
         }
     }
     return j + 1;
