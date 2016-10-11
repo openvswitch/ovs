@@ -238,6 +238,120 @@ OVN_NBCTL_TEST_STOP
 AT_CLEANUP
 
 dnl ---------------------------------------------------------------------
+AT_SETUP([ovn-nbctl - NATs])
+OVN_NBCTL_TEST_START
+AT_CHECK([ovn-nbctl lr-add lr0])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snatt 30.0.0.2 192.168.1.2], [1], [],
+[ovn-nbctl: snatt: type must be one of "dnat", "snat" and "dnat_and_snat".
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 30.0.0.2a 192.168.1.2], [1], [],
+[ovn-nbctl: 30.0.0.2a: should be an IPv4 address.
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 30.0.0 192.168.1.2], [1], [],
+[ovn-nbctl: 30.0.0: should be an IPv4 address.
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 30.0.0.2/24 192.168.1.2], [1], [],
+[ovn-nbctl: 30.0.0.2/24: should be an IPv4 address.
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 30.0.0.2:80 192.168.1.2], [1], [],
+[ovn-nbctl: 30.0.0.2:80: should be an IPv4 address.
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 30.0.0.2 192.168.1.2a], [1], [],
+[ovn-nbctl: 192.168.1.2a: should be an IPv4 address or network.
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 30.0.0.2 192.168.1], [1], [],
+[ovn-nbctl: 192.168.1: should be an IPv4 address or network.
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 30.0.0.2 192.168.1.2:80], [1], [],
+[ovn-nbctl: 192.168.1.2:80: should be an IPv4 address or network.
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 30.0.0.2 192.168.1.2/a], [1], [],
+[ovn-nbctl: 192.168.1.2/a: should be an IPv4 address or network.
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat 30.0.0.2 192.168.1.2a], [1], [],
+[ovn-nbctl: 192.168.1.2a: should be an IPv4 address.
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat 30.0.0.2 192.168.1], [1], [],
+[ovn-nbctl: 192.168.1: should be an IPv4 address.
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat 30.0.0.2 192.168.1.2:80], [1], [],
+[ovn-nbctl: 192.168.1.2:80: should be an IPv4 address.
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat 30.0.0.2 192.168.1.2/24], [1], [],
+[ovn-nbctl: 192.168.1.2/24: should be an IPv4 address.
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat_and_snat 30.0.0.2 192.168.1.2/24], [1], [],
+[ovn-nbctl: 192.168.1.2/24: should be an IPv4 address.
+])
+
+dnl Add snat and dnat
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 30.0.0.1 192.168.1.0/24])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat 30.0.0.1 192.168.1.2])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat_and_snat 30.0.0.1 192.168.1.2])
+AT_CHECK([ovn-nbctl lr-nat-list lr0], [0], [dnl
+TYPE             EXTERNAL_IP        LOGICAL_IP
+dnat             30.0.0.1           192.168.1.2
+dnat_and_snat    30.0.0.1           192.168.1.2
+snat             30.0.0.1           192.168.1.0/24
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 30.0.0.1 192.168.1.0/24], [1], [],
+[ovn-nbctl: 30.0.0.1, 192.168.1.0/24: a NAT with this external_ip and logical_ip already exists
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 30.0.0.1 192.168.1.10/24], [1], [],
+[ovn-nbctl: 30.0.0.1, 192.168.1.0/24: a NAT with this external_ip and logical_ip already exists
+])
+AT_CHECK([ovn-nbctl --may-exist lr-nat-add lr0 snat 30.0.0.1 192.168.1.0/24])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 snat 30.0.0.2 192.168.1.0/24], [1], [],
+[ovn-nbctl: a NAT with this type (snat) and logical_ip (192.168.1.0/24) already exists
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat 30.0.0.1 192.168.1.2], [1], [],
+[ovn-nbctl: 30.0.0.1, 192.168.1.2: a NAT with this external_ip and logical_ip already exists
+])
+AT_CHECK([ovn-nbctl --may-exist lr-nat-add lr0 dnat 30.0.0.1 192.168.1.2])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat 30.0.0.1 192.168.1.3], [1], [],
+[ovn-nbctl: a NAT with this type (dnat) and external_ip (30.0.0.1) already exists
+])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat_and_snat 30.0.0.1 192.168.1.2], [1], [],
+[ovn-nbctl: 30.0.0.1, 192.168.1.2: a NAT with this external_ip and logical_ip already exists
+])
+AT_CHECK([ovn-nbctl --may-exist lr-nat-add lr0 dnat_and_snat 30.0.0.1 192.168.1.2])
+AT_CHECK([ovn-nbctl lr-nat-add lr0 dnat_and_snat 30.0.0.1 192.168.1.3], [1], [],
+[ovn-nbctl: a NAT with this type (dnat_and_snat) and external_ip (30.0.0.1) already exists
+])
+
+dnl Deletes the NATs
+AT_CHECK([ovn-nbctl lr-nat-del lr0 dnat_and_snat 30.0.0.2], [1], [],
+[ovn-nbctl: no matching NAT with the type (dnat_and_snat) and external_ip (30.0.0.2)
+])
+AT_CHECK([ovn-nbctl lr-nat-del lr0 dnat 30.0.0.2], [1], [],
+[ovn-nbctl: no matching NAT with the type (dnat) and external_ip (30.0.0.2)
+])
+AT_CHECK([ovn-nbctl lr-nat-del lr0 snat 192.168.10.0/24], [1], [],
+[ovn-nbctl: no matching NAT with the type (snat) and logical_ip (192.168.10.0/24)
+])
+AT_CHECK([ovn-nbctl --if-exists lr-nat-del lr0 snat 192.168.10.0/24])
+
+AT_CHECK([ovn-nbctl lr-nat-del lr0 dnat_and_snat 30.0.0.1])
+AT_CHECK([ovn-nbctl lr-nat-list lr0], [0], [dnl
+TYPE             EXTERNAL_IP        LOGICAL_IP
+dnat             30.0.0.1           192.168.1.2
+snat             30.0.0.1           192.168.1.0/24
+])
+
+AT_CHECK([ovn-nbctl lr-nat-del lr0 dnat])
+AT_CHECK([ovn-nbctl lr-nat-list lr0], [0], [dnl
+TYPE             EXTERNAL_IP        LOGICAL_IP
+snat             30.0.0.1           192.168.1.0/24
+])
+
+AT_CHECK([ovn-nbctl lr-nat-del lr0])
+AT_CHECK([ovn-nbctl lr-nat-list lr0], [0], [])
+AT_CHECK([ovn-nbctl lr-nat-del lr0])
+AT_CHECK([ovn-nbctl lr-nat-del lr0 dnat])
+OVN_NBCTL_TEST_STOP
+AT_CLEANUP
+
+dnl ---------------------------------------------------------------------
 
 AT_SETUP([ovn-nbctl - LBs])
 OVN_NBCTL_TEST_START

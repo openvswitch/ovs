@@ -384,6 +384,13 @@ Route commands:\n\
                             remove routes from ROUTER\n\
   lr-route-list ROUTER      print routes for ROUTER\n\
 \n\
+NAT commands:\n\
+  lr-nat-add ROUTER TYPE EXTERNAL_IP LOGICAL_IP\n\
+                            add a NAT to ROUTER\n\
+  lr-nat-del ROUTER [TYPE [IP]]\n\
+                            remove NATs from ROUTER\n\
+  lr-nat-list ROUTER        print NATs for ROUTER\n\
+\n\
 LB commands:\n\
   lb-add LB VIP[:PORT] IP[:PORT]... [PROTOCOL]\n\
                             create a load-balancer or add a VIP to an\n\
@@ -2176,6 +2183,177 @@ nbctl_lr_route_del(struct ctl_context *ctx)
     }
     free(prefix);
 }
+
+static void
+nbctl_lr_nat_add(struct ctl_context *ctx)
+{
+    const struct nbrec_logical_router *lr;
+    const char *nat_type = ctx->argv[2];
+    const char *external_ip = ctx->argv[3];
+    const char *logical_ip = ctx->argv[4];
+    char *new_logical_ip = NULL;
+
+    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    if (strcmp(nat_type, "dnat") && strcmp(nat_type, "snat")
+            && strcmp(nat_type, "dnat_and_snat")) {
+        ctl_fatal("%s: type must be one of \"dnat\", \"snat\" and "
+                "\"dnat_and_snat\".", nat_type);
+    }
+
+    ovs_be32 ipv4 = 0;
+    unsigned int plen;
+    if (!ip_parse(external_ip, &ipv4)) {
+        ctl_fatal("%s: should be an IPv4 address.", external_ip);
+    }
+
+    if (strcmp("snat", nat_type)) {
+        if (!ip_parse(logical_ip, &ipv4)) {
+            ctl_fatal("%s: should be an IPv4 address.", logical_ip);
+        }
+        new_logical_ip = xstrdup(logical_ip);
+    } else {
+        char *error = ip_parse_cidr(logical_ip, &ipv4, &plen);
+        if (error) {
+            free(error);
+            ctl_fatal("%s: should be an IPv4 address or network.",
+                    logical_ip);
+        }
+        new_logical_ip = normalize_ipv4_prefix(ipv4, plen);
+    }
+
+    bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
+    int is_snat = !strcmp("snat", nat_type);
+    for (size_t i = 0; i < lr->n_nat; i++) {
+        const struct nbrec_nat *nat = lr->nat[i];
+        if (!strcmp(nat_type, nat->type)) {
+            if (!strcmp(is_snat ? new_logical_ip : external_ip,
+                        is_snat ? nat->logical_ip : nat->external_ip)) {
+                if (!strcmp(is_snat ? external_ip : new_logical_ip,
+                            is_snat ? nat->external_ip : nat->logical_ip)) {
+                        if (may_exist) {
+                            free(new_logical_ip);
+                            return;
+                        }
+                        ctl_fatal("%s, %s: a NAT with this external_ip and "
+                                "logical_ip already exists",
+                                external_ip, new_logical_ip);
+                } else {
+                        ctl_fatal("a NAT with this type (%s) and %s (%s) "
+                                "already exists",
+                                nat_type,
+                                is_snat ? "logical_ip" : "external_ip",
+                                is_snat ? new_logical_ip : external_ip);
+                }
+            }
+        }
+    }
+
+    /* Create the NAT. */
+    struct nbrec_nat *nat = nbrec_nat_insert(ctx->txn);
+    nbrec_nat_set_type(nat, nat_type);
+    nbrec_nat_set_external_ip(nat, external_ip);
+    nbrec_nat_set_logical_ip(nat, new_logical_ip);
+    free(new_logical_ip);
+
+    /* Insert the NAT into the logical router. */
+    nbrec_logical_router_verify_nat(lr);
+    struct nbrec_nat **new_nats = xmalloc(sizeof *new_nats * (lr->n_nat + 1));
+    memcpy(new_nats, lr->nat, sizeof *new_nats * lr->n_nat);
+    new_nats[lr->n_nat] = nat;
+    nbrec_logical_router_set_nat(lr, new_nats, lr->n_nat + 1);
+    free(new_nats);
+}
+
+static void
+nbctl_lr_nat_del(struct ctl_context *ctx)
+{
+    const struct nbrec_logical_router *lr;
+    bool must_exist = !shash_find(&ctx->options, "--if-exists");
+    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    if (ctx->argc == 2) {
+        /* If type, external_ip and logical_ip are not specified, delete
+         * all NATs. */
+        nbrec_logical_router_verify_nat(lr);
+        nbrec_logical_router_set_nat(lr, NULL, 0);
+        return;
+    }
+
+    const char *nat_type = ctx->argv[2];
+    if (strcmp(nat_type, "dnat") && strcmp(nat_type, "snat")
+            && strcmp(nat_type, "dnat_and_snat")) {
+        ctl_fatal("%s: type must be one of \"dnat\", \"snat\" and "
+                "\"dnat_and_snat\".", nat_type);
+    }
+
+    if (ctx->argc == 3) {
+        /*Deletes all NATs with the specified type. */
+        struct nbrec_nat **new_nats = xmalloc(sizeof *new_nats * lr->n_nat);
+        int n_nat = 0;
+        for (size_t i = 0; i < lr->n_nat; i++) {
+            if (strcmp(nat_type, lr->nat[i]->type)) {
+                new_nats[n_nat++] = lr->nat[i];
+            }
+        }
+
+        nbrec_logical_router_verify_nat(lr);
+        nbrec_logical_router_set_nat(lr, new_nats, n_nat);
+        free(new_nats);
+        return;
+    }
+
+    const char *nat_ip = ctx->argv[3];
+    int is_snat = !strcmp("snat", nat_type);
+    /* Remove the matching NAT. */
+    for (size_t i = 0; i < lr->n_nat; i++) {
+        struct nbrec_nat *nat = lr->nat[i];
+        if (!strcmp(nat_type, nat->type) &&
+             !strcmp(nat_ip, is_snat ? nat->logical_ip : nat->external_ip)) {
+            struct nbrec_nat **new_nats
+                = xmemdup(lr->nat, sizeof *new_nats * lr->n_nat);
+            new_nats[i] = lr->nat[lr->n_nat - 1];
+            nbrec_logical_router_verify_nat(lr);
+            nbrec_logical_router_set_nat(lr, new_nats,
+                                          lr->n_nat - 1);
+            free(new_nats);
+            return;
+        }
+    }
+
+    if (must_exist) {
+        ctl_fatal("no matching NAT with the type (%s) and %s (%s)",
+                nat_type, is_snat ? "logical_ip" : "external_ip", nat_ip);
+    }
+}
+
+static void
+nbctl_lr_nat_list(struct ctl_context *ctx)
+{
+    const struct nbrec_logical_router *lr;
+    lr = lr_by_name_or_uuid(ctx, ctx->argv[1], true);
+
+    struct smap lr_nats = SMAP_INITIALIZER(&lr_nats);
+    for (size_t i = 0; i < lr->n_nat; i++) {
+        const struct nbrec_nat *nat = lr->nat[i];
+        smap_add_format(&lr_nats, nat->type, "%-19.15s%s",
+                        nat->external_ip, nat->logical_ip);
+    }
+
+    const struct smap_node **nodes = smap_sort(&lr_nats);
+    if (nodes) {
+        ds_put_format(&ctx->output, "%-17.13s%-19.15s%s\n",
+                "TYPE", "EXTERNAL_IP", "LOGICAL_IP");
+        for (size_t i = 0; i < smap_count(&lr_nats); i++) {
+            const struct smap_node *node = nodes[i];
+            ds_put_format(&ctx->output, "%-17.13s%s\n",
+                    node->key, node->value);
+        }
+        free(nodes);
+    }
+    smap_destroy(&lr_nats);
+}
+
 
 static const struct nbrec_logical_router_port *
 lrp_by_name_or_uuid(struct ctl_context *ctx, const char *id, bool must_exist)
@@ -2974,6 +3152,13 @@ static const struct ctl_command_syntax nbctl_commands[] = {
       NULL, "--if-exists", RW },
     { "lr-route-list", 1, 1, "ROUTER", NULL, nbctl_lr_route_list, NULL,
       "", RO },
+
+    /* NAT commands. */
+    { "lr-nat-add", 4, 4, "ROUTER TYPE EXTERNAL_IP LOGICAL_IP", NULL,
+      nbctl_lr_nat_add, NULL, "--may-exist", RW },
+    { "lr-nat-del", 1, 3, "ROUTER [TYPE [IP]]", NULL,
+        nbctl_lr_nat_del, NULL, "--if-exists", RW },
+    { "lr-nat-list", 1, 1, "ROUTER", NULL, nbctl_lr_nat_list, NULL, "", RO },
 
     /* load balancer commands. */
     { "lb-add", 3, 4, "LB VIP[:PORT] IP[:PORT]... [PROTOCOL]", NULL,
