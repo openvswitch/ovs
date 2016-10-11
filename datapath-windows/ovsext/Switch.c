@@ -600,8 +600,8 @@ OvsExtNetPnPEvent(NDIS_HANDLE filterModuleContext,
     OVS_LOG_TRACE("Enter: filterModuleContext: %p, NetEvent: %d",
                   filterModuleContext, (netPnPEvent->NetPnPEvent).NetEvent);
     /*
-     * The only interesting event is the NetEventSwitchActivate. It provides
-     * an asynchronous notification of the switch completing activation.
+     * NetEventSwitchActivate provides an asynchronous notification of
+     * the switch completing activation.
      */
     if (netPnPEvent->NetPnPEvent.NetEvent == NetEventSwitchActivate) {
         ASSERT(switchContext->isActivated == FALSE);
@@ -611,9 +611,7 @@ OvsExtNetPnPEvent(NDIS_HANDLE filterModuleContext,
                           "status: %s", switchContext,
                           status ? "TRUE" : "FALSE");
         }
-    }
-
-    if (netPnPEvent->NetPnPEvent.NetEvent == NetEventFilterPreDetach) {
+    } else if (netPnPEvent->NetPnPEvent.NetEvent == NetEventFilterPreDetach) {
         switchContext->dataFlowState = OvsSwitchPaused;
         KeMemoryBarrier();
     }
