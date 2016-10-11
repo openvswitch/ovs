@@ -4014,7 +4014,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                       "ip", "flags.loopback = 1; ct_dnat;");
     }
 
-    /* Logical router ingress table 4: IP Routing.
+    /* Logical router ingress table 5: IP Routing.
      *
      * A packet that arrives at this table is an IP packet that should be
      * routed to the address in 'ip[46].dst'. This table sets outport to
@@ -4056,7 +4056,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
     /* XXX destination unreachable */
 
-    /* Local router ingress table 5: ARP Resolution.
+    /* Local router ingress table 6: ARP Resolution.
      *
      * Any packet that reaches this table is an IP packet whose next-hop IP
      * address is in reg0. (ip4.dst is the final destination.) This table
@@ -4251,7 +4251,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                       "get_nd(outport, xxreg0); next;");
     }
 
-    /* Local router ingress table 6: ARP request.
+    /* Local router ingress table 7: ARP request.
      *
      * In the common case where the Ethernet destination has been resolved,
      * this table outputs the packet (priority 0).  Otherwise, it composes
