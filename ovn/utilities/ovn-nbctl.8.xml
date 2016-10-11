@@ -418,7 +418,7 @@
         </p>
 
         <p>
-          It is an error if <code>prefix</code> is specified and there
+          It is an error if <var>prefix</var> is specified and there
           is no matching route entry, unless <code>--if-exists</code> is
           specified.
         </p>
