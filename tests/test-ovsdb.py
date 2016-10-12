@@ -430,38 +430,63 @@ def idl_set(idl, commands, step):
             l1.k = [l1]
         elif name == 'partialmapinsertelement':
             row = idltest_find_simple2(idl, 'myString1')
+            len_smap = len(getattr(row, 'smap'))
             row.setkey('smap', 'key1', 'myList1')
+            len_imap = len(getattr(row, 'imap'))
             row.setkey('imap', 3, 'myids2')
             row.__setattr__('name', 'String2')
+            assert len(getattr(row, 'smap')) == len_smap
+            assert len(getattr(row, 'imap')) == len_imap + 1
         elif name == 'partialmapinsertmultipleelements':
             row = idltest_find_simple2(idl, 'String2')
+            len_smap = len(getattr(row, 'smap'))
             row.setkey('smap', 'key2', 'myList2')
             row.setkey('smap', 'key3', 'myList3')
+            row.setkey('smap', 'key4', 'myList4')
+            assert len(getattr(row, 'smap')) == len_smap + 2
         elif name == 'partialmapdelelements':
             row = idltest_find_simple2(idl, 'String2')
+            len_smap = len(getattr(row, 'smap'))
             row.delkey('smap', 'key1', 'myList1')
             row.delkey('smap', 'key2', 'wrongvalue')
             row.delkey('smap', 'key3')
+            row.delkey('smap', 'key4')
+            assert len(getattr(row, 'smap')) == len_smap - 3
+        elif name == 'partialmapmutatenew':
+            new_row2 = txn.insert(idl.tables["simple2"])
+            setattr(new_row2, 'name', 'String2New')
+            new_row2.setkey('smap', 'key1', 'newList1')
+            assert len(getattr(new_row2, 'smap')) == 1
+            new_row2.setkey('smap', 'key2', 'newList2')
+            assert len(getattr(new_row2, 'smap')) == 2
         elif name == 'partialrenamesetadd':
             row = idltest_find_simple3(idl, 'mySet1')
+            old_size = len(getattr(row, 'uset', []))
             row.addvalue('uset',
                          uuid.UUID("001e43d2-dd3f-4616-ab6a-83a490bb0991"))
             row.__setattr__('name', 'String2')
+            assert len(getattr(row, 'uset', [])) == old_size + 1
         elif name == 'partialduplicateadd':
             row = idltest_find_simple3(idl, 'String2')
+            old_size = len(getattr(row, 'uset', []))
             row.addvalue('uset',
                          uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8"))
             row.addvalue('uset',
                          uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8"))
+            assert len(getattr(row, 'uset', [])) == old_size + 1
         elif name == 'partialsetdel':
             row = idltest_find_simple3(idl, 'String2')
+            old_size = len(getattr(row, 'uset', []))
             row.delvalue('uset',
                          uuid.UUID("001e43d2-dd3f-4616-ab6a-83a490bb0991"))
+            assert len(getattr(row, 'uset', [])) == old_size - 1
         elif name == 'partialsetref':
             new_row = txn.insert(idl.tables["simple4"])
             new_row.__setattr__('name', 'test')
             row = idltest_find_simple3(idl, 'String2')
+            old_size = len(getattr(row, 'uref', []))
             row.addvalue('uref', new_row.uuid)
+            assert len(getattr(row, 'uref', [])) == old_size + 1
         elif name == 'partialsetoverrideops':
             row = idltest_find_simple3(idl, 'String2')
             row.addvalue('uset',
@@ -470,12 +495,23 @@ def idl_set(idl, commands, step):
                          uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8"))
             row.__setattr__('uset',
                 [uuid.UUID("0026b3ba-571b-4729-8227-d860a5210ab8")])
+            assert len(getattr(row, 'uset', [])) == 1
+        elif name == 'partialsetadddelete':
+            row = idltest_find_simple3(idl, 'String2')
+            row.addvalue('uset',
+                         uuid.UUID('b6272353-af9c-40b7-90fe-32a43e6518a1'))
+            row.addvalue('uset',
+                         uuid.UUID('1d6a71a2-dffb-426e-b2fa-b727091f9901'))
+            row.delvalue('uset',
+                         uuid.UUID('0026b3ba-571b-4729-8227-d860a5210ab8'))
+            assert len(getattr(row, 'uset', [])) == 2
         elif name == 'partialsetmutatenew':
             new_row41 = txn.insert(idl.tables["simple4"])
             new_row41.__setattr__('name', 'new_row41')
             new_row3 = txn.insert(idl.tables["simple3"])
             setattr(new_row3, 'name', 'String3')
             new_row3.addvalue('uset', new_row41.uuid)
+            assert len(getattr(new_row3, 'uset', [])) == 1
         else:
             sys.stderr.write("unknown command %s\n" % name)
             sys.exit(1)

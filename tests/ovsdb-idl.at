@@ -1112,15 +1112,18 @@ OVSDB_CHECK_IDL_PY([partial-map idl],
 [['["idltest", {"op":"insert", "table":"simple2",
                 "row":{"name":"myString1","smap":["map",[["key1","value1"],["key2","value2"]]]} }]']
 ],
-  [?simple2:name,smap,imap 'partialmapinsertelement' 'partialmapinsertmultipleelements' 'partialmapdelelements'],
+  [?simple2:name,smap,imap 'partialmapinsertelement' 'partialmapinsertmultipleelements' 'partialmapdelelements' 'partialmapmutatenew'],
 [[000: name=myString1 smap=[(key1 value1) (key2 value2)] imap=[]
 001: commit, status=success
 002: name=String2 smap=[(key1 myList1) (key2 value2)] imap=[(3 myids2)]
 003: commit, status=success
-004: name=String2 smap=[(key1 myList1) (key2 myList2) (key3 myList3)] imap=[(3 myids2)]
+004: name=String2 smap=[(key1 myList1) (key2 myList2) (key3 myList3) (key4 myList4)] imap=[(3 myids2)]
 005: commit, status=success
 006: name=String2 smap=[(key2 myList2)] imap=[(3 myids2)]
-007: done
+007: commit, status=success
+008: name=String2 smap=[(key2 myList2)] imap=[(3 myids2)]
+008: name=String2New smap=[(key1 newList1) (key2 newList2)] imap=[]
+009: done
 ]])
 
 m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_SET_COLUMN],
@@ -1166,7 +1169,7 @@ OVSDB_CHECK_IDL_PY([partial-set idl],
                {"op":"mutate", "table":"simple3", "where":[["_uuid", "==", ["named-uuid", "newrow"]]],
                     "mutations": [["uset", "insert", ["set", [["uuid", "000d2f6a-76af-412f-b59d-e7bcd3e84eff"]]]]]}]']
 ],
-  ['partialrenamesetadd' 'partialduplicateadd' 'partialsetdel' 'partialsetref' 'partialsetoverrideops' 'partialsetmutatenew'],
+  ['partialrenamesetadd' 'partialduplicateadd' 'partialsetdel' 'partialsetref' 'partialsetoverrideops' 'partialsetadddelete' 'partialsetmutatenew'],
 [[000: name=mySet1 uset=[<0> <1>]
 001: commit, status=success
 002: name=String2 uset=[<0> <1> <2>]
@@ -1179,9 +1182,11 @@ OVSDB_CHECK_IDL_PY([partial-set idl],
 009: commit, status=success
 010: name=String2 uset=[<3>]
 011: commit, status=success
-012: name=String2 uset=[<3>]
-012: name=String3 uset=[<4>]
-013: done
+012: name=String2 uset=[<4> <5>]
+013: commit, status=success
+014: name=String2 uset=[<4> <5>]
+014: name=String3 uset=[<6>]
+015: done
 ]])
 
 m4_define([OVSDB_CHECK_IDL_NOTIFY_PY],
