@@ -89,6 +89,7 @@
       one and only one <code>localnet</code> port, which has only one special
       address <code>unknown</code>.
     </p>
+
     <column name="name">
       <p>
         A name for the logical switch.  This name has no special meaning or purpose
@@ -97,6 +98,7 @@
         logical switch's UUID should be used as the unique identifier.
       </p>
     </column>
+
     <column name="ports">
       <p>
         The logical ports connected to the logical switch.
@@ -126,7 +128,7 @@
         Logical chains cannot currently cross logical switch boundaries.
       </p>
     </column>
-  
+
     <column name="load_balancer">
       Load balance a virtual ipv4 address to a set of logical port endpoint
       ipv4 addresses.
@@ -178,7 +180,7 @@
       </p>
 
       <p>
-        It is an error for a port pair group to be empty
+        It is an error for a port pair group to be empty.
       </p>
     </column>
     <column name="flow_classifier">
@@ -187,8 +189,8 @@
       </p>
 
       <p>
-        It is an error for multiple logical switches to include the same
-        logical port.
+        It is an error for multiple logical port chains to include the same
+        flow classifier.
       </p>
     </column>
     <group title="Common Columns">
@@ -203,7 +205,7 @@
      An ordered port pair list
    </p>
    <column name="name">
-     <p> 
+     <p>
        Logical port pair group name
      </p>
    </column>
@@ -218,23 +220,24 @@
       </column>
     </group>
  </table>
+
  <table name="Logical_Port_Pair" title="logical port pairs">
    <p>
      Ports pairs defining the service
    </p>
    <column name="name">
-     <p> 
+     <p>
        Logical port pair
      </p>
    </column>
    <column name="outport">
      <p>
-       out port for this port pair
+       Out logical port for this port pair. Can be the same value as inport.
      </p>
    </column>
    <column name="inport">
      <p>
-       in port for this port pair
+       In logical port for this port pair.
      </p>
    </column>
     <group title="Common Columns">
@@ -249,18 +252,18 @@
      Flow classifier defining traffic steering rules
    </p>
    <column name="name">
-     <p> 
+     <p>
        Logical flow classifier
      </p>
    </column>
    <column name="logical_source_port">
      <p>
-       source port for flow
+       Source port for flow
      </p>
    </column>
    <column name="logical_destination_port">
      <p>
-       destination port for flow
+       Destination port for flow
      </p>
    </column>
    <column name="source_port_range_min">
@@ -292,17 +295,17 @@
      <p>
        destination ip prefix
      </p>
-   </column> 
+   </column>
    <column name="protocol">
      <p>
        protocol
      </p>
-   </column> 
+   </column>
    <column name="ethertype">
      <p>
        ethertype
      </p>
-   </column> 
+   </column>
    <group title="Common Columns">
       <column name="external_ids">
         See <em>External IDs</em> at the beginning of this document.
