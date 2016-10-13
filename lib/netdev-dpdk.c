@@ -31,9 +31,6 @@
 #include <rte_malloc.h>
 #include <rte_mbuf.h>
 #include <rte_meter.h>
-#ifdef DPDK_PDUMP
-#include <rte_pdump.h>
-#endif
 #include <rte_virtio_net.h>
 
 #include "dirs.h"

@@ -22,8 +22,13 @@
 #include <getopt.h>
 
 #include <rte_memzone.h>
+#ifdef DPDK_PDUMP
+#include <rte_mempool.h>
+#include <rte_pdump.h>
+#endif
 
 #include "dirs.h"
+#include "fatal-signal.h"
 #include "netdev-dpdk.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/vlog.h"
