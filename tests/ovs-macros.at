@@ -106,11 +106,12 @@ fi
 parent_pid () {
     # Using "ps" is portable to any POSIX system, but busybox "ps" (used in
     # e.g. Alpine Linux) is noncompliant, so we use a Linux-specific approach
-    # when it's available.
-    if test ! -e /proc/$1/status; then
-        ps -o ppid= -p $1
-    else
+    # when it's available.  We check the format of the status file to avoid
+    # the NetBSD file with the same name but different contents.
+    if egrep '^PPid:[[:space:]]*[0-9]*$' /proc/$1/status > /dev/null 2>&1; then
         sed -n 's/^PPid:	\([0-9]*\)/\1/p' /proc/$1/status
+    else
+        ps -o ppid= -p $1
     fi
 }
 ]
