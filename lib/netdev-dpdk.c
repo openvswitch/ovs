@@ -1952,9 +1952,9 @@ out:
 static int
 netdev_dpdk_get_features(const struct netdev *netdev,
                          enum netdev_features *current,
-                         enum netdev_features *advertised OVS_UNUSED,
-                         enum netdev_features *supported OVS_UNUSED,
-                         enum netdev_features *peer OVS_UNUSED)
+                         enum netdev_features *advertised,
+                         enum netdev_features *supported,
+                         enum netdev_features *peer)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_eth_link link;
@@ -1991,6 +1991,8 @@ netdev_dpdk_get_features(const struct netdev *netdev,
     if (link.link_autoneg) {
         *current |= NETDEV_F_AUTONEG;
     }
+
+    *advertised = *supported = *peer = 0;
 
     return 0;
 }
