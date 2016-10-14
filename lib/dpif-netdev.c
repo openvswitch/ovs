@@ -4166,7 +4166,7 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     /* Sparse or MSVC doesn't like variable length array. */
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
-    struct netdev_flow_key keys[PKT_ARRAY_SIZE];
+    struct netdev_flow_key keys[PKT_ARRAY_SIZE] OVS_ALIGNED_VAR(CACHE_LINE_SIZE);
     struct packet_batch_per_flow batches[PKT_ARRAY_SIZE];
     long long now = time_msec();
     size_t newcnt, n_batches, i;
