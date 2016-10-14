@@ -290,8 +290,8 @@ struct dp_netdev_port {
     struct netdev *netdev;
     struct hmap_node node;      /* Node in dp_netdev's 'ports'. */
     struct netdev_saved_flags *sf;
-    unsigned n_rxq;             /* Number of elements in 'rxq' */
     struct dp_netdev_rxq *rxqs;
+    unsigned n_rxq;             /* Number of elements in 'rxq' */
     bool dynamic_txqs;          /* If true XPS will be used. */
     unsigned *txq_used;         /* Number of threads that uses each tx queue. */
     struct ovs_mutex txq_used_mutex;
