@@ -670,7 +670,7 @@ ssl_send(struct stream *stream, const void *buffer, size_t n)
         case EAGAIN:
             return n;
         default:
-            sslv->txbuf = NULL;
+            ssl_clear_txbuf(sslv);
             return -error;
         }
     }
