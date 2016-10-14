@@ -260,12 +260,12 @@ struct nl_dump {
     /* These members are immutable during the lifetime of the nl_dump. */
     struct nl_sock *sock;       /* Socket being dumped. */
     uint32_t nl_seq;            /* Expected nlmsg_seq for replies. */
-
-    /* 'mutex' protects 'status' and serializes access to 'sock'. */
-    struct ovs_mutex mutex;     /* Protects 'status', synchronizes recv(). */
     int status OVS_GUARDED;     /* 0: dump in progress,
                                  * positive errno: dump completed with error,
                                  * EOF: dump completed successfully. */
+
+    /* 'mutex' protects 'status' and serializes access to 'sock'. */
+    struct ovs_mutex mutex;     /* Protects 'status', synchronizes recv(). */
 };
 
 void nl_dump_start(struct nl_dump *, int protocol,
