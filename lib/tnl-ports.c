@@ -368,12 +368,14 @@ insert_ipdev(const char dev_name[])
     ip_dev->change_seq = netdev_get_change_seq(dev);
     error = netdev_get_etheraddr(ip_dev->dev, &ip_dev->mac);
     if (error) {
+        netdev_close(dev);
         free(ip_dev);
         return;
     }
     error4 = netdev_get_in4(ip_dev->dev, (struct in_addr *)&ip_dev->addr4, NULL);
     error6 = netdev_get_in6(ip_dev->dev, &ip_dev->addr6);
     if (error4 && error6) {
+        netdev_close(dev);
         free(ip_dev);
         return;
     }
