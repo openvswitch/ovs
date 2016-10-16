@@ -124,13 +124,7 @@
       <p>
         Logical chains cannot currently cross logical switch boundaries.
       </p>
-    </column>
-
-      <p>
-        Logical chains cannot currently cross logical switch boundaries.
-      </p>
-    </column>
-  
+    </column>  
     <column name="load_balancer">
       Load balance a virtual ipv4 address to a set of logical port endpoint
       ipv4 addresses.
