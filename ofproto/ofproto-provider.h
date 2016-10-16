@@ -1811,6 +1811,13 @@ struct ofproto_class {
      * This function should be NULL if an implementation does not support it.
      */
     const char *(*get_datapath_version)(const struct ofproto *);
+
+/* ## ------------------- ## */
+/* ## Connection tracking ## */
+/* ## ------------------- ## */
+    /* Flushes the connection tracking tables. If 'zone' is not NULL,
+     * only deletes connections in '*zone'. */
+    void (*ct_flush)(const struct ofproto *, const uint16_t *zone);
 };
 
 extern const struct ofproto_class ofproto_dpif_class;

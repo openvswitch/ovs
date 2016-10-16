@@ -402,14 +402,13 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
     struct netdev_vport *dev = netdev_vport_cast(dev_);
     const char *name = netdev_get_name(dev_);
     const char *type = netdev_get_type(dev_);
-    bool ipsec_mech_set, needs_dst_port, has_csum;
+    bool needs_dst_port, has_csum;
     uint16_t dst_proto = 0, src_proto = 0;
     struct netdev_tunnel_config tnl_cfg;
     struct smap_node *node;
 
     has_csum = strstr(type, "gre") || strstr(type, "geneve") ||
                strstr(type, "stt") || strstr(type, "vxlan");
-    ipsec_mech_set = false;
     memset(&tnl_cfg, 0, sizeof tnl_cfg);
 
     /* Add a default destination port for tunnel ports if none specified. */
@@ -430,7 +429,6 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
     }
 
     needs_dst_port = netdev_vport_needs_dst_port(dev_);
-    tnl_cfg.ipsec = strstr(type, "ipsec");
     tnl_cfg.dont_fragment = true;
 
     SMAP_FOR_EACH (node, args) {
@@ -485,33 +483,6 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
             if (!strcmp(node->value, "false")) {
                 tnl_cfg.dont_fragment = false;
             }
-        } else if (!strcmp(node->key, "peer_cert") && tnl_cfg.ipsec) {
-            if (smap_get(args, "certificate")) {
-                ipsec_mech_set = true;
-            } else {
-                const char *use_ssl_cert;
-
-                /* If the "use_ssl_cert" is true, then "certificate" and
-                 * "private_key" will be pulled from the SSL table.  The
-                 * use of this option is strongly discouraged, since it
-                 * will like be removed when multiple SSL configurations
-                 * are supported by OVS.
-                 */
-                use_ssl_cert = smap_get(args, "use_ssl_cert");
-                if (!use_ssl_cert || strcmp(use_ssl_cert, "true")) {
-                    VLOG_ERR("%s: 'peer_cert' requires 'certificate' argument",
-                             name);
-                    return EINVAL;
-                }
-                ipsec_mech_set = true;
-            }
-        } else if (!strcmp(node->key, "psk") && tnl_cfg.ipsec) {
-            ipsec_mech_set = true;
-        } else if (tnl_cfg.ipsec
-                && (!strcmp(node->key, "certificate")
-                    || !strcmp(node->key, "private_key")
-                    || !strcmp(node->key, "use_ssl_cert"))) {
-            /* Ignore options not used by the netdev. */
         } else if (!strcmp(node->key, "key") ||
                    !strcmp(node->key, "in_key") ||
                    !strcmp(node->key, "out_key")) {
@@ -536,39 +507,6 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args)
             free(str);
         } else {
             VLOG_WARN("%s: unknown %s argument '%s'", name, type, node->key);
-        }
-    }
-
-    if (tnl_cfg.ipsec) {
-        static struct ovs_mutex mutex = OVS_MUTEX_INITIALIZER;
-        static pid_t pid = 0;
-
-#ifndef _WIN32
-        ovs_mutex_lock(&mutex);
-        if (pid <= 0) {
-            char *file_name = xasprintf("%s/%s", ovs_rundir(),
-                                        "ovs-monitor-ipsec.pid");
-            pid = read_pidfile(file_name);
-            free(file_name);
-        }
-        ovs_mutex_unlock(&mutex);
-#endif
-
-        if (pid < 0) {
-            VLOG_ERR("%s: IPsec requires the ovs-monitor-ipsec daemon",
-                     name);
-            return EINVAL;
-        }
-
-        if (smap_get(args, "peer_cert") && smap_get(args, "psk")) {
-            VLOG_ERR("%s: cannot define both 'peer_cert' and 'psk'", name);
-            return EINVAL;
-        }
-
-        if (!ipsec_mech_set) {
-            VLOG_ERR("%s: IPsec requires an 'peer_cert' or psk' argument",
-                     name);
-            return EINVAL;
         }
     }
 
@@ -896,7 +834,6 @@ netdev_vport_tunnel_register(void)
         TUNNEL_CLASS("gre", "gre_sys", netdev_gre_build_header,
                                        netdev_gre_push_header,
                                        netdev_gre_pop_header),
-        TUNNEL_CLASS("ipsec_gre", "gre_sys", NULL, NULL, NULL),
         TUNNEL_CLASS("vxlan", "vxlan_sys", netdev_vxlan_build_header,
                                            netdev_tnl_push_udp_header,
                                            netdev_vxlan_pop_header),

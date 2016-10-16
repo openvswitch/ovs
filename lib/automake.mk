@@ -77,6 +77,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/dpctl.h \
 	lib/dp-packet.h \
 	lib/dp-packet.c \
+	lib/dpdk.h \
 	lib/dpif-netdev.c \
 	lib/dpif-netdev.h \
 	lib/dpif-provider.h \
@@ -128,6 +129,7 @@ lib_libopenvswitch_la_SOURCES = \
 	lib/meta-flow.c \
 	lib/multipath.c \
 	lib/multipath.h \
+	lib/netdev-dpdk.h \
 	lib/netdev-dummy.c \
 	lib/netdev-provider.h \
 	lib/netdev-vport.c \
@@ -368,12 +370,11 @@ endif
 
 if DPDK_NETDEV
 lib_libopenvswitch_la_SOURCES += \
-       lib/netdev-dpdk.c \
-       lib/netdev-dpdk.h
+	lib/dpdk.c \
+	lib/netdev-dpdk.c
 else
 lib_libopenvswitch_la_SOURCES += \
-	lib/netdev-nodpdk.c \
-	lib/netdev-dpdk.h
+	lib/dpdk-stub.c
 endif
 
 if WIN32

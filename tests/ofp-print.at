@@ -3629,3 +3629,13 @@ NXST_IPFIX_FLOW reply (xid=0x2): 2 ids
           pkts errs=160, ipv4 errs=68719476738, ipv6 errs=3, tx errs=5
 ])
 AT_CLEANUP
+
+AT_SETUP([NXT_CT_FLUSH_ZONE])
+AT_KEYWORDS([ofp-print])
+AT_CHECK([ovs-ofctl ofp-print "\
+01 04 00 18 00 00 00 03 00 00 23 20 00 00 00 1d \
+00 00 00 00 00 00 00 0d \
+"], [0], [dnl
+NXT_CT_FLUSH_ZONE (xid=0x3): zone_id=13
+])
+AT_CLEANUP

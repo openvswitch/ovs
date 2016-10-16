@@ -68,11 +68,11 @@ struct hmap {
 #define HMAP_INITIALIZER(HMAP) \
     { (struct hmap_node **const) &(HMAP)->one, NULL, 0, 0 }
 
-/* Initializer for an immutable struct hmap 'HMAP' that contains a single
- * 'NODE'. */
-#define HMAP_CONST1(HMAP, NODE) {                                   \
-        CONST_CAST(struct hmap_node **, &(HMAP)->one), NODE, 0, 1 }
-#define HMAP_NODE_INIT(HASH) { HASH, NULL }
+/* Initializer for an immutable struct hmap 'HMAP' that contains 'N' nodes
+ * linked together starting at 'NODE'.  The hmap only has a single chain of
+ * hmap_nodes, so 'N' should be small. */
+#define HMAP_CONST(HMAP, N, NODE) {                                 \
+        CONST_CAST(struct hmap_node **, &(HMAP)->one), NODE, 0, N }
 
 /* Initialization. */
 void hmap_init(struct hmap *);

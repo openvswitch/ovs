@@ -45,7 +45,7 @@ AT_CLEANUP
 
 AT_SETUP([learning action - examples])
 AT_DATA([flows.txt], [[
-# These are the examples from nicira-ext.h.
+# These are the examples from ofp-actions.c.
 actions=learn(in_port=99,NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[], load:NXM_OF_IN_PORT[]->NXM_NX_REG1[16..31])
 actions=learn(NXM_OF_VLAN_TCI[0..11], NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],output:NXM_OF_IN_PORT[])
 table=0 actions=learn(table=1,hard_timeout=10, NXM_OF_VLAN_TCI[0..11],output:NXM_OF_IN_PORT[]), resubmit(,1)

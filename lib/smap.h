@@ -54,16 +54,24 @@ struct smap_node {
  *
  * An smap initialized this way must not be modified or destroyed.
  *
- * The 'KEY' argument is evaluated multiple times.
+ * The 'KEY', 'K1', 'K2' arguments are evaluated multiple times.
  */
-#define SMAP_CONST1(SMAP, KEY, VALUE) {                                 \
-        HMAP_CONST1(&(SMAP)->map,                                       \
-                   (&(struct smap_node) SMAP_NODE_INIT(KEY, VALUE).node)) \
-            }
-#define SMAP_NODE_INIT(KEY, VALUE) {                \
-        HMAP_NODE_INIT(hash_string(KEY, 0)),        \
-                       CONST_CAST(char *, KEY),     \
-                       CONST_CAST(char *, VALUE) }
+#define SMAP_CONST1(SMAP, KEY, VALUE) (const struct smap) { \
+            HMAP_CONST(&(SMAP)->map, 1, SMAP_NODE(KEY, VALUE, NULL)) \
+        }
+#define SMAP_CONST2(SMAP, K1, V1, K2, V2) (const struct smap) {     \
+            HMAP_CONST(&(SMAP)->map, 2,                             \
+                       SMAP_NODE(K1, V1, SMAP_NODE(K2, V2, NULL)))  \
+        }
+#define SMAP_NODE(KEY, VALUE, NEXT)             \
+        &(struct smap_node) {                   \
+            .node = {                           \
+                .hash = hash_string(KEY, 0),    \
+                .next = (NEXT),                 \
+            },                                  \
+            .key = CONST_CAST(char *, KEY),     \
+            .value = CONST_CAST(char *, VALUE), \
+        }.node
 
 
 void smap_init(struct smap *);

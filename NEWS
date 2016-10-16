@@ -1,5 +1,9 @@
 Post-v2.6.0
 ---------------------
+   - OVN:
+     * QoS is now implemented via egress shaping rather than ingress policing.
+     * DSCP marking is now supported, via the new northbound QoS table.
+     * IPAM now supports fixed MAC addresses.
    - Fixed regression in table stats maintenance introduced in OVS
      2.3.0, wherein the number of OpenFlow table hits and misses was
      not accurate.
@@ -25,8 +29,12 @@ Post-v2.6.0
      * TLV mappings for protocols such as Geneve are now segregated on
        a per-OpenFlow bridge basis rather than globally. (The interface
        has not changed.)
+     * Removed support for IPsec tunnels.
+   - DPDK:
+     * New option 'n_rxq_desc' and 'n_txq_desc' fields for DPDK interfaces
+       which set the number of rx and tx descriptors to use for the given port.
 
-v2.6.0 - xx xxx xxxx
+v2.6.0 - 27 Sep 2016
 ---------------------
    - First supported release of OVN.  See ovn-architecture(7) for more
      details.
@@ -71,6 +79,7 @@ v2.6.0 - xx xxx xxxx
        already expected to work properly in cases where the switch can
        not buffer packets, so this change should not affect existing
        users.
+     * New OpenFlow extension NXT_CT_FLUSH_ZONE to flush conntrack zones.
    - Improved OpenFlow version compatibility for actions:
      * New OpenFlow extension to support the "group" action in OpenFlow 1.0.
      * OpenFlow 1.0 "enqueue" action now properly translated to OpenFlow 1.1+.
@@ -149,6 +158,7 @@ v2.6.0 - xx xxx xxxx
      * Flow based tunnel match and action can be used for IPv6 address using
        tun_ipv6_src, tun_ipv6_dst fields.
      * Added support for IPv6 tunnels, for details checkout FAQ.
+     * Deprecated support for IPsec tunnels ports.
    - A wrapper script, 'ovs-tcpdump', to easily port-mirror an OVS port and
      watch with tcpdump
    - Introduce --no-self-confinement flag that allows daemons to work with

@@ -22,6 +22,11 @@ import ovs.poller
 import ovs.socket_util
 import ovs.vlog
 
+try:
+    from OpenSSL import SSL
+except ImportError:
+    SSL = None
+
 vlog = ovs.vlog.Vlog("stream")
 
 
@@ -39,7 +44,7 @@ def stream_or_pstream_needs_probes(name):
 
 
 class Stream(object):
-    """Bidirectional byte stream.  Currently only Unix domain sockets
+    """Bidirectional byte stream.  Unix domain sockets, tcp and ssl
     are implemented."""
 
     # States.
@@ -53,6 +58,10 @@ class Stream(object):
     W_SEND = 2                  # Send buffer room available.
 
     _SOCKET_METHODS = {}
+
+    _SSL_private_key_file = None
+    _SSL_certificate_file = None
+    _SSL_ca_cert_file = None
 
     @staticmethod
     def register_method(method, cls):
@@ -68,7 +77,7 @@ class Stream(object):
     @staticmethod
     def is_valid_name(name):
         """Returns True if 'name' is a stream name in the form "TYPE:ARGS" and
-        TYPE is a supported stream type (currently only "unix:" and "tcp:"),
+        TYPE is a supported stream type ("unix:", "tcp:" and "ssl:"),
         otherwise False."""
         return bool(Stream._find_method(name))
 
@@ -116,7 +125,7 @@ class Stream(object):
             return error, None
         else:
             status = ovs.socket_util.check_connection_completion(sock)
-            return 0, Stream(sock, name, status)
+            return 0, cls(sock, name, status)
 
     @staticmethod
     def _open(suffix, dscp):
@@ -264,6 +273,18 @@ class Stream(object):
         # Don't delete the file: we might have forked.
         self.socket.close()
 
+    @staticmethod
+    def ssl_set_private_key_file(file_name):
+        Stream._SSL_private_key_file = file_name
+
+    @staticmethod
+    def ssl_set_certificate_file(file_name):
+        Stream._SSL_certificate_file = file_name
+
+    @staticmethod
+    def ssl_set_ca_cert_file(file_name):
+        Stream._SSL_ca_cert_file = file_name
+
 
 class PassiveStream(object):
     @staticmethod
@@ -362,6 +383,7 @@ def usage(name):
 Active %s connection methods:
   unix:FILE               Unix domain socket named FILE
   tcp:IP:PORT             TCP socket to IP with port no of PORT
+  ssl:IP:PORT             SSL socket to IP with port no of PORT
 
 Passive %s connection methods:
   punix:FILE              Listen on Unix domain socket FILE""" % (name, name)
@@ -385,3 +407,66 @@ class TCPStream(Stream):
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         return error, sock
 Stream.register_method("tcp", TCPStream)
+
+
+class SSLStream(Stream):
+
+    @staticmethod
+    def verify_cb(conn, cert, errnum, depth, ok):
+        return ok
+
+    @staticmethod
+    def _open(suffix, dscp):
+        error, sock = TCPStream._open(suffix, dscp)
+        if error:
+            return error, None
+
+        # Create an SSL context
+        ctx = SSL.Context(SSL.SSLv23_METHOD)
+        ctx.set_verify(SSL.VERIFY_PEER, SSLStream.verify_cb)
+        ctx.set_options(SSL.OP_NO_SSLv2 | SSL.OP_NO_SSLv3)
+        ctx.set_session_cache_mode(SSL.SESS_CACHE_OFF)
+        # If the client has not set the SSL configuration files
+        # exception would be raised.
+        ctx.use_privatekey_file(Stream._SSL_private_key_file)
+        ctx.use_certificate_file(Stream._SSL_certificate_file)
+        ctx.load_verify_locations(Stream._SSL_ca_cert_file)
+
+        ssl_sock = SSL.Connection(ctx, sock)
+        ssl_sock.set_connect_state()
+        return error, ssl_sock
+
+    def connect(self):
+        retval = super(SSLStream, self).connect()
+
+        if retval:
+            return retval
+
+        # TCP Connection is successful. Now do the SSL handshake
+        try:
+            self.socket.do_handshake()
+        except SSL.WantReadError:
+            return errno.EAGAIN
+
+        return 0
+
+    def recv(self, n):
+        try:
+            return super(SSLStream, self).recv(n)
+        except SSL.WantReadError:
+            return (errno.EAGAIN, "")
+
+    def send(self, buf):
+        try:
+            if isinstance(buf, six.text_type):
+                # Convert to byte stream if the buffer is string type/unicode.
+                # pyopenssl version 0.14 expects the buffer to be byte string.
+                buf = buf.encode('utf-8')
+            return super(SSLStream, self).send(buf)
+        except SSL.WantWriteError:
+            return errno.EAGAIN
+
+
+if SSL:
+    # Register SSL only if the OpenSSL module is available
+    Stream.register_method("ssl", SSLStream)

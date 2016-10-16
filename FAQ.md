@@ -541,9 +541,8 @@ A: The following commands configure br0 with eth0 and tap0 as trunk
 
 ### Q: Does Open vSwitch support ERSPAN?
 
-A: No.  ERSPAN is an undocumented proprietary protocol.  As an
-   alternative, Open vSwitch supports mirroring to a GRE tunnel (see
-   above).
+A: No.  As an alternative, Open vSwitch supports mirroring to a GRE
+   tunnel (see above).
 
 ### Q: How do I connect two bridges?
 

@@ -315,7 +315,7 @@ struct ovsdb_idl_loop {
 
 void ovsdb_idl_loop_destroy(struct ovsdb_idl_loop *);
 struct ovsdb_idl_txn *ovsdb_idl_loop_run(struct ovsdb_idl_loop *);
-void ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *);
+int ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *);
 
 /* Conditional Replication
  * =======================

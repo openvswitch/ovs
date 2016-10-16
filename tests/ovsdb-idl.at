@@ -1,5 +1,18 @@
 AT_BANNER([OVSDB -- interface description language (IDL)])
 
+m4_divert_text([PREPARE_TESTS], [
+# ovsdb_start_idltest [REMOTE] [SCHEMA]
+#
+# Creates a database using SCHEMA (default: idltest.ovsschema) and
+# starts a database server listening on punix:socket and REMOTE (if
+# specified).
+ovsdb_start_idltest () {
+    ovsdb-tool create db ${2:-$abs_srcdir/idltest.ovsschema} || return $?
+    ovsdb-server -vconsole:warn --log-file --detach --no-chdir --pidfile --remote=punix:socket ${1:+--remote=$1} db || return $?
+    on_exit 'kill `cat ovsdb-server.pid`'
+}
+])
+
 # OVSDB_CHECK_IDL_C(TITLE, [PRE-IDL-TXN], TRANSACTIONS, OUTPUT, [KEYWORDS],
 #                   [FILTER])
 #
@@ -19,10 +32,7 @@ AT_BANNER([OVSDB -- interface description language (IDL)])
 m4_define([OVSDB_CHECK_IDL_C],
   [AT_SETUP([$1 - C])
    AT_KEYWORDS([ovsdb server idl positive $5])
-   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
-                  [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
-   on_exit 'kill `cat pid`'
+   AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket $3],
@@ -37,10 +47,7 @@ m4_define([OVSDB_CHECK_IDL_PYN],
   [AT_SETUP([$1])
    AT_SKIP_IF([test $7 = no])
    AT_KEYWORDS([ovsdb server idl positive Python $5])
-   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
-                  [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
-   on_exit 'kill `cat pid`'
+   AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $3],
@@ -60,10 +67,7 @@ m4_define([OVSDB_CHECK_IDL_REGISTER_COLUMNS_PYN],
   [AT_SETUP([$1 - register_columns])
    AT_SKIP_IF([test $7 = no])
    AT_KEYWORDS([ovsdb server idl positive Python register_columns $5])
-   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
-                  [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
-   on_exit 'kill `cat pid`'
+   AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([$8 $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket ?simple:b,ba,i,ia,r,ra,s,sa,u,ua?link1:i,k,ka,l2?link2:i,l1 $3],
@@ -84,10 +88,7 @@ m4_define([OVSDB_CHECK_IDL_TCP_PYN],
   [AT_SETUP([$1 - tcp])
    AT_SKIP_IF([test $7 = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp socket $5])
-   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
-                  [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server --log-file '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
-   on_exit 'kill `cat pid`'
+   AT_CHECK([ovsdb_start_idltest "ptcp:0:127.0.0.1"])
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
 
    m4_if([$2], [], [],
@@ -112,10 +113,7 @@ m4_define([OVSDB_CHECK_IDL_TCP6_PYN],
    AT_SKIP_IF([test "$IS_WIN32" = "yes"])
    AT_SKIP_IF([test $HAVE_IPV6 = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp6 socket $5])
-   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
-                  [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server --log-file '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=ptcp:0:[[::1]] --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
-   on_exit 'kill `cat pid`'
+   AT_CHECK([ovsdb_start_idltest "ptcp:0:[[::1]]"])
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
    echo "TCP_PORT=$TCP_PORT"
 
@@ -146,16 +144,14 @@ m4_define([OVSDB_CHECK_IDL_PASSIVE_TCP_PY],
   [AT_SETUP([$1 - Python ptcp])
    AT_SKIP_IF([test $HAVE_PYTHON = no])
    AT_KEYWORDS([ovsdb server idl positive Python with tcp socket $5])
-   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
-                  [0], [stdout], [ignore])
    # find free TCP port
-   AT_CHECK([ovsdb-server --log-file '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=ptcp:0:127.0.0.1 --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
-   on_exit 'kill `cat pid`'
+   AT_CHECK([ovsdb_start_idltest "ptcp:0:127.0.0.1"])
    PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
    OVSDB_SERVER_SHUTDOWN
+   rm -f db
 
    # start OVSDB server in passive mode
-   AT_CHECK([ovsdb-server --log-file '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --remote=tcp:127.0.0.1:$TCP_PORT --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   AT_CHECK([ovsdb_start_idltest "tcp:127.0.0.1:$TCP_PORT"])
    AT_CHECK([$PYTHON $srcdir/test-ovsdb.py -t10 idl_passive $srcdir/idltest.ovsschema ptcp:127.0.0.1:$TCP_PORT $3],
       [0], [stdout], [ignore])
    AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$6],,, [[| $6]]),
@@ -729,10 +725,7 @@ AT_KEYWORDS([ovsdb server idl positive])
 # table link2 and column l2 have been deleted.  But the IDL still
 # expects them to be there, so this test checks that it properly
 # tolerates them being missing.
-AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest2.ovsschema],
-    [0], [stdout], [ignore])
-AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
-on_exit 'kill `cat pid`'
+AT_CHECK([ovsdb_start_idltest "" "$abs_srcdir/idltest2.ovsschema"])
 AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 idl unix:socket ['["idltest",
       {"op": "insert",
        "table": "link1",
@@ -801,10 +794,7 @@ m4_define([OVSDB_CHECK_IDL_FETCH_COLUMNS_PY],
   [AT_SETUP([$1 - Python fetch])
    AT_SKIP_IF([test $HAVE_PYTHON = no])
    AT_KEYWORDS([ovsdb server idl positive Python increment fetch $6])
-   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
-                  [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
-   on_exit 'kill `cat pid`'
+   AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket [$3] $4],
@@ -849,10 +839,8 @@ m4_define([OVSDB_CHECK_IDL_WO_MONITOR_COND_PY],
   [AT_SETUP([$1 - Python])
    AT_SKIP_IF([test $HAVE_PYTHON = no])
    AT_KEYWORDS([ovsdb server idl Python monitor $4])
-   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
-                  [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
-   AT_CHECK([ovs-appctl -t "`pwd`"/unixctl ovsdb-server/disable-monitor-cond])
+   AT_CHECK([ovsdb_start_idltest])
+   AT_CHECK([ovs-appctl -t ovsdb-server ovsdb-server/disable-monitor-cond])
    AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
             [0], [stdout], [ignore], [kill `cat pid`])
    AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$5],,, [[| $5]]),
@@ -945,10 +933,7 @@ OVSDB_CHECK_IDL_WO_MONITOR_COND([simple idl disable monitor-cond],
 m4_define([OVSDB_CHECK_IDL_TRACK_C],
   [AT_SETUP([$1 - C])
    AT_KEYWORDS([ovsdb server idl tracking positive $5])
-   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
-                  [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
-   on_exit 'kill `cat pid`'
+   AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl unix:socket $3],
@@ -1077,10 +1062,7 @@ OVSDB_CHECK_IDL_TRACK([track, simple idl, initially empty, various ops],
 m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_MAP_COLUMN],
   [AT_SETUP([$1 - C])
    AT_KEYWORDS([ovsdb server idl partial update map column positive $5])
-   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
-                  [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
-   on_exit 'kill `cat pid`'
+   AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-partial-update-map-column unix:socket $3],
@@ -1112,24 +1094,24 @@ OVSDB_CHECK_IDL_PY([partial-map idl],
 [['["idltest", {"op":"insert", "table":"simple2",
                 "row":{"name":"myString1","smap":["map",[["key1","value1"],["key2","value2"]]]} }]']
 ],
-  [?simple2:name,smap,imap 'partialmapinsertelement' 'partialmapinsertmultipleelements' 'partialmapdelelements'],
+  [?simple2:name,smap,imap 'partialmapinsertelement' 'partialmapinsertmultipleelements' 'partialmapdelelements' 'partialmapmutatenew'],
 [[000: name=myString1 smap=[(key1 value1) (key2 value2)] imap=[]
 001: commit, status=success
 002: name=String2 smap=[(key1 myList1) (key2 value2)] imap=[(3 myids2)]
 003: commit, status=success
-004: name=String2 smap=[(key1 myList1) (key2 myList2) (key3 myList3)] imap=[(3 myids2)]
+004: name=String2 smap=[(key1 myList1) (key2 myList2) (key3 myList3) (key4 myList4)] imap=[(3 myids2)]
 005: commit, status=success
 006: name=String2 smap=[(key2 myList2)] imap=[(3 myids2)]
-007: done
+007: commit, status=success
+008: name=String2 smap=[(key2 myList2)] imap=[(3 myids2)]
+008: name=String2New smap=[(key1 newList1) (key2 newList2)] imap=[]
+009: done
 ]])
 
 m4_define([OVSDB_CHECK_IDL_PARTIAL_UPDATE_SET_COLUMN],
   [AT_SETUP([$1 - C])
    AT_KEYWORDS([ovsdb server idl partial update set column positive $5])
-   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
-                  [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
-   on_exit 'kill `cat pid`'
+   AT_CHECK([ovsdb_start_idltest])
    m4_if([$2], [], [],
      [AT_CHECK([ovsdb-client transact unix:socket $2], [0], [ignore], [ignore])])
    AT_CHECK([test-ovsdb '-vPATTERN:console:test-ovsdb|%c|%m' -vjsonrpc -t10 -c idl-partial-update-set-column unix:socket $3],
@@ -1166,7 +1148,7 @@ OVSDB_CHECK_IDL_PY([partial-set idl],
                {"op":"mutate", "table":"simple3", "where":[["_uuid", "==", ["named-uuid", "newrow"]]],
                     "mutations": [["uset", "insert", ["set", [["uuid", "000d2f6a-76af-412f-b59d-e7bcd3e84eff"]]]]]}]']
 ],
-  ['partialrenamesetadd' 'partialduplicateadd' 'partialsetdel' 'partialsetref' 'partialsetoverrideops' 'partialsetmutatenew'],
+  ['partialrenamesetadd' 'partialduplicateadd' 'partialsetdel' 'partialsetref' 'partialsetoverrideops' 'partialsetadddelete' 'partialsetmutatenew'],
 [[000: name=mySet1 uset=[<0> <1>]
 001: commit, status=success
 002: name=String2 uset=[<0> <1> <2>]
@@ -1179,18 +1161,18 @@ OVSDB_CHECK_IDL_PY([partial-set idl],
 009: commit, status=success
 010: name=String2 uset=[<3>]
 011: commit, status=success
-012: name=String2 uset=[<3>]
-012: name=String3 uset=[<4>]
-013: done
+012: name=String2 uset=[<4> <5>]
+013: commit, status=success
+014: name=String2 uset=[<4> <5>]
+014: name=String3 uset=[<6>]
+015: done
 ]])
 
 m4_define([OVSDB_CHECK_IDL_NOTIFY_PY],
   [AT_SETUP([$1 - Python])
    AT_SKIP_IF([test $HAVE_PYTHON = no])
    AT_KEYWORDS([ovsdb server idl Python notify $4])
-   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
-                  [0], [stdout], [ignore])
-   AT_CHECK([ovsdb-server '-vPATTERN:console:ovsdb-server|%c|%m' --detach --no-chdir --pidfile="`pwd`"/pid --remote=punix:socket --unixctl="`pwd`"/unixctl db], [0], [ignore], [ignore])
+   AT_CHECK([ovsdb_start_idltest])
    AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema unix:socket $2],
             [0], [stdout], [ignore], [kill `cat pid`])
    AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$5],,, [[| $5]]),
@@ -1198,10 +1180,37 @@ m4_define([OVSDB_CHECK_IDL_NOTIFY_PY],
    OVSDB_SERVER_SHUTDOWN
    AT_CLEANUP])
 
+# This test uses the Python IDL implementation with ssl
+m4_define([OVSDB_CHECK_IDL_NOTIFY_SSL_PY],
+  [AT_SETUP([$1 - SSL])
+   AT_SKIP_IF([test $HAVE_PYTHON = no])
+   $PYTHON -m OpenSSL.SSL
+   SSL_PRESENT=$?
+   AT_SKIP_IF([test $SSL_PRESENT != 0])
+   AT_KEYWORDS([ovsdb server idl Python notify - ssl socket])
+   AT_CHECK([ovsdb-tool create db $abs_srcdir/idltest.ovsschema],
+             [0], [stdout], [ignore])
+   PKIDIR=$abs_top_builddir/tests
+   AT_CHECK([ovsdb-server -vconsole:warn --log-file --detach --no-chdir \
+             --pidfile \
+             --private-key=$PKIDIR/testpki-privkey2.pem \
+             --certificate=$PKIDIR/testpki-cert2.pem \
+             --ca-cert=$PKIDIR/testpki-cacert.pem \
+             --remote=pssl:0:127.0.0.1 db])
+   on_exit 'kill `cat ovsdb-server.pid`'
+   PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
+   AT_CHECK([$PYTHON $srcdir/test-ovsdb.py  -t10 idl $srcdir/idltest.ovsschema \
+             ssl:127.0.0.1:$TCP_PORT $PKIDIR/testpki-privkey.pem \
+             $PKIDIR/testpki-cert.pem $PKIDIR/testpki-cacert.pem $2],
+            [0], [stdout], [ignore], [kill `cat pid`])
+   AT_CHECK([sort stdout | ${PERL} $srcdir/uuidfilt.pl]m4_if([$5],,, [[| $5]]),
+            [0], [$3], [], [kill `cat pid`])
+   OVSDB_SERVER_SHUTDOWN
+   AT_CLEANUP])
 
 m4_define([OVSDB_CHECK_IDL_NOTIFY],
-   [OVSDB_CHECK_IDL_NOTIFY_PY($@)])
-
+   [OVSDB_CHECK_IDL_NOTIFY_PY($@)
+    OVSDB_CHECK_IDL_NOTIFY_SSL_PY($@)])
 
 OVSDB_CHECK_IDL_NOTIFY([simple idl verify notify],
   [['track-notify' \

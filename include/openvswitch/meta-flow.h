@@ -940,8 +940,12 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Access: read/write.
      * NXM: NXM_NX_XXREG0(111) since v2.6.              <0>
      * NXM: NXM_NX_XXREG1(112) since v2.6.              <1>
-     * NXM: NXM_NX_XXREG0(113) since v2.6.              <2>
-     * NXM: NXM_NX_XXREG1(114) since v2.6.              <3>
+     * NXM: NXM_NX_XXREG2(113) since v2.6.              <2>
+     * NXM: NXM_NX_XXREG3(114) since v2.6.              <3>
+     * NXM: NXM_NX_XXREG4(115) since vX.Y.              <4>
+     * NXM: NXM_NX_XXREG5(116) since vX.Y.              <5>
+     * NXM: NXM_NX_XXREG6(117) since vX.Y.              <6>
+     * NXM: NXM_NX_XXREG7(118) since vX.Y.              <7>
      * OXM: none.
      */
     MFF_XXREG0,

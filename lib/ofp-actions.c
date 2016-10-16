@@ -1200,7 +1200,8 @@ format_OUTPUT_REG(const struct ofpact_output_reg *a, struct ds *s)
  * generally take into account things like its carrier status and the results
  * of any link monitoring protocols which happen to be running on it.  In order
  * to give controllers a place-holder value, the OFPP_NONE port is always
- * considered live.
+ * considered live, that is, NXAST_BUNDLE_LOAD stores OFPP_NONE in the output
+ * register if no slave is live.
  *
  * Some slave selection strategies require the use of a hash function, in which
  * case the 'fields' and 'basis' parameters should be populated.  The 'fields'
@@ -7029,21 +7030,23 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
 
     case OFPACT_CT: {
         struct ofpact_conntrack *oc = ofpact_get_CT(a);
-        enum ofperr err;
 
         if (!dl_type_is_ip_any(flow->dl_type)
-            || (flow->ct_state & CS_INVALID && oc->flags & NX_CT_F_COMMIT)) {
-            inconsistent_match(usable_protocols);
+            || (flow->ct_state & CS_INVALID && oc->flags & NX_CT_F_COMMIT)
+            || (oc->alg == IPPORT_FTP && flow->nw_proto != IPPROTO_TCP)) {
+            /* We can't downgrade to OF1.0 and expect inconsistent CT actions
+             * be silently discarded.  Instead, datapath flow install fails, so
+             * it is better to flag inconsistent CT actions as hard errors. */
+            return OFPERR_OFPBAC_MATCH_INCONSISTENT;
         }
 
         if (oc->zone_src.field) {
             return mf_check_src(&oc->zone_src, flow);
         }
 
-        err = ofpacts_check(oc->actions, ofpact_ct_get_action_len(oc),
-                            flow, max_ports, table_id, n_tables,
-                            usable_protocols);
-        return err;
+        return ofpacts_check(oc->actions, ofpact_ct_get_action_len(oc),
+                             flow, max_ports, table_id, n_tables,
+                             usable_protocols);
     }
 
     case OFPACT_NAT: {
@@ -7053,7 +7056,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
             (on->range_af == AF_INET && flow->dl_type != htons(ETH_TYPE_IP)) ||
             (on->range_af == AF_INET6
              && flow->dl_type != htons(ETH_TYPE_IPV6))) {
-            inconsistent_match(usable_protocols);
+            return OFPERR_OFPBAC_MATCH_INCONSISTENT;
         }
         return 0;
     }

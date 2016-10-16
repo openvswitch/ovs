@@ -770,6 +770,7 @@ class Row(object):
         assert self._changes is not None
         assert self._mutations is not None
 
+        column = self._table.columns[column_name]
         datum = self._changes.get(column_name)
         inserts = None
         if '_inserts' in self._mutations.keys():
@@ -784,24 +785,33 @@ class Row(object):
                                          (self.__class__.__name__,
                                           column_name))
                 else:
-                    datum = inserts
-            if column_name in self._data:
+                    datum = data.Datum.from_python(column.type,
+                                                   inserts,
+                                                   _row_to_uuid)
+            elif column_name in self._data:
                 datum = self._data[column_name]
-                try:
+                if column.type.is_set():
+                    dlist = datum.as_list()
                     if inserts is not None:
-                        datum.extend(inserts)
+                        dlist.extend(list(inserts))
                     if removes is not None:
-                        datum = [x for x in datum if x not in removes]
-                except error.Error:
-                    pass
-                try:
+                        removes_datum = data.Datum.from_python(column.type,
+                                                              removes,
+                                                              _row_to_uuid)
+                        removes_list = removes_datum.as_list()
+                        dlist = [x for x in dlist if x not in removes_list]
+                    datum = data.Datum.from_python(column.type, dlist,
+                                                   _row_to_uuid)
+                elif column.type.is_map():
+                    dmap = datum.to_python(_uuid_to_row)
                     if inserts is not None:
-                        datum.merge(inserts)
+                        dmap.update(inserts)
                     if removes is not None:
-                        for key in removes.keys():
-                            del datum[key]
-                except error.Error:
-                    pass
+                        for key in removes:
+                            if key not in (inserts or {}):
+                                del dmap[key]
+                    datum = data.Datum.from_python(column.type, dmap,
+                                                   _row_to_uuid)
             else:
                 if inserts is None:
                     raise AttributeError("%s instance has no attribute '%s'" %
@@ -870,7 +880,7 @@ class Row(object):
             vlog.err("attempting to write bad value to column %s (%s)"
                      % (column_name, e))
             return
-        if column_name in self._data:
+        if self._data and column_name in self._data:
             # Remove existing key/value before updating.
             removes = self._mutations.setdefault('_removes', {})
             column_value = removes.setdefault(column_name, set())

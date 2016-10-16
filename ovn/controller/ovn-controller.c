@@ -231,7 +231,8 @@ get_ovnsb_remote(struct ovsdb_idl *ovs_idl)
 
 static void
 update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
-                struct simap *ct_zones, unsigned long *ct_zone_bitmap)
+                struct simap *ct_zones, unsigned long *ct_zone_bitmap,
+                struct shash *pending_ct_zones)
 {
     struct simap_node *ct_zone, *ct_zone_next;
     int scan_start = 1;
@@ -260,6 +261,15 @@ update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
     /* Delete zones that do not exist in above sset. */
     SIMAP_FOR_EACH_SAFE(ct_zone, ct_zone_next, ct_zones) {
         if (!sset_contains(&all_users, ct_zone->name)) {
+            VLOG_DBG("removing ct zone %"PRId32" for '%s'",
+                     ct_zone->data, ct_zone->name);
+
+            struct ct_zone_pending_entry *pending = xmalloc(sizeof *pending);
+            pending->state = CT_ZONE_DB_QUEUED; /* Skip flushing zone. */
+            pending->zone = ct_zone->data;
+            pending->add = false;
+            shash_add(pending_ct_zones, ct_zone->name, pending);
+
             bitmap_set0(ct_zone_bitmap, ct_zone->data);
             simap_delete(ct_zones, ct_zone);
         }
@@ -271,7 +281,7 @@ update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
     /* Assign a unique zone id for each logical port and two zones
      * to a gateway router. */
     SSET_FOR_EACH(user, &all_users) {
-        size_t zone;
+        int zone;
 
         if (simap_contains(ct_zones, user)) {
             continue;
@@ -286,15 +296,98 @@ update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
         }
         scan_start = zone + 1;
 
+        VLOG_DBG("assigning ct zone %"PRId32" to '%s'", zone, user);
+
+        struct ct_zone_pending_entry *pending = xmalloc(sizeof *pending);
+        pending->state = CT_ZONE_OF_QUEUED;
+        pending->zone = zone;
+        pending->add = true;
+        shash_add(pending_ct_zones, user, pending);
+
         bitmap_set1(ct_zone_bitmap, zone);
         simap_put(ct_zones, user, zone);
-
-        /* xxx We should erase any old entries for this
-         * xxx zone, but we need a generic interface to the conntrack
-         * xxx table. */
     }
 
     sset_destroy(&all_users);
+}
+
+static void
+commit_ct_zones(const struct ovsrec_bridge *br_int,
+                struct shash *pending_ct_zones)
+{
+    struct smap new_ids;
+    smap_clone(&new_ids, &br_int->external_ids);
+
+    bool updated = false;
+    struct shash_node *iter;
+    SHASH_FOR_EACH(iter, pending_ct_zones) {
+        struct ct_zone_pending_entry *ctzpe = iter->data;
+
+        /* The transaction is open, so any pending entries in the
+         * CT_ZONE_DB_QUEUED must be sent and any in CT_ZONE_DB_QUEUED
+         * need to be retried. */
+        if (ctzpe->state != CT_ZONE_DB_QUEUED
+            && ctzpe->state != CT_ZONE_DB_SENT) {
+            continue;
+        }
+
+        char *user_str = xasprintf("ct-zone-%s", iter->name);
+        if (ctzpe->add) {
+            char *zone_str = xasprintf("%"PRId32, ctzpe->zone);
+            smap_replace(&new_ids, user_str, zone_str);
+            free(zone_str);
+        } else {
+            smap_remove(&new_ids, user_str);
+        }
+        free(user_str);
+
+        ctzpe->state = CT_ZONE_DB_SENT;
+        updated = true;
+    }
+
+    if (updated) {
+        ovsrec_bridge_verify_external_ids(br_int);
+        ovsrec_bridge_set_external_ids(br_int, &new_ids);
+    }
+    smap_destroy(&new_ids);
+}
+
+static void
+restore_ct_zones(struct ovsdb_idl *ovs_idl,
+                 struct simap *ct_zones, unsigned long *ct_zone_bitmap)
+{
+    const struct ovsrec_open_vswitch *cfg;
+    cfg = ovsrec_open_vswitch_first(ovs_idl);
+    if (!cfg) {
+        return;
+    }
+
+    const char *br_int_name = smap_get_def(&cfg->external_ids, "ovn-bridge",
+                                           DEFAULT_BRIDGE_NAME);
+
+    const struct ovsrec_bridge *br_int;
+    br_int = get_bridge(ovs_idl, br_int_name);
+    if (!br_int) {
+        /* If the integration bridge hasn't been defined, assume that
+         * any existing ct-zone definitions aren't valid. */
+        return;
+    }
+
+    struct smap_node *node;
+    SMAP_FOR_EACH(node, &br_int->external_ids) {
+        if (strncmp(node->key, "ct-zone-", 8)) {
+            continue;
+        }
+
+        const char *user = node->key + 8;
+        int zone = atoi(node->value);
+
+        if (user[0] && zone) {
+            VLOG_DBG("restoring ct zone %"PRId32" for '%s'", zone, user);
+            bitmap_set1(ct_zone_bitmap, zone);
+            simap_put(ct_zones, user, zone);
+        }
+    }
 }
 
 static int64_t
@@ -362,6 +455,7 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_name);
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_fail_mode);
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_other_config);
+    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_bridge_col_external_ids);
     chassis_register_ovs_idl(ovs_idl_loop.idl);
     encaps_register_ovs_idl(ovs_idl_loop.idl);
     binding_register_ovs_idl(ovs_idl_loop.idl);
@@ -381,9 +475,11 @@ main(int argc, char *argv[])
 
     /* Initialize connection tracking zones. */
     struct simap ct_zones = SIMAP_INITIALIZER(&ct_zones);
+    struct shash pending_ct_zones = SHASH_INITIALIZER(&pending_ct_zones);
     unsigned long ct_zone_bitmap[BITMAP_N_LONGS(MAX_CT_ZONES)];
     memset(ct_zone_bitmap, 0, sizeof ct_zone_bitmap);
     bitmap_set1(ct_zone_bitmap, 0); /* Zone 0 is reserved. */
+    restore_ct_zones(ovs_idl_loop.idl, &ct_zones, ct_zone_bitmap);
     unixctl_command_register("ct-zone-list", "", 0, 0,
                              ct_zone_list, &ct_zones);
 
@@ -436,27 +532,32 @@ main(int argc, char *argv[])
             lport_index_init(&lports, ctx.ovnsb_idl);
             mcgroup_index_init(&mcgroups, ctx.ovnsb_idl);
 
-            enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int);
+            enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int,
+                                                         &pending_ct_zones);
 
             pinctrl_run(&ctx, &lports, br_int, chassis_id, &local_datapaths);
             update_ct_zones(&all_lports, &patched_datapaths, &ct_zones,
-                            ct_zone_bitmap);
+                            ct_zone_bitmap, &pending_ct_zones);
+            if (ctx.ovs_idl_txn) {
+                commit_ct_zones(br_int, &pending_ct_zones);
 
-            struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
-            lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
-                      &patched_datapaths, &group_table, &ct_zones,
-                      &flow_table);
+                struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
+                lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
+                          &patched_datapaths, &group_table, &ct_zones,
+                          &flow_table);
 
-            physical_run(&ctx, mff_ovn_geneve,
-                         br_int, chassis_id, &ct_zones, &flow_table,
-                         &local_datapaths, &patched_datapaths);
+                physical_run(&ctx, mff_ovn_geneve,
+                             br_int, chassis_id, &ct_zones, &flow_table,
+                             &local_datapaths, &patched_datapaths);
 
-            ofctrl_put(&flow_table, get_nb_cfg(ctx.ovnsb_idl));
-            hmap_destroy(&flow_table);
-            if (ctx.ovnsb_idl_txn) {
-                int64_t cur_cfg = ofctrl_get_cur_cfg();
-                if (cur_cfg && cur_cfg != chassis->nb_cfg) {
-                    sbrec_chassis_set_nb_cfg(chassis, cur_cfg);
+                ofctrl_put(&flow_table, &pending_ct_zones,
+                           get_nb_cfg(ctx.ovnsb_idl));
+                hmap_destroy(&flow_table);
+                if (ctx.ovnsb_idl_txn) {
+                    int64_t cur_cfg = ofctrl_get_cur_cfg();
+                    if (cur_cfg && cur_cfg != chassis->nb_cfg) {
+                        sbrec_chassis_set_nb_cfg(chassis, cur_cfg);
+                    }
                 }
             }
             mcgroup_index_destroy(&mcgroups);
@@ -493,9 +594,20 @@ main(int argc, char *argv[])
             pinctrl_wait(&ctx);
         }
         ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
-        ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop);
         ovsdb_idl_track_clear(ovnsb_idl_loop.idl);
+
+        if (ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop) == 1) {
+            struct shash_node *iter, *iter_next;
+            SHASH_FOR_EACH_SAFE(iter, iter_next, &pending_ct_zones) {
+                struct ct_zone_pending_entry *ctzpe = iter->data;
+                if (ctzpe->state == CT_ZONE_DB_SENT) {
+                    shash_delete(&pending_ct_zones, iter);
+                    free(ctzpe);
+                }
+            }
+        }
         ovsdb_idl_track_clear(ovs_idl_loop.idl);
+
         poll_block();
         if (should_service_stop()) {
             exiting = true;

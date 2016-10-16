@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2016 Red Hat, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,33 +15,36 @@
  * limitations under the License.
  */
 
-#ifndef NETDEV_DPDK_H
-#define NETDEV_DPDK_H
-
 #include <config.h>
+#include "dpdk.h"
 
-#include "openvswitch/compiler.h"
+#include "smap.h"
+#include "ovs-thread.h"
+#include "openvswitch/vlog.h"
 
-struct dp_packet;
+VLOG_DEFINE_THIS_MODULE(dpdk);
 
-#ifdef DPDK_NETDEV
+void
+dpdk_init(const struct smap *ovs_other_config)
+{
+    static struct ovsthread_once once = OVSTHREAD_ONCE_INITIALIZER;
 
-void netdev_dpdk_register(void);
-void free_dpdk_buf(struct dp_packet *);
+    if (ovsthread_once_start(&once)) {
+        if (smap_get_bool(ovs_other_config, "dpdk-init", false)) {
+            VLOG_ERR("DPDK not supported in this copy of Open vSwitch.");
+        }
+        ovsthread_once_done(&once);
+    }
+}
 
-#else
-
-static inline void
-netdev_dpdk_register(void)
+void
+dpdk_set_lcore_id(unsigned cpu OVS_UNUSED)
 {
     /* Nothing */
 }
-static inline void
-free_dpdk_buf(struct dp_packet *buf OVS_UNUSED)
+
+const char *
+dpdk_get_vhost_sock_dir(void)
 {
-    /* Nothing */
+    return NULL;
 }
-
-#endif
-
-#endif /* netdev-dpdk.h */

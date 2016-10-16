@@ -297,6 +297,10 @@ expr_fix(struct expr *expr)
 
 /* Formatting. */
 
+/* Searches bits [0,width) in 'sv' for a contiguous sequence of 1-bits.  If one
+ * such sequence exists, stores the index of the first 1-bit into '*startp' and
+ * the number of 1-bits into '*n_bitsp'.  Stores 0 into both variables if no
+ * such sequence, or more than one, exists. */
 static void
 find_bitwise_range(const union mf_subvalue *sv, int width,
                    int *startp, int *n_bitsp)
@@ -1669,6 +1673,18 @@ expr_annotate(struct expr *expr, const struct shash *symtab, char **errorp)
 }
 
 static struct expr *
+expr_simplify_eq(struct expr *expr)
+{
+    const union mf_subvalue *mask = &expr->cmp.mask;
+    if (is_all_zeros(mask, sizeof *mask)) {
+        /* Simplify "ip4.dst == 0/0" to just "1" (plus a prerequisite). */
+        expr_destroy(expr);
+        return expr_create_boolean(true);
+    }
+    return expr;
+}
+
+static struct expr *
 expr_simplify_ne(struct expr *expr)
 {
     struct expr *new = NULL;
@@ -1690,7 +1706,16 @@ expr_simplify_ne(struct expr *expr)
 
         new = expr_combine(EXPR_T_OR, new, e);
     }
-    ovs_assert(new);
+    if (!new) {
+        /* Handle a comparison like "ip4.dst != 0/0", where the mask has no
+         * 1-bits.
+         *
+         * The correct result for this expression may not be obvious.  It's
+         * easier to understand that "ip4.dst == 0/0" should be true, since 0/0
+         * matches every IPv4 address; then, "ip4.dst != 0/0" should have the
+         * opposite result. */
+        new = expr_create_boolean(false);
+    }
 
     expr_destroy(expr);
 
@@ -1708,18 +1733,41 @@ expr_simplify_relational(struct expr *expr)
     ovs_assert(n_bits > 0);
     end = start + n_bits;
 
-    struct expr *new;
-    if (expr->cmp.relop == EXPR_R_LE || expr->cmp.relop == EXPR_R_GE) {
-        new = xmemdup(expr, sizeof *expr);
-        new->cmp.relop = EXPR_R_EQ;
-    } else {
-        new = NULL;
+    /* Handle some special cases.
+     *
+     * These optimize to just "true":
+     *
+     *    tcp.dst >= 0
+     *    tcp.dst <= 65535
+     *
+     * These are easier to understand, and equivalent, when treated as if
+     * > or < were !=:
+     *
+     *    tcp.dst > 0
+     *    tcp.dst < 65535
+     */
+    bool lt = expr->cmp.relop == EXPR_R_LT || expr->cmp.relop == EXPR_R_LE;
+    bool eq = expr->cmp.relop == EXPR_R_LE || expr->cmp.relop == EXPR_R_GE;
+    if (bitwise_scan(value, sizeof *value, !lt, start, end) == end) {
+        if (eq) {
+            expr_destroy(expr);
+            return expr_create_boolean(true);
+        } else {
+            return expr_simplify_ne(expr);
+        }
     }
 
-    bool b = expr->cmp.relop == EXPR_R_LT || expr->cmp.relop == EXPR_R_LE;
-    for (int z = bitwise_scan(value, sizeof *value, b, start, end);
+    /* Reduce "tcp.dst >= 1234" to "tcp.dst == 1234 || tcp.dst > 1234",
+     * and similarly for "tcp.dst <= 1234". */
+    struct expr *new = NULL;
+    if (eq) {
+        new = xmemdup(expr, sizeof *expr);
+        new->cmp.relop = EXPR_R_EQ;
+    }
+
+    for (int z = bitwise_scan(value, sizeof *value, lt, start, end);
          z < end;
-         z = bitwise_scan(value, sizeof *value, b, z + 1, end)) {
+         z = bitwise_scan(value, sizeof *value, lt, z + 1, end)) {
         struct expr *e;
 
         e = xmemdup(expr, sizeof *expr);
@@ -1742,7 +1790,8 @@ expr_simplify(struct expr *expr)
 
     switch (expr->type) {
     case EXPR_T_CMP:
-        return (expr->cmp.relop == EXPR_R_EQ || !expr->cmp.symbol->width ? expr
+        return (!expr->cmp.symbol->width ? expr
+                : expr->cmp.relop == EXPR_R_EQ ? expr_simplify_eq(expr)
                 : expr->cmp.relop == EXPR_R_NE ? expr_simplify_ne(expr)
                 : expr_simplify_relational(expr));
 

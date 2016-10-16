@@ -20,6 +20,11 @@ import socket
 import os
 
 try:
+    from OpenSSL import SSL
+except ImportError:
+    SSL = None
+
+try:
     import eventlet.patcher
 
     def _using_eventlet_green_select():
@@ -54,6 +59,9 @@ class _SelectSelect(object):
     def register(self, fd, events):
         if isinstance(fd, socket.socket):
             fd = fd.fileno()
+        if SSL and isinstance(fd, SSL.Connection):
+            fd = fd.fileno()
+
         assert isinstance(fd, int)
         if events & POLLIN:
             self.rlist.append(fd)

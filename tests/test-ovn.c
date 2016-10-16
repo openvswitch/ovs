@@ -626,7 +626,7 @@ init_terminal(struct expr *expr, int phase,
         memset(&expr->cmp.value, 0, sizeof expr->cmp.value);
         memset(&expr->cmp.mask, 0, sizeof expr->cmp.mask);
         expr->cmp.value.integer = htonll(0);
-        expr->cmp.mask.integer = htonll(1);
+        expr->cmp.mask.integer = htonll(0);
         return;
     }
 
@@ -721,15 +721,13 @@ next_terminal(struct expr *expr,
                     return true;
                 }
             }
-            next = 0;
-        } else if (m == 0) {
-            /* Skip: empty mask is pathological. */
+            next = UINT_MAX;
         } else if (v & ~m) {
             /* Skip: 1-bits in value correspond to 0-bits in mask. */
-        } else if (turn_off_rightmost_1s(m)
+        } else if ((!m || turn_off_rightmost_1s(m))
                    && (expr->cmp.relop != EXPR_R_EQ &&
                        expr->cmp.relop != EXPR_R_NE)) {
-            /* Skip: can't have discontiguous mask for > >= < <=. */
+            /* Skip: can't have discontiguous or all-0 mask for > >= < <=. */
         } else {
             expr->cmp.value.integer = htonll(v);
             expr->cmp.mask.integer = htonll(m);

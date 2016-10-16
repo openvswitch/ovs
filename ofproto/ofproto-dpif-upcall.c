@@ -939,6 +939,21 @@ udpif_revalidator(void *arg)
             latch_wait(&udpif->exit_latch);
             latch_wait(&udpif->pause_latch);
             poll_block();
+
+            if (!latch_is_set(&udpif->pause_latch) &&
+                !latch_is_set(&udpif->exit_latch)) {
+                long long int now = time_msec();
+                /* Block again if we are woken up within 5ms of the last start
+                 * time. */
+                start_time += 5;
+
+                if (now < start_time) {
+                    poll_timer_wait_until(start_time);
+                    latch_wait(&udpif->exit_latch);
+                    latch_wait(&udpif->pause_latch);
+                    poll_block();
+                }
+            }
         }
     }
 
@@ -1791,6 +1806,11 @@ should_revalidate(const struct udpif *udpif, uint64_t packets,
 {
     long long int metric, now, duration;
 
+    if (!used) {
+        /* Always revalidate the first time a flow is dumped. */
+        return true;
+    }
+
     if (udpif->dump_duration < 200) {
         /* We are likely to handle full revalidation for the flows. */
         return true;
@@ -1818,6 +1838,154 @@ should_revalidate(const struct udpif *udpif, uint64_t packets,
     return false;
 }
 
+struct reval_context {
+    /* Optional output parameters */
+    struct flow_wildcards *wc;
+    struct ofpbuf *odp_actions;
+    struct netflow **netflow;
+    struct xlate_cache *xcache;
+
+    /* Required output parameters */
+    struct xlate_out xout;
+    struct flow flow;
+};
+
+/* Translates 'key' into a flow, populating 'ctx' as it goes along.
+ *
+ * Returns 0 on success, otherwise a positive errno value.
+ *
+ * The caller is responsible for uninitializing ctx->xout on success.
+ */
+static int
+xlate_key(struct udpif *udpif, const struct nlattr *key, unsigned int len,
+          const struct dpif_flow_stats *push, struct reval_context *ctx)
+{
+    struct ofproto_dpif *ofproto;
+    ofp_port_t ofp_in_port;
+    struct xlate_in xin;
+    int error;
+
+    if (odp_flow_key_to_flow(key, len, &ctx->flow) == ODP_FIT_ERROR) {
+        return EINVAL;
+    }
+
+    error = xlate_lookup(udpif->backer, &ctx->flow, &ofproto, NULL, NULL,
+                         ctx->netflow, &ofp_in_port);
+    if (error) {
+        return error;
+    }
+
+    xlate_in_init(&xin, ofproto, ofproto_dpif_get_tables_version(ofproto),
+                  &ctx->flow, ofp_in_port, NULL, push->tcp_flags,
+                  NULL, ctx->wc, ctx->odp_actions);
+    if (push->n_packets) {
+        xin.resubmit_stats = push;
+        xin.allow_side_effects = true;
+    }
+    xin.xcache = ctx->xcache;
+    xlate_actions(&xin, &ctx->xout);
+
+    return 0;
+}
+
+static int
+xlate_ukey(struct udpif *udpif, const struct udpif_key *ukey,
+           uint16_t tcp_flags, struct reval_context *ctx)
+{
+    struct dpif_flow_stats push = {
+        .tcp_flags = tcp_flags,
+    };
+    return xlate_key(udpif, ukey->key, ukey->key_len, &push, ctx);
+}
+
+static int
+populate_xcache(struct udpif *udpif, struct udpif_key *ukey,
+                uint16_t tcp_flags)
+    OVS_REQUIRES(ukey->mutex)
+{
+    struct reval_context ctx = {
+        .odp_actions = NULL,
+        .netflow = NULL,
+        .wc = NULL,
+    };
+    int error;
+
+    ovs_assert(!ukey->xcache);
+    ukey->xcache = ctx.xcache = xlate_cache_new();
+    error = xlate_ukey(udpif, ukey, tcp_flags, &ctx);
+    if (error) {
+        return error;
+    }
+    xlate_out_uninit(&ctx.xout);
+
+    return 0;
+}
+
+static enum reval_result
+revalidate_ukey__(struct udpif *udpif, const struct udpif_key *ukey,
+                  uint16_t tcp_flags, struct ofpbuf *odp_actions,
+                  struct recirc_refs *recircs, struct xlate_cache *xcache)
+{
+    struct xlate_out *xoutp;
+    struct netflow *netflow;
+    struct flow_wildcards dp_mask, wc;
+    enum reval_result result;
+    struct reval_context ctx = {
+        .odp_actions = odp_actions,
+        .netflow = &netflow,
+        .xcache = xcache,
+        .wc = &wc,
+    };
+
+    result = UKEY_DELETE;
+    xoutp = NULL;
+    netflow = NULL;
+
+    if (xlate_ukey(udpif, ukey, tcp_flags, &ctx)) {
+        goto exit;
+    }
+    xoutp = &ctx.xout;
+
+    if (xoutp->slow) {
+        ofpbuf_clear(odp_actions);
+        compose_slow_path(udpif, xoutp, &ctx.flow, ctx.flow.in_port.odp_port,
+                          odp_actions);
+    }
+
+    if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, &dp_mask, &ctx.flow)
+        == ODP_FIT_ERROR) {
+        goto exit;
+    }
+
+    /* Do not modify if any bit is wildcarded by the installed datapath flow,
+     * but not the newly revalidated wildcard mask (wc), i.e., if revalidation
+     * tells that the datapath flow is now too generic and must be narrowed
+     * down.  Note that we do not know if the datapath has ignored any of the
+     * wildcarded bits, so we may be overtly conservative here. */
+    if (flow_wildcards_has_extra(&dp_mask, ctx.wc)) {
+        goto exit;
+    }
+
+    if (!ofpbuf_equal(odp_actions,
+                      ovsrcu_get(struct ofpbuf *, &ukey->actions))) {
+        /* The datapath mask was OK, but the actions seem to have changed.
+         * Let's modify it in place. */
+        result = UKEY_MODIFY;
+        /* Transfer recirc action ID references to the caller. */
+        recirc_refs_swap(recircs, &xoutp->recircs);
+        goto exit;
+    }
+
+    result = UKEY_KEEP;
+
+exit:
+    if (netflow && result == UKEY_DELETE) {
+        netflow_flow_clear(netflow, &ctx.flow);
+    }
+    xlate_out_uninit(xoutp);
+    return result;
+}
+
 /* Verifies that the datapath actions of 'ukey' are still correct, and pushes
  * 'stats' for it.
  *
@@ -1843,26 +2011,12 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
                 struct recirc_refs *recircs)
     OVS_REQUIRES(ukey->mutex)
 {
-    struct xlate_out xout, *xoutp;
-    struct netflow *netflow;
-    struct ofproto_dpif *ofproto;
+    bool need_revalidate = ukey->reval_seq != reval_seq;
+    enum reval_result result = UKEY_DELETE;
     struct dpif_flow_stats push;
-    struct flow flow;
-    struct flow_wildcards dp_mask, wc;
-    enum reval_result result;
-    ofp_port_t ofp_in_port;
-    struct xlate_in xin;
-    long long int last_used;
-    int error;
-    bool need_revalidate;
-
-    result = UKEY_DELETE;
-    xoutp = NULL;
-    netflow = NULL;
 
     ofpbuf_clear(odp_actions);
-    need_revalidate = (ukey->reval_seq != reval_seq);
-    last_used = ukey->stats.used;
+
     push.used = stats->used;
     push.tcp_flags = stats->tcp_flags;
     push.n_packets = (stats->n_packets > ukey->stats.n_packets
@@ -1872,98 +2026,28 @@ revalidate_ukey(struct udpif *udpif, struct udpif_key *ukey,
                     ? stats->n_bytes - ukey->stats.n_bytes
                     : 0);
 
-    if (need_revalidate && last_used
-        && !should_revalidate(udpif, push.n_packets, last_used)) {
-        goto exit;
-    }
-
-    /* We will push the stats, so update the ukey stats cache. */
-    ukey->stats = *stats;
-    if (!push.n_packets && !need_revalidate) {
-        result = UKEY_KEEP;
-        goto exit;
-    }
-
-    if (ukey->xcache && !need_revalidate) {
-        xlate_push_stats(ukey->xcache, &push);
-        result = UKEY_KEEP;
-        goto exit;
-    }
-
-    if (odp_flow_key_to_flow(ukey->key, ukey->key_len, &flow)
-        == ODP_FIT_ERROR) {
-        goto exit;
-    }
-
-    error = xlate_lookup(udpif->backer, &flow, &ofproto, NULL, NULL, &netflow,
-                         &ofp_in_port);
-    if (error) {
-        goto exit;
-    }
-
     if (need_revalidate) {
-        xlate_cache_clear(ukey->xcache);
-    }
-    if (!ukey->xcache) {
-        ukey->xcache = xlate_cache_new();
-    }
-
-    xlate_in_init(&xin, ofproto, ofproto_dpif_get_tables_version(ofproto),
-                  &flow, ofp_in_port, NULL, push.tcp_flags,
-                  NULL, need_revalidate ? &wc : NULL, odp_actions);
-    if (push.n_packets) {
-        xin.resubmit_stats = &push;
-        xin.allow_side_effects = true;
-    }
-    xin.xcache = ukey->xcache;
-    xlate_actions(&xin, &xout);
-    xoutp = &xout;
-
-    if (!need_revalidate) {
+        if (should_revalidate(udpif, push.n_packets, ukey->stats.used)) {
+            if (!ukey->xcache) {
+                ukey->xcache = xlate_cache_new();
+            } else {
+                xlate_cache_clear(ukey->xcache);
+            }
+            result = revalidate_ukey__(udpif, ukey, push.tcp_flags,
+                                       odp_actions, recircs, ukey->xcache);
+        } /* else delete; too expensive to revalidate */
+    } else if (!push.n_packets || ukey->xcache
+               || !populate_xcache(udpif, ukey, push.tcp_flags)) {
         result = UKEY_KEEP;
-        goto exit;
     }
 
-    if (xout.slow) {
-        ofpbuf_clear(odp_actions);
-        compose_slow_path(udpif, &xout, &flow, flow.in_port.odp_port,
-                          odp_actions);
-    }
-
-    if (odp_flow_key_to_mask(ukey->mask, ukey->mask_len, &dp_mask, &flow)
-        == ODP_FIT_ERROR) {
-        goto exit;
-    }
-
-    /* Do not modify if any bit is wildcarded by the installed datapath flow,
-     * but not the newly revalidated wildcard mask (wc), i.e., if revalidation
-     * tells that the datapath flow is now too generic and must be narrowed
-     * down.  Note that we do not know if the datapath has ignored any of the
-     * wildcarded bits, so we may be overtly conservative here. */
-    if (flow_wildcards_has_extra(&dp_mask, &wc)) {
-        goto exit;
-    }
-
-    if (!ofpbuf_equal(odp_actions,
-                      ovsrcu_get(struct ofpbuf *, &ukey->actions))) {
-        /* The datapath mask was OK, but the actions seem to have changed.
-         * Let's modify it in place. */
-        result = UKEY_MODIFY;
-        /* Transfer recirc action ID references to the caller. */
-        recirc_refs_swap(recircs, &xoutp->recircs);
-        goto exit;
-    }
-
-    result = UKEY_KEEP;
-
-exit:
+    /* Stats for deleted flows will be attributed upon flow deletion. Skip. */
     if (result != UKEY_DELETE) {
+        xlate_push_stats(ukey->xcache, &push);
+        ukey->stats = *stats;
         ukey->reval_seq = reval_seq;
     }
-    if (netflow && result == UKEY_DELETE) {
-        netflow_flow_clear(netflow, &flow);
-    }
-    xlate_out_uninit(xoutp);
+
     return result;
 }
 
@@ -2058,10 +2142,10 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
         if (push->n_packets || netflow_exists()) {
             const struct nlattr *key = op->dop.u.flow_del.key;
             size_t key_len = op->dop.u.flow_del.key_len;
-            struct ofproto_dpif *ofproto;
             struct netflow *netflow;
-            ofp_port_t ofp_in_port;
-            struct flow flow;
+            struct reval_context ctx = {
+                .netflow = &netflow,
+            };
             int error;
 
             if (op->ukey) {
@@ -2076,26 +2160,16 @@ push_dp_ops(struct udpif *udpif, struct ukey_op *ops, size_t n_ops)
                 key_len = op->ukey->key_len;
             }
 
-            if (odp_flow_key_to_flow(key, key_len, &flow)
-                == ODP_FIT_ERROR) {
-                continue;
-            }
+            error = xlate_key(udpif, key, key_len, push, &ctx);
+            if (error) {
+                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-            error = xlate_lookup(udpif->backer, &flow, &ofproto, NULL, NULL,
-                                 &netflow, &ofp_in_port);
-            if (!error) {
-                struct xlate_in xin;
-
-                xlate_in_init(&xin, ofproto,
-                              ofproto_dpif_get_tables_version(ofproto),
-                              &flow, ofp_in_port, NULL,
-                              push->tcp_flags, NULL, NULL, NULL);
-                xin.resubmit_stats = push->n_packets ? push : NULL;
-                xin.allow_side_effects = push->n_packets > 0;
-                xlate_actions_for_side_effects(&xin);
-
+                VLOG_WARN_RL(&rl, "xlate_actions failed (%s)!",
+                             xlate_strerror(error));
+            } else {
+                xlate_out_uninit(&ctx.xout);
                 if (netflow) {
-                    netflow_flow_clear(netflow, &flow);
+                    netflow_flow_clear(netflow, &ctx.flow);
                 }
             }
         }

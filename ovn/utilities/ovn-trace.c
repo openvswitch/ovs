@@ -300,6 +300,7 @@ struct ovntrace_flow {
     enum ovntrace_pipeline pipeline;
     int table_id;
     char *stage_name;
+    char *source;
     int priority;
     char *match_s;
     struct expr *match;
@@ -638,6 +639,8 @@ read_flows(void)
         flow->table_id = sblf->table_id;
         flow->stage_name = nullable_xstrdup(smap_get(&sblf->external_ids,
                                                      "stage-name"));
+        flow->source = nullable_xstrdup(smap_get(&sblf->external_ids,
+                                                 "source"));
         flow->priority = sblf->priority;
         flow->match_s = xstrdup(sblf->match);
         flow->match = match;
@@ -1289,6 +1292,18 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
         case OVNACT_PUT_DHCPV6_OPTS:
             execute_put_dhcp_opts(ovnact_get_PUT_DHCPV6_OPTS(a), uflow);
             break;
+
+        case OVNACT_SET_QUEUE:
+            /* The set_queue action is slippery from a logical perspective.  It
+             * has no visible effect as long as the packet remains on the same
+             * chassis: it can bounce from one logical datapath to another
+             * retaining the queue and even end up at a VM on the same chassis.
+             * Without taking the physical arrangement into account, we can't
+             * do anything with this action other than just to note that it
+             * happened.  If we ever add some physical knowledge to ovn-trace,
+             * though, it would be easy enough to track the queue information
+             * by adjusting uflow->skb_priority. */
+            break;
         }
 
     }
@@ -1322,8 +1337,12 @@ trace__(const struct ovntrace_datapath *dp, struct flow *uflow,
     struct ds s = DS_EMPTY_INITIALIZER;
     ds_put_format(&s, "%2d. ", table_id);
     if (f) {
-        if (f->stage_name) {
+        if (f->stage_name && f->source) {
+            ds_put_format(&s, "%s (%s): ", f->stage_name, f->source);
+        } else if (f->stage_name) {
             ds_put_format(&s, "%s: ", f->stage_name);
+        } else if (f->source) {
+            ds_put_format(&s, "(%s): ", f->source);
         }
         ds_put_format(&s, "%s, priority %d", f->match_s, f->priority);
     } else {

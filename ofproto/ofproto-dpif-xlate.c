@@ -5100,24 +5100,6 @@ xlate_out_uninit(struct xlate_out *xout)
         recirc_refs_unref(&xout->recircs);
     }
 }
-
-/* Translates the 'ofpacts_len' bytes of "struct ofpact"s starting at 'ofpacts'
- * into datapath actions, using 'ctx', and discards the datapath actions. */
-void
-xlate_actions_for_side_effects(struct xlate_in *xin)
-{
-    struct xlate_out xout;
-    enum xlate_error error;
-
-    error = xlate_actions(xin, &xout);
-    if (error) {
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
-
-        VLOG_WARN_RL(&rl, "xlate_actions failed (%s)!", xlate_strerror(error));
-    }
-
-    xlate_out_uninit(&xout);
-}
 
 static struct skb_priority_to_dscp *
 get_skb_priority(const struct xport *xport, uint32_t skb_priority)
@@ -5297,6 +5279,17 @@ xlate_wc_finish(struct xlate_ctx *ctx)
     /* VLAN_TCI CFI bit must be matched if any of the TCI is matched. */
     if (ctx->wc->masks.vlan_tci) {
         ctx->wc->masks.vlan_tci |= htons(VLAN_CFI);
+    }
+
+    /* The classifier might return masks that match on tp_src and tp_dst even
+     * for later fragments.  This happens because there might be flows that
+     * match on tp_src or tp_dst without matching on the frag bits, because
+     * it is not a prerequisite for OpenFlow.  Since it is a prerequisite for
+     * datapath flows and since tp_src and tp_dst are always going to be 0,
+     * wildcard the fields here. */
+    if (ctx->xin->flow.nw_frag & FLOW_NW_FRAG_LATER) {
+        ctx->wc->masks.tp_src = 0;
+        ctx->wc->masks.tp_dst = 0;
     }
 }
 

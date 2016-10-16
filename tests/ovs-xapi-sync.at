@@ -26,7 +26,7 @@ ovs_vsctl () {
 OVS_VSCTL_SETUP
 
 # Start ovs-xapi-sync.
-AT_CHECK([$PYTHON ./ovs-xapi-sync "--pidfile=`pwd`/ovs-xapi-sync.pid" \
+AT_CHECK([$PYTHON ./ovs-xapi-sync "--pidfile=ovs-xapi-sync.pid" \
                   "--root-prefix=`pwd`" unix:socket >log 2>&1 &])
 AT_CAPTURE_FILE([log])
 

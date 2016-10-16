@@ -33,6 +33,16 @@ openvswitch (2.6.0-1) unstable; urgency=low
        packet to size M bytes when outputting to port N.
      * New command OFPGC_ADD_OR_MOD for OFPT_GROUP_MOD message that adds a
        new group or modifies an existing groups
+     * The optional OpenFlow packet buffering feature is deprecated in
+       this release, and will be removed in the next OVS release
+       (2.7).  After the change OVS always sends the 'buffer_id' as
+       0xffffffff in packet-in messages and will send an error
+       response if any other value of this field is included in
+       packet-out and flow mod sent by a controller.  Controllers are
+       already expected to work properly in cases where the switch can
+       not buffer packets, so this change should not affect existing
+       users.
+     * New OpenFlow extension NXT_CT_FLUSH_ZONE to flush conntrack zones.
    - Improved OpenFlow version compatibility for actions:
      * New OpenFlow extension to support the "group" action in OpenFlow 1.0.
      * OpenFlow 1.0 "enqueue" action now properly translated to OpenFlow 1.1+.
@@ -108,6 +118,7 @@ openvswitch (2.6.0-1) unstable; urgency=low
      * Flow based tunnel match and action can be used for IPv6 address using
        tun_ipv6_src, tun_ipv6_dst fields.
      * Added support for IPv6 tunnels, for details checkout FAQ.
+     * Deprecated support for IPsec tunnels ports.
    - A wrapper script, 'ovs-tcpdump', to easily port-mirror an OVS port and
      watch with tcpdump
    - Introduce --no-self-confinement flag that allows daemons to work with

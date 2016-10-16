@@ -34,7 +34,7 @@ struct ofpbuf;
 
 /* NXAST_BUNDLE helper functions.
  *
- * See include/openflow/nicira-ext.h for NXAST_BUNDLE specification. */
+ * See lib/ofp-actions.c for NXAST_BUNDLE specification. */
 
 #define BUNDLE_MAX_SLAVES 2048
 

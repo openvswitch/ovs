@@ -142,11 +142,13 @@ eth_addr_is_reserved(const struct eth_addr ea)
 
 /* Attempts to parse 's' as an Ethernet address.  If successful, stores the
  * address in 'ea' and returns true, otherwise zeros 'ea' and returns
- * false.  */
+ * false.  This function checks trailing characters. */
 bool
 eth_addr_from_string(const char *s, struct eth_addr *ea)
 {
-    if (ovs_scan(s, ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(*ea))) {
+    int n = 0;
+    if (ovs_scan(s, ETH_ADDR_SCAN_FMT"%n", ETH_ADDR_SCAN_ARGS(*ea), &n)
+        && !s[n]) {
         return true;
     } else {
         *ea = eth_addr_zero;
@@ -425,6 +427,24 @@ bool
 ip_parse(const char *s, ovs_be32 *ip)
 {
     return inet_pton(AF_INET, s, ip) == 1;
+}
+
+/* Parses string 's', which must be an IP address with a port number
+ * with ":" as a separator (e.g.: 192.168.1.2:80).
+ * Stores the IP address into '*ip' and port number to '*port'. */
+char * OVS_WARN_UNUSED_RESULT
+ip_parse_port(const char *s, ovs_be32 *ip, ovs_be16 *port)
+{
+    int n = 0;
+    if (!ovs_scan_len(s, &n, IP_PORT_SCAN_FMT,
+                IP_PORT_SCAN_ARGS(ip, port))) {
+        return xasprintf("%s: invalid IP address or port number", s);
+    }
+
+    if (s[n]) {
+        return xasprintf("%s: invalid IP address or port number", s);
+    }
+    return NULL;
 }
 
 /* Parses string 's', which must be an IP address with an optional netmask or

@@ -397,19 +397,19 @@ AT_CLEANUP
 
 AT_SETUP([ovn -- 2-term expression conversion])
 AT_CHECK([ovstest test-ovn exhaustive --operation=convert 2], [0],
-  [Tested converting 570 expressions of 2 terminals with 2 numeric vars (each 3 bits) in terms of operators == != < <= > >= and 2 string vars.
+  [Tested converting 578 expressions of 2 terminals with 2 numeric vars (each 3 bits) in terms of operators == != < <= > >= and 2 string vars.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 3-term expression conversion])
 AT_CHECK([ovstest test-ovn exhaustive --operation=convert --bits=2 3], [0],
-  [Tested converting 62418 expressions of 3 terminals with 2 numeric vars (each 2 bits) in terms of operators == != < <= > >= and 2 string vars.
+  [Tested converting 67410 expressions of 3 terminals with 2 numeric vars (each 2 bits) in terms of operators == != < <= > >= and 2 string vars.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 3-term numeric expression simplification])
 AT_CHECK([ovstest test-ovn exhaustive --operation=simplify --nvars=2 --svars=0 3], [0],
-  [Tested simplifying 477138 expressions of 3 terminals with 2 numeric vars (each 3 bits) in terms of operators == != < <= > >=.
+  [Tested simplifying 490770 expressions of 3 terminals with 2 numeric vars (each 3 bits) in terms of operators == != < <= > >=.
 ])
 AT_CLEANUP
 
@@ -421,13 +421,35 @@ AT_CLEANUP
 
 AT_SETUP([ovn -- 3-term mixed expression simplification])
 AT_CHECK([ovstest test-ovn exhaustive --operation=simplify --nvars=1 --svars=1 3], [0],
-  [Tested simplifying 124410 expressions of 3 terminals with 1 numeric vars (each 3 bits) in terms of operators == != < <= > >= and 1 string vars.
+  [Tested simplifying 127890 expressions of 3 terminals with 1 numeric vars (each 3 bits) in terms of operators == != < <= > >= and 1 string vars.
 ])
+AT_CLEANUP
+
+AT_SETUP([ovn -- simplification special cases])
+simplify() {
+    echo "$1" | ovstest test-ovn simplify-expr
+}
+AT_CHECK([simplify 'eth.dst == 0/0'], [0], [1
+])
+AT_CHECK([simplify 'eth.dst != 0/0'], [0], [0
+])
+AT_CHECK([simplify 'tcp.dst >= 0'], [0],
+    [ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
+])
+AT_CHECK([simplify 'tcp.dst <= 65535'], [0],
+    [ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
+])
+AT_CHECK([simplify 'tcp.dst > 0'], [0],
+    [[(tcp.dst[0] || tcp.dst[1] || tcp.dst[2] || tcp.dst[3] || tcp.dst[4] || tcp.dst[5] || tcp.dst[6] || tcp.dst[7] || tcp.dst[8] || tcp.dst[9] || tcp.dst[10] || tcp.dst[11] || tcp.dst[12] || tcp.dst[13] || tcp.dst[14] || tcp.dst[15]) && ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
+]])
+AT_CHECK([simplify 'tcp.dst < 65535'], [0],
+    [[(!tcp.dst[0] || !tcp.dst[1] || !tcp.dst[2] || !tcp.dst[3] || !tcp.dst[4] || !tcp.dst[5] || !tcp.dst[6] || !tcp.dst[7] || !tcp.dst[8] || !tcp.dst[9] || !tcp.dst[10] || !tcp.dst[11] || !tcp.dst[12] || !tcp.dst[13] || !tcp.dst[14] || !tcp.dst[15]) && ip.proto == 0x6 && (eth.type == 0x800 || eth.type == 0x86dd)
+]])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 4-term numeric expression normalization])
 AT_CHECK([ovstest test-ovn exhaustive --operation=normalize --nvars=3 --svars=0 --bits=1 4], [0],
-  [Tested normalizing 1207162 expressions of 4 terminals with 3 numeric vars (each 1 bits) in terms of operators == != < <= > >=.
+  [Tested normalizing 1874026 expressions of 4 terminals with 3 numeric vars (each 1 bits) in terms of operators == != < <= > >=.
 ])
 AT_CLEANUP
 
@@ -439,13 +461,13 @@ AT_CLEANUP
 
 AT_SETUP([ovn -- 4-term mixed expression normalization])
 AT_CHECK([ovstest test-ovn exhaustive --operation=normalize --nvars=1 --bits=1 --svars=2 4], [0],
-  [Tested normalizing 128282 expressions of 4 terminals with 1 numeric vars (each 1 bits) in terms of operators == != < <= > >= and 2 string vars.
+  [Tested normalizing 175978 expressions of 4 terminals with 1 numeric vars (each 1 bits) in terms of operators == != < <= > >= and 2 string vars.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 5-term numeric expression normalization])
 AT_CHECK([ovstest test-ovn exhaustive --operation=normalize --nvars=3 --svars=0 --bits=1 --relops='==' 5], [0],
-  [Tested normalizing 368550 expressions of 5 terminals with 3 numeric vars (each 1 bits) in terms of operators ==.
+  [Tested normalizing 1317600 expressions of 5 terminals with 3 numeric vars (each 1 bits) in terms of operators ==.
 ])
 AT_CLEANUP
 
@@ -457,35 +479,40 @@ AT_CLEANUP
 
 AT_SETUP([ovn -- 5-term mixed expression normalization])
 AT_CHECK([ovstest test-ovn exhaustive --operation=normalize --nvars=1 --svars=1 --bits=1 --relops='==' 5], [0],
-  [Tested normalizing 116550 expressions of 5 terminals with 1 numeric vars (each 1 bits) in terms of operators == and 1 string vars.
+  [Tested normalizing 216000 expressions of 5 terminals with 1 numeric vars (each 1 bits) in terms of operators == and 1 string vars.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 4-term numeric expressions to flows])
+AT_KEYWORDS([expression])
 AT_CHECK([ovstest test-ovn exhaustive --operation=flow --nvars=2 --svars=0 --bits=2 --relops='==' 4], [0],
-  [Tested converting to flows 128282 expressions of 4 terminals with 2 numeric vars (each 2 bits) in terms of operators ==.
+  [Tested converting to flows 175978 expressions of 4 terminals with 2 numeric vars (each 2 bits) in terms of operators ==.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 4-term string expressions to flows])
+AT_KEYWORDS([expression])
 AT_CHECK([ovstest test-ovn exhaustive --operation=flow --nvars=0 --svars=4 4], [0],
   [Tested converting to flows 21978 expressions of 4 terminals with 4 string vars.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 4-term mixed expressions to flows])
+AT_KEYWORDS([expression])
 AT_CHECK([ovstest test-ovn exhaustive --operation=flow --nvars=1 --bits=2 --svars=1 --relops='==' 4], [0],
-  [Tested converting to flows 37994 expressions of 4 terminals with 1 numeric vars (each 2 bits) in terms of operators == and 1 string vars.
+  [Tested converting to flows 48312 expressions of 4 terminals with 1 numeric vars (each 2 bits) in terms of operators == and 1 string vars.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 3-term numeric expressions to flows])
+AT_KEYWORDS([expression])
 AT_CHECK([ovstest test-ovn exhaustive --operation=flow --nvars=3 --svars=0 --bits=3 --relops='==' 3], [0],
-  [Tested converting to flows 38394 expressions of 3 terminals with 3 numeric vars (each 3 bits) in terms of operators ==.
+  [Tested converting to flows 41328 expressions of 3 terminals with 3 numeric vars (each 3 bits) in terms of operators ==.
 ])
 AT_CLEANUP
 
 AT_SETUP([ovn -- converting expressions to flows -- string fields])
+AT_KEYWORDS([expression])
 expr_to_flow () {
     echo "$1" | ovstest test-ovn expr-to-flows | sort
 }
@@ -522,6 +549,7 @@ AT_CHECK([expr_to_flow 'inport == "eth0" && inport == "eth1"'], [0], [dnl
 AT_CLEANUP
 
 AT_SETUP([ovn -- converting expressions to flows -- address sets])
+AT_KEYWORDS([expression])
 expr_to_flow () {
     echo "$1" | ovstest test-ovn expr-to-flows | sort
 }
@@ -938,6 +966,14 @@ reg1[0] = put_dhcpv6_opts(ia_addr="ae70::4");
 reg1[0] = put_dhcpv6_opts(ia_addr=ae70::4, domain_search=ae70::1);
     DHCPv6 option domain_search requires string value.
 
+# set_queue
+set_queue(0);
+    encodes as set_queue:0
+set_queue(61440);
+    encodes as set_queue:61440
+set_queue(65535);
+    Queue ID 65535 for set_queue is not in valid range 0 to 61440.
+
 # Contradictionary prerequisites (allowed but not useful):
 ip4.src = ip6.src[0..31];
     encodes as move:NXM_NX_IPV6_SRC[0..31]->NXM_OF_IP_SRC[]
@@ -1107,7 +1143,8 @@ ip_to_hex() {
 #
 # 8. The switch drops multicast and broadcast packets that violate an ACL.
 #
-# 9. ARP requests to known IPs are responded directly.
+# 9. OVN generates responses to ARP requests for known IPs, except for
+#    requests from a port for the port's own IP.
 #
 # 10. No response to ARP requests for unknown IPs.
 
@@ -1159,13 +1196,18 @@ for is in 1 2 3; do
                 sip=`ip_to_hex 192 168 0 $i$j`
                 tip=`ip_to_hex 192 168 0 $id$jd`
                 tip_unknown=`ip_to_hex 11 11 11 11`
-                test_arp $s f000000000$s $sip $tip f000000000$d            #9
+                if test $d != $s; then
+                    reply_ha=f000000000$d
+                else
+                    reply_ha=
+                fi
+                test_arp $s f000000000$s $sip $tip $reply_ha               #9
                 test_arp $s f000000000$s $sip $tip_unknown                 #10
 
                 if test $jd = 3; then
                     # lsp[123]3 has an additional ip 192.169.0.[123]3.
                     tip=`ip_to_hex 192 169 0 $id$jd`
-                    test_arp $s f000000000$s $sip $tip f000000000$d        #9
+                    test_arp $s f000000000$s $sip $tip $reply_ha           #9
                 fi
             done
         done
@@ -1245,6 +1287,9 @@ ovn-nbctl ls-add lsw0
 ovn-sbctl chassis-add hv0 geneve 127.0.0.1
 for i in 1 2 3; do
     ovn-nbctl lsp-add lsw0 lp$i
+done
+ovn-nbctl --wait=sb sync
+for i in 1 2 3; do
     ovn-sbctl lsp-bind lp$i hv0
     if test $i = 1; then
         ovn-nbctl lsp-set-addresses lp$i "f0:00:00:00:00:0$i 192.168.0.$i" unknown
@@ -1362,7 +1407,8 @@ output(\"lp$inport\");
 #
 # 8. The switch drops multicast and broadcast packets that violate an ACL.
 #
-# 9. ARP requests to known IPs are responded directly.
+# 9. OVN generates responses to ARP requests for known IPs, except for
+#    requests from a port for the port's own IP.
 #
 # 10. No response to ARP requests for unknown IPs.
 
@@ -1413,13 +1459,14 @@ for s in 1 2 3; do
         sip=192.168.0.$s
         tip=192.168.0.$d
         tip_unknown=11.11.11.11
-        test_arp $s f0:00:00:00:00:0$s $sip $tip f0:00:00:00:00:0$d        #9
+        if test $d != $s; then reply_ha=f0:00:00:00:00:0$d; else reply_ha=; fi
+        test_arp $s f0:00:00:00:00:0$s $sip $tip $reply_ha                 #9
         test_arp $s f0:00:00:00:00:0$s $sip $tip_unknown                   #10
 
         if test $d = 3; then
             # lp3 has an additional ip 192.169.0.[123]3.
             tip=192.169.0.$d
-            test_arp $s f0:00:00:00:00:0$s $sip $tip f0:00:00:00:00:0$d    #9
+            test_arp $s f0:00:00:00:00:0$s $sip $tip $reply_ha             #9
         fi
     done
 
@@ -1452,7 +1499,6 @@ AT_CLEANUP
 # 2 locally attached networks (one flat, one vlan tagged over same device)
 # 2 ports per HV on each network
 AT_SETUP([ovn -- 2 HVs, 4 lports/HV, localnet ports])
-AT_KEYWORDS([ovn-localnet])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -2359,7 +2405,6 @@ AT_CLEANUP
 
 # 3 hypervisors, one logical switch, 3 logical ports per hypervisor
 AT_SETUP([ovn -- portsecurity : 3 HVs, 1 LS, 3 lports/HV])
-AT_KEYWORDS([portsecurity])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -2610,13 +2655,13 @@ sip=`ip_to_hex 192 168 0 13`
 tip=`ip_to_hex 192 168 0 23`
 test_ip 13 f00000000113 f00000000023 $sip $tip
 
-# ipv6 packet should be received by lp[123]3 with mac f0000000{i}{i}3
-# and ip6.dst as fe80::ea2a:eaff:fe28:0{i}{i}3.
+# ipv6 packet should be received by lp[123]3 with mac f00000000${i}${i}3
+# and ip6.dst as fe80::ea2a:eaff:fe28:0${i}${i}3.
 # lp11 can send ipv6 traffic as there is no port security
 sip=ee800000000000000000000000000000
 for i in 1 2 3; do
-    tip=fe80000000000000ea2aeafffe2800{i}3
-    test_ipv6 11 f00000000011 f000000000{i}${i}3 $sip $tip {i}3
+    tip=fe80000000000000ea2aeafffe2800${i}3
+    test_ipv6 11 f00000000011 f00000000${i}${i}3 $sip $tip ${i}3
 done
 
 
@@ -2629,8 +2674,8 @@ sip=ee800000000000000000000000000000
 tip=fe80000000000000ea2aeafffe280023
 test_ipv6 11 f00000000011 f00000000333 $sip $tip
 
-# ipv6 packet should be allowed for lp[123]3 with mac f0000000{i}{i}3
-# and ip6.src fe80::ea2a:eaff:fe28:0{i}{i}3 and ip6.src ::.
+# ipv6 packet should be allowed for lp[123]3 with mac f0000000${i}${i}3
+# and ip6.src fe80::ea2a:eaff:fe28:0${i}${i}3 and ip6.src ::.
 # and should be dropped for any other ip6.src
 # lp21 can receive ipv6 traffic as there is no port security
 
@@ -2737,7 +2782,6 @@ OVN_CLEANUP([hv1],[hv2],[hv3])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 2 HVs, 2 LS, 1 lport/LS, 2 peer LRs])
-AT_KEYWORDS([ovnpeer])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -3105,7 +3149,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 2 HVs, 3 LS, 1 lport/LS, 2 peer LRs, static routes])
-AT_KEYWORDS([ovnstaticroutespeer])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -3259,7 +3302,6 @@ OVN_CLEANUP([hv1],[hv2])
 AT_CLEANUP
 
 AT_SETUP([ovn -- send gratuitous arp on localnet])
-AT_KEYWORDS([ovn])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 ovn-nbctl ls-add lsw0
@@ -3301,7 +3343,6 @@ OVN_CLEANUP([hv])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 2 HVs, 3 LRs connected via LS, static routes])
-AT_KEYWORDS([ovnstaticroutes])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -3479,7 +3520,6 @@ OVN_CLEANUP([hv1],[hv2])
 AT_CLEANUP
 
 AT_SETUP([ovn -- dhcpv4 : 1 HV, 2 LS, 2 LSPs/LS])
-AT_KEYWORDS([dhcpv4])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -3555,22 +3595,22 @@ test_dhcp() {
     local inport=$1 src_mac=$2 dhcp_type=$3 offer_ip=$4
     local request=ffffffffffff${src_mac}080045100110000000008011000000000000ffffffff
     # udp header and dhcp header
-    request+=0044004300fc0000
-    request+=010106006359aa760000000000000000000000000000000000000000${src_mac}
+    request=${request}0044004300fc0000
+    request=${request}010106006359aa760000000000000000000000000000000000000000${src_mac}
     # client hardware padding
-    request+=00000000000000000000
+    request=${request}00000000000000000000
     # server hostname
-    request+=0000000000000000000000000000000000000000000000000000000000000000
-    request+=0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
     # boot file name
-    request+=0000000000000000000000000000000000000000000000000000000000000000
-    request+=0000000000000000000000000000000000000000000000000000000000000000
-    request+=0000000000000000000000000000000000000000000000000000000000000000
-    request+=0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
+    request=${request}0000000000000000000000000000000000000000000000000000000000000000
     # dhcp magic cookie
-    request+=63825363
+    request=${request}63825363
     # dhcp message type
-    request+=3501${dhcp_type}ff
+    request=${request}3501${dhcp_type}ff
 
     if test $offer_ip != 0; then
         local srv_mac=$5 srv_ip=$6 expected_dhcp_opts=$7
@@ -3584,29 +3624,29 @@ test_dhcp() {
         local reply=${src_mac}${srv_mac}080045100${ip_len}000000008011XXXX${srv_ip}${offer_ip}
         # udp header and dhcp header.
         # $udp_len var will be in 3 digits. So adding a '0' before $udp_len
-        reply+=004300440${udp_len}0000020106006359aa760000000000000000
+        reply=${reply}004300440${udp_len}0000020106006359aa760000000000000000
         # your ip address
-        reply+=${offer_ip}
+        reply=${reply}${offer_ip}
         # next server ip address, relay agent ip address, client mac address
-        reply+=0000000000000000${src_mac}
+        reply=${reply}0000000000000000${src_mac}
         # client hardware padding
-        reply+=00000000000000000000
+        reply=${reply}00000000000000000000
         # server hostname
-        reply+=0000000000000000000000000000000000000000000000000000000000000000
-        reply+=0000000000000000000000000000000000000000000000000000000000000000
+        reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+        reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
         # boot file name
-        reply+=0000000000000000000000000000000000000000000000000000000000000000
-        reply+=0000000000000000000000000000000000000000000000000000000000000000
-        reply+=0000000000000000000000000000000000000000000000000000000000000000
-        reply+=0000000000000000000000000000000000000000000000000000000000000000
+        reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+        reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+        reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
+        reply=${reply}0000000000000000000000000000000000000000000000000000000000000000
         # dhcp magic cookie
-        reply+=63825363
+        reply=${reply}63825363
         # dhcp message type
         local dhcp_reply_type=02
         if test $dhcp_type = 03; then
             dhcp_reply_type=05
         fi
-        reply+=3501${dhcp_reply_type}${expected_dhcp_opts}00000000ff00000000
+        reply=${reply}3501${dhcp_reply_type}${expected_dhcp_opts}00000000ff00000000
         echo $reply >> $inport.expected
     else
         shift; shift; shift; shift;
@@ -3749,7 +3789,6 @@ OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovn -- dhcpv6 : 1 HV, 2 LS, 5 LSPs])
-AT_KEYWORDS([dhcpv6])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -3839,13 +3878,13 @@ test_dhcpv6() {
     local inport=$1 src_mac=$2 src_lla=$3 msg_code=$4 offer_ip=$5
     local request=ffffffffffff${src_mac}86dd00000000002a1101${src_lla}
     # dst ip ff02::1:2
-    request+=ff020000000000000000000000010002
+    request=${request}ff020000000000000000000000010002
     # udp header and dhcpv6 header
-    request+=02220223002affff${msg_code}010203
+    request=${request}02220223002affff${msg_code}010203
     # Client identifier
-    request+=0001000a00030001${src_mac}
+    request=${request}0001000a00030001${src_mac}
     # IA-NA (Identity Association for Non Temporary Address)
-    request+=0003000c0102030400000e1000001518
+    request=${request}0003000c0102030400000e1000001518
     shift; shift; shift; shift; shift;
     if test $offer_ip != 0; then
         local server_mac=000000100001
@@ -3860,15 +3899,15 @@ test_dhcpv6() {
         fi
         local reply=${src_mac}${server_mac}86dd0000000000${msg_len}1101${server_lla}${src_lla}
         # udp header and dhcpv6 header
-        reply+=0223022200${msg_len}ffff${reply_code}010203
+        reply=${reply}0223022200${msg_len}ffff${reply_code}010203
         # Client identifier
-        reply+=0001000a00030001${src_mac}
+        reply=${reply}0001000a00030001${src_mac}
         # IA-NA
         if test $offer_ip != 1; then
-            reply+=0003002801020304ffffffffffffffff00050018${offer_ip}ffffffffffffffff
+            reply=${reply}0003002801020304ffffffffffffffff00050018${offer_ip}ffffffffffffffff
         fi
         # Server identifier
-        reply+=0002000a00030001${server_mac}
+        reply=${reply}0002000a00030001${server_mac}
         echo $reply | trim_zeros >> $inport.expected
     else
         for outport; do
@@ -4011,7 +4050,6 @@ OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
 AT_SETUP([ovn -- 2 HVs, 2 LRs connected via LS, gateway router])
-AT_KEYWORDS([ovngatewayrouter])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -4337,7 +4375,6 @@ AT_CLEANUP
 # make sure that the port state is properly set to up and back down
 # when created and deleted.
 AT_SETUP([ovn -- port state up and down])
-AT_KEYWORDS([ovn])
 ovn_start
 
 ovn-nbctl ls-add ls1
@@ -4363,7 +4400,7 @@ AT_CLEANUP
 # make sure that the OF rules created to support a datapath are added/cleared
 # when logical switch is created and removed.
 AT_SETUP([ovn -- datapath rules added/removed])
-AT_KEYWORDS([ovn datapath cleanup])
+AT_KEYWORDS([cleanup])
 ovn_start
 
 net_add n1
@@ -4392,9 +4429,9 @@ test_datapath_in_of_rules() {
     # magic keyword that represents one, based on the exit status of
     # a quiet grep
     if test $expect_datapath != 0; then
-       AT_CHECK([grep --quiet -i 'metadata=' stdout], [0], [ignore-nolog])
+       AT_CHECK([grep -q -i 'metadata=' stdout], [0], [ignore-nolog])
     else
-       AT_CHECK([grep --quiet -i 'metadata=' stdout], [1], [ignore-nolog])
+       AT_CHECK([grep -q -i 'metadata=' stdout], [1], [ignore-nolog])
     fi
 }
 
@@ -4427,7 +4464,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- nd_na ])
-AT_KEYWORDS([ovn-nd_na])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -4500,7 +4536,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- address sets modification/removal smoke test])
-AT_KEYWORDS([ovn-addr])
 ovn_start
 
 net_add n1
@@ -4528,7 +4563,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- ipam])
-AT_KEYWORDS([ovnipam])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -4536,7 +4570,7 @@ ovn_start
 # subnet which should result in an address being allocated for the port.
 ovn-nbctl ls-add sw0
 ovn-nbctl lsp-add sw0 p0 -- lsp-set-addresses p0 dynamic
-ovn-nbctl add Logical-Switch sw0 other_config subnet=192.168.1.0/24
+ovn-nbctl --wait=sb add Logical-Switch sw0 other_config subnet=192.168.1.0/24
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p0 dynamic_addresses], [0],
     ["0a:00:00:00:00:01 192.168.1.2"
 ])
@@ -4673,6 +4707,13 @@ AT_CHECK([ovn-nbctl get Logical-Switch-Port p30 dynamic_addresses], [0],
      ["0a:00:00:00:00:20 192.168.1.17"
 ])
 
+# Test static MAC address with dynamically allocated IP
+ovn-nbctl --wait=sb lsp-add sw0 p31 -- lsp-set-addresses p31 \
+"fe:dc:ba:98:76:54 dynamic"
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p31 dynamic_addresses], [0],
+     ["fe:dc:ba:98:76:54 192.168.1.18"
+])
+
 as ovn-sb
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
@@ -4685,7 +4726,6 @@ OVS_APP_EXIT_AND_WAIT([ovn-northd])
 AT_CLEANUP
 
 AT_SETUP([ovn -- ipam connectivity])
-AT_KEYWORDS([ovnipamconnectivity])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -4706,25 +4746,19 @@ ovn-nbctl lsp-add alice rp-alice -- set Logical_Switch_Port rp-alice type=router
           options:router-port=alice addresses=\"00:00:00:01:02:04\"
 
 # Create logical port foo1 in foo
-ovn-nbctl lsp-add foo foo1 \
+ovn-nbctl --wait=sb lsp-add foo foo1 \
 -- lsp-set-addresses foo1 "dynamic"
-AT_CHECK([ovn-nbctl get Logical-Switch-Port foo1 dynamic_addresses], [0],
-     ["0a:00:00:00:00:01 192.168.1.2"
-])
+AT_CHECK([ovn-nbctl --timeout=10 wait-until Logical-Switch-Port foo1 dynamic_addresses='"0a:00:00:00:00:01 192.168.1.2"'], [0])
 
 # Create logical port alice1 in alice
-ovn-nbctl lsp-add alice alice1 \
+ovn-nbctl --wait=sb lsp-add alice alice1 \
 -- lsp-set-addresses alice1 "dynamic"
-AT_CHECK([ovn-nbctl get Logical-Switch-Port alice1 dynamic_addresses], [0],
-     ["0a:00:00:00:00:02 192.168.2.2"
-])
+AT_CHECK([ovn-nbctl --timeout=10 wait-until Logical-Switch-Port alice1 dynamic_addresses='"0a:00:00:00:00:02 192.168.2.2"'])
 
 # Create logical port foo2 in foo
-ovn-nbctl lsp-add foo foo2 \
+ovn-nbctl --wait=sb lsp-add foo foo2 \
 -- lsp-set-addresses foo2 "dynamic"
-AT_CHECK([ovn-nbctl get Logical-Switch-Port foo2 dynamic_addresses], [0],
-     ["0a:00:00:00:00:03 192.168.1.3"
-])
+AT_CHECK([ovn-nbctl --timeout=10 wait-until Logical-Switch-Port foo2 dynamic_addresses='"0a:00:00:00:00:03 192.168.1.3"'])
 
 # Create a hypervisor and create OVS ports corresponding to logical ports.
 net_add n1
@@ -4819,7 +4853,7 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- ovs-vswitchd restart])
-AT_KEYWORDS([vswitchd restart])
+AT_KEYWORDS([vswitchd])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -4914,7 +4948,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- send arp for nexthop])
-AT_KEYWORDS([ovn])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -5025,7 +5058,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- send gratuitous arp for nat ips in localnet])
-AT_KEYWORDS([ovn])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 # Create logical switch
@@ -5074,7 +5106,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- delete mac bindings])
-AT_KEYWORDS([ovn])
 ovn_start
 net_add n1
 sim_add hv1
@@ -5092,22 +5123,20 @@ dp_uuid=`ovn-sbctl find datapath | grep uuid | cut -f2 -d ":" | cut -f2 -d " "`
 ovn-sbctl create MAC_Binding ip=10.0.0.1 datapath=$dp_uuid logical_port=lp0 mac="mac1"
 ovn-sbctl create MAC_Binding ip=10.0.0.1 datapath=$dp_uuid logical_port=lp1 mac="mac2"
 ovn-sbctl find MAC_Binding
-#Delete port lp0
+# Delete port lp0 and check that its MAC_Binding is deleted.
 ovn-nbctl lsp-del lp0
 ovn-sbctl find MAC_Binding
-AT_CHECK([ovn-sbctl find MAC_Binding logical_port=lp0], [0], [])
-#Delete ls0. This will verify that the mac_bindings are cleaned up when a
-#datapath is deleted without explicitly removing the the logical ports
+OVS_WAIT_UNTIL([test `ovn-sbctl find MAC_Binding logical_port=lp0 | wc -l` = 0])
+# Delete logical switch ls0 and check that its MAC_Binding is deleted.
 ovn-nbctl ls-del ls0
 ovn-sbctl find MAC_Binding
-AT_CHECK([ovn-sbctl find MAC_Binding], [0], [])
+OVS_WAIT_UNTIL([test `ovn-sbctl find MAC_Binding | wc -l` = 0])
 
 OVN_CLEANUP([hv1])
 
 AT_CLEANUP
 
 AT_SETUP([ovn -- conntrack zone allocation])
-AT_KEYWORDS([ovnconntrack])
 AT_SKIP_IF([test $HAVE_PYTHON = no])
 ovn_start
 
@@ -5162,7 +5191,6 @@ OVN_CLEANUP([hv1])
 AT_CLEANUP
 
 AT_SETUP([ovn -- tag allocation])
-AT_KEYWORDS([ovntags])
 ovn_start
 
 AT_CHECK([ovn-nbctl ls-add ls0])
@@ -5278,7 +5306,6 @@ AT_CHECK([ovn-nbctl lsp-get-tag local1], [0], [50
 AT_CLEANUP
 
 AT_SETUP([ovn -- lsp deletion and broadcast-flow deletion on localnet])
-AT_KEYWORDS([ovn])
 ovn_start
 ovn-nbctl ls-add lsw0
 net_add n1
@@ -5343,6 +5370,90 @@ AT_CHECK([ovn-nbctl lsp-del localvif2])
 # because, localvif3 is still bound.
 OVS_WAIT_UNTIL([test `ovs-vsctl show | grep "Port patch-br-int-to-ln_port" | wc -l` -eq 1])
 
-
 OVN_CLEANUP([hv1],[hv2])
+
+AT_CLEANUP
+
+AT_SETUP([ovn -- DSCP marking check])
+AT_KEYWORDS([ovn])
+ovn_start
+
+ovn-nbctl ls-add lsw0
+ovn-nbctl --wait=sb lsp-add lsw0 lp1
+ovn-nbctl --wait=sb lsp-add lsw0 lp2
+ovn-nbctl lsp-set-addresses lp1 f0:00:00:00:00:01
+ovn-nbctl lsp-set-addresses lp2 f0:00:00:00:00:02
+ovn-nbctl lsp-set-port-security lp1 f0:00:00:00:00:01
+ovn-nbctl lsp-set-port-security lp2 f0:00:00:00:00:02
+ovn-nbctl --wait=sb sync
+net_add n1
+sim_add hv
+as hv
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl add-port br-int vif1 -- set Interface vif1 external-ids:iface-id=lp1 options:tx_pcap=vif1-tx.pcap options:rxq_pcap=vif1-rx.pcap ofport-request=1
+ovs-vsctl add-port br-int vif2 -- set Interface vif2 external-ids:iface-id=lp2 options:tx_pcap=vif2-tx.pcap options:rxq_pcap=vif2-rx.pcap ofport-request=2
+
+AT_CAPTURE_FILE([trace])
+ovn_trace () {
+    ovn-trace --all "$@" | tee trace | sed '1,/Minimal trace/d'
+}
+
+# Extracts nw_tos from the final flow from ofproto/trace output and prints
+# it on stdout.  Prints "none" if no nw_tos was included.
+get_final_nw_tos() {
+    if flow=$(grep '^Final flow:' stdout); then :; else
+       # The output didn't have a final flow.
+       return 99
+    fi
+
+    tos=$(echo "$flow" | sed -n 's/.*nw_tos=\([[0-9]]\{1,\}\).*/\1/p')
+    case $tos in
+        '') echo none ;;
+	*) echo $tos ;;
+    esac
+}
+
+# check_tos TOS
+#
+# Checks that a packet from 1.1.1.1 to 1.1.1.2 gets its DSCP set to TOS.
+check_tos() {
+    # First check with ovn-trace for logical flows.
+    echo "checking for tos $1"
+    (if test $1 != 0; then echo "ip.dscp = $1;"; fi;
+     echo 'output("lp2");') > expout
+    AT_CHECK_UNQUOTED([ovn_trace lsw0 'inport == "lp1" && eth.src == f0:00:00:00:00:01 && eth.dst == f0:00:00:00:00:02 && ip4.src == 1.1.1.1 && ip4.dst == 1.1.1.2'], [0], [expout])
+
+    # Then re-check with ofproto/trace for a physical packet.
+    AT_CHECK([ovs-appctl ofproto/trace br-int 'in_port=1,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02,dl_type=0x800,nw_src=1.1.1.1,nw_dst=1.1.1.2'], [0], [stdout-nolog])
+    AT_CHECK_UNQUOTED([get_final_nw_tos], [0], [`expr $1 \* 4`
+])
+}
+
+# check at L2
+AT_CHECK([ovn_trace lsw0 'inport == "lp1" && eth.src == f0:00:00:00:00:01 && eth.dst == f0:00:00:00:00:02'], [0], [output("lp2");
+])
+AT_CHECK([ovs-appctl ofproto/trace br-int 'in_port=1,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02'], [0], [stdout-nolog])
+AT_CHECK([get_final_nw_tos], [0], [none
+])
+
+# check at L3 without dscp marking
+check_tos 0
+
+# Mark DSCP with a valid value
+qos_id=$(ovn-nbctl --wait=hv -- --id=@lp1-qos create QoS priority=100 action=dscp=48 match="inport\=\=\"lp1\"" direction="from-lport" -- set Logical_Switch lsw0 qos_rules=@lp1-qos)
+check_tos 48
+
+# Update the DSCP marking
+ovn-nbctl --wait=hv set QoS $qos_id action=dscp=63
+check_tos 63
+
+ovn-nbctl --wait=hv set QoS $qos_id match="outport\=\=\"lp2\"" direction="to-lport"
+check_tos 63
+
+# Disable DSCP marking
+ovn-nbctl --wait=hv clear Logical_Switch lsw0 qos_rules
+check_tos 0
+
+OVN_CLEANUP([hv])
 AT_CLEANUP

@@ -61,7 +61,6 @@ enum dpif_sflow_tunnel_type {
     DPIF_SFLOW_TUNNEL_VXLAN,
     DPIF_SFLOW_TUNNEL_GRE,
     DPIF_SFLOW_TUNNEL_LISP,
-    DPIF_SFLOW_TUNNEL_IPSEC_GRE,
     DPIF_SFLOW_TUNNEL_GENEVE
 };
 
@@ -582,8 +581,6 @@ dpif_sflow_tunnel_type(struct ofport *ofport) {
     if (type) {
 	if (strcmp(type, "gre") == 0) {
 	    return DPIF_SFLOW_TUNNEL_GRE;
-	} else if (strcmp(type, "ipsec_gre") == 0) {
-	    return DPIF_SFLOW_TUNNEL_IPSEC_GRE;
 	} else if (strcmp(type, "vxlan") == 0) {
 	    return DPIF_SFLOW_TUNNEL_VXLAN;
 	} else if (strcmp(type, "lisp") == 0) {
@@ -604,10 +601,6 @@ dpif_sflow_tunnel_proto(enum dpif_sflow_tunnel_type tunnel_type)
 
     case DPIF_SFLOW_TUNNEL_GRE:
         ipproto = IPPROTO_GRE;
-        break;
-
-    case DPIF_SFLOW_TUNNEL_IPSEC_GRE:
-        ipproto = IPPROTO_ESP;
         break;
 
     case DPIF_SFLOW_TUNNEL_VXLAN:

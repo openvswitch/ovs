@@ -137,7 +137,7 @@ ovn_init_symtab(struct shash *symtab)
     expr_symtab_add_predicate(symtab, "ip6", "eth.type == 0x86dd");
     expr_symtab_add_predicate(symtab, "ip", "ip4 || ip6");
     expr_symtab_add_field(symtab, "ip.proto", MFF_IP_PROTO, "ip", true);
-    expr_symtab_add_field(symtab, "ip.dscp", MFF_IP_DSCP, "ip", false);
+    expr_symtab_add_field(symtab, "ip.dscp", MFF_IP_DSCP_SHIFTED, "ip", false);
     expr_symtab_add_field(symtab, "ip.ecn", MFF_IP_ECN, "ip", false);
     expr_symtab_add_field(symtab, "ip.ttl", MFF_IP_TTL, "ip", false);
 

@@ -19,10 +19,16 @@
 
 #include <stddef.h>
 #include <stdint.h>
+
+#ifdef DPDK_NETDEV
+#include <rte_config.h>
+#include <rte_mbuf.h>
+#endif
+
+#include "netdev-dpdk.h"
 #include "openvswitch/list.h"
 #include "packets.h"
 #include "util.h"
-#include "netdev-dpdk.h"
 
 #ifdef  __cplusplus
 extern "C" {

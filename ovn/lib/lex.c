@@ -589,7 +589,7 @@ next:
         token->type = LEX_T_END;
         return p;
 
-    case ' ': case '\t': case '\n': case '\r':
+    case ' ': case '\t': case '\n': case '\r': case '\v': case '\f':
         p++;
         goto next;
 

@@ -169,14 +169,38 @@
 
       <dt><code>lsp-set-addresses</code> <var>port</var> [<var>address</var>]...</dt>
       <dd>
-        Sets the addresses associated with <var>port</var> to
-        <var>address</var>.  Each <var>address</var> should be either an
-        Ethernet address or an Ethernet address followed by IP addresses
-        (separated by space and quoted to form a single command-line
-        argument).  The special form <code>unknown</code> is also valid.
-        Multiple Ethernet addresses or Ethernet+IPs combinations may be set.
-        If no <var>address</var> argument is given, <var>port</var> will have
-        no addresses associated with it.
+        <p>
+          Sets the addresses associated with <var>port</var> to
+          <var>address</var>.  Each <var>address</var> should be one of the
+          following:
+        </p>
+
+        <dl>
+          <dt>an Ethernet address, optionally followed by a space and one or more IP addresses</dt>
+          <dd>
+            OVN delivers packets for the Ethernet address to this port.
+          </dd>
+
+          <dt><code>unknown</code></dt>
+          <dd>
+            OVN delivers unicast Ethernet packets whose destination MAC address
+            is not in any logical port's addresses column to ports with address
+            <code>unknown</code>.
+          </dd>
+
+          <dt><code>dynamic</code></dt>
+          <dd>
+            Use this keyword to make <code>ovn-northd</code> generate a
+            globally unique MAC address and choose an unused IPv4 address with
+            the logical port's subnet and store them in the port's
+            <code>dynamic_addresses</code> column.
+          </dd>
+        </dl>
+
+        <p>
+          Multiple addresses may be set.  If no <var>address</var> argument is
+          given, <var>port</var> will have no addresses associated with it.
+        </p>
       </dd>
 
       <dt><code>lsp-get-addresses</code> <var>port</var></dt>
@@ -399,6 +423,111 @@
         Lists the routes on <var>router</var>.
       </dd>
     </dl>
+
+    <h1>Load Balancer Commands</h1>
+    <dl>
+      <dt>[<code>--may-exist</code> | <code>--add-duplicate</code>] <code>lb-add</code> <var>lb</var> <var>vip</var> <var>ips</var> [<var>protocol</var>]</dt>
+      <dd>
+        <p>
+         Creates a new load balancer named <var>lb</var> with the provided
+         <var>vip</var> and <var>ips</var> or adds the <var>vip</var> to
+         an existing <var>lb</var>.  <var>vip</var> should be a
+         virtual IPv4 address (or an IPv4 address and a port number with
+         <code>:</code> as a separator).  Examples for <var>vip</var> are
+         <code>192.168.1.4</code> and <code>192.168.1.5:8080</code>.
+         <var>ips</var> should be comma separated IPv4 endpoints (or comma
+         separated IPv4 addresses and port numbers with <code>:</code> as a
+         separator).  Examples for <var>ips</var> are <code>10.0.0.1,10.0.0.2
+         </code>or <code>20.0.0.10:8800,20.0.0.11:8800</code>.
+        </p>
+
+        <p>
+         The optional argument <var>protocol</var> must be either
+         <code>tcp</code> or <code>udp</code>.  This argument is useful when
+         a port number is provided as part of the <var>vip</var>.  If the
+         <var>protocol</var> is unspecified and a port number is provided as
+         part of the <var>vip</var>, OVN assumes the <var>protocol</var> to
+         be <code>tcp</code>.
+        </p>
+
+        <p>
+         It is an error if the <var>vip</var> already exists in the load
+         balancer named <var>lb</var>, unless <code>--may-exist</code> is
+         specified.  With <code>--add-duplicate</code>, the command really
+         creates a new load balancer with a duplicate name.
+        </p>
+
+        <p>
+         The following example adds a load balancer.
+        </p>
+
+        <p>
+         <code>lb-add lb0 30.0.0.10:80
+         192.168.10.10:80,192.168.10.20:80,192.168.10.30:80 udp</code>
+        </p>
+      </dd>
+
+      <dt>[<code>--if-exists</code>] <code>lb-del</code> <var>lb</var> [<var>vip</var>]</dt>
+      <dd>
+        Deletes <var>lb</var> or the <var>vip</var> from <var>lb</var>.
+        If <var>vip</var> is supplied, only the <var>vip</var> will be
+        deleted from the <var>lb</var>.  If only the <var>lb</var> is supplied,
+        the <var>lb</var> will be deleted.  It is an error if <var>vip</var>
+        does not already exist in <var>lb</var>, unless
+        <code>--if-exists</code> is specified.
+      </dd>
+
+      <dt><code>lb-list</code> [<var>lb</var>]</dt>
+      <dd>
+        Lists the LBs.  If <var>lb</var> is also specified, then only the
+        specified <var>lb</var> will be listed.
+      </dd>
+
+      <dt>[<code>--may-exist</code>] <code>ls-lb-add</code> <var>switch</var> <var>lb</var></dt>
+      <dd>
+        Adds the specified <var>lb</var> to <var>switch</var>.
+        It is an error if a load balancer named <var>lb</var> already exists
+        in the <var>switch</var>, unless <code>--may-exist</code> is specified.
+      </dd>
+
+      <dt>[<code>--if-exists</code>] <code>ls-lb-del</code> <var>switch</var> [<var>lb</var>]</dt>
+      <dd>
+        Removes <var>lb</var> from <var>switch</var>.  If only
+        <var>switch</var> is supplied, all the LBs from the logical switch are
+        removed.  If <var>lb</var> is also specified, then only the
+        <var>lb</var> will be removed from the logical switch.
+        It is an error if <var>lb</var> does not exist in the
+        <var>switch</var>, unless <code>--if-exists</code> is specified.
+      </dd>
+
+      <dt><code>ls-lb-list</code> <var>switch</var></dt>
+      <dd>
+        Lists the LBs for the given <var>switch</var>.
+      </dd>
+
+      <dt>[<code>--may-exist</code>] <code>lr-lb-add</code> <var>router</var> <var>lb</var></dt>
+      <dd>
+        Adds the specified <var>lb</var> to <var>router</var>.
+        It is an error if a load balancer named <var>lb</var> already exists
+        in the <var>router</var>, unless <code>--may-exist</code> is specified.
+      </dd>
+
+      <dt>[<code>--if-exists</code>] <code>lr-lb-del</code> <var>router</var> [<var>lb</var>]</dt>
+      <dd>
+        Removes <var>lb</var> from <var>router</var>.  If only
+        <var>router</var> is supplied, all the LBs from the logical router are
+        removed.  If <var>lb</var> is also specified, then only the
+        <var>lb</var> will be removed from the logical router.
+        It is an error if <var>lb</var> does not exist in the
+        <var>router</var>, unless <code>--if-exists</code> is specified.
+      </dd>
+
+      <dt><code>lr-lb-list</code> <var>router</var></dt>
+      <dd>
+        Lists the LBs for the given <var>router</var>.
+      </dd>
+    </dl>
+
 
     <h1>DHCP Options commands</h1>
 

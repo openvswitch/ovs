@@ -468,6 +468,9 @@ enum ofpraw {
     /* NXT 1.0+ (28): uint8_t[8][]. */
     OFPRAW_NXT_RESUME,
 
+    /* NXT 1.0+ (29): struct nx_zone_id. */
+    OFPRAW_NXT_CT_FLUSH_ZONE,
+
     /* NXST 1.0+ (3): void. */
     OFPRAW_NXST_IPFIX_BRIDGE_REQUEST,
 
@@ -707,6 +710,7 @@ enum ofptype {
     OFPTYPE_IPFIX_BRIDGE_STATS_REPLY, /* OFPRAW_NXST_IPFIX_BRIDGE_REPLY */
     OFPTYPE_IPFIX_FLOW_STATS_REQUEST, /* OFPRAW_NXST_IPFIX_FLOW_REQUEST */
     OFPTYPE_IPFIX_FLOW_STATS_REPLY,   /* OFPRAW_NXST_IPFIX_FLOW_REPLY */
+    OFPTYPE_CT_FLUSH_ZONE,            /* OFPRAW_NXT_CT_FLUSH_ZONE. */
 
     /* Flow monitor extension. */
     OFPTYPE_FLOW_MONITOR_CANCEL,        /* OFPRAW_NXT_FLOW_MONITOR_CANCEL. */

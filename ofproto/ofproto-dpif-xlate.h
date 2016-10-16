@@ -213,7 +213,6 @@ void xlate_in_init(struct xlate_in *, struct ofproto_dpif *, ovs_version_t,
                    uint16_t tcp_flags, const struct dp_packet *packet,
                    struct flow_wildcards *, struct ofpbuf *odp_actions);
 void xlate_out_uninit(struct xlate_out *);
-void xlate_actions_for_side_effects(struct xlate_in *);
 
 enum ofperr xlate_resume(struct ofproto_dpif *,
                          const struct ofputil_packet_in_private *,

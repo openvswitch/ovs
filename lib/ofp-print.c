@@ -3324,6 +3324,12 @@ ofp_print_nxst_ipfix_flow_reply(struct ds *string, const struct ofp_header *oh)
     }
 }
 
+static void
+ofp_print_nxt_ct_flush_zone(struct ds *string, const struct nx_zone_id *nzi)
+{
+    ds_put_format(string, " zone_id=%"PRIu16, ntohs(nzi->zone_id));
+}
+
 
 static void
 ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
@@ -3624,6 +3630,10 @@ ofp_to_string__(const struct ofp_header *oh, enum ofpraw raw,
         break;
     case OFPTYPE_IPFIX_FLOW_STATS_REPLY:
         ofp_print_nxst_ipfix_flow_reply(string, oh);
+        break;
+
+    case OFPTYPE_CT_FLUSH_ZONE:
+        ofp_print_nxt_ct_flush_zone(string, ofpmsg_body(oh));
         break;
     }
 }

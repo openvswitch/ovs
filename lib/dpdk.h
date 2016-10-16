@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,33 +14,26 @@
  * limitations under the License.
  */
 
-#ifndef NETDEV_DPDK_H
-#define NETDEV_DPDK_H
-
-#include <config.h>
-
-#include "openvswitch/compiler.h"
-
-struct dp_packet;
+#ifndef DPDK_H
+#define DPDK_H
 
 #ifdef DPDK_NETDEV
 
-void netdev_dpdk_register(void);
-void free_dpdk_buf(struct dp_packet *);
+#include <rte_config.h>
+#include <rte_lcore.h>
+
+#define NON_PMD_CORE_ID LCORE_ID_ANY
 
 #else
 
-static inline void
-netdev_dpdk_register(void)
-{
-    /* Nothing */
-}
-static inline void
-free_dpdk_buf(struct dp_packet *buf OVS_UNUSED)
-{
-    /* Nothing */
-}
+#define NON_PMD_CORE_ID UINT32_MAX
 
-#endif
+#endif /* DPDK_NETDEV */
 
-#endif /* netdev-dpdk.h */
+struct smap;
+
+void dpdk_init(const struct smap *ovs_other_config);
+void dpdk_set_lcore_id(unsigned cpu);
+const char *dpdk_get_vhost_sock_dir(void);
+
+#endif /* dpdk.h */

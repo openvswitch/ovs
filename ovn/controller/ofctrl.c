@@ -170,7 +170,8 @@ run_S_NEW(void)
 
 static void
 recv_S_NEW(const struct ofp_header *oh OVS_UNUSED,
-           enum ofptype type OVS_UNUSED)
+           enum ofptype type OVS_UNUSED,
+           struct shash *pending_ct_zones OVS_UNUSED)
 {
     OVS_NOT_REACHED();
 }
@@ -256,7 +257,8 @@ process_tlv_table_reply(const struct ofputil_tlv_table_reply *reply)
 }
 
 static void
-recv_S_TLV_TABLE_REQUESTED(const struct ofp_header *oh, enum ofptype type)
+recv_S_TLV_TABLE_REQUESTED(const struct ofp_header *oh, enum ofptype type,
+                           struct shash *pending_ct_zones OVS_UNUSED)
 {
     if (oh->xid != xid) {
         ofctrl_recv(oh, type);
@@ -311,7 +313,8 @@ run_S_TLV_TABLE_MOD_SENT(void)
 }
 
 static void
-recv_S_TLV_TABLE_MOD_SENT(const struct ofp_header *oh, enum ofptype type)
+recv_S_TLV_TABLE_MOD_SENT(const struct ofp_header *oh, enum ofptype type,
+                          struct shash *pending_ct_zones OVS_UNUSED)
 {
     if (oh->xid != xid && oh->xid != xid2) {
         ofctrl_recv(oh, type);
@@ -390,7 +393,8 @@ run_S_CLEAR_FLOWS(void)
 }
 
 static void
-recv_S_CLEAR_FLOWS(const struct ofp_header *oh, enum ofptype type)
+recv_S_CLEAR_FLOWS(const struct ofp_header *oh, enum ofptype type,
+                   struct shash *pending_ct_zones OVS_UNUSED)
 {
     ofctrl_recv(oh, type);
 }
@@ -412,7 +416,8 @@ run_S_UPDATE_FLOWS(void)
 }
 
 static void
-recv_S_UPDATE_FLOWS(const struct ofp_header *oh, enum ofptype type)
+recv_S_UPDATE_FLOWS(const struct ofp_header *oh, enum ofptype type,
+                    struct shash *pending_ct_zones)
 {
     if (type == OFPTYPE_BARRIER_REPLY && !ovs_list_is_empty(&flow_updates)) {
         struct ofctrl_flow_update *fup = ofctrl_flow_update_from_list_node(
@@ -424,6 +429,17 @@ recv_S_UPDATE_FLOWS(const struct ofp_header *oh, enum ofptype type)
             ovs_list_remove(&fup->list_node);
             free(fup);
         }
+
+        /* If the barrier xid is associated with an outstanding conntrack
+         * flush, the flush succeeded.  Move the pending ct zone entry
+         * to the next stage. */
+        struct shash_node *iter;
+        SHASH_FOR_EACH(iter, pending_ct_zones) {
+            struct ct_zone_pending_entry *ctzpe = iter->data;
+            if (ctzpe->state == CT_ZONE_OF_SENT && ctzpe->of_xid == oh->xid) {
+                ctzpe->state = CT_ZONE_DB_QUEUED;
+            }
+        }
     } else {
         ofctrl_recv(oh, type);
     }
@@ -434,7 +450,7 @@ recv_S_UPDATE_FLOWS(const struct ofp_header *oh, enum ofptype type)
  * field for class OVN_GENEVE_CLASS, type OVN_GENEVE_TYPE.  If successful,
  * returns the MFF_* field ID for the option, otherwise returns 0. */
 enum mf_field_id
-ofctrl_run(const struct ovsrec_bridge *br_int)
+ofctrl_run(const struct ovsrec_bridge *br_int, struct shash *pending_ct_zones)
 {
     char *target = xasprintf("unix:%s/%s.mgmt", ovs_rundir(), br_int->name);
     if (strcmp(target, rconn_get_target(swconn))) {
@@ -451,6 +467,15 @@ ofctrl_run(const struct ovsrec_bridge *br_int)
     if (seqno != rconn_get_connection_seqno(swconn)) {
         seqno = rconn_get_connection_seqno(swconn);
         state = S_NEW;
+
+        /* Reset the state of any outstanding ct flushes to resend them. */
+        struct shash_node *iter;
+        SHASH_FOR_EACH(iter, pending_ct_zones) {
+            struct ct_zone_pending_entry *ctzpe = iter->data;
+            if (ctzpe->state == CT_ZONE_OF_SENT) {
+                ctzpe->state = CT_ZONE_OF_QUEUED;
+            }
+        }
     }
 
     bool progress = true;
@@ -475,7 +500,7 @@ ofctrl_run(const struct ovsrec_bridge *br_int)
             error = ofptype_decode(&type, oh);
             if (!error) {
                 switch (state) {
-#define STATE(NAME) case NAME: recv_##NAME(oh, type); break;
+#define STATE(NAME) case NAME: recv_##NAME(oh, type, pending_ct_zones); break;
                     STATES
 #undef STATE
                 default:
@@ -767,6 +792,16 @@ add_group_mod(const struct ofputil_group_mod *gm, struct ovs_list *msgs)
     ovs_list_push_back(msgs, &msg->list_node);
 }
 
+static void
+add_ct_flush_zone(uint16_t zone_id, struct ovs_list *msgs)
+{
+    struct ofpbuf *msg = ofpraw_alloc(OFPRAW_NXT_CT_FLUSH_ZONE,
+                                      rconn_get_version(swconn), 0);
+    struct nx_zone_id *nzi = ofpbuf_put_zeros(msg, sizeof *nzi);
+    nzi->zone_id = htons(zone_id);
+
+    ovs_list_push_back(msgs, &msg->list_node);
+}
 
 /* Replaces the flow table on the switch, if possible, by the flows added
  * with ofctrl_add_flow().
@@ -777,9 +812,14 @@ add_group_mod(const struct ofputil_group_mod *gm, struct ovs_list *msgs)
  * 'groups->desired_groups' and frees them. (The hmap itself isn't
  * destroyed.)
  *
+ * Sends conntrack flush messages to each zone in 'pending_ct_zones' that
+ * is in the CT_ZONE_OF_QUEUED state and then moves the zone into the
+ * CT_ZONE_OF_SENT state.
+ *
  * This should be called after ofctrl_run() within the main loop. */
 void
-ofctrl_put(struct hmap *flow_table, int64_t nb_cfg)
+ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
+           int64_t nb_cfg)
 {
     /* The flow table can be updated if the connection to the switch is up and
      * in the correct state and not backlogged with existing flow_mods.  (Our
@@ -794,6 +834,17 @@ ofctrl_put(struct hmap *flow_table, int64_t nb_cfg)
 
     /* OpenFlow messages to send to the switch to bring it up-to-date. */
     struct ovs_list msgs = OVS_LIST_INITIALIZER(&msgs);
+
+    /* Iterate through ct zones that need to be flushed. */
+    struct shash_node *iter;
+    SHASH_FOR_EACH(iter, pending_ct_zones) {
+        struct ct_zone_pending_entry *ctzpe = iter->data;
+        if (ctzpe->state == CT_ZONE_OF_QUEUED) {
+            add_ct_flush_zone(ctzpe->zone, &msgs);
+            ctzpe->state = CT_ZONE_OF_SENT;
+            ctzpe->of_xid = 0;
+        }
+    }
 
     /* Iterate through all the desired groups. If there are new ones,
      * add them to the switch. */
@@ -955,6 +1006,15 @@ ofctrl_put(struct hmap *flow_table, int64_t nb_cfg)
         struct ofpbuf *msg;
         LIST_FOR_EACH_POP (msg, list_node, &msgs) {
             queue_msg(msg);
+        }
+
+        /* Store the barrier's xid with any newly sent ct flushes. */
+        struct shash_node *iter;
+        SHASH_FOR_EACH(iter, pending_ct_zones) {
+            struct ct_zone_pending_entry *ctzpe = iter->data;
+            if (ctzpe->state == CT_ZONE_OF_SENT && !ctzpe->of_xid) {
+                ctzpe->of_xid = xid;
+            }
         }
 
         /* Track the flow update. */

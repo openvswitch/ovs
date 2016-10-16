@@ -31,6 +31,21 @@ struct controller_ctx {
     struct ovsdb_idl_txn *ovs_idl_txn;
 };
 
+/* States to move through when a new conntrack zone has been allocated. */
+enum ct_zone_pending_state {
+    CT_ZONE_OF_QUEUED,    /* Waiting to send conntrack flush command. */
+    CT_ZONE_OF_SENT,      /* Sent and waiting for confirmation on flush. */
+    CT_ZONE_DB_QUEUED,    /* Waiting for DB transaction to open. */
+    CT_ZONE_DB_SENT,      /* Sent and waiting for confirmation from DB. */
+};
+
+struct ct_zone_pending_entry {
+    int zone;
+    bool add;             /* Is the entry being added? */
+    ovs_be32 of_xid;      /* Transaction id for barrier. */
+    enum ct_zone_pending_state state;
+};
+
 /* Contains hmap_node whose hash values are the tunnel_key of datapaths
  * with at least one local port binding. It also stores the port binding of
  * "localnet" port if such a port exists on the datapath, which indicates

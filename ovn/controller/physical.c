@@ -202,8 +202,8 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
      *       For a container nested inside a VM and accessible via a VLAN,
      *       'tag' is the VLAN ID; otherwise 'tag' is 0.
      *
-     *       For a localnet patch port, if a VLAN ID was configured, 'tag'
-     *       is set to that VLAN ID; otherwise 'tag' is 0.
+     *       For a localnet or l2gateway patch port, if a VLAN ID was
+     *       configured, 'tag' is set to that VLAN ID; otherwise 'tag' is 0.
      *
      *     - If the port is on a remote chassis, the OpenFlow port for a
      *       tunnel to the VIF's remote chassis.  'tun' identifies that

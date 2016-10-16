@@ -78,7 +78,6 @@ enum dpif_ipfix_tunnel_type {
     DPIF_IPFIX_TUNNEL_GRE = 0x02,
     DPIF_IPFIX_TUNNEL_LISP = 0x03,
     DPIF_IPFIX_TUNNEL_STT = 0x04,
-    DPIF_IPFIX_TUNNEL_IPSEC_GRE = 0x05,
     DPIF_IPFIX_TUNNEL_GENEVE = 0x07,
     NUM_DPIF_IPFIX_TUNNEL
 };
@@ -311,16 +310,12 @@ struct ipfix_data_record_flow_key_icmp {
 });
 BUILD_ASSERT_DECL(sizeof(struct ipfix_data_record_flow_key_icmp) == 2);
 
-/* For the tunnel type that is on the top of IPSec, the protocol identifier
- * of the upper tunnel type is used.
- */
 static uint8_t tunnel_protocol[NUM_DPIF_IPFIX_TUNNEL] = {
     0,              /* reserved */
     IPPROTO_UDP,    /* DPIF_IPFIX_TUNNEL_VXLAN */
     IPPROTO_GRE,    /* DPIF_IPFIX_TUNNEL_GRE */
     IPPROTO_UDP,    /* DPIF_IPFIX_TUNNEL_LISP*/
     IPPROTO_TCP,    /* DPIF_IPFIX_TUNNEL_STT*/
-    IPPROTO_GRE,    /* DPIF_IPFIX_TUNNEL_IPSEC_GRE */
     0          ,    /* reserved */
     IPPROTO_UDP,    /* DPIF_IPFIX_TUNNEL_GENEVE*/
 };
@@ -656,10 +651,6 @@ dpif_ipfix_add_tunnel_port(struct dpif_ipfix *di, struct ofport *ofport,
     if (strcmp(type, "gre") == 0) {
         /* 32-bit key gre */
         dip->tunnel_type = DPIF_IPFIX_TUNNEL_GRE;
-        dip->tunnel_key_length = 4;
-    } else if (strcmp(type, "ipsec_gre") == 0) {
-        /* 32-bit key ipsec_gre */
-        dip->tunnel_type = DPIF_IPFIX_TUNNEL_IPSEC_GRE;
         dip->tunnel_key_length = 4;
     } else if (strcmp(type, "vxlan") == 0) {
         dip->tunnel_type = DPIF_IPFIX_TUNNEL_VXLAN;
@@ -1728,12 +1719,6 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         data_tunnel->tunnel_destination_ipv4_address = tunnel_key->ip_dst;
         /* The tunnel_protocol_identifier is from tunnel_proto array, which
          * contains protocol_identifiers of each tunnel type.
-         * For the tunnel type on the top of IPSec, which uses the protocol
-         * identifier of the upper tunnel type is used, the tcp_src and tcp_dst
-         * are decided based on the protocol identifiers.
-         * E.g:
-         * The protocol identifier of DPIF_IPFIX_TUNNEL_IPSEC_GRE is IPPROTO_GRE,
-         * and both tp_src and tp_dst are zero.
          */
         data_tunnel->tunnel_protocol_identifier =
             tunnel_protocol[tunnel_port->tunnel_type];

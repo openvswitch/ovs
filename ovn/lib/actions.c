@@ -1614,6 +1614,46 @@ free_PUT_DHCPV6_OPTS(struct ovnact_put_dhcp_opts *pdo)
 {
     free_put_dhcp_opts(pdo);
 }
+
+static void
+parse_SET_QUEUE(struct action_context *ctx)
+{
+    int queue_id;
+
+    if (!lexer_force_match(ctx->lexer, LEX_T_LPAREN)
+        || !lexer_get_int(ctx->lexer, &queue_id)
+        || !lexer_force_match(ctx->lexer, LEX_T_RPAREN)) {
+        return;
+    }
+
+    if (queue_id < QDISC_MIN_QUEUE_ID || queue_id > QDISC_MAX_QUEUE_ID) {
+        lexer_error(ctx->lexer, "Queue ID %d for set_queue is "
+                    "not in valid range %d to %d.",
+                    queue_id, QDISC_MIN_QUEUE_ID, QDISC_MAX_QUEUE_ID);
+        return;
+    }
+
+    ovnact_put_SET_QUEUE(ctx->ovnacts)->queue_id = queue_id;
+}
+
+static void
+format_SET_QUEUE(const struct ovnact_set_queue *set_queue, struct ds *s)
+{
+    ds_put_format(s, "set_queue(%d);", set_queue->queue_id);
+}
+
+static void
+encode_SET_QUEUE(const struct ovnact_set_queue *set_queue,
+                 const struct ovnact_encode_params *ep OVS_UNUSED,
+                 struct ofpbuf *ofpacts)
+{
+    ofpact_put_SET_QUEUE(ofpacts)->queue_id = set_queue->queue_id;
+}
+
+static void
+free_SET_QUEUE(struct ovnact_set_queue *a OVS_UNUSED)
+{
+}
 
 /* Parses an assignment or exchange or put_dhcp_opts action. */
 static void
@@ -1685,6 +1725,8 @@ parse_action(struct action_context *ctx)
         parse_get_mac_bind(ctx, 128, ovnact_put_GET_ND(ctx->ovnacts));
     } else if (lexer_match_id(ctx->lexer, "put_nd")) {
         parse_put_mac_bind(ctx, 128, ovnact_put_PUT_ND(ctx->ovnacts));
+    } else if (lexer_match_id(ctx->lexer, "set_queue")) {
+        parse_SET_QUEUE(ctx);
     } else {
         lexer_syntax_error(ctx->lexer, "expecting action");
     }

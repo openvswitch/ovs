@@ -10,7 +10,7 @@ m4_define([DAEMON_PYN],
    AT_CAPTURE_FILE([expected])
    # Start the daemon and wait for the pidfile to get created
    # and that its contents are the correct pid.
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=`pwd`/pid& echo $! > expected], [0])
+   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=pid& echo $! > expected], [0])
    OVS_WAIT_UNTIL([test -s pid], [kill `cat expected`])
    AT_CHECK(
      [pid=`cat pid` && expected=`cat expected` && test "$pid" = "$expected"],
@@ -35,40 +35,35 @@ m4_define([DAEMON_MONITOR_PYN],
    AT_CAPTURE_FILE([parentpid])
    AT_CAPTURE_FILE([newpid])
    # Start the daemon and wait for the pidfile to get created.
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=`pwd`/pid --monitor& echo $! > parent], [0])
-   OVS_WAIT_UNTIL([test -s pid], [kill `cat parent`])
+   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=pid --monitor& echo $! > parent], [0])
+   on_exit 'kill `cat parent`'
+   OVS_WAIT_UNTIL([test -s pid])
    # Check that the pidfile names a running process,
    # and that the parent process of that process is our child process.
-   AT_CHECK([kill -0 `cat pid`], [0], [], [], [kill `cat parent`])
-   AT_CHECK([ps -o ppid= -p `cat pid` > parentpid],
-     [0], [], [], [kill `cat parent`])
+   AT_CHECK([kill -0 `cat pid`])
+   AT_CHECK([parent_pid `cat pid` > parentpid])
    AT_CHECK(
      [parentpid=`cat parentpid` &&
       parent=`cat parent` &&
-      test $parentpid = $parent],
-     [0], [], [], [kill `cat parent`])
+      test $parentpid = $parent])
    # Kill the daemon process, making it look like a segfault,
    # and wait for a new child process to get spawned.
-   AT_CHECK([cp pid oldpid], [0], [], [], [kill `cat parent`])
-   AT_CHECK([kill -SEGV `cat pid`], [0], [], [ignore], [kill `cat parent`])
-   OVS_WAIT_WHILE([kill -0 `cat oldpid`], [kill `cat parent`])
-   OVS_WAIT_UNTIL([test -s pid && test `cat pid` != `cat oldpid`],
-     [kill `cat parent`])
-   AT_CHECK([cp pid newpid], [0], [], [], [kill `cat parent`])
+   AT_CHECK([cp pid oldpid])
+   AT_CHECK([kill -SEGV `cat pid`], [0], [], [ignore])
+   OVS_WAIT_WHILE([kill -0 `cat oldpid`])
+   OVS_WAIT_UNTIL([test -s pid && test `cat pid` != `cat oldpid`])
+   AT_CHECK([cp pid newpid])
    # Check that the pidfile names a running process,
    # and that the parent process of that process is our child process.
-   AT_CHECK([ps -o ppid= -p `cat pid` > parentpid],
-     [0], [], [], [kill `cat parent`])
+   AT_CHECK([parent_pid `cat pid` > parentpid])
    AT_CHECK(
      [parentpid=`cat parentpid` &&
       parent=`cat parent` &&
-      test $parentpid = $parent],
-     [0], [], [], [kill `cat parent`])
+      test $parentpid = $parent])
    # Kill the daemon process with SIGTERM, and wait for the daemon
    # and the monitor processes to go away and the pidfile to get deleted.
-   AT_CHECK([kill `cat pid`], [0], [], [ignore], [kill `cat parent`])
-   OVS_WAIT_WHILE([kill -0 `cat parent` || kill -0 `cat newpid` || test -e pid],
-     [kill `cat parent`])
+   AT_CHECK([kill `cat pid`])
+   OVS_WAIT_WHILE([kill -0 `cat parent` || kill -0 `cat newpid` || test -e pid])
    AT_CLEANUP])
 
 DAEMON_MONITOR_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
@@ -84,40 +79,35 @@ m4_define([DAEMON_MONITOR_RESTART_PYN],
    AT_CAPTURE_FILE([parentpid])
    AT_CAPTURE_FILE([newpid])
    # Start the daemon and wait for the pidfile to get created.
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=`pwd`/pid --monitor& echo $! > parent], [0])
-   OVS_WAIT_UNTIL([test -s pid], [kill `cat parent`])
+   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=pid --monitor& echo $! > parent], [0])
+   on_exit 'kill `cat parent`'
+   OVS_WAIT_UNTIL([test -s pid])
    # Check that the pidfile names a running process,
    # and that the parent process of that process is our child process.
-   AT_CHECK([kill -0 `cat pid`], [0], [], [], [kill `cat parent`])
-   AT_CHECK([ps -o ppid= -p `cat pid` > parentpid],
-     [0], [], [], [kill `cat parent`])
+   AT_CHECK([kill -0 `cat pid`])
+   AT_CHECK([parent_pid `cat pid` > parentpid])
    AT_CHECK(
      [parentpid=`cat parentpid` &&
       parent=`cat parent` &&
-      test $parentpid = $parent],
-     [0], [], [], [kill `cat parent`])
+      test $parentpid = $parent])
    # HUP the daemon process causing it to throw an exception,
    # and wait for a new child process to get spawned.
-   AT_CHECK([cp pid oldpid], [0], [], [], [kill `cat parent`])
-   AT_CHECK([kill -HUP `cat pid`], [0], [], [ignore], [kill `cat parent`])
-   OVS_WAIT_WHILE([kill -0 `cat oldpid`], [kill `cat parent`])
-   OVS_WAIT_UNTIL([test -s pid && test `cat pid` != `cat oldpid`],
-     [kill `cat parent`])
-   AT_CHECK([cp pid newpid], [0], [], [], [kill `cat parent`])
+   AT_CHECK([cp pid oldpid])
+   AT_CHECK([kill -HUP `cat pid`])
+   OVS_WAIT_WHILE([kill -0 `cat oldpid`])
+   OVS_WAIT_UNTIL([test -s pid && test `cat pid` != `cat oldpid`])
+   AT_CHECK([cp pid newpid])
    # Check that the pidfile names a running process,
    # and that the parent process of that process is our child process.
-   AT_CHECK([ps -o ppid= -p `cat pid` > parentpid],
-     [0], [], [], [kill `cat parent`])
+   AT_CHECK([parent_pid `cat pid` > parentpid])
    AT_CHECK(
      [parentpid=`cat parentpid` &&
       parent=`cat parent` &&
-      test $parentpid = $parent],
-     [0], [], [], [kill `cat parent`])
+      test $parentpid = $parent])
    # Kill the daemon process with SIGTERM, and wait for the daemon
    # and the monitor processes to go away and the pidfile to get deleted.
-   AT_CHECK([kill `cat pid`], [0], [], [ignore], [kill `cat parent`])
-   OVS_WAIT_WHILE([kill -0 `cat parent` || kill -0 `cat newpid` || test -e pid],
-     [kill `cat parent`])
+   AT_CHECK([kill `cat pid`], [0], [], [ignore])
+   OVS_WAIT_WHILE([kill -0 `cat parent` || kill -0 `cat newpid` || test -e pid])
    AT_CLEANUP])
 
 DAEMON_MONITOR_RESTART_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
@@ -132,7 +122,7 @@ m4_define([DAEMON_DETACH_PYN],
    # Start the daemon and make sure that the pidfile exists immediately.
    # We don't wait for the pidfile to get created because the daemon is
    # supposed to do so before the parent exits.
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=`pwd`/pid --detach], [0])
+   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=pid --detach], [0])
    AT_CHECK([test -s pid])
    AT_CHECK([kill -0 `cat pid`])
    # Kill the daemon and make sure that the pidfile gets deleted.
@@ -145,8 +135,6 @@ m4_define([DAEMON_DETACH_PYN],
 DAEMON_DETACH_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
 DAEMON_DETACH_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
 
-m4_define([CHECK],
- [AT_CHECK([$1], [$2], [$3], [$4], [kill `cat daemon monitor`])])
 m4_define([DAEMON_DETACH_MONITOR_PYN],
   [AT_SETUP([daemon --detach --monitor - $1])
    AT_SKIP_IF([test $2 = no])
@@ -161,50 +149,48 @@ m4_define([DAEMON_DETACH_MONITOR_PYN],
    # Start the daemon and make sure that the pidfile exists immediately.
    # We don't wait for the pidfile to get created because the daemon is
    # supposed to do so before the parent exits.
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=`pwd`/daemon --detach --monitor], [0])
+   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=daemon --detach --monitor], [0])
+   on_exit 'kill `cat daemon olddaemon newdaemon monitor`'
    AT_CHECK([test -s daemon])
    # Check that the pidfile names a running process,
    # and that the parent process of that process is a running process,
    # and that the parent process of that process is init.
-   CHECK([kill -0 `cat daemon`])
-   CHECK([ps -o ppid= -p `cat daemon` > monitor])
-   CHECK([kill -0 `cat monitor`])
-   CHECK([ps -o ppid= -p `cat monitor` > init])
-   CHECK([test `cat init` != $$])
+   AT_CHECK([kill -0 `cat daemon`])
+   AT_CHECK([parent_pid `cat daemon` > monitor])
+   AT_CHECK([kill -0 `cat monitor`])
+   AT_CHECK([parent_pid `cat monitor` > init])
+   AT_CHECK([test `cat init` != $$])
    # Kill the daemon process, making it look like a segfault,
    # and wait for a new daemon process to get spawned.
-   CHECK([cp daemon olddaemon])
-   CHECK([kill -SEGV `cat daemon`], [0], [ignore], [ignore])
-   OVS_WAIT_WHILE([kill -0 `cat olddaemon`], [kill `cat olddaemon daemon`])
-   OVS_WAIT_UNTIL([test -s daemon && test `cat daemon` != `cat olddaemon`],
-     [kill `cat olddaemon daemon`])
-   CHECK([cp daemon newdaemon])
+   AT_CHECK([cp daemon olddaemon])
+   AT_CHECK([kill -SEGV `cat daemon`], [0], [ignore], [ignore])
+   OVS_WAIT_WHILE([kill -0 `cat olddaemon`])
+   OVS_WAIT_UNTIL([test -s daemon && test `cat daemon` != `cat olddaemon`])
+   AT_CHECK([cp daemon newdaemon])
    # Check that the pidfile names a running process,
    # and that the parent process of that process is our child process.
-   CHECK([kill -0 `cat daemon`])
-   CHECK([diff olddaemon newdaemon], [1], [ignore])
-   CHECK([ps -o ppid= -p `cat daemon` > newmonitor])
-   CHECK([diff monitor newmonitor])
-   CHECK([kill -0 `cat newmonitor`])
-   CHECK([ps -o ppid= -p `cat newmonitor` > init])
-   CHECK([test `cat init` != $$])
+   AT_CHECK([kill -0 `cat daemon`])
+   AT_CHECK([diff olddaemon newdaemon], [1], [ignore])
+   AT_CHECK([parent_pid `cat daemon` > newmonitor])
+   AT_CHECK([diff monitor newmonitor])
+   AT_CHECK([kill -0 `cat newmonitor`])
+   AT_CHECK([parent_pid `cat newmonitor` > init])
+   AT_CHECK([test `cat init` != $$])
    # Kill the daemon process with SIGTERM, and wait for the daemon
    # and the monitor processes to go away and the pidfile to get deleted.
-   CHECK([kill `cat daemon`], [0], [], [ignore])
+   AT_CHECK([kill `cat daemon`], [0], [], [ignore])
    OVS_WAIT_WHILE(
-     [kill -0 `cat monitor` || kill -0 `cat newdaemon` || test -e daemon],
-     [kill `cat monitor newdaemon`])
+     [kill -0 `cat monitor` || kill -0 `cat newdaemon` || test -e daemon])
    AT_CLEANUP])
 
 DAEMON_DETACH_MONITOR_PYN([Python2], [$HAVE_PYTHON], [$PYTHON])
 DAEMON_DETACH_MONITOR_PYN([Python3], [$HAVE_PYTHON3], [$PYTHON3])
-m4_undefine([CHECK])
 
 m4_define([DAEMON_DETACH_ERRORS_PYN],
   [AT_SETUP([daemon --detach startup errors - $1])
    AT_SKIP_IF([test $2 = no])
    AT_CAPTURE_FILE([pid])
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=`pwd`/pid --detach --bail], [1], [], [stderr])
+   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=pid --detach --bail], [1], [], [stderr])
    AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
      [0], [ignore], [])
    AT_CHECK([test ! -s pid])
@@ -217,7 +203,7 @@ m4_define([DAEMON_DETACH_MONITOR_ERRORS_PYN],
   [AT_SETUP([daemon --detach --monitor startup errors - $1])
    AT_SKIP_IF([test $2 = no])
    AT_CAPTURE_FILE([pid])
-   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=`pwd`/pid --detach --monitor --bail], [1], [], [stderr])
+   AT_CHECK([$3 $srcdir/test-daemon.py --pidfile=pid --detach --monitor --bail], [1], [], [stderr])
    AT_CHECK([grep 'test-daemon.py: exiting after daemonize_start() as requested' stderr],
      [0], [ignore], [])
    AT_CHECK([test ! -s pid])
@@ -234,7 +220,7 @@ m4_define([DAEMON_DETACH_CLOSES_FDS_PYN],
    AT_CAPTURE_FILE([pid])
    AT_CAPTURE_FILE([status])
    AT_CAPTURE_FILE([stderr])
-   AT_CHECK([(yes 2>stderr; echo $? > status) | $3 $srcdir/test-daemon.py --pidfile=`pwd`/pid --detach], [0], [], [])
+   AT_CHECK([(yes 2>stderr; echo $? > status) | $3 $srcdir/test-daemon.py --pidfile=pid --detach])
    AT_CHECK([kill `cat pid`])
    AT_CHECK([test -s status])
    if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then
@@ -261,7 +247,7 @@ m4_define([DAEMON_DETACH_MONITOR_CLOSES_FDS_PYN],
    AT_CAPTURE_FILE([status])
    AT_CAPTURE_FILE([stderr])
    OVSDB_INIT([db])
-   AT_CHECK([(yes 2>stderr; echo $? > status) | $3 $srcdir/test-daemon.py --pidfile=`pwd`/pid --detach], [0], [], [])
+   AT_CHECK([(yes 2>stderr; echo $? > status) | $3 $srcdir/test-daemon.py --pidfile=pid --detach], [0], [], [])
    AT_CHECK([kill `cat pid`])
    AT_CHECK([test -s status])
    if grep '[[bB]]roken pipe' stderr >/dev/null 2>&1; then

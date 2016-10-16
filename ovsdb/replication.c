@@ -38,7 +38,7 @@
 VLOG_DEFINE_THIS_MODULE(replication);
 
 static char *sync_from;
-static struct jsonrpc_session *session = NULL;
+static struct jsonrpc_session *session;
 static unsigned int session_seqno = UINT_MAX;
 
 static struct jsonrpc_msg *create_monitor_request(struct ovsdb *db);
@@ -101,9 +101,10 @@ static enum ovsdb_replication_state state;
  * in 'replication dbs', which is a subset of all dbs and remote dbs whose
  * schema matches.  */
 static struct shash local_dbs = SHASH_INITIALIZER(&local_dbs);
-static struct shash *replication_dbs = NULL;
+static struct shash *replication_dbs;
 
 static struct shash *replication_db_clone(struct shash *dbs);
+static void replication_dbs_destroy(void);
 /* Find 'struct ovsdb' by name within 'replication_dbs' */
 static struct ovsdb* find_db(const char *db_name);
 
@@ -118,8 +119,7 @@ replication_init(const char *sync_from_, const char *exclude_tables)
      * parseable. An error here is unexpected. */
     ovs_assert(!err);
 
-    shash_destroy(replication_dbs);
-    replication_dbs = NULL;
+    replication_dbs_destroy();
 
     shash_clear(&local_dbs);
     if (session) {
@@ -160,7 +160,7 @@ replication_run(void)
             request_ids_add(request->id, NULL);
             jsonrpc_session_send(session, request);
 
-            shash_destroy(replication_dbs);
+            replication_dbs_destroy();
             replication_dbs = replication_db_clone(&local_dbs);
 
             state = RPL_S_DB_REQUESTED;
@@ -464,8 +464,7 @@ replication_destroy(void)
     }
 
     request_ids_destroy();
-    shash_destroy(replication_dbs);
-    replication_dbs = NULL;
+    replication_dbs_destroy();
 
     shash_destroy(&local_dbs);
 }
@@ -751,6 +750,14 @@ replication_db_clone(struct shash *dbs)
     }
 
     return new;
+}
+
+static void
+replication_dbs_destroy(void)
+{
+    shash_destroy(replication_dbs);
+    free(replication_dbs);
+    replication_dbs = NULL;
 }
 
 /* Return true if replication just started or is ongoing.
