@@ -110,7 +110,7 @@ enum ovn_stage {
     PIPELINE_STAGE(SWITCH, IN,  ARP_ND_RSP,     9, "ls_in_arp_rsp")      \
     PIPELINE_STAGE(SWITCH, IN,  DHCP_OPTIONS,   10, "ls_in_dhcp_options") \
     PIPELINE_STAGE(SWITCH, IN,  DHCP_RESPONSE,  11, "ls_in_dhcp_response") \
-    PIPELINE_STAGE(SWITCH, IN,  CHAIN,          12, "ls_in_chain")		\
+    PIPELINE_STAGE(SWITCH, IN,  CHAIN,          12, "ls_in_chain")        \
     PIPELINE_STAGE(SWITCH, IN,  L2_LKUP,        13, "ls_in_l2_lkup")      \
                                                                       \
     /* Logical switch egress stages. */                               \
@@ -2507,17 +2507,17 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
 
 
 /*
-   * Build the rules to insert service chains
-   */
-  static void
-  install_port_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
-  {
+ * Build the rules to insert service chains
+ */
+static void
+install_port_chain(struct ovn_datapath *od, struct hmap *lflows, struct hmap *ports)
+{
     /* For each port-cahin add ingress flow rules, if bi-directional add
-     *  egress flow rules. The rules are given a higher priority than 
+     *  egress flow rules. The rules are given a higher priority than
      *  the default base rules.
-     * 
+     *
      * The first rule for both ingress and egress has higher priority than the second
-     *   to ensure that the service is always inserted first.
+     * to ensure that the service is always inserted first.
      *
      * The ingress rules are as follows:
      *     If the flow classifier matches send to the input port of the first port pair.
@@ -2534,7 +2534,7 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
      *     * Load balancing support
      *     * ACL Table integration
      *     * Support all flow-classifier parameters
-     *     * bidirectional parameter support
+     *     * Bidirectional parameter support
      *     * Support modes of VNF (BitW, L2, L3)
      *     * Remove port-security on VNF Ports (if set by Openstack)
      */
@@ -2544,16 +2544,15 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
      */
     bool bidirectional = true;
 
-    uint16_t ingress_inner_priority = 150;
-    uint16_t ingress_outer_priority = 100;
-    uint16_t egress_inner_priority = 150;
-    uint16_t egress_outer_priority = 125;
+    const uint16_t ingress_inner_priority = 150;
+    const uint16_t ingress_outer_priority = 100;
+    const uint16_t egress_inner_priority = 150;
+    const uint16_t egress_outer_priority = 125;
 
     const struct nbrec_logical_flow_classifier *fc;
-    
+
     char *fc_match = NULL;
     char *pc_action = NULL;
-
 
     struct ovn_port *dst_port = NULL;
     struct ovn_port *src_port = NULL;
@@ -2566,188 +2565,193 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
     struct nbrec_logical_port_pair *lpp;
 
     VLOG_INFO("beginning port-chain insertion\n");
- 
-    /* Ingress table 6: default to passing through to the next table
-     * (priority 0) 
-     */
-    ovn_lflow_add(lflows, od, S_SWITCH_IN_CHAIN, 0, "1", "next;"); 
-    if (od->nbs->port_chains) {
-      VLOG_INFO("Iterating through %u port-chains \n", (unsigned int)od->nbs->n_port_chains);
-      /*
-       * Iterate through all the port-chains defined for this datapath.
-       */
-      for (size_t i = 0; i < od->nbs->n_port_chains; i++) {
-	lpc = od->nbs->port_chains[i];
-	/*
-	 * Allocate space for port-pairs
-	 */
-	// TODO free malloc memory
-	VLOG_INFO("Iterating through %u port-pair-groups for %s\n", (unsigned int)lpc->n_port_pair_groups, lpc->name);
-	input_port_array = xmalloc(sizeof *src_port * lpc->n_port_pair_groups + 1);
-	output_port_array = xmalloc(sizeof *dst_port * (lpc->n_port_pair_groups + 1));
-	VLOG_INFO("Allocating port array\n");
-	/*
-	 * For each port-pair-group in a port chain pull out the port-pairs
-	 */
-	for (size_t j = 0; j < lpc->n_port_pair_groups; j++){
-	  lppg = lpc->port_pair_groups[j];
-	  VLOG_INFO("Iterating through %u port-pair-group %s\n", (unsigned int)j, lppg->name);
-	  /* 
-	   * Todo: Need to add load balancing logic when LB becomes available.
-	   *       Until LB is available just take the first PP in the PPG.
-	   */
-	  if (lppg->n_port_pairs > 1){
-	    VLOG_INFO("Error: Currently cannot have more than one port-pair %u\n", \
-		      (unsigned int)lppg->n_port_pairs);
-	  } else {
-	    for (size_t k = 0; k < lppg->n_port_pairs; k++){
-	      lpp = lppg->port_pairs[k];
-	      input_port_array[j] = ovn_port_find(ports,lpp->inport->name);
-	      VLOG_INFO("In port for port-pair-group %s : %s\n",lppg->name,lpp->inport->name);
-	      output_port_array[j] =  ovn_port_find(ports,lpp->outport->name);
-	      VLOG_INFO("Out port for port-pair-group %s : %s\n", lppg->name,lpp->outport->name);
-	    } 
-	  }
-	}
 
-	/*
-	 * Get the flow classifier and build the match
-	 */
-	if (lpc->flow_classifier){
-	  fc = lpc->flow_classifier;
-	  VLOG_INFO("Flow Classifier %s\n",fc->name); 
-	  /*
-	   * Get all flow_classifier parameters in OVN format and
-	   * build match statement
-	   */
-	  if (fc->logical_source_port){
-	    src_port =  ovn_port_find(ports,fc->logical_source_port->name);
-	    VLOG_INFO("Flow Classifier source port: %s\n",fc->logical_source_port->name);
-	  } else {
-	    /* Should never get here */
-	    VLOG_INFO("Flow Classifier %s logical source port not set/n",fc->name); 
-	  }
-	  if (fc->logical_destination_port){
-	    VLOG_INFO("Logical dest port %p\n",fc->logical_destination_port);	    
-	    dst_port =  ovn_port_find(ports,fc->logical_destination_port->name);
-	  }
-	  VLOG_INFO("Setting src port in location %u\n",lpc->n_port_pair_groups);
-	  input_port_array[lpc->n_port_pair_groups] = src_port;
-	  output_port_array[lpc->n_port_pair_groups] = src_port;
-	  /*
-	   * TODO - add all the flow-classification logic
-	   *
-	   if (!strcmp(fc->ethertype, "")){
-	   fc_ethertype = fc->ethertype;
-	   }
-	   if (!strcmp(fc->protocol, "")){
-	   fc_protocol = fc->protocol;
-	   } 
-	   fc_src_port_range_min =
-	   fc src_port_range_max = 
-	   fc_dst_port_range_min = 
-	   fc_dst_port_range_max =
-	   fc_src_ip_prefix = 
-	   fc_dst_ip_prefix =
-	  */
-   
-	  /*
-	   * Match src_logical_port mac and src_logical_port mac
-	   */
-	  struct eth_addr src_logical_port_ea;
-	  ovs_be32 src_logical_port_ip;
-          VLOG_INFO("Scaning src_port\n");
-	  ovs_scan(src_port->nbsp->addresses[0],  ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
-		   ETH_ADDR_SCAN_ARGS(src_logical_port_ea), IP_SCAN_ARGS(&src_logical_port_ip)); 
-	  VLOG_INFO("Scanned src_port\n");
-	  /*
-	   * Insert the lowest priorty rule dest is src-logical-port
-	   */ 
-	  fc_match =  xasprintf("ip4.dst == "IP_FMT,IP_ARGS(src_logical_port_ip));
-	  pc_action = xasprintf("outport = %s;"" output;",output_port_array[0]->json_key);
-	  VLOG_INFO("Port chain action %s\n",pc_action);
-	  ovn_lflow_add(lflows, od, S_SWITCH_IN_CHAIN, ingress_outer_priority,
-			fc_match, pc_action);
-	  free(fc_match);
-	  free(pc_action);
-	  /* 
-	   * Steer traffic through the port-chain
-	   */
-	  for (size_t j = 0; j < lpc->n_port_pair_groups; j++){ 
-	    /*
-	     * From flow classifier get the logical source port
-	     * app_port: Port of server that is having service inserted
-	     */
-	    fc_match = xasprintf("ip4.dst == "IP_FMT" && inport == %s",		\
-				 IP_ARGS(src_logical_port_ip),input_port_array[j]->json_key);
-	    pc_action = xasprintf("outport = %s;"" output;",output_port_array[j+1]->json_key);
-	    VLOG_INFO("Port chain action %s\n",pc_action);
-	    ovn_lflow_add(lflows, od, S_SWITCH_IN_CHAIN, ingress_inner_priority,
-			  fc_match, pc_action);
-	    free(fc_match);
-	    free(pc_action);
-	  }
-	  /*
-	   * Add egress flow rules only if bi-direction port-chains
-	   */
-	  if (bidirectional == true) {
-	    VLOG_INFO("Egress rule 1\n");
-	    /* 
-	     * Steer traffic through the port-chain in reverse direction
-	     */
-	    for (size_t j = 0; j < lpc->n_port_pair_groups; j++) { 
-	      fc_match = xasprintf("ip4.src == "IP_FMT" && inport == %s",	\
-				   IP_ARGS(src_logical_port_ip),output_port_array[lpc->n_port_pair_groups-j]->json_key);
-	      pc_action = xasprintf("outport = %s;"" output;",input_port_array[lpc->n_port_pair_groups-1-j]->json_key);
-  
-	      VLOG_INFO("Egress Rule 1: fc match %s\n",fc_match);
-	      VLOG_INFO("Egress Rule 1: pc action %s\n",pc_action);
-	      ovn_lflow_add(lflows, od, S_SWITCH_IN_CHAIN, egress_inner_priority,
-			    fc_match, pc_action);
-	      free(fc_match);
-	      free(pc_action);
-	    }
-	    /*
-	     * Add dest port to all rules - this works for same subnet
-	     * Need to figure out how to do it across L3
-	     */
-	    struct ovn_port *op;
-	    HMAP_FOR_EACH (op, key_node, ports) {
-	      if (!op->nbsp) {
-		continue;
-	      }
-	      VLOG_INFO("Looping over ports\n");
-	      /* Only add ports that are have services attached */
-	      if (od == op->od) {
-		/* TODO Fixing cases when multiple addresses */
-		struct eth_addr def_ea;
-		ovs_be32 def_ip;            
-		struct ds service_match, service_actions;
-		VLOG_INFO("Looping over port %s\n", op->nbsp->name);
-		/* Only add ports that have IP addresses */
-		if (ovs_scan(op->nbsp->addresses[0],  ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
-			     ETH_ADDR_SCAN_ARGS(def_ea), IP_SCAN_ARGS(&def_ip))) {
-		  VLOG_INFO("Addresses for port: %s\n",op->nbsp->addresses[0]);
-		  ds_init(&service_match);
-		  ds_put_format(&service_match, "inport == %s && ip4.dst == "IP_FMT, \
-				output_port_array[0]->json_key,IP_ARGS(def_ip));
-		  ds_init(&service_actions);
-		  ds_put_format(&service_actions, "outport = %s; output;", op->json_key);
-		  VLOG_INFO("Match String: %s\n",ds_cstr(&service_match));
-		  VLOG_INFO("Action String: %s\n",ds_cstr(&service_actions));
-		  ovn_lflow_add(lflows, od, S_SWITCH_IN_CHAIN, egress_outer_priority, \
-				ds_cstr(&service_match), ds_cstr(&service_actions));
-		  ds_destroy(&service_actions);
-		  ds_destroy(&service_match);
-		  VLOG_INFO("Completed output match");   
-		}
-	      }
-	    }
-	  }
-	}
-      }
+    /* Ingress table 6: default to passing through to the next table
+     * (priority 0)
+     */
+    ovn_lflow_add(lflows, od, S_SWITCH_IN_CHAIN, 0, "1", "next;");
+    if (od->nbs->port_chains) {
+        VLOG_INFO("Iterating through %"PRIuSIZE" port-chains \n", od->nbs->n_port_chains);
+        /*
+         * Iterate through all the port-chains defined for this datapath.
+         */
+        for (size_t i = 0; i < od->nbs->n_port_chains; i++) {
+            lpc = od->nbs->port_chains[i];
+            /*
+             * Allocate space for port-pairs
+             */
+            // TODO free malloc memory
+            VLOG_INFO("Iterating through %"PRIuSIZE" port-pair-groups for %s\n", lpc->n_port_pair_groups, lpc->name);
+            input_port_array = xmalloc(sizeof *src_port * lpc->n_port_pair_groups + 1);
+            output_port_array = xmalloc(sizeof *dst_port * (lpc->n_port_pair_groups + 1));
+            VLOG_INFO("Allocating port array\n");
+            /*
+             * For each port-pair-group in a port chain pull out the port-pairs
+             */
+            for (size_t j = 0; j < lpc->n_port_pair_groups; j++){
+                lppg = lpc->port_pair_groups[j];
+                VLOG_INFO("Iterating through %"PRIuSIZE" port-pair-group %s\n", j, lppg->name);
+                /*
+                 * Todo: Need to add load balancing logic when LB becomes available.
+                 *       Until LB is available just take the first PP in the PPG.
+                 */
+                if (lppg->n_port_pairs > 1){
+                    VLOG_INFO("Error: Currently lacking support for more than one port-pair %"PRIuSIZE"\n", \
+                              lppg->n_port_pairs);
+                } else {
+                    for (size_t k = 0; k < lppg->n_port_pairs; k++){
+                        lpp = lppg->port_pairs[k];
+                        input_port_array[j] = ovn_port_find(ports,lpp->inport->name);
+                        VLOG_INFO("In port for port-pair-group %s : %s\n",lppg->name,lpp->inport->name);
+                        output_port_array[j] = ovn_port_find(ports,lpp->outport->name);
+                        VLOG_INFO("Out port for port-pair-group %s : %s\n", lppg->name,lpp->outport->name);
+                    }
+                }
+            }
+
+            /*
+             * Get the flow classifier and build the match
+             */
+            if (lpc->flow_classifier){
+                fc = lpc->flow_classifier;
+                VLOG_INFO("Flow Classifier %s\n",fc->name);
+                /*
+                 * Get all flow_classifier parameters in OVN format and
+                 * build match statement
+                 */
+                if (fc->logical_source_port){
+                    src_port =  ovn_port_find(ports,fc->logical_source_port->name);
+                    VLOG_INFO("Flow Classifier source port: %s\n",fc->logical_source_port->name);
+                } else {
+                    /* Should never get here */
+                    VLOG_INFO("Flow Classifier %s logical source port not set/n",fc->name);
+                }
+                if (fc->logical_destination_port){
+                    VLOG_INFO("Logical dest port %p\n",fc->logical_destination_port);
+                    dst_port =  ovn_port_find(ports,fc->logical_destination_port->name);
+                } else {
+                    VLOG_INFO("Logical dest port is the same as the src port %s\n",
+                              fc->logical_source_port->name);
+                    dst_port = src_port;
+                }
+                VLOG_INFO("Setting src port in location %"PRIuSIZE"\n", lpc->n_port_pair_groups);
+                input_port_array[lpc->n_port_pair_groups] = src_port;
+                output_port_array[lpc->n_port_pair_groups] = dst_port;
+                /*
+                 * TODO - add all the flow-classification logic
+                 *
+                 if (!strcmp(fc->ethertype, "")){
+                 fc_ethertype = fc->ethertype;
+                 }
+                 if (!strcmp(fc->protocol, "")){
+                 fc_protocol = fc->protocol;
+                 }
+                 fc_src_port_range_min =
+                 fc src_port_range_max =
+                 fc_dst_port_range_min =
+                 fc_dst_port_range_max =
+                 fc_src_ip_prefix =
+                 fc_dst_ip_prefix =
+                */
+
+                /*
+                 * Match src_logical_port mac and src_logical_port mac
+                 */
+                struct eth_addr src_logical_port_ea;
+                ovs_be32 src_logical_port_ip;
+                VLOG_INFO("Scaning src_port\n");
+                ovs_scan(src_port->nbsp->addresses[0],  ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
+                         ETH_ADDR_SCAN_ARGS(src_logical_port_ea), IP_SCAN_ARGS(&src_logical_port_ip));
+                VLOG_INFO("Scanned src_port\n");
+                /*
+                 * Insert the lowest priorty rule dest is src-logical-port
+                 */
+                fc_match =  xasprintf("ip4.dst == "IP_FMT,IP_ARGS(src_logical_port_ip));
+                pc_action = xasprintf("outport = %s;"" output;",output_port_array[0]->json_key);
+                VLOG_INFO("Port chain action %s\n",pc_action);
+                ovn_lflow_add(lflows, od, S_SWITCH_IN_CHAIN, ingress_outer_priority,
+                              fc_match, pc_action);
+                free(fc_match);
+                free(pc_action);
+                /*
+                 * Steer traffic through the port-chain
+                 */
+                for (size_t j = 0; j < lpc->n_port_pair_groups; j++){
+                    /*
+                     * From flow classifier get the logical source port
+                     * app_port: Port of server that is having service inserted
+                     */
+                    fc_match = xasprintf("ip4.dst == "IP_FMT" && inport == %s",        \
+                                         IP_ARGS(src_logical_port_ip),input_port_array[j]->json_key);
+                    pc_action = xasprintf("outport = %s;"" output;",output_port_array[j+1]->json_key);
+                    VLOG_INFO("Port chain action %s\n",pc_action);
+                    ovn_lflow_add(lflows, od, S_SWITCH_IN_CHAIN, ingress_inner_priority,
+                                  fc_match, pc_action);
+                    free(fc_match);
+                    free(pc_action);
+                }
+                /*
+                 * Add egress flow rules only if bi-direction port-chains
+                 */
+                if (bidirectional == true) {
+                    VLOG_INFO("Egress rule 1\n");
+                    /*
+                     * Steer traffic through the port-chain in reverse direction
+                     */
+                    for (size_t j = 0; j < lpc->n_port_pair_groups; j++) {
+                        fc_match = xasprintf("ip4.src == "IP_FMT" && inport == %s",    \
+                                             IP_ARGS(src_logical_port_ip),output_port_array[lpc->n_port_pair_groups-j]->json_key);
+                        pc_action = xasprintf("outport = %s;"" output;",input_port_array[lpc->n_port_pair_groups-1-j]->json_key);
+
+                        VLOG_INFO("Egress Rule 1: fc match %s\n",fc_match);
+                        VLOG_INFO("Egress Rule 1: pc action %s\n",pc_action);
+                        ovn_lflow_add(lflows, od, S_SWITCH_IN_CHAIN, egress_inner_priority,
+                                      fc_match, pc_action);
+                        free(fc_match);
+                        free(pc_action);
+                    }
+                    /*
+                     * Add dest port to all rules - this works for same subnet
+                     * Need to figure out how to do it across L3
+                     */
+                    struct ovn_port *op;
+                    HMAP_FOR_EACH (op, key_node, ports) {
+                        if (!op->nbsp) {
+                            continue;
+                        }
+                        VLOG_INFO("Looping over ports\n");
+                        /* Only add ports that are have services attached */
+                        if (od == op->od) {
+                            /* TODO Fixing cases when multiple addresses */
+                            struct eth_addr def_ea;
+                            ovs_be32 def_ip;
+                            struct ds service_match, service_actions;
+                            VLOG_INFO("Looping over port %s\n", op->nbsp->name);
+                            /* Only add ports that have IP addresses */
+                            if (ovs_scan(op->nbsp->addresses[0],  ETH_ADDR_SCAN_FMT" "IP_SCAN_FMT,
+                                         ETH_ADDR_SCAN_ARGS(def_ea), IP_SCAN_ARGS(&def_ip))) {
+                                VLOG_INFO("Addresses for port: %s\n",op->nbsp->addresses[0]);
+                                ds_init(&service_match);
+                                ds_put_format(&service_match, "inport == %s && ip4.dst == "IP_FMT, \
+                                              output_port_array[0]->json_key,IP_ARGS(def_ip));
+                                ds_init(&service_actions);
+                                ds_put_format(&service_actions, "outport = %s; output;", op->json_key);
+                                VLOG_INFO("Match String: %s\n",ds_cstr(&service_match));
+                                VLOG_INFO("Action String: %s\n",ds_cstr(&service_actions));
+                                ovn_lflow_add(lflows, od, S_SWITCH_IN_CHAIN, egress_outer_priority, \
+                                              ds_cstr(&service_match), ds_cstr(&service_actions));
+                                ds_destroy(&service_actions);
+                                ds_destroy(&service_match);
+                                VLOG_INFO("Completed output match");
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
-  }
+}
+
 static void
 build_lb(struct ovn_datapath *od, struct hmap *lflows)
 {
@@ -3128,7 +3132,20 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
     }
     VLOG_INFO("Service Chaining complete\n");
 
-    /* Ingress table 12: Destination lookup, broadcast and multicast handling
+    /* Ingress table 12: Add override rules for service insertion
+     *  If a service is defined send traffic destined for an application
+     *  to the service first (both for ingress and egress)
+     */
+    VLOG_INFO("Just before service chaining\n"); // FIXME (ff): debug; remove this
+    HMAP_FOR_EACH(od, key_node, datapaths) {
+        if (!od->nbs) {
+            continue;
+        }
+        install_port_chain(od, lflows, ports);
+    }
+    VLOG_INFO("Service Chaining complete\n"); // FIXME (ff): debug; remove this
+
+    /* Ingress table 13: Destination lookup, broadcast and multicast handling
      * (priority 100). */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbsp) {
