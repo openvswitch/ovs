@@ -3305,18 +3305,6 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         ovn_lflow_add(lflows, od, S_SWITCH_IN_DHCP_OPTIONS, 0, "1", "next;");
         ovn_lflow_add(lflows, od, S_SWITCH_IN_DHCP_RESPONSE, 0, "1", "next;");
     }
- /* Ingress table 12: Add override rules for service insertion
-     *  If a service is defined send traffic destined for an application
-     *  to the service first (both for ingress and egress)
-     */
-    VLOG_INFO("just before service chaining\n");
-    HMAP_FOR_EACH(od, key_node, datapaths) {
-      if (!od->nbs) {
-	continue;
-      }
-      install_port_chain(od, lflows, ports);   
-    }
-    VLOG_INFO("Service Chaining complete\n");
 
     /* Ingress table 12: Add override rules for service insertion
      *  If a service is defined send traffic destined for an application
