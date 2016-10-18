@@ -95,7 +95,7 @@ docs = \
 	README-native-tunneling.md \
 	REPORTING-BUGS.rst \
 	SECURITY.md \
-	WHY-OVS.md
+	WHY-OVS.rst
 EXTRA_DIST = \
 	$(docs) \
 	NOTICE \

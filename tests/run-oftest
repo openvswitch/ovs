@@ -21,7 +21,7 @@ case $srcdir in
     /*) ;;
     *) srcdir=`pwd`/$srcdir ;;
 esac
-if test ! -e "$srcdir"/WHY-OVS.md; then
+if test ! -e "$srcdir"/WHY-OVS.rst; then
     echo >&2 'source directory not found, please set $srcdir or run via \"make check-oftest'
     exit 1
 fi

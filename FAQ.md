@@ -83,7 +83,7 @@ A: The [PORTING.rst] document describes how one would go about
 A: Open vSwitch is specially designed to make it easier to manage VM
    network configuration and monitor state spread across many physical
    hosts in dynamic virtualized environments.  Please see
-   [WHY-OVS.md] for a more detailed description of how Open vSwitch
+   [WHY-OVS.rst] for a more detailed description of how Open vSwitch
    relates to the Linux Bridge.
 
 ### Q: How is Open vSwitch related to distributed virtual switches like the VMware vNetwork distributed switch or the Cisco Nexus 1000V?
@@ -2150,7 +2150,7 @@ bugs@openvswitch.org
 http://openvswitch.org/
 
 [PORTING.rst]:PORTING.rst
-[WHY-OVS.md]:WHY-OVS.md
+[WHY-OVS.rst]:WHY-OVS.rst
 [INSTALL.rst]:INSTALL.rst
 [OPENFLOW-1.1+.md]:OPENFLOW-1.1+.md
 [INSTALL.DPDK.rst]:INSTALL.DPDK.rst
