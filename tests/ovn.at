@@ -3618,8 +3618,8 @@ test_dhcp() {
         # (which is 272 in our case) + 8 (padding bytes) + (expected_dhcp_opts / 2)
         ip_len=`expr 280 + ${#expected_dhcp_opts} / 2`
         udp_len=`expr $ip_len - 20`
-        printf -v ip_len "%x" $ip_len
-        printf -v udp_len "%x" $udp_len
+        ip_len=$(printf "%x" $ip_len)
+        udp_len=$(printf "%x" $udp_len)
         # $ip_len var will be in 3 digits i.e 134. So adding a '0' before $ip_len
         local reply=${src_mac}${srv_mac}080045100${ip_len}000000008011XXXX${srv_ip}${offer_ip}
         # udp header and dhcp header.
