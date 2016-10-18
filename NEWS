@@ -33,6 +33,8 @@ Post-v2.6.0
    - DPDK:
      * New option 'n_rxq_desc' and 'n_txq_desc' fields for DPDK interfaces
        which set the number of rx and tx descriptors to use for the given port.
+   - Fedora packaging:
+     * A package upgrade does not automatically restart OVS service.
 
 v2.6.0 - 27 Sep 2016
 ---------------------
