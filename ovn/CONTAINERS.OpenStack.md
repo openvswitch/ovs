@@ -22,7 +22,7 @@ interface (VIF) of VM-A.
 
 * When VM-A is created on a hypervisor, its VIF gets added to the
 Open vSwitch integration bridge.  This creates a row in the Interface table
-of the Open_vSwitch database.  As explained in the [IntegrationGuide.md],
+of the Open_vSwitch database.  As explained in the [IntegrationGuide.rst],
 the vif-id associated with the VM network interface gets added in the
 external_ids:iface-id column of the newly created row in the Interface table.
 
@@ -119,4 +119,4 @@ a MAC address and IP address for that interface.  ovn-docker will then create
 a veth pair, insert one end inside the container as 'eth0' and the other end
 as a port of a local OVS bridge as an access port of the chosen VLAN.
 
-[IntegrationGuide.md]:IntegrationGuide.md
+[IntegrationGuide.rst]:IntegrationGuide.rst

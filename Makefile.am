@@ -86,7 +86,7 @@ docs = \
 	INSTALL.XenServer.rst \
 	INSTALL.userspace.rst \
 	INSTALL.Windows.rst \
-	IntegrationGuide.md \
+	IntegrationGuide.rst \
 	MAINTAINERS.md \
 	OPENFLOW-1.1+.md \
 	PORTING.md \

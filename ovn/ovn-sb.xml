@@ -1593,7 +1593,7 @@ tcp.flags = RST;
       which <code>ovn-controller</code>/<code>ovn-controller-vtep</code> in
       turn finds out by monitoring the local hypervisor's Open_vSwitch
       database, which identifies logical ports via the conventions described
-      in <code>IntegrationGuide.md</code>.  (The exceptions are for
+      in <code>IntegrationGuide.rst</code>.  (The exceptions are for
       <code>Port_Binding</code> records with <code>type</code> of
       <code>l3gateway</code>, whose locations are identified by
       <code>ovn-northd</code> via the <code>options:l3gateway-chassis</code>

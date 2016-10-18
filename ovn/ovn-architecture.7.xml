@@ -42,7 +42,7 @@
     <li>
       One or more (usually many) <dfn>hypervisors</dfn>.  Hypervisors must run
       Open vSwitch and implement the interface described in
-      <code>IntegrationGuide.md</code> in the OVS source tree.  Any hypervisor
+      <code>IntegrationGuide.rst</code> in the OVS source tree.  Any hypervisor
       platform supported by Open vSwitch is acceptable.
     </li>
 
@@ -295,7 +295,7 @@
     <li>
       On a hypervisor, any VIFs that are to be attached to logical networks.
       The hypervisor itself, or the integration between Open vSwitch and the
-      hypervisor (described in <code>IntegrationGuide.md</code>) takes care of
+      hypervisor (described in <code>IntegrationGuide.rst</code>) takes care of
       this.  (This is not part of OVN or new to OVN; this is pre-existing
       integration work that has already been done on hypervisors that support
       OVS.)
@@ -445,7 +445,7 @@
     <li>
       Eventually, a user powers on the VM that owns the VIF.  On the hypervisor
       where the VM is powered on, the integration between the hypervisor and
-      Open vSwitch (described in <code>IntegrationGuide.md</code>) adds the VIF
+      Open vSwitch (described in <code>IntegrationGuide.rst</code>) adds the VIF
       to the OVN integration bridge and stores <var>vif-id</var> in
       <code>external_ids</code>:<code>iface-id</code> to indicate that the
       interface is an instantiation of the new VIF.  (None of this code is new
