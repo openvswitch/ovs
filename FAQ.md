@@ -75,7 +75,7 @@ A: No, Open vSwitch has been ported to a number of different operating
 
 ### Q: What's involved with porting Open vSwitch to a new platform or switching ASIC?
 
-A: The [PORTING.md] document describes how one would go about
+A: The [PORTING.rst] document describes how one would go about
    porting Open vSwitch to a new operating system or hardware platform.
 
 ### Q: Why would I use Open vSwitch instead of the Linux bridge?
@@ -2149,7 +2149,7 @@ Contact
 bugs@openvswitch.org
 http://openvswitch.org/
 
-[PORTING.md]:PORTING.md
+[PORTING.rst]:PORTING.rst
 [WHY-OVS.md]:WHY-OVS.md
 [INSTALL.rst]:INSTALL.rst
 [OPENFLOW-1.1+.md]:OPENFLOW-1.1+.md

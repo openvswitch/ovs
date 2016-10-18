@@ -31,8 +31,8 @@ As all executables installed with pkgsrc are placed in `/usr/pkg/bin/`
 directory, it might be a good idea to add it to your PATH.
 
 Open vSwitch on NetBSD is currently "userspace switch" implementation
-in the sense described in [INSTALL.userspace.rst] and [PORTING.md].
+in the sense described in [INSTALL.userspace.rst] and [PORTING.rst].
 
 [INSTALL.rst]:INSTALL.rst
 [INSTALL.userspace.rst]:INSTALL.userspace.rst
-[PORTING.md]:PORTING.md
+[PORTING.rst]:PORTING.rst

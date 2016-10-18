@@ -89,7 +89,7 @@ docs = \
 	IntegrationGuide.rst \
 	MAINTAINERS.rst \
 	OPENFLOW-1.1+.md \
-	PORTING.md \
+	PORTING.rst \
 	README.md \
 	README-lisp.md \
 	README-native-tunneling.md \
