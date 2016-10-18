@@ -94,7 +94,7 @@ docs = \
 	README-lisp.md \
 	README-native-tunneling.md \
 	REPORTING-BUGS.rst \
-	SECURITY.md \
+	SECURITY.rst \
 	WHY-OVS.rst
 EXTRA_DIST = \
 	$(docs) \
