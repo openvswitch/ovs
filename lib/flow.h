@@ -592,11 +592,12 @@ mf_get_next_in_map(struct mf_for_each_in_map_aux *aux,
     if (OVS_LIKELY(*fmap & rm1bit)) {
         map_t trash = *fmap & (rm1bit - 1);
 
-        *fmap -= trash;
-        /* count_1bits() is fast for systems where speed matters (e.g.,
-         * DPDK), so we don't try avoid using it.
-         * Advance 'aux->values' to point to the value for 'rm1bit'. */
-        aux->values += count_1bits(trash);
+        /* Avoid resetting 'fmap' and calling count_1bits() when trash is
+         * zero. */
+        if (trash) {
+            *fmap -= trash;
+            aux->values += count_1bits(trash);
+        }
 
         *value = *aux->values;
     } else {
