@@ -158,7 +158,7 @@ ovs-vsctl add-br br0  # Add bridge br0 inside hv0.
           replaced by <code>dummy</code> devices.  Other types of devices,
           however, retain their usual functions, which means that, e.g.,
           <code>vxlan</code> tunnels still act as tunnels (see
-          <code>README-native-tunneling.md</code>).
+          <code>README-native-tunneling.rst</code>).
         </p>
       </dd>
 

@@ -92,7 +92,7 @@ docs = \
 	PORTING.rst \
 	README.rst \
 	README-lisp.rst \
-	README-native-tunneling.md \
+	README-native-tunneling.rst \
 	REPORTING-BUGS.rst \
 	SECURITY.rst \
 	WHY-OVS.rst
