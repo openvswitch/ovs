@@ -301,7 +301,7 @@ Please consider the following:
     should document it in the appropriate manpage and mention it in
     NEWS as well.
 
-  * Coding style (see the [CodingStyle.md] file at the top of the
+  * Coding style (see the [CodingStyle] file at the top of the
     source tree).
 
   * The patch submission guidelines (see [CONTRIBUTING.md]).  I
@@ -313,5 +313,5 @@ Bug Reporting
 
 Please report problems to bugs@openvswitch.org.
 
-[CONTRIBUTING.md]:CONTRIBUTING.md
-[CodingStyle.md]:CodingStyle.md
+[CONTRIBUTING.md]: CONTRIBUTING.md
+[CodingStyle.rst]: CodingStyle.rst

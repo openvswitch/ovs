@@ -366,7 +366,7 @@ If you cannot convince your email client not to mangle patches, then
 sending the patch as an attachment is a second choice.
 
 Please follow the style used in the code that you are modifying.  The
-[CodingStyle.md] file describes the coding style used in most of Open
+[CodingStyle] file describes the coding style used in most of Open
 vSwitch. Use Linux kernel coding style for Linux kernel code.
 
 If your code is non-datapath code, you may use the
@@ -411,4 +411,4 @@ index fdd952e..f6cb88e 100644
 ```
 
 [INSTALL.rst]:INSTALL.rst
-[CodingStyle.md]:CodingStyle.md
+[CodingStyle]: CodingStyle.rst

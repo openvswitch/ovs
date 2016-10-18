@@ -67,7 +67,7 @@ PYCOV_CLEAN_FILES = build-aux/check-structs,cover
 # automatically be included in the "make dist-docs" output.
 docs = \
 	CONTRIBUTING.md \
-	CodingStyle.md \
+	CodingStyle.rst \
 	DESIGN.md \
 	DocumentationStyle.rst \
 	FAQ.md \
@@ -271,7 +271,7 @@ printf-check:
 	then \
 	    echo "See above for list of violations of the rule that"; \
 	    echo "'z', 't', 'j', 'hh' printf() type modifiers are"; \
-	    echo "forbidden.  See CodingStyle.md for replacements."; \
+	    echo "forbidden.  See CodingStyle.rst for replacements."; \
 	    exit 1; \
 	fi
 .PHONY: printf-check
