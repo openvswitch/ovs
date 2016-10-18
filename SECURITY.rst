@@ -178,7 +178,7 @@ sections for the document include:
 
     * Patch: If a patch or patches are available, and it is practical
       to include them in the email, put them at the end.  Format them
-      as described in CONTRIBUTING.md, that is, as output by "git
+      as described in CONTRIBUTING.rst, that is, as output by "git
       format-patch".
 
       The patch subjects should include the version for which they are

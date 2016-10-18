@@ -304,7 +304,7 @@ Please consider the following:
   * Coding style (see the [CodingStyle] file at the top of the
     source tree).
 
-  * The patch submission guidelines (see [CONTRIBUTING.md]).  I
+  * The patch submission guidelines (see [CONTRIBUTING.rst]).  I
     recommend using "git send-email", which automatically follows a
     lot of those guidelines.
 
