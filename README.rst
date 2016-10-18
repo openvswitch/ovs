@@ -98,7 +98,7 @@ To use Open vSwitch...
 
 - ...with SELinux, see `here <INSTALL.SELinux.md>`__.
 
-For answers to common questions, refer to the `FAQ <FAQ.md>`__.
+For answers to common questions, refer to the `FAQ <FAQ.rst>`__.
 
 To learn how to set up SSL support for Open vSwitch, see `here
 <INSTALL.SSL.md>`__.

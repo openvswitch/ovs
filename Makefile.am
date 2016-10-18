@@ -70,7 +70,7 @@ docs = \
 	CodingStyle.rst \
 	DESIGN.md \
 	DocumentationStyle.rst \
-	FAQ.md \
+	FAQ.rst \
 	INSTALL.rst \
 	INSTALL.Debian.rst \
 	INSTALL.Docker.rst \
