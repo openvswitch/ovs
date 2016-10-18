@@ -91,7 +91,7 @@ docs = \
 	OPENFLOW-1.1+.md \
 	PORTING.rst \
 	README.rst \
-	README-lisp.md \
+	README-lisp.rst \
 	README-native-tunneling.md \
 	REPORTING-BUGS.rst \
 	SECURITY.rst \
