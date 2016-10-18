@@ -474,7 +474,7 @@ fi
 %{_mandir}/man8/ovs-vswitchd.8*
 %{_mandir}/man8/ovs-parse-backtrace.8*
 %{_mandir}/man8/ovs-testcontroller.8*
-%doc COPYING DESIGN.md INSTALL.SSL.md NOTICE README.md WHY-OVS.md
+%doc COPYING DESIGN.md INSTALL.SSL.md NOTICE README.rst WHY-OVS.md
 %doc FAQ.md NEWS INSTALL.DPDK.rst rhel/README.RHEL
 /var/lib/openvswitch
 /var/log/openvswitch

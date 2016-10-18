@@ -90,7 +90,7 @@ docs = \
 	MAINTAINERS.rst \
 	OPENFLOW-1.1+.md \
 	PORTING.rst \
-	README.md \
+	README.rst \
 	README-lisp.md \
 	README-native-tunneling.md \
 	REPORTING-BUGS.md \

@@ -85,7 +85,7 @@ use the userspace-only implementation, at some cost in features and performance
 To compile the kernel module on Linux, you must also install the
 following:
 
-- A supported Linux kernel version. Refer to the `README <README.md>`__
+- A supported Linux kernel version. Refer to the `README <README.rst>`__
   for a list of supported versions.
 
   For optional support of ingress policing, you must enable kernel
