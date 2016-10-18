@@ -88,7 +88,7 @@ docs = \
 	INSTALL.Windows.rst \
 	IntegrationGuide.rst \
 	MAINTAINERS.rst \
-	OPENFLOW-1.1+.md \
+	OPENFLOW.rst \
 	PORTING.rst \
 	README.rst \
 	README-lisp.rst \

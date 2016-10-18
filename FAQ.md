@@ -1609,7 +1609,7 @@ A: The following table lists the versions of OpenFlow supported by
    (Open vSwitch 2.2 had an experimental implementation of OpenFlow
    1.4 that could cause crashes.  We don't recommend enabling it.)
 
-   [OPENFLOW-1.1+.md] in the Open vSwitch source tree tracks support for
+   [OPENFLOW.rst] in the Open vSwitch source tree tracks support for
    OpenFlow 1.1 and later features.  When support for OpenFlow 1.4 and
    1.5 is solidly implemented, Open vSwitch will enable those version
    by default.
@@ -2152,7 +2152,7 @@ http://openvswitch.org/
 [PORTING.rst]:PORTING.rst
 [WHY-OVS.rst]:WHY-OVS.rst
 [INSTALL.rst]:INSTALL.rst
-[OPENFLOW-1.1+.md]:OPENFLOW-1.1+.md
+[OPENFLOW.rst]:OPENFLOW.rst
 [INSTALL.DPDK.rst]:INSTALL.DPDK.rst
 [Tutorial.md]:tutorial/Tutorial.md
 [release-process.md]:Documentation/release-process.md
