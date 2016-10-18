@@ -69,6 +69,7 @@ docs = \
 	CONTRIBUTING.md \
 	CodingStyle.md \
 	DESIGN.md \
+	DocumentationStyle.rst \
 	FAQ.md \
 	INSTALL.rst \
 	INSTALL.Debian.rst \
