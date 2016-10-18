@@ -65,7 +65,7 @@ A security team member should reply to the reporter acknowledging that
 the report has been received.
 
 Please consider reporting the information mentioned in
-REPORTING-BUGS.md, where relevant.
+REPORTING-BUGS.rst, where relevant.
 
 Reporters may ask for a GPG key while initiating contact with the
 security team to deliver more sensitive reports.

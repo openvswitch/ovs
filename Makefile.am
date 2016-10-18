@@ -93,7 +93,7 @@ docs = \
 	README.rst \
 	README-lisp.md \
 	README-native-tunneling.md \
-	REPORTING-BUGS.md \
+	REPORTING-BUGS.rst \
 	SECURITY.md \
 	WHY-OVS.md
 EXTRA_DIST = \
