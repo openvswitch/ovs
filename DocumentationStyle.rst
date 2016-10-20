@@ -28,7 +28,9 @@ Open vSwitch Documentation Style
 ================================
 
 This file describes the documentation style used in all documentation found in
-Open vSwitch. All documents should follow this guide.
+Open vSwitch. Documentation includes any documents found in ``Documentation``
+along with any ``README``, ``INSTALL``, or generally ``rst`` suffixed documents
+found in the project tree.
 
 reStructuredText vs. Sphinx
 ---------------------------
@@ -52,10 +54,6 @@ guide <CodingStyle.md>`__.
 
   Sphinx extensions can be used, but only for documentation in the
   ``Documentation`` folder.
-
-  .. note::
-    Some legacy documents may exist in other formats. When time allows, these
-    should be converted to reST.
 
 - Limit lines at 79 characters.
 
@@ -169,7 +167,7 @@ Graphic tables
       +--------------+---------------+
 
 .. note::
-  The ``table`` role (`` .. table:: <name>``) can be safely omitted.
+  The ``table`` role - ``.. table:: <name>`` -  can be safely omitted.
 
 List tables
 +++++++++++
