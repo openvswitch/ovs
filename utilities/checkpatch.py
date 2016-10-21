@@ -59,13 +59,14 @@ __regex_leading_with_whitespace_at_all = re.compile(r'^\s+')
 __regex_leading_with_spaces = re.compile(r'^ +[\S]+')
 __regex_trailing_whitespace = re.compile(r'[^\S]+$')
 __regex_single_line_feed = re.compile(r'^\f$')
-__regex_for_if_missing_whitespace = re.compile(r'(if|for|while)[\(]')
-__regex_for_if_too_much_whitespace = re.compile(r'(if|for|while)  +[\(]')
-__regex_for_if_parens_whitespace = re.compile(r'(if|for|while) \( +[\s\S]+\)')
+__regex_for_if_missing_whitespace = re.compile(r' +(if|for|while)[\(]')
+__regex_for_if_too_much_whitespace = re.compile(r' +(if|for|while)  +[\(]')
+__regex_for_if_parens_whitespace = \
+    re.compile(r' +(if|for|while) \( +[\s\S]+\)')
 __regex_is_for_if_single_line_bracket = \
     re.compile(r'^ +(if|for|while) \(.*\)')
-
-__regex_ends_with_bracket = re.compile(r'[^\s]\) {$')
+__regex_ends_with_bracket = \
+    re.compile(r'[^\s]\) {(\s+/\*[\s\Sa-zA-Z0-9\.,\?\*/+-]*)?$')
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
