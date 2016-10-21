@@ -21,10 +21,19 @@ import sys
 
 __errors = 0
 __warnings = 0
+print_file_name = None
+
+
+def print_file():
+    global print_file_name
+    if print_file_name:
+        print("In file %s" % print_file_name)
+        print_file_name = None
 
 
 def print_error(message, lineno=None):
     global __errors
+    print_file()
     if lineno is not None:
         print("E(%d): %s" % (lineno, message))
     else:
@@ -35,6 +44,7 @@ def print_error(message, lineno=None):
 
 def print_warning(message, lineno=None):
     global __warnings
+    print_file()
     if lineno:
         print("W(%d): %s" % (lineno, message))
     else:
@@ -131,6 +141,7 @@ def if_and_for_end_with_bracket_check(line):
 
 
 def ovs_checkpatch_parse(text):
+    global print_file_name
     lineno = 0
     signatures = []
     co_authors = []
@@ -162,6 +173,7 @@ def ovs_checkpatch_parse(text):
             if match:
                 parse = parse + 1
                 current_file = match.group(2)
+                print_file_name = current_file
             continue
         elif parse == 0:
             if scissors.match(line):
@@ -185,6 +197,7 @@ def ovs_checkpatch_parse(text):
             newfile = hunks.match(line)
             if newfile:
                 current_file = newfile.group(2)
+                print_file_name = current_file
                 continue
             if not is_added_line(line):
                 continue
