@@ -54,6 +54,7 @@ def print_warning(message, lineno=None):
 
 
 __regex_added_line = re.compile(r'^\+{1,2}[^\+][\w\W]*')
+__regex_subtracted_line = re.compile(r'^\-{1,2}[^\-][\w\W]*')
 __regex_leading_with_whitespace_at_all = re.compile(r'^\s+')
 __regex_leading_with_spaces = re.compile(r'^ +[\S]+')
 __regex_trailing_whitespace = re.compile(r'[^\S]+$')
@@ -78,6 +79,10 @@ skip_signoff_check = False
 line_length_blacklist = ['.am', '.at', 'etc', '.in', '.m4', '.mk', '.patch',
                          '.py']
 
+
+def is_subtracted_line(line):
+    """Returns TRUE if the line in question has been removed."""
+    return __regex_subtracted_line.search(line) is not None
 
 def is_added_line(line):
     """Returns TRUE if the line in question is an added line.
@@ -150,6 +155,8 @@ def ovs_checkpatch_parse(text):
     previous_file = ''
     scissors = re.compile(r'^[\w]*---[\w]*')
     hunks = re.compile('^(---|\+\+\+) (\S+)')
+    hunk_differences = re.compile(
+        r'^@@ ([0-9-+]+),([0-9-+]+) ([0-9-+]+),([0-9-+]+) @@')
     is_signature = re.compile(r'((\s*Signed-off-by: )(.*))$',
                               re.I | re.M | re.S)
     is_co_author = re.compile(r'(\s*(Co-authored-by: )(.*))$',
@@ -199,6 +206,14 @@ def ovs_checkpatch_parse(text):
                 current_file = newfile.group(2)
                 print_file_name = current_file
                 continue
+            reset_line_number = hunk_differences.match(line)
+            if reset_line_number:
+                lineno = int(reset_line_number.group(3))
+                if lineno < 0:
+                    lineno = -1 * lineno
+                lineno -= 1
+            if is_subtracted_line(line):
+                lineno -= 1
             if not is_added_line(line):
                 continue
             # Skip files which have /datapath in them, since they are
