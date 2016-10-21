@@ -250,6 +250,7 @@ def usage():
 
 
 def ovs_checkpatch_file(filename):
+    global __warnings, __errors
     try:
         mail = email.message_from_file(open(filename, 'r'))
     except:
@@ -259,7 +260,10 @@ def ovs_checkpatch_file(filename):
     for part in mail.walk():
         if part.get_content_maintype() == 'multipart':
             continue
-        return ovs_checkpatch_parse(part.get_payload(decode=True))
+    result = ovs_checkpatch_parse(part.get_payload(decode=True))
+    if result < 0:
+        print("Warnings: %d, Errors: %d" % (__warnings, __errors))
+    return result
 
 if __name__ == '__main__':
     try:
