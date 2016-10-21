@@ -219,14 +219,13 @@ def ovs_checkpatch_parse(text):
                               lineno)
             if not if_and_for_whitespace_checks(line[1:]):
                 print_line = True
-                print_warning("Improper whitespace around control block",
-                              lineno)
+                print_error("Improper whitespace around control block",
+                            lineno)
             if not if_and_for_end_with_bracket_check(line[1:]):
                 print_line = True
-                print_warning("Inappropriate bracing around statement",
-                              lineno)
+                print_error("Inappropriate bracing around statement", lineno)
             if print_line:
-                print(line)
+                print("\n%s\n" % line)
     if __errors or __warnings:
         return -1
     return 0
