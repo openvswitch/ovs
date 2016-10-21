@@ -22,6 +22,7 @@ import sys
 __errors = 0
 __warnings = 0
 print_file_name = None
+checking_file = False
 
 
 def print_file():
@@ -85,10 +86,20 @@ def is_subtracted_line(line):
     """Returns TRUE if the line in question has been removed."""
     return __regex_subtracted_line.search(line) is not None
 
+
 def is_added_line(line):
     """Returns TRUE if the line in question is an added line.
     """
-    return __regex_added_line.search(line) is not None
+    global checking_file
+    return __regex_added_line.search(line) is not None or checking_file
+
+
+def added_line(line):
+    """Returns the line formatted properly by removing diff syntax"""
+    global checking_file
+    if not checking_file:
+        return line[1:]
+    return line
 
 
 def leading_whitespace_is_spaces(line):
@@ -176,6 +187,9 @@ def ovs_checkpatch_parse(text):
         if len(line) <= 0:
             continue
 
+        if checking_file:
+            parse = 2
+
         if parse == 1:
             match = hunks.match(line)
             if match:
@@ -217,27 +231,30 @@ def ovs_checkpatch_parse(text):
                 lineno -= 1
             if not is_added_line(line):
                 continue
+
+            cmp_line = added_line(line)
+
             # Skip files which have /datapath in them, since they are
             # linux or windows coding standards
             if '/datapath' in current_file:
                 continue
             if (not current_file.endswith('.mk') and
-                    not leading_whitespace_is_spaces(line[1:])):
+                    not leading_whitespace_is_spaces(cmp_line)):
                 print_line = True
                 print_warning("Line has non-spaces leading whitespace",
                               lineno)
-            if trailing_whitespace_or_crlf(line[1:]):
+            if trailing_whitespace_or_crlf(cmp_line):
                 print_line = True
                 print_warning("Line has trailing whitespace", lineno)
-            if len(line[1:]) > 79 and not skip_line_length_check:
+            if len(cmp_line) > 79 and not skip_line_length_check:
                 print_line = True
                 print_warning("Line is greater than 79-characters long",
                               lineno)
-            if not if_and_for_whitespace_checks(line[1:]):
+            if not if_and_for_whitespace_checks(cmp_line):
                 print_line = True
                 print_error("Improper whitespace around control block",
                             lineno)
-            if not if_and_for_end_with_bracket_check(line[1:]):
+            if not if_and_for_end_with_bracket_check(cmp_line):
                 print_line = True
                 print_error("Inappropriate bracing around statement", lineno)
             if print_line:
@@ -256,6 +273,7 @@ def usage():
     print("-h|--help\t\t\t\tThis help message")
     print("-b|--skip-block-whitespace\t"
           "Skips the if/while/for whitespace tests")
+    print("-f|--check-file\t\t\tCheck a file instead of a patchfile.")
     print("-l|--skip-leading-whitespace\t"
           "Skips the leading whitespace test")
     print("-s|--skip-signoff-lines\t"
@@ -265,7 +283,7 @@ def usage():
 
 
 def ovs_checkpatch_file(filename):
-    global __warnings, __errors
+    global __warnings, __errors, checking_file
     try:
         mail = email.message_from_file(open(filename, 'r'))
     except:
@@ -282,8 +300,9 @@ def ovs_checkpatch_file(filename):
 
 if __name__ == '__main__':
     try:
-        optlist, args = getopt.getopt(sys.argv[1:], 'bhlst',
-                                      ["help",
+        optlist, args = getopt.getopt(sys.argv[1:], 'bhlstf',
+                                      ["check-file",
+                                       "help",
                                        "skip-block-whitespace",
                                        "skip-leading-whitespace",
                                        "skip-signoff-lines",
@@ -304,6 +323,8 @@ if __name__ == '__main__':
             skip_signoff_check = True
         elif o in ("-t", "--skip-trailing-whitespace"):
             skip_trailing_whitespace_check = True
+        elif o in ("-f", "--check-file"):
+            checking_file = True
         else:
             print("Unknown option '%s'" % o)
             sys.exit(-1)
