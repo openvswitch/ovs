@@ -188,7 +188,7 @@ def ovs_checkpatch_parse(text):
                 if not skip_signoff_check:
                     if len(signatures) == 0:
                         print_error("No signatures found.")
-                    if len(signatures) != 1 + len(co_authors):
+                    elif len(signatures) != 1 + len(co_authors):
                         print_error("Too many signoffs; "
                                     "are you missing Co-authored-by lines?")
                     if not set(co_authors) <= set(signatures):
