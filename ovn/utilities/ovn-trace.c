@@ -244,17 +244,22 @@ usage(void)
 usage: %s [OPTIONS] DATAPATH MICROFLOW\n\
        %s [OPTIONS] --detach\n\
 \n\
-Options:\n\
-  --db=DATABASE               connect to DATABASE\n\
-                              (default: %s)\n",
-           program_name, program_name, program_name, default_sb_db());
+Option format options:\n\
+  --detailed              table-by-table \"backtrace\" (default)\n\
+  --summary               less detailed, more parseable\n\
+  --minimal               minimum to explain externally visible behavior\n\
+  --all                   provide all forms of output\n",
+           program_name, program_name, program_name);
     daemon_usage();
     vlog_usage();
     printf("\n\
 Other options:\n\
-  --unixctl=SOCKET            set control socket name\n\
-  -h, --help                  display this help message\n\
-  -V, --version               display version information\n");
+  --db=DATABASE           connect to DATABASE\n\
+                          (default: %s)\n\
+  --unixctl=SOCKET        set control socket name\n\
+  -h, --help              display this help message\n\
+  -V, --version           display version information\n",
+           default_sb_db());
     stream_usage("database", true, true, false);
     exit(EXIT_SUCCESS);
 }
