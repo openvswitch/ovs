@@ -1188,17 +1188,18 @@ execute_get_mac_bind(const struct ovnact_get_mac_bind *bind,
     const struct ovntrace_mac_binding *binding
         = ovntrace_mac_binding_find(dp, port_key, &ip);
 
-    const struct eth_addr mac = binding ? binding->mac : eth_addr_zero;
+    uflow->dl_dst = binding ? binding->mac : eth_addr_zero;
     if (binding) {
         ovntrace_node_append(super, OVNTRACE_NODE_ACTION,
                              "/* MAC binding to "ETH_ADDR_FMT". */",
-                             ETH_ADDR_ARGS(mac));
+                             ETH_ADDR_ARGS(uflow->dl_dst));
     } else {
         ovntrace_node_append(super, OVNTRACE_NODE_ACTION,
                              "/* No MAC binding. */");
     }
     ovntrace_node_append(super, OVNTRACE_NODE_MODIFY,
-                         "eth.dst = "ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
+                         "eth.dst = "ETH_ADDR_FMT,
+                         ETH_ADDR_ARGS(uflow->dl_dst));
 }
 
 static void
