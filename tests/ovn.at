@@ -1543,6 +1543,18 @@ for i in 1 2 3; do
     ovn-nbctl lsp-set-options $ln_port_name network_name=phys
 done
 
+# lsp_to_ls LSP
+#
+# Prints the name of the logical switch that contains LSP.
+lsp_to_ls () {
+    case $1 in dnl (
+	lp?[[12]]) echo ls1 ;; dnl (
+	lp?[[34]]) echo ls2 ;; dnl (
+	lp?5) echo ls3 ;; dnl (
+	*) AT_FAIL_IF([:]) ;;
+    esac
+}
+
 net_add n1
 for i in 1 2; do
     sim_add hv$i
@@ -1559,13 +1571,7 @@ for i in 1 2; do
                                   ofport-request=$i$j
 
         lsp_name=lp$i$j
-        if test $j -le 2; then
-            ls_name=ls1
-        elif test $j -le 4; then
-            ls_name=ls2
-        else
-            ls_name=ls3
-        fi
+	ls_name=$(lsp_to_ls $lsp_name)
 
         ovn-nbctl lsp-add $ls_name $lsp_name
         ovn-nbctl lsp-set-addresses $lsp_name f0:00:00:00:00:$i$j
@@ -1574,6 +1580,8 @@ for i in 1 2; do
         OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up $lsp_name` = xup])
     done
 done
+ovn-nbctl --wait=sb sync
+ovn-sbctl dump-flows
 
 ovn_populate_arp
 
@@ -1585,68 +1593,84 @@ vif_to_hv() {
     echo hv${1%?}
 }
 #
-# test_packet INPORT DST SRC ETHTYPE OUTPORT...
+# test_packet INPORT DST SRC ETHTYPE EOUT LOUT
 #
 # This shell function causes a packet to be received on INPORT.  The packet's
 # content has Ethernet destination DST and source SRC (each exactly 12 hex
-# digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
-# more) list the VIFs on which the packet should be received.  INPORT and the
-# OUTPORTs are specified as logical switch port numbers, e.g. 11 for vif11.
+# digits) and Ethernet type ETHTYPE (4 hex digits).  INPORT is specified as
+# logical switch port numbers, e.g. 11 for vif11.
+#
+# EOUT is the end-to-end output port, that is, where the packet will end up
+# after possibly bouncing through one or more localnet ports.  LOUT is the
+# logical output port, which might be a localnet port, as seen by ovn-trace
+# (which doesn't know what localnet ports are connected to and therefore can't
+# figure out the end-to-end answer).
 for i in 1 2; do
     for j in 1 2 3 4 5; do
         : > $i$j.expected
     done
 done
 test_packet() {
-    local inport=$1 dst=$2 src=$3 eth=$4; shift; shift; shift; shift
-    local packet=${dst}${src}${eth}
+    local inport=$1 dst=$2 src=$3 eth=$4 eout=$5 lout=$6
+    echo "$@"
+
+    # First try tracing the packet.
+    uflow="inport==\"lp$inport\" && eth.dst==$dst && eth.src==$src && eth.type==0x$eth"
+    if test $lout != drop; then
+        echo "output(\"$lout\");"
+    fi > expout
+    AT_CAPTURE_FILE([trace])
+    AT_CHECK([ovn-trace --all $(lsp_to_ls lp$inport) "$uflow" | tee trace | sed '1,/Minimal trace/d'], [0], [expout])
+
+    # Then actually send a packet, for an end-to-end test.
+    local packet=$(echo $dst$src | sed 's/://g')${eth}
     hv=`vif_to_hv $inport`
     vif=vif$inport
     as $hv ovs-appctl netdev-dummy/receive $vif $packet
-    for outport; do
-        echo $packet >> $outport.expected
-    done
+    if test $eout != drop; then
+        echo $packet >> ${eout#lp}.expected
+    fi
 }
 
 # lp11 and lp21 are on the same network (phys, untagged)
 # and on different hypervisors
-test_packet 11 f00000000021 f00000000011 1121 21
-test_packet 21 f00000000011 f00000000021 2111 11
+test_packet 11 f0:00:00:00:00:21 f0:00:00:00:00:11 1121 lp21 lp21
+test_packet 21 f0:00:00:00:00:11 f0:00:00:00:00:21 2111 lp11 lp11
 
 # lp11 and lp12 are on the same network (phys, untagged)
 # and on the same hypervisor
-test_packet 11 f00000000012 f00000000011 1112 12
-test_packet 12 f00000000011 f00000000012 1211 11
+test_packet 11 f0:00:00:00:00:12 f0:00:00:00:00:11 1112 lp12 lp12
+test_packet 12 f0:00:00:00:00:11 f0:00:00:00:00:12 1211 lp11 lp11
 
 # lp13 and lp23 are on the same network (phys, VLAN 101)
 # and on different hypervisors
-test_packet 13 f00000000023 f00000000013 1323 23
-test_packet 23 f00000000013 f00000000023 2313 13
+test_packet 13 f0:00:00:00:00:23 f0:00:00:00:00:13 1323 lp23 lp23
+test_packet 23 f0:00:00:00:00:13 f0:00:00:00:00:23 2313 lp13 lp13
 
 # lp13 and lp14 are on the same network (phys, VLAN 101)
 # and on the same hypervisor
-test_packet 13 f00000000014 f00000000013 1314 14
-test_packet 14 f00000000013 f00000000014 1413 13
+test_packet 13 f0:00:00:00:00:14 f0:00:00:00:00:13 1314 lp14 lp14
+test_packet 14 f0:00:00:00:00:13 f0:00:00:00:00:14 1413 lp13 lp13
 
 # lp11 and lp15 are on the same network (phys, untagged),
 # same hypervisor, and on different switches
-test_packet 11 f00000000015 f00000000011 1115 15
-test_packet 15 f00000000011 f00000000015 1511 11
+test_packet 11 f0:00:00:00:00:15 f0:00:00:00:00:11 1115 lp15 ln1
+test_packet 15 f0:00:00:00:00:11 f0:00:00:00:00:15 1511 lp11 ln3
 
 # lp11 and lp25 are on the same network (phys, untagged),
 # different hypervisors, and on different switches
-test_packet 11 f00000000025 f00000000011 1125 25
-test_packet 25 f00000000011 f00000000025 2511 11
+test_packet 11 f0:00:00:00:00:25 f0:00:00:00:00:11 1125 lp25 ln1
+test_packet 25 f0:00:00:00:00:11 f0:00:00:00:00:25 2511 lp11 ln3
 
 # Ports that should not be able to communicate
-test_packet 11 f00000000013 f00000000011 1113
-test_packet 11 f00000000023 f00000000011 1123
-test_packet 21 f00000000013 f00000000021 2113
-test_packet 21 f00000000023 f00000000021 2123
-test_packet 13 f00000000011 f00000000013 1311
-test_packet 13 f00000000021 f00000000013 1321
-test_packet 23 f00000000011 f00000000023 2311
-test_packet 23 f00000000021 f00000000023 2321
+test_packet 11 f0:00:00:00:00:13 f0:00:00:00:00:11 1113 drop ln1
+test_packet 11 f0:00:00:00:00:23 f0:00:00:00:00:11 1123 drop ln1
+test_packet 21 f0:00:00:00:00:13 f0:00:00:00:00:21 2113 drop ln1
+test_packet 21 f0:00:00:00:00:23 f0:00:00:00:00:21 2123 drop ln1
+test_packet 13 f0:00:00:00:00:11 f0:00:00:00:00:13 1311 drop ln2
+test_packet 13 f0:00:00:00:00:21 f0:00:00:00:00:13 1321 drop ln2
+test_packet 23 f0:00:00:00:00:11 f0:00:00:00:00:23 2311 drop ln2
+test_packet 23 f0:00:00:00:00:21 f0:00:00:00:00:23 2321 drop ln2
 
 # Dump a bunch of info helpful for debugging if there's a failure.
 
