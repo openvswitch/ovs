@@ -1598,8 +1598,8 @@ for i in 1 2; do
     done
 done
 test_packet() {
-    local inport=$1 src=$2 dst=$3 eth=$4; shift; shift; shift; shift
-    local packet=${src}${dst}${eth}
+    local inport=$1 dst=$2 src=$3 eth=$4; shift; shift; shift; shift
+    local packet=${dst}${src}${eth}
     hv=`vif_to_hv $inport`
     vif=vif$inport
     as $hv ovs-appctl netdev-dummy/receive $vif $packet
