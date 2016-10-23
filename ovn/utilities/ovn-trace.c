@@ -1344,14 +1344,14 @@ trace(const char *dp_s, const char *flow_s)
 {
     const struct ovntrace_datapath *dp = ovntrace_datapath_find_by_name(dp_s);
     if (!dp) {
-        ovs_fatal(0, "unknown datapath \"%s\"", dp_s);
+        return xasprintf("unknown datapath \"%s\"\n", dp_s);
     }
 
     struct flow uflow;
     char *error = expr_parse_microflow(flow_s, &symtab, &address_sets,
                                        ovntrace_lookup_port, dp, &uflow);
     if (error) {
-        ovs_fatal(0, "error parsing flow: %s", error);
+        return xasprintf("error parsing flow: %s\n", error);
     }
 
     uint32_t in_key = uflow.regs[MFF_LOG_INPORT - MFF_REG0];
