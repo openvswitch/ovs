@@ -355,7 +355,21 @@ class IPsec:
 
 def update_ipsec(ipsec, interfaces, new_interfaces):
     for name, vals in interfaces.iteritems():
-        if name not in new_interfaces:
+        del_if = True
+        if name in new_interfaces:
+            del_if = False
+        else:
+            # Check if there still is ANOTHER tunnel present! Multiple tunnels
+            # between two hosts can exist without issues when they share a PSK
+            # over different bridges and ports.
+            # So we need to be careful when removing policies without double
+            # checking as this could break other tunnels that should not be
+            # affected!
+            for new_name, new_vals in new_interfaces.iteritems():
+                if (vals["local_ip"] == new_vals["local_ip"]) and (vals["remote_ip"] == new_vals["remote_ip"]):
+                    del_if = False
+
+        if del_if:
             ipsec.del_entry(vals["local_ip"], vals["remote_ip"])
 
     for name, vals in new_interfaces.iteritems():
