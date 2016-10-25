@@ -37,11 +37,6 @@ Russell Bryant: "Today that would require creating 4096 ports for
 the VM and attach to 4096 OVN networks, so doable, but not quite
 ideal."
 
-* IPAM enhancements.
-
-Russell Bryant: "Be able to specify a MAC and only have the IP be
-dynamic.  Right now both are dynamic."
-
 * Native DNS support
 
 Russell Bryant: "This is an OpenStack requirement to fully eliminate
