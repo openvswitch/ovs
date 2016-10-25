@@ -5461,3 +5461,97 @@ check_tos 0
 
 OVN_CLEANUP([hv])
 AT_CLEANUP
+
+AT_SETUP([ovn -- read-only sb db:ptcp access])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+
+: > .$1.db.~lock~
+ovsdb-tool create ovn-sb.db "$abs_top_srcdir"/ovn/ovn-sb.ovsschema
+
+# Add read-only remote to sb ovsdb-server
+AT_CHECK(
+  [ovsdb-tool transact ovn-sb.db \
+     ['["OVN_Southbound",
+       {"op": "insert",
+        "table": "SB_Global",
+        "row": {
+          "connections": ["set", [["named-uuid", "xyz"]]]}},
+       {"op": "insert",
+        "table": "Connection",
+        "uuid-name": "xyz",
+        "row": {"target": "ptcp:0:127.0.0.1",
+               "read_only": true}}]']], [0], [ignore], [ignore])
+
+start_daemon ovsdb-server --remote=punix:ovn-sb.sock --remote=db:OVN_Southbound,SB_Global,connections ovn-sb.db
+
+PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
+
+# read-only accesses should succeed
+AT_CHECK([ovn-sbctl --db=tcp:127.0.0.1:$TCP_PORT list SB_Global], [0], [stdout], [ignore])
+AT_CHECK([ovn-sbctl --db=tcp:127.0.0.1:$TCP_PORT list Connection], [0], [stdout], [ignore])
+
+# write access should fail
+AT_CHECK([ovn-sbctl --db=tcp:127.0.0.1:$TCP_PORT chassis-add ch vxlan 1.2.4.8], [1], [ignore],
+[ovn-sbctl: transaction error: {"details":"insert operation not allowed when database server is in read only mode","error":"not allowed"}
+])
+
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CLEANUP
+
+AT_SETUP([ovn -- read-only sb db:pssl access])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
+PKIDIR="$(cd $abs_top_builddir/tests && pwd)"
+AT_SKIP_IF([expr "$PKIDIR" : ".*[ 	'\"
+\\]"])
+
+: > .$1.db.~lock~
+ovsdb-tool create ovn-sb.db "$abs_top_srcdir"/ovn/ovn-sb.ovsschema
+
+# Add read-only remote to sb ovsdb-server
+AT_CHECK(
+  [ovsdb-tool transact ovn-sb.db \
+     ['["OVN_Southbound",
+       {"op": "insert",
+        "table": "SB_Global",
+        "row": {
+          "connections": ["set", [["named-uuid", "xyz"]]]}},
+       {"op": "insert",
+        "table": "Connection",
+        "uuid-name": "xyz",
+        "row": {"target": "pssl:0:127.0.0.1",
+               "read_only": true}}]']], [0], [ignore], [ignore])
+
+start_daemon ovsdb-server --remote=punix:ovn-sb.sock \
+                          --remote=db:OVN_Southbound,SB_Global,connections \
+                          --private-key="$PKIDIR/testpki-privkey2.pem" \
+                          --certificate="$PKIDIR/testpki-cert2.pem" \
+                          --ca-cert="$PKIDIR/testpki-cacert.pem" \
+                          ovn-sb.db
+
+PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
+
+# read-only accesses should succeed
+AT_CHECK([ovn-sbctl --db=ssl:127.0.0.1:$TCP_PORT \
+                    --private-key=$PKIDIR/testpki-privkey.pem \
+                    --certificate=$PKIDIR/testpki-cert.pem \
+                    --ca-cert=$PKIDIR/testpki-cacert.pem \
+                    list SB_Global], [0], [stdout], [ignore])
+AT_CHECK([ovn-sbctl --db=ssl:127.0.0.1:$TCP_PORT \
+                    --private-key=$PKIDIR/testpki-privkey.pem \
+                    --certificate=$PKIDIR/testpki-cert.pem \
+                    --ca-cert=$PKIDIR/testpki-cacert.pem \
+                    list Connection], [0], [stdout], [ignore])
+
+# write access should fail
+AT_CHECK([ovn-sbctl --db=ssl:127.0.0.1:$TCP_PORT \
+                    --private-key=$PKIDIR/testpki-privkey.pem \
+                    --certificate=$PKIDIR/testpki-cert.pem \
+                    --ca-cert=$PKIDIR/testpki-cacert.pem \
+                    chassis-add ch vxlan 1.2.4.8], [1], [ignore],
+[ovn-sbctl: transaction error: {"details":"insert operation not allowed when database server is in read only mode","error":"not allowed"}
+])
+
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CLEANUP
+
