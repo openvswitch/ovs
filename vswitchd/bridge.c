@@ -223,7 +223,8 @@ static long long int aa_refresh_timer = LLONG_MIN;
  * will be reconfigured.
  */
 static struct if_notifier *ifnotifier;
-static bool ifaces_changed = false;
+static struct seq *ifaces_changed;
+static uint64_t last_ifaces_changed;
 
 static void add_del_bridges(const struct ovsrec_open_vswitch *);
 static void bridge_run__(void);
@@ -368,7 +369,21 @@ bridge_init_ofproto(const struct ovsrec_open_vswitch *cfg)
 static void
 if_change_cb(void *aux OVS_UNUSED)
 {
-    ifaces_changed = true;
+    seq_change(ifaces_changed);
+}
+
+static bool
+if_notifier_changed(struct if_notifier *notifier OVS_UNUSED)
+{
+    uint64_t new_seq;
+    bool changed = false;
+    new_seq = seq_read(ifaces_changed);
+    if (new_seq != last_ifaces_changed) {
+        changed = true;
+        last_ifaces_changed = new_seq;
+    }
+    seq_wait(ifaces_changed, last_ifaces_changed);
+    return changed;
 }
 
 /* Public functions. */
@@ -475,6 +490,8 @@ bridge_init(const char *remote)
     stp_init();
     lldp_init();
     rstp_init();
+    ifaces_changed = seq_create();
+    last_ifaces_changed = seq_read(ifaces_changed);
     ifnotifier = if_notifier_create(if_change_cb, NULL);
 }
 
@@ -484,6 +501,7 @@ bridge_exit(void)
     struct bridge *br, *next_br;
 
     if_notifier_destroy(ifnotifier);
+    seq_destroy(ifaces_changed);
     HMAP_FOR_EACH_SAFE (br, next_br, node, &all_bridges) {
         bridge_destroy(br, false);
     }
@@ -2928,10 +2946,9 @@ bridge_run(void)
         stream_ssl_set_ca_cert_file(ssl->ca_cert, ssl->bootstrap_ca_cert);
     }
 
-    if (ovsdb_idl_get_seqno(idl) != idl_seqno || ifaces_changed) {
+    if (ovsdb_idl_get_seqno(idl) != idl_seqno ||
+        if_notifier_changed(ifnotifier)) {
         struct ovsdb_idl_txn *txn;
-
-        ifaces_changed = false;
 
         idl_seqno = ovsdb_idl_get_seqno(idl);
         txn = ovsdb_idl_txn_create(idl);
@@ -2990,9 +3007,6 @@ bridge_wait(void)
     }
 
     if_notifier_wait();
-    if (ifaces_changed) {
-        poll_immediate_wake();
-    }
 
     sset_init(&types);
     ofproto_enumerate_types(&types);
