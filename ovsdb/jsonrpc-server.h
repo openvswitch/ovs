@@ -34,6 +34,7 @@ void ovsdb_jsonrpc_server_destroy(struct ovsdb_jsonrpc_server *);
 struct ovsdb_jsonrpc_options {
     int max_backoff;            /* Maximum reconnection backoff, in msec. */
     int probe_interval;         /* Max idle time before probing, in msec. */
+    bool read_only;             /* Only read-only transactions are allowed. */
     int dscp;                   /* Dscp value for manager connections */
 };
 struct ovsdb_jsonrpc_options *

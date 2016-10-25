@@ -781,6 +781,17 @@ read_string_column(const struct ovsdb_row *row, const char *column_name,
     return atom != NULL;
 }
 
+static bool
+read_bool_column(const struct ovsdb_row *row, const char *column_name,
+                   bool *boolp)
+{
+    const union ovsdb_atom *atom;
+
+    atom = read_column(row, column_name, OVSDB_TYPE_BOOLEAN);
+    *boolp = atom ? atom->boolean : false;
+    return atom != NULL;
+}
+
 static void
 write_bool_column(struct ovsdb_row *row, const char *column_name, bool value)
 {
@@ -849,6 +860,7 @@ add_manager_options(struct shash *remotes, const struct ovsdb_row *row)
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
     struct ovsdb_jsonrpc_options *options;
     long long int max_backoff, probe_interval;
+    bool read_only;
     const char *target, *dscp_string;
 
     if (!read_string_column(row, "target", &target) || !target) {
@@ -863,6 +875,9 @@ add_manager_options(struct shash *remotes, const struct ovsdb_row *row)
     }
     if (read_integer_column(row, "inactivity_probe", &probe_interval)) {
         options->probe_interval = probe_interval;
+    }
+    if (read_bool_column(row, "read_only", &read_only)) {
+        options->read_only = read_only;
     }
 
     options->dscp = DSCP_DEFAULT;

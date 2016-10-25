@@ -25,6 +25,8 @@ Post-v2.6.0
        release.
      * New unixctl "ofctl/packet-out" command, which can be used to
        instruct a flow monitor to issue OpenFlow packet-out messages.
+   - ovsdb-server:
+     * Remote connections can now be made read-only (see ovsdb-server(1)).
    - Tunnels:
      * TLV mappings for protocols such as Geneve are now segregated on
        a per-OpenFlow bridge basis rather than globally. (The interface
