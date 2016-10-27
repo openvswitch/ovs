@@ -226,7 +226,7 @@ netdev_windows_netdev_from_ofpbuf(struct netdev_windows_netdev_info *info,
 
     netdev_windows_info_init(info);
 
-    struct ofpbuf b = ofpbuf_const_initializer(&b, buf->data, buf->size);
+    struct ofpbuf b = ofpbuf_const_initializer(buf->data, buf->size);
     struct nlmsghdr *nlmsg = ofpbuf_try_pull(&b, sizeof *nlmsg);
     struct genlmsghdr *genl = ofpbuf_try_pull(&b, sizeof *genl);
     struct ovs_header *ovs_header = ofpbuf_try_pull(&b, sizeof *ovs_header);
