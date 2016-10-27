@@ -1079,9 +1079,6 @@ OvsPopFieldInPacketBuf(OvsForwardingContext *ovsFwdCtx,
     UINT32 packetLen, mdlLen;
     PNET_BUFFER_LIST newNbl;
     NDIS_STATUS status;
-    PUINT8 tempBuffer[ETH_HEADER_LENGTH];
-
-    ASSERT(shiftOffset > ETH_ADDR_LENGTH);
 
     newNbl = OvsPartialCopyNBL(ovsFwdCtx->switchContext, ovsFwdCtx->curNbl,
                                0, 0, TRUE /* copy NBL info */);
@@ -1118,8 +1115,16 @@ OvsPopFieldInPacketBuf(OvsForwardingContext *ovsFwdCtx,
         return NDIS_STATUS_FAILURE;
     }
     bufferStart += NET_BUFFER_CURRENT_MDL_OFFSET(curNb);
-    RtlCopyMemory(tempBuffer, bufferStart, shiftOffset);
-    RtlCopyMemory(bufferStart + shiftLength, tempBuffer, shiftOffset);
+    /* XXX At the momemnt !bufferData means it should be treated as VLAN. We
+     * should split the function and refactor. */
+    if (!bufferData) {
+        EthHdr *ethHdr = (EthHdr *)bufferStart;
+        /* If the frame is not VLAN make it a no op */
+        if (ethHdr->Type != ETH_TYPE_802_1PQ_NBO) {
+            return NDIS_STATUS_SUCCESS;
+        }
+    }
+    RtlMoveMemory(bufferStart + shiftLength, bufferStart, shiftOffset);
     NdisAdvanceNetBufferDataStart(curNb, shiftLength, FALSE, NULL);
 
     if (bufferData) {
