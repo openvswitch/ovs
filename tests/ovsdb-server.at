@@ -739,7 +739,11 @@ AT_CHECK(
 dnl There should be 6 lines in the log now.
 AT_CHECK([test `wc -l < db` -eq 6], [0], [], [],
   [test ! -e pid || kill `cat pid`])
-dnl Then check that the dumped data is correct.
+dnl Then check that the dumped data is correct.  This time first kill
+dnl and restart the database server to ensure that the data is correct on
+dnl disk as well as in memory.
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server.log db], [0], [ignore], [ignore])
 AT_CHECK([ovsdb-client dump unix:socket ordinals], [0], [stdout], [ignore],
   [test ! -e pid || kill `cat pid`])
 AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
