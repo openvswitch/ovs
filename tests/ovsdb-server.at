@@ -560,9 +560,11 @@ dnl Make sure that "ovsdb-tool create" works with a dangling symlink for
 dnl the database and the lockfile, creating the target of each symlink rather
 dnl than replacing the symlinks with regular files.
 mkdir dir
-ln -s dir/db db
-ln -s dir/.db.~lock~ .db.~lock~
-AT_SKIP_IF([test ! -h db || test ! -h .db.~lock~])
+if test "$IS_WIN32" = "no"; then
+    ln -s dir/db db
+    ln -s dir/.db.~lock~ .db.~lock~
+    AT_SKIP_IF([test ! -h db || test ! -h .db.~lock~])
+fi
 AT_CHECK([ovsdb-tool create db schema], [0], [ignore], [ignore])
 dnl Start ovsdb-server.
 AT_CHECK([ovsdb-server --detach --no-chdir --pidfile --remote=punix:socket --log-file="`pwd`"/ovsdb-server.log db], [0], [ignore], [ignore])
@@ -635,10 +637,12 @@ AT_CHECK([[ovs-appctl -t ovsdb-server ovsdb-server/compact]],
   [0], [], [ignore], [test ! -e pid || kill `cat pid`])
 dnl Make sure that "db" is still a symlink to dir/db instead of getting
 dnl replaced by a regular file, ditto for .db.~lock~.
-AT_CHECK([test -h db])
-AT_CHECK([test -h .db.~lock~])
-AT_CHECK([test -f dir/db])
-AT_CHECK([test -f dir/.db.~lock~])
+if test "$IS_WIN32" = "no"; then
+    AT_CHECK([test -h db])
+    AT_CHECK([test -h .db.~lock~])
+    AT_CHECK([test -f dir/db])
+    AT_CHECK([test -f dir/.db.~lock~])
+fi
 dnl We can't fully re-check the contents of the database log, because the
 dnl order of the records is not predictable, but there should only be 4 lines
 dnl in it now.
