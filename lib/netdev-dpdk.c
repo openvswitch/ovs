@@ -1056,13 +1056,18 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
     smap_add_format(args, "configured_rx_queues", "%d", netdev->n_rxq);
     smap_add_format(args, "requested_tx_queues", "%d", dev->requested_n_txq);
     smap_add_format(args, "configured_tx_queues", "%d", netdev->n_txq);
-    smap_add_format(args, "requested_rxq_descriptors", "%d",
-                    dev->requested_rxq_size);
-    smap_add_format(args, "configured_rxq_descriptors", "%d", dev->rxq_size);
-    smap_add_format(args, "requested_txq_descriptors", "%d",
-                    dev->requested_txq_size);
-    smap_add_format(args, "configured_txq_descriptors", "%d", dev->txq_size);
     smap_add_format(args, "mtu", "%d", dev->mtu);
+
+    if (dev->type == DPDK_DEV_ETH) {
+        smap_add_format(args, "requested_rxq_descriptors", "%d",
+                        dev->requested_rxq_size);
+        smap_add_format(args, "configured_rxq_descriptors", "%d",
+                        dev->rxq_size);
+        smap_add_format(args, "requested_txq_descriptors", "%d",
+                        dev->requested_txq_size);
+        smap_add_format(args, "configured_txq_descriptors", "%d",
+                        dev->txq_size);
+    }
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
