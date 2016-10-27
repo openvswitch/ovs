@@ -138,11 +138,11 @@ dp_to_netdev_ifi_flags(uint32_t dp_flags)
 {
     uint32_t nd_flags = 0;
 
-    if (dp_flags && OVS_WIN_NETDEV_IFF_UP) {
+    if (dp_flags & OVS_WIN_NETDEV_IFF_UP) {
         nd_flags |= NETDEV_UP;
     }
 
-    if (dp_flags && OVS_WIN_NETDEV_IFF_PROMISC) {
+    if (dp_flags & OVS_WIN_NETDEV_IFF_PROMISC) {
         nd_flags |= NETDEV_PROMISC;
     }
 
