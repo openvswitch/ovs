@@ -55,12 +55,16 @@ dnl with a regular file, and that the lockfile gets created relative to
 dnl the symlink's target.
 mkdir dir
 : > dir/.db.~lock~
-ln -s dir/db db
-AT_SKIP_IF([test ! -h db])
+if test "$IS_WIN32" = "no"; then
+    ln -s dir/db db
+    AT_SKIP_IF([test ! -h db])
+fi
 AT_CHECK([ovsdb-tool create db schema], [0], [], [ignore])
-AT_CHECK([test ! -e .db.~lock])
-AT_CHECK([test -h db])
-AT_CHECK([test -f dir/db])
+if test "$IS_WIN32" = "no"; then
+    AT_CHECK([test ! -e .db.~lock])
+    AT_CHECK([test -h db])
+    AT_CHECK([test -f dir/db])
+fi
 dnl Do a bunch of random transactions that put crap in the database log.
 AT_CHECK(
   [[for pair in 'zero 0' 'one 1' 'two 2' 'three 3' 'four 4' 'five 5'; do
@@ -110,9 +114,15 @@ AT_CHECK([[${PERL} $srcdir/uuidfilt.pl db | grep -v ^OVSDB | sed 's/"_date":[0-9
 {"_comment":"delete row for 5","_date":0,"ordinals":{"<10>":null}}
 {"_comment":"add back row for five 5","_date":0,"ordinals":{"<11>":{"name":"five","number":5}}}
 ]])
+
 dnl Dump out and check the actual database contents.
-AT_CHECK([[ovsdb-server --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
-  [0], [stdout], [ignore])
+on_exit 'kill `cat ovsdb-server.pid`'
+AT_CHECK([[ovsdb-server --detach --pidfile --no-chdir --remote=punix:socket db]],
+	 [0], [stdout], [ignore])
+AT_CHECK([[ovsdb-client dump unix:socket ordinals]],
+	 [0], [stdout], [ignore])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
 AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                name  number
@@ -129,17 +139,23 @@ touch .db.tmp.~lock~
 AT_CHECK([[ovsdb-tool compact db]], [0], [], [ignore])
 dnl Make sure that "db" is still a symlink to dir/db instead of getting
 dnl replaced by a regular file.
-AT_CHECK([test ! -e .db.~lock])
-AT_CHECK([test -h db])
-AT_CHECK([test -f dir/db])
+if test "$IS_WIN32" = "no"; then
+    AT_CHECK([test ! -e .db.~lock])
+    AT_CHECK([test -h db])
+    AT_CHECK([test -f dir/db])
+fi
 dnl We can't fully re-check the contents of the database log, because the
 dnl order of the records is not predictable, but there should only be 4 lines
 dnl in it now.
 AT_CAPTURE_FILE([db])
 AT_CHECK([test `wc -l < db` -eq 4])
 dnl And check that the dumped data is the same too:
-AT_CHECK([[ovsdb-server --remote=punix:socket --run "ovsdb-client dump unix:socket ordinals" db]],
-  [0], [stdout], [ignore])
+AT_CHECK([[ovsdb-server --detach --pidfile --no-chdir --remote=punix:socket db]],
+	 [0], [stdout], [ignore])
+AT_CHECK([[ovsdb-client dump unix:socket ordinals]],
+	 [0], [stdout], [ignore])
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+
 AT_CHECK([${PERL} $srcdir/uuidfilt.pl stdout], [0], [dnl
 ordinals table
 _uuid                                name  number
