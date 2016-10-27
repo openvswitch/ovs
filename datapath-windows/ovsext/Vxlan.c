@@ -260,10 +260,10 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
 
         /* L2 header */
         ethHdr = (EthHdr *)bufferStart;
-        ASSERT(((PCHAR)&fwdInfo->dstMacAddr + sizeof fwdInfo->dstMacAddr) ==
-               (PCHAR)&fwdInfo->srcMacAddr);
         NdisMoveMemory(ethHdr->Destination, fwdInfo->dstMacAddr,
-                       sizeof ethHdr->Destination + sizeof ethHdr->Source);
+                       sizeof ethHdr->Destination);
+        NdisMoveMemory(ethHdr->Source, fwdInfo->srcMacAddr,
+                       sizeof ethHdr->Source);
         ethHdr->Type = htons(ETH_TYPE_IPV4);
 
         /* IP header */
