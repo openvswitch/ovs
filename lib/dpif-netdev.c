@@ -3398,7 +3398,7 @@ dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id)
         /* We cannot call dp_netdev_del_pmd(), since it alters
          * 'dp->poll_threads' (while we're iterating it) and it
          * might quiesce. */
-        if (pmd->numa_id == numa_id) {
+        if (pmd->numa_id == numa_id && pmd->core_id != NON_PMD_CORE_ID) {
             atomic_read_relaxed(&pmd->static_tx_qid, &free_idx[k]);
             pmd_list[k] = pmd;
             ovs_assert(k < n_pmds_on_numa);
@@ -3416,7 +3416,7 @@ dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id)
 
         atomic_read_relaxed(&pmd->static_tx_qid, &old_tx_qid);
 
-        if (old_tx_qid >= n_pmds) {
+        if (old_tx_qid >= n_pmds && pmd->core_id != NON_PMD_CORE_ID) {
             int new_tx_qid = free_idx[--k];
 
             atomic_store_relaxed(&pmd->static_tx_qid, new_tx_qid);
