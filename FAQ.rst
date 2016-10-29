@@ -124,7 +124,7 @@ Q: How can I contribute to the Open vSwitch Community?
     A: You can start by joining the mailing lists and helping to answer
     questions.  You can also suggest improvements to documentation.  If you
     have a feature or bug you would like to work on, send a mail to `one of the
-    mailing lists `http://openvswitch.org/mlists/>`__
+    mailing lists <http://openvswitch.org/mlists/>`__.
 
 Q: Why can I no longer connect to my OpenFlow controller or OVSDB manager?
 
@@ -145,8 +145,8 @@ Q: What does it mean for an Open vSwitch release to be LTS (long-term support)?
     be fixed and may just be supplanted by the next major release.  The current
     LTS release is 2.3.x.
 
-    For more information on the Open vSwitch release process, refer `release
-    process <release-process.md>`__.
+    For more information on the Open vSwitch release process, refer to `release
+    process <Documentation/release-process.md>`__.
 
 Q: What Linux kernel versions does each Open vSwitch release work with?
 
