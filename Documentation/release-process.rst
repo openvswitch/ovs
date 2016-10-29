@@ -105,11 +105,11 @@ is subject to change.
 +-------------------+-----------------------+--------------------------------------+
 | **Time (months)** | **Approximate Dates** | **Event**                            |
 +-------------------+-----------------------+--------------------------------------+
-| T                 | Apr 1, Oct 1          | Release cycle for version x.y begins |
+| T                 | Mar 1, Sep 1          | Release cycle for version x.y begins |
 +-------------------+-----------------------+--------------------------------------+
-| T + 4             | Aug 1, Feb 1          | branch-x.y forks from master         |
+| T + 4             | Jul 1, Jan 1          | branch-x.y forks from master         |
 +-------------------+-----------------------+--------------------------------------+
-| T + 5.5           | Sep 15, Mar 15        | branch-x.y released as version x.y.0 |
+| T + 5.5           | Aug 15, Feb 15        | branch-x.y released as version x.y.0 |
 +-------------------+-----------------------+--------------------------------------+
 
 Contact
