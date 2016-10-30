@@ -80,7 +80,7 @@ docs = \
 	INSTALL.KVM.rst \
 	INSTALL.Libvirt.rst \
 	INSTALL.NetBSD.rst \
-	INSTALL.RHEL.md \
+	INSTALL.RHEL.rst \
 	INSTALL.SELinux.md \
 	INSTALL.SSL.rst \
 	INSTALL.XenServer.rst \

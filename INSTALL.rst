@@ -31,7 +31,7 @@ platform, refer to one of these installation guides:
 
 - `Debian <INSTALL.Debian.rst>`__
 - `Fedora <INSTALL.Fedora.rst>`__
-- `RHEL <INSTALL.RHEL.md>`__
+- `RHEL <INSTALL.RHEL.rst>`__
 - `XenServer <INSTALL.XenServer.rst>`__
 - `NetBSD <INSTALL.NetBSD.rst>`__
 - `Windows <INSTALL.Windows.rst>`__

@@ -290,7 +290,7 @@ The "underlay" mode
    Depending on your VM, you can make the above step persistent across reboots.
    For example, if your VM is Debian/Ubuntu-based, read
    `openvswitch-switch.README.Debian` found in `debian` folder. If your VM is
-   RHEL-based, refer to the `RHEL install guide <../../INSTALL.RHEL.md>`__.
+   RHEL-based, refer to the `RHEL install guide <../../INSTALL.RHEL.rst>`__.
 
 3. Start the Open vSwitch network driver
 

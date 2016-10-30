@@ -79,7 +79,7 @@ specific platform, please see one of the below installation guides:
 
 - `Debian <INSTALL.Debian.rst>`__
 - `Fedora <INSTALL.Fedora.rst>`__
-- `RHEL <INSTALL.RHEL.md>`__
+- `RHEL <INSTALL.RHEL.rst>`__
 - `XenServer <INSTALL.XenServer.rst>`__
 - `Windows <INSTALL.Windows.rst>`__
 
