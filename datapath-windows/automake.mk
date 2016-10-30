@@ -1,5 +1,5 @@
 EXTRA_DIST += \
-	datapath-windows/CodingStyle \
+	datapath-windows/CodingStyle.rst \
 	datapath-windows/DESIGN \
 	datapath-windows/Package/package.VcxProj \
 	datapath-windows/Package/package.VcxProj.user \
