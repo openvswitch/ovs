@@ -81,7 +81,7 @@ docs = \
 	INSTALL.Libvirt.rst \
 	INSTALL.NetBSD.rst \
 	INSTALL.RHEL.rst \
-	INSTALL.SELinux.md \
+	INSTALL.SELinux.rst \
 	INSTALL.SSL.rst \
 	INSTALL.XenServer.rst \
 	INSTALL.userspace.rst \

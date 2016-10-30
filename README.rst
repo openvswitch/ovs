@@ -96,7 +96,7 @@ To use Open vSwitch...
 
 - ...with DPDK, see `here <INSTALL.DPDK.rst>`__.
 
-- ...with SELinux, see `here <INSTALL.SELinux.md>`__.
+- ...with SELinux, see `here <INSTALL.SELinux.rst>`__.
 
 For answers to common questions, refer to the `FAQ <FAQ.rst>`__.
 
