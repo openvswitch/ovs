@@ -55,7 +55,7 @@ In addition to the requirements described in the `installation guide
 
 Detailed system requirements can be found at `DPDK requirements`_, while more
 detailed install information can be found in the `advanced installation guide
-<INSTALL.DPDK-ADVANCED.md>`__.
+<INSTALL.DPDK-ADVANCED.rst>`__.
 
 .. _DPDK supported NIC: http://dpdk.org/doc/nics
 .. _DPDK requirements: http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html
@@ -229,7 +229,7 @@ them to cores 1,2, run::
     $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=6
 
 For details on using ivshmem with DPDK, refer to `the advanced installation
-guide <INSTALL.DPDK-ADVANCED.md>`__.
+guide <INSTALL.DPDK-ADVANCED.rst>`__.
 
 Refer to ovs-vswitchd.conf.db(5) for additional information on configuration
 options.
@@ -338,7 +338,7 @@ DPDK 'testpmd' application can be run in the Guest VM for high speed packet
 forwarding between vhostuser ports. DPDK and testpmd application has to be
 compiled on the guest VM. Below are the steps for setting up the testpmd
 application in the VM. More information on the vhostuser ports can be found in
-the `advanced install guide <INSTALL.DPDK-ADVANCED.md>`__.
+the `advanced install guide <INSTALL.DPDK-ADVANCED.rst>`__.
 
 .. note::
   Support for DPDK in the guest requires QEMU >= 2.2.0.
@@ -574,12 +574,12 @@ When you finish testing, bind the vNICs back to kernel::
 
 .. note::
   More information on the dpdkvhostuser ports can be found in the `advanced
-  installation guide <INSTALL.DPDK-ADVANCED.md>`__.
+  installation guide <INSTALL.DPDK-ADVANCED.rst>`__.
 
 PHY-VM-PHY (IVSHMEM loopback)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Refer to the `advanced installation guide <INSTALL.DPDK-ADVANCED.md>`__.
+Refer to the `advanced installation guide <INSTALL.DPDK-ADVANCED.rst>`__.
 
 Limitations
 ------------

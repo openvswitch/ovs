@@ -74,7 +74,7 @@ docs = \
 	INSTALL.rst \
 	INSTALL.Debian.rst \
 	INSTALL.Docker.rst \
-	INSTALL.DPDK-ADVANCED.md \
+	INSTALL.DPDK-ADVANCED.rst \
 	INSTALL.DPDK.rst \
 	INSTALL.Fedora.rst \
 	INSTALL.KVM.rst \
