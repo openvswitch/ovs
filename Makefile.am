@@ -78,7 +78,7 @@ docs = \
 	INSTALL.DPDK.rst \
 	INSTALL.Fedora.rst \
 	INSTALL.KVM.rst \
-	INSTALL.Libvirt.md \
+	INSTALL.Libvirt.rst \
 	INSTALL.NetBSD.md \
 	INSTALL.RHEL.md \
 	INSTALL.SELinux.md \

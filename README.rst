@@ -90,7 +90,7 @@ To use Open vSwitch...
 - ...with KVM on Linux, see `here <INSTALL.rst>`__ and `here
   <INSTALL.KVM.rst>`__.
 
-- ...with Libvirt, see `here <INSTALL.Libvirt.md>`__.
+- ...with Libvirt, see `here <INSTALL.Libvirt.rst>`__.
 
 - ...without using a kernel module, see `here <INSTALL.userspace.rst>`__.
 
