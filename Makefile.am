@@ -82,7 +82,7 @@ docs = \
 	INSTALL.NetBSD.md \
 	INSTALL.RHEL.md \
 	INSTALL.SELinux.md \
-	INSTALL.SSL.md \
+	INSTALL.SSL.rst \
 	INSTALL.XenServer.rst \
 	INSTALL.userspace.rst \
 	INSTALL.Windows.rst \

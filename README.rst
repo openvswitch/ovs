@@ -101,7 +101,7 @@ To use Open vSwitch...
 For answers to common questions, refer to the `FAQ <FAQ.rst>`__.
 
 To learn how to set up SSL support for Open vSwitch, see `here
-<INSTALL.SSL.md>`__.
+<INSTALL.SSL.rst>`__.
 
 To learn about some advanced features of the Open vSwitch software switch, read
 the `tutorial <tutorial/Tutorial.md>`__.
