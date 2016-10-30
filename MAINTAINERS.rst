@@ -32,7 +32,7 @@ The responsibilities of an Open vSwitch committer are documented
 `here <Documentation/committer-responsibilities.md>`__.
 
 The process for adding or removing committers is documented
-`here <Documentation/committer-grant-revocation.md>`__.
+`here <Documentation/committer-grant-revocation.rst>`__.
 
 This is the current list of Open vSwitch committers:
 
