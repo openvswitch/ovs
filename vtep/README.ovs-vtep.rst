@@ -154,7 +154,7 @@ using the debian packages as mentioned in step 2 of the "Requirements" section.
 
 6. Start the VTEP emulator. If you installed the components following the
    `installation guide <../INSTALL.rst>`__ file, run the following from the
-   same directory as this README.md:
+   same directory as this README:
 
    ::
 

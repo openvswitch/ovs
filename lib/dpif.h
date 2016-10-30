@@ -113,7 +113,7 @@
  *
  *      In Open vSwitch userspace, "struct flow" is the typical way to describe
  *      a flow, but the datapath interface uses a different data format to
- *      allow ABI forward- and backward-compatibility.  datapath/README.md
+ *      allow ABI forward- and backward-compatibility.  datapath/README.rst
  *      describes the rationale and design.  Refer to OVS_KEY_ATTR_* and
  *      "struct ovs_key_*" in include/odp-netlink.h for details.
  *      lib/odp-util.h defines several functions for working with these flows.
