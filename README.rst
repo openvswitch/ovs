@@ -78,7 +78,7 @@ To install Open vSwitch on a regular Linux or FreeBSD host, please read the
 specific platform, please see one of the below installation guides:
 
 - `Debian <INSTALL.Debian.rst>`__
-- `Fedora <INSTALL.Fedora.md>`__
+- `Fedora <INSTALL.Fedora.rst>`__
 - `RHEL <INSTALL.RHEL.md>`__
 - `XenServer <INSTALL.XenServer.rst>`__
 - `Windows <INSTALL.Windows.rst>`__

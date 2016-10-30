@@ -8,7 +8,7 @@ on a generic Linux host, see [INSTALL.rst] instead.
 We have tested these instructions with RHEL 5.6 and RHEL 6.0.
 
 For RHEL 7.x (or derivatives, such as CentOS 7.x), you should follow
-the instructions in [INSTALL.Fedora.md].  The Fedora spec files are
+the instructions in [INSTALL.Fedora.rst].  The Fedora spec files are
 used for RHEL 7.x.
 
 Building Open vSwitch for RHEL
@@ -167,5 +167,5 @@ Reporting Bugs
 Please report problems to bugs@openvswitch.org.
 
 [INSTALL.rst]:INSTALL.rst
-[INSTALL.Fedora.md]:INSTALL.Fedora.md
+[INSTALL.Fedora.rst]:INSTALL.Fedora.rst
 [rhel/README.RHEL.rst]:rhel/README.RHEL.rst

@@ -76,7 +76,7 @@ docs = \
 	INSTALL.Docker.rst \
 	INSTALL.DPDK-ADVANCED.md \
 	INSTALL.DPDK.rst \
-	INSTALL.Fedora.md \
+	INSTALL.Fedora.rst \
 	INSTALL.KVM.rst \
 	INSTALL.Libvirt.md \
 	INSTALL.NetBSD.md \

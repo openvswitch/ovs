@@ -30,7 +30,7 @@ Linux, FreeBSD, or NetBSD host. For specifics around installation on a specific
 platform, refer to one of these installation guides:
 
 - `Debian <INSTALL.Debian.rst>`__
-- `Fedora <INSTALL.Fedora.md>`__
+- `Fedora <INSTALL.Fedora.rst>`__
 - `RHEL <INSTALL.RHEL.md>`__
 - `XenServer <INSTALL.XenServer.rst>`__
 - `NetBSD <INSTALL.NetBSD.md>`__
