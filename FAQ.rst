@@ -146,7 +146,7 @@ Q: What does it mean for an Open vSwitch release to be LTS (long-term support)?
     LTS release is 2.3.x.
 
     For more information on the Open vSwitch release process, refer to `release
-    process <Documentation/release-process.md>`__.
+    process <Documentation/release-process.rst>`__.
 
 Q: What Linux kernel versions does each Open vSwitch release work with?
 

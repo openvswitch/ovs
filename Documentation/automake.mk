@@ -3,4 +3,4 @@ docs += \
 	Documentation/committer-grant-revocation.rst \
 	Documentation/group-selection-method-property.txt \
 	Documentation/OVSDB-replication.md \
-	Documentation/release-process.md
+	Documentation/release-process.rst
