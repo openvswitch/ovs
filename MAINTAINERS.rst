@@ -29,7 +29,7 @@ Open vSwitch committers are the people who have been granted access to push
 changes to to the Open vSwitch git repository.
 
 The responsibilities of an Open vSwitch committer are documented
-`here <Documentation/committer-responsibilities.md>`__.
+`here <Documentation/committer-responsibilities.rst>`__.
 
 The process for adding or removing committers is documented
 `here <Documentation/committer-grant-revocation.rst>`__.
