@@ -813,7 +813,7 @@ struct ofputil_table_features {
      * supported, otherwise 0.  For other versions, they are decoded as -1 and
      * ignored for encoding.
      *
-     * See the section "OFPTC_* Table Configuration" in DESIGN.md for more
+     * See the section "OFPTC_* Table Configuration" in DESIGN.rst for more
      * details of how OpenFlow has changed in this area.
      */
     enum ofputil_table_miss miss_config; /* OF1.1 and 1.2 only. */

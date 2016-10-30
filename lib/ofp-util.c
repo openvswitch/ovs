@@ -5675,7 +5675,7 @@ ofputil_encode_table_config(enum ofputil_table_miss miss,
                             enum ofp_version version)
 {
     uint32_t config = 0;
-    /* See the section "OFPTC_* Table Configuration" in DESIGN.md for more
+    /* See the section "OFPTC_* Table Configuration" in DESIGN.rst for more
      * information on the crazy evolution of this field. */
     switch (version) {
     case OFP10_VERSION:

@@ -342,7 +342,7 @@
       It's possible, however, for some other bridge in the same system to have
       an in-band remote controller, and in that case this suppresses the flows
       that in-band control would ordinarily set up.  See <code>In-Band
-      Control</code> in <code>DESIGN.md</code> for more information.
+      Control</code> in <code>DESIGN.rst</code> for more information.
     </dd>
   </dl>
 

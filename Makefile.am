@@ -68,7 +68,7 @@ PYCOV_CLEAN_FILES = build-aux/check-structs,cover
 docs = \
 	CONTRIBUTING.rst \
 	CodingStyle.rst \
-	DESIGN.md \
+	DESIGN.rst \
 	DocumentationStyle.rst \
 	FAQ.rst \
 	INSTALL.rst \
