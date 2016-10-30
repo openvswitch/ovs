@@ -33,7 +33,7 @@ platform, refer to one of these installation guides:
 - `Fedora <INSTALL.Fedora.rst>`__
 - `RHEL <INSTALL.RHEL.md>`__
 - `XenServer <INSTALL.XenServer.rst>`__
-- `NetBSD <INSTALL.NetBSD.md>`__
+- `NetBSD <INSTALL.NetBSD.rst>`__
 - `Windows <INSTALL.Windows.rst>`__
 - `DPDK <INSTALL.DPDK.rst>`__
 

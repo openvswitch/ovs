@@ -79,7 +79,7 @@ docs = \
 	INSTALL.Fedora.rst \
 	INSTALL.KVM.rst \
 	INSTALL.Libvirt.rst \
-	INSTALL.NetBSD.md \
+	INSTALL.NetBSD.rst \
 	INSTALL.RHEL.md \
 	INSTALL.SELinux.md \
 	INSTALL.SSL.rst \
