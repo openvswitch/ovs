@@ -157,8 +157,8 @@ Red Hat Network Scripts Integration
 -----------------------------------
 
 Simple integration with Red Hat network scripts has been implemented.
-Please read [rhel/README.RHEL] in the source tree or
-/usr/share/doc/openvswitch/README.RHEL in the installed openvswitch
+Please read [rhel/README.RHEL.rst] in the source tree or
+/usr/share/doc/openvswitch/README.RHEL.rst in the installed openvswitch
 package for details.
 
 Reporting Bugs
@@ -168,4 +168,4 @@ Please report problems to bugs@openvswitch.org.
 
 [INSTALL.rst]:INSTALL.rst
 [INSTALL.Fedora.md]:INSTALL.Fedora.md
-[rhel/README.RHEL]:rhel/README.RHEL
+[rhel/README.RHEL.rst]:rhel/README.RHEL.rst

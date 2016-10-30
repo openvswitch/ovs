@@ -127,4 +127,4 @@ Please report problems to bugs@openvswitch.org.
 
 [INSTALL.rst]:INSTALL.rst
 [FAQ.rst]:FAQ.rst
-[README.RHEL]:rhel/README.RHEL
+[README.RHEL]:rhel/README.RHEL.rst
