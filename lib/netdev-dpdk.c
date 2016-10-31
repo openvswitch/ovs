@@ -2803,7 +2803,7 @@ netdev_dpdk_set_qos(struct netdev *netdev, const char *type,
         if (type && type[0]) {
             error = EOPNOTSUPP;
         }
-    } else if (qos_conf->ops == new_ops
+    } else if (qos_conf && qos_conf->ops == new_ops
                && qos_conf->ops->qos_is_equal(qos_conf, details)) {
         new_qos_conf = qos_conf;
     } else {
