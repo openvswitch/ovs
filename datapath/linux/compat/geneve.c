@@ -738,6 +738,23 @@ static void geneve_build_header(struct genevehdr *geneveh,
 	memcpy(geneveh->options, options, options_len);
 }
 
+static int push_vlan_tag(struct sk_buff *skb)
+{
+	if (skb_vlan_tag_present(skb)) {
+		__be16 vlan_proto = skb->vlan_proto;
+		int err;
+
+		err = __vlan_insert_tag(skb, skb->vlan_proto,
+					skb_vlan_tag_get(skb));
+
+		if (unlikely(err))
+			return err;
+		skb->vlan_tci = 0;
+		skb->protocol = vlan_proto;
+	}
+	return 0;
+}
+
 static int geneve_build_skb(struct rtable *rt, struct sk_buff *skb,
 			    __be16 tun_flags, u8 vni[3], u8 opt_len, u8 *opt,
 			    u32 flags, bool xnet)
@@ -750,8 +767,14 @@ static int geneve_build_skb(struct rtable *rt, struct sk_buff *skb,
 	skb_scrub_packet(skb, xnet);
 
 	min_headroom = LL_RESERVED_SPACE(rt->dst.dev) + rt->dst.header_len
-			+ GENEVE_BASE_HLEN + opt_len + sizeof(struct iphdr);
+			+ GENEVE_BASE_HLEN + opt_len + sizeof(struct iphdr)
+			+ (skb_vlan_tag_present(skb) ? VLAN_HLEN : 0);
+
 	err = skb_cow_head(skb, min_headroom);
+	if (unlikely(err))
+		goto free_rt;
+
+	err = push_vlan_tag(skb);
 	if (unlikely(err))
 		goto free_rt;
 
@@ -783,8 +806,14 @@ static int geneve6_build_skb(struct dst_entry *dst, struct sk_buff *skb,
 	skb_scrub_packet(skb, xnet);
 
 	min_headroom = LL_RESERVED_SPACE(dst->dev) + dst->header_len
-			+ GENEVE_BASE_HLEN + opt_len + sizeof(struct ipv6hdr);
+			+ GENEVE_BASE_HLEN + opt_len + sizeof(struct ipv6hdr)
+			+ (skb_vlan_tag_present(skb) ? VLAN_HLEN : 0);
+
 	err = skb_cow_head(skb, min_headroom);
+	if (unlikely(err))
+		goto free_dst;
+
+	err = push_vlan_tag(skb);
 	if (unlikely(err))
 		goto free_dst;
 
