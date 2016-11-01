@@ -431,20 +431,20 @@ ip_parse(const char *s, ovs_be32 *ip)
 
 /* Parses string 's', which must be an IP address with a port number
  * with ":" as a separator (e.g.: 192.168.1.2:80).
- * Stores the IP address into '*ip' and port number to '*port'. */
+ * Stores the IP address into '*ip' and port number to '*port'.
+ *
+ * Returns NULL if successful, otherwise an error message that the caller must
+ * free(). */
 char * OVS_WARN_UNUSED_RESULT
 ip_parse_port(const char *s, ovs_be32 *ip, ovs_be16 *port)
 {
     int n = 0;
-    if (!ovs_scan_len(s, &n, IP_PORT_SCAN_FMT,
-                IP_PORT_SCAN_ARGS(ip, port))) {
-        return xasprintf("%s: invalid IP address or port number", s);
+    if (ovs_scan(s, IP_PORT_SCAN_FMT"%n", IP_PORT_SCAN_ARGS(ip, port), &n)
+        && !s[n]) {
+        return NULL;
     }
 
-    if (s[n]) {
-        return xasprintf("%s: invalid IP address or port number", s);
-    }
-    return NULL;
+    return xasprintf("%s: invalid IP address or port number", s);
 }
 
 /* Parses string 's', which must be an IP address with an optional netmask or
