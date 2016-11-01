@@ -2426,6 +2426,7 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                 ovn_lflow_add(lflows, od, stage,
                               acl->priority + OVN_ACL_PRI_OFFSET,
                               acl->match, "drop;");
+                ds_destroy(&match);
             }
         }
     }
