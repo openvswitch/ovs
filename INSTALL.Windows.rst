@@ -52,7 +52,7 @@ The following explains the steps in some detail.
   automake and autoconf(version 2.68).
 
   Also make sure that ``/mingw`` mount point exists. If its not, please
-  add/create the following entry in ``/etc/fstab``:::
+  add/create the following entry in ``/etc/fstab``::
 
       'C:/MinGW /mingw'.
 
@@ -123,7 +123,7 @@ Bootstrapping
 This step is not needed if you have downloaded a released tarball. If
 you pulled the sources directly from an Open vSwitch Git tree or got a
 Git tree snapshot, then run boot.sh in the top source directory to build
-the "configure" script:::
+the "configure" script::
 
     > ./boot.sh
 
@@ -134,7 +134,7 @@ Configuring
 
 Configure the package by running the configure script.  You should provide some
 configure options to choose the right compiler, linker, libraries, Open vSwitch
-component installation directories, etc. For example:::
+component installation directories, etc. For example::
 
     > ./configure CC=./build-aux/cccl LD="$(which link)" \
         LIBS="-lws2_32 -liphlpapi" --prefix="C:/openvswitch/usr" \
@@ -146,7 +146,7 @@ component installation directories, etc. For example:::
   By default, the above enables compiler optimization for fast code.  For
   default compiler optimization, pass the ``--with-debug`` configure option.
 
-To configure with SSL support, add the requisite additional options:::
+To configure with SSL support, add the requisite additional options::
 
     > ./configure CC=./build-aux/cccl LD="`which link`"  \
         LIBS="-lws2_32 -liphlpapi" --prefix="C:/openvswitch/usr" \
@@ -155,7 +155,7 @@ To configure with SSL support, add the requisite additional options:::
          --with-pthread="C:/pthread" \
          --enable-ssl --with-openssl="C:/OpenSSL-Win32"
 
-Finally, to the kernel module also:::
+Finally, to the kernel module also::
 
     > ./configure CC=./build-aux/cccl LD="`which link`" \
         LIBS="-lws2_32 -liphlpapi" --prefix="C:/openvswitch/usr" \
@@ -182,7 +182,7 @@ Building
 Once correctly configured, building Open vSwitch on Windows is similar to
 building on Linux, FreeBSD, or NetBSD.
 
-#. Run make for the ported executables in the top source directory, e.g.:::
+#. Run make for the ported executables in the top source directory, e.g.::
 
        > make
 
@@ -198,15 +198,15 @@ building on Linux, FreeBSD, or NetBSD.
 
          > mingw-get upgrade msys-core-bin=1.0.17-1
 
-#. To run all the unit tests in Open vSwitch, one at a time:::
+#. To run all the unit tests in Open vSwitch, one at a time::
 
        > make check
 
-   To run all the unit tests in Open vSwitch, up to 8 in parallel:::
+   To run all the unit tests in Open vSwitch, up to 8 in parallel::
 
        > make check TESTSUITEFLAGS="-j8"
 
-#. To install all the compiled executables on the local machine, run:::
+#. To install all the compiled executables on the local machine, run::
 
        > make install
 
@@ -236,7 +236,7 @@ the target Hyper-V machine.
 Now run ``./uninstall.cmd`` to remove the old extension. Once complete, run
 ``./install.cmd`` to insert the new one.  For this to work you will have to
 turn on ``TESTSIGNING`` boot option or 'Disable Driver Signature
-Enforcement' during boot.  The following commands can be used:::
+Enforcement' during boot.  The following commands can be used::
 
     > bcdedit /set LOADOPTIONS DISABLE_INTEGRITY_CHECKS
     > bcdedit /set TESTSIGNING ON
@@ -251,7 +251,7 @@ existing switch, make sure to enable the "Allow Management OS" option for VXLAN
 to work (covered later).
 
 The command to create a new switch named 'OVS-Extended-Switch' using a physical
-NIC named 'Ethernet 1' is:::
+NIC named 'Ethernet 1' is::
 
     PS > New-VMSwitch "OVS-Extended-Switch" -AllowManagementOS $true \
         -NetAdapterName "Ethernet 1"
@@ -262,7 +262,7 @@ NIC named 'Ethernet 1' is:::
 
 In the properties of any switch, you should should now see "Open vSwitch
 Extension" under 'Extensions'.  Click the check box to enable the extension.
-An alternative way to do the same is to run the following command:::
+An alternative way to do the same is to run the following command::
 
     PS > Enable-VMSwitchExtension "Open vSwitch Extension" OVS-Extended-Switch
 
@@ -302,7 +302,7 @@ harmless::
     > ovs-vsctl --no-wait init
 
 .. tip::
-  If you would later like to terminate the started ovsdb-server, run:::
+  If you would later like to terminate the started ovsdb-server, run::
 
       > ovs-appctl -t ovsdb-server exit
 
@@ -312,7 +312,7 @@ domain socket::
     > ovs-vswitchd -vfile:info --log-file --pidfile --detach
 
 .. tip::
-  If you would like to terminate the started ovs-vswitchd, run:::
+  If you would like to terminate the started ovs-vswitchd, run::
 
       > ovs-appctl exit
 
@@ -329,7 +329,7 @@ Add bridges
 ~~~~~~~~~~~
 
 Let's start by creating an integration bridge, ``br-int`` and a PIF bridge,
-``br-pif``:::
+``br-pif``::
 
     > ovs-vsctl add-br br-int
     > ovs-vsctl add-br br-pif
@@ -340,7 +340,7 @@ Let's start by creating an integration bridge, ``br-int`` and a PIF bridge,
   issue despite that, hit Ctrl-C to terminate ovs-vsctl and check the output to
   see if your command succeeded.
 
-Validate that ports are added by dumping from both ovs-dpctl and ovs-vsctl:::
+Validate that ports are added by dumping from both ovs-dpctl and ovs-vsctl::
 
     > ovs-dpctl show
     system@ovs-system:
@@ -387,7 +387,7 @@ switch using the instructions above.  In OVS for Hyper-V, we use a the name of
 that specific adapter as a special name to refer to that adapter. By default it
 is created under the following rule ``vEthernet (<name of the switch>)``.
 
-As a whole example, if we issue the following in a powershell console:::
+As a whole example, if we issue the following in a powershell console::
 
     PS C:\package\binaries> Get-NetAdapter | select Name,MacAddress,InterfaceDescription
     Name                   MacAddress         InterfaceDescription
@@ -403,12 +403,12 @@ As a whole example, if we issue the following in a powershell console:::
 
 We can see that we have a switch(external) created upon adapter name
 'Ethernet0' with an internal port under name ``vEthernet (external)``. Thus
-resulting into the following ovs-vsctl commands:::
+resulting into the following ovs-vsctl commands::
 
     > ovs-vsctl add-port br-pif Ethernet0
     > ovs-vsctl add-port br-pif "vEthernet (external)"
 
-Dumping the ports should show the additional ports that were just added:::
+Dumping the ports should show the additional ports that were just added::
 
     > ovs-dpctl show
     system@ovs-system:
@@ -459,11 +459,11 @@ assumed to be the Hyper-V switch with OVS extension enabled.::
     PS> Connect-VMNetworkAdapter -VMNetworkAdapter $vnic[0] \
           -SwitchName OVS-Extended-Switch
 
-Next, add the VIFs to ``br-int``:::
+Next, add the VIFs to ``br-int``::
 
     > ovs-vsctl add-port br-int ovs-port-a
 
-Dumping the ports should show the additional ports that were just added:::
+Dumping the ports should show the additional ports that were just added::
 
     > ovs-dpctl show
     system@ovs-system:
@@ -498,19 +498,19 @@ Add patch ports and configure VLAN tagging
 The Windows Open vSwitch implementation support VLAN tagging in the switch.
 Switch VLAN tagging along with patch ports between ``br-int`` and ``br-pif`` is
 used to configure VLAN tagging functionality between two VMs on different
-Hyper-Vs.  To start, add a patch port from ``br-int`` to ``br-pif``:::
+Hyper-Vs.  To start, add a patch port from ``br-int`` to ``br-pif``::
 
     > ovs-vsctl add-port br-int patch-to-pif
     > ovs-vsctl set interface patch-to-pif type=patch \
         options:peer=patch-to-int
 
-Add a patch port from ``br-pif`` to ``br-int``:::
+Add a patch port from ``br-pif`` to ``br-int``::
 
     > ovs-vsctl add-port br-pif patch-to-int
     > ovs-vsctl set interface patch-to-int type=patch \
         options:peer=patch-to-pif
 
-Re-Add the VIF ports with the VLAN tag:::
+Re-Add the VIF ports with the VLAN tag::
 
     > ovs-vsctl add-port br-int ovs-port-a tag=900
     > ovs-vsctl add-port br-int ovs-port-b tag=900
@@ -520,7 +520,7 @@ Add tunnels
 
 The Windows Open vSwitch implementation support VXLAN and STT tunnels. To add
 tunnels. For example, first add the tunnel port between 172.168.201.101 <->
-172.168.201.102:::
+172.168.201.102::
 
     > ovs-vsctl add-port br-int tun-1
     > ovs-vsctl set Interface tun-1 type=<port-type>
@@ -529,7 +529,7 @@ tunnels. For example, first add the tunnel port between 172.168.201.101 <->
     > ovs-vsctl set Interface tun-1 options:in_key=flow
     > ovs-vsctl set Interface tun-1 options:out_key=flow
 
-...and the tunnel port between 172.168.201.101 <-> 172.168.201.105:::
+...and the tunnel port between 172.168.201.101 <-> 172.168.201.105::
 
     > ovs-vsctl add-port br-int tun-2
     > ovs-vsctl set Interface tun-2 type=<port-type>
@@ -554,12 +554,12 @@ daemons via ``make install``.
 .. note::
   The commands shown here can be run from MSYS bash or Windows command prompt.
 
-To start, create the database:::
+To start, create the database::
 
     > ovsdb-tool create C:/openvswitch/etc/openvswitch/conf.db \
         "C:/openvswitch/usr/share/openvswitch/vswitch.ovsschema"
 
-Create the ovsdb-server service and start it:::
+Create the ovsdb-server service and start it::
 
     > sc create ovsdb-server \
         binpath="C:/openvswitch/usr/sbin/ovsdb-server.exe \
@@ -571,30 +571,30 @@ Create the ovsdb-server service and start it:::
 .. tip::
   One of the common issues with creating a Windows service is with mungled
   paths.  You can make sure that the correct path has been registered with the
-  Windows services manager by running:::
+  Windows services manager by running::
 
       > sc qc ovsdb-server
 
-Check that the service is healthy by running:::
+Check that the service is healthy by running::
 
     > sc query ovsdb-server
 
-Initialize the database:::
+Initialize the database::
 
     > ovs-vsctl --no-wait init
 
-Create the ovs-vswitchd service and start it:::
+Create the ovs-vswitchd service and start it::
 
     > sc create ovs-vswitchd \
       binpath="C:/openvswitch/usr/sbin/ovs-vswitchd.exe \
       --pidfile -vfile:info --log-file  --service --service-monitor"
     > sc start ovs-vswitchd
 
-Check that the service is healthy by running:::
+Check that the service is healthy by running::
 
     > sc query ovs-vswitchd
 
-To stop and delete the services, run:::
+To stop and delete the services, run::
 
     > sc stop ovs-vswitchd
     > sc stop ovsdb-server

@@ -66,7 +66,7 @@ Installing
 DPDK
 ~~~~
 
-1. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``:::
+1. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
 
        $ cd /usr/src/
        $ wget http://dpdk.org/browse/dpdk/snapshot/dpdk-16.07.zip
@@ -76,13 +76,13 @@ DPDK
 
 2. Configure and install DPDK
 
-   Build and install the DPDK library:::
+   Build and install the DPDK library::
 
        $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
        $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
        $ make install T=$DPDK_TARGET DESTDIR=install
 
-   If IVSHMEM support is required, use a different target:::
+   If IVSHMEM support is required, use a different target::
 
        $ export DPDK_TARGET=x86_64-ivshmem-linuxapp-gcc
 
@@ -106,7 +106,7 @@ has to be configured with DPDK support (``--with-dpdk``).
 2. Bootstrap, if required, as described in the `installation guide
    <INSTALL.rst>`__.
 
-3. Configure the package using the ``--with-dpdk`` flag:::
+3. Configure the package using the ``--with-dpdk`` flag::
 
        $ ./configure --with-dpdk=$DPDK_BUILD
 
@@ -132,19 +132,19 @@ Setup Hugepages
 Allocate a number of 2M Huge pages:
 
 -  For persistent allocation of huge pages, write to hugepages.conf file
-   in `/etc/sysctl.d`:::
+   in `/etc/sysctl.d`::
 
        $ echo 'vm.nr_hugepages=2048' > /etc/sysctl.d/hugepages.conf
 
--  For run-time allocation of huge pages, use the ``sysctl`` utility:::
+-  For run-time allocation of huge pages, use the ``sysctl`` utility::
 
        $ sysctl -w vm.nr_hugepages=N  # where N = No. of 2M huge pages
 
-To verify hugepage configuration:::
+To verify hugepage configuration::
 
     $ grep HugePages_ /proc/meminfo
 
-Mount the hugepages, if not already mounted by default:::
+Mount the hugepages, if not already mounted by default::
 
     $ mount -t hugetlbfs none /dev/hugepages``
 
@@ -157,13 +157,13 @@ VFIO is prefered to the UIO driver when using recent versions of DPDK. VFIO
 support required support from both the kernel and BIOS. For the former, kernel
 version > 3.6 must be used. For the latter, you must enable VT-d in the BIOS
 and ensure this is configured via grub. To ensure VT-d is enabled via the BIOS,
-run:::
+run::
 
     $ dmesg | grep -e DMAR -e IOMMU
 
 If VT-d is not enabled in the BIOS, enable it now.
 
-To ensure VT-d is enabled in the kernel, run:::
+To ensure VT-d is enabled in the kernel, run::
 
     $ cat /proc/cmdline | grep iommu=pt
     $ cat /proc/cmdline | grep intel_iommu=on
@@ -171,7 +171,7 @@ To ensure VT-d is enabled in the kernel, run:::
 If VT-d is not enabled in the kernel, enable it now.
 
 Once VT-d is correctly configured, load the required modules and bind the NIC
-to the VFIO driver:::
+to the VFIO driver::
 
     $ modprobe vfio-pci
     $ /usr/bin/chmod a+x /dev/vfio
@@ -187,7 +187,7 @@ Open vSwitch should be started as described in the `installation guide
 special configuration to enable DPDK functionality. DPDK configuration
 arguments can be passed to ovs-vswitchd via the ``other_config`` column of the
 ``Open_vSwitch`` table. At a minimum, the ``dpdk-init`` option must be set to
-``true``. For example:::
+``true``. For example::
 
     $ export DB_SOCK=/usr/local/var/run/openvswitch/db.sock
     $ ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true
@@ -216,7 +216,7 @@ listed below. Defaults will be provided for all values not explicitly set.
 
 If allocating more than one GB hugepage (as for IVSHMEM), you can configure the
 amount of memory used from any given NUMA nodes. For example, to use 1GB from
-NUMA node 0, run:::
+NUMA node 0, run::
 
     $ ovs-vsctl --no-wait set Open_vSwitch . \
         other_config:dpdk-socket-mem="1024,0"
@@ -224,7 +224,7 @@ NUMA node 0, run:::
 Similarly, if you wish to better scale the workloads across cores, then
 multiple pmd threads can be created and pinned to CPU cores by explicity
 specifying ``pmd-cpu-mask``. For example, to spawn two pmd threads and pin
-them to cores 1,2, run:::
+them to cores 1,2, run::
 
     $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=6
 
@@ -245,33 +245,33 @@ Creating bridges and ports
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 You can now use ovs-vsctl to set up bridges and other Open vSwitch features.
-Bridges should be created with a ``datapath_type=netdev``:::
+Bridges should be created with a ``datapath_type=netdev``::
 
     $ ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev
 
 Now you can add DPDK devices. OVS expects DPDK device names to start with
 ``dpdk`` and end with a portid. ovs-vswitchd should print the number of dpdk
-devices found in the log file:::
+devices found in the log file::
 
     $ ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
     $ ovs-vsctl add-port br0 dpdk1 -- set Interface dpdk1 type=dpdk
 
 After the DPDK ports get added to switch, a polling thread continuously polls
 DPDK devices and consumes 100% of the core, as can be checked from 'top' and
-'ps' cmds:::
+'ps' cmds::
 
     $ top -H
     $ ps -eLo pid,psr,comm | grep pmd
 
 Creating bonds of DPDK interfaces is slightly different to creating bonds of
 system interfaces. For DPDK, the interface type must be explicitly set. For
-example:::
+example::
 
     $ ovs-vsctl add-bond br0 dpdkbond dpdk0 dpdk1 \
         -- set Interface dpdk0 type=dpdk \
         -- set Interface dpdk1 type=dpdk
 
-To stop ovs-vswitchd & delete bridge, run:::
+To stop ovs-vswitchd & delete bridge, run::
 
     $ ovs-appctl -t ovs-vswitchd exit
     $ ovs-appctl -t ovsdb-server exit
@@ -280,23 +280,23 @@ To stop ovs-vswitchd & delete bridge, run:::
 PMD thread statistics
 ~~~~~~~~~~~~~~~~~~~~~
 
-To show current stats:::
+To show current stats::
 
     $ ovs-appctl dpif-netdev/pmd-stats-show
 
-To clear previous stats:::
+To clear previous stats::
 
     $ ovs-appctl dpif-netdev/pmd-stats-clear
 
 Port/rxq assigment to PMD threads
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To show port/rxq assignment:::
+To show port/rxq assignment::
 
     $ ovs-appctl dpif-netdev/pmd-rxq-show
 
 To change default rxq assignment to pmd threads, rxqs may be manually pinned to
-desired cores using:::
+desired cores using::
 
     $ ovs-vsctl set Interface <iface> \
         other_config:pmd-rxq-affinity=<rxq-affinity-list>
@@ -308,7 +308,7 @@ where:
                            ``<affinity-pair>`` , ``<non-empty-list>``
 - ``<affinity-pair>`` ::= ``<queue-id>`` : ``<core-id>``
 
-For example:::
+For example::
 
     $ ovs-vsctl set interface dpdk0 options:n_rxq=4 \
         other_config:pmd-rxq-affinity="0:3,1:7,3:8"
@@ -343,7 +343,7 @@ the `advanced install guide <INSTALL.DPDK-ADVANCED.md>`__.
 .. note::
   Support for DPDK in the guest requires QEMU >= 2.2.0.
 
-To being, instantiate the guest:::
+To being, instantiate the guest::
 
     $ export VM_NAME=Centos-vm export GUEST_MEM=3072M
     $ export QCOW2_IMAGE=/root/CentOS7_x86_64.qcow2
@@ -360,7 +360,7 @@ To being, instantiate the guest:::
         -netdev type=vhost-user,id=mynet2,chardev=char1,vhostforce \
         -device virtio-net-pci,mac=00:00:00:00:00:02,netdev=mynet2,mrg_rxbuf=off \
 
-Download the DPDK sourcs to VM and build DPDK:::
+Download the DPDK sourcs to VM and build DPDK::
 
     $ cd /root/dpdk/
     $ wget http://dpdk.org/browse/dpdk/snapshot/dpdk-16.07.zip
@@ -371,14 +371,14 @@ Download the DPDK sourcs to VM and build DPDK:::
     $ cd $DPDK_DIR
     $ make install T=$DPDK_TARGET DESTDIR=install
 
-Build the test-pmd application:::
+Build the test-pmd application::
 
     $ cd app/test-pmd
     $ export RTE_SDK=$DPDK_DIR
     $ export RTE_TARGET=$DPDK_TARGET
     $ make
 
-Setup huge pages and DPDK devices using UIO:::
+Setup huge pages and DPDK devices using UIO::
 
     $ sysctl vm.nr_hugepages=1024
     $ mkdir -p /dev/hugepages
@@ -398,7 +398,7 @@ Testing
 -------
 
 Below are few testcases and the list of steps to be followed. Before beginning,
-ensure a userspace bridge has been created and two DPDK ports added:::
+ensure a userspace bridge has been created and two DPDK ports added::
 
     $ ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev
     $ ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
@@ -407,7 +407,7 @@ ensure a userspace bridge has been created and two DPDK ports added:::
 PHY-PHY
 ~~~~~~~
 
-Add test flows to forward packets betwen DPDK port 0 and port 1:::
+Add test flows to forward packets betwen DPDK port 0 and port 1::
 
     # Clear current flows
     $ ovs-ofctl del-flows br0
@@ -421,14 +421,14 @@ Transmit traffic into either port. You should see it returned via the other.
 PHY-VM-PHY (vhost loopback)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Add two ``dpdkvhostuser`` ports to bridge ``br0``:::
+Add two ``dpdkvhostuser`` ports to bridge ``br0``::
 
     $ ovs-vsctl add-port br0 dpdkvhostuser0 \
         -- set Interface dpdkvhostuser0 type=dpdkvhostuser
     $ ovs-vsctl add-port br0 dpdkvhostuser1 \
         -- set Interface dpdkvhostuser1 type=dpdkvhostuser
 
-Add test flows to forward packets betwen DPDK devices and VM ports:::
+Add test flows to forward packets betwen DPDK devices and VM ports::
 
     # Clear current flows
     $ ovs-ofctl del-flows br0
@@ -456,7 +456,7 @@ Create a VM using the following configuration:
 +----------------------+--------+-----------------+
 
 You can do this directly with QEMU via the ``qemu-system-x86_64``
-application:::
+application::
 
     $ export VM_NAME=vhost-vm
     $ export GUEST_MEM=3072M
@@ -475,7 +475,7 @@ application:::
       -device virtio-net-pci,mac=00:00:00:00:00:02,netdev=mynet2,mrg_rxbuf=off
 
 Alternatively, you can configure the guest using libvirt. Below is an XML
-configuration for a 'demovm' guest that can be instantiated using `virsh`:::
+configuration for a 'demovm' guest that can be instantiated using `virsh`::
 
     <domain type='kvm'>
       <name>demovm</name>
@@ -553,7 +553,7 @@ configuration for a 'demovm' guest that can be instantiated using `virsh`:::
 Once the guest is configured and booted, configure DPDK packet forwarding
 within the guest. To accomplish this, DPDK and testpmd application have to
 be first compiled on the VM as described in **Guest Setup**. Once compiled, run
-the ``test-pmd`` application:::
+the ``test-pmd`` application::
 
     $ cd $DPDK_DIR/app/test-pmd;
     $ ./testpmd -c 0x3 -n 4 --socket-mem 1024 -- \
@@ -561,14 +561,14 @@ the ``test-pmd`` application:::
     $ set fwd mac retry
     $ start
 
-When you finish testing, bind the vNICs back to kernel:::
+When you finish testing, bind the vNICs back to kernel::
 
     $ $DPDK_DIR/tools/dpdk-devbind.py --bind=virtio-pci 0000:00:03.0
     $ $DPDK_DIR/tools/dpdk-devbind.py --bind=virtio-pci 0000:00:04.0
 
 .. note::
   Appropriate PCI IDs to be passed in above example. The PCI IDs can be
-  retrieved like so:::
+  retrieved like so::
 
       $ $DPDK_DIR/tools/dpdk-devbind.py --status
 

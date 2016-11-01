@@ -37,7 +37,7 @@ Setup
 -----
 
 KVM uses tunctl to handle various bridging modes, which you can install with
-the Debian/Ubuntu package ``uml-utilities``:::
+the Debian/Ubuntu package ``uml-utilities``::
 
     $ apt-get install uml-utilities
 
@@ -45,7 +45,7 @@ Next, you will need to modify or create custom versions of the ``qemu-ifup``
 and ``qemu-ifdown`` scripts. In this guide, we'll create custom versions that
 make use of example Open vSwitch bridges that we'll describe in this guide.
 
-Create the following two files and store them in known locations. For example:::
+Create the following two files and store them in known locations. For example::
 
     echo << EOF > /etc/ovs-ifup
     #!/bin/sh
@@ -66,18 +66,18 @@ Create the following two files and store them in known locations. For example:::
 
 The basic usage of Open vSwitch is described at the end of the `installation
 guide <INSTALL.rst>`__. If you haven't already, create a bridge named ``br0``
-with the following command:::
+with the following command::
 
     $ ovs-vsctl add-br br0
 
 Then, add a port to the bridge for the NIC that you want your guests to
-communicate over (e.g. ``eth0``):::
+communicate over (e.g. ``eth0``)::
 
     $ ovs-vsctl add-port br0 eth0
 
 Refer to ovs-vsctl(8) for more details.
 
-Next, we'll start a guest that will use our ifup and ifdown scripts:::
+Next, we'll start a guest that will use our ifup and ifdown scripts::
 
     $ kvm -m 512 -net nic,macaddr=00:11:22:EE:EE:EE -net \
         tap,script=/etc/ovs-ifup,downscript=/etc/ovs-ifdown -drive \
@@ -88,7 +88,7 @@ script will add a port on the br0 bridge so that the guest will be able to
 communicate over that bridge.
 
 To get some more information and for debugging you can use Open vSwitch
-utilities such as ovs-dpctl and ovs-ofctl, For example:::
+utilities such as ovs-dpctl and ovs-ofctl, For example::
 
     $ ovs-dpctl show
     $ ovs-ofctl show br0

@@ -50,7 +50,7 @@ Git tree with these instructions.
 
 You do not need to be the superuser to build the Debian packages.
 
-1. Install the "build-essential" and "fakeroot" packages. For example:::
+1. Install the "build-essential" and "fakeroot" packages. For example::
 
        $ apt-get install build-essential fakeroot
 
@@ -66,17 +66,17 @@ directory. If you've installed all the dependencies properly,
 ``dpkg-checkbuilddeps`` will exit without printing anything. If you forgot to
 install some dependencies, it will tell you which ones.
 
-4. Build the package:::
+4. Build the package::
 
        $ fakeroot debian/rules binary
 
    This will do a serial build that runs the unit tests. This will take
    approximately 8 to 10 minutes. If you prefer, you can run a faster parallel
-   build:::
+   build::
 
        $ DEB_BUILD_OPTIONS='parallel=8' fakeroot debian/rules binary
 
-   If you are in a big hurry, you can even skip the unit tests:::
+   If you are in a big hurry, you can even skip the unit tests::
 
        $ DEB_BUILD_OPTIONS='parallel=8 nocheck' fakeroot debian/rules binary
 
@@ -85,7 +85,7 @@ install some dependencies, it will tell you which ones.
   There are a few pitfalls in the Debian packaging building system so that,
   occasionally, you may find that in a tree that you have using for a while,
   the build command above exits immediately without actually building anything.
-  To fix the problem, run:::
+  To fix the problem, run::
 
       $ fakeroot debian/rules clean
 

@@ -276,7 +276,7 @@ Q: What DPDK version does each Open vSwitch release work with?
     2.6.x        16.07
     ============ =====
 
-Q: I get an error like this when I configure Open vSwitch:::
+Q: I get an error like this when I configure Open vSwitch::
 
     configure: error: Linux kernel in <dir> is version <x>, but
     version newer than <y> is not supported (please refer to the
@@ -479,7 +479,7 @@ Q: How do I configure a DPDK port as an access port?
     startup when other_config:dpdk-init is set to 'true'.
 
     Secondly, when adding a DPDK port, unlike a system port, the type for the
-    interface must be specified. For example:::
+    interface must be specified. For example::
 
         $ ovs-vsctl add-br br0
         $ ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
@@ -546,7 +546,7 @@ Q: How do I configure mirroring of all traffic to a GRE tunnel?
     A: The following commands configure br0 with eth0 and tap0 as trunk ports.
     All traffic coming in or going out on eth0 or tap0 is also mirrored to
     gre0, a GRE tunnel to the remote host 192.168.1.10; any traffic arriving on
-    gre0 is dropped:::
+    gre0 is dropped::
 
         $ ovs-vsctl add-br br0
         $ ovs-vsctl add-port br0 eth0
@@ -557,7 +557,7 @@ Q: How do I configure mirroring of all traffic to a GRE tunnel?
              -- --id=@m create mirror name=m0 select-all=true output-port=@p \
              -- set bridge br0 mirrors=@m
 
-    To later disable mirroring and destroy the GRE tunnel:::
+    To later disable mirroring and destroy the GRE tunnel::
 
         $ ovs-vsctl clear bridge br0 mirrors
         $ ovs-vsctl del-port br0 gre0
@@ -720,7 +720,7 @@ Configuration Problems
 ----------------------
 
 Q: I created a bridge and added my Ethernet port to it, using commands like
-these:::
+these::
 
     ovs-vsctl add-br br0
     ovs-vsctl add-port br0 eth0
@@ -735,7 +735,7 @@ eth0.  Help!
     You can restore functionality by moving the IP address to an Open vSwitch
     "internal" device, such as the network device named after the bridge
     itself.  For example, assuming that eth0's IP address is 192.168.128.5, you
-    could run the commands below to fix up the situation:::
+    could run the commands below to fix up the situation::
 
         $ ifconfig eth0 0.0.0.0
         $ ifconfig br0 192.168.128.5
@@ -763,7 +763,7 @@ eth0.  Help!
     applies to all network devices except Open vSwitch "internal" devices.
 
 Q: I created a bridge and added a couple of Ethernet ports to it, using
-commands like these:::
+commands like these::
 
     $ ovs-vsctl add-br br0
     $ ovs-vsctl add-port br0 eth0
@@ -785,7 +785,7 @@ very high.
 
     - If you added eth0 and eth1 to get higher bandwidth or higher reliability
       between OVS and your physical Ethernet switch, use a bond.  The following
-      commands create br0 and then add eth0 and eth1 as a bond:::
+      commands create br0 and then add eth0 and eth1 as a bond::
 
           $ ovs-vsctl add-br br0
           $ ovs-vsctl add-bond br0 bond0 eth0 eth1
@@ -814,7 +814,7 @@ very high.
       prevent loops, turn on spanning tree protocol (STP).  The following
       commands create br0, enable STP, and add eth0 and eth1 to the bridge.
       The order is important because you don't want have to have a loop in your
-      network even transiently:::
+      network even transiently::
 
           $ ovs-vsctl add-br br0
           $ ovs-vsctl set bridge br0 stp_enable=true
@@ -898,7 +898,7 @@ Q: Open vSwitch does not seem to obey my packet filter rules.
 
 Q: It seems that Open vSwitch does nothing when I removed a port and then
 immediately put it back.  For example, consider that p1 is a port of
-``type=internal``:::
+``type=internal``::
 
      $ ovs-vsctl del-port br0 p1 -- \
          add-port br0 p1 -- \
@@ -917,7 +917,7 @@ immediately put it back.  For example, consider that p1 is a port of
     corresponding interface, you need to separate operations into multiple
     OVSDB transactions and ensure that at least the first one does not have
     ``--no-wait``.  In the following example, the first ovs-vsctl will block
-    until Open vSwitch reloads the new configuration and removes the port:::
+    until Open vSwitch reloads the new configuration and removes the port::
 
         $ ovs-vsctl del-port br0 p1
         $ ovs-vsctl add-port br0 p1 -- \
@@ -934,7 +934,7 @@ long (minutes or hours) to do it with ovs-vsctl.  How can I do it faster?
     significant.
 
     The solution is to add the ports in one invocation of ovs-vsctl (or a small
-    number of them).  For example, using bash:::
+    number of them).  For example, using bash::
 
         $ ovs-vsctl add-br br0
         $ cmds=; for i in {1..5000}; do cmds+=" -- add-port br0 p$i"; done
@@ -972,7 +972,7 @@ Q: I have a bridge br0.  I added a new port vif1.0, and it shows up in
     will immediately report when there is an issue creating a port.
 
 Q: I created a tap device tap0, configured an IP address on it, and added it to
-a bridge, like this:::
+a bridge, like this::
 
     $ tunctl -t tap0
     $ ifconfig tap0 192.168.0.123
@@ -985,14 +985,14 @@ network, but it doesn't work.  Why not?
     A: The short answer is that this is a misuse of a "tap" device.  Use an
     "internal" device implemented by Open vSwitch, which works differently and
     is designed for this use.  To solve this problem with an internal device,
-    instead run:::
+    instead run::
 
         $ ovs-vsctl add-br br0
         $ ovs-vsctl add-port br0 int0 -- set Interface int0 type=internal
         $ ifconfig int0 192.168.0.123
 
     Even more simply, you can take advantage of the internal port that every
-    bridge has under the name of the bridge:::
+    bridge has under the name of the bridge::
 
         $ ovs-vsctl add-br br0
         $ ifconfig br0 192.168.0.123
@@ -1076,7 +1076,7 @@ keep changing internal ports MTU?
 
     Sometimes this behavior is not desirable, for example with tunnels.  The
     MTU of an internal interface can be explicitly set using the following
-    command:::
+    command::
 
         $ ovs-vsctl set int br0 mtu_request=1450
 
@@ -1085,7 +1085,7 @@ keep changing internal ports MTU?
     with `ip` or `ifconfig`).
 
     The MTU configuration can be removed to restore the default behavior
-    with:::
+    with::
 
         $ ovs-vsctl set int br0 mtu_request=[]
 
@@ -1116,7 +1116,7 @@ Q: How do I configure egress traffic shaping?
     Ethernet port eth0 (a 1 Gbps device) and virtual machine interfaces vif1.0
     and vif2.0, and that you want to limit traffic from vif1.0 to eth0 to 10
     Mbps and from vif2.0 to eth0 to 20 Mbps.  Then, you could configure the
-    bridge this way:::
+    bridge this way::
 
         $ ovs-vsctl -- \
           add-br br0 -- \
@@ -1138,7 +1138,7 @@ Q: How do I configure egress traffic shaping?
     "default queue", which is not what we want.
 
     We use OpenFlow to direct packets from vif1.0 and vif2.0 to the queues
-    reserved for them:::
+    reserved for them::
 
         $ ovs-ofctl add-flow br0 in_port=5,actions=set_queue:123,normal
         $ ovs-ofctl add-flow br0 in_port=6,actions=set_queue:234,normal
@@ -1153,13 +1153,13 @@ Q: How do I configure egress traffic shaping?
 
     Now traffic going from vif1.0 or vif2.0 to eth0 should be rate-limited.
 
-    By the way, if you delete the bridge created by the above commands, with:::
+    By the way, if you delete the bridge created by the above commands, with::
 
         $ ovs-vsctl del-br br0
 
     then that will leave one unreferenced QoS record and two unreferenced Queue
     records in the Open vSwich database.  One way to clear them out, assuming
-    you don't have other QoS or Queue records that you want to keep, is:::
+    you don't have other QoS or Queue records that you want to keep, is::
 
         $ ovs-vsctl -- --all destroy QoS -- --all destroy Queue
 
@@ -1306,7 +1306,7 @@ Q: VLANs don't work.
 
     - Use "VLAN splinters", a feature in Open vSwitch 1.4 upto 2.5 that works
       around bugs in kernel drivers.  To enable VLAN splinters on interface
-      eth0, use the command:::
+      eth0, use the command::
 
           $ ovs-vsctl set interface eth0 other-config:enable-vlan-splinters=true
 
@@ -1353,7 +1353,7 @@ traffic.
 
     - Change the OVS configuration for the physical port to a native VLAN mode.
       For example, the following sets up a bridge with port eth0 in
-      "native-tagged" mode in VLAN 9:::
+      "native-tagged" mode in VLAN 9::
 
           $ ovs-vsctl add-br br0 $ ovs-vsctl add-port br0 eth0 tag=9
           vlan_mode=native-tagged
@@ -1362,7 +1362,7 @@ traffic.
       well.  Refer to the documentation for the Port table in
       ovs-vswitchd.conf.db(5) for more information.
 
-Q: I added a pair of VMs on different VLANs, like this:::
+Q: I added a pair of VMs on different VLANs, like this::
 
     $ ovs-vsctl add-br br0
     $ ovs-vsctl add-port br0 eth0
@@ -1380,7 +1380,7 @@ but the VMs can't access each other, the external network, or the Internet.
     machines you are trying to access are not on VLAN 9 (or 10) and that the
     Internet is not available on VLAN 9 (or 10).
 
-Q: I added a pair of VMs on the same VLAN, like this:::
+Q: I added a pair of VMs on the same VLAN, like this::
 
     $ ovs-vsctl add-br br0
     $ ovs-vsctl add-port br0 eth0
@@ -1400,7 +1400,7 @@ Q: Can I configure an IP address on a VLAN?
     the following configures IP address 192.168.0.7 on VLAN 9.  That is, OVS
     will forward packets from eth0 to 192.168.0.7 only if they have an 802.1Q
     header with VLAN 9.  Conversely, traffic forwarded from 192.168.0.7 to eth0
-    will be tagged with an 802.1Q header with VLAN 9:::
+    will be tagged with an 802.1Q header with VLAN 9::
 
         $ ovs-vsctl add-br br0
         $ ovs-vsctl add-port br0 eth0
@@ -1410,7 +1410,7 @@ Q: Can I configure an IP address on a VLAN?
 
     See also the following question.
 
-Q: I configured one IP address on VLAN 0 and another on VLAN 9, like this:::
+Q: I configured one IP address on VLAN 0 and another on VLAN 9, like this::
 
     $ ovs-vsctl add-br br0
     $ ovs-vsctl add-port br0 eth0
@@ -1475,7 +1475,7 @@ Q: My OpenFlow controller doesn't see the VLANs that I expect.
       "strip_vlan" action.
 
 Q: I configured ports on a bridge as access ports with different VLAN tags,
-like this:::
+like this::
 
     $ ovs-vsctl add-br br0
     $ ovs-vsctl set-controller br0 tcp:192.168.0.10:6653
@@ -1564,23 +1564,23 @@ Q: What versions of OpenFlow does Open vSwitch support?
 
     In any case, the user may override the default:
 
-    - To enable OpenFlow 1.0, 1.1, 1.2, and 1.3 on bridge br0:::
+    - To enable OpenFlow 1.0, 1.1, 1.2, and 1.3 on bridge br0::
 
           $ ovs-vsctl set bridge br0 \
               protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13
 
-    - To enable OpenFlow 1.0, 1.1, 1.2, 1.3, 1.4, and 1.5 on bridge br0:::
+    - To enable OpenFlow 1.0, 1.1, 1.2, 1.3, 1.4, and 1.5 on bridge br0::
 
           $ ovs-vsctl set bridge br0 \
               protocols=OpenFlow10,OpenFlow11,OpenFlow12,OpenFlow13,OpenFlow14,OpenFlow15
 
-    - To enable only OpenFlow 1.0 on bridge br0:::
+    - To enable only OpenFlow 1.0 on bridge br0::
 
           $ ovs-vsctl set bridge br0 protocols=OpenFlow10
 
     All current versions of ovs-ofctl enable only OpenFlow 1.0 by default.  Use
     the -O option to enable support for later versions of OpenFlow in
-    ovs-ofctl.  For example:::
+    ovs-ofctl.  For example::
 
         $ ovs-ofctl -O OpenFlow13 dump-flows br0
 
@@ -1642,7 +1642,7 @@ going through.
 
     Usually, the hidden flows are desirable and helpful, but occasionally they
     can cause unexpected behavior.  You can view the full OpenFlow flow table,
-    including hidden flows, on bridge br0 with the command:::
+    including hidden flows, on bridge br0 with the command::
 
         $ ovs-appctl bridge/dump-flows br0
 
@@ -1657,7 +1657,7 @@ going through.
     localhost via 127.0.0.1, or on a separate network), then you should
     configure your controllers in "out-of-band" mode.  If you have one
     controller on bridge br0, then you can configure out-of-band mode
-    on it with:::
+    on it with::
 
         $ ovs-vsctl set controller br0 connection-mode=out-of-band
 
@@ -1672,7 +1672,7 @@ bridge/dump-flows" still shows some hidden flows.
     A: You probably have a remote manager configured (e.g. with "ovs-vsctl
     set-manager").  By default, Open vSwitch assumes that managers need in-band
     rules set up on every bridge.  You can disable these rules on bridge br0
-    with:::
+    with::
 
         $ ovs-vsctl set bridge br0 other-config:disable-in-band=true
 
@@ -1684,7 +1684,7 @@ Q: My OpenFlow controller doesn't see the VLANs that I expect.
     A: See answer under "VLANs", above.
 
 Q: I ran ``ovs-ofctl add-flow br0 nw_dst=192.168.0.1,actions=drop`` but I got a
-funny message like this:::
+funny message like this::
 
     ofp_util|INFO|normalization changed ofp_match, details:
     ofp_util|INFO| pre: nw_dst=192.168.0.1
@@ -1699,11 +1699,11 @@ disappeared, so that the flow ends up matching every packet.
     match was dropped.
 
     In this case, the L3 protocol could be IP or ARP.  A correct command for
-    each possibility is, respectively:::
+    each possibility is, respectively::
 
         $ ovs-ofctl add-flow br0 ip,nw_dst=192.168.0.1,actions=drop
 
-    and:::
+    and::
 
         $ ovs-ofctl add-flow br0 arp,nw_dst=192.168.0.1,actions=drop
 
@@ -1723,11 +1723,11 @@ Q: How can I figure out the OpenFlow port number for a given port?
 
     The Interface table in the Open vSwitch database also maps OpenFlow port
     names to numbers.  To print the OpenFlow port number associated with
-    interface eth0, run:::
+    interface eth0, run::
 
         $ ovs-vsctl get Interface eth0 ofport
 
-    You can print the entire mapping with:::
+    You can print the entire mapping with::
 
         $ ovs-vsctl -- --columns=name,ofport list Interface
 
@@ -1844,7 +1844,7 @@ Q: How do I make a flow drop packets?
     explicitly specifies forwarding actions.  Thus, a flow with an empty set of
     actions does not forward packets anywhere, causing them to be dropped.  You
     can specify an empty set of actions with ``actions=`` on the ovs-ofctl
-    command line.  For example:::
+    command line.  For example::
 
         $ ovs-ofctl add-flow br0 priority=65535,actions=
 
@@ -1852,14 +1852,14 @@ Q: How do I make a flow drop packets?
 
     You can write "drop" explicitly if you like.  The effect is the same.
     Thus, the following command also causes every packet entering switch br0 to
-    be dropped:::
+    be dropped::
 
         $ ovs-ofctl add-flow br0 priority=65535,actions=drop
 
     ``drop`` is not an action, either in OpenFlow or Open vSwitch.  Rather, it
     is only a way to say that there are no actions.
 
-Q: I added a flow to send packets out the ingress port, like this:::
+Q: I added a flow to send packets out the ingress port, like this::
 
     $ ovs-ofctl add-flow br0 in_port=2,actions=2
 
@@ -1873,18 +1873,18 @@ but OVS drops the packets instead.
 
     Sometimes one really needs to send a packet out its ingress port
     ("hairpin"). In this case, output to ``OFPP_IN_PORT``, which in ovs-ofctl
-    syntax is expressed as just ``in_port``, e.g.:::
+    syntax is expressed as just ``in_port``, e.g.::
 
         $ ovs-ofctl add-flow br0 in_port=2,actions=in_port
 
     This also works in some circumstances where the flow doesn't match on the
     input port.  For example, if you know that your switch has five ports
     numbered 2 through 6, then the following will send every received packet
-    out every port, even its ingress port:::
+    out every port, even its ingress port::
 
         $ ovs-ofctl add-flow br0 actions=2,3,4,5,6,in_port
 
-    or, equivalently:::
+    or, equivalently::
 
         $ ovs-ofctl add-flow br0 actions=all,in_port
 
@@ -1895,7 +1895,7 @@ but OVS drops the packets instead.
     the ability to modify the in_port field.  Whatever value is currently in
     the in_port field is the port to which outputs will be dropped, as well as
     the destination for ``OFPP_IN_PORT``.  This means that the following will
-    reliably output to port 2 or to ports 2 through 6, respectively:::
+    reliably output to port 2 or to ports 2 through 6, respectively::
 
         $ ovs-ofctl add-flow br0 in_port=2,actions=load:0->NXM_OF_IN_PORT[],2
         $ ovs-ofctl add-flow br0 actions=load:0->NXM_OF_IN_PORT[],2,3,4,5,6
@@ -1910,7 +1910,7 @@ but OVS drops the packets instead.
 
 Q: My bridge br0 has host 192.168.0.1 on port 1 and host 192.168.0.2 on port 2.
 I set up flows to forward only traffic destined to the other host and drop
-other traffic, like this:::
+other traffic, like this::
 
     priority=5,in_port=1,ip,nw_dst=192.168.0.2,actions=2
     priority=5,in_port=2,ip,nw_dst=192.168.0.1,actions=1
@@ -1920,7 +1920,7 @@ But it doesn't work--I don't get any connectivity when I do this.  Why?
 
     A: These flows drop the ARP packets that IP hosts use to establish IP
     connectivity over Ethernet.  To solve the problem, add flows to allow ARP
-    to pass between the hosts:::
+    to pass between the hosts::
 
         priority=5,in_port=1,arp,actions=2
         priority=5,in_port=2,arp,actions=1
@@ -1928,14 +1928,14 @@ But it doesn't work--I don't get any connectivity when I do this.  Why?
     This issue can manifest other ways, too.  The following flows that match on
     Ethernet addresses instead of IP addresses will also drop ARP packets,
     because ARP requests are broadcast instead of being directed to a specific
-    host:::
+    host::
 
         priority=5,in_port=1,dl_dst=54:00:00:00:00:02,actions=2
         priority=5,in_port=2,dl_dst=54:00:00:00:00:01,actions=1
         priority=0,actions=drop
 
     The solution already described above will also work in this case.  It may
-    be better to add flows to allow all multicast and broadcast traffic:::
+    be better to add flows to allow all multicast and broadcast traffic::
 
         priority=5,in_port=1,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00,actions=2
         priority=5,in_port=2,dl_dst=01:00:00:00:00:00/01:00:00:00:00:00,actions=1
@@ -1985,7 +1985,7 @@ Q: How does OVS divide flows among buckets in an OpenFlow "select" group?
     source tree.  (OpenFlow 1.5 support in Open vSwitch is still experimental.)
 
 Q: I added a flow to accept packets on VLAN 123 and output them on VLAN 456,
-like so:::
+like so::
 
     $ ovs-ofctl add-flow br0 dl_vlan=123,actions=output:1,mod_vlan_vid:456
 
@@ -1997,7 +1997,7 @@ but the packets are actually being output in VLAN 123.  Why?
     effect.
 
     To solve this and similar problems, order actions so that changes to
-    headers happen before output, e.g.:::
+    headers happen before output, e.g.::
 
         $ ovs-ofctl add-flow br0 dl_vlan=123,actions=mod_vlan_vid:456,output:1
 

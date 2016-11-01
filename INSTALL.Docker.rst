@@ -46,7 +46,7 @@ Setup
 For multi-host networking with OVN and Docker, Docker has to be started with a
 destributed key-value store. For example, if you decide to use consul as your
 distributed key-value store and your host IP address is ``$HOST_IP``, start
-your Docker daemon with:::
+your Docker daemon with::
 
     $ docker daemon --cluster-store=consul://127.0.0.1:8500 \
         --cluster-advertise=$HOST_IP:0
@@ -87,7 +87,7 @@ The "overlay" mode
 
   Start ovn-northd daemon. This daemon translates networking intent from Docker
   stored in the OVN\_Northbound database to logical flows in ``OVN_Southbound``
-  database. For example:::
+  database. For example::
 
       $ /usr/share/openvswitch/scripts/ovn-ctl start_northd
 
@@ -95,7 +95,7 @@ The "overlay" mode
 
    On each host, where you plan to spawn your containers, you will need to run
    the below command once. You may need to run it again if your OVS database
-   gets cleared. It is harmless to run it again in any case:::
+   gets cleared. It is harmless to run it again in any case::
 
        $ ovs-vsctl set Open_vSwitch . \
            external_ids:ovn-remote="tcp:$CENTRAL_IP:6642" \
@@ -117,7 +117,7 @@ The "overlay" mode
      Open vSwitch kernel module from upstream Linux, you will need a minumum
      kernel version of 3.18 for ``geneve``. There is no ``stt`` support in
      upstream Linux. You can verify whether you have the support in your kernel
-     as follows:::
+     as follows::
 
          $ lsmod | grep $ENCAP_TYPE
 
@@ -126,7 +126,7 @@ The "overlay" mode
    distribution packaging for Open vSwitch (e.g. .deb or .rpm packages), or if
    you use the ovs-ctl utility included with Open vSwitch, it automatically
    configures a system-id.  If you start Open vSwitch manually, you should set
-   one up yourself. For example:::
+   one up yourself. For example::
 
        $ id_file=/etc/openvswitch/system-id.conf
        $ test -e $id_file || uuidgen > $id_file
@@ -134,7 +134,7 @@ The "overlay" mode
 
 3. Start the ``ovn-controller``.
 
-   You need to run the below command on every boot:::
+   You need to run the below command on every boot::
 
        $ /usr/share/openvswitch/scripts/ovn-ctl start_controller
 
@@ -146,13 +146,13 @@ The "overlay" mode
 
    The Open vSwitch driver uses the Python's flask module to listen to Docker's
    networking api calls. So, if your host does not have Python's flask module,
-   install it:::
+   install it::
 
        $ sudo pip install Flask
 
    Start the Open vSwitch driver on every host where you plan to create your
    containers. Refer to the note on ``$OVS_PYTHON_LIBS_PATH`` that is used below
-   at the end of this document:::
+   at the end of this document::
 
        $ PYTHONPATH=$OVS_PYTHON_LIBS_PATH ovn-docker-overlay-driver --detach
 
@@ -175,7 +175,7 @@ commands. Here are some examples.
 Create a logical switch
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-To create a logical switch with name 'foo', on subnet '192.168.1.0/24', run:::
+To create a logical switch with name 'foo', on subnet '192.168.1.0/24', run::
 
     $ NID=`docker network create -d openvswitch --subnet=192.168.1.0/24 foo`
 
@@ -187,7 +187,7 @@ List all logical switches
     $ docker network ls
 
 You can also look at this logical switch in OVN's northbound database by
-running the following command:::
+running the following command::
 
     $ ovn-nbctl --db=tcp:$CENTRAL_IP:6640 ls-list
 
@@ -204,7 +204,7 @@ Create a logical port
 
 Docker creates your logical port and attaches it to the logical network in a
 single step. For example, to attach a logical port to network ``foo`` inside
-container busybox, run:::
+container busybox, run::
 
     $ docker run -itd --net=foo --name=busybox busybox
 
@@ -212,7 +212,7 @@ List all logical ports
 ~~~~~~~~~~~~~~~~~~~~~~
 
 Docker does not currently have a CLI command to list all logical ports but you
-can look at them in the OVN database by running:::
+can look at them in the OVN database by running::
 
     $ ovn-nbctl --db=tcp:$CENTRAL_IP:6640 lsp-list $NID
 
@@ -250,22 +250,22 @@ The "underlay" mode
    that belongs to management logical networks. The tenant needs to fetch the
    port-id associated with the interface via which he plans to send the container
    traffic inside the spawned VM. This can be obtained by running the below
-   command to fetch the 'id' associated with the VM:::
+   command to fetch the 'id' associated with the VM::
 
        $ nova list
 
-   and then by running:::
+   and then by running::
 
        $ neutron port-list --device_id=$id
 
    Inside the VM, download the OpenStack RC file that contains the tenant
    information (henceforth referred to as ``openrc.sh``). Edit the file and add the
    previously obtained port-id information to the file by appending the following
-   line:::
+   line::
 
        $ export OS_VIF_ID=$port_id
 
-   After this edit, the file will look something like:::
+   After this edit, the file will look something like::
 
        #!/bin/bash
        export OS_AUTH_URL=http://10.33.75.122:5000/v2.0
@@ -298,17 +298,17 @@ The "underlay" mode
    networking api calls. The driver also uses OpenStack's
    ``python-neutronclient`` libraries. If your host does not have Python's
    ``flask`` module or ``python-neutronclient`` you must install them. For
-   example:::
+   example::
 
        $ pip install python-neutronclient
        $ pip install Flask
 
-   Once installed, source the ``openrc`` file:::
+   Once installed, source the ``openrc`` file::
 
        $ . ./openrc.sh
 
    Start the network driver and provide your OpenStack tenant password when
-   prompted:::
+   prompted::
 
        $ PYTHONPATH=$OVS_PYTHON_LIBS_PATH ovn-docker-underlay-driver \
            --bridge breth0 --detach

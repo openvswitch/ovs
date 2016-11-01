@@ -63,7 +63,7 @@ Using the Userspace Datapath with ovs-vswitchd
 ----------------------------------------------
 
 To use ovs-vswitchd in userspace mode, create a bridge with
-``datapath_type=netdev`` in the configuration database.  For example:::
+``datapath_type=netdev`` in the configuration database.  For example::
 
     $ ovs-vsctl add-br br0
     $ ovs-vsctl set bridge br0 datapath_type=netdev
@@ -76,7 +76,7 @@ the same as the bridge, as well as for each configured internal interface.
 
 Currently, on FreeBSD, the functionality required for in-band control support
 is not implemented.  To avoid related errors, you can disable the in-band
-support with the following command:::
+support with the following command::
 
     $ ovs-vsctl set bridge br0 other_config:disable-in-band=true
 
@@ -87,7 +87,7 @@ On Linux, when a physical interface is in use by the userspace datapath,
 packets received on the interface still also pass into the kernel TCP/IP stack.
 This can cause surprising and incorrect behavior.  You can use "iptables" to
 avoid this behavior, by using it to drop received packets.  For example, to
-drop packets received on eth0:::
+drop packets received on eth0::
 
     $ iptables -A INPUT -i eth0 -j DROP
     $ iptables -A FORWARD -i eth0 -j DROP
