@@ -1,9 +1,11 @@
 openvswitch (2.6.1-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-   - Nothing yet!
+   - Fedora packaging:
+     * A package upgrade does not automatically restart OVS service.
+   - Bug fixes
 
- -- Open vSwitch team <dev@openvswitch.org>  Tue, 27 Sep 2016 10:15:43 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Tue, 01 Nov 2016 15:40:17 -0700
 
 openvswitch (2.6.0-1) unstable; urgency=low
    [ Open vSwitch team ]

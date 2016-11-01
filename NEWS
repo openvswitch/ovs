@@ -1,7 +1,8 @@
-v2.6.1 - xx xxx xxxx
+v2.6.1 - 01 Nov 2016
 ---------------------
    - Fedora packaging:
      * A package upgrade does not automatically restart OVS service.
+   - Bug fixes
 
 v2.6.0 - 27 Sep 2016
 ---------------------
