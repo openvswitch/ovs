@@ -841,8 +841,23 @@
             <li><code>ct.inv</code>: True for a connection entry in a bad state</li>
           </ul>
           <p>
-            <code>ct_state</code> and its subfields are initialized by the
-            <code>ct_next</code> action, described below.
+            The above subfields of <code>ct_state</code> are initialized by
+            the <code>ct_next</code> action, described later.
+          </p>
+          <ul>
+            <li>
+              <code>ct.dnat</code>: True for a packet whose destination IP
+              address has been changed.
+            </li>
+            <li>
+              <code>ct.snat</code>: True for a packet whose source IP
+              address has been changed.
+            </li>
+          </ul>
+          <p>
+            The above subfields of <code>ct_state</code> are initialized by
+            the actions like <code>ct_dnat</code>, <code>ct_snat</code> and
+            <code>ct_lb</code> described later.
           </p>
         </li>
       </ul>

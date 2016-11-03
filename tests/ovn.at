@@ -162,11 +162,13 @@ AT_CLEANUP
 dnl Check that the OVN conntrack field definitions are correct.
 AT_SETUP([ovn -- conntrack fields])
 AT_CHECK([ovstest test-ovn dump-symtab | grep ^ct | sort], [0],
-[[ct.est = ct_state[1]
+[[ct.dnat = ct_state[7]
+ct.est = ct_state[1]
 ct.inv = ct_state[4]
 ct.new = ct_state[0]
 ct.rel = ct_state[2]
 ct.rpl = ct_state[3]
+ct.snat = ct_state[6]
 ct.trk = ct_state[5]
 ct_label = NXM_NX_CT_LABEL
 ct_label.blocked = ct_label[0]

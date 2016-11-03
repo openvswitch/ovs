@@ -108,6 +108,8 @@ ovn_init_symtab(struct shash *symtab)
         {"rel", CS_RELATED_BIT},
         {"rpl", CS_REPLY_DIR_BIT},
         {"inv", CS_INVALID_BIT},
+        {"dnat", CS_DST_NAT_BIT},
+        {"snat", CS_SRC_NAT_BIT},
     };
     for (const struct ct_bit *b = bits; b < &bits[ARRAY_SIZE(bits)]; b++) {
         char *name = xasprintf("ct.%s", b->name);
