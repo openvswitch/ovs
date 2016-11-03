@@ -946,14 +946,14 @@ to strip the vlan tag and set the reg6 and metadata appropriately.
 
 [View ovn/env7/packet1.sh][env7packet1].
 
-    $ ovn/env5/packet1.sh
+    $ ovn/env7/packet1.sh
 
 
 The second trace shows a packet from 'csw0-port2' to 'csw0-port1'.
 
 [View ovn/env7/packet2.sh][env7packet2].
 
-    $ ovn/env5/packet1.sh
+    $ ovn/env7/packet2.sh
 
 You can extend this setup by adding additional container ports with two
 hypervisors. Please see the tutorial 3 above.
