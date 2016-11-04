@@ -14,7 +14,7 @@
 #
 
 #
-# See "Simple two-port setup" in tutorial/OVN-Tutorial.md.
+# See "Simple two-port setup" in tutorial/ovn-tutorial.rst.
 #
 
 set -o xtrace
