@@ -304,6 +304,12 @@
         connections.
       </li>
       <li>
+        <code>sfc</code> ACLs work as entry points for service function
+        chaining, also known as SFC classifiers. Further attributes such
+        as what chain to be used and the last_hop_port are provided via
+        external_ids of the ACL.
+      </li>
+      <li>
         Other ACLs translate to <code>drop;</code> for new or untracked
         connections and <code>ct_commit(ct_label=1/1);</code> for known
         connections.  Setting <code>ct_label</code> marks a connection

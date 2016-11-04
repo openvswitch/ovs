@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.4.1",
-    "cksum": "3773248894 11490",
+    "version": "5.4.2",
+    "cksum": "2998303999 11681",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -123,8 +123,12 @@
                                             "enum": ["set", ["from-lport", "to-lport"]]}}},
                 "match": {"type": "string"},
                 "action": {"type": {"key": {"type": "string",
-                                            "enum": ["set", ["allow", "allow-related", "drop", "reject"]]}}},
+                                            "enum": ["set", ["allow", "allow-related", "drop", "reject", "sfc"]]}}},
                 "log": {"type": "boolean"},
+                "options": {
+                    "type": {"key": "string",
+                             "value": "string",
+                             "min": 0, "max": "unlimited"}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},

@@ -2522,6 +2522,15 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
 
                 ds_destroy(&match);
             }
+        } else if (!strcmp(acl->action, "sfc")) {
+            struct ds match = DS_EMPTY_INITIALIZER;
+
+            // XXX FIXME (FF): Do something amazing here
+            ovn_lflow_add(lflows, od, stage,
+                          acl->priority + OVN_ACL_PRI_OFFSET,
+                          acl->match, "drop;");
+
+            ds_destroy(&match);
         } else if (!strcmp(acl->action, "drop")
                    || !strcmp(acl->action, "reject")) {
             struct ds match = DS_EMPTY_INITIALIZER;

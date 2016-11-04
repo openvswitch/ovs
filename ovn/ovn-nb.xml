@@ -841,6 +841,13 @@
           ICMP unreachable message for other IP-based protocols.
           <code>Not implemented--currently treated as drop</code>
         </li>
+
+        <li>
+          <code>sfc</code>: Forward the packet into a logical port chain.
+          The chain to be used -- as well as any other attributes that determine
+          the behavior of the packet while in the chain -- are provided
+          via <ref column="options"/>.
+        </li>
       </ul>
     </column>
 
@@ -855,6 +862,40 @@
         Logging is not yet implemented.
       </p>
     </column>
+
+    <group title="Options">
+      <column name = "options">
+        This column provides key/value settings specific to the ACL
+        <ref column="action"/>. The type-specific options are described
+        individually below.
+      </column>
+
+      <group title="Options for action sfc">
+        <p>
+          These options apply when <ref column="action"/> is <code>sfc</code>.
+        </p>
+
+        <column name="options" key="sfc-port-chain">
+          Required when <ref column="action"/> is <code>sfc</code>.
+          The uuid (or name) of the <ref table="Logical_Port_Chain"/> to be used.
+        </column>
+
+        <column name="options" key="sfc-bidirectional">
+          Optional and only applicable when <ref column="action"/> is <code>sfc</code>.
+          When set with value <code>true</code>, the implementation will also add rules to make packets
+          go through the chain in reverse direction. A restriction on making bidirectional chains is
+          that the inport parameter must be present in <ref column="match"/>, as it will be used as the
+          <ref table="Logical_Port_Chain" column="last_hop_port"/>. As expected, all <code>src*</code>
+          fields in <ref column="match"/> will be converted to <code>dst*</code> in order to derive the
+          reverse ACL.
+
+          <p>
+            sfc-bidirectional option is not yet implemented.
+          </p>
+        </column>
+      </group>
+
+    </group>
 
     <group title="Common Columns">
       <column name="external_ids">
