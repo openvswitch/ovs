@@ -2844,13 +2844,15 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
     }
 
     /* Ingress table 10: ARP/ND responder, skip requests coming from localnet
-     * ports. (priority 100). */
+     * and vtep ports. (priority 100); see ovn-northd.8.xml for the
+     * rationale. */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbsp) {
             continue;
         }
 
-        if (!strcmp(op->nbsp->type, "localnet")) {
+        if ((!strcmp(op->nbsp->type, "localnet")) ||
+            (!strcmp(op->nbsp->type, "vtep"))) {
             ds_clear(&match);
             ds_put_format(&match, "inport == %s", op->json_key);
             ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 100,
