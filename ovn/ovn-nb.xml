@@ -110,6 +110,27 @@
       </p>
     </column>
 
+    <column name="port_chains">
+      <p>
+        The logical port-chains connected to the logical switch.
+      </p>
+
+      <p>
+        It is an error for multiple logical switches to include the same
+        logical port.
+      </p>
+    </column>
+
+    <column name="port_pairs">
+      <p>
+        The logical chains that define the service path.
+      </p>
+
+      <p>
+        Logical chains cannot currently cross logical switch boundaries.
+      </p>
+    </column>
+
     <column name="load_balancer">
       Load balance a virtual ipv4 address to a set of logical port endpoint
       ipv4 addresses.
@@ -137,6 +158,104 @@
         particular port.
       </column>
     </group>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="Logical_Port_Chain" title="Logical port chain">
+    <p>
+      Each row represents one logical port chain
+    </p>
+
+    <column name="name">
+      <p>
+        A name for the logical chain.  This name has no special meaning or purpose
+        other than to provide convenience for human interaction with the ovn-nb
+        database.  There is no requirement for the name to be unique.  The
+        logical chains's UUID should be used as the unique identifier.
+      </p>
+    </column>
+
+    <column name="port_pair_groups">
+      <p>
+        The logical list of port pairs that the flow goes through.
+      </p>
+
+      <p>
+        It is an error for a port pair group to be empty.
+      </p>
+    </column>
+
+    <column name="last_hop_port">
+      The <ref table="Logical_Switch_Port"/> to be used once packet reaches the end
+      of the chain.
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="Logical_Port_Pair_Group" title="logical port pair groups">
+    <p>
+      An ordered port pair list
+    </p>
+
+    <column name="name">
+      <p>
+        Logical port pair group name
+      </p>
+    </column>
+
+    <column name="port_pairs">
+      <p>
+        port pair for this group
+      </p>
+    </column>
+
+    <column name="sortkey">
+      <p>
+        An integer used for ordering instances of <ref table="Logical_Port_Pair_Group"/>
+        in the <ref column="port_pairs" table="Logical_Port_Chain"/> column
+        of <ref table="Logical_Port_Chain"/>.
+      </p>
+    </column>
+
+    <group title="Common Columns">
+      <column name="external_ids">
+        See <em>External IDs</em> at the beginning of this document.
+      </column>
+    </group>
+  </table>
+
+  <table name="Logical_Port_Pair" title="logical port pairs">
+    <p>
+      Ports pairs defining the service
+    </p>
+
+    <column name="name">
+      <p>
+        Logical port pair
+      </p>
+    </column>
+
+    <column name="outport">
+      <p>
+        Out logical port for this port pair. Can be the same value as inport.
+      </p>
+    </column>
+
+    <column name="inport">
+      <p>
+        In logical port for this port pair.
+      </p>
+    </column>
 
     <group title="Common Columns">
       <column name="external_ids">
