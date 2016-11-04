@@ -1200,9 +1200,23 @@ icmp4 {
     <ul>
       <li>
         <p>
-          For each configuration in the OVN Northbound database, that asks
+          If the Gateway router has been configured to force SNAT any
+          previously DNATted packets to <var>B</var>, a priority-110 flow
+          matches <code>ip &amp;&amp; ip4.dst == <var>B</var></code> with
+          an action <code>ct_snat; next;</code>.
+        </p>
+
+        <p>
+          If the Gateway router has been configured to force SNAT any
+          previously load-balanced packets to <var>B</var>, a priority-100 flow
+          matches <code>ip &amp;&amp; ip4.dst == <var>B</var></code> with
+          an action <code>ct_snat; next;</code>.
+        </p>
+
+        <p>
+          For each NAT configuration in the OVN Northbound database, that asks
           to change the source IP address of a packet from <var>A</var> to
-          <var>B</var>, a priority-100 flow matches <code>ip &amp;&amp;
+          <var>B</var>, a priority-90 flow matches <code>ip &amp;&amp;
           ip4.dst == <var>B</var></code> with an action
           <code>ct_snat; next;</code>.
         </p>
@@ -1231,7 +1245,23 @@ icmp4 {
         &amp;&amp; <var>P</var> &amp;&amp; <var>P</var>.dst == <var>PORT
         </var></code> with an action of <code>ct_lb(<var>args</var>)</code>,
         where <var>args</var> contains comma separated IPv4 addresses (and
-        optional port numbers) to load balance to.
+        optional port numbers) to load balance to.  If the Gateway router
+        is configured to force SNAT any load-balanced packets, the above
+        action will be replaced by <code>flags.force_snat_for_lb = 1;
+        ct_lb(<var>args</var>);</code>.
+      </li>
+
+      <li>
+        For all the configured load balancing rules for Gateway router in
+        <code>OVN_Northbound</code> database that includes a L4 port
+        <var>PORT</var> of protocol <var>P</var> and IPv4 address
+        <var>VIP</var>, a priority-120 flow that matches on
+        <code>ct.est &amp;&amp; ip &amp;&amp; ip4.dst == <var>VIP</var>
+        &amp;&amp; <var>P</var> &amp;&amp; <var>P</var>.dst == <var>PORT
+        </var></code> with an action of <code>ct_dnat;</code>.
+        If the Gateway router is configured to force SNAT any load-balanced
+        packets, the above action will be replaced by
+        <code>flags.force_snat_for_lb = 1; ct_dnat;</code>.
       </li>
 
       <li>
@@ -1241,7 +1271,21 @@ icmp4 {
         <code>ct.new &amp;&amp; ip &amp;&amp; ip4.dst ==
         <var>VIP</var></code> with an action of
         <code>ct_lb(<var>args</var>)</code>, where <var>args</var> contains
-        comma separated IPv4 addresses.
+        comma separated IPv4 addresses.  If the Gateway router
+        is configured to force SNAT any load-balanced packets, the above
+        action will be replaced by <code>flags.force_snat_for_lb = 1;
+        ct_lb(<var>args</var>);</code>.
+      </li>
+
+      <li>
+        For all the configured load balancing rules for Gateway router in
+        <code>OVN_Northbound</code> database that includes just an IP address
+        <var>VIP</var> to match on, a priority-110 flow that matches on
+        <code>ct.est &amp;&amp; ip &amp;&amp; ip4.dst ==
+        <var>VIP</var></code> with an action of <code>ct_dnat;</code>.
+        If the Gateway router is configured to force SNAT any load-balanced
+        packets, the above action will be replaced by
+        <code>flags.force_snat_for_lb = 1; ct_dnat;</code>.
       </li>
 
       <li>
@@ -1249,7 +1293,11 @@ icmp4 {
         to change the destination IP address of a packet from <var>A</var> to
         <var>B</var>, a priority-100 flow matches <code>ip &amp;&amp;
         ip4.dst == <var>A</var></code> with an action
-        <code>flags.loopback = 1; ct_dnat(<var>B</var>);</code>.
+        <code>flags.loopback = 1; ct_dnat(<var>B</var>);</code>.  If the
+        Gateway router is configured to force SNAT any DNATed packet,
+        the above action will be replaced by
+        <code>flags.force_snat_for_dnat = 1; flags.loopback = 1;
+        ct_dnat(<var>B</var>);</code>.
       </li>
 
       <li>
@@ -1487,6 +1535,20 @@ arp {
     </p>
     <ul>
       <li>
+        <p>
+          If the Gateway router in the OVN Northbound database has been
+          configured to force SNAT a packet (that has been previously DNATted)
+          to <var>B</var>, a priority-100 flow matches
+          <code>flags.force_snat_for_dnat == 1 &amp;&amp; ip</code> with an
+          action <code>ct_snat(<var>B</var>);</code>.
+        </p>
+        <p>
+          If the Gateway router in the OVN Northbound database has been
+          configured to force SNAT a packet (that has been previously
+          load-balanced) to <var>B</var>, a priority-100 flow matches
+          <code>flags.force_snat_for_lb == 1 &amp;&amp; ip</code> with an
+          action <code>ct_snat(<var>B</var>);</code>.
+        </p>
         <p>
           For each configuration in the OVN Northbound database, that asks
           to change the source IP address of a packet from an IP address of
