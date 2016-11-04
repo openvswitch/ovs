@@ -1692,6 +1692,15 @@ ovn-nbctl lsp-set-type lp-vtep vtep
 ovn-nbctl lsp-set-options lp-vtep vtep-physical-switch=br-vtep vtep-logical-switch=lsw0
 ovn-nbctl lsp-set-addresses lp-vtep unknown
 
+# lpr, lr and lrp1 are used for the ARP request handling test only.
+ovn-nbctl lsp-add lsw0 lpr
+ovn-nbctl lr-add lr
+ovn-nbctl lrp-add lr lrp1 f0:00:00:00:00:f1 192.168.1.1/24
+ovn-nbctl set Logical_Switch_Port lpr type=router \
+                             options:router-port=lrp1 \
+    addresses='"f0:00:00:00:00:f1 192.168.1.1"'
+
+
 net_add n1               # Network to connect hv1, hv2, and vtep
 net_add n2               # Network to connect vtep and hv3
 
@@ -1814,10 +1823,31 @@ for s in 1 2 3; do
     test_packet $s f0000000ffff f0000000000$s 0${s}66 $unknown           #3
 done
 
+# ARP request should not be responded to by logical switch router
+# type arp responder on HV1 and HV2 and should reach directly to
+# vif1 and vif2
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+sha=f00000000003
+spa=`ip_to_hex 192 168 1 2`
+tpa=`ip_to_hex 192 168 1 1`
+request=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
+as hv3 ovs-appctl netdev-dummy/receive vif3 $request
+echo $request >> 1.expected
+echo $request >> 2.expected
+
 # dump information with counters
 echo "------ OVN dump ------"
 ovn-nbctl show
 ovn-sbctl show
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list port_binding
+echo "---------------------"
+ovn-sbctl dump-flows
 
 echo "------ hv1 dump ------"
 as hv1 ovs-vsctl show
