@@ -71,7 +71,7 @@ EXTRA_DIST += ovn/ovn-architecture.7.xml
 DISTCLEANFILES += ovn/ovn-architecture.7
 
 EXTRA_DIST += \
-	ovn/TODO \
+	ovn/TODO.rst \
 	ovn/CONTAINERS.OpenStack.rst \
 	ovn/OVN-GW-HA.rst
 
