@@ -324,7 +324,7 @@ Logical switch commands:\n\
   ls-list                   print the names of all logical switches\n\
 \n\
 ACL commands:\n\
-  acl-add SWITCH DIRECTION PRIORITY MATCH ACTION [log]\n\
+  acl-add SWITCH DIRECTION PRIORITY MATCH ACTION [ACL-OPTIONS] [log]\n\
                             add an ACL to SWITCH\n\
   acl-del SWITCH [DIRECTION [PRIORITY MATCH]]\n\
                             remove ACLs from SWITCH\n\
@@ -1286,6 +1286,26 @@ nbctl_acl_add(struct ctl_context *ctx)
         return;
     }
 
+    /* Validate ACL Options, if there were any provided. */
+    struct smap acl_options = SMAP_INITIALIZER(&acl_options);
+    if (ctx->argc >= 7) {
+        struct sset acl_options_set;
+        sset_from_delimited_string(&acl_options_set, ctx->argv[6], " ");
+
+        const char *acl_option_tuple;
+        SSET_FOR_EACH (acl_option_tuple, &acl_options_set) {
+            char *key, *value;
+            value = xstrdup(acl_option_tuple);
+            key = strsep(&value, "=");
+            if (value) {
+                smap_add(&acl_options, key, value);
+            }
+            free(key);
+        }
+
+        sset_destroy(&acl_options_set);
+    }
+
     /* Create the acl. */
     struct nbrec_acl *acl = nbrec_acl_insert(ctx->txn);
     nbrec_acl_set_priority(acl, priority);
@@ -1295,6 +1315,9 @@ nbctl_acl_add(struct ctl_context *ctx)
     if (shash_find(&ctx->options, "--log") != NULL) {
         nbrec_acl_set_log(acl, true);
     }
+    if (! smap_is_empty(&acl_options)) {
+        nbrec_acl_set_options(acl, &acl_options);
+    }
 
     /* Insert the acl into the logical switch. */
     nbrec_logical_switch_verify_acls(ls);
@@ -1303,6 +1326,8 @@ nbctl_acl_add(struct ctl_context *ctx)
     new_acls[ls->n_acls] = acl;
     nbrec_logical_switch_set_acls(ls, new_acls, ls->n_acls + 1);
     free(new_acls);
+
+    smap_destroy(&acl_options);
 }
 
 static void
@@ -2911,7 +2936,7 @@ static const struct ctl_command_syntax nbctl_commands[] = {
     { "ls-list", 0, 0, "", NULL, nbctl_ls_list, NULL, "", RO },
 
     /* acl commands. */
-    { "acl-add", 5, 5, "SWITCH DIRECTION PRIORITY MATCH ACTION", NULL,
+    { "acl-add", 5, 6, "SWITCH DIRECTION PRIORITY MATCH ACTION [ACL-OPTIONS]", NULL,
       nbctl_acl_add, NULL, "--log", RW },
     { "acl-del", 1, 4, "SWITCH [DIRECTION [PRIORITY MATCH]]", NULL,
       nbctl_acl_del, NULL, "", RW },
