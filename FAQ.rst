@@ -2031,7 +2031,7 @@ Q: The "learn" action can't learn the action I want, can you improve it?
       http://openvswitch.org/pipermail/discuss/2016-June/021694.html
 
     - MAC learning in the middle of a pipeline, as described in `the tutorial
-      <tutorial/Tutorial.md>`__.
+      <tutorial/tutorial.rst>`__.
 
     - TCP state based firewalling, by learning outgoing connections based on
       SYN packets and matching them up with incoming packets.

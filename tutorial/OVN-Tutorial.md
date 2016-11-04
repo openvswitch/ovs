@@ -991,7 +991,7 @@ and `lport2`.
     $ ovn/env8/packet2.sh
 
 [ovn-architecture(7)]:http://openvswitch.org/support/dist-docs/ovn-architecture.7.html
-[Tutorial.md]:https://github.com/openvswitch/ovs/blob/master/tutorial/Tutorial.md
+[Tutorial.md]:https://github.com/openvswitch/ovs/blob/master/tutorial/tutorial.rst
 [ovn-nb(5)]:http://openvswitch.org/support/dist-docs/ovn-nb.5.html
 [ovn-sb(5)]:http://openvswitch.org/support/dist-docs/ovn-sb.5.html
 [vtep(5)]:http://openvswitch.org/support/dist-docs/vtep.5.html
