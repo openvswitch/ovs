@@ -306,8 +306,7 @@
       <li>
         <code>sfc</code> ACLs work as entry points for service function
         chaining, also known as SFC classifiers. Further attributes such
-        as what chain to be used and the last_hop_port are provided via
-        external_ids of the ACL.
+        as what chain to be used are provided via the options column.
       </li>
       <li>
         Other ACLs translate to <code>drop;</code> for new or untracked
