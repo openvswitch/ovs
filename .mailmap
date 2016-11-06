@@ -1,13 +1,24 @@
+# See git-shortlog(1) for official documentation of this file format.
+#
+# Name <email>
+#   Use "Name" for any commit with address "<email>".  This is useful when a person
+#   has commits using different spellings of their name, but with the same email
+#   address.
+#
+# Name <email> <email2>
+#   Use "Name" and "<email>" for any commit with the address "<email2>".  This is useful
+#   when a person has used more than one email address.
+
 Aaron Conole <aconole@redhat.com> <aaron@bytheb.org>
 Aaron Conole <aconole@redhat.com> <aconole@bytheb.org>
 Aaron Rosen <aaronorosen@gmail.com> <arosen@clemson.edu>
 Alex Wang <ee07b291@gmail.com> <alexw@nicira.com>
 Alexey I. Froloff <raorn@raorn.name> <raorn@altlinux.org>
+Alin Serdean <aserdean@cloudbasesolutions.com>
 Alin Serdean <aserdean@cloudbasesolutions.com> <aserdean at cloudbasesolutions.com>
-Alin Serdean <aserdean@cloudbasesolutions.com> Alin Gabriel Sardean <aserdean@cloudbasesolutions.com>
+Andy Zhou <azhou@ovn.org>
 Andy Zhou <azhou@ovn.org> <azhou@nicira.com>
 Andy Zhou <azhou@ovn.org> <azhou@von.org>
-Andy Zhou <azhou@ovn.org> andy zhou <azhou@ovn.org>
 Ansis Atteka <aatteka@ovn.org> <aatteka@nicira.com>
 Ansis Atteka <aatteka@ovn.org> <ansisatteka@gmail.com>
 Anupam Chanda <achanda@vmware.com> <achanda@nicira.com>
@@ -25,8 +36,8 @@ Fischetti, Antonio <antonio.fischetti@intel.com>
 Flavio Fernandes <flavio@flaviof.com>
 Flavio Leitner <fbl@sysclose.org> <fbl@redhat.com>
 Gal Sagie <gal.sagie@gmail.com>
+Gurucharan Shetty <guru@ovn.org>
 Gurucharan Shetty <guru@ovn.org> <gshetty@nicira.com>
-Gurucharan Shetty <guru@ovn.org> Guru Shetty <guru@ovn.org>
 Henry Mai <hmai@nicira.com> <henrymai@nicira.com>
 Hui Kang <kangh@us.ibm.com> <hkang.sunysb@gmail.com>
 Ian Campbell <ian.campbell@citrix.com> <Ian.Campbell@citrix.com>
@@ -51,7 +62,7 @@ Raju Subramanian <rsubramanian@nicira.com>
 Ralf Spenneberg <ralf@spenneberg.net>
 Rami Rosen <ramirose@gmail.com>
 Ramu Ramamurthy <ramu.ramamurthy@us.ibm.com> <ramu.ramamurthy@gmail.com>
-Robert Åkerblom-Andersson <Robert.nr1@gmail.com> Robert Åkerblom-Andersson <Scorpiion@users.noreply.github.com>
+Robert Åkerblom-Andersson <Robert.nr1@gmail.com> <Scorpiion@users.noreply.github.com>
 Romain Lenglet <romain.lenglet@oracle.com> <rlenglet@vmware.com>
 Romain Lenglet <romain.lenglet@oracle.com> <romain.lenglet@berabera.info>
 Russell Bryant <russell@ovn.org> <rbryant@redhat.com>
