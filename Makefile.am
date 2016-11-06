@@ -116,7 +116,8 @@ EXTRA_DIST = \
 	$(MAN_FRAGMENTS) \
 	$(MAN_ROOTS) \
 	Vagrantfile \
-	Vagrantfile-FreeBSD
+	Vagrantfile-FreeBSD \
+	.mailmap
 bin_PROGRAMS =
 sbin_PROGRAMS =
 bin_SCRIPTS =
