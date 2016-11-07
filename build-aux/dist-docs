@@ -34,7 +34,6 @@ search_path () {
     exit 1
 }
 search_path man
-search_path markdown
 search_path rst2html
 search_path ps2pdf
 
@@ -63,8 +62,8 @@ cat >&3 <<EOF
 EOF
 
 # Add top-level documentation to index.html, giving it .txt extensions so that
-# the webserver doesn't serve it as Markdown/rST and make your web browser try
-# to invoke some kind of external helper you don't have installed.
+# the webserver doesn't serve it as rST and make your web browser try to invoke
+# some kind of external helper you don't have installed.
 #
 # Also translate documentation to HTML.
 for file
@@ -72,27 +71,6 @@ do
     title=`head -1 "$srcdir/$file"`
     dir=$distdir/`dirname $file`; test -d "$dir" || mkdir "$dir"
     case $file in
-        *.md)
-            cp "$srcdir/$file" "$distdir/$file.txt"
-            ln -s $(basename "$file.txt") "$distdir/$file"
-            (cat <<EOF
-<html><head>
-  <meta charset="UTF-8"></head>
-  <link rel="stylesheet" type="text/css" href="style.css">
-  <title>$file (Open vSwitch $VERSION)</title>
-</head><body>
-EOF
-             markdown "$distdir/$file.txt"
-             echo "</body></html>") > "$distdir/$file.html"
-            cat <<EOF
-<tr>
-  <td>$file</td>
-  <td>$title</td>
-  <td><a href="$file.html">HTML</a>, <a href="$file.txt">plain text</a></td>
-</tr>
-EOF
-            ;;
-
         *.rst)
             title=`grep -A 1 -e "^=" $srcdir/$file | sed -n 2p`
             cp "$srcdir/$file" "$distdir/$file.txt"

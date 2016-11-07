@@ -74,7 +74,7 @@ What other documentation is available?
 --------------------------------------
 
 To install Open vSwitch on a regular Linux or FreeBSD host, please read the
-`installation guide <INSTALL.md>`__. For specifics around installation on a
+`installation guide <INSTALL.rst>`__. For specifics around installation on a
 specific platform, please see one of the below installation guides:
 
 - `Debian <INSTALL.Debian.rst>`__

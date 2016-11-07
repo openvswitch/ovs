@@ -80,7 +80,7 @@ vSwitch distribution or to use the kernel module built into the Linux kernel
 are not available in the Open vSwitch kernel datapath that ships as part of the
 upstream Linux kernel?" for more information on this trade-off. You may also
 use the userspace-only implementation, at some cost in features and performance
-(see the `userspace installation guide <INSTALL.userspace.md>`__ for details).
+(see the `userspace installation guide <INSTALL.userspace.rst>`__ for details).
 
 To compile the kernel module on Linux, you must also install the
 following:

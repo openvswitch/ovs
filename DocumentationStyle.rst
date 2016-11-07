@@ -48,7 +48,7 @@ Basics
 ~~~~~~
 
 Many of the basic documentation guidelines match those of the `coding style
-guide <CodingStyle.md>`__.
+guide <CodingStyle.rst>`__.
 
 - Use reStructuredText (reST) for all documentation.
 
