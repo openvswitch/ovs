@@ -178,6 +178,7 @@
   <ItemGroup>
     <ClCompile Include="Actions.c" />
     <ClCompile Include="BufferMgmt.c" />
+    <ClCompile Include="Conntrack-icmp.c" />
     <ClCompile Include="Conntrack-other.c" />
     <ClCompile Include="Conntrack-tcp.c" />
     <ClCompile Include="Conntrack.c" />

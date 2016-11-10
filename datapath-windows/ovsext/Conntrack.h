@@ -31,7 +31,14 @@ struct ct_addr {
 
 struct ct_endpoint {
     struct ct_addr addr;
-    ovs_be16 port;
+    union {
+        ovs_be16 port;
+        struct {
+            ovs_be16 icmp_id;
+            uint8_t icmp_type;
+            uint8_t icmp_code;
+        };
+    };
     UINT16 pad;
 };
 
@@ -94,6 +101,14 @@ typedef struct OvsConntrackKeyLookupCtx {
         ((STRUCT *) (void *) ((char *) (POINTER) - \
          offsetof (STRUCT, MEMBER)))
 
+static __inline void
+OvsConntrackUpdateExpiration(OVS_CT_ENTRY *ctEntry,
+                             long long now,
+                             long long interval)
+{
+    ctEntry->expiration = now + interval;
+}
+
 VOID OvsCleanupConntrack(VOID);
 NTSTATUS OvsInitConntrack(POVS_SWITCH_CONTEXT context);
 
@@ -102,20 +117,25 @@ NDIS_STATUS OvsExecuteConntrackAction(PNET_BUFFER_LIST curNbl,
                                       OvsFlowKey *key,
                                       const PNL_ATTR a);
 BOOLEAN OvsConntrackValidateTcpPacket(const TCPHdr *tcp);
+BOOLEAN OvsConntrackValidateIcmpPacket(const ICMPHdr *icmp);
 OVS_CT_ENTRY * OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
                                           PNET_BUFFER_LIST nbl,
                                           UINT64 now);
 NDIS_STATUS OvsCtMapTcpProtoInfoToNl(PNL_BUFFER nlBuf,
                                      OVS_CT_ENTRY *conn_);
 OVS_CT_ENTRY * OvsConntrackCreateOtherEntry(UINT64 now);
+OVS_CT_ENTRY * OvsConntrackCreateIcmpEntry(UINT64 now);
 enum CT_UPDATE_RES OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
                                               const TCPHdr *tcp,
                                               PNET_BUFFER_LIST nbl,
                                               BOOLEAN reply,
                                               UINT64 now);
-enum ct_update_res OvsConntrackUpdateOtherEntry(OVS_CT_ENTRY *conn_,
+enum CT_UPDATE_RES OvsConntrackUpdateOtherEntry(OVS_CT_ENTRY *conn_,
                                                 BOOLEAN reply,
                                                 UINT64 now);
+enum CT_UPDATE_RES OvsConntrackUpdateIcmpEntry(OVS_CT_ENTRY* conn_,
+                                               BOOLEAN reply,
+                                               UINT64 now);
 NTSTATUS
 OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
                           PVOID outBuffer,

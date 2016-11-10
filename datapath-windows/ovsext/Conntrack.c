@@ -211,7 +211,28 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
             return entry;
         }
         case IPPROTO_ICMP:
+        {
+            ICMPHdr storage;
+            const ICMPHdr *icmp;
+            icmp = OvsGetIcmp(curNbl, l4Offset, &storage);
+            if (!OvsConntrackValidateIcmpPacket(icmp)) {
+                goto invalid;
+            }
+
+            state |= OVS_CS_F_NEW;
+            if (commit) {
+                entry = OvsConntrackCreateIcmpEntry(currentTime);
+                if (!entry) {
+                    return NULL;
+                }
+                OvsCtAddEntry(entry, ctx, currentTime);
+            }
+
+            OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
+            return entry;
+        }
         case IPPROTO_UDP:
+        {
             state |= OVS_CS_F_NEW;
             if (commit) {
                 entry = OvsConntrackCreateOtherEntry(currentTime);
@@ -223,6 +244,7 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
 
             OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
             return entry;
+        }
         default:
             goto invalid;
     }
@@ -254,6 +276,7 @@ OvsCtUpdateEntry(OVS_CT_ENTRY* entry,
             return OvsConntrackUpdateTcpEntry(entry, tcp, nbl, reply, now);
         }
         case IPPROTO_ICMP:
+            return OvsConntrackUpdateIcmpEntry(entry, reply, now);
         case IPPROTO_UDP:
             return OvsConntrackUpdateOtherEntry(entry, reply, now);
         default:
@@ -338,8 +361,7 @@ OvsCtLookup(OvsConntrackKeyLookupCtx *ctx)
     BOOLEAN reply = FALSE;
     POVS_CT_ENTRY found = NULL;
 
-    if (!ctTotalEntries)
-    {
+    if (!ctTotalEntries) {
         return found;
     }
 
@@ -384,6 +406,27 @@ OvsExtractLookupCtxHash(OvsConntrackKeyLookupCtx *ctx)
                          hash);
 }
 
+static UINT8
+OvsReverseIcmpType(UINT8 type)
+{
+    switch (type) {
+    case ICMP4_ECHO_REQUEST:
+        return ICMP4_ECHO_REPLY;
+    case ICMP4_ECHO_REPLY:
+        return ICMP4_ECHO_REQUEST;
+    case ICMP4_TIMESTAMP_REQUEST:
+        return ICMP4_TIMESTAMP_REPLY;
+    case ICMP4_TIMESTAMP_REPLY:
+        return ICMP4_TIMESTAMP_REQUEST;
+    case ICMP4_INFO_REQUEST:
+        return ICMP4_INFO_REPLY;
+    case ICMP4_INFO_REPLY:
+        return ICMP4_INFO_REQUEST;
+    default:
+        return 0;
+    }
+}
+
 static __inline NDIS_STATUS
 OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
                     UINT16 zone,
@@ -408,16 +451,31 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
             const ICMPHdr *icmp;
             icmp = OvsGetIcmp(curNbl, l4Offset, &icmpStorage);
             ASSERT(icmp);
-            ctx->key.src.port = ctx->key.dst.port = icmp->fields.echo.id;
 
             /* Related bit is set when ICMP has an error */
             /* XXX parse out the appropriate src and dst from inner pkt */
             switch (icmp->type) {
+               case ICMP4_ECHO_REQUEST:
+               case ICMP4_ECHO_REPLY:
+               case ICMP4_TIMESTAMP_REQUEST:
+               case ICMP4_TIMESTAMP_REPLY:
+               case ICMP4_INFO_REQUEST:
+               case ICMP4_INFO_REPLY:
+                   if (icmp->code != 0) {
+                       return NDIS_STATUS_INVALID_PACKET;
+                   }
+                   /* Separate ICMP connection: identified using id */
+                   ctx->key.dst.icmp_id = icmp->fields.echo.id;
+                   ctx->key.src.icmp_id = icmp->fields.echo.id;
+                   ctx->key.src.icmp_type = icmp->type;
+                   ctx->key.dst.icmp_type = OvsReverseIcmpType(icmp->type);
+                   break;
                case ICMP4_DEST_UNREACH:
                case ICMP4_TIME_EXCEEDED:
                case ICMP4_PARAM_PROB:
                case ICMP4_SOURCE_QUENCH:
                case ICMP4_REDIRECT: {
+                   /* XXX Handle inner packet */
                    ctx->related = TRUE;
                    break;
                }
@@ -830,15 +888,18 @@ MapProtoTupleToNl(PNL_BUFFER nlBuf, OVS_CT_KEY *key)
         || key->dl_type == ntohs(ETH_TYPE_IPV6)) {
         /* ICMP and ICMPv6 Type, Code and ID are currently not tracked */
         if (key->nw_proto == IPPROTO_ICMP) {
-            if (!NlMsgPutTailU16(nlBuf, CTA_PROTO_ICMP_ID, 0)) {
+            if (!NlMsgPutTailU16(nlBuf, CTA_PROTO_ICMP_ID,
+                                 htons(key->src.icmp_id))) {
                 status = NDIS_STATUS_FAILURE;
                 goto done;
             }
-            if (!NlMsgPutTailU8(nlBuf, CTA_PROTO_ICMP_TYPE, 0)) {
+            if (!NlMsgPutTailU8(nlBuf, CTA_PROTO_ICMP_TYPE,
+                                key->src.icmp_type)) {
                 status = NDIS_STATUS_FAILURE;
                 goto done;
             }
-            if (!NlMsgPutTailU8(nlBuf, CTA_PROTO_ICMP_CODE, 0)) {
+            if (!NlMsgPutTailU8(nlBuf, CTA_PROTO_ICMP_CODE,
+                                key->src.icmp_code)) {
                 status = NDIS_STATUS_FAILURE;
                 goto done;
             }
