@@ -758,6 +758,18 @@ ovntrace_flow_lookup(const struct ovntrace_datapath *dp,
     return NULL;
 }
 
+static char *
+ovntrace_stage_name(const struct ovntrace_datapath *dp,
+                    uint8_t table_id, enum ovntrace_pipeline pipeline)
+{
+    for (size_t i = 0; i < dp->n_flows; i++) {
+        const struct ovntrace_flow *flow = dp->flows[i];
+        if (flow->pipeline == pipeline && flow->table_id == table_id) {
+            return xstrdup(flow->stage_name);;
+        }
+    }
+    return NULL;
+}
 
 enum ovntrace_node_type {
     OVNTRACE_NODE_OUTPUT,
@@ -1346,7 +1358,11 @@ trace__(const struct ovntrace_datapath *dp, struct flow *uflow,
         }
         ds_put_format(&s, "%s, priority %d", f->match_s, f->priority);
     } else {
-        ds_put_format(&s, "no match");
+        char *stage_name = ovntrace_stage_name(dp, table_id, pipeline);
+        ds_put_format(&s, "%s%sno match",
+                      stage_name ? stage_name : "",
+                      stage_name ? ": " : "");
+        free(stage_name);
     }
     struct ovntrace_node *node = ovntrace_node_append(
         super, OVNTRACE_NODE_TABLE, "%s", ds_cstr(&s));
