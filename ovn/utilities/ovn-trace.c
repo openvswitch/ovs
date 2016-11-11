@@ -1359,7 +1359,7 @@ trace__(const struct ovntrace_datapath *dp, struct flow *uflow,
         ds_put_format(&s, "%s, priority %d", f->match_s, f->priority);
     } else {
         char *stage_name = ovntrace_stage_name(dp, table_id, pipeline);
-        ds_put_format(&s, "%s%sno match",
+        ds_put_format(&s, "%s%sno match (implicit drop)",
                       stage_name ? stage_name : "",
                       stage_name ? ": " : "");
         free(stage_name);
