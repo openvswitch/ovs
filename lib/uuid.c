@@ -115,7 +115,7 @@ uuid_set_bits_v4(struct uuid *uuid)
 void
 uuid_zero(struct uuid *uuid)
 {
-    uuid->parts[0] = uuid->parts[1] = uuid->parts[2] = uuid->parts[3] = 0;
+    *uuid = UUID_ZERO;
 }
 
 /* Returns true if 'uuid' is all zero, otherwise false. */

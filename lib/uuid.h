@@ -18,6 +18,9 @@
 
 #include "openvswitch/uuid.h"
 
+/* An initializer or expression for an all-zero UUID. */
+#define UUID_ZERO ((struct uuid) { .parts = { 0, 0, 0, 0 } })
+
 /* Formats a UUID as a string, in the conventional format.
  *
  * Example:
