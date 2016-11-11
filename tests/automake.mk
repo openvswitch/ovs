@@ -167,43 +167,15 @@ valgrind_wrappers = \
 	tests/valgrind/ovn-sbctl \
 	tests/valgrind/ovs-appctl \
 	tests/valgrind/ovs-ofctl \
-	tests/valgrind/ovstest \
 	tests/valgrind/ovs-vsctl \
 	tests/valgrind/ovs-vswitchd \
 	tests/valgrind/ovsdb-client \
 	tests/valgrind/ovsdb-server \
 	tests/valgrind/ovsdb-tool \
-	tests/valgrind/test-aes128 \
-	tests/valgrind/test-atomic \
-	tests/valgrind/test-bundle \
-	tests/valgrind/test-byte-order \
-	tests/valgrind/test-classifier \
-	tests/valgrind/test-ccmap \
-	tests/valgrind/test-cmap \
-	tests/valgrind/test-csum \
-	tests/valgrind/test-flows \
-	tests/valgrind/test-hash \
-	tests/valgrind/test-hindex \
-	tests/valgrind/test-hmap \
-	tests/valgrind/test-json \
-	tests/valgrind/test-jsonrpc \
-	tests/valgrind/test-list \
-	tests/valgrind/test-lockfile \
-	tests/valgrind/test-multipath \
-	tests/valgrind/test-odp \
-	tests/valgrind/test-ofpbuf \
+	tests/valgrind/ovstest \
 	tests/valgrind/test-ovsdb \
-	tests/valgrind/test-packets \
-	tests/valgrind/test-random \
-	tests/valgrind/test-reconnect \
-	tests/valgrind/test-rstp \
-	tests/valgrind/test-sha1 \
-	tests/valgrind/test-stp \
-	tests/valgrind/test-type-props \
-	tests/valgrind/test-unix-socket \
-	tests/valgrind/test-unixctl \
-	tests/valgrind/test-uuid \
-	tests/valgrind/test-vconn
+	tests/valgrind/test-strtok_r \
+	tests/valgrind/test-type-props
 
 $(valgrind_wrappers): tests/valgrind-wrapper.in
 	@test -d tests/valgrind || mkdir tests/valgrind
