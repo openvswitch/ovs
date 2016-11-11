@@ -2263,7 +2263,7 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     netdev_flow_key_init_masked(&flow->cr.flow, &match->flow, &mask);
 
     /* Select dpcls for in_port. Relies on in_port to be exact match */
-    ovs_assert(match->wc.masks.in_port.odp_port == ODP_PORT_C(UINT32_MAX));
+    ovs_assert(match->wc.masks.in_port.odp_port == ODPP_NONE);
     cls = dp_netdev_pmd_find_dpcls(pmd, in_port);
     dpcls_insert(cls, &flow->cr, &mask);
 
