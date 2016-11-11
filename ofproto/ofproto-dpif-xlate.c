@@ -2326,11 +2326,14 @@ xlate_normal_mcast_send_mrouters(struct xlate_ctx *ctx,
     xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     LIST_FOR_EACH(mrouter, mrouter_node, &ms->mrouter_lru) {
         mcast_xbundle = xbundle_lookup(xcfg, mrouter->port);
-        if (mcast_xbundle && mcast_xbundle != in_xbundle) {
+        if (mcast_xbundle && mcast_xbundle != in_xbundle
+            && mrouter->vlan == vlan) {
             xlate_report(ctx, "forwarding to mcast router port");
             output_normal(ctx, mcast_xbundle, vlan);
         } else if (!mcast_xbundle) {
             xlate_report(ctx, "mcast router port is unknown, dropping");
+        } else if (mrouter->vlan != vlan) {
+            xlate_report(ctx, "mcast router is on another vlan, dropping");
         } else {
             xlate_report(ctx, "mcast router port is input port, dropping");
         }
