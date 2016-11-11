@@ -2164,6 +2164,8 @@ netdev_dpdk_update_flags__(struct netdev_dpdk *dev,
         if (!(dev->flags & NETDEV_UP)) {
             rte_eth_dev_stop(dev->port_id);
         }
+
+        netdev_change_seq_changed(&dev->up);
     } else {
         /* If DPDK_DEV_VHOST device's NETDEV_UP flag was changed and vhost is
          * running then change netdev's change_seq to trigger link state
