@@ -14,6 +14,7 @@ EXTRA_DIST += \
 	datapath-windows/ovsext/Atomic.h \
 	datapath-windows/ovsext/BufferMgmt.c \
 	datapath-windows/ovsext/BufferMgmt.h \
+	datapath-windows/ovsext/Conntrack-icmp.c \
 	datapath-windows/ovsext/Conntrack-other.c \
 	datapath-windows/ovsext/Conntrack-tcp.c \
 	datapath-windows/ovsext/Conntrack.c \
