@@ -391,7 +391,8 @@ struct netdev_rxq_dpdk {
     int port_id;
 };
 
-static int netdev_dpdk_construct(struct netdev *);
+static int netdev_dpdk_class_init(void);
+static int netdev_dpdk_vhost_class_init(void);
 
 int netdev_dpdk_get_vid(const struct netdev_dpdk *dev);
 
@@ -401,7 +402,8 @@ netdev_dpdk_get_ingress_policer(const struct netdev_dpdk *dev);
 static bool
 is_dpdk_class(const struct netdev_class *class)
 {
-    return class->construct == netdev_dpdk_construct;
+    return class->init == netdev_dpdk_class_init
+           || class->init == netdev_dpdk_vhost_class_init;
 }
 
 /* DPDK NIC drivers allocate RX buffers at a particular granularity, typically
