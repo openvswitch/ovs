@@ -170,7 +170,7 @@ void xlate_bundle_set(struct ofproto_dpif *, struct ofbundle *,
                       const char *name, enum port_vlan_mode, int vlan,
                       unsigned long *trunks, bool use_priority_tags,
                       const struct bond *, const struct lacp *,
-                      bool floodable);
+                      bool floodable, bool protected);
 void xlate_bundle_remove(struct ofbundle *);
 
 void xlate_ofport_set(struct ofproto_dpif *, struct ofbundle *,

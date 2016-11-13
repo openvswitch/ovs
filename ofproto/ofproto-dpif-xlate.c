@@ -130,6 +130,7 @@ struct xbundle {
                                     * NULL if all VLANs are trunked. */
     bool use_priority_tags;        /* Use 802.1p tag for frames in VLAN 0? */
     bool floodable;                /* No port has OFPUTIL_PC_NO_FLOOD set? */
+    bool protected;                /* Protected port mode */
 };
 
 struct xport {
@@ -534,7 +535,7 @@ static void xlate_xbundle_set(struct xbundle *xbundle,
                               enum port_vlan_mode vlan_mode, int vlan,
                               unsigned long *trunks, bool use_priority_tags,
                               const struct bond *bond, const struct lacp *lacp,
-                              bool floodable);
+                              bool floodable, bool protected);
 static void xlate_xport_set(struct xport *xport, odp_port_t odp_port,
                             const struct netdev *netdev, const struct cfm *cfm,
                             const struct bfd *bfd, const struct lldp *lldp,
@@ -683,7 +684,7 @@ xlate_xbundle_set(struct xbundle *xbundle,
                   enum port_vlan_mode vlan_mode, int vlan,
                   unsigned long *trunks, bool use_priority_tags,
                   const struct bond *bond, const struct lacp *lacp,
-                  bool floodable)
+                  bool floodable, bool protected)
 {
     ovs_assert(xbundle->xbridge);
 
@@ -692,6 +693,7 @@ xlate_xbundle_set(struct xbundle *xbundle,
     xbundle->trunks = trunks;
     xbundle->use_priority_tags = use_priority_tags;
     xbundle->floodable = floodable;
+    xbundle->protected = protected;
 
     if (xbundle->bond != bond) {
         bond_unref(xbundle->bond);
@@ -786,7 +788,7 @@ xlate_xbundle_copy(struct xbridge *xbridge, struct xbundle *xbundle)
     xlate_xbundle_set(new_xbundle, xbundle->vlan_mode,
                       xbundle->vlan, xbundle->trunks,
                       xbundle->use_priority_tags, xbundle->bond, xbundle->lacp,
-                      xbundle->floodable);
+                      xbundle->floodable, xbundle->protected);
     LIST_FOR_EACH (xport, bundle_node, &xbundle->xports) {
         xlate_xport_copy(xbridge, new_xbundle, xport);
     }
@@ -980,7 +982,7 @@ xlate_bundle_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
                  const char *name, enum port_vlan_mode vlan_mode, int vlan,
                  unsigned long *trunks, bool use_priority_tags,
                  const struct bond *bond, const struct lacp *lacp,
-                 bool floodable)
+                 bool floodable, bool protected)
 {
     struct xbundle *xbundle;
 
@@ -999,7 +1001,7 @@ xlate_bundle_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
     xbundle->name = xstrdup(name);
 
     xlate_xbundle_set(xbundle, vlan_mode, vlan, trunks,
-                      use_priority_tags, bond, lacp, floodable);
+                      use_priority_tags, bond, lacp, floodable, protected);
 }
 
 static void
