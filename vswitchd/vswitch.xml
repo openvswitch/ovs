@@ -1778,6 +1778,14 @@
         Bridge?  See ovs-vsctl(8) for more information.
       </column>
 
+      <column name="protected" type='{"type": "boolean"}'>
+        The protected ports feature allows certain ports to be designated as
+        protected. Traffic between protected ports is blocked. Protected
+        ports can send traffic to unprotected ports. Unprotected ports can
+        send traffic to any port.
+        Default is false.
+      </column>
+
       <column name="external_ids" key="fake-bridge-id-*">
         External IDs for a fake bridge (see the <ref column="fake_bridge"/>
         column) are defined by prefixing a <ref table="Bridge"/> <ref
