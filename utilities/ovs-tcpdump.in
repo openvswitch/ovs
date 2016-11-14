@@ -430,9 +430,6 @@ def main():
             if len(data) == 0:
                 raise KeyboardInterrupt
             print(data)
-            if select.select([sys.stdin], [], [], 0.0)[0]:
-                data_in = sys.stdin.read()
-                pipes.stdin.write(data_in)
         raise KeyboardInterrupt
     except KeyboardInterrupt:
         pipes.terminate()
