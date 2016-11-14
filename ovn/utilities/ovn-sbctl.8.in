@@ -97,6 +97,9 @@ to approximately \fIsecs\fR seconds.  If the timeout expires,
 would normally happen only if the database cannot be contacted, or if
 the system is overloaded.)
 .
+.so lib/vlog.man
+.so lib/common.man
+.
 .SS "Table Formatting Options"
 These options control the format of output from the \fBlist\fR and
 \fBfind\fR commands.
