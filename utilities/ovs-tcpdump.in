@@ -426,7 +426,7 @@ def main():
     pipes = _doexec(*([dump_cmd, '-i', mirror_interface] + tcpdargs))
     try:
         while pipes.poll() is None:
-            data = pipes.stdout.readline()
+            data = pipes.stdout.readline().strip('\n')
             if len(data) == 0:
                 raise KeyboardInterrupt
             print(data)
