@@ -2770,7 +2770,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
     case OVS_KEY_ATTR_IN_PORT:
         if (portno_names && verbose && is_exact) {
             char *name = odp_portno_names_get(portno_names,
-                            u32_to_odp(nl_attr_get_u32(a)));
+                                              nl_attr_get_odp_port(a));
             if (name) {
                 ds_put_format(ds, "%s", name);
             } else {

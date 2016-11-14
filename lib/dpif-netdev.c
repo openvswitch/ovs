@@ -4410,7 +4410,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
 
     switch ((enum ovs_action_attr)type) {
     case OVS_ACTION_ATTR_OUTPUT:
-        p = pmd_tx_port_cache_lookup(pmd, u32_to_odp(nl_attr_get_u32(a)));
+        p = pmd_tx_port_cache_lookup(pmd, nl_attr_get_odp_port(a));
         if (OVS_LIKELY(p)) {
             int tx_qid;
             bool dynamic_txqs;
@@ -4455,7 +4455,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
     case OVS_ACTION_ATTR_TUNNEL_POP:
         if (*depth < MAX_RECIRC_DEPTH) {
             struct dp_packet_batch *orig_packets_ = packets_;
-            odp_port_t portno = u32_to_odp(nl_attr_get_u32(a));
+            odp_port_t portno = nl_attr_get_odp_port(a);
 
             p = pmd_tx_port_cache_lookup(pmd, portno);
             if (p) {
