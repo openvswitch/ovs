@@ -230,7 +230,8 @@ class OVSDB(object):
                                  (port_name, txn.get_error()))
         self._txn = None
 
-    def destroy_mirror(self, mirror_name, bridge_name):
+    def destroy_mirror(self, intf_name, bridge_name):
+        mirror_name = 'm_%s' % intf_name
         if not self.mirror_exists(mirror_name):
             return
         txn = self._start_txn()
@@ -433,7 +434,7 @@ def main():
         raise KeyboardInterrupt
     except KeyboardInterrupt:
         pipes.terminate()
-        ovsdb.destroy_mirror('m%s' % interface, ovsdb.port_bridge(interface))
+        ovsdb.destroy_mirror(interface, ovsdb.port_bridge(interface))
         ovsdb.destroy_port(mirror_interface, ovsdb.port_bridge(interface))
     except Exception:
         print("Unable to tear down the ports and mirrors.")
