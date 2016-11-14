@@ -39,6 +39,12 @@
 
 #include <openflow/openflow-1.3.h>
 
+/* OpenFlow 1.4.1+ specific capabilities
+ * (struct ofp_switch_features, member capabilities). */
+enum ofp14_capabilities {
+    OFPC14_BUNDLES        = 1 << 9,    /* Switch supports bundles. */
+    OFPC14_FLOW_MONITORING = 1 << 10,  /* Switch supports flow monitoring. */
+};
 
 /* ## ---------- ## */
 /* ## ofp14_port ## */

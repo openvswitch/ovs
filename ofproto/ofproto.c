@@ -3397,7 +3397,7 @@ handle_features_request(struct ofconn *ofconn, const struct ofp_header *oh)
     features.n_tables = ofproto_get_n_visible_tables(ofproto);
     features.capabilities = (OFPUTIL_C_FLOW_STATS | OFPUTIL_C_TABLE_STATS |
                              OFPUTIL_C_PORT_STATS | OFPUTIL_C_QUEUE_STATS |
-                             OFPUTIL_C_GROUP_STATS);
+                             OFPUTIL_C_GROUP_STATS | OFPUTIL_C_BUNDLES);
     if (arp_match_ip) {
         features.capabilities |= OFPUTIL_C_ARP_MATCH_IP;
     }

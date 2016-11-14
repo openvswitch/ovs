@@ -1239,7 +1239,7 @@ do
     AT_CHECK_UNQUOTED([strip_xids < stdout], [0], [dnl
 OFPT_FEATURES_REPLY (OF1.4): dpid:fedcba9876543210
 n_tables:254, n_buffers:256
-capabilities: FLOW_STATS TABLE_STATS PORT_STATS GROUP_STATS QUEUE_STATS
+capabilities: FLOW_STATS TABLE_STATS PORT_STATS GROUP_STATS QUEUE_STATS BUNDLES
 OFPST_PORT_DESC reply (OF1.4):
  LOCAL(br0): addr:aa:55:aa:55:00:00
      config:     $config

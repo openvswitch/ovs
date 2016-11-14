@@ -4654,6 +4654,9 @@ BUILD_ASSERT_DECL((int) OFPUTIL_C_PORT_STATS == OFPC_PORT_STATS);
 BUILD_ASSERT_DECL((int) OFPUTIL_C_IP_REASM == OFPC_IP_REASM);
 BUILD_ASSERT_DECL((int) OFPUTIL_C_QUEUE_STATS == OFPC_QUEUE_STATS);
 BUILD_ASSERT_DECL((int) OFPUTIL_C_ARP_MATCH_IP == OFPC_ARP_MATCH_IP);
+BUILD_ASSERT_DECL((int) OFPUTIL_C_PORT_BLOCKED == OFPC12_PORT_BLOCKED);
+BUILD_ASSERT_DECL((int) OFPUTIL_C_BUNDLES == OFPC14_BUNDLES);
+BUILD_ASSERT_DECL((int) OFPUTIL_C_FLOW_MONITORING == OFPC14_FLOW_MONITORING);
 
 static uint32_t
 ofputil_capabilities_mask(enum ofp_version ofp_version)
@@ -4665,10 +4668,12 @@ ofputil_capabilities_mask(enum ofp_version ofp_version)
         return OFPC_COMMON | OFPC_ARP_MATCH_IP;
     case OFP12_VERSION:
     case OFP13_VERSION:
+        return OFPC_COMMON | OFPC12_PORT_BLOCKED;
     case OFP14_VERSION:
     case OFP15_VERSION:
     case OFP16_VERSION:
-        return OFPC_COMMON | OFPC12_PORT_BLOCKED;
+        return OFPC_COMMON | OFPC12_PORT_BLOCKED | OFPC14_BUNDLES
+            | OFPC14_FLOW_MONITORING;
     default:
         /* Caller needs to check osf->header.version itself */
         return 0;
@@ -4794,7 +4799,6 @@ ofputil_encode_switch_features(const struct ofputil_switch_features *features,
     osf->n_buffers = htonl(features->n_buffers);
     osf->n_tables = features->n_tables;
 
-    osf->capabilities = htonl(features->capabilities & OFPC_COMMON);
     osf->capabilities = htonl(features->capabilities &
                               ofputil_capabilities_mask(version));
     switch (version) {
