@@ -2,13 +2,17 @@
 
 ovn/utilities/ovn-sbctl.8: \
 	ovn/utilities/ovn-sbctl.8.in \
+	lib/common.man \
 	lib/db-ctl-base.man \
 	lib/table.man \
+	lib/vlog.man \
 	ovsdb/remote-active.man \
 	ovsdb/remote-passive.man
 ovn/utilities/ovn-sbctl.8.in:
+lib/common.man:
 lib/db-ctl-base.man:
 lib/table.man:
+lib/vlog.man:
 ovsdb/remote-active.man:
 ovsdb/remote-passive.man:
 
