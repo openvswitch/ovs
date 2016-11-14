@@ -433,7 +433,9 @@ def main():
             print(data)
         raise KeyboardInterrupt
     except KeyboardInterrupt:
-        pipes.terminate()
+        if pipes.poll() is None:
+            pipes.terminate()
+
         ovsdb.destroy_mirror(interface, ovsdb.port_bridge(interface))
         ovsdb.destroy_port(mirror_interface, ovsdb.port_bridge(interface))
     except Exception:
