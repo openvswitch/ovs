@@ -617,3 +617,47 @@ p2 1 0 0
 dnl During reconfiguration some packets will be dropped. This is expected
 OVS_VSWITCHD_STOP(["/dpif(monitor[[0-9]]\+)|WARN|dummy@ovs-dummy: execute [[0-9]]\+ failed/d"])
 AT_CLEANUP
+
+AT_SETUP([PMD - dpctl])
+OVS_VSWITCHD_START(
+  [del-br br0], [], [], [--dummy-numa 0,0])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+AT_CHECK([ovs-appctl dpctl/add-dp dummy@dp0])
+AT_CHECK([ovs-appctl dpctl/add-if dummy@dp0 p1,type=dummy-pmd])
+AT_CHECK([ovs-appctl dpctl/add-if dummy@dp0 p2,type=dummy])
+
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show dp0 | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 0
+])
+
+AT_CHECK([ovs-appctl dpctl/show dummy@dp0], [0], [dnl
+dummy@dp0:
+	lookups: hit:0 missed:0 lost:0
+	flows: 0
+	port 0: dp0 (dummy-internal)
+	port 1: p1 (dummy-pmd: configured_rx_queues=1, configured_tx_queues=1, requested_rx_queues=1, requested_tx_queues=1)
+	port 2: p2 (dummy)
+])
+
+AT_CHECK([ovs-appctl dpctl/add-flow dummy@dp0 'in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234)' 2], [0], [dnl
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@dp0 | sort], [0], [dnl
+flow-dump from non-dpdk interfaces:
+flow-dump from pmd on cpu core: 0
+recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234), packets:0, bytes:0, used:never, actions:2
+recirc_id(0),in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234), packets:0, bytes:0, used:never, actions:2
+])
+
+AT_CHECK([ovs-appctl dpctl/del-flow dummy@dp0 'in_port(1),eth(src=00:00:00:00:00:01,dst=00:00:00:00:00:02),eth_type(0x1234)'], [0], [dnl
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows dummy@dp0], [0], [dnl
+])
+
+AT_CHECK([ovs-appctl dpctl/del-dp dummy@dp0], [0], [dnl
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

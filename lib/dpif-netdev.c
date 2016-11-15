@@ -2308,54 +2308,26 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
 }
 
 static int
-dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
+flow_put_on_pmd(struct dp_netdev_pmd_thread *pmd,
+                struct netdev_flow_key *key,
+                struct match *match,
+                ovs_u128 *ufid,
+                const struct dpif_flow_put *put,
+                struct dpif_flow_stats *stats)
 {
-    struct dp_netdev *dp = get_dp_netdev(dpif);
     struct dp_netdev_flow *netdev_flow;
-    struct netdev_flow_key key;
-    struct dp_netdev_pmd_thread *pmd;
-    struct match match;
-    ovs_u128 ufid;
-    unsigned pmd_id = put->pmd_id == PMD_ID_NULL
-                      ? NON_PMD_CORE_ID : put->pmd_id;
-    int error;
+    int error = 0;
 
-    error = dpif_netdev_flow_from_nlattrs(put->key, put->key_len, &match.flow);
-    if (error) {
-        return error;
-    }
-    error = dpif_netdev_mask_from_nlattrs(put->key, put->key_len,
-                                          put->mask, put->mask_len,
-                                          &match.flow, &match.wc);
-    if (error) {
-        return error;
-    }
-
-    pmd = dp_netdev_get_pmd(dp, pmd_id);
-    if (!pmd) {
-        return EINVAL;
-    }
-
-    /* Must produce a netdev_flow_key for lookup.
-     * This interface is no longer performance critical, since it is not used
-     * for upcall processing any more. */
-    netdev_flow_key_from_flow(&key, &match.flow);
-
-    if (put->ufid) {
-        ufid = *put->ufid;
-    } else {
-        dpif_flow_hash(dpif, &match.flow, sizeof match.flow, &ufid);
+    if (stats) {
+        memset(stats, 0, sizeof *stats);
     }
 
     ovs_mutex_lock(&pmd->flow_mutex);
-    netdev_flow = dp_netdev_pmd_lookup_flow(pmd, &key, NULL);
+    netdev_flow = dp_netdev_pmd_lookup_flow(pmd, key, NULL);
     if (!netdev_flow) {
         if (put->flags & DPIF_FP_CREATE) {
             if (cmap_count(&pmd->flow_table) < MAX_FLOWS) {
-                if (put->stats) {
-                    memset(put->stats, 0, sizeof *put->stats);
-                }
-                dp_netdev_flow_add(pmd, &match, &ufid, put->actions,
+                dp_netdev_flow_add(pmd, match, ufid, put->actions,
                                    put->actions_len);
                 error = 0;
             } else {
@@ -2366,7 +2338,7 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
         }
     } else {
         if (put->flags & DPIF_FP_MODIFY
-            && flow_equal(&match.flow, &netdev_flow->flow)) {
+            && flow_equal(&match->flow, &netdev_flow->flow)) {
             struct dp_netdev_actions *new_actions;
             struct dp_netdev_actions *old_actions;
 
@@ -2376,8 +2348,8 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
             old_actions = dp_netdev_flow_get_actions(netdev_flow);
             ovsrcu_set(&netdev_flow->actions, new_actions);
 
-            if (put->stats) {
-                get_dpif_flow_stats(netdev_flow, put->stats);
+            if (stats) {
+                get_dpif_flow_stats(netdev_flow, stats);
             }
             if (put->flags & DPIF_FP_ZERO_STATS) {
                 /* XXX: The userspace datapath uses thread local statistics
@@ -2401,7 +2373,95 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
         }
     }
     ovs_mutex_unlock(&pmd->flow_mutex);
-    dp_netdev_pmd_unref(pmd);
+    return error;
+}
+
+static int
+dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    struct netdev_flow_key key;
+    struct dp_netdev_pmd_thread *pmd;
+    struct match match;
+    ovs_u128 ufid;
+    int error;
+
+    if (put->stats) {
+        memset(put->stats, 0, sizeof *put->stats);
+    }
+    error = dpif_netdev_flow_from_nlattrs(put->key, put->key_len, &match.flow);
+    if (error) {
+        return error;
+    }
+    error = dpif_netdev_mask_from_nlattrs(put->key, put->key_len,
+                                          put->mask, put->mask_len,
+                                          &match.flow, &match.wc);
+    if (error) {
+        return error;
+    }
+
+    if (put->ufid) {
+        ufid = *put->ufid;
+    } else {
+        dpif_flow_hash(dpif, &match.flow, sizeof match.flow, &ufid);
+    }
+
+    /* Must produce a netdev_flow_key for lookup.
+     * This interface is no longer performance critical, since it is not used
+     * for upcall processing any more. */
+    netdev_flow_key_from_flow(&key, &match.flow);
+
+    if (put->pmd_id == PMD_ID_NULL) {
+        if (cmap_count(&dp->poll_threads) == 0) {
+            return EINVAL;
+        }
+        CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
+            struct dpif_flow_stats pmd_stats;
+            int pmd_error;
+
+            pmd_error = flow_put_on_pmd(pmd, &key, &match, &ufid, put,
+                                        &pmd_stats);
+            if (pmd_error) {
+                error = pmd_error;
+            } else if (put->stats) {
+                put->stats->n_packets += pmd_stats.n_packets;
+                put->stats->n_bytes += pmd_stats.n_bytes;
+                put->stats->used = MAX(put->stats->used, pmd_stats.used);
+                put->stats->tcp_flags |= pmd_stats.tcp_flags;
+            }
+        }
+    } else {
+        pmd = dp_netdev_get_pmd(dp, put->pmd_id);
+        if (!pmd) {
+            return EINVAL;
+        }
+        error = flow_put_on_pmd(pmd, &key, &match, &ufid, put, put->stats);
+        dp_netdev_pmd_unref(pmd);
+    }
+
+    return error;
+}
+
+static int
+flow_del_on_pmd(struct dp_netdev_pmd_thread *pmd,
+                struct dpif_flow_stats *stats,
+                const struct dpif_flow_del *del)
+{
+    struct dp_netdev_flow *netdev_flow;
+    int error = 0;
+
+    ovs_mutex_lock(&pmd->flow_mutex);
+    netdev_flow = dp_netdev_pmd_find_flow(pmd, del->ufid, del->key,
+                                          del->key_len);
+    if (netdev_flow) {
+        if (stats) {
+            get_dpif_flow_stats(netdev_flow, stats);
+        }
+        dp_netdev_pmd_remove_flow(pmd, netdev_flow);
+    } else {
+        error = ENOENT;
+    }
+    ovs_mutex_unlock(&pmd->flow_mutex);
 
     return error;
 }
@@ -2410,30 +2470,40 @@ static int
 dpif_netdev_flow_del(struct dpif *dpif, const struct dpif_flow_del *del)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
-    struct dp_netdev_flow *netdev_flow;
     struct dp_netdev_pmd_thread *pmd;
-    unsigned pmd_id = del->pmd_id == PMD_ID_NULL
-                      ? NON_PMD_CORE_ID : del->pmd_id;
     int error = 0;
 
-    pmd = dp_netdev_get_pmd(dp, pmd_id);
-    if (!pmd) {
-        return EINVAL;
+    if (del->stats) {
+        memset(del->stats, 0, sizeof *del->stats);
     }
 
-    ovs_mutex_lock(&pmd->flow_mutex);
-    netdev_flow = dp_netdev_pmd_find_flow(pmd, del->ufid, del->key,
-                                          del->key_len);
-    if (netdev_flow) {
-        if (del->stats) {
-            get_dpif_flow_stats(netdev_flow, del->stats);
+    if (del->pmd_id == PMD_ID_NULL) {
+        if (cmap_count(&dp->poll_threads) == 0) {
+            return EINVAL;
         }
-        dp_netdev_pmd_remove_flow(pmd, netdev_flow);
+        CMAP_FOR_EACH (pmd, node, &dp->poll_threads) {
+            struct dpif_flow_stats pmd_stats;
+            int pmd_error;
+
+            pmd_error = flow_del_on_pmd(pmd, &pmd_stats, del);
+            if (pmd_error) {
+                error = pmd_error;
+            } else if (del->stats) {
+                del->stats->n_packets += pmd_stats.n_packets;
+                del->stats->n_bytes += pmd_stats.n_bytes;
+                del->stats->used = MAX(del->stats->used, pmd_stats.used);
+                del->stats->tcp_flags |= pmd_stats.tcp_flags;
+            }
+        }
     } else {
-        error = ENOENT;
+        pmd = dp_netdev_get_pmd(dp, del->pmd_id);
+        if (!pmd) {
+            return EINVAL;
+        }
+        error = flow_del_on_pmd(pmd, del->stats, del);
+        dp_netdev_pmd_unref(pmd);
     }
-    ovs_mutex_unlock(&pmd->flow_mutex);
-    dp_netdev_pmd_unref(pmd);
+
 
     return error;
 }

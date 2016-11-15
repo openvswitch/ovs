@@ -907,7 +907,7 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
      * previous run are still present in the datapath. */
     error = dpif_flow_put(dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY | DPIF_FP_PROBE,
                           key->data, key->size, NULL, 0, NULL, 0,
-                          ufid, PMD_ID_NULL, NULL);
+                          ufid, NON_PMD_CORE_ID, NULL);
     if (error) {
         if (error != EINVAL) {
             VLOG_WARN("%s: %s flow probe failed (%s)",
@@ -918,7 +918,7 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
 
     ofpbuf_use_stack(&reply, &stub, sizeof stub);
     error = dpif_flow_get(dpif, key->data, key->size, ufid,
-                          PMD_ID_NULL, &reply, &flow);
+                          NON_PMD_CORE_ID, &reply, &flow);
     if (!error
         && (!ufid || (flow.ufid_present
                       && ovs_u128_equals(*ufid, flow.ufid)))) {
@@ -926,7 +926,7 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
     }
 
     error = dpif_flow_del(dpif, key->data, key->size, ufid,
-                          PMD_ID_NULL, NULL);
+                          NON_PMD_CORE_ID, NULL);
     if (error) {
         VLOG_WARN("%s: failed to delete %s feature probe flow",
                   dpif_name(dpif), name);

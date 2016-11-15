@@ -629,7 +629,8 @@ enum dpif_op_type {
  *
  *   - If the datapath implements multiple pmd thread with its own flow
  *     table, 'pmd_id' should be used to specify the particular polling
- *     thread for the operation.
+ *     thread for the operation. PMD_ID_NULL means that the flow should
+ *     be put on all the polling threads.
  */
 struct dpif_flow_put {
     /* Input. */
@@ -661,7 +662,8 @@ struct dpif_flow_put {
  *
  * If the datapath implements multiple polling thread with its own flow table,
  * 'pmd_id' should be used to specify the particular polling thread for the
- * operation.
+ * operation. PMD_ID_NULL means that the flow should be deleted from all the
+ * polling threads.
  *
  * If the operation succeeds, then 'stats', if nonnull, will be set to the
  * flow's statistics before its deletion. */
@@ -726,7 +728,8 @@ struct dpif_execute {
  *
  * If the datapath implements multiple polling thread with its own flow table,
  * 'pmd_id' should be used to specify the particular polling thread for the
- * operation.
+ * operation. PMD_ID_NULL means that the datapath will return the first
+ * matching flow from any poll thread.
  *
  * Succeeds with status 0 if the flow is fetched, or fails with ENOENT if no
  * such flow exists. Other failures are indicated with a positive errno value.
@@ -860,6 +863,9 @@ void dpif_get_netflow_ids(const struct dpif *,
 
 int dpif_queue_to_priority(const struct dpif *, uint32_t queue_id,
                            uint32_t *priority);
+
+int dpif_get_pmds_for_port(const struct dpif * dpif, odp_port_t port_no,
+                           unsigned int **pmds, size_t *n);
 
 char *dpif_get_dp_version(const struct dpif *);
 bool dpif_supports_tnl_push_pop(const struct dpif *);
