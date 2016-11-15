@@ -32,6 +32,7 @@
 #include "openvswitch/list.h"
 #include "ovs-thread.h"
 #include "openvswitch/vlog.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(ovs_numa);
 
@@ -503,6 +504,81 @@ ovs_numa_dump_cores_on_numa(int numa_id)
             struct ovs_numa_info *info = xmalloc(sizeof *info);
 
             info->numa_id = numa->numa_id;
+            info->core_id = core->core_id;
+            hmap_insert(&dump->dump, &info->hmap_node,
+                        hash_2words(info->numa_id, info->core_id));
+        }
+    }
+
+    return dump;
+}
+
+struct ovs_numa_dump *
+ovs_numa_dump_cores_with_cmask(const char *cmask)
+{
+    struct ovs_numa_dump *dump = xmalloc(sizeof *dump);
+    int core_id = 0;
+    int end_idx;
+
+    hmap_init(&dump->dump);
+
+    /* Ignore leading 0x. */
+    end_idx = 0;
+    if (!strncmp(cmask, "0x", 2) || !strncmp(cmask, "0X", 2)) {
+        end_idx = 2;
+    }
+
+    for (int i = strlen(cmask) - 1; i >= end_idx; i--) {
+        char hex = cmask[i];
+        int bin;
+
+        bin = hexit_value(hex);
+        if (bin == -1) {
+            VLOG_WARN("Invalid cpu mask: %c", cmask[i]);
+            bin = 0;
+        }
+
+        for (int j = 0; j < 4; j++) {
+            if ((bin >> j) & 0x1) {
+                struct cpu_core *core = get_core_by_core_id(core_id);
+
+                if (core) {
+                    struct ovs_numa_info *info = xmalloc(sizeof *info);
+
+                    info->numa_id = core->numa->numa_id;
+                    info->core_id = core->core_id;
+                    hmap_insert(&dump->dump, &info->hmap_node,
+                                hash_2words(info->numa_id, info->core_id));
+                }
+            }
+
+            core_id++;
+        }
+    }
+
+    return dump;
+}
+
+struct ovs_numa_dump *
+ovs_numa_dump_n_cores_per_numa(int cores_per_numa)
+{
+    struct ovs_numa_dump *dump = xmalloc(sizeof *dump);
+    const struct numa_node *n;
+
+    hmap_init(&dump->dump);
+
+    HMAP_FOR_EACH (n, hmap_node, &all_numa_nodes) {
+        const struct cpu_core *core;
+        int i = 0;
+
+        LIST_FOR_EACH (core, list_node, &n->cores) {
+            if (i++ >= cores_per_numa) {
+                break;
+            }
+
+            struct ovs_numa_info *info = xmalloc(sizeof *info);
+
+            info->numa_id = core->numa->numa_id;
             info->core_id = core->core_id;
             hmap_insert(&dump->dump, &info->hmap_node,
                         hash_2words(info->numa_id, info->core_id));

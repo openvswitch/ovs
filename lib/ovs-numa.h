@@ -54,12 +54,14 @@ unsigned ovs_numa_get_unpinned_core_any(void);
 unsigned ovs_numa_get_unpinned_core_on_numa(int numa_id);
 void ovs_numa_unpin_core(unsigned core_id);
 struct ovs_numa_dump *ovs_numa_dump_cores_on_numa(int numa_id);
+struct ovs_numa_dump *ovs_numa_dump_cores_with_cmask(const char *cmask);
+struct ovs_numa_dump *ovs_numa_dump_n_cores_per_numa(int n);
 bool ovs_numa_dump_contains_core(const struct ovs_numa_dump *,
                                  int numa_id, unsigned core_id);
 void ovs_numa_dump_destroy(struct ovs_numa_dump *);
 int ovs_numa_thread_setaffinity_core(unsigned core_id);
 
-#define FOR_EACH_CORE_ON_NUMA(ITER, DUMP)                    \
+#define FOR_EACH_CORE_ON_DUMP(ITER, DUMP)                    \
     HMAP_FOR_EACH((ITER), hmap_node, &(DUMP)->dump)
 
 #endif /* ovs-numa.h */
