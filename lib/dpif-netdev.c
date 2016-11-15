@@ -485,6 +485,8 @@ struct dp_netdev_pmd_thread {
     unsigned long long last_cycles;
 
     struct latch exit_latch;        /* For terminating the pmd thread. */
+    struct seq *reload_seq;
+    uint64_t last_reload_seq;
     atomic_bool reload;             /* Do we need to reload ports? */
     pthread_t thread;
     unsigned core_id;               /* CPU core id of this pmd thread. */
@@ -1209,6 +1211,7 @@ dp_netdev_reload_pmd__(struct dp_netdev_pmd_thread *pmd)
     }
 
     ovs_mutex_lock(&pmd->cond_mutex);
+    seq_change(pmd->reload_seq);
     atomic_store_relaxed(&pmd->reload, true);
     ovs_mutex_cond_wait(&pmd->cond, &pmd->cond_mutex);
     ovs_mutex_unlock(&pmd->cond_mutex);
@@ -3164,6 +3167,14 @@ reload:
                 netdev_rxq_get_queue_id(poll_list[i].rx));
     }
 
+    if (!poll_cnt) {
+        while (seq_read(pmd->reload_seq) == pmd->last_reload_seq) {
+            seq_wait(pmd->reload_seq, pmd->last_reload_seq);
+            poll_block();
+        }
+        lc = UINT_MAX;
+    }
+
     for (;;) {
         for (i = 0; i < poll_cnt; i++) {
             dp_netdev_process_rxq_port(pmd, poll_list[i].port, poll_list[i].rx);
@@ -3239,6 +3250,7 @@ dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd)
 {
     ovs_mutex_lock(&pmd->cond_mutex);
     atomic_store_relaxed(&pmd->reload, false);
+    pmd->last_reload_seq = seq_read(pmd->reload_seq);
     xpthread_cond_signal(&pmd->cond);
     ovs_mutex_unlock(&pmd->cond_mutex);
 }
@@ -3333,6 +3345,8 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
 
     ovs_refcount_init(&pmd->ref_cnt);
     latch_init(&pmd->exit_latch);
+    pmd->reload_seq = seq_create();
+    pmd->last_reload_seq = seq_read(pmd->reload_seq);
     atomic_init(&pmd->reload, false);
     xpthread_cond_init(&pmd->cond, NULL);
     ovs_mutex_init(&pmd->cond_mutex);
@@ -3372,6 +3386,7 @@ dp_netdev_destroy_pmd(struct dp_netdev_pmd_thread *pmd)
     cmap_destroy(&pmd->flow_table);
     ovs_mutex_destroy(&pmd->flow_mutex);
     latch_destroy(&pmd->exit_latch);
+    seq_destroy(pmd->reload_seq);
     xpthread_cond_destroy(&pmd->cond);
     ovs_mutex_destroy(&pmd->cond_mutex);
     ovs_mutex_destroy(&pmd->port_mutex);
