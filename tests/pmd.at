@@ -53,7 +53,7 @@ m4_define([CHECK_PMD_THREADS_CREATED], [
 ])
 
 m4_define([SED_NUMA_CORE_PATTERN], ["s/\(numa_id \)[[0-9]]*\( core_id \)[[0-9]]*:/\1<cleared>\2<cleared>:/"])
-m4_define([DUMMY_NUMA], [--dummy-numa="0,0,0,0,1,1,1,1"])
+m4_define([DUMMY_NUMA], [--dummy-numa="0,0,0,0"])
 
 AT_SETUP([PMD - creating a thread/add-port])
 OVS_VSWITCHD_START([add-port br0 p0 -- set Interface p0 type=dummy-pmd], [], [], [DUMMY_NUMA])
