@@ -496,7 +496,7 @@ struct dp_netdev_pmd_thread {
     /* Queue id used by this pmd thread to send packets on all netdevs if
      * XPS disabled for this netdev. All static_tx_qid's are unique and less
      * than 'ovs_numa_get_n_cores() + 1'. */
-    atomic_int static_tx_qid;
+    const int static_tx_qid;
 
     struct ovs_mutex port_mutex;    /* Mutex for 'poll_list' and 'tx_ports'. */
     /* List of rx queues to poll. */
@@ -3302,10 +3302,9 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     pmd->numa_id = numa_id;
     pmd->poll_cnt = 0;
 
-    atomic_init(&pmd->static_tx_qid,
-                (core_id == NON_PMD_CORE_ID)
-                ? ovs_numa_get_n_cores()
-                : get_n_pmd_threads(dp));
+    *CONST_CAST(int *, &pmd->static_tx_qid) = (core_id == NON_PMD_CORE_ID)
+                                              ? ovs_numa_get_n_cores()
+                                              : get_n_pmd_threads(dp);
 
     ovs_refcount_init(&pmd->ref_cnt);
     latch_init(&pmd->exit_latch);
@@ -4410,7 +4409,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
             if (dynamic_txqs) {
                 tx_qid = dpif_netdev_xps_get_tx_qid(pmd, p, now);
             } else {
-                atomic_read_relaxed(&pmd->static_tx_qid, &tx_qid);
+                tx_qid = pmd->static_tx_qid;
             }
 
             netdev_send(p->port->netdev, tx_qid, packets_, may_steal,
