@@ -746,10 +746,6 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
     int diag;
     int n_rxq, n_txq;
 
-    if (!rte_eth_dev_is_valid_port(dev->port_id)) {
-        return ENODEV;
-    }
-
     rte_eth_dev_info_get(dev->port_id, &info);
 
     n_rxq = MIN(info.max_rx_queues, dev->up.n_rxq);
@@ -858,15 +854,10 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
     dev->port_id = port_no;
     dev->type = type;
     dev->flags = 0;
-    dev->requested_mtu = dev->mtu = ETHER_MTU;
+    dev->requested_mtu = ETHER_MTU;
     dev->max_packet_len = MTU_TO_FRAME_LEN(dev->mtu);
     ovsrcu_index_init(&dev->vid, -1);
     dev->vhost_reconfigured = false;
-
-    err = netdev_dpdk_mempool_configure(dev);
-    if (err) {
-        goto unlock;
-    }
 
     ovsrcu_init(&dev->qos_conf, NULL);
 
@@ -874,14 +865,12 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
     dev->policer_rate = 0;
     dev->policer_burst = 0;
 
-    netdev->n_rxq = NR_QUEUE;
-    netdev->n_txq = NR_QUEUE;
-    dev->requested_n_rxq = netdev->n_rxq;
-    dev->requested_n_txq = netdev->n_txq;
-    dev->rxq_size = NIC_PORT_DEFAULT_RXQ_SIZE;
-    dev->txq_size = NIC_PORT_DEFAULT_TXQ_SIZE;
-    dev->requested_rxq_size = dev->rxq_size;
-    dev->requested_txq_size = dev->txq_size;
+    netdev->n_rxq = 0;
+    netdev->n_txq = 0;
+    dev->requested_n_rxq = NR_QUEUE;
+    dev->requested_n_txq = NR_QUEUE;
+    dev->requested_rxq_size = NIC_PORT_DEFAULT_RXQ_SIZE;
+    dev->requested_txq_size = NIC_PORT_DEFAULT_TXQ_SIZE;
 
     /* Initialize the flow control to NULL */
     memset(&dev->fc_conf, 0, sizeof dev->fc_conf);
@@ -891,24 +880,17 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
 
     dev->flags = NETDEV_UP | NETDEV_PROMISC;
 
-    if (type == DPDK_DEV_ETH) {
-        if (rte_eth_dev_is_valid_port(dev->port_id)) {
-            err = dpdk_eth_dev_init(dev);
-            if (err) {
-                goto unlock;
-            }
-        }
-        dev->tx_q = netdev_dpdk_alloc_txq(netdev->n_txq);
-    } else {
+    if (type == DPDK_DEV_VHOST) {
         dev->tx_q = netdev_dpdk_alloc_txq(OVS_VHOST_MAX_QUEUE_NUM);
-    }
-
-    if (!dev->tx_q) {
-        err = ENOMEM;
-        goto unlock;
+        if (!dev->tx_q) {
+            err = ENOMEM;
+            goto unlock;
+        }
     }
 
     ovs_list_push_back(&dpdk_list, &dev->list_node);
+
+    netdev_request_reconfigure(netdev);
 
 unlock:
     ovs_mutex_unlock(&dev->mutex);
@@ -3177,7 +3159,7 @@ out:
     return err;
 }
 
-static void
+static int
 dpdk_vhost_reconfigure_helper(struct netdev_dpdk *dev)
     OVS_REQUIRES(dev->mutex)
 {
@@ -3198,31 +3180,37 @@ dpdk_vhost_reconfigure_helper(struct netdev_dpdk *dev)
         }
     }
 
+    if (!dev->dpdk_mp) {
+        return ENOMEM;
+    }
+
     if (netdev_dpdk_get_vid(dev) >= 0) {
         dev->vhost_reconfigured = true;
     }
+
+    return 0;
 }
 
 static int
 netdev_dpdk_vhost_reconfigure(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+    int err;
 
     ovs_mutex_lock(&dev->mutex);
-    dpdk_vhost_reconfigure_helper(dev);
+    err = dpdk_vhost_reconfigure_helper(dev);
     ovs_mutex_unlock(&dev->mutex);
-    return 0;
+
+    return err;
 }
 
 static int
 netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int err = 0;
+    int err;
 
     ovs_mutex_lock(&dev->mutex);
-
-    dpdk_vhost_reconfigure_helper(dev);
 
     /* Configure vHost client mode if requested and if the following criteria
      * are met:
@@ -3237,6 +3225,7 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
         if (err) {
             VLOG_ERR("vhost-user device setup failure for device %s\n",
                      dev->vhost_id);
+            goto unlock;
         } else {
             /* Configuration successful */
             dev->vhost_driver_flags |= RTE_VHOST_USER_CLIENT;
@@ -3246,9 +3235,12 @@ netdev_dpdk_vhost_client_reconfigure(struct netdev *netdev)
         }
     }
 
+    err = dpdk_vhost_reconfigure_helper(dev);
+
+unlock:
     ovs_mutex_unlock(&dev->mutex);
 
-    return 0;
+    return err;
 }
 
 #define NETDEV_DPDK_CLASS(NAME, INIT, CONSTRUCT, DESTRUCT,    \

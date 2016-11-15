@@ -1762,6 +1762,8 @@ iface_do_create(const struct bridge *br,
     *ofp_portp = iface_pick_ofport(iface_cfg);
     error = ofproto_port_add(br->ofproto, netdev, ofp_portp);
     if (error) {
+        VLOG_WARN_BUF(errp, "could not add network device %s to ofproto (%s)",
+                      iface_cfg->name, ovs_strerror(error));
         goto error;
     }
 
