@@ -1,0 +1,13 @@
+AT_BANNER([appctl route/add with gateway])
+AT_SETUP([appctl - route/add with gateway])
+AT_KEYWORDS([ovs_router])
+AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
+OVS_VSWITCHD_START([add-port br0 p2 -- set Interface p2 type=gre \
+			options:local_ip=2.2.2.2 options:remote_ip=1.1.1.1 \
+			-- add-port br0 p1  -- set interface p1 type=dummy])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 2.2.2.2/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 1.1.1.0/24 br0 2.2.2.10], [0], [OK
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
