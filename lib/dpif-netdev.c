@@ -3349,6 +3349,7 @@ dp_netdev_destroy_pmd(struct dp_netdev_pmd_thread *pmd)
     /* All flows (including their dpcls_rules) have been deleted already */
     CMAP_FOR_EACH (cls, node, &pmd->classifiers) {
         dpcls_destroy(cls);
+        ovsrcu_postpone(free, cls);
     }
     cmap_destroy(&pmd->classifiers);
     cmap_destroy(&pmd->flow_table);
