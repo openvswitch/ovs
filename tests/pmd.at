@@ -517,6 +517,62 @@ p1 3 0 2
 OVS_VSWITCHD_STOP(["/dpif_netdev|WARN|There is no PMD thread on core/d"])
 AT_CLEANUP
 
+AT_SETUP([PMD - rxq affinity - NUMA])
+OVS_VSWITCHD_START(
+  [], [], [], [--dummy-numa 0,0,0,1,1])
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
+
+AT_CHECK([ovs-ofctl add-flow br0 actions=controller])
+
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=7e])
+
+AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=2 options:numa_id=0 other_config:pmd-rxq-affinity="0:1,1:2"])
+
+dnl The rxqs should be on the requested cores.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 0 1
+p1 1 0 2
+])
+
+AT_CHECK([ovs-vsctl set Interface p1 other_config:pmd-rxq-affinity="0:3,1:4"])
+
+dnl We moved the queues to different numa node. Expecting threads on
+dnl NUMA node 1 to be created.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 1 3
+p1 1 1 4
+])
+
+AT_CHECK([ovs-vsctl set Interface p1 other_config:pmd-rxq-affinity="0:3,1:1"])
+
+dnl Queues splitted between NUMA nodes.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show], [0], [dnl
+p1 0 1 3
+p1 1 0 1
+])
+
+AT_CHECK([ovs-vsctl remove Interface p1 other_config pmd-rxq-affinity])
+
+dnl We removed the rxq-affinity request.  dpif-netdev should assign queues
+dnl in a round robin fashion.  We just make sure that every rxq is being
+dnl polled again.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show | cut -f 1,2 -d ' ' | sort], [0], [dnl
+p1 0
+p1 1
+])
+
+AT_CHECK([ovs-vsctl set Interface p1 other_config:pmd-rxq-affinity='0:3'])
+
+dnl We explicitly requesting NUMA node 1 for queue 0.
+dnl Queue 1 should be polled by thread from NUMA node 0.
+AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | parse_pmd_rxq_show | cut -f 1,2,3 -d ' '], [0], [dnl
+p1 0 1
+p1 1 0
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([PMD - monitor threads])
 OVS_VSWITCHD_START(
   [], [], [], [--dummy-numa 0,0])

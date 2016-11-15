@@ -1498,18 +1498,30 @@ get_n_pmd_threads_on_numa(struct dp_netdev *dp, int numa_id)
     return n_pmds;
 }
 
-/* Returns 'true' if there is a port with pmd netdev and the netdev
- * is on numa node 'numa_id'. */
+/* Returns 'true' if there is a port with pmd netdev and the netdev is on
+ * numa node 'numa_id' or its rx queue assigned to core on that numa node . */
 static bool
-has_pmd_port_for_numa(struct dp_netdev *dp, int numa_id)
+has_pmd_rxq_for_numa(struct dp_netdev *dp, int numa_id)
     OVS_REQUIRES(dp->port_mutex)
 {
     struct dp_netdev_port *port;
 
     HMAP_FOR_EACH (port, node, &dp->ports) {
-        if (netdev_is_pmd(port->netdev)
-            && netdev_get_numa_id(port->netdev) == numa_id) {
-            return true;
+        if (netdev_is_pmd(port->netdev)) {
+            int i;
+
+            if (netdev_get_numa_id(port->netdev) == numa_id) {
+                return true;
+            }
+
+            for (i = 0; i < port->n_rxq; i++) {
+                unsigned core_id = port->rxqs[i].core_id;
+
+                if (core_id != -1
+                    && ovs_numa_get_numa_id(core_id) == numa_id) {
+                    return true;
+                }
+            }
         }
     }
 
@@ -1533,7 +1545,7 @@ do_del_port(struct dp_netdev *dp, struct dp_netdev_port *port)
         ovs_assert(ovs_numa_numa_id_is_valid(numa_id));
         /* If there is no netdev on the numa node, deletes the pmd threads
          * for that numa. */
-        if (!has_pmd_port_for_numa(dp, numa_id)) {
+        if (!has_pmd_rxq_for_numa(dp, numa_id)) {
             dp_netdev_del_pmds_on_numa(dp, numa_id);
         }
     }
@@ -3738,9 +3750,27 @@ dp_netdev_reset_pmd_threads(struct dp_netdev *dp)
 
     HMAP_FOR_EACH (port, node, &dp->ports) {
         if (netdev_is_pmd(port->netdev)) {
-            int numa_id = netdev_get_numa_id(port->netdev);
+            struct hmapx numas = HMAPX_INITIALIZER(&numas);
+            struct hmapx_node *numa_node;
+            uintptr_t numa_id;
+            int i;
 
-            dp_netdev_set_pmds_on_numa(dp, numa_id);
+            numa_id = netdev_get_numa_id(port->netdev);
+            hmapx_add(&numas, (void *) numa_id);
+            for (i = 0; i < port->n_rxq; i++) {
+                unsigned core_id = port->rxqs[i].core_id;
+
+                if (core_id != -1) {
+                    numa_id = ovs_numa_get_numa_id(core_id);
+                    hmapx_add(&numas, (void *) numa_id);
+                }
+            }
+
+            HMAPX_FOR_EACH (numa_node, &numas) {
+                dp_netdev_set_pmds_on_numa(dp, (uintptr_t) numa_node->data);
+            }
+
+            hmapx_destroy(&numas);
         }
         /* Distribute only pinned rx queues first to mark threads as isolated */
         dp_netdev_add_port_rx_to_pmds(dp, port, &to_reload, true);
