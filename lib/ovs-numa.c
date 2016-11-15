@@ -71,8 +71,6 @@ struct cpu_core {
     struct ovs_list list_node; /* In 'numa_node->cores' list. */
     struct numa_node *numa;    /* numa node containing the core. */
     unsigned core_id;          /* Core id. */
-    bool available;            /* If the core can be pinned. */
-    bool pinned;               /* If a thread has been pinned to the core. */
 };
 
 /* Contains all 'struct numa_node's. */
@@ -120,7 +118,6 @@ insert_new_cpu_core(struct numa_node *n, unsigned core_id)
     ovs_list_insert(&n->cores, &c->list_node);
     c->core_id = core_id;
     c->numa = n;
-    c->available = true;
 
     return c;
 }
@@ -343,18 +340,6 @@ ovs_numa_core_id_is_valid(unsigned core_id)
     return found_numa_and_core && core_id < ovs_numa_get_n_cores();
 }
 
-bool
-ovs_numa_core_is_pinned(unsigned core_id)
-{
-    struct cpu_core *core = get_core_by_core_id(core_id);
-
-    if (core) {
-        return core->pinned;
-    }
-
-    return false;
-}
-
 /* Returns the number of numa nodes. */
 int
 ovs_numa_get_n_numas(void)
@@ -397,97 +382,6 @@ ovs_numa_get_n_cores_on_numa(int numa_id)
     }
 
     return OVS_CORE_UNSPEC;
-}
-
-/* Returns the number of cpu cores that are available and unpinned
- * on numa node.  Returns OVS_CORE_UNSPEC if 'numa_id' is invalid. */
-int
-ovs_numa_get_n_unpinned_cores_on_numa(int numa_id)
-{
-    struct numa_node *numa = get_numa_by_numa_id(numa_id);
-
-    if (numa) {
-        struct cpu_core *core;
-        int count = 0;
-
-        LIST_FOR_EACH(core, list_node, &numa->cores) {
-            if (core->available && !core->pinned) {
-                count++;
-            }
-        }
-        return count;
-    }
-
-    return OVS_CORE_UNSPEC;
-}
-
-/* Given 'core_id', tries to pin that core.  Returns true, if succeeds.
- * False, if the core has already been pinned, or if it is invalid or
- * not available. */
-bool
-ovs_numa_try_pin_core_specific(unsigned core_id)
-{
-    struct cpu_core *core = get_core_by_core_id(core_id);
-
-    if (core) {
-        if (core->available && !core->pinned) {
-            core->pinned = true;
-            return true;
-        }
-    }
-
-    return false;
-}
-
-/* Searches through all cores for an unpinned and available core.  Returns
- * the 'core_id' if found and sets the 'core->pinned' to true.  Otherwise,
- * returns OVS_CORE_UNSPEC. */
-unsigned
-ovs_numa_get_unpinned_core_any(void)
-{
-    struct cpu_core *core;
-
-    HMAP_FOR_EACH(core, hmap_node, &all_cpu_cores) {
-        if (core->available && !core->pinned) {
-            core->pinned = true;
-            return core->core_id;
-        }
-    }
-
-    return OVS_CORE_UNSPEC;
-}
-
-/* Searches through all cores on numa node with 'numa_id' for an
- * unpinned and available core.  Returns the core_id if found and
- * sets the 'core->pinned' to true.  Otherwise, returns OVS_CORE_UNSPEC. */
-unsigned
-ovs_numa_get_unpinned_core_on_numa(int numa_id)
-{
-    struct numa_node *numa = get_numa_by_numa_id(numa_id);
-
-    if (numa) {
-        struct cpu_core *core;
-
-        LIST_FOR_EACH(core, list_node, &numa->cores) {
-            if (core->available && !core->pinned) {
-                core->pinned = true;
-                return core->core_id;
-            }
-        }
-    }
-
-    return OVS_CORE_UNSPEC;
-}
-
-/* Unpins the core with 'core_id'. */
-void
-ovs_numa_unpin_core(unsigned core_id)
-{
-    struct cpu_core *core = get_core_by_core_id(core_id);
-
-    if (core) {
-        core->pinned = false;
-    }
 }
 
 static struct ovs_numa_dump *
@@ -650,75 +544,6 @@ ovs_numa_dump_destroy(struct ovs_numa_dump *dump)
     hmap_destroy(&dump->numas);
 
     free(dump);
-}
-
-/* Reads the cpu mask configuration from 'cmask' and sets the
- * 'available' of corresponding cores.  For unspecified cores,
- * sets 'available' to false. */
-void
-ovs_numa_set_cpu_mask(const char *cmask)
-{
-    int core_id = 0;
-    int i;
-    int end_idx;
-
-    if (!found_numa_and_core) {
-        return;
-    }
-
-    /* If no mask specified, resets the 'available' to true for all cores. */
-    if (!cmask) {
-        struct cpu_core *core;
-
-        HMAP_FOR_EACH(core, hmap_node, &all_cpu_cores) {
-            core->available = true;
-        }
-
-        return;
-    }
-
-    /* Ignore leading 0x. */
-    end_idx = 0;
-    if (!strncmp(cmask, "0x", 2) || !strncmp(cmask, "0X", 2)) {
-        end_idx = 2;
-    }
-
-    for (i = strlen(cmask) - 1; i >= end_idx; i--) {
-        char hex = toupper((unsigned char)cmask[i]);
-        int bin, j;
-
-        if (hex >= '0' && hex <= '9') {
-            bin = hex - '0';
-        } else if (hex >= 'A' && hex <= 'F') {
-            bin = hex - 'A' + 10;
-        } else {
-            bin = 0;
-            VLOG_WARN("Invalid cpu mask: %c", cmask[i]);
-        }
-
-        for (j = 0; j < 4; j++) {
-            struct cpu_core *core;
-
-            core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
-                                                     hash_int(core_id++, 0)),
-                                struct cpu_core, hmap_node);
-            core->available = (bin >> j) & 0x1;
-
-            if (core_id >= hmap_count(&all_cpu_cores)) {
-                return;
-            }
-        }
-    }
-
-    /* For unspecified cores, sets 'available' to false.  */
-    while (core_id < hmap_count(&all_cpu_cores)) {
-        struct cpu_core *core;
-
-        core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
-                                                 hash_int(core_id++, 0)),
-                            struct cpu_core, hmap_node);
-        core->available = false;
-    }
 }
 
 int ovs_numa_thread_setaffinity_core(unsigned core_id OVS_UNUSED)
