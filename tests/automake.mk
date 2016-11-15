@@ -92,7 +92,8 @@ TESTSUITE_AT = \
 	tests/ovn-nbctl.at \
 	tests/ovn-sbctl.at \
 	tests/ovn-controller.at \
-	tests/ovn-controller-vtep.at
+	tests/ovn-controller-vtep.at \
+	tests/mcast-snooping.at
 
 SYSTEM_KMOD_TESTSUITE_AT = \
 	tests/system-common-macros.at \
