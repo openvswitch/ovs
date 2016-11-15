@@ -485,7 +485,7 @@ struct dp_netdev_pmd_thread {
     unsigned long long last_cycles;
 
     struct latch exit_latch;        /* For terminating the pmd thread. */
-    atomic_uint change_seq;         /* For reloading pmd ports. */
+    atomic_bool reload;             /* Do we need to reload ports? */
     pthread_t thread;
     unsigned core_id;               /* CPU core id of this pmd thread. */
     int numa_id;                    /* numa node id of this pmd thread. */
@@ -525,8 +525,6 @@ struct dp_netdev_pmd_thread {
     unsigned long long stats_zero[DP_N_STATS];
     uint64_t cycles_zero[PMD_N_CYCLES];
 };
-
-#define PMD_INITIAL_SEQ 1
 
 /* Interface to netdev-based datapath. */
 struct dpif_netdev {
@@ -1201,8 +1199,6 @@ dpif_netdev_get_stats(const struct dpif *dpif, struct dpif_dp_stats *stats)
 static void
 dp_netdev_reload_pmd__(struct dp_netdev_pmd_thread *pmd)
 {
-    int old_seq;
-
     if (pmd->core_id == NON_PMD_CORE_ID) {
         ovs_mutex_lock(&pmd->dp->non_pmd_mutex);
         ovs_mutex_lock(&pmd->port_mutex);
@@ -1213,7 +1209,7 @@ dp_netdev_reload_pmd__(struct dp_netdev_pmd_thread *pmd)
     }
 
     ovs_mutex_lock(&pmd->cond_mutex);
-    atomic_add_relaxed(&pmd->change_seq, 1, &old_seq);
+    atomic_store_relaxed(&pmd->reload, true);
     ovs_mutex_cond_wait(&pmd->cond, &pmd->cond_mutex);
     ovs_mutex_unlock(&pmd->cond_mutex);
 }
@@ -3147,7 +3143,6 @@ pmd_thread_main(void *f_)
     struct dp_netdev_pmd_thread *pmd = f_;
     unsigned int lc = 0;
     struct rxq_poll *poll_list;
-    unsigned int port_seq = PMD_INITIAL_SEQ;
     bool exiting;
     int poll_cnt;
     int i;
@@ -3175,7 +3170,7 @@ reload:
         }
 
         if (lc++ > 1024) {
-            unsigned int seq;
+            bool reload;
 
             lc = 0;
 
@@ -3185,9 +3180,8 @@ reload:
                 emc_cache_slow_sweep(&pmd->flow_cache);
             }
 
-            atomic_read_relaxed(&pmd->change_seq, &seq);
-            if (seq != port_seq) {
-                port_seq = seq;
+            atomic_read_relaxed(&pmd->reload, &reload);
+            if (reload) {
                 break;
             }
         }
@@ -3244,6 +3238,7 @@ static void
 dp_netdev_pmd_reload_done(struct dp_netdev_pmd_thread *pmd)
 {
     ovs_mutex_lock(&pmd->cond_mutex);
+    atomic_store_relaxed(&pmd->reload, false);
     xpthread_cond_signal(&pmd->cond);
     ovs_mutex_unlock(&pmd->cond_mutex);
 }
@@ -3338,7 +3333,7 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
 
     ovs_refcount_init(&pmd->ref_cnt);
     latch_init(&pmd->exit_latch);
-    atomic_init(&pmd->change_seq, PMD_INITIAL_SEQ);
+    atomic_init(&pmd->reload, false);
     xpthread_cond_init(&pmd->cond, NULL);
     ovs_mutex_init(&pmd->cond_mutex);
     ovs_mutex_init(&pmd->flow_mutex);
