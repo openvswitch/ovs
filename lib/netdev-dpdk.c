@@ -783,8 +783,6 @@ dpdk_eth_dev_init(struct netdev_dpdk *dev)
     mbp_priv = rte_mempool_get_priv(dev->dpdk_mp->mp);
     dev->buf_size = mbp_priv->mbuf_data_room_size - RTE_PKTMBUF_HEADROOM;
 
-    dev->flags = NETDEV_UP | NETDEV_PROMISC;
-
     /* Get the Flow control configuration for DPDK-ETH */
     diag = rte_eth_dev_flow_ctrl_get(dev->port_id, &dev->fc_conf);
     if (diag) {
@@ -890,6 +888,9 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
 
     /* Initilize the hardware offload flags to 0 */
     dev->hw_ol_features = 0;
+
+    dev->flags = NETDEV_UP | NETDEV_PROMISC;
+
     if (type == DPDK_DEV_ETH) {
         if (rte_eth_dev_is_valid_port(dev->port_id)) {
             err = dpdk_eth_dev_init(dev);
@@ -900,8 +901,6 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
         dev->tx_q = netdev_dpdk_alloc_txq(netdev->n_txq);
     } else {
         dev->tx_q = netdev_dpdk_alloc_txq(OVS_VHOST_MAX_QUEUE_NUM);
-        /* Enable DPDK_DEV_VHOST device and set promiscuous mode flag. */
-        dev->flags = NETDEV_UP | NETDEV_PROMISC;
     }
 
     if (!dev->tx_q) {
@@ -1598,6 +1597,10 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq, struct dp_packet_batch *batch)
     int nb_rx;
     int dropped = 0;
 
+    if (OVS_UNLIKELY(!(dev->flags & NETDEV_UP))) {
+        return EAGAIN;
+    }
+
     nb_rx = rte_eth_rx_burst(rx->port_id, rxq->queue_id,
                              (struct rte_mbuf **) batch->packets,
                              NETDEV_MAX_BURST);
@@ -1828,6 +1831,11 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
                    struct dp_packet_batch *batch, bool may_steal,
                    bool concurrent_txq)
 {
+    if (OVS_UNLIKELY(!(dev->flags & NETDEV_UP))) {
+        dp_packet_delete_batch(batch, may_steal);
+        return;
+    }
+
     if (OVS_UNLIKELY(concurrent_txq)) {
         qid = qid % dev->up.n_txq;
         rte_spinlock_lock(&dev->tx_q[qid].tx_lock);
@@ -2292,8 +2300,6 @@ netdev_dpdk_update_flags__(struct netdev_dpdk *dev,
                            enum netdev_flags *old_flagsp)
     OVS_REQUIRES(dev->mutex)
 {
-    int err;
-
     if ((off | on) & ~(NETDEV_UP | NETDEV_PROMISC)) {
         return EINVAL;
     }
@@ -2307,18 +2313,8 @@ netdev_dpdk_update_flags__(struct netdev_dpdk *dev,
     }
 
     if (dev->type == DPDK_DEV_ETH) {
-        if (dev->flags & NETDEV_UP) {
-            err = rte_eth_dev_start(dev->port_id);
-            if (err)
-                return -err;
-        }
-
         if (dev->flags & NETDEV_PROMISC) {
             rte_eth_promiscuous_enable(dev->port_id);
-        }
-
-        if (!(dev->flags & NETDEV_UP)) {
-            rte_eth_dev_stop(dev->port_id);
         }
 
         netdev_change_seq_changed(&dev->up);
