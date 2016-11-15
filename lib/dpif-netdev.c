@@ -422,7 +422,8 @@ struct rxq_poll {
     struct ovs_list node;
 };
 
-/* Contained by struct dp_netdev_pmd_thread's 'port_cache' or 'tx_ports'. */
+/* Contained by struct dp_netdev_pmd_thread's 'send_port_cache',
+ * 'tnl_port_cache' or 'tx_ports'. */
 struct tx_port {
     struct dp_netdev_port *port;
     int qid;
@@ -504,11 +505,18 @@ struct dp_netdev_pmd_thread {
      * read by the pmd thread. */
     struct hmap tx_ports OVS_GUARDED;
 
-    /* Map of 'tx_port' used in the fast path. This is a thread-local copy of
-     * 'tx_ports'. The instance for cpu core NON_PMD_CORE_ID can be accessed
-     * by multiple threads, and thusly need to be protected by 'non_pmd_mutex'.
-     * Every other instance will only be accessed by its own pmd thread. */
-    struct hmap port_cache;
+    /* These are thread-local copies of 'tx_ports'.  One contains only tunnel
+     * ports (that support push_tunnel/pop_tunnel), the other contains ports
+     * with at least one txq (that support send).  A port can be in both.
+     *
+     * There are two separate maps to make sure that we don't try to execute
+     * OUTPUT on a device which has 0 txqs or PUSH/POP on a non-tunnel device.
+     *
+     * The instances for cpu core NON_PMD_CORE_ID can be accessed by multiple
+     * threads, and thusly need to be protected by 'non_pmd_mutex'.  Every
+     * other instance will only be accessed by its own pmd thread. */
+    struct hmap tnl_port_cache;
+    struct hmap send_port_cache;
 
     /* Only a pmd thread can write on its own 'cycles' and 'stats'.
      * The main thread keeps 'stats_zero' and 'cycles_zero' as base
@@ -3074,7 +3082,10 @@ pmd_free_cached_ports(struct dp_netdev_pmd_thread *pmd)
     /* Free all used tx queue ids. */
     dpif_netdev_xps_revalidate_pmd(pmd, 0, true);
 
-    HMAP_FOR_EACH_POP (tx_port_cached, node, &pmd->port_cache) {
+    HMAP_FOR_EACH_POP (tx_port_cached, node, &pmd->tnl_port_cache) {
+        free(tx_port_cached);
+    }
+    HMAP_FOR_EACH_POP (tx_port_cached, node, &pmd->send_port_cache) {
         free(tx_port_cached);
     }
 }
@@ -3088,12 +3099,21 @@ pmd_load_cached_ports(struct dp_netdev_pmd_thread *pmd)
     struct tx_port *tx_port, *tx_port_cached;
 
     pmd_free_cached_ports(pmd);
-    hmap_shrink(&pmd->port_cache);
+    hmap_shrink(&pmd->send_port_cache);
+    hmap_shrink(&pmd->tnl_port_cache);
 
     HMAP_FOR_EACH (tx_port, node, &pmd->tx_ports) {
-        tx_port_cached = xmemdup(tx_port, sizeof *tx_port_cached);
-        hmap_insert(&pmd->port_cache, &tx_port_cached->node,
-                    hash_port_no(tx_port_cached->port->port_no));
+        if (netdev_has_tunnel_push_pop(tx_port->port->netdev)) {
+            tx_port_cached = xmemdup(tx_port, sizeof *tx_port_cached);
+            hmap_insert(&pmd->tnl_port_cache, &tx_port_cached->node,
+                        hash_port_no(tx_port_cached->port->port_no));
+        }
+
+        if (netdev_n_txq(tx_port->port->netdev)) {
+            tx_port_cached = xmemdup(tx_port, sizeof *tx_port_cached);
+            hmap_insert(&pmd->send_port_cache, &tx_port_cached->node,
+                        hash_port_no(tx_port_cached->port->port_no));
+        }
     }
 }
 
@@ -3328,7 +3348,8 @@ dp_netdev_configure_pmd(struct dp_netdev_pmd_thread *pmd, struct dp_netdev *dp,
     pmd->next_optimization = time_msec() + DPCLS_OPTIMIZATION_INTERVAL;
     ovs_list_init(&pmd->poll_list);
     hmap_init(&pmd->tx_ports);
-    hmap_init(&pmd->port_cache);
+    hmap_init(&pmd->tnl_port_cache);
+    hmap_init(&pmd->send_port_cache);
     /* init the 'flow_cache' since there is no
      * actual thread created for NON_PMD_CORE_ID. */
     if (core_id == NON_PMD_CORE_ID) {
@@ -3344,7 +3365,8 @@ dp_netdev_destroy_pmd(struct dp_netdev_pmd_thread *pmd)
     struct dpcls *cls;
 
     dp_netdev_pmd_flow_flush(pmd);
-    hmap_destroy(&pmd->port_cache);
+    hmap_destroy(&pmd->send_port_cache);
+    hmap_destroy(&pmd->tnl_port_cache);
     hmap_destroy(&pmd->tx_ports);
     /* All flows (including their dpcls_rules) have been deleted already */
     CMAP_FOR_EACH (cls, node, &pmd->classifiers) {
@@ -3611,7 +3633,9 @@ static void
 dp_netdev_add_port_tx_to_pmd(struct dp_netdev_pmd_thread *pmd,
                              struct dp_netdev_port *port)
 {
-    struct tx_port *tx = xzalloc(sizeof *tx);
+    struct tx_port *tx;
+
+    tx = xzalloc(sizeof *tx);
 
     tx->port = port;
     tx->qid = -1;
@@ -4299,7 +4323,7 @@ dpif_netdev_xps_revalidate_pmd(const struct dp_netdev_pmd_thread *pmd,
     struct dp_netdev_port *port;
     long long interval;
 
-    HMAP_FOR_EACH (tx, node, &pmd->port_cache) {
+    HMAP_FOR_EACH (tx, node, &pmd->send_port_cache) {
         if (!tx->port->dynamic_txqs) {
             continue;
         }
@@ -4363,10 +4387,17 @@ dpif_netdev_xps_get_tx_qid(const struct dp_netdev_pmd_thread *pmd,
 }
 
 static struct tx_port *
-pmd_tx_port_cache_lookup(const struct dp_netdev_pmd_thread *pmd,
-                         odp_port_t port_no)
+pmd_tnl_port_cache_lookup(const struct dp_netdev_pmd_thread *pmd,
+                          odp_port_t port_no)
 {
-    return tx_port_lookup(&pmd->port_cache, port_no);
+    return tx_port_lookup(&pmd->tnl_port_cache, port_no);
+}
+
+static struct tx_port *
+pmd_send_port_cache_lookup(const struct dp_netdev_pmd_thread *pmd,
+                           odp_port_t port_no)
+{
+    return tx_port_lookup(&pmd->send_port_cache, port_no);
 }
 
 static int
@@ -4380,7 +4411,7 @@ push_tnl_action(const struct dp_netdev_pmd_thread *pmd,
 
     data = nl_attr_get(attr);
 
-    tun_port = pmd_tx_port_cache_lookup(pmd, u32_to_odp(data->tnl_port));
+    tun_port = pmd_tnl_port_cache_lookup(pmd, u32_to_odp(data->tnl_port));
     if (!tun_port) {
         err = -EINVAL;
         goto error;
@@ -4432,7 +4463,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
 
     switch ((enum ovs_action_attr)type) {
     case OVS_ACTION_ATTR_OUTPUT:
-        p = pmd_tx_port_cache_lookup(pmd, nl_attr_get_odp_port(a));
+        p = pmd_send_port_cache_lookup(pmd, nl_attr_get_odp_port(a));
         if (OVS_LIKELY(p)) {
             int tx_qid;
             bool dynamic_txqs;
@@ -4479,7 +4510,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
             struct dp_packet_batch *orig_packets_ = packets_;
             odp_port_t portno = nl_attr_get_odp_port(a);
 
-            p = pmd_tx_port_cache_lookup(pmd, portno);
+            p = pmd_tnl_port_cache_lookup(pmd, portno);
             if (p) {
                 struct dp_packet_batch tnl_pkt;
                 int i;
