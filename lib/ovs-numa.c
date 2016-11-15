@@ -494,7 +494,7 @@ ovs_numa_dump_cores_on_numa(int numa_id)
     struct ovs_numa_dump *dump = xmalloc(sizeof *dump);
     struct numa_node *numa = get_numa_by_numa_id(numa_id);
 
-    ovs_list_init(&dump->dump);
+    hmap_init(&dump->dump);
 
     if (numa) {
         struct cpu_core *core;
@@ -504,11 +504,28 @@ ovs_numa_dump_cores_on_numa(int numa_id)
 
             info->numa_id = numa->numa_id;
             info->core_id = core->core_id;
-            ovs_list_insert(&dump->dump, &info->list_node);
+            hmap_insert(&dump->dump, &info->hmap_node,
+                        hash_2words(info->numa_id, info->core_id));
         }
     }
 
     return dump;
+}
+
+bool
+ovs_numa_dump_contains_core(const struct ovs_numa_dump *dump,
+                            int numa_id, unsigned core_id)
+{
+    struct ovs_numa_info *core;
+
+    HMAP_FOR_EACH_WITH_HASH (core, hmap_node, hash_2words(numa_id, core_id),
+                             &dump->dump) {
+        if (core->core_id == core_id && core->numa_id == numa_id) {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 void
@@ -520,9 +537,11 @@ ovs_numa_dump_destroy(struct ovs_numa_dump *dump)
         return;
     }
 
-    LIST_FOR_EACH_POP (iter, list_node, &dump->dump) {
+    HMAP_FOR_EACH_POP (iter, hmap_node, &dump->dump) {
         free(iter);
     }
+
+    hmap_destroy(&dump->dump);
 
     free(dump);
 }
