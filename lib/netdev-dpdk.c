@@ -827,29 +827,20 @@ netdev_dpdk_alloc_txq(unsigned int n_txqs)
 }
 
 static int
-netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
-                 enum dpdk_dev_type type)
+common_construct(struct netdev *netdev, unsigned int port_no,
+                 enum dpdk_dev_type type, int socket_id)
     OVS_REQUIRES(dpdk_mutex)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
-    int sid;
-    int err = 0;
 
     ovs_mutex_init(&dev->mutex);
-    ovs_mutex_lock(&dev->mutex);
 
     rte_spinlock_init(&dev->stats_lock);
 
     /* If the 'sid' is negative, it means that the kernel fails
      * to obtain the pci numa info.  In that situation, always
      * use 'SOCKET0'. */
-    if (type == DPDK_DEV_ETH && rte_eth_dev_is_valid_port(dev->port_id)) {
-        sid = rte_eth_dev_socket_id(port_no);
-    } else {
-        sid = rte_lcore_to_socket_id(rte_get_master_lcore());
-    }
-
-    dev->socket_id = sid < 0 ? SOCKET0 : sid;
+    dev->socket_id = socket_id < 0 ? SOCKET0 : socket_id;
     dev->requested_socket_id = dev->socket_id;
     dev->port_id = port_no;
     dev->type = type;
@@ -880,21 +871,11 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
 
     dev->flags = NETDEV_UP | NETDEV_PROMISC;
 
-    if (type == DPDK_DEV_VHOST) {
-        dev->tx_q = netdev_dpdk_alloc_txq(OVS_VHOST_MAX_QUEUE_NUM);
-        if (!dev->tx_q) {
-            err = ENOMEM;
-            goto unlock;
-        }
-    }
-
     ovs_list_push_back(&dpdk_list, &dev->list_node);
 
     netdev_request_reconfigure(netdev);
 
-unlock:
-    ovs_mutex_unlock(&dev->mutex);
-    return err;
+    return 0;
 }
 
 /* dev_name must be the prefix followed by a positive decimal number.
@@ -916,6 +897,21 @@ dpdk_dev_parse_name(const char dev_name[], const char prefix[],
     } else {
         return ENODEV;
     }
+}
+
+static int
+vhost_common_construct(struct netdev *netdev)
+    OVS_REQUIRES(dpdk_mutex)
+{
+    int socket_id = rte_lcore_to_socket_id(rte_get_master_lcore());
+    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
+
+    dev->tx_q = netdev_dpdk_alloc_txq(OVS_VHOST_MAX_QUEUE_NUM);
+    if (!dev->tx_q) {
+        return ENOMEM;
+    }
+
+    return common_construct(netdev, -1, DPDK_DEV_VHOST, socket_id);
 }
 
 static int
@@ -952,7 +948,7 @@ netdev_dpdk_vhost_construct(struct netdev *netdev)
         VLOG_INFO("Socket %s created for vhost-user port %s\n",
                   dev->vhost_id, name);
     }
-    err = netdev_dpdk_init(netdev, -1, DPDK_DEV_VHOST);
+    err = vhost_common_construct(netdev);
 
     ovs_mutex_unlock(&dpdk_mutex);
     return err;
@@ -964,7 +960,7 @@ netdev_dpdk_vhost_client_construct(struct netdev *netdev)
     int err;
 
     ovs_mutex_lock(&dpdk_mutex);
-    err = netdev_dpdk_init(netdev, -1, DPDK_DEV_VHOST);
+    err = vhost_common_construct(netdev);
     ovs_mutex_unlock(&dpdk_mutex);
     return err;
 }
@@ -975,9 +971,23 @@ netdev_dpdk_construct(struct netdev *netdev)
     int err;
 
     ovs_mutex_lock(&dpdk_mutex);
-    err = netdev_dpdk_init(netdev, -1, DPDK_DEV_ETH);
+    err = common_construct(netdev, -1, DPDK_DEV_ETH, SOCKET0);
     ovs_mutex_unlock(&dpdk_mutex);
     return err;
+}
+
+static void
+common_destruct(struct netdev_dpdk *dev)
+    OVS_REQUIRES(dpdk_mutex)
+    OVS_EXCLUDED(dev->mutex)
+{
+    rte_free(dev->tx_q);
+    dpdk_mp_put(dev->dpdk_mp);
+
+    ovs_list_remove(&dev->list_node);
+    free(ovsrcu_get_protected(struct ingress_policer *,
+                              &dev->ingress_policer));
+    ovs_mutex_destroy(&dev->mutex);
 }
 
 static void
@@ -986,18 +996,11 @@ netdev_dpdk_destruct(struct netdev *netdev)
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
     ovs_mutex_lock(&dpdk_mutex);
-    ovs_mutex_lock(&dev->mutex);
 
     rte_eth_dev_stop(dev->port_id);
     free(dev->devargs);
-    free(ovsrcu_get_protected(struct ingress_policer *,
-                              &dev->ingress_policer));
+    common_destruct(dev);
 
-    rte_free(dev->tx_q);
-    ovs_list_remove(&dev->list_node);
-    dpdk_mp_put(dev->dpdk_mp);
-
-    ovs_mutex_unlock(&dev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
 }
 
@@ -1020,7 +1023,6 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
     char *vhost_id;
 
     ovs_mutex_lock(&dpdk_mutex);
-    ovs_mutex_lock(&dev->mutex);
 
     /* Guest becomes an orphan if still attached. */
     if (netdev_dpdk_get_vid(dev) >= 0
@@ -1031,16 +1033,10 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
                  "socket '%s' must be restarted.", dev->vhost_id);
     }
 
-    free(ovsrcu_get_protected(struct ingress_policer *,
-                              &dev->ingress_policer));
-
-    rte_free(dev->tx_q);
-    ovs_list_remove(&dev->list_node);
-    dpdk_mp_put(dev->dpdk_mp);
-
     vhost_id = xstrdup(dev->vhost_id);
 
-    ovs_mutex_unlock(&dev->mutex);
+    common_destruct(dev);
+
     ovs_mutex_unlock(&dpdk_mutex);
 
     if (!vhost_id[0]) {
@@ -2899,8 +2895,8 @@ netdev_dpdk_ring_construct(struct netdev *netdev)
         goto unlock_dpdk;
     }
 
-    err = netdev_dpdk_init(netdev, port_no, DPDK_DEV_ETH);
-
+    err = common_construct(netdev, port_no, DPDK_DEV_ETH,
+                           rte_eth_dev_socket_id(port_no));
 unlock_dpdk:
     ovs_mutex_unlock(&dpdk_mutex);
     return err;
