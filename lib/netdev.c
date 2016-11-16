@@ -1766,8 +1766,8 @@ netdev_get_vports(size_t *size)
     }
 
     /* Explicitly allocates big enough chunk of memory. */
-    vports = xmalloc(shash_count(&netdev_shash) * sizeof *vports);
     ovs_mutex_lock(&netdev_mutex);
+    vports = xmalloc(shash_count(&netdev_shash) * sizeof *vports);
     SHASH_FOR_EACH (node, &netdev_shash) {
         struct netdev *dev = node->data;
 
