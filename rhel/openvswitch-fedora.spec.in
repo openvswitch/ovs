@@ -310,6 +310,10 @@ rm -rf $RPM_BUILD_ROOT
     fi
 %endif
 
+%post ovn-common
+mkdir /usr/lib/ocf/resource.d/ovn
+ln -sf %{_datadir}/openvswitch/scripts/ovndb-servers.ocf /usr/lib/ocf/resource.d/ovn/ovndb-servers
+
 %post ovn-central
 %if 0%{?systemd_post:1}
     %systemd_post ovn-northd.service
@@ -349,6 +353,9 @@ rm -rf $RPM_BUILD_ROOT
 %else
     /bin/systemctl daemon-reload >/dev/null 2>&1 || :
 %endif
+
+%postun ovn-common
+rm -rf /usr/lib/ocf/resource.d/ovn
 
 %postun ovn-central
 %if 0%{?systemd_postun_with_restart:1}
@@ -489,6 +496,7 @@ fi
 %{_bindir}/ovn-sbctl
 %{_bindir}/ovn-trace
 %{_datadir}/openvswitch/scripts/ovn-ctl
+%{_datadir}/openvswitch/scripts/ovndb-servers.ocf
 %{_datadir}/openvswitch/scripts/ovn-bugtool-nbctl-show
 %{_datadir}/openvswitch/scripts/ovn-bugtool-sbctl-lflow-list
 %{_datadir}/openvswitch/scripts/ovn-bugtool-sbctl-show
