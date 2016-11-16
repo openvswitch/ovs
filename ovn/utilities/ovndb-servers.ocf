@@ -1,0 +1,355 @@
+#!/bin/bash
+
+: ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
+. ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
+: ${OVN_CTL_DEFAULT="/usr/share/openvswitch/scripts/ovn-ctl"}
+CRM_MASTER="${HA_SBIN_DIR}/crm_master -l reboot"
+CRM_ATTR_REPL_INFO="${HA_SBIN_DIR}/crm_attribute --type crm_config --name OVN_REPL_INFO -s ovn_ovsdb_master_server"
+OVN_CTL=${OCF_RESKEY_ovn_ctl:-${OVN_CTL_DEFAULT}}
+MASTER_IP=${OCF_RESKEY_master_ip}
+
+# Invalid IP address is an address that can never exist in the network, as
+# mentioned in rfc-5737. The ovsdb servers connects to this IP address till
+# a master is promoted and the IPAddr2 resource is started.
+INVALID_IP_ADDRESS=192.0.2.254
+
+host_name=$(ocf_local_nodename)
+: ${slave_score=5}
+: ${master_score=10}
+
+ovsdb_server_metadata() {
+    cat <<END
+<?xml version="1.0"?>
+<!DOCTYPE resource-agent SYSTEM "ra-api-1.dtd">
+<resource-agent name="ovsdb-server">
+  <version>1.0</version>
+
+  <longdesc lang="en">
+    This resource manages ovsdb-server.
+  </longdesc>
+
+  <shortdesc lang="en">
+    Manages ovsdb-server.
+  </shortdesc>
+
+  <parameters>
+
+  <parameter name="ovn_ctl" unique="1">
+  <longdesc lang="en">
+  Location to the ovn-ctl script file
+  </longdesc>
+  <shortdesc lang="en">ovn-ctl script</shortdesc>
+  <content type="string" default="${OVN_CTL_DEFAULT}" />
+  </parameter>
+
+  <parameter name="master_ip" unique="1">
+  <longdesc lang="en">
+  The IP address resource which will be available on the master ovsdb server
+  </longdesc>
+  <shortdesc lang="en">master ip address</shortdesc>
+  <content type="string" />
+  </parameter>
+
+  </parameters>
+
+  <actions>
+    <action name="notify"       timeout="20s" />
+    <action name="start"        timeout="30s" />
+    <action name="stop"         timeout="20s" />
+    <action name="promote"      timeout="50s" />
+    <action name="demote"       timeout="50s" />
+    <action name="monitor"      timeout="20s"  depth="0" interval="10s" />
+    <action name="meta-data"    timeout="5s" />
+    <action name="validate-all" timeout="20s" />
+  </actions>
+</resource-agent>
+END
+    exit $OCF_SUCCESS
+}
+
+ovsdb_server_notify() {
+    # requires the notify=true meta resource attribute
+    local type_op="${OCF_RESKEY_CRM_meta_notify_type}-${OCF_RESKEY_CRM_meta_notify_operation}"
+
+    if [ "$type_op" != "post-promote" ]; then
+        # We are only interested in specific events
+        return $OCF_SUCCESS
+    fi
+
+    ocf_log debug "ovndb_server: notified of event $type_op"
+    if [ "x${OCF_RESKEY_CRM_meta_notify_promote_uname}" = "x${host_name}" ]; then
+        # Record ourselves so that the agent has a better chance of doing
+        # the right thing at startup
+        ocf_log debug "ovndb_server: $host_name is the master"
+        ${CRM_ATTR_REPL_INFO} -v "$host_name"
+
+    else
+        # Synchronize with the new master
+        ocf_log debug "ovndb_server: Connecting to the new master ${OCF_RESKEY_CRM_meta_notify_promote_uname}"
+        ${OVN_CTL} demote_ovnnb --db-nb-sync-from-addr=${MASTER_IP}
+        ${OVN_CTL} demote_ovnsb --db-sb-sync-from-addr=${MASTER_IP}
+    fi
+}
+
+ovsdb_server_usage() {
+    cat <<END
+usage: $0 {start|stop|status|monitor|notify|validate-all|meta-data}
+
+Expects to have a fully populated OCF RA-compliant environment set.
+END
+    exit $1
+}
+
+ovsdb_server_find_active_master() {
+    # Operation sequence is Demote -> Stop -> Start -> Promote
+    # At the point this is run, the only active masters will be
+    # previous masters minus any that were scheduled to be demoted
+
+    for master in ${OCF_RESKEY_CRM_meta_notify_master_uname}; do
+        found=0
+        for old in ${OCF_RESKEY_CRM_meta_notify_demote_uname}; do
+            if [ $master = $old ]; then
+                found=1
+            fi
+        done
+        if [ $found = 0 ]; then
+            # Rely on master-max=1
+            # Pacemaker will demote any additional ones it finds before starting new copies
+            echo "$master"
+            return
+        fi
+    done
+
+    local expected_master=$($CRM_ATTR_REPL_INFO --query  -q 2>/dev/null)
+    case "x${OCF_RESKEY_CRM_meta_notify_start_uname}x" in
+        *${expected_master}*) echo "${expected_master}";; # The previous master is expected to start
+    esac
+}
+
+ovsdb_server_find_active_peers() {
+    # Do we have any peers that are not stopping
+    for peer in ${OCF_RESKEY_CRM_meta_notify_slave_uname}; do
+        found=0
+        for old in ${OCF_RESKEY_CRM_meta_notify_stop_uname}; do
+            if [ $peer = $old ]; then
+                found=1
+            fi
+        done
+        if [ $found = 0 ]; then
+            # Rely on master-max=1
+            # Pacemaker will demote any additional ones it finds before starting new copies
+            echo "$peer"
+            return
+        fi
+    done
+}
+
+ovsdb_server_master_update() {
+
+    case $1 in
+        $OCF_SUCCESS)
+        $CRM_MASTER -v ${slave_score};;
+        $OCF_RUNNING_MASTER)
+            $CRM_MASTER -v ${master_score};;
+        #*) $CRM_MASTER -D;;
+    esac
+}
+
+ovsdb_server_monitor() {
+    ovsdb_server_check_status
+    rc=$?
+
+    ovsdb_server_master_update $rc
+    return $rc
+}
+
+ovsdb_server_check_status() {
+    local sb_status=`${OVN_CTL} status_ovnsb`
+    local nb_status=`${OVN_CTL} status_ovnnb`
+
+    if [[ $sb_status == "running/backup" && $nb_status == "running/backup" ]]; then
+        return $OCF_SUCCESS
+    fi
+
+    if [[ $sb_status == "running/active" && $nb_status == "running/active" ]]; then
+        return $OCF_RUNNING_MASTER
+    fi
+
+    # TODO: What about service running but not in either state above?
+    # Eg. a transient state where one db is "active" and the other
+    # "backup"
+
+    return $OCF_NOT_RUNNING
+}
+
+ovsdb_server_start() {
+    ovsdb_server_check_status
+    local status=$?
+    # If not in stopped state, return
+    if [ $status -ne $OCF_NOT_RUNNING ]; then
+        return $status
+    fi
+
+    local present_master=$(ovsdb_server_find_active_master)
+
+    set ${OVN_CTL}
+
+    if [ "x${present_master}" = x ]; then
+        # No master detected, or the previous master is not among the
+        # set starting.
+        #
+        # Force all copies to come up as slaves by pointing them into
+        # space and let pacemaker pick one to promote:
+        #
+        set $@ --db-nb-sync-from-addr=${INVALID_IP_ADDRESS} --db-sb-sync-from-addr=${INVALID_IP_ADDRESS}
+
+    elif [ ${present_master} != ${host_name} ]; then
+        # An existing master is active, connect to it
+        set $@ --db-nb-sync-from-addr=${MASTER_IP} --db-sb-sync-from-addr=${MASTER_IP}
+    fi
+
+    $@ start_ovsdb
+
+    while [ 1 = 1 ]; do
+        # It is important that we don't return until we're in a functional state
+        ovsdb_server_monitor
+        rc=$?
+        case $rc in
+            $OCF_SUCCESS)        return $rc;;
+            $OCF_RUNNING_MASTER) return $rc;;
+            $OCF_ERR_GENERIC)    return $rc;;
+            # Otherwise loop, waiting for the service to start, until
+            # the cluster times the operation out
+        esac
+        ocf_log warn "ovndb_servers: After starting ovsdb, status is $rc. Checking the status again"
+    done
+}
+
+ovsdb_server_stop() {
+    ovsdb_server_check_status
+    case $? in
+        $OCF_NOT_RUNNING)    return ${OCF_SUCCESS};;
+        $OCF_RUNNING_MASTER) return ${OCF_RUNNING_MASTER};;
+    esac
+
+    ${OVN_CTL} stop_ovsdb
+    ovsdb_server_master_update ${OCF_NOT_RUNNING}
+
+    while [ 1 = 1 ]; do
+        # It is important that we don't return until we're stopped
+        ovsdb_server_check_status
+        rc=$?
+        case $rc in
+        $OCF_SUCCESS)
+            # Loop, waiting for the service to stop, until the
+            # cluster times the operation out
+            ocf_log warn "ovndb_servers: Even after stopping, the servers seems to be running"
+            ;;
+        $OCF_NOT_RUNNING)
+            return $OCF_SUCCESS
+            ;;
+        *)
+            return $rc
+            ;;
+        esac
+    done
+
+    return $OCF_ERR_GENERIC
+}
+
+ovsdb_server_promote() {
+    ovsdb_server_check_status
+    rc=$?
+    case $rc in
+        ${OCF_SUCCESS}) ;;
+        ${OCF_RUNNING_MASTER}) return ${OCF_SUCCESS};;
+        *)
+            ovsdb_server_master_update $OCF_RUNNING_MASTER
+            return ${rc}
+            ;;
+    esac
+
+    ${OVN_CTL} promote_ovnnb
+    ${OVN_CTL} promote_ovnsb
+
+    ocf_log debug "ovndb_servers: Promoting $host_name as the master"
+    # Record ourselves so that the agent has a better chance of doing
+    # the right thing at startup
+    ${CRM_ATTR_REPL_INFO} -v "$host_name"
+    ovsdb_server_master_update $OCF_RUNNING_MASTER
+    return $OCF_SUCCESS
+}
+
+ovsdb_server_demote() {
+    ovsdb_server_check_status
+    if [ $? = $OCF_NOT_RUNNING ]; then
+        return $OCF_NOT_RUNNING
+    fi
+
+    local present_master=$(ovsdb_server_find_active_master)
+    local recorded_master=$($CRM_ATTR_REPL_INFO --query  -q 2>/dev/null)
+
+    ocf_log debug "ovndb_servers: Demoting $host_name, present master ${present_master}, recorded master ${recorded_master}"
+    if [ "x${recorded_master}" = "x${host_name}" -a "x${present_master}" = x ]; then
+        # We are the one and only master
+        # This should be the "normal" case
+        # The only way to be demoted is to call demote_ovn*
+        #
+        # The local database is only reset once we successfully
+        # connect to the peer.  So specify one that doesn't exist.
+        #
+        # Eventually a new master will be promoted and we'll resync
+        # using the logic in ovsdb_server_notify()
+        ${OVN_CTL} demote_ovnnb --db-nb-sync-from-addr=${INVALID_IP_ADDRESS}
+        ${OVN_CTL} demote_ovnsb --db-sb-sync-from-addr=${INVALID_IP_ADDRESS}
+
+    elif [ "x${present_master}" = "x${host_name}" ]; then
+        # Safety check, should never be called
+        #
+        # Never allow sync'ing from ourselves, its a great way to
+        # erase the local DB
+        ${OVN_CTL} demote_ovnnb --db-nb-sync-from-addr=${INVALID_IP_ADDRESS}
+        ${OVN_CTL} demote_ovnsb --db-sb-sync-from-addr=${INVALID_IP_ADDRESS}
+
+    elif [ "x${present_master}" != x ]; then
+        # There are too many masters and we're an extra one that is
+        # being demoted. Sync to the surviving one
+        ${OVN_CTL} demote_ovnnb --db-nb-sync-from-addr=${MASTER_IP}
+        ${OVN_CTL} demote_ovnsb --db-sb-sync-from-addr=${MASTER_IP}
+
+    else
+        # For completeness, should never be called
+        #
+        # Something unexpected happened, perhaps CRM_ATTR_REPL_INFO is incorrect
+        ${OVN_CTL} demote_ovnnb --db-nb-sync-from-addr=${INVALID_IP_ADDRESS}
+        ${OVN_CTL} demote_ovnsb --db-sb-sync-from-addr=${INVALID_IP_ADDRESS}
+    fi
+
+    ovsdb_server_master_update $OCF_SUCCESS
+    return $OCF_SUCCESS
+}
+
+ovsdb_server_validate() {
+    if [ ! -e ${OVN_CTL} ]; then
+        return $OCF_ERR_INSTALLED
+    fi
+    return $OCF_SUCCESS
+}
+
+
+case $__OCF_ACTION in
+start)          ovsdb_server_start;;
+stop)           ovsdb_server_stop;;
+promote)        ovsdb_server_promote;;
+demote)         ovsdb_server_demote;;
+start)          ovsdb_server_start;;
+notify)         ovsdb_server_notify;;
+meta-data)      ovsdb_server_metadata;;
+validate-all)   ovsdb_server_validate;;
+status|monitor) ovsdb_server_monitor;;
+usage|help)     ovsdb_server_usage $OCF_SUCCESS;;
+*)              ovsdb_server_usage $OCF_ERR_UNIMPLEMENTED ;;
+esac
+
+rc=$?
+exit $rc

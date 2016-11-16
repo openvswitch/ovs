@@ -193,3 +193,71 @@ can be used:
 ::
 
     $ ovs-vsctl set Interface eth0 external-ids:iface-id='"${UUID}"'
+
+
+HA for OVN DB servers using pacemaker
+-------------------------------------
+
+The ovsdb servers can work in either active or backup mode. In backup mode, db
+server will be connected to an active server and replicate the active servers
+contents. At all times, the data can be transacted only from the active server.
+When the active server dies for some reason, entire OVN operations will be
+stalled.
+
+`Pacemaker <http://clusterlabs.org/pacemaker.html>`_ is a cluster resource
+manager which can manage a defined set of resource across a set of clustered
+nodes. Pacemaker manages the resource with the help of the resource agents.
+One among the resource agent is
+`OCF <http://www.linux-ha.org/wiki/OCF_Resource_Agents`_
+
+OCF is nothing but a shell script which accepts a set of actions and returns an
+appropriate status code.
+
+With the help of the OCF resource agent ovn/utilities/ovndb-servers.ocf, one
+can defined a resource for the pacemaker such that pacemaker will always
+maintain one running active server at any time.
+
+After creating a pacemaker cluster, use the following commands to create
+one active and multiple backup servers for OVN databases.
+
+::
+
+    pcs resource create ovndb_servers ocf:ovn:ovndb-servers \
+         master_ip=x.x.x.x \
+         ovn_ctl=<path of the ovn-ctl script> \
+         op monitor interval="10s"
+
+    pcs resource master ovndb_servers-master ovndb_servers \
+        meta notify="true"
+
+The `master_ip` and `ovn_ctl` are the parameters that will be used by the
+OCF script. `ovn_ctl` is optional, if not given, it assumes a default value of
+/usr/share/openvswitch/scripts/ovn-ctl. `master_ip` is the IP address on which
+the active database server is expected to be listening.
+
+Whenever the active server dies, pacemaker is responsible to promote one of
+the backup servers to be active. Both ovn-controller and ovn-northd needs the
+ip-address at which the active server is listening. With pacemaker changing the
+node at which the active server is run, it is not efficient to instruct all the
+ovn-controllers and the ovn-northd to listen to the latest active server's ip-
+address
+
+This problem can be solved by using a native ocf resource agent
+`ocf:heartbeat:IPaddr2`. The IPAddr2 resource agent is just a resource with an
+ip-address. When we colocate this resource with the active server, pacemaker
+will enable the active server to be connected with a single ip-address all the
+time. This is the ip-address that needs to be given as the parameter while
+creating the `ovndb_servers` resource.
+
+Use the following command to create the IPAddr2 resource and colocate it
+with the active server.
+
+::
+
+    pcs resource create VirtualIP ocf:heartbeat:IPaddr2 ip=x.x.x.x \
+        op monitor interval=30s
+
+    pcs constraint order VirtualIP then ovndb_servers-master
+
+    pcs constraint colocation add ovndb_servers-master with master VirtualIP \
+        score=INFINITY
