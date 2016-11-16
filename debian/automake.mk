@@ -60,6 +60,8 @@ EXTRA_DIST += \
 	debian/ovn-controller-vtep.manpages \
 	debian/ovn-common.install \
 	debian/ovn-common.manpages \
+	debian/ovn-common.postinst \
+	debian/ovn-common.postrm \
 	debian/ovn-docker.install \
 	debian/ovn-host.dirs \
 	debian/ovn-host.init \
