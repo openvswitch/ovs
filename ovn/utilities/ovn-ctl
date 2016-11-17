@@ -112,7 +112,7 @@ start_northd () {
 
 start_controller () {
     set ovn-controller "unix:$DB_SOCK"
-    set "$@" -vconsole:emer -vsyslog:err -vfile:info
+    set "$@" $OVN_CONTROLLER_LOG
     OVS_RUNDIR=${OVN_RUNDIR} start_daemon "$OVN_CONTROLLER_PRIORITY" "$OVN_CONTROLLER_WRAPPER" "$@"
 }
 
