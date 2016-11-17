@@ -131,7 +131,6 @@ static const struct rte_eth_conf port_conf = {
     },
 };
 
-enum { MAX_TX_QUEUE_LEN = 384 };
 enum { DPDK_RING_SIZE = 256 };
 BUILD_ASSERT_DECL(IS_POW2(DPDK_RING_SIZE));
 enum { DRAIN_TSC = 200000ULL };
@@ -153,8 +152,7 @@ static struct ovs_list dpdk_mp_list OVS_GUARDED_BY(dpdk_mutex)
     = OVS_LIST_INITIALIZER(&dpdk_mp_list);
 
 /* This mutex must be used by non pmd threads when allocating or freeing
- * mbufs through mempools. Since dpdk_queue_pkts() and dpdk_queue_flush() may
- * use mempools, a non pmd thread should hold this mutex while calling them */
+ * mbufs through mempools. */
 static struct ovs_mutex nonpmd_mempool_mutex = OVS_MUTEX_INITIALIZER;
 
 struct dpdk_mp {
@@ -168,17 +166,12 @@ struct dpdk_mp {
 /* There should be one 'struct dpdk_tx_queue' created for
  * each cpu core. */
 struct dpdk_tx_queue {
-    bool flush_tx;                 /* Set to true to flush queue everytime */
-                                   /* pkts are queued. */
-    int count;
     rte_spinlock_t tx_lock;        /* Protects the members and the NIC queue
                                     * from concurrent access.  It is used only
                                     * if the queue is shared among different
                                     * pmd threads (see 'txq_needs_locking'). */
     int map;                       /* Mapping of configured vhost-user queues
                                     * to enabled by guest. */
-    uint64_t tsc;
-    struct rte_mbuf *burst_pkts[MAX_TX_QUEUE_LEN];
 };
 
 /* dpdk has no way to remove dpdk ring ethernet devices
@@ -566,19 +559,6 @@ netdev_dpdk_alloc_txq(struct netdev_dpdk *netdev, unsigned int n_txqs)
 
     netdev->tx_q = dpdk_rte_mzalloc(n_txqs * sizeof *netdev->tx_q);
     for (i = 0; i < n_txqs; i++) {
-        int numa_id = ovs_numa_get_numa_id(i);
-
-        if (!netdev->txq_needs_locking) {
-            /* Each index is considered as a cpu core id, since there should
-             * be one tx queue for each cpu core.  If the corresponding core
-             * is not on the same numa node as 'netdev', flags the
-             * 'flush_tx'. */
-            netdev->tx_q[i].flush_tx = netdev->socket_id == numa_id;
-        } else {
-            /* Queues are shared among CPUs. Always flush */
-            netdev->tx_q[i].flush_tx = true;
-        }
-
         /* Initialize map for vhost devices. */
         netdev->tx_q[i].map = OVS_VHOST_QUEUE_MAP_UNKNOWN;
         rte_spinlock_init(&netdev->tx_q[i].tx_lock);
@@ -952,16 +932,15 @@ netdev_dpdk_rxq_dealloc(struct netdev_rxq *rxq_)
 }
 
 static inline void
-dpdk_queue_flush__(struct netdev_dpdk *dev, int qid)
+netdev_dpdk_eth_tx_burst(struct netdev_dpdk *dev, int qid,
+                             struct rte_mbuf **pkts, int cnt)
 {
-    struct dpdk_tx_queue *txq = &dev->tx_q[qid];
     uint32_t nb_tx = 0;
 
-    while (nb_tx != txq->count) {
+    while (nb_tx != cnt) {
         uint32_t ret;
 
-        ret = rte_eth_tx_burst(dev->port_id, qid, txq->burst_pkts + nb_tx,
-                               txq->count - nb_tx);
+        ret = rte_eth_tx_burst(dev->port_id, qid, pkts + nb_tx, cnt - nb_tx);
         if (!ret) {
             break;
         }
@@ -969,32 +948,18 @@ dpdk_queue_flush__(struct netdev_dpdk *dev, int qid)
         nb_tx += ret;
     }
 
-    if (OVS_UNLIKELY(nb_tx != txq->count)) {
+    if (OVS_UNLIKELY(nb_tx != cnt)) {
         /* free buffers, which we couldn't transmit, one at a time (each
          * packet could come from a different mempool) */
         int i;
 
-        for (i = nb_tx; i < txq->count; i++) {
-            rte_pktmbuf_free(txq->burst_pkts[i]);
+        for (i = nb_tx; i < cnt; i++) {
+            rte_pktmbuf_free(pkts[i]);
         }
         rte_spinlock_lock(&dev->stats_lock);
-        dev->stats.tx_dropped += txq->count-nb_tx;
+        dev->stats.tx_dropped += cnt - nb_tx;
         rte_spinlock_unlock(&dev->stats_lock);
     }
-
-    txq->count = 0;
-    txq->tsc = rte_get_timer_cycles();
-}
-
-static inline void
-dpdk_queue_flush(struct netdev_dpdk *dev, int qid)
-{
-    struct dpdk_tx_queue *txq = &dev->tx_q[qid];
-
-    if (txq->count == 0) {
-        return;
-    }
-    dpdk_queue_flush__(dev, qid);
 }
 
 static bool
@@ -1076,18 +1041,7 @@ netdev_dpdk_rxq_recv(struct netdev_rxq *rxq_, struct dp_packet **packets,
                      int *c)
 {
     struct netdev_rxq_dpdk *rx = netdev_rxq_dpdk_cast(rxq_);
-    struct netdev *netdev = rx->up.netdev;
-    struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     int nb_rx;
-
-    /* There is only one tx queue for this core.  Do not flush other
-     * queues.
-     * Do not flush tx queue which is shared among CPUs
-     * since it is always flushed */
-    if (rxq_->queue_id == rte_lcore_id() &&
-        OVS_LIKELY(!dev->txq_needs_locking)) {
-        dpdk_queue_flush(dev, rxq_->queue_id);
-    }
 
     nb_rx = rte_eth_rx_burst(rx->port_id, rxq_->queue_id,
                              (struct rte_mbuf **) packets,
@@ -1175,35 +1129,6 @@ out:
     }
 }
 
-inline static void
-dpdk_queue_pkts(struct netdev_dpdk *dev, int qid,
-               struct rte_mbuf **pkts, int cnt)
-{
-    struct dpdk_tx_queue *txq = &dev->tx_q[qid];
-    uint64_t diff_tsc;
-
-    int i = 0;
-
-    while (i < cnt) {
-        int freeslots = MAX_TX_QUEUE_LEN - txq->count;
-        int tocopy = MIN(freeslots, cnt-i);
-
-        memcpy(&txq->burst_pkts[txq->count], &pkts[i],
-               tocopy * sizeof (struct rte_mbuf *));
-
-        txq->count += tocopy;
-        i += tocopy;
-
-        if (txq->count == MAX_TX_QUEUE_LEN || txq->flush_tx) {
-            dpdk_queue_flush__(dev, qid);
-        }
-        diff_tsc = rte_get_timer_cycles() - txq->tsc;
-        if (diff_tsc >= DRAIN_TSC) {
-            dpdk_queue_flush__(dev, qid);
-        }
-    }
-}
-
 /* Tx function. Transmit packets indefinitely */
 static void
 dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet **pkts,
@@ -1265,8 +1190,7 @@ dpdk_do_tx_copy(struct netdev *netdev, int qid, struct dp_packet **pkts,
     if (dev->type == DPDK_DEV_VHOST) {
         __netdev_dpdk_vhost_send(netdev, qid, (struct dp_packet **) mbufs, newcnt, true);
     } else {
-        dpdk_queue_pkts(dev, qid, mbufs, newcnt);
-        dpdk_queue_flush(dev, qid);
+        netdev_dpdk_eth_tx_burst(dev, qid, mbufs, newcnt);
     }
 
     if (!dpdk_thread_is_pmd()) {
@@ -1324,7 +1248,7 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
 
             if (OVS_UNLIKELY(size > dev->max_packet_len)) {
                 if (next_tx_idx != i) {
-                    dpdk_queue_pkts(dev, qid,
+                    netdev_dpdk_eth_tx_burst(dev, qid,
                                     (struct rte_mbuf **)&pkts[next_tx_idx],
                                     i-next_tx_idx);
                 }
@@ -1338,9 +1262,9 @@ netdev_dpdk_send__(struct netdev_dpdk *dev, int qid,
             }
         }
         if (next_tx_idx != cnt) {
-           dpdk_queue_pkts(dev, qid,
-                            (struct rte_mbuf **)&pkts[next_tx_idx],
-                            cnt-next_tx_idx);
+            netdev_dpdk_eth_tx_burst(dev, qid,
+                                     (struct rte_mbuf **)&pkts[next_tx_idx],
+                                     cnt-next_tx_idx);
         }
 
         if (OVS_UNLIKELY(dropped)) {
