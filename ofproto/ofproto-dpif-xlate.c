@@ -2850,6 +2850,22 @@ clear_conntrack(struct flow *flow)
     memset(&flow->ct_label, 0, sizeof flow->ct_label);
 }
 
+static bool
+xlate_flow_is_protected(const struct xlate_ctx *ctx, const struct flow *flow, const struct xport *xport_out)
+{
+    const struct xport *xport_in;
+
+    if (!xport_out) {
+        return false;
+    }
+
+    xport_in = get_ofp_port(ctx->xbridge, flow->in_port.ofp_port);
+
+    return (xport_in && xport_in->xbundle && xport_out->xbundle &&
+            xport_in->xbundle->protected && xport_out->xbundle->protected);
+}
+
+
 static void
 compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                         const struct xlate_bond_recirc *xr, bool check_stp)
@@ -2878,6 +2894,9 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         return;
     } else if (ctx->mirror_snaplen != 0 && xport->odp_port == ODPP_NONE) {
         xlate_report(ctx, "Mirror truncate to ODPP_NONE, skipping output");
+        return;
+    } else if (xlate_flow_is_protected(ctx, flow, xport)) {
+        xlate_report(ctx, "Flow is between protected ports, skipping output.");
         return;
     } else if (check_stp) {
         if (is_stp(&ctx->base_flow)) {

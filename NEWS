@@ -40,6 +40,10 @@ Post-v2.6.0
        which set the number of rx and tx descriptors to use for the given port.
    - Fedora packaging:
      * A package upgrade does not automatically restart OVS service.
+   - ovs-vswitchd/ovs-vsctl:
+     * Ports now have a "protected" flag. Protected ports can not forward
+       frames to other protected ports. Unprotected ports can receive and
+       forward frames to protected and other unprotected ports.
 
 v2.6.0 - 27 Sep 2016
 ---------------------
