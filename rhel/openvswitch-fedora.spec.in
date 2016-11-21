@@ -311,7 +311,7 @@ rm -rf $RPM_BUILD_ROOT
 %endif
 
 %post ovn-common
-mkdir /usr/lib/ocf/resource.d/ovn
+mkdir -p /usr/lib/ocf/resource.d/ovn
 ln -sf %{_datadir}/openvswitch/scripts/ovndb-servers.ocf /usr/lib/ocf/resource.d/ovn/ovndb-servers
 
 %post ovn-central
