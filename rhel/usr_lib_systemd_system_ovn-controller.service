@@ -20,3 +20,6 @@ Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/share/openvswitch/scripts/ovn-ctl start_controller $OVN_CONTROLLER_OPTS
 ExecStop=/usr/share/openvswitch/scripts/ovn-ctl stop_controller
+
+[Install]
+WantedBy=multi-user.target
