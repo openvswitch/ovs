@@ -10,3 +10,6 @@ RemainAfterExit=yes
 Environment=OVS_RUNDIR=%t/openvswitch OVS_DBDIR=/var/lib/openvswitch
 ExecStart=/usr/share/openvswitch/scripts/ovn-ctl start_northd
 ExecStop=/usr/share/openvswitch/scripts/ovn-ctl stop_northd
+
+[Install]
+WantedBy=multi-user.target

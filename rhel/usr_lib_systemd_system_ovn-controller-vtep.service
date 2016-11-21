@@ -28,3 +28,6 @@ ExecStart=/usr/bin/ovn-controller-vtep -vconsole:emer -vsyslog:err -vfile:info \
           --log-file=/var/log/openvswitch/ovn-controller-vtep.log \
           --no-chdir --pidfile=${OVS_RUNDIR}/ovn-controller-vtep.pid \
           --ovnsb-db=${OVN_DB} --vtep-db=${VTEP_DB}
+
+[Install]
+WantedBy=multi-user.target
