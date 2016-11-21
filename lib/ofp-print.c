@@ -1263,6 +1263,7 @@ ofp_print_queue_get_config_reply(struct ds *string,
         ofp_print_error(string, retval);
     }
     ds_chomp(string, ' ');
+    free(queues);
 }
 
 static void
