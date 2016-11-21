@@ -2149,6 +2149,7 @@ ofctl_packet_out(struct ovs_cmdl_context *ctx)
                                            usable_protocols);
         opo = ofputil_encode_packet_out(&po, protocol);
         transact_noreply(vconn, opo);
+        vconn_close(vconn);
         free(CONST_CAST(void *, po.packet));
         free(po.ofpacts);
     } else {
