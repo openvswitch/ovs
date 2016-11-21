@@ -713,6 +713,7 @@ bundle_print_errors(struct ovs_list *errors, struct ovs_list *requests)
             fprintf(stderr, "Error %s for: ", ofperr_get_name(ofperr));
             ofp_print(stderr, ofp_msg, msg_len, verbosity + 1);
         }
+        ofpbuf_uninit(&payload);
         free(error);
     }
     fflush(stderr);
