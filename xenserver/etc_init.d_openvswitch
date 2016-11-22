@@ -45,9 +45,9 @@ esac
 
 start_ovs_xapi_sync () {
     if daemon_is_running ovs-xapi-sync; then
-	log_success_msg "ovs-xapi-sync is already running"
+        log_success_msg "ovs-xapi-sync is already running"
     else
-	PYTHONPATH=/usr/share/openvswitch/python \
+        PYTHONPATH=/usr/share/openvswitch/python \
             /usr/share/openvswitch/scripts/ovs-xapi-sync \
             --log-file --pidfile --detach --monitor unix:/var/run/openvswitch/db.sock
     fi
@@ -61,16 +61,16 @@ start () {
     set "$@" --external-id=xs-system-uuid="$INSTALLATION_UUID"
     set "$@" --daemon-cwd=/var/xen/openvswitch
     if test X"$FORCE_COREFILES" != X; then
-	set "$@" --force-corefiles="$FORCE_COREFILES"
+        set "$@" --force-corefiles="$FORCE_COREFILES"
     fi
     if test X"$OVSDB_SERVER_PRIORITY" != X; then
-	set "$@" --ovsdb-server-priority="$OVSDB_SERVER_PRIORITY"
+        set "$@" --ovsdb-server-priority="$OVSDB_SERVER_PRIORITY"
     fi
     if test X"$VSWITCHD_PRIORITY" != X; then
-	set "$@" --ovs-vswitchd-priority="$VSWITCHD_PRIORITY"
+        set "$@" --ovs-vswitchd-priority="$VSWITCHD_PRIORITY"
     fi
     if test X"$VSWITCHD_MLOCKALL" != X; then
-	set "$@" --mlockall="$VSWITCHD_MLOCKALL"
+        set "$@" --mlockall="$VSWITCHD_MLOCKALL"
     fi
     if test ! -e /var/run/openvswitch.booted; then
         touch /var/run/openvswitch.booted
@@ -92,9 +92,9 @@ force_reload_kmod () {
     # Restart the high-availability daemon if it is running.  Otherwise
     # it loses its heartbeat and reboots the system after a few minutes.
     if pidof xhad >/dev/null && test -e /etc/xensource/xhad.conf; then
-	PATH=$PATH:/opt/xensource/xha
-	action "Stopping HA daemon" ha_stop_daemon
-	action "Starting HA daemon" ha_start_daemon
+        PATH=$PATH:/opt/xensource/xha
+        action "Stopping HA daemon" ha_stop_daemon
+        action "Starting HA daemon" ha_start_daemon
     fi
 
     action "Stopping ovs-xapi-sync" stop_daemon ovs-xapi-sync
