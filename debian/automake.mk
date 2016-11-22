@@ -89,12 +89,12 @@ check-debian-changelog-version:
 ALL_LOCAL += check-debian-changelog-version
 DIST_HOOKS += check-debian-changelog-version
 
-$(srcdir)/debian/copyright: AUTHORS debian/copyright.in
+$(srcdir)/debian/copyright: AUTHORS.rst debian/copyright.in
 	$(AM_V_GEN) \
 	{ sed -n -e '/%AUTHORS%/q' -e p < $(srcdir)/debian/copyright.in;   \
-	  sed '1,/^$$/d' $(srcdir)/AUTHORS |				   \
+	  sed '34,/^$$/d' $(srcdir)/AUTHORS.rst |			   \
 		sed -n -e '/^$$/q' -e 's/^/  /p';			   \
-	  sed -e '1,/%AUTHORS%/d' $(srcdir)/debian/copyright.in;	   \
+	  sed -e '34,/%AUTHORS%/d' $(srcdir)/debian/copyright.in;	   \
 	} > $@
 
 DISTCLEANFILES += debian/copyright
