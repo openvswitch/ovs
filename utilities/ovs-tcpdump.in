@@ -18,7 +18,6 @@ import fcntl
 import netifaces
 import os
 import pwd
-import select
 import struct
 import subprocess
 import sys
