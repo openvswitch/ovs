@@ -222,8 +222,6 @@ Template Emails
 Nomination to Grant Commit Access
 ---------------------------------
 
-::
-
     I would like to nominate *[candidate]* for commit access. I believe
     *[he/she]* has met the conditions for commit access described in the
     committer grant policy on the project web site in the following ways:
@@ -236,8 +234,6 @@ Nomination to Grant Commit Access
 
 Vote to Grant Commit Access
 ---------------------------
-
-::
 
     I nominated *[candidate]* for commit access on *[date]*. Having allowed
     sufficient time for discussion it's now time to formally vote on the
@@ -254,8 +250,6 @@ Vote to Grant Commit Access
 Vote Results for Grant of Commit Access
 ---------------------------------------
 
-::
-
     The voting period for granting to commit access to *[candidate]* initiated
     at *[date and time]* is now closed with the following results:
 
@@ -269,8 +263,6 @@ Vote Results for Grant of Commit Access
 
 Invitation to Accepted Committer
 --------------------------------
-
-::
 
     Due to your sustained contributions to the Open vSwitch (OVS) project we
     would like to provide you with commit access to the project repository.
@@ -287,8 +279,6 @@ Invitation to Accepted Committer
 Proposal to Remove Commit Access for Inactivity
 -----------------------------------------------
 
-::
-
     Committer *[candidate]* has been inactive for *[duration]*. I have
     attempted to privately contacted *[him/her]* and *[he/she]* could not be
     reached.
@@ -300,16 +290,12 @@ Proposal to Remove Commit Access for Inactivity
 Notification of Commit Removal for Inactivity
 ---------------------------------------------
 
-::
-
     Committer *[candidate]* has been inactive for *[duration]*. *[He/she]*
     *[stated no commit access is required/failed to respond]* to the formal
     proposal to remove access on *[date]*. Commit access has now been removed.
 
 Proposal to Revoke Commit Access for Detrimental Behavior
 ---------------------------------------------------------
-
-::
 
     I regret that I feel compelled to propose revocation of commit access for
     *[candidate]*. I have privately discussed with *[him/her]* the following
@@ -329,8 +315,6 @@ Proposal to Revoke Commit Access for Detrimental Behavior
 
 Vote to Revoke Commit Access
 ----------------------------
-
-::
 
     I nominated *[candidate]* for revocation of commit access on *[date]*.
     Having allowed sufficient time for discussion it's now time to formally
@@ -359,8 +343,6 @@ Vote to Revoke Commit Access
 Vote Results for Revocation of Commit Access
 --------------------------------------------
 
-::
-
     The voting period for revoking the commit access of *[candidate]* initiated
     at *[date and time]* is now closed with the following results:
 
@@ -381,8 +363,6 @@ Vote Results for Revocation of Commit Access
 
 Notification of Commit Revocation for Detrimental Behavior
 ----------------------------------------------------------
-
-::
 
     After private discussion with you and careful consideration of the
     situation, the other committers to the Open vSwitch (OVS) project have
