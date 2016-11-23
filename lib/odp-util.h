@@ -264,8 +264,7 @@ enum user_action_cookie_type {
     USER_ACTION_COOKIE_IPFIX,        /* Packet for per-bridge IPFIX sampling. */
 };
 
-/* user_action_cookie is passed as argument to OVS_ACTION_ATTR_USERSPACE.
- * Since it is passed to kernel as u64, its size has to be 8 bytes. */
+/* user_action_cookie is passed as argument to OVS_ACTION_ATTR_USERSPACE. */
 union user_action_cookie {
     uint16_t type;              /* enum user_action_cookie_type. */
 
