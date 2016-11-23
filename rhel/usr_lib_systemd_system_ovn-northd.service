@@ -6,8 +6,12 @@
 # could place the following contents in
 # /etc/systemd/system/ovn-northd.d/local.conf:
 #
-# [System]
-# Environment="OVN_NORTHD_OPTS=--db-nb-sock=/usr/local/var/run/openvswitch/ovnnb_db.sock --db-sb-sock=/usr/local/var/run/openvswitch/ovnsb_db.sock"
+#   [System]
+#   Environment="OVN_NORTHD_OPTS=--db-nb-sock=/usr/local/var/run/openvswitch/ovnnb_db.sock --db-sb-sock=/usr/local/var/run/openvswitch/ovnsb_db.sock"
+#
+# Alternatively, you may specify environment variables in the file /etc/sysconfig/ovn-northd:
+#
+#   OVN_NORTHD_OPTS="--db-nb-sock=/usr/local/var/run/openvswitch/ovnnb_db.sock --db-sb-sock=/usr/local/var/run/openvswitch/ovnsb_db.sock"
 
 [Unit]
 Description=OVN northd management daemon
@@ -19,6 +23,7 @@ After=openvswitch.service
 Type=oneshot
 RemainAfterExit=yes
 Environment=OVS_RUNDIR=%t/openvswitch OVS_DBDIR=/var/lib/openvswitch
+EnvironmentFile=-/etc/sysconfig/ovn-northd
 ExecStart=/usr/share/openvswitch/scripts/ovn-ctl start_northd $OVN_NORTHD_OPTS
 ExecStop=/usr/share/openvswitch/scripts/ovn-ctl stop_northd
 

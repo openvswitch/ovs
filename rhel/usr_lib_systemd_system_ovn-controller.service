@@ -6,8 +6,12 @@
 # could place the following contents in
 # /etc/systemd/system/ovn-controller.d/local.conf:
 #
-# [System]
-# Environment="OVN_CONTROLLER_OPTS=--ovn-controller-log=-vconsole:emer -vsyslog:err -vfile:info"
+#   [System]
+#   Environment="OVN_CONTROLLER_OPTS=--ovn-controller-log=-vconsole:emer -vsyslog:err -vfile:info"
+#
+# Alternatively, you may specify environment variables in the file /etc/sysconfig/ovn-controller:
+#
+#   OVN_CONTROLLER_OPTS="--ovn-controller-log=-vconsole:emer -vsyslog:err -vfile:info"
 
 [Unit]
 Description=OVN controller daemon
@@ -18,6 +22,7 @@ After=openvswitch.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
+EnvironmentFile=-/etc/sysconfig/ovn-controller
 ExecStart=/usr/share/openvswitch/scripts/ovn-ctl start_controller $OVN_CONTROLLER_OPTS
 ExecStop=/usr/share/openvswitch/scripts/ovn-ctl stop_controller
 
