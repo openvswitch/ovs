@@ -1091,9 +1091,11 @@ OvsInternalAdapterUp(GUID *netCfgInstanceId)
     InsertHeadList(&ovsIpHelperRequestList, &request->link);
     ovsNumIpHelperRequests++;
     if (ovsNumIpHelperRequests == 1) {
+        NdisReleaseSpinLock(&ovsIpHelperLock);
         OvsWakeupIPHelper();
+    } else {
+        NdisReleaseSpinLock(&ovsIpHelperLock);
     }
-    NdisReleaseSpinLock(&ovsIpHelperLock);
 }
 
 
@@ -1455,12 +1457,14 @@ OvsStartIpHelper(PVOID data)
     POVS_IPNEIGH_ENTRY ipn;
     PLIST_ENTRY link;
     UINT64   timeVal, timeout;
+    PLARGE_INTEGER threadSleepTimeout;
 
     OVS_LOG_INFO("Start the IP Helper Thread, context: %p", context);
 
     NdisAcquireSpinLock(&ovsIpHelperLock);
     while (!context->exit) {
 
+        threadSleepTimeout = NULL;
         timeout = 0;
         while (!IsListEmpty(&ovsIpHelperRequestList)) {
             if (context->exit) {
@@ -1468,6 +1472,7 @@ OvsStartIpHelper(PVOID data)
             }
             link = ovsIpHelperRequestList.Flink;
             RemoveEntryList(link);
+            ovsNumIpHelperRequests--;
             NdisReleaseSpinLock(&ovsIpHelperLock);
             req = CONTAINING_RECORD(link, OVS_IP_HELPER_REQUEST, link);
             switch (req->command) {
@@ -1497,6 +1502,7 @@ OvsStartIpHelper(PVOID data)
             KeQuerySystemTime((LARGE_INTEGER *)&timeVal);
             if (ipn->timeout > timeVal) {
                 timeout = ipn->timeout;
+                threadSleepTimeout = (PLARGE_INTEGER)&timeout;
                 break;
             }
             ipAddr = ipn->ipAddr;
@@ -1519,8 +1525,13 @@ ip_helper_wait:
         KeClearEvent(&context->event);
         NdisReleaseSpinLock(&ovsIpHelperLock);
 
+        /*
+         * Wait indefinitely for the thread to be woken up.
+         * Passing NULL as the Timeout value in the below
+         * call to KeWaitForSingleObject achieves this.
+         */
         KeWaitForSingleObject(&context->event, Executive, KernelMode,
-                              FALSE, (LARGE_INTEGER *)&timeout);
+                              FALSE, threadSleepTimeout);
         NdisAcquireSpinLock(&ovsIpHelperLock);
     }
     NdisReleaseSpinLock(&ovsIpHelperLock);
