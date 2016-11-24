@@ -355,7 +355,7 @@ ovs_router_lookup_cmd(struct unixctl_conn *conn, int argc OVS_UNUSED,
     if (ovs_router_lookup(&ip6, iface, &gw)) {
         struct ds ds = DS_EMPTY_INITIALIZER;
         ds_put_format(&ds, "gateway ");
-        ipv6_format_mapped(&ip6, &ds);
+        ipv6_format_mapped(&gw, &ds);
         ds_put_format(&ds, "\ndev %s\n", iface);
         unixctl_command_reply(conn, ds_cstr(&ds));
         ds_destroy(&ds);
