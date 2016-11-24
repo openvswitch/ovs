@@ -402,7 +402,7 @@ ovs_router_lookup_cmd(struct unixctl_conn *conn, int argc OVS_UNUSED,
         struct ds ds = DS_EMPTY_INITIALIZER;
         ds_put_format(&ds, "src ");
         ipv6_format_mapped(&src, &ds);
-        ds_put_format(&ds, "gateway ");
+        ds_put_format(&ds, "\ngateway ");
         ipv6_format_mapped(&gw, &ds);
         ds_put_format(&ds, "\ndev %s\n", iface);
         unixctl_command_reply(conn, ds_cstr(&ds));
