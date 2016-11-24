@@ -291,6 +291,8 @@ enum ofp_raw_action_type {
     NXAST_RAW_SAMPLE,
     /* NX1.0+(38): struct nx_action_sample2. */
     NXAST_RAW_SAMPLE2,
+    /* NX1.0+(41): struct nx_action_sample2. */
+    NXAST_RAW_SAMPLE3,
 
     /* NX1.0+(34): struct nx_action_conjunction. */
     NXAST_RAW_CONJUNCTION,
@@ -4824,10 +4826,13 @@ struct nx_action_sample {
 };
 OFP_ASSERT(sizeof(struct nx_action_sample) == 24);
 
-/* Action structure for NXAST_SAMPLE2.
+/* Action structure for NXAST_SAMPLE2 and NXAST_SAMPLE3.
  *
- * This replacement for NXAST_SAMPLE makes it support exporting
- * egress tunnel information. */
+ * NXAST_SAMPLE2 was added in Open vSwitch 2.5.90.  Compared to NXAST_SAMPLE,
+ * it adds support for exporting egress tunnel information.
+ *
+ * NXAST_SAMPLE3 was added in Open vSwitch 2.6.90.  Compared to NXAST_SAMPLE2,
+ * it adds support for the 'direction' field. */
 struct nx_action_sample2 {
     ovs_be16 type;                  /* OFPAT_VENDOR. */
     ovs_be16 len;                   /* Length is 32. */
@@ -4838,7 +4843,8 @@ struct nx_action_sample2 {
     ovs_be32 obs_domain_id;         /* ID of sampling observation domain. */
     ovs_be32 obs_point_id;          /* ID of sampling observation point. */
     ovs_be16 sampling_port;         /* Sampling port. */
-    uint8_t  pad[6];                /* Pad to a multiple of 8 bytes */
+    uint8_t  direction;             /* NXAST_SAMPLE3 only. */
+    uint8_t  zeros[5];              /* Pad to a multiple of 8 bytes */
  };
  OFP_ASSERT(sizeof(struct nx_action_sample2) == 32);
 
@@ -4855,8 +4861,29 @@ decode_NXAST_RAW_SAMPLE(const struct nx_action_sample *nas,
     sample->collector_set_id = ntohl(nas->collector_set_id);
     sample->obs_domain_id = ntohl(nas->obs_domain_id);
     sample->obs_point_id = ntohl(nas->obs_point_id);
-    /* Default value for sampling port is OFPP_NONE */
     sample->sampling_port = OFPP_NONE;
+    sample->direction = NX_ACTION_SAMPLE_DEFAULT;
+
+    if (sample->probability == 0) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    return 0;
+}
+
+static enum ofperr
+decode_SAMPLE2(const struct nx_action_sample2 *nas,
+               enum ofp_raw_action_type raw,
+               enum nx_action_sample_direction direction,
+               struct ofpact_sample *sample)
+{
+    sample->ofpact.raw = raw;
+    sample->probability = ntohs(nas->probability);
+    sample->collector_set_id = ntohl(nas->collector_set_id);
+    sample->obs_domain_id = ntohl(nas->obs_domain_id);
+    sample->obs_point_id = ntohl(nas->obs_point_id);
+    sample->sampling_port = u16_to_ofp(ntohs(nas->sampling_port));
+    sample->direction = direction;
 
     if (sample->probability == 0) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
@@ -4870,35 +4897,50 @@ decode_NXAST_RAW_SAMPLE2(const struct nx_action_sample2 *nas,
                          enum ofp_version ofp_version OVS_UNUSED,
                          struct ofpbuf *out)
 {
-    struct ofpact_sample *sample;
+    return decode_SAMPLE2(nas, NXAST_RAW_SAMPLE2, NX_ACTION_SAMPLE_DEFAULT,
+                          ofpact_put_SAMPLE(out));
+}
 
-    sample = ofpact_put_SAMPLE(out);
-    sample->ofpact.raw = NXAST_RAW_SAMPLE2;
-    sample->probability = ntohs(nas->probability);
-    sample->collector_set_id = ntohl(nas->collector_set_id);
-    sample->obs_domain_id = ntohl(nas->obs_domain_id);
-    sample->obs_point_id = ntohl(nas->obs_point_id);
-    sample->sampling_port = u16_to_ofp(ntohs(nas->sampling_port));
-
-    if (sample->probability == 0) {
+static enum ofperr
+decode_NXAST_RAW_SAMPLE3(const struct nx_action_sample2 *nas,
+                         enum ofp_version ofp_version OVS_UNUSED,
+                         struct ofpbuf *out)
+{
+    struct ofpact_sample *sample = ofpact_put_SAMPLE(out);
+    if (!is_all_zeros(nas->zeros, sizeof nas->zeros)) {
+        return OFPERR_NXBRC_MUST_BE_ZERO;
+    }
+    if (nas->direction != NX_ACTION_SAMPLE_DEFAULT &&
+        nas->direction != NX_ACTION_SAMPLE_INGRESS &&
+        nas->direction != NX_ACTION_SAMPLE_EGRESS) {
+        VLOG_WARN_RL(&rl, "invalid sample direction %"PRIu8, nas->direction);
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
+    return decode_SAMPLE2(nas, NXAST_RAW_SAMPLE3, nas->direction, sample);
+}
 
-    return 0;
+static void
+encode_SAMPLE2(const struct ofpact_sample *sample,
+               struct nx_action_sample2 *nas)
+{
+    nas->probability = htons(sample->probability);
+    nas->collector_set_id = htonl(sample->collector_set_id);
+    nas->obs_domain_id = htonl(sample->obs_domain_id);
+    nas->obs_point_id = htonl(sample->obs_point_id);
+    nas->sampling_port = htons(ofp_to_u16(sample->sampling_port));
+    nas->direction = sample->direction;
 }
 
 static void
 encode_SAMPLE(const struct ofpact_sample *sample,
               enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
 {
-    if (sample->ofpact.raw == NXAST_RAW_SAMPLE2
-        || sample->sampling_port != OFPP_NONE) {
-        struct nx_action_sample2 *nas = put_NXAST_SAMPLE2(out);
-        nas->probability = htons(sample->probability);
-        nas->collector_set_id = htonl(sample->collector_set_id);
-        nas->obs_domain_id = htonl(sample->obs_domain_id);
-        nas->obs_point_id = htonl(sample->obs_point_id);
-        nas->sampling_port = htons(ofp_to_u16(sample->sampling_port));
+    if (sample->ofpact.raw == NXAST_RAW_SAMPLE3
+        || sample->direction != NX_ACTION_SAMPLE_DEFAULT) {
+        encode_SAMPLE2(sample, put_NXAST_SAMPLE3(out));
+    } else if (sample->ofpact.raw == NXAST_RAW_SAMPLE2
+               || sample->sampling_port != OFPP_NONE) {
+        encode_SAMPLE2(sample, put_NXAST_SAMPLE2(out));
     } else {
         struct nx_action_sample *nas = put_NXAST_SAMPLE(out);
         nas->probability = htons(sample->probability);
@@ -4919,6 +4961,7 @@ parse_SAMPLE(char *arg, struct ofpbuf *ofpacts,
 {
     struct ofpact_sample *os = ofpact_put_SAMPLE(ofpacts);
     os->sampling_port = OFPP_NONE;
+    os->direction = NX_ACTION_SAMPLE_DEFAULT;
 
     char *key, *value;
     while (ofputil_parse_key_value(&arg, &key, &value)) {
@@ -4939,6 +4982,10 @@ parse_SAMPLE(char *arg, struct ofpbuf *ofpacts,
             if (!ofputil_port_from_string(value, &os->sampling_port)) {
                 error = xasprintf("%s: unknown port", value);
             }
+        } else if (!strcmp(key, "ingress")) {
+            os->direction = NX_ACTION_SAMPLE_INGRESS;
+        } else if (!strcmp(key, "egress")) {
+            os->direction = NX_ACTION_SAMPLE_EGRESS;
         } else {
             error = xasprintf("invalid key \"%s\" in \"sample\" argument",
                               key);
@@ -4969,6 +5016,11 @@ format_SAMPLE(const struct ofpact_sample *a, struct ds *s)
     if (a->sampling_port != OFPP_NONE) {
         ds_put_format(s, ",%ssampling_port=%s%"PRIu16,
                       colors.param, colors.end, a->sampling_port);
+    }
+    if (a->direction == NX_ACTION_SAMPLE_INGRESS) {
+        ds_put_format(s, ",%singress%s", colors.param, colors.end);
+    } else if (a->direction == NX_ACTION_SAMPLE_EGRESS) {
+        ds_put_format(s, ",%segress%s", colors.param, colors.end);
     }
     ds_put_format(s, "%s)%s", colors.paren, colors.end);
 }

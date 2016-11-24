@@ -4282,6 +4282,7 @@ xlate_sample_action(struct xlate_ctx *ctx,
             .obs_domain_id = os->obs_domain_id,
             .obs_point_id = os->obs_point_id,
             .output_odp_port = output_odp_port,
+            .direction = os->direction,
         }
     };
     compose_sample_action(ctx, probability, &cookie, sizeof cookie.flow_sample,

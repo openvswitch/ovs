@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@
 #include "flow.h"
 #include "hash.h"
 #include "openvswitch/hmap.h"
+#include "openvswitch/ofp-actions.h"
 #include "odp-netlink.h"
 #include "openflow/openflow.h"
 #include "util.h"
@@ -287,6 +288,7 @@ union user_action_cookie {
         uint32_t obs_domain_id; /* Observation Domain ID. */
         uint32_t obs_point_id;  /* Observation Point ID. */
         odp_port_t output_odp_port; /* The output odp port. */
+        enum nx_action_sample_direction direction;
     } flow_sample;
 
     struct {
@@ -294,7 +296,7 @@ union user_action_cookie {
         odp_port_t output_odp_port; /* The output odp port. */
     } ipfix;
 };
-BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 20);
+BUILD_ASSERT_DECL(sizeof(union user_action_cookie) == 24);
 
 size_t odp_put_userspace_action(uint32_t pid,
                                 const void *userdata, size_t userdata_size,

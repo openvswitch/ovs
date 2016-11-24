@@ -130,6 +130,9 @@ ffff 0018 00002320 001d 3039 00005BA0 00008707 0000B26E
 # actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 ffff 0020 00002320 0026 3039 00005BA0 00008707 0000B26E DDD50000 00000000
 
+# actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789,egress)
+ffff 0020 00002320 0029 3039 00005BA0 00008707 0000B26E DDD50200 00000000
+
 # bad OpenFlow10 actions: OFPBAC_BAD_LEN
 & ofp_actions|WARN|OpenFlow action OFPAT_OUTPUT length 240 exceeds action buffer length 8
 & ofp_actions|WARN|bad action at offset 0 (OFPBAC_BAD_LEN):

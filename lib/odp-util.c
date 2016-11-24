@@ -313,12 +313,18 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
                               ",collector_set_id=%"PRIu32
                               ",obs_domain_id=%"PRIu32
                               ",obs_point_id=%"PRIu32
-                              ",output_port=%"PRIu32")",
+                              ",output_port=%"PRIu32,
                               cookie.flow_sample.probability,
                               cookie.flow_sample.collector_set_id,
                               cookie.flow_sample.obs_domain_id,
                               cookie.flow_sample.obs_point_id,
                               cookie.flow_sample.output_odp_port);
+                if (cookie.flow_sample.direction == NX_ACTION_SAMPLE_INGRESS) {
+                    ds_put_cstr(ds, ",ingress");
+                } else if (cookie.flow_sample.direction == NX_ACTION_SAMPLE_EGRESS) {
+                    ds_put_cstr(ds, ",egress");
+                }
+                ds_put_char(ds, ')');
             } else if (userdata_len >= sizeof cookie.ipfix
                        && cookie.type == USER_ACTION_COOKIE_IPFIX) {
                 ds_put_format(ds, ",ipfix(output_port=%"PRIu32")",
@@ -963,7 +969,7 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
                             "collector_set_id=%"SCNi32","
                             "obs_domain_id=%"SCNi32","
                             "obs_point_id=%"SCNi32","
-                            "output_port=%"SCNi32")%n",
+                            "output_port=%"SCNi32"%n",
                             &probability, &collector_set_id,
                             &obs_domain_id, &obs_point_id,
                             &output, &n1)) {
@@ -977,6 +983,21 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             cookie.flow_sample.output_odp_port = u32_to_odp(output);
             user_data = &cookie;
             user_data_size = sizeof cookie.flow_sample;
+
+            if (ovs_scan(&s[n], ",ingress%n", &n1)) {
+                cookie.flow_sample.direction = NX_ACTION_SAMPLE_INGRESS;
+                n += n1;
+            } else if (ovs_scan(&s[n], ",egress%n", &n1)) {
+                cookie.flow_sample.direction = NX_ACTION_SAMPLE_EGRESS;
+                n += n1;
+            } else {
+                cookie.flow_sample.direction = NX_ACTION_SAMPLE_DEFAULT;
+            }
+            if (s[n] != ')') {
+                res = -EINVAL;
+                goto out;
+            }
+            n++;
         } else if (ovs_scan(&s[n], ",ipfix(output_port=%"SCNi32")%n",
                             &output, &n1) ) {
             n += n1;

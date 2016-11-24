@@ -189,7 +189,9 @@ sctp actions=drop
 sctp actions=drop
 in_port=0 actions=resubmit:0
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,ingress)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789,egress)
 ip,actions=ct(nat)
 ip,actions=ct(commit,nat(dst))
 ip,actions=ct(commit,nat(src))
@@ -220,7 +222,9 @@ OFPT_FLOW_MOD: ADD sctp actions=drop
 OFPT_FLOW_MOD: ADD sctp actions=drop
 OFPT_FLOW_MOD: ADD in_port=0 actions=resubmit:0
 OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
+OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,ingress)
 OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
+OFPT_FLOW_MOD: ADD actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789,egress)
 OFPT_FLOW_MOD: ADD ip actions=ct(nat)
 OFPT_FLOW_MOD: ADD ip actions=ct(commit,nat(dst))
 OFPT_FLOW_MOD: ADD ip actions=ct(commit,nat(src))

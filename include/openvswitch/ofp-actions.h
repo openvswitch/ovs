@@ -841,9 +841,23 @@ struct ofpact_note {
     uint8_t data[];
 };
 
+/* Direction of sampled packets. */
+enum nx_action_sample_direction {
+    /* OVS will attempt to infer the sample's direction based on whether
+     * 'sampling_port' is the packet's output port.  This is generally
+     * effective except when sampling happens as part of an output to a patch
+     * port, which doesn't involve a datapath output action. */
+    NX_ACTION_SAMPLE_DEFAULT,
+
+    /* Explicit direction.  This is useful for sampling packets coming in from
+     * or going out of a patch port, where the direction cannot be inferred. */
+    NX_ACTION_SAMPLE_INGRESS,
+    NX_ACTION_SAMPLE_EGRESS
+};
+
 /* OFPACT_SAMPLE.
  *
- * Used for NXAST_SAMPLE and NXAST_SAMPLE2. */
+ * Used for NXAST_SAMPLE, NXAST_SAMPLE2, and NXAST_SAMPLE3. */
 struct ofpact_sample {
     struct ofpact ofpact;
     uint16_t probability;  /* Always positive. */
@@ -851,6 +865,7 @@ struct ofpact_sample {
     uint32_t obs_domain_id;
     uint32_t obs_point_id;
     ofp_port_t sampling_port;
+    enum nx_action_sample_direction direction;
 };
 
 /* OFPACT_DEC_TTL.
