@@ -73,7 +73,8 @@
       </column>
 
       <column name="external_ids" key="hostname">
-        The hostname for the host running Open vSwitch.
+        The hostname for the host running Open vSwitch. This is a fully
+        qualified domain name since version 2.6.2.
       </column>
 
       <column name="other_config" key="stats-update-interval"
