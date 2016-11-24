@@ -108,7 +108,7 @@ set_system_ids () {
     esac
     set "$@" external-ids:system-id="\"$SYSTEM_ID\""
 
-    set "$@" external-ids:hostname="\"$(hostname)\""
+    set "$@" external-ids:hostname="\"$(hostname -f)\""
 
     if test X"$SYSTEM_TYPE" != X; then
         set "$@" system-type="\"$SYSTEM_TYPE\""
