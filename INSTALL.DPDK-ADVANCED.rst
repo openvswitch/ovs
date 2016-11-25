@@ -393,7 +393,7 @@ bridge ``br0``. Once complete, follow the below steps:
        $ cd /usr/src/cmdline_generator
        $ wget https://raw.githubusercontent.com/netgroup-polito/un-orchestrator/master/orchestrator/compute_controller/plugins/kvm-libvirt/cmdline_generator/cmdline_generator.c
        $ wget https://raw.githubusercontent.com/netgroup-polito/un-orchestrator/master/orchestrator/compute_controller/plugins/kvm-libvirt/cmdline_generator/Makefile
-       $ export RTE_SDK=/usr/src/dpdk-16.07
+       $ export RTE_SDK=/usr/src/dpdk-16.11
        $ export RTE_TARGET=x86_64-ivshmem-linuxapp-gcc
        $ make
        $ ./build/cmdline_generator -m -p dpdkr0 XXX
@@ -414,7 +414,7 @@ bridge ``br0``. Once complete, follow the below steps:
        $ mount -t hugetlbfs nodev /dev/hugepages (if not already mounted)
 
        # Build the DPDK ring application in the VM
-       $ export RTE_SDK=/root/dpdk-16.07
+       $ export RTE_SDK=/root/dpdk-16.11
        $ export RTE_TARGET=x86_64-ivshmem-linuxapp-gcc
        $ make
 

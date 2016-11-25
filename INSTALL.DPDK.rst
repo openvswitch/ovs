@@ -38,7 +38,7 @@ Build requirements
 In addition to the requirements described in the `installation guide
 <INSTALL.rst>`__, building Open vSwitch with DPDK will require the following:
 
-- DPDK 16.07
+- DPDK 16.11
 
 - A `DPDK supported NIC`_
 
@@ -69,9 +69,9 @@ DPDK
 1. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
 
        $ cd /usr/src/
-       $ wget http://dpdk.org/browse/dpdk/snapshot/dpdk-16.07.zip
-       $ unzip dpdk-16.07.zip
-       $ export DPDK_DIR=/usr/src/dpdk-16.07
+       $ wget http://dpdk.org/browse/dpdk/snapshot/dpdk-16.11.zip
+       $ unzip dpdk-16.11.zip
+       $ export DPDK_DIR=/usr/src/dpdk-16.11
        $ cd $DPDK_DIR
 
 2. Configure and install DPDK
@@ -363,9 +363,9 @@ To being, instantiate the guest::
 Download the DPDK sourcs to VM and build DPDK::
 
     $ cd /root/dpdk/
-    $ wget http://dpdk.org/browse/dpdk/snapshot/dpdk-16.07.zip
-    $ unzip dpdk-16.07.zip
-    $ export DPDK_DIR=/root/dpdk/dpdk-16.07
+    $ wget http://dpdk.org/browse/dpdk/snapshot/dpdk-16.11.zip
+    $ unzip dpdk-16.11.zip
+    $ export DPDK_DIR=/root/dpdk/dpdk-16.11
     $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
     $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
     $ cd $DPDK_DIR
@@ -521,7 +521,7 @@ configuration for a 'demovm' guest that can be instantiated using `virsh`::
         </disk>
         <disk type='dir' device='disk'>
           <driver name='qemu' type='fat'/>
-          <source dir='/usr/src/dpdk-16.07'/>
+          <source dir='/usr/src/dpdk-16.11'/>
           <target dev='vdb' bus='virtio'/>
           <readonly/>
         </disk>
@@ -596,7 +596,7 @@ Limitations
   The latest list of validated firmware versions can be found in the `DPDK
   release notes`_.
 
-.. _DPDK release notes: http://dpdk.org/doc/guides/rel_notes/release_16.07.html
+.. _DPDK release notes: http://dpdk.org/doc/guides/rel_notes/release_16_11.html
 
 Bug Reporting
 -------------
