@@ -417,7 +417,7 @@ to use the SSL configuration in the database::
         --private-key=db:Open_vSwitch,SSL,private_key \
         --certificate=db:Open_vSwitch,SSL,certificate \
         --bootstrap-ca-cert=db:Open_vSwitch,SSL,ca_cert \
-        --pidfile --detach
+        --pidfile --detach --log-file
 
 .. note::
   If you built Open vSwitch without SSL support, then omit ``--private-key``,
@@ -432,7 +432,7 @@ harmless::
 Start the main Open vSwitch daemon, telling it to connect to the same Unix
 domain socket::
 
-    $ ovs-vswitchd --pidfile --detach
+    $ ovs-vswitchd --pidfile --detach --log-file
 
 Validating
 ----------
