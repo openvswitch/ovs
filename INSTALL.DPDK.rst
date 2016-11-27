@@ -69,8 +69,8 @@ DPDK
 1. Download the `DPDK sources`_, extract the file and set ``DPDK_DIR``::
 
        $ cd /usr/src/
-       $ wget http://dpdk.org/browse/dpdk/snapshot/dpdk-16.11.zip
-       $ unzip dpdk-16.11.zip
+       $ wget http://fast.dpdk.org/rel/dpdk-16.11.tar.xz
+       $ tar xf dpdk-16.11.tar.xz
        $ export DPDK_DIR=/usr/src/dpdk-16.11
        $ cd $DPDK_DIR
 
@@ -86,7 +86,7 @@ DPDK
 
        $ export DPDK_TARGET=x86_64-ivshmem-linuxapp-gcc
 
-.. _DPDK sources: http://dpdk.org/browse/dpdk/refs/
+.. _DPDK sources: http://dpdk.org/rel
 
 Install OVS
 ~~~~~~~~~~~
@@ -363,8 +363,8 @@ To being, instantiate the guest::
 Download the DPDK sourcs to VM and build DPDK::
 
     $ cd /root/dpdk/
-    $ wget http://dpdk.org/browse/dpdk/snapshot/dpdk-16.11.zip
-    $ unzip dpdk-16.11.zip
+    $ wget http://fast.dpdk.org/rel/dpdk-16.11.tar.xz
+    $ tar xf dpdk-16.11.tar.xz
     $ export DPDK_DIR=/root/dpdk/dpdk-16.11
     $ export DPDK_TARGET=x86_64-native-linuxapp-gcc
     $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
