@@ -42,6 +42,8 @@ static PNDIS_RW_LOCK_EX ovsConntrackLockObj;
 extern POVS_SWITCH_CONTEXT gOvsSwitchContext;
 static UINT64 ctTotalEntries;
 
+static __inline NDIS_STATUS OvsCtFlush(UINT16 zone);
+
 /*
  *----------------------------------------------------------------------------
  * OvsInitConntrack
@@ -116,6 +118,9 @@ OvsCleanupConntrack(VOID)
     KeWaitForSingleObject(ctThreadCtx.threadObject, Executive,
                           KernelMode, FALSE, NULL);
     ObDereferenceObject(ctThreadCtx.threadObject);
+
+    /* Force flush all entries before removing */
+    OvsCtFlush(0);
 
     if (ovsConntrackTable) {
         OvsFreeMemoryWithTag(ovsConntrackTable, OVS_CT_POOL_TAG);
