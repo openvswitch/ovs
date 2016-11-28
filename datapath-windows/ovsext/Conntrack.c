@@ -802,12 +802,14 @@ OvsCtDeleteCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
         NlBufInit(&nlBuf,
                   usrParamsCtx->outputBuffer,
                   usrParamsCtx->outputLength);
-        status = NlFillOvsMsgForNfGenMsg(&nlBuf, nlmsgType, NLM_F_CREATE,
-                                         msgIn->nlMsg.nlmsgSeq,
-                                         msgIn->nlMsg.nlmsgPid,
-                                         AF_UNSPEC,
-                                         msgIn->nfGenMsg.version,
-                                         0);
+        if (!NlFillOvsMsgForNfGenMsg(&nlBuf, nlmsgType, NLM_F_CREATE,
+                                     msgIn->nlMsg.nlmsgSeq,
+                                     msgIn->nlMsg.nlmsgPid,
+                                     AF_UNSPEC,
+                                     msgIn->nfGenMsg.version,
+                                     0)) {
+            status = STATUS_INVALID_PARAMETER;
+        }
         nlMsg = (PNL_MSG_HDR)NlBufAt(&nlBuf, 0, 0);
         nlMsg->nlmsgLen = NlBufSize(&nlBuf);
         *replyLen = msgOut->nlMsg.nlmsgLen;
