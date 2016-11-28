@@ -194,7 +194,7 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
             TCPHdr tcpStorage;
             const TCPHdr *tcp;
             tcp = OvsGetTcp(curNbl, l4Offset, &tcpStorage);
-            if (!OvsConntrackValidateTcpPacket(tcp)) {
+            if (!tcp || !OvsConntrackValidateTcpPacket(tcp)) {
                 goto invalid;
             }
 
@@ -215,7 +215,7 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
             ICMPHdr storage;
             const ICMPHdr *icmp;
             icmp = OvsGetIcmp(curNbl, l4Offset, &storage);
-            if (!OvsConntrackValidateIcmpPacket(icmp)) {
+            if (!icmp || !OvsConntrackValidateIcmpPacket(icmp)) {
                 goto invalid;
             }
 
