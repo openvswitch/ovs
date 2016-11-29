@@ -242,30 +242,32 @@ discover_numa_and_core(void)
 static struct cpu_core*
 get_core_by_core_id(unsigned core_id)
 {
-    struct cpu_core *core = NULL;
+    struct cpu_core *core;
 
-    if (ovs_numa_core_id_is_valid(core_id)) {
-        core = CONTAINER_OF(hmap_first_with_hash(&all_cpu_cores,
-                                                 hash_int(core_id, 0)),
-                            struct cpu_core, hmap_node);
+    HMAP_FOR_EACH_WITH_HASH (core, hmap_node, hash_int(core_id, 0),
+                             &all_cpu_cores) {
+        if (core->core_id == core_id) {
+            return core;
+        }
     }
 
-    return core;
+    return NULL;
 }
 
 /* Gets 'struct numa_node' by 'numa_id'. */
 static struct numa_node*
 get_numa_by_numa_id(int numa_id)
 {
-    struct numa_node *numa = NULL;
+    struct numa_node *numa;
 
-    if (ovs_numa_numa_id_is_valid(numa_id)) {
-        numa = CONTAINER_OF(hmap_first_with_hash(&all_numa_nodes,
-                                                 hash_int(numa_id, 0)),
-                            struct numa_node, hmap_node);
+    HMAP_FOR_EACH_WITH_HASH (numa, hmap_node, hash_int(numa_id, 0),
+                             &all_numa_nodes) {
+        if (numa->numa_id == numa_id) {
+            return numa;
+        }
     }
 
-    return numa;
+    return NULL;
 }
 
 
