@@ -1023,6 +1023,10 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
     ovs_mutex_unlock(&dev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
 
+    if (!strlen(dev->vhost_id)) {
+        goto out;
+    }
+
     if (dpdk_vhost_driver_unregister(dev, vhost_id)) {
         VLOG_ERR("%s: Unable to unregister vhost driver for socket '%s'.\n",
                  netdev->name, vhost_id);
@@ -1030,6 +1034,7 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
         /* OVS server mode - remove this socket from list for deletion */
         fatal_signal_remove_file_to_unlink(vhost_id);
     }
+out:
     free(vhost_id);
 }
 
