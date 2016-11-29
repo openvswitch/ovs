@@ -175,10 +175,11 @@ core shared by two logical cores, run::
 where ``N`` is the logical core number.
 
 In this example, it would show that cores ``1`` and ``21`` share the same
-physical core., thus, the ``pmd-cpu-mask`` can be used to enable these two pmd
-threads running on these two logical cores (one physical core) is::
+physical core. As cores are counted from 0, the ``pmd-cpu-mask`` can be used
+to enable these two pmd threads running on these two logical cores (one
+physical core) is::
 
-    $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=100002
+    $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x200002
 
 Isolate Cores
 ~~~~~~~~~~~~~
@@ -239,7 +240,7 @@ affinitized accordingly.
   By setting a bit in the mask, a pmd thread is created and pinned to the
   corresponding CPU core. e.g. to run a pmd thread on core 2::
 
-      $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=4
+      $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x4
 
   .. note::
     pmd thread on a NUMA node is only created if there is at least one DPDK
@@ -269,7 +270,7 @@ is done automatically.
 A set bit in the mask means a pmd thread is created and pinned to the
 corresponding CPU core. For example, to run pmd threads on core 1 and 2::
 
-    $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=6
+    $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x6
 
 When using dpdk and dpdkvhostuser ports in a bi-directional VM loopback as
 shown below, spreading the workload over 2 or 4 pmd threads shows significant
@@ -436,7 +437,7 @@ guide`_ to create and initialize the database, start ovs-vswitchd and add
    of rx queues at vhost-user interface gets automatically configured after
    virtio device connection and doesn't need manual configuration::
 
-       $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=c
+       $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0xC
        $ ovs-vsctl set Interface dpdk0 options:n_rxq=2
        $ ovs-vsctl set Interface dpdk1 options:n_rxq=2
 

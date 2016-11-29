@@ -223,10 +223,10 @@ NUMA node 0, run::
 
 Similarly, if you wish to better scale the workloads across cores, then
 multiple pmd threads can be created and pinned to CPU cores by explicity
-specifying ``pmd-cpu-mask``. For example, to spawn two pmd threads and pin
-them to cores 1,2, run::
+specifying ``pmd-cpu-mask``. Cores are numbered from 0, so to spawn two pmd
+threads and pin them to cores 1,2, run::
 
-    $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=6
+    $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x6
 
 For details on using ivshmem with DPDK, refer to `the advanced installation
 guide <INSTALL.DPDK-ADVANCED.rst>`__.

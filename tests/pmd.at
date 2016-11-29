@@ -123,7 +123,7 @@ pmd thread numa_id <cleared> core_id <cleared>:
 ])
 
 TMP=$(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])
-AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=3])
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x3])
 CHECK_PMD_THREADS_CREATED([2], [], [+$TMP])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
@@ -136,7 +136,7 @@ pmd thread numa_id <cleared> core_id <cleared>:
 ])
 
 TMP=$(cat ovs-vswitchd.log | wc -l | tr -d [[:blank:]])
-AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=1])
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x1])
 CHECK_PMD_THREADS_CREATED([1], [], [+$TMP])
 
 AT_CHECK([ovs-appctl dpif-netdev/pmd-rxq-show | sed SED_NUMA_CORE_PATTERN], [0], [dnl
@@ -471,7 +471,7 @@ AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg])
 
 AT_CHECK([ovs-ofctl add-flow br0 actions=controller])
 
-AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=1fe])
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x1fe])
 
 AT_CHECK([ovs-vsctl add-port br0 p1 -- set Interface p1 type=dummy-pmd ofport_request=1 options:n_rxq=4 other_config:pmd-rxq-affinity="0:3,1:7,2:2,3:8"])
 
