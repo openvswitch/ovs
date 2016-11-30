@@ -490,25 +490,53 @@ ovs_numa_unpin_core(unsigned core_id)
     }
 }
 
+static struct ovs_numa_dump *
+ovs_numa_dump_create(void)
+{
+    struct ovs_numa_dump *dump = xmalloc(sizeof *dump);
+
+    hmap_init(&dump->cores);
+    hmap_init(&dump->numas);
+
+    return dump;
+}
+
+static void
+ovs_numa_dump_add(struct ovs_numa_dump *dump, int numa_id, int core_id)
+{
+    struct ovs_numa_info_core *c = xzalloc(sizeof *c);
+    struct ovs_numa_info_numa *n;
+
+    c->numa_id = numa_id;
+    c->core_id = core_id;
+    hmap_insert(&dump->cores, &c->hmap_node, hash_2words(numa_id, core_id));
+
+    HMAP_FOR_EACH_WITH_HASH (n, hmap_node, hash_int(numa_id, 0),
+                             &dump->numas) {
+        if (n->numa_id == numa_id) {
+            n->n_cores++;
+            return;
+        }
+    }
+
+    n = xzalloc(sizeof *n);
+    n->numa_id = numa_id;
+    n->n_cores = 1;
+    hmap_insert(&dump->numas, &n->hmap_node, hash_int(numa_id, 0));
+}
+
 /* Given the 'numa_id', returns dump of all cores on the numa node. */
 struct ovs_numa_dump *
 ovs_numa_dump_cores_on_numa(int numa_id)
 {
-    struct ovs_numa_dump *dump = xmalloc(sizeof *dump);
+    struct ovs_numa_dump *dump = ovs_numa_dump_create();
     struct numa_node *numa = get_numa_by_numa_id(numa_id);
-
-    hmap_init(&dump->dump);
 
     if (numa) {
         struct cpu_core *core;
 
-        LIST_FOR_EACH(core, list_node, &numa->cores) {
-            struct ovs_numa_info *info = xmalloc(sizeof *info);
-
-            info->numa_id = numa->numa_id;
-            info->core_id = core->core_id;
-            hmap_insert(&dump->dump, &info->hmap_node,
-                        hash_2words(info->numa_id, info->core_id));
+        LIST_FOR_EACH (core, list_node, &numa->cores) {
+            ovs_numa_dump_add(dump, numa->numa_id, core->core_id);
         }
     }
 
@@ -518,11 +546,9 @@ ovs_numa_dump_cores_on_numa(int numa_id)
 struct ovs_numa_dump *
 ovs_numa_dump_cores_with_cmask(const char *cmask)
 {
-    struct ovs_numa_dump *dump = xmalloc(sizeof *dump);
+    struct ovs_numa_dump *dump = ovs_numa_dump_create();
     int core_id = 0;
     int end_idx;
-
-    hmap_init(&dump->dump);
 
     /* Ignore leading 0x. */
     end_idx = 0;
@@ -545,12 +571,9 @@ ovs_numa_dump_cores_with_cmask(const char *cmask)
                 struct cpu_core *core = get_core_by_core_id(core_id);
 
                 if (core) {
-                    struct ovs_numa_info *info = xmalloc(sizeof *info);
-
-                    info->numa_id = core->numa->numa_id;
-                    info->core_id = core->core_id;
-                    hmap_insert(&dump->dump, &info->hmap_node,
-                                hash_2words(info->numa_id, info->core_id));
+                    ovs_numa_dump_add(dump,
+                                      core->numa->numa_id,
+                                      core->core_id);
                 }
             }
 
@@ -564,10 +587,8 @@ ovs_numa_dump_cores_with_cmask(const char *cmask)
 struct ovs_numa_dump *
 ovs_numa_dump_n_cores_per_numa(int cores_per_numa)
 {
-    struct ovs_numa_dump *dump = xmalloc(sizeof *dump);
+    struct ovs_numa_dump *dump = ovs_numa_dump_create();
     const struct numa_node *n;
-
-    hmap_init(&dump->dump);
 
     HMAP_FOR_EACH (n, hmap_node, &all_numa_nodes) {
         const struct cpu_core *core;
@@ -578,12 +599,7 @@ ovs_numa_dump_n_cores_per_numa(int cores_per_numa)
                 break;
             }
 
-            struct ovs_numa_info *info = xmalloc(sizeof *info);
-
-            info->numa_id = core->numa->numa_id;
-            info->core_id = core->core_id;
-            hmap_insert(&dump->dump, &info->hmap_node,
-                        hash_2words(info->numa_id, info->core_id));
+            ovs_numa_dump_add(dump, core->numa->numa_id, core->core_id);
         }
     }
 
@@ -594,10 +610,10 @@ bool
 ovs_numa_dump_contains_core(const struct ovs_numa_dump *dump,
                             int numa_id, unsigned core_id)
 {
-    struct ovs_numa_info *core;
+    struct ovs_numa_info_core *core;
 
     HMAP_FOR_EACH_WITH_HASH (core, hmap_node, hash_2words(numa_id, core_id),
-                             &dump->dump) {
+                             &dump->cores) {
         if (core->core_id == core_id && core->numa_id == numa_id) {
             return true;
         }
@@ -606,20 +622,32 @@ ovs_numa_dump_contains_core(const struct ovs_numa_dump *dump,
     return false;
 }
 
+size_t
+ovs_numa_dump_count(const struct ovs_numa_dump *dump)
+{
+    return hmap_count(&dump->cores);
+}
+
 void
 ovs_numa_dump_destroy(struct ovs_numa_dump *dump)
 {
-    struct ovs_numa_info *iter;
+    struct ovs_numa_info_core *c;
+    struct ovs_numa_info_numa *n;
 
     if (!dump) {
         return;
     }
 
-    HMAP_FOR_EACH_POP (iter, hmap_node, &dump->dump) {
-        free(iter);
+    HMAP_FOR_EACH_POP (c, hmap_node, &dump->cores) {
+        free(c);
     }
 
-    hmap_destroy(&dump->dump);
+    HMAP_FOR_EACH_POP (n, hmap_node, &dump->numas) {
+        free(n);
+    }
+
+    hmap_destroy(&dump->cores);
+    hmap_destroy(&dump->numas);
 
     free(dump);
 }
