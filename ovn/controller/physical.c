@@ -781,9 +781,6 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
      * 64 for logical-to-physical translation. */
     const struct sbrec_port_binding *binding;
     SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
-        /* Because it is possible in the above code to enter this
-         * for loop without having cleared the flow table first, we
-         * should clear the old flows to avoid collisions. */
         consider_port_binding(mff_ovn_geneve, ct_zones, local_datapaths,
                               patched_datapaths, binding, &ofpacts,
                               flow_table);
@@ -794,9 +791,6 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
     struct ofpbuf remote_ofpacts;
     ofpbuf_init(&remote_ofpacts, 0);
     SBREC_MULTICAST_GROUP_FOR_EACH (mc, ctx->ovnsb_idl) {
-        /* As multicast groups are always reprocessed each time,
-         * the first step is to clean the old flows for the group
-         * so that we avoid warning messages on collisions. */
         consider_mc_group(mff_ovn_geneve, ct_zones,
                           local_datapaths, mc, &ofpacts, &remote_ofpacts,
                           flow_table);
