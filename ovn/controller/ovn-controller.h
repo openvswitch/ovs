@@ -68,8 +68,6 @@ struct patched_datapath {
     struct hmap_node hmap_node;
     struct uuid key;   /* UUID of the corresponding datapath. */
     bool local; /* 'True' if the datapath is for gateway router. */
-    bool stale; /* 'True' if the datapath is not referenced by any patch
-                 * port. */
 };
 
 struct patched_datapath *get_patched_datapath(const struct hmap *,
