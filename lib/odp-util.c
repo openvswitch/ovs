@@ -5582,7 +5582,10 @@ commit_mpls_action(const struct flow *flow, struct flow *base,
                                       sizeof *mpls);
         mpls->mpls_ethertype = flow->dl_type;
         mpls->mpls_lse = flow->mpls_lse[flow_n - base_n - 1];
-        flow_push_mpls(base, base_n, mpls->mpls_ethertype, NULL);
+        /* Update base flow's MPLS stack, but do not clear L3.  We need the L3
+         * headers if the flow is restored later due to returning from a patch
+         * port or group bucket. */
+        flow_push_mpls(base, base_n, mpls->mpls_ethertype, NULL, false);
         flow_set_mpls_lse(base, 0, mpls->mpls_lse);
         base_n++;
     }
@@ -5945,12 +5948,21 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
                    bool use_masked)
 {
     enum slow_path_reason slow1, slow2;
+    bool mpls_done = false;
 
     commit_set_ether_addr_action(flow, base, odp_actions, wc, use_masked);
+    /* Make packet a non-MPLS packet before committing L3/4 actions,
+     * which would otherwise do nothing. */
+    if (eth_type_mpls(base->dl_type) && !eth_type_mpls(flow->dl_type)) {
+        commit_mpls_action(flow, base, odp_actions);
+        mpls_done = true;
+    }
     slow1 = commit_set_nw_action(flow, base, odp_actions, wc, use_masked);
     commit_set_port_action(flow, base, odp_actions, wc, use_masked);
     slow2 = commit_set_icmp_action(flow, base, odp_actions, wc);
-    commit_mpls_action(flow, base, odp_actions);
+    if (!mpls_done) {
+        commit_mpls_action(flow, base, odp_actions);
+    }
     commit_vlan_action(flow->vlan_tci, base, odp_actions, wc);
     commit_set_priority_action(flow, base, odp_actions, wc, use_masked);
     commit_set_pkt_mark_action(flow, base, odp_actions, wc, use_masked);
