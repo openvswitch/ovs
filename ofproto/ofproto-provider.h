@@ -1891,6 +1891,7 @@ struct ofproto_flow_mod {
     bool modify_cookie;
     /* Fields derived from ofputil_flow_mod. */
     bool modify_may_add_flow;
+    bool modify_keep_counts;
     enum nx_flow_update_event event;
 
     /* These are only used during commit execution.
