@@ -66,6 +66,7 @@ PYCOV_CLEAN_FILES = build-aux/check-structs,cover
 # A list of Markdown- or reStructuredText-formatted documentation that will
 # automatically be included in the "make dist-docs" output.
 docs = \
+	AUTHORS.rst \
 	CONTRIBUTING.rst \
 	CodingStyle.rst \
 	DESIGN.rst \
