@@ -501,15 +501,8 @@
 
       <column name="db_version">
         <p>
-          The database schema version number in the form
-          <code><var>major</var>.<var>minor</var>.<var>tweak</var></code>,
-          e.g. <code>1.2.3</code>.  Whenever the database schema is changed in
-          a non-backward compatible way (e.g. deleting a column or a table),
-          <var>major</var> is incremented.  When the database schema is changed
-          in a backward compatible way (e.g. adding a new column),
-          <var>minor</var> is incremented.  When the database schema is changed
-          cosmetically (e.g. reindenting its syntax), <var>tweak</var> is
-          incremented.
+          The database schema version number, e.g. <code>1.2.3</code>.  See
+          ovsdb-tool(1) for an explanation of the numbering scheme.
         </p>
 
         <p>
