@@ -3743,7 +3743,8 @@ compose_mpls_push_action(struct xlate_ctx *ctx, struct ofpact_push_mpls *mpls)
         return;
     }
 
-    flow_push_mpls(flow, n, mpls->ethertype, ctx->wc);
+    /* Update flow's MPLS stack, and clear L3/4 fields to mark them invalid. */
+    flow_push_mpls(flow, n, mpls->ethertype, ctx->wc, true);
 }
 
 static void

@@ -223,7 +223,7 @@ int flow_count_common_mpls_labels(const struct flow *a, int an,
                                   const struct flow *b, int bn,
                                   struct flow_wildcards *wc);
 void flow_push_mpls(struct flow *, int n, ovs_be16 mpls_eth_type,
-                    struct flow_wildcards *);
+                    struct flow_wildcards *, bool clear_flow_L3);
 bool flow_pop_mpls(struct flow *, int n, ovs_be16 eth_type,
                    struct flow_wildcards *);
 void flow_set_mpls_label(struct flow *, int idx, ovs_be32 label);

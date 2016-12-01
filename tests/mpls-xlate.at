@@ -62,3 +62,67 @@ AT_CHECK([tail -1 stdout], [0],
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([MPLS xlate action - patch-port])
+
+OVS_VSWITCHD_START(
+  [add-port br0 p0 -- set Interface p0 type=dummy ofport_request=1 -- \
+   add-port br0 p1 -- set Interface p1 type=patch \
+                                       options:peer=p2 ofport_request=2 -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy other-config:datapath-id=1234 \
+                  fail-mode=secure -- \
+   add-port br1 p2 -- set Interface p2 type=patch \
+                                       options:peer=p1 -- \
+   add-port br1 p3 -- set Interface p3 type=dummy ofport_request=3])
+
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg ofproto_dpif_upcall:dbg])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+	br0:
+		br0 65534/100: (dummy)
+		p0 1/1: (dummy)
+		p1 2/none: (patch: peer=p2)
+	br1:
+		br1 65534/101: (dummy)
+		p2 1/none: (patch: peer=p1)
+		p3 3/3: (dummy)
+])
+
+dnl MPLS PUSH + POP.
+AT_CHECK([ovs-ofctl del-flows br0])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 in_port=local,ip,actions=2,1,1])
+
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br1 in_port=1,ip,actions=dec_ttl,push_mpls:0x8847,3])
+
+dnl MPLS push+pop
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(100),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=10.1.1.22,dst=10.0.0.3,proto=6,tos=0,ttl=64,frag=no),tcp(src=53295,dst=8080)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: set(ipv4(ttl=63)),push_mpls(label=0,tc=0,ttl=63,bos=1,eth_type=0x8847),3,pop_mpls(eth_type=0x800),set(ipv4(tos=0/0xfc,ttl=64)),1,1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([MPLS xlate action - group bucket])
+
+OVS_VSWITCHD_START
+ADD_OF_PORTS([br0], [1])
+
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg ofproto_dpif_upcall:dbg])
+
+AT_CHECK([ovs-ofctl del-flows br0])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-group br0 'group_id=1234,type=all,bucket=push_mpls:0x8847,output:1'])
+AT_CHECK([ovs-ofctl -O OpenFlow13 add-flow br0 in_port=local,ip,actions=group:1234,output:1,output:1])
+
+dnl MPLS push in a bucket
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(100),eth(src=f8:bc:12:44:34:b6,dst=f8:bc:12:46:58:e0),eth_type(0x0800),ipv4(src=10.1.1.22,dst=10.0.0.3,proto=6,tos=0,ttl=64,frag=no),tcp(src=53295,dst=8080)'], [0], [stdout])
+AT_CHECK([tail -1 stdout], [0],
+  [Datapath actions: push_mpls(label=0,tc=0,ttl=64,bos=1,eth_type=0x8847),1,pop_mpls(eth_type=0x800),1,1
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
