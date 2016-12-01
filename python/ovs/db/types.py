@@ -56,6 +56,7 @@ class AtomicType(object):
     def default_atom(self):
         return ovs.db.data.Atom(self, self.default)
 
+
 REAL_PYTHON_TYPES = list(six.integer_types)
 REAL_PYTHON_TYPES.extend([float])
 REAL_PYTHON_TYPES = tuple(REAL_PYTHON_TYPES)

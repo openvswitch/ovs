@@ -149,12 +149,16 @@ def conf():
     mf.write("\ncheck:\n")
     mf.write(make_str % BUILD_GCC)
     mf.close()
+
+
 commands.append(conf)
 
 
 def make(args=""):
     make = "make -s -j 8 " + args
     _sh(make)
+
+
 commands.append(make)
 
 
@@ -172,6 +176,8 @@ def check():
                 flags += "-k %s " % arg
     ENV["TESTSUITEFLAGS"] = flags
     make("check")
+
+
 commands.append(check)
 
 
@@ -190,6 +196,8 @@ def tag():
         _sh('cscope', '-R', '-b')
     except:
         pass
+
+
 commands.append(tag)
 
 
@@ -200,6 +208,8 @@ def kill():
             _sh("ovs-appctl", "-t", proc, "exit", check=False)
             time.sleep(.1)
         _sh("killall", "-q", "-2", proc, check=False)
+
+
 commands.append(kill)
 
 
@@ -210,6 +220,8 @@ def reset():
         shutil.rmtree(RUNDIR)
     for dp in _sh("ovs-dpctl dump-dps", capture=True):
         _sh("ovs-dpctl", "del-dp", dp.decode().strip())
+
+
 commands.append(reset)
 
 
@@ -285,6 +297,8 @@ def run():
     else:
         opts = opts + ["-vconsole:off", "--detach", "--enable-dummy"]
     _sh(*(cmd + opts))
+
+
 commands.append(run)
 
 
@@ -313,11 +327,15 @@ def modinst():
     _sh("dmesg | grep openvswitch | tail -1")
     _sh("find /lib/modules/%s/ -iname vport-*.ko -exec insmod '{}' \;"
         % uname())
+
+
 commands.append(modinst)
 
 
 def env():
     print("export PATH=" + ENV["PATH"])
+
+
 commands.append(env)
 
 
@@ -373,6 +391,8 @@ Note:
     will always run as the root user, by rerun the commands with "sudo".
 """ % {"ovs": OVS_SRC, "v": sys.argv[0], "run": RUNDIR})
     sys.exit(0)
+
+
 commands.append(doc)
 
 

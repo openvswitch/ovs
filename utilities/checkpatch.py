@@ -298,6 +298,7 @@ def ovs_checkpatch_file(filename):
         print("Warnings: %d, Errors: %d" % (__warnings, __errors))
     return result
 
+
 if __name__ == '__main__':
     try:
         optlist, args = getopt.getopt(sys.argv[1:], 'bhlstf',

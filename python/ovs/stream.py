@@ -395,6 +395,8 @@ class UnixStream(Stream):
         connect_path = suffix
         return ovs.socket_util.make_unix_socket(socket.SOCK_STREAM,
                                                 True, None, connect_path)
+
+
 Stream.register_method("unix", UnixStream)
 
 
@@ -406,6 +408,8 @@ class TCPStream(Stream):
         if not error:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         return error, sock
+
+
 Stream.register_method("tcp", TCPStream)
 
 
