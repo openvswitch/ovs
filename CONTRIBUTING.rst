@@ -94,7 +94,11 @@ Where:
   multiple distinct pieces of code.
 
 ``<summary>``:
-  briefly describes the change.
+
+  briefly describes the change.  Use the the imperative form,
+  e.g. "Force SNAT for multiple gateway routers." or "Fix daemon exit
+  for bad datapaths or flows."  Try to keep the summary short, about
+  50 characters wide.
 
 The subject, minus the ``[PATCH <n>/<m>]`` prefix, becomes the first line of
 the commit's change log message.
@@ -106,7 +110,9 @@ The body of the email should start with a more thorough description of the
 change.  This becomes the body of the commit message, following the subject.
 There is no need to duplicate the summary given in the subject.
 
-Please limit lines in the description to 79 characters in width.
+Please limit lines in the description to 75 characters in width.  That
+allows the description to format properly even when indented (e.g. by
+"git log" or in email quotations).
 
 The description should include:
 
@@ -341,6 +347,8 @@ openvswitch please sign off your work.  The sign off certifies the following:
         personal information I submit with it, including my sign-off) is
         maintained indefinitely and may be redistributed consistent with
         this project or the open source license(s) involved.
+
+See also http://developercertificate.org/.
 
 Feature Deprecation Guidelines
 ------------------------------
