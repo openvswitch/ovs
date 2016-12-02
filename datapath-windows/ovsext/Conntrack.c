@@ -694,7 +694,7 @@ OvsExecuteConntrackAction(PNET_BUFFER_LIST curNbl,
 
 /*
  *----------------------------------------------------------------------------
- * OvsConntrackEnrtyCleaner
+ * ovsConntrackEntryCleaner
  *     Runs periodically and cleans up the connection tracker
  *----------------------------------------------------------------------------
  */

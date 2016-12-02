@@ -1219,7 +1219,7 @@ FixSegmentHeader(PNET_BUFFER nb, UINT16 segmentSize, UINT32 seqNumber,
 
 /*
  * --------------------------------------------------------------------------
- * OvsTcpSegmentyNBL --
+ * OvsTcpSegmentNBL --
  *
  *    Segment TCP payload, and prepend each segment with ether/IP/TCP header.
  *    Leave headRoom for additional encap.
