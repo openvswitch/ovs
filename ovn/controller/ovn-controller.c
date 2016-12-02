@@ -505,6 +505,11 @@ main(int argc, char *argv[])
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
 
+        struct lport_index lports;
+        struct mcgroup_index mcgroups;
+        lport_index_init(&lports, ctx.ovnsb_idl);
+        mcgroup_index_init(&mcgroups, ctx.ovnsb_idl);
+
         const struct sbrec_chassis *chassis = NULL;
         if (chassis_id) {
             chassis = chassis_run(&ctx, chassis_id, br_int);
@@ -516,11 +521,6 @@ main(int argc, char *argv[])
         if (br_int && chassis) {
             patch_run(&ctx, br_int, chassis_id, &local_datapaths,
                       &patched_datapaths);
-
-            struct lport_index lports;
-            struct mcgroup_index mcgroups;
-            lport_index_init(&lports, ctx.ovnsb_idl);
-            mcgroup_index_init(&mcgroups, ctx.ovnsb_idl);
 
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int,
                                                          &pending_ct_zones);
@@ -550,10 +550,10 @@ main(int argc, char *argv[])
                     }
                 }
             }
-            mcgroup_index_destroy(&mcgroups);
-            lport_index_destroy(&lports);
         }
 
+        mcgroup_index_destroy(&mcgroups);
+        lport_index_destroy(&lports);
         sset_destroy(&all_lports);
 
         struct local_datapath *cur_node, *next_node;
