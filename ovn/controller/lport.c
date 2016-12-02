@@ -68,6 +68,10 @@ lport_index_init(struct lport_index *lports, struct ovsdb_idl *ovnsb_idl)
 void
 lport_index_destroy(struct lport_index *lports)
 {
+    if (!lports) {
+        return;
+    }
+
     /* Destroy all of the "struct lport"s.
      *
      * We don't have to remove the node from both indexes. */
@@ -141,6 +145,10 @@ mcgroup_index_init(struct mcgroup_index *mcgroups, struct ovsdb_idl *ovnsb_idl)
 void
 mcgroup_index_destroy(struct mcgroup_index *mcgroups)
 {
+    if (!mcgroups) {
+        return;
+    }
+
     struct mcgroup *mcgroup, *next;
     HMAP_FOR_EACH_SAFE (mcgroup, next, dp_name_node, &mcgroups->by_dp_name) {
         hmap_remove(&mcgroups->by_dp_name, &mcgroup->dp_name_node);
