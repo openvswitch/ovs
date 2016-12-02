@@ -566,7 +566,6 @@ main(int argc, char *argv[])
         struct local_datapath *cur_node, *next_node;
         HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node, &local_datapaths) {
             hmap_remove(&local_datapaths, &cur_node->hmap_node);
-            free(cur_node->logical_port);
             free(cur_node);
         }
         hmap_destroy(&local_datapaths);

@@ -114,8 +114,6 @@ add_local_datapath(struct hmap *local_datapaths,
     }
 
     struct local_datapath *ld = xzalloc(sizeof *ld);
-    ld->logical_port = xstrdup(binding_rec->logical_port);
-    memcpy(&ld->uuid, &binding_rec->header_.uuid, sizeof ld->uuid);
     hmap_insert(local_datapaths, &ld->hmap_node,
                 binding_rec->datapath->tunnel_key);
 }
