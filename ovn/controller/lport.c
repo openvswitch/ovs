@@ -37,10 +37,22 @@ lport_index_init(struct lport_index *lports, struct ovsdb_idl *ovnsb_idl)
 
     const struct sbrec_port_binding *pb;
     SBREC_PORT_BINDING_FOR_EACH (pb, ovnsb_idl) {
+        if (!pb->datapath) {
+            continue;
+        }
+
         if (lport_lookup_by_name(lports, pb->logical_port)) {
             static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
             VLOG_WARN_RL(&rl, "duplicate logical port name '%s'",
                          pb->logical_port);
+            continue;
+        }
+        if (lport_lookup_by_key(lports, pb->datapath->tunnel_key,
+                                pb->tunnel_key)) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(&rl, "duplicate logical port %"PRId64" in logical "
+                         "datapath %"PRId64,
+                         pb->tunnel_key, pb->datapath->tunnel_key);
             continue;
         }
 
