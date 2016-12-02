@@ -524,8 +524,8 @@ main(int argc, char *argv[])
             patch_run(&ctx, br_int, chassis_id, &local_datapaths,
                       &patched_datapaths);
 
-            static struct lport_index lports;
-            static struct mcgroup_index mcgroups;
+            struct lport_index lports;
+            struct mcgroup_index mcgroups;
             lport_index_init(&lports, ctx.ovnsb_idl);
             mcgroup_index_init(&mcgroups, ctx.ovnsb_idl);
 
