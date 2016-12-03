@@ -260,5 +260,5 @@ with the active server.
 
     pcs constraint order VirtualIP then ovndb_servers-master
 
-    pcs constraint colocation add ovndb_servers-master with master VirtualIP \
+    pcs constraint colocation add master ovndb_servers-master with VirtualIP \
         score=INFINITY
