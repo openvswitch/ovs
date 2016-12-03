@@ -66,12 +66,12 @@ CalculateOnesComplement(UINT8 *start,
                         UINT64 initial,
                         BOOLEAN isEvenStart)
 {
-    UINT64  sum = 0, val;
+    UINT64  sum = 0, val64;
     UINT64  *src = (UINT64 *)start;
     while (totalLength > 7) {
-        val = *src;
-        sum += val;
-        if (sum < val) sum++;
+        val64 = *src;
+        sum += val64;
+        if (sum < val64) sum++;
         src++;
         totalLength -= 8;
     }
