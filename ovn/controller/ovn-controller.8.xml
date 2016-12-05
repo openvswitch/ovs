@@ -93,13 +93,8 @@
       <dd>
         <p>
           The OVN database that this system should connect to for its
-          configuration.
-        </p>
-
-        <p>
-          Currently, <code>ovn-controller</code> does not support changing this
-          setting mid-run.  If the value needs to change, the daemon must be
-          restarted.  (This behavior should be improved.)
+          configuration, in one of the same forms documented above for the
+          <var>ovs-database</var>.
         </p>
       </dd>
 

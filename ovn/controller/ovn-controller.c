@@ -204,10 +204,7 @@ get_chassis_id(const struct ovsdb_idl *ovs_idl)
 }
 
 /* Retrieves the OVN Southbound remote location from the
- * "external-ids:ovn-remote" key in 'ovs_idl' and returns a copy of it.
- *
- * XXX ovn-controller does not support this changing mid-run, but that should
- * be addressed later. */
+ * "external-ids:ovn-remote" key in 'ovs_idl' and returns a copy of it. */
 static char *
 get_ovnsb_remote(struct ovsdb_idl *ovs_idl)
 {
