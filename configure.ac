@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -147,7 +147,7 @@ OVS_ENABLE_OPTION([-Wall])
 OVS_ENABLE_OPTION([-Wextra])
 OVS_ENABLE_OPTION([-Wno-sign-compare])
 OVS_ENABLE_OPTION([-Wpointer-arith])
-OVS_ENABLE_OPTION([-Wformat-security])
+OVS_ENABLE_OPTION([-Wformat -Wformat-security])
 OVS_ENABLE_OPTION([-Wswitch-enum])
 OVS_ENABLE_OPTION([-Wunused-parameter])
 OVS_ENABLE_OPTION([-Wbad-function-cast])

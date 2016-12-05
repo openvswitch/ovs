@@ -768,7 +768,7 @@ dnl gives unlimited permission to copy and/or distribute it,
 dnl with or without modifications, as long as this notice is preserved.
 
 AC_DEFUN([_OVS_CHECK_CC_OPTION], [dnl
-  m4_define([ovs_cv_name], [ovs_cv_[]m4_translit([$1], [-=], [__])])dnl
+  m4_define([ovs_cv_name], [ovs_cv_[]m4_translit([$1], [-= ], [__])])dnl
   AC_CACHE_CHECK([whether $CC accepts $1], [ovs_cv_name], 
     [ovs_save_CFLAGS="$CFLAGS"
      dnl Include -Werror in the compiler options, because without -Werror
