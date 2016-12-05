@@ -51,7 +51,7 @@ static NTSTATUS OvsCreateNewNBLsFromMultipleNBs(
                     PNET_BUFFER_LIST *curNbl,
                     PNET_BUFFER_LIST *nextNbl);
 
-__inline VOID
+VOID
 OvsInitCompletionList(OvsCompletionList *completionList,
                       POVS_SWITCH_CONTEXT switchContext,
                       ULONG sendCompleteFlags)
@@ -64,7 +64,7 @@ OvsInitCompletionList(OvsCompletionList *completionList,
 }
 
 /* Utility function used to complete an NBL. */
-__inline VOID
+VOID
 OvsAddPktCompletionList(OvsCompletionList *completionList,
                         BOOLEAN incoming,
                         NDIS_SWITCH_PORT_ID sourcePort,
