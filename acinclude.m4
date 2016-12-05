@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -784,7 +784,15 @@ AC_DEFUN([_OVS_CHECK_CC_OPTION], [dnl
      dnl    0
      dnl    %
      CFLAGS="$CFLAGS $WERROR $1"
-     AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,)], [if test -s conftest.err && grep "unrecognized option" conftest.err; then ovs_cv_name[]=no; else ovs_cv_name[]=yes; fi], [ovs_cv_name[]=no])
+     AC_COMPILE_IFELSE(
+       [AC_LANG_SOURCE([int x;])],
+       [if test -s conftest.err && grep "unrecognized option" conftest.err
+        then
+          ovs_cv_name[]=no
+        else
+          ovs_cv_name[]=yes
+        fi],
+       [ovs_cv_name[]=no])
      CFLAGS="$ovs_save_CFLAGS"])
   if test $ovs_cv_name = yes; then
     m4_if([$2], [], [:], [$2])
