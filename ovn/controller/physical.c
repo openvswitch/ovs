@@ -153,6 +153,136 @@ get_localnet_port(struct hmap *local_datapaths, int64_t tunnel_key)
     return ld ? ld->localnet_port : NULL;
 }
 
+/* Datapath zone IDs for connection tracking and NAT */
+struct zone_ids {
+    int ct;                     /* MFF_LOG_CT_ZONE. */
+    int dnat;                   /* MFF_LOG_DNAT_ZONE. */
+    int snat;                   /* MFF_LOG_SNAT_ZONE. */
+};
+
+static struct zone_ids
+get_zone_ids(const struct sbrec_port_binding *binding,
+             const struct simap *ct_zones)
+{
+    struct zone_ids zone_ids;
+
+    zone_ids.ct = simap_get(ct_zones, binding->logical_port);
+
+    const struct uuid *key = &binding->datapath->header_.uuid;
+
+    char *dnat = alloc_nat_zone_key(key, "dnat");
+    zone_ids.dnat = simap_get(ct_zones, dnat);
+    free(dnat);
+
+    char *snat = alloc_nat_zone_key(key, "snat");
+    zone_ids.snat = simap_get(ct_zones, snat);
+    free(snat);
+
+    return zone_ids;
+}
+
+static void
+put_local_common_flows(uint32_t dp_key, uint32_t port_key,
+                       bool nested_container, const struct zone_ids *zone_ids,
+                       struct ofpbuf *ofpacts_p, struct hmap *flow_table)
+{
+    struct match match;
+
+    /* Table 33, priority 100.
+     * =======================
+     *
+     * Implements output to local hypervisor.  Each flow matches a
+     * logical output port on the local hypervisor, and resubmits to
+     * table 34.
+     */
+
+    match_init_catchall(&match);
+    ofpbuf_clear(ofpacts_p);
+
+    /* Match MFF_LOG_DATAPATH, MFF_LOG_OUTPORT. */
+    match_set_metadata(&match, htonll(dp_key));
+    match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
+
+    if (zone_ids) {
+        if (zone_ids->ct) {
+            put_load(zone_ids->ct, MFF_LOG_CT_ZONE, 0, 32, ofpacts_p);
+        }
+        if (zone_ids->dnat) {
+            put_load(zone_ids->dnat, MFF_LOG_DNAT_ZONE, 0, 32, ofpacts_p);
+        }
+        if (zone_ids->snat) {
+            put_load(zone_ids->snat, MFF_LOG_SNAT_ZONE, 0, 32, ofpacts_p);
+        }
+    }
+
+    /* Resubmit to table 34. */
+    put_resubmit(OFTABLE_CHECK_LOOPBACK, ofpacts_p);
+    ofctrl_add_flow(flow_table, OFTABLE_LOCAL_OUTPUT, 100,
+                    &match, ofpacts_p);
+
+    /* Table 34, Priority 100.
+     * =======================
+     *
+     * Drop packets whose logical inport and outport are the same
+     * and the MLF_ALLOW_LOOPBACK flag is not set. */
+    match_init_catchall(&match);
+    ofpbuf_clear(ofpacts_p);
+    match_set_metadata(&match, htonll(dp_key));
+    match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
+                         0, MLF_ALLOW_LOOPBACK);
+    match_set_reg(&match, MFF_LOG_INPORT - MFF_REG0, port_key);
+    match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
+    ofctrl_add_flow(flow_table, OFTABLE_CHECK_LOOPBACK, 100,
+                    &match, ofpacts_p);
+
+    /* Table 64, Priority 100.
+     * =======================
+     *
+     * If the packet is supposed to hair-pin because the "loopback"
+     * flag is set (or if the destination is a nested container),
+     * temporarily set the in_port to zero, resubmit to
+     * table 65 for logical-to-physical translation, then restore
+     * the port number. */
+    match_init_catchall(&match);
+    ofpbuf_clear(ofpacts_p);
+    match_set_metadata(&match, htonll(dp_key));
+    match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
+    if (!nested_container) {
+        match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
+                             MLF_ALLOW_LOOPBACK, MLF_ALLOW_LOOPBACK);
+    }
+
+    put_stack(MFF_IN_PORT, ofpact_put_STACK_PUSH(ofpacts_p));
+    put_load(0, MFF_IN_PORT, 0, 16, ofpacts_p);
+    put_resubmit(OFTABLE_LOG_TO_PHY, ofpacts_p);
+    put_stack(MFF_IN_PORT, ofpact_put_STACK_POP(ofpacts_p));
+    ofctrl_add_flow(flow_table, OFTABLE_SAVE_INPORT, 100, &match, ofpacts_p);
+}
+
+static void
+load_logical_ingress_metadata(const struct sbrec_port_binding *binding,
+                              const struct zone_ids *zone_ids,
+                              struct ofpbuf *ofpacts_p)
+{
+    if (zone_ids) {
+        if (zone_ids->ct) {
+            put_load(zone_ids->ct, MFF_LOG_CT_ZONE, 0, 32, ofpacts_p);
+        }
+        if (zone_ids->dnat) {
+            put_load(zone_ids->dnat, MFF_LOG_DNAT_ZONE, 0, 32, ofpacts_p);
+        }
+        if (zone_ids->snat) {
+            put_load(zone_ids->snat, MFF_LOG_SNAT_ZONE, 0, 32, ofpacts_p);
+        }
+    }
+
+    /* Set MFF_LOG_DATAPATH and MFF_LOG_INPORT. */
+    uint32_t dp_key = binding->datapath->tunnel_key;
+    uint32_t port_key = binding->tunnel_key;
+    put_load(dp_key, MFF_LOG_DATAPATH, 0, 64, ofpacts_p);
+    put_load(port_key, MFF_LOG_INPORT, 0, 32, ofpacts_p);
+}
+
 static void
 consider_port_binding(enum mf_field_id mff_ovn_geneve,
                       const struct simap *ct_zones,
@@ -237,7 +367,6 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
 
     struct match match;
     if (!is_remote) {
-        int zone_id = simap_get(ct_zones, binding->logical_port);
         /* Packets that arrive from a vif can belong to a VM or
          * to a container located inside that VM. Packets that
          * arrive from containers have a tag (vlan) associated with them.
@@ -280,30 +409,8 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
          * as we're going to remove this with ofpbuf_pull() later. */
         uint32_t ofpacts_orig_size = ofpacts_p->size;
 
-        if (zone_id) {
-            put_load(zone_id, MFF_LOG_CT_ZONE, 0, 32, ofpacts_p);
-        }
-
-        int zone_id_dnat, zone_id_snat;
-        const struct uuid *key = &binding->datapath->header_.uuid;
-        char *dnat = alloc_nat_zone_key(key, "dnat");
-        char *snat = alloc_nat_zone_key(key, "snat");
-
-        zone_id_dnat = simap_get(ct_zones, dnat);
-        if (zone_id_dnat) {
-            put_load(zone_id_dnat, MFF_LOG_DNAT_ZONE, 0, 32, ofpacts_p);
-        }
-        free(dnat);
-
-        zone_id_snat = simap_get(ct_zones, snat);
-        if (zone_id_snat) {
-            put_load(zone_id_snat, MFF_LOG_SNAT_ZONE, 0, 32, ofpacts_p);
-        }
-        free(snat);
-
-        /* Set MFF_LOG_DATAPATH and MFF_LOG_INPORT. */
-        put_load(dp_key, MFF_LOG_DATAPATH, 0, 64, ofpacts_p);
-        put_load(port_key, MFF_LOG_INPORT, 0, 32, ofpacts_p);
+        struct zone_ids zone_ids = get_zone_ids(binding, ct_zones);
+        load_logical_ingress_metadata(binding, &zone_ids, ofpacts_p);
 
         /* Resubmit to first logical ingress pipeline table. */
         put_resubmit(OFTABLE_LOG_INGRESS_PIPELINE, ofpacts_p);
@@ -321,74 +428,8 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
             ofctrl_add_flow(flow_table, 0, 100, &match, ofpacts_p);
         }
 
-        /* Table 33, priority 100.
-         * =======================
-         *
-         * Implements output to local hypervisor.  Each flow matches a
-         * logical output port on the local hypervisor, and resubmits to
-         * table 34.
-         */
-
-        match_init_catchall(&match);
-        ofpbuf_clear(ofpacts_p);
-
-        /* Match MFF_LOG_DATAPATH, MFF_LOG_OUTPORT. */
-        match_set_metadata(&match, htonll(dp_key));
-        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
-
-        if (zone_id) {
-            put_load(zone_id, MFF_LOG_CT_ZONE, 0, 32, ofpacts_p);
-        }
-        if (zone_id_dnat) {
-            put_load(zone_id_dnat, MFF_LOG_DNAT_ZONE, 0, 32, ofpacts_p);
-        }
-        if (zone_id_snat) {
-            put_load(zone_id_snat, MFF_LOG_SNAT_ZONE, 0, 32, ofpacts_p);
-        }
-
-        /* Resubmit to table 34. */
-        put_resubmit(OFTABLE_CHECK_LOOPBACK, ofpacts_p);
-        ofctrl_add_flow(flow_table, OFTABLE_LOCAL_OUTPUT, 100,
-                        &match, ofpacts_p);
-
-        /* Table 34, Priority 100.
-         * =======================
-         *
-         * Drop packets whose logical inport and outport are the same
-         * and the MLF_ALLOW_LOOPBACK flag is not set. */
-        match_init_catchall(&match);
-        ofpbuf_clear(ofpacts_p);
-        match_set_metadata(&match, htonll(dp_key));
-        match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
-                             0, MLF_ALLOW_LOOPBACK);
-        match_set_reg(&match, MFF_LOG_INPORT - MFF_REG0, port_key);
-        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
-        ofctrl_add_flow(flow_table, OFTABLE_CHECK_LOOPBACK, 100,
-                        &match, ofpacts_p);
-
-        /* Table 64, Priority 100.
-         * =======================
-         *
-         * If the packet is supposed to hair-pin because the "loopback"
-         * flag is set (or if the destination is a nested container),
-         * temporarily set the in_port to zero, resubmit to
-         * table 65 for logical-to-physical translation, then restore
-         * the port number. */
-        match_init_catchall(&match);
-        ofpbuf_clear(ofpacts_p);
-        match_set_metadata(&match, htonll(dp_key));
-        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
-        if (!nested_container) {
-            match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
-                                 MLF_ALLOW_LOOPBACK, MLF_ALLOW_LOOPBACK);
-        }
-
-        put_stack(MFF_IN_PORT, ofpact_put_STACK_PUSH(ofpacts_p));
-        put_load(0, MFF_IN_PORT, 0, 16, ofpacts_p);
-        put_resubmit(OFTABLE_LOG_TO_PHY, ofpacts_p);
-        put_stack(MFF_IN_PORT, ofpact_put_STACK_POP(ofpacts_p));
-        ofctrl_add_flow(flow_table, OFTABLE_SAVE_INPORT, 100,
-                        &match, ofpacts_p);
+        put_local_common_flows(dp_key, port_key, nested_container, &zone_ids,
+                               ofpacts_p, flow_table);
 
         /* Table 65, Priority 100.
          * =======================
