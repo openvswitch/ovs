@@ -130,6 +130,7 @@ Geoffrey Wossum                 gwossum@acm.org
 Gianluca Merlo                  gianluca.merlo@gmail.com
 Giuseppe Lettieri               g.lettieri@iet.unipi.it
 Glen Gibb                       grg@stanford.edu
+Guoshuai Li                     ligs@dtdream.com
 Guolin Yang                     gyang@nicira.com
 Guru Chaitanya Perakam          gperakam@Brocade.com
 Gurucharan Shetty               guru@ovn.org

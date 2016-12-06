@@ -342,7 +342,6 @@ start)          ovsdb_server_start;;
 stop)           ovsdb_server_stop;;
 promote)        ovsdb_server_promote;;
 demote)         ovsdb_server_demote;;
-start)          ovsdb_server_start;;
 notify)         ovsdb_server_notify;;
 meta-data)      ovsdb_server_metadata;;
 validate-all)   ovsdb_server_validate;;
