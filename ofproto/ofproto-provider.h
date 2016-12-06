@@ -365,8 +365,8 @@ struct rule {
     struct ovs_refcount ref_count;
 
     /* A "flow cookie" is the OpenFlow name for a 64-bit value associated with
-     * a flow.. */
-    ovs_be64 flow_cookie OVS_GUARDED;
+     * a flow. */
+    const ovs_be64 flow_cookie; /* Immutable once rule is constructed. */
     struct hindex_node cookie_node OVS_GUARDED_BY(ofproto_mutex);
 
     enum ofputil_flow_mod_flags flags OVS_GUARDED;

@@ -4859,7 +4859,7 @@ ofproto_rule_create(struct ofproto *ofproto, struct cls_rule *cr,
 
     ovs_mutex_init(&rule->mutex);
     ovs_mutex_lock(&rule->mutex);
-    rule->flow_cookie = new_cookie;
+    *CONST_CAST(ovs_be64 *, &rule->flow_cookie) = new_cookie;
     rule->created = rule->modified = time_msec();
     rule->idle_timeout = idle_timeout;
     rule->hard_timeout = hard_timeout;
@@ -5098,7 +5098,8 @@ replace_rule_start(struct ofproto *ofproto, struct ofproto_flow_mod *ofm,
                 new_rule->created = old_rule->created;
             }
             if (!change_cookie) {
-                new_rule->flow_cookie = old_rule->flow_cookie;
+                *CONST_CAST(ovs_be64 *, &new_rule->flow_cookie)
+                    = old_rule->flow_cookie;
             }
             ovs_mutex_unlock(&old_rule->mutex);
             ovs_mutex_unlock(&new_rule->mutex);
