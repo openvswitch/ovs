@@ -501,7 +501,7 @@ connmgr_get_controller_info(struct connmgr *mgr, struct shash *info)
 
             for (i = 0; i < N_SCHEDULERS; i++) {
                 if (ofconn->schedulers[i]) {
-                    const char *name = i ? "miss" : "action";
+                    const char *name = i == 0 ? "miss" : "action";
                     struct pinsched_stats stats;
 
                     pinsched_get_stats(ofconn->schedulers[i], &stats);
