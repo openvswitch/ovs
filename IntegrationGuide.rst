@@ -225,7 +225,8 @@ one active and multiple backup servers for OVN databases.
     pcs resource create ovndb_servers ocf:ovn:ovndb-servers \
          master_ip=x.x.x.x \
          ovn_ctl=<path of the ovn-ctl script> \
-         op monitor interval="10s"
+         op monitor interval="10s" \
+         op monitor role=Master interval="15s"
 
     pcs resource master ovndb_servers-master ovndb_servers \
         meta notify="true"
