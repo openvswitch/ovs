@@ -35,7 +35,7 @@ windows_installer: all
 	cp -f $(top_srcdir)/datapath-windows/x64/Win8.1$(VSTUDIO_CONFIG)/package/ovsext.cat windows/ovs-windows-installer/Driver/Win8.1/ovsext.cat
 	cp -f $(top_srcdir)/datapath-windows/x64/Win8.1$(VSTUDIO_CONFIG)/package/ovsext.inf windows/ovs-windows-installer/Driver/Win8.1/ovsext.inf
 	cp -f $(top_srcdir)/datapath-windows/x64/Win8.1$(VSTUDIO_CONFIG)/package/ovsext.sys windows/ovs-windows-installer/Driver/Win8.1/ovsext.sys
-	MSBuild.exe windows/ovs-windows-installer.sln /target:Build /property:Configuration="Release"
+	MSBuild.exe windows/ovs-windows-installer.sln /target:Build /property:Configuration="Release" /property:Version="$(PACKAGE_VERSION)"
 
 EXTRA_DIST += \
 	windows/.gitignore \
