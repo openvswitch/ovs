@@ -1023,7 +1023,7 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
     ovs_mutex_unlock(&dev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
 
-    if (!strlen(dev->vhost_id)) {
+    if (!vhost_id[0]) {
         goto out;
     }
 
