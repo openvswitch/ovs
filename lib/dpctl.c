@@ -1780,8 +1780,12 @@ dpctl_unixctl_register(void)
     for (p = all_commands; p->name != NULL; p++) {
         if (strcmp(p->name, "help")) {
             char *cmd_name = xasprintf("dpctl/%s", p->name);
-            unixctl_command_register(cmd_name, "", p->min_args, p->max_args,
-                                     dpctl_unixctl_handler, p->handler);
+            unixctl_command_register(cmd_name,
+                                     p->usage,
+                                     p->min_args,
+                                     p->max_args,
+                                     dpctl_unixctl_handler,
+                                     p->handler);
             free(cmd_name);
         }
     }
