@@ -10,16 +10,17 @@
     <OutputType>Package</OutputType>
     <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' AND '$(MSBuildExtensionsPath32)' != '' ">$(MSBuildExtensionsPath32)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
     <WixTargetsPath Condition=" '$(WixTargetsPath)' == '' ">$(MSBuildExtensionsPath)\Microsoft\WiX\v3.x\Wix.targets</WixTargetsPath>
+    <Version Condition=" '$(Version)' == '' ">1.0.0.0</Version>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <OutputPath>bin\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
-    <DefineConstants>Debug</DefineConstants>
+    <DefineConstants>Debug;Version=$(Version)</DefineConstants>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <OutputPath>bin\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>obj\$(Configuration)\</IntermediateOutputPath>
-    <DefineConstants>BinariesPath=Binaries;SymbolsPath=Symbols;</DefineConstants>
+    <DefineConstants>BinariesPath=Binaries;SymbolsPath=Symbols;Version=$(Version)</DefineConstants>
     <SuppressAllWarnings>False</SuppressAllWarnings>
     <Pedantic>False</Pedantic>
     <SuppressSpecificWarnings>1076;</SuppressSpecificWarnings>
@@ -30,7 +31,7 @@
     <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
-    <DefineConstants>BinariesPath=Binaries;SymbolsPath=Symbols;</DefineConstants>
+    <DefineConstants>BinariesPath=Binaries;SymbolsPath=Symbols;Version=$(Version)</DefineConstants>
     <SuppressAllWarnings>False</SuppressAllWarnings>
     <Pedantic>False</Pedantic>
     <SuppressSpecificWarnings>1076;</SuppressSpecificWarnings>
@@ -38,12 +39,12 @@
     <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
-    <DefineConstants>Debug</DefineConstants>
+    <DefineConstants>Debug;Version=$(Version)</DefineConstants>
     <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
-    <DefineConstants>BinariesPath=Binaries;SymbolsPath=Symbols;</DefineConstants>
+    <DefineConstants>BinariesPath=Binaries;SymbolsPath=Symbols;Version=$(Version)</DefineConstants>
     <SuppressAllWarnings>False</SuppressAllWarnings>
     <Pedantic>False</Pedantic>
     <SuppressSpecificWarnings>1076;</SuppressSpecificWarnings>
@@ -51,12 +52,12 @@
     <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x64' ">
-    <DefineConstants>Debug</DefineConstants>
+    <DefineConstants>Debug;Version=$(Version)</DefineConstants>
     <OutputPath>bin\$(Platform)\$(Configuration)\</OutputPath>
     <IntermediateOutputPath>obj\$(Platform)\$(Configuration)\</IntermediateOutputPath>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x64' ">
-    <DefineConstants>BinariesPath=Binaries;SymbolsPath=Symbols;</DefineConstants>
+    <DefineConstants>BinariesPath=Binaries;SymbolsPath=Symbols;Version=$(Version)</DefineConstants>
     <SuppressAllWarnings>False</SuppressAllWarnings>
     <Pedantic>False</Pedantic>
     <SuppressSpecificWarnings>1076;</SuppressSpecificWarnings>

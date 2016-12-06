@@ -18,7 +18,7 @@
 -->
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
      xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
-  <Product Id="{0DF60ED5-6C22-49A0-913E-77412D35C400}" Name="Open vSwitch for Hyper-V" Language="1033" Version="1.0.0.0"
+  <Product Id="{0DF60ED5-6C22-49A0-913E-77412D35C400}" Name="Open vSwitch for Hyper-V" Language="1033" Version="$(var.Version)"
            Manufacturer="Open vSwitch" UpgradeCode="da802b12-433d-4742-a7ae-783aa0c48222">
     <Package InstallerVersion="405" Compressed="yes" InstallScope="perMachine" InstallPrivileges="elevated" Platform="x64" />
 
