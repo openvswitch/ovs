@@ -274,6 +274,8 @@ struct ofproto_dpif {
 /* All existing ofproto_dpif instances, indexed by ->up.name. */
 extern struct hmap all_ofproto_dpifs;
 
+struct ofproto_dpif *ofproto_dpif_lookup(const char *name);
+
 ovs_version_t ofproto_dpif_get_tables_version(struct ofproto_dpif *);
 
 void ofproto_dpif_credit_table_stats(struct ofproto_dpif *, uint8_t table_id,
