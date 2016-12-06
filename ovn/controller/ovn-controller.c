@@ -505,8 +505,10 @@ main(int argc, char *argv[])
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
 
+        struct ldatapath_index ldatapaths;
         struct lport_index lports;
         struct mcgroup_index mcgroups;
+        ldatapath_index_init(&ldatapaths, ctx.ovnsb_idl);
         lport_index_init(&lports, ctx.ovnsb_idl);
         mcgroup_index_init(&mcgroups, ctx.ovnsb_idl);
 
@@ -554,6 +556,8 @@ main(int argc, char *argv[])
 
         mcgroup_index_destroy(&mcgroups);
         lport_index_destroy(&lports);
+        ldatapath_index_destroy(&ldatapaths);
+
         sset_destroy(&all_lports);
 
         struct local_datapath *cur_node, *next_node;

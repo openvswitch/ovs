@@ -22,6 +22,68 @@
 
 VLOG_DEFINE_THIS_MODULE(lport);
 
+static struct ldatapath *ldatapath_lookup_by_key__(
+    const struct ldatapath_index *, uint32_t dp_key);
+
+void
+ldatapath_index_init(struct ldatapath_index *ldatapaths,
+                     struct ovsdb_idl *ovnsb_idl)
+{
+    hmap_init(&ldatapaths->by_key);
+
+    const struct sbrec_port_binding *pb;
+    SBREC_PORT_BINDING_FOR_EACH (pb, ovnsb_idl) {
+        if (!pb->datapath) {
+            continue;
+        }
+        uint32_t dp_key = pb->datapath->tunnel_key;
+        struct ldatapath *ld = ldatapath_lookup_by_key__(ldatapaths, dp_key);
+        if (!ld) {
+            ld = xzalloc(sizeof *ld);
+            hmap_insert(&ldatapaths->by_key, &ld->by_key_node, dp_key);
+            ld->db = pb->datapath;
+        }
+
+        if (ld->n_lports >= ld->allocated_lports) {
+            ld->lports = x2nrealloc(ld->lports, &ld->allocated_lports,
+                                    sizeof *ld->lports);
+        }
+        ld->lports[ld->n_lports++] = pb;
+    }
+}
+
+void
+ldatapath_index_destroy(struct ldatapath_index *ldatapaths)
+{
+    if (!ldatapaths) {
+        return;
+    }
+
+    struct ldatapath *ld, *ld_next;
+    HMAP_FOR_EACH_SAFE (ld, ld_next, by_key_node, &ldatapaths->by_key) {
+        hmap_remove(&ldatapaths->by_key, &ld->by_key_node);
+        free(ld->lports);
+        free(ld);
+    }
+    hmap_destroy(&ldatapaths->by_key);
+}
+
+static struct ldatapath *ldatapath_lookup_by_key__(
+    const struct ldatapath_index *ldatapaths, uint32_t dp_key)
+{
+    struct ldatapath *ld;
+    HMAP_FOR_EACH_WITH_HASH (ld, by_key_node, dp_key, &ldatapaths->by_key) {
+        return ld;
+    }
+    return NULL;
+}
+
+const struct ldatapath *ldatapath_lookup_by_key(
+    const struct ldatapath_index *ldatapaths, uint32_t dp_key)
+{
+    return ldatapath_lookup_by_key__(ldatapaths, dp_key);
+}
+
 /* A logical port. */
 struct lport {
     struct hmap_node name_node; /* Index by name. */
