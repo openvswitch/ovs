@@ -435,6 +435,7 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
             flow->tunnel.ipv6_dst = in6addr_any;
         }
     }
+    flow->tunnel.tp_dst = cfg->dst_port;
     flow->pkt_mark |= tnl_port->match.pkt_mark;
     wc->masks.pkt_mark |= tnl_port->match.pkt_mark;
 
