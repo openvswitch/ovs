@@ -395,8 +395,8 @@ udpif_init(void)
                                  upcall_unixctl_disable_ufid, NULL);
         unixctl_command_register("upcall/enable-ufid", "", 0, 0,
                                  upcall_unixctl_enable_ufid, NULL);
-        unixctl_command_register("upcall/set-flow-limit", "", 1, 1,
-                                 upcall_unixctl_set_flow_limit, NULL);
+        unixctl_command_register("upcall/set-flow-limit", "flow-limit-number",
+                                 1, 1, upcall_unixctl_set_flow_limit, NULL);
         unixctl_command_register("revalidator/wait", "", 0, 0,
                                  upcall_unixctl_dump_wait, NULL);
         unixctl_command_register("revalidator/purge", "", 0, 0,
