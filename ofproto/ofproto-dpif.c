@@ -26,7 +26,6 @@
 #include "coverage.h"
 #include "cfm.h"
 #include "ct-dpif.h"
-#include "dpif.h"
 #include "fail-open.h"
 #include "guarded-list.h"
 #include "hmapx.h"
@@ -80,53 +79,10 @@ COVERAGE_DEFINE(packet_in_overflow);
 
 struct flow_miss;
 
-struct rule_dpif {
-    struct rule up;
-
-    /* These statistics:
-     *
-     *   - Do include packets and bytes from datapath flows which have not
-     *   recently been processed by a revalidator. */
-    struct ovs_mutex stats_mutex;
-    struct dpif_flow_stats stats OVS_GUARDED;
-
-   /* In non-NULL, will point to a new rule (for which a reference is held) to
-    * which all the stats updates should be forwarded. This exists only
-    * transitionally when flows are replaced.
-    *
-    * Protected by stats_mutex.  If both 'rule->stats_mutex' and
-    * 'rule->new_rule->stats_mutex' must be held together, acquire them in that
-    * order, */
-    struct rule_dpif *new_rule OVS_GUARDED;
-    bool forward_counts OVS_GUARDED;   /* Forward counts? 'used' time will be
-                                        * forwarded in all cases. */
-
-    /* If non-zero then the recirculation id that has
-     * been allocated for use with this rule.
-     * The recirculation id and associated internal flow should
-     * be freed when the rule is freed */
-    uint32_t recirc_id;
-};
-
-/* RULE_CAST() depends on this. */
-BUILD_ASSERT_DECL(offsetof(struct rule_dpif, up) == 0);
-
 static void rule_get_stats(struct rule *, uint64_t *packets, uint64_t *bytes,
                            long long int *used);
 static struct rule_dpif *rule_dpif_cast(const struct rule *);
 static void rule_expire(struct rule_dpif *, long long now);
-
-struct group_dpif {
-    struct ofgroup up;
-
-    /* These statistics:
-     *
-     *   - Do include packets and bytes from datapath flows which have not
-     *   recently been processed by a revalidator. */
-    struct ovs_mutex stats_mutex;
-    uint64_t packet_count OVS_GUARDED;  /* Number of packets received. */
-    uint64_t byte_count OVS_GUARDED;    /* Number of bytes received. */
-};
 
 struct ofbundle {
     struct hmap_node hmap_node; /* In struct ofproto's "bundles" hmap. */
@@ -216,24 +172,6 @@ static int set_cfm(struct ofport *, const struct cfm_settings *);
 static int set_lldp(struct ofport *ofport_, const struct smap *cfg);
 static void ofport_update_peer(struct ofport_dpif *);
 
-/* Reasons that we might need to revalidate every datapath flow, and
- * corresponding coverage counters.
- *
- * A value of 0 means that there is no need to revalidate.
- *
- * It would be nice to have some cleaner way to integrate with coverage
- * counters, but with only a few reasons I guess this is good enough for
- * now. */
-enum revalidate_reason {
-    REV_RECONFIGURE = 1,       /* Switch configuration changed. */
-    REV_STP,                   /* Spanning tree protocol port status change. */
-    REV_RSTP,                  /* RSTP port status change. */
-    REV_BOND,                  /* Bonding changed. */
-    REV_PORT_TOGGLED,          /* Port enabled or disabled by CFM, LACP, ...*/
-    REV_FLOW_TABLE,            /* Flow table changed. */
-    REV_MAC_LEARNING,          /* Mac learning changed. */
-    REV_MCAST_SNOOPING,        /* Multicast snooping changed. */
-};
 COVERAGE_DEFINE(rev_reconfigure);
 COVERAGE_DEFINE(rev_stp);
 COVERAGE_DEFINE(rev_rstp);
@@ -243,89 +181,11 @@ COVERAGE_DEFINE(rev_flow_table);
 COVERAGE_DEFINE(rev_mac_learning);
 COVERAGE_DEFINE(rev_mcast_snooping);
 
-/* All datapaths of a given type share a single dpif backer instance. */
-struct dpif_backer {
-    char *type;
-    int refcount;
-    struct dpif *dpif;
-    struct udpif *udpif;
-
-    struct ovs_rwlock odp_to_ofport_lock;
-    struct hmap odp_to_ofport_map OVS_GUARDED; /* Contains "struct ofport"s. */
-
-    struct simap tnl_backers;      /* Set of dpif ports backing tunnels. */
-
-    enum revalidate_reason need_revalidate; /* Revalidate all flows. */
-
-    bool recv_set_enable; /* Enables or disables receiving packets. */
-
-    /* Version string of the datapath stored in OVSDB. */
-    char *dp_version_string;
-
-    /* Datapath feature support. */
-    struct dpif_backer_support support;
-    struct atomic_count tnl_count;
-};
-
 /* All existing ofproto_backer instances, indexed by ofproto->up.type. */
-static struct shash all_dpif_backers = SHASH_INITIALIZER(&all_dpif_backers);
-
-struct ofproto_dpif {
-    struct hmap_node all_ofproto_dpifs_node; /* In 'all_ofproto_dpifs'. */
-    struct ofproto up;
-    struct dpif_backer *backer;
-
-    /* Unique identifier for this instantiation of this bridge in this running
-     * process.  */
-    struct uuid uuid;
-
-    ATOMIC(ovs_version_t) tables_version;  /* For classifier lookups. */
-
-    uint64_t dump_seq; /* Last read of udpif_dump_seq(). */
-
-    /* Special OpenFlow rules. */
-    struct rule_dpif *miss_rule; /* Sends flow table misses to controller. */
-    struct rule_dpif *no_packet_in_rule; /* Drops flow table misses. */
-    struct rule_dpif *drop_frags_rule; /* Used in OFPUTIL_FRAG_DROP mode. */
-
-    /* Bridging. */
-    struct netflow *netflow;
-    struct dpif_sflow *sflow;
-    struct dpif_ipfix *ipfix;
-    struct hmap bundles;        /* Contains "struct ofbundle"s. */
-    struct mac_learning *ml;
-    struct mcast_snooping *ms;
-    bool has_bonded_bundles;
-    bool lacp_enabled;
-    struct mbridge *mbridge;
-
-    struct ovs_mutex stats_mutex;
-    struct netdev_stats stats OVS_GUARDED; /* To account packets generated and
-                                            * consumed in userspace. */
-
-    /* Spanning tree. */
-    struct stp *stp;
-    long long int stp_last_tick;
-
-    /* Rapid Spanning Tree. */
-    struct rstp *rstp;
-    long long int rstp_last_tick;
-
-    /* Ports. */
-    struct sset ports;             /* Set of standard port names. */
-    struct sset ghost_ports;       /* Ports with no datapath port. */
-    struct sset port_poll_set;     /* Queued names for port_poll() reply. */
-    int port_poll_errno;           /* Last errno for port_poll() reply. */
-    uint64_t change_seq;           /* Connectivity status changes. */
-
-    /* Work queues. */
-    struct guarded_list ams;      /* Contains "struct ofproto_async_msgs"s. */
-    struct seq *ams_seq;          /* For notifying 'ams' reception. */
-    uint64_t ams_seqno;
-};
+struct shash all_dpif_backers = SHASH_INITIALIZER(&all_dpif_backers);
 
 /* All existing ofproto_dpif instances, indexed by ->up.name. */
-static struct hmap all_ofproto_dpifs = HMAP_INITIALIZER(&all_ofproto_dpifs);
+struct hmap all_ofproto_dpifs = HMAP_INITIALIZER(&all_ofproto_dpifs);
 
 static bool ofproto_use_tnl_push_pop = true;
 static void ofproto_unixctl_init(void);
@@ -335,18 +195,6 @@ ofproto_dpif_cast(const struct ofproto *ofproto)
 {
     ovs_assert(ofproto->ofproto_class == &ofproto_dpif_class);
     return CONTAINER_OF(ofproto, struct ofproto_dpif, up);
-}
-
-bool
-ofproto_dpif_get_enable_ufid(const struct dpif_backer *backer)
-{
-    return backer->support.ufid;
-}
-
-struct dpif_backer_support *
-ofproto_dpif_get_support(const struct ofproto_dpif *ofproto)
-{
-    return &ofproto->backer->support;
 }
 
 static void ofproto_trace(struct ofproto_dpif *, struct flow *,
@@ -359,12 +207,6 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 /* Initial mappings of port to bridge mappings. */
 static struct shash init_ofp_ports = SHASH_INITIALIZER(&init_ofp_ports);
-
-const struct tun_table *
-ofproto_dpif_get_tun_tab(const struct ofproto_dpif *ofproto)
-{
-    return ofproto_get_tun_tab(&ofproto->up);
-}
 
 /* Initialize 'ofm' for a learn action.  If the rule already existed, reference
  * to that rule is taken, otherwise a new rule is created.  'ofm' keeps the
@@ -478,12 +320,6 @@ lookup_ofproto_dpif_by_port_name(const char *name)
     }
 
     return NULL;
-}
-
-bool
-ofproto_dpif_backer_enabled(struct dpif_backer* backer)
-{
-    return backer->recv_set_enable;
 }
 
 static int
@@ -3862,28 +3698,6 @@ rule_dpif_credit_stats(struct rule_dpif *rule,
     ovs_mutex_unlock(&rule->stats_mutex);
 }
 
-ovs_be64
-rule_dpif_get_flow_cookie(const struct rule_dpif *rule)
-    OVS_REQUIRES(rule->up.mutex)
-{
-    return rule->up.flow_cookie;
-}
-
-void
-rule_dpif_reduce_timeouts(struct rule_dpif *rule, uint16_t idle_timeout,
-                     uint16_t hard_timeout)
-{
-    ofproto_rule_reduce_timeouts(&rule->up, idle_timeout, hard_timeout);
-}
-
-/* Returns 'rule''s actions.  The returned actions are RCU-protected, and can
- * be read until the calling thread quiesces. */
-const struct rule_actions *
-rule_dpif_get_actions(const struct rule_dpif *rule)
-{
-    return rule_get_actions(&rule->up);
-}
-
 /* Sets 'rule''s recirculation id. */
 static void
 rule_dpif_set_recirc_id(struct rule_dpif *rule, uint32_t id)
@@ -4120,7 +3934,7 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
     ovs_u128 ct_label;
     uint32_t ct_mark;
 
-    support = &ofproto_dpif_get_support(ofproto)->odp;
+    support = &ofproto->backer->support.odp;
     ct_state = MINIFLOW_GET_U16(flow, ct_state);
     if (support->ct_state && support->ct_zone && support->ct_mark
         && support->ct_label && support->ct_state_nat) {
@@ -4169,7 +3983,7 @@ check_actions(const struct ofproto_dpif *ofproto,
         }
 
         ct = CONTAINER_OF(ofpact, struct ofpact_conntrack, ofpact);
-        support = &ofproto_dpif_get_support(ofproto)->odp;
+        support = &ofproto->backer->support.odp;
 
         if (!support->ct_state) {
             report_unsupported_ct(NULL);
@@ -4250,7 +4064,7 @@ rule_insert(struct rule *rule_, struct rule *old_rule_, bool forward_counts)
 
         /* Take a reference to the new rule, and refer all stats updates from
          * the old rule to the new rule. */
-        rule_dpif_ref(rule);
+        ofproto_rule_ref(&rule->up);
 
         ovs_mutex_lock(&old_rule->stats_mutex);
         ovs_mutex_lock(&rule->stats_mutex);
@@ -4278,7 +4092,7 @@ rule_destruct(struct rule *rule_)
     ovs_mutex_destroy(&rule->stats_mutex);
     /* Release reference to the new rule, if any. */
     if (rule->new_rule) {
-        rule_dpif_unref(rule->new_rule);
+        ofproto_rule_unref(&rule->new_rule->up);
     }
     if (rule->recirc_id) {
         recirc_free_id(rule->recirc_id);
@@ -4524,14 +4338,11 @@ static void
 group_construct_stats(struct group_dpif *group)
     OVS_REQUIRES(group->stats_mutex)
 {
-    struct ofputil_bucket *bucket;
-    const struct ovs_list *buckets;
-
     group->packet_count = 0;
     group->byte_count = 0;
 
-    buckets = group_dpif_get_buckets(group, NULL);
-    LIST_FOR_EACH (bucket, list_node, buckets) {
+    struct ofputil_bucket *bucket;
+    LIST_FOR_EACH (bucket, list_node, &group->up.buckets) {
         bucket->stats.packet_count = 0;
         bucket->stats.byte_count = 0;
     }
@@ -4549,10 +4360,8 @@ group_dpif_credit_stats(struct group_dpif *group,
         bucket->stats.packet_count += stats->n_packets;
         bucket->stats.byte_count += stats->n_bytes;
     } else { /* Credit to all buckets */
-        const struct ovs_list *buckets;
-
-        buckets = group_dpif_get_buckets(group, NULL);
-        LIST_FOR_EACH (bucket, list_node, buckets) {
+        struct ofputil_bucket *bucket;
+        LIST_FOR_EACH (bucket, list_node, &group->up.buckets) {
             bucket->stats.packet_count += stats->n_packets;
             bucket->stats.byte_count += stats->n_bytes;
         }
@@ -4583,17 +4392,14 @@ static enum ofperr
 group_get_stats(const struct ofgroup *group_, struct ofputil_group_stats *ogs)
 {
     struct group_dpif *group = group_dpif_cast(group_);
-    struct ofputil_bucket *bucket;
-    const struct ovs_list *buckets;
-    struct bucket_counter *bucket_stats;
 
     ovs_mutex_lock(&group->stats_mutex);
     ogs->packet_count = group->packet_count;
     ogs->byte_count = group->byte_count;
 
-    buckets = group_dpif_get_buckets(group, NULL);
-    bucket_stats = ogs->bucket_stats;
-    LIST_FOR_EACH (bucket, list_node, buckets) {
+    struct bucket_counter *bucket_stats = ogs->bucket_stats;
+    struct ofputil_bucket *bucket;
+    LIST_FOR_EACH (bucket, list_node, &group->up.buckets) {
         bucket_stats->packet_count = bucket->stats.packet_count;
         bucket_stats->byte_count = bucket->stats.byte_count;
         bucket_stats++;
@@ -4605,7 +4411,7 @@ group_get_stats(const struct ofgroup *group_, struct ofputil_group_stats *ogs)
 
 /* If the group exists, this function increments the groups's reference count.
  *
- * Make sure to call group_dpif_unref() after no longer needing to maintain
+ * Make sure to call ofproto_group_unref() after no longer needing to maintain
  * a reference to the group. */
 struct group_dpif *
 group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
@@ -4614,27 +4420,6 @@ group_dpif_lookup(struct ofproto_dpif *ofproto, uint32_t group_id,
     struct ofgroup *ofgroup = ofproto_group_lookup(&ofproto->up, group_id,
                                                    version, take_ref);
     return ofgroup ? group_dpif_cast(ofgroup) : NULL;
-}
-
-const struct ovs_list *
-group_dpif_get_buckets(const struct group_dpif *group, uint32_t *n_buckets)
-{
-    if (n_buckets) {
-        *n_buckets = group->up.n_buckets;
-    }
-    return &group->up.buckets;
-}
-
-enum ofp11_group_type
-group_dpif_get_type(const struct group_dpif *group)
-{
-    return group->up.type;
-}
-
-const char *
-group_dpif_get_selection_method(const struct group_dpif *group)
-{
-    return group->up.props.selection_method;
 }
 
 /* Sends 'packet' out 'ofport'. If 'port' is a tunnel and that tunnel type
@@ -4655,18 +4440,6 @@ ofproto_dpif_send_packet(const struct ofport_dpif *ofport, bool oam,
     ofproto->stats.tx_bytes += dp_packet_size(packet);
     ovs_mutex_unlock(&ofproto->stats_mutex);
     return error;
-}
-
-uint64_t
-group_dpif_get_selection_method_param(const struct group_dpif *group)
-{
-    return group->up.props.selection_method_param;
-}
-
-const struct field_array *
-group_dpif_get_fields(const struct group_dpif *group)
-{
-    return &group->up.props.fields;
 }
 
 /* Return the version string of the datapath that backs up
@@ -4973,7 +4746,7 @@ trace_format_rule(struct ofproto *ofproto, struct ds *result, int level,
     cls_rule_format(&rule->up.cr, ofproto_get_tun_tab(ofproto), result);
     ds_put_char(result, '\n');
 
-    actions = rule_dpif_get_actions(rule);
+    actions = rule->up.actions;
 
     ds_put_char_multiple(result, '\t', level);
     ds_put_cstr(result, "OpenFlow actions=");
@@ -5190,7 +4963,7 @@ parse_flow_and_packet(int argc, const char *argv[],
             goto exit;
         }
 
-        flow->tunnel.metadata.tab = ofproto_dpif_get_tun_tab(*ofprotop);
+        flow->tunnel.metadata.tab = ofproto_get_tun_tab(&(*ofprotop)->up);
 
         /* Convert Geneve options to OpenFlow format now. This isn't actually
          * required in order to get the right results since the ofproto xlate
@@ -5224,7 +4997,7 @@ parse_flow_and_packet(int argc, const char *argv[],
         }
 
         err = parse_ofp_exact_flow(flow, NULL,
-                                   ofproto_dpif_get_tun_tab(*ofprotop),
+                                   ofproto_get_tun_tab(&(*ofprotop)->up),
                                    argv[argc - 1], NULL);
         if (err) {
             m_err = xasprintf("Bad openflow flow syntax: %s", err);
@@ -5734,16 +5507,7 @@ ofproto_unixctl_init(void)
     unixctl_command_register("dpif/disable-truncate", "", 0, 0,
                              disable_datapath_truncate, NULL);
 }
-
-/* Returns true if 'table' is the table used for internal rules,
- * false otherwise. */
-bool
-table_is_internal(uint8_t table_id)
-{
-    return table_id == TBL_INTERNAL;
-}
 
-
 static odp_port_t
 ofp_port_to_odp_port(const struct ofproto_dpif *ofproto, ofp_port_t ofp_port)
 {
@@ -5849,12 +5613,6 @@ ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
     }
 
     return 0;
-}
-
-const struct uuid *
-ofproto_dpif_get_uuid(const struct ofproto_dpif *ofproto)
-{
-    return &ofproto->uuid;
 }
 
 const struct ofproto_class ofproto_dpif_class = {

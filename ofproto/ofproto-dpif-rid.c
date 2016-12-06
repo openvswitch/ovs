@@ -285,7 +285,7 @@ recirc_alloc_id(struct ofproto_dpif *ofproto)
     tunnel.ipv6_dst = in6addr_any;
     struct frozen_state state = {
         .table_id = TBL_INTERNAL,
-        .ofproto_uuid = *ofproto_dpif_get_uuid(ofproto),
+        .ofproto_uuid = ofproto->uuid,
         .metadata = { .tunnel = &tunnel, .in_port = OFPP_NONE },
     };
     return recirc_alloc_id__(&state, frozen_state_hash(&state))->id;
@@ -338,9 +338,8 @@ recirc_free_ofproto(struct ofproto_dpif *ofproto, const char *ofproto_name)
 {
     struct recirc_id_node *n;
 
-    const struct uuid *ofproto_uuid = ofproto_dpif_get_uuid(ofproto);
     CMAP_FOR_EACH (n, metadata_node, &metadata_map) {
-        if (uuid_equals(&n->state.ofproto_uuid, ofproto_uuid)) {
+        if (uuid_equals(&n->state.ofproto_uuid, &ofproto->uuid)) {
             VLOG_ERR("recirc_id %"PRIu32
                      " left allocated when ofproto (%s)"
                      " is destructed", n->id, ofproto_name);

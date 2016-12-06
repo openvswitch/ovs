@@ -541,7 +541,7 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
                 "handler", udpif_upcall_handler, handler);
         }
 
-        enable_ufid = ofproto_dpif_get_enable_ufid(udpif->backer);
+        enable_ufid = udpif->backer->support.ufid;
         atomic_init(&udpif->enable_ufid, enable_ufid);
         dpif_enable_upcall(udpif->dpif);
 
@@ -567,7 +567,7 @@ udpif_start_threads(struct udpif *udpif, size_t n_handlers,
 static void
 udpif_pause_revalidators(struct udpif *udpif)
 {
-    if (ofproto_dpif_backer_enabled(udpif->backer)) {
+    if (udpif->backer->recv_set_enable) {
         latch_set(&udpif->pause_latch);
         ovs_barrier_block(&udpif->pause_barrier);
     }
@@ -578,7 +578,7 @@ udpif_pause_revalidators(struct udpif *udpif)
 static void
 udpif_resume_revalidators(struct udpif *udpif)
 {
-    if (ofproto_dpif_backer_enabled(udpif->backer)) {
+    if (udpif->backer->recv_set_enable) {
         latch_poll(&udpif->pause_latch);
         ovs_barrier_block(&udpif->pause_barrier);
     }
@@ -700,7 +700,7 @@ udpif_use_ufid(struct udpif *udpif)
     bool enable;
 
     atomic_read_relaxed(&enable_ufid, &enable);
-    return enable && ofproto_dpif_get_enable_ufid(udpif->backer);
+    return enable && udpif->backer->support.ufid;
 }
 
 
@@ -1507,7 +1507,7 @@ ukey_create_from_upcall(struct upcall *upcall, struct flow_wildcards *wc)
         .mask = wc ? &wc->masks : NULL,
     };
 
-    odp_parms.support = ofproto_dpif_get_support(upcall->ofproto)->odp;
+    odp_parms.support = upcall->ofproto->backer->support.odp;
     if (upcall->key_len) {
         ofpbuf_use_const(&keybuf, upcall->key, upcall->key_len);
     } else {

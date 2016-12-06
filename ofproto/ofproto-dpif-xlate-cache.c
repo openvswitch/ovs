@@ -139,8 +139,8 @@ xlate_push_stats_entry(struct xc_entry *entry,
         break;
     case XC_FIN_TIMEOUT:
         if (stats->tcp_flags & (TCP_FIN | TCP_RST)) {
-            rule_dpif_reduce_timeouts(entry->fin.rule, entry->fin.idle,
-                                      entry->fin.hard);
+            ofproto_rule_reduce_timeouts(&entry->fin.rule->up, entry->fin.idle,
+                                         entry->fin.hard);
         }
         break;
     case XC_GROUP:
@@ -208,7 +208,7 @@ xlate_cache_clear_entry(struct xc_entry *entry)
     case XC_TABLE:
         break;
     case XC_RULE:
-        rule_dpif_unref(entry->rule);
+        ofproto_rule_unref(&entry->rule->up);
         break;
     case XC_BOND:
         free(entry->bond.flow);
@@ -234,7 +234,7 @@ xlate_cache_clear_entry(struct xc_entry *entry)
          * has already released it's reference above. */
         break;
     case XC_GROUP:
-        group_dpif_unref(entry->group.group);
+        ofproto_group_unref(&entry->group.group->up);
         break;
     case XC_TNL_NEIGH:
         break;
