@@ -227,7 +227,7 @@ OVS_VSWITCHD_START([dnl
     add-port br0 p2 -- set Interface p2 type=dummy -- \
     set Interface p2 ofport_request=2
 ])
-AT_CHECK([ovs-ofctl add-flow br0 'actions=bundle(eth_src,50,hrw,ofport,slaves:1,2)'])
+AT_CHECK([ovs-ofctl add-flow br0 'actions=bundle(eth_src,50,active_backup,ofport,slaves:1,2)'])
 AT_CHECK([ovs-ofctl mod-port br0 p1 up])
 AT_CHECK([ovs-ofctl mod-port br0 p2 up])
 AT_CHECK([ovs-appctl ofproto/trace br0 'in_port=LOCAL,dl_src=50:54:00:00:00:05,dl_dst=50:54:00:00:00:06'], [0], [stdout])
