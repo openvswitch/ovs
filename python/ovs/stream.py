@@ -451,6 +451,8 @@ class SSLStream(Stream):
             self.socket.do_handshake()
         except SSL.WantReadError:
             return errno.EAGAIN
+        except SSL.SysCallError as e:
+            return ovs.socket_util.get_exception_errno(e)
 
         return 0
 
@@ -459,6 +461,10 @@ class SSLStream(Stream):
             return super(SSLStream, self).recv(n)
         except SSL.WantReadError:
             return (errno.EAGAIN, "")
+        except SSL.SysCallError as e:
+            return (ovs.socket_util.get_exception_errno(e), "")
+        except SSL.ZeroReturnError:
+            return (0, "")
 
     def send(self, buf):
         try:
