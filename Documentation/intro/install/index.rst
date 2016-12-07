@@ -60,6 +60,14 @@ provided below.
    fedora
    rhel
 
+Upgrades
+--------
+
+.. toctree::
+   :maxdepth: 2
+
+   ovn-upgrades
+
 Others
 ------
 
