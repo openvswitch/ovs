@@ -3197,7 +3197,7 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
         struct ofpbuf key;
         struct odp_flow_key_parms odp_parms = {
             .flow = flow,
-            .mask = &wc->masks,
+            .mask = wc ? &wc->masks : NULL,
             .odp_in_port = flow->in_port.odp_port,
             .support = dp_netdev_support,
         };
