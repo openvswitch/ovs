@@ -240,8 +240,8 @@ Whenever the active server dies, pacemaker is responsible to promote one of
 the backup servers to be active. Both ovn-controller and ovn-northd needs the
 ip-address at which the active server is listening. With pacemaker changing the
 node at which the active server is run, it is not efficient to instruct all the
-ovn-controllers and the ovn-northd to listen to the latest active server's ip-
-address
+ovn-controllers and the ovn-northd to listen to the latest active server's
+ip-address.
 
 This problem can be solved by using a native ocf resource agent
 `ocf:heartbeat:IPaddr2`. The IPAddr2 resource agent is just a resource with an
