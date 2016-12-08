@@ -55,6 +55,8 @@ class PcapReader(object):
         if len(packet) != incl_len:
             raise PcapException("end of file reading pcap packet data")
         return packet
+
+
 argv0 = sys.argv[0]
 
 
@@ -69,6 +71,7 @@ The following options are also available:
   -V, --version               display version information\
 """ % {'argv0': argv0})
     sys.exit(0)
+
 
 if __name__ == "__main__":
     try:

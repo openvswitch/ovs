@@ -67,6 +67,7 @@ def _install_tap_linux(tap_name):
         *(['ip', 'link', 'set', 'dev', str(tap_name), 'up']))
     pipe.wait()
 
+
 _make_taps['linux'] = _install_tap_linux
 _make_taps['linux2'] = _install_tap_linux
 
