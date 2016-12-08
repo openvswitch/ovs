@@ -385,13 +385,13 @@ compose_out_dhcpv6_opts(struct ofpbuf *userdata,
             return false;
         }
 
-        uint8_t *userdata_opt_data = ofpbuf_try_pull(userdata,
-                                                     userdata_opt->len);
+        size_t size = ntohs(userdata_opt->size);
+        uint8_t *userdata_opt_data = ofpbuf_try_pull(userdata, size);
         if (!userdata_opt_data) {
             return false;
         }
 
-        switch (userdata_opt->code) {
+        switch (ntohs(userdata_opt->opt_code)) {
         case DHCPV6_OPT_SERVER_ID_CODE:
         {
             /* The Server Identifier option carries a DUID
@@ -405,7 +405,7 @@ compose_out_dhcpv6_opts(struct ofpbuf *userdata,
                 out_dhcpv6_opts, sizeof *opt_server_id);
 
             opt_server_id->opt.code = htons(DHCPV6_OPT_SERVER_ID_CODE);
-            opt_server_id->opt.len = htons(userdata_opt->len + 4);
+            opt_server_id->opt.len = htons(size + 4);
             opt_server_id->duid_type = htons(DHCPV6_DUID_LL);
             opt_server_id->hw_type = htons(DHCPV6_HW_TYPE_ETH);
             memcpy(&opt_server_id->mac, userdata_opt_data,
@@ -415,7 +415,7 @@ compose_out_dhcpv6_opts(struct ofpbuf *userdata,
 
         case DHCPV6_OPT_IA_ADDR_CODE:
         {
-            if (userdata_opt->len != sizeof(struct in6_addr)) {
+            if (size != sizeof(struct in6_addr)) {
                 return false;
             }
 
@@ -444,9 +444,8 @@ compose_out_dhcpv6_opts(struct ofpbuf *userdata,
             struct dhcpv6_opt_ia_addr *opt_ia_addr = ofpbuf_put_zeros(
                 out_dhcpv6_opts, sizeof *opt_ia_addr);
             opt_ia_addr->opt.code = htons(DHCPV6_OPT_IA_ADDR_CODE);
-            opt_ia_addr->opt.len = htons(userdata_opt->len + 8);
-            memcpy(opt_ia_addr->ipv6.s6_addr, userdata_opt_data,
-                   userdata_opt->len);
+            opt_ia_addr->opt.len = htons(size + 8);
+            memcpy(opt_ia_addr->ipv6.s6_addr, userdata_opt_data, size);
             opt_ia_addr->t1 = OVS_BE32_MAX;
             opt_ia_addr->t2 = OVS_BE32_MAX;
             break;
@@ -457,8 +456,8 @@ compose_out_dhcpv6_opts(struct ofpbuf *userdata,
             struct dhcpv6_opt_header *opt_dns = ofpbuf_put_zeros(
                 out_dhcpv6_opts, sizeof *opt_dns);
             opt_dns->code = htons(DHCPV6_OPT_DNS_SERVER_CODE);
-            opt_dns->len = htons(userdata_opt->len);
-            ofpbuf_put(out_dhcpv6_opts, userdata_opt_data, userdata_opt->len);
+            opt_dns->len = htons(size);
+            ofpbuf_put(out_dhcpv6_opts, userdata_opt_data, size);
             break;
         }
 
@@ -467,11 +466,10 @@ compose_out_dhcpv6_opts(struct ofpbuf *userdata,
             struct dhcpv6_opt_header *opt_dsl = ofpbuf_put_zeros(
                 out_dhcpv6_opts, sizeof *opt_dsl);
             opt_dsl->code = htons(DHCPV6_OPT_DOMAIN_SEARCH_CODE);
-            opt_dsl->len = htons(userdata_opt->len + 2);
-            uint8_t *data = ofpbuf_put_zeros(out_dhcpv6_opts,
-                                              userdata_opt->len + 2);
-            *data = userdata_opt->len;
-            memcpy(data + 1, userdata_opt_data, userdata_opt->len);
+            opt_dsl->len = htons(size + 2);
+            uint8_t *data = ofpbuf_put_zeros(out_dhcpv6_opts, size + 2);
+            *data = size;
+            memcpy(data + 1, userdata_opt_data, size);
             break;
         }
 

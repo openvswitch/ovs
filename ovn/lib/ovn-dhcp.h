@@ -109,9 +109,10 @@ dhcp_opts_destroy(struct hmap *dhcp_opts)
     hmap_destroy(dhcp_opts);
 }
 
+/* Used in the OpenFlow PACKET_IN userdata */
 struct dhcp_opt6_header {
-    uint16_t code;
-    uint16_t len;
+    ovs_be16 opt_code;
+    ovs_be16 size;
 };
 
 /* Supported DHCPv6 Message Types */

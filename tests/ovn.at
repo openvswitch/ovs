@@ -950,17 +950,17 @@ put_nd(inport, nd.target, nd.sll);
 
 # put_dhcpv6_opts
 reg1[0] = put_dhcpv6_opts(ia_addr = ae70::4, server_id = 00:00:00:00:10:02);
-    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.05.00.10.00.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.04.02.00.06.00.00.00.00.00.10.02,pause)
+    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.00.05.00.10.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.04.00.02.00.06.00.00.00.00.10.02,pause)
 reg1[0] = put_dhcpv6_opts();
     encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40,pause)
 reg1[0] = put_dhcpv6_opts(dns_server={ae70::1,ae70::2});
     formats as reg1[0] = put_dhcpv6_opts(dns_server = {ae70::1, ae70::2});
-    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.17.00.20.00.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.01.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.02,pause)
+    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.00.17.00.20.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.01.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.02,pause)
 reg1[0] = put_dhcpv6_opts(server_id=12:34:56:78:9a:bc, dns_server={ae70::1,ae89::2});
     formats as reg1[0] = put_dhcpv6_opts(server_id = 12:34:56:78:9a:bc, dns_server = {ae70::1, ae89::2});
-    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.02.00.06.00.12.34.56.78.9a.bc.17.00.20.00.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.01.ae.89.00.00.00.00.00.00.00.00.00.00.00.00.00.02,pause)
+    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.00.02.00.06.12.34.56.78.9a.bc.00.17.00.20.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.01.ae.89.00.00.00.00.00.00.00.00.00.00.00.00.00.02,pause)
 reg1[0] = put_dhcpv6_opts(domain_search = "ovn.org");
-    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.18.00.07.00.6f.76.6e.2e.6f.72.67,pause)
+    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.00.18.00.07.6f.76.6e.2e.6f.72.67,pause)
 reg1[0] = put_dhcpv6_opts(x = 1.2.3.4);
     Syntax error at `x' expecting DHCPv6 option name.
 reg1[0] = put_dhcpv6_opts(ia_addr=ae70::4, "hi");
