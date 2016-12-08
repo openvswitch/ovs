@@ -44,7 +44,11 @@ csum_continue(uint32_t partial, const void *data_, size_t n)
         partial = csum_add16(partial, get_unaligned_be16(data));
     }
     if (n) {
+#ifdef WORDS_BIGENDIAN
+        partial += (*(uint8_t *) data) << 8;
+#else
         partial += *(uint8_t *) data;
+#endif
     }
     return partial;
 }
