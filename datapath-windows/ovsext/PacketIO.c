@@ -193,7 +193,6 @@ OvsAppendNativeForwardedPacket(POVS_SWITCH_CONTEXT switchContext,
     NDIS_STRING filterReason;
 
     *nativeNbls = curNbl;
-    nativeNbls = &(curNbl->Next);
 
     ctx = OvsInitExternalNBLContext(switchContext, curNbl, isRecv);
     if (ctx == NULL) {
