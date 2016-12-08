@@ -663,6 +663,9 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
 {
     NDIS_STATUS status = NDIS_STATUS_FAILURE;
     PNET_BUFFER_LIST newNbl = NULL;
+    UINT32 srcVportNo;
+    NDIS_SWITCH_NIC_INDEX srcNicIndex;
+    NDIS_SWITCH_PORT_ID srcPortId;
 
     /*
      * Setup the source port to be the internal port to as to facilitate the
@@ -675,11 +678,15 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
             L"OVS-Dropped since either internal or external port is absent");
         return NDIS_STATUS_FAILURE;
     }
-    ovsFwdCtx->srcVportNo =
-        ((POVS_VPORT_ENTRY)ovsFwdCtx->switchContext->internalVport)->portNo;
 
-    ovsFwdCtx->fwdDetail->SourcePortId = ovsFwdCtx->switchContext->internalPortId;
-    ovsFwdCtx->fwdDetail->SourceNicIndex =
+    /*
+     * Save the 'srcVportNo', 'srcPortId', 'srcNicIndex' so that
+     * this can be applied to the new NBL later on.
+     */
+    srcVportNo =
+        ((POVS_VPORT_ENTRY)ovsFwdCtx->switchContext->internalVport)->portNo;
+    srcPortId = ovsFwdCtx->switchContext->internalPortId;
+    srcNicIndex =
         ((POVS_VPORT_ENTRY)ovsFwdCtx->switchContext->internalVport)->nicIndex;
 
     /* Do the encap. Encap function does not consume the NBL. */
@@ -715,12 +722,20 @@ OvsTunnelPortTx(OvsForwardingContext *ovsFwdCtx)
         ASSERT(newNbl);
         OvsCompleteNBLForwardingCtx(ovsFwdCtx,
                                     L"Complete after cloning NBL for encapsulation");
+        status = OvsInitForwardingCtx(ovsFwdCtx, ovsFwdCtx->switchContext,
+                                      newNbl, srcVportNo, 0,
+                                      NET_BUFFER_LIST_SWITCH_FORWARDING_DETAIL(newNbl),
+                                      ovsFwdCtx->completionList,
+                                      &ovsFwdCtx->layers, FALSE);
         ovsFwdCtx->curNbl = newNbl;
+        /* Update the forwarding detail for the new NBL */
+        ovsFwdCtx->fwdDetail->SourcePortId = srcPortId;
+        ovsFwdCtx->fwdDetail->SourceNicIndex = srcNicIndex;
         status = OvsDoFlowLookupOutput(ovsFwdCtx);
         ASSERT(ovsFwdCtx->curNbl == NULL);
     } else {
         /*
-        * XXX: Temporary freeing of the packet until we register a
+         * XXX: Temporary freeing of the packet until we register a
          * callback to IP helper.
          */
         OvsCompleteNBLForwardingCtx(ovsFwdCtx,
