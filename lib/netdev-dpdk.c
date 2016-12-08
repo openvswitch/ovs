@@ -1084,7 +1084,7 @@ dpdk_set_rxq_config(struct netdev_dpdk *dev, const struct smap *args)
 {
     int new_n_rxq;
 
-    new_n_rxq = MAX(smap_get_int(args, "n_rxq", dev->requested_n_rxq), 1);
+    new_n_rxq = MAX(smap_get_int(args, "n_rxq", NR_QUEUE), 1);
     if (new_n_rxq != dev->requested_n_rxq) {
         dev->requested_n_rxq = new_n_rxq;
         netdev_request_reconfigure(&dev->up);
