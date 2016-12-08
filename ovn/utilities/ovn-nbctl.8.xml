@@ -720,6 +720,42 @@
       </dd>
     </dl>
 
+    <h1>Remote Connectivity Commands</h1>
+    <dl>
+      <dt><code>get-connection</code></dt>
+      <dd>
+      Prints the configured connection(s).
+      </dd>
+
+      <dt><code>del-connection</code></dt>
+      <dd>
+      Deletes the configured connection(s).
+      </dd>
+
+      <dt><code>set-connection</code> <var>target</var>...</dt>
+      <dd>
+      Sets the configured manager target or targets.
+      </dd>
+    </dl>
+
+    <h1>SSL Configuration Commands</h1>
+    <dl>
+      <dt><code>get-ssl</code></dt>
+      <dd>
+      Prints the SSL configuration.
+      </dd>
+
+      <dt><code>del-ssl</code></dt>
+      <dd>
+      Deletes the current SSL configuration.
+      </dd>
+
+      <dt>[<code>--bootstrap</code>] <code>set-ssl</code> <var>private-key</var> <var>certificate</var> <var>ca-cert</var></dt>
+      <dd>
+      Sets the SSL configuration.
+      </dd>
+    </dl>
+
     <h1>Options</h1>
 
     <dl>

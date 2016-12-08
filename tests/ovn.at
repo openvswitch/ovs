@@ -5616,6 +5616,58 @@ AT_CHECK([ovn-sbctl --db=ssl:127.0.0.1:$TCP_PORT \
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 AT_CLEANUP
 
+AT_SETUP([ovn -- nb connection/ssl commands])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+AT_SKIP_IF([test "$HAVE_OPENSSL" = no])
+PKIDIR="$(cd $abs_top_builddir/tests && pwd)"
+AT_SKIP_IF([expr "$PKIDIR" : ".*[ 	'\"
+\\]"])
+
+: > .$1.db.~lock~
+ovsdb-tool create ovn-nb.db "$abs_top_srcdir"/ovn/ovn-nb.ovsschema
+
+# Start nb db server using db connection/ssl entries (unpopulated initially)
+start_daemon ovsdb-server --remote=punix:ovnnb_db.sock \
+                          --remote=db:OVN_Northbound,NB_Global,connections \
+                          --private-key=db:OVN_Northbound,SSL,private_key \
+                          --certificate=db:OVN_Northbound,SSL,certificate \
+                          --ca-cert=db:OVN_Northbound,SSL,ca_cert \
+                          ovn-nb.db
+
+# Populate SSL configuration entries in nb db
+AT_CHECK(
+    [ovn-nbctl set-ssl $PKIDIR/testpki-privkey.pem \
+                       $PKIDIR/testpki-cert.pem \
+                       $PKIDIR/testpki-cacert.pem], [0], [stdout], [ignore])
+
+# Populate a passive SSL connection in nb db
+AT_CHECK([ovn-nbctl set-connection pssl:0:127.0.0.1], [0], [stdout], [ignore])
+
+PARSE_LISTENING_PORT([ovsdb-server.log], [TCP_PORT])
+
+# Verify SSL connetivity to nb db server
+AT_CHECK([ovn-nbctl --db=ssl:127.0.0.1:$TCP_PORT \
+                    --private-key=$PKIDIR/testpki-privkey.pem \
+                    --certificate=$PKIDIR/testpki-cert.pem \
+                    --ca-cert=$PKIDIR/testpki-cacert.pem \
+          list NB_Global],
+         [0], [stdout], [ignore])
+AT_CHECK([ovn-nbctl --db=ssl:127.0.0.1:$TCP_PORT \
+                    --private-key=$PKIDIR/testpki-privkey.pem \
+                    --certificate=$PKIDIR/testpki-cert.pem \
+                    --ca-cert=$PKIDIR/testpki-cacert.pem \
+          list Connection],
+         [0], [stdout], [ignore])
+AT_CHECK([ovn-nbctl --db=ssl:127.0.0.1:$TCP_PORT \
+                    --private-key=$PKIDIR/testpki-privkey.pem \
+                    --certificate=$PKIDIR/testpki-cert.pem \
+                    --ca-cert=$PKIDIR/testpki-cacert.pem \
+          get-connection],
+         [0], [stdout], [ignore])
+
+OVS_APP_EXIT_AND_WAIT([ovsdb-server])
+AT_CLEANUP
+
 AT_SETUP([ovn -- nested containers])
 ovn_start
 
