@@ -54,6 +54,8 @@ hardware or even supervisor privilege on your system.  Instead, we will use a
 script called ``ovs-sandbox``, which accompanies the tutorial, that constructs
 a software simulated network environment based on Open vSwitch.
 
+.. TODO(stephenfin): Update installation guide link when this is moved.
+
 You can use ``ovs-sandbox`` three ways:
 
 * If you have already installed Open vSwitch on your system, then you should be
@@ -61,9 +63,9 @@ You can use ``ovs-sandbox`` three ways:
 
 * If you have not installed Open vSwitch (and you do not want to install it),
   then you can build Open vSwitch according to the instructions in the
-  `installation guide <INSTALL.rst>`__, without installing it.  Then run
-  ``./ovs-sandbox -b DIRECTORY`` from this directory, substituting the Open
-  vSwitch build directory for ``DIRECTORY``.
+  `installation guide`, without installing it.  Then run ``./ovs-sandbox -b
+  DIRECTORY`` from this directory, substituting the Open vSwitch build
+  directory for ``DIRECTORY``.
 
 * As a slight variant on the latter, you can run ``make sandbox`` from an Open
   vSwitch build directory.

@@ -31,8 +31,8 @@ OpenSSL. SSL support ensures integrity and confidentiality of the OpenFlow
 connections, increasing network security.
 
 This document describes how to configure an Open vSwitch to connect to an
-OpenFlow controller over SSL.  Refer to the `general installation guide
-<INSTALL.rst>`__ for instructions on building Open vSwitch with SSL support.
+OpenFlow controller over SSL.  Refer to :doc:`/intro/install/general`. for
+instructions on building Open vSwitch with SSL support.
 
 Open vSwitch uses TLS version 1.0 or later (TLSv1), as specified by RFC 2246,
 which is very similar to SSL version 3.0.  TLSv1 was released in January 1999,

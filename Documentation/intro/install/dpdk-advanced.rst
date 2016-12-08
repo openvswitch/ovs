@@ -40,8 +40,8 @@ Open vSwitch against the shared DPDK library.
   Minor performance loss is seen with OVS when using shared DPDK library as
   compared to static library.
 
-To build Open vSwitch using DPDK as a shared library, first refer to the `DPDK
-installation guide`_ for download instructions for DPDK and OVS.
+To build Open vSwitch using DPDK as a shared library, first refer to
+:doc:`/intro/install/dpdk` for download instructions for DPDK and OVS.
 
 Once DPDK and OVS have been downloaded, you must configure the DPDK library
 accordingly. Simply set ``CONFIG_RTE_BUILD_SHARED_LIB=y`` in
@@ -53,7 +53,7 @@ built as usual. For example::
     $ make install T=$DPDK_TARGET DESTDIR=install
 
 Once DPDK is built, export the DPDK shared library location and setup OVS as
-detailed in the `DPDK installation guide`_::
+detailed in :doc:`/intro/install/dpdk`::
 
     $ export LD_LIBRARY_PATH=$DPDK_DIR/x86_64-native-linuxapp-gcc/lib
 
@@ -345,8 +345,8 @@ OVS Testcases
 PHY-VM-PHY (vHost Loopback)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The `DPDK installation guide`_ details steps for PHY-VM-PHY loopback testcase
-and packet forwarding using DPDK testpmd application in the Guest VM. For users
+:doc:`/intro/install/dpdk` details steps for PHY-VM-PHY loopback testcase and
+packet forwarding using DPDK testpmd application in the Guest VM. For users
 wishing to do packet forwarding using kernel stack below, you need to run the
 below commands on the guest::
 
@@ -367,7 +367,7 @@ PHY-VM-PHY (IVSHMEM)
 ~~~~~~~~~~~~~~~~~~~~
 
 IVSHMEM can also be validated using the PHY-VM-PHY configuration. To begin,
-follow the steps described in the `DPDK installation guide`_ to create and
+follow the steps described in the :doc:`/intro/install/dpdk` to create and
 initialize the database, start ovs-vswitchd and add ``dpdk``-type devices to
 bridge ``br0``. Once complete, follow the below steps:
 
@@ -427,9 +427,10 @@ PHY-VM-PHY (vHost Multiqueue)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 vHost Multique functionality can also be validated using the PHY-VM-PHY
-configuration. To begin, follow the steps described in the `DPDK installation
-guide`_ to create and initialize the database, start ovs-vswitchd and add
-``dpdk``-type devices to bridge ``br0``. Once complete, follow the below steps:
+configuration. To begin, follow the steps described in
+:doc:`/intro/install/dpdk` to create and initialize the database, start
+ovs-vswitchd and add ``dpdk``-type devices to bridge ``br0``. Once complete,
+follow the below steps:
 
 1. Configure PMD and RXQs.
 
@@ -672,7 +673,7 @@ itself.
 
 2. Instantiate the VM
 
-   - Copy the XML configuration described in the `DPDK installation guide`_.
+   - Copy the XML configuration described in :doc:`/intro/install/dpdk`
 
    - Start the VM::
 
@@ -935,5 +936,3 @@ Bug Reporting
 -------------
 
 Report problems to bugs@openvswitch.org.
-
-.. _DPDK installation guide: INSTALL.DPDK.rst

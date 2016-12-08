@@ -22,7 +22,7 @@
       Avoid deeper levels because they do not render well.
 
 ===================================
-Open vSwitch Without Kernel Support
+Open vSwitch without Kernel Support
 ===================================
 
 Open vSwitch can operate, at a cost in performance, entirely in userspace,
@@ -42,9 +42,9 @@ Building and Installing
 -----------------------
 
 The requirements and procedure for building, installing, and configuring Open
-vSwitch are the same as those given in the `installation guide
-<INSTALL.rst>`__.  You may omit configuring, building, and installing the
-kernel module, and the related requirements.
+vSwitch are the same as those given in :doc:`general`. You may omit
+configuring, building, and installing the kernel module, and the related
+requirements.
 
 On Linux, the userspace switch additionally requires the kernel TUN/TAP driver
 to be available, either built into the kernel or loaded as a module.  If you
@@ -100,7 +100,7 @@ configuration might help.  See sysctl(7).::
 
     $ sysctl -w net.inet.ip.checkinterface=1
 
-Bug Reporting
--------------
+Reporting Bugs
+--------------
 
-Please report problems to bugs@openvswitch.org.
+Report problems to bugs@openvswitch.org.

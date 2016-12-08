@@ -21,17 +21,16 @@
 
       Avoid deeper levels because they do not render well.
 
-================================
-How to Use Open vSwitch with KVM
-================================
+=====================
+Open vSwitch with KVM
+=====================
 
 This document describes how to use Open vSwitch with the Kernel-based Virtual
 Machine (KVM).
 
 .. note::
 
-  This document assumes that you have read and followed the `installation guide
-  <INSTALL.rst>`__ to get Open vSwitch setup on your Linux system.
+  This document assumes that you have Open vSwitch set up on a Linux system.
 
 Setup
 -----
@@ -64,9 +63,9 @@ Create the following two files and store them in known locations. For example::
     /sbin/ifconfig $1 0.0.0.0 down
     ovs-vsctl del-port ${switch} $1
 
-The basic usage of Open vSwitch is described at the end of the `installation
-guide <INSTALL.rst>`__. If you haven't already, create a bridge named ``br0``
-with the following command::
+The basic usage of Open vSwitch is described at the end of
+:doc:`/intro/install/general`. If you haven't already, create a bridge named
+``br0`` with the following command::
 
     $ ovs-vsctl add-br br0
 

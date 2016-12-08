@@ -873,11 +873,12 @@ of what the resulting OpenFlow flows look like.
 Container Ports
 ---------------
 
+.. TODO(stephenfin): Update Docker link when this is moved.
+
 OVN supports containers running directly on the hypervisors and running
 containers inside VMs. This example shows how OVN supports network
 virtualization to containers when run inside VMs. Details about how to use
-docker containers in OVS can be found in the `Docker installlation guide
-<../INSTALL.Docker.rst>`__.
+docker containers in OVS can be found in the `Docker installlation guide`.
 
 To support container traffic created inside a VM and to distinguish network
 traffic coming from different container vifs, for each container a logical port

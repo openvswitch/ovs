@@ -30,5 +30,38 @@ Installing Open vSwitch
 A collection of guides detailing how to install Open vSwitch in a variety of
 different environments and using different configurations.
 
+Installation from Source
+------------------------
+
+.. TODO(stephenfin): The DPDK-ADVANCED doc is mostly usage material. The
+   install related instructions should be moved to the main doc, while the
+   rest should be moved to howto and topic docs
+
+.. TODO(stephenfin): Based on the title alone, the NetBSD doc should probably
+   be merged into the general install doc
+
 .. toctree::
    :maxdepth: 2
+
+   general
+   netbsd
+   windows
+   xenserver
+   userspace
+   dpdk
+   dpdk-advanced
+   bash-completion
+
+Installation from Packages
+--------------------------
+
+Open vSwitch is packaged on a variety of distributions. The tooling required to
+build these packages is included in the Open vSwitch tree. The instructions are
+provided below.
+
+.. toctree::
+   :maxdepth: 2
+
+   debian
+   fedora
+   rhel

@@ -37,8 +37,7 @@ or later.
 .. note::
 
   You must build and install Open vSwitch before proceeding with the below
-  guide. Refer to the `installation guide <INSTALL.rst>`__ for more
-  information.
+  guide. Refer to :doc:`/intro/install/index` for more information.
 
 Setup
 -----
@@ -162,10 +161,10 @@ The "overlay" mode
      Open vSwitch Python modules are installed. If you installed Open vSwitch
      Python modules via the Debian package of ``python-openvswitch`` or via pip
      by running ``pip install ovs``, you do not need to specify the PATH. If
-     you installed it by following the instructions in the `installation guide
-     <INSTALL.rst>`__, then you should specify the PATH. In this case, the PATH
-     depends on the options passed to ``./configure``. It is usually either
-     ``/usr/share/openvswitch/python`` or
+     you installed it by following the instructions in
+     :doc:`/intro/install/general`, then you should specify the PATH. In this
+     case, the PATH depends on the options passed to ``./configure``. It is
+     usually either ``/usr/share/openvswitch/python`` or
      ``/usr/local/share/openvswitch/python``
 
 Docker has inbuilt primitives that closely match OVN's logical switches and
@@ -290,7 +289,7 @@ The "underlay" mode
    Depending on your VM, you can make the above step persistent across reboots.
    For example, if your VM is Debian/Ubuntu-based, read
    `openvswitch-switch.README.Debian` found in `debian` folder. If your VM is
-   RHEL-based, refer to the `RHEL install guide <../../INSTALL.RHEL.rst>`__.
+   RHEL-based, refer to :doc:`/intro/install/rhel`.
 
 3. Start the Open vSwitch network driver
 

@@ -35,8 +35,8 @@ userspace.
 Build requirements
 ------------------
 
-In addition to the requirements described in the `installation guide
-<INSTALL.rst>`__, building Open vSwitch with DPDK will require the following:
+In addition to the requirements described in :doc:`general`, building Open
+vSwitch with DPDK will require the following:
 
 - DPDK 16.11
 
@@ -53,9 +53,10 @@ In addition to the requirements described in the `installation guide
   present, it will be necessary to upgrade your kernel or build a custom kernel
   with these flags enabled.
 
+.. TODO(stephenfin): drag the below information in from dpdk-advanced
+
 Detailed system requirements can be found at `DPDK requirements`_, while more
-detailed install information can be found in the `advanced installation guide
-<INSTALL.DPDK-ADVANCED.rst>`__.
+detailed install information can be found in :doc:`dpdk-advanced`.
 
 .. _DPDK supported NIC: http://dpdk.org/doc/nics
 .. _DPDK requirements: http://dpdk.org/doc/guides/linux_gsg/sys_reqs.html
@@ -100,28 +101,25 @@ has to be configured with DPDK support (``--with-dpdk``).
 
 .. _OVS sources: http://openvswitch.org/releases/
 
-1. Ensure the standard OVS requirements, described in the `installation guide
-   <INSTALL.rst>`__, are installed.
+1. Ensure the standard OVS requirements, described in
+   :ref:`general-build-reqs`, are installed
 
-2. Bootstrap, if required, as described in the `installation guide
-   <INSTALL.rst>`__.
+2. Bootstrap, if required, as described in :ref:`general-bootstrapping`
 
 3. Configure the package using the ``--with-dpdk`` flag::
 
        $ ./configure --with-dpdk=$DPDK_BUILD
 
    where ``DPDK_BUILD`` is the path to the built DPDK library. This can be
-   skipped if DPDK library is installed in its default location.
+   skipped if DPDK library is installed in its default location
 
    .. note::
      While ``--with-dpdk`` is required, you can pass any other configuration
-     option described in the `installation guide <INSTALL.rst>`__.
+     option described in :ref:`general-configuring`.
 
-4. Build and install OVS, as described in the `installation guide
-   <INSTALL.rst>`__.
+4. Build and install OVS, as described in :ref:`general-building`
 
-Additional information can be found in the `installation guide
-<INSTALL.rst>`__.
+Additional information can be found in :doc:`general`.
 
 Setup
 -----
@@ -182,12 +180,11 @@ to the VFIO driver::
 Setup OVS
 ~~~~~~~~~
 
-Open vSwitch should be started as described in the `installation guide
-<INSTALL.rst>`__ with the exception of ovs-vswitchd, which requires some
-special configuration to enable DPDK functionality. DPDK configuration
-arguments can be passed to ovs-vswitchd via the ``other_config`` column of the
-``Open_vSwitch`` table. At a minimum, the ``dpdk-init`` option must be set to
-``true``. For example::
+Open vSwitch should be started as described in :doc:`general` with the
+exception of ovs-vswitchd, which requires some special configuration to enable
+DPDK functionality. DPDK configuration arguments can be passed to ovs-vswitchd
+via the ``other_config`` column of the ``Open_vSwitch`` table. At a minimum,
+the ``dpdk-init`` option must be set to ``true``. For example::
 
     $ export DB_SOCK=/usr/local/var/run/openvswitch/db.sock
     $ ovs-vsctl --no-wait set Open_vSwitch . other_config:dpdk-init=true
@@ -228,8 +225,7 @@ threads and pin them to cores 1,2, run::
 
     $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x6
 
-For details on using ivshmem with DPDK, refer to `the advanced installation
-guide <INSTALL.DPDK-ADVANCED.rst>`__.
+For details on using ivshmem with DPDK, refer to :doc:`dpdk-advanced`.
 
 Refer to ovs-vswitchd.conf.db(5) for additional information on configuration
 options.
@@ -338,7 +334,7 @@ DPDK 'testpmd' application can be run in the Guest VM for high speed packet
 forwarding between vhostuser ports. DPDK and testpmd application has to be
 compiled on the guest VM. Below are the steps for setting up the testpmd
 application in the VM. More information on the vhostuser ports can be found in
-the `advanced install guide <INSTALL.DPDK-ADVANCED.rst>`__.
+:doc:`dpdk-advanced`.
 
 .. note::
   Support for DPDK in the guest requires QEMU >= 2.2.0.
@@ -573,13 +569,13 @@ When you finish testing, bind the vNICs back to kernel::
       $ $DPDK_DIR/tools/dpdk-devbind.py --status
 
 .. note::
-  More information on the dpdkvhostuser ports can be found in the `advanced
-  installation guide <INSTALL.DPDK-ADVANCED.rst>`__.
+  More information on the dpdkvhostuser ports can be found in
+  :doc:`dpdk-advanced`.
 
 PHY-VM-PHY (IVSHMEM loopback)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Refer to the `advanced installation guide <INSTALL.DPDK-ADVANCED.rst>`__.
+Refer to the :doc:`dpdk-advanced`.
 
 Limitations
 ------------
@@ -598,7 +594,7 @@ Limitations
 
 .. _DPDK release notes: http://dpdk.org/doc/guides/rel_notes/release_16_11.html
 
-Bug Reporting
--------------
+Reporting Bugs
+--------------
 
-Please report problems to bugs@openvswitch.org.
+Report problems to bugs@openvswitch.org.

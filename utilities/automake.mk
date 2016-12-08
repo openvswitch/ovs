@@ -37,11 +37,9 @@ noinst_SCRIPTS += utilities/ovs-sim
 
 utilities/ovs-lib: $(top_builddir)/config.status
 
-docs += utilities/ovs-command-bashcomp.INSTALL.rst
 EXTRA_DIST += \
 	utilities/ovs-appctl-bashcomp.bash \
 	utilities/ovs-check-dead-ifs.in \
-	utilities/ovs-command-bashcomp.INSTALL.rst \
 	utilities/ovs-ctl.in \
 	utilities/ovs-dev.py \
 	utilities/ovs-docker \

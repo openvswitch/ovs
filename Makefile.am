@@ -70,21 +70,6 @@ docs = \
 	CONTRIBUTING.rst \
 	DESIGN.rst \
 	FAQ.rst \
-	INSTALL.rst \
-	INSTALL.Debian.rst \
-	INSTALL.Docker.rst \
-	INSTALL.DPDK-ADVANCED.rst \
-	INSTALL.DPDK.rst \
-	INSTALL.Fedora.rst \
-	INSTALL.KVM.rst \
-	INSTALL.Libvirt.rst \
-	INSTALL.NetBSD.rst \
-	INSTALL.RHEL.rst \
-	INSTALL.SELinux.rst \
-	INSTALL.SSL.rst \
-	INSTALL.XenServer.rst \
-	INSTALL.userspace.rst \
-	INSTALL.Windows.rst \
 	IntegrationGuide.rst \
 	MAINTAINERS.rst \
 	OPENFLOW.rst \

@@ -21,13 +21,13 @@
 
       Avoid deeper levels because they do not render well.
 
-===============================================
-How to Install Open vSwitch on Citrix XenServer
-===============================================
+================================
+Open vSwitch on Citrix XenServer
+================================
 
 This document describes how to build and install Open vSwitch on a Citrix
 XenServer host.  If you want to install Open vSwitch on a generic Linux or BSD
-host, see the `installation guide <INSTALL.rst>`__ instead.
+host, refer to :doc:`general` instead.
 
 Open vSwitch should work with XenServer 5.6.100 and later.  However, Open
 vSwitch requires Python 2.7 or later, so using Open vSwitch with XenServer 6.5
@@ -49,8 +49,8 @@ is the DDK VM available from Citrix.
 
    You cannot run this in the DDK VM, because it lacks tools that are necessary
    to bootstrap the Open vSwitch distribution.  Instead, you must run this on a
-   machine that has the tools listed in the installation guide <INSTALL.rst>`__
-   as prerequisites for building from a Git tree.
+   machine that has the tools listed in :ref:`general-install-reqs` as
+   prerequisites for building from a Git tree.
 
 2. Copy the distribution tarball into ``/usr/src/redhat/SOURCES`` inside
    the DDK VM.

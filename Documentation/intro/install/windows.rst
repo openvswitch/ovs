@@ -171,8 +171,7 @@ Possible values for ``<target type>`` are: ``Debug`` and ``Release``
   You can directly use the Visual Studio 2013 IDE to compile the kernel
   datapath.  Open the ovsext.sln file in the IDE and build the solution.
 
-Refer to the `installation guide <INSTALL.rst>` for information on additional
-configuration options.
+Refer to :doc:`general` for information on additional configuration options.
 
 .. _windows-building:
 

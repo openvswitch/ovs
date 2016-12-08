@@ -74,8 +74,8 @@ anticipated the feature set that your SELinux implementation supports.
 Installation
 ------------
 
-Refer to the `Fedora installation guide <INSTALL.Fedora.rst>`__ for
-instructions on how to build all Open vSwitch rpm packages.
+Refer to :doc:`/intro/install/fedora` for instructions on how to build all Open
+vSwitch rpm packages.
 
 Once the package is built, install it on your Linux distribution::
 
@@ -159,8 +159,8 @@ vSwitch developer mailing list:
    Implications of this are that you should use only those SELinux policy
    features that are supported by the lowest SELinux version out there.
    Typically this means that you should test your SELinux policy changes on the
-   oldest RHEL or CentOS version that this OVS version supports.  Check
-   INSTALL.Fedora.rst file to find out this.
+   oldest RHEL or CentOS version that this OVS version supports. Refer to
+   :doc:`/intro/install/fedora` to find out this.
 
 3. The SELinux policy is enforced only when state transition to
    ``openvswitch_t`` domain happens.

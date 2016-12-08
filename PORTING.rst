@@ -141,13 +141,15 @@ Porting Strategies
 After a netdev provider has been implemented for a system's network devices,
 you may choose among three basic porting strategies.
 
+.. TODO(stephenfin): Update the link to the installation guide when this is
+   moved
+
 The lowest-effort strategy is to use the "userspace switch" implementation
 built into Open vSwitch.  This ought to work, without writing any more code, as
 long as the netdev provider that you implemented supports receiving packets.
 It yields poor performance, however, because every packet passes through the
-ovs-vswitchd process.  See the `userspace installation guide
-<INSTALL.userspace.rst>` for instructions on how to configure a userspace
-switch.
+ovs-vswitchd process.  See the `userspace installation guide` for instructions
+on how to configure a userspace switch.
 
 If the userspace switch is not the right choice for your port, then you will
 have to write more code.  You may implement either an "ofproto provider" or a

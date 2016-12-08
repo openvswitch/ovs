@@ -486,7 +486,7 @@ Q: How do I configure a DPDK port as an access port?
 
     Finally, it is required that DPDK port names begin with ``dpdk``.
 
-    See `INSTALL.DPDK <INSTALL.DPDK.rst>`__ for more information on enabling
+    Refer to the `DPDK installation guide`_ for more information on enabling
     and using DPDK with Open vSwitch.
 
 Q: How do I configure a VLAN as an RSPAN VLAN, that is, enable mirroring of all
@@ -794,7 +794,8 @@ very high.
       on the Port table in ovs-vswitchd.conf.db(5) for all the details.
 
       Configuration for DPDK-enabled interfaces is slightly less
-      straightforward: see `INSTALL.DPDK <INSTALL.DPDK.rst>`__.
+      straightforward. Refer to the `DPDK installation guide`_ for more
+      information.
 
     - Perhaps you don't actually need eth0 and eth1 to be on the same bridge.
       For example, if you simply want to be able to connect each of them to
@@ -862,8 +863,8 @@ port in the datapath?
     Linux GRE module is already loaded and blocking OVS (to confirm, check
     dmesg for errors regarding GRE registration). To fix this, unload all GRE
     modules that appear in lsmod as well as the OVS kernel module. You can then
-    reload the OVS module following the directions in the `installation guide
-    <INSTALL.rst>`__, which will ensure that dependencies are satisfied.
+    reload the OVS module following the directions in the `general installation
+    guide`_, which will ensure that dependencies are satisfied.
 
 Q: Open vSwitch does not seem to obey my packet filter rules.
 
@@ -2048,8 +2049,7 @@ Q: How do I implement a new OpenFlow message?
     ``lib/ofp-msgs.h``, following the existing pattern.  Then recompile and fix
     all of the new warnings, implementing new functionality for the new message
     as needed.  (If you configure with ``--enable-Werror``, as described in the
-    `installation guide <INSTALL.rst>`__, then it is impossible to miss any
-    warnings.)
+    `general installation guide`_, then it is impossible to miss any warnings.)
 
     If you need to add an OpenFlow vendor extension message for a vendor that
     doesn't yet have any extension messages, then you will also need to edit
@@ -2065,8 +2065,8 @@ Q: How do I add support for a new field or header?
     ``lib/nx-match.c`` to output your new field in OXM matches.  Then recompile
     and fix all of the new warnings, implementing new functionality for the new
     field or header as needed.  (If you configure with ``--enable-Werror``, as
-    described in the `installation guide <INSTALL.rst>`__, then it is impossible
-    to miss any warnings.)
+    described in the `general installation guide`_, then it is impossible to
+    miss any warnings.)
 
     If you want kernel datapath support for your new field, you also need to
     modify the kernel module for the operating systems you are interested in.
@@ -2085,9 +2085,12 @@ Q: How do I add support for a new OpenFlow action?
     ``lib/ofp-actions.c``, following the existing pattern.  Then recompile and
     fix all of the new warnings, implementing new functionality for the new
     action as needed.  (If you configure with ``--enable-Werror``, as described
-    in the `installation guide <INSTALL.rst>`__, then it is impossible to miss
-    any warnings.)
+    in the `general installation guide`_, then it is impossible to miss any
+    warnings.)
 
     If you need to add an OpenFlow vendor extension action for a vendor that
     doesn't yet have any extension actions, then you will also need to edit
     ``build-aux/extract-ofp-actions``.
+
+.. _general installation guide: Documentation/intro/install/general.rst
+.. _DPDK installation guide: Documentation/intro/install/dpdk.rst

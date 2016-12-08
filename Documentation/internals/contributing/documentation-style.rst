@@ -29,8 +29,8 @@ Open vSwitch Documentation Style
 
 This file describes the documentation style used in all documentation found in
 Open vSwitch. Documentation includes any documents found in ``Documentation``
-along with any ``README``, ``INSTALL``, or generally ``rst`` suffixed documents
-found in the project tree.
+along with any ``README``, ``MAINTAINERS``, or generally ``rst`` suffixed
+documents found in the project tree.
 
 reStructuredText vs. Sphinx
 ---------------------------

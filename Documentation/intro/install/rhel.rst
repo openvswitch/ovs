@@ -22,18 +22,20 @@
       Avoid deeper levels because they do not render well.
 
 ========================================
-Open vSwitch on Red Hat Enterprise Linux
+RHEL 5.6, 6.x Packaging for Open vSwitch
 ========================================
 
 This document describes how to build and install Open vSwitch on a Red Hat
 Enterprise Linux (RHEL) host.  If you want to install Open vSwitch on a generic
-Linux host, see the `general installation guide <INSTALL.rst>`__ instead.
+Linux host, refer to :doc:`general` instead.
 
 We have tested these instructions with RHEL 5.6 and RHEL 6.0.
 
 For RHEL 7.x (or derivatives, such as CentOS 7.x), you should follow the
-instructions in the `Fedora installation guide <INSTALL.Fedora.rst>`__.  The
-Fedora spec files are used for RHEL 7.x.
+instructions in the :doc:`fedora`.  The Fedora spec files are used for RHEL
+7.x.
+
+.. _rhel-prerequisites:
 
 Prerequisites
 -------------
@@ -69,21 +71,23 @@ Build Requirements
 ------------------
 
 To compile the RPMs, you will need to install the packages described in the
-`general installation guide <INSTALL.rst>`__ along with some additional
-packages. These can be installed with the below command::
+:doc:`general` along with some additional packages. These can be installed with
+the below command::
 
     $ yum install gcc make python-devel openssl-devel kernel-devel graphviz \
         kernel-debug-devel autoconf automake rpm-build redhat-rpm-config \
         libtool
 
+.. _rhel-bootstrapping:
+
 Bootstrapping and Configuring
 -----------------------------
 
-If you are building from a distribution tarball, skip to *Building*. If not,
-you must be building from an Open vSwitch Git tree.  Determine what version of
-Autoconf is installed (e.g. run ``autoconf --version``).  If it is not at least
-version 2.63, then you must upgrade or use another machine to build the
-packages.
+If you are building from a distribution tarball, skip to :ref:`rhel-building`.
+If not, you must be building from an Open vSwitch Git tree.  Determine what
+version of Autoconf is installed (e.g. run ``autoconf --version``).  If it is
+not at least version 2.63, then you must upgrade or use another machine to
+build the packages.
 
 Assuming all requirements have been met, build the tarball by running::
 
@@ -91,10 +95,10 @@ Assuming all requirements have been met, build the tarball by running::
     $ ./configure
     $ make dist
 
-You must run this on a machine that has the tools listed in the `general
-installation guide <INSTALL.rst>`__ as prerequisites for building from a Git
-tree.  Afterward, proceed with the rest of the instructions using the
-distribution tarball.
+You must run this on a machine that has the tools listed in
+:ref:`general-build-reqs` as prerequisites for building from a Git tree.
+Afterward, proceed with the rest of the instructions using the distribution
+tarball.
 
 Now you have a distribution tarball, named something like
 ``openvswitch-x.y.z.tar.gz``.  Copy this file into the RPM sources directory,
@@ -134,6 +138,8 @@ where ``<target>`` is the name of an existing directory under
 ``/usr/src/kernels``, whose name should be similar to ``<version>`` but may
 contain some extra parts.  Once you have done this, verify the fix with the
 same procedure you used above to check for the problem.
+
+.. _rhel-building:
 
 Building
 --------
@@ -186,6 +192,8 @@ You might have to specify a kernel version and/or variants, e.g.:
 This produces an "kmod-openvswitch" RPM for each kernel variant, in this
 example: "kmod-openvswitch", "kmod-openvswitch-debug", and
 "kmod-openvswitch-kdump".
+
+.. _rhel-script-integrations:
 
 Red Hat Network Scripts Integration
 -----------------------------------

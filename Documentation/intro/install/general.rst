@@ -27,15 +27,7 @@ Open vSwitch on Linux, FreeBSD and NetBSD
 
 This document describes how to build and install Open vSwitch on a generic
 Linux, FreeBSD, or NetBSD host. For specifics around installation on a specific
-platform, refer to one of these installation guides:
-
-- `Debian <INSTALL.Debian.rst>`__
-- `Fedora <INSTALL.Fedora.rst>`__
-- `RHEL <INSTALL.RHEL.rst>`__
-- `XenServer <INSTALL.XenServer.rst>`__
-- `NetBSD <INSTALL.NetBSD.rst>`__
-- `Windows <INSTALL.Windows.rst>`__
-- `DPDK <INSTALL.DPDK.rst>`__
+platform, refer to one of the other installation guides listed in :doc:`index`.
 
 .. _general-build-reqs:
 
@@ -55,8 +47,8 @@ need the following software:
     thread-safety checks. For Ubuntu, there are nightly built packages
     available on clang's website.
 
-  - MSVC 2013. See the `Windows installation guide <INSTALL.Windows>`__
-    for additional Windows build instructions.
+  - MSVC 2013. Refer to :doc:`windows` for additional Windows build
+    instructions.
 
   While OVS may be compatible with other compilers, optimal support for atomic
   operations may be missing, making OVS very slow (see ``lib/ovs-atomic.h``).
@@ -79,14 +71,13 @@ vSwitch distribution or to use the kernel module built into the Linux kernel
 (version 3.3 or later). See the `FAQ <FAQ.rst>`__ question "What features
 are not available in the Open vSwitch kernel datapath that ships as part of the
 upstream Linux kernel?" for more information on this trade-off. You may also
-use the userspace-only implementation, at some cost in features and performance
-(see the `userspace installation guide <INSTALL.userspace.rst>`__ for details).
+use the userspace-only implementation, at some cost in features and
+performance. Refer to :doc:`userspace` for details.
 
 To compile the kernel module on Linux, you must also install the
 following:
 
-- A supported Linux kernel version. Refer to the `README <README.rst>`__
-  for a list of supported versions.
+- A supported Linux kernel version.
 
   For optional support of ingress policing, you must enable kernel
   configuration options ``NET_CLS_BASIC``, ``NET_SCH_INGRESS``, and
@@ -865,7 +856,7 @@ You should invoke scan-view to view analysis results. The last line of output
 from ``clang-analyze`` will list the command (containing results directory)
 that you should invoke to view the results on a browser.
 
-Bug Reporting
--------------
+Reporting Bugs
+--------------
 
-Please report problems to bugs@openvswitch.org.
+Report problems to bugs@openvswitch.org.

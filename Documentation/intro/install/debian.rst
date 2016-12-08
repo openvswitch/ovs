@@ -21,13 +21,13 @@
 
       Avoid deeper levels because they do not render well.
 
-=========================================
-Building Debian Packages for Open vSwitch
-=========================================
+=================================
+Debian Packaging for Open vSwitch
+=================================
 
 This document describes how to build Debian packages for Open vSwitch. To
-install Open vSwitch on Debian without building Debian packages, see the
-`installation guide <INSTALL.rst>`__ instead.
+install Open vSwitch on Debian without building Debian packages, refer to
+:doc:`general` instead.
 
 .. note::
   These instructions should also work on Ubuntu and other Debian derivative
@@ -117,7 +117,7 @@ Open vSwitch ``.deb`` packages not mentioned above are rarely useful. Refer to
 their individual package descriptions to find out whether any of them are
 useful to you.
 
-Bug Reporting
--------------
+Reporting Bugs
+--------------
 
-Please report problems to bugs@openvswitch.org.
+Report problems to bugs@openvswitch.org.

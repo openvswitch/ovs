@@ -36,13 +36,12 @@ The VTEP emulator is a Python script that invokes calls to tools like vtep-ctl
 and ovs-vsctl. It is only useful when Open vSwitch daemons like ovsdb-server
 and ovs-vswitchd are running and installed. To do this, either:
 
-- Follow the instructions in the `installation guide <..INSTALL.rst>`__ (don't
+- Follow the instructions in ``Documentation/intro/install/general`` (don't
   start any daemons yet).
 
-- Follow the instructions in `Debian installation guide
-  <../INSTALL.Debian.rst>`__ and then install the ``openvswitch-vtep`` package
-  (if operating on a debian based machine). This will automatically start the
-  daemons.
+- Follow the instructions in ``Documentation/intro/install/debian`` and then
+  install the ``openvswitch-vtep`` package (if operating on a debian based
+  machine).  This will automatically start the daemons.
 
 Design
 ------
@@ -152,9 +151,9 @@ using the debian packages as mentioned in step 2 of the "Requirements" section.
        $ vtep-ctl add-ps br0
        $ vtep-ctl set Physical_Switch br0 tunnel_ips=10.2.2.1
 
-6. Start the VTEP emulator. If you installed the components following the
-   `installation guide <../INSTALL.rst>`__ file, run the following from the
-   same directory as this README:
+6. Start the VTEP emulator. If you installed the components following
+   ``Documentation/intro/install/general``, run the following from the same
+   directory as this README:
 
    ::
 
