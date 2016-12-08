@@ -1,7 +1,7 @@
 {
     "name": "OVN_Southbound",
     "version": "1.9.0",
-    "cksum": "239060528 9012",
+    "cksum": "2240045372 9719",
     "tables": {
         "SB_Global": {
             "columns": {
@@ -13,7 +13,11 @@
                     "type": {"key": {"type": "uuid",
                                      "refTable": "Connection"},
                                      "min": 0,
-                                     "max": "unlimited"}}},
+                                     "max": "unlimited"}},
+                "ssl": {
+                    "type": {"key": {"type": "uuid",
+                                     "refTable": "SSL"},
+                                     "min": 0, "max": 1}}},
             "maxRows": 1,
             "isRoot": true},
         "Chassis": {
@@ -183,4 +187,15 @@
                                     "min": 0,
                                     "max": "unlimited"},
                                     "ephemeral": true}},
-            "indexes": [["target"]]}}}
+            "indexes": [["target"]]},
+        "SSL": {
+            "columns": {
+                "private_key": {"type": "string"},
+                "certificate": {"type": "string"},
+                "ca_cert": {"type": "string"},
+                "bootstrap_ca_cert": {"type": "boolean"},
+                "external_ids": {"type": {"key": "string",
+                                          "value": "string",
+                                          "min": 0,
+                                          "max": "unlimited"}}},
+            "maxRows": 1}}}

@@ -169,6 +169,9 @@
         connections should be configured.  See the <ref table="Connection"/>
         table for more information.
       </column>
+      <column name="ssl">
+        Global SSL configuration.
+      </column>
     </group>
   </table>
 
@@ -2311,7 +2314,9 @@ tcp.flags = RST;
             <p>
               The specified SSL <var>port</var> on the host at the given
               <var>ip</var>, which must be expressed as an IP address
-              (not a DNS name).
+              (not a DNS name). A valid SSL configuration must be provided
+              when this form is used, this configuration can be specified
+              via command-line options or the <ref table="SSL"/> table.
             </p>
             <p>
               If <var>port</var> is not specified, it defaults to 6640.
@@ -2347,6 +2352,9 @@ tcp.flags = RST;
               address, wrap in square brackets,
               e.g. <code>pssl:6640:[::1]</code>.  If <var>ip</var> is not
               specified then it listens only on IPv4 (but not IPv6) addresses.
+              A valid SSL configuration must be provided when this form is used,
+             this can be specified either via command-line options or the
+             <ref table="SSL"/> table.
             </p>
             <p>
               If <var>port</var> is not specified, it defaults to 6640.
@@ -2517,6 +2525,44 @@ tcp.flags = RST;
 
       <column name="external_ids"/>
       <column name="other_config"/>
+    </group>
+  </table>
+  <table name="SSL">
+    SSL configuration for ovn-sb database access.
+
+    <column name="private_key">
+      Name of a PEM file containing the private key used as the switch's
+      identity for SSL connections to the controller.
+    </column>
+
+    <column name="certificate">
+      Name of a PEM file containing a certificate, signed by the
+      certificate authority (CA) used by the controller and manager,
+      that certifies the switch's private key, identifying a trustworthy
+      switch.
+    </column>
+
+    <column name="ca_cert">
+      Name of a PEM file containing the CA certificate used to verify
+      that the switch is connected to a trustworthy controller.
+    </column>
+
+    <column name="bootstrap_ca_cert">
+      If set to <code>true</code>, then Open vSwitch will attempt to
+      obtain the CA certificate from the controller on its first SSL
+      connection and save it to the named PEM file. If it is successful,
+      it will immediately drop the connection and reconnect, and from then
+      on all SSL connections must be authenticated by a certificate signed
+      by the CA certificate thus obtained.  <em>This option exposes the
+      SSL connection to a man-in-the-middle attack obtaining the initial
+      CA certificate.</em>  It may still be useful for bootstrapping.
+    </column>
+
+    <group title="Common Columns">
+      The overall purpose of these columns is described under <code>Common
+      Columns</code> at the beginning of this document.
+
+      <column name="external_ids"/>
     </group>
   </table>
 </database>

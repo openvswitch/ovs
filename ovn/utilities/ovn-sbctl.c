@@ -48,6 +48,7 @@
 #include "table.h"
 #include "timeval.h"
 #include "util.h"
+#include "svec.h"
 
 VLOG_DEFINE_THIS_MODULE(sbctl);
 
@@ -287,8 +288,6 @@ usage(void)
     printf("\
 %s: OVN southbound DB management utility\n\
 \n\
-For debugging and testing only, not for use in production.\n\
-\n\
 usage: %s [OPTIONS] COMMAND [ARG...]\n\
 \n\
 General commands:\n\
@@ -308,6 +307,16 @@ Port binding commands:\n\
 Logical flow commands:\n\
   lflow-list [DATAPATH]       List logical flows for all or a single datapath\n\
   dump-flows [DATAPATH]       Alias for lflow-list\n\
+\n\
+Connection commands:\n\
+  get-connection             print the connections\n\
+  del-connection             delete the connections\n\
+  set-connection TARGET...   set the list of connections to TARGET...\n\
+\n\
+SSL commands:\n\
+  get-ssl                     print the SSL configuration\n\
+  del-ssl                     delete the SSL configuration\n\
+  set-ssl PRIV-KEY CERT CA-CERT  set the SSL configuration\n\
 \n\
 %s\
 \n\
@@ -739,6 +748,199 @@ cmd_lflow_list(struct ctl_context *ctx)
     free(lflows);
 }
 
+static void
+verify_connections(struct ctl_context *ctx)
+{
+    const struct sbrec_sb_global *sb_global = sbrec_sb_global_first(ctx->idl);
+    const struct sbrec_connection *conn;
+
+    sbrec_sb_global_verify_connections(sb_global);
+
+    SBREC_CONNECTION_FOR_EACH(conn, ctx->idl) {
+        sbrec_connection_verify_target(conn);
+    }
+}
+
+static void
+pre_connection(struct ctl_context *ctx)
+{
+    ovsdb_idl_add_column(ctx->idl, &sbrec_sb_global_col_connections);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_connection_col_target);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_connection_col_read_only);
+}
+
+static void
+cmd_get_connection(struct ctl_context *ctx)
+{
+    const struct sbrec_connection *conn;
+    struct svec targets;
+    size_t i;
+
+    verify_connections(ctx);
+
+    /* Print the targets in sorted order for reproducibility. */
+    svec_init(&targets);
+
+    SBREC_CONNECTION_FOR_EACH(conn, ctx->idl) {
+        char *s;
+
+        s = xasprintf("%s %s", conn->read_only ? "read-only" : "read-write",
+                               conn->target);
+        svec_add(&targets, s);
+        free(s);
+    }
+
+    svec_sort_unique(&targets);
+    for (i = 0; i < targets.n; i++) {
+        ds_put_format(&ctx->output, "%s\n", targets.names[i]);
+    }
+    svec_destroy(&targets);
+}
+
+static void
+delete_connections(struct ctl_context *ctx)
+{
+    const struct sbrec_sb_global *sb_global = sbrec_sb_global_first(ctx->idl);
+    const struct sbrec_connection *conn, *next;
+
+    /* Delete Manager rows pointed to by 'connection_options' column. */
+    SBREC_CONNECTION_FOR_EACH_SAFE(conn, next, ctx->idl) {
+        sbrec_connection_delete(conn);
+    }
+
+    /* Delete 'Manager' row refs in 'manager_options' column. */
+    sbrec_sb_global_set_connections(sb_global, NULL, 0);
+}
+
+static void
+cmd_del_connection(struct ctl_context *ctx)
+{
+    verify_connections(ctx);
+    delete_connections(ctx);
+}
+
+static void
+insert_connections(struct ctl_context *ctx, char *targets[], size_t n)
+{
+    const struct sbrec_sb_global *sb_global = sbrec_sb_global_first(ctx->idl);
+    struct sbrec_connection **connections;
+    size_t i, conns=0;
+    bool read_only = false;
+
+    /* Insert each connection in a new row in Connection table. */
+    connections = xmalloc(n * sizeof *connections);
+    for (i = 0; i < n; i++) {
+        if (!strcmp(targets[i], "read-only")) {
+            read_only = true;
+            continue;
+        } else if (!strcmp(targets[i], "read-write")) {
+            read_only = false;
+            continue;
+        } else if (stream_verify_name(targets[i]) &&
+                   pstream_verify_name(targets[i])) {
+            VLOG_WARN("target type \"%s\" is possibly erroneous", targets[i]);
+        }
+
+        connections[conns] = sbrec_connection_insert(ctx->txn);
+        sbrec_connection_set_target(connections[conns], targets[i]);
+        sbrec_connection_set_read_only(connections[conns], read_only);
+        conns++;
+    }
+
+    /* Store uuids of new connection rows in 'connection' column. */
+    sbrec_sb_global_set_connections(sb_global, connections, conns);
+    free(connections);
+}
+
+static void
+cmd_set_connection(struct ctl_context *ctx)
+{
+    const size_t n = ctx->argc - 1;
+
+    verify_connections(ctx);
+    delete_connections(ctx);
+    insert_connections(ctx, &ctx->argv[1], n);
+}
+
+static void
+pre_cmd_get_ssl(struct ctl_context *ctx)
+{
+    ovsdb_idl_add_column(ctx->idl, &sbrec_sb_global_col_ssl);
+
+    ovsdb_idl_add_column(ctx->idl, &sbrec_ssl_col_private_key);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_ssl_col_certificate);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_ssl_col_ca_cert);
+    ovsdb_idl_add_column(ctx->idl, &sbrec_ssl_col_bootstrap_ca_cert);
+}
+
+static void
+cmd_get_ssl(struct ctl_context *ctx)
+{
+    const struct sbrec_sb_global *sb_global = sbrec_sb_global_first(ctx->idl);
+    const struct sbrec_ssl *ssl = sbrec_ssl_first(ctx->idl);
+
+    sbrec_sb_global_verify_ssl(sb_global);
+    if (ssl) {
+        sbrec_ssl_verify_private_key(ssl);
+        sbrec_ssl_verify_certificate(ssl);
+        sbrec_ssl_verify_ca_cert(ssl);
+        sbrec_ssl_verify_bootstrap_ca_cert(ssl);
+
+        ds_put_format(&ctx->output, "Private key: %s\n", ssl->private_key);
+        ds_put_format(&ctx->output, "Certificate: %s\n", ssl->certificate);
+        ds_put_format(&ctx->output, "CA Certificate: %s\n", ssl->ca_cert);
+        ds_put_format(&ctx->output, "Bootstrap: %s\n",
+                ssl->bootstrap_ca_cert ? "true" : "false");
+    }
+}
+
+static void
+pre_cmd_del_ssl(struct ctl_context *ctx)
+{
+    ovsdb_idl_add_column(ctx->idl, &sbrec_sb_global_col_ssl);
+}
+
+static void
+cmd_del_ssl(struct ctl_context *ctx)
+{
+    const struct sbrec_sb_global *sb_global = sbrec_sb_global_first(ctx->idl);
+    const struct sbrec_ssl *ssl = sbrec_ssl_first(ctx->idl);
+
+    if (ssl) {
+        sbrec_sb_global_verify_ssl(sb_global);
+        sbrec_ssl_delete(ssl);
+        sbrec_sb_global_set_ssl(sb_global, NULL);
+    }
+}
+
+static void
+pre_cmd_set_ssl(struct ctl_context *ctx)
+{
+    ovsdb_idl_add_column(ctx->idl, &sbrec_sb_global_col_ssl);
+}
+
+static void
+cmd_set_ssl(struct ctl_context *ctx)
+{
+    bool bootstrap = shash_find(&ctx->options, "--bootstrap");
+    const struct sbrec_sb_global *sb_global = sbrec_sb_global_first(ctx->idl);
+    const struct sbrec_ssl *ssl = sbrec_ssl_first(ctx->idl);
+
+    sbrec_sb_global_verify_ssl(sb_global);
+    if (ssl) {
+        sbrec_ssl_delete(ssl);
+    }
+    ssl = sbrec_ssl_insert(ctx->txn);
+
+    sbrec_ssl_set_private_key(ssl, ctx->argv[1]);
+    sbrec_ssl_set_certificate(ssl, ctx->argv[2]);
+    sbrec_ssl_set_ca_cert(ssl, ctx->argv[3]);
+
+    sbrec_ssl_set_bootstrap_ca_cert(ssl, bootstrap);
+
+    sbrec_sb_global_set_ssl(sb_global, ssl);
+}
+
 
 static const struct ctl_table_class tables[] = {
     {&sbrec_table_sb_global,
@@ -781,6 +983,9 @@ static const struct ctl_table_class tables[] = {
     {&sbrec_table_connection,
      {{&sbrec_table_connection, NULL, NULL},
       {NULL, NULL, NULL}}},
+
+    {&sbrec_table_ssl,
+     {{&sbrec_table_sb_global, NULL, &sbrec_sb_global_col_ssl}}},
 
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}
 };
@@ -1044,7 +1249,17 @@ static const struct ctl_command_syntax sbctl_commands[] = {
     {"dump-flows", 0, 1, "[DATAPATH]", pre_get_info, cmd_lflow_list, NULL,
      "", RO}, /* Friendly alias for lflow-list */
 
-    /* SSL commands (To Be Added). */
+    /* Connection commands. */
+    {"get-connection", 0, 0, "", pre_connection, cmd_get_connection, NULL, "", RO},
+    {"del-connection", 0, 0, "", pre_connection, cmd_del_connection, NULL, "", RW},
+    {"set-connection", 1, INT_MAX, "TARGET...", pre_connection, cmd_set_connection,
+     NULL, "", RW},
+
+    /* SSL commands. */
+    {"get-ssl", 0, 0, "", pre_cmd_get_ssl, cmd_get_ssl, NULL, "", RO},
+    {"del-ssl", 0, 0, "", pre_cmd_del_ssl, cmd_del_ssl, NULL, "", RW},
+    {"set-ssl", 3, 3, "PRIVATE-KEY CERTIFICATE CA-CERT", pre_cmd_set_ssl,
+     cmd_set_ssl, NULL, "--bootstrap", RW},
 
     {NULL, 0, 0, NULL, NULL, NULL, NULL, NULL, RO},
 };
