@@ -1,6 +1,4 @@
 ..
-      Copyright (c) 2016, Stephen Finucane <stephen@that.guru>
-
       Licensed under the Apache License, Version 2.0 (the "License"); you may
       not use this file except in compliance with the License. You may obtain
       a copy of the License at
@@ -23,21 +21,17 @@
 
       Avoid deeper levels because they do not render well.
 
-================
-Open vSwitch FAQ
-================
+===========
+Terminology
+===========
 
-.. toctree::
-   :maxdepth: 2
+Q: I thought Open vSwitch was a virtual Ethernet switch, but the documentation
+keeps talking about bridges.  What's a bridge?
 
-   configuration
-   contributing
-   design
-   general
-   issues
-   openflow
-   qos
-   releases
-   terminology
-   vlan
-   vxlan
+    A: In networking, the terms "bridge" and "switch" are synonyms.  Open
+    vSwitch implements an Ethernet switch, which means that it is also an
+    Ethernet bridge.
+
+Q: What's a VLAN?
+
+    A: See :doc:`vlan`.

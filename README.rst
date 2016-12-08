@@ -81,7 +81,7 @@ To install Open vSwitch on a regular Linux or FreeBSD host, please read the
 around installation on a specific platform, refer to one of the `other
 installation guides <Documentation/intro/install/index.rst>`__
 
-For answers to common questions, refer to the `FAQ <FAQ.rst>`__.
+For answers to common questions, refer to the `FAQ <Documentation/faq>`__.
 
 To learn about some advanced features of the Open vSwitch software switch, read
 the `tutorial <Documentation/tutorials/ovs-advanced.rst>`__.

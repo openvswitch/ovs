@@ -68,8 +68,8 @@ need the following software:
 
 On Linux, you may choose to compile the kernel module that comes with the Open
 vSwitch distribution or to use the kernel module built into the Linux kernel
-(version 3.3 or later). See the `FAQ <FAQ.rst>`__ question "What features
-are not available in the Open vSwitch kernel datapath that ships as part of the
+(version 3.3 or later). See the :doc:`/faq/index` question "What features are
+not available in the Open vSwitch kernel datapath that ships as part of the
 upstream Linux kernel?" for more information on this trade-off. You may also
 use the userspace-only implementation, at some cost in features and
 performance. Refer to :doc:`userspace` for details.
@@ -264,8 +264,8 @@ example, to build for a running instance of Linux::
 
 .. note::
   If ``--with-linux`` requests building for an unsupported version of Linux,
-  then ``configure`` will fail with an error message. Refer to the `FAQ
-  <FAQ.rst>`__ for advice in that case.
+  then ``configure`` will fail with an error message. Refer to the
+  :doc:`/faq/index` for advice in that case.
 
 If you wish to build the kernel module for an architecture other than the
 architecture of the machine used for the build, you may specify the kernel

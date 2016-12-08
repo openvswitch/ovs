@@ -122,7 +122,7 @@ installation requires superuser privileges.
 The `openvswitch-kmod` RPM should be installed first if the Linux OVS tree
 datapath module is to be used. The `openvswitch-kmod` RPM should not be
 installed if only the in-tree Linux datapath or user-space datapath is needed.
-See the `FAQ document <FAQ.rst>`__ for more information about the various Open
+Refer to the :doc:`/faq/index` for more information about the various Open
 vSwitch datapath options.
 
 In most cases only the `openvswitch` RPM will need to be installed. The

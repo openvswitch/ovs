@@ -46,6 +46,17 @@ EXTRA_DIST += \
 	Documentation/howto/vtep.rst \
 	Documentation/ref/index.rst \
 	Documentation/faq/index.rst \
+	Documentation/faq/configuration.rst \
+	Documentation/faq/contributing.rst \
+	Documentation/faq/design.rst \
+	Documentation/faq/general.rst \
+	Documentation/faq/issues.rst \
+	Documentation/faq/openflow.rst \
+	Documentation/faq/qos.rst \
+	Documentation/faq/releases.rst \
+	Documentation/faq/terminology.rst \
+	Documentation/faq/vlan.rst \
+	Documentation/faq/vxlan.rst \
 	Documentation/internals/index.rst \
 	Documentation/internals/authors.rst \
 	Documentation/internals/bugs.rst \
