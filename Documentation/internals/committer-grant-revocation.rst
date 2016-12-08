@@ -269,7 +269,7 @@ Invitation to Accepted Committer
     Developers with commit access must agree to fulfill specific
     responsibilities described in the source repository:
 
-        /Documentation/committer-responsibilities.rst
+        /Documentation/internals/committer-responsibilities.rst
 
     Please let us know if you would like to accept commit access and if so that
     you agree to fulfill these responsibilities. Once we receive your response

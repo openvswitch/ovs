@@ -31,7 +31,7 @@ they can be fixed as quickly as possible.
 
 Please report bugs by sending email to bugs@openvswitch.org.
 
-For reporting security vulnerabilities, please read SECURITY.rst.
+For reporting security vulnerabilities, please read :doc:`security`.
 
 The most important parts of your bug report are the following:
 

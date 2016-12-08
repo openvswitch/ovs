@@ -1,9 +1,6 @@
 docs += \
-	Documentation/committer-responsibilities.rst \
-	Documentation/committer-grant-revocation.rst \
 	Documentation/group-selection-method-property.txt \
-	Documentation/OVSDB-replication.rst \
-	Documentation/release-process.rst
+	Documentation/OVSDB-replication.rst
 
 EXTRA_DIST += \
 	Documentation/_static/logo.png \
@@ -17,7 +14,20 @@ EXTRA_DIST += \
 	Documentation/howto/index.rst \
 	Documentation/ref/index.rst \
 	Documentation/faq/index.rst \
-	Documentation/internals/index.rst
+	Documentation/internals/index.rst \
+	Documentation/internals/authors.rst \
+	Documentation/internals/bugs.rst \
+	Documentation/internals/committer-grant-revocation.rst \
+	Documentation/internals/committer-responsibilities.rst \
+	Documentation/internals/mailing-lists.rst \
+	Documentation/internals/maintainers.rst \
+	Documentation/internals/release-process.rst \
+	Documentation/internals/security.rst \
+	Documentation/internals/contributing/index.rst \
+	Documentation/internals/contributing/coding-style.rst \
+	Documentation/internals/contributing/coding-style-windows.rst \
+	Documentation/internals/contributing/documentation-style.rst \
+	Documentation/internals/contributing/submitting-patches.rst
 
 # You can set these variables from the command line.
 SPHINXOPTS =

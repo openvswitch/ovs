@@ -25,10 +25,10 @@
 Open vSwitch Windows Datapath Coding Style
 ==========================================
 
-The coding style described in the Open vSwitch distribution gives the
-flexiblity for each platform to use its own coding style for the kernel
-datapath.  This file describes the specific coding style used in most of the C
-files in the Windows kernel datapath of the Open vSwitch distribution.
+The :doc:`coding style <coding-style>` guide gives the flexiblity for each
+platform to use its own coding style for the kernel datapath.  This file
+describes the specific coding style used in most of the C files in the Windows
+kernel datapath of the Open vSwitch distribution.
 
 Most of the coding conventions applicable for the Open vSwitch distribution are
 applicable to the Windows kernel datapath as well.  There are some exceptions

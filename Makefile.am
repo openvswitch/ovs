@@ -68,9 +68,7 @@ PYCOV_CLEAN_FILES = build-aux/check-structs,cover
 docs = \
 	AUTHORS.rst \
 	CONTRIBUTING.rst \
-	CodingStyle.rst \
 	DESIGN.rst \
-	DocumentationStyle.rst \
 	FAQ.rst \
 	INSTALL.rst \
 	INSTALL.Debian.rst \
@@ -94,8 +92,6 @@ docs = \
 	README.rst \
 	README-lisp.rst \
 	README-native-tunneling.rst \
-	REPORTING-BUGS.rst \
-	SECURITY.rst \
 	WHY-OVS.rst
 EXTRA_DIST = \
 	$(docs) \

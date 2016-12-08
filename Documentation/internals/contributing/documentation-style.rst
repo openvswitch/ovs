@@ -47,8 +47,8 @@ reST Conventions
 Basics
 ~~~~~~
 
-Many of the basic documentation guidelines match those of the `coding style
-guide <CodingStyle.rst>`__.
+Many of the basic documentation guidelines match those of the
+:doc:`coding-style`.
 
 - Use reStructuredText (reST) for all documentation.
 

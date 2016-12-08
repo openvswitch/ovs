@@ -28,7 +28,7 @@ Open vSwitch Coding Style
 This file describes the coding style used in most C files in the Open vSwitch
 distribution. However, Linux kernel code datapath directory follows the Linux
 kernel's established coding conventions. For the Windows kernel datapath code,
-use the coding style described in datapath-windows/CodingStyle.
+use the coding style described in :doc:`coding-style-windows`.
 
 The following GNU indent options approximate this style.
 

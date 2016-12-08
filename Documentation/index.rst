@@ -57,7 +57,21 @@ The Open vSwitch Project
 
 Learn more about the Open vSwitch project and about how you can contribute:
 
-**TODO**
+- **Community:** :doc:`internals/release-process` |
+  :doc:`internals/authors` |
+  :doc:`internals/mailing-lists` |
+  :doc:`internals/bugs` |
+  :doc:`internals/security`
+
+- **Contributing:** :doc:`internals/contributing/submitting-patches` |
+  :doc:`internals/contributing/coding-style` |
+  :doc:`internals/contributing/coding-style-windows`
+
+- **Maintaining:** :doc:`internals/maintainers` |
+  :doc:`internals/committer-responsibilities` |
+  :doc:`internals/committer-grant-revocation`
+
+- **Documentation:** :doc:`internals/contributing/documentation-style`
 
 Getting Help
 -------------
