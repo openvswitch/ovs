@@ -1,7 +1,5 @@
-docs += \
-	Documentation/group-selection-method-property.txt
-
 EXTRA_DIST += \
+	Documentation/group-selection-method-property.txt \
 	Documentation/_static/logo.png \
 	Documentation/conf.py \
 	Documentation/index.rst \
@@ -76,7 +74,7 @@ EXTRA_DIST += \
 SPHINXOPTS =
 SPHINXBUILD = sphinx-build
 SPHINXSRCDIR = $(srcdir)/Documentation
-SPHINXBUILDDIR = $(srcdir)/Documentation/_build
+SPHINXBUILDDIR = $(builddir)/Documentation/_build
 
 # Internal variables.
 PAPEROPT_a4 = -D latex_paper_size=a4

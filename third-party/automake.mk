@@ -1,2 +1,3 @@
-docs += third-party/README.rst
-EXTRA_DIST += third-party/ofp-tcpdump.patch
+EXTRA_DIST += \
+	third-party/ofp-tcpdump.patch \
+	third-party/README.rst
