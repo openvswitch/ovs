@@ -70,8 +70,7 @@ docs = \
 	CONTRIBUTING.rst \
 	FAQ.rst \
 	MAINTAINERS.rst \
-	README.rst \
-	WHY-OVS.rst
+	README.rst
 EXTRA_DIST = \
 	$(docs) \
 	NOTICE \

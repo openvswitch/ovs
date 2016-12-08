@@ -223,7 +223,7 @@ if $built; then
     case $srcdir in
         '')
             srcdir=$builddir
-            if test ! -e "$srcdir"/WHY-OVS.rst; then
+            if test ! -e "$srcdir"/README.rst; then
                 srcdir=`cd $builddir/.. && pwd`
             fi
             ;;

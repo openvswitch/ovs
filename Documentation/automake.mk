@@ -7,6 +7,7 @@ EXTRA_DIST += \
 	Documentation/index.rst \
 	Documentation/contents.rst \
 	Documentation/intro/index.rst \
+	Documentation/intro/why-ovs.rst \
 	Documentation/intro/install/index.rst \
 	Documentation/intro/install/bash-completion.rst \
 	Documentation/intro/install/debian.rst \

@@ -24,7 +24,7 @@ ENV = os.environ
 HOME = ENV["HOME"]
 PWD = os.getcwd()
 OVS_SRC = HOME + "/ovs"
-if os.path.exists(PWD + "/WHY-OVS.rst"):
+if os.path.exists(PWD + "/README.rst"):
     OVS_SRC = PWD  # Use current directory as OVS source tree
 RUNDIR = OVS_SRC + "/_run"
 BUILD_GCC = OVS_SRC + "/_build-gcc"

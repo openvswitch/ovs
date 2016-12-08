@@ -87,9 +87,9 @@ Q: Why would I use Open vSwitch instead of the Linux bridge?
 
     A: Open vSwitch is specially designed to make it easier to manage VM
     network configuration and monitor state spread across many physical hosts
-    in dynamic virtualized environments.  Refer to `WHY-OVS <WHY-OVS.rst>`__
-    for a more detailed description of how Open vSwitch relates to the Linux
-    Bridge.
+    in dynamic virtualized environments.  Refer to `WHY-OVS
+    <Documentation/intro/why-ovs.rst>`__ for a more detailed description of how
+    Open vSwitch relates to the Linux Bridge.
 
 Q: How is Open vSwitch related to distributed virtual switches like the VMware
 vNetwork distributed switch or the Cisco Nexus 1000V?

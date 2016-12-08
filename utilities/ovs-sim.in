@@ -63,8 +63,8 @@ if test ! -e "$sim_builddir"/vswitchd/ovs-vswitchd; then
     echo "$sim_builddir/vswitchd/ovs-vswitchd does not exist (need to run \"make\"?)" >&2
     exit 1
 fi
-if test ! -e "$sim_srcdir"/WHY-OVS.rst; then
-    echo "$sim_srcdir/WHY-OVS.rst does not exist" >&2
+if test ! -e "$sim_srcdir"/README.rst; then
+    echo "$sim_srcdir/README.rst does not exist" >&2
     exit 1
 fi
 

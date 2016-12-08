@@ -32,4 +32,5 @@ How to get started with Open vSwitch.
 .. toctree::
    :maxdepth: 2
 
+   why-ovs
    install/index
