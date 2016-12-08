@@ -1,4 +1,6 @@
 ..
+      Copyright (c) 2016, Stephen Finucane <stephen@that.guru>
+
       Licensed under the Apache License, Version 2.0 (the "License"); you may
       not use this file except in compliance with the License. You may obtain
       a copy of the License at
@@ -25,4 +27,42 @@
 Open vSwitch Documentation
 ==========================
 
+How the Documentation is Organised
+----------------------------------
+
+The Open vSwitch documentation is organised into multiple sections:
+
+- :doc:`Installation guides </intro/install/index>` guide you through
+  installing Open vSwitch (OVS) and Open Virtual Network (OVN) on a variety of
+  different platforms
+- :doc:`Tutorials </tutorials/index>` take you through a series of steps to
+  configure OVS and OVN in sandboxed environments
+- :doc:`Topic guides </topics/index>` provide a high level overview of OVS and
+  OVN internals and operation
+- :doc:`How-to guides </howto/index>` are recipes or use-cases for OVS and OVN.
+  They are more advanced than the tutorials.
+
+First Steps
+-----------
+
 **TODO**
+
+Deeper Dive
+-----------
+
+**TODO**
+
+The Open vSwitch Project
+------------------------
+
+Learn more about the Open vSwitch project and about how you can contribute:
+
+**TODO**
+
+Getting Help
+-------------
+
+- Seeing an issue of potential bug? Report problems to bugs@openvswitch.org
+
+- Looking for specific information? Try the :ref:`genindex`, :ref:`modindex` or
+  the :doc:`detailed table of contents <contents>`.

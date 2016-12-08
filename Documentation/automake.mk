@@ -9,7 +9,15 @@ EXTRA_DIST += \
 	Documentation/_static/logo.png \
 	Documentation/conf.py \
 	Documentation/index.rst \
-	Documentation/contents.rst
+	Documentation/contents.rst \
+	Documentation/intro/index.rst \
+	Documentation/intro/install/index.rst \
+	Documentation/tutorials/index.rst \
+	Documentation/topics/index.rst \
+	Documentation/howto/index.rst \
+	Documentation/ref/index.rst \
+	Documentation/faq/index.rst \
+	Documentation/internals/index.rst
 
 # You can set these variables from the command line.
 SPHINXOPTS =

@@ -1,4 +1,6 @@
 ..
+      Copyright (c) 2016, Stephen Finucane <stephen@that.guru>
+
       Licensed under the Apache License, Version 2.0 (the "License"); you may
       not use this file except in compliance with the License. You may obtain
       a copy of the License at
@@ -21,22 +23,12 @@
 
       Avoid deeper levels because they do not render well.
 
-===================================
-Open vSwitch Documentation Contents
-===================================
+======================
+Open vSwitch Internals
+======================
+
+Information for people who want to know more about the Open vSwitch project
+itself and how they might involved.
 
 .. toctree::
-   :maxdepth: 3
-
-   index
-
-.. toctree::
-   :maxdepth: 3
-
-   intro/index
-   tutorials/index
-   topics/index
-   howto/index
-   ref/index
-   faq/index
-   internals/index
+   :maxdepth: 2
