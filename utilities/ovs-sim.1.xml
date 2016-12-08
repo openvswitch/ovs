@@ -143,7 +143,7 @@ utilities/ovs-sim
         </p>
 
         <pre>
-sim_add hv0           # Create sandbox hv0.  
+sim_add hv0           # Create sandbox hv0.
 as hv0                # Set hv0 as default sandbox.
 ovs-vsctl add-br br0  # Add bridge br0 inside hv0.
         </pre>
@@ -157,8 +157,8 @@ ovs-vsctl add-br br0  # Add bridge br0 inside hv0.
           default <code>system</code> type of bridges and interfaces are
           replaced by <code>dummy</code> devices.  Other types of devices,
           however, retain their usual functions, which means that, e.g.,
-          <code>vxlan</code> tunnels still act as tunnels (see
-          <code>README-native-tunneling.rst</code>).
+          <code>vxlan</code> tunnels still act as tunnels (refer to the
+          documentation).
         </p>
       </dd>
 

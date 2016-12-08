@@ -75,8 +75,6 @@ docs = \
 	OPENFLOW.rst \
 	PORTING.rst \
 	README.rst \
-	README-lisp.rst \
-	README-native-tunneling.rst \
 	WHY-OVS.rst
 EXTRA_DIST = \
 	$(docs) \

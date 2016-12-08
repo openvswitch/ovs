@@ -45,10 +45,10 @@ example.
 
 * When VM-A is created on a hypervisor, its VIF gets added to the Open vSwitch
   integration bridge.  This creates a row in the Interface table of the
-  ``Open_vSwitch`` database.  As explained in the `integration guide
-  <IntegrationGuide.rst>`__, the vif-id associated with the VM network
-  interface gets added in the ``external_ids:iface-id`` column of the newly
-  created row in the Interface table.
+  ``Open_vSwitch`` database.  As explained in the `integration guide`, the
+  vif-id associated with the VM network interface gets added in the
+  ``external_ids:iface-id`` column of the newly created row in the Interface
+  table.
 
 * Since VM-A belongs to a logical network, it gets an IP address.  This IP
   address is used to spawn containers (either manually or through container
@@ -102,7 +102,7 @@ example.
 
 * When a container is eventually deleted, the network plugin in that VM may
   make a call to Neutron to delete that port.  Neutron in turn will delete the
-  entry in the Logical_Switch_Port table of the OVN Northbound Database.
+  entry in the ``Logical_Switch_Port`` table of the OVN Northbound Database.
 
 As an example, consider Docker containers.  Since Docker currently does not
 have a network plugin feature, this example uses a hypothetical wrapper around

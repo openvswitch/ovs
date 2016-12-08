@@ -1,6 +1,5 @@
 .SS "OPENVSWITCH TUNNELING COMMANDS"
-These commands query and modify OVS tunnel components. Ref to
-README-native-tunneling.rst for more info.
+These commands query and modify OVS tunnel components.
 .
 .IP "\fBovs/route/add ipv4_address/plen output_bridge [GW]\fR"
 Adds ipv4_address/plen route to vswitchd routing table. output_bridge

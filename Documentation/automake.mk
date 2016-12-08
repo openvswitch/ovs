@@ -28,6 +28,10 @@ EXTRA_DIST += \
 	Documentation/howto/libvirt.rst \
 	Documentation/howto/selinux.rst \
 	Documentation/howto/ssl.rst \
+	Documentation/howto/native-tunneling.rst \
+	Documentation/howto/lisp.rst \
+	Documentation/howto/openstack-containers.rst \
+	Documentation/howto/vtep.rst \
 	Documentation/ref/index.rst \
 	Documentation/faq/index.rst \
 	Documentation/internals/index.rst \
