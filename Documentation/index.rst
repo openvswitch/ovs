@@ -55,7 +55,8 @@ vSwitch? Start here.
   :doc:`intro/install/xenserver` |
   :doc:`intro/install/dpdk`
 
-- **Tutorials:** **TODO**
+- **Tutorials:** :doc:`tutorials/ovs-advanced` |
+  :doc:`tutorials/ovn-basics`
 
 Deeper Dive
 -----------

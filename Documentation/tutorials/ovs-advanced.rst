@@ -21,9 +21,9 @@
 
       Avoid deeper levels because they do not render well.
 
-=======================================
-Open vSwitch Advanced Features Tutorial
-=======================================
+==============================
+Open vSwitch Advanced Features
+==============================
 
 Many tutorials cover the basics of OpenFlow.  This is not such a tutorial.
 Rather, a knowledge of the basics of OpenFlow is a prerequisite.  If you do not
@@ -54,18 +54,16 @@ hardware or even supervisor privilege on your system.  Instead, we will use a
 script called ``ovs-sandbox``, which accompanies the tutorial, that constructs
 a software simulated network environment based on Open vSwitch.
 
-.. TODO(stephenfin): Update installation guide link when this is moved.
-
 You can use ``ovs-sandbox`` three ways:
 
 * If you have already installed Open vSwitch on your system, then you should be
   able to just run ``ovs-sandbox`` from this directory without any options.
 
 * If you have not installed Open vSwitch (and you do not want to install it),
-  then you can build Open vSwitch according to the instructions in the
-  `installation guide`, without installing it.  Then run ``./ovs-sandbox -b
-  DIRECTORY`` from this directory, substituting the Open vSwitch build
-  directory for ``DIRECTORY``.
+  then you can build Open vSwitch according to the instructions in
+  :doc:`/intro/install/general`, without installing it.  Then run
+  ``./ovs-sandbox -b DIRECTORY`` from this directory, substituting the Open
+  vSwitch build directory for ``DIRECTORY``.
 
 * As a slight variant on the latter, you can run ``make sandbox`` from an Open
   vSwitch build directory.

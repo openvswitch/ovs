@@ -84,7 +84,7 @@ installation guides <Documentation/intro/install/index.rst>`__
 For answers to common questions, refer to the `FAQ <FAQ.rst>`__.
 
 To learn about some advanced features of the Open vSwitch software switch, read
-the `tutorial <tutorial/tutorial.rst>`__.
+the `tutorial <Documentation/tutorials/ovs-advanced.rst>`__.
 
 Each Open vSwitch userspace program is accompanied by a manpage.  Many of the
 manpages are customized to your configuration as part of the build process, so
