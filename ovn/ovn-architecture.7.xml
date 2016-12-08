@@ -341,8 +341,8 @@
       controller (over a Unix domain socket) instead of a remote controller.
       It's possible, however, for some other bridge in the same system to have
       an in-band remote controller, and in that case this suppresses the flows
-      that in-band control would ordinarily set up.  See <code>In-Band
-      Control</code> in <code>DESIGN.rst</code> for more information.
+      that in-band control would ordinarily set up.  Refer to the documentation
+      for more information.
     </dd>
   </dl>
 

@@ -158,8 +158,8 @@ enum {
  *       NXAST_SET_TUNNEL64.  In these cases, if the "struct ofpact" originated
  *       from OpenFlow, then we want to make sure that, if it gets translated
  *       back to OpenFlow later, it is translated back to the same action type.
- *       (Otherwise, we'd violate the promise made in DESIGN, in the "Action
- *       Reproduction" section.)
+ *       (Otherwise, we'd violate the promise made in the topics/design doc, in
+ *       the "Action Reproduction" section.)
  *
  *       For such actions, the 'raw' member should be the "enum ofp_raw_action"
  *       originally extracted from the OpenFlow action.  (If the action didn't

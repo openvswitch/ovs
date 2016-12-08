@@ -731,8 +731,7 @@ pinctrl_recv(const struct ofp_header *oh, enum ofptype type)
     if (type == OFPTYPE_ECHO_REQUEST) {
         queue_msg(make_echo_reply(oh));
     } else if (type == OFPTYPE_GET_CONFIG_REPLY) {
-        /* Enable asynchronous messages (see "Asynchronous Messages" in
-         * DESIGN.rst for more information). */
+        /* Enable asynchronous messages */
         struct ofputil_switch_config config;
 
         ofputil_decode_get_config_reply(oh, &config);

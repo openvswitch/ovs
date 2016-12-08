@@ -1,6 +1,4 @@
 ..
-      Copyright (c) 2016, Stephen Finucane <stephen@that.guru>
-
       Licensed under the Apache License, Version 2.0 (the "License"); you may
       not use this file except in compliance with the License. You may obtain
       a copy of the License at
@@ -23,27 +21,8 @@
 
       Avoid deeper levels because they do not render well.
 
-======================
-Open vSwitch Deep Dive
-======================
+================
+DPDK Integration
+================
 
-How Open vSwitch is implemented and, where necessary, why it was implemented
-that way.
-
-.. toctree::
-   :maxdepth: 2
-
-   design
-   datapath
-   integration
-   porting
-   openflow
-   bonding
-   ovsdb-replication
-   dpdk
-   windows
-
-.. toctree::
-   :maxdepth: 2
-
-   high-availability
+**TODO**

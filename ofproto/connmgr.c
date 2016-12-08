@@ -1520,7 +1520,7 @@ ofconn_receives_async_msg(const struct ofconn *ofconn,
     ovs_assert((unsigned int) type < OAM_N_TYPES);
 
     /* Keep the following code in sync with the documentation in the
-     * "Asynchronous Messages" section in DESIGN. */
+     * "Asynchronous Messages" section in 'topics/design' */
 
     if (ofconn->type == OFCONN_SERVICE && !ofconn->miss_send_len) {
         /* Service connections don't get asynchronous messages unless they have

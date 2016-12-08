@@ -1,6 +1,5 @@
 docs += \
-	Documentation/group-selection-method-property.txt \
-	Documentation/OVSDB-replication.rst
+	Documentation/group-selection-method-property.txt
 
 EXTRA_DIST += \
 	Documentation/_static/logo.png \
@@ -22,6 +21,16 @@ EXTRA_DIST += \
 	Documentation/intro/install/xenserver.rst \
 	Documentation/tutorials/index.rst \
 	Documentation/topics/index.rst \
+	Documentation/topics/bonding.rst \
+	Documentation/topics/datapath.rst \
+	Documentation/topics/design.rst \
+	Documentation/topics/dpdk.rst \
+	Documentation/topics/high-availability.rst \
+	Documentation/topics/integration.rst \
+	Documentation/topics/openflow.rst \
+	Documentation/topics/ovsdb-replication.rst \
+	Documentation/topics/porting.rst \
+	Documentation/topics/windows.rst \
 	Documentation/howto/index.rst \
 	Documentation/howto/docker.rst \
 	Documentation/howto/kvm.rst \
@@ -58,8 +67,7 @@ SPHINXBUILDDIR = $(srcdir)/Documentation/_build
 # Internal variables.
 PAPEROPT_a4 = -D latex_paper_size=a4
 PAPEROPT_letter = -D latex_paper_size=letter
-# TODO(stephenfin): Add '-W' flag here once we've integrated required docs
-ALLSPHINXOPTS = -d $(SPHINXBUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(SPHINXSRCDIR)
+ALLSPHINXOPTS = -W -d $(SPHINXBUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(SPHINXSRCDIR)
 
 .PHONY: htmldocs
 htmldocs:

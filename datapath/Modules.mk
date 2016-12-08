@@ -45,9 +45,6 @@ openvswitch_headers = \
 	vport-internal_dev.h \
 	vport-netdev.h
 
-openvswitch_extras = \
-	README.rst
-
 dist_sources = $(foreach module,$(dist_modules),$($(module)_sources))
 dist_headers = $(foreach module,$(dist_modules),$($(module)_headers))
 dist_extras = $(foreach module,$(dist_modules),$($(module)_extras))

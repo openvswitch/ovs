@@ -2476,7 +2476,7 @@ AT_CHECK([echo "$tcp_flags" | ovs-ofctl parse-oxm OpenFlow15], [0],
 AT_CLEANUP
 
 dnl Check all of the patterns mentioned in the "VLAN Matching" section
-dnl in the DESIGN file at top level.
+dnl in the topics/design doc
 AT_SETUP([ovs-ofctl check-vlan])
 AT_KEYWORDS([VLAN])
 

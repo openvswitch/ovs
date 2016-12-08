@@ -787,7 +787,7 @@ When \fBipv6\fR or \fBdl_type=0x86dd\fR is specified, matches IPv6
 header type \fIproto\fR, which is specified as a decimal number between
 0 and 255, inclusive (e.g. 58 to match ICMPv6 packets or 6 to match
 TCP).  The header type is the terminal header as described in the
-\fBDESIGN\fR document.
+\fBtopics/design\fR document.
 .IP
 When \fBarp\fR or \fBdl_type=0x0806\fR is specified, matches the lower
 8 bits of the ARP opcode.  ARP opcodes greater than 255 are treated as

@@ -1,5 +1,4 @@
 EXTRA_DIST += \
-	datapath-windows/DESIGN.rst \
 	datapath-windows/Package/package.VcxProj \
 	datapath-windows/Package/package.VcxProj.user \
 	datapath-windows/include/OvsDpInterfaceExt.h \

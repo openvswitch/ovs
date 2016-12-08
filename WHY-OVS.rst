@@ -109,8 +109,8 @@ implementation or a hardware switch.
 
 There are many ongoing efforts to port Open vSwitch to hardware chipsets. These
 include multiple merchant silicon chipsets (Broadcom and Marvell), as well as a
-number of vendor-specific platforms. (The PORTING file discusses how one would
-go about making such a port.)
+number of vendor-specific platforms. The "Porting" section in the documentation
+discusses how one would go about making such a port.
 
 The advantage of hardware integration is not only performance within
 virtualized environments. If physical switches also expose the Open vSwitch

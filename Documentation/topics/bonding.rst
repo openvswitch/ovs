@@ -21,21 +21,9 @@
 
       Avoid deeper levels because they do not render well.
 
-======================
-ovs-vswitchd Internals
-======================
-
-This document describes some of the internals of the ovs-vswitchd process.  It
-is not complete.  It tends to be updated on demand, so if you have questions
-about the vswitchd implementation, ask them and perhaps we'll add some
-appropriate documentation here.
-
-Most of the ovs-vswitchd implementation is in ``vswitchd/bridge.c``, so code
-references below should be assumed to refer to that file except as otherwise
-specified.
-
+=======
 Bonding
--------
+=======
 
 Bonding allows two or more interfaces (the "slaves") to share network traffic.
 From a high-level point of view, bonded interfaces act like a single port, but
@@ -55,8 +43,15 @@ Ethernet source address.  This is useful only if the traffic over the bond has
 multiple Ethernet source addresses, for example if network traffic from
 multiple VMs are multiplexed over the bond.
 
+.. note::
+
+   Most of the ovs-vswitchd implementation is in ``vswitchd/bridge.c``, so code
+   references below should be assumed to refer to that file except as otherwise
+   specified.
+
+
 Enabling and Disabling Slaves
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-----------------------------
 
 When a bond is created, a slave is initially enabled or disabled based on
 whether carrier is detected on the NIC (see ``iface_create()``).  After that, a
@@ -86,7 +81,7 @@ connected to a physical switch; vswitchd should probably provide a way to
 disable or configure it in other scenarios.)
 
 Bond Packet Input
-~~~~~~~~~~~~~~~~~
+-----------------
 
 Bonding accepts unicast packets on any bond slave.  This can occasionally cause
 packet duplication for the first few packets sent to a given MAC, if the
@@ -118,7 +113,7 @@ remaining slave whose interface name is first alphabetically, but this is by no
 means guaranteed.
 
 Bond Packet Output
-~~~~~~~~~~~~~~~~~~
+------------------
 
 When a packet is sent out a bond port, the bond slave actually used is selected
 based on the packet's source MAC and VLAN tag (see ``choose_output_iface()``).
@@ -143,12 +138,12 @@ Currently, "significantly more loaded" means that H must carry at least 1 Mbps
 more traffic, and that traffic must be at least 3% greater than L's.
 
 Bond Balance Modes
-~~~~~~~~~~~~~~~~~~
+------------------
 
 Each bond balancing mode has different considerations, described below.
 
 LACP Bonding
-++++++++++++
+~~~~~~~~~~~~
 
 LACP bonding requires the remote switch to implement LACP, but it is otherwise
 very simple in that, after LACP negotiation is complete, there is no need for
@@ -169,7 +164,7 @@ configuration is complete. An option "lacp-fallback-ab" exists to provide such
 behavior on openvswitch.
 
 Active Backup Bonding
-+++++++++++++++++++++
+~~~~~~~~~~~~~~~~~~~~~
 
 Active Backup bonds send all traffic out one "active" slave until that slave
 becomes unavailable.  Since they are significantly less complicated than SLB
@@ -178,7 +173,7 @@ the only bond mode which supports attaching each slave to a different upstream
 switch.
 
 SLB Bonding
-+++++++++++
+~~~~~~~~~~~
 
 SLB bonding allows a limited form of load balancing without the remote switch's
 knowledge or cooperation.  The basics of SLB are simple.  SLB assigns each
@@ -241,4 +236,3 @@ SLB bonding has the following complications:
    for a MAC+VLAN from which a gratuitous ARP was received from a non-SLB bond
    port.  For 5 seconds, a locked MAC learning table entry will not be updated
    based on a gratuitous ARP received on a SLB bond.
-

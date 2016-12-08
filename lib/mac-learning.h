@@ -46,8 +46,8 @@
  *
  * Second, the implementation has the ability to "lock" a MAC table entry
  * updated by a gratuitous ARP.  This is a simple feature but the rationale for
- * it is complicated.  Please refer to the description of SLB bonding in
- * vswitchd/INTERNALS.rst for an explanation.
+ * it is complicated.  Refer to the description of SLB bonding in the
+ * 'ovs-vswitchd Internals' guide for an explanation.
  *
  * Third, the implementation expires entries that are idle for longer than a
  * configurable amount of time.  This is implemented by keeping all of the

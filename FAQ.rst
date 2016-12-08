@@ -79,8 +79,9 @@ Q: Does Open vSwitch only work on Linux?
 
 Q: What's involved with porting Open vSwitch to a new platform or switching ASIC?
 
-    A: The `porting document <PORTING.rst>`__ describes how one would go about
-    porting Open vSwitch to a new operating system or hardware platform.
+    A: The `porting document <Documentation/development-guide/porting.rst>`__
+    describes how one would go about porting Open vSwitch to a new operating
+    system or hardware platform.
 
 Q: Why would I use Open vSwitch instead of the Linux bridge?
 
@@ -1588,9 +1589,10 @@ Q: What versions of OpenFlow does Open vSwitch support?
     (Open vSwitch 2.2 had an experimental implementation of OpenFlow 1.4 that
     could cause crashes.  We don't recommend enabling it.)
 
-    The `OpenFlow guide <OPENFLOW.rst>`__ tracks support for OpenFlow 1.1 and
-    later features.  When support for OpenFlow 1.4 and 1.5 is solidly
-    implemented, Open vSwitch will enable those version by default.
+    The `OpenFlow guide <Documentation/development-guide/openflow.rst>`__
+    tracks support for OpenFlow 1.1 and later features.  When support for
+    OpenFlow 1.4 and 1.5 is solidly implemented, Open vSwitch will enable those
+    version by default.
 
 Q: Does Open vSwitch support MPLS?
 
@@ -1651,8 +1653,8 @@ going through.
     greater than 65535 (the maximum priority that can be set with
     OpenFlow).
 
-    The DESIGN file at the top level of the Open vSwitch source
-    distribution describes the in-band model in detail.
+    The ``Documentation/topics/design`` doc describes the in-band model in
+    detail.
 
     If your controllers are not actually in-band (e.g. they are on
     localhost via 127.0.0.1, or on a separate network), then you should

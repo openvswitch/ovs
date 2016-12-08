@@ -68,12 +68,8 @@ PYCOV_CLEAN_FILES = build-aux/check-structs,cover
 docs = \
 	AUTHORS.rst \
 	CONTRIBUTING.rst \
-	DESIGN.rst \
 	FAQ.rst \
-	IntegrationGuide.rst \
 	MAINTAINERS.rst \
-	OPENFLOW.rst \
-	PORTING.rst \
 	README.rst \
 	WHY-OVS.rst
 EXTRA_DIST = \

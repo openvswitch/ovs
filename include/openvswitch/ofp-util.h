@@ -282,7 +282,7 @@ enum ofputil_flow_mod_flags {
 /* Protocol-independent flow_mod.
  *
  * The handling of cookies across multiple versions of OpenFlow is a bit
- * confusing.  See DESIGN for the details. */
+ * confusing.  See the topics/design doc for the details. */
 struct ofputil_flow_mod {
     struct ovs_list list_node; /* For queuing flow_mods. */
 
@@ -818,7 +818,7 @@ struct ofputil_table_features {
      * supported, otherwise 0.  For other versions, they are decoded as -1 and
      * ignored for encoding.
      *
-     * See the section "OFPTC_* Table Configuration" in DESIGN.rst for more
+     * Search for "OFPTC_* Table Configuration" in the documentation for more
      * details of how OpenFlow has changed in this area.
      */
     enum ofputil_table_miss miss_config; /* OF1.1 and 1.2 only. */

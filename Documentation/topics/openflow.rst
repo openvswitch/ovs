@@ -395,21 +395,25 @@ How to contribute
 If you plan to contribute code for a feature, please let everyone know on
 ovs-dev before you start work.  This will help avoid duplicating work.
 
-Please consider the following:
+Consider the following:
 
-* Testing.  Please test your code.
+* Testing.
 
-* Unit tests.  Please consider writing some.  The tests directory has many
-  examples that you can use as a starting point.
+  Please test your code.
 
-* ovs-ofctl.  If you add a feature that is useful for some ovs-ofctl command
-  then you should add support for it there.
+* Unit tests.
 
-* Documentation.  If you add a user-visible feature, then you should document
-  it in the appropriate manpage and mention it in NEWS as well.
+  Consider writing some.  The tests directory has many examples that you can
+  use as a starting point.
 
-* Coding style (see the `coding style guide <CodingStyle.rst>`__ file at the top
-  of the source tree).
+* ovs-ofctl.
 
-* The `patch submission guidelines <CONTRIBUTING.rst>`__.  I recommend using
-  "git send-email", which automatically follows a lot of those guidelines.
+  If you add a feature that is useful for some ovs-ofctl command then you
+  should add support for it there.
+
+* Documentation.
+
+  If you add a user-visible feature, then you should document it in the
+  appropriate manpage and mention it in NEWS as well.
+
+Refer to :doc:`/internals/contributing/index` for more information.
