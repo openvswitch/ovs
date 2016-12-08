@@ -59,6 +59,10 @@ OvsConntrackUpdateIcmpEntry(OVS_CT_ENTRY* conn_,
 BOOLEAN
 OvsConntrackValidateIcmpPacket(const ICMPHdr *icmp)
 {
+    if (!icmp) {
+        return FALSE;
+    }
+
     return icmp->type == ICMP4_ECHO_REQUEST
            || icmp->type == ICMP4_INFO_REQUEST
            || icmp->type == ICMP4_TIMESTAMP_REQUEST;

@@ -457,9 +457,13 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
 BOOLEAN
 OvsConntrackValidateTcpPacket(const TCPHdr *tcp)
 {
+    if (!tcp) {
+        return FALSE;
+    }
+
     UINT16 tcp_flags = ntohs(tcp->flags);
 
-    if (tcp == NULL || OvsCtInvalidTcpFlags(tcp_flags)) {
+    if (OvsCtInvalidTcpFlags(tcp_flags)) {
         return FALSE;
     }
 
