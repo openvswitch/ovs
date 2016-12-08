@@ -868,8 +868,8 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
         goto exit;
     }
 
-    new_n_rxq = MAX(smap_get_int(args, "n_rxq", netdev->requested_n_rxq), 1);
-    new_n_txq = MAX(smap_get_int(args, "n_txq", netdev->requested_n_txq), 1);
+    new_n_rxq = MAX(smap_get_int(args, "n_rxq", 1), 1);
+    new_n_txq = MAX(smap_get_int(args, "n_txq", 1), 1);
     new_numa_id = smap_get_int(args, "numa_id", 0);
     if (new_n_rxq != netdev->requested_n_rxq
         || new_n_txq != netdev->requested_n_txq

@@ -259,6 +259,13 @@ NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_le
 icmp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.0.0.2,nw_dst=10.0.0.1,nw_tos=0,nw_ecn=0,nw_ttl=64,icmp_type=8,icmp_code=0 icmp_csum:f7ff
 ])
 
+dnl Check resetting to default number of rx queues after removal from the db.
+AT_CHECK([ovs-vsctl remove interface p1 options n_rxq])
+
+AT_CHECK([ovs-appctl dpif/show | grep p1 | sed 's/\(tx_queues=\)[[0-9]]*/\1<cleared>/g'], [0], [dnl
+		p1 1/1: (dummy-pmd: configured_rx_queues=1, configured_tx_queues=<cleared>, requested_rx_queues=1, requested_tx_queues=<cleared>)
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
