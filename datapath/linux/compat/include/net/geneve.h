@@ -18,6 +18,16 @@ static inline void rpl_geneve_cleanup_module(void)
 
 #define geneve_xmit dev_queue_xmit
 
+#ifdef CONFIG_INET
+#ifndef HAVE_NAME_ASSIGN_TYPE
+static inline struct net_device *rpl_geneve_dev_create_fb(
+	struct net *net, const char *name, u8 name_assign_type, u16 dst_port) {
+	return geneve_dev_create_fb(net, name, dst_port);
+}
+#define geneve_dev_create_fb rpl_geneve_dev_create_fb
+#endif
+#endif
+
 #else
 /* Geneve Header:
  *  +-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+
