@@ -103,8 +103,8 @@ class Stream(object):
     def open(name, dscp=DSCP_DEFAULT):
         """Attempts to connect a stream to a remote peer.  'name' is a
         connection name in the form "TYPE:ARGS", where TYPE is an active stream
-        class's name and ARGS are stream class-specific.  Currently the only
-        supported TYPEs are "unix" and "tcp".
+        class's name and ARGS are stream class-specific.  The supported TYPEs
+        include "unix", "tcp", and "ssl".
 
         Returns (error, stream): on success 'error' is 0 and 'stream' is the
         new Stream, on failure 'error' is a positive errno value and 'stream'
