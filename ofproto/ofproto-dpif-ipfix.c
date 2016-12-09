@@ -868,6 +868,15 @@ dpif_ipfix_flow_exporter_set_options(
     return true;
 }
 
+static void
+remove_flow_exporter(struct dpif_ipfix *di,
+                     struct dpif_ipfix_flow_exporter_map_node *node)
+{
+    hmap_remove(&di->flow_exporter_map, &node->node);
+    dpif_ipfix_flow_exporter_destroy(&node->exporter);
+    free(node);
+}
+
 void
 dpif_ipfix_set_options(
     struct dpif_ipfix *di,
@@ -878,7 +887,6 @@ dpif_ipfix_set_options(
     int i;
     struct ofproto_ipfix_flow_exporter_options *options;
     struct dpif_ipfix_flow_exporter_map_node *node, *next;
-    size_t n_broken_flow_exporters_options = 0;
 
     ovs_mutex_lock(&mutex);
     dpif_ipfix_bridge_exporter_set_options(&di->bridge_exporter,
@@ -897,38 +905,29 @@ dpif_ipfix_set_options(
                         hash_int(options->collector_set_id, 0));
         }
         if (!dpif_ipfix_flow_exporter_set_options(&node->exporter, options)) {
-            n_broken_flow_exporters_options++;
+            remove_flow_exporter(di, node);
         }
         options++;
     }
 
-    ovs_assert(hmap_count(&di->flow_exporter_map) >=
-               (n_flow_exporters_options - n_broken_flow_exporters_options));
-
     /* Remove dropped flow exporters, if any needs to be removed. */
-    if (hmap_count(&di->flow_exporter_map) > n_flow_exporters_options) {
-        HMAP_FOR_EACH_SAFE (node, next, node, &di->flow_exporter_map) {
-            /* This is slow but doesn't take any extra memory, and
-             * this table is not supposed to contain many rows anyway. */
-            options = (struct ofproto_ipfix_flow_exporter_options *)
-                flow_exporters_options;
-            for (i = 0; i < n_flow_exporters_options; i++) {
-              if (node->exporter.options->collector_set_id
-                  == options->collector_set_id) {
-                  break;
-              }
-              options++;
+    HMAP_FOR_EACH_SAFE (node, next, node, &di->flow_exporter_map) {
+        /* This is slow but doesn't take any extra memory, and
+         * this table is not supposed to contain many rows anyway. */
+        options = (struct ofproto_ipfix_flow_exporter_options *)
+            flow_exporters_options;
+        for (i = 0; i < n_flow_exporters_options; i++) {
+            if (node->exporter.options->collector_set_id
+                == options->collector_set_id) {
+                break;
             }
-            if (i == n_flow_exporters_options) {  // Not found.
-                hmap_remove(&di->flow_exporter_map, &node->node);
-                dpif_ipfix_flow_exporter_destroy(&node->exporter);
-                free(node);
-            }
+            options++;
+        }
+        if (i == n_flow_exporters_options) {  // Not found.
+            remove_flow_exporter(di, node);
         }
     }
 
-    ovs_assert(hmap_count(&di->flow_exporter_map) ==
-               (n_flow_exporters_options - n_broken_flow_exporters_options));
     ovs_mutex_unlock(&mutex);
 }
 
