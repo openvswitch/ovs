@@ -6313,6 +6313,13 @@ AT_SETUP([ofproto-dpif - Flow IPFIX sanity check])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2
 
+# Check for regression against a bug where an invalid target caused an
+# assertion failure and a crash.
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- --id=@ipfix create IPFIX targets=\"xyzzy\" \
+                    -- --id=@cs create Flow_Sample_Collector_Set id=0 bridge=@br0 ipfix=@ipfix],
+         [0], [ignore])
+
 AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
                     -- --id=@ipfix create IPFIX targets=\"127.0.0.1:4739\" \
                     -- --id=@cs create Flow_Sample_Collector_Set id=1 bridge=@br0 ipfix=@ipfix],
@@ -6346,7 +6353,9 @@ flow-dump from non-dpdk interfaces:
 packets:2, bytes:68, used:0.001s, actions:drop
 ])
 
-OVS_VSWITCHD_STOP(["/sending to collector failed/d"])
+OVS_VSWITCHD_STOP(["/sending to collector failed/d
+/xyzzy/d
+/no collectors/d"])
 AT_CLEANUP
 
 dnl Flow IPFIX sanity check for tunnel set
