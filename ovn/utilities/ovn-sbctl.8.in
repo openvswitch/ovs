@@ -121,8 +121,8 @@ Prints a brief overview of the database contents.
 .SS "Chassis Commands"
 These commands manipulate \fBOVN_Southbound\fR chassis.
 .
-.IP "[\fB\-\-may\-exist\fR] \fBchassis\-add \fIchassis\fR \fIencap\-type\fR \fIencap-ip\fR"
-Creates a new chassis named \fIchassis\fR.  \fIencap\-type\fR is a
+.IP "[\fB\-\-may\-exist\fR] \fBchassis\-add \fIchassis\fR \fIencap-type\fR \fIencap-ip\fR"
+Creates a new chassis named \fIchassis\fR.  \fIencap-type\fR is a
 comma-separated list of tunnel types.  The chassis will have
 one encap entry for each specified tunnel type with \fIencap-ip\fR
 as the destination IP for each.
@@ -142,16 +142,16 @@ delete a chassis that does not exist has no effect.
 .
 These commands manipulate \fBOVN_Southbound\fR port bindings.
 .
-.IP "[\fB\-\-may\-exist\fR] \fBlsp\-bind \fIlogical\-port\fR \fIchassis\fR"
-Binds the logical port named \fIlogical\-port\fR to \fIchassis\fR.
+.IP "[\fB\-\-may\-exist\fR] \fBlsp\-bind \fIlogical-port\fR \fIchassis\fR"
+Binds the logical port named \fIlogical-port\fR to \fIchassis\fR.
 .IP
 Without \fB\-\-may\-exist\fR, attempting to bind a logical port that
 has already been bound is an error.  With \fB\-\-may\-exist\fR, this
-command does nothing if \fIlogical\-port\fR has already been bound to
+command does nothing if \fIlogical-port\fR has already been bound to
 a chassis.
 .
-.IP "[\fB\-\-if\-exists\fR] \fBlsp\-unbind\fR \fIlogical\-port\fR"
-Resets the binding of \fIlogical\-port\fR to \fINULL\fR.
+.IP "[\fB\-\-if\-exists\fR] \fBlsp\-unbind\fR \fIlogical-port\fR"
+Resets the binding of \fIlogical-port\fR to \fINULL\fR.
 .IP
 Without \fB\-\-if\-exists\fR, attempting to unbind a logical port
 that is not bound is an error.  With \fB\-\-if\-exists\fR, attempting
@@ -159,11 +159,11 @@ to unbind logical port that is not bound has no effect.
 .
 .SS "Logical Flow Commands"
 .
-.IP "\fBlflow\-list\fR [\fIlogical\-datapath\fR]"
-List logical flows. If \fIlogical\-datapath\fR is specified, only list flows for
-that logical datapath.
+.IP "\fBlflow\-list\fR [\fIlogical-datapath\fR]"
+List logical flows.  If \fIlogical-datapath\fR is specified, only list
+flows for that logical datapath.
 .
-.IP "\fBdump\-flows\fR [\fIlogical\-datapath\fR]"
+.IP "\fBdump\-flows\fR [\fIlogical-datapath\fR]"
 Alias for \fBlflow\-list\fB.
 .
 .so lib/db-ctl-base.man
