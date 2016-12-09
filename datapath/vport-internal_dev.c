@@ -153,7 +153,11 @@ static const struct net_device_ops internal_dev_netdev_ops = {
 	.ndo_change_mtu = internal_dev_change_mtu,
 	.ndo_get_stats64 = internal_get_stats,
 #ifdef HAVE_IFF_PHONY_HEADROOM
+#ifndef HAVE_NET_DEVICE_OPS_WITH_EXTENDED
 	.ndo_set_rx_headroom = internal_set_rx_headroom,
+#else
+	.extended.ndo_set_rx_headroom = internal_set_rx_headroom,
+#endif
 #endif
 };
 

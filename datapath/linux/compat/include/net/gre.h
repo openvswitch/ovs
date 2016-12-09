@@ -17,6 +17,16 @@ static inline void rpl_ipgre_fini(void)
 
 #define gre_fb_xmit dev_queue_xmit
 
+#ifdef CONFIG_INET
+#ifndef HAVE_NAME_ASSIGN_TYPE
+static inline struct net_device *rpl_gretap_fb_dev_create(
+	struct net *net, const char *name, u8 name_assign_type) {
+	return gretap_fb_dev_create(net, name);
+}
+#define gretap_fb_dev_create rpl_gretap_fb_dev_create
+#endif
+#endif
+
 #else
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,37) || \
