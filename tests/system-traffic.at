@@ -338,6 +338,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([datapath - basic truncate action])
+AT_SKIP_IF([test $HAVE_NC = no])
 OVS_TRAFFIC_VSWITCHD_START()
 AT_CHECK([ovs-ofctl del-flows br0])
 
@@ -454,6 +455,7 @@ dnl   ns1: connect to br0, with IP:10.1.1.2
 dnl   br-underlay: with IP: 172.31.1.100
 dnl   ns0: connect to br-underlay, with IP: 10.1.1.1
 AT_SETUP([datapath - truncate and output to gre tunnel])
+AT_SKIP_IF([test $HAVE_NC = no])
 OVS_CHECK_GRE()
 OVS_TRAFFIC_VSWITCHD_START()
 
@@ -1479,6 +1481,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - ICMP related])
+AT_SKIP_IF([test $HAVE_NC = no])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
 
@@ -2408,6 +2411,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - ICMP related with NAT])
+AT_SKIP_IF([test $HAVE_NC = no])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -2832,6 +2836,7 @@ AT_CLEANUP
 
 
 AT_SETUP([conntrack - DNAT load balancing with NC])
+AT_SKIP_IF([test $HAVE_NC = no])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()
