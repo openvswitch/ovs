@@ -103,7 +103,7 @@ rm \
     $RPM_BUILD_ROOT/usr/bin/ovn-* \
     $RPM_BUILD_ROOT/usr/share/man/man?/ovn-* \
     $RPM_BUILD_ROOT/usr/share/openvswitch/ovn-* \
-    $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovn-*
+    $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovn*
 (cd "$RPM_BUILD_ROOT" && rm -rf usr/%{_lib}/*.la)
 (cd "$RPM_BUILD_ROOT" && rm -rf usr/include)
 
