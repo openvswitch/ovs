@@ -3365,7 +3365,7 @@ get_dpdk_args(const struct smap *ovs_other_config, char ***argv,
     return i + extra_argc;
 }
 
-static char **dpdk_argv;
+static char **dpdk_argv, **dpdk_argv_release;
 static int dpdk_argc;
 
 static void
@@ -3373,9 +3373,10 @@ deferred_argv_release(void)
 {
     int result;
     for (result = 0; result < dpdk_argc; ++result) {
-        free(dpdk_argv[result]);
+        free(dpdk_argv_release[result]);
     }
 
+    free(dpdk_argv_release);
     free(dpdk_argv);
 }
 
@@ -3479,6 +3480,11 @@ dpdk_init__(const struct smap *ovs_other_config)
         }
         VLOG_INFO("%s", ds_cstr_ro(&eal_args));
         ds_destroy(&eal_args);
+    }
+
+    dpdk_argv_release = grow_argv(&dpdk_argv_release, 0, argc);
+    for (argc_tmp = 0; argc_tmp < argc; ++argc_tmp) {
+        dpdk_argv_release[argc_tmp] = argv[argc_tmp];
     }
 
     /* Make sure things are initialized ... */
