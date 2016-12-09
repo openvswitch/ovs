@@ -223,16 +223,26 @@ m4_define([NETNS_DAEMONIZE],
    ]
 )
 
+# OVS_CHECK_FIREWALL()
+#
+# Check if firewalld is active, skip the test if it is on.
+# The following command currently only supports RHEL and CentOS.
+m4_define([OVS_CHECK_FIREWALL],
+    [AT_SKIP_IF([systemctl status firewalld 2>&1 | grep running > /dev/null])])
+
 # OVS_CHECK_VXLAN()
 #
 # Do basic check for vxlan functionality, skip the test if it's not there.
 m4_define([OVS_CHECK_VXLAN],
-    [AT_SKIP_IF([! ip link add foo type vxlan help 2>&1 | grep dstport >/dev/null])])
+    [AT_SKIP_IF([! ip link add foo type vxlan help 2>&1 | grep dstport >/dev/null])
+     OVS_CHECK_FIREWALL()])
 
 # OVS_CHECK_GRE()
 m4_define([OVS_CHECK_GRE],
-    [AT_SKIP_IF([! ip link add foo type gretap help 2>&1 | grep gre >/dev/null])])
+    [AT_SKIP_IF([! ip link add foo type gretap help 2>&1 | grep gre >/dev/null])
+     OVS_CHECK_FIREWALL()])
 
 # OVS_CHECK_GENEVE()
 m4_define([OVS_CHECK_GENEVE],
-    [AT_SKIP_IF([! ip link add foo type geneve help 2>&1 | grep geneve >/dev/null])])
+    [AT_SKIP_IF([! ip link add foo type geneve help 2>&1 | grep geneve >/dev/null])
+     OVS_CHECK_FIREWALL()])
