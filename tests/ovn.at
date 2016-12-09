@@ -3681,7 +3681,7 @@ as hv1 ovs-ofctl dump-flows br-int
 # Send DHCPDISCOVER.
 offer_ip=`ip_to_hex 10 0 0 4`
 server_ip=`ip_to_hex 10 0 0 1`
-expected_dhcp_opts=0104ffffff0003040a00000136040a000001330400000e10
+expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
 test_dhcp 1 f00000000001 01 $offer_ip ff1000000001 $server_ip $expected_dhcp_opts
 
 # NXT_RESUMEs should be 1.
@@ -3704,7 +3704,7 @@ rm -f 2.expected
 # Send DHCPREQUEST.
 offer_ip=`ip_to_hex 10 0 0 6`
 server_ip=`ip_to_hex 10 0 0 1`
-expected_dhcp_opts=0104ffffff0003040a00000136040a000001330400000e10
+expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
 test_dhcp 2 f00000000002 03 $offer_ip ff1000000001 $server_ip $expected_dhcp_opts
 
 # NXT_RESUMEs should be 2.

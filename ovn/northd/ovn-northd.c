@@ -1940,10 +1940,15 @@ build_dhcpv4_action(struct ovn_port *op, ovs_be32 offer_ip,
     ds_put_format(options_action,
                   REGBIT_DHCP_OPTS_RESULT" = put_dhcp_opts(offerip = "
                   IP_FMT", ", IP_ARGS(offer_ip));
-    struct smap_node *node;
-    SMAP_FOR_EACH(node, &dhcpv4_options) {
+
+    /* We're not using SMAP_FOR_EACH because we want a consistent order of the
+     * options on different architectures (big or little endian, SSE4.2) */
+    const struct smap_node **sorted_opts = smap_sort(&dhcpv4_options);
+    for (size_t i = 0; i < smap_count(&dhcpv4_options); i++) {
+        const struct smap_node *node = sorted_opts[i];
         ds_put_format(options_action, "%s = %s, ", node->key, node->value);
     }
+    free(sorted_opts);
 
     ds_chomp(options_action, ' ');
     ds_chomp(options_action, ',');
@@ -1984,9 +1989,9 @@ build_dhcpv6_action(struct ovn_port *op, struct in6_addr *offer_ip,
         return false;
     }
 
+    const struct smap *options_map = &op->nbsp->dhcpv6_options->options;
     /* "server_id" should be the MAC address. */
-    const char *server_mac = smap_get(&op->nbsp->dhcpv6_options->options,
-                                      "server_id");
+    const char *server_mac = smap_get(options_map, "server_id");
     struct eth_addr ea;
     if (!server_mac || !eth_addr_from_string(server_mac, &ea)) {
         /* "server_id" should be present in the dhcpv6_options. */
@@ -2009,10 +2014,18 @@ build_dhcpv6_action(struct ovn_port *op, struct in6_addr *offer_ip,
     ds_put_format(options_action,
                   REGBIT_DHCP_OPTS_RESULT" = put_dhcpv6_opts(ia_addr = %s, ",
                   ia_addr);
-    struct smap_node *node;
-    SMAP_FOR_EACH (node, &op->nbsp->dhcpv6_options->options) {
-        ds_put_format(options_action, "%s = %s, ", node->key, node->value);
+
+    /* We're not using SMAP_FOR_EACH because we want a consistent order of the
+     * options on different architectures (big or little endian, SSE4.2) */
+    const struct smap_node **sorted_opts = smap_sort(options_map);
+    for (size_t i = 0; i < smap_count(options_map); i++) {
+        const struct smap_node *node = sorted_opts[i];
+        if (strcmp(node->key, "dhcpv6_stateless")) {
+            ds_put_format(options_action, "%s = %s, ", node->key, node->value);
+        }
     }
+    free(sorted_opts);
+
     ds_chomp(options_action, ' ');
     ds_chomp(options_action, ',');
     ds_put_cstr(options_action, "); next;");
