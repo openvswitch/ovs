@@ -41,7 +41,7 @@ $HOME/rpmbuild/SOURCES.
    ```
    yum install gcc make python-devel openssl-devel kernel-devel graphviz \
        kernel-debug-devel autoconf automake rpm-build redhat-rpm-config \
-       libtool
+       libtool checkpolicy selinux-policy-devel
    ```
 
 2. If you are building from a distribution tarball, skip to step 3.
