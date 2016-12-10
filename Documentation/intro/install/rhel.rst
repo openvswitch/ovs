@@ -76,7 +76,7 @@ the below command::
 
     $ yum install gcc make python-devel openssl-devel kernel-devel graphviz \
         kernel-debug-devel autoconf automake rpm-build redhat-rpm-config \
-        libtool
+        libtool checkpolicy selinux-policy-devel
 
 .. _rhel-bootstrapping:
 

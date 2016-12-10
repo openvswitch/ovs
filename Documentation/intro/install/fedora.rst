@@ -46,6 +46,7 @@ in the :doc:`general`. Specific packages (by package name) include:
 - desktop-file-utils
 - groff graphviz
 - procps-ng
+- checkpolicy selinux-policy-devel
 
 And (optionally):
 
