@@ -7,4 +7,8 @@
 #define GENL_UNS_ADMIN_PERM GENL_ADMIN_PERM
 #endif
 
+#ifdef GENL_ID_GENERATE
+compiletime_assert(GENL_ID_GENERATE == 0, "GENL_ID_GENERATE is assumed to be zero")
+#endif
+
 #endif

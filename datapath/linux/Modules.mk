@@ -29,6 +29,7 @@ openvswitch_headers += \
 	linux/compat/gso.h \
 	linux/compat/include/linux/percpu.h \
 	linux/compat/include/linux/bug.h \
+	linux/compat/include/linux/cache.h \
 	linux/compat/include/linux/compiler.h \
 	linux/compat/include/linux/compiler-gcc.h \
 	linux/compat/include/linux/cpumask.h \
