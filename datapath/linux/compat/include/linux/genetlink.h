@@ -8,7 +8,9 @@
 #endif
 
 #ifdef GENL_ID_GENERATE
-compiletime_assert(GENL_ID_GENERATE == 0, "GENL_ID_GENERATE is assumed to be zero")
+#if GENL_ID_GENERATE != 0
+#error "GENL_ID_GENERATE is assumed to be zero"
+#endif
 #endif
 
 #endif
