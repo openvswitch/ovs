@@ -1149,9 +1149,16 @@ netdev_dummy_get_mtu(const struct netdev *netdev, int *mtup)
     return 0;
 }
 
+#define DUMMY_MIN_MTU 68
+#define DUMMY_MAX_MTU 65535
+
 static int
 netdev_dummy_set_mtu(struct netdev *netdev, int mtu)
 {
+    if (mtu < DUMMY_MIN_MTU || mtu > DUMMY_MAX_MTU) {
+        return EINVAL;
+    }
+
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);
