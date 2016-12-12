@@ -2396,6 +2396,12 @@
         </p>
 
         <p>
+          RFC 791 requires every internet module to be able to forward a
+          datagram of 68 octets without further fragmentation.  The maximum
+          size of an IP packet is 65535 bytes.
+        </p>
+
+        <p>
           If this is not set and if the interface has <code>internal</code>
           type, Open vSwitch will change the MTU to match the minimum of the
           other interfaces in the bridge.
