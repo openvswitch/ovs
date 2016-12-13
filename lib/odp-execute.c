@@ -33,6 +33,7 @@
 #include "flow.h"
 #include "unaligned.h"
 #include "util.h"
+#include "csum.h"
 
 /* Masked copy of an ethernet address. 'src' is already properly masked. */
 static void
@@ -68,13 +69,51 @@ odp_set_ipv4(struct dp_packet *packet, const struct ovs_key_ipv4 *key,
              const struct ovs_key_ipv4 *mask)
 {
     struct ip_header *nh = dp_packet_l3(packet);
+    ovs_be32 ip_src_nh;
+    ovs_be32 ip_dst_nh;
+    ovs_be32 new_ip_src;
+    ovs_be32 new_ip_dst;
+    uint8_t new_tos;
+    uint8_t new_ttl;
 
-    packet_set_ipv4(
-        packet,
-        key->ipv4_src | (get_16aligned_be32(&nh->ip_src) & ~mask->ipv4_src),
-        key->ipv4_dst | (get_16aligned_be32(&nh->ip_dst) & ~mask->ipv4_dst),
-        key->ipv4_tos | (nh->ip_tos & ~mask->ipv4_tos),
-        key->ipv4_ttl | (nh->ip_ttl & ~mask->ipv4_ttl));
+    if (mask->ipv4_src) {
+        ip_src_nh = get_16aligned_be32(&nh->ip_src);
+        new_ip_src = key->ipv4_src | (ip_src_nh & ~mask->ipv4_src);
+
+        if (ip_src_nh != new_ip_src) {
+            packet_set_ipv4_addr(packet, &nh->ip_src, new_ip_src);
+        }
+    }
+
+    if (mask->ipv4_dst) {
+        ip_dst_nh = get_16aligned_be32(&nh->ip_dst);
+        new_ip_dst = key->ipv4_dst | (ip_dst_nh & ~mask->ipv4_dst);
+
+        if (ip_dst_nh != new_ip_dst) {
+            packet_set_ipv4_addr(packet, &nh->ip_dst, new_ip_dst);
+        }
+    }
+
+    if (mask->ipv4_tos) {
+        new_tos = key->ipv4_tos | (nh->ip_tos & ~mask->ipv4_tos);
+
+        if (nh->ip_tos != new_tos) {
+            nh->ip_csum = recalc_csum16(nh->ip_csum,
+                                        htons((uint16_t) nh->ip_tos),
+                                        htons((uint16_t) new_tos));
+            nh->ip_tos = new_tos;
+        }
+    }
+
+    if (OVS_LIKELY(mask->ipv4_ttl)) {
+        new_ttl = key->ipv4_ttl | (nh->ip_ttl & ~mask->ipv4_ttl);
+
+        if (OVS_LIKELY(nh->ip_ttl != new_ttl)) {
+            nh->ip_csum = recalc_csum16(nh->ip_csum, htons(nh->ip_ttl << 8),
+                                        htons(new_ttl << 8));
+            nh->ip_ttl = new_ttl;
+        }
+    }
 }
 
 static const ovs_be32 *

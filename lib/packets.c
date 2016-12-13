@@ -849,7 +849,7 @@ eth_compose(struct dp_packet *b, const struct eth_addr eth_dst,
     return data;
 }
 
-static void
+void
 packet_set_ipv4_addr(struct dp_packet *packet,
                      ovs_16aligned_be32 *addr, ovs_be32 new_addr)
 {
