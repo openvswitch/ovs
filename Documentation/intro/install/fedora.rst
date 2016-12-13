@@ -133,8 +133,10 @@ purpose.
 
 The `openvswitch-ovn-*` packages are only needed when using OVN.
 
-Refer to the `RHEL README <rhel/README.RHEL.rst>`__ for additional usage and
-configuration information.
+Refer to the `RHEL README`__ for additional usage and configuration
+information.
+
+__ https://github.com/openvswitch/ovs/blob/master/rhel/README.RHEL.rst
 
 Reporting Bugs
 --------------

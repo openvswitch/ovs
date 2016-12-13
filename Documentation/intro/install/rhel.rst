@@ -206,9 +206,11 @@ Refer to the "enable-protocol" command in the ovs-ctl(8) manpage for more
 information.
 
 In addition, simple integration with Red Hat network scripts has been
-implemented.  Refer to `README.RHEL.rst <rhel/README.RHEL.rst>`__ in the source
-tree or /usr/share/doc/openvswitch/README.RHEL.rst in the installed openvswitch
-package for details.
+implemented.  Refer to `README.RHEL.rst`__ in the source tree or
+/usr/share/doc/openvswitch/README.RHEL.rst in the installed openvswitch package
+for details.
+
+__ https://github.com/openvswitch/ovs/blob/master/rhel/README.RHEL.rst
 
 Reporting Bugs
 --------------

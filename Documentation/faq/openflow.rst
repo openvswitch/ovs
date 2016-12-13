@@ -82,10 +82,9 @@ Q: What versions of OpenFlow does Open vSwitch support?
     (Open vSwitch 2.2 had an experimental implementation of OpenFlow 1.4 that
     could cause crashes.  We don't recommend enabling it.)
 
-    The `OpenFlow guide <Documentation/development-guide/openflow.rst>`__
-    tracks support for OpenFlow 1.1 and later features.  When support for
-    OpenFlow 1.4 and 1.5 is solidly implemented, Open vSwitch will enable those
-    version by default.
+    :doc:`/topics/openflow` tracks support for OpenFlow 1.1 and later features.
+    When support for OpenFlow 1.4 and 1.5 is solidly implemented, Open vSwitch
+    will enable those version by default.
 
 Q: Does Open vSwitch support MPLS?
 
@@ -526,8 +525,8 @@ Q: The "learn" action can't learn the action I want, can you improve it?
     - Resubmit to a table selected based on learned information, e.g. see:
       http://openvswitch.org/pipermail/discuss/2016-June/021694.html
 
-    - MAC learning in the middle of a pipeline, as described in `the tutorial
-      <Documentation/tutorials/ovs-advanced.rst>`__.
+    - MAC learning in the middle of a pipeline, as described in
+      :doc:`/tutorials/ovs-advanced`
 
     - TCP state based firewalling, by learning outgoing connections based on
       SYN packets and matching them up with incoming packets.

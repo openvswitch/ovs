@@ -76,17 +76,15 @@ Q: Does Open vSwitch only work on Linux?
 
 Q: What's involved with porting Open vSwitch to a new platform or switching ASIC?
 
-    A: The `porting document <Documentation/development-guide/porting.rst>`__
-    describes how one would go about porting Open vSwitch to a new operating
-    system or hardware platform.
+    A: :doc:`/topics/porting` describes how one would go about porting Open
+    vSwitch to a new operating system or hardware platform.
 
 Q: Why would I use Open vSwitch instead of the Linux bridge?
 
     A: Open vSwitch is specially designed to make it easier to manage VM
     network configuration and monitor state spread across many physical hosts
-    in dynamic virtualized environments.  Refer to `WHY-OVS
-    <Documentation/intro/why-ovs.rst>`__ for a more detailed description of how
-    Open vSwitch relates to the Linux Bridge.
+    in dynamic virtualized environments.  Refer to :doc:`/intro/why-ovs` for a
+    more detailed description of how Open vSwitch relates to the Linux Bridge.
 
 Q: How is Open vSwitch related to distributed virtual switches like the VMware
 vNetwork distributed switch or the Cisco Nexus 1000V?
@@ -121,8 +119,8 @@ Q: How can I contribute to the Open vSwitch Community?
 
     A: You can start by joining the mailing lists and helping to answer
     questions.  You can also suggest improvements to documentation.  If you
-    have a feature or bug you would like to work on, send a mail to `one of the
-    mailing lists <http://openvswitch.org/mlists/>`__.
+    have a feature or bug you would like to work on, send a mail to one of the
+    :doc:`mailing lists </internals/mailing-lists>`.
 
 Q: Why can I no longer connect to my OpenFlow controller or OVSDB manager?
 
