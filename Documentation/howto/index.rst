@@ -44,6 +44,7 @@ topics covered herein, refer to :doc:`/topics/index`.
    qos
    vtep
    sflow
+   dpdk
 
 .. toctree::
    :maxdepth: 1

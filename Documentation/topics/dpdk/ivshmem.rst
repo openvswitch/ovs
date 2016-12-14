@@ -1,6 +1,4 @@
 ..
-      Copyright (c) 2016, Stephen Finucane <stephen@that.guru>
-
       Licensed under the Apache License, Version 2.0 (the "License"); you may
       not use this file except in compliance with the License. You may obtain
       a copy of the License at
@@ -23,40 +21,8 @@
 
       Avoid deeper levels because they do not render well.
 
-=======================
-Installing Open vSwitch
-=======================
+==================
+DPDK IVSHMEM Ports
+==================
 
-A collection of guides detailing how to install Open vSwitch in a variety of
-different environments and using different configurations.
-
-Installation from Source
-------------------------
-
-.. TODO(stephenfin): Based on the title alone, the NetBSD doc should probably
-   be merged into the general install doc
-
-.. toctree::
-   :maxdepth: 2
-
-   general
-   netbsd
-   windows
-   xenserver
-   userspace
-   dpdk
-   bash-completion
-
-Installation from Packages
---------------------------
-
-Open vSwitch is packaged on a variety of distributions. The tooling required to
-build these packages is included in the Open vSwitch tree. The instructions are
-provided below.
-
-.. toctree::
-   :maxdepth: 2
-
-   debian
-   fedora
-   rhel
+**TODO**

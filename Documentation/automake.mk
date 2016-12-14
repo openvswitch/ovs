@@ -9,7 +9,6 @@ EXTRA_DIST += \
 	Documentation/intro/install/index.rst \
 	Documentation/intro/install/bash-completion.rst \
 	Documentation/intro/install/debian.rst \
-	Documentation/intro/install/dpdk-advanced.rst \
 	Documentation/intro/install/dpdk.rst \
 	Documentation/intro/install/fedora.rst \
 	Documentation/intro/install/general.rst \
@@ -25,7 +24,10 @@ EXTRA_DIST += \
 	Documentation/topics/bonding.rst \
 	Documentation/topics/datapath.rst \
 	Documentation/topics/design.rst \
-	Documentation/topics/dpdk.rst \
+	Documentation/topics/dpdk/index.rst \
+	Documentation/topics/dpdk/vhost-user.rst \
+	Documentation/topics/dpdk/ivshmem.rst \
+	Documentation/topics/testing.rst \
 	Documentation/topics/high-availability.rst \
 	Documentation/topics/integration.rst \
 	Documentation/topics/openflow.rst \
@@ -34,6 +36,7 @@ EXTRA_DIST += \
 	Documentation/topics/windows.rst \
 	Documentation/howto/index.rst \
 	Documentation/howto/docker.rst \
+	Documentation/howto/dpdk.rst \
 	Documentation/howto/kvm.rst \
 	Documentation/howto/libvirt.rst \
 	Documentation/howto/selinux.rst \

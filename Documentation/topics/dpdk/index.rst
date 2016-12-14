@@ -21,8 +21,12 @@
 
       Avoid deeper levels because they do not render well.
 
-================
-DPDK Integration
-================
+=================
+The DPDK Datapath
+=================
 
-**TODO**
+.. toctree::
+   :maxdepth: 2
+
+   vhost-user
+   ivshmem

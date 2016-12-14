@@ -61,6 +61,19 @@ vSwitch? Start here.
 Deeper Dive
 -----------
 
+- **Architecture** :doc:`topics/design` |
+  :doc:`topics/openflow` |
+  :doc:`topics/integration` |
+  :doc:`topics/porting`
+
+- **DPDK** :doc:`howto/dpdk` |
+  :doc:`topics/dpdk/vhost-user` |
+  :doc:`topics/dpdk/ivshmem`
+
+- **Windows** :doc:`topics/windows`
+
+- **Testing** :doc:`topics/testing`
+
 - **Reference Guides:** :doc:`ref/index`
 
 The Open vSwitch Project
