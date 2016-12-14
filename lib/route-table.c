@@ -188,7 +188,7 @@ route_table_parse(struct ofpbuf *buf, struct route_table_msg *change)
 
     static const struct nl_policy policy[] = {
         [RTA_DST] = { .type = NL_A_U32, .optional = true  },
-        [RTA_OIF] = { .type = NL_A_U32, .optional = false },
+        [RTA_OIF] = { .type = NL_A_U32, .optional = true },
         [RTA_GATEWAY] = { .type = NL_A_U32, .optional = true },
     };
 
