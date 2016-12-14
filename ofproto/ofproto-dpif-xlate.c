@@ -30,6 +30,7 @@
 #include "cfm.h"
 #include "connmgr.h"
 #include "coverage.h"
+#include "csum.h"
 #include "dp-packet.h"
 #include "dpif.h"
 #include "in-band.h"
@@ -2173,8 +2174,19 @@ update_mcast_snooping_table4__(const struct xbridge *xbridge,
     OVS_REQ_WRLOCK(ms->rwlock)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 30);
+    const struct igmp_header *igmp;
     int count;
+    size_t offset;
     ovs_be32 ip4 = flow->igmp_group_ip4;
+
+    offset = (char *) dp_packet_l4(packet) - (char *) dp_packet_data(packet);
+    igmp = dp_packet_at(packet, offset, IGMP_HEADER_LEN);
+    if (!igmp || csum(igmp, dp_packet_l4_size(packet)) != 0) {
+        VLOG_DBG_RL(&rl, "bridge %s: multicast snooping received bad IGMP "
+                    "checksum on port %s in VLAN %d",
+                    xbridge->name, in_xbundle->name, vlan);
+        return;
+    }
 
     switch (ntohs(flow->tp_src)) {
     case IGMP_HOST_MEMBERSHIP_REPORT:
@@ -2221,7 +2233,22 @@ update_mcast_snooping_table6__(const struct xbridge *xbridge,
     OVS_REQ_WRLOCK(ms->rwlock)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(60, 30);
+    const struct mld_header *mld;
     int count;
+    size_t offset;
+
+    offset = (char *) dp_packet_l4(packet) - (char *) dp_packet_data(packet);
+    mld = dp_packet_at(packet, offset, MLD_HEADER_LEN);
+
+    if (!mld ||
+        packet_csum_upperlayer6(dp_packet_l3(packet),
+                                mld, IPPROTO_ICMPV6,
+                                dp_packet_l4_size(packet)) != 0) {
+        VLOG_DBG_RL(&rl, "bridge %s: multicast snooping received bad MLD "
+                    "checksum on port %s in VLAN %d",
+                    xbridge->name, in_xbundle->name, vlan);
+        return;
+    }
 
     switch (ntohs(flow->tp_src)) {
     case MLD_QUERY:

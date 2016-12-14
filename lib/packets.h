@@ -830,6 +830,8 @@ struct icmp6_header {
 BUILD_ASSERT_DECL(ICMP6_HEADER_LEN == sizeof(struct icmp6_header));
 
 uint32_t packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *);
+uint16_t packet_csum_upperlayer6(const struct ovs_16aligned_ip6_hdr *,
+                                 const void *, uint8_t, uint16_t);
 
 /* Neighbor Discovery option field.
  * ND options are always a multiple of 8 bytes in size. */

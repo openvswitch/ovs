@@ -1454,6 +1454,26 @@ packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *ip6)
 
     return partial;
 }
+
+/* Calculate the IPv6 upper layer checksum according to RFC2460. We pass the
+   ip6_nxt and ip6_plen values, so it will also work if extension headers
+   are present. */
+uint16_t
+packet_csum_upperlayer6(const struct ovs_16aligned_ip6_hdr *ip6,
+                        const void *data, uint8_t l4_protocol,
+                        uint16_t l4_size)
+{
+    uint32_t partial = 0;
+
+    partial = csum_continue(partial, &ip6->ip6_src, sizeof ip6->ip6_src);
+    partial = csum_continue(partial, &ip6->ip6_dst, sizeof ip6->ip6_dst);
+    partial = csum_add16(partial, htons(l4_protocol));
+    partial = csum_add16(partial, htons(l4_size));
+
+    partial = csum_continue(partial, data, l4_size);
+
+    return csum_finish(partial);
+}
 #endif
 
 void
