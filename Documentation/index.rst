@@ -84,6 +84,7 @@ Learn more about the Open vSwitch project and about how you can contribute:
 - **Community:** :doc:`internals/release-process` |
   :doc:`internals/authors` |
   :doc:`internals/mailing-lists` |
+  :doc:`internals/patchwork` |
   :doc:`internals/bugs` |
   :doc:`internals/security`
 

@@ -35,6 +35,7 @@ itself and how they might involved.
 
    contributing/index
    mailing-lists
+   patchwork
    release-process
    bugs
    security

@@ -73,6 +73,7 @@ EXTRA_DIST += \
 	Documentation/internals/committer-responsibilities.rst \
 	Documentation/internals/mailing-lists.rst \
 	Documentation/internals/maintainers.rst \
+	Documentation/internals/patchwork.rst \
 	Documentation/internals/release-process.rst \
 	Documentation/internals/security.rst \
 	Documentation/internals/contributing/index.rst \
