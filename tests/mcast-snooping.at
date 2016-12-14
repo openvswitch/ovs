@@ -63,5 +63,42 @@ AT_CHECK([cat p2.pcap.txt], [0], [dnl
 01005e5e0101aa55aa550001810006bd08004500001c00000000401180710a000001ef5e010100001f400008e63d
 ])
 
+# Clear the mdb, send a IGMP packet with invalid checksum and make sure it
+# does not end up in the mdb.
+AT_CHECK([ovs-appctl mdb/flush br0], [0], [dnl
+table successfully flushed
+])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 \
+'01005e0000015c8a38552552810006bd080046c000240000000001027f00ac111901e0000001940400001164ec1000000000027d000000000000000000000000'])
+
+AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
+ port  VLAN  GROUP                Age
+])
+
+
+# First send a valid packet to make sure it populates the mdb. Than Clear
+# the mdb, send a MLD packet with invalid checksum and make sure it does
+# not end up in the mdb.
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 \
+'3333ff0e4c67000c290e4c6786dd600000000020000100000000000000000000000000000000ff0200000000000000000001ff0e4c673a000502000001008300e7b800000000ff0200000000000000000001ff0e4c67'])
+
+AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
+ port  VLAN  GROUP                Age
+    2     0  ff02::1:ff0e:4c67           0
+])
+
+AT_CHECK([ovs-appctl mdb/flush br0], [0], [dnl
+table successfully flushed
+])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 \
+'3333ff0e4c67000c290e4c6786dd600000000020000100000000000000000000000000000000ff0200000000000000000001ff0e4c673a000502000001008300e7b000000000ff0200000000000000000001ff0e4c67'])
+
+AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
+ port  VLAN  GROUP                Age
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP

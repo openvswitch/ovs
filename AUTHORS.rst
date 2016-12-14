@@ -108,6 +108,7 @@ Dustin Lundquist                dustin@null-ptr.net
 Ed Maste                        emaste@freebsd.org
 Ed Swierk                       eswierk@skyportsystems.com
 Edouard Bourguignon             madko@linuxed.net
+Eelco Chaudron                  echaudro@redhat.com
 Esteban Rodriguez Betancourt    estebarb@hpe.com
 Aymerich Edward                 edward.aymerich@hpe.com
 Edward Tomasz Napierała         trasz@freebsd.org
