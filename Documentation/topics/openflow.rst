@@ -164,7 +164,7 @@ mechanism with the ONF Experimenter ID.
 When defined integrated in 1.4, the feature use the standard OpenFlow
 structures (for example defined in openflow-1.4.h).
 
-The two definitions for each feature are independant and can exist in parallel
+The two definitions for each feature are independent and can exist in parallel
 in OVS.
 
 
@@ -303,7 +303,7 @@ mechanism with the ONF Experimenter ID.  When defined integrated in 1.5, the
 feature use the standard OpenFlow structures (for example defined in
 openflow-1.5.h).
 
-The two definitions for each feature are independant and can exist in parallel
+The two definitions for each feature are independent and can exist in parallel
 in OVS.
 
 * Time scheduled bundles

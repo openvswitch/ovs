@@ -59,7 +59,7 @@
   <dt><code>--no-chdir</code></dt>
   <dd>
     <p>
-      By default, when <code>--detach</code> is specified, the deamon changes
+      By default, when <code>--detach</code> is specified, the daemon changes
       its current working directory to the root directory after it detaches.
       Otherwise, invoking the daemon from a carelessly chosen directory would
       prevent the administrator from unmounting the file system that holds that

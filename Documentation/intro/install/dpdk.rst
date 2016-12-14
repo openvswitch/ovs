@@ -514,7 +514,7 @@ Generally, smaller queue sizes can have a positive impact for latency at the
 expense of throughput. The opposite is often true for larger queue sizes.
 Note: increasing the number of rx descriptors eg. to 4096  may have a negative
 impact on performance due to the fact that non-vectorised DPDK rx functions may
-be used. This is dependant on the driver in use, but is true for the commonly
+be used. This is dependent on the driver in use, but is true for the commonly
 used i40e and ixgbe DPDK drivers.
 
 Exact Match Cache
