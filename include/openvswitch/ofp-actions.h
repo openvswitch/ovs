@@ -543,6 +543,12 @@ BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions) % OFPACT_ALIGNTO == 0);
 BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions)
                   == sizeof(struct ofpact_nest));
 
+static inline size_t
+ofpact_nest_get_action_len(const struct ofpact_nest *on)
+{
+    return on->ofpact.len - offsetof(struct ofpact_nest, actions);
+}
+
 /* Bits for 'flags' in struct nx_action_conntrack.
  *
  * If NX_CT_F_COMMIT is set, then the connection entry is moved from the
@@ -582,12 +588,6 @@ static inline size_t
 ofpact_ct_get_action_len(const struct ofpact_conntrack *oc)
 {
     return oc->ofpact.len - offsetof(struct ofpact_conntrack, actions);
-}
-
-static inline size_t
-ofpact_nest_get_action_len(const struct ofpact_nest *on)
-{
-    return on->ofpact.len - offsetof(struct ofpact_nest, actions);
 }
 
 void ofpacts_execute_action_set(struct ofpbuf *action_list,
