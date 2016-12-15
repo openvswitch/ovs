@@ -233,22 +233,16 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id,
 /* Returns true if the database is all cleaned up, false if more work is
  * required. */
 bool
-chassis_cleanup(struct controller_ctx *ctx, const char *chassis_id)
+chassis_cleanup(struct controller_ctx *ctx,
+                const struct sbrec_chassis *chassis_rec)
 {
-    if (!chassis_id) {
-        return true;
-    }
-
-    /* Delete Chassis row. */
-    const struct sbrec_chassis *chassis_rec
-        = get_chassis(ctx->ovnsb_idl, chassis_id);
     if (!chassis_rec) {
         return true;
     }
     if (ctx->ovnsb_idl_txn) {
         ovsdb_idl_txn_add_comment(ctx->ovnsb_idl_txn,
                                   "ovn-controller: unregistering chassis '%s'",
-                                  chassis_id);
+                                  chassis_rec->name);
         sbrec_chassis_delete(chassis_rec);
     }
     return false;

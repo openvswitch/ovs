@@ -25,14 +25,14 @@ struct ldatapath_index;
 struct lport_index;
 struct ovsdb_idl;
 struct ovsrec_bridge;
-struct simap;
+struct sbrec_chassis;
 struct sset;
 
 void binding_register_ovs_idl(struct ovsdb_idl *);
 void binding_run(struct controller_ctx *, const struct ovsrec_bridge *br_int,
-                 const char *chassis_id, const struct ldatapath_index *,
+                 const struct sbrec_chassis *, const struct ldatapath_index *,
                  const struct lport_index *, struct hmap *local_datapaths,
                  struct sset *all_lports);
-bool binding_cleanup(struct controller_ctx *, const char *chassis_id);
+bool binding_cleanup(struct controller_ctx *, const struct sbrec_chassis *);
 
 #endif /* ovn/binding.h */

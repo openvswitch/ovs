@@ -503,7 +503,7 @@ main(int argc, char *argv[])
         if (chassis_id) {
             chassis = chassis_run(&ctx, chassis_id, br_int);
             encaps_run(&ctx, br_int, chassis_id);
-            binding_run(&ctx, br_int, chassis_id, &ldatapaths, &lports,
+            binding_run(&ctx, br_int, chassis, &ldatapaths, &lports,
                         &local_datapaths, &all_lports);
         }
 
@@ -593,11 +593,13 @@ main(int argc, char *argv[])
 
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
+        const struct sbrec_chassis *chassis
+            = chassis_id ? get_chassis(ctx.ovnsb_idl, chassis_id) : NULL;
 
         /* Run all of the cleanup functions, even if one of them returns false.
          * We're done if all of them return true. */
-        done = binding_cleanup(&ctx, chassis_id);
-        done = chassis_cleanup(&ctx, chassis_id) && done;
+        done = binding_cleanup(&ctx, chassis);
+        done = chassis_cleanup(&ctx, chassis) && done;
         done = encaps_cleanup(&ctx, br_int) && done;
         if (done) {
             poll_immediate_wake();

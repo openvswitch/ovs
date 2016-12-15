@@ -413,20 +413,19 @@ consider_local_datapath(struct controller_ctx *ctx,
 
 void
 binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
-            const char *chassis_id, const struct ldatapath_index *ldatapaths,
+            const struct sbrec_chassis *chassis_rec,
+            const struct ldatapath_index *ldatapaths,
             const struct lport_index *lports, struct hmap *local_datapaths,
             struct sset *all_lports)
 {
-    const struct sbrec_chassis *chassis_rec;
+    if (!chassis_rec) {
+        return;
+    }
+
     const struct sbrec_port_binding *binding_rec;
     struct shash lport_to_iface = SHASH_INITIALIZER(&lport_to_iface);
     struct sset egress_ifaces = SSET_INITIALIZER(&egress_ifaces);
     struct hmap qos_map;
-
-    chassis_rec = get_chassis(ctx->ovnsb_idl, chassis_id);
-    if (!chassis_rec) {
-        return;
-    }
 
     hmap_init(&qos_map);
     if (br_int) {
@@ -462,25 +461,20 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
 /* Returns true if the database is all cleaned up, false if more work is
  * required. */
 bool
-binding_cleanup(struct controller_ctx *ctx, const char *chassis_id)
+binding_cleanup(struct controller_ctx *ctx,
+                const struct sbrec_chassis *chassis_rec)
 {
     if (!ctx->ovnsb_idl_txn) {
         return false;
     }
-
-    if (!chassis_id) {
-        return true;
-    }
-
-    const struct sbrec_chassis *chassis_rec
-        = get_chassis(ctx->ovnsb_idl, chassis_id);
     if (!chassis_rec) {
         return true;
     }
 
     ovsdb_idl_txn_add_comment(
         ctx->ovnsb_idl_txn,
-        "ovn-controller: removing all port bindings for '%s'", chassis_id);
+        "ovn-controller: removing all port bindings for '%s'",
+        chassis_rec->name);
 
     const struct sbrec_port_binding *binding_rec;
     bool any_changes = false;
