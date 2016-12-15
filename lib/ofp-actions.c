@@ -44,6 +44,25 @@ static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
 struct ofp_action_header;
 
+/* Header for Open vSwitch and ONF vendor extension actions.
+ *
+ * This is the entire header for a few Open vSwitch vendor extension actions,
+ * the ones that either have no arguments or for which variable-length
+ * arguments follow the header.
+ *
+ * This cannot be used as an entirely generic vendor extension action header,
+ * because OpenFlow does not specify the location or size of the action
+ * subtype; it just happens that ONF extensions and Nicira extensions share
+ * this format. */
+struct ext_action_header {
+    ovs_be16 type;                  /* OFPAT_VENDOR. */
+    ovs_be16 len;                   /* At least 16. */
+    ovs_be32 vendor;                /* NX_VENDOR_ID or ONF_VENDOR_ID. */
+    ovs_be16 subtype;               /* See enum ofp_raw_action_type. */
+    uint8_t pad[6];
+};
+OFP_ASSERT(sizeof(struct ext_action_header) == 16);
+
 /* Raw identifiers for OpenFlow actions.
  *
  * Decoding and encoding OpenFlow actions across multiple versions is difficult
@@ -216,7 +235,7 @@ enum ofp_raw_action_type {
      * [In OpenFlow 1.5, set_field is a superset of reg_load functionality, so
      * we drop reg_load.] */
     NXAST_RAW_REG_LOAD,
-    /* NX1.0-1.4(33): struct nx_action_reg_load2, ...
+    /* NX1.0-1.4(33): struct ext_action_header, ...
      *
      * [In OpenFlow 1.5, set_field is a superset of reg_load2 functionality, so
      * we drop reg_load2.] */
@@ -275,7 +294,7 @@ enum ofp_raw_action_type {
 
     /* NX1.0+(20): struct nx_action_controller. */
     NXAST_RAW_CONTROLLER,
-    /* NX1.0+(37): struct nx_action_controller2, ... */
+    /* NX1.0+(37): struct ext_action_header, ... */
     NXAST_RAW_CONTROLLER2,
 
     /* NX1.0+(22): struct nx_action_write_metadata. */
@@ -689,18 +708,8 @@ enum nx_action_controller2_prop_type {
     NXAC2PT_PAUSE,              /* Flag to pause pipeline to resume later. */
 };
 
-/* Action structure for NXAST_CONTROLLER2.
- *
- * This replacement for NXAST_CONTROLLER makes it extensible via properties. */
-struct nx_action_controller2 {
-    ovs_be16 type;                  /* OFPAT_VENDOR. */
-    ovs_be16 len;                   /* Length is 16 or more. */
-    ovs_be32 vendor;                /* NX_VENDOR_ID. */
-    ovs_be16 subtype;               /* NXAST_CONTROLLER2. */
-    uint8_t zeros[6];               /* Must be zero. */
-    /* Followed by NXAC2PT_* properties. */
-};
-OFP_ASSERT(sizeof(struct nx_action_controller2) == 16);
+/* The action structure for NXAST_CONTROLLER2 is "struct ext_action_header",
+ * followed by NXAC2PT_* properties. */
 
 static enum ofperr
 decode_NXAST_RAW_CONTROLLER(const struct nx_action_controller *nac,
@@ -720,11 +729,11 @@ decode_NXAST_RAW_CONTROLLER(const struct nx_action_controller *nac,
 }
 
 static enum ofperr
-decode_NXAST_RAW_CONTROLLER2(const struct nx_action_controller2 *nac2,
+decode_NXAST_RAW_CONTROLLER2(const struct ext_action_header *eah,
                              enum ofp_version ofp_version OVS_UNUSED,
                              struct ofpbuf *out)
 {
-    if (!is_all_zeros(nac2->zeros, sizeof nac2->zeros)) {
+    if (!is_all_zeros(eah->pad, sizeof eah->pad)) {
         return OFPERR_NXBRC_MUST_BE_ZERO;
     }
 
@@ -735,8 +744,8 @@ decode_NXAST_RAW_CONTROLLER2(const struct nx_action_controller2 *nac2,
     oc->reason = OFPR_ACTION;
 
     struct ofpbuf properties;
-    ofpbuf_use_const(&properties, nac2, ntohs(nac2->len));
-    ofpbuf_pull(&properties, sizeof *nac2);
+    ofpbuf_use_const(&properties, eah, ntohs(eah->len));
+    ofpbuf_pull(&properties, sizeof *eah);
 
     while (properties.size > 0) {
         struct ofpbuf payload;
@@ -2441,25 +2450,13 @@ struct nx_action_reg_load {
 };
 OFP_ASSERT(sizeof(struct nx_action_reg_load) == 24);
 
-/* Action structure for NXAST_REG_LOAD2.
+/* The NXAST_REG_LOAD2 action structure is "struct ext_action_header",
+ * followed by:
  *
- * Compared to OFPAT_SET_FIELD, we can use this to set whole or partial fields
- * in any OpenFlow version.  Compared to NXAST_REG_LOAD, we can use this to set
- * OXM experimenter fields. */
-struct nx_action_reg_load2 {
-    ovs_be16 type;                  /* OFPAT_VENDOR. */
-    ovs_be16 len;                   /* At least 16. */
-    ovs_be32 vendor;                /* NX_VENDOR_ID. */
-    ovs_be16 subtype;               /* NXAST_SET_FIELD. */
-
-    /* Followed by:
-     * - An NXM/OXM header, value, and optionally a mask.
-     * - Enough 0-bytes to pad out to a multiple of 64 bits.
-     *
-     * The "pad" member is the beginning of the above. */
-    uint8_t pad[6];
-};
-OFP_ASSERT(sizeof(struct nx_action_reg_load2) == 16);
+ * - An NXM/OXM header, value, and optionally a mask.
+ * - Enough 0-bytes to pad out to a multiple of 64 bits.
+ *
+ * The "pad" member is the beginning of the above. */
 
 static enum ofperr
 decode_ofpat_set_field(const struct ofp12_action_set_field *oasf,
@@ -2568,12 +2565,12 @@ decode_NXAST_RAW_REG_LOAD(const struct nx_action_reg_load *narl,
 }
 
 static enum ofperr
-decode_NXAST_RAW_REG_LOAD2(const struct nx_action_reg_load2 *narl,
+decode_NXAST_RAW_REG_LOAD2(const struct ext_action_header *eah,
                            enum ofp_version ofp_version OVS_UNUSED,
                            struct ofpbuf *out)
 {
-    struct ofpbuf b = ofpbuf_const_initializer(narl, ntohs(narl->len));
-    ofpbuf_pull(&b, OBJECT_OFFSETOF(narl, pad));
+    struct ofpbuf b = ofpbuf_const_initializer(eah, ntohs(eah->len));
+    ofpbuf_pull(&b, OBJECT_OFFSETOF(eah, pad));
 
     union mf_value value, mask;
     const struct mf_field *field;
@@ -2657,11 +2654,11 @@ set_field_to_nxast(const struct ofpact_set_field *sf, struct ofpbuf *openflow)
      * NXAST_REG_LOAD, which is backward compatible. */
     if (sf->ofpact.raw == NXAST_RAW_REG_LOAD2
         || !mf_nxm_header(sf->field->id) || sf->field->variable_len) {
-        struct nx_action_reg_load2 *narl OVS_UNUSED;
+        struct ext_action_header *eah OVS_UNUSED;
         size_t start_ofs = openflow->size;
 
-        narl = put_NXAST_REG_LOAD2(openflow);
-        openflow->size = openflow->size - sizeof narl->pad;
+        eah = put_NXAST_REG_LOAD2(openflow);
+        openflow->size = openflow->size - sizeof eah->pad;
         nx_put_entry(openflow, sf->field->id, 0, sf->value,
                      ofpact_set_field_mask(sf));
         pad_ofpat(openflow, start_ofs);
@@ -8049,21 +8046,6 @@ struct ofp_action_header {
     ovs_be32 vendor;
 };
 OFP_ASSERT(sizeof(struct ofp_action_header) == 8);
-
-/* Header for Nicira-defined actions and for ONF vendor extensions.
- *
- * This cannot be used as an entirely generic vendor extension action header,
- * because OpenFlow does not specify the location or size of the action
- * subtype; it just happens that ONF extensions and Nicira extensions share
- * this format. */
-struct ext_action_header {
-    ovs_be16 type;                  /* OFPAT_VENDOR. */
-    ovs_be16 len;                   /* At least 16. */
-    ovs_be32 vendor;                /* NX_VENDOR_ID or ONF_VENDOR_ID. */
-    ovs_be16 subtype;               /* See enum ofp_raw_action_type. */
-    uint8_t pad[6];
-};
-OFP_ASSERT(sizeof(struct ext_action_header) == 16);
 
 static bool
 ofpact_hdrs_equal(const struct ofpact_hdrs *a,
