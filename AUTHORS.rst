@@ -309,6 +309,7 @@ nickcooper-zhangtonghao         nickcooper-zhangtonghao@opencloud.tech
 wisd0me                         ak47izatool@gmail.com
 xushengping                     shengping.xu@huawei.com
 yinpeijun                       yinpeijun@huawei.com
+zangchuanqiang                  zangchuanqiang@huawei.com
 =============================== ===============================================
 
 The following additional people are mentioned in commit logs as having

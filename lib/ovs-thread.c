@@ -240,7 +240,7 @@ ovs_rwlock_init(const struct ovs_rwlock *l_)
     xpthread_rwlockattr_setkind_np(
         &attr, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
 #endif
-    error = pthread_rwlock_init(&l->lock, NULL);
+    error = pthread_rwlock_init(&l->lock, &attr);
     if (OVS_UNLIKELY(error)) {
         ovs_abort(error, "pthread_rwlock_init failed");
     }
