@@ -184,21 +184,6 @@ OvsTcpGetWscale(const TCPHdr *tcp)
     return wscale;
 }
 
-static __inline uint32_t
-OvsGetTcpPayloadLength(PNET_BUFFER_LIST nbl)
-{
-    IPHdr *ipHdr;
-    char *ipBuf[sizeof(IPHdr)];
-    PNET_BUFFER curNb;
-    curNb = NET_BUFFER_LIST_FIRST_NB(nbl);
-    ipHdr = NdisGetDataBuffer(curNb, sizeof *ipHdr, (PVOID) &ipBuf,
-                                                    1 /*no align*/, 0);
-    TCPHdr *tcp = (TCPHdr *)((PCHAR)ipHdr + ipHdr->ihl * 4);
-    return (UINT16)ntohs(ipHdr->tot_len)
-                        - (ipHdr->ihl * 4)
-                        - (sizeof * tcp);
-}
-
 static __inline struct conn_tcp*
 OvsCastConntrackEntryToTcpEntry(OVS_CT_ENTRY* conn)
 {

@@ -109,6 +109,28 @@ OvsConntrackUpdateExpiration(OVS_CT_ENTRY *ctEntry,
     ctEntry->expiration = now + interval;
 }
 
+static __inline UINT32
+OvsGetTcpPayloadLength(PNET_BUFFER_LIST nbl)
+{
+    IPHdr *ipHdr;
+    char *ipBuf[sizeof(IPHdr)];
+    PNET_BUFFER curNb;
+    curNb = NET_BUFFER_LIST_FIRST_NB(nbl);
+    UINT32 hdrLen = sizeof(EthHdr);
+    NdisAdvanceNetBufferDataStart(curNb, hdrLen, FALSE, NULL);
+    ipHdr = NdisGetDataBuffer(curNb, sizeof *ipHdr, (PVOID) &ipBuf,
+                              1 /*no align*/, 0);
+    if (ipHdr == NULL) {
+        NdisRetreatNetBufferDataStart(curNb, hdrLen, 0, NULL);
+        return 0;
+    }
+
+    TCPHdr *tcp = (TCPHdr *)((PCHAR)ipHdr + ipHdr->ihl * 4);
+    NdisRetreatNetBufferDataStart(curNb, hdrLen, 0, NULL);
+
+    return (ntohs(ipHdr->tot_len) - (ipHdr->ihl * 4) - (TCP_HDR_LEN(tcp)));
+}
+
 VOID OvsCleanupConntrack(VOID);
 NTSTATUS OvsInitConntrack(POVS_SWITCH_CONTEXT context);
 
