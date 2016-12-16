@@ -138,6 +138,7 @@ UINT8 NlAttrGetU8(const PNL_ATTR nla);
 UINT16 NlAttrGetU16(const PNL_ATTR nla);
 UINT32 NlAttrGetU32(const PNL_ATTR nla);
 UINT64 NlAttrGetU64(const PNL_ATTR nla);
+PCHAR NlAttrGetString(const PNL_ATTR nla);
 const PNL_ATTR NlAttrFind__(const PNL_ATTR attrs,
                             UINT32 size, UINT16 type);
 const PNL_ATTR NlAttrFindNested(const PNL_ATTR nla,

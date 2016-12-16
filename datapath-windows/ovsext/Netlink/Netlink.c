@@ -992,6 +992,22 @@ NlAttrGetU64(const PNL_ATTR nla)
 
 /*
  * ---------------------------------------------------------------------------
+ * Returns the string value in 'nla''s payload.
+ * Returns NULL if it is not a proper '\0' terminated string.
+ * ---------------------------------------------------------------------------
+ */
+PCHAR
+NlAttrGetString(const PNL_ATTR nla)
+{
+    ASSERT(nla->nlaLen >= NLA_HDRLEN);
+    if (!memchr(NlAttrGet(nla), '\0', nla->nlaLen - NLA_HDRLEN)) {
+        return NULL;
+    }
+    return NlAttrGet(nla);
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * Validate the netlink attribute against the policy
  * ---------------------------------------------------------------------------
  */

@@ -192,10 +192,20 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
             }
 
             state |= OVS_CS_F_NEW;
+            POVS_CT_ENTRY parentEntry = NULL;
+            parentEntry = OvsCtRelatedLookup(ctx->key, currentTime);
+            if (parentEntry != NULL) {
+                state |= OVS_CS_F_RELATED;
+            }
+
             if (commit) {
                 entry = OvsConntrackCreateTcpEntry(tcp, curNbl, currentTime);
                 if (!entry) {
                     return NULL;
+                }
+                /* If this is related entry, then update parent */
+                if (parentEntry != NULL) {
+                    entry->parent = parentEntry;
                 }
                 OvsCtAddEntry(entry, ctx, currentTime);
             }
@@ -492,6 +502,13 @@ OvsCtSetupLookupCtx(OvsFlowKey *flowKey,
     return NDIS_STATUS_SUCCESS;
 }
 
+static __inline BOOLEAN
+OvsDetectFtpPacket(OvsFlowKey *key) {
+    return (key->ipKey.nwProto == IPPROTO_TCP &&
+            (ntohs(key->ipKey.l4.tpDst) == IPPORT_FTP ||
+            ntohs(key->ipKey.l4.tpSrc) == IPPORT_FTP));
+}
+
 /*
  *----------------------------------------------------------------------------
  * OvsProcessConntrackEntry
@@ -542,6 +559,21 @@ OvsProcessConntrackEntry(PNET_BUFFER_LIST curNbl,
             break;
         }
     }
+
+    if (key->ipKey.nwProto == IPPROTO_TCP && entry) {
+        /* Update the related bit if there is a parent */
+        if (entry->parent) {
+            state |= OVS_CS_F_RELATED;
+        } else {
+            POVS_CT_ENTRY parentEntry;
+            parentEntry = OvsCtRelatedLookup(ctx->key, currentTime);
+            if (parentEntry != NULL) {
+                entry->parent = parentEntry;
+                state |= OVS_CS_F_RELATED;
+            }
+        }
+    }
+
     /* Copy mark and label from entry into flowKey. If actions specify
        different mark and label, update the flowKey. */
     if (entry != NULL) {
@@ -592,7 +624,8 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
               BOOLEAN commit,
               UINT16 zone,
               MD_MARK *mark,
-              MD_LABELS *labels)
+              MD_LABELS *labels,
+              PCHAR helper)
 {
     NDIS_STATUS status = NDIS_STATUS_SUCCESS;
     POVS_CT_ENTRY entry = NULL;
@@ -629,6 +662,17 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
         OvsConntrackSetLabels(key, entry, &labels->value, &labels->mask);
     }
 
+    if (entry && OvsDetectFtpPacket(key)) {
+        /* FTP parser will always be loaded */
+        UNREFERENCED_PARAMETER(helper);
+
+        status = OvsCtHandleFtp(curNbl, key, layers, currentTime, entry,
+                                (ntohs(key->ipKey.l4.tpDst) == IPPORT_FTP));
+        if (status != NDIS_STATUS_SUCCESS) {
+            OVS_LOG_ERROR("Error while parsing the FTP packet");
+        }
+    }
+
     NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
 
     return status;
@@ -651,6 +695,8 @@ OvsExecuteConntrackAction(PNET_BUFFER_LIST curNbl,
     UINT16 zone = 0;
     MD_MARK *mark = NULL;
     MD_LABELS *labels = NULL;
+    PCHAR helper = NULL;
+
     NDIS_STATUS status;
 
     status = OvsDetectCtPacket(key);
@@ -674,9 +720,20 @@ OvsExecuteConntrackAction(PNET_BUFFER_LIST curNbl,
     if (ctAttr) {
         labels = NlAttrGet(ctAttr);
     }
+    ctAttr = NlAttrFindNested(a, OVS_CT_ATTR_HELPER);
+    if (ctAttr) {
+        helper = NlAttrGetString(ctAttr);
+        if (helper == NULL) {
+            return NDIS_STATUS_INVALID_PARAMETER;
+        }
+        if (strcmp("ftp", helper) != 0) {
+            /* Only support FTP */
+            return NDIS_STATUS_NOT_SUPPORTED;
+        }
+    }
 
     status = OvsCtExecute_(curNbl, key, layers,
-                           commit, zone, mark, labels);
+                           commit, zone, mark, labels, helper);
     return status;
 }
 

@@ -85,6 +85,7 @@ typedef struct OVS_CT_ENTRY {
     UINT32      mark;
     UINT64      timestampStart;
     struct ovs_key_ct_labels labels;
+    PVOID       parent; /* Points to main connection */
 } OVS_CT_ENTRY, *POVS_CT_ENTRY;
 
 typedef struct OVS_CT_REL_ENTRY {
@@ -199,5 +200,12 @@ NDIS_STATUS OvsCtRelatedEntryCreate(UINT8 ipProto,
                                     UINT64 currentTime,
                                     POVS_CT_ENTRY parent);
 POVS_CT_ENTRY OvsCtRelatedLookup(OVS_CT_KEY key, UINT64 currentTime);
+
+NDIS_STATUS OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
+                           OvsFlowKey *key,
+                           OVS_PACKET_HDR_INFO *layers,
+                           UINT64 currentTime,
+                           POVS_CT_ENTRY entry,
+                           BOOLEAN request);
 
 #endif /* __OVS_CONNTRACK_H_ */

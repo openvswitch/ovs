@@ -225,6 +225,13 @@ OvsCreateSwitch(NDIS_HANDLE ndisFilterHandle,
         goto create_switch_done;
     }
 
+    status = OvsInitCtRelated(switchContext);
+    if (status != STATUS_SUCCESS) {
+        OvsUninitSwitchContext(switchContext);
+        OVS_LOG_ERROR("Exit: Failed to initialize Connection tracking");
+        goto create_switch_done;
+    }
+
     *switchContextOut = switchContext;
 
 create_switch_done:
@@ -257,6 +264,7 @@ OvsExtDetach(NDIS_HANDLE filterModuleContext)
     OvsCleanupIpHelper();
     OvsCleanupSttDefragmentation();
     OvsCleanupConntrack();
+    OvsCleanupCtRelated();
     /* This completes the cleanup, and a new attach can be handled now. */
 
     OVS_LOG_TRACE("Exit: OvsDetach Successfully");
