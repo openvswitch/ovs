@@ -19,6 +19,13 @@
 
 #include "precomp.h"
 #include "Flow.h"
+#include "Debug.h"
+#include <stddef.h>
+
+#ifdef OVS_DBG_MOD
+#undef OVS_DBG_MOD
+#endif
+#define OVS_DBG_MOD OVS_DBG_CONTRK
 
 struct ct_addr {
     union {
@@ -79,6 +86,19 @@ typedef struct OVS_CT_ENTRY {
     UINT64      timestampStart;
     struct ovs_key_ct_labels labels;
 } OVS_CT_ENTRY, *POVS_CT_ENTRY;
+
+typedef struct OVS_CT_REL_ENTRY {
+    OVS_CT_KEY      key;
+    POVS_CT_ENTRY   parent;
+    UINT64          expiration;
+    LIST_ENTRY      link;
+} OVS_CT_REL_ENTRY, *POVS_CT_REL_ENTRY;
+
+typedef struct _OVS_CT_THREAD_CTX {
+    KEVENT      event;
+    PVOID       threadObject;
+    UINT32      exit;
+} OVS_CT_THREAD_CTX, *POVS_CT_THREAD_CTX;
 
 typedef struct OvsConntrackKeyLookupCtx {
     OVS_CT_KEY      key;
@@ -158,13 +178,26 @@ enum CT_UPDATE_RES OvsConntrackUpdateOtherEntry(OVS_CT_ENTRY *conn_,
 enum CT_UPDATE_RES OvsConntrackUpdateIcmpEntry(OVS_CT_ENTRY* conn_,
                                                BOOLEAN reply,
                                                UINT64 now);
-NTSTATUS
-OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
-                          PVOID outBuffer,
-                          UINT32 outBufLen,
-                          UINT8 eventType,
-                          UINT32 nlmsgSeq,
-                          UINT32 nlmsgPid,
-                          UINT8 nfGenVersion,
-                          UINT32 dpIfIndex);
+NTSTATUS OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
+                                   PVOID outBuffer,
+                                   UINT32 outBufLen,
+                                   UINT8 eventType,
+                                   UINT32 nlmsgSeq,
+                                   UINT32 nlmsgPid,
+                                   UINT8 nfGenVersion,
+                                   UINT32 dpIfIndex);
+
+/* Tracking related connections */
+NTSTATUS OvsInitCtRelated(POVS_SWITCH_CONTEXT context);
+VOID OvsCleanupCtRelated(VOID);
+NDIS_STATUS OvsCtRelatedEntryCreate(UINT8 ipProto,
+                                    UINT16 dl_type,
+                                    UINT32 serverIp,
+                                    UINT32 clientIp,
+                                    UINT16 serverPort,
+                                    UINT16 clientPort,
+                                    UINT64 currentTime,
+                                    POVS_CT_ENTRY parent);
+POVS_CT_ENTRY OvsCtRelatedLookup(OVS_CT_KEY key, UINT64 currentTime);
+
 #endif /* __OVS_CONNTRACK_H_ */

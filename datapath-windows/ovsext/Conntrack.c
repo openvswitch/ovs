@@ -14,26 +14,14 @@
  * limitations under the License.
  */
 
-#ifdef OVS_DBG_MOD
-#undef OVS_DBG_MOD
-#endif
-#define OVS_DBG_MOD OVS_DBG_CONTRK
-
 #include "Conntrack.h"
 #include "Jhash.h"
 #include "PacketParser.h"
-#include "Debug.h"
 #include "Event.h"
 
 #define WINDOWS_TICK 10000000
 #define SEC_TO_UNIX_EPOCH 11644473600LL
 #define SEC_TO_NANOSEC 1000000000LL
-
-typedef struct _OVS_CT_THREAD_CTX {
-    KEVENT      event;
-    PVOID       threadObject;
-    UINT32      exit;
-} OVS_CT_THREAD_CTX, *POVS_CT_THREAD_CTX;
 
 KSTART_ROUTINE ovsConntrackEntryCleaner;
 static PLIST_ENTRY ovsConntrackTable;
