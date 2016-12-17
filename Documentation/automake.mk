@@ -45,6 +45,8 @@ EXTRA_DIST += \
 	Documentation/howto/qos.rst \
 	Documentation/howto/sflow.png \
 	Documentation/howto/sflow.rst \
+	Documentation/howto/tunneling.png \
+	Documentation/howto/tunneling.rst \
 	Documentation/howto/vlan.png \
 	Documentation/howto/vlan.rst \
 	Documentation/howto/vtep.rst \

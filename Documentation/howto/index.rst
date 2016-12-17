@@ -38,6 +38,7 @@ topics covered herein, refer to :doc:`/topics/index`.
    libvirt
    ssl
    lisp
+   tunneling
    native-tunneling
    vlan
    qos
