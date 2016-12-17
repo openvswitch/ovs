@@ -94,11 +94,11 @@ Titles
 
 - Use the following headers levels.
 
-  | =======  Heading 0 (reserved for the title in a document)
-  | -------  Heading 1
-  | ~~~~~~~  Heading 2
-  | +++++++  Heading 3
-  | '''''''  Heading 4
+  | ``=======``  Heading 0 (reserved for the title in a document)
+  | ``-------``  Heading 1
+  | ``~~~~~~~``  Heading 2
+  | ``+++++++``  Heading 3
+  | ``'''''''``  Heading 4
 
   .. note::
 
@@ -280,7 +280,7 @@ vSwitch documentation. These guidelines are based on the `IBM Style Guide
 
   Commonly used terms like CPU or RAM are allowed.
 
-  .. list-table:: Example
+  .. list-table::
      :header-rows: 1
 
      * - Do not use
@@ -294,7 +294,7 @@ vSwitch documentation. These guidelines are based on the `IBM Style Guide
 
   The subject should do the verb's action, rather than be acted upon.
 
-  .. list-table:: Example
+  .. list-table::
      :header-rows: 1
 
      * - Do not use
@@ -304,7 +304,7 @@ vSwitch documentation. These guidelines are based on the `IBM Style Guide
 
 - Write in the present tense
 
-  .. list-table:: Example
+  .. list-table::
      :header-rows: 1
 
      * - Do not use
@@ -314,7 +314,7 @@ vSwitch documentation. These guidelines are based on the `IBM Style Guide
 
 - Write in second person
 
-  .. list-table:: Example
+  .. list-table::
      :header-rows: 1
 
      * - Do not use
