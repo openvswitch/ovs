@@ -41,6 +41,8 @@ EXTRA_DIST += \
 	Documentation/howto/native-tunneling.rst \
 	Documentation/howto/lisp.rst \
 	Documentation/howto/openstack-containers.rst \
+	Documentation/howto/vlan.png \
+	Documentation/howto/vlan.rst \
 	Documentation/howto/vtep.rst \
 	Documentation/ref/index.rst \
 	Documentation/faq/index.rst \

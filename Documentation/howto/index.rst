@@ -39,6 +39,7 @@ topics covered herein, refer to :doc:`/topics/index`.
    ssl
    lisp
    native-tunneling
+   vlan
    vtep
 
 .. toctree::
