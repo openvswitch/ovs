@@ -40,6 +40,7 @@ topics covered herein, refer to :doc:`/topics/index`.
    lisp
    native-tunneling
    vlan
+   qos
    vtep
 
 .. toctree::
