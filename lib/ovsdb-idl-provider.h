@@ -103,7 +103,6 @@ struct ovsdb_idl_table_class {
 };
 
 struct ovsdb_idl_condition {
-    const struct ovsdb_idl_table_class *tc;
     struct ovs_list clauses;
 };
 

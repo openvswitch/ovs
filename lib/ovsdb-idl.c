@@ -219,8 +219,7 @@ ovsdb_idl_table_from_class(const struct ovsdb_idl *,
                            const struct ovsdb_idl_table_class *);
 static bool ovsdb_idl_track_is_set(struct ovsdb_idl_table *table);
 static void ovsdb_idl_send_cond_change(struct ovsdb_idl *idl);
-static void ovsdb_idl_condition_init(struct ovsdb_idl_condition *cnd,
-                                     const struct ovsdb_idl_table_class *tc);
+static void ovsdb_idl_condition_init(struct ovsdb_idl_condition *cnd);
 
 /* Creates and returns a connection to database 'remote', which should be in a
  * form acceptable to jsonrpc_session_open().  The connection will maintain an
@@ -279,7 +278,7 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
             = table->change_seqno[OVSDB_IDL_CHANGE_MODIFY]
             = table->change_seqno[OVSDB_IDL_CHANGE_DELETE] = 0;
         table->idl = idl;
-        ovsdb_idl_condition_init(&table->condition, tc);
+        ovsdb_idl_condition_init(&table->condition);
         table->cond_changed = false;
     }
 
@@ -892,10 +891,8 @@ ovsdb_idl_condition_reset(struct ovsdb_idl *idl,
 }
 
 static void
-ovsdb_idl_condition_init(struct ovsdb_idl_condition *cnd,
-                         const struct ovsdb_idl_table_class *tc)
+ovsdb_idl_condition_init(struct ovsdb_idl_condition *cnd)
 {
-    cnd->tc = tc;
     ovs_list_init(&cnd->clauses);
 }
 
