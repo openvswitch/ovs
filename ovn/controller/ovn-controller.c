@@ -487,7 +487,13 @@ main(int argc, char *argv[])
 
         /* Contains "struct local_datapath" nodes. */
         struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
-        struct sset all_lports = SSET_INITIALIZER(&all_lports);
+
+        /* Contains the name of each logical port resident on the local
+         * hypervisor.  These logical ports include the VIFs (and their child
+         * logical ports, if any) that belong to VMs running on the hypervisor,
+         * l2gateway ports for which options:l2gateway-chassis designates the
+         * local hypervisor, and localnet ports. */
+        struct sset local_lports = SSET_INITIALIZER(&local_lports);
 
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
@@ -504,7 +510,7 @@ main(int argc, char *argv[])
             chassis = chassis_run(&ctx, chassis_id, br_int);
             encaps_run(&ctx, br_int, chassis_id);
             binding_run(&ctx, br_int, chassis, &ldatapaths, &lports,
-                        &local_datapaths, &all_lports);
+                        &local_datapaths, &local_lports);
         }
 
         if (br_int && chassis) {
@@ -514,7 +520,7 @@ main(int argc, char *argv[])
                                                          &pending_ct_zones);
 
             pinctrl_run(&ctx, &lports, br_int, chassis, &local_datapaths);
-            update_ct_zones(&all_lports, &local_datapaths, &ct_zones,
+            update_ct_zones(&local_lports, &local_datapaths, &ct_zones,
                             ct_zone_bitmap, &pending_ct_zones);
             if (ctx.ovs_idl_txn) {
                 commit_ct_zones(br_int, &pending_ct_zones);
@@ -543,7 +549,7 @@ main(int argc, char *argv[])
         lport_index_destroy(&lports);
         ldatapath_index_destroy(&ldatapaths);
 
-        sset_destroy(&all_lports);
+        sset_destroy(&local_lports);
 
         struct local_datapath *cur_node, *next_node;
         HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node, &local_datapaths) {

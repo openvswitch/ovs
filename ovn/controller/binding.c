@@ -67,7 +67,7 @@ binding_register_ovs_idl(struct ovsdb_idl *ovs_idl)
 static void
 get_local_iface_ids(const struct ovsrec_bridge *br_int,
                     struct shash *lport_to_iface,
-                    struct sset *all_lports,
+                    struct sset *local_lports,
                     struct sset *egress_ifaces)
 {
     int i;
@@ -89,7 +89,7 @@ get_local_iface_ids(const struct ovsrec_bridge *br_int,
 
             if (iface_id) {
                 shash_add(lport_to_iface, iface_id, iface_rec);
-                sset_add(all_lports, iface_id);
+                sset_add(local_lports, iface_id);
             }
 
             /* Check if this is a tunnel interface. */
@@ -327,7 +327,7 @@ consider_local_datapath(struct controller_ctx *ctx,
                         struct hmap *qos_map,
                         struct hmap *local_datapaths,
                         struct shash *lport_to_iface,
-                        struct sset *all_lports)
+                        struct sset *local_lports)
 {
     const struct ovsrec_interface *iface_rec
         = shash_find_data(lport_to_iface, binding_rec->logical_port);
@@ -335,10 +335,10 @@ consider_local_datapath(struct controller_ctx *ctx,
     bool our_chassis = false;
     if (iface_rec
         || (binding_rec->parent_port && binding_rec->parent_port[0] &&
-            sset_contains(all_lports, binding_rec->parent_port))) {
+            sset_contains(local_lports, binding_rec->parent_port))) {
         if (binding_rec->parent_port && binding_rec->parent_port[0]) {
             /* Add child logical port to the set of all local ports. */
-            sset_add(all_lports, binding_rec->logical_port);
+            sset_add(local_lports, binding_rec->logical_port);
         }
         add_local_datapath(ldatapaths, lports, binding_rec->datapath,
                            false, local_datapaths);
@@ -351,7 +351,7 @@ consider_local_datapath(struct controller_ctx *ctx,
                                           "l2gateway-chassis");
         our_chassis = chassis_id && !strcmp(chassis_id, chassis_rec->name);
         if (our_chassis) {
-            sset_add(all_lports, binding_rec->logical_port);
+            sset_add(local_lports, binding_rec->logical_port);
             add_local_datapath(ldatapaths, lports, binding_rec->datapath,
                                false, local_datapaths);
         }
@@ -364,9 +364,9 @@ consider_local_datapath(struct controller_ctx *ctx,
                                true, local_datapaths);
         }
     } else if (!strcmp(binding_rec->type, "localnet")) {
-        /* Add all localnet ports to all_lports so that we allocate ct zones
+        /* Add all localnet ports to local_lports so that we allocate ct zones
          * for them. */
-        sset_add(all_lports, binding_rec->logical_port);
+        sset_add(local_lports, binding_rec->logical_port);
         our_chassis = false;
     }
 
@@ -396,7 +396,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
             const struct sbrec_chassis *chassis_rec,
             const struct ldatapath_index *ldatapaths,
             const struct lport_index *lports, struct hmap *local_datapaths,
-            struct sset *all_lports)
+            struct sset *local_lports)
 {
     if (!chassis_rec) {
         return;
@@ -409,7 +409,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
 
     hmap_init(&qos_map);
     if (br_int) {
-        get_local_iface_ids(br_int, &lport_to_iface, all_lports,
+        get_local_iface_ids(br_int, &lport_to_iface, local_lports,
                             &egress_ifaces);
     }
 
@@ -421,7 +421,7 @@ binding_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
                                 chassis_rec, binding_rec,
                                 sset_is_empty(&egress_ifaces) ? NULL :
                                 &qos_map, local_datapaths, &lport_to_iface,
-                                all_lports);
+                                local_lports);
 
     }
 
