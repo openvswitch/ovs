@@ -456,8 +456,13 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
                 idl->schema = NULL;
                 break;
 
-            case IDL_S_MONITORING:
             case IDL_S_MONITORING_COND:
+                /* Conditional monitor clauses were updated. Send out
+                 * the next condition changes, in any, immediately. */
+                ovsdb_idl_send_cond_change(idl);
+                break;
+
+            case IDL_S_MONITORING:
             case IDL_S_NO_SCHEMA:
             default:
                 OVS_NOT_REACHED();
@@ -496,14 +501,23 @@ ovsdb_idl_run(struct ovsdb_idl *idl)
                 idl->state = IDL_S_MONITOR_REQUESTED;
             }
         } else if (msg->type == JSONRPC_ERROR
+                   && idl->state == IDL_S_MONITORING_COND
+                   && idl->request_id
+                   && json_equal(idl->request_id, msg->id)) {
+            json_destroy(idl->request_id);
+            idl->request_id = NULL;
+            VLOG_ERR("%s: conditional monitor update failed",
+                     jsonrpc_session_get_name(idl->session));
+            idl->state = IDL_S_NO_SCHEMA;
+        } else if (msg->type == JSONRPC_ERROR
                    && idl->state == IDL_S_SCHEMA_REQUESTED
                    && idl->request_id
                    && json_equal(idl->request_id, msg->id)) {
-                json_destroy(idl->request_id);
-                idl->request_id = NULL;
-                VLOG_ERR("%s: requested schema not found",
-                         jsonrpc_session_get_name(idl->session));
-                idl->state = IDL_S_NO_SCHEMA;
+            json_destroy(idl->request_id);
+            idl->request_id = NULL;
+            VLOG_ERR("%s: requested schema not found",
+                     jsonrpc_session_get_name(idl->session));
+            idl->state = IDL_S_NO_SCHEMA;
         } else if ((msg->type == JSONRPC_ERROR
                     || msg->type == JSONRPC_REPLY)
                    && ovsdb_idl_txn_process_reply(idl, msg)) {
@@ -1091,8 +1105,11 @@ ovsdb_idl_send_cond_change(struct ovsdb_idl *idl)
     struct json *params, *json_uuid;
     struct jsonrpc_msg *request;
 
+    /* When 'idl-request_id' is not NULL, there is an outstanding
+     * conditional monitoring update request that we have not heard
+     * from the server yet. Don't generate another request in this case.  */
     if (!idl->cond_changed || !jsonrpc_session_is_connected(idl->session) ||
-        idl->state != IDL_S_MONITORING_COND) {
+        idl->state != IDL_S_MONITORING_COND || idl->request_id) {
         return;
     }
 
@@ -1128,7 +1145,8 @@ ovsdb_idl_send_cond_change(struct ovsdb_idl *idl)
         params = json_array_create_3(json_uuid, json_string_create(uuid),
                                      monitor_cond_change_requests);
 
-        request = jsonrpc_create_request("monitor_cond_change", params, NULL);
+        request = jsonrpc_create_request("monitor_cond_change", params,
+                                         &idl->request_id);
         jsonrpc_session_send(idl->session, request);
     }
     idl->cond_changed = false;
