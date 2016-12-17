@@ -35,11 +35,14 @@ documents found in the project tree.
 reStructuredText vs. Sphinx
 ---------------------------
 
-reStructuredText (reST) is the syntax, while Sphinx is a documentation
+`reStructuredText (reST)`__ is the syntax, while `Sphinx`__ is a documentation
 generator.  Sphinx introduces a number of extensions to reST, like the
 ``:ref:`` role, which can and should be used in documentation, but these will
 not work correctly on GitHub. As such, these extensions should not be used in
 any documentation in the root level, such as the ``README``.
+
+__ http://docutils.sourceforge.net/rst.html
+__ http://www.sphinx-doc.org/
 
 reST Conventions
 ----------------
@@ -325,9 +328,29 @@ vSwitch documentation. These guidelines are based on the `IBM Style Guide
 
   Avoid "please" and "thank you"
 
+Helpful Tools
+-------------
+
+There are a number of tools, online and offline, which can be used to preview
+documents are you edit them:
+
+- `rst.ninjs.org <http://rst.ninjs.org/>`__
+
+  An online rST editor/previewer
+
+- `ReText <https://github.com/retext-project/retext>`__
+
+  A simple but powerful editor for Markdown and reStructuredText. ReText is
+  written in Python.
+
+- `restview <https://mg.pov.lt/restview/>`__
+
+  A viewer for ReStructuredText documents that renders them on the fly.
+
 Useful Links
 ------------
 
-* `Quick reStructuredText
+- `Quick reStructuredText
   <http://docutils.sourceforge.net/docs/user/rst/quickref.html>`__
-* `Sphinx Documentation <http://sphinx.readthedocs.org/en/latest/rest.html>`__
+
+- `Sphinx Documentation <http://sphinx.readthedocs.org/en/latest/rest.html>`__
