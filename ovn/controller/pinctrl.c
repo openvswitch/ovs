@@ -39,6 +39,7 @@
 #include "ovn-controller.h"
 #include "ovn/actions.h"
 #include "ovn/lex.h"
+#include "ovn/lib/acl-log.h"
 #include "ovn/lib/logical-fields.h"
 #include "ovn/lib/ovn-dhcp.h"
 #include "ovn/lib/ovn-util.h"
@@ -979,6 +980,10 @@ process_packet_in(const struct ofp_header *msg, struct controller_ctx *ctx)
 
     case ACTION_OPCODE_DNS_LOOKUP:
         pinctrl_handle_dns_lookup(&packet, &pin, &userdata, &continuation, ctx);
+        break;
+
+    case ACTION_OPCODE_LOG:
+        handle_acl_log(&headers, &userdata);
         break;
 
     default:

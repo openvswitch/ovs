@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.7.0",
-    "cksum": "3754583060 16164",
+    "version": "5.8.0",
+    "cksum": "2812300190 16766",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -116,7 +116,7 @@
             "isRoot": true},
         "Load_Balancer": {
             "columns": {
-		"name": {"type": "string"},
+                "name": {"type": "string"},
                 "vips": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}},
@@ -130,6 +130,9 @@
             "isRoot": true},
         "ACL": {
             "columns": {
+                "name": {"type": {"key": {"type": "string",
+                                          "maxLength": 63},
+                                          "min": 0, "max": 1}},
                 "priority": {"type": {"key": {"type": "integer",
                                               "minInteger": 0,
                                               "maxInteger": 32767}}},
@@ -139,6 +142,12 @@
                 "action": {"type": {"key": {"type": "string",
                                             "enum": ["set", ["allow", "allow-related", "drop", "reject"]]}}},
                 "log": {"type": "boolean"},
+                "severity": {"type": {"key": {"type": "string",
+                                              "enum": ["set",
+                                                       ["alert", "warning",
+                                                        "notice", "info",
+                                                        "debug"]]},
+                                      "min": 0, "max": 1}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
                              "min": 0, "max": "unlimited"}}},

@@ -34,6 +34,7 @@
 #include "ovn/actions.h"
 #include "ovn/expr.h"
 #include "ovn/lex.h"
+#include "ovn/lib/acl-log.h"
 #include "ovn/lib/logical-fields.h"
 #include "ovn/lib/ovn-sb-idl.h"
 #include "ovn/lib/ovn-dhcp.h"
@@ -1682,6 +1683,20 @@ execute_ct_nat(const struct ovnact_ct_nat *ct_nat,
 }
 
 static void
+execute_log(const struct ovnact_log *log, struct flow *uflow,
+            struct ovs_list *super)
+{
+    char *packet_str = flow_to_string(uflow, NULL);
+    ovntrace_node_append(super, OVNTRACE_NODE_TRANSFORMATION,
+                    "LOG: ACL name=%s, verdict=%s, severity=%s, packet=\"%s\"",
+                    log->name ? log->name : "<unnamed>",
+                    log_verdict_to_string(log->verdict),
+                    log_severity_to_string(log->severity),
+                    packet_str);
+    free(packet_str);
+}
+
+static void
 trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
               const struct ovntrace_datapath *dp, struct flow *uflow,
               uint8_t table_id, enum ovnact_pipeline pipeline,
@@ -1815,6 +1830,10 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
 
         case OVNACT_DNS_LOOKUP:
             execute_dns_lookup(ovnact_get_DNS_LOOKUP(a), uflow, super);
+            break;
+
+        case OVNACT_LOG:
+            execute_log(ovnact_get_LOG(a), uflow, super);
             break;
         }
 

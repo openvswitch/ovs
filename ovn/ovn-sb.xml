@@ -1515,6 +1515,47 @@
         </dd>
       </dl>
 
+      <dl>
+        <dt>
+          <code>log(<var>key</var>=<var>value</var>, </code>...<code>);</code>
+        </dt>
+
+        <dd>
+          <p>
+            Causes <code>ovn-controller</code> to log the packet on the chassis
+            that processes it.  Packet logging currently uses the same logging
+            mechanism as other Open vSwitch and OVN messages, which means that
+            whether and where log messages appear depends on the local logging
+            configuration that can be configured with <code>ovs-appctl</code>,
+            etc.
+          </p>
+          <p>
+            The <code>log</code> action takes zero or more of the following
+            key-value pair arguments that control what is logged:
+          </p>
+          <dl>
+            <dt><code>name=</code><var>string</var></dt>
+            <dd>
+              An optional name for the ACL.  The <var>string</var> is
+              currently limited to 64 bytes.
+            </dd>
+            <dt><code>severity=</code><var>level</var></dt>
+            <dd>
+              Indicates the severity of the event.  The <var>level</var> is one
+              of following (from more to less serious): <code>alert</code>,
+              <code>warning</code>, <code>notice</code>, <code>info</code>, or
+              <code>debug</code>.  If a severity is not provided, the default
+              is <code>info</code>.
+            </dd>
+            <dt><code>verdict=</code><var>value</var></dt>
+            <dd>
+              The verdict for packets matching the flow.  The value must be one
+              of <code>allow</code>, <code>deny</code>, or <code>reject</code>.
+            </dd>
+          </dl>
+        </dd>
+      </dl>
+
       <p>
         The following actions will likely be useful later, but they have not
         been thought out carefully.

@@ -33,6 +33,7 @@
 #include "ovn/actions.h"
 #include "ovn/expr.h"
 #include "ovn/lex.h"
+#include "ovn/lib/acl-log.h"
 #include "packets.h"
 #include "openvswitch/shash.h"
 #include "simap.h"
@@ -1759,6 +1760,119 @@ ovnact_dns_lookup_free(struct ovnact_dns_lookup *dl OVS_UNUSED)
 {
 }
 
+static void
+parse_log_arg(struct action_context *ctx, struct ovnact_log *log)
+{
+    if (lexer_match_id(ctx->lexer, "verdict")) {
+        if (!lexer_force_match(ctx->lexer, LEX_T_EQUALS)) {
+            return;
+        }
+        if (lexer_match_id(ctx->lexer, "drop")) {
+            log->verdict = LOG_VERDICT_DROP;
+        } else if (lexer_match_id(ctx->lexer, "reject")) {
+            log->verdict = LOG_VERDICT_REJECT;
+        } else if (lexer_match_id(ctx->lexer, "allow")) {
+            log->verdict = LOG_VERDICT_ALLOW;
+        } else {
+            lexer_syntax_error(ctx->lexer, "unknown acl verdict");
+        }
+    } else if (lexer_match_id(ctx->lexer, "name")) {
+        if (!lexer_force_match(ctx->lexer, LEX_T_EQUALS)) {
+            return;
+        }
+        /* If multiple names are given, use the most recent. */
+        if (ctx->lexer->token.type == LEX_T_STRING) {
+            /* Arbitrarily limit the name length to 64 bytes, since
+             * these will be encoded in datapath actions. */
+            if (strlen(ctx->lexer->token.s) >= 64) {
+                lexer_syntax_error(ctx->lexer, "name must be shorter "
+                                               "than 64 characters");
+                return;
+            }
+            free(log->name);
+            log->name = xstrdup(ctx->lexer->token.s);
+        } else {
+            lexer_syntax_error(ctx->lexer, "expecting string");
+            return;
+        }
+        lexer_get(ctx->lexer);
+    } else if (lexer_match_id(ctx->lexer, "severity")) {
+        if (!lexer_force_match(ctx->lexer, LEX_T_EQUALS)) {
+            return;
+        }
+        if (ctx->lexer->token.type == LEX_T_ID) {
+            uint8_t severity = log_severity_from_string(ctx->lexer->token.s);
+            if (severity != UINT8_MAX) {
+                log->severity = severity;
+                lexer_get(ctx->lexer);
+                return;
+            }
+        }
+        lexer_syntax_error(ctx->lexer, "expecting severity");
+    } else {
+        lexer_syntax_error(ctx->lexer, NULL);
+    }
+}
+
+static void
+parse_LOG(struct action_context *ctx)
+{
+    struct ovnact_log *log = ovnact_put_LOG(ctx->ovnacts);
+
+    /* Provide default values. */
+    log->severity = LOG_SEVERITY_INFO;
+    log->verdict = LOG_VERDICT_UNKNOWN;
+
+    if (lexer_match(ctx->lexer, LEX_T_LPAREN)) {
+        while (!lexer_match(ctx->lexer, LEX_T_RPAREN)) {
+            parse_log_arg(ctx, log);
+            if (ctx->lexer->error) {
+                return;
+            }
+            lexer_match(ctx->lexer, LEX_T_COMMA);
+        }
+    }
+}
+
+static void
+format_LOG(const struct ovnact_log *log, struct ds *s)
+{
+    ds_put_cstr(s, "log(");
+
+    if (log->name) {
+        ds_put_format(s, "name=\"%s\", ", log->name);
+    }
+
+    ds_put_format(s, "verdict=%s, ", log_verdict_to_string(log->verdict));
+    ds_put_format(s, "severity=%s);", log_severity_to_string(log->severity));
+}
+
+static void
+encode_LOG(const struct ovnact_log *log,
+           const struct ovnact_encode_params *ep OVS_UNUSED,
+           struct ofpbuf *ofpacts)
+{
+    size_t oc_offset = encode_start_controller_op(ACTION_OPCODE_LOG, false,
+                                                  ofpacts);
+
+    struct log_pin_header *lph = ofpbuf_put_uninit(ofpacts, sizeof *lph);
+    lph->verdict = log->verdict;
+    lph->severity = log->severity;
+
+    if (log->name) {
+        int name_len = strlen(log->name);
+        ofpbuf_put(ofpacts, log->name, name_len);
+    }
+
+    encode_finish_controller_op(oc_offset, ofpacts);
+}
+
+static void
+ovnact_log_free(struct ovnact_log *log)
+{
+    free(log->name);
+}
+
 /* Parses an assignment or exchange or put_dhcp_opts action. */
 static void
 parse_set_action(struct action_context *ctx)
@@ -1838,6 +1952,8 @@ parse_action(struct action_context *ctx)
         parse_put_mac_bind(ctx, 128, ovnact_put_PUT_ND(ctx->ovnacts));
     } else if (lexer_match_id(ctx->lexer, "set_queue")) {
         parse_SET_QUEUE(ctx);
+    } else if (lexer_match_id(ctx->lexer, "log")) {
+        parse_LOG(ctx);
     } else {
         lexer_syntax_error(ctx->lexer, "expecting action");
     }

@@ -1035,17 +1035,43 @@
       </ul>
     </column>
 
-    <column name="log">
+    <group title="Logging">
       <p>
-        If set to <code>true</code>, packets that match the ACL will trigger a
-        log message on the transport node or nodes that perform ACL processing.
-        Logging may be combined with any <ref column="action"/>.
+        These columns control whether and how OVN logs packets that match an
+        ACL.
       </p>
 
-      <p>
-        Logging is not yet implemented.
-      </p>
-    </column>
+      <column name="log">
+        <p>
+          If set to <code>true</code>, packets that match the ACL will trigger
+          a log message on the transport node or nodes that perform ACL
+          processing.  Logging may be combined with any <ref column="action"/>.
+        </p>
+
+        <p>
+          If set to <code>false</code>, the remaining columns in this group
+          have no significance.
+        </p>
+      </column>
+
+      <column name="name">
+        <p>
+          This name, if it is provided, is included in log records.  It
+          provides the administrator and the cloud management system a way to
+          associate a log record with a particular ACL.
+        </p>
+      </column>
+
+      <column name="severity">
+        <p>
+          The severity of the ACL.  The severity levels match those of syslog,
+          in decreasing level of severity: <code>alert</code>,
+          <code>warning</code>, <code>notice</code>, <code>info</code>, or
+          <code>debug</code>.  When the column is empty, the default is
+          <code>info</code>.
+        </p>
+      </column>
+    </group>
 
     <group title="Common Columns">
       <column name="external_ids">

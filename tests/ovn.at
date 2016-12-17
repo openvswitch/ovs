@@ -5741,6 +5741,111 @@ OVN_CLEANUP([hv1],[hv2])
 
 AT_CLEANUP
 
+
+AT_SETUP([ovn -- ACL logging])
+AT_KEYWORDS([ovn])
+ovn_start
+
+net_add n1
+
+sim_add hv
+as hv
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+for i in lp1 lp2; do
+    ovs-vsctl -- add-port br-int $i -- \
+        set interface $i external-ids:iface-id=$i \
+        options:tx_pcap=hv/$i-tx.pcap \
+        options:rxq_pcap=hv/$i-rx.pcap
+done
+
+lp1_mac="f0:00:00:00:00:01"
+lp1_ip="192.168.1.2"
+
+lp2_mac="f0:00:00:00:00:02"
+lp2_ip="192.168.1.3"
+
+ovn-nbctl ls-add lsw0
+ovn-nbctl --wait=sb lsp-add lsw0 lp1
+ovn-nbctl --wait=sb lsp-add lsw0 lp2
+ovn-nbctl lsp-set-addresses lp1 $lp1_mac
+ovn-nbctl lsp-set-addresses lp2 $lp2_mac
+ovn-nbctl --wait=sb sync
+
+ovn-nbctl acl-add lsw0 to-lport 1000 'tcp.dst==80' drop
+ovn-nbctl --log --severity=alert --name=drop-flow acl-add lsw0 to-lport 1000 'tcp.dst==81' drop
+
+ovn-nbctl acl-add lsw0 to-lport 1000 'tcp.dst==82' allow
+ovn-nbctl --log --severity=info --name=allow-flow acl-add lsw0 to-lport 1000 'tcp.dst==83' allow
+
+ovn-nbctl acl-add lsw0 to-lport 1000 'tcp.dst==84' allow-related
+ovn-nbctl --log acl-add lsw0 to-lport 1000 'tcp.dst==85' allow-related
+
+ovn-nbctl acl-add lsw0 to-lport 1000 'tcp.dst==86' reject
+ovn-nbctl --log --severity=alert --name=reject-flow acl-add lsw0 to-lport 1000 'tcp.dst==87' reject
+
+ovn-sbctl dump-flows
+
+
+# Send packet that should be dropped without logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4360 && tcp.dst==80"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should be dropped with logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4361 && tcp.dst==81"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should be allowed without logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4362 && tcp.dst==82"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should be allowed with logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4363 && tcp.dst==83"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should allow related flows without logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4364 && tcp.dst==84"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should allow related flows with logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4365 && tcp.dst==85"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should allow related flows with logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4366 && tcp.dst==86"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+# Send packet that should allow related flows with logging.
+packet="inport==\"lp1\" && eth.src==$lp1_mac && eth.dst==$lp2_mac &&
+        ip4 && ip.ttl==64 && ip4.src==$lp1_ip && ip4.dst==$lp2_ip &&
+        tcp && tcp.flags==2 && tcp.src==4367 && tcp.dst==87"
+as hv ovs-appctl -t ovn-controller inject-pkt "$packet"
+
+AT_CHECK([grep 'acl_log' hv/ovn-controller.log | sed 's/.*name=/name=/'], [0], [dnl
+name="drop-flow", verdict=drop, severity=alert: tcp,vlan_tci=0x0000,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02,nw_src=192.168.1.2,nw_dst=192.168.1.3,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4361,tp_dst=81,tcp_flags=syn
+name="allow-flow", verdict=allow, severity=info: tcp,vlan_tci=0x0000,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02,nw_src=192.168.1.2,nw_dst=192.168.1.3,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4363,tp_dst=83,tcp_flags=syn
+name="<unnamed>", verdict=allow, severity=info: tcp,vlan_tci=0x0000,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02,nw_src=192.168.1.2,nw_dst=192.168.1.3,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4365,tp_dst=85,tcp_flags=syn
+name="reject-flow", verdict=reject, severity=alert: tcp,vlan_tci=0x0000,dl_src=f0:00:00:00:00:01,dl_dst=f0:00:00:00:00:02,nw_src=192.168.1.2,nw_dst=192.168.1.3,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4367,tp_dst=87,tcp_flags=syn
+])
+
+OVN_CLEANUP([hv])
+AT_CLEANUP
+
+
 AT_SETUP([ovn -- DSCP marking check])
 AT_KEYWORDS([ovn])
 ovn_start

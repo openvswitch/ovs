@@ -20,6 +20,15 @@
       machine-local and do not run over a physical network.
     </p>
 
+    <h1>ACL Logging</h1>
+    <p>
+      ACL log messages are logged through <code>ovn-controller</code>'s
+      logging mechanism.  ACL log entries have the module
+      <code>acl_log</code> at log level <code>info</code>.  Configuring
+      logging is described below in the <code>Logging Options</code>
+      section.
+    </p>
+
     <h1>Options</h1>
 
     <h2>Daemon Options</h2>
