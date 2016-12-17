@@ -42,6 +42,7 @@ topics covered herein, refer to :doc:`/topics/index`.
    vlan
    qos
    vtep
+   sflow
 
 .. toctree::
    :maxdepth: 1
