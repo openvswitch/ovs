@@ -38,7 +38,6 @@ EXTRA_DIST += \
 	Documentation/howto/libvirt.rst \
 	Documentation/howto/selinux.rst \
 	Documentation/howto/ssl.rst \
-	Documentation/howto/native-tunneling.rst \
 	Documentation/howto/lisp.rst \
 	Documentation/howto/openstack-containers.rst \
 	Documentation/howto/qos.png \
@@ -47,6 +46,7 @@ EXTRA_DIST += \
 	Documentation/howto/sflow.rst \
 	Documentation/howto/tunneling.png \
 	Documentation/howto/tunneling.rst \
+	Documentation/howto/userspace-tunneling.rst \
 	Documentation/howto/vlan.png \
 	Documentation/howto/vlan.rst \
 	Documentation/howto/vtep.rst \
