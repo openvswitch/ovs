@@ -6431,6 +6431,24 @@ AT_CHECK([ovs-vsctl destroy Flow_Sample_Collector_Set 1], [0], [ignore])
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - clone action])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3 4
+
+AT_DATA([flows.txt], [dnl
+in_port=1, ip, actions=clone(set_field:192.168.3.3->ip_src),clone(set_field:192.168.4.4->ip_dst,output:2),clone(mod_dl_src:80:81:81:81:81:81,set_field:192.168.5.5->ip_dst,output:3),output:4
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt], [0], [ignore])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: set(ipv4(src=10.10.10.2,dst=192.168.4.4)),2,set(eth(src=80:81:81:81:81:81)),set(ipv4(src=10.10.10.2,dst=192.168.5.5)),3,set(eth(src=50:54:00:00:00:09)),set(ipv4(src=10.10.10.2,dst=10.10.10.1)),4
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 dnl Flow based IPFIX statistics check
 AT_SETUP([ofproto-dpif - Flow IPFIX statistics check])
 OVS_VSWITCHD_START

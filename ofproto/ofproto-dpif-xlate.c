@@ -4290,6 +4290,14 @@ xlate_sample_action(struct xlate_ctx *ctx,
                           tunnel_out_port, false);
 }
 
+static void
+compose_clone_action(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
+{
+    struct flow old_flow = ctx->xin->flow;
+    do_xlate_actions(oc->actions, ofpact_nest_get_action_len(oc), ctx);
+    ctx->xin->flow = old_flow;
+}
+
 static bool
 may_receive(const struct xport *xport, struct xlate_ctx *ctx)
 {
@@ -4448,6 +4456,7 @@ freeze_unroll_actions(const struct ofpact *a, const struct ofpact *end,
         case OFPACT_WRITE_ACTIONS:
         case OFPACT_METER:
         case OFPACT_SAMPLE:
+        case OFPACT_CLONE:
         case OFPACT_DEBUG_RECIRC:
         case OFPACT_CT:
         case OFPACT_NAT:
@@ -4696,6 +4705,7 @@ recirc_for_mpls(const struct ofpact *a, struct xlate_ctx *ctx)
     case OFPACT_NOTE:
     case OFPACT_EXIT:
     case OFPACT_SAMPLE:
+    case OFPACT_CLONE:
     case OFPACT_UNROLL_XLATE:
     case OFPACT_CT:
     case OFPACT_NAT:
@@ -5053,6 +5063,10 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_SAMPLE:
             xlate_sample_action(ctx, ofpact_get_SAMPLE(a));
+            break;
+
+        case OFPACT_CLONE:
+            compose_clone_action(ctx, ofpact_get_CLONE(a));
             break;
 
         case OFPACT_CT:

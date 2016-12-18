@@ -109,6 +109,7 @@
     OFPACT(CT,              ofpact_conntrack,   ofpact, "ct")           \
     OFPACT(NAT,             ofpact_nat,         ofpact, "nat")          \
     OFPACT(OUTPUT_TRUNC,    ofpact_output_trunc,ofpact, "output_trunc") \
+    OFPACT(CLONE,           ofpact_nest,        actions, "clone")       \
                                                                         \
     /* Debugging actions.                                               \
      *                                                                  \
@@ -532,9 +533,9 @@ struct ofpact_meter {
     uint32_t meter_id;
 };
 
-/* OFPACT_WRITE_ACTIONS.
+/* OFPACT_WRITE_ACTIONS, OFPACT_CLONE.
  *
- * Used for OFPIT11_WRITE_ACTIONS. */
+ * Used for OFPIT11_WRITE_ACTIONS, NXAST_CLONE. */
 struct ofpact_nest {
     OFPACT_PADDED_MEMBERS(struct ofpact ofpact;);
     struct ofpact actions[];

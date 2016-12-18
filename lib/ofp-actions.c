@@ -325,6 +325,9 @@ enum ofp_raw_action_type {
     /* NX1.0+(39): struct nx_action_output_trunc. */
     NXAST_RAW_OUTPUT_TRUNC,
 
+    /* NX1.0+(42): struct ext_action_header, ... */
+    NXAST_RAW_CLONE,
+
 /* ## ------------------ ## */
 /* ## Debugging actions. ## */
 /* ## ------------------ ## */
@@ -453,6 +456,9 @@ ofpact_next_flattened(const struct ofpact *ofpact)
     case OFPACT_GOTO_TABLE:
     case OFPACT_NAT:
         return ofpact_next(ofpact);
+
+    case OFPACT_CLONE:
+        return ofpact_get_CLONE(ofpact)->actions;
 
     case OFPACT_CT:
         return ofpact_get_CT(ofpact)->actions;
@@ -4798,6 +4804,78 @@ format_UNROLL_XLATE(const struct ofpact_unroll_xlate *a, struct ds *s)
                   colors.paren,   colors.end);
 }
 
+/* The NXAST_CLONE action is "struct ext_action_header", followed by zero or
+ * more embedded OpenFlow actions. */
+
+static enum ofperr
+decode_NXAST_RAW_CLONE(const struct ext_action_header *eah,
+                        enum ofp_version ofp_version,
+                        struct ofpbuf *out)
+{
+    int error;
+    struct ofpbuf openflow;
+    const size_t clone_offset = ofpacts_pull(out);
+    struct ofpact_nest *clone = ofpact_put_CLONE(out);
+
+    /* decode action list */
+    ofpbuf_pull(out, sizeof(*clone));
+    openflow = ofpbuf_const_initializer(
+                    eah + 1, ntohs(eah->len) - sizeof *eah);
+    error = ofpacts_pull_openflow_actions__(&openflow, openflow.size,
+                                            ofp_version,
+                                            1u << OVSINST_OFPIT11_APPLY_ACTIONS,
+                                            out, 0);
+    clone = ofpbuf_push_uninit(out, sizeof *clone);
+    out->header = &clone->ofpact;
+    ofpact_finish_CLONE(out, &clone);
+    ofpbuf_push_uninit(out, clone_offset);
+    return error;
+}
+
+static void
+encode_CLONE(const struct ofpact_nest *clone,
+              enum ofp_version ofp_version, struct ofpbuf *out)
+{
+    size_t len;
+    const size_t ofs = out->size;
+    struct ext_action_header *eah;
+
+    eah = put_NXAST_CLONE(out);
+    len = ofpacts_put_openflow_actions(clone->actions,
+                                       ofpact_nest_get_action_len(clone),
+                                       out, ofp_version);
+    len += sizeof *eah;
+    eah = ofpbuf_at(out, ofs, sizeof *eah);
+    eah->len = htons(len);
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_CLONE(char *arg, struct ofpbuf *ofpacts,
+             enum ofputil_protocol *usable_protocols)
+{
+    const size_t clone_offset = ofpacts_pull(ofpacts);
+    struct ofpact_nest *clone = ofpact_put_CLONE(ofpacts);
+    char *error;
+
+    ofpbuf_pull(ofpacts, sizeof *clone);
+    error = ofpacts_parse_copy(arg, ofpacts, usable_protocols, false, 0);
+    /* header points to the action list */
+    ofpacts->header = ofpbuf_push_uninit(ofpacts, sizeof *clone);
+    clone = ofpacts->header;
+
+    ofpact_finish_CLONE(ofpacts, &clone);
+    ofpbuf_push_uninit(ofpacts, clone_offset);
+    return error;
+}
+
+static void
+format_CLONE(const struct ofpact_nest *a, struct ds *s)
+{
+    ds_put_format(s, "%sclone(%s", colors.paren, colors.end);
+    ofpacts_format(a->actions, ofpact_nest_get_action_len(a), s);
+    ds_put_format(s, "%s)%s", colors.paren, colors.end);
+}
+
 /* Action structure for NXAST_SAMPLE.
  *
  * Samples matching packets with the given probability and sends them
@@ -6209,6 +6287,7 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_BUNDLE:
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_CT:
+    case OFPACT_CLONE:
     case OFPACT_NAT:
     case OFPACT_CONTROLLER:
     case OFPACT_DEC_MPLS_TTL:
@@ -6285,6 +6364,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
      * the specification.  Thus the order in which they should be applied
      * in the action set is undefined. */
     case OFPACT_BUNDLE:
+    case OFPACT_CLONE:
     case OFPACT_CONTROLLER:
     case OFPACT_CT:
     case OFPACT_NAT:
@@ -6477,6 +6557,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
         return OVSINST_OFPIT11_GOTO_TABLE;
     case OFPACT_OUTPUT:
     case OFPACT_GROUP:
+    case OFPACT_CLONE:
     case OFPACT_CONTROLLER:
     case OFPACT_ENQUEUE:
     case OFPACT_OUTPUT_REG:
@@ -7077,6 +7158,13 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     case OFPACT_SAMPLE:
         return 0;
 
+    case OFPACT_CLONE: {
+        struct ofpact_nest *on = ofpact_get_CLONE(a);
+        return ofpacts_check(on->actions, ofpact_nest_get_action_len(on),
+                             flow, max_ports, table_id, n_tables,
+                             usable_protocols);
+    }
+
     case OFPACT_CT: {
         struct ofpact_conntrack *oc = ofpact_get_CT(a);
 
@@ -7632,6 +7720,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_POP_MPLS:
     case OFPACT_SAMPLE:
     case OFPACT_CLEAR_ACTIONS:
+    case OFPACT_CLONE:
     case OFPACT_WRITE_ACTIONS:
     case OFPACT_GOTO_TABLE:
     case OFPACT_METER:

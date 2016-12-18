@@ -337,6 +337,35 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.1.1.100 | FORMAT_PI
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - clone action])
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1, at_ns2)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+ADD_VETH(p2, at_ns2, br0, "10.1.1.3/24")
+
+AT_CHECK([ovs-vsctl -- set interface ovs-p0 ofport_request=1])
+AT_CHECK([ovs-vsctl -- set interface ovs-p1 ofport_request=2])
+AT_CHECK([ovs-vsctl -- set interface ovs-p2 ofport_request=3])
+
+dnl verify that the clone(...) won't affect the original packet, so ping still works OK
+dnl without 'output' in 'clone()'
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=1,ip,actions=clone(mod_dl_dst(50:54:00:00:00:0a),set_field:192.168.3.3->ip_dst), output:2"])
+dnl with 'output' in 'clone()'
+AT_CHECK([ovs-ofctl add-flow br0 "in_port=2,ip,actions=clone(mod_dl_dst(50:54:00:00:00:0b),set_field:192.168.4.4->ip_dst, output:3), output:1"])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([datapath - basic truncate action])
 AT_SKIP_IF([test $HAVE_NC = no])
 OVS_TRAFFIC_VSWITCHD_START()
