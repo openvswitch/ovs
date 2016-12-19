@@ -48,7 +48,7 @@ override_dh_auto_clean:
 	rm -f python/ovs/*.pyc python/ovs/db/*.pyc
 	dh_auto_clean
 
-override_dh_install:
+override_dh_install-arch:
 	dh_install
 	# openvswitch-switch
 	cp debian/openvswitch-switch.template debian/openvswitch-switch/usr/share/openvswitch/switch/default.template
@@ -58,6 +58,9 @@ override_dh_install:
 
 	# ovn-central
 	cp debian/ovn-central.template debian/ovn-central/usr/share/ovn/central/default.template
+
+override_dh_install-indep:
+	dh_install
 
 	# openvswitch-datapath-source
 	cp debian/rules.modules debian/openvswitch-datapath-source/usr/src/modules/openvswitch-datapath/debian/rules
