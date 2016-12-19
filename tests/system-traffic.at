@@ -1437,12 +1437,8 @@ ADD_VETH(p1, at_ns1, br0, "172.16.0.2/24")
 
 dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
 AT_DATA([flows.txt], [dnl
-priority=1,action=drop
-priority=10,arp,action=normal
-priority=100,in_port=1,udp,ct_state=-trk,action=ct(commit,table=0)
-priority=100,in_port=1,ip,ct_state=+trk,actions=controller
-priority=100,in_port=2,ip,ct_state=-trk,action=ct(table=0)
-priority=100,in_port=2,ip,ct_state=+trk+rel+rpl,action=controller
+table=0,ip,action=ct(commit,table=1)
+table=1,ip,action=controller
 ])
 
 AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows.txt])
@@ -1451,20 +1447,29 @@ AT_CAPTURE_FILE([ofctl_monitor.log])
 AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
 dnl 1. Send an ICMP port unreach reply for port 8738, without any previous request
-AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) 'f64c473528c9c6f54ecb72db080045c0003d2e8700004001f355ac100004ac1000030303553f0000000045000021317040004011b138ac100003ac10000411112222000d20966369616f0a'])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 resubmit\(,0\) 'f64c473528c9c6f54ecb72db080045c0003d2e8700004001f351ac100004ac1000030303da490000000045000021317040004011b138ac100003ac10000411112222000d20966369616f0a'])
 
 dnl 2. Send and UDP packet to port 5555
-AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 1 ct\(commit,table=0\) 'c6f94ecb72dbe64c473528c9080045000021317040004011b138ac100001ac100002a28e15b3000d20966369616f0a'])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 1 resubmit\(,0\) 'c6f94ecb72dbe64c473528c9080045000021317040004011b138ac100001ac100002a28e15b3000d20966369616f0a'])
 
 dnl 3. Send an ICMP port unreach reply for port 5555, related to the first packet
-AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 ct\(table=0\) 'e64c473528c9c6f94ecb72db080045c0003d2e8700004001f355ac100002ac1000010303553f0000000045000021317040004011b138ac100001ac100002a28e15b3000d20966369616f0a'])
+AT_CHECK([ovs-ofctl -O OpenFlow13 packet-out br0 2 resubmit\(,0\) 'e64c473528c9c6f94ecb72db080045c0003d2e8700004001f355ac100002ac1000010303553f0000000045000021317040004011b138ac100001ac100002a28e15b3000d20966369616f0a'])
 
 dnl Check this output. We only see the latter two packets, not the first.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=47 ct_state=new|trk,in_port=1 (via action) data_len=47 (unbuffered)
+NXT_PACKET_IN2 (xid=0x0): table_id=1 cookie=0x0 total_len=75 ct_state=inv|trk,in_port=2 (via action) data_len=75 (unbuffered)
+icmp,vlan_tci=0x0000,dl_src=c6:f5:4e:cb:72:db,dl_dst=f6:4c:47:35:28:c9,nw_src=172.16.0.4,nw_dst=172.16.0.3,nw_tos=192,nw_ecn=0,nw_ttl=64,icmp_type=3,icmp_code=3 icmp_csum:da49
+NXT_PACKET_IN2 (xid=0x0): table_id=1 cookie=0x0 total_len=47 ct_state=new|trk,in_port=1 (via action) data_len=47 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=e6:4c:47:35:28:c9,dl_dst=c6:f9:4e:cb:72:db,nw_src=172.16.0.1,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=41614,tp_dst=5555 udp_csum:2096
-NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=75 ct_state=rel|rpl|trk,in_port=2 (via action) data_len=75 (unbuffered)
+NXT_PACKET_IN2 (xid=0x0): table_id=1 cookie=0x0 total_len=75 ct_state=rel|rpl|trk,in_port=2 (via action) data_len=75 (unbuffered)
 icmp,vlan_tci=0x0000,dl_src=c6:f9:4e:cb:72:db,dl_dst=e6:4c:47:35:28:c9,nw_src=172.16.0.2,nw_dst=172.16.0.1,nw_tos=192,nw_ecn=0,nw_ttl=64,icmp_type=3,icmp_code=3 icmp_csum:553f
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(172.16.0.1)], [0], [dnl
+udp,orig=(src=172.16.0.1,dst=172.16.0.2,sport=<cleared>,dport=<cleared>),reply=(src=172.16.0.2,dst=172.16.0.1,sport=<cleared>,dport=<cleared>)
+])
+
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(172.16.0.3)], [0], [dnl
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
