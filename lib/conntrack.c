@@ -247,7 +247,11 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
             }
         }
     } else {
-        conn = conn_not_found(ct, pkt, ctx, &state, commit, now);
+        if (ctx->related) {
+            state |= CS_INVALID;
+        } else {
+            conn = conn_not_found(ct, pkt, ctx, &state, commit, now);
+        }
     }
 
     write_ct_md(pkt, state, zone, conn ? conn->mark : 0,
