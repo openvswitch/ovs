@@ -1352,7 +1352,9 @@ trace(const char *dp_s, const char *flow_s)
     char *error = expr_parse_microflow(flow_s, &symtab, &address_sets,
                                        ovntrace_lookup_port, dp, &uflow);
     if (error) {
-        return xasprintf("error parsing flow: %s\n", error);
+        char *s = xasprintf("error parsing flow: %s\n", error);
+        free(error);
+        return s;
     }
 
     uint32_t in_key = uflow.regs[MFF_LOG_INPORT - MFF_REG0];
