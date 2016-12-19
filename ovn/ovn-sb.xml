@@ -1037,9 +1037,11 @@
             As a side effect, IP fragments will be reassembled for matching.
             If a fragmented packet is output, then it will be sent with any
             overlapping fragments squashed.  The connection tracking state is
-            scoped by the logical port, so overlapping addresses may be used.
-            To allow traffic related to the matched flow, execute
-            <code>ct_commit</code>.
+            scoped by the logical port when the action is used in a flow for
+            a logical switch, so overlapping addresses may be used.  To allow
+            traffic related to the matched flow, execute <code>ct_commit
+            </code>.  Connection tracking state is scoped by the logical
+            topology when the action is used in a flow for a router.
           </p>
 
           <p>

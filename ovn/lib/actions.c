@@ -551,7 +551,8 @@ encode_CT_NEXT(const struct ovnact_next *next,
 {
     struct ofpact_conntrack *ct = ofpact_put_CT(ofpacts);
     ct->recirc_table = ep->first_ptable + next->ltable;
-    ct->zone_src.field = mf_from_id(MFF_LOG_CT_ZONE);
+    ct->zone_src.field = ep->is_switch ? mf_from_id(MFF_LOG_CT_ZONE)
+                            : mf_from_id(MFF_LOG_DNAT_ZONE);
     ct->zone_src.ofs = 0;
     ct->zone_src.n_bits = 16;
     ofpact_finish(ofpacts, &ct->ofpact);
