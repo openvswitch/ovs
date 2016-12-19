@@ -332,6 +332,7 @@ consider_local_datapath(struct controller_ctx *ctx,
     const struct ovsrec_interface *iface_rec
         = shash_find_data(lport_to_iface, binding_rec->logical_port);
 
+    bool our_chassis = false;
     if (iface_rec
         || (binding_rec->parent_port && binding_rec->parent_port[0] &&
             sset_contains(all_lports, binding_rec->parent_port))) {
@@ -344,70 +345,49 @@ consider_local_datapath(struct controller_ctx *ctx,
         if (iface_rec && qos_map && ctx->ovs_idl_txn) {
             get_qos_params(binding_rec, qos_map);
         }
-        if (binding_rec->chassis == chassis_rec) {
-            return;
+        our_chassis = true;
+    } else if (!strcmp(binding_rec->type, "l2gateway")) {
+        const char *chassis_id = smap_get(&binding_rec->options,
+                                          "l2gateway-chassis");
+        our_chassis = chassis_id && !strcmp(chassis_id, chassis_rec->name);
+        if (our_chassis) {
+            sset_add(all_lports, binding_rec->logical_port);
+            add_local_datapath(ldatapaths, lports, binding_rec->datapath,
+                               false, local_datapaths);
         }
-        if (ctx->ovnsb_idl_txn) {
+    } else if (!strcmp(binding_rec->type, "l3gateway")) {
+        const char *chassis_id = smap_get(&binding_rec->options,
+                                          "l3gateway-chassis");
+        our_chassis = chassis_id && !strcmp(chassis_id, chassis_rec->name);
+        if (our_chassis) {
+            add_local_datapath(ldatapaths, lports, binding_rec->datapath,
+                               true, local_datapaths);
+        }
+    } else if (!strcmp(binding_rec->type, "localnet")) {
+        /* Add all localnet ports to all_lports so that we allocate ct zones
+         * for them. */
+        sset_add(all_lports, binding_rec->logical_port);
+        our_chassis = false;
+    }
+
+    if (ctx->ovnsb_idl_txn) {
+        if (our_chassis) {
             if (binding_rec->chassis) {
                 VLOG_INFO("Changing chassis for lport %s from %s to %s.",
                           binding_rec->logical_port,
                           binding_rec->chassis->name,
                           chassis_rec->name);
-            } else {
-                VLOG_INFO("Claiming lport %s for this chassis.",
-                          binding_rec->logical_port);
-                for (int i = 0; i < binding_rec->n_mac; i++) {
-                    VLOG_INFO("Claiming %s", binding_rec->mac[i]);
-                }
+            }
+            for (int i = 0; i < binding_rec->n_mac; i++) {
+                VLOG_INFO("%s: Claiming %s",
+                          binding_rec->logical_port, binding_rec->mac[i]);
             }
             sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
-        }
-    } else if (!strcmp(binding_rec->type, "l2gateway")) {
-        const char *chassis_id = smap_get(&binding_rec->options,
-                                          "l2gateway-chassis");
-        if (!chassis_id || strcmp(chassis_id, chassis_rec->name)) {
-            if (binding_rec->chassis == chassis_rec && ctx->ovnsb_idl_txn) {
-                VLOG_INFO("Releasing l2gateway port %s from this chassis.",
-                          binding_rec->logical_port);
-                sbrec_port_binding_set_chassis(binding_rec, NULL);
-            }
-            return;
-        }
-
-        sset_add(all_lports, binding_rec->logical_port);
-        add_local_datapath(ldatapaths, lports, binding_rec->datapath,
-                           false, local_datapaths);
-        if (binding_rec->chassis == chassis_rec) {
-            return;
-        }
-
-        if (!strcmp(chassis_id, chassis_rec->name) && ctx->ovnsb_idl_txn) {
-            VLOG_INFO("Claiming l2gateway port %s for this chassis.",
-                      binding_rec->logical_port);
-            sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
-        }
-    } else if (!strcmp(binding_rec->type, "l3gateway")) {
-        const char *chassis = smap_get(&binding_rec->options,
-                                       "l3gateway-chassis");
-        if (!strcmp(chassis, chassis_rec->name)) {
-            add_local_datapath(ldatapaths, lports, binding_rec->datapath,
-                               true, local_datapaths);
-        }
-    } else if (chassis_rec && binding_rec->chassis == chassis_rec) {
-        if (ctx->ovnsb_idl_txn) {
+        } else if (binding_rec->chassis == chassis_rec) {
             VLOG_INFO("Releasing lport %s from this chassis.",
                       binding_rec->logical_port);
-            for (int i = 0; i < binding_rec->n_mac; i++) {
-                VLOG_INFO("Releasing %s", binding_rec->mac[i]);
-            }
             sbrec_port_binding_set_chassis(binding_rec, NULL);
-            sset_find_and_delete(all_lports, binding_rec->logical_port);
         }
-    } else if (!binding_rec->chassis
-               && !strcmp(binding_rec->type, "localnet")) {
-        /* Add all localnet ports to all_lports so that we allocate ct zones
-         * for them. */
-        sset_add(all_lports, binding_rec->logical_port);
     }
 }
 

@@ -508,12 +508,12 @@ main(int argc, char *argv[])
         }
 
         if (br_int && chassis) {
-            patch_run(&ctx, br_int, chassis_id, &local_datapaths);
+            patch_run(&ctx, br_int, chassis, &local_datapaths);
 
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int,
                                                          &pending_ct_zones);
 
-            pinctrl_run(&ctx, &lports, br_int, chassis_id, &local_datapaths);
+            pinctrl_run(&ctx, &lports, br_int, chassis, &local_datapaths);
             update_ct_zones(&all_lports, &local_datapaths, &ct_zones,
                             ct_zone_bitmap, &pending_ct_zones);
             if (ctx.ovs_idl_txn) {
@@ -524,8 +524,8 @@ main(int argc, char *argv[])
                           &group_table, &ct_zones, &flow_table);
 
                 physical_run(&ctx, mff_ovn_geneve,
-                             br_int, chassis_id, &ct_zones, &flow_table,
-                             &local_datapaths);
+                             br_int, chassis, &ct_zones, &lports,
+                             &flow_table, &local_datapaths);
 
                 ofctrl_put(&flow_table, &pending_ct_zones,
                            get_nb_cfg(ctx.ovnsb_idl));

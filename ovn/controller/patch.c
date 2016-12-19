@@ -137,7 +137,7 @@ add_bridge_mappings(struct controller_ctx *ctx,
                     const struct ovsrec_bridge *br_int,
                     struct shash *existing_ports,
                     struct hmap *local_datapaths,
-                    const char *chassis_id)
+                    const struct sbrec_chassis *chassis)
 {
     /* Get ovn-bridge-mappings. */
     const char *mappings_cfg = "";
@@ -207,7 +207,7 @@ add_bridge_mappings(struct controller_ctx *ctx,
             patch_port_id = "ovn-localnet-port";
         } else if (!strcmp(binding->type, "l2gateway")) {
             if (!binding->chassis
-                || strcmp(chassis_id, binding->chassis->name)) {
+                || strcmp(chassis->name, binding->chassis->name)) {
                 /* This L2 gateway port is not bound to this chassis,
                  * so we should not create any patch ports for it. */
                 continue;
@@ -247,86 +247,20 @@ add_bridge_mappings(struct controller_ctx *ctx,
     shash_destroy(&bridge_mappings);
 }
 
-/* Add one OVS patch port for each OVN logical patch port.
- *
- * It's wasteful to create an OVS patch port per OVN logical patch port, when
- * really there's no benefit to them beyond a way to identify how a packet
- * ingressed into a logical datapath.
- *
- * There are two obvious ways to improve the situation here, by modifying
- * OVS:
- *
- *     1. Add a way to configure in OVS which fields are preserved on a hop
- *        across an OVS patch port.  If MFF_LOG_DATAPATH and MFF_LOG_INPORT
- *        were preserved, then only a single pair of OVS patch ports would be
- *        required regardless of the number of OVN logical patch ports.
- *
- *     2. Add a new OpenFlow extension action modeled on "resubmit" that also
- *        saves and restores the packet data and metadata (the inability to do
- *        this is the only reason that "resubmit" can't be used already).  Or
- *        add OpenFlow extension actions to otherwise save and restore packet
- *        data and metadata.
- */
-static void
-add_logical_patch_ports(struct controller_ctx *ctx,
-                        const struct ovsrec_bridge *br_int,
-                        const char *local_chassis_id,
-                        struct hmap *local_datapaths,
-                        struct shash *existing_ports)
-{
-    const struct sbrec_chassis *chassis_rec;
-    chassis_rec = get_chassis(ctx->ovnsb_idl, local_chassis_id);
-    if (!chassis_rec) {
-        return;
-    }
-
-    const struct local_datapath *ld;
-    HMAP_FOR_EACH (ld, hmap_node, local_datapaths) {
-        for (size_t i = 0; i < ld->ldatapath->n_lports; i++) {
-            const struct sbrec_port_binding *pb = ld->ldatapath->lports[i];
-            const char *patch_port_id = "ovn-logical-patch-port";
-
-            bool is_local_l3gateway = false;
-            if (!strcmp(pb->type, "l3gateway")) {
-                const char *chassis = smap_get(&pb->options,
-                                               "l3gateway-chassis");
-                if (chassis && !strcmp(local_chassis_id, chassis)) {
-                    is_local_l3gateway = true;
-                    patch_port_id = "ovn-l3gateway-port";
-                    if (pb->chassis != chassis_rec && ctx->ovnsb_idl_txn) {
-                        sbrec_port_binding_set_chassis(pb, chassis_rec);
-                    }
-                }
-            }
-
-            if (!strcmp(pb->type, "patch") || is_local_l3gateway) {
-                const char *local = pb->logical_port;
-                const char *peer = smap_get(&pb->options, "peer");
-                if (!peer) {
-                    continue;
-                }
-
-                char *src_name = patch_port_name(local, peer);
-                char *dst_name = patch_port_name(peer, local);
-                create_patch_port(ctx, patch_port_id, local,
-                                  br_int, src_name, br_int, dst_name,
-                                  existing_ports);
-                free(dst_name);
-                free(src_name);
-            }
-        }
-    }
-}
-
 void
 patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
-          const char *chassis_id, struct hmap *local_datapaths)
+          const struct sbrec_chassis *chassis, struct hmap *local_datapaths)
 {
     if (!ctx->ovs_idl_txn) {
         return;
     }
 
-    /* Figure out what patch ports already exist. */
+    /* Figure out what patch ports already exist.
+     *
+     * ovn-controller does not create or use ports of type "ovn-l3gateway-port"
+     * or "ovn-logical-patch-port", but older version did.  We still recognize
+     * them here, so that we delete them at the end of this function, to avoid
+     * leaving useless ports on upgrade. */
     struct shash existing_ports = SHASH_INITIALIZER(&existing_ports);
     const struct ovsrec_port *port;
     OVSREC_PORT_FOR_EACH (port, ctx->ovs_idl) {
@@ -342,9 +276,7 @@ patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
      * 'existing_ports' any patch ports that do exist in the database and
      * should be there. */
     add_bridge_mappings(ctx, br_int, &existing_ports, local_datapaths,
-                        chassis_id);
-    add_logical_patch_ports(ctx, br_int, chassis_id, local_datapaths,
-                            &existing_ports);
+                        chassis);
 
     /* Now 'existing_ports' only still contains patch ports that exist in the
      * database but shouldn't.  Delete them from the database. */

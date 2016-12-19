@@ -68,7 +68,7 @@ static void init_send_garps(void);
 static void destroy_send_garps(void);
 static void send_garp_wait(void);
 static void send_garp_run(const struct ovsrec_bridge *,
-                          const char *chassis_id,
+                          const struct sbrec_chassis *,
                           const struct lport_index *lports,
                           struct hmap *local_datapaths);
 static void pinctrl_handle_nd_na(const struct flow *ip_flow,
@@ -752,7 +752,7 @@ pinctrl_recv(const struct ofp_header *oh, enum ofptype type)
 void
 pinctrl_run(struct controller_ctx *ctx, const struct lport_index *lports,
             const struct ovsrec_bridge *br_int,
-            const char *chassis_id,
+            const struct sbrec_chassis *chassis,
             struct hmap *local_datapaths)
 {
     char *target = xasprintf("unix:%s/%s.mgmt", ovs_rundir(), br_int->name);
@@ -788,7 +788,7 @@ pinctrl_run(struct controller_ctx *ctx, const struct lport_index *lports,
     }
 
     run_put_mac_bindings(ctx, lports);
-    send_garp_run(br_int, chassis_id, lports, local_datapaths);
+    send_garp_run(br_int, chassis, lports, local_datapaths);
 }
 
 void
@@ -1145,7 +1145,7 @@ send_garp(struct garp_data *garp, long long int current_time)
 /* Get localnet vifs, local l3gw ports and ofport for localnet patch ports. */
 static void
 get_localnet_vifs_l3gwports(const struct ovsrec_bridge *br_int,
-                  const char *this_chassis_id,
+                  const struct sbrec_chassis *chassis,
                   const struct lport_index *lports,
                   struct hmap *local_datapaths,
                   struct sset *localnet_vifs,
@@ -1159,13 +1159,11 @@ get_localnet_vifs_l3gwports(const struct ovsrec_bridge *br_int,
         }
         const char *chassis_id = smap_get(&port_rec->external_ids,
                                           "ovn-chassis-id");
-        if (chassis_id && !strcmp(chassis_id, this_chassis_id)) {
+        if (chassis_id && !strcmp(chassis_id, chassis->name)) {
             continue;
         }
         const char *localnet = smap_get(&port_rec->external_ids,
                                         "ovn-localnet-port");
-        const char *l3_gateway_port = smap_get(&port_rec->external_ids,
-                                               "ovn-l3gateway-port");
         for (int j = 0; j < port_rec->n_interfaces; j++) {
             const struct ovsrec_interface *iface_rec = port_rec->interfaces[j];
             if (!iface_rec->n_ofport) {
@@ -1177,10 +1175,6 @@ get_localnet_vifs_l3gwports(const struct ovsrec_bridge *br_int,
                     continue;
                 }
                 simap_put(localnet_ofports, localnet, ofport);
-                continue;
-            }
-            if (l3_gateway_port) {
-                sset_add(local_l3gw_ports, l3_gateway_port);
                 continue;
             }
             const char *iface_id = smap_get(&iface_rec->external_ids,
@@ -1198,6 +1192,21 @@ get_localnet_vifs_l3gwports(const struct ovsrec_bridge *br_int,
                                      pb->datapath->tunnel_key);
             if (ld && ld->localnet_port) {
                 sset_add(localnet_vifs, iface_id);
+            }
+        }
+    }
+
+    const struct local_datapath *ld;
+    HMAP_FOR_EACH (ld, hmap_node, local_datapaths) {
+        if (!ld->has_local_l3gateway) {
+            continue;
+        }
+
+        for (size_t i = 0; i < ld->ldatapath->n_lports; i++) {
+            const struct sbrec_port_binding *pb = ld->ldatapath->lports[i];
+            if (!strcmp(pb->type, "l3gateway")
+                /* && it's on this chassis */) {
+                sset_add(local_l3gw_ports, pb->logical_port);
             }
         }
     }
@@ -1245,7 +1254,8 @@ send_garp_wait(void)
 }
 
 static void
-send_garp_run(const struct ovsrec_bridge *br_int, const char *chassis_id,
+send_garp_run(const struct ovsrec_bridge *br_int,
+              const struct sbrec_chassis *chassis,
               const struct lport_index *lports,
               struct hmap *local_datapaths)
 {
@@ -1257,7 +1267,7 @@ send_garp_run(const struct ovsrec_bridge *br_int, const char *chassis_id,
 
     shash_init(&nat_addresses);
 
-    get_localnet_vifs_l3gwports(br_int, chassis_id, lports, local_datapaths,
+    get_localnet_vifs_l3gwports(br_int, chassis, lports, local_datapaths,
                       &localnet_vifs, &localnet_ofports, &local_l3gw_ports);
 
     get_nat_addresses_and_keys(&nat_ip_keys, &local_l3gw_ports, lports,
