@@ -2462,7 +2462,7 @@ upcall_unixctl_enable_ufid(struct unixctl_conn *conn, int argc OVS_UNUSED,
 static void
 upcall_unixctl_set_flow_limit(struct unixctl_conn *conn,
                               int argc OVS_UNUSED,
-                              const char *argv[] OVS_UNUSED,
+                              const char *argv[],
                               void *aux OVS_UNUSED)
 {
     struct ds ds = DS_EMPTY_INITIALIZER;
