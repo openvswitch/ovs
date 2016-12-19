@@ -78,16 +78,6 @@ get_local_datapath(const struct hmap *local_datapaths, uint32_t tunnel_key)
             : NULL);
 }
 
-struct patched_datapath *
-get_patched_datapath(const struct hmap *patched_datapaths, uint32_t tunnel_key)
-{
-    struct hmap_node *node = hmap_first_with_hash(patched_datapaths,
-                                                  tunnel_key);
-    return (node
-            ? CONTAINER_OF(node, struct patched_datapath, hmap_node)
-            : NULL);
-}
-
 const struct sbrec_chassis *
 get_chassis(struct ovsdb_idl *ovnsb_idl, const char *chassis_id)
 {
@@ -227,13 +217,12 @@ get_ovnsb_remote(struct ovsdb_idl *ovs_idl)
 }
 
 static void
-update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
+update_ct_zones(struct sset *lports, const struct hmap *local_datapaths,
                 struct simap *ct_zones, unsigned long *ct_zone_bitmap,
                 struct shash *pending_ct_zones)
 {
     struct simap_node *ct_zone, *ct_zone_next;
     int scan_start = 1;
-    struct patched_datapath *pd;
     const char *user;
     struct sset all_users = SSET_INITIALIZER(&all_users);
 
@@ -242,13 +231,14 @@ update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
     }
 
     /* Local patched datapath (gateway routers) need zones assigned. */
-    HMAP_FOR_EACH(pd, hmap_node, patched_datapaths) {
-        if (!pd->local) {
+    const struct local_datapath *ld;
+    HMAP_FOR_EACH (ld, hmap_node, local_datapaths) {
+        if (!ld->has_local_l3gateway) {
             continue;
         }
 
-        char *dnat = alloc_nat_zone_key(&pd->key, "dnat");
-        char *snat = alloc_nat_zone_key(&pd->key, "snat");
+        char *dnat = alloc_nat_zone_key(&ld->datapath->header_.uuid, "dnat");
+        char *snat = alloc_nat_zone_key(&ld->datapath->header_.uuid, "snat");
         sset_add(&all_users, dnat);
         sset_add(&all_users, snat);
         free(dnat);
@@ -495,11 +485,8 @@ main(int argc, char *argv[])
 
         update_probe_interval(&ctx);
 
-        /* Contains "struct local_datapath" nodes whose hash values are the
-         * tunnel_key of datapaths with at least one local port binding. */
+        /* Contains "struct local_datapath" nodes. */
         struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
-
-        struct hmap patched_datapaths = HMAP_INITIALIZER(&patched_datapaths);
         struct sset all_lports = SSET_INITIALIZER(&all_lports);
 
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
@@ -516,31 +503,29 @@ main(int argc, char *argv[])
         if (chassis_id) {
             chassis = chassis_run(&ctx, chassis_id, br_int);
             encaps_run(&ctx, br_int, chassis_id);
-            binding_run(&ctx, br_int, chassis_id, &local_datapaths,
-                        &all_lports);
+            binding_run(&ctx, br_int, chassis_id, &ldatapaths, &lports,
+                        &local_datapaths, &all_lports);
         }
 
         if (br_int && chassis) {
-            patch_run(&ctx, br_int, chassis_id, &local_datapaths,
-                      &patched_datapaths);
+            patch_run(&ctx, br_int, chassis_id, &local_datapaths);
 
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int,
                                                          &pending_ct_zones);
 
             pinctrl_run(&ctx, &lports, br_int, chassis_id, &local_datapaths);
-            update_ct_zones(&all_lports, &patched_datapaths, &ct_zones,
+            update_ct_zones(&all_lports, &local_datapaths, &ct_zones,
                             ct_zone_bitmap, &pending_ct_zones);
             if (ctx.ovs_idl_txn) {
                 commit_ct_zones(br_int, &pending_ct_zones);
 
                 struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
                 lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
-                          &patched_datapaths, &group_table, &ct_zones,
-                          &flow_table);
+                          &group_table, &ct_zones, &flow_table);
 
                 physical_run(&ctx, mff_ovn_geneve,
                              br_int, chassis_id, &ct_zones, &flow_table,
-                             &local_datapaths, &patched_datapaths);
+                             &local_datapaths);
 
                 ofctrl_put(&flow_table, &pending_ct_zones,
                            get_nb_cfg(ctx.ovnsb_idl));
@@ -566,14 +551,6 @@ main(int argc, char *argv[])
             free(cur_node);
         }
         hmap_destroy(&local_datapaths);
-
-        struct patched_datapath *pd_cur_node, *pd_next_node;
-        HMAP_FOR_EACH_SAFE (pd_cur_node, pd_next_node, hmap_node,
-                &patched_datapaths) {
-            hmap_remove(&patched_datapaths, &pd_cur_node->hmap_node);
-            free(pd_cur_node);
-        }
-        hmap_destroy(&patched_datapaths);
 
         unixctl_server_run(unixctl);
 

@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -44,6 +44,6 @@ void physical_register_ovs_idl(struct ovsdb_idl *);
 void physical_run(struct controller_ctx *, enum mf_field_id mff_ovn_geneve,
                   const struct ovsrec_bridge *br_int, const char *chassis_id,
                   const struct simap *ct_zones, struct hmap *flow_table,
-                  struct hmap *local_datapaths, struct hmap *patched_datapaths);
+                  struct hmap *local_datapaths);
 
 #endif /* ovn/physical.h */

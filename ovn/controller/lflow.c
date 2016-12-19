@@ -68,7 +68,6 @@ static void consider_logical_flow(const struct lport_index *lports,
                                   const struct mcgroup_index *mcgroups,
                                   const struct sbrec_logical_flow *lflow,
                                   const struct hmap *local_datapaths,
-                                  const struct hmap *patched_datapaths,
                                   struct group_table *group_table,
                                   const struct simap *ct_zones,
                                   struct hmap *dhcp_opts_p,
@@ -111,7 +110,6 @@ static void
 add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
                   const struct mcgroup_index *mcgroups,
                   const struct hmap *local_datapaths,
-                  const struct hmap *patched_datapaths,
                   struct group_table *group_table,
                   const struct simap *ct_zones,
                   struct hmap *flow_table,
@@ -137,7 +135,7 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
 
     SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
         consider_logical_flow(lports, mcgroups, lflow, local_datapaths,
-                              patched_datapaths, group_table, ct_zones,
+                              group_table, ct_zones,
                               &dhcp_opts, &dhcpv6_opts, &conj_id_ofs,
                               flow_table, expr_address_sets_p);
     }
@@ -151,7 +149,6 @@ consider_logical_flow(const struct lport_index *lports,
                       const struct mcgroup_index *mcgroups,
                       const struct sbrec_logical_flow *lflow,
                       const struct hmap *local_datapaths,
-                      const struct hmap *patched_datapaths,
                       struct group_table *group_table,
                       const struct simap *ct_zones,
                       struct hmap *dhcp_opts_p,
@@ -167,41 +164,8 @@ consider_logical_flow(const struct lport_index *lports,
     if (!ldp) {
         return;
     }
-    if (is_switch(ldp)) {
-        /* For a logical switch datapath, local_datapaths tells us if there
-         * are any local ports for this datapath.  If not, we can skip
-         * processing logical flows if that logical switch datapath is not
-         * patched to any logical router.
-         *
-         * Otherwise, we still need both ingress and egress pipeline
-         * because even if there are no local ports, we still may need to
-         * execute the ingress pipeline after a packet leaves a logical
-         * router and we need to do egress pipeline for a switch that
-         * is connected to only routers.  Further optimization is possible,
-         * but not based on what we know with local_datapaths right now.
-         *
-         * A better approach would be a kind of "flood fill" algorithm:
-         *
-         *   1. Initialize set S to the logical datapaths that have a port
-         *      located on the hypervisor.
-         *
-         *   2. For each patch port P in a logical datapath in S, add the
-         *      logical datapath of the remote end of P to S.  Iterate
-         *      until S reaches a fixed point.
-         *
-         * This can be implemented in northd, which can generate the sets and
-         * save it on each port-binding record in SB, and ovn-controller can
-         * use the information directly. However, there can be update storms
-         * when a pair of patch ports are added/removed to connect/disconnect
-         * large lrouters and lswitches. This need to be studied further.
-         */
-
-        if (!get_local_datapath(local_datapaths, ldp->tunnel_key)) {
-            if (!get_patched_datapath(patched_datapaths,
-                                      ldp->tunnel_key)) {
-                return;
-            }
-        }
+    if (!get_local_datapath(local_datapaths, ldp->tunnel_key)) {
+        return;
     }
 
     /* Determine translation of logical table IDs to physical table IDs. */
@@ -410,7 +374,6 @@ void
 lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
           const struct mcgroup_index *mcgroups,
           const struct hmap *local_datapaths,
-          const struct hmap *patched_datapaths,
           struct group_table *group_table,
           const struct simap *ct_zones,
           struct hmap *flow_table)
@@ -419,8 +382,7 @@ lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
 
     update_address_sets(ctx, &expr_address_sets);
     add_logical_flows(ctx, lports, mcgroups, local_datapaths,
-                      patched_datapaths, group_table, ct_zones, flow_table,
-                      &expr_address_sets);
+                      group_table, ct_zones, flow_table, &expr_address_sets);
     add_neighbor_flows(ctx, lports, flow_table);
 
     expr_macros_destroy(&expr_address_sets);

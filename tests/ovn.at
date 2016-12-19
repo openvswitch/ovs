@@ -5403,9 +5403,9 @@ AT_CHECK([ovs-vsctl add-port br-int localvif1 -- set Interface localvif1 externa
 # On hv1, check that there are no flows outputting bcast to tunnel
 OVS_WAIT_UNTIL([test `ovs-ofctl dump-flows br-int table=32 | ofctl_strip | grep output | wc -l` -eq 0])
 
-# On hv2, check that there is 1 flow outputting bcast to tunnel to hv1.
+# On hv2, check that no flow outputs bcast to tunnel to hv1.
 as hv2
-OVS_WAIT_UNTIL([test `ovs-ofctl dump-flows br-int table=32 | ofctl_strip | grep output | wc -l` -eq 1])
+OVS_WAIT_UNTIL([test `ovs-ofctl dump-flows br-int table=32 | ofctl_strip | grep output | wc -l` -eq 0])
 
 # Now bind vif2 on hv2.
 AT_CHECK([ovs-vsctl add-port br-int localvif2 -- set Interface localvif2 external_ids:iface-id=localvif2])

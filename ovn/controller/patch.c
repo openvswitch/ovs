@@ -184,9 +184,6 @@ add_bridge_mappings(struct controller_ctx *ctx,
                 = get_local_datapath(local_datapaths,
                                      binding->datapath->tunnel_key);
             if (!ld) {
-                /* This localnet port is on a datapath with no
-                 * logical ports bound to this chassis, so there's no need
-                 * to create patch ports for it. */
                 continue;
             }
 
@@ -250,30 +247,11 @@ add_bridge_mappings(struct controller_ctx *ctx,
     shash_destroy(&bridge_mappings);
 }
 
-static void
-add_patched_datapath(struct hmap *patched_datapaths,
-                     const struct sbrec_port_binding *binding_rec, bool local)
-{
-    struct patched_datapath *pd = get_patched_datapath(patched_datapaths,
-                                       binding_rec->datapath->tunnel_key);
-    if (pd) {
-        return;
-    }
-
-    pd = xzalloc(sizeof *pd);
-    pd->local = local;
-    pd->key = binding_rec->datapath->header_.uuid;
-    hmap_insert(patched_datapaths, &pd->hmap_node,
-                binding_rec->datapath->tunnel_key);
-}
-
 /* Add one OVS patch port for each OVN logical patch port.
  *
- * This is suboptimal for several reasons.  First, it creates an OVS port for
- * every OVN logical patch port, not just for the ones that are actually useful
- * on this hypervisor.  Second, it's wasteful to create an OVS patch port per
- * OVN logical patch port, when really there's no benefit to them beyond a way
- * to identify how a packet ingressed into a logical datapath.
+ * It's wasteful to create an OVS patch port per OVN logical patch port, when
+ * really there's no benefit to them beyond a way to identify how a packet
+ * ingressed into a logical datapath.
  *
  * There are two obvious ways to improve the situation here, by modifying
  * OVS:
@@ -293,8 +271,8 @@ static void
 add_logical_patch_ports(struct controller_ctx *ctx,
                         const struct ovsrec_bridge *br_int,
                         const char *local_chassis_id,
-                        struct shash *existing_ports,
-                        struct hmap *patched_datapaths)
+                        struct hmap *local_datapaths,
+                        struct shash *existing_ports)
 {
     const struct sbrec_chassis *chassis_rec;
     chassis_rec = get_chassis(ctx->ovnsb_idl, local_chassis_id);
@@ -302,38 +280,39 @@ add_logical_patch_ports(struct controller_ctx *ctx,
         return;
     }
 
-    const struct sbrec_port_binding *binding;
-    SBREC_PORT_BINDING_FOR_EACH (binding, ctx->ovnsb_idl) {
-        const char *patch_port_id = "ovn-logical-patch-port";
-        bool local_port = false;
-        if (!strcmp(binding->type, "l3gateway")) {
-            const char *chassis = smap_get(&binding->options,
-                                           "l3gateway-chassis");
-            if (chassis && !strcmp(local_chassis_id, chassis)) {
-                local_port = true;
-                patch_port_id = "ovn-l3gateway-port";
-            }
-        }
+    const struct local_datapath *ld;
+    HMAP_FOR_EACH (ld, hmap_node, local_datapaths) {
+        for (size_t i = 0; i < ld->ldatapath->n_lports; i++) {
+            const struct sbrec_port_binding *pb = ld->ldatapath->lports[i];
+            const char *patch_port_id = "ovn-logical-patch-port";
 
-        if (!strcmp(binding->type, "patch") || local_port) {
-            const char *local = binding->logical_port;
-            const char *peer = smap_get(&binding->options, "peer");
-            if (!peer) {
-                continue;
-            }
-
-            char *src_name = patch_port_name(local, peer);
-            char *dst_name = patch_port_name(peer, local);
-            create_patch_port(ctx, patch_port_id, local,
-                              br_int, src_name, br_int, dst_name,
-                              existing_ports);
-            free(dst_name);
-            free(src_name);
-            add_patched_datapath(patched_datapaths, binding, local_port);
-            if (local_port) {
-                if (binding->chassis != chassis_rec && ctx->ovnsb_idl_txn) {
-                    sbrec_port_binding_set_chassis(binding, chassis_rec);
+            bool is_local_l3gateway = false;
+            if (!strcmp(pb->type, "l3gateway")) {
+                const char *chassis = smap_get(&pb->options,
+                                               "l3gateway-chassis");
+                if (chassis && !strcmp(local_chassis_id, chassis)) {
+                    is_local_l3gateway = true;
+                    patch_port_id = "ovn-l3gateway-port";
+                    if (pb->chassis != chassis_rec && ctx->ovnsb_idl_txn) {
+                        sbrec_port_binding_set_chassis(pb, chassis_rec);
+                    }
                 }
+            }
+
+            if (!strcmp(pb->type, "patch") || is_local_l3gateway) {
+                const char *local = pb->logical_port;
+                const char *peer = smap_get(&pb->options, "peer");
+                if (!peer) {
+                    continue;
+                }
+
+                char *src_name = patch_port_name(local, peer);
+                char *dst_name = patch_port_name(peer, local);
+                create_patch_port(ctx, patch_port_id, local,
+                                  br_int, src_name, br_int, dst_name,
+                                  existing_ports);
+                free(dst_name);
+                free(src_name);
             }
         }
     }
@@ -341,8 +320,7 @@ add_logical_patch_ports(struct controller_ctx *ctx,
 
 void
 patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
-          const char *chassis_id, struct hmap *local_datapaths,
-          struct hmap *patched_datapaths)
+          const char *chassis_id, struct hmap *local_datapaths)
 {
     if (!ctx->ovs_idl_txn) {
         return;
@@ -365,8 +343,8 @@ patch_run(struct controller_ctx *ctx, const struct ovsrec_bridge *br_int,
      * should be there. */
     add_bridge_mappings(ctx, br_int, &existing_ports, local_datapaths,
                         chassis_id);
-    add_logical_patch_ports(ctx, br_int, chassis_id, &existing_ports,
-                            patched_datapaths);
+    add_logical_patch_ports(ctx, br_int, chassis_id, local_datapaths,
+                            &existing_ports);
 
     /* Now 'existing_ports' only still contains patch ports that exist in the
      * database but shouldn't.  Delete them from the database. */

@@ -86,17 +86,23 @@ check_patches \
     'br-int  patch-br-int-to-localnet2 patch-localnet2-to-br-int' \
     'br-eth0 patch-localnet2-to-br-int patch-br-int-to-localnet2'
 
-# Add logical patch ports.
+# Add logical patch ports to connect new logical datapath.
+#
+# (Also add a vif on this hypervisor on one of the datapaths,
+# otherwise the hypervisor will ignore both of them.)
 AT_CHECK([ovn-sbctl \
     -- --id=@dp1 create Datapath_Binding tunnel_key=1 \
     -- --id=@dp2 create Datapath_Binding tunnel_key=2 \
     -- create Port_Binding datapath=@dp1 logical_port=foo tunnel_key=1 type=patch options:peer=bar \
     -- create Port_Binding datapath=@dp2 logical_port=bar tunnel_key=2 type=patch options:peer=foo \
+    -- create Port_Binding datapath=@dp1 logical_port=dp1vif tunnel_key=3 \
 | ${PERL} $srcdir/uuidfilt.pl], [0], [<0>
 <1>
 <2>
 <3>
+<4>
 ])
+ovs-vsctl add-port br-int dp1vif -- set Interface dp1vif external_ids:iface-id=dp1vif
 check_patches \
     'br-int  patch-br-int-to-localnet2 patch-localnet2-to-br-int' \
     'br-eth0 patch-localnet2-to-br-int patch-br-int-to-localnet2' \
@@ -116,6 +122,17 @@ check_patches \
 AT_CHECK([ovn-sbctl \
     -- set Port_Binding foo logical_port=quux options:peer=baz \
     -- set Port_Binding bar logical_port=baz  options:peer=quux])
+check_patches \
+    'br-int patch-quux-to-baz patch-baz-to-quux' \
+    'br-int patch-baz-to-quux patch-quux-to-baz'
+
+# Drop the vif from the patched-together datapaths and verify that the patch
+# ports disappear.
+AT_CHECK([ovs-vsctl del-port dp1vif])
+check_patches
+
+# Put the vif back and the patch ports reappear.
+AT_CHECK([ovs-vsctl add-port br-int dp1vif -- set Interface dp1vif external_ids:iface-id=dp1vif])
 check_patches \
     'br-int patch-quux-to-baz patch-baz-to-quux' \
     'br-int patch-baz-to-quux patch-quux-to-baz'
