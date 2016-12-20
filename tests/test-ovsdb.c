@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2294,7 +2294,12 @@ update_conditions(struct ovsdb_idl *idl, char *commands)
                 }
             }
         }
-        ovsdb_idl_set_condition(idl, tc, &cond);
+
+        unsigned int seqno = ovsdb_idl_get_condition_seqno(idl);
+        unsigned int next_seqno = ovsdb_idl_set_condition(idl, tc, &cond);
+        if (seqno == next_seqno ) {
+            ovs_fatal(0, "condition unchanged");
+        }
         ovsdb_idl_condition_destroy(&cond);
         json_destroy(json);
     }
