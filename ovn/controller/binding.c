@@ -372,17 +372,22 @@ consider_local_datapath(struct controller_ctx *ctx,
 
     if (ctx->ovnsb_idl_txn) {
         if (our_chassis) {
-            if (binding_rec->chassis) {
-                VLOG_INFO("Changing chassis for lport %s from %s to %s.",
-                          binding_rec->logical_port,
-                          binding_rec->chassis->name,
-                          chassis_rec->name);
+            if (binding_rec->chassis != chassis_rec) {
+                if (binding_rec->chassis) {
+                    VLOG_INFO("Changing chassis for lport %s from %s to %s.",
+                              binding_rec->logical_port,
+                              binding_rec->chassis->name,
+                              chassis_rec->name);
+                } else {
+                    VLOG_INFO("Claiming lport %s for this chassis.",
+                              binding_rec->logical_port);
+                }
+                for (int i = 0; i < binding_rec->n_mac; i++) {
+                    VLOG_INFO("%s: Claiming %s",
+                              binding_rec->logical_port, binding_rec->mac[i]);
+                }
+                sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
             }
-            for (int i = 0; i < binding_rec->n_mac; i++) {
-                VLOG_INFO("%s: Claiming %s",
-                          binding_rec->logical_port, binding_rec->mac[i]);
-            }
-            sbrec_port_binding_set_chassis(binding_rec, chassis_rec);
         } else if (binding_rec->chassis == chassis_rec) {
             VLOG_INFO("Releasing lport %s from this chassis.",
                       binding_rec->logical_port);
