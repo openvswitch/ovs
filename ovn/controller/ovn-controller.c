@@ -118,6 +118,71 @@ get_bridge(struct ovsdb_idl *ovs_idl, const char *br_name)
     return NULL;
 }
 
+static void
+update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
+                   const struct sbrec_chassis *chassis,
+                   const struct sset *local_ifaces,
+                   struct hmap *local_datapaths)
+{
+    /* Monitor Port_Bindings rows for local interfaces and local datapaths.
+     *
+     * Monitor Logical_Flow, MAC_Binding, and Multicast_Group tables for
+     * local datapaths.
+     *
+     * We always monitor patch ports because they allow us to see the linkages
+     * between related logical datapaths.  That way, when we know that we have
+     * a VIF on a particular logical switch, we immediately know to monitor all
+     * the connected logical routers and logical switches. */
+    struct ovsdb_idl_condition pb = OVSDB_IDL_CONDITION_INIT(&pb);
+    struct ovsdb_idl_condition lf = OVSDB_IDL_CONDITION_INIT(&lf);
+    struct ovsdb_idl_condition mb = OVSDB_IDL_CONDITION_INIT(&mb);
+    struct ovsdb_idl_condition mg = OVSDB_IDL_CONDITION_INIT(&mg);
+    sbrec_port_binding_add_clause_type(&pb, OVSDB_F_EQ, "patch");
+    if (chassis) {
+        /* This should be mostly redundant with the other clauses for port
+         * bindings, but it allows us to catch any ports that are assigned to
+         * us but should not be.  That way, we can clear their chassis
+         * assignments. */
+        sbrec_port_binding_add_clause_chassis(&pb, OVSDB_F_EQ,
+                                              &chassis->header_.uuid);
+
+        /* Ensure that we find out about l2gateway and l3gateway ports that
+         * should be present on this chassis.  Otherwise, we might never find
+         * out about those ports, if their datapaths don't otherwise have a VIF
+         * in this chassis. */
+        const char *id = chassis->name;
+        const struct smap l2 = SMAP_CONST1(&l2, "l2gateway-chassis", id);
+        sbrec_port_binding_add_clause_options(&pb, OVSDB_F_INCLUDES, &l2);
+        const struct smap l3 = SMAP_CONST1(&l3, "l3gateway-chassis", id);
+        sbrec_port_binding_add_clause_options(&pb, OVSDB_F_INCLUDES, &l3);
+    }
+    if (local_ifaces) {
+        const char *name;
+        SSET_FOR_EACH (name, local_ifaces) {
+            sbrec_port_binding_add_clause_logical_port(&pb, OVSDB_F_EQ, name);
+        }
+    }
+    if (local_datapaths) {
+        const struct local_datapath *ld;
+        HMAP_FOR_EACH (ld, hmap_node, local_datapaths) {
+            const struct uuid *uuid = &ld->datapath->header_.uuid;
+            sbrec_port_binding_add_clause_datapath(&pb, OVSDB_F_EQ, uuid);
+            sbrec_logical_flow_add_clause_logical_datapath(&lf, OVSDB_F_EQ,
+                                                           uuid);
+            sbrec_mac_binding_add_clause_datapath(&mb, OVSDB_F_EQ, uuid);
+            sbrec_multicast_group_add_clause_datapath(&mg, OVSDB_F_EQ, uuid);
+        }
+    }
+    sbrec_port_binding_set_condition(ovnsb_idl, &pb);
+    sbrec_logical_flow_set_condition(ovnsb_idl, &lf);
+    sbrec_mac_binding_set_condition(ovnsb_idl, &mb);
+    sbrec_multicast_group_set_condition(ovnsb_idl, &mg);
+    ovsdb_idl_condition_destroy(&pb);
+    ovsdb_idl_condition_destroy(&lf);
+    ovsdb_idl_condition_destroy(&mb);
+    ovsdb_idl_condition_destroy(&mg);
+}
+
 static const struct ovsrec_bridge *
 create_br_int(struct controller_ctx *ctx,
               const struct ovsrec_open_vswitch *cfg,
@@ -451,6 +516,7 @@ main(int argc, char *argv[])
     struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
     ovsdb_idl_omit_alert(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
+    update_sb_monitors(ovnsb_idl_loop.idl, NULL, NULL, NULL);
     ovsdb_idl_get_initial_snapshot(ovnsb_idl_loop.idl);
 
     /* Initialize connection tracking zones. */
@@ -543,6 +609,9 @@ main(int argc, char *argv[])
                     }
                 }
             }
+
+            update_sb_monitors(ctx.ovnsb_idl, chassis,
+                               &local_lports, &local_datapaths);
         }
 
         mcgroup_index_destroy(&mcgroups);
