@@ -334,7 +334,7 @@ ret_error:
  *----------------------------------------------------------------------------
  * OvsEncapVxlan --
  *     Encapsulates the packet if L2/L3 for destination resolves. Otherwise,
- *     enqueues a callback that does encapsulatation after resolution.
+ *     enqueues a callback that does encapsulation after resolution.
  *----------------------------------------------------------------------------
  */
 NDIS_STATUS
@@ -343,15 +343,15 @@ OvsEncapVxlan(POVS_VPORT_ENTRY vport,
               OvsIPv4TunnelKey *tunKey,
               POVS_SWITCH_CONTEXT switchContext,
               POVS_PACKET_HDR_INFO layers,
-              PNET_BUFFER_LIST *newNbl)
+              PNET_BUFFER_LIST *newNbl,
+              POVS_FWD_INFO switchFwdInfo)
 {
     NTSTATUS status;
     OVS_FWD_INFO fwdInfo;
 
-    status = OvsLookupIPFwdInfo(tunKey->dst, &fwdInfo);
+    status = OvsLookupIPFwdInfo(tunKey->src, tunKey->dst, &fwdInfo);
     if (status != STATUS_SUCCESS) {
         OvsFwdIPHelperRequest(NULL, 0, tunKey, NULL, NULL, NULL);
-        // return NDIS_STATUS_PENDING;
         /*
          * XXX: Don't know if the completionList will make any sense when
          * accessed in the callback. Make sure the caveats are known.
@@ -361,6 +361,8 @@ OvsEncapVxlan(POVS_VPORT_ENTRY vport,
          */
         return NDIS_STATUS_FAILURE;
     }
+
+    RtlCopyMemory(switchFwdInfo->value, fwdInfo.value, sizeof fwdInfo.value);
 
     return OvsDoEncapVxlan(vport, curNbl, tunKey, &fwdInfo, layers,
                            switchContext, newNbl);

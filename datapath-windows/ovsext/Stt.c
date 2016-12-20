@@ -107,13 +107,14 @@ OvsEncapStt(POVS_VPORT_ENTRY vport,
             OvsIPv4TunnelKey *tunKey,
             POVS_SWITCH_CONTEXT switchContext,
             POVS_PACKET_HDR_INFO layers,
-            PNET_BUFFER_LIST *newNbl)
+            PNET_BUFFER_LIST *newNbl,
+            POVS_FWD_INFO switchFwdInfo)
 {
     OVS_FWD_INFO fwdInfo;
     NDIS_STATUS status;
 
     UNREFERENCED_PARAMETER(switchContext);
-    status = OvsLookupIPFwdInfo(tunKey->dst, &fwdInfo);
+    status = OvsLookupIPFwdInfo(tunKey->src, tunKey->dst, &fwdInfo);
     if (status != STATUS_SUCCESS) {
         OvsFwdIPHelperRequest(NULL, 0, tunKey, NULL, NULL, NULL);
         /*
@@ -122,6 +123,8 @@ OvsEncapStt(POVS_VPORT_ENTRY vport,
          */
         return NDIS_STATUS_FAILURE;
     }
+
+    RtlCopyMemory(switchFwdInfo->value, fwdInfo.value, sizeof fwdInfo.value);
 
     status = OvsDoEncapStt(vport, curNbl, tunKey, &fwdInfo, layers,
                            switchContext, newNbl);
