@@ -388,7 +388,9 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/netlink-notifier.h \
 	lib/netlink-protocol.h \
 	lib/netlink-socket.c \
-	lib/netlink-socket.h
+	lib/netlink-socket.h \
+	lib/wmi.c \
+	lib/wmi.h
 endif
 
 if HAVE_POSIX_AIO
