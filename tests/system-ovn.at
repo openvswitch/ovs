@@ -1,3 +1,5 @@
+AT_BANNER([system-ovn])
+
 AT_SETUP([ovn -- 2 LRs connected via LS, gateway router, SNAT and DNAT])
 AT_KEYWORDS([ovnnat])
 
