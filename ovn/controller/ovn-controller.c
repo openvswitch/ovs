@@ -456,15 +456,11 @@ main(int argc, char *argv[])
     physical_register_ovs_idl(ovs_idl_loop.idl);
     ovsdb_idl_get_initial_snapshot(ovs_idl_loop.idl);
 
-    /* Connect to OVN SB database. */
+    /* Connect to OVN SB database and get a snapshot. */
     char *ovnsb_remote = get_ovnsb_remote(ovs_idl_loop.idl);
     struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
     ovsdb_idl_omit_alert(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
-
-    /* Track the southbound idl. */
-    ovsdb_idl_track_add_all(ovnsb_idl_loop.idl);
-
     ovsdb_idl_get_initial_snapshot(ovnsb_idl_loop.idl);
 
     /* Initialize connection tracking zones. */
@@ -587,7 +583,6 @@ main(int argc, char *argv[])
             pinctrl_wait(&ctx);
         }
         ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
-        ovsdb_idl_track_clear(ovnsb_idl_loop.idl);
 
         if (ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop) == 1) {
             struct shash_node *iter, *iter_next;
@@ -599,8 +594,6 @@ main(int argc, char *argv[])
                 }
             }
         }
-        ovsdb_idl_track_clear(ovs_idl_loop.idl);
-
         poll_block();
         if (should_service_stop()) {
             exiting = true;
