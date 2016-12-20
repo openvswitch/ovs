@@ -112,6 +112,8 @@ SYSTEM_TESTSUITE_AT = \
 	tests/system-ovn.at \
 	tests/system-traffic.at
 
+check_SCRIPTS += tests/atlocal
+
 TESTSUITE = $(srcdir)/tests/testsuite
 TESTSUITE_PATCH = $(srcdir)/tests/testsuite.patch
 SYSTEM_KMOD_TESTSUITE = $(srcdir)/tests/system-kmod-testsuite
