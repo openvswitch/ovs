@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010, 2011, 2012, 2013 Nicira, Inc.
+# Copyright (c) 2009, 2010, 2011, 2012, 2013, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -144,7 +144,7 @@ class Idl(object):
             table.need_table = False
             table.rows = {}
             table.idl = self
-            table.condition = []
+            table.condition = [True]
             table.cond_changed = False
 
     def close(self):
@@ -265,23 +265,23 @@ class Idl(object):
                 self.__send_cond_change(table, table.condition)
                 table.cond_changed = False
 
-    def cond_change(self, table_name, add_cmd, cond):
-        """Change conditions for this IDL session. If session is not already
-        connected, add condtion to table and submit it on send_monitor_request.
-        Otherwise  send monitor_cond_change method with the requested
-        changes."""
+    def cond_change(self, table_name, cond):
+        """Sets the condition for 'table_name' to 'cond', which should be a
+        conditional expression suitable for use directly in the OVSDB
+        protocol, with the exception that the empty condition []
+        matches no rows (instead of matching every row).  That is, []
+        is equivalent to [False], not to [True].
+        """
 
         table = self.tables.get(table_name)
         if not table:
             raise error.Error('Unknown table "%s"' % table_name)
 
-        if add_cmd:
-            table.condition += cond
-        else:
-            for c in cond:
-                table.condition.remove(c)
-
-        table.cond_changed = True
+        if cond == []:
+            cond = [False]
+        if table.condition != cond:
+            table.condition = cond
+            table.cond_changed = True
 
     def wait(self, poller):
         """Arranges for poller.block() to wake up when self.run() has something
@@ -420,8 +420,7 @@ class Idl(object):
                         (column not in self.readonly[table.name])):
                     columns.append(column)
             monitor_requests[table.name] = {"columns": columns}
-            if method == "monitor_cond" and table.cond_changed and \
-                   table.condition:
+            if method == "monitor_cond" and table.condition != [True]:
                 monitor_requests[table.name]["where"] = table.condition
                 table.cond_change = False
 

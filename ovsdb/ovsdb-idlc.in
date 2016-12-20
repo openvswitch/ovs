@@ -243,7 +243,7 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
                 print 'void %(s)s_update_%(c)s_delvalue(const struct %(s)s *, ' % {'s': structName, 'c': columnName},
                 print '%(valtype)s);' % {'valtype':column.type.key.to_const_c_type(prefix)}
 
-            print 'void %(s)s_add_clause_%(c)s(struct ovsdb_idl *idl, enum ovsdb_function function,' % {'s': structName, 'c': columnName},
+            print 'void %(s)s_add_clause_%(c)s(struct ovsdb_idl_condition *, enum ovsdb_function function,' % {'s': structName, 'c': columnName},
             if column.type.is_smap():
                 args = ['const struct smap *']
             else:
@@ -252,22 +252,7 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
                 args = ['%(type)s%(name)s' % member for member in members]
             print '%s);' % ', '.join(args)
 
-        print 'void %s_add_clause_true(struct ovsdb_idl *idl);' % structName
-        print 'void %s_add_clause_false(struct ovsdb_idl *idl);' % structName
-
-        print
-        for columnName, column in sorted_columns(table):
-            print 'void %(s)s_remove_clause_%(c)s(struct ovsdb_idl *idl, enum ovsdb_function function,' % {'s': structName, 'c': columnName},
-            if column.type.is_smap():
-                args = ['const struct smap *']
-            else:
-                comment, members = cMembers(prefix, tableName, columnName,
-                                            column, True, refTable=False)
-                args = ['%(type)s%(name)s' % member for member in members]
-            print '%s);' % ', '.join(args)
-
-        print 'void %s_remove_clause_true(struct ovsdb_idl *idl);' % structName
-        print 'void %s_remove_clause_false(struct ovsdb_idl *idl);' % structName
+            print 'void %(s)s_set_condition(struct ovsdb_idl *, struct ovsdb_idl_condition *);' % {'s': structName},
 
         print
 
@@ -870,7 +855,7 @@ void
             if type.is_smap():
                 print comment
                 print """void
-%(s)s_add_clause_%(c)s(struct ovsdb_idl *idl, enum ovsdb_function function, const struct smap *%(c)s)
+%(s)s_add_clause_%(c)s(struct ovsdb_idl_condition *cond, enum ovsdb_function function, const struct smap *%(c)s)
 {
     struct ovsdb_datum datum;
 
@@ -880,8 +865,7 @@ void
         ovsdb_datum_init_empty(&datum);
     }
 
-    ovsdb_idl_condition_add_clause(idl,
-                                   &%(p)stable_%(tl)s,
+    ovsdb_idl_condition_add_clause(cond,
                                    function,
                                    &%(s)s_col_%(c)s,
                                    &datum);
@@ -911,7 +895,7 @@ void
 
             print comment
             print 'void'
-            print '%(s)s_add_clause_%(c)s(struct ovsdb_idl *idl, enum ovsdb_function function, %(args)s)' % \
+            print '%(s)s_add_clause_%(c)s(struct ovsdb_idl_condition *cond, enum ovsdb_function function, %(args)s)' % \
                 {'s': structName, 'c': columnName,
                  'args': ', '.join(['%(type)s%(name)s' % m for m in members])}
             print "{"
@@ -975,7 +959,7 @@ void
                 print "    ovsdb_datum_sort_unique(&datum, %s, %s);" % (
                     type.key.toAtomicType(), valueType)
 
-            print"""    ovsdb_idl_condition_add_clause(idl, &%(p)stable_%(tl)s,
+            print"""    ovsdb_idl_condition_add_clause(cond,
                           function,
                           &%(s)s_col_%(c)s,
                           &datum);\
@@ -990,177 +974,14 @@ void
                 print "    free(%s);" % var
             print "}"
 
-        print """\
+        print """
 void
-%(s)s_add_clause_false(struct ovsdb_idl *idl)
+%(s)s_set_condition(struct ovsdb_idl *idl, struct ovsdb_idl_condition *condition)
 {
-    struct ovsdb_datum datum;
-
-    ovsdb_datum_init_empty(&datum);
-    ovsdb_idl_condition_add_clause(idl, &%(p)stable_%(tl)s, OVSDB_F_FALSE, NULL, &datum);
-}""" % {'s': structName,
-        'tl': tableName.lower(),
-        'p': prefix,
-        'P': prefix.upper()}
-
-        print """void
-%(s)s_add_clause_true(struct ovsdb_idl *idl)
-{
-    struct ovsdb_datum datum;
-
-    ovsdb_datum_init_empty(&datum);
-    ovsdb_idl_condition_add_clause(idl, &%(p)stable_%(tl)s, OVSDB_F_TRUE, NULL, &datum);
-}""" % {'s': structName,
-        'tl': tableName.lower(),
-        'p': prefix,
-        'P': prefix.upper()}
-
-        # Remove clause functions.
-        for columnName, column in sorted_columns(table):
-            type = column.type
-
-            comment, members = cMembers(prefix, tableName, columnName,
-                                        column, True, refTable=False)
-
-            if type.is_smap():
-                print comment
-                print """void
-%(s)s_remove_clause_%(c)s(struct ovsdb_idl *idl, enum ovsdb_function function, const struct smap *%(c)s)
-{
-    struct ovsdb_datum datum;
-
-    if (%(c)s) {
-        ovsdb_datum_from_smap(&datum, %(c)s);
-    } else {
-        ovsdb_datum_init_empty(&datum);
-    }
-
-    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s,
-                                      function,
-                                      &%(s)s_col_%(c)s,
-                                      &datum);
-
-    ovsdb_datum_destroy(&datum, &%(s)s_col_%(c)s.type);
-}
-""" % {'tl': tableName.lower(),
-       'p': prefix,
-       'P': prefix.upper(),
-       's': structName,
-       'S': structName.upper(),
-       'c': columnName}
-                continue
-
-            keyVar = members[0]['name']
-            nVar = None
-            valueVar = None
-            if type.value:
-                valueVar = members[1]['name']
-                if len(members) > 2:
-                    nVar = members[2]['name']
-            else:
-                if len(members) > 1:
-                    nVar = members[1]['name']
-
-            print comment
-            print 'void'
-            print '%(s)s_remove_clause_%(c)s(struct ovsdb_idl *idl, enum ovsdb_function function, %(args)s)' % \
-                {'s': structName, 'c': columnName,
-                 'args': ', '.join(['%(type)s%(name)s' % m for m in members])}
-            print "{"
-            print "    struct ovsdb_datum datum;"
-            free = []
-            if type.n_min == 1 and type.n_max == 1:
-                print "    union ovsdb_atom key;"
-                if type.value:
-                    print "    union ovsdb_atom value;"
-                print
-                print "    datum.n = 1;"
-                print "    datum.keys = &key;"
-                print "    " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar, refTable=False)
-                if type.value:
-                    print "    datum.values = &value;"
-                    print "    "+ type.value.assign_c_value_casting_away_const("value.%s" % type.value.type.to_string(), valueVar, refTable=False)
-                else:
-                    print "    datum.values = NULL;"
-            elif type.is_optional_pointer():
-                print "    union ovsdb_atom key;"
-                print
-                print "    if (%s) {" % keyVar
-                print "        datum.n = 1;"
-                print "        datum.keys = &key;"
-                print "        " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar, refTable=False)
-                print "    } else {"
-                print "        datum.n = 0;"
-                print "        datum.keys = NULL;"
-                print "    }"
-                print "    datum.values = NULL;"
-            elif type.n_max == 1:
-                print "    union ovsdb_atom key;"
-                print
-                print "    if (%s) {" % nVar
-                print "        datum.n = 1;"
-                print "        datum.keys = &key;"
-                print "        " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), "*" + keyVar, refTable=False)
-                print "    } else {"
-                print "        datum.n = 0;"
-                print "        datum.keys = NULL;"
-                print "    }"
-                print "    datum.values = NULL;"
-            else:
-                print "    datum.n = %s;" % nVar
-                print "    datum.keys = %s ? xmalloc(%s * sizeof *datum.keys) : NULL;" % (nVar, nVar)
-                free += ['datum.keys']
-                if type.value:
-                    free += ['datum.values']
-                    print "    datum.values = xmalloc(%s * sizeof *datum.values);" % nVar
-                else:
-                    print "    datum.values = NULL;"
-                print "    for (size_t i = 0; i < %s; i++) {" % nVar
-                print "        " + type.key.assign_c_value_casting_away_const("datum.keys[i].%s" % type.key.type.to_string(), "%s[i]" % keyVar, refTable=False)
-                if type.value:
-                    print "        " + type.value.assign_c_value_casting_away_const("datum.values[i].%s" % type.value.type.to_string(), "%s[i]" % valueVar, refTable=False)
-                print "    }"
-                if type.value:
-                    valueType = type.value.toAtomicType()
-                else:
-                    valueType = "OVSDB_TYPE_VOID"
-                print "    ovsdb_datum_sort_unique(&datum, %s, %s);" % (
-                    type.key.toAtomicType(), valueType)
-
-            print"""    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s,
-                          function,
-                          &%(s)s_col_%(c)s,
-                          &datum);\
-""" % {'tl': tableName.lower(),
-       'p': prefix,
-       'P': prefix.upper(),
-       's': structName,
-       'S': structName.upper(),
-       'c': columnName}
-            for var in free:
-                print "    free(%s);" % var
-            print "}"
-
-        print """void
-%(s)s_remove_clause_false(struct ovsdb_idl *idl)
-{
-    struct ovsdb_datum datum;
-
-    ovsdb_datum_init_empty(&datum);
-    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s, OVSDB_F_FALSE, NULL, &datum);
-}
-
-void
-%(s)s_remove_clause_true(struct ovsdb_idl *idl)
-{
-    struct ovsdb_datum datum;
-
-    ovsdb_datum_init_empty(&datum);
-    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s, OVSDB_F_TRUE, NULL, &datum);
-}""" % {'s': structName,
-        'tl': tableName.lower(),
-        'p': prefix,
-        'P': prefix.upper(),}
+    ovsdb_idl_set_condition(idl, &%(p)stable_%(tl)s, condition);
+}""" % {'p': prefix,
+        's': structName,
+        'tl': tableName.lower()}
 
         # Table columns.
         for columnName, column in sorted_columns(table):

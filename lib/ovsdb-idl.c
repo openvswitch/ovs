@@ -24,6 +24,7 @@
 
 #include "bitmap.h"
 #include "coverage.h"
+#include "hash.h"
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "openvswitch/json.h"
@@ -219,7 +220,6 @@ ovsdb_idl_table_from_class(const struct ovsdb_idl *,
                            const struct ovsdb_idl_table_class *);
 static bool ovsdb_idl_track_is_set(struct ovsdb_idl_table *table);
 static void ovsdb_idl_send_cond_change(struct ovsdb_idl *idl);
-static void ovsdb_idl_condition_init(struct ovsdb_idl_condition *cnd);
 
 /* Creates and returns a connection to database 'remote', which should be in a
  * form acceptable to jsonrpc_session_open().  The connection will maintain an
@@ -279,6 +279,7 @@ ovsdb_idl_create(const char *remote, const struct ovsdb_idl_class *class,
             = table->change_seqno[OVSDB_IDL_CHANGE_DELETE] = 0;
         table->idl = idl;
         ovsdb_idl_condition_init(&table->condition);
+        ovsdb_idl_condition_add_clause_true(&table->condition);
         table->cond_changed = false;
     }
 
@@ -837,147 +838,210 @@ ovsdb_idl_add_table(struct ovsdb_idl *idl,
     OVS_NOT_REACHED();
 }
 
+/* A single clause within an ovsdb_idl_condition. */
 struct ovsdb_idl_clause {
-    struct ovs_list node;
-    enum ovsdb_function function;
-    const struct ovsdb_idl_column *column;
-    struct ovsdb_datum arg;
+    struct hmap_node hmap_node;   /* In struct ovsdb_idl_condition. */
+    enum ovsdb_function function; /* Never OVSDB_F_TRUE or OVSDB_F_FALSE. */
+    const struct ovsdb_idl_column *column; /* Must be nonnull. */
+    struct ovsdb_datum arg;       /* Has ovsdb_type ->column->type. */
 };
+
+static uint32_t
+ovsdb_idl_clause_hash(const struct ovsdb_idl_clause *clause)
+{
+    uint32_t hash = hash_pointer(clause->column, clause->function);
+    return ovsdb_datum_hash(&clause->arg, &clause->column->type, hash);
+}
+
+static int
+ovsdb_idl_clause_equals(const struct ovsdb_idl_clause *a,
+                        const struct ovsdb_idl_clause *b)
+{
+    return (a->function == b->function
+            && a->column == b->column
+            && ovsdb_datum_equals(&a->arg, &b->arg, &a->column->type));
+}
 
 static struct json *
 ovsdb_idl_clause_to_json(const struct ovsdb_idl_clause *clause)
 {
-    if (clause->function != OVSDB_F_TRUE &&
-        clause->function != OVSDB_F_FALSE) {
-        const char *function = ovsdb_function_to_string(clause->function);
-
-        return json_array_create_3(json_string_create(clause->column->name),
-                                   json_string_create(function),
-                                   ovsdb_datum_to_json(&clause->arg,
-                                                       &clause->column->type));
-    }
-
-    return json_boolean_create(clause->function == OVSDB_F_TRUE ?
-                               true : false);
+    const char *function = ovsdb_function_to_string(clause->function);
+    return json_array_create_3(json_string_create(clause->column->name),
+                               json_string_create(function),
+                               ovsdb_datum_to_json(&clause->arg,
+                                                   &clause->column->type));
 }
 
 static void
-ovsdb_idl_clause_free(struct ovsdb_idl_clause *clause)
+ovsdb_idl_clause_destroy(struct ovsdb_idl_clause *clause)
 {
-    if (clause->function != OVSDB_F_TRUE &&
-        clause->function != OVSDB_F_FALSE) {
+    if (clause) {
         ovsdb_datum_destroy(&clause->arg, &clause->column->type);
+        free(clause);
     }
-
-    ovs_list_remove(&clause->node);
-    free(clause);
 }
+
+/* ovsdb_idl_condition. */
 
-/* Clears all of the conditional clauses from table 'tc', so that all of the
- * rows in the table will be replicated.  (This is the default, so this
- * function has an effect only if some clauses were added to 'tc' using
- * ovsdb_idl_condition_add_clause().) */
 void
-ovsdb_idl_condition_reset(struct ovsdb_idl *idl,
-                          const struct ovsdb_idl_table_class *tc)
-{
-    struct ovsdb_idl_clause *c, *next;
-    struct ovsdb_idl_table *table = ovsdb_idl_table_from_class(idl, tc);
-
-    LIST_FOR_EACH_SAFE (c, next, node, &table->condition.clauses) {
-        ovsdb_idl_clause_free(c);
-    }
-    idl->cond_changed = table->cond_changed = true;
-}
-
-static void
 ovsdb_idl_condition_init(struct ovsdb_idl_condition *cnd)
 {
-    ovs_list_init(&cnd->clauses);
+    hmap_init(&cnd->clauses);
+    cnd->is_true = false;
+}
+
+void
+ovsdb_idl_condition_destroy(struct ovsdb_idl_condition *cond)
+{
+    if (cond) {
+        ovsdb_idl_condition_clear(cond);
+        hmap_destroy(&cond->clauses);
+    }
+}
+
+void
+ovsdb_idl_condition_clear(struct ovsdb_idl_condition *cond)
+{
+    struct ovsdb_idl_clause *clause, *next;
+    HMAP_FOR_EACH_SAFE (clause, next, hmap_node, &cond->clauses) {
+        hmap_remove(&cond->clauses, &clause->hmap_node);
+        ovsdb_idl_clause_destroy(clause);
+    }
+    cond->is_true = false;
+}
+
+bool
+ovsdb_idl_condition_is_true(const struct ovsdb_idl_condition *condition)
+{
+    return condition->is_true;
 }
 
 static struct ovsdb_idl_clause *
-ovsdb_idl_condition_find_clause(struct ovsdb_idl_table *table,
-                                enum ovsdb_function function,
-                                const struct ovsdb_idl_column *column,
-                                const struct ovsdb_datum *arg)
+ovsdb_idl_condition_find_clause(const struct ovsdb_idl_condition *condition,
+                                const struct ovsdb_idl_clause *target,
+                                uint32_t hash)
 {
-    struct ovsdb_idl_clause *c;
-    LIST_FOR_EACH (c, node, &table->condition.clauses) {
-        if (c->function == function &&
-            (!column || (c->column == column &&
-                         ovsdb_datum_equals(&c->arg,
-                                             arg, &column->type)))) {
-            return c;
+    struct ovsdb_idl_clause *clause;
+    HMAP_FOR_EACH_WITH_HASH (clause, hmap_node, hash, &condition->clauses) {
+        if (ovsdb_idl_clause_equals(clause, target)) {
+            return clause;
         }
     }
     return NULL;
 }
 
+static void
+ovsdb_idl_condition_add_clause__(struct ovsdb_idl_condition *condition,
+                                 const struct ovsdb_idl_clause *src,
+                                 uint32_t hash)
+{
+    struct ovsdb_idl_clause *clause = xmalloc(sizeof *clause);
+    clause->function = src->function;
+    clause->column = src->column;
+    ovsdb_datum_clone(&clause->arg, &src->arg, &src->column->type);
+    hmap_insert(&condition->clauses, &clause->hmap_node, hash);
+}
+
 /* Adds a clause to the condition for replicating the table with class 'tc' in
  * 'idl'.
  *
- * By default, a table has no clauses, and in that case the IDL replicates all
- * its rows.  When a table has one or more clauses, the IDL replicates only
- * rows that satisfy at least one clause.
+ * The IDL replicates only rows in a table that satisfy at least one clause in
+ * the table's condition.  The default condition for a table has a single
+ * clause with function OVSDB_F_TRUE, so that the IDL replicates all rows in
+ * the table.  When the IDL client replaces the default condition by one of its
+ * own, the condition can have any number of clauses.  If it has no conditions,
+ * then no rows are replicated.
  *
- * Two distinct of clauses can be added:
+ * Two distinct of clauses can usefully be added:
  *
- *    - A 'function' of OVSDB_F_FALSE or OVSDB_F_TRUE adds a Boolean clause.  A
- *      "false" clause by itself prevents any rows from being replicated; in
- *      combination with other clauses it has no effect.  A "true" clause
- *      causes every row to be replicated, regardless of whether other clauses
- *      exist (thus, a condition that includes "true" is like a condition
- *      without any clauses at all).
+ *    - A 'function' of OVSDB_F_TRUE.  A "true" clause causes every row to be
+ *      replicated, regardless of whether other clauses exist.  'column' and
+ *      'arg' are ignored.
  *
- *      'column' should be NULL and 'arg' should be an empty datum (initialized
- *      with ovsdb_datum_init_empty()).
- *
- *    - Other 'functions' add a clause of the form "<column> <function> <arg>",
- *      e.g. "column == 5" or "column <= 10".  In this case, 'arg' must have a
- *      type that is compatible with 'column'.
+ *    - Binary 'functions' add a clause of the form "<column> <function>
+ *      <arg>", e.g. "column == 5" or "column <= 10".  In this case, 'arg' must
+ *      have a type that is compatible with 'column'.
  */
 void
-ovsdb_idl_condition_add_clause(struct ovsdb_idl *idl,
-                               const struct ovsdb_idl_table_class *tc,
+ovsdb_idl_condition_add_clause(struct ovsdb_idl_condition *condition,
                                enum ovsdb_function function,
                                const struct ovsdb_idl_column *column,
                                const struct ovsdb_datum *arg)
 {
-    struct ovsdb_idl_table *table = ovsdb_idl_table_from_class(idl, tc);
-
-    /* Return without doing anything, if this would be a duplicate clause. */
-    if (ovsdb_idl_condition_find_clause(table, function, column, arg)) {
-        return;
+    if (condition->is_true) {
+        /* Adding a clause to an always-true condition has no effect.  */
+    } else if (function == OVSDB_F_TRUE) {
+        ovsdb_idl_condition_add_clause_true(condition);
+    } else if (function == OVSDB_F_FALSE) {
+        /* Adding a "false" clause never has any effect. */
+    } else {
+        struct ovsdb_idl_clause clause = {
+            .function = function,
+            .column = column,
+            .arg = *arg,
+        };
+        uint32_t hash = ovsdb_idl_clause_hash(&clause);
+        if (!ovsdb_idl_condition_find_clause(condition, &clause, hash)) {
+            ovsdb_idl_condition_add_clause__(condition, &clause, hash);
+        }
     }
-
-    struct ovsdb_idl_clause *clause = xzalloc(sizeof *clause);
-    ovs_list_init(&clause->node);
-    clause->function = function;
-    clause->column = column;
-    ovsdb_datum_clone(&clause->arg, arg,
-                      column ? &column->type : &ovsdb_type_boolean);
-    ovs_list_push_back(&table->condition.clauses, &clause->node);
-    idl->cond_changed = table->cond_changed = true;
-    poll_immediate_wake();
 }
 
-/* If a clause matching (function, column, arg) is included in the condition
- * for 'tc' within 'idl', removes it.  (If this was the last clause included in
- * the table's condition, then this means that the IDL will begin replicating
- * every row in the table.) */
 void
-ovsdb_idl_condition_remove_clause(struct ovsdb_idl *idl,
-                                  const struct ovsdb_idl_table_class *tc,
-                                  enum ovsdb_function function,
-                                  const struct ovsdb_idl_column *column,
-                                  const struct ovsdb_datum *arg)
+ovsdb_idl_condition_add_clause_true(struct ovsdb_idl_condition *condition)
+{
+    if (!condition->is_true) {
+        ovsdb_idl_condition_clear(condition);
+        condition->is_true = true;
+    }
+}
+
+static bool
+ovsdb_idl_condition_equals(const struct ovsdb_idl_condition *a,
+                           const struct ovsdb_idl_condition *b)
+{
+    if (hmap_count(&a->clauses) != hmap_count(&b->clauses)) {
+        return false;
+    }
+    if (a->is_true != b->is_true) {
+        return false;
+    }
+
+    const struct ovsdb_idl_clause *clause;
+    HMAP_FOR_EACH (clause, hmap_node, &a->clauses) {
+        if (!ovsdb_idl_condition_find_clause(b, clause,
+                                             clause->hmap_node.hash)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static void
+ovsdb_idl_condition_clone(struct ovsdb_idl_condition *dst,
+                          const struct ovsdb_idl_condition *src)
+{
+    ovsdb_idl_condition_init(dst);
+
+    dst->is_true = src->is_true;
+
+    const struct ovsdb_idl_clause *clause;
+    HMAP_FOR_EACH (clause, hmap_node, &src->clauses) {
+        ovsdb_idl_condition_add_clause__(dst, clause, clause->hmap_node.hash);
+    }
+}
+
+/* Sets the replication condition for 'tc' in 'idl' to 'condition' and arranges
+ * to send the new condition to the database server. */
+void
+ovsdb_idl_set_condition(struct ovsdb_idl *idl,
+                        const struct ovsdb_idl_table_class *tc,
+                        const struct ovsdb_idl_condition *condition)
 {
     struct ovsdb_idl_table *table = ovsdb_idl_table_from_class(idl, tc);
-    struct ovsdb_idl_clause *c
-        = ovsdb_idl_condition_find_clause(table, function, column, arg);
-    if (c) {
-        ovsdb_idl_clause_free(c);
+    if (!ovsdb_idl_condition_equals(condition, &table->condition)) {
+        ovsdb_idl_condition_destroy(&table->condition);
+        ovsdb_idl_condition_clone(&table->condition, condition);
         idl->cond_changed = table->cond_changed = true;
         poll_immediate_wake();
     }
@@ -986,18 +1050,25 @@ ovsdb_idl_condition_remove_clause(struct ovsdb_idl *idl,
 static struct json *
 ovsdb_idl_condition_to_json(const struct ovsdb_idl_condition *cnd)
 {
-    struct json **clauses;
-    size_t i = 0, n_clauses = ovs_list_size(&cnd->clauses);
-    struct ovsdb_idl_clause *c;
-
-    clauses = xmalloc(n_clauses * sizeof *clauses);
-    LIST_FOR_EACH (c, node, &cnd->clauses) {
-        clauses[i++] = ovsdb_idl_clause_to_json(c);
+    if (cnd->is_true) {
+        return json_array_create_empty();
     }
 
-    return json_array_create(clauses, n_clauses);
-}
+    size_t n = hmap_count(&cnd->clauses);
+    if (!n) {
+        return json_array_create_1(json_boolean_create(false));
+    }
 
+    struct json **clauses = xmalloc(n * sizeof *clauses);
+    const struct ovsdb_idl_clause *clause;
+    size_t i = 0;
+    HMAP_FOR_EACH (clause, hmap_node, &cnd->clauses) {
+        clauses[i++] = ovsdb_idl_clause_to_json(clause);
+    }
+    ovs_assert(i == n);
+    return json_array_create(clauses, n);
+}
+
 static struct json *
 ovsdb_idl_create_cond_change_req(struct ovsdb_idl_table *table)
 {
@@ -1398,8 +1469,8 @@ ovsdb_idl_send_monitor_request__(struct ovsdb_idl *idl,
 
             monitor_request = json_object_create();
             json_object_put(monitor_request, "columns", columns);
-            if (!strcmp(method, "monitor_cond") && table->cond_changed &&
-                ovs_list_size(&table->condition.clauses) > 0) {
+            if (!strcmp(method, "monitor_cond")
+                && !ovsdb_idl_condition_is_true(&table->condition)) {
                 where = ovsdb_idl_condition_to_json(&table->condition);
                 json_object_put(monitor_request, "where", where);
                 table->cond_changed = false;

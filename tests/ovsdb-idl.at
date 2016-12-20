@@ -393,8 +393,8 @@ OVSDB_CHECK_IDL([simple idl, conditional, false condition],
        "row": {"i": 1,
                "r": 2.0,
                "b": true}}]']],
-  [['condition add simple [false]' \
-    'condition remove simple [false]']],
+  [['condition simple []' \
+    'condition simple [true]']],
   [[000: change conditions
 001: empty
 002: change conditions
@@ -409,8 +409,8 @@ OVSDB_CHECK_IDL([simple idl, conditional, true condition],
        "row": {"i": 1,
                "r": 2.0,
                "b": true}}]']],
-  [['condition add simple [false]' \
-    'condition add simple [true]']],
+  [['condition simple []' \
+    'condition simple [true]']],
   [[000: change conditions
 001: empty
 002: change conditions
@@ -430,8 +430,8 @@ OVSDB_CHECK_IDL([simple idl, conditional, multiple clauses in condition],
        "row": {"i": 2,
                "r": 3.0,
                "b": true}}]']],
-  [['condition add simple [false]' \
-    'condition add simple [["i","==",1],["i","==",2]]']],
+  [['condition simple []' \
+    'condition simple [["i","==",1],["i","==",2]]']],
   [[000: change conditions
 001: empty
 002: change conditions
@@ -447,8 +447,8 @@ OVSDB_CHECK_IDL([simple idl, conditional, modify as insert due to condition],
        "row": {"i": 1,
                "r": 2.0,
                "b": true}}]']],
-  [['condition add simple [false]' \
-    'condition add simple [["i","==",1]]']],
+  [['condition simple []' \
+    'condition simple [["i","==",1]]']],
   [[000: change conditions
 001: empty
 002: change conditions
@@ -463,9 +463,9 @@ OVSDB_CHECK_IDL([simple idl, conditional, modify as delete due to condition],
        "row": {"i": 1,
                "r": 2.0,
                "b": true}}]']],
-  [['condition add simple [false]' \
-    'condition add simple [["i","==",1],["i","==",2]]' \
-    'condition remove simple [["i","==",1]]' \
+  [['condition simple []' \
+    'condition simple [["i","==",1],["i","==",2]]' \
+    'condition simple [["i","==",2]]' \
     '["idltest",
        {"op": "insert",
        "table": "simple",
@@ -498,10 +498,10 @@ OVSDB_CHECK_IDL([simple idl, conditional, multiple tables],
        "table": "link2",
        "row": {"i": 2},
        "uuid-name": "row0"}]']],
-  [['condition add simple [false];condition add link1 [false];condition add link2 [false]' \
-    'condition add simple [["i","==",1]]' \
-    'condition add link1 [["i","==",0]]' \
-    'condition add link2 [["i","==",3]]' \
+  [['condition simple [];link1 [];link2 []' \
+    'condition simple [["i","==",1]]' \
+    'condition link1 [["i","==",0]]' \
+    'condition link2 [["i","==",3]]' \
     '+["idltest",
        {"op": "insert",
        "table": "link2",

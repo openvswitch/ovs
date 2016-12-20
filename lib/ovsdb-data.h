@@ -127,6 +127,7 @@ struct ovsdb_datum {
     union ovsdb_atom *keys;     /* Each of the ovsdb_type's 'key_type'. */
     union ovsdb_atom *values;   /* Each of the ovsdb_type's 'value_type'. */
 };
+#define OVSDB_DATUM_INITIALIZER { 0, NULL, NULL }
 
 /* Basics. */
 void ovsdb_datum_init_empty(struct ovsdb_datum *);
