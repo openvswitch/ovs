@@ -137,7 +137,8 @@ configure options to choose the right compiler, linker, libraries, Open vSwitch
 component installation directories, etc. For example::
 
     > ./configure CC=./build-aux/cccl LD="$(which link)" \
-        LIBS="-lws2_32 -liphlpapi" --prefix="C:/openvswitch/usr" \
+        LIBS="-lws2_32 -liphlpapi -lwbemuuid -lole32 -loleaut32" \
+        --prefix="C:/openvswitch/usr" \
         --localstatedir="C:/openvswitch/var" \
         --sysconfdir="C:/openvswitch/etc" \
         --with-pthread="C:/pthread"
@@ -149,16 +150,18 @@ component installation directories, etc. For example::
 To configure with SSL support, add the requisite additional options::
 
     > ./configure CC=./build-aux/cccl LD="`which link`"  \
-        LIBS="-lws2_32 -liphlpapi" --prefix="C:/openvswitch/usr" \
-         --localstatedir="C:/openvswitch/var"
-         --sysconfdir="C:/openvswitch/etc" \
-         --with-pthread="C:/pthread" \
-         --enable-ssl --with-openssl="C:/OpenSSL-Win32"
+        LIBS="-lws2_32 -liphlpapi -lwbemuuid -lole32 -loleaut32" \
+        --prefix="C:/openvswitch/usr" \
+        --localstatedir="C:/openvswitch/var"
+        --sysconfdir="C:/openvswitch/etc" \
+        --with-pthread="C:/pthread" \
+        --enable-ssl --with-openssl="C:/OpenSSL-Win32"
 
 Finally, to the kernel module also::
 
     > ./configure CC=./build-aux/cccl LD="`which link`" \
-        LIBS="-lws2_32 -liphlpapi" --prefix="C:/openvswitch/usr" \
+        LIBS="-lws2_32 -liphlpapi -lwbemuuid -lole32 -loleaut32" \
+        --prefix="C:/openvswitch/usr" \
         --localstatedir="C:/openvswitch/var" \
         --sysconfdir="C:/openvswitch/etc" \
         --with-pthread="C:/pthread" \
@@ -252,8 +255,7 @@ to work (covered later).
 The command to create a new switch named 'OVS-Extended-Switch' using a physical
 NIC named 'Ethernet 1' is::
 
-    PS > New-VMSwitch "OVS-Extended-Switch" -AllowManagementOS $true \
-        -NetAdapterName "Ethernet 1"
+    PS > New-VMSwitch "OVS-Extended-Switch" -NetAdapterName "Ethernet 1"
 
 .. note::
   You can obtain the list of physical NICs on the host using 'Get-NetAdapter'
@@ -377,23 +379,22 @@ the adapter named ``Ethernet0``, then in OVS we use that name (``Ethernet0``)
 as a special name to refer to that adapter.
 
 .. note::
-  we assume that the Hyper-V switch on which OVS extension is enabled has a
-  single physical NIC connected to it.
+  we assume that the OVS extension is enabled Hyper-V switch.
 
-An internal port is the virtual adapter created on the Hyper-V switch using the
-``AllowManagementOS`` setting.  This has already been setup while creating the
-switch using the instructions above.  In OVS for Hyper-V, we use a the name of
-that specific adapter as a special name to refer to that adapter. By default it
-is created under the following rule ``vEthernet (<name of the switch>)``.
+Internal ports are the virtual adapters created on the Hyper-V switch using the
+``ovs-vsctl add-br <bridge>`` command. By default they are created under the
+following rule "<name of bridge>" and the adapters are disabled. One needs to
+enable them and set the corresponding values to it to make them IP-able.
 
 As a whole example, if we issue the following in a powershell console::
 
-    PS C:\package\binaries> Get-NetAdapter | select Name,MacAddress,InterfaceDescription
-    Name                   MacAddress         InterfaceDescription
-    ----                   ----------         --------------------
-    Ethernet1              00-0C-29-94-05-65  Intel(R) PRO/1000 MT Network Connection
-    vEthernet (external)   00-0C-29-94-05-5B  Hyper-V Virtual Ethernet Adapter #2
-    Ethernet0              00-0C-29-94-05-5B  Intel(R) PRO/1000 MT Network Connection #2
+    PS C:\package\binaries> Get-NetAdapter | select Name,InterfaceDescription
+    Name                   InterfaceDescription
+    ----                   --------------------
+    Ethernet1              Intel(R) PRO/1000 MT Network Connection
+    br-pif                 Hyper-V Virtual Ethernet Adapter #2
+    Ethernet0              Intel(R) PRO/1000 MT Network Connection #2
+    br-int                 Hyper-V Virtual Ethernet Adapter #3
 
     PS C:\package\binaries> Get-VMSwitch
     Name     SwitchType NetAdapterInterfaceDescription
@@ -401,11 +402,10 @@ As a whole example, if we issue the following in a powershell console::
     external External   Intel(R) PRO/1000 MT Network Connection #2
 
 We can see that we have a switch(external) created upon adapter name
-'Ethernet0' with an internal port under name ``vEthernet (external)``. Thus
+'Ethernet0' with the internal ports under name 'br-pif' and 'br-int'. Thus
 resulting into the following ovs-vsctl commands::
 
     > ovs-vsctl add-port br-pif Ethernet0
-    > ovs-vsctl add-port br-pif "vEthernet (external)"
 
 Dumping the ports should show the additional ports that were just added::
 
@@ -413,18 +413,17 @@ Dumping the ports should show the additional ports that were just added::
     system@ovs-system:
             lookups: hit:0 missed:0 lost:0
             flows: 0
-            port 4: vEthernet (external) (internal) <<< 'AllowManagementOS'
-                                                         adapter on
-                                                         Hyper-V switch
-            port 2: br-pif (internal)
-            port 1: br-int (internal)
+            port 2: br-pif (internal)               <<< internal port
+                                                        adapter on
+                                                        Hyper-V switch
+            port 1: br-int (internal)               <<< internal port
+                                                        adapter on
+                                                        Hyper-V switch
             port 3: Ethernet0                       <<< Physical NIC
 
     > ovs-vsctl show
     a56ec7b5-5b1f-49ec-a795-79f6eb63228b
         Bridge br-pif
-            Port "vEthernet (external)"
-                Interface "vEthernet (external)"
             Port br-pif
                 Interface br-pif
                     type: internal
@@ -451,11 +450,11 @@ is being addressed.  After assigning the name ``ovs-port-a``, the VIF is
 connected back to the Hyper-V switch with name ``OVS-HV-Switch``, which is
 assumed to be the Hyper-V switch with OVS extension enabled.::
 
-    PS> import-module .\datapath-windows\misc\OVS.psm1
-    PS> $vnic = Get-VMNetworkAdapter <Name of the VM>
-    PS> Disconnect-VMNetworkAdapter -VMNetworkAdapter $vnic[0]
-    PS> $vnic[0] | Set-VMNetworkAdapterOVSPort -OVSPortName ovs-port-a
-    PS> Connect-VMNetworkAdapter -VMNetworkAdapter $vnic[0] \
+    PS > import-module .\datapath-windows\misc\OVS.psm1
+    PS > $vnic = Get-VMNetworkAdapter <Name of the VM>
+    PS > Disconnect-VMNetworkAdapter -VMNetworkAdapter $vnic[0]
+    PS > $vnic[0] | Set-VMNetworkAdapterOVSPort -OVSPortName ovs-port-a
+    PS > Connect-VMNetworkAdapter -VMNetworkAdapter $vnic[0] \
           -SwitchName OVS-Extended-Switch
 
 Next, add the VIFs to ``br-int``::
@@ -468,8 +467,7 @@ Dumping the ports should show the additional ports that were just added::
     system@ovs-system:
             lookups: hit:0 missed:0 lost:0
             flows: 0
-            port 4: vEthernet (external) (internal)
-            port 5: ovs-port-a
+            port 4: ovs-port-a
             port 2: br-pif (internal)
             port 1: br-int (internal
             port 3: Ethernet0
@@ -490,6 +488,74 @@ Dumping the ports should show the additional ports that were just added::
                     type: internal
             Port "ovs-port-a"
                 Interface "ovs-port-a"
+
+Add multiple NICs to be managed by OVS
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To leverage support of multiple NICs into OVS, we will be using the MSFT
+cmdlets for forwarding team extension. More documentation about them can be
+found at technet_.
+
+.. _technet: https://technet.microsoft.com/en-us/library/jj553812%28v=wps.630%29.aspx
+
+I.e.::
+We will set up a switch team combined from ``Ethernet0 2`` and ``Ethernet1 2``
+named ``external``.
+
+PS > Get-NetAdapter
+Name                      InterfaceDescription
+----                      --------------------
+br-int                    Hyper-V Virtual Ethernet Adapter #3
+br-pif                    Hyper-V Virtual Ethernet Adapter #2
+Ethernet3 2               Intel(R) 82574L Gigabit Network Co...#3
+Ethernet2 2               Intel(R) 82574L Gigabit Network Co...#4
+Ethernet1 2               Intel(R) 82574L Gigabit Network Co...#2
+Ethernet0 2               Intel(R) 82574L Gigabit Network Conn...
+
+PS > New-NetSwitchTeam -Name external -TeamMembers "Ethernet0 2","Ethernet1 2"
+PS > Get-NetSwitchTeam
+Name    : external
+Members : {Ethernet1 2, Ethernet0 2}
+
+This will result in a new adapter bound to the host called ``external``
+
+PS > Get-NetAdapter
+
+Name                      InterfaceDescription
+----                      --------------------
+br-test                   Hyper-V Virtual Ethernet Adapter #4
+br-pif                    Hyper-V Virtual Ethernet Adapter #2
+external                  Microsoft Network Adapter Multiplexo...
+Ethernet3 2               Intel(R) 82574L Gigabit Network Co...#3
+Ethernet2 2               Intel(R) 82574L Gigabit Network Co...#4
+Ethernet1 2               Intel(R) 82574L Gigabit Network Co...#2
+Ethernet0 2               Intel(R) 82574L Gigabit Network Conn...
+
+Next we will set up the Hyper-V VMSwitch on the new adapter ``external``
+
+PS > New-VMSwitch -Name external -NetAdapterName external \
+     -AllowManagementOS $false
+
+Under OVS the adapters under the team ``external``, ``Ethernet0 2`` and
+``Ethernet1 2``, can be added either under a bond device or separately.
+
+The following example shows how the bridges look with the NICs being separated::
+
+> ovs-vsctl show
+
+6cd9481b-c249-4ee3-8692-97b399dd29d8
+    Bridge br-test
+        Port br-test
+            Interface br-test
+                type: internal
+        Port "Ethernet1 2"
+            Interface "Ethernet1 2"
+    Bridge br-pif
+        Port "Ethernet0 2"
+            Interface "Ethernet0 2"
+        Port br-pif
+            Interface br-pif
+                type: internal
 
 Add patch ports and configure VLAN tagging
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
