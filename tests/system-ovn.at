@@ -581,9 +581,9 @@ ovn-nbctl set load_balancer $uuid vips:'"30.0.0.2:8000"'='"172.16.1.2:80,172.16.
 OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | grep ct\(])
 
 # Start webservers in 'bar1', 'bar2' and 'bar3'.
-NETNS_DAEMONIZE([bar1], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
-NETNS_DAEMONIZE([bar2], [[$PYTHON $srcdir/test-l7.py]], [http2.pid])
-NETNS_DAEMONIZE([bar3], [[$PYTHON $srcdir/test-l7.py]], [http3.pid])
+OVS_START_L7([bar1], [http])
+OVS_START_L7([bar2], [http])
+OVS_START_L7([bar3], [http])
 
 dnl Should work with the virtual IP 30.0.0.1 address through NAT
 for i in `seq 1 20`; do
@@ -700,9 +700,9 @@ ovn-nbctl set load_balancer $uuid vips:'"30.0.0.2:8000"'='"192.168.1.3:80,192.16
 OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | grep ct\(])
 
 # Start webservers in 'foo2', 'foo3' and 'foo4'.
-NETNS_DAEMONIZE([foo2], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
-NETNS_DAEMONIZE([foo3], [[$PYTHON $srcdir/test-l7.py]], [http2.pid])
-NETNS_DAEMONIZE([foo4], [[$PYTHON $srcdir/test-l7.py]], [http3.pid])
+OVS_START_L7([foo2], [http])
+OVS_START_L7([foo3], [http])
+OVS_START_L7([foo4], [http])
 
 dnl Should work with the virtual IP address through NAT
 for i in `seq 1 20`; do
@@ -847,8 +847,8 @@ ovn-nbctl set load_balancer $uuid vips:'"30.0.0.2:8000"'='"192.168.1.2:80,192.16
 OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | grep ct\(])
 
 # Start webservers in 'foo1', 'bar1'.
-NETNS_DAEMONIZE([foo1], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
-NETNS_DAEMONIZE([bar1], [[$PYTHON $srcdir/test-l7.py]], [http2.pid])
+OVS_START_L7([foo1], [http])
+OVS_START_L7([bar1], [http])
 
 dnl Should work with the virtual IP address through NAT
 for i in `seq 1 20`; do
@@ -1021,8 +1021,8 @@ ovn-nbctl set logical_router R3 load_balancer=$uuid
 OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | grep ct\(])
 
 # Start webservers in 'foo1', 'bar1'.
-NETNS_DAEMONIZE([foo1], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
-NETNS_DAEMONIZE([bar1], [[$PYTHON $srcdir/test-l7.py]], [http2.pid])
+OVS_START_L7([foo1], [http])
+OVS_START_L7([bar1], [http])
 
 dnl Should work with the virtual IP address through NAT
 for i in `seq 1 20`; do

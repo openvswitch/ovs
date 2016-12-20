@@ -37,7 +37,7 @@ NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], 
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+OVS_START_L7([at_ns1], [http])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -671,17 +671,17 @@ priority=100,in_port=2,ct_state=+trk+est,tcp,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl HTTP requests from ns0->ns1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
-NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+OVS_START_L7([at_ns0], [http])
+OVS_START_L7([at_ns1], [http])
 
+dnl HTTP requests from ns0->ns1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 ])
 
 dnl HTTP requests from ns1->ns0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns1], [wget 10.1.1.1 -t 3 -T 1 -v -o wget1.log], [4])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -712,18 +712,17 @@ dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
+OVS_START_L7([at_ns0], [http6])
+OVS_START_L7([at_ns1], [http6])
+
 dnl HTTP requests from ns0->ns1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py http6]], [http0.pid])
-
 NS_CHECK_EXEC([at_ns0], [wget http://[[fc00::2]] -t 3 -T 1 --retry-connrefused -v -o wget0.log])
-
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
 tcp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::1,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
 ])
 
 dnl HTTP requests from ns1->ns0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py http6]], [http1.pid])
 NS_CHECK_EXEC([at_ns1], [wget http://[[fc00::1]] -t 3 -T 1 -v -o wget1.log], [4])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -846,12 +845,13 @@ priority=100,in_port=4,tcp,ct_state=+trk,action=3
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+OVS_START_L7([at_ns1], [http])
+OVS_START_L7([at_ns3], [http])
+
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 dnl HTTP requests from p2->p3 should work fine.
-NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 --retry-connrefused -v -o wget1.log])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -886,12 +886,13 @@ priority=100,in_port=4,tcp,ct_state=+trk,action=3
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+OVS_START_L7([at_ns1], [http])
+OVS_START_L7([at_ns3], [http])
+
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 dnl HTTP requests from p2->p3 should work fine.
-NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 --retry-connrefused -v -o wget1.log])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -930,11 +931,11 @@ AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 dnl We set up our rules to allow the request without committing. The return
 dnl traffic can't be identified, because the initial request wasn't committed.
 dnl For the first pair of ports, this means that the connection fails.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+OVS_START_L7([at_ns1], [http])
+OVS_START_L7([at_ns3], [http])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log], [4])
 
 dnl For the second pair, we allow packets from invalid connections, so it works.
-NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 --retry-connrefused -v -o wget1.log])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -967,8 +968,10 @@ priority=100,in_port=4,ct_state=+trk,ct_zone=1,tcp,action=3
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+OVS_START_L7([at_ns1], [http])
+OVS_START_L7([at_ns3], [http])
+
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
@@ -977,7 +980,6 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.4)], [0], [dnl
@@ -1013,8 +1015,10 @@ priority=100,in_port=4,ct_state=+trk,ct_zone=0x1001,tcp,action=3
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+OVS_START_L7([at_ns1], [http])
+OVS_START_L7([at_ns3], [http])
+
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
@@ -1023,7 +1027,6 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.4)], [0], [dnl
@@ -1071,7 +1074,7 @@ AT_CHECK([ovs-ofctl --bundle add-flows br0 flows-br0.txt])
 AT_CHECK([ovs-ofctl --bundle add-flows br1 flows-br1.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+OVS_START_L7([at_ns1], [http])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1098,8 +1101,9 @@ priority=100,in_port=2,ct_state=+trk,ct_zone=2,tcp,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+OVS_START_L7([at_ns1], [http])
+
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 dnl (again) HTTP requests from p0->p1 should work fine.
@@ -1144,8 +1148,9 @@ AT_CHECK([ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
+OVS_START_L7([at_ns0], [http])
+
 dnl HTTP requests from root namespace to p0 should work fine.
-NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 AT_CHECK([wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 dnl (again) HTTP requests from root namespace to  p0 should work fine.
@@ -1186,8 +1191,9 @@ priority=100,in_port=2,ct_state=+trk,ct_zone=1,tcp,action=1
 
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
+OVS_START_L7([at_ns1], [http])
+
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 dnl (again) HTTP requests from p0->p1 should work fine.
@@ -1255,8 +1261,9 @@ AT_CHECK([ping -q -c 3 -i 0.3 -w 2 10.1.1.2 | FORMAT_PING], [0], [dnl
 3 packets transmitted, 3 received, 0% packet loss, time 0ms
 ])
 
+OVS_START_L7([at_ns0], [http])
+
 dnl HTTP requests from root namespace to p0 should work fine.
-NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 AT_CHECK([wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 dnl (again) HTTP requests from root namespace to p0 should work fine.
@@ -1299,19 +1306,18 @@ priority=100,in_port=4,ct_state=+trk,ct_mark=1,tcp,action=3
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
-NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+OVS_START_L7([at_ns1], [http])
+OVS_START_L7([at_ns3], [http])
 
+dnl HTTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),mark=1,protoinfo=(state=<cleared>)
 ])
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
-
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.4)], [0], [dnl
 tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),mark=2,protoinfo=(state=<cleared>)
 ])
@@ -1343,8 +1349,9 @@ table=1,in_port=2,ct_state=+trk,ct_mark=3,tcp,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+OVS_START_L7([at_ns1], [http])
+
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
@@ -1380,19 +1387,18 @@ priority=100,in_port=4,ct_state=+trk,ct_mark=1,tcp,action=3
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
-NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
+OVS_START_L7([at_ns1], [http])
+OVS_START_L7([at_ns3], [http])
 
+dnl HTTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),mark=1,protoinfo=(state=<cleared>)
 ])
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
-
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.4)], [0], [dnl
 tcp,orig=(src=10.1.1.3,dst=10.1.1.4,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.4,dst=10.1.1.3,sport=<cleared>,dport=<cleared>),mark=2,protoinfo=(state=<cleared>)
 ])
@@ -1427,13 +1433,14 @@ priority=100,in_port=4,ct_state=+trk,ct_label=0x0a000d000005000001,tcp,action=3
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+OVS_START_L7([at_ns1], [http])
+OVS_START_L7([at_ns3], [http])
+
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 dnl HTTP requests from p2->p3 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http1.pid])
 NS_CHECK_EXEC([at_ns2], [wget 10.1.1.4 -t 3 -T 1 -v -o wget1.log], [4])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -1463,8 +1470,9 @@ table=1,in_port=2,ct_state=+trk,ct_label=0x200000001,tcp,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+OVS_START_L7([at_ns1], [http])
+
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
@@ -1500,8 +1508,9 @@ table=1,in_port=2,tcp,action=ct(zone=2),1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
+OVS_START_L7([at_ns1], [http])
+
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
@@ -1634,8 +1643,8 @@ table=1,in_port=2,tcp,ct_state=+trk-new+rel,action=1
 
 AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows1.txt])
 
-NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_START_L7([at_ns0], [ftp])
+OVS_START_L7([at_ns1], [ftp])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p1->p0 should fail due to network failure.
@@ -1720,7 +1729,7 @@ dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_START_L7([at_ns1], [ftp])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
@@ -1770,8 +1779,8 @@ table=2,in_port=2,tcp,ct_zone=1,ct_state=+trk+est,action=1
 
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp1.pid])
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_START_L7([at_ns0], [ftp])
+OVS_START_L7([at_ns1], [ftp])
 
 dnl FTP requests from p1->p0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
@@ -2215,7 +2224,7 @@ table=10 priority=0 action=drop
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+OVS_START_L7([at_ns1], [http])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
@@ -2263,7 +2272,7 @@ table=10 priority=0 action=drop
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+OVS_START_L7([at_ns1], [http])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
@@ -2316,7 +2325,7 @@ table=10 priority=0 action=drop
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl HTTP requests from p0->p1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+OVS_START_L7([at_ns1], [http])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.2 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2) | sed -e 's/dst=10.1.1.2[[45]][[0-9]]/dst=10.1.1.2XX/'], [0], [dnl
@@ -2364,7 +2373,7 @@ table=10 priority=0 action=drop
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl Should work with the virtual IP address through NAT
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+OVS_START_L7([at_ns1], [http])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.64 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.64)], [0], [dnl
@@ -2425,7 +2434,7 @@ table=10 priority=0 action=drop
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl Should work with the virtual IP address through NAT
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py]], [http0.pid])
+OVS_START_L7([at_ns1], [http])
 NS_CHECK_EXEC([at_ns0], [wget 10.1.1.64 -t 5 -T 1 --retry-connrefused -v -o wget0.log])
 
 AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.64)], [0], [dnl
@@ -2527,7 +2536,7 @@ m4_define([CHECK_FTP_NAT],
 
     AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
-    NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+    OVS_START_L7([at_ns1], [ftp])
     OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
     dnl FTP requests from p0->p1 should work fine.
@@ -2708,13 +2717,13 @@ dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2])
 
 dnl HTTP requests from ns0->ns1 should work fine.
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py http6]], [http0.pid])
+OVS_START_L7([at_ns1], [http6])
 
 NS_CHECK_EXEC([at_ns0], [wget http://[[fc00::2]] -t 3 -T 1 --retry-connrefused -v -o wget0.log])
 
 dnl HTTP requests from ns1->ns0 should fail due to network failure.
 dnl Try 3 times, in 1 second intervals.
-NETNS_DAEMONIZE([at_ns0], [[$PYTHON $srcdir/test-l7.py http6]], [http1.pid])
+OVS_START_L7([at_ns0], [http6])
 NS_CHECK_EXEC([at_ns1], [wget http://[[fc00::1]] -t 3 -T 1 -v -o wget1.log], [4])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -2765,7 +2774,7 @@ dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
 
-NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_START_L7([at_ns1], [ftp])
 OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
 
 dnl FTP requests from p0->p1 should work fine.
@@ -2837,9 +2846,9 @@ table=10 priority=0 action=controller
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl Start web servers
-NETNS_DAEMONIZE([at_ns2], [[$PYTHON $srcdir/test-l7.py]], [http2.pid])
-NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http3.pid])
-NETNS_DAEMONIZE([at_ns4], [[$PYTHON $srcdir/test-l7.py]], [http4.pid])
+OVS_START_L7([at_ns2], [http])
+OVS_START_L7([at_ns3], [http])
+OVS_START_L7([at_ns4], [http])
 
 on_exit 'ovs-ofctl -O OpenFlow15 dump-flows br0'
 on_exit 'ovs-appctl revalidator/purge'
@@ -2928,9 +2937,9 @@ table=10 priority=0 action=controller
 AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
 dnl Start web servers
-NETNS_DAEMONIZE([at_ns2], [[$PYTHON $srcdir/test-l7.py]], [http2.pid])
-NETNS_DAEMONIZE([at_ns3], [[$PYTHON $srcdir/test-l7.py]], [http3.pid])
-NETNS_DAEMONIZE([at_ns4], [[$PYTHON $srcdir/test-l7.py]], [http4.pid])
+OVS_START_L7([at_ns2], [http])
+OVS_START_L7([at_ns3], [http])
+OVS_START_L7([at_ns4], [http])
 
 on_exit 'ovs-ofctl -O OpenFlow15 dump-flows br0'
 on_exit 'ovs-appctl revalidator/purge'

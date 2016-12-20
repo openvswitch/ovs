@@ -236,6 +236,17 @@ m4_define([NETNS_DAEMONIZE],
 m4_define([OVS_CHECK_FIREWALL],
     [AT_SKIP_IF([systemctl status firewalld 2>&1 | grep running > /dev/null])])
 
+# OVS_START_L7([namespace], [protocol])
+#
+# Start a server serving 'protocol' within 'namespace'. The server will exit
+# when the test finishes.
+#
+m4_define([OVS_START_L7],
+   [PIDFILE=$(mktemp $2XXX.pid)
+    NETNS_DAEMONIZE([$1], [[$PYTHON $srcdir/test-l7.py $2]], [$PIDFILE])
+   ]
+)
+
 # OVS_CHECK_VXLAN()
 #
 # Do basic check for vxlan functionality, skip the test if it's not there.
