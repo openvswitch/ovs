@@ -141,7 +141,7 @@ enum ovn_stage {
 
 #define PIPELINE_STAGE(DP_TYPE, PIPELINE, STAGE, TABLE, NAME)   \
     S_##DP_TYPE##_##PIPELINE##_##STAGE                          \
-      = OVN_STAGE_BUILD(DP_##DP_TYPE, P_##PIPELINE, TABLE),
+        = OVN_STAGE_BUILD(DP_##DP_TYPE, P_##PIPELINE, TABLE),
     PIPELINE_STAGES
 #undef PIPELINE_STAGE
 };
@@ -169,26 +169,26 @@ ovn_stage_build(enum ovn_datapath_type dp_type, enum ovn_pipeline pipeline,
 static enum ovn_pipeline
 ovn_stage_get_pipeline(enum ovn_stage stage)
 {
-  return (stage >> 8) & 1;
+    return (stage >> 8) & 1;
 }
 
 /* Returns the table to which 'stage' belongs. */
 static uint8_t
 ovn_stage_get_table(enum ovn_stage stage)
 {
-  return stage & 0xff;
+    return stage & 0xff;
 }
 
 /* Returns a string name for 'stage'. */
 static const char *
 ovn_stage_to_str(enum ovn_stage stage)
 {
-  switch (stage) {
-#define PIPELINE_STAGE(DP_TYPE, PIPELINE, STAGE, TABLE, NAME)	  \
+    switch (stage) {
+#define PIPELINE_STAGE(DP_TYPE, PIPELINE, STAGE, TABLE, NAME)	    \
         case S_##DP_TYPE##_##PIPELINE##_##STAGE: return NAME;
     PIPELINE_STAGES
 #undef PIPELINE_STAGE
-      default: return "<unknown>";
+        default: return "<unknown>";
     }
 }
 
@@ -205,11 +205,10 @@ ovn_stage_to_datapath_type(enum ovn_stage stage)
     default: OVS_NOT_REACHED();
     }
 }
-
 
-  static void
-  usage(void)
-  {
+static void
+usage(void)
+{
     printf("\
 %s: OVN northbound management daemon\n\
 usage: %s [OPTIONS]\n\
@@ -226,60 +225,60 @@ Options:\n\
     daemon_usage();
     vlog_usage();
     stream_usage("database", true, true, false);
-  }
+}
 
-  struct tnlid_node {
+struct tnlid_node {
     struct hmap_node hmap_node;
     uint32_t tnlid;
-  };
+};
 
-  static void
-  destroy_tnlids(struct hmap *tnlids)
-  {
+static void
+destroy_tnlids(struct hmap *tnlids)
+{
     struct tnlid_node *node;
     HMAP_FOR_EACH_POP (node, hmap_node, tnlids) {
-      free(node);
+        free(node);
     }
     hmap_destroy(tnlids);
-  }
+}
 
-  static void
-  add_tnlid(struct hmap *set, uint32_t tnlid)
-  {
+static void
+add_tnlid(struct hmap *set, uint32_t tnlid)
+{
     struct tnlid_node *node = xmalloc(sizeof *node);
     hmap_insert(set, &node->hmap_node, hash_int(tnlid, 0));
     node->tnlid = tnlid;
-  }
+}
 
-  static bool
-  tnlid_in_use(const struct hmap *set, uint32_t tnlid)
-  {
+static bool
+tnlid_in_use(const struct hmap *set, uint32_t tnlid)
+{
     const struct tnlid_node *node;
     HMAP_FOR_EACH_IN_BUCKET (node, hmap_node, hash_int(tnlid, 0), set) {
-      if (node->tnlid == tnlid) {
-	return true;
-      }
+        if (node->tnlid == tnlid) {
+	         return true;
+        }
     }
     return false;
-  }
+}
 
-  static uint32_t
-  allocate_tnlid(struct hmap *set, const char *name, uint32_t max,
+static uint32_t
+allocate_tnlid(struct hmap *set, const char *name, uint32_t max,
 		 uint32_t *hint)
-  {
+{
     for (uint32_t tnlid = *hint + 1; tnlid != *hint;
-	 tnlid = tnlid + 1 <= max ? tnlid + 1 : 1) {
+	     tnlid = tnlid + 1 <= max ? tnlid + 1 : 1) {
       if (!tnlid_in_use(set, tnlid)) {
-	add_tnlid(set, tnlid);
-	*hint = tnlid;
-	return tnlid;
+	       add_tnlid(set, tnlid);
+	       *hint = tnlid;
+	       return tnlid;
       }
-    }
+}
 
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
     VLOG_WARN_RL(&rl, "all %s tunnel ids exhausted", name);
     return 0;
-  }
+}
 
 struct ovn_chassis_qdisc_queues {
     struct hmap_node key_node;
@@ -431,11 +430,11 @@ ovn_datapath_create(struct hmap *datapaths, const struct uuid *key,
     od->port_key_hint = 0;
     hmap_insert(datapaths, &od->key_node, uuid_hash(&od->key));
     return od;
-  }
+}
 
-  static void
-  ovn_datapath_destroy(struct hmap *datapaths, struct ovn_datapath *od)
-  {
+static void
+ovn_datapath_destroy(struct hmap *datapaths, struct ovn_datapath *od)
+{
     if (od) {
         /* Don't remove od->list.  It is used within build_datapaths() as a
          * private list and once we've exited that function it is not safe to
@@ -461,37 +460,37 @@ ovn_datapath_find(struct hmap *datapaths, const struct uuid *uuid)
     struct ovn_datapath *od;
 
     HMAP_FOR_EACH_WITH_HASH (od, key_node, uuid_hash(uuid), datapaths) {
-      if (uuid_equals(uuid, &od->key)) {
-	return od;
-      }
+        if (uuid_equals(uuid, &od->key)) {
+	         return od;
+        }
     }
     return NULL;
-  }
+}
 
-  static struct ovn_datapath *
-  ovn_datapath_from_sbrec(struct hmap *datapaths,
-			  const struct sbrec_datapath_binding *sb)
-  {
+static struct ovn_datapath *
+ovn_datapath_from_sbrec(struct hmap *datapaths,
+			                   const struct sbrec_datapath_binding *sb)
+{
     struct uuid key;
 
     if (!smap_get_uuid(&sb->external_ids, "logical-switch", &key) &&
-	!smap_get_uuid(&sb->external_ids, "logical-router", &key)) {
-      return NULL;
+	       !smap_get_uuid(&sb->external_ids, "logical-router", &key)) {
+          return NULL;
     }
     return ovn_datapath_find(datapaths, &key);
-  }
+}
 
-  static bool
-  lrouter_is_enabled(const struct nbrec_logical_router *lrouter)
-  {
+static bool
+lrouter_is_enabled(const struct nbrec_logical_router *lrouter)
+{
     return !lrouter->enabled || *lrouter->enabled;
-  }
+}
 
-  static void
-  join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
-		 struct ovs_list *sb_only, struct ovs_list *nb_only,
-		 struct ovs_list *both)
-  {
+static void
+join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
+        		   struct ovs_list *sb_only, struct ovs_list *nb_only,
+		           struct ovs_list *both)
+{
     hmap_init(datapaths);
     ovs_list_init(sb_only);
     ovs_list_init(nb_only);
@@ -499,47 +498,47 @@ ovn_datapath_find(struct hmap *datapaths, const struct uuid *uuid)
 
     const struct sbrec_datapath_binding *sb, *sb_next;
     SBREC_DATAPATH_BINDING_FOR_EACH_SAFE (sb, sb_next, ctx->ovnsb_idl) {
-      struct uuid key;
-      if (!smap_get_uuid(&sb->external_ids, "logical-switch", &key) &&
-	  !smap_get_uuid(&sb->external_ids, "logical-router", &key)) {
-	ovsdb_idl_txn_add_comment(
-				  ctx->ovnsb_txn,
-				  "deleting Datapath_Binding "UUID_FMT" that lacks "
-				  "external-ids:logical-switch and "
-				  "external-ids:logical-router",
-				  UUID_ARGS(&sb->header_.uuid));
-	sbrec_datapath_binding_delete(sb);
-	continue;
-      }
+        struct uuid key;
+        if (!smap_get_uuid(&sb->external_ids, "logical-switch", &key) &&
+	          !smap_get_uuid(&sb->external_ids, "logical-router", &key)) {
+	          ovsdb_idl_txn_add_comment(
+				      ctx->ovnsb_txn,
+				      "deleting Datapath_Binding "UUID_FMT" that lacks "
+				      "external-ids:logical-switch and "
+				      "external-ids:logical-router",
+				      UUID_ARGS(&sb->header_.uuid));
+	         sbrec_datapath_binding_delete(sb);
+	         continue;
+        }
 
-      if (ovn_datapath_find(datapaths, &key)) {
-	static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
-	VLOG_INFO_RL(
-		     &rl, "deleting Datapath_Binding "UUID_FMT" with "
-		     "duplicate external-ids:logical-switch/router "UUID_FMT,
-		     UUID_ARGS(&sb->header_.uuid), UUID_ARGS(&key));
-	sbrec_datapath_binding_delete(sb);
-	continue;
-      }
+        if (ovn_datapath_find(datapaths, &key)) {
+	         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+	         VLOG_INFO_RL(
+		          &rl, "deleting Datapath_Binding "UUID_FMT" with "
+		          "duplicate external-ids:logical-switch/router "UUID_FMT,
+		          UUID_ARGS(&sb->header_.uuid), UUID_ARGS(&key));
+	         sbrec_datapath_binding_delete(sb);
+	         continue;
+        }
 
-      struct ovn_datapath *od = ovn_datapath_create(datapaths, &key,
-						    NULL, NULL, sb);
-      ovs_list_push_back(sb_only, &od->list);
+        struct ovn_datapath *od = ovn_datapath_create(datapaths, &key,
+						                                          NULL, NULL, sb);
+        ovs_list_push_back(sb_only, &od->list);
     }
 
     const struct nbrec_logical_switch *nbs;
     NBREC_LOGICAL_SWITCH_FOR_EACH (nbs, ctx->ovnnb_idl) {
-      struct ovn_datapath *od = ovn_datapath_find(datapaths,
-						  &nbs->header_.uuid);
-      if (od) {
-	od->nbs = nbs;
-	ovs_list_remove(&od->list);
-	ovs_list_push_back(both, &od->list);
-      } else {
-	od = ovn_datapath_create(datapaths, &nbs->header_.uuid,
-				 nbs, NULL, NULL);
-	ovs_list_push_back(nb_only, &od->list);
-      }
+        struct ovn_datapath *od = ovn_datapath_find(datapaths,
+						                                        &nbs->header_.uuid);
+        if (od) {
+	           od->nbs = nbs;
+	           ovs_list_remove(&od->list);
+	           ovs_list_push_back(both, &od->list);
+        } else {
+	           od = ovn_datapath_create(datapaths, &nbs->header_.uuid,
+				                              nbs, NULL, NULL);
+	           ovs_list_push_back(nb_only, &od->list);
+        }
     }
 
     const struct nbrec_logical_router *nbr;
@@ -576,36 +575,36 @@ ovn_datapath_allocate_key(struct hmap *dp_tnlids)
 {
     static uint32_t hint;
     return allocate_tnlid(dp_tnlids, "datapath", (1u << 24) - 1, &hint);
-  }
+}
 
-  /* Updates the southbound Datapath_Binding table so that it contains the
-   * logical switches and routers specified by the northbound database.
-   *
-   * Initializes 'datapaths' to contain a "struct ovn_datapath" for every logical
-   * switch and router. */
-  static void
-  build_datapaths(struct northd_context *ctx, struct hmap *datapaths)
-  {
+/* Updates the southbound Datapath_Binding table so that it contains the
+ * logical switches and routers specified by the northbound database.
+ *
+ * Initializes 'datapaths' to contain a "struct ovn_datapath" for every logical
+ * switch and router. */
+static void
+build_datapaths(struct northd_context *ctx, struct hmap *datapaths)
+{
     struct ovs_list sb_only, nb_only, both;
 
     join_datapaths(ctx, datapaths, &sb_only, &nb_only, &both);
 
     if (!ovs_list_is_empty(&nb_only)) {
-      /* First index the in-use datapath tunnel IDs. */
-      struct hmap dp_tnlids = HMAP_INITIALIZER(&dp_tnlids);
-      struct ovn_datapath *od;
-      LIST_FOR_EACH (od, list, &both) {
-	add_tnlid(&dp_tnlids, od->sb->tunnel_key);
-      }
+        /* First index the in-use datapath tunnel IDs. */
+        struct hmap dp_tnlids = HMAP_INITIALIZER(&dp_tnlids);
+        struct ovn_datapath *od;
+        LIST_FOR_EACH (od, list, &both) {
+	           add_tnlid(&dp_tnlids, od->sb->tunnel_key);
+        }
 
-      /* Add southbound record for each unmatched northbound record. */
-      LIST_FOR_EACH (od, list, &nb_only) {
-	uint16_t tunnel_key = ovn_datapath_allocate_key(&dp_tnlids);
-	if (!tunnel_key) {
-	  break;
-	}
+        /* Add southbound record for each unmatched northbound record. */
+        LIST_FOR_EACH (od, list, &nb_only) {
+	           uint16_t tunnel_key = ovn_datapath_allocate_key(&dp_tnlids);
+	           if (!tunnel_key) {
+	               break;
+	           }
 
-	od->sb = sbrec_datapath_binding_insert(ctx->ovnsb_txn);
+	           od->sb = sbrec_datapath_binding_insert(ctx->ovnsb_txn);
 
             /* Get the logical-switch or logical-router UUID to set in
              * external-ids. */
@@ -625,21 +624,21 @@ ovn_datapath_allocate_key(struct hmap *dp_tnlids)
             sbrec_datapath_binding_set_external_ids(od->sb, &ids);
             smap_destroy(&ids);
 
-	sbrec_datapath_binding_set_tunnel_key(od->sb, tunnel_key);
-      }
-      destroy_tnlids(&dp_tnlids);
+	         sbrec_datapath_binding_set_tunnel_key(od->sb, tunnel_key);
+        }
+        destroy_tnlids(&dp_tnlids);
     }
 
     /* Delete southbound records without northbound matches. */
     struct ovn_datapath *od, *next;
     LIST_FOR_EACH_SAFE (od, next, list, &sb_only) {
-      ovs_list_remove(&od->list);
-      sbrec_datapath_binding_delete(od->sb);
-      ovn_datapath_destroy(datapaths, od);
+        ovs_list_remove(&od->list);
+        sbrec_datapath_binding_delete(od->sb);
+        ovn_datapath_destroy(datapaths, od);
     }
-  }
+}
 
-  struct ovn_port {
+struct ovn_port {
     struct hmap_node key_node;  /* Index on 'key'. */
     char *key;                  /* nbs->name, nbr->name, sb->logical_port. */
     char *json_key;             /* 'key', quoted for use in JSON. */
@@ -691,11 +690,11 @@ ovn_port_create(struct hmap *ports, const char *key,
     op->nbrp = nbrp;
     hmap_insert(ports, &op->key_node, hash_string(op->key, 0));
     return op;
-  }
+}
 
-  static void
-  ovn_port_destroy(struct hmap *ports, struct ovn_port *port)
-  {
+static void
+ovn_port_destroy(struct hmap *ports, struct ovn_port *port)
+{
     if (port) {
         /* Don't remove port->list.  It is used within build_ports() as a
          * private list and once we've exited that function it is not safe to
@@ -725,16 +724,16 @@ ovn_port_find(struct hmap *ports, const char *name)
     struct ovn_port *op;
 
     HMAP_FOR_EACH_WITH_HASH (op, key_node, hash_string(name, 0), ports) {
-      if (!strcmp(op->key, name)) {
-	return op;
-      }
+        if (!strcmp(op->key, name)) {
+	           return op;
+        }
     }
     return NULL;
-  }
+}
 
-  static uint32_t
-  ovn_port_allocate_key(struct ovn_datapath *od)
-  {
+static uint32_t
+ovn_port_allocate_key(struct ovn_datapath *od)
+{
     return allocate_tnlid(&od->port_tnlids, "port",
                           (1u << 15) - 1, &od->port_key_hint);
 }
@@ -1163,9 +1162,9 @@ join_logical_ports(struct northd_context *ctx,
 
     const struct sbrec_port_binding *sb;
     SBREC_PORT_BINDING_FOR_EACH (sb, ctx->ovnsb_idl) {
-      struct ovn_port *op = ovn_port_create(ports, sb->logical_port,
-					    NULL, NULL, sb);
-      ovs_list_push_back(sb_only, &op->list);
+        struct ovn_port *op = ovn_port_create(ports, sb->logical_port,
+					                                     NULL, NULL, sb);
+        ovs_list_push_back(sb_only, &op->list);
     }
 
     struct ovn_datapath *od;
@@ -1486,24 +1485,24 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
         }
         ovn_port_update_sbrec(op, &chassis_qdisc_queues);
 
-      add_tnlid(&op->od->port_tnlids, op->sb->tunnel_key);
-      if (op->sb->tunnel_key > op->od->port_key_hint) {
-	op->od->port_key_hint = op->sb->tunnel_key;
-      }
+        add_tnlid(&op->od->port_tnlids, op->sb->tunnel_key);
+        if (op->sb->tunnel_key > op->od->port_key_hint) {
+	           op->od->port_key_hint = op->sb->tunnel_key;
+        }
     }
 
     /* Add southbound record for each unmatched northbound record. */
     LIST_FOR_EACH_SAFE (op, next, list, &nb_only) {
-      uint16_t tunnel_key = ovn_port_allocate_key(op->od);
-      if (!tunnel_key) {
-	continue;
-      }
+        uint16_t tunnel_key = ovn_port_allocate_key(op->od);
+        if (!tunnel_key) {
+	           continue;
+        }
 
         op->sb = sbrec_port_binding_insert(ctx->ovnsb_txn);
         ovn_port_update_sbrec(op, &chassis_qdisc_queues);
 
-      sbrec_port_binding_set_logical_port(op->sb, op->key);
-      sbrec_port_binding_set_tunnel_key(op->sb, tunnel_key);
+        sbrec_port_binding_set_logical_port(op->sb, op->key);
+        sbrec_port_binding_set_tunnel_key(op->sb, tunnel_key);
     }
 
     bool remove_mac_bindings = false;
@@ -1513,11 +1512,10 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
 
     /* Delete southbound records without northbound matches. */
     LIST_FOR_EACH_SAFE(op, next, list, &sb_only) {
-      ovs_list_remove(&op->list);
-      sbrec_port_binding_delete(op->sb);
-      ovn_port_destroy(ports, op);
+        ovs_list_remove(&op->list);
+        sbrec_port_binding_delete(op->sb);
+        ovn_port_destroy(ports, op);
     }
-
     if (remove_mac_bindings) {
         cleanup_mac_bindings(ctx, ports);
     }
@@ -1529,108 +1527,108 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
 #define OVN_MIN_MULTICAST 32768
 #define OVN_MAX_MULTICAST 65535
 
-  struct multicast_group {
+struct multicast_group {
     const char *name;
     uint16_t key;               /* OVN_MIN_MULTICAST...OVN_MAX_MULTICAST. */
-  };
+};
 
 #define MC_FLOOD "_MC_flood"
-  static const struct multicast_group mc_flood = { MC_FLOOD, 65535 };
+static const struct multicast_group mc_flood = { MC_FLOOD, 65535 };
 
 #define MC_UNKNOWN "_MC_unknown"
-  static const struct multicast_group mc_unknown = { MC_UNKNOWN, 65534 };
+static const struct multicast_group mc_unknown = { MC_UNKNOWN, 65534 };
 
-  static bool
-  multicast_group_equal(const struct multicast_group *a,
-			const struct multicast_group *b)
-  {
+static bool
+multicast_group_equal(const struct multicast_group *a,
+                			const struct multicast_group *b)
+{
     return !strcmp(a->name, b->name) && a->key == b->key;
-  }
+}
 
-  /* Multicast group entry. */
-  struct ovn_multicast {
+/* Multicast group entry. */
+struct ovn_multicast {
     struct hmap_node hmap_node; /* Index on 'datapath' and 'key'. */
     struct ovn_datapath *datapath;
     const struct multicast_group *group;
 
     struct ovn_port **ports;
     size_t n_ports, allocated_ports;
-  };
+};
 
-  static uint32_t
-  ovn_multicast_hash(const struct ovn_datapath *datapath,
-		     const struct multicast_group *group)
-  {
+static uint32_t
+ovn_multicast_hash(const struct ovn_datapath *datapath,
+	           	     const struct multicast_group *group)
+{
     return hash_pointer(datapath, group->key);
-  }
+}
 
-  static struct ovn_multicast *
-  ovn_multicast_find(struct hmap *mcgroups, struct ovn_datapath *datapath,
-		     const struct multicast_group *group)
-  {
+static struct ovn_multicast *
+ovn_multicast_find(struct hmap *mcgroups, struct ovn_datapath *datapath,
+          		     const struct multicast_group *group)
+{
     struct ovn_multicast *mc;
 
     HMAP_FOR_EACH_WITH_HASH (mc, hmap_node,
-			     ovn_multicast_hash(datapath, group), mcgroups) {
-      if (mc->datapath == datapath
-	  && multicast_group_equal(mc->group, group)) {
-	return mc;
-      }
+			                       ovn_multicast_hash(datapath, group), mcgroups) {
+        if (mc->datapath == datapath
+	           && multicast_group_equal(mc->group, group)) {
+	           return mc;
+        }
     }
     return NULL;
-  }
+}
 
-  static void
-  ovn_multicast_add(struct hmap *mcgroups, const struct multicast_group *group,
-		    struct ovn_port *port)
-  {
+static void
+ovn_multicast_add(struct hmap *mcgroups, const struct multicast_group *group,
+		                struct ovn_port *port)
+{
     struct ovn_datapath *od = port->od;
     struct ovn_multicast *mc = ovn_multicast_find(mcgroups, od, group);
     if (!mc) {
-      mc = xmalloc(sizeof *mc);
-      hmap_insert(mcgroups, &mc->hmap_node, ovn_multicast_hash(od, group));
-      mc->datapath = od;
-      mc->group = group;
-      mc->n_ports = 0;
-      mc->allocated_ports = 4;
-      mc->ports = xmalloc(mc->allocated_ports * sizeof *mc->ports);
+        mc = xmalloc(sizeof *mc);
+        hmap_insert(mcgroups, &mc->hmap_node, ovn_multicast_hash(od, group));
+        mc->datapath = od;
+        mc->group = group;
+        mc->n_ports = 0;
+        mc->allocated_ports = 4;
+        mc->ports = xmalloc(mc->allocated_ports * sizeof *mc->ports);
     }
     if (mc->n_ports >= mc->allocated_ports) {
-      mc->ports = x2nrealloc(mc->ports, &mc->allocated_ports,
-			     sizeof *mc->ports);
+        mc->ports = x2nrealloc(mc->ports, &mc->allocated_ports,
+			                         sizeof *mc->ports);
     }
     mc->ports[mc->n_ports++] = port;
-  }
+}
 
-  static void
-  ovn_multicast_destroy(struct hmap *mcgroups, struct ovn_multicast *mc)
-  {
+static void
+ovn_multicast_destroy(struct hmap *mcgroups, struct ovn_multicast *mc)
+{
     if (mc) {
       hmap_remove(mcgroups, &mc->hmap_node);
       free(mc->ports);
       free(mc);
     }
-  }
+}
 
-  static void
-  ovn_multicast_update_sbrec(const struct ovn_multicast *mc,
-			     const struct sbrec_multicast_group *sb)
-  {
+static void
+ovn_multicast_update_sbrec(const struct ovn_multicast *mc,
+			                     const struct sbrec_multicast_group *sb)
+{
     struct sbrec_port_binding **ports = xmalloc(mc->n_ports * sizeof *ports);
     for (size_t i = 0; i < mc->n_ports; i++) {
       ports[i] = CONST_CAST(struct sbrec_port_binding *, mc->ports[i]->sb);
     }
     sbrec_multicast_group_set_ports(sb, ports, mc->n_ports);
     free(ports);
-  }
+}
 
-  /* Logical flow generation.
-   *
-   * This code generates the Logical_Flow table in the southbound database, as a
-   * function of most of the northbound database.
-   */
+/* Logical flow generation.
+ *
+ * This code generates the Logical_Flow table in the southbound database, as a
+ * function of most of the northbound database.
+ */
 
-  struct ovn_lflow {
+struct ovn_lflow {
     struct hmap_node hmap_node;
 
     struct ovn_datapath *od;
@@ -1641,18 +1639,18 @@ build_ports(struct northd_context *ctx, struct hmap *datapaths,
     const char *where;
 };
 
-  static size_t
-  ovn_lflow_hash(const struct ovn_lflow *lflow)
-  {
+static size_t
+ovn_lflow_hash(const struct ovn_lflow *lflow)
+{
     size_t hash = uuid_hash(&lflow->od->key);
     hash = hash_2words((lflow->stage << 16) | lflow->priority, hash);
     hash = hash_string(lflow->match, hash);
     return hash_string(lflow->actions, hash);
-  }
+}
 
-  static bool
-  ovn_lflow_equal(const struct ovn_lflow *a, const struct ovn_lflow *b)
-  {
+static bool
+ovn_lflow_equal(const struct ovn_lflow *a, const struct ovn_lflow *b)
+{
     return (a->od == b->od
             && a->stage == b->stage
             && a->priority == b->priority
@@ -1685,7 +1683,7 @@ ovn_lflow_add_at(struct hmap *lflow_map, struct ovn_datapath *od,
     ovn_lflow_init(lflow, od, stage, priority,
                    xstrdup(match), xstrdup(actions), where);
     hmap_insert(lflow_map, &lflow->hmap_node, ovn_lflow_hash(lflow));
-  }
+}
 
 /* Adds a row with the specified contents to the Logical_Flow table. */
 #define ovn_lflow_add(LFLOW_MAP, OD, STAGE, PRIORITY, MATCH, ACTIONS) \
@@ -1704,17 +1702,17 @@ ovn_lflow_find(struct hmap *lflows, struct ovn_datapath *od,
 
     struct ovn_lflow *lflow;
     HMAP_FOR_EACH_WITH_HASH (lflow, hmap_node, ovn_lflow_hash(&target),
-			     lflows) {
-      if (ovn_lflow_equal(lflow, &target)) {
-	return lflow;
-      }
+			                       lflows) {
+        if (ovn_lflow_equal(lflow, &target)) {
+	           return lflow;
+        }
     }
     return NULL;
-  }
+}
 
-  static void
-  ovn_lflow_destroy(struct hmap *lflows, struct ovn_lflow *lflow)
-  {
+static void
+ovn_lflow_destroy(struct hmap *lflows, struct ovn_lflow *lflow)
+{
     if (lflow) {
 
         hmap_remove(lflows, &lflow->hmap_node);
@@ -1747,19 +1745,19 @@ build_port_security_l2(const char *eth_addr_field,
     ds_put_cstr(match, "}");
 }
 
-  static void
-  build_port_security_ipv6_nd_flow(
-				   struct ds *match, struct eth_addr ea, struct ipv6_netaddr *ipv6_addrs,
-				   int n_ipv6_addrs)
-  {
+static void
+build_port_security_ipv6_nd_flow(
+		struct ds *match, struct eth_addr ea, struct ipv6_netaddr *ipv6_addrs,
+		int n_ipv6_addrs)
+{
     ds_put_format(match, " && ip6 && nd && ((nd.sll == "ETH_ADDR_FMT" || "
-		  "nd.sll == "ETH_ADDR_FMT") || ((nd.tll == "ETH_ADDR_FMT" || "
-		  "nd.tll == "ETH_ADDR_FMT")", ETH_ADDR_ARGS(eth_addr_zero),
-		  ETH_ADDR_ARGS(ea), ETH_ADDR_ARGS(eth_addr_zero),
-		  ETH_ADDR_ARGS(ea));
+		              "nd.sll == "ETH_ADDR_FMT") || ((nd.tll == "ETH_ADDR_FMT" || "
+		              "nd.tll == "ETH_ADDR_FMT")", ETH_ADDR_ARGS(eth_addr_zero),
+		              ETH_ADDR_ARGS(ea), ETH_ADDR_ARGS(eth_addr_zero),
+		              ETH_ADDR_ARGS(ea));
     if (!n_ipv6_addrs) {
-      ds_put_cstr(match, "))");
-      return;
+        ds_put_cstr(match, "))");
+        return;
     }
 
     char ip6_str[INET6_ADDRSTRLEN + 1];
@@ -1770,19 +1768,19 @@ build_port_security_l2(const char *eth_addr_field,
     ds_put_format(match, " && (nd.target == %s", ip6_str);
 
     for(int i = 0; i < n_ipv6_addrs; i++) {
-      memset(ip6_str, 0, sizeof(ip6_str));
-      ipv6_string_mapped(ip6_str, &ipv6_addrs[i].addr);
-      ds_put_format(match, " || nd.target == %s", ip6_str);
+        memset(ip6_str, 0, sizeof(ip6_str));
+        ipv6_string_mapped(ip6_str, &ipv6_addrs[i].addr);
+        ds_put_format(match, " || nd.target == %s", ip6_str);
     }
 
     ds_put_format(match, ")))");
-  }
+}
 
-  static void
-  build_port_security_ipv6_flow(
-				enum ovn_pipeline pipeline, struct ds *match, struct eth_addr ea,
-				struct ipv6_netaddr *ipv6_addrs, int n_ipv6_addrs)
-  {
+static void
+build_port_security_ipv6_flow(
+		enum ovn_pipeline pipeline, struct ds *match, struct eth_addr ea,
+		struct ipv6_netaddr *ipv6_addrs, int n_ipv6_addrs)
+{
     char ip6_str[INET6_ADDRSTRLEN + 1];
 
     ds_put_format(match, " && %s == {",
