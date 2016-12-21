@@ -313,12 +313,18 @@ format_odp_userspace_action(struct ds *ds, const struct nlattr *attr)
                               ",collector_set_id=%"PRIu32
                               ",obs_domain_id=%"PRIu32
                               ",obs_point_id=%"PRIu32
-                              ",output_port=%"PRIu32")",
+                              ",output_port=%"PRIu32,
                               cookie.flow_sample.probability,
                               cookie.flow_sample.collector_set_id,
                               cookie.flow_sample.obs_domain_id,
                               cookie.flow_sample.obs_point_id,
                               cookie.flow_sample.output_odp_port);
+                if (cookie.flow_sample.direction == NX_ACTION_SAMPLE_INGRESS) {
+                    ds_put_cstr(ds, ",ingress");
+                } else if (cookie.flow_sample.direction == NX_ACTION_SAMPLE_EGRESS) {
+                    ds_put_cstr(ds, ",egress");
+                }
+                ds_put_char(ds, ')');
             } else if (userdata_len >= sizeof cookie.ipfix
                        && cookie.type == USER_ACTION_COOKIE_IPFIX) {
                 ds_put_format(ds, ",ipfix(output_port=%"PRIu32")",
@@ -963,7 +969,7 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
                             "collector_set_id=%"SCNi32","
                             "obs_domain_id=%"SCNi32","
                             "obs_point_id=%"SCNi32","
-                            "output_port=%"SCNi32")%n",
+                            "output_port=%"SCNi32"%n",
                             &probability, &collector_set_id,
                             &obs_domain_id, &obs_point_id,
                             &output, &n1)) {
@@ -977,6 +983,21 @@ parse_odp_userspace_action(const char *s, struct ofpbuf *actions)
             cookie.flow_sample.output_odp_port = u32_to_odp(output);
             user_data = &cookie;
             user_data_size = sizeof cookie.flow_sample;
+
+            if (ovs_scan(&s[n], ",ingress%n", &n1)) {
+                cookie.flow_sample.direction = NX_ACTION_SAMPLE_INGRESS;
+                n += n1;
+            } else if (ovs_scan(&s[n], ",egress%n", &n1)) {
+                cookie.flow_sample.direction = NX_ACTION_SAMPLE_EGRESS;
+                n += n1;
+            } else {
+                cookie.flow_sample.direction = NX_ACTION_SAMPLE_DEFAULT;
+            }
+            if (s[n] != ')') {
+                res = -EINVAL;
+                goto out;
+            }
+            n++;
         } else if (ovs_scan(&s[n], ",ipfix(output_port=%"SCNi32")%n",
                             &output, &n1) ) {
             n += n1;
@@ -2770,7 +2791,7 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
     case OVS_KEY_ATTR_IN_PORT:
         if (portno_names && verbose && is_exact) {
             char *name = odp_portno_names_get(portno_names,
-                            u32_to_odp(nl_attr_get_u32(a)));
+                                              nl_attr_get_odp_port(a));
             if (name) {
                 ds_put_format(ds, "%s", name);
             } else {
@@ -5532,7 +5553,10 @@ commit_mpls_action(const struct flow *flow, struct flow *base,
                                       sizeof *mpls);
         mpls->mpls_ethertype = flow->dl_type;
         mpls->mpls_lse = flow->mpls_lse[flow_n - base_n - 1];
-        flow_push_mpls(base, base_n, mpls->mpls_ethertype, NULL);
+        /* Update base flow's MPLS stack, but do not clear L3.  We need the L3
+         * headers if the flow is restored later due to returning from a patch
+         * port or group bucket. */
+        flow_push_mpls(base, base_n, mpls->mpls_ethertype, NULL, false);
         flow_set_mpls_lse(base, 0, mpls->mpls_lse);
         base_n++;
     }
@@ -5895,12 +5919,21 @@ commit_odp_actions(const struct flow *flow, struct flow *base,
                    bool use_masked)
 {
     enum slow_path_reason slow1, slow2;
+    bool mpls_done = false;
 
     commit_set_ether_addr_action(flow, base, odp_actions, wc, use_masked);
+    /* Make packet a non-MPLS packet before committing L3/4 actions,
+     * which would otherwise do nothing. */
+    if (eth_type_mpls(base->dl_type) && !eth_type_mpls(flow->dl_type)) {
+        commit_mpls_action(flow, base, odp_actions);
+        mpls_done = true;
+    }
     slow1 = commit_set_nw_action(flow, base, odp_actions, wc, use_masked);
     commit_set_port_action(flow, base, odp_actions, wc, use_masked);
     slow2 = commit_set_icmp_action(flow, base, odp_actions, wc);
-    commit_mpls_action(flow, base, odp_actions);
+    if (!mpls_done) {
+        commit_mpls_action(flow, base, odp_actions);
+    }
     commit_vlan_action(flow->vlan_tci, base, odp_actions, wc);
     commit_set_priority_action(flow, base, odp_actions, wc, use_masked);
     commit_set_pkt_mark_action(flow, base, odp_actions, wc, use_masked);

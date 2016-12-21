@@ -1,0 +1,67 @@
+AT_BANNER([mcast snooping])
+
+AT_SETUP([mcast - check multicasts to trunk ports are not duplicated])
+
+OVS_VSWITCHD_START([])
+
+AT_CHECK([
+    ovs-vsctl set bridge br0 \
+    datapath_type=dummy \
+    mcast_snooping_enable=true \
+    other-config:mcast-snooping-disable-flood-unregistered=true
+], [0])
+
+AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+
+# Create an access port p1 on vlan 1725, and a trunk port p2.
+AT_CHECK([
+    ovs-vsctl add-port br0 p1 tag=1725 -- set Interface p1 type=dummy \
+    other-config:hwaddr=aa:55:aa:55:00:01 ofport_request=1 \
+    -- add-port br0 p2 -- set Interface p2 type=dummy \
+    other-config:hwaddr=aa:55:aa:55:00:02 ofport_request=2
+], [0])
+
+AT_CHECK([ovs-appctl dpif/show], [0], [dnl
+dummy@ovs-dummy: hit:0 missed:0
+	br0:
+		br0 65534/100: (dummy-internal)
+		p1 1/1: (dummy)
+		p2 2/2: (dummy)
+])
+
+# Send IGMPv3 query on p2 with vlan 1725
+# 5c:8a:38:55:25:52 > 01:00:5e:00:00:01, ethertype 802.1Q (0x8100), length 64: vlan 1725, p 0, ethertype IPv4,
+# 172.17.25.1 > 224.0.0.1: igmp query v3
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 \
+'01005e0000015c8a38552552810006bd080046c000240000000001027f00ac111901e0000001940400001164ec1e00000000027d000000000000000000000000'])
+
+# Send IGMPv3 query on p2 with vlan 1728
+# 5c:8a:38:55:25:52 > 01:00:5e:00:00:01, ethertype 802.1Q (0x8100), length 64: vlan 1728, p 0, ethertype IPv4,
+# 172.17.28.1 > 224.0.0.1: igmp query v3
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 \
+'01005e0000015c8a38552552810006c0080046c000240000000001027c00ac111c01e0000001940400001164ec1e00000000027d000000000000000000000000'])
+
+AT_CHECK([ovs-appctl mdb/show br0], [0], [dnl
+ port  VLAN  GROUP                Age
+    2  1725  querier               0
+    2  1728  querier               0
+])
+
+AT_CHECK([ovs-vsctl set Interface p2 options:tx_pcap=p2.pcap])
+
+# Send a multicast packet on p1
+AT_CHECK([
+    ovs-appctl netdev-dummy/receive p1 \
+    'in_port(1),eth(src=aa:55:aa:55:00:01,dst=01:00:5e:5e:01:01),eth_type(0x0800),ipv4(src=10.0.0.1,dst=239.94.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=0,dst=8000)'
+])
+
+# Check this packet was forwarded exactly once to p2 and has vlan tag 1725
+# aa:55:aa:55:00:01 > 01:00:5e:5e:01:01, ethertype 802.1Q (0x8100), length 46: vlan 1725, p 0, ethertype IPv4,
+# 10.0.0.1.0 > 239.94.1.1.8000: UDP, length 0
+AT_CHECK([ovs-pcap p2.pcap > p2.pcap.txt 2>&1])
+AT_CHECK([cat p2.pcap.txt], [0], [dnl
+01005e5e0101aa55aa550001810006bd08004500001c00000000401180710a000001ef5e010100001f400008e63d
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP

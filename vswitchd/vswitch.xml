@@ -73,7 +73,8 @@
       </column>
 
       <column name="external_ids" key="hostname">
-        The hostname for the host running Open vSwitch.
+        The hostname for the host running Open vSwitch. This is a fully
+        qualified domain name since version 2.6.2.
       </column>
 
       <column name="other_config" key="stats-update-interval"
@@ -500,15 +501,8 @@
 
       <column name="db_version">
         <p>
-          The database schema version number in the form
-          <code><var>major</var>.<var>minor</var>.<var>tweak</var></code>,
-          e.g. <code>1.2.3</code>.  Whenever the database schema is changed in
-          a non-backward compatible way (e.g. deleting a column or a table),
-          <var>major</var> is incremented.  When the database schema is changed
-          in a backward compatible way (e.g. adding a new column),
-          <var>minor</var> is incremented.  When the database schema is changed
-          cosmetically (e.g. reindenting its syntax), <var>tweak</var> is
-          incremented.
+          The database schema version number, e.g. <code>1.2.3</code>.  See
+          ovsdb-tool(1) for an explanation of the numbering scheme.
         </p>
 
         <p>
@@ -1778,6 +1772,14 @@
         Bridge?  See ovs-vsctl(8) for more information.
       </column>
 
+      <column name="protected" type='{"type": "boolean"}'>
+        The protected ports feature allows certain ports to be designated as
+        protected. Traffic between protected ports is blocked. Protected
+        ports can send traffic to unprotected ports. Unprotected ports can
+        send traffic to any port.
+        Default is false.
+      </column>
+
       <column name="external_ids" key="fake-bridge-id-*">
         External IDs for a fake bridge (see the <ref column="fake_bridge"/>
         column) are defined by prefixing a <ref table="Bridge"/> <ref
@@ -2391,6 +2393,12 @@
         <p>
           Requested MTU (Maximum Transmission Unit) for the interface. A client
           can fill this column to change the MTU of an interface.
+        </p>
+
+        <p>
+          RFC 791 requires every internet module to be able to forward a
+          datagram of 68 octets without further fragmentation.  The maximum
+          size of an IP packet is 65535 bytes.
         </p>
 
         <p>

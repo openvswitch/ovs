@@ -62,6 +62,29 @@ specified, the compacted version is written as a new file named
 omitted, then the compacted version of the database replaces \fIdb\fR
 in-place.
 .
+.SS "Version Management Commands"
+.PP
+An OVSDB schema has a schema version number, and an OVSDB database
+embeds a particular version of an OVSDB schema.  These version numbers
+take the form \fIx\fB.\fIy\fB.\fIz\fR, e.g. \fB1.2.3\fR.  The OVSDB
+implementation does not enforce a particular version numbering scheme,
+but schemas managed within the Open vSwitch project use the following
+approach.  Whenever the database schema is changed in a non-backward
+compatible way (e.g. deleting a column or a table), \fIx\fR is
+incremented (and \fIy\fR and \fIz\fR are reset to 0).  When the
+database schema is changed in a backward compatible way (e.g. adding a
+new column), \fIy\fR is incremented (and \fIz\fR is reset to 0).  When
+the database schema is changed cosmetically (e.g. reindenting its
+syntax), \fIz\fR is incremented.
+.
+.PP
+Some OVSDB databases and schemas, especially very old ones, do not
+have a version number.
+.
+.PP
+These commands work with different versions of OVSDB schemas and
+databases.
+.
 .IP "\fBconvert\fI db schema \fR[\fItarget\fR]"
 Reads \fIdb\fR, translating it into to the schema specified in
 \fIschema\fR, and writes out the new interpretation.  If \fItarget\fR
@@ -105,6 +128,8 @@ Prints the checksum in the schema embedded within the database
 If \fIschema\fR or \fIdb\fR was created before schema checksums were
 introduced, then it will not have a checksum and this command
 will print a blank line.
+.
+.SS "Other Commands"
 .
 .IP "\fBquery\fI db transaction\fR"
 Opens \fIdb\fR, executes \fItransaction\fR on it, and prints the

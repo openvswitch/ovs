@@ -787,7 +787,7 @@ When \fBipv6\fR or \fBdl_type=0x86dd\fR is specified, matches IPv6
 header type \fIproto\fR, which is specified as a decimal number between
 0 and 255, inclusive (e.g. 58 to match ICMPv6 packets or 6 to match
 TCP).  The header type is the terminal header as described in the
-\fBDESIGN\fR document.
+\fBtopics/design\fR document.
 .IP
 When \fBarp\fR or \fBdl_type=0x0806\fR is specified, matches the lower
 8 bits of the ARP opcode.  ARP opcodes greater than 255 are treated as
@@ -2380,11 +2380,19 @@ Observation Domain ID sent in every IPFIX flow record.  Defaults to 0.
 When sending samples to IPFIX collectors, the unsigned 32-bit integer
 Observation Point ID sent in every IPFIX flow record.  Defaults to 0.
 .IP "\fBsampling_port=\fIport\fR"
-Sample packets on the port.  It can be set as input port or output
-port.  When this option is omitted, or specified as \fBNONE\fR, IPFIX
-does not differentiate between ingress packets and egress packets and
-does not export egress tunnel information.  This option was added in
-Open vSwitch 2.5.90.
+Sample packets on \fIport\fR, which should be the ingress or egress
+port.  This option, which was added in Open vSwitch 2.5.90, allows the
+IPFIX implementation to export egress tunnel information.
+.IP "\fBingress\fR"
+.IQ "\fBegress\fR"
+Specifies explicitly that the packet is being sampled on ingress to or
+egress from the switch.  IPFIX reports sent by Open vSwitch before
+version 2.5.90 did not include a direction.  From 2.5.90 until 2.6.90,
+IPFIX reports inferred a direction from \fBsampling_port\fR: if it was
+the packet's output port, then the direction was reported as egress,
+otherwise as ingress.  Open vSwitch 2.6.90 introduced these options,
+which allow the inferred direction to be overridden.  This is
+particularly useful when the ingress (or egress) port is not a tunnel.
 .RE
 .IP
 Refer to \fBovs\-vswitchd.conf.db\fR(5) for more details on

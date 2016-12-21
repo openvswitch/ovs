@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Nicira, Inc.
+ * Copyright (c) 2011, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,4 +73,18 @@ stream_ssl_set_key_and_cert(const char *private_key_file,
 {
     stream_ssl_set_private_key_file(private_key_file);
     stream_ssl_set_certificate_file(certificate_file);
+}
+
+void
+stream_ssl_set_protocols(const char *arg OVS_UNUSED)
+{
+    /* Ignore this option since it seems harmless to set SSL protocols if SSL
+     * won't be used. */
+}
+
+void
+stream_ssl_set_ciphers(const char *arg OVS_UNUSED)
+{
+    /* Ignore this option since it seems harmless to set SSL ciphers if SSL
+     * won't be used. */
 }

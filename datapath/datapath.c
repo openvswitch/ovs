@@ -682,8 +682,7 @@ static struct genl_ops dp_packet_genl_ops[] = {
 	}
 };
 
-static struct genl_family dp_packet_genl_family = {
-	.id = GENL_ID_GENERATE,
+static struct genl_family dp_packet_genl_family __ro_after_init = {
 	.hdrsize = sizeof(struct ovs_header),
 	.name = OVS_PACKET_FAMILY,
 	.version = OVS_PACKET_VERSION,
@@ -692,6 +691,7 @@ static struct genl_family dp_packet_genl_family = {
 	.parallel_ops = true,
 	.ops = dp_packet_genl_ops,
 	.n_ops = ARRAY_SIZE(dp_packet_genl_ops),
+	.module = THIS_MODULE,
 };
 
 static void get_dp_stats(const struct datapath *dp, struct ovs_dp_stats *stats,
@@ -1447,8 +1447,7 @@ static struct genl_ops dp_flow_genl_ops[] = {
 	},
 };
 
-static struct genl_family dp_flow_genl_family = {
-	.id = GENL_ID_GENERATE,
+static struct genl_family dp_flow_genl_family __ro_after_init = {
 	.hdrsize = sizeof(struct ovs_header),
 	.name = OVS_FLOW_FAMILY,
 	.version = OVS_FLOW_VERSION,
@@ -1459,6 +1458,7 @@ static struct genl_family dp_flow_genl_family = {
 	.n_ops = ARRAY_SIZE(dp_flow_genl_ops),
 	.mcgrps = &ovs_dp_flow_multicast_group,
 	.n_mcgrps = 1,
+	.module = THIS_MODULE,
 };
 
 static size_t ovs_dp_cmd_msg_size(void)
@@ -1832,8 +1832,7 @@ static struct genl_ops dp_datapath_genl_ops[] = {
 	},
 };
 
-static struct genl_family dp_datapath_genl_family = {
-	.id = GENL_ID_GENERATE,
+static struct genl_family dp_datapath_genl_family __ro_after_init = {
 	.hdrsize = sizeof(struct ovs_header),
 	.name = OVS_DATAPATH_FAMILY,
 	.version = OVS_DATAPATH_VERSION,
@@ -1844,6 +1843,7 @@ static struct genl_family dp_datapath_genl_family = {
 	.n_ops = ARRAY_SIZE(dp_datapath_genl_ops),
 	.mcgrps = &ovs_dp_datapath_multicast_group,
 	.n_mcgrps = 1,
+	.module = THIS_MODULE,
 };
 
 /* Called with ovs_mutex or RCU read lock. */
@@ -2254,8 +2254,7 @@ static struct genl_ops dp_vport_genl_ops[] = {
 	},
 };
 
-struct genl_family dp_vport_genl_family = {
-	.id = GENL_ID_GENERATE,
+struct genl_family dp_vport_genl_family __ro_after_init = {
 	.hdrsize = sizeof(struct ovs_header),
 	.name = OVS_VPORT_FAMILY,
 	.version = OVS_VPORT_VERSION,
@@ -2266,6 +2265,7 @@ struct genl_family dp_vport_genl_family = {
 	.n_ops = ARRAY_SIZE(dp_vport_genl_ops),
 	.mcgrps = &ovs_dp_vport_multicast_group,
 	.n_mcgrps = 1,
+	.module = THIS_MODULE,
 };
 
 static struct genl_family *dp_genl_families[] = {
@@ -2283,7 +2283,7 @@ static void dp_unregister_genl(int n_families)
 		genl_unregister_family(dp_genl_families[i]);
 }
 
-static int dp_register_genl(void)
+static int __init dp_register_genl(void)
 {
 	int err;
 	int i;

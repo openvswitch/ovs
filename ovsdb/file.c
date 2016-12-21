@@ -622,6 +622,25 @@ ovsdb_file_commit(struct ovsdb_replica *replica,
     return NULL;
 }
 
+/* Rename 'old' to 'new', replacing 'new' if it exists.  Returns NULL if
+ * successful, otherwise an ovsdb_error that the caller must destroy. */
+static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
+ovsdb_rename(const char *old, const char *new)
+{
+#ifdef _WIN32
+    int error = (MoveFileEx(old, new, MOVEFILE_REPLACE_EXISTING
+                            | MOVEFILE_WRITE_THROUGH | MOVEFILE_COPY_ALLOWED)
+                 ? 0 : EACCES);
+#else
+    int error = rename(old, new) ? errno : 0;
+#endif
+
+    return (error
+            ? ovsdb_io_error(error, "failed to rename \"%s\" to \"%s\"",
+                             old, new)
+            : NULL);
+}
+
 struct ovsdb_error *
 ovsdb_file_compact(struct ovsdb_file *file)
 {
@@ -667,22 +686,68 @@ ovsdb_file_compact(struct ovsdb_file *file)
         goto exit;
     }
 
-    /* Replace original by temporary. */
-    if (rename(tmp_name, file->file_name)) {
-        error = ovsdb_io_error(errno, "failed to rename \"%s\" to \"%s\"",
-                               tmp_name, file->file_name);
+    /* Replace original file by the temporary file.
+     *
+     * We support two strategies:
+     *
+     *     - The preferred strategy is to rename the temporary file over the
+     *       original one in-place, then close the original one.  This works on
+     *       Unix-like systems.  It does not work on Windows, which does not
+     *       allow open files to be renamed.  The approach has the advantage
+     *       that, at any point, we can drop back to something that already
+     *       works.
+     *
+     *     - Alternatively, we can close both files, rename, then open the new
+     *       file (which now has the original name).  This works on all
+     *       systems, but if reopening the file fails then we're stuck and have
+     *       to abort (XXX although it would be better to retry).
+     *
+     * We make the strategy a variable instead of an #ifdef to make it easier
+     * to test both strategies on Unix-like systems, and to make the code
+     * easier to read. */
+#ifdef _WIN32
+    bool rename_open_files = false;
+#else
+    bool rename_open_files = true;
+#endif
+    if (!rename_open_files) {
+        ovsdb_log_close(file->log);
+        ovsdb_log_close(new_log);
+        file->log = NULL;
+        new_log = NULL;
+    }
+    error = ovsdb_rename(tmp_name, file->file_name);
+    if (error) {
         goto exit;
     }
-    fsync_parent_dir(file->file_name);
-
-exit:
-    if (!error) {
+    if (rename_open_files) {
+        fsync_parent_dir(file->file_name);
         ovsdb_log_close(file->log);
         file->log = new_log;
-        file->last_compact = time_msec();
-        file->next_compact = file->last_compact + COMPACT_MIN_MSEC;
-        file->n_transactions = 1;
     } else {
+        /* Re-open the log.  This skips past the schema log record. */
+        error = ovsdb_file_open_log(file->file_name, OVSDB_LOG_READ_WRITE,
+                                    &file->log, NULL);
+        if (error) {
+            ovs_fatal(0, "could not reopen database");
+        }
+
+        /* Skip past the data log reecord. */
+        struct json *json;
+        error = ovsdb_log_read(file->log, &json);
+        if (error) {
+            ovs_fatal(0, "error reading database");
+        }
+        json_destroy(json);
+    }
+
+    /* Success! */
+    file->last_compact = time_msec();
+    file->next_compact = file->last_compact + COMPACT_MIN_MSEC;
+    file->n_transactions = 1;
+
+exit:
+    if (error) {
         ovsdb_log_close(new_log);
         if (tmp_lock) {
             unlink(tmp_name);

@@ -198,6 +198,9 @@ ovs_router_insert__(uint8_t priority, const struct in6_addr *ip6_dst,
     p->plen = plen;
     p->priority = priority;
     err = get_src_addr(ip6_dst, output_bridge, &p->src_addr);
+    if (err && ipv6_addr_is_set(gw)) {
+        err = get_src_addr(gw, output_bridge, &p->src_addr);
+    }
     if (err) {
         free(p);
         return err;
@@ -316,7 +319,7 @@ ovs_router_add(struct unixctl_conn *conn, int argc,
     }
     err = ovs_router_insert__(plen + 32, &ip6, plen, argv[2], &gw6);
     if (err) {
-        unixctl_command_reply(conn, "Error while inserting route.");
+        unixctl_command_reply_error(conn, "Error while inserting route.");
     } else {
         unixctl_command_reply(conn, "OK");
     }
@@ -399,7 +402,7 @@ ovs_router_lookup_cmd(struct unixctl_conn *conn, int argc OVS_UNUSED,
         struct ds ds = DS_EMPTY_INITIALIZER;
         ds_put_format(&ds, "src ");
         ipv6_format_mapped(&src, &ds);
-        ds_put_format(&ds, "gateway ");
+        ds_put_format(&ds, "\ngateway ");
         ipv6_format_mapped(&gw, &ds);
         ds_put_format(&ds, "\ndev %s\n", iface);
         unixctl_command_reply(conn, ds_cstr(&ds));

@@ -88,6 +88,14 @@ ovn_init_symtab(struct shash *symtab)
     char flags_str[16];
     snprintf(flags_str, sizeof flags_str, "flags[%d]", MLF_ALLOW_LOOPBACK_BIT);
     expr_symtab_add_subfield(symtab, "flags.loopback", NULL, flags_str);
+    snprintf(flags_str, sizeof flags_str, "flags[%d]",
+             MLF_FORCE_SNAT_FOR_DNAT_BIT);
+    expr_symtab_add_subfield(symtab, "flags.force_snat_for_dnat", NULL,
+                             flags_str);
+    snprintf(flags_str, sizeof flags_str, "flags[%d]",
+             MLF_FORCE_SNAT_FOR_LB_BIT);
+    expr_symtab_add_subfield(symtab, "flags.force_snat_for_lb", NULL,
+                             flags_str);
 
     /* Connection tracking state. */
     expr_symtab_add_field(symtab, "ct_mark", MFF_CT_MARK, NULL, false);
@@ -108,6 +116,8 @@ ovn_init_symtab(struct shash *symtab)
         {"rel", CS_RELATED_BIT},
         {"rpl", CS_REPLY_DIR_BIT},
         {"inv", CS_INVALID_BIT},
+        {"dnat", CS_DST_NAT_BIT},
+        {"snat", CS_SRC_NAT_BIT},
     };
     for (const struct ct_bit *b = bits; b < &bits[ARRAY_SIZE(bits)]; b++) {
         char *name = xasprintf("ct.%s", b->name);

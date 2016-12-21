@@ -7,4 +7,10 @@
 #define GENL_UNS_ADMIN_PERM GENL_ADMIN_PERM
 #endif
 
+#ifdef GENL_ID_GENERATE
+#if GENL_ID_GENERATE != 0
+#error "GENL_ID_GENERATE is assumed to be zero"
+#endif
+#endif
+
 #endif

@@ -2082,10 +2082,15 @@ build_dhcpv4_action(struct ovn_port *op, ovs_be32 offer_ip,
     ds_put_format(options_action,
                   REGBIT_DHCP_OPTS_RESULT" = put_dhcp_opts(offerip = "
                   IP_FMT", ", IP_ARGS(offer_ip));
-    struct smap_node *node;
-    SMAP_FOR_EACH(node, &dhcpv4_options) {
+
+    /* We're not using SMAP_FOR_EACH because we want a consistent order of the
+     * options on different architectures (big or little endian, SSE4.2) */
+    const struct smap_node **sorted_opts = smap_sort(&dhcpv4_options);
+    for (size_t i = 0; i < smap_count(&dhcpv4_options); i++) {
+        const struct smap_node *node = sorted_opts[i];
         ds_put_format(options_action, "%s = %s, ", node->key, node->value);
     }
+    free(sorted_opts);
 
     ds_chomp(options_action, ' ');
     ds_chomp(options_action, ',');
@@ -2126,9 +2131,9 @@ build_dhcpv6_action(struct ovn_port *op, struct in6_addr *offer_ip,
         return false;
     }
 
+    const struct smap *options_map = &op->nbsp->dhcpv6_options->options;
     /* "server_id" should be the MAC address. */
-    const char *server_mac = smap_get(&op->nbsp->dhcpv6_options->options,
-                                      "server_id");
+    const char *server_mac = smap_get(options_map, "server_id");
     struct eth_addr ea;
     if (!server_mac || !eth_addr_from_string(server_mac, &ea)) {
         /* "server_id" should be present in the dhcpv6_options. */
@@ -2153,20 +2158,24 @@ build_dhcpv6_action(struct ovn_port *op, struct in6_addr *offer_ip,
 
     /* Check whether the dhcpv6 options should be configured as stateful.
      * Only reply with ia_addr option for dhcpv6 stateful address mode. */
-    if (!smap_get_bool(&op->nbsp->dhcpv6_options->options,
-                       "dhcpv6_stateless", false)) {
+    if (!smap_get_bool(options_map, "dhcpv6_stateless", false)) {
         char ia_addr[INET6_ADDRSTRLEN + 1];
         ipv6_string_mapped(ia_addr, offer_ip);
 
         ds_put_format(options_action, "ia_addr = %s, ", ia_addr);
     }
 
-    struct smap_node *node;
-    SMAP_FOR_EACH (node, &op->nbsp->dhcpv6_options->options) {
+    /* We're not using SMAP_FOR_EACH because we want a consistent order of the
+     * options on different architectures (big or little endian, SSE4.2) */
+    const struct smap_node **sorted_opts = smap_sort(options_map);
+    for (size_t i = 0; i < smap_count(options_map); i++) {
+        const struct smap_node *node = sorted_opts[i];
         if (strcmp(node->key, "dhcpv6_stateless")) {
             ds_put_format(options_action, "%s = %s, ", node->key, node->value);
         }
     }
+    free(sorted_opts);
+
     ds_chomp(options_action, ' ');
     ds_chomp(options_action, ',');
     ds_put_cstr(options_action, "); next;");
@@ -3099,13 +3108,15 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
     }
 
     /* Ingress table 10: ARP/ND responder, skip requests coming from localnet
-     * ports. (priority 100). */
+     * and vtep ports. (priority 100); see ovn-northd.8.xml for the
+     * rationale. */
     HMAP_FOR_EACH (op, key_node, ports) {
         if (!op->nbsp) {
             continue;
         }
 
-        if (!strcmp(op->nbsp->type, "localnet")) {
+        if ((!strcmp(op->nbsp->type, "localnet")) ||
+            (!strcmp(op->nbsp->type, "vtep"))) {
             ds_clear(&match);
             ds_put_format(&match, "inport == %s", op->json_key);
             ovn_lflow_add(lflows, op->od, S_SWITCH_IN_ARP_ND_RSP, 100,
@@ -3729,6 +3740,63 @@ op_put_v6_networks(struct ds *ds, const struct ovn_port *op)
     ds_put_cstr(ds, "}");
 }
 
+static const char *
+get_force_snat_ip(struct ovn_datapath *od, const char *key_type, ovs_be32 *ip)
+{
+    char *key = xasprintf("%s_force_snat_ip", key_type);
+    const char *ip_address = smap_get(&od->nbr->options, key);
+    free(key);
+
+    if (ip_address) {
+        ovs_be32 mask;
+        char *error = ip_parse_masked(ip_address, ip, &mask);
+        if (error || mask != OVS_BE32_MAX) {
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+            VLOG_WARN_RL(&rl, "bad ip %s in options of router "UUID_FMT"",
+                         ip_address, UUID_ARGS(&od->key));
+            free(error);
+            *ip = 0;
+            return NULL;
+        }
+        return ip_address;
+    }
+
+    *ip = 0;
+    return NULL;
+}
+
+static void
+add_router_lb_flow(struct hmap *lflows, struct ovn_datapath *od,
+                   struct ds *match, struct ds *actions, int priority,
+                   const char *lb_force_snat_ip)
+{
+    /* A match and actions for new connections. */
+    char *new_match = xasprintf("ct.new && %s", ds_cstr(match));
+    if (lb_force_snat_ip) {
+        char *new_actions = xasprintf("flags.force_snat_for_lb = 1; %s",
+                                      ds_cstr(actions));
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT, priority, new_match,
+                      new_actions);
+        free(new_actions);
+    } else {
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT, priority, new_match,
+                      ds_cstr(actions));
+    }
+
+    /* A match and actions for established connections. */
+    char *est_match = xasprintf("ct.est && %s", ds_cstr(match));
+    if (lb_force_snat_ip) {
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT, priority, est_match,
+                      "flags.force_snat_for_lb = 1; ct_dnat;");
+    } else {
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT, priority, est_match,
+                      "ct_dnat;");
+    }
+
+    free(new_match);
+    free(est_match);
+}
+
 static void
 build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                     struct hmap *lflows)
@@ -3950,8 +4018,26 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
         sset_destroy(&all_ips);
 
-        ovs_be32 *snat_ips = xmalloc(sizeof *snat_ips * op->od->nbr->n_nat);
+        /* A gateway router can have 2 SNAT IP addresses to force DNATed and
+         * LBed traffic respectively to be SNATed.  In addition, there can be
+         * a number of SNAT rules in the NAT table. */
+        ovs_be32 *snat_ips = xmalloc(sizeof *snat_ips *
+                                     (op->od->nbr->n_nat + 2));
         size_t n_snat_ips = 0;
+
+        ovs_be32 snat_ip;
+        const char *dnat_force_snat_ip = get_force_snat_ip(op->od, "dnat",
+                                                           &snat_ip);
+        if (dnat_force_snat_ip) {
+            snat_ips[n_snat_ips++] = snat_ip;
+        }
+
+        const char *lb_force_snat_ip = get_force_snat_ip(op->od, "lb",
+                                                         &snat_ip);
+        if (lb_force_snat_ip) {
+            snat_ips[n_snat_ips++] = snat_ip;
+        }
+
         for (int i = 0; i < op->od->nbr->n_nat; i++) {
             const struct nbrec_nat *nat;
 
@@ -4122,6 +4208,12 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
+        ovs_be32 snat_ip;
+        const char *dnat_force_snat_ip = get_force_snat_ip(od, "dnat",
+                                                           &snat_ip);
+        const char *lb_force_snat_ip = get_force_snat_ip(od, "lb",
+                                                         &snat_ip);
+
         /* A set to hold all ips that need defragmentation and tracking. */
         struct sset all_ips = SSET_INITIALIZER(&all_ips);
 
@@ -4144,14 +4236,16 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                     sset_add(&all_ips, ip_address);
                 }
 
-                /* Higher priority rules are added in DNAT table to match on
-                 * ct.new which in-turn have group id as an action for load
-                 * balancing. */
+                /* Higher priority rules are added for load-balancing in DNAT
+                 * table.  For every match (on a VIP[:port]), we add two flows
+                 * via add_router_lb_flow().  One flow is for specific matching
+                 * on ct.new with an action of "ct_lb($targets);".  The other
+                 * flow is for ct.est with an action of "ct_dnat;". */
                 ds_clear(&actions);
                 ds_put_format(&actions, "ct_lb(%s);", node->value);
 
                 ds_clear(&match);
-                ds_put_format(&match, "ct.new && ip && ip4.dst == %s",
+                ds_put_format(&match, "ip && ip4.dst == %s",
                               ip_address);
                 free(ip_address);
 
@@ -4163,11 +4257,11 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                         ds_put_format(&match, " && tcp && tcp.dst == %d",
                                       port);
                     }
-                    ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT,
-                                  120, ds_cstr(&match), ds_cstr(&actions));
+                    add_router_lb_flow(lflows, od, &match, &actions, 120,
+                                       lb_force_snat_ip);
                 } else {
-                    ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT,
-                                  110, ds_cstr(&match), ds_cstr(&actions));
+                    add_router_lb_flow(lflows, od, &match, &actions, 110,
+                                       lb_force_snat_ip);
                 }
             }
         }
@@ -4243,7 +4337,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 || !strcmp(nat->type, "dnat_and_snat")) {
                 ds_clear(&match);
                 ds_put_format(&match, "ip && ip4.dst == %s", nat->external_ip);
-                ovn_lflow_add(lflows, od, S_ROUTER_IN_UNSNAT, 100,
+                ovn_lflow_add(lflows, od, S_ROUTER_IN_UNSNAT, 90,
                               ds_cstr(&match), "ct_snat; next;");
             }
 
@@ -4258,7 +4352,13 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                 ds_clear(&match);
                 ds_put_format(&match, "ip && ip4.dst == %s", nat->external_ip);
                 ds_clear(&actions);
-                ds_put_format(&actions,"flags.loopback = 1; ct_dnat(%s);",
+                if (dnat_force_snat_ip) {
+                    /* Indicate to the future tables that a DNAT has taken
+                     * place and a force SNAT needs to be done in the Egress
+                     * SNAT table. */
+                    ds_put_format(&actions, "flags.force_snat_for_dnat = 1; ");
+                }
+                ds_put_format(&actions, "flags.loopback = 1; ct_dnat(%s);",
                               nat->logical_ip);
                 ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT, 100,
                               ds_cstr(&match), ds_cstr(&actions));
@@ -4283,8 +4383,47 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             }
         }
 
+        /* Handle force SNAT options set in the gateway router. */
+        if (dnat_force_snat_ip) {
+            /* If a packet with destination IP address as that of the
+             * gateway router (as set in options:dnat_force_snat_ip) is seen,
+             * UNSNAT it. */
+            ds_clear(&match);
+            ds_put_format(&match, "ip && ip4.dst == %s", dnat_force_snat_ip);
+            ovn_lflow_add(lflows, od, S_ROUTER_IN_UNSNAT, 110,
+                          ds_cstr(&match), "ct_snat; next;");
+
+            /* Higher priority rules to force SNAT with the IP addresses
+             * configured in the Gateway router.  This only takes effect
+             * when the packet has already been DNATed once. */
+            ds_clear(&match);
+            ds_put_format(&match, "flags.force_snat_for_dnat == 1 && ip");
+            ds_clear(&actions);
+            ds_put_format(&actions, "ct_snat(%s);", dnat_force_snat_ip);
+            ovn_lflow_add(lflows, od, S_ROUTER_OUT_SNAT, 100,
+                          ds_cstr(&match), ds_cstr(&actions));
+        }
+        if (lb_force_snat_ip) {
+            /* If a packet with destination IP address as that of the
+             * gateway router (as set in options:lb_force_snat_ip) is seen,
+             * UNSNAT it. */
+            ds_clear(&match);
+            ds_put_format(&match, "ip && ip4.dst == %s", lb_force_snat_ip);
+            ovn_lflow_add(lflows, od, S_ROUTER_IN_UNSNAT, 100,
+                          ds_cstr(&match), "ct_snat; next;");
+
+            /* Load balanced traffic will have flags.force_snat_for_lb set.
+             * Force SNAT it. */
+            ds_clear(&match);
+            ds_put_format(&match, "flags.force_snat_for_lb == 1 && ip");
+            ds_clear(&actions);
+            ds_put_format(&actions, "ct_snat(%s);", lb_force_snat_ip);
+            ovn_lflow_add(lflows, od, S_ROUTER_OUT_SNAT, 100,
+                          ds_cstr(&match), ds_cstr(&actions));
+        }
+
         /* Re-circulate every packet through the DNAT zone.
-        * This helps with three things.
+        * This helps with two things.
         *
         * 1. Any packet that needs to be unDNATed in the reverse
         * direction gets unDNATed. Ideally this could be done in
@@ -4293,10 +4432,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         * ip address being external IP address for IP routing,
         * we can do it here, saving a future re-circulation.
         *
-        * 2. Established load-balanced connections automatically get
-        * DNATed.
-        *
-        * 3. Any packet that was sent through SNAT zone in the
+        * 2. Any packet that was sent through SNAT zone in the
         * previous table automatically gets re-circulated to get
         * back the new destination IP address that is needed for
         * routing in the openflow pipeline. */
@@ -4974,8 +5110,9 @@ static void
 parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 {
     enum {
-      DAEMON_OPTION_ENUMS,
-      VLOG_OPTION_ENUMS,
+        DAEMON_OPTION_ENUMS,
+        VLOG_OPTION_ENUMS,
+        SSL_OPTION_ENUMS,
     };
     static const struct option long_options[] = {
       {"ovnsb-db", required_argument, NULL, 'd'},

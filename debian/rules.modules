@@ -8,7 +8,7 @@ MA_DIR ?= /usr/share/modass
 DATAPATH_CONFIGURE_OPTS =
 
 kdist_clean:
-	dh_testdir	
+	dh_testdir
 	dh_testroot
 	dh_clean
 	rm -rf openvswitch

@@ -282,7 +282,7 @@ enum ofputil_flow_mod_flags {
 /* Protocol-independent flow_mod.
  *
  * The handling of cookies across multiple versions of OpenFlow is a bit
- * confusing.  See DESIGN for the details. */
+ * confusing.  See the topics/design doc for the details. */
 struct ofputil_flow_mod {
     struct ovs_list list_node; /* For queuing flow_mods. */
 
@@ -613,7 +613,7 @@ struct ofputil_phy_port {
 };
 
 enum ofputil_capabilities {
-    /* OpenFlow 1.0, 1.1, 1.2, and 1.3 share these capability values. */
+    /* All OpenFlow versions share these capability values. */
     OFPUTIL_C_FLOW_STATS     = 1 << 0,  /* Flow statistics. */
     OFPUTIL_C_TABLE_STATS    = 1 << 1,  /* Table statistics. */
     OFPUTIL_C_PORT_STATS     = 1 << 2,  /* Port statistics. */
@@ -626,11 +626,16 @@ enum ofputil_capabilities {
     /* OpenFlow 1.0 only. */
     OFPUTIL_C_STP            = 1 << 3,  /* 802.1d spanning tree. */
 
-    /* OpenFlow 1.1, 1.2, and 1.3 share this capability. */
+    /* OpenFlow 1.1+ only.  Note that this bit value does not match the one
+     * in the OpenFlow message. */
     OFPUTIL_C_GROUP_STATS    = 1 << 4,  /* Group statistics. */
 
-    /* OpenFlow 1.2 and 1.3 share this capability */
+    /* OpenFlow 1.2+ only. */
     OFPUTIL_C_PORT_BLOCKED   = 1 << 8,  /* Switch will block looping ports */
+
+    /* OpenFlow 1.4+ only. */
+    OFPUTIL_C_BUNDLES         = 1 << 9,  /* Switch supports bundles. */
+    OFPUTIL_C_FLOW_MONITORING = 1 << 10, /* Switch supports flow monitoring. */
 };
 
 /* Abstract ofp_switch_features. */
@@ -813,7 +818,7 @@ struct ofputil_table_features {
      * supported, otherwise 0.  For other versions, they are decoded as -1 and
      * ignored for encoding.
      *
-     * See the section "OFPTC_* Table Configuration" in DESIGN.rst for more
+     * Search for "OFPTC_* Table Configuration" in the documentation for more
      * details of how OpenFlow has changed in this area.
      */
     enum ofputil_table_miss miss_config; /* OF1.1 and 1.2 only. */

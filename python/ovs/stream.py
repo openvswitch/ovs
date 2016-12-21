@@ -103,8 +103,8 @@ class Stream(object):
     def open(name, dscp=DSCP_DEFAULT):
         """Attempts to connect a stream to a remote peer.  'name' is a
         connection name in the form "TYPE:ARGS", where TYPE is an active stream
-        class's name and ARGS are stream class-specific.  Currently the only
-        supported TYPEs are "unix" and "tcp".
+        class's name and ARGS are stream class-specific.  The supported TYPEs
+        include "unix", "tcp", and "ssl".
 
         Returns (error, stream): on success 'error' is 0 and 'stream' is the
         new Stream, on failure 'error' is a positive errno value and 'stream'
@@ -395,6 +395,8 @@ class UnixStream(Stream):
         connect_path = suffix
         return ovs.socket_util.make_unix_socket(socket.SOCK_STREAM,
                                                 True, None, connect_path)
+
+
 Stream.register_method("unix", UnixStream)
 
 
@@ -406,6 +408,8 @@ class TCPStream(Stream):
         if not error:
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         return error, sock
+
+
 Stream.register_method("tcp", TCPStream)
 
 
@@ -447,6 +451,8 @@ class SSLStream(Stream):
             self.socket.do_handshake()
         except SSL.WantReadError:
             return errno.EAGAIN
+        except SSL.SysCallError as e:
+            return ovs.socket_util.get_exception_errno(e)
 
         return 0
 
@@ -455,6 +461,10 @@ class SSLStream(Stream):
             return super(SSLStream, self).recv(n)
         except SSL.WantReadError:
             return (errno.EAGAIN, "")
+        except SSL.SysCallError as e:
+            return (ovs.socket_util.get_exception_errno(e), "")
+        except SSL.ZeroReturnError:
+            return (0, "")
 
     def send(self, buf):
         try:

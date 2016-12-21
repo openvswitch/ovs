@@ -868,8 +868,8 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
         goto exit;
     }
 
-    new_n_rxq = MAX(smap_get_int(args, "n_rxq", netdev->requested_n_rxq), 1);
-    new_n_txq = MAX(smap_get_int(args, "n_txq", netdev->requested_n_txq), 1);
+    new_n_rxq = MAX(smap_get_int(args, "n_rxq", 1), 1);
+    new_n_txq = MAX(smap_get_int(args, "n_txq", 1), 1);
     new_numa_id = smap_get_int(args, "numa_id", 0);
     if (new_n_rxq != netdev->requested_n_rxq
         || new_n_txq != netdev->requested_n_txq
@@ -1149,9 +1149,16 @@ netdev_dummy_get_mtu(const struct netdev *netdev, int *mtup)
     return 0;
 }
 
+#define DUMMY_MIN_MTU 68
+#define DUMMY_MAX_MTU 65535
+
 static int
 netdev_dummy_set_mtu(struct netdev *netdev, int mtu)
 {
+    if (mtu < DUMMY_MIN_MTU || mtu > DUMMY_MAX_MTU) {
+        return EINVAL;
+    }
+
     struct netdev_dummy *dev = netdev_dummy_cast(netdev);
 
     ovs_mutex_lock(&dev->mutex);

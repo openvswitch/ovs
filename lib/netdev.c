@@ -1766,8 +1766,8 @@ netdev_get_vports(size_t *size)
     }
 
     /* Explicitly allocates big enough chunk of memory. */
-    vports = xmalloc(shash_count(&netdev_shash) * sizeof *vports);
     ovs_mutex_lock(&netdev_mutex);
+    vports = xmalloc(shash_count(&netdev_shash) * sizeof *vports);
     SHASH_FOR_EACH (node, &netdev_shash) {
         struct netdev *dev = node->data;
 
@@ -1913,7 +1913,7 @@ netdev_get_addrs(const char dev[], struct in6_addr **paddr,
 
             sin = ALIGNED_CAST(const struct sockaddr_in *, ifa->ifa_addr);
             in6_addr_set_mapped_ipv4(&addr_array[i], sin->sin_addr.s_addr);
-            sin = (struct sockaddr_in *) &ifa->ifa_netmask;
+            sin = ALIGNED_CAST(const struct sockaddr_in *, ifa->ifa_netmask);
             in6_addr_set_mapped_ipv4(&mask_array[i], sin->sin_addr.s_addr);
             i++;
         } else if (family == AF_INET6) {
@@ -1921,7 +1921,7 @@ netdev_get_addrs(const char dev[], struct in6_addr **paddr,
 
             sin6 = ALIGNED_CAST(const struct sockaddr_in6 *, ifa->ifa_addr);
             memcpy(&addr_array[i], &sin6->sin6_addr, sizeof *addr_array);
-            sin6 = (struct sockaddr_in6 *) &ifa->ifa_netmask;
+            sin6 = ALIGNED_CAST(const struct sockaddr_in6 *, ifa->ifa_netmask);
             memcpy(&mask_array[i], &sin6->sin6_addr, sizeof *mask_array);
             i++;
         }

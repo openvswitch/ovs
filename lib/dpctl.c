@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1615,18 +1615,18 @@ out:
 }
 
 static const struct dpctl_command all_commands[] = {
-    { "add-dp", "add-dp dp [iface...]", 1, INT_MAX, dpctl_add_dp, DP_RW },
-    { "del-dp", "del-dp dp", 1, 1, dpctl_del_dp, DP_RW },
-    { "add-if", "add-if dp iface...", 2, INT_MAX, dpctl_add_if, DP_RW },
-    { "del-if", "del-if dp iface...", 2, INT_MAX, dpctl_del_if, DP_RW },
-    { "set-if", "set-if dp iface...", 2, INT_MAX, dpctl_set_if, DP_RW },
+    { "add-dp", "dp [iface...]", 1, INT_MAX, dpctl_add_dp, DP_RW },
+    { "del-dp", "dp", 1, 1, dpctl_del_dp, DP_RW },
+    { "add-if", "dp iface...", 2, INT_MAX, dpctl_add_if, DP_RW },
+    { "del-if", "dp iface...", 2, INT_MAX, dpctl_del_if, DP_RW },
+    { "set-if", "dp iface...", 2, INT_MAX, dpctl_set_if, DP_RW },
     { "dump-dps", "", 0, 0, dpctl_dump_dps, DP_RO },
     { "show", "[dp...]", 0, INT_MAX, dpctl_show, DP_RO },
     { "dump-flows", "[dp]", 0, 2, dpctl_dump_flows, DP_RO },
-    { "add-flow", "add-flow [dp] flow actions", 2, 3, dpctl_add_flow, DP_RW },
-    { "mod-flow", "mod-flow [dp] flow actions", 2, 3, dpctl_mod_flow, DP_RW },
-    { "get-flow", "get-flow [dp] ufid", 1, 2, dpctl_get_flow, DP_RO },
-    { "del-flow", "del-flow [dp] flow", 1, 2, dpctl_del_flow, DP_RW },
+    { "add-flow", "[dp] flow actions", 2, 3, dpctl_add_flow, DP_RW },
+    { "mod-flow", "[dp] flow actions", 2, 3, dpctl_mod_flow, DP_RW },
+    { "get-flow", "[dp] ufid", 1, 2, dpctl_get_flow, DP_RO },
+    { "del-flow", "[dp] flow", 1, 2, dpctl_del_flow, DP_RW },
     { "del-flows", "[dp]", 0, 1, dpctl_del_flows, DP_RW },
     { "dump-conntrack", "[dp] [zone=N]", 0, 2, dpctl_dump_conntrack, DP_RO },
     { "flush-conntrack", "[dp] [zone=N]", 0, 2, dpctl_flush_conntrack, DP_RW },
@@ -1780,8 +1780,12 @@ dpctl_unixctl_register(void)
     for (p = all_commands; p->name != NULL; p++) {
         if (strcmp(p->name, "help")) {
             char *cmd_name = xasprintf("dpctl/%s", p->name);
-            unixctl_command_register(cmd_name, "", p->min_args, p->max_args,
-                                     dpctl_unixctl_handler, p->handler);
+            unixctl_command_register(cmd_name,
+                                     p->usage,
+                                     p->min_args,
+                                     p->max_args,
+                                     dpctl_unixctl_handler,
+                                     p->handler);
             free(cmd_name);
         }
     }

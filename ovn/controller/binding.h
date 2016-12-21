@@ -1,4 +1,4 @@
-/* Copyright (c) 2015 Nicira, Inc.
+/* Copyright (c) 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,15 +21,18 @@
 
 struct controller_ctx;
 struct hmap;
+struct ldatapath_index;
+struct lport_index;
 struct ovsdb_idl;
 struct ovsrec_bridge;
-struct simap;
+struct sbrec_chassis;
 struct sset;
 
 void binding_register_ovs_idl(struct ovsdb_idl *);
 void binding_run(struct controller_ctx *, const struct ovsrec_bridge *br_int,
-                 const char *chassis_id, struct hmap *local_datapaths,
+                 const struct sbrec_chassis *, const struct ldatapath_index *,
+                 const struct lport_index *, struct hmap *local_datapaths,
                  struct sset *all_lports);
-bool binding_cleanup(struct controller_ctx *, const char *chassis_id);
+bool binding_cleanup(struct controller_ctx *, const struct sbrec_chassis *);
 
 #endif /* ovn/binding.h */

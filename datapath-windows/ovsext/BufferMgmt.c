@@ -1219,7 +1219,7 @@ FixSegmentHeader(PNET_BUFFER nb, UINT16 segmentSize, UINT32 seqNumber,
 
 /*
  * --------------------------------------------------------------------------
- * OvsTcpSegmentyNBL --
+ * OvsTcpSegmentNBL --
  *
  *    Segment TCP payload, and prepend each segment with ether/IP/TCP header.
  *    Leave headRoom for additional encap.
@@ -1541,27 +1541,27 @@ OvsCompleteNBL(POVS_SWITCH_CONTEXT context,
     }
 
     if (flags & (OVS_BUFFER_PRIVATE_MDL | OVS_BUFFER_PRIVATE_DATA)) {
-        PNET_BUFFER nb = NET_BUFFER_LIST_FIRST_NB(nbl);
-        while (nb) {
-            PMDL mdl = NET_BUFFER_FIRST_MDL(nb);
-            NET_BUFFER_FIRST_MDL(nb) = NULL;
+        PNET_BUFFER nbTemp = NET_BUFFER_LIST_FIRST_NB(nbl);
+        while (nbTemp) {
+            PMDL mdl = NET_BUFFER_FIRST_MDL(nbTemp);
+            NET_BUFFER_FIRST_MDL(nbTemp) = NULL;
             ASSERT(mdl->Next == NULL);
             OvsFreeMDLAndData(mdl);
-            nb = NET_BUFFER_NEXT_NB(nb);
+            nbTemp = NET_BUFFER_NEXT_NB(nbTemp);
         }
     }
 
     if (flags & OVS_BUFFER_PRIVATE_NET_BUFFER) {
-        PNET_BUFFER nb, nextNb;
+        PNET_BUFFER nbTemp, nextNb;
 
-        nb = NET_BUFFER_LIST_FIRST_NB(nbl);
-        while (nb) {
-            nextNb = NET_BUFFER_NEXT_NB(nb);
-            NdisFreeNetBuffer(nb);
+        nbTemp = NET_BUFFER_LIST_FIRST_NB(nbl);
+        while (nbTemp) {
+            nextNb = NET_BUFFER_NEXT_NB(nbTemp);
+            NdisFreeNetBuffer(nbTemp);
 #ifdef DBG
             InterlockedDecrement((LONG volatile *)&ovsPool->nbCount);
 #endif
-            nb = nextNb;
+            nbTemp = nextNb;
         }
         NET_BUFFER_LIST_FIRST_NB(nbl) = NULL;
     }

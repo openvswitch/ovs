@@ -320,7 +320,7 @@ static struct sk_buff **vxlan_gro_receive(struct sk_buff **head,
 
 	flags = vh->vx_flags;
 
-	if ((flags & VXLAN_HF_RCO) && (vs->flags & VXLAN_F_REMCSUM_RX)) {
+	if ((flags & VXLAN_HF_RCO) && vs && (vs->flags & VXLAN_F_REMCSUM_RX)) {
 		vh = vxlan_gro_remcsum(skb, off_vx, vh, sizeof(struct vxlanhdr),
 				       vh->vx_vni, &grc,
 				       !!(vs->flags &

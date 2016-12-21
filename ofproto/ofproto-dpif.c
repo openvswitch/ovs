@@ -144,6 +144,8 @@ struct ofbundle {
     struct bond *bond;          /* Nonnull iff more than one port. */
     bool use_priority_tags;     /* Use 802.1p tag for frames in VLAN 0? */
 
+    bool protected;             /* Protected port mode */
+
     /* Status. */
     bool floodable;          /* True if no port has OFPUTIL_PC_NO_FLOOD set. */
 };
@@ -620,7 +622,7 @@ type_run(const char *type)
                                  bundle->vlan_mode, bundle->vlan,
                                  bundle->trunks, bundle->use_priority_tags,
                                  bundle->bond, bundle->lacp,
-                                 bundle->floodable);
+                                 bundle->floodable, bundle->protected);
             }
 
             HMAP_FOR_EACH (ofport, up.hmap_node, &ofproto->up.ports) {
@@ -2909,6 +2911,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         bundle->bond = NULL;
 
         bundle->floodable = true;
+        bundle->protected = false;
         mbridge_register_bundle(ofproto->mbridge, bundle);
     }
 
@@ -3040,6 +3043,12 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     } else {
         bond_unref(bundle->bond);
         bundle->bond = NULL;
+    }
+
+    /* Set proteced port mode */
+    if (s->protected != bundle->protected) {
+        bundle->protected = s->protected;
+        need_flush = true;
     }
 
     /* If we changed something that would affect MAC learning, un-learn

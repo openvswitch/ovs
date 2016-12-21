@@ -1,6 +1,6 @@
 # -*- autoconf -*-
 
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -134,10 +134,10 @@ AC_DEFUN([OVS_CHECK_LINUX], [
     AC_MSG_RESULT([$kversion])
 
     if test "$version" -ge 4; then
-       if test "$version" = 4 && test "$patchlevel" -le 8; then
+       if test "$version" = 4 && test "$patchlevel" -le 9; then
           : # Linux 4.x
        else
-          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.8.x is not supported (please refer to the FAQ for advice)])
+          AC_ERROR([Linux kernel in $KBUILD is version $kversion, but version newer than 4.9.x is not supported (please refer to the FAQ for advice)])
        fi
     elif test "$version" = 3 && test "$patchlevel" -ge 10; then
        : # Linux 3.x
@@ -458,6 +458,11 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_FIELD_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frag_queue],
                         [list_evictor])
   OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [inet_frag_lru_move])
+  OVS_FIND_PARAM_IFELSE([$KSRC/include/net/inet_frag.h],
+                        [sub_frag_mem_limit], [struct.netns_frags],
+                        [OVS_DEFINE([HAVE_SUB_FRAG_MEM_LIMIT_ARG_STRUCT_NETNS_FRAGS])])
+  OVS_GREP_IFELSE([$KSRC/include/net/inet_frag.h], [void.*inet_frags_init],
+                  [OVS_DEFINE([HAVE_VOID_INET_FRAGS_INIT])])
   OVS_GREP_IFELSE([$KSRC/include/net/inetpeer.h], [vif],
                   [OVS_DEFINE([HAVE_INETPEER_VIF_SUPPORT])])
 
@@ -500,6 +505,8 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
                   [OVS_DEFINE([HAVE_UDP_OFFLOAD_ARG_UOFF])])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [gro_remcsum])
   OVS_GREP_IFELSE([$KSRC/include/linux/netdevice.h], [IFF_PHONY_HEADROOM])
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netdevice.h], [net_device_ops],
+                        [extended])
   OVS_FIND_PARAM_IFELSE([$KSRC/include/linux/netdevice.h],
                         [netdev_master_upper_dev_link], [upper_priv],
                         [OVS_DEFINE([HAVE_NETDEV_MASTER_UPPER_DEV_LINK_PRIV])])
@@ -768,7 +775,7 @@ dnl gives unlimited permission to copy and/or distribute it,
 dnl with or without modifications, as long as this notice is preserved.
 
 AC_DEFUN([_OVS_CHECK_CC_OPTION], [dnl
-  m4_define([ovs_cv_name], [ovs_cv_[]m4_translit([$1], [-=], [__])])dnl
+  m4_define([ovs_cv_name], [ovs_cv_[]m4_translit([$1], [-= ], [__])])dnl
   AC_CACHE_CHECK([whether $CC accepts $1], [ovs_cv_name], 
     [ovs_save_CFLAGS="$CFLAGS"
      dnl Include -Werror in the compiler options, because without -Werror
@@ -784,7 +791,15 @@ AC_DEFUN([_OVS_CHECK_CC_OPTION], [dnl
      dnl    0
      dnl    %
      CFLAGS="$CFLAGS $WERROR $1"
-     AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,)], [if test -s conftest.err && grep "unrecognized option" conftest.err; then ovs_cv_name[]=no; else ovs_cv_name[]=yes; fi], [ovs_cv_name[]=no])
+     AC_COMPILE_IFELSE(
+       [AC_LANG_SOURCE([int x;])],
+       [if test -s conftest.err && grep "unrecognized option" conftest.err
+        then
+          ovs_cv_name[]=no
+        else
+          ovs_cv_name[]=yes
+        fi],
+       [ovs_cv_name[]=no])
      CFLAGS="$ovs_save_CFLAGS"])
   if test $ovs_cv_name = yes; then
     m4_if([$2], [], [:], [$2])

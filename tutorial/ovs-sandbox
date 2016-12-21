@@ -69,6 +69,7 @@ built=false
 ovn=false
 ovnsb_schema=
 ovnnb_schema=
+dummy=override
 
 for option; do
     # This option-parsing mechanism borrowed from a Autoconf-generated
@@ -112,6 +113,7 @@ These options force ovs-sandbox to use an installed Open vSwitch:
   --gdb-ovn-northd     run ovn-northd under gdb
   --gdb-ovn-controller run ovn-controller under gdb
   --gdb-ovn-controller-vtep run ovn-controller-vtep under gdb
+  --dummy=ARG          pass --enable-dummy=ARG to vswitchd (default: override)
   -R, --gdb-run        automatically start running the daemon in gdb
                        for any daemon set to run under gdb
   -S, --schema=FILE    use FILE as vswitch.ovsschema
@@ -134,6 +136,12 @@ EOF
         --sr*=*)
             srcdir=$optarg
             built=false
+            ;;
+        --dummy)
+            prev=dummy
+            ;;
+        --dummy=*)
+            dummy=$optarg
             ;;
         -s|--sr*)
             prev=srcdir
@@ -223,7 +231,7 @@ if $built; then
     case $srcdir in
         '')
             srcdir=$builddir
-            if test ! -e "$srcdir"/WHY-OVS.rst; then
+            if test ! -e "$srcdir"/README.rst; then
                 srcdir=`cd $builddir/.. && pwd`
             fi
             ;;
@@ -361,7 +369,7 @@ run ovs-vsctl --no-wait -- init
 
 # Start ovs-vswitchd.
 rungdb $gdb_vswitchd $gdb_vswitchd_ex ovs-vswitchd --detach --no-chdir --pidfile -vconsole:off --log-file \
-    --enable-dummy=override -vvconn -vnetdev_dummy
+    --enable-dummy=$dummy -vvconn -vnetdev_dummy
 
 if $ovn; then
     ovs-vsctl set open . external-ids:system-id=56b18105-5706-46ef-80c4-ff20979ab068

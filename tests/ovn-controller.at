@@ -86,68 +86,36 @@ check_patches \
     'br-int  patch-br-int-to-localnet2 patch-localnet2-to-br-int' \
     'br-eth0 patch-localnet2-to-br-int patch-br-int-to-localnet2'
 
-# Add logical patch ports.
+# Add logical patch ports to connect new logical datapath.
+#
+# OVN no longer uses OVS patch ports to implement logical patch ports, so
+# the set of OVS patch ports doesn't change.
 AT_CHECK([ovn-sbctl \
     -- --id=@dp1 create Datapath_Binding tunnel_key=1 \
     -- --id=@dp2 create Datapath_Binding tunnel_key=2 \
     -- create Port_Binding datapath=@dp1 logical_port=foo tunnel_key=1 type=patch options:peer=bar \
     -- create Port_Binding datapath=@dp2 logical_port=bar tunnel_key=2 type=patch options:peer=foo \
+    -- create Port_Binding datapath=@dp1 logical_port=dp1vif tunnel_key=3 \
 | ${PERL} $srcdir/uuidfilt.pl], [0], [<0>
 <1>
 <2>
 <3>
+<4>
 ])
+ovs-vsctl add-port br-int dp1vif -- set Interface dp1vif external_ids:iface-id=dp1vif
 check_patches \
     'br-int  patch-br-int-to-localnet2 patch-localnet2-to-br-int' \
-    'br-eth0 patch-localnet2-to-br-int patch-br-int-to-localnet2' \
-    'br-int  patch-foo-to-bar        patch-bar-to-foo' \
-    'br-int  patch-bar-to-foo        patch-foo-to-bar'
+    'br-eth0 patch-localnet2-to-br-int patch-br-int-to-localnet2'
 
-# Delete the mapping and the ovn-bridge-mapping patch ports should go away;
-# the ones from the logical patch port remain.
+# Delete the mapping and the ovn-bridge-mapping patch ports should go away.
 AT_CHECK([ovs-vsctl remove Open_vSwitch . external-ids ovn-bridge-mappings])
 check_bridge_mappings
-check_patches \
-    'br-int patch-foo-to-bar patch-bar-to-foo' \
-    'br-int patch-bar-to-foo patch-foo-to-bar'
-
-# Change name of logical patch port, check that the OVS patch ports
-# get updated.
-AT_CHECK([ovn-sbctl \
-    -- set Port_Binding foo logical_port=quux options:peer=baz \
-    -- set Port_Binding bar logical_port=baz  options:peer=quux])
-check_patches \
-    'br-int patch-quux-to-baz patch-baz-to-quux' \
-    'br-int patch-baz-to-quux patch-quux-to-baz'
-
-# Create an empty database, serve it and switch to it
-# and verify that the OVS patch ports disappear
-# then put it back and verify that they reappear
-
-on_exit 'kill `cat $ovs_base/ovn-sb/ovsdb-server-2.pid`'
-
-ovsdb-tool create $ovs_base/ovn-sb/ovn-sb1.db "$abs_top_srcdir"/ovn/ovn-sb.ovsschema
-as ovn-sb ovsdb-server --detach --pidfile=$ovs_base/ovn-sb/ovsdb-server-2.pid --remote=punix:$ovs_base/ovn-sb/ovn-sb1.sock $ovs_base/ovn-sb/ovn-sb1.db \
-   --unixctl=$ovs_base/ovn-sb/ovsdb-server-2.ctl
-AT_CHECK([ovs-vsctl -- set Open_vSwitch . external-ids:ovn-remote=unix:$ovs_base/ovn-sb/ovn-sb1.sock])
-check_patches
-AT_CHECK([ovs-vsctl -- set Open_vSwitch . external-ids:ovn-remote=unix:$ovs_base/ovn-sb/ovn-sb.sock])
-check_patches \
-    'br-int patch-quux-to-baz patch-baz-to-quux' \
-    'br-int patch-baz-to-quux patch-quux-to-baz'
-
-# Change the logical patch ports to VIFs and verify that the OVS patch
-# ports disappear.
-AT_CHECK([ovn-sbctl \
-    -- set Port_Binding quux type='""' options='{}' \
-    -- set Port_Binding baz type='""' options='{}'])
 check_patches
 
 # Gracefully terminate daemons
 OVN_CLEANUP_SBOX([hv])
 OVN_CLEANUP_VSWITCH([main])
 as ovn-sb
-OVS_APP_EXIT_AND_WAIT_BY_TARGET([$ovs_base/ovn-sb/ovsdb-server-2.ctl], [$ovs_base/ovn-sb/ovsdb-server-2.pid])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP

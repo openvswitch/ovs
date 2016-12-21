@@ -102,11 +102,6 @@ struct ovsdb_idl_table_class {
     void (*row_init)(struct ovsdb_idl_row *);
 };
 
-struct ovsdb_idl_condition {
-    const struct ovsdb_idl_table_class *tc;
-    struct ovs_list clauses;
-};
-
 struct ovsdb_idl_table {
     const struct ovsdb_idl_table_class *class;
     unsigned char *modes;    /* OVSDB_IDL_* bitmasks, indexed by column. */

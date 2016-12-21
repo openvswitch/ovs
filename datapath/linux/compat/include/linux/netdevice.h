@@ -122,10 +122,11 @@ int rpl_dev_queue_xmit(struct sk_buff *skb);
 #endif
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3,11,0)
-static inline struct net_device *netdev_notifier_info_to_dev(void *info)
+static inline struct net_device *rpl_netdev_notifier_info_to_dev(void *info)
 {
 	return info;
 }
+#define netdev_notifier_info_to_dev rpl_netdev_notifier_info_to_dev
 #endif
 
 #ifndef HAVE_PCPU_SW_NETSTATS

@@ -395,8 +395,8 @@ udpif_init(void)
                                  upcall_unixctl_disable_ufid, NULL);
         unixctl_command_register("upcall/enable-ufid", "", 0, 0,
                                  upcall_unixctl_enable_ufid, NULL);
-        unixctl_command_register("upcall/set-flow-limit", "", 1, 1,
-                                 upcall_unixctl_set_flow_limit, NULL);
+        unixctl_command_register("upcall/set-flow-limit", "flow-limit-number",
+                                 1, 1, upcall_unixctl_set_flow_limit, NULL);
         unixctl_command_register("revalidator/wait", "", 0, 0,
                                  upcall_unixctl_dump_wait, NULL);
         unixctl_command_register("revalidator/purge", "", 0, 0,
@@ -1227,7 +1227,7 @@ upcall_cb(const struct dp_packet *packet, const struct flow *flow, ovs_u128 *ufi
                    upcall.put_actions.size);
     }
 
-    if (OVS_UNLIKELY(!megaflow)) {
+    if (OVS_UNLIKELY(!megaflow && wc)) {
         flow_wildcards_init_for_packet(wc, flow);
     }
 
@@ -1504,7 +1504,7 @@ ukey_create_from_upcall(struct upcall *upcall, struct flow_wildcards *wc)
     bool megaflow;
     struct odp_flow_key_parms odp_parms = {
         .flow = upcall->flow,
-        .mask = &wc->masks,
+        .mask = wc ? &wc->masks : NULL,
     };
 
     odp_parms.support = ofproto_dpif_get_support(upcall->ofproto)->odp;
@@ -1519,7 +1519,7 @@ ukey_create_from_upcall(struct upcall *upcall, struct flow_wildcards *wc)
 
     atomic_read_relaxed(&enable_megaflows, &megaflow);
     ofpbuf_use_stack(&maskbuf, &maskstub, sizeof maskstub);
-    if (megaflow) {
+    if (megaflow && wc) {
         odp_parms.key_buf = &keybuf;
         odp_flow_key_from_mask(&odp_parms, &maskbuf);
     }

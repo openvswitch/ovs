@@ -425,16 +425,16 @@ netdev_windows_get_next_hop(const struct in_addr *host,
 {
     uint32_t ret_val = 0;
     /* The buffer length of all addresses */
-    uint32_t buffer_length = 1000;
+    uint32_t buffer_length = 0;
     PIP_ADAPTER_ADDRESSES all_addr = NULL;
     PIP_ADAPTER_ADDRESSES cur_addr = NULL;
 
     ret_val = GetAdaptersAddresses(AF_INET,
                                    GAA_FLAG_INCLUDE_PREFIX |
                                    GAA_FLAG_INCLUDE_GATEWAYS,
-                                   NULL, all_addr, &buffer_length);
+                                   NULL, NULL, &buffer_length);
 
-    if (ret_val != ERROR_INSUFFICIENT_BUFFER ) {
+    if (ret_val != ERROR_BUFFER_OVERFLOW ) {
         VLOG_ERR("Call to GetAdaptersAddresses failed with error: %s",
                  ovs_format_message(ret_val));
         return ENXIO;

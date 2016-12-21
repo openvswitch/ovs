@@ -1,0 +1,24 @@
+#!/bin/sh
+# postinst script for ovn-common
+#
+# see: dh_installdeb(1)
+
+set -e
+
+case "$1" in
+    configure)
+        mkdir -p /usr/lib/ocf/resource.d/ovn
+        ln -sf /usr/share/openvswitch/scripts/ovndb-servers.ocf /usr/lib/ocf/resource.d/ovn/ovndb-servers
+        ;;
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

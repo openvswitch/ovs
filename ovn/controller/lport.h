@@ -22,8 +22,37 @@
 struct ovsdb_idl;
 struct sbrec_datapath_binding;
 
-/* Logical port and multicast group indexes
- * ========================================
+/* Database indexes.
+ * =================
+ *
+ * If the database IDL were a little smarter, it would allow us to directly
+ * look up data based on values of its fields.  It's not that smart (yet), so
+ * instead we define our own indexes.
+ */
+
+/* Logical datapath index
+ * ======================
+ */
+
+struct ldatapath {
+    struct hmap_node by_key_node; /* Index by tunnel key. */
+    const struct sbrec_datapath_binding *db;
+    const struct sbrec_port_binding **lports;
+    size_t n_lports, allocated_lports;
+};
+
+struct ldatapath_index {
+    struct hmap by_key;
+};
+
+void ldatapath_index_init(struct ldatapath_index *, struct ovsdb_idl *);
+void ldatapath_index_destroy(struct ldatapath_index *);
+
+const struct ldatapath *ldatapath_lookup_by_key(
+    const struct ldatapath_index *, uint32_t dp_key);
+
+/* Logical port index
+ * ==================
  *
  * This data structure holds multiple indexes over logical ports, to allow for
  * efficient searching for logical ports by name or number.

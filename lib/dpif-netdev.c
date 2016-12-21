@@ -1498,18 +1498,30 @@ get_n_pmd_threads_on_numa(struct dp_netdev *dp, int numa_id)
     return n_pmds;
 }
 
-/* Returns 'true' if there is a port with pmd netdev and the netdev
- * is on numa node 'numa_id'. */
+/* Returns 'true' if there is a port with pmd netdev and the netdev is on
+ * numa node 'numa_id' or its rx queue assigned to core on that numa node . */
 static bool
-has_pmd_port_for_numa(struct dp_netdev *dp, int numa_id)
+has_pmd_rxq_for_numa(struct dp_netdev *dp, int numa_id)
     OVS_REQUIRES(dp->port_mutex)
 {
     struct dp_netdev_port *port;
 
     HMAP_FOR_EACH (port, node, &dp->ports) {
-        if (netdev_is_pmd(port->netdev)
-            && netdev_get_numa_id(port->netdev) == numa_id) {
-            return true;
+        if (netdev_is_pmd(port->netdev)) {
+            int i;
+
+            if (netdev_get_numa_id(port->netdev) == numa_id) {
+                return true;
+            }
+
+            for (i = 0; i < port->n_rxq; i++) {
+                unsigned core_id = port->rxqs[i].core_id;
+
+                if (core_id != -1
+                    && ovs_numa_get_numa_id(core_id) == numa_id) {
+                    return true;
+                }
+            }
         }
     }
 
@@ -1533,7 +1545,7 @@ do_del_port(struct dp_netdev *dp, struct dp_netdev_port *port)
         ovs_assert(ovs_numa_numa_id_is_valid(numa_id));
         /* If there is no netdev on the numa node, deletes the pmd threads
          * for that numa. */
-        if (!has_pmd_port_for_numa(dp, numa_id)) {
+        if (!has_pmd_rxq_for_numa(dp, numa_id)) {
             dp_netdev_del_pmds_on_numa(dp, numa_id);
         }
     }
@@ -2263,7 +2275,7 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     netdev_flow_key_init_masked(&flow->cr.flow, &match->flow, &mask);
 
     /* Select dpcls for in_port. Relies on in_port to be exact match */
-    ovs_assert(match->wc.masks.in_port.odp_port == ODP_PORT_C(UINT32_MAX));
+    ovs_assert(match->wc.masks.in_port.odp_port == ODPP_NONE);
     cls = dp_netdev_pmd_find_dpcls(pmd, in_port);
     dpcls_insert(cls, &flow->cr, &mask);
 
@@ -3400,7 +3412,7 @@ dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id)
         /* We cannot call dp_netdev_del_pmd(), since it alters
          * 'dp->poll_threads' (while we're iterating it) and it
          * might quiesce. */
-        if (pmd->numa_id == numa_id) {
+        if (pmd->numa_id == numa_id && pmd->core_id != NON_PMD_CORE_ID) {
             atomic_read_relaxed(&pmd->static_tx_qid, &free_idx[k]);
             pmd_list[k] = pmd;
             ovs_assert(k < n_pmds_on_numa);
@@ -3418,7 +3430,7 @@ dp_netdev_del_pmds_on_numa(struct dp_netdev *dp, int numa_id)
 
         atomic_read_relaxed(&pmd->static_tx_qid, &old_tx_qid);
 
-        if (old_tx_qid >= n_pmds) {
+        if (old_tx_qid >= n_pmds && pmd->core_id != NON_PMD_CORE_ID) {
             int new_tx_qid = free_idx[--k];
 
             atomic_store_relaxed(&pmd->static_tx_qid, new_tx_qid);
@@ -3738,9 +3750,27 @@ dp_netdev_reset_pmd_threads(struct dp_netdev *dp)
 
     HMAP_FOR_EACH (port, node, &dp->ports) {
         if (netdev_is_pmd(port->netdev)) {
-            int numa_id = netdev_get_numa_id(port->netdev);
+            struct hmapx numas = HMAPX_INITIALIZER(&numas);
+            struct hmapx_node *numa_node;
+            uintptr_t numa_id;
+            int i;
 
-            dp_netdev_set_pmds_on_numa(dp, numa_id);
+            numa_id = netdev_get_numa_id(port->netdev);
+            hmapx_add(&numas, (void *) numa_id);
+            for (i = 0; i < port->n_rxq; i++) {
+                unsigned core_id = port->rxqs[i].core_id;
+
+                if (core_id != -1) {
+                    numa_id = ovs_numa_get_numa_id(core_id);
+                    hmapx_add(&numas, (void *) numa_id);
+                }
+            }
+
+            HMAPX_FOR_EACH (numa_node, &numas) {
+                dp_netdev_set_pmds_on_numa(dp, (uintptr_t) numa_node->data);
+            }
+
+            hmapx_destroy(&numas);
         }
         /* Distribute only pinned rx queues first to mark threads as isolated */
         dp_netdev_add_port_rx_to_pmds(dp, port, &to_reload, true);
@@ -3804,7 +3834,7 @@ dp_netdev_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet_,
         struct ofpbuf key;
         struct odp_flow_key_parms odp_parms = {
             .flow = flow,
-            .mask = &wc->masks,
+            .mask = wc ? &wc->masks : NULL,
             .support = dp_netdev_support,
         };
 
@@ -4380,7 +4410,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
 
     switch ((enum ovs_action_attr)type) {
     case OVS_ACTION_ATTR_OUTPUT:
-        p = pmd_tx_port_cache_lookup(pmd, u32_to_odp(nl_attr_get_u32(a)));
+        p = pmd_tx_port_cache_lookup(pmd, nl_attr_get_odp_port(a));
         if (OVS_LIKELY(p)) {
             int tx_qid;
             bool dynamic_txqs;
@@ -4425,7 +4455,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
     case OVS_ACTION_ATTR_TUNNEL_POP:
         if (*depth < MAX_RECIRC_DEPTH) {
             struct dp_packet_batch *orig_packets_ = packets_;
-            odp_port_t portno = u32_to_odp(nl_attr_get_u32(a));
+            odp_port_t portno = nl_attr_get_odp_port(a);
 
             p = pmd_tx_port_cache_lookup(pmd, portno);
             if (p) {
@@ -4994,23 +5024,21 @@ dpcls_lookup(struct dpcls *cls, const struct netdev_flow_key keys[],
              int *num_lookups_p)
 {
     /* The received 'cnt' miniflows are the search-keys that will be processed
-     * in batches of 16 elements.  N_MAPS will contain the number of these
-     * 16-elements batches.  i.e. for 'cnt' = 32, N_MAPS will be 2.  The batch
-     * size 16 was experimentally found faster than 8 or 32. */
-    typedef uint16_t map_type;
+     * to find a matching entry into the available subtables.
+     * The number of bits in map_type is equal to NETDEV_MAX_BURST. */
+    typedef uint32_t map_type;
 #define MAP_BITS (sizeof(map_type) * CHAR_BIT)
+    BUILD_ASSERT_DECL(MAP_BITS >= NETDEV_MAX_BURST);
 
-#if !defined(__CHECKER__) && !defined(_WIN32)
-    const int N_MAPS = DIV_ROUND_UP(cnt, MAP_BITS);
-#else
-    enum { N_MAPS = DIV_ROUND_UP(NETDEV_MAX_BURST, MAP_BITS) };
-#endif
-    map_type maps[N_MAPS];
     struct dpcls_subtable *subtable;
 
-    memset(maps, 0xff, sizeof maps);
-    if (cnt % MAP_BITS) {
-        maps[N_MAPS - 1] >>= MAP_BITS - cnt % MAP_BITS; /* Clear extra bits. */
+    map_type keys_map = TYPE_MAXIMUM(map_type); /* Set all bits. */
+    map_type found_map;
+    uint32_t hashes[MAP_BITS];
+    const struct cmap_node *nodes[MAP_BITS];
+
+    if (cnt != MAP_BITS) {
+        keys_map >>= MAP_BITS - cnt; /* Clear extra bits. */
     }
     memset(rules, 0, cnt * sizeof *rules);
 
@@ -5024,61 +5052,43 @@ dpcls_lookup(struct dpcls *cls, const struct netdev_flow_key keys[],
      * search-key, the search for that key can stop because the rules are
      * non-overlapping. */
     PVECTOR_FOR_EACH (subtable, &cls->subtables) {
-        const struct netdev_flow_key *mkeys = keys;
-        struct dpcls_rule **mrules = rules;
-        map_type remains = 0;
-        int m;
+        int i;
 
-        BUILD_ASSERT_DECL(sizeof remains == sizeof *maps);
-
-        /* Loops on each batch of 16 search-keys. */
-        for (m = 0; m < N_MAPS; m++, mkeys += MAP_BITS, mrules += MAP_BITS) {
-            uint32_t hashes[MAP_BITS];
-            const struct cmap_node *nodes[MAP_BITS];
-            unsigned long map = maps[m];
-            int i;
-
-            if (!map) {
-                continue; /* Skip empty maps. */
-            }
-
-            /* Compute hashes for the remaining keys.  Each search-key is
-             * masked with the subtable's mask to avoid hashing the wildcarded
-             * bits. */
-            ULLONG_FOR_EACH_1(i, map) {
-                hashes[i] = netdev_flow_key_hash_in_mask(&mkeys[i],
-                                                         &subtable->mask);
-            }
-            /* Lookup. */
-            map = cmap_find_batch(&subtable->rules, map, hashes, nodes);
-            /* Check results.  When the i-th bit of map is set, it means that a
-             * set of nodes with a matching hash value was found for the i-th
-             * search-key.  Due to possible hash collisions we need to check
-             * which of the found rules, if any, really matches our masked
-             * search-key. */
-            ULLONG_FOR_EACH_1(i, map) {
-                struct dpcls_rule *rule;
-
-                CMAP_NODE_FOR_EACH (rule, cmap_node, nodes[i]) {
-                    if (OVS_LIKELY(dpcls_rule_matches_key(rule, &mkeys[i]))) {
-                        mrules[i] = rule;
-                        /* Even at 20 Mpps the 32-bit hit_cnt cannot wrap
-                         * within one second optimization interval  */
-                        subtable->hit_cnt++;
-                        lookups_match += subtable_pos;
-                        goto next;
-                    }
-                }
-                /* None of the found rules was a match. Reset the i-th bit to
-                 * keep searching in the next subtable. */
-                ULLONG_SET0(map, i);  /* Did not match. */
-            next:
-                ;                     /* Keep Sparse happy. */
-            }
-            maps[m] &= ~map;          /* Clear the found rules. */
-            remains |= maps[m];
+        /* Compute hashes for the remaining keys.  Each search-key is
+         * masked with the subtable's mask to avoid hashing the wildcarded
+         * bits. */
+        ULLONG_FOR_EACH_1(i, keys_map) {
+            hashes[i] = netdev_flow_key_hash_in_mask(&keys[i],
+                                                     &subtable->mask);
         }
-        if (!remains) {
+        /* Lookup. */
+        found_map = cmap_find_batch(&subtable->rules, keys_map, hashes, nodes);
+        /* Check results.  When the i-th bit of found_map is set, it means
+         * that a set of nodes with a matching hash value was found for the
+         * i-th search-key.  Due to possible hash collisions we need to check
+         * which of the found rules, if any, really matches our masked
+         * search-key. */
+        ULLONG_FOR_EACH_1(i, found_map) {
+            struct dpcls_rule *rule;
+
+            CMAP_NODE_FOR_EACH (rule, cmap_node, nodes[i]) {
+                if (OVS_LIKELY(dpcls_rule_matches_key(rule, &keys[i]))) {
+                    rules[i] = rule;
+                    /* Even at 20 Mpps the 32-bit hit_cnt cannot wrap
+                     * within one second optimization interval. */
+                    subtable->hit_cnt++;
+                    lookups_match += subtable_pos;
+                    goto next;
+                }
+            }
+            /* None of the found rules was a match.  Reset the i-th bit to
+             * keep searching this key in the next subtable. */
+            ULLONG_SET0(found_map, i);  /* Did not match. */
+        next:
+            ;                     /* Keep Sparse happy. */
+        }
+        keys_map &= ~found_map;             /* Clear the found rules. */
+        if (!keys_map) {
             if (num_lookups_p) {
                 *num_lookups_p = lookups_match;
             }

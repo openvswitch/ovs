@@ -506,6 +506,8 @@ ofputil_capabilities_to_name(uint32_t bit)
     case OFPUTIL_C_STP:          return "STP";
     case OFPUTIL_C_GROUP_STATS:  return "GROUP_STATS";
     case OFPUTIL_C_PORT_BLOCKED: return "PORT_BLOCKED";
+    case OFPUTIL_C_BUNDLES:      return "BUNDLES";
+    case OFPUTIL_C_FLOW_MONITORING: return "FLOW_MONITORING";
     }
 
     return NULL;
@@ -1261,6 +1263,7 @@ ofp_print_queue_get_config_reply(struct ds *string,
         ofp_print_error(string, retval);
     }
     ds_chomp(string, ' ');
+    free(queues);
 }
 
 static void

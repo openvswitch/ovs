@@ -30,7 +30,7 @@ extern "C" {
  *
  * Every port on a switch must have a corresponding netdev that must minimally
  * support a few operations, such as the ability to read the netdev's MTU.
- * The PORTING file at the top of the source tree has more information in the
+ * The Porting section of the documentation has more information in the
  * "Writing a netdev Provider" section.
  *
  * Thread-safety

@@ -859,6 +859,15 @@ dpif_ipfix_flow_exporter_set_options(
     return true;
 }
 
+static void
+remove_flow_exporter(struct dpif_ipfix *di,
+                     struct dpif_ipfix_flow_exporter_map_node *node)
+{
+    hmap_remove(&di->flow_exporter_map, &node->node);
+    dpif_ipfix_flow_exporter_destroy(&node->exporter);
+    free(node);
+}
+
 void
 dpif_ipfix_set_options(
     struct dpif_ipfix *di,
@@ -869,7 +878,6 @@ dpif_ipfix_set_options(
     int i;
     struct ofproto_ipfix_flow_exporter_options *options;
     struct dpif_ipfix_flow_exporter_map_node *node, *next;
-    size_t n_broken_flow_exporters_options = 0;
 
     ovs_mutex_lock(&mutex);
     dpif_ipfix_bridge_exporter_set_options(&di->bridge_exporter,
@@ -888,38 +896,29 @@ dpif_ipfix_set_options(
                         hash_int(options->collector_set_id, 0));
         }
         if (!dpif_ipfix_flow_exporter_set_options(&node->exporter, options)) {
-            n_broken_flow_exporters_options++;
+            remove_flow_exporter(di, node);
         }
         options++;
     }
 
-    ovs_assert(hmap_count(&di->flow_exporter_map) >=
-               (n_flow_exporters_options - n_broken_flow_exporters_options));
-
     /* Remove dropped flow exporters, if any needs to be removed. */
-    if (hmap_count(&di->flow_exporter_map) > n_flow_exporters_options) {
-        HMAP_FOR_EACH_SAFE (node, next, node, &di->flow_exporter_map) {
-            /* This is slow but doesn't take any extra memory, and
-             * this table is not supposed to contain many rows anyway. */
-            options = (struct ofproto_ipfix_flow_exporter_options *)
-                flow_exporters_options;
-            for (i = 0; i < n_flow_exporters_options; i++) {
-              if (node->exporter.options->collector_set_id
-                  == options->collector_set_id) {
-                  break;
-              }
-              options++;
+    HMAP_FOR_EACH_SAFE (node, next, node, &di->flow_exporter_map) {
+        /* This is slow but doesn't take any extra memory, and
+         * this table is not supposed to contain many rows anyway. */
+        options = (struct ofproto_ipfix_flow_exporter_options *)
+            flow_exporters_options;
+        for (i = 0; i < n_flow_exporters_options; i++) {
+            if (node->exporter.options->collector_set_id
+                == options->collector_set_id) {
+                break;
             }
-            if (i == n_flow_exporters_options) {  // Not found.
-                hmap_remove(&di->flow_exporter_map, &node->node);
-                dpif_ipfix_flow_exporter_destroy(&node->exporter);
-                free(node);
-            }
+            options++;
+        }
+        if (i == n_flow_exporters_options) {  // Not found.
+            remove_flow_exporter(di, node);
         }
     }
 
-    ovs_assert(hmap_count(&di->flow_exporter_map) ==
-               (n_flow_exporters_options - n_broken_flow_exporters_options));
     ovs_mutex_unlock(&mutex);
 }
 
@@ -1562,6 +1561,7 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
                        const struct dp_packet *packet, const struct flow *flow,
                        uint64_t packet_delta_count, uint32_t obs_domain_id,
                        uint32_t obs_point_id, odp_port_t output_odp_port,
+                       enum nx_action_sample_direction direction,
                        const struct dpif_ipfix_port *tunnel_port,
                        const struct flow_tnl *tunnel_key)
 {
@@ -1648,7 +1648,9 @@ ipfix_cache_entry_init(struct ipfix_flow_cache_entry *entry,
         data_common = dp_packet_put_zeros(&msg, sizeof *data_common);
         data_common->observation_point_id = htonl(obs_point_id);
         data_common->flow_direction =
-            (output_odp_port == ODPP_NONE) ? INGRESS_FLOW : EGRESS_FLOW;
+            (direction == NX_ACTION_SAMPLE_INGRESS ? INGRESS_FLOW
+             : direction == NX_ACTION_SAMPLE_EGRESS ? EGRESS_FLOW
+             : output_odp_port == ODPP_NONE ? INGRESS_FLOW : EGRESS_FLOW);
         data_common->source_mac_address = flow->dl_src;
         data_common->destination_mac_address = flow->dl_dst;
         data_common->ethernet_type = flow->dl_type;
@@ -1884,6 +1886,7 @@ dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
                   const struct dp_packet *packet, const struct flow *flow,
                   uint64_t packet_delta_count, uint32_t obs_domain_id,
                   uint32_t obs_point_id, odp_port_t output_odp_port,
+                  enum nx_action_sample_direction direction,
                   const struct dpif_ipfix_port *tunnel_port,
                   const struct flow_tnl *tunnel_key)
 {
@@ -1895,8 +1898,8 @@ dpif_ipfix_sample(struct dpif_ipfix_exporter *exporter,
     sampled_packet_type = ipfix_cache_entry_init(entry, packet,
                                                  flow, packet_delta_count,
                                                  obs_domain_id, obs_point_id,
-                                                 output_odp_port, tunnel_port,
-                                                 tunnel_key);
+                                                 output_odp_port, direction,
+                                                 tunnel_port, tunnel_key);
     ipfix_cache_update(exporter, entry, sampled_packet_type);
 }
 
@@ -1959,7 +1962,8 @@ dpif_ipfix_bridge_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
                       packet_delta_count,
                       di->bridge_exporter.options->obs_domain_id,
                       di->bridge_exporter.options->obs_point_id,
-                      output_odp_port, tunnel_port, tunnel_key);
+                      output_odp_port, NX_ACTION_SAMPLE_DEFAULT,
+                      tunnel_port, tunnel_key);
     ovs_mutex_unlock(&mutex);
 }
 
@@ -2002,7 +2006,8 @@ dpif_ipfix_flow_sample(struct dpif_ipfix *di, const struct dp_packet *packet,
                           packet_delta_count,
                           cookie->flow_sample.obs_domain_id,
                           cookie->flow_sample.obs_point_id,
-                          output_odp_port, tunnel_port, tunnel_key);
+                          output_odp_port, cookie->flow_sample.direction,
+                          tunnel_port, tunnel_key);
     }
     ovs_mutex_unlock(&mutex);
 }

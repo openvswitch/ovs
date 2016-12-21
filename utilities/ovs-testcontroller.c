@@ -259,7 +259,8 @@ parse_options(int argc, char *argv[])
         OPT_UNIXCTL,
         VLOG_OPTION_ENUMS,
         DAEMON_OPTION_ENUMS,
-        OFP_VERSION_OPTION_ENUMS
+        OFP_VERSION_OPTION_ENUMS,
+        SSL_OPTION_ENUMS,
     };
     static const struct option long_options[] = {
         {"hub",         no_argument, NULL, 'H'},

@@ -71,9 +71,7 @@ EXTRA_DIST += ovn/ovn-architecture.7.xml
 DISTCLEANFILES += ovn/ovn-architecture.7
 
 EXTRA_DIST += \
-	ovn/TODO \
-	ovn/CONTAINERS.OpenStack.rst \
-	ovn/OVN-GW-HA.rst
+	ovn/TODO.rst
 
 # Version checking for ovn-nb.ovsschema.
 ALL_LOCAL += ovn/ovn-nb.ovsschema.stamp

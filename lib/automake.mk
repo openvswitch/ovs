@@ -388,7 +388,9 @@ lib_libopenvswitch_la_SOURCES += \
 	lib/netlink-notifier.h \
 	lib/netlink-protocol.h \
 	lib/netlink-socket.c \
-	lib/netlink-socket.h
+	lib/netlink-socket.h \
+	lib/wmi.c \
+	lib/wmi.h
 endif
 
 if HAVE_POSIX_AIO
@@ -461,6 +463,8 @@ MAN_FRAGMENTS += \
 	lib/ssl-peer-ca-cert-syn.man \
 	lib/ssl.man \
 	lib/ssl-syn.man \
+	lib/ssl-connect.man \
+	lib/ssl-connect-syn.man \
 	lib/table.man \
 	lib/unixctl.man \
 	lib/unixctl-syn.man \

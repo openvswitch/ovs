@@ -73,38 +73,18 @@ Open vSwitch also provides some tools:
 What other documentation is available?
 --------------------------------------
 
+.. TODO(stephenfin): Update with a link to the hosting site of the docs, once
+   we know where that is
+
 To install Open vSwitch on a regular Linux or FreeBSD host, please read the
-`installation guide <INSTALL.md>`__. For specifics around installation on a
-specific platform, please see one of the below installation guides:
+`installation guide <Documentation/intro/install/general.rst>`__. For specifics
+around installation on a specific platform, refer to one of the `other
+installation guides <Documentation/intro/install/index.rst>`__
 
-- `Debian <INSTALL.Debian.rst>`__
-- `Fedora <INSTALL.Fedora.rst>`__
-- `RHEL <INSTALL.RHEL.rst>`__
-- `XenServer <INSTALL.XenServer.rst>`__
-- `Windows <INSTALL.Windows.rst>`__
-
-To use Open vSwitch...
-
-- ...with Docker on Linux, see `here <INSTALL.Docker.rst>`__.
-
-- ...with KVM on Linux, see `here <INSTALL.rst>`__ and `here
-  <INSTALL.KVM.rst>`__.
-
-- ...with Libvirt, see `here <INSTALL.Libvirt.rst>`__.
-
-- ...without using a kernel module, see `here <INSTALL.userspace.rst>`__.
-
-- ...with DPDK, see `here <INSTALL.DPDK.rst>`__.
-
-- ...with SELinux, see `here <INSTALL.SELinux.rst>`__.
-
-For answers to common questions, refer to the `FAQ <FAQ.rst>`__.
-
-To learn how to set up SSL support for Open vSwitch, see `here
-<INSTALL.SSL.rst>`__.
+For answers to common questions, refer to the `FAQ <Documentation/faq>`__.
 
 To learn about some advanced features of the Open vSwitch software switch, read
-the `tutorial <tutorial/Tutorial.md>`__.
+the `tutorial <Documentation/tutorials/ovs-advanced.rst>`__.
 
 Each Open vSwitch userspace program is accompanied by a manpage.  Many of the
 manpages are customized to your configuration as part of the build process, so

@@ -184,29 +184,6 @@ OvsTcpGetWscale(const TCPHdr *tcp)
     return wscale;
 }
 
-static __inline uint32_t
-OvsGetTcpPayloadLength(PNET_BUFFER_LIST nbl)
-{
-    IPHdr *ipHdr;
-    char *ipBuf[sizeof(IPHdr)];
-    PNET_BUFFER curNb;
-    curNb = NET_BUFFER_LIST_FIRST_NB(nbl);
-    ipHdr = NdisGetDataBuffer(curNb, sizeof *ipHdr, (PVOID) &ipBuf,
-                                                    1 /*no align*/, 0);
-    TCPHdr *tcp = (TCPHdr *)((PCHAR)ipHdr + ipHdr->ihl * 4);
-    return (UINT16)ntohs(ipHdr->tot_len)
-                        - (ipHdr->ihl * 4)
-                        - (sizeof * tcp);
-}
-
-static __inline void
-OvsConntrackUpdateExpiration(struct conn_tcp *conn,
-                             long long now,
-                             long long interval)
-{
-    conn->up.expiration = now + interval;
-}
-
 static __inline struct conn_tcp*
 OvsCastConntrackEntryToTcpEntry(OVS_CT_ENTRY* conn)
 {
@@ -383,18 +360,23 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
 
         if (src->state >= CT_DPIF_TCPS_FIN_WAIT_2
             && dst->state >= CT_DPIF_TCPS_FIN_WAIT_2) {
-            OvsConntrackUpdateExpiration(conn, now, 30 * CT_INTERVAL_SEC);
+            OvsConntrackUpdateExpiration(&conn->up, now,
+                                         30 * CT_INTERVAL_SEC);
         } else if (src->state >= CT_DPIF_TCPS_CLOSING
                    && dst->state >= CT_DPIF_TCPS_CLOSING) {
-            OvsConntrackUpdateExpiration(conn, now, 45 * CT_INTERVAL_SEC);
+            OvsConntrackUpdateExpiration(&conn->up, now,
+                                         45 * CT_INTERVAL_SEC);
         } else if (src->state < CT_DPIF_TCPS_ESTABLISHED
                    || dst->state < CT_DPIF_TCPS_ESTABLISHED) {
-            OvsConntrackUpdateExpiration(conn, now, 30 * CT_INTERVAL_SEC);
+            OvsConntrackUpdateExpiration(&conn->up, now,
+                                         30 * CT_INTERVAL_SEC);
         } else if (src->state >= CT_DPIF_TCPS_CLOSING
                    || dst->state >= CT_DPIF_TCPS_CLOSING) {
-            OvsConntrackUpdateExpiration(conn, now, 15 * 60 * CT_INTERVAL_SEC);
+            OvsConntrackUpdateExpiration(&conn->up, now,
+                                         15 * 60 * CT_INTERVAL_SEC);
         } else {
-            OvsConntrackUpdateExpiration(conn, now, 24 * 60 * 60 * CT_INTERVAL_SEC);
+            OvsConntrackUpdateExpiration(&conn->up, now,
+                                         24 * 60 * 60 * CT_INTERVAL_SEC);
         }
     } else if ((dst->state < CT_DPIF_TCPS_SYN_SENT
                 || dst->state >= CT_DPIF_TCPS_FIN_WAIT_2
@@ -460,9 +442,13 @@ OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
 BOOLEAN
 OvsConntrackValidateTcpPacket(const TCPHdr *tcp)
 {
+    if (!tcp) {
+        return FALSE;
+    }
+
     UINT16 tcp_flags = ntohs(tcp->flags);
 
-    if (tcp == NULL || OvsCtInvalidTcpFlags(tcp_flags)) {
+    if (OvsCtInvalidTcpFlags(tcp_flags)) {
         return FALSE;
     }
 
@@ -518,7 +504,7 @@ OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
     src->state = CT_DPIF_TCPS_SYN_SENT;
     dst->state = CT_DPIF_TCPS_CLOSED;
 
-    OvsConntrackUpdateExpiration(newconn, now, CT_ENTRY_TIMEOUT);
+    OvsConntrackUpdateExpiration(&newconn->up, now, CT_ENTRY_TIMEOUT);
 
     return &newconn->up;
 }

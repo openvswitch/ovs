@@ -78,16 +78,6 @@ get_local_datapath(const struct hmap *local_datapaths, uint32_t tunnel_key)
             : NULL);
 }
 
-struct patched_datapath *
-get_patched_datapath(const struct hmap *patched_datapaths, uint32_t tunnel_key)
-{
-    struct hmap_node *node = hmap_first_with_hash(patched_datapaths,
-                                                  tunnel_key);
-    return (node
-            ? CONTAINER_OF(node, struct patched_datapath, hmap_node)
-            : NULL);
-}
-
 const struct sbrec_chassis *
 get_chassis(struct ovsdb_idl *ovnsb_idl, const char *chassis_id)
 {
@@ -126,6 +116,71 @@ get_bridge(struct ovsdb_idl *ovs_idl, const char *br_name)
         }
     }
     return NULL;
+}
+
+static void
+update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
+                   const struct sbrec_chassis *chassis,
+                   const struct sset *local_ifaces,
+                   struct hmap *local_datapaths)
+{
+    /* Monitor Port_Bindings rows for local interfaces and local datapaths.
+     *
+     * Monitor Logical_Flow, MAC_Binding, and Multicast_Group tables for
+     * local datapaths.
+     *
+     * We always monitor patch ports because they allow us to see the linkages
+     * between related logical datapaths.  That way, when we know that we have
+     * a VIF on a particular logical switch, we immediately know to monitor all
+     * the connected logical routers and logical switches. */
+    struct ovsdb_idl_condition pb = OVSDB_IDL_CONDITION_INIT(&pb);
+    struct ovsdb_idl_condition lf = OVSDB_IDL_CONDITION_INIT(&lf);
+    struct ovsdb_idl_condition mb = OVSDB_IDL_CONDITION_INIT(&mb);
+    struct ovsdb_idl_condition mg = OVSDB_IDL_CONDITION_INIT(&mg);
+    sbrec_port_binding_add_clause_type(&pb, OVSDB_F_EQ, "patch");
+    if (chassis) {
+        /* This should be mostly redundant with the other clauses for port
+         * bindings, but it allows us to catch any ports that are assigned to
+         * us but should not be.  That way, we can clear their chassis
+         * assignments. */
+        sbrec_port_binding_add_clause_chassis(&pb, OVSDB_F_EQ,
+                                              &chassis->header_.uuid);
+
+        /* Ensure that we find out about l2gateway and l3gateway ports that
+         * should be present on this chassis.  Otherwise, we might never find
+         * out about those ports, if their datapaths don't otherwise have a VIF
+         * in this chassis. */
+        const char *id = chassis->name;
+        const struct smap l2 = SMAP_CONST1(&l2, "l2gateway-chassis", id);
+        sbrec_port_binding_add_clause_options(&pb, OVSDB_F_INCLUDES, &l2);
+        const struct smap l3 = SMAP_CONST1(&l3, "l3gateway-chassis", id);
+        sbrec_port_binding_add_clause_options(&pb, OVSDB_F_INCLUDES, &l3);
+    }
+    if (local_ifaces) {
+        const char *name;
+        SSET_FOR_EACH (name, local_ifaces) {
+            sbrec_port_binding_add_clause_logical_port(&pb, OVSDB_F_EQ, name);
+        }
+    }
+    if (local_datapaths) {
+        const struct local_datapath *ld;
+        HMAP_FOR_EACH (ld, hmap_node, local_datapaths) {
+            const struct uuid *uuid = &ld->datapath->header_.uuid;
+            sbrec_port_binding_add_clause_datapath(&pb, OVSDB_F_EQ, uuid);
+            sbrec_logical_flow_add_clause_logical_datapath(&lf, OVSDB_F_EQ,
+                                                           uuid);
+            sbrec_mac_binding_add_clause_datapath(&mb, OVSDB_F_EQ, uuid);
+            sbrec_multicast_group_add_clause_datapath(&mg, OVSDB_F_EQ, uuid);
+        }
+    }
+    sbrec_port_binding_set_condition(ovnsb_idl, &pb);
+    sbrec_logical_flow_set_condition(ovnsb_idl, &lf);
+    sbrec_mac_binding_set_condition(ovnsb_idl, &mb);
+    sbrec_multicast_group_set_condition(ovnsb_idl, &mg);
+    ovsdb_idl_condition_destroy(&pb);
+    ovsdb_idl_condition_destroy(&lf);
+    ovsdb_idl_condition_destroy(&mb);
+    ovsdb_idl_condition_destroy(&mg);
 }
 
 static const struct ovsrec_bridge *
@@ -204,10 +259,7 @@ get_chassis_id(const struct ovsdb_idl *ovs_idl)
 }
 
 /* Retrieves the OVN Southbound remote location from the
- * "external-ids:ovn-remote" key in 'ovs_idl' and returns a copy of it.
- *
- * XXX ovn-controller does not support this changing mid-run, but that should
- * be addressed later. */
+ * "external-ids:ovn-remote" key in 'ovs_idl' and returns a copy of it. */
 static char *
 get_ovnsb_remote(struct ovsdb_idl *ovs_idl)
 {
@@ -230,13 +282,12 @@ get_ovnsb_remote(struct ovsdb_idl *ovs_idl)
 }
 
 static void
-update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
+update_ct_zones(struct sset *lports, const struct hmap *local_datapaths,
                 struct simap *ct_zones, unsigned long *ct_zone_bitmap,
                 struct shash *pending_ct_zones)
 {
     struct simap_node *ct_zone, *ct_zone_next;
     int scan_start = 1;
-    struct patched_datapath *pd;
     const char *user;
     struct sset all_users = SSET_INITIALIZER(&all_users);
 
@@ -245,13 +296,14 @@ update_ct_zones(struct sset *lports, struct hmap *patched_datapaths,
     }
 
     /* Local patched datapath (gateway routers) need zones assigned. */
-    HMAP_FOR_EACH(pd, hmap_node, patched_datapaths) {
-        if (!pd->local) {
+    const struct local_datapath *ld;
+    HMAP_FOR_EACH (ld, hmap_node, local_datapaths) {
+        if (!ld->has_local_l3gateway) {
             continue;
         }
 
-        char *dnat = alloc_nat_zone_key(&pd->key, "dnat");
-        char *snat = alloc_nat_zone_key(&pd->key, "snat");
+        char *dnat = alloc_nat_zone_key(&ld->datapath->header_.uuid, "dnat");
+        char *snat = alloc_nat_zone_key(&ld->datapath->header_.uuid, "snat");
         sset_add(&all_users, dnat);
         sset_add(&all_users, snat);
         free(dnat);
@@ -459,15 +511,12 @@ main(int argc, char *argv[])
     physical_register_ovs_idl(ovs_idl_loop.idl);
     ovsdb_idl_get_initial_snapshot(ovs_idl_loop.idl);
 
-    /* Connect to OVN SB database. */
+    /* Connect to OVN SB database and get a snapshot. */
     char *ovnsb_remote = get_ovnsb_remote(ovs_idl_loop.idl);
     struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(ovnsb_remote, &sbrec_idl_class, true, true));
     ovsdb_idl_omit_alert(ovnsb_idl_loop.idl, &sbrec_chassis_col_nb_cfg);
-
-    /* Track the southbound idl. */
-    ovsdb_idl_track_add_all(ovnsb_idl_loop.idl);
-
+    update_sb_monitors(ovnsb_idl_loop.idl, NULL, NULL, NULL);
     ovsdb_idl_get_initial_snapshot(ovnsb_idl_loop.idl);
 
     /* Initialize connection tracking zones. */
@@ -502,50 +551,53 @@ main(int argc, char *argv[])
 
         update_probe_interval(&ctx);
 
-        /* Contains "struct local_datapath" nodes whose hash values are the
-         * tunnel_key of datapaths with at least one local port binding. */
+        /* Contains "struct local_datapath" nodes. */
         struct hmap local_datapaths = HMAP_INITIALIZER(&local_datapaths);
 
-        struct hmap patched_datapaths = HMAP_INITIALIZER(&patched_datapaths);
-        struct sset all_lports = SSET_INITIALIZER(&all_lports);
+        /* Contains the name of each logical port resident on the local
+         * hypervisor.  These logical ports include the VIFs (and their child
+         * logical ports, if any) that belong to VMs running on the hypervisor,
+         * l2gateway ports for which options:l2gateway-chassis designates the
+         * local hypervisor, and localnet ports. */
+        struct sset local_lports = SSET_INITIALIZER(&local_lports);
 
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
+
+        struct ldatapath_index ldatapaths;
+        struct lport_index lports;
+        struct mcgroup_index mcgroups;
+        ldatapath_index_init(&ldatapaths, ctx.ovnsb_idl);
+        lport_index_init(&lports, ctx.ovnsb_idl);
+        mcgroup_index_init(&mcgroups, ctx.ovnsb_idl);
 
         const struct sbrec_chassis *chassis = NULL;
         if (chassis_id) {
             chassis = chassis_run(&ctx, chassis_id, br_int);
             encaps_run(&ctx, br_int, chassis_id);
-            binding_run(&ctx, br_int, chassis_id, &local_datapaths,
-                        &all_lports);
+            binding_run(&ctx, br_int, chassis, &ldatapaths, &lports,
+                        &local_datapaths, &local_lports);
         }
 
         if (br_int && chassis) {
-            patch_run(&ctx, br_int, chassis_id, &local_datapaths,
-                      &patched_datapaths);
-
-            static struct lport_index lports;
-            static struct mcgroup_index mcgroups;
-            lport_index_init(&lports, ctx.ovnsb_idl);
-            mcgroup_index_init(&mcgroups, ctx.ovnsb_idl);
+            patch_run(&ctx, br_int, chassis, &local_datapaths);
 
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int,
                                                          &pending_ct_zones);
 
-            pinctrl_run(&ctx, &lports, br_int, chassis_id, &local_datapaths);
-            update_ct_zones(&all_lports, &patched_datapaths, &ct_zones,
+            pinctrl_run(&ctx, &lports, br_int, chassis, &local_datapaths);
+            update_ct_zones(&local_lports, &local_datapaths, &ct_zones,
                             ct_zone_bitmap, &pending_ct_zones);
             if (ctx.ovs_idl_txn) {
                 commit_ct_zones(br_int, &pending_ct_zones);
 
                 struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
                 lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
-                          &patched_datapaths, &group_table, &ct_zones,
-                          &flow_table);
+                          &group_table, &ct_zones, &flow_table);
 
                 physical_run(&ctx, mff_ovn_geneve,
-                             br_int, chassis_id, &ct_zones, &flow_table,
-                             &local_datapaths, &patched_datapaths);
+                             br_int, chassis, &ct_zones, &lports,
+                             &flow_table, &local_datapaths);
 
                 ofctrl_put(&flow_table, &pending_ct_zones,
                            get_nb_cfg(ctx.ovnsb_idl));
@@ -557,27 +609,23 @@ main(int argc, char *argv[])
                     }
                 }
             }
-            mcgroup_index_destroy(&mcgroups);
-            lport_index_destroy(&lports);
+
+            update_sb_monitors(ctx.ovnsb_idl, chassis,
+                               &local_lports, &local_datapaths);
         }
 
-        sset_destroy(&all_lports);
+        mcgroup_index_destroy(&mcgroups);
+        lport_index_destroy(&lports);
+        ldatapath_index_destroy(&ldatapaths);
+
+        sset_destroy(&local_lports);
 
         struct local_datapath *cur_node, *next_node;
         HMAP_FOR_EACH_SAFE (cur_node, next_node, hmap_node, &local_datapaths) {
             hmap_remove(&local_datapaths, &cur_node->hmap_node);
-            free(cur_node->logical_port);
             free(cur_node);
         }
         hmap_destroy(&local_datapaths);
-
-        struct patched_datapath *pd_cur_node, *pd_next_node;
-        HMAP_FOR_EACH_SAFE (pd_cur_node, pd_next_node, hmap_node,
-                &patched_datapaths) {
-            hmap_remove(&patched_datapaths, &pd_cur_node->hmap_node);
-            free(pd_cur_node);
-        }
-        hmap_destroy(&patched_datapaths);
 
         unixctl_server_run(unixctl);
 
@@ -591,7 +639,6 @@ main(int argc, char *argv[])
             pinctrl_wait(&ctx);
         }
         ovsdb_idl_loop_commit_and_wait(&ovnsb_idl_loop);
-        ovsdb_idl_track_clear(ovnsb_idl_loop.idl);
 
         if (ovsdb_idl_loop_commit_and_wait(&ovs_idl_loop) == 1) {
             struct shash_node *iter, *iter_next;
@@ -603,8 +650,6 @@ main(int argc, char *argv[])
                 }
             }
         }
-        ovsdb_idl_track_clear(ovs_idl_loop.idl);
-
         poll_block();
         if (should_service_stop()) {
             exiting = true;
@@ -623,11 +668,13 @@ main(int argc, char *argv[])
 
         const struct ovsrec_bridge *br_int = get_br_int(&ctx);
         const char *chassis_id = get_chassis_id(ctx.ovs_idl);
+        const struct sbrec_chassis *chassis
+            = chassis_id ? get_chassis(ctx.ovnsb_idl, chassis_id) : NULL;
 
         /* Run all of the cleanup functions, even if one of them returns false.
          * We're done if all of them return true. */
-        done = binding_cleanup(&ctx, chassis_id);
-        done = chassis_cleanup(&ctx, chassis_id) && done;
+        done = binding_cleanup(&ctx, chassis);
+        done = chassis_cleanup(&ctx, chassis) && done;
         done = encaps_cleanup(&ctx, br_int) && done;
         if (done) {
             poll_immediate_wake();
@@ -674,7 +721,8 @@ parse_options(int argc, char *argv[])
         OPT_PEER_CA_CERT = UCHAR_MAX + 1,
         OPT_BOOTSTRAP_CA_CERT,
         VLOG_OPTION_ENUMS,
-        DAEMON_OPTION_ENUMS
+        DAEMON_OPTION_ENUMS,
+        SSL_OPTION_ENUMS,
     };
 
     static struct option long_options[] = {

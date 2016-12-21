@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2010, 2011, 2012 Nicira, Inc.
+# Copyright (c) 2009, 2010, 2011, 2012, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -531,25 +531,17 @@ def idl_set(idl, commands, step):
 
 
 def update_condition(idl, commands):
-    commands = commands.split(";")
+    commands = commands[len("condition "):].split(";")
     for command in commands:
-        command = command[len("condition "):]
-        if "add" in command:
-            add_cmd = True
-            command = command[len("add "):]
-        else:
-            add_cmd = False
-            command = command[len("remove "):]
-
         command = command.split(" ")
         if(len(command) != 2):
-            sys.stderr.write("Error parsong condition %s\n" % command)
+            sys.stderr.write("Error parsing condition %s\n" % command)
             sys.exit(1)
 
         table = command[0]
         cond = ovs.json.from_string(command[1])
 
-        idl.cond_change(table, add_cmd, cond)
+        idl.cond_change(table, cond)
 
 
 def do_idl(schema_file, remote, *commands):

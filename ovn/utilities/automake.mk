@@ -1,5 +1,6 @@
 scripts_SCRIPTS += \
-    ovn/utilities/ovn-ctl
+    ovn/utilities/ovn-ctl \
+    ovn/utilities/ovndb-servers.ocf
 
 man_MANS += \
     ovn/utilities/ovn-ctl.8 \
@@ -20,7 +21,8 @@ EXTRA_DIST += \
     ovn/utilities/ovn-docker-overlay-driver \
     ovn/utilities/ovn-docker-underlay-driver \
     ovn/utilities/ovn-nbctl.8.xml \
-    ovn/utilities/ovn-trace.8.xml
+    ovn/utilities/ovn-trace.8.xml \
+    ovn/utilities/ovndb-servers.ocf
 
 DISTCLEANFILES += \
     ovn/utilities/ovn-ctl.8 \

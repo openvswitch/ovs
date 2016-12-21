@@ -326,19 +326,31 @@ int ovsdb_idl_loop_commit_and_wait(struct ovsdb_idl_loop *);
  * replicates every row in the table.  These functions allow the client to
  * specify that only selected rows should be replicated, by constructing a
  * per-table condition that specifies the rows to replicate.
+ *
+ * A condition is a disjunction of clauses.  The condition is true, and thus a
+ * row is replicated, if any of the clauses evaluates to true for a given row.
+ * (Thus, a condition with no clauses is always false.)
  */
 
-void ovsdb_idl_condition_reset(struct ovsdb_idl *idl,
-                               const struct ovsdb_idl_table_class *tc);
-void ovsdb_idl_condition_add_clause(struct ovsdb_idl *idl,
-                                    const struct ovsdb_idl_table_class *tc,
+struct ovsdb_idl_condition {
+    struct hmap clauses;        /* Contains "struct ovsdb_idl_clause"s. */
+    bool is_true;               /* Is the condition unconditionally true? */
+};
+#define OVSDB_IDL_CONDITION_INIT(CONDITION) \
+    { HMAP_INITIALIZER(&(CONDITION)->clauses), false }
+
+void ovsdb_idl_condition_init(struct ovsdb_idl_condition *);
+void ovsdb_idl_condition_clear(struct ovsdb_idl_condition *);
+void ovsdb_idl_condition_destroy(struct ovsdb_idl_condition *);
+void ovsdb_idl_condition_add_clause(struct ovsdb_idl_condition *,
                                     enum ovsdb_function function,
                                     const struct ovsdb_idl_column *column,
                                     const struct ovsdb_datum *arg);
-void ovsdb_idl_condition_remove_clause(struct ovsdb_idl *idl,
-                                       const struct ovsdb_idl_table_class *tc,
-                                       enum ovsdb_function function,
-                                       const struct ovsdb_idl_column *column,
-                                       const struct ovsdb_datum *arg);
+void ovsdb_idl_condition_add_clause_true(struct ovsdb_idl_condition *);
+bool ovsdb_idl_condition_is_true(const struct ovsdb_idl_condition *);
+
+void ovsdb_idl_set_condition(struct ovsdb_idl *,
+                             const struct ovsdb_idl_table_class *,
+                             const struct ovsdb_idl_condition *);
 
 #endif /* ovsdb-idl.h */

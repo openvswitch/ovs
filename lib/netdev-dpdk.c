@@ -391,7 +391,8 @@ struct netdev_rxq_dpdk {
     int port_id;
 };
 
-static int netdev_dpdk_construct(struct netdev *);
+static int netdev_dpdk_class_init(void);
+static int netdev_dpdk_vhost_class_init(void);
 
 int netdev_dpdk_get_vid(const struct netdev_dpdk *dev);
 
@@ -401,7 +402,8 @@ netdev_dpdk_get_ingress_policer(const struct netdev_dpdk *dev);
 static bool
 is_dpdk_class(const struct netdev_class *class)
 {
-    return class->construct == netdev_dpdk_construct;
+    return class->init == netdev_dpdk_class_init
+           || class->init == netdev_dpdk_vhost_class_init;
 }
 
 /* DPDK NIC drivers allocate RX buffers at a particular granularity, typically
@@ -1025,6 +1027,10 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
     ovs_mutex_unlock(&dev->mutex);
     ovs_mutex_unlock(&dpdk_mutex);
 
+    if (!vhost_id[0]) {
+        goto out;
+    }
+
     if (dpdk_vhost_driver_unregister(dev, vhost_id)) {
         VLOG_ERR("%s: Unable to unregister vhost driver for socket '%s'.\n",
                  netdev->name, vhost_id);
@@ -1032,6 +1038,7 @@ netdev_dpdk_vhost_destruct(struct netdev *netdev)
         /* OVS server mode - remove this socket from list for deletion */
         fatal_signal_remove_file_to_unlink(vhost_id);
     }
+out:
     free(vhost_id);
 }
 
@@ -1054,13 +1061,18 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
     smap_add_format(args, "configured_rx_queues", "%d", netdev->n_rxq);
     smap_add_format(args, "requested_tx_queues", "%d", dev->requested_n_txq);
     smap_add_format(args, "configured_tx_queues", "%d", netdev->n_txq);
-    smap_add_format(args, "requested_rxq_descriptors", "%d",
-                    dev->requested_rxq_size);
-    smap_add_format(args, "configured_rxq_descriptors", "%d", dev->rxq_size);
-    smap_add_format(args, "requested_txq_descriptors", "%d",
-                    dev->requested_txq_size);
-    smap_add_format(args, "configured_txq_descriptors", "%d", dev->txq_size);
     smap_add_format(args, "mtu", "%d", dev->mtu);
+
+    if (dev->type == DPDK_DEV_ETH) {
+        smap_add_format(args, "requested_rxq_descriptors", "%d",
+                        dev->requested_rxq_size);
+        smap_add_format(args, "configured_rxq_descriptors", "%d",
+                        dev->rxq_size);
+        smap_add_format(args, "requested_txq_descriptors", "%d",
+                        dev->requested_txq_size);
+        smap_add_format(args, "configured_txq_descriptors", "%d",
+                        dev->txq_size);
+    }
     ovs_mutex_unlock(&dev->mutex);
 
     return 0;
@@ -1072,7 +1084,7 @@ dpdk_set_rxq_config(struct netdev_dpdk *dev, const struct smap *args)
 {
     int new_n_rxq;
 
-    new_n_rxq = MAX(smap_get_int(args, "n_rxq", dev->requested_n_rxq), 1);
+    new_n_rxq = MAX(smap_get_int(args, "n_rxq", NR_QUEUE), 1);
     if (new_n_rxq != dev->requested_n_rxq) {
         dev->requested_n_rxq = new_n_rxq;
         netdev_request_reconfigure(&dev->up);
@@ -1945,9 +1957,9 @@ out:
 static int
 netdev_dpdk_get_features(const struct netdev *netdev,
                          enum netdev_features *current,
-                         enum netdev_features *advertised OVS_UNUSED,
-                         enum netdev_features *supported OVS_UNUSED,
-                         enum netdev_features *peer OVS_UNUSED)
+                         enum netdev_features *advertised,
+                         enum netdev_features *supported,
+                         enum netdev_features *peer)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     struct rte_eth_link link;
@@ -1984,6 +1996,8 @@ netdev_dpdk_get_features(const struct netdev *netdev,
     if (link.link_autoneg) {
         *current |= NETDEV_F_AUTONEG;
     }
+
+    *advertised = *supported = *peer = 0;
 
     return 0;
 }
@@ -2160,6 +2174,8 @@ netdev_dpdk_update_flags__(struct netdev_dpdk *dev,
         if (!(dev->flags & NETDEV_UP)) {
             rte_eth_dev_stop(dev->port_id);
         }
+
+        netdev_change_seq_changed(&dev->up);
     } else {
         /* If DPDK_DEV_VHOST device's NETDEV_UP flag was changed and vhost is
          * running then change netdev's change_seq to trigger link state
@@ -2584,7 +2600,8 @@ netdev_dpdk_vhost_class_init(void)
         rte_vhost_driver_callback_register(&virtio_net_device_ops);
         rte_vhost_feature_disable(1ULL << VIRTIO_NET_F_HOST_TSO4
                                   | 1ULL << VIRTIO_NET_F_HOST_TSO6
-                                  | 1ULL << VIRTIO_NET_F_CSUM);
+                                  | 1ULL << VIRTIO_NET_F_CSUM
+                                  | 1ULL << VIRTIO_RING_F_INDIRECT_DESC);
         ovs_thread_create("vhost_thread", start_vhost_loop, NULL);
 
         ovsthread_once_done(&once);
@@ -2803,7 +2820,7 @@ netdev_dpdk_set_qos(struct netdev *netdev, const char *type,
         if (type && type[0]) {
             error = EOPNOTSUPP;
         }
-    } else if (qos_conf->ops == new_ops
+    } else if (qos_conf && qos_conf->ops == new_ops
                && qos_conf->ops->qos_is_equal(qos_conf, details)) {
         new_qos_conf = qos_conf;
     } else {

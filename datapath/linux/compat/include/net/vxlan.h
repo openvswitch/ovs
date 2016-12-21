@@ -17,6 +17,17 @@ static inline void rpl_vxlan_cleanup_module(void)
 
 #define vxlan_xmit dev_queue_xmit
 
+#ifdef CONFIG_INET
+#ifndef HAVE_NAME_ASSIGN_TYPE
+static inline struct net_device *rpl_vxlan_dev_create(
+	struct net *net, const char *name, u8 name_assign_type,
+	struct vxlan_config *conf) {
+	return vxlan_dev_create(net, name, conf);
+}
+#define vxlan_dev_create rpl_vxlan_dev_create
+#endif
+#endif
+
 #else /* USE_UPSTREAM_TUNNEL */
 
 #include <linux/ip.h>

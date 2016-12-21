@@ -2,3 +2,4 @@ usr/bin/ovn-nbctl
 usr/bin/ovn-sbctl
 usr/bin/ovn-trace
 usr/share/openvswitch/scripts/ovn-ctl
+usr/share/openvswitch/scripts/ovndb-servers.ocf

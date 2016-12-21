@@ -1627,6 +1627,40 @@ NXST_FLOW reply:
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - controller action without megaflows])
+OVS_VSWITCHD_START
+add_of_ports br0 1
+
+AT_CHECK([ovs-ofctl add-flow br0 in_port=1,action=controller])
+AT_CHECK([ovs-appctl upcall/disable-megaflows], [0], [dnl
+megaflows disabled
+])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+for i in 1 2; do
+    AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x1234)'])
+done
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
+flow-dump from non-dpdk interfaces:
+packets:1, bytes:14, used:0.001s, actions:userspace(pid=0,slow_path(controller))
+])
+
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=14 in_port=1 (via action) data_len=14 (unbuffered)
+vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=14 in_port=1 (via action) data_len=14 (unbuffered)
+vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,dl_type=0x1234
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - MPLS handling])
 OVS_VSWITCHD_START([dnl
    add-port br0 p1 -- set Interface p1 type=dummy
@@ -6279,6 +6313,13 @@ AT_SETUP([ofproto-dpif - Flow IPFIX sanity check])
 OVS_VSWITCHD_START
 add_of_ports br0 1 2
 
+# Check for regression against a bug where an invalid target caused an
+# assertion failure and a crash.
+AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
+                    -- --id=@ipfix create IPFIX targets=\"xyzzy\" \
+                    -- --id=@cs create Flow_Sample_Collector_Set id=0 bridge=@br0 ipfix=@ipfix],
+         [0], [ignore])
+
 AT_CHECK([ovs-vsctl -- --id=@br0 get Bridge br0 \
                     -- --id=@ipfix create IPFIX targets=\"127.0.0.1:4739\" \
                     -- --id=@cs create Flow_Sample_Collector_Set id=1 bridge=@br0 ipfix=@ipfix],
@@ -6312,7 +6353,9 @@ flow-dump from non-dpdk interfaces:
 packets:2, bytes:68, used:0.001s, actions:drop
 ])
 
-OVS_VSWITCHD_STOP(["/sending to collector failed/d"])
+OVS_VSWITCHD_STOP(["/sending to collector failed/d
+/xyzzy/d
+/no collectors/d"])
 AT_CLEANUP
 
 dnl Flow IPFIX sanity check for tunnel set
@@ -6378,12 +6421,30 @@ AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(3),eth(src=50:54:00:00:00:
 dnl Make sure flow sample action in datapath is behind set tunnel
 dnl action at egress point of tunnel port.
 AT_CHECK([tail -1 stdout], [0], [dnl
-Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df|key))),sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=1),tunnel_out_port=1))),1,set(tunnel(tun_id=0x6,src=2.2.2.3,dst=1.1.1.2,tos=0x1,ttl=64,flags(df|key))),sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=7471),tunnel_out_port=7471))),7471
+Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df|key))),sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=1),tunnel_out_port=1))),1,set(tunnel(tun_id=0x6,src=2.2.2.3,dst=1.1.1.2,tos=0x1,ttl=64,tp_dst=7471,flags(df|key))),sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=7471),tunnel_out_port=7471))),7471
 ])
 
 dnl Remove the flow which contains sample action.
 AT_CHECK([ovs-ofctl del-flows br0 in_port=3], [0], [ignore])
 AT_CHECK([ovs-vsctl destroy Flow_Sample_Collector_Set 1], [0], [ignore])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - clone action])
+OVS_VSWITCHD_START
+add_of_ports br0 1 2 3 4
+
+AT_DATA([flows.txt], [dnl
+in_port=1, ip, actions=clone(set_field:192.168.3.3->ip_src),clone(set_field:192.168.4.4->ip_dst,output:2),clone(mod_dl_src:80:81:81:81:81:81,set_field:192.168.5.5->ip_dst,output:3),output:4
+])
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt], [0], [ignore])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+
+AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: set(ipv4(src=10.10.10.2,dst=192.168.4.4)),2,set(eth(src=80:81:81:81:81:81)),set(ipv4(src=10.10.10.2,dst=192.168.5.5)),3,set(eth(src=50:54:00:00:00:09)),set(ipv4(src=10.10.10.2,dst=10.10.10.1)),4
+])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
@@ -6457,6 +6518,180 @@ AT_CHECK([strip_xids < stdout | sed -n 's/duration=[[0-9]]*\.[[0-9]]*s/duration=
  cookie=0x0, duration=0.0s, table=0, n_packets=0, n_bytes=0, idle_age=1, icmp actions=NORMAL
  cookie=0x0, duration=0.0s, table=0, n_packets=10, n_bytes=540, idle_age=1, ip actions=NORMAL
 ])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([ofproto-dpif - flow stats reset_counts])
+OVS_VSWITCHD_START
+flow="ip,actions=NORMAL"
+
+ovs-appctl time/stop
+
+AT_CHECK([ovs-ofctl add-flow br0 $flow])
+
+warp_and_dump_NXM () {
+    AT_CHECK([ovs-appctl time/warp 1000], [0], [ignore])
+    AT_CHECK([ovs-appctl revalidator/purge], [0])
+
+    AT_CHECK_UNQUOTED([ovs-ofctl dump-flows br0], [0], [stdout])
+    if [[ $5 -gt 0 ]]; then
+        expected=" cookie=0x0, duration=$1s, table=0, n_packets=$2, n_bytes=$3, idle_age=$4, hard_age=$5, ip actions=NORMAL"
+    else
+        expected=" cookie=0x0, duration=$1s, table=0, n_packets=$2, n_bytes=$3, idle_age=$4, ip actions=NORMAL"
+    fi
+    AT_CHECK_UNQUOTED([strip_xids < stdout | sed -n 's/duration=\([[0-9]]*\)\.*[[0-9]]*s/duration=\1s/p' | sort], [0], [dnl
+$expected
+])
+}
+
+warp_and_dump_OF () {
+    AT_CHECK([ovs-appctl time/warp 1000], [0], [ignore])
+    AT_CHECK([ovs-appctl revalidator/purge], [0])
+
+    AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow$1 dump-flows br0], [0], [stdout])
+    if [[ $1 -lt 13 -o "$5X" = "X" ]]; then
+        expected=" cookie=0x0, duration=$2s, table=0, n_packets=$3, n_bytes=$4, ip actions=NORMAL"
+    else
+        expected=" cookie=0x0, duration=$2s, table=0, n_packets=$3, n_bytes=$4, $5 ip actions=NORMAL"
+    fi
+    AT_CHECK_UNQUOTED([strip_xids < stdout | sed -n 's/duration=\([[0-9]]*\)\.*[[0-9]]*s/duration=\1s/p' | sort], [0], [dnl
+$expected
+])
+}
+
+send_packet () {
+    ovs-appctl netdev-dummy/receive br0 'in_port(0),eth(src=50:54:00:00:00:07,dst=50:54:00:00:00:05),eth_type(0x0800),ipv4(src=192.168.0.2,dst=192.168.0.1,proto=6,tos=0,ttl=64,frag=no)'
+}
+
+# OpenFlow 1.0, implicit reset_counts
+send_packet
+warp_and_dump_NXM   1 1 54 1
+AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow10 add-flow br0 $flow])
+# add-flow resets duration and counts,
+# but idle age is inherited from the old flow
+warp_and_dump_NXM   1 0 0  2
+
+send_packet
+warp_and_dump_NXM   2 1 54 1
+AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow10 mod-flows br0 $flow])
+# mod-flows resets hard_age, but not counts
+# but duration and idle_age is inherited from the old flow
+warp_and_dump_NXM   3 1 54  2 1
+
+# OpenFlow 1.1, implicit reset_counts
+send_packet
+warp_and_dump_OF 11 4 2 108
+AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow11 add-flow br0 $flow])
+# add-flow resets duration and counts,
+# but idle age is inherited from the old flow
+warp_and_dump_NXM   1 0 0  2
+warp_and_dump_OF 11 2 0 0
+
+send_packet
+warp_and_dump_OF 11 3 1 54
+AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow11 mod-flows br0 $flow])
+# mod-flows resets hard_age, but not counts
+# but duration and idle_age is inherited from the old flow
+warp_and_dump_NXM   4 1 54  2 1
+warp_and_dump_OF 11 5 1 54
+
+# OpenFlow 1.2, explicit reset_counts
+send_packet
+warp_and_dump_OF 12 6 2 108
+AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow12 add-flow br0 $flow])
+# add-flow without flags resets duration, but not counts,
+# idle age is inherited from the old flow
+warp_and_dump_NXM   1 2 108  2
+warp_and_dump_OF 12 2 2 108
+
+send_packet
+warp_and_dump_OF 12 3 3 162
+AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow12 mod-flows br0 $flow])
+# mod-flows without flags does not reset duration nor counts,
+# idle age is inherited from the old flow
+warp_and_dump_NXM   4 3 162  2 1
+warp_and_dump_OF 12 5 3 162
+
+send_packet
+warp_and_dump_OF 12 6 4 216
+AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow12 add-flow br0 reset_counts,$flow])
+# add-flow with reset_counts resets both duration and counts,
+# idle age is inherited from the old flow
+warp_and_dump_NXM   1 0 0  2
+warp_and_dump_OF 12 2 0 0
+
+send_packet
+warp_and_dump_OF 12 3 1 54
+AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow12 mod-flows br0 reset_counts,$flow])
+# mod-flows with reset_counts resets counts, but not duration,
+# idle age is inherited from the old flow
+warp_and_dump_NXM   4 0 0  2 1
+warp_and_dump_OF 12 5 0 0
+
+# OpenFlow > 1.3, explicit reset_counts
+flow_mods_reset_counts () {
+    # Reset to a known state
+    AT_CHECK([ovs-ofctl add-flow br0 $flow])
+
+    send_packet
+    warp_and_dump_OF $1 1 1 54 reset_counts
+    AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow$1 add-flow br0 $flow])
+    # add-flow without flags resets duration, but not counts,
+    # idle age is inherited from the old flow
+    warp_and_dump_NXM   1 1 54  2
+    warp_and_dump_OF $1 2 1 54
+
+    send_packet
+    warp_and_dump_OF $1 3 2 108
+    AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow$1 mod-flows br0 $flow])
+    # mod-flows without flags does not reset duration nor counts,
+    # idle age is inherited from the old flow
+    warp_and_dump_NXM   4 2 108  2 1
+    warp_and_dump_OF $1 5 2 108
+
+    send_packet
+    warp_and_dump_OF $1 6 3 162
+    AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow$1 add-flow br0 reset_counts,$flow])
+    # add-flow with reset_counts resets both duration and counts,
+    # idle age is inherited from the old flow
+    warp_and_dump_NXM   1 0 0  2
+    warp_and_dump_OF $1 2 0 0 reset_counts
+
+    send_packet
+    warp_and_dump_OF $1 3 1 54 reset_counts
+    AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow$1 mod-flows br0 reset_counts,$flow])
+    # mod-flows with reset_counts resets counts, but not duration,
+    # idle age is inherited from the old flow
+    warp_and_dump_NXM   4 0 0  2 1
+    warp_and_dump_OF $1 5 0 0 reset_counts
+
+    # Modify flow having reset_counts flag without reset_counts
+    send_packet
+    warp_and_dump_OF $1 6 1 54 reset_counts
+    AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow$1 mod-flows br0 $flow])
+    warp_and_dump_NXM   7 1 54  2 1
+    warp_and_dump_OF $1 8 1 54 reset_counts
+
+    # Add flow having reset_counts flag without reset_counts
+    send_packet
+    warp_and_dump_OF $1 9 2 108 reset_counts
+    AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow$1 add-flow br0 $flow])
+    warp_and_dump_NXM   1 2 108  2
+    warp_and_dump_OF $1 2 2 108
+
+    # Modify flow w/o reset_counts flag with a flow_mod having reset_counts
+    send_packet
+    warp_and_dump_OF $1 3 3 162
+    AT_CHECK_UNQUOTED([ovs-ofctl -O OpenFlow$1 mod-flows br0 reset_counts,$flow])
+    warp_and_dump_NXM   4 0 0  2 1
+    warp_and_dump_OF $1 5 0 0
+}
+
+# OpenFlow versions >= 1.3 should behave the same way
+flow_mods_reset_counts 13
+flow_mods_reset_counts 14
+flow_mods_reset_counts 15
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 

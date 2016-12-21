@@ -41,14 +41,7 @@ OvsCastConntrackEntryToOtherEntry(OVS_CT_ENTRY *conn)
     return CONTAINER_OF(conn, struct conn_other, up);
 }
 
-static __inline VOID
-OvsConntrackUpdateExpiration(struct conn_other *conn, long long now)
-{
-    ASSERT(conn);
-    conn->up.expiration = now + other_timeouts[conn->state];
-}
-
-enum ct_update_res
+enum CT_UPDATE_RES
 OvsConntrackUpdateOtherEntry(OVS_CT_ENTRY *conn_,
                              BOOLEAN reply,
                              UINT64 now)
@@ -62,7 +55,8 @@ OvsConntrackUpdateOtherEntry(OVS_CT_ENTRY *conn_,
         conn->state = OTHERS_MULTIPLE;
     }
 
-    OvsConntrackUpdateExpiration(conn, now);
+    OvsConntrackUpdateExpiration(&conn->up, now,
+                                 other_timeouts[conn->state]);
 
     return CT_UPDATE_VALID;
 }
@@ -78,6 +72,7 @@ OvsConntrackCreateOtherEntry(UINT64 now)
     }
     conn->up = (OVS_CT_ENTRY) {0};
     conn->state = OTHERS_FIRST;
-    OvsConntrackUpdateExpiration(conn, now);
+    OvsConntrackUpdateExpiration(&conn->up, now,
+                                 other_timeouts[conn->state]);
     return &conn->up;
 }

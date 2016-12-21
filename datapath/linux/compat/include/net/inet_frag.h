@@ -29,7 +29,7 @@ static inline bool inet_frag_evicting(struct inet_frag_queue *q)
 #define inet_frag_lru_move(q)
 #endif
 
-#ifndef HAVE_CORRECT_MRU_HANDLING
+#ifndef HAVE_SUB_FRAG_MEM_LIMIT_ARG_STRUCT_NETNS_FRAGS
 static inline void rpl_sub_frag_mem_limit(struct netns_frags *nf, int i)
 {
 	__percpu_counter_add(&nf->mem, -i, frag_percpu_counter_batch);
@@ -41,14 +41,18 @@ static inline void rpl_add_frag_mem_limit(struct netns_frags *nf, int i)
 	__percpu_counter_add(&nf->mem, i, frag_percpu_counter_batch);
 }
 #define add_frag_mem_limit rpl_add_frag_mem_limit
+#endif
 
+#ifdef HAVE_VOID_INET_FRAGS_INIT
 static inline int rpl_inet_frags_init(struct inet_frags *frags)
 {
 	inet_frags_init(frags);
 	return 0;
 }
 #define inet_frags_init rpl_inet_frags_init
+#endif
 
+#ifndef HAVE_CORRECT_MRU_HANDLING
 /* We reuse the upstream inet_fragment.c common code for managing fragment
  * stores, However we actually store the fragments within our own 'inet_frags'
  * structures (in {ip_fragment,nf_conntrack_reasm}.c). When unloading the OVS
@@ -64,7 +68,6 @@ static inline int rpl_inet_frags_init(struct inet_frags *frags)
  */
 void rpl_inet_frags_exit_net(struct netns_frags *nf, struct inet_frags *f);
 #define inet_frags_exit_net rpl_inet_frags_exit_net
-
-#endif /* !HAVE_CORRECT_MRU_HANDLING */
+#endif
 
 #endif /* inet_frag.h */

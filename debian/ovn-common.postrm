@@ -1,0 +1,23 @@
+#!/bin/sh
+# postrm script for openvswitch-testcontroller
+#
+# see: dh_installdeb(1)
+
+set -e
+
+case "$1" in
+    purge|remove)
+        rm -rf /usr/lib/ocf/resource.d/ovn
+        ;;
+    upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        ;;
+
+    *)
+        echo "postrm called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+#DEBHELPER#
+
+exit 0

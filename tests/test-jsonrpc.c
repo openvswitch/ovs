@@ -55,7 +55,8 @@ parse_options(int argc, char *argv[])
 {
     enum {
         OPT_BOOTSTRAP_CA_CERT = UCHAR_MAX + 1,
-        DAEMON_OPTION_ENUMS
+        DAEMON_OPTION_ENUMS,
+        SSL_OPTION_ENUMS,
     };
     static const struct option long_options[] = {
         {"verbose", optional_argument, NULL, 'v'},

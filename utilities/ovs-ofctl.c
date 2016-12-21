@@ -190,7 +190,8 @@ parse_options(int argc, char *argv[])
         OPT_READ_ONLY,
         DAEMON_OPTION_ENUMS,
         OFP_VERSION_OPTION_ENUMS,
-        VLOG_OPTION_ENUMS
+        VLOG_OPTION_ENUMS,
+        SSL_OPTION_ENUMS,
     };
     static const struct option long_options[] = {
         {"timeout", required_argument, NULL, 't'},
@@ -713,6 +714,7 @@ bundle_print_errors(struct ovs_list *errors, struct ovs_list *requests)
             fprintf(stderr, "Error %s for: ", ofperr_get_name(ofperr));
             ofp_print(stderr, ofp_msg, msg_len, verbosity + 1);
         }
+        ofpbuf_uninit(&payload);
         free(error);
     }
     fflush(stderr);
@@ -2148,6 +2150,7 @@ ofctl_packet_out(struct ovs_cmdl_context *ctx)
                                            usable_protocols);
         opo = ofputil_encode_packet_out(&po, protocol);
         transact_noreply(vconn, opo);
+        vconn_close(vconn);
         free(CONST_CAST(void *, po.packet));
         free(po.ofpacts);
     } else {

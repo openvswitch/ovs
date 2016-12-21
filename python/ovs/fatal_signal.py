@@ -43,6 +43,7 @@ def fork():
             cancel()
 
     _hooks = []
+
 
 _added_hook = False
 _files = {}

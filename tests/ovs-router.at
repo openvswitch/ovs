@@ -1,0 +1,42 @@
+AT_BANNER([ovs-router])
+
+AT_SETUP([appctl - route/add with gateway])
+AT_KEYWORDS([ovs_router])
+AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
+OVS_VSWITCHD_START([add-port br0 p2 -- set Interface p2 type=gre \
+			options:local_ip=2.2.2.2 options:remote_ip=1.1.1.1 \
+			-- add-port br0 p1  -- set interface p1 type=dummy])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 2.2.2.2/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 1.1.1.0/24 br0 2.2.2.10], [0], [OK
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([appctl - route/lookup])
+AT_KEYWORDS([ovs_router])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
+AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 192.0.2.1/24], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 198.51.100.0/24 br0 192.0.2.254], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/lookup 198.51.100.1], [0], [src 192.0.2.1
+gateway 192.0.2.254
+dev br0
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([appctl - route/lookup6])
+AT_KEYWORDS([ovs_router])
+OVS_VSWITCHD_START([add-port br0 p1 -- set Interface p1 type=dummy])
+AT_CHECK([ovs-appctl netdev-dummy/ip6addr br0 2001:db8:cafe::1/64], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/add 2001:db8:babe::/64 br0 2001:db8:cafe::2], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/lookup 2001:db8:babe::1eaf], [0], [src 2001:db8:cafe::1
+gateway 2001:db8:cafe::2
+dev br0
+])
+OVS_VSWITCHD_STOP
+AT_CLEANUP

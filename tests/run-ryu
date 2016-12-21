@@ -19,7 +19,7 @@ case $srcdir in
     /*) ;;
     *) srcdir=`pwd`/$srcdir ;;
 esac
-if test ! -e "$srcdir"/WHY-OVS.rst; then
+if test ! -e "$srcdir"/README.rst; then
     echo >&2 'source directory not found, please set $srcdir or run via \"make check-ryu'
     exit 1
 fi

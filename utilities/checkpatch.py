@@ -21,10 +21,20 @@ import sys
 
 __errors = 0
 __warnings = 0
+print_file_name = None
+checking_file = False
+
+
+def print_file():
+    global print_file_name
+    if print_file_name:
+        print("In file %s" % print_file_name)
+        print_file_name = None
 
 
 def print_error(message, lineno=None):
     global __errors
+    print_file()
     if lineno is not None:
         print("E(%d): %s" % (lineno, message))
     else:
@@ -35,6 +45,7 @@ def print_error(message, lineno=None):
 
 def print_warning(message, lineno=None):
     global __warnings
+    print_file()
     if lineno:
         print("W(%d): %s" % (lineno, message))
     else:
@@ -44,17 +55,19 @@ def print_warning(message, lineno=None):
 
 
 __regex_added_line = re.compile(r'^\+{1,2}[^\+][\w\W]*')
+__regex_subtracted_line = re.compile(r'^\-{1,2}[^\-][\w\W]*')
 __regex_leading_with_whitespace_at_all = re.compile(r'^\s+')
 __regex_leading_with_spaces = re.compile(r'^ +[\S]+')
 __regex_trailing_whitespace = re.compile(r'[^\S]+$')
 __regex_single_line_feed = re.compile(r'^\f$')
-__regex_for_if_missing_whitespace = re.compile(r'(if|for|while)[\(]')
-__regex_for_if_too_much_whitespace = re.compile(r'(if|for|while)  +[\(]')
-__regex_for_if_parens_whitespace = re.compile(r'(if|for|while) \( +[\s\S]+\)')
+__regex_for_if_missing_whitespace = re.compile(r' +(if|for|while)[\(]')
+__regex_for_if_too_much_whitespace = re.compile(r' +(if|for|while)  +[\(]')
+__regex_for_if_parens_whitespace = \
+    re.compile(r' +(if|for|while) \( +[\s\S]+\)')
 __regex_is_for_if_single_line_bracket = \
     re.compile(r'^ +(if|for|while) \(.*\)')
-
-__regex_ends_with_bracket = re.compile(r'[^\s]\) {$')
+__regex_ends_with_bracket = \
+    re.compile(r'[^\s]\) {(\s+/\*[\s\Sa-zA-Z0-9\.,\?\*/+-]*)?$')
 
 skip_leading_whitespace_check = False
 skip_trailing_whitespace_check = False
@@ -69,10 +82,24 @@ line_length_blacklist = ['.am', '.at', 'etc', '.in', '.m4', '.mk', '.patch',
                          '.py']
 
 
+def is_subtracted_line(line):
+    """Returns TRUE if the line in question has been removed."""
+    return __regex_subtracted_line.search(line) is not None
+
+
 def is_added_line(line):
     """Returns TRUE if the line in question is an added line.
     """
-    return __regex_added_line.search(line) is not None
+    global checking_file
+    return __regex_added_line.search(line) is not None or checking_file
+
+
+def added_line(line):
+    """Returns the line formatted properly by removing diff syntax"""
+    global checking_file
+    if not checking_file:
+        return line[1:]
+    return line
 
 
 def leading_whitespace_is_spaces(line):
@@ -131,6 +158,7 @@ def if_and_for_end_with_bracket_check(line):
 
 
 def ovs_checkpatch_parse(text):
+    global print_file_name
     lineno = 0
     signatures = []
     co_authors = []
@@ -139,6 +167,8 @@ def ovs_checkpatch_parse(text):
     previous_file = ''
     scissors = re.compile(r'^[\w]*---[\w]*')
     hunks = re.compile('^(---|\+\+\+) (\S+)')
+    hunk_differences = re.compile(
+        r'^@@ ([0-9-+]+),([0-9-+]+) ([0-9-+]+),([0-9-+]+) @@')
     is_signature = re.compile(r'((\s*Signed-off-by: )(.*))$',
                               re.I | re.M | re.S)
     is_co_author = re.compile(r'(\s*(Co-authored-by: )(.*))$',
@@ -157,11 +187,15 @@ def ovs_checkpatch_parse(text):
         if len(line) <= 0:
             continue
 
+        if checking_file:
+            parse = 2
+
         if parse == 1:
             match = hunks.match(line)
             if match:
                 parse = parse + 1
                 current_file = match.group(2)
+                print_file_name = current_file
             continue
         elif parse == 0:
             if scissors.match(line):
@@ -169,7 +203,7 @@ def ovs_checkpatch_parse(text):
                 if not skip_signoff_check:
                     if len(signatures) == 0:
                         print_error("No signatures found.")
-                    if len(signatures) != 1 + len(co_authors):
+                    elif len(signatures) != 1 + len(co_authors):
                         print_error("Too many signoffs; "
                                     "are you missing Co-authored-by lines?")
                     if not set(co_authors) <= set(signatures):
@@ -185,35 +219,46 @@ def ovs_checkpatch_parse(text):
             newfile = hunks.match(line)
             if newfile:
                 current_file = newfile.group(2)
+                print_file_name = current_file
                 continue
+            reset_line_number = hunk_differences.match(line)
+            if reset_line_number:
+                lineno = int(reset_line_number.group(3))
+                if lineno < 0:
+                    lineno = -1 * lineno
+                lineno -= 1
+            if is_subtracted_line(line):
+                lineno -= 1
             if not is_added_line(line):
                 continue
+
+            cmp_line = added_line(line)
+
             # Skip files which have /datapath in them, since they are
             # linux or windows coding standards
             if '/datapath' in current_file:
                 continue
             if (not current_file.endswith('.mk') and
-                    not leading_whitespace_is_spaces(line[1:])):
+                    not leading_whitespace_is_spaces(cmp_line)):
                 print_line = True
                 print_warning("Line has non-spaces leading whitespace",
                               lineno)
-            if trailing_whitespace_or_crlf(line[1:]):
+            if trailing_whitespace_or_crlf(cmp_line):
                 print_line = True
                 print_warning("Line has trailing whitespace", lineno)
-            if len(line[1:]) > 79 and not skip_line_length_check:
+            if len(cmp_line) > 79 and not skip_line_length_check:
                 print_line = True
                 print_warning("Line is greater than 79-characters long",
                               lineno)
-            if not if_and_for_whitespace_checks(line[1:]):
+            if not if_and_for_whitespace_checks(cmp_line):
                 print_line = True
-                print_warning("Improper whitespace around control block",
-                              lineno)
-            if not if_and_for_end_with_bracket_check(line[1:]):
+                print_error("Improper whitespace around control block",
+                            lineno)
+            if not if_and_for_end_with_bracket_check(cmp_line):
                 print_line = True
-                print_warning("Inappropriate bracing around statement",
-                              lineno)
+                print_error("Inappropriate bracing around statement", lineno)
             if print_line:
-                print(line)
+                print("\n%s\n" % line)
     if __errors or __warnings:
         return -1
     return 0
@@ -228,6 +273,7 @@ def usage():
     print("-h|--help\t\t\t\tThis help message")
     print("-b|--skip-block-whitespace\t"
           "Skips the if/while/for whitespace tests")
+    print("-f|--check-file\t\t\tCheck a file instead of a patchfile.")
     print("-l|--skip-leading-whitespace\t"
           "Skips the leading whitespace test")
     print("-s|--skip-signoff-lines\t"
@@ -237,6 +283,7 @@ def usage():
 
 
 def ovs_checkpatch_file(filename):
+    global __warnings, __errors, checking_file
     try:
         mail = email.message_from_file(open(filename, 'r'))
     except:
@@ -246,12 +293,17 @@ def ovs_checkpatch_file(filename):
     for part in mail.walk():
         if part.get_content_maintype() == 'multipart':
             continue
-        return ovs_checkpatch_parse(part.get_payload(decode=True))
+    result = ovs_checkpatch_parse(part.get_payload(decode=True))
+    if result < 0:
+        print("Warnings: %d, Errors: %d" % (__warnings, __errors))
+    return result
+
 
 if __name__ == '__main__':
     try:
-        optlist, args = getopt.getopt(sys.argv[1:], 'bhlst',
-                                      ["help",
+        optlist, args = getopt.getopt(sys.argv[1:], 'bhlstf',
+                                      ["check-file",
+                                       "help",
                                        "skip-block-whitespace",
                                        "skip-leading-whitespace",
                                        "skip-signoff-lines",
@@ -272,6 +324,8 @@ if __name__ == '__main__':
             skip_signoff_check = True
         elif o in ("-t", "--skip-trailing-whitespace"):
             skip_trailing_whitespace_check = True
+        elif o in ("-f", "--check-file"):
+            checking_file = True
         else:
             print("Unknown option '%s'" % o)
             sys.exit(-1)

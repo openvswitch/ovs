@@ -1,10 +1,13 @@
 Post-v2.6.0
 ---------------------
+   - Utilities and daemons that support SSL now allow protocols and
+     ciphers to be configured with --ssl-protocols and --ssl-ciphers.
    - OVN:
      * QoS is now implemented via egress shaping rather than ingress policing.
      * DSCP marking is now supported, via the new northbound QoS table.
      * IPAM now supports fixed MAC addresses.
      * Support for source IP address based routing.
+     * ovn-trace can now trace put_dhcp_opts and put_dhcp_optsv6 actions.
    - Fixed regression in table stats maintenance introduced in OVS
      2.3.0, wherein the number of OpenFlow table hits and misses was
      not accurate.
@@ -18,6 +21,7 @@ Post-v2.6.0
        control over the OpenFlow select groups selection method.  See
        "selection_method" and related options in ovs-ofctl(8) for
        details.
+     * The "sample" action now supports "ingress" and "egress" options.
    - ovs-ofctl:
      * 'bundle' command now supports packet-out messages.
      * New syntax for 'ovs-ofctl packet-out' command, which uses the
@@ -36,8 +40,13 @@ Post-v2.6.0
    - DPDK:
      * New option 'n_rxq_desc' and 'n_txq_desc' fields for DPDK interfaces
        which set the number of rx and tx descriptors to use for the given port.
+     * Support for DPDK v16.11.
    - Fedora packaging:
      * A package upgrade does not automatically restart OVS service.
+   - ovs-vswitchd/ovs-vsctl:
+     * Ports now have a "protected" flag. Protected ports can not forward
+       frames to other protected ports. Unprotected ports can receive and
+       forward frames to protected and other unprotected ports.
 
 v2.6.0 - 27 Sep 2016
 ---------------------

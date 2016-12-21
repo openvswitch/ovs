@@ -130,6 +130,7 @@ struct xbundle {
                                     * NULL if all VLANs are trunked. */
     bool use_priority_tags;        /* Use 802.1p tag for frames in VLAN 0? */
     bool floodable;                /* No port has OFPUTIL_PC_NO_FLOOD set? */
+    bool protected;                /* Protected port mode */
 };
 
 struct xport {
@@ -534,7 +535,7 @@ static void xlate_xbundle_set(struct xbundle *xbundle,
                               enum port_vlan_mode vlan_mode, int vlan,
                               unsigned long *trunks, bool use_priority_tags,
                               const struct bond *bond, const struct lacp *lacp,
-                              bool floodable);
+                              bool floodable, bool protected);
 static void xlate_xport_set(struct xport *xport, odp_port_t odp_port,
                             const struct netdev *netdev, const struct cfm *cfm,
                             const struct bfd *bfd, const struct lldp *lldp,
@@ -683,7 +684,7 @@ xlate_xbundle_set(struct xbundle *xbundle,
                   enum port_vlan_mode vlan_mode, int vlan,
                   unsigned long *trunks, bool use_priority_tags,
                   const struct bond *bond, const struct lacp *lacp,
-                  bool floodable)
+                  bool floodable, bool protected)
 {
     ovs_assert(xbundle->xbridge);
 
@@ -692,6 +693,7 @@ xlate_xbundle_set(struct xbundle *xbundle,
     xbundle->trunks = trunks;
     xbundle->use_priority_tags = use_priority_tags;
     xbundle->floodable = floodable;
+    xbundle->protected = protected;
 
     if (xbundle->bond != bond) {
         bond_unref(xbundle->bond);
@@ -786,7 +788,7 @@ xlate_xbundle_copy(struct xbridge *xbridge, struct xbundle *xbundle)
     xlate_xbundle_set(new_xbundle, xbundle->vlan_mode,
                       xbundle->vlan, xbundle->trunks,
                       xbundle->use_priority_tags, xbundle->bond, xbundle->lacp,
-                      xbundle->floodable);
+                      xbundle->floodable, xbundle->protected);
     LIST_FOR_EACH (xport, bundle_node, &xbundle->xports) {
         xlate_xport_copy(xbridge, new_xbundle, xport);
     }
@@ -980,7 +982,7 @@ xlate_bundle_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
                  const char *name, enum port_vlan_mode vlan_mode, int vlan,
                  unsigned long *trunks, bool use_priority_tags,
                  const struct bond *bond, const struct lacp *lacp,
-                 bool floodable)
+                 bool floodable, bool protected)
 {
     struct xbundle *xbundle;
 
@@ -999,7 +1001,7 @@ xlate_bundle_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
     xbundle->name = xstrdup(name);
 
     xlate_xbundle_set(xbundle, vlan_mode, vlan, trunks,
-                      use_priority_tags, bond, lacp, floodable);
+                      use_priority_tags, bond, lacp, floodable, protected);
 }
 
 static void
@@ -2172,11 +2174,14 @@ xlate_normal_mcast_send_mrouters(struct xlate_ctx *ctx,
     xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
     LIST_FOR_EACH(mrouter, mrouter_node, &ms->mrouter_lru) {
         mcast_xbundle = xbundle_lookup(xcfg, mrouter->port);
-        if (mcast_xbundle && mcast_xbundle != in_xbundle) {
+        if (mcast_xbundle && mcast_xbundle != in_xbundle
+            && mrouter->vlan == vlan) {
             xlate_report(ctx, "forwarding to mcast router port");
             output_normal(ctx, mcast_xbundle, vlan);
         } else if (!mcast_xbundle) {
             xlate_report(ctx, "mcast router port is unknown, dropping");
+        } else if (mrouter->vlan != vlan) {
+            xlate_report(ctx, "mcast router is on another vlan, dropping");
         } else {
             xlate_report(ctx, "mcast router port is input port, dropping");
         }
@@ -2845,6 +2850,22 @@ clear_conntrack(struct flow *flow)
     memset(&flow->ct_label, 0, sizeof flow->ct_label);
 }
 
+static bool
+xlate_flow_is_protected(const struct xlate_ctx *ctx, const struct flow *flow, const struct xport *xport_out)
+{
+    const struct xport *xport_in;
+
+    if (!xport_out) {
+        return false;
+    }
+
+    xport_in = get_ofp_port(ctx->xbridge, flow->in_port.ofp_port);
+
+    return (xport_in && xport_in->xbundle && xport_out->xbundle &&
+            xport_in->xbundle->protected && xport_out->xbundle->protected);
+}
+
+
 static void
 compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
                         const struct xlate_bond_recirc *xr, bool check_stp)
@@ -2873,6 +2894,9 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         return;
     } else if (ctx->mirror_snaplen != 0 && xport->odp_port == ODPP_NONE) {
         xlate_report(ctx, "Mirror truncate to ODPP_NONE, skipping output");
+        return;
+    } else if (xlate_flow_is_protected(ctx, flow, xport)) {
+        xlate_report(ctx, "Flow is between protected ports, skipping output.");
         return;
     } else if (check_stp) {
         if (is_stp(&ctx->base_flow)) {
@@ -3799,7 +3823,8 @@ compose_mpls_push_action(struct xlate_ctx *ctx, struct ofpact_push_mpls *mpls)
         return;
     }
 
-    flow_push_mpls(flow, n, mpls->ethertype, ctx->wc);
+    /* Update flow's MPLS stack, and clear L3/4 fields to mark them invalid. */
+    flow_push_mpls(flow, n, mpls->ethertype, ctx->wc, true);
 }
 
 static void
@@ -4258,10 +4283,19 @@ xlate_sample_action(struct xlate_ctx *ctx,
             .obs_domain_id = os->obs_domain_id,
             .obs_point_id = os->obs_point_id,
             .output_odp_port = output_odp_port,
+            .direction = os->direction,
         }
     };
     compose_sample_action(ctx, probability, &cookie, sizeof cookie.flow_sample,
                           tunnel_out_port, false);
+}
+
+static void
+compose_clone_action(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
+{
+    struct flow old_flow = ctx->xin->flow;
+    do_xlate_actions(oc->actions, ofpact_nest_get_action_len(oc), ctx);
+    ctx->xin->flow = old_flow;
 }
 
 static bool
@@ -4422,6 +4456,7 @@ freeze_unroll_actions(const struct ofpact *a, const struct ofpact *end,
         case OFPACT_WRITE_ACTIONS:
         case OFPACT_METER:
         case OFPACT_SAMPLE:
+        case OFPACT_CLONE:
         case OFPACT_DEBUG_RECIRC:
         case OFPACT_CT:
         case OFPACT_NAT:
@@ -4670,6 +4705,7 @@ recirc_for_mpls(const struct ofpact *a, struct xlate_ctx *ctx)
     case OFPACT_NOTE:
     case OFPACT_EXIT:
     case OFPACT_SAMPLE:
+    case OFPACT_CLONE:
     case OFPACT_UNROLL_XLATE:
     case OFPACT_CT:
     case OFPACT_NAT:
@@ -5027,6 +5063,10 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_SAMPLE:
             xlate_sample_action(ctx, ofpact_get_SAMPLE(a));
+            break;
+
+        case OFPACT_CLONE:
+            compose_clone_action(ctx, ofpact_get_CLONE(a));
             break;
 
         case OFPACT_CT:

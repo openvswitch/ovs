@@ -435,20 +435,75 @@
     <h3>Ingress Table 10: ARP/ND responder</h3>
 
     <p>
-      This table implements ARP/ND responder for known IPs.  It contains these
-      logical flows:
+      This table implements ARP/ND responder in a logical switch for known
+      IPs.  The advantage of the ARP responder flow is to limit ARP
+      broadcasts by locally responding to ARP requests without the need to
+      send to other hypervisors.  One common case is when the inport is a
+      logical port associated with a VIF and the broadcast is responded to
+      on the local hypervisor rather than broadcast across the whole
+      network and responded to by the destination VM.  This behavior is
+      proxy ARP.
     </p>
+
+    <p>
+      ARP requests arrive from VMs from a logical switch inport of type
+      default.  For this case, the logical switch proxy ARP rules can be
+      for other VMs or logical router ports.  Logical switch proxy ARP
+      rules may be programmed both for mac binding of IP addresses on
+      other logical switch VIF ports (which are of the default logical
+      switch port type, representing connectivity to VMs or containers),
+      and for mac binding of IP addresses on logical switch router type
+      ports, representing their logical router port peers.  In order to
+      support proxy ARP for logical router ports, an IP address must be
+      configured on the logical switch router type port, with the same
+      value as the peer logical router port.  The configured MAC addresses
+      must match as well.  When a VM sends an ARP request for a distributed
+      logical router port and if the peer router type port of the attached
+      logical switch does not have an IP address configured, the ARP request
+      will be broadcast on the logical switch.  One of the copies of the ARP
+      request will go through the logical switch router type port to the
+      logical router datapath, where the logical router ARP responder will
+      generate a reply.  The MAC binding of a distributed logical router,
+      once learned by an associated VM, is used for all that VM's
+      communication needing routing.  Hence, the action of a VM re-arping for
+      the mac binding of the logical router port should be rare.
+    </p>
+
+    <p>
+      Logical switch ARP responder proxy ARP rules can also be hit when
+      receiving ARP requests externally on a L2 gateway port.  In this case,
+      the hypervisor acting as an L2 gateway, responds to the ARP request on
+      behalf of a destination VM.
+    </p>
+
+    <p>
+      Note that ARP requests received from <code>localnet</code> or
+      <code>vtep</code> logical inports can either go directly to VMs, in
+      which case the VM responds or can hit an ARP responder for a logical
+      router port if the packet is used to resolve a logical router port
+      next hop address.  In either case, logical switch ARP responder rules
+      will not be hit.  It contains these logical flows:
+     </p>
 
     <ul>
       <li>
-        Priority-100 flows to skip ARP responder if inport is of type
-        <code>localnet</code>, and advances directly to the next table.
+        Priority-100 flows to skip the ARP responder if inport is of type
+        <code>localnet</code> or <code>vtep</code> and advances directly
+        to the next table.  ARP requests sent to <code>localnet</code> or
+        <code>vtep</code> ports can be received by multiple hypervisors.
+        Now, because the same mac binding rules are downloaded to all
+        hypervisors, each of the multiple hypervisors will respond.  This
+        will confuse L2 learning on the source of the ARP requests.  ARP
+        requests received on an inport of type <code>router</code> are not
+        expected to hit any logical switch ARP responder flows.  However,
+        no skip flows are installed for these packets, as there would be
+        some additional flow cost for this and the value appears limited.
       </li>
 
       <li>
         <p>
           Priority-50 flows that match ARP requests to each known IP address
-          <var>A</var> of every logical router port, and respond with ARP
+          <var>A</var> of every logical switch port, and respond with ARP
           replies directly with corresponding Ethernet address <var>E</var>:
         </p>
 
@@ -475,7 +530,7 @@ output;
         <p>
           Priority-50 flows that match IPv6 ND neighbor solicitations to
           each known IP address <var>A</var> (and <var>A</var>'s
-          solicited node address) of every logical router port, and
+          solicited node address) of every logical switch port, and
           respond with neighbor advertisements directly with
           corresponding Ethernet address <var>E</var>:
         </p>
@@ -1145,9 +1200,23 @@ icmp4 {
     <ul>
       <li>
         <p>
-          For each configuration in the OVN Northbound database, that asks
+          If the Gateway router has been configured to force SNAT any
+          previously DNATted packets to <var>B</var>, a priority-110 flow
+          matches <code>ip &amp;&amp; ip4.dst == <var>B</var></code> with
+          an action <code>ct_snat; next;</code>.
+        </p>
+
+        <p>
+          If the Gateway router has been configured to force SNAT any
+          previously load-balanced packets to <var>B</var>, a priority-100 flow
+          matches <code>ip &amp;&amp; ip4.dst == <var>B</var></code> with
+          an action <code>ct_snat; next;</code>.
+        </p>
+
+        <p>
+          For each NAT configuration in the OVN Northbound database, that asks
           to change the source IP address of a packet from <var>A</var> to
-          <var>B</var>, a priority-100 flow matches <code>ip &amp;&amp;
+          <var>B</var>, a priority-90 flow matches <code>ip &amp;&amp;
           ip4.dst == <var>B</var></code> with an action
           <code>ct_snat; next;</code>.
         </p>
@@ -1176,7 +1245,23 @@ icmp4 {
         &amp;&amp; <var>P</var> &amp;&amp; <var>P</var>.dst == <var>PORT
         </var></code> with an action of <code>ct_lb(<var>args</var>)</code>,
         where <var>args</var> contains comma separated IPv4 addresses (and
-        optional port numbers) to load balance to.
+        optional port numbers) to load balance to.  If the Gateway router
+        is configured to force SNAT any load-balanced packets, the above
+        action will be replaced by <code>flags.force_snat_for_lb = 1;
+        ct_lb(<var>args</var>);</code>.
+      </li>
+
+      <li>
+        For all the configured load balancing rules for Gateway router in
+        <code>OVN_Northbound</code> database that includes a L4 port
+        <var>PORT</var> of protocol <var>P</var> and IPv4 address
+        <var>VIP</var>, a priority-120 flow that matches on
+        <code>ct.est &amp;&amp; ip &amp;&amp; ip4.dst == <var>VIP</var>
+        &amp;&amp; <var>P</var> &amp;&amp; <var>P</var>.dst == <var>PORT
+        </var></code> with an action of <code>ct_dnat;</code>.
+        If the Gateway router is configured to force SNAT any load-balanced
+        packets, the above action will be replaced by
+        <code>flags.force_snat_for_lb = 1; ct_dnat;</code>.
       </li>
 
       <li>
@@ -1186,7 +1271,21 @@ icmp4 {
         <code>ct.new &amp;&amp; ip &amp;&amp; ip4.dst ==
         <var>VIP</var></code> with an action of
         <code>ct_lb(<var>args</var>)</code>, where <var>args</var> contains
-        comma separated IPv4 addresses.
+        comma separated IPv4 addresses.  If the Gateway router
+        is configured to force SNAT any load-balanced packets, the above
+        action will be replaced by <code>flags.force_snat_for_lb = 1;
+        ct_lb(<var>args</var>);</code>.
+      </li>
+
+      <li>
+        For all the configured load balancing rules for Gateway router in
+        <code>OVN_Northbound</code> database that includes just an IP address
+        <var>VIP</var> to match on, a priority-110 flow that matches on
+        <code>ct.est &amp;&amp; ip &amp;&amp; ip4.dst ==
+        <var>VIP</var></code> with an action of <code>ct_dnat;</code>.
+        If the Gateway router is configured to force SNAT any load-balanced
+        packets, the above action will be replaced by
+        <code>flags.force_snat_for_lb = 1; ct_dnat;</code>.
       </li>
 
       <li>
@@ -1194,7 +1293,11 @@ icmp4 {
         to change the destination IP address of a packet from <var>A</var> to
         <var>B</var>, a priority-100 flow matches <code>ip &amp;&amp;
         ip4.dst == <var>A</var></code> with an action
-        <code>flags.loopback = 1; ct_dnat(<var>B</var>);</code>.
+        <code>flags.loopback = 1; ct_dnat(<var>B</var>);</code>.  If the
+        Gateway router is configured to force SNAT any DNATed packet,
+        the above action will be replaced by
+        <code>flags.force_snat_for_dnat = 1; flags.loopback = 1;
+        ct_dnat(<var>B</var>);</code>.
       </li>
 
       <li>
@@ -1432,6 +1535,20 @@ arp {
     </p>
     <ul>
       <li>
+        <p>
+          If the Gateway router in the OVN Northbound database has been
+          configured to force SNAT a packet (that has been previously DNATted)
+          to <var>B</var>, a priority-100 flow matches
+          <code>flags.force_snat_for_dnat == 1 &amp;&amp; ip</code> with an
+          action <code>ct_snat(<var>B</var>);</code>.
+        </p>
+        <p>
+          If the Gateway router in the OVN Northbound database has been
+          configured to force SNAT a packet (that has been previously
+          load-balanced) to <var>B</var>, a priority-100 flow matches
+          <code>flags.force_snat_for_lb == 1 &amp;&amp; ip</code> with an
+          action <code>ct_snat(<var>B</var>);</code>.
+        </p>
         <p>
           For each configuration in the OVN Northbound database, that asks
           to change the source IP address of a packet from an IP address of

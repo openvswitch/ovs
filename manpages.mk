@@ -2,13 +2,17 @@
 
 ovn/utilities/ovn-sbctl.8: \
 	ovn/utilities/ovn-sbctl.8.in \
+	lib/common.man \
 	lib/db-ctl-base.man \
 	lib/table.man \
+	lib/vlog.man \
 	ovsdb/remote-active.man \
 	ovsdb/remote-passive.man
 ovn/utilities/ovn-sbctl.8.in:
+lib/common.man:
 lib/db-ctl-base.man:
 lib/table.man:
+lib/vlog.man:
 ovsdb/remote-active.man:
 ovsdb/remote-passive.man:
 
@@ -20,6 +24,8 @@ ovsdb/ovsdb-client.1: \
 	lib/daemon.man \
 	lib/ssl-bootstrap-syn.man \
 	lib/ssl-bootstrap.man \
+	lib/ssl-connect-syn.man \
+	lib/ssl-connect.man \
 	lib/ssl-syn.man \
 	lib/ssl.man \
 	lib/table.man \
@@ -34,6 +40,8 @@ lib/daemon-syn.man:
 lib/daemon.man:
 lib/ssl-bootstrap-syn.man:
 lib/ssl-bootstrap.man:
+lib/ssl-connect-syn.man:
+lib/ssl-connect.man:
 lib/ssl-syn.man:
 lib/ssl.man:
 lib/table.man:
@@ -54,6 +62,8 @@ ovsdb/ovsdb-server.1: \
 	lib/service.man \
 	lib/ssl-bootstrap-syn.man \
 	lib/ssl-bootstrap.man \
+	lib/ssl-connect-syn.man \
+	lib/ssl-connect.man \
 	lib/ssl-peer-ca-cert-syn.man \
 	lib/ssl-peer-ca-cert.man \
 	lib/ssl-syn.man \
@@ -78,6 +88,8 @@ lib/service-syn.man:
 lib/service.man:
 lib/ssl-bootstrap-syn.man:
 lib/ssl-bootstrap.man:
+lib/ssl-connect-syn.man:
+lib/ssl-connect.man:
 lib/ssl-peer-ca-cert-syn.man:
 lib/ssl-peer-ca-cert.man:
 lib/ssl-syn.man:

@@ -56,7 +56,7 @@ function install_dpdk()
         cd dpdk-$1
         git checkout v$1
     else
-        wget http://www.dpdk.org/browse/dpdk/snapshot/dpdk-$1.tar.gz
+        wget http://fast.dpdk.org/rel/dpdk-$1.tar.gz
         tar xzvf dpdk-$1.tar.gz > /dev/null
         cd dpdk-$1
     fi
@@ -80,7 +80,7 @@ fi
 
 if [ "$DPDK" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="16.07"
+        DPDK_VER="16.11"
     fi
     install_dpdk $DPDK_VER
     if [ "$CC" = "clang" ]; then

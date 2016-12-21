@@ -1089,7 +1089,7 @@ dpif_sflow_read_actions(const struct flow *flow,
 	    /* Capture the output port in case we need it
 	     * to get the output tunnel type.
 	     */
-	    sflow_actions->out_port = u32_to_odp(nl_attr_get_u32(a));
+	    sflow_actions->out_port = nl_attr_get_odp_port(a);
 	    break;
 
 	case OVS_ACTION_ATTR_TUNNEL_POP:

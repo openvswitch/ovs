@@ -162,11 +162,13 @@ AT_CLEANUP
 dnl Check that the OVN conntrack field definitions are correct.
 AT_SETUP([ovn -- conntrack fields])
 AT_CHECK([ovstest test-ovn dump-symtab | grep ^ct | sort], [0],
-[[ct.est = ct_state[1]
+[[ct.dnat = ct_state[7]
+ct.est = ct_state[1]
 ct.inv = ct_state[4]
 ct.new = ct_state[0]
 ct.rel = ct_state[2]
 ct.rpl = ct_state[3]
+ct.snat = ct_state[6]
 ct.trk = ct_state[5]
 ct_label = NXM_NX_CT_LABEL
 ct_label.blocked = ct_label[0]
@@ -948,17 +950,17 @@ put_nd(inport, nd.target, nd.sll);
 
 # put_dhcpv6_opts
 reg1[0] = put_dhcpv6_opts(ia_addr = ae70::4, server_id = 00:00:00:00:10:02);
-    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.05.00.10.00.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.04.02.00.06.00.00.00.00.00.10.02,pause)
+    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.00.05.00.10.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.04.00.02.00.06.00.00.00.00.10.02,pause)
 reg1[0] = put_dhcpv6_opts();
     encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40,pause)
 reg1[0] = put_dhcpv6_opts(dns_server={ae70::1,ae70::2});
     formats as reg1[0] = put_dhcpv6_opts(dns_server = {ae70::1, ae70::2});
-    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.17.00.20.00.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.01.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.02,pause)
+    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.00.17.00.20.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.01.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.02,pause)
 reg1[0] = put_dhcpv6_opts(server_id=12:34:56:78:9a:bc, dns_server={ae70::1,ae89::2});
     formats as reg1[0] = put_dhcpv6_opts(server_id = 12:34:56:78:9a:bc, dns_server = {ae70::1, ae89::2});
-    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.02.00.06.00.12.34.56.78.9a.bc.17.00.20.00.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.01.ae.89.00.00.00.00.00.00.00.00.00.00.00.00.00.02,pause)
+    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.00.02.00.06.12.34.56.78.9a.bc.00.17.00.20.ae.70.00.00.00.00.00.00.00.00.00.00.00.00.00.01.ae.89.00.00.00.00.00.00.00.00.00.00.00.00.00.02,pause)
 reg1[0] = put_dhcpv6_opts(domain_search = "ovn.org");
-    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.18.00.07.00.6f.76.6e.2e.6f.72.67,pause)
+    encodes as controller(userdata=00.00.00.05.00.00.00.00.00.01.de.10.00.00.00.40.00.18.00.07.6f.76.6e.2e.6f.72.67,pause)
 reg1[0] = put_dhcpv6_opts(x = 1.2.3.4);
     Syntax error at `x' expecting DHCPv6 option name.
 reg1[0] = put_dhcpv6_opts(ia_addr=ae70::4, "hi");
@@ -1541,6 +1543,18 @@ for i in 1 2 3; do
     ovn-nbctl lsp-set-options $ln_port_name network_name=phys
 done
 
+# lsp_to_ls LSP
+#
+# Prints the name of the logical switch that contains LSP.
+lsp_to_ls () {
+    case $1 in dnl (
+	lp?[[12]]) echo ls1 ;; dnl (
+	lp?[[34]]) echo ls2 ;; dnl (
+	lp?5) echo ls3 ;; dnl (
+	*) AT_FAIL_IF([:]) ;;
+    esac
+}
+
 net_add n1
 for i in 1 2; do
     sim_add hv$i
@@ -1557,13 +1571,7 @@ for i in 1 2; do
                                   ofport-request=$i$j
 
         lsp_name=lp$i$j
-        if test $j -le 2; then
-            ls_name=ls1
-        elif test $j -le 4; then
-            ls_name=ls2
-        else
-            ls_name=ls3
-        fi
+	ls_name=$(lsp_to_ls $lsp_name)
 
         ovn-nbctl lsp-add $ls_name $lsp_name
         ovn-nbctl lsp-set-addresses $lsp_name f0:00:00:00:00:$i$j
@@ -1572,6 +1580,8 @@ for i in 1 2; do
         OVS_WAIT_UNTIL([test x`ovn-nbctl lsp-get-up $lsp_name` = xup])
     done
 done
+ovn-nbctl --wait=sb sync
+ovn-sbctl dump-flows
 
 ovn_populate_arp
 
@@ -1583,68 +1593,84 @@ vif_to_hv() {
     echo hv${1%?}
 }
 #
-# test_packet INPORT DST SRC ETHTYPE OUTPORT...
+# test_packet INPORT DST SRC ETHTYPE EOUT LOUT
 #
 # This shell function causes a packet to be received on INPORT.  The packet's
 # content has Ethernet destination DST and source SRC (each exactly 12 hex
-# digits) and Ethernet type ETHTYPE (4 hex digits).  The OUTPORTs (zero or
-# more) list the VIFs on which the packet should be received.  INPORT and the
-# OUTPORTs are specified as logical switch port numbers, e.g. 11 for vif11.
+# digits) and Ethernet type ETHTYPE (4 hex digits).  INPORT is specified as
+# logical switch port numbers, e.g. 11 for vif11.
+#
+# EOUT is the end-to-end output port, that is, where the packet will end up
+# after possibly bouncing through one or more localnet ports.  LOUT is the
+# logical output port, which might be a localnet port, as seen by ovn-trace
+# (which doesn't know what localnet ports are connected to and therefore can't
+# figure out the end-to-end answer).
 for i in 1 2; do
     for j in 1 2 3 4 5; do
         : > $i$j.expected
     done
 done
 test_packet() {
-    local inport=$1 src=$2 dst=$3 eth=$4; shift; shift; shift; shift
-    local packet=${src}${dst}${eth}
+    local inport=$1 dst=$2 src=$3 eth=$4 eout=$5 lout=$6
+    echo "$@"
+
+    # First try tracing the packet.
+    uflow="inport==\"lp$inport\" && eth.dst==$dst && eth.src==$src && eth.type==0x$eth"
+    if test $lout != drop; then
+        echo "output(\"$lout\");"
+    fi > expout
+    AT_CAPTURE_FILE([trace])
+    AT_CHECK([ovn-trace --all $(lsp_to_ls lp$inport) "$uflow" | tee trace | sed '1,/Minimal trace/d'], [0], [expout])
+
+    # Then actually send a packet, for an end-to-end test.
+    local packet=$(echo $dst$src | sed 's/://g')${eth}
     hv=`vif_to_hv $inport`
     vif=vif$inport
     as $hv ovs-appctl netdev-dummy/receive $vif $packet
-    for outport; do
-        echo $packet >> $outport.expected
-    done
+    if test $eout != drop; then
+        echo $packet >> ${eout#lp}.expected
+    fi
 }
 
 # lp11 and lp21 are on the same network (phys, untagged)
 # and on different hypervisors
-test_packet 11 f00000000021 f00000000011 1121 21
-test_packet 21 f00000000011 f00000000021 2111 11
+test_packet 11 f0:00:00:00:00:21 f0:00:00:00:00:11 1121 lp21 lp21
+test_packet 21 f0:00:00:00:00:11 f0:00:00:00:00:21 2111 lp11 lp11
 
 # lp11 and lp12 are on the same network (phys, untagged)
 # and on the same hypervisor
-test_packet 11 f00000000012 f00000000011 1112 12
-test_packet 12 f00000000011 f00000000012 1211 11
+test_packet 11 f0:00:00:00:00:12 f0:00:00:00:00:11 1112 lp12 lp12
+test_packet 12 f0:00:00:00:00:11 f0:00:00:00:00:12 1211 lp11 lp11
 
 # lp13 and lp23 are on the same network (phys, VLAN 101)
 # and on different hypervisors
-test_packet 13 f00000000023 f00000000013 1323 23
-test_packet 23 f00000000013 f00000000023 2313 13
+test_packet 13 f0:00:00:00:00:23 f0:00:00:00:00:13 1323 lp23 lp23
+test_packet 23 f0:00:00:00:00:13 f0:00:00:00:00:23 2313 lp13 lp13
 
 # lp13 and lp14 are on the same network (phys, VLAN 101)
 # and on the same hypervisor
-test_packet 13 f00000000014 f00000000013 1314 14
-test_packet 14 f00000000013 f00000000014 1413 13
+test_packet 13 f0:00:00:00:00:14 f0:00:00:00:00:13 1314 lp14 lp14
+test_packet 14 f0:00:00:00:00:13 f0:00:00:00:00:14 1413 lp13 lp13
 
 # lp11 and lp15 are on the same network (phys, untagged),
 # same hypervisor, and on different switches
-test_packet 11 f00000000015 f00000000011 1115 15
-test_packet 15 f00000000011 f00000000015 1511 11
+test_packet 11 f0:00:00:00:00:15 f0:00:00:00:00:11 1115 lp15 ln1
+test_packet 15 f0:00:00:00:00:11 f0:00:00:00:00:15 1511 lp11 ln3
 
 # lp11 and lp25 are on the same network (phys, untagged),
 # different hypervisors, and on different switches
-test_packet 11 f00000000025 f00000000011 1125 25
-test_packet 25 f00000000011 f00000000025 2511 11
+test_packet 11 f0:00:00:00:00:25 f0:00:00:00:00:11 1125 lp25 ln1
+test_packet 25 f0:00:00:00:00:11 f0:00:00:00:00:25 2511 lp11 ln3
 
 # Ports that should not be able to communicate
-test_packet 11 f00000000013 f00000000011 1113
-test_packet 11 f00000000023 f00000000011 1123
-test_packet 21 f00000000013 f00000000021 2113
-test_packet 21 f00000000023 f00000000021 2123
-test_packet 13 f00000000011 f00000000013 1311
-test_packet 13 f00000000021 f00000000013 1321
-test_packet 23 f00000000011 f00000000023 2311
-test_packet 23 f00000000021 f00000000023 2321
+test_packet 11 f0:00:00:00:00:13 f0:00:00:00:00:11 1113 drop ln1
+test_packet 11 f0:00:00:00:00:23 f0:00:00:00:00:11 1123 drop ln1
+test_packet 21 f0:00:00:00:00:13 f0:00:00:00:00:21 2113 drop ln1
+test_packet 21 f0:00:00:00:00:23 f0:00:00:00:00:21 2123 drop ln1
+test_packet 13 f0:00:00:00:00:11 f0:00:00:00:00:13 1311 drop ln2
+test_packet 13 f0:00:00:00:00:21 f0:00:00:00:00:13 1321 drop ln2
+test_packet 23 f0:00:00:00:00:11 f0:00:00:00:00:23 2311 drop ln2
+test_packet 23 f0:00:00:00:00:21 f0:00:00:00:00:23 2321 drop ln2
 
 # Dump a bunch of info helpful for debugging if there's a failure.
 
@@ -1689,6 +1715,15 @@ ovn-nbctl lsp-add lsw0 lp-vtep
 ovn-nbctl lsp-set-type lp-vtep vtep
 ovn-nbctl lsp-set-options lp-vtep vtep-physical-switch=br-vtep vtep-logical-switch=lsw0
 ovn-nbctl lsp-set-addresses lp-vtep unknown
+
+# lpr, lr and lrp1 are used for the ARP request handling test only.
+ovn-nbctl lsp-add lsw0 lpr
+ovn-nbctl lr-add lr
+ovn-nbctl lrp-add lr lrp1 f0:00:00:00:00:f1 192.168.1.1/24
+ovn-nbctl set Logical_Switch_Port lpr type=router \
+                             options:router-port=lrp1 \
+    addresses='"f0:00:00:00:00:f1 192.168.1.1"'
+
 
 net_add n1               # Network to connect hv1, hv2, and vtep
 net_add n2               # Network to connect vtep and hv3
@@ -1812,10 +1847,31 @@ for s in 1 2 3; do
     test_packet $s f0000000ffff f0000000000$s 0${s}66 $unknown           #3
 done
 
+# ARP request should not be responded to by logical switch router
+# type arp responder on HV1 and HV2 and should reach directly to
+# vif1 and vif2
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+sha=f00000000003
+spa=`ip_to_hex 192 168 1 2`
+tpa=`ip_to_hex 192 168 1 1`
+request=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
+as hv3 ovs-appctl netdev-dummy/receive vif3 $request
+echo $request >> 1.expected
+echo $request >> 2.expected
+
 # dump information with counters
 echo "------ OVN dump ------"
 ovn-nbctl show
 ovn-sbctl show
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list port_binding
+echo "---------------------"
+ovn-sbctl dump-flows
 
 echo "------ hv1 dump ------"
 as hv1 ovs-vsctl show
@@ -3698,7 +3754,7 @@ as hv1 ovs-ofctl dump-flows br-int
 # Send DHCPDISCOVER.
 offer_ip=`ip_to_hex 10 0 0 4`
 server_ip=`ip_to_hex 10 0 0 1`
-expected_dhcp_opts=0104ffffff0003040a00000136040a000001330400000e10
+expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
 test_dhcp 1 f00000000001 01 $offer_ip ff1000000001 $server_ip $expected_dhcp_opts
 
 # NXT_RESUMEs should be 1.
@@ -3721,7 +3777,7 @@ rm -f 2.expected
 # Send DHCPREQUEST.
 offer_ip=`ip_to_hex 10 0 0 6`
 server_ip=`ip_to_hex 10 0 0 1`
-expected_dhcp_opts=0104ffffff0003040a00000136040a000001330400000e10
+expected_dhcp_opts=330400000e100104ffffff0003040a00000136040a000001
 test_dhcp 2 f00000000002 03 $offer_ip ff1000000001 $server_ip $expected_dhcp_opts
 
 # NXT_RESUMEs should be 2.
@@ -5347,9 +5403,9 @@ AT_CHECK([ovs-vsctl add-port br-int localvif1 -- set Interface localvif1 externa
 # On hv1, check that there are no flows outputting bcast to tunnel
 OVS_WAIT_UNTIL([test `ovs-ofctl dump-flows br-int table=32 | ofctl_strip | grep output | wc -l` -eq 0])
 
-# On hv2, check that there is 1 flow outputting bcast to tunnel to hv1.
+# On hv2, check that no flow outputs bcast to tunnel to hv1.
 as hv2
-OVS_WAIT_UNTIL([test `ovs-ofctl dump-flows br-int table=32 | ofctl_strip | grep output | wc -l` -eq 1])
+OVS_WAIT_UNTIL([test `ovs-ofctl dump-flows br-int table=32 | ofctl_strip | grep output | wc -l` -eq 0])
 
 # Now bind vif2 on hv2.
 AT_CHECK([ovs-vsctl add-port br-int localvif2 -- set Interface localvif2 external_ids:iface-id=localvif2])

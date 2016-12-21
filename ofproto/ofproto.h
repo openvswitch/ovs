@@ -405,6 +405,8 @@ struct ofproto_bundle_settings {
 
     struct lacp_settings *lacp;              /* Nonnull to enable LACP. */
     struct lacp_slave_settings *lacp_slaves; /* Array of n_slaves elements. */
+
+    bool protected;             /* Protected port mode */
 };
 
 int ofproto_bundle_register(struct ofproto *, void *aux,

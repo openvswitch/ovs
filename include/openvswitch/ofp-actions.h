@@ -109,6 +109,7 @@
     OFPACT(CT,              ofpact_conntrack,   ofpact, "ct")           \
     OFPACT(NAT,             ofpact_nat,         ofpact, "nat")          \
     OFPACT(OUTPUT_TRUNC,    ofpact_output_trunc,ofpact, "output_trunc") \
+    OFPACT(CLONE,           ofpact_nest,        actions, "clone")       \
                                                                         \
     /* Debugging actions.                                               \
      *                                                                  \
@@ -158,8 +159,8 @@ enum {
  *       NXAST_SET_TUNNEL64.  In these cases, if the "struct ofpact" originated
  *       from OpenFlow, then we want to make sure that, if it gets translated
  *       back to OpenFlow later, it is translated back to the same action type.
- *       (Otherwise, we'd violate the promise made in DESIGN, in the "Action
- *       Reproduction" section.)
+ *       (Otherwise, we'd violate the promise made in the topics/design doc, in
+ *       the "Action Reproduction" section.)
  *
  *       For such actions, the 'raw' member should be the "enum ofp_raw_action"
  *       originally extracted from the OpenFlow action.  (If the action didn't
@@ -532,9 +533,9 @@ struct ofpact_meter {
     uint32_t meter_id;
 };
 
-/* OFPACT_WRITE_ACTIONS.
+/* OFPACT_WRITE_ACTIONS, OFPACT_CLONE.
  *
- * Used for OFPIT11_WRITE_ACTIONS. */
+ * Used for OFPIT11_WRITE_ACTIONS, NXAST_CLONE. */
 struct ofpact_nest {
     OFPACT_PADDED_MEMBERS(struct ofpact ofpact;);
     struct ofpact actions[];
@@ -542,6 +543,12 @@ struct ofpact_nest {
 BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions) % OFPACT_ALIGNTO == 0);
 BUILD_ASSERT_DECL(offsetof(struct ofpact_nest, actions)
                   == sizeof(struct ofpact_nest));
+
+static inline size_t
+ofpact_nest_get_action_len(const struct ofpact_nest *on)
+{
+    return on->ofpact.len - offsetof(struct ofpact_nest, actions);
+}
 
 /* Bits for 'flags' in struct nx_action_conntrack.
  *
@@ -582,12 +589,6 @@ static inline size_t
 ofpact_ct_get_action_len(const struct ofpact_conntrack *oc)
 {
     return oc->ofpact.len - offsetof(struct ofpact_conntrack, actions);
-}
-
-static inline size_t
-ofpact_nest_get_action_len(const struct ofpact_nest *on)
-{
-    return on->ofpact.len - offsetof(struct ofpact_nest, actions);
 }
 
 void ofpacts_execute_action_set(struct ofpbuf *action_list,
@@ -841,9 +842,23 @@ struct ofpact_note {
     uint8_t data[];
 };
 
+/* Direction of sampled packets. */
+enum nx_action_sample_direction {
+    /* OVS will attempt to infer the sample's direction based on whether
+     * 'sampling_port' is the packet's output port.  This is generally
+     * effective except when sampling happens as part of an output to a patch
+     * port, which doesn't involve a datapath output action. */
+    NX_ACTION_SAMPLE_DEFAULT,
+
+    /* Explicit direction.  This is useful for sampling packets coming in from
+     * or going out of a patch port, where the direction cannot be inferred. */
+    NX_ACTION_SAMPLE_INGRESS,
+    NX_ACTION_SAMPLE_EGRESS
+};
+
 /* OFPACT_SAMPLE.
  *
- * Used for NXAST_SAMPLE and NXAST_SAMPLE2. */
+ * Used for NXAST_SAMPLE, NXAST_SAMPLE2, and NXAST_SAMPLE3. */
 struct ofpact_sample {
     struct ofpact ofpact;
     uint16_t probability;  /* Always positive. */
@@ -851,6 +866,7 @@ struct ofpact_sample {
     uint32_t obs_domain_id;
     uint32_t obs_point_id;
     ofp_port_t sampling_port;
+    enum nx_action_sample_direction direction;
 };
 
 /* OFPACT_DEC_TTL.

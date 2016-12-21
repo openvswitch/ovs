@@ -418,7 +418,7 @@
         </p>
 
         <p>
-          It is an error if <code>prefix</code> is specified and there
+          It is an error if <var>prefix</var> is specified and there
           is no matching route entry, unless <code>--if-exists</code> is
           specified.
         </p>
@@ -427,6 +427,72 @@
       <dt><code>lr-route-list</code> <var>router</var></dt>
       <dd>
         Lists the routes on <var>router</var>.
+      </dd>
+    </dl>
+
+    <h1>NAT Commands</h1>
+
+    <dl>
+      <dt>[<code>--may-exist</code>] <code>lr-nat-add</code> <var>router</var> <var>type</var> <var>external_ip</var> <var>logical_ip</var></dt>
+      <dd>
+        <p>
+          Adds the specified NAT to <var>router</var>.
+          The <var>type</var> must be one of <code>snat</code>,
+          <code>dnat</code>, or <code>dnat_and_snat</code>.
+          The <var>external_ip</var> is an IPv4 address.
+          The <var>logical_ip</var> is an IPv4 network (e.g 192.168.1.0/24)
+          or an IPv4 address.
+        </p>
+        <p>
+          When <var>type</var> is <code>dnat</code>, the externally
+          visible IP address <var>external_ip</var> is DNATted to the
+          IP address <var>logical_ip</var> in the logical space.
+        </p>
+        <p>
+          When <var>type</var> is <code>snat</code>, IP packets with their
+          source IP address that either matches the IP address in
+          <var>logical_ip</var> or is in the network provided by
+          <var>logical_ip</var> is SNATed into the IP address in
+          <var>external_ip</var>.
+        </p>
+        <p>
+          When <var>type</var> is <code>dnat_and_snat</code>,
+          the externally visible IP address <var>external_ip</var>
+          is DNATted to the IP address <var>logical_ip</var> in
+          the logical space.  In addition, IP packets with the source
+          IP address that matches <var>logical_ip</var> is SNATed into
+          the IP address in <var>external_ip</var>.
+        </p>
+        <p>
+          It is an error if a NAT already exists,
+          unless <code>--may-exist</code> is specified.
+        </p>
+      </dd>
+
+      <dt>[<code>--if-exists</code>] <code>lr-nat-del</code> <var>router</var> [<var>type</var> [<var>ip</var>]]</dt>
+      <dd>
+        <p>
+          Deletes NATs from <var>router</var>.  If only <var>router</var>
+          is supplied, all the NATs from the logical router are
+          deleted.  If <var>type</var> is also specified, then all the
+          NATs that match the <var>type</var> will be deleted from the logical
+          router.  If all the fields are given, then a single NAT rule
+          that matches all the fields will be deleted.  When <var>type</var>
+          is <code>snat</code>, the <var>ip</var> should be logical_ip.
+          When <var>type</var> is <code>dnat</code> or
+          <code>dnat_and_snat</code>, the <var>ip</var> shoud be external_ip.
+        </p>
+
+        <p>
+          It is an error if <var>ip</var> is specified and there
+          is no matching NAT entry, unless <code>--if-exists</code> is
+          specified.
+        </p>
+      </dd>
+
+      <dt><code>lr-nat-list</code> <var>router</var></dt>
+      <dd>
+        Lists the NATs on <var>router</var>.
       </dd>
     </dl>
 

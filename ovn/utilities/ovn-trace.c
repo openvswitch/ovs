@@ -33,6 +33,7 @@
 #include "ovn/lex.h"
 #include "ovn/lib/logical-fields.h"
 #include "ovn/lib/ovn-sb-idl.h"
+#include "ovn/lib/ovn-dhcp.h"
 #include "ovn/lib/ovn-util.h"
 #include "ovsdb-idl.h"
 #include "poll-loop.h"
@@ -153,6 +154,7 @@ parse_options(int argc, char *argv[])
         OPT_MINIMAL,
         OPT_ALL,
         DAEMON_OPTION_ENUMS,
+        SSL_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
     };
     static const struct option long_options[] = {
@@ -243,17 +245,22 @@ usage(void)
 usage: %s [OPTIONS] DATAPATH MICROFLOW\n\
        %s [OPTIONS] --detach\n\
 \n\
-Options:\n\
-  --db=DATABASE               connect to DATABASE\n\
-                              (default: %s)\n",
-           program_name, program_name, program_name, default_sb_db());
+Option format options:\n\
+  --detailed              table-by-table \"backtrace\" (default)\n\
+  --summary               less detailed, more parseable\n\
+  --minimal               minimum to explain externally visible behavior\n\
+  --all                   provide all forms of output\n",
+           program_name, program_name, program_name);
     daemon_usage();
     vlog_usage();
     printf("\n\
 Other options:\n\
-  --unixctl=SOCKET            set control socket name\n\
-  -h, --help                  display this help message\n\
-  -V, --version               display version information\n");
+  --db=DATABASE           connect to DATABASE\n\
+                          (default: %s)\n\
+  --unixctl=SOCKET        set control socket name\n\
+  -h, --help              display this help message\n\
+  -V, --version           display version information\n",
+           default_sb_db());
     stream_usage("database", true, true, false);
     exit(EXIT_SUCCESS);
 }
@@ -331,6 +338,10 @@ static struct shash symtab;
 
 /* Address sets. */
 static struct shash address_sets;
+
+/* DHCP options. */
+static struct hmap dhcp_opts;   /* Contains "struct dhcp_opts_map"s. */
+static struct hmap dhcpv6_opts; /* Contains "struct dhcp_opts_map"s. */
 
 static struct ovntrace_datapath *
 ovntrace_datapath_find_by_sb_uuid(const struct uuid *sb_uuid)
@@ -602,7 +613,8 @@ read_flows(void)
 
         struct ovnact_parse_params pp = {
             .symtab = &symtab,
-            .dhcp_opts = NULL /* XXX */,
+            .dhcp_opts = &dhcp_opts,
+            .dhcpv6_opts = &dhcpv6_opts,
             .n_tables = 16,
             .cur_ltable = sblf->table_id,
         };
@@ -660,6 +672,23 @@ read_flows(void)
 }
 
 static void
+read_dhcp_opts(void)
+{
+    hmap_init(&dhcp_opts);
+    const struct sbrec_dhcp_options *sdo;
+    SBREC_DHCP_OPTIONS_FOR_EACH (sdo, ovnsb_idl) {
+        dhcp_opt_add(&dhcp_opts, sdo->name, sdo->code, sdo->type);
+    }
+
+
+    hmap_init(&dhcpv6_opts);
+    const struct sbrec_dhcpv6_options *sdo6;
+    SBREC_DHCPV6_OPTIONS_FOR_EACH(sdo6, ovnsb_idl) {
+       dhcp_opt_add(&dhcpv6_opts, sdo6->name, sdo6->code, sdo6->type);
+    }
+}
+
+static void
 read_mac_bindings(void)
 {
     const struct sbrec_mac_binding *sbmb;
@@ -707,6 +736,7 @@ read_db(void)
     read_ports();
     read_mcgroups();
     read_address_sets();
+    read_dhcp_opts();
     read_flows();
     read_mac_bindings();
 }
@@ -757,6 +787,18 @@ ovntrace_flow_lookup(const struct ovntrace_datapath *dp,
     return NULL;
 }
 
+static char *
+ovntrace_stage_name(const struct ovntrace_datapath *dp,
+                    uint8_t table_id, enum ovntrace_pipeline pipeline)
+{
+    for (size_t i = 0; i < dp->n_flows; i++) {
+        const struct ovntrace_flow *flow = dp->flows[i];
+        if (flow->pipeline == pipeline && flow->table_id == table_id) {
+            return xstrdup(flow->stage_name);;
+        }
+    }
+    return NULL;
+}
 
 enum ovntrace_node_type {
     OVNTRACE_NODE_OUTPUT,
@@ -1175,23 +1217,53 @@ execute_get_mac_bind(const struct ovnact_get_mac_bind *bind,
     const struct ovntrace_mac_binding *binding
         = ovntrace_mac_binding_find(dp, port_key, &ip);
 
-    const struct eth_addr mac = binding ? binding->mac : eth_addr_zero;
+    uflow->dl_dst = binding ? binding->mac : eth_addr_zero;
     if (binding) {
         ovntrace_node_append(super, OVNTRACE_NODE_ACTION,
                              "/* MAC binding to "ETH_ADDR_FMT". */",
-                             ETH_ADDR_ARGS(mac));
+                             ETH_ADDR_ARGS(uflow->dl_dst));
     } else {
         ovntrace_node_append(super, OVNTRACE_NODE_ACTION,
                              "/* No MAC binding. */");
     }
     ovntrace_node_append(super, OVNTRACE_NODE_MODIFY,
-                         "eth.dst = "ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
+                         "eth.dst = "ETH_ADDR_FMT,
+                         ETH_ADDR_ARGS(uflow->dl_dst));
 }
 
 static void
 execute_put_dhcp_opts(const struct ovnact_put_dhcp_opts *pdo,
-                      struct flow *uflow)
+                      const char *name, struct flow *uflow,
+                      struct ovs_list *super)
 {
+    ovntrace_node_append(
+        super, OVNTRACE_NODE_ERROR,
+        "/* We assume that this packet is DHCPDISCOVER or DHCPREQUEST. */");
+
+    /* Format the put_dhcp_opts action. */
+    struct ds s = DS_EMPTY_INITIALIZER;
+    for (const struct ovnact_dhcp_option *o = pdo->options;
+         o < &pdo->options[pdo->n_options]; o++) {
+        if (o != pdo->options) {
+            ds_put_cstr(&s, ", ");
+        }
+        ds_put_format(&s, "%s = ", o->option->name);
+        expr_constant_set_format(&o->value, &s);
+    }
+    ovntrace_node_append(super, OVNTRACE_NODE_MODIFY, "%s(%s)",
+                         name, ds_cstr(&s));
+    ds_destroy(&s);
+
+    struct mf_subfield dst = expr_resolve_field(&pdo->dst);
+    if (!mf_is_register(dst.field->id)) {
+        /* Format assignment. */
+        struct ds s = DS_EMPTY_INITIALIZER;
+        expr_field_format(&pdo->dst, &s);
+        ovntrace_node_append(super, OVNTRACE_NODE_MODIFY,
+                             "%s = 1", ds_cstr(&s));
+        ds_destroy(&s);
+    }
+
     struct mf_subfield sf = expr_resolve_field(&pdo->dst);
     union mf_subvalue sv = { .u8_val = 1 };
     mf_write_subfield_flow(&sf, &sv, uflow);
@@ -1285,11 +1357,13 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
             break;
 
         case OVNACT_PUT_DHCPV4_OPTS:
-            execute_put_dhcp_opts(ovnact_get_PUT_DHCPV4_OPTS(a), uflow);
+            execute_put_dhcp_opts(ovnact_get_PUT_DHCPV4_OPTS(a),
+                                  "put_dhcp_opts", uflow, super);
             break;
 
         case OVNACT_PUT_DHCPV6_OPTS:
-            execute_put_dhcp_opts(ovnact_get_PUT_DHCPV6_OPTS(a), uflow);
+            execute_put_dhcp_opts(ovnact_get_PUT_DHCPV6_OPTS(a),
+                                  "put_dhcpv6_opts", uflow, super);
             break;
 
         case OVNACT_SET_QUEUE:
@@ -1345,7 +1419,11 @@ trace__(const struct ovntrace_datapath *dp, struct flow *uflow,
         }
         ds_put_format(&s, "%s, priority %d", f->match_s, f->priority);
     } else {
-        ds_put_format(&s, "no match");
+        char *stage_name = ovntrace_stage_name(dp, table_id, pipeline);
+        ds_put_format(&s, "%s%sno match (implicit drop)",
+                      stage_name ? stage_name : "",
+                      stage_name ? ": " : "");
+        free(stage_name);
     }
     struct ovntrace_node *node = ovntrace_node_append(
         super, OVNTRACE_NODE_TABLE, "%s", ds_cstr(&s));
@@ -1362,14 +1440,14 @@ trace(const char *dp_s, const char *flow_s)
 {
     const struct ovntrace_datapath *dp = ovntrace_datapath_find_by_name(dp_s);
     if (!dp) {
-        ovs_fatal(0, "unknown datapath \"%s\"", dp_s);
+        return xasprintf("unknown datapath \"%s\"\n", dp_s);
     }
 
     struct flow uflow;
     char *error = expr_parse_microflow(flow_s, &symtab, &address_sets,
                                        ovntrace_lookup_port, dp, &uflow);
     if (error) {
-        ovs_fatal(0, "error parsing flow: %s", error);
+        return xasprintf("error parsing flow: %s\n", error);
     }
 
     uint32_t in_key = uflow.regs[MFF_LOG_INPORT - MFF_REG0];

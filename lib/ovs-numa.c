@@ -535,6 +535,7 @@ ovs_numa_set_cpu_mask(const char *cmask)
 {
     int core_id = 0;
     int i;
+    int end_idx;
 
     if (!found_numa_and_core) {
         return;
@@ -551,7 +552,13 @@ ovs_numa_set_cpu_mask(const char *cmask)
         return;
     }
 
-    for (i = strlen(cmask) - 1; i >= 0; i--) {
+    /* Ignore leading 0x. */
+    end_idx = 0;
+    if (!strncmp(cmask, "0x", 2) || !strncmp(cmask, "0X", 2)) {
+        end_idx = 2;
+    }
+
+    for (i = strlen(cmask) - 1; i >= end_idx; i--) {
         char hex = toupper((unsigned char)cmask[i]);
         int bin, j;
 
@@ -575,7 +582,7 @@ ovs_numa_set_cpu_mask(const char *cmask)
             if (core_id >= hmap_count(&all_cpu_cores)) {
                 return;
             }
-	}
+        }
     }
 
     /* For unspecified cores, sets 'available' to false.  */

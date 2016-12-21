@@ -1,6 +1,3 @@
-docs += \
-	tutorial/Tutorial.md \
-	tutorial/OVN-Tutorial.md
 EXTRA_DIST += \
 	tutorial/ovs-sandbox \
 	tutorial/t-setup \

@@ -1,3 +1,4 @@
+# See ovn-controller-vtep(8) for details about ovn-controller-vtep.
 #
 # You may override the following variables to customize ovn-controller-vtep
 # behavior:
@@ -12,6 +13,18 @@
 #             ovn-controller-vtep for more details on the format for the db
 #             location.
 #
+# To override these variables, you may create a configuration file
+# in the /etc/systemd/system/ovn-controller-vtep.d/ directory.  For example,
+# you could place the following contents in
+# /etc/systemd/system/ovn-controller-vtep.d/local.conf:
+#
+#   [System]
+#   Environment="OVN_DB=unix:/usr/local/var/run/openvswitch/db.sock" "VTEP_DB=unix:/usr/local/var/run/openvswitch/vtep.sock"
+#
+# Alternatively, you may specify environment variables in the file /etc/sysconfig/ovn-controller-vtep:
+#
+#   OVN_DB="unix:/usr/local/var/run/openvswitch/db.sock"
+#   VTEP_DB="unix:/usr/local/var/run/openvswitch/vtep.sock"
 
 [Unit]
 Description=OVN VTEP gateway controller daemon
@@ -24,7 +37,11 @@ Type=simple
 Environment=OVS_RUNDIR=%t/openvswitch
 Environment=OVN_DB=unix:%t/openvswitch/db.sock
 Environment=VTEP_DB=unix:%t/openvswitch/db.sock
+EnvironmentFile=-/etc/sysconfig/ovn-controller-vtep
 ExecStart=/usr/bin/ovn-controller-vtep -vconsole:emer -vsyslog:err -vfile:info \
           --log-file=/var/log/openvswitch/ovn-controller-vtep.log \
           --no-chdir --pidfile=${OVS_RUNDIR}/ovn-controller-vtep.pid \
           --ovnsb-db=${OVN_DB} --vtep-db=${VTEP_DB}
+
+[Install]
+WantedBy=multi-user.target

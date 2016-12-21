@@ -51,7 +51,7 @@ static inline uint32_t hash_pointer(const void *, uint32_t basis);
 static inline uint32_t hash_string(const char *, uint32_t basis);
 
 /* Murmurhash by Austin Appleby,
- * from http://code.google.com/p/smhasher/source/browse/trunk/MurmurHash3.cpp.
+ * from https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
  *
  * The upstream license there says:
  *

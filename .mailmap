@@ -1,0 +1,85 @@
+# See git-shortlog(1) for official documentation of this file format.
+#
+# Name <email>
+#   Use "Name" for any commit with address "<email>".  This is useful when a person
+#   has commits using different spellings of their name, but with the same email
+#   address.
+#
+# Name <email> <email2>
+#   Use "Name" and "<email>" for any commit with the address "<email2>".  This is useful
+#   when a person has used more than one email address.
+
+Aaron Conole <aconole@redhat.com> <aaron@bytheb.org>
+Aaron Conole <aconole@redhat.com> <aconole@bytheb.org>
+Aaron Rosen <aaronorosen@gmail.com> <arosen@clemson.edu>
+Alex Wang <ee07b291@gmail.com> <alexw@nicira.com>
+Alexey I. Froloff <raorn@raorn.name> <raorn@altlinux.org>
+Alin Serdean <aserdean@cloudbasesolutions.com>
+Alin Serdean <aserdean@cloudbasesolutions.com> <aserdean at cloudbasesolutions.com>
+Andy Zhou <azhou@ovn.org>
+Andy Zhou <azhou@ovn.org> <azhou@nicira.com>
+Andy Zhou <azhou@ovn.org> <azhou@von.org>
+Ansis Atteka <aatteka@ovn.org> <aatteka@nicira.com>
+Ansis Atteka <aatteka@ovn.org> <ansisatteka@gmail.com>
+Anupam Chanda <achanda@vmware.com> <achanda@nicira.com>
+Ariel Tubaltsev <tubaltzev@gmail.com> <atubaltsev@vmware.com>
+Babu Shanmugam <bschanmu@redhat.com>
+Ben Pfaff <blp@ovn.org> <blp@nicira.com>
+Bruce Davie <bdavie@vmware.com> <bsd@nicira.com>
+Bruce Davie <bdavie@vmware.com> <bdavie@nicira.com>
+Chandra Sekhar Vejendla <csvejend@us.ibm.com>
+Daniele Di Proietto <diproiettod@vmware.com> <daniele.di.proietto@gmail.com>
+Daniele Di Proietto <diproiettod@vmware.com> <ddiproietto@vmware.com>
+Ed Maste <emaste@freebsd.org> <emaste@adaranet.com>
+Ethan J. Jackson <ejj@eecs.berkeley.edu> <ethan@nicira.com>
+Fischetti, Antonio <antonio.fischetti@intel.com>
+Flavio Fernandes <flavio@flaviof.com>
+Flavio Leitner <fbl@sysclose.org> <fbl@redhat.com>
+Gal Sagie <gal.sagie@gmail.com>
+Gurucharan Shetty <guru@ovn.org>
+Gurucharan Shetty <guru@ovn.org> <gshetty@nicira.com>
+Henry Mai <hmai@nicira.com> <henrymai@nicira.com>
+Hui Kang <kangh@us.ibm.com> <hkang.sunysb@gmail.com>
+Ian Campbell <ian.campbell@citrix.com> <Ian.Campbell@citrix.com>
+James Page <james.page@ubuntu.com> <roampune@gmail.com>
+Jarno Rajahalme <jarno@ovn.org> <jarno.rajahalme@nsn.com>
+Jarno Rajahalme <jarno@ovn.org> <jrajahalme@nicira.com>
+Jean Tourrilhes <jt@hpl.hp.com> Jean Tourrihles <jt@hpl.hp.com>
+Jean Tourrilhes <jt@hpl.hp.com> <jean.tourrilhes@hp.com>
+Jesse Gross <jesse@kernel.org> <jesse@nicira.com>
+Joe Stringer <joe@ovn.org> <joe@wand.net.nz>
+Joe Stringer <joe@ovn.org> <joestringer@nicira.com>
+Justin Pettit <jpettit@ovn.org> <jpettit@nicira.com>
+Kmindg <kmindg@gmail.com>
+Kyle Mestery <mestery@mestery.com> <kmestery@cisco.com>
+Mauricio Vasquez <mauricio.vasquez@polito.it> <mauricio.vasquezbernal@studenti.polito.it>
+Miguel Angel Ajo <majopela@redhat.com> <mangelajo@redhat.com>
+Neil McKee <neil.mckee@inmon.com>
+Ofer Ben-Yacov <ofer.benyacov@gmail.com>
+Polehn, Mike A <mike.a.polehn@intel.com>
+Pravin B Shelar <pshelar@ovn.org> <pshelar@nicira.com>
+Raju Subramanian <rsubramanian@nicira.com>
+Ralf Spenneberg <ralf@spenneberg.net>
+Rami Rosen <ramirose@gmail.com>
+Ramu Ramamurthy <ramu.ramamurthy@us.ibm.com> <ramu.ramamurthy@gmail.com>
+Robert Åkerblom-Andersson <Robert.nr1@gmail.com> <Scorpiion@users.noreply.github.com>
+Romain Lenglet <romain.lenglet@oracle.com> <rlenglet@vmware.com>
+Romain Lenglet <romain.lenglet@oracle.com> <romain.lenglet@berabera.info>
+Russell Bryant <russell@ovn.org> <rbryant@redhat.com>
+Ryan Moats <rmoats@us.ibm.com>
+Sabyasachi Sengupta <Sabyasachi.Sengupta@alcatel-lucent.com> <sabyasachi.sengupta@alcatel-lucent.com>
+Saurabh Shah <ssaurabh@vmware.com> <ssaurabh@nicira.com>
+Shad Ansari <shad.ansar@hpe.com> <shad.ansari@hp.com>
+Shih-Hao Li <shihli@vmware.com> <shli@nicira.com>
+Simon Horman <simon.horman@netronome.com> <horms@verge.net.au>
+Stephen Finucane <stephen@that.guru> <stephen.finucane@intel.com>
+Thomas F. Herbert <thomasfherbert@gmail.com> <thomasfherbert@entpnt.com>
+Thomas Graf <tgraf@noironetworks.com> <tgraf@redhat.com>
+Thomas Graf <tgraf@noironetworks.com> <tgraf@suug.ch>
+Wei Li <liw@dtdream.com>
+YAMAMOTO Takashi <yamamoto@ovn.org> <yamamoto@midokura.com>
+YAMAMOTO Takashi <yamamoto@ovn.org> <yamamoto@valinux.co.jp>
+YAMAMOTO Takashi <yamamoto@ovn.org> <yamt@mwd.biglobe.ne.jp>
+Zhi Yong Wu <wuzhy@linux.vnet.ibm.com> <zwu.kernel@gmail.com>
+Zoltan Kiss <zoltan.kiss@linaro.org> <zoltan.kiss@citrix.com>
+Zong Kai LI <zealokii@gmail.com>

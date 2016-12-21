@@ -47,6 +47,8 @@ void ovn_init_symtab(struct shash *symtab);
 enum mff_log_flags_bits {
     MLF_ALLOW_LOOPBACK_BIT = 0,
     MLF_RCV_FROM_VXLAN_BIT = 1,
+    MLF_FORCE_SNAT_FOR_DNAT_BIT = 2,
+    MLF_FORCE_SNAT_FOR_LB_BIT = 3,
 };
 
 /* MFF_LOG_FLAGS_REG flag assignments */
@@ -59,6 +61,14 @@ enum mff_log_flags {
      * VXLAN encapsulation.  Egress port information is available for
      * Geneve and STT tunnel types. */
     MLF_RCV_FROM_VXLAN = (1 << MLF_RCV_FROM_VXLAN_BIT),
+
+    /* Indicate that a packet needs a force SNAT in the gateway router when
+     * DNAT has taken place. */
+    MLF_FORCE_SNAT_FOR_DNAT = (1 << MLF_FORCE_SNAT_FOR_DNAT_BIT),
+
+    /* Indicate that a packet needs a force SNAT in the gateway router when
+     * load-balancing has taken place. */
+    MLF_FORCE_SNAT_FOR_LB = (1 << MLF_FORCE_SNAT_FOR_LB_BIT),
 };
 
 #endif /* ovn/lib/logical-fields.h */

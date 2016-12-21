@@ -144,6 +144,7 @@ parse_options(int argc, char *argv[], char **unixctl_pathp)
         OPT_DISABLE_SYSTEM,
         DAEMON_OPTION_ENUMS,
         OPT_DPDK,
+        SSL_OPTION_ENUMS,
         OPT_DUMMY_NUMA,
     };
     static const struct option long_options[] = {

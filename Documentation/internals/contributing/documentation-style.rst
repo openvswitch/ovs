@@ -1,0 +1,332 @@
+..
+      Copyright (c) 2016 Stephen Finucane <stephen@that.guru>
+
+      Licensed under the Apache License, Version 2.0 (the "License"); you may
+      not use this file except in compliance with the License. You may obtain
+      a copy of the License at
+
+          http://www.apache.org/licenses/LICENSE-2.0
+
+      Unless required by applicable law or agreed to in writing, software
+      distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+      WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+      License for the specific language governing permissions and limitations
+      under the License.
+
+      Convention for heading levels in Open vSwitch documentation:
+
+      =======  Heading 0 (reserved for the title in a document)
+      -------  Heading 1
+      ~~~~~~~  Heading 2
+      +++++++  Heading 3
+      '''''''  Heading 4
+
+      Avoid deeper levels because they do not render well.
+
+================================
+Open vSwitch Documentation Style
+================================
+
+This file describes the documentation style used in all documentation found in
+Open vSwitch. Documentation includes any documents found in ``Documentation``
+along with any ``README``, ``MAINTAINERS``, or generally ``rst`` suffixed
+documents found in the project tree.
+
+reStructuredText vs. Sphinx
+---------------------------
+
+reStructuredText (reST) is the syntax, while Sphinx is a documentation
+generator.  Sphinx introduces a number of extensions to reST, like the
+``:ref:`` role, which can and should be used in documentation, but these will
+not work correctly on GitHub. As such, these extensions should not be used in
+any documentation in the root level, such as the ``README``.
+
+reST Conventions
+----------------
+
+Basics
+~~~~~~
+
+Many of the basic documentation guidelines match those of the
+:doc:`coding-style`.
+
+- Use reStructuredText (reST) for all documentation.
+
+  Sphinx extensions can be used, but only for documentation in the
+  ``Documentation`` folder.
+
+- Limit lines at 79 characters.
+
+  .. note::
+    An exception to this rule is text within code-block elements that cannot be
+    wrapped and links within references.
+
+- Use spaces for indenation.
+
+- Match indentation levels.
+
+  A change in indentation level usually signifies a change in content nesting,
+  by either closing the existing level or introducing a new level.
+
+- Avoid trailing spaces on lines.
+
+- Include a license (see this file) in all docs.
+
+- Most importantly, always build and display documentation before submitting
+  changes! Docs aren't unit testable, so visible inspection is necessary.
+
+File Names
+~~~~~~~~~~
+
+- Use hyphens as space delimiters. For example: ``my-readme-document.rst``
+
+- Use lowercase filenames.
+
+  .. note::
+    An exception to this rule is any documents found in the root-level of the
+    project.
+
+Titles
+~~~~~~
+
+- Use the following headers levels.
+
+  | =======  Heading 0 (reserved for the title in a document)
+  | -------  Heading 1
+  | ~~~~~~~  Heading 2
+  | +++++++  Heading 3
+  | '''''''  Heading 4
+
+  .. note::
+
+    Avoid using lower heading levels by rewriting and reorganizing the
+    information.
+
+- Under- and overlines should be of the same length as that of the heading
+  text.
+
+- Use "title case" for headers.
+
+Code
+~~~~
+
+- Use ``::``, the ``code`` role or the ``code-block:: <syntax>`` role to prefix
+  code.
+
+- Prefix commands with ``$``.
+
+- Where possible, include fully-working snippets of code. If there
+  pre-requisites, explain what they are and how to achieve them.
+
+Admonitions
+~~~~~~~~~~~
+
+- Use admonitions to call attention to important information.::
+
+      .. note::
+
+        This is a sample callout for some useful tip or trick.
+
+  Example admonitions include: ``warning``, ``important``, ``note``, ``tip`` or
+  ``seealso``.
+
+- Use notes sparingly. Avoid having more than one per subsection.
+
+Tables
+~~~~~~
+
+- Use either graphic tables, list tables or CSV tables.
+
+Graphic tables
+++++++++++++++
+
+::
+
+    .. table:: OVS-Linux kernel compatibility
+
+      ============ ==============
+      Open vSwitch Linux kernel
+      ============ ==============
+      1.4.x        2.6.18 to 3.2
+      1.5.x        2.6.18 to 3.2
+      1.6.x        2.6.18 to 3.2
+      ============ ==============
+
+::
+
+    .. table:: OVS-Linux kernel compatibility
+
+      +--------------+---------------+
+      | Open vSwitch | Linux kernel  |
+      +==============+===============+
+      | 1.4.x        | 2.6.18 to 3.2 |
+      +--------------+---------------+
+      | 1.5.x        | 2.6.18 to 3.2 |
+      +--------------+---------------+
+      | 1.6.x        | 2.6.18 to 3.2 |
+      +--------------+---------------+
+
+.. note::
+  The ``table`` role - ``.. table:: <name>`` -  can be safely omitted.
+
+List tables
++++++++++++
+
+::
+
+    .. list-table:: OVS-Linux kernel compatibility
+       :widths: 10 15
+       :header-rows: 1
+
+       * - Open vSwitch
+         - Linux kernel
+       * - 1.4.x
+         - 2.6.18 to 3.2
+       * - 1.5.x
+         - 2.6.18 to 3.2
+       * - 1.6.x
+         - 2.6.18 to 3.2
+
+CSV tables
+++++++++++
+
+::
+
+    .. csv-table:: OVS-Linux kernel compatibility
+       :header: Open vSwitch, Linux kernel
+       :widths: 10 15
+
+       1.4.x, 2.6.18 to 3.2
+       1.5.x, 2.6.18 to 3.2
+       1.6.x, 2.6.18 to 3.2
+
+Cross-referencing
+~~~~~~~~~~~~~~~~~
+
+- To link to an external file or document, include as a link.::
+
+      Here's a `link <http://openvswitch.org>`__ to the Open vSwitch website.
+
+
+      Here's a `link`_ in reference style.
+
+      .. _link: http://openvswitch.org
+
+- You can also use citations.::
+
+      Refer to the Open vSwitch documentation [1]_.
+
+      References
+      ----------
+
+      .. [1]: http://openvswitch.org
+
+- To cross-reference another doc, use the ``doc`` role.::
+
+      Here is a link to the :doc:`/README.rst`
+
+  .. note::
+    This is a Sphinx extension. Do not use this in any top-level documents.
+
+- To cross-reference an arbitrary location in a doc, use the ``ref`` role.::
+
+      .. _sample-crossref
+
+      Title
+      ~~~~~
+
+      Hello, world.
+
+      Another Title
+      ~~~~~~~~~~~~~
+
+      Here is a cross-reference to :ref:`sample-crossref`.
+
+  .. note::
+    This is a Sphinx extension. Do not use this in any top-level documents.
+
+Figures and Other Media
+~~~~~~~~~~~~~~~~~~~~~~~
+
+- All images should be in ASCII format and included in code-blocks to preserve
+  formatting.
+
+- Include other reStructuredText verbatim in a current document
+
+Comments
+~~~~~~~~
+
+- Comments are indicated by means of the ``..`` marker.::
+
+      .. TODO(stephenfin) This section needs some work. This TODO will not
+         appear in the final generated document, however.
+
+Writing Style
+-------------
+
+Follow these guidelines to ensure readability and consistency of the Open
+vSwitch documentation. These guidelines are based on the `IBM Style Guide
+<http://www.redbooks.ibm.com/Redbooks.nsf/ibmpressisbn/9780132101301?Open>`__.
+
+- Use standard US English
+
+  Use a spelling and grammar checking tool as necessary.
+
+- Expand initialisms and acronyms on first usage.
+
+  Commonly used terms like CPU or RAM are allowed.
+
+  .. list-table:: Example
+     :header-rows: 1
+
+     * - Do not use
+       - Do use
+     * - OVS is a virtual switch. OVS has...
+       - Open vSwitch (OVS) is a virtual switch. OVS has...
+     * - The VTEP emulator is...
+       - The Virtual Tunnel Endpoint (VTEP) emulator is...
+
+- Write in the active voice
+
+  The subject should do the verb's action, rather than be acted upon.
+
+  .. list-table:: Example
+     :header-rows: 1
+
+     * - Do not use
+       - Do use
+     * - A bridge is created by you
+       - Create a bridge
+
+- Write in the present tense
+
+  .. list-table:: Example
+     :header-rows: 1
+
+     * - Do not use
+       - Do use
+     * - Once the bridge is created, you can create a port
+       - Once the bridge is created, create a port
+
+- Write in second person
+
+  .. list-table:: Example
+     :header-rows: 1
+
+     * - Do not use
+       - Do use
+     * - To create a bridge, the user runs:
+       - To create a bridge, run:
+
+- Keep sentences short and consise
+
+- Eliminate needless politeness
+
+  Avoid "please" and "thank you"
+
+Useful Links
+------------
+
+* `Quick reStructuredText
+  <http://docutils.sourceforge.net/docs/user/rst/quickref.html>`__
+* `Sphinx Documentation <http://sphinx.readthedocs.org/en/latest/rest.html>`__

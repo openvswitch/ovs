@@ -19,6 +19,13 @@
 
 #include "precomp.h"
 #include "Flow.h"
+#include "Debug.h"
+#include <stddef.h>
+
+#ifdef OVS_DBG_MOD
+#undef OVS_DBG_MOD
+#endif
+#define OVS_DBG_MOD OVS_DBG_CONTRK
 
 struct ct_addr {
     union {
@@ -31,7 +38,14 @@ struct ct_addr {
 
 struct ct_endpoint {
     struct ct_addr addr;
-    ovs_be16 port;
+    union {
+        ovs_be16 port;
+        struct {
+            ovs_be16 icmp_id;
+            uint8_t icmp_type;
+            uint8_t icmp_code;
+        };
+    };
     UINT16 pad;
 };
 
@@ -71,7 +85,21 @@ typedef struct OVS_CT_ENTRY {
     UINT32      mark;
     UINT64      timestampStart;
     struct ovs_key_ct_labels labels;
+    PVOID       parent; /* Points to main connection */
 } OVS_CT_ENTRY, *POVS_CT_ENTRY;
+
+typedef struct OVS_CT_REL_ENTRY {
+    OVS_CT_KEY      key;
+    POVS_CT_ENTRY   parent;
+    UINT64          expiration;
+    LIST_ENTRY      link;
+} OVS_CT_REL_ENTRY, *POVS_CT_REL_ENTRY;
+
+typedef struct _OVS_CT_THREAD_CTX {
+    KEVENT      event;
+    PVOID       threadObject;
+    UINT32      exit;
+} OVS_CT_THREAD_CTX, *POVS_CT_THREAD_CTX;
 
 typedef struct OvsConntrackKeyLookupCtx {
     OVS_CT_KEY      key;
@@ -94,6 +122,36 @@ typedef struct OvsConntrackKeyLookupCtx {
         ((STRUCT *) (void *) ((char *) (POINTER) - \
          offsetof (STRUCT, MEMBER)))
 
+static __inline void
+OvsConntrackUpdateExpiration(OVS_CT_ENTRY *ctEntry,
+                             long long now,
+                             long long interval)
+{
+    ctEntry->expiration = now + interval;
+}
+
+static __inline UINT32
+OvsGetTcpPayloadLength(PNET_BUFFER_LIST nbl)
+{
+    IPHdr *ipHdr;
+    char *ipBuf[sizeof(IPHdr)];
+    PNET_BUFFER curNb;
+    curNb = NET_BUFFER_LIST_FIRST_NB(nbl);
+    UINT32 hdrLen = sizeof(EthHdr);
+    NdisAdvanceNetBufferDataStart(curNb, hdrLen, FALSE, NULL);
+    ipHdr = NdisGetDataBuffer(curNb, sizeof *ipHdr, (PVOID) &ipBuf,
+                              1 /*no align*/, 0);
+    if (ipHdr == NULL) {
+        NdisRetreatNetBufferDataStart(curNb, hdrLen, 0, NULL);
+        return 0;
+    }
+
+    TCPHdr *tcp = (TCPHdr *)((PCHAR)ipHdr + ipHdr->ihl * 4);
+    NdisRetreatNetBufferDataStart(curNb, hdrLen, 0, NULL);
+
+    return (ntohs(ipHdr->tot_len) - (ipHdr->ihl * 4) - (TCP_HDR_LEN(tcp)));
+}
+
 VOID OvsCleanupConntrack(VOID);
 NTSTATUS OvsInitConntrack(POVS_SWITCH_CONTEXT context);
 
@@ -102,27 +160,52 @@ NDIS_STATUS OvsExecuteConntrackAction(PNET_BUFFER_LIST curNbl,
                                       OvsFlowKey *key,
                                       const PNL_ATTR a);
 BOOLEAN OvsConntrackValidateTcpPacket(const TCPHdr *tcp);
+BOOLEAN OvsConntrackValidateIcmpPacket(const ICMPHdr *icmp);
 OVS_CT_ENTRY * OvsConntrackCreateTcpEntry(const TCPHdr *tcp,
                                           PNET_BUFFER_LIST nbl,
                                           UINT64 now);
 NDIS_STATUS OvsCtMapTcpProtoInfoToNl(PNL_BUFFER nlBuf,
                                      OVS_CT_ENTRY *conn_);
 OVS_CT_ENTRY * OvsConntrackCreateOtherEntry(UINT64 now);
+OVS_CT_ENTRY * OvsConntrackCreateIcmpEntry(UINT64 now);
 enum CT_UPDATE_RES OvsConntrackUpdateTcpEntry(OVS_CT_ENTRY* conn_,
                                               const TCPHdr *tcp,
                                               PNET_BUFFER_LIST nbl,
                                               BOOLEAN reply,
                                               UINT64 now);
-enum ct_update_res OvsConntrackUpdateOtherEntry(OVS_CT_ENTRY *conn_,
+enum CT_UPDATE_RES OvsConntrackUpdateOtherEntry(OVS_CT_ENTRY *conn_,
                                                 BOOLEAN reply,
                                                 UINT64 now);
-NTSTATUS
-OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
-                          PVOID outBuffer,
-                          UINT32 outBufLen,
-                          UINT8 eventType,
-                          UINT32 nlmsgSeq,
-                          UINT32 nlmsgPid,
-                          UINT8 nfGenVersion,
-                          UINT32 dpIfIndex);
+enum CT_UPDATE_RES OvsConntrackUpdateIcmpEntry(OVS_CT_ENTRY* conn_,
+                                               BOOLEAN reply,
+                                               UINT64 now);
+NTSTATUS OvsCreateNlMsgFromCtEntry(POVS_CT_ENTRY entry,
+                                   PVOID outBuffer,
+                                   UINT32 outBufLen,
+                                   UINT8 eventType,
+                                   UINT32 nlmsgSeq,
+                                   UINT32 nlmsgPid,
+                                   UINT8 nfGenVersion,
+                                   UINT32 dpIfIndex);
+
+/* Tracking related connections */
+NTSTATUS OvsInitCtRelated(POVS_SWITCH_CONTEXT context);
+VOID OvsCleanupCtRelated(VOID);
+NDIS_STATUS OvsCtRelatedEntryCreate(UINT8 ipProto,
+                                    UINT16 dl_type,
+                                    UINT32 serverIp,
+                                    UINT32 clientIp,
+                                    UINT16 serverPort,
+                                    UINT16 clientPort,
+                                    UINT64 currentTime,
+                                    POVS_CT_ENTRY parent);
+POVS_CT_ENTRY OvsCtRelatedLookup(OVS_CT_KEY key, UINT64 currentTime);
+
+NDIS_STATUS OvsCtHandleFtp(PNET_BUFFER_LIST curNbl,
+                           OvsFlowKey *key,
+                           OVS_PACKET_HDR_INFO *layers,
+                           UINT64 currentTime,
+                           POVS_CT_ENTRY entry,
+                           BOOLEAN request);
+
 #endif /* __OVS_CONNTRACK_H_ */

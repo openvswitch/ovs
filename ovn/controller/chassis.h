@@ -21,11 +21,12 @@
 struct controller_ctx;
 struct ovsdb_idl;
 struct ovsrec_bridge;
+struct sbrec_chassis;
 
 void chassis_register_ovs_idl(struct ovsdb_idl *);
 const struct sbrec_chassis *chassis_run(struct controller_ctx *,
                                         const char *chassis_id,
                                         const struct ovsrec_bridge *br_int);
-bool chassis_cleanup(struct controller_ctx *, const char *chassis_id);
+bool chassis_cleanup(struct controller_ctx *, const struct sbrec_chassis *);
 
 #endif /* ovn/chassis.h */

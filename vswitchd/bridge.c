@@ -1013,6 +1013,9 @@ port_configure(struct port *port)
         }
     }
 
+    /* Protected port mode */
+    s.protected = cfg->protected;
+
     /* Register. */
     ofproto_bundle_register(port->bridge->ofproto, port, &s);
 

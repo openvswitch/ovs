@@ -310,6 +310,10 @@ rm -rf $RPM_BUILD_ROOT
     fi
 %endif
 
+%post ovn-common
+mkdir -p /usr/lib/ocf/resource.d/ovn
+ln -sf %{_datadir}/openvswitch/scripts/ovndb-servers.ocf /usr/lib/ocf/resource.d/ovn/ovndb-servers
+
 %post ovn-central
 %if 0%{?systemd_post:1}
     %systemd_post ovn-northd.service
@@ -349,6 +353,9 @@ rm -rf $RPM_BUILD_ROOT
 %else
     /bin/systemctl daemon-reload >/dev/null 2>&1 || :
 %endif
+
+%postun ovn-common
+rm -rf /usr/lib/ocf/resource.d/ovn
 
 %postun ovn-central
 %if 0%{?systemd_postun_with_restart:1}
@@ -474,8 +481,7 @@ fi
 %{_mandir}/man8/ovs-vswitchd.8*
 %{_mandir}/man8/ovs-parse-backtrace.8*
 %{_mandir}/man8/ovs-testcontroller.8*
-%doc COPYING DESIGN.rst INSTALL.SSL.rst NOTICE README.rst WHY-OVS.rst
-%doc FAQ.rst NEWS INSTALL.DPDK.rst rhel/README.RHEL.rst
+%doc COPYING NOTICE README.rst NEWS rhel/README.RHEL.rst
 /var/lib/openvswitch
 /var/log/openvswitch
 %ghost %attr(755,root,root) %{_rundir}/openvswitch
@@ -489,6 +495,7 @@ fi
 %{_bindir}/ovn-sbctl
 %{_bindir}/ovn-trace
 %{_datadir}/openvswitch/scripts/ovn-ctl
+%{_datadir}/openvswitch/scripts/ovndb-servers.ocf
 %{_datadir}/openvswitch/scripts/ovn-bugtool-nbctl-show
 %{_datadir}/openvswitch/scripts/ovn-bugtool-sbctl-lflow-list
 %{_datadir}/openvswitch/scripts/ovn-bugtool-sbctl-show

@@ -67,9 +67,8 @@ to modify datapaths when \fBovs\-vswitchd\fR is running can interfere with
 its operation.  (\fBovs\-dpctl\fR may still be useful for diagnostics.)
 .PP
 An Open vSwitch datapath kernel module must be loaded for \fBovs\-vswitchd\fR
-to be useful.  Please refer to the \fBINSTALL.Linux\fR file included in the
-Open vSwitch distribution for instructions on how to build and load
-the Open vSwitch kernel module.
+to be useful.  Refer to the documentation for instructions on how to build and
+load the Open vSwitch kernel module.
 .PP
 .SH OPTIONS
 .IP "\fB\-\-mlockall\fR"
@@ -85,7 +84,7 @@ unavailable or unsuccessful.
 .
 .SS "DPDK Options"
 For details on initializing the \fBovs\-vswitchd\fR DPDK datapath,
-refer to INSTALL.DPDK.rst or \fBovs\-vswitchd.conf.db\fR(5) for
+refer to the documentation or \fBovs\-vswitchd.conf.db\fR(5) for
 details.
 .SS "Daemon Options"
 .ds DD \
@@ -348,5 +347,4 @@ time linear in the number of flows.
 .
 .SH "SEE ALSO"
 .BR ovs\-appctl (8),
-.BR ovsdb\-server (1),
-\fBINSTALL.Linux\fR in the Open vSwitch distribution.
+.BR ovsdb\-server (1).

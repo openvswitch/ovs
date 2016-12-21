@@ -72,3 +72,4 @@ testsuite.tmp.orig
 /rpm/
 /openvswitch*.tar.gz
 /tests/lcov/
+/Documentation/_build

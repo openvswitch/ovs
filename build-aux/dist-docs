@@ -3,10 +3,10 @@
 set -e
 
 # Check command line.
-if test ! -d "$1" || test $# -lt 2; then
+if test ! -d "$1" || test $# != 1; then
     cat <<EOF
 $0: HTML documentation generator for Open vSwitch
-usage: $0 srcdir docfile...
+usage: $0 srcdir
 
 The VERSION environment variable should be set to the Open vSwitch version.
 Must be invoked from an Open vSwitch build directory.
@@ -34,8 +34,6 @@ search_path () {
     exit 1
 }
 search_path man
-search_path markdown
-search_path rst2html
 search_path ps2pdf
 
 # Create dist-docs directory.
@@ -57,75 +55,7 @@ cat >&3 <<EOF
   <link rel="stylesheet" type="text/css" href="style.css">
   <title>Open vSwitch $VERSION Documentation</title>
 </head><body>
-<h1>Open vSwitch $VERSION Documentation</h1>
-<h2>Documents</h2>
-<table>
-EOF
-
-# Add top-level documentation to index.html, giving it .txt extensions so that
-# the webserver doesn't serve it as Markdown/rST and make your web browser try
-# to invoke some kind of external helper you don't have installed.
-#
-# Also translate documentation to HTML.
-for file
-do
-    title=`head -1 "$srcdir/$file"`
-    dir=$distdir/`dirname $file`; test -d "$dir" || mkdir "$dir"
-    case $file in
-        *.md)
-            cp "$srcdir/$file" "$distdir/$file.txt"
-            ln -s $(basename "$file.txt") "$distdir/$file"
-            (cat <<EOF
-<html><head>
-  <meta charset="UTF-8"></head>
-  <link rel="stylesheet" type="text/css" href="style.css">
-  <title>$file (Open vSwitch $VERSION)</title>
-</head><body>
-EOF
-             markdown "$distdir/$file.txt"
-             echo "</body></html>") > "$distdir/$file.html"
-            cat <<EOF
-<tr>
-  <td>$file</td>
-  <td>$title</td>
-  <td><a href="$file.html">HTML</a>, <a href="$file.txt">plain text</a></td>
-</tr>
-EOF
-            ;;
-
-        *.rst)
-            title=`grep -A 1 -e "^=" $srcdir/$file | sed -n 2p`
-            cp "$srcdir/$file" "$distdir/$file.txt"
-            ln -s $(basename "$file.txt") "$distdir/$file"
-            rst2html "$distdir/$file.txt" --stylesheet-path="style.css" \
-                --link-stylesheet --title="$file (Open vSwitch $VERSION)" \
-                > "$distdir/$file.html"
-            cat <<EOF
-<tr>
-  <td>$file</td>
-  <td>$title</td>
-  <td><a href="$file.html">HTML</a>, <a href="$file.txt">plain text</a></td>
-</tr>
-EOF
-            ;;
-
-        *)
-            cp "$srcdir/$file" "$distdir/$file"
-            cat <<EOF
-<tr>
-  <td>$file</td>
-  <td>$title</td>
-  <td><a href="$file">plain text</a></td>
-</tr>
-EOF
-            ;;
-    esac
-done >&3
-
-# Add header for manpages to index.html.
-cat >&3 <<EOF
-</table>
-<h2>Manpages</h2>
+<h1>Open vSwitch $VERSION Manpages</h1>
 <table>
 EOF
 

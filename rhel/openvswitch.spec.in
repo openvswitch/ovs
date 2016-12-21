@@ -33,6 +33,7 @@ Release: 1
 Source: openvswitch-%{version}.tar.gz
 Buildroot: /tmp/openvswitch-rpm
 Requires: logrotate, python >= 2.7, python-six
+BuildRequires: python-six
 BuildRequires: openssl-devel
 BuildRequires: checkpolicy, selinux-policy-devel
 
@@ -102,7 +103,7 @@ rm \
     $RPM_BUILD_ROOT/usr/bin/ovn-* \
     $RPM_BUILD_ROOT/usr/share/man/man?/ovn-* \
     $RPM_BUILD_ROOT/usr/share/openvswitch/ovn-* \
-    $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovn-*
+    $RPM_BUILD_ROOT/usr/share/openvswitch/scripts/ovn*
 (cd "$RPM_BUILD_ROOT" && rm -rf usr/%{_lib}/*.la)
 (cd "$RPM_BUILD_ROOT" && rm -rf usr/include)
 
@@ -247,8 +248,7 @@ exit 0
 /usr/share/openvswitch/scripts/sysconfig.template
 /usr/share/openvswitch/vswitch.ovsschema
 /usr/share/openvswitch/vtep.ovsschema
-%doc COPYING DESIGN.rst INSTALL.SSL.rst NOTICE README.rst WHY-OVS.rst FAQ.rst NEWS
-%doc INSTALL.DPDK.rst rhel/README.RHEL.rst README-native-tunneling.rst
+%doc COPYING NOTICE README.rst NEWS rhel/README.RHEL.rst
 /var/lib/openvswitch
 /var/log/openvswitch
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+# Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -147,7 +147,7 @@ OVS_ENABLE_OPTION([-Wall])
 OVS_ENABLE_OPTION([-Wextra])
 OVS_ENABLE_OPTION([-Wno-sign-compare])
 OVS_ENABLE_OPTION([-Wpointer-arith])
-OVS_ENABLE_OPTION([-Wformat-security])
+OVS_ENABLE_OPTION([-Wformat -Wformat-security])
 OVS_ENABLE_OPTION([-Wswitch-enum])
 OVS_ENABLE_OPTION([-Wunused-parameter])
 OVS_ENABLE_OPTION([-Wbad-function-cast])
@@ -158,6 +158,12 @@ OVS_ENABLE_OPTION([-Wmissing-prototypes])
 OVS_ENABLE_OPTION([-Wmissing-field-initializers])
 OVS_ENABLE_OPTION([-Wthread-safety])
 OVS_ENABLE_OPTION([-fno-strict-aliasing])
+OVS_ENABLE_OPTION([-Wswitch-bool])
+OVS_ENABLE_OPTION([-Wlogical-not-parentheses])
+OVS_ENABLE_OPTION([-Wsizeof-array-argument])
+OVS_ENABLE_OPTION([-Wbool-compare])
+OVS_ENABLE_OPTION([-Wshift-negative-value])
+OVS_ENABLE_OPTION([-Wduplicated-cond])
 OVS_ENABLE_OPTION([-Qunused-arguments])
 OVS_CONDITIONAL_CC_OPTION([-Wno-unused], [HAVE_WNO_UNUSED])
 OVS_CONDITIONAL_CC_OPTION([-Wno-unused-parameter], [HAVE_WNO_UNUSED_PARAMETER])
