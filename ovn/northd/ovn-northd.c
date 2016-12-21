@@ -49,10 +49,10 @@ VLOG_DEFINE_THIS_MODULE(ovn_northd);
 static unixctl_cb_func ovn_northd_exit;
 
 struct northd_context {
-  struct ovsdb_idl *ovnnb_idl;
-  struct ovsdb_idl *ovnsb_idl;
-  struct ovsdb_idl_txn *ovnnb_txn;
-  struct ovsdb_idl_txn *ovnsb_txn;
+    struct ovsdb_idl *ovnnb_idl;
+    struct ovsdb_idl *ovnsb_idl;
+    struct ovsdb_idl_txn *ovnnb_txn;
+    struct ovsdb_idl_txn *ovnsb_txn;
 };
 
 static const char *ovnnb_db;
@@ -85,7 +85,7 @@ enum ovn_datapath_type {
  *
  * (It's better to use ovn_stage_build() for type-safety reasons, but inline
  * functions can't be used in enums or switch cases.) */
-#define OVN_STAGE_BUILD(DP_TYPE, PIPELINE, TABLE)	\
+#define OVN_STAGE_BUILD(DP_TYPE, PIPELINE, TABLE) \
     (((DP_TYPE) << 9) | ((PIPELINE) << 8) | (TABLE))
 
 /* A stage within an OVN logical switch or router.
@@ -95,7 +95,6 @@ enum ovn_datapath_type {
  * the table within that pipeline.  The first three components are combined to
  * form the stage's full name, e.g. S_SWITCH_IN_PORT_SEC_L2,
  * S_ROUTER_OUT_DELIVERY. */
-
 enum ovn_stage {
 #define PIPELINE_STAGES                                                   \
     /* Logical switch ingress stages. */                                  \
@@ -141,16 +140,16 @@ enum ovn_stage {
     PIPELINE_STAGE(ROUTER, OUT, DELIVERY,  1, "lr_out_delivery")
 
 #define PIPELINE_STAGE(DP_TYPE, PIPELINE, STAGE, TABLE, NAME)   \
-    S_##DP_TYPE##_##PIPELINE##_##STAGE				\
-    = OVN_STAGE_BUILD(DP_##DP_TYPE, P_##PIPELINE, TABLE),
+    S_##DP_TYPE##_##PIPELINE##_##STAGE                          \
+      = OVN_STAGE_BUILD(DP_##DP_TYPE, P_##PIPELINE, TABLE),
     PIPELINE_STAGES
 #undef PIPELINE_STAGE
-  };
+};
 
-  /* Due to various hard-coded priorities need to implement ACLs, the
-   * northbound database supports a smaller range of ACL priorities than
-   * are available to logical flows.  This value is added to an ACL
-   * priority to determine the ACL's logical flow priority. */
+/* Due to various hard-coded priorities need to implement ACLs, the
+ * northbound database supports a smaller range of ACL priorities than
+ * are available to logical flows.  This value is added to an ACL
+ * priority to determine the ACL's logical flow priority. */
 #define OVN_ACL_PRI_OFFSET 1000
 
 #define REGBIT_CONNTRACK_DEFRAG "reg0[0]"
@@ -164,32 +163,32 @@ ovn_stage_build(enum ovn_datapath_type dp_type, enum ovn_pipeline pipeline,
                 uint8_t table)
 {
     return OVN_STAGE_BUILD(dp_type, pipeline, table);
-  }
+}
 
-  /* Returns the pipeline to which 'stage' belongs. */
-  static enum ovn_pipeline
-  ovn_stage_get_pipeline(enum ovn_stage stage)
-  {
-    return (stage >> 8) & 1;
-  }
+/* Returns the pipeline to which 'stage' belongs. */
+static enum ovn_pipeline
+ovn_stage_get_pipeline(enum ovn_stage stage)
+{
+  return (stage >> 8) & 1;
+}
 
-  /* Returns the table to which 'stage' belongs. */
-  static uint8_t
-  ovn_stage_get_table(enum ovn_stage stage)
-  {
-    return stage & 0xff;
-  }
+/* Returns the table to which 'stage' belongs. */
+static uint8_t
+ovn_stage_get_table(enum ovn_stage stage)
+{
+  return stage & 0xff;
+}
 
-  /* Returns a string name for 'stage'. */
-  static const char *
-  ovn_stage_to_str(enum ovn_stage stage)
-  {
-    switch (stage) {
-#define PIPELINE_STAGE(DP_TYPE, PIPELINE, STAGE, TABLE, NAME)	\
-      case S_##DP_TYPE##_##PIPELINE##_##STAGE: return NAME;
-      PIPELINE_STAGES
+/* Returns a string name for 'stage'. */
+static const char *
+ovn_stage_to_str(enum ovn_stage stage)
+{
+  switch (stage) {
+#define PIPELINE_STAGE(DP_TYPE, PIPELINE, STAGE, TABLE, NAME)	  \
+        case S_##DP_TYPE##_##PIPELINE##_##STAGE: return NAME;
+    PIPELINE_STAGES
 #undef PIPELINE_STAGE
-    default: return "<unknown>";
+      default: return "<unknown>";
     }
 }
 
