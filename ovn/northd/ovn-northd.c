@@ -71,14 +71,14 @@ static struct hmap macam = HMAP_INITIALIZER(&macam);
 
 /* The two pipelines in an OVN logical flow table. */
 enum ovn_pipeline {
-  P_IN,                       /* Ingress pipeline. */
-  P_OUT                       /* Egress pipeline. */
+    P_IN,                       /* Ingress pipeline. */
+    P_OUT                       /* Egress pipeline. */
 };
 
 /* The two purposes for which ovn-northd uses OVN logical datapaths. */
 enum ovn_datapath_type {
-  DP_SWITCH,                  /* OVN logical switch. */
-  DP_ROUTER                   /* OVN logical router. */
+    DP_SWITCH,                  /* OVN logical switch. */
+    DP_ROUTER                   /* OVN logical router. */
 };
 
 /* Returns an "enum ovn_stage" built from the arguments.
@@ -86,7 +86,7 @@ enum ovn_datapath_type {
  * (It's better to use ovn_stage_build() for type-safety reasons, but inline
  * functions can't be used in enums or switch cases.) */
 #define OVN_STAGE_BUILD(DP_TYPE, PIPELINE, TABLE)	\
-  (((DP_TYPE) << 9) | ((PIPELINE) << 8) | (TABLE))
+    (((DP_TYPE) << 9) | ((PIPELINE) << 8) | (TABLE))
 
 /* A stage within an OVN logical switch or router.
  *
