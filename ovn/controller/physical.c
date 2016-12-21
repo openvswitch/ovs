@@ -536,31 +536,13 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
     } else {
         /* Remote port connected by tunnel */
 
-        /* Table 32, priority 150 and 100.
-         * ===============================
+        /* Table 32, priority 100.
+         * =======================
          *
-         * Priority 150 is for packets received from a VXLAN tunnel
-         * which get resubmitted to OFTABLE_LOG_INGRESS_PIPELINE due to
-         * lack of needed metadata in VXLAN, explicitly skip sending
-         * back out any tunnels and resubmit to table 33 for local
-         * delivery.
-         *
-         * Priority 100 is for all other traffic which need to be sent
-         * to a remote hypervisor.  Each flow matches an output port
-         * that includes a logical port on a remote hypervisor, and
-         * tunnels the packet to that hypervisor.
+         * Handles traffic that needs to be sent to a remote hypervisor.  Each
+         * flow matches an output port that includes a logical port on a remote
+         * hypervisor, and tunnels the packet to that hypervisor.
          */
-        match_init_catchall(&match);
-        ofpbuf_clear(ofpacts_p);
-        match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
-                             MLF_RCV_FROM_VXLAN, MLF_RCV_FROM_VXLAN);
-
-        /* Resubmit to table 33. */
-        put_resubmit(OFTABLE_LOCAL_OUTPUT, ofpacts_p);
-        ofctrl_add_flow(flow_table, OFTABLE_REMOTE_OUTPUT, 150, &match,
-                        ofpacts_p);
-
-
         match_init_catchall(&match);
         ofpbuf_clear(ofpacts_p);
 
@@ -937,12 +919,29 @@ physical_run(struct controller_ctx *ctx, enum mf_field_id mff_ovn_geneve,
         }
     }
 
+    /* Table 32, priority 150.
+     * =======================
+     *
+     * Handles packets received from a VXLAN tunnel which get resubmitted to
+     * OFTABLE_LOG_INGRESS_PIPELINE due to lack of needed metadata in VXLAN,
+     * explicitly skip sending back out any tunnels and resubmit to table 33
+     * for local delivery.
+     */
+    struct match match;
+    match_init_catchall(&match);
+    ofpbuf_clear(&ofpacts);
+    match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
+                         MLF_RCV_FROM_VXLAN, MLF_RCV_FROM_VXLAN);
+
+    /* Resubmit to table 33. */
+    put_resubmit(OFTABLE_LOCAL_OUTPUT, &ofpacts);
+    ofctrl_add_flow(flow_table, OFTABLE_REMOTE_OUTPUT, 150, &match, &ofpacts);
+
     /* Table 32, Priority 0.
      * =======================
      *
      * Resubmit packets that are not directed at tunnels or part of a
      * multicast group to the local output table. */
-    struct match match;
     match_init_catchall(&match);
     ofpbuf_clear(&ofpacts);
     put_resubmit(OFTABLE_LOCAL_OUTPUT, &ofpacts);

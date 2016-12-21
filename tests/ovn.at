@@ -1058,6 +1058,11 @@ ovn_populate_arp
 # XXX This should be more systematic.
 sleep 1
 
+# Make sure there is no attempt to adding duplicated flows by ovn-controller
+AT_FAIL_IF([test -n "`grep duplicate hv1/ovn-controller.log`"])
+AT_FAIL_IF([test -n "`grep duplicate hv2/ovn-controller.log`"])
+AT_FAIL_IF([test -n "`grep duplicate hv3/ovn-controller.log`"])
+
 # Given the name of a logical port, prints the name of the hypervisor
 # on which it is located.
 vif_to_hv() {
