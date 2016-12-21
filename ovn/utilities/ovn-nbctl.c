@@ -320,9 +320,9 @@ General commands:\n\
   show ROUTER               print overview of database contents for ROUTER\n\
 \n\
 Logical switch commands:\n\
-  ls-add [LSWITCH]     create a logical switch named LSWITCH\n\
-  ls-del LSWITCH       delete LSWITCH and all its ports\n\
-  ls-list              print the names of all logical switches\n\
+  ls-add [LSWITCH]          create a logical switch named LSWITCH\n\
+  ls-del LSWITCH            delete LSWITCH and all its ports\n\
+  ls-list                   print the names of all logical switches\n\
 \n\
 Logical port-chain commands:\n\
   lport-chain-add LSWITCH [LPORT-CHAIN]     create a logical port-chain named LPORT-CHAIN\n\

@@ -4944,6 +4944,7 @@ update_logical_port_status(struct northd_context *ctx)
     }
     hmap_destroy(&lports_hmap);
 }
+
 static struct dhcp_opts_map supported_dhcp_opts[] = {
     OFFERIP,
     DHCP_OPT_NETMASK,
