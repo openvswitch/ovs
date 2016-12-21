@@ -493,6 +493,11 @@ void
         for columnName, column in sorted(table.columns.iteritems()):
             if column.type.is_smap():
                 print "    smap_init(&row->%s);" % columnName
+            elif (column.type.n_min == 1 and
+                  column.type.n_max == 1 and
+                  column.type.key.type == ovs.db.types.StringType and
+                  not column.type.value):
+                print "    row->%s = \"\";" % columnName
         print "}"
 
         # First, next functions.
