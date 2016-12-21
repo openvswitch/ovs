@@ -4756,17 +4756,17 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
     }
     struct ovn_lflow *lflow, *next_lflow;
     HMAP_FOR_EACH_SAFE (lflow, next_lflow, hmap_node, &lflows) {
-      enum ovn_pipeline pipeline = ovn_stage_get_pipeline(lflow->stage);
-      uint8_t table = ovn_stage_get_table(lflow->stage);
+        enum ovn_pipeline pipeline = ovn_stage_get_pipeline(lflow->stage);
+        uint8_t table = ovn_stage_get_table(lflow->stage);
 
-      sbflow = sbrec_logical_flow_insert(ctx->ovnsb_txn);
-      sbrec_logical_flow_set_logical_datapath(sbflow, lflow->od->sb);
-      sbrec_logical_flow_set_pipeline(
+        sbflow = sbrec_logical_flow_insert(ctx->ovnsb_txn);
+        sbrec_logical_flow_set_logical_datapath(sbflow, lflow->od->sb);
+        sbrec_logical_flow_set_pipeline(
 				      sbflow, pipeline == P_IN ? "ingress" : "egress");
-      sbrec_logical_flow_set_table_id(sbflow, table);
-      sbrec_logical_flow_set_priority(sbflow, lflow->priority);
-      sbrec_logical_flow_set_match(sbflow, lflow->match);
-      sbrec_logical_flow_set_actions(sbflow, lflow->actions);
+        sbrec_logical_flow_set_table_id(sbflow, table);
+        sbrec_logical_flow_set_priority(sbflow, lflow->priority);
+        sbrec_logical_flow_set_match(sbflow, lflow->match);
+        sbrec_logical_flow_set_actions(sbflow, lflow->actions);
 
         /* Trim the source locator lflow->where, which looks something like
          * "ovn/northd/ovn-northd.c:1234", down to just the part following the
@@ -4786,38 +4786,38 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
             "source", where);
         sbrec_logical_flow_set_external_ids(sbflow, &ids);
 
-      ovn_lflow_destroy(&lflows, lflow);
+        ovn_lflow_destroy(&lflows, lflow);
     }
     hmap_destroy(&lflows);
 
     /* Push changes to the Multicast_Group table to database. */
     const struct sbrec_multicast_group *sbmc, *next_sbmc;
     SBREC_MULTICAST_GROUP_FOR_EACH_SAFE (sbmc, next_sbmc, ctx->ovnsb_idl) {
-      struct ovn_datapath *od = ovn_datapath_from_sbrec(datapaths,
-							sbmc->datapath);
-      if (!od) {
-	sbrec_multicast_group_delete(sbmc);
-	continue;
-      }
+        struct ovn_datapath *od = ovn_datapath_from_sbrec(datapaths,
+							                                             sbmc->datapath);
+        if (!od) {
+	           sbrec_multicast_group_delete(sbmc);
+	           continue;
+        }
 
-      struct multicast_group group = { .name = sbmc->name,
-				       .key = sbmc->tunnel_key };
-      struct ovn_multicast *mc = ovn_multicast_find(&mcgroups, od, &group);
-      if (mc) {
-	ovn_multicast_update_sbrec(mc, sbmc);
-	ovn_multicast_destroy(&mcgroups, mc);
-      } else {
-	sbrec_multicast_group_delete(sbmc);
-      }
+        struct multicast_group group = {  .name = sbmc->name,
+				                                .key = sbmc->tunnel_key };
+        struct ovn_multicast *mc = ovn_multicast_find(&mcgroups, od, &group);
+        if (mc) {
+	           ovn_multicast_update_sbrec(mc, sbmc);
+	           ovn_multicast_destroy(&mcgroups, mc);
+        } else {
+	           sbrec_multicast_group_delete(sbmc);
+        }
     }
     struct ovn_multicast *mc, *next_mc;
     HMAP_FOR_EACH_SAFE (mc, next_mc, hmap_node, &mcgroups) {
-      sbmc = sbrec_multicast_group_insert(ctx->ovnsb_txn);
-      sbrec_multicast_group_set_datapath(sbmc, mc->datapath->sb);
-      sbrec_multicast_group_set_name(sbmc, mc->group->name);
-      sbrec_multicast_group_set_tunnel_key(sbmc, mc->group->key);
-      ovn_multicast_update_sbrec(mc, sbmc);
-      ovn_multicast_destroy(&mcgroups, mc);
+        sbmc = sbrec_multicast_group_insert(ctx->ovnsb_txn);
+        sbrec_multicast_group_set_datapath(sbmc, mc->datapath->sb);
+        sbrec_multicast_group_set_name(sbmc, mc->group->name);
+        sbrec_multicast_group_set_tunnel_key(sbmc, mc->group->key);
+        ovn_multicast_update_sbrec(mc, sbmc);
+        ovn_multicast_destroy(&mcgroups, mc);
     }
     hmap_destroy(&mcgroups);
 }
@@ -4858,9 +4858,7 @@ sync_address_sets(struct northd_context *ctx)
     }
     shash_destroy(&sb_address_sets);
 }
-
 
-
 static void
 ovnnb_db_run(struct northd_context *ctx, struct ovsdb_idl_loop *sb_loop)
 {
@@ -4877,13 +4875,13 @@ ovnnb_db_run(struct northd_context *ctx, struct ovsdb_idl_loop *sb_loop)
 
     struct ovn_datapath *dp, *next_dp;
     HMAP_FOR_EACH_SAFE (dp, next_dp, key_node, &datapaths) {
-      ovn_datapath_destroy(&datapaths, dp);
+        ovn_datapath_destroy(&datapaths, dp);
     }
     hmap_destroy(&datapaths);
 
     struct ovn_port *port, *next_port;
     HMAP_FOR_EACH_SAFE (port, next_port, key_node, &ports) {
-      ovn_port_destroy(&ports, port);
+        ovn_port_destroy(&ports, port);
     }
     hmap_destroy(&ports);
 
@@ -4955,7 +4953,7 @@ update_logical_port_status(struct northd_context *ctx)
     }
 
     HMAP_FOR_EACH_POP(hash_node, node, &lports_hmap) {
-      free(hash_node);
+        free(hash_node);
     }
     hmap_destroy(&lports_hmap);
 
@@ -5112,78 +5110,78 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
         SSL_OPTION_ENUMS,
     };
     static const struct option long_options[] = {
-      {"ovnsb-db", required_argument, NULL, 'd'},
-      {"ovnnb-db", required_argument, NULL, 'D'},
-      {"help", no_argument, NULL, 'h'},
-      {"options", no_argument, NULL, 'o'},
-      {"version", no_argument, NULL, 'V'},
-      DAEMON_LONG_OPTIONS,
-      VLOG_LONG_OPTIONS,
-      STREAM_SSL_LONG_OPTIONS,
-      {NULL, 0, NULL, 0},
+        {"ovnsb-db", required_argument, NULL, 'd'},
+        {"ovnnb-db", required_argument, NULL, 'D'},
+        {"help", no_argument, NULL, 'h'},
+        {"options", no_argument, NULL, 'o'},
+        {"version", no_argument, NULL, 'V'},
+        DAEMON_LONG_OPTIONS,
+        VLOG_LONG_OPTIONS,
+        STREAM_SSL_LONG_OPTIONS,
+        {NULL, 0, NULL, 0},
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
     for (;;) {
-      int c;
+        int c;
 
-      c = getopt_long(argc, argv, short_options, long_options, NULL);
-      if (c == -1) {
-	break;
-      }
+        c = getopt_long(argc, argv, short_options, long_options, NULL);
+        if (c == -1) {
+	       break;
+        }
 
       switch (c) {
-	DAEMON_OPTION_HANDLERS;
-	VLOG_OPTION_HANDLERS;
-	STREAM_SSL_OPTION_HANDLERS;
+	     DAEMON_OPTION_HANDLERS;
+	     VLOG_OPTION_HANDLERS;
+	     STREAM_SSL_OPTION_HANDLERS;
 
-      case 'd':
-	ovnsb_db = optarg;
-	break;
+        case 'd':
+	           ovnsb_db = optarg;
+	           break;
 
-      case 'D':
-	ovnnb_db = optarg;
-	break;
+        case 'D':
+	           ovnnb_db = optarg;
+	           break;
 
-      case 'h':
-	usage();
-	exit(EXIT_SUCCESS);
+        case 'h':
+	           usage();
+	           exit(EXIT_SUCCESS);
 
-      case 'o':
-	ovs_cmdl_print_options(long_options);
-	exit(EXIT_SUCCESS);
+        case 'o':
+	           ovs_cmdl_print_options(long_options);
+	           exit(EXIT_SUCCESS);
 
-      case 'V':
-	ovs_print_version(0, 0);
-	exit(EXIT_SUCCESS);
+        case 'V':
+	           ovs_print_version(0, 0);
+	           exit(EXIT_SUCCESS);
 
-      default:
-	break;
+        default:
+	           break;
       }
     }
 
     if (!ovnsb_db) {
-      ovnsb_db = default_sb_db();
+        ovnsb_db = default_sb_db();
     }
 
     if (!ovnnb_db) {
-      ovnnb_db = default_nb_db();
+        ovnnb_db = default_nb_db();
     }
 
     free(short_options);
-  }
+}
 
-  static void
-  add_column_noalert(struct ovsdb_idl *idl,
-		     const struct ovsdb_idl_column *column)
-  {
+static void
+add_column_noalert(struct ovsdb_idl *idl,
+		                const struct ovsdb_idl_column *column)
+{
     ovsdb_idl_add_column(idl, column);
     ovsdb_idl_omit_alert(idl, column);
-  }
+}
 
-  int
-  main(int argc, char *argv[])
-  {
+int
+main(int argc, char *argv[])
+{
     int res = EXIT_SUCCESS;
     struct unixctl_server *unixctl;
     int retval;
@@ -5198,7 +5196,7 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
     retval = unixctl_server_create(NULL, &unixctl);
     if (retval) {
-      exit(EXIT_FAILURE);
+        exit(EXIT_FAILURE);
     }
     unixctl_command_register("exit", "", 0, 0, ovn_northd_exit, &exiting);
 
@@ -5212,14 +5210,14 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
     /* We want to detect only selected changes to the ovn-sb db. */
     struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
-								      ovsdb_idl_create(ovnsb_db, &sbrec_idl_class, false, true));
+				ovsdb_idl_create(ovnsb_db, &sbrec_idl_class, false, true));
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_sb_global);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_sb_global_col_nb_cfg);
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_logical_flow);
     add_column_noalert(ovnsb_idl_loop.idl,
-		       &sbrec_logical_flow_col_logical_datapath);
+		        &sbrec_logical_flow_col_logical_datapath);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_logical_flow_col_pipeline);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_logical_flow_col_table_id);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_logical_flow_col_priority);
@@ -5228,26 +5226,26 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_multicast_group);
     add_column_noalert(ovnsb_idl_loop.idl,
-		       &sbrec_multicast_group_col_datapath);
+		        &sbrec_multicast_group_col_datapath);
     add_column_noalert(ovnsb_idl_loop.idl,
-		       &sbrec_multicast_group_col_tunnel_key);
+		        &sbrec_multicast_group_col_tunnel_key);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_multicast_group_col_name);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_multicast_group_col_ports);
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_datapath_binding);
     add_column_noalert(ovnsb_idl_loop.idl,
-		       &sbrec_datapath_binding_col_tunnel_key);
+		        &sbrec_datapath_binding_col_tunnel_key);
     add_column_noalert(ovnsb_idl_loop.idl,
-		       &sbrec_datapath_binding_col_external_ids);
+		        &sbrec_datapath_binding_col_external_ids);
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_port_binding);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_datapath);
     add_column_noalert(ovnsb_idl_loop.idl,
-		       &sbrec_port_binding_col_logical_port);
+		        &sbrec_port_binding_col_logical_port);
     add_column_noalert(ovnsb_idl_loop.idl,
-		       &sbrec_port_binding_col_tunnel_key);
+		        &sbrec_port_binding_col_tunnel_key);
     add_column_noalert(ovnsb_idl_loop.idl,
-		       &sbrec_port_binding_col_parent_port);
+		        &sbrec_port_binding_col_parent_port);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_tag);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_type);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_options);
@@ -5311,14 +5309,14 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
     service_stop();
 
     exit(res);
-  }
+}
 
-  static void
-  ovn_northd_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
-		  const char *argv[] OVS_UNUSED, void *exiting_)
-  {
+static void
+ovn_northd_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
+		            const char *argv[] OVS_UNUSED, void *exiting_)
+{
     bool *exiting = exiting_;
     *exiting = true;
 
     unixctl_command_reply(conn, NULL);
-  }
+}
