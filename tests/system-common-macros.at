@@ -204,6 +204,12 @@ m4_define([ADD_NATIVE_TUNNEL],
 #
 m4_define([FORMAT_PING], [grep "transmitted" | sed 's/time.*ms$/time 0ms/'])
 
+# STRIP_MONITOR_CSUM([])
+#
+# Strip the csum value from ovs-ofctl monitor.
+#
+m4_define([STRIP_MONITOR_CSUM], [grep "csum:" | sed 's/csum:.*/csum: <skip>/'])
+
 # FORMAT_CT([ip-addr])
 #
 # Strip content from the piped input which would differ from test to test
