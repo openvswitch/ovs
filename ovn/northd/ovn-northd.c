@@ -268,11 +268,11 @@ allocate_tnlid(struct hmap *set, const char *name, uint32_t max,
 {
     for (uint32_t tnlid = *hint + 1; tnlid != *hint;
          tnlid = tnlid + 1 <= max ? tnlid + 1 : 1) {
-         if (!tnlid_in_use(set, tnlid)) {
-             add_tnlid(set, tnlid);
-             *hint = tnlid;
-             return tnlid;
-         }
+        if (!tnlid_in_use(set, tnlid)) {
+            add_tnlid(set, tnlid);
+            *hint = tnlid;
+            return tnlid;
+        }
     }
 
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
@@ -475,7 +475,7 @@ ovn_datapath_from_sbrec(struct hmap *datapaths,
 
     if (!smap_get_uuid(&sb->external_ids, "logical-switch", &key) &&
         !smap_get_uuid(&sb->external_ids, "logical-router", &key)) {
-         return NULL;
+        return NULL;
     }
     return ovn_datapath_find(datapaths, &key);
 }
@@ -1604,9 +1604,9 @@ static void
 ovn_multicast_destroy(struct hmap *mcgroups, struct ovn_multicast *mc)
 {
     if (mc) {
-       hmap_remove(mcgroups, &mc->hmap_node);
-       free(mc->ports);
-       free(mc);
+        hmap_remove(mcgroups, &mc->hmap_node);
+        free(mc->ports);
+        free(mc);
     }
 }
 
@@ -1793,11 +1793,11 @@ build_port_security_ipv6_flow(
 
     /* Allow ip6.dst=ff00::/8 for multicast packets */
     if (pipeline == P_OUT) {
-       ds_put_cstr(match, "ff00::/8, ");
+        ds_put_cstr(match, "ff00::/8, ");
     }
     for(int i = 0; i < n_ipv6_addrs; i++) {
-       ipv6_string_mapped(ip6_str, &ipv6_addrs[i].addr);
-       ds_put_format(match, "%s, ", ip6_str);
+        ipv6_string_mapped(ip6_str, &ipv6_addrs[i].addr);
+        ds_put_format(match, "%s, ", ip6_str);
     }
     /* Replace ", " by "}". */
     ds_chomp(match, ' ');
@@ -1907,11 +1907,11 @@ build_port_security_ip(enum ovn_pipeline pipeline, struct ovn_port *op,
     char *port_direction;
     enum ovn_stage stage;
     if (pipeline == P_IN) {
-       port_direction = "inport";
-       stage = S_SWITCH_IN_PORT_SEC_IP;
+        port_direction = "inport";
+        stage = S_SWITCH_IN_PORT_SEC_IP;
     } else {
-       port_direction = "outport";
-       stage = S_SWITCH_OUT_PORT_SEC_IP;
+        port_direction = "outport";
+        stage = S_SWITCH_OUT_PORT_SEC_IP;
     }
 
     for (size_t i = 0; i < op->n_ps_addrs; i++) {
@@ -2023,7 +2023,6 @@ lsp_is_up(const struct nbrec_logical_switch_port *lsp)
 {
     return !lsp->up || *lsp->up;
 }
-
 
 static bool
 build_dhcpv4_action(struct ovn_port *op, ovs_be32 offer_ip,
@@ -2188,15 +2187,14 @@ static bool
 has_stateful_acl(struct ovn_datapath *od)
 {
     for (size_t i = 0; i < od->nbs->n_acls; i++) {
-       struct nbrec_acl *acl = od->nbs->acls[i];
-       if (!strcmp(acl->action, "allow-related")) {
-           return true;
-       }
+        struct nbrec_acl *acl = od->nbs->acls[i];
+        if (!strcmp(acl->action, "allow-related")) {
+            return true;
+        }
     }
 
     return false;
 }
-
 
 static void
 build_pre_acls(struct ovn_datapath *od, struct hmap *lflows)
@@ -3038,20 +3036,20 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
     /* Logical switch ingress table 0: Admission control framework (priority
      * 100). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
-       if (!od->nbs) {
-           continue;
-       }
+        if (!od->nbs) {
+            continue;
+        }
 
-       /* Logical VLANs not supported. */
-       ovn_lflow_add(lflows, od, S_SWITCH_IN_PORT_SEC_L2, 100, "vlan.present",
-                     "drop;");
+        /* Logical VLANs not supported. */
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_PORT_SEC_L2, 100, "vlan.present",
+                      "drop;");
 
-       /* Broadcast/multicast source address is invalid. */
-       ovn_lflow_add(lflows, od, S_SWITCH_IN_PORT_SEC_L2, 100, "eth.src[40]",
-                     "drop;");
+        /* Broadcast/multicast source address is invalid. */
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_PORT_SEC_L2, 100, "eth.src[40]",
+                      "drop;");
 
-       /* Port security flows have priority 50 (see below) and will continue
-        * to the next table if packet source is acceptable. */
+        /* Port security flows have priority 50 (see below) and will continue
+         * to the next table if packet source is acceptable. */
     }
 
     /* Logical switch ingress table 0: Ingress port security - L2
@@ -3094,12 +3092,12 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
     /* Ingress table 1 and 2: Port security - IP and ND, by default goto next.
      * (priority 0)*/
     HMAP_FOR_EACH (od, key_node, datapaths) {
-       if (!od->nbs) {
-           continue;
-       }
+        if (!od->nbs) {
+            continue;
+        }
 
-       ovn_lflow_add(lflows, od, S_SWITCH_IN_PORT_SEC_ND, 0, "1", "next;");
-       ovn_lflow_add(lflows, od, S_SWITCH_IN_PORT_SEC_IP, 0, "1", "next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_PORT_SEC_ND, 0, "1", "next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_PORT_SEC_IP, 0, "1", "next;");
     }
 
     /* Ingress table 10: ARP/ND responder, skip requests coming from localnet
@@ -3215,11 +3213,11 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
     /* Ingress table 10: ARP/ND responder, by default goto next.
      * (priority 0)*/
     HMAP_FOR_EACH (od, key_node, datapaths) {
-       if (!od->nbs) {
-           continue;
-       }
+        if (!od->nbs) {
+            continue;
+        }
 
-       ovn_lflow_add(lflows, od, S_SWITCH_IN_ARP_ND_RSP, 0, "1", "next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_ARP_ND_RSP, 0, "1", "next;");
     }
 
     /* Logical switch ingress table 11 and 12: DHCP options and response
@@ -3338,12 +3336,12 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
         }
     }
     HMAP_FOR_EACH (od, key_node, datapaths) {
-       if (!od->nbs) {
-           continue;
-       }
+        if (!od->nbs) {
+            continue;
+        }
 
-       ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 100, "eth.mcast",
-                     "outport = \""MC_FLOOD"\"; output;");
+        ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 100, "eth.mcast",
+                      "outport = \""MC_FLOOD"\"; output;");
     }
 
     /* Ingress table 13: Destination lookup, unicast handling (priority 50), */
@@ -3398,27 +3396,27 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 
     /* Ingress table 13: Destination lookup for unknown MACs (priority 0). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
-       if (!od->nbs) {
-           continue;
-       }
+        if (!od->nbs) {
+            continue;
+        }
 
-       if (od->has_unknown) {
-       ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 0, "1",
-                     "outport = \""MC_UNKNOWN"\"; output;");
-       }
+        if (od->has_unknown) {
+            ovn_lflow_add(lflows, od, S_SWITCH_IN_L2_LKUP, 0, "1",
+                          "outport = \""MC_UNKNOWN"\"; output;");
+        }
     }
 
     /* Egress tables 6: Egress port security - IP (priority 0)
      * Egress table 7: Egress port security L2 - multicast/broadcast
      *                 (priority 100). */
     HMAP_FOR_EACH (od, key_node, datapaths) {
-       if (!od->nbs) {
-           continue;
-       }
+        if (!od->nbs) {
+            continue;
+        }
 
-       ovn_lflow_add(lflows, od, S_SWITCH_OUT_PORT_SEC_IP, 0, "1", "next;");
-       ovn_lflow_add(lflows, od, S_SWITCH_OUT_PORT_SEC_L2, 100, "eth.mcast",
-                      "output;");
+        ovn_lflow_add(lflows, od, S_SWITCH_OUT_PORT_SEC_IP, 0, "1", "next;");
+        ovn_lflow_add(lflows, od, S_SWITCH_OUT_PORT_SEC_L2, 100, "eth.mcast",
+                       "output;");
     }
 
     /* Egress table 6: Egress port security - IP (priorities 90 and 80)
@@ -3796,14 +3794,14 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
     /* Logical router ingress table 0: Admission control framework. */
     struct ovn_datapath *od;
     HMAP_FOR_EACH (od, key_node, datapaths) {
-       if (!od->nbr) {
-           continue;
-       }
+        if (!od->nbr) {
+            continue;
+        }
 
-       /* Logical VLANs not supported.
-        * Broadcast/multicast source address is invalid. */
-       ovn_lflow_add(lflows, od, S_ROUTER_IN_ADMISSION, 100,
-                      "vlan.present || eth.src[40]", "drop;");
+        /* Logical VLANs not supported.
+         * Broadcast/multicast source address is invalid. */
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_ADMISSION, 100,
+                       "vlan.present || eth.src[40]", "drop;");
     }
 
     /* Logical router ingress table 0: match (priority 50). */
@@ -4460,6 +4458,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
         for (int i = 0; i < od->nbr->n_static_routes; i++) {
             const struct nbrec_logical_router_static_route *route;
+
             route = od->nbr->static_routes[i];
             build_static_route_flow(lflows, od, ports, route);
         }
@@ -4660,6 +4659,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
 
         ovn_lflow_add(lflows, od, S_ROUTER_IN_ARP_RESOLVE, 0, "ip6",
                       "get_nd(outport, xxreg0); next;");
+    }
 
     /* Local router ingress table 7: ARP request.
      *
@@ -4722,24 +4722,24 @@ build_lflows(struct northd_context *ctx, struct hmap *datapaths,
     /* Push changes to the Logical_Flow table to database. */
     const struct sbrec_logical_flow *sbflow, *next_sbflow;
     SBREC_LOGICAL_FLOW_FOR_EACH_SAFE (sbflow, next_sbflow, ctx->ovnsb_idl) {
-       struct ovn_datapath *od
-           = ovn_datapath_from_sbrec(datapaths, sbflow->logical_datapath);
-       if (!od) {
-           sbrec_logical_flow_delete(sbflow);
-           continue;
-       }
+        struct ovn_datapath *od
+            = ovn_datapath_from_sbrec(datapaths, sbflow->logical_datapath);
+        if (!od) {
+            sbrec_logical_flow_delete(sbflow);
+            continue;
+        }
 
-       enum ovn_datapath_type dp_type = od->nbs ? DP_SWITCH : DP_ROUTER;
-       enum ovn_pipeline pipeline
-           = !strcmp(sbflow->pipeline, "ingress") ? P_IN : P_OUT;
-       struct ovn_lflow *lflow = ovn_lflow_find(
-                 &lflows, od, ovn_stage_build(dp_type, pipeline, sbflow->table_id),
-                 sbflow->priority, sbflow->match, sbflow->actions);
-       if (lflow) {
-           ovn_lflow_destroy(&lflows, lflow);
-       } else {
-           sbrec_logical_flow_delete(sbflow);
-       }
+        enum ovn_datapath_type dp_type = od->nbs ? DP_SWITCH : DP_ROUTER;
+        enum ovn_pipeline pipeline
+            = !strcmp(sbflow->pipeline, "ingress") ? P_IN : P_OUT;
+        struct ovn_lflow *lflow = ovn_lflow_find(
+            &lflows, od, ovn_stage_build(dp_type, pipeline, sbflow->table_id),
+            sbflow->priority, sbflow->match, sbflow->actions);
+        if (lflow) {
+            ovn_lflow_destroy(&lflows, lflow);
+        } else {
+            sbrec_logical_flow_delete(sbflow);
+        }
     }
     struct ovn_lflow *lflow, *next_lflow;
     HMAP_FOR_EACH_SAFE (lflow, next_lflow, hmap_node, &lflows) {
@@ -4945,7 +4945,6 @@ update_logical_port_status(struct northd_context *ctx)
     hmap_destroy(&lports_hmap);
 
 }
-
 static struct dhcp_opts_map supported_dhcp_opts[] = {
     OFFERIP,
     DHCP_OPT_NETMASK,
@@ -5197,7 +5196,7 @@ main(int argc, char *argv[])
 
     /* We want to detect only selected changes to the ovn-sb db. */
     struct ovsdb_idl_loop ovnsb_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
-       ovsdb_idl_create(ovnsb_db, &sbrec_idl_class, false, true));
+        ovsdb_idl_create(ovnsb_db, &sbrec_idl_class, false, true));
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_sb_global);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_sb_global_col_nb_cfg);
