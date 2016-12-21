@@ -98,7 +98,7 @@
         logical switch's UUID should be used as the unique identifier.
       </p>
     </column>
-
+    
     <column name="ports">
       <p>
         The logical ports connected to the logical switch.
