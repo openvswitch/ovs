@@ -111,7 +111,8 @@ Code
 ~~~~
 
 - Use ``::``, the ``code`` role or the ``code-block:: <syntax>`` role to prefix
-  code.
+  code. The ``code-block:: <syntax>`` format is preferred as this provides
+  syntax highlighting for non-Python languages, such as Bash or PowerShell.
 
 - Prefix commands with ``$``.
 
