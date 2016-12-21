@@ -562,7 +562,7 @@ lex_parse_id(const char *p, enum lex_type type, struct lex_token *token)
 }
 
 static const char *
-lex_parse_macro(const char *p, struct lex_token *token)
+lex_parse_addr_set(const char *p, struct lex_token *token)
 {
     p++;
     if (!lex_is_id1(*p)) {
@@ -744,7 +744,7 @@ next:
         break;
 
     case '$':
-        p = lex_parse_macro(p, token);
+        p = lex_parse_addr_set(p, token);
         break;
 
     case ':':

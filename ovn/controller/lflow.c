@@ -53,8 +53,9 @@ update_address_sets(struct controller_ctx *ctx,
 {
     const struct sbrec_address_set *as;
     SBREC_ADDRESS_SET_FOR_EACH (as, ctx->ovnsb_idl) {
-        expr_macros_add(expr_address_sets_p, as->name,
-                        (const char *const *) as->addresses, as->n_addresses);
+        expr_addr_sets_add(expr_address_sets_p, as->name,
+                           (const char *const *) as->addresses,
+                           as->n_addresses);
     }
 }
 
@@ -385,7 +386,7 @@ lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
                       group_table, ct_zones, flow_table, &expr_address_sets);
     add_neighbor_flows(ctx, lports, flow_table);
 
-    expr_macros_destroy(&expr_address_sets);
+    expr_addr_sets_destroy(&expr_address_sets);
     shash_destroy(&expr_address_sets);
 }
 

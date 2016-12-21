@@ -434,10 +434,10 @@ expr_print(const struct expr *e)
 
 /* Context maintained during expr_parse(). */
 struct expr_context {
-    struct lexer *lexer;        /* Lexer for pulling more tokens. */
-    const struct shash *symtab; /* Symbol table. */
-    const struct shash *macros; /* Table of macros. */
-    bool not;                   /* True inside odd number of NOT operators. */
+    struct lexer *lexer;           /* Lexer for pulling more tokens. */
+    const struct shash *symtab;    /* Symbol table. */
+    const struct shash *addr_sets; /* Address set table. */
+    bool not;                    /* True inside odd number of NOT operators. */
 };
 
 struct expr *expr_parse__(struct expr_context *);
@@ -692,14 +692,14 @@ assign_constant_set_type(struct expr_context *ctx,
 }
 
 static bool
-parse_macros(struct expr_context *ctx, struct expr_constant_set *cs,
-             size_t *allocated_values)
+parse_addr_sets(struct expr_context *ctx, struct expr_constant_set *cs,
+                size_t *allocated_values)
 {
-    struct expr_constant_set *addr_set
-        = (ctx->macros
-           ? shash_find_data(ctx->macros, ctx->lexer->token.s)
+    struct expr_constant_set *addr_sets
+        = (ctx->addr_sets
+           ? shash_find_data(ctx->addr_sets, ctx->lexer->token.s)
            : NULL);
-    if (!addr_set) {
+    if (!addr_sets) {
         lexer_syntax_error(ctx->lexer, "expecting address set name");
         return false;
     }
@@ -708,13 +708,13 @@ parse_macros(struct expr_context *ctx, struct expr_constant_set *cs,
         return false;
     }
 
-    size_t n_values = cs->n_values + addr_set->n_values;
+    size_t n_values = cs->n_values + addr_sets->n_values;
     if (n_values >= *allocated_values) {
         cs->values = xrealloc(cs->values, n_values * sizeof *cs->values);
         *allocated_values = n_values;
     }
-    for (size_t i = 0; i < addr_set->n_values; i++) {
-        cs->values[cs->n_values++] = addr_set->values[i];
+    for (size_t i = 0; i < addr_sets->n_values; i++) {
+        cs->values[cs->n_values++] = addr_sets->values[i];
     }
 
     return true;
@@ -752,7 +752,7 @@ parse_constant(struct expr_context *ctx, struct expr_constant_set *cs,
         lexer_get(ctx->lexer);
         return true;
     } else if (ctx->lexer->token.type == LEX_T_MACRO) {
-        if (!parse_macros(ctx, cs, allocated_values)) {
+        if (!parse_addr_sets(ctx, cs, allocated_values)) {
             return false;
         }
         lexer_get(ctx->lexer);
@@ -908,14 +908,14 @@ expr_constant_set_destroy(struct expr_constant_set *cs)
     }
 }
 
-/* Adds a macro named 'name' to 'macros', replacing any existing macro with the
- * given name. */
+/* Adds an address set named 'name' to 'addr_sets', replacing any existing
+ * address set entry with the given name. */
 void
-expr_macros_add(struct shash *macros, const char *name,
-                const char *const *values, size_t n_values)
+expr_addr_sets_add(struct shash *addr_sets, const char *name,
+                   const char *const *values, size_t n_values)
 {
     /* Replace any existing entry for this name. */
-    expr_macros_remove(macros, name);
+    expr_addr_sets_remove(addr_sets, name);
 
     struct expr_constant_set *cs = xzalloc(sizeof *cs);
     cs->type = EXPR_C_INTEGER;
@@ -923,7 +923,7 @@ expr_macros_add(struct shash *macros, const char *name,
     cs->n_values = 0;
     cs->values = xmalloc(n_values * sizeof *cs->values);
     for (size_t i = 0; i < n_values; i++) {
-        /* Use the lexer to convert each macro into the proper
+        /* Use the lexer to convert each address set into the proper
          * integer format. */
         struct lexer lex;
         lexer_init(&lex, values[i]);
@@ -944,29 +944,29 @@ expr_macros_add(struct shash *macros, const char *name,
         lexer_destroy(&lex);
     }
 
-    shash_add(macros, name, cs);
+    shash_add(addr_sets, name, cs);
 }
 
 void
-expr_macros_remove(struct shash *macros, const char *name)
+expr_addr_sets_remove(struct shash *addr_sets, const char *name)
 {
-    struct expr_constant_set *cs = shash_find_and_delete(macros, name);
+    struct expr_constant_set *cs = shash_find_and_delete(addr_sets, name);
     if (cs) {
         expr_constant_set_destroy(cs);
         free(cs);
     }
 }
 
-/* Destroy all contents of 'macros'. */
+/* Destroy all contents of 'addr_sets'. */
 void
-expr_macros_destroy(struct shash *macros)
+expr_addr_sets_destroy(struct shash *addr_sets)
 {
     struct shash_node *node, *next;
 
-    SHASH_FOR_EACH_SAFE (node, next, macros) {
+    SHASH_FOR_EACH_SAFE (node, next, addr_sets) {
         struct expr_constant_set *cs = node->data;
 
-        shash_delete(macros, node);
+        shash_delete(addr_sets, node);
         expr_constant_set_destroy(cs);
         free(cs);
     }
@@ -1144,33 +1144,35 @@ expr_parse__(struct expr_context *ctx)
     return e;
 }
 
-/* Parses an expression from 'lexer' using the symbols in 'symtab' and macros
- * in 'macros'.  If successful, returns the new expression; on failure, returns
- * NULL.  Returns nonnull if and only if lexer->error is NULL. */
+/* Parses an expression from 'lexer' using the symbols in 'symtab' and
+ * address set table in 'addr_sets'.  If successful, returns the new
+ * expression; on failure, returns NULL.  Returns nonnull if and only if
+ * lexer->error is NULL. */
 struct expr *
 expr_parse(struct lexer *lexer, const struct shash *symtab,
-           const struct shash *macros)
+           const struct shash *addr_sets)
 {
     struct expr_context ctx = { .lexer = lexer,
                                 .symtab = symtab,
-                                .macros = macros };
+                                .addr_sets = addr_sets };
     return lexer->error ? NULL : expr_parse__(&ctx);
 }
 
-/* Parses the expression in 's' using the symbols in 'symtab' and macros in
- * 'macros'.  If successful, returns the new expression and sets '*errorp' to
- * NULL.  On failure, returns NULL and sets '*errorp' to an explanatory error
- * message.  The caller must eventually free the returned expression (with
- * expr_destroy()) or error (with free()). */
+/* Parses the expression in 's' using the symbols in 'symtab' and
+ * address set table in 'addr_sets'.  If successful, returns the new
+ * expression and sets '*errorp' to NULL.  On failure, returns NULL and
+ * sets '*errorp' to an explanatory error message.  The caller must
+ * eventually free the returned expression (with expr_destroy()) or
+ * error (with free()). */
 struct expr *
 expr_parse_string(const char *s, const struct shash *symtab,
-                  const struct shash *macros, char **errorp)
+                  const struct shash *addr_sets, char **errorp)
 {
     struct lexer lexer;
 
     lexer_init(&lexer, s);
     lexer_get(&lexer);
-    struct expr *expr = expr_parse(&lexer, symtab, macros);
+    struct expr *expr = expr_parse(&lexer, symtab, addr_sets);
     lexer_force_end(&lexer);
     *errorp = lexer_steal_error(&lexer);
     if (*errorp) {
@@ -3074,10 +3076,11 @@ expr_parse_microflow__(struct lexer *lexer,
     return e;
 }
 
-/* Parses 's' as a microflow, using symbols from 'symtab', macros from
- * 'macros', and looking up port numbers using 'lookup_port' and 'aux'.  On
- * success, stores the result in 'uflow' and returns NULL, otherwise zeros
- * 'uflow' and returns an error message that the caller must free().
+/* Parses 's' as a microflow, using symbols from 'symtab', address set
+ * table from 'addr_sets', and looking up port numbers using 'lookup_port'
+ * and 'aux'.  On success, stores the result in 'uflow' and returns
+ * NULL, otherwise zeros 'uflow' and returns an error message that the
+ * caller must free().
  *
  * A "microflow" is a description of a single stream of packets, such as half a
  * TCP connection.  's' uses the syntax of an OVN logical expression to express
@@ -3103,7 +3106,7 @@ expr_parse_microflow__(struct lexer *lexer,
  * the last two as ambiguous.  Just don't be too clever. */
 char * OVS_WARN_UNUSED_RESULT
 expr_parse_microflow(const char *s, const struct shash *symtab,
-                     const struct shash *macros,
+                     const struct shash *addr_sets,
                      bool (*lookup_port)(const void *aux,
                                          const char *port_name,
                                          unsigned int *portp),
@@ -3113,7 +3116,7 @@ expr_parse_microflow(const char *s, const struct shash *symtab,
     lexer_init(&lexer, s);
     lexer_get(&lexer);
 
-    struct expr *e = expr_parse(&lexer, symtab, macros);
+    struct expr *e = expr_parse(&lexer, symtab, addr_sets);
     lexer_force_end(&lexer);
 
     if (e) {

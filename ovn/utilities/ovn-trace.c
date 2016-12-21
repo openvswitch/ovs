@@ -579,9 +579,9 @@ read_address_sets(void)
 
     const struct sbrec_address_set *sbas;
     SBREC_ADDRESS_SET_FOR_EACH (sbas, ovnsb_idl) {
-        expr_macros_add(&address_sets, sbas->name,
-                        (const char *const *) sbas->addresses,
-                        sbas->n_addresses);
+        expr_addr_sets_add(&address_sets, sbas->name,
+                           (const char *const *) sbas->addresses,
+                           sbas->n_addresses);
     }
 }
 

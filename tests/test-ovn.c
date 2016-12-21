@@ -188,9 +188,9 @@ create_dhcp_opts(struct hmap *dhcp_opts, struct hmap *dhcpv6_opts)
 }
 
 static void
-create_macros(struct shash *macros)
+create_addr_sets(struct shash *addr_sets)
 {
-    shash_init(macros);
+    shash_init(addr_sets);
 
     static const char *const addrs1[] = {
         "10.0.0.1", "10.0.0.2", "10.0.0.3",
@@ -202,9 +202,9 @@ create_macros(struct shash *macros)
         "00:00:00:00:00:01", "00:00:00:00:00:02", "00:00:00:00:00:03",
     };
 
-    expr_macros_add(macros, "set1", addrs1, 3);
-    expr_macros_add(macros, "set2", addrs2, 3);
-    expr_macros_add(macros, "set3", addrs3, 3);
+    expr_addr_sets_add(addr_sets, "set1", addrs1, 3);
+    expr_addr_sets_add(addr_sets, "set2", addrs2, 3);
+    expr_addr_sets_add(addr_sets, "set3", addrs3, 3);
 }
 
 static bool
@@ -223,12 +223,12 @@ static void
 test_parse_expr__(int steps)
 {
     struct shash symtab;
-    struct shash macros;
+    struct shash addr_sets;
     struct simap ports;
     struct ds input;
 
     create_symtab(&symtab);
-    create_macros(&macros);
+    create_addr_sets(&addr_sets);
 
     simap_init(&ports);
     simap_put(&ports, "eth0", 5);
@@ -240,7 +240,7 @@ test_parse_expr__(int steps)
         struct expr *expr;
         char *error;
 
-        expr = expr_parse_string(ds_cstr(&input), &symtab, &macros, &error);
+        expr = expr_parse_string(ds_cstr(&input), &symtab, &addr_sets, &error);
         if (!error && steps > 0) {
             expr = expr_annotate(expr, &symtab, &error);
         }
@@ -277,8 +277,8 @@ test_parse_expr__(int steps)
     simap_destroy(&ports);
     expr_symtab_destroy(&symtab);
     shash_destroy(&symtab);
-    expr_macros_destroy(&macros);
-    shash_destroy(&macros);
+    expr_addr_sets_destroy(&addr_sets);
+    shash_destroy(&addr_sets);
 }
 
 static void
