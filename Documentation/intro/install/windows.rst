@@ -498,64 +498,72 @@ found at technet_.
 
 .. _technet: https://technet.microsoft.com/en-us/library/jj553812%28v=wps.630%29.aspx
 
-I.e.::
-We will set up a switch team combined from ``Ethernet0 2`` and ``Ethernet1 2``
-named ``external``.
+For example, to set up a switch team combined from ``Ethernet0 2`` and
+``Ethernet1 2`` named ``external``:
 
-PS > Get-NetAdapter
-Name                      InterfaceDescription
-----                      --------------------
-br-int                    Hyper-V Virtual Ethernet Adapter #3
-br-pif                    Hyper-V Virtual Ethernet Adapter #2
-Ethernet3 2               Intel(R) 82574L Gigabit Network Co...#3
-Ethernet2 2               Intel(R) 82574L Gigabit Network Co...#4
-Ethernet1 2               Intel(R) 82574L Gigabit Network Co...#2
-Ethernet0 2               Intel(R) 82574L Gigabit Network Conn...
+.. code-block:: powershell
 
-PS > New-NetSwitchTeam -Name external -TeamMembers "Ethernet0 2","Ethernet1 2"
-PS > Get-NetSwitchTeam
-Name    : external
-Members : {Ethernet1 2, Ethernet0 2}
+   PS > Get-NetAdapter
+   Name                      InterfaceDescription
+   ----                      --------------------
+   br-int                    Hyper-V Virtual Ethernet Adapter #3
+   br-pif                    Hyper-V Virtual Ethernet Adapter #2
+   Ethernet3 2               Intel(R) 82574L Gigabit Network Co...#3
+   Ethernet2 2               Intel(R) 82574L Gigabit Network Co...#4
+   Ethernet1 2               Intel(R) 82574L Gigabit Network Co...#2
+   Ethernet0 2               Intel(R) 82574L Gigabit Network Conn...
 
-This will result in a new adapter bound to the host called ``external``
+   PS > New-NetSwitchTeam -Name external -TeamMembers "Ethernet0 2","Ethernet1 2"
+   PS > Get-NetSwitchTeam
+   Name    : external
+   Members : {Ethernet1 2, Ethernet0 2}
 
-PS > Get-NetAdapter
+This will result in a new adapter bound to the host called ``external``:
 
-Name                      InterfaceDescription
-----                      --------------------
-br-test                   Hyper-V Virtual Ethernet Adapter #4
-br-pif                    Hyper-V Virtual Ethernet Adapter #2
-external                  Microsoft Network Adapter Multiplexo...
-Ethernet3 2               Intel(R) 82574L Gigabit Network Co...#3
-Ethernet2 2               Intel(R) 82574L Gigabit Network Co...#4
-Ethernet1 2               Intel(R) 82574L Gigabit Network Co...#2
-Ethernet0 2               Intel(R) 82574L Gigabit Network Conn...
+.. code-block:: powershell
 
-Next we will set up the Hyper-V VMSwitch on the new adapter ``external``
+   PS > Get-NetAdapter
 
-PS > New-VMSwitch -Name external -NetAdapterName external \
-     -AllowManagementOS $false
+   Name                      InterfaceDescription
+   ----                      --------------------
+   br-test                   Hyper-V Virtual Ethernet Adapter #4
+   br-pif                    Hyper-V Virtual Ethernet Adapter #2
+   external                  Microsoft Network Adapter Multiplexo...
+   Ethernet3 2               Intel(R) 82574L Gigabit Network Co...#3
+   Ethernet2 2               Intel(R) 82574L Gigabit Network Co...#4
+   Ethernet1 2               Intel(R) 82574L Gigabit Network Co...#2
+   Ethernet0 2               Intel(R) 82574L Gigabit Network Conn...
+
+Next we will set up the Hyper-V VMSwitch on the new adapter ``external``:
+
+.. code-block:: powershell
+
+   PS > New-VMSwitch -Name external -NetAdapterName external \
+        -AllowManagementOS $false
 
 Under OVS the adapters under the team ``external``, ``Ethernet0 2`` and
 ``Ethernet1 2``, can be added either under a bond device or separately.
 
-The following example shows how the bridges look with the NICs being separated::
+The following example shows how the bridges look with the NICs being
+separated:
 
-> ovs-vsctl show
+.. code-block:: powershell
 
-6cd9481b-c249-4ee3-8692-97b399dd29d8
-    Bridge br-test
-        Port br-test
-            Interface br-test
-                type: internal
-        Port "Ethernet1 2"
-            Interface "Ethernet1 2"
-    Bridge br-pif
-        Port "Ethernet0 2"
-            Interface "Ethernet0 2"
-        Port br-pif
-            Interface br-pif
-                type: internal
+   PS > ovs-vsctl show
+
+   6cd9481b-c249-4ee3-8692-97b399dd29d8
+       Bridge br-test
+           Port br-test
+               Interface br-test
+                   type: internal
+           Port "Ethernet1 2"
+               Interface "Ethernet1 2"
+       Bridge br-pif
+           Port "Ethernet0 2"
+               Interface "Ethernet0 2"
+           Port br-pif
+               Interface br-pif
+                   type: internal
 
 Add patch ports and configure VLAN tagging
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
