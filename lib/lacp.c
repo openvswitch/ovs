@@ -596,11 +596,13 @@ lacp_update_attached(struct lacp *lacp) OVS_REQUIRES(mutex)
 {
     struct slave *lead, *slave;
     struct lacp_info lead_pri;
+    bool lead_enable;
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 10);
 
     lacp->update = false;
 
     lead = NULL;
+    lead_enable = false;
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
         struct lacp_info pri;
 
@@ -623,9 +625,14 @@ lacp_update_attached(struct lacp *lacp) OVS_REQUIRES(mutex)
 
         slave->attached = true;
         slave_get_priority(slave, &pri);
+        bool enable = slave_may_enable__(slave);
 
-        if (!lead || memcmp(&pri, &lead_pri, sizeof pri) < 0) {
+        if (!lead
+            || enable > lead_enable
+            || (enable == lead_enable
+                && memcmp(&pri, &lead_pri, sizeof pri) < 0)) {
             lead = slave;
+            lead_enable = enable;
             lead_pri = pri;
         }
     }
