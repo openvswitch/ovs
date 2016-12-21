@@ -809,11 +809,11 @@ because the VLAN only belongs to the input port::
 
 Try some other broadcast cases on your own::
 
-    $ ovs-appctl ofproto/trace br0
+    $ ovs-appctl ofproto/trace br0 \
         in_port=1,dl_dst=ff:ff:ff:ff:ff:ff,dl_vlan=20
-    $ ovs-appctl ofproto/trace br0
+    $ ovs-appctl ofproto/trace br0 \
         in_port=2,dl_dst=ff:ff:ff:ff:ff:ff
-    $ ovs-appctl ofproto/trace br0
+    $ ovs-appctl ofproto/trace br0 \
         in_port=4,dl_dst=ff:ff:ff:ff:ff:ff
 
 You can see the same behavior with multicast packets and with unicast
