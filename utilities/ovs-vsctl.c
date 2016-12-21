@@ -31,6 +31,7 @@
 
 #include "command-line.h"
 #include "compiler.h"
+#include "dirs.h"
 #include "openvswitch/dynamic-string.h"
 #include "fatal-signal.h"
 #include "hash.h"
@@ -721,6 +722,7 @@ pre_get_info(struct ctl_context *ctx)
     ovsdb_idl_add_column(ctx->idl, &ovsrec_interface_col_name);
 
     ovsdb_idl_add_column(ctx->idl, &ovsrec_interface_col_ofport);
+    ovsdb_idl_add_column(ctx->idl, &ovsrec_interface_col_error);
 }
 
 static void
@@ -2376,7 +2378,7 @@ post_db_reload_expect_iface(const struct ovsrec_interface *iface)
 static void
 post_db_reload_do_checks(const struct vsctl_context *vsctl_ctx)
 {
-    struct ds dead_ifaces = DS_EMPTY_INITIALIZER;
+    bool print_error = false;
     size_t i;
 
     for (i = 0; i < n_neoteric_ifaces; i++) {
@@ -2389,18 +2391,23 @@ post_db_reload_do_checks(const struct vsctl_context *vsctl_ctx)
 
             iface = ovsrec_interface_get_for_uuid(vsctl_ctx->base.idl, uuid);
             if (iface && (!iface->ofport || *iface->ofport == -1)) {
-                ds_put_format(&dead_ifaces, "'%s', ", iface->name);
+                if (iface->error && *iface->error) {
+                    ovs_error(0, "Error detected while setting up '%s': %s.  "
+                                 "See ovs-vswitchd log for details.",
+                              iface->name, iface->error);
+                } else {
+                    ovs_error(0, "Error detected while setting up '%s'.  "
+                                 "See ovs-vswitchd log for details.",
+                              iface->name);
+                }
+                print_error = true;
             }
         }
     }
 
-    if (dead_ifaces.length) {
-        dead_ifaces.length -= 2; /* Strip off trailing comma and space. */
-        ovs_error(0, "Error detected while setting up %s.  See ovs-vswitchd "
-                  "log for details.", ds_cstr(&dead_ifaces));
+    if (print_error) {
+        ovs_error(0, "The default log directory is \"%s\".", ovs_logdir());
     }
-
-    ds_destroy(&dead_ifaces);
 }
 
 

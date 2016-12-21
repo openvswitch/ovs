@@ -215,9 +215,12 @@ AT_CHECK([test -$S a.mgmt])
 # Create a bridge with an unsafe name and make sure that the management
 # socket does not get created.
 mkdir b
-AT_CHECK([ovs-vsctl add-br b/c -- set bridge b/c datapath-type=dummy], [0],
-  [], [ovs-vsctl: Error detected while setting up 'b/c'.  See ovs-vswitchd log for details.
-])
+
+cat >experr <<EOF
+ovs-vsctl: Error detected while setting up 'b/c'.  See ovs-vswitchd log for details.
+ovs-vsctl: The default log directory is "$OVS_RUNDIR".
+EOF
+AT_CHECK([ovs-vsctl add-br b/c -- set bridge b/c datapath-type=dummy], [0], [], [experr])
 AT_CHECK([test ! -e b/c.mgmt])
 
 OVS_VSWITCHD_STOP(['/ignoring bridge with invalid name/d'])

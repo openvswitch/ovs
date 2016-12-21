@@ -1238,9 +1238,11 @@ m4_foreach(
 [vxlan_sys]],
 [
 # Try creating the port
-AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [dnl
+cat >experr <<EOF
 ovs-vsctl: Error detected while setting up 'reserved_name'.  See ovs-vswitchd log for details.
-])
+ovs-vsctl: The default log directory is "$OVS_RUNDIR".
+EOF
+AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [experr])
 # Prevent race.
 OVS_WAIT_UNTIL([test `grep -- "|WARN|" ovs-vswitchd.log | wc -l` -ge 1])
 # Detect the warning log message
@@ -1274,9 +1276,11 @@ m4_foreach(
 [vxlan_sys]],
 [
 # Try creating the port
-AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [dnl
+cat >experr <<EOF
 ovs-vsctl: Error detected while setting up 'reserved_name'.  See ovs-vswitchd log for details.
-])
+ovs-vsctl: The default log directory is "$OVS_RUNDIR".
+EOF
+AT_CHECK([ovs-vsctl add-port br0 reserved_name], [0], [], [experr])
 # Prevent race.
 OVS_WAIT_UNTIL([test `grep -- "|WARN|" ovs-vswitchd.log | wc -l` -ge 1])
 # Detect the warning log message
