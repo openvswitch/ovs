@@ -3416,7 +3416,7 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
 
         ovn_lflow_add(lflows, od, S_SWITCH_OUT_PORT_SEC_IP, 0, "1", "next;");
         ovn_lflow_add(lflows, od, S_SWITCH_OUT_PORT_SEC_L2, 100, "eth.mcast",
-                       "output;");
+                      "output;");
     }
 
     /* Egress table 6: Egress port security - IP (priorities 90 and 80)
@@ -3801,7 +3801,7 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         /* Logical VLANs not supported.
          * Broadcast/multicast source address is invalid. */
         ovn_lflow_add(lflows, od, S_ROUTER_IN_ADMISSION, 100,
-                       "vlan.present || eth.src[40]", "drop;");
+                      "vlan.present || eth.src[40]", "drop;");
     }
 
     /* Logical router ingress table 0: match (priority 50). */
@@ -4943,7 +4943,6 @@ update_logical_port_status(struct northd_context *ctx)
         free(hash_node);
     }
     hmap_destroy(&lports_hmap);
-
 }
 static struct dhcp_opts_map supported_dhcp_opts[] = {
     OFFERIP,
@@ -5143,7 +5142,7 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 
         default:
             break;
-      }
+        }
     }
 
     if (!ovnsb_db) {

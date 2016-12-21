@@ -89,6 +89,7 @@
       one and only one <code>localnet</code> port, which has only one special
       address <code>unknown</code>.
     </p>
+
     <column name="name">
       <p>
         A name for the logical switch.  This name has no special meaning or purpose
@@ -97,6 +98,7 @@
         logical switch's UUID should be used as the unique identifier.
       </p>
     </column>
+    
     <column name="ports">
       <p>
         The logical ports connected to the logical switch.
