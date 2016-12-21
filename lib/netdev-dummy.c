@@ -830,7 +830,8 @@ netdev_dummy_set_in6(struct netdev *netdev_, struct in6_addr *in6,
 #define DUMMY_MAX_QUEUES_PER_PORT 1024
 
 static int
-netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
+netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args,
+                        char **errp OVS_UNUSED)
 {
     struct netdev_dummy *netdev = netdev_dummy_cast(netdev_);
     const char *pcap;

@@ -417,13 +417,19 @@ netdev_set_config(struct netdev *netdev, const struct smap *args, char **errp)
 {
     if (netdev->netdev_class->set_config) {
         const struct smap no_args = SMAP_INITIALIZER(&no_args);
+        char *verbose_error = NULL;
         int error;
 
         error = netdev->netdev_class->set_config(netdev,
-                                                 args ? args : &no_args);
+                                                 args ? args : &no_args,
+                                                 &verbose_error);
         if (error) {
-            VLOG_WARN_BUF(errp, "%s: could not set configuration (%s)",
+            VLOG_WARN_BUF(verbose_error ? NULL : errp,
+                          "%s: could not set configuration (%s)",
                           netdev_get_name(netdev), ovs_strerror(error));
+            if (verbose_error) {
+                *errp = verbose_error;
+            }
         }
         return error;
     } else if (args && !smap_is_empty(args)) {

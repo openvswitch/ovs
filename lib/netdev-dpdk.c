@@ -1132,7 +1132,7 @@ netdev_dpdk_lookup_by_port_id(int port_id)
 }
 
 static int
-netdev_dpdk_process_devargs(const char *devargs)
+netdev_dpdk_process_devargs(const char *devargs, char **errp)
 {
     uint8_t new_port_id = UINT8_MAX;
 
@@ -1145,7 +1145,7 @@ netdev_dpdk_process_devargs(const char *devargs)
             VLOG_INFO("Device '%s' attached to DPDK", devargs);
         } else {
             /* Attach unsuccessful */
-            VLOG_INFO("Error attaching device '%s' to DPDK", devargs);
+            VLOG_WARN_BUF(errp, "Error attaching device '%s' to DPDK", devargs);
             return -1;
         }
     }
@@ -1184,7 +1184,8 @@ dpdk_process_queue_size(struct netdev *netdev, const struct smap *args,
 }
 
 static int
-netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
+netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args,
+                       char **errp)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     bool rx_fc_en, tx_fc_en, autoneg;
@@ -1225,7 +1226,7 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
          * is valid */
         if (!(dev->devargs && !strcmp(dev->devargs, new_devargs)
                && rte_eth_dev_is_valid_port(dev->port_id))) {
-            int new_port_id = netdev_dpdk_process_devargs(new_devargs);
+            int new_port_id = netdev_dpdk_process_devargs(new_devargs, errp);
             if (!rte_eth_dev_is_valid_port(new_port_id)) {
                 err = EINVAL;
             } else if (new_port_id == dev->port_id) {
@@ -1235,10 +1236,10 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
                 struct netdev_dpdk *dup_dev;
                 dup_dev = netdev_dpdk_lookup_by_port_id(new_port_id);
                 if (dup_dev) {
-                    VLOG_WARN("'%s' is trying to use device '%s' which is "
-                              "already in use by '%s'.",
-                              netdev_get_name(netdev), new_devargs,
-                              netdev_get_name(&dup_dev->up));
+                    VLOG_WARN_BUF(errp, "'%s' is trying to use device '%s' "
+                                        "which is already in use by '%s'",
+                                  netdev_get_name(netdev), new_devargs,
+                                  netdev_get_name(&dup_dev->up));
                     err = EADDRINUSE;
                 } else {
                     int sid = rte_eth_dev_socket_id(new_port_id);
@@ -1251,7 +1252,9 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
             }
         }
     } else {
-        /* dpdk-devargs unspecified - can't configure device */
+        VLOG_WARN_BUF(errp, "'%s' is missing 'options:dpdk-devargs'. "
+                            "The old 'dpdk<port_id>' names are not supported",
+                      netdev_get_name(netdev));
         err = EINVAL;
     }
 
@@ -1288,7 +1291,8 @@ out:
 }
 
 static int
-netdev_dpdk_ring_set_config(struct netdev *netdev, const struct smap *args)
+netdev_dpdk_ring_set_config(struct netdev *netdev, const struct smap *args,
+                            char **errp OVS_UNUSED)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
 
@@ -1301,7 +1305,8 @@ netdev_dpdk_ring_set_config(struct netdev *netdev, const struct smap *args)
 
 static int
 netdev_dpdk_vhost_client_set_config(struct netdev *netdev,
-                                    const struct smap *args)
+                                    const struct smap *args,
+                                    char **errp OVS_UNUSED)
 {
     struct netdev_dpdk *dev = netdev_dpdk_cast(netdev);
     const char *path;
