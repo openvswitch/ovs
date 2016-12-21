@@ -388,7 +388,6 @@
       database. These are the only rules necessary to implement traffic steering for VNFs.
       The section below "<code>Life Cycle of an inserted VNF</code>" provides more details.
     </li>
-
   </ul>
 
   <h2>Life Cycle of a VIF</h2>
@@ -624,7 +623,7 @@
      While within CMS the service insertion may be broken down into multiple reusable steps
      (as is the case with Openstack). Within OVN the creating of a new service insertion
      is treated as an atomic operation. This enables the easy atomic insertion and deletion of
-     service insertions. This is important as it is envisioned that the number of service
+     service insertions. This is important as it is envisioned that the number of serivce
      insertions can easily number in the hundreds, all with separate lifecycles. For each new
      service insertion operation a new row is added to the OVN Northbound Database. The new row is
      only added to the ovn-nb when the VNF, application and network are enabled by the CMS.
