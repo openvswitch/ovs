@@ -184,7 +184,7 @@ static const char *
 ovn_stage_to_str(enum ovn_stage stage)
 {
     switch (stage) {
-#define PIPELINE_STAGE(DP_TYPE, PIPELINE, STAGE, TABLE, NAME)	    \
+#define PIPELINE_STAGE(DP_TYPE, PIPELINE, STAGE, TABLE, NAME)	      \
         case S_##DP_TYPE##_##PIPELINE##_##STAGE: return NAME;
     PIPELINE_STAGES
 #undef PIPELINE_STAGE
@@ -256,7 +256,7 @@ tnlid_in_use(const struct hmap *set, uint32_t tnlid)
     const struct tnlid_node *node;
     HMAP_FOR_EACH_IN_BUCKET (node, hmap_node, hash_int(tnlid, 0), set) {
         if (node->tnlid == tnlid) {
-	         return true;
+            return true;
         }
     }
     return false;
@@ -5172,8 +5172,8 @@ parse_options(int argc OVS_UNUSED, char *argv[] OVS_UNUSED)
 }
 
 static void
-add_column_noalert(struct ovsdb_idl *idl,
-		                const struct ovsdb_idl_column *column)
+add_column_noalert(struct ovsdb_idl *idl, 
+                    const struct ovsdb_idl_column *column)
 {
     ovsdb_idl_add_column(idl, column);
     ovsdb_idl_omit_alert(idl, column);
@@ -5217,7 +5217,7 @@ main(int argc, char *argv[])
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_logical_flow);
     add_column_noalert(ovnsb_idl_loop.idl,
-		        &sbrec_logical_flow_col_logical_datapath);
+		                    &sbrec_logical_flow_col_logical_datapath);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_logical_flow_col_pipeline);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_logical_flow_col_table_id);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_logical_flow_col_priority);
@@ -5226,26 +5226,26 @@ main(int argc, char *argv[])
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_multicast_group);
     add_column_noalert(ovnsb_idl_loop.idl,
-		        &sbrec_multicast_group_col_datapath);
+		                    &sbrec_multicast_group_col_datapath);
     add_column_noalert(ovnsb_idl_loop.idl,
-		        &sbrec_multicast_group_col_tunnel_key);
+		                    &sbrec_multicast_group_col_tunnel_key);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_multicast_group_col_name);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_multicast_group_col_ports);
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_datapath_binding);
     add_column_noalert(ovnsb_idl_loop.idl,
-		        &sbrec_datapath_binding_col_tunnel_key);
+		                    &sbrec_datapath_binding_col_tunnel_key);
     add_column_noalert(ovnsb_idl_loop.idl,
-		        &sbrec_datapath_binding_col_external_ids);
+		                    &sbrec_datapath_binding_col_external_ids);
 
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_port_binding);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_datapath);
     add_column_noalert(ovnsb_idl_loop.idl,
-		        &sbrec_port_binding_col_logical_port);
+		                    &sbrec_port_binding_col_logical_port);
     add_column_noalert(ovnsb_idl_loop.idl,
-		        &sbrec_port_binding_col_tunnel_key);
+		                    &sbrec_port_binding_col_tunnel_key);
     add_column_noalert(ovnsb_idl_loop.idl,
-		        &sbrec_port_binding_col_parent_port);
+		                    &sbrec_port_binding_col_parent_port);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_tag);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_type);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_port_binding_col_options);
@@ -5255,8 +5255,8 @@ main(int argc, char *argv[])
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_mac_binding_col_datapath);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_mac_binding_col_ip);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_mac_binding_col_mac);
-    add_column_noalert(ovnsb_idl_loop.idl,
-                       &sbrec_mac_binding_col_logical_port);
+    add_column_noalert(ovnsb_idl_loop.idl, 
+                        &sbrec_mac_binding_col_logical_port);
     ovsdb_idl_add_table(ovnsb_idl_loop.idl, &sbrec_table_dhcp_options);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dhcp_options_col_code);
     add_column_noalert(ovnsb_idl_loop.idl, &sbrec_dhcp_options_col_type);
@@ -5313,7 +5313,7 @@ main(int argc, char *argv[])
 
 static void
 ovn_northd_exit(struct unixctl_conn *conn, int argc OVS_UNUSED,
-		            const char *argv[] OVS_UNUSED, void *exiting_)
+                const char *argv[] OVS_UNUSED, void *exiting_)
 {
     bool *exiting = exiting_;
     *exiting = true;
