@@ -4134,6 +4134,16 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
     return 0;
 }
 
+static void
+report_unsupported_ct(const char *detail)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+    VLOG_WARN_RL(&rl, "Rejecting ct action because datapath does not support "
+                 "ct action%s%s (your kernel module may be out of date)",
+                 detail ? " " : "",
+                 detail ? detail : "");
+}
+
 static enum ofperr
 check_actions(const struct ofproto_dpif *ofproto,
               const struct rule_actions *const actions)
@@ -4153,9 +4163,11 @@ check_actions(const struct ofproto_dpif *ofproto,
         support = &ofproto_dpif_get_support(ofproto)->odp;
 
         if (!support->ct_state) {
+            report_unsupported_ct(NULL);
             return OFPERR_OFPBAC_BAD_TYPE;
         }
         if ((ct->zone_imm || ct->zone_src.field) && !support->ct_zone) {
+            report_unsupported_ct("zone");
             return OFPERR_OFPBAC_BAD_ARGUMENT;
         }
 
@@ -4166,10 +4178,12 @@ check_actions(const struct ofproto_dpif *ofproto,
                 /* The backer doesn't seem to support the NAT bits in
                  * 'ct_state': assume that it doesn't support the NAT
                  * action. */
+                report_unsupported_ct("nat");
                 return OFPERR_OFPBAC_BAD_TYPE;
             }
             if (dst && ((dst->id == MFF_CT_MARK && !support->ct_mark)
                         || (dst->id == MFF_CT_LABEL && !support->ct_label))) {
+                report_unsupported_ct("setting mark and/or label");
                 return OFPERR_OFPBAC_BAD_SET_ARGUMENT;
             }
         }

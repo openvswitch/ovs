@@ -76,9 +76,6 @@ main(int argc, char *argv[])
 
     daemonize_complete();
 
-    vteprec_init();
-    sbrec_init();
-
     /* Connect to VTEP database. */
     struct ovsdb_idl_loop vtep_idl_loop = OVSDB_IDL_LOOP_INITIALIZER(
         ovsdb_idl_create(vtep_remote, &vteprec_idl_class, true, true));

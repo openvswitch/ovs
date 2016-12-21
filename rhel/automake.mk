@@ -6,7 +6,7 @@
 # without warranty of any kind.
 
 EXTRA_DIST += \
-	rhel/README.RHEL \
+	rhel/README.RHEL.rst \
 	rhel/automake.mk \
 	rhel/etc_init.d_openvswitch \
 	rhel/etc_logrotate.d_openvswitch \

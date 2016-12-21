@@ -37,11 +37,6 @@ Russell Bryant: "Today that would require creating 4096 ports for
 the VM and attach to 4096 OVN networks, so doable, but not quite
 ideal."
 
-* IPAM enhancements.
-
-Russell Bryant: "Be able to specify a MAC and only have the IP be
-dynamic.  Right now both are dynamic."
-
 * Native DNS support
 
 Russell Bryant: "This is an OpenStack requirement to fully eliminate
@@ -203,7 +198,7 @@ large.
   make sense at a slow rate if someone does OVN monitoring system integration,
   but not otherwise.
 
-  When OVN gets to supporting HA for gateways (see ovn/OVN-GW-HA.md), BFD is
+  When OVN gets to supporting HA for gateways (see ovn/OVN-GW-HA.rst), BFD is
   likely needed as a part of that solution.
 
   There's more commentary in this ML post:

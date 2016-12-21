@@ -113,7 +113,7 @@
  *
  *      In Open vSwitch userspace, "struct flow" is the typical way to describe
  *      a flow, but the datapath interface uses a different data format to
- *      allow ABI forward- and backward-compatibility.  datapath/README.md
+ *      allow ABI forward- and backward-compatibility.  datapath/README.rst
  *      describes the rationale and design.  Refer to OVS_KEY_ATTR_* and
  *      "struct ovs_key_*" in include/odp-netlink.h for details.
  *      lib/odp-util.h defines several functions for working with these flows.
@@ -780,8 +780,11 @@ const char *dpif_upcall_type_to_string(enum dpif_upcall_type);
  */
 struct dpif_upcall {
     /* All types. */
+    struct dp_packet packet;    /* Packet data,'dp_packet' should be the first
+				   member to avoid a hole. This is because
+				   'rte_mbuf' in dp_packet is aligned atleast
+				   on a 64-byte boundary */
     enum dpif_upcall_type type;
-    struct dp_packet packet;       /* Packet data. */
     struct nlattr *key;         /* Flow key. */
     size_t key_len;             /* Length of 'key' in bytes. */
     ovs_u128 ufid;              /* Unique flow identifier for 'key'. */

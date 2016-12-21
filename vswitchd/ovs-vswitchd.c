@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -75,7 +75,6 @@ main(int argc, char *argv[])
     service_start(&argc, &argv);
     remote = parse_options(argc, argv, &unixctl_path);
     fatal_ignore_sigpipe();
-    ovsrec_init();
 
     daemonize_start(true);
 

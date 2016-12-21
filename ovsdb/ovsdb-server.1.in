@@ -86,6 +86,8 @@ Maximum number of milliseconds to wait between connection attempts.
 .IP "\fBinactivity_probe\fR (integer)"
 Maximum number of milliseconds of idle time on connection to
 client before sending an inactivity probe message.
+.IP "\fBread_only\fR (boolean)"
+If true, only read-only transactions are allowed on this connection.
 .RE
 .IP
 It is an error for \fIcolumn\fR to have another type.

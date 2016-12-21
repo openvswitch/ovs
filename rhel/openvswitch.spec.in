@@ -247,8 +247,8 @@ exit 0
 /usr/share/openvswitch/scripts/sysconfig.template
 /usr/share/openvswitch/vswitch.ovsschema
 /usr/share/openvswitch/vtep.ovsschema
-%doc COPYING DESIGN.md INSTALL.SSL.md NOTICE README.md WHY-OVS.md FAQ.md NEWS
-%doc INSTALL.DPDK.md rhel/README.RHEL README-native-tunneling.md
+%doc COPYING DESIGN.rst INSTALL.SSL.rst NOTICE README.rst WHY-OVS.rst FAQ.rst NEWS
+%doc INSTALL.DPDK.rst rhel/README.RHEL.rst README-native-tunneling.rst
 /var/lib/openvswitch
 /var/log/openvswitch
 

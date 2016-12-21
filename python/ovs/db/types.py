@@ -402,40 +402,50 @@ class BaseType(object):
                        StringType: '%s = NULL;'}[self.type]
             return pattern % var
 
-    def cInitBaseType(self, indent, var):
-        stmts = []
-        stmts.append('ovsdb_base_type_init(&%s, %s);' % (
-                var, self.toAtomicType()))
+    def cInitBaseType(self, prefix, prereqs):
+        init = [".type = %s," % self.toAtomicType()]
         if self.enum:
-            stmts.append("%s.enum_ = xmalloc(sizeof *%s.enum_);"
-                         % (var, var))
-            stmts += self.enum.cInitDatum("%s.enum_" % var)
+            datum_name = "%s_enum" % prefix
+            init += [".enum_ = &%s," % datum_name]
+            prereqs += self.enum.cDeclareDatum(datum_name)
         if self.type == IntegerType:
-            if self.min is not None:
-                stmts.append('%s.u.integer.min = INT64_C(%d);'
-                        % (var, self.min))
-            if self.max is not None:
-                stmts.append('%s.u.integer.max = INT64_C(%d);'
-                        % (var, self.max))
+            if self.min is None:
+                low = "INT64_MIN"
+            else:
+                low = "INT64_C(%d)" % self.min
+            if self.max is None:
+                high = "INT64_MAX"
+            else:
+                high = "INT64_C(%d)" % self.max
+            init.append(".u.integer = { .min = %s, .max = %s }," % (low, high))
         elif self.type == RealType:
-            if self.min is not None:
-                stmts.append('%s.u.real.min = %d;' % (var, self.min))
-            if self.max is not None:
-                stmts.append('%s.u.real.max = %d;' % (var, self.max))
+            if self.min is None:
+                low = "-DBL_MAX"
+            else:
+                low = self.min
+            if self.max is None:
+                high = "DBL_MAX"
+            else:
+                high = self.max
+            init.append(".u.real = { .min = %s, .max = %s }," % (low, high))
         elif self.type == StringType:
-            if self.min_length is not None:
-                stmts.append('%s.u.string.minLen = %d;'
-                        % (var, self.min_length))
-            if self.max_length != sys.maxsize:
-                stmts.append('%s.u.string.maxLen = %d;'
-                        % (var, self.max_length))
+            if self.min is None:
+                low = 0
+            else:
+                low = self.min_length
+            if self.max is None:
+                high = "UINT_MAX"
+            else:
+                high = self.max_length
+            init.append(".u.string = { .minLen = %s, .maxLen = %s }," % (
+                low, high))
         elif self.type == UuidType:
             if self.ref_table_name is not None:
-                stmts.append('%s.u.uuid.refTableName = "%s";'
-                        % (var, escapeCString(self.ref_table_name)))
-                stmts.append('%s.u.uuid.refType = OVSDB_REF_%s;'
-                        % (var, self.ref_type.upper()))
-        return '\n'.join([indent + stmt for stmt in stmts])
+                init.append(".u.uuid = { .refTableName = \"%s\", "
+                            ".refType = OVSDB_REF_%s }," % (
+                                escapeCString(self.ref_table_name),
+                                self.ref_type.upper()))
+        return init
 
 
 class Type(object):
@@ -613,17 +623,23 @@ class Type(object):
         else:
             return ""
 
-    def cInitType(self, indent, var):
-        initKey = self.key.cInitBaseType(indent, "%s.key" % var)
+    def cInitType(self, prefix, prereqs):
+        init = [".key = {"]
+        init += ["   " + x for x in self.key.cInitBaseType(prefix + "_key",
+                                                           prereqs)]
+        init += ["},"]
         if self.value:
-            initValue = self.value.cInitBaseType(indent, "%s.value" % var)
+            init += [".value = {"]
+            init += ["    " + x
+                     for x in self.value.cInitBaseType(prefix + "_value",
+                                                       prereqs)]
+            init += ["},"]
         else:
-            initValue = ('%sovsdb_base_type_init(&%s.value, '
-                         'OVSDB_TYPE_VOID);' % (indent, var))
-        initMin = "%s%s.n_min = %s;" % (indent, var, self.n_min)
+            init.append(".value = OVSDB_BASE_VOID_INIT,")
+        init.append(".n_min = %s," % self.n_min)
         if self.n_max == sys.maxsize:
             n_max = "UINT_MAX"
         else:
             n_max = self.n_max
-        initMax = "%s%s.n_max = %s;" % (indent, var, n_max)
-        return "\n".join((initKey, initValue, initMin, initMax))
+        init.append(".n_max = %s," % n_max)
+        return init

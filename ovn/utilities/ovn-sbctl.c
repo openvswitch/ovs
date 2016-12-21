@@ -97,7 +97,6 @@ main(int argc, char *argv[])
     fatal_ignore_sigpipe();
     vlog_set_levels(NULL, VLF_CONSOLE, VLL_WARN);
     vlog_set_levels_from_string_assert("reconnect:warn");
-    sbrec_init();
 
     sbctl_cmd_init();
 
@@ -776,6 +775,10 @@ static const struct ctl_table_class tables[] = {
 
     {&sbrec_table_address_set,
      {{&sbrec_table_address_set, &sbrec_address_set_col_name, NULL},
+      {NULL, NULL, NULL}}},
+
+    {&sbrec_table_connection,
+     {{&sbrec_table_connection, NULL, NULL},
       {NULL, NULL, NULL}}},
 
     {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}

@@ -117,6 +117,9 @@ def cMembers(prefix, tableName, columnName, column, const, refTable=True):
 
     return (comment, members)
 
+def sorted_columns(table):
+    return sorted(table.columns.items())
+
 def printCIDLHeader(schemaFile):
     schema = parseSchema(schemaFile)
     prefix = schema.idlPrefix
@@ -141,7 +144,7 @@ def printCIDLHeader(schemaFile):
         print "/* %s table. */" % tableName
         print "struct %s {" % structName
         print "\tstruct ovsdb_idl_row header_;"
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             print "\n\t/* %s column. */" % columnName
             comment, members = cMembers(prefix, tableName,
                                         columnName, column, False)
@@ -151,7 +154,7 @@ def printCIDLHeader(schemaFile):
 
         # Column indexes.
         printEnum("%s_column_id" % structName.lower(), ["%s_COL_%s" % (structName.upper(), columnName.upper())
-                   for columnName in sorted(table.columns)]
+                                                        for columnName, column in sorted_columns(table)]
                   + ["%s_N_COLUMNS" % structName.upper()])
 
         print
@@ -204,11 +207,11 @@ struct %(s)s *%(s)s_insert(struct ovsdb_idl_txn *);
 bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
 ''' % {'s': structName, 'S': structName.upper()}
 
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             print 'void %(s)s_verify_%(c)s(const struct %(s)s *);' % {'s': structName, 'c': columnName}
 
         print
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             if column.type.value:
                 valueParam = ', enum ovsdb_atomic_type value_type'
             else:
@@ -217,7 +220,7 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
                 's': structName, 'c': columnName, 'v': valueParam}
 
         print
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             print 'void %(s)s_set_%(c)s(const struct %(s)s *,' % {'s': structName, 'c': columnName},
             if column.type.is_smap():
                 args = ['const struct smap *']
@@ -228,7 +231,7 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
             print '%s);' % ', '.join(args)
 
         print
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             if column.type.is_map():
                 print 'void %(s)s_update_%(c)s_setkey(const struct %(s)s *, ' % {'s': structName, 'c': columnName},
                 print '%(coltype)s, %(valtype)s);' % {'coltype':column.type.key.to_const_c_type(prefix), 'valtype':column.type.value.to_const_c_type(prefix)}
@@ -253,7 +256,7 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
         print 'void %s_add_clause_false(struct ovsdb_idl *idl);' % structName
 
         print
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             print 'void %(s)s_remove_clause_%(c)s(struct ovsdb_idl *idl, enum ovsdb_function function,' % {'s': structName, 'c': columnName},
             if column.type.is_smap():
                 args = ['const struct smap *']
@@ -280,7 +283,6 @@ bool %(s)s_is_updated(const struct %(s)s *, enum %(s)s_column_id);
     print "\nextern struct ovsdb_idl_table_class %stable_classes[%sN_TABLES];" % (prefix, prefix.upper())
 
     print "\nextern struct ovsdb_idl_class %sidl_class;" % prefix
-    print "\nvoid %sinit(void);" % prefix
 
     print "\nconst char * %sget_db_version(void);" % prefix
     print "\n#endif /* %(prefix)sIDL_HEADER */" % {'prefix': prefix.upper()}
@@ -309,14 +311,6 @@ def printCIDLSource(schemaFile):
 #include "ovsdb-error.h"
 #include "util.h"
 
-#ifdef __CHECKER__
-/* Sparse dislikes sizeof(bool) ("warning: expression using sizeof bool"). */
-enum { sizeof_bool = 1 };
-#else
-enum { sizeof_bool = sizeof(bool) };
-#endif
-
-static bool inited;
 ''' % schema.idlHeader
 
     # Cast functions.
@@ -337,7 +331,7 @@ static struct %(s)s *
         print "/* %s table. */" % (tableName)
 
         # Parse functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             print '''
 static void
 %(s)s_parse_%(c)s(struct ovsdb_idl_row *row_, const struct ovsdb_datum *datum)
@@ -353,29 +347,25 @@ static void
                 valueVar = None
 
             if type.is_smap():
-                print "    size_t i;"
-                print
-                print "    ovs_assert(inited);"
                 print "    smap_init(&row->%s);" % columnName
-                print "    for (i = 0; i < datum->n; i++) {"
+                print "    for (size_t i = 0; i < datum->n; i++) {"
                 print "        smap_add(&row->%s," % columnName
                 print "                 datum->keys[i].string,"
                 print "                 datum->values[i].string);"
                 print "    }"
             elif (type.n_min == 1 and type.n_max == 1) or type.is_optional_pointer():
                 print
-                print "    ovs_assert(inited);"
                 print "    if (datum->n >= 1) {"
                 if not type.key.ref_table:
                     print "        %s = datum->keys[0].%s;" % (keyVar, type.key.type.to_string())
                 else:
-                    print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[0].uuid));" % (keyVar, prefix, type.key.ref_table.name.lower(), prefix, prefix.upper(), type.key.ref_table.name.upper())
+                    print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->keys[0].uuid));" % (keyVar, prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower())
 
                 if valueVar:
                     if not type.value.ref_table:
                         print "        %s = datum->values[0].%s;" % (valueVar, type.value.type.to_string())
                     else:
-                        print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[0].uuid));" % (valueVar, prefix, type.value.ref_table.name.lower(), prefix, prefix.upper(), type.value.ref_table.name.upper())
+                        print "        %s = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->values[0].uuid));" % (valueVar, prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower())
                 print "    } else {"
                 print "        %s" % type.key.initCDefault(keyVar, type.n_min == 0)
                 if valueVar:
@@ -387,72 +377,56 @@ static void
                     nMax = "n"
                 else:
                     nMax = "datum->n"
-                print "    size_t i;"
-                print
-                print "    ovs_assert(inited);"
                 print "    %s = NULL;" % keyVar
                 if valueVar:
                     print "    %s = NULL;" % valueVar
                 print "    row->n_%s = 0;" % columnName
-                print "    for (i = 0; i < %s; i++) {" % nMax
-                refs = []
+                print "    for (size_t i = 0; i < %s; i++) {" % nMax
                 if type.key.ref_table:
-                    print "        struct %s%s *keyRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->keys[i].uuid));" % (prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower(), prefix, prefix.upper(), type.key.ref_table.name.upper())
+                    print """\
+        struct %s%s *keyRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->keys[i].uuid));
+        if (!keyRow) {
+            continue;
+        }\
+""" % (prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower(), prefix, type.key.ref_table.name.lower())
                     keySrc = "keyRow"
-                    refs.append('keyRow')
                 else:
                     keySrc = "datum->keys[i].%s" % type.key.type.to_string()
                 if type.value and type.value.ref_table:
-                    print "        struct %s%s *valueRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_classes[%sTABLE_%s], &datum->values[i].uuid));" % (prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower(), prefix, prefix.upper(), type.value.ref_table.name.upper())
+                    print """\
+        struct %s%s *valueRow = %s%s_cast(ovsdb_idl_get_row_arc(row_, &%stable_%s, &datum->values[i].uuid));
+        if (!valueRow) {
+            continue;
+        }\
+""" % (prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower(), prefix, type.value.ref_table.name.lower())
                     valueSrc = "valueRow"
-                    refs.append('valueRow')
                 elif valueVar:
                     valueSrc = "datum->values[i].%s" % type.value.type.to_string()
-                if refs:
-                    print "        if (%s) {" % ' && '.join(refs)
-                    indent = "            "
-                else:
-                    indent = "        "
-                print "%sif (!row->n_%s) {" % (indent, columnName)
+                print "        if (!row->n_%s) {" % (columnName)
 
-                # Special case for boolean types.  This is only here because
-                # sparse does not like the "normal" case ("warning: expression
-                # using sizeof bool").
-                if type.key.type == ovs.db.types.BooleanType:
-                    sizeof = "sizeof_bool"
-                else:
-                    sizeof = "sizeof *%s" % keyVar
-                print "%s    %s = xmalloc(%s * %s);" % (indent, keyVar, nMax,
-                                                        sizeof)
+                print "            %s = xmalloc(%s * sizeof *%s);" % (
+                    keyVar, nMax, keyVar)
                 if valueVar:
-                    # Special case for boolean types (see above).
-                    if type.value.type == ovs.db.types.BooleanType:
-                        sizeof = " * sizeof_bool"
-                    else:
-                        sizeof = "sizeof *%s" % valueVar
-                    print "%s    %s = xmalloc(%s * %s);" % (indent, valueVar,
-                                                            nMax, sizeof)
-                print "%s}" % indent
-                print "%s%s[row->n_%s] = %s;" % (indent, keyVar, columnName, keySrc)
+                    print "            %s = xmalloc(%s * sizeof *%s);" % (
+                        valueVar, nMax, valueVar)
+                print "        }"
+                print "        %s[row->n_%s] = %s;" % (keyVar, columnName, keySrc)
                 if valueVar:
-                    print "%s%s[row->n_%s] = %s;" % (indent, valueVar, columnName, valueSrc)
-                print "%srow->n_%s++;" % (indent, columnName)
-                if refs:
-                    print "        }"
+                    print "        %s[row->n_%s] = %s;" % (valueVar, columnName, valueSrc)
+                print "        row->n_%s++;" % columnName
                 print "    }"
             print "}"
 
         # Unparse functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             type = column.type
             if type.is_smap() or (type.n_min != 1 or type.n_max != 1) and not type.is_optional_pointer():
                 print '''
 static void
 %(s)s_unparse_%(c)s(struct ovsdb_idl_row *row_)
 {
-    struct %(s)s *row = %(s)s_cast(row_);
-
-    ovs_assert(inited);''' % {'s': structName, 'c': columnName}
+    struct %(s)s *row = %(s)s_cast(row_);''' % {'s': structName,
+                                                'c': columnName}
 
                 if type.is_smap():
                     print "    smap_destroy(&row->%s);" % columnName
@@ -490,7 +464,7 @@ void
 %(s)s_init(struct %(s)s *row)
 {
     memset(row, 0, sizeof *row); """ % {'s': structName, 't': tableName}
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             if column.type.is_smap():
                 print "    smap_init(&row->%s);" % columnName
         print "}"
@@ -502,7 +476,7 @@ void
 const struct %(s)s *
 %(s)s_get_for_uuid(const struct ovsdb_idl *idl, const struct uuid *uuid)
 {
-    return %(s)s_cast(ovsdb_idl_get_row_for_uuid(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s], uuid));
+    return %(s)s_cast(ovsdb_idl_get_row_for_uuid(idl, &%(p)stable_%(tl)s, uuid));
 }
 
 /* Returns a row in table "%(t)s" in 'idl', or a null pointer if that
@@ -514,7 +488,7 @@ const struct %(s)s *
 const struct %(s)s *
 %(s)s_first(const struct ovsdb_idl *idl)
 {
-    return %(s)s_cast(ovsdb_idl_first_row(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]));
+    return %(s)s_cast(ovsdb_idl_first_row(idl, &%(p)stable_%(tl)s));
 }
 
 /* Returns a row following 'row' within its table, or a null pointer if 'row'
@@ -527,7 +501,7 @@ const struct %(s)s *
 
 unsigned int %(s)s_get_seqno(const struct ovsdb_idl *idl)
 {
-    return ovsdb_idl_table_get_seqno(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]);
+    return ovsdb_idl_table_get_seqno(idl, &%(p)stable_%(tl)s);
 }
 
 unsigned int %(s)s_row_get_seqno(const struct %(s)s *row, enum ovsdb_idl_change change)
@@ -538,7 +512,7 @@ unsigned int %(s)s_row_get_seqno(const struct %(s)s *row, enum ovsdb_idl_change 
 const struct %(s)s *
 %(s)s_track_get_first(const struct ovsdb_idl *idl)
 {
-    return %(s)s_cast(ovsdb_idl_track_get_first(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s]));
+    return %(s)s_cast(ovsdb_idl_track_get_first(idl, &%(p)stable_%(tl)s));
 }
 
 const struct %(s)s
@@ -549,6 +523,7 @@ const struct %(s)s
         'p': prefix,
         'P': prefix.upper(),
         't': tableName,
+        'tl': tableName.lower(),
         'T': tableName.upper()}
 
         print '''
@@ -573,7 +548,7 @@ void
 struct %(s)s *
 %(s)s_insert(struct ovsdb_idl_txn *txn)
 {
-    return %(s)s_cast(ovsdb_idl_txn_insert(txn, &%(p)stable_classes[%(P)sTABLE_%(T)s], NULL));
+    return %(s)s_cast(ovsdb_idl_txn_insert(txn, &%(p)stable_%(tl)s, NULL));
 }
 
 bool
@@ -584,10 +559,11 @@ bool
         'p': prefix,
         'P': prefix.upper(),
         't': tableName,
+        'tl': tableName.lower(),
         'T': tableName.upper()}
 
         # Verify functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             print '''
 /* Causes the original contents of column "%(c)s" in 'row' to be
  * verified as a prerequisite to completing the transaction.  That is, if
@@ -615,15 +591,14 @@ bool
 void
 %(s)s_verify_%(c)s(const struct %(s)s *row)
 {
-    ovs_assert(inited);
-    ovsdb_idl_txn_verify(&row->header_, &%(s)s_columns[%(S)s_COL_%(C)s]);
+    ovsdb_idl_txn_verify(&row->header_, &%(s)s_col_%(c)s);
 }''' % {'s': structName,
         'S': structName.upper(),
         'c': columnName,
         'C': columnName.upper()}
 
         # Get functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             if column.type.value:
                 valueParam = ',\n\tenum ovsdb_atomic_type value_type OVS_UNUSED'
                 valueType = '\n    ovs_assert(value_type == %s);' % column.type.value.toAtomicType()
@@ -663,7 +638,7 @@ const struct ovsdb_datum *
        'v': valueParam, 'vt': valueType, 'vc': valueComment}
 
         # Set functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             type = column.type
 
             comment, members = cMembers(prefix, tableName, columnName,
@@ -676,27 +651,13 @@ const struct ovsdb_datum *
 {
     struct ovsdb_datum datum;
 
-    ovs_assert(inited);
     if (%(c)s) {
-        struct smap_node *node;
-        size_t i;
-
-        datum.n = smap_count(%(c)s);
-        datum.keys = xmalloc(datum.n * sizeof *datum.keys);
-        datum.values = xmalloc(datum.n * sizeof *datum.values);
-
-        i = 0;
-        SMAP_FOR_EACH (node, %(c)s) {
-            datum.keys[i].string = xstrdup(node->key);
-            datum.values[i].string = xstrdup(node->value);
-            i++;
-        }
-        ovsdb_datum_sort_unique(&datum, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
+        ovsdb_datum_from_smap(&datum, %(c)s);
     } else {
         ovsdb_datum_init_empty(&datum);
     }
     ovsdb_idl_txn_write(&row->header_,
-                        &%(s)s_columns[%(S)s_COL_%(C)s],
+                        &%(s)s_col_%(c)s,
                         &datum);
 }
 """ % {'t': tableName,
@@ -718,18 +679,19 @@ const struct ovsdb_datum *
                     nVar = members[1]['name']
 
             print comment
-            print 'void'
-            print '%(s)s_set_%(c)s(const struct %(s)s *row, %(args)s)' % \
-                {'s': structName, 'c': columnName,
-                 'args': ', '.join(['%(type)s%(name)s' % m for m in members])}
-            print "{"
-            print "    struct ovsdb_datum datum;"
+            print """\
+void
+%(s)s_set_%(c)s(const struct %(s)s *row, %(args)s)
+{
+    struct ovsdb_datum datum;""" % {'s': structName,
+        'c': columnName,
+        'args': ', '.join(['%(type)s%(name)s'
+                           % m for m in members])}
             if type.n_min == 1 and type.n_max == 1:
                 print "    union ovsdb_atom key;"
                 if type.value:
                     print "    union ovsdb_atom value;"
                 print
-                print "    ovs_assert(inited);"
                 print "    datum.n = 1;"
                 print "    datum.keys = &key;"
                 print "    " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar)
@@ -742,7 +704,6 @@ const struct ovsdb_datum *
             elif type.is_optional_pointer():
                 print "    union ovsdb_atom key;"
                 print
-                print "    ovs_assert(inited);"
                 print "    if (%s) {" % keyVar
                 print "        datum.n = 1;"
                 print "        datum.keys = &key;"
@@ -756,7 +717,6 @@ const struct ovsdb_datum *
             elif type.n_max == 1:
                 print "    union ovsdb_atom key;"
                 print
-                print "    ovs_assert(inited);"
                 print "    if (%s) {" % nVar
                 print "        datum.n = 1;"
                 print "        datum.keys = &key;"
@@ -768,16 +728,14 @@ const struct ovsdb_datum *
                 print "    datum.values = NULL;"
                 txn_write_func = "ovsdb_idl_txn_write_clone"
             else:
-                print "    size_t i;"
                 print
-                print "    ovs_assert(inited);"
                 print "    datum.n = %s;" % nVar
                 print "    datum.keys = %s ? xmalloc(%s * sizeof *datum.keys) : NULL;" % (nVar, nVar)
                 if type.value:
                     print "    datum.values = xmalloc(%s * sizeof *datum.values);" % nVar
                 else:
                     print "    datum.values = NULL;"
-                print "    for (i = 0; i < %s; i++) {" % nVar
+                print "    for (size_t i = 0; i < %s; i++) {" % nVar
                 print "        " + type.key.copyCValue("datum.keys[i].%s" % type.key.type.to_string(), "%s[i]" % keyVar)
                 if type.value:
                     print "        " + type.value.copyCValue("datum.values[i].%s" % type.value.type.to_string(), "%s[i]" % valueVar)
@@ -786,17 +744,15 @@ const struct ovsdb_datum *
                     valueType = type.value.toAtomicType()
                 else:
                     valueType = "OVSDB_TYPE_VOID"
-                print "    ovsdb_datum_sort_unique(&datum, %s, %s);" % (
-                    type.key.toAtomicType(), valueType)
                 txn_write_func = "ovsdb_idl_txn_write"
-            print "    %(f)s(&row->header_, &%(s)s_columns[%(S)s_COL_%(C)s], &datum);" \
+            print "    %(f)s(&row->header_, &%(s)s_col_%(c)s, &datum);" \
                 % {'f': txn_write_func,
                    's': structName,
                    'S': structName.upper(),
-                   'C': columnName.upper()}
+                   'c': columnName}
             print "}"
         # Update/Delete of partial map column functions
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             type = column.type
             if type.is_map():
                 print '''
@@ -808,8 +764,6 @@ void
 %(s)s_update_%(c)s_setkey(const struct %(s)s *row, %(coltype)snew_key, %(valtype)snew_value)
 {
     struct ovsdb_datum *datum;
-
-    ovs_assert(inited);
 
     datum = xmalloc(sizeof *datum);
     datum->n = 1;
@@ -823,11 +777,10 @@ void
                 print "    "+ type.value.copyCValue("datum->values[0].%s" % type.value.type.to_string(), "new_value")
                 print '''
     ovsdb_idl_txn_write_partial_map(&row->header_,
-                                    &%(s)s_columns[%(S)s_COL_%(C)s],
+                                    &%(s)s_col_%(c)s,
                                     datum);
-}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
-        'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper(),
-        'C': columnName.upper()}
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
+        'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper()}
                 print '''
 /* Deletes an element of the "%(c)s" map column from the "%(t)s" table in 'row'
  * given the key value 'delete_key'.
@@ -837,8 +790,6 @@ void
 %(s)s_update_%(c)s_delkey(const struct %(s)s *row, %(coltype)sdelete_key)
 {
     struct ovsdb_datum *datum;
-
-    ovs_assert(inited);
 
     datum = xmalloc(sizeof *datum);
     datum->n = 1;
@@ -851,11 +802,10 @@ void
                 print "    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "delete_key")
                 print '''
     ovsdb_idl_txn_delete_partial_map(&row->header_,
-                                    &%(s)s_columns[%(S)s_COL_%(C)s],
+                                    &%(s)s_col_%(c)s,
                                     datum);
-}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
-        'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper(),
-        'C': columnName.upper()}
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
+        'valtype':column.type.value.to_const_c_type(prefix), 'S': structName.upper()}
         # End Update/Delete of partial maps
         # Update/Delete of partial set column functions
             if type.is_set():
@@ -869,8 +819,6 @@ void
 {
     struct ovsdb_datum *datum;
 
-    ovs_assert(inited);
-
     datum = xmalloc(sizeof *datum);
     datum->n = 1;
     datum->keys = xmalloc(datum->n * sizeof *datum->values);
@@ -881,11 +829,10 @@ void
                 print "    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "new_value")
                 print '''
     ovsdb_idl_txn_write_partial_set(&row->header_,
-                                    &%(s)s_columns[%(S)s_COL_%(C)s],
+                                    &%(s)s_col_%(c)s,
                                     datum);
-}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
-        'valtype':column.type.key.to_const_c_type(prefix), 'S': structName.upper(),
-        'C': columnName.upper()}
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
+        'valtype':column.type.key.to_const_c_type(prefix), 'S': structName.upper()}
                 print '''
 /* Deletes the value 'delete_value' from the "%(c)s" set column from the
  * "%(t)s" table in 'row'.
@@ -895,8 +842,6 @@ void
 %(s)s_update_%(c)s_delvalue(const struct %(s)s *row, %(valtype)sdelete_value)
 {
     struct ovsdb_datum *datum;
-
-    ovs_assert(inited);
 
     datum = xmalloc(sizeof *datum);
     datum->n = 1;
@@ -909,15 +854,14 @@ void
                 print "    "+ type.key.copyCValue("datum->keys[0].%s" % type.key.type.to_string(), "delete_value")
                 print '''
     ovsdb_idl_txn_delete_partial_set(&row->header_,
-                                    &%(s)s_columns[%(S)s_COL_%(C)s],
+                                    &%(s)s_col_%(c)s,
                                     datum);
-}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.to_const_c_type(prefix),
-        'valtype':column.type.key.to_const_c_type(prefix), 'S': structName.upper(),
-        'C': columnName.upper()}
+}''' % {'s': structName, 'c': columnName,'coltype':column.type.key.toCType(prefix),
+        'valtype':column.type.key.to_const_c_type(prefix), 'S': structName.upper()}
         # End Update/Delete of partial set
 
         # Add clause functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             type = column.type
 
             comment, members = cMembers(prefix, tableName, columnName,
@@ -930,42 +874,28 @@ void
 {
     struct ovsdb_datum datum;
 
-    ovs_assert(inited);
     if (%(c)s) {
-        struct smap_node *node;
-        size_t i;
-
-        datum.n = smap_count(%(c)s);
-        datum.keys = xmalloc(datum.n * sizeof *datum.keys);
-        datum.values = xmalloc(datum.n * sizeof *datum.values);
-
-        i = 0;
-        SMAP_FOR_EACH (node, %(c)s) {
-            datum.keys[i].string = xstrdup(node->key);
-            datum.values[i].string = xstrdup(node->value);
-            i++;
-        }
-        ovsdb_datum_sort_unique(&datum, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
+        ovsdb_datum_from_smap(&datum, %(c)s);
     } else {
         ovsdb_datum_init_empty(&datum);
     }
 
     ovsdb_idl_condition_add_clause(idl,
-                                   &%(p)stable_classes[%(P)sTABLE_%(T)s],
+                                   &%(p)stable_%(tl)s,
                                    function,
-                                   &%(s)s_columns[%(S)s_COL_%(C)s],
+                                   &%(s)s_col_%(c)s,
                                    &datum);
 
     ovsdb_datum_destroy(&datum, &%(s)s_col_%(c)s.type);
 }
 """ % {'t': tableName,
+       'tl': tableName.lower(),
        'T': tableName.upper(),
        'p': prefix,
        'P': prefix.upper(),
        's': structName,
        'S': structName.upper(),
-       'c': columnName,
-       'C': columnName.upper()}
+       'c': columnName}
                 continue
 
             keyVar = members[0]['name']
@@ -992,7 +922,6 @@ void
                 if type.value:
                     print "    union ovsdb_atom value;"
                 print
-                print "    ovs_assert(inited);"
                 print "    datum.n = 1;"
                 print "    datum.keys = &key;"
                 print "    " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar, refTable=False)
@@ -1004,7 +933,6 @@ void
             elif type.is_optional_pointer():
                 print "    union ovsdb_atom key;"
                 print
-                print "    ovs_assert(inited);"
                 print "    if (%s) {" % keyVar
                 print "        datum.n = 1;"
                 print "        datum.keys = &key;"
@@ -1017,7 +945,6 @@ void
             elif type.n_max == 1:
                 print "    union ovsdb_atom key;"
                 print
-                print "    ovs_assert(inited);"
                 print "    if (%s) {" % nVar
                 print "        datum.n = 1;"
                 print "        datum.keys = &key;"
@@ -1028,9 +955,6 @@ void
                 print "    }"
                 print "    datum.values = NULL;"
             else:
-                print "    size_t i;"
-                print
-                print "    ovs_assert(inited);"
                 print "    datum.n = %s;" % nVar
                 print "    datum.keys = %s ? xmalloc(%s * sizeof *datum.keys) : NULL;" % (nVar, nVar)
                 free += ['datum.keys']
@@ -1039,7 +963,7 @@ void
                     free += ['datum.values']
                 else:
                     print "    datum.values = NULL;"
-                print "    for (i = 0; i < %s; i++) {" % nVar
+                print "    for (size_t i = 0; i < %s; i++) {" % nVar
                 print "        " + type.key.assign_c_value_casting_away_const("datum.keys[i].%s" % type.key.type.to_string(), "%s[i]" % keyVar, refTable=False)
                 if type.value:
                     print "        " + type.value.assign_c_value_casting_away_const("datum.values[i].%s" % type.value.type.to_string(), "%s[i]" % valueVar, refTable=False)
@@ -1051,31 +975,31 @@ void
                 print "    ovsdb_datum_sort_unique(&datum, %s, %s);" % (
                     type.key.toAtomicType(), valueType)
 
-            print"""    ovsdb_idl_condition_add_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s],
+            print"""    ovsdb_idl_condition_add_clause(idl, &%(p)stable_%(tl)s,
                           function,
-                          &%(s)s_columns[%(S)s_COL_%(C)s],
+                          &%(s)s_col_%(c)s,
                           &datum);\
-""" % {'t': tableName,
+""" % {'tl': tableName.lower(),
        'T': tableName.upper(),
        'p': prefix,
        'P': prefix.upper(),
        's': structName,
        'S': structName.upper(),
-       'c': columnName,
-       'C': columnName.upper()}
+       'c': columnName}
             for var in free:
                 print "    free(%s);" % var
             print "}"
 
-        print """void
+        print """\
+void
 %(s)s_add_clause_false(struct ovsdb_idl *idl)
 {
     struct ovsdb_datum datum;
 
     ovsdb_datum_init_empty(&datum);
-    ovsdb_idl_condition_add_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s], OVSDB_F_FALSE, NULL, &datum);
+    ovsdb_idl_condition_add_clause(idl, &%(p)stable_%(tl)s, OVSDB_F_FALSE, NULL, &datum);
 }""" % {'s': structName,
-        'T': tableName.upper(),
+        'tl': tableName.lower(),
         'p': prefix,
         'P': prefix.upper()}
 
@@ -1085,14 +1009,14 @@ void
     struct ovsdb_datum datum;
 
     ovsdb_datum_init_empty(&datum);
-    ovsdb_idl_condition_add_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s], OVSDB_F_TRUE, NULL, &datum);
+    ovsdb_idl_condition_add_clause(idl, &%(p)stable_%(tl)s, OVSDB_F_TRUE, NULL, &datum);
 }""" % {'s': structName,
-        'T': tableName.upper(),
+        'tl': tableName.lower(),
         'p': prefix,
         'P': prefix.upper()}
 
         # Remove clause functions.
-        for columnName, column in sorted(table.columns.iteritems()):
+        for columnName, column in sorted_columns(table):
             type = column.type
 
             comment, members = cMembers(prefix, tableName, columnName,
@@ -1105,41 +1029,25 @@ void
 {
     struct ovsdb_datum datum;
 
-    ovs_assert(inited);
     if (%(c)s) {
-        struct smap_node *node;
-        size_t i;
-
-        datum.n = smap_count(%(c)s);
-        datum.keys = xmalloc(datum.n * sizeof *datum.keys);
-        datum.values = xmalloc(datum.n * sizeof *datum.values);
-
-        i = 0;
-        SMAP_FOR_EACH (node, %(c)s) {
-            datum.keys[i].string = xstrdup(node->key);
-            datum.values[i].string = xstrdup(node->value);
-            i++;
-        }
-        ovsdb_datum_sort_unique(&datum, OVSDB_TYPE_STRING, OVSDB_TYPE_STRING);
+        ovsdb_datum_from_smap(&datum, %(c)s);
     } else {
         ovsdb_datum_init_empty(&datum);
     }
 
-    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s],
+    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s,
                                       function,
-                                      &%(s)s_columns[%(S)s_COL_%(C)s],
+                                      &%(s)s_col_%(c)s,
                                       &datum);
 
     ovsdb_datum_destroy(&datum, &%(s)s_col_%(c)s.type);
 }
-""" % {'t': tableName,
-       'T': tableName.upper(),
+""" % {'tl': tableName.lower(),
        'p': prefix,
        'P': prefix.upper(),
        's': structName,
        'S': structName.upper(),
-       'c': columnName,
-       'C': columnName.upper()}
+       'c': columnName}
                 continue
 
             keyVar = members[0]['name']
@@ -1166,7 +1074,6 @@ void
                 if type.value:
                     print "    union ovsdb_atom value;"
                 print
-                print "    ovs_assert(inited);"
                 print "    datum.n = 1;"
                 print "    datum.keys = &key;"
                 print "    " + type.key.assign_c_value_casting_away_const("key.%s" % type.key.type.to_string(), keyVar, refTable=False)
@@ -1178,7 +1085,6 @@ void
             elif type.is_optional_pointer():
                 print "    union ovsdb_atom key;"
                 print
-                print "    ovs_assert(inited);"
                 print "    if (%s) {" % keyVar
                 print "        datum.n = 1;"
                 print "        datum.keys = &key;"
@@ -1191,7 +1097,6 @@ void
             elif type.n_max == 1:
                 print "    union ovsdb_atom key;"
                 print
-                print "    ovs_assert(inited);"
                 print "    if (%s) {" % nVar
                 print "        datum.n = 1;"
                 print "        datum.keys = &key;"
@@ -1202,9 +1107,6 @@ void
                 print "    }"
                 print "    datum.values = NULL;"
             else:
-                print "    size_t i;"
-                print
-                print "    ovs_assert(inited);"
                 print "    datum.n = %s;" % nVar
                 print "    datum.keys = %s ? xmalloc(%s * sizeof *datum.keys) : NULL;" % (nVar, nVar)
                 free += ['datum.keys']
@@ -1213,7 +1115,7 @@ void
                     print "    datum.values = xmalloc(%s * sizeof *datum.values);" % nVar
                 else:
                     print "    datum.values = NULL;"
-                print "    for (i = 0; i < %s; i++) {" % nVar
+                print "    for (size_t i = 0; i < %s; i++) {" % nVar
                 print "        " + type.key.assign_c_value_casting_away_const("datum.keys[i].%s" % type.key.type.to_string(), "%s[i]" % keyVar, refTable=False)
                 if type.value:
                     print "        " + type.value.assign_c_value_casting_away_const("datum.values[i].%s" % type.value.type.to_string(), "%s[i]" % valueVar, refTable=False)
@@ -1225,18 +1127,16 @@ void
                 print "    ovsdb_datum_sort_unique(&datum, %s, %s);" % (
                     type.key.toAtomicType(), valueType)
 
-            print"""    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s],
+            print"""    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s,
                           function,
-                          &%(s)s_columns[%(S)s_COL_%(C)s],
+                          &%(s)s_col_%(c)s,
                           &datum);\
-""" % {'t': tableName,
-       'T': tableName.upper(),
+""" % {'tl': tableName.lower(),
        'p': prefix,
        'P': prefix.upper(),
        's': structName,
        'S': structName.upper(),
-       'c': columnName,
-       'C': columnName.upper()}
+       'c': columnName}
             for var in free:
                 print "    free(%s);" % var
             print "}"
@@ -1247,48 +1147,53 @@ void
     struct ovsdb_datum datum;
 
     ovsdb_datum_init_empty(&datum);
-    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s], OVSDB_F_FALSE, NULL, &datum);
-}""" % {'s': structName,
-       'T': tableName.upper(),
-       'p': prefix,
-       'P': prefix.upper()}
+    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s, OVSDB_F_FALSE, NULL, &datum);
+}
 
-        print """void
+void
 %(s)s_remove_clause_true(struct ovsdb_idl *idl)
 {
     struct ovsdb_datum datum;
 
     ovsdb_datum_init_empty(&datum);
-    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_classes[%(P)sTABLE_%(T)s], OVSDB_F_TRUE, NULL, &datum);
+    ovsdb_idl_condition_remove_clause(idl, &%(p)stable_%(tl)s, OVSDB_F_TRUE, NULL, &datum);
 }""" % {'s': structName,
-        'T': tableName.upper(),
+        'tl': tableName.lower(),
         'p': prefix,
         'P': prefix.upper(),}
 
         # Table columns.
-        print "\nstruct ovsdb_idl_column %s_columns[%s_N_COLUMNS];" % (
+        for columnName, column in sorted_columns(table):
+            prereqs = []
+            x = column.type.cInitType("%s_col_%s" % (tableName, columnName), prereqs)
+            if prereqs:
+                print '\n'.join(prereqs)
+        print "\nstruct ovsdb_idl_column %s_columns[%s_N_COLUMNS] = {" % (
             structName, structName.upper())
-        print """
-static void\n%s_columns_init(void)
-{
-    struct ovsdb_idl_column *c;\
-""" % structName
-        for columnName, column in sorted(table.columns.iteritems()):
-            cs = "%s_col_%s" % (structName, columnName)
-            d = {'cs': cs, 'c': columnName, 's': structName}
+        for columnName, column in sorted_columns(table):
             if column.mutable:
                 mutable = "true"
             else:
                 mutable = "false"
-            print
-            print "    /* Initialize %(cs)s. */" % d
-            print "    c = &%(cs)s;" % d
-            print "    c->name = \"%(c)s\";" % d
-            print column.type.cInitType("    ", "c->type")
-            print "    c->mutable = %s;" % mutable
-            print "    c->parse = %(s)s_parse_%(c)s;" % d
-            print "    c->unparse = %(s)s_unparse_%(c)s;" % d
-        print "}"
+            type_init = '\n'.join("            " + x
+                                  for x in column.type.cInitType("%s_col_%s" % (tableName, columnName), prereqs))
+            print """\
+    [%(P)s%(T)s_COL_%(C)s] = {
+         .name = "%(c)s",
+         .type = {
+%(type)s
+         },
+         .mutable = %(mutable)s,
+         .parse = %(s)s_parse_%(c)s,
+         .unparse = %(s)s_unparse_%(c)s,
+    },\n""" % {'P': prefix.upper(),
+               'T': tableName.upper(),
+               'c': columnName,
+               'C': columnName.upper(),
+               's': structName,
+               'mutable': mutable,
+               'type': type_init}
+        print "};"
 
     # Table classes.
     print ""
@@ -1310,22 +1215,6 @@ static void\n%s_columns_init(void)
     print "    \"%s\", %stable_classes, ARRAY_SIZE(%stable_classes)" % (
         schema.name, prefix, prefix)
     print "};"
-
-    # global init function
-    print """
-void
-%sinit(void)
-{
-    if (inited) {
-        return;
-    }
-    assert_single_threaded();
-    inited = true;
-""" % prefix
-    for tableName, table in sorted(schema.tables.iteritems()):
-        structName = "%s%s" % (prefix, tableName.lower())
-        print "    %s_columns_init();" % structName
-    print "}"
 
     print """
 /* Return the schema version.  The caller must not free the returned value. */
@@ -1368,7 +1257,6 @@ The following commands are supported:
   annotate SCHEMA ANNOTATIONS print SCHEMA combined with ANNOTATIONS
   c-idl-header IDL            print C header file for IDL
   c-idl-source IDL            print C source file for IDL implementation
-  nroff IDL                   print schema documentation in nroff format
 
 The following options are also available:
   -h, --help                  display this help message

@@ -25,6 +25,42 @@
 #include "openvswitch/shash.h"
 #include "uuid.h"
 
+/* A local copy of a row in an OVSDB table, replicated from an OVSDB server.
+ * This structure is used as a header for a larger structure that translates
+ * the "struct ovsdb_datum"s into easier-to-use forms, via the ->parse() and
+ * ->unparse functions in struct ovsdb_idl_column.  (Those functions are
+ * generated automatically via ovsdb-idlc.)
+ *
+ * When no transaction is in progress:
+ *
+ *     - 'old' points to the data committed to the database and currently
+ *       in the row.
+ *
+ *     - 'new == old'.
+ *
+ * When a transaction is in progress, the situation is a little different.  For
+ * a row inserted in the transaction, 'old' is NULL and 'new' points to the
+ * row's initial contents.  Otherwise:
+ *
+ *     - 'old' points to the data committed to the database and currently in
+ *       the row.  (This is the same as when no transaction is in progress.)
+ *
+ *     - If the transaction does not modify the row, 'new == old'.
+ *
+ *     - If the transaction modifies the row, 'new' points to the modified
+ *       data.
+ *
+ *     - If the transaction deletes the row, 'new' is NULL.
+ *
+ * Thus:
+ *
+ *     - 'old' always points to committed data, except that it is NULL if the
+ *       row is inserted within the current transaction.
+ *
+ *     - 'new' always points to the newest, possibly uncommitted version of the
+ *       row's data, except that it is NULL if the row is deleted within the
+ *       current transaction.
+ */
 struct ovsdb_idl_row {
     struct hmap_node hmap_node; /* In struct ovsdb_idl_table's 'rows'. */
     struct uuid uuid;           /* Row "_uuid" field. */
@@ -93,7 +129,7 @@ struct ovsdb_idl_class {
 
 struct ovsdb_idl_row *ovsdb_idl_get_row_arc(
     struct ovsdb_idl_row *src,
-    struct ovsdb_idl_table_class *dst_table,
+    const struct ovsdb_idl_table_class *dst_table,
     const struct uuid *dst_uuid);
 
 void ovsdb_idl_txn_verify(const struct ovsdb_idl_row *,

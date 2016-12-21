@@ -290,8 +290,8 @@ struct dp_netdev_port {
     struct netdev *netdev;
     struct hmap_node node;      /* Node in dp_netdev's 'ports'. */
     struct netdev_saved_flags *sf;
-    unsigned n_rxq;             /* Number of elements in 'rxq' */
     struct dp_netdev_rxq *rxqs;
+    unsigned n_rxq;             /* Number of elements in 'rxq' */
     bool dynamic_txqs;          /* If true XPS will be used. */
     unsigned *txq_used;         /* Number of threads that uses each tx queue. */
     struct ovs_mutex txq_used_mutex;
@@ -4166,7 +4166,7 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
     /* Sparse or MSVC doesn't like variable length array. */
     enum { PKT_ARRAY_SIZE = NETDEV_MAX_BURST };
 #endif
-    struct netdev_flow_key keys[PKT_ARRAY_SIZE];
+    OVS_ALIGNED_VAR(CACHE_LINE_SIZE) struct netdev_flow_key keys[PKT_ARRAY_SIZE];
     struct packet_batch_per_flow batches[PKT_ARRAY_SIZE];
     long long now = time_msec();
     size_t newcnt, n_batches, i;
@@ -4182,6 +4182,15 @@ dp_netdev_input__(struct dp_netdev_pmd_thread *pmd,
         fast_path_processing(pmd, packets, keys, batches, &n_batches, in_port, now);
     }
 
+    /* All the flow batches need to be reset before any call to
+     * packet_batch_per_flow_execute() as it could potentially trigger
+     * recirculation. When a packet matching flow ‘j’ happens to be
+     * recirculated, the nested call to dp_netdev_input__() could potentially
+     * classify the packet as matching another flow - say 'k'. It could happen
+     * that in the previous call to dp_netdev_input__() that same flow 'k' had
+     * already its own batches[k] still waiting to be served.  So if its
+     * ‘batch’ member is not reset, the recirculated packet would be wrongly
+     * appended to batches[k] of the 1st call to dp_netdev_input__(). */
     for (i = 0; i < n_batches; i++) {
         batches[i].flow->batch = NULL;
     }

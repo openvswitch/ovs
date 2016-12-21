@@ -2038,6 +2038,7 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
     bool increment = false;
 
     txn = ovsdb_idl_txn_create(idl);
+    ovsdb_idl_check_consistency(idl);
     for (cmd = strtok_r(commands, ",", &save_ptr1); cmd;
          cmd = strtok_r(NULL, ",", &save_ptr1)) {
         char *save_ptr2 = NULL;
@@ -2144,14 +2145,17 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
             increment = true;
         } else if (!strcmp(name, "abort")) {
             ovsdb_idl_txn_abort(txn);
+            ovsdb_idl_check_consistency(idl);
             break;
         } else if (!strcmp(name, "destroy")) {
             printf("%03d: destroy\n", step);
             ovsdb_idl_txn_destroy(txn);
+            ovsdb_idl_check_consistency(idl);
             return;
         } else {
             ovs_fatal(0, "unknown command %s", name);
         }
+        ovsdb_idl_check_consistency(idl);
     }
 
     status = ovsdb_idl_txn_commit_block(txn);
@@ -2163,6 +2167,7 @@ idl_set(struct ovsdb_idl *idl, char *commands, int step)
     }
     putchar('\n');
     ovsdb_idl_txn_destroy(txn);
+    ovsdb_idl_check_consistency(idl);
 }
 
 static const struct ovsdb_idl_table_class *
@@ -2381,8 +2386,6 @@ do_idl(struct ovs_cmdl_context *ctx)
     int i;
     bool track;
 
-    idltest_init();
-
     track = ((struct test_ovsdb_pvt_context *)(ctx->pvt))->track;
 
     idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, true, true);
@@ -2424,6 +2427,7 @@ do_idl(struct ovs_cmdl_context *ctx)
             /* Wait for update. */
             for (;;) {
                 ovsdb_idl_run(idl);
+                ovsdb_idl_check_consistency(idl);
                 if (ovsdb_idl_get_seqno(idl) != seqno) {
                     break;
                 }
@@ -2476,6 +2480,7 @@ do_idl(struct ovs_cmdl_context *ctx)
     }
     for (;;) {
         ovsdb_idl_run(idl);
+        ovsdb_idl_check_consistency(idl);
         if (ovsdb_idl_get_seqno(idl) != seqno) {
             break;
         }
@@ -2530,7 +2535,6 @@ do_idl_partial_update_map_column(struct ovs_cmdl_context *ctx)
     int step = 0;
     char key_to_delete[100];
 
-    idltest_init();
     idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, false, true);
     ovsdb_idl_add_table(idl, &idltest_table_simple2);
     ovsdb_idl_add_column(idl, &idltest_simple2_col_name);
@@ -2638,7 +2642,6 @@ do_idl_partial_update_set_column(struct ovs_cmdl_context *ctx)
     const struct ovsdb_datum *uref OVS_UNUSED;
     int step = 0;
 
-    idltest_init();
     idl = ovsdb_idl_create(ctx->argv[1], &idltest_idl_class, false, true);
     ovsdb_idl_add_table(idl, &idltest_table_simple3);
     ovsdb_idl_add_column(idl, &idltest_simple3_col_name);

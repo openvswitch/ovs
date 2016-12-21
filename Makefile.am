@@ -63,38 +63,39 @@ CLEAN_LOCAL =
 DISTCLEANFILES =
 PYCOV_CLEAN_FILES = build-aux/check-structs,cover
 
-# A list of Markdown-formatted documentation that will automatically be
-# included in the "make dist-docs" output.
+# A list of Markdown- or reStructuredText-formatted documentation that will
+# automatically be included in the "make dist-docs" output.
 docs = \
-	CONTRIBUTING.md \
-	CodingStyle.md \
-	DESIGN.md \
-	FAQ.md \
-	INSTALL.md \
-	INSTALL.Debian.md \
-	INSTALL.Docker.md \
-	INSTALL.DPDK-ADVANCED.md \
-	INSTALL.DPDK.md \
-	INSTALL.Fedora.md \
-	INSTALL.KVM.md \
-	INSTALL.Libvirt.md \
-	INSTALL.NetBSD.md \
-	INSTALL.RHEL.md \
-	INSTALL.SELinux.md \
-	INSTALL.SSL.md \
-	INSTALL.XenServer.md \
-	INSTALL.userspace.md \
-	INSTALL.Windows.md \
-	IntegrationGuide.md \
-	MAINTAINERS.md \
-	OPENFLOW-1.1+.md \
-	PORTING.md \
-	README.md \
-	README-lisp.md \
-	README-native-tunneling.md \
-	REPORTING-BUGS.md \
-	SECURITY.md \
-	WHY-OVS.md
+	CONTRIBUTING.rst \
+	CodingStyle.rst \
+	DESIGN.rst \
+	DocumentationStyle.rst \
+	FAQ.rst \
+	INSTALL.rst \
+	INSTALL.Debian.rst \
+	INSTALL.Docker.rst \
+	INSTALL.DPDK-ADVANCED.rst \
+	INSTALL.DPDK.rst \
+	INSTALL.Fedora.rst \
+	INSTALL.KVM.rst \
+	INSTALL.Libvirt.rst \
+	INSTALL.NetBSD.rst \
+	INSTALL.RHEL.rst \
+	INSTALL.SELinux.rst \
+	INSTALL.SSL.rst \
+	INSTALL.XenServer.rst \
+	INSTALL.userspace.rst \
+	INSTALL.Windows.rst \
+	IntegrationGuide.rst \
+	MAINTAINERS.rst \
+	OPENFLOW.rst \
+	PORTING.rst \
+	README.rst \
+	README-lisp.rst \
+	README-native-tunneling.rst \
+	REPORTING-BUGS.rst \
+	SECURITY.rst \
+	WHY-OVS.rst
 EXTRA_DIST = \
 	$(docs) \
 	NOTICE \
@@ -270,7 +271,7 @@ printf-check:
 	then \
 	    echo "See above for list of violations of the rule that"; \
 	    echo "'z', 't', 'j', 'hh' printf() type modifiers are"; \
-	    echo "forbidden.  See CodingStyle.md for replacements."; \
+	    echo "forbidden.  See CodingStyle.rst for replacements."; \
 	    exit 1; \
 	fi
 .PHONY: printf-check

@@ -130,9 +130,32 @@ m4_define([ADD_VETH_BOND],
 # Add a VLAN device named 'port' within 'namespace'. It will be configured
 # with the ID 'vlan-id' and the address 'ip-addr'.
 m4_define([ADD_VLAN],
-    [ NS_CHECK_EXEC([$2], [ip link add link $1 name $1.$3 type vlan id $3])
+    [ NS_CHECK_EXEC([$2], [ip link add link $1 name $1.$3 type vlan proto 802.1q id $3])
       NS_CHECK_EXEC([$2], [ip link set dev $1.$3 up])
       NS_CHECK_EXEC([$2], [ip addr add dev $1.$3 $4])
+    ]
+)
+
+# ADD_SVLAN([port], [namespace], [vlan-id], [ip-addr])
+#
+# Add a SVLAN device named 'port' within 'namespace'. It will be configured
+# with the ID 'vlan-id' and the address 'ip-addr'.
+m4_define([ADD_SVLAN],
+    [ NS_CHECK_EXEC([$2], [ip link add link $1 name $1.$3 type vlan proto 802.1ad id $3])
+      NS_CHECK_EXEC([$2], [ip link set dev $1.$3 up])
+      NS_CHECK_EXEC([$2], [ip addr add dev $1.$3 $4])
+      NS_CHECK_EXEC([$2], [ip link set $1.$3 mtu 1496])
+    ]
+)
+
+# ADD_CVLAN([port], [namespace], [vlan-id], [ip-addr])
+#
+# Similar to ADD_VLAN(), but sets MTU. Lower MTU here instead of increase MTU
+# on bridge/SVLAN because older kernels didn't work.
+#
+m4_define([ADD_CVLAN],
+    [ ADD_VLAN([$1], [$2], [$3], [$4])
+      NS_CHECK_EXEC([$2], [ip link set $1.$3 mtu 1492])
     ]
 )
 

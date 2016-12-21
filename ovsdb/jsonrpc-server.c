@@ -127,6 +127,7 @@ struct ovsdb_jsonrpc_remote {
     struct pstream *listener;   /* Listener, if passive. */
     struct ovs_list sessions;   /* List of "struct ovsdb_jsonrpc_session"s. */
     uint8_t dscp;
+    bool read_only;
 };
 
 static struct ovsdb_jsonrpc_remote *ovsdb_jsonrpc_server_add_remote(
@@ -268,11 +269,12 @@ ovsdb_jsonrpc_server_add_remote(struct ovsdb_jsonrpc_server *svr,
     remote->listener = listener;
     ovs_list_init(&remote->sessions);
     remote->dscp = options->dscp;
+    remote->read_only = options->read_only;
     shash_add(&svr->remotes, name, remote);
 
     if (!listener) {
         ovsdb_jsonrpc_session_create(remote, jsonrpc_session_open(name, true),
-                                      svr->read_only);
+                                      svr->read_only || remote->read_only);
     }
     return remote;
 }
@@ -366,7 +368,8 @@ ovsdb_jsonrpc_server_run(struct ovsdb_jsonrpc_server *svr)
                 struct jsonrpc_session *js;
                 js = jsonrpc_session_open_unreliably(jsonrpc_open(stream),
                                                      remote->dscp);
-                ovsdb_jsonrpc_session_create(remote, js, svr->read_only);
+                ovsdb_jsonrpc_session_create(remote, js, svr->read_only ||
+                                                         remote->read_only);
             } else if (error != EAGAIN) {
                 VLOG_WARN_RL(&rl, "%s: accept failed: %s",
                              pstream_get_name(remote->listener),

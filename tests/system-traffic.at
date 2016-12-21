@@ -69,6 +69,37 @@ NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([datapath - ping between two ports on cvlan])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+ADD_SVLAN(p0, at_ns0, 4094, "10.255.2.1/24")
+ADD_SVLAN(p1, at_ns1, 4094, "10.255.2.2/24")
+
+ADD_CVLAN(p0.4094, at_ns0, 100, "10.2.2.1/24")
+ADD_CVLAN(p1.4094, at_ns1, 100, "10.2.2.2/24")
+
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping -c 1 10.2.2.2])
+
+NS_CHECK_EXEC([at_ns0], [ping -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping -s 1600 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping -s 3200 -q -c 3 -i 0.3 -w 2 10.2.2.2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([datapath - ping6 between two ports])
 OVS_TRAFFIC_VSWITCHD_START()
 
@@ -113,6 +144,37 @@ ADD_VLAN(p1, at_ns1, 100, "fc00:1::2/96")
 dnl Linux seems to take a little time to get its IPv6 stack in order. Without
 dnl waiting, we get occasional failures due to the following error:
 dnl "connect: Cannot assign requested address"
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00:1::2])
+
+NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping6 -s 1600 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+NS_CHECK_EXEC([at_ns0], [ping6 -s 3200 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl
+3 packets transmitted, 3 received, 0% packet loss, time 0ms
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([datapath - ping6 between two ports on cvlan])
+OVS_TRAFFIC_VSWITCHD_START()
+
+AT_CHECK([ovs-ofctl add-flow br0 "actions=normal"])
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+
+ADD_SVLAN(p0, at_ns0, 4094, "fc00:ffff::1/96")
+ADD_SVLAN(p1, at_ns1, 4094, "fc00:ffff::2/96")
+
+ADD_CVLAN(p0.4094, at_ns0, 100, "fc00:1::1/96")
+ADD_CVLAN(p1.4094, at_ns1, 100, "fc00:1::2/96")
+
 OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00:1::2])
 
 NS_CHECK_EXEC([at_ns0], [ping6 -q -c 3 -i 0.3 -w 2 fc00:1::2 | FORMAT_PING], [0], [dnl

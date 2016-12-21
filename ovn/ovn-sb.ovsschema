@@ -1,14 +1,19 @@
 {
     "name": "OVN_Southbound",
-    "version": "1.8.0",
-    "cksum": "59582657 7376",
+    "version": "1.9.0",
+    "cksum": "239060528 9012",
     "tables": {
         "SB_Global": {
             "columns": {
                 "nb_cfg": {"type": {"key": "integer"}},
                 "external_ids": {
                     "type": {"key": "string", "value": "string",
-                             "min": 0, "max": "unlimited"}}},
+                             "min": 0, "max": "unlimited"}},
+                "connections": {
+                    "type": {"key": {"type": "uuid",
+                                     "refTable": "Connection"},
+                                     "min": 0,
+                                     "max": "unlimited"}}},
             "maxRows": 1,
             "isRoot": true},
         "Chassis": {
@@ -152,4 +157,30 @@
                     "type": {"key": {
                         "type": "string",
                         "enum": ["set", ["ipv6", "str", "mac"]]}}}},
-            "isRoot": true}}}
+            "isRoot": true},
+        "Connection": {
+            "columns": {
+                "target": {"type": "string"},
+                "max_backoff": {"type": {"key": {"type": "integer",
+                                         "minInteger": 1000},
+                                         "min": 0,
+                                         "max": 1}},
+                "inactivity_probe": {"type": {"key": "integer",
+                                              "min": 0,
+                                              "max": 1}},
+                "read_only": {"type": "boolean"},
+                "other_config": {"type": {"key": "string",
+                                          "value": "string",
+                                          "min": 0,
+                                          "max": "unlimited"}},
+                "external_ids": {"type": {"key": "string",
+                                 "value": "string",
+                                 "min": 0,
+                                 "max": "unlimited"}},
+                "is_connected": {"type": "boolean", "ephemeral": true},
+                "status": {"type": {"key": "string",
+                                    "value": "string",
+                                    "min": 0,
+                                    "max": "unlimited"},
+                                    "ephemeral": true}},
+            "indexes": [["target"]]}}}

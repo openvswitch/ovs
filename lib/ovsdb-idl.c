@@ -88,8 +88,8 @@ struct ovsdb_idl {
     const struct ovsdb_idl_class *class;
     struct jsonrpc_session *session;
     struct uuid uuid;
-    struct shash table_by_name;
-    struct ovsdb_idl_table *tables; /* Contains "struct ovsdb_idl_table *"s.*/
+    struct shash table_by_name; /* Contains "struct ovsdb_idl_table *"s.*/
+    struct ovsdb_idl_table *tables; /* Array of ->class->n_tables elements. */
     unsigned int change_seqno;
     bool verify_write_only;
 
@@ -628,6 +628,128 @@ void
 ovsdb_idl_set_probe_interval(const struct ovsdb_idl *idl, int probe_interval)
 {
     jsonrpc_session_set_probe_interval(idl->session, probe_interval);
+}
+
+static size_t
+find_uuid_in_array(const struct uuid *target,
+                   const struct uuid *array, size_t n)
+{
+    for (size_t i = 0; i < n; i++) {
+        if (uuid_equals(&array[i], target)) {
+            return i;
+        }
+    }
+    return SIZE_MAX;
+}
+
+static size_t
+array_contains_uuid(const struct uuid *target,
+                    const struct uuid *array, size_t n)
+{
+    return find_uuid_in_array(target, array, n) != SIZE_MAX;
+}
+
+static bool
+remove_uuid_from_array(const struct uuid *target,
+                       struct uuid *array, size_t *n)
+{
+    size_t i = find_uuid_in_array(target, array, *n);
+    if (i != SIZE_MAX) {
+        array[i] = array[--*n];
+        return true;
+    } else {
+        return false;
+    }
+}
+
+static void
+add_row_references(const struct ovsdb_base_type *type,
+                   const union ovsdb_atom *atoms, size_t n_atoms,
+                   const struct uuid *exclude_uuid,
+                   struct uuid **dstsp, size_t *n_dstsp,
+                   size_t *allocated_dstsp)
+{
+    if (type->type != OVSDB_TYPE_UUID || !type->u.uuid.refTableName) {
+        return;
+    }
+
+    for (size_t i = 0; i < n_atoms; i++) {
+        const struct uuid *uuid = &atoms[i].uuid;
+        if (!uuid_equals(uuid, exclude_uuid)
+            && !array_contains_uuid(uuid, *dstsp, *n_dstsp)) {
+            if (*n_dstsp >= *allocated_dstsp) {
+                *dstsp = x2nrealloc(*dstsp, allocated_dstsp,
+                                    sizeof **dstsp);
+
+            }
+            (*dstsp)[*n_dstsp] = *uuid;
+            ++*n_dstsp;
+        }
+    }
+}
+
+/* Checks for consistency in 'idl''s graph of arcs between database rows.  Each
+ * reference from one row to a different row should be reflected as a "struct
+ * ovsdb_idl_arc" between those rows.
+ *
+ * This function is slow, big-O wise, and aborts if it finds an inconsistency,
+ * thus it is only for use in test programs. */
+void
+ovsdb_idl_check_consistency(const struct ovsdb_idl *idl)
+{
+    /* Consistency is broken while a transaction is in progress. */
+    if (!idl->txn) {
+        return;
+    }
+
+    bool ok = true;
+
+    struct uuid *dsts = NULL;
+    size_t allocated_dsts = 0;
+
+    for (size_t i = 0; i < idl->class->n_tables; i++) {
+        const struct ovsdb_idl_table *table = &idl->tables[i];
+        const struct ovsdb_idl_table_class *class = table->class;
+
+        const struct ovsdb_idl_row *row;
+        HMAP_FOR_EACH (row, hmap_node, &table->rows) {
+            size_t n_dsts = 0;
+            if (row->new) {
+                size_t n_columns = shash_count(&row->table->columns);
+                for (size_t j = 0; j < n_columns; j++) {
+                    const struct ovsdb_type *type = &class->columns[j].type;
+                    const struct ovsdb_datum *datum = &row->new[j];
+                    add_row_references(&type->key,
+                                       datum->keys, datum->n, &row->uuid,
+                                       &dsts, &n_dsts, &allocated_dsts);
+                    add_row_references(&type->value,
+                                       datum->values, datum->n, &row->uuid,
+                                       &dsts, &n_dsts, &allocated_dsts);
+                }
+            }
+            const struct ovsdb_idl_arc *arc;
+            LIST_FOR_EACH (arc, src_node, &row->src_arcs) {
+                if (!remove_uuid_from_array(&arc->dst->uuid,
+                                            dsts, &n_dsts)) {
+                    VLOG_ERR("unexpected arc from %s row "UUID_FMT" to %s "
+                             "row "UUID_FMT,
+                             table->class->name,
+                             UUID_ARGS(&row->uuid),
+                             arc->dst->table->class->name,
+                             UUID_ARGS(&arc->dst->uuid));
+                    ok = false;
+                }
+            }
+            for (size_t i = 0; i < n_dsts; i++) {
+                VLOG_ERR("%s row "UUID_FMT" missing arc to row "UUID_FMT,
+                         table->class->name, UUID_ARGS(&row->uuid),
+                         UUID_ARGS(&dsts[i]));
+                ok = false;
+            }
+        }
+    }
+    free(dsts);
+    ovs_assert(ok);
 }
 
 static unsigned char *
@@ -2041,7 +2163,7 @@ ovsdb_idl_table_from_class(const struct ovsdb_idl *idl,
 /* Called by ovsdb-idlc generated code. */
 struct ovsdb_idl_row *
 ovsdb_idl_get_row_arc(struct ovsdb_idl_row *src,
-                      struct ovsdb_idl_table_class *dst_table_class,
+                      const struct ovsdb_idl_table_class *dst_table_class,
                       const struct uuid *dst_uuid)
 {
     struct ovsdb_idl *idl = src->table->idl;
@@ -3080,23 +3202,6 @@ ovsdb_idl_txn_complete(struct ovsdb_idl_txn *txn,
     hmap_remove(&txn->idl->outstanding_txns, &txn->hmap_node);
 }
 
-/* Writes 'datum' to the specified 'column' in 'row_'.  Updates both 'row_'
- * itself and the structs derived from it (e.g. the "struct ovsrec_*", for
- * ovs-vswitchd).
- *
- * 'datum' must have the correct type for its column.  The IDL does not check
- * that it meets schema constraints, but ovsdb-server will do so at commit time
- * so it had better be correct.
- *
- * A transaction must be in progress.  Replication of 'column' must not have
- * been disabled (by calling ovsdb_idl_omit()).
- *
- * Usually this function is used indirectly through one of the "set" functions
- * generated by ovsdb-idlc.
- *
- * Takes ownership of what 'datum' points to (and in some cases destroys that
- * data before returning) but makes a copy of 'datum' itself.  (Commonly
- * 'datum' is on the caller's stack.) */
 static void
 ovsdb_idl_txn_write__(const struct ovsdb_idl_row *row_,
                       const struct ovsdb_idl_column *column,
@@ -3172,14 +3277,40 @@ discard_datum:
     }
 }
 
+/* Writes 'datum' to the specified 'column' in 'row_'.  Updates both 'row_'
+ * itself and the structs derived from it (e.g. the "struct ovsrec_*", for
+ * ovs-vswitchd).
+ *
+ * 'datum' must have the correct type for its column, but it needs not be
+ * sorted or unique because this function will take care of that.  The IDL does
+ * not check that it meets schema constraints, but ovsdb-server will do so at
+ * commit time so it had better be correct.
+ *
+ * A transaction must be in progress.  Replication of 'column' must not have
+ * been disabled (by calling ovsdb_idl_omit()).
+ *
+ * Usually this function is used indirectly through one of the "set" functions
+ * generated by ovsdb-idlc.
+ *
+ * Takes ownership of what 'datum' points to (and in some cases destroys that
+ * data before returning) but makes a copy of 'datum' itself.  (Commonly
+ * 'datum' is on the caller's stack.) */
 void
 ovsdb_idl_txn_write(const struct ovsdb_idl_row *row,
                     const struct ovsdb_idl_column *column,
                     struct ovsdb_datum *datum)
 {
+    ovsdb_datum_sort_unique(datum,
+                            column->type.key.type, column->type.value.type);
     ovsdb_idl_txn_write__(row, column, datum, true);
 }
 
+/* Similar to ovsdb_idl_txn_write(), except:
+ *
+ *     - The caller retains ownership of 'datum' and what it points to.
+ *
+ *     - The caller must ensure that 'datum' is sorted and unique (e.g. via
+ *       ovsdb_datum_sort_unique().) */
 void
 ovsdb_idl_txn_write_clone(const struct ovsdb_idl_row *row,
                           const struct ovsdb_idl_column *column,

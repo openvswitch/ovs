@@ -1255,10 +1255,38 @@
       Each record represents a static route.
     </p>
 
+    <p>
+      When multiple routes match a packet, the longest-prefix match is chosen.
+      For a given prefix length, a <code>dst-ip</code> route is preferred over
+      a <code>src-ip</code> route.
+    </p>
+
     <column name="ip_prefix">
       <p>
         IP prefix of this route (e.g. 192.168.100.0/24).
       </p>
+    </column>
+
+    <column name="policy">
+      <p>
+        If it is specified, this setting describes the policy used to make
+        routing decisions.  This setting must be one of the following strings:
+      </p>
+      <ul>
+        <li>
+          <code>src-ip</code>: This policy sends the packet to the
+          <ref column="nexthop"/> when the packet's source IP address matches
+          <ref column="ip_prefix"/>.
+       </li>
+        <li>
+          <code>dst-ip</code>: This policy sends the packet to the
+          <ref column="nexthop"/> when the packet's destination IP address
+          matches <ref column="ip_prefix"/>.
+        </li>
+      </ul>
+      <p>
+        If not specified, the default is <code>dst-ip</code>.
+     </p>
     </column>
 
     <column name="nexthop">

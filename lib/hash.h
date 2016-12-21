@@ -62,6 +62,11 @@ static inline uint32_t hash_string(const char *, uint32_t basis);
 
 static inline uint32_t mhash_add__(uint32_t hash, uint32_t data)
 {
+    /* zero-valued 'data' will not change the 'hash' value */
+    if (!data) {
+        return hash;
+    }
+
     data *= 0xcc9e2d51;
     data = hash_rot(data, 15);
     data *= 0x1b873593;

@@ -8,7 +8,7 @@
 EXTRA_DIST += \
 	xenserver/GPLv2 \
 	xenserver/LICENSE \
-	xenserver/README \
+	xenserver/README.rst \
 	xenserver/automake.mk \
 	xenserver/etc_init.d_openvswitch \
 	xenserver/etc_init.d_openvswitch-xapi-update \

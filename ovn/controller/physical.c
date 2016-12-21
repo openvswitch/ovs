@@ -211,6 +211,7 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
      */
 
     int tag = 0;
+    bool nested_container = false;
     ofp_port_t ofport;
     bool is_remote = false;
     if (binding->parent_port && *binding->parent_port) {
@@ -221,6 +222,7 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
                                       binding->parent_port));
         if (ofport) {
             tag = *binding->tag;
+            nested_container = true;
         }
     } else {
         ofport = u16_to_ofp(simap_get(&localvif_to_ofport,
@@ -288,6 +290,12 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
         if (tag || !strcmp(binding->type, "localnet")
             || !strcmp(binding->type, "l2gateway")) {
             match_set_dl_vlan(&match, htons(tag));
+            if (nested_container) {
+                /* When a packet comes from a container sitting behind a
+                 * parent_port, we should let it loopback to other containers
+                 * or the parent_port itself. */
+                put_load(MLF_ALLOW_LOOPBACK, MFF_LOG_FLAGS, 0, 1, ofpacts_p);
+            }
             ofpact_put_STRIP_VLAN(ofpacts_p);
         }
 
@@ -385,15 +393,18 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
          * =======================
          *
          * If the packet is supposed to hair-pin because the "loopback"
-         * flag is set, temporarily set the in_port to zero, resubmit to
+         * flag is set (or if the destination is a nested container),
+         * temporarily set the in_port to zero, resubmit to
          * table 65 for logical-to-physical translation, then restore
          * the port number. */
         match_init_catchall(&match);
         ofpbuf_clear(ofpacts_p);
         match_set_metadata(&match, htonll(dp_key));
-        match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
-                             MLF_ALLOW_LOOPBACK, MLF_ALLOW_LOOPBACK);
         match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
+        if (!nested_container) {
+            match_set_reg_masked(&match, MFF_LOG_FLAGS - MFF_REG0,
+                                 MLF_ALLOW_LOOPBACK, MLF_ALLOW_LOOPBACK);
+        }
 
         put_stack(MFF_IN_PORT, ofpact_put_STACK_PUSH(ofpacts_p));
         put_load(0, MFF_IN_PORT, 0, 16, ofpacts_p);
@@ -417,22 +428,14 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
             vlan_vid = ofpact_put_SET_VLAN_VID(ofpacts_p);
             vlan_vid->vlan_vid = tag;
             vlan_vid->push_vlan_if_needed = true;
-
-            /* A packet might need to hair-pin back into its ingress
-             * OpenFlow port (to a different logical port, which we already
-             * checked back in table 34), so set the in_port to zero. */
-            put_stack(MFF_IN_PORT, ofpact_put_STACK_PUSH(ofpacts_p));
-            put_load(0, MFF_IN_PORT, 0, 16, ofpacts_p);
         }
         ofpact_put_OUTPUT(ofpacts_p)->port = ofport;
         if (tag) {
             /* Revert the tag added to the packets headed to containers
              * in the previous step. If we don't do this, the packets
              * that are to be broadcasted to a VM in the same logical
-             * switch will also contain the tag. Also revert the zero'd
-             * in_port. */
+             * switch will also contain the tag. */
             ofpact_put_STRIP_VLAN(ofpacts_p);
-            put_stack(MFF_IN_PORT, ofpact_put_STACK_POP(ofpacts_p));
         }
         ofctrl_add_flow(flow_table, OFTABLE_LOG_TO_PHY, 100,
                         &match, ofpacts_p);

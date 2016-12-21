@@ -278,10 +278,10 @@ OvsDoEncapStt(POVS_VPORT_ENTRY vport,
         sttHdr = (SttHdr *) (outerTcpHdr + 1);
 
         /* L2 header */
-        ASSERT(((PCHAR)&fwdInfo->dstMacAddr + sizeof fwdInfo->dstMacAddr) ==
-                (PCHAR)&fwdInfo->srcMacAddr);
         NdisMoveMemory(outerEthHdr->Destination, fwdInfo->dstMacAddr,
-                        sizeof outerEthHdr->Destination + sizeof outerEthHdr->Source);
+                       sizeof outerEthHdr->Destination);
+        NdisMoveMemory(outerEthHdr->Source, fwdInfo->srcMacAddr,
+                       sizeof outerEthHdr->Source);
         outerEthHdr->Type = htons(ETH_TYPE_IPV4);
 
         /* L3 header */

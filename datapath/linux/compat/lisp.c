@@ -49,7 +49,7 @@ static int lisp_net_id;
 struct lisp_dev {
 	struct net         *net;        /* netns for packet i/o */
 	struct net_device  *dev;        /* netdev for lisp tunnel */
-	struct socket           *sock;
+	struct socket __rcu  *sock;
 	__be16             dst_port;
 	struct list_head   next;
 };
@@ -318,9 +318,10 @@ netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb)
 	int network_offset = skb_network_offset(skb);
 	struct ip_tunnel_info *info;
 	struct ip_tunnel_key *tun_key;
+	__be16 src_port, dst_port;
 	struct rtable *rt;
 	int min_headroom;
-	__be16 src_port, dst_port;
+	struct socket *sock;
 	struct flowi4 fl;
 	__be16 df;
 	int err;
@@ -328,6 +329,12 @@ netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb)
 	info = skb_tunnel_info(skb);
 	if (unlikely(!info)) {
 		err = -EINVAL;
+		goto error;
+	}
+
+	sock = rcu_dereference(lisp_dev->sock);
+	if (!sock) {
+		err = -EIO;
 		goto error;
 	}
 
@@ -381,7 +388,7 @@ netdev_tx_t rpl_lisp_xmit(struct sk_buff *skb)
 	ovs_skb_set_inner_protocol(skb, skb->protocol);
 
 	df = tun_key->tun_flags & TUNNEL_DONT_FRAGMENT ? htons(IP_DF) : 0;
-	udp_tunnel_xmit_skb(rt, lisp_dev->sock->sk, skb,
+	udp_tunnel_xmit_skb(rt, sock->sk, skb,
 			    fl.saddr, tun_key->u.ipv4.dst,
 			    tun_key->tos, tun_key->ttl,
 			    df, src_port, dst_port, false, true);
@@ -442,26 +449,35 @@ static int lisp_open(struct net_device *dev)
 	struct lisp_dev *lisp = netdev_priv(dev);
 	struct udp_tunnel_sock_cfg tunnel_cfg;
 	struct net *net = lisp->net;
+	struct socket *sock;
 
-	lisp->sock = create_sock(net, false, lisp->dst_port);
-	if (IS_ERR(lisp->sock))
-		return PTR_ERR(lisp->sock);
+	sock = create_sock(net, false, lisp->dst_port);
+	if (IS_ERR(sock))
+		return PTR_ERR(sock);
 
+	rcu_assign_pointer(lisp->sock, sock);
 	/* Mark socket as an encapsulation socket */
 	tunnel_cfg.sk_user_data = dev;
 	tunnel_cfg.encap_type = 1;
 	tunnel_cfg.encap_rcv = lisp_rcv;
 	tunnel_cfg.encap_destroy = NULL;
-	setup_udp_tunnel_sock(net, lisp->sock, &tunnel_cfg);
+	setup_udp_tunnel_sock(net, sock, &tunnel_cfg);
 	return 0;
 }
 
 static int lisp_stop(struct net_device *dev)
 {
 	struct lisp_dev *lisp = netdev_priv(dev);
+	struct socket *socket;
 
-	udp_tunnel_sock_release(lisp->sock);
-	lisp->sock = NULL;
+	socket = rtnl_dereference(lisp->sock);
+	if (!socket)
+		return 0;
+
+	rcu_assign_pointer(lisp->sock, NULL);
+
+	synchronize_net();
+	udp_tunnel_sock_release(socket);
 	return 0;
 }
 

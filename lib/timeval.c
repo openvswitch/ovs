@@ -71,10 +71,10 @@ struct clock {
     clockid_t id;               /* CLOCK_MONOTONIC or CLOCK_REALTIME. */
 
     /* Features for use by unit tests.  Protected by 'mutex'. */
-    struct ovs_mutex mutex;
     atomic_bool slow_path;             /* True if warped or stopped. */
-    struct timespec warp OVS_GUARDED;  /* Offset added for unit tests. */
     bool stopped OVS_GUARDED;          /* Disable real-time updates if true. */
+    struct ovs_mutex mutex;
+    struct timespec warp OVS_GUARDED;  /* Offset added for unit tests. */
     struct timespec cache OVS_GUARDED; /* Last time read from kernel. */
     struct large_warp large_warp OVS_GUARDED; /* Connection information waiting
                                                  for warp response. */

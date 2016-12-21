@@ -411,7 +411,8 @@ update_learning_table__(struct mac_learning *ml, struct eth_addr src,
          * packet was received over a non-bond interface and refrain from
          * learning from gratuitous ARP packets that arrive over bond
          * interfaces for this entry while the lock is in effect.  See
-         * vswitchd/INTERNALS for more in-depth discussion on this topic. */
+         * vswitchd/INTERNALS.rst for more in-depth discussion on this
+         * topic. */
         if (!is_bond) {
             mac_entry_set_grat_arp_lock(mac);
         } else if (mac_entry_is_grat_arp_locked(mac)) {

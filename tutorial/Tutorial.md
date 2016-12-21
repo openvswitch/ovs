@@ -45,7 +45,7 @@ You can use `ovs-sandbox` three ways:
 
   * If you have not installed Open vSwitch (and you do not want to
     install it), then you can build Open vSwitch according to the
-    instructions in [INSTALL.md], without installing it.  Then run
+    instructions in [INSTALL.rst], without installing it.  Then run
     `./ovs-sandbox -b DIRECTORY` from this directory, substituting
     the Open vSwitch build directory for `DIRECTORY`.
 
@@ -856,4 +856,4 @@ Contact
 bugs@openvswitch.org
 http://openvswitch.org/
 
-[INSTALL.md]:../INSTALL.md
+[INSTALL.rst]:../INSTALL.rst
