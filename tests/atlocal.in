@@ -126,7 +126,7 @@ fi
 
 # Look for a commnand in the system. If it is found, defines
 # HAVE_COMMAND="yes", otherwise HAVE_COMMAND="no".
-FindCommand()
+find_command()
 {
     which $1 > /dev/null 2>&1
     status=$?
@@ -139,7 +139,7 @@ FindCommand()
 }
 
 # Set HAVE_NC
-FindCommand nc
+find_command nc
 
 # Determine correct netcat option to quit on stdin EOF
 if nc --version 2>&1 | grep -q nmap.org; then
