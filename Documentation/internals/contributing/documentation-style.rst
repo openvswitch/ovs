@@ -247,13 +247,22 @@ Cross-referencing
       Here is a cross-reference to :ref:`sample-crossref`.
 
   .. note::
-    This is a Sphinx extension. Do not use this in any top-level documents.
+
+     This is a Sphinx extension. Do not use this in any top-level documents.
 
 Figures and Other Media
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-- All images should be in ASCII format and included in code-blocks to preserve
-  formatting.
+- All images should be in PNG format and compressed where possible. For PNG
+  files, use OptiPNG and AdvanceCOMP's ``advpng``:
+
+  .. code-block:: shell
+
+     $ optipng -o7 -zm1-9 -i0 -strip all <path_to_png>
+     $ advpng -z4 <path_to_png>
+
+- Any ASCII text "images" should be included in code-blocks to preserve
+  formatting
 
 - Include other reStructuredText verbatim in a current document
 
