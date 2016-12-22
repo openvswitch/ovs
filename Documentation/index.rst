@@ -72,9 +72,11 @@ Deeper Dive
 
 - **Windows** :doc:`topics/windows`
 
-- **Testing** :doc:`topics/testing`
+- **Integrations:** :doc:`topics/language-bindings`
 
 - **Reference Guides:** :doc:`ref/index`
+
+- **Testing** :doc:`topics/testing`
 
 - **Packaging:** :doc:`intro/install/debian` |
   :doc:`intro/install/rhel` |

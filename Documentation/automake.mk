@@ -31,6 +31,7 @@ EXTRA_DIST += \
 	Documentation/topics/testing.rst \
 	Documentation/topics/high-availability.rst \
 	Documentation/topics/integration.rst \
+	Documentation/topics/language-bindings.rst \
 	Documentation/topics/openflow.rst \
 	Documentation/topics/ovsdb-replication.rst \
 	Documentation/topics/porting.rst \

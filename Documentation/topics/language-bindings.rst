@@ -1,6 +1,4 @@
 ..
-      Copyright (c) 2016, Stephen Finucane <stephen@that.guru>
-
       Licensed under the Apache License, Version 2.0 (the "License"); you may
       not use this file except in compliance with the License. You may obtain
       a copy of the License at
@@ -23,29 +21,40 @@
 
       Avoid deeper levels because they do not render well.
 
-======================
-Open vSwitch Deep Dive
-======================
+=================
+Language Bindings
+=================
 
-How Open vSwitch is implemented and, where necessary, why it was implemented
-that way.
+Bindings exist for Open vSwitch in a variety of languages.
 
-.. toctree::
-   :maxdepth: 2
+Official Bindings
+-----------------
 
-   design
-   datapath
-   integration
-   porting
-   openflow
-   bonding
-   ovsdb-replication
-   dpdk/index
-   windows
-   language-bindings
-   testing
+Python
+~~~~~~
 
-.. toctree::
-   :maxdepth: 2
+The Python bindings are part of the `Open vSwitch package`__. You can install
+the bindings using ``pip``:
 
-   high-availability
+.. code-block:: shell
+
+   $ pip install ovs
+
+__ https://github.com/openvswitch/ovs/tree/master/python/ovs
+
+Third-Party Bindings
+--------------------
+
+Lua
+~~~
+
+- `LJIT2ovs:`__ LuaJIT binding for Open vSwitch
+
+__ https://github.com/wiladams/LJIT2ovs
+
+Go
+~~
+
+- `go-odp:`__ A Go library to control the Open vSwitch in-kernel datapath
+
+__ https://github.com/weaveworks/go-odp
