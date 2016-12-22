@@ -25,14 +25,14 @@
 Bash command-line completion scripts
 ====================================
 
-There are two completion scripts available, ovs-appctl-bashcomp.bash and
-ovs-vsctl-bashcomp.bash respectively.
+There are two completion scripts available: ``ovs-appctl-bashcomp.bash`` and
+``ovs-vsctl-bashcomp.bash``.
 
 ovs-appctl-bashcomp
 -------------------
 
-ovs-appctl-bashcomp.bash adds bash command-line completion support for
-ovs-appctl, ovs-dpctl, ovs-ofctl and ovsdb-tool commands.
+``ovs-appctl-bashcomp.bash`` adds bash command-line completion support for
+``ovs-appctl``, ``ovs-dpctl``, ``ovs-ofctl`` and ``ovsdb-tool`` commands.
 
 Features
 ~~~~~~~~
@@ -48,19 +48,14 @@ Features
 Limitations
 ~~~~~~~~~~~
 
-- Only supports a small set of important keywords (``dp``, ``datapath``, ``bridge``, ``switch``,
-  ``port``, ``interface``, ``iface``).
+- Only supports a small set of important keywords (``dp``, ``datapath``,
+  ``bridge``, ``switch``, ``port``, ``interface``, ``iface``).
 
-- Does not support parsing of nested options. For example:
-
-
-  ::
+- Does not support parsing of nested options. For example::
 
       $ ovsdb-tool create [db [schema]]
 
-- Does not support expansion on repeated argument. For example:
-
-  ::
+- Does not support expansion on repeated argument. For example::
 
       $ ovs-dpctl show [dp...]).
 
@@ -70,8 +65,8 @@ Limitations
 ovs-vsctl-bashcomp
 -------------------
 
-ovs-vsctl-bashcomp.bash adds bash command-line completion support for ovs-vsctl
-command.
+``ovs-vsctl-bashcomp.bash`` adds Bash command-line completion support for
+``ovs-vsctl`` command.
 
 Features
 ~~~~~~~~
@@ -84,7 +79,7 @@ Features
 
 - Deal with argument relations like 'one and more', 'zero or one'.
 
-- Complete multiple ovs-vsctl commands cascaded via ``--``.
+- Complete multiple ``ovs-vsctl`` commands cascaded via ``--``.
 
 Limitations
 ~~~~~~~~~~~
