@@ -355,7 +355,10 @@ ln -sf %{_datadir}/openvswitch/scripts/ovndb-servers.ocf /usr/lib/ocf/resource.d
 %endif
 
 %postun ovn-common
-rm -rf /usr/lib/ocf/resource.d/ovn
+if [ $1 -eq 0 ] ; then
+    # Package removal, not upgrade
+    rm -rf /usr/lib/ocf/resource.d/ovn
+fi
 
 %postun ovn-central
 %if 0%{?systemd_postun_with_restart:1}
