@@ -1,9 +1,9 @@
+.. NOTE(stephenfin): If making changes to this file, ensure that the line
+   numbers found in 'Documentation/intro/what-is-ovs' are kept up-to-date.
+
 ============
 Open vSwitch
 ============
-
-Build Status
-------------
 
 .. image:: https://travis-ci.org/openvswitch/ovs.png
     :target: https://travis-ci.org/openvswitch/ovs

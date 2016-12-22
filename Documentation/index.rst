@@ -48,6 +48,9 @@ First Steps
 Getting started with Open vSwitch (OVS) or Open Virtual Network (OVN) for Open
 vSwitch? Start here.
 
+- **Overview:** :doc:`intro/what-is-ovs` |
+  :doc:`intro/why-ovs`
+
 - **Install:** :doc:`intro/install/general` |
   :doc:`intro/install/userspace` |
   :doc:`intro/install/netbsd` |

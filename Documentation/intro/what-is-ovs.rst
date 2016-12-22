@@ -23,15 +23,19 @@
 
       Avoid deeper levels because they do not render well.
 
-===============
-Getting Started
-===============
+=====================
+What Is Open vSwitch?
+=====================
 
-How to get started with Open vSwitch.
+.. image:: ../_static/overview.png
+   :align: center
 
-.. toctree::
-   :maxdepth: 2
+Overview
+--------
 
-   what-is-ovs
-   why-ovs
-   install/index
+.. NOTE(stephenfin): The below line numbers may need to be updated if the
+   README is modified
+
+.. include:: ../../README.rst
+   :start-line: 13
+   :end-line: 71

@@ -1,10 +1,12 @@
 EXTRA_DIST += \
 	Documentation/group-selection-method-property.txt \
 	Documentation/_static/logo.png \
+	Documentation/_static/overview.png \
 	Documentation/conf.py \
 	Documentation/index.rst \
 	Documentation/contents.rst \
 	Documentation/intro/index.rst \
+	Documentation/intro/what-is-ovs.rst \
 	Documentation/intro/why-ovs.rst \
 	Documentation/intro/install/index.rst \
 	Documentation/intro/install/bash-completion.rst \
