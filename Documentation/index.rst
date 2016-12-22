@@ -76,6 +76,10 @@ Deeper Dive
 
 - **Reference Guides:** :doc:`ref/index`
 
+- **Packaging:** :doc:`intro/install/debian` |
+  :doc:`intro/install/rhel` |
+  :doc:`intro/install/fedora`
+
 The Open vSwitch Project
 ------------------------
 
@@ -96,7 +100,8 @@ Learn more about the Open vSwitch project and about how you can contribute:
   :doc:`internals/committer-responsibilities` |
   :doc:`internals/committer-grant-revocation`
 
-- **Documentation:** :doc:`internals/contributing/documentation-style`
+- **Documentation:** :doc:`internals/contributing/documentation-style` |
+  :doc:`Building Open vSwitch Documentation <intro/install/documentation>`
 
 Getting Help
 -------------

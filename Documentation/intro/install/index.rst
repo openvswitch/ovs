@@ -45,7 +45,6 @@ Installation from Source
    xenserver
    userspace
    dpdk
-   bash-completion
 
 Installation from Packages
 --------------------------
@@ -60,3 +59,12 @@ provided below.
    debian
    fedora
    rhel
+
+Others
+------
+
+.. toctree::
+   :maxdepth: 2
+
+   bash-completion
+   documentation
