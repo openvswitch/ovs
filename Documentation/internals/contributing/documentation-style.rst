@@ -61,8 +61,9 @@ Many of the basic documentation guidelines match those of the
 - Limit lines at 79 characters.
 
   .. note::
-    An exception to this rule is text within code-block elements that cannot be
-    wrapped and links within references.
+
+     An exception to this rule is text within code-block elements that cannot
+     be wrapped and links within references.
 
 - Use spaces for indenation.
 
@@ -86,8 +87,9 @@ File Names
 - Use lowercase filenames.
 
   .. note::
-    An exception to this rule is any documents found in the root-level of the
-    project.
+
+     An exception to this rule is any documents found in the root-level of the
+     project.
 
 Titles
 ~~~~~~
@@ -102,8 +104,8 @@ Titles
 
   .. note::
 
-    Avoid using lower heading levels by rewriting and reorganizing the
-    information.
+     Avoid using lower heading levels by rewriting and reorganizing the
+     information.
 
 - Under- and overlines should be of the same length as that of the heading
   text.
@@ -129,7 +131,7 @@ Admonitions
 
       .. note::
 
-        This is a sample callout for some useful tip or trick.
+         This is a sample callout for some useful tip or trick.
 
   Example admonitions include: ``warning``, ``important``, ``note``, ``tip`` or
   ``seealso``.
@@ -230,7 +232,8 @@ Cross-referencing
       Here is a link to the :doc:`/README.rst`
 
   .. note::
-    This is a Sphinx extension. Do not use this in any top-level documents.
+
+     This is a Sphinx extension. Do not use this in any top-level documents.
 
 - To cross-reference an arbitrary location in a doc, use the ``ref`` role.::
 
