@@ -193,6 +193,8 @@ parse_options(int argc, char *argv[])
     };
     char *short_options = ovs_cmdl_long_options_to_short_options(long_options);
 
+    table_style.format = TF_TABLE;
+
     for (;;) {
         int c;
 

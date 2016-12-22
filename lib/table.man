@@ -3,11 +3,11 @@
 Sets the type of table formatting.  The following types of
 \fIformat\fR are available:
 .RS
-.ie '\*(PN'ovs\-vsctl' .IP "\fBtable\fR"
-.el                    .IP "\fBtable\fR (default)"
+.ie '\*(PN'ovsdb\-client' .IP "\fBtable\fR (default)"
+.el                       .IP "\fBtable\fR"
 2-D text tables with aligned columns.
-.ie '\*(PN'ovs\-vsctl' .IP "\fBlist\fR (default)"
-.el                    .IP "\fBlist\fR"
+.ie '\*(PN'ovsdb\-client' .IP "\fBlist\fR"
+.el                       .IP "\fBlist\fR (default)"
 A list with one column per line and rows separated by a blank line.
 .IP "\fBhtml\fR"
 HTML tables.

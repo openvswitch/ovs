@@ -206,7 +206,6 @@ parse_options(int argc, char *argv[], struct shash *local_options)
     allocated_options = ARRAY_SIZE(global_long_options);
     n_options = n_global_long_options;
     ctl_add_cmd_options(&options, &n_options, &allocated_options, OPT_LOCAL);
-    table_style.format = TF_LIST;
 
     for (;;) {
         int idx;

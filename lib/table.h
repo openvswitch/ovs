@@ -80,7 +80,7 @@ struct table_style {
     int json_flags;             /* CF_JSON: Flags for json_to_string(). */
 };
 
-#define TABLE_STYLE_DEFAULT { TF_TABLE, CF_STRING, true, JSSF_SORT }
+#define TABLE_STYLE_DEFAULT { TF_LIST, CF_STRING, true, JSSF_SORT }
 
 #define TABLE_OPTION_ENUMS                      \
     OPT_NO_HEADINGS,                            \
