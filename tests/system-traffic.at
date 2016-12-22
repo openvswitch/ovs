@@ -1987,7 +1987,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - FTP])
-AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
+AT_SKIP_IF([test $HAVE_FTP = no])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_ALG()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -2072,7 +2072,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - FTP over IPv6])
-AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
+AT_SKIP_IF([test $HAVE_FTP = no])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_ALG()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -2127,7 +2127,7 @@ OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
 AT_SETUP([conntrack - FTP with multiple expectations])
-AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
+AT_SKIP_IF([test $HAVE_FTP = no])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_ALG()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -2187,6 +2187,80 @@ tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=1,protoinfo=(state=<cleared>),helper=ftp
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=<cleared>)
 tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),zone=2,protoinfo=(state=<cleared>),helper=ftp
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
+AT_SETUP([conntrack - TFTP])
+AT_SKIP_IF([test $HAVE_TFTP = no])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_ALG()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "10.1.1.1/24")
+ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
+
+dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows1.txt], [dnl
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+table=0,priority=100,in_port=1,udp,action=ct(alg=tftp,commit),2
+table=0,priority=100,in_port=2,udp,action=ct(table=1)
+table=1,in_port=2,udp,ct_state=+trk+est,action=1
+table=1,in_port=2,udp,ct_state=+trk+rel,action=1
+])
+
+dnl Similar policy but without allowing all traffic from ns0->ns1.
+AT_DATA([flows2.txt], [dnl
+table=0,priority=1,action=drop
+table=0,priority=10,arp,action=normal
+table=0,priority=10,icmp,action=normal
+
+dnl Allow outgoing UDP connections, and treat them as TFTP
+table=0,priority=100,in_port=1,udp,action=ct(table=1)
+table=1,in_port=1,udp,ct_state=+trk+new-rel,action=ct(commit,alg=tftp),2
+table=1,in_port=1,udp,ct_state=+trk+new+rel,action=ct(commit),2
+table=1,in_port=1,udp,ct_state=+trk+est,action=2
+
+dnl Allow incoming TFTP data connections and responses to existing connections
+table=0,priority=100,in_port=2,udp,action=ct(table=1)
+table=1,in_port=2,udp,ct_state=+trk+est,action=1
+table=1,in_port=2,udp,ct_state=+trk+new+rel,action=1
+])
+
+AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows1.txt])
+
+OVS_START_L7([at_ns0], [tftp])
+OVS_START_L7([at_ns1], [tftp])
+
+dnl TFTP requests from p1->p0 should fail due to network failure.
+NS_CHECK_EXEC([at_ns1], [[curl $CURL_OPT tftp://10.1.1.1/flows1.txt -o foo 2>curl0.log]], [28])
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
+])
+
+dnl TFTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [[curl $CURL_OPT tftp://10.1.1.2/flows1.txt -o foo 2>curl1.log]])
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),helper=tftp
+])
+
+dnl Try the second set of flows.
+AT_CHECK([ovs-ofctl --bundle replace-flows br0 flows2.txt])
+AT_CHECK([ovs-appctl dpctl/flush-conntrack])
+
+dnl TFTP requests from p1->p0 should fail due to network failure.
+NS_CHECK_EXEC([at_ns1], [[curl $CURL_OPT tftp://10.1.1.1/flows1.txt -o foo 2>curl2.log]], [28])
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.1)], [0], [dnl
+])
+
+dnl TFTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [[curl $CURL_OPT tftp://10.1.1.2/flows1.txt -o foo 2>curl3.log]])
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
+udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=10.1.1.1,sport=<cleared>,dport=<cleared>),helper=tftp
 ])
 
 OVS_TRAFFIC_VSWITCHD_STOP
@@ -2524,7 +2598,7 @@ dnl Checks the implementation of conntrack with FTP ALGs in combination with
 dnl NAT, using the provided flow table.
 m4_define([CHECK_FTP_NAT],
    [AT_SETUP([conntrack - FTP NAT $1])
-    AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
+    AT_SKIP_IF([test $HAVE_FTP = no])
     CHECK_CONNTRACK()
     CHECK_CONNTRACK_NAT()
 
@@ -2736,7 +2810,7 @@ AT_CLEANUP
 
 
 AT_SETUP([conntrack - IPv6 FTP with NAT])
-AT_SKIP_IF([test $HAVE_PYFTPDLIB = no])
+AT_SKIP_IF([test $HAVE_FTP = no])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_NAT()
 OVS_TRAFFIC_VSWITCHD_START()

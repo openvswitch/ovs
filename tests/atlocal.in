@@ -117,12 +117,24 @@ if test "$IS_WIN32" = "yes"; then
     HAVE_PYTHON3="no"
 fi
 
-if test "$HAVE_PYTHON" = "yes" \
-   && test "x`$PYTHON $abs_top_srcdir/tests/test-l7.py --help | grep 'ftp'`" != x; then
-    HAVE_PYFTPDLIB="yes"
-else
-    HAVE_PYFTPDLIB="no"
-fi
+find_l7_lib()
+{
+    set +x
+    var=HAVE_`echo "$1" | tr '[a-z]' '[A-Z]'`
+    if test "$HAVE_PYTHON" = "yes"; then
+        result=$($PYTHON $abs_top_srcdir/tests/test-l7.py --help | grep "$1")
+        if test "x${result}" != x; then
+            eval ${var}="yes"
+        else
+            eval ${var}="no"
+        fi
+    else
+        eval ${var}="no"
+    fi
+}
+
+find_l7_lib ftp
+find_l7_lib tftp
 
 # Look for a commnand in the system. If it is found, defines
 # HAVE_COMMAND="yes", otherwise HAVE_COMMAND="no".
@@ -147,6 +159,8 @@ if nc --version 2>&1 | grep -q nmap.org; then
 else
     NC_EOF_OPT="-q 1"
 fi
+
+CURL_OPT="-g -v --max-time 1 --retry 2 --retry-delay 1 --connect-timeout 1"
 
 # Turn off proxies.
 unset http_proxy

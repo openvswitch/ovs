@@ -125,6 +125,10 @@ The datapath tests for userspace and Linux datapaths also rely upon:
 
 - netcat. Several common implementations are known to work.
 
+- curl. Version 7.47.0 is known to work. Earlier versions should also work.
+
+- tftpy. Version 0.6.2 is known to work. Earlier versions should also work.
+
 The ovs-vswitchd.conf.db(5) manpage will include an E-R diagram, in formats
 other than plain text, only if you have the following:
 

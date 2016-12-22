@@ -181,6 +181,10 @@ str_to_connhelper(const char *str, uint16_t *alg)
         *alg = IPPORT_FTP;
         return NULL;
     }
+    if (!strcmp(str, "tftp")) {
+        *alg = IPPORT_TFTP;
+        return NULL;
+    }
     return xasprintf("invalid conntrack helper \"%s\"", str);
 }
 

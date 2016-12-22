@@ -566,6 +566,10 @@ enum nx_conntrack_flags {
 #define IPPORT_FTP  21
 #endif
 
+#if !defined(IPPORT_TFTP)
+#define IPPORT_TFTP  69
+#endif
+
 /* OFPACT_CT.
  *
  * Used for NXAST_CT. */

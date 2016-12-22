@@ -9,9 +9,9 @@ $bootstrap_fedora = <<SCRIPT
 dnf -y update
 dnf -y install autoconf automake openssl-devel libtool \
                python-twisted-core python-zope-interface \
-               desktop-file-utils groff graphviz rpmdevtools nc \
+               desktop-file-utils groff graphviz rpmdevtools nc curl \
                wget python-six pyftpdlib checkpolicy selinux-policy-devel \
-               libcap-ng-devel kernel-devel-`uname -r` ethtool
+               libcap-ng-devel kernel-devel-`uname -r` ethtool python-tftpy
 echo "search extra update built-in" >/etc/depmod.d/search_path.conf
 SCRIPT
 
@@ -23,10 +23,10 @@ aptitude -y install -R \
 		debhelper dh-autoreconf uuid-runtime \
 		autoconf automake libtool \
 		python-all python-twisted-core python-twisted-conch \
-		xdg-utils groff graphviz netcat \
+		xdg-utils groff graphviz netcat curl \
 		wget python-six ethtool \
 		libcap-ng-dev libssl-dev python-dev openssl \
-		python-pyftpdlib python-flake8 \
+		python-pyftpdlib python-flake8 python-tftpy \
 		linux-headers-`uname -r`
 SCRIPT
 
@@ -34,7 +34,7 @@ $bootstrap_centos = <<SCRIPT
 yum -y update
 yum -y install autoconf automake openssl-devel libtool \
                python-twisted-core python-zope-interface \
-               desktop-file-utils groff graphviz rpmdevtools nc \
+               desktop-file-utils groff graphviz rpmdevtools nc curl \
                wget python-six pyftpdlib checkpolicy selinux-policy-devel \
                libcap-ng-devel kernel-devel-`uname -r` ethtool
 SCRIPT

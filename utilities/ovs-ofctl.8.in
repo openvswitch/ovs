@@ -1840,12 +1840,19 @@ The \fBcommit\fR parameter must be specified to use \fBexec(...)\fR.
 .
 .IP \fBalg=\fIalg\fR
 Specify application layer gateway \fIalg\fR to track specific connection
-types. Supported types include:
+types. If subsequent related connections are sent through the \fBct\fR
+action, then the \fBrel\fR flag in the \fBct_state\fR field will be set.
+Supported types include:
 .RS
 .IP \fBftp\fR
-Look for negotiation of FTP data connections. If a subsequent FTP data
-connection arrives which is related, the \fBct\fR action will set the
-\fBrel\fR flag in the \fBct_state\fR field for packets sent through \fBct\fR.
+Look for negotiation of FTP data connections. Specify this option for FTP
+control connections to detect related data connections and populate the
+\fBrel\fR flag for the data connections.
+.
+.IP \fBtftp\fR
+Look for negotiation of TFTP data connections. Specify this option for TFTP
+control connections to detect related data connections and populate the
+\fBrel\fR flag for the data connections.
 .RE
 .
 .IP

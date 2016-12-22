@@ -4550,10 +4550,16 @@ static void
 put_ct_helper(struct ofpbuf *odp_actions, struct ofpact_conntrack *ofc)
 {
     if (ofc->alg) {
-        if (ofc->alg == IPPORT_FTP) {
+        switch(ofc->alg) {
+        case IPPORT_FTP:
             nl_msg_put_string(odp_actions, OVS_CT_ATTR_HELPER, "ftp");
-        } else {
+            break;
+        case IPPORT_TFTP:
+            nl_msg_put_string(odp_actions, OVS_CT_ATTR_HELPER, "tftp");
+            break;
+        default:
             VLOG_WARN("Cannot serialize ct_helper %d\n", ofc->alg);
+            break;
         }
     }
 }

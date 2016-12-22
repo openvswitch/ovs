@@ -5454,10 +5454,19 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
 static void
 format_alg(int port, struct ds *s)
 {
-    if (port == IPPORT_FTP) {
+    switch(port) {
+    case IPPORT_FTP:
         ds_put_format(s, "%salg=%sftp,", colors.param, colors.end);
-    } else if (port) {
+        break;
+    case IPPORT_TFTP:
+        ds_put_format(s, "%salg=%stftp,", colors.param, colors.end);
+        break;
+    case 0:
+        /* Don't print. */
+        break;
+    default:
         ds_put_format(s, "%salg=%s%d,", colors.param, colors.end, port);
+        break;
     }
 }
 
@@ -7170,7 +7179,8 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
 
         if (!dl_type_is_ip_any(flow->dl_type)
             || (flow->ct_state & CS_INVALID && oc->flags & NX_CT_F_COMMIT)
-            || (oc->alg == IPPORT_FTP && flow->nw_proto != IPPROTO_TCP)) {
+            || (oc->alg == IPPORT_FTP && flow->nw_proto != IPPROTO_TCP)
+            || (oc->alg == IPPORT_TFTP && flow->nw_proto != IPPROTO_UDP)) {
             /* We can't downgrade to OF1.0 and expect inconsistent CT actions
              * be silently discarded.  Instead, datapath flow install fails, so
              * it is better to flag inconsistent CT actions as hard errors. */
