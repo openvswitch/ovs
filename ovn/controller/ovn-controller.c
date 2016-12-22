@@ -258,6 +258,19 @@ get_chassis_id(const struct ovsdb_idl *ovs_idl)
     return chassis_id;
 }
 
+/* Iterate address sets in the southbound database.  Create and update the
+ * corresponding symtab entries as necessary. */
+static void
+addr_sets_init(struct controller_ctx *ctx, struct shash *addr_sets)
+{
+    const struct sbrec_address_set *as;
+    SBREC_ADDRESS_SET_FOR_EACH (as, ctx->ovnsb_idl) {
+        expr_addr_sets_add(addr_sets, as->name,
+                           (const char *const *) as->addresses,
+                           as->n_addresses);
+    }
+}
+
 /* Retrieves the OVN Southbound remote location from the
  * "external-ids:ovn-remote" key in 'ovs_idl' and returns a copy of it. */
 static char *
@@ -589,11 +602,14 @@ main(int argc, char *argv[])
             update_ct_zones(&local_lports, &local_datapaths, &ct_zones,
                             ct_zone_bitmap, &pending_ct_zones);
             if (ctx.ovs_idl_txn) {
+                struct shash addr_sets = SHASH_INITIALIZER(&addr_sets);
+                addr_sets_init(&ctx, &addr_sets);
+
                 commit_ct_zones(br_int, &pending_ct_zones);
 
                 struct hmap flow_table = HMAP_INITIALIZER(&flow_table);
                 lflow_run(&ctx, &lports, &mcgroups, &local_datapaths,
-                          &group_table, &ct_zones, &flow_table);
+                          &group_table, &ct_zones, &addr_sets, &flow_table);
 
                 physical_run(&ctx, mff_ovn_geneve,
                              br_int, chassis, &ct_zones, &lports,
@@ -602,6 +618,10 @@ main(int argc, char *argv[])
                 ofctrl_put(&flow_table, &pending_ct_zones,
                            get_nb_cfg(ctx.ovnsb_idl));
                 hmap_destroy(&flow_table);
+
+                expr_addr_sets_destroy(&addr_sets);
+                shash_destroy(&addr_sets);
+
                 if (ctx.ovnsb_idl_txn) {
                     int64_t cur_cfg = ofctrl_get_cur_cfg();
                     if (cur_cfg && cur_cfg != chassis->nb_cfg) {

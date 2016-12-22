@@ -43,21 +43,6 @@ lflow_init(void)
 {
     ovn_init_symtab(&symtab);
 }
-
-/* Iterate address sets in the southbound database.  Create and update the
- * corresponding symtab entries as necessary. */
-static void
-update_address_sets(struct controller_ctx *ctx,
-                    struct shash *expr_address_sets_p)
-
-{
-    const struct sbrec_address_set *as;
-    SBREC_ADDRESS_SET_FOR_EACH (as, ctx->ovnsb_idl) {
-        expr_addr_sets_add(expr_address_sets_p, as->name,
-                           (const char *const *) as->addresses,
-                           as->n_addresses);
-    }
-}
 
 struct lookup_port_aux {
     const struct lport_index *lports;
@@ -74,8 +59,8 @@ static void consider_logical_flow(const struct lport_index *lports,
                                   struct hmap *dhcp_opts_p,
                                   struct hmap *dhcpv6_opts_p,
                                   uint32_t *conj_id_ofs_p,
-                                  struct hmap *flow_table,
-                                  struct shash *expr_address_sets_p);
+                                  const struct shash *addr_sets,
+                                  struct hmap *flow_table);
 
 static bool
 lookup_port_cb(const void *aux_, const char *port_name, unsigned int *portp)
@@ -113,8 +98,8 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
                   const struct hmap *local_datapaths,
                   struct group_table *group_table,
                   const struct simap *ct_zones,
-                  struct hmap *flow_table,
-                  struct shash *expr_address_sets_p)
+                  const struct shash *addr_sets,
+                  struct hmap *flow_table)
 {
     uint32_t conj_id_ofs = 1;
     const struct sbrec_logical_flow *lflow;
@@ -138,7 +123,7 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
         consider_logical_flow(lports, mcgroups, lflow, local_datapaths,
                               group_table, ct_zones,
                               &dhcp_opts, &dhcpv6_opts, &conj_id_ofs,
-                              flow_table, expr_address_sets_p);
+                              addr_sets, flow_table);
     }
 
     dhcp_opts_destroy(&dhcp_opts);
@@ -155,8 +140,8 @@ consider_logical_flow(const struct lport_index *lports,
                       struct hmap *dhcp_opts_p,
                       struct hmap *dhcpv6_opts_p,
                       uint32_t *conj_id_ofs_p,
-                      struct hmap *flow_table,
-                      struct shash *expr_address_sets_p)
+                      const struct shash *addr_sets,
+                      struct hmap *flow_table)
 {
     /* Determine translation of logical table IDs to physical table IDs. */
     bool ingress = !strcmp(lflow->pipeline, "ingress");
@@ -232,8 +217,7 @@ consider_logical_flow(const struct lport_index *lports,
     struct hmap matches;
     struct expr *expr;
 
-    expr = expr_parse_string(lflow->match, &symtab,
-                             expr_address_sets_p, &error);
+    expr = expr_parse_string(lflow->match, &symtab, addr_sets, &error);
     if (!error) {
         if (prereqs) {
             expr = expr_combine(EXPR_T_AND, expr, prereqs);
@@ -377,17 +361,12 @@ lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
           const struct hmap *local_datapaths,
           struct group_table *group_table,
           const struct simap *ct_zones,
+          const struct shash *addr_sets,
           struct hmap *flow_table)
 {
-    struct shash expr_address_sets = SHASH_INITIALIZER(&expr_address_sets);
-
-    update_address_sets(ctx, &expr_address_sets);
     add_logical_flows(ctx, lports, mcgroups, local_datapaths,
-                      group_table, ct_zones, flow_table, &expr_address_sets);
+                      group_table, ct_zones, addr_sets, flow_table);
     add_neighbor_flows(ctx, lports, flow_table);
-
-    expr_addr_sets_destroy(&expr_address_sets);
-    shash_destroy(&expr_address_sets);
 }
 
 void
