@@ -31,7 +31,7 @@ Q: What's a VXLAN?
     to solve the scaling challenges of VLAN networks in a multi-tenant
     environment. VXLAN is an overlay network which transports an L2 network
     over an existing L3 network. For more information on VXLAN, please see `RFC
-    7348 <http://tools.ietf.org/html/rfc7348>`__.
+    7348 <https://tools.ietf.org/html/rfc7348>`__.
 
 Q: How much of the VXLAN protocol does Open vSwitch currently support?
 

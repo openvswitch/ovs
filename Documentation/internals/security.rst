@@ -89,12 +89,12 @@ Consider reporting the information mentioned in :doc:`bugs`, where relevant.
 Reporters may ask for a GPG key while initiating contact with the security team
 to deliver more sensitive reports.
 
-The Linux kernel has its own vulnerability management process:
-https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/Documentation/SecurityBugs
-Handling of vulnerabilities that affect both the Open vSwitch tree and the
-upstream Linux kernel should be reported through both processes.  Send your
-report as a single email to both the kernel and OVS security teams to allow
-those teams to most easily coordinate among themselves.
+The Linux kernel has `its own vulnerability management process
+<https://static.lwn.net/kerneldoc/admin-guide/security-bugs.html>`__.  Handling
+of vulnerabilities that affect both the Open vSwitch tree and the upstream
+Linux kernel should be reported through both processes.  Send your report as a
+single email to both the kernel and OVS security teams to allow those teams to
+most easily coordinate among themselves.
 
 Step 2: Assessment
 ------------------
@@ -220,8 +220,9 @@ sections for the document include:
       Certificate of Origin.  It should also include other appropriate
       tags, such as Acked-by tags obtained during review.
 
-CVE-2016-2074 is an example advisory document, available at:
-http://openvswitch.org/pipermail/announce/2016-March/000082.html
+`CVE-2016-2074
+<https://mail.openvswitch.org/pipermail/ovs-announce/2016-March/000082.html>`__
+is an example advisory document.
 
 Step 3b: Fix
 ------------

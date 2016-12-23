@@ -499,12 +499,12 @@ driver.
 References
 ----------
 
-.. [1] Hyper-V Extensible Switch http://msdn.microsoft.com/en-us/library/windows/hardware/hh598161(v=vs.85).aspx
-.. [2] Hyper-V Extensible Switch Extensions http://msdn.microsoft.com/en-us/library/windows/hardware/hh598169(v=vs.85).aspx
+.. [1] Hyper-V Extensible Switch https://msdn.microsoft.com/windows/hardware/drivers/network/hyper-v-extensible-switch
+.. [2] Hyper-V Extensible Switch Extensions https://msdn.microsoft.com/windows/hardware/drivers/network/hyper-v-extensible-switch-extensions
 .. [3] DPIF Provider http://openvswitch.sourcearchive.com/documentation/1.1.0-1/dpif-provider_8h_source.html
-.. [4] Hyper-V Extensible Switch Components http://msdn.microsoft.com/en-us/library/windows/hardware/hh598163(v=vs.85).aspx
-.. [5] Windows Filtering Platform http://msdn.microsoft.com/en-us/library/windows/desktop/aa366510(v=vs.85).aspx
-.. [6] IP Helper http://msdn.microsoft.com/en-us/library/windows/hardware/ff557015(v=vs.85).aspx
-.. [7] How to Port Open vSwitch to New Software or Hardware http://git.openvswitch.org/cgi-bin/gitweb.cgi?p=openvswitch;a=blob;f=PORTING
-.. [8] Netlink http://en.wikipedia.org/wiki/Netlink
-.. [9] epoll http://en.wikipedia.org/wiki/Epoll
+.. [4] Hyper-V Extensible Switch Components https://msdn.microsoft.com/windows/hardware/drivers/network/hyper-v-extensible-switch-components
+.. [5] Windows Filtering Platform https://msdn.microsoft.com/en-us/library/windows/desktop/aa366510(v=vs.85).aspx
+.. [6] IP Helper https://msdn.microsoft.com/windows/hardware/drivers/network/ip-helper
+.. [7] How to Port Open vSwitch to New Software or Hardware :doc:`porting`
+.. [8] Netlink https://en.wikipedia.org/wiki/Netlink
+.. [9] epoll https://en.wikipedia.org/wiki/Epoll

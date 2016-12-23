@@ -402,9 +402,9 @@ not want to use Git.
 Patches should be inline in the email message.  Some email clients corrupt
 white space or wrap lines in patches.  There are hints on how to configure many
 email clients to avoid this problem on `kernel.org
-<http://git.kernel.org/?p=linux/kernel/git/torvalds/linux-2.6.git;a=blob_plain;f=Documentation/email-clients.txt>`__.
-If you cannot convince your email client not to mangle patches, then sending
-the patch as an attachment is a second choice.
+<https://static.lwn.net/kerneldoc/process/email-clients.html>`__.  If you
+cannot convince your email client not to mangle patches, then sending the patch
+as an attachment is a second choice.
 
 Follow the style used in the code that you are modifying. :doc:`coding-style`
 file describes the coding style used in most of Open vSwitch. Use Linux kernel

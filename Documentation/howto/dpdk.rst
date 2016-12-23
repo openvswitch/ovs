@@ -224,7 +224,7 @@ tcpdump. Issue the following command to view the contents of ``pkts.pcap``::
     $ tcpdump -r pkts.pcap
 
 More information on the pdump app and its usage can be found in the `DPDK docs
-<http://dpdk.org/doc/guides/sample_app_ug/pdump.html>`__.
+<http://dpdk.org/doc/guides/tools/pdump.html>`__.
 
 Jumbo Frames
 ------------

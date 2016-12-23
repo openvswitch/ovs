@@ -355,7 +355,7 @@ travis-ci.
 
 Instructions to setup travis-ci for your GitHub repository:
 
-1. Go to http://travis-ci.org/ and sign in using your GitHub ID.
+1. Go to https://travis-ci.org/ and sign in using your GitHub ID.
 2. Go to the "Repositories" tab and enable the ovs repository. You may disable
    builds for pushes or pull requests.
 3. In order to avoid forks sending build failures to the upstream mailing list,

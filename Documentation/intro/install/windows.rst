@@ -97,7 +97,7 @@ The following explains the steps in some detail.
 - OpenSSL
 
   To get SSL support for Open vSwitch on Windows, you will need to install
-  `OpenSSL for Windows <http://www.openssl.org/related/binaries.html>`__
+  `OpenSSL for Windows <https://wiki.openssl.org/index.php/Binaries>`__
 
   Note down the directory where OpenSSL is installed (e.g.:
   ``C:/OpenSSL-Win32``) for later use.

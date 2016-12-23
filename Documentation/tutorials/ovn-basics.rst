@@ -866,7 +866,7 @@ logical flows described above give a very good idea of what the flows look
 like, though.
 
 `This blog post
-<http://blog.russellbryant.net/2015/10/22/openstack-security-groups-using-ovn-acls/>`__
+<https://blog.russellbryant.net/2015/10/22/openstack-security-groups-using-ovn-acls/>`__
 discusses OVN ACLs from an OpenStack perspective and also provides an example
 of what the resulting OpenFlow flows look like.
 
@@ -962,7 +962,7 @@ should see it output to the local ports ``lport1`` and ``lport2``::
     $ ovn/env8/packet2.sh
 
 .. _ovn-architecture: http://openvswitch.org/support/dist-docs/ovn-architecture.7.html
-.. _Tutorial: https://github.com/openvswitch/ovs/blob/master/tutorial/tutorial.rst
+.. _Tutorial: :ref:`ovs-advanced`
 .. _ovn-nb(5): http://openvswitch.org/support/dist-docs/ovn-nb.5.html
 .. _ovn-sb(5): http://openvswitch.org/support/dist-docs/ovn-sb.5.html
 .. _vtep(5): http://openvswitch.org/support/dist-docs/vtep.5.html

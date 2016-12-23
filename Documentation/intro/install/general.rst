@@ -137,7 +137,7 @@ If you are going to extensively modify Open vSwitch, consider installing the
 following to obtain better warnings:
 
 - "sparse" version 0.4.4 or later
-  (http://www.kernel.org/pub/software/devel/sparse/dist/).
+  (https://www.kernel.org/pub/software/devel/sparse/dist/).
 
 - GNU make.
 
@@ -171,7 +171,7 @@ simply install and run Open vSwitch you require the following software:
 
 - For optional support of ingress policing on Linux, the "tc" program
   from iproute2 (part of all major distributions and available at
-  http://www.linux-foundation.org/en/Net:Iproute2).
+  https://wiki.linuxfoundation.org/networking/iproute2).
 
 - Python 2.7. You must also have the Python six library.
 

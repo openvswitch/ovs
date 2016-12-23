@@ -206,8 +206,8 @@ but other hosts that are only on VLAN 0 can reach the IP address configured on
 VLAN 9.  What's going on?
 
     A: `RFC 1122 section 3.3.4.2 "Multihoming Requirements"
-    <https://tools.ietf.org/html/rfc1122#section-3.3.4.2>`__ describes two
-    approaches to IP address handling in Internet hosts:
+    <https://tools.ietf.org/html/rfc1122>`__ describes two approaches to IP
+    address handling in Internet hosts:
 
     - In the "Strong ES Model", where an ES is a host ("End System"), an IP
       address is primarily associated with a particular interface.  The host

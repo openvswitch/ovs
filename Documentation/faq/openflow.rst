@@ -523,7 +523,7 @@ Q: The "learn" action can't learn the action I want, can you improve it?
     example:
 
     - Resubmit to a table selected based on learned information, e.g. see:
-      http://openvswitch.org/pipermail/discuss/2016-June/021694.html
+      https://mail.openvswitch.org/pipermail/ovs-discuss/2016-June/021694.html
 
     - MAC learning in the middle of a pipeline, as described in
       :doc:`/tutorials/ovs-advanced`
