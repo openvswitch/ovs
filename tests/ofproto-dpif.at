@@ -6245,7 +6245,7 @@ for i in `seq 1 3`; do
 done
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-packets:2, bytes:68, used:0.001s, actions:sample(sample=100.0%,actions(userspace(pid=0,ipfix(output_port=4294967295))))
+packets:2, bytes:68, used:0.001s, actions:userspace(pid=0,ipfix(output_port=4294967295))
 ])
 
 dnl Remove the IPFIX configuration.
@@ -6337,7 +6337,7 @@ for i in `seq 1 3`; do
 done
 AT_CHECK([ovs-appctl dpctl/dump-flows | sed 's/.*\(packets:\)/\1/' | sed 's/used:[[0-9]].[[0-9]]*s/used:0.001s/'], [0], [dnl
 flow-dump from non-dpdk interfaces:
-packets:2, bytes:68, used:0.001s, actions:sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=4294967295)))),2
+packets:2, bytes:68, used:0.001s, actions:userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=4294967295)),2
 ])
 
 dnl Remove the flow which contains sample action.
@@ -6385,7 +6385,7 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt], [0], [ignore])
 
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(3),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 AT_CHECK([tail -1 stdout], [0], [dnl
-Datapath actions: sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=4294967295)))),set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df|key))),1
+Datapath actions: userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=4294967295)),set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df|key))),1
 ])
 
 dnl Remove the flow which contains sample action.
@@ -6403,7 +6403,7 @@ AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(3),eth(src=50:54:00:00:00:
 dnl Make sure flow sample action in datapath is behind set tunnel
 dnl action at egress point of tunnel port.
 AT_CHECK([tail -1 stdout], [0], [dnl
-Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df|key))),sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=1),tunnel_out_port=1))),1
+Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df|key))),userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=1),tunnel_out_port=1),1
 ])
 
 dnl Remove the flow which contains sample action.
@@ -6421,7 +6421,7 @@ AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(3),eth(src=50:54:00:00:00:
 dnl Make sure flow sample action in datapath is behind set tunnel
 dnl action at egress point of tunnel port.
 AT_CHECK([tail -1 stdout], [0], [dnl
-Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df|key))),sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=1),tunnel_out_port=1))),1,set(tunnel(tun_id=0x6,src=2.2.2.3,dst=1.1.1.2,tos=0x1,ttl=64,tp_dst=7471,flags(df|key))),sample(sample=100.0%,actions(userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=7471),tunnel_out_port=7471))),7471
+Datapath actions: set(tunnel(tun_id=0x5,src=2.2.2.2,dst=1.1.1.1,tos=0x1,ttl=64,flags(df|key))),userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=1),tunnel_out_port=1),1,set(tunnel(tun_id=0x6,src=2.2.2.3,dst=1.1.1.2,tos=0x1,ttl=64,tp_dst=7471,flags(df|key))),userspace(pid=0,flow_sample(probability=65535,collector_set_id=1,obs_domain_id=0,obs_point_id=0,output_port=7471),tunnel_out_port=7471),7471
 ])
 
 dnl Remove the flow which contains sample action.

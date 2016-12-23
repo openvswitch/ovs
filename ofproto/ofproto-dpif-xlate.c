@@ -2511,13 +2511,17 @@ compose_sample_action(struct xlate_ctx *ctx,
         return 0;
     }
 
-    size_t sample_offset = nl_msg_start_nested(ctx->odp_actions,
-                                               OVS_ACTION_ATTR_SAMPLE);
-
-    nl_msg_put_u32(ctx->odp_actions, OVS_SAMPLE_ATTR_PROBABILITY, probability);
-
-    size_t actions_offset = nl_msg_start_nested(ctx->odp_actions,
-                                                OVS_SAMPLE_ATTR_ACTIONS);
+    /* No need to generate sample action for 100% sampling rate. */
+    bool is_sample = probability < UINT32_MAX;
+    size_t sample_offset, actions_offset;
+    if (is_sample) {
+        sample_offset = nl_msg_start_nested(ctx->odp_actions,
+                                            OVS_ACTION_ATTR_SAMPLE);
+        nl_msg_put_u32(ctx->odp_actions, OVS_SAMPLE_ATTR_PROBABILITY,
+                       probability);
+        actions_offset = nl_msg_start_nested(ctx->odp_actions,
+                                             OVS_SAMPLE_ATTR_ACTIONS);
+    }
 
     odp_port_t odp_port = ofp_port_to_odp_port(
         ctx->xbridge, ctx->xin->flow.in_port.ofp_port);
@@ -2528,8 +2532,10 @@ compose_sample_action(struct xlate_ctx *ctx,
                                                  include_actions,
                                                  ctx->odp_actions);
 
-    nl_msg_end_nested(ctx->odp_actions, actions_offset);
-    nl_msg_end_nested(ctx->odp_actions, sample_offset);
+    if (is_sample) {
+        nl_msg_end_nested(ctx->odp_actions, actions_offset);
+        nl_msg_end_nested(ctx->odp_actions, sample_offset);
+    }
 
     return cookie_offset;
 }
