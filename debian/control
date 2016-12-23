@@ -161,7 +161,7 @@ Description: OVN central components
  databases for OVN that is run at a central location.
 
 Package: ovn-docker
-Architecture: any
+Architecture: linux-any
 Depends: openvswitch-switch (= ${binary:Version}),
          openvswitch-common (= ${binary:Version}),
          python (>= 2.7),
