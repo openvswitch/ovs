@@ -1459,16 +1459,8 @@ packet_csum_pseudoheader6(const struct ovs_16aligned_ip6_hdr *ip6)
 {
     uint32_t partial = 0;
 
-    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[0])));
-    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[1])));
-    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[2])));
-    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_src.be32[3])));
-
-    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[0])));
-    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[1])));
-    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[2])));
-    partial = csum_add32(partial, get_16aligned_be32(&(ip6->ip6_dst.be32[3])));
-
+    partial = csum_continue(partial, &ip6->ip6_src, sizeof ip6->ip6_src);
+    partial = csum_continue(partial, &ip6->ip6_dst, sizeof ip6->ip6_dst);
     partial = csum_add16(partial, htons(ip6->ip6_nxt));
     partial = csum_add16(partial, ip6->ip6_plen);
 
