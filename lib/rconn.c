@@ -554,19 +554,23 @@ run_ACTIVE(struct rconn *rc)
 {
     if (timed_out(rc)) {
         unsigned int base = MAX(rc->last_activity, rc->state_entered);
-        int version;
-
         VLOG_DBG("%s: idle %u seconds, sending inactivity probe",
                  rc->name, (unsigned int) (time_now() - base));
-
-        version = rconn_get_version__(rc);
-        ovs_assert(version >= 0 && version <= 0xff);
 
         /* Ordering is important here: rconn_send() can transition to BACKOFF,
          * and we don't want to transition back to IDLE if so, because then we
          * can end up queuing a packet with vconn == NULL and then *boom*. */
         state_transition(rc, S_IDLE);
-        rconn_send__(rc, make_echo_request(version), NULL);
+
+        /* Send an echo request if we can.  (If version negotiation is not
+         * complete, that is, if we did not yet receive a "hello" message from
+         * the peer, we do not know the version to use, so we don't send
+         * anything.) */
+        int version = rconn_get_version__(rc);
+        if (version >= 0 && version <= 0xff) {
+            rconn_send__(rc, make_echo_request(version), NULL);
+        }
+
         return;
     }
 
