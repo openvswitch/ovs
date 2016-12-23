@@ -2506,6 +2506,11 @@ compose_sample_action(struct xlate_ctx *ctx,
                       const odp_port_t tunnel_out_port,
                       bool include_actions)
 {
+    if (probability == 0) {
+        /* No need to generate sampling or the inner action. */
+        return 0;
+    }
+
     size_t sample_offset = nl_msg_start_nested(ctx->odp_actions,
                                                OVS_ACTION_ATTR_SAMPLE);
 
