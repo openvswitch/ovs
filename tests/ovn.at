@@ -1710,9 +1710,7 @@ vtep-ctl add-ls lsw0
 start_daemon ovs-vtep br-vtep
 start_daemon ovn-controller-vtep --vtep-db=unix:"$ovs_base"/vtep/db.sock --ovnsb-db=unix:"$ovs_base"/ovn-sb/ovn-sb.sock
 
-sleep 1
-
-vtep-ctl bind-ls br-vtep br-vtep_n2 0 lsw0
+OVS_WAIT_UNTIL([vtep-ctl bind-ls br-vtep br-vtep_n2 0 lsw0])
 
 OVS_WAIT_UNTIL([test -n "`as vtep vtep-ctl get-replication-mode lsw0 |
                grep -- source`"])
