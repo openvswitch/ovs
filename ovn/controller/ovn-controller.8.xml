@@ -300,6 +300,26 @@
       <dd>
         Lists each local logical port and its connection tracking zone.
       </dd>
+
+      <dt><code>inject-pkt</code> <var>microflow</var></dt>
+      <dd>
+      <p>
+        Injects <var>microflow</var> into the connected Open vSwitch
+        instance.  <var>microflow</var> must contain an ingress logical
+        port (<code>inport</code> argument) that is present on the Open
+        vSwitch instance.
+      </p>
+
+      <p>
+        The <var>microflow</var> argument describes the packet whose
+        forwarding is to be simulated, in the syntax of an OVN logical
+        expression, as described in <code>ovn-sb</code>(5), to express
+        constraints.  The parser understands prerequisites; for example,
+        if the expression refers to <code>ip4.src</code>, there is no
+        need to explicitly state <code>ip4</code> or <code>eth.type ==
+        0x800</code>.
+      </p>
+      </dd>
       </dl>
     </p>
 

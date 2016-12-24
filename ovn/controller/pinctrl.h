@@ -21,10 +21,10 @@
 
 #include "openvswitch/meta-flow.h"
 
+struct controller_ctx;
 struct hmap;
 struct lport_index;
 struct ovsrec_bridge;
-struct controller_ctx;
 struct sbrec_chassis;
 
 void pinctrl_init(void);

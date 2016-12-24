@@ -59,6 +59,7 @@ VLOG_DEFINE_THIS_MODULE(main);
 
 static unixctl_cb_func ovn_controller_exit;
 static unixctl_cb_func ct_zone_list;
+static unixctl_cb_func inject_pkt;
 
 #define DEFAULT_BRIDGE_NAME "br-int"
 #define DEFAULT_PROBE_INTERVAL_MSEC 5000
@@ -66,6 +67,13 @@ static unixctl_cb_func ct_zone_list;
 static void update_probe_interval(struct controller_ctx *);
 static void parse_options(int argc, char *argv[]);
 OVS_NO_RETURN static void usage(void);
+
+/* Pending packet to be injected into connected OVS. */
+struct pending_pkt {
+    /* Setting 'conn' indicates that a request is pending. */
+    struct unixctl_conn *conn;
+    char *flow_s;
+};
 
 static char *ovs_remote;
 
@@ -542,6 +550,10 @@ main(int argc, char *argv[])
     unixctl_command_register("ct-zone-list", "", 0, 0,
                              ct_zone_list, &ct_zones);
 
+    struct pending_pkt pending_pkt = { .conn = NULL };
+    unixctl_command_register("inject-pkt", "MICROFLOW", 1, 1, inject_pkt,
+                             &pending_pkt);
+
     /* Main loop. */
     exiting = false;
     while (!exiting) {
@@ -593,6 +605,9 @@ main(int argc, char *argv[])
         }
 
         if (br_int && chassis) {
+            struct shash addr_sets = SHASH_INITIALIZER(&addr_sets);
+            addr_sets_init(&ctx, &addr_sets);
+
             patch_run(&ctx, br_int, chassis, &local_datapaths);
 
             enum mf_field_id mff_ovn_geneve = ofctrl_run(br_int,
@@ -602,8 +617,6 @@ main(int argc, char *argv[])
             update_ct_zones(&local_lports, &local_datapaths, &ct_zones,
                             ct_zone_bitmap, &pending_ct_zones);
             if (ctx.ovs_idl_txn) {
-                struct shash addr_sets = SHASH_INITIALIZER(&addr_sets);
-                addr_sets_init(&ctx, &addr_sets);
 
                 commit_ct_zones(br_int, &pending_ct_zones);
 
@@ -617,10 +630,8 @@ main(int argc, char *argv[])
 
                 ofctrl_put(&flow_table, &pending_ct_zones,
                            get_nb_cfg(ctx.ovnsb_idl));
-                hmap_destroy(&flow_table);
 
-                expr_addr_sets_destroy(&addr_sets);
-                shash_destroy(&addr_sets);
+                hmap_destroy(&flow_table);
 
                 if (ctx.ovnsb_idl_txn) {
                     int64_t cur_cfg = ofctrl_get_cur_cfg();
@@ -630,8 +641,33 @@ main(int argc, char *argv[])
                 }
             }
 
+            if (pending_pkt.conn) {
+                char *error = ofctrl_inject_pkt(br_int, pending_pkt.flow_s,
+                                                &addr_sets);
+                if (error) {
+                    unixctl_command_reply_error(pending_pkt.conn, error);
+                    free(error);
+                } else {
+                    unixctl_command_reply(pending_pkt.conn, NULL);
+                }
+                pending_pkt.conn = NULL;
+                free(pending_pkt.flow_s);
+            }
+
             update_sb_monitors(ctx.ovnsb_idl, chassis,
                                &local_lports, &local_datapaths);
+
+            expr_addr_sets_destroy(&addr_sets);
+            shash_destroy(&addr_sets);
+        }
+
+        /* If we haven't handled the pending packet insertion
+         * request, the system is not ready. */
+        if (pending_pkt.conn) {
+            unixctl_command_reply_error(pending_pkt.conn,
+                                        "ovn-controller not ready.");
+            pending_pkt.conn = NULL;
+            free(pending_pkt.flow_s);
         }
 
         mcgroup_index_destroy(&mcgroups);
@@ -650,7 +686,7 @@ main(int argc, char *argv[])
         unixctl_server_run(unixctl);
 
         unixctl_server_wait(unixctl);
-        if (exiting) {
+        if (exiting || pending_pkt.conn) {
             poll_immediate_wake();
         }
 
@@ -847,6 +883,20 @@ ct_zone_list(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     unixctl_command_reply(conn, ds_cstr(&ds));
     ds_destroy(&ds);
+}
+
+static void
+inject_pkt(struct unixctl_conn *conn, int argc OVS_UNUSED,
+           const char *argv[], void *pending_pkt_)
+{
+    struct pending_pkt *pending_pkt = pending_pkt_;
+
+    if (pending_pkt->conn) {
+        unixctl_command_reply_error(conn, "already pending packet injection");
+        return;
+    }
+    pending_pkt->conn = conn;
+    pending_pkt->flow_s = xstrdup(argv[1]);
 }
 
 /* Get the desired SB probe timer from the OVS database and configure it into
