@@ -56,9 +56,9 @@ static void consider_logical_flow(const struct lport_index *lports,
                                   const struct hmap *local_datapaths,
                                   struct group_table *group_table,
                                   const struct simap *ct_zones,
-                                  struct hmap *dhcp_opts_p,
-                                  struct hmap *dhcpv6_opts_p,
-                                  uint32_t *conj_id_ofs_p,
+                                  struct hmap *dhcp_opts,
+                                  struct hmap *dhcpv6_opts,
+                                  uint32_t *conj_id_ofs,
                                   const struct shash *addr_sets,
                                   struct hmap *flow_table);
 
@@ -137,9 +137,9 @@ consider_logical_flow(const struct lport_index *lports,
                       const struct hmap *local_datapaths,
                       struct group_table *group_table,
                       const struct simap *ct_zones,
-                      struct hmap *dhcp_opts_p,
-                      struct hmap *dhcpv6_opts_p,
-                      uint32_t *conj_id_ofs_p,
+                      struct hmap *dhcp_opts,
+                      struct hmap *dhcpv6_opts,
+                      uint32_t *conj_id_ofs,
                       const struct shash *addr_sets,
                       struct hmap *flow_table)
 {
@@ -170,8 +170,8 @@ consider_logical_flow(const struct lport_index *lports,
     struct ofpbuf ovnacts = OFPBUF_STUB_INITIALIZER(ovnacts_stub);
     struct ovnact_parse_params pp = {
         .symtab = &symtab,
-        .dhcp_opts = dhcp_opts_p,
-        .dhcpv6_opts = dhcpv6_opts_p,
+        .dhcp_opts = dhcp_opts,
+        .dhcpv6_opts = dhcpv6_opts,
 
         .n_tables = LOG_PIPELINE_LEN,
         .cur_ltable = lflow->table_id,
@@ -247,7 +247,7 @@ consider_logical_flow(const struct lport_index *lports,
         match_set_metadata(&m->match,
                            htonll(lflow->logical_datapath->tunnel_key));
         if (m->match.wc.masks.conj_id) {
-            m->match.flow.conj_id += *conj_id_ofs_p;
+            m->match.flow.conj_id += *conj_id_ofs;
         }
         if (!m->n) {
             ofctrl_add_flow(flow_table, ptable, lflow->priority,
@@ -262,7 +262,7 @@ consider_logical_flow(const struct lport_index *lports,
                 struct ofpact_conjunction *dst;
 
                 dst = ofpact_put_CONJUNCTION(&conj);
-                dst->id = src->id + *conj_id_ofs_p;
+                dst->id = src->id + *conj_id_ofs;
                 dst->clause = src->clause;
                 dst->n_clauses = src->n_clauses;
             }
@@ -275,7 +275,7 @@ consider_logical_flow(const struct lport_index *lports,
     /* Clean up. */
     expr_matches_destroy(&matches);
     ofpbuf_uninit(&ofpacts);
-    *conj_id_ofs_p += n_conjs;
+    *conj_id_ofs += n_conjs;
 }
 
 static void
