@@ -2347,7 +2347,7 @@ flow_compose_l4_csum(struct dp_packet *p, const struct flow *flow,
     }
 }
 
-/* Puts into 'b' a packet that flow_extract() would parse as having the given
+/* Puts into 'p' a packet that flow_extract() would parse as having the given
  * 'flow'.
  *
  * (This is useful only for testing, obviously, and the packet isn't really
