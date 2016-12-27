@@ -106,7 +106,7 @@ sim_add () {
 # there.
 as() {
     if test "X$2" != X; then
-        (ovs_setenv $1; shift; $@)
+        (ovs_setenv $1; shift; "$@")
     else
         ovs_setenv $1
     fi
