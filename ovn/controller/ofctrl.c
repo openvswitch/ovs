@@ -57,6 +57,7 @@ struct ovn_flow {
     /* Data. */
     struct ofpact *ofpacts;
     size_t ofpacts_len;
+    uint64_t cookie;
 };
 
 static uint32_t ovn_flow_hash(const struct ovn_flow *);
@@ -592,8 +593,8 @@ ofctrl_recv(const struct ofp_header *oh, enum ofptype type)
 /* Flow table interfaces to the rest of ovn-controller. */
 
 /* Adds a flow to 'desired_flows' with the specified 'match' and 'actions' to
- * the OpenFlow table numbered 'table_id' with the given 'priority'.  The
- * caller retains ownership of 'match' and 'actions'.
+ * the OpenFlow table numbered 'table_id' with the given 'priority' and
+ * OpenFlow 'cookie'.  The caller retains ownership of 'match' and 'actions'.
  *
  * This just assembles the desired flow table in memory.  Nothing is actually
  * sent to the switch until a later call to ofctrl_run().
@@ -601,8 +602,9 @@ ofctrl_recv(const struct ofp_header *oh, enum ofptype type)
  * The caller should initialize its own hmap to hold the flows. */
 void
 ofctrl_add_flow(struct hmap *desired_flows,
-                uint8_t table_id, uint16_t priority,
-                const struct match *match, const struct ofpbuf *actions)
+                uint8_t table_id, uint16_t priority, uint64_t cookie,
+                const struct match *match,
+                const struct ofpbuf *actions)
 {
     struct ovn_flow *f = xmalloc(sizeof *f);
     f->table_id = table_id;
@@ -611,6 +613,7 @@ ofctrl_add_flow(struct hmap *desired_flows,
     f->ofpacts = xmemdup(actions->data, actions->size);
     f->ofpacts_len = actions->size;
     f->hmap_node.hash = ovn_flow_hash(f);
+    f->cookie = cookie;
 
     if (ovn_flow_lookup(desired_flows, f)) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
@@ -935,6 +938,7 @@ ofctrl_put(struct hmap *flow_table, struct shash *pending_ct_zones,
             .table_id = d->table_id,
             .ofpacts = d->ofpacts,
             .ofpacts_len = d->ofpacts_len,
+            .new_cookie = htonll(d->cookie),
             .command = OFPFC_ADD,
         };
         add_flow_mod(&fm, &msgs);

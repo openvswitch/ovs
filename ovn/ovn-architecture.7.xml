@@ -846,6 +846,34 @@
       </p>
 
       <p>
+        Each logical flow maps to one or more OpenFlow flows.  An actual packet
+        ordinarily matches only one of these, although in some cases it can
+        match more than one of these flows (which is not a problem because all
+        of them have the same actions).  <code>ovn-controller</code> uses the
+        first 32 bits of the logical flow's UUID as the cookie for its OpenFlow
+        flow or flows.  (This is not necessarily unique, since the first 32
+        bits of a logical flow's UUID is not necessarily unique.)
+      </p>
+
+      <p>
+        Some logical flows can map to the Open vSwitch ``conjunctive match''
+        extension (see <code>ovs-ofctl</code>(8)).  Flows with a
+        <code>conjunction</code> action use an OpenFlow cookie of 0, because
+        they can correspond to multiple logical flows.  The OpenFlow flow for a
+        conjunctive match includes a match on <code>conj_id</code>.
+      </p>
+
+      <p>
+        Some logical flows may not be represented in the OpenFlow tables on a
+        given hypervisor, if they could not be used on that hypervisor.  For
+        example, if no VIF in a logical switch resides on a given hypervisor,
+        and the logical switch is not otherwise reachable on that hypervisor
+        (e.g. over a series of hops through logical switches and routers
+        starting from a VIF on the hypervisor), then the logical flow may not
+        be represented there.
+      </p>
+
+      <p>
         Most OVN actions have fairly obvious implementations in OpenFlow (with
         OVS extensions), e.g. <code>next;</code> is implemented as
         <code>resubmit</code>, <code><var>field</var> =

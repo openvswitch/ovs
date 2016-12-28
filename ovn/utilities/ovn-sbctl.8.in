@@ -160,11 +160,25 @@ to unbind logical port that is not bound has no effect.
 .
 .SS "Logical Flow Commands"
 .
-.IP "\fBlflow\-list\fR [\fIlogical-datapath\fR]"
+.IP "[\fB\-\-uuid\fR] \fBlflow\-list\fR [\fIlogical-datapath\fR] [\fIlflow\fR...]"
 List logical flows.  If \fIlogical-datapath\fR is specified, only list
-flows for that logical datapath.
+flows for that logical datapath.  The \fIlogical-datapath\fR may be
+given as a UUID or as a datapath name (reporting an error if multiple
+datapaths have the same name).
+.IP
+If at least one \fIlflow\fR is given, only matching logical flows, if
+any, are listed.  Each \fIlflow\fR may be specified as a UUID or the
+first few characters of a UUID, optionally prefixed by \fB0x\fR.
+(Because \fBovn\-controller\fR sets OpenFlow flow cookies to the first
+32 bits of the corresponding logical flow's UUID, this makes it easy
+to look up the logical flow that generated a particular OpenFlow
+flow.)
+.IP
+If \fB\-\-uuid\fR is specified, the output includes the first 32 bits
+of each logical flow's UUID.  This makes it easier to find the
+OpenFlow flows that correspond to a given logical flow.
 .
-.IP "\fBdump\-flows\fR [\fIlogical-datapath\fR]"
+.IP "[\fB\-\-uuid\fR] \fBdump\-flows\fR [\fIlogical-datapath\fR]"
 Alias for \fBlflow\-list\fB.
 .
 .SS "Remote Connectivity Commands"

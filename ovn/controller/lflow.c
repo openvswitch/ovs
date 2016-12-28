@@ -265,8 +265,8 @@ consider_logical_flow(const struct lport_index *lports,
             m->match.flow.conj_id += *conj_id_ofs_p;
         }
         if (!m->n) {
-            ofctrl_add_flow(flow_table, ptable, lflow->priority, &m->match,
-                            &ofpacts);
+            ofctrl_add_flow(flow_table, ptable, lflow->priority,
+                            lflow->header_.uuid.parts[0], &m->match, &ofpacts);
         } else {
             uint64_t conj_stubs[64 / 8];
             struct ofpbuf conj;
@@ -281,7 +281,7 @@ consider_logical_flow(const struct lport_index *lports,
                 dst->clause = src->clause;
                 dst->n_clauses = src->n_clauses;
             }
-            ofctrl_add_flow(flow_table, ptable, lflow->priority, &m->match,
+            ofctrl_add_flow(flow_table, ptable, lflow->priority, 0, &m->match,
                             &conj);
             ofpbuf_uninit(&conj);
         }
@@ -350,7 +350,7 @@ consider_neighbor_flow(const struct lport_index *lports,
     uint64_t stub[1024 / 8];
     struct ofpbuf ofpacts = OFPBUF_STUB_INITIALIZER(stub);
     put_load(mac.ea, sizeof mac.ea, MFF_ETH_DST, 0, 48, &ofpacts);
-    ofctrl_add_flow(flow_table, OFTABLE_MAC_BINDING, 100, &match, &ofpacts);
+    ofctrl_add_flow(flow_table, OFTABLE_MAC_BINDING, 100, 0, &match, &ofpacts);
     ofpbuf_uninit(&ofpacts);
 }
 

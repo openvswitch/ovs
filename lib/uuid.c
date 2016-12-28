@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2013, 2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -210,6 +210,26 @@ error:
     uuid_zero(uuid);
     return false;
 }
+
+/* Returns the number of characters at the beginning of 's' that are valid for
+ * a UUID.  For example, the "123" at the beginning of "123xyzzy" could begin a
+ * UUID, so uuid_is_partial_string() would return 3; for "xyzzy", this function
+ * would return 0, since "x" can't start a UUID. */
+int
+uuid_is_partial_string(const char *s)
+{
+    static const char tmpl[UUID_LEN] = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx";
+    size_t i;
+    for (i = 0; i < UUID_LEN; i++) {
+        if (tmpl[i] == 'x'
+            ? hexit_value(s[i]) < 0
+            : s[i] != '-') {
+            break;
+        }
+    }
+    return i;
+}
+
 
 static void
 sha1_update_int(struct sha1_ctx *sha1_ctx, uintmax_t x)
