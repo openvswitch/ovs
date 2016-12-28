@@ -255,6 +255,58 @@
     <dd>
       Selects all three forms of output.
     </dd>
+
+    <dt><code>--ovs</code>[<code>=</code><var>remote</var>]</dt>
+    <dd>
+      <p>
+        Makes <code>ovn-trace</code> attempt to obtain and display the OpenFlow
+        flows that correspond to each OVN logical flow.  To do so,
+        <code>ovn-trace</code> connects to <var>remote</var> (by default,
+        <code>unix:@RUNDIR@/br-int.mgmt</code>) over OpenFlow and retrieves the
+        flows.  If <var>remote</var> is specified, it must be an active
+        OpenFlow connection method described in <code>ovs-ofctl</code>(8).
+      </p>
+
+      <p>
+        To make the best use of the output, it is important to understand the
+        relationship between logical flows and OpenFlow flows.
+        <code>ovn-architecture</code>(7), under <em>Architectural Physical Life
+        Cycle of a Packet</em>, describes this relationship.  Keep in mind the
+        following points:
+      </p>
+
+      <ul>
+        <li>
+          <code>ovn-trace</code> currently shows all the OpenFlow flows to
+          which a logical flow corresponds, even though an actual packet
+          ordinarily matches only one of these.
+        </li>
+
+        <li>
+          Some logical flows can map to the Open vSwitch ``conjunctive match''
+          extension (see <code>ovs-ofctl</code>(8)).  Currently
+          <code>ovn-trace</code> cannot display the flows with
+          <code>conjunction</code> actions that effectively produce the
+          <code>conj_id</code> match.
+        </li>
+
+        <li>
+          Some logical flows may not be represented in the OpenFlow tables on a
+          given hypervisor, if they could not be used on that hypervisor.
+        </li>
+
+        <li>
+          Some OpenFlow flows do not correspond to logical flows, such as
+          OpenFlow flows that map between physical and logical ports.  These
+          flows will never show up in a trace.
+        </li>
+
+        <li>
+          When <code>ovn-trace</code> omits uninteresting logical flows from
+          output, it does not look up the corresponding OpenFlow flows.
+        </li>
+      </ul>
+    </dd>
   </dl>
 
   <h2>Daemon Options</h2>
@@ -266,7 +318,7 @@
   <h2>PKI Options</h2>
   <p>
     PKI configuration is required to use SSL for the connection to the
-    database.
+    database (and the switch, if <code>--ovs</code> is specified).
   </p>
   <xi:include href="lib/ssl.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 

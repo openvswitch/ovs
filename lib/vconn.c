@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008-2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -942,6 +942,124 @@ vconn_transact_multiple_noreply(struct vconn *vconn, struct ovs_list *requests,
     *replyp = NULL;
     return 0;
 }
+
+static int
+recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
+                      struct ofpbuf **replyp,
+                      struct ofputil_flow_stats *fs, struct ofpbuf *ofpacts)
+{
+    static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 5);
+    struct ofpbuf *reply = *replyp;
+
+    for (;;) {
+        int retval;
+        bool more;
+
+        /* Get a flow stats reply message, if we don't already have one. */
+        if (!reply) {
+            enum ofptype type;
+            enum ofperr error;
+
+            do {
+                error = vconn_recv_block(vconn, &reply);
+                if (error) {
+                    return error;
+                }
+            } while (((struct ofp_header *) reply->data)->xid != send_xid);
+
+            error = ofptype_decode(&type, reply->data);
+            if (error || type != OFPTYPE_FLOW_STATS_REPLY) {
+                VLOG_WARN_RL(&rl, "received bad reply: %s",
+                             ofp_to_string(reply->data, reply->size, 1));
+                return EPROTO;
+            }
+        }
+
+        /* Pull an individual flow stats reply out of the message. */
+        retval = ofputil_decode_flow_stats_reply(fs, reply, false, ofpacts);
+        switch (retval) {
+        case 0:
+            *replyp = reply;
+            return 0;
+
+        case EOF:
+            more = ofpmp_more(reply->header);
+            ofpbuf_delete(reply);
+            reply = NULL;
+            if (!more) {
+                *replyp = NULL;
+                return EOF;
+            }
+            break;
+
+        default:
+            VLOG_WARN_RL(&rl, "parse error in reply (%s)",
+                         ofperr_to_string(retval));
+            return EPROTO;
+        }
+    }
+}
+
+/* Sends 'fsr' to 'vconn', encoding it with the given 'protocol', and then
+ * waits for, parses, and accumulates all of the replies into '*fsesp' and
+ * '*n_fsesp'.  The caller is responsible for freeing all of the flows.
+ * Returns 0 if successful, otherwise a positive errno value. */
+int
+vconn_dump_flows(struct vconn *vconn,
+                 const struct ofputil_flow_stats_request *fsr,
+                 enum ofputil_protocol protocol,
+                 struct ofputil_flow_stats **fsesp, size_t *n_fsesp)
+{
+    struct ofputil_flow_stats *fses = NULL;
+    size_t n_fses = 0;
+    size_t allocated_fses = 0;
+
+    struct ofpbuf *request = ofputil_encode_flow_stats_request(fsr, protocol);
+    const struct ofp_header *oh = request->data;
+    ovs_be32 send_xid = oh->xid;
+    int error = vconn_send_block(vconn, request);
+    if (error) {
+        goto exit;
+    }
+
+    struct ofpbuf *reply = NULL;
+    struct ofpbuf ofpacts;
+    ofpbuf_init(&ofpacts, 0);
+    for (;;) {
+        if (n_fses >= allocated_fses) {
+            fses = x2nrealloc(fses, &allocated_fses, sizeof *fses);
+        }
+
+        struct ofputil_flow_stats *fs = &fses[n_fses];
+        error = recv_flow_stats_reply(vconn, send_xid, &reply, fs, &ofpacts);
+        if (error) {
+            if (error == EOF) {
+                error = 0;
+            }
+            break;
+        }
+        fs->ofpacts = xmemdup(fs->ofpacts, fs->ofpacts_len);
+        n_fses++;
+    }
+    ofpbuf_uninit(&ofpacts);
+    ofpbuf_delete(reply);
+
+    if (error) {
+        for (size_t i = 0; i < n_fses; i++) {
+            free(CONST_CAST(struct ofpact *, fses[i].ofpacts));
+        }
+        free(fses);
+
+        fses = NULL;
+        n_fses = 0;
+    }
+
+exit:
+    *fsesp = fses;
+    *n_fsesp = n_fses;
+    return error;
+}
+
 
 static enum ofperr
 vconn_bundle_reply_validate(struct ofpbuf *reply,

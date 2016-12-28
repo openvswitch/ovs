@@ -27,6 +27,8 @@
 #include "nx-match.h"
 #include "openvswitch/dynamic-string.h"
 #include "openvswitch/ofp-actions.h"
+#include "openvswitch/ofp-print.h"
+#include "openvswitch/vconn.h"
 #include "openvswitch/vlog.h"
 #include "ovn/actions.h"
 #include "ovn/expr.h"
@@ -62,6 +64,10 @@ static bool summary;
 
 /* --minimal: Show a trace with only minimal information. */
 static bool minimal;
+
+/* --ovs: OVS instance to contact to get OpenFlow flows. */
+static const char *ovs;
+static struct vconn *vconn;
 
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
@@ -143,6 +149,12 @@ main(int argc, char *argv[])
     }
 }
 
+static char *
+default_ovs(void)
+{
+    return xasprintf("unix:%s/br-int.mgmt", ovs_rundir());
+}
+
 static void
 parse_options(int argc, char *argv[])
 {
@@ -153,6 +165,7 @@ parse_options(int argc, char *argv[])
         OPT_SUMMARY,
         OPT_MINIMAL,
         OPT_ALL,
+        OPT_OVS,
         DAEMON_OPTION_ENUMS,
         SSL_OPTION_ENUMS,
         VLOG_OPTION_ENUMS
@@ -164,6 +177,7 @@ parse_options(int argc, char *argv[])
         {"summary", no_argument, NULL, OPT_SUMMARY},
         {"minimal", no_argument, NULL, OPT_MINIMAL},
         {"all", no_argument, NULL, OPT_ALL},
+        {"ovs", optional_argument, NULL, OPT_OVS},
         {"help", no_argument, NULL, 'h'},
         {"version", no_argument, NULL, 'V'},
         DAEMON_LONG_OPTIONS,
@@ -207,6 +221,10 @@ parse_options(int argc, char *argv[])
             detailed = summary = minimal = true;
             break;
 
+        case OPT_OVS:
+            ovs = optarg ? optarg : default_ovs();
+            break;
+
         case 'h':
             usage();
 
@@ -245,7 +263,7 @@ usage(void)
 usage: %s [OPTIONS] DATAPATH MICROFLOW\n\
        %s [OPTIONS] --detach\n\
 \n\
-Option format options:\n\
+Output format options:\n\
   --detailed              table-by-table \"backtrace\" (default)\n\
   --summary               less detailed, more parseable\n\
   --minimal               minimum to explain externally visible behavior\n\
@@ -257,11 +275,14 @@ Option format options:\n\
 Other options:\n\
   --db=DATABASE           connect to DATABASE\n\
                           (default: %s)\n\
+  --ovs[=REMOTE]          obtain corresponding OpenFlow flows from REMOTE\n\
+                          (default: %s)\n\
   --unixctl=SOCKET        set control socket name\n\
   -h, --help              display this help message\n\
   -V, --version           display version information\n",
-           default_sb_db());
+           default_sb_db(), default_ovs());
     stream_usage("database", true, true, false);
+    vconn_usage(true, false, false);
     exit(EXIT_SUCCESS);
 }
 
@@ -303,6 +324,7 @@ struct ovntrace_mcgroup {
 enum ovntrace_pipeline { P_INGRESS, P_EGRESS };
 
 struct ovntrace_flow {
+    struct uuid uuid;
     enum ovntrace_pipeline pipeline;
     int table_id;
     char *stage_name;
@@ -644,6 +666,7 @@ read_flows(void)
         }
 
         struct ovntrace_flow *flow = xzalloc(sizeof *flow);
+        flow->uuid = sblf->header_.uuid;
         flow->pipeline = (!strcmp(sblf->pipeline, "ingress")
                           ? P_INGRESS
                           : P_EGRESS);
@@ -1394,6 +1417,54 @@ may_omit_stage(const struct ovntrace_flow *f, uint8_t table_id)
 }
 
 static void
+trace_openflow(const struct ovntrace_flow *f, struct ovs_list *super)
+{
+    struct ofputil_flow_stats_request fsr = {
+        .cookie = htonll(f->uuid.parts[0]),
+        .cookie_mask = OVS_BE64_MAX,
+        .out_port = OFPP_ANY,
+        .out_group = OFPG_ANY,
+        .table_id = OFPTT_ALL,
+    };
+
+    struct ofputil_flow_stats *fses;
+    size_t n_fses;
+    int error = vconn_dump_flows(vconn, &fsr, OFPUTIL_P_OF13_OXM,
+                                 &fses, &n_fses);
+    if (error) {
+        ovntrace_node_append(super, OVNTRACE_NODE_ERROR,
+                             "*** error obtaining flow stats (%s)",
+                             ovs_strerror(error));
+        VLOG_WARN("%s: error obtaining flow stats (%s)",
+                  ovs, ovs_strerror(error));
+        return;
+    }
+
+    if (n_fses) {
+        struct ds s = DS_EMPTY_INITIALIZER;
+        for (size_t i = 0; i < n_fses; i++) {
+            ds_clear(&s);
+            ofp_print_flow_stats(&s, &fses[i]);
+
+            /* ofp_print_flow_stats() indents its output with a space.
+             * Omit it. */
+            const char *p = ds_cstr(&s);
+            p += strspn(p, " ");
+            ovntrace_node_append(super, OVNTRACE_NODE_ACTION, "%s", p);
+        }
+        ds_destroy(&s);
+    } else {
+        ovntrace_node_append(super, OVNTRACE_NODE_ERROR,
+                             "*** no OpenFlow flows");
+    }
+
+    for (size_t i = 0; i < n_fses; i++) {
+        free(CONST_CAST(struct ofpact *, fses[i].ofpacts));
+    }
+    free(fses);
+}
+
+static void
 trace__(const struct ovntrace_datapath *dp, struct flow *uflow,
         uint8_t table_id, enum ovntrace_pipeline pipeline,
         struct ovs_list *super)
@@ -1417,7 +1488,8 @@ trace__(const struct ovntrace_datapath *dp, struct flow *uflow,
         } else if (f->source) {
             ds_put_format(&s, "(%s): ", f->source);
         }
-        ds_put_format(&s, "%s, priority %d", f->match_s, f->priority);
+        ds_put_format(&s, "%s, priority %d, uuid %08x",
+                      f->match_s, f->priority, f->uuid.parts[0]);
     } else {
         char *stage_name = ovntrace_stage_name(dp, table_id, pipeline);
         ds_put_format(&s, "%s%sno match (implicit drop)",
@@ -1430,6 +1502,9 @@ trace__(const struct ovntrace_datapath *dp, struct flow *uflow,
     ds_destroy(&s);
 
     if (f) {
+        if (vconn) {
+            trace_openflow(f, &node->subs);
+        }
         trace_actions(f->ovnacts, f->ovnacts_len, dp, uflow, table_id,
                       pipeline, &node->subs);
     }
@@ -1465,6 +1540,13 @@ trace(const char *dp_s, const char *flow_s)
     flow_format(&output, &uflow);
     ds_put_char(&output, '\n');
 
+    if (ovs) {
+        int retval = vconn_open_block(ovs, 1 << OFP13_VERSION, 0, &vconn);
+        if (retval) {
+            VLOG_WARN("%s: connection failed (%s)", ovs, ovs_strerror(retval));
+        }
+    }
+
     struct ovs_list root = OVS_LIST_INITIALIZER(&root);
     struct ovntrace_node *node = ovntrace_node_append(
         &root, OVNTRACE_NODE_PIPELINE, "ingress(dp=\"%s\", inport=\"%s\")",
@@ -1496,6 +1578,9 @@ trace(const char *dp_s, const char *flow_s)
         ovntrace_node_prune_hard(&root);
         ovntrace_node_print_summary(&output, &root, 0);
     }
+
+    vconn_close(vconn);
+
     return ds_steal_cstr(&output);
 }
 

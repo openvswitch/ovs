@@ -129,10 +129,6 @@ static const struct ovs_cmdl_command *get_all_commands(void);
 OVS_NO_RETURN static void usage(void);
 static void parse_options(int argc, char *argv[]);
 
-static bool recv_flow_stats_reply(struct vconn *, ovs_be32 send_xid,
-                                  struct ofpbuf **replyp,
-                                  struct ofputil_flow_stats *,
-                                  struct ofpbuf *ofpacts);
 int
 main(int argc, char *argv[])
 {
@@ -1166,14 +1162,14 @@ set_protocol_for_flow_dump(struct vconn *vconn,
 
 static struct vconn *
 prepare_dump_flows(int argc, char *argv[], bool aggregate,
-                   struct ofpbuf **requestp)
+                   struct ofputil_flow_stats_request *fsr,
+                   enum ofputil_protocol *protocolp)
 {
     enum ofputil_protocol usable_protocols, protocol;
-    struct ofputil_flow_stats_request fsr;
     struct vconn *vconn;
     char *error;
 
-    error = parse_ofp_flow_stats_request_str(&fsr, aggregate,
+    error = parse_ofp_flow_stats_request_str(fsr, aggregate,
                                              argc > 2 ? argv[2] : "",
                                              &usable_protocols);
     if (error) {
@@ -1181,19 +1177,19 @@ prepare_dump_flows(int argc, char *argv[], bool aggregate,
     }
 
     protocol = open_vconn(argv[1], &vconn);
-    protocol = set_protocol_for_flow_dump(vconn, protocol, usable_protocols);
-    *requestp = ofputil_encode_flow_stats_request(&fsr, protocol);
+    *protocolp = set_protocol_for_flow_dump(vconn, protocol, usable_protocols);
     return vconn;
 }
 
 static void
 ofctl_dump_flows__(int argc, char *argv[], bool aggregate)
 {
-    struct ofpbuf *request;
+    struct ofputil_flow_stats_request fsr;
+    enum ofputil_protocol protocol;
     struct vconn *vconn;
 
-    vconn = prepare_dump_flows(argc, argv, aggregate, &request);
-    dump_transaction(vconn, request);
+    vconn = prepare_dump_flows(argc, argv, aggregate, &fsr, &protocol);
+    dump_transaction(vconn, ofputil_encode_flow_stats_request(&fsr, protocol));
     vconn_close(vconn);
 }
 
@@ -1270,52 +1266,29 @@ ofctl_dump_flows(struct ovs_cmdl_context *ctx)
         ofctl_dump_flows__(ctx->argc, ctx->argv, false);
         return;
     } else {
-        struct ofputil_flow_stats *fses;
-        size_t n_fses, allocated_fses;
-        struct ofpbuf *request;
-        struct ofpbuf ofpacts;
-        struct ofpbuf *reply;
+        struct ofputil_flow_stats_request fsr;
+        enum ofputil_protocol protocol;
         struct vconn *vconn;
-        ovs_be32 send_xid;
-        struct ds s;
-        size_t i;
 
-        vconn = prepare_dump_flows(ctx->argc, ctx->argv, false, &request);
-        send_xid = ((struct ofp_header *) request->data)->xid;
-        send_openflow_buffer(vconn, request);
+        vconn = prepare_dump_flows(ctx->argc, ctx->argv, false,
+                                   &fsr, &protocol);
 
-        fses = NULL;
-        n_fses = allocated_fses = 0;
-        reply = NULL;
-        ofpbuf_init(&ofpacts, 0);
-        for (;;) {
-            struct ofputil_flow_stats *fs;
-
-            if (n_fses >= allocated_fses) {
-                fses = x2nrealloc(fses, &allocated_fses, sizeof *fses);
-            }
-
-            fs = &fses[n_fses];
-            if (!recv_flow_stats_reply(vconn, send_xid, &reply, fs,
-                                       &ofpacts)) {
-                break;
-            }
-            fs->ofpacts = xmemdup(fs->ofpacts, fs->ofpacts_len);
-            n_fses++;
-        }
-        ofpbuf_uninit(&ofpacts);
+        struct ofputil_flow_stats *fses;
+        size_t n_fses;
+        run(vconn_dump_flows(vconn, &fsr, protocol, &fses, &n_fses),
+            "dump flows");
 
         qsort(fses, n_fses, sizeof *fses, compare_flows);
 
-        ds_init(&s);
-        for (i = 0; i < n_fses; i++) {
+        struct ds s = DS_EMPTY_INITIALIZER;
+        for (size_t i = 0; i < n_fses; i++) {
             ds_clear(&s);
             ofp_print_flow_stats(&s, &fses[i]);
             puts(ds_cstr(&s));
         }
         ds_destroy(&s);
 
-        for (i = 0; i < n_fses; i++) {
+        for (size_t i = 0; i < n_fses; i++) {
             free(CONST_CAST(struct ofpact *, fses[i].ofpacts));
         }
         free(fses);
@@ -3365,59 +3338,6 @@ read_flows_from_file(const char *filename, struct fte_state *state, int index)
     return usable_protocols;
 }
 
-static bool
-recv_flow_stats_reply(struct vconn *vconn, ovs_be32 send_xid,
-                      struct ofpbuf **replyp,
-                      struct ofputil_flow_stats *fs, struct ofpbuf *ofpacts)
-{
-    struct ofpbuf *reply = *replyp;
-
-    for (;;) {
-        int retval;
-        bool more;
-
-        /* Get a flow stats reply message, if we don't already have one. */
-        if (!reply) {
-            enum ofptype type;
-            enum ofperr error;
-
-            do {
-                run(vconn_recv_block(vconn, &reply),
-                    "OpenFlow packet receive failed");
-            } while (((struct ofp_header *) reply->data)->xid != send_xid);
-
-            error = ofptype_decode(&type, reply->data);
-            if (error || type != OFPTYPE_FLOW_STATS_REPLY) {
-                ovs_fatal(0, "received bad reply: %s",
-                          ofp_to_string(reply->data, reply->size,
-                                        verbosity + 1));
-            }
-        }
-
-        /* Pull an individual flow stats reply out of the message. */
-        retval = ofputil_decode_flow_stats_reply(fs, reply, false, ofpacts);
-        switch (retval) {
-        case 0:
-            *replyp = reply;
-            return true;
-
-        case EOF:
-            more = ofpmp_more(reply->header);
-            ofpbuf_delete(reply);
-            reply = NULL;
-            if (!more) {
-                *replyp = NULL;
-                return false;
-            }
-            break;
-
-        default:
-            ovs_fatal(0, "parse error in reply (%s)",
-                      ofperr_to_string(retval));
-        }
-    }
-}
-
 /* Reads the OpenFlow flow table from 'vconn', which has currently active flow
  * format 'protocol', and adds them as flow table entries in 'tables' for the
  * version with the specified 'index'. */
@@ -3427,11 +3347,6 @@ read_flows_from_switch(struct vconn *vconn,
                        struct fte_state *state, int index)
 {
     struct ofputil_flow_stats_request fsr;
-    struct ofputil_flow_stats fs;
-    struct ofpbuf *request;
-    struct ofpbuf ofpacts;
-    struct ofpbuf *reply;
-    ovs_be32 send_xid;
 
     fsr.aggregate = false;
     match_init_catchall(&fsr.match);
@@ -3439,28 +3354,27 @@ read_flows_from_switch(struct vconn *vconn,
     fsr.out_group = OFPG_ANY;
     fsr.table_id = 0xff;
     fsr.cookie = fsr.cookie_mask = htonll(0);
-    request = ofputil_encode_flow_stats_request(&fsr, protocol);
-    send_xid = ((struct ofp_header *) request->data)->xid;
-    send_openflow_buffer(vconn, request);
 
-    reply = NULL;
-    ofpbuf_init(&ofpacts, 0);
-    while (recv_flow_stats_reply(vconn, send_xid, &reply, &fs, &ofpacts)) {
+    struct ofputil_flow_stats *fses;
+    size_t n_fses;
+    run(vconn_dump_flows(vconn, &fsr, protocol, &fses, &n_fses),
+        "dump flows");
+    for (size_t i = 0; i < n_fses; i++) {
+        const struct ofputil_flow_stats *fs = &fses[i];
         struct fte_version *version;
 
         version = xmalloc(sizeof *version);
-        version->cookie = fs.cookie;
-        version->idle_timeout = fs.idle_timeout;
-        version->hard_timeout = fs.hard_timeout;
-        version->importance = fs.importance;
+        version->cookie = fs->cookie;
+        version->idle_timeout = fs->idle_timeout;
+        version->hard_timeout = fs->hard_timeout;
+        version->importance = fs->importance;
         version->flags = 0;
-        version->ofpacts_len = fs.ofpacts_len;
-        version->ofpacts = xmemdup(fs.ofpacts, fs.ofpacts_len);
-        version->table_id = fs.table_id;
+        version->ofpacts_len = fs->ofpacts_len;
+        version->ofpacts = xmemdup(fs->ofpacts, fs->ofpacts_len);
+        version->table_id = fs->table_id;
 
-        fte_queue(state, &fs.match, fs.priority, version, index);
+        fte_queue(state, &fs->match, fs->priority, version, index);
     }
-    ofpbuf_uninit(&ofpacts);
 }
 
 static void

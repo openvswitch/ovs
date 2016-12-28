@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015 Nicira, Inc.
+ * Copyright (c) 2008-2016 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,10 @@
 #define OPENVSWITCH_VCONN_H 1
 
 #include <stdbool.h>
-#include <openvswitch/list.h>
-#include <openvswitch/types.h>
-#include <openflow/openflow.h>
+#include "openvswitch/list.h"
+#include "openvswitch/types.h"
+#include "openvswitch/ofp-util.h"
+#include "openflow/openflow.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -55,6 +56,10 @@ int vconn_transact(struct vconn *, struct ofpbuf *, struct ofpbuf **);
 int vconn_transact_noreply(struct vconn *, struct ofpbuf *, struct ofpbuf **);
 int vconn_transact_multiple_noreply(struct vconn *, struct ovs_list *requests,
                                     struct ofpbuf **replyp);
+
+int vconn_dump_flows(struct vconn *, const struct ofputil_flow_stats_request *,
+                     enum ofputil_protocol,
+                     struct ofputil_flow_stats **fsesp, size_t *n_fsesp);
 
 /* Bundle errors must be free()d by the caller. */
 struct vconn_bundle_error {
