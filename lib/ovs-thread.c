@@ -230,21 +230,27 @@ void
 ovs_rwlock_init(const struct ovs_rwlock *l_)
 {
     struct ovs_rwlock *l = CONST_CAST(struct ovs_rwlock *, l_);
-    pthread_rwlockattr_t attr;
     int error;
 
     l->where = "<unlocked>";
 
-    xpthread_rwlockattr_init(&attr);
 #ifdef PTHREAD_RWLOCK_WRITER_NONRECURSIVE_INITIALIZER_NP
+    pthread_rwlockattr_t attr;
+    xpthread_rwlockattr_init(&attr);
     xpthread_rwlockattr_setkind_np(
         &attr, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
-#endif
     error = pthread_rwlock_init(&l->lock, &attr);
+    xpthread_rwlockattr_destroy(&attr);
+#else
+    /* It is important to avoid passing a rwlockattr in this case because
+     * Windows pthreads 2.9.1 (and earlier) fail and abort if passed one, even
+     * one without any special attributes. */
+    error = pthread_rwlock_init(&l->lock, NULL);
+#endif
+
     if (OVS_UNLIKELY(error)) {
         ovs_abort(error, "pthread_rwlock_init failed");
     }
-    xpthread_rwlockattr_destroy(&attr);
 }
 
 /* Provides an error-checking wrapper around pthread_cond_wait().
