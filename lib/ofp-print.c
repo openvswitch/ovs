@@ -2371,10 +2371,8 @@ ofp_print_nxst_flow_monitor_reply(struct ds *string,
     for (;;) {
         char reasonbuf[OFP_FLOW_REMOVED_REASON_BUFSIZE];
         struct ofputil_flow_update update;
-        struct match match;
         int retval;
 
-        update.match = &match;
         retval = ofputil_decode_flow_update(&update, &b, &ofpacts);
         if (retval) {
             if (retval != EOF) {
@@ -2418,7 +2416,7 @@ ofp_print_nxst_flow_monitor_reply(struct ds *string,
         ds_put_format(string, " cookie=%#"PRIx64, ntohll(update.cookie));
 
         ds_put_char(string, ' ');
-        match_format(update.match, string, OFP_DEFAULT_PRIORITY);
+        match_format(&update.match, string, OFP_DEFAULT_PRIORITY);
 
         if (update.ofpacts_len) {
             if (string->string[string->length - 1] != ' ') {

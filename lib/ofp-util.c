@@ -6720,7 +6720,7 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
         update->cookie = nfuf->cookie;
         update->priority = ntohs(nfuf->priority);
 
-        error = nx_pull_match(msg, match_len, update->match, NULL, NULL, NULL);
+        error = nx_pull_match(msg, match_len, &update->match, NULL, NULL, NULL);
         if (error) {
             return error;
         }
@@ -6782,12 +6782,19 @@ ofputil_start_flow_update(struct ovs_list *replies)
 
 void
 ofputil_append_flow_update(const struct ofputil_flow_update *update,
-                           struct ovs_list *replies)
+                           struct ovs_list *replies,
+                           const struct tun_table *tun_table)
 {
+    struct ofputil_flow_update *update_ =
+        CONST_CAST(struct ofputil_flow_update *, update);
+    const struct tun_table *orig_tun_table;
     enum ofp_version version = ofpmp_version(replies);
     struct nx_flow_update_header *nfuh;
     struct ofpbuf *msg;
     size_t start_ofs;
+
+    orig_tun_table = update->match.flow.tunnel.metadata.tab;
+    update_->match.flow.tunnel.metadata.tab = tun_table;
 
     msg = ofpbuf_from_list(ovs_list_back(replies));
     start_ofs = msg->size;
@@ -6802,7 +6809,7 @@ ofputil_append_flow_update(const struct ofputil_flow_update *update,
         int match_len;
 
         ofpbuf_put_zeros(msg, sizeof *nfuf);
-        match_len = nx_put_match(msg, update->match, htonll(0), htonll(0));
+        match_len = nx_put_match(msg, &update->match, htonll(0), htonll(0));
         ofpacts_put_openflow_actions(update->ofpacts, update->ofpacts_len, msg,
                                      version);
         nfuf = ofpbuf_at_assert(msg, start_ofs, sizeof *nfuf);
@@ -6820,6 +6827,7 @@ ofputil_append_flow_update(const struct ofputil_flow_update *update,
     nfuh->event = htons(update->event);
 
     ofpmp_postappend(replies, start_ofs);
+    update_->match.flow.tunnel.metadata.tab = orig_tun_table;
 }
 
 struct ofpbuf *

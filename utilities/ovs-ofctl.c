@@ -1784,7 +1784,7 @@ ofctl_unblock(struct unixctl_conn *conn, int argc OVS_UNUSED,
     }
 }
 
-/* Prints to stdout all of the messages received on 'vconn'.
+/* Prints to stderr all of the messages received on 'vconn'.
  *
  * Iff 'reply_to_echo_requests' is true, sends a reply to any echo request
  * received on 'vconn'.

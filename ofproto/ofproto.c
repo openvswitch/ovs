@@ -5885,12 +5885,12 @@ handle_barrier_request(struct ofconn *ofconn, const struct ofp_header *oh)
 static void
 ofproto_compose_flow_refresh_update(const struct rule *rule,
                                     enum nx_flow_monitor_flags flags,
-                                    struct ovs_list *msgs)
+                                    struct ovs_list *msgs,
+                                    const struct tun_table *tun_table)
     OVS_REQUIRES(ofproto_mutex)
 {
     const struct rule_actions *actions;
     struct ofputil_flow_update fu;
-    struct match match;
 
     fu.event = (flags & (NXFMF_INITIAL | NXFMF_ADD)
                 ? NXFME_ADDED : NXFME_MODIFIED);
@@ -5901,8 +5901,7 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
     ovs_mutex_unlock(&rule->mutex);
     fu.table_id = rule->table_id;
     fu.cookie = rule->flow_cookie;
-    minimatch_expand(&rule->cr.match, &match);
-    fu.match = &match;
+    minimatch_expand(&rule->cr.match, &fu.match);
     fu.priority = rule->cr.priority;
 
     actions = flags & NXFMF_ACTIONS ? rule_get_actions(rule) : NULL;
@@ -5912,7 +5911,7 @@ ofproto_compose_flow_refresh_update(const struct rule *rule,
     if (ovs_list_is_empty(msgs)) {
         ofputil_start_flow_update(msgs);
     }
-    ofputil_append_flow_update(&fu, msgs);
+    ofputil_append_flow_update(&fu, msgs, tun_table);
 }
 
 void
@@ -5926,7 +5925,8 @@ ofmonitor_compose_refresh_updates(struct rule_collection *rules,
         enum nx_flow_monitor_flags flags = rule->monitor_flags;
         rule->monitor_flags = 0;
 
-        ofproto_compose_flow_refresh_update(rule, flags, msgs);
+        ofproto_compose_flow_refresh_update(rule, flags, msgs,
+                ofproto_get_tun_tab(rule->ofproto));
     }
 }
 

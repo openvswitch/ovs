@@ -2183,14 +2183,12 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
             if (flags & NXFMF_OWN || ofconn != abbrev_ofconn
                 || ofconn->monitor_paused) {
                 struct ofputil_flow_update fu;
-                struct match match;
 
                 fu.event = event;
                 fu.reason = event == NXFME_DELETED ? reason : 0;
                 fu.table_id = rule->table_id;
                 fu.cookie = rule->flow_cookie;
-                minimatch_expand(&rule->cr.match, &match);
-                fu.match = &match;
+                minimatch_expand(&rule->cr.match, &fu.match);
                 fu.priority = rule->cr.priority;
 
                 ovs_mutex_lock(&rule->mutex);
@@ -2206,13 +2204,15 @@ ofmonitor_report(struct connmgr *mgr, struct rule *rule,
                     fu.ofpacts = NULL;
                     fu.ofpacts_len = 0;
                 }
-                ofputil_append_flow_update(&fu, &ofconn->updates);
+                ofputil_append_flow_update(&fu, &ofconn->updates,
+                                           ofproto_get_tun_tab(rule->ofproto));
             } else if (!ofconn->sent_abbrev_update) {
                 struct ofputil_flow_update fu;
 
                 fu.event = NXFME_ABBREV;
                 fu.xid = abbrev_xid;
-                ofputil_append_flow_update(&fu, &ofconn->updates);
+                ofputil_append_flow_update(&fu, &ofconn->updates,
+                                           ofproto_get_tun_tab(rule->ofproto));
 
                 ofconn->sent_abbrev_update = true;
             }

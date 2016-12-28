@@ -5640,3 +5640,48 @@ NXST_FLOW reply:
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([ofproto - monitor flows with tun_md])
+OVS_VSWITCHD_START
+
+AT_CHECK([ovs-ofctl add-tlv-map br0 "{class=0xffff,type=0,len=4}->tun_metadata0"])
+AT_CHECK([ovs-ofctl add-flow br0 tun_metadata0=0x1,actions=drop])
+
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0], [dnl
+NXST_FLOW reply:
+ tun_metadata0=0x1 actions=drop
+])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+dnl Usually ovs-ofctl monitor outputs on stderr, but the first message here
+dnl is put on stdout, because it is handled by ofctl in dump_transaction()
+dnl and not in monitor_vconn().
+AT_CHECK([ovs-ofctl monitor br0 65534 watch: --detach --no-chdir --pidfile >ofctl_monitor.log 2>&1])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 2])
+
+AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+NXST_FLOW_MONITOR reply:
+ event=ADDED table=0 cookie=0 tun_metadata0=0x1
+])
+
+AT_CHECK([ovs-ofctl del-flows br0])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+
+AT_CHECK([cat ofctl_monitor.log | ofctl_strip], [0], [dnl
+NXST_FLOW_MONITOR reply:
+ event=ADDED table=0 cookie=0 tun_metadata0=0x1
+NXST_FLOW_MONITOR reply:
+ event=DELETED reason=delete table=0 cookie=0 tun_metadata0=0x1
+])
+
+OVS_APP_EXIT_AND_WAIT([ovs-ofctl])
+
+dnl Check that vswitchd hasn't crashed
+AT_CHECK([ovs-ofctl dump-flows br0 | ofctl_strip], [0], [dnl
+NXST_FLOW reply:
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
