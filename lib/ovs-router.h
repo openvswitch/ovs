@@ -25,10 +25,12 @@
 extern "C" {
 #endif
 
-bool ovs_router_lookup(const struct in6_addr *ip_dst, char out_dev[],
+bool ovs_router_lookup(uint32_t mark, const struct in6_addr *ip_dst,
+                       char out_dev[],
                        struct in6_addr *src, struct in6_addr *gw);
 void ovs_router_init(void);
-void ovs_router_insert(const struct in6_addr *ip_dst, uint8_t plen,
+void ovs_router_insert(uint32_t mark, const struct in6_addr *ip_dst,
+                       uint8_t plen,
                        const char output_bridge[], const struct in6_addr *gw);
 void ovs_router_flush(void);
 #ifdef  __cplusplus

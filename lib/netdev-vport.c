@@ -260,10 +260,12 @@ tunnel_check_status_change__(struct netdev_vport *netdev)
     bool status = false;
     struct in6_addr *route;
     struct in6_addr gw;
+    uint32_t mark;
 
     iface[0] = '\0';
     route = &netdev->tnl_cfg.ipv6_dst;
-    if (ovs_router_lookup(route, iface, NULL, &gw)) {
+    mark = netdev->tnl_cfg.egress_pkt_mark;
+    if (ovs_router_lookup(mark, route, iface, NULL, &gw)) {
         struct netdev *egress_netdev;
 
         if (!netdev_open(iface, NULL, &egress_netdev)) {

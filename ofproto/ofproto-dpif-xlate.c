@@ -2878,7 +2878,7 @@ tnl_route_lookup_flow(const struct flow *oflow,
     struct in6_addr dst;
 
     dst = flow_tnl_dst(&oflow->tunnel);
-    if (!ovs_router_lookup(&dst, out_dev, src, &gw)) {
+    if (!ovs_router_lookup(oflow->pkt_mark, &dst, out_dev, src, &gw)) {
         return -ENOENT;
     }
 

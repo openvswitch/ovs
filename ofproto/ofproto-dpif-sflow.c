@@ -449,7 +449,10 @@ sflow_choose_agent_address(const char *agent_device,
             struct in6_addr addr6, src, gw;
 
             in6_addr_set_mapped_ipv4(&addr6, sa.sin.sin_addr.s_addr);
-            if (ovs_router_lookup(&addr6, name, &src, &gw)) {
+            /* sFlow only supports target in default routing table with
+             * packet mark zero.
+             */
+            if (ovs_router_lookup(0, &addr6, name, &src, &gw)) {
 
                 in4.s_addr = in6_addr_get_mapped_ipv4(&src);
                 goto success;

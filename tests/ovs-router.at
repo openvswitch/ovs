@@ -19,10 +19,32 @@ AT_CHECK([ovs-appctl netdev-dummy/ip4addr br0 192.0.2.1/24], [0], [OK
 ])
 AT_CHECK([ovs-appctl ovs/route/add 198.51.100.0/24 br0 192.0.2.254], [0], [OK
 ])
+AT_CHECK([ovs-appctl ovs/route/add 192.0.2.1/24 br0 pkt_mark=123], [0], [OK
+])
+
+AT_CHECK([ovs-appctl ovs/route/add 198.51.100.200/24 br0 192.0.2.250 pkt_mark=1234], [0], [OK
+])
+
+AT_CHECK([ovs-appctl ovs/route/show | grep User | sort], [0], [User: 192.0.2.0/24 MARK 123 dev br0 SRC 192.0.2.1
+User: 198.51.100.0/24 MARK 1234 dev br0 GW 192.0.2.250 SRC 192.0.2.1
+User: 198.51.100.0/24 dev br0 GW 192.0.2.254 SRC 192.0.2.1
+])
+
 AT_CHECK([ovs-appctl ovs/route/lookup 198.51.100.1], [0], [src 192.0.2.1
 gateway 192.0.2.254
 dev br0
 ])
+
+AT_CHECK([ovs-appctl ovs/route/lookup 198.51.100.1 pkt_mark=1234], [0], [src 192.0.2.1
+gateway 192.0.2.250
+dev br0
+])
+AT_CHECK([ovs-appctl ovs/route/del 198.51.100.0/24 pkt_mark=1234], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/show | grep User | sort], [0], [User: 192.0.2.0/24 MARK 123 dev br0 SRC 192.0.2.1
+User: 198.51.100.0/24 dev br0 GW 192.0.2.254 SRC 192.0.2.1
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
@@ -33,9 +55,29 @@ AT_CHECK([ovs-appctl netdev-dummy/ip6addr br0 2001:db8:cafe::1/64], [0], [OK
 ])
 AT_CHECK([ovs-appctl ovs/route/add 2001:db8:babe::/64 br0 2001:db8:cafe::2], [0], [OK
 ])
+AT_CHECK([ovs-appctl ovs/route/add 2001:db8:babe::/64 br0 2001:db8:cafe::3 pkt_mark=321], [0], [OK
+])
+
+AT_CHECK([ovs-appctl ovs/route/show | grep User | sort], [0], [dnl
+User: 2001:db8:babe::/64 MARK 321 dev br0 GW 2001:db8:cafe::3 SRC 2001:db8:cafe::1
+User: 2001:db8:babe::/64 dev br0 GW 2001:db8:cafe::2 SRC 2001:db8:cafe::1
+])
+
 AT_CHECK([ovs-appctl ovs/route/lookup 2001:db8:babe::1eaf], [0], [src 2001:db8:cafe::1
 gateway 2001:db8:cafe::2
 dev br0
 ])
+
+AT_CHECK([ovs-appctl ovs/route/lookup 2001:db8:babe::1eaf pkt_mark=321], [0], [src 2001:db8:cafe::1
+gateway 2001:db8:cafe::3
+dev br0
+])
+
+AT_CHECK([ovs-appctl ovs/route/del 2001:db8:babe::/64 pkt_mark=321], [0], [OK
+])
+AT_CHECK([ovs-appctl ovs/route/show | grep User | sort], [0], [dnl
+User: 2001:db8:babe::/64 dev br0 GW 2001:db8:cafe::2 SRC 2001:db8:cafe::1
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP

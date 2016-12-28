@@ -298,7 +298,7 @@ route_table_handle_msg(const struct route_table_msg *change)
     if (change->relevant && change->nlmsg_type == RTM_NEWROUTE) {
         const struct route_data *rd = &change->rd;
 
-        ovs_router_insert(&rd->rta_dst, rd->rtm_dst_len,
+        ovs_router_insert(rd->mark, &rd->rta_dst, rd->rtm_dst_len,
                           rd->ifname, &rd->rta_gw);
     }
 }
