@@ -19,6 +19,9 @@
 #include "PacketParser.h"
 #include "Event.h"
 
+#pragma warning(push)
+#pragma warning(disable:4311)
+
 #define WINDOWS_TICK 10000000
 #define SEC_TO_UNIX_EPOCH 11644473600LL
 #define SEC_TO_NANOSEC 1000000000LL
@@ -1311,3 +1314,5 @@ OvsCtDumpCmdHandler(POVS_USER_PARAMS_CONTEXT usrParamsCtx,
 
     return STATUS_SUCCESS;
 }
+
+#pragma warning(pop)
