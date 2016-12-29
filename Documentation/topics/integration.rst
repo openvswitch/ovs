@@ -252,6 +252,6 @@ with the active server::
 
     $ pcs resource create VirtualIP ocf:heartbeat:IPaddr2 ip=x.x.x.x \
         op monitor interval=30s
-    $ pcs constraint order VirtualIP then ovndb_servers-master
-    $ pcs constraint colocation add master ovndb_servers-master with VirtualIP \
+    $ pcs constraint order promote ovndb_servers-master then VirtualIP
+    $ pcs constraint colocation add VirtualIP with master ovndb_servers-master \
         score=INFINITY
