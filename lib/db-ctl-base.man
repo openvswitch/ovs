@@ -29,7 +29,11 @@ single comma.  When multiple values are present, duplicates are not
 allowed, and order is not important.  Conversely, some database
 columns can have an empty set of values, represented as \fB[]\fR, and
 square brackets may optionally enclose other non-empty sets or single
-values as well.
+values as well. For a column accepting a set of integers, database commands
+accept a range. A range is represented by two integers separated by
+\fB-\fR. A range is inclusive. A range has a maximum size of 4096
+elements. If more elements are needed, they can be specified in seperate
+ranges.
 .PP
 A few database columns are ``maps'' of key-value pairs, where the key
 and the value are each some fixed database type.  These are specified

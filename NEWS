@@ -59,6 +59,9 @@ Post-v2.6.0
      * Ports now have a "protected" flag. Protected ports can not forward
        frames to other protected ports. Unprotected ports can receive and
        forward frames to protected and other unprotected ports.
+   - ovs-vsctl, ovn-nbctl, ovn-sbctl, vtep-ctl:
+     * Database commands now accept integer ranges, e.g. "set port
+       eth0 trunks=1-10" to enable trunking VLANs 1 to 10.
 
 v2.6.0 - 27 Sep 2016
 ---------------------

@@ -677,7 +677,7 @@ is_condition_satisfied(const struct ctl_table_class *table,
                       column->name);
         }
 
-        die_if_error(ovsdb_atom_from_string(&want_key, &column->type.key,
+        die_if_error(ovsdb_atom_from_string(&want_key, NULL, &column->type.key,
                                             key_string, symtab));
 
         type.key = type.value;
@@ -823,7 +823,7 @@ cmd_get(struct ctl_context *ctx)
                           column->name);
             }
 
-            die_if_error(ovsdb_atom_from_string(&key,
+            die_if_error(ovsdb_atom_from_string(&key, NULL,
                                                 &column->type.key,
                                                 key_string, ctx->symtab));
 
@@ -1118,13 +1118,13 @@ set_column(const struct ctl_table_class *table,
                       column->name);
         }
 
-        die_if_error(ovsdb_atom_from_string(&key, &column->type.key,
+        die_if_error(ovsdb_atom_from_string(&key, NULL, &column->type.key,
                                             key_string, symtab));
-        die_if_error(ovsdb_atom_from_string(&value, &column->type.value,
+        die_if_error(ovsdb_atom_from_string(&value, NULL, &column->type.value,
                                             value_string, symtab));
 
         ovsdb_datum_init_empty(&datum);
-        ovsdb_datum_add_unsafe(&datum, &key, &value, &column->type);
+        ovsdb_datum_add_unsafe(&datum, &key, &value, &column->type, NULL);
 
         ovsdb_atom_destroy(&key, column->type.key.type);
         ovsdb_atom_destroy(&value, column->type.value.type);

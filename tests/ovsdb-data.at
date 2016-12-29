@@ -92,12 +92,26 @@ OVSDB_CHECK_POSITIVE([integer atom from string],
     '-1' \
     '+1000' \
     '9223372036854775807' \
-    '-9223372036854775808' ]], 
+    '-9223372036854775808' \
+    '0-1000' \
+    '-1000-+1000' \
+    '-1000--10' \
+    '+10-+1000' \
+    '1-4096' \
+    '-4096--1' \
+    '-2000-2095']],
   [0
 -1
 1000
 9223372036854775807
--9223372036854775808])
+-9223372036854775808
+0-1000
+-1000-1000
+-1000--10
+10-1000
+1-4096
+-4096--1
+-2000-2095])
 
 OVSDB_CHECK_POSITIVE_CPY([real atom from JSON], 
   [[parse-atoms '["real"]' \
@@ -258,6 +272,30 @@ OVSDB_CHECK_NEGATIVE([real not acceptable integer string atom],
   [[parse-atom-strings '["integer"]' '0.5' ]],
   ["0.5" is not a valid integer])
 
+OVSDB_CHECK_NEGATIVE([inverted range is not acceptable integer string atom positive and negative],
+  [[parse-atom-strings -- '["integer"]' '10--10' ]],
+  ["10--10" is not a valid range. Range end cannot be before start.])
+
+OVSDB_CHECK_NEGATIVE([inverted range is not acceptable integer string atom negative],
+  [[parse-atom-strings -- '["integer"]' '-10--100' ]],
+  ["-10--100" is not a valid range. Range end cannot be before start.])
+
+OVSDB_CHECK_NEGATIVE([inverted range is not acceptable integer string atom positive],
+  [[parse-atom-strings -- '["integer"]' '100-10' ]],
+  ["100-10" is not a valid range. Range end cannot be before start.])
+
+OVSDB_CHECK_NEGATIVE([too big range is not acceptable integer string atom positive and negative],
+  [[parse-atom-strings -- '["integer"]' '-2000-2096' ]],
+  [Range "-2000-2096" is too big.])
+
+OVSDB_CHECK_NEGATIVE([too big range is not acceptable integer string atom negative],
+  [[parse-atom-strings -- '["integer"]' '-4097--1' ]],
+  [Range "-4097--1" is too big.])
+
+OVSDB_CHECK_NEGATIVE([too big range is not acceptable integer string atom positive],
+  [[parse-atom-strings -- '["integer"]' '1-4097' ]],
+  [Range "1-4097" is too big.])
+
 OVSDB_CHECK_POSITIVE_CPY([string "true" not acceptable boolean JSON atom],
   [[parse-atoms '["boolean"]' '["true"]' ]],
   [syntax ""true"": syntax error: expected boolean])
@@ -322,6 +360,27 @@ constraint violation: 7 is not one of the allowed values ([1, 6, 8, 10])
 constraint violation: 9 is not one of the allowed values ([1, 6, 8, 10])
 10
 constraint violation: 11 is not one of the allowed values ([1, 6, 8, 10])]])
+
+OVSDB_CHECK_POSITIVE([integer atom enum from string],
+  [[parse-atom-strings '[{"type": "integer", "enum": ["set", [1, 6, 8, 10, 20, 21, 22, 23, 24, 25]]}]' \
+    '1' \
+    '6' \
+    '8' \
+    '10' \
+    '20-25']],
+  [[1
+6
+8
+10
+20-25]])
+
+OVSDB_CHECK_NEGATIVE([integer not in enum set from string],
+  [[parse-atom-strings '[{"type": "integer", "enum": ["set", [1, 6, 8, 10]]}]' '0' ]],
+  [[constraint violation: 0 is not one of the allowed values ([1, 6, 8, 10])]])
+
+OVSDB_CHECK_NEGATIVE([integer range not in enum set from string],
+  [[parse-atom-strings '[{"type": "integer", "enum": ["set", [1, 6, 8, 10]]}]' '8-10' ]],
+  [[constraint violation: 9 is not one of the allowed values ([1, 6, 8, 10])]])
 
 OVSDB_CHECK_POSITIVE_CPY([real atom enum], 
   [[parse-atoms '[{"type": "real", "enum": ["set", [-1.5, 1.5]]}]' \
@@ -590,11 +649,15 @@ OVSDB_CHECK_POSITIVE([string set of 0 or more integers],
     '0, 1, 2' \
     '[0, 1,2, 3, 4, 5]' \
     '0, 1,2, 3,4, 5, 6, 7, 8' \
-    '[0, 1, 2, 3, 4,5, 6,7, 8, 9, 10]']],
+    '[0, 1, 2, 3, 4,5, 6,7, 8, 9, 10]' \
+    '0-8' \
+    '[0-10']]],
   [[[0]
 [0, 1]
 [0, 1, 2]
 [0, 1, 2, 3, 4, 5]
+[0, 1, 2, 3, 4, 5, 6, 7, 8]
+[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 [0, 1, 2, 3, 4, 5, 6, 7, 8]
 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]])
 

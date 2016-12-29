@@ -640,11 +640,22 @@ str_to_long(const char *s, int base, long *li)
 bool
 str_to_llong(const char *s, int base, long long *x)
 {
-    int save_errno = errno;
     char *tail;
+    bool ok = str_to_llong_with_tail(s, &tail, base, x);
+    if (*tail != '\0') {
+        *x = 0;
+        return false;
+    }
+    return ok;
+}
+
+bool
+str_to_llong_with_tail(const char *s, char **tail, int base, long long *x)
+{
+    int save_errno = errno;
     errno = 0;
-    *x = strtoll(s, &tail, base);
-    if (errno == EINVAL || errno == ERANGE || tail == s || *tail != '\0') {
+    *x = strtoll(s, tail, base);
+    if (errno == EINVAL || errno == ERANGE || *tail == s) {
         errno = save_errno;
         *x = 0;
         return false;
@@ -666,6 +677,21 @@ str_to_uint(const char *s, int base, unsigned int *u)
         *u = ll;
         return true;
     }
+}
+
+bool
+str_to_llong_range(const char *s, int base, long long *begin,
+                   long long *end)
+{
+    char *tail;
+    if (str_to_llong_with_tail(s, &tail, base, begin)
+        && *tail == '-'
+        && str_to_llong(tail + 1, base, end)) {
+        return true;
+    }
+    *begin = 0;
+    *end = 0;
+    return false;
 }
 
 /* Converts floating-point string 's' into a double.  If successful, stores

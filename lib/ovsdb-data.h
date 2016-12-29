@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2015, 2016 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,8 @@
 #include "compiler.h"
 #include "ovsdb-types.h"
 #include "openvswitch/shash.h"
+
+#define MAX_OVSDB_ATOM_RANGE_SIZE 4096
 
 struct ds;
 struct ovsdb_symbol_table;
@@ -89,7 +91,7 @@ struct ovsdb_error *ovsdb_atom_from_json(union ovsdb_atom *,
 struct json *ovsdb_atom_to_json(const union ovsdb_atom *,
                                 enum ovsdb_atomic_type);
 
-char *ovsdb_atom_from_string(union ovsdb_atom *,
+char *ovsdb_atom_from_string(union ovsdb_atom *, union ovsdb_atom **,
                              const struct ovsdb_base_type *, const char *,
                              struct ovsdb_symbol_table *)
     OVS_WARN_UNUSED_RESULT;
@@ -235,7 +237,8 @@ void ovsdb_datum_remove_unsafe(struct ovsdb_datum *, size_t idx,
 void ovsdb_datum_add_unsafe(struct ovsdb_datum *,
                             const union ovsdb_atom *key,
                             const union ovsdb_atom *value,
-                            const struct ovsdb_type *);
+                            const struct ovsdb_type *,
+                            const union ovsdb_atom *range_end_atom);
 
 /* Type checking. */
 static inline bool
@@ -275,5 +278,8 @@ struct ovsdb_symbol *ovsdb_symbol_table_insert(struct ovsdb_symbol_table *,
 
 char *ovsdb_token_parse(const char **, char **outp) OVS_WARN_UNUSED_RESULT;
 bool ovsdb_token_is_delim(unsigned char);
+
+struct ovsdb_error *ovsdb_atom_range_check_size(int64_t range_start,
+                                                int64_t range_end);
 
 #endif /* ovsdb-data.h */

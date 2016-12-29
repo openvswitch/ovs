@@ -190,6 +190,7 @@ Luca Giraudo                    lgiraudo@nicira.com
 Lucian Petrut                   lpetrut@cloudbasesolutions.com
 Luigi Rizzo                     rizzo@iet.unipi.it
 Luis E. P.                      l31g@hotmail.com
+Lukasz Rzasik                   lukasz.rzasik@gmail.com
 Madhu Challa                    challa@noironetworks.com
 Mario Cabrera                   mario.cabrera@hpe.com
 Mark D. Gray                    mark.d.gray@intel.com

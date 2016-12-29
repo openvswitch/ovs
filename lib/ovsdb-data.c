@@ -305,6 +305,25 @@ ovsdb_symbol_referenced(struct ovsdb_symbol *symbol,
     }
 }
 
+static union ovsdb_atom *
+alloc_default_atoms(enum ovsdb_atomic_type type, size_t n)
+{
+    if (type != OVSDB_TYPE_VOID && n) {
+        union ovsdb_atom *atoms;
+        unsigned int i;
+
+        atoms = xmalloc(n * sizeof *atoms);
+        for (i = 0; i < n; i++) {
+            ovsdb_atom_init_default(&atoms[i], type);
+        }
+        return atoms;
+    } else {
+        /* Avoid wasting memory in the n == 0 case, because xmalloc(0) is
+         * treated as xmalloc(1). */
+        return NULL;
+    }
+}
+
 static struct ovsdb_error * OVS_WARN_UNUSED_RESULT
 ovsdb_atom_parse_uuid(struct uuid *uuid, const struct json *json,
                       struct ovsdb_symbol_table *symtab,
@@ -468,6 +487,7 @@ ovsdb_atom_to_json(const union ovsdb_atom *atom, enum ovsdb_atomic_type type)
 
 static char *
 ovsdb_atom_from_string__(union ovsdb_atom *atom,
+                         union ovsdb_atom **range_end_atom,
                          const struct ovsdb_base_type *base, const char *s,
                          struct ovsdb_symbol_table *symtab)
 {
@@ -478,9 +498,20 @@ ovsdb_atom_from_string__(union ovsdb_atom *atom,
         OVS_NOT_REACHED();
 
     case OVSDB_TYPE_INTEGER: {
-        long long int integer;
-        if (!str_to_llong(s, 10, &integer)) {
-            return xasprintf("\"%s\" is not a valid integer", s);
+        long long int integer, end;
+        if (range_end_atom
+            && str_to_llong_range(s, 10, &integer, &end)) {
+            if (end < integer) {
+                return xasprintf("\"%s\" is not a valid range. "
+                    "Range end cannot be before start.", s);
+            }
+            *range_end_atom = alloc_default_atoms(type, 1);
+            if (!(*range_end_atom)) {
+                return xasprintf("\"%s\" is not a valid range", s);
+            }
+            (*range_end_atom)->integer = end;
+        } else if (!str_to_llong(s, 10, &integer)) {
+            return xasprintf("\"%s\" is not a valid integer or range", s);
         }
         atom->integer = integer;
     }
@@ -549,10 +580,13 @@ ovsdb_atom_from_string__(union ovsdb_atom *atom,
     return NULL;
 }
 
-/* Initializes 'atom' to a value of type 'base' parsed from 's', which takes
- * one of the following forms:
+/* Initializes 'atom' and optionally 'range_end_atom' to a value of type 'base'
+ * parsed from 's', which takes one of the following forms:
  *
- *      - OVSDB_TYPE_INTEGER: A decimal integer optionally preceded by a sign.
+ *      - OVSDB_TYPE_INTEGER: A decimal integer optionally preceded by a sign
+ *        or two decimal integers optionally preceded by a sign and separated
+ *        by a hyphen, representing inclusive range of integers
+ *        ['atom', 'range_end_atom'].
  *
  *      - OVSDB_TYPE_REAL: A floating-point number in the format accepted by
  *        strtod().
@@ -574,23 +608,62 @@ ovsdb_atom_from_string__(union ovsdb_atom *atom,
  * Returns a null pointer if successful, otherwise an error message describing
  * the problem.  On failure, the contents of 'atom' are indeterminate.  The
  * caller is responsible for freeing the atom or the error.
+ *
+ * Does not attempt to parse range if 'range_end_atom' is a null pointer.
+ * Dynamically allocates ovdsb_atom and stores its address in '*range_end_atom'
+ * if successfully parses range. Caller is responsible for deallocating
+ * the memory by calling 'ovsdb_atom_destroy' and then 'free' on the address.
+ * Does not allocate memory and sets '*range_end_atom' to a null pointer
+ * if does not parse a range or fails for any reason.
  */
 char *
 ovsdb_atom_from_string(union ovsdb_atom *atom,
+                       union ovsdb_atom **range_end_atom,
                        const struct ovsdb_base_type *base, const char *s,
                        struct ovsdb_symbol_table *symtab)
 {
     struct ovsdb_error *error;
     char *msg;
 
-    msg = ovsdb_atom_from_string__(atom, base, s, symtab);
+    if (range_end_atom) {
+        *range_end_atom = NULL;
+    }
+
+    msg = ovsdb_atom_from_string__(atom, range_end_atom, base, s, symtab);
     if (msg) {
         return msg;
     }
 
     error = ovsdb_atom_check_constraints(atom, base);
+
+    if (!error && range_end_atom && *range_end_atom) {
+        /* Check range constraints */
+        int64_t start = atom->integer;
+        int64_t end = (*range_end_atom)->integer;
+        if (base->enum_) {
+            for (int64_t i = start + 1; i <= end; i++) {
+                union ovsdb_atom ai = { .integer = i };
+                error = ovsdb_atom_check_constraints(&ai, base);
+                if (error) {
+                    break;
+                }
+            }
+        } else {
+            error = ovsdb_atom_check_constraints(*range_end_atom, base);
+        }
+
+        if (!error) {
+            error = ovsdb_atom_range_check_size(start, end);
+        }
+    }
+
     if (error) {
         ovsdb_atom_destroy(atom, base->type);
+        if (range_end_atom && *range_end_atom) {
+            ovsdb_atom_destroy(*range_end_atom, base->type);
+            free(*range_end_atom);
+            *range_end_atom = NULL;
+        }
         msg = ovsdb_error_to_string(error);
         ovsdb_error_destroy(error);
     }
@@ -811,25 +884,6 @@ ovsdb_atom_check_constraints(const union ovsdb_atom *atom,
     }
 }
 
-static union ovsdb_atom *
-alloc_default_atoms(enum ovsdb_atomic_type type, size_t n)
-{
-    if (type != OVSDB_TYPE_VOID && n) {
-        union ovsdb_atom *atoms;
-        unsigned int i;
-
-        atoms = xmalloc(n * sizeof *atoms);
-        for (i = 0; i < n; i++) {
-            ovsdb_atom_init_default(&atoms[i], type);
-        }
-        return atoms;
-    } else {
-        /* Avoid wasting memory in the n == 0 case, because xmalloc(0) is
-         * treated as xmalloc(1). */
-        return NULL;
-    }
-}
-
 /* Initializes 'datum' as an empty datum.  (An empty datum can be treated as
  * any type.) */
 void
@@ -1336,13 +1390,15 @@ skip_spaces(const char *p)
 
 static char *
 parse_atom_token(const char **s, const struct ovsdb_base_type *base,
-                 union ovsdb_atom *atom, struct ovsdb_symbol_table *symtab)
+                 union ovsdb_atom *atom, union ovsdb_atom **range_end_atom,
+                 struct ovsdb_symbol_table *symtab)
 {
     char *token, *error;
 
     error = ovsdb_token_parse(s, &token);
     if (!error) {
-        error = ovsdb_atom_from_string(atom, base, token, symtab);
+        error = ovsdb_atom_from_string(atom, range_end_atom,
+                                       base, token, symtab);
         free(token);
     }
     return error;
@@ -1351,36 +1407,49 @@ parse_atom_token(const char **s, const struct ovsdb_base_type *base,
 static char *
 parse_key_value(const char **s, const struct ovsdb_type *type,
                 union ovsdb_atom *key, union ovsdb_atom *value,
-                struct ovsdb_symbol_table *symtab)
+                struct ovsdb_symbol_table *symtab,
+                union ovsdb_atom **range_end_key)
 {
     const char *start = *s;
     char *error;
 
-    error = parse_atom_token(s, &type->key, key, symtab);
+    error = parse_atom_token(s, &type->key, key, range_end_key, symtab);
+
     if (!error && type->value.type != OVSDB_TYPE_VOID) {
         *s = skip_spaces(*s);
         if (**s == '=') {
             (*s)++;
             *s = skip_spaces(*s);
-            error = parse_atom_token(s, &type->value, value, symtab);
+            error = parse_atom_token(s, &type->value, value, NULL, symtab);
         } else {
             error = xasprintf("%s: syntax error at \"%c\" expecting \"=\"",
                               start, **s);
         }
         if (error) {
             ovsdb_atom_destroy(key, type->key.type);
+            if (range_end_key && *range_end_key) {
+                ovsdb_atom_destroy(*range_end_key, type->key.type);
+                free(*range_end_key);
+                *range_end_key = NULL;
+            }
         }
     }
     return error;
 }
 
 static void
-free_key_value(const struct ovsdb_type *type,
-               union ovsdb_atom *key, union ovsdb_atom *value)
+free_key_value_range(const struct ovsdb_type *type,
+                     union ovsdb_atom *key, union ovsdb_atom *value,
+                     union ovsdb_atom **range_end_atom)
 {
     ovsdb_atom_destroy(key, type->key.type);
     if (type->value.type != OVSDB_TYPE_VOID) {
         ovsdb_atom_destroy(value, type->value.type);
+    }
+    if (range_end_atom && *range_end_atom) {
+        ovsdb_atom_destroy(*range_end_atom, type->key.type);
+        free(*range_end_atom);
+        *range_end_atom = NULL;
     }
 }
 
@@ -1423,6 +1492,7 @@ ovsdb_datum_from_string(struct ovsdb_datum *datum,
 
     while (*p && *p != end_delim) {
         union ovsdb_atom key, value;
+        union ovsdb_atom *range_end_key = NULL;
 
         if (ovsdb_token_is_delim(*p)) {
             char *type_str = ovsdb_type_to_english(type);
@@ -1433,12 +1503,13 @@ ovsdb_datum_from_string(struct ovsdb_datum *datum,
         }
 
         /* Add to datum. */
-        error = parse_key_value(&p, type, &key, &value, symtab);
+        error = parse_key_value(&p, type, &key, &value,
+                                symtab, &range_end_key);
         if (error) {
             goto error;
         }
-        ovsdb_datum_add_unsafe(datum, &key, &value, type);
-        free_key_value(type, &key, &value);
+        ovsdb_datum_add_unsafe(datum, &key, &value, type, range_end_key);
+        free_key_value_range(type, &key, &value, &range_end_key);
 
         /* Skip optional white space and comma. */
         p = skip_spaces(p);
@@ -1760,10 +1831,15 @@ ovsdb_datum_remove_unsafe(struct ovsdb_datum *datum, size_t idx,
 }
 
 /* Adds the element with the given 'key' and 'value' to 'datum', which must
- * have the specified 'type'.
+ * have the specified 'type'. Optionally if 'range_end_atom' is not
+ * a null pointer, adds a set of integers to 'datum' from inclusive
+ * range ['key', 'range_end_atom'].
  *
  * This function always allocates memory, so it is not an efficient way to add
  * a number of elements to a datum.
+ *
+ * When adding a range of integers, this function allocates the memory once
+ * for the whole range.
  *
  * This function does not maintain ovsdb_datum invariants.  Use
  * ovsdb_datum_sort() to check and restore these invariants.  (But a datum with
@@ -1772,15 +1848,24 @@ void
 ovsdb_datum_add_unsafe(struct ovsdb_datum *datum,
                        const union ovsdb_atom *key,
                        const union ovsdb_atom *value,
-                       const struct ovsdb_type *type)
+                       const struct ovsdb_type *type,
+                       const union ovsdb_atom *range_end_atom)
 {
-    size_t idx = datum->n++;
+    size_t idx = datum->n;
+    datum->n += range_end_atom ?
+                (range_end_atom->integer - key->integer + 1) : 1;
     datum->keys = xrealloc(datum->keys, datum->n * sizeof *datum->keys);
-    ovsdb_atom_clone(&datum->keys[idx], key, type->key.type);
-    if (type->value.type != OVSDB_TYPE_VOID) {
-        datum->values = xrealloc(datum->values,
-                                 datum->n * sizeof *datum->values);
-        ovsdb_atom_clone(&datum->values[idx], value, type->value.type);
+    if (range_end_atom && key->integer <= range_end_atom->integer) {
+        for (int64_t i = key->integer; i <= range_end_atom->integer; i++) {
+            datum->keys[idx++].integer = i;
+        }
+    } else {
+        ovsdb_atom_clone(&datum->keys[idx], key, type->key.type);
+        if (type->value.type != OVSDB_TYPE_VOID) {
+            datum->values = xrealloc(datum->values,
+                                     datum->n * sizeof *datum->values);
+            ovsdb_atom_clone(&datum->values[idx], value, type->value.type);
+        }
     }
 }
 
@@ -1937,29 +2022,31 @@ ovsdb_datum_diff(struct ovsdb_datum *diff,
                                         type->key.type);
         if (c < 0) {
             ovsdb_datum_add_unsafe(diff, &old->keys[oi], &old->values[oi],
-                                   type);
+                                   type, NULL);
             oi++;
         } else if (c > 0) {
             ovsdb_datum_add_unsafe(diff, &new->keys[ni], &new->values[ni],
-                                   type);
+                                   type, NULL);
             ni++;
         } else {
             if (type->value.type != OVSDB_TYPE_VOID &&
                 ovsdb_atom_compare_3way(&old->values[oi], &new->values[ni],
                                         type->value.type)) {
                 ovsdb_datum_add_unsafe(diff, &new->keys[ni], &new->values[ni],
-                                       type);
+                                       type, NULL);
             }
             oi++; ni++;
         }
     }
 
     for (; oi < old->n; oi++) {
-        ovsdb_datum_add_unsafe(diff, &old->keys[oi], &old->values[oi], type);
+        ovsdb_datum_add_unsafe(diff, &old->keys[oi], &old->values[oi],
+                               type, NULL);
     }
 
     for (; ni < new->n; ni++) {
-        ovsdb_datum_add_unsafe(diff, &new->keys[ni], &new->values[ni], type);
+        ovsdb_datum_add_unsafe(diff, &new->keys[ni], &new->values[ni],
+                               type, NULL);
     }
 }
 
@@ -2050,4 +2137,17 @@ bool
 ovsdb_token_is_delim(unsigned char c)
 {
     return strchr(":=, []{}!<>", c) != NULL;
+}
+
+struct ovsdb_error *
+ovsdb_atom_range_check_size(int64_t range_start, int64_t range_end)
+{
+    if ((uint64_t) range_end - (uint64_t) range_start
+        >= MAX_OVSDB_ATOM_RANGE_SIZE) {
+        return ovsdb_error("constraint violation",
+                           "Range \"%"PRId64"-%"PRId64"\" is too big. "
+                           "Maximum allowed size is %d.",
+                           range_start, range_end, MAX_OVSDB_ATOM_RANGE_SIZE);
+    }
+    return NULL;
 }

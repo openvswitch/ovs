@@ -554,17 +554,29 @@ do_parse_atom_strings(struct ovs_cmdl_context *ctx)
     json_destroy(json);
 
     for (i = 2; i < ctx->argc; i++) {
-        union ovsdb_atom atom;
+        union ovsdb_atom atom, *range_end_atom = NULL;
         struct ds out;
 
-        die_if_error(ovsdb_atom_from_string(&atom, &base, ctx->argv[i], NULL));
+        die_if_error(ovsdb_atom_from_string(&atom, &range_end_atom, &base,
+                                            ctx->argv[i], NULL));
 
         ds_init(&out);
         ovsdb_atom_to_string(&atom, base.type, &out);
+        if (range_end_atom) {
+            struct ds range_end_ds;
+            ds_init(&range_end_ds);
+            ovsdb_atom_to_string(range_end_atom, base.type, &range_end_ds);
+            ds_put_char(&out, '-');
+            ds_put_cstr(&out, ds_cstr(&range_end_ds));;
+            ds_destroy(&range_end_ds);
+        }
         puts(ds_cstr(&out));
         ds_destroy(&out);
 
         ovsdb_atom_destroy(&atom, base.type);
+        if (range_end_atom) {
+            ovsdb_atom_destroy(range_end_atom, base.type);
+        }
     }
     ovsdb_base_type_destroy(&base);
 }
