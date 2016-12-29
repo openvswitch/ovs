@@ -1608,17 +1608,17 @@ OvsHandleFwdRequest(POVS_IP_HELPER_REQUEST request)
 
     status = OvsGetRoute(&dst, &ipRoute, &src, &instance, &fwdInfo.vport, request->fwdReq.tunnelKey.src);
     if (request->fwdReq.tunnelKey.src && request->fwdReq.tunnelKey.src != src.Ipv4.sin_addr.s_addr) {
-        UINT32 ipAddr = dst.Ipv4.sin_addr.s_addr;
+        UINT32 tempAddr = dst.Ipv4.sin_addr.s_addr;
         OVS_LOG_INFO("Fail to get route to %d.%d.%d.%d, status: %x",
-            ipAddr & 0xff, (ipAddr >> 8) & 0xff,
-            (ipAddr >> 16) & 0xff, (ipAddr >> 24) & 0xff, status);
+                     tempAddr & 0xff, (tempAddr >> 8) & 0xff,
+                     (tempAddr >> 16) & 0xff, (tempAddr >> 24) & 0xff, status);
         goto fwd_handle_nbl;
     }
     if (status != STATUS_SUCCESS || instance == NULL) {
-        UINT32 ipAddr = dst.Ipv4.sin_addr.s_addr;
+        UINT32 tempAddr = dst.Ipv4.sin_addr.s_addr;
         OVS_LOG_INFO("Fail to get route to %d.%d.%d.%d, status: %x",
-                     ipAddr & 0xff, (ipAddr >> 8) & 0xff,
-                     (ipAddr >> 16) & 0xff, (ipAddr >> 24) & 0xff, status);
+                     tempAddr & 0xff, (tempAddr >> 8) & 0xff,
+                     (tempAddr >> 16) & 0xff, (tempAddr >> 24) & 0xff, status);
         goto fwd_handle_nbl;
     }
 
@@ -1865,17 +1865,18 @@ OvsStartIpHelper(PVOID data)
                 break;
             case OVS_IP_HELPER_INTERNAL_ADAPTER_DOWN:
             {
-                PLIST_ENTRY head, link, next;
+                PLIST_ENTRY head, current, next;
                 UINT32 portNo = req->instanceReq.portNo;
                 GUID netCfgInstanceId = req->instanceReq.netCfgInstanceId;
 
                 ExAcquireResourceExclusiveLite(&ovsInstanceListLock, TRUE);
                 head = &ovsInstanceList;
-                LIST_FORALL_SAFE(head, link, next) {
+                LIST_FORALL_SAFE(head, current, next) {
                     POVS_IPHELPER_INSTANCE instance = NULL;
                     LOCK_STATE_EX lockState;
 
-                    instance = CONTAINING_RECORD(link, OVS_IPHELPER_INSTANCE, link);
+                    instance = CONTAINING_RECORD(current, OVS_IPHELPER_INSTANCE,
+                                                 link);
 
                     ExAcquireResourceExclusiveLite(&instance->lock, TRUE);
                     if (instance->portNo == portNo &&
