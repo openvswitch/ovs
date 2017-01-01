@@ -5540,8 +5540,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     /* Tunnel metadata in udpif format must be normalized before translation. */
     if (flow->tunnel.flags & FLOW_TNL_F_UDPIF) {
-        const struct tun_table *tun_tab
-            = ofproto_get_tun_tab(&xin->ofproto->up);
+        const struct tun_table *tun_tab = ofproto_get_tun_tab(
+            &ctx.xbridge->ofproto->up);
         int err;
 
         err = tun_metadata_from_geneve_udpif(tun_tab, &xin->upcall_flow->tunnel,
@@ -5556,7 +5556,8 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         /* If the original flow did not come in on a tunnel, then it won't have
          * FLOW_TNL_F_UDPIF set. However, we still need to have a metadata
          * table in case we generate tunnel actions. */
-        flow->tunnel.metadata.tab = ofproto_get_tun_tab(&xin->ofproto->up);
+        flow->tunnel.metadata.tab = ofproto_get_tun_tab(
+            &ctx.xbridge->ofproto->up);
     }
     ctx.wc->masks.tunnel.metadata.tab = flow->tunnel.metadata.tab;
 
