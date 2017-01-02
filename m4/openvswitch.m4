@@ -400,7 +400,7 @@ else:
    AM_CONDITIONAL([HAVE_PYTHON3], [test "$HAVE_PYTHON3" = yes])])
 
 
-dnl Checks for dot.
+dnl Checks for flake8.
 AC_DEFUN([OVS_CHECK_FLAKE8],
   [AC_CACHE_CHECK(
     [for flake8],
@@ -411,6 +411,18 @@ AC_DEFUN([OVS_CHECK_FLAKE8],
        ovs_cv_flake8=no
      fi])
    AM_CONDITIONAL([HAVE_FLAKE8], [test "$ovs_cv_flake8" = yes])])
+
+dnl Checks for sphinx.
+AC_DEFUN([OVS_CHECK_SPHINX],
+  [AC_CACHE_CHECK(
+    [for sphinx],
+    [ovs_cv_sphinx],
+    [if sphinx-build --version >/dev/null 2>&1; then
+       ovs_cv_sphinx=yes
+     else
+       ovs_cv_sphinx=no
+     fi])
+   AM_CONDITIONAL([HAVE_SPHINX], [test "$ovs_cv_sphinx" = yes])])
 
 dnl Checks for dot.
 AC_DEFUN([OVS_CHECK_DOT],

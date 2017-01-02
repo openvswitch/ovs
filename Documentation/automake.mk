@@ -101,18 +101,21 @@ ALLSPHINXOPTS = -W -n -d $(SPHINXBUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHIN
 sphinx_verbose = $(sphinx_verbose_@AM_V@)
 sphinx_verbose_ = $(sphinx_verbose_@AM_DEFAULT_V@)
 sphinx_verbose_0 = -q
+
+if HAVE_SPHINX
 htmldocs:
 	$(AM_V_GEN)$(SPHINXBUILD) $(sphinx_verbose) -b html $(ALLSPHINXOPTS) $(SPHINXBUILDDIR)/html
 ALL_LOCAL += htmldocs
-.PHONY: htmldocs
 
 check-docs:
 	$(SPHINXBUILD) -b linkcheck $(ALLSPHINXOPTS) $(SPHINXBUILDDIR)/linkcheck
-.PHONY: check-docs
 
 clean-docs:
 	rm -rf $(SPHINXBUILDDIR)/doctrees
 	rm -rf $(SPHINXBUILDDIR)/html
 	rm -rf $(SPHINXBUILDDIR)/linkcheck
 CLEAN_LOCAL += clean-docs
+endif
+.PHONY: htmldocs
+.PHONY: check-docs
 .PHONY: clean-docs
