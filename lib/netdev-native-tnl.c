@@ -85,9 +85,11 @@ netdev_tnl_ip_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
 
         ovs_be32 ip_src, ip_dst;
 
-        if (csum(ip, IP_IHL(ip->ip_ihl_ver) * 4)) {
-            VLOG_WARN_RL(&err_rl, "ip packet has invalid checksum");
-            return NULL;
+        if (OVS_UNLIKELY(!dp_packet_ip_checksum_valid(packet))) {
+            if (csum(ip, IP_IHL(ip->ip_ihl_ver) * 4)) {
+                VLOG_WARN_RL(&err_rl, "ip packet has invalid checksum");
+                return NULL;
+            }
         }
 
         if (ntohs(ip->ip_tot_len) > l3_size) {
@@ -179,18 +181,21 @@ udp_extract_tnl_md(struct dp_packet *packet, struct flow_tnl *tnl,
     }
 
     if (udp->udp_csum) {
-        uint32_t csum;
-        if (netdev_tnl_is_header_ipv6(dp_packet_data(packet))) {
-            csum = packet_csum_pseudoheader6(dp_packet_l3(packet));
-        } else {
-            csum = packet_csum_pseudoheader(dp_packet_l3(packet));
-        }
+        if (OVS_UNLIKELY(!dp_packet_l4_checksum_valid(packet))) {
+            uint32_t csum;
+            if (netdev_tnl_is_header_ipv6(dp_packet_data(packet))) {
+                csum = packet_csum_pseudoheader6(dp_packet_l3(packet));
+            } else {
+                csum = packet_csum_pseudoheader(dp_packet_l3(packet));
+            }
 
-        csum = csum_continue(csum, udp, dp_packet_size(packet) -
-                             ((const unsigned char *)udp -
-                              (const unsigned char *)dp_packet_l2(packet)));
-        if (csum_finish(csum)) {
-            return NULL;
+            csum = csum_continue(csum, udp, dp_packet_size(packet) -
+                                 ((const unsigned char *)udp -
+                                  (const unsigned char *)dp_packet_l2(packet)
+                                 ));
+            if (csum_finish(csum)) {
+                return NULL;
+            }
         }
         tnl->flags |= FLOW_TNL_F_CSUM;
     }

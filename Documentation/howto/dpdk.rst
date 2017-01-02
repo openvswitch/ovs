@@ -273,6 +273,31 @@ largest frame size supported by Fortville NIC using the DPDK i40e driver, but
 larger frames and other DPDK NIC drivers may be supported. These cases are
 common for use cases involving East-West traffic only.
 
+Rx Checksum Offload
+-------------------
+
+By default, DPDK physical ports are enabled with Rx checksum offload. Rx
+checksum offload can be configured on a DPDK physical port either when adding
+or at run time.
+
+To disable Rx checksum offload when adding a DPDK port dpdk0::
+
+    $ ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk \
+      options:rx-checksum-offload=false
+
+Similarly to disable the Rx checksum offloading on a existing DPDK port dpdk0::
+
+    $ ovs-vsctl set Interface dpdk0 type=dpdk options:rx-checksum-offload=false
+
+Rx checksum offload can offer performance improvement only for tunneling
+traffic in OVS-DPDK because the checksum validation of tunnel packets is
+offloaded to the NIC. Also enabling Rx checksum may slightly reduce the
+performance of non-tunnel traffic, specifically for smaller size packet.
+DPDK vectorization is disabled when checksum offloading is configured on DPDK
+physical ports which in turn effects the non-tunnel traffic performance.
+So it is advised to turn off the Rx checksum offload for non-tunnel traffic use
+cases to achieve the best performance.
+
 .. _dpdk-ovs-in-guest:
 
 OVS with DPDK Inside VMs

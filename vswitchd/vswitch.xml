@@ -3186,6 +3186,20 @@
       </column>
     </group>
 
+    <group title="Rx Checksum Offload Configuration">
+      <p>
+        The checksum validation on the incoming packets are performed on NIC
+        using Rx checksum offload feature. Implemented only for <code>dpdk
+        </code>physical interfaces.
+      </p>
+
+      <column name="options" key="rx-checksum-offload"
+              type='{"type": "boolean"}'>
+        Set to <code>false</code> to disble Rx checksum offloading on <code>
+        dpdk</code>physical ports. By default, Rx checksum offload is enabled.
+      </column>
+    </group>
+
     <group title="Common Columns">
       The overall purpose of these columns is described under <code>Common
       Columns</code> at the beginning of this document.

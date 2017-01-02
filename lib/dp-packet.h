@@ -598,6 +598,37 @@ dp_packet_rss_invalidate(struct dp_packet *p)
 #endif
 }
 
+static inline bool
+dp_packet_ip_checksum_valid(struct dp_packet *p)
+{
+#ifdef DPDK_NETDEV
+    return p->mbuf.ol_flags & PKT_RX_IP_CKSUM_GOOD;
+#else
+    return 0 && p;
+#endif
+}
+
+static inline bool
+dp_packet_l4_checksum_valid(struct dp_packet *p)
+{
+#ifdef DPDK_NETDEV
+    return p->mbuf.ol_flags & PKT_RX_L4_CKSUM_GOOD;
+#else
+    return 0 && p;
+#endif
+}
+
+#ifdef DPDK_NETDEV
+static inline void
+reset_dp_packet_checksum_ol_flags(struct dp_packet *p)
+{
+    p->mbuf.ol_flags &= ~(PKT_RX_L4_CKSUM_GOOD | PKT_RX_L4_CKSUM_BAD |
+                          PKT_RX_IP_CKSUM_GOOD | PKT_RX_IP_CKSUM_BAD);
+}
+#else
+#define reset_dp_packet_checksum_ol_flags(arg)
+#endif
+
 enum { NETDEV_MAX_BURST = 32 }; /* Maximum number packets in a batch. */
 
 struct dp_packet_batch {

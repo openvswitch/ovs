@@ -741,6 +741,10 @@ netdev_pop_header(struct netdev *netdev, struct dp_packet_batch *batch)
     for (i = 0; i < batch->count; i++) {
         buffers[i] = netdev->netdev_class->pop_header(buffers[i]);
         if (buffers[i]) {
+            /* Reset the checksum offload flags if present, to avoid wrong
+             * interpretation in the further packet processing when
+             * recirculated.*/
+            reset_dp_packet_checksum_ol_flags(buffers[i]);
             buffers[n_cnt++] = buffers[i];
         }
     }
