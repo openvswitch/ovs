@@ -102,7 +102,6 @@ sphinx_verbose = $(sphinx_verbose_@AM_V@)
 sphinx_verbose_ = $(sphinx_verbose_@AM_DEFAULT_V@)
 sphinx_verbose_0 = -q
 htmldocs:
-	rm -rf $(SPHINXBUILDDIR)/*
 	$(AM_V_GEN)$(SPHINXBUILD) $(sphinx_verbose) -b html $(ALLSPHINXOPTS) $(SPHINXBUILDDIR)/html
 ALL_LOCAL += htmldocs
 .PHONY: htmldocs
@@ -110,3 +109,10 @@ ALL_LOCAL += htmldocs
 check-docs:
 	$(SPHINXBUILD) -b linkcheck $(ALLSPHINXOPTS) $(SPHINXBUILDDIR)/linkcheck
 .PHONY: check-docs
+
+clean-docs:
+	rm -rf $(SPHINXBUILDDIR)/doctrees
+	rm -rf $(SPHINXBUILDDIR)/html
+	rm -rf $(SPHINXBUILDDIR)/linkcheck
+CLEAN_LOCAL += clean-docs
+.PHONY: clean-docs
