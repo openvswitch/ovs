@@ -96,9 +96,17 @@ SPHINXBUILDDIR = $(builddir)/Documentation/_build
 # Internal variables.
 PAPEROPT_a4 = -D latex_paper_size=a4
 PAPEROPT_letter = -D latex_paper_size=letter
-ALLSPHINXOPTS = -W -d $(SPHINXBUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(SPHINXSRCDIR)
+ALLSPHINXOPTS = -W -n -d $(SPHINXBUILDDIR)/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) $(SPHINXSRCDIR)
 
-.PHONY: htmldocs
+sphinx_verbose = $(sphinx_verbose_@AM_V@)
+sphinx_verbose_ = $(sphinx_verbose_@AM_DEFAULT_V@)
+sphinx_verbose_0 = -q
 htmldocs:
 	rm -rf $(SPHINXBUILDDIR)/*
-	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(SPHINXBUILDDIR)/html
+	$(AM_V_GEN)$(SPHINXBUILD) $(sphinx_verbose) -b html $(ALLSPHINXOPTS) $(SPHINXBUILDDIR)/html
+ALL_LOCAL += htmldocs
+.PHONY: htmldocs
+
+check-docs:
+	$(SPHINXBUILD) -b linkcheck $(ALLSPHINXOPTS) $(SPHINXBUILDDIR)/linkcheck
+.PHONY: check-docs

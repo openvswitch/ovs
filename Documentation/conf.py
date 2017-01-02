@@ -119,6 +119,8 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # If true, `todo` and `todoList` produce output, else they produce nothing.
 todo_include_todos = False
 
+# If true, check the validity of #anchors in links.
+linkcheck_anchors = False
 
 # -- Options for HTML output ----------------------------------------------
 

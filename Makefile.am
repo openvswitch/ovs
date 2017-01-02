@@ -177,10 +177,10 @@ SUFFIXES += .xml
 		sbindir='$(sbindir)'
 	$(AM_v_at)mv $@.tmp $@
 
-.PHONY: clean-pycov
 clean-pycov:
 	cd $(srcdir) && rm -f $(PYCOV_CLEAN_FILES)
 CLEAN_LOCAL += clean-pycov
+.PHONY: clean-pycov
 
 # If we're checked out from a Git repository, make sure that every
 # file that is in Git is distributed.
