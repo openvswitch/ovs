@@ -243,7 +243,14 @@ class Vlog(object):
                                      Vlog._unixctl_vlog_reopen, None)
         ovs.unixctl.command_register("vlog/close", "", 0, 0,
                                      Vlog._unixctl_vlog_close, None)
-        ovs.unixctl.command_register("vlog/set", "spec", 1, sys.maxsize,
+        try:
+            # Windows limitation on Python 2, sys.maxsize is a long number
+            # on 64 bits environments, while sys.maxint is the maximum int
+            # number. Python 3 works as expected.
+            maxsize_int = sys.maxint
+        except AttributeError:
+            maxsize_int = sys.maxsize
+        ovs.unixctl.command_register("vlog/set", "spec", 1, maxsize_int,
                                      Vlog._unixctl_vlog_set, None)
         ovs.unixctl.command_register("vlog/list", "", 0, 0,
                                      Vlog._unixctl_vlog_list, None)
@@ -384,6 +391,16 @@ class Vlog(object):
             logger.addHandler(Vlog.__file_handler)
 
     @staticmethod
+    def close_log_file():
+        """Closes the current log file. (This is useful on Windows, to ensure
+        that a reference to the file is not kept by the daemon in case of
+        detach.)"""
+        if Vlog.__log_file:
+            logger = logging.getLogger("file")
+            logger.removeHandler(Vlog.__file_handler)
+            Vlog.__file_handler.close()
+
+    @staticmethod
     def _unixctl_vlog_reopen(conn, unused_argv, unused_aux):
         if Vlog.__log_file:
             Vlog.reopen_log_file()
@@ -394,8 +411,11 @@ class Vlog(object):
     @staticmethod
     def _unixctl_vlog_close(conn, unused_argv, unused_aux):
         if Vlog.__log_file:
-            logger = logging.getLogger("file")
-            logger.removeHandler(Vlog.__file_handler)
+            if sys.platform != 'win32':
+                logger = logging.getLogger("file")
+                logger.removeHandler(Vlog.__file_handler)
+            else:
+                Vlog.close_log_file()
         conn.reply(None)
 
     @staticmethod

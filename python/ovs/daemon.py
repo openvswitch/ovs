@@ -13,9 +13,7 @@
 # limitations under the License.
 
 import errno
-import fcntl
 import os
-import resource
 import signal
 import sys
 import time
@@ -28,10 +26,23 @@ import ovs.timeval
 import ovs.util
 import ovs.vlog
 
+if sys.platform != 'win32':
+    import fcntl
+    import resource
+else:
+    import ovs.winutils as winutils
+    import ovs.fcntl_win as fcntl
+    import pywintypes
+    import subprocess
+    import win32process
+
 vlog = ovs.vlog.Vlog("daemon")
 
 # --detach: Should we run in the background?
 _detach = False
+
+# Running as the child process - Windows only.
+_detached = False
 
 # --pidfile: Name of pidfile (null if none).
 _pidfile = None
@@ -98,6 +109,16 @@ def set_detach():
     _detach = True
 
 
+def set_detached(wp):
+    """Sets up a following call to daemonize() to fork a supervisory
+    process to monitor the daemon and restart it if it dies due to
+    an error signal. Used on Windows only."""
+    global _detached
+    global _daemonize_fd
+    _detached = True
+    _daemonize_fd = int(wp)
+
+
 def get_detach():
     """Will daemonize() really detach?"""
     return _detach
@@ -123,8 +144,12 @@ def _make_pidfile():
     pid = os.getpid()
 
     # Create a temporary pidfile.
-    tmpfile = "%s.tmp%d" % (_pidfile, pid)
-    ovs.fatal_signal.add_file_to_unlink(tmpfile)
+    if sys.platform != 'win32':
+        tmpfile = "%s.tmp%d" % (_pidfile, pid)
+        ovs.fatal_signal.add_file_to_unlink(tmpfile)
+    else:
+        tmpfile = "%s" % _pidfile
+
     try:
         # This is global to keep Python from garbage-collecting and
         # therefore closing our file after this function exits.  That would
@@ -147,40 +172,48 @@ def _make_pidfile():
         _fatal("%s: write failed: %s" % (tmpfile, e.strerror))
 
     try:
-        fcntl.lockf(file_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        if sys.platform != 'win32':
+            fcntl.lockf(file_handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        else:
+            fcntl.lockf(file_handle, fcntl.LOCK_SH | fcntl.LOCK_NB)
     except IOError as e:
         _fatal("%s: fcntl failed: %s" % (tmpfile, e.strerror))
 
-    # Rename or link it to the correct name.
-    if _overwrite_pidfile:
-        try:
-            os.rename(tmpfile, _pidfile)
-        except OSError as e:
-            _fatal("failed to rename \"%s\" to \"%s\" (%s)"
-                   % (tmpfile, _pidfile, e.strerror))
+    if sys.platform == 'win32':
+        # Ensure that the pidfile will gets closed and deleted on exit.
+        ovs.fatal_signal.add_file_to_close_and_unlink(_pidfile, file_handle)
     else:
-        while True:
+        # Rename or link it to the correct name.
+        if _overwrite_pidfile:
             try:
-                os.link(tmpfile, _pidfile)
-                error = 0
+                os.rename(tmpfile, _pidfile)
             except OSError as e:
-                error = e.errno
-            if error == errno.EEXIST:
-                _check_already_running()
-            elif error != errno.EINTR:
-                break
-        if error:
-            _fatal("failed to link \"%s\" as \"%s\" (%s)"
-                   % (tmpfile, _pidfile, os.strerror(error)))
+                _fatal("failed to rename \"%s\" to \"%s\" (%s)"
+                       % (tmpfile, _pidfile, e.strerror))
+        else:
+            while True:
+                try:
+                    os.link(tmpfile, _pidfile)
+                    error = 0
+                except OSError as e:
+                    error = e.errno
+                if error == errno.EEXIST:
+                    _check_already_running()
+                elif error != errno.EINTR:
+                    break
+            if error:
+                _fatal("failed to link \"%s\" as \"%s\" (%s)"
+                       % (tmpfile, _pidfile, os.strerror(error)))
 
-    # Ensure that the pidfile will get deleted on exit.
-    ovs.fatal_signal.add_file_to_unlink(_pidfile)
+        # Ensure that the pidfile will get deleted on exit.
+        ovs.fatal_signal.add_file_to_unlink(_pidfile)
 
-    # Delete the temporary pidfile if it still exists.
-    if not _overwrite_pidfile:
-        error = ovs.fatal_signal.unlink_file_now(tmpfile)
-        if error:
-            _fatal("%s: unlink failed (%s)" % (tmpfile, os.strerror(error)))
+        # Delete the temporary pidfile if it still exists.
+        if not _overwrite_pidfile:
+            error = ovs.fatal_signal.unlink_file_now(tmpfile)
+            if error:
+                _fatal("%s: unlink failed (%s)" % (
+                    tmpfile, os.strerror(error)))
 
     global _pidfile_dev
     global _pidfile_ino
@@ -206,6 +239,9 @@ def _waitpid(pid, options):
 
 
 def _fork_and_wait_for_startup():
+    if sys.platform == 'win32':
+        return _fork_and_wait_for_startup_windows()
+
     try:
         rfd, wfd = os.pipe()
     except OSError as e:
@@ -259,7 +295,65 @@ def _fork_and_wait_for_startup():
     return pid
 
 
+def _fork_and_wait_for_startup_windows():
+    global _detached
+    if _detached:
+        # Running in child process
+        ovs.timeval.postfork()
+        return 0
+
+    """ close the log file, on Windows cannot be moved while the parent has
+    a reference on it."""
+    vlog.close_log_file()
+
+    try:
+        (rfd, wfd) = winutils.windows_create_pipe()
+    except pywintypes.error as e:
+        sys.stderr.write("pipe failed to create: %s\n" % e.strerror)
+        sys.exit(1)
+
+    try:
+        creationFlags = win32process.DETACHED_PROCESS
+        args = ("%s %s --pipe-handle=%ld" % (
+            sys.executable, " ".join(sys.argv), int(wfd)))
+        proc = subprocess.Popen(
+            args=args,
+            close_fds=False,
+            shell=False,
+            creationflags=creationFlags,
+            stdout=sys.stdout,
+            stderr=sys.stderr)
+        pid = proc.pid
+    except OSError as e:
+        sys.stderr.write("CreateProcess failed (%s)\n" % os.strerror(e.errno))
+        sys.exit(1)
+
+    # Running in parent process.
+    winutils.win32file.CloseHandle(wfd)
+    ovs.fatal_signal.fork()
+
+    error, s = winutils.windows_read_pipe(rfd, 1)
+    if error:
+        s = ""
+
+    if len(s) != 1:
+        retval = proc.wait()
+        if retval == 0:
+            sys.stderr.write("fork child failed to signal startup\n")
+        else:
+            # Child exited with an error. Convey the same error to
+            # our parent process as a courtesy.
+            sys.exit(retval)
+    winutils.win32file.CloseHandle(rfd)
+
+    return pid
+
+
 def _fork_notify_startup(fd):
+    if sys.platform == 'win32':
+        _fork_notify_startup_windows(fd)
+        return
+
     if fd is not None:
         error, bytes_written = ovs.socket_util.write_fully(fd, "0")
         if error:
@@ -268,8 +362,30 @@ def _fork_notify_startup(fd):
         os.close(fd)
 
 
+def _fork_notify_startup_windows(fd):
+    if fd is not None:
+        try:
+            # Python 2 requires a string as second parameter, while
+            # Python 3 requires a bytes-like object. b"0" fits for both
+            # python versions.
+            winutils.win32file.WriteFile(fd, b"0", None)
+        except winutils.pywintypes.error as e:
+            sys.stderr.write("could not write to pipe: %s\n" %
+                             os.strerror(e.winerror))
+            sys.exit(1)
+
+
 def _should_restart(status):
     global RESTART_EXIT_CODE
+
+    if sys.platform == 'win32':
+        # The exit status is encoded in the high byte of the
+        # 16-bit number 'status'.
+        exit_status = status >> 8
+
+        if exit_status == RESTART_EXIT_CODE:
+            return True
+        return False
 
     if os.WIFEXITED(status) and os.WEXITSTATUS(status) == RESTART_EXIT_CODE:
         return True
@@ -296,7 +412,7 @@ def _monitor_daemon(daemon_pid):
                           % (daemon_pid, ovs.process.status_msg(status)))
 
             if _should_restart(status):
-                if os.WCOREDUMP(status):
+                if sys.platform != 'win32' and os.WCOREDUMP(status):
                     # Disable further core dumps to save disk space.
                     try:
                         resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
@@ -351,8 +467,9 @@ def daemonize_start():
             # Running in parent process.
             sys.exit(0)
 
-        # Running in daemon or monitor process.
-        os.setsid()
+        if sys.platform != 'win32':
+            # Running in daemon or monitor process.
+            os.setsid()
 
     if _monitor:
         saved_daemonize_fd = _daemonize_fd
@@ -360,7 +477,8 @@ def daemonize_start():
         if daemon_pid > 0:
             # Running in monitor process.
             _fork_notify_startup(saved_daemonize_fd)
-            _close_standard_fds()
+            if sys.platform != 'win32':
+                _close_standard_fds()
             _monitor_daemon(daemon_pid)
         # Running in daemon process
 
@@ -502,6 +620,10 @@ def add_args(parser):
             help="Create pidfile (default %s)." % pidfile)
     group.add_argument("--overwrite-pidfile", action="store_true",
             help="With --pidfile, start even if already running.")
+    if sys.platform == 'win32':
+        group.add_argument("--pipe-handle",
+                           help=("With --pidfile, start even if "
+                                 "already running."))
 
 
 def handle_args(args):
@@ -509,6 +631,10 @@ def handle_args(args):
     containing values parsed by the parse_args() method of ArgumentParser.  The
     parent ArgumentParser should have been prepared by add_args() before
     calling parse_args()."""
+
+    if sys.platform == 'win32':
+        if args.pipe_handle:
+            set_detached(args.pipe_handle)
 
     if args.detach:
         set_detach()
