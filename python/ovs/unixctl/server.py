@@ -148,6 +148,10 @@ class UnixctlServer(object):
     def run(self):
         for _ in range(10):
             error, stream = self._listener.accept()
+            if sys.platform == "win32" and error == errno.WSAEWOULDBLOCK:
+                # WSAEWOULDBLOCK would be the equivalent on Windows
+                # for EAGAIN on Unix.
+                error = errno.EAGAIN
             if not error:
                 rpc = ovs.jsonrpc.Connection(stream)
                 self._conns.append(UnixctlConnection(rpc))

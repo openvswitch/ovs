@@ -18,6 +18,10 @@ import ovs.vlog
 import select
 import socket
 import os
+import sys
+
+if sys.platform == "win32":
+    import ovs.winutils as winutils
 
 try:
     from OpenSSL import SSL
@@ -62,7 +66,9 @@ class _SelectSelect(object):
         if SSL and isinstance(fd, SSL.Connection):
             fd = fd.fileno()
 
-        assert isinstance(fd, int)
+        if sys.platform != 'win32':
+            # Skip this on Windows, it also register events
+            assert isinstance(fd, int)
         if events & POLLIN:
             self.rlist.append(fd)
             events &= ~POLLIN
@@ -73,28 +79,58 @@ class _SelectSelect(object):
             self.xlist.append(fd)
 
     def poll(self, timeout):
-        if timeout == -1:
-            # epoll uses -1 for infinite timeout, select uses None.
-            timeout = None
-        else:
-            timeout = float(timeout) / 1000
         # XXX workaround a bug in eventlet
         # see https://github.com/eventlet/eventlet/pull/25
         if timeout == 0 and _using_eventlet_green_select():
             timeout = 0.1
+        if sys.platform == 'win32':
+            events = self.rlist + self.wlist + self.xlist
+            if not events:
+                return []
+            if len(events) > winutils.win32event.MAXIMUM_WAIT_OBJECTS:
+                raise WindowsError("Cannot handle more than maximum wait"
+                                   "objects\n")
 
-        rlist, wlist, xlist = select.select(self.rlist, self.wlist, self.xlist,
-                                            timeout)
-        events_dict = {}
-        for fd in rlist:
-            events_dict[fd] = events_dict.get(fd, 0) | POLLIN
-        for fd in wlist:
-            events_dict[fd] = events_dict.get(fd, 0) | POLLOUT
-        for fd in xlist:
-            events_dict[fd] = events_dict.get(fd, 0) | (POLLERR |
-                                                        POLLHUP |
-                                                        POLLNVAL)
-        return list(events_dict.items())
+            # win32event.INFINITE timeout is -1
+            # timeout must be an int number, expressed in ms
+            if timeout == 0.1:
+                timeout = 100
+            else:
+                timeout = int(timeout)
+
+            # Wait until any of the events is set to signaled
+            try:
+                retval = winutils.win32event.WaitForMultipleObjects(
+                    events,
+                    False,  # Wait all
+                    timeout)
+            except winutils.pywintypes.error:
+                    return [(0, POLLERR)]
+
+            if retval == winutils.winerror.WAIT_TIMEOUT:
+                return []
+
+            return [(events[retval], 0)]
+        else:
+            if timeout == -1:
+                # epoll uses -1 for infinite timeout, select uses None.
+                timeout = None
+            else:
+                timeout = float(timeout) / 1000
+            rlist, wlist, xlist = select.select(self.rlist,
+                                                self.wlist,
+                                                self.xlist,
+                                                timeout)
+            events_dict = {}
+            for fd in rlist:
+                events_dict[fd] = events_dict.get(fd, 0) | POLLIN
+            for fd in wlist:
+                events_dict[fd] = events_dict.get(fd, 0) | POLLOUT
+            for fd in xlist:
+                events_dict[fd] = events_dict.get(fd, 0) | (POLLERR |
+                                                            POLLHUP |
+                                                            POLLNVAL)
+            return list(events_dict.items())
 
 
 SelectPoll = _SelectSelect

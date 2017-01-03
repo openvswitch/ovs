@@ -17,6 +17,7 @@ import os
 import os.path
 import random
 import socket
+import sys
 
 import six
 from six.moves import range
@@ -24,6 +25,10 @@ from six.moves import range
 import ovs.fatal_signal
 import ovs.poller
 import ovs.vlog
+
+if sys.platform == 'win32':
+    import ovs.winutils as winutils
+    import win32file
 
 vlog = ovs.vlog.Vlog("socket_util")
 
@@ -158,7 +163,17 @@ def make_unix_socket(style, nonblock, bind_path, connect_path, short=False):
 
 def check_connection_completion(sock):
     p = ovs.poller.SelectPoll()
-    p.register(sock, ovs.poller.POLLOUT)
+    if sys.platform == "win32":
+        event = winutils.get_new_event(None, False, True, None)
+        # Receive notification of readiness for writing, of completed
+        # connection or multipoint join operation, and of socket closure.
+        win32file.WSAEventSelect(sock, event,
+                                 win32file.FD_WRITE |
+                                 win32file.FD_CONNECT |
+                                 win32file.FD_CLOSE)
+        p.register(event, ovs.poller.POLLOUT)
+    else:
+        p.register(sock, ovs.poller.POLLOUT)
     pfds = p.poll(0)
     if len(pfds) == 1:
         revents = pfds[0][1]
@@ -228,7 +243,12 @@ def inet_open_active(style, target, default_port, dscp):
         try:
             sock.connect(address)
         except socket.error as e:
-            if get_exception_errno(e) != errno.EINPROGRESS:
+            error = get_exception_errno(e)
+            if sys.platform == 'win32' and error == errno.WSAEWOULDBLOCK:
+                # WSAEWOULDBLOCK would be the equivalent on Windows
+                # for EINPROGRESS on Unix.
+                error = errno.EINPROGRESS
+            if error != errno.EINPROGRESS:
                 raise
         return 0, sock
     except socket.error as e:
@@ -257,9 +277,12 @@ def get_null_fd():
     global null_fd
     if null_fd < 0:
         try:
-            null_fd = os.open("/dev/null", os.O_RDWR)
+            # os.devnull ensures compatibility with Windows, returns
+            # '/dev/null' for Unix and 'nul' for Windows
+            null_fd = os.open(os.devnull, os.O_RDWR)
         except OSError as e:
-            vlog.err("could not open /dev/null: %s" % os.strerror(e.errno))
+            vlog.err("could not open %s: %s" % (os.devnull,
+                                                os.strerror(e.errno)))
             return -e.errno
     return null_fd
 

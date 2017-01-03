@@ -53,11 +53,17 @@ def handle_rpc(rpc, msg):
 
 
 def do_listen(name):
-    error, pstream = ovs.stream.PassiveStream.open(name)
-    if error:
-        sys.stderr.write("could not listen on \"%s\": %s\n"
-                         % (name, os.strerror(error)))
-        sys.exit(1)
+    if sys.platform != 'win32' or (
+            ovs.daemon._detach and ovs.daemon._detached):
+        # On Windows the child is a new process created which should be the
+        # one that creates the PassiveStream. Without this check, the new
+        # child process will create a new PassiveStream overwriting the one
+        # that the parent process created.
+        error, pstream = ovs.stream.PassiveStream.open(name)
+        if error:
+            sys.stderr.write("could not listen on \"%s\": %s\n"
+                             % (name, os.strerror(error)))
+            sys.exit(1)
 
     ovs.daemon.daemonize()
 
