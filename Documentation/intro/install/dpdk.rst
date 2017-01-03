@@ -91,10 +91,6 @@ Install DPDK
        $ export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
        $ make install T=$DPDK_TARGET DESTDIR=install
 
-   If IVSHMEM support is required, use a different target::
-
-       $ export DPDK_TARGET=x86_64-ivshmem-linuxapp-gcc
-
 #. (Optional) Export the DPDK shared library location
 
    If DPDK was built as a shared library, export the path to this library for
@@ -226,7 +222,7 @@ listed below. Defaults will be provided for all values not explicitly set.
 ``vhost-sock-dir``
   Option to set the path to the vhost-user unix socket files.
 
-If allocating more than one GB hugepage (as for IVSHMEM), you can configure the
+If allocating more than one GB hugepage, you can configure the
 amount of memory used from any given NUMA nodes. For example, to use 1GB from
 NUMA node 0, run::
 
@@ -239,8 +235,6 @@ specifying ``pmd-cpu-mask``. Cores are numbered from 0, so to spawn two pmd
 threads and pin them to cores 1,2, run::
 
     $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0x6
-
-For details on using IVSHMEM with DPDK, refer to :doc:`/topics/dpdk/ivshmem`.
 
 Refer to ovs-vswitchd.conf.db(5) for additional information on configuration
 options.

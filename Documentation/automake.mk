@@ -29,7 +29,6 @@ EXTRA_DIST += \
 	Documentation/topics/design.rst \
 	Documentation/topics/dpdk/index.rst \
 	Documentation/topics/dpdk/vhost-user.rst \
-	Documentation/topics/dpdk/ivshmem.rst \
 	Documentation/topics/testing.rst \
 	Documentation/topics/high-availability.rst \
 	Documentation/topics/integration.rst \

@@ -72,8 +72,7 @@ Deeper Dive
   :doc:`topics/porting`
 
 - **DPDK** :doc:`howto/dpdk` |
-  :doc:`topics/dpdk/vhost-user` |
-  :doc:`topics/dpdk/ivshmem`
+  :doc:`topics/dpdk/vhost-user`
 
 - **Windows** :doc:`topics/windows`
 
