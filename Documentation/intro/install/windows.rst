@@ -60,6 +60,13 @@ The following explains the steps in some detail.
 
   Install the latest Python 2.x from python.org and verify that its path is
   part of Windows' PATH environment variable.
+  We require that you have Python six and pypiwin32 libraries installed.
+  The libraries can be installed via pip command:
+
+   .. code-block:: console
+
+      $ pip install six
+      $ pip install pypiwin32
 
 - Visual Studio
 
