@@ -39,6 +39,7 @@ Alexei Starovoitov              ast@plumgrid.com
 Alexey I. Froloff               raorn@raorn.name
 Alex Wang                       ee07b291@gmail.com
 Alfredo Finelli                 alf@computationes.de
+Alin Balutoiu                   abalutoiu@cloudbasesolutions.com
 Alin Serdean                    aserdean@cloudbasesolutions.com
 Ambika Arora                    ambika.arora@tcs.com
 Amit Bose                       bose@noironetworks.com
