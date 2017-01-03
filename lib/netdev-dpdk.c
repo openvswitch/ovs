@@ -2666,12 +2666,12 @@ static int
 dpdk_ring_create(const char dev_name[], unsigned int port_no,
                  unsigned int *eth_port_id)
 {
-    struct dpdk_ring *ivshmem;
+    struct dpdk_ring *ring_pair;
     char *ring_name;
     int err;
 
-    ivshmem = dpdk_rte_mzalloc(sizeof *ivshmem);
-    if (!ivshmem) {
+    ring_pair = dpdk_rte_mzalloc(sizeof *ring_pair);
+    if (!ring_pair) {
         return ENOMEM;
     }
 
@@ -2679,38 +2679,38 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
     ring_name = xasprintf("%s_tx", dev_name);
 
     /* Create single producer tx ring, netdev does explicit locking. */
-    ivshmem->cring_tx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0,
+    ring_pair->cring_tx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0,
                                         RING_F_SP_ENQ);
     free(ring_name);
-    if (ivshmem->cring_tx == NULL) {
-        rte_free(ivshmem);
+    if (ring_pair->cring_tx == NULL) {
+        rte_free(ring_pair);
         return ENOMEM;
     }
 
     ring_name = xasprintf("%s_rx", dev_name);
 
     /* Create single consumer rx ring, netdev does explicit locking. */
-    ivshmem->cring_rx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0,
+    ring_pair->cring_rx = rte_ring_create(ring_name, DPDK_RING_SIZE, SOCKET0,
                                         RING_F_SC_DEQ);
     free(ring_name);
-    if (ivshmem->cring_rx == NULL) {
-        rte_free(ivshmem);
+    if (ring_pair->cring_rx == NULL) {
+        rte_free(ring_pair);
         return ENOMEM;
     }
 
-    err = rte_eth_from_rings(dev_name, &ivshmem->cring_rx, 1,
-                             &ivshmem->cring_tx, 1, SOCKET0);
+    err = rte_eth_from_rings(dev_name, &ring_pair->cring_rx, 1,
+                             &ring_pair->cring_tx, 1, SOCKET0);
 
     if (err < 0) {
-        rte_free(ivshmem);
+        rte_free(ring_pair);
         return ENODEV;
     }
 
-    ivshmem->user_port_id = port_no;
-    ivshmem->eth_port_id = rte_eth_dev_count() - 1;
-    ovs_list_push_back(&dpdk_ring_list, &ivshmem->list_node);
+    ring_pair->user_port_id = port_no;
+    ring_pair->eth_port_id = rte_eth_dev_count() - 1;
+    ovs_list_push_back(&dpdk_ring_list, &ring_pair->list_node);
 
-    *eth_port_id = ivshmem->eth_port_id;
+    *eth_port_id = ring_pair->eth_port_id;
     return 0;
 }
 
@@ -2718,7 +2718,7 @@ static int
 dpdk_ring_open(const char dev_name[], unsigned int *eth_port_id)
     OVS_REQUIRES(dpdk_mutex)
 {
-    struct dpdk_ring *ivshmem;
+    struct dpdk_ring *ring_pair;
     unsigned int port_no;
     int err = 0;
 
@@ -2729,11 +2729,11 @@ dpdk_ring_open(const char dev_name[], unsigned int *eth_port_id)
     }
 
     /* Look through our list to find the device */
-    LIST_FOR_EACH (ivshmem, list_node, &dpdk_ring_list) {
-         if (ivshmem->user_port_id == port_no) {
+    LIST_FOR_EACH (ring_pair, list_node, &dpdk_ring_list) {
+         if (ring_pair->user_port_id == port_no) {
             VLOG_INFO("Found dpdk ring device %s:", dev_name);
             /* Really all that is needed */
-            *eth_port_id = ivshmem->eth_port_id;
+            *eth_port_id = ring_pair->eth_port_id;
             return 0;
          }
     }
