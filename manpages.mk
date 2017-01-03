@@ -42,6 +42,8 @@ ovsdb/ovsdb-client.1: \
 	lib/vlog-syn.man \
 	lib/vlog.man \
 	ovsdb/remote-active.man \
+	ovsdb/remote-active.man \
+	ovsdb/remote-passive.man \
 	ovsdb/remote-passive.man
 ovsdb/ovsdb-client.1.in:
 lib/common-syn.man:
@@ -58,6 +60,8 @@ lib/table.man:
 lib/vlog-syn.man:
 lib/vlog.man:
 ovsdb/remote-active.man:
+ovsdb/remote-active.man:
+ovsdb/remote-passive.man:
 ovsdb/remote-passive.man:
 
 ovsdb/ovsdb-server.1: \

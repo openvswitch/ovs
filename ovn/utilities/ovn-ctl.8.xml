@@ -38,17 +38,24 @@
     <p><code>-h</code> | <code>--help</code></p>
 
     <h1>File location options</h1>
-    <p><code>--db-sock==<var>SOCKET</var></code></p>
-    <p><code>--db-nb-file==<var>FILE</var></code></p>
-    <p><code>--db-sb-file==<var>FILE</var></code></p>
-    <p><code>--db-nb-schema==<var>FILE</var></code></p>
-    <p><code>--db-sb-schema==<var>FILE</var></code></p>
+    <p><code>--db-sock=<var>SOCKET</var></code></p>
+    <p><code>--db-nb-file=<var>FILE</var></code></p>
+    <p><code>--db-sb-file=<var>FILE</var></code></p>
+    <p><code>--db-nb-schema=<var>FILE</var></code></p>
+    <p><code>--db-sb-schema=<var>FILE</var></code></p>
+    <p><code>--db-sb-create-insecure-remote=<var>yes|no</var></code></p>
+    <p><code>--db-nb-create-insecure-remote=<var>yes|no</var></code></p>
+    <p><code>--ovn-controller-ssl-key=<var>KEY</var></code></p>
+    <p><code>--ovn-controller-ssl-cert=<var>CERT</var></code></p>
+    <p><code>--ovn-controller-ssl-ca-cert=<var>CERT</var></code></p>
 
     <h1>Address and port options</h1>
     <p><code>--db-nb-sync-from-addr=<var>IP ADDRESS</var></code></p>
     <p><code>--db-nb-sync-from-port=<var>PORT NUMBER</var></code></p>
+    <p><code>--db-nb-sync-from-proto=<var>PROTO</var></code></p>
     <p><code>--db-sb-sync-from-addr=<var>IP ADDRESS</var></code></p>
     <p><code>--db-sb-sync-from-port=<var>PORT NUMBER</var></code></p>
+    <p><code>--db-sb-sync-from-proto=<var>PROTO</var></code></p>
 
     <h1>Configuration files</h1>
     <p>Following are the optional configuration files. If present, it should be located in the etc dir</p>

@@ -12,6 +12,12 @@ Post-v2.6.0
        - put_dhcp_opts and put_dhcp_optsv6 actions may now be traced.
      * Support for managing SSL and remote connection configuration in
        northbound and southbound databases.
+     * TCP connections to northbound and southbound databases are no
+       longer enabled by default and must be explicitly configured.
+       See documentation for ovn-sbctl/ovn-nbctl "set-connection"
+       command or the ovn-ctl "--db-sb-create-insecure-remote" and
+       "--db-nb-create-insecure-remote" command-line options for
+       information regarding remote connection configuration.
    - Fixed regression in table stats maintenance introduced in OVS
      2.3.0, wherein the number of OpenFlow table hits and misses was
      not accurate.

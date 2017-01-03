@@ -50,7 +50,7 @@ stop_ovsdb () {
 
 demote_ovnnb() {
     if test ! -z "$DB_NB_SYNC_FROM_ADDR"; then
-        echo "tcp:$DB_NB_SYNC_FROM_ADDR:$DB_NB_SYNC_FROM_PORT" > $ovnnb_active_conf_file
+        echo "$DB_NB_SYNC_FROM_PROTO:$DB_NB_SYNC_FROM_ADDR:$DB_NB_SYNC_FROM_PORT" > $ovnnb_active_conf_file
     fi
 
     if test -e $ovnnb_active_conf_file; then
@@ -64,7 +64,7 @@ demote_ovnnb() {
 
 demote_ovnsb() {
     if test ! -z "$DB_SB_SYNC_FROM_ADDR"; then
-        echo "tcp:$DB_SB_SYNC_FROM_ADDR:$DB_SB_SYNC_FROM_PORT" > $ovnsb_active_conf_file
+        echo "$DB_SB_SYNC_FROM_PROTO:$DB_SB_SYNC_FROM_ADDR:$DB_SB_SYNC_FROM_PORT" > $ovnsb_active_conf_file
     fi
 
     if test -e $ovnsb_active_conf_file; then
@@ -93,15 +93,21 @@ start_ovsdb () {
 
         set ovsdb-server
 
-        set "$@" --detach --monitor $OVN_NB_LOG \
-            --log-file=$OVN_NB_LOGFILE \
-            --remote=punix:$DB_NB_SOCK \
-            --remote=ptcp:$DB_NB_PORT:$DB_NB_ADDR \
-            --pidfile=$DB_NB_PID \
-            --unixctl=ovnnb_db.ctl
+        set "$@" --detach --monitor
+        set "$@" $OVN_NB_LOG --log-file=$OVN_NB_LOGFILE
+        set "$@" --remote=punix:$DB_NB_SOCK --pidfile=$DB_NB_PID
+        set "$@" --remote=db:OVN_Northbound,NB_Global,connections
+        set "$@" --unixctl=ovnnb_db.ctl
+        set "$@" --private-key=db:OVN_Northbound,SSL,private_key
+        set "$@" --certificate=db:OVN_Northbound,SSL,certificate
+        set "$@" --ca-cert=db:OVN_Northbound,SSL,ca_cert
+
+        if test X"$DB_NB_CREATE_INSECURE_REMOTE" = Xyes; then
+            set "$@" --remote=ptcp:$DB_NB_PORT:$DB_NB_ADDR
+        fi
 
         if test ! -z "$DB_NB_SYNC_FROM_ADDR"; then
-            echo "tcp:$DB_NB_SYNC_FROM_ADDR:$DB_NB_SYNC_FROM_PORT" > $ovnnb_active_conf_file
+            echo "$DB_NB_SYNC_FROM_PROTO:$DB_NB_SYNC_FROM_ADDR:$DB_NB_SYNC_FROM_PORT" > $ovnnb_active_conf_file
         fi
 
         if test -e $ovnnb_active_conf_file; then
@@ -118,15 +124,21 @@ start_ovsdb () {
 
         set ovsdb-server
 
-        set "$@" --detach --monitor $OVN_SB_LOG \
-            --log-file=$OVN_SB_LOGFILE \
-            --remote=punix:$DB_SB_SOCK \
-            --remote=ptcp:$DB_SB_PORT:$DB_SB_ADDR \
-            --pidfile=$DB_SB_PID \
-            --unixctl=ovnsb_db.ctl
+        set "$@" --detach --monitor
+        set "$@" $OVN_SB_LOG --log-file=$OVN_SB_LOGFILE
+        set "$@" --remote=punix:$DB_SB_SOCK --pidfile=$DB_SB_PID
+        set "$@" --remote=db:OVN_Southbound,SB_Global,connections
+        set "$@" --unixctl=ovnsb_db.ctl
+        set "$@" --private-key=db:OVN_Southbound,SSL,private_key
+        set "$@" --certificate=db:OVN_Southbound,SSL,certificate
+        set "$@" --ca-cert=db:OVN_Southbound,SSL,ca_cert
+
+        if test X"$DB_SB_CREATE_INSECURE_REMOTE" = Xyes; then
+            set "$@" --remote=ptcp:$DB_SB_PORT:$DB_SB_ADDR
+        fi
 
         if test ! -z "$DB_SB_SYNC_FROM_ADDR"; then
-            echo "tcp:$DB_SB_SYNC_FROM_ADDR:$DB_SB_SYNC_FROM_PORT" > $ovnsb_active_conf_file
+            echo "$DB_SB_SYNC_FROM_PROTO:$DB_SB_SYNC_FROM_ADDR:$DB_SB_SYNC_FROM_PORT" > $ovnsb_active_conf_file
         fi
 
         if test -e $ovnsb_active_conf_file; then
@@ -208,12 +220,22 @@ start_northd () {
 start_controller () {
     set ovn-controller "unix:$DB_SOCK"
     set "$@" $OVN_CONTROLLER_LOG
+    if test X"$OVN_CONTROLLER_SSL_CERT" != X; then
+        set "$@" --private-key=$OVN_CONTROLLER_SSL_KEY
+        set "$@" --certificate=$OVN_CONTROLLER_SSL_CERT
+        set "$@" --ca-cert=$OVN_CONTROLLER_SSL_CA_CERT
+    fi
     OVS_RUNDIR=${OVN_RUNDIR} start_daemon "$OVN_CONTROLLER_PRIORITY" "$OVN_CONTROLLER_WRAPPER" "$@"
 }
 
 start_controller_vtep () {
     set ovn-controller-vtep "unix:$DB_SOCK"
     set "$@" -vconsole:emer -vsyslog:err -vfile:info
+    if test X"$OVN_CONTROLLER_SSL_CERT" != X; then
+        set "$@" --private-key=$OVN_CONTROLLER_SSL_KEY
+        set "$@" --certificate=$OVN_CONTROLLER_SSL_CERT
+        set "$@" --ca-cert=$OVN_CONTROLLER_SSL_CA_CERT
+    fi
     OVS_RUNDIR=${OVN_RUNDIR} start_daemon "$OVN_CONTROLLER_PRIORITY" "$OVN_CONTROLLER_WRAPPER" "$@"
 }
 
@@ -275,6 +297,7 @@ set_defaults () {
     DB_NB_FILE=$dbdir/ovnnb_db.db
     DB_NB_ADDR=0.0.0.0
     DB_NB_PORT=6641
+    DB_NB_SYNC_FROM_PROTO=tcp
     DB_NB_SYNC_FROM_ADDR=
     DB_NB_SYNC_FROM_PORT=6641
 
@@ -283,6 +306,7 @@ set_defaults () {
     DB_SB_FILE=$dbdir/ovnsb_db.db
     DB_SB_ADDR=0.0.0.0
     DB_SB_PORT=6642
+    DB_SB_SYNC_FROM_PROTO=tcp
     DB_SB_SYNC_FROM_ADDR=
     DB_SB_SYNC_FROM_PORT=6642
 
@@ -307,6 +331,13 @@ set_defaults () {
     OVN_SB_LOG="-vconsole:off"
     OVN_NB_LOGFILE="$logdir/ovsdb-server-nb.log"
     OVN_SB_LOGFILE="$logdir/ovsdb-server-sb.log"
+
+    OVN_CONTROLLER_SSL_KEY=""
+    OVN_CONTROLLER_SSL_CERT=""
+    OVN_CONTROLLER_SSL_CA_CERT=""
+
+    DB_SB_CREATE_INSECURE_REMOTE="no"
+    DB_NB_CREATE_INSECURE_REMOTE="no"
 }
 
 set_option () {
@@ -350,6 +381,9 @@ Options:
   --ovn-northd-wrapper=WRAPPER   run with a wrapper like valgrind for debugging
   --ovn-controller-priority=NICE     set ovn-northd's niceness (default: $OVN_CONTROLLER_PRIORITY)
   --ovn-controller-wrapper=WRAPPER   run with a wrapper like valgrind for debugging
+  --ovn-controller-ssl-key=KEY OVN Southbound SSL private key file
+  --ovn-controller-ssl-cert=CERT OVN Southbound SSL certificate file
+  --ovn-controller-ssl-ca-cert=CERT OVN Southbound SSL CA certificate file
   --ovn-manage-ovsdb=yes|no        Whether or not the OVN databases should be
                                    automatically started and stopped along
                                    with ovn-northd. The default is "yes". If
@@ -376,9 +410,13 @@ File location options:
   --ovn-nb-logfile=FILE OVN Northbound log file (default: $OVN_NB_LOGFILE)
   --ovn-sb-logfile=FILE OVN Southbound log file (default: $OVN_SB_LOGFILE)
   --db-nb-sync-from-addr=ADDR OVN Northbound active db tcp address (default: $DB_NB_SYNC_FROM_ADDR)
-  --db-nb-sync-from-port=PORT OVN Northdbound active db tcp port (default: $DB_NB_SYNC_FROM_PORT)
+  --db-nb-sync-from-port=PORT OVN Northbound active db tcp port (default: $DB_NB_SYNC_FROM_PORT)
+  --db-nb-sync-from-proto=PROTO OVN Northbound active db transport (default: $DB_NB_SYNC_FROM_PROTO)
+  --db-nb-create-insecure-remote=yes|no Create ptcp OVN Northbound remote (default: $DB_NB_CREATE_INSECURE_REMOTE)
   --db-sb-sync-from-addr=ADDR OVN Southbound active db tcp address (default: $DB_SB_SYNC_FROM_ADDR)
   --db-sb-sync-from-port=ADDR OVN Southbound active db tcp port (default: $DB_SB_SYNC_FROM_PORT)
+  --db-sb-sync-from-proto=PROTO OVN Southbound active db transport (default: $DB_SB_SYNC_FROM_PROTO)
+  --db-sb-create-insecure-remote=yes|no Create ptcp OVN Southbound remote (default: $DB_SB_CREATE_INSECURE_REMOTE)
 
 Default directories with "configure" option and environment variable override:
   logs: /usr/local/var/log/openvswitch (--with-logdir, OVS_LOGDIR)
