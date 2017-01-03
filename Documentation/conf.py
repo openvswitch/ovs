@@ -19,12 +19,18 @@
 # import os
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
+try:
+    import ovs_sphinx_theme
+    use_ovs_theme = True
+except ImportError:
+    print("Cannot find 'ovs_sphinx' package. Falling back to default theme.")
+    use_ovs_theme = False
 
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
 #
-# needs_sphinx = '1.0'
+needs_sphinx = '1.2'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
@@ -102,7 +108,7 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 # show_authors = False
 
 # The name of the Pygments (syntax highlighting) style to use.
-pygments_style = 'sphinx'
+# pygments_style = 'friendly'
 
 # A list of ignored prefixes for module index sorting.
 # modindex_common_prefix = []
@@ -119,7 +125,10 @@ todo_include_todos = False
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'bizstyle'
+if use_ovs_theme:
+    html_theme = 'ovs'
+else:
+    html_theme = 'default'
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
@@ -128,7 +137,10 @@ html_theme = 'bizstyle'
 # html_theme_options = {}
 
 # Add any paths that contain custom themes here, relative to this directory.
-# html_theme_path = []
+if use_ovs_theme:
+    html_theme_path = [ovs_sphinx_theme.get_theme_dir()]
+else:
+    html_theme_path = []
 
 # The name for this set of Sphinx documents.
 # "<project> v<release> documentation" by default.
