@@ -95,7 +95,7 @@ When you run ``ovs-sandbox``, it does the following:
 8. Starts a nested interactive shell inside "sandbox".
 
 At this point, you can run all the usual Open vSwitch utilities from the nested
-shell environment.  You can, for example, use ``ovs-vsctl`` to create a bridge:
+shell environment.  You can, for example, use ``ovs-vsctl`` to create a bridge::
 
     $ ovs-vsctl add-br br0
 
