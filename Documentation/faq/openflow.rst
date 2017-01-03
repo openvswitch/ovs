@@ -534,3 +534,12 @@ Q: The "learn" action can't learn the action I want, can you improve it?
     - At least some of the features described in T. A. Hoff, "Extending Open
       vSwitch to Facilitate Creation of Stateful SDN Applications".
 
+Q: When using the "ct" action with FTP connections, it doesn't seem to matter
+if I set the "alg=ftp" parameter in the action. Is this required?
+
+    A: It is advisable to use this option. Some platforms may automatically
+    detect and apply ALGs in the "ct" action regardless of the parameters you
+    provide, however this is not consistent across all implementations. The
+    `ovs-ofctl(8) <http://openvswitch.org/support/dist-docs/ovs-ofctl.8.html>`_
+    man pages contain further details in the description of the ALG parameter.
+

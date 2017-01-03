@@ -1863,6 +1863,16 @@ When committing related connections, the \fBct_mark\fR for that connection is
 inherited from the current \fBct_mark\fR stored with the original connection
 (ie, the connection created by \fBct(alg=...)\fR).
 .
+.IP
+Note that with the Linux datapath, global sysctl options affect the usage of
+the \fBct\fR action. In particular, if \fBnet.netfilter.nf_conntrack_helper\fR
+is enabled then application layer gateway helpers may be executed even if the
+\fBalg\fR option is not specified. This is the default setting until Linux 4.7.
+For security reasons, the netfilter team recommends users to disable this
+option. See this blog post for further details:
+.
+http://www.netfilter.org/news.html#2012-04-03
+.
 .IP \fBnat\fR[\fB(\fR(\fBsrc\fR|\fBdst\fR)\fB=\fIaddr1\fR[\fB-\fIaddr2\fR][\fB:\fIport1\fR[\fB-\fIport2\fR]][\fB,\fIflags\fR]\fB)\fR]
 .
 Specify address and port translation for the connection being tracked.
