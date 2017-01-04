@@ -122,7 +122,7 @@ EOF
             fi
             ;;
         *)
-            (sim_setvars $1; shift; $@)
+            (sim_setvars $1; shift; "$@")
             ;;
     esac
 }
