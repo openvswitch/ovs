@@ -384,7 +384,7 @@ Comments
 
 If you want to include any comments in your email that should not be part of
 the commit's change log message, put them after the description, separated by a
-line that contains just `---`.  It may be helpful to include a diffstat here
+line that contains just ``---``.  It may be helpful to include a diffstat here
 for changes that touch multiple files.
 
 Patch
