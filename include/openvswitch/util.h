@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,11 +73,7 @@ OVS_NO_RETURN void ovs_assert_failure(const char *, const char *, const char *);
     ((void) sizeof ((int) ((POINTER) == (TYPE) (POINTER))))
 
 /* Casts 'pointer' to 'type' and issues a compiler warning if the cast changes
- * anything other than an outermost "const" or "volatile" qualifier.
- *
- * The cast to int is present only to suppress an "expression using sizeof
- * bool" warning from "sparse" (see
- * http://permalink.gmane.org/gmane.comp.parsers.sparse/2967). */
+ * anything other than an outermost "const" or "volatile" qualifier. */
 #define CONST_CAST(TYPE, POINTER)                               \
     (BUILD_ASSERT_TYPE(POINTER, TYPE),                          \
      (TYPE) (POINTER))
