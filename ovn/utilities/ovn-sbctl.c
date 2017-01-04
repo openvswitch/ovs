@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1036,60 +1036,25 @@ cmd_set_ssl(struct ctl_context *ctx)
 }
 
 
-static const struct ctl_table_class tables[] = {
-    {&sbrec_table_sb_global,
-     {{&sbrec_table_sb_global, NULL, NULL},
-      {NULL, NULL, NULL}}},
+static const struct ctl_table_class tables[SBREC_N_TABLES] = {
+    [SBREC_TABLE_CHASSIS].row_ids[0] =
+    {&sbrec_table_chassis, &sbrec_chassis_col_name, NULL},
 
-    {&sbrec_table_chassis,
-     {{&sbrec_table_chassis, &sbrec_chassis_col_name, NULL},
-      {NULL, NULL, NULL}}},
+    [SBREC_TABLE_LOGICAL_FLOW].row_ids[0] =
+     {&sbrec_table_logical_flow, NULL,
+      &sbrec_logical_flow_col_logical_datapath},
 
-    {&sbrec_table_encap,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
+    [SBREC_TABLE_PORT_BINDING].row_ids[0] =
+    {&sbrec_table_port_binding, &sbrec_port_binding_col_logical_port, NULL},
 
-    {&sbrec_table_logical_flow,
-     {{&sbrec_table_logical_flow, NULL,
-       &sbrec_logical_flow_col_logical_datapath},
-      {NULL, NULL, NULL}}},
+    [SBREC_TABLE_MAC_BINDING].row_ids[0] =
+    {&sbrec_table_mac_binding, &sbrec_mac_binding_col_logical_port, NULL},
 
-    {&sbrec_table_multicast_group,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
+    [SBREC_TABLE_ADDRESS_SET].row_ids[0] =
+    {&sbrec_table_address_set, &sbrec_address_set_col_name, NULL},
 
-    {&sbrec_table_datapath_binding,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&sbrec_table_port_binding,
-     {{&sbrec_table_port_binding, &sbrec_port_binding_col_logical_port, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&sbrec_table_mac_binding,
-     {{&sbrec_table_mac_binding, &sbrec_mac_binding_col_logical_port, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&sbrec_table_address_set,
-     {{&sbrec_table_address_set, &sbrec_address_set_col_name, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&sbrec_table_dhcp_options,
-     {{&sbrec_table_dhcp_options, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&sbrec_table_dhcpv6_options,
-     {{&sbrec_table_dhcpv6_options, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&sbrec_table_connection,
-     {{&sbrec_table_connection, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&sbrec_table_ssl,
-     {{&sbrec_table_sb_global, NULL, &sbrec_sb_global_col_ssl}}},
-
-    {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}
+    [SBREC_TABLE_SSL].row_ids[0] =
+    {&sbrec_table_sb_global, NULL, &sbrec_sb_global_col_ssl},
 };
 
 
@@ -1372,6 +1337,6 @@ static const struct ctl_command_syntax sbctl_commands[] = {
 static void
 sbctl_cmd_init(void)
 {
-    ctl_init(tables, cmd_show_tables, sbctl_exit);
+    ctl_init(sbrec_table_classes, tables, cmd_show_tables, sbctl_exit);
     ctl_register_commands(sbctl_commands);
 }

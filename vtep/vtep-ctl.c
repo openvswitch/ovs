@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -2175,72 +2175,22 @@ cmd_set_manager(struct ctl_context *ctx)
 }
 
 /* Parameter commands. */
-static const struct ctl_table_class tables[] = {
-    {&vteprec_table_global,
-     {{&vteprec_table_global, NULL, NULL},
-      {NULL, NULL, NULL}}},
+static const struct ctl_table_class tables[VTEPREC_N_TABLES] = {
+    [VTEPREC_TABLE_LOGICAL_SWITCH].row_ids[0]
+    = {&vteprec_table_logical_switch, &vteprec_logical_switch_col_name, NULL},
 
-    {&vteprec_table_logical_binding_stats,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
+    [VTEPREC_TABLE_MANAGER].row_ids[0]
+    = {&vteprec_table_manager, &vteprec_manager_col_target, NULL},
 
-    {&vteprec_table_logical_switch,
-     {{&vteprec_table_logical_switch, &vteprec_logical_switch_col_name, NULL},
-      {NULL, NULL, NULL}}},
+    [VTEPREC_TABLE_PHYSICAL_PORT].row_ids[0]
+    = {&vteprec_table_physical_port, &vteprec_physical_port_col_name, NULL},
 
-    {&vteprec_table_ucast_macs_local,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
+    [VTEPREC_TABLE_PHYSICAL_SWITCH].row_ids[0]
+    = {&vteprec_table_physical_switch, &vteprec_physical_switch_col_name,
+       NULL},
 
-    {&vteprec_table_ucast_macs_remote,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&vteprec_table_mcast_macs_local,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&vteprec_table_mcast_macs_remote,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&vteprec_table_manager,
-     {{&vteprec_table_manager, &vteprec_manager_col_target, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&vteprec_table_physical_locator,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&vteprec_table_physical_locator_set,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&vteprec_table_physical_port,
-     {{&vteprec_table_physical_port, &vteprec_physical_port_col_name, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&vteprec_table_physical_switch,
-     {{&vteprec_table_physical_switch, &vteprec_physical_switch_col_name, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&vteprec_table_tunnel,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&vteprec_table_logical_router,
-     {{&vteprec_table_logical_router, &vteprec_logical_router_col_name, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&vteprec_table_arp_sources_local,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&vteprec_table_arp_sources_remote,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}
+    [VTEPREC_TABLE_LOGICAL_ROUTER].row_ids[0]
+    = {&vteprec_table_logical_router, &vteprec_logical_router_col_name, NULL},
 };
 
 
@@ -2545,6 +2495,6 @@ static const struct ctl_command_syntax vtep_commands[] = {
 static void
 vtep_ctl_cmd_init(void)
 {
-    ctl_init(tables, cmd_show_tables, vtep_ctl_exit);
+    ctl_init(vteprec_table_classes, tables, cmd_show_tables, vtep_ctl_exit);
     ctl_register_commands(vtep_commands);
 }

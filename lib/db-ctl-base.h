@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015 Nicira, Inc.
+ * Copyright (c) 2015, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,10 +45,21 @@ struct table;
 #define ovs_fatal please_use_ctl_fatal_instead_of_ovs_fatal
 
 struct ctl_table_class;
+struct ovsdb_idl_class;
+struct ovsdb_idl_table_class;
 struct cmd_show_table;
-void ctl_init(const struct ctl_table_class *tables,
-              const struct cmd_show_table *cmd_show_tables,
-              void (*ctl_exit_func)(int status));
+
+/* ctl_init() figures out the number of tables on its own and flags an error if
+ * 'ctl_classes' was defined with the wrong number of elements. */
+#define ctl_init(idl_classes, ctl_classes, cmd_show_table, ctl_exit_func) \
+    (BUILD_ASSERT(ARRAY_SIZE(idl_classes) == ARRAY_SIZE(ctl_classes)),  \
+     ctl_init__(idl_classes, ctl_classes, ARRAY_SIZE(idl_classes),      \
+                cmd_show_table, ctl_exit_func))
+void ctl_init__(const struct ovsdb_idl_table_class *idl_classes,
+                const struct ctl_table_class *ctl_classes,
+                size_t n_classes,
+                const struct cmd_show_table *cmd_show_tables,
+                void (*ctl_exit_func)(int status));
 char *ctl_default_db(void);
 OVS_NO_RETURN void ctl_fatal(const char *, ...) OVS_PRINTF_FORMAT(1, 2);
 
@@ -233,7 +244,6 @@ struct ctl_row_id {
 };
 
 struct ctl_table_class {
-    struct ovsdb_idl_table_class *class;
     struct ctl_row_id row_ids[2];
 };
 

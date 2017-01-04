@@ -2970,69 +2970,26 @@ cmd_set_ssl(struct ctl_context *ctx)
     nbrec_nb_global_set_ssl(nb_global, ssl);
 }
 
-static const struct ctl_table_class tables[] = {
-    {&nbrec_table_nb_global,
-     {{&nbrec_table_nb_global, NULL, NULL},
-      {NULL, NULL, NULL}}},
+static const struct ctl_table_class tables[NBREC_N_TABLES] = {
+    [NBREC_TABLE_LOGICAL_SWITCH].row_ids[0]
+    = {&nbrec_table_logical_switch, &nbrec_logical_switch_col_name, NULL},
 
-    {&nbrec_table_logical_switch,
-     {{&nbrec_table_logical_switch, &nbrec_logical_switch_col_name, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&nbrec_table_logical_switch_port,
-     {{&nbrec_table_logical_switch_port, &nbrec_logical_switch_port_col_name,
+    [NBREC_TABLE_LOGICAL_SWITCH_PORT].row_ids[0]
+    = {&nbrec_table_logical_switch_port, &nbrec_logical_switch_port_col_name,
        NULL},
-      {NULL, NULL, NULL}}},
 
-    {&nbrec_table_acl,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
+    [NBREC_TABLE_LOGICAL_ROUTER].row_ids[0]
+    = {&nbrec_table_logical_router, &nbrec_logical_router_col_name, NULL},
 
-    {&nbrec_table_load_balancer,
-     {{NULL, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&nbrec_table_logical_router,
-     {{&nbrec_table_logical_router, &nbrec_logical_router_col_name, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&nbrec_table_logical_router_port,
-     {{&nbrec_table_logical_router_port, &nbrec_logical_router_port_col_name,
+    [NBREC_TABLE_LOGICAL_ROUTER_PORT].row_ids[0]
+    = {&nbrec_table_logical_router_port, &nbrec_logical_router_port_col_name,
        NULL},
-      {NULL, NULL, NULL}}},
 
-    {&nbrec_table_logical_router_static_route,
-     {{&nbrec_table_logical_router_static_route, NULL,
-       NULL},
-      {NULL, NULL, NULL}}},
+    [NBREC_TABLE_ADDRESS_SET].row_ids[0]
+    = {&nbrec_table_address_set, &nbrec_address_set_col_name, NULL},
 
-    {&nbrec_table_nat,
-     {{&nbrec_table_nat, NULL,
-       NULL},
-      {NULL, NULL, NULL}}},
-
-    {&nbrec_table_address_set,
-     {{&nbrec_table_address_set, &nbrec_address_set_col_name, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&nbrec_table_dhcp_options,
-     {{&nbrec_table_dhcp_options, NULL,
-       NULL},
-      {NULL, NULL, NULL}}},
-
-    {&nbrec_table_qos,
-     {{&nbrec_table_qos, NULL,
-       NULL},
-      {NULL, NULL, NULL}}},
-
-    {&nbrec_table_connection,
-     {{&nbrec_table_connection, NULL, NULL},
-      {NULL, NULL, NULL}}},
-
-    {&nbrec_table_ssl,
-     {{&nbrec_table_nb_global, NULL, &nbrec_nb_global_col_ssl}}},
-
-    {NULL, {{NULL, NULL, NULL}, {NULL, NULL, NULL}}}
+    [NBREC_TABLE_SSL].row_ids[0]
+    = {&nbrec_table_nb_global, NULL, &nbrec_nb_global_col_ssl},
 };
 
 static void
@@ -3405,6 +3362,6 @@ static const struct ctl_command_syntax nbctl_commands[] = {
 static void
 nbctl_cmd_init(void)
 {
-    ctl_init(tables, NULL, nbctl_exit);
+    ctl_init(nbrec_table_classes, tables, NULL, nbctl_exit);
     ctl_register_commands(nbctl_commands);
 }

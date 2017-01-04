@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -61,14 +61,15 @@ static const struct cmd_show_table *cmd_show_tables;
 static void (*ctl_exit_func)(int status) = NULL;
 OVS_NO_RETURN static void ctl_exit(int status);
 
-/* Represents all tables in the schema.  User must define 'tables'
- * in implementation and supply via ctl_init().  The definition must end
- * with an all-NULL entry. */
-static const struct ctl_table_class *tables;
+/* Two arrays with 'n_classes' elements, which represent the tables in this
+ * database and how the user can refer to their rows. */
+static const struct ctl_table_class *ctl_classes;
+static const struct ovsdb_idl_table_class *idl_classes;
+static size_t n_classes;
 
 static struct shash all_commands = SHASH_INITIALIZER(&all_commands);
-static const struct ctl_table_class *get_table(const char *table_name);
-static void set_column(const struct ctl_table_class *,
+static const struct ovsdb_idl_table_class *get_table(const char *table_name);
+static void set_column(const struct ovsdb_idl_table_class *,
                        const struct ovsdb_idl_row *, const char *,
                        struct ovsdb_symbol_table *);
 
@@ -195,6 +196,10 @@ to_lower_and_underscores(unsigned c)
     return c == '-' ? '_' : tolower(c);
 }
 
+/* Returns a score representing how well 's' matches 'name'.  Higher return
+ * values indicate a better match.  The order of the arguments is important:
+ * 'name' is the name of an entity such as a table or a column, and 's' is user
+ * input. */
 static unsigned int
 score_partial_match(const char *name, const char *s)
 {
@@ -236,54 +241,43 @@ create_symbol(struct ovsdb_symbol_table *symtab, const char *id, bool *newp)
 }
 
 static const struct ovsdb_idl_row *
-get_row_by_id(struct ctl_context *ctx, const struct ctl_table_class *table,
+get_row_by_id(struct ctl_context *ctx,
+              const struct ovsdb_idl_table_class *table,
               const struct ctl_row_id *id, const char *record_id)
 {
-    const struct ovsdb_idl_row *referrer, *final;
 
-    if (!id->table) {
+    if (!id->table || !id->name_column) {
         return NULL;
     }
 
-    if (!id->name_column) {
-        if (strcmp(record_id, ".")) {
-            return NULL;
-        }
-        referrer = ovsdb_idl_first_row(ctx->idl, id->table);
-        if (!referrer || ovsdb_idl_next_row(referrer)) {
+    const struct ovsdb_idl_row *referrer = NULL;
+    ovs_assert(id->name_column->type.value.type == OVSDB_TYPE_VOID);
+
+    enum ovsdb_atomic_type key = id->name_column->type.key.type;
+    if (key == OVSDB_TYPE_INTEGER) {
+        if (!record_id[0] || record_id[strspn(record_id, "0123456789")]) {
             return NULL;
         }
     } else {
-        referrer = NULL;
+        ovs_assert(key == OVSDB_TYPE_STRING);
+    }
 
-        ovs_assert(id->name_column->type.value.type == OVSDB_TYPE_VOID);
-
-        enum ovsdb_atomic_type key = id->name_column->type.key.type;
-        if (key == OVSDB_TYPE_INTEGER) {
-            if (!record_id[0] || record_id[strspn(record_id, "0123456789")]) {
-                return NULL;
-            }
-        } else {
-            ovs_assert(key == OVSDB_TYPE_STRING);
-        }
-
-        for (const struct ovsdb_idl_row *row = ovsdb_idl_first_row(ctx->idl,
-                                                                   id->table);
-             row != NULL;
-             row = ovsdb_idl_next_row(row)) {
-            const struct ovsdb_datum *name = ovsdb_idl_get(
-                row, id->name_column, key, OVSDB_TYPE_VOID);
-            if (name->n == 1) {
-                const union ovsdb_atom *atom = &name->keys[0];
-                if (key == OVSDB_TYPE_STRING
-                    ? !strcmp(atom->string, record_id)
-                    : atom->integer == strtoll(record_id, NULL, 10)) {
-                    if (referrer) {
-                        ctl_fatal("multiple rows in %s match \"%s\"",
-                                  table->class->name, record_id);
-                    }
-                    referrer = row;
+    for (const struct ovsdb_idl_row *row = ovsdb_idl_first_row(ctx->idl,
+                                                               id->table);
+         row != NULL;
+         row = ovsdb_idl_next_row(row)) {
+        const struct ovsdb_datum *name = ovsdb_idl_get(
+            row, id->name_column, key, OVSDB_TYPE_VOID);
+        if (name->n == 1) {
+            const union ovsdb_atom *atom = &name->keys[0];
+            if (key == OVSDB_TYPE_STRING
+                ? !strcmp(atom->string, record_id)
+                : atom->integer == strtoll(record_id, NULL, 10)) {
+                if (referrer) {
+                    ctl_fatal("multiple rows in %s match \"%s\"",
+                              table->name, record_id);
                 }
+                referrer = row;
             }
         }
     }
@@ -291,7 +285,7 @@ get_row_by_id(struct ctl_context *ctx, const struct ctl_table_class *table,
         return NULL;
     }
 
-    final = NULL;
+    const struct ovsdb_idl_row *final = referrer;
     if (id->uuid_column) {
         const struct ovsdb_datum *uuid;
 
@@ -299,55 +293,59 @@ get_row_by_id(struct ctl_context *ctx, const struct ctl_table_class *table,
         uuid = ovsdb_idl_get(referrer, id->uuid_column,
                              OVSDB_TYPE_UUID, OVSDB_TYPE_VOID);
         if (uuid->n == 1) {
-            final = ovsdb_idl_get_row_for_uuid(ctx->idl, table->class,
+            final = ovsdb_idl_get_row_for_uuid(ctx->idl, table,
                                                &uuid->keys[0].uuid);
         }
-    } else {
-        final = referrer;
     }
-
     return final;
 }
 
 static const struct ovsdb_idl_row *
 get_row(struct ctl_context *ctx,
-        const struct ctl_table_class *table, const char *record_id,
+        const struct ovsdb_idl_table_class *table, const char *record_id,
         bool must_exist)
 {
-    const struct ovsdb_idl_row *row;
+    const struct ovsdb_idl_row *row = NULL;
     struct uuid uuid;
 
-    row = NULL;
     if (uuid_from_string(&uuid, record_id)) {
-        row = ovsdb_idl_get_row_for_uuid(ctx->idl, table->class, &uuid);
+        row = ovsdb_idl_get_row_for_uuid(ctx->idl, table, &uuid);
     }
     if (!row) {
-        int i;
-
-        for (i = 0; i < ARRAY_SIZE(table->row_ids); i++) {
-            row = get_row_by_id(ctx, table, &table->row_ids[i], record_id);
+        if (!strcmp(record_id, ".")) {
+            row = ovsdb_idl_first_row(ctx->idl, table);
+            if (row && ovsdb_idl_next_row(row)) {
+                row = NULL;
+            }
+        }
+    }
+    if (!row) {
+        const struct ctl_table_class *ctl_class
+            = &ctl_classes[table - idl_classes];
+        for (int i = 0; i < ARRAY_SIZE(ctl_class->row_ids); i++) {
+            row = get_row_by_id(ctx, table, &ctl_class->row_ids[i],
+                                record_id);
             if (row) {
                 break;
             }
         }
     }
     if (must_exist && !row) {
-        ctl_fatal("no row \"%s\" in table %s",
-                  record_id, table->class->name);
+        ctl_fatal("no row \"%s\" in table %s", record_id, table->name);
     }
     return row;
 }
 
 static char *
-get_column(const struct ctl_table_class *table, const char *column_name,
+get_column(const struct ovsdb_idl_table_class *table, const char *column_name,
            const struct ovsdb_idl_column **columnp)
 {
     const struct ovsdb_idl_column *best_match = NULL;
     unsigned int best_score = 0;
     size_t i;
 
-    for (i = 0; i < table->class->n_columns; i++) {
-        const struct ovsdb_idl_column *column = &table->class->columns[i];
+    for (i = 0; i < table->n_columns; i++) {
+        const struct ovsdb_idl_column *column = &table->columns[i];
         unsigned int score = score_partial_match(column->name, column_name);
         if (score > best_score) {
             best_match = column;
@@ -362,33 +360,32 @@ get_column(const struct ctl_table_class *table, const char *column_name,
         return NULL;
     } else if (best_score) {
         return xasprintf("%s contains more than one column whose name "
-                         "matches \"%s\"", table->class->name, column_name);
+                         "matches \"%s\"", table->name, column_name);
     } else {
         return xasprintf("%s does not contain a column whose name matches "
-                         "\"%s\"", table->class->name, column_name);
+                         "\"%s\"", table->name, column_name);
     }
 }
 
 static void
 pre_get_column(struct ctl_context *ctx,
-               const struct ctl_table_class *table, const char *column_name,
+               const struct ovsdb_idl_table_class *table,
+               const char *column_name,
                const struct ovsdb_idl_column **columnp)
 {
     die_if_error(get_column(table, column_name, columnp));
     ovsdb_idl_add_column(ctx->idl, *columnp);
 }
 
-static const struct ctl_table_class *
+static const struct ovsdb_idl_table_class *
 pre_get_table(struct ctl_context *ctx, const char *table_name)
 {
-    const struct ctl_table_class *table_class;
-    int i;
+    const struct ovsdb_idl_table_class *table = get_table(table_name);
+    ovsdb_idl_add_table(ctx->idl, table);
 
-    table_class = get_table(table_name);
-    ovsdb_idl_add_table(ctx->idl, table_class->class);
-
-    for (i = 0; i < ARRAY_SIZE(table_class->row_ids); i++) {
-        const struct ctl_row_id *id = &table_class->row_ids[i];
+    const struct ctl_table_class *ctl = &ctl_classes[table - idl_classes];
+    for (int i = 0; i < ARRAY_SIZE(ctl->row_ids); i++) {
+        const struct ctl_row_id *id = &ctl->row_ids[i];
         if (id->table) {
             ovsdb_idl_add_table(ctx->idl, id->table);
         }
@@ -400,7 +397,7 @@ pre_get_table(struct ctl_context *ctx, const char *table_name)
         }
     }
 
-    return table_class;
+    return table;
 }
 
 static char *
@@ -447,7 +444,7 @@ missing_operator_error(const char *arg, const char **allowed_operators,
  * message and stores NULL into all of the nonnull output arguments. */
 static char * OVS_WARN_UNUSED_RESULT
 parse_column_key_value(const char *arg,
-                       const struct ctl_table_class *table,
+                       const struct ovsdb_idl_table_class *table,
                        const struct ovsdb_idl_column **columnp, char **keyp,
                        int *operatorp,
                        const char **allowed_operators, size_t n_allowed,
@@ -546,7 +543,7 @@ parse_column_key_value(const char *arg,
 static const struct ovsdb_idl_column *
 pre_parse_column_key_value(struct ctl_context *ctx,
                            const char *arg,
-                           const struct ctl_table_class *table)
+                           const struct ovsdb_idl_table_class *table)
 {
     const struct ovsdb_idl_column *column;
     const char *p;
@@ -637,7 +634,7 @@ evaluate_relop(const struct ovsdb_datum *a, const struct ovsdb_datum *b,
 }
 
 static bool
-is_condition_satisfied(const struct ctl_table_class *table,
+is_condition_satisfied(const struct ovsdb_idl_table_class *table,
                        const struct ovsdb_idl_row *row, const char *arg,
                        struct ovsdb_symbol_table *symtab)
 {
@@ -734,7 +731,7 @@ pre_cmd_get(struct ctl_context *ctx)
 {
     const char *id = shash_find_data(&ctx->options, "--id");
     const char *table_name = ctx->argv[1];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     int i;
 
     /* Using "get" without --id or a column name could possibly make sense.
@@ -764,7 +761,7 @@ cmd_get(struct ctl_context *ctx)
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_row *row;
     struct ds *out = &ctx->output;
     int i;
@@ -832,7 +829,7 @@ cmd_get(struct ctl_context *ctx)
             if (idx == UINT_MAX) {
                 if (must_exist) {
                     ctl_fatal("no key \"%s\" in %s record \"%s\" column %s",
-                              key_string, table->class->name, record_id,
+                              key_string, table->name, record_id,
                               column->name);
                 }
             } else {
@@ -851,7 +848,7 @@ cmd_get(struct ctl_context *ctx)
 
 static void
 parse_column_names(const char *column_names,
-                   const struct ctl_table_class *table,
+                   const struct ovsdb_idl_table_class *table,
                    const struct ovsdb_idl_column ***columnsp,
                    size_t *n_columnsp)
 {
@@ -861,11 +858,11 @@ parse_column_names(const char *column_names,
     if (!column_names) {
         size_t i;
 
-        n_columns = table->class->n_columns + 1;
+        n_columns = table->n_columns + 1;
         columns = xmalloc(n_columns * sizeof *columns);
         columns[0] = NULL;
-        for (i = 0; i < table->class->n_columns; i++) {
-            columns[i + 1] = &table->class->columns[i];
+        for (i = 0; i < table->n_columns; i++) {
+            columns[i + 1] = &table->columns[i];
         }
     } else {
         char *s = xstrdup(column_names);
@@ -902,7 +899,7 @@ parse_column_names(const char *column_names,
 
 static void
 pre_list_columns(struct ctl_context *ctx,
-                 const struct ctl_table_class *table,
+                 const struct ovsdb_idl_table_class *table,
                  const char *column_names)
 {
     const struct ovsdb_idl_column **columns;
@@ -923,7 +920,7 @@ pre_cmd_list(struct ctl_context *ctx)
 {
     const char *column_names = shash_find_data(&ctx->options, "--columns");
     const char *table_name = ctx->argv[1];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
 
     table = pre_get_table(ctx, table_name);
     pre_list_columns(ctx, table, column_names);
@@ -992,7 +989,7 @@ cmd_list(struct ctl_context *ctx)
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const struct ovsdb_idl_column **columns;
     const char *table_name = ctx->argv[1];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     struct table *out;
     size_t n_columns;
     int i;
@@ -1008,7 +1005,7 @@ cmd_list(struct ctl_context *ctx)
     } else {
         const struct ovsdb_idl_row *row;
 
-        for (row = ovsdb_idl_first_row(ctx->idl, table->class); row != NULL;
+        for (row = ovsdb_idl_first_row(ctx->idl, table); row != NULL;
              row = ovsdb_idl_next_row(row)) {
             list_record(row, columns, n_columns, out);
         }
@@ -1016,18 +1013,17 @@ cmd_list(struct ctl_context *ctx)
     free(columns);
 }
 
-/* Finds and returns the "struct ctl_table_class *" with 'table_name' by
- * searching the 'tables'. */
-static const struct ctl_table_class *
+/* Finds and returns the "struct ovsdb_idl_table_class *" with 'table_name' by
+ * searching the tables in these schema. */
+static const struct ovsdb_idl_table_class *
 get_table(const char *table_name)
 {
-    const struct ctl_table_class *table;
-    const struct ctl_table_class *best_match = NULL;
+    const struct ovsdb_idl_table_class *best_match = NULL;
     unsigned int best_score = 0;
 
-    for (table = tables; table->class; table++) {
-        unsigned int score = score_partial_match(table->class->name,
-                                                 table_name);
+    for (const struct ovsdb_idl_table_class *table = idl_classes;
+         table < &idl_classes[n_classes]; table++) {
+        unsigned int score = score_partial_match(table->name, table_name);
         if (score > best_score) {
             best_match = table;
             best_score = score;
@@ -1050,7 +1046,7 @@ pre_cmd_find(struct ctl_context *ctx)
 {
     const char *column_names = shash_find_data(&ctx->options, "--columns");
     const char *table_name = ctx->argv[1];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     int i;
 
     table = pre_get_table(ctx, table_name);
@@ -1066,7 +1062,7 @@ cmd_find(struct ctl_context *ctx)
     const char *column_names = shash_find_data(&ctx->options, "--columns");
     const struct ovsdb_idl_column **columns;
     const char *table_name = ctx->argv[1];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_row *row;
     struct table *out;
     size_t n_columns;
@@ -1074,7 +1070,7 @@ cmd_find(struct ctl_context *ctx)
     table = get_table(table_name);
     parse_column_names(column_names, table, &columns, &n_columns);
     out = ctx->table = list_make_table(columns, n_columns);
-    for (row = ovsdb_idl_first_row(ctx->idl, table->class); row;
+    for (row = ovsdb_idl_first_row(ctx->idl, table); row;
          row = ovsdb_idl_next_row(row)) {
         int i;
 
@@ -1093,7 +1089,7 @@ cmd_find(struct ctl_context *ctx)
 
 /* Sets the column of 'row' in 'table'. */
 static void
-set_column(const struct ctl_table_class *table,
+set_column(const struct ovsdb_idl_table_class *table,
            const struct ovsdb_idl_row *row, const char *arg,
            struct ovsdb_symbol_table *symtab)
 {
@@ -1149,7 +1145,7 @@ static void
 pre_cmd_set(struct ctl_context *ctx)
 {
     const char *table_name = ctx->argv[1];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     int i;
 
     table = pre_get_table(ctx, table_name);
@@ -1164,7 +1160,7 @@ cmd_set(struct ctl_context *ctx)
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_row *row;
     int i;
 
@@ -1186,7 +1182,7 @@ pre_cmd_add(struct ctl_context *ctx)
 {
     const char *table_name = ctx->argv[1];
     const char *column_name = ctx->argv[3];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_column *column;
 
     table = pre_get_table(ctx, table_name);
@@ -1200,7 +1196,7 @@ cmd_add(struct ctl_context *ctx)
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
     const char *column_name = ctx->argv[3];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_column *column;
     const struct ovsdb_idl_row *row;
     const struct ovsdb_type *type;
@@ -1234,7 +1230,7 @@ cmd_add(struct ctl_context *ctx)
                   "table %s but the maximum number is %u",
                   old.n,
                   type->value.type == OVSDB_TYPE_VOID ? "values" : "pairs",
-                  column->name, table->class->name, type->n_max);
+                  column->name, table->name, type->n_max);
     }
     ovsdb_idl_txn_verify(row, column);
     ovsdb_idl_txn_write(row, column, &old);
@@ -1247,7 +1243,7 @@ pre_cmd_remove(struct ctl_context *ctx)
 {
     const char *table_name = ctx->argv[1];
     const char *column_name = ctx->argv[3];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_column *column;
 
     table = pre_get_table(ctx, table_name);
@@ -1261,7 +1257,7 @@ cmd_remove(struct ctl_context *ctx)
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
     const char *column_name = ctx->argv[3];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_column *column;
     const struct ovsdb_idl_row *row;
     const struct ovsdb_type *type;
@@ -1307,7 +1303,7 @@ cmd_remove(struct ctl_context *ctx)
                   "table %s but the minimum number is %u",
                   old.n,
                   type->value.type == OVSDB_TYPE_VOID ? "values" : "pairs",
-                  column->name, table->class->name, type->n_min);
+                  column->name, table->name, type->n_min);
     }
     ovsdb_idl_txn_verify(row, column);
     ovsdb_idl_txn_write(row, column, &old);
@@ -1319,7 +1315,7 @@ static void
 pre_cmd_clear(struct ctl_context *ctx)
 {
     const char *table_name = ctx->argv[1];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     int i;
 
     table = pre_get_table(ctx, table_name);
@@ -1336,7 +1332,7 @@ cmd_clear(struct ctl_context *ctx)
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_row *row;
     int i;
 
@@ -1358,7 +1354,7 @@ cmd_clear(struct ctl_context *ctx)
         if (type->n_min > 0) {
             ctl_fatal("\"clear\" operation cannot be applied to column %s "
                       "of table %s, which is not allowed to be empty",
-                      column->name, table->class->name);
+                      column->name, table->name);
         }
 
         ovsdb_datum_init_empty(&datum);
@@ -1373,12 +1369,12 @@ pre_create(struct ctl_context *ctx)
 {
     const char *id = shash_find_data(&ctx->options, "--id");
     const char *table_name = ctx->argv[1];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
 
     table = get_table(table_name);
-    if (!id && !table->class->is_root) {
+    if (!id && !table->is_root) {
         VLOG_WARN("applying \"create\" command to table %s without --id "
-                  "option will have no effect", table->class->name);
+                  "option will have no effect", table->name);
     }
 }
 
@@ -1387,14 +1383,14 @@ cmd_create(struct ctl_context *ctx)
 {
     const char *id = shash_find_data(&ctx->options, "--id");
     const char *table_name = ctx->argv[1];
-    const struct ctl_table_class *table = get_table(table_name);
+    const struct ovsdb_idl_table_class *table = get_table(table_name);
     const struct ovsdb_idl_row *row;
     const struct uuid *uuid;
     int i;
 
     if (id) {
         struct ovsdb_symbol *symbol = create_symbol(ctx->symtab, id, NULL);
-        if (table->class->is_root) {
+        if (table->is_root) {
             /* This table is in the root set, meaning that rows created in it
              * won't disappear even if they are unreferenced, so disable
              * warnings about that by pretending that there is a reference. */
@@ -1405,7 +1401,7 @@ cmd_create(struct ctl_context *ctx)
         uuid = NULL;
     }
 
-    row = ovsdb_idl_txn_insert(ctx->txn, table->class, uuid);
+    row = ovsdb_idl_txn_insert(ctx->txn, table, uuid);
     for (i = 2; i < ctx->argc; i++) {
         set_column(table, row, ctx->argv[i], ctx->symtab);
     }
@@ -1452,7 +1448,7 @@ cmd_destroy(struct ctl_context *ctx)
     bool must_exist = !shash_find(&ctx->options, "--if-exists");
     bool delete_all = shash_find(&ctx->options, "--all");
     const char *table_name = ctx->argv[1];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     int i;
 
     table = get_table(table_name);
@@ -1469,7 +1465,7 @@ cmd_destroy(struct ctl_context *ctx)
         const struct ovsdb_idl_row *row;
         const struct ovsdb_idl_row *next_row;
 
-        for (row = ovsdb_idl_first_row(ctx->idl, table->class);
+        for (row = ovsdb_idl_first_row(ctx->idl, table);
              row;) {
             next_row = ovsdb_idl_next_row(row);
             ovsdb_idl_txn_delete(row);
@@ -1492,7 +1488,7 @@ static void
 pre_cmd_wait_until(struct ctl_context *ctx)
 {
     const char *table_name = ctx->argv[1];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     int i;
 
     table = pre_get_table(ctx, table_name);
@@ -1507,7 +1503,7 @@ cmd_wait_until(struct ctl_context *ctx)
 {
     const char *table_name = ctx->argv[1];
     const char *record_id = ctx->argv[2];
-    const struct ctl_table_class *table;
+    const struct ovsdb_idl_table_class *table;
     const struct ovsdb_idl_row *row;
     int i;
 
@@ -2073,11 +2069,15 @@ ctl_register_commands(const struct ctl_command_syntax *commands)
 
 /* Registers the 'db_ctl_commands' to 'all_commands'. */
 void
-ctl_init(const struct ctl_table_class tables_[],
-         const struct cmd_show_table cmd_show_tables_[],
-         void (*ctl_exit_func_)(int status))
+ctl_init__(const struct ovsdb_idl_table_class *idl_classes_,
+           const struct ctl_table_class *ctl_classes_,
+           size_t n_classes_,
+           const struct cmd_show_table cmd_show_tables_[],
+           void (*ctl_exit_func_)(int status))
 {
-    tables = tables_;
+    idl_classes = idl_classes_;
+    ctl_classes = ctl_classes_;
+    n_classes = n_classes_;
     ctl_exit_func = ctl_exit_func_;
     ctl_register_commands(db_ctl_commands);
 
