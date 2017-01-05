@@ -254,6 +254,52 @@ parse_field(const struct mf_field *mf, const char *s, struct match *match,
     return error;
 }
 
+/* Parses 'str_value' as the value of subfield 'name', and updates
+ * 'match' appropriately.  Restricts the set of usable protocols to ones
+ * supporting the parsed field.
+ *
+ * Returns NULL if successful, otherwise a malloc()'d string describing the
+ * error.  The caller is responsible for freeing the returned string. */
+static char * OVS_WARN_UNUSED_RESULT
+parse_subfield(const char *name, const char *str_value, struct match *match,
+               enum ofputil_protocol *usable_protocols)
+{
+    struct mf_subfield sf;
+    char *error;
+
+    error = mf_parse_subfield(&sf, name);
+    if (!error) {
+        union mf_value val;
+        char *tail;
+        if (parse_int_string(str_value, (uint8_t *)&val, sf.field->n_bytes,
+                             &tail) || *tail != 0) {
+            return xasprintf("%s: cannot parse integer value: %s", name,
+                             str_value);
+        }
+        if (!bitwise_is_all_zeros(&val, sf.field->n_bytes, sf.n_bits,
+                                  sf.field->n_bytes * 8 - sf.n_bits)) {
+            struct ds ds;
+
+            ds_init(&ds);
+            mf_format(sf.field, &val, NULL, &ds);
+            error = xasprintf("%s: value %s does not fit into %d bits",
+                              name, ds_cstr(&ds), sf.n_bits);
+            ds_destroy(&ds);
+            return error;
+        }
+
+        const struct mf_field *field = sf.field;
+        union mf_value value, mask;
+        unsigned int size = DIV_ROUND_UP(sf.n_bits, 8);
+
+        mf_get(field, match, &value, &mask);
+        bitwise_copy(&val, size, 0, &value, field->n_bytes, sf.ofs, sf.n_bits);
+        bitwise_one (               &mask,  field->n_bytes, sf.ofs, sf.n_bits);
+        *usable_protocols &= mf_set(field, &value, &mask, match, &error);
+    }
+    return error;
+}
+
 static char *
 extract_actions(char *s)
 {
@@ -360,6 +406,7 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
 
     while (ofputil_parse_key_value(&string, &name, &value)) {
         const struct protocol *p;
+        const struct mf_field *mf;
         char *error = NULL;
 
         if (parse_protocol(name, &p)) {
@@ -383,9 +430,10 @@ parse_ofp_str__(struct ofputil_flow_mod *fm, int command, char *string,
         } else if (!strcmp(name, "no_readonly_table")
                    || !strcmp(name, "allow_hidden_fields")) {
              /* ignore these fields. */
-        } else if (mf_from_name(name)) {
-            error = parse_field(mf_from_name(name), value, &fm->match,
-                                usable_protocols);
+        } else if ((mf = mf_from_name(name)) != NULL) {
+            error = parse_field(mf, value, &fm->match, usable_protocols);
+        } else if (strchr(name, '[')) {
+            error = parse_subfield(name, value, &fm->match, usable_protocols);
         } else {
             if (!*value) {
                 return xasprintf("field %s missing value", name);

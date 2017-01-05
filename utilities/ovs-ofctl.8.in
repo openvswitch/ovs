@@ -1545,8 +1545,8 @@ is the packet's input port, the packet is not output.
 .
 .IP \fBoutput:\fIsrc\fB[\fIstart\fB..\fIend\fB]
 Outputs the packet to the OpenFlow port number read from \fIsrc\fR,
-which must be an NXM field as described above.  For example,
-\fBoutput:NXM_NX_REG0[16..31]\fR outputs to the OpenFlow port number
+which may be an NXM field name, as described above, or a match field name.
+\fBoutput:reg0[16..31]\fR outputs to the OpenFlow port number
 written in the upper half of register 0.  If the port number is the
 packet's input port, the packet is not output.
 .IP
@@ -2014,18 +2014,19 @@ bytes with value 0 to make the total number 6 more than a multiple of
 .
 .IP "\fBmove:\fIsrc\fB[\fIstart\fB..\fIend\fB]\->\fIdst\fB[\fIstart\fB..\fIend\fB]\fR"
 Copies the named bits from field \fIsrc\fR to field \fIdst\fR.
-\fIsrc\fR and \fIdst\fR must be NXM field names as defined in
-\fBnicira\-ext.h\fR, e.g. \fBNXM_OF_UDP_SRC\fR or \fBNXM_NX_REG0\fR.
-Each \fIstart\fR and \fIend\fR pair, which are inclusive, must specify
-the same number of bits and must fit within its respective field.
+\fIsrc\fR and \fIdst\fR may be NXM field names as defined in
+\fBnicira\-ext.h\fR, e.g. \fBNXM_OF_UDP_SRC\fR or \fBNXM_NX_REG0\fR,
+or a match field name, e.g. \fBreg0\fR.  Each
+\fIstart\fR and \fIend\fR pair, which are inclusive, must specify the
+same number of bits and must fit within its respective field.
 Shorthands for \fB[\fIstart\fB..\fIend\fB]\fR exist: use
 \fB[\fIbit\fB]\fR to specify a single bit or \fB[]\fR to specify an
-entire field.
+entire field (in the latter case the brackets can also be left off).
 .IP
 Examples: \fBmove:NXM_NX_REG0[0..5]\->NXM_NX_REG1[26..31]\fR copies the
 six bits numbered 0 through 5, inclusive, in register 0 into bits 26
 through 31, inclusive;
-\fBmove:NXM_NX_REG0[0..15]\->NXM_OF_VLAN_TCI[]\fR copies the least
+\fBmove:reg0[0..15]\->vlan_tci\fR copies the least
 significant 16 bits of register 0 into the VLAN TCI field.
 .IP
 In OpenFlow 1.0 through 1.4, \fBmove\fR ordinarily uses an Open
@@ -2044,9 +2045,9 @@ the customary syntax for field \fIdst\fR, which is expressed as a
 field name.  For example, \fBset_field:00:11:22:33:44:55->eth_src\fR
 sets the Ethernet source address to 00:11:22:33:44:55.  With
 \fBload\fR, \fIvalue\fR must be an integer value (in decimal or
-prefixed by \fB0x\fR for hexadecimal) and \fIdst\fR is the NXM or OXM
-name for the field.  For example,
-\fBload:0x001122334455->OXM_OF_ETH_DST[]\fR has the same effect as the
+prefixed by \fB0x\fR for hexadecimal) and \fIdst\fR can also be the
+NXM or OXM name for the field.  For example,
+\fBload:0x001122334455->OXM_OF_ETH_SRC[]\fR has the same effect as the
 prior \fBset_field\fR example.
 .IP
 The two forms exist for historical reasons.  Open vSwitch 1.1
@@ -2066,8 +2067,9 @@ subfield, \fBOFPAT_SET_FIELD\fR otherwise; and OpenFlow 1.5 and later,
 Pushes \fIstart\fR to \fIend\fR bits inclusive, in fields
 on top of the stack.
 .IP
-Example: \fBpush:NXM_NX_REG2[0..5]\fR push the value stored in register
-2 bits 0 through 5, inclusive, on to the internal stack.
+Example: \fBpush:NXM_NX_REG2[0..5]\fR or \fBpush:reg2[0..5]\fR push
+the value stored in register 2 bits 0 through 5, inclusive, on to the
+internal stack.
 .
 .IP "\fBpop:\fIdst\fB[\fIstart\fB..\fIend\fB]"
 Pops from the top of the stack, retrieves the \fIstart\fR to \fIend\fR bits
@@ -2075,9 +2077,9 @@ inclusive, from the value popped and store them into the corresponding
 bits in \fIdst\fR.
 .
 .IP
-Example: \fBpop:NXM_NX_REG2[0..5]\fR pops the value from top of the stack.
-Set register 2 bits 0 through 5, inclusive, based on bits 0 through 5 from the
-value just popped.
+Example: \fBpop:NXM_NX_REG2[0..5]\fR or \fBpop:reg2[0..5]\fR pops the
+value from top of the stack.  Set register 2 bits 0 through 5,
+inclusive, based on bits 0 through 5 from the value just popped.
 .
 .
 .IP "\fBmultipath(\fIfields\fB, \fIbasis\fB, \fIalgorithm\fB, \fIn_links\fB, \fIarg\fB, \fIdst\fB[\fIstart\fB..\fIend\fB])\fR"
@@ -2144,7 +2146,10 @@ above.
 Example: \fBbundle_load(eth_src, 0, hrw, ofport, NXM_NX_REG0[],
 slaves:4, 8)\fR uses an Ethernet source hash with basis 0, to select
 between OpenFlow ports 4 and 8 using the Highest Random Weight
-algorithm, and writes the selection to \fBNXM_NX_REG0[]\fR.
+algorithm, and writes the selection to \fBNXM_NX_REG0[]\fR.  Also the
+match field name can be used, for example, instead of 'NXM_NX_REG0'
+the name 'reg0' can be used.  When the while field is indicated the
+empty brackets can also be left off.
 .IP
 Refer to \fBnicira\-ext.h\fR for more details.
 .
@@ -3287,8 +3292,10 @@ Implements a level 2 MAC learning switch using the learn.
 \fBovs\-ofctl add\-flow br0 'table=0,priority=0 actions=load:3->NXM_NX_REG0[0..15],learn(table=0,priority=1,idle_timeout=10,NXM_OF_ETH_SRC[],NXM_OF_VLAN_TCI[0..11],output:NXM_NX_REG0[0..15]),output:2\fR
 In this use of a learn action, the first packet from each source MAC
 will be sent to port 2. Subsequent packets will be output to port 3,
-with an idle timeout of 10 seconds.
-.
+with an idle timeout of 10 seconds.  NXM field names and match field
+names are both accepted, e.g. \fBNXM_NX_REG0\fR or \fBreg0\fR for the
+first register, and empty brackets may be omitted.
+.IP
 Additional examples may be found documented as part of related sections.
 .
 .SH "SEE ALSO"

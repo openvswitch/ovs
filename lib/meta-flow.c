@@ -80,6 +80,17 @@ mf_from_name(const char *name)
     return shash_find_data(&mf_by_name, name);
 }
 
+/* Returns the field with the given 'name' (which is 'len' bytes long), or a
+ * null pointer if no field has that name. */
+const struct mf_field *
+mf_from_name_len(const char *name, size_t len)
+{
+    nxm_init();
+
+    struct shash_node *node = shash_find_len(&mf_by_name, name, len);
+    return node ? node->data : NULL;
+}
+
 static void
 nxm_do_init(void)
 {

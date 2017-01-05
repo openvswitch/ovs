@@ -1812,7 +1812,7 @@ mf_parse_subfield_name(const char *name, int name_len, bool *wild)
 char * OVS_WARN_UNUSED_RESULT
 mf_parse_subfield__(struct mf_subfield *sf, const char **sp)
 {
-    const struct mf_field *field;
+    const struct mf_field *field = NULL;
     const struct nxm_field *f;
     const char *name;
     int start, end;
@@ -1822,30 +1822,31 @@ mf_parse_subfield__(struct mf_subfield *sf, const char **sp)
 
     s = *sp;
     name = s;
-    name_len = strcspn(s, "[");
-    if (s[name_len] != '[') {
-        return xasprintf("%s: missing [ looking for field name", *sp);
-    }
+    name_len = strcspn(s, "[-");
 
     f = mf_parse_subfield_name(name, name_len, &wild);
-    if (!f) {
+    field = f ? mf_from_id(f->id) : mf_from_name_len(name, name_len);
+    if (!field) {
         return xasprintf("%s: unknown field `%.*s'", *sp, name_len, s);
     }
-    field = mf_from_id(f->id);
 
     s += name_len;
-    if (ovs_scan(s, "[%d..%d]", &start, &end)) {
-        /* Nothing to do. */
-    } else if (ovs_scan(s, "[%d]", &start)) {
-        end = start;
-    } else if (!strncmp(s, "[]", 2)) {
-        start = 0;
-        end = field->n_bits - 1;
-    } else {
-        return xasprintf("%s: syntax error expecting [] or [<bit>] or "
-                         "[<start>..<end>]", *sp);
+    /* Assume full field. */
+    start = 0;
+    end = field->n_bits - 1;
+    if (*s == '[') {
+        if (!strncmp(s, "[]", 2)) {
+            /* Nothing to do. */
+        } else if (ovs_scan(s, "[%d..%d]", &start, &end)) {
+            /* Nothing to do. */
+        } else if (ovs_scan(s, "[%d]", &start)) {
+            end = start;
+        } else {
+            return xasprintf("%s: syntax error expecting [] or [<bit>] or "
+                             "[<start>..<end>]", *sp);
+        }
+        s = strchr(s, ']') + 1;
     }
-    s = strchr(s, ']') + 1;
 
     if (start > end) {
         return xasprintf("%s: starting bit %d is after ending bit %d",

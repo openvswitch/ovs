@@ -7,7 +7,7 @@ actions=learn(send_flow_rem)
 actions=learn(delete_learned)
 actions=learn(send_flow_rem,delete_learned)
 actions=learn(NXM_OF_VLAN_TCI[0..11], NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[], output:NXM_OF_IN_PORT[], load:10->NXM_NX_REG0[5..10])
-actions=learn(table=1,idle_timeout=10, hard_timeout=20, fin_idle_timeout=5, fin_hard_timeout=10, priority=10, cookie=0xfedcba9876543210, in_port=99,NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG1[16..31])
+actions=learn(table=1,idle_timeout=10, hard_timeout=20, fin_idle_timeout=5, fin_hard_timeout=10, priority=10, cookie=0xfedcba9876543210, in_port=99,eth_dst=eth_src,load:in_port->reg1[16..31])
 ]])
 AT_CHECK([ovs-ofctl parse-flows flows.txt], [0],
 [[usable protocols: any
@@ -26,7 +26,7 @@ AT_CHECK([[ovs-ofctl parse-flow 'actions=learn(table=1, in_port_oxm=123456)']],
   [1], [], [stderr])
 AT_CHECK([sed -e 's/.*|ofp_util|WARN|//' < stderr], [0],
   [[port 123456 is outside the supported range 0 through ffff or 0xffffff00 through 0xffffffff
-ovs-ofctl: 123456: port value out of range for in_port_oxm
+ovs-ofctl: table=1, in_port_oxm=123456: in_port_oxm value 123456 cannot be parsed as a subfield (123456: unknown field `123456') or an immediate value (123456: port value out of range for in_port_oxm)
 ]], [[]])
 AT_CLEANUP
 

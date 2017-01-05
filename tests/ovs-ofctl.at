@@ -79,6 +79,9 @@ for test_case in \
     'xxreg2=2/1                                  NXM,OXM' \
     'xxreg3=3                                    NXM,OXM' \
     'xxreg3=3/1                                  NXM,OXM' \
+    'xxreg3[[0..0]]=1                            NXM,OXM' \
+    'xxreg3[[126..127]]=3                        NXM,OXM' \
+    'reg3[[]]=3                                  NXM,OXM' \
     'dl_src=00:11:22:33:44:55                    any' \
     'dl_src=00:11:22:33:44:55/00:ff:ff:ff:ff:ff  NXM,OXM,OpenFlow11' \
     'dl_dst=00:11:22:33:44:55                    any' \
@@ -147,6 +150,7 @@ for test_case in \
     'udp,udp_dst=0x1000/0x1000                   NXM,OXM' \
     'udp6,udp_dst=80                             NXM,OXM' \
     'udp6,udp_dst=0x1000/0x1000                  NXM,OXM' \
+    'udp6,udp_dst[[12]]=1                        NXM,OXM' \
     'icmp,icmp_type=1                            any' \
     'icmp,icmp_code=2                            any' \
     'icmp6,icmpv6_type=1                         NXM,OXM' \
@@ -395,7 +399,7 @@ cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
 tcp,tp_src=0x1230/0xfff0,tun_id=0x1234,cookie=0x5678,actions=flood
 actions=set_tunnel:0x1234,set_tunnel64:0x9876,set_tunnel:0x123456789
-actions=multipath(eth_src, 50, hrw, 12, 0, NXM_NX_REG0[0..3]),multipath(symmetric_l4, 1024, iter_hash, 5000, 5050, NXM_NX_REG0[0..12])
+actions=multipath(eth_src, 50, hrw, 12, 0, NXM_NX_REG0[0..3]),multipath(symmetric_l4, 1024, iter_hash, 5000, 5050, reg0[0..12])
 table=1,actions=drop
 tun_id=0x1234000056780000/0xffff0000ffff0000,actions=drop
 metadata=0x1234ffff5678ffff/0xffff0000ffff0000,actions=drop
@@ -403,13 +407,13 @@ actions=bundle(eth_src,50,active_backup,ofport,slaves:1)
 actions=bundle(symmetric_l4,60,hrw,ofport,slaves:2,3)
 actions=bundle(symmetric_l4,60,hrw,ofport,slaves:)
 actions=output:1,bundle(eth_src,0,hrw,ofport,slaves:1),output:2
-actions=bundle_load(eth_src,50,active_backup,ofport,NXM_NX_REG0[],slaves:1)
+actions=bundle_load(eth_src,50,active_backup,ofport,reg0,slaves:1)
 actions=bundle_load(symmetric_l4,60,hrw,ofport,NXM_NX_REG0[0..15],slaves:2,3)
-actions=bundle_load(symmetric_l4,60,hrw,ofport,NXM_NX_REG0[0..15],slaves:[2,3])
+actions=bundle_load(symmetric_l4,60,hrw,ofport,reg0[0..15],slaves:[2,3])
 actions=bundle_load(symmetric_l4,60,hrw,ofport,NXM_NX_REG0[0..30],slaves:)
 actions=output:1,bundle_load(eth_src,0,hrw,ofport,NXM_NX_REG0[16..31],slaves:1),output:2
 actions=resubmit:1,resubmit(2),resubmit(,3),resubmit(2,3)
-send_flow_rem,actions=output:1,output:NXM_NX_REG0[],output:2,output:NXM_NX_REG1[16..31],output:3
+send_flow_rem,actions=output:1,output:NXM_NX_REG0,output:2,output:reg1[16..31],output:3
 check_overlap,actions=output:1,exit,output:2
 tcp,actions=fin_timeout(idle_timeout=5,hard_timeout=15)
 actions=controller(max_len=123,reason=invalid_ttl,id=555)
@@ -419,6 +423,9 @@ ip,actions=ct(commit,zone=5)
 ip,actions=ct(commit,exec(load(1->NXM_NX_CT_MARK[])))
 ip,actions=ct(commit,exec(load(0x1->NXM_NX_CT_LABEL[])))
 ip,actions=ct(commit,exec(load(0x1234567890ABCDEF->NXM_NX_CT_LABEL[32..95])))
+ip,actions=ct(commit,exec(load(1->ct_mark)))
+ip,actions=ct(commit,exec(load(0x1->ct_label[])))
+ip,actions=ct(commit,exec(load(0x1234567890ABCDEF->ct_label[32..95])))
 ip,actions=ct(commit,exec(set_field(0x1->ct_label)))
 ip,ct_state=+trk,ct_label=0x1234567890abcdef12345678,actions=ct(commit)
 actions=output(max_len=100,port=123)
@@ -463,6 +470,9 @@ NXT_FLOW_MOD: ADD table:255 actions=controller(reason=invalid_ttl,max_len=123,id
 NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 NXT_FLOW_MOD: ADD table:255 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,zone=5)
+NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[]))
+NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
+NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1234567890abcdef->NXM_NX_CT_LABEL[32..95]))
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_MARK[]))
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1->NXM_NX_CT_LABEL[0..63],load:0->NXM_NX_CT_LABEL[64..127]))
 NXT_FLOW_MOD: ADD table:255 ip actions=ct(commit,exec(load:0x1234567890abcdef->NXM_NX_CT_LABEL[32..95]))
@@ -579,9 +589,12 @@ cookie=0x123456789abcdef hard_timeout=10 priority=60000 actions=controller
 actions=note:41.42.43,note:00.01.02.03.04.05.06.07,note
 tun_id=0x1234,cookie=0x5678,actions=flood
 actions=drop
-reg0=123,actions=move:NXM_NX_REG0[0..5]->NXM_NX_REG1[26..31],load:55->NXM_NX_REG2[0..31],move:NXM_NX_REG0[0..31]->NXM_NX_TUN_ID[0..31],move:NXM_NX_REG0[0..15]->NXM_OF_VLAN_TCI[]
+reg0=123,actions=move:reg0[0..5]->reg1[26..31],load:55->reg2,move:reg0->tun_id[0..31],move:reg0[0..15]->vlan_tci
 actions=move:OXM_OF_ETH_DST[]->OXM_OF_ETH_SRC[]
-actions=push:NXM_NX_REG0[0..31],pop:NXM_NX_REG0[]
+actions=push:reg0[0..31],pop:NXM_NX_REG0[]
+reg0=123,actions=move:reg0[0..5]->reg1[26..31],load:55->reg2,move:reg0->tun_id[0..31],move:reg0[0..15]->vlan_tci
+actions=move:eth_dst->eth_src[]
+actions=push:reg0[0..31],pop:reg0
 vlan_tci=0x1123/0x1fff,actions=drop
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678)
 actions=sample(probability=12345,collector_set_id=23456,obs_domain_id=34567,obs_point_id=45678,sampling_port=56789)
@@ -616,6 +629,9 @@ NXT_FLOW_MOD: ADD <any> cookie:0x123456789abcdef hard:10 pri:60000 actions=CONTR
 NXT_FLOW_MOD: ADD <any> actions=note:41.42.43.00.00.00,note:00.01.02.03.04.05.06.07.00.00.00.00.00.00,note:00.00.00.00.00.00
 NXT_FLOW_MOD: ADD NXM_NX_TUN_ID(0000000000001234) cookie:0x5678 actions=FLOOD
 NXT_FLOW_MOD: ADD <any> actions=drop
+NXT_FLOW_MOD: ADD NXM_NX_REG0(0000007b) actions=move:NXM_NX_REG0[0..5]->NXM_NX_REG1[26..31],load:0x37->NXM_NX_REG2[],move:NXM_NX_REG0[]->NXM_NX_TUN_ID[0..31],move:NXM_NX_REG0[0..15]->NXM_OF_VLAN_TCI[]
+NXT_FLOW_MOD: ADD <any> actions=move:NXM_OF_ETH_DST[]->NXM_OF_ETH_SRC[]
+NXT_FLOW_MOD: ADD <any> actions=push:NXM_NX_REG0[],pop:NXM_NX_REG0[]
 NXT_FLOW_MOD: ADD NXM_NX_REG0(0000007b) actions=move:NXM_NX_REG0[0..5]->NXM_NX_REG1[26..31],load:0x37->NXM_NX_REG2[],move:NXM_NX_REG0[]->NXM_NX_TUN_ID[0..31],move:NXM_NX_REG0[0..15]->NXM_OF_VLAN_TCI[]
 NXT_FLOW_MOD: ADD <any> actions=move:NXM_OF_ETH_DST[]->NXM_OF_ETH_SRC[]
 NXT_FLOW_MOD: ADD <any> actions=push:NXM_NX_REG0[],pop:NXM_NX_REG0[]

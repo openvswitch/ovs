@@ -2069,6 +2069,7 @@ struct field_array {
 
 /* Finding mf_fields. */
 const struct mf_field *mf_from_name(const char *name);
+const struct mf_field *mf_from_name_len(const char *name, size_t len);
 
 static inline const struct mf_field *
 mf_from_id(enum mf_field_id id)

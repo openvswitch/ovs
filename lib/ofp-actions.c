@@ -609,25 +609,30 @@ static char * OVS_WARN_UNUSED_RESULT
 parse_OUTPUT(const char *arg, struct ofpbuf *ofpacts,
              enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
-    if (strchr(arg, '[')) {
-        struct ofpact_output_reg *output_reg;
-
-        output_reg = ofpact_put_OUTPUT_REG(ofpacts);
-        output_reg->max_len = UINT16_MAX;
-        return mf_parse_subfield(&output_reg->src, arg);
-    } else if (strstr(arg, "port") && strstr(arg, "max_len")) {
+    if (strstr(arg, "port") && strstr(arg, "max_len")) {
         struct ofpact_output_trunc *output_trunc;
 
         output_trunc = ofpact_put_OUTPUT_TRUNC(ofpacts);
         return parse_truncate_subfield(output_trunc, arg);
     } else {
-        struct ofpact_output *output;
+        struct mf_subfield src;
+        char *error = mf_parse_subfield(&src, arg);
+        if (!error) {
+            struct ofpact_output_reg *output_reg;
 
-        output = ofpact_put_OUTPUT(ofpacts);
-        if (!ofputil_port_from_string(arg, &output->port)) {
-            return xasprintf("%s: output to unknown port", arg);
+            output_reg = ofpact_put_OUTPUT_REG(ofpacts);
+            output_reg->max_len = UINT16_MAX;
+            output_reg->src = src;
+        } else {
+            free(error);
+            struct ofpact_output *output;
+
+            output = ofpact_put_OUTPUT(ofpacts);
+            if (!ofputil_port_from_string(arg, &output->port)) {
+                return xasprintf("%s: output to unknown port", arg);
+            }
+            output->max_len = output->port == OFPP_CONTROLLER ? UINT16_MAX : 0;
         }
-        output->max_len = output->port == OFPP_CONTROLLER ? UINT16_MAX : 0;
         return NULL;
     }
 }
@@ -2375,28 +2380,7 @@ parse_REG_MOVE(const char *arg, struct ofpbuf *ofpacts,
                enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
     struct ofpact_reg_move *move = ofpact_put_REG_MOVE(ofpacts);
-    const char *full_arg = arg;
-    char *error;
-
-    error = mf_parse_subfield__(&move->src, &arg);
-    if (error) {
-        return error;
-    }
-    if (strncmp(arg, "->", 2)) {
-        return xasprintf("%s: missing `->' following source", full_arg);
-    }
-    arg += 2;
-    error = mf_parse_subfield(&move->dst, arg);
-    if (error) {
-        return error;
-    }
-
-    if (move->src.n_bits != move->dst.n_bits) {
-        return xasprintf("%s: source field is %d bits wide but destination is "
-                         "%d bits wide", full_arg,
-                         move->src.n_bits, move->dst.n_bits);
-    }
-    return NULL;
+    return nxm_parse_reg_move(move, arg);
 }
 
 static void
