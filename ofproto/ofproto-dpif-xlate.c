@@ -4316,9 +4316,16 @@ xlate_sample_action(struct xlate_ctx *ctx,
 static void
 compose_clone_action(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
 {
+    bool old_conntracked = ctx->conntracked;
     struct flow old_flow = ctx->xin->flow;
+
     do_xlate_actions(oc->actions, ofpact_nest_get_action_len(oc), ctx);
+
     ctx->xin->flow = old_flow;
+
+    /* The clone's conntrack execution should have no effect on the original
+     * packet. */
+    ctx->conntracked = old_conntracked;
 }
 
 static bool
