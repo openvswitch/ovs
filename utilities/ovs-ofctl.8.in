@@ -2633,6 +2633,14 @@ than one flow.  Open vSwitch does not enforce this.
 .IP
 The \fBconjunction\fR action and \fBconj_id\fR field were introduced
 in Open vSwitch 2.4.
+.
+.IP "\fBclone(\fR[\fIaction\fR][\fB,\fIaction\fR...]\fB)\fR"
+Executes each nested \fIaction\fR, saving much of the packet and
+pipeline state beforehand and then restoring it afterward.  The state
+that is saved and restored includes all flow data and metadata
+(including, for example, \fBct_state\fR).
+.IP
+This action was added in Open vSwitch 2.6.90.
 .RE
 .
 .PP
