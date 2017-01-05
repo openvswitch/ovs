@@ -56,6 +56,11 @@ Post-v2.6.0
      * Support for DPDK v16.11.
      * Support for rx checksum offload. Refer DPDK HOWTO for details.
      * Port Hotplug is now supported.
+     * DPDK physical ports can now have arbitrary names. The PCI address of
+       the device must be set using the 'dpdk-devargs' option. Compatibility
+       with the old dpdk<portid> naming scheme is broken, and as such a
+       device will not be available for use until a valid dpdk-devargs is
+       specified.
    - Fedora packaging:
      * A package upgrade does not automatically restart OVS service.
    - ovs-vswitchd/ovs-vsctl:

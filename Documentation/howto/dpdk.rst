@@ -312,14 +312,13 @@ In order to attach a port, it has to be bound to DPDK using the
 
 Then it can be attached to OVS::
 
-    $ ovs-appctl netdev-dpdk/attach 0000:01:00.0
-
-At this point, the user can create a dpdk port using the ``add-port`` command.
+    $ ovs-vsctl add-port br0 dpdkx -- set Interface dpdkx type=dpdk \
+        options:dpdk-devargs=0000:01:00.0
 
 It is also possible to detach a port from ovs, the user has to remove the
 port using the del-port command, then it can be detached using::
 
-    $ ovs-appctl netdev-dpdk/detach dpdk0
+    $ ovs-appctl netdev-dpdk/detach dpdkx
 
 This feature is not supported with VFIO and does not work with some NICs.
 For more information please refer to the `DPDK Port Hotplug Framework

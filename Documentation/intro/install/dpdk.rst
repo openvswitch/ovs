@@ -252,8 +252,13 @@ ports. For example, to create a userspace bridge named ``br0`` and add two
 ``dpdk`` ports to it, run::
 
     $ ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev
-    $ ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
-    $ ovs-vsctl add-port br0 dpdk1 -- set Interface dpdk1 type=dpdk
+    $ ovs-vsctl add-port br0 myportnameone -- set Interface myportnameone \
+        type=dpdk options:dpdk-devargs=0000:06:00.0
+    $ ovs-vsctl add-port br0 myportnametwo -- set Interface myportnametwo \
+        type=dpdk options:dpdk-devargs=0000:06:00.1
+
+DPDK devices will not be available for use until a valid dpdk-devargs is
+specified.
 
 Refer to ovs-vsctl(8) and :doc:`/howto/dpdk` for more details.
 

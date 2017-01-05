@@ -2303,6 +2303,14 @@
         </p>
       </column>
 
+      <column name="options" key="dpdk-devargs"
+              type='{"type": "string"}'>
+        <p>
+          Specifies the PCI address of a physical dpdk device.
+          Only supported by 'dpdk' devices.
+        </p>
+      </column>
+
       <column name="other_config" key="pmd-rxq-affinity">
         <p>Specifies mapping of RX queues of this interface to CPU cores.</p>
         <p>Value should be set in the following form:</p>

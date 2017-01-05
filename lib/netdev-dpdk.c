@@ -356,6 +356,9 @@ struct netdev_dpdk {
     /* Identifier used to distinguish vhost devices from each other. */
     char vhost_id[PATH_MAX];
 
+    /* Device arguments for dpdk ports */
+    char *devargs;
+
     /* In dpdk_list. */
     struct ovs_list list_node OVS_GUARDED_BY(dpdk_mutex);
 
@@ -846,7 +849,7 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
     /* If the 'sid' is negative, it means that the kernel fails
      * to obtain the pci numa info.  In that situation, always
      * use 'SOCKET0'. */
-    if (type == DPDK_DEV_ETH) {
+    if (type == DPDK_DEV_ETH && rte_eth_dev_is_valid_port(dev->port_id)) {
         sid = rte_eth_dev_socket_id(port_no);
     } else {
         sid = rte_lcore_to_socket_id(rte_get_master_lcore());
@@ -888,9 +891,11 @@ netdev_dpdk_init(struct netdev *netdev, unsigned int port_no,
     /* Initilize the hardware offload flags to 0 */
     dev->hw_ol_features = 0;
     if (type == DPDK_DEV_ETH) {
-        err = dpdk_eth_dev_init(dev);
-        if (err) {
-            goto unlock;
+        if (rte_eth_dev_is_valid_port(dev->port_id)) {
+            err = dpdk_eth_dev_init(dev);
+            if (err) {
+                goto unlock;
+            }
         }
         dev->tx_q = netdev_dpdk_alloc_txq(netdev->n_txq);
     } else {
@@ -986,17 +991,10 @@ netdev_dpdk_vhost_client_construct(struct netdev *netdev)
 static int
 netdev_dpdk_construct(struct netdev *netdev)
 {
-    unsigned int port_no;
     int err;
 
-    /* Names always start with "dpdk" */
-    err = dpdk_dev_parse_name(netdev->name, "dpdk", &port_no);
-    if (err) {
-        return err;
-    }
-
     ovs_mutex_lock(&dpdk_mutex);
-    err = netdev_dpdk_init(netdev, port_no, DPDK_DEV_ETH);
+    err = netdev_dpdk_init(netdev, -1, DPDK_DEV_ETH);
     ovs_mutex_unlock(&dpdk_mutex);
     return err;
 }
@@ -1010,6 +1008,7 @@ netdev_dpdk_destruct(struct netdev *netdev)
     ovs_mutex_lock(&dev->mutex);
 
     rte_eth_dev_stop(dev->port_id);
+    free(dev->devargs);
     free(ovsrcu_get_protected(struct ingress_policer *,
                               &dev->ingress_policer));
 
@@ -1117,6 +1116,49 @@ netdev_dpdk_get_config(const struct netdev *netdev, struct smap *args)
     return 0;
 }
 
+static struct netdev_dpdk *
+netdev_dpdk_lookup_by_port_id(int port_id)
+    OVS_REQUIRES(dpdk_mutex)
+{
+    struct netdev_dpdk *dev;
+
+    LIST_FOR_EACH (dev, list_node, &dpdk_list) {
+        if (dev->port_id == port_id) {
+            return dev;
+        }
+    }
+
+    return NULL;
+}
+
+static int
+netdev_dpdk_process_devargs(const char *devargs)
+{
+    struct rte_pci_addr addr;
+    uint8_t new_port_id = UINT8_MAX;
+
+    if (!eal_parse_pci_DomBDF(devargs, &addr)) {
+        /* Valid PCI address format detected - configure physical device */
+        if (!rte_eth_dev_count()
+                || rte_eth_dev_get_port_by_name(devargs, &new_port_id)
+                || !rte_eth_dev_is_valid_port(new_port_id)) {
+            /* PCI device not found in DPDK, attempt to attach it */
+            if (!rte_eth_dev_attach(devargs, &new_port_id)) {
+                /* Attach successful */
+                VLOG_INFO("Device "PCI_PRI_FMT" has been attached to DPDK",
+                          addr.domain, addr.bus, addr.devid, addr.function);
+            } else {
+                /* Attach unsuccessful */
+                VLOG_INFO("Error attaching device "PCI_PRI_FMT" to DPDK",
+                          addr.domain, addr.bus, addr.devid, addr.function);
+                return -1;
+            }
+        }
+    }
+
+    return new_port_id;
+}
+
 static void
 dpdk_set_rxq_config(struct netdev_dpdk *dev, const struct smap *args)
     OVS_REQUIRES(dev->mutex)
@@ -1159,7 +1201,10 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
     };
     bool rx_chksm_ofld;
     bool temp_flag;
+    const char *new_devargs;
+    int err = 0;
 
+    ovs_mutex_lock(&dpdk_mutex);
     ovs_mutex_lock(&dev->mutex);
 
     dpdk_set_rxq_config(dev, args);
@@ -1170,6 +1215,53 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
     dpdk_process_queue_size(netdev, args, "n_txq_desc",
                             NIC_PORT_DEFAULT_TXQ_SIZE,
                             &dev->requested_txq_size);
+
+    new_devargs = smap_get(args, "dpdk-devargs");
+
+    if (dev->devargs && strcmp(new_devargs, dev->devargs)) {
+        /* The user requested a new device.  If we return error, the caller
+         * will delete this netdev and try to recreate it. */
+        err = EAGAIN;
+        goto out;
+    }
+
+    /* dpdk-devargs is required for device configuration */
+    if (new_devargs && new_devargs[0]) {
+        /* Don't process dpdk-devargs if value is unchanged and port id
+         * is valid */
+        if (!(dev->devargs && !strcmp(dev->devargs, new_devargs)
+               && rte_eth_dev_is_valid_port(dev->port_id))) {
+            int new_port_id = netdev_dpdk_process_devargs(new_devargs);
+            if (!rte_eth_dev_is_valid_port(new_port_id)) {
+                err = EINVAL;
+            } else if (new_port_id == dev->port_id) {
+                /* Already configured, do not reconfigure again */
+                err = 0;
+            } else {
+                struct netdev_dpdk *dup_dev;
+                dup_dev = netdev_dpdk_lookup_by_port_id(new_port_id);
+                if (dup_dev) {
+                    VLOG_WARN("'%s' is trying to use device '%s' which is "
+                              "already in use by '%s'.",
+                              netdev_get_name(netdev), new_devargs,
+                              netdev_get_name(&dup_dev->up));
+                    err = EADDRINUSE;
+                } else {
+                    dev->devargs = xstrdup(new_devargs);
+                    dev->port_id = new_port_id;
+                    netdev_request_reconfigure(&dev->up);
+                    err = 0;
+                }
+            }
+        }
+    } else {
+        /* dpdk-devargs unspecified - can't configure device */
+        err = EINVAL;
+    }
+
+    if (err) {
+        goto out;
+    }
 
     rx_fc_en = smap_get_bool(args, "rx-flow-ctrl", false);
     tx_fc_en = smap_get_bool(args, "tx-flow-ctrl", false);
@@ -1191,9 +1283,12 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
         dev->hw_ol_features ^= NETDEV_RX_CHECKSUM_OFFLOAD;
         dpdk_eth_checksum_offload_configure(dev);
     }
-    ovs_mutex_unlock(&dev->mutex);
 
-    return 0;
+out:
+    ovs_mutex_unlock(&dev->mutex);
+    ovs_mutex_unlock(&dpdk_mutex);
+
+    return err;
 }
 
 static int
@@ -2358,57 +2453,35 @@ netdev_dpdk_set_admin_state(struct unixctl_conn *conn, int argc,
 }
 
 static void
-netdev_dpdk_attach(struct unixctl_conn *conn, int argc OVS_UNUSED,
-                   const char *argv[], void *aux OVS_UNUSED)
-{
-    int ret;
-    char *response;
-    uint8_t port_id;
-
-    ovs_mutex_lock(&dpdk_mutex);
-
-    ret = rte_eth_dev_attach(argv[1], &port_id);
-    if (ret < 0) {
-        response = xasprintf("Error attaching device '%s'", argv[1]);
-        ovs_mutex_unlock(&dpdk_mutex);
-        unixctl_command_reply_error(conn, response);
-        free(response);
-        return;
-    }
-
-    response = xasprintf("Device '%s' has been attached as 'dpdk%d'",
-                         argv[1], port_id);
-
-    ovs_mutex_unlock(&dpdk_mutex);
-    unixctl_command_reply(conn, response);
-    free(response);
-}
-
-static void
 netdev_dpdk_detach(struct unixctl_conn *conn, int argc OVS_UNUSED,
                    const char *argv[], void *aux OVS_UNUSED)
 {
     int ret;
     char *response;
-    unsigned int parsed_port;
     uint8_t port_id;
     char devname[RTE_ETH_NAME_MAX_LEN];
+    struct rte_pci_addr addr;
+    struct netdev_dpdk *dev;
 
     ovs_mutex_lock(&dpdk_mutex);
 
-    ret = dpdk_dev_parse_name(argv[1], "dpdk", &parsed_port);
-    if (ret) {
-        response = xasprintf("'%s' is not a valid port", argv[1]);
+    if (eal_parse_pci_DomBDF(argv[1], &addr)) {
+        response = xasprintf("Invalid PCI address '%s'. Cannot detach.",
+                             argv[1]);
         goto error;
     }
 
-    port_id = parsed_port;
+    if (!rte_eth_dev_count() || rte_eth_dev_get_port_by_name(argv[1],
+                                                             &port_id)) {
+        response = xasprintf("Device '%s' not found in DPDK", argv[1]);
+        goto error;
+    }
 
-    struct netdev *netdev = netdev_from_name(argv[1]);
-    if (netdev) {
-        netdev_close(netdev);
-        response = xasprintf("Port '%s' is being used. Remove it before"
-                             "detaching", argv[1]);
+    dev = netdev_dpdk_lookup_by_port_id(port_id);
+    if (dev) {
+        response = xasprintf("Device '%s' is being used by interface '%s'. "
+                             "Remove it before detaching",
+                             argv[1], netdev_get_name(&dev->up));
         goto error;
     }
 
@@ -2416,11 +2489,11 @@ netdev_dpdk_detach(struct unixctl_conn *conn, int argc OVS_UNUSED,
 
     ret = rte_eth_dev_detach(port_id, devname);
     if (ret < 0) {
-        response = xasprintf("Port '%s' can not be detached", argv[1]);
+        response = xasprintf("Device '%s' can not be detached", argv[1]);
         goto error;
     }
 
-    response = xasprintf("Port '%s' has been detached", argv[1]);
+    response = xasprintf("Device '%s' has been detached", argv[1]);
 
     ovs_mutex_unlock(&dpdk_mutex);
     unixctl_command_reply(conn, response);
@@ -2708,11 +2781,8 @@ netdev_dpdk_class_init(void)
         unixctl_command_register("netdev-dpdk/set-admin-state",
                                  "[netdev] up|down", 1, 2,
                                  netdev_dpdk_set_admin_state, NULL);
-        unixctl_command_register("netdev-dpdk/attach",
-                                 "pci address of device", 1, 1,
-                                 netdev_dpdk_attach, NULL);
         unixctl_command_register("netdev-dpdk/detach",
-                                 "port", 1, 1,
+                                 "pci address of device", 1, 1,
                                  netdev_dpdk_detach, NULL);
 
         ovsthread_once_done(&once);
