@@ -298,6 +298,33 @@ physical ports which in turn effects the non-tunnel traffic performance.
 So it is advised to turn off the Rx checksum offload for non-tunnel traffic use
 cases to achieve the best performance.
 
+.. _port-hotplug:
+
+Port Hotplug
+------------
+
+OVS supports port hotplugging, allowing the use of ports that were not bound
+to DPDK when vswitchd was started.
+In order to attach a port, it has to be bound to DPDK using the
+``dpdk_nic_bind.py`` script::
+
+    $ $DPDK_DIR/tools/dpdk_nic_bind.py --bind=igb_uio 0000:01:00.0
+
+Then it can be attached to OVS::
+
+    $ ovs-appctl netdev-dpdk/attach 0000:01:00.0
+
+At this point, the user can create a dpdk port using the ``add-port`` command.
+
+It is also possible to detach a port from ovs, the user has to remove the
+port using the del-port command, then it can be detached using::
+
+    $ ovs-appctl netdev-dpdk/detach dpdk0
+
+This feature is not supported with VFIO and does not work with some NICs.
+For more information please refer to the `DPDK Port Hotplug Framework
+<http://dpdk.org/doc/guides/prog_guide/port_hotplug_framework.html#hotplug>`__.
+
 .. _dpdk-ovs-in-guest:
 
 OVS with DPDK Inside VMs

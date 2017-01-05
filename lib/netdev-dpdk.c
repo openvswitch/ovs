@@ -2357,6 +2357,82 @@ netdev_dpdk_set_admin_state(struct unixctl_conn *conn, int argc,
     unixctl_command_reply(conn, "OK");
 }
 
+static void
+netdev_dpdk_attach(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                   const char *argv[], void *aux OVS_UNUSED)
+{
+    int ret;
+    char *response;
+    uint8_t port_id;
+
+    ovs_mutex_lock(&dpdk_mutex);
+
+    ret = rte_eth_dev_attach(argv[1], &port_id);
+    if (ret < 0) {
+        response = xasprintf("Error attaching device '%s'", argv[1]);
+        ovs_mutex_unlock(&dpdk_mutex);
+        unixctl_command_reply_error(conn, response);
+        free(response);
+        return;
+    }
+
+    response = xasprintf("Device '%s' has been attached as 'dpdk%d'",
+                         argv[1], port_id);
+
+    ovs_mutex_unlock(&dpdk_mutex);
+    unixctl_command_reply(conn, response);
+    free(response);
+}
+
+static void
+netdev_dpdk_detach(struct unixctl_conn *conn, int argc OVS_UNUSED,
+                   const char *argv[], void *aux OVS_UNUSED)
+{
+    int ret;
+    char *response;
+    unsigned int parsed_port;
+    uint8_t port_id;
+    char devname[RTE_ETH_NAME_MAX_LEN];
+
+    ovs_mutex_lock(&dpdk_mutex);
+
+    ret = dpdk_dev_parse_name(argv[1], "dpdk", &parsed_port);
+    if (ret) {
+        response = xasprintf("'%s' is not a valid port", argv[1]);
+        goto error;
+    }
+
+    port_id = parsed_port;
+
+    struct netdev *netdev = netdev_from_name(argv[1]);
+    if (netdev) {
+        netdev_close(netdev);
+        response = xasprintf("Port '%s' is being used. Remove it before"
+                             "detaching", argv[1]);
+        goto error;
+    }
+
+    rte_eth_dev_close(port_id);
+
+    ret = rte_eth_dev_detach(port_id, devname);
+    if (ret < 0) {
+        response = xasprintf("Port '%s' can not be detached", argv[1]);
+        goto error;
+    }
+
+    response = xasprintf("Port '%s' has been detached", argv[1]);
+
+    ovs_mutex_unlock(&dpdk_mutex);
+    unixctl_command_reply(conn, response);
+    free(response);
+    return;
+
+error:
+    ovs_mutex_unlock(&dpdk_mutex);
+    unixctl_command_reply_error(conn, response);
+    free(response);
+}
+
 /*
  * Set virtqueue flags so that we do not receive interrupts.
  */
@@ -2632,6 +2708,12 @@ netdev_dpdk_class_init(void)
         unixctl_command_register("netdev-dpdk/set-admin-state",
                                  "[netdev] up|down", 1, 2,
                                  netdev_dpdk_set_admin_state, NULL);
+        unixctl_command_register("netdev-dpdk/attach",
+                                 "pci address of device", 1, 1,
+                                 netdev_dpdk_attach, NULL);
+        unixctl_command_register("netdev-dpdk/detach",
+                                 "port", 1, 1,
+                                 netdev_dpdk_detach, NULL);
 
         ovsthread_once_done(&once);
     }
@@ -2668,7 +2750,7 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
 {
     struct dpdk_ring *ring_pair;
     char *ring_name;
-    int err;
+    int port_id;
 
     ring_pair = dpdk_rte_mzalloc(sizeof *ring_pair);
     if (!ring_pair) {
@@ -2698,19 +2780,20 @@ dpdk_ring_create(const char dev_name[], unsigned int port_no,
         return ENOMEM;
     }
 
-    err = rte_eth_from_rings(dev_name, &ring_pair->cring_rx, 1,
-                             &ring_pair->cring_tx, 1, SOCKET0);
+    port_id = rte_eth_from_rings(dev_name, &ring_pair->cring_rx, 1,
+                                 &ring_pair->cring_tx, 1, SOCKET0);
 
-    if (err < 0) {
+    if (port_id < 0) {
         rte_free(ring_pair);
         return ENODEV;
     }
 
     ring_pair->user_port_id = port_no;
-    ring_pair->eth_port_id = rte_eth_dev_count() - 1;
+    ring_pair->eth_port_id = port_id;
+    *eth_port_id = port_id;
+
     ovs_list_push_back(&dpdk_ring_list, &ring_pair->list_node);
 
-    *eth_port_id = ring_pair->eth_port_id;
     return 0;
 }
 
