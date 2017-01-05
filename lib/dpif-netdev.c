@@ -2101,6 +2101,9 @@ dp_netdev_flow_to_dpif_flow(const struct dp_netdev_flow *netdev_flow,
         };
 
         miniflow_expand(&netdev_flow->cr.mask->mf, &wc.masks);
+        /* in_port is exact matched, but we have left it out from the mask for
+         * optimnization reasons. Add in_port back to the mask. */
+        wc.masks.in_port.odp_port = ODPP_NONE;
 
         /* Key */
         offset = key_buf->size;
@@ -2257,9 +2260,23 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
     struct dp_netdev_flow *flow;
     struct netdev_flow_key mask;
     struct dpcls *cls;
+
+    /* Make sure in_port is exact matched before we read it. */
+    ovs_assert(match->wc.masks.in_port.odp_port == ODPP_NONE);
     odp_port_t in_port = match->flow.in_port.odp_port;
 
+    /* As we select the dpcls based on the port number, each netdev flow
+     * belonging to the same dpcls will have the same odp_port value.
+     * For performance reasons we wildcard odp_port here in the mask.  In the
+     * typical case dp_hash is also wildcarded, and the resulting 8-byte
+     * chunk {dp_hash, in_port} will be ignored by netdev_flow_mask_init() and
+     * will not be part of the subtable mask.
+     * This will speed up the hash computation during dpcls_lookup() because
+     * there is one less call to hash_add64() in this case. */
+    match->wc.masks.in_port.odp_port = 0;
     netdev_flow_mask_init(&mask, match);
+    match->wc.masks.in_port.odp_port = ODPP_NONE;
+
     /* Make sure wc does not have metadata. */
     ovs_assert(!FLOWMAP_HAS_FIELD(&mask.mf.map, metadata)
                && !FLOWMAP_HAS_FIELD(&mask.mf.map, regs));
@@ -2277,8 +2294,7 @@ dp_netdev_flow_add(struct dp_netdev_pmd_thread *pmd,
 
     netdev_flow_key_init_masked(&flow->cr.flow, &match->flow, &mask);
 
-    /* Select dpcls for in_port. Relies on in_port to be exact match */
-    ovs_assert(match->wc.masks.in_port.odp_port == ODPP_NONE);
+    /* Select dpcls for in_port. Relies on in_port to be exact match. */
     cls = dp_netdev_pmd_find_dpcls(pmd, in_port);
     dpcls_insert(cls, &flow->cr, &mask);
 
