@@ -61,6 +61,7 @@ Post-v2.6.0
        with the old dpdk<portid> naming scheme is broken, and as such a
        device will not be available for use until a valid dpdk-devargs is
        specified.
+     * Virtual DPDK Poll Mode Driver (vdev PMD) support.
    - Fedora packaging:
      * A package upgrade does not automatically restart OVS service.
    - ovs-vswitchd/ovs-vsctl:

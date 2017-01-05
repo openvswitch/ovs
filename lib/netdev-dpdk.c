@@ -1134,25 +1134,19 @@ netdev_dpdk_lookup_by_port_id(int port_id)
 static int
 netdev_dpdk_process_devargs(const char *devargs)
 {
-    struct rte_pci_addr addr;
     uint8_t new_port_id = UINT8_MAX;
 
-    if (!eal_parse_pci_DomBDF(devargs, &addr)) {
-        /* Valid PCI address format detected - configure physical device */
-        if (!rte_eth_dev_count()
-                || rte_eth_dev_get_port_by_name(devargs, &new_port_id)
-                || !rte_eth_dev_is_valid_port(new_port_id)) {
-            /* PCI device not found in DPDK, attempt to attach it */
-            if (!rte_eth_dev_attach(devargs, &new_port_id)) {
-                /* Attach successful */
-                VLOG_INFO("Device "PCI_PRI_FMT" has been attached to DPDK",
-                          addr.domain, addr.bus, addr.devid, addr.function);
-            } else {
-                /* Attach unsuccessful */
-                VLOG_INFO("Error attaching device "PCI_PRI_FMT" to DPDK",
-                          addr.domain, addr.bus, addr.devid, addr.function);
-                return -1;
-            }
+    if (!rte_eth_dev_count()
+            || rte_eth_dev_get_port_by_name(devargs, &new_port_id)
+            || !rte_eth_dev_is_valid_port(new_port_id)) {
+        /* Device not found in DPDK, attempt to attach it */
+        if (!rte_eth_dev_attach(devargs, &new_port_id)) {
+            /* Attach successful */
+            VLOG_INFO("Device '%s' attached to DPDK", devargs);
+        } else {
+            /* Attach unsuccessful */
+            VLOG_INFO("Error attaching device '%s' to DPDK", devargs);
+            return -1;
         }
     }
 
@@ -2460,16 +2454,9 @@ netdev_dpdk_detach(struct unixctl_conn *conn, int argc OVS_UNUSED,
     char *response;
     uint8_t port_id;
     char devname[RTE_ETH_NAME_MAX_LEN];
-    struct rte_pci_addr addr;
     struct netdev_dpdk *dev;
 
     ovs_mutex_lock(&dpdk_mutex);
-
-    if (eal_parse_pci_DomBDF(argv[1], &addr)) {
-        response = xasprintf("Invalid PCI address '%s'. Cannot detach.",
-                             argv[1]);
-        goto error;
-    }
 
     if (!rte_eth_dev_count() || rte_eth_dev_get_port_by_name(argv[1],
                                                              &port_id)) {

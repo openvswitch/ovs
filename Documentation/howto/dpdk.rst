@@ -324,6 +324,35 @@ This feature is not supported with VFIO and does not work with some NICs.
 For more information please refer to the `DPDK Port Hotplug Framework
 <http://dpdk.org/doc/guides/prog_guide/port_hotplug_framework.html#hotplug>`__.
 
+.. _vdev-support:
+
+Vdev Support
+------------
+
+DPDK provides drivers for both physical and virtual devices. Physical DPDK
+devices are added to OVS by specifying a valid PCI address in 'dpdk-devargs'.
+Virtual DPDK devices which do not have PCI addresses can be added using a
+different format for 'dpdk-devargs'.
+
+Typically, the format expected is 'eth_<driver_name><x>' where 'x' is a
+number between 0 and RTE_MAX_ETHPORTS -1 (31).
+
+For example to add a dpdk port that uses the 'null' DPDK PMD driver::
+
+       $ ovs-vsctl add-port br0 null0 -- set Interface null0 type=dpdk \
+           options:dpdk-devargs=eth_null0
+
+Similarly, to add a dpdk port that uses the 'af_packet' DPDK PMD driver::
+
+       $ ovs-vsctl add-port br0 myeth0 -- set Interface myeth0 type=dpdk \
+           options:dpdk-devargs=eth_af_packet0,iface=eth0
+
+More information on the different types of virtual DPDK PMDs can be found in
+the `DPDK documentation
+<http://dpdk.org/doc/guides/nics/overview.html>`__.
+
+Note: Not all DPDK virtual PMD drivers have been tested and verified to work.
+
 .. _dpdk-ovs-in-guest:
 
 OVS with DPDK Inside VMs
