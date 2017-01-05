@@ -21,6 +21,8 @@
 #include <stdint.h>
 #include "openvswitch/types.h"
 
+struct in6_addr;
+
 ovs_be16 csum(const void *, size_t);
 uint32_t csum_continue(uint32_t partial, const void *, size_t);
 ovs_be16 csum_finish(uint32_t partial);
@@ -29,7 +31,7 @@ ovs_be16 recalc_csum32(ovs_be16 old_csum, ovs_be32 old_u32, ovs_be32 new_u32);
 ovs_be16 recalc_csum48(ovs_be16 old_csum, const struct eth_addr old_mac,
                        const struct eth_addr new_mac);
 ovs_be16 recalc_csum128(ovs_be16 old_csum, ovs_16aligned_be32 old_u32[4],
-                        const ovs_be32 new_u32[4]);
+                        const struct in6_addr *);
 
 #ifndef __CHECKER__
 /* Adds the 16 bits in 'new' to the partial IP checksum 'partial' and returns

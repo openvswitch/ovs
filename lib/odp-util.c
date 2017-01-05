@@ -2059,8 +2059,8 @@ odp_mask_is_exact(enum ovs_key_attr attr, const void *mask, size_t size)
             && ipv6_mask->ipv6_tclass == UINT8_MAX
             && ipv6_mask->ipv6_hlimit == UINT8_MAX
             && ipv6_mask->ipv6_frag == UINT8_MAX
-            && ipv6_mask_is_exact((const struct in6_addr *)ipv6_mask->ipv6_src)
-            && ipv6_mask_is_exact((const struct in6_addr *)ipv6_mask->ipv6_dst);
+            && ipv6_mask_is_exact(&ipv6_mask->ipv6_src)
+            && ipv6_mask_is_exact(&ipv6_mask->ipv6_dst);
     }
     if (attr == OVS_KEY_ATTR_TUNNEL) {
         return false;
@@ -2207,16 +2207,6 @@ format_in6_addr(struct ds *ds, const char *name,
         }
         ds_put_char(ds, ',');
     }
-}
-
-static void
-format_ipv6(struct ds *ds, const char *name, const ovs_be32 key_[4],
-            const ovs_be32 (*mask_)[4], bool verbose)
-{
-    format_in6_addr(ds, name,
-                    (const struct in6_addr *)key_,
-                    mask_ ? (const struct in6_addr *)*mask_ : NULL,
-                    verbose);
 }
 
 static void
@@ -2866,16 +2856,18 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         const struct ovs_key_ipv6 *key = nl_attr_get(a);
         const struct ovs_key_ipv6 *mask = ma ? nl_attr_get(ma) : NULL;
 
-        format_ipv6(ds, "src", key->ipv6_src, MASK(mask, ipv6_src), verbose);
-        format_ipv6(ds, "dst", key->ipv6_dst, MASK(mask, ipv6_dst), verbose);
+        format_in6_addr(ds, "src", &key->ipv6_src, MASK(mask, ipv6_src),
+                        verbose);
+        format_in6_addr(ds, "dst", &key->ipv6_dst, MASK(mask, ipv6_dst),
+                        verbose);
         format_ipv6_label(ds, "label", key->ipv6_label, MASK(mask, ipv6_label),
                           verbose);
         format_u8u(ds, "proto", key->ipv6_proto, MASK(mask, ipv6_proto),
-                      verbose);
+                   verbose);
         format_u8x(ds, "tclass", key->ipv6_tclass, MASK(mask, ipv6_tclass),
-                      verbose);
+                   verbose);
         format_u8u(ds, "hlimit", key->ipv6_hlimit, MASK(mask, ipv6_hlimit),
-                      verbose);
+                   verbose);
         format_frag(ds, "frag", key->ipv6_frag, MASK(mask, ipv6_frag),
                     verbose);
         ds_chomp(ds, ',');
@@ -2941,8 +2933,8 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         const struct ovs_key_nd *mask = ma ? nl_attr_get(ma) : NULL;
         const struct ovs_key_nd *key = nl_attr_get(a);
 
-        format_ipv6(ds, "target", key->nd_target, MASK(mask, nd_target),
-                    verbose);
+        format_in6_addr(ds, "target", &key->nd_target, MASK(mask, nd_target),
+                        verbose);
         format_eth(ds, "sll", key->nd_sll, MASK(mask, nd_sll), verbose);
         format_eth(ds, "tll", key->nd_tll, MASK(mask, nd_tll), verbose);
 
@@ -3238,13 +3230,6 @@ scan_in6_addr(const char *s, struct in6_addr *key, struct in6_addr *mask)
         return len;
     }
     return 0;
-}
-
-static int
-scan_ipv6(const char *s, ovs_be32 (*key)[4], ovs_be32 (*mask)[4])
-{
-    return scan_in6_addr(s, key ? (struct in6_addr *) *key : NULL,
-                         mask ? (struct in6_addr *) *mask : NULL);
 }
 
 static int
@@ -4119,8 +4104,8 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     } SCAN_END(OVS_KEY_ATTR_IPV4);
 
     SCAN_BEGIN("ipv6(", struct ovs_key_ipv6) {
-        SCAN_FIELD("src=", ipv6, ipv6_src);
-        SCAN_FIELD("dst=", ipv6, ipv6_dst);
+        SCAN_FIELD("src=", in6_addr, ipv6_src);
+        SCAN_FIELD("dst=", in6_addr, ipv6_dst);
         SCAN_FIELD("label=", ipv6_label, ipv6_label);
         SCAN_FIELD("proto=", u8, ipv6_proto);
         SCAN_FIELD("tclass=", u8, ipv6_tclass);
@@ -4164,7 +4149,7 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     } SCAN_END(OVS_KEY_ATTR_ARP);
 
     SCAN_BEGIN("nd(", struct ovs_key_nd) {
-        SCAN_FIELD("target=", ipv6, nd_target);
+        SCAN_FIELD("target=", in6_addr, nd_target);
         SCAN_FIELD("sll=", eth, nd_sll);
         SCAN_FIELD("tll=", eth, nd_tll);
     } SCAN_END(OVS_KEY_ATTR_ND);
@@ -4455,8 +4440,7 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
 
                 nd_key = nl_msg_put_unspec_uninit(buf, OVS_KEY_ATTR_ND,
                                                     sizeof *nd_key);
-                memcpy(nd_key->nd_target, &data->nd_target,
-                        sizeof nd_key->nd_target);
+                nd_key->nd_target = data->nd_target;
                 nd_key->nd_sll = data->arp_sha;
                 nd_key->nd_tll = data->arp_tha;
             }
@@ -4986,8 +4970,7 @@ parse_l2_5_onward(const struct nlattr *attrs[OVS_KEY_ATTR_MAX + 1],
                     const struct ovs_key_nd *nd_key;
 
                     nd_key = nl_attr_get(attrs[OVS_KEY_ATTR_ND]);
-                    memcpy(&flow->nd_target, nd_key->nd_target,
-                           sizeof flow->nd_target);
+                    flow->nd_target = nd_key->nd_target;
                     flow->arp_sha = nd_key->nd_sll;
                     flow->arp_tha = nd_key->nd_tll;
                     if (is_mask) {
@@ -5613,8 +5596,8 @@ commit_set_ipv4_action(const struct flow *flow, struct flow *base_flow,
 static void
 get_ipv6_key(const struct flow *flow, struct ovs_key_ipv6 *ipv6, bool is_mask)
 {
-    memcpy(ipv6->ipv6_src, &flow->ipv6_src, sizeof ipv6->ipv6_src);
-    memcpy(ipv6->ipv6_dst, &flow->ipv6_dst, sizeof ipv6->ipv6_dst);
+    ipv6->ipv6_src = flow->ipv6_src;
+    ipv6->ipv6_dst = flow->ipv6_dst;
     ipv6->ipv6_label = flow->ipv6_label;
     ipv6->ipv6_proto = flow->nw_proto;
     ipv6->ipv6_tclass = flow->nw_tos;
@@ -5625,8 +5608,8 @@ get_ipv6_key(const struct flow *flow, struct ovs_key_ipv6 *ipv6, bool is_mask)
 static void
 put_ipv6_key(const struct ovs_key_ipv6 *ipv6, struct flow *flow, bool is_mask)
 {
-    memcpy(&flow->ipv6_src, ipv6->ipv6_src, sizeof flow->ipv6_src);
-    memcpy(&flow->ipv6_dst, ipv6->ipv6_dst, sizeof flow->ipv6_dst);
+    flow->ipv6_src = ipv6->ipv6_src;
+    flow->ipv6_dst = ipv6->ipv6_dst;
     flow->ipv6_label = ipv6->ipv6_label;
     flow->nw_proto = ipv6->ipv6_proto;
     flow->nw_tos = ipv6->ipv6_tclass;
@@ -5748,7 +5731,7 @@ commit_set_icmp_action(const struct flow *flow, struct flow *base_flow,
 static void
 get_nd_key(const struct flow *flow, struct ovs_key_nd *nd)
 {
-    memcpy(nd->nd_target, &flow->nd_target, sizeof flow->nd_target);
+    nd->nd_target = flow->nd_target;
     /* nd_sll and nd_tll are stored in arp_sha and arp_tha, respectively */
     nd->nd_sll = flow->arp_sha;
     nd->nd_tll = flow->arp_tha;
@@ -5757,7 +5740,7 @@ get_nd_key(const struct flow *flow, struct ovs_key_nd *nd)
 static void
 put_nd_key(const struct ovs_key_nd *nd, struct flow *flow)
 {
-    memcpy(&flow->nd_target, nd->nd_target, sizeof flow->nd_target);
+    flow->nd_target = nd->nd_target;
     /* nd_sll and nd_tll are stored in arp_sha and arp_tha, respectively */
     flow->arp_sha = nd->nd_sll;
     flow->arp_tha = nd->nd_tll;

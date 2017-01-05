@@ -22,9 +22,13 @@ $i\
 #endif\
 
 # Use OVS's own struct eth_addr instead of a 6-byte char array.
-s,<linux/types\.h>,"openvswitch/types.h",
+s,<linux/types\.h>,"openvswitch/types.h"\
+#include <netinet/in.h>,
 s,#.*<linux/if_ether\.h>,,
 s/__u8[[:space:]]*\([a-zA-Z0-9_]*\)[[:space:]]*\[[[:space:]]*ETH_ALEN[[:space:]]*\]/struct eth_addr \1/
+
+# Transform IPv6 addresses from an array to struct in6_addr
+s/__be32[[:space:]]*\([a-zA-Z0-9_]*\)[[:space:]]*\[[[:space:]]*4[[:space:]]*\]/struct in6_addr \1/
 
 # Transform most Linux-specific __u<N> types into C99 uint<N>_t types,
 # and most Linux-specific __be<N> into Open vSwitch ovs_be<N>,

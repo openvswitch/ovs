@@ -1097,14 +1097,14 @@ void packet_set_ipv4(struct dp_packet *, ovs_be32 src, ovs_be32 dst, uint8_t tos
                      uint8_t ttl);
 void packet_set_ipv4_addr(struct dp_packet *packet, ovs_16aligned_be32 *addr,
                           ovs_be32 new_addr);
-void packet_set_ipv6(struct dp_packet *, const ovs_be32 src[4],
-                     const ovs_be32 dst[4], uint8_t tc,
+void packet_set_ipv6(struct dp_packet *, const struct in6_addr *src,
+                     const struct in6_addr *dst, uint8_t tc,
                      ovs_be32 fl, uint8_t hlmit);
 void packet_set_tcp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_udp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_sctp_port(struct dp_packet *, ovs_be16 src, ovs_be16 dst);
 void packet_set_icmp(struct dp_packet *, uint8_t type, uint8_t code);
-void packet_set_nd(struct dp_packet *, const ovs_be32 target[4],
+void packet_set_nd(struct dp_packet *, const struct in6_addr *target,
                    const struct eth_addr sll, const struct eth_addr tll);
 
 void packet_format_tcp_flags(struct ds *, uint16_t);

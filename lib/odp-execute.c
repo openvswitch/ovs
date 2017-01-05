@@ -116,14 +116,21 @@ odp_set_ipv4(struct dp_packet *packet, const struct ovs_key_ipv4 *key,
     }
 }
 
-static const ovs_be32 *
-mask_ipv6_addr(const ovs_16aligned_be32 *old, const ovs_be32 *addr,
-               const ovs_be32 *mask, ovs_be32 *masked)
+static struct in6_addr *
+mask_ipv6_addr(const ovs_16aligned_be32 *old, const struct in6_addr *addr,
+               const struct in6_addr *mask, struct in6_addr *masked)
 {
+#ifdef s6_addr32
     for (int i = 0; i < 4; i++) {
-        masked[i] = addr[i] | (get_16aligned_be32(&old[i]) & ~mask[i]);
+        masked->s6_addr32[i] = addr->s6_addr32[i]
+            | (get_16aligned_be32(&old[i]) & ~mask->s6_addr32[i]);
     }
-
+#else
+    const uint8_t *old8 = (const uint8_t *)old;
+    for (int i = 0; i < 16; i++) {
+        masked->s6_addr[i] = addr->s6_addr[i] | (old8[i] & ~mask->s6_addr[i]);
+    }
+#endif
     return masked;
 }
 
@@ -132,14 +139,16 @@ odp_set_ipv6(struct dp_packet *packet, const struct ovs_key_ipv6 *key,
              const struct ovs_key_ipv6 *mask)
 {
     struct ovs_16aligned_ip6_hdr *nh = dp_packet_l3(packet);
-    ovs_be32 sbuf[4], dbuf[4];
+    struct in6_addr sbuf, dbuf;
     uint8_t old_tc = ntohl(get_16aligned_be32(&nh->ip6_flow)) >> 20;
     ovs_be32 old_fl = get_16aligned_be32(&nh->ip6_flow) & htonl(0xfffff);
 
     packet_set_ipv6(
         packet,
-        mask_ipv6_addr(nh->ip6_src.be32, key->ipv6_src, mask->ipv6_src, sbuf),
-        mask_ipv6_addr(nh->ip6_dst.be32, key->ipv6_dst, mask->ipv6_dst, dbuf),
+        mask_ipv6_addr(nh->ip6_src.be32, &key->ipv6_src, &mask->ipv6_src,
+                       &sbuf),
+        mask_ipv6_addr(nh->ip6_dst.be32, &key->ipv6_dst, &mask->ipv6_dst,
+                       &dbuf),
         key->ipv6_tclass | (old_tc & ~mask->ipv6_tclass),
         key->ipv6_label | (old_fl & ~mask->ipv6_label),
         key->ipv6_hlimit | (nh->ip6_hlim & ~mask->ipv6_hlimit));
@@ -228,7 +237,7 @@ odp_set_nd(struct dp_packet *packet, const struct ovs_key_nd *key,
 
     if (OVS_LIKELY(ns && nd_opt)) {
         int bytes_remain = dp_packet_l4_size(packet) - sizeof(*ns);
-        ovs_be32 tgt_buf[4];
+        struct in6_addr tgt_buf;
         struct eth_addr sll_buf = eth_addr_zero;
         struct eth_addr tll_buf = eth_addr_zero;
 
@@ -254,8 +263,8 @@ odp_set_nd(struct dp_packet *packet, const struct ovs_key_nd *key,
         }
 
         packet_set_nd(packet,
-                      mask_ipv6_addr(ns->target.be32,
-                                     key->nd_target, mask->nd_target, tgt_buf),
+                      mask_ipv6_addr(ns->target.be32, &key->nd_target,
+                                     &mask->nd_target, &tgt_buf),
                       sll_buf,
                       tll_buf);
     }
@@ -295,7 +304,7 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
 
     case OVS_KEY_ATTR_IPV6:
         ipv6_key = nl_attr_get_unspec(a, sizeof(struct ovs_key_ipv6));
-        packet_set_ipv6(packet, ipv6_key->ipv6_src, ipv6_key->ipv6_dst,
+        packet_set_ipv6(packet, &ipv6_key->ipv6_src, &ipv6_key->ipv6_dst,
                         ipv6_key->ipv6_tclass, ipv6_key->ipv6_label,
                         ipv6_key->ipv6_hlimit);
         break;
@@ -352,7 +361,7 @@ odp_execute_set_action(struct dp_packet *packet, const struct nlattr *a)
         if (OVS_LIKELY(dp_packet_get_nd_payload(packet))) {
             const struct ovs_key_nd *nd_key
                    = nl_attr_get_unspec(a, sizeof(struct ovs_key_nd));
-            packet_set_nd(packet, nd_key->nd_target, nd_key->nd_sll,
+            packet_set_nd(packet, &nd_key->nd_target, nd_key->nd_sll,
                           nd_key->nd_tll);
         }
         break;

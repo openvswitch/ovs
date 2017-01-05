@@ -17,6 +17,7 @@
 #include <config.h>
 #include "csum.h"
 #include "unaligned.h"
+#include <netinet/in.h>
 
 #ifndef __CHECKER__
 /* Returns the IP checksum of the 'n' bytes in 'data'.
@@ -117,9 +118,15 @@ recalc_csum48(ovs_be16 old_csum, const struct eth_addr old_mac,
  * changed to contain 'new_u32[4]'. */
 ovs_be16
 recalc_csum128(ovs_be16 old_csum, ovs_16aligned_be32 old_u32[4],
-               const ovs_be32 new_u32[4])
+               const struct in6_addr *new_in6)
 {
     ovs_be16 new_csum = old_csum;
+#ifndef s6_addr32
+    ovs_be32 new_u32[4];
+    memcpy(new_u32, new_in6, sizeof new_u32);
+#else
+    const ovs_be32 *new_u32 = new_in6->s6_addr32;
+#endif
     int i;
 
     for (i = 0; i < 4; ++i) {
