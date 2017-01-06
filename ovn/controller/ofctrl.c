@@ -1133,7 +1133,7 @@ ofctrl_inject_pkt(const struct ovsrec_bridge *br_int, const char *flow_s,
 
     /* The physical OpenFlow port was stored in the logical ingress
      * port, so put it in the correct location for a flow structure. */
-    uflow.in_port.ofp_port = uflow.regs[MFF_LOG_INPORT - MFF_REG0];
+    uflow.in_port.ofp_port = u16_to_ofp(uflow.regs[MFF_LOG_INPORT - MFF_REG0]);
     uflow.regs[MFF_LOG_INPORT - MFF_REG0] = 0;
 
     if (!uflow.in_port.ofp_port) {
