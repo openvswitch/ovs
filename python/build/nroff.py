@@ -220,7 +220,9 @@ fillval = .2
 
 
 def block_xml_to_nroff(nodes, para='.PP'):
+    HEADER_TAGS = ('h1', 'h2', 'h3')
     s = ''
+    prev = ''
     for node in nodes:
         if node.nodeType == node.TEXT_NODE:
             s += text_to_nroff(node.data)
@@ -248,9 +250,13 @@ def block_xml_to_nroff(nodes, para='.PP'):
                                           "<li> children" % node.tagName)
                 s += ".RE\n"
             elif node.tagName == 'dl':
+                indent = True
+                if prev in HEADER_TAGS:
+                    indent = False
                 if s != "":
                     s += "\n"
-                s += ".RS\n"
+                if indent:
+                    s += ".RS\n"
                 prev = "dd"
                 for li_node in node.childNodes:
                     if (li_node.nodeType == node.ELEMENT_NODE
@@ -272,14 +278,15 @@ def block_xml_to_nroff(nodes, para='.PP'):
                         raise error.Error("<dl> element may only have "
                                           "<dt> and <dd> children")
                     s += block_xml_to_nroff(li_node.childNodes, ".IP")
-                s += ".RE\n"
+                if indent:
+                    s += ".RE\n"
             elif node.tagName == 'p':
                 if s != "":
                     if not s.endswith("\n"):
                         s += "\n"
                     s += para + "\n"
                 s += block_xml_to_nroff(node.childNodes, para)
-            elif node.tagName in ('h1', 'h2', 'h3'):
+            elif node.tagName in HEADER_TAGS:
                 if s != "":
                     if not s.endswith("\n"):
                         s += "\n"
@@ -300,6 +307,7 @@ def block_xml_to_nroff(nodes, para='.PP'):
                 s += diagram_to_nroff(node.childNodes, para)
             else:
                 s += inline_xml_to_nroff(node, r'\fR')
+            prev = node.tagName
         elif node.nodeType == node.COMMENT_NODE:
             pass
         else:
