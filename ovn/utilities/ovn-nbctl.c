@@ -807,7 +807,8 @@ nbctl_lsp_add(struct ctl_context *ctx)
         parent_name = ctx->argv[3];
         if (!ovs_scan(ctx->argv[4], "%"SCNd64, &tag)
             || tag < 0 || tag > 4095) {
-            ctl_fatal("%s: invalid tag", ctx->argv[4]);
+            ctl_fatal("%s: invalid tag (must be in range 0 to 4095)",
+                      ctx->argv[4]);
         }
     } else {
         ctl_fatal("lsp-add with parent must also specify a tag");

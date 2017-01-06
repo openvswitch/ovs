@@ -125,7 +125,9 @@
         <p>
           Creates on <var>switch</var> a logical switch port named
           <var>port</var> that is a child of <var>parent</var> that is
-          identified with VLAN ID <var>tag_request</var>.  If
+          identified with VLAN ID <var>tag_request</var>,
+          which must be between <code>0</code> and
+          <code>4095</code>, inclusive. If
           <var>tag_request</var> is <code>0</code>, <code>ovn-northd</code>
           generates a tag that is unique in the scope of <var>parent</var>.
           This is useful in cases such as virtualized container environments
