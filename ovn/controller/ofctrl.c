@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2016 Nicira, Inc.
+/* Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1119,7 +1119,7 @@ char *
 ofctrl_inject_pkt(const struct ovsrec_bridge *br_int, const char *flow_s,
                   const struct shash *addr_sets)
 {
-    enum ofp_version version = rconn_get_version(swconn);
+    int version = rconn_get_version(swconn);
     if (version < 0) {
         return xstrdup("OpenFlow channel not ready.");
     }
