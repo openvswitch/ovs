@@ -4315,6 +4315,7 @@ xlate_sample_action(struct xlate_ctx *ctx,
 static void
 compose_clone_action(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
 {
+    bool old_was_mpls = ctx->was_mpls;
     bool old_conntracked = ctx->conntracked;
     struct flow old_flow = ctx->xin->flow;
 
@@ -4341,6 +4342,10 @@ compose_clone_action(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
     /* The clone's conntrack execution should have no effect on the original
      * packet. */
     ctx->conntracked = old_conntracked;
+
+    /* Popping MPLS from the clone should have no effect on the original
+     * packet. */
+    ctx->was_mpls = old_was_mpls;
 }
 
 static bool
