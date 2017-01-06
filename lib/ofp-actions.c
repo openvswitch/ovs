@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008-2016 Nicira, Inc.
+ * Copyright (c) 2008-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -328,6 +328,9 @@ enum ofp_raw_action_type {
     /* NX1.0+(42): struct ext_action_header, ... */
     NXAST_RAW_CLONE,
 
+    /* NX1.0+(43): void. */
+    NXAST_RAW_CT_CLEAR,
+
 /* ## ------------------ ## */
 /* ## Debugging actions. ## */
 /* ## ------------------ ## */
@@ -449,6 +452,7 @@ ofpact_next_flattened(const struct ofpact *ofpact)
     case OFPACT_EXIT:
     case OFPACT_SAMPLE:
     case OFPACT_UNROLL_XLATE:
+    case OFPACT_CT_CLEAR:
     case OFPACT_DEBUG_RECIRC:
     case OFPACT_METER:
     case OFPACT_CLEAR_ACTIONS:
@@ -5495,6 +5499,36 @@ format_CT(const struct ofpact_conntrack *a, struct ds *s)
     ds_put_format(s, "%s)%s", colors.paren, colors.end);
 }
 
+/* ct_clear action. */
+
+static enum ofperr
+decode_NXAST_RAW_CT_CLEAR(struct ofpbuf *out)
+{
+    ofpact_put_CT_CLEAR(out);
+    return 0;
+}
+
+static void
+encode_CT_CLEAR(const struct ofpact_null *null OVS_UNUSED,
+                enum ofp_version ofp_version OVS_UNUSED,
+                struct ofpbuf *out)
+{
+    put_NXAST_CT_CLEAR(out);
+}
+
+static char * OVS_WARN_UNUSED_RESULT
+parse_CT_CLEAR(char *arg OVS_UNUSED, struct ofpbuf *ofpacts,
+               enum ofputil_protocol *usable_protocols OVS_UNUSED)
+{
+    ofpact_put_CT_CLEAR(ofpacts);
+    return NULL;
+}
+
+static void
+format_CT_CLEAR(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
+{
+    ds_put_format(s, "%sct_clear%s", colors.value, colors.end);
+}
 /* NAT action. */
 
 /* Which optional fields are present? */
@@ -6280,6 +6314,7 @@ ofpact_is_set_or_move_action(const struct ofpact *a)
     case OFPACT_BUNDLE:
     case OFPACT_CLEAR_ACTIONS:
     case OFPACT_CT:
+    case OFPACT_CT_CLEAR:
     case OFPACT_CLONE:
     case OFPACT_NAT:
     case OFPACT_CONTROLLER:
@@ -6360,6 +6395,7 @@ ofpact_is_allowed_in_actions_set(const struct ofpact *a)
     case OFPACT_CLONE:
     case OFPACT_CONTROLLER:
     case OFPACT_CT:
+    case OFPACT_CT_CLEAR:
     case OFPACT_NAT:
     case OFPACT_ENQUEUE:
     case OFPACT_EXIT:
@@ -6594,6 +6630,7 @@ ovs_instruction_type_from_ofpact_type(enum ofpact_type type)
     case OFPACT_SAMPLE:
     case OFPACT_DEBUG_RECIRC:
     case OFPACT_CT:
+    case OFPACT_CT_CLEAR:
     case OFPACT_NAT:
     default:
         return OVSINST_OFPIT11_APPLY_ACTIONS;
@@ -7180,6 +7217,9 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
                              usable_protocols);
     }
 
+    case OFPACT_CT_CLEAR:
+        return 0;
+
     case OFPACT_NAT: {
         struct ofpact_nat *on = ofpact_get_NAT(a);
 
@@ -7721,6 +7761,7 @@ ofpact_outputs_to_port(const struct ofpact *ofpact, ofp_port_t port)
     case OFPACT_GROUP:
     case OFPACT_DEBUG_RECIRC:
     case OFPACT_CT:
+    case OFPACT_CT_CLEAR:
     case OFPACT_NAT:
     default:
         return false;

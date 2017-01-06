@@ -2874,12 +2874,15 @@ xlate_commit_actions(struct xlate_ctx *ctx)
 }
 
 static void
-clear_conntrack(struct flow *flow)
+clear_conntrack(struct xlate_ctx *ctx)
 {
+    ctx->conntracked = false;
+
+    struct flow *flow = &ctx->xin->flow;
     flow->ct_state = 0;
     flow->ct_zone = 0;
     flow->ct_mark = 0;
-    memset(&flow->ct_label, 0, sizeof flow->ct_label);
+    flow->ct_label = OVS_U128_ZERO;
 }
 
 static bool
@@ -2896,7 +2899,6 @@ xlate_flow_is_protected(const struct xlate_ctx *ctx, const struct flow *flow, co
     return (xport_in && xport_in->xbundle && xport_out->xbundle &&
             xport_in->xbundle->protected && xport_out->xbundle->protected);
 }
-
 
 static void
 compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
@@ -2978,8 +2980,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         ctx->wc->masks.tunnel.metadata.tab = flow->tunnel.metadata.tab;
         memset(flow->regs, 0, sizeof flow->regs);
         flow->actset_output = OFPP_UNSET;
-        ctx->conntracked = false;
-        clear_conntrack(flow);
+        clear_conntrack(ctx);
 
         /* When the patch port points to a different bridge, then the mirrors
          * for that bridge clearly apply independently to the packet, so we
@@ -4509,6 +4510,7 @@ freeze_unroll_actions(const struct ofpact *a, const struct ofpact *end,
         case OFPACT_CLONE:
         case OFPACT_DEBUG_RECIRC:
         case OFPACT_CT:
+        case OFPACT_CT_CLEAR:
         case OFPACT_NAT:
             /* These may not generate PACKET INs. */
             break;
@@ -4764,6 +4766,7 @@ recirc_for_mpls(const struct ofpact *a, struct xlate_ctx *ctx)
     case OFPACT_CLONE:
     case OFPACT_UNROLL_XLATE:
     case OFPACT_CT:
+    case OFPACT_CT_CLEAR:
     case OFPACT_NAT:
     case OFPACT_DEBUG_RECIRC:
     case OFPACT_METER:
@@ -5127,6 +5130,10 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
 
         case OFPACT_CT:
             compose_conntrack_action(ctx, ofpact_get_CT(a));
+            break;
+
+        case OFPACT_CT_CLEAR:
+            clear_conntrack(ctx);
             break;
 
         case OFPACT_NAT:
@@ -5515,7 +5522,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
         xlate_report(&ctx, "- Resuming from table %"PRIu8, ctx.table_id);
 
         if (!state->conntracked) {
-            clear_conntrack(flow);
+            clear_conntrack(&ctx);
         }
 
         /* Restore pipeline metadata. May change flow's in_port and other

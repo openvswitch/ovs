@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -107,6 +107,7 @@
     OFPACT(SAMPLE,          ofpact_sample,      ofpact, "sample")       \
     OFPACT(UNROLL_XLATE,    ofpact_unroll_xlate, ofpact, "unroll_xlate") \
     OFPACT(CT,              ofpact_conntrack,   ofpact, "ct")           \
+    OFPACT(CT_CLEAR,        ofpact_null,        ofpact, "ct_clear")     \
     OFPACT(NAT,             ofpact_nat,         ofpact, "nat")          \
     OFPACT(OUTPUT_TRUNC,    ofpact_output_trunc,ofpact, "output_trunc") \
     OFPACT(CLONE,           ofpact_nest,        actions, "clone")       \
