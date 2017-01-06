@@ -2638,7 +2638,8 @@ in Open vSwitch 2.4.
 Executes each nested \fIaction\fR, saving much of the packet and
 pipeline state beforehand and then restoring it afterward.  The state
 that is saved and restored includes all flow data and metadata
-(including, for example, \fBct_state\fR).
+(including, for example, \fBct_state\fR), the stack accessed by
+\fBpush\fR and \fBpop\fR actions, and the OpenFlow action set.
 .IP
 This action was added in Open vSwitch 2.6.90.
 .RE
