@@ -167,14 +167,23 @@ ofp_print_packet_in(struct ds *string, const struct ofp_header *oh,
                       UUID_ARGS(&pin.bridge));
     }
 
-    if (pin.n_stack) {
-        ds_put_cstr(string, " continuation.stack=");
-        for (size_t i = 0; i < pin.n_stack; i++) {
-            if (i) {
-                ds_put_char(string, ' ');
-            }
-            mf_subvalue_format(&pin.stack[i], string);
+    if (pin.stack_size) {
+        ds_put_cstr(string, " continuation.stack=(top)");
+
+        struct ofpbuf pin_stack;
+        ofpbuf_use_const(&pin_stack, pin.stack, pin.stack_size);
+
+        while (pin_stack.size) {
+            uint8_t len;
+            uint8_t *val = nx_stack_pop(&pin_stack, &len);
+            union mf_subvalue value;
+
+            ds_put_char(string, ' ');
+            memset(&value, 0, sizeof value - len);
+            memcpy(&value.u8[sizeof value - len], val, len);
+            mf_subvalue_format(&value, string);
         }
+        ds_put_cstr(string, " (bottom)\n");
     }
 
     if (pin.mirrors) {

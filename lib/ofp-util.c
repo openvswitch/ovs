@@ -3668,16 +3668,13 @@ ofputil_put_packet_in_private(const struct ofputil_packet_in_private *pin,
         ofpprop_put_uuid(msg, NXCPT_BRIDGE, &pin->bridge);
     }
 
-    for (size_t i = 0; i < pin->n_stack; i++) {
-        const union mf_subvalue *s = &pin->stack[i];
-        size_t ofs;
-        for (ofs = 0; ofs < sizeof *s; ofs++) {
-            if (s->u8[ofs]) {
-                break;
-            }
-        }
+    struct ofpbuf pin_stack;
+    ofpbuf_use_const(&pin_stack, pin->stack, pin->stack_size);
 
-        ofpprop_put(msg, NXCPT_STACK, &s->u8[ofs], sizeof *s - ofs);
+    while (pin_stack.size) {
+        uint8_t len;
+        uint8_t *val = nx_stack_pop(&pin_stack, &len);
+        ofpprop_put(msg, NXCPT_STACK, val, len);
     }
 
     if (pin->mirrors) {
@@ -3796,7 +3793,7 @@ ofputil_encode_nx_packet_in2(const struct ofputil_packet_in_private *pin,
     /* 'extra' is just an estimate of the space required. */
     size_t extra = (pin->public.packet_len
                     + NXM_TYPICAL_LEN   /* flow_metadata */
-                    + pin->n_stack * 16
+                    + pin->stack_size * 4
                     + pin->actions_len
                     + pin->action_set_len
                     + 256);     /* fudge factor */
@@ -3997,16 +3994,15 @@ ofputil_encode_resume(const struct ofputil_packet_in *pin,
 }
 
 static enum ofperr
-parse_subvalue_prop(const struct ofpbuf *property, union mf_subvalue *sv)
+parse_stack_prop(const struct ofpbuf *property, struct ofpbuf *stack)
 {
     unsigned int len = ofpbuf_msgsize(property);
-    if (len > sizeof *sv) {
+    if (len > sizeof(union mf_subvalue)) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "NXCPT_STACK property has bad length %u",
                      len);
         return OFPERR_OFPBPC_BAD_LEN;
     }
-    memset(sv, 0, sizeof *sv);
-    memcpy(&sv->u8[sizeof *sv - len], property->msg, len);
+    nx_stack_push_bottom(stack, property->msg, len);
     return 0;
 }
 
@@ -4054,7 +4050,8 @@ ofputil_decode_packet_in_private(const struct ofp_header *oh, bool loose,
     uint8_t table_id = 0;
     ovs_be64 cookie = 0;
 
-    size_t allocated_stack = 0;
+    struct ofpbuf stack;
+    ofpbuf_init(&stack, 0);
 
     while (continuation.size > 0) {
         struct ofpbuf payload;
@@ -4071,12 +4068,7 @@ ofputil_decode_packet_in_private(const struct ofp_header *oh, bool loose,
             break;
 
         case NXCPT_STACK:
-            if (pin->n_stack >= allocated_stack) {
-                pin->stack = x2nrealloc(pin->stack, &allocated_stack,
-                                           sizeof *pin->stack);
-            }
-            error = parse_subvalue_prop(&payload,
-                                        &pin->stack[pin->n_stack++]);
+            error = parse_stack_prop(&payload, &stack);
             break;
 
         case NXCPT_MIRRORS:
@@ -4121,6 +4113,8 @@ ofputil_decode_packet_in_private(const struct ofp_header *oh, bool loose,
     pin->actions = ofpbuf_steal_data(&actions);
     pin->action_set_len = action_set.size;
     pin->action_set = ofpbuf_steal_data(&action_set);
+    pin->stack_size = stack.size;
+    pin->stack = ofpbuf_steal_data(&stack);
 
     if (error) {
         ofputil_packet_in_private_destroy(pin);

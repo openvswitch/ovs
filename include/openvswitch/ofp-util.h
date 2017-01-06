@@ -481,8 +481,8 @@ struct ofputil_packet_in_private {
     struct uuid bridge;
 
     /* NXCPT_STACK. */
-    union mf_subvalue *stack;
-    size_t n_stack;
+    uint8_t *stack;
+    size_t stack_size;
 
     /* NXCPT_MIRRORS. */
     uint32_t mirrors;

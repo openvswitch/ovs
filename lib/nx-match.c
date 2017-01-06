@@ -1704,25 +1704,52 @@ nxm_stack_pop_check(const struct ofpact_stack *pop,
     return mf_check_dst(&pop->subfield, flow);
 }
 
-/* nxm_execute_stack_push(), nxm_execute_stack_pop(). */
-static void
-nx_stack_push(struct ofpbuf *stack, union mf_subvalue *v)
+/* nxm_execute_stack_push(), nxm_execute_stack_pop().
+ *
+ * A stack is an ofpbuf with 'data' pointing to the bottom of the stack and
+ * 'size' indexing the top of the stack.  Each value of some byte length is
+ * stored to the stack immediately followed by the length of the value as an
+ * unsigned byte.  This way a POP operation can first read the length byte, and
+ * then the appropriate number of bytes from the stack.  This also means that
+ * it is only possible to traverse the stack from top to bottom.  It is
+ * possible, however, to push values also to the bottom of the stack, which is
+ * useful when a stack has been serialized to a wire format in reverse order
+ * (topmost value first).
+ */
+
+/* Push value 'v' of length 'bytes' to the top of 'stack'. */
+void
+nx_stack_push(struct ofpbuf *stack, const void *v, uint8_t bytes)
 {
-    ofpbuf_put(stack, v, sizeof *v);
+    ofpbuf_put(stack, v, bytes);
+    ofpbuf_put(stack, &bytes, sizeof bytes);
 }
 
-static union mf_subvalue *
-nx_stack_pop(struct ofpbuf *stack)
+/* Push value 'v' of length 'bytes' to the bottom of 'stack'. */
+void
+nx_stack_push_bottom(struct ofpbuf *stack, const void *v, uint8_t bytes)
 {
-    union mf_subvalue *v = NULL;
+    ofpbuf_push(stack, &bytes, sizeof bytes);
+    ofpbuf_push(stack, v, bytes);
+}
 
-    if (stack->size) {
-
-        stack->size -= sizeof *v;
-        v = (union mf_subvalue *) ofpbuf_tail(stack);
+/* Pop the topmost value from 'stack', returning a pointer to the value in the
+ * stack and the length of the value in '*bytes'.  In case of underflow a NULL
+ * is returned and length is returned as zero via '*bytes'. */
+void *
+nx_stack_pop(struct ofpbuf *stack, uint8_t *bytes)
+{
+    if (!stack->size) {
+        *bytes = 0;
+        return NULL;
     }
 
-    return v;
+    stack->size -= sizeof *bytes;
+    memcpy(bytes, ofpbuf_tail(stack), sizeof *bytes);
+
+    ovs_assert(stack->size >= *bytes);
+    stack->size -= *bytes;
+    return ofpbuf_tail(stack);
 }
 
 void
@@ -1730,14 +1757,15 @@ nxm_execute_stack_push(const struct ofpact_stack *push,
                        const struct flow *flow, struct flow_wildcards *wc,
                        struct ofpbuf *stack)
 {
-    union mf_subvalue mask_value;
     union mf_subvalue dst_value;
 
-    memset(&mask_value, 0xff, sizeof mask_value);
-    mf_write_subfield_flow(&push->subfield, &mask_value, &wc->masks);
+    mf_write_subfield_flow(&push->subfield,
+                           (union mf_subvalue *)&exact_match_mask,
+                           &wc->masks);
 
     mf_read_subfield(&push->subfield, flow, &dst_value);
-    nx_stack_push(stack, &dst_value);
+    uint8_t bytes = DIV_ROUND_UP(push->subfield.n_bits, 8);
+    nx_stack_push(stack, &dst_value.u8[sizeof dst_value - bytes], bytes);
 }
 
 void
@@ -1745,17 +1773,23 @@ nxm_execute_stack_pop(const struct ofpact_stack *pop,
                       struct flow *flow, struct flow_wildcards *wc,
                       struct ofpbuf *stack)
 {
-    union mf_subvalue *src_value;
-
-    src_value = nx_stack_pop(stack);
+    uint8_t src_bytes;
+    const void *src = nx_stack_pop(stack, &src_bytes);
 
     /* Only pop if stack is not empty. Otherwise, give warning. */
-    if (src_value) {
-        union mf_subvalue mask_value;
+    if (src) {
+        union mf_subvalue src_value;
+        uint8_t dst_bytes = DIV_ROUND_UP(pop->subfield.n_bits, 8);
 
-        memset(&mask_value, 0xff, sizeof mask_value);
-        mf_write_subfield_flow(&pop->subfield, &mask_value, &wc->masks);
-        mf_write_subfield_flow(&pop->subfield, src_value, flow);
+        if (src_bytes < dst_bytes) {
+            memset(&src_value.u8[sizeof src_value - dst_bytes], 0,
+                   dst_bytes - src_bytes);
+        }
+        memcpy(&src_value.u8[sizeof src_value - src_bytes], src, src_bytes);
+        mf_write_subfield_flow(&pop->subfield,
+                               (union mf_subvalue *)&exact_match_mask,
+                               &wc->masks);
+        mf_write_subfield_flow(&pop->subfield, &src_value, flow);
     } else {
         if (!VLOG_DROP_WARN(&rl)) {
             char *flow_str = flow_to_string(flow);

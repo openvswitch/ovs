@@ -124,9 +124,8 @@ frozen_state_hash(const struct frozen_state *state)
     hash = hash_bytes64((const uint64_t *) &state->metadata.metadata,
                         sizeof state->metadata - sizeof state->metadata.tunnel,
                         hash);
-    if (state->stack && state->n_stack) {
-        hash = hash_bytes64((const uint64_t *) state->stack,
-                            state->n_stack * sizeof *state->stack, hash);
+    if (state->stack && state->stack_size) {
+        hash = hash_bytes(state->stack, state->stack_size, hash);
     }
     hash = hash_int(state->mirrors, hash);
     hash = hash_int(state->action_set_len, hash);
@@ -149,8 +148,8 @@ frozen_state_equal(const struct frozen_state *a, const struct frozen_state *b)
             && flow_tnl_equal(a->metadata.tunnel, b->metadata.tunnel)
             && !memcmp(&a->metadata.metadata, &b->metadata.metadata,
                        sizeof a->metadata - sizeof a->metadata.tunnel)
-            && a->n_stack == b->n_stack
-            && !memcmp(a->stack, b->stack, a->n_stack * sizeof *a->stack)
+            && a->stack_size == b->stack_size
+            && !memcmp(a->stack, b->stack, a->stack_size)
             && a->mirrors == b->mirrors
             && a->conntracked == b->conntracked
             && ofpacts_equal(a->ofpacts, a->ofpacts_len,
@@ -196,8 +195,8 @@ frozen_state_clone(struct frozen_state *new, const struct frozen_state *old,
     flow_tnl_copy__(tunnel, old->metadata.tunnel);
     new->metadata.tunnel = tunnel;
 
-    new->stack = (new->n_stack
-                  ? xmemdup(new->stack, new->n_stack * sizeof *new->stack)
+    new->stack = (new->stack_size
+                  ? xmemdup(new->stack, new->stack_size)
                   : NULL);
     new->ofpacts = (new->ofpacts_len
                     ? xmemdup(new->ofpacts, new->ofpacts_len)

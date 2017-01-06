@@ -143,8 +143,8 @@ struct frozen_state {
     /* Pipeline context for processing when thawing. */
     struct uuid ofproto_uuid;     /* Bridge to resume from. */
     struct frozen_metadata metadata; /* Flow metadata. */
-    union mf_subvalue *stack;     /* Stack if any. */
-    size_t n_stack;
+    uint8_t *stack;               /* Stack if any. */
+    size_t stack_size;
     mirror_mask_t mirrors;        /* Mirrors already output. */
     bool conntracked;             /* Conntrack occurred prior to freeze. */
 

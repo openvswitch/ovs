@@ -183,8 +183,8 @@ struct xlate_ctx {
      * actually set the tun_dst field. */
     struct in6_addr orig_tunnel_ipv6_dst;
 
-    /* Stack for the push and pop actions.  Each stack element is of type
-     * "union mf_subvalue". */
+    /* Stack for the push and pop actions.  See comment above nx_stack_push()
+     * in nx-match.c for info on how the stack is stored. */
     struct ofpbuf stack;
 
     /* The rule that we are currently translating, or NULL. */
@@ -2964,7 +2964,7 @@ compose_output_action__(struct xlate_ctx *ctx, ofp_port_t ofp_port,
         bool old_was_mpls = ctx->was_mpls;
         ovs_version_t old_version = ctx->xin->tables_version;
         struct ofpbuf old_stack = ctx->stack;
-        union mf_subvalue new_stack[1024 / sizeof(union mf_subvalue)];
+        uint8_t new_stack[1024];
         struct ofpbuf old_action_set = ctx->action_set;
         uint64_t actset_stub[1024 / 8];
 
@@ -3722,9 +3722,8 @@ emit_continuation(struct xlate_ctx *ctx, const struct frozen_state *state)
                     .reason = ctx->pause->reason,
                 },
                 .bridge = ctx->xbridge->ofproto->uuid,
-                .stack = xmemdup(state->stack,
-                                 state->n_stack * sizeof *state->stack),
-                .n_stack = state->n_stack,
+                .stack = xmemdup(state->stack, state->stack_size),
+                .stack_size = state->stack_size,
                 .mirrors = state->mirrors,
                 .conntracked = state->conntracked,
                 .actions = xmemdup(state->ofpacts, state->ofpacts_len),
@@ -3760,7 +3759,7 @@ finish_freezing__(struct xlate_ctx *ctx, uint8_t table)
         .table_id = table,
         .ofproto_uuid = ctx->xbridge->ofproto->uuid,
         .stack = ctx->stack.data,
-        .n_stack = ctx->stack.size / sizeof(union mf_subvalue),
+        .stack_size = ctx->stack.size,
         .mirrors = ctx->mirrors,
         .conntracked = ctx->conntracked,
         .ofpacts = ctx->frozen_actions.data,
@@ -5393,7 +5392,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
     struct flow *flow = &xin->flow;
 
-    union mf_subvalue stack_stub[1024 / sizeof(union mf_subvalue)];
+    uint8_t stack_stub[1024];
     uint64_t action_set_stub[1024 / 8];
     uint64_t frozen_actions_stub[1024 / 8];
     uint64_t actions_stub[256 / 8];
@@ -5504,8 +5503,7 @@ xlate_actions(struct xlate_in *xin, struct xlate_out *xout)
 
         /* Restore stack, if any. */
         if (state->stack) {
-            ofpbuf_put(&ctx.stack, state->stack,
-                       state->n_stack * sizeof *state->stack);
+            ofpbuf_put(&ctx.stack, state->stack, state->stack_size);
         }
 
         /* Restore mirror state. */
@@ -5798,7 +5796,7 @@ xlate_resume(struct ofproto_dpif *ofproto,
         .table_id = 0,     /* Not the table where NXAST_PAUSE was executed. */
         .ofproto_uuid = pin->bridge,
         .stack = pin->stack,
-        .n_stack = pin->n_stack,
+        .stack_size = pin->stack_size,
         .mirrors = pin->mirrors,
         .conntracked = pin->conntracked,
 
