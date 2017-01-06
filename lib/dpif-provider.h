@@ -176,6 +176,10 @@ struct dpif_class {
      * If 'port' is not null, stores information about the port into
      * '*port' if successful.
      *
+     * If the port doesn't exist, the provider must return ENODEV.  Other
+     * error numbers means that something wrong happened and will be
+     * treated differently by upper layers.
+     *
      * If 'port' is not null, the caller takes ownership of data in
      * 'port' and must free it with dpif_port_destroy() when it is no
      * longer needed. */

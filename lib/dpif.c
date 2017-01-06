@@ -602,7 +602,7 @@ bool
 dpif_port_exists(const struct dpif *dpif, const char *devname)
 {
     int error = dpif->dpif_class->port_query_by_name(dpif, devname, NULL);
-    if (error != 0 && error != ENOENT && error != ENODEV) {
+    if (error != 0 && error != ENODEV) {
         VLOG_WARN_RL(&error_rl, "%s: failed to query port %s: %s",
                      dpif_name(dpif), devname, ovs_strerror(error));
     }
@@ -631,6 +631,8 @@ dpif_port_set_config(struct dpif *dpif, odp_port_t port_no,
  * initializes '*port' appropriately; on failure, returns a positive errno
  * value.
  *
+ * Retuns ENODEV if the port doesn't exist.
+ *
  * The caller owns the data in 'port' and must free it with
  * dpif_port_destroy() when it is no longer needed. */
 int
@@ -653,6 +655,8 @@ dpif_port_query_by_number(const struct dpif *dpif, odp_port_t port_no,
  * initializes '*port' appropriately; on failure, returns a positive errno
  * value.
  *
+ * Retuns ENODEV if the port doesn't exist.
+ *
  * The caller owns the data in 'port' and must free it with
  * dpif_port_destroy() when it is no longer needed. */
 int
@@ -666,12 +670,11 @@ dpif_port_query_by_name(const struct dpif *dpif, const char *devname,
     } else {
         memset(port, 0, sizeof *port);
 
-        /* For ENOENT or ENODEV we use DBG level because the caller is probably
+        /* For ENODEV we use DBG level because the caller is probably
          * interested in whether 'dpif' actually has a port 'devname', so that
          * it's not an issue worth logging if it doesn't.  Other errors are
          * uncommon and more likely to indicate a real problem. */
-        VLOG_RL(&error_rl,
-                error == ENOENT || error == ENODEV ? VLL_DBG : VLL_WARN,
+        VLOG_RL(&error_rl, error == ENODEV ? VLL_DBG : VLL_WARN,
                 "%s: failed to query port %s: %s",
                 dpif_name(dpif), devname, ovs_strerror(error));
     }
