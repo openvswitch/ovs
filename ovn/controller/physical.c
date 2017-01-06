@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2016 Nicira, Inc.
+/* Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -331,6 +331,7 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
 
         size_t clone_ofs = ofpacts_p->size;
         struct ofpact_nest *clone = ofpact_put_CLONE(ofpacts_p);
+        ofpact_put_CT_CLEAR(ofpacts_p);
         put_load(0, MFF_LOG_DNAT_ZONE, 0, 32, ofpacts_p);
         put_load(0, MFF_LOG_SNAT_ZONE, 0, 32, ofpacts_p);
         put_load(0, MFF_LOG_CT_ZONE, 0, 32, ofpacts_p);
