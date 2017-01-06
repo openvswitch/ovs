@@ -26,16 +26,18 @@ vlog = ovs.vlog.Vlog("stream")
 
 
 def stream_or_pstream_needs_probes(name):
-    """ 1 if the stream or pstream specified by 'name' needs periodic probes to
-    verify connectivity.  For [p]streams which need probes, it can take a long
-    time to notice the connection was dropped.  Returns 0 if probes aren't
-    needed, and -1 if 'name' is invalid"""
+    """ True if the stream or pstream specified by 'name' needs periodic probes
+    to verify connectivity.  For [p]streams which need probes, it can take a
+    long time to notice the connection was dropped.  Returns False if probes
+    aren't needed, and None if 'name' is invalid"""
 
-    if PassiveStream.is_valid_name(name) or Stream.is_valid_name(name):
-        # Only unix and punix are supported currently.
-        return 0
+    cls = Stream._find_method(name)
+    if cls:
+        return cls.needs_probes()
+    elif PassiveStream.is_valid_name(name):
+        return PassiveStream.needs_probes(name)
     else:
-        return -1
+        return None
 
 
 class Stream(object):
@@ -267,6 +269,10 @@ class Stream(object):
 
 class PassiveStream(object):
     @staticmethod
+    def needs_probes(name):
+        return False if name.startswith("punix:") else True
+
+    @staticmethod
     def is_valid_name(name):
         """Returns True if 'name' is a passive stream name in the form
         "TYPE:ARGS" and TYPE is a supported passive stream type (currently
@@ -369,6 +375,10 @@ Passive %s connection methods:
 
 class UnixStream(Stream):
     @staticmethod
+    def needs_probes():
+        return False
+
+    @staticmethod
     def _open(suffix, dscp):
         connect_path = suffix
         return ovs.socket_util.make_unix_socket(socket.SOCK_STREAM,
@@ -377,6 +387,10 @@ Stream.register_method("unix", UnixStream)
 
 
 class TCPStream(Stream):
+    @staticmethod
+    def needs_probes():
+        return True
+
     @staticmethod
     def _open(suffix, dscp):
         error, sock = ovs.socket_util.inet_open_active(socket.SOCK_STREAM,
