@@ -24,7 +24,7 @@ argv0 = sys.argv[0]
 
 
 def usage():
-    print """\
+    print("""\
 %(argv0)s: XML to nroff converter
 Converts the XML format supplied as input into an nroff-formatted manpage.
 usage: %(argv0)s [OPTIONS] INPUT.XML [VAR=VALUE]...
@@ -37,14 +37,14 @@ The following options are also available:
   -I, --include=DIR           search DIR for include files (default: .)
   --version=VERSION           use VERSION to display on document footer
   -h, --help                  display this help message\
-""" % {'argv0': argv0}
+""" % {'argv0': argv0})
     sys.exit(0)
 
 
 def manpage_to_nroff(xml_file, subst, include_path, version=None):
     with open(xml_file) as f:
         content = f.read()
-    for k, v in subst.iteritems():
+    for k, v in subst.items():
         content = content.replace(k, v)
     doc = xml.dom.minidom.parseString(content).documentElement
 
@@ -62,7 +62,7 @@ def manpage_to_nroff(xml_file, subst, include_path, version=None):
             sys.stderr.write("%s: could not open include file %s\n"
                              % (argv0, fn))
             sys.exit(1)
-        for k, v in subst.iteritems():
+        for k, v in subst.items():
             content = content.replace(k, v)
         xi_doc = xml.dom.minidom.parseString(content).documentElement
         doc.replaceChild(xi_doc, node)
@@ -102,7 +102,7 @@ if __name__ == "__main__":
     try:
         options, args = getopt.gnu_getopt(sys.argv[1:], 'hVI:',
                                           ['version=', 'help', 'include='])
-    except getopt.GetoptError, geo:
+    except getopt.GetoptError as geo:
         sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
         sys.exit(1)
 
@@ -139,13 +139,13 @@ if __name__ == "__main__":
 
     try:
         s = manpage_to_nroff(args[0], subst, include_path, version)
-    except build.nroff.error.Error, e:
+    except build.nroff.error.Error as e:
         sys.stderr.write("%s: %s\n" % (argv0, e.msg))
         sys.exit(1)
     for line in s.splitlines():
         line = line.strip()
         if line:
-            print line
+            print(line)
 
 
 # Local variables:
