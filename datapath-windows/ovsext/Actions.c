@@ -1400,7 +1400,7 @@ OvsUpdateIPv4Header(OvsForwardingContext *ovsFwdCtx,
     }
 
     /*
-     * Adjust the IP header inline as dictated by the action, nad also update
+     * Adjust the IP header inline as dictated by the action, and also update
      * the IP and the TCP checksum for the data modified.
      *
      * In the future, this could be optimized to make one call to
