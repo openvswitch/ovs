@@ -519,6 +519,28 @@
             </dl>
           </dd>
 
+          <dt><code>router</code></dt>
+          <dd>
+            <p>
+              Accepted only when <ref column="type"/> is <code>router</code>.
+              This indicates that the Ethernet, IPv4, and IPv6 addresses for
+              this logical switch port should be obtained from the connected
+              logical router port, as specified by <code>router-port</code> in
+              <ref column="options"/>.
+            </p>
+
+            <p>
+              The resulting addresses are used to populate the logical
+              switch's destination lookup, and also for the logical switch
+              to generate ARP and ND replies.
+            </p>
+
+            <p>
+              Supported only in OVN 2.7 and later.  Earlier versions required
+              router addresses to be manually synchronized.
+            </p>
+          </dd>
+
         </dl>
       </column>
 

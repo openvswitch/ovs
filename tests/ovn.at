@@ -4804,7 +4804,8 @@ ovn-nbctl ls-add alice -- add Logical_Switch alice other_config subnet=192.168.2
 # Connect foo to R1
 ovn-nbctl lrp-add R1 foo 00:00:00:01:02:03 192.168.1.1/24
 ovn-nbctl lsp-add foo rp-foo -- set Logical_Switch_Port rp-foo type=router \
-          options:router-port=foo addresses=\"00:00:00:01:02:03\"
+          options:router-port=foo \
+          -- lsp-set-addresses rp-foo router
 
 # Connect alice to R1
 ovn-nbctl lrp-add R1 alice 00:00:00:01:02:04 192.168.2.1/24

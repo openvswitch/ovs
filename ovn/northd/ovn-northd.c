@@ -815,7 +815,7 @@ ipam_insert_lsp_addresses(struct ovn_datapath *od, struct ovn_port *op,
                           char *address)
 {
     if (!od || !op || !address || !strcmp(address, "unknown")
-        || is_dynamic_lsp_address(address)) {
+        || !strcmp(address, "router") || is_dynamic_lsp_address(address)) {
         return;
     }
 
@@ -1205,7 +1205,8 @@ join_logical_ports(struct northd_context *ctx,
                 op->lsp_addrs
                     = xmalloc(sizeof *op->lsp_addrs * nbsp->n_addresses);
                 for (size_t j = 0; j < nbsp->n_addresses; j++) {
-                    if (!strcmp(nbsp->addresses[j], "unknown")) {
+                    if (!strcmp(nbsp->addresses[j], "unknown")
+                        || !strcmp(nbsp->addresses[j], "router")) {
                         continue;
                     }
                     if (is_dynamic_lsp_address(nbsp->addresses[j])) {
@@ -1323,6 +1324,18 @@ join_logical_ports(struct northd_context *ctx,
                 op->od->router_ports,
                 sizeof *op->od->router_ports * (op->od->n_router_ports + 1));
             op->od->router_ports[op->od->n_router_ports++] = op;
+
+            /* Fill op->lsp_addrs for op->nbsp->addresses[] with
+             * contents "router", which was skipped in the loop above. */
+            for (size_t j = 0; j < op->nbsp->n_addresses; j++) {
+                if (!strcmp(op->nbsp->addresses[j], "router")) {
+                    if (extract_lrp_networks(peer->nbrp,
+                                            &op->lsp_addrs[op->n_lsp_addrs])) {
+                        op->n_lsp_addrs++;
+                    }
+                    break;
+                }
+            }
         } else if (op->nbrp && op->nbrp->peer) {
             struct ovn_port *peer = ovn_port_find(ports, op->nbrp->peer);
             if (peer) {
@@ -3112,6 +3125,20 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
             } else if (is_dynamic_lsp_address(op->nbsp->addresses[i])) {
                 if (!op->nbsp->dynamic_addresses
                     || !ovs_scan(op->nbsp->dynamic_addresses,
+                            ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))) {
+                    continue;
+                }
+                ds_clear(&match);
+                ds_put_format(&match, "eth.dst == "ETH_ADDR_FMT,
+                              ETH_ADDR_ARGS(mac));
+
+                ds_clear(&actions);
+                ds_put_format(&actions, "outport = %s; output;", op->json_key);
+                ovn_lflow_add(lflows, op->od, S_SWITCH_IN_L2_LKUP, 50,
+                              ds_cstr(&match), ds_cstr(&actions));
+            } else if (!strcmp(op->nbsp->addresses[i], "router")) {
+                if (!op->peer || !op->peer->nbrp
+                    || !ovs_scan(op->peer->nbrp->mac,
                             ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(mac))) {
                     continue;
                 }

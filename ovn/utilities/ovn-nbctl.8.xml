@@ -197,6 +197,15 @@
             the logical port's subnet and store them in the port's
             <code>dynamic_addresses</code> column.
           </dd>
+
+          <dt><code>router</code></dt>
+          <dd>
+            Accepted only when the <code>type</code> of the logical switch
+            port is <code>router</code>.  This indicates that the Ethernet,
+            IPv4, and IPv6 addresses for this logical switch port should be
+            obtained from the connected logical router port, as specified by
+            <code>router-port</code> in <code>lsp-set-options</code>.
+          </dd>
         </dl>
 
         <p>
