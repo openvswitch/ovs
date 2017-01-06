@@ -81,7 +81,7 @@
         Adds the specified ACL to <var>switch</var>.
         <var>direction</var> must be either <code>from-lport</code> or
         <code>to-lport</code>.  <var>priority</var> must be between
-        <code>1</code> and <code>65534</code>, inclusive.  If
+        <code>0</code> and <code>32767</code>, inclusive.  If
         <code>--log</code> is specified, packet logging is enabled for the
         ACL.  A full description of the fields are in <code>ovn-nb</code>(5).
       </dd>
