@@ -809,7 +809,9 @@ class SSLStream(Stream):
                 buf = buf.encode('utf-8')
             return super(SSLStream, self).send(buf)
         except SSL.WantWriteError:
-            return errno.EAGAIN
+            return -errno.EAGAIN
+        except SSL.SysCallError as e:
+            return -ovs.socket_util.get_exception_errno(e)
 
 
 if SSL:
