@@ -4074,7 +4074,9 @@ ofputil_decode_packet_in_private(const struct ofp_header *oh, bool loose,
         uint64_t type;
 
         error = ofpprop_pull(&continuation, &payload, &type);
-        ovs_assert(!error);
+        if (error) {
+            break;
+        }
 
         switch (type) {
         case NXCPT_BRIDGE:
@@ -4137,7 +4139,7 @@ ofputil_decode_packet_in_private(const struct ofp_header *oh, bool loose,
         ofputil_packet_in_private_destroy(pin);
     }
 
-    return 0;
+    return error;
 }
 
 /* Frees data in 'pin' that is dynamically allocated by
