@@ -453,6 +453,20 @@ AT_CHECK([simplify 'tcp.dst < 65535'], [0],
 ]])
 AT_CLEANUP
 
+AT_SETUP([ovn -- is_chassis_resident simplification])
+simplify() {
+    echo "$1" | ovstest test-ovn simplify-expr
+}
+AT_CHECK([simplify 'is_chassis_resident("eth1")'], [0], [1
+])
+AT_CHECK([simplify 'is_chassis_resident("eth2")'], [0], [0
+])
+AT_CHECK([simplify '!is_chassis_resident("eth1")'], [0], [0
+])
+AT_CHECK([simplify '!is_chassis_resident("eth2")'], [0], [1
+])
+AT_CLEANUP
+
 AT_SETUP([ovn -- 4-term numeric expression normalization])
 AT_CHECK([ovstest test-ovn exhaustive --operation=normalize --nvars=3 --svars=0 --bits=1 4], [0],
   [Tested normalizing 1874026 expressions of 4 terminals with 3 numeric vars (each 1 bits) in terms of operators == != < <= > >=.

@@ -534,6 +534,20 @@
         packet.
       </p>
 
+      <p>
+        Match expressions also support a kind of function syntax.  The
+        following functions are supported:
+      </p>
+
+      <dl>
+        <dt><code>is_chassis_resident(<var>lport</var>)</code></dt>
+        <dd>
+          Evaluates to true on a chassis on which logical port <var>lport</var>
+          (a quoted string) resides, and to false elsewhere.  This function was
+          introduced in OVN 2.7.
+        </dd>
+      </dl>
+
       <p><em>Symbols</em></p>
 
       <p>
