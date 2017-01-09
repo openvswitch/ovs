@@ -1790,6 +1790,21 @@ tcp.flags = RST;
             table="Port_Binding"/>:<code>vtep-logical-switch</code> must also
             be defined.
           </dd>
+
+          <dt><code>chassisredirect</code></dt>
+          <dd>
+            A logical port that represents a particular instance, bound
+            to a specific chassis, of an otherwise distributed parent
+            port (e.g. of type <code>patch</code>).  A
+            <code>chassisredirect</code> port should never be used as an
+            <code>inport</code>.  When an ingress pipeline sets the
+            <code>outport</code>, it may set the value to a logical port
+            of type <code>chassisredirect</code>.  This will cause the
+            packet to be directed to a specific chassis to carry out the
+            egress pipeline.  At the beginning of the egress pipeline,
+            the <code>outport</code> will be reset to the value of the
+            distributed port.
+          </dd>
         </dl>
       </column>
     </group>
@@ -1943,6 +1958,26 @@ tcp.flags = RST;
         Indicates the queue number on the physical device. This is same as the
         <code>queue_id</code> used in OpenFlow in <code>struct
         ofp_action_enqueue</code>.
+      </column>
+    </group>
+
+    <group title="Chassis Redirect Options">
+      <p>
+        These options apply to logical ports with <ref column="type"/>
+        of <code>chassisredirect</code>.
+      </p>
+
+      <column name="options" key="distributed-port">
+        The name of the distributed port for which this
+        <code>chassisredirect</code> port represents a particular instance.
+      </column>
+
+      <column name="options" key="redirect-chassis">
+        The <code>chassis</code> that this <code>chassisredirect</code> port
+        is bound to.  This is taken from <ref table="Logical_Router_Port"
+        column="options" key="redirect-chassis" db="OVN_Northbound"/>
+        in the OVN_Northbound database's <ref table="Logical_Router_Port"
+        db="OVN_Northbound"/> table.
       </column>
     </group>
 

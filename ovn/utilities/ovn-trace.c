@@ -307,6 +307,7 @@ struct ovntrace_port {
     char *type;
     uint16_t tunnel_key;
     struct ovntrace_port *peer; /* Patch ports only. */
+    struct ovntrace_port *distributed_port; /* chassisredirect ports only. */
 };
 
 struct ovntrace_mcgroup {
@@ -512,6 +513,24 @@ read_ports(void)
                 if (peer) {
                     port->peer = peer;
                     port->peer->peer = port;
+                }
+            }
+        }
+    }
+
+    SBREC_PORT_BINDING_FOR_EACH (sbpb, ovnsb_idl) {
+        if (!strcmp(sbpb->type, "chassisredirect")) {
+            struct ovntrace_port *port
+                = shash_find_data(&ports, sbpb->logical_port);
+            if (port) {
+                const char *distributed_name = smap_get(&sbpb->options,
+                                                       "distributed-port");
+                if (distributed_name) {
+                    struct ovntrace_port *distributed_port
+                        = shash_find_data(&ports, distributed_name);
+                    if (distributed_port && distributed_port->dp == port->dp) {
+                        port->distributed_port = distributed_port;
+                    }
                 }
             }
         }
@@ -1173,7 +1192,29 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
                                      "/* omitting output because inport == outport && !flags.loopback */");
             }
         }
-    } else if (port->tunnel_key != in_key || allow_loopback) {
+        return;
+    }
+
+    if (port && !strcmp(port->type, "chassisredirect")) {
+        if (port->distributed_port) {
+            ovntrace_node_append(super, OVNTRACE_NODE_OUTPUT,
+                                 "/* Replacing type \"%s\" outport \"%s\""
+                                 " with distributed port \"%s\". */",
+                                 port->type, port->name,
+                                 port->distributed_port->name);
+            port = port->distributed_port;
+            out_name = port->name;
+            egress_uflow.regs[MFF_LOG_OUTPORT - MFF_REG0] = port->tunnel_key;
+        } else {
+            ovntrace_node_append(super, OVNTRACE_NODE_ERROR,
+                                 "*** output to type \"%s\" port \"%s\""
+                                 " with no or invalid distributed port",
+                                 port->type, out_name);
+            return;
+        }
+    }
+
+    if (port->tunnel_key != in_key || allow_loopback) {
         struct ovntrace_node *node = ovntrace_node_append(
             super, OVNTRACE_NODE_PIPELINE,
             "egress(dp=\"%s\", inport=\"%s\", outport=\"%s\")",

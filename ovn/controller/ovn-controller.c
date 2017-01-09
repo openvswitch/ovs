@@ -163,6 +163,10 @@ update_sb_monitors(struct ovsdb_idl *ovnsb_idl,
         sbrec_port_binding_add_clause_options(&pb, OVSDB_F_INCLUDES, &l2);
         const struct smap l3 = SMAP_CONST1(&l3, "l3gateway-chassis", id);
         sbrec_port_binding_add_clause_options(&pb, OVSDB_F_INCLUDES, &l3);
+        const struct smap redirect = SMAP_CONST1(&redirect,
+                                                 "redirect-chassis", id);
+        sbrec_port_binding_add_clause_options(&pb, OVSDB_F_INCLUDES,
+                                              &redirect);
     }
     if (local_ifaces) {
         const char *name;

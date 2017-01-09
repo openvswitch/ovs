@@ -1139,8 +1139,8 @@
   </p>
 
   <p>
-    The following section describes an exception, where logical routers
-    and logical patch ports are associated with a physical location.
+    The following sections describe two exceptions, where logical routers
+    and/or logical patch ports are associated with a physical location.
   </p>
 
   <h3>Gateway Routers</h3>
@@ -1181,6 +1181,133 @@
     When using gateway routers, DNAT and SNAT rules are associated with
     the gateway router, which provides a central location that can handle
     one-to-many SNAT (aka IP masquerading).
+  </p>
+
+  <h3>Distributed Gateway Ports</h3>
+
+  <p>
+    <dfn>Distributed gateway ports</dfn> are logical router patch ports
+    that directly connect distributed logical routers to logical
+    switches with localnet ports.
+  </p>
+
+  <p>
+    The primary design goal of distributed gateway ports is to allow as
+    much traffic as possible to be handled locally on the hypervisor
+    where a VM or container resides.  Whenever possible, packets from
+    the VM or container to the outside world should be processed
+    completely on that VM's or container's hypervisor, eventually
+    traversing a localnet port instance on that hypervisor to the
+    physical network.  Whenever possible, packets from the outside
+    world to a VM or container should be directed through the physical
+    network directly to the VM's or container's hypervisor, where the
+    packet will enter the integration bridge through a localnet port.
+  </p>
+
+  <p>
+    In order to allow for the distributed processing of packets
+    described in the paragraph above, distributed gateway ports need to
+    be logical patch ports that effectively reside on every hypervisor,
+    rather than <code>l3gateway</code> ports that are bound to a
+    particular chassis.  However, the flows associated with distributed
+    gateway ports often need to be associated with physical locations,
+    for the following reasons:
+  </p>
+
+  <ul>
+    <li>
+      <p>
+        The physical network that the localnet port is attached to
+        typically uses L2 learning.  Any Ethernet address used over the
+        distributed gateway port must be restricted to a single physical
+        location so that upstream L2 learning is not confused.  Traffic
+        sent out the distributed gateway port towards the localnet port
+        with a specific Ethernet address must be sent out one specific
+        instance of the distributed gateway port on one specific
+        chassis.  Traffic received from the localnet port (or from a VIF
+        on the same logical switch as the localnet port) with a specific
+        Ethernet address must be directed to the logical switch's patch
+        port instance on that specific chassis.
+      </p>
+
+      <p>
+        Due to the implications of L2 learning, the Ethernet address and
+        IP address of the distributed gateway port need to be restricted
+        to a single physical location.  For this reason, the user must
+        specify one chassis associated with the distributed gateway
+        port.  Note that traffic traversing the distributed gateway port
+        using other Ethernet addresses and IP addresses (e.g. one-to-one
+        NAT) is not restricted to this chassis.
+      </p>
+
+      <p>
+        Replies to ARP and ND requests must be restricted to a single
+        physical location, where the Ethernet address in the reply
+        resides.  This includes ARP and ND replies for the IP address
+        of the distributed gateway port, which are restricted to the
+        chassis that the user associated with the distributed gateway
+        port.
+      </p>
+    </li>
+
+    <li>
+      In order to support one-to-many SNAT (aka IP masquerading), where
+      multiple logical IP addresses spread across multiple chassis are
+      mapped to a single external IP address, it will be necessary to
+      handle some of the logical router processing on a specific chassis
+      in a centralized manner.  Since the SNAT external IP address is
+      typically the distributed gateway port IP address, and for
+      simplicity, the same chassis associated with the distributed
+      gateway port is used.
+    </li>
+  </ul>
+
+  <p>
+    The details of flow restrictions to specific chassis are described
+    in the <code>ovn-northd</code> documentation.
+  </p>
+
+  <p>
+    While most of the physical location dependent aspects of distributed
+    gateway ports can be handled by restricting some flows to specific
+    chassis, one additional mechanism is required.  When a packet
+    leaves the ingress pipeline and the logical egress port is the
+    distributed gateway port, one of two different sets of actions is
+    required at table 32:
+  </p>
+
+  <ul>
+    <li>
+      If the packet can be handled locally on the sender's hypervisor
+      (e.g. one-to-one NAT traffic), then the packet should just be
+      resubmitted locally to table 33, in the normal manner for
+      distributed logical patch ports.
+    </li>
+
+    <li>
+      However, if the packet needs to be handled on the chassis
+      associated with the distributed gateway port (e.g. one-to-many
+      SNAT traffic or non-NAT traffic), then table 32 must send the
+      packet on a tunnel port to that chassis.
+    </li>
+  </ul>
+
+  <p>
+    In order to trigger the second set of actions, the
+    <code>chassisredirect</code> type of southbound
+    <code>Port_Binding</code> has been added.  Setting the logical
+    egress port to the type <code>chassisredirect</code> logical port is
+    simply a way to indicate that although the packet is destined for
+    the distributed gateway port, it needs to be redirected to a
+    different chassis.  At table 32, packets with this logical egress
+    port are sent to a specific chassis, in the same way that table 32
+    directs packets whose logical egress port is a VIF or a type
+    <code>l3gateway</code> port to different chassis.  Once the packet
+    arrives at that chassis, table 33 resets the logical egress port to
+    the value representing the distributed gateway port.  For each
+    distributed gateway port, there is one type
+    <code>chassisredirect</code> port, in addition to the distributed
+    logical patch port representing the distributed gateway port.
   </p>
 
   <h2>Life Cycle of a VTEP gateway</h2>
