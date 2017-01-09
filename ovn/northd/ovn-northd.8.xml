@@ -740,9 +740,21 @@ output;
       </li>
 
       <li>
-        One priority-50 flow that matches each known Ethernet address against
-        <code>eth.dst</code> and outputs the packet to the single associated
-        output port.
+        <p>
+          One priority-50 flow that matches each known Ethernet address against
+          <code>eth.dst</code> and outputs the packet to the single associated
+          output port.
+        </p>
+
+        <p>
+          For the Ethernet address on a logical switch port of type
+          <code>router</code>, when that logical switch port's
+          <ref column="addresses" table="Logical_Switch_Port"
+          db="OVN_Northbound"/> column is set to <code>router</code> and
+          the connected logical router port specifies a
+          <code>redirect-chassis</code>, the flow is only programmed on the
+          <code>redirect-chassis</code>.
+        </p>
       </li>
 
       <li>
@@ -862,10 +874,21 @@ output;
       </li>
 
       <li>
-        For each enabled router port <var>P</var> with Ethernet address
-        <var>E</var>, a priority-50 flow that matches <code>inport ==
-        <var>P</var> &amp;&amp; (eth.mcast || eth.dst ==
-        <var>E</var></code>), with action <code>next;</code>.
+        <p>
+          For each enabled router port <var>P</var> with Ethernet address
+          <var>E</var>, a priority-50 flow that matches <code>inport ==
+          <var>P</var> &amp;&amp; (eth.mcast || eth.dst ==
+          <var>E</var></code>), with action <code>next;</code>.
+        </p>
+
+        <p>
+          For the gateway port on a distributed logical router (where
+          one of the logical router ports specifies a
+          <code>redirect-chassis</code>), the above flow matching
+          <code>eth.dst == <var>E</var></code> is only programmed on
+          the gateway port instance on the
+          <code>redirect-chassis</code>.
+        </p>
       </li>
     </ul>
 
@@ -980,6 +1003,17 @@ outport = <var>P</var>;
 flags.loopback = 1;
 output;
         </pre>
+
+        <p>
+          For the gateway port on a distributed logical router (where
+          one of the logical router ports specifies a
+          <code>redirect-chassis</code>), the above flows are only
+          programmed on the gateway port instance on the
+          <code>redirect-chassis</code>.  This behavior avoids generation
+          of multiple ARP responses from different chassis, and allows
+          upstream MAC learning to point to the
+          <code>redirect-chassis</code>.
+        </p>
       </li>
 
       <li>
@@ -1040,6 +1074,17 @@ nd_na {
     output;
 };
         </pre>
+
+        <p>
+          For the gateway port on a distributed logical router (where
+          one of the logical router ports specifies a
+          <code>redirect-chassis</code>), the above flows replying to
+          IPv6 Neighbor Solicitations are only programmed on the
+          gateway port instance on the <code>redirect-chassis</code>.
+          This behavior avoids generation of multiple replies from
+          different chassis, and allows upstream MAC learning to point
+          to the <code>redirect-chassis</code>.
+        </p>
       </li>
 
       <li>
@@ -1485,7 +1530,46 @@ next;
       </li>
     </ul>
 
-    <h3>Ingress Table 7: ARP Request</h3>
+    <h3>Ingress Table 7: Gateway Redirect</h3>
+
+    <p>
+      For distributed logical routers where one of the logical router
+      ports specifies a <code>redirect-chassis</code>, this table redirects
+      certain packets to the distributed gateway port instance on the
+      <code>redirect-chassis</code>.  This table has the following flows:
+    </p>
+
+    <ul>
+      <li>
+        A priority-150 logical flow with match
+        <code>outport == <var>GW</var> &amp;&amp;
+        eth.dst == 00:00:00:00:00:00</code> has actions
+        <code>outport = <var>CR</var>; next;</code>, where
+        <var>GW</var> is the logical router distributed gateway
+        port and <var>CR</var> is the <code>chassisredirect</code>
+        port representing the instance of the logical router
+        distributed gateway port on the
+        <code>redirect-chassis</code>.
+      </li>
+
+      <li>
+        A priority-50 logical flow with match
+        <code>outport == <var>GW</var></code> has actions
+        <code>outport = <var>CR</var>; next;</code>, where
+        <var>GW</var> is the logical router distributed gateway
+        port and <var>CR</var> is the <code>chassisredirect</code>
+        port representing the instance of the logical router
+        distributed gateway port on the
+        <code>redirect-chassis</code>.
+      </li>
+
+      <li>
+        A priority-0 logical flow with match <code>1</code> has actions
+        <code>next;</code>.
+      </li>
+    </ul>
+
+    <h3>Ingress Table 8: ARP Request</h3>
 
     <p>
       In the common case where the Ethernet destination has been resolved, this

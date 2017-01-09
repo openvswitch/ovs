@@ -132,7 +132,8 @@ enum ovn_stage {
     PIPELINE_STAGE(ROUTER, IN,  DNAT,        4, "lr_in_dnat")         \
     PIPELINE_STAGE(ROUTER, IN,  IP_ROUTING,  5, "lr_in_ip_routing")   \
     PIPELINE_STAGE(ROUTER, IN,  ARP_RESOLVE, 6, "lr_in_arp_resolve")  \
-    PIPELINE_STAGE(ROUTER, IN,  ARP_REQUEST, 7, "lr_in_arp_request")  \
+    PIPELINE_STAGE(ROUTER, IN,  GW_REDIRECT, 7, "lr_in_gw_redirect")  \
+    PIPELINE_STAGE(ROUTER, IN,  ARP_REQUEST, 8, "lr_in_arp_request")  \
                                                                       \
     /* Logical router egress stages. */                               \
     PIPELINE_STAGE(ROUTER, OUT, SNAT,      0, "lr_out_snat")          \
@@ -382,6 +383,15 @@ struct ovn_datapath {
 
     /* IPAM data. */
     struct hmap ipam;
+
+    /* OVN northd only needs to know about the logical router gateway port for
+     * NAT on a distributed router.  This "distributed gateway port" is
+     * populated only when there is a "redirect-chassis" specified for one of
+     * the ports on the logical router.  Otherwise this will be NULL. */
+    struct ovn_port *l3dgw_port;
+    /* The "derived" OVN port representing the instance of l3dgw_port on
+     * the "redirect-chassis". */
+    struct ovn_port *l3redirect_port;
 };
 
 struct macam_node {
@@ -658,6 +668,9 @@ struct ovn_port {
 
     struct lport_addresses lrp_networks;
 
+    bool derived; /* Indicates whether this is an additional port
+                   * derived from nbsp or nbrp. */
+
     /* The port's peer:
      *
      *     - A switch port S of type "router" has a router port R as a peer,
@@ -687,6 +700,7 @@ ovn_port_create(struct hmap *ports, const char *key,
     op->sb = sb;
     op->nbsp = nbsp;
     op->nbrp = nbrp;
+    op->derived = false;
     hmap_insert(ports, &op->key_node, hash_string(op->key, 0));
     return op;
 }
@@ -735,6 +749,12 @@ ovn_port_allocate_key(struct ovn_datapath *od)
 {
     return allocate_tnlid(&od->port_tnlids, "port",
                           (1u << 15) - 1, &od->port_key_hint);
+}
+
+static char *
+chassis_redirect_name(const char *port_name)
+{
+    return xasprintf("cr-%s", port_name);
 }
 
 static bool
@@ -1299,6 +1319,52 @@ join_logical_ports(struct northd_context *ctx,
                 op->lrp_networks = lrp_networks;
                 op->od = od;
                 ipam_add_port_addresses(op->od, op);
+
+                const char *redirect_chassis = smap_get(&op->nbrp->options,
+                                                        "redirect-chassis");
+                if (redirect_chassis) {
+                    /* Additional "derived" ovn_port crp represents the
+                     * instance of op on the "redirect-chassis". */
+                    const char *gw_chassis = smap_get(&op->od->nbr->options,
+                                                   "chassis");
+                    if (gw_chassis) {
+                        static struct vlog_rate_limit rl
+                            = VLOG_RATE_LIMIT_INIT(1, 1);
+                        VLOG_WARN_RL(&rl, "Bad configuration: "
+                                     "redirect-chassis configured on port %s "
+                                     "on L3 gateway router", nbrp->name);
+                        continue;
+                    }
+                    char *redirect_name = chassis_redirect_name(nbrp->name);
+                    struct ovn_port *crp = ovn_port_find(ports, redirect_name);
+                    if (crp) {
+                        crp->derived = true;
+                        crp->nbrp = nbrp;
+                        ovs_list_remove(&crp->list);
+                        ovs_list_push_back(both, &crp->list);
+                    } else {
+                        crp = ovn_port_create(ports, redirect_name,
+                                              NULL, nbrp, NULL);
+                        crp->derived = true;
+                        ovs_list_push_back(nb_only, &crp->list);
+                    }
+                    crp->od = od;
+                    free(redirect_name);
+
+                    /* Set l3dgw_port and l3redirect_port in od, for later
+                     * use during flow creation. */
+                    if (od->l3dgw_port || od->l3redirect_port) {
+                        static struct vlog_rate_limit rl
+                            = VLOG_RATE_LIMIT_INIT(1, 1);
+                        VLOG_WARN_RL(&rl, "Bad configuration: multiple ports "
+                                     "with redirect-chassis on same logical "
+                                     "router %s", od->nbr->name);
+                        continue;
+                    } else {
+                        od->l3dgw_port = op;
+                        od->l3redirect_port = crp;
+                    }
+                }
             }
         }
     }
@@ -1307,7 +1373,7 @@ join_logical_ports(struct northd_context *ctx,
      * to their peers. */
     struct ovn_port *op;
     HMAP_FOR_EACH (op, key_node, ports) {
-        if (op->nbsp && !strcmp(op->nbsp->type, "router")) {
+        if (op->nbsp && !strcmp(op->nbsp->type, "router") && !op->derived) {
             const char *peer_name = smap_get(&op->nbsp->options, "router-port");
             if (!peer_name) {
                 continue;
@@ -1336,7 +1402,7 @@ join_logical_ports(struct northd_context *ctx,
                     break;
                 }
             }
-        } else if (op->nbrp && op->nbrp->peer) {
+        } else if (op->nbrp && op->nbrp->peer && !op->derived) {
             struct ovn_port *peer = ovn_port_find(ports, op->nbrp->peer);
             if (peer) {
                 if (peer->nbrp) {
@@ -1366,18 +1432,29 @@ ovn_port_update_sbrec(const struct ovn_port *op,
         /* If the router is for l3 gateway, it resides on a chassis
          * and its port type is "l3gateway". */
         const char *chassis = smap_get(&op->od->nbr->options, "chassis");
-        if (chassis) {
+        if (op->derived) {
+            sbrec_port_binding_set_type(op->sb, "chassisredirect");
+        } else if (chassis) {
             sbrec_port_binding_set_type(op->sb, "l3gateway");
         } else {
             sbrec_port_binding_set_type(op->sb, "patch");
         }
 
-        const char *peer = op->peer ? op->peer->key : "<error>";
         struct smap new;
         smap_init(&new);
-        smap_add(&new, "peer", peer);
-        if (chassis) {
-            smap_add(&new, "l3gateway-chassis", chassis);
+        if (op->derived) {
+            const char *redirect_chassis = smap_get(&op->nbrp->options,
+                                                    "redirect-chassis");
+            if (redirect_chassis) {
+                smap_add(&new, "redirect-chassis", redirect_chassis);
+            }
+            smap_add(&new, "distributed-port", op->nbrp->name);
+        } else {
+            const char *peer = op->peer ? op->peer->key : "<error>";
+            smap_add(&new, "peer", peer);
+            if (chassis) {
+                smap_add(&new, "l3gateway-chassis", chassis);
+            }
         }
         sbrec_port_binding_set_options(op->sb, &new);
         smap_destroy(&new);
@@ -3174,6 +3251,15 @@ build_lswitch_flows(struct hmap *datapaths, struct hmap *ports,
                 ds_clear(&match);
                 ds_put_format(&match, "eth.dst == "ETH_ADDR_FMT,
                               ETH_ADDR_ARGS(mac));
+                if (op->peer->od->l3dgw_port
+                    && op->peer == op->peer->od->l3dgw_port
+                    && op->peer->od->l3redirect_port) {
+                    /* The destination lookup flow for the router's
+                     * distributed gateway port MAC address should only be
+                     * programmed on the "redirect-chassis". */
+                    ds_put_format(&match, " && is_chassis_resident(%s)",
+                                  op->peer->od->l3redirect_port->json_key);
+                }
 
                 ds_clear(&actions);
                 ds_put_format(&actions, "outport = %s; output;", op->json_key);
@@ -3612,9 +3698,27 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
+        if (op->derived) {
+            /* No ingress packets should be received on a chassisredirect
+             * port. */
+            continue;
+        }
+
         ds_clear(&match);
-        ds_put_format(&match, "(eth.mcast || eth.dst == %s) && inport == %s",
+        ds_put_format(&match, "eth.mcast && inport == %s", op->json_key);
+        ovn_lflow_add(lflows, op->od, S_ROUTER_IN_ADMISSION, 50,
+                      ds_cstr(&match), "next;");
+
+        ds_clear(&match);
+        ds_put_format(&match, "eth.dst == %s && inport == %s",
                       op->lrp_networks.ea_s, op->json_key);
+        if (op->od->l3dgw_port && op == op->od->l3dgw_port
+            && op->od->l3redirect_port) {
+            /* Traffic with eth.dst = l3dgw_port->lrp_networks.ea_s
+             * should only be received on the "redirect-chassis". */
+            ds_put_format(&match, " && is_chassis_resident(%s)",
+                          op->od->l3redirect_port->json_key);
+        }
         ovn_lflow_add(lflows, op->od, S_ROUTER_IN_ADMISSION, 50,
                       ds_cstr(&match), "next;");
     }
@@ -3677,6 +3781,11 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
+        if (op->derived) {
+            /* No ingress packets are accepted on a chassisredirect
+             * port, so no need to program flows for that port. */
+            continue;
+        }
 
         if (op->lrp_networks.n_ipv4_addrs) {
             /* L3 admission control: drop packets that originate from an
@@ -3716,6 +3825,16 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             ds_put_format(&match,
                           "inport == %s && arp.tpa == %s && arp.op == 1",
                           op->json_key, op->lrp_networks.ipv4_addrs[i].addr_s);
+            if (op->od->l3dgw_port && op == op->od->l3dgw_port
+                && op->od->l3redirect_port) {
+                /* Traffic with eth.src = l3dgw_port->lrp_networks.ea_s
+                 * should only be sent from the "redirect-chassis", so that
+                 * upstream MAC learning points to the "redirect-chassis".
+                 * Also need to avoid generation of multiple ARP responses
+                 * from different chassis. */
+                ds_put_format(&match, " && is_chassis_resident(%s)",
+                              op->od->l3redirect_port->json_key);
+            }
 
             ds_clear(&actions);
             ds_put_format(&actions,
@@ -3902,6 +4021,12 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
             continue;
         }
 
+        if (op->derived) {
+            /* No ingress packets are accepted on a chassisredirect
+             * port, so no need to program flows for that port. */
+            continue;
+        }
+
         if (op->lrp_networks.n_ipv6_addrs) {
             /* L3 admission control: drop packets that originate from an
              * IPv6 address owned by the router (priority 100). */
@@ -3947,6 +4072,16 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                     op->lrp_networks.ipv6_addrs[i].addr_s,
                     op->lrp_networks.ipv6_addrs[i].sn_addr_s,
                     op->lrp_networks.ipv6_addrs[i].addr_s);
+            if (op->od->l3dgw_port && op == op->od->l3dgw_port
+                && op->od->l3redirect_port) {
+                /* Traffic with eth.src = l3dgw_port->lrp_networks.ea_s
+                 * should only be sent from the "redirect-chassis", so that
+                 * upstream MAC learning points to the "redirect-chassis".
+                 * Also need to avoid generation of multiple ND replies
+                 * from different chassis. */
+                ds_put_format(&match, " && is_chassis_resident(%s)",
+                              op->od->l3redirect_port->json_key);
+            }
 
             ds_clear(&actions);
             ds_put_format(&actions,
@@ -4456,7 +4591,47 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
                       "get_nd(outport, xxreg0); next;");
     }
 
-    /* Local router ingress table 7: ARP request.
+    /* Logical router ingress table 7: Gateway redirect.
+     *
+     * For traffic with outport equal to the l3dgw_port
+     * on a distributed router, this table redirects a subset
+     * of the traffic to the l3redirect_port which represents
+     * the central instance of the l3dgw_port.
+     */
+    HMAP_FOR_EACH (od, key_node, datapaths) {
+        if (!od->nbr) {
+            continue;
+        }
+        if (od->l3dgw_port && od->l3redirect_port) {
+            /* For traffic with outport == l3dgw_port, if the
+             * packet did not match any higher priority redirect
+             * rule, then the traffic is redirected to the central
+             * instance of the l3dgw_port. */
+            ds_clear(&match);
+            ds_put_format(&match, "outport == %s",
+                          od->l3dgw_port->json_key);
+            ds_clear(&actions);
+            ds_put_format(&actions, "outport = %s; next;",
+                          od->l3redirect_port->json_key);
+            ovn_lflow_add(lflows, od, S_ROUTER_IN_GW_REDIRECT, 50,
+                          ds_cstr(&match), ds_cstr(&actions));
+
+            /* If the Ethernet destination has not been resolved,
+             * redirect to the central instance of the l3dgw_port.
+             * Such traffic will be replaced by an ARP request or ND
+             * Neighbor Solicitation in the ARP request ingress
+             * table, before being redirected to the central instance.
+             */
+            ds_put_format(&match, " && eth.dst == 00:00:00:00:00:00");
+            ovn_lflow_add(lflows, od, S_ROUTER_IN_GW_REDIRECT, 150,
+                          ds_cstr(&match), ds_cstr(&actions));
+        }
+
+        /* Packets are allowed by default. */
+        ovn_lflow_add(lflows, od, S_ROUTER_IN_GW_REDIRECT, 0, "1", "next;");
+    }
+
+    /* Local router ingress table 8: ARP request.
      *
      * In the common case where the Ethernet destination has been resolved,
      * this table outputs the packet (priority 0).  Otherwise, it composes
@@ -4489,6 +4664,14 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         if (!lrport_is_enabled(op->nbrp)) {
             /* Drop packets to disabled logical ports (since logical flow
              * tables are default-drop). */
+            continue;
+        }
+
+        if (op->derived) {
+            /* No egress packets should be processed in the context of
+             * a chassisredirect port.  The chassisredirect port should
+             * be replaced by the l3dgw port in the local output
+             * pipeline stage before egress processing. */
             continue;
         }
 

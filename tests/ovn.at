@@ -6247,3 +6247,337 @@ OVS_APP_EXIT_AND_WAIT([ovs-vswitchd])
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
 AT_CLEANUP
+
+AT_SETUP([ovn -- 1 LR with distributed router gateway port])
+AT_SKIP_IF([test $HAVE_PYTHON = no])
+ovn_start
+
+# Logical network:
+# One LR R1 that has switches foo (192.168.1.0/24) and
+# alice (172.16.1.0/24) connected to it.  The logical port
+# between R1 and alice has a "redirect-chassis" specified,
+# i.e. it is the distributed router gateway port.
+# Switch alice also has a localnet port defined.
+# An additional switch outside has a localnet port and the
+# same subnet as alice (172.16.1.0/24).
+
+# Physical network:
+# Three hypervisors hv[123].
+# hv1 hosts vif foo1.
+# hv2 is the "redirect-chassis" that hosts the distributed
+# router gateway port.
+# hv3 hosts vif outside1.
+# In order to show that connectivity works only through hv2,
+# an initial round of tests is run without any bridge-mapping
+# defined for the localnet on hv2.  These tests are expected
+# to fail.
+# Subsequent tests are run after defining the bridge-mapping
+# for the localnet on hv2. These tests are expected to succeed.
+
+# Create three hypervisors and create OVS ports corresponding
+to logical ports.
+net_add n1
+
+sim_add hv1
+as hv1
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.1
+ovs-vsctl -- add-port br-int hv1-vif1 -- \
+    set interface hv1-vif1 external-ids:iface-id=foo1 \
+    options:tx_pcap=hv1/vif1-tx.pcap \
+    options:rxq_pcap=hv1/vif1-rx.pcap \
+    ofport-request=1
+
+sim_add hv2
+as hv2
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.2
+
+sim_add hv3
+as hv3
+ovs-vsctl add-br br-phys
+ovn_attach n1 br-phys 192.168.0.3
+ovs-vsctl -- add-port br-int hv3-vif1 -- \
+    set interface hv3-vif1 external-ids:iface-id=outside1 \
+    options:tx_pcap=hv3/vif1-tx.pcap \
+    options:rxq_pcap=hv3/vif1-rx.pcap \
+    ofport-request=1
+
+# Pre-populate the hypervisors' ARP tables so that we don't lose any
+# packets for ARP resolution (native tunneling doesn't queue packets
+# for ARP resolution).
+ovn_populate_arp
+
+ovn-nbctl create Logical_Router name=R1
+
+ovn-nbctl ls-add foo
+ovn-nbctl ls-add alice
+ovn-nbctl ls-add outside
+
+# Connect foo to R1
+ovn-nbctl lrp-add R1 foo 00:00:01:01:02:03 192.168.1.1/24
+ovn-nbctl lsp-add foo rp-foo -- set Logical_Switch_Port rp-foo \
+    type=router options:router-port=foo \
+    -- lsp-set-addresses rp-foo router
+
+# Connect alice to R1 as distributed router gateway port on hv2
+ovn-nbctl lrp-add R1 alice 00:00:02:01:02:03 172.16.1.1/24 \
+    -- set Logical_Router_Port alice options:redirect-chassis="hv2"
+ovn-nbctl lsp-add alice rp-alice -- set Logical_Switch_Port rp-alice \
+    type=router options:router-port=alice \
+    -- lsp-set-addresses rp-alice router
+
+# Create logical port foo1 in foo
+ovn-nbctl lsp-add foo foo1 \
+-- lsp-set-addresses foo1 "f0:00:00:01:02:03 192.168.1.2"
+
+# Create logical port outside1 in outside
+ovn-nbctl lsp-add outside outside1 \
+-- lsp-set-addresses outside1 "f0:00:00:01:02:04 172.16.1.3"
+
+# Create localnet port in alice
+ovn-nbctl lsp-add alice ln-alice
+ovn-nbctl lsp-set-addresses ln-alice unknown
+ovn-nbctl lsp-set-type ln-alice localnet
+ovn-nbctl lsp-set-options ln-alice network_name=phys
+
+# Create localnet port in outside
+ovn-nbctl lsp-add outside ln-outside
+ovn-nbctl lsp-set-addresses ln-outside unknown
+ovn-nbctl lsp-set-type ln-outside localnet
+ovn-nbctl lsp-set-options ln-outside network_name=phys
+
+# Create bridge-mappings on hv1 and hv3, leaving hv2 for later
+as hv1 ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+as hv3 ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 2
+
+echo "---------NB dump-----"
+ovn-nbctl show
+echo "---------------------"
+ovn-nbctl list logical_router
+echo "---------------------"
+ovn-nbctl list logical_router_port
+echo "---------------------"
+
+echo "---------SB dump-----"
+ovn-sbctl list datapath_binding
+echo "---------------------"
+ovn-sbctl list port_binding
+echo "---------------------"
+ovn-sbctl dump-flows
+echo "---------------------"
+ovn-sbctl list chassis
+ovn-sbctl list encap
+echo "---------------------"
+
+echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl show br-int
+as hv1 ovs-ofctl dump-flows br-int
+echo "------ hv2 dump ----------"
+as hv2 ovs-ofctl show br-int
+as hv2 ovs-ofctl dump-flows br-int
+echo "------ hv3 dump ----------"
+as hv3 ovs-ofctl show br-int
+as hv3 ovs-ofctl dump-flows br-int
+echo "--------------------------"
+
+# Check that redirect mapping is programmed only on hv2
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=33 | grep =0x3,metadata=0x1 | wc -l], [0], [0
+])
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int table=33 | grep =0x3,metadata=0x1 | grep load:0x2- | wc -l], [0], [1
+])
+# Check that hv1 sends chassisredirect port traffic to hv2
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int table=32 | grep =0x3,metadata=0x1 | grep output | wc -l], [0], [1
+])
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int table=32 | grep =0x3,metadata=0x1 | wc -l], [0], [0
+])
+# Check that arp reply on distributed gateway port is only programmed on hv2
+AT_CHECK([as hv1 ovs-ofctl dump-flows br-int | grep arp | grep =0x2,metadata=0x1 | wc -l], [0], [0
+])
+AT_CHECK([as hv2 ovs-ofctl dump-flows br-int | grep arp | grep =0x2,metadata=0x1 | wc -l], [0], [1
+])
+
+
+ip_to_hex() {
+    printf "%02x%02x%02x%02x" "$@"
+}
+
+
+: > hv2-vif1.expected
+: > hv3-vif1.expected
+
+# test_arp INPORT SHA SPA TPA [REPLY_HA]
+#
+# Causes a packet to be received on INPORT.  The packet is an ARP
+# request with SHA, SPA, and TPA as specified.  If REPLY_HA is provided, then
+# it should be the hardware address of the target to expect to receive in an
+# ARP reply; otherwise no reply is expected.
+#
+# INPORT is an logical switch port number, e.g. 11 for vif11.
+# SHA and REPLY_HA are each 12 hex digits.
+# SPA and TPA are each 8 hex digits.
+test_arp() {
+    local hv=$1 inport=$2 sha=$3 spa=$4 tpa=$5 reply_ha=$6
+    local request=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
+    as hv$hv ovs-appctl netdev-dummy/receive hv${hv}-vif$inport $request
+
+    if test X$reply_ha != X; then
+        # Expect to receive the reply, if any.
+        local reply=${sha}${reply_ha}08060001080006040002${reply_ha}${tpa}${sha}${spa}
+        echo $reply >> hv${hv}-vif$inport.expected
+    fi
+}
+
+rtr_ip=$(ip_to_hex 172 16 1 1)
+foo_ip=$(ip_to_hex 192 168 1 2)
+outside_ip=$(ip_to_hex 172 16 1 3)
+
+echo $rtr_ip
+echo $foo_ip
+echo $outside_ip
+
+# ARP for router IP address from outside1, no response expected
+test_arp 3 1 f00000010204 $outside_ip $rtr_ip
+
+# Now check the packets actually received against the ones expected.
+OVN_CHECK_PACKETS([hv3/vif1-tx.pcap], [hv3-vif1.expected])
+
+# Send ip packet between foo1 and outside1
+src_mac="f00000010203"
+dst_mac="000001010203"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 172 16 1 3`
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+
+# Now check the packets actually received against the ones expected.
+OVN_CHECK_PACKETS([hv3/vif1-tx.pcap], [hv3-vif1.expected])
+
+# Now add bridge-mappings on hv2, which should make everything work
+as hv2 ovs-vsctl set open . external-ids:ovn-bridge-mappings=phys:br-phys
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 2
+
+# ARP for router IP address from outside1
+test_arp 3 1 f00000010204 $outside_ip $rtr_ip 000002010203
+
+# Now check the packets actually received against the ones expected.
+OVN_CHECK_PACKETS([hv3/vif1-tx.pcap], [hv3-vif1.expected])
+
+# Send ip packet between foo1 and outside1
+src_mac="f00000010203"
+dst_mac="000001010203"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 172 16 1 3`
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+
+# ARP request packet to expect at outside1
+src_mac="000002010203"
+src_ip=`ip_to_hex 172 16 1 1`
+arp_request=ffffffffffff${src_mac}08060001080006040001${src_mac}${src_ip}000000000000${dst_ip}
+
+as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+
+echo $arp_request >> hv3-vif1.expected
+OVN_CHECK_PACKETS([hv3/vif1-tx.pcap], [hv3-vif1.expected])
+
+# Send ARP reply from outside1 back to the router
+reply_mac="f00000010204"
+arp_reply=${src_mac}${reply_mac}08060001080006040002${reply_mac}${dst_ip}${src_mac}${src_ip}
+
+as hv3 ovs-appctl netdev-dummy/receive hv3-vif1 $arp_reply
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+# Packet to Expect at outside1
+src_mac="000002010203"
+dst_mac="f00000010204"
+src_ip=`ip_to_hex 192 168 1 2`
+dst_ip=`ip_to_hex 172 16 1 3`
+expected=${dst_mac}${src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+
+# Resend packet from foo1 to outside1
+as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
+
+echo "------ hv1 dump ----------"
+as hv1 ovs-ofctl show br-int
+as hv1 ovs-ofctl dump-flows br-int
+echo "------ hv2 dump ----------"
+as hv2 ovs-ofctl show br-int
+as hv2 ovs-ofctl dump-flows br-int
+echo "------ hv3 dump ----------"
+as hv3 ovs-ofctl show br-int
+as hv3 ovs-ofctl dump-flows br-int
+echo "----------------------------"
+
+echo $expected >> hv3-vif1.expected
+OVN_CHECK_PACKETS([hv3/vif1-tx.pcap], [hv3-vif1.expected])
+
+#Check ovn-trace over "chassisredirect" port
+AT_CAPTURE_FILE([trace])
+ovn_trace () {
+    ovn-trace --all "$@" | tee trace | sed '1,/Minimal trace/d'
+}
+
+echo 'ip.ttl--;' > expout
+echo 'eth.src = 00:00:02:01:02:03;' >> expout
+echo 'eth.dst = f0:00:00:01:02:04;' >> expout
+echo 'output("ln-alice");' >> expout
+AT_CHECK_UNQUOTED([ovn_trace foo 'inport == "foo1" && eth.src == f0:00:00:01:02:03 && eth.dst == 00:00:01:01:02:03 && ip4.src == 192.168.1.2 && ip4.dst == 172.16.1.3 && ip.ttl == 0xff'], [0], [expout])
+
+# Create logical port alice1 in alice on hv1
+as hv1 ovs-vsctl -- add-port br-int hv1-vif2 -- \
+    set interface hv1-vif2 external-ids:iface-id=alice1 \
+    options:tx_pcap=hv1/vif2-tx.pcap \
+    options:rxq_pcap=hv1/vif2-rx.pcap \
+    ofport-request=1
+
+ovn-nbctl lsp-add alice alice1 \
+-- lsp-set-addresses alice1 "f0:00:00:01:02:05 172.16.1.4"
+
+# Create logical port foo2 in foo on hv2
+as hv2 ovs-vsctl -- add-port br-int hv2-vif1 -- \
+    set interface hv2-vif1 external-ids:iface-id=foo2 \
+    options:tx_pcap=hv2/vif1-tx.pcap \
+    options:rxq_pcap=hv2/vif1-rx.pcap \
+    ofport-request=1
+
+ovn-nbctl lsp-add foo foo2 \
+-- lsp-set-addresses foo2 "f0:00:00:01:02:06 192.168.1.3"
+
+# Allow some time for ovn-northd and ovn-controller to catch up.
+# XXX This should be more systematic.
+sleep 1
+
+: > hv1-vif2.expected
+
+# Send ip packet between alice1 and foo2
+src_mac="f00000010205"
+dst_mac="000002010203"
+src_ip=`ip_to_hex 172 16 1 4`
+dst_ip=`ip_to_hex 192 168 1 3`
+packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
+
+as hv1 ovs-appctl netdev-dummy/receive hv1-vif2 $packet
+
+# Packet to Expect at foo2
+src_mac="000001010203"
+dst_mac="f00000010206"
+src_ip=`ip_to_hex 172 16 1 4`
+dst_ip=`ip_to_hex 192 168 1 3`
+expected=${dst_mac}${src_mac}08004500001c000000003f110100${src_ip}${dst_ip}0035111100080000
+
+echo $expected >> hv2-vif1.expected
+OVN_CHECK_PACKETS([hv2/vif1-tx.pcap], [hv2-vif1.expected])
+
+OVN_CLEANUP([hv1],[hv2],[hv3])
+
+AT_CLEANUP

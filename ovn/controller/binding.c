@@ -355,6 +355,14 @@ consider_local_datapath(struct controller_ctx *ctx,
             add_local_datapath(ldatapaths, lports, binding_rec->datapath,
                                false, local_datapaths);
         }
+    } else if (!strcmp(binding_rec->type, "chassisredirect")) {
+        const char *chassis_id = smap_get(&binding_rec->options,
+                                          "redirect-chassis");
+        our_chassis = chassis_id && !strcmp(chassis_id, chassis_rec->name);
+        if (our_chassis) {
+            add_local_datapath(ldatapaths, lports, binding_rec->datapath,
+                               false, local_datapaths);
+        }
     } else if (!strcmp(binding_rec->type, "l3gateway")) {
         const char *chassis_id = smap_get(&binding_rec->options,
                                           "l3gateway-chassis");

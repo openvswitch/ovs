@@ -353,6 +353,69 @@ consider_port_binding(enum mf_field_id mff_ovn_geneve,
         return;
     }
 
+    if (!strcmp(binding->type, "chassisredirect")
+        && binding->chassis == chassis) {
+
+        /* Table 33, priority 100.
+         * =======================
+         *
+         * Implements output to local hypervisor.  Each flow matches a
+         * logical output port on the local hypervisor, and resubmits to
+         * table 34.  For ports of type "chassisredirect", the logical
+         * output port is changed from the "chassisredirect" port to the
+         * underlying distributed port. */
+
+        match_init_catchall(&match);
+        ofpbuf_clear(ofpacts_p);
+        match_set_metadata(&match, htonll(dp_key));
+        match_set_reg(&match, MFF_LOG_OUTPORT - MFF_REG0, port_key);
+
+        const char *distributed_port = smap_get(&binding->options,
+                                                "distributed-port");
+        const struct sbrec_port_binding *distributed_binding
+            = lport_lookup_by_name(lports, distributed_port);
+
+        if (!distributed_binding) {
+            /* Packet will be dropped. */
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(&rl, "No port binding record for distributed "
+                         "port %s referred by chassisredirect port %s",
+                         distributed_port,
+                         binding->logical_port);
+        } else if (binding->datapath !=
+                   distributed_binding->datapath) {
+            /* Packet will be dropped. */
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
+            VLOG_WARN_RL(&rl,
+                         "chassisredirect port %s refers to "
+                         "distributed port %s in wrong datapath",
+                         binding->logical_port,
+                         distributed_port);
+        } else {
+            put_load(distributed_binding->tunnel_key,
+                     MFF_LOG_OUTPORT, 0, 32, ofpacts_p);
+
+            struct zone_ids zone_ids = get_zone_ids(distributed_binding,
+                                                    ct_zones);
+            if (zone_ids.ct) {
+                put_load(zone_ids.ct, MFF_LOG_CT_ZONE, 0, 32, ofpacts_p);
+            }
+            if (zone_ids.dnat) {
+                put_load(zone_ids.dnat, MFF_LOG_DNAT_ZONE, 0, 32, ofpacts_p);
+            }
+            if (zone_ids.snat) {
+                put_load(zone_ids.snat, MFF_LOG_SNAT_ZONE, 0, 32, ofpacts_p);
+            }
+
+            /* Resubmit to table 34. */
+            put_resubmit(OFTABLE_CHECK_LOOPBACK, ofpacts_p);
+        }
+
+        ofctrl_add_flow(flow_table, OFTABLE_LOCAL_OUTPUT, 100, 0,
+                        &match, ofpacts_p);
+        return;
+    }
+
     /* Find the OpenFlow port for the logical port, as 'ofport'.  This is
      * one of:
      *

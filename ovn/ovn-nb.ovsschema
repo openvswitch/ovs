@@ -1,7 +1,7 @@
 {
     "name": "OVN_Northbound",
-    "version": "5.4.1",
-    "cksum": "3485560318 13777",
+    "version": "5.5.0",
+    "cksum": "379266191 13990",
     "tables": {
         "NB_Global": {
             "columns": {
@@ -191,6 +191,11 @@
         "Logical_Router_Port": {
             "columns": {
                 "name": {"type": "string"},
+                "options": {
+                    "type": {"key": "string",
+                             "value": "string",
+                             "min": 0,
+                             "max": "unlimited"}},
                 "networks": {"type": {"key": "string",
                                       "min": 1,
                                       "max": "unlimited"}},
