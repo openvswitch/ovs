@@ -593,6 +593,25 @@ read_address_sets(void)
     }
 }
 
+static bool
+ovntrace_is_chassis_resident(const void *aux OVS_UNUSED,
+                             const char *port_name)
+{
+    if (port_name[0] == '\0') {
+        return true;
+    }
+
+    const struct ovntrace_port *port = shash_find_data(&ports, port_name);
+    if (port) {
+        /* Since ovntrace is not chassis specific, assume any port
+         * that exists is resident. */
+        return true;
+    }
+
+    VLOG_WARN("%s: unknown logical port\n", port_name);
+    return false;
+}
+
 static int
 compare_flow(const void *a_, const void *b_)
 {
@@ -673,7 +692,7 @@ read_flows(void)
             continue;
         }
         if (match) {
-            match = expr_simplify(match);
+            match = expr_simplify(match, ovntrace_is_chassis_resident, NULL);
         }
 
         struct ovntrace_flow *flow = xzalloc(sizeof *flow);

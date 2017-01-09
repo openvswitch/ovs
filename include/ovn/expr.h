@@ -292,6 +292,15 @@ enum expr_type {
     EXPR_T_AND,                 /* Logical AND of 2 or more subexpressions. */
     EXPR_T_OR,                  /* Logical OR of 2 or more subexpressions. */
     EXPR_T_BOOLEAN,             /* True or false constant. */
+    EXPR_T_CONDITION,           /* Conditional to be evaluated in the
+                                 * controller during expr_simplify(),
+                                 * prior to constructing OpenFlow matches. */
+};
+
+/* Expression condition type. */
+enum expr_cond_type {
+    EXPR_COND_CHASSIS_RESIDENT, /* Check if specified logical port name is
+                                 * resident on the controller chassis. */
 };
 
 /* Relational operator. */
@@ -349,6 +358,14 @@ struct expr {
 
         /* EXPR_T_BOOLEAN. */
         bool boolean;
+
+        /* EXPR_T_CONDITION. */
+        struct {
+            enum expr_cond_type type;
+            bool not;
+            /* XXX Should arguments for conditions be generic? */
+            char *string;
+        } cond;
     };
 };
 
@@ -375,7 +392,10 @@ void expr_destroy(struct expr *);
 
 struct expr *expr_annotate(struct expr *, const struct shash *symtab,
                            char **errorp);
-struct expr *expr_simplify(struct expr *);
+struct expr *expr_simplify(struct expr *,
+                           bool (*is_chassis_resident)(const void *c_aux,
+                                                       const char *port_name),
+                           const void *c_aux);
 struct expr *expr_normalize(struct expr *);
 
 bool expr_honors_invariants(const struct expr *);

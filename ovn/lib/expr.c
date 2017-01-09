@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -233,6 +233,11 @@ expr_not(struct expr *expr)
     case EXPR_T_BOOLEAN:
         expr->boolean = !expr->boolean;
         break;
+
+    case EXPR_T_CONDITION:
+        expr->cond.not = !expr->cond.not;
+        break;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -288,6 +293,9 @@ expr_fix(struct expr *expr)
         return expr_fix_andor(expr, true);
 
     case EXPR_T_BOOLEAN:
+        return expr;
+
+    case EXPR_T_CONDITION:
         return expr;
 
     default:
@@ -394,6 +402,21 @@ expr_format_andor(const struct expr *e, const char *op, struct ds *s)
     }
 }
 
+static void
+expr_format_condition(const struct expr *e, struct ds *s)
+{
+    if (e->cond.not) {
+        ds_put_char(s, '!');
+    }
+    switch (e->cond.type) {
+    case EXPR_COND_CHASSIS_RESIDENT:
+        ds_put_format(s, "is_chassis_resident(");
+        json_string_escape(e->cond.string, s);
+        ds_put_char(s, ')');
+        break;
+    }
+}
+
 /* Appends a string form of 'e' to 's'.  The string form is acceptable for
  * parsing back into an equivalent expression. */
 void
@@ -414,6 +437,10 @@ expr_format(const struct expr *e, struct ds *s)
 
     case EXPR_T_BOOLEAN:
         ds_put_char(s, e->boolean ? '1' : '0');
+        break;
+
+    case EXPR_T_CONDITION:
+        expr_format_condition(e, s);
         break;
     }
 }
@@ -973,6 +1000,29 @@ expr_addr_sets_destroy(struct shash *addr_sets)
 }
 
 static struct expr *
+parse_chassis_resident(struct expr_context *ctx)
+{
+    if (ctx->lexer->token.type != LEX_T_STRING) {
+        lexer_syntax_error(ctx->lexer, "expecting string");
+        return NULL;
+    }
+
+    struct expr *e = xzalloc(sizeof *e);
+    e->type = EXPR_T_CONDITION;
+    e->cond.type = EXPR_COND_CHASSIS_RESIDENT;
+    e->cond.not = false;
+    e->cond.string = xstrdup(ctx->lexer->token.s);
+
+    lexer_get(ctx->lexer);
+    if (!lexer_force_match(ctx->lexer, LEX_T_RPAREN)) {
+        expr_destroy(e);
+        return NULL;
+    }
+
+    return e;
+}
+
+static struct expr *
 expr_parse_primary(struct expr_context *ctx, bool *atomic)
 {
     *atomic = false;
@@ -990,6 +1040,16 @@ expr_parse_primary(struct expr_context *ctx, bool *atomic)
         struct expr_field f;
         enum expr_relop r;
         struct expr_constant_set c;
+
+        if (lexer_lookahead(ctx->lexer) == LEX_T_LPAREN) {
+            if (lexer_match_id(ctx->lexer, "is_chassis_resident")) {
+                lexer_get(ctx->lexer); /* Skip "(". */
+                *atomic = true;
+                return parse_chassis_resident(ctx);
+            }
+            lexer_error(ctx->lexer, "parsing function name");
+            return NULL;
+        }
 
         if (!parse_field(ctx, &f)) {
             return NULL;
@@ -1385,6 +1445,7 @@ expr_get_level(const struct expr *expr)
         return level;
 
     case EXPR_T_BOOLEAN:
+    case EXPR_T_CONDITION:
         return EXPR_L_BOOLEAN;
 
     default:
@@ -1467,6 +1528,14 @@ expr_clone_andor(struct expr *expr)
     return new;
 }
 
+static struct expr *
+expr_clone_condition(struct expr *expr)
+{
+    struct expr *new = xmemdup(expr, sizeof *expr);
+    new->cond.string = xstrdup(new->cond.string);
+    return new;
+}
+
 /* Returns a clone of 'expr'.  This is a "deep copy": neither the returned
  * expression nor any of its substructure will be shared with 'expr'. */
 struct expr *
@@ -1482,6 +1551,9 @@ expr_clone(struct expr *expr)
 
     case EXPR_T_BOOLEAN:
         return expr_create_boolean(expr->boolean);
+
+    case EXPR_T_CONDITION:
+        return expr_clone_condition(expr);
     }
     OVS_NOT_REACHED();
 }
@@ -1512,6 +1584,10 @@ expr_destroy(struct expr *expr)
         break;
 
     case EXPR_T_BOOLEAN:
+        break;
+
+    case EXPR_T_CONDITION:
+        free(expr->cond.string);
         break;
     }
     free(expr);
@@ -1641,6 +1717,7 @@ expr_annotate__(struct expr *expr, const struct shash *symtab,
     }
 
     case EXPR_T_BOOLEAN:
+    case EXPR_T_CONDITION:
         *errorp = NULL;
         return expr;
 
@@ -1783,10 +1860,36 @@ expr_simplify_relational(struct expr *expr)
     return new ? new : expr_create_boolean(false);
 }
 
+/* Resolves condition and replaces the expression with a boolean. */
+static struct expr *
+expr_simplify_condition(struct expr *expr,
+                        bool (*is_chassis_resident)(const void *c_aux,
+                                                    const char *port_name),
+                        const void *c_aux)
+{
+    bool result;
+
+    switch (expr->cond.type) {
+    case EXPR_COND_CHASSIS_RESIDENT:
+        result = is_chassis_resident(c_aux, expr->cond.string);
+        break;
+
+    default:
+        OVS_NOT_REACHED();
+    }
+
+    result ^= expr->cond.not;
+    expr_destroy(expr);
+    return expr_create_boolean(result);
+}
+
 /* Takes ownership of 'expr' and returns an equivalent expression whose
  * EXPR_T_CMP nodes use only tests for equality (EXPR_R_EQ). */
 struct expr *
-expr_simplify(struct expr *expr)
+expr_simplify(struct expr *expr,
+              bool (*is_chassis_resident)(const void *c_aux,
+                                          const char *port_name),
+              const void *c_aux)
 {
     struct expr *sub, *next;
 
@@ -1801,12 +1904,16 @@ expr_simplify(struct expr *expr)
     case EXPR_T_OR:
         LIST_FOR_EACH_SAFE (sub, next, node, &expr->andor) {
             ovs_list_remove(&sub->node);
-            expr_insert_andor(expr, next, expr_simplify(sub));
+            expr_insert_andor(expr, next,
+                              expr_simplify(sub, is_chassis_resident, c_aux));
         }
         return expr_fix(expr);
 
     case EXPR_T_BOOLEAN:
         return expr;
+
+    case EXPR_T_CONDITION:
+        return expr_simplify_condition(expr, is_chassis_resident, c_aux);
     }
     OVS_NOT_REACHED();
 }
@@ -1834,6 +1941,7 @@ expr_is_cmp(const struct expr *expr)
     }
 
     case EXPR_T_BOOLEAN:
+    case EXPR_T_CONDITION:
         return NULL;
 
     default:
@@ -1930,6 +2038,8 @@ crush_and_string(struct expr *expr, const struct expr_symbol *symbol)
             }
             free(new);
             break;
+        case EXPR_T_CONDITION:
+            OVS_NOT_REACHED();
         }
     }
 
@@ -2024,6 +2134,8 @@ crush_and_numeric(struct expr *expr, const struct expr_symbol *symbol)
             }
             expr_destroy(new);
             break;
+        case EXPR_T_CONDITION:
+            OVS_NOT_REACHED();
         }
     }
     if (ovs_list_is_empty(&expr->andor)) {
@@ -2236,6 +2348,10 @@ crush_cmps(struct expr *expr, const struct expr_symbol *symbol)
     case EXPR_T_BOOLEAN:
         return expr;
 
+    /* Should not hit expression type condition, since crush_cmps is only
+     * called during expr_normalize, after expr_simplify which resolves
+     * all conditions. */
+    case EXPR_T_CONDITION:
     default:
         OVS_NOT_REACHED();
     }
@@ -2443,8 +2559,13 @@ expr_normalize(struct expr *expr)
 
     case EXPR_T_BOOLEAN:
         return expr;
+
+    /* Should not hit expression type condition, since expr_normalize is
+     * only called after expr_simplify, which resolves all conditions. */
+    case EXPR_T_CONDITION:
+    default:
+        OVS_NOT_REACHED();
     }
-    OVS_NOT_REACHED();
 }
 
 /* Creates, initializes, and returns a new 'struct expr_match'.  If 'm' is
@@ -2611,6 +2732,8 @@ add_conjunction(const struct expr *and,
             break;
         case EXPR_T_AND:
         case EXPR_T_BOOLEAN:
+        case EXPR_T_CONDITION:
+        default:
             OVS_NOT_REACHED();
         }
     }
@@ -2742,6 +2865,12 @@ expr_to_matches(const struct expr *expr,
             /* No match. */
         }
         break;
+
+    /* Should not hit expression type condition, since expr_to_matches is
+     * only called after expr_simplify, which resolves all conditions. */
+    case EXPR_T_CONDITION:
+    default:
+        OVS_NOT_REACHED();
     }
     return n_conjs;
 }
@@ -2818,6 +2947,7 @@ expr_honors_invariants(const struct expr *expr)
         return true;
 
     case EXPR_T_BOOLEAN:
+    case EXPR_T_CONDITION:
         return true;
 
     default:
@@ -2865,6 +2995,9 @@ expr_is_normalized(const struct expr *expr)
 
     case EXPR_T_BOOLEAN:
         return true;
+
+    case EXPR_T_CONDITION:
+        return false;
 
     default:
         OVS_NOT_REACHED();
@@ -2958,6 +3091,11 @@ expr_evaluate(const struct expr *e, const struct flow *uflow,
     case EXPR_T_BOOLEAN:
         return e->boolean;
 
+    case EXPR_T_CONDITION:
+        /* Assume tests calling expr_evaluate are not chassis specific, so
+         * is_chassis_resident evaluates as true. */
+        return (e->cond.not ? false : true);
+
     default:
         OVS_NOT_REACHED();
     }
@@ -3011,6 +3149,15 @@ expr_resolve_field(const struct expr_field *f)
     return (struct mf_subfield) { symbol->field, ofs, n_bits };
 }
 
+static bool
+microflow_is_chassis_resident_cb(const void *c_aux OVS_UNUSED,
+                                 const char *port_name OVS_UNUSED)
+{
+    /* Assume tests calling expr_parse_microflow are not chassis specific, so
+     * is_chassis_resident need not be supplied and should return true. */
+    return true;
+}
+
 static struct expr *
 expr_parse_microflow__(struct lexer *lexer,
                        const struct shash *symtab,
@@ -3031,7 +3178,7 @@ expr_parse_microflow__(struct lexer *lexer,
     struct ds annotated = DS_EMPTY_INITIALIZER;
     expr_format(e, &annotated);
 
-    e = expr_simplify(e);
+    e = expr_simplify(e, microflow_is_chassis_resident_cb, NULL);
     e = expr_normalize(e);
 
     struct match m = MATCH_CATCHALL_INITIALIZER;
@@ -3067,6 +3214,9 @@ expr_parse_microflow__(struct lexer *lexer,
     }
         break;
 
+    /* Should not hit expression type condition, since
+     * expr_simplify was called above. */
+    case EXPR_T_CONDITION:
     default:
         OVS_NOT_REACHED();
     }

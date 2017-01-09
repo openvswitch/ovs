@@ -50,12 +50,18 @@ struct lookup_port_aux {
     const struct sbrec_datapath_binding *dp;
 };
 
+struct condition_aux {
+    const struct lport_index *lports;
+    const struct sbrec_chassis *chassis;
+};
+
 static void consider_logical_flow(const struct lport_index *lports,
                                   const struct mcgroup_index *mcgroups,
                                   const struct sbrec_logical_flow *lflow,
                                   const struct hmap *local_datapaths,
                                   struct group_table *group_table,
                                   const struct simap *ct_zones,
+                                  const struct sbrec_chassis *chassis,
                                   struct hmap *dhcp_opts,
                                   struct hmap *dhcpv6_opts,
                                   uint32_t *conj_id_ofs,
@@ -85,6 +91,16 @@ lookup_port_cb(const void *aux_, const char *port_name, unsigned int *portp)
 }
 
 static bool
+is_chassis_resident_cb(const void *c_aux_, const char *port_name)
+{
+    const struct condition_aux *c_aux = c_aux_;
+
+    const struct sbrec_port_binding *pb
+        = lport_lookup_by_name(c_aux->lports, port_name);
+    return pb && pb->chassis && pb->chassis == c_aux->chassis;
+}
+
+static bool
 is_switch(const struct sbrec_datapath_binding *ldp)
 {
     return smap_get(&ldp->external_ids, "logical-switch") != NULL;
@@ -98,6 +114,7 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
                   const struct hmap *local_datapaths,
                   struct group_table *group_table,
                   const struct simap *ct_zones,
+                  const struct sbrec_chassis *chassis,
                   const struct shash *addr_sets,
                   struct hmap *flow_table)
 {
@@ -121,7 +138,7 @@ add_logical_flows(struct controller_ctx *ctx, const struct lport_index *lports,
 
     SBREC_LOGICAL_FLOW_FOR_EACH (lflow, ctx->ovnsb_idl) {
         consider_logical_flow(lports, mcgroups, lflow, local_datapaths,
-                              group_table, ct_zones,
+                              group_table, ct_zones, chassis,
                               &dhcp_opts, &dhcpv6_opts, &conj_id_ofs,
                               addr_sets, flow_table);
     }
@@ -137,6 +154,7 @@ consider_logical_flow(const struct lport_index *lports,
                       const struct hmap *local_datapaths,
                       struct group_table *group_table,
                       const struct simap *ct_zones,
+                      const struct sbrec_chassis *chassis,
                       struct hmap *dhcp_opts,
                       struct hmap *dhcpv6_opts,
                       uint32_t *conj_id_ofs,
@@ -238,7 +256,8 @@ consider_logical_flow(const struct lport_index *lports,
         return;
     }
 
-    expr = expr_simplify(expr);
+    struct condition_aux cond_aux = { lports, chassis };
+    expr = expr_simplify(expr, is_chassis_resident_cb, &cond_aux);
     expr = expr_normalize(expr);
     uint32_t n_conjs = expr_to_matches(expr, lookup_port_cb, &aux,
                                        &matches);
@@ -359,7 +378,9 @@ add_neighbor_flows(struct controller_ctx *ctx,
 /* Translates logical flows in the Logical_Flow table in the OVN_SB database
  * into OpenFlow flows.  See ovn-architecture(7) for more information. */
 void
-lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
+lflow_run(struct controller_ctx *ctx,
+          const struct sbrec_chassis *chassis,
+          const struct lport_index *lports,
           const struct mcgroup_index *mcgroups,
           const struct hmap *local_datapaths,
           struct group_table *group_table,
@@ -367,8 +388,8 @@ lflow_run(struct controller_ctx *ctx, const struct lport_index *lports,
           const struct shash *addr_sets,
           struct hmap *flow_table)
 {
-    add_logical_flows(ctx, lports, mcgroups, local_datapaths,
-                      group_table, ct_zones, addr_sets, flow_table);
+    add_logical_flows(ctx, lports, mcgroups, local_datapaths, group_table,
+                      ct_zones, chassis, addr_sets, flow_table);
     add_neighbor_flows(ctx, lports, flow_table);
 }
 
