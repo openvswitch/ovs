@@ -370,6 +370,7 @@ Derek Cormier                   derek.cormier@lab.ntt.co.jp
 Dhaval Badiani                  dbadiani@vmware.com
 DK Moon                         dkmoon@nicira.com
 Ding Zhi                        zhi.ding@6wind.com
+Dong Jun                        dongj@dtdream.com
 Dustin Spinhirne                dspinhirne@vmware.com
 Edwin Chiu                      echiu@vmware.com
 Eivind Bulie Haanaes
