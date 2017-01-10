@@ -289,7 +289,8 @@ OvsDoEncapVxlan(POVS_VPORT_ENTRY vport,
         /* UDP header */
         udpHdr = (UDPHdr *)((PCHAR)ipHdr + sizeof *ipHdr);
         udpHdr->source = htons(tunKey->flow_hash | MAXINT16);
-        udpHdr->dest = htons(vportVxlan->dstPort);
+        udpHdr->dest = tunKey->dst_port ? tunKey->dst_port :
+                                          htons(vportVxlan->dstPort);
         udpHdr->len = htons(NET_BUFFER_DATA_LENGTH(curNb) - headRoom +
                             sizeof *udpHdr + sizeof *vxlanHdr);
 
