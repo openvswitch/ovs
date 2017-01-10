@@ -1604,11 +1604,11 @@ OvsExecuteSetAction(OvsForwardingContext *ovsFwdCtx,
     case OVS_KEY_ATTR_TUNNEL:
     {
         OvsIPv4TunnelKey tunKey;
+        tunKey.flow_hash = (uint16)(hash ? *hash : OvsHashFlow(key));
+        tunKey.dst_port = key->ipKey.l4.tpDst;
         NTSTATUS convertStatus = OvsTunnelAttrToIPv4TunnelKey((PNL_ATTR)a, &tunKey);
         status = SUCCEEDED(convertStatus) ? NDIS_STATUS_SUCCESS : NDIS_STATUS_FAILURE;
         ASSERT(status == NDIS_STATUS_SUCCESS);
-        tunKey.flow_hash = (uint16)(hash ? *hash : OvsHashFlow(key));
-        tunKey.dst_port = key->ipKey.l4.tpDst;
         RtlCopyMemory(&ovsFwdCtx->tunKey, &tunKey, sizeof ovsFwdCtx->tunKey);
         break;
     }
