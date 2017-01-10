@@ -1794,9 +1794,11 @@ ukey_delete(struct umap *umap, struct udpif_key *ukey)
     OVS_REQUIRES(umap->mutex)
 {
     ovs_mutex_lock(&ukey->mutex);
-    cmap_remove(&umap->cmap, &ukey->cmap_node, ukey->hash);
-    ovsrcu_postpone(ukey_delete__, ukey);
-    transition_ukey(ukey, UKEY_DELETED);
+    if (ukey->state < UKEY_DELETED) {
+        cmap_remove(&umap->cmap, &ukey->cmap_node, ukey->hash);
+        ovsrcu_postpone(ukey_delete__, ukey);
+        transition_ukey(ukey, UKEY_DELETED);
+    }
     ovs_mutex_unlock(&ukey->mutex);
 }
 
