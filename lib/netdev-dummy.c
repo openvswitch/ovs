@@ -827,6 +827,8 @@ netdev_dummy_set_in6(struct netdev *netdev_, struct in6_addr *in6,
     return 0;
 }
 
+#define DUMMY_MAX_QUEUES_PER_PORT 1024
+
 static int
 netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
 {
@@ -870,6 +872,21 @@ netdev_dummy_set_config(struct netdev *netdev_, const struct smap *args)
 
     new_n_rxq = MAX(smap_get_int(args, "n_rxq", NR_QUEUE), 1);
     new_n_txq = MAX(smap_get_int(args, "n_txq", NR_QUEUE), 1);
+
+    if (new_n_rxq > DUMMY_MAX_QUEUES_PER_PORT ||
+        new_n_txq > DUMMY_MAX_QUEUES_PER_PORT) {
+        VLOG_WARN("The one or both of interface %s queues"
+                  "(rxq: %d, txq: %d) exceed %d. Sets it %d.\n",
+                  netdev_get_name(netdev_),
+                  new_n_rxq,
+                  new_n_txq,
+                  DUMMY_MAX_QUEUES_PER_PORT,
+                  DUMMY_MAX_QUEUES_PER_PORT);
+
+        new_n_rxq = MIN(DUMMY_MAX_QUEUES_PER_PORT, new_n_rxq);
+        new_n_txq = MIN(DUMMY_MAX_QUEUES_PER_PORT, new_n_txq);
+    }
+
     new_numa_id = smap_get_int(args, "numa_id", 0);
     if (new_n_rxq != netdev->requested_n_rxq
         || new_n_txq != netdev->requested_n_txq
