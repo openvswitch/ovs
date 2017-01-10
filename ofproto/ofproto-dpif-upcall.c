@@ -1672,7 +1672,7 @@ transition_ukey(struct udpif_key *ukey, enum ukey_state dst)
     OVS_REQUIRES(ukey->mutex)
 {
     ovs_assert(dst >= ukey->state);
-    if (ukey->state == dst) {
+    if (ukey->state == dst && dst == UKEY_OPERATIONAL) {
         return;
     }
 
