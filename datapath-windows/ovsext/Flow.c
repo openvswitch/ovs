@@ -1809,7 +1809,7 @@ MapTunAttrToFlowPut(PNL_ATTR *keyAttrs,
         }
 
         if (tunAttrs[OVS_TUNNEL_KEY_ATTR_OAM]) {
-        destKey->tunKey.flags |= OVS_TNL_F_OAM;
+            destKey->tunKey.flags |= OVS_TNL_F_OAM;
         }
 
         if (tunAttrs[OVS_TUNNEL_KEY_ATTR_GENEVE_OPTS]) {
