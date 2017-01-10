@@ -96,3 +96,6 @@ override_dh_strip:
 	dh_strip --dbg-package=openvswitch-dbg
 
 override_dh_usrlocal:
+
+override_dh_installman:
+	dh_installman --language=C

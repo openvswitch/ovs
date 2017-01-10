@@ -453,6 +453,7 @@ Michael Hu                      mhu@nicira.com
 Michael J. Smalley              michaeljsmalley@gmail.com
 Michael Mao                     mmao@nicira.com
 Michael Shigorin                mike@osdn.org.ua
+Michael Stapelberg              stapelberg@debian.org
 Mihir Gangar                    gangarm@vmware.com
 Mike Bursell                    mike.bursell@citrix.com
 Mike Kruze                      mkruze@nicira.com
