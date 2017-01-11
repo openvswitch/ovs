@@ -1107,12 +1107,11 @@ struct dpif_execute_helper_aux {
  * meaningful. */
 static void
 dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
-                       const struct nlattr *action, bool may_steal OVS_UNUSED)
+                       const struct nlattr *action, bool may_steal)
 {
     struct dpif_execute_helper_aux *aux = aux_;
     int type = nl_attr_type(action);
     struct dp_packet *packet = packets_->packets[0];
-    struct dp_packet *trunc_packet = NULL, *orig_packet;
 
     ovs_assert(packets_->count == 1);
 
@@ -1127,8 +1126,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
         struct ofpbuf execute_actions;
         uint64_t stub[256 / 8];
         struct pkt_metadata *md = &packet->md;
-        bool dst_set, clone = false;
-        uint32_t cutlen = dp_packet_get_cutlen(packet);
+        bool dst_set;
 
         dst_set = flow_tnl_dst_is_set(&md->tunnel);
         if (dst_set) {
@@ -1146,20 +1144,17 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
             execute.actions_len = NLA_ALIGN(action->nla_len);
         }
 
-        orig_packet = packet;
-
-        if (cutlen > 0 && (type == OVS_ACTION_ATTR_OUTPUT ||
-            type == OVS_ACTION_ATTR_TUNNEL_PUSH ||
-            type == OVS_ACTION_ATTR_TUNNEL_POP ||
-            type == OVS_ACTION_ATTR_USERSPACE)) {
+        struct dp_packet *clone = NULL;
+        uint32_t cutlen = dp_packet_get_cutlen(packet);
+        if (cutlen && (type == OVS_ACTION_ATTR_OUTPUT
+                        || type == OVS_ACTION_ATTR_TUNNEL_PUSH
+                        || type == OVS_ACTION_ATTR_TUNNEL_POP
+                        || type == OVS_ACTION_ATTR_USERSPACE)) {
+            dp_packet_reset_cutlen(packet);
             if (!may_steal) {
-                trunc_packet = dp_packet_clone(packet);
-                packet = trunc_packet;
-                clone = true;
+                packet = clone = dp_packet_clone(packet);
             }
-
             dp_packet_set_size(packet, dp_packet_size(packet) - cutlen);
-            dp_packet_reset_cutlen(orig_packet);
         }
 
         execute.packet = packet;
@@ -1170,12 +1165,10 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
         aux->error = dpif_execute(aux->dpif, &execute);
         log_execute_message(aux->dpif, &execute, true, aux->error);
 
+        dp_packet_delete(clone);
+
         if (dst_set) {
             ofpbuf_uninit(&execute_actions);
-        }
-
-        if (clone) {
-            dp_packet_delete(trunc_packet);
         }
         break;
     }
