@@ -231,7 +231,10 @@ active and multiple backup servers for OVN databases::
 The `master_ip` and `ovn_ctl` are the parameters that will be used by the OCF
 script. `ovn_ctl` is optional, if not given, it assumes a default value of
 /usr/share/openvswitch/scripts/ovn-ctl. `master_ip` is the IP address on which
-the active database server is expected to be listening.
+the active database server is expected to be listening, the slave node uses it
+to connect to the master node. You can add the optional parameters
+'nb_master_port', 'nb_master_protocol', 'sb_master_port', 'sb_master_protocol'
+to set the protocol and port.
 
 Whenever the active server dies, pacemaker is responsible to promote one of the
 backup servers to be active. Both ovn-controller and ovn-northd needs the
