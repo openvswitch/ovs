@@ -3,10 +3,18 @@
 : ${OCF_FUNCTIONS_DIR=${OCF_ROOT}/lib/heartbeat}
 . ${OCF_FUNCTIONS_DIR}/ocf-shellfuncs
 : ${OVN_CTL_DEFAULT="/usr/share/openvswitch/scripts/ovn-ctl"}
+: ${NB_MASTER_PORT_DEFAULT="6641"}
+: ${NB_MASTER_PROTO_DEFAULT="tcp"}
+: ${SB_MASTER_PORT_DEFAULT="6642"}
+: ${SB_MASTER_PROTO_DEFAULT="tcp"}
 CRM_MASTER="${HA_SBIN_DIR}/crm_master -l reboot"
 CRM_ATTR_REPL_INFO="${HA_SBIN_DIR}/crm_attribute --type crm_config --name OVN_REPL_INFO -s ovn_ovsdb_master_server"
 OVN_CTL=${OCF_RESKEY_ovn_ctl:-${OVN_CTL_DEFAULT}}
 MASTER_IP=${OCF_RESKEY_master_ip}
+NB_MASTER_PORT=${OCF_RESKEY_nb_master_port:-${NB_MASTER_PORT_DEFAULT}}
+NB_MASTER_PROTO=${OCF_RESKEY_nb_master_protocol:-${NB_MASTER_PROTO_DEFAULT}}
+SB_MASTER_PORT=${OCF_RESKEY_sb_master_port:-${SB_MASTER_PORT_DEFAULT}}
+SB_MASTER_PROTO=${OCF_RESKEY_sb_master_protocol:-${SB_MASTER_PROTO_DEFAULT}}
 
 # Invalid IP address is an address that can never exist in the network, as
 # mentioned in rfc-5737. The ovsdb servers connects to this IP address till
@@ -50,6 +58,38 @@ ovsdb_server_metadata() {
   <content type="string" />
   </parameter>
 
+  <parameter name="nb_master_port" unique="1">
+  <longdesc lang="en">
+  The port which the master Northbound database server is listening
+  </longdesc>
+  <shortdesc lang="en">master Northbound database port</shortdesc>
+  <content type="string" />
+  </parameter>
+
+  <parameter name="nb_master_protocol" unique="1">
+  <longdesc lang="en">
+  The protocol which the master Northbound database server used, 'tcp' or 'ssl'.
+  </longdesc>
+  <shortdesc lang="en">master Northbound database protocol</shortdesc>
+  <content type="string" />
+  </parameter>
+
+  <parameter name="sb_master_port" unique="1">
+  <longdesc lang="en">
+  The port which the master Southbound database server is listening
+  </longdesc>
+  <shortdesc lang="en">master Southbound database port</shortdesc>
+  <content type="string" />
+  </parameter>
+
+  <parameter name="sb_master_protocol" unique="1">
+  <longdesc lang="en">
+  The protocol which the master Southbound database server used, 'tcp' or 'ssl'.
+  </longdesc>
+  <shortdesc lang="en">master Southbound database protocol</shortdesc>
+  <content type="string" />
+  </parameter>
+
   </parameters>
 
   <actions>
@@ -86,8 +126,12 @@ ovsdb_server_notify() {
     else
         # Synchronize with the new master
         ocf_log debug "ovndb_server: Connecting to the new master ${OCF_RESKEY_CRM_meta_notify_promote_uname}"
-        ${OVN_CTL} demote_ovnnb --db-nb-sync-from-addr=${MASTER_IP}
-        ${OVN_CTL} demote_ovnsb --db-sb-sync-from-addr=${MASTER_IP}
+        ${OVN_CTL} demote_ovnnb --db-nb-sync-from-addr=${MASTER_IP} \
+                                --db-nb-sync-from-port=${NB_MASTER_PORT} \
+                                --db-nb-sync-from-proto=${NB_MASTER_PROTO}
+        ${OVN_CTL} demote_ovnsb --db-sb-sync-from-addr=${MASTER_IP} \
+                                --db-sb-sync-from-port=${SB_MASTER_PORT} \
+                                --db-sb-sync-from-proto=${SB_MASTER_PROTO}
     fi
 }
 
@@ -206,6 +250,10 @@ ovsdb_server_start() {
     elif [ ${present_master} != ${host_name} ]; then
         # An existing master is active, connect to it
         set $@ --db-nb-sync-from-addr=${MASTER_IP} --db-sb-sync-from-addr=${MASTER_IP}
+        set $@ --db-nb-sync-from-port=${NB_MASTER_PORT}
+        set $@ --db-nb-sync-from-proto=${NB_MASTER_PROTO}
+        set $@ --db-sb-sync-from-port=${SB_MASTER_PORT}
+        set $@ --db-sb-sync-from-proto=${SB_MASTER_PROTO}
     fi
 
     $@ start_ovsdb
@@ -314,8 +362,12 @@ ovsdb_server_demote() {
     elif [ "x${present_master}" != x ]; then
         # There are too many masters and we're an extra one that is
         # being demoted. Sync to the surviving one
-        ${OVN_CTL} demote_ovnnb --db-nb-sync-from-addr=${MASTER_IP}
-        ${OVN_CTL} demote_ovnsb --db-sb-sync-from-addr=${MASTER_IP}
+        ${OVN_CTL} demote_ovnnb --db-nb-sync-from-addr=${MASTER_IP} \
+                                --db-nb-sync-from-port=${NB_MASTER_PORT} \
+                                --db-nb-sync-from-proto=${NB_MASTER_PROTO}
+        ${OVN_CTL} demote_ovnsb --db-sb-sync-from-addr=${MASTER_IP} \
+                                --db-sb-sync-from-port=${SB_MASTER_PORT} \
+                                --db-sb-sync-from-proto=${SB_MASTER_PROTO}
 
     else
         # For completeness, should never be called
