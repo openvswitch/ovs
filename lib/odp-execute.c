@@ -528,6 +528,26 @@ odp_execute_sample(void *dp, struct dp_packet *packet, bool steal,
                         nl_attr_get_size(subactions), dp_execute_action);
 }
 
+static void
+odp_execute_clone(void *dp, struct dp_packet *packet, bool steal,
+                   const struct nlattr *actions,
+                   odp_execute_cb dp_execute_action)
+{
+    struct dp_packet_batch pb;
+
+    if (!steal) {
+        /* The 'actions' may modify the packet, but the modification
+         * should not propagate beyond this clone action. Make a copy
+         * the packet in case we don't own the packet, so that the
+         * 'actions' are only applied to the clone.  'odp_execute_actions'
+         * will free the clone.  */
+        packet = dp_packet_clone(packet);
+    }
+    packet_batch_init_packet(&pb, packet);
+    odp_execute_actions(dp, &pb, true, nl_attr_get(actions),
+                        nl_attr_get_size(actions), dp_execute_action);
+}
+
 static bool
 requires_datapath_assistance(const struct nlattr *a)
 {
@@ -552,6 +572,7 @@ requires_datapath_assistance(const struct nlattr *a)
     case OVS_ACTION_ATTR_PUSH_MPLS:
     case OVS_ACTION_ATTR_POP_MPLS:
     case OVS_ACTION_ATTR_TRUNC:
+    case OVS_ACTION_ATTR_CLONE:
         return false;
 
     case OVS_ACTION_ATTR_UNSPEC:
@@ -684,6 +705,19 @@ odp_execute_actions(void *dp, struct dp_packet_batch *batch, bool steal,
             }
             break;
         }
+
+        case OVS_ACTION_ATTR_CLONE:
+            for (i = 0; i < cnt; i++) {
+                odp_execute_clone(dp, packets[i], steal && last_action, a,
+                                  dp_execute_action);
+            }
+
+            if (last_action) {
+                /* We do not need to free the packets. odp_execute_clone() has
+                 * stolen them.  */
+                return;
+            }
+            break;
 
         case OVS_ACTION_ATTR_OUTPUT:
         case OVS_ACTION_ATTR_TUNNEL_PUSH:

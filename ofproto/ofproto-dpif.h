@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+/* Copyright (c) 2009-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -165,6 +165,9 @@ struct dpif_backer_support {
 
     /* Each member represents support for related OVS_KEY_ATTR_* fields. */
     struct odp_support odp;
+
+    /* True if the datapath supports OVS_ACTION_ATTR_CLONE action. */
+    bool clone;
 };
 
 /* Reasons that we might need to revalidate every datapath flow, and

@@ -121,6 +121,7 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_SET_MASKED: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_SAMPLE: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_CT: return ATTR_LEN_VARIABLE;
+    case OVS_ACTION_ATTR_CLONE: return ATTR_LEN_VARIABLE;
 
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
@@ -220,6 +221,18 @@ format_odp_sample_action(struct ds *ds, const struct nlattr *attr)
     len = nl_attr_get_size(a[OVS_SAMPLE_ATTR_ACTIONS]);
     format_odp_actions(ds, nla_acts, len);
     ds_put_format(ds, "))");
+}
+
+static void
+format_odp_clone_action(struct ds *ds, const struct nlattr *attr)
+{
+    const struct nlattr *nla_acts = nl_attr_get(attr);
+    int len = nl_attr_get_size(attr);
+
+    ds_put_cstr(ds, "clone");
+    ds_put_format(ds, "(");
+    format_odp_actions(ds, nla_acts, len);
+    ds_put_format(ds, ")");
 }
 
 static const char *
@@ -864,6 +877,9 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         break;
     case OVS_ACTION_ATTR_CT:
         format_odp_conntrack_action(ds, a);
+        break;
+    case OVS_ACTION_ATTR_CLONE:
+        format_odp_clone_action(ds, a);
         break;
     case OVS_ACTION_ATTR_UNSPEC:
     case __OVS_ACTION_ATTR_MAX:
