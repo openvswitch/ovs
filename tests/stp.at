@@ -428,10 +428,10 @@ port p2: STP state changed from disabled to listening
 ])
 
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(7),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.0.0.2,dst=10.0.0.1,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' | grep STP], [0], [dnl
-STP not in forwarding state, skipping output
+     >> STP not in forwarding state, skipping output
 ])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(8),eth(src=50:54:00:00:00:0b,dst=50:54:00:00:00:0c),eth_type(0x0800),ipv4(src=10.0.0.3,dst=10.0.0.4,proto=1,tos=0,ttl=64,frag=no),icmp(type=8,code=0)' | grep STP], [0], [dnl
-STP not in forwarding state, skipping output
+     >> STP not in forwarding state, skipping output
 ])
 
 # give time for STP to synchronize

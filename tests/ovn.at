@@ -2301,7 +2301,7 @@ test_arp() {
     local request=ffffffffffff${sha}08060001080006040001${sha}${spa}ffffffffffff${tpa}
     hv=hv`vif_to_hv $inport`
     as $hv ovs-appctl netdev-dummy/receive vif$inport $request
-    #as $hv ovs-appctl ofproto/trace br-int in_port=$inport $request
+    as $hv ovs-appctl ofproto/trace br-int in_port=$inport $request
 
     # Expect to receive the broadcast ARP on the other logical switch ports if
     # IP address is not configured to the switch patch port.
@@ -6074,7 +6074,7 @@ src_ip=`ip_to_hex 192 168 1 2`
 dst_ip=`ip_to_hex 172 16 1 3`
 packet=${dst_mac}${src_mac}08004500001c0000000040110000${src_ip}${dst_ip}0035111100080000
 as hv1 ovs-appctl netdev-dummy/receive hv1-vif1 $packet
-#as hv1 ovs-appctl ofproto/trace br-int in_port=1 $packet
+as hv1 ovs-appctl ofproto/trace br-int in_port=1 $packet
 
 # Send ip packets between bar1 and bob1
 src_mac="f00000010204"

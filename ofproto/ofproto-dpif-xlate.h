@@ -1,4 +1,4 @@
-/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+/* Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -83,27 +83,10 @@ struct xlate_in {
      * timeouts.) */
     uint16_t tcp_flags;
 
-    /* If nonnull, flow translation calls this function just before executing a
-     * resubmit or OFPP_TABLE action.  In addition, disables logging of traces
-     * when the recursion depth is exceeded.
-     *
-     * 'rule' is the rule being submitted into.  It will be null if the
-     * resubmit or OFPP_TABLE action didn't find a matching rule.
-     *
-     * 'indentation' is the resubmit recursion depth at time of invocation,
-     * suitable for indenting the output.
-     *
-     * This is normally null so the client has to set it manually after
-     * calling xlate_in_init(). */
-    void (*resubmit_hook)(struct xlate_in *, struct rule_dpif *rule,
-                          int indentation);
-
-    /* If nonnull, flow translation calls this function to report some
-     * significant decision, e.g. to explain why OFPP_NORMAL translation
-     * dropped a packet.  'indentation' is the resubmit recursion depth at time
-     * of invocation, suitable for indenting the output. */
-    void (*report_hook)(struct xlate_in *, int indentation,
-                        const char *format, va_list args);
+    /* Set to nonnull to trace the translation.  See ofproto-dpif-trace.h for
+     * more information.  This points to the list of oftrace nodes to which the
+     * translation should add tracing information (with oftrace_report()). */
+    struct ovs_list *trace;
 
     /* If nonnull, flow translation credits the specified statistics to each
      * rule reached through a resubmit or OFPP_TABLE action.
@@ -127,7 +110,6 @@ struct xlate_in {
      * These fields are really implementation details; the client doesn't care
      * about what they mean.  See the corresponding fields in xlate_ctx for
      * real documentation. */
-    int indentation;
     int depth;
     int resubmits;
 

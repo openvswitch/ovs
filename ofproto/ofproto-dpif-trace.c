@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,165 +23,108 @@
 #include "openvswitch/ofp-parse.h"
 #include "unixctl.h"
 
-struct trace_ctx {
-    struct xlate_out xout;
-    struct xlate_in xin;
-    const struct flow *key;
-    struct flow flow;
-    struct ds *result;
-    struct flow_wildcards wc;
-    struct ofpbuf odp_actions;
-};
-
 static void ofproto_trace(struct ofproto_dpif *, struct flow *,
                           const struct dp_packet *packet,
                           const struct ofpact[], size_t ofpacts_len,
                           struct ds *);
+static void oftrace_node_destroy(struct oftrace_node *);
 
-static void
-trace_format_rule(struct ofproto *ofproto, struct ds *result, int level,
-                  const struct rule_dpif *rule)
+/* Creates a new oftrace_node, populates it with the given 'type' and a copy of
+ * 'text', and appends it to list 'super'.  The caller retains ownership of
+ * 'text'. */
+struct oftrace_node *
+oftrace_report(struct ovs_list *super, enum oftrace_node_type type,
+               const char *text)
 {
-    const struct rule_actions *actions;
-    ovs_be64 cookie;
+    struct oftrace_node *node = xmalloc(sizeof *node);
+    ovs_list_push_back(super, &node->node);
+    node->type = type;
+    node->text = xstrdup(text);
+    ovs_list_init(&node->subs);
 
-    ds_put_char_multiple(result, '\t', level);
-    if (!rule) {
-        ds_put_cstr(result, "No match\n");
-        return;
+    return node;
+}
+
+static bool
+oftrace_node_type_is_terminal(enum oftrace_node_type type)
+{
+    switch (type) {
+    case OFT_ACTION:
+    case OFT_DETAIL:
+    case OFT_WARN:
+    case OFT_ERROR:
+        return true;
+
+    case OFT_BRIDGE:
+    case OFT_TABLE:
+    case OFT_THAW:
+        return false;
     }
 
-    ovs_mutex_lock(&rule->up.mutex);
-    cookie = rule->up.flow_cookie;
-    ovs_mutex_unlock(&rule->up.mutex);
-
-    ds_put_format(result, "Rule: table=%"PRIu8" cookie=%#"PRIx64" ",
-                  rule ? rule->up.table_id : 0, ntohll(cookie));
-    cls_rule_format(&rule->up.cr, ofproto_get_tun_tab(ofproto), result);
-    ds_put_char(result, '\n');
-
-    actions = rule_get_actions(&rule->up);
-
-    ds_put_char_multiple(result, '\t', level);
-    ds_put_cstr(result, "OpenFlow actions=");
-    ofpacts_format(actions->ofpacts, actions->ofpacts_len, result);
-    ds_put_char(result, '\n');
+    OVS_NOT_REACHED();
 }
 
 static void
-trace_format_flow(struct ds *result, int level, const char *title,
-                  struct trace_ctx *trace)
+oftrace_node_list_destroy(struct ovs_list *nodes)
 {
-    ds_put_char_multiple(result, '\t', level);
-    ds_put_format(result, "%s: ", title);
-    /* Do not report unchanged flows for resubmits. */
-    if ((level > 0 && flow_equal(&trace->xin.flow, &trace->flow))
-        || (level == 0 && flow_equal(&trace->xin.flow, trace->key))) {
-        ds_put_cstr(result, "unchanged");
-    } else {
-        flow_format(result, &trace->xin.flow);
-        trace->flow = trace->xin.flow;
-    }
-    ds_put_char(result, '\n');
-}
-
-static void
-trace_format_regs(struct ds *result, int level, const char *title,
-                  struct trace_ctx *trace)
-{
-    size_t i;
-
-    ds_put_char_multiple(result, '\t', level);
-    ds_put_format(result, "%s:", title);
-    for (i = 0; i < FLOW_N_REGS; i++) {
-        ds_put_format(result, " reg%"PRIuSIZE"=0x%"PRIx32, i, trace->flow.regs[i]);
-    }
-    ds_put_char(result, '\n');
-}
-
-static void
-trace_format_odp(struct ds *result, int level, const char *title,
-                 struct trace_ctx *trace)
-{
-    struct ofpbuf *odp_actions = &trace->odp_actions;
-
-    ds_put_char_multiple(result, '\t', level);
-    ds_put_format(result, "%s: ", title);
-    format_odp_actions(result, odp_actions->data, odp_actions->size);
-    ds_put_char(result, '\n');
-}
-
-static void
-trace_format_megaflow(struct ds *result, int level, const char *title,
-                      struct trace_ctx *trace)
-{
-    struct match match;
-
-    ds_put_char_multiple(result, '\t', level);
-    ds_put_format(result, "%s: ", title);
-    match_init(&match, trace->key, &trace->wc);
-    match_format(&match, result, OFP_DEFAULT_PRIORITY);
-    ds_put_char(result, '\n');
-}
-
-static void trace_report(struct xlate_in *, int indentation,
-                         const char *format, ...)
-    OVS_PRINTF_FORMAT(3, 4);
-static void trace_report_valist(struct xlate_in *, int indentation,
-                                const char *format, va_list args)
-    OVS_PRINTF_FORMAT(3, 0);
-
-static void
-trace_resubmit(struct xlate_in *xin, struct rule_dpif *rule, int indentation)
-{
-    struct trace_ctx *trace = CONTAINER_OF(xin, struct trace_ctx, xin);
-    struct ds *result = trace->result;
-
-    if (!indentation) {
-        if (rule == xin->ofproto->miss_rule) {
-            trace_report(xin, indentation,
-                         "No match, flow generates \"packet in\"s.");
-        } else if (rule == xin->ofproto->no_packet_in_rule) {
-            trace_report(xin, indentation, "No match, packets dropped because "
-                         "OFPPC_NO_PACKET_IN is set on in_port.");
-        } else if (rule == xin->ofproto->drop_frags_rule) {
-            trace_report(xin, indentation,
-                         "Packets dropped because they are IP fragments and "
-                         "the fragment handling mode is \"drop\".");
+    if (nodes) {
+        struct oftrace_node *node, *next;
+        LIST_FOR_EACH_SAFE (node, next, node, nodes) {
+            ovs_list_remove(&node->node);
+            oftrace_node_destroy(node);
         }
     }
+}
 
-    ds_put_char(result, '\n');
-    if (indentation) {
-        trace_format_flow(result, indentation, "Resubmitted flow", trace);
-        trace_format_regs(result, indentation, "Resubmitted regs", trace);
-        trace_format_odp(result,  indentation, "Resubmitted  odp", trace);
-        trace_format_megaflow(result, indentation, "Resubmitted megaflow",
-                              trace);
+static void
+oftrace_node_destroy(struct oftrace_node *node)
+{
+    if (node) {
+        oftrace_node_list_destroy(&node->subs);
+        free(node->text);
+        free(node);
     }
-    trace_format_rule(&xin->ofproto->up, result, indentation, rule);
 }
 
 static void
-trace_report_valist(struct xlate_in *xin, int indentation,
-                    const char *format, va_list args)
+oftrace_node_print_details(struct ds *output,
+                           const struct ovs_list *nodes, int level)
 {
-    struct trace_ctx *trace = CONTAINER_OF(xin, struct trace_ctx, xin);
-    struct ds *result = trace->result;
+    const struct oftrace_node *sub;
+    LIST_FOR_EACH (sub, node, nodes) {
+        if (sub->type == OFT_BRIDGE) {
+            ds_put_char(output, '\n');
+        }
 
-    ds_put_char_multiple(result, '\t', indentation);
-    ds_put_format_valist(result, format, args);
-    ds_put_char(result, '\n');
-}
+        bool more = (sub->node.next != nodes
+                     || oftrace_node_type_is_terminal(sub->type));
 
-static void
-trace_report(struct xlate_in *xin, int indentation, const char *format, ...)
-{
-    va_list args;
+        ds_put_char_multiple(output, ' ', (level + more) * 4);
+        switch (sub->type) {
+        case OFT_DETAIL:
+            ds_put_format(output, " -> %s\n", sub->text);
+            break;
+        case OFT_WARN:
+            ds_put_format(output, " >> %s\n", sub->text);
+            break;
+        case OFT_ERROR:
+            ds_put_format(output, " >>>> %s <<<<\n", sub->text);
+            break;
+        case OFT_BRIDGE:
+            ds_put_format(output, "%s\n", sub->text);
+            ds_put_char_multiple(output, ' ', (level + more) * 4);
+            ds_put_char_multiple(output, '-', strlen(sub->text));
+            ds_put_char(output, '\n');
+            break;
+        case OFT_TABLE:
+        case OFT_THAW:
+        case OFT_ACTION:
+            ds_put_format(output, "%s\n", sub->text);
+            break;
+        }
 
-    va_start(args, format);
-    trace_report_valist(xin, indentation, format, args);
-    va_end(args);
+        oftrace_node_print_details(output, &sub->subs, level + more + more);
+    }
 }
 
 /* Parses the 'argc' elements of 'argv', ignoring argv[0].  The following
@@ -466,7 +409,7 @@ exit:
 }
 
 /* Implements a "trace" through 'ofproto''s flow table, appending a textual
- * description of the results to 'ds'.
+ * description of the results to 'output'.
  *
  * The trace follows a packet with the specified 'flow' through the flow
  * table.  'packet' may be nonnull to trace an actual packet, with consequent
@@ -478,61 +421,75 @@ static void
 ofproto_trace(struct ofproto_dpif *ofproto, struct flow *flow,
               const struct dp_packet *packet,
               const struct ofpact ofpacts[], size_t ofpacts_len,
-              struct ds *ds)
+              struct ds *output)
 {
-    struct trace_ctx trace;
-    enum xlate_error error;
+    struct ofpbuf odp_actions;
+    ofpbuf_init(&odp_actions, 0);
 
-    ds_put_format(ds, "Bridge: %s\n", ofproto->up.name);
-    ds_put_cstr(ds, "Flow: ");
-    flow_format(ds, flow);
-    ds_put_char(ds, '\n');
-
-    ofpbuf_init(&trace.odp_actions, 0);
-
-    trace.result = ds;
-    trace.key = flow; /* Original flow key, used for megaflow. */
-    trace.flow = *flow; /* May be modified by actions. */
-    xlate_in_init(&trace.xin, ofproto,
+    struct xlate_in xin;
+    struct flow_wildcards wc;
+    struct ovs_list trace = OVS_LIST_INITIALIZER(&trace);
+    xlate_in_init(&xin, ofproto,
                   ofproto_dpif_get_tables_version(ofproto), flow,
                   flow->in_port.ofp_port, NULL, ntohs(flow->tcp_flags),
-                  packet, &trace.wc, &trace.odp_actions);
-    trace.xin.ofpacts = ofpacts;
-    trace.xin.ofpacts_len = ofpacts_len;
-    trace.xin.resubmit_hook = trace_resubmit;
-    trace.xin.report_hook = trace_report_valist;
+                  packet, &wc, &odp_actions);
+    xin.ofpacts = ofpacts;
+    xin.ofpacts_len = ofpacts_len;
+    xin.trace = &trace;
 
-    error = xlate_actions(&trace.xin, &trace.xout);
-    ds_put_char(ds, '\n');
-    trace.xin.flow.actset_output = 0;
-    trace_format_flow(ds, 0, "Final flow", &trace);
-    trace_format_megaflow(ds, 0, "Megaflow", &trace);
+    /* Copy initial flow out of xin.flow.  It differs from '*flow' because
+     * xlate_in_init() initializes actset_output to OFPP_UNSET. */
+    struct flow initial_flow = xin.flow;
+    ds_put_cstr(output, "Flow: ");
+    flow_format(output, &initial_flow);
+    ds_put_char(output, '\n');
 
-    ds_put_cstr(ds, "Datapath actions: ");
-    format_odp_actions(ds, trace.odp_actions.data, trace.odp_actions.size);
+    struct xlate_out xout;
+    enum xlate_error error = xlate_actions(&xin, &xout);
+
+    oftrace_node_print_details(output, &trace, 0);
+
+    ds_put_cstr(output, "\nFinal flow: ");
+    if (flow_equal(&initial_flow, &xin.flow)) {
+        ds_put_cstr(output, "unchanged");
+    } else {
+        flow_format(output, &xin.flow);
+    }
+    ds_put_char(output, '\n');
+
+    ds_put_cstr(output, "Megaflow: ");
+    struct match match;
+    match_init(&match, flow, &wc);
+    match_format(&match, output, OFP_DEFAULT_PRIORITY);
+    ds_put_char(output, '\n');
+
+    ds_put_cstr(output, "Datapath actions: ");
+    format_odp_actions(output, odp_actions.data, odp_actions.size);
 
     if (error != XLATE_OK) {
-        ds_put_format(ds, "\nTranslation failed (%s), packet is dropped.\n",
+        ds_put_format(output,
+                      "\nTranslation failed (%s), packet is dropped.\n",
                       xlate_strerror(error));
-    } else if (trace.xout.slow) {
+    } else if (xout.slow) {
         enum slow_path_reason slow;
 
-        ds_put_cstr(ds, "\nThis flow is handled by the userspace "
+        ds_put_cstr(output, "\nThis flow is handled by the userspace "
                     "slow path because it:");
 
-        slow = trace.xout.slow;
+        slow = xout.slow;
         while (slow) {
             enum slow_path_reason bit = rightmost_1bit(slow);
 
-            ds_put_format(ds, "\n\t- %s.",
+            ds_put_format(output, "\n\t- %s.",
                           slow_path_reason_to_explanation(bit));
 
             slow &= ~bit;
         }
     }
 
-    xlate_out_uninit(&trace.xout);
-    ofpbuf_uninit(&trace.odp_actions);
+    xlate_out_uninit(&xout);
+    ofpbuf_uninit(&odp_actions);
+    oftrace_node_list_destroy(&trace);
 }
 
 void

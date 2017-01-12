@@ -329,22 +329,28 @@ Try this command::
 
 The output should look something like this::
 
-    Flow: metadata=0,in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=01:80:c2:00:00:05,dl_type=0x0000
-    Rule: table=0 cookie=0 dl_dst=01:80:c2:00:00:00/ff:ff:ff:ff:ff:f0
-    OpenFlow actions=drop
+    Flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=01:80:c2:00:00:05,dl_type=0x0000
+
+    bridge("br0")
+    -------------
+     0. dl_dst=01:80:c2:00:00:00/ff:ff:ff:ff:ff:f0, priority 32768
+	drop
 
     Final flow: unchanged
+    Megaflow: recirc_id=0,in_port=1,dl_src=00:00:00:00:00:00/01:00:00:00:00:00,dl_dst=01:80:c2:00:00:00/ff:ff:ff:ff:ff:f0,dl_type=0x0000
     Datapath actions: drop
 
-The first block of lines describes an OpenFlow table lookup.  The first line
-shows the fields used for the table lookup (which is mostly zeros because
-that's the default if we don't specify everything).  The second line gives the
-OpenFlow flow that the fields matched (called a "rule" because that is the name
-used inside Open vSwitch for an OpenFlow flow).  In this case, we see that this
-packet that has a reserved multicast destination address matches the rule that
-drops those packets.  The third line gives the rule's OpenFlow actions.
+The first line shows the flow being traced, in slightly greater detail
+than specified on the command line.  It is mostly zeros because
+unspecified fields default to zeros.
 
-The second block of lines summarizes the results, which are not very
+The second group of lines shows the packet's trip through bridge br0.
+We see, in table 0, the OpenFlow flow that the fields matched, along
+with its priority, followed by its actions, one per line.  In this
+case, we see that this packet that has a reserved multicast
+destination address matches the flow that drops those packets.
+
+The final block of lines summarizes the results, which are not very
 interesting here.
 
 Example 2
@@ -356,26 +362,27 @@ Try another command::
 
 The output should be::
 
-    Flow: metadata=0,in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=01:80:c2:00:00:10,dl_type=0x0000
-    Rule: table=0 cookie=0 priority=0
-    OpenFlow actions=resubmit(,1)
+    Flow: in_port=1,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=01:80:c2:00:00:10,dl_type=0x0000
 
-    Resubmitted flow: unchanged
-    Resubmitted regs: reg0=0x0 reg1=0x0 reg2=0x0 reg3=0x0 reg4=0x0 reg5=0x0 reg6=0x0 reg7=0x0
-    Resubmitted  odp: drop
-    No match
+    bridge("br0")
+    -------------
+     0. priority 0
+	resubmit(,1)
+     1. No match.
+	drop
 
     Final flow: unchanged
+    Megaflow: recirc_id=0,in_port=1,dl_src=00:00:00:00:00:00/01:00:00:00:00:00,dl_dst=01:80:c2:00:00:10/ff:ff:ff:ff:ff:f0,dl_type=0x0000
     Datapath actions: drop
 
-This time the flow we handed to ``ofproto/trace`` doesn't match any of our
-"drop" rules, so it falls through to the low-priority "resubmit" rule, which we
-see in the rule and the actions selected in the first block.  The "resubmit"
-causes a second lookup in OpenFlow table 1, described by the additional block
-of indented text in the output.  We haven't yet added any flows to OpenFlow
-table 1, so no flow actually matches in the second lookup.  Therefore, the
-packet is still actually dropped, which means that the externally observable
-results would be identical to our first example.
+This time the flow we handed to ``ofproto/trace`` doesn't match any of
+our "drop" flows in table 0, so it falls through to the low-priority
+"resubmit" flow.  The "resubmit" causes a second lookup in OpenFlow
+table 1, described by the block of text that starts with "1."  We
+haven't yet added any flows to OpenFlow table 1, so no flow actually
+matches in the second lookup.  Therefore, the packet is still actually
+dropped, which means that the externally observable results would be
+identical to our first example.
 
 Implementing Table 1: VLAN Input Processing
 -------------------------------------------
@@ -389,7 +396,7 @@ being part of the VLAN header, reducing special cases.
 
 Let's start by adding a low-priority flow that drops all packets, before we add
 flows that pass through acceptable packets.  You can think of this as a
-"default drop" rule::
+"default drop" flow::
 
     $ ovs-ofctl add-flow br0 "table=1, priority=0, actions=drop"
 
@@ -410,8 +417,8 @@ stage::
     table=1, priority=99, in_port=4, vlan_tci=0, actions=mod_vlan_vid:30, resubmit(,2)
     EOF
 
-We don't write any rules that match packets with 802.1Q that enter this stage
-on any of the access ports, so the "default drop" rule we added earlier causes
+We don't write any flows that match packets with 802.1Q that enter this stage
+on any of the access ports, so the "default drop" flow we added earlier causes
 them to be dropped, which is ordinarily what we want for access ports.
 
 .. note::
@@ -422,7 +429,7 @@ them to be dropped, which is ordinarily what we want for access ports.
 Testing Table 1
 ---------------
 
-``ofproto/trace`` allows us to test the ingress VLAN rules that we added above.
+``ofproto/trace`` allows us to test the ingress VLAN flows that we added above.
 
 Example 1: Packet on Trunk Port
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -435,22 +442,19 @@ The output shows the lookup in table 0, the resubmit to table 1, and the
 resubmit to table 2 (which does nothing because we haven't put anything there
 yet)::
 
-    Flow: metadata=0,in_port=1,vlan_tci=0x0005,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x0000
-    Rule: table=0 cookie=0 priority=0
-    OpenFlow actions=resubmit(,1)
+    Flow: in_port=1,vlan_tci=0x0005,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x0000
 
-    Resubmitted flow: unchanged
-    Resubmitted regs: reg0=0x0 reg1=0x0 reg2=0x0 reg3=0x0 reg4=0x0 reg5=0x0 reg6=0x0 reg7=0x0
-    Resubmitted  odp: drop
-    Rule: table=1 cookie=0 priority=99,in_port=1
-    OpenFlow actions=resubmit(,2)
-
-    Resubmitted flow: unchanged
-    Resubmitted regs: reg0=0x0 reg1=0x0 reg2=0x0 reg3=0x0 reg4=0x0 reg5=0x0 reg6=0x0 reg7=0x0
-    Resubmitted  odp: drop
-    No match
+    bridge("br0")
+    -------------
+     0. priority 0
+	resubmit(,1)
+     1. in_port=1, priority 99
+	resubmit(,2)
+     2. No match.
+	drop
 
     Final flow: unchanged
+    Megaflow: recirc_id=0,in_port=1,dl_src=00:00:00:00:00:00/01:00:00:00:00:00,dl_dst=00:00:00:00:00:00/ff:ff:ff:ff:ff:f0,dl_type=0x0000
     Datapath actions: drop
 
 Example 2: Valid Packet on Access Port
@@ -465,22 +469,20 @@ The output is similar to that for the previous case, except that it
 additionally tags the packet with ``p2``'s VLAN 20 before it passes it along to
 table 2::
 
-    Flow: metadata=0,in_port=2,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x0000
-    Rule: table=0 cookie=0 priority=0
-    OpenFlow actions=resubmit(,1)
+    Flow: in_port=2,vlan_tci=0x0000,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x0000
 
-    Resubmitted flow: unchanged
-    Resubmitted regs: reg0=0x0 reg1=0x0 reg2=0x0 reg3=0x0 reg4=0x0 reg5=0x0 reg6=0x0 reg7=0x0
-    Resubmitted  odp: drop
-    Rule: table=1 cookie=0 priority=99,in_port=2,vlan_tci=0x0000
-    OpenFlow actions=mod_vlan_vid:20,resubmit(,2)
+    bridge("br0")
+    -------------
+     0. priority 0
+	resubmit(,1)
+     1. in_port=2,vlan_tci=0x0000, priority 99
+	mod_vlan_vid:20
+	resubmit(,2)
+     2. No match.
+	drop
 
-    Resubmitted flow: metadata=0,in_port=2,dl_vlan=20,dl_vlan_pcp=0,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x0000
-    Resubmitted regs: reg0=0x0 reg1=0x0 reg2=0x0 reg3=0x0 reg4=0x0 reg5=0x0 reg6=0x0 reg7=0x0
-    Resubmitted  odp: drop
-    No match
-
-    Final flow: unchanged
+    Final flow: in_port=2,dl_vlan=20,dl_vlan_pcp=0,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x0000
+    Megaflow: recirc_id=0,in_port=2,vlan_tci=0x0000,dl_src=00:00:00:00:00:00/01:00:00:00:00:00,dl_dst=00:00:00:00:00:00/ff:ff:ff:ff:ff:f0,dl_type=0x0000
     Datapath actions: drop
 
 Example 3: Invalid Packet on Access Port
@@ -491,19 +493,19 @@ access port ``p2``::
 
     $ ovs-appctl ofproto/trace br0 in_port=2,vlan_tci=5
 
-The output shows the packet matching the default drop rule::
+The output shows the packet matching the default drop flow::
 
-    Flow: metadata=0,in_port=2,vlan_tci=0x0005,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x0000
-    Rule: table=0 cookie=0 priority=0
-    OpenFlow actions=resubmit(,1)
+    Flow: in_port=2,vlan_tci=0x0005,dl_src=00:00:00:00:00:00,dl_dst=00:00:00:00:00:00,dl_type=0x0000
 
-    Resubmitted flow: unchanged
-    Resubmitted regs: reg0=0x0 reg1=0x0 reg2=0x0 reg3=0x0 reg4=0x0 reg5=0x0 reg6=0x0 reg7=0x0
-    Resubmitted  odp: drop
-    Rule: table=1 cookie=0 priority=0
-    OpenFlow actions=drop
+    bridge("br0")
+    -------------
+     0. priority 0
+	resubmit(,1)
+     1. priority 0
+	drop
 
     Final flow: unchanged
+    Megaflow: recirc_id=0,in_port=2,vlan_tci=0x0005,dl_src=00:00:00:00:00:00/01:00:00:00:00:00,dl_dst=00:00:00:00:00:00/ff:ff:ff:ff:ff:f0,dl_type=0x0000
     Datapath actions: drop
 
 Implementing Table 2: MAC+VLAN Learning for Ingress Port
@@ -571,8 +573,27 @@ Try the following test command::
     $ ovs-appctl ofproto/trace br0 \
         in_port=1,vlan_tci=20,dl_src=50:00:00:00:00:01 -generate
 
-The output shows that "learn" was executed, but it isn't otherwise informative,
-so we won't include it here.
+The output shows that "learn" was executed in table 2 and the
+particular flow that was added::
+
+    Flow: in_port=1,vlan_tci=0x0014,dl_src=50:00:00:00:00:01,dl_dst=00:00:00:00:00:00,dl_type=0x0000
+
+    bridge("br0")
+    -------------
+     0. priority 0
+	resubmit(,1)
+     1. in_port=1, priority 99
+	resubmit(,2)
+     2. priority 32768
+	learn(table=10,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG0[0..15])
+	 -> table=10 vlan_tci=0x0014/0x0fff,dl_dst=50:00:00:00:00:01 priority=32768 actions=load:0x1->NXM_NX_REG0[0..15]
+	resubmit(,3)
+     3. No match.
+	drop
+
+    Final flow: unchanged
+    Megaflow: recirc_id=0,in_port=1,vlan_tci=0x0014/0x1fff,dl_src=50:00:00:00:00:01,dl_dst=00:00:00:00:00:00/ff:ff:ff:ff:ff:f0,dl_type=0x0000
+    Datapath actions: drop
 
 The ``-generate`` keyword is new.  Ordinarily, ``ofproto/trace`` has no side
 effects: "output" actions do not actually output packets, "learn" actions do
@@ -662,22 +683,35 @@ on ``p1`` in VLAN ``20``::
         in_port=1,dl_vlan=20,dl_src=f0:00:00:00:00:01,dl_dst=90:00:00:00:00:01 \
         -generate
 
-Here's an excerpt from the output that shows (from the "no match" looking up
-the resubmit to table 10) that the flow's destination was unknown::
+The output shows (from the "no match" looking up the resubmit to
+table 10) that the flow's destination was unknown::
 
-    Resubmitted flow: unchanged
-    Resubmitted regs: reg0=0x0 reg1=0x0 reg2=0x0 reg3=0x0 reg4=0x0 reg5=0x0 reg6=0x0 reg7=0x0
-    Resubmitted  odp: drop
-    Rule: table=3 cookie=0 priority=50
-    OpenFlow actions=resubmit(,10),resubmit(,4)
+    Flow: in_port=1,dl_vlan=20,dl_vlan_pcp=0,dl_src=f0:00:00:00:00:01,dl_dst=90:00:00:00:00:01,dl_type=0x0000
 
-        Resubmitted flow: unchanged
-        Resubmitted regs: reg0=0x0 reg1=0x0 reg2=0x0 reg3=0x0 reg4=0x0 reg5=0x0 reg6=0x0 reg7=0x0
-        Resubmitted  odp: drop
-        No match
+    bridge("br0")
+    -------------
+     0. priority 0
+	resubmit(,1)
+     1. in_port=1, priority 99
+	resubmit(,2)
+     2. priority 32768
+	learn(table=10,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG0[0..15])
+	 -> table=10 vlan_tci=0x0014/0x0fff,dl_dst=f0:00:00:00:00:01 priority=32768 actions=load:0x1->NXM_NX_REG0[0..15]
+	resubmit(,3)
+     3. priority 50
+	resubmit(,10)
+	10. No match.
+		drop
+	resubmit(,4)
+     4. No match.
+	drop
 
-You can verify that the packet's source was learned two ways.  The most direct
-way is to dump the learning table with::
+    Final flow: unchanged
+    Megaflow: recirc_id=0,in_port=1,dl_vlan=20,dl_src=f0:00:00:00:00:01,dl_dst=90:00:00:00:00:01,dl_type=0x0000
+    Datapath actions: drop
+
+There are two ways that you can verify that the packet's source was
+learned.  The most direct way is to dump the learning table with::
 
     $ ovs-ofctl dump-flows br0 table=10
 
@@ -698,16 +732,35 @@ that we just learned on p1:
     $ ovs-appctl ofproto/trace br0 \
         in_port=2,dl_src=90:00:00:00:00:01,dl_dst=f0:00:00:00:00:01 -generate
 
-Here's an interesting excerpt from that command's output.  This group of lines
-traces the ``resubmit(,10)``, showing that the packet matched the learned flow
-for the first MAC we used, loading the OpenFlow port number for the learned
-port ``p1`` into register ``0``::
+Here is this command's output.  Take a look at the lines that trace
+the ``resubmit(,10)``, showing that the packet matched the learned
+flow for the first MAC we used, loading the OpenFlow port number for
+the learned port ``p1`` into register ``0``::
 
-    Resubmitted flow: unchanged
-    Resubmitted regs: reg0=0x0 reg1=0x0 reg2=0x0 reg3=0x0 reg4=0x0 reg5=0x0 reg6=0x0 reg7=0x0
-    Resubmitted  odp: drop
-    Rule: table=10 cookie=0 vlan_tci=0x0014/0x0fff,dl_dst=f0:00:00:00:00:01
-    OpenFlow actions=load:0x1->NXM_NX_REG0[0..15]
+    Flow: in_port=2,vlan_tci=0x0000,dl_src=90:00:00:00:00:01,dl_dst=f0:00:00:00:00:01,dl_type=0x0000
+
+    bridge("br0")
+    -------------
+     0. priority 0
+	resubmit(,1)
+     1. in_port=2,vlan_tci=0x0000, priority 99
+	mod_vlan_vid:20
+	resubmit(,2)
+     2. priority 32768
+	learn(table=10,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG0[0..15])
+	 -> table=10 vlan_tci=0x0014/0x0fff,dl_dst=90:00:00:00:00:01 priority=32768 actions=load:0x2->NXM_NX_REG0[0..15]
+	resubmit(,3)
+     3. priority 50
+	resubmit(,10)
+	10. vlan_tci=0x0014/0x0fff,dl_dst=f0:00:00:00:00:01, priority 32768
+		load:0x1->NXM_NX_REG0[0..15]
+	resubmit(,4)
+     4. No match.
+	drop
+
+    Final flow: reg0=0x1,in_port=2,dl_vlan=20,dl_vlan_pcp=0,dl_src=90:00:00:00:00:01,dl_dst=f0:00:00:00:00:01,dl_type=0x0000
+    Megaflow: recirc_id=0,in_port=2,vlan_tci=0x0000,dl_src=90:00:00:00:00:01,dl_dst=f0:00:00:00:00:01,dl_type=0x0000
+    Datapath actions: drop
 
 If you read the commands above carefully, then you might have noticed that they
 simply have the Ethernet source and destination addresses exchanged.  That
@@ -717,13 +770,28 @@ means that if we now rerun the first ``ovs-appctl`` command above, e.g.:
         in_port=1,dl_vlan=20,dl_src=f0:00:00:00:00:01,dl_dst=90:00:00:00:00:01 \
         -generate
 
-then we see in the output that the destination has now been learned::
+then we see in the output, looking at the indented "load" action
+executed in table 10, that the destination has now been learned::
 
-    Resubmitted flow: unchanged
-    Resubmitted regs: reg0=0x0 reg1=0x0 reg2=0x0 reg3=0x0 reg4=0x0 reg5=0x0 reg6=0x0 reg7=0x0
-    Resubmitted  odp: drop
-    Rule: table=10 cookie=0 vlan_tci=0x0014/0x0fff,dl_dst=90:00:00:00:00:01
-    OpenFlow actions=load:0x2->NXM_NX_REG0[0..15]
+    Flow: in_port=1,dl_vlan=20,dl_vlan_pcp=0,dl_src=f0:00:00:00:00:01,dl_dst=90:00:00:00:00:01,dl_type=0x0000
+
+    bridge("br0")
+    -------------
+     0. priority 0
+	resubmit(,1)
+     1. in_port=1, priority 99
+	resubmit(,2)
+     2. priority 32768
+	learn(table=10,NXM_OF_VLAN_TCI[0..11],NXM_OF_ETH_DST[]=NXM_OF_ETH_SRC[],load:NXM_OF_IN_PORT[]->NXM_NX_REG0[0..15])
+	 -> table=10 vlan_tci=0x0014/0x0fff,dl_dst=f0:00:00:00:00:01 priority=32768 actions=load:0x1->NXM_NX_REG0[0..15]
+	resubmit(,3)
+     3. priority 50
+	resubmit(,10)
+	10. vlan_tci=0x0014/0x0fff,dl_dst=90:00:00:00:00:01, priority 32768
+		load:0x2->NXM_NX_REG0[0..15]
+	resubmit(,4)
+     4. No match.
+	drop
 
 
 Implementing Table 4: Output Processing
@@ -761,7 +829,7 @@ in copies output to access ports::
     EOF
 
 .. note::
-  Our rules rely on the standard OpenFlow behavior that an output action will
+  Our flows rely on the standard OpenFlow behavior that an output action will
   not forward a packet back out the port it came in on.  That is, if a packet
   comes in on p1, and we've learned that the packet's destination MAC is also
   on p1, so that we end up with ``actions=1`` as our actions, the switch will

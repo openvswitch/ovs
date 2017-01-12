@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1768,15 +1768,13 @@ nxm_execute_stack_push(const struct ofpact_stack *push,
     nx_stack_push(stack, &dst_value.u8[sizeof dst_value - bytes], bytes);
 }
 
-void
+bool
 nxm_execute_stack_pop(const struct ofpact_stack *pop,
                       struct flow *flow, struct flow_wildcards *wc,
                       struct ofpbuf *stack)
 {
     uint8_t src_bytes;
     const void *src = nx_stack_pop(stack, &src_bytes);
-
-    /* Only pop if stack is not empty. Otherwise, give warning. */
     if (src) {
         union mf_subvalue src_value;
         uint8_t dst_bytes = DIV_ROUND_UP(pop->subfield.n_bits, 8);
@@ -1790,13 +1788,10 @@ nxm_execute_stack_pop(const struct ofpact_stack *pop,
                                (union mf_subvalue *)&exact_match_mask,
                                &wc->masks);
         mf_write_subfield_flow(&pop->subfield, &src_value, flow);
+        return true;
     } else {
-        if (!VLOG_DROP_WARN(&rl)) {
-            char *flow_str = flow_to_string(flow);
-            VLOG_WARN_RL(&rl, "Failed to pop from an empty stack. On flow\n"
-                           " %s", flow_str);
-            free(flow_str);
-        }
+        /* Attempted to pop from an empty stack. */
+        return false;
     }
 }
 
