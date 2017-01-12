@@ -1241,6 +1241,8 @@ netdev_dpdk_set_config(struct netdev *netdev, const struct smap *args)
                               netdev_get_name(&dup_dev->up));
                     err = EADDRINUSE;
                 } else {
+                    int sid = rte_eth_dev_socket_id(new_port_id);
+                    dev->requested_socket_id = sid < 0 ? SOCKET0 : sid;
                     dev->devargs = xstrdup(new_devargs);
                     dev->port_id = new_port_id;
                     netdev_request_reconfigure(&dev->up);
@@ -3140,7 +3142,8 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
         && netdev->n_rxq == dev->requested_n_rxq
         && dev->mtu == dev->requested_mtu
         && dev->rxq_size == dev->requested_rxq_size
-        && dev->txq_size == dev->requested_txq_size) {
+        && dev->txq_size == dev->requested_txq_size
+        && dev->socket_id == dev->requested_socket_id) {
         /* Reconfiguration is unnecessary */
 
         goto out;
@@ -3148,7 +3151,8 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
 
     rte_eth_dev_stop(dev->port_id);
 
-    if (dev->mtu != dev->requested_mtu) {
+    if (dev->mtu != dev->requested_mtu
+        || dev->socket_id != dev->requested_socket_id) {
         netdev_dpdk_mempool_configure(dev);
     }
 
