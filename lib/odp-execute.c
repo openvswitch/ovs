@@ -523,8 +523,16 @@ odp_execute_sample(void *dp, struct dp_packet *packet, bool steal,
         }
     }
 
+    if (!steal) {
+        /* The 'subactions' may modify the packet, but the modification
+         * should not propagate beyond this sample action. Make a copy
+         * the packet in case we don't own the packet, so that the
+         * 'subactions' are only applid to the clone.  'odp_execute_actions'
+         * will free the clone.  */
+        packet = dp_packet_clone(packet);
+    }
     dp_packet_batch_init_packet(&pb, packet);
-    odp_execute_actions(dp, &pb, steal, nl_attr_get(subactions),
+    odp_execute_actions(dp, &pb, true, nl_attr_get(subactions),
                         nl_attr_get_size(subactions), dp_execute_action);
 }
 
