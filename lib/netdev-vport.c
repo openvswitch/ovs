@@ -561,10 +561,12 @@ set_tunnel_config(struct netdev *dev_, const struct smap *args, char **errp)
     err = 0;
 
 out:
-    ds_chomp(&errors, '\n');
-    VLOG_WARN("%s", ds_cstr(&errors));
-    if (err) {
-        *errp = ds_steal_cstr(&errors);
+    if (errors.length) {
+        ds_chomp(&errors, '\n');
+        VLOG_WARN("%s", ds_cstr(&errors));
+        if (err) {
+            *errp = ds_steal_cstr(&errors);
+        }
     }
 
     ds_destroy(&errors);
