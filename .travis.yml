@@ -49,4 +49,4 @@ script: ./.travis/${TRAVIS_OS_NAME}-build.sh $OPTS
 notifications:
   email:
     recipients:
-      - build@openvswitch.org
+      - ovs-build@openvswitch.org
