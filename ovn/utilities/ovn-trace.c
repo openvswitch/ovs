@@ -905,10 +905,12 @@ struct ovntrace_node {
     struct ovs_list node;       /* In parent. */
 
     enum ovntrace_node_type type;
-    const char *name;
+    char *name;
     bool always_indent;
     struct ovs_list subs;       /* List of children. */
 };
+
+static void ovntrace_node_destroy(struct ovntrace_node *);
 
 static struct ovntrace_node * OVS_PRINTF_FORMAT(3, 4)
 ovntrace_node_append(struct ovs_list *super, enum ovntrace_node_type type,
@@ -938,6 +940,29 @@ ovntrace_node_clone(const struct ovs_list *old, struct ovs_list *new)
                                                           "%s", osub->name);
         nsub->always_indent = osub->always_indent;
         ovntrace_node_clone(&osub->subs, &nsub->subs);
+    }
+}
+
+static void
+ovntrace_node_list_destroy(struct ovs_list *list)
+{
+    if (list) {
+        struct ovntrace_node *node, *next;
+
+        LIST_FOR_EACH_SAFE (node, next, node, list) {
+            ovs_list_remove(&node->node);
+            ovntrace_node_destroy(node);
+        }
+    }
+}
+
+static void
+ovntrace_node_destroy(struct ovntrace_node *node)
+{
+    if (node) {
+        ovntrace_node_list_destroy(&node->subs);
+        free(node->name);
+        free(node);
     }
 }
 
@@ -977,8 +1002,10 @@ ovntrace_node_prune_summary(struct ovs_list *nodes)
         ovntrace_node_prune_summary(&sub->subs);
         if (sub->type == OVNTRACE_NODE_MODIFY ||
             sub->type == OVNTRACE_NODE_TABLE) {
+            /* Replace 'sub' by its children, if any, */
             ovs_list_remove(&sub->node);
             ovs_list_splice(&next->node, sub->subs.next, &sub->subs);
+            ovntrace_node_destroy(sub);
         }
     }
 }
@@ -1019,8 +1046,10 @@ ovntrace_node_prune_hard(struct ovs_list *nodes)
             sub->type == OVNTRACE_NODE_PIPELINE ||
             sub->type == OVNTRACE_NODE_TABLE ||
             sub->type == OVNTRACE_NODE_OUTPUT) {
+            /* Replace 'sub' by its children, if any, */
             ovs_list_remove(&sub->node);
             ovs_list_splice(&next->node, sub->subs.next, &sub->subs);
+            ovntrace_node_destroy(sub);
         }
     }
 }
@@ -1676,6 +1705,7 @@ trace(const char *dp_s, const char *flow_s)
         ovntrace_node_clone(&root, &clone);
         ovntrace_node_prune_summary(&clone);
         ovntrace_node_print_summary(&output, &clone, 0);
+        ovntrace_node_list_destroy(&clone);
     }
 
     if (minimal) {
@@ -1685,6 +1715,8 @@ trace(const char *dp_s, const char *flow_s)
         ovntrace_node_prune_hard(&root);
         ovntrace_node_print_summary(&output, &root, 0);
     }
+
+    ovntrace_node_list_destroy(&root);
 
     vconn_close(vconn);
 
