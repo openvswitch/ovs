@@ -467,6 +467,19 @@ nl_msg_end_nested(struct ofpbuf *msg, size_t offset)
     attr->nla_len = msg->size - offset;
 }
 
+/* Same as nls_msg_end_nested() when the nested Netlink contains non empty
+ * message. Otherwise, drop the nested message header from 'msg'.    */
+void
+nl_msg_end_non_empty_nested(struct ofpbuf *msg, size_t offset)
+{
+    nl_msg_end_nested(msg, offset);
+
+    struct nlattr *attr = ofpbuf_at_assert(msg, offset, sizeof *attr);
+    if (!nl_attr_get_size(attr)) {
+        msg->size = offset;
+    }
+}
+
 /* Appends a nested Netlink attribute of the given 'type', with the 'size'
  * bytes of content starting at 'data', to 'msg'. */
 void

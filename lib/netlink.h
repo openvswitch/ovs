@@ -79,6 +79,7 @@ void nl_msg_put_string(struct ofpbuf *, uint16_t type, const char *value);
 
 size_t nl_msg_start_nested(struct ofpbuf *, uint16_t type);
 void nl_msg_end_nested(struct ofpbuf *, size_t offset);
+void nl_msg_end_non_empty_nested(struct ofpbuf *, size_t offset);
 void nl_msg_put_nested(struct ofpbuf *, uint16_t type,
                        const void *data, size_t size);
 
