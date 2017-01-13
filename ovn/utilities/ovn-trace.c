@@ -872,13 +872,17 @@ ovntrace_stage_name(const struct ovntrace_datapath *dp,
     return NULL;
 }
 
+/* Type of a node within a trace. */
 enum ovntrace_node_type {
+    /* Nodes that may have children (nonterminal nodes). */
     OVNTRACE_NODE_OUTPUT,
     OVNTRACE_NODE_MODIFY,
-    OVNTRACE_NODE_PIPELINE,
-    OVNTRACE_NODE_TABLE,
     OVNTRACE_NODE_ACTION,
     OVNTRACE_NODE_ERROR,
+
+    /* Nodes that never have children (terminal nodes). */
+    OVNTRACE_NODE_PIPELINE,
+    OVNTRACE_NODE_TABLE,
     OVNTRACE_NODE_TRANSFORMATION
 };
 
@@ -976,7 +980,9 @@ ovntrace_node_print_details(struct ds *output,
             continue;
         }
 
-        bool more = sub->node.next != nodes || sub->always_indent || ovntrace_node_type_is_terminal(sub->type);
+        bool more = (sub->node.next != nodes
+                     || sub->always_indent
+                     || ovntrace_node_type_is_terminal(sub->type));
         bool title = (sub->type == OVNTRACE_NODE_PIPELINE ||
                       sub->type == OVNTRACE_NODE_TRANSFORMATION);
         if (title) {
