@@ -123,7 +123,7 @@ bundle_check(const struct ofpact_bundle *bundle, ofp_port_t max_ports,
         if (ofp_port != OFPP_NONE) {
             enum ofperr error = ofpact_check_output_port(ofp_port, max_ports);
             if (error) {
-                VLOG_WARN_RL(&rl, "invalid slave %"PRIu16, ofp_port);
+                VLOG_WARN_RL(&rl, "invalid slave %"PRIu32, ofp_port);
                 return error;
             }
         }

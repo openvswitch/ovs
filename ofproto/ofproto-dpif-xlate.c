@@ -1749,7 +1749,7 @@ lookup_input_bundle(const struct xlate_ctx *ctx,
          *   the port after it was created, but before the client had a chance
          *   to configure its bundle.
          */
-        xlate_report_error(ctx, "received packet on unknown port %"PRIu16,
+        xlate_report_error(ctx, "received packet on unknown port %"PRIu32,
                            in_port);
     }
     return xbundle;
