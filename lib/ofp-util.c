@@ -4209,7 +4209,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
     if (ofp_to_u16(po->in_port) >= ofp_to_u16(OFPP_MAX)
         && po->in_port != OFPP_LOCAL
         && po->in_port != OFPP_NONE && po->in_port != OFPP_CONTROLLER) {
-        VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out has bad input port %#"PRIx16,
+        VLOG_WARN_RL(&bad_ofmsg_rl, "packet-out has bad input port %#"PRIx32,
                      po->in_port);
         return OFPERR_OFPBRC_BAD_PORT;
     }
@@ -7130,7 +7130,7 @@ ofputil_port_to_string(ofp_port_t port,
 #undef OFPUTIL_NAMED_PORT
 
     default:
-        snprintf(namebuf, bufsize, "%"PRIu16, port);
+        snprintf(namebuf, bufsize, "%"PRIu32, port);
         break;
     }
 }

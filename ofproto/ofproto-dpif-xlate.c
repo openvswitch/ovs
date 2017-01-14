@@ -1659,7 +1659,7 @@ lookup_input_bundle(const struct xbridge *xbridge, ofp_port_t in_port,
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
         VLOG_WARN_RL(&rl, "bridge %s: received packet on unknown "
-                     "port %"PRIu16, xbridge->name, in_port);
+                     "port %"PRIu32, xbridge->name, in_port);
     }
     return NULL;
 }

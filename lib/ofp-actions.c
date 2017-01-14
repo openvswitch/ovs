@@ -609,7 +609,7 @@ static void
 format_OUTPUT(const struct ofpact_output *a, struct ds *s)
 {
     if (ofp_to_u16(a->port) < ofp_to_u16(OFPP_MAX)) {
-        ds_put_format(s, "%soutput:%s%"PRIu16,
+        ds_put_format(s, "%soutput:%s%"PRIu32,
                       colors.special, colors.end, a->port);
     } else {
         ofputil_format_port(a->port, s);
@@ -4966,7 +4966,7 @@ format_SAMPLE(const struct ofpact_sample *a, struct ds *s)
                   colors.param, colors.end, a->obs_domain_id,
                   colors.param, colors.end, a->obs_point_id);
     if (a->sampling_port != OFPP_NONE) {
-        ds_put_format(s, ",%ssampling_port=%s%"PRIu16,
+        ds_put_format(s, ",%ssampling_port=%s%"PRIu32,
                       colors.param, colors.end, a->sampling_port);
     }
     ds_put_format(s, "%s)%s", colors.paren, colors.end);
@@ -5778,7 +5778,7 @@ parse_OUTPUT_TRUNC(const char *arg, struct ofpbuf *ofpacts OVS_UNUSED,
 static void
 format_OUTPUT_TRUNC(const struct ofpact_output_trunc *a, struct ds *s)
 {
-     ds_put_format(s, "%soutput%s(port=%"PRIu16",max_len=%"PRIu32")",
+     ds_put_format(s, "%soutput%s(port=%"PRIu32",max_len=%"PRIu32")",
                    colors.special, colors.end, a->port, a->max_len);
 }
 

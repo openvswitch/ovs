@@ -451,7 +451,7 @@ lswitch_choose_destination(struct lswitch *sw, const struct flow *flow)
             if (get_mac_entry_ofp_port(sw->ml, mac)
                 != flow->in_port.ofp_port) {
                 VLOG_DBG_RL(&rl, "%016llx: learned that "ETH_ADDR_FMT" is on "
-                            "port %"PRIu16, sw->datapath_id,
+                            "port %"PRIu32, sw->datapath_id,
                             ETH_ADDR_ARGS(flow->dl_src),
                             flow->in_port.ofp_port);
 
