@@ -310,8 +310,12 @@
         <code>csum</code> indicates that encapsulation checksums can be
         transmitted and received with reasonable performance. It is a hint
         to senders transmitting data to this chassis that they should use
-        checksums to protect OVN metadata. Set to <code>true</code> to enable
-        or <code>false</code> to disable.
+        checksums to protect OVN metadata. <code>ovn-controller</code>
+        populates this key with the value defined in 
+        <ref table="Open_vSwitch" column="external_ids:ovn-encap-csum"/> column
+        of the Open_vSwitch database's <ref table="Open_vSwitch"
+        db="Open_vSwitch"/> table.  Other applications should treat this key as
+        read-only. See <code>ovn-controller</code>(8) for more information.
       </p>
 
       <p>
