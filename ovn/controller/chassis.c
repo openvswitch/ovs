@@ -130,7 +130,8 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id,
 
     const struct sbrec_chassis *chassis_rec
         = get_chassis(ctx->ovnsb_idl, chassis_id);
-
+    const char *encap_csum = smap_get_def(&cfg->external_ids,
+                                          "ovn-encap-csum", "true");
     if (chassis_rec) {
         if (strcmp(hostname, chassis_rec->hostname)) {
             sbrec_chassis_set_hostname(chassis_rec, hostname);
@@ -165,8 +166,9 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id,
             cur_tunnels |= get_tunnel_type(chassis_rec->encaps[i]->type);
             same = same && !strcmp(chassis_rec->encaps[i]->ip, encap_ip);
 
-            same = same && smap_get_bool(&chassis_rec->encaps[i]->options,
-                                         "csum", false);
+            same = same && !strcmp(
+                smap_get_def(&chassis_rec->encaps[i]->options, "csum", ""),
+                encap_csum);
         }
         same = same && req_tunnels == cur_tunnels;
 
@@ -211,8 +213,7 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id,
     ds_destroy(&iface_types);
     int n_encaps = count_1bits(req_tunnels);
     struct sbrec_encap **encaps = xmalloc(n_encaps * sizeof *encaps);
-    const struct smap options = SMAP_CONST1(&options, "csum", "true");
-
+    const struct smap options = SMAP_CONST1(&options, "csum", encap_csum);
     for (int i = 0; i < n_encaps; i++) {
         const char *type = pop_tunnel_name(&req_tunnels);
 
@@ -222,7 +223,6 @@ chassis_run(struct controller_ctx *ctx, const char *chassis_id,
         sbrec_encap_set_ip(encaps[i], encap_ip);
         sbrec_encap_set_options(encaps[i], &options);
     }
-
     sbrec_chassis_set_encaps(chassis_rec, encaps, n_encaps);
     free(encaps);
 

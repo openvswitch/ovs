@@ -149,6 +149,17 @@
         value mapping two physical network names to two ovs bridges would be:
         <code>physnet1:br-eth0,physnet2:br-eth1</code>.
       </dd>
+
+      <dt><code>external_ids:ovn-encap-csum</code></dt>
+      <dd>
+        <code>ovn-encap-csum</code> indicates that encapsulation checksums can
+        be transmitted and received with reasonable performance. It is a hint
+        to senders transmitting data to this chassis that they should use
+        checksums to protect OVN metadata. Set to <code>true</code> to enable
+        or <code>false</code> to disable. Depending on the capabilities of the
+        network interface card, enabling encapsulation checksum may incur
+        performance loss. In such cases, encapsulation checksums can be disabled.
+      </dd>
     </dl>
 
     <p>
