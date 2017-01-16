@@ -601,3 +601,18 @@ AC_DEFUN([OVS_CHECK_PRAGMA_MESSAGE],
      [AC_DEFINE(HAVE_PRAGMA_MESSAGE,1,[Define if compiler supports #pragma
      message directive])])
   ])
+
+dnl OVS_LIBTOOL_VERSIONS sets the major, minor, micro version information for
+dnl OVS_LTINFO variable.  This variable locks libtool information for shared
+dnl objects, allowing multiple versions with different ABIs to coexist.
+AC_DEFUN([OVS_LIBTOOL_VERSIONS],
+    [AC_MSG_CHECKING(linker output version information)
+  OVS_MAJOR=`echo "$PACKAGE_VERSION" | sed -e 's/[[.]].*//'`
+  OVS_MINOR=`echo "$PACKAGE_VERSION" | sed -e "s/^$OVS_MAJOR//" -e 's/^.//' -e 's/[[.]].*//'`
+  OVS_MICRO=`echo "$PACKAGE_VERSION" | sed -e "s/^$OVS_MAJOR.$OVS_MINOR//" -e 's/^.//' -e 's/[[^0-9]].*//'`
+  OVS_LT_RELINFO="-release $OVS_MAJOR"
+  OVS_LT_VERINFO="-version-info $OVS_MINOR:$OVS_MICRO"
+  OVS_LTINFO="$OVS_LT_RELINFO $OVS_LT_VERINFO"
+  AC_MSG_RESULT([libX-$OVS_MAJOR.so.$OVS_MINOR.0.$OVS_MICRO)])
+  AC_SUBST(OVS_LTINFO)
+    ])

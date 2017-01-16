@@ -14,7 +14,7 @@ vtep/vtep-idl.ovsidl: $(VTEP_IDL_FILES)
 # libvtep
 lib_LTLIBRARIES += vtep/libvtep.la
 vtep_libvtep_la_LDFLAGS = \
-	-version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE) \
+	$(OVS_LTINFO) \
 	-Wl,--version-script=$(top_builddir)/vtep/libvtep.sym \
 	$(AM_LDFLAGS)
 nodist_vtep_libvtep_la_SOURCES = \

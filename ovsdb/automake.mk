@@ -1,7 +1,7 @@
 # libovsdb
 lib_LTLIBRARIES += ovsdb/libovsdb.la
 ovsdb_libovsdb_la_LDFLAGS = \
-        -version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE) \
+        $(OVS_LTINFO) \
         -Wl,--version-script=$(top_builddir)/ovsdb/libovsdb.sym \
         $(AM_LDFLAGS)
 ovsdb_libovsdb_la_SOURCES = \

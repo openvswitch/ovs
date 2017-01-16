@@ -34,3 +34,4 @@ The below guides provide information on contributing to Open vSwitch itself.
    coding-style
    coding-style-windows
    documentation-style
+   libopenvswitch-abi
