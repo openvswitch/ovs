@@ -1,6 +1,6 @@
 lib_LTLIBRARIES += ovn/lib/libovn.la
 ovn_lib_libovn_la_LDFLAGS = \
-        -version-info $(LT_CURRENT):$(LT_REVISION):$(LT_AGE) \
+        $(OVS_LTINFO) \
         -Wl,--version-script=$(top_builddir)/ovn/lib/libovn.sym \
         $(AM_LDFLAGS)
 ovn_lib_libovn_la_SOURCES = \
