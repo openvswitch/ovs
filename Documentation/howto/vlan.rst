@@ -90,7 +90,7 @@ Perform the following configuration on `host1`:
 
 #. Add ``eth0`` to the bridge::
 
-     $ ovs-vsctl add-port br0 eth0</code></p>
+     $ ovs-vsctl add-port br0 eth0
 
    .. note::
 
