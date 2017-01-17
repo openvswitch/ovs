@@ -632,79 +632,144 @@ reset_dp_packet_checksum_ol_flags(struct dp_packet *p)
 enum { NETDEV_MAX_BURST = 32 }; /* Maximum number packets in a batch. */
 
 struct dp_packet_batch {
-    int count;
+    size_t count;
     bool trunc; /* true if the batch needs truncate. */
     struct dp_packet *packets[NETDEV_MAX_BURST];
 };
 
-static inline void dp_packet_batch_init(struct dp_packet_batch *b)
+static inline void
+dp_packet_batch_init(struct dp_packet_batch *batch)
 {
-    b->count = 0;
-    b->trunc = false;
+    batch->count = 0;
+    batch->trunc = false;
 }
+
+static inline void
+dp_packet_batch_add__(struct dp_packet_batch *batch,
+                      struct dp_packet *packet, size_t limit)
+{
+    if (batch->count < limit) {
+        batch->packets[batch->count++] = packet;
+    } else {
+        dp_packet_delete(packet);
+    }
+}
+
+/* When the batch is full, 'packet' will be dropped and freed. */
+static inline void
+dp_packet_batch_add(struct dp_packet_batch *batch, struct dp_packet *packet)
+{
+    dp_packet_batch_add__(batch, packet, NETDEV_MAX_BURST);
+}
+
+static inline size_t
+dp_packet_batch_size(const struct dp_packet_batch *batch)
+{
+    return batch->count;
+}
+
+/*
+ * Clear 'batch' for refill. Use dp_packet_batch_refill() to add
+ * packets back into the 'batch'.
+ *
+ * Return the original size of the 'batch'.  */
+static inline void
+dp_packet_batch_refill_init(struct dp_packet_batch *batch)
+{
+    batch->count = 0;
+};
+
+static inline void
+dp_packet_batch_refill(struct dp_packet_batch *batch,
+                       struct dp_packet *packet, size_t idx)
+{
+    dp_packet_batch_add__(batch, packet, MIN(NETDEV_MAX_BURST, idx + 1));
+}
+
+static inline void
+dp_packet_batch_init_packet(struct dp_packet_batch *batch, struct dp_packet *p)
+{
+    dp_packet_batch_init(batch);
+    batch->count = 1;
+    batch->packets[0] = p;
+}
+
+static inline bool
+dp_packet_batch_is_empty(const struct dp_packet_batch *batch)
+{
+    return !dp_packet_batch_size(batch);
+}
+
+#define DP_PACKET_BATCH_FOR_EACH(PACKET, BATCH)    \
+    for (size_t i = 0; i < dp_packet_batch_size(BATCH); i++)  \
+        if (PACKET = BATCH->packets[i], true)
+
+/* Use this macro for cases where some packets in the 'BATCH' may be
+ * dropped after going through each packet in the 'BATCH'.
+ *
+ * For packets to stay in the 'BATCH', they need to be refilled back
+ * into the 'BATCH' by calling dp_packet_batch_refill(). Caller owns
+ * the packets that are not refilled.
+ *
+ * Caller needs to supply 'SIZE', that stores the current number of
+ * packets in 'BATCH'. It is best to declare this variable with
+ * the 'const' modifier since it should not be modified by
+ * the iterator.  */
+#define DP_PACKET_BATCH_REFILL_FOR_EACH(IDX, SIZE, PACKET, BATCH)       \
+    for (dp_packet_batch_refill_init(BATCH), IDX=0; IDX < SIZE; IDX++)  \
+         if (PACKET = BATCH->packets[IDX], true)
 
 static inline void
 dp_packet_batch_clone(struct dp_packet_batch *dst,
                       struct dp_packet_batch *src)
 {
-    int i;
+    struct dp_packet *packet;
 
-    for (i = 0; i < src->count; i++) {
-        dst->packets[i] = dp_packet_clone(src->packets[i]);
+    dp_packet_batch_init(dst);
+    DP_PACKET_BATCH_FOR_EACH (packet, src) {
+        dp_packet_batch_add(dst, dp_packet_clone(packet));
     }
-    dst->count = src->count;
-    dst->trunc = src->trunc;
-}
-
-static inline void
-packet_batch_init_packet(struct dp_packet_batch *b, struct dp_packet *p)
-{
-    b->count = 1;
-    b->trunc = false;
-    b->packets[0] = p;
 }
 
 static inline void
 dp_packet_delete_batch(struct dp_packet_batch *batch, bool may_steal)
 {
     if (may_steal) {
-        int i;
+        struct dp_packet *packet;
 
-        for (i = 0; i < batch->count; i++) {
-            dp_packet_delete(batch->packets[i]);
+        DP_PACKET_BATCH_FOR_EACH (packet, batch) {
+            dp_packet_delete(packet);
         }
+        dp_packet_batch_init(batch);
     }
 }
 
 static inline void
-dp_packet_batch_apply_cutlen(struct dp_packet_batch *pktb)
+dp_packet_batch_apply_cutlen(struct dp_packet_batch *batch)
 {
-    int i;
+    if (batch->trunc) {
+        struct dp_packet *packet;
 
-    if (!pktb->trunc)
-        return;
+        DP_PACKET_BATCH_FOR_EACH (packet, batch) {
+            uint32_t cutlen = dp_packet_get_cutlen(packet);
 
-    for (i = 0; i < pktb->count; i++) {
-        uint32_t cutlen = dp_packet_get_cutlen(pktb->packets[i]);
-
-        dp_packet_set_size(pktb->packets[i],
-                    dp_packet_size(pktb->packets[i]) - cutlen);
-        dp_packet_reset_cutlen(pktb->packets[i]);
+            dp_packet_set_size(packet, dp_packet_size(packet) - cutlen);
+            dp_packet_reset_cutlen(packet);
+        }
+        batch->trunc = false;
     }
-    pktb->trunc = false;
 }
 
 static inline void
-dp_packet_batch_reset_cutlen(struct dp_packet_batch *pktb)
+dp_packet_batch_reset_cutlen(struct dp_packet_batch *batch)
 {
-    int i;
+    if (batch->trunc) {
+        struct dp_packet *packet;
 
-    if (!pktb->trunc)
-        return;
-
-    pktb->trunc = false;
-    for (i = 0; i < pktb->count; i++) {
-        dp_packet_reset_cutlen(pktb->packets[i]);
+        DP_PACKET_BATCH_FOR_EACH (packet, batch) {
+            dp_packet_reset_cutlen(packet);
+        }
+        batch->trunc = false;
     }
 }
 

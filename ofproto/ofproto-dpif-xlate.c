@@ -3825,7 +3825,7 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     }
 
     packet = dp_packet_clone(ctx->xin->packet);
-    packet_batch_init_packet(&batch, packet);
+    dp_packet_batch_init_packet(&batch, packet);
     odp_execute_actions(NULL, &batch, false,
                         ctx->odp_actions->data, ctx->odp_actions->size, NULL);
 
