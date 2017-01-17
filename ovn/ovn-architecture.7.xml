@@ -381,6 +381,36 @@
       switch.  Logical switches and routers are both implemented as logical
       datapaths.
     </li>
+
+    <li>
+      <p>
+        <dfn>Logical ports</dfn> represent the points of connectivity in and
+        out of logical switches and logical routers.  Some common types of
+        logical ports are:
+      </p>
+
+      <ul>
+        <li>
+          Logical ports representing VIFs.
+        </li>
+
+        <li>
+          <dfn>Localnet ports</dfn> represent the points of connectivity
+          between logical switches and the physical network.  They are
+          implemented as OVS patch ports between the integration bridge
+          and the separate Open vSwitch bridge that underlay physical
+          ports attach to.
+        </li>
+
+        <li>
+          <dfn>Logical patch ports</dfn> represent the points of
+          connectivity between logical switches and logical routers, and
+          in some cases between peer logical routers.  There is a pair of
+          logical patch ports at each such point of connectivity, one on
+          each side.
+        </li>
+      </ul>
+    </li>
   </ul>
 
   <h2>Life Cycle of a VIF</h2>
@@ -1040,16 +1070,118 @@
         is a container nested with a VM, then before sending the packet the
         actions push on a VLAN header with an appropriate VLAN ID.
       </p>
-
-      <p>
-        If the logical egress port is a logical patch port, then table 65
-        outputs to an OVS patch port that represents the logical patch port.
-        The packet re-enters the OpenFlow flow table from the OVS patch port's
-        peer in table 0, which identifies the logical datapath and logical
-        input port based on the OVS patch port's OpenFlow port number.
-      </p>
     </li>
   </ol>
+
+  <h2>Logical Routers and Logical Patch Ports</h2>
+
+  <p>
+    Typically logical routers and logical patch ports do not have a
+    physical location and effectively reside on every hypervisor.  This is
+    the case for logical patch ports between logical routers and logical
+    switches behind those logical routers, to which VMs (and VIFs) attach.
+  </p>
+
+  <p>
+    Consider a packet sent from one virtual machine or container to another
+    VM or container that resides on a different subnet.  The packet will
+    traverse tables 0 to 65 as described in the previous section
+    <code>Architectural Physical Life Cycle of a Packet</code>, using the
+    logical datapath representing the logical switch that the sender is
+    attached to.  At table 32, the packet will use the fallback flow that
+    resubmits locally to table 33 on the same hypervisor.  In this case,
+    all of the processing from table 0 to table 65 occurs on the hypervisor
+    where the sender resides.
+  </p>
+
+  <p>
+    When the packet reaches table 65, the logical egress port is a logical
+    patch port.  The implementation in table 65 differs depending on the OVS
+    version, although the observed behavior is meant to be the same:
+  </p>
+
+  <ul>
+    <li>
+      In OVS versions 2.6 and earlier, table 65 outputs to an OVS patch
+      port that represents the logical patch port.  The packet re-enters
+      the OpenFlow flow table from the OVS patch port's peer in table 0,
+      which identifies the logical datapath and logical input port based
+      on the OVS patch port's OpenFlow port number.
+    </li>
+
+    <li>
+      In OVS versions 2.7 and later, the packet is cloned and resubmitted
+      directly to OpenFlow flow table 16, setting the logical ingress
+      port to the peer logical patch port, and using the peer logical
+      patch port's logical datapath (that represents the logical router).
+    </li>
+  </ul>
+
+  <p>
+    The packet re-enters the ingress pipeline in order to traverse tables
+    16 to 65 again, this time using the logical datapath representing the
+    logical router.  The processing continues as described in the previous
+    section <code>Architectural Physical Life Cycle of a Packet</code>.
+    When the packet reachs table 65, the logical egress port will once
+    again be a logical patch port.  In the same manner as described above,
+    this logical patch port will cause the packet to be resubmitted to
+    OpenFlow tables 16 to 65, this time using the logical datapath
+    representing the logical switch that the destination VM or container
+    is attached to.
+  </p>
+
+  <p>
+    The packet traverses tables 16 to 65 a third and final time.  If the
+    destination VM or container resides on a remote hypervisor, then table
+    32 will send the packet on a tunnel port from the sender's hypervisor
+    to the remote hypervisor.  Finally table 65 will output the packet
+    directly to the destination VM or container.
+  </p>
+
+  <p>
+    The following section describes an exception, where logical routers
+    and logical patch ports are associated with a physical location.
+  </p>
+
+  <h3>Gateway Routers</h3>
+
+  <p>
+    A <dfn>gateway router</dfn> is a logical router that is bound to a
+    physical location.  This includes all of the logical patch ports of
+    the logical router, as well as all of the peer logical patch ports on
+    logical switches.  In the OVN Southbound database, the
+    <code>Port_Binding</code> entries for these logical patch ports use
+    the type <code>l3gateway</code> rather than <code>patch</code>, in
+    order to distinguish that these logical patch ports are bound to a
+    chassis.
+  </p>
+
+  <p>
+    When a hypervisor processes a packet on a logical datapath
+    representing a logical switch, and the logical egress port is a
+    <code>l3gateway</code> port representing connectivity to a gateway
+    router, the packet will match a flow in table 32 that sends the
+    packet on a tunnel port to the chassis where the gateway router
+    resides.  This processing in table 32 is done in the same manner as
+    for VIFs.
+  </p>
+
+  <p>
+    Gateway routers are typically used in between distributed logical
+    routers and physical networks.  The distributed logical router and
+    the logical switches behind it, to which VMs and containers attach,
+    effectively reside on each hypervisor.  The distributed router and
+    the gateway router are connected by another logical switch, sometimes
+    referred to as a <code>join</code> logical switch.  On the other
+    side, the gateway router connects to another logical switch that has
+    a localnet port connecting to the physical network.
+  </p>
+
+  <p>
+    When using gateway routers, DNAT and SNAT rules are associated with
+    the gateway router, which provides a central location that can handle
+    one-to-many SNAT (aka IP masquerading).
+  </p>
 
   <h2>Life Cycle of a VTEP gateway</h2>
 
