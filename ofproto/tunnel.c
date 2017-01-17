@@ -461,6 +461,11 @@ tnl_port_send(const struct ofport_dpif *ofport, struct flow *flow,
         | (cfg->csum ? FLOW_TNL_F_CSUM : 0)
         | (cfg->out_key_present ? FLOW_TNL_F_KEY : 0);
 
+    if (cfg->set_egress_pkt_mark) {
+        flow->pkt_mark = cfg->egress_pkt_mark;
+        wc->masks.pkt_mark = UINT32_MAX;
+    }
+
     if (pre_flow_str) {
         char *post_flow_str = flow_to_string(flow);
         char *tnl_str = tnl_port_fmt(tnl_port);

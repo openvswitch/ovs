@@ -2226,6 +2226,12 @@
         to <code>false</code> to disable.
       </column>
 
+      <column name="options" key="egress_pkt_mark">
+        Optional.  The pkt_mark to be set on the encapsulating packet.  This
+        option sets packet mark for the tunnel endpoint for all tunnel packets
+        including tunnel monitoring.
+      </column>
+
       <group title="Tunnel Options: vxlan only">
 
         <column name="options" key="exts">
