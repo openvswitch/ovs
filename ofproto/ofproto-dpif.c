@@ -1693,7 +1693,12 @@ set_tables_version(struct ofproto *ofproto_, cls_version_t version)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
 
-    atomic_store_relaxed(&ofproto->tables_version, version);
+    /* Use memory_order_release to signify that any prior memory accesses can
+     * not be reordered to happen after this atomic store.  This makes sure the
+     * new version is properly set up when the readers can read this 'version'
+     * value. */
+    atomic_store_explicit(&ofproto->tables_version, version,
+                          memory_order_release);
 }
 
 
@@ -3852,8 +3857,12 @@ ofproto_dpif_get_tables_version(struct ofproto_dpif *ofproto OVS_UNUSED)
 {
     cls_version_t version;
 
-    atomic_read_relaxed(&ofproto->tables_version, &version);
-
+    /* Use memory_order_acquire to signify that any following memory accesses
+     * can not be reordered to happen before this atomic read.  This makes sure
+     * all following reads relate to this or a newer version, but never to an
+     * older version. */
+    atomic_read_explicit(&ofproto->tables_version, &version,
+                         memory_order_acquire);
     return version;
 }
 
