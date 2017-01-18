@@ -107,12 +107,11 @@ Q: How do I configure a DPDK port as an access port?
     startup when other_config:dpdk-init is set to 'true'.
 
     Secondly, when adding a DPDK port, unlike a system port, the type for the
-    interface must be specified. For example::
+    interface and valid dpdk-devargs must be specified. For example::
 
         $ ovs-vsctl add-br br0
-        $ ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
-
-    Finally, it is required that DPDK port names begin with ``dpdk``.
+        $ ovs-vsctl add-port br0 myportname -- set Interface myportname \
+            type=dpdk options:dpdk-devargs=0000:06:00.0
 
     Refer to :doc:`/intro/install/dpdk` for more information on enabling and
     using DPDK with Open vSwitch.
