@@ -108,3 +108,35 @@ packets?
     For more relevant information on the architecture of Open vSwitch, please
     read "The Design and Implementation of Open vSwitch", published in USENIX
     NSDI 2015.
+
+Q: How many packets does OVS buffer?
+
+    A: Open vSwitch fast path packet processing uses a "run to completion"
+    model in which every packet is completely handled in a single pass.
+    Therefore, in the common case where a packet just passes through the fast
+    path, Open vSwitch does not buffer packets itself.  The operating system
+    and the network drivers involved in receiving and later in transmitting the
+    packet do often include buffering.  Open vSwitch is only a middleman
+    between these and does not have direct access or influence over their
+    buffers.
+
+    Outside the common case, Open vSwitch does sometimes buffer packets.  When
+    the OVS fast path processes a packet that does not match any of the flows
+    in its megaflow cache, it passes that packet to the Open vSwitch slow path.
+    This procedure queues a copy of the packet to the Open vSwitch userspace
+    which processes it and, if necessary, passes it back to the kernel module.
+    Queuing the packet to userspace as part of this process involves buffering.
+    (Going the opposite direction does not, because the kernel actually
+    processes the request synchronously.)  A few other exceptional cases also
+    queue packets to userspace for processing; most of these are due to
+    OpenFlow actions that the fast path cannot handle and that must therefore
+    be handled by the slow path instead.
+
+    OpenFlow also has a concept of packet buffering.  When an OpenFlow switch
+    sends a packet to a controller, it may opt to retain a copy of the packet
+    in an OpenFlow "packet buffer".  Later, if the controller wants to tell the
+    switch to forward a copy of that packet, it can refer to the packet through
+    its assigned buffer, instead of sending the whole packet back to the
+    switch, thereby saving bandwidth in the OpenFlow control channel.  Before
+    Open vSwitch 2.7, OVS implemented such buffering; Open vSwitch 2.7 and
+    later do not.
