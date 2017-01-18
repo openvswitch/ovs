@@ -829,6 +829,7 @@
       database.
     </p>
     <xi:include href="lib/ssl.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
+    <xi:include href="lib/ssl-bootstrap.xml" xmlns:xi="http://www.w3.org/2003/XInclude"/>
 
     <h2>Other Options</h2>
 
