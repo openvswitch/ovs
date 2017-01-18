@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2010, 2011, 2012, 2013, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2010, 2011, 2012, 2013, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1433,17 +1433,21 @@ pkt_list_delete(struct ovs_list *l)
 }
 
 static struct dp_packet *
-eth_from_packet_or_flow(const char *s)
+eth_from_packet(const char *s)
+{
+    struct dp_packet *packet;
+    eth_from_hex(s, &packet);
+    return packet;
+}
+
+static struct dp_packet *
+eth_from_flow(const char *s)
 {
     enum odp_key_fitness fitness;
     struct dp_packet *packet;
     struct ofpbuf odp_key;
     struct flow flow;
     int error;
-
-    if (!eth_from_hex(s, &packet)) {
-        return packet;
-    }
 
     /* Convert string to datapath key.
      *
@@ -1540,10 +1544,24 @@ netdev_dummy_receive(struct unixctl_conn *conn,
     for (i = k; i < argc; i++) {
         struct dp_packet *packet;
 
-        packet = eth_from_packet_or_flow(argv[i]);
+        /* Try to parse 'argv[i]' as packet in hex. */
+        packet = eth_from_packet(argv[i]);
+
         if (!packet) {
-            unixctl_command_reply_error(conn, "bad packet syntax");
-            goto exit;
+            /* Try parse 'argv[i]' as odp flow. */
+            packet = eth_from_flow(argv[i]);
+
+            if (!packet) {
+                unixctl_command_reply_error(conn, "bad packet or flow syntax");
+                goto exit;
+            }
+
+            /* Parse optional --len argument immediately follows a 'flow'.  */
+            if (argc >= i + 2 && !strcmp(argv[i + 1], "--len")) {
+                int packet_size = strtol(argv[i + 2], NULL, 10);
+                dp_packet_set_size(packet, packet_size);
+                i+=2;
+            }
         }
 
         netdev_dummy_queue_packet(dummy_dev, packet, rx_qid);
@@ -1757,7 +1775,7 @@ void
 netdev_dummy_register(enum dummy_level level)
 {
     unixctl_command_register("netdev-dummy/receive",
-                             "name [--qid queue_id] packet|flow...",
+                             "name [--qid queue_id] packet|flow [--len packet_len]",
                              2, INT_MAX, netdev_dummy_receive, NULL);
     unixctl_command_register("netdev-dummy/set-admin-state",
                              "[netdev] up|down", 1, 2,
