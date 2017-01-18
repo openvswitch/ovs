@@ -441,6 +441,7 @@ EXTRA_DIST += \
 	lib/dirs.c.in \
 	lib/db-ctl-base.xml \
 	lib/ssl.xml \
+	lib/ssl-bootstrap.xml \
 	lib/vlog.xml
 
 MAN_FRAGMENTS += \

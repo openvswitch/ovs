@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<dl>
+  <dt><code>--bootstrap-ca-cert=</code><var>cacert.pem</var></dt>
+  <dd>
+    <p>
+      When <var>cacert.pem</var> exists, this option has the same effect
+      as <code>-C</code> or <code>--ca-cert</code>. If it does not exist,
+      then the executable will attempt to obtain the CA certificate from the
+      SSL peer on its first SSL connection and save it to the named PEM
+      file.  If it is successful, it will immediately drop the connection
+      and reconnect, and from then on all SSL connections must be
+      authenticated by a certificate signed by the CA certificate thus
+      obtained.
+    </p>
+    <p>
+      This option exposes the SSL connection to a man-in-the-middle
+      attack obtaining the initial CA certificate, but it may be useful
+      for bootstrapping.
+    </p>
+    <p>
+      This option is only useful if the SSL peer sends its CA certificate as
+      part of the SSL certificate chain.  The SSL protocol does not require
+      the server to send the CA certificate.
+    </p>
+    <p>
+      This option is mutually exclusive with <code>-C</code> and
+      <code>--ca-cert</code>.
+    </p>
+  </dd>
+</dl>
