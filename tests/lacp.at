@@ -579,5 +579,141 @@ slave p3: enabled
 	may_enable: true
 
 ])
+
+# Reconnect the patch link between p0 and p2 to allow traffic between the ports.
+AT_CHECK([ovs-vsctl \
+-- del-port null0 -- set int p2 options:peer=p0 \
+-- del-port null1 -- set int p0 options:peer=p2])
+
+# Wait for 30 more seconds (LACP_SLOW_TIME_TX) for the lacp to renegotiate
+ovs-appctl time/warp 30100 100
+
+AT_CHECK(
+  [ovs-appctl lacp/show bond0
+ovs-appctl lacp/show bond1
+ovs-appctl bond/show bond0 | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC
+ovs-appctl bond/show bond1 | STRIP_RECIRC_ID | STRIP_ACTIVE_SLAVE_MAC ], [0], [dnl
+---- bond0 ----
+	status: active negotiated
+	sys_id: aa:55:aa:55:00:00
+	sys_priority: 65534
+	aggregation key: 2
+	lacp_time: fast
+
+slave: p0: current attached
+	port_id: 1
+	port_priority: 65535
+	may_enable: true
+
+	actor sys_id: aa:55:aa:55:00:00
+	actor sys_priority: 65534
+	actor port_id: 1
+	actor port_priority: 65535
+	actor key: 2
+	actor state: activity timeout aggregation synchronized collecting distributing
+
+	partner sys_id: aa:66:aa:66:00:00
+	partner sys_priority: 65534
+	partner port_id: 3
+	partner port_priority: 65535
+	partner key: 4
+	partner state: activity timeout aggregation synchronized collecting distributing
+
+slave: p1: current attached
+	port_id: 2
+	port_priority: 65535
+	may_enable: true
+
+	actor sys_id: aa:55:aa:55:00:00
+	actor sys_priority: 65534
+	actor port_id: 2
+	actor port_priority: 65535
+	actor key: 2
+	actor state: activity timeout aggregation synchronized collecting distributing
+
+	partner sys_id: aa:66:aa:66:00:00
+	partner sys_priority: 65534
+	partner port_id: 4
+	partner port_priority: 65535
+	partner key: 4
+	partner state: activity timeout aggregation synchronized collecting distributing
+---- bond1 ----
+	status: active negotiated
+	sys_id: aa:66:aa:66:00:00
+	sys_priority: 65534
+	aggregation key: 4
+	lacp_time: fast
+
+slave: p2: current attached
+	port_id: 3
+	port_priority: 65535
+	may_enable: true
+
+	actor sys_id: aa:66:aa:66:00:00
+	actor sys_priority: 65534
+	actor port_id: 3
+	actor port_priority: 65535
+	actor key: 4
+	actor state: activity timeout aggregation synchronized collecting distributing
+
+	partner sys_id: aa:55:aa:55:00:00
+	partner sys_priority: 65534
+	partner port_id: 1
+	partner port_priority: 65535
+	partner key: 2
+	partner state: activity timeout aggregation synchronized collecting distributing
+
+slave: p3: current attached
+	port_id: 4
+	port_priority: 65535
+	may_enable: true
+
+	actor sys_id: aa:66:aa:66:00:00
+	actor sys_priority: 65534
+	actor port_id: 4
+	actor port_priority: 65535
+	actor key: 4
+	actor state: activity timeout aggregation synchronized collecting distributing
+
+	partner sys_id: aa:55:aa:55:00:00
+	partner sys_priority: 65534
+	partner port_id: 2
+	partner port_priority: 65535
+	partner key: 2
+	partner state: activity timeout aggregation synchronized collecting distributing
+---- bond0 ----
+bond_mode: balance-tcp
+bond may use recirculation: yes, <del>
+bond-hash-basis: 0
+updelay: 0 ms
+downdelay: 0 ms
+lacp_status: negotiated
+<active slave mac del>
+
+slave p0: enabled
+	may_enable: true
+
+slave p1: enabled
+	active slave
+	may_enable: true
+
+---- bond1 ----
+bond_mode: balance-tcp
+bond may use recirculation: yes, <del>
+bond-hash-basis: 0
+updelay: 0 ms
+downdelay: 0 ms
+lacp_status: negotiated
+<active slave mac del>
+
+slave p2: enabled
+	may_enable: true
+
+slave p3: enabled
+	active slave
+	may_enable: true
+
+])
+
 OVS_VSWITCHD_STOP
 AT_CLEANUP
