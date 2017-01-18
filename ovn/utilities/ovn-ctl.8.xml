@@ -48,6 +48,7 @@
     <p><code>--ovn-controller-ssl-key=<var>KEY</var></code></p>
     <p><code>--ovn-controller-ssl-cert=<var>CERT</var></code></p>
     <p><code>--ovn-controller-ssl-ca-cert=<var>CERT</var></code></p>
+    <p><code>--ovn-controller-ssl-bootstrap-ca-cert=<var>CERT</var></code></p>
 
     <h1>Address and port options</h1>
     <p><code>--db-nb-sync-from-addr=<var>IP ADDRESS</var></code></p>
