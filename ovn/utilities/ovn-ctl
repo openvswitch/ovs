@@ -220,10 +220,17 @@ start_northd () {
 start_controller () {
     set ovn-controller "unix:$DB_SOCK"
     set "$@" $OVN_CONTROLLER_LOG
-    if test X"$OVN_CONTROLLER_SSL_CERT" != X; then
+    if test X"$OVN_CONTROLLER_SSL_KEY" != X; then
         set "$@" --private-key=$OVN_CONTROLLER_SSL_KEY
+    fi
+    if test X"$OVN_CONTROLLER_SSL_CERT" != X; then
         set "$@" --certificate=$OVN_CONTROLLER_SSL_CERT
+    fi
+    if test X"$OVN_CONTROLLER_SSL_CA_CERT" != X; then
         set "$@" --ca-cert=$OVN_CONTROLLER_SSL_CA_CERT
+    fi
+    if test X"$OVN_CONTROLLER_SSL_BOOTSTRAP_CA_CERT" != X; then
+        set "$@" --bootstrap-ca-cert=$OVN_CONTROLLER_SSL_BOOTSTRAP_CA_CERT
     fi
     OVS_RUNDIR=${OVN_RUNDIR} start_daemon "$OVN_CONTROLLER_PRIORITY" "$OVN_CONTROLLER_WRAPPER" "$@"
 }
@@ -231,10 +238,17 @@ start_controller () {
 start_controller_vtep () {
     set ovn-controller-vtep "unix:$DB_SOCK"
     set "$@" -vconsole:emer -vsyslog:err -vfile:info
-    if test X"$OVN_CONTROLLER_SSL_CERT" != X; then
+    if test X"$OVN_CONTROLLER_SSL_KEY" != X; then
         set "$@" --private-key=$OVN_CONTROLLER_SSL_KEY
+    fi
+    if test X"$OVN_CONTROLLER_SSL_CERT" != X; then
         set "$@" --certificate=$OVN_CONTROLLER_SSL_CERT
+    fi
+    if test X"$OVN_CONTROLLER_SSL_CA_CERT" != X; then
         set "$@" --ca-cert=$OVN_CONTROLLER_SSL_CA_CERT
+    fi
+    if test X"$OVN_CONTROLLER_SSL_BOOTSTRAP_CA_CERT" != X; then
+        set "$@" --bootstrap-ca-cert=$OVN_CONTROLLER_SSL_BOOTSTRAP_CA_CERT
     fi
     OVS_RUNDIR=${OVN_RUNDIR} start_daemon "$OVN_CONTROLLER_PRIORITY" "$OVN_CONTROLLER_WRAPPER" "$@"
 }
@@ -335,6 +349,7 @@ set_defaults () {
     OVN_CONTROLLER_SSL_KEY=""
     OVN_CONTROLLER_SSL_CERT=""
     OVN_CONTROLLER_SSL_CA_CERT=""
+    OVN_CONTROLLER_SSL_BOOTSTRAP_CA_CERT=""
 
     DB_SB_CREATE_INSECURE_REMOTE="no"
     DB_NB_CREATE_INSECURE_REMOTE="no"
@@ -384,6 +399,7 @@ Options:
   --ovn-controller-ssl-key=KEY OVN Southbound SSL private key file
   --ovn-controller-ssl-cert=CERT OVN Southbound SSL certificate file
   --ovn-controller-ssl-ca-cert=CERT OVN Southbound SSL CA certificate file
+  --ovn-controller-ssl-bootstrap-ca-cert=CERT Bootstrapped OVN Southbound SSL CA certificate file
   --ovn-manage-ovsdb=yes|no        Whether or not the OVN databases should be
                                    automatically started and stopped along
                                    with ovn-northd. The default is "yes". If
