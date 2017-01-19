@@ -40,4 +40,3 @@ vSwitch.
    :maxdepth: 2
 
    ovs-advanced
-   ovn-basics

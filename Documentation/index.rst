@@ -61,7 +61,6 @@ vSwitch? Start here.
   :doc:`intro/install/dpdk`
 
 - **Tutorials:** :doc:`tutorials/ovs-advanced` |
-  :doc:`tutorials/ovn-basics`
 
 Deeper Dive
 -----------

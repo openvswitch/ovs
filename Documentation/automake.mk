@@ -21,7 +21,6 @@ EXTRA_DIST += \
 	Documentation/intro/install/windows.rst \
 	Documentation/intro/install/xenserver.rst \
 	Documentation/tutorials/index.rst \
-	Documentation/tutorials/ovn-basics.rst \
 	Documentation/tutorials/ovs-advanced.rst \
 	Documentation/topics/index.rst \
 	Documentation/topics/bonding.rst \
