@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,7 +45,7 @@ VLOG_DEFINE_THIS_MODULE(actions);
     static void encode_##ENUM(const struct STRUCT *,                \
                               const struct ovnact_encode_params *,  \
                               struct ofpbuf *ofpacts);              \
-    static void free_##ENUM(struct STRUCT *a);
+    static void STRUCT##_free(struct STRUCT *a);
 OVNACTS
 #undef OVNACT
 
@@ -226,6 +226,11 @@ add_prerequisite(struct action_context *ctx, const char *prerequisite)
     ovs_assert(!error);
     ctx->prereqs = expr_combine(EXPR_T_AND, ctx->prereqs, expr);
 }
+
+static void
+ovnact_null_free(struct ovnact_null *a OVS_UNUSED)
+{
+}
 
 static void
 format_OUTPUT(const struct ovnact_null *a OVS_UNUSED, struct ds *s)
@@ -247,11 +252,6 @@ encode_OUTPUT(const struct ovnact_null *a OVS_UNUSED,
               struct ofpbuf *ofpacts)
 {
     emit_resubmit(ofpacts, ep->output_ptable);
-}
-
-static void
-free_OUTPUT(struct ovnact_null *a OVS_UNUSED)
-{
 }
 
 static void
@@ -300,7 +300,7 @@ encode_NEXT(const struct ovnact_next *next,
 }
 
 static void
-free_NEXT(struct ovnact_next *a OVS_UNUSED)
+ovnact_next_free(struct ovnact_next *a OVS_UNUSED)
 {
 }
 
@@ -374,7 +374,7 @@ encode_LOAD(const struct ovnact_load *load,
 }
 
 static void
-free_LOAD(struct ovnact_load *load)
+ovnact_load_free(struct ovnact_load *load)
 {
     expr_constant_destroy(&load->imm, load_type(load));
 }
@@ -490,12 +490,7 @@ encode_EXCHANGE(const struct ovnact_move *xchg,
 }
 
 static void
-free_MOVE(struct ovnact_move *move OVS_UNUSED)
-{
-}
-
-static void
-free_EXCHANGE(struct ovnact_move *xchg OVS_UNUSED)
+ovnact_move_free(struct ovnact_move *move OVS_UNUSED)
 {
 }
 
@@ -519,11 +514,6 @@ encode_DEC_TTL(const struct ovnact_null *null OVS_UNUSED,
                struct ofpbuf *ofpacts)
 {
     ofpact_put_DEC_TTL(ofpacts);
-}
-
-static void
-free_DEC_TTL(struct ovnact_null *null OVS_UNUSED)
-{
 }
 
 static void
@@ -557,11 +547,6 @@ encode_CT_NEXT(const struct ovnact_next *next,
     ct->zone_src.ofs = 0;
     ct->zone_src.n_bits = 16;
     ofpact_finish(ofpacts, &ct->ofpact);
-}
-
-static void
-free_CT_NEXT(struct ovnact_next *next OVS_UNUSED)
-{
 }
 
 static void
@@ -680,7 +665,7 @@ encode_CT_COMMIT(const struct ovnact_ct_commit *cc,
 }
 
 static void
-free_CT_COMMIT(struct ovnact_ct_commit *cc OVS_UNUSED)
+ovnact_ct_commit_free(struct ovnact_ct_commit *cc OVS_UNUSED)
 {
 }
 
@@ -819,12 +804,7 @@ encode_CT_SNAT(const struct ovnact_ct_nat *cn,
 }
 
 static void
-free_CT_DNAT(struct ovnact_ct_nat *ct_nat OVS_UNUSED)
-{
-}
-
-static void
-free_CT_SNAT(struct ovnact_ct_nat *ct_nat OVS_UNUSED)
+ovnact_ct_nat_free(struct ovnact_ct_nat *ct_nat OVS_UNUSED)
 {
 }
 
@@ -1016,7 +996,7 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
 }
 
 static void
-free_CT_LB(struct ovnact_ct_lb *ct_lb)
+ovnact_ct_lb_free(struct ovnact_ct_lb *ct_lb)
 {
     free(ct_lb->dsts);
 }
@@ -1133,23 +1113,12 @@ encode_ND_NA(const struct ovnact_nest *on,
     encode_nested_actions(on, ep, ACTION_OPCODE_ND_NA, ofpacts);
 }
 
+
 static void
-free_nested_actions(struct ovnact_nest *on)
+ovnact_nest_free(struct ovnact_nest *on)
 {
     ovnacts_free(on->nested, on->nested_len);
     free(on->nested);
-}
-
-static void
-free_ARP(struct ovnact_nest *nest)
-{
-    free_nested_actions(nest);
-}
-
-static void
-free_ND_NA(struct ovnact_nest *nest)
-{
-    free_nested_actions(nest);
 }
 
 static void
@@ -1221,12 +1190,7 @@ encode_GET_ND(const struct ovnact_get_mac_bind *get_mac,
 }
 
 static void
-free_GET_ARP(struct ovnact_get_mac_bind *get_mac OVS_UNUSED)
-{
-}
-
-static void
-free_GET_ND(struct ovnact_get_mac_bind *get_mac OVS_UNUSED)
+ovnact_get_mac_bind_free(struct ovnact_get_mac_bind *get_mac OVS_UNUSED)
 {
 }
 
@@ -1300,12 +1264,7 @@ encode_PUT_ND(const struct ovnact_put_mac_bind *put_mac,
 }
 
 static void
-free_PUT_ARP(struct ovnact_put_mac_bind *put_mac OVS_UNUSED)
-{
-}
-
-static void
-free_PUT_ND(struct ovnact_put_mac_bind *put_mac OVS_UNUSED)
+ovnact_put_mac_bind_free(struct ovnact_put_mac_bind *put_mac OVS_UNUSED)
 {
 }
 
@@ -1602,21 +1561,9 @@ encode_PUT_DHCPV6_OPTS(const struct ovnact_put_dhcp_opts *pdo,
 }
 
 static void
-free_put_dhcp_opts(struct ovnact_put_dhcp_opts *pdo)
+ovnact_put_dhcp_opts_free(struct ovnact_put_dhcp_opts *pdo)
 {
     free_dhcp_options(pdo->options, pdo->n_options);
-}
-
-static void
-free_PUT_DHCPV4_OPTS(struct ovnact_put_dhcp_opts *pdo)
-{
-    free_put_dhcp_opts(pdo);
-}
-
-static void
-free_PUT_DHCPV6_OPTS(struct ovnact_put_dhcp_opts *pdo)
-{
-    free_put_dhcp_opts(pdo);
 }
 
 static void
@@ -1655,7 +1602,7 @@ encode_SET_QUEUE(const struct ovnact_set_queue *set_queue,
 }
 
 static void
-free_SET_QUEUE(struct ovnact_set_queue *a OVS_UNUSED)
+ovnact_set_queue_free(struct ovnact_set_queue *a OVS_UNUSED)
 {
 }
 
@@ -1901,7 +1848,7 @@ ovnact_free(struct ovnact *a)
     switch (a->type) {
 #define OVNACT(ENUM, STRUCT)                                            \
         case OVNACT_##ENUM:                                             \
-            free_##ENUM(ALIGNED_CAST(struct STRUCT *, a));              \
+            STRUCT##_free(ALIGNED_CAST(struct STRUCT *, a));            \
             break;
         OVNACTS
 #undef OVNACT
