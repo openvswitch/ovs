@@ -1320,6 +1320,18 @@ nbctl_acl_add(struct ctl_context *ctx)
         nbrec_acl_set_log(acl, true);
     }
 
+    /* Check if same acl already exists for the ls */
+    for (size_t i = 0; i < ls->n_acls; i++) {
+        if (!acl_cmp(&ls->acls[i], &acl)) {
+            bool may_exist = shash_find(&ctx->options, "--may-exist") != NULL;
+            if (!may_exist) {
+                ctl_fatal("Same ACL already existed on the ls %s.",
+                          ctx->argv[1]);
+            }
+            return;
+        }
+    }
+
     /* Insert the acl into the logical switch. */
     nbrec_logical_switch_verify_acls(ls);
     struct nbrec_acl **new_acls = xmalloc(sizeof *new_acls * (ls->n_acls + 1));
@@ -3289,7 +3301,7 @@ static const struct ctl_command_syntax nbctl_commands[] = {
 
     /* acl commands. */
     { "acl-add", 5, 5, "SWITCH DIRECTION PRIORITY MATCH ACTION", NULL,
-      nbctl_acl_add, NULL, "--log", RW },
+      nbctl_acl_add, NULL, "--log,--may-exist", RW },
     { "acl-del", 1, 4, "SWITCH [DIRECTION [PRIORITY MATCH]]", NULL,
       nbctl_acl_del, NULL, "", RW },
     { "acl-list", 1, 1, "SWITCH", NULL, nbctl_acl_list, NULL, "", RO },

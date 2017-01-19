@@ -200,6 +200,10 @@ AT_CHECK([ovn-nbctl acl-add ls0 from-lport 400 tcp drop])
 AT_CHECK([ovn-nbctl acl-add ls0 to-lport 300 tcp drop])
 AT_CHECK([ovn-nbctl acl-add ls0 from-lport 200 ip drop])
 AT_CHECK([ovn-nbctl acl-add ls0 to-lport 100 ip drop])
+dnl Add duplicated ACL
+AT_CHECK([ovn-nbctl acl-add ls0 to-lport 100 ip drop], [1], [], [stderr])
+AT_CHECK([grep 'already existed' stderr], [0], [ignore])
+AT_CHECK([ovn-nbctl --may-exist acl-add ls0 to-lport 100 ip drop])
 
 AT_CHECK([ovn-nbctl acl-list ls0], [0], [dnl
 from-lport   600 (udp) drop log
