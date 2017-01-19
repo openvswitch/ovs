@@ -151,7 +151,7 @@ Perform the folowing configuration on `host1`:
    ``vfio`` driver, run::
 
        $ ovs-vsctl --timeout 10 add-port br-phy dpdk0 \
-         -- set Interface dpdk0 type=dpdk
+         -- set Interface dpdk0 type=dpdk options:dpdk-devargs=0000:06:00.0
        $ ip addr add 172.168.1.1/24 dev br-phy
        $ ip link set br-phy up
        $ iptables -F

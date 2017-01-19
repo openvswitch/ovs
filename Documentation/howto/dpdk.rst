@@ -44,8 +44,10 @@ ovs-vsctl can also be used to add DPDK devices. OVS expects DPDK device names
 to start with ``dpdk`` and end with a portid. ovs-vswitchd should print the
 number of dpdk devices found in the log file::
 
-    $ ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
-    $ ovs-vsctl add-port br0 dpdk1 -- set Interface dpdk1 type=dpdk
+    $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
+        options:dpdk-devargs=0000:01:00.0
+    $ ovs-vsctl add-port br0 dpdk-p1 -- set Interface dpdk-p1 type=dpdk \
+        options:dpdk-devargs=0000:01:00.1
 
 After the DPDK ports get added to switch, a polling thread continuously polls
 DPDK devices and consumes 100% of the core, as can be checked from ``top`` and
@@ -55,12 +57,12 @@ DPDK devices and consumes 100% of the core, as can be checked from ``top`` and
     $ ps -eLo pid,psr,comm | grep pmd
 
 Creating bonds of DPDK interfaces is slightly different to creating bonds of
-system interfaces. For DPDK, the interface type must be explicitly set. For
-example::
+system interfaces. For DPDK, the interface type and devargs must be explicitly
+set. For example::
 
-    $ ovs-vsctl add-bond br0 dpdkbond dpdk0 dpdk1 \
-        -- set Interface dpdk0 type=dpdk \
-        -- set Interface dpdk1 type=dpdk
+    $ ovs-vsctl add-bond br0 dpdkbond p0 p1 \
+        -- set Interface p0 type=dpdk options:dpdk-devargs=0000:01:00.0 \
+        -- set Interface p1 type=dpdk options:dpdk-devargs=0000:01:00.1
 
 To stop ovs-vswitchd & delete bridge, run::
 
@@ -98,7 +100,7 @@ where:
 
 For example::
 
-    $ ovs-vsctl set interface dpdk0 options:n_rxq=4 \
+    $ ovs-vsctl set interface dpdk-p0 options:n_rxq=4 \
         other_config:pmd-rxq-affinity="0:3,1:7,3:8"
 
 This will ensure:
@@ -165,27 +167,27 @@ Flow Control
 Flow control can be enabled only on DPDK physical ports. To enable flow control
 support at tx side while adding a port, run::
 
-    $ ovs-vsctl add-port br0 dpdk0 -- \
-        set Interface dpdk0 type=dpdk options:tx-flow-ctrl=true
+    $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
+        options:dpdk-devargs=0000:01:00.0 options:tx-flow-ctrl=true
 
 Similarly, to enable rx flow control, run::
 
-    $ ovs-vsctl add-port br0 dpdk0 -- \
-        set Interface dpdk0 type=dpdk options:rx-flow-ctrl=true
+    $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
+        options:dpdk-devargs=0000:01:00.0 options:rx-flow-ctrl=true
 
 To enable flow control auto-negotiation, run::
 
-    $ ovs-vsctl add-port br0 dpdk0 -- \
-        set Interface dpdk0 type=dpdk options:flow-ctrl-autoneg=true
+    $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
+        options:dpdk-devargs=0000:01:00.0 options:flow-ctrl-autoneg=true
 
 To turn ON the tx flow control at run time for an existing port, run::
 
-    $ ovs-vsctl set Interface dpdk0 options:tx-flow-ctrl=true
+    $ ovs-vsctl set Interface dpdk-p0 options:tx-flow-ctrl=true
 
 The flow control parameters can be turned off by setting ``false`` to the
 respective parameter. To disable the flow control at tx side, run::
 
-    $ ovs-vsctl set Interface dpdk0 options:tx-flow-ctrl=false
+    $ ovs-vsctl set Interface dpdk-p0 options:tx-flow-ctrl=false
 
 pdump
 -----
@@ -234,13 +236,12 @@ enable Jumbo Frames support for a DPDK port, change the Interface's
 ``mtu_request`` attribute to a sufficiently large value. For example, to add a
 DPDK Phy port with MTU of 9000::
 
-    $ ovs-vsctl add-port br0 dpdk0 \
-      -- set Interface dpdk0 type=dpdk \
-      -- set Interface dpdk0 mtu_request=9000`
+    $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
+          options:dpdk-devargs=0000:01:00.0 mtu_request=9000
 
 Similarly, to change the MTU of an existing port to 6200::
 
-    $ ovs-vsctl set Interface dpdk0 mtu_request=6200
+    $ ovs-vsctl set Interface dpdk-p0 mtu_request=6200
 
 Some additional configuration is needed to take advantage of jumbo frames with
 vHost ports:
@@ -280,14 +281,14 @@ By default, DPDK physical ports are enabled with Rx checksum offload. Rx
 checksum offload can be configured on a DPDK physical port either when adding
 or at run time.
 
-To disable Rx checksum offload when adding a DPDK port dpdk0::
+To disable Rx checksum offload when adding a DPDK port dpdk-p0::
 
-    $ ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk \
-      options:rx-checksum-offload=false
+    $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
+      options:dpdk-devargs=0000:01:00.0 options:rx-checksum-offload=false
 
-Similarly to disable the Rx checksum offloading on a existing DPDK port dpdk0::
+Similarly to disable the Rx checksum offloading on a existing DPDK port dpdk-p0::
 
-    $ ovs-vsctl set Interface dpdk0 type=dpdk options:rx-checksum-offload=false
+    $ ovs-vsctl set Interface dpdk-p0 options:rx-checksum-offload=false
 
 Rx checksum offload can offer performance improvement only for tunneling
 traffic in OVS-DPDK because the checksum validation of tunnel packets is
@@ -318,7 +319,7 @@ Then it can be attached to OVS::
 It is also possible to detach a port from ovs, the user has to remove the
 port using the del-port command, then it can be detached using::
 
-    $ ovs-appctl netdev-dpdk/detach dpdkx
+    $ ovs-appctl netdev-dpdk/detach 0000:01:00.0
 
 This feature is not supported with VFIO and does not work with some NICs.
 For more information please refer to the `DPDK Port Hotplug Framework
@@ -388,15 +389,18 @@ Add a userspace bridge and two ``dpdk`` (PHY) ports::
     $ ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev
 
     # Add two dpdk ports
-    $ ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
-    $ ovs-vsctl add-port br0 dpdk1 -- set Interface dpdk1 type=dpdk
+    $ ovs-vsctl add-port br0 phy0 -- set Interface phy0 type=dpdk \
+          options:dpdk-devargs=0000:01:00.0 ofport_request=1
+
+    $ ovs-vsctl add-port br0 phy1 -- set Interface phy1 type=dpdk
+          options:dpdk-devargs=0000:01:00.1 ofport_request=2
 
 Add test flows to forward packets betwen DPDK port 0 and port 1::
 
     # Clear current flows
     $ ovs-ofctl del-flows br0
 
-    # Add flows between port 1 (dpdk0) to port 2 (dpdk1)
+    # Add flows between port 1 (phy0) to port 2 (phy1)
     $ ovs-ofctl add-flow br0 in_port=1,action=output:2
     $ ovs-ofctl add-flow br0 in_port=2,action=output:1
 
@@ -414,14 +418,17 @@ ports::
     $ ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev
 
     # Add two dpdk ports
-    $ ovs-vsctl add-port br0 dpdk0 -- set Interface dpdk0 type=dpdk
-    $ ovs-vsctl add-port br0 dpdk1 -- set Interface dpdk1 type=dpdk
+    $ ovs-vsctl add-port br0 phy0 -- set Interface phy0 type=dpdk \
+          options:dpdk-devargs=0000:01:00.0 ofport_request=1
+
+    $ ovs-vsctl add-port br0 phy1 -- set Interface phy1 type=dpdk
+          options:dpdk-devargs=0000:01:00.1 ofport_request=2
 
     # Add two dpdkvhostuser ports
     $ ovs-vsctl add-port br0 dpdkvhostuser0 \
-        -- set Interface dpdkvhostuser0 type=dpdkvhostuser
+        -- set Interface dpdkvhostuser0 type=dpdkvhostuser ofport_request=3
     $ ovs-vsctl add-port br0 dpdkvhostuser1 \
-        -- set Interface dpdkvhostuser1 type=dpdkvhostuser
+        -- set Interface dpdkvhostuser1 type=dpdkvhostuser ofport_request=4
 
 Add test flows to forward packets betwen DPDK devices and VM ports::
 
@@ -532,8 +539,8 @@ devices to bridge ``br0``. Once complete, follow the below steps:
    virtio device connection and doesn't need manual configuration::
 
        $ ovs-vsctl set Open_vSwitch . other_config:pmd-cpu-mask=0xc
-       $ ovs-vsctl set Interface dpdk0 options:n_rxq=2
-       $ ovs-vsctl set Interface dpdk1 options:n_rxq=2
+       $ ovs-vsctl set Interface phy0 options:n_rxq=2
+       $ ovs-vsctl set Interface phy1 options:n_rxq=2
 
 2. Instantiate Guest VM using QEMU cmdline
 
