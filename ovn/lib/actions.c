@@ -55,10 +55,10 @@ OVNACTS
 void *
 ovnact_put(struct ofpbuf *ovnacts, enum ovnact_type type, size_t len)
 {
-    struct ovnact *ovnact;
+    ovs_assert(len == OVNACT_ALIGN(len));
 
     ovnacts->header = ofpbuf_put_uninit(ovnacts, len);
-    ovnact = ovnacts->header;
+    struct ovnact *ovnact = ovnacts->header;
     ovnact_init(ovnact, type, len);
     return ovnact;
 }
@@ -67,6 +67,7 @@ ovnact_put(struct ofpbuf *ovnacts, enum ovnact_type type, size_t len)
 void
 ovnact_init(struct ovnact *ovnact, enum ovnact_type type, size_t len)
 {
+    ovs_assert(len == OVNACT_ALIGN(len));
     memset(ovnact, 0, len);
     ovnact->type = type;
     ovnact->len = len;
@@ -1057,7 +1058,8 @@ parse_nested_action(struct action_context *ctx, enum ovnact_type type,
 
     add_prerequisite(ctx, prereq);
 
-    struct ovnact_nest *on = ovnact_put(ctx->ovnacts, type, sizeof *on);
+    struct ovnact_nest *on = ovnact_put(ctx->ovnacts, type,
+                                        OVNACT_ALIGN(sizeof *on));
     on->nested_len = nested.size;
     on->nested = ofpbuf_steal_data(&nested);
 }
