@@ -140,6 +140,12 @@ struct ovnact_null {
     struct ovnact ovnact;
 };
 
+/* Logical pipeline in which a set of actions is executed. */
+enum ovnact_pipeline {
+    OVNACT_P_INGRESS,
+    OVNACT_P_EGRESS,
+};
+
 /* OVNACT_NEXT. */
 struct ovnact_next {
     struct ovnact ovnact;
