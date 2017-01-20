@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -139,7 +139,7 @@ bool lexer_is_int(const struct lexer *);
 bool lexer_get_int(struct lexer *, int *value);
 bool lexer_force_int(struct lexer *, int *value);
 
-void lexer_force_end(struct lexer *);
+bool lexer_force_end(struct lexer *);
 
 void lexer_error(struct lexer *, const char *message, ...)
     OVS_PRINTF_FORMAT(2, 3);
