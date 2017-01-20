@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -856,7 +856,9 @@ lexer_match(struct lexer *lexer, enum lex_type type)
 bool
 lexer_force_match(struct lexer *lexer, enum lex_type t)
 {
-    if (lexer_match(lexer, t)) {
+    if (t == LEX_T_END) {
+        return lexer_force_end(lexer);
+    } else if (lexer_match(lexer, t)) {
         return true;
     } else {
         struct lex_token token = { .type = t };
@@ -915,11 +917,14 @@ lexer_force_int(struct lexer *lexer, int *value)
     return ok;
 }
 
-void
+bool
 lexer_force_end(struct lexer *lexer)
 {
-    if (lexer->token.type != LEX_T_END) {
+    if (lexer->token.type == LEX_T_END) {
+        return true;
+    } else {
         lexer_syntax_error(lexer, "expecting end of input");
+        return false;
     }
 }
 
