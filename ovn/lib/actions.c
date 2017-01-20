@@ -1001,8 +1001,8 @@ ovnact_ct_lb_free(struct ovnact_ct_lb *ct_lb)
     free(ct_lb->dsts);
 }
 
-/* Implements the "arp" and "nd_na" actions, which execute nested actions on a
- * packet derived from the one being processed. */
+/* Implements the "arp", "nd_na", and "clone" actions, which execute nested
+ * actions on a packet derived from the one being processed. */
 static void
 parse_nested_action(struct action_context *ctx, enum ovnact_type type,
                     const char *prereq)
@@ -1018,21 +1018,27 @@ parse_nested_action(struct action_context *ctx, enum ovnact_type type,
         .pp = ctx->pp,
         .lexer = ctx->lexer,
         .ovnacts = &nested,
-        .prereqs = NULL
+        .prereqs = NULL,
     };
     parse_actions(&inner_ctx, LEX_T_RCURLY);
 
-    /* XXX Not really sure what we should do with prerequisites for nested
-     * actions. */
-    expr_destroy(inner_ctx.prereqs);
+    if (prereq) {
+        /* XXX Not really sure what we should do with prerequisites for "arp"
+         * and "nd_na" actions. */
+        expr_destroy(inner_ctx.prereqs);
+        add_prerequisite(ctx, prereq);
+    } else {
+        /* For "clone", the inner prerequisites should just add to the outer
+         * ones. */
+        ctx->prereqs = expr_combine(EXPR_T_AND,
+                                    inner_ctx.prereqs, ctx->prereqs);
+    }
 
     if (inner_ctx.lexer->error) {
         ovnacts_free(nested.data, nested.size);
         ofpbuf_uninit(&nested);
         return;
     }
-
-    add_prerequisite(ctx, prereq);
 
     struct ovnact_nest *on = ovnact_put(ctx->ovnacts, type,
                                         OVNACT_ALIGN(sizeof *on));
@@ -1050,6 +1056,12 @@ static void
 parse_ND_NA(struct action_context *ctx)
 {
     parse_nested_action(ctx, OVNACT_ND_NA, "nd_ns");
+}
+
+static void
+parse_CLONE(struct action_context *ctx)
+{
+    parse_nested_action(ctx, OVNACT_CLONE, NULL);
 }
 
 static void
@@ -1074,10 +1086,16 @@ format_ND_NA(const struct ovnact_nest *nest, struct ds *s)
 }
 
 static void
-encode_nested_actions(const struct ovnact_nest *on,
-                      const struct ovnact_encode_params *ep,
-                      enum action_opcode opcode,
-                      struct ofpbuf *ofpacts)
+format_CLONE(const struct ovnact_nest *nest, struct ds *s)
+{
+    format_nested_action(nest, "clone", s);
+}
+
+static void
+encode_nested_neighbor_actions(const struct ovnact_nest *on,
+                               const struct ovnact_encode_params *ep,
+                               enum action_opcode opcode,
+                               struct ofpbuf *ofpacts)
 {
     /* Convert nested actions into ofpacts. */
     uint64_t inner_ofpacts_stub[1024 / 8];
@@ -1102,7 +1120,7 @@ encode_ARP(const struct ovnact_nest *on,
            const struct ovnact_encode_params *ep,
            struct ofpbuf *ofpacts)
 {
-    encode_nested_actions(on, ep, ACTION_OPCODE_ARP, ofpacts);
+    encode_nested_neighbor_actions(on, ep, ACTION_OPCODE_ARP, ofpacts);
 }
 
 static void
@@ -1110,9 +1128,22 @@ encode_ND_NA(const struct ovnact_nest *on,
              const struct ovnact_encode_params *ep,
              struct ofpbuf *ofpacts)
 {
-    encode_nested_actions(on, ep, ACTION_OPCODE_ND_NA, ofpacts);
+    encode_nested_neighbor_actions(on, ep, ACTION_OPCODE_ND_NA, ofpacts);
 }
 
+static void
+encode_CLONE(const struct ovnact_nest *on,
+             const struct ovnact_encode_params *ep,
+             struct ofpbuf *ofpacts)
+{
+    size_t ofs = ofpacts->size;
+    ofpact_put_CLONE(ofpacts);
+    ovnacts_encode(on->nested, on->nested_len, ep, ofpacts);
+
+    struct ofpact_nest *clone = ofpbuf_at_assert(ofpacts, ofs, sizeof *clone);
+    ofpacts->header = clone;
+    ofpact_finish_CLONE(ofpacts, &clone);
+}
 
 static void
 ovnact_nest_free(struct ovnact_nest *on)
@@ -1664,6 +1695,8 @@ parse_action(struct action_context *ctx)
         parse_CT_SNAT(ctx);
     } else if (lexer_match_id(ctx->lexer, "ct_lb")) {
         parse_ct_lb_action(ctx);
+    } else if (lexer_match_id(ctx->lexer, "clone")) {
+        parse_CLONE(ctx);
     } else if (lexer_match_id(ctx->lexer, "arp")) {
         parse_ARP(ctx);
     } else if (lexer_match_id(ctx->lexer, "nd_na")) {

@@ -1168,6 +1168,20 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
 }
 
 static void
+execute_clone(const struct ovnact_nest *on, const struct ovntrace_datapath *dp,
+              const struct flow *uflow, uint8_t table_id,
+              enum ovntrace_pipeline pipeline, struct ovs_list *super)
+{
+    struct flow cloned_flow = *uflow;
+
+    struct ovntrace_node *node = ovntrace_node_append(
+        super, OVNTRACE_NODE_TRANSFORMATION, "clone");
+
+    trace_actions(on->nested, on->nested_len, dp, &cloned_flow,
+                  table_id, pipeline, &node->subs);
+}
+
+static void
 execute_arp(const struct ovnact_nest *on, const struct ovntrace_datapath *dp,
             const struct flow *uflow, uint8_t table_id,
             enum ovntrace_pipeline pipeline, struct ovs_list *super)
@@ -1354,6 +1368,11 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
         case OVNACT_CT_LB:
             ovntrace_node_append(super, OVNTRACE_NODE_ERROR,
                                  "*** ct_* actions not implemented");
+            break;
+
+        case OVNACT_CLONE:
+            execute_clone(ovnact_get_CLONE(a), dp, uflow, table_id, pipeline,
+                          super);
             break;
 
         case OVNACT_ARP:

@@ -853,6 +853,11 @@ ct_snat(foo, bar);
 ct_snat();
     Syntax error at `)' expecting IPv4 address.
 
+# clone
+clone { ip4.dst = 255.255.255.255; output; }; next(11);
+    encodes as clone(set_field:255.255.255.255->ip_dst,resubmit(,64)),resubmit(,27)
+    has prereqs eth.type == 0x800
+
 # arp
 arp { eth.dst = ff:ff:ff:ff:ff:ff; output; }; output;
     encodes as controller(userdata=00.00.00.00.00.00.00.00.00.19.00.10.80.00.06.06.ff.ff.ff.ff.ff.ff.00.00.ff.ff.00.10.00.00.23.20.00.0e.ff.f8.40.00.00.00),resubmit(,64)
