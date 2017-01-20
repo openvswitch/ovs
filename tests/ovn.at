@@ -629,9 +629,9 @@ output;
 
 # next
 next;
-    formats as next(11);
     encodes as resubmit(,27)
 next(11);
+    formats as next;
     encodes as resubmit(,27)
 next(0);
     encodes as resubmit(,16)
@@ -643,7 +643,7 @@ next();
 next(10;
     Syntax error at `;' expecting `)'.
 next(16);
-    "next" argument must be in range 0 to 15.
+    "next" action cannot advance beyond table 15.
 
 # Loading a constant value.
 tcp.dst=80;
@@ -664,7 +664,7 @@ ip.ttl=4;
     encodes as set_field:4->nw_ttl
     has prereqs eth.type == 0x800 || eth.type == 0x86dd
 outport="eth0"; next; outport="LOCAL"; next;
-    formats as outport = "eth0"; next(11); outport = "LOCAL"; next(11);
+    formats as outport = "eth0"; next; outport = "LOCAL"; next;
     encodes as set_field:0x5->reg15,resubmit(,27),set_field:0xfffe->reg15,resubmit(,27)
 
 inport[1] = 1;
@@ -854,7 +854,7 @@ ct_snat();
     Syntax error at `)' expecting IPv4 address.
 
 # clone
-clone { ip4.dst = 255.255.255.255; output; }; next(11);
+clone { ip4.dst = 255.255.255.255; output; }; next;
     encodes as clone(set_field:255.255.255.255->ip_dst,resubmit(,64)),resubmit(,27)
     has prereqs eth.type == 0x800
 
