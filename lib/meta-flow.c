@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2011-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@
 #include "openvswitch/dynamic-string.h"
 #include "nx-match.h"
 #include "openvswitch/ofp-util.h"
+#include "ovs-rcu.h"
 #include "ovs-thread.h"
 #include "packets.h"
 #include "random.h"
@@ -2638,4 +2639,110 @@ field_array_set(enum mf_field_id id, const union mf_value *value,
     bitmap_set1(fa->used.bm, id);
 
     memcpy(fa->values + offset, value, value_size);
+}
+
+static inline uint32_t
+mf_field_hash(uint32_t key)
+{
+    return hash_int(key, 0);
+}
+
+void
+mf_vl_mff_map_clear(struct vl_mff_map *vl_mff_map)
+    OVS_REQUIRES(vl_mff_map->mutex)
+{
+    struct mf_field *mf;
+
+    CMAP_FOR_EACH (mf, cmap_node, &vl_mff_map->cmap) {
+        cmap_remove(&vl_mff_map->cmap, &mf->cmap_node, mf_field_hash(mf->id));
+        ovsrcu_postpone(free, mf);
+    }
+}
+
+static struct mf_field *
+mf_get_vl_mff__(uint32_t id, const struct vl_mff_map *vl_mff_map)
+{
+    struct mf_field *field;
+
+    CMAP_FOR_EACH_WITH_HASH (field, cmap_node, mf_field_hash(id),
+                             &vl_mff_map->cmap) {
+        if (field->id == id) {
+            return field;
+        }
+    }
+
+    return NULL;
+}
+
+/* If 'mff' is a variable length field, looks up 'vl_mff_map', returns a
+ * pointer to the variable length meta-flow field corresponding to 'mff'.
+ * Returns NULL if no mapping is existed for 'mff'. */
+const struct mf_field *
+mf_get_vl_mff(const struct mf_field *mff,
+              const struct vl_mff_map *vl_mff_map)
+{
+    if (mff && mff->variable_len && vl_mff_map) {
+        return mf_get_vl_mff__(mff->id, vl_mff_map);
+    }
+
+    return NULL;
+}
+
+/* Updates the tun_metadata mf_field in 'vl_mff_map' according to 'ttm'.
+ * This function is supposed to be invoked after tun_metadata_table_mod(). */
+enum ofperr
+mf_vl_mff_map_mod_from_tun_metadata(struct vl_mff_map *vl_mff_map,
+                                    const struct ofputil_tlv_table_mod *ttm)
+    OVS_REQUIRES(vl_mff_map->mutex)
+{
+    struct ofputil_tlv_map *tlv_map;
+
+    if (ttm->command == NXTTMC_CLEAR) {
+        mf_vl_mff_map_clear(vl_mff_map);
+        return 0;
+    }
+
+    LIST_FOR_EACH (tlv_map, list_node, &ttm->mappings) {
+        unsigned int idx = MFF_TUN_METADATA0 + tlv_map->index;
+        struct mf_field *mf;
+
+        if (idx >= MFF_TUN_METADATA0 + TUN_METADATA_NUM_OPTS) {
+            return OFPERR_NXTTMFC_BAD_FIELD_IDX;
+        }
+
+        switch (ttm->command) {
+        case NXTTMC_ADD:
+            mf = xmalloc(sizeof *mf);
+            *mf = mf_fields[idx];
+            mf->n_bytes = tlv_map->option_len;
+            mf->n_bits = tlv_map->option_len * 8;
+            mf->mapped = true;
+
+            cmap_insert(&vl_mff_map->cmap, &mf->cmap_node, mf_field_hash(idx));
+            break;
+
+        case NXTTMC_DELETE:
+            mf = mf_get_vl_mff__(idx, vl_mff_map);
+            if (mf) {
+                cmap_remove(&vl_mff_map->cmap, &mf->cmap_node,
+                            mf_field_hash(idx));
+                ovsrcu_postpone(free, mf);
+            }
+            break;
+
+        case NXTTMC_CLEAR:
+        default:
+            OVS_NOT_REACHED();
+        }
+    }
+
+    return 0;
+}
+
+/* Returns true if a variable length meta-flow field 'mff' is not mapped in
+ * the 'vl_mff_map'. */
+bool
+mf_vl_mff_invalid(const struct mf_field *mff, const struct vl_mff_map *map)
+{
+    return map && mff && mff->variable_len && !mff->mapped;
 }

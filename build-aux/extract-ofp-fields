@@ -334,7 +334,7 @@ def make_meta_flow(meta_flow_h):
             rw = 'true'
         else:
             rw = 'false'
-        output += ["    %s, %s, %s, %s,"
+        output += ["    %s, %s, %s, %s, false,"
                    % (f['mask'], f['string'], PREREQS[f['prereqs']], rw)]
 
         oxm = f['OXM']
@@ -386,7 +386,7 @@ def make_meta_flow(meta_flow_h):
         else:
             output += ["    -1, /* not usable for prefix lookup */"]
 
-        output += ["},"]
+        output += ["    {OVSRCU_INITIALIZER(NULL)},},"]
     for oline in output:
         print(oline)
 
