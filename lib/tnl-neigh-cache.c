@@ -122,8 +122,8 @@ tnl_neigh_set__(const char name[IFNAMSIZ], const struct in6_addr *dst,
             return;
         }
         tnl_neigh_delete(neigh);
-        seq_change(tnl_conf_seq);
     }
+    seq_change(tnl_conf_seq);
 
     neigh = xmalloc(sizeof *neigh);
 
