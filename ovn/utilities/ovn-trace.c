@@ -322,11 +322,9 @@ struct ovntrace_mcgroup {
     size_t n_ports;
 };
 
-enum ovntrace_pipeline { P_INGRESS, P_EGRESS };
-
 struct ovntrace_flow {
     struct uuid uuid;
-    enum ovntrace_pipeline pipeline;
+    enum ovnact_pipeline pipeline;
     int table_id;
     char *stage_name;
     char *source;
@@ -632,8 +630,8 @@ compare_flow(const void *a_, const void *b_)
     const struct ovntrace_flow *b = *bp;
 
     if (a->pipeline != b->pipeline) {
-        /* Sort P_INGRESS before P_EGRESS. */
-        return a->pipeline == P_EGRESS ? 1 : -1;
+        /* Sort OVNACT_P_INGRESS before OVNACT_P_EGRESS. */
+        return a->pipeline == OVNACT_P_EGRESS ? 1 : -1;
     } else if (a->table_id != b->table_id) {
         /* Sort in increasing order of table_id. */
         return a->table_id > b->table_id ? 1 : -1;
@@ -706,8 +704,8 @@ read_flows(void)
         struct ovntrace_flow *flow = xzalloc(sizeof *flow);
         flow->uuid = sblf->header_.uuid;
         flow->pipeline = (!strcmp(sblf->pipeline, "ingress")
-                          ? P_INGRESS
-                          : P_EGRESS);
+                          ? OVNACT_P_INGRESS
+                          : OVNACT_P_EGRESS);
         flow->table_id = sblf->table_id;
         flow->stage_name = nullable_xstrdup(smap_get(&sblf->external_ids,
                                                      "stage-name"));
@@ -835,7 +833,7 @@ ovntrace_lookup_port(const void *dp_, const char *port_name,
 static const struct ovntrace_flow *
 ovntrace_flow_lookup(const struct ovntrace_datapath *dp,
                      const struct flow *uflow,
-                     uint8_t table_id, enum ovntrace_pipeline pipeline)
+                     uint8_t table_id, enum ovnact_pipeline pipeline)
 {
     for (size_t i = 0; i < dp->n_flows; i++) {
         const struct ovntrace_flow *flow = dp->flows[i];
@@ -850,7 +848,7 @@ ovntrace_flow_lookup(const struct ovntrace_datapath *dp,
 
 static char *
 ovntrace_stage_name(const struct ovntrace_datapath *dp,
-                    uint8_t table_id, enum ovntrace_pipeline pipeline)
+                    uint8_t table_id, enum ovnact_pipeline pipeline)
 {
     for (size_t i = 0; i < dp->n_flows; i++) {
         const struct ovntrace_flow *flow = dp->flows[i];
@@ -1100,17 +1098,17 @@ execute_exchange(const struct ovnact_move *move, struct flow *uflow,
 
 static void
 trace__(const struct ovntrace_datapath *dp, struct flow *uflow,
-        uint8_t table_id, enum ovntrace_pipeline pipeline,
+        uint8_t table_id, enum ovnact_pipeline pipeline,
         struct ovs_list *super);
 
 static void
 trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
               const struct ovntrace_datapath *dp, struct flow *uflow,
-              uint8_t table_id, enum ovntrace_pipeline pipeline,
+              uint8_t table_id, enum ovnact_pipeline pipeline,
               struct ovs_list *super);
 static void
 execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
-               enum ovntrace_pipeline pipeline, struct ovs_list *super)
+               enum ovnact_pipeline pipeline, struct ovs_list *super)
 {
     uint16_t key = uflow->regs[MFF_LOG_OUTPORT - MFF_REG0];
     if (!key) {
@@ -1131,7 +1129,7 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
                              key);
     }
 
-    if (pipeline == P_EGRESS) {
+    if (pipeline == OVNACT_P_EGRESS) {
         ovntrace_node_append(super, OVNTRACE_NODE_OUTPUT,
                              "/* output to \"%s\", type \"%s\" */",
                              out_name, port ? port->type : "");
@@ -1146,7 +1144,7 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
             struct flow new_uflow = *uflow;
             new_uflow.regs[MFF_LOG_INPORT - MFF_REG0] = peer->tunnel_key;
             new_uflow.regs[MFF_LOG_OUTPORT - MFF_REG0] = 0;
-            trace__(peer->dp, &new_uflow, 0, P_INGRESS, &node->subs);
+            trace__(peer->dp, &new_uflow, 0, OVNACT_P_INGRESS, &node->subs);
         } else {
             ovntrace_node_append(super, OVNTRACE_NODE_MODIFY,
                                  "output(\"%s\")", out_name);
@@ -1186,7 +1184,7 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
                 node->always_indent = true;
 
                 egress_uflow.regs[MFF_LOG_OUTPORT - MFF_REG0] = p->tunnel_key;
-                trace__(dp, &egress_uflow, 0, P_EGRESS, &node->subs);
+                trace__(dp, &egress_uflow, 0, OVNACT_P_EGRESS, &node->subs);
             } else {
                 ovntrace_node_append(&node->subs, OVNTRACE_NODE_OUTPUT,
                                      "/* omitting output because inport == outport && !flags.loopback */");
@@ -1220,7 +1218,7 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
             "egress(dp=\"%s\", inport=\"%s\", outport=\"%s\")",
             dp->name, inport_name, out_name);
 
-        trace__(dp, &egress_uflow, 0, P_EGRESS, &node->subs);
+        trace__(dp, &egress_uflow, 0, OVNACT_P_EGRESS, &node->subs);
     } else {
         ovntrace_node_append(super, OVNTRACE_NODE_OUTPUT,
                              "/* omitting output because inport == outport && !flags.loopback */");
@@ -1230,7 +1228,7 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
 static void
 execute_clone(const struct ovnact_nest *on, const struct ovntrace_datapath *dp,
               const struct flow *uflow, uint8_t table_id,
-              enum ovntrace_pipeline pipeline, struct ovs_list *super)
+              enum ovnact_pipeline pipeline, struct ovs_list *super)
 {
     struct flow cloned_flow = *uflow;
 
@@ -1244,7 +1242,7 @@ execute_clone(const struct ovnact_nest *on, const struct ovntrace_datapath *dp,
 static void
 execute_arp(const struct ovnact_nest *on, const struct ovntrace_datapath *dp,
             const struct flow *uflow, uint8_t table_id,
-            enum ovntrace_pipeline pipeline, struct ovs_list *super)
+            enum ovnact_pipeline pipeline, struct ovs_list *super)
 {
     struct flow arp_flow = *uflow;
 
@@ -1272,7 +1270,7 @@ execute_arp(const struct ovnact_nest *on, const struct ovntrace_datapath *dp,
 static void
 execute_nd_na(const struct ovnact_nest *on, const struct ovntrace_datapath *dp,
               const struct flow *uflow, uint8_t table_id,
-              enum ovntrace_pipeline pipeline, struct ovs_list *super)
+              enum ovnact_pipeline pipeline, struct ovs_list *super)
 {
     struct flow na_flow = *uflow;
 
@@ -1369,7 +1367,7 @@ execute_put_dhcp_opts(const struct ovnact_put_dhcp_opts *pdo,
 static void
 trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
               const struct ovntrace_datapath *dp, struct flow *uflow,
-              uint8_t table_id, enum ovntrace_pipeline pipeline,
+              uint8_t table_id, enum ovnact_pipeline pipeline,
               struct ovs_list *super)
 {
     if (!ovnacts_len) {
@@ -1545,7 +1543,7 @@ trace_openflow(const struct ovntrace_flow *f, struct ovs_list *super)
 
 static void
 trace__(const struct ovntrace_datapath *dp, struct flow *uflow,
-        uint8_t table_id, enum ovntrace_pipeline pipeline,
+        uint8_t table_id, enum ovnact_pipeline pipeline,
         struct ovs_list *super)
 {
     const struct ovntrace_flow *f;
@@ -1630,7 +1628,7 @@ trace(const char *dp_s, const char *flow_s)
     struct ovntrace_node *node = ovntrace_node_append(
         &root, OVNTRACE_NODE_PIPELINE, "ingress(dp=\"%s\", inport=\"%s\")",
         dp->name, inport_name);
-    trace__(dp, &uflow, 0, P_INGRESS, &node->subs);
+    trace__(dp, &uflow, 0, OVNACT_P_INGRESS, &node->subs);
 
     bool multiple = (detailed + summary + minimal) > 1;
     if (detailed) {
