@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2016 Nicira, Inc.
+ * Copyright (c) 2009-2017 Nicira, Inc.
  * Copyright (c) 2010 Jean Tourrilhes - HP-Labs.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -530,6 +530,9 @@ ofproto_create(const char *datapath_name, const char *datapath_type,
         ofproto->ogf.ofpacts[i] = (UINT64_C(1) << N_OFPACTS) - 1;
     }
     ovsrcu_set(&ofproto->metadata_tab, tun_metadata_alloc(NULL));
+
+    ovs_mutex_init(&ofproto->vl_mff_map.mutex);
+    cmap_init(&ofproto->vl_mff_map.cmap);
 
     error = ofproto->ofproto_class->construct(ofproto);
     if (error) {
@@ -1571,6 +1574,13 @@ ofproto_destroy__(struct ofproto *ofproto)
     hmap_remove(&all_ofprotos, &ofproto->hmap_node);
     tun_metadata_free(ovsrcu_get_protected(struct tun_table *,
                                            &ofproto->metadata_tab));
+
+    ovs_mutex_lock(&ofproto->vl_mff_map.mutex);
+    mf_vl_mff_map_clear(&ofproto->vl_mff_map);
+    ovs_mutex_unlock(&ofproto->vl_mff_map.mutex);
+    cmap_destroy(&ofproto->vl_mff_map.cmap);
+    ovs_mutex_destroy(&ofproto->vl_mff_map.mutex);
+
     free(ofproto->name);
     free(ofproto->type);
     free(ofproto->mfr_desc);
@@ -5707,7 +5717,8 @@ handle_flow_mod(struct ofconn *ofconn, const struct ofp_header *oh)
 
     ofpbuf_use_stub(&ofpacts, ofpacts_stub, sizeof ofpacts_stub);
     error = ofputil_decode_flow_mod(&fm, oh, ofconn_get_protocol(ofconn),
-                                    ofproto_get_tun_tab(ofproto), &ofpacts,
+                                    ofproto_get_tun_tab(ofproto),
+                                    &ofproto->vl_mff_map, &ofpacts,
                                     u16_to_ofp(ofproto->max_ports),
                                     ofproto->n_tables);
     if (!error) {
@@ -7707,7 +7718,7 @@ handle_bundle_add(struct ofconn *ofconn, const struct ofp_header *oh)
         error = ofputil_decode_flow_mod(&fm, badd.msg,
                                         ofconn_get_protocol(ofconn),
                                         ofproto_get_tun_tab(ofproto),
-                                        &ofpacts,
+                                        &ofproto->vl_mff_map, &ofpacts,
                                         u16_to_ofp(ofproto->max_ports),
                                         ofproto->n_tables);
         if (!error) {
@@ -7767,6 +7778,11 @@ handle_tlv_table_mod(struct ofconn *ofconn, const struct ofp_header *oh)
     if (!error) {
         ovsrcu_set(&ofproto->metadata_tab, new_tab);
         tun_metadata_postpone_free(old_tab);
+
+        ovs_mutex_lock(&ofproto->vl_mff_map.mutex);
+        error = mf_vl_mff_map_mod_from_tun_metadata(&ofproto->vl_mff_map,
+                                                    &ttm);
+        ovs_mutex_unlock(&ofproto->vl_mff_map.mutex);
     }
 
     ofputil_uninit_tlv_table(&ttm.mappings);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2008-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1571,6 +1571,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
                         const struct ofp_header *oh,
                         enum ofputil_protocol protocol,
                         const struct tun_table *tun_table,
+                        const struct vl_mff_map *vl_mff_map,
                         struct ofpbuf *ofpacts,
                         ofp_port_t max_port, uint8_t max_table)
 {
@@ -1723,8 +1724,8 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
         return OFPERR_OFPFMFC_BAD_COMMAND;
     }
 
-    error = ofpacts_pull_openflow_instructions(&b, b.size,
-                                               oh->version, ofpacts);
+    error = ofpacts_pull_openflow_instructions(&b, b.size, oh->version,
+                                               vl_mff_map, ofpacts);
     if (error) {
         return error;
     }
@@ -2996,7 +2997,7 @@ ofputil_decode_flow_stats_reply(struct ofputil_flow_stats *fs,
     }
 
     if (ofpacts_pull_openflow_instructions(msg, instructions_len, oh->version,
-                                           ofpacts)) {
+                                           NULL, ofpacts)) {
         VLOG_WARN_RL(&bad_ofmsg_rl, "OFPST_FLOW reply bad instructions");
         return EINVAL;
     }
@@ -4017,7 +4018,7 @@ parse_actions_property(struct ofpbuf *property, enum ofp_version version,
     }
 
     return ofpacts_pull_openflow_actions(property, property->size,
-                                         version, ofpacts);
+                                         version, NULL, ofpacts);
 }
 
 /* This is like ofputil_decode_packet_in(), except that it decodes the
@@ -4170,7 +4171,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         }
 
         error = ofpacts_pull_openflow_actions(&b, ntohs(opo->actions_len),
-                                              oh->version, ofpacts);
+                                              oh->version, NULL, ofpacts);
         if (error) {
             return error;
         }
@@ -4182,7 +4183,7 @@ ofputil_decode_packet_out(struct ofputil_packet_out *po,
         po->in_port = u16_to_ofp(ntohs(opo->in_port));
 
         error = ofpacts_pull_openflow_actions(&b, ntohs(opo->actions_len),
-                                              oh->version, ofpacts);
+                                              oh->version, NULL, ofpacts);
         if (error) {
             return error;
         }
@@ -5156,7 +5157,7 @@ parse_oxms(struct ofpbuf *payload, bool loose,
         enum ofperr error;
         bool hasmask;
 
-        error = nx_pull_header(payload, &field, &hasmask);
+        error = nx_pull_header(payload, NULL, &field, &hasmask);
         if (!error) {
             bitmap_set1(hasmask ? masked.bm : exact.bm, field->id);
         } else if (error != OFPERR_OFPBMC_BAD_FIELD || !loose) {
@@ -6723,7 +6724,7 @@ ofputil_decode_flow_update(struct ofputil_flow_update *update,
 
         actions_len = length - sizeof *nfuf - ROUND_UP(match_len, 8);
         error = ofpacts_pull_openflow_actions(msg, actions_len, oh->version,
-                                              ofpacts);
+                                              NULL, ofpacts);
         if (error) {
             return error;
         }
@@ -8707,7 +8708,7 @@ ofputil_pull_ofp11_buckets(struct ofpbuf *msg, size_t buckets_length,
 
         ofpbuf_init(&ofpacts, 0);
         error = ofpacts_pull_openflow_actions(msg, ob_len - sizeof *ob,
-                                              version, &ofpacts);
+                                              version, NULL, &ofpacts);
         if (error) {
             ofpbuf_uninit(&ofpacts);
             ofputil_bucket_list_destroy(buckets);
@@ -8781,7 +8782,7 @@ ofputil_pull_ofp15_buckets(struct ofpbuf *msg, size_t buckets_length,
         buckets_length -= ob_len;
 
         err = ofpacts_pull_openflow_actions(msg, actions_len, version,
-                                            &ofpacts);
+                                            NULL, &ofpacts);
         if (err) {
             goto err;
         }

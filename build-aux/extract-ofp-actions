@@ -123,7 +123,13 @@ def extract_ofp_actions(fn, definitions):
             fatal("unexpected syntax between actions")
 
         dsts = m.group(1)
-        argtype = m.group(2).strip().replace('.', '', 1)
+        argtypes = m.group(2).strip().replace('.', '', 1)
+
+        if 'VLMFF' in argtypes:
+            arg_vl_mff_map = True
+        else:
+            arg_vl_mff_map = False
+        argtype = argtypes.replace('VLMFF', '', 1).rstrip()
 
         get_line()
         m = re.match(r'\s+(([A-Z]+)_RAW([0-9]*)_([A-Z0-9_]+)),?', line)
@@ -210,17 +216,18 @@ def extract_ofp_actions(fn, definitions):
                     else:
                         max_length = min_length
 
-                    info = {"enum": enum,                 # 0
-                            "deprecation": deprecation,   # 1
-                            "file_name": file_name,       # 2
-                            "line_number": line_number,   # 3
-                            "min_length": min_length,     # 4
-                            "max_length": max_length,     # 5
-                            "arg_ofs": arg_ofs,           # 6
-                            "arg_len": arg_len,           # 7
-                            "base_argtype": base_argtype, # 8
-                            "version": version,           # 9
-                            "type": type_}                # 10
+                    info = {"enum": enum,                     # 0
+                            "deprecation": deprecation,       # 1
+                            "file_name": file_name,           # 2
+                            "line_number": line_number,       # 3
+                            "min_length": min_length,         # 4
+                            "max_length": max_length,         # 5
+                            "arg_ofs": arg_ofs,               # 6
+                            "arg_len": arg_len,               # 7
+                            "base_argtype": base_argtype,     # 8
+                            "arg_vl_mff_map": arg_vl_mff_map, # 9
+                            "version": version,               # 10
+                            "type": type_}                    # 11
                     domain[vendor][type_][version] = info
 
                     enums.setdefault(enum, [])
@@ -314,7 +321,8 @@ def extract_ofp_actions(fn, definitions):
         print """\
 static enum ofperr
 ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
-              enum ofp_version version, uint64_t arg, struct ofpbuf *out)
+              enum ofp_version version, uint64_t arg,
+              const struct vl_mff_map *vl_mff_map, struct ofpbuf *out)
 {
     switch (raw) {\
 """
@@ -322,6 +330,7 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
             enum = versions[0]["enum"]
             print "    case %s:" % enum
             base_argtype = versions[0]["base_argtype"]
+            arg_vl_mff_map = versions[0]["arg_vl_mff_map"]
             if base_argtype == 'void':
                 print "        return decode_%s(out);" % enum
             else:
@@ -333,7 +342,10 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
                         arg = "%s(arg)" % hton
                     else:
                         arg = "arg"
-                print "        return decode_%s(%s, version, out);" % (enum, arg)
+                if arg_vl_mff_map:
+                    print "        return decode_%s(%s, version, vl_mff_map, out);" % (enum, arg)
+                else:
+                    print "        return decode_%s(%s, version, out);" % (enum, arg)
             print
         print """\
     default:
@@ -346,11 +358,14 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
             enum = versions[0]["enum"]
             prototype = "static enum ofperr decode_%s(" % enum
             base_argtype = versions[0]["base_argtype"]
+            arg_vl_mff_map = versions[0]["arg_vl_mff_map"]
             if base_argtype != 'void':
                 if base_argtype.startswith('struct'):
                     prototype += "const %s *, enum ofp_version, " % base_argtype
                 else:
                     prototype += "%s, enum ofp_version, " % base_argtype
+                if arg_vl_mff_map:
+                    prototype += 'const struct vl_mff_map *, '
             prototype += "struct ofpbuf *);"
             print prototype
 
@@ -358,7 +373,8 @@ ofpact_decode(const struct ofp_action_header *a, enum ofp_raw_action_type raw,
 static enum ofperr ofpact_decode(const struct ofp_action_header *,
                                  enum ofp_raw_action_type raw,
                                  enum ofp_version version,
-                                 uint64_t arg, struct ofpbuf *out);
+                                 uint64_t arg, const struct vl_mff_map *vl_mff_map,
+                                 struct ofpbuf *out);
 """
 
 if __name__ == '__main__':

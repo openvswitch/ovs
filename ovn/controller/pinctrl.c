@@ -1,4 +1,5 @@
 /* Copyright (c) 2015, 2016 Red Hat, Inc.
+ * Copyright (c) 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,7 +167,8 @@ pinctrl_handle_arp(const struct flow *ip_flow, const struct match *md,
     enum ofp_version version = rconn_get_version(swconn);
 
     reload_metadata(&ofpacts, md);
-    enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size, version, &ofpacts);
+    enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size,
+                                                      version, NULL, &ofpacts);
     if (error) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_WARN_RL(&rl, "failed to parse arp actions (%s)",
@@ -202,7 +204,7 @@ pinctrl_handle_put_dhcp_opts(
 
     /* Parse result field. */
     const struct mf_field *f;
-    enum ofperr ofperr = nx_pull_header(userdata, &f, NULL);
+    enum ofperr ofperr = nx_pull_header(userdata, NULL, &f, NULL);
     if (ofperr) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_WARN_RL(&rl, "bad result OXM (%s)", ofperr_to_string(ofperr));
@@ -493,7 +495,7 @@ pinctrl_handle_put_dhcpv6_opts(
 
     /* Parse result field. */
     const struct mf_field *f;
-    enum ofperr ofperr = nx_pull_header(userdata, &f, NULL);
+    enum ofperr ofperr = nx_pull_header(userdata, NULL, &f, NULL);
     if (ofperr) {
        VLOG_WARN_RL(&rl, "bad result OXM (%s)", ofperr_to_string(ofperr));
        goto exit;
@@ -1396,7 +1398,7 @@ pinctrl_handle_nd_na(const struct flow *ip_flow, const struct match *md,
     reload_metadata(&ofpacts, md);
 
     enum ofperr error = ofpacts_pull_openflow_actions(userdata, userdata->size,
-                                                      version, &ofpacts);
+                                                      version, NULL, &ofpacts);
     if (error) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_WARN_RL(&rl, "failed to parse actions for 'na' (%s)",

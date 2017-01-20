@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2008-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -394,6 +394,10 @@ enum ofperr {
      * the "command" field of struct ofp_flow_mod, when the
      * nxt_flow_mod_table_id extension is enabled. */
     OFPERR_NXFMFC_BAD_TABLE_ID,
+
+    /* NX1.0-1.1(1,536), NX1.2+(37).  Attempted to add a flow with an invalid
+     * variable length meta-flow field. */
+    OFPERR_NXFMFC_INVALID_TLV_FIELD,
 
 /* ## ---------------------- ## */
 /* ## OFPET_GROUP_MOD_FAILED ## */

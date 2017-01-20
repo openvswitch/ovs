@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2009-2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -59,6 +59,7 @@ struct bfd_cfg;
 struct meter;
 struct ofoperation;
 struct ofproto_packet_out;
+struct vl_mff_map;
 
 extern struct ovs_mutex ofproto_mutex;
 
@@ -126,6 +127,10 @@ struct ofproto {
 
      /* Tunnel TLV mapping table. */
      OVSRCU_TYPE(struct tun_table *) metadata_tab;
+
+    /* Variable length mf_field mapping. Stores all configured variable length
+     * meta-flow fields (struct mf_field) in a switch. */
+    struct vl_mff_map vl_mff_map;
 };
 
 void ofproto_init_tables(struct ofproto *, int n_tables);
