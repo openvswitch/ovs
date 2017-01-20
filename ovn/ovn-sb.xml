@@ -1137,6 +1137,16 @@
           </p>
         </dd>
 
+
+        <dt><code>clone { <var>action</var>; </code>...<code> };</code></dt>
+        <dd>
+          Makes a copy of the packet being processed and executes each
+          <code>action</code> on the copy.  Actions following the
+          <var>clone</var> action, if any, apply to the original, unmodified
+          packet.  This can be used as a way to ``save and restore'' the packet
+          around a set of actions that may modify it and should not persist.
+        </dd>
+
         <dt><code>arp { <var>action</var>; </code>...<code> };</code></dt>
         <dd>
           <p>

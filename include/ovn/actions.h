@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -60,6 +60,7 @@ struct simap;
     OVNACT(CT_DNAT,       ovnact_ct_nat)            \
     OVNACT(CT_SNAT,       ovnact_ct_nat)            \
     OVNACT(CT_LB,         ovnact_ct_lb)             \
+    OVNACT(CLONE,         ovnact_nest)              \
     OVNACT(ARP,           ovnact_nest)              \
     OVNACT(ND_NA,         ovnact_nest)              \
     OVNACT(GET_ARP,       ovnact_get_mac_bind)      \
@@ -186,7 +187,7 @@ struct ovnact_ct_lb {
     uint8_t ltable;             /* Logical table ID of next table. */
 };
 
-/* OVNACT_ARP, OVNACT_ND_NA. */
+/* OVNACT_ARP, OVNACT_ND_NA, OVNACT_CLONE. */
 struct ovnact_nest {
     struct ovnact ovnact;
     struct ovnact *nested;
