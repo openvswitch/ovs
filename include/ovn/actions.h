@@ -60,6 +60,7 @@ struct simap;
     OVNACT(CT_DNAT,       ovnact_ct_nat)            \
     OVNACT(CT_SNAT,       ovnact_ct_nat)            \
     OVNACT(CT_LB,         ovnact_ct_lb)             \
+    OVNACT(CT_CLEAR,      ovnact_null)              \
     OVNACT(CLONE,         ovnact_nest)              \
     OVNACT(ARP,           ovnact_nest)              \
     OVNACT(ND_NA,         ovnact_nest)              \

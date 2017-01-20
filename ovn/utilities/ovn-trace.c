@@ -1453,6 +1453,7 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
         case OVNACT_CT_DNAT:
         case OVNACT_CT_SNAT:
         case OVNACT_CT_LB:
+        case OVNACT_CT_CLEAR:
             ovntrace_node_append(super, OVNTRACE_NODE_ERROR,
                                  "*** ct_* actions not implemented");
             break;

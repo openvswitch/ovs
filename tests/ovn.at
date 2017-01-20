@@ -887,6 +887,10 @@ ct_snat(foo, bar);
 ct_snat();
     Syntax error at `)' expecting IPv4 address.
 
+# ct_clear
+ct_clear;
+    encodes as ct_clear
+
 # clone
 clone { ip4.dst = 255.255.255.255; output; }; next;
     encodes as clone(set_field:255.255.255.255->ip_dst,resubmit(,64)),resubmit(,27)

@@ -1056,6 +1056,20 @@ ovnact_ct_lb_free(struct ovnact_ct_lb *ct_lb)
     free(ct_lb->dsts);
 }
 
+static void
+format_CT_CLEAR(const struct ovnact_null *null OVS_UNUSED, struct ds *s)
+{
+    ds_put_cstr(s, "ct_clear;");
+}
+
+static void
+encode_CT_CLEAR(const struct ovnact_null *null OVS_UNUSED,
+                const struct ovnact_encode_params *ep OVS_UNUSED,
+                struct ofpbuf *ofpacts)
+{
+    ofpact_put_CT_CLEAR(ofpacts);
+}
+
 /* Implements the "arp", "nd_na", and "clone" actions, which execute nested
  * actions on a packet derived from the one being processed. */
 static void
@@ -1750,6 +1764,8 @@ parse_action(struct action_context *ctx)
         parse_CT_SNAT(ctx);
     } else if (lexer_match_id(ctx->lexer, "ct_lb")) {
         parse_ct_lb_action(ctx);
+    } else if (lexer_match_id(ctx->lexer, "ct_clear")) {
+        ovnact_put_CT_CLEAR(ctx->ovnacts);
     } else if (lexer_match_id(ctx->lexer, "clone")) {
         parse_CLONE(ctx);
     } else if (lexer_match_id(ctx->lexer, "arp")) {

@@ -1143,6 +1143,10 @@
           </p>
         </dd>
 
+        <dt><code>ct_clear;</code></dt>
+        <dd>
+          Clears connection tracking state.
+        </dd>
 
         <dt><code>clone { <var>action</var>; </code>...<code> };</code></dt>
         <dd>
