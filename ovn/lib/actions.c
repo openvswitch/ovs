@@ -530,23 +530,28 @@ parse_CT_NEXT(struct action_context *ctx)
 }
 
 static void
-format_CT_NEXT(const struct ovnact_next *next OVS_UNUSED, struct ds *s)
+format_CT_NEXT(const struct ovnact_ct_next *ct_next OVS_UNUSED, struct ds *s)
 {
     ds_put_cstr(s, "ct_next;");
 }
 
 static void
-encode_CT_NEXT(const struct ovnact_next *next,
+encode_CT_NEXT(const struct ovnact_ct_next *ct_next,
                 const struct ovnact_encode_params *ep,
                 struct ofpbuf *ofpacts)
 {
     struct ofpact_conntrack *ct = ofpact_put_CT(ofpacts);
-    ct->recirc_table = ep->first_ptable + next->ltable;
+    ct->recirc_table = ep->first_ptable + ct_next->ltable;
     ct->zone_src.field = ep->is_switch ? mf_from_id(MFF_LOG_CT_ZONE)
                             : mf_from_id(MFF_LOG_DNAT_ZONE);
     ct->zone_src.ofs = 0;
     ct->zone_src.n_bits = 16;
     ofpact_finish(ofpacts, &ct->ofpact);
+}
+
+static void
+ovnact_ct_next_free(struct ovnact_ct_next *a OVS_UNUSED)
+{
 }
 
 static void

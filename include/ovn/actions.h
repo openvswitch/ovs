@@ -55,7 +55,7 @@ struct simap;
     OVNACT(MOVE,          ovnact_move)              \
     OVNACT(EXCHANGE,      ovnact_move)              \
     OVNACT(DEC_TTL,       ovnact_null)              \
-    OVNACT(CT_NEXT,       ovnact_next)              \
+    OVNACT(CT_NEXT,       ovnact_ct_next)           \
     OVNACT(CT_COMMIT,     ovnact_ct_commit)         \
     OVNACT(CT_DNAT,       ovnact_ct_nat)            \
     OVNACT(CT_SNAT,       ovnact_ct_nat)            \
@@ -140,7 +140,7 @@ struct ovnact_null {
     struct ovnact ovnact;
 };
 
-/* OVNACT_NEXT, OVNACT_CT_NEXT. */
+/* OVNACT_NEXT. */
 struct ovnact_next {
     struct ovnact ovnact;
     uint8_t ltable;             /* Logical table ID of next table. */
@@ -158,6 +158,12 @@ struct ovnact_move {
     struct ovnact ovnact;
     struct expr_field lhs;
     struct expr_field rhs;
+};
+
+/* OVNACT_CT_NEXT. */
+struct ovnact_ct_next {
+    struct ovnact ovnact;
+    uint8_t ltable;                /* Logical table ID of next table. */
 };
 
 /* OVNACT_CT_COMMIT. */
