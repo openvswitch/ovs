@@ -430,6 +430,7 @@ Konstantin Khorenko             khorenko@openvz.org
 Kris zhang                      zhang.kris@gmail.com
 Krishna Miriyala                krishna@nicira.com
 Krishna Mohan Elluru            elluru.kri.mohan@hpe.com
+László Sürü                     laszlo.suru@ericsson.com
 Len Gao                         leng@vmware.com
 Logan Rosen                     logatronico@gmail.com
 Luca Falavigna                  dktrkranz@debian.org
