@@ -143,7 +143,15 @@ struct ovnact_null {
 /* OVNACT_NEXT. */
 struct ovnact_next {
     struct ovnact ovnact;
+
+    /* Arguments. */
     uint8_t ltable;             /* Logical table ID of next table. */
+
+    /* Information about the flow that the action is in.  This does not affect
+     * behavior, since the implementation of "next" doesn't depend on the
+     * source table or pipeline.  It does affect how ovnacts_format() prints
+     * the action. */
+    uint8_t src_ltable;            /* Logical table ID of source table. */
 };
 
 /* OVNACT_LOAD. */

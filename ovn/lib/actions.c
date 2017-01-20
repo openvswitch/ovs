@@ -259,36 +259,36 @@ parse_NEXT(struct action_context *ctx)
 {
     if (!ctx->pp->n_tables) {
         lexer_error(ctx->lexer, "\"next\" action not allowed here.");
-    } else if (lexer_match(ctx->lexer, LEX_T_LPAREN)) {
-        int ltable;
-
-        if (!lexer_force_int(ctx->lexer, &ltable) ||
-            !lexer_force_match(ctx->lexer, LEX_T_RPAREN)) {
-            return;
-        }
-
-        if (ltable >= ctx->pp->n_tables) {
-            lexer_error(ctx->lexer,
-                        "\"next\" argument must be in range 0 to %d.",
-                         ctx->pp->n_tables - 1);
-            return;
-        }
-
-        ovnact_put_NEXT(ctx->ovnacts)->ltable = ltable;
-    } else {
-        if (ctx->pp->cur_ltable < ctx->pp->n_tables) {
-            ovnact_put_NEXT(ctx->ovnacts)->ltable = ctx->pp->cur_ltable + 1;
-        } else {
-            lexer_error(ctx->lexer,
-                        "\"next\" action not allowed in last table.");
-        }
+        return;
     }
+
+    int table = ctx->pp->cur_ltable + 1;
+    if (lexer_match(ctx->lexer, LEX_T_LPAREN)
+        && (!lexer_force_int(ctx->lexer, &table) ||
+            !lexer_force_match(ctx->lexer, LEX_T_RPAREN))) {
+        return;
+    }
+
+    if (table >= ctx->pp->n_tables) {
+        lexer_error(ctx->lexer,
+                    "\"next\" action cannot advance beyond table %d.",
+                    ctx->pp->n_tables - 1);
+        return;
+    }
+
+    struct ovnact_next *next = ovnact_put_NEXT(ctx->ovnacts);
+    next->ltable = table;
+    next->src_ltable = ctx->pp->cur_ltable;
 }
 
 static void
 format_NEXT(const struct ovnact_next *next, struct ds *s)
 {
-    ds_put_format(s, "next(%d);", next->ltable);
+    if (next->ltable != next->src_ltable + 1) {
+        ds_put_format(s, "next(%d);", next->ltable);
+    } else {
+        ds_put_cstr(s, "next;");
+    }
 }
 
 static void
