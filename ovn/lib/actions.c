@@ -179,7 +179,7 @@ struct action_context {
     struct expr *prereqs;       /* Prerequisites to apply to match. */
 };
 
-static bool parse_action(struct action_context *);
+static void parse_actions(struct action_context *, enum lex_type sentinel);
 
 static bool
 action_parse_field(struct action_context *ctx,
@@ -1040,11 +1040,7 @@ parse_nested_action(struct action_context *ctx, enum ovnact_type type,
         .ovnacts = &nested,
         .prereqs = NULL
     };
-    while (!lexer_match(ctx->lexer, LEX_T_RCURLY)) {
-        if (!parse_action(&inner_ctx)) {
-            break;
-        }
-    }
+    parse_actions(&inner_ctx, LEX_T_RCURLY);
 
     /* XXX Not really sure what we should do with prerequisites for nested
      * actions. */
@@ -1743,7 +1739,7 @@ parse_action(struct action_context *ctx)
 }
 
 static void
-parse_actions(struct action_context *ctx)
+parse_actions(struct action_context *ctx, enum lex_type sentinel)
 {
     /* "drop;" by itself is a valid (empty) set of actions, but it can't be
      * combined with other actions because that doesn't make sense. */
@@ -1752,11 +1748,11 @@ parse_actions(struct action_context *ctx)
         && lexer_lookahead(ctx->lexer) == LEX_T_SEMICOLON) {
         lexer_get(ctx->lexer);  /* Skip "drop". */
         lexer_get(ctx->lexer);  /* Skip ";". */
-        lexer_force_end(ctx->lexer);
+        lexer_force_match(ctx->lexer, sentinel);
         return;
     }
 
-    while (ctx->lexer->token.type != LEX_T_END) {
+    while (!lexer_match(ctx->lexer, sentinel)) {
         if (!parse_action(ctx)) {
             return;
         }
@@ -1791,7 +1787,7 @@ ovnacts_parse(struct lexer *lexer, const struct ovnact_parse_params *pp,
         .prereqs = NULL,
     };
     if (!lexer->error) {
-        parse_actions(&ctx);
+        parse_actions(&ctx, LEX_T_END);
     }
 
     if (!lexer->error) {
