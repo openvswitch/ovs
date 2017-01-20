@@ -2660,6 +2660,13 @@ dpif_netdev_execute(struct dpif *dpif, struct dpif_execute *execute)
         }
     }
 
+    if (execute->probe) {
+        /* If this is part of a probe, Drop the packet, since executing
+         * the action may actually cause spurious packets be sent into
+         * the network. */
+        return 0;
+    }
+
     /* If the current thread is non-pmd thread, acquires
      * the 'non_pmd_mutex'. */
     if (pmd->core_id == NON_PMD_CORE_ID) {
