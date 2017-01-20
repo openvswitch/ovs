@@ -4520,8 +4520,22 @@ xlate_sample_action(struct xlate_ctx *ctx,
                           tunnel_out_port, false);
 }
 
+/* Only called if the datapath supports 'OVS_ACTION_ATTR_CLONE'.
+ *
+ * Translates 'oc' within OVS_ACTION_ATTR_CLONE. */
 static void
 compose_clone_action(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
+{
+    size_t clone_offset = nl_msg_start_nested(ctx->odp_actions,
+                                              OVS_ACTION_ATTR_CLONE);
+
+    do_xlate_actions(oc->actions, ofpact_nest_get_action_len(oc), ctx);
+
+    nl_msg_end_non_empty_nested(ctx->odp_actions, clone_offset);
+}
+
+static void
+xlate_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
 {
     bool old_was_mpls = ctx->was_mpls;
     bool old_conntracked = ctx->conntracked;
@@ -4537,7 +4551,16 @@ compose_clone_action(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
     ofpbuf_use_stub(&ctx->action_set, actset_stub, sizeof actset_stub);
     ofpbuf_put(&ctx->action_set, old_action_set.data, old_action_set.size);
 
-    do_xlate_actions(oc->actions, ofpact_nest_get_action_len(oc), ctx);
+    if (ctx->xbridge->support.clone) {
+        /* Datapath clone action will make sure the pre clone packets
+         * are used for actions after clone. Save and restore
+         * ctx->base_flow to reflect this for the openflow pipeline. */
+        struct flow old_base_flow = ctx->base_flow;
+        compose_clone_action(ctx, oc);
+        ctx->base_flow = old_base_flow;
+    } else {
+        do_xlate_actions(oc->actions, ofpact_nest_get_action_len(oc), ctx);
+    }
 
     ofpbuf_uninit(&ctx->action_set);
     ctx->action_set = old_action_set;
@@ -5383,7 +5406,7 @@ do_xlate_actions(const struct ofpact *ofpacts, size_t ofpacts_len,
             break;
 
         case OFPACT_CLONE:
-            compose_clone_action(ctx, ofpact_get_CLONE(a));
+            xlate_clone(ctx, ofpact_get_CLONE(a));
             break;
 
         case OFPACT_CT:
@@ -6168,4 +6191,15 @@ xlate_mac_learning_update(const struct ofproto_dpif *ofproto,
     }
 
     update_learning_table__(xbridge, xbundle, dl_src, vlan, is_grat_arp);
+}
+
+void
+xlate_disable_dp_clone(const struct ofproto_dpif *ofproto)
+{
+    struct xlate_cfg *xcfg = ovsrcu_get(struct xlate_cfg *, &xcfgp);
+    struct xbridge *xbridge = xbridge_lookup(xcfg, ofproto);
+
+    if (xbridge) {
+        xbridge->support.clone = false;
+    }
 }

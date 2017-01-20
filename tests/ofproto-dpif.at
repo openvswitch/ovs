@@ -6446,6 +6446,17 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt], [0], [ignore])
 AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
 
 AT_CHECK([tail -1 stdout], [0], [dnl
+Datapath actions: clone(set(ipv4(src=10.10.10.2,dst=192.168.4.4)),2),clone(set(eth(src=80:81:81:81:81:81)),set(ipv4(src=10.10.10.2,dst=192.168.5.5)),3),4
+])
+
+dnl Test flow xlate openflow clone action without using datapath clone action.
+AT_CHECK([ovs-appctl dpif/disable-dp-clone br0], [0],
+[Datapath clone action disabled for bridge br0
+])
+
+AT_CHECK([ovs-appctl ofproto/trace ovs-dummy 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.10.10.2,dst=10.10.10.1,proto=1,tos=1,ttl=128,frag=no),icmp(type=8,code=0)'], [0], [stdout])
+
+AT_CHECK([tail -1 stdout], [0], [dnl
 Datapath actions: set(ipv4(src=10.10.10.2,dst=192.168.4.4)),2,set(eth(src=80:81:81:81:81:81)),set(ipv4(src=10.10.10.2,dst=192.168.5.5)),3,set(eth(src=50:54:00:00:00:09)),set(ipv4(src=10.10.10.2,dst=10.10.10.1)),4
 ])
 
