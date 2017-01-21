@@ -409,6 +409,16 @@ ovntrace_port_find_by_key(const struct ovntrace_datapath *dp,
     return NULL;
 }
 
+static const char *
+ovntrace_port_key_to_name(const struct ovntrace_datapath *dp,
+                          uint16_t key)
+{
+    const struct ovntrace_port *port = ovntrace_port_find_by_key(dp, key);
+    return (port ? port->name
+            : !key ? ""
+            : "(unnamed)");
+}
+
 static const struct ovntrace_mcgroup *
 ovntrace_mcgroup_find_by_key(const struct ovntrace_datapath *dp,
                              uint16_t tunnel_key)
@@ -673,6 +683,9 @@ read_flows(void)
             .symtab = &symtab,
             .dhcp_opts = &dhcp_opts,
             .dhcpv6_opts = &dhcpv6_opts,
+            .pipeline = (!strcmp(sblf->pipeline, "ingress")
+                         ? OVNACT_P_INGRESS
+                         : OVNACT_P_EGRESS),
             .n_tables = 16,
             .cur_ltable = sblf->table_id,
         };
@@ -1162,8 +1175,7 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
     }
 
     uint16_t in_key = uflow->regs[MFF_LOG_INPORT - MFF_REG0];
-    const struct ovntrace_port *inport = ovntrace_port_find_by_key(dp, in_key);
-    const char *inport_name = !in_key ? "" : inport ? inport->name : "(unnamed)";
+    const char *inport_name = ovntrace_port_key_to_name(dp, in_key);
     uint32_t flags = uflow->regs[MFF_LOG_FLAGS - MFF_REG0];
     bool allow_loopback = (flags & MLF_ALLOW_LOOPBACK) != 0;
 
@@ -1365,6 +1377,23 @@ execute_put_dhcp_opts(const struct ovnact_put_dhcp_opts *pdo,
 }
 
 static void
+execute_next(const struct ovnact_next *next,
+             const struct ovntrace_datapath *dp, struct flow *uflow,
+             enum ovnact_pipeline pipeline, struct ovs_list *super)
+{
+    if (pipeline != next->pipeline) {
+        ovs_assert(next->pipeline == OVNACT_P_INGRESS);
+
+        uint16_t in_key = uflow->regs[MFF_LOG_INPORT - MFF_REG0];
+        struct ovntrace_node *node = ovntrace_node_append(
+            super, OVNTRACE_NODE_PIPELINE, "ingress(dp=\"%s\", inport=\"%s\")",
+            dp->name, ovntrace_port_key_to_name(dp, in_key));
+        super = &node->subs;
+    }
+    trace__(dp, uflow, next->ltable, next->pipeline, super);
+}
+
+static void
 trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
               const struct ovntrace_datapath *dp, struct flow *uflow,
               uint8_t table_id, enum ovnact_pipeline pipeline,
@@ -1388,7 +1417,7 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
             break;
 
         case OVNACT_NEXT:
-            trace__(dp, uflow, ovnact_get_NEXT(a)->ltable, pipeline, super);
+            execute_next(ovnact_get_NEXT(a), dp, uflow, pipeline, super);
             break;
 
         case OVNACT_LOAD:

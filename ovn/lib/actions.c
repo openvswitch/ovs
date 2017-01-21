@@ -170,6 +170,15 @@ put_load(uint64_t value, enum mf_field_id dst, int ofs, int n_bits,
     bitwise_copy(&n_value, 8, 0, sf->value, sf->field->n_bytes, ofs, n_bits);
     bitwise_one(ofpact_set_field_mask(sf), sf->field->n_bytes, ofs, n_bits);
 }
+
+static uint8_t
+first_ptable(const struct ovnact_encode_params *ep,
+             enum ovnact_pipeline pipeline)
+{
+    return (pipeline == OVNACT_P_INGRESS
+            ? ep->ingress_ptable
+            : ep->egress_ptable);
+}
 
 /* Context maintained during ovnacts_parse(). */
 struct action_context {
@@ -262,14 +271,48 @@ parse_NEXT(struct action_context *ctx)
         return;
     }
 
+    int pipeline = ctx->pp->pipeline;
     int table = ctx->pp->cur_ltable + 1;
-    if (lexer_match(ctx->lexer, LEX_T_LPAREN)
-        && (!lexer_force_int(ctx->lexer, &table) ||
-            !lexer_force_match(ctx->lexer, LEX_T_RPAREN))) {
-        return;
+    if (lexer_match(ctx->lexer, LEX_T_LPAREN)) {
+        if (lexer_is_int(ctx->lexer)) {
+            lexer_get_int(ctx->lexer, &table);
+        } else {
+            do {
+                if (lexer_match_id(ctx->lexer, "pipeline")) {
+                    if (!lexer_force_match(ctx->lexer, LEX_T_EQUALS)) {
+                        return;
+                    }
+                    if (lexer_match_id(ctx->lexer, "ingress")) {
+                        pipeline = OVNACT_P_INGRESS;
+                    } else if (lexer_match_id(ctx->lexer, "egress")) {
+                        pipeline = OVNACT_P_EGRESS;
+                    } else {
+                        lexer_syntax_error(
+                            ctx->lexer, "expecting \"ingress\" or \"egress\"");
+                        return;
+                    }
+                } else if (lexer_match_id(ctx->lexer, "table")) {
+                    if (!lexer_force_match(ctx->lexer, LEX_T_EQUALS) ||
+                        !lexer_force_int(ctx->lexer, &table)) {
+                        return;
+                    }
+                } else {
+                    lexer_syntax_error(ctx->lexer,
+                                       "expecting \"pipeline\" or \"table\"");
+                    return;
+                }
+            } while (lexer_match(ctx->lexer, LEX_T_COMMA));
+        }
+        if (!lexer_force_match(ctx->lexer, LEX_T_RPAREN)) {
+            return;
+        }
     }
 
-    if (table >= ctx->pp->n_tables) {
+    if (pipeline == OVNACT_P_EGRESS && ctx->pp->pipeline == OVNACT_P_INGRESS) {
+        lexer_error(ctx->lexer,
+                    "\"next\" action cannot advance from ingress to egress "
+                    "pipeline (use \"output\" action instead)");
+    } else if (table >= ctx->pp->n_tables) {
         lexer_error(ctx->lexer,
                     "\"next\" action cannot advance beyond table %d.",
                     ctx->pp->n_tables - 1);
@@ -277,14 +320,21 @@ parse_NEXT(struct action_context *ctx)
     }
 
     struct ovnact_next *next = ovnact_put_NEXT(ctx->ovnacts);
+    next->pipeline = pipeline;
     next->ltable = table;
+    next->src_pipeline = ctx->pp->pipeline;
     next->src_ltable = ctx->pp->cur_ltable;
 }
 
 static void
 format_NEXT(const struct ovnact_next *next, struct ds *s)
 {
-    if (next->ltable != next->src_ltable + 1) {
+    if (next->pipeline != next->src_pipeline) {
+        ds_put_format(s, "next(pipeline=%s, table=%d);",
+                      (next->pipeline == OVNACT_P_INGRESS
+                       ? "ingress" : "egress"),
+                      next->ltable);
+    } else if (next->ltable != next->src_ltable + 1) {
         ds_put_format(s, "next(%d);", next->ltable);
     } else {
         ds_put_cstr(s, "next;");
@@ -296,7 +346,7 @@ encode_NEXT(const struct ovnact_next *next,
             const struct ovnact_encode_params *ep,
             struct ofpbuf *ofpacts)
 {
-    emit_resubmit(ofpacts, ep->first_ptable + next->ltable);
+    emit_resubmit(ofpacts, first_ptable(ep, next->pipeline) + next->ltable);
 }
 
 static void
@@ -541,7 +591,7 @@ encode_CT_NEXT(const struct ovnact_ct_next *ct_next,
                 struct ofpbuf *ofpacts)
 {
     struct ofpact_conntrack *ct = ofpact_put_CT(ofpacts);
-    ct->recirc_table = ep->first_ptable + ct_next->ltable;
+    ct->recirc_table = first_ptable(ep, ep->pipeline) + ct_next->ltable;
     ct->zone_src.field = ep->is_switch ? mf_from_id(MFF_LOG_CT_ZONE)
                             : mf_from_id(MFF_LOG_DNAT_ZONE);
     ct->zone_src.ofs = 0;
@@ -745,7 +795,7 @@ encode_ct_nat(const struct ovnact_ct_nat *cn,
     ofpbuf_pull(ofpacts, ct_offset);
 
     struct ofpact_conntrack *ct = ofpact_put_CT(ofpacts);
-    ct->recirc_table = cn->ltable + ep->first_ptable;
+    ct->recirc_table = cn->ltable + first_ptable(ep, ep->pipeline);
     if (snat) {
         ct->zone_src.field = mf_from_id(MFF_LOG_SNAT_ZONE);
     } else {
@@ -889,7 +939,7 @@ encode_CT_LB(const struct ovnact_ct_lb *cl,
              const struct ovnact_encode_params *ep,
              struct ofpbuf *ofpacts)
 {
-    uint8_t recirc_table = cl->ltable + ep->first_ptable;
+    uint8_t recirc_table = cl->ltable + first_ptable(ep, ep->pipeline);
     if (!cl->n_dsts) {
         /* ct_lb without any destinations means that this is an established
          * connection and we just need to do a NAT. */

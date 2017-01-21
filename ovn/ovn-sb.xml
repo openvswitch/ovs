@@ -956,10 +956,16 @@
 
         <dt><code>next;</code></dt>
         <dt><code>next(<var>table</var>);</code></dt>
+        <dt><code>next(pipeline=<var>pipeline</var>, table=<var>table</var>);</code></dt>
         <dd>
-          Executes another logical datapath table as a subroutine.  By default,
-          the table after the current one is executed.  Specify
-          <var>table</var> to jump to a specific table in the same pipeline.
+          Executes the given logical datapath <var>table</var> in
+          <var>pipeline</var> as a subroutine.  The default <var>table</var> is
+          just after the current one.  If <var>pipeline</var> is specified, it
+          may be <code>ingress</code> or <code>egress</code>; the default
+          <var>pipeline</var> is the one currently executing.  Actions in the
+          ingress pipeline may not use <code>next</code> to jump into the
+          egress pipeline (use the <code>output</code> instead), but
+          transitions in the opposite direction are allowed.
         </dd>
 
         <dt><code><var>field</var> = <var>constant</var>;</code></dt>
