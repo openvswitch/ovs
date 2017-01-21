@@ -639,11 +639,31 @@ next(15);
     encodes as resubmit(,31)
 
 next();
-    Syntax error at `)' expecting small integer.
+    Syntax error at `)' expecting "pipeline" or "table".
 next(10;
     Syntax error at `;' expecting `)'.
 next(16);
     "next" action cannot advance beyond table 15.
+
+next(table=11);
+    formats as next;
+    encodes as resubmit(,27)
+next(pipeline=ingress);
+    formats as next;
+    encodes as resubmit(,27)
+next(table=11, pipeline=ingress);
+    formats as next;
+    encodes as resubmit(,27)
+next(pipeline=ingress, table=11);
+    formats as next;
+    encodes as resubmit(,27)
+
+next(pipeline=egress);
+    "next" action cannot advance from ingress to egress pipeline (use "output" action instead)
+
+next(table=10);
+    formats as next(10);
+    encodes as resubmit(,26)
 
 # Loading a constant value.
 tcp.dst=80;

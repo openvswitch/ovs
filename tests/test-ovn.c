@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1226,7 +1226,9 @@ test_parse_actions(struct ovs_cmdl_context *ctx OVS_UNUSED)
                 .ct_zones = &ct_zones,
                 .group_table = &group_table,
 
-                .first_ptable = 16,
+                .pipeline = OVNACT_P_INGRESS,
+                .ingress_ptable = 16,
+                .egress_ptable = 48,
                 .output_ptable = 64,
                 .mac_bind_ptable = 65,
             };

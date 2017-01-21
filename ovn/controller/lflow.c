@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2016 Nicira, Inc.
+/* Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -173,6 +173,7 @@ consider_logical_flow(const struct lport_index *lports,
         .dhcp_opts = dhcp_opts,
         .dhcpv6_opts = dhcpv6_opts,
 
+        .pipeline = ingress ? OVNACT_P_INGRESS : OVNACT_P_EGRESS,
         .n_tables = LOG_PIPELINE_LEN,
         .cur_ltable = lflow->table_id,
     };
@@ -205,7 +206,9 @@ consider_logical_flow(const struct lport_index *lports,
         .ct_zones = ct_zones,
         .group_table = group_table,
 
-        .first_ptable = first_ptable,
+        .pipeline = ingress ? OVNACT_P_INGRESS : OVNACT_P_EGRESS,
+        .ingress_ptable = OFTABLE_LOG_INGRESS_PIPELINE,
+        .egress_ptable = OFTABLE_LOG_EGRESS_PIPELINE,
         .output_ptable = output_ptable,
         .mac_bind_ptable = OFTABLE_MAC_BINDING,
     };
