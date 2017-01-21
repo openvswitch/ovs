@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Nicira, Inc.
+ * Copyright (c) 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -1376,7 +1376,7 @@ trace_actions(const struct ovnact *ovnacts, size_t ovnacts_len,
             break;
 
         case OVNACT_NEXT:
-            trace__(dp, uflow, table_id + 1, pipeline, super);
+            trace__(dp, uflow, ovnact_get_NEXT(a)->ltable, pipeline, super);
             break;
 
         case OVNACT_LOAD:
