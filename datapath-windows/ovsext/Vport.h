@@ -134,6 +134,8 @@ POVS_VPORT_ENTRY OvsFindVportByHvNameW(POVS_SWITCH_CONTEXT switchContext,
 POVS_VPORT_ENTRY OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
                                                  NDIS_SWITCH_PORT_ID portId,
                                                  NDIS_SWITCH_NIC_INDEX index);
+BOOLEAN OvsIsExternalVportByPortId(POVS_SWITCH_CONTEXT switchContext,
+                                   NDIS_SWITCH_PORT_ID portId);
 POVS_VPORT_ENTRY OvsFindTunnelVportByDstPortAndType(POVS_SWITCH_CONTEXT switchContext,
                                                     UINT16 dstPort,
                                                     OVS_VPORT_TYPE ovsPortType);

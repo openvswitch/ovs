@@ -259,13 +259,13 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                 curNbl,
                 nextNativeForwardedNbl,
                 sendCompleteFlags,
-                sourcePort == switchContext->virtualExternalPortId);
+                OvsIsExternalVportByPortId(switchContext, sourcePort));
             continue;
         }
 #endif /* NDIS_SUPPORT_NDIS640 */
 
         ctx = OvsInitExternalNBLContext(switchContext, curNbl,
-                  sourcePort == switchContext->virtualExternalPortId);
+                  OvsIsExternalVportByPortId(switchContext, sourcePort));
         if (ctx == NULL) {
             RtlInitUnicodeString(&filterReason,
                 L"Cannot allocate external NBL context.");
@@ -345,7 +345,7 @@ OvsStartNBLIngress(POVS_SWITCH_CONTEXT switchContext,
                 datapath->misses++;
                 status = OvsCreateAndAddPackets(NULL, 0, OVS_PACKET_CMD_MISS,
                              vport, &key, curNbl,
-                             sourcePort == switchContext->virtualExternalPortId,
+                             OvsIsExternalVportByPortId(switchContext, sourcePort),
                              &layers, switchContext, &missedPackets, &num);
                 if (status == NDIS_STATUS_SUCCESS) {
                     /* Complete the packet since it was copied to user

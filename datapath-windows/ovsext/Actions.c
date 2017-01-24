@@ -290,8 +290,8 @@ OvsDetectTunnelPkt(OvsForwardingContext *ovsFwdCtx,
          * default port.
          */
         BOOLEAN validSrcPort =
-            (ovsFwdCtx->fwdDetail->SourcePortId ==
-                 ovsFwdCtx->switchContext->virtualExternalPortId) ||
+            (OvsIsExternalVportByPortId(ovsFwdCtx->switchContext,
+                 ovsFwdCtx->fwdDetail->SourcePortId)) ||
             (ovsFwdCtx->fwdDetail->SourcePortId ==
                  NDIS_SWITCH_DEFAULT_PORT_ID);
 
@@ -2252,8 +2252,8 @@ OvsDoRecirc(POVS_SWITCH_CONTEXT switchContext,
         }
         status = OvsCreateAndAddPackets(NULL, 0, OVS_PACKET_CMD_MISS,
                                         vport, key, ovsFwdCtx.curNbl,
-                                        vport->portId ==
-                                        switchContext->virtualExternalPortId,
+                                        OvsIsExternalVportByPortId(switchContext,
+                                            vport->portId),
                                         &ovsFwdCtx.layers,
                                         ovsFwdCtx.switchContext,
                                         &missedPackets, &num);

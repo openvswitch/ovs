@@ -909,6 +909,12 @@ OvsFindVportByPortIdAndNicIndex(POVS_SWITCH_CONTEXT switchContext,
     }
 }
 
+BOOLEAN OvsIsExternalVportByPortId(POVS_SWITCH_CONTEXT switchContext,
+                                   NDIS_SWITCH_PORT_ID portId)
+{
+    return (portId == switchContext->virtualExternalPortId);
+}
+
 POVS_VPORT_ENTRY
 OvsAllocateVport(VOID)
 {
