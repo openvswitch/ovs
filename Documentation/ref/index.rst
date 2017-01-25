@@ -109,6 +109,10 @@ Man Pages
      - `(pdf) <http://openvswitch.org/support/dist-docs/ovs-dpctl-top.8.pdf>`__
      - `(html) <http://openvswitch.org/support/dist-docs/ovs-dpctl-top.8.html>`__
      - `(plain text) <http://openvswitch.org/support/dist-docs/ovs-dpctl-top.8.txt>`__
+   * - ovs-fields(7)
+     - `(pdf) <http://openvswitch.org/support/dist-docs/ovs-fields.7.pdf>`__
+     - `(html) <http://openvswitch.org/support/dist-docs/ovs-fields.7.html>`__
+     - `(plain text) <http://openvswitch.org/support/dist-docs/ovs-fields.7.txt>`__
    * - ovs-l3ping(8)
      - `(pdf) <http://openvswitch.org/support/dist-docs/ovs-l3ping.8.pdf>`__
      - `(html) <http://openvswitch.org/support/dist-docs/ovs-l3ping.8.html>`__

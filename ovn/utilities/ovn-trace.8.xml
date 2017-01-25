@@ -284,7 +284,7 @@
 
         <li>
           Some logical flows can map to the Open vSwitch ``conjunctive match''
-          extension (see <code>ovs-ofctl</code>(8)).  Currently
+          extension (see <code>ovs-fields</code>(7)).  Currently
           <code>ovn-trace</code> cannot display the flows with
           <code>conjunction</code> actions that effectively produce the
           <code>conj_id</code> match.

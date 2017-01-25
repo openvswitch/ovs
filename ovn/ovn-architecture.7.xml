@@ -887,7 +887,7 @@
 
       <p>
         Some logical flows can map to the Open vSwitch ``conjunctive match''
-        extension (see <code>ovs-ofctl</code>(8)).  Flows with a
+        extension (see <code>ovs-fields</code>(7)).  Flows with a
         <code>conjunction</code> action use an OpenFlow cookie of 0, because
         they can correspond to multiple logical flows.  The OpenFlow flow for a
         conjunctive match includes a match on <code>conj_id</code>.

@@ -1,4 +1,4 @@
-# Copyright (c) 2010, 2011, 2012, 2015 Nicira, Inc.
+# Copyright (c) 2010, 2011, 2012, 2015, 2016, 2017 Nicira, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@ import sys
 from ovs.db import error
 
 
-def text_to_nroff(s, font=r'\fR'):
+def text_to_nroff(s, font=r'\fR', escape_dot=True):
     def escape(match):
         c = match.group(0)
 
@@ -47,9 +47,13 @@ def text_to_nroff(s, font=r'\fR'):
         elif c == "'":
             return r'\(cq'
         elif c == ".":
-            # groff(7) says that . can be escaped by \. but in practice groff
-            # still gives an error with \. at the beginning of a line.
-            return r'\[char46]'
+            if escape_dot:
+                # groff(7) says that . can be escaped by \. but in practice
+                # groff still gives an error with \. at the beginning of a
+                # line.
+                return r'\[char46]'
+            else:
+                return '.'
         else:
             raise error.Error("bad escape")
 
@@ -87,15 +91,27 @@ def inline_xml_to_nroff(node, font, to_upper=False, newline='\n'):
                 s += node.attributes['group'].nodeValue
             elif node.hasAttribute('db'):
                 s += node.attributes['db'].nodeValue
+            elif node.hasAttribute('field'):
+                s += node.attributes['field'].nodeValue
             else:
                 raise error.Error("'ref' lacks required attributes: %s"
                                   % list(node.attributes.keys()))
             return s + font
-        elif node.tagName in ['var', 'dfn', 'i']:
+        elif node.tagName in ['var', 'dfn', 'i', 'cite']:
             s = r'\fI'
             for child in node.childNodes:
                 s += inline_xml_to_nroff(child, r'\fI', to_upper, newline)
             return s + font
+        elif node.tagName in ['literal']:
+            s = r'\fL'
+            for child in node.childNodes:
+                s += inline_xml_to_nroff(child, r'\fL')
+            return s + font
+        elif node.tagName == 'url':
+            return ('\n.URL "'
+                    + text_to_nroff(node.attributes['href'].nodeValue,
+                                    escape_dot=False)
+                    + '"\n')
         else:
             raise error.Error("element <%s> unknown or invalid here"
                               % node.tagName)
@@ -111,8 +127,18 @@ def pre_to_nroff(nodes, para, font):
     # from preformatted text.
     s = para + '\n.nf\n' + font
     for node in nodes:
-        s += inline_xml_to_nroff(node, font, False, '\n.br\n' + font)
+        s += inline_xml_to_nroff(node, font, False, '\n.br\n' + font) + '\\fR'
     s += '\n.fi\n'
+    return s
+
+
+def tbl_to_nroff(nodes, para):
+    s = para + '\n.TS\n'
+    for node in nodes:
+        if node.nodeType != node.TEXT_NODE:
+            fatal("<tbl> element may only have text children")
+        s += node.data + '\n'
+    s += '.TE\n'
     return s
 
 
@@ -262,12 +288,17 @@ fillval = .2
 
 
 def block_xml_to_nroff(nodes, para='.PP'):
-    HEADER_TAGS = ('h1', 'h2', 'h3')
+    HEADER_TAGS = ('h1', 'h2', 'h3', 'h4')
     s = ''
     prev = ''
     for node in nodes:
         if node.nodeType == node.TEXT_NODE:
-            s += text_to_nroff(node.data)
+            if s == '' and para != '.IP':
+                s = para + '\n'
+            text = re.sub(r'\s+', ' ', node.data)
+            if s.endswith(' '):
+                text = text.lstrip()
+            s += text_to_nroff(text)
             s = s.lstrip()
         elif node.nodeType == node.ELEMENT_NODE:
             if node.tagName in ['ul', 'ol']:
@@ -332,12 +363,15 @@ def block_xml_to_nroff(nodes, para='.PP'):
                 if s != "":
                     if not s.endswith("\n"):
                         s += "\n"
-                nroffTag = {'h1': 'SH', 'h2': 'SS', 'h3': 'ST'}[node.tagName]
-                s += '.%s "' % nroffTag
+                nroffTag = {'h1': 'SH',
+                            'h2': 'SS',
+                            'h3': 'ST',
+                            'h4': 'SU'}[node.tagName]
+                to_upper = node.tagName == 'h1'
+                s += ".%s \"" % nroffTag
                 for child_node in node.childNodes:
-                    s += inline_xml_to_nroff(child_node, r'\fR',
-                                          to_upper=(nroffTag == 'SH'))
-                s += '"\n'
+                    s += inline_xml_to_nroff(child_node, r'\fR', to_upper)
+                s += "\"\n"
             elif node.tagName == 'pre':
                 fixed = node.getAttribute('fixed')
                 if fixed == 'yes':
@@ -345,6 +379,8 @@ def block_xml_to_nroff(nodes, para='.PP'):
                 else:
                     font = r'\fB'
                 s += pre_to_nroff(node.childNodes, para, font)
+            elif node.tagName == 'tbl':
+                s += tbl_to_nroff(node.childNodes, para)
             elif node.tagName == 'diagram':
                 s += diagram_to_nroff(node.childNodes, para)
             else:
