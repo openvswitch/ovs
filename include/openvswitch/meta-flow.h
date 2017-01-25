@@ -34,64 +34,7 @@ struct match;
 /* Open vSwitch fields
  * ===================
  *
- * A "field" is a property of a packet.  Most familiarly, "data fields" are
- * fields that can be extracted from a packet.
- *
- * Some data fields are always present as a consequence of the basic networking
- * technology in use.  Ethernet is the assumed base technology for current
- * versions of OpenFlow and Open vSwitch, so Ethernet header fields are always
- * available.
- *
- * Other data fields are not always present.  A packet contains ARP fields, for
- * example, only when its Ethernet header indicates the Ethertype for ARP,
- * 0x0806.  We say that a field is "applicable" when it is it present in a
- * packet, and "inapplicable" when it is not, and refer to the conditions that
- * determine whether a field is applicable as "prerequisites".  Some
- * VLAN-related fields are a special case: these fields are always applicable,
- * but have a designated value or bit that indicates whether a VLAN header is
- * present, with the remaining values or bits indicating the VLAN header's
- * content (if it is present).  See MFF_VLAN_TCI for an example.
- *
- * Conceptually, an inapplicable field does not have a value, not even a
- * nominal ``value'' such as all-zero-bits.  In many circumstances, OpenFlow
- * and Open vSwitch allow references only to applicable fields.  For example,
- * one may match a given field only if the match includes the field's
- * prerequisite, e.g. matching an ARP field is only allowed if one also matches
- * on Ethertype 0x0806.
- *
- * (Practically, however, OVS represents a field's value as some fixed member
- * in its "struct flow", so accessing that member will obtain some value.  Some
- * members are used for more than one purpose, e.g. the "tp_src" member
- * represents the TCP, UDP, and SCTP source port, so the value read may not
- * even make sense.  For this reason, it is important to know whether a field's
- * prerequisites are satisfied before attempting to read it.)
- *
- * Sometimes a packet may contain multiple instances of a header.  For example,
- * a packet may contain multiple VLAN or MPLS headers, and tunnels can cause
- * any data field to recur.  OpenFlow and Open vSwitch do not address these
- * cases uniformly.  For VLAN and MPLS headers, only the outermost header is
- * accessible, so that inner headers may be accessed only by ``popping''
- * (removing) the outer header.  (Open vSwitch supports only a single VLAN
- * header in any case.)  For tunnels, e.g. GRE or VXLAN, the outer header and
- * inner headers are treated as different data fields.
- *
- * OpenFlow and Open vSwitch support some fields other than data fields.
- * "Metadata fields" relate to the origin or treatment of a packet, but they
- * are not extracted from the packet data itself.  One example is the physical
- * port on which a packet arrived at the switch.  "Register fields" act like
- * variables: they give an OpenFlow switch space for temporary storage while
- * processing a packet.  Existing metadata and register fields have no
- * prerequisites.
- *
- * A field's value consists of an integral number of bytes.  Most data fields
- * are copied directly from protocol headers, e.g. at layer 2, MFF_ETH_SRC is
- * copied from the Ethernet source address and MFF_ETH_DST from the destination
- * address.  Other data fields are copied from a packet with padding, usually
- * with zeros and in the most significant positions (see e.g. MFF_MPLS_LABEL)
- * but not always (see e.g. MFF_IP_DSCP).  A final category of data fields is
- * transformed in other ways as they are copied from the packets, to make them
- * more useful for matching, e.g. MFF_IP_FRAG describes whether a packet is a
- * fragment but it is not copied directly from the IP header.
+ * Refer to ovs-fields(7) for a detailed introduction to Open vSwitch fields.
  *
  *
  * Field specifications
@@ -115,8 +58,8 @@ struct match;
  *
  *       New fields should have only one name.
  *
- *     - Any number of paragraphs of free text that describe the field.  This
- *       is meant for human readers, so extract-ofp-fields ignores it.
+ *     - Any number of paragraphs of free text that describe the field.  These
+ *       are kept brief because the main description is in meta-flow.xml.
  *
  *     - A final paragraph that consists of a series of key-value pairs, one
  *       per line, in the form "key: value." where the period at the end of the
@@ -408,18 +351,6 @@ enum OVS_PACKED_ENUM mf_field_id {
     /* "tun_flags".
      *
      * Flags representing aspects of tunnel behavior.
-     *
-     * This field currently only has a single flag defined:
-     *
-     *   - NX_TUN_FLAG_OAM: The tunnel protocol indicated that this is an
-     *                      OAM control packet.
-     *
-     * The switch may reject matches against values that it is not aware of.
-     *
-     * Note that it is possible for newer version of Open vSwitch to
-     * introduce additional flags with varying meaning. It is therefore not
-     * recommended to use an exact match on this field since the behavior of
-     * these new flags is unknown and should be ignored.
      *
      * For non-tunneled packets, the value is 0.
      *
@@ -743,42 +674,7 @@ enum OVS_PACKED_ENUM mf_field_id {
     /* "ct_state".
      *
      * Connection tracking state.  The field is populated by the NXAST_CT
-     * action. The following bit values describe the state of the connection:
-     *
-     *   - New (0x01): This is the beginning of a new connection.
-     *   - Established (0x02): This is part of an already existing connection.
-     *   - Related (0x04): This is a separate connection that is related to an
-     *                     existing connection.
-     *   - Reply (0x08): This flow is in the reply direction, ie it did not
-     *                   initiate the connection.
-     *   - Invalid (0x10): This flow could not be associated with a connection.
-     *                     This could be set for a variety of reasons,
-     *                     including (but not limited to):
-     *                     - L3/L4 protocol handler is not loaded/unavailable.
-     *                     - L3/L4 protocol handler determines that the packet
-     *                       is malformed or invalid for the current FSM stage.
-     *                     - Packets are unexpected length for protocol.
-     *   - Tracked (0x20): Connection tracking has occurred.
-     *
-     * The "Tracked" bit corresponds to the packet_state as described in the
-     * description of NXAST_CT action. The remaining bits correspond to
-     * connection state. The "New" bit implies that the connection state
-     * is uncommitted, while "Established" implies that it has previously been
-     * committed.
-     *
-     * There are additional constraints on the ct_state bits, listed in order
-     * of precedence below:
-     *
-     *   - If "Tracked" is unset, no other bits may be set.
-     *   - If "Tracked" is set, one or more other bits may be set.
-     *   - If "Invalid" is set, only the "Tracked" bit is also set.
-     *   - The "New" and "Established" bits are mutually exclusive.
-     *   - The "New" and "Reply" bits are mutually exclusive.
-     *   - The "Related" bit may be set in conjunction with any other bits.
-     *     Connections that are identified as "Related" are separate
-     *     connections from the originating connection, so must be committed
-     *     separately. All packets for a related connection will have the
-     *     "Related" bit set (not just the initial packet).
+     * action.
      *
      * Type: be32.
      * Maskable: bitwise.
@@ -894,15 +790,7 @@ enum OVS_PACKED_ENUM mf_field_id {
 #if FLOW_N_XREGS == 8
     /* "xreg<N>".
      *
-     * OpenFlow 1.5 ``extended register".  Each extended register
-     * overlays two of the Open vSwitch extension 32-bit registers:
-     * xreg0 overlays reg0 and reg1, with reg0 supplying the
-     * most-significant bits of xreg0 and reg1 the least-significant.
-     * xreg1 similarly overlays reg2 and reg3, and so on.
-     *
-     * These registers were introduced in OpenFlow 1.5, but EXT-244 in the ONF
-     * JIRA also publishes them as a (draft) OpenFlow extension to OpenFlow
-     * 1.3.
+     * OpenFlow 1.5 ``extended register".
      *
      * Type: be64.
      * Maskable: bitwise.
@@ -927,11 +815,7 @@ enum OVS_PACKED_ENUM mf_field_id {
 #if FLOW_N_XXREGS == 4
     /* "xxreg<N>".
      *
-     * ``extended-extended register".  Each of these extended registers
-     * overlays four of the Open vSwitch extension 32-bit registers:
-     * xxreg0 overlays reg0 through reg3, with reg0 supplying the
-     * most-significant bits of xxreg0 and reg3 the least-significant.
-     * xxreg1 similarly overlays reg4 and reg7.
+     * ``extended-extended register".
      *
      * Type: be128.
      * Maskable: bitwise.
@@ -964,8 +848,6 @@ enum OVS_PACKED_ENUM mf_field_id {
      *
      * Source address in Ethernet header.
      *
-     * This field was not maskable before Open vSwitch 1.8.
-     *
      * Type: MAC.
      * Maskable: bitwise.
      * Formatting: Ethernet.
@@ -982,10 +864,6 @@ enum OVS_PACKED_ENUM mf_field_id {
      *
      * Destination address in Ethernet header.
      *
-     * Before Open vSwitch 1.8, the allowed masks were restricted to
-     * 00:00:00:00:00:00, fe:ff:ff:ff:ff:ff, 01:00:00:00:00:00,
-     * ff:ff:ff:ff:ff:ff.
-     *
      * Type: MAC.
      * Maskable: bitwise.
      * Formatting: Ethernet.
@@ -1001,11 +879,6 @@ enum OVS_PACKED_ENUM mf_field_id {
     /* "eth_type" (aka "dl_type").
      *
      * Packet's Ethernet type.
-     *
-     * For an Ethernet II packet this is taken from the Ethernet header.  For
-     * an 802.2 LLC+SNAP header with OUI 00-00-00 this is taken from the SNAP
-     * header.  A packet that has neither format has value 0x05ff
-     * (OFP_DL_TYPE_NOT_ETH_TYPE).
      *
      * For a packet with an 802.1Q header, this is the type of the encapsulated
      * frame.
@@ -1039,36 +912,6 @@ enum OVS_PACKED_ENUM mf_field_id {
      * For a packet with an 802.1Q header, this is the Tag Control Information
      * (TCI) field, with the CFI bit forced to 1.  For a packet with no 802.1Q
      * header, this has value 0.
-     *
-     * This field can be used in various ways:
-     *
-     *   - If it is not constrained at all, the nx_match matches packets
-     *     without an 802.1Q header or with an 802.1Q header that has any TCI
-     *     value.
-     *
-     *   - Testing for an exact match with 0 matches only packets without an
-     *     802.1Q header.
-     *
-     *   - Testing for an exact match with a TCI value with CFI=1 matches
-     *     packets that have an 802.1Q header with a specified VID and PCP.
-     *
-     *   - Testing for an exact match with a nonzero TCI value with CFI=0 does
-     *     not make sense.  The switch may reject this combination.
-     *
-     *   - Testing with a specific VID and CFI=1, with nxm_mask=0x1fff, matches
-     *     packets that have an 802.1Q header with that VID (and any PCP).
-     *
-     *   - Testing with a specific PCP and CFI=1, with nxm_mask=0xf000, matches
-     *     packets that have an 802.1Q header with that PCP (and any VID).
-     *
-     *   - Testing with nxm_value=0, nxm_mask=0x0fff matches packets with no
-     *     802.1Q header or with an 802.1Q header with a VID of 0.
-     *
-     *   - Testing with nxm_value=0, nxm_mask=0xe000 matches packets with no
-     *     802.1Q header or with an 802.1Q header with a PCP of 0.
-     *
-     *   - Testing with nxm_value=0, nxm_mask=0xefff matches packets with no
-     *     802.1Q header or with an 802.1Q header with both VID and PCP of 0.
      *
      * Type: be16.
      * Maskable: bitwise.
@@ -1398,42 +1241,6 @@ enum OVS_PACKED_ENUM mf_field_id {
     /* "ip_frag".
      *
      * IP fragment information.
-     *
-     * This field has three possible values:
-     *
-     *   - A packet that is not an IP fragment has value 0.
-     *
-     *   - A packet that is an IP fragment with offset 0 (the first fragment)
-     *     has bit 0 set and thus value 1.
-     *
-     *   - A packet that is an IP fragment with nonzero offset has bits 0 and 1
-     *     set and thus value 3.
-     *
-     * NX_IP_FRAG_ANY and NX_IP_FRAG_LATER are declared to symbolically
-     * represent the meanings of bits 0 and 1.
-     *
-     * The switch may reject matches against values that can never appear.
-     *
-     * It is important to understand how this field interacts with the OpenFlow
-     * IP fragment handling mode:
-     *
-     *   - In OFPC_FRAG_DROP mode, the OpenFlow switch drops all IP fragments
-     *     before they reach the flow table, so every packet that is available
-     *     for matching will have value 0 in this field.
-     *
-     *   - Open vSwitch does not implement OFPC_FRAG_REASM mode, but if it did
-     *     then IP fragments would be reassembled before they reached the flow
-     *     table and again every packet available for matching would always
-     *     have value 0.
-     *
-     *   - In OFPC_FRAG_NORMAL mode, all three values are possible, but
-     *     OpenFlow 1.0 says that fragments' transport ports are always 0, even
-     *     for the first fragment, so this does not provide much extra
-     *     information.
-     *
-     *   - In OFPC_FRAG_NX_MATCH mode, all three values are possible.  For
-     *     fragments with offset 0, Open vSwitch makes L4 header information
-     *     available.
      *
      * Type: u8 (low 2 bits).
      * Maskable: bitwise.

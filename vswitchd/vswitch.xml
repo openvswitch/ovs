@@ -2236,9 +2236,9 @@
             <li>
               <code>gbp</code>: VXLAN-GBP allows to transport the group policy
               context of a packet across the VXLAN tunnel to other network
-              peers. See the field description of <code>tun_gbp_id</code> and
-              <code>tun_gbp_flags</code> in ovs-ofctl(8) for additional
-              information.
+              peers. See the description of <code>tun_gbp_id</code> and
+              <code>tun_gbp_flags</code> in <code>ovs-fields</code>(7) for
+              additional information.
               (<code>https://tools.ietf.org/html/draft-smith-vxlan-group-policy</code>)
             </li>
           </ul>

@@ -1,8 +1,11 @@
 #! /usr/bin/python
 
+import getopt
 import sys
 import os.path
 import re
+import xml.dom.minidom
+import build.nroff
 
 line = ""
 
@@ -13,6 +16,7 @@ VERSION = {"1.0": 0x01,
            "1.3": 0x04,
            "1.4": 0x05,
            "1.5": 0x06}
+VERSION_REVERSE = dict((v,k) for k, v in VERSION.iteritems())
 
 TYPES = {"u8":       (1,   False),
          "be16":     (2,   False),
@@ -174,8 +178,7 @@ def parse_oxm(s, prefix, n_bytes):
     if oxm_class == 0xffff:
         oxm_length += 4
 
-    header = ("NXM_HEADER(0x%x,0x%x,%s,0,%d)"
-              % (oxm_vendor, oxm_class, oxm_type, oxm_length))
+    header = (oxm_vendor, oxm_class, int(oxm_type), oxm_length)
 
     if of_version:
         if of_version not in VERSION:
@@ -183,6 +186,8 @@ def parse_oxm(s, prefix, n_bytes):
         of_version_nr = VERSION[of_version]
         if of_version_nr < VERSION['1.2']:
             fatal("%s: claimed version %s predates OXM" % (name, of_version))
+    elif prefix == 'OXM':
+        fatal("%s: missing OpenFlow version number" % name)
     else:
         of_version_nr = 0
 
@@ -257,13 +262,14 @@ def parse_field(mff, comment):
     fmt = FORMATTING.get(d['Formatting'])
     if not fmt:
         fatal("%s: unknown format %s" % (mff, d['Formatting']))
+    f['formatting'] = d['Formatting']
     if f['n_bytes'] < fmt[1] or f['n_bytes'] > fmt[2]:
         fatal("%s: %d-byte field can't be formatted as %s"
               % (mff, f['n_bytes'], d['Formatting']))
     f['string'] = fmt[0]
 
-    f['prereqs'] = PREREQS.get(d['Prerequisites'])
-    if not f['prereqs']:
+    f['prereqs'] = d['Prerequisites']
+    if f['prereqs'] not in PREREQS:
         fatal("%s: unknown prerequisites %s" % (mff, d['Prerequisites']))
 
     if d['Access'] == 'read-only':
@@ -302,8 +308,14 @@ def protocols_to_c(protocols):
         assert False
 
 
-def make_meta_flow(fields):
-    output = []
+def autogen_c_comment():
+    return [
+"/* Generated automatically; do not modify!    -*- buffer-read-only: t -*- */",
+""]
+
+def make_meta_flow(meta_flow_h):
+    fields = extract_ofp_fields(meta_flow_h)
+    output = autogen_c_comment()
     for f in fields:
         output += ["{"]
         output += ["    %s," % f['mff']]
@@ -323,7 +335,7 @@ def make_meta_flow(fields):
         else:
             rw = 'false'
         output += ["    %s, %s, %s, %s,"
-                   % (f['mask'], f['string'], f['prereqs'], rw)]
+                   % (f['mask'], f['string'], PREREQS[f['prereqs']], rw)]
 
         oxm = f['OXM']
         of10 = f['OF1.0']
@@ -375,23 +387,34 @@ def make_meta_flow(fields):
             output += ["    -1, /* not usable for prefix lookup */"]
 
         output += ["},"]
-    return output
+    for oline in output:
+        print(oline)
 
 
-def make_nx_match(fields):
-    output = []
+def make_nx_match(meta_flow_h):
+    fields = extract_ofp_fields(meta_flow_h)
+    output = autogen_c_comment()
     print("static struct nxm_field_index all_nxm_fields[] = {")
     for f in fields:
         # Sort by OpenFlow version number (nx-match.c depends on this).
         for oxm in sorted(f['OXM'], key=lambda x: x[2]):
+            header = ("NXM_HEADER(0x%x,0x%x,%s,0,%d)" % oxm[0])
             print("""{ .nf = { %s, %d, "%s", %s } },""" % (
-                oxm[0], oxm[2], oxm[1], f['mff']))
+                header, oxm[2], oxm[1], f['mff']))
     print("};")
-    return output
+    for oline in output:
+        print(oline)
 
 
-def extract_ofp_fields(mode):
+def extract_ofp_fields(fn):
+    global file_name
+    global input_file
+    global line_number
     global line
+
+    file_name = fn
+    input_file = open(file_name)
+    line_number = 0
 
     fields = []
 
@@ -495,37 +518,297 @@ def extract_ofp_fields(mode):
     if n_errors:
         sys.exit(1)
 
-    print("""\
-/* Generated automatically; do not modify!    "-*- buffer-read-only: t -*- */
-""")
+    return fields
+
+## ------------------------ ##
+## Documentation Generation ##
+## ------------------------ ##
 
-    if mode == '--meta-flow':
-        output = make_meta_flow(fields)
-    elif mode == '--nx-match':
-        output = make_nx_match(fields)
+def field_to_xml(field_node, f, body, summary):
+    f["used"] = True
+
+    # Summary.
+    if field_node.hasAttribute('internal'):
+        return
+
+    min_of_version = None
+    min_ovs_version = None
+    for header, name, of_version_nr, ovs_version_s in f['OXM']:
+        if (not name.startswith('NXM')
+            and (min_ovs_version is None or of_version_nr < min_of_version)):
+            min_of_version = of_version_nr
+        ovs_version = [int(x) for x in ovs_version_s.split('.')]
+        if min_ovs_version is None or ovs_version < min_ovs_version:
+            min_ovs_version = ovs_version
+    summary += ["\\fB%s\\fR" % f["name"]]
+    if f["extra_name"]:
+        summary += [" aka \\fB%s\\fR" % f["extra_name"]]
+    summary += [";%d" % f["n_bytes"]]
+    if f["n_bits"] != 8 * f["n_bytes"]:
+        summary += [" (low %d bits)" % f["n_bits"]]
+    summary += [";%s;" % {"MFM_NONE": "no", "MFM_FULLY": "yes"}[f["mask"]]]
+    summary += ["%s;" % {True: "yes", False: "no"}[f["writable"]]]
+    summary += ["%s;" % f["prereqs"]]
+    support = []
+    if min_of_version is not None:
+        support += ["OF %s+" % VERSION_REVERSE[min_of_version]]
+    if min_ovs_version is not None:
+        support += ["OVS %s+" % '.'.join([str(x) for x in min_ovs_version])]
+    summary += ' and '.join(support)
+    summary += ["\n"]
+
+    # Full description.
+    if field_node.hasAttribute('hidden'):
+        return
+
+    title = field_node.attributes['title'].nodeValue
+
+    body += [""".PP
+\\fB%s Field\\fR
+.TS
+tab(;);
+l lx.
+""" % title]
+
+    body += ["Name:;\\fB%s\\fR" % f["name"]]
+    if f["extra_name"]:
+        body += [" (aka \\fB%s\\fR)" % f["extra_name"]]
+    body += ['\n']
+
+    body += ["Width:;"]
+    if f["n_bits"] != 8 * f["n_bytes"]:
+        body += ["%d bits (only the least-significant %d bits "
+                 "may be nonzero)" % (f["n_bytes"] * 8, f["n_bits"])]
+    elif f["n_bits"] <= 128:
+        body += ["%d bits" % f["n_bits"]]
     else:
-        assert False
+        body += ["%d bits (%d bytes)" % (f["n_bits"], f["n_bits"] / 8)]
+    body += ['\n']
 
-    return output
+    body += ["Format:;%s\n" % f["formatting"]]
 
+    masks = {"MFM_NONE": "not maskable",
+             "MFM_FULLY": "arbitrary bitwise masks"}
+    body += ["Masking:;%s\n" % masks[f["mask"]]]
+    body += ["Prerequisites:;%s\n" % f["prereqs"]]
 
-if __name__ == '__main__':
-    if '--help' in sys.argv:
-        usage()
-    elif len(sys.argv) != 3:
-        sys.stderr.write("exactly two arguments required; "
-                         "use --help for help\n")
+    access = {True: "read/write",
+              False: "read-only"}[f["writable"]]
+    body += ["Access:;%s\n" % access]
+
+    of10 = {None: "not supported",
+            "exact match": "yes (exact match only)",
+            "CIDR mask": "yes (CIDR match only)"}
+    body += ["OpenFlow 1.0:;%s\n" % of10[f["OF1.0"]]]
+
+    of11 = {None: "not supported",
+            "exact match": "yes (exact match only)",
+            "bitwise mask": "yes"}
+    body += ["OpenFlow 1.1:;%s\n" % of11[f["OF1.1"]]]
+
+    oxms = []
+    for header, name, of_version_nr, ovs_version in [x for x in sorted(f['OXM'], key=lambda x: x[2]) if not x[1].startswith('NXM')]:
+        of_version = VERSION_REVERSE[of_version_nr]
+        oxms += [r"\fB%s\fR (%d) since OpenFlow %s and Open vSwitch %s" % (name, header[2], of_version, ovs_version)]
+    if not oxms:
+        oxms = ['none']
+    body += ['OXM:;T{\n%s\nT}\n' % r'\[char59] '.join(oxms)]
+
+    nxms = []
+    for header, name, of_version_nr, ovs_version in [x for x in sorted(f['OXM'], key=lambda x: x[2]) if x[1].startswith('NXM')]:
+        nxms += [r"\fB%s\fR (%d) since Open vSwitch %s" % (name, header[2], ovs_version)]
+    if not nxms:
+        nxms = ['none']
+    body += ['NXM:;T{\n%s\nT}\n' % r'\[char59] '.join(nxms)]
+
+    body += [".TE\n"]
+
+    body += ['.PP\n']
+    body += [build.nroff.block_xml_to_nroff(field_node.childNodes)]
+
+def group_xml_to_nroff(group_node, fields):
+    title = group_node.attributes['title'].nodeValue
+
+    summary = []
+    body = []
+    for node in group_node.childNodes:
+        if node.nodeType == node.ELEMENT_NODE and node.tagName == 'field':
+            id_ = node.attributes['id'].nodeValue
+            field_to_xml(node, fields[id_], body, summary)
+        else:
+            body += [build.nroff.block_xml_to_nroff([node])]
+
+    content = [
+        '.bp\n',
+        '.SH \"%s\"\n' % build.nroff.text_to_nroff(title.upper() + " FIELDS"),
+        '.SS "Summary:"\n',
+        '.TS\n',
+        'tab(;);\n',
+        'l l l l l l l.\n',
+        'Name;Bytes;Mask;RW?;Prereqs;NXM/OXM Support\n',
+        '\_;\_;\_;\_;\_;\_\n']
+    content += summary
+    content += ['.TE\n']
+    content += body
+    return ''.join(content)
+
+def make_oxm_classes_xml(document):
+    s = '''tab(;);
+l l l.
+Prefix;Vendor;Class
+\_;\_;\_
+'''
+    for key in sorted(OXM_CLASSES, key=OXM_CLASSES.get):
+        vendor, class_ = OXM_CLASSES.get(key)
+        s += r"\fB%s\fR;" % key.rstrip('_')
+        if vendor:
+            s += r"\fL0x%08x\fR;" % vendor
+        else:
+            s += "(none);"
+        s += r"\fL0x%04x\fR;" % class_
+        s += "\n"
+    e = document.createElement('tbl')
+    e.appendChild(document.createTextNode(s))
+    return e
+
+def recursively_replace(node, name, replacement):
+    for child in node.childNodes:
+        if child.nodeType == node.ELEMENT_NODE:
+            if child.tagName == name:
+                node.replaceChild(replacement, child)
+            else:
+                recursively_replace(child, name, replacement)
+
+def make_ovs_fields(meta_flow_h, meta_flow_xml):
+    fields = extract_ofp_fields(meta_flow_h)
+    fields_map = {}
+    for f in fields:
+        fields_map[f['mff']] = f
+
+    document = xml.dom.minidom.parse(meta_flow_xml)
+    doc = document.documentElement
+
+    global version
+    if version == None:
+        version = "UNKNOWN"
+
+    print('''\
+'\\" tp
+.\\" -*- mode: troff; coding: utf-8 -*-
+.TH "ovs\-fields" 7 "%s" "Open vSwitch" "Open vSwitch Manual"
+.fp 5 L CR              \\" Make fixed-width font available as \\fL.
+.de ST
+.  PP
+.  RS -0.15in
+.  I "\\\\$1"
+.  RE
+..
+
+.de SU
+.  PP
+.  I "\\\\$1"
+..
+
+.de IQ
+.  br
+.  ns
+.  IP "\\\\$1"
+..
+.de URL
+\\\\$2 \\(laURL: \\\\$1 \\(ra\\\\$3
+..
+.if \\n[.g] .mso www.tmac
+.SH NAME
+ovs\-fields \- protocol header fields in OpenFlow and Open vSwitch
+.
+.PP
+''') % version
+
+    recursively_replace(doc, 'oxm_classes', make_oxm_classes_xml(document))
+
+    s = ''
+    for node in doc.childNodes:
+        if node.nodeType == node.ELEMENT_NODE and node.tagName == "group":
+            s += group_xml_to_nroff(node, fields_map)
+        elif node.nodeType == node.TEXT_NODE:
+            assert node.data.isspace()
+        elif node.nodeType == node.COMMENT_NODE:
+            pass
+        else:
+            s += build.nroff.block_xml_to_nroff([node])
+
+    for f in fields:
+        if "used" not in f:
+            fatal("%s: field not documented" % f["mff"])
+    if n_errors:
         sys.exit(1)
-    elif sys.argv[2] in ('--meta-flow', '--nx-match'):
-        global file_name
-        global input_file
-        global line_number
-        file_name = sys.argv[1]
-        input_file = open(file_name)
-        line_number = 0
 
-        for oline in extract_ofp_fields(sys.argv[2]):
-            print(oline)
-    else:
-        sys.stderr.write("invalid arguments; use --help for help\n")
+    output = []
+    for oline in s.split("\n"):
+        oline = oline.strip()
+
+        # Life is easier with nroff if we don't try to feed it Unicode.
+        # Fortunately, we only use a few characters outside the ASCII range.
+        oline = oline.replace(u'\u2208', r'\[mo]')
+        oline = oline.replace(u'\u2260', r'\[!=]')
+        oline = oline.replace(u'\u2264', r'\[<=]')
+        if len(oline):
+            output += [oline]
+
+    # nroff tends to ignore .bp requests if they come after .PP requests,
+    # so remove .PPs that precede .bp.
+    for i in range(len(output)):
+        if output[i] == '.bp':
+            j = i - 1
+            while j >= 0 and output[j] == '.PP':
+                output[j] = None
+                j -= 1
+    for i in range(len(output)):
+        if output[i] is not None:
+            print(output[i])
+
+## ------------ ##
+## Main Program ##
+## ------------ ##
+
+if __name__ == "__main__":
+    argv0 = sys.argv[0]
+    try:
+        options, args = getopt.gnu_getopt(sys.argv[1:], 'h',
+                                          ['help', 'ovs-version='])
+    except getopt.GetoptError, geo:
+        sys.stderr.write("%s: %s\n" % (argv0, geo.msg))
         sys.exit(1)
+
+    global version
+    version = None
+    for key, value in options:
+        if key in ['-h', '--help']:
+            usage()
+        elif key == '--ovs-version':
+            version = value
+        else:
+            sys.exit(0)
+
+    if not args:
+        sys.stderr.write("%s: missing command argument "
+                         "(use --help for help)\n" % argv0)
+        sys.exit(1)
+
+    commands = {"meta-flow": (make_meta_flow, 1),
+                "nx-match": (make_nx_match, 1),
+                "ovs-fields": (make_ovs_fields, 2)}
+
+    if not args[0] in commands:
+        sys.stderr.write("%s: unknown command \"%s\" "
+                         "(use --help for help)\n" % (argv0, args[0]))
+        sys.exit(1)
+
+    func, n_args = commands[args[0]]
+    if len(args) - 1 != n_args:
+        sys.stderr.write("%s: \"%s\" requires %d arguments but %d "
+                         "provided\n"
+                         % (argv0, args[0], n_args, len(args) - 1))
+        sys.exit(1)
+
+    func(*args[1:])
