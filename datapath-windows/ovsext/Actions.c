@@ -1390,13 +1390,13 @@ OvsUpdateIPv4Header(OvsForwardingContext *ovsFwdCtx,
         mdlLen -= curMdlOffset;
         ASSERT(mdlLen >= hdrSize);
     }
-
-    ipHdr = (IPHdr *)(bufferStart + curMdlOffset + layers->l3Offset);
+    bufferStart += curMdlOffset;
+    ipHdr = (IPHdr *)(bufferStart + layers->l3Offset);
 
     if (layers->isTcp) {
-        tcpHdr = (TCPHdr *)(bufferStart + curMdlOffset + layers->l4Offset);
+        tcpHdr = (TCPHdr *)(bufferStart + layers->l4Offset);
     } else if (layers->isUdp) {
-        udpHdr = (UDPHdr *)(bufferStart + curMdlOffset + layers->l4Offset);
+        udpHdr = (UDPHdr *)(bufferStart + layers->l4Offset);
     }
 
     /*
