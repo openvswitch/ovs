@@ -168,13 +168,14 @@ AT_SETUP([daemon --service])
 AT_KEYWORDS([windows-service])
 AT_SKIP_IF([test "$IS_WIN32" != "yes"])
 OVS_SKIP_NON_ADMIN_WIN
+AT_SKIP_IF([sc qc ovsdb-server])
 
 OVSDB_INIT([db])
 AT_CAPTURE_FILE([pid])
 # To create a Windows service, we need the absolute path for the executable.
 abs_path="$(cd $(dirname `which ovsdb-server`); pwd -W; cd $OLDPWD)"
 
-AT_CHECK([sc create ovsdb-server binpath="$abs_path/ovsdb-server `pwd`/db --log-file=`pwd`/ovsdb-server.log --pidfile --remote=punix:`pwd`/socket --service"],
+AT_CHECK([sc create ovsdb-server binpath="$abs_path/ovsdb-server `pwd`/db --log-file=`pwd`/ovsdb-server.log --pidfile=`pwd`/ovsdb-server.pid --unixctl=`pwd`/ovsdb-server.ctl --remote=punix:`pwd`/socket --service"],
 [0], [[[SC]] CreateService SUCCESS
 ])
 
