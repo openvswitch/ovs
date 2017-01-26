@@ -183,6 +183,9 @@ windows_close(struct stream *stream)
     /* Disconnect the named pipe in case it was created from a passive stream.
      */
     if (s->server) {
+        /* Flush the pipe to allow the client to read the pipe's contents
+         * before disconnecting. */
+        FlushFileBuffers(s->fd);
         DisconnectNamedPipe(s->fd);
     }
     CloseHandle(s->fd);
