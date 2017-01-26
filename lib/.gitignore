@@ -9,6 +9,7 @@
 /ofp-actions.inc2
 /ofp-errors.inc
 /ofp-msgs.inc
+/ovs-fields.7
 /stdio.h
 /string.h
 /vswitch-idl.c
