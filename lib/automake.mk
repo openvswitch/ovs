@@ -431,8 +431,8 @@ lib_libopenvswitch_la_SOURCES += lib/stream-nossl.c
 endif
 
 pkgconfig_DATA += \
-	$(srcdir)/lib/libopenvswitch.pc \
-	$(srcdir)/lib/libsflow.pc
+	lib/libopenvswitch.pc \
+	lib/libsflow.pc
 
 EXTRA_DIST += \
 	lib/dh1024.pem \
