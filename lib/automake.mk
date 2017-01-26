@@ -1,4 +1,4 @@
-# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+# Copyright (C) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -539,6 +539,7 @@ lib-install-data-local:
 	$(MKDIR_P) $(DESTDIR)$(sysconfdir)/openvswitch
 
 man_MANS += lib/ovs-fields.7
+CLEANFILES += lib/ovs-fields.7
 lib/ovs-fields.7: $(srcdir)/build-aux/extract-ofp-fields include/openvswitch/meta-flow.h lib/meta-flow.xml
 	$(AM_V_GEN)PYTHONIOENCODING=utf8 $(run_python) $< \
             --ovs-version=$(VERSION) ovs-fields \
