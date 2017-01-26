@@ -714,6 +714,12 @@ def make_ovs_fields(meta_flow_h, meta_flow_xml):
 .  ns
 .  IP "\\\\$1"
 ..
+
+.de TQ
+.  br
+.  ns
+.  TP "\\\\$1"
+..
 .de URL
 \\\\$2 \\(laURL: \\\\$1 \\(ra\\\\$3
 ..
