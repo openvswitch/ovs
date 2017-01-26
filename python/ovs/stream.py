@@ -233,6 +233,9 @@ class Stream(object):
             self.socket.close()
         if self.pipe is not None:
             if self._server:
+                # Flush the pipe to allow the client to read the pipe
+                # before disconnecting.
+                win32pipe.FlushFileBuffers(self.pipe)
                 win32pipe.DisconnectNamedPipe(self.pipe)
             winutils.close_handle(self.pipe, vlog.warn)
             winutils.close_handle(self._read.hEvent, vlog.warn)
