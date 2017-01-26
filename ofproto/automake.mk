@@ -60,7 +60,7 @@ ofproto_libofproto_la_LIBADD += ${PTHREAD_LIBS}
 endif
 
 pkgconfig_DATA += \
-	$(srcdir)/ofproto/libofproto.pc
+	ofproto/libofproto.pc
 
 # Distribute this generated file in order not to require Python at
 # build time if ofproto/ipfix.xml is not modified.
