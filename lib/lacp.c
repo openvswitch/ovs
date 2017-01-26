@@ -597,6 +597,7 @@ lacp_update_attached(struct lacp *lacp) OVS_REQUIRES(mutex)
     lead_enable = false;
     HMAP_FOR_EACH (slave, node, &lacp->slaves) {
         struct lacp_info pri;
+        bool enable;
 
         slave->attached = false;
 
@@ -617,7 +618,7 @@ lacp_update_attached(struct lacp *lacp) OVS_REQUIRES(mutex)
 
         slave->attached = true;
         slave_get_priority(slave, &pri);
-        bool enable = slave_may_enable__(slave);
+        enable = slave_may_enable__(slave);
 
         if (!lead
             || enable > lead_enable
