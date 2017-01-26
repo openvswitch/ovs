@@ -2,7 +2,6 @@ AT_BANNER([ovs-router])
 
 AT_SETUP([appctl - route/add with gateway])
 AT_KEYWORDS([ovs_router])
-AT_XFAIL_IF([test "$IS_WIN32" = "yes"])
 OVS_VSWITCHD_START([add-port br0 p2 -- set Interface p2 type=gre \
 			options:local_ip=2.2.2.2 options:remote_ip=1.1.1.1 \
 			-- add-port br0 p1  -- set interface p1 type=dummy])
