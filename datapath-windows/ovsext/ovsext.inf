@@ -79,6 +79,6 @@ Description     = %OVSExt_Desc%
 DelService=OVSExt,0x200
 
 [Strings]
-OVS = "Open vSwitch"
+OVS = "The Linux Foundation (R)"
 OVSExt_Desc = "Open vSwitch Extension"
 OVSExt_HelpText = "Open vSwitch forwarding switch extension"

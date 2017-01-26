@@ -50,7 +50,7 @@
 
 /* The provider name should always match the provider string from the install
  * file. */
-#define OVS_TUNNEL_PROVIDER_NAME        L"Open vSwitch"
+#define OVS_TUNNEL_PROVIDER_NAME        L"The Linux Foundation (R)"
 
 /* The provider description should always contain the OVS service description
  * string from the install file. */

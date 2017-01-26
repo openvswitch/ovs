@@ -31,7 +31,7 @@ BEGIN
     BEGIN
         BLOCK "000004b0"
         BEGIN
-            VALUE "CompanyName", "Open vSwitch"
+            VALUE "CompanyName", "The Linux Foundation (R)"
             VALUE "FileDescription", "Open vSwitch Extension"
             VALUE "FileVersion", STR(Version)
             VALUE "InternalName", "OVSExt.SYS"
