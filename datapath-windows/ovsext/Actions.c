@@ -1430,6 +1430,49 @@ OvsUpdateUdpPorts(OvsForwardingContext *ovsFwdCtx,
 
 /*
  *----------------------------------------------------------------------------
+ * OvsUpdateTcpPorts --
+ *      Updates the TCP source or destination port in ovsFwdCtx.curNbl inline
+ *      based on the specified key.
+ *----------------------------------------------------------------------------
+ */
+static __inline NDIS_STATUS
+OvsUpdateTcpPorts(OvsForwardingContext *ovsFwdCtx,
+                  const struct ovs_key_tcp *tcpAttr)
+{
+    PUINT8 bufferStart;
+    OVS_PACKET_HDR_INFO *layers = &ovsFwdCtx->layers;
+    TCPHdr *tcpHdr = NULL;
+
+    ASSERT(layers->value != 0);
+
+    if (!layers->isTcp) {
+        ovsActionStats.noCopiedNbl++;
+        return NDIS_STATUS_FAILURE;
+    }
+
+    bufferStart = OvsGetHeaderBySize(ovsFwdCtx, layers->l7Offset);
+    if (!bufferStart) {
+        return NDIS_STATUS_RESOURCES;
+    }
+
+    tcpHdr = (TCPHdr *)(bufferStart + layers->l4Offset);
+
+    if (tcpHdr->source != tcpAttr->tcp_src) {
+        tcpHdr->check = ChecksumUpdate16(tcpHdr->check, tcpHdr->source,
+                                         tcpAttr->tcp_src);
+        tcpHdr->source = tcpAttr->tcp_src;
+    }
+    if (tcpHdr->dest != tcpAttr->tcp_dst) {
+        tcpHdr->check = ChecksumUpdate16(tcpHdr->check, tcpHdr->dest,
+                                         tcpAttr->tcp_dst);
+        tcpHdr->dest = tcpAttr->tcp_dst;
+    }
+
+    return NDIS_STATUS_SUCCESS;
+}
+
+/*
+ *----------------------------------------------------------------------------
  * OvsUpdateIPv4Header --
  *      Updates the IPv4 header in ovsFwdCtx.curNbl inline based on the
  *      specified key.
@@ -1573,6 +1616,11 @@ OvsExecuteSetAction(OvsForwardingContext *ovsFwdCtx,
     case OVS_KEY_ATTR_UDP:
         status = OvsUpdateUdpPorts(ovsFwdCtx,
             NlAttrGetUnspec(a, sizeof(struct ovs_key_udp)));
+        break;
+
+    case OVS_KEY_ATTR_TCP:
+        status = OvsUpdateTcpPorts(ovsFwdCtx,
+            NlAttrGetUnspec(a, sizeof(struct ovs_key_tcp)));
         break;
 
     default:
