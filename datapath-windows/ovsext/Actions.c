@@ -1306,7 +1306,6 @@ OvsUpdateEthHeader(OvsForwardingContext *ovsFwdCtx,
     return NDIS_STATUS_SUCCESS;
 }
 
-
 /*
  *----------------------------------------------------------------------------
  * OvsGetHeaderBySize --
@@ -1382,6 +1381,52 @@ PUINT8 OvsGetHeaderBySize(OvsForwardingContext *ovsFwdCtx,
     return start + curMdlOffset;
 }
 
+/*
+ *----------------------------------------------------------------------------
+ * OvsUpdateUdpPorts --
+ *      Updates the UDP source or destination port in ovsFwdCtx.curNbl inline
+ *      based on the specified key.
+ *----------------------------------------------------------------------------
+ */
+static __inline NDIS_STATUS
+OvsUpdateUdpPorts(OvsForwardingContext *ovsFwdCtx,
+                  const struct ovs_key_udp *udpAttr)
+{
+    PUINT8 bufferStart;
+    OVS_PACKET_HDR_INFO *layers = &ovsFwdCtx->layers;
+    UDPHdr *udpHdr = NULL;
+
+    ASSERT(layers->value != 0);
+
+    if (!layers->isUdp) {
+        ovsActionStats.noCopiedNbl++;
+        return NDIS_STATUS_FAILURE;
+    }
+
+    bufferStart = OvsGetHeaderBySize(ovsFwdCtx, layers->l7Offset);
+    if (!bufferStart) {
+        return NDIS_STATUS_RESOURCES;
+    }
+
+    udpHdr = (UDPHdr *)(bufferStart + layers->l4Offset);
+    if (udpHdr->check) {
+        if (udpHdr->source != udpAttr->udp_src) {
+            udpHdr->check = ChecksumUpdate16(udpHdr->check, udpHdr->source,
+                                             udpAttr->udp_src);
+            udpHdr->source = udpAttr->udp_src;
+        }
+        if (udpHdr->dest != udpAttr->udp_dst) {
+            udpHdr->check = ChecksumUpdate16(udpHdr->check, udpHdr->dest,
+                                             udpAttr->udp_dst);
+            udpHdr->dest = udpAttr->udp_dst;
+        }
+    } else {
+        udpHdr->source = udpAttr->udp_src;
+        udpHdr->dest = udpAttr->udp_dst;
+    }
+
+    return NDIS_STATUS_SUCCESS;
+}
 
 /*
  *----------------------------------------------------------------------------
@@ -1524,6 +1569,11 @@ OvsExecuteSetAction(OvsForwardingContext *ovsFwdCtx,
         RtlCopyMemory(&ovsFwdCtx->tunKey, &tunKey, sizeof ovsFwdCtx->tunKey);
         break;
     }
+
+    case OVS_KEY_ATTR_UDP:
+        status = OvsUpdateUdpPorts(ovsFwdCtx,
+            NlAttrGetUnspec(a, sizeof(struct ovs_key_udp)));
+        break;
 
     default:
         OVS_LOG_INFO("Unhandled attribute %#x", type);
