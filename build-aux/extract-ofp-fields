@@ -752,6 +752,8 @@ ovs\-fields \- protocol header fields in OpenFlow and Open vSwitch
         oline = oline.replace(u'\u2208', r'\[mo]')
         oline = oline.replace(u'\u2260', r'\[!=]')
         oline = oline.replace(u'\u2264', r'\[<=]')
+        oline = oline.replace(u'\u2265', r'\[>=]')
+        oline = oline.replace(u'\u00d7', r'\[mu]')
         if len(oline):
             output += [oline]
 

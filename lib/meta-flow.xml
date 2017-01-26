@@ -3102,8 +3102,7 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
 
         <dt><code>vlan_tci=0x5000/0xe000</code></dt>
         <dd>
-          Match packets with no 802.1Q header or tagged with prior‐
-          ity 2 (in any VLAN).
+          Match packets with no 802.1Q header or tagged with priority 2 (in any VLAN).
         </dd>
 
         <dt><code>vlan_tci=0/0xefff</code></dt>
