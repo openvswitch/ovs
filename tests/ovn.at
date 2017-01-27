@@ -872,7 +872,7 @@ ct_dnat();
 
 # ct_snat
 ct_snat;
-    encodes as ct(zone=NXM_NX_REG12[0..15],nat)
+    encodes as ct(table=27,zone=NXM_NX_REG12[0..15],nat)
     has prereqs ip
 ct_snat(192.168.1.2);
     encodes as ct(commit,table=27,zone=NXM_NX_REG12[0..15],nat(src=192.168.1.2))

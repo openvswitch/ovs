@@ -445,6 +445,9 @@ struct ovnact_encode_params {
     /* 'true' if the flow is for a switch. */
     bool is_switch;
 
+    /* 'true' if the flow is for a gateway router. */
+    bool is_gateway_router;
+
     /* A map from a port name to its connection tracking zone. */
     const struct simap *ct_zones;
 
