@@ -536,6 +536,15 @@
             </p>
 
             <p>
+              If the connected logical router port has a
+              <code>redirect-chassis</code> specified and the logical router
+              has rules specified in <ref column="nat" table="Logical_Router"/>
+              with <ref column="external_mac" table="NAT"/>, then those
+              addresses are also used to populate the switch's destination
+              lookup.
+            </p>
+
+            <p>
               Supported only in OVN 2.7 and later.  Earlier versions required
               router addresses to be manually synchronized.
             </p>
@@ -927,8 +936,9 @@
     </column>
 
     <column name="nat">
-      One or more NAT rules for the router. NAT rules only work on the
-      Gateway routers.
+      One or more NAT rules for the router.  NAT rules only work on
+      Gateway routers, and on distributed routers with one logical router
+      port with a <code>redirect-chassis</code> specified.
     </column>
 
     <column name="load_balancer">
@@ -1231,9 +1241,9 @@
     </column>
   </table>
 
-  <table name="NAT" title="NAT rules for a Gateway router.">
+  <table name="NAT" title="NAT rules">
     <p>
-      Each record represents a NAT rule in a Gateway router.
+      Each record represents a NAT rule.
     </p>
 
     <column name="type">
@@ -1266,8 +1276,46 @@
       An IPv4 address.
     </column>
 
+    <column name="external_mac">
+      <p>
+        A MAC address.
+      </p>
+
+      <p>
+        This is only used on the gateway port on distributed routers.
+        This must be specified in order for the NAT rule to be
+        processed in a distributed manner on all chassis.  If this is
+        not specified for a NAT rule on a distributed router, then
+        this NAT rule will be processed in a centralized manner on
+        the gateway port instance on the <code>redirect-chassis</code>.
+      </p>
+
+      <p>
+        This MAC address must be unique on the logical switch that the
+        gateway port is attached to.  If the MAC address used on the
+        <ref column="logical_port"/> is globally unique, then that MAC
+        address can be specified as this <ref column="external_mac"/>.
+      </p>
+    </column>
+
     <column name="logical_ip">
       An IPv4 network (e.g 192.168.1.0/24) or an IPv4 address.
+    </column>
+
+    <column name="logical_port">
+      <p>
+        The name of the logical port where the <ref column="logical_ip"/>
+        resides.
+      </p>
+
+      <p>
+        This is only used on distributed routers.  This must be
+        specified in order for the NAT rule to be processed in a
+        distributed manner on all chassis.  If this is not specified
+        for a NAT rule on a distributed router, then this NAT rule
+        will be processed in a centralized manner on the gateway
+        port instance on the <code>redirect-chassis</code>.
+      </p>
     </column>
   </table>
 
