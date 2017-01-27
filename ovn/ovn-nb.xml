@@ -1111,31 +1111,31 @@
       <column name="options" key="redirect-chassis">
         <p>
           If set, this indicates that this logical router port represents
-          a distributed gateway port.  In addition to the southbound
-          database port representing this distributed gateway port, another
-          port will be created in the southbound database that represents a
-          particular instance, bound to a specific chassis, of this
-          otherwise distributed logical router port.  This additional port
-          can then be specified as an <code>outport</code> in some of the
-          ingress pipeline flows.  This will cause matching packets to be
-          directed to a specific chassis to carry out the egress pipeline,
-          allowing a subset of logical router functionality to be
-          implemented in a centralized manner.  At the beginning of the
-          egress pipeline, the <code>outport</code> will be reset to the
-          value of the distributed port.
+          a distributed gateway port that connects this router to a logical
+          switch with a localnet port.  There may be at most one such
+          logical router port on each logical router.
         </p>
 
         <p>
-          This option specifies the name of the <code>chassis</code> to which
-          the additional southbound port binding of type
-          <code>chassisredirect</code> will be bound.
+          Even when a <code>redirect-chassis</code> is specified, the
+          logical router port still effectively resides on each chassis.
+          However, due to the implications of the use of L2 learning in the
+          physical network, as well as the need to support advanced features
+          such as one-to-many NAT (aka IP masquerading), a subset of the
+          logical router processing is handled in a centralized manner on
+          the specified <code>redirect-chassis</code>.
         </p>
 
         <p>
           When this option is specified, the peer logical switch port's
-          <ref column="addresses" table="Logical_Switch_Port"/> should be
-          set to <code>router</code>, so that the corresponding logical
-          switch destination lookup flow is only programmed on the
+          <ref column="addresses" table="Logical_Switch_Port"/> must be
+          set to <code>router</code>.  With this setting, the <ref
+          column="external_mac" table="NAT"/>s specified in NAT rules are
+          automatically programmed in the peer logical switch's
+          destination lookup on the chassis where the <ref
+          column="logical_port" table="NAT"/> resides.  In addition, the
+          logical router's MAC address is automatically programmed in the
+          peer logical switch's destination lookup flow on the
           <code>redirect-chassis</code>.
         </p>
       </column>
