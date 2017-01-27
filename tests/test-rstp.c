@@ -691,6 +691,7 @@ test_rstp_main(int argc, char *argv[])
         }
     }
     free(token);
+    fclose(input_file);
 
     for (i = 0; i < tc->n_lans; i++) {
         struct lan *lan = tc->lans[i];
