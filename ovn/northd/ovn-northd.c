@@ -4128,76 +4128,6 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         const char *lb_force_snat_ip = get_force_snat_ip(od, "lb",
                                                          &snat_ip);
 
-        /* A set to hold all ips that need defragmentation and tracking. */
-        struct sset all_ips = SSET_INITIALIZER(&all_ips);
-
-        for (int i = 0; i < od->nbr->n_load_balancer; i++) {
-            struct nbrec_load_balancer *lb = od->nbr->load_balancer[i];
-            struct smap *vips = &lb->vips;
-            struct smap_node *node;
-
-            SMAP_FOR_EACH (node, vips) {
-                uint16_t port = 0;
-
-                /* node->key contains IP:port or just IP. */
-                char *ip_address = NULL;
-                ip_address_and_port_from_lb_key(node->key, &ip_address, &port);
-                if (!ip_address) {
-                    continue;
-                }
-
-                if (!sset_contains(&all_ips, ip_address)) {
-                    sset_add(&all_ips, ip_address);
-                }
-
-                /* Higher priority rules are added for load-balancing in DNAT
-                 * table.  For every match (on a VIP[:port]), we add two flows
-                 * via add_router_lb_flow().  One flow is for specific matching
-                 * on ct.new with an action of "ct_lb($targets);".  The other
-                 * flow is for ct.est with an action of "ct_dnat;". */
-                ds_clear(&actions);
-                ds_put_format(&actions, "ct_lb(%s);", node->value);
-
-                ds_clear(&match);
-                ds_put_format(&match, "ip && ip4.dst == %s",
-                              ip_address);
-                free(ip_address);
-
-                if (port) {
-                    if (lb->protocol && !strcmp(lb->protocol, "udp")) {
-                        ds_put_format(&match, " && udp && udp.dst == %d",
-                                      port);
-                    } else {
-                        ds_put_format(&match, " && tcp && tcp.dst == %d",
-                                      port);
-                    }
-                    add_router_lb_flow(lflows, od, &match, &actions, 120,
-                                       lb_force_snat_ip);
-                } else {
-                    add_router_lb_flow(lflows, od, &match, &actions, 110,
-                                       lb_force_snat_ip);
-                }
-            }
-        }
-
-        /* If there are any load balancing rules, we should send the
-         * packet to conntrack for defragmentation and tracking.  This helps
-         * with two things.
-         *
-         * 1. With tracking, we can send only new connections to pick a
-         *    DNAT ip address from a group.
-         * 2. If there are L4 ports in load balancing rules, we need the
-         *    defragmentation to match on L4 ports. */
-        const char *ip_address;
-        SSET_FOR_EACH(ip_address, &all_ips) {
-            ds_clear(&match);
-            ds_put_format(&match, "ip && ip4.dst == %s", ip_address);
-            ovn_lflow_add(lflows, od, S_ROUTER_IN_DEFRAG,
-                          100, ds_cstr(&match), "ct_next;");
-        }
-
-        sset_destroy(&all_ips);
-
         for (int i = 0; i < od->nbr->n_nat; i++) {
             const struct nbrec_nat *nat;
 
@@ -4352,6 +4282,76 @@ build_lrouter_flows(struct hmap *datapaths, struct hmap *ports,
         * routing in the openflow pipeline. */
         ovn_lflow_add(lflows, od, S_ROUTER_IN_DNAT, 50,
                       "ip", "flags.loopback = 1; ct_dnat;");
+
+        /* A set to hold all ips that need defragmentation and tracking. */
+        struct sset all_ips = SSET_INITIALIZER(&all_ips);
+
+        for (int i = 0; i < od->nbr->n_load_balancer; i++) {
+            struct nbrec_load_balancer *lb = od->nbr->load_balancer[i];
+            struct smap *vips = &lb->vips;
+            struct smap_node *node;
+
+            SMAP_FOR_EACH (node, vips) {
+                uint16_t port = 0;
+
+                /* node->key contains IP:port or just IP. */
+                char *ip_address = NULL;
+                ip_address_and_port_from_lb_key(node->key, &ip_address, &port);
+                if (!ip_address) {
+                    continue;
+                }
+
+                if (!sset_contains(&all_ips, ip_address)) {
+                    sset_add(&all_ips, ip_address);
+                }
+
+                /* Higher priority rules are added for load-balancing in DNAT
+                 * table.  For every match (on a VIP[:port]), we add two flows
+                 * via add_router_lb_flow().  One flow is for specific matching
+                 * on ct.new with an action of "ct_lb($targets);".  The other
+                 * flow is for ct.est with an action of "ct_dnat;". */
+                ds_clear(&actions);
+                ds_put_format(&actions, "ct_lb(%s);", node->value);
+
+                ds_clear(&match);
+                ds_put_format(&match, "ip && ip4.dst == %s",
+                              ip_address);
+                free(ip_address);
+
+                if (port) {
+                    if (lb->protocol && !strcmp(lb->protocol, "udp")) {
+                        ds_put_format(&match, " && udp && udp.dst == %d",
+                                      port);
+                    } else {
+                        ds_put_format(&match, " && tcp && tcp.dst == %d",
+                                      port);
+                    }
+                    add_router_lb_flow(lflows, od, &match, &actions, 120,
+                                       lb_force_snat_ip);
+                } else {
+                    add_router_lb_flow(lflows, od, &match, &actions, 110,
+                                       lb_force_snat_ip);
+                }
+            }
+        }
+
+        /* If there are any load balancing rules, we should send the
+         * packet to conntrack for defragmentation and tracking.  This helps
+         * with two things.
+         *
+         * 1. With tracking, we can send only new connections to pick a
+         *    DNAT ip address from a group.
+         * 2. If there are L4 ports in load balancing rules, we need the
+         *    defragmentation to match on L4 ports. */
+        const char *ip_address;
+        SSET_FOR_EACH(ip_address, &all_ips) {
+            ds_clear(&match);
+            ds_put_format(&match, "ip && ip4.dst == %s", ip_address);
+            ovn_lflow_add(lflows, od, S_ROUTER_IN_DEFRAG,
+                          100, ds_cstr(&match), "ct_next;");
+        }
+
+        sset_destroy(&all_ips);
     }
 
     /* Logical router ingress table 5: IP Routing.
