@@ -793,11 +793,10 @@
       number 13.
     </dd>
 
-    <dt>conntrack zone fields for Gateway router</dt>
+    <dt>conntrack zone fields for routers</dt>
     <dd>
-      Fields that denote the connection tracking zones for Gateway routers.
-      These values only have local significance (only on chassis that have
-      Gateway routers instantiated) and is not meaningful between
+      Fields that denote the connection tracking zones for routers.  These
+      values only have local significance and are not meaningful between
       chassis.  OVN stores the zone information for DNATting in Open vSwitch
         <!-- Keep the following in sync with MFF_LOG_DNAT_ZONE and
         MFF_LOG_SNAT_ZONE in ovn/lib/logical-fields.h. -->

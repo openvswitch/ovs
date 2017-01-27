@@ -323,10 +323,8 @@ update_ct_zones(struct sset *lports, const struct hmap *local_datapaths,
     /* Local patched datapath (gateway routers) need zones assigned. */
     const struct local_datapath *ld;
     HMAP_FOR_EACH (ld, hmap_node, local_datapaths) {
-        if (!ld->has_local_l3gateway) {
-            continue;
-        }
-
+        /* XXX Add method to limit zone assignment to logical router
+         * datapaths with NAT */
         char *dnat = alloc_nat_zone_key(&ld->datapath->header_.uuid, "dnat");
         char *snat = alloc_nat_zone_key(&ld->datapath->header_.uuid, "snat");
         sset_add(&all_users, dnat);
