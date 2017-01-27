@@ -444,7 +444,7 @@
     <h1>NAT Commands</h1>
 
     <dl>
-      <dt>[<code>--may-exist</code>] <code>lr-nat-add</code> <var>router</var> <var>type</var> <var>external_ip</var> <var>logical_ip</var></dt>
+      <dt>[<code>--may-exist</code>] <code>lr-nat-add</code> <var>router</var> <var>type</var> <var>external_ip</var> <var>logical_ip</var> [<var>logical_port</var> <var>external_mac</var>]</dt>
       <dd>
         <p>
           Adds the specified NAT to <var>router</var>.
@@ -453,6 +453,13 @@
           The <var>external_ip</var> is an IPv4 address.
           The <var>logical_ip</var> is an IPv4 network (e.g 192.168.1.0/24)
           or an IPv4 address.
+          The <var>logical_port</var> and <var>external_mac</var> are only
+          accepted when <var>router</var> is a distributed router (rather
+          than a gateway router) and <var>type</var> is
+          <code>dnat_and_snat</code>.
+          The <var>logical_port</var> is the name of an existing logical
+          switch port where the <var>logical_ip</var> resides.
+          The <var>external_mac</var> is an Ethernet address.
         </p>
         <p>
           When <var>type</var> is <code>dnat</code>, the externally
@@ -475,8 +482,22 @@
           the IP address in <var>external_ip</var>.
         </p>
         <p>
-          It is an error if a NAT already exists,
-          unless <code>--may-exist</code> is specified.
+          When the <var>logical_port</var> and <var>external_mac</var>
+          are specified, the NAT rule will be programmed on the chassis
+          where the <var>logical_port</var> resides.  This includes
+          ARP replies for the <var>external_ip</var>, which return the
+          value of <var>external_mac</var>.  All packets transmitted
+          with source IP address equal to <var>external_ip</var> will
+          be sent using the <var>external_mac</var>.
+        </p>
+        <p>
+          It is an error if a NAT already exists with the same values
+          of <var>router</var>, <var>type</var>, <var>external_ip</var>,
+          and <var>logical_ip</var>, unless <code>--may-exist</code> is
+          specified.  When <code>--may-exist</code>,
+          <var>logical_port</var>, and <var>external_mac</var> are all
+          specified, the existing values of <var>logical_port</var> and
+          <var>external_mac</var> are overwritten.
         </p>
       </dd>
 
