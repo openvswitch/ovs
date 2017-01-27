@@ -1145,20 +1145,11 @@ ovn-nbctl lsp-add alice alice1 \
 -- lsp-set-addresses alice1 "f0:00:00:01:02:05 172.16.1.2"
 
 # Add DNAT rules
-ovn-nbctl -- --id=@nat create nat type="dnat_and_snat" \
-    logical_ip=192.168.1.2 external_ip=172.16.1.3 \
-    external_mac=\"00:00:02:02:03:04\" logical_port=foo1 \
-    -- add logical_router R1 nat @nat
-
-ovn-nbctl -- --id=@nat create nat type="dnat_and_snat" \
-    logical_ip=192.168.1.3 external_ip=172.16.1.4 \
-    external_mac=\"00:00:02:02:03:05\" logical_port=foo2 \
-    -- add logical_router R1 nat @nat
+AT_CHECK([ovn-nbctl lr-nat-add R1 dnat_and_snat 172.16.1.3 192.168.1.2 foo1 00:00:02:02:03:04])
+AT_CHECK([ovn-nbctl lr-nat-add R1 dnat_and_snat 172.16.1.4 192.168.1.3 foo2 00:00:02:02:03:05])
 
 # Add a SNAT rule
-ovn-nbctl -- --id=@nat create nat type="snat" \
-    logical_ip=192.168.0.0/16 external_ip=172.16.1.1 \
-    -- add logical_router R1 nat @nat
+AT_CHECK([ovn-nbctl lr-nat-add R1 snat 172.16.1.1 192.168.0.0/16])
 
 OVS_WAIT_UNTIL([ovs-ofctl dump-flows br-int | grep ct\( | grep nat])
 
@@ -1300,20 +1291,11 @@ ovn-nbctl lsp-add alice alice1 \
 -- lsp-set-addresses alice1 "f0:00:00:01:02:05 172.16.1.2"
 
 # Add DNAT rules
-ovn-nbctl -- --id=@nat create nat type="dnat_and_snat" \
-    logical_ip=192.168.1.2 external_ip=172.16.1.3 \
-    external_mac=\"00:00:02:02:03:04\" logical_port=foo1 \
-    -- add logical_router R1 nat @nat
-
-ovn-nbctl -- --id=@nat create nat type="dnat_and_snat" \
-    logical_ip=192.168.2.2 external_ip=172.16.1.4 \
-    external_mac=\"00:00:02:02:03:05\" logical_port=bar1 \
-    -- add logical_router R1 nat @nat
+AT_CHECK([ovn-nbctl lr-nat-add R1 dnat_and_snat 172.16.1.3 192.168.1.2 foo1 00:00:02:02:03:04])
+AT_CHECK([ovn-nbctl lr-nat-add R1 dnat_and_snat 172.16.1.4 192.168.2.2 bar1 00:00:02:02:03:05])
 
 # Add a SNAT rule
-ovn-nbctl -- --id=@nat create nat type="snat" \
-    logical_ip=192.168.0.0/16 external_ip=172.16.1.1 \
-    -- add logical_router R1 nat @nat
+AT_CHECK([ovn-nbctl lr-nat-add R1 snat 172.16.1.1 192.168.0.0/16])
 
 OVS_WAIT_UNTIL([ovs-ofctl dump-flows br-int | grep ct\( | grep nat])
 
