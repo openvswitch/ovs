@@ -350,6 +350,8 @@ tranform_wide(char *name, wchar_t *wide_name)
     return true;
 }
 
+#define WMI_QUERY_COUNT 2048
+
 /* This function will delete a switch internal port with a given name as input
  * executing "RemoveResourceSettings" as per documentation:
  * https://msdn.microsoft.com/en-us/library/hh850277%28v=vs.85%29.aspx
@@ -400,7 +402,7 @@ delete_wmi_port(char *name)
 
 
     /* Get the port with the element name equal to the name input. */
-    wchar_t internal_port_query[2048] = L"SELECT * from "
+    wchar_t internal_port_query[WMI_QUERY_COUNT] = L"SELECT * from "
         L"Msvm_EthernetPortAllocationSettingData  WHERE ElementName = \"" ;
 
     wide_name = malloc((strlen(name) + 1) * sizeof(wchar_t));
@@ -414,9 +416,9 @@ delete_wmi_port(char *name)
         retval = false;
         goto error;
     }
-    wcscat_s(internal_port_query, sizeof(internal_port_query), wide_name);
+    wcscat_s(internal_port_query, WMI_QUERY_COUNT, wide_name);
 
-    wcscat_s(internal_port_query, sizeof(internal_port_query), L"\"");
+    wcscat_s(internal_port_query, WMI_QUERY_COUNT, L"\"");
 
     hres = psvc->lpVtbl->ExecQuery(psvc,
                                    L"WQL",
@@ -626,6 +628,7 @@ error:
     return retval;
 }
 
+
 /* This function will create an internal port on the switch given a given name
  * executing the method AddResourceSettings as per documentation:
  * https://msdn.microsoft.com/en-us/library/hh850019%28v=vs.85%29.aspx.
@@ -686,7 +689,7 @@ create_wmi_port(char *name) {
     }
 
     /* Check if the element already exists on the switch. */
-    wchar_t internal_port_query[2048] = L"SELECT * FROM "
+    wchar_t internal_port_query[WMI_QUERY_COUNT] = L"SELECT * FROM "
     L"Msvm_InternalEthernetPort WHERE ElementName = \"";
 
     wide_name = malloc((strlen(name) + 1) * sizeof(wchar_t));
@@ -700,9 +703,10 @@ create_wmi_port(char *name) {
         retval = false;
         goto error;
     }
-    wcscat_s(internal_port_query, sizeof(internal_port_query), wide_name);
 
-    wcscat_s(internal_port_query, sizeof(internal_port_query), L"\"");
+    wcscat_s(internal_port_query, WMI_QUERY_COUNT, wide_name);
+
+    wcscat_s(internal_port_query, WMI_QUERY_COUNT, L"\"");
     hres = psvc->lpVtbl->ExecQuery(psvc,
                                    L"WQL",
                                    internal_port_query,
@@ -748,7 +752,7 @@ create_wmi_port(char *name) {
         retval = false;
         goto error;
     }
-    wcscpy_s(internal_port_query, sizeof(internal_port_query),
+    wcscpy_s(internal_port_query, WMI_QUERY_COUNT,
              L"SELECT * FROM Msvm_VirtualEthernetSwitch WHERE Name = \"");
 
     hres = pcls_obj->lpVtbl->Get(pcls_obj, L"SystemName", 0,
@@ -758,7 +762,7 @@ create_wmi_port(char *name) {
         goto error;
     }
 
-    wcscat_s(internal_port_query, sizeof(internal_port_query),
+    wcscat_s(internal_port_query, WMI_QUERY_COUNT,
              vt_prop.bstrVal);
 
     VariantClear(&vt_prop);
@@ -780,7 +784,7 @@ create_wmi_port(char *name) {
     }
 
     /* Get the switch object on which the extension is activated. */
-    wcscat_s(internal_port_query, sizeof(internal_port_query), L"\"");
+    wcscat_s(internal_port_query, WMI_QUERY_COUNT, L"\"");
     hres = psvc->lpVtbl->ExecQuery(psvc,
                                    L"WQL",
                                    internal_port_query,
@@ -810,11 +814,11 @@ create_wmi_port(char *name) {
         goto error;
     }
 
-    wcscpy_s(internal_port_query, sizeof(internal_port_query),
+    wcscpy_s(internal_port_query, WMI_QUERY_COUNT,
              L"SELECT * FROM Msvm_VirtualEthernetSwitchSettingData WHERE "
              L"ElementName = \"");
 
-    wcscat_s(internal_port_query, sizeof(internal_port_query),
+    wcscat_s(internal_port_query, WMI_QUERY_COUNT,
              vt_prop.bstrVal);
     VariantClear(&vt_prop);
 
@@ -831,11 +835,11 @@ create_wmi_port(char *name) {
      * Uniquely identifies an instance of this class. This property is
      * inherited from CIM_SettingData and is always
      * set to "Microsoft:GUID\DeviceSpecificData". */
-    wcscat_s(internal_port_query, sizeof(internal_port_query),
+    wcscat_s(internal_port_query, WMI_QUERY_COUNT,
              L"\" AND InstanceID  = \"Microsoft:");
-    wcscat_s(internal_port_query, sizeof(internal_port_query),
+    wcscat_s(internal_port_query, WMI_QUERY_COUNT,
              vt_prop.bstrVal);
-    wcscat_s(internal_port_query, sizeof(internal_port_query),
+    wcscat_s(internal_port_query, WMI_QUERY_COUNT,
              L"\"");
 
     VariantClear(&vt_prop);
@@ -1135,10 +1139,10 @@ create_wmi_port(char *name) {
         goto error;
     }
 
-    wcscpy_s(internal_port_query, sizeof(internal_port_query),
+    wcscpy_s(internal_port_query, WMI_QUERY_COUNT,
              L"SELECT * FROM MSFT_NetAdapter WHERE Name LIKE '%%");
-    wcscat_s(internal_port_query, sizeof(internal_port_query), wide_name);
-    wcscat_s(internal_port_query, sizeof(internal_port_query), L"%%'");
+    wcscat_s(internal_port_query, WMI_QUERY_COUNT, wide_name);
+    wcscat_s(internal_port_query, WMI_QUERY_COUNT, L"%%'");
 
     /* Get the object with the port name equal to name on the CIM. */
     hres = psvc->lpVtbl->ExecQuery(psvc,
