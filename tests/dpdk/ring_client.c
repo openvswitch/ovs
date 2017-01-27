@@ -176,7 +176,7 @@ main(int argc, char *argv[])
 
     RTE_LOG(INFO, APP, "Finished Process Init.\n");
 
-    printf("\nClient process %d handling packets\n", client_id);
+    printf("\nClient process %u handling packets\n", client_id);
     printf("[Press Ctrl-C to quit ...]\n");
 
     for (;;) {
