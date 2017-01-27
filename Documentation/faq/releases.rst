@@ -118,18 +118,14 @@ Q: Are all features available with all datapaths?
     sFlow                 YES            YES            YES       NO
     IPFIX                 3.10           YES            YES       NO
     Set action            YES            YES            YES       PARTIAL
-    NIC Bonding           YES            YES            YES       NO
-    Multiple VTEPs        YES            YES            YES       NO
+    NIC Bonding           YES            YES            YES       YES
+    Multiple VTEPs        YES            YES            YES       YES
     ===================== ============== ============== ========= =======
 
     Do note, however:
 
     * Only a limited set of flow fields is modifiable via the set action by the
       Hyper-V datapath.
-    * The Hyper-V datapath only supports one physical NIC per datapath. This is
-      why bonding is not supported.
-    * The Hyper-V datapath can have at most one IP address configured as a
-      tunnel endpoint.
 
     The following table lists features that do not *directly* impact an Open
     vSwitch user, e.g. because their absence can be hidden by the ofproto layer
