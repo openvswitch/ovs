@@ -1440,17 +1440,17 @@ dpif_print_packet(struct dpif *dpif, struct dpif_upcall *upcall)
     }
 }
 
-/* If 'dpif' creates its own I/O polling threads, refreshes poll threads
- * configuration. */
+/* Pass custom configuration to the datapath implementation.  Some of the
+ * changes can be postponed until dpif_run() is called. */
 int
-dpif_poll_threads_set(struct dpif *dpif, const char *cmask)
+dpif_set_config(struct dpif *dpif, const struct smap *cfg)
 {
     int error = 0;
 
-    if (dpif->dpif_class->poll_threads_set) {
-        error = dpif->dpif_class->poll_threads_set(dpif, cmask);
+    if (dpif->dpif_class->set_config) {
+        error = dpif->dpif_class->set_config(dpif, cfg);
         if (error) {
-            log_operation(dpif, "poll_threads_set", error);
+            log_operation(dpif, "set_config", error);
         }
     }
 

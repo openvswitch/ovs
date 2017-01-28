@@ -2724,12 +2724,13 @@ dpif_netdev_operate(struct dpif *dpif, struct dpif_op **ops, size_t n_ops)
     }
 }
 
-/* Changes the number or the affinity of pmd threads.  The changes are actually
- * applied in dpif_netdev_run(). */
+/* Applies datapath configuration from the database. Some of the changes are
+ * actually applied in dpif_netdev_run(). */
 static int
-dpif_netdev_pmd_set(struct dpif *dpif, const char *cmask)
+dpif_netdev_set_config(struct dpif *dpif, const struct smap *other_config)
 {
     struct dp_netdev *dp = get_dp_netdev(dpif);
+    const char *cmask = smap_get(other_config, "pmd-cpu-mask");
 
     if (!nullable_string_is_equal(dp->pmd_cmask, cmask)) {
         free(dp->pmd_cmask);
@@ -4844,7 +4845,7 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_operate,
     NULL,                       /* recv_set */
     NULL,                       /* handlers_set */
-    dpif_netdev_pmd_set,
+    dpif_netdev_set_config,
     dpif_netdev_queue_to_priority,
     NULL,                       /* recv */
     NULL,                       /* recv_wait */

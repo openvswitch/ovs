@@ -331,9 +331,6 @@ type_run(const char *type)
         return 0;
     }
 
-    /* This must be called before dpif_run() */
-    dpif_poll_threads_set(backer->dpif, pmd_cpu_mask);
-
     if (dpif_run(backer->dpif)) {
         backer->need_revalidate = REV_RECONFIGURE;
     }
@@ -4516,6 +4513,21 @@ get_datapath_version(const struct ofproto *ofproto_)
 }
 
 static void
+type_set_config(const char *type, const struct smap *other_config)
+{
+    struct dpif_backer *backer;
+
+    backer = shash_find_data(&all_dpif_backers, type);
+    if (!backer) {
+        /* This is not necessarily a problem, since backers are only
+         * created on demand. */
+        return;
+    }
+
+    dpif_set_config(backer->dpif, other_config);
+}
+
+static void
 ct_flush(const struct ofproto *ofproto_, const uint16_t *zone)
 {
     struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
@@ -5284,5 +5296,6 @@ const struct ofproto_class ofproto_dpif_class = {
     NULL,                       /* group_modify */
     group_get_stats,            /* group_get_stats */
     get_datapath_version,       /* get_datapath_version */
+    type_set_config,
     ct_flush,                   /* ct_flush */
 };

@@ -845,7 +845,7 @@ void dpif_register_upcall_cb(struct dpif *, upcall_callback *, void *aux);
 
 int dpif_recv_set(struct dpif *, bool enable);
 int dpif_handlers_set(struct dpif *, uint32_t n_handlers);
-int dpif_poll_threads_set(struct dpif *, const char *cmask);
+int dpif_set_config(struct dpif *, const struct smap *cfg);
 int dpif_port_set_config(struct dpif *, odp_port_t, const struct smap *cfg);
 int dpif_recv(struct dpif *, uint32_t handler_id, struct dpif_upcall *,
               struct ofpbuf *);

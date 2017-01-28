@@ -60,6 +60,7 @@ struct meter;
 struct ofoperation;
 struct ofproto_packet_out;
 struct vl_mff_map;
+struct smap;
 
 extern struct ovs_mutex ofproto_mutex;
 
@@ -512,9 +513,6 @@ extern unsigned ofproto_max_idle;
 /* Number of upcall handler and revalidator threads. Only affects the
  * ofproto-dpif implementation. */
 extern size_t n_handlers, n_revalidators;
-
-/* Cpu mask for pmd threads. */
-extern char *pmd_cpu_mask;
 
 static inline struct rule *rule_from_cls_rule(const struct cls_rule *);
 
@@ -1816,6 +1814,13 @@ struct ofproto_class {
      * This function should be NULL if an implementation does not support it.
      */
     const char *(*get_datapath_version)(const struct ofproto *);
+
+    /* Pass custom configuration options to the 'type' datapath.
+     *
+     * This function should be NULL if an implementation does not support it.
+     */
+    void (*type_set_config)(const char *type,
+                            const struct smap *other_config);
 
 /* ## ------------------- ## */
 /* ## Connection tracking ## */

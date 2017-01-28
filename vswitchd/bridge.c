@@ -570,6 +570,21 @@ collect_in_band_managers(const struct ovsrec_open_vswitch *ovs_cfg,
 }
 
 static void
+config_ofproto_types(const struct smap *other_config)
+{
+    struct sset types;
+    const char *type;
+
+    /* Pass custom configuration to datapath types. */
+    sset_init(&types);
+    ofproto_enumerate_types(&types);
+    SSET_FOR_EACH (type, &types) {
+        ofproto_type_set_config(type, other_config);
+    }
+    sset_destroy(&types);
+}
+
+static void
 bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
 {
     struct sockaddr_in *managers;
@@ -583,7 +598,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
                                         OFPROTO_FLOW_LIMIT_DEFAULT));
     ofproto_set_max_idle(smap_get_int(&ovs_cfg->other_config, "max-idle",
                                       OFPROTO_MAX_IDLE_DEFAULT));
-    ofproto_set_cpu_mask(smap_get(&ovs_cfg->other_config, "pmd-cpu-mask"));
 
     ofproto_set_threads(
         smap_get_int(&ovs_cfg->other_config, "n-handler-threads", 0),
@@ -691,6 +705,8 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_aa(br);
     }
     free(managers);
+
+    config_ofproto_types(&ovs_cfg->other_config);
 
     /* The ofproto-dpif provider does some final reconfiguration in its
      * ->type_run() function.  We have to call it before notifying the database
