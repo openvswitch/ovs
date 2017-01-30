@@ -20,6 +20,7 @@
 #include <stdio.h>
 #include <tchar.h>
 #include "openvswitch/vlog.h"
+#include "util.h"
 
 VLOG_DEFINE_THIS_MODULE(wmi);
 
