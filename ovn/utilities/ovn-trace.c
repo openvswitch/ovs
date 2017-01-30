@@ -1224,7 +1224,7 @@ execute_output(const struct ovntrace_datapath *dp, struct flow *uflow,
         }
     }
 
-    if (port->tunnel_key != in_key || allow_loopback) {
+    if ((port && port->tunnel_key != in_key) || allow_loopback) {
         struct ovntrace_node *node = ovntrace_node_append(
             super, OVNTRACE_NODE_PIPELINE,
             "egress(dp=\"%s\", inport=\"%s\", outport=\"%s\")",
