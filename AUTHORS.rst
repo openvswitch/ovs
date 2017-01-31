@@ -243,6 +243,7 @@ Rishi Bamba                     rishi.bamba@tcs.com
 Rob Adams                       readams@readams.net
 Robert Åkerblom-Andersson       Robert.nr1@gmail.com
 Rob Hoes                        rob.hoes@citrix.com
+Roi Dayan                       roid@mellanox.com
 Romain Lenglet                  romain.lenglet@berabera.info
 Russell Bryant                  russell@ovn.org
 RYAN D. MOATS                   rmoats@us.ibm.com
