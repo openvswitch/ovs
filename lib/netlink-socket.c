@@ -1698,7 +1698,9 @@ nl_transact(int protocol, const struct ofpbuf *request,
 
     error = nl_pool_alloc(protocol, &sock);
     if (error) {
-        *replyp = NULL;
+        if (replyp) {
+            *replyp = NULL;
+        }
         return error;
     }
 
