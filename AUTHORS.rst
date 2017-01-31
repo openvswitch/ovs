@@ -259,6 +259,7 @@ Saurabh Shrivastava             saurabh.shrivastava@nuagenetworks.net
 Scott Lowe                      scott.lowe@scottlowe.org
 Scott Mann                      sdmnix@gmail.com
 Selvamuthukumar                 smkumar@merunetworks.com
+Sha Zhang                       zhangsha.zhang@huawei.com
 Shad Ansari                     shad.ansari@hpe.com
 Shan Wei                        davidshan@tencent.com
 Shashank Ram                    rams@vmware.com

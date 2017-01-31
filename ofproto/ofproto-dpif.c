@@ -432,6 +432,7 @@ type_run(const char *type)
         }
         backer->need_revalidate = 0;
 
+        xlate_txn_start();
         HMAP_FOR_EACH (ofproto, all_ofproto_dpifs_node, &all_ofproto_dpifs) {
             struct ofport_dpif *ofport;
             struct ofbundle *bundle;
@@ -440,7 +441,6 @@ type_run(const char *type)
                 continue;
             }
 
-            xlate_txn_start();
             xlate_ofproto_set(ofproto, ofproto->up.name,
                               ofproto->backer->dpif, ofproto->ml,
                               ofproto->stp, ofproto->rstp, ofproto->ms,
@@ -471,8 +471,8 @@ type_run(const char *type)
                                  ofport->up.pp.state, ofport->is_tunnel,
                                  ofport->may_enable);
             }
-            xlate_txn_commit();
         }
+        xlate_txn_commit();
 
         udpif_revalidate(backer->udpif);
     }
