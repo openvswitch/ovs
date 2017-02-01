@@ -1,4 +1,10 @@
-Post-v2.6.0
+Post-v2.7.0
+---------------------
+   - Tunnels:
+     * Added support to set packet mark for tunnel endpoint using
+       `egress_pkt_mark` OVSDB option.
+
+v2.7.0 - xx xxx xxxx
 ---------------------
    - Utilities and daemons that support SSL now allow protocols and
      ciphers to be configured with --ssl-protocols and --ssl-ciphers.
@@ -51,8 +57,6 @@ Post-v2.6.0
        a per-OpenFlow bridge basis rather than globally. (The interface
        has not changed.)
      * Removed support for IPsec tunnels.
-     * Added support to set packet mark for tunnel endpoint using
-       `egress_pkt_mark` OVSDB option.
    - DPDK:
      * New option 'n_rxq_desc' and 'n_txq_desc' fields for DPDK interfaces
        which set the number of rx and tx descriptors to use for the given port.
