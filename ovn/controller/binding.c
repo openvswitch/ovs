@@ -1,4 +1,4 @@
-/* Copyright (c) 2015, 2016 Nicira, Inc.
+/* Copyright (c) 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -251,11 +251,14 @@ setup_qos(const char *egress_iface, struct hmap *queue_map)
     smap_init(&qdisc_details);
     if (netdev_get_qos(netdev_phy, &qdisc_type, &qdisc_details) != 0 ||
         qdisc_type[0] == '\0') {
+        smap_destroy(&qdisc_details);
         /* Qos is not supported. */
         return;
     }
+    smap_destroy(&qdisc_details);
+
     if (strcmp(qdisc_type, OVN_QOS_TYPE)) {
-        error = netdev_set_qos(netdev_phy, OVN_QOS_TYPE, &qdisc_details);
+        error = netdev_set_qos(netdev_phy, OVN_QOS_TYPE, NULL);
         if (error) {
             VLOG_WARN_RL(&rl, "%s: could not configure QoS (%s)",
                          egress_iface, ovs_strerror(error));
