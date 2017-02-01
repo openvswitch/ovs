@@ -33,7 +33,7 @@
 
 struct tun_meta_entry {
     struct hmap_node node;      /* In struct tun_table's key_hmap. */
-    uint32_t key;               /* (class << 16) | type. */
+    uint32_t key;               /* (class << 8) | type. */
     struct tun_metadata_loc loc;
     bool valid;                 /* True if allocated to a class and type. */
 };
