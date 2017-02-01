@@ -1,9 +1,80 @@
-openvswitch (2.6.90-1) unstable; urgency=low
+openvswitch (2.7.0-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-   - Nothing yet!  Try NEWS...
+   - Utilities and daemons that support SSL now allow protocols and
+     ciphers to be configured with --ssl-protocols and --ssl-ciphers.
+   - OVN:
+     * QoS is now implemented via egress shaping rather than ingress policing.
+     * DSCP marking is now supported, via the new northbound QoS table.
+     * IPAM now supports fixed MAC addresses.
+     * Support for source IP address based routing.
+     * ovn-trace:
+       - New --ovs option to also print OpenFlow flows.
+       - put_dhcp_opts and put_dhcp_optsv6 actions may now be traced.
+     * Support for managing SSL and remote connection configuration in
+       northbound and southbound databases.
+     * TCP connections to northbound and southbound databases are no
+       longer enabled by default and must be explicitly configured.
+       See documentation for ovn-sbctl/ovn-nbctl "set-connection"
+       command or the ovn-ctl "--db-sb-create-insecure-remote" and
+       "--db-nb-create-insecure-remote" command-line options for
+       information regarding remote connection configuration.
+     * New appctl "inject-pkt" command in ovn-controller that allows
+       packets to be injected into the connected OVS instance.
+   - Fixed regression in table stats maintenance introduced in OVS
+     2.3.0, wherein the number of OpenFlow table hits and misses was
+     not accurate.
+   - OpenFlow:
+     * OFPT_PACKET_OUT messages are now supported in bundles.
+     * A new "selection_method=dp_hash" type for OpenFlow select group
+       bucket selection that uses the datapath computed 5-tuple hash
+       without making datapath flows match the 5-tuple fields, which
+       is useful for more efficient load balancing, for example.  This
+       uses the Netronome extension to OpenFlow 1.5+ that allows
+       control over the OpenFlow select groups selection method.  See
+       "selection_method" and related options in ovs-ofctl(8) for
+       details.
+     * The "sample" action now supports "ingress" and "egress" options.
+     * The "ct" action now supports the TFTP ALG where support is available.
+     * New actions "clone" and "ct_clear".
+   - ovs-ofctl:
+     * 'bundle' command now supports packet-out messages.
+     * New syntax for 'ovs-ofctl packet-out' command, which uses the
+       same string parser as the 'bundle' command.  The old 'packet-out'
+       syntax is deprecated and will be removed in a later OVS
+       release.
+     * New unixctl "ofctl/packet-out" command, which can be used to
+       instruct a flow monitor to issue OpenFlow packet-out messages.
+   - ovsdb-server:
+     * Remote connections can now be made read-only (see ovsdb-server(1)).
+   - Tunnels:
+     * TLV mappings for protocols such as Geneve are now segregated on
+       a per-OpenFlow bridge basis rather than globally. (The interface
+       has not changed.)
+     * Removed support for IPsec tunnels.
+   - DPDK:
+     * New option 'n_rxq_desc' and 'n_txq_desc' fields for DPDK interfaces
+       which set the number of rx and tx descriptors to use for the given port.
+     * Support for DPDK v16.11.
+     * Support for rx checksum offload. Refer DPDK HOWTO for details.
+     * Port Hotplug is now supported.
+     * DPDK physical ports can now have arbitrary names. The PCI address of
+       the device must be set using the 'dpdk-devargs' option. Compatibility
+       with the old dpdk<portid> naming scheme is broken, and as such a
+       device will not be available for use until a valid dpdk-devargs is
+       specified.
+     * Virtual DPDK Poll Mode Driver (vdev PMD) support.
+   - Fedora packaging:
+     * A package upgrade does not automatically restart OVS service.
+   - ovs-vswitchd/ovs-vsctl:
+     * Ports now have a "protected" flag. Protected ports can not forward
+       frames to other protected ports. Unprotected ports can receive and
+       forward frames to protected and other unprotected ports.
+   - ovs-vsctl, ovn-nbctl, ovn-sbctl, vtep-ctl:
+     * Database commands now accept integer ranges, e.g. "set port
+       eth0 trunks=1-10" to enable trunking VLANs 1 to 10.
 
- -- Open vSwitch team <dev@openvswitch.org>  Mon, 15 Aug 2016 19:55:47 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Tue, 31 Jan 2017 17:46:12 -0700
 
 openvswitch (2.6.0-1) unstable; urgency=low
    [ Open vSwitch team ]

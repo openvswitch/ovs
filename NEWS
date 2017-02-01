@@ -1,4 +1,4 @@
-Post-v2.6.0
+v2.7.0 - xx xxx xxxx
 ---------------------
    - Utilities and daemons that support SSL now allow protocols and
      ciphers to be configured with --ssl-protocols and --ssl-ciphers.
