@@ -89,6 +89,9 @@ static void format_u128(struct ds *ds, const ovs_u128 *value,
                         const ovs_u128 *mask, bool verbose);
 static int scan_u128(const char *s, ovs_u128 *value, ovs_u128 *mask);
 
+static int parse_odp_action(const char *s, const struct simap *port_names,
+                            struct ofpbuf *actions);
+
 /* Returns one the following for the action with the given OVS_ACTION_ATTR_*
  * 'type':
  *
@@ -1561,6 +1564,29 @@ find_end:
 }
 
 static int
+parse_action_list(const char *s, const struct simap *port_names,
+                  struct ofpbuf *actions)
+{
+    int n = 0;
+
+    for (;;) {
+        int retval;
+
+        n += strspn(s + n, delimiters);
+        if (s[n] == ')') {
+            break;
+        }
+        retval = parse_odp_action(s + n, port_names, actions);
+        if (retval < 0) {
+            return retval;
+        }
+        n += retval;
+    }
+
+    return n;
+}
+
+static int
 parse_odp_action(const char *s, const struct simap *port_names,
                  struct ofpbuf *actions)
 {
@@ -1700,24 +1726,31 @@ parse_odp_action(const char *s, const struct simap *port_names,
 
             actions_ofs = nl_msg_start_nested(actions,
                                               OVS_SAMPLE_ATTR_ACTIONS);
-            for (;;) {
-                int retval;
+            int retval = parse_action_list(s + n, port_names, actions);
+            if (retval < 0)
+                return retval;
 
-                n += strspn(s + n, delimiters);
-                if (s[n] == ')') {
-                    break;
-                }
-
-                retval = parse_odp_action(s + n, port_names, actions);
-                if (retval < 0) {
-                    return retval;
-                }
-                n += retval;
-            }
+            n += retval;
             nl_msg_end_nested(actions, actions_ofs);
             nl_msg_end_nested(actions, sample_ofs);
 
             return s[n + 1] == ')' ? n + 2 : -EINVAL;
+        }
+    }
+
+    {
+        if (!strncmp(s, "clone(", 6)) {
+            size_t actions_ofs;
+            int n = 6;
+
+            actions_ofs = nl_msg_start_nested(actions, OVS_ACTION_ATTR_CLONE);
+            int retval = parse_action_list(s + n, port_names, actions);
+            if (retval < 0) {
+                return retval;
+            }
+            n += retval;
+            nl_msg_end_nested(actions, actions_ofs);
+            return n + 1;
         }
     }
 
