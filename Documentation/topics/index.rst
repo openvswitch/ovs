@@ -23,12 +23,15 @@
 
       Avoid deeper levels because they do not render well.
 
-======================
-Open vSwitch Deep Dive
-======================
+=========
+Deep Dive
+=========
 
-How Open vSwitch is implemented and, where necessary, why it was implemented
-that way.
+How Open vSwitch and OVN are implemented and, where necessary, why it was
+implemented that way.
+
+OVS
+---
 
 .. toctree::
    :maxdepth: 2
@@ -45,7 +48,17 @@ that way.
    language-bindings
    testing
 
+OVN
+---
+
 .. toctree::
    :maxdepth: 2
 
    high-availability
+
+.. list-table::
+
+   * - ovn-architecture(7)
+     - `(pdf) <http://openvswitch.org/support/dist-docs/ovn-architecture.7.pdf>`__
+     - `(html) <http://openvswitch.org/support/dist-docs/ovn-architecture.7.html>`__
+     - `(plain text) <http://openvswitch.org/support/dist-docs/ovn-architecture.7.txt>`__

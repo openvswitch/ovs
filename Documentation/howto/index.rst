@@ -30,6 +30,9 @@ How-to Guides
 Answers to common "How do I?"-style questions. For more information on the
 topics covered herein, refer to :doc:`/topics/index`.
 
+OVS
+---
+
 .. toctree::
    :maxdepth: 2
 
@@ -45,6 +48,9 @@ topics covered herein, refer to :doc:`/topics/index`.
    vtep
    sflow
    dpdk
+
+OVN
+---
 
 .. toctree::
    :maxdepth: 1
