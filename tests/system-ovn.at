@@ -97,7 +97,8 @@ ovn-nbctl -- --id=@nat create nat type="snat" logical_ip=192.168.2.2 \
     external_ip=30.0.0.1 -- add logical_router R2 nat @nat
 
 # wait for ovn-controller to catch up.
-OVS_WAIT_UNTIL([ovs-ofctl dump-flows br-int | grep ct\( | grep nat])
+ovn-nbctl --wait=hv sync
+OVS_WAIT_UNTIL([ovs-ofctl dump-flows br-int | grep 'nat(src=30.0.0.1)'])
 
 # 'alice1' should be able to ping 'foo1' directly.
 NS_CHECK_EXEC([alice1], [ping -q -c 3 -i 0.3 -w 2 192.168.1.2 | FORMAT_PING], \
@@ -250,7 +251,8 @@ ovn-nbctl lsp-add alice alice1 \
 ovn-nbctl -- --id=@nat create nat type="snat" logical_ip=192.168.1.2 \
     external_ip=172.16.1.1 -- add logical_router R2 nat @nat
 
-OVS_WAIT_UNTIL([ovs-ofctl dump-flows br-int | grep ct\( | grep nat])
+ovn-nbctl --wait=hv sync
+OVS_WAIT_UNTIL([ovs-ofctl dump-flows br-int | grep 'nat(src=172.16.1.1)'])
 
 # South-North SNAT: 'foo1' pings 'alice1'. But 'alice1' receives traffic
 # from 172.16.1.1
@@ -420,7 +422,8 @@ ovn-nbctl -- --id=@nat create nat type="snat" logical_ip=192.168.2.2 \
     external_ip=30.0.0.4 -- add logical_router R3 nat @nat
 
 # wait for ovn-controller to catch up.
-OVS_WAIT_UNTIL([ovs-ofctl dump-flows br-int | grep ct\( | grep nat])
+ovn-nbctl --wait=hv sync
+OVS_WAIT_UNTIL([ovs-ofctl dump-flows br-int | grep 'nat(src=30.0.0.4)'])
 
 # North-South DNAT: 'alice1' should be able to ping 'foo1' via 30.0.0.2
 NS_CHECK_EXEC([alice1], [ping -q -c 3 -i 0.3 -w 2 30.0.0.2 | FORMAT_PING], \
@@ -580,7 +583,9 @@ ovn-nbctl add logical_switch foo load_balancer $uuid
 ovn-nbctl set load_balancer $uuid vips:'"30.0.0.2:8000"'='"172.16.1.2:80,172.16.1.3:80,172.16.1.4:80"'
 
 # Wait for ovn-controller to catch up.
-OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | grep ct\(])
+ovn-nbctl --wait=hv sync
+OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | \
+grep 'nat(dst=172.16.1.4:80)'])
 
 # Start webservers in 'bar1', 'bar2' and 'bar3'.
 OVS_START_L7([bar1], [http])
@@ -699,7 +704,9 @@ ovn-nbctl set logical_switch foo load_balancer=$uuid
 ovn-nbctl set load_balancer $uuid vips:'"30.0.0.2:8000"'='"192.168.1.3:80,192.168.1.4:80,192.168.1.5:80"'
 
 # Wait for ovn-controller to catch up.
-OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | grep ct\(])
+ovn-nbctl --wait=hv sync
+OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | \
+grep 'nat(dst=192.168.1.5:80)'])
 
 # Start webservers in 'foo2', 'foo3' and 'foo4'.
 OVS_START_L7([foo2], [http])
@@ -846,7 +853,9 @@ ovn-nbctl set logical_router R2 load_balancer=$uuid
 ovn-nbctl set load_balancer $uuid vips:'"30.0.0.2:8000"'='"192.168.1.2:80,192.168.2.2:80"'
 
 # Wait for ovn-controller to catch up.
-OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | grep ct\(])
+ovn-nbctl --wait=hv sync
+OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | \
+grep 'nat(dst=192.168.2.2:80)'])
 
 # Start webservers in 'foo1', 'bar1'.
 OVS_START_L7([foo1], [http])
@@ -1020,7 +1029,9 @@ ovn-nbctl set logical_router R2 load_balancer=$uuid
 ovn-nbctl set logical_router R3 load_balancer=$uuid
 
 # Wait for ovn-controller to catch up.
-OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | grep ct\(])
+ovn-nbctl --wait=hv sync
+OVS_WAIT_UNTIL([ovs-ofctl -O OpenFlow13 dump-groups br-int | \
+grep 'nat(dst=192.168.2.2)'])
 
 # Start webservers in 'foo1', 'bar1'.
 OVS_START_L7([foo1], [http])
@@ -1151,7 +1162,8 @@ AT_CHECK([ovn-nbctl lr-nat-add R1 dnat_and_snat 172.16.1.4 192.168.1.3 foo2 00:0
 # Add a SNAT rule
 AT_CHECK([ovn-nbctl lr-nat-add R1 snat 172.16.1.1 192.168.0.0/16])
 
-OVS_WAIT_UNTIL([ovs-ofctl dump-flows br-int | grep ct\( | grep nat])
+ovn-nbctl --wait=hv sync
+OVS_WAIT_UNTIL([ovs-ofctl dump-flows br-int | grep 'nat(src=172.16.1.1)'])
 
 # North-South DNAT: 'alice1' pings 'foo1' using 172.16.1.3.
 NS_CHECK_EXEC([alice1], [ping -q -c 3 -i 0.3 -w 2 172.16.1.3 | FORMAT_PING], \
@@ -1297,7 +1309,8 @@ AT_CHECK([ovn-nbctl lr-nat-add R1 dnat_and_snat 172.16.1.4 192.168.2.2 bar1 00:0
 # Add a SNAT rule
 AT_CHECK([ovn-nbctl lr-nat-add R1 snat 172.16.1.1 192.168.0.0/16])
 
-OVS_WAIT_UNTIL([ovs-ofctl dump-flows br-int | grep ct\( | grep nat])
+ovn-nbctl --wait=hv sync
+OVS_WAIT_UNTIL([ovs-ofctl dump-flows br-int | grep 'nat(src=172.16.1.1)'])
 
 echo "------ hv dump ------"
 ovs-ofctl show br-int
