@@ -263,6 +263,7 @@ setup_qos(const char *egress_iface, struct hmap *queue_map)
     if (netdev_get_qos(netdev_phy, &qdisc_type, &qdisc_details) != 0 ||
         qdisc_type[0] == '\0') {
         smap_destroy(&qdisc_details);
+        netdev_close(netdev_phy);
         /* Qos is not supported. */
         return;
     }
@@ -286,6 +287,7 @@ setup_qos(const char *egress_iface, struct hmap *queue_map)
         if (!strcmp(qdisc_type, OVN_QOS_TYPE)) {
             set_qos_type(netdev_phy, "");
         }
+        netdev_close(netdev_phy);
         return;
     }
 
