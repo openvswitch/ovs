@@ -204,6 +204,9 @@ AT_CHECK([RUN_OVS_VSCTL([add-br a])], [0], [], [], [OVS_VSCTL_CLEANUP])
 AT_CHECK([RUN_OVS_VSCTL([add-br a])], [1], [],
   [ovs-vsctl: cannot create a bridge named a because a bridge named a already exists
 ], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([add-br ''])], [1], [],
+  [ovs-vsctl: bridge name must not be empty string
+], [OVS_VSCTL_CLEANUP])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -278,6 +281,9 @@ AT_CHECK([RUN_OVS_VSCTL(
 AT_CHECK([RUN_OVS_VSCTL([add-port a a1])], [1], [],
   [ovs-vsctl: cannot create a port named a1 because a port named a1 already exists on bridge a
 ], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([add-port a ''])], [1], [],
+  [ovs-vsctl: port name must not be empty string
+], [OVS_VSCTL_CLEANUP])
 OVS_VSCTL_CLEANUP
 AT_CLEANUP
 
@@ -315,6 +321,12 @@ AT_CHECK([RUN_OVS_VSCTL([--may-exist add-bond a bond0 a2 a1])], [1], [],
   [ovs-vsctl: "--may-exist add-bond a bond0 a2 a1" but bond0 actually has interface(s) a1, a2, a3
 ],
   [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([add-bond a '' x y z])], [1], [],
+  [ovs-vsctl: port name must not be empty string
+], [OVS_VSCTL_CLEANUP])
+AT_CHECK([RUN_OVS_VSCTL([add-bond a x '' y z])], [1], [],
+  [ovs-vsctl: interface name must not be empty string
+], [OVS_VSCTL_CLEANUP])
 CHECK_BRIDGES([a, a, 0])
 CHECK_PORTS([a], [bond0])
 CHECK_IFACES([a], [a1], [a2], [a3])
