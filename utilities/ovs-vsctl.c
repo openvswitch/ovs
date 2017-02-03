@@ -1154,6 +1154,9 @@ cmd_add_br(struct ctl_context *ctx)
     int vlan;
 
     br_name = ctx->argv[1];
+    if (!br_name[0]) {
+        ctl_fatal("bridge name must not be empty string");
+    }
     if (ctx->argc == 2) {
         parent_name = NULL;
         vlan = 0;
@@ -1502,6 +1505,15 @@ add_port(struct ctl_context *ctx,
     struct ovsrec_interface **ifaces;
     struct ovsrec_port *port;
     size_t i;
+
+    if (!port_name[0]) {
+        ctl_fatal("port name must not be empty string");
+    }
+    for (i = 0; i < n_ifaces; i++) {
+        if (!iface_names[i][0]) {
+            ctl_fatal("interface name must not be empty string");
+        }
+    }
 
     vsctl_context_populate_cache(ctx);
     if (may_exist) {
