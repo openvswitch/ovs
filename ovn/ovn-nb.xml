@@ -242,13 +242,41 @@
         </column>
 
         <column name="options" key="nat-addresses">
-          MAC address of the <code>router-port</code> followed by a list of
-          SNAT and DNAT IP addresses. This is used to send gratuitous ARPs for
-          SNAT and DNAT IP addresses via <code>localnet</code> and is valid for
-          only L3 gateway ports.  Example: <code>80:fa:5b:06:72:b7 158.36.44.22
-          158.36.44.24</code>. This would result in generation of gratuitous
-          ARPs for IP addresses 158.36.44.22 and 158.36.44.24 with a MAC
-          address of 80:fa:5b:06:72:b7.
+          <p>
+            This is used to send gratuitous ARPs for SNAT and DNAT IP
+            addresses via <code>localnet</code> and is valid for only L3
+            gateway ports.
+          </p>
+
+          <p>
+            This must take one of the following forms:
+          </p>
+
+          <dl>
+            <dt><code>router</code></dt>
+            <dd>
+              <p>
+                Gratuitous ARPs will be sent for all SNAT and DNAT external IP
+                addresses and for all load balancer IP addresses defined on the
+                <ref column="options" key="router-port"/>'s logical router,
+                using the <ref column="options" key="router-port"/>'s MAC
+                address.
+              </p>
+
+              <p>
+                Supported only in OVN 2.8 and later.  Earlier versions required
+                NAT addresses to be manually synchronized.
+              </p>
+            </dd>
+
+            <dt><code>Ethernet address followed by one or more IPv4 addresses</code></dt>
+            <dd>
+              Example: <code>80:fa:5b:06:72:b7 158.36.44.22
+              158.36.44.24</code>. This would result in generation of
+              gratuitous ARPs for IP addresses 158.36.44.22 and 158.36.44.24
+              with a MAC address of 80:fa:5b:06:72:b7.
+            </dd>
+          </dl>
         </column>
       </group>
 
