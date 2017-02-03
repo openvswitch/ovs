@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -331,6 +331,14 @@ netdev_open(const char *name, const char *type, struct netdev **netdevp)
 {
     struct netdev *netdev;
     int error;
+
+    if (!name[0]) {
+        /* Reject empty names.  This saves the providers having to do this.  At
+         * least one screwed this up: the netdev-linux "tap" implementation
+         * passed the name directly to the Linux TUNSETIFF call, which treats
+         * an empty string as a request to generate a unique name. */
+        return EINVAL;
+    }
 
     netdev_initialize();
 
