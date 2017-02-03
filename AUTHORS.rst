@@ -192,6 +192,7 @@ Luigi Rizzo                     rizzo@iet.unipi.it
 Luis E. P.                      l31g@hotmail.com
 Lukasz Rzasik                   lukasz.rzasik@gmail.com
 Madhu Challa                    challa@noironetworks.com
+Marcin Mirecki                  mmirecki@redhat.com
 Mario Cabrera                   mario.cabrera@hpe.com
 Mark D. Gray                    mark.d.gray@intel.com
 Mark Hamilton                   mhamilton@nicira.com
