@@ -127,6 +127,7 @@ files needed to build an external application.
 Summary: Open vSwitch - Open Virtual Network support
 License: ASL 2.0
 Requires: openvswitch openvswitch-ovn-common
+Requires: firewalld-filesystem
 
 %description ovn-central
 OVN, the Open Virtual Network, is a system to support virtual network
@@ -138,6 +139,7 @@ overlays and security groups.
 Summary: Open vSwitch - Open Virtual Network support
 License: ASL 2.0
 Requires: openvswitch openvswitch-ovn-common
+Requires: firewalld-filesystem
 
 %description ovn-host
 OVN, the Open Virtual Network, is a system to support virtual network
@@ -231,6 +233,11 @@ touch $RPM_BUILD_ROOT%{_sysconfdir}/openvswitch/system-id.conf
 
 install -p -m 644 -D selinux/openvswitch-custom.pp \
         $RPM_BUILD_ROOT%{_datadir}/selinux/packages/%{name}/openvswitch-custom.pp
+
+install rhel/usr_lib_firewalld_services_ovn-central-firewall-service.xml \
+        $RPM_BUILD_ROOT%{_prefix}/lib/firewalld/services/ovn-central-firewall-service.xml
+install rhel/usr_lib_firewalld_services_ovn-host-firewall-service.xml \
+        $RPM_BUILD_ROOT%{_prefix}/lib/firewalld/services/ovn-host-firewall-service.xml
 
 # remove unpackaged files
 rm -f $RPM_BUILD_ROOT%{_bindir}/ovs-parse-backtrace \
@@ -517,11 +524,13 @@ fi
 %config %{_datadir}/openvswitch/ovn-nb.ovsschema
 %config %{_datadir}/openvswitch/ovn-sb.ovsschema
 %{_unitdir}/ovn-northd.service
+${_prefix}/lib/firewalld/services/ovn-central-firewall-service.xml
 
 %files ovn-host
 %{_bindir}/ovn-controller
 %{_mandir}/man8/ovn-controller.8*
 %{_unitdir}/ovn-controller.service
+${_prefix}/lib/firewalld/services/ovn-host-firewall-service.xml
 
 %files ovn-vtep
 %{_bindir}/ovn-controller-vtep

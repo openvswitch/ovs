@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<service>
+  <short>ovn-central-firewall-service</short>
+  <description>Firewall service for ovn central</description>
+  <port protocol="tcp" port="6641"/>
+  <port protocol="tcp" port="6442"/>
+</service>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<service>
+  <short>ovn-host-firewall-service</short>
+  <description>Firewall service for ovn host</description>
+  <port protocol="udp" port="6081"/>
+</service>
