@@ -38,7 +38,6 @@ windows_installer: all
 	MSBuild.exe windows/ovs-windows-installer.sln /target:Build /property:Configuration="Release" /property:Version="$(PACKAGE_VERSION)"
 
 EXTRA_DIST += \
-	windows/.gitignore \
 	windows/automake.mk \
 	windows/README.rst \
 	windows/ovs-windows-installer.sln \
