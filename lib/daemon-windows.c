@@ -77,8 +77,7 @@ daemon_usage(void)
         "\nService options:\n"
         "  --service               run in background as a service.\n"
         "  --service-monitor       restart the service in case of an "
-                                   "unexpected failure. \n",
-        ovs_rundir(), program_name);
+                                   "unexpected failure. \n");
 }
 
 /* Registers the call-back and configures the actions in case of a failure
