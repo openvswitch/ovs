@@ -29,9 +29,6 @@ This document describes how to build and install Open vSwitch using a DPDK
 datapath. Open vSwitch can use the DPDK library to operate entirely in
 userspace.
 
-.. warning::
-  The DPDK support of Open vSwitch is considered 'experimental'.
-
 Build requirements
 ------------------
 

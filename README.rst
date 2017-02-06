@@ -38,9 +38,11 @@ following features:
 
 The included Linux kernel module supports Linux 3.10 and up.
 
-Open vSwitch can also operate, at a cost in performance, entirely in userspace,
-without assistance from a kernel module.  This userspace implementation should
-be easier to port than the kernel-based switch.  It is considered experimental.
+Open vSwitch can also operate entirely in userspace without assistance from
+a kernel module.  This userspace implementation should be easier to port than
+the kernel-based switch. OVS in userspace can access Linux or DPDK devices.
+Note Open vSwitch with Linux devices in userspace is considered experimental
+and comes with a cost in performance.
 
 What's here?
 ------------

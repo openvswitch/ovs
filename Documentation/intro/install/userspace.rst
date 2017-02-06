@@ -35,8 +35,8 @@ been recently tested, and so Debian packages are not a recommended way to use
 this version of Open vSwitch.
 
 .. warning::
-  The userspace-only mode of Open vSwitch is considered experimental.  It has
-  not been thoroughly tested.
+  The userspace-only mode of Open vSwitch without DPDK is considered
+  experimental. It has not been thoroughly tested.
 
 Building and Installing
 -----------------------
