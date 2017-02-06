@@ -60,6 +60,8 @@ static void log_nlmsg(const char *function, int error,
 #ifdef _WIN32
 static int get_sock_pid_from_kernel(struct nl_sock *sock);
 static int set_sock_property(struct nl_sock *sock);
+static int nl_sock_transact(struct nl_sock *sock, const struct ofpbuf *request,
+                            struct ofpbuf **replyp);
 #endif
 
 /* Netlink sockets. */
@@ -425,6 +427,30 @@ nl_sock_join_mcgroup(struct nl_sock *sock, unsigned int multicast_group)
 
 #ifdef _WIN32
 int
+nl_sock_subscribe_packet__(struct nl_sock *sock, bool subscribe)
+{
+    struct ofpbuf request;
+    uint64_t request_stub[128];
+    struct ovs_header *ovs_header;
+    struct nlmsghdr *nlmsg;
+    int error;
+
+    ofpbuf_use_stub(&request, request_stub, sizeof request_stub);
+    nl_msg_put_genlmsghdr(&request, 0, OVS_WIN_NL_CTRL_FAMILY_ID, 0,
+                          OVS_CTRL_CMD_PACKET_SUBSCRIBE_REQ,
+                          OVS_WIN_CONTROL_VERSION);
+
+    ovs_header = ofpbuf_put_uninit(&request, sizeof *ovs_header);
+    ovs_header->dp_ifindex = 0;
+    nl_msg_put_u8(&request, OVS_NL_ATTR_PACKET_SUBSCRIBE, subscribe ? 1 : 0);
+    nl_msg_put_u32(&request, OVS_NL_ATTR_PACKET_PID, sock->pid);
+
+    error = nl_sock_send(sock, &request, true);
+    ofpbuf_uninit(&request);
+    return error;
+}
+
+int
 nl_sock_subscribe_packets(struct nl_sock *sock)
 {
     int error;
@@ -458,30 +484,6 @@ nl_sock_unsubscribe_packets(struct nl_sock *sock)
 
     sock->read_ioctl = OVS_IOCTL_READ;
     return 0;
-}
-
-int
-nl_sock_subscribe_packet__(struct nl_sock *sock, bool subscribe)
-{
-    struct ofpbuf request;
-    uint64_t request_stub[128];
-    struct ovs_header *ovs_header;
-    struct nlmsghdr *nlmsg;
-    int error;
-
-    ofpbuf_use_stub(&request, request_stub, sizeof request_stub);
-    nl_msg_put_genlmsghdr(&request, 0, OVS_WIN_NL_CTRL_FAMILY_ID, 0,
-                          OVS_CTRL_CMD_PACKET_SUBSCRIBE_REQ,
-                          OVS_WIN_CONTROL_VERSION);
-
-    ovs_header = ofpbuf_put_uninit(&request, sizeof *ovs_header);
-    ovs_header->dp_ifindex = 0;
-    nl_msg_put_u8(&request, OVS_NL_ATTR_PACKET_SUBSCRIBE, subscribe ? 1 : 0);
-    nl_msg_put_u32(&request, OVS_NL_ATTR_PACKET_PID, sock->pid);
-
-    error = nl_sock_send(sock, &request, true);
-    ofpbuf_uninit(&request);
-    return error;
 }
 #endif
 
