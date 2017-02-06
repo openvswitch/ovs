@@ -60,6 +60,9 @@ VLOG_DEFINE_THIS_MODULE(dpif_netlink);
 #ifdef _WIN32
 #include "wmi.h"
 enum { WINDOWS = 1 };
+static int dpif_netlink_port_query__(const struct dpif_netlink *dpif,
+                                     odp_port_t port_no, const char *port_name,
+                                     struct dpif_port *dpif_port);
 #else
 enum { WINDOWS = 0 };
 #endif
