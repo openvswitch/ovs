@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2008, 2009, 2010, 2011, 2013 Nicira, Inc.
+ * Copyright (c) 2008, 2009, 2010, 2011, 2013, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -54,6 +54,7 @@ void poll_fd_wait_at(int fd, short int events, const char *where);
 #define poll_fd_wait(fd, events) poll_fd_wait_at(fd, events, OVS_SOURCE_LOCATOR)
 
 #ifdef _WIN32
+void poll_wevent_wait_at(HANDLE wevent, const char *where);
 #define poll_wevent_wait(wevent) poll_wevent_wait_at(wevent, OVS_SOURCE_LOCATOR)
 #endif /* _WIN32 */
 
