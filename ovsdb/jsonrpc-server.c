@@ -1575,6 +1575,12 @@ ovsdb_jsonrpc_create_notify(const struct ovsdb_jsonrpc_monitor *m,
     return jsonrpc_create_notify(method, params);
 }
 
+const struct uuid *
+ovsdb_jsonrpc_server_get_uuid(const struct ovsdb_jsonrpc_server *s)
+{
+    return &s->up.uuid;
+}
+
 static void
 ovsdb_jsonrpc_monitor_flush_all(struct ovsdb_jsonrpc_session *s)
 {

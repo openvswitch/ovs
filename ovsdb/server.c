@@ -19,6 +19,7 @@
 
 #include "hash.h"
 #include "ovsdb.h"
+#include "uuid.h"
 
 /* Initializes 'session' as a session within 'server'. */
 void
@@ -121,6 +122,7 @@ ovsdb_server_init(struct ovsdb_server *server)
 {
     shash_init(&server->dbs);
     hmap_init(&server->locks);
+    uuid_generate(&server->uuid);
 }
 
 /* Adds 'db' to the set of databases served out by 'server'.  Returns true if
