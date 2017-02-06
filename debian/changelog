@@ -71,6 +71,7 @@ openvswitch (2.7.0-1) unstable; urgency=low
        device will not be available for use until a valid dpdk-devargs is
        specified.
      * Virtual DPDK Poll Mode Driver (vdev PMD) support.
+     * Removed experimental tag.
    - Fedora packaging:
      * A package upgrade does not automatically restart OVS service.
    - ovs-vswitchd/ovs-vsctl:
