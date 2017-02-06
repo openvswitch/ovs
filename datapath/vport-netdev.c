@@ -58,8 +58,10 @@ void netdev_port_receive(struct sk_buff *skb, struct ip_tunnel_info *tun_info)
 	if (unlikely(!skb))
 		return;
 
-	skb_push(skb, ETH_HLEN);
-	skb_postpush_rcsum(skb, skb->data, ETH_HLEN);
+	if (skb->dev->type == ARPHRD_ETHER) {
+		skb_push(skb, ETH_HLEN);
+		skb_postpush_rcsum(skb, skb->data, ETH_HLEN);
+	}
 	ovs_vport_receive(vport, skb, tun_info);
 	return;
 error:
@@ -102,7 +104,8 @@ struct vport *ovs_netdev_link(struct vport *vport, const char *name)
 	}
 
 	if (vport->dev->flags & IFF_LOOPBACK ||
-	    vport->dev->type != ARPHRD_ETHER ||
+	    (vport->dev->type != ARPHRD_ETHER &&
+	     vport->dev->type != ARPHRD_NONE) ||
 	    ovs_is_internal_dev(vport->dev)) {
 		err = -EINVAL;
 		goto error_put;
