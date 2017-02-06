@@ -119,9 +119,11 @@ refresh_remote(struct in_band *ib, struct in_band_remote *r)
     retval = netdev_get_next_hop(ib->local_netdev, &r->remote_addr.sin_addr,
                                  &next_hop_inaddr, &next_hop_dev);
     if (retval) {
-        VLOG_WARN("%s: cannot find route for controller ("IP_FMT"): %s",
-                  ib->ofproto->name, IP_ARGS(r->remote_addr.sin_addr.s_addr),
-                  ovs_strerror(retval));
+        VLOG_WARN_RL(&rl, "%s: cannot find route for controller "
+                     "("IP_FMT"): %s",
+                     ib->ofproto->name,
+                     IP_ARGS(r->remote_addr.sin_addr.s_addr),
+                     ovs_strerror(retval));
         return 1;
     }
     if (!next_hop_inaddr.s_addr) {
