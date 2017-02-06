@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016 Cloudbase Solutions Srl
+ * Copyright (c) 2016, 2017 Cloudbase Solutions Srl
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 #include <unistd.h>
 #include "poll-loop.h"
 #include "dirs.h"
+#include "fatal-signal.h"
 #include "util.h"
 #include "stream-provider.h"
 #include "openvswitch/vlog.h"
