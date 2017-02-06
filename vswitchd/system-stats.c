@@ -326,7 +326,7 @@ get_raw_process_info(pid_t pid, struct raw_process_info *raw)
     start_msec = get_boot_time() + ticks_to_ms(start_time);
 
     raw->vsz = vsize / 1024;
-    raw->rss = rss * (getpagesize() / 1024);
+    raw->rss = rss * (get_page_size() / 1024);
     raw->uptime = time_wall_msec() - start_msec;
     raw->cputime = ticks_to_ms(utime + stime);
     raw->ppid = ppid;
