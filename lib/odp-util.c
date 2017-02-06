@@ -124,6 +124,8 @@ odp_action_len(uint16_t type)
     case OVS_ACTION_ATTR_SET_MASKED: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_SAMPLE: return ATTR_LEN_VARIABLE;
     case OVS_ACTION_ATTR_CT: return ATTR_LEN_VARIABLE;
+    case OVS_ACTION_ATTR_PUSH_ETH: return sizeof(struct ovs_action_push_eth);
+    case OVS_ACTION_ATTR_POP_ETH: return 0;
     case OVS_ACTION_ATTR_CLONE: return ATTR_LEN_VARIABLE;
 
     case OVS_ACTION_ATTR_UNSPEC:
@@ -849,6 +851,16 @@ format_odp_action(struct ds *ds, const struct nlattr *a)
         ds_put_cstr(ds, "set(");
         format_odp_key_attr(nl_attr_get(a), NULL, NULL, ds, true);
         ds_put_cstr(ds, ")");
+        break;
+    case OVS_ACTION_ATTR_PUSH_ETH: {
+        const struct ovs_action_push_eth *eth = nl_attr_get(a);
+        ds_put_format(ds, "push_eth(src="ETH_ADDR_FMT",dst="ETH_ADDR_FMT")",
+                      ETH_ADDR_ARGS(eth->addresses.eth_src),
+                      ETH_ADDR_ARGS(eth->addresses.eth_dst));
+        break;
+    }
+    case OVS_ACTION_ATTR_POP_ETH:
+        ds_put_cstr(ds, "pop_eth");
         break;
     case OVS_ACTION_ATTR_PUSH_VLAN: {
         const struct ovs_action_push_vlan *vlan = nl_attr_get(a);
