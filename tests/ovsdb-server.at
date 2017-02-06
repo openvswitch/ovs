@@ -1440,6 +1440,38 @@ dnl OVSDB_SERVER_SHUTDOWN
 dnl OVSDB_SERVER_SHUTDOWN2
 AT_CLEANUP
 
+#ovsdb-server prevent self replicating
+AT_SETUP([ovsdb-server prevent self replicating])
+AT_KEYWORDS([ovsdb server replication])
+replication_schema > schema
+AT_CHECK([ovsdb-tool create db schema], [0], [stdout], [ignore])
+
+dnl Add some data to both DBs
+AT_CHECK([ovsdb-tool transact db \
+'[["mydb",
+  {"op": "insert",
+   "table": "a",
+   "row": {"number": 9, "name": "nine"}}]]'], [0], [ignore], [ignore])
+
+dnl Start 'db', then try to be a back up server of itself.
+AT_CHECK([ovsdb-server --detach --no-chdir --log-file=ovsdb-server.log --pidfile="`pwd`"/pid --remote=punix:db.sock --unixctl="`pwd`"/unixctl db --sync-from=unix:db.sock --active ], [0], [ignore], [ignore])
+on_exit 'test ! -e pid || kill `cat pid`'
+
+dnl Save the current content
+AT_CHECK([ovsdb-client dump unix:db.sock], [0], [stdout])
+cp stdout dump1
+
+AT_CHECK([ovs-appctl -t "`pwd`"/unixctl ovsdb-server/connect-active-ovsdb-server])
+dnl Check that self replicating is blocked.
+AT_CHECK([grep "Self replicating is not allowed" ovsdb-server.log], [0], [stdout])
+
+dnl Check current DB content is preserved.
+AT_CHECK([ovsdb-client dump unix:db.sock], [0], [stdout])
+cat stdout > dump2
+
+AT_CHECK([diff dump1 dump2])
+AT_CLEANUP
+
 AT_SETUP([ovsdb-server/read-only db:ptcp connection])
 AT_KEYWORDS([ovsdb server read-only])
 AT_DATA([schema],

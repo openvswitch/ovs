@@ -44,7 +44,8 @@ struct ovsdb;
  *    used mainly by uinxctl commands.
  */
 
-void replication_init(const char *sync_from, const char *exclude_tables);
+void replication_init(const char *sync_from, const char *exclude_tables,
+                      const struct uuid *server);
 void replication_run(void);
 void replication_wait(void);
 void replication_destroy(void);
