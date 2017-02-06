@@ -263,6 +263,11 @@ static inline void __skb_fill_page_desc(struct sk_buff *skb, int i,
 int rpl_skb_ensure_writable(struct sk_buff *skb, int write_len);
 #endif
 
+#ifndef HAVE___SKB_VLAN_POP
+#define __skb_vlan_pop rpl___skb_vlan_pop
+int rpl___skb_vlan_pop(struct sk_buff *skb, u16 *vlan_tci);
+#endif
+
 #ifndef HAVE_SKB_VLAN_POP
 #define skb_vlan_pop rpl_skb_vlan_pop
 int rpl_skb_vlan_pop(struct sk_buff *skb);
