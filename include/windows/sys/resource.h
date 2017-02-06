@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014 Nicira, Inc.
+ * Copyright (c) 2014, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -47,5 +47,7 @@ struct rusage {
 #ifndef RUSAGE_THREAD
 #define RUSAGE_THREAD 3
 #endif
+
+int getrusage(int who, struct rusage *usage);
 
 #endif /* sys/resource.h */
