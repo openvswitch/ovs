@@ -134,6 +134,9 @@ icmp,orig=(src=192.168.2.2,dst=172.16.1.2,id=<cleared>,type=8,code=0),reply=(src
 # Add static routes to handle east-west NAT.
 ovn-nbctl lr-route-add R1 30.0.0.0/24 20.0.0.2
 
+# wait for ovn-controller to catch up.
+ovn-nbctl --wait=hv sync
+
 # Flush conntrack entries for easier output parsing of next test.
 AT_CHECK([ovs-appctl dpctl/flush-conntrack])
 
