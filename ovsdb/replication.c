@@ -1,6 +1,6 @@
 /*
  * (c) Copyright 2016 Hewlett Packard Enterprise Development LP
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2016 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,10 +34,12 @@
 #include "svec.h"
 #include "table.h"
 #include "transaction.h"
+#include "uuid.h"
 
 VLOG_DEFINE_THIS_MODULE(replication);
 
 static char *sync_from;
+static struct uuid server_uuid;
 static struct jsonrpc_session *session;
 static unsigned int session_seqno = UINT_MAX;
 
@@ -88,6 +90,7 @@ void request_ids_clear(void);
 
 enum ovsdb_replication_state {
     RPL_S_INIT,
+    RPL_S_SERVER_ID_REQUESTED,
     RPL_S_DB_REQUESTED,
     RPL_S_SCHEMA_REQUESTED,
     RPL_S_MONITOR_REQUESTED,
@@ -110,7 +113,8 @@ static struct ovsdb* find_db(const char *db_name);
 
 
 void
-replication_init(const char *sync_from_, const char *exclude_tables)
+replication_init(const char *sync_from_, const char *exclude_tables,
+                 const struct uuid *server)
 {
     free(sync_from);
     sync_from = xstrdup(sync_from_);
@@ -128,6 +132,10 @@ replication_init(const char *sync_from_, const char *exclude_tables)
 
     session = jsonrpc_session_open(sync_from, true);
     session_seqno = UINT_MAX;
+
+    /* Keep a copy of local server uuid.  */
+    server_uuid = *server;
+
     state = RPL_S_INIT;
 }
 
@@ -155,16 +163,13 @@ replication_run(void)
             session_seqno = seqno;
             request_ids_clear();
             struct jsonrpc_msg *request;
-            request = jsonrpc_create_request("list_dbs",
+            request = jsonrpc_create_request("get_server_id",
                                              json_array_create_empty(), NULL);
             request_ids_add(request->id, NULL);
             jsonrpc_session_send(session, request);
 
-            replication_dbs_destroy();
-            replication_dbs = replication_db_clone(&local_dbs);
-
-            state = RPL_S_DB_REQUESTED;
-            VLOG_DBG("Send list_dbs request");
+            state = RPL_S_SERVER_ID_REQUESTED;
+            VLOG_DBG("send server ID request.");
         }
 
         msg = jsonrpc_session_recv(session);
@@ -197,10 +202,45 @@ replication_run(void)
             }
 
             switch (state) {
+            case RPL_S_SERVER_ID_REQUESTED: {
+                struct uuid uuid;
+                if (msg->result->type != JSON_STRING ||
+                    !uuid_from_string(&uuid, json_string(msg->result))) {
+                    struct ovsdb_error *error;
+                    error = ovsdb_error("get_server_id failed",
+                                        "Server ID is not valid UUID");
+
+                    ovsdb_error_assert(error);
+                    state = RPL_S_ERR;
+                    break;
+                }
+
+                if (uuid_equals(&uuid, &server_uuid)) {
+                    struct ovsdb_error *error;
+                    error = ovsdb_error("Server ID check failed",
+                                        "Self replicating is not allowed");
+
+                    ovsdb_error_assert(error);
+                    state = RPL_S_ERR;
+                    break;
+                }
+
+                struct jsonrpc_msg *request;
+                request = jsonrpc_create_request("list_dbs",
+                                                 json_array_create_empty(),
+                                                 NULL);
+                request_ids_add(request->id, NULL);
+                jsonrpc_session_send(session, request);
+
+                replication_dbs_destroy();
+                replication_dbs = replication_db_clone(&local_dbs);
+                state = RPL_S_DB_REQUESTED;
+                break;
+            }
             case RPL_S_DB_REQUESTED:
                 if (msg->result->type != JSON_ARRAY) {
                     struct ovsdb_error *error;
-                    error = ovsdb_error("list-dbs failed",
+                    error = ovsdb_error("list_dbs failed",
                                         "list_dbs response is not array");
                     ovsdb_error_assert(error);
                     state = RPL_S_ERR;
@@ -802,6 +842,7 @@ replication_status(void)
     if (alive) {
         switch(state) {
         case RPL_S_INIT:
+        case RPL_S_SERVER_ID_REQUESTED:
         case RPL_S_DB_REQUESTED:
         case RPL_S_SCHEMA_REQUESTED:
         case RPL_S_MONITOR_REQUESTED:
