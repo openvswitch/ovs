@@ -980,6 +980,10 @@ abs_file_name(const char *dir, const char *file_name)
 static char *
 xreadlink(const char *filename)
 {
+#ifdef _WIN32
+    errno = ENOENT;
+    return NULL;
+#else
     size_t size;
 
     for (size = 64; ; size *= 2) {
@@ -998,6 +1002,7 @@ xreadlink(const char *filename)
             return NULL;
         }
     }
+#endif
 }
 
 /* Returns a version of 'filename' with symlinks in the final component
