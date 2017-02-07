@@ -90,6 +90,13 @@ The "overlay" mode
 
       $ /usr/share/openvswitch/scripts/ovn-ctl start_northd
 
+  With Open vSwitch version of 2.7 or greater, you need to run the following
+  additional commands (Please read the manpages of ovn-nb for more control
+  on the types of connection allowed.) ::
+
+      $ ovn-nbctl set-connection ptcp:6641
+      $ ovn-sbctl set-connection ptcp:6642
+
 2. One time setup
 
    On each host, where you plan to spawn your containers, you will need to run
