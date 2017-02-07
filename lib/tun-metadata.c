@@ -156,8 +156,8 @@ tun_metadata_table_mod(struct ofputil_tlv_table_mod *ttm,
                                          ofp_map->option_type,
                                          ofp_map->option_len);
             if (err) {
-                *new_tab = NULL;
                 tun_metadata_free(*new_tab);
+                *new_tab = NULL;
                 return err;
             }
         }
