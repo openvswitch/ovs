@@ -56,6 +56,7 @@ provided below.
 .. toctree::
    :maxdepth: 2
 
+   distributions
    debian
    fedora
    rhel
