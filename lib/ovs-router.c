@@ -263,6 +263,8 @@ rt_entry_delete(uint8_t priority, const struct in6_addr *ip6_dst, uint8_t plen)
         res = __rt_entry_delete(cr);
         ovs_mutex_unlock(&mutex);
     }
+
+    cls_rule_destroy(&rule);
     return res;
 }
 
