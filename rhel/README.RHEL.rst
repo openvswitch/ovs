@@ -305,6 +305,38 @@ DPDK NIC port:
     OVS_OPTIONS="bond_mode=active-backup"
     HOTPLUG=no
 
+
+Red Hat systemd integration
+---------------------------
+
+The RPM packages for Open vSwitch provide support for systemd integration. It's
+recommended to use the openvswitch.service to start and stop the Open vSwitch
+daemons. The below table shows systemd's behavior:
+
+=============================== ============== ============== ============== =============== ===============
+              -                 Process Status                systemctk <> status
+------------------------------- ----------------------------- ----------------------------------------------
+Action                          ovs-vswitch     ovsdb-server  openvswitch    ovs-vswitchd    ovsdb-server
+=============================== ============== ============== ============== =============== ===============
+systemctl start openvswitch*    started        started        active, exited active, running active, running
+crash of vswitchd               crash, started re-started     active, exited active, running active, running
+crash of ovsdb                  re-started     crash, started active, exited active, running active, running
+systemctl restart openvswitch   re-started     re-started     active, exited active, running active, running
+systemctl restart ovs-vswitchd  re-started     re-started     active, exited active, running active, running
+systemctl restart ovsdb-server  re-started     re-started     active, exited active, running active, running
+systemctl stop openvswitch      stopped        stopped        inactive, dead inactive, dead  inactive, dead
+systemctl stop ovs-vswitchd     stopped        stopped        inactive, dead inactive, dead  inactive, dead
+systemctl stop ovsdb-server     stopped        stopped        inactive, dead inactive, dead  inactive, dead
+systemctl start ovs-vswitchd*   started        started        inactive, dead active, running active, running
+systemctl start ovsdb-server*   not started    started        inactive, dead inactive, dead  active, running
+=============================== ============== ============== ============== =============== ===============
+
+
+\* These commands where executed when no Open vSwitch related processes where
+running. All other commands where executed when Open vSwitch was successfully
+running.
+
+
 Reporting Bugs
 --------------
 
