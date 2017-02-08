@@ -280,6 +280,8 @@ rt_entry_delete(uint32_t mark, uint8_t priority,
         res = __rt_entry_delete(cr);
         ovs_mutex_unlock(&mutex);
     }
+
+    cls_rule_destroy(&rule);
     return res;
 }
 
