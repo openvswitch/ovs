@@ -549,6 +549,7 @@ ofctrl_destroy(void)
     rconn_destroy(swconn);
     ovn_flow_table_destroy(&installed_flows);
     rconn_packet_counter_destroy(tx_counter);
+    expr_symtab_destroy(&symtab);
     shash_destroy(&symtab);
 }
 
