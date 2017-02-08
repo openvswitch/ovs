@@ -3375,6 +3375,11 @@ read_flows_from_switch(struct vconn *vconn,
 
         fte_queue(state, &fs->match, fs->priority, version, index);
     }
+
+    for (size_t i = 0; i < n_fses; i++) {
+        free(CONST_CAST(struct ofpact *, fses[i].ofpacts));
+    }
+    free(fses);
 }
 
 static void
