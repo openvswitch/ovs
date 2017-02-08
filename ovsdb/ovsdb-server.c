@@ -199,8 +199,8 @@ main_loop(struct ovsdb_jsonrpc_server *jsonrpc, struct shash *all_dbs,
         if (*is_backup) {
             replication_run();
             if (!replication_is_alive()) {
-                int retval = replication_get_last_error();
-                ovs_fatal(retval, "replication connection failed");
+                disconnect_active_server();
+                *is_backup = false;
             }
         }
 
