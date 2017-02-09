@@ -31,7 +31,6 @@ EXTRA_DIST += \
 	rhel/usr_lib_systemd_system_ovn-controller.service \
 	rhel/usr_lib_systemd_system_ovn-controller-vtep.service \
 	rhel/usr_lib_systemd_system_ovn-northd.service \
-	rhel/usr_lib_systemd_system_ovn-northd.service \
 	rhel/usr_lib_firewalld_services_ovn-central-firewall-service.xml \
 	rhel/usr_lib_firewalld_services_ovn-host-firewall-service.xml
 
