@@ -39,7 +39,7 @@ VLOG_DEFINE_THIS_MODULE(dpdk);
 static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 
 static int
-process_vhost_flags(char *flag, char *default_val, int size,
+process_vhost_flags(char *flag, const char *default_val, int size,
                     const struct smap *ovs_other_config,
                     char **new_val)
 {
@@ -57,7 +57,7 @@ process_vhost_flags(char *flag, char *default_val, int size,
         VLOG_INFO("User-provided %s in use: %s", flag, *new_val);
     } else {
         VLOG_INFO("No %s provided - defaulting to %s", flag, default_val);
-        *new_val = default_val;
+        *new_val = xstrdup(default_val);
     }
 
     return changed;
@@ -273,7 +273,7 @@ dpdk_init__(const struct smap *ovs_other_config)
     cpu_set_t cpuset;
     char *sock_dir_subcomponent;
 
-    if (process_vhost_flags("vhost-sock-dir", xstrdup(ovs_rundir()),
+    if (process_vhost_flags("vhost-sock-dir", ovs_rundir(),
                             NAME_MAX, ovs_other_config,
                             &sock_dir_subcomponent)) {
         struct stat s;
