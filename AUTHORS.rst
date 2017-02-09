@@ -148,6 +148,7 @@ Ian Campbell                    Ian.Campbell@citrix.com
 Ian Stokes                      ian.stokes@intel.com
 Ilya Maximets                   i.maximets@samsung.com
 Isaku Yamahata                  yamahata@valinux.co.jp
+Jakub Libosvar                  libosvar@redhat.com
 James P.                        roampune@gmail.com
 James Page                      james.page@ubuntu.com
 Jamie Lennox                    jamielennox@gmail.com
