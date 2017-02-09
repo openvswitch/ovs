@@ -284,6 +284,7 @@ Thomas Goirand                  zigo@debian.org
 Thomas Graf                     tgraf@noironetworks.com
 Thomas Lacroix                  thomas.lacroix@citrix.com
 Timo Puha                       timox.puha@intel.com
+Timothy Redaelli                tredaelli@redhat.com
 Todd Deshane                    deshantm@gmail.com
 Tom Everman                     teverman@google.com
 Torgny Lindberg                 torgny.lindberg@ericsson.com

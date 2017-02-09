@@ -63,7 +63,8 @@ BuildRequires: procps-ng
 BuildRequires: libcap-ng libcap-ng-devel
 %endif
 %if %{with dpdk}
-BuildRequires: dpdk-devel >= 2.2.0
+BuildRequires: libpcap-devel numactl-devel
+BuildRequires: dpdk-devel >= 16.11
 Provides: %{name}-dpdk = %{version}-%{release}
 %endif
 
