@@ -89,11 +89,6 @@ struct sk_buff *rpl_skb_gso_segment(struct sk_buff *skb, netdev_features_t featu
 }
 #endif
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,38)
-#define netif_skb_features rpl_netif_skb_features
-netdev_features_t rpl_netif_skb_features(struct sk_buff *skb);
-#endif
-
 #ifdef HAVE_NETIF_NEEDS_GSO_NETDEV
 #define netif_needs_gso rpl_netif_needs_gso
 static inline bool netif_needs_gso(struct sk_buff *skb,
