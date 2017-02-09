@@ -37,7 +37,7 @@ yum -y install autoconf automake openssl-devel libtool \
                python-twisted-core python-zope-interface \
                desktop-file-utils groff graphviz rpmdevtools nc curl \
                wget python-six pyftpdlib checkpolicy selinux-policy-devel \
-               libcap-ng-devel kernel-devel-`uname -r` ethtool
+               libcap-ng-devel kernel-devel-`uname -r` ethtool net-tools
 SCRIPT
 
 $configure_ovs = <<SCRIPT
@@ -122,7 +122,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
        debian.vm.provision "install_deb", type: "shell", inline: $install_deb
   end
   config.vm.define "fedora-23" do |fedora|
-       fedora.vm.box = "bento/fedora-23"
+       fedora.vm.box = "fedora/23-cloud-base"
+       fedora.vm.synced_folder ".", "/vagrant", type: "rsync"
        fedora.vm.provision "bootstrap", type: "shell", inline: $bootstrap_fedora
        fedora.vm.provision "configure_ovs", type: "shell", inline: $configure_ovs
        fedora.vm.provision "build_ovs", type: "shell", inline: $build_ovs
@@ -130,8 +131,8 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
        fedora.vm.provision "test_ovs_system_userspace", type: "shell", inline: $test_ovs_system_userspace
        fedora.vm.provision "install_rpm", type: "shell", inline: $install_rpm
   end
-  config.vm.define "centos-7.2" do |centos|
-       centos.vm.box = "bento/centos-7.2"
+  config.vm.define "centos-7" do |centos|
+       centos.vm.box = "centos/7"
        centos.vm.synced_folder ".", "/vagrant", type: "rsync"
        centos.vm.provision "bootstrap", type: "shell", inline: $bootstrap_centos
        centos.vm.provision "configure_ovs", type: "shell", inline: $configure_ovs
