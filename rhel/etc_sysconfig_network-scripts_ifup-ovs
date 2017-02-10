@@ -181,10 +181,18 @@ case "$TYPE" in
 		;;
 	OVSDPDKVhostUserPort)
 		ifup_ovs_bridge
+		PORT_TYPE="dpdkvhostuser"
+		PORT_PATH=""
+		if [ "$OVS_PORT_MODE" == "client" ]; then
+			PORT_TYPE="dpdkvhostuserclient"
+			PORT_PATH="options:vhost-server-path=${OVS_PORT_PATH}"
+		fi
 		ovs-vsctl -t ${TIMEOUT} \
 			-- --if-exists del-port "$OVS_BRIDGE" "$DEVICE" \
 			-- add-port "$OVS_BRIDGE" "$DEVICE" $OVS_OPTIONS \
-			-- set Interface "$DEVICE" type=dpdkvhostuser ${OVS_EXTRA+-- $OVS_EXTRA}
+			-- set Interface "$DEVICE" type=$PORT_TYPE \
+			$PORT_PATH \
+			${OVS_EXTRA+-- $OVS_EXTRA}
 		;;
 	OVSDPDKBond)
 		ifup_ovs_bridge
