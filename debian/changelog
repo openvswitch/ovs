@@ -21,6 +21,16 @@ openvswitch (2.7.0-1) unstable; urgency=low
        information regarding remote connection configuration.
      * New appctl "inject-pkt" command in ovn-controller that allows
        packets to be injected into the connected OVS instance.
+     * Distributed logical routers may now be connected directly to
+       logical switches with localnet ports, by specifying a
+       "redirect-chassis" on the distributed gateway port of the
+       logical router.  NAT rules may be specified directly on the
+       distributed logical router, and are handled either centrally on
+       the "redirect-chassis", or in many cases are handled locally on
+       the hypervisor where the corresponding logical port resides.
+       Gratuitous ARP for NAT addresses on a distributed logical
+       router is not yet supported, but will be added in a future
+       version.
    - Fixed regression in table stats maintenance introduced in OVS
      2.3.0, wherein the number of OpenFlow table hits and misses was
      not accurate.
