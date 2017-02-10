@@ -73,6 +73,15 @@ OVS_PATCH_PEER
   For "OVSPatchPort" devices, this field specifies the patch's peer on the
   other bridge.
 
+OVS_PORT_MODE
+  For "OVSDPDKVhostUserPort" devices, this field can be set to "client" which
+  indicates that the port will be used in client mode.
+
+OVS_PORT_PATH
+  For "OVSDPDKVhostUserPort" devices, this field specifies the path to the
+  vhost-user server socket.  It will only be used if OVS_PORT_MODE is set to
+  "client".
+
 Note
 ----
 
