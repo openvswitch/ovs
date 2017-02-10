@@ -31,6 +31,7 @@ The below guides provide information on contributing to Open vSwitch itself.
    :maxdepth: 2
 
    submitting-patches
+   backporting-patches
    coding-style
    coding-style-windows
    documentation-style

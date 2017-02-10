@@ -80,6 +80,7 @@ EXTRA_DIST += \
 	Documentation/internals/release-process.rst \
 	Documentation/internals/security.rst \
 	Documentation/internals/contributing/index.rst \
+	Documentation/internals/contributing/backporting-patches.rst \
 	Documentation/internals/contributing/coding-style.rst \
 	Documentation/internals/contributing/coding-style-windows.rst \
 	Documentation/internals/contributing/documentation-style.rst \

@@ -211,6 +211,8 @@ omit ``RYUDIR``
   of Open vSwitch and Ryu in your bug report, plus any other information
   needed to reproduce the problem.
 
+.. _datapath-testing:
+
 Datapath testing
 ~~~~~~~~~~~~~~~~
 
