@@ -3813,13 +3813,150 @@ flood_packets(struct xlate_ctx *ctx, bool all)
     ctx->nf_output_iface = NF_OUT_FLOOD;
 }
 
+/* Copy and reformat a partially xlated odp actions to a new
+ * odp actions list in 'b', so that the new actions list
+ * can be executed by odp_execute_actions.
+ *
+ * When xlate using nested odp actions, such as sample and clone,
+ * the nested action created by nl_msg_start_nested() may not
+ * have been properly closed yet, thus can not be executed
+ * directly.
+ *
+ * Since unclosed nested action has to be last action, it can be
+ * fixed by skipping the outer header, and treating the actions within
+ * as if they are outside the nested attribute since the effect
+ * of executing them on packet is the same.
+ *
+ * As an optimization, a fully closed 'sample' or 'clone' action
+ * is skipped since their execution has no effect to the packet.
+ *
+ * Returns true if success. 'b' contains the new actions list.
+ * The caller is responsible for disposing 'b'.
+ *
+ * Returns false if error, 'b' has been freed already.  */
+static bool
+xlate_fixup_actions(struct ofpbuf *b, const struct nlattr *actions,
+                    size_t actions_len)
+{
+    const struct nlattr *a;
+    unsigned int left;
+
+    NL_ATTR_FOR_EACH_UNSAFE (a, left, actions, actions_len) {
+        int type = nl_attr_type(a);
+
+        switch ((enum ovs_action_attr) type) {
+        case OVS_ACTION_ATTR_HASH:
+        case OVS_ACTION_ATTR_PUSH_VLAN:
+        case OVS_ACTION_ATTR_POP_VLAN:
+        case OVS_ACTION_ATTR_PUSH_MPLS:
+        case OVS_ACTION_ATTR_POP_MPLS:
+        case OVS_ACTION_ATTR_SET:
+        case OVS_ACTION_ATTR_SET_MASKED:
+        case OVS_ACTION_ATTR_TRUNC:
+        case OVS_ACTION_ATTR_OUTPUT:
+        case OVS_ACTION_ATTR_TUNNEL_PUSH:
+        case OVS_ACTION_ATTR_TUNNEL_POP:
+        case OVS_ACTION_ATTR_USERSPACE:
+        case OVS_ACTION_ATTR_RECIRC:
+        case OVS_ACTION_ATTR_CT:
+            ofpbuf_put(b, a, nl_attr_len_pad(a, left));
+            break;
+
+        case OVS_ACTION_ATTR_CLONE:
+            /* If the clone action has been fully xlated, it can
+             * be skipped, since any actions executed within clone
+             * do not affect the current packet.
+             *
+             * When xlating actions within clone, the clone action,
+             * because it is an nested netlink attribute, do not have
+             * a valid 'nla_len'; it will be zero instead.  Skip
+             * the clone header to find the start of the actions
+             * enclosed. Treat those actions as if they are written
+             * outside of clone.   */
+            if (!a->nla_len) {
+                bool ok;
+                if (left < NLA_HDRLEN) {
+                    goto error;
+                }
+
+                ok = xlate_fixup_actions(b, nl_attr_get_unspec(a, 0),
+                                         left - NLA_HDRLEN);
+                if (!ok) {
+                    goto error;
+                }
+            }
+            break;
+
+        case OVS_ACTION_ATTR_SAMPLE:
+            if (!a->nla_len) {
+                bool ok;
+                if (left < NLA_HDRLEN) {
+                    goto error;
+                }
+                const struct nlattr *attr = nl_attr_get_unspec(a, 0);
+                left -= NLA_HDRLEN;
+
+                while (left > 0 &&
+                       nl_attr_type(attr) != OVS_SAMPLE_ATTR_ACTIONS) {
+                    /* Only OVS_SAMPLE_ATTR_ACTIONS can have unclosed
+                     * nested netlink attribute.  */
+                    if (!attr->nla_len) {
+                        goto error;
+                    }
+
+                    left -= NLA_ALIGN(attr->nla_len);
+                    attr = nl_attr_next(attr);
+                }
+
+                if (left < NLA_HDRLEN) {
+                    goto error;
+                }
+
+                ok = xlate_fixup_actions(b, nl_attr_get_unspec(attr, 0),
+                                         left - NLA_HDRLEN);
+                if (!ok) {
+                    goto error;
+                }
+            }
+            break;
+
+        case OVS_ACTION_ATTR_UNSPEC:
+        case __OVS_ACTION_ATTR_MAX:
+            OVS_NOT_REACHED();
+        }
+    }
+
+    return true;
+
+error:
+    ofpbuf_delete(b);
+    return false;
+}
+
+static bool
+xlate_execute_odp_actions(struct dp_packet *packet,
+                          const struct nlattr *actions, int actions_len)
+{
+    struct dp_packet_batch batch;
+    struct ofpbuf *b = ofpbuf_new(actions_len);
+
+    if (!xlate_fixup_actions(b, actions, actions_len)) {
+        return false;
+    }
+
+    dp_packet_batch_init_packet(&batch, packet);
+    odp_execute_actions(NULL, &batch, false, b->data, b->size, NULL);
+    ofpbuf_delete(b);
+
+    return true;
+}
+
 static void
 execute_controller_action(struct xlate_ctx *ctx, int len,
                           enum ofp_packet_in_reason reason,
                           uint16_t controller_id,
                           const uint8_t *userdata, size_t userdata_len)
 {
-    struct dp_packet_batch batch;
     struct dp_packet *packet;
 
     ctx->xout->slow |= SLOW_CONTROLLER;
@@ -3833,10 +3970,12 @@ execute_controller_action(struct xlate_ctx *ctx, int len,
     }
 
     packet = dp_packet_clone(ctx->xin->packet);
-    dp_packet_batch_init_packet(&batch, packet);
-    odp_execute_actions(NULL, &batch, false,
-                        ctx->odp_actions->data, ctx->odp_actions->size, NULL);
-
+    if (!xlate_execute_odp_actions(packet, ctx->odp_actions->data,
+                                  ctx->odp_actions->size)) {
+        xlate_report_error(ctx, "Failed to execute controller action");
+        dp_packet_delete(packet);
+        return;
+    }
     /* A packet sent by an action in a table-miss rule is considered an
      * explicit table miss.  OpenFlow before 1.3 doesn't have that concept so
      * it will get translated back to OFPR_ACTION for those versions. */
