@@ -664,6 +664,7 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [__vlan_insert_tag])
   OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [vlan_get_protocol])
   OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [skb_vlan_tagged])
+  OVS_GREP_IFELSE([$KSRC/include/linux/if_vlan.h], [eth_type_vlan])
 
   OVS_GREP_IFELSE([$KSRC/include/linux/u64_stats_sync.h], [u64_stats_fetch_begin_irq])
 
