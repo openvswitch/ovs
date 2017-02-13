@@ -24,8 +24,9 @@
  * acceptable.
  */
 #define vlan_insert_tag_set_proto(skb, proto, vlan_tci) \
-	rpl_vlan_insert_tag_set_proto(skb, vlan_tci)
+	rpl_vlan_insert_tag_set_proto(skb, proto, vlan_tci)
 static inline struct sk_buff *rpl_vlan_insert_tag_set_proto(struct sk_buff *skb,
+							    __be16 vlan_proto,
 							    u16 vlan_tci)
 {
 	struct vlan_ethhdr *veth;
@@ -41,12 +42,12 @@ static inline struct sk_buff *rpl_vlan_insert_tag_set_proto(struct sk_buff *skb,
 	skb->mac_header -= VLAN_HLEN;
 
 	/* first, the ethernet type */
-	veth->h_vlan_proto = htons(ETH_P_8021Q);
+	veth->h_vlan_proto = vlan_proto;
 
 	/* now, the TCI */
 	veth->h_vlan_TCI = htons(vlan_tci);
 
-	skb->protocol = htons(ETH_P_8021Q);
+	skb->protocol = vlan_proto;
 
 	return skb;
 }
