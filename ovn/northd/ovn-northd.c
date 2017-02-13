@@ -1179,6 +1179,41 @@ tag_alloc_create_new_tag(struct hmap *tag_alloc_table,
 }
 
 
+/*
+ * This function checks if the MAC in "address" parameter (if present) is
+ * different from the one stored in Logical_Switch_Port.dynamic_addresses
+ * and updates it.
+ */
+static void
+check_and_update_mac_in_dynamic_addresses(
+    const char *address,
+    const struct nbrec_logical_switch_port *nbsp)
+{
+    if (!nbsp->dynamic_addresses) {
+        return;
+    }
+    int buf_index = 0;
+    struct eth_addr ea;
+    if (!ovs_scan_len(address, &buf_index,
+                      ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(ea))) {
+        return;
+    }
+
+    struct eth_addr present_ea;
+    buf_index = 0;
+    if (ovs_scan_len(nbsp->dynamic_addresses, &buf_index,
+                     ETH_ADDR_SCAN_FMT, ETH_ADDR_SCAN_ARGS(present_ea))
+        && !eth_addr_equals(ea, present_ea)) {
+        /* MAC address has changed. Update it */
+        char *new_addr =  xasprintf(
+            ETH_ADDR_FMT"%s", ETH_ADDR_ARGS(ea),
+            &nbsp->dynamic_addresses[buf_index]);
+        nbrec_logical_switch_port_set_dynamic_addresses(
+            nbsp, new_addr);
+        free(new_addr);
+    }
+}
+
 static void
 join_logical_ports(struct northd_context *ctx,
                    struct hmap *datapaths, struct hmap *ports,
@@ -1243,6 +1278,8 @@ join_logical_ports(struct northd_context *ctx,
                     }
                     if (is_dynamic_lsp_address(nbsp->addresses[j])) {
                         if (nbsp->dynamic_addresses) {
+                            check_and_update_mac_in_dynamic_addresses(
+                                nbsp->addresses[j], nbsp);
                             if (!extract_lsp_addresses(nbsp->dynamic_addresses,
                                             &op->lsp_addrs[op->n_lsp_addrs])) {
                                 static struct vlog_rate_limit rl

@@ -4893,6 +4893,25 @@ AT_CHECK([ovn-nbctl get Logical-Switch-Port p31 dynamic_addresses], [0],
      ["fe:dc:ba:98:76:54 192.168.1.18"
 ])
 
+# Update the static MAC address with dynamically allocated IP and check
+# if the MAC address is updated in 'Logical_Switch_Port.dynamic_adddresses'
+ovn-nbctl --wait=sb lsp-set-addresses p31 "fe:dc:ba:98:76:55 dynamic"
+ovn-nbctl get Logical-Switch-Port p31 dynamic_addresses
+
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p31 dynamic_addresses], [0],
+     ["fe:dc:ba:98:76:55 192.168.1.18"
+])
+
+ovn-nbctl --wait=sb lsp-set-addresses p31 "dynamic"
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p31 dynamic_addresses], [0],
+     ["fe:dc:ba:98:76:55 192.168.1.18"
+])
+
+ovn-nbctl --wait=sb lsp-set-addresses p31 "fe:dc:ba:98:76:56 dynamic"
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p31 dynamic_addresses], [0],
+     ["fe:dc:ba:98:76:56 192.168.1.18"
+])
+
 as ovn-sb
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 
