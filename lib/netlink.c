@@ -467,16 +467,29 @@ nl_msg_end_nested(struct ofpbuf *msg, size_t offset)
     attr->nla_len = msg->size - offset;
 }
 
-/* Same as nls_msg_end_nested() when the nested Netlink contains non empty
- * message. Otherwise, drop the nested message header from 'msg'.    */
+/* Cancel a nested Netlink attribute in 'msg'.  'offset' should be the value
+ * returned by nl_msg_start_nested(). */
 void
+nl_msg_cancel_nested(struct ofpbuf *msg, size_t offset)
+{
+    msg->size = offset;
+}
+
+/* Same as nls_msg_end_nested() when the nested Netlink contains non empty
+ * message. Otherwise, drop the nested message header from 'msg'.
+ *
+ * Return true if the nested message has been dropped.  */
+bool
 nl_msg_end_non_empty_nested(struct ofpbuf *msg, size_t offset)
 {
     nl_msg_end_nested(msg, offset);
 
     struct nlattr *attr = ofpbuf_at_assert(msg, offset, sizeof *attr);
     if (!nl_attr_get_size(attr)) {
-        msg->size = offset;
+        nl_msg_cancel_nested(msg, offset);
+        return true;
+    } else {
+        return false;
     }
 }
 
