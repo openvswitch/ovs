@@ -239,6 +239,9 @@ bond_create(const struct bond_settings *s, struct ofproto_dpif *ofproto)
     ovs_refcount_init(&bond->ref_cnt);
     hmap_init(&bond->pr_rule_ops);
 
+    bond->active_slave_mac = eth_addr_zero;
+    bond->active_slave_changed = false;
+
     bond_reconfigure(bond, s);
     return bond;
 }
@@ -453,9 +456,6 @@ bond_reconfigure(struct bond *bond, const struct bond_settings *s)
     if (bond->balance == BM_AB || !bond->hash || revalidate) {
         bond_entry_reset(bond);
     }
-
-    bond->active_slave_mac = s->active_slave_mac;
-    bond->active_slave_changed = false;
 
     ovs_rwlock_unlock(&rwlock);
     return revalidate;
