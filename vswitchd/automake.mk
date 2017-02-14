@@ -1,6 +1,6 @@
 sbin_PROGRAMS += vswitchd/ovs-vswitchd
 man_MANS += vswitchd/ovs-vswitchd.8
-DISTCLEANFILES += \
+CLEANFILES += \
 	vswitchd/ovs-vswitchd.8
 
 vswitchd_ovs_vswitchd_SOURCES = \
@@ -35,13 +35,13 @@ vswitchd/vswitch.pic: vswitchd/vswitch.gv ovsdb/dot2pic
 	mv $@.tmp $@
 VSWITCH_PIC = vswitchd/vswitch.pic
 VSWITCH_DOT_DIAGRAM_ARG = --er-diagram=$(VSWITCH_PIC)
-DISTCLEANFILES += vswitchd/vswitch.gv vswitchd/vswitch.pic
+CLEANFILES += vswitchd/vswitch.gv vswitchd/vswitch.pic
 endif
 endif
 
 # vswitch schema documentation
 EXTRA_DIST += vswitchd/vswitch.xml
-DISTCLEANFILES += vswitchd/ovs-vswitchd.conf.db.5
+CLEANFILES += vswitchd/ovs-vswitchd.conf.db.5
 man_MANS += vswitchd/ovs-vswitchd.conf.db.5
 vswitchd/ovs-vswitchd.conf.db.5: \
 	ovsdb/ovsdb-doc vswitchd/vswitch.xml vswitchd/vswitch.ovsschema \

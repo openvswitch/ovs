@@ -75,7 +75,7 @@ MAN_ROOTS += \
 	utilities/ovs-vlan-test.8.in \
 	utilities/ovs-vsctl.8.in
 MAN_FRAGMENTS += utilities/ovs-vlan-bugs.man
-DISTCLEANFILES += \
+CLEANFILES += \
 	utilities/ovs-appctl.8 \
 	utilities/ovs-ctl \
 	utilities/ovs-check-dead-ifs \

@@ -15,13 +15,13 @@ ovn/ovn-sb.pic: ovn/ovn-sb.gv ovsdb/dot2pic
 	mv $@.tmp $@
 OVN_SB_PIC = ovn/ovn-sb.pic
 OVN_SB_DOT_DIAGRAM_ARG = --er-diagram=$(OVN_SB_PIC)
-DISTCLEANFILES += ovn/ovn-sb.gv ovn/ovn-sb.pic
+CLEANFILES += ovn/ovn-sb.gv ovn/ovn-sb.pic
 endif
 endif
 
 # OVN southbound schema documentation
 EXTRA_DIST += ovn/ovn-sb.xml
-DISTCLEANFILES += ovn/ovn-sb.5
+CLEANFILES += ovn/ovn-sb.5
 man_MANS += ovn/ovn-sb.5
 ovn/ovn-sb.5: \
 	ovsdb/ovsdb-doc ovn/ovn-sb.xml ovn/ovn-sb.ovsschema $(OVN_SB_PIC)
@@ -49,13 +49,13 @@ ovn/ovn-nb.pic: ovn/ovn-nb.gv ovsdb/dot2pic
 	mv $@.tmp $@
 OVN_NB_PIC = ovn/ovn-nb.pic
 OVN_NB_DOT_DIAGRAM_ARG = --er-diagram=$(OVN_NB_PIC)
-DISTCLEANFILES += ovn/ovn-nb.gv ovn/ovn-nb.pic
+CLEANFILES += ovn/ovn-nb.gv ovn/ovn-nb.pic
 endif
 endif
 
 # OVN northbound schema documentation
 EXTRA_DIST += ovn/ovn-nb.xml
-DISTCLEANFILES += ovn/ovn-nb.5
+CLEANFILES += ovn/ovn-nb.5
 man_MANS += ovn/ovn-nb.5
 ovn/ovn-nb.5: \
 	ovsdb/ovsdb-doc ovn/ovn-nb.xml ovn/ovn-nb.ovsschema $(OVN_NB_PIC)
@@ -68,7 +68,7 @@ ovn/ovn-nb.5: \
 
 man_MANS += ovn/ovn-architecture.7
 EXTRA_DIST += ovn/ovn-architecture.7.xml
-DISTCLEANFILES += ovn/ovn-architecture.7
+CLEANFILES += ovn/ovn-architecture.7
 
 EXTRA_DIST += \
 	ovn/TODO.rst

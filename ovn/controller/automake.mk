@@ -23,4 +23,4 @@ ovn_controller_ovn_controller_SOURCES = \
 ovn_controller_ovn_controller_LDADD = ovn/lib/libovn.la lib/libopenvswitch.la
 man_MANS += ovn/controller/ovn-controller.8
 EXTRA_DIST += ovn/controller/ovn-controller.8.xml
-DISTCLEANFILES += ovn/controller/ovn-controller.8
+CLEANFILES += ovn/controller/ovn-controller.8

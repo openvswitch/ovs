@@ -97,4 +97,4 @@ $(srcdir)/debian/copyright: AUTHORS.rst debian/copyright.in
 	  sed -e '34,/%AUTHORS%/d' $(srcdir)/debian/copyright.in;	   \
 	} > $@
 
-DISTCLEANFILES += debian/copyright
+CLEANFILES += debian/copyright

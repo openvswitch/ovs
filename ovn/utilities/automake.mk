@@ -24,7 +24,7 @@ EXTRA_DIST += \
     ovn/utilities/ovn-trace.8.xml \
     ovn/utilities/ovndb-servers.ocf
 
-DISTCLEANFILES += \
+CLEANFILES += \
     ovn/utilities/ovn-ctl.8 \
     ovn/utilities/ovn-nbctl.8 \
     ovn/utilities/ovn-sbctl.8 \
