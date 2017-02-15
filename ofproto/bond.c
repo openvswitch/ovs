@@ -488,10 +488,13 @@ bond_find_slave_by_mac(const struct bond *bond, const struct eth_addr mac)
 static void
 bond_active_slave_changed(struct bond *bond)
 {
-    struct eth_addr mac;
-
-    netdev_get_etheraddr(bond->active_slave->netdev, &mac);
-    bond->active_slave_mac = mac;
+    if (bond->active_slave) {
+        struct eth_addr mac;
+        netdev_get_etheraddr(bond->active_slave->netdev, &mac);
+        bond->active_slave_mac = mac;
+    } else {
+        bond->active_slave_mac = eth_addr_zero;
+    }
     bond->active_slave_changed = true;
     seq_change(connectivity_seq_get());
 }
@@ -1866,6 +1869,7 @@ bond_choose_active_slave(struct bond *bond)
             bond_active_slave_changed(bond);
         }
     } else if (old_active_slave) {
+        bond_active_slave_changed(bond);
         VLOG_INFO_RL(&rl, "bond %s: all interfaces disabled", bond->name);
     }
 }
