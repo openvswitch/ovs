@@ -654,6 +654,9 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
             }
         }
     }
+
+    config_ofproto_types(&ovs_cfg->other_config);
+
     HMAP_FOR_EACH (br, node, &all_bridges) {
         bridge_add_ports(br, &br->wanted_ports);
         shash_destroy(&br->wanted_ports);
@@ -705,8 +708,6 @@ bridge_reconfigure(const struct ovsrec_open_vswitch *ovs_cfg)
         bridge_configure_aa(br);
     }
     free(managers);
-
-    config_ofproto_types(&ovs_cfg->other_config);
 
     /* The ofproto-dpif provider does some final reconfiguration in its
      * ->type_run() function.  We have to call it before notifying the database
