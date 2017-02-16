@@ -2067,8 +2067,7 @@ out:
     stats->tx_packets = rte_stats.opackets;
     stats->rx_bytes = rte_stats.ibytes;
     stats->tx_bytes = rte_stats.obytes;
-    /* DPDK counts imissed as errors, but count them here as dropped instead */
-    stats->rx_errors = rte_stats.ierrors - rte_stats.imissed;
+    stats->rx_errors = rte_stats.ierrors;
     stats->tx_errors = rte_stats.oerrors;
 
     rte_spinlock_lock(&dev->stats_lock);
