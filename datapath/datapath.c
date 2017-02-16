@@ -62,7 +62,6 @@
 #include "vport-netdev.h"
 
 int ovs_net_id __read_mostly;
-EXPORT_SYMBOL_GPL(ovs_net_id);
 
 static struct genl_family dp_packet_genl_family;
 static struct genl_family dp_flow_genl_family;
@@ -135,7 +134,6 @@ int lockdep_ovsl_is_held(void)
 	else
 		return 1;
 }
-EXPORT_SYMBOL_GPL(lockdep_ovsl_is_held);
 #endif
 
 static int queue_gso_packets(struct datapath *dp, struct sk_buff *,
