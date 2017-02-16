@@ -89,14 +89,25 @@ static const struct ethtool_ops internal_dev_ethtool_ops = {
 	.get_link	= ethtool_op_get_link,
 };
 
-static int internal_dev_change_mtu(struct net_device *netdev, int new_mtu)
+#ifndef HAVE_NET_DEVICE_WITH_MAX_MTU
+static int internal_dev_change_mtu(struct net_device *dev, int new_mtu)
 {
-	if (new_mtu < 68)
+	if (new_mtu < ETH_MIN_MTU) {
+		net_err_ratelimited("%s: Invalid MTU %d requested, hw min %d\n",
+				    dev->name, new_mtu, ETH_MIN_MTU);
 		return -EINVAL;
+	}
 
-	netdev->mtu = new_mtu;
+	if (new_mtu > ETH_MAX_MTU) {
+		net_err_ratelimited("%s: Invalid MTU %d requested, hw max %d\n",
+				    dev->name, new_mtu, ETH_MAX_MTU);
+		return -EINVAL;
+	}
+
+	dev->mtu = new_mtu;
 	return 0;
 }
+#endif
 
 static void internal_dev_destructor(struct net_device *dev)
 {
@@ -150,7 +161,9 @@ static const struct net_device_ops internal_dev_netdev_ops = {
 	.ndo_stop = internal_dev_stop,
 	.ndo_start_xmit = internal_dev_xmit,
 	.ndo_set_mac_address = eth_mac_addr,
+#ifndef HAVE_NET_DEVICE_WITH_MAX_MTU
 	.ndo_change_mtu = internal_dev_change_mtu,
+#endif
 	.ndo_get_stats64 = internal_get_stats,
 #ifdef HAVE_IFF_PHONY_HEADROOM
 #ifndef HAVE_NET_DEVICE_OPS_WITH_EXTENDED
@@ -169,6 +182,9 @@ static void do_setup(struct net_device *netdev)
 {
 	ether_setup(netdev);
 
+#ifdef HAVE_NET_DEVICE_WITH_MAX_MTU
+	netdev->max_mtu = ETH_MAX_MTU;
+#endif
 	netdev->netdev_ops = &internal_dev_netdev_ops;
 
 	netdev->priv_flags &= ~IFF_TX_SKB_SHARING;

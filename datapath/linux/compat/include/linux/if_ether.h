@@ -3,6 +3,14 @@
 
 #include_next <linux/if_ether.h>
 
+#ifndef ETH_MIN_MTU
+#define ETH_MIN_MTU	68		/* Min IPv4 MTU per RFC791	*/
+#endif
+
+#ifndef ETH_MAX_MTU
+#define ETH_MAX_MTU	0xFFFFU		/* 65535, same as IP_MAX_MTU	*/
+#endif
+
 #ifndef ETH_P_802_3_MIN
 #define ETH_P_802_3_MIN        0x0600
 #endif
