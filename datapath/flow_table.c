@@ -31,6 +31,7 @@
 #include <linux/module.h>
 #include <linux/in.h>
 #include <linux/rcupdate.h>
+#include <linux/cpumask.h>
 #include <linux/if_arp.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
@@ -85,17 +86,12 @@ struct sw_flow *ovs_flow_alloc(void)
 {
 	struct sw_flow *flow;
 	struct flow_stats *stats;
-	int node;
 
-	flow = kmem_cache_alloc(flow_cache, GFP_KERNEL);
+	flow = kmem_cache_zalloc(flow_cache, GFP_KERNEL);
 	if (!flow)
 		return ERR_PTR(-ENOMEM);
 
-	flow->sf_acts = NULL;
-	flow->mask = NULL;
-	flow->id.ufid_len = 0;
-	flow->id.unmasked_key = NULL;
-	flow->stats_last_writer = NUMA_NO_NODE;
+	flow->stats_last_writer = -1;
 
 	/* Initialize the default stat node. */
 	stats = kmem_cache_alloc_node(flow_stats_cache,
@@ -107,10 +103,6 @@ struct sw_flow *ovs_flow_alloc(void)
 	spin_lock_init(&stats->lock);
 
 	RCU_INIT_POINTER(flow->stats[0], stats);
-
-	for_each_node(node)
-		if (node != 0)
-			RCU_INIT_POINTER(flow->stats[node], NULL);
 
 	return flow;
 err:
@@ -148,17 +140,17 @@ static struct flex_array *alloc_buckets(unsigned int n_buckets)
 
 static void flow_free(struct sw_flow *flow)
 {
-	int node;
+	int cpu;
 
 	if (ovs_identifier_is_key(&flow->id))
 		kfree(flow->id.unmasked_key);
 	if (flow->sf_acts)
 		ovs_nla_free_flow_actions((struct sw_flow_actions __force *)flow->sf_acts);
-	/* We open code this to make sure node 0 is always considered */
-	for (node = 0; node < MAX_NUMNODES; node = next_node(node, node_possible_map))
-		if (flow->stats[node])
+	/* We open code this to make sure cpu 0 is always considered */
+	for (cpu = 0; cpu < nr_cpu_ids; cpu = cpumask_next(cpu, cpu_possible_mask))
+		if (flow->stats[cpu])
 			kmem_cache_free(flow_stats_cache,
-					rcu_dereference_raw(flow->stats[node]));
+					rcu_dereference_raw(flow->stats[cpu]));
 	kmem_cache_free(flow_cache, flow);
 }
 
@@ -985,7 +977,7 @@ int ovs_flow_init(void)
 	BUILD_BUG_ON(sizeof(struct sw_flow_key) % sizeof(long));
 
 	flow_cache = kmem_cache_create("sw_flow", sizeof(struct sw_flow)
-				       + (nr_node_ids
+				       + (nr_cpu_ids
 					  * sizeof(struct flow_stats *)),
 				       0, 0, NULL);
 	if (flow_cache == NULL)
