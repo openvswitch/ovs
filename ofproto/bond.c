@@ -1329,6 +1329,9 @@ bond_print_details(struct ds *ds, const struct bond *bond)
         break;
     }
 
+    ds_put_format(ds, "lacp_fallback_ab: %s\n",
+                  bond->lacp_fallback_ab ? "true" : "false");
+
     ds_put_cstr(ds, "active slave mac: ");
     ds_put_format(ds, ETH_ADDR_FMT, ETH_ADDR_ARGS(bond->active_slave_mac));
     slave = bond_find_slave_by_mac(bond, bond->active_slave_mac);

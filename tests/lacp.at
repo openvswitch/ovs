@@ -124,6 +124,7 @@ bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
+lacp_fallback_ab: false
 active slave mac: 00:00:00:00:00:00(none)
 
 slave p1: disabled
@@ -288,6 +289,7 @@ bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
+lacp_fallback_ab: false
 
 slave p0: enabled
 	may_enable: true
@@ -302,6 +304,7 @@ bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
+lacp_fallback_ab: false
 
 slave p2: enabled
 	may_enable: true
@@ -423,6 +426,7 @@ bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
+lacp_fallback_ab: false
 <active slave mac del>
 
 slave p0: disabled
@@ -439,6 +443,7 @@ bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
+lacp_fallback_ab: false
 <active slave mac del>
 
 slave p2: disabled
@@ -553,6 +558,7 @@ bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
+lacp_fallback_ab: false
 <active slave mac del>
 
 slave p0: disabled
@@ -569,6 +575,7 @@ bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
+lacp_fallback_ab: false
 <active slave mac del>
 
 slave p2: disabled
@@ -688,6 +695,7 @@ bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
+lacp_fallback_ab: false
 <active slave mac del>
 
 slave p0: enabled
@@ -704,6 +712,7 @@ bond-hash-basis: 0
 updelay: 0 ms
 downdelay: 0 ms
 lacp_status: negotiated
+lacp_fallback_ab: false
 <active slave mac del>
 
 slave p2: enabled
