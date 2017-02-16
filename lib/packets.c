@@ -986,7 +986,7 @@ packet_update_csum128(struct dp_packet *packet, uint8_t proto,
     }
 }
 
-static void
+void
 packet_set_ipv6_addr(struct dp_packet *packet, uint8_t proto,
                      ovs_16aligned_be32 addr[4],
                      const struct in6_addr *new_addr,
