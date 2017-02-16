@@ -786,7 +786,11 @@ bond_check_admissibility(struct bond *bond, const void *slave_,
         if (!bond->lacp_fallback_ab) {
             goto out;
         }
+        break;
     case LACP_DISABLED:
+        if (bond->balance == BM_TCP) {
+            goto out;
+        }
         break;
     }
 
