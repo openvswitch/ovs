@@ -335,6 +335,23 @@
           datapaths.
         </p>
       </column>
+
+      <column name="other_config" key="emc-insert-inv-prob"
+              type='{"type": "integer", "minInteger": 0, "maxInteger": 4294967295}'>
+        <p>
+          Specifies the inverse probability (1/emc-insert-inv-prob) of a flow
+          being inserted into the Exact Match Cache (EMC). On average one in
+          every <code>emc-insert-inv-prob</code> packets that generate a unique
+          flow will cause an insertion into the EMC.
+
+          A value of 1 will result in an insertion for every flow (1/1 = 100%)
+          whereas a value of zero will result in no insertions and essentially
+          disable the EMC.
+        </p>
+        <p>
+          Defaults to 100 ie. there is (1/100 =) 1% chance of EMC insertion.
+        </p>
+      </column>
     </group>
 
     <group title="Status">

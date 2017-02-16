@@ -158,6 +158,7 @@ CHECK_PMD_THREADS_CREATED()
 
 AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg])
 AT_CHECK([ovs-ofctl add-flow br0 action=normal])
+AT_CHECK([ovs-vsctl set Open_vSwitch . other_config:emc-insert-inv-prob=1])
 
 sleep 1
 

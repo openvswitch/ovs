@@ -385,6 +385,7 @@ Eric Lopez                      elopez@nicira.com
 Frido Roose                     fr.roose@gmail.com
 Gaetano Catalli                 gaetano.catalli@gmail.com
 Gavin Remaley                   gavin_remaley@selinc.com
+Georg Schmuecking               georg.schmuecking@ericsson.com
 George Shuklin                  amarao@desunote.ru
 Gerald Rogers                   gerald.rogers@intel.com
 Ghanem Bahri                    bahri.ghanem@gmail.com

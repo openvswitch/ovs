@@ -354,6 +354,26 @@ the `DPDK documentation
 
 Note: Not all DPDK virtual PMD drivers have been tested and verified to work.
 
+EMC Insertion Probability
+-------------------------
+By default 1 in every 100 flows are inserted into the Exact Match Cache (EMC).
+It is possible to change this insertion probability by setting the
+``emc-insert-inv-prob`` option::
+
+    $ ovs-vsctl --no-wait set Open_vSwitch . other_config:emc-insert-inv-prob=N
+
+where:
+
+``N``
+  is a positive integer representing the inverse probability of insertion ie.
+  on average 1 in every N packets with a unique flow will generate an EMC
+  insertion.
+
+If ``N`` is set to 1, an insertion will be performed for every flow. If set to
+0, no insertions will be performed and the EMC will effectively be disabled.
+
+For more information on the EMC refer to :doc:`/intro/install/dpdk` .
+
 .. _dpdk-ovs-in-guest:
 
 OVS with DPDK Inside VMs
