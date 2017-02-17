@@ -159,7 +159,10 @@ netdev_windows_system_construct(struct netdev *netdev_)
 
     /* Query the attributes and runtime status of the netdev. */
     ret = query_netdev(netdev_get_name(&netdev->up), &info, &buf);
-    if (ret) {
+    /* "Internal" netdevs do not exist in the kernel yet.  They need to be
+     * transformed into a netdev object and passed to dpif_port_add(), which
+     * will add them to the kernel.  */
+    if (strcmp(netdev_get_type(&netdev->up), "internal") && ret) {
         return ret;
     }
     ofpbuf_delete(buf);
