@@ -649,6 +649,7 @@ class Idl(object):
         txn = self._outstanding_txns.pop(msg.id, None)
         if txn:
             txn._process_reply(msg)
+            return True
 
 
 def _uuid_to_row(atom, base):
