@@ -1352,11 +1352,14 @@ handle_upcalls(struct udpif *udpif, struct upcall *upcalls,
 
     /* Handle the packets individually in order of arrival.
      *
-     *   - For SLOW_CFM, SLOW_LACP, SLOW_STP, and SLOW_BFD, translation is what
-     *     processes received packets for these protocols.
+     *   - For SLOW_CFM, SLOW_LACP, SLOW_STP, SLOW_BFD, and SLOW_LLDP,
+     *     translation is what processes received packets for these
+     *     protocols.
      *
      *   - For SLOW_CONTROLLER, translation sends the packet to the OpenFlow
      *     controller.
+     *
+     *   - For SLOW_ACTION, translation executes the actions directly.
      *
      * The loop fills 'ops' with an array of operations to execute in the
      * datapath. */
