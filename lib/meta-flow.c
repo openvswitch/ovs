@@ -38,6 +38,7 @@
 #include "util.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/vlog.h"
+#include "vl-mff-map.h"
 
 VLOG_DEFINE_THIS_MODULE(meta_flow);
 
@@ -2641,6 +2642,13 @@ field_array_set(enum mf_field_id id, const union mf_value *value,
     memcpy(fa->values + offset, value, value_size);
 }
 
+/* A wrapper for variable length mf_fields that is maintained by
+ * struct vl_mff_map.*/
+struct vl_mf_field {
+    struct mf_field mf;
+    struct cmap_node cmap_node; /* In ofproto->vl_mff_map->cmap. */
+};
+
 static inline uint32_t
 mf_field_hash(uint32_t key)
 {
@@ -2651,23 +2659,24 @@ void
 mf_vl_mff_map_clear(struct vl_mff_map *vl_mff_map)
     OVS_REQUIRES(vl_mff_map->mutex)
 {
-    struct mf_field *mf;
+    struct vl_mf_field *vmf;
 
-    CMAP_FOR_EACH (mf, cmap_node, &vl_mff_map->cmap) {
-        cmap_remove(&vl_mff_map->cmap, &mf->cmap_node, mf_field_hash(mf->id));
-        ovsrcu_postpone(free, mf);
+    CMAP_FOR_EACH (vmf, cmap_node, &vl_mff_map->cmap) {
+        cmap_remove(&vl_mff_map->cmap, &vmf->cmap_node,
+                    mf_field_hash(vmf->mf.id));
+        ovsrcu_postpone(free, vmf);
     }
 }
 
-static struct mf_field *
+static struct vl_mf_field *
 mf_get_vl_mff__(uint32_t id, const struct vl_mff_map *vl_mff_map)
 {
-    struct mf_field *field;
+    struct vl_mf_field *vmf;
 
-    CMAP_FOR_EACH_WITH_HASH (field, cmap_node, mf_field_hash(id),
+    CMAP_FOR_EACH_WITH_HASH (vmf, cmap_node, mf_field_hash(id),
                              &vl_mff_map->cmap) {
-        if (field->id == id) {
-            return field;
+        if (vmf->mf.id == id) {
+            return vmf;
         }
     }
 
@@ -2682,7 +2691,7 @@ mf_get_vl_mff(const struct mf_field *mff,
               const struct vl_mff_map *vl_mff_map)
 {
     if (mff && mff->variable_len && vl_mff_map) {
-        return mf_get_vl_mff__(mff->id, vl_mff_map);
+        return &mf_get_vl_mff__(mff->id, vl_mff_map)->mf;
     }
 
     return NULL;
@@ -2704,7 +2713,7 @@ mf_vl_mff_map_mod_from_tun_metadata(struct vl_mff_map *vl_mff_map,
 
     LIST_FOR_EACH (tlv_map, list_node, &ttm->mappings) {
         unsigned int idx = MFF_TUN_METADATA0 + tlv_map->index;
-        struct mf_field *mf;
+        struct vl_mf_field *vmf;
 
         if (idx >= MFF_TUN_METADATA0 + TUN_METADATA_NUM_OPTS) {
             return OFPERR_NXTTMFC_BAD_FIELD_IDX;
@@ -2712,21 +2721,22 @@ mf_vl_mff_map_mod_from_tun_metadata(struct vl_mff_map *vl_mff_map,
 
         switch (ttm->command) {
         case NXTTMC_ADD:
-            mf = xmalloc(sizeof *mf);
-            *mf = mf_fields[idx];
-            mf->n_bytes = tlv_map->option_len;
-            mf->n_bits = tlv_map->option_len * 8;
-            mf->mapped = true;
+            vmf = xmalloc(sizeof *vmf);
+            vmf->mf = mf_fields[idx];
+            vmf->mf.n_bytes = tlv_map->option_len;
+            vmf->mf.n_bits = tlv_map->option_len * 8;
+            vmf->mf.mapped = true;
 
-            cmap_insert(&vl_mff_map->cmap, &mf->cmap_node, mf_field_hash(idx));
+            cmap_insert(&vl_mff_map->cmap, &vmf->cmap_node,
+                        mf_field_hash(idx));
             break;
 
         case NXTTMC_DELETE:
-            mf = mf_get_vl_mff__(idx, vl_mff_map);
-            if (mf) {
-                cmap_remove(&vl_mff_map->cmap, &mf->cmap_node,
+            vmf = mf_get_vl_mff__(idx, vl_mff_map);
+            if (vmf) {
+                cmap_remove(&vl_mff_map->cmap, &vmf->cmap_node,
                             mf_field_hash(idx));
-                ovsrcu_postpone(free, mf);
+                ovsrcu_postpone(free, vmf);
             }
             break;
 

@@ -386,7 +386,7 @@ def make_meta_flow(meta_flow_h):
         else:
             output += ["    -1, /* not usable for prefix lookup */"]
 
-        output += ["    {OVSRCU_INITIALIZER(NULL)},},"]
+        output += ["},"]
     for oline in output:
         print(oline)
 
