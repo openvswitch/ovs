@@ -36,6 +36,7 @@
 struct ofpbuf;
 union ofp_action;
 struct ofpact_set_field;
+struct vl_mff_map;
 
 /* Port numbers. */
 enum ofperr ofputil_port_from_ofp11(ovs_be32 ofp11_port,

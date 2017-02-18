@@ -23,11 +23,9 @@
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <netinet/ip6.h>
-#include "cmap.h"
 #include "openvswitch/flow.h"
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/packets.h"
-#include "openvswitch/thread.h"
 #include "openvswitch/util.h"
 
 struct ds;
@@ -1774,9 +1772,6 @@ struct mf_field {
 
     int flow_be32ofs;  /* Field's be32 offset in "struct flow", if prefix tree
                         * lookup is supported for the field, or -1. */
-
-    /* For variable length mf_fields only. In ofproto->vl_mff_map->cmap. */
-    struct cmap_node cmap_node;
 };
 
 /* The representation of a field's value. */
@@ -1852,14 +1847,6 @@ union mf_subvalue {
     };
 };
 BUILD_ASSERT_DECL(sizeof(union mf_value) == sizeof (union mf_subvalue));
-
-/* Variable length mf_fields mapping map. This is a single writer,
- * multiple-reader hash table that a writer must hold the following mutex
- * to access this map. */
-struct vl_mff_map {
-    struct cmap cmap;       /* Contains 'struct mf_field' */
-    struct ovs_mutex mutex;
-};
 
 bool mf_subvalue_intersect(const union mf_subvalue *a_value,
                            const union mf_subvalue *a_mask,
@@ -1987,14 +1974,4 @@ void mf_format_subvalue(const union mf_subvalue *subvalue, struct ds *s);
 /* Field Arrays. */
 void field_array_set(enum mf_field_id id, const union mf_value *,
                      struct field_array *);
-
-/* Variable length fields. */
-void mf_vl_mff_map_clear(struct vl_mff_map *vl_mff_map)
-    OVS_REQUIRES(vl_mff_map->mutex);
-enum ofperr mf_vl_mff_map_mod_from_tun_metadata(
-    struct vl_mff_map *vl_mff_map, const struct ofputil_tlv_table_mod *)
-    OVS_REQUIRES(vl_mff_map->mutex);
-const struct mf_field * mf_get_vl_mff(const struct mf_field *,
-                                      const struct vl_mff_map *);
-bool mf_vl_mff_invalid(const struct mf_field *, const struct vl_mff_map *);
 #endif /* meta-flow.h */

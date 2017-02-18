@@ -52,6 +52,7 @@
 #include "timeval.h"
 #include "tun-metadata.h"
 #include "versions.h"
+#include "vl-mff-map.h"
 
 struct match;
 struct ofputil_flow_mod;
@@ -59,7 +60,6 @@ struct bfd_cfg;
 struct meter;
 struct ofoperation;
 struct ofproto_packet_out;
-struct vl_mff_map;
 struct smap;
 
 extern struct ovs_mutex ofproto_mutex;

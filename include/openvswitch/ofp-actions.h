@@ -26,6 +26,8 @@
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
 
+struct vl_mff_map;
+
 /* List of OVS abstracted actions.
  *
  * This macro is used directly only internally by this header, but the list is

@@ -37,6 +37,7 @@
 #include "openvswitch/vlog.h"
 #include "unaligned.h"
 #include "util.h"
+#include "vl-mff-map.h"
 
 VLOG_DEFINE_THIS_MODULE(ofp_actions);
 
