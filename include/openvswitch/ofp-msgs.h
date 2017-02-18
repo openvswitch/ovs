@@ -40,7 +40,6 @@
 
 #include "openvswitch/ofp-errors.h"
 #include "openvswitch/types.h"
-#include "util.h"
 
 struct ovs_list;
 
