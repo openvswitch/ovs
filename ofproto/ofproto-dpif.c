@@ -5736,6 +5736,8 @@ ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
     ofm.fm.cookie_mask = htonll(0);
     ofm.fm.modify_cookie = false;
     ofm.fm.table_id = TBL_INTERNAL;
+    ofm.fm.out_port = OFPP_ANY;
+    ofm.fm.out_group = OFPG_ANY;
     ofm.fm.flags = OFPUTIL_FF_HIDDEN_FIELDS | OFPUTIL_FF_NO_READONLY;
     ofm.fm.command = OFPFC_DELETE_STRICT;
 
