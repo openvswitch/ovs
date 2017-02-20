@@ -99,7 +99,7 @@ Coverage
 
 If the build was configured with ``--enable-coverage`` and the ``lcov`` utility
 is installed, you can run the testsuite and generate a code coverage report by
-using the ``check-lcoc`` target::
+using the ``check-lcov`` target::
 
     $ make check-lcov
 
