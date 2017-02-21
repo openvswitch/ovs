@@ -35,7 +35,7 @@ void id_pool_add(struct id_pool *, uint32_t id);
  * ========
  *
  * Pool of unique 32bit ids.
- *
+ * Allocation always returns the lowest available id.
  *
  * Thread-safety
  * =============

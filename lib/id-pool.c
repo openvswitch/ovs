@@ -148,6 +148,9 @@ id_pool_free_id(struct id_pool *pool, uint32_t id)
         id_node = id_pool_find(pool, id);
         if (id_node) {
             hmap_remove(&pool->map, &id_node->node);
+            if (id < pool->next_free_id) {
+                pool->next_free_id = id;
+            }
             free(id_node);
         }
     }
