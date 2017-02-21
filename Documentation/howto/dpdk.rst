@@ -40,8 +40,7 @@ Bridges should be created with a ``datapath_type=netdev``::
 
     $ ovs-vsctl add-br br0 -- set bridge br0 datapath_type=netdev
 
-ovs-vsctl can also be used to add DPDK devices. OVS expects DPDK device names
-to start with ``dpdk`` and end with a portid. ovs-vswitchd should print the
+ovs-vsctl can also be used to add DPDK devices. ovs-vswitchd should print the
 number of dpdk devices found in the log file::
 
     $ ovs-vsctl add-port br0 dpdk-p0 -- set Interface dpdk-p0 type=dpdk \
