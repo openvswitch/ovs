@@ -170,6 +170,8 @@ do_start_ovsdb () {
         set "$@" --private-key=db:Open_vSwitch,SSL,private_key
         set "$@" --certificate=db:Open_vSwitch,SSL,certificate
         set "$@" --bootstrap-ca-cert=db:Open_vSwitch,SSL,ca_cert
+        [ "$OVS_USER" != "" ] && set "$@" --user "$OVS_USER"
+
         start_daemon "$OVSDB_SERVER_PRIORITY" "$OVSDB_SERVER_WRAPPER" "$@" \
             || return 1
 
@@ -239,6 +241,8 @@ do_start_forwarding () {
         if test X"$SELF_CONFINEMENT" = Xno; then
             set "$@" --no-self-confinement
         fi
+        [ "$OVS_USER" != "" ] && set "$@" --user "$OVS_USER"
+
         start_daemon "$OVS_VSWITCHD_PRIORITY" "$OVS_VSWITCHD_WRAPPER" "$@" ||
             return 1
     fi
@@ -503,6 +507,7 @@ set_defaults () {
     MLOCKALL=yes
     SELF_CONFINEMENT=yes
     MONITOR=yes
+    OVS_USER=
     OVSDB_SERVER=yes
     OVS_VSWITCHD=yes
     OVSDB_SERVER_PRIORITY=-10
@@ -570,6 +575,7 @@ Other important options for "start", "restart" and "force-reload-kmod":
   --external-id="key=value"
                      add given key-value pair to Open_vSwitch external-ids
   --delete-bridges   delete all bridges just before starting ovs-vswitchd
+  --ovs-user="user[:group]"  pass the --user flag to ovs daemons
 
 Less important options for "start", "restart" and "force-reload-kmod":
   --daemon-cwd=DIR               set working dir for OVS daemons (default: $DAEMON_CWD)
