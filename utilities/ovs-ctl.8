@@ -159,6 +159,13 @@ Deletes all ports that have the other_config:transient value set to true. This
 is important on certain environments where some ports are going to be recreated
 after reboot, but other ports need to be persisted in the database.
 .
+.IP "\fB\-\-ovs\-user=user[:group]\fR"
+Ordinarily Open vSwitch daemons are started as the user invoking the ovs-ctl
+command.  Some system administrators would prefer to have the various daemons
+spawn as different users in their environments.  This option allows passing the
+\fB\-\-user\fR option to the \fBovsdb\-server\fR and \fBovs\-vswitchd\fR
+daemons, allowing them to change their privilege levels.
+.
 .PP
 The following options are less important:
 .
