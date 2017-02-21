@@ -135,10 +135,3 @@ necessary because the command does not ordinarily imply a particular
 OpenFlow version.  One exception is that, when \fIactions\fR includes
 an action that only OpenFlow 1.1 and later supports (such as
 \fBpush_vlan\fR), \fB\-consistent\fR is automatically enabled.
-.IP "\fBofproto/self\-check\fR [\fIswitch\fR]"
-Runs an internal consistency check on \fIswitch\fR, if specified,
-otherwise on all ofproto instances, and responds with a brief summary
-of the results.  If the summary reports any errors, then the Open
-vSwitch logs should contain more detailed information.  Please pass
-along errors reported by this command to the Open vSwitch developers
-as bugs.
