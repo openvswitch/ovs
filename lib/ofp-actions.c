@@ -2805,9 +2805,11 @@ set_field_to_legacy_openflow(const struct ofpact_set_field *sf,
         put_OFPAT_SET_NW_TOS(out, ofp_version, sf->value->u8 << 2);
         break;
 
-    case MFF_IP_ECN:
-        put_OFPAT11_SET_NW_ECN(out, sf->value->u8);
+    case MFF_IP_ECN: {
+        struct ofpact_ecn ip_ecn = { .ecn = sf->value->u8 };
+        encode_SET_IP_ECN(&ip_ecn, ofp_version, out);
         break;
+    }
 
     case MFF_TCP_SRC:
     case MFF_UDP_SRC:

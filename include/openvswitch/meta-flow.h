@@ -1221,6 +1221,7 @@ enum OVS_PACKED_ENUM mf_field_id {
      * Access: read/write.
      * NXM: NXM_NX_IP_ECN(28) since v1.4.
      * OXM: OXM_OF_IP_ECN(9) since OF1.2 and v1.7.
+     * OF1.1: exact match.
      */
     MFF_IP_ECN,
 
