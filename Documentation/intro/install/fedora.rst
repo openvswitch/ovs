@@ -42,6 +42,7 @@ in the :doc:`general`. Specific packages (by package name) include:
 - rpm-build
 - autoconf automake libtool
 - systemd-units openssl openssl-devel
+- python-devel python3-devel
 - python python-twisted-core python-zope-interface python-six
 - desktop-file-utils
 - groff graphviz

@@ -8,6 +8,7 @@ Vagrant.require_version ">=1.7.0"
 $bootstrap_fedora = <<SCRIPT
 dnf -y update
 dnf -y install autoconf automake openssl-devel libtool \
+               python-devel python3-devel \
                python-twisted-core python-zope-interface \
                desktop-file-utils groff graphviz rpmdevtools nc curl \
                wget python-six pyftpdlib checkpolicy selinux-policy-devel \
