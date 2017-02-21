@@ -1,9 +1,14 @@
 openvswitch (2.5.2-1) unstable; urgency=low
    [ Open vSwitch team ]
    * New upstream version
-   - Nothing yet!
+   - ovs-ctl:
+     * Added the ability to selectively start the forwarding and database
+       functions (ovs-vswitchd and ovsdb-server, respectively).
+   - Fedora packaging:
+     * A package upgrade does not automatically restart OVS service.
+   - Bug fixes
 
- -- Open vSwitch team <dev@openvswitch.org>  Tue, 27 Sep 2016 10:21:47 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Tue, 21 Feb 2017 14:36:44 -0700
 
 openvswitch (2.5.1-1) unstable; urgency=low
    [ Open vSwitch team ]
