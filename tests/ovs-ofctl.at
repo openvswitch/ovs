@@ -119,7 +119,7 @@ for test_case in \
     'ipv6,nw_tos=0xf0                            NXM,OXM' \
     'ip,ip_dscp=0x3c                             any' \
     'ipv6,ip_dscp=0x3c                           NXM,OXM' \
-    'ip,nw_ecn=1                                 NXM,OXM' \
+    'ip,nw_ecn=1                                 NXM,OXM,OpenFlow11' \
     'ipv6,nw_ecn=1                               NXM,OXM' \
     'ip,nw_ttl=5                                 NXM,OXM' \
     'ipv6,nw_ttl=5                               NXM,OXM' \
