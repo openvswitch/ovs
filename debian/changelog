@@ -85,7 +85,7 @@ openvswitch (2.7.0-1) unstable; urgency=low
      * Database commands now accept integer ranges, e.g. "set port
        eth0 trunks=1-10" to enable trunking VLANs 1 to 10.
 
- -- Open vSwitch team <dev@openvswitch.org>  Tue, 31 Jan 2017 17:46:12 -0700
+ -- Open vSwitch team <dev@openvswitch.org>  Tue, 21 Feb 2017 13:57:33 -0700
 
 openvswitch (2.6.0-1) unstable; urgency=low
    [ Open vSwitch team ]
