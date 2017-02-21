@@ -63,5 +63,11 @@
     <CustomAction Id="ChangeOvsVSwitchdService"
               BinaryKey="OVSActions"
               JScriptCall="changeServiceAction" Execute="deferred" Return="check" Impersonate="no" />
+    <CustomAction Id="AddTriggerToOvsVswitchdService_Prop" Property="AddTriggerToOvsVswitchdService"
+                  Value='"[System64Folder]sc.exe" triggerinfo ovs-vswitchd "start/strcustom/6066F867-7CA1-4418-85FD-36E3F9C0600C/VmmsWmiEventProvider"|0|failed to add triggerinfo to ovs-vswitchd service'
+                  Execute="immediate" />
+    <CustomAction Id="AddTriggerToOvsVswitchdService"
+              BinaryKey="OVSActions"
+              JScriptCall="runCommandAction" Execute="deferred" Return="check" Impersonate="no" />
   </Fragment>
 </Wix>
