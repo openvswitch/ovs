@@ -229,8 +229,8 @@ config-h-check:
 	  echo "See above for list of violations of the rule that"; \
 	  echo "every C source file must #include <config.h>."; \
 	  exit 1; \
-	fi
-	if grep '#include' $(srcdir)/include/openvswitch/*.h | \
+	fi; \
+	if grep '#include' include/openvswitch/*.h | \
 	    grep -vE '(<.*>)|("openvswitch)|("openflow)'; \
 	then \
 	  echo "See above for list of violations of the rule that"; \
