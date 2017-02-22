@@ -238,6 +238,17 @@ ovsdb_server_start() {
 
     set ${OVN_CTL}
 
+    set $@ --db-nb-addr=${MASTER_IP} --db-nb-port=${NB_MASTER_PORT}
+    set $@ --db-sb-addr=${MASTER_IP} --db-sb-port=${SB_MASTER_PORT}
+
+    if [ "x${NB_MASTER_PROTO}" = xtcp ]; then
+        set $@ --db-nb-create-insecure-remote=yes
+    fi
+
+    if [ "x${SB_MASTER_PROTO}" = xtcp ]; then
+        set $@ --db-sb-create-insecure-remote=yes
+    fi
+
     if [ "x${present_master}" = x ]; then
         # No master detected, or the previous master is not among the
         # set starting.
