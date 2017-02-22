@@ -48,7 +48,7 @@ def _doexec(*args, **kwargs):
     return proc
 
 
-def _install_tap_linux(tap_name):
+def _install_tap_linux(tap_name, mtu_value=None):
     """Uses /dev/net/tun to create a tap device"""
     global tapdev_fd
 
@@ -63,6 +63,12 @@ def _install_tap_linux(tap_name):
     fcntl.ioctl(tapdev_fd, TUNSETOWNER, os.getegid())
 
     time.sleep(1)  # required to give the new device settling time
+    if mtu_value is not None:
+        pipe = _doexec(
+            *(['ip', 'link', 'set', 'dev', str(tap_name), 'mtu',
+               str(mtu_value)]))
+        pipe.wait()
+
     pipe = _doexec(
         *(['ip', 'link', 'set', 'dev', str(tap_name), 'up']))
     pipe.wait()
@@ -173,6 +179,13 @@ class OVSDB(object):
             return br.name
         except Exception:
             raise OVSDBException('Unable to find port %s bridge' % port_name)
+
+    def interface_mtu(self, intf_name):
+        try:
+            intf = self._find_row_by_name('Interface', intf_name)
+            return intf.mtu[0]
+        except Exception:
+            return None
 
     def interface_exists(self, intf_name):
         return bool(self._find_row_by_name('Interface', intf_name))
@@ -395,7 +408,8 @@ def main():
 
     if sys.platform in _make_taps and \
        mirror_interface not in netifaces.interfaces():
-        _make_taps[sys.platform](mirror_interface)
+        _make_taps[sys.platform](mirror_interface,
+                                 ovsdb.interface_mtu(interface))
 
     if mirror_interface not in netifaces.interfaces():
         print("ERROR: Please create an interface called `%s`" %
