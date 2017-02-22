@@ -25,18 +25,30 @@ typedef uint32_t mirror_mask_t;
 struct ofproto_dpif;
 struct ofbundle;
 
-struct mbridge *mbridge_create(void);
+/* The following functions are used by handler threads without any locking,
+ * assuming RCU protection. */
+
 struct mbridge *mbridge_ref(const struct mbridge *);
 void mbridge_unref(struct mbridge *);
 bool mbridge_has_mirrors(struct mbridge *);
-bool mbridge_need_revalidate(struct mbridge *);
-
-void mbridge_register_bundle(struct mbridge *, struct ofbundle *);
-void mbridge_unregister_bundle(struct mbridge *, struct ofbundle *);
 
 mirror_mask_t mirror_bundle_out(struct mbridge *, struct ofbundle *);
 mirror_mask_t mirror_bundle_src(struct mbridge *, struct ofbundle *);
 mirror_mask_t mirror_bundle_dst(struct mbridge *, struct ofbundle *);
+
+void mirror_update_stats(struct mbridge*, mirror_mask_t, uint64_t packets,
+                         uint64_t bytes);
+bool mirror_get(struct mbridge *, int index, const unsigned long **vlans,
+                mirror_mask_t *dup_mirrors, struct ofbundle **out,
+                int *snaplen, int *out_vlan);
+
+/* The remaining functions are assumed to be called by the main thread only. */
+
+struct mbridge *mbridge_create(void);
+bool mbridge_need_revalidate(struct mbridge *);
+
+void mbridge_register_bundle(struct mbridge *, struct ofbundle *);
+void mbridge_unregister_bundle(struct mbridge *, struct ofbundle *);
 
 int mirror_set(struct mbridge *, void *aux, const char *name,
                struct ofbundle **srcs, size_t n_srcs,
@@ -46,10 +58,5 @@ int mirror_set(struct mbridge *, void *aux, const char *name,
 void mirror_destroy(struct mbridge *, void *aux);
 int mirror_get_stats(struct mbridge *, void *aux, uint64_t *packets,
                      uint64_t *bytes);
-void mirror_update_stats(struct mbridge*, mirror_mask_t, uint64_t packets,
-                         uint64_t bytes);
-bool mirror_get(struct mbridge *, int index, const unsigned long **vlans,
-                mirror_mask_t *dup_mirrors, struct ofbundle **out,
-                int *snaplen, int *out_vlan);
 
 #endif /* ofproto-dpif-mirror.h */
