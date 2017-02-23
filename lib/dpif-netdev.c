@@ -86,6 +86,9 @@ DEFINE_STATIC_PER_THREAD_DATA(uint32_t, recirc_depth, 0)
 
 /* Configuration parameters. */
 enum { MAX_FLOWS = 65536 };     /* Maximum number of flows in flow table. */
+enum { MAX_METERS = 65536 };    /* Maximum number of meters. */
+enum { MAX_BANDS = 8 };         /* Maximum number of bands / meter. */
+enum { N_METER_LOCKS = 64 };    /* Maximum number of meters. */
 
 /* Protects against changes to 'dp_netdevs'. */
 static struct ovs_mutex dp_netdev_mutex = OVS_MUTEX_INITIALIZER;
@@ -198,6 +201,31 @@ static bool dpcls_lookup(struct dpcls *cls,
                          struct dpcls_rule **rules, size_t cnt,
                          int *num_lookups_p);
 
+/* Set of supported meter flags */
+#define DP_SUPPORTED_METER_FLAGS_MASK \
+    (OFPMF13_STATS | OFPMF13_PKTPS | OFPMF13_KBPS | OFPMF13_BURST)
+
+/* Set of supported meter band types */
+#define DP_SUPPORTED_METER_BAND_TYPES           \
+    ( 1 << OFPMBT13_DROP )
+
+struct dp_meter_band {
+    struct ofputil_meter_band up; /* type, prec_level, pad, rate, burst_size */
+    uint32_t bucket; /* In 1/1000 packets (for PKTPS), or in bits (for KBPS) */
+    uint64_t packet_count;
+    uint64_t byte_count;
+};
+
+struct dp_meter {
+    uint16_t flags;
+    uint16_t n_bands;
+    uint32_t max_delta_t;
+    uint64_t used;
+    uint64_t packet_count;
+    uint64_t byte_count;
+    struct dp_meter_band bands[];
+};
+
 /* Datapath based on the network device interface from netdev.h.
  *
  *
@@ -227,6 +255,11 @@ struct dp_netdev {
     struct ovs_mutex port_mutex;
     struct hmap ports;
     struct seq *port_seq;       /* Incremented whenever a port changes. */
+
+    /* Meters. */
+    struct ovs_mutex meter_locks[N_METER_LOCKS];
+    struct dp_meter *meters[MAX_METERS]; /* Meter bands. */
+    uint32_t meter_free;                 /* Next free meter. */
 
     /* Protects access to ofproto-dpif-upcall interface during revalidator
      * thread synchronization. */
@@ -263,6 +296,19 @@ struct dp_netdev {
     /* Probability of EMC insertions is a factor of 'emc_insert_min'.*/
     OVS_ALIGNED_VAR(CACHE_LINE_SIZE) atomic_uint32_t emc_insert_min;
 };
+
+static void meter_lock(const struct dp_netdev *dp, uint32_t meter_id)
+    OVS_ACQUIRES(dp->meter_locks[meter_id % N_METER_LOCKS])
+{
+    ovs_mutex_lock(&dp->meter_locks[meter_id % N_METER_LOCKS]);
+}
+
+static void meter_unlock(const struct dp_netdev *dp, uint32_t meter_id)
+    OVS_RELEASES(dp->meter_locks[meter_id % N_METER_LOCKS])
+{
+    ovs_mutex_unlock(&dp->meter_locks[meter_id % N_METER_LOCKS]);
+}
+
 
 static struct dp_netdev_port *dp_netdev_lookup_port(const struct dp_netdev *dp,
                                                     odp_port_t)
@@ -1067,6 +1113,10 @@ create_dp_netdev(const char *name, const struct dpif_class *class,
     dp->reconfigure_seq = seq_create();
     dp->last_reconfigure_seq = seq_read(dp->reconfigure_seq);
 
+    for (int i = 0; i < N_METER_LOCKS; ++i) {
+        ovs_mutex_init_adaptive(&dp->meter_locks[i]);
+    }
+
     /* Disable upcalls by default. */
     dp_netdev_disable_upcall(dp);
     dp->upcall_aux = NULL;
@@ -1146,6 +1196,16 @@ dp_netdev_destroy_upcall_lock(struct dp_netdev *dp)
     fat_rwlock_destroy(&dp->upcall_rwlock);
 }
 
+static void
+dp_delete_meter(struct dp_netdev *dp, uint32_t meter_id)
+    OVS_REQUIRES(dp->meter_locks[meter_id % N_METER_LOCKS])
+{
+    if (dp->meters[meter_id]) {
+        free(dp->meters[meter_id]);
+        dp->meters[meter_id] = NULL;
+    }
+}
+
 /* Requires dp_netdev_mutex so that we can't get a new reference to 'dp'
  * through the 'dp_netdevs' shash while freeing 'dp'. */
 static void
@@ -1161,6 +1221,7 @@ dp_netdev_free(struct dp_netdev *dp)
         do_del_port(dp, port);
     }
     ovs_mutex_unlock(&dp->port_mutex);
+
     dp_netdev_destroy_all_pmds(dp, true);
     cmap_destroy(&dp->poll_threads);
 
@@ -1178,6 +1239,17 @@ dp_netdev_free(struct dp_netdev *dp)
 
     /* Upcalls must be disabled at this point */
     dp_netdev_destroy_upcall_lock(dp);
+
+    int i;
+
+    for (i = 0; i < MAX_METERS; ++i) {
+        meter_lock(dp, i);
+        dp_delete_meter(dp, i);
+        meter_unlock(dp, i);
+    }
+    for (i = 0; i < N_METER_LOCKS; ++i) {
+        ovs_mutex_destroy(&dp->meter_locks[i]);
+    }
 
     free(dp->pmd_cmask);
     free(CONST_CAST(char *, dp->name));
@@ -3657,37 +3729,304 @@ static void
 dpif_netdev_meter_get_features(const struct dpif * dpif OVS_UNUSED,
                                struct ofputil_meter_features *features)
 {
-    features->max_meters = 0;
-    features->band_types = 0;
-    features->capabilities = 0;
-    features->max_bands = 0;
+    features->max_meters = MAX_METERS;
+    features->band_types = DP_SUPPORTED_METER_BAND_TYPES;
+    features->capabilities = DP_SUPPORTED_METER_FLAGS_MASK;
+    features->max_bands = MAX_BANDS;
     features->max_color = 0;
 }
 
-static int
-dpif_netdev_meter_set(struct dpif *dpif OVS_UNUSED,
-                      ofproto_meter_id *meter_id OVS_UNUSED,
-                      struct ofputil_meter_config *config OVS_UNUSED)
+/* Returns false when packet needs to be dropped. */
+static void
+dp_netdev_run_meter(struct dp_netdev *dp, struct dp_packet_batch *packets_,
+                    uint32_t meter_id, long long int now)
 {
-    return EFBIG; /* meter_id out of range */
+    struct dp_meter *meter;
+    struct dp_meter_band *band;
+    long long int long_delta_t; /* msec */
+    uint32_t delta_t; /* msec */
+    int i;
+    int cnt = packets_->count;
+    uint32_t bytes, volume;
+    int exceeded_band[NETDEV_MAX_BURST];
+    uint32_t exceeded_rate[NETDEV_MAX_BURST];
+    int exceeded_pkt = cnt; /* First packet that exceeded a band rate. */
+
+    if (meter_id >= MAX_METERS) {
+        return;
+    }
+
+    meter_lock(dp, meter_id);
+    meter = dp->meters[meter_id];
+    if (!meter) {
+        goto out;
+    }
+
+    /* Initialize as negative values. */
+    memset(exceeded_band, 0xff, cnt * sizeof *exceeded_band);
+    /* Initialize as zeroes. */
+    memset(exceeded_rate, 0, cnt * sizeof *exceeded_rate);
+
+    /* All packets will hit the meter at the same time. */
+    long_delta_t = (now - meter->used); /* msec */
+
+    /* Make sure delta_t will not be too large, so that bucket will not
+     * wrap around below. */
+    delta_t = (long_delta_t > (long long int)meter->max_delta_t)
+        ? meter->max_delta_t : (uint32_t)long_delta_t;
+
+    /* Update meter stats. */
+    meter->used = now;
+    meter->packet_count += cnt;
+    bytes = 0;
+    for (i = 0; i < cnt; i++) {
+        bytes += dp_packet_size(packets_->packets[i]);
+    }
+    meter->byte_count += bytes;
+
+    /* Meters can operate in terms of packets per second or kilobits per
+     * second. */
+    if (meter->flags & OFPMF13_PKTPS) {
+        /* Rate in packets/second, bucket 1/1000 packets. */
+        /* msec * packets/sec = 1/1000 packets. */
+        volume = cnt * 1000; /* Take 'cnt' packets from the bucket. */
+    } else {
+        /* Rate in kbps, bucket in bits. */
+        /* msec * kbps = bits */
+        volume = bytes * 8;
+    }
+
+    /* Update all bands and find the one hit with the highest rate for each
+     * packet (if any). */
+    for (int m = 0; m < meter->n_bands; ++m) {
+        band = &meter->bands[m];
+
+        /* Update band's bucket. */
+        band->bucket += delta_t * band->up.rate;
+        if (band->bucket > band->up.burst_size) {
+            band->bucket = band->up.burst_size;
+        }
+
+        /* Drain the bucket for all the packets, if possible. */
+        if (band->bucket >= volume) {
+            band->bucket -= volume;
+        } else {
+            int band_exceeded_pkt;
+
+            /* Band limit hit, must process packet-by-packet. */
+            if (meter->flags & OFPMF13_PKTPS) {
+                band_exceeded_pkt = band->bucket / 1000;
+                band->bucket %= 1000; /* Remainder stays in bucket. */
+
+                /* Update the exceeding band for each exceeding packet.
+                 * (Only one band will be fired by a packet, and that
+                 * can be different for each packet.) */
+                for (i = band_exceeded_pkt; i < cnt; i++) {
+                    if (band->up.rate > exceeded_rate[i]) {
+                        exceeded_rate[i] = band->up.rate;
+                        exceeded_band[i] = m;
+                    }
+                }
+            } else {
+                /* Packet sizes differ, must process one-by-one. */
+                band_exceeded_pkt = cnt;
+                for (i = 0; i < cnt; i++) {
+                    uint32_t bits = dp_packet_size(packets_->packets[i]) * 8;
+
+                    if (band->bucket >= bits) {
+                        band->bucket -= bits;
+                    } else {
+                        if (i < band_exceeded_pkt) {
+                            band_exceeded_pkt = i;
+                        }
+                        /* Update the exceeding band for the exceeding packet.
+                         * (Only one band will be fired by a packet, and that
+                         * can be different for each packet.) */
+                        if (band->up.rate > exceeded_rate[i]) {
+                            exceeded_rate[i] = band->up.rate;
+                            exceeded_band[i] = m;
+                        }
+                    }
+                }
+            }
+            /* Remember the first exceeding packet. */
+            if (exceeded_pkt > band_exceeded_pkt) {
+                exceeded_pkt = band_exceeded_pkt;
+            }
+        }
+    }
+
+    /* Fire the highest rate band exceeded by each packet.
+     * Drop packets if needed, by swapping packet to the end that will be
+     * ignored. */
+    const size_t size = dp_packet_batch_size(packets_);
+    struct dp_packet *packet;
+    size_t j;
+    DP_PACKET_BATCH_REFILL_FOR_EACH (j, size, packet, packets_) {
+        if (exceeded_band[j] >= 0) {
+            /* Meter drop packet. */
+            band = &meter->bands[exceeded_band[j]];
+            band->packet_count += 1;
+            band->byte_count += dp_packet_size(packet);
+
+            dp_packet_delete(packet);
+        } else {
+            /* Meter accepts packet. */
+            dp_packet_batch_refill(packets_, packet, j);
+        }
+    }
+ out:
+    meter_unlock(dp, meter_id);
+}
+
+/* Meter set/get/del processing is still single-threaded. */
+static int
+dpif_netdev_meter_set(struct dpif *dpif, ofproto_meter_id *meter_id,
+                      struct ofputil_meter_config *config)
+{
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    uint32_t mid = meter_id->uint32;
+    struct dp_meter *meter;
+    int i;
+
+    if (mid == UINT32_MAX) {
+        mid = dp->meter_free;
+    }
+    if (mid >= MAX_METERS) {
+        return EFBIG; /* Meter_id out of range. */
+    }
+
+    if (config->flags & ~DP_SUPPORTED_METER_FLAGS_MASK ||
+        !(config->flags & (OFPMF13_KBPS | OFPMF13_PKTPS))) {
+        return EBADF; /* Unsupported flags set */
+    }
+    /* Validate bands */
+    if (config->n_bands == 0 || config->n_bands > MAX_BANDS) {
+        return EINVAL; /* Too many bands */
+    }
+    for (i = 0; i < config->n_bands; ++i) {
+        switch (config->bands[i].type) {
+        case OFPMBT13_DROP:
+            break;
+        default:
+            return ENODEV; /* Unsupported band type */
+        }
+    }
+
+    /* Allocate meter */
+    meter = xzalloc(sizeof *meter
+                    + config->n_bands * sizeof(struct dp_meter_band));
+    if (meter) {
+        meter->flags = config->flags;
+        meter->n_bands = config->n_bands;
+        meter->max_delta_t = 0;
+        meter->used = time_msec();
+
+        /* set up bands */
+        for (i = 0; i < config->n_bands; ++i) {
+            uint32_t band_max_delta_t;
+
+            /* Set burst size to a workable value if none specified. */
+            if (config->bands[i].burst_size == 0) {
+                config->bands[i].burst_size = config->bands[i].rate;
+            }
+
+            meter->bands[i].up = config->bands[i];
+            /* Convert burst size to the bucket units: */
+            /* pkts => 1/1000 packets, kilobits => bits. */
+            meter->bands[i].up.burst_size *= 1000;
+            /* Initialize bucket to empty. */
+            meter->bands[i].bucket = 0;
+
+            /* Figure out max delta_t that is enough to fill any bucket. */
+            band_max_delta_t
+                = meter->bands[i].up.burst_size / meter->bands[i].up.rate;
+            if (band_max_delta_t > meter->max_delta_t) {
+                meter->max_delta_t = band_max_delta_t;
+            }
+        }
+
+        meter_lock(dp, mid);
+        dp_delete_meter(dp, mid); /* Free existing meter, if any */
+        dp->meters[mid] = meter;
+        meter_unlock(dp, mid);
+
+        meter_id->uint32 = mid; /* Store on success. */
+
+        /* Find next free meter */
+        if (dp->meter_free == mid) { /* Now taken. */
+            do {
+                if (++mid >= MAX_METERS) { /* Wrap around */
+                    mid = 0;
+                }
+                if (mid == dp->meter_free) { /* Full circle */
+                    mid = MAX_METERS;
+                    break;
+                }
+            } while (dp->meters[mid]);
+            dp->meter_free = mid; /* Next free meter or MAX_METERS */
+        }
+        return 0;
+    }
+    return ENOMEM;
 }
 
 static int
-dpif_netdev_meter_get(const struct dpif *dpif OVS_UNUSED,
-                      ofproto_meter_id meter_id OVS_UNUSED,
-                      struct ofputil_meter_stats *stats OVS_UNUSED,
-                      uint16_t n_bands OVS_UNUSED)
+dpif_netdev_meter_get(const struct dpif *dpif,
+                      ofproto_meter_id meter_id_,
+                      struct ofputil_meter_stats *stats, uint16_t n_bands)
 {
-    return EFBIG; /* meter_id out of range */
+    const struct dp_netdev *dp = get_dp_netdev(dpif);
+    const struct dp_meter *meter;
+    uint32_t meter_id = meter_id_.uint32;
+
+    if (meter_id >= MAX_METERS) {
+        return EFBIG;
+    }
+    meter = dp->meters[meter_id];
+    if (!meter) {
+        return ENOENT;
+    }
+    if (stats) {
+        int i = 0;
+
+        meter_lock(dp, meter_id);
+        stats->packet_in_count = meter->packet_count;
+        stats->byte_in_count = meter->byte_count;
+
+        for (i = 0; i < n_bands && i < meter->n_bands; ++i) {
+            stats->bands[i].packet_count = meter->bands[i].packet_count;
+            stats->bands[i].byte_count = meter->bands[i].byte_count;
+        }
+        meter_unlock(dp, meter_id);
+
+        stats->n_bands = i;
+    }
+    return 0;
 }
 
 static int
-dpif_netdev_meter_del(struct dpif *dpif OVS_UNUSED,
-                      ofproto_meter_id meter_id OVS_UNUSED,
-                      struct ofputil_meter_stats *stats OVS_UNUSED,
-                      uint16_t n_bands OVS_UNUSED)
+dpif_netdev_meter_del(struct dpif *dpif,
+                      ofproto_meter_id meter_id_,
+                      struct ofputil_meter_stats *stats, uint16_t n_bands)
 {
-    return EFBIG; /* meter_id out of range */
+    struct dp_netdev *dp = get_dp_netdev(dpif);
+    int error;
+
+    error = dpif_netdev_meter_get(dpif, meter_id_, stats, n_bands);
+    if (!error) {
+        uint32_t meter_id = meter_id_.uint32;
+
+        meter_lock(dp, meter_id);
+        dp_delete_meter(dp, meter_id);
+        meter_unlock(dp, meter_id);
+
+        /* Keep free meter index as low as possible */
+        if (meter_id < dp->meter_free) {
+            dp->meter_free = meter_id;
+        }
+    }
+    return error;
 }
 
 
@@ -4617,6 +4956,7 @@ dp_execute_userspace_action(struct dp_netdev_pmd_thread *pmd,
 static void
 dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
               const struct nlattr *a, bool may_steal)
+    OVS_NO_THREAD_SAFETY_ANALYSIS
 {
     struct dp_netdev_execute_aux *aux = aux_;
     uint32_t *depth = recirc_depth_get();
@@ -4814,6 +5154,10 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
     }
 
     case OVS_ACTION_ATTR_METER:
+        dp_netdev_run_meter(pmd->dp, packets_, nl_attr_get_u32(a),
+                            time_msec());
+        break;
+
     case OVS_ACTION_ATTR_PUSH_VLAN:
     case OVS_ACTION_ATTR_POP_VLAN:
     case OVS_ACTION_ATTR_PUSH_MPLS:
