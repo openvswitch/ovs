@@ -1104,6 +1104,7 @@ struct dpif_execute_helper_aux {
     struct dpif *dpif;
     const struct flow *flow;
     int error;
+    const struct nlattr *meter_action; /* Non-NULL, if have a meter action. */
 };
 
 /* This is called for actions that need the context of the datapath to be
@@ -1119,6 +1120,13 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
     ovs_assert(packets_->count == 1);
 
     switch ((enum ovs_action_attr)type) {
+    case OVS_ACTION_ATTR_METER:
+        /* Maintain a pointer to the first meter action seen. */
+        if (!aux->meter_action) {
+            aux->meter_action = action;
+        }
+	break;
+
     case OVS_ACTION_ATTR_CT:
     case OVS_ACTION_ATTR_OUTPUT:
     case OVS_ACTION_ATTR_TUNNEL_PUSH:
@@ -1129,15 +1137,36 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
         struct ofpbuf execute_actions;
         uint64_t stub[256 / 8];
         struct pkt_metadata *md = &packet->md;
-        bool dst_set;
 
-        dst_set = flow_tnl_dst_is_set(&md->tunnel);
-        if (dst_set) {
+        if (flow_tnl_dst_is_set(&md->tunnel) || aux->meter_action) {
+            ofpbuf_use_stub(&execute_actions, stub, sizeof stub);
+
+            if (aux->meter_action) {
+                const struct nlattr *a = aux->meter_action;
+
+                /* XXX: This code collects meter actions since the last action
+                 * execution via the datapath to be executed right before the
+                 * current action that needs to be executed by the datapath.
+                 * This is only an approximation, but better than nothing.
+                 * Fundamentally, we should have a mechanism by which the
+                 * datapath could return the result of the meter action so that
+                 * we could execute them at the right order. */
+                do {
+                    ofpbuf_put(&execute_actions, a, NLA_ALIGN(a->nla_len));
+                    /* Find next meter action before 'action', if any. */
+                    do {
+                        a = nl_attr_next(a);
+                    } while (a != action &&
+                             nl_attr_type(a) != OVS_ACTION_ATTR_METER);
+                } while (a != action);
+            }
+
             /* The Linux kernel datapath throws away the tunnel information
              * that we supply as metadata.  We have to use a "set" action to
              * supply it. */
-            ofpbuf_use_stub(&execute_actions, stub, sizeof stub);
-            odp_put_tunnel_action(&md->tunnel, &execute_actions);
+            if (md->tunnel.ip_dst) {
+                odp_put_tunnel_action(&md->tunnel, &execute_actions);
+            }
             ofpbuf_put(&execute_actions, action, NLA_ALIGN(action->nla_len));
 
             execute.actions = execute_actions.data;
@@ -1170,14 +1199,16 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
 
         dp_packet_delete(clone);
 
-        if (dst_set) {
+        if (flow_tnl_dst_is_set(&md->tunnel) || aux->meter_action) {
             ofpbuf_uninit(&execute_actions);
+
+            /* Do not re-use the same meters for later output actions. */
+            aux->meter_action = NULL;
         }
         break;
     }
 
     case OVS_ACTION_ATTR_HASH:
-    case OVS_ACTION_ATTR_METER:
     case OVS_ACTION_ATTR_PUSH_VLAN:
     case OVS_ACTION_ATTR_POP_VLAN:
     case OVS_ACTION_ATTR_PUSH_MPLS:
@@ -1203,7 +1234,7 @@ dpif_execute_helper_cb(void *aux_, struct dp_packet_batch *packets_,
 static int
 dpif_execute_with_help(struct dpif *dpif, struct dpif_execute *execute)
 {
-    struct dpif_execute_helper_aux aux = {dpif, execute->flow, 0};
+    struct dpif_execute_helper_aux aux = {dpif, execute->flow, 0, NULL};
     struct dp_packet_batch pb;
 
     COVERAGE_INC(dpif_execute_with_help);

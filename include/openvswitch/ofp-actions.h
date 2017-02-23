@@ -534,6 +534,7 @@ struct ofpact_metadata {
 struct ofpact_meter {
     struct ofpact ofpact;
     uint32_t meter_id;
+    uint32_t provider_meter_id;
 };
 
 /* OFPACT_WRITE_ACTIONS, OFPACT_CLONE.
