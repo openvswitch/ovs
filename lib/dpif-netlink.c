@@ -2359,6 +2359,46 @@ dpif_netlink_ct_flush(struct dpif *dpif OVS_UNUSED, const uint16_t *zone)
     }
 }
 
+
+/* Meters */
+static void
+dpif_netlink_meter_get_features(const struct dpif * dpif OVS_UNUSED,
+                                struct ofputil_meter_features *features)
+{
+    features->max_meters = 0;
+    features->band_types = 0;
+    features->capabilities = 0;
+    features->max_bands = 0;
+    features->max_color = 0;
+}
+
+static int
+dpif_netlink_meter_set(struct dpif *dpif OVS_UNUSED,
+                       ofproto_meter_id *meter_id OVS_UNUSED,
+                       struct ofputil_meter_config *config OVS_UNUSED)
+{
+    return EFBIG; /* meter_id out of range */
+}
+
+static int
+dpif_netlink_meter_get(const struct dpif *dpif OVS_UNUSED,
+                       ofproto_meter_id meter_id OVS_UNUSED,
+                       struct ofputil_meter_stats *stats OVS_UNUSED,
+                       uint16_t n_bands OVS_UNUSED)
+{
+    return EFBIG; /* meter_id out of range */
+}
+
+static int
+dpif_netlink_meter_del(struct dpif *dpif OVS_UNUSED,
+                       ofproto_meter_id meter_id OVS_UNUSED,
+                       struct ofputil_meter_stats *stats OVS_UNUSED,
+                       uint16_t n_bands OVS_UNUSED)
+{
+    return EFBIG; /* meter_id out of range */
+}
+
+
 const struct dpif_class dpif_netlink_class = {
     "system",
     NULL,                       /* init */
@@ -2403,7 +2443,11 @@ const struct dpif_class dpif_netlink_class = {
     dpif_netlink_ct_dump_start,
     dpif_netlink_ct_dump_next,
     dpif_netlink_ct_dump_done,
-    dpif_netlink_ct_flush
+    dpif_netlink_ct_flush,
+    dpif_netlink_meter_get_features,
+    dpif_netlink_meter_set,
+    dpif_netlink_meter_get,
+    dpif_netlink_meter_del,
 };
 
 static int

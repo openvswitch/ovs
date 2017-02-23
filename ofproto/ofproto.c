@@ -6439,7 +6439,7 @@ handle_meter_request(struct ofconn *ofconn, const struct ofp_header *request,
 
             if (!ofproto->ofproto_class->meter_get(ofproto,
                                                    meter->provider_meter_id,
-                                                   &stats)) {
+                                                   &stats, meter->n_bands)) {
                 ofputil_append_meter_stats(&replies, &stats);
             }
         } else { /* type == OFPTYPE_METER_CONFIG_REQUEST */

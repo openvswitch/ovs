@@ -3651,6 +3651,46 @@ dp_netdev_disable_upcall(struct dp_netdev *dp)
     fat_rwlock_wrlock(&dp->upcall_rwlock);
 }
 
+
+/* Meters */
+static void
+dpif_netdev_meter_get_features(const struct dpif * dpif OVS_UNUSED,
+                               struct ofputil_meter_features *features)
+{
+    features->max_meters = 0;
+    features->band_types = 0;
+    features->capabilities = 0;
+    features->max_bands = 0;
+    features->max_color = 0;
+}
+
+static int
+dpif_netdev_meter_set(struct dpif *dpif OVS_UNUSED,
+                      ofproto_meter_id *meter_id OVS_UNUSED,
+                      struct ofputil_meter_config *config OVS_UNUSED)
+{
+    return EFBIG; /* meter_id out of range */
+}
+
+static int
+dpif_netdev_meter_get(const struct dpif *dpif OVS_UNUSED,
+                      ofproto_meter_id meter_id OVS_UNUSED,
+                      struct ofputil_meter_stats *stats OVS_UNUSED,
+                      uint16_t n_bands OVS_UNUSED)
+{
+    return EFBIG; /* meter_id out of range */
+}
+
+static int
+dpif_netdev_meter_del(struct dpif *dpif OVS_UNUSED,
+                      ofproto_meter_id meter_id OVS_UNUSED,
+                      struct ofputil_meter_stats *stats OVS_UNUSED,
+                      uint16_t n_bands OVS_UNUSED)
+{
+    return EFBIG; /* meter_id out of range */
+}
+
+
 static void
 dpif_netdev_disable_upcall(struct dpif *dpif)
     OVS_NO_THREAD_SAFETY_ANALYSIS
@@ -4773,6 +4813,7 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
         break;
     }
 
+    case OVS_ACTION_ATTR_METER:
     case OVS_ACTION_ATTR_PUSH_VLAN:
     case OVS_ACTION_ATTR_POP_VLAN:
     case OVS_ACTION_ATTR_PUSH_MPLS:
@@ -4912,6 +4953,10 @@ const struct dpif_class dpif_netdev_class = {
     dpif_netdev_ct_dump_next,
     dpif_netdev_ct_dump_done,
     dpif_netdev_ct_flush,
+    dpif_netdev_meter_get_features,
+    dpif_netdev_meter_set,
+    dpif_netdev_meter_get,
+    dpif_netdev_meter_del,
 };
 
 static void

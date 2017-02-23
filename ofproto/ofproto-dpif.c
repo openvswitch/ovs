@@ -5201,6 +5201,58 @@ ofproto_dpif_delete_internal_flow(struct ofproto_dpif *ofproto,
     return 0;
 }
 
+static void
+meter_get_features(const struct ofproto *ofproto_,
+                   struct ofputil_meter_features *features)
+{
+    const struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    dpif_meter_get_features(ofproto->backer->dpif, features);
+}
+
+static enum ofperr
+meter_set(struct ofproto *ofproto_, ofproto_meter_id *meter_id,
+          struct ofputil_meter_config *config)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    switch (dpif_meter_set(ofproto->backer->dpif, meter_id, config)) {
+    case 0:
+        return 0;
+    case EFBIG: /* meter_id out of range */
+    case ENOMEM: /* Cannot allocate meter */
+        return OFPERR_OFPMMFC_OUT_OF_METERS;
+    case EBADF: /* Unsupported flags */
+        return OFPERR_OFPMMFC_BAD_FLAGS;
+    case EINVAL: /* Too many bands */
+        return OFPERR_OFPMMFC_OUT_OF_BANDS;
+    case ENODEV: /* Unsupported band type */
+        return OFPERR_OFPMMFC_BAD_BAND;
+    default:
+        return OFPERR_OFPMMFC_UNKNOWN;
+    }
+}
+
+static enum ofperr
+meter_get(const struct ofproto *ofproto_, ofproto_meter_id meter_id,
+          struct ofputil_meter_stats *stats, uint16_t n_bands)
+{
+    const struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    if (!dpif_meter_get(ofproto->backer->dpif, meter_id, stats, n_bands)) {
+        return 0;
+    }
+    return OFPERR_OFPMMFC_UNKNOWN_METER;
+}
+
+static void
+meter_del(struct ofproto *ofproto_, ofproto_meter_id meter_id)
+{
+    struct ofproto_dpif *ofproto = ofproto_dpif_cast(ofproto_);
+
+    dpif_meter_del(ofproto->backer->dpif, meter_id, NULL, 0);
+}
+
 const struct ofproto_class ofproto_dpif_class = {
     init,
     enumerate_types,
@@ -5289,10 +5341,10 @@ const struct ofproto_class ofproto_dpif_class = {
     set_mac_table_config,
     set_mcast_snooping,
     set_mcast_snooping_port,
-    NULL,                       /* meter_get_features */
-    NULL,                       /* meter_set */
-    NULL,                       /* meter_get */
-    NULL,                       /* meter_del */
+    meter_get_features,
+    meter_set,
+    meter_get,
+    meter_del,
     group_alloc,                /* group_alloc */
     group_construct,            /* group_construct */
     group_destruct,             /* group_destruct */

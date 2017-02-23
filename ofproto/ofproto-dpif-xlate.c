@@ -3861,6 +3861,7 @@ xlate_fixup_actions(struct ofpbuf *b, const struct nlattr *actions,
         case OVS_ACTION_ATTR_CT:
         case OVS_ACTION_ATTR_PUSH_ETH:
         case OVS_ACTION_ATTR_POP_ETH:
+        case OVS_ACTION_ATTR_METER:
             ofpbuf_put(b, a, nl_attr_len_pad(a, left));
             break;
 

@@ -425,6 +425,35 @@ struct dpif_class {
     /* Flushes the connection tracking tables. If 'zone' is not NULL,
      * only deletes connections in '*zone'. */
     int (*ct_flush)(struct dpif *, const uint16_t *zone);
+
+    /* Meters */
+
+    /* Queries 'dpif' for supported meter features.
+     * NULL pointer means no meter features are supported. */
+    void (*meter_get_features)(const struct dpif *,
+                               struct ofputil_meter_features *);
+
+    /* Adds or modifies 'meter' in 'dpif'.   If '*meter_id' is UINT32_MAX,
+     * adds a new meter, otherwise modifies an existing meter.
+     *
+     * If meter is successfully added, sets '*meter_id' to the new meter's
+     * meter id selected by 'dpif'. */
+    int (*meter_set)(struct dpif *, ofproto_meter_id *meter_id,
+                     struct ofputil_meter_config *);
+
+    /* Queries 'dpif' for meter stats with the given 'meter_id'.  Stores
+     * maximum of 'n_bands' meter statistics, returning the number of band
+     * stats returned in 'stats->n_bands' if successful. */
+    int (*meter_get)(const struct dpif *, ofproto_meter_id meter_id,
+                     struct ofputil_meter_stats *, uint16_t n_bands);
+
+    /* Removes meter 'meter_id' from 'dpif'. Stores meter and band statistics
+     * (for maximum of 'n_bands', returning the number of band stats returned
+     * in 'stats->n_bands' if successful.  'stats' may be passed in as NULL if
+     * no stats are needed, in which case 'n_bands' must be passed in as
+     * zero. */
+    int (*meter_del)(struct dpif *, ofproto_meter_id meter_id,
+                     struct ofputil_meter_stats *, uint16_t n_bands);
 };
 
 extern const struct dpif_class dpif_netlink_class;
