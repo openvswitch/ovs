@@ -12,11 +12,12 @@ ovs\-appctl \- utility for configuring running Open vSwitch daemons
 .
 .SH SYNOPSIS
 \fBovs\-appctl\fR [\fB\-\-target=\fItarget\fR | \fB\-t\fR \fItarget\fR]
+[\fB\-T \fIsecs\fR | \fB\-\-timeout=\fIsecs\fR]
 \fIcommand \fR[\fIarg\fR...]
 .br
-\fBovs\-appctl\fR \-\-help
+\fBovs\-appctl \fB\-\-help\fR
 .br
-\fBovs\-appctl\fR \-\-version
+\fBovs\-appctl \fB\-\-version\fR
 .SH DESCRIPTION
 Open vSwitch daemons accept certain commands at runtime to control their
 behavior and query their settings.  Every daemon accepts a common set of
@@ -62,6 +63,13 @@ looks for a file named \fItarget\fB.ctl\fR in the configured \fIOVS_RUNDIR\fR
 directory.
 .IP
 The default target is \fBovs\-vswitchd\fR.
+.
+.IP "\fB\-T \fIsecs\fR"
+.IQ "\fB\-\-timeout=\fIsecs\fR"
+By default, or with a \fIsecs\fR of \fB0\fR, \fBovs\-appctl\fR waits
+forever to connect to the daemon and receive a response.  This option
+limits runtime to approximately \fIsecs\fR seconds.  If the timeout
+expires, \fBovs\-appctl\fR exits with a \fBSIGALRM\fR signal.
 .
 .SH COMMON COMMANDS
 Every Open vSwitch daemon supports a common set of commands, which are
