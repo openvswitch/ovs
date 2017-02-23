@@ -94,6 +94,12 @@ adjust_limits(int *rate_limit, int *burst_limit)
 static void
 pinqueue_destroy(struct pinsched *ps, struct pinqueue *q)
 {
+    if (ps->next_txq == q) {
+        advance_txq(ps);
+        if (ps->next_txq == q) {
+            ps->next_txq = NULL;
+        }
+    }
     hmap_remove(&ps->queues, &q->node);
     free(q);
 }
