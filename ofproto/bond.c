@@ -913,17 +913,16 @@ bool
 bond_may_recirc(const struct bond *bond, uint32_t *recirc_id,
                 uint32_t *hash_bias)
 {
-    if (bond->balance == BM_TCP && bond->recirc_id) {
-        if (recirc_id) {
-            *recirc_id = bond->recirc_id;
-        }
-        if (hash_bias) {
-            *hash_bias = bond->basis;
-        }
-        return true;
-    } else {
-        return false;
+    bool may_recirc = bond->balance == BM_TCP && bond->recirc_id;
+
+    if (recirc_id) {
+        *recirc_id = may_recirc ? bond->recirc_id : 0;
     }
+    if (hash_bias) {
+        *hash_bias = may_recirc ? bond->basis : 0;
+    }
+
+    return may_recirc;
 }
 
 static void
@@ -951,12 +950,16 @@ bond_update_post_recirc_rules__(struct bond* bond, const bool force)
 }
 
 void
-bond_update_post_recirc_rules(struct bond* bond, const bool force)
+bond_update_post_recirc_rules(struct bond *bond, uint32_t *recirc_id,
+                              uint32_t *hash_basis)
 {
     ovs_rwlock_wrlock(&rwlock);
-    bond_update_post_recirc_rules__(bond, force);
+    if (bond_may_recirc(bond, recirc_id, hash_basis)) {
+        bond_update_post_recirc_rules__(bond, false);
+    }
     ovs_rwlock_unlock(&rwlock);
 }
+
 
 /* Rebalancing. */
 
