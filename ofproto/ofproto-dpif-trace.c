@@ -387,8 +387,10 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
                                ofproto->up.n_tables, &usable_protocols);
     }
     if (!retval) {
+        ovs_mutex_lock(&ofproto_mutex);
         retval = ofproto_check_ofpacts(&ofproto->up, ofpacts.data,
                                        ofpacts.size);
+        ovs_mutex_unlock(&ofproto_mutex);
     }
 
     if (retval) {

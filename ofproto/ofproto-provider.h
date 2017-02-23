@@ -1949,7 +1949,8 @@ void ofproto_flush_flows(struct ofproto *);
 
 enum ofperr ofproto_check_ofpacts(struct ofproto *,
                                   const struct ofpact ofpacts[],
-                                  size_t ofpacts_len);
+                                  size_t ofpacts_len)
+    OVS_REQUIRES(ofproto_mutex);
 
 static inline const struct rule_actions *
 rule_get_actions(const struct rule *rule)
