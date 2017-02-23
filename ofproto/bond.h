@@ -120,7 +120,8 @@ void bond_rebalance(struct bond *);
  * Bond module pulls stats from those post recirculation rules. If rebalancing
  * is needed, those rules are updated with new output actions.
 */
-void bond_update_post_recirc_rules(struct bond *, const bool force);
+void bond_update_post_recirc_rules(struct bond *, uint32_t *recirc_id,
+                                   uint32_t *hash_basis);
 bool bond_may_recirc(const struct bond *, uint32_t *recirc_id,
                      uint32_t *hash_bias);
 #endif /* bond.h */

@@ -1987,15 +1987,23 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
         struct flow_wildcards *wc = ctx->wc;
         struct ofport_dpif *ofport;
 
-        if (ctx->xbridge->support.odp.recirc) {
-            use_recirc = bond_may_recirc(
-                out_xbundle->bond, &xr.recirc_id, &xr.hash_basis);
-
-            if (use_recirc) {
-                /* Only TCP mode uses recirculation. */
+        if (ctx->xbridge->support.odp.recirc
+            && bond_may_recirc(out_xbundle->bond, NULL, NULL)) {
+            /* To avoid unnecessary locking, bond_may_recirc() is first
+             * called outside of the 'rwlock'. After acquiring the lock,
+             * bond_update_post_recirc_rules() will check again to make
+             * sure bond configuration has not been changed.
+             *
+             * In case recirculation is not actually in use, 'xr.recirc_id'
+             * will be set to '0', Since a valid 'recirc_id' can
+             * not be zero.  */
+            bond_update_post_recirc_rules(out_xbundle->bond,
+                                          &xr.recirc_id,
+                                          &xr.hash_basis);
+            if (xr.recirc_id) {
+                /* Use recirculation instead of output. */
+                use_recirc = true;
                 xr.hash_alg = OVS_HASH_ALG_L4;
-                bond_update_post_recirc_rules(out_xbundle->bond, false);
-
                 /* Recirculation does not require unmasking hash fields. */
                 wc = NULL;
             }
