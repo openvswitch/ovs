@@ -54,6 +54,7 @@ static unixctl_cb_func test_sflow_exit;
 
 /* Structure element tag numbers. */
 #define SFLOW_TAG_CTR_IFCOUNTERS 1
+#define SFLOW_TAG_CTR_ETHCOUNTERS 2
 #define SFLOW_TAG_CTR_LACPCOUNTERS 7
 #define SFLOW_TAG_CTR_OPENFLOWPORT 1004
 #define SFLOW_TAG_CTR_PORTNAME 1005
@@ -115,7 +116,8 @@ struct sflow_xdr {
 	uint32_t TUNNEL_VNI_OUT;
 	uint32_t TUNNEL_VNI_IN;
 	uint32_t MPLS;
-        uint32_t IFCOUNTERS;
+	uint32_t IFCOUNTERS;
+	uint32_t ETHCOUNTERS;
 	uint32_t LACPCOUNTERS;
 	uint32_t OPENFLOWPORT;
 	uint32_t PORTNAME;
@@ -296,6 +298,25 @@ process_counter_sample(struct sflow_xdr *x)
 	portName[pnLen] = '\0';
 	printf(" portName=%s", portName);
 	printf("\n");
+    }
+    if (x->offset.ETHCOUNTERS) {
+        sflowxdr_setc(x, x->offset.ETHCOUNTERS);
+        printf("ETHCOUNTERS");
+        printf(" dot3StatsAlignmentErrors=%"PRIu32, sflowxdr_next(x));
+        printf(" dot3StatsFCSErrors=%"PRIu32, sflowxdr_next(x));
+        printf(" dot3StatsSingleCollisionFrames=%"PRIu32, sflowxdr_next(x));
+        printf(" dot3StatsMultipleCollisionFrames=%"PRIu32, sflowxdr_next(x));
+        printf(" dot3StatsSQETestErrors=%"PRIu32, sflowxdr_next(x));
+        printf(" dot3StatsDeferredTransmissions=%"PRIu32, sflowxdr_next(x));
+        printf(" dot3StatsLateCollisions=%"PRIu32, sflowxdr_next(x));
+        printf(" dot3StatsExcessiveCollisions=%"PRIu32, sflowxdr_next(x));
+        printf(" dot3StatsInternalMacTransmitErrors=%"PRIu32,
+               sflowxdr_next(x));
+        printf(" dot3StatsCarrierSenseErrors=%"PRIu32, sflowxdr_next(x));
+        printf(" dot3StatsFrameTooLongs=%"PRIu32, sflowxdr_next(x));
+        printf(" dot3StatsInternalMacReceiveErrors=%"PRIu32, sflowxdr_next(x));
+        printf(" dot3StatsSymbolErrors=%"PRIu32, sflowxdr_next(x));
+        printf("\n");
     }
 }
 
@@ -512,6 +533,9 @@ process_datagram(struct sflow_xdr *x)
                 switch (ceTag) {
                 case SFLOW_TAG_CTR_IFCOUNTERS:
                     sflowxdr_mark_unique(x, &x->offset.IFCOUNTERS);
+                    break;
+                case SFLOW_TAG_CTR_ETHCOUNTERS:
+                    sflowxdr_mark_unique(x, &x->offset.ETHCOUNTERS);
                     break;
                 case SFLOW_TAG_CTR_LACPCOUNTERS:
                     sflowxdr_mark_unique(x, &x->offset.LACPCOUNTERS);

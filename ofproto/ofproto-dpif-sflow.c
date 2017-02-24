@@ -298,9 +298,11 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
 {
     struct dpif_sflow *ds = ds_;
     SFLCounters_sample_element elem, lacp_elem, of_elem, name_elem;
+    SFLCounters_sample_element eth_elem;
     enum netdev_features current;
     struct dpif_sflow_port *dsp;
     SFLIf_counters *counters;
+    SFLEthernet_counters* eth_counters;
     struct netdev_stats stats;
     enum netdev_flags flags;
     struct lacp_slave_stats lacp_stats;
@@ -343,14 +345,14 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     counters->ifInOctets = stats.rx_bytes;
     counters->ifInUcastPkts = stats.rx_packets;
     counters->ifInMulticastPkts = stats.multicast;
-    counters->ifInBroadcastPkts = -1;
+    counters->ifInBroadcastPkts = stats.rx_broadcast_packets;
     counters->ifInDiscards = stats.rx_dropped;
     counters->ifInErrors = stats.rx_errors;
     counters->ifInUnknownProtos = -1;
     counters->ifOutOctets = stats.tx_bytes;
     counters->ifOutUcastPkts = stats.tx_packets;
-    counters->ifOutMulticastPkts = -1;
-    counters->ifOutBroadcastPkts = -1;
+    counters->ifOutMulticastPkts = stats.tx_multicast_packets;
+    counters->ifOutBroadcastPkts = stats.tx_broadcast_packets;
     counters->ifOutDiscards = stats.tx_dropped;
     counters->ifOutErrors = stats.tx_errors;
     counters->ifPromiscuousMode = 0;
@@ -406,6 +408,25 @@ sflow_agent_get_counters(void *ds_, SFLPoller *poller,
     of_elem.counterBlock.ofPort.port_no =
       (OVS_FORCE uint32_t)dsp->ofport->ofp_port;
     SFLADD_ELEMENT(cs, &of_elem);
+
+    /* Include ethernet counters */
+    memset(&eth_elem, 0, sizeof eth_elem);
+    eth_elem.tag = SFLCOUNTERS_ETHERNET;
+    eth_counters = &eth_elem.counterBlock.ethernet;
+    eth_counters->dot3StatsAlignmentErrors = stats.rx_frame_errors;
+    eth_counters->dot3StatsFCSErrors = stats.rx_crc_errors;
+    eth_counters->dot3StatsFrameTooLongs = stats.rx_oversize_errors;
+    SFL_UNDEF_COUNTER(eth_counters->dot3StatsSingleCollisionFrames);
+    SFL_UNDEF_COUNTER(eth_counters->dot3StatsMultipleCollisionFrames);
+    SFL_UNDEF_COUNTER(eth_counters->dot3StatsSQETestErrors);
+    SFL_UNDEF_COUNTER(eth_counters->dot3StatsDeferredTransmissions);
+    SFL_UNDEF_COUNTER(eth_counters->dot3StatsLateCollisions);
+    SFL_UNDEF_COUNTER(eth_counters->dot3StatsExcessiveCollisions);
+    SFL_UNDEF_COUNTER(eth_counters->dot3StatsInternalMacTransmitErrors);
+    SFL_UNDEF_COUNTER(eth_counters->dot3StatsCarrierSenseErrors);
+    SFL_UNDEF_COUNTER(eth_counters->dot3StatsInternalMacReceiveErrors);
+    SFL_UNDEF_COUNTER(eth_counters->dot3StatsSymbolErrors);
+    SFLADD_ELEMENT(cs, &eth_elem);
 
     sfl_poller_writeCountersSample(poller, cs);
 }

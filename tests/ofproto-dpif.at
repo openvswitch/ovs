@@ -5467,31 +5467,92 @@ HEADER
 	hdr=50-54-00-00-00-05-50-54-00-00-00-07-86-DD-67-00-00-00-00-00-0A-80-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-01-FE-80-00-00-00-00-00-00-00-00-00-00-00-00-00-02
 ])
 
-  AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'IFCOUNTERS|ERROR|PORTNAME|OPENFLOWPORT' | head -18 | sed 's/ /\
+  AT_CHECK_UNQUOTED([[sort sflow.log | $EGREP 'ETHCOUNTERS|IFCOUNTERS|ERROR|PORTNAME|OPENFLOWPORT' | head -24 | sed 's/ /\
 	/g']], [0], [dnl
-IFCOUNTERS
-	dgramSeqNo=1
-	ds=127.0.0.1>0:1002
-	csSeqNo=1
-	ifindex=1002
-	type=6
-	ifspeed=100000000
-	direction=0
-	status=0
-	in_octets=0
-	in_unicasts=0
-	in_multicasts=4294967295
-	in_broadcasts=4294967295
-	in_discards=4294967295
-	in_errors=4294967295
-	in_unknownprotos=4294967295
-	out_octets=84
-	out_unicasts=2
-	out_multicasts=4294967295
-	out_broadcasts=4294967295
-	out_discards=4294967295
-	out_errors=4294967295
-	promiscuous=0
+ETHCOUNTERS
+	dot3StatsAlignmentErrors=4294967295
+	dot3StatsFCSErrors=4294967295
+	dot3StatsSingleCollisionFrames=4294967295
+	dot3StatsMultipleCollisionFrames=4294967295
+	dot3StatsSQETestErrors=4294967295
+	dot3StatsDeferredTransmissions=4294967295
+	dot3StatsLateCollisions=4294967295
+	dot3StatsExcessiveCollisions=4294967295
+	dot3StatsInternalMacTransmitErrors=4294967295
+	dot3StatsCarrierSenseErrors=4294967295
+	dot3StatsFrameTooLongs=4294967295
+	dot3StatsInternalMacReceiveErrors=4294967295
+	dot3StatsSymbolErrors=4294967295
+ETHCOUNTERS
+	dot3StatsAlignmentErrors=4294967295
+	dot3StatsFCSErrors=4294967295
+	dot3StatsSingleCollisionFrames=4294967295
+	dot3StatsMultipleCollisionFrames=4294967295
+	dot3StatsSQETestErrors=4294967295
+	dot3StatsDeferredTransmissions=4294967295
+	dot3StatsLateCollisions=4294967295
+	dot3StatsExcessiveCollisions=4294967295
+	dot3StatsInternalMacTransmitErrors=4294967295
+	dot3StatsCarrierSenseErrors=4294967295
+	dot3StatsFrameTooLongs=4294967295
+	dot3StatsInternalMacReceiveErrors=4294967295
+	dot3StatsSymbolErrors=4294967295
+ETHCOUNTERS
+	dot3StatsAlignmentErrors=4294967295
+	dot3StatsFCSErrors=4294967295
+	dot3StatsSingleCollisionFrames=4294967295
+	dot3StatsMultipleCollisionFrames=4294967295
+	dot3StatsSQETestErrors=4294967295
+	dot3StatsDeferredTransmissions=4294967295
+	dot3StatsLateCollisions=4294967295
+	dot3StatsExcessiveCollisions=4294967295
+	dot3StatsInternalMacTransmitErrors=4294967295
+	dot3StatsCarrierSenseErrors=4294967295
+	dot3StatsFrameTooLongs=4294967295
+	dot3StatsInternalMacReceiveErrors=4294967295
+	dot3StatsSymbolErrors=4294967295
+ETHCOUNTERS
+	dot3StatsAlignmentErrors=4294967295
+	dot3StatsFCSErrors=4294967295
+	dot3StatsSingleCollisionFrames=4294967295
+	dot3StatsMultipleCollisionFrames=4294967295
+	dot3StatsSQETestErrors=4294967295
+	dot3StatsDeferredTransmissions=4294967295
+	dot3StatsLateCollisions=4294967295
+	dot3StatsExcessiveCollisions=4294967295
+	dot3StatsInternalMacTransmitErrors=4294967295
+	dot3StatsCarrierSenseErrors=4294967295
+	dot3StatsFrameTooLongs=4294967295
+	dot3StatsInternalMacReceiveErrors=4294967295
+	dot3StatsSymbolErrors=4294967295
+ETHCOUNTERS
+	dot3StatsAlignmentErrors=4294967295
+	dot3StatsFCSErrors=4294967295
+	dot3StatsSingleCollisionFrames=4294967295
+	dot3StatsMultipleCollisionFrames=4294967295
+	dot3StatsSQETestErrors=4294967295
+	dot3StatsDeferredTransmissions=4294967295
+	dot3StatsLateCollisions=4294967295
+	dot3StatsExcessiveCollisions=4294967295
+	dot3StatsInternalMacTransmitErrors=4294967295
+	dot3StatsCarrierSenseErrors=4294967295
+	dot3StatsFrameTooLongs=4294967295
+	dot3StatsInternalMacReceiveErrors=4294967295
+	dot3StatsSymbolErrors=4294967295
+ETHCOUNTERS
+	dot3StatsAlignmentErrors=4294967295
+	dot3StatsFCSErrors=4294967295
+	dot3StatsSingleCollisionFrames=4294967295
+	dot3StatsMultipleCollisionFrames=4294967295
+	dot3StatsSQETestErrors=4294967295
+	dot3StatsDeferredTransmissions=4294967295
+	dot3StatsLateCollisions=4294967295
+	dot3StatsExcessiveCollisions=4294967295
+	dot3StatsInternalMacTransmitErrors=4294967295
+	dot3StatsCarrierSenseErrors=4294967295
+	dot3StatsFrameTooLongs=4294967295
+	dot3StatsInternalMacReceiveErrors=4294967295
+	dot3StatsSymbolErrors=4294967295
 IFCOUNTERS
 	dgramSeqNo=1
 	ds=127.0.0.1>0:1003
@@ -5541,6 +5602,29 @@ IFCOUNTERS
 IFCOUNTERS
 	dgramSeqNo=2
 	ds=127.0.0.1>0:1002
+	csSeqNo=1
+	ifindex=1002
+	type=6
+	ifspeed=100000000
+	direction=0
+	status=0
+	in_octets=0
+	in_unicasts=0
+	in_multicasts=4294967295
+	in_broadcasts=4294967295
+	in_discards=4294967295
+	in_errors=4294967295
+	in_unknownprotos=4294967295
+	out_octets=84
+	out_unicasts=2
+	out_multicasts=4294967295
+	out_broadcasts=4294967295
+	out_discards=4294967295
+	out_errors=4294967295
+	promiscuous=0
+IFCOUNTERS
+	dgramSeqNo=3
+	ds=127.0.0.1>0:1002
 	csSeqNo=2
 	ifindex=1002
 	type=6
@@ -5562,7 +5646,7 @@ IFCOUNTERS
 	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
-	dgramSeqNo=2
+	dgramSeqNo=3
 	ds=127.0.0.1>0:1003
 	csSeqNo=2
 	ifindex=1003
@@ -5585,7 +5669,7 @@ IFCOUNTERS
 	out_errors=4294967295
 	promiscuous=0
 IFCOUNTERS
-	dgramSeqNo=2
+	dgramSeqNo=3
 	ds=127.0.0.1>0:1004
 	csSeqNo=2
 	ifindex=1004
