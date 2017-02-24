@@ -14,12 +14,11 @@
 
 import os
 
-import six
-
 import ovs.jsonrpc
 import ovs.stream
 import ovs.util
 
+import six
 
 vlog = ovs.vlog.Vlog("unixctl_client")
 strtypes = six.string_types

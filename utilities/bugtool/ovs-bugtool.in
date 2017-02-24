@@ -34,25 +34,27 @@
 #
 
 from __future__ import print_function
-from six.moves import input
 
-import getopt
-import re
-import os
 import StringIO
+import commands
+import fcntl
+import getopt
+import hashlib
+import os
+import platform
+import re
 import sys
 import tarfile
 import time
-import commands
-from xml.dom.minidom import parse, getDOMImplementation
+import warnings
 import zipfile
-from subprocess import Popen, PIPE
 from select import select
 from signal import SIGTERM
-import hashlib
-import platform
-import fcntl
-import warnings
+from subprocess import PIPE, Popen
+
+from xml.dom.minidom import getDOMImplementation, parse
+
+from six.moves import input
 warnings.filterwarnings(action="ignore", category=DeprecationWarning)
 
 OS_RELEASE = platform.release()

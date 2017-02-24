@@ -14,9 +14,9 @@
 
 import re
 
-import six
-
 from ovs.db import error
+
+import six
 
 
 class Parser(object):

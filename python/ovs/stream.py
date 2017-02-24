@@ -17,11 +17,11 @@ import os
 import socket
 import sys
 
-import six
-
 import ovs.poller
 import ovs.socket_util
 import ovs.vlog
+
+import six
 
 try:
     from OpenSSL import SSL

@@ -18,18 +18,23 @@ rpcserver is an XML RPC server that allows RPC client to initiate tests
 
 from __future__ import print_function
 
-import exceptions
 import sys
 
+import exceptions
+
 import six.moves.xmlrpc_client
-from twisted.internet import reactor
-from twisted.internet.error import CannotListenError
-from twisted.web import xmlrpc
-from twisted.web import server
 
 import tcp
+
+from twisted.internet import reactor
+from twisted.internet.error import CannotListenError
+from twisted.web import server
+from twisted.web import xmlrpc
+
 import udp
+
 import util
+
 import vswitch
 
 

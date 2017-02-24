@@ -13,12 +13,14 @@
 # limitations under the License.
 
 import errno
-import ovs.timeval
-import ovs.vlog
+import os
+
 import select
 import socket
-import os
 import sys
+
+import ovs.timeval
+import ovs.vlog
 
 if sys.platform == "win32":
     import ovs.winutils as winutils

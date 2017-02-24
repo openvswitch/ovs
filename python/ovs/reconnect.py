@@ -14,8 +14,8 @@
 
 import os
 
-import ovs.vlog
 import ovs.util
+import ovs.vlog
 
 # Values returned by Reconnect.run()
 CONNECT = 'connect'

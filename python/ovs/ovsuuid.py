@@ -15,11 +15,11 @@
 import re
 import uuid
 
+import ovs.db.parser
+from ovs.db import error
+
 import six
 from six.moves import range
-
-from ovs.db import error
-import ovs.db.parser
 
 uuidRE = re.compile("^xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx$"
                     .replace('x', '[0-9a-fA-F]'))

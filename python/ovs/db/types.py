@@ -15,12 +15,12 @@
 import sys
 import uuid
 
-import six
-
-from ovs.db import error
-import ovs.db.parser
 import ovs.db.data
+import ovs.db.parser
 import ovs.ovsuuid
+from ovs.db import error
+
+import six
 
 
 class AtomicType(object):

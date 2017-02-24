@@ -16,8 +16,6 @@ import errno
 import os
 import sys
 
-import six
-
 import ovs.json
 import ovs.poller
 import ovs.reconnect
@@ -25,6 +23,8 @@ import ovs.stream
 import ovs.timeval
 import ovs.util
 import ovs.vlog
+
+import six
 
 EOF = ovs.util.EOF
 vlog = ovs.vlog.Vlog("jsonrpc")

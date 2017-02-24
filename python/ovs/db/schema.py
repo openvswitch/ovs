@@ -15,11 +15,11 @@
 import re
 import sys
 
-import six
-
-from ovs.db import error
 import ovs.db.parser
 import ovs.db.types
+from ovs.db import error
+
+import six
 
 
 def _check_id(name, json):

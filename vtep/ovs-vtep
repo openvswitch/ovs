@@ -23,13 +23,14 @@ import subprocess
 import sys
 import time
 
-import ovs.dirs
-import ovs.util
 import ovs.daemon
+import ovs.dirs
 import ovs.unixctl.server
+import ovs.util
 import ovs.vlog
-from six.moves import range
+
 import six
+from six.moves import range
 
 
 VERSION = "0.99"

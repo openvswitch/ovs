@@ -13,10 +13,14 @@
 # limitations under the License.
 
 import errno
-import win32con
-import win32file
-import pywintypes
+
 import msvcrt
+
+import pywintypes
+
+import win32con
+
+import win32file
 
 LOCK_EX = win32con.LOCKFILE_EXCLUSIVE_LOCK
 LOCK_SH = 0  # the default

@@ -29,11 +29,12 @@ import time
 
 import XenAPI
 
-import ovs.dirs
 import ovs.daemon
 import ovs.db.idl
+import ovs.dirs
 import ovs.unixctl
 import ovs.unixctl.server
+
 import six
 
 vlog = ovs.vlog.Vlog("ovs-xapi-sync")

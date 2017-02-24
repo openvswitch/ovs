@@ -15,6 +15,7 @@
 import argparse
 
 import ovs.vlog
+
 from six.moves import range
 
 

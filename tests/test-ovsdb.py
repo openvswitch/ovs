@@ -15,21 +15,22 @@
 from __future__ import print_function
 
 import getopt
-import re
 import os
+import re
 import sys
 import uuid
 
-from ovs.db import error
 import ovs.db.idl
 import ovs.db.schema
-from ovs.db import data
 import ovs.db.types
 import ovs.ovsuuid
 import ovs.poller
 import ovs.stream
 import ovs.util
+from ovs.db import data
+from ovs.db import error
 from ovs.fatal_signal import signal_alarm
+
 import six
 
 

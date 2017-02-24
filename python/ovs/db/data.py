@@ -16,17 +16,16 @@ import functools
 import re
 import uuid
 
-import six
-
-import ovs.poller
-import ovs.socket_util
+import ovs.db.parser
+import ovs.db.types
 import ovs.json
 import ovs.jsonrpc
 import ovs.ovsuuid
-
-import ovs.db.parser
+import ovs.poller
+import ovs.socket_util
 from ovs.db import error
-import ovs.db.types
+
+import six
 
 
 class ConstraintViolation(error.Error):

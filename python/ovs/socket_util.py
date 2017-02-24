@@ -19,12 +19,12 @@ import random
 import socket
 import sys
 
-import six
-from six.moves import range
-
 import ovs.fatal_signal
 import ovs.poller
 import ovs.vlog
+
+import six
+from six.moves import range
 
 if sys.platform == 'win32':
     import ovs.winutils as winutils

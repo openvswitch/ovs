@@ -17,9 +17,6 @@ import errno
 import os
 import sys
 
-import six
-from six.moves import range
-
 import ovs.dirs
 import ovs.jsonrpc
 import ovs.stream
@@ -27,6 +24,9 @@ import ovs.unixctl
 import ovs.util
 import ovs.version
 import ovs.vlog
+
+import six
+from six.moves import range
 
 Message = ovs.jsonrpc.Message
 vlog = ovs.vlog.Vlog("unixctl_server")

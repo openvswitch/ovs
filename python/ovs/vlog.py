@@ -22,12 +22,12 @@ import socket
 import sys
 import threading
 
-import six
-from six.moves import range
-
 import ovs.dirs
 import ovs.unixctl
 import ovs.util
+
+import six
+from six.moves import range
 
 DESTINATIONS = {"console": "info", "file": "info", "syslog": "info"}
 PATTERNS = {

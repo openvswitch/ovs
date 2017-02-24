@@ -19,6 +19,7 @@ import getopt
 import sys
 
 import ovs.json
+
 import six
 
 

@@ -16,10 +16,12 @@
 tcp module contains listener and sender classes for TCP protocol
 """
 
-from twisted.internet.protocol import Factory, ClientFactory, Protocol
-from twisted.internet import interfaces
-from zope.interface import implements
 import time
+
+from twisted.internet import interfaces
+from twisted.internet.protocol import ClientFactory, Factory, Protocol
+
+from zope.interface import implements
 
 
 class TcpListenerConnection(Protocol):

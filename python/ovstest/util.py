@@ -16,18 +16,20 @@
 util module contains some helper function
 """
 import array
-import exceptions
 import fcntl
+
 import os
+import re
 import select
+import signal
 import socket
 import struct
-import signal
 import subprocess
-import re
 
-from six.moves import range
+import exceptions
+
 import six.moves.xmlrpc_client
+from six.moves import range
 
 
 def str_ip(ip_address):

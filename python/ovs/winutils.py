@@ -12,19 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import six
 import sys
+
+import six
 
 if sys.platform != 'win32':
     raise Exception("Intended to use only on Windows")
 else:
     import pywintypes
-    import winerror
-    import win32pipe
     import win32con
-    import win32security
-    import win32file
     import win32event
+    import win32file
+    import win32pipe
+    import win32security
+    import winerror
 
 
 def close_handle(handle, logger=None):
