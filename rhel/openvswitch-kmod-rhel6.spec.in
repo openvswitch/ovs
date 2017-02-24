@@ -54,19 +54,19 @@ done
 %install
 export INSTALL_MOD_PATH=$RPM_BUILD_ROOT
 export INSTALL_MOD_DIR=extra/%{oname}
-for flavor in %flavors_to_build ; do
-         make -C %{kernel_source $flavor} modules_install \
-                 M="`pwd`"/_$flavor/datapath/linux
 
-         # Cleanup unnecessary kernel-generated module dependency files.
-         find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
+for flavor in %flavors_to_build ; do
+	make -C %{kernel_source $flavor} modules_install M="`pwd`"/_$flavor/datapath/linux
+
+	# Cleanup unnecessary kernel-generated module dependency files.
+	find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
 done
+
 install -d %{buildroot}%{_sysconfdir}/depmod.d/
-for module in $(find %{buildroot}/lib/modules/%{kernel_version}/$INSTALL_MOD_DIR -iname '*.ko') ;
-do
-    modname="$(basename ${module})"
-    echo "override ${modname%.ko} * extra/%{oname}" >> %{oname}.conf
-    echo "override ${modname%.ko} * weak-updates/%{oname}" >> %{oname}.conf
+for module in $(find %{buildroot}/lib/modules/%{kversion}/$INSTALL_MOD_DIR -iname '*.ko') ; do
+	modname="$(basename ${module})"
+	echo "override ${modname%.ko} * extra/%{oname}" >> %{oname}.conf
+	echo "override ${modname%.ko} * weak-updates/%{oname}" >> %{oname}.conf
 done
 install -m 644 %{oname}.conf %{buildroot}%{_sysconfdir}/depmod.d/
 
