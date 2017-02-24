@@ -62,7 +62,7 @@ for flavor in %flavors_to_build ; do
          find $INSTALL_MOD_PATH/lib/modules -iname 'modules.*' -exec rm {} \;
 done
 install -d %{buildroot}%{_sysconfdir}/depmod.d/
-for module in %{buildroot}/lib/modules/%{kernel_version}/$INSTALL_MOD_DIR/*.ko;
+for module in $(find %{buildroot}/lib/modules/%{kernel_version}/$INSTALL_MOD_DIR -iname '*.ko') ;
 do
     modname="$(basename ${module})"
     echo "override ${modname%.ko} * extra/%{oname}" >> %{oname}.conf
