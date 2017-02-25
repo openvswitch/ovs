@@ -1988,7 +1988,7 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
         struct ofport_dpif *ofport;
 
         if (ctx->xbridge->support.odp.recirc
-            && bond_may_recirc(out_xbundle->bond, NULL, NULL)) {
+            && bond_may_recirc(out_xbundle->bond)) {
             /* To avoid unnecessary locking, bond_may_recirc() is first
              * called outside of the 'rwlock'. After acquiring the lock,
              * bond_update_post_recirc_rules() will check again to make

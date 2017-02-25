@@ -927,19 +927,9 @@ bond_recirculation_account(struct bond *bond)
 }
 
 bool
-bond_may_recirc(const struct bond *bond, uint32_t *recirc_id,
-                uint32_t *hash_bias)
+bond_may_recirc(const struct bond *bond)
 {
-    bool may_recirc = bond->balance == BM_TCP && bond->recirc_id;
-
-    if (recirc_id) {
-        *recirc_id = may_recirc ? bond->recirc_id : 0;
-    }
-    if (hash_bias) {
-        *hash_bias = may_recirc ? bond->basis : 0;
-    }
-
-    return may_recirc;
+    return bond->balance == BM_TCP && bond->recirc_id;
 }
 
 static void
@@ -971,8 +961,12 @@ bond_update_post_recirc_rules(struct bond *bond, uint32_t *recirc_id,
                               uint32_t *hash_basis)
 {
     ovs_rwlock_wrlock(&rwlock);
-    if (bond_may_recirc(bond, recirc_id, hash_basis)) {
+    if (bond_may_recirc(bond)) {
+        *recirc_id = bond->recirc_id;
+        *hash_basis = bond->basis;
         bond_update_post_recirc_rules__(bond, false);
+    } else {
+        *recirc_id = *hash_basis = 0;
     }
     ovs_rwlock_unlock(&rwlock);
 }
@@ -1159,7 +1153,7 @@ bond_rebalance(struct bond *bond)
     bond->next_rebalance = time_msec() + bond->rebalance_interval;
 
     use_recirc = bond->ofproto->backer->support.odp.recirc &&
-                 bond_may_recirc(bond, NULL, NULL);
+                 bond_may_recirc(bond);
 
     if (use_recirc) {
         bond_recirculation_account(bond);
@@ -1319,7 +1313,8 @@ bond_print_details(struct ds *ds, const struct bond *bond)
     ds_put_format(ds, "bond_mode: %s\n",
                   bond_mode_to_string(bond->balance));
 
-    may_recirc = bond_may_recirc(bond, &recirc_id, NULL);
+    may_recirc = bond_may_recirc(bond);
+    recirc_id = bond->recirc_id;
     ds_put_format(ds, "bond may use recirculation: %s, Recirc-ID : %d\n",
                   may_recirc ? "yes" : "no", may_recirc ? recirc_id: -1);
 
