@@ -9,6 +9,7 @@ PartOf=openvswitch.service
 
 [Service]
 Type=forking
+Restart=on-failure
 EnvironmentFile=-/etc/sysconfig/openvswitch
 ExecStart=/usr/share/openvswitch/scripts/ovs-ctl \
           --no-ovsdb-server --no-monitor --system-id=random \
