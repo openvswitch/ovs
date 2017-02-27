@@ -3,8 +3,8 @@ Description=Open vSwitch
 Before=network.target network.service
 After=network-pre.target ovsdb-server.service ovs-vswitchd.service
 PartOf=network.target
-BindsTo=ovsdb-server.service
-BindsTo=ovs-vswitchd.service
+Requires=ovsdb-server.service
+Requires=ovs-vswitchd.service
 
 [Service]
 Type=oneshot
