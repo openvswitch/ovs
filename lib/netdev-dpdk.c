@@ -2772,8 +2772,7 @@ netdev_dpdk_vhost_class_init(void)
         rte_vhost_driver_callback_register(&virtio_net_device_ops);
         rte_vhost_feature_disable(1ULL << VIRTIO_NET_F_HOST_TSO4
                                   | 1ULL << VIRTIO_NET_F_HOST_TSO6
-                                  | 1ULL << VIRTIO_NET_F_CSUM
-                                  | 1ULL << VIRTIO_RING_F_INDIRECT_DESC);
+                                  | 1ULL << VIRTIO_NET_F_CSUM);
         ovs_thread_create("vhost_thread", start_vhost_loop, NULL);
 
         ovsthread_once_done(&once);
