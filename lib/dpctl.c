@@ -1408,6 +1408,7 @@ dpctl_normalize_actions(int argc, const char *argv[],
     struct ds s;
     int left;
     int i, error;
+    int encaps = 0;
 
     ds_init(&s);
 
@@ -1464,12 +1465,14 @@ dpctl_normalize_actions(int argc, const char *argv[],
         const struct ovs_action_push_vlan *push;
         switch(nl_attr_type(a)) {
         case OVS_ACTION_ATTR_POP_VLAN:
-            flow.vlan_tci = htons(0);
+            flow_pop_vlan(&flow, NULL);
             continue;
 
         case OVS_ACTION_ATTR_PUSH_VLAN:
+            flow_push_vlan_uninit(&flow, NULL);
             push = nl_attr_get_unspec(a, sizeof *push);
-            flow.vlan_tci = push->vlan_tci;
+            flow.vlans[0].tpid = push->vlan_tpid;
+            flow.vlans[0].tci = push->vlan_tci;
             continue;
         }
 
@@ -1495,12 +1498,22 @@ dpctl_normalize_actions(int argc, const char *argv[],
 
         sort_output_actions(af->actions.data, af->actions.size);
 
-        if (af->flow.vlan_tci != htons(0)) {
-            dpctl_print(dpctl_p, "vlan(vid=%"PRIu16",pcp=%d): ",
-                        vlan_tci_to_vid(af->flow.vlan_tci),
-                        vlan_tci_to_pcp(af->flow.vlan_tci));
-        } else {
-            dpctl_print(dpctl_p, "no vlan: ");
+        for (encaps = 0; encaps < FLOW_MAX_VLAN_HEADERS; encaps ++) {
+            union flow_vlan_hdr *vlan = &af->flow.vlans[encaps];
+            if (vlan->tci != htons(0)) {
+                dpctl_print(dpctl_p, "vlan(");
+                if (vlan->tpid != htons(ETH_TYPE_VLAN)) {
+                    dpctl_print(dpctl_p, "tpid=0x%04"PRIx16",", vlan->tpid);
+                }
+                dpctl_print(dpctl_p, "vid=%"PRIu16",pcp=%d): ",
+                            vlan_tci_to_vid(vlan->tci),
+                            vlan_tci_to_pcp(vlan->tci));
+            } else {
+                if (encaps == 0) {
+                    dpctl_print(dpctl_p, "no vlan: ");
+                }
+                break;
+            }
         }
 
         if (eth_type_mpls(af->flow.dl_type)) {

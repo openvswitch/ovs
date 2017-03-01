@@ -340,6 +340,7 @@ int ofproto_get_stp_status(struct ofproto *, struct ofproto_stp_status *);
 
 int ofproto_set_rstp(struct ofproto *, const struct ofproto_rstp_settings *);
 int ofproto_get_rstp_status(struct ofproto *, struct ofproto_rstp_status *);
+void ofproto_set_vlan_limit(int vlan_limit);
 
 /* Configuration of ports. */
 void ofproto_port_unregister(struct ofproto *, ofp_port_t ofp_port);

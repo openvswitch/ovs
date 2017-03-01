@@ -136,7 +136,7 @@ map_insert(odp_port_t port, struct eth_addr mac, struct in6_addr *addr,
         } else {
             match.wc.masks.ipv6_dst = in6addr_exact;
         }
-        match.wc.masks.vlan_tci = OVS_BE16_MAX;
+        match.wc.masks.vlans[0].tci = OVS_BE16_MAX;
         memset(&match.wc.masks.dl_dst, 0xff, sizeof (struct eth_addr));
 
         cls_rule_init(&p->cr, &match, 0); /* Priority == 0. */

@@ -143,7 +143,7 @@ void odp_portno_names_destroy(struct hmap *portno_names);
  * add another field and forget to adjust this value.
  */
 #define ODPUTIL_FLOW_KEY_BYTES 640
-BUILD_ASSERT_DECL(FLOW_WC_SEQ == 37);
+BUILD_ASSERT_DECL(FLOW_WC_SEQ == 38);
 
 /* A buffer with sufficient size and alignment to hold an nlattr-formatted flow
  * key.  An array of "struct nlattr" might not, in theory, be sufficiently
@@ -170,6 +170,8 @@ int odp_flow_from_string(const char *s,
 /* Indicates support for various fields. This defines how flows will be
  * serialised. */
 struct odp_support {
+    /* Maximum number of 802.1q VLAN headers to serialize in a mask. */
+    size_t max_vlan_headers;
     /* Maximum number of MPLS label stack entries to serialise in a mask. */
     size_t max_mpls_depth;
 
@@ -203,6 +205,10 @@ struct odp_flow_key_parms {
     /* Indicates support for various fields. If the datapath supports a field,
      * then it will always be serialised. */
     struct odp_support support;
+
+    /* Indicates if we are probing datapath capability. If true, ignore the
+     * configured flow limits. */
+    bool probe;
 
     /* The netlink formatted version of the flow. It is used in cases where
      * the mask cannot be constructed from the OVS internal representation

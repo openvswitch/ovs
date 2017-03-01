@@ -104,6 +104,7 @@ static struct vlog_rate_limit upcall_rl = VLOG_RATE_LIMIT_INIT(600, 600);
 #define DP_NETDEV_CS_UNSUPPORTED_MASK (~(uint32_t)DP_NETDEV_CS_SUPPORTED_MASK)
 
 static struct odp_support dp_netdev_support = {
+    .max_vlan_headers = SIZE_MAX,
     .max_mpls_depth = SIZE_MAX,
     .recirc = true,
     .ct_state = true,
@@ -441,7 +442,7 @@ struct dp_netdev_flow {
 static void dp_netdev_flow_unref(struct dp_netdev_flow *);
 static bool dp_netdev_flow_ref(struct dp_netdev_flow *);
 static int dpif_netdev_flow_from_nlattrs(const struct nlattr *, uint32_t,
-                                         struct flow *);
+                                         struct flow *, bool);
 
 /* A set of datapath actions within a "struct dp_netdev_flow".
  *
@@ -2093,7 +2094,7 @@ dp_netdev_pmd_find_flow(const struct dp_netdev_pmd_thread *pmd,
 
     /* If a UFID is not provided, determine one based on the key. */
     if (!ufidp && key && key_len
-        && !dpif_netdev_flow_from_nlattrs(key, key_len, &flow)) {
+        && !dpif_netdev_flow_from_nlattrs(key, key_len, &flow, false)) {
         dpif_flow_hash(pmd->dp->dpif, &flow, sizeof flow, &ufid);
         ufidp = &ufid;
     }
@@ -2186,27 +2187,29 @@ static int
 dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
                               const struct nlattr *mask_key,
                               uint32_t mask_key_len, const struct flow *flow,
-                              struct flow_wildcards *wc)
+                              struct flow_wildcards *wc, bool probe)
 {
     enum odp_key_fitness fitness;
 
     fitness = odp_flow_key_to_mask(mask_key, mask_key_len, wc, flow);
     if (fitness) {
-        /* This should not happen: it indicates that
-         * odp_flow_key_from_mask() and odp_flow_key_to_mask()
-         * disagree on the acceptable form of a mask.  Log the problem
-         * as an error, with enough details to enable debugging. */
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        if (!probe) {
+            /* This should not happen: it indicates that
+             * odp_flow_key_from_mask() and odp_flow_key_to_mask()
+             * disagree on the acceptable form of a mask.  Log the problem
+             * as an error, with enough details to enable debugging. */
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-        if (!VLOG_DROP_ERR(&rl)) {
-            struct ds s;
+            if (!VLOG_DROP_ERR(&rl)) {
+                struct ds s;
 
-            ds_init(&s);
-            odp_flow_format(key, key_len, mask_key, mask_key_len, NULL, &s,
-                            true);
-            VLOG_ERR("internal error parsing flow mask %s (%s)",
-                     ds_cstr(&s), odp_key_fitness_to_string(fitness));
-            ds_destroy(&s);
+                ds_init(&s);
+                odp_flow_format(key, key_len, mask_key, mask_key_len, NULL, &s,
+                                true);
+                VLOG_ERR("internal error parsing flow mask %s (%s)",
+                ds_cstr(&s), odp_key_fitness_to_string(fitness));
+                ds_destroy(&s);
+            }
         }
 
         return EINVAL;
@@ -2217,24 +2220,26 @@ dpif_netdev_mask_from_nlattrs(const struct nlattr *key, uint32_t key_len,
 
 static int
 dpif_netdev_flow_from_nlattrs(const struct nlattr *key, uint32_t key_len,
-                              struct flow *flow)
+                              struct flow *flow, bool probe)
 {
     odp_port_t in_port;
 
     if (odp_flow_key_to_flow(key, key_len, flow)) {
-        /* This should not happen: it indicates that odp_flow_key_from_flow()
-         * and odp_flow_key_to_flow() disagree on the acceptable form of a
-         * flow.  Log the problem as an error, with enough details to enable
-         * debugging. */
-        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
+        if (!probe) {
+            /* This should not happen: it indicates that
+             * odp_flow_key_from_flow() and odp_flow_key_to_flow() disagree on
+             * the acceptable form of a flow.  Log the problem as an error,
+             * with enough details to enable debugging. */
+            static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
 
-        if (!VLOG_DROP_ERR(&rl)) {
-            struct ds s;
+            if (!VLOG_DROP_ERR(&rl)) {
+                struct ds s;
 
-            ds_init(&s);
-            odp_flow_format(key, key_len, NULL, 0, NULL, &s, true);
-            VLOG_ERR("internal error parsing flow key %s", ds_cstr(&s));
-            ds_destroy(&s);
+                ds_init(&s);
+                odp_flow_format(key, key_len, NULL, 0, NULL, &s, true);
+                VLOG_ERR("internal error parsing flow key %s", ds_cstr(&s));
+                ds_destroy(&s);
+            }
         }
 
         return EINVAL;
@@ -2466,17 +2471,19 @@ dpif_netdev_flow_put(struct dpif *dpif, const struct dpif_flow_put *put)
     struct match match;
     ovs_u128 ufid;
     int error;
+    bool probe = put->flags & DPIF_FP_PROBE;
 
     if (put->stats) {
         memset(put->stats, 0, sizeof *put->stats);
     }
-    error = dpif_netdev_flow_from_nlattrs(put->key, put->key_len, &match.flow);
+    error = dpif_netdev_flow_from_nlattrs(put->key, put->key_len, &match.flow,
+                                          probe);
     if (error) {
         return error;
     }
     error = dpif_netdev_mask_from_nlattrs(put->key, put->key_len,
                                           put->mask, put->mask_len,
-                                          &match.flow, &match.wc);
+                                          &match.flow, &match.wc, probe);
     if (error) {
         return error;
     }
@@ -4596,8 +4603,8 @@ handle_packet_upcall(struct dp_netdev_pmd_thread *pmd, struct dp_packet *packet,
      * VLAN.  Unless we refactor a lot of code that translates between
      * Netlink and struct flow representations, we have to do the same
      * here. */
-    if (!match.wc.masks.vlan_tci) {
-        match.wc.masks.vlan_tci = htons(0xffff);
+    if (!match.wc.masks.vlans[0].tci) {
+        match.wc.masks.vlans[0].tci = htons(0xffff);
     }
 
     /* We can't allow the packet batching in the next loop to execute

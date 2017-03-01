@@ -8610,3 +8610,9 @@ ofproto_unixctl_init(void)
     unixctl_command_register("ofproto/list", "", 0, 0,
                              ofproto_unixctl_list, NULL);
 }
+
+void
+ofproto_set_vlan_limit(int vlan_limit)
+{
+    flow_limit_vlans(vlan_limit);
+}

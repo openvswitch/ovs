@@ -53,6 +53,9 @@ struct match;
 
 extern const uint8_t flow_segment_u64s[];
 
+/* Configured maximum VLAN headers. */
+extern int flow_vlan_limit;
+
 #define FLOW_U64_OFFSET(FIELD)                          \
     (offsetof(struct flow, FIELD) / sizeof(uint64_t))
 #define FLOW_U64_OFFREM(FIELD)                          \
@@ -87,8 +90,16 @@ static inline bool flow_equal(const struct flow *, const struct flow *);
 static inline size_t flow_hash(const struct flow *, uint32_t basis);
 
 void flow_set_dl_vlan(struct flow *, ovs_be16 vid);
+void flow_fix_vlan_tpid(struct flow *);
 void flow_set_vlan_vid(struct flow *, ovs_be16 vid);
 void flow_set_vlan_pcp(struct flow *, uint8_t pcp);
+
+void flow_limit_vlans(int vlan_limit);
+int flow_count_vlan_headers(const struct flow *);
+void flow_skip_common_vlan_headers(const struct flow *a, int *p_an,
+                                   const struct flow *b, int *p_bn);
+void flow_pop_vlan(struct flow*, struct flow_wildcards*);
+void flow_push_vlan_uninit(struct flow*, struct flow_wildcards*);
 
 int flow_count_mpls_labels(const struct flow *, struct flow_wildcards *);
 int flow_count_common_mpls_labels(const struct flow *a, int an,
@@ -694,7 +705,7 @@ static inline uint32_t miniflow_get_u32(const struct miniflow *,
                                         unsigned int u32_ofs);
 static inline ovs_be32 miniflow_get_be32(const struct miniflow *,
                                          unsigned int be32_ofs);
-static inline uint16_t miniflow_get_vid(const struct miniflow *);
+static inline uint16_t miniflow_get_vid(const struct miniflow *, size_t);
 static inline uint16_t miniflow_get_tcp_flags(const struct miniflow *);
 static inline ovs_be64 miniflow_get_metadata(const struct miniflow *);
 
@@ -732,7 +743,7 @@ static inline uint32_t minimask_get_u32(const struct minimask *,
                                         unsigned int u32_ofs);
 static inline ovs_be32 minimask_get_be32(const struct minimask *,
                                          unsigned int be32_ofs);
-static inline uint16_t minimask_get_vid_mask(const struct minimask *);
+static inline uint16_t minimask_get_vid_mask(const struct minimask *, size_t);
 static inline ovs_be64 minimask_get_metadata_mask(const struct minimask *);
 
 bool minimask_equal(const struct minimask *a, const struct minimask *b);
@@ -779,10 +790,15 @@ static inline ovs_be32 miniflow_get_be32(const struct miniflow *flow,
 /* Returns the VID within the vlan_tci member of the "struct flow" represented
  * by 'flow'. */
 static inline uint16_t
-miniflow_get_vid(const struct miniflow *flow)
+miniflow_get_vid(const struct miniflow *flow, size_t n)
 {
-    ovs_be16 tci = MINIFLOW_GET_BE16(flow, vlan_tci);
-    return vlan_tci_to_vid(tci);
+    if (n < FLOW_MAX_VLAN_HEADERS) {
+        union flow_vlan_hdr hdr = {
+            .qtag = MINIFLOW_GET_BE32(flow, vlans[n])
+        };
+        return vlan_tci_to_vid(hdr.tci);
+    }
+    return 0;
 }
 
 /* Returns the uint32_t that would be at byte offset '4 * u32_ofs' if 'mask'
@@ -802,9 +818,9 @@ minimask_get_be32(const struct minimask *mask, unsigned int be32_ofs)
 /* Returns the VID mask within the vlan_tci member of the "struct
  * flow_wildcards" represented by 'mask'. */
 static inline uint16_t
-minimask_get_vid_mask(const struct minimask *mask)
+minimask_get_vid_mask(const struct minimask *mask, size_t n)
 {
-    return miniflow_get_vid(&mask->masks);
+    return miniflow_get_vid(&mask->masks, n);
 }
 
 /* Returns the value of the "tcp_flags" field in 'flow'. */
@@ -889,7 +905,7 @@ static inline void
 pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
 {
     /* Update this function whenever struct flow changes. */
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 37);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 38);
 
     md->recirc_id = flow->recirc_id;
     md->dp_hash = flow->dp_hash;
@@ -938,9 +954,9 @@ static inline bool is_vlan(const struct flow *flow,
                            struct flow_wildcards *wc)
 {
     if (wc) {
-        WC_MASK_FIELD_MASK(wc, vlan_tci, htons(VLAN_CFI));
+        WC_MASK_FIELD_MASK(wc, vlans[0].tci, htons(VLAN_CFI));
     }
-    return (flow->vlan_tci & htons(VLAN_CFI)) != 0;
+    return (flow->vlans[0].tci & htons(VLAN_CFI)) != 0;
 }
 
 static inline bool is_ip_any(const struct flow *flow)

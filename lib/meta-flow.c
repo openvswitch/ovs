@@ -288,14 +288,14 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return eth_addr_is_zero(wc->masks.arp_tha);
 
     case MFF_VLAN_TCI:
-        return !wc->masks.vlan_tci;
+        return !wc->masks.vlans[0].tci;
     case MFF_DL_VLAN:
-        return !(wc->masks.vlan_tci & htons(VLAN_VID_MASK));
+        return !(wc->masks.vlans[0].tci & htons(VLAN_VID_MASK));
     case MFF_VLAN_VID:
-        return !(wc->masks.vlan_tci & htons(VLAN_VID_MASK | VLAN_CFI));
+        return !(wc->masks.vlans[0].tci & htons(VLAN_VID_MASK | VLAN_CFI));
     case MFF_DL_VLAN_PCP:
     case MFF_VLAN_PCP:
-        return !(wc->masks.vlan_tci & htons(VLAN_PCP_MASK));
+        return !(wc->masks.vlans[0].tci & htons(VLAN_PCP_MASK));
 
     case MFF_MPLS_LABEL:
         return !(wc->masks.mpls_lse[0] & htonl(MPLS_LABEL_MASK));
@@ -732,19 +732,19 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
         break;
 
     case MFF_VLAN_TCI:
-        value->be16 = flow->vlan_tci;
+        value->be16 = flow->vlans[0].tci;
         break;
 
     case MFF_DL_VLAN:
-        value->be16 = flow->vlan_tci & htons(VLAN_VID_MASK);
+        value->be16 = flow->vlans[0].tci & htons(VLAN_VID_MASK);
         break;
     case MFF_VLAN_VID:
-        value->be16 = flow->vlan_tci & htons(VLAN_VID_MASK | VLAN_CFI);
+        value->be16 = flow->vlans[0].tci & htons(VLAN_VID_MASK | VLAN_CFI);
         break;
 
     case MFF_DL_VLAN_PCP:
     case MFF_VLAN_PCP:
-        value->u8 = vlan_tci_to_pcp(flow->vlan_tci);
+        value->u8 = vlan_tci_to_pcp(flow->vlans[0].tci);
         break;
 
     case MFF_MPLS_LABEL:
@@ -1381,19 +1381,24 @@ mf_set_flow_value(const struct mf_field *mf,
         break;
 
     case MFF_VLAN_TCI:
-        flow->vlan_tci = value->be16;
+        flow->vlans[0].tci = value->be16;
+        flow_fix_vlan_tpid(flow);
         break;
 
     case MFF_DL_VLAN:
         flow_set_dl_vlan(flow, value->be16);
+        flow_fix_vlan_tpid(flow);
         break;
+
     case MFF_VLAN_VID:
         flow_set_vlan_vid(flow, value->be16);
+        flow_fix_vlan_tpid(flow);
         break;
 
     case MFF_DL_VLAN_PCP:
     case MFF_VLAN_PCP:
         flow_set_vlan_pcp(flow, value->u8);
+        flow_fix_vlan_tpid(flow);
         break;
 
     case MFF_MPLS_LABEL:

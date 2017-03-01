@@ -986,7 +986,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 37);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 38);
 
     /* Metadata. */
     if (match->wc.masks.dp_hash) {
@@ -1029,8 +1029,8 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     /* 802.1Q. */
     if (oxm) {
         ovs_be16 VID_CFI_MASK = htons(VLAN_VID_MASK | VLAN_CFI);
-        ovs_be16 vid = flow->vlan_tci & VID_CFI_MASK;
-        ovs_be16 mask = match->wc.masks.vlan_tci & VID_CFI_MASK;
+        ovs_be16 vid = flow->vlans[0].tci & VID_CFI_MASK;
+        ovs_be16 mask = match->wc.masks.vlans[0].tci & VID_CFI_MASK;
 
         if (mask == htons(VLAN_VID_MASK | VLAN_CFI)) {
             nxm_put_16(b, MFF_VLAN_VID, oxm, vid);
@@ -1038,14 +1038,14 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
             nxm_put_16m(b, MFF_VLAN_VID, oxm, vid, mask);
         }
 
-        if (vid && vlan_tci_to_pcp(match->wc.masks.vlan_tci)) {
+        if (vid && vlan_tci_to_pcp(match->wc.masks.vlans[0].tci)) {
             nxm_put_8(b, MFF_VLAN_PCP, oxm,
-                      vlan_tci_to_pcp(flow->vlan_tci));
+                      vlan_tci_to_pcp(flow->vlans[0].tci));
         }
 
     } else {
-        nxm_put_16m(b, MFF_VLAN_TCI, oxm, flow->vlan_tci,
-                    match->wc.masks.vlan_tci);
+        nxm_put_16m(b, MFF_VLAN_TCI, oxm, flow->vlans[0].tci,
+                    match->wc.masks.vlans[0].tci);
     }
 
     /* MPLS. */

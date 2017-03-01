@@ -153,8 +153,9 @@ pinctrl_handle_arp(const struct flow *ip_flow, const struct match *md,
     arp->ar_tha = eth_addr_zero;
     put_16aligned_be32(&arp->ar_tpa, ip_flow->nw_dst);
 
-    if (ip_flow->vlan_tci & htons(VLAN_CFI)) {
-        eth_push_vlan(&packet, htons(ETH_TYPE_VLAN_8021Q), ip_flow->vlan_tci);
+    if (ip_flow->vlans[0].tci & htons(VLAN_CFI)) {
+        eth_push_vlan(&packet, htons(ETH_TYPE_VLAN_8021Q),
+                      ip_flow->vlans[0].tci);
     }
 
     /* Compose actions.

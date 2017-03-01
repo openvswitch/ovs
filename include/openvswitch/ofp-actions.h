@@ -68,7 +68,7 @@ struct vl_mff_map;
     OFPACT(SET_VLAN_VID,    ofpact_vlan_vid,    ofpact, "set_vlan_vid") \
     OFPACT(SET_VLAN_PCP,    ofpact_vlan_pcp,    ofpact, "set_vlan_pcp") \
     OFPACT(STRIP_VLAN,      ofpact_null,        ofpact, "strip_vlan")   \
-    OFPACT(PUSH_VLAN,       ofpact_null,        ofpact, "push_vlan")    \
+    OFPACT(PUSH_VLAN,       ofpact_push_vlan,   ofpact, "push_vlan")    \
     OFPACT(SET_ETH_SRC,     ofpact_mac,         ofpact, "mod_dl_src")   \
     OFPACT(SET_ETH_DST,     ofpact_mac,         ofpact, "mod_dl_dst")   \
     OFPACT(SET_IPV4_SRC,    ofpact_ipv4,        ofpact, "mod_nw_src")   \
@@ -388,6 +388,14 @@ struct ofpact_vlan_pcp {
     uint8_t vlan_pcp;           /* VLAN PCP in low 3 bits, 0 in other bits. */
     bool push_vlan_if_needed;   /* OF 1.0 semantics if true. */
     bool flow_has_vlan;         /* VLAN present at action validation time? */
+};
+
+/* OFPACT_PUSH_VLAN.
+ *
+ * Used for OFPAT11_PUSH_VLAN. */
+struct ofpact_push_vlan {
+    struct ofpact ofpact;
+    ovs_be16 ethertype;
 };
 
 /* OFPACT_SET_ETH_SRC, OFPACT_SET_ETH_DST.

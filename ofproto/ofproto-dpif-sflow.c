@@ -1301,8 +1301,8 @@ dpif_sflow_received(struct dpif_sflow *ds, const struct dp_packet *packet,
     /* Add extended switch element. */
     memset(&switchElem, 0, sizeof(switchElem));
     switchElem.tag = SFLFLOW_EX_SWITCH;
-    switchElem.flowType.sw.src_vlan = vlan_tci_to_vid(flow->vlan_tci);
-    switchElem.flowType.sw.src_priority = vlan_tci_to_pcp(flow->vlan_tci);
+    switchElem.flowType.sw.src_vlan = vlan_tci_to_vid(flow->vlans[0].tci);
+    switchElem.flowType.sw.src_priority = vlan_tci_to_pcp(flow->vlans[0].tci);
 
     /* Retrieve data from user_action_cookie. */
     vlan_tci = cookie->sflow.vlan_tci;

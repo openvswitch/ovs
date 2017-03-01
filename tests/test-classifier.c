@@ -58,7 +58,7 @@ static bool versioned = false;
     CLS_FIELD(nw_src,            NW_SRC)      \
     CLS_FIELD(nw_dst,            NW_DST)      \
     CLS_FIELD(in_port.ofp_port,  IN_PORT)     \
-    CLS_FIELD(vlan_tci,          VLAN_TCI)    \
+    CLS_FIELD(vlans[0].tci,      VLAN_TCI)    \
     CLS_FIELD(dl_type,           DL_TYPE)     \
     CLS_FIELD(tp_src,            TP_SRC)      \
     CLS_FIELD(tp_dst,            TP_DST)      \
@@ -231,8 +231,8 @@ match(const struct cls_rule *wild_, const struct flow *fixed)
             eq = eth_addr_equal_except(fixed->dl_dst, wild.flow.dl_dst,
                                        wild.wc.masks.dl_dst);
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
-            eq = !((fixed->vlan_tci ^ wild.flow.vlan_tci)
-                   & wild.wc.masks.vlan_tci);
+            eq = !((fixed->vlans[0].tci ^ wild.flow.vlans[0].tci)
+                   & wild.wc.masks.vlans[0].tci);
         } else if (f_idx == CLS_F_IDX_TUN_ID) {
             eq = !((fixed->tunnel.tun_id ^ wild.flow.tunnel.tun_id)
                    & wild.wc.masks.tunnel.tun_id);
@@ -427,7 +427,7 @@ compare_classifiers(struct classifier *cls, size_t n_invisible_rules,
         flow.metadata = metadata_values[get_value(&x, N_METADATA_VALUES)];
         flow.in_port.ofp_port = in_port_values[get_value(&x,
                                                    N_IN_PORT_VALUES)];
-        flow.vlan_tci = vlan_tci_values[get_value(&x, N_VLAN_TCI_VALUES)];
+        flow.vlans[0].tci = vlan_tci_values[get_value(&x, N_VLAN_TCI_VALUES)];
         flow.dl_type = dl_type_values[get_value(&x, N_DL_TYPE_VALUES)];
         flow.tp_src = tp_src_values[get_value(&x, N_TP_SRC_VALUES)];
         flow.tp_dst = tp_dst_values[get_value(&x, N_TP_DST_VALUES)];
@@ -688,7 +688,7 @@ make_rule(int wc_fields, int priority, int value_pat)
         } else if (f_idx == CLS_F_IDX_DL_DST) {
             WC_MASK_FIELD(&match.wc, dl_dst);
         } else if (f_idx == CLS_F_IDX_VLAN_TCI) {
-            match.wc.masks.vlan_tci = OVS_BE16_MAX;
+            match.wc.masks.vlans[0].tci = OVS_BE16_MAX;
         } else if (f_idx == CLS_F_IDX_TUN_ID) {
             match.wc.masks.tunnel.tun_id = OVS_BE64_MAX;
         } else if (f_idx == CLS_F_IDX_METADATA) {
@@ -1431,7 +1431,7 @@ benchmark(bool use_wc)
         flow->metadata = metadata_values[get_value(&x, N_METADATA_VALUES)];
         flow->in_port.ofp_port = in_port_values[get_value(&x,
                                                           N_IN_PORT_VALUES)];
-        flow->vlan_tci = vlan_tci_values[get_value(&x, N_VLAN_TCI_VALUES)];
+        flow->vlans[0].tci = vlan_tci_values[get_value(&x, N_VLAN_TCI_VALUES)];
         flow->dl_type = dl_type_values[get_value(&x, N_DL_TYPE_VALUES)];
         flow->tp_src = tp_src_values[get_value(&x, N_TP_SRC_VALUES)];
         flow->tp_dst = tp_dst_values[get_value(&x, N_TP_DST_VALUES)];
@@ -1702,7 +1702,10 @@ test_miniflow(struct ovs_cmdl_context *ctx OVS_UNUSED)
         miniflow = miniflow_create(&flow);
 
         /* Check that the flow equals its miniflow. */
-        assert(miniflow_get_vid(miniflow) == vlan_tci_to_vid(flow.vlan_tci));
+        for (i = 0; i < FLOW_MAX_VLAN_HEADERS; i++) {
+            assert(miniflow_get_vid(miniflow, i) ==
+                   vlan_tci_to_vid(flow.vlans[i].tci));
+        }
         for (i = 0; i < FLOW_U64S; i++) {
             assert(miniflow_get(miniflow, i) == flow_u64[i]);
         }

@@ -449,8 +449,9 @@ type_run(const char *type)
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
                 xlate_bundle_set(ofproto, bundle, bundle->name,
-                                 bundle->vlan_mode, bundle->vlan,
-                                 bundle->trunks, bundle->use_priority_tags,
+                                 bundle->vlan_mode,
+                                 bundle->vlan, bundle->trunks,
+                                 bundle->use_priority_tags,
                                  bundle->bond, bundle->lacp,
                                  bundle->floodable, bundle->protected);
             }
@@ -947,6 +948,41 @@ check_variable_length_userdata(struct dpif_backer *backer)
     }
 }
 
+/* Tests number of 802.1q VLAN headers supported by 'backer''s datapath.
+ *
+ * Returns the number of elements in a struct flow's vlan
+ * if the datapath supports at least that many VLAN headers. */
+static size_t
+check_max_vlan_headers(struct dpif_backer *backer)
+{
+    struct flow flow;
+    struct odp_flow_key_parms odp_parms = {
+        .flow = &flow,
+        .probe = true,
+    };
+    int n;
+
+    memset(&flow, 0, sizeof flow);
+    flow.dl_type = htons(ETH_TYPE_IP);
+    for (n = 0; n < FLOW_MAX_VLAN_HEADERS; n++) {
+        struct odputil_keybuf keybuf;
+        struct ofpbuf key;
+
+        flow_push_vlan_uninit(&flow, NULL);
+        flow.vlans[0].tpid = htons(ETH_TYPE_VLAN);
+        flow.vlans[0].tci = htons(1) | htons(VLAN_CFI);
+
+        ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+        odp_flow_key_from_flow(&odp_parms, &key);
+        if (!dpif_probe_feature(backer->dpif, "VLAN", &key, NULL, NULL)) {
+            break;
+        }
+    }
+
+    VLOG_INFO("%s: VLAN header stack length probed as %d",
+              dpif_name(backer->dpif), n);
+    return n;
+}
 /* Tests the MPLS label stack depth supported by 'backer''s datapath.
  *
  * Returns the number of elements in a struct flow's mpls_lse field
@@ -1254,6 +1290,7 @@ check_support(struct dpif_backer *backer)
 
     /* Actions. */
     backer->support.odp.recirc = check_recirc(backer);
+    backer->support.odp.max_vlan_headers = check_max_vlan_headers(backer);
     backer->support.odp.max_mpls_depth = check_max_mpls_depth(backer);
     backer->support.masked_set_action = check_masked_set_action(backer);
     backer->support.trunc = check_trunc_action(backer);
@@ -2833,7 +2870,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     bool need_flush = false;
     struct ofport_dpif *port;
     struct ofbundle *bundle;
-    unsigned long *trunks;
+    unsigned long *trunks = NULL;
     int vlan;
     size_t i;
     bool ok;

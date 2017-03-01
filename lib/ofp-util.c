@@ -101,7 +101,7 @@ ofputil_netmask_to_wcbits(ovs_be32 netmask)
 void
 ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 {
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 37);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 38);
 
     /* Initialize most of wc. */
     flow_wildcards_init_catchall(wc);
@@ -141,10 +141,10 @@ ofputil_wildcard_from_ofpfw10(uint32_t ofpfw, struct flow_wildcards *wc)
 
     /* VLAN TCI mask. */
     if (!(ofpfw & OFPFW10_DL_VLAN_PCP)) {
-        wc->masks.vlan_tci |= htons(VLAN_PCP_MASK | VLAN_CFI);
+        wc->masks.vlans[0].tci |= htons(VLAN_PCP_MASK | VLAN_CFI);
     }
     if (!(ofpfw & OFPFW10_DL_VLAN)) {
-        wc->masks.vlan_tci |= htons(VLAN_VID_MASK | VLAN_CFI);
+        wc->masks.vlans[0].tci |= htons(VLAN_VID_MASK | VLAN_CFI);
     }
 }
 
@@ -182,8 +182,8 @@ ofputil_match_from_ofp10_match(const struct ofp10_match *ofmatch,
          * because we can't have a specific PCP without an 802.1Q header.
          * However, older versions of OVS treated this as matching packets
          * withut an 802.1Q header, so we do here too. */
-        match->flow.vlan_tci = htons(0);
-        match->wc.masks.vlan_tci = htons(0xffff);
+        match->flow.vlans[0].tci = htons(0);
+        match->wc.masks.vlans[0].tci = htons(0xffff);
     } else {
         ovs_be16 vid, pcp, tci;
         uint16_t hpcp;
@@ -192,7 +192,7 @@ ofputil_match_from_ofp10_match(const struct ofp10_match *ofmatch,
         hpcp = (ofmatch->dl_vlan_pcp << VLAN_PCP_SHIFT) & VLAN_PCP_MASK;
         pcp = htons(hpcp);
         tci = vid | pcp | htons(VLAN_CFI);
-        match->flow.vlan_tci = tci & match->wc.masks.vlan_tci;
+        match->flow.vlans[0].tci = tci & match->wc.masks.vlans[0].tci;
     }
 
     /* Clean up. */
@@ -241,22 +241,23 @@ ofputil_match_to_ofp10_match(const struct match *match,
     /* Translate VLANs. */
     ofmatch->dl_vlan = htons(0);
     ofmatch->dl_vlan_pcp = 0;
-    if (match->wc.masks.vlan_tci == htons(0)) {
+    if (match->wc.masks.vlans[0].tci == htons(0)) {
         ofpfw |= OFPFW10_DL_VLAN | OFPFW10_DL_VLAN_PCP;
-    } else if (match->wc.masks.vlan_tci & htons(VLAN_CFI)
-               && !(match->flow.vlan_tci & htons(VLAN_CFI))) {
+    } else if (match->wc.masks.vlans[0].tci & htons(VLAN_CFI)
+               && !(match->flow.vlans[0].tci & htons(VLAN_CFI))) {
         ofmatch->dl_vlan = htons(OFP10_VLAN_NONE);
     } else {
-        if (!(match->wc.masks.vlan_tci & htons(VLAN_VID_MASK))) {
+        if (!(match->wc.masks.vlans[0].tci & htons(VLAN_VID_MASK))) {
             ofpfw |= OFPFW10_DL_VLAN;
         } else {
-            ofmatch->dl_vlan = htons(vlan_tci_to_vid(match->flow.vlan_tci));
+            ofmatch->dl_vlan =
+                htons(vlan_tci_to_vid(match->flow.vlans[0].tci));
         }
 
-        if (!(match->wc.masks.vlan_tci & htons(VLAN_PCP_MASK))) {
+        if (!(match->wc.masks.vlans[0].tci & htons(VLAN_PCP_MASK))) {
             ofpfw |= OFPFW10_DL_VLAN_PCP;
         } else {
-            ofmatch->dl_vlan_pcp = vlan_tci_to_pcp(match->flow.vlan_tci);
+            ofmatch->dl_vlan_pcp = vlan_tci_to_pcp(match->flow.vlans[0].tci);
         }
     }
 
@@ -345,17 +346,17 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
     if (!(wc & OFPFW11_DL_VLAN)) {
         if (ofmatch->dl_vlan == htons(OFPVID11_NONE)) {
             /* Match only packets without a VLAN tag. */
-            match->flow.vlan_tci = htons(0);
-            match->wc.masks.vlan_tci = OVS_BE16_MAX;
+            match->flow.vlans[0].tci = htons(0);
+            match->wc.masks.vlans[0].tci = OVS_BE16_MAX;
         } else {
             if (ofmatch->dl_vlan == htons(OFPVID11_ANY)) {
                 /* Match any packet with a VLAN tag regardless of VID. */
-                match->flow.vlan_tci = htons(VLAN_CFI);
-                match->wc.masks.vlan_tci = htons(VLAN_CFI);
+                match->flow.vlans[0].tci = htons(VLAN_CFI);
+                match->wc.masks.vlans[0].tci = htons(VLAN_CFI);
             } else if (ntohs(ofmatch->dl_vlan) < 4096) {
                 /* Match only packets with the specified VLAN VID. */
-                match->flow.vlan_tci = htons(VLAN_CFI) | ofmatch->dl_vlan;
-                match->wc.masks.vlan_tci = htons(VLAN_CFI | VLAN_VID_MASK);
+                match->flow.vlans[0].tci = htons(VLAN_CFI) | ofmatch->dl_vlan;
+                match->wc.masks.vlans[0].tci = htons(VLAN_CFI | VLAN_VID_MASK);
             } else {
                 /* Invalid VID. */
                 return OFPERR_OFPBMC_BAD_VALUE;
@@ -363,9 +364,9 @@ ofputil_match_from_ofp11_match(const struct ofp11_match *ofmatch,
 
             if (!(wc & OFPFW11_DL_VLAN_PCP)) {
                 if (ofmatch->dl_vlan_pcp <= 7) {
-                    match->flow.vlan_tci |= htons(ofmatch->dl_vlan_pcp
+                    match->flow.vlans[0].tci |= htons(ofmatch->dl_vlan_pcp
                                                   << VLAN_PCP_SHIFT);
-                    match->wc.masks.vlan_tci |= htons(VLAN_PCP_MASK);
+                    match->wc.masks.vlans[0].tci |= htons(VLAN_PCP_MASK);
                 } else {
                     /* Invalid PCP. */
                     return OFPERR_OFPBMC_BAD_VALUE;
@@ -483,23 +484,24 @@ ofputil_match_to_ofp11_match(const struct match *match,
     ofmatch->dl_dst = match->flow.dl_dst;
     ofmatch->dl_dst_mask = eth_addr_invert(match->wc.masks.dl_dst);
 
-    if (match->wc.masks.vlan_tci == htons(0)) {
+    if (match->wc.masks.vlans[0].tci == htons(0)) {
         wc |= OFPFW11_DL_VLAN | OFPFW11_DL_VLAN_PCP;
-    } else if (match->wc.masks.vlan_tci & htons(VLAN_CFI)
-               && !(match->flow.vlan_tci & htons(VLAN_CFI))) {
+    } else if (match->wc.masks.vlans[0].tci & htons(VLAN_CFI)
+               && !(match->flow.vlans[0].tci & htons(VLAN_CFI))) {
         ofmatch->dl_vlan = htons(OFPVID11_NONE);
         wc |= OFPFW11_DL_VLAN_PCP;
     } else {
-        if (!(match->wc.masks.vlan_tci & htons(VLAN_VID_MASK))) {
+        if (!(match->wc.masks.vlans[0].tci & htons(VLAN_VID_MASK))) {
             ofmatch->dl_vlan = htons(OFPVID11_ANY);
         } else {
-            ofmatch->dl_vlan = htons(vlan_tci_to_vid(match->flow.vlan_tci));
+            ofmatch->dl_vlan =
+                htons(vlan_tci_to_vid(match->flow.vlans[0].tci));
         }
 
-        if (!(match->wc.masks.vlan_tci & htons(VLAN_PCP_MASK))) {
+        if (!(match->wc.masks.vlans[0].tci & htons(VLAN_PCP_MASK))) {
             wc |= OFPFW11_DL_VLAN_PCP;
         } else {
-            ofmatch->dl_vlan_pcp = vlan_tci_to_pcp(match->flow.vlan_tci);
+            ofmatch->dl_vlan_pcp = vlan_tci_to_pcp(match->flow.vlans[0].tci);
         }
     }
 

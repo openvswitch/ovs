@@ -4141,8 +4141,8 @@ ofctl_check_vlan(struct ovs_cmdl_context *ctx)
     enum ofputil_protocol usable_protocols; /* Unused for now. */
 
     match_init_catchall(&match);
-    match.flow.vlan_tci = htons(strtoul(ctx->argv[1], NULL, 16));
-    match.wc.masks.vlan_tci = htons(strtoul(ctx->argv[2], NULL, 16));
+    match.flow.vlans[0].tci = htons(strtoul(ctx->argv[1], NULL, 16));
+    match.wc.masks.vlans[0].tci = htons(strtoul(ctx->argv[2], NULL, 16));
 
     /* Convert to and from string. */
     string_s = match_to_string(&match, OFP_DEFAULT_PRIORITY);
@@ -4153,8 +4153,8 @@ ofctl_check_vlan(struct ovs_cmdl_context *ctx)
         ovs_fatal(0, "%s", error_s);
     }
     printf("%04"PRIx16"/%04"PRIx16"\n",
-           ntohs(fm.match.flow.vlan_tci),
-           ntohs(fm.match.wc.masks.vlan_tci));
+           ntohs(fm.match.flow.vlans[0].tci),
+           ntohs(fm.match.wc.masks.vlans[0].tci));
     free(string_s);
 
     /* Convert to and from NXM. */
@@ -4168,8 +4168,8 @@ ofctl_check_vlan(struct ovs_cmdl_context *ctx)
         printf("%s\n", ofperr_to_string(error));
     } else {
         printf("%04"PRIx16"/%04"PRIx16"\n",
-               ntohs(nxm_match.flow.vlan_tci),
-               ntohs(nxm_match.wc.masks.vlan_tci));
+               ntohs(nxm_match.flow.vlans[0].tci),
+               ntohs(nxm_match.wc.masks.vlans[0].tci));
     }
     free(nxm_s);
     ofpbuf_uninit(&nxm);
@@ -4183,14 +4183,15 @@ ofctl_check_vlan(struct ovs_cmdl_context *ctx)
     if (error) {
         printf("%s\n", ofperr_to_string(error));
     } else {
-        uint16_t vid = ntohs(nxm_match.flow.vlan_tci) &
+        uint16_t vid = ntohs(nxm_match.flow.vlans[0].tci) &
             (VLAN_VID_MASK | VLAN_CFI);
-        uint16_t mask = ntohs(nxm_match.wc.masks.vlan_tci) &
+        uint16_t mask = ntohs(nxm_match.wc.masks.vlans[0].tci) &
             (VLAN_VID_MASK | VLAN_CFI);
 
         printf("%04"PRIx16"/%04"PRIx16",", vid, mask);
-        if (vid && vlan_tci_to_pcp(nxm_match.wc.masks.vlan_tci)) {
-            printf("%02"PRIx8"\n", vlan_tci_to_pcp(nxm_match.flow.vlan_tci));
+        if (vid && vlan_tci_to_pcp(nxm_match.wc.masks.vlans[0].tci)) {
+            printf("%02"PRIx8"\n",
+                   vlan_tci_to_pcp(nxm_match.flow.vlans[0].tci));
         } else {
             printf("--\n");
         }
@@ -4206,8 +4207,8 @@ ofctl_check_vlan(struct ovs_cmdl_context *ctx)
            (of10_raw.wildcards & htonl(OFPFW10_DL_VLAN)) != 0,
            of10_raw.dl_vlan_pcp,
            (of10_raw.wildcards & htonl(OFPFW10_DL_VLAN_PCP)) != 0,
-           ntohs(of10_match.flow.vlan_tci),
-           ntohs(of10_match.wc.masks.vlan_tci));
+           ntohs(of10_match.flow.vlans[0].tci),
+           ntohs(of10_match.wc.masks.vlans[0].tci));
 
     /* Convert to and from OpenFlow 1.1. */
     ofputil_match_to_ofp11_match(&match, &of11_raw);
@@ -4217,8 +4218,8 @@ ofctl_check_vlan(struct ovs_cmdl_context *ctx)
            (of11_raw.wildcards & htonl(OFPFW11_DL_VLAN)) != 0,
            of11_raw.dl_vlan_pcp,
            (of11_raw.wildcards & htonl(OFPFW11_DL_VLAN_PCP)) != 0,
-           ntohs(of11_match.flow.vlan_tci),
-           ntohs(of11_match.wc.masks.vlan_tci));
+           ntohs(of11_match.flow.vlans[0].tci),
+           ntohs(of11_match.wc.masks.vlans[0].tci));
 }
 
 /* "print-error ENUM": Prints the type and code of ENUM for every OpenFlow
