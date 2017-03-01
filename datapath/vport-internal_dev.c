@@ -117,7 +117,7 @@ static void internal_dev_destructor(struct net_device *dev)
 	free_netdev(dev);
 }
 
-static struct rtnl_link_stats64 *
+static void
 internal_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
 {
 	int i;
@@ -145,8 +145,6 @@ internal_get_stats(struct net_device *dev, struct rtnl_link_stats64 *stats)
 		stats->tx_bytes         += local_stats.tx_bytes;
 		stats->tx_packets       += local_stats.tx_packets;
 	}
-
-	return stats;
 }
 
 #ifdef HAVE_IFF_PHONY_HEADROOM
@@ -164,7 +162,7 @@ static const struct net_device_ops internal_dev_netdev_ops = {
 #ifndef HAVE_NET_DEVICE_WITH_MAX_MTU
 	.ndo_change_mtu = internal_dev_change_mtu,
 #endif
-	.ndo_get_stats64 = internal_get_stats,
+	.ndo_get_stats64 = (void *)internal_get_stats,
 #ifdef HAVE_IFF_PHONY_HEADROOM
 #ifndef HAVE_NET_DEVICE_OPS_WITH_EXTENDED
 	.ndo_set_rx_headroom = internal_set_rx_headroom,
