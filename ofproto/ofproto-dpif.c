@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -94,9 +94,11 @@ struct ofbundle {
     /* Configuration. */
     struct ovs_list ports;      /* Contains "struct ofport"s. */
     enum port_vlan_mode vlan_mode; /* VLAN mode */
+    uint16_t qinq_ethtype;
     int vlan;                   /* -1=trunk port, else a 12-bit VLAN ID. */
     unsigned long *trunks;      /* Bitmap of trunked VLANs, if 'vlan' == -1.
                                  * NULL if all VLANs are trunked. */
+    unsigned long *cvlans;
     struct lacp *lacp;          /* LACP if LACP is enabled, otherwise NULL. */
     struct bond *bond;          /* Nonnull iff more than one port. */
     bool use_priority_tags;     /* Use 802.1p tag for frames in VLAN 0? */
@@ -449,8 +451,8 @@ type_run(const char *type)
 
             HMAP_FOR_EACH (bundle, hmap_node, &ofproto->bundles) {
                 xlate_bundle_set(ofproto, bundle, bundle->name,
-                                 bundle->vlan_mode,
-                                 bundle->vlan, bundle->trunks,
+                                 bundle->vlan_mode, bundle->qinq_ethtype,
+                                 bundle->vlan, bundle->trunks, bundle->cvlans,
                                  bundle->use_priority_tags,
                                  bundle->bond, bundle->lacp,
                                  bundle->floodable, bundle->protected);
@@ -2857,6 +2859,7 @@ bundle_destroy(struct ofbundle *bundle)
     hmap_remove(&ofproto->bundles, &bundle->hmap_node);
     free(bundle->name);
     free(bundle->trunks);
+    free(bundle->cvlans);
     lacp_unref(bundle->lacp);
     bond_unref(bundle->bond);
     free(bundle);
@@ -2871,6 +2874,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     struct ofport_dpif *port;
     struct ofbundle *bundle;
     unsigned long *trunks = NULL;
+    unsigned long *cvlans = NULL;
     int vlan;
     size_t i;
     bool ok;
@@ -2895,8 +2899,10 @@ bundle_set(struct ofproto *ofproto_, void *aux,
 
         ovs_list_init(&bundle->ports);
         bundle->vlan_mode = PORT_VLAN_TRUNK;
+        bundle->qinq_ethtype = ETH_TYPE_VLAN_8021AD;
         bundle->vlan = -1;
         bundle->trunks = NULL;
+        bundle->cvlans = NULL;
         bundle->use_priority_tags = s->use_priority_tags;
         bundle->lacp = NULL;
         bundle->bond = NULL;
@@ -2961,6 +2967,11 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         need_flush = true;
     }
 
+    if (s->qinq_ethtype != bundle->qinq_ethtype) {
+        bundle->qinq_ethtype = s->qinq_ethtype;
+        need_flush = true;
+    }
+
     /* Set VLAN tag. */
     vlan = (s->vlan_mode == PORT_VLAN_TRUNK ? -1
             : s->vlan >= 0 && s->vlan <= 4095 ? s->vlan
@@ -2998,6 +3009,10 @@ bundle_set(struct ofproto *ofproto_, void *aux,
         }
         break;
 
+    case PORT_VLAN_DOT1Q_TUNNEL:
+        cvlans = CONST_CAST(unsigned long *, s->cvlans);
+        break;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -3013,6 +3028,20 @@ bundle_set(struct ofproto *ofproto_, void *aux,
     }
     if (trunks != s->trunks) {
         free(trunks);
+    }
+
+    if (!vlan_bitmap_equal(cvlans, bundle->cvlans)) {
+        free(bundle->cvlans);
+        if (cvlans == s->cvlans) {
+            bundle->cvlans = vlan_bitmap_clone(cvlans);
+        } else {
+            bundle->cvlans = cvlans;
+            cvlans = NULL;
+        }
+        need_flush = true;
+    }
+    if (cvlans != s->cvlans) {
+        free(cvlans);
     }
 
     /* Bonding. */

@@ -1281,7 +1281,39 @@
     </column>
 
     <group title="VLAN Configuration">
-      <p>Bridge ports support the following types of VLAN configuration:</p>
+      <p>
+        In short, a VLAN (short for ``virtual LAN'') is a way to partition a
+        single switch into multiple switches.  VLANs can be confusing, so for
+        an introduction, please refer to the question ``What's a VLAN?'' in the
+        Open vSwitch FAQ.
+      </p>
+
+      <p>
+        A VLAN is sometimes encoded into a packet using a 802.1Q or 802.1ad
+        VLAN header, but every packet is part of some VLAN whether or not it is
+        encoded in the packet.  (A packet that appears to have no VLAN is part
+        of VLAN 0, by default.)  As a result, it's useful to think of a VLAN as
+        a metadata property of a packet, separate from how the VLAN is encoded.
+        For a given port, this column determines how the encoding of a packet
+        that ingresses or egresses the port maps to the packet's VLAN.  When a
+        packet enters the switch, its VLAN is determined based on its setting
+        in this column and its VLAN headers, if any, and then, conceptually,
+        the VLAN headers are then stripped off.  Conversely, when a packet
+        exits the switch, its VLAN and the settings in this column determine
+        what VLAN headers, if any, are pushed onto the packet before it
+        egresses the port.
+      </p>
+
+      <p>
+        The VLAN configuration in this column affects Open vSwitch only when it
+        is doing ``normal switching.''  It does not affect flows set up by an
+        OpenFlow controller, outside of the OpenFlow ``normal action.''
+      </p>
+
+      <p>
+        Bridge ports support the following types of VLAN configuration:
+      </p>
+
       <dl>
         <dt>trunk</dt>
         <dd>
@@ -1329,6 +1361,29 @@
           exception that a packet that egresses on a native-untagged port in
           the native VLAN will not have an 802.1Q header.
         </dd>
+
+        <dt>dot1q-tunnel</dt>
+        <dd>
+          <p>
+            A dot1q-tunnel port is somewhat like an access port.  Like an
+            access port, it carries packets on the single VLAN specified in the
+            <ref column="tag"/> column and this VLAN, called the service VLAN,
+            does not appear in an 802.1Q header for packets that ingress or
+            egress on the port.  The main difference lies in the behavior when
+            packets that include a 802.1Q header ingress on the port.  Whereas
+            an access port drops such packets, a dot1q-tunnel port treats these
+            as double-tagged with the outer service VLAN <ref column="tag"/>
+            and the inner customer VLAN taken from the 802.1Q header.
+            Correspondingly, to egress on the port, a packet outer VLAN (or
+            only VLAN) must be <ref column="tag"/>, which is removed before
+            egress, which exposes the inner (customer) VLAN if one is present.
+          </p>
+            
+          <p>
+            If <ref column="cvlans"/> is set, only allows packets in the
+            specified customer VLANs.
+          </p>
+        </dd>
       </dl>
       <p>
         A packet will only egress through bridge ports that carry the VLAN of
@@ -1370,6 +1425,37 @@
           A native-tagged or native-untagged port always trunks its native
           VLAN, regardless of whether <ref column="trunks"/> includes that
           VLAN.
+        </p>
+      </column>
+
+      <column name="cvlans">
+        <p>
+          For a dot1q-tunnel port, the customer VLANs that this port includes.
+          If this is empty, the port includes all customer VLANs.
+        </p>
+        <p>
+          For other kinds of ports, this setting is ignored.
+        </p>
+      </column>
+
+      <column name="other_config" key="qinq-ethtype"
+              type='{"type": "string", "enum": ["set", ["802.1ad", "802.1q"]]}'>
+        <p>
+          For a dot1q-tunnel port, this is the TPID for the service tag, that
+          is, for the 802.1Q header that contains the service VLAN ID.  Because
+          packets that actually ingress and egress a dot1q-tunnel port do not
+          include an 802.1Q header for the service VLAN, this does not affect
+          packets on the dot1q-tunnel port itself.  Rather, it determines the
+          service VLAN for a packet that ingresses on a dot1q-tunnel port and
+          egresses on a trunk port.
+        </p>
+        <p>
+          The value <code>802.1ad</code> specifies TPID 0x88a8, which is also
+          the default if the setting is omitted.  The value <code>802.1q</code>
+          specifies TPID 0x8100.
+        </p>
+        <p>
+          For other kinds of ports, this setting is ignored.
         </p>
       </column>
 

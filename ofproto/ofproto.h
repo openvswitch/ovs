@@ -388,7 +388,11 @@ enum port_vlan_mode {
     /* Untagged incoming packets are part of 'vlan', as are incoming packets
      * tagged with 'vlan'.  Outgoing packets tagged with 'vlan' are untagged.
      * Other VLANs in 'trunks' are trunked. */
-    PORT_VLAN_NATIVE_UNTAGGED
+    PORT_VLAN_NATIVE_UNTAGGED,
+
+    /* 802.1q tunnel port. Incoming packets are added an outer vlan tag
+     * 'vlan'. If 'cvlans' is set, only allows VLANs in 'cvlans'. */
+    PORT_VLAN_DOT1Q_TUNNEL
 };
 
 /* Configuration of bundles. */
@@ -399,8 +403,10 @@ struct ofproto_bundle_settings {
     size_t n_slaves;
 
     enum port_vlan_mode vlan_mode; /* Selects mode for vlan and trunks */
+    uint16_t qinq_ethtype;
     int vlan;                   /* VLAN VID, except for PORT_VLAN_TRUNK. */
     unsigned long *trunks;      /* vlan_bitmap, except for PORT_VLAN_ACCESS. */
+    unsigned long *cvlans;
     bool use_priority_tags;     /* Use 802.1p tag for frames in VLAN 0? */
 
     struct bond_settings *bond; /* Must be nonnull iff if n_slaves > 1. */

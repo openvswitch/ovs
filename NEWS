@@ -11,7 +11,8 @@ Post-v2.7.0
        'ovs-appctl vlog' commands for 'dpdk' module. Lower bound
        still can be configured via extra arguments for DPDK EAL.
    - The "learn" action now supports a "limit" option (see ovs-ofctl(8)).
-   - New support for multiple VLANs (802.1ad or "QinQ").
+   - New support for multiple VLANs (802.1ad or "QinQ"), including a new
+     "dot1q-tunnel" port VLAN mode.
 
 v2.7.0 - 21 Feb 2017
 ---------------------

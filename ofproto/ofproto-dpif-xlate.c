@@ -127,9 +127,13 @@ struct xbundle {
     struct lacp *lacp;             /* LACP handle or null. */
 
     enum port_vlan_mode vlan_mode; /* VLAN mode. */
+    uint16_t qinq_ethtype;         /* Ethertype of dot1q-tunnel interface
+                                    * either 0x8100 or 0x88a8. */
     int vlan;                      /* -1=trunk port, else a 12-bit VLAN ID. */
     unsigned long *trunks;         /* Bitmap of trunked VLANs, if 'vlan' == -1.
                                     * NULL if all VLANs are trunked. */
+    unsigned long *cvlans;         /* Bitmap of allowed customer vlans,
+                                    * NULL if all VLANs are allowed */
     bool use_priority_tags;        /* Use 802.1p tag for frames in VLAN 0? */
     bool floodable;                /* No port has OFPUTIL_PC_NO_FLOOD set? */
     bool protected;                /* Protected port mode */
@@ -499,6 +503,7 @@ static bool input_vid_is_valid(const struct xlate_ctx *,
                                uint16_t vid, struct xbundle *);
 static void xvlan_copy(struct xvlan *dst, const struct xvlan *src);
 static void xvlan_pop(struct xvlan *src);
+static void xvlan_push_uninit(struct xvlan *src);
 static void xvlan_extract(const struct flow *, struct xvlan *);
 static void xvlan_put(struct flow *, const struct xvlan *);
 static void xvlan_input_translate(const struct xbundle *,
@@ -550,8 +555,8 @@ static void xlate_xbridge_set(struct xbridge *, struct dpif *,
                               const struct dpif_backer_support *);
 static void xlate_xbundle_set(struct xbundle *xbundle,
                               enum port_vlan_mode vlan_mode,
-                              int vlan,
-                              unsigned long *trunks,
+                              uint16_t qinq_ethtype, int vlan,
+                              unsigned long *trunks, unsigned long *cvlans,
                               bool use_priority_tags,
                               const struct bond *bond, const struct lacp *lacp,
                               bool floodable, bool protected);
@@ -857,8 +862,8 @@ xlate_xbridge_set(struct xbridge *xbridge,
 
 static void
 xlate_xbundle_set(struct xbundle *xbundle,
-                  enum port_vlan_mode vlan_mode,
-                  int vlan, unsigned long *trunks,
+                  enum port_vlan_mode vlan_mode, uint16_t qinq_ethtype,
+                  int vlan, unsigned long *trunks, unsigned long *cvlans,
                   bool use_priority_tags,
                   const struct bond *bond, const struct lacp *lacp,
                   bool floodable, bool protected)
@@ -866,8 +871,10 @@ xlate_xbundle_set(struct xbundle *xbundle,
     ovs_assert(xbundle->xbridge);
 
     xbundle->vlan_mode = vlan_mode;
+    xbundle->qinq_ethtype = qinq_ethtype;
     xbundle->vlan = vlan;
     xbundle->trunks = trunks;
+    xbundle->cvlans = cvlans;
     xbundle->use_priority_tags = use_priority_tags;
     xbundle->floodable = floodable;
     xbundle->protected = protected;
@@ -962,8 +969,8 @@ xlate_xbundle_copy(struct xbridge *xbridge, struct xbundle *xbundle)
     new_xbundle->name = xstrdup(xbundle->name);
     xlate_xbundle_init(new_xcfg, new_xbundle);
 
-    xlate_xbundle_set(new_xbundle, xbundle->vlan_mode,
-                      xbundle->vlan, xbundle->trunks,
+    xlate_xbundle_set(new_xbundle, xbundle->vlan_mode, xbundle->qinq_ethtype,
+                      xbundle->vlan, xbundle->trunks, xbundle->cvlans,
                       xbundle->use_priority_tags, xbundle->bond, xbundle->lacp,
                       xbundle->floodable, xbundle->protected);
     LIST_FOR_EACH (xport, bundle_node, &xbundle->xports) {
@@ -1157,8 +1164,8 @@ xlate_remove_ofproto(struct ofproto_dpif *ofproto)
 void
 xlate_bundle_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
                  const char *name, enum port_vlan_mode vlan_mode,
-                 int vlan,
-                 unsigned long *trunks,
+                 uint16_t qinq_ethtype, int vlan,
+                 unsigned long *trunks, unsigned long *cvlans,
                  bool use_priority_tags,
                  const struct bond *bond, const struct lacp *lacp,
                  bool floodable, bool protected)
@@ -1179,7 +1186,7 @@ xlate_bundle_set(struct ofproto_dpif *ofproto, struct ofbundle *ofbundle,
     free(xbundle->name);
     xbundle->name = xstrdup(name);
 
-    xlate_xbundle_set(xbundle, vlan_mode, vlan, trunks,
+    xlate_xbundle_set(xbundle, vlan_mode, qinq_ethtype, vlan, trunks, cvlans,
                       use_priority_tags, bond, lacp, floodable, protected);
 }
 
@@ -1701,6 +1708,12 @@ xbundle_trunks_vlan(const struct xbundle *bundle, uint16_t vlan)
 }
 
 static bool
+xbundle_allows_cvlan(const struct xbundle *bundle, uint16_t vlan)
+{
+    return (!bundle->cvlans || bitmap_is_set(bundle->cvlans, vlan));
+}
+
+static bool
 xbundle_includes_vlan(const struct xbundle *xbundle, const struct xvlan *xvlan)
 {
     switch (xbundle->vlan_mode) {
@@ -1711,6 +1724,10 @@ xbundle_includes_vlan(const struct xbundle *xbundle, const struct xvlan *xvlan)
     case PORT_VLAN_NATIVE_UNTAGGED:
     case PORT_VLAN_NATIVE_TAGGED:
         return xbundle_trunks_vlan(xbundle, xvlan->v[0].vid);
+
+    case PORT_VLAN_DOT1Q_TUNNEL:
+        return xvlan->v[0].vid == xbundle->vlan &&
+               xbundle_allows_cvlan(xbundle, xvlan->v[1].vid);
 
     default:
         OVS_NOT_REACHED();
@@ -1948,6 +1965,15 @@ input_vid_is_valid(const struct xlate_ctx *ctx,
         }
         return true;
 
+    case PORT_VLAN_DOT1Q_TUNNEL:
+        if (!xbundle_allows_cvlan(in_xbundle, vid)) {
+            xlate_report_error(ctx, "dropping VLAN %"PRIu16" packet received "
+                               "on dot1q-tunnel port %s that excludes this "
+                               "VLAN", vid, in_xbundle->name);
+            return false;
+        }
+        return true;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -1966,6 +1992,13 @@ xvlan_pop(struct xvlan *src)
     memmove(&src->v[0], &src->v[1], sizeof(src->v) - sizeof(src->v[0]));
     memset(&src->v[FLOW_MAX_VLAN_HEADERS - 1], 0,
            sizeof(src->v[FLOW_MAX_VLAN_HEADERS - 1]));
+}
+
+static void
+xvlan_push_uninit(struct xvlan *src)
+{
+    memmove(&src->v[1], &src->v[0], sizeof(src->v) - sizeof(src->v[0]));
+    memset(&src->v[0], 0, sizeof(src->v[0]));
 }
 
 /* Extract VLAN information (headers) from flow */
@@ -2035,6 +2068,14 @@ xvlan_input_translate(const struct xbundle *in_xbundle,
         }
         break;
 
+    case PORT_VLAN_DOT1Q_TUNNEL:
+        xvlan_copy(xvlan, in_xvlan);
+        xvlan_push_uninit(xvlan);
+        xvlan->v[0].tpid = in_xbundle->qinq_ethtype;
+        xvlan->v[0].vid = in_xbundle->vlan;
+        xvlan->v[0].pcp = 0;
+        break;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -2064,8 +2105,23 @@ xvlan_output_translate(const struct xbundle *out_xbundle,
         }
         break;
 
+    case PORT_VLAN_DOT1Q_TUNNEL:
+        xvlan_copy(out_xvlan, xvlan);
+        xvlan_pop(out_xvlan);
+        break;
+
     default:
         OVS_NOT_REACHED();
+    }
+}
+
+/* If output xbundle is dot1q-tunnel, set mask bits of cvlan */
+static void
+check_and_set_cvlan_mask(struct flow_wildcards *wc,
+                         const struct xbundle *xbundle)
+{
+    if (xbundle->vlan_mode == PORT_VLAN_DOT1Q_TUNNEL && xbundle->cvlans) {
+        wc->masks.vlans[1].tci = htons(0xffff);
     }
 }
 
@@ -2079,6 +2135,8 @@ output_normal(struct xlate_ctx *ctx, const struct xbundle *out_xbundle,
     struct xlate_bond_recirc xr;
     bool use_recirc = false;
     struct xvlan out_xvlan;
+
+    check_and_set_cvlan_mask(ctx->wc, out_xbundle);
 
     xvlan_output_translate(out_xbundle, xvlan, &out_xvlan);
     if (out_xbundle->use_priority_tags) {

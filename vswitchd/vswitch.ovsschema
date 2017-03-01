@@ -1,6 +1,6 @@
 {"name": "Open_vSwitch",
- "version": "7.14.0",
- "cksum": "3374030633 22987",
+ "version": "7.15.0",
+ "cksum": "544856471 23228",
  "tables": {
    "Open_vSwitch": {
      "columns": {
@@ -145,6 +145,11 @@
                           "minInteger": 0,
                           "maxInteger": 4095},
                   "min": 0, "max": 4096}},
+       "cvlans": {
+         "type": {"key": {"type": "integer",
+                          "minInteger": 0,
+                          "maxInteger": 4095},
+                  "min": 0, "max": 4096}},
        "tag": {
          "type": {"key": {"type": "integer",
                           "minInteger": 0,
@@ -152,7 +157,8 @@
                   "min": 0, "max": 1}},
        "vlan_mode": {
          "type": {"key": {"type": "string",
-           "enum": ["set", ["trunk", "access", "native-tagged", "native-untagged"]]},
+           "enum": ["set", ["trunk", "access", "native-tagged",
+                            "native-untagged", "dot1q-tunnel"]]},
          "min": 0, "max": 1}},
        "qos": {
          "type": {"key": {"type": "uuid",

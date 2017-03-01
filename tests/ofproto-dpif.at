@@ -3182,6 +3182,11 @@ OVS_VSWITCHD_START(
    add-port br0 p7 vlan_mode=native-untagged tag=12              -- \
    add-port br0 p8 vlan_mode=native-untagged tag=12 trunks=10,12 \
                    other-config:priority-tags=true               -- \
+   add-port br0 p9 vlan_mode=dot1q-tunnel    tag=10              other-config:qinq-ethtype=802.1q  -- \
+   add-port br0 p10 vlan_mode=dot1q-tunnel   tag=10 cvlans=10,12 other-config:qinq-ethtype=802.1q  -- \
+   add-port br0 p11 vlan_mode=dot1q-tunnel   tag=12              other-config:qinq-ethtype=802.1q  -- \
+   add-port br0 p12 vlan_mode=dot1q-tunnel   tag=12              other-config:qinq-ethtype=802.1q  \
+                   other-config:priority-tags=true               -- \
    set Interface p1 type=dummy -- \
    set Interface p2 type=dummy -- \
    set Interface p3 type=dummy -- \
@@ -3189,7 +3194,11 @@ OVS_VSWITCHD_START(
    set Interface p5 type=dummy -- \
    set Interface p6 type=dummy -- \
    set Interface p7 type=dummy -- \
-   set Interface p8 type=dummy --])
+   set Interface p8 type=dummy -- \
+   set Interface p9 type=dummy -- \
+   set Interface p10 type=dummy -- \
+   set Interface p11 type=dummy -- \
+   set Interface p12 type=dummy --])
 
 dnl Each of these specifies an in_port by number, a VLAN VID (or "none"),
 dnl a VLAN PCP (used if the VID isn't "none") and the expected set of datapath
@@ -3198,84 +3207,93 @@ for tuple in \
         "100 none 0 drop" \
         "100 0    0 drop" \
         "100 0    1 drop" \
-        "100 10   0 1,5,6,7,8,pop_vlan,2" \
-        "100 10   1 1,5,6,7,8,pop_vlan,2" \
+        "100 10   0 1,5,6,7,8,pop_vlan,2,9" \
+        "100 10   1 1,5,6,7,8,pop_vlan,2,9" \
         "100 11   0 5,7" \
         "100 11   1 5,7" \
-        "100 12   0 1,5,6,pop_vlan,3,4,7,8" \
-        "100 12   1 1,5,6,pop_vlan,4,7,push_vlan(vid=0,pcp=1),3,8" \
+        "100 12   0 1,5,6,pop_vlan,3,4,7,8,11,12" \
+        "100 12   1 1,5,6,pop_vlan,4,7,11,push_vlan(vid=0,pcp=1),3,8,12" \
         "1  none 0 drop" \
         "1  0    0 drop" \
         "1  0    1 drop" \
-        "1  10   0 5,6,7,8,100,pop_vlan,2" \
-        "1  10   1 5,6,7,8,100,pop_vlan,2" \
+        "1  10   0 5,6,7,8,100,pop_vlan,2,9" \
+        "1  10   1 5,6,7,8,100,pop_vlan,2,9" \
         "1  11   0 drop" \
         "1  11   1 drop" \
-        "1  12   0 5,6,100,pop_vlan,3,4,7,8" \
-        "1  12   1 5,6,100,pop_vlan,4,7,push_vlan(vid=0,pcp=1),3,8" \
-        "2  none 0 push_vlan(vid=10,pcp=0),1,5,6,7,8,100" \
-        "2  0    0 pop_vlan,push_vlan(vid=10,pcp=0),1,5,6,7,8,100" \
-        "2  0    1 pop_vlan,push_vlan(vid=10,pcp=1),1,5,6,7,8,100" \
+        "1  12   0 5,6,100,pop_vlan,3,4,7,8,11,12" \
+        "1  12   1 5,6,100,pop_vlan,4,7,11,push_vlan(vid=0,pcp=1),3,8,12" \
+        "2  none 0 9,push_vlan(vid=10,pcp=0),1,5,6,7,8,100" \
+        "2  0    0 pop_vlan,9,push_vlan(vid=10,pcp=0),1,5,6,7,8,100" \
+        "2  0    1 pop_vlan,9,push_vlan(vid=10,pcp=1),1,5,6,7,8,100" \
         "2  10   0 drop" \
         "2  10   1 drop" \
         "2  11   0 drop" \
         "2  11   1 drop" \
         "2  12   0 drop" \
         "2  12   1 drop" \
-        "3  none 0 4,7,8,push_vlan(vid=12,pcp=0),1,5,6,100" \
-        "3  0    0 pop_vlan,4,7,8,push_vlan(vid=12,pcp=0),1,5,6,100" \
-        "3  0    1 8,pop_vlan,4,7,push_vlan(vid=12,pcp=1),1,5,6,100" \
+        "3  none 0 4,7,8,11,12,push_vlan(vid=12,pcp=0),1,5,6,100" \
+        "3  0    0 pop_vlan,4,7,8,11,12,push_vlan(vid=12,pcp=0),1,5,6,100" \
+        "3  0    1 8,12,pop_vlan,4,7,11,push_vlan(vid=12,pcp=1),1,5,6,100" \
         "3  10   0 drop" \
         "3  10   1 drop" \
         "3  11   0 drop" \
         "3  11   1 drop" \
         "3  12   0 drop" \
         "3  12   1 drop" \
-        "4  none 0 3,7,8,push_vlan(vid=12,pcp=0),1,5,6,100" \
-        "4  0    0 pop_vlan,3,7,8,push_vlan(vid=12,pcp=0),1,5,6,100" \
-        "4  0    1 3,8,pop_vlan,7,push_vlan(vid=12,pcp=1),1,5,6,100" \
+        "4  none 0 3,7,8,11,12,push_vlan(vid=12,pcp=0),1,5,6,100" \
+        "4  0    0 pop_vlan,3,7,8,11,12,push_vlan(vid=12,pcp=0),1,5,6,100" \
+        "4  0    1 3,8,12,pop_vlan,7,11,push_vlan(vid=12,pcp=1),1,5,6,100" \
         "4  10   0 drop" \
         "4  10   1 drop" \
         "4  11   0 drop" \
         "4  11   1 drop" \
         "4  12   0 drop" \
         "4  12   1 drop" \
-        "5  none 0 2,push_vlan(vid=10,pcp=0),1,6,7,8,100" \
-        "5  0    0 pop_vlan,2,push_vlan(vid=10,pcp=0),1,6,7,8,100" \
-        "5  0    1 pop_vlan,2,push_vlan(vid=10,pcp=1),1,6,7,8,100" \
-        "5  10   0 1,6,7,8,100,pop_vlan,2" \
-        "5  10   1 1,6,7,8,100,pop_vlan,2" \
+        "5  none 0 2,9,push_vlan(vid=10,pcp=0),1,6,7,8,100" \
+        "5  0    0 pop_vlan,2,9,push_vlan(vid=10,pcp=0),1,6,7,8,100" \
+        "5  0    1 pop_vlan,2,9,push_vlan(vid=10,pcp=1),1,6,7,8,100" \
+        "5  10   0 1,6,7,8,100,pop_vlan,2,9" \
+        "5  10   1 1,6,7,8,100,pop_vlan,2,9" \
         "5  11   0 7,100" \
         "5  11   1 7,100" \
-        "5  12   0 1,6,100,pop_vlan,3,4,7,8" \
-        "5  12   1 1,6,100,pop_vlan,4,7,push_vlan(vid=0,pcp=1),3,8" \
-        "6  none 0 2,push_vlan(vid=10,pcp=0),1,5,7,8,100" \
-        "6  0    0 pop_vlan,2,push_vlan(vid=10,pcp=0),1,5,7,8,100" \
-        "6  0    1 pop_vlan,2,push_vlan(vid=10,pcp=1),1,5,7,8,100" \
-        "6  10   0 1,5,7,8,100,pop_vlan,2" \
-        "6  10   1 1,5,7,8,100,pop_vlan,2" \
+        "5  12   0 1,6,100,pop_vlan,3,4,7,8,11,12" \
+        "5  12   1 1,6,100,pop_vlan,4,7,11,push_vlan(vid=0,pcp=1),3,8,12" \
+        "6  none 0 2,9,push_vlan(vid=10,pcp=0),1,5,7,8,100" \
+        "6  0    0 pop_vlan,2,9,push_vlan(vid=10,pcp=0),1,5,7,8,100" \
+        "6  0    1 pop_vlan,2,9,push_vlan(vid=10,pcp=1),1,5,7,8,100" \
+        "6  10   0 1,5,7,8,100,pop_vlan,2,9" \
+        "6  10   1 1,5,7,8,100,pop_vlan,2,9" \
         "6  11   0 drop" \
         "6  11   1 drop" \
-        "6  12   0 1,5,100,pop_vlan,3,4,7,8" \
-        "6  12   1 1,5,100,pop_vlan,4,7,push_vlan(vid=0,pcp=1),3,8" \
-        "7  none 0 3,4,8,push_vlan(vid=12,pcp=0),1,5,6,100" \
-        "7  0    0 pop_vlan,3,4,8,push_vlan(vid=12,pcp=0),1,5,6,100" \
-        "7  0    1 3,8,pop_vlan,4,push_vlan(vid=12,pcp=1),1,5,6,100" \
-        "7  10   0 1,5,6,8,100,pop_vlan,2" \
-        "7  10   1 1,5,6,8,100,pop_vlan,2" \
+        "6  12   0 1,5,100,pop_vlan,3,4,7,8,11,12" \
+        "6  12   1 1,5,100,pop_vlan,4,7,11,push_vlan(vid=0,pcp=1),3,8,12" \
+        "7  none 0 3,4,8,11,12,push_vlan(vid=12,pcp=0),1,5,6,100" \
+        "7  0    0 pop_vlan,3,4,8,11,12,push_vlan(vid=12,pcp=0),1,5,6,100" \
+        "7  0    1 3,8,12,pop_vlan,4,11,push_vlan(vid=12,pcp=1),1,5,6,100" \
+        "7  10   0 1,5,6,8,100,pop_vlan,2,9" \
+        "7  10   1 1,5,6,8,100,pop_vlan,2,9" \
         "7  11   0 5,100" \
         "7  11   1 5,100" \
-        "7  12   0 1,5,6,100,pop_vlan,3,4,8" \
-        "7  12   1 1,5,6,100,pop_vlan,4,push_vlan(vid=0,pcp=1),3,8" \
-        "8  none 0 3,4,7,push_vlan(vid=12,pcp=0),1,5,6,100" \
-        "8  0    0 pop_vlan,3,4,7,push_vlan(vid=12,pcp=0),1,5,6,100" \
-        "8  0    1 3,pop_vlan,4,7,push_vlan(vid=12,pcp=1),1,5,6,100" \
-        "8  10   0 1,5,6,7,100,pop_vlan,2" \
-        "8  10   1 1,5,6,7,100,pop_vlan,2" \
+        "7  12   0 1,5,6,100,pop_vlan,3,4,8,11,12" \
+        "7  12   1 1,5,6,100,pop_vlan,4,11,push_vlan(vid=0,pcp=1),3,8,12" \
+        "8  none 0 3,4,7,11,12,push_vlan(vid=12,pcp=0),1,5,6,100" \
+        "8  0    0 pop_vlan,3,4,7,11,12,push_vlan(vid=12,pcp=0),1,5,6,100" \
+        "8  0    1 3,12,pop_vlan,4,7,11,push_vlan(vid=12,pcp=1),1,5,6,100" \
+        "8  10   0 1,5,6,7,100,pop_vlan,2,9" \
+        "8  10   1 1,5,6,7,100,pop_vlan,2,9" \
         "8  11   0 drop" \
         "8  11   1 drop" \
-        "8  12   0 1,5,6,100,pop_vlan,3,4,7" \
-        "8  12   1 1,5,6,100,pop_vlan,4,7,push_vlan(vid=0,pcp=1),3"
+        "8  12   0 1,5,6,100,pop_vlan,3,4,7,11,12" \
+        "8  12   1 1,5,6,100,pop_vlan,4,7,11,push_vlan(vid=0,pcp=1),3,12" \
+        "9  none 0 2,push_vlan(vid=10,pcp=0),1,5,6,7,8,100" \
+        "9  10   0 10,push_vlan(vid=10,pcp=0),1,5,6,7,8,100" \
+        "9  11   0 push_vlan(vid=10,pcp=0),1,5,6,7,8,100" \
+        "10 none 0 drop" \
+        "10 0    0 drop" \
+        "10 11   0 drop" \
+        "10 12   0 9,push_vlan(vid=10,pcp=0),1,5,6,7,8,100" \
+        "11 10   0 7,8,12,push_vlan(vid=12,pcp=0),1,5,6,100" \
+        "11 10   1 7,8,12,push_vlan(vid=12,pcp=0),1,5,6,100"
 do
   set $tuple
   in_port=$1

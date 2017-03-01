@@ -1,4 +1,4 @@
-/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016 Nicira, Inc.
+/* Copyright (c) 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -978,6 +978,11 @@ port_configure(struct port *port)
         s.trunks = vlan_bitmap_from_array(cfg->trunks, cfg->n_trunks);
     }
 
+    s.cvlans = NULL;
+    if (cfg->n_cvlans) {
+        s.cvlans = vlan_bitmap_from_array(cfg->cvlans, cfg->n_cvlans);
+    }
+
     /* Get VLAN mode. */
     if (cfg->vlan_mode) {
         if (!strcmp(cfg->vlan_mode, "access")) {
@@ -988,6 +993,8 @@ port_configure(struct port *port)
             s.vlan_mode = PORT_VLAN_NATIVE_TAGGED;
         } else if (!strcmp(cfg->vlan_mode, "native-untagged")) {
             s.vlan_mode = PORT_VLAN_NATIVE_UNTAGGED;
+        } else if (!strcmp(cfg->vlan_mode, "dot1q-tunnel")) {
+            s.vlan_mode = PORT_VLAN_DOT1Q_TUNNEL;
         } else {
             /* This "can't happen" because ovsdb-server should prevent it. */
             VLOG_WARN("port %s: unknown VLAN mode %s, falling "
@@ -997,7 +1004,7 @@ port_configure(struct port *port)
     } else {
         if (s.vlan >= 0) {
             s.vlan_mode = PORT_VLAN_ACCESS;
-            if (cfg->n_trunks) {
+            if (cfg->n_trunks || cfg->n_cvlans) {
                 VLOG_WARN("port %s: ignoring trunks in favor of implicit vlan",
                           port->name);
             }
@@ -1005,6 +1012,12 @@ port_configure(struct port *port)
             s.vlan_mode = PORT_VLAN_TRUNK;
         }
     }
+
+    const char *qe = smap_get_def(&cfg->other_config, "qinq-ethtype", "");
+    s.qinq_ethtype = (!strcmp(qe, "802.1q")
+                      ? ETH_TYPE_VLAN_8021Q
+                      : ETH_TYPE_VLAN_8021AD);
+
     s.use_priority_tags = smap_get_bool(&cfg->other_config, "priority-tags",
                                         false);
 
