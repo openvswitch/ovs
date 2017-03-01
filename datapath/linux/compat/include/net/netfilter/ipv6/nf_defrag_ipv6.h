@@ -5,11 +5,14 @@
 #include_next <net/netfilter/ipv6/nf_defrag_ipv6.h>
 
 /* Upstream commit 029f7f3b8701 ("netfilter: ipv6: nf_defrag: avoid/free clone
- * operations") changed the semantics of nf_ct_frag6_gather(), so we backport
- * it for all prior kernels.
+ * operations") changed the semantics of nf_ct_frag6_gather(), so we need
+ * to backport for all prior kernels, i.e. kernel < 4.5.0.
+ *
+ * Upstream commit 48cac18ecf1d ("ipv6: orphan skbs in reassembly unit") fixes
+ * a bug that requires all kernels prior to this fix, i.e. kernel < 4.11.0
+ * to be backported.
  */
-#if defined(HAVE_NF_CT_FRAG6_CONSUME_ORIG) || \
-    defined(HAVE_NF_CT_FRAG6_OUTPUT)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(4,11,0)
 #define OVS_NF_DEFRAG6_BACKPORT 1
 int rpl_nf_ct_frag6_gather(struct net *net, struct sk_buff *skb, u32 user);
 #define nf_ct_frag6_gather rpl_nf_ct_frag6_gather
