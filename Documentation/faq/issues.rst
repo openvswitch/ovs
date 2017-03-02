@@ -105,7 +105,7 @@ very high.
 
     - Perhaps you don't actually need eth0 and eth1 to be on the same bridge.
       For example, if you simply want to be able to connect each of them to
-      virtual machines, then you can put each of them on a bridge of its own:
+      virtual machines, then you can put each of them on a bridge of its own::
 
           $ ovs-vsctl add-br br0
           $ ovs-vsctl add-port br0 eth0
@@ -211,6 +211,8 @@ immediately put it back.  For example, consider that p1 is a port of
      $ ovs-vsctl del-port br0 p1 -- \
          add-port br0 p1 -- \
          set interface p1 type=internal
+
+Any other type of port gets the same effect.
 
     A: It's an expected behaviour.
 
