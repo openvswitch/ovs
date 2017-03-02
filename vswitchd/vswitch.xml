@@ -241,10 +241,6 @@
           regardless of socket. It is recommended that dpdk-socket-mem is used
           instead.
         </p>
-        <p>
-          If not specified, the value is 0. Changing this value requires
-          restarting the daemon.
-        </p>
       </column>
 
       <column name="other_config" key="dpdk-socket-mem"
@@ -259,8 +255,10 @@
           1024MB, socket 1 to preallocate 2048MB, etc.)
         </p>
         <p>
-          If not specified, the default value is 1024,0. Changing this value
-          requires restarting the daemon.
+          If dpdk-socket-mem and dpdk-alloc-mem are not specified, dpdk-socket-mem
+          will be used and the default value is 1024,0. If dpdk-socket-mem and
+          dpdk-alloc-mem are specified at same time, dpdk-socket-mem will be
+          used as default. Changing this value requires restarting the daemon.
         </p>
       </column>
 
