@@ -168,7 +168,7 @@ OvsCtAddEntry(POVS_CT_ENTRY entry, OvsConntrackKeyLookupCtx *ctx, UINT64 now)
     entry->timestampStart = now;
     InsertHeadList(&ovsConntrackTable[ctx->hash & CT_HASH_TABLE_MASK],
                    &entry->link);
-    OvsPostCtEventEntry(entry, OVS_EVENT_CT_NEW);
+
     ctTotalEntries++;
 }
 
@@ -179,9 +179,11 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
                  OvsConntrackKeyLookupCtx *ctx,
                  OvsFlowKey *key,
                  BOOLEAN commit,
-                 UINT64 currentTime)
+                 UINT64 currentTime,
+                 BOOLEAN *entryCreated)
 {
     POVS_CT_ENTRY entry = NULL;
+    *entryCreated = FALSE;
     UINT32 state = 0;
     switch (ipProto)
     {
@@ -211,6 +213,7 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
                     entry->parent = parentEntry;
                 }
                 OvsCtAddEntry(entry, ctx, currentTime);
+                *entryCreated = TRUE;
             }
 
             OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
@@ -232,6 +235,7 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
                     return NULL;
                 }
                 OvsCtAddEntry(entry, ctx, currentTime);
+                *entryCreated = TRUE;
             }
 
             OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
@@ -246,6 +250,7 @@ OvsCtEntryCreate(PNET_BUFFER_LIST curNbl,
                     return NULL;
                 }
                 OvsCtAddEntry(entry, ctx, currentTime);
+                *entryCreated = TRUE;
             }
 
             OvsCtUpdateFlowKey(key, state, ctx->key.zone, 0, NULL);
@@ -525,10 +530,12 @@ OvsProcessConntrackEntry(PNET_BUFFER_LIST curNbl,
                          OvsFlowKey *key,
                          UINT16 zone,
                          BOOLEAN commit,
-                         UINT64 currentTime)
+                         UINT64 currentTime,
+                         BOOLEAN *entryCreated)
 {
     POVS_CT_ENTRY entry = ctx->entry;
     UINT32 state = 0;
+    *entryCreated = FALSE;
 
     /* If an entry was found, update the state based on TCP flags */
     if (ctx->related) {
@@ -555,7 +562,8 @@ OvsProcessConntrackEntry(PNET_BUFFER_LIST curNbl,
             OvsCtEntryDelete(ctx->entry);
             ctx->entry = NULL;
             entry = OvsCtEntryCreate(curNbl, key->ipKey.nwProto, l4Offset,
-                                     ctx, key, commit, currentTime);
+                                     ctx, key, commit, currentTime,
+                                     entryCreated);
             if (!entry) {
                 return NULL;
             }
@@ -644,17 +652,19 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
 
     /* Lookup Conntrack entries for a matching entry */
     entry = OvsCtLookup(&ctx);
-
+    BOOLEAN entryCreated = FALSE;
     if (!entry) {
         /* If no matching entry was found, create one and add New state */
         entry = OvsCtEntryCreate(curNbl, key->ipKey.nwProto,
                                  layers->l4Offset, &ctx,
-                                 key, commit, currentTime);
+                                 key, commit, currentTime,
+                                 &entryCreated);
     } else {
         /* Process the entry and update CT flags */
         OvsCtIncrementCounters(entry, ctx.reply, curNbl);
         entry = OvsProcessConntrackEntry(curNbl, layers->l4Offset, &ctx, key,
-                                         zone, commit, currentTime);
+                                         zone, commit, currentTime,
+                                         &entryCreated);
     }
 
     if (entry && mark) {
@@ -674,6 +684,10 @@ OvsCtExecute_(PNET_BUFFER_LIST curNbl,
         if (status != NDIS_STATUS_SUCCESS) {
             OVS_LOG_ERROR("Error while parsing the FTP packet");
         }
+    }
+
+    if (entryCreated && entry) {
+        OvsPostCtEventEntry(entry, OVS_EVENT_CT_NEW);
     }
 
     NdisReleaseRWLock(ovsConntrackLockObj, &lockState);
