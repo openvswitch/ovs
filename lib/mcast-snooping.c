@@ -942,3 +942,34 @@ mcast_snooping_wait(struct mcast_snooping *ms)
     mcast_snooping_wait__(ms);
     ovs_rwlock_unlock(&ms->rwlock);
 }
+
+void
+mcast_snooping_flush_bundle(struct mcast_snooping *ms, void *port)
+{
+    struct mcast_group *g, *next_g;
+    struct mcast_mrouter_bundle *m, *next_m;
+
+    if (!mcast_snooping_enabled(ms)) {
+        return;
+    }
+
+    ovs_rwlock_wrlock(&ms->rwlock);
+    LIST_FOR_EACH_SAFE (g, next_g, group_node, &ms->group_lru) {
+        if (mcast_group_delete_bundle(ms, g, port)) {
+            ms->need_revalidate = true;
+
+            if (!mcast_group_has_bundles(g)) {
+                mcast_snooping_flush_group__(ms, g);
+            }
+        }
+    }
+
+    LIST_FOR_EACH_SAFE (m, next_m, mrouter_node, &ms->mrouter_lru) {
+        if (m->port == port) {
+            mcast_snooping_flush_mrouter(m);
+            ms->need_revalidate = true;
+        }
+    }
+
+    ovs_rwlock_unlock(&ms->rwlock);
+}
