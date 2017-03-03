@@ -130,7 +130,7 @@ id_pool_alloc_id(struct id_pool *pool, uint32_t *id_)
 found_free_id:
     id_pool_add(pool, id);
 
-    if (id < pool->base + pool->n_ids) {
+    if (id <= pool->base + pool->n_ids) {
         pool->next_free_id = id + 1;
     } else {
         pool->next_free_id = pool->base;
