@@ -2948,6 +2948,7 @@ bundle_set(struct ofproto *ofproto_, void *aux,
      * everything on this port and force flow revalidation. */
     if (need_flush) {
         bundle_flush_macs(bundle, false);
+        mcast_snooping_flush_bundle(ofproto->ms, bundle);
     }
 
     return 0;
