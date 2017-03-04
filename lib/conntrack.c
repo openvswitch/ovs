@@ -568,14 +568,14 @@ extract_l3_ipv6(struct conn_key *key, const void *data, size_t size,
                 const char **new_data)
 {
     const struct ovs_16aligned_ip6_hdr *ip6 = data;
-    uint8_t nw_proto = ip6->ip6_nxt;
-    uint8_t nw_frag = 0;
-
     if (new_data) {
         if (OVS_UNLIKELY(size < sizeof *ip6)) {
             return false;
         }
     }
+
+    uint8_t nw_proto = ip6->ip6_nxt;
+    uint8_t nw_frag = 0;
 
     data = ip6 + 1;
     size -=  sizeof *ip6;
@@ -623,8 +623,11 @@ check_l4_tcp(const struct conn_key *key, const void *data, size_t size,
              const void *l3)
 {
     const struct tcp_header *tcp = data;
-    size_t tcp_len = TCP_OFFSET(tcp->tcp_ctl) * 4;
+    if (size < sizeof *tcp) {
+        return false;
+    }
 
+    size_t tcp_len = TCP_OFFSET(tcp->tcp_ctl) * 4;
     if (OVS_UNLIKELY(tcp_len < TCP_HEADER_LEN || tcp_len > size)) {
         return false;
     }
@@ -637,8 +640,11 @@ check_l4_udp(const struct conn_key *key, const void *data, size_t size,
              const void *l3)
 {
     const struct udp_header *udp = data;
-    size_t udp_len = ntohs(udp->udp_len);
+    if (size < sizeof *udp) {
+        return false;
+    }
 
+    size_t udp_len = ntohs(udp->udp_len);
     if (OVS_UNLIKELY(udp_len < UDP_HEADER_LEN || udp_len > size)) {
         return false;
     }
