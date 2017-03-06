@@ -71,10 +71,10 @@ typedef struct GeneveOptionHdr {
     UINT32   optionClass:16;
     /* Format of data contained in the option. */
     UINT32   type:8;
-    /* Reserved. */
-    UINT32   reserved:3;
     /* Length of option in int32 excluding the option header. */
     UINT32   length:5;
+    /* Reserved. */
+    UINT32   reserved:3;
 } GeneveOptionHdr;
 
 #define GENEVE_CRIT_OPT_TYPE (1 << 7)
