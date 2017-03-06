@@ -5,6 +5,11 @@ Post-v2.7.0
        `egress_pkt_mark` OVSDB option.
    - EMC insertion probability is reduced to 1% and is configurable via
      the new 'other_config:emc-insert-inv-prob' option.
+   - DPDK:
+     * DPDK log messages redirected to OVS logging subsystem.
+       Log level can be changed in a usual OVS way using
+       'ovs-appctl vlog' commands for 'dpdk' module. Lower bound
+       still can be configured via extra arguments for DPDK EAL.
 
 v2.7.0 - xx xxx xxxx
 ---------------------

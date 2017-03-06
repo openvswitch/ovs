@@ -17,10 +17,12 @@
 #include <config.h>
 #include "dpdk.h"
 
+#include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <getopt.h>
 
+#include <rte_log.h>
 #include <rte_memzone.h>
 #ifdef DPDK_PDUMP
 #include <rte_mempool.h>
@@ -35,6 +37,8 @@
 #include "smap.h"
 
 VLOG_DEFINE_THIS_MODULE(dpdk);
+
+static FILE *log_stream = NULL;       /* Stream for DPDK log redirection */
 
 static char *vhost_sock_dir = NULL;   /* Location of vhost-user sockets */
 
@@ -262,6 +266,42 @@ argv_release(char **dpdk_argv, char **dpdk_argv_release, size_t dpdk_argc)
     free(dpdk_argv);
 }
 
+static ssize_t
+dpdk_log_write(void *c OVS_UNUSED, const char *buf, size_t size)
+{
+    char *str = xmemdup0(buf, size);
+
+    switch (rte_log_cur_msg_loglevel()) {
+        case RTE_LOG_DEBUG:
+            VLOG_DBG("%s", str);
+            break;
+        case RTE_LOG_INFO:
+        case RTE_LOG_NOTICE:
+            VLOG_INFO("%s", str);
+            break;
+        case RTE_LOG_WARNING:
+            VLOG_WARN("%s", str);
+            break;
+        case RTE_LOG_ERR:
+            VLOG_ERR("%s", str);
+            break;
+        case RTE_LOG_CRIT:
+        case RTE_LOG_ALERT:
+        case RTE_LOG_EMERG:
+            VLOG_EMER("%s", str);
+            break;
+        default:
+            OVS_NOT_REACHED();
+    }
+
+    free(str);
+    return size;
+}
+
+static cookie_io_functions_t dpdk_log_func = {
+    .write = dpdk_log_write,
+};
+
 static void
 dpdk_init__(const struct smap *ovs_other_config)
 {
@@ -272,6 +312,14 @@ dpdk_init__(const struct smap *ovs_other_config)
     int err = 0;
     cpu_set_t cpuset;
     char *sock_dir_subcomponent;
+
+    log_stream = fopencookie(NULL, "w+", dpdk_log_func);
+    if (log_stream == NULL) {
+        VLOG_ERR("Can't redirect DPDK log: %s.", ovs_strerror(errno));
+    } else {
+        setbuf(log_stream, NULL);
+        rte_openlog_stream(log_stream);
+    }
 
     if (process_vhost_flags("vhost-sock-dir", ovs_rundir(),
                             NAME_MAX, ovs_other_config,
