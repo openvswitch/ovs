@@ -183,6 +183,7 @@ Kyle Upton                      kupton@baymicrosystems.com
 Lance Richardson                lrichard@redhat.com
 Lars Kellogg-Stedman            lars@redhat.com
 Lei Huang                       huang.f.lei@gmail.com
+Leif Madsen                     lmadsen@redhat.com
 Leo Alterman                    lalterman@nicira.com
 Lilijun                         jerry.lilijun@huawei.com
 Linda Sun                       lsun@vmware.com

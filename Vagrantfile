@@ -9,7 +9,7 @@ $bootstrap_fedora = <<SCRIPT
 dnf -y update
 dnf -y install autoconf automake openssl-devel libtool \
                python-devel python3-devel \
-               python-twisted-core python-zope-interface \
+               python-twisted python-zope-interface \
                desktop-file-utils groff graphviz rpmdevtools nc curl \
                wget python-six pyftpdlib checkpolicy selinux-policy-devel \
                libcap-ng-devel kernel-devel-`uname -r` ethtool python-tftpy
@@ -80,8 +80,8 @@ PACKAGE_VERSION=`autom4te -l Autoconf -t 'AC_INIT:$2' /vagrant/configure.ac`
 make && make dist
 rpmdev-setuptree
 cp openvswitch-$PACKAGE_VERSION.tar.gz $HOME/rpmbuild/SOURCES
-rpmbuild --bb -D "kversion `uname -r`" /vagrant/rhel/openvswitch-kmod-rhel6.spec
-rpmbuild --bb --without check /vagrant/rhel/openvswitch.spec
+rpmbuild --bb -D "kversion `uname -r`" /vagrant/rhel/openvswitch-kmod-fedora.spec
+rpmbuild --bb --without check /vagrant/rhel/openvswitch-fedora.spec
 rpm -e openvswitch
 rpm -ivh $HOME/rpmbuild/RPMS/x86_64/openvswitch-$PACKAGE_VERSION-1.x86_64.rpm
 systemctl enable openvswitch
