@@ -496,6 +496,27 @@ but the packets are actually being output in VLAN 123.  Why?
 
         $ ovs-ofctl add-flow br0 dl_vlan=123,actions=mod_vlan_vid:456,output:1
 
+    See also the following question.
+
+Q: I added a flow to a redirect packets for TCP port 80 to port 443,
+like so::
+
+    $ ovs-ofctl add-flow br0 tcp,tcp_dst=123,actions=mod_tp_dst:443
+
+but the packets are getting dropped instead.  Why?
+
+    A: This set of actions does change the TCP destination port to 443, but
+    then it does nothing more.  It doesn't, for example, say to continue to
+    another flow table or to output the packet.  Therefore, the packet is
+    dropped.
+
+    To solve the problem, add an action that does something with the modified
+    packet.  For example::
+
+        $ ovs-ofctl add-flow br0 tcp,tcp_dst=123,actions=mod_tp_dst:443,normal
+
+    See also the preceding question.
+
 Q: The "learn" action can't learn the action I want, can you improve it?
 
     A: By itself, the "learn" action can only put two kinds of actions into the
