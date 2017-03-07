@@ -794,3 +794,39 @@ BFD_VSCTL_LIST_IFACE([p1], ["s/^.*flap_count=\(.*\), forwarding.*$/\1/p"], ["1"]
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([bfd - check that BFD works together with RSTP])
+# Create br0 with interfaces p1
+#    and br1 with interfaces p2
+# with p1 and p2 connected via unix domain socket
+OVS_VSWITCHD_START(
+  [set bridge br0 rstp_enable=true -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy -- \
+   set bridge br1 rstp_enable=true -- \
+])
+
+AT_CHECK([ovs-vsctl add-port br0 p1 -- \
+   set interface p1 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock bfd:enable=true -- \
+])
+
+AT_CHECK([ovs-vsctl add-port br1 p2 -- \
+   set interface p2 type=dummy options:stream=unix:$OVS_RUNDIR/p0.sock bfd:enable=true -- \
+])
+
+ovs-appctl time/stop
+ovs-appctl time/warp 4100 100
+
+# Forwarding should be true
+BFD_CHECK([p1], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+BFD_CHECK([p2], [true], [false], [none], [up], [No Diagnostic], [none], [up], [No Diagnostic])
+
+# Disable bfd on p2, forwarding on p1 should go to false
+AT_CHECK([ovs-vsctl set interface p2 bfd:enable=false])
+
+ovs-appctl time/warp 5000 100
+BFD_CHECK([p1], [false], [false], [none], [down], [Control Detection Time Expired], [none], [down], [No Diagnostic])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
