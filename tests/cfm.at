@@ -283,3 +283,39 @@ CFM_VSCTL_LIST_IFACE([p1], [cfm_fault_status], [cfm_fault_status    : [[]]])
 
 OVS_VSWITCHD_STOP
 AT_CLEANUP
+
+AT_SETUP([cfm - check that CFM works together with RSTP])
+# Create br0 with interfaces p1
+#    and br1 with interfaces p2
+# with p1 and p2 connected via unix domain socket
+OVS_VSWITCHD_START(
+  [set bridge br0 rstp_enable=true -- \
+   add-br br1 -- \
+   set bridge br1 other-config:hwaddr=aa:66:aa:66:00:00 -- \
+   set bridge br1 datapath-type=dummy -- \
+   set bridge br1 rstp_enable=true -- \
+])
+
+AT_CHECK([ovs-vsctl add-port br0 p0 -- \
+   set interface p0 type=dummy options:pstream=punix:$OVS_RUNDIR/p0.sock cfm_mpid=1 other_config:cfm_interval=300 other_config:cfm_extended=true -- \
+])
+
+AT_CHECK([ovs-vsctl add-port br1 p1 -- \
+   set interface p1 type=dummy options:stream=unix:$OVS_RUNDIR/p0.sock cfm_mpid=2 other_config:cfm_interval=300 other_config:cfm_extended=true -- \
+])
+
+ovs-appctl time/stop
+ovs-appctl time/warp 10100 100
+
+# Forwarding should be true
+CFM_CHECK_EXTENDED([p0], [1], [100], [up], [up], [300ms], [2], [up])
+CFM_CHECK_EXTENDED([p1], [2], [100], [up], [up], [300ms], [1], [up])
+
+# Disable cfm on p1, cfm should receive fault.
+AT_CHECK([ovs-vsctl set interface p1 other_config:cfm_extended=false])
+
+ovs-appctl time/warp 5000 100
+CFM_CHECK_EXTENDED_FAULT([p0], [1], [recv], [0], [up], [up], [300ms])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
