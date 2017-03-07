@@ -302,7 +302,7 @@ stp_create(const char *name, stp_identifier bridge_id,
 
     stp_stop_timer(&stp->tcn_timer);
     stp_stop_timer(&stp->topology_change_timer);
-    stp_start_timer(&stp->hello_timer, 0);
+    stp_start_timer(&stp->hello_timer, stp->hello_time);
 
     stp->send_bpdu = send_bpdu;
     stp->aux = aux;
