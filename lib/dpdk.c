@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2015, 2016 Nicira, Inc.
+ * Copyright (c) 2014, 2015, 2016, 2017 Nicira, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -424,11 +424,7 @@ dpdk_init(const struct smap *ovs_other_config)
             ovsthread_once_done(&once_enable);
         }
     } else {
-        static struct ovsthread_once once_disable = OVSTHREAD_ONCE_INITIALIZER;
-        if (ovsthread_once_start(&once_disable)) {
-            VLOG_INFO("DPDK Disabled - Use other_config:dpdk-init to enable");
-            ovsthread_once_done(&once_disable);
-        }
+        VLOG_INFO_ONCE("DPDK Disabled - Use other_config:dpdk-init to enable");
     }
 }
 
