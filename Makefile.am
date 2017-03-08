@@ -184,11 +184,6 @@ CLEAN_LOCAL += clean-pycov
 
 # If we're checked out from a Git repository, make sure that every
 # file that is in Git is distributed.
-#
-# We only enable this check when GNU make is in use because the
-# Makefile in datapath/linux, needed to get the list of files to
-# distribute, requires GNU make extensions.
-if GNU_MAKE
 ALL_LOCAL += dist-hook-git
 dist-hook-git: distfiles
 	@if test -e $(srcdir)/.git && (git --version) >/dev/null 2>&1; then \
@@ -220,7 +215,6 @@ distfiles: Makefile
 	      -e "s|^$$topsrcdirstrip/|$(top_builddir)/|;t" | \
 	  LC_ALL=C sort -u > $@
 CLEANFILES += distfiles
-endif
 .PHONY: dist-hook-git
 
 # Check that every .c file includes <config.h>.
