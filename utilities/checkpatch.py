@@ -182,7 +182,7 @@ def ovs_checkpatch_parse(text):
                               re.I | re.M | re.S)
     skip_line_length_check = False
 
-    for line in text.split('\n'):
+    for line in text.decode().split('\n'):
         if current_file != previous_file:
             previous_file = current_file
             if any([fmt in current_file for fmt in line_length_blacklist]):
