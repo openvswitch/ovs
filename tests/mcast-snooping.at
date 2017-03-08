@@ -181,6 +181,8 @@ AT_CHECK([
     -- set Interface p2 type=dummy other-config:hwaddr=aa:55:aa:55:00:02 ofport_request=2 \
 ], [0])
 
+ovs-appctl time/stop
+
 # send report packets
 AT_CHECK([
     ovs-appctl netdev-dummy/receive p1  \
