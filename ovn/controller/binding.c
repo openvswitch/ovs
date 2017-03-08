@@ -86,8 +86,9 @@ get_local_iface_ids(const struct ovsrec_bridge *br_int,
 
             iface_rec = port_rec->interfaces[j];
             iface_id = smap_get(&iface_rec->external_ids, "iface-id");
+            int64_t ofport = iface_rec->n_ofport ? *iface_rec->ofport : 0;
 
-            if (iface_id) {
+            if (iface_id && ofport > 0) {
                 shash_add(lport_to_iface, iface_id, iface_rec);
                 sset_add(local_lports, iface_id);
             }

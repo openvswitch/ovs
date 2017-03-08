@@ -518,6 +518,7 @@ main(int argc, char *argv[])
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_interface_col_name);
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_interface_col_type);
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_interface_col_options);
+    ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_interface_col_ofport);
     ovsdb_idl_add_table(ovs_idl_loop.idl, &ovsrec_table_port);
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_port_col_name);
     ovsdb_idl_add_column(ovs_idl_loop.idl, &ovsrec_port_col_interfaces);
