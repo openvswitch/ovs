@@ -1,4 +1,4 @@
-# Copyright (C) 2007-2016 Nicira, Inc.
+# Copyright (C) 2007-2017 Nicira, Inc.
 #
 # Copying and distribution of this file, with or without modification,
 # are permitted in any medium without royalty provided the copyright
@@ -203,6 +203,11 @@ dist-hook-git: distfiles
 	    cat missing-distfiles; \
 	    exit 1; \
 	  fi; \
+	  if LC_ALL=C grep '\.gitignore$$' all-distfiles; then \
+	    echo "See above for list of files that are distributed but"; \
+	    echo "should not be."; \
+	    exit 1; \
+	  fi \
 	fi
 CLEANFILES += all-distfiles all-gitfiles missing-distfiles
 # The following is based on commands for the Automake "distdir" target.
