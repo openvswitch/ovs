@@ -52,13 +52,13 @@ function install_kernel()
 function install_dpdk()
 {
     if [ -n "$DPDK_GIT" ]; then
-        git clone $DPDK_GIT dpdk-$1
-        cd dpdk-$1
-        git checkout v$1
+        git clone $DPDK_GIT dpdk-stable-$1
+        cd dpdk-stable-$1
+        git checkout tags/v$1
     else
-        wget http://www.dpdk.org/browse/dpdk/snapshot/dpdk-$1.tar.gz
+        wget http://fast.dpdk.org/rel/dpdk-$1.tar.gz
         tar xzvf dpdk-$1.tar.gz > /dev/null
-        cd dpdk-$1
+        cd dpdk-stable-$1
     fi
     find ./ -type f | xargs sed -i 's/max-inline-insns-single=100/max-inline-insns-single=400/'
     echo 'CONFIG_RTE_BUILD_FPIC=y' >>config/common_linuxapp
@@ -80,7 +80,7 @@ fi
 
 if [ "$DPDK" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="16.07"
+        DPDK_VER="16.07.2"
     fi
     install_dpdk $DPDK_VER
     if [ "$CC" = "clang" ]; then

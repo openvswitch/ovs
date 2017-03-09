@@ -256,12 +256,12 @@ A: The following table lists the DPDK version against which the
    given versions of Open vSwitch will successfully build.
 
 | Open vSwitch | DPDK
-|:------------:|:-----:
+|:------------:|:-------:
 |    2.2.x     | 1.6
 |    2.3.x     | 1.6
 |    2.4.x     | 2.0
 |    2.5.x     | 2.2
-|    2.6.x     | 16.07
+|    2.6.x     | 16.07.2
 
 ### Q: I get an error like this when I configure Open vSwitch:
 

@@ -46,7 +46,7 @@ for DPDK and OVS.
     For IVSHMEM case, set `export DPDK_TARGET=x86_64-ivshmem-linuxapp-gcc`
 
     ```
-    export DPDK_DIR=/usr/src/dpdk-16.07
+    export DPDK_DIR=/usr/src/dpdk-stable-16.07.2
     export DPDK_BUILD=$DPDK_DIR/$DPDK_TARGET
     make install T=$DPDK_TARGET DESTDIR=install
     ```
@@ -342,7 +342,7 @@ For users wanting to do packet forwarding using kernel stack below are the steps
        cd /usr/src/cmdline_generator
        wget https://raw.githubusercontent.com/netgroup-polito/un-orchestrator/master/orchestrator/compute_controller/plugins/kvm-libvirt/cmdline_generator/cmdline_generator.c
        wget https://raw.githubusercontent.com/netgroup-polito/un-orchestrator/master/orchestrator/compute_controller/plugins/kvm-libvirt/cmdline_generator/Makefile
-       export RTE_SDK=/usr/src/dpdk-16.07
+       export RTE_SDK=/usr/src/dpdk-stable-16.07.2
        export RTE_TARGET=x86_64-ivshmem-linuxapp-gcc
        make
        ./build/cmdline_generator -m -p dpdkr0 XXX
@@ -366,7 +366,7 @@ For users wanting to do packet forwarding using kernel stack below are the steps
        mount -t hugetlbfs nodev /dev/hugepages (if not already mounted)
 
        # Build the DPDK ring application in the VM
-       export RTE_SDK=/root/dpdk-16.07
+       export RTE_SDK=/root/dpdk-stable-16.07.2
        export RTE_TARGET=x86_64-ivshmem-linuxapp-gcc
        make
 
