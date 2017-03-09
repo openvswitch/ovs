@@ -212,6 +212,7 @@ Michael Arnaldi                 arnaldimichael@gmail.com
 Michal Weglicki                 michalx.weglicki@intel.com
 Mickey Spiegel                  mickeys.dev@gmail.com
 Mijo Safradin                   mijo@linux.vnet.ibm.com
+Mika Vaisanen                   mika.vaisanen@gmail.com
 Minoru TAKAHASHI                takahashi.minoru7@gmail.com
 Murphy McCauley                 murphy.mccauley@gmail.com
 Natasha Gude                    natasha@nicira.com
