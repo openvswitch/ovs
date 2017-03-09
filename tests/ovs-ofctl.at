@@ -1213,9 +1213,9 @@ NXM_NX_REG0(a0e0d050)
 
 # Connection tracking fields,
 dnl
-dnl When re-serialising, bits 16-31 are wildcarded, because current OVS userspace
+dnl When re-serialising, bits 8-31 are wildcarded, because current OVS userspace
 dnl doesn't understand (or store) those bits.
-NXM_OF_ETH_TYPE(0800), NXM_NX_CT_STATE_W(00000020/0000ffff)
+NXM_OF_ETH_TYPE(0800), NXM_NX_CT_STATE_W(00000020/000000ff)
 nx_pull_match() returned error OFPBMC_BAD_VALUE
 NXM_OF_ETH_TYPE(0800), NXM_NX_CT_STATE_W(00000020/00000020)
 NXM_OF_ETH_TYPE(0800), NXM_NX_CT_STATE_W(00000020/000000f0)

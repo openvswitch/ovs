@@ -340,8 +340,8 @@ match_set_ct_state(struct match *match, uint32_t ct_state)
 void
 match_set_ct_state_masked(struct match *match, uint32_t ct_state, uint32_t mask)
 {
-    match->flow.ct_state = ct_state & mask & UINT16_MAX;
-    match->wc.masks.ct_state = mask & UINT16_MAX;
+    match->flow.ct_state = ct_state & mask & UINT8_MAX;
+    match->wc.masks.ct_state = mask & UINT8_MAX;
 }
 
 void
@@ -1111,7 +1111,7 @@ match_format(const struct match *match, struct ds *s, int priority)
     }
 
     if (wc->masks.ct_state) {
-        if (wc->masks.ct_state == UINT16_MAX) {
+        if (wc->masks.ct_state == UINT8_MAX) {
             ds_put_format(s, "%sct_state=%s", colors.param, colors.end);
             if (f->ct_state) {
                 format_flags(s, ct_state_to_string, f->ct_state, '|');
@@ -1120,7 +1120,7 @@ match_format(const struct match *match, struct ds *s, int priority)
             }
         } else {
             format_flags_masked(s, "ct_state", ct_state_to_string,
-                                f->ct_state, wc->masks.ct_state, UINT16_MAX);
+                                f->ct_state, wc->masks.ct_state, UINT8_MAX);
         }
         ds_put_char(s, ',');
     }

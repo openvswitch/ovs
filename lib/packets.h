@@ -99,7 +99,7 @@ struct pkt_metadata {
                                    action. */
     uint32_t skb_priority;      /* Packet priority for QoS. */
     uint32_t pkt_mark;          /* Packet mark. */
-    uint16_t ct_state;          /* Connection state. */
+    uint8_t  ct_state;          /* Connection state. */
     uint16_t ct_zone;           /* Connection zone. */
     uint32_t ct_mark;           /* Connection mark. */
     ovs_u128 ct_label;          /* Connection label. */

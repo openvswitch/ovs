@@ -91,7 +91,8 @@ struct flow {
                                  * computation is opaque to the user space. */
     union flow_in_port in_port; /* Input port.*/
     uint32_t recirc_id;         /* Must be exact match. */
-    uint16_t ct_state;          /* Connection tracking state. */
+    uint8_t ct_state;           /* Connection tracking state. */
+    uint8_t pad0;
     uint16_t ct_zone;           /* Connection tracking zone. */
     uint32_t ct_mark;           /* Connection mark.*/
     uint8_t pad1[4];            /* Pad to 64 bits. */

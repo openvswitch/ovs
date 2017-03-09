@@ -3996,7 +3996,7 @@ check_mask(struct ofproto_dpif *ofproto, const struct miniflow *flow)
     uint32_t ct_mark;
 
     support = &ofproto->backer->support.odp;
-    ct_state = MINIFLOW_GET_U16(flow, ct_state);
+    ct_state = MINIFLOW_GET_U8(flow, ct_state);
     if (support->ct_state && support->ct_zone && support->ct_mark
         && support->ct_label && support->ct_state_nat) {
         return ct_state & CS_UNSUPPORTED_MASK ? OFPERR_OFPBMC_BAD_MASK : 0;
