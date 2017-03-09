@@ -545,6 +545,6 @@ lib/ovs-fields.7: $(srcdir)/build-aux/extract-ofp-fields include/openvswitch/met
 	$(AM_V_GEN)PYTHONIOENCODING=utf8 $(run_python) $< \
             --ovs-version=$(VERSION) ovs-fields \
 	    $(srcdir)/include/openvswitch/meta-flow.h \
-            $(srcdir)/lib/meta-flow.xml | preconv -e utf-8 > $@.tmp
+            $(srcdir)/lib/meta-flow.xml > $@.tmp
 	$(AM_V_at)mv $@.tmp $@
 EXTRA_DIST += lib/meta-flow.xml
