@@ -14,4 +14,12 @@ static inline bool rpl_nf_ct_get_tuplepr(const struct sk_buff *skb,
 #define nf_ct_get_tuplepr rpl_nf_ct_get_tuplepr
 #endif
 
+#ifndef HAVE_NF_CT_SET
+static inline void
+nf_ct_set(struct sk_buff *skb, struct nf_conn *ct, enum ip_conntrack_info info)
+{
+       skb->nfct = &ct->ct_general;
+       skb->nfctinfo = info;
+}
+#endif
 #endif /* _NF_CONNTRACK_WRAPPER_H */
