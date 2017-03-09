@@ -2279,11 +2279,9 @@ build_dhcpv4_action(struct ovn_port *op, ovs_be32 offer_ip,
         &op->nbsp->dhcpv4_options->options, "server_mac");
     const char *lease_time = smap_get(
         &op->nbsp->dhcpv4_options->options, "lease_time");
-    const char *router = smap_get(
-            &op->nbsp->dhcpv4_options->options, "router");
 
-    if (!(server_ip && server_mac && lease_time && router)) {
-        /* "server_id", "server_mac", "lease_time" and "router" should be
+    if (!(server_ip && server_mac && lease_time)) {
+        /* "server_id", "server_mac" and "lease_time" should be
          * present in the dhcp_options. */
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
         VLOG_WARN_RL(&rl, "Required DHCPv4 options not defined for lport - %s",
@@ -2826,9 +2824,7 @@ build_acls(struct ovn_datapath *od, struct hmap *lflows)
                 &od->nbs->ports[i]->dhcpv4_options->options, "server_mac");
             const char *lease_time = smap_get(
                 &od->nbs->ports[i]->dhcpv4_options->options, "lease_time");
-            const char *router = smap_get(
-                &od->nbs->ports[i]->dhcpv4_options->options, "router");
-            if (server_id && server_mac && lease_time && router) {
+            if (server_id && server_mac && lease_time) {
                 struct ds match = DS_EMPTY_INITIALIZER;
                 const char *actions =
                     has_stateful ? "ct_commit; next;" : "next;";

@@ -13,6 +13,8 @@ Post-v2.7.0
    - The "learn" action now supports a "limit" option (see ovs-ofctl(8)).
    - New support for multiple VLANs (802.1ad or "QinQ"), including a new
      "dot1q-tunnel" port VLAN mode.
+   - OVN:
+     * Make the DHCPv4 router setting optional.
 
 v2.7.0 - 21 Feb 2017
 ---------------------
