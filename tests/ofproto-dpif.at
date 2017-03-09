@@ -8409,19 +8409,74 @@ add_of_ports br0 1 2
 
 AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
 
-dnl Allow new connections on p1->p2, but not on p2->p1.
+dnl Allow new UDP connections on p1 for dst port 2, drop everything else.
 AT_DATA([flows.txt], [dnl
 dnl Table 0
+dnl Store zone in reg4 and packet direction in reg3 (IN=1, OUT=2).
 dnl
 table=0,priority=100,arp,action=normal
-table=0,priority=10,in_port=1,udp,action=ct(commit,zone=0),controller
-table=0,priority=10,in_port=2,udp,action=ct(table=1,zone=0)
+table=0,priority=10,in_port=1,ip,action=set_field:1->reg4,set_field:1->reg3,ct(zone=NXM_NX_REG4[[0..15]],table=1)
+table=0,priority=10,in_port=2,ip,action=set_field:1->reg4,set_field:2->reg3,ct(zone=NXM_NX_REG4[[0..15]],table=1)
 table=0,priority=1,action=drop
 dnl
-dnl Table 1
+dnl Pass tracked traffic through ACL, drop everything else.
+dnl Non-REPLY/RELATED packets get the ACL lookup with the packet headers
+dnl in the actual packet direction in reg0 (IN=1, OUT=2).  REPLY packets
+dnl get the ACL lookup using the conntrack tuple and the inverted direction.
+dnl RELATED packets get ACL lookup using the conntrack tuple in the direction
+dnl of the master connection, as storted in ct_mark.
 dnl
-table=1,priority=10,in_port=2,ct_state=+trk+est-new,udp,action=controller
-table=1,priority=1,action=drop
+dnl Incoming non-related packet in the original direction (ACL IN)
+table=1 reg3=1, ip, ct_state=-rel-rpl+trk-inv action=set_field:1->reg0,resubmit(,3),goto_table:5
+dnl Incoming non-related reply packet (CT ACL OUT)
+table=1 reg3=1, ip, ct_state=-rel+rpl+trk-inv action=set_field:2->reg0,resubmit(,3,ct),goto_table:4
+dnl Outgoing non-related packet (ACL OUT)
+table=1 reg3=2, ip, ct_state=-rel-rpl+trk-inv action=set_field:2->reg0,resubmit(,3),goto_table:5
+dnl Outgoing non-related reply packet (CT ACL IN)
+table=1 reg3=2, ip, ct_state=-rel+rpl+trk-inv action=set_field:1->reg0,resubmit(,3,ct),goto_table:4
+dnl
+dnl Related packet (CT ACL in the direction of the master connection.)
+table=1 ip, ct_state=+rel+trk-inv, action=move:NXM_NX_CT_MARK[[]]->NXM_NX_REG0[[]],resubmit(,3,ct),goto_table:4
+dnl Drop everything else.
+table=1 priority=0, action=drop
+dnl
+dnl "ACL table"
+dnl
+dnl Stateful accept (1->reg2) all incoming (reg0=1) IP connections with
+dnl UDP destination port '2'.  Store rule ID (1234) in reg1, verdict
+dnl in reg2.
+table=3 priority=10, reg0=1, udp, udp_dst=2 action=set_field:1234->reg1,set_field:1->reg2
+dnl Stateless drop (0->reg2) everything else in both directions. (Rule ID: 1235)
+table=3 priority=0, action=set_field:1235->reg1,set_field:0->reg2
+dnl
+dnl Re-process stateful traffic that was not accepted by a stateful rule as
+dnl normal traffic in the current direction.  This should also delete the
+dnl now stale conntrack state, so that new state can be created in it's place.
+dnl
+dnl Stateful accepts go to next table.
+table=4 priority=100 reg2=1, action=goto_table:5
+dnl Everything else is reprocessed disregarding the CT state, using the actual
+dnl packet direction.
+table=4 priority=0 action=move:NXM_NX_REG3[[]]->NXM_NX_REG0[[]],resubmit(,3),goto_table:5
+dnl
+dnl "ACL verdict processing table."
+dnl
+dnl Handle stateful (reg2=1) / stateless (reg2=2) accepts and drops (reg2=0)
+dnl
+dnl Drop all non-accepted packets.
+table=5 reg2=0 priority=1000 action=drop
+dnl Commit new non-related IP connections.
+table=5 priority=10 reg2=1 ct_state=+new-rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,exec(move:NXM_NX_REG3[[0..31]]->NXM_NX_CT_MARK[[0..31]],move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
+dnl Commit new related connections in either direction, which inherit the mark
+dnl (the direction of the original direction master tuple) from the master
+dnl connection.
+table=5 priority=10 reg2=1 ct_state=+new+rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,exec(move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
+dnl Forward everything else, including stateless accepts.
+table=5 priority=0 action=goto_table:6
+dnl
+dnl "Forwarding table"
+dnl
+table=6 action=controller
 ])
 
 AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
@@ -8441,37 +8496,33 @@ OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 dnl Check this output. We only see the latter two packets, not the first.
-dnl Note that the first packet doesn't have the ct_state bits set. This
-dnl happens because the ct_state field is available only after recirc.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=6 cookie=0x0 total_len=42 ct_state=new|trk,ct_zone=1,ct_mark=0x1,ct_label=0x4d2000000000000000000000000,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,reg0=0x1,reg1=0x4d2,reg2=0x1,reg3=0x1,reg4=0x1,in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN (xid=0x0): table_id=6 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_zone=1,ct_mark=0x1,ct_label=0x4d2000000000000000000000000,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,reg0=0x1,reg1=0x4d2,reg2=0x1,reg3=0x2,reg4=0x1,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
 ])
 
 AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
 
 dnl OK, now start a second connection from port 1
-AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=3,dst=4)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=3,dst=2)'])
 
 dnl Now try a reply from port 2.
-AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=4,dst=3)'])
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=3)'])
 
 
 OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
 OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
 
 dnl Check this output. We should see both packets
-dnl Note that the first packet doesn't have the ct_state bits set. This
-dnl happens because the ct_state field is available only after recirc.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
-NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
-udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=3,tp_dst=4 udp_csum:e9d2
+NXT_PACKET_IN (xid=0x0): table_id=6 cookie=0x0 total_len=42 ct_state=new|trk,ct_zone=1,ct_mark=0x1,ct_label=0x4d2000000000000000000000000,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=3,ct_tp_dst=2,reg0=0x1,reg1=0x4d2,reg2=0x1,reg3=0x1,reg4=0x1,in_port=1 (via action) data_len=42 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=3,tp_dst=2 udp_csum:e9d4
 dnl
-NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=3,ct_tp_dst=4,in_port=2 (via action) data_len=42 (unbuffered)
-udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4,tp_dst=3 udp_csum:e9d2
+NXT_PACKET_IN (xid=0x0): table_id=6 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_zone=1,ct_mark=0x1,ct_label=0x4d2000000000000000000000000,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=3,ct_tp_dst=2,reg0=0x1,reg1=0x4d2,reg2=0x1,reg3=0x2,reg4=0x1,in_port=2 (via action) data_len=42 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=3 udp_csum:e9d4
 ])
 
 OVS_VSWITCHD_STOP

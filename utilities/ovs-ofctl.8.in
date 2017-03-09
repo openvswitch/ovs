@@ -963,10 +963,22 @@ only known to be implemented by Open vSwitch:
 .
 .IP \fBresubmit\fB:\fIport\fR
 .IQ \fBresubmit\fB(\fR[\fIport\fR]\fB,\fR[\fItable\fR]\fB)
+.IQ \fBresubmit\fB(\fR[\fIport\fR]\fB,\fR[\fItable\fR]\fB,ct)
 Re-searches this OpenFlow flow table (or the table whose number is
 specified by \fItable\fR) with the \fBin_port\fR field replaced by
-\fIport\fR (if \fIport\fR is specified) and executes the actions
-found, if any, in addition to any other actions in this flow entry.
+\fIport\fR (if \fIport\fR is specified) and the packet 5-tuple fields
+swapped with the corresponding conntrack original direction tuple
+fields (if \fBct\fR is specified, see \fBct_nw_src\fR above), and
+executes the actions found, if any, in addition to any other actions
+in this flow entry.  The \fBin_port\fR and swapped 5-tuple fields are
+restored immediately after the search, before any actions are
+executed.
+.IP
+The \fBct\fR option requires a valid connection tracking state as a
+match prerequisite in the flow where this action is placed.  Examples
+of valid connection tracking state matches include
+\fBct_state=+new\fR, \fBct_state=+est\fR, \fBct_state=+rel\fR, and
+\fBct_state=+trk-inv\fR.
 .IP
 Recursive \fBresubmit\fR actions are obeyed up to
 implementation-defined limits:
@@ -991,7 +1003,8 @@ exception: \fBresubmit\fR from table \fIx\fR to any table \fIy\fR >
 \fIx\fR does not count against the recursion limit.
 .RE
 .IP
-Open vSwitch before 1.2.90 did not support \fItable\fR.
+Open vSwitch before 1.2.90 did not support \fItable\fR.  Open vSwitch
+before 2.7 did not support \fBct\fR.
 .
 .IP \fBset_tunnel\fB:\fIid\fR
 .IQ \fBset_tunnel64\fB:\fIid\fR

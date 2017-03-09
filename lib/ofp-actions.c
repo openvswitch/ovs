@@ -265,6 +265,8 @@ enum ofp_raw_action_type {
     NXAST_RAW_RESUBMIT,
     /* NX1.0+(14): struct nx_action_resubmit. */
     NXAST_RAW_RESUBMIT_TABLE,
+    /* NX1.0+(44): struct nx_action_resubmit. */
+    NXAST_RAW_RESUBMIT_TABLE_CT,
 
     /* NX1.0+(2): uint32_t. */
     NXAST_RAW_SET_TUNNEL,
@@ -3852,19 +3854,20 @@ format_FIN_TIMEOUT(const struct ofpact_fin_timeout *a, struct ds *s)
     ds_put_format(s, "%s)%s", colors.paren, colors.end);
 }
 
-/* Action structures for NXAST_RESUBMIT and NXAST_RESUBMIT_TABLE.
+/* Action structures for NXAST_RESUBMIT, NXAST_RESUBMIT_TABLE, and
+ * NXAST_RESUBMIT_TABLE_CT.
  *
  * These actions search one of the switch's flow tables:
  *
- *    - For NXAST_RESUBMIT_TABLE only, if the 'table' member is not 255, then
- *      it specifies the table to search.
+ *    - For NXAST_RESUBMIT_TABLE and NXAST_RESUBMIT_TABLE_CT, if the
+ *      'table' member is not 255, then it specifies the table to search.
  *
- *    - Otherwise (for NXAST_RESUBMIT_TABLE with a 'table' of 255, or for
- *      NXAST_RESUBMIT regardless of 'table'), it searches the current flow
- *      table, that is, the OpenFlow flow table that contains the flow from
- *      which this action was obtained.  If this action did not come from a
- *      flow table (e.g. it came from an OFPT_PACKET_OUT message), then table 0
- *      is the current table.
+ *    - Otherwise (for NXAST_RESUBMIT_TABLE or NXAST_RESUBMIT_TABLE_CT with a
+ *      'table' of 255, or for NXAST_RESUBMIT regardless of 'table'), it
+ *      searches the current flow table, that is, the OpenFlow flow table that
+ *      contains the flow from which this action was obtained.  If this action
+ *      did not come from a flow table (e.g. it came from an OFPT_PACKET_OUT
+ *      message), then table 0 is the current table.
  *
  * The flow table lookup uses a flow that may be slightly modified from the
  * original lookup:
@@ -3872,9 +3875,12 @@ format_FIN_TIMEOUT(const struct ofpact_fin_timeout *a, struct ds *s)
  *    - For NXAST_RESUBMIT, the 'in_port' member of struct nx_action_resubmit
  *      is used as the flow's in_port.
  *
- *    - For NXAST_RESUBMIT_TABLE, if the 'in_port' member is not OFPP_IN_PORT,
- *      then its value is used as the flow's in_port.  Otherwise, the original
- *      in_port is used.
+ *    - For NXAST_RESUBMIT_TABLE and NXAST_RESUBMIT_TABLE_CT, if the 'in_port'
+ *      member is not OFPP_IN_PORT, then its value is used as the flow's
+ *      in_port.  Otherwise, the original in_port is used.
+ *
+ *    - For NXAST_RESUBMIT_TABLE_CT the Conntrack 5-tuple fields are used as
+ *      the packets IP header fields during the lookup.
  *
  *    - If actions that modify the flow (e.g. OFPAT_SET_VLAN_VID) precede the
  *      resubmit action, then the flow is updated with the new values.
@@ -3907,11 +3913,12 @@ format_FIN_TIMEOUT(const struct ofpact_fin_timeout *a, struct ds *s)
  *      a total limit of 4,096 resubmits per flow translation (earlier versions
  *      did not impose any total limit).
  *
- * NXAST_RESUBMIT ignores 'table' and 'pad'.  NXAST_RESUBMIT_TABLE requires
- * 'pad' to be all-bits-zero.
+ * NXAST_RESUBMIT ignores 'table' and 'pad'.  NXAST_RESUBMIT_TABLE and
+ * NXAST_RESUBMIT_TABLE_CT require 'pad' to be all-bits-zero.
  *
  * Open vSwitch 1.0.1 and earlier did not support recursion.  Open vSwitch
- * before 1.2.90 did not support NXAST_RESUBMIT_TABLE.
+ * before 1.2.90 did not support NXAST_RESUBMIT_TABLE.  Open vSwitch before
+ * 2.8.0 did not support NXAST_RESUBMIT_TABLE_CT.
  */
 struct nx_action_resubmit {
     ovs_be16 type;                  /* OFPAT_VENDOR. */
@@ -3956,6 +3963,21 @@ decode_NXAST_RAW_RESUBMIT_TABLE(const struct nx_action_resubmit *nar,
     return 0;
 }
 
+static enum ofperr
+decode_NXAST_RAW_RESUBMIT_TABLE_CT(const struct nx_action_resubmit *nar,
+                                   enum ofp_version ofp_version OVS_UNUSED,
+                                   struct ofpbuf *out)
+{
+    enum ofperr error = decode_NXAST_RAW_RESUBMIT_TABLE(nar, ofp_version, out);
+    if (error) {
+        return error;
+    }
+    struct ofpact_resubmit *resubmit = out->header;
+    resubmit->ofpact.raw = NXAST_RAW_RESUBMIT_TABLE_CT;
+    resubmit->with_ct_orig = true;
+    return 0;
+}
+
 static void
 encode_RESUBMIT(const struct ofpact_resubmit *resubmit,
                 enum ofp_version ofp_version OVS_UNUSED, struct ofpbuf *out)
@@ -3963,10 +3985,12 @@ encode_RESUBMIT(const struct ofpact_resubmit *resubmit,
     uint16_t in_port = ofp_to_u16(resubmit->in_port);
 
     if (resubmit->table_id == 0xff
-        && resubmit->ofpact.raw != NXAST_RAW_RESUBMIT_TABLE) {
+        && resubmit->ofpact.raw == NXAST_RAW_RESUBMIT) {
         put_NXAST_RESUBMIT(out, in_port);
     } else {
-        struct nx_action_resubmit *nar = put_NXAST_RESUBMIT_TABLE(out);
+        struct nx_action_resubmit *nar;
+        nar = resubmit->with_ct_orig
+            ? put_NXAST_RESUBMIT_TABLE_CT(out) : put_NXAST_RESUBMIT_TABLE(out);
         nar->table = resubmit->table_id;
         nar->in_port = htons(in_port);
     }
@@ -3977,7 +4001,7 @@ parse_RESUBMIT(char *arg, struct ofpbuf *ofpacts,
                enum ofputil_protocol *usable_protocols OVS_UNUSED)
 {
     struct ofpact_resubmit *resubmit;
-    char *in_port_s, *table_s;
+    char *in_port_s, *table_s, *ct_s;
 
     resubmit = ofpact_put_RESUBMIT(ofpacts);
 
@@ -4004,6 +4028,16 @@ parse_RESUBMIT(char *arg, struct ofpbuf *ofpacts,
         resubmit->table_id = 255;
     }
 
+    ct_s = strsep(&arg, ",");
+    if (ct_s && ct_s[0]) {
+        if (strcmp(ct_s, "ct")) {
+            return xasprintf("%s: unknown parameter", ct_s);
+        }
+        resubmit->with_ct_orig = true;
+    } else {
+        resubmit->with_ct_orig = false;
+    }
+
     if (resubmit->in_port == OFPP_IN_PORT && resubmit->table_id == 255) {
         return xstrdup("at least one \"in_port\" or \"table\" must be "
                        "specified  on resubmit");
@@ -4025,6 +4059,9 @@ format_RESUBMIT(const struct ofpact_resubmit *a, struct ds *s)
         ds_put_char(s, ',');
         if (a->table_id != 255) {
             ds_put_format(s, "%"PRIu8, a->table_id);
+        }
+        if (a->with_ct_orig) {
+            ds_put_cstr(s, ",ct");
         }
         ds_put_format(s, "%s)%s", colors.paren, colors.end);
     }
@@ -7223,9 +7260,16 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     case OFPACT_SET_TUNNEL:
     case OFPACT_SET_QUEUE:
     case OFPACT_POP_QUEUE:
-    case OFPACT_RESUBMIT:
         return 0;
 
+    case OFPACT_RESUBMIT: {
+        struct ofpact_resubmit *resubmit = ofpact_get_RESUBMIT(a);
+
+        if (resubmit->with_ct_orig && !is_ct_valid(flow, &match->wc, NULL)) {
+            return OFPERR_OFPBAC_MATCH_INCONSISTENT;
+        }
+        return 0;
+    }
     case OFPACT_FIN_TIMEOUT:
         if (flow->nw_proto != IPPROTO_TCP) {
             inconsistent_match(usable_protocols);

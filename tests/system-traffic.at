@@ -2645,7 +2645,7 @@ udp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
-dnl CHECK_FTP_NAT(TITLE, IP_ADDR, FLOWS)
+dnl CHECK_FTP_NAT(TITLE, IP_ADDR, FLOWS, CT_DUMP)
 dnl
 dnl Checks the implementation of conntrack with FTP ALGs in combination with
 dnl NAT, using the provided flow table.
@@ -2664,8 +2664,7 @@ m4_define([CHECK_FTP_NAT],
     ADD_VETH(p1, at_ns1, br0, "10.1.1.2/24")
 
     dnl Allow any traffic from ns0->ns1. Only allow nd, return traffic from ns1->ns0.
-    AT_DATA([flows.txt], [$3
-])
+    AT_DATA([flows.txt], [$3])
 
     AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
 
@@ -2675,10 +2674,7 @@ m4_define([CHECK_FTP_NAT],
     NS_CHECK_EXEC([at_ns0], [wget ftp://10.1.1.2 -4 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
 
     dnl Discards CLOSE_WAIT and CLOSING
-    AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [dnl
-tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
-tcp,orig=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
-])
+    AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(10.1.1.2)], [0], [$4])
 
     OVS_TRAFFIC_VSWITCHD_STOP
     AT_CLEANUP])
@@ -2739,7 +2735,10 @@ dnl Swaps the fields of the ARP message to turn a query to a response.
 table=10 priority=100 arp xreg0=0 action=normal
 table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
 table=10 priority=0 action=drop
-    ])
+], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+])
 ])
 
 dnl Check that ct(nat,table=foo) works without TCP sequence adjustment.
@@ -2802,7 +2801,10 @@ dnl Swaps the fields of the ARP message to turn a query to a response.
 table=10 priority=100 arp xreg0=0 action=normal
 table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
 table=10 priority=0 action=drop
-    ])
+], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+])
 ])
 
 dnl Check that ct(nat,table=foo) works without TCP sequence adjustment.
@@ -2832,8 +2834,14 @@ dnl IP_ADDR must specify the NAT address in standard "10.1.1.x" format,
 dnl and IP_ADDR_AS_HEX must specify the same address as hex, eg 0x0a0101xx.
 m4_define([CHECK_FTP_NAT_ORIG_TUPLE], [dnl
     CHECK_FTP_NAT([orig tuple $1], [$2], [dnl
-dnl track all IP traffic (includes nat and helper calls to non-NEW packets.)
-table=0 ip, action=ct(nat,table=1)
+dnl Store zone in reg4 and packet direction in reg3 (IN=1, OUT=2).
+dnl NAT is only applied to OUT-direction packets, so that ACL
+dnl processing can be done with non-NATted headers.
+dnl
+dnl Track all IP traffic in the IN-direction (IN from Port 1).
+table=0 in_port=1, ip, action=set_field:1->reg4,set_field:1->reg3,ct(zone=NXM_NX_REG4[[0..15]],table=1)
+dnl Track all IP traffic in the OUT-direction (OUT to the Port 1).
+table=0 in_port=2, ip, action=set_field:1->reg4,set_field:2->reg3,ct(zone=NXM_NX_REG4[[0..15]],nat,table=1)
 dnl
 dnl ARP
 dnl
@@ -2841,32 +2849,81 @@ table=0 priority=100 arp arp_op=1 action=move:OXM_OF_ARP_TPA[[]]->NXM_NX_REG2[[]
 table=0 priority=10 arp action=normal
 table=0 priority=0 action=drop
 dnl
-dnl "ACL table"
+dnl Pass tracked traffic through ACL, drop everything else.
+dnl Non-REPLY/RELATED packets get the ACL lookup with the packet headers
+dnl in the actual packet direction in reg0 (IN=1, OUT=2).  REPLY packets
+dnl get the ACL lookup using the conntrack tuple and the inverted direction.
+dnl RELATED packets get ACL lookup using the conntrack tuple in the direction
+dnl of the master connection, as storted in ct_mark.
 dnl
-dnl Allow all IP traffic with conntrack original direction IP source address
-dnl '10.1.1.1'.  This should allow also reply packets and related packets in
-dnl both directions.
-table=1 ip, ct_state=+trk-inv, ct_nw_src=10.1.1.1 action=goto_table:2
+dnl Incoming non-related packet in the original direction (ACL IN)
+table=1 reg3=1, ip, ct_state=-rel-rpl+trk-inv action=set_field:1->reg0,resubmit(,3),goto_table:5
+dnl Incoming non-related reply packet (CT ACL OUT)
+table=1 reg3=1, ip, ct_state=-rel+rpl+trk-inv action=set_field:2->reg0,resubmit(,3,ct),goto_table:4
+dnl Outgoing non-related packet (ACL OUT)
+table=1 reg3=2, ip, ct_state=-rel-rpl+trk-inv action=set_field:2->reg0,resubmit(,3),goto_table:5
+dnl Outgoing non-related reply packet (CT ACL IN)
+table=1 reg3=2, ip, ct_state=-rel+rpl+trk-inv action=set_field:1->reg0,resubmit(,3,ct),goto_table:4
+dnl
+dnl Related packet (CT ACL in the direction of the master connection.)
+table=1 ip, ct_state=+rel+trk-inv, action=move:NXM_NX_CT_MARK[[]]->NXM_NX_REG0[[]],resubmit(,3,ct),goto_table:4
 dnl Drop everything else.
 table=1 priority=0, action=drop
 dnl
-dnl "Conntrack commit table"
+dnl "ACL table"
 dnl
-dnl Commit new outgoing FTP control connections.  Must match on 'tcp' when
-dnl setting 'alg=ftp'.
-table=2 in_port=1 priority=100 ct_state=+new, tcp, tp_dst=21, action=ct(alg=ftp,commit,nat(src=$2)),2
-dnl Commit other new outgoing IP connections.
-table=2 in_port=1 priority=20 ct_state=+new, ip, action=ct(commit,nat(src=$2)),2
-dnl Commit incoming new IP connections. 'nat' may be needed for related
-dnl connections, and is harmless for connections that do not need it.
-table=2 in_port=2 priority=10 ct_state=+new, ip, action=ct(commit,nat),1
-dnl Just forward all the rest.
-table=2 priority=0 in_port=1 action=2
-table=2 priority=0 in_port=2 action=1
+dnl Stateful accept (1->reg2) all incoming (reg0=1) IP connections with
+dnl IP source address '10.1.1.1'.  Store rule ID (1234) in reg1, verdict
+dnl in reg2.
+table=3 priority=10, reg0=1, ip, nw_src=10.1.1.1 action=set_field:1234->reg1,set_field:1->reg2
+dnl Stateless drop (0->reg2) everything else in both directions. (Rule ID: 1235)
+table=3 priority=0, action=set_field:1235->reg1,set_field:0->reg2
+dnl
+dnl Re-process stateful traffic that was not accepted by a stateful rule as
+dnl normal traffic in the current direction.  This should also delete the
+dnl now stale conntrack state, so that new state can be created in it's place.
+dnl
+dnl Stateful accepts go to next table.
+table=4 priority=100 reg2=1, action=goto_table:5
+dnl Everything else is reprocessed disregarding the CT state, using the actual
+dnl packet direction.
+table=4 priority=0 action=move:NXM_NX_REG3[[]]->NXM_NX_REG0[[]],resubmit(,3),goto_table:5
+dnl
+dnl "ACL verdict processing table."
+dnl
+dnl Handle stateful (reg2=1) / stateless (reg2=2) accepts and drops (reg2=0)
+dnl
+dnl Drop all non-accepted packets.
+table=5 reg2=0 priority=1000 action=drop
+dnl
+dnl Commit new incoming FTP control connections with SNAT range.  Must match on
+dnl 'tcp' when setting 'alg=ftp'.  Store the directionality of non-related
+dnl connections to ct_mark.  Store the rule ID to labels.
+table=5 priority=100 reg2=1 reg3=1 ct_state=+new-rel, tcp, tp_dst=21, action=ct(zone=NXM_NX_REG4[[0..15]],alg=ftp,commit,nat(src=$2),exec(move:NXM_NX_REG3[[0..31]]->NXM_NX_CT_MARK[[0..31]],move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
+dnl Commit other new incoming non-related IP connections with SNAT range.
+table=5 priority=10 reg2=1 reg3=1 ct_state=+new-rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,nat(src=$2),exec(move:NXM_NX_REG3[[0..31]]->NXM_NX_CT_MARK[[0..31]],move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
+dnl Commit non-related outgoing new IP connections with DNAT range.
+dnl (This should not get any packets in this test.)
+table=5 priority=10 reg2=1 reg3=2 ct_state=+new-rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,nat(dst=$2),exec(move:NXM_NX_REG3[[0..31]]->NXM_NX_CT_MARK[[0..31]],move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
+dnl Commit new related connections in either direction, which need 'nat'
+dnl and which inherit the mark (the direction of the original direction
+dnl master tuple) from the master connection.
+table=5 priority=10 reg2=1 ct_state=+new+rel, ip, action=ct(zone=NXM_NX_REG4[[0..15]],commit,nat,exec(move:NXM_NX_REG1[[0..31]]->NXM_NX_CT_LABEL[[96..127]])),goto_table:6
+dnl
+dnl NAT incoming non-NEW packets. Outgoing packets were NATted in table 0.
+dnl
+table=5 priority=10 ct_state=-new+trk-inv reg3=1 ip, action=ct(zone=NXM_NX_REG4[[0..15]],nat),goto_table:6
+dnl Forward everything else, including stateless accepts.
+table=5 priority=0 action=goto_table:6
+dnl
+dnl "Forwarding table"
+dnl
+table=6 in_port=1 action=2
+table=6 in_port=2 action=1
 dnl
 dnl MAC resolution table for IP in reg2, stores mac in OXM_OF_PKT_REG0
 dnl
-table=8,reg2=$3/0xffffffff,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
+table=8,reg2=$3,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
 table=8,priority=0,action=load:0->OXM_OF_PKT_REG0[[]]
 dnl ARP responder mac filled in at OXM_OF_PKT_REG0, or 0 for normal action.
 dnl TPA IP in reg2.
@@ -2874,7 +2931,10 @@ dnl Swaps the fields of the ARP message to turn a query to a response.
 table=10 priority=100 arp xreg0=0 action=normal
 table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
 table=10 priority=0 action=drop
-    ])
+], [dnl
+tcp,orig=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),zone=1,mark=1,labels=0x4d2000000000000000000000000,protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=10.1.1.2,dst=$2,sport=<cleared>,dport=<cleared>),reply=(src=10.1.1.1,dst=10.1.1.2,sport=<cleared>,dport=<cleared>),zone=1,mark=1,labels=0x4d2000000000000000000000000,protoinfo=(state=<cleared>)
+])
 ])
 
 dnl Check that ct(nat,table=foo) works without TCP sequence adjustment with

@@ -641,11 +641,13 @@ struct ofpact_nat {
 
 /* OFPACT_RESUBMIT.
  *
- * Used for NXAST_RESUBMIT, NXAST_RESUBMIT_TABLE. */
+ * Used for NXAST_RESUBMIT, NXAST_RESUBMIT_TABLE, NXAST_RESUBMIT_TABLE_CT. */
 struct ofpact_resubmit {
     struct ofpact ofpact;
     ofp_port_t in_port;
     uint8_t table_id;
+    bool with_ct_orig;   /* Resubmit with Conntrack original direction tuple
+                          * fields in place of IP header fields. */
 };
 
 /* Bits for 'flags' in struct nx_action_learn.
