@@ -519,7 +519,8 @@ enum dpif_flow_put_flags {
 };
 
 bool dpif_probe_feature(struct dpif *, const char *name,
-                        const struct ofpbuf *key, const ovs_u128 *ufid);
+                        const struct ofpbuf *key, const struct ofpbuf *actions,
+                        const ovs_u128 *ufid);
 void dpif_flow_hash(const struct dpif *, const void *key, size_t key_len,
                     ovs_u128 *hash);
 int dpif_flow_flush(struct dpif *);

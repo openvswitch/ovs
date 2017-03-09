@@ -897,19 +897,23 @@ dpif_flow_flush(struct dpif *dpif)
  */
 bool
 dpif_probe_feature(struct dpif *dpif, const char *name,
-                   const struct ofpbuf *key, const ovs_u128 *ufid)
+                   const struct ofpbuf *key, const struct ofpbuf *actions,
+                   const ovs_u128 *ufid)
 {
     struct dpif_flow flow;
     struct ofpbuf reply;
     uint64_t stub[DPIF_FLOW_BUFSIZE / 8];
     bool enable_feature = false;
     int error;
+    const struct nlattr *nl_actions = actions ? actions->data : NULL;
+    const size_t nl_actions_size = actions ? actions->size : 0;
 
     /* Use DPIF_FP_MODIFY to cover the case where ovs-vswitchd is killed (and
      * restarted) at just the right time such that feature probes from the
      * previous run are still present in the datapath. */
     error = dpif_flow_put(dpif, DPIF_FP_CREATE | DPIF_FP_MODIFY | DPIF_FP_PROBE,
-                          key->data, key->size, NULL, 0, NULL, 0,
+                          key->data, key->size, NULL, 0,
+                          nl_actions, nl_actions_size,
                           ufid, NON_PMD_CORE_ID, NULL);
     if (error) {
         if (error != EINVAL) {

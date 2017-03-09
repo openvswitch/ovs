@@ -822,7 +822,7 @@ check_recirc(struct dpif_backer *backer)
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
     odp_flow_key_from_flow(&odp_parms, &key);
     enable_recirc = dpif_probe_feature(backer->dpif, "recirculation", &key,
-                                       NULL);
+                                       NULL, NULL);
 
     if (enable_recirc) {
         VLOG_INFO("%s: Datapath supports recirculation",
@@ -859,7 +859,7 @@ check_ufid(struct dpif_backer *backer)
     odp_flow_key_from_flow(&odp_parms, &key);
     dpif_flow_hash(backer->dpif, key.data, key.size, &ufid);
 
-    enable_ufid = dpif_probe_feature(backer->dpif, "UFID", &key, &ufid);
+    enable_ufid = dpif_probe_feature(backer->dpif, "UFID", &key, NULL, &ufid);
 
     if (enable_ufid) {
         VLOG_INFO("%s: Datapath supports unique flow ids",
@@ -973,7 +973,7 @@ check_max_mpls_depth(struct dpif_backer *backer)
 
         ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
         odp_flow_key_from_flow(&odp_parms, &key);
-        if (!dpif_probe_feature(backer->dpif, "MPLS", &key, NULL)) {
+        if (!dpif_probe_feature(backer->dpif, "MPLS", &key, NULL, NULL)) {
             break;
         }
     }
@@ -1166,7 +1166,7 @@ check_##NAME(struct dpif_backer *backer)                                    \
                                                                             \
     ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);                         \
     odp_flow_key_from_flow(&odp_parms, &key);                               \
-    enable = dpif_probe_feature(backer->dpif, #NAME, &key, NULL);           \
+    enable = dpif_probe_feature(backer->dpif, #NAME, &key, NULL, NULL);     \
                                                                             \
     if (enable) {                                                           \
         VLOG_INFO("%s: Datapath supports "#NAME, dpif_name(backer->dpif));  \
