@@ -191,6 +191,10 @@ bundle_parse__(const char *s, char **save_ptr,
         bundle->fields = NX_HASH_FIELDS_SYMMETRIC_L3L4;
     } else if (!strcasecmp(fields, "symmetric_l3l4+udp")) {
         bundle->fields = NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP;
+    } else if (!strcasecmp(fields, "nw_src")) {
+        bundle->fields = NX_HASH_FIELDS_NW_SRC;
+    } else if (!strcasecmp(fields, "nw_dst")) {
+        bundle->fields = NX_HASH_FIELDS_NW_DST;
     } else {
         return xasprintf("%s: unknown fields `%s'", s, fields);
     }

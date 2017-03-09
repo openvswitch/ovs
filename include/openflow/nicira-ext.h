@@ -103,8 +103,13 @@ enum nx_hash_fields {
      *  - NXM_OF_TCP_SRC / NXM_OF_TCP_DST
      *  - NXM_OF_UDP_SRC / NXM_OF_UDP_DST
      */
-    NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP
+    NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP,
 
+    /* Network source address (NXM_OF_IP_SRC) only. */
+    NX_HASH_FIELDS_NW_SRC,
+
+    /* Network destination address (NXM_OF_IP_DST) only. */
+    NX_HASH_FIELDS_NW_DST
 
 };
 

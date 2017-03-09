@@ -2002,6 +2002,22 @@ flow_mask_hash_fields(const struct flow *flow, struct flow_wildcards *wc,
         }
         break;
 
+    case NX_HASH_FIELDS_NW_SRC:
+        if (flow->dl_type == htons(ETH_TYPE_IP)) {
+            memset(&wc->masks.nw_src, 0xff, sizeof wc->masks.nw_src);
+        } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+            memset(&wc->masks.ipv6_src, 0xff, sizeof wc->masks.ipv6_src);
+        }
+        break;
+
+    case NX_HASH_FIELDS_NW_DST:
+        if (flow->dl_type == htons(ETH_TYPE_IP)) {
+            memset(&wc->masks.nw_dst, 0xff, sizeof wc->masks.nw_dst);
+        } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+            memset(&wc->masks.ipv6_dst, 0xff, sizeof wc->masks.ipv6_dst);
+        }
+        break;
+
     default:
         OVS_NOT_REACHED();
     }
@@ -2026,6 +2042,24 @@ flow_hash_fields(const struct flow *flow, enum nx_hash_fields fields,
     case NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP:
         return flow_hash_symmetric_l3l4(flow, basis, true);
 
+    case NX_HASH_FIELDS_NW_SRC:
+        if (flow->dl_type == htons(ETH_TYPE_IP)) {
+            return jhash_bytes(&flow->nw_src, sizeof flow->nw_src, basis);
+        } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+            return jhash_bytes(&flow->ipv6_src, sizeof flow->ipv6_src, basis);
+        } else {
+            return basis;
+        }
+
+    case NX_HASH_FIELDS_NW_DST:
+        if (flow->dl_type == htons(ETH_TYPE_IP)) {
+            return jhash_bytes(&flow->nw_dst, sizeof flow->nw_dst, basis);
+        } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+            return jhash_bytes(&flow->ipv6_dst, sizeof flow->ipv6_dst, basis);
+        } else {
+            return basis;
+        }
+
     }
 
     OVS_NOT_REACHED();
@@ -2040,6 +2074,8 @@ flow_hash_fields_to_str(enum nx_hash_fields fields)
     case NX_HASH_FIELDS_SYMMETRIC_L4: return "symmetric_l4";
     case NX_HASH_FIELDS_SYMMETRIC_L3L4: return "symmetric_l3l4";
     case NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP: return "symmetric_l3l4+udp";
+    case NX_HASH_FIELDS_NW_SRC: return "nw_src";
+    case NX_HASH_FIELDS_NW_DST: return "nw_dst";
     default: return "<unknown>";
     }
 }
@@ -2051,7 +2087,9 @@ flow_hash_fields_valid(enum nx_hash_fields fields)
     return fields == NX_HASH_FIELDS_ETH_SRC
         || fields == NX_HASH_FIELDS_SYMMETRIC_L4
         || fields == NX_HASH_FIELDS_SYMMETRIC_L3L4
-        || fields == NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP;
+        || fields == NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP
+        || fields == NX_HASH_FIELDS_NW_SRC
+        || fields == NX_HASH_FIELDS_NW_DST;
 }
 
 /* Returns a hash value for the bits of 'flow' that are active based on

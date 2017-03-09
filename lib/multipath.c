@@ -168,6 +168,10 @@ multipath_parse__(struct ofpact_multipath *mp, const char *s_, char *s)
         mp->fields = NX_HASH_FIELDS_SYMMETRIC_L3L4;
     } else if (!strcasecmp(fields, "symmetric_l3l4+udp")) {
         mp->fields = NX_HASH_FIELDS_SYMMETRIC_L3L4_UDP;
+    } else if (!strcasecmp(fields, "nw_src")) {
+        mp->fields = NX_HASH_FIELDS_NW_SRC;
+    } else if (!strcasecmp(fields, "nw_dst")) {
+        mp->fields = NX_HASH_FIELDS_NW_DST;
     } else {
         return xasprintf("%s: unknown fields `%s'", s_, fields);
     }
