@@ -246,6 +246,20 @@ mf_is_all_wild(const struct mf_field *mf, const struct flow_wildcards *wc)
         return !wc->masks.ct_mark;
     case MFF_CT_LABEL:
         return ovs_u128_is_zero(wc->masks.ct_label);
+    case MFF_CT_NW_PROTO:
+        return !wc->masks.ct_nw_proto;
+    case MFF_CT_NW_SRC:
+        return !wc->masks.ct_nw_src;
+    case MFF_CT_NW_DST:
+        return !wc->masks.ct_nw_dst;
+    case MFF_CT_TP_SRC:
+        return !wc->masks.ct_tp_src;
+    case MFF_CT_TP_DST:
+        return !wc->masks.ct_tp_dst;
+    case MFF_CT_IPV6_SRC:
+        return ipv6_mask_is_any(&wc->masks.ct_ipv6_src);
+    case MFF_CT_IPV6_DST:
+        return ipv6_mask_is_any(&wc->masks.ct_ipv6_dst);
     CASE_MFF_REGS:
         return !wc->masks.regs[mf->id - MFF_REG0];
     CASE_MFF_XREGS:
@@ -383,7 +397,7 @@ mf_is_mask_valid(const struct mf_field *mf, const union mf_value *mask)
  * Sets inspected bits in 'wc', if non-NULL. */
 static bool
 mf_are_prereqs_ok__(const struct mf_field *mf, const struct flow *flow,
-                    const struct flow_wildcards *mask OVS_UNUSED,
+                    const struct flow_wildcards *mask,
                     struct flow_wildcards *wc)
 {
     switch (mf->prereqs) {
@@ -402,6 +416,14 @@ mf_are_prereqs_ok__(const struct mf_field *mf, const struct flow *flow,
         return eth_type_mpls(flow->dl_type);
     case MFP_IP_ANY:
         return is_ip_any(flow);
+    case MFP_CT_VALID:
+        return is_ct_valid(flow, mask, wc);
+    case MFP_CTV4_VALID:
+        return flow->dl_type == htons(ETH_TYPE_IP)
+            && is_ct_valid(flow, mask, wc);
+    case MFP_CTV6_VALID:
+        return flow->dl_type == htons(ETH_TYPE_IPV6)
+            && is_ct_valid(flow, mask, wc);
     case MFP_TCP:
         /* Matching !FRAG_LATER is not enforced (mask is not checked). */
         return is_tcp(flow, wc) && !(flow->nw_frag & FLOW_NW_FRAG_LATER);
@@ -475,6 +497,13 @@ mf_is_value_valid(const struct mf_field *mf, const union mf_value *value)
     case MFF_CT_ZONE:
     case MFF_CT_MARK:
     case MFF_CT_LABEL:
+    case MFF_CT_NW_PROTO:
+    case MFF_CT_NW_SRC:
+    case MFF_CT_NW_DST:
+    case MFF_CT_IPV6_SRC:
+    case MFF_CT_IPV6_DST:
+    case MFF_CT_TP_SRC:
+    case MFF_CT_TP_DST:
     CASE_MFF_REGS:
     CASE_MFF_XREGS:
     CASE_MFF_XXREGS:
@@ -647,6 +676,34 @@ mf_get_value(const struct mf_field *mf, const struct flow *flow,
 
     case MFF_CT_LABEL:
         value->be128 = hton128(flow->ct_label);
+        break;
+
+    case MFF_CT_NW_PROTO:
+        value->u8 = flow->ct_nw_proto;
+        break;
+
+    case MFF_CT_NW_SRC:
+        value->be32 = flow->ct_nw_src;
+        break;
+
+    case MFF_CT_NW_DST:
+        value->be32 = flow->ct_nw_dst;
+        break;
+
+    case MFF_CT_IPV6_SRC:
+        value->ipv6 = flow->ct_ipv6_src;
+        break;
+
+    case MFF_CT_IPV6_DST:
+        value->ipv6 = flow->ct_ipv6_dst;
+        break;
+
+    case MFF_CT_TP_SRC:
+        value->be16 = flow->ct_tp_src;
+        break;
+
+    case MFF_CT_TP_DST:
+        value->be16 = flow->ct_tp_dst;
         break;
 
     CASE_MFF_REGS:
@@ -909,6 +966,34 @@ mf_set_value(const struct mf_field *mf,
 
     case MFF_CT_LABEL:
         match_set_ct_label(match, ntoh128(value->be128));
+        break;
+
+    case MFF_CT_NW_PROTO:
+        match_set_ct_nw_proto(match, value->u8);
+        break;
+
+    case MFF_CT_NW_SRC:
+        match_set_ct_nw_src(match, value->be32);
+        break;
+
+    case MFF_CT_NW_DST:
+        match_set_ct_nw_dst(match, value->be32);
+        break;
+
+    case MFF_CT_IPV6_SRC:
+        match_set_ct_ipv6_src(match, &value->ipv6);
+        break;
+
+    case MFF_CT_IPV6_DST:
+        match_set_ct_ipv6_dst(match, &value->ipv6);
+        break;
+
+    case MFF_CT_TP_SRC:
+        match_set_ct_tp_src(match, value->be16);
+        break;
+
+    case MFF_CT_TP_DST:
+        match_set_ct_tp_dst(match, value->be16);
         break;
 
     CASE_MFF_REGS:
@@ -1242,6 +1327,34 @@ mf_set_flow_value(const struct mf_field *mf,
         flow->ct_label = ntoh128(value->be128);
         break;
 
+    case MFF_CT_NW_PROTO:
+        flow->ct_nw_proto = value->u8;
+        break;
+
+    case MFF_CT_NW_SRC:
+        flow->ct_nw_src = value->be32;
+        break;
+
+    case MFF_CT_NW_DST:
+        flow->ct_nw_dst = value->be32;
+        break;
+
+    case MFF_CT_IPV6_SRC:
+        flow->ct_ipv6_src = value->ipv6;
+        break;
+
+    case MFF_CT_IPV6_DST:
+        flow->ct_ipv6_dst = value->ipv6;
+        break;
+
+    case MFF_CT_TP_SRC:
+        flow->ct_tp_src = value->be16;
+        break;
+
+    case MFF_CT_TP_DST:
+        flow->ct_tp_dst = value->be16;
+        break;
+
     CASE_MFF_REGS:
         flow->regs[mf->id - MFF_REG0] = ntohl(value->be32);
         break;
@@ -1571,6 +1684,41 @@ mf_set_wild(const struct mf_field *mf, struct match *match, char **err_str)
         memset(&match->wc.masks.ct_label, 0, sizeof(match->wc.masks.ct_label));
         break;
 
+    case MFF_CT_NW_PROTO:
+        match->flow.ct_nw_proto = 0;
+        match->wc.masks.ct_nw_proto = 0;
+        break;
+
+    case MFF_CT_NW_SRC:
+        match->flow.ct_nw_src = 0;
+        match->wc.masks.ct_nw_src = 0;
+        break;
+
+    case MFF_CT_NW_DST:
+        match->flow.ct_nw_dst = 0;
+        match->wc.masks.ct_nw_dst = 0;
+        break;
+
+    case MFF_CT_IPV6_SRC:
+        memset(&match->flow.ct_ipv6_src, 0, sizeof(match->flow.ct_ipv6_src));
+        WC_UNMASK_FIELD(&match->wc, ct_ipv6_src);
+        break;
+
+    case MFF_CT_IPV6_DST:
+        memset(&match->flow.ct_ipv6_dst, 0, sizeof(match->flow.ct_ipv6_dst));
+        WC_UNMASK_FIELD(&match->wc, ct_ipv6_dst);
+        break;
+
+    case MFF_CT_TP_SRC:
+        match->flow.ct_tp_src = 0;
+        match->wc.masks.ct_tp_src = 0;
+        break;
+
+    case MFF_CT_TP_DST:
+        match->flow.ct_tp_dst = 0;
+        match->wc.masks.ct_tp_dst = 0;
+        break;
+
     CASE_MFF_REGS:
         match_set_reg_masked(match, mf->id - MFF_REG0, 0, 0);
         break;
@@ -1773,6 +1921,13 @@ mf_set(const struct mf_field *mf,
 
     switch (mf->id) {
     case MFF_CT_ZONE:
+    case MFF_CT_NW_PROTO:
+    case MFF_CT_NW_SRC:
+    case MFF_CT_NW_DST:
+    case MFF_CT_IPV6_SRC:
+    case MFF_CT_IPV6_DST:
+    case MFF_CT_TP_SRC:
+    case MFF_CT_TP_DST:
     case MFF_RECIRC_ID:
     case MFF_CONJ_ID:
     case MFF_IN_PORT:

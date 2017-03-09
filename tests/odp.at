@@ -163,7 +163,7 @@ s/$/)/' odp-base.txt
 
  echo
  echo '# Valid forms with conntrack fields.'
- sed 's/\(eth([[^)]]*)\),/\1,ct_state(+trk),ct_zone(0x5\/0xff),ct_mark(0x10305070\/0xf0f0f0f0),ct_label(0x1234567890abcdef1234567890abcdef\/0x102030405060708090a0b0c0d0e0f0),/' odp-base.txt
+ sed 's/\(eth([[^)]]*)\),/\1,ct_state(+trk),ct_zone(0x5\/0xff),ct_mark(0x10305070\/0xf0f0f0f0),ct_label(0x1234567890abcdef1234567890abcdef\/0x102030405060708090a0b0c0d0e0f0),ct_tuple4(src=10.10.10.10,dst=20.20.20.20,proto=17,tp_src=1,tp_dst=2),/' odp-base.txt
 
  echo
  echo '# Valid forms with IP first fragment.'

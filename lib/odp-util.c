@@ -4168,6 +4168,22 @@ parse_odp_key_mask_attr(const char *s, const struct simap *port_names,
     SCAN_SINGLE("ct_mark(", uint32_t, u32, OVS_KEY_ATTR_CT_MARK);
     SCAN_SINGLE("ct_label(", ovs_u128, u128, OVS_KEY_ATTR_CT_LABELS);
 
+    SCAN_BEGIN("ct_tuple4(", struct ovs_key_ct_tuple_ipv4) {
+        SCAN_FIELD("src=", ipv4, ipv4_src);
+        SCAN_FIELD("dst=", ipv4, ipv4_dst);
+        SCAN_FIELD("proto=", u8, ipv4_proto);
+        SCAN_FIELD("tp_src=", be16, src_port);
+        SCAN_FIELD("tp_dst=", be16, dst_port);
+    } SCAN_END(OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4);
+
+    SCAN_BEGIN("ct_tuple6(", struct ovs_key_ct_tuple_ipv6) {
+        SCAN_FIELD("src=", in6_addr, ipv6_src);
+        SCAN_FIELD("dst=", in6_addr, ipv6_dst);
+        SCAN_FIELD("proto=", u8, ipv6_proto);
+        SCAN_FIELD("tp_src=", be16, src_port);
+        SCAN_FIELD("tp_dst=", be16, dst_port);
+    } SCAN_END(OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6);
+
     SCAN_BEGIN_NESTED("tunnel(", OVS_KEY_ATTR_TUNNEL) {
         SCAN_FIELD_NESTED("tun_id=", ovs_be64, be64, OVS_TUNNEL_KEY_ATTR_ID);
         SCAN_FIELD_NESTED("src=", ovs_be32, ipv4, OVS_TUNNEL_KEY_ATTR_IPV4_SRC);
@@ -4418,6 +4434,29 @@ odp_flow_key_from_flow__(const struct odp_flow_key_parms *parms,
         nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_LABELS, &data->ct_label,
                           sizeof(data->ct_label));
     }
+    if (parms->support.ct_orig_tuple && flow->ct_nw_proto) {
+        if (flow->dl_type == htons(ETH_TYPE_IP)) {
+            struct ovs_key_ct_tuple_ipv4 ct = {
+                data->ct_nw_src,
+                data->ct_nw_dst,
+                data->ct_tp_src,
+                data->ct_tp_dst,
+                data->ct_nw_proto,
+            };
+            nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4, &ct,
+                              sizeof ct);
+        } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+            struct ovs_key_ct_tuple_ipv6 ct = {
+                data->ct_ipv6_src,
+                data->ct_ipv6_dst,
+                data->ct_tp_src,
+                data->ct_tp_dst,
+                data->ct_nw_proto,
+            };
+            nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6, &ct,
+                              sizeof ct);
+        }
+    }
     if (parms->support.recirc) {
         nl_msg_put_u32(buf, OVS_KEY_ATTR_RECIRC_ID, data->recirc_id);
         nl_msg_put_u32(buf, OVS_KEY_ATTR_DP_HASH, data->dp_hash);
@@ -4614,6 +4653,19 @@ odp_key_from_pkt_metadata(struct ofpbuf *buf, const struct pkt_metadata *md)
             nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_LABELS, &md->ct_label,
                               sizeof(md->ct_label));
         }
+        if (md->ct_orig_tuple_ipv6) {
+            if (md->ct_orig_tuple.ipv6.ipv6_proto) {
+                nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6,
+                                  &md->ct_orig_tuple.ipv6,
+                                  sizeof md->ct_orig_tuple.ipv6);
+            }
+        } else {
+            if (md->ct_orig_tuple.ipv4.ipv4_proto) {
+                nl_msg_put_unspec(buf, OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4,
+                                  &md->ct_orig_tuple.ipv4,
+                                  sizeof md->ct_orig_tuple.ipv4);
+            }
+        }
     }
 
     /* Add an ingress port attribute if 'odp_in_port' is not the magical
@@ -4680,6 +4732,21 @@ odp_key_to_pkt_metadata(const struct nlattr *key, size_t key_len,
 
             md->ct_label = *cl;
             wanted_attrs &= ~(1u << OVS_KEY_ATTR_CT_LABELS);
+            break;
+        }
+        case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4: {
+            const struct ovs_key_ct_tuple_ipv4 *ct = nl_attr_get(nla);
+            md->ct_orig_tuple.ipv4 = *ct;
+            md->ct_orig_tuple_ipv6 = false;
+            wanted_attrs &= ~(1u << OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4);
+            break;
+        }
+        case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6: {
+            const struct ovs_key_ct_tuple_ipv6 *ct = nl_attr_get(nla);
+
+            md->ct_orig_tuple.ipv6 = *ct;
+            md->ct_orig_tuple_ipv6 = true;
+            wanted_attrs &= ~(1u << OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6);
             break;
         }
         case OVS_KEY_ATTR_TUNNEL: {
@@ -5254,6 +5321,25 @@ odp_flow_key_to_flow__(const struct nlattr *key, size_t key_len,
 
         flow->ct_label = *cl;
         expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_CT_LABELS;
+    }
+    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4)) {
+        const struct ovs_key_ct_tuple_ipv4 *ct = nl_attr_get(attrs[OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4]);
+        flow->ct_nw_src = ct->ipv4_src;
+        flow->ct_nw_dst = ct->ipv4_dst;
+        flow->ct_nw_proto = ct->ipv4_proto;
+        flow->ct_tp_src = ct->src_port;
+        flow->ct_tp_dst = ct->dst_port;
+        expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4;
+    }
+    if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6)) {
+        const struct ovs_key_ct_tuple_ipv6 *ct = nl_attr_get(attrs[OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6]);
+
+        flow->ct_ipv6_src = ct->ipv6_src;
+        flow->ct_ipv6_dst = ct->ipv6_dst;
+        flow->ct_nw_proto = ct->ipv6_proto;
+        flow->ct_tp_src = ct->src_port;
+        flow->ct_tp_dst = ct->dst_port;
+        expected_attrs |= UINT64_C(1) << OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6;
     }
 
     if (present_attrs & (UINT64_C(1) << OVS_KEY_ATTR_TUNNEL)) {

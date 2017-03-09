@@ -99,6 +99,22 @@ void match_set_ct_mark(struct match *, uint32_t ct_mark);
 void match_set_ct_mark_masked(struct match *, uint32_t ct_mark, uint32_t mask);
 void match_set_ct_label(struct match *, ovs_u128 ct_label);
 void match_set_ct_label_masked(struct match *, ovs_u128 ct_label, ovs_u128 mask);
+void match_set_ct_nw_src(struct match *, ovs_be32);
+void match_set_ct_nw_src_masked(struct match *, ovs_be32, ovs_be32 mask);
+void match_set_ct_nw_dst(struct match *, ovs_be32);
+void match_set_ct_nw_dst_masked(struct match *, ovs_be32, ovs_be32 mask);
+void match_set_ct_nw_proto(struct match *, uint8_t);
+void match_set_ct_tp_src(struct match *, ovs_be16);
+void match_set_ct_tp_src_masked(struct match *, ovs_be16, ovs_be16 mask);
+void match_set_ct_tp_dst(struct match *, ovs_be16);
+void match_set_ct_tp_dst_masked(struct match *, ovs_be16, ovs_be16 mask);
+void match_set_ct_ipv6_src(struct match *, const struct in6_addr *);
+void match_set_ct_ipv6_src_masked(struct match *, const struct in6_addr *,
+                                  const struct in6_addr *);
+void match_set_ct_ipv6_dst(struct match *, const struct in6_addr *);
+void match_set_ct_ipv6_dst_masked(struct match *, const struct in6_addr *,
+                                  const struct in6_addr *);
+
 void match_set_skb_priority(struct match *, uint32_t skb_priority);
 void match_set_dl_type(struct match *, ovs_be16);
 void match_set_dl_src(struct match *, const struct eth_addr );

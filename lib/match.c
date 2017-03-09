@@ -384,6 +384,99 @@ match_set_ct_label_masked(struct match *match, ovs_u128 value, ovs_u128 mask)
 }
 
 void
+match_set_ct_nw_src(struct match *match, ovs_be32 ct_nw_src)
+{
+    match->flow.ct_nw_src = ct_nw_src;
+    match->wc.masks.ct_nw_src = OVS_BE32_MAX;
+}
+
+void
+match_set_ct_nw_src_masked(struct match *match, ovs_be32 ct_nw_src,
+                           ovs_be32 mask)
+{
+    match->flow.ct_nw_src = ct_nw_src & mask;
+    match->wc.masks.ct_nw_src = mask;
+}
+
+void
+match_set_ct_nw_dst(struct match *match, ovs_be32 ct_nw_dst)
+{
+    match->flow.ct_nw_dst = ct_nw_dst;
+    match->wc.masks.ct_nw_dst = OVS_BE32_MAX;
+}
+
+void
+match_set_ct_nw_dst_masked(struct match *match, ovs_be32 ct_nw_dst,
+                           ovs_be32 mask)
+{
+    match->flow.ct_nw_dst = ct_nw_dst & mask;
+    match->wc.masks.ct_nw_dst = mask;
+}
+
+void
+match_set_ct_nw_proto(struct match *match, uint8_t ct_nw_proto)
+{
+    match->flow.ct_nw_proto = ct_nw_proto;
+    match->wc.masks.ct_nw_proto = UINT8_MAX;
+}
+
+void
+match_set_ct_tp_src(struct match *match, ovs_be16 ct_tp_src)
+{
+    match_set_ct_tp_src_masked(match, ct_tp_src, OVS_BE16_MAX);
+}
+
+void
+match_set_ct_tp_src_masked(struct match *match, ovs_be16 port, ovs_be16 mask)
+{
+    match->flow.ct_tp_src = port & mask;
+    match->wc.masks.ct_tp_src = mask;
+}
+
+void
+match_set_ct_tp_dst(struct match *match, ovs_be16 ct_tp_dst)
+{
+    match_set_ct_tp_dst_masked(match, ct_tp_dst, OVS_BE16_MAX);
+}
+
+void
+match_set_ct_tp_dst_masked(struct match *match, ovs_be16 port, ovs_be16 mask)
+{
+    match->flow.ct_tp_dst = port & mask;
+    match->wc.masks.ct_tp_dst = mask;
+}
+
+void
+match_set_ct_ipv6_src(struct match *match, const struct in6_addr *src)
+{
+    match->flow.ct_ipv6_src = *src;
+    match->wc.masks.ct_ipv6_src = in6addr_exact;
+}
+
+void
+match_set_ct_ipv6_src_masked(struct match *match, const struct in6_addr *src,
+                             const struct in6_addr *mask)
+{
+    match->flow.ct_ipv6_src = ipv6_addr_bitand(src, mask);
+    match->wc.masks.ct_ipv6_src = *mask;
+}
+
+void
+match_set_ct_ipv6_dst(struct match *match, const struct in6_addr *dst)
+{
+    match->flow.ct_ipv6_dst = *dst;
+    match->wc.masks.ct_ipv6_dst = in6addr_exact;
+}
+
+void
+match_set_ct_ipv6_dst_masked(struct match *match, const struct in6_addr *dst,
+                             const struct in6_addr *mask)
+{
+    match->flow.ct_ipv6_dst = ipv6_addr_bitand(dst, mask);
+    match->wc.masks.ct_ipv6_dst = *mask;
+}
+
+void
 match_set_dl_type(struct match *match, ovs_be16 dl_type)
 {
     match->wc.masks.dl_type = OVS_BE16_MAX;
@@ -1075,7 +1168,7 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 36);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 37);
 
     if (priority != OFP_DEFAULT_PRIORITY) {
         ds_put_format(s, "%spriority=%s%d,",
@@ -1135,6 +1228,21 @@ match_format(const struct match *match, struct ds *s, int priority)
 
     if (!ovs_u128_is_zero(wc->masks.ct_label)) {
         format_ct_label_masked(s, &f->ct_label, &wc->masks.ct_label);
+    }
+
+    format_ip_netmask(s, "ct_nw_src", f->ct_nw_src,
+                      wc->masks.ct_nw_src);
+    format_ipv6_netmask(s, "ct_ipv6_src", &f->ct_ipv6_src,
+                        &wc->masks.ct_ipv6_src);
+    format_ip_netmask(s, "ct_nw_dst", f->ct_nw_dst,
+                      wc->masks.ct_nw_dst);
+    format_ipv6_netmask(s, "ct_ipv6_dst", &f->ct_ipv6_dst,
+                        &wc->masks.ct_ipv6_dst);
+    if (wc->masks.ct_nw_proto) {
+        ds_put_format(s, "%sct_nw_proto=%s%"PRIu8",",
+                      colors.param, colors.end, f->ct_nw_proto);
+        format_be16_masked(s, "ct_tp_src", f->ct_tp_src, wc->masks.ct_tp_src);
+        format_be16_masked(s, "ct_tp_dst", f->ct_tp_dst, wc->masks.ct_tp_dst);
     }
 
     if (wc->masks.dl_type) {

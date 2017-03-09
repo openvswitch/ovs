@@ -970,7 +970,7 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
     int match_len;
     int i;
 
-    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 36);
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 37);
 
     /* Metadata. */
     if (match->wc.masks.dp_hash) {
@@ -1118,7 +1118,21 @@ nx_put_raw(struct ofpbuf *b, enum ofp_version oxm, const struct match *match,
                 htonl(match->wc.masks.ct_mark));
     nxm_put_128m(b, MFF_CT_LABEL, oxm, hton128(flow->ct_label),
                  hton128(match->wc.masks.ct_label));
-
+    nxm_put_32m(b, MFF_CT_NW_SRC, oxm,
+                flow->ct_nw_src, match->wc.masks.ct_nw_src);
+    nxm_put_ipv6(b, MFF_CT_IPV6_SRC, oxm,
+                 &flow->ct_ipv6_src, &match->wc.masks.ct_ipv6_src);
+    nxm_put_32m(b, MFF_CT_NW_DST, oxm,
+                flow->ct_nw_dst, match->wc.masks.ct_nw_dst);
+    nxm_put_ipv6(b, MFF_CT_IPV6_DST, oxm,
+                 &flow->ct_ipv6_dst, &match->wc.masks.ct_ipv6_dst);
+    if (flow->ct_nw_proto) {
+        nxm_put_8(b, MFF_CT_NW_PROTO, oxm, flow->ct_nw_proto);
+        nxm_put_16m(b, MFF_CT_TP_SRC, oxm,
+                    flow->ct_tp_src, match->wc.masks.ct_tp_src);
+        nxm_put_16m(b, MFF_CT_TP_DST, oxm,
+                    flow->ct_tp_dst, match->wc.masks.ct_tp_dst);
+    }
     /* OpenFlow 1.1+ Metadata. */
     nxm_put_64m(b, MFF_METADATA, oxm,
                 flow->metadata, match->wc.masks.metadata);

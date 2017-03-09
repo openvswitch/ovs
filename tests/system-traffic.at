@@ -612,6 +612,7 @@ AT_BANNER([conntrack])
 AT_SETUP([conntrack - controller])
 CHECK_CONNTRACK()
 OVS_TRAFFIC_VSWITCHD_START()
+AT_CHECK([ovs-appctl vlog/set dpif:dbg dpif_netdev:dbg ofproto_dpif_upcall:dbg])
 
 ADD_NAMESPACES(at_ns0, at_ns1)
 
@@ -645,7 +646,7 @@ dnl Check this output. We only see the latter two packets, not the first.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN2 (xid=0x0): total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=1,tp_dst=2 udp_csum:0
-NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,in_port=2 (via action) data_len=42 (unbuffered)
+NXT_PACKET_IN2 (xid=0x0): cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,in_port=2 (via action) data_len=42 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=0,tp_src=2,tp_dst=1 udp_csum:0
 ])
 
@@ -1353,9 +1354,9 @@ dnl Check this output. We only see the latter two packets, not the first.
 AT_CHECK([cat ofctl_monitor.log], [0], [dnl
 NXT_PACKET_IN2 (xid=0x0): table_id=1 cookie=0x0 total_len=75 ct_state=inv|trk,in_port=2 (via action) data_len=75 (unbuffered)
 icmp,vlan_tci=0x0000,dl_src=c6:f5:4e:cb:72:db,dl_dst=f6:4c:47:35:28:c9,nw_src=172.16.0.4,nw_dst=172.16.0.3,nw_tos=192,nw_ecn=0,nw_ttl=64,icmp_type=3,icmp_code=3 icmp_csum:da49
-NXT_PACKET_IN2 (xid=0x0): table_id=1 cookie=0x0 total_len=47 ct_state=new|trk,in_port=1 (via action) data_len=47 (unbuffered)
+NXT_PACKET_IN2 (xid=0x0): table_id=1 cookie=0x0 total_len=47 ct_state=new|trk,ct_nw_src=172.16.0.1,ct_nw_dst=172.16.0.2,ct_nw_proto=17,ct_tp_src=41614,ct_tp_dst=5555,in_port=1 (via action) data_len=47 (unbuffered)
 udp,vlan_tci=0x0000,dl_src=e6:4c:47:35:28:c9,dl_dst=c6:f9:4e:cb:72:db,nw_src=172.16.0.1,nw_dst=172.16.0.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=41614,tp_dst=5555 udp_csum:2096
-NXT_PACKET_IN2 (xid=0x0): table_id=1 cookie=0x0 total_len=75 ct_state=rel|rpl|trk,in_port=2 (via action) data_len=75 (unbuffered)
+NXT_PACKET_IN2 (xid=0x0): table_id=1 cookie=0x0 total_len=75 ct_state=rel|rpl|trk,ct_nw_src=172.16.0.1,ct_nw_dst=172.16.0.2,ct_nw_proto=17,ct_tp_src=41614,ct_tp_dst=5555,in_port=2 (via action) data_len=75 (unbuffered)
 icmp,vlan_tci=0x0000,dl_src=c6:f9:4e:cb:72:db,dl_dst=e6:4c:47:35:28:c9,nw_src=172.16.0.2,nw_dst=172.16.0.1,nw_tos=192,nw_ecn=0,nw_ttl=64,icmp_type=3,icmp_code=3 icmp_csum:553f
 ])
 
@@ -1369,7 +1370,7 @@ AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(172.16.0.3)], [0], [dnl
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
 
-AT_SETUP([conntrack - IPv4 fragmentation ])
+AT_SETUP([conntrack - IPv4 fragmentation])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_FRAG()
 OVS_TRAFFIC_VSWITCHD_START()
@@ -2818,6 +2819,72 @@ dnl separate from the above to easier identify issues in this code on different
 dnl kernels.
 CHECK_FTP_NAT_POST_RECIRC([seqadj], [10.1.1.240], [0x0a0101f0])
 
+
+dnl CHECK_FTP_NAT_ORIG_TUPLE(TITLE, IP_ADDR, IP_ADDR_AS_HEX)
+dnl
+dnl Checks the implementation of conntrack original direction tuple matching
+dnl with FTP ALGs in combination with NAT, with flow tables that implement
+dnl the NATing before the first round of recirculation - that is, the first
+dnl flow ct(nat, table=foo) then a subsequent flow will implement the
+dnl commiting of NATed and other connections with ct(nat..),output:foo.
+dnl
+dnl IP_ADDR must specify the NAT address in standard "10.1.1.x" format,
+dnl and IP_ADDR_AS_HEX must specify the same address as hex, eg 0x0a0101xx.
+m4_define([CHECK_FTP_NAT_ORIG_TUPLE], [dnl
+    CHECK_FTP_NAT([orig tuple $1], [$2], [dnl
+dnl track all IP traffic (includes nat and helper calls to non-NEW packets.)
+table=0 ip, action=ct(nat,table=1)
+dnl
+dnl ARP
+dnl
+table=0 priority=100 arp arp_op=1 action=move:OXM_OF_ARP_TPA[[]]->NXM_NX_REG2[[]],resubmit(,8),goto_table:10
+table=0 priority=10 arp action=normal
+table=0 priority=0 action=drop
+dnl
+dnl "ACL table"
+dnl
+dnl Allow all IP traffic with conntrack original direction IP source address
+dnl '10.1.1.1'.  This should allow also reply packets and related packets in
+dnl both directions.
+table=1 ip, ct_state=+trk-inv, ct_nw_src=10.1.1.1 action=goto_table:2
+dnl Drop everything else.
+table=1 priority=0, action=drop
+dnl
+dnl "Conntrack commit table"
+dnl
+dnl Commit new outgoing FTP control connections.  Must match on 'tcp' when
+dnl setting 'alg=ftp'.
+table=2 in_port=1 priority=100 ct_state=+new, tcp, tp_dst=21, action=ct(alg=ftp,commit,nat(src=$2)),2
+dnl Commit other new outgoing IP connections.
+table=2 in_port=1 priority=20 ct_state=+new, ip, action=ct(commit,nat(src=$2)),2
+dnl Commit incoming new IP connections. 'nat' may be needed for related
+dnl connections, and is harmless for connections that do not need it.
+table=2 in_port=2 priority=10 ct_state=+new, ip, action=ct(commit,nat),1
+dnl Just forward all the rest.
+table=2 priority=0 in_port=1 action=2
+table=2 priority=0 in_port=2 action=1
+dnl
+dnl MAC resolution table for IP in reg2, stores mac in OXM_OF_PKT_REG0
+dnl
+table=8,reg2=$3/0xffffffff,action=load:0x808888888888->OXM_OF_PKT_REG0[[]]
+table=8,priority=0,action=load:0->OXM_OF_PKT_REG0[[]]
+dnl ARP responder mac filled in at OXM_OF_PKT_REG0, or 0 for normal action.
+dnl TPA IP in reg2.
+dnl Swaps the fields of the ARP message to turn a query to a response.
+table=10 priority=100 arp xreg0=0 action=normal
+table=10 priority=10,arp,arp_op=1,action=load:2->OXM_OF_ARP_OP[[]],move:OXM_OF_ARP_SHA[[]]->OXM_OF_ARP_THA[[]],move:OXM_OF_PKT_REG0[[0..47]]->OXM_OF_ARP_SHA[[]],move:OXM_OF_ARP_SPA[[]]->OXM_OF_ARP_TPA[[]],move:NXM_NX_REG2[[]]->OXM_OF_ARP_SPA[[]],move:NXM_OF_ETH_SRC[[]]->NXM_OF_ETH_DST[[]],move:OXM_OF_PKT_REG0[[0..47]]->NXM_OF_ETH_SRC[[]],move:NXM_OF_IN_PORT[[]]->NXM_NX_REG3[[0..15]],load:0->NXM_OF_IN_PORT[[]],output:NXM_NX_REG3[[0..15]]
+table=10 priority=0 action=drop
+    ])
+])
+
+dnl Check that ct(nat,table=foo) works without TCP sequence adjustment with
+dnl an ACL table based on matching on conntrack original direction tuple only.
+CHECK_FTP_NAT_ORIG_TUPLE([], [10.1.1.9], [0x0a010109])
+
+dnl Check that ct(nat,table=foo) works with TCP sequence adjustment with
+dnl an ACL table based on matching on conntrack original direction tuple only.
+CHECK_FTP_NAT_ORIG_TUPLE([seqadj], [10.1.1.240], [0x0a0101f0])
+
 AT_SETUP([conntrack - IPv6 HTTP with NAT])
 CHECK_CONNTRACK()
 CHECK_CONNTRACK_NAT()
@@ -2878,9 +2945,6 @@ NS_CHECK_EXEC([at_ns1], [ip -6 neigh add fc00::240 lladdr 80:88:88:88:88:88 dev 
 dnl Allow any traffic from ns0->ns1.
 dnl Only allow nd, return traffic from ns1->ns0.
 AT_DATA([flows.txt], [dnl
-dnl Allow other ICMPv6 both ways (without commit).
-table=1 priority=100 in_port=1 icmp6, action=2
-table=1 priority=100 in_port=2 icmp6, action=1
 dnl track all IPv6 traffic (this includes NAT & help to non-NEW packets.)
 table=0 priority=10 ip6, action=ct(nat,table=1)
 table=0 priority=0 action=drop
@@ -2894,6 +2958,9 @@ table=1 in_port=2 ct_state=+new+rel tcp6 ipv6_dst=fc00::240 action=ct(commit,nat
 dnl Allow established TCPv6 connections both ways, enforce NATting
 table=1 in_port=1 ct_state=+est tcp6 ipv6_src=fc00::240   action=2
 table=1 in_port=2 ct_state=+est tcp6 ipv6_dst=fc00::1     action=1
+dnl Allow other ICMPv6 both ways (without commit).
+table=1 priority=100 in_port=1 icmp6, action=2
+table=1 priority=100 in_port=2 icmp6, action=1
 dnl Drop everything else.
 table=1 priority=0, action=drop
 ])
@@ -2918,6 +2985,67 @@ tcp,orig=(src=fc00::2,dst=fc00::240,sport=<cleared>,dport=<cleared>),reply=(src=
 
 OVS_TRAFFIC_VSWITCHD_STOP
 AT_CLEANUP
+
+
+AT_SETUP([conntrack - IPv6 FTP with NAT - orig tuple])
+AT_SKIP_IF([test $HAVE_FTP = no])
+CHECK_CONNTRACK()
+CHECK_CONNTRACK_NAT()
+OVS_TRAFFIC_VSWITCHD_START()
+
+ADD_NAMESPACES(at_ns0, at_ns1)
+
+ADD_VETH(p0, at_ns0, br0, "fc00::1/96")
+NS_CHECK_EXEC([at_ns0], [ip link set dev p0 address 80:88:88:88:88:88])
+ADD_VETH(p1, at_ns1, br0, "fc00::2/96")
+dnl Would be nice if NAT could translate neighbor discovery messages, too.
+NS_CHECK_EXEC([at_ns1], [ip -6 neigh add fc00::240 lladdr 80:88:88:88:88:88 dev p1])
+
+dnl Allow any traffic from ns0->ns1.
+dnl Only allow nd, return traffic from ns1->ns0.
+AT_DATA([flows.txt], [dnl
+dnl track all IPv6 traffic (this includes NAT & help to non-NEW packets.)
+table=0 priority=10 ip6, action=ct(nat,table=1)
+table=0 priority=0 action=drop
+dnl
+dnl Table 1
+dnl
+dnl Allow other ICMPv6 both ways (without commit).
+table=1 priority=100 in_port=1 icmp6, action=2
+table=1 priority=100 in_port=2 icmp6, action=1
+dnl Allow new TCPv6 FTP control connections.
+table=1 priority=10 in_port=1 ct_state=+new+trk-inv tcp6 ct_nw_proto=6 ct_ipv6_src=fc00::1 ct_tp_dst=21  action=ct(alg=ftp,commit,nat(src=fc00::240)),2
+dnl Allow related TCPv6 connections from port 2 to the NATted address.
+table=1 priority=10 in_port=2 ct_state=+new+rel+trk-inv ipv6 ct_nw_proto=6 ct_ipv6_src=fc00::1 ct_tp_dst=21 action=ct(commit,nat),1
+dnl Allow established TCPv6 connections both ways, enforce NATting
+table=1 priority=10 in_port=1 ct_state=+est+trk-inv ipv6 ct_nw_proto=6 ct_ipv6_src=fc00::1 ct_tp_dst=21 action=2
+table=1 priority=10 in_port=2 ct_state=+est+trk-inv ipv6 ct_nw_proto=6 ct_ipv6_src=fc00::1 ct_tp_dst=21 action=1
+dnl Drop everything else.
+table=1 priority=0, action=drop
+])
+
+AT_CHECK([ovs-ofctl --bundle add-flows br0 flows.txt])
+
+dnl Linux seems to take a little time to get its IPv6 stack in order. Without
+dnl waiting, we get occasional failures due to the following error:
+dnl "connect: Cannot assign requested address"
+OVS_WAIT_UNTIL([ip netns exec at_ns0 ping6 -c 1 fc00::2 >/dev/null])
+
+NETNS_DAEMONIZE([at_ns1], [[$PYTHON $srcdir/test-l7.py ftp]], [ftp0.pid])
+OVS_WAIT_UNTIL([ip netns exec at_ns1 netstat -l | grep ftp])
+
+dnl FTP requests from p0->p1 should work fine.
+NS_CHECK_EXEC([at_ns0], [wget ftp://[[fc00::2]] -6 --no-passive-ftp -t 3 -T 1 --retry-connrefused -v --server-response --no-remove-listing -o wget0.log -d])
+
+dnl Discards CLOSE_WAIT and CLOSING
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | FORMAT_CT(fc00::2)], [0], [dnl
+tcp,orig=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),reply=(src=fc00::2,dst=fc00::240,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>),helper=ftp
+tcp,orig=(src=fc00::2,dst=fc00::240,sport=<cleared>,dport=<cleared>),reply=(src=fc00::1,dst=fc00::2,sport=<cleared>,dport=<cleared>),protoinfo=(state=<cleared>)
+])
+
+OVS_TRAFFIC_VSWITCHD_STOP
+AT_CLEANUP
+
 
 AT_SETUP([conntrack - DNAT load balancing])
 CHECK_CONNTRACK()

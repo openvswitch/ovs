@@ -1184,6 +1184,7 @@ CHECK_FEATURE(ct_zone)
 CHECK_FEATURE(ct_mark)
 CHECK_FEATURE__(ct_label, ct_label, ct_label.u64.lo, 1)
 CHECK_FEATURE__(ct_state_nat, ct_state, ct_state, CS_TRACKED|CS_SRC_NAT)
+CHECK_FEATURE__(ct_orig_tuple, ct_orig_tuple, ct_nw_proto, 1)
 
 #undef CHECK_FEATURE
 #undef CHECK_FEATURE__
@@ -1210,6 +1211,7 @@ check_support(struct dpif_backer *backer)
     backer->support.odp.ct_label = check_ct_label(backer);
 
     backer->support.odp.ct_state_nat = check_ct_state_nat(backer);
+    backer->support.odp.ct_orig_tuple = check_ct_orig_tuple(backer);
 }
 
 static int

@@ -2479,6 +2479,98 @@ actions=clone(load:0->NXM_OF_IN_PORT[],output:123)
       parameter to the <code>ct</code> action, to the connection to which the
       current packet belongs.
     </field>
+
+    <p>
+      Open vSwitch 2.8 introduced the matching support for connection
+      tracker original direction 5-tuple fields.
+    </p>
+
+    <p>
+      For non-committed non-related connections the conntrack original
+      direction tuple fields always have the same values as the
+      corresponding headers in the packet itself.  For any other packets of
+      a committed connection the conntrack original direction tuple fields
+      reflect the values from that initial non-committed non-related packet,
+      and thus may be different from the actual packet headers, as the
+      actual packet headers may be in reverse direction (for reply packets),
+      transformed by NAT (when \fBnat\fR option was applied to the
+      connection), or be of different protocol (i.e., when an ICMP response
+      is sent to an UDP packet).  In case of related connections, e.g., an
+      FTP data connection, the original direction tuple contains the
+      original direction headers from the master connection, e.g., an FTP
+      control connection.
+    </p>
+
+    <p>
+      The following fields are populated by the ct action, and require a
+      match to a valid connection tracking state as a prerequisite, in
+      addition to the IP or IPv6 ethertype match.  Examples of valid
+      connection tracking state matches include \fBct_state=+new\fR,
+      \fBct_state=+est\fR, \fBct_state=+rel\fR, and \fBct_state=+trk-inv\fR.
+    </p>
+
+    <field id="MFF_CT_NW_SRC" title="Connection Tracking Original Direction IPv4 Source Address">
+      Matches IPv4 conntrack original direction tuple source address.
+      See the paragraphs above for general description to the
+      conntrack original direction tuple.  Introduced in Open vSwitch
+      2.8.
+    </field>
+
+    <field id="MFF_CT_NW_DST" title="Connection Tracking Original Direction IPv4 Destination Address">
+      Matches IPv4 conntrack original direction tuple destination address.
+      See the paragraphs above for general description to the
+      conntrack original direction tuple.  Introduced in Open vSwitch
+      2.8.
+    </field>
+
+    <field id="MFF_CT_IPV6_SRC" title="Connection Tracking Original Direction IPv6 Source Address">
+      Matches IPv6 conntrack original direction tuple source address.
+      See the paragraphs above for general description to the
+      conntrack original direction tuple.  Introduced in Open vSwitch
+      2.8.
+    </field>
+
+    <field id="MFF_CT_IPV6_DST" title="Connection Tracking Original Direction IPv6 Destination Address">
+      Matches IPv6 conntrack original direction tuple destination address.
+      See the paragraphs above for general description to the
+      conntrack original direction tuple.  Introduced in Open vSwitch
+      2.8.
+    </field>
+
+    <field id="MFF_CT_NW_PROTO" title="Connection Tracking Original Direction IP Protocol">
+      Matches conntrack original direction tuple IP protocol type,
+      which is specified as a decimal number between 0 and 255,
+      inclusive (e.g. 1 to match ICMP packets or 6 to match TCP
+      packets).  In case of, for example, an ICMP response to an UDP
+      packet, this may be different from the IP protocol type of the
+      packet itself.  See the paragraphs above for general description
+      to the conntrack original direction tuple.  Introduced in Open
+      vSwitch 2.8.
+    </field>
+
+    <field id="MFF_CT_TP_SRC" title="Connection Tracking Original Direction Transport Layer Source Port">
+      Bitwise match on the conntrack original direction tuple
+      transport source, when
+      <code>MFF_CT_NW_PROTO</code> has value 6 for TCP, 17 for UDP, or
+      132 for SCTP.  When <code>MFF_CT_NW_PROTO</code> has value 1 for
+      ICMP, or 58 for ICMPv6, the lower 8 bits of
+      <code>MFF_CT_TP_SRC</code> matches the conntrack original
+      direction ICMP type.  See the paragraphs above for general
+      description to the conntrack original direction
+      tuple. Introduced in Open vSwitch 2.8.
+    </field>
+
+    <field id="MFF_CT_TP_DST" title="Connection Tracking Original Direction Transport Layer Source Port">
+      Bitwise match on the conntrack original direction tuple
+      transport destination port, when
+      <code>MFF_CT_NW_PROTO</code> has value 6 for TCP, 17 for UDP, or
+      132 for SCTP.  When <code>MFF_CT_NW_PROTO</code> has value 1 for
+      ICMP, or 58 for ICMPv6, the lower 8 bits of
+      <code>MFF_CT_TP_DST</code> matches the conntrack original
+      direction ICMP code.  See the paragraphs above for general
+      description to the conntrack original direction
+      tuple. Introduced in Open vSwitch 2.8.
+    </field>
   </group>
 
   <group title="Register">

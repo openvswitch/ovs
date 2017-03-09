@@ -862,9 +862,35 @@ flow_union_with_miniflow(struct flow *dst, const struct miniflow *src)
     flow_union_with_miniflow_subset(dst, src, src->map);
 }
 
+static inline bool is_ct_valid(const struct flow *flow,
+                               const struct flow_wildcards *mask,
+                               struct flow_wildcards *wc)
+{
+    /* Matches are checked with 'mask' and without 'wc'. */
+    if (mask && !wc) {
+        /* Must match at least one of the bits that implies a valid
+         * conntrack entry, or an explicit not-invalid. */
+        return flow->ct_state & (CS_NEW | CS_ESTABLISHED | CS_RELATED
+                                 | CS_REPLY_DIR | CS_SRC_NAT | CS_DST_NAT)
+            || (flow->ct_state & CS_TRACKED
+                && mask->masks.ct_state & CS_INVALID
+                && !(flow->ct_state & CS_INVALID));
+    }
+    /* Else we are checking a fully extracted flow, where valid CT state always
+     * has either 'new', 'established', or 'reply_dir' bit set. */
+#define CS_VALID_MASK (CS_NEW | CS_ESTABLISHED | CS_REPLY_DIR)
+    if (wc) {
+        wc->masks.ct_state |= CS_VALID_MASK;
+    }
+    return flow->ct_state & CS_VALID_MASK;
+}
+
 static inline void
 pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
 {
+    /* Update this function whenever struct flow changes. */
+    BUILD_ASSERT_DECL(FLOW_WC_SEQ == 37);
+
     md->recirc_id = flow->recirc_id;
     md->dp_hash = flow->dp_hash;
     flow_tnl_copy__(&md->tunnel, &flow->tunnel);
@@ -875,6 +901,30 @@ pkt_metadata_from_flow(struct pkt_metadata *md, const struct flow *flow)
     md->ct_zone = flow->ct_zone;
     md->ct_mark = flow->ct_mark;
     md->ct_label = flow->ct_label;
+
+    md->ct_orig_tuple_ipv6 = false;
+    if (is_ct_valid(flow, NULL, NULL)) {
+        if (flow->dl_type == htons(ETH_TYPE_IP)) {
+            md->ct_orig_tuple.ipv4 = (struct ovs_key_ct_tuple_ipv4) {
+                flow->ct_nw_src,
+                flow->ct_nw_dst,
+                flow->ct_tp_src,
+                flow->ct_tp_dst,
+                flow->ct_nw_proto,
+            };
+        } else if (flow->dl_type == htons(ETH_TYPE_IPV6)) {
+            md->ct_orig_tuple_ipv6 = true;
+            md->ct_orig_tuple.ipv6 = (struct ovs_key_ct_tuple_ipv6) {
+                flow->ct_ipv6_src,
+                flow->ct_ipv6_dst,
+                flow->ct_tp_src,
+                flow->ct_tp_dst,
+                flow->ct_nw_proto,
+            };
+        }
+    } else {
+        memset(&md->ct_orig_tuple, 0, sizeof md->ct_orig_tuple);
+    }
 }
 
 /* Often, during translation we need to read a value from a flow('FLOW') and

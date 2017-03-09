@@ -23,7 +23,7 @@
 /* This sequence number should be incremented whenever anything involving flows
  * or the wildcarding of flows changes.  This will cause build assertion
  * failures in places which likely need to be updated. */
-#define FLOW_WC_SEQ 36
+#define FLOW_WC_SEQ 37
 
 /* Number of Open vSwitch extension 32-bit registers. */
 #define FLOW_N_REGS 16
@@ -92,7 +92,7 @@ struct flow {
     union flow_in_port in_port; /* Input port.*/
     uint32_t recirc_id;         /* Must be exact match. */
     uint8_t ct_state;           /* Connection tracking state. */
-    uint8_t pad0;
+    uint8_t ct_nw_proto;        /* CT orig tuple IP protocol. */
     uint16_t ct_zone;           /* Connection tracking zone. */
     uint32_t ct_mark;           /* Connection mark.*/
     uint8_t pad1[4];            /* Pad to 64 bits. */
@@ -110,8 +110,12 @@ struct flow {
     /* L3 (64-bit aligned) */
     ovs_be32 nw_src;            /* IPv4 source address or ARP SPA. */
     ovs_be32 nw_dst;            /* IPv4 destination address or ARP TPA. */
+    ovs_be32 ct_nw_src;         /* CT orig tuple IPv4 source address. */
+    ovs_be32 ct_nw_dst;         /* CT orig tuple IPv4 destination address. */
     struct in6_addr ipv6_src;   /* IPv6 source address. */
     struct in6_addr ipv6_dst;   /* IPv6 destination address. */
+    struct in6_addr ct_ipv6_src; /* CT orig tuple IPv6 source address. */
+    struct in6_addr ct_ipv6_dst; /* CT orig tuple IPv6 destination address. */
     ovs_be32 ipv6_label;        /* IPv6 flow label. */
     uint8_t nw_frag;            /* FLOW_FRAG_* flags. */
     uint8_t nw_tos;             /* IP ToS (including DSCP and ECN). */
@@ -126,8 +130,11 @@ struct flow {
     /* L4 (64-bit aligned) */
     ovs_be16 tp_src;            /* TCP/UDP/SCTP source port/ICMP type. */
     ovs_be16 tp_dst;            /* TCP/UDP/SCTP destination port/ICMP code. */
+    ovs_be16 ct_tp_src;         /* CT original tuple source port/ICMP type. */
+    ovs_be16 ct_tp_dst;         /* CT original tuple dst port/ICMP code. */
     ovs_be32 igmp_group_ip4;    /* IGMP group IPv4 address.
                                  * Keep last for BUILD_ASSERT_DECL below. */
+    ovs_be32 pad4;              /* Pad to 64 bits. */
 };
 BUILD_ASSERT_DECL(sizeof(struct flow) % sizeof(uint64_t) == 0);
 BUILD_ASSERT_DECL(sizeof(struct flow_tnl) % sizeof(uint64_t) == 0);
@@ -136,8 +143,8 @@ BUILD_ASSERT_DECL(sizeof(struct flow_tnl) % sizeof(uint64_t) == 0);
 
 /* Remember to update FLOW_WC_SEQ when changing 'struct flow'. */
 BUILD_ASSERT_DECL(offsetof(struct flow, igmp_group_ip4) + sizeof(uint32_t)
-                  == sizeof(struct flow_tnl) + 248
-                  && FLOW_WC_SEQ == 36);
+                  == sizeof(struct flow_tnl) + 292
+                  && FLOW_WC_SEQ == 37);
 
 /* Incremental points at which flow classification may be performed in
  * segments.

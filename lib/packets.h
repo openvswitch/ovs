@@ -100,9 +100,14 @@ struct pkt_metadata {
     uint32_t skb_priority;      /* Packet priority for QoS. */
     uint32_t pkt_mark;          /* Packet mark. */
     uint8_t  ct_state;          /* Connection state. */
+    bool ct_orig_tuple_ipv6;
     uint16_t ct_zone;           /* Connection zone. */
     uint32_t ct_mark;           /* Connection mark. */
     ovs_u128 ct_label;          /* Connection label. */
+    union {                     /* Populated only for non-zero 'ct_state'. */
+        struct ovs_key_ct_tuple_ipv4 ipv4;
+        struct ovs_key_ct_tuple_ipv6 ipv6;   /* Used only if                */
+    } ct_orig_tuple;                         /* 'ct_orig_tuple_ipv6' is set */
     union flow_in_port in_port; /* Input port. */
     struct flow_tnl tunnel;     /* Encapsulating tunnel parameters. Note that
                                  * if 'ip_dst' == 0, the rest of the fields may
