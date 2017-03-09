@@ -29,6 +29,7 @@
 struct ds;
 struct flow;
 struct flow_wildcards;
+struct match;
 struct ofpact_bundle;
 struct ofpbuf;
 
@@ -43,7 +44,7 @@ ofp_port_t bundle_execute(const struct ofpact_bundle *, const struct flow *,
                         bool (*slave_enabled)(ofp_port_t ofp_port, void *aux),
                         void *aux);
 enum ofperr bundle_check(const struct ofpact_bundle *, ofp_port_t max_ports,
-                         const struct flow *);
+                         const struct match *);
 char *bundle_parse(const char *, struct ofpbuf *ofpacts) OVS_WARN_UNUSED_RESULT;
 char *bundle_parse_load(const char *, struct ofpbuf *ofpacts)
     OVS_WARN_UNUSED_RESULT;

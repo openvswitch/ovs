@@ -35,18 +35,18 @@
 /* Checks that 'learn' is a valid action on 'flow'.  Returns 0 if it is valid,
  * otherwise an OFPERR_*. */
 enum ofperr
-learn_check(const struct ofpact_learn *learn, const struct flow *flow)
+learn_check(const struct ofpact_learn *learn, const struct match *src_match)
 {
     const struct ofpact_learn_spec *spec;
-    struct match match;
+    struct match dst_match;
 
-    match_init_catchall(&match);
+    match_init_catchall(&dst_match);
     OFPACT_LEARN_SPEC_FOR_EACH (spec, learn) {
         enum ofperr error;
 
         /* Check the source. */
         if (spec->src_type == NX_LEARN_SRC_FIELD) {
-            error = mf_check_src(&spec->src, flow);
+            error = mf_check_src(&spec->src, src_match);
             if (error) {
                 return error;
             }
@@ -55,18 +55,19 @@ learn_check(const struct ofpact_learn *learn, const struct flow *flow)
         /* Check the destination. */
         switch (spec->dst_type) {
         case NX_LEARN_DST_MATCH:
-            error = mf_check_src(&spec->dst, &match.flow);
+            error = mf_check_src(&spec->dst, &dst_match);
             if (error) {
                 return error;
             }
             if (spec->src_type & NX_LEARN_SRC_IMMEDIATE) {
                 mf_write_subfield_value(&spec->dst,
-                                        ofpact_learn_spec_imm(spec), &match);
+                                        ofpact_learn_spec_imm(spec),
+                                        &dst_match);
             }
             break;
 
         case NX_LEARN_DST_LOAD:
-            error = mf_check_dst(&spec->dst, &match.flow);
+            error = mf_check_dst(&spec->dst, &dst_match);
             if (error) {
                 return error;
             }

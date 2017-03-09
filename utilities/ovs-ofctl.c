@@ -3880,12 +3880,12 @@ ofctl_parse_actions__(const char *version_s, bool instructions)
         if (!error && instructions) {
             /* Verify actions, enforce consistency. */
             enum ofputil_protocol protocol;
-            struct flow flow;
+            struct match match;
 
-            memset(&flow, 0, sizeof flow);
+            memset(&match, 0, sizeof match);
             protocol = ofputil_protocols_from_ofp_version(version);
             error = ofpacts_check_consistency(ofpacts.data, ofpacts.size,
-                                              &flow, OFPP_MAX,
+                                              &match, OFPP_MAX,
                                               table_id ? atoi(table_id) : 0,
                                               OFPTT_MAX + 1, protocol);
         }

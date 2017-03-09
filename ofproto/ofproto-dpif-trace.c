@@ -324,7 +324,7 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
     struct ofpbuf ofpacts;
     struct dp_packet *packet;
     struct ds result;
-    struct flow flow;
+    struct match match;
     uint16_t in_port;
 
     /* Three kinds of error return values! */
@@ -354,12 +354,13 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
         enforce_consistency = false;
     }
 
-    error = parse_flow_and_packet(argc, argv, &ofproto, &flow, &packet);
+    error = parse_flow_and_packet(argc, argv, &ofproto, &match.flow, &packet);
     if (error) {
         unixctl_command_reply_error(conn, error);
         free(error);
         goto exit;
     }
+    match_wc_init(&match, &match.flow);
 
     /* Do the same checks as handle_packet_out() in ofproto.c.
      *
@@ -371,18 +372,18 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
      *
      * We skip the "meter" check here because meter is an instruction, not an
      * action, and thus cannot appear in ofpacts. */
-    in_port = ofp_to_u16(flow.in_port.ofp_port);
+    in_port = ofp_to_u16(match.flow.in_port.ofp_port);
     if (in_port >= ofproto->up.max_ports && in_port < ofp_to_u16(OFPP_MAX)) {
         unixctl_command_reply_error(conn, "invalid in_port");
         goto exit;
     }
     if (enforce_consistency) {
-        retval = ofpacts_check_consistency(ofpacts.data, ofpacts.size, &flow,
+        retval = ofpacts_check_consistency(ofpacts.data, ofpacts.size, &match,
                                            u16_to_ofp(ofproto->up.max_ports),
                                            0, ofproto->up.n_tables,
                                            usable_protocols);
     } else {
-        retval = ofpacts_check(ofpacts.data, ofpacts.size, &flow,
+        retval = ofpacts_check(ofpacts.data, ofpacts.size, &match,
                                u16_to_ofp(ofproto->up.max_ports), 0,
                                ofproto->up.n_tables, &usable_protocols);
     }
@@ -400,7 +401,7 @@ ofproto_unixctl_trace_actions(struct unixctl_conn *conn, int argc,
         goto exit;
     }
 
-    ofproto_trace(ofproto, &flow, packet,
+    ofproto_trace(ofproto, &match.flow, packet,
                   ofpacts.data, ofpacts.size, &result);
     unixctl_command_reply(conn, ds_cstr(&result));
 

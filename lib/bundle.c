@@ -105,13 +105,13 @@ bundle_execute(const struct ofpact_bundle *bundle,
 
 enum ofperr
 bundle_check(const struct ofpact_bundle *bundle, ofp_port_t max_ports,
-             const struct flow *flow)
+             const struct match *match)
 {
     static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 5);
     size_t i;
 
     if (bundle->dst.field) {
-        enum ofperr error = mf_check_dst(&bundle->dst, flow);
+        enum ofperr error = mf_check_dst(&bundle->dst, match);
         if (error) {
             return error;
         }

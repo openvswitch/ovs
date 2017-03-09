@@ -35,9 +35,9 @@
  * OFPERR_*. */
 enum ofperr
 multipath_check(const struct ofpact_multipath *mp,
-                const struct flow *flow)
+                const struct match *match)
 {
-    return mf_check_dst(&mp->dst, flow);
+    return mf_check_dst(&mp->dst, match);
 }
 
 /* multipath_execute(). */

@@ -539,7 +539,7 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
                 *cookie = value.be64;
                 *cookie_mask = mask.be64;
             }
-        } else if (!mf_are_prereqs_ok(field, &match->flow, NULL)) {
+        } else if (!mf_are_match_prereqs_ok(field, match)) {
             error = OFPERR_OFPBMC_BAD_PREREQ;
         } else if (!mf_is_all_wild(field, &match->wc)) {
             error = OFPERR_OFPBMC_DUP_FIELD;
@@ -1663,16 +1663,17 @@ nxm_format_reg_move(const struct ofpact_reg_move *move, struct ds *s)
 
 
 enum ofperr
-nxm_reg_move_check(const struct ofpact_reg_move *move, const struct flow *flow)
+nxm_reg_move_check(const struct ofpact_reg_move *move,
+                   const struct match *match)
 {
     enum ofperr error;
 
-    error = mf_check_src(&move->src, flow);
+    error = mf_check_src(&move->src, match);
     if (error) {
         return error;
     }
 
-    return mf_check_dst(&move->dst, flow);
+    return mf_check_dst(&move->dst, match);
 }
 
 /* nxm_execute_reg_move(). */
@@ -1734,16 +1735,16 @@ nxm_format_stack_pop(const struct ofpact_stack *pop, struct ds *s)
 
 enum ofperr
 nxm_stack_push_check(const struct ofpact_stack *push,
-                     const struct flow *flow)
+                     const struct match *match)
 {
-    return mf_check_src(&push->subfield, flow);
+    return mf_check_src(&push->subfield, match);
 }
 
 enum ofperr
 nxm_stack_pop_check(const struct ofpact_stack *pop,
-                    const struct flow *flow)
+                    const struct match *match)
 {
-    return mf_check_dst(&pop->subfield, flow);
+    return mf_check_dst(&pop->subfield, match);
 }
 
 /* nxm_execute_stack_push(), nxm_execute_stack_pop().

@@ -1899,6 +1899,7 @@ void mf_get_mask(const struct mf_field *, const struct flow_wildcards *,
 /* Prerequisites. */
 bool mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow,
                        struct flow_wildcards *wc);
+bool mf_are_match_prereqs_ok(const struct mf_field *, const struct match *);
 
 static inline bool
 mf_is_l3_or_higher(const struct mf_field *mf)
@@ -1960,8 +1961,8 @@ void mf_subfield_swap(const struct mf_subfield *,
                       const struct mf_subfield *,
                       struct flow *flow, struct flow_wildcards *);
 
-enum ofperr mf_check_src(const struct mf_subfield *, const struct flow *);
-enum ofperr mf_check_dst(const struct mf_subfield *, const struct flow *);
+enum ofperr mf_check_src(const struct mf_subfield *, const struct match *);
+enum ofperr mf_check_dst(const struct mf_subfield *, const struct match *);
 
 /* Parsing and formatting. */
 char *mf_parse(const struct mf_field *, const char *,

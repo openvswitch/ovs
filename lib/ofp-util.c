@@ -1751,7 +1751,7 @@ ofputil_decode_flow_mod(struct ofputil_flow_mod *fm,
     }
 
     return ofpacts_check_consistency(fm->ofpacts, fm->ofpacts_len,
-                                     &fm->match.flow, max_port,
+                                     &fm->match, max_port,
                                      fm->table_id, max_table, protocol);
 }
 

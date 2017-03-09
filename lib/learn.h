@@ -23,6 +23,7 @@
 struct ds;
 struct flow;
 struct flow_wildcards;
+struct match;
 struct ofpbuf;
 struct ofpact_learn;
 struct ofputil_flow_mod;
@@ -33,7 +34,7 @@ struct nx_action_learn;
  * See lib/ofp-actions.c for NXAST_LEARN specification.
  */
 
-enum ofperr learn_check(const struct ofpact_learn *, const struct flow *);
+enum ofperr learn_check(const struct ofpact_learn *, const struct match *);
 void learn_execute(const struct ofpact_learn *, const struct flow *,
                    struct ofputil_flow_mod *, struct ofpbuf *ofpacts);
 void learn_mask(const struct ofpact_learn *, struct flow_wildcards *);

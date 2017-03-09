@@ -3448,6 +3448,7 @@ ofproto_packet_out_init(struct ofproto *ofproto,
                         const struct ofputil_packet_out *po)
 {
     enum ofperr error;
+    struct match match;
 
     if (ofp_to_u16(po->in_port) >= ofproto->max_ports
         && ofp_to_u16(po->in_port) < ofp_to_u16(OFPP_MAX)) {
@@ -3472,8 +3473,8 @@ ofproto_packet_out_init(struct ofproto *ofproto,
      * actions aren't in any table.  This is OK as 'table_id' is only used to
      * check instructions (e.g., goto-table), which can't appear on the action
      * list of a packet-out. */
-    error = ofpacts_check_consistency(po->ofpacts, po->ofpacts_len,
-                                      opo->flow,
+    match_wc_init(&match, opo->flow);
+    error = ofpacts_check_consistency(po->ofpacts, po->ofpacts_len, &match,
                                       u16_to_ofp(ofproto->max_ports), 0,
                                       ofproto->n_tables,
                                       ofconn_get_protocol(ofconn));

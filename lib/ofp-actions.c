@@ -7068,9 +7068,10 @@ inconsistent_match(enum ofputil_protocol *usable_protocols)
  * without context. */
 static enum ofperr
 ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
-               struct flow *flow, ofp_port_t max_ports,
+               struct match *match, ofp_port_t max_ports,
                uint8_t table_id, uint8_t n_tables)
 {
+    struct flow *flow = &match->flow;
     const struct ofpact_enqueue *enqueue;
     const struct mf_field *mf;
 
@@ -7092,14 +7093,14 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         return 0;
 
     case OFPACT_OUTPUT_REG:
-        return mf_check_src(&ofpact_get_OUTPUT_REG(a)->src, flow);
+        return mf_check_src(&ofpact_get_OUTPUT_REG(a)->src, match);
 
     case OFPACT_OUTPUT_TRUNC:
         return ofpact_check_output_port(ofpact_get_OUTPUT_TRUNC(a)->port,
                                         max_ports);
 
     case OFPACT_BUNDLE:
-        return bundle_check(ofpact_get_BUNDLE(a), max_ports, flow);
+        return bundle_check(ofpact_get_BUNDLE(a), max_ports, match);
 
     case OFPACT_SET_VLAN_VID:
         /* Remember if we saw a vlan tag in the flow to aid translating to
@@ -7182,7 +7183,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         return 0;
 
     case OFPACT_REG_MOVE:
-        return nxm_reg_move_check(ofpact_get_REG_MOVE(a), flow);
+        return nxm_reg_move_check(ofpact_get_REG_MOVE(a), match);
 
     case OFPACT_SET_FIELD:
         mf = ofpact_get_SET_FIELD(a)->field;
@@ -7205,10 +7206,10 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         return 0;
 
     case OFPACT_STACK_PUSH:
-        return nxm_stack_push_check(ofpact_get_STACK_PUSH(a), flow);
+        return nxm_stack_push_check(ofpact_get_STACK_PUSH(a), match);
 
     case OFPACT_STACK_POP:
-        return nxm_stack_pop_check(ofpact_get_STACK_POP(a), flow);
+        return nxm_stack_pop_check(ofpact_get_STACK_POP(a), match);
 
     case OFPACT_SET_MPLS_LABEL:
     case OFPACT_SET_MPLS_TC:
@@ -7232,13 +7233,13 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         return 0;
 
     case OFPACT_LEARN:
-        return learn_check(ofpact_get_LEARN(a), flow);
+        return learn_check(ofpact_get_LEARN(a), match);
 
     case OFPACT_CONJUNCTION:
         return 0;
 
     case OFPACT_MULTIPATH:
-        return multipath_check(ofpact_get_MULTIPATH(a), flow);
+        return multipath_check(ofpact_get_MULTIPATH(a), match);
 
     case OFPACT_NOTE:
     case OFPACT_EXIT:
@@ -7265,7 +7266,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
     case OFPACT_CLONE: {
         struct ofpact_nest *on = ofpact_get_CLONE(a);
         return ofpacts_check(on->actions, ofpact_nest_get_action_len(on),
-                             flow, max_ports, table_id, n_tables,
+                             match, max_ports, table_id, n_tables,
                              usable_protocols);
     }
 
@@ -7283,11 +7284,11 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         }
 
         if (oc->zone_src.field) {
-            return mf_check_src(&oc->zone_src, flow);
+            return mf_check_src(&oc->zone_src, match);
         }
 
         return ofpacts_check(oc->actions, ofpact_ct_get_action_len(oc),
-                             flow, max_ports, table_id, n_tables,
+                             match, max_ports, table_id, n_tables,
                              usable_protocols);
     }
 
@@ -7315,7 +7316,7 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
         struct ofpact_nest *on = ofpact_get_WRITE_ACTIONS(a);
         enum ofputil_protocol p = *usable_protocols;
         return ofpacts_check(on->actions, ofpact_nest_get_action_len(on),
-                             flow, max_ports, table_id, n_tables, &p);
+                             match, max_ports, table_id, n_tables, &p);
     }
 
     case OFPACT_WRITE_METADATA:
@@ -7363,32 +7364,33 @@ ofpact_check__(enum ofputil_protocol *usable_protocols, struct ofpact *a,
  * example of an inconsistency between match and actions is a flow that does
  * not match on an MPLS Ethertype but has an action that pops an MPLS label.)
  *
- * May annotate ofpacts with information gathered from the 'flow'.
+ * May annotate ofpacts with information gathered from the 'match'.
  *
- * May temporarily modify 'flow', but restores the changes before returning. */
+ * May temporarily modify 'match', but restores the changes before
+ * returning. */
 enum ofperr
 ofpacts_check(struct ofpact ofpacts[], size_t ofpacts_len,
-              struct flow *flow, ofp_port_t max_ports,
+              struct match *match, ofp_port_t max_ports,
               uint8_t table_id, uint8_t n_tables,
               enum ofputil_protocol *usable_protocols)
 {
     struct ofpact *a;
-    ovs_be16 dl_type = flow->dl_type;
-    ovs_be16 vlan_tci = flow->vlan_tci;
-    uint8_t nw_proto = flow->nw_proto;
+    ovs_be16 dl_type = match->flow.dl_type;
+    ovs_be16 vlan_tci = match->flow.vlan_tci;
+    uint8_t nw_proto = match->flow.nw_proto;
     enum ofperr error = 0;
 
     OFPACT_FOR_EACH (a, ofpacts, ofpacts_len) {
-        error = ofpact_check__(usable_protocols, a, flow,
+        error = ofpact_check__(usable_protocols, a, match,
                                max_ports, table_id, n_tables);
         if (error) {
             break;
         }
     }
     /* Restore fields that may have been modified. */
-    flow->dl_type = dl_type;
-    flow->vlan_tci = vlan_tci;
-    flow->nw_proto = nw_proto;
+    match->flow.dl_type = dl_type;
+    match->flow.vlan_tci = vlan_tci;
+    match->flow.nw_proto = nw_proto;
     return error;
 }
 
@@ -7396,14 +7398,14 @@ ofpacts_check(struct ofpact ofpacts[], size_t ofpacts_len,
  * OFPERR_OFPBAC_MATCH_INCONSISTENT rather than clearing bits. */
 enum ofperr
 ofpacts_check_consistency(struct ofpact ofpacts[], size_t ofpacts_len,
-                          struct flow *flow, ofp_port_t max_ports,
+                          struct match *match, ofp_port_t max_ports,
                           uint8_t table_id, uint8_t n_tables,
                           enum ofputil_protocol usable_protocols)
 {
     enum ofputil_protocol p = usable_protocols;
     enum ofperr error;
 
-    error = ofpacts_check(ofpacts, ofpacts_len, flow, max_ports,
+    error = ofpacts_check(ofpacts, ofpacts_len, match, max_ports,
                           table_id, n_tables, &p);
     return (error ? error
             : p != usable_protocols ? OFPERR_OFPBAC_MATCH_INCONSISTENT

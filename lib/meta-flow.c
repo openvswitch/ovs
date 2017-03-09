@@ -379,10 +379,12 @@ mf_is_mask_valid(const struct mf_field *mf, const union mf_value *mask)
 }
 
 /* Returns true if 'flow' meets the prerequisites for 'mf', false otherwise.
+ * If a non-NULL 'mask' is passed, zero-valued matches can also be verified.
  * Sets inspected bits in 'wc', if non-NULL. */
-bool
-mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow,
-                  struct flow_wildcards *wc)
+static bool
+mf_are_prereqs_ok__(const struct mf_field *mf, const struct flow *flow,
+                    const struct flow_wildcards *mask OVS_UNUSED,
+                    struct flow_wildcards *wc)
 {
     switch (mf->prereqs) {
     case MFP_NONE:
@@ -401,6 +403,7 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow,
     case MFP_IP_ANY:
         return is_ip_any(flow);
     case MFP_TCP:
+        /* Matching !FRAG_LATER is not enforced (mask is not checked). */
         return is_tcp(flow, wc) && !(flow->nw_frag & FLOW_NW_FRAG_LATER);
     case MFP_UDP:
         return is_udp(flow, wc) && !(flow->nw_frag & FLOW_NW_FRAG_LATER);
@@ -419,6 +422,23 @@ mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow,
     }
 
     OVS_NOT_REACHED();
+}
+
+/* Returns true if 'flow' meets the prerequisites for 'mf', false otherwise.
+ * Sets inspected bits in 'wc', if non-NULL. */
+bool
+mf_are_prereqs_ok(const struct mf_field *mf, const struct flow *flow,
+                  struct flow_wildcards *wc)
+{
+    return mf_are_prereqs_ok__(mf, flow, NULL, wc);
+}
+
+/* Returns true if 'match' meets the prerequisites for 'mf', false otherwise.
+ */
+bool
+mf_are_match_prereqs_ok(const struct mf_field *mf, const struct match *match)
+{
+    return mf_are_prereqs_ok__(mf, &match->flow, &match->wc, NULL);
 }
 
 /* Returns true if 'value' may be a valid value *as part of a masked match*,
@@ -1948,7 +1968,7 @@ mf_set(const struct mf_field *mf,
 }
 
 static enum ofperr
-mf_check__(const struct mf_subfield *sf, const struct flow *flow,
+mf_check__(const struct mf_subfield *sf, const struct match *match,
            const char *type)
 {
     if (!sf->field) {
@@ -1966,7 +1986,7 @@ mf_check__(const struct mf_subfield *sf, const struct flow *flow,
                      "of %s field %s", sf->ofs, sf->n_bits,
                      sf->field->n_bits, type, sf->field->name);
         return OFPERR_OFPBAC_BAD_SET_LEN;
-    } else if (flow && !mf_are_prereqs_ok(sf->field, flow, NULL)) {
+    } else if (match && !mf_are_match_prereqs_ok(sf->field, match)) {
         VLOG_WARN_RL(&rl, "%s field %s lacks correct prerequisites",
                      type, sf->field->name);
         return OFPERR_OFPBAC_MATCH_INCONSISTENT;
@@ -2053,18 +2073,18 @@ mf_subfield_swap(const struct mf_subfield *a,
  * 0 if so, otherwise an OpenFlow error code (e.g. as returned by
  * ofp_mkerr()).  */
 enum ofperr
-mf_check_src(const struct mf_subfield *sf, const struct flow *flow)
+mf_check_src(const struct mf_subfield *sf, const struct match *match)
 {
-    return mf_check__(sf, flow, "source");
+    return mf_check__(sf, match, "source");
 }
 
 /* Checks whether 'sf' is valid for writing a subfield into 'flow'.  Returns 0
  * if so, otherwise an OpenFlow error code (e.g. as returned by
  * ofp_mkerr()). */
 enum ofperr
-mf_check_dst(const struct mf_subfield *sf, const struct flow *flow)
+mf_check_dst(const struct mf_subfield *sf, const struct match *match)
 {
-    int error = mf_check__(sf, flow, "destination");
+    int error = mf_check__(sf, match, "destination");
     if (!error && !sf->field->writable) {
         VLOG_WARN_RL(&rl, "destination field %s is not writable",
                      sf->field->name);
