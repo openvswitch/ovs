@@ -41,7 +41,7 @@ need the following software:
 
 - A C compiler, such as:
 
-  - GCC 4.x.
+  - GCC 4.6 or later.
 
   - Clang. Clang 3.4 and later provide useful static semantic analysis and
     thread-safety checks. For Ubuntu, there are nightly built packages
@@ -64,7 +64,9 @@ need the following software:
   If libcap-ng is installed, then Open vSwitch will automatically build with
   support for it.
 
-- Python 2.7. You must also have the Python ``six`` library.
+- Python 2.7. You must also have the Python ``six`` library version 1.4.0
+  or later.
+
 
 On Linux, you may choose to compile the kernel module that comes with the Open
 vSwitch distribution or to use the kernel module built into the Linux kernel
@@ -173,7 +175,8 @@ simply install and run Open vSwitch you require the following software:
   from iproute2 (part of all major distributions and available at
   https://wiki.linuxfoundation.org/networking/iproute2).
 
-- Python 2.7. You must also have the Python six library.
+- Python 2.7. You must also have the Python six library version 1.4.0
+  or later.
 
 On Linux you should ensure that ``/dev/urandom`` exists. To support TAP
 devices, you must also ensure that ``/dev/net/tun`` exists.
