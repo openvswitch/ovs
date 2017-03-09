@@ -163,6 +163,7 @@ struct ct_dpif_entry {
     struct ct_dpif_protoinfo protoinfo;
 
     ovs_u128 labels;
+    bool have_labels;
     uint32_t status;
     /* Timeout for this entry in seconds */
     uint32_t timeout;
