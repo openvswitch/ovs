@@ -77,6 +77,14 @@
         qualified domain name since version 2.6.2.
       </column>
 
+      <column name="external_ids" key="rundir">
+        In Open vSwitch 2.8 and later, the run directory of the running Open
+        vSwitch daemon.  This directory is used for runtime state such as
+        control and management sockets.  The value of <ref
+        column="other_config" key="vhost-sock-dir"/> is relative to this
+        directory.
+      </column>
+
       <column name="other_config" key="stats-update-interval"
               type='{"type": "integer", "minInteger": 5000}'>
         <p>
@@ -288,13 +296,13 @@
       <column name="other_config" key="vhost-sock-dir"
               type='{"type": "string"}'>
         <p>
-          Specifies the path to the vhost-user unix domain socket files. This
-          path must exist and be a subdirectory tree of the Open vSwitch
-          run directory.
+          Specifies a relative path from <ref column="external_ids"
+          key="rundir"/> to the vhost-user unix domain socket files.  If this
+          value is unset, the sockets are put directly in <ref
+          column="external_ids" key="rundir"/>.
         </p>
         <p>
-          Defaults to the working directory of the application. Changing this
-          value requires restarting the daemon.
+          Changing this value requires restarting the daemon.
         </p>
       </column>
 
