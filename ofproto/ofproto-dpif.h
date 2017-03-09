@@ -168,6 +168,9 @@ struct dpif_backer_support {
 
     /* True if the datapath supports OVS_ACTION_ATTR_CLONE action. */
     bool clone;
+
+    /* Maximum level of nesting allowed by OVS_ACTION_ATTR_SAMPLE action.  */
+    size_t sample_nesting;
 };
 
 /* Reasons that we might need to revalidate every datapath flow, and

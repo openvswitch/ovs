@@ -983,6 +983,63 @@ check_max_mpls_depth(struct dpif_backer *backer)
     return n;
 }
 
+static void
+add_sample_actions(struct ofpbuf *actions, int nesting)
+{
+    if (nesting == 0) {
+        nl_msg_put_odp_port(actions, OVS_ACTION_ATTR_OUTPUT, u32_to_odp(1));
+        return;
+    }
+
+    size_t start, actions_start;
+
+    start = nl_msg_start_nested(actions, OVS_ACTION_ATTR_SAMPLE);
+    actions_start = nl_msg_start_nested(actions, OVS_SAMPLE_ATTR_ACTIONS);
+    add_sample_actions(actions, nesting - 1);
+    nl_msg_end_nested(actions, actions_start);
+    nl_msg_put_u32(actions, OVS_SAMPLE_ATTR_PROBABILITY, UINT32_MAX);
+    nl_msg_end_nested(actions, start);
+}
+
+/* Tests the nested sample actions levels supported by 'backer''s datapath.
+ *
+ * Returns the number of nested sample actions accepted by the datapath.  */
+static size_t
+check_max_sample_nesting(struct dpif_backer *backer)
+{
+    struct odputil_keybuf keybuf;
+    struct ofpbuf key;
+    struct flow flow;
+    int n;
+
+    struct odp_flow_key_parms odp_parms = {
+        .flow = &flow,
+    };
+
+    memset(&flow, 0, sizeof flow);
+    ofpbuf_use_stack(&key, &keybuf, sizeof keybuf);
+    odp_flow_key_from_flow(&odp_parms, &key);
+
+    /* OVS datapath has always supported at least 3 nested levels.  */
+    for (n = 3; n < FLOW_MAX_SAMPLE_NESTING; n++) {
+        struct ofpbuf actions;
+        bool ok;
+
+        ofpbuf_init(&actions, 300);
+        add_sample_actions(&actions, n);
+        ok = dpif_probe_feature(backer->dpif, "Sample action nesting", &key,
+                                &actions, NULL);
+        ofpbuf_uninit(&actions);
+        if (!ok) {
+            break;
+        }
+    }
+
+    VLOG_INFO("%s: Max sample nesting level probed as %d",
+              dpif_name(backer->dpif), n);
+    return n;
+}
+
 /* Tests whether 'backer''s datapath supports masked data in
  * OVS_ACTION_ATTR_SET actions.  We need to disable some features on older
  * datapaths that don't support this feature. */
@@ -1203,6 +1260,7 @@ check_support(struct dpif_backer *backer)
     backer->support.ufid = check_ufid(backer);
     backer->support.tnl_push_pop = dpif_supports_tnl_push_pop(backer->dpif);
     backer->support.clone = check_clone(backer);
+    backer->support.sample_nesting = check_max_sample_nesting(backer);
 
     /* Flow fields. */
     backer->support.odp.ct_state = check_ct_state(backer);

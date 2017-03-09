@@ -61,6 +61,9 @@ const char *flow_tun_flag_to_string(uint32_t flags);
 /* Maximum number of supported MPLS labels. */
 #define FLOW_MAX_MPLS_LABELS 3
 
+/* Maximum number of supported SAMPLE action nesting. */
+#define FLOW_MAX_SAMPLE_NESTING 10
+
 /*
  * A flow in the network.
  *

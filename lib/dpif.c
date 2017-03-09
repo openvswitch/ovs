@@ -916,7 +916,7 @@ dpif_probe_feature(struct dpif *dpif, const char *name,
                           nl_actions, nl_actions_size,
                           ufid, NON_PMD_CORE_ID, NULL);
     if (error) {
-        if (error != EINVAL) {
+        if (error != EINVAL && error != EOVERFLOW) {
             VLOG_WARN("%s: %s flow probe failed (%s)",
                       dpif_name(dpif), name, ovs_strerror(error));
         }
