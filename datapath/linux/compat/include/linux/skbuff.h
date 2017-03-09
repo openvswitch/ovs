@@ -376,4 +376,15 @@ static inline __wsum lco_csum(struct sk_buff *skb)
 	return csum_partial(l4_hdr, csum_start - l4_hdr, partial);
 }
 #endif
+
+#ifndef HAVE_SKB_NFCT
+static inline struct nf_conntrack *skb_nfct(const struct sk_buff *skb)
+{
+#if IS_ENABLED(CONFIG_NF_CONNTRACK)
+       return skb->nfct;
+#else
+       return NULL;
+#endif
+}
+#endif
 #endif
