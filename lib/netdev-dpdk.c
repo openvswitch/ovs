@@ -530,7 +530,9 @@ dpdk_mp_get(int socket_id, int mtu)
     }
 
     dmp = dpdk_mp_create(socket_id, mtu);
-    ovs_list_push_back(&dpdk_mp_list, &dmp->list_node);
+    if (dmp) {
+        ovs_list_push_back(&dpdk_mp_list, &dmp->list_node);
+    }
 
 out:
     ovs_mutex_unlock(&dpdk_mp_mutex);
@@ -3131,7 +3133,10 @@ netdev_dpdk_reconfigure(struct netdev *netdev)
 
     if (dev->mtu != dev->requested_mtu
         || dev->socket_id != dev->requested_socket_id) {
-        netdev_dpdk_mempool_configure(dev);
+        err = netdev_dpdk_mempool_configure(dev);
+        if (err) {
+            goto out;
+        }
     }
 
     netdev->n_txq = dev->requested_n_txq;
@@ -3160,6 +3165,7 @@ dpdk_vhost_reconfigure_helper(struct netdev_dpdk *dev)
 {
     dev->up.n_txq = dev->requested_n_txq;
     dev->up.n_rxq = dev->requested_n_rxq;
+    int err;
 
     /* Enable TX queue 0 by default if it wasn't disabled. */
     if (dev->tx_q[0].map == OVS_VHOST_QUEUE_MAP_UNKNOWN) {
@@ -3170,13 +3176,12 @@ dpdk_vhost_reconfigure_helper(struct netdev_dpdk *dev)
 
     if (dev->requested_socket_id != dev->socket_id
         || dev->requested_mtu != dev->mtu) {
-        if (!netdev_dpdk_mempool_configure(dev)) {
+        err = netdev_dpdk_mempool_configure(dev);
+        if (err) {
+            return err;
+        } else {
             netdev_change_seq_changed(&dev->up);
         }
-    }
-
-    if (!dev->dpdk_mp) {
-        return ENOMEM;
     }
 
     if (netdev_dpdk_get_vid(dev) >= 0) {
