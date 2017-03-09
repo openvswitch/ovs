@@ -718,6 +718,8 @@ struct ovs_action_push_tnl {
  * mask. For each bit set in the mask, the corresponding bit in the value is
  * copied to the connection tracking label field in the connection.
  * @OVS_CT_ATTR_HELPER: variable length string defining conntrack ALG.
+ * @OVS_CT_ATTR_NAT: Nested OVS_NAT_ATTR_* for performing L3 network address
+ * translation (NAT) on the packet.
  * @OVS_CT_ATTR_FORCE_COMMIT: Like %OVS_CT_ATTR_COMMIT, but instead of doing
  * nothing if the connection is already committed will check that the current
  * packet is in conntrack entry's original direction.  If directionality does
