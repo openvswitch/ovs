@@ -153,6 +153,8 @@ ovs_key_attr_to_string(enum ovs_key_attr attr, char *namebuf, size_t bufsize)
     case OVS_KEY_ATTR_CT_ZONE: return "ct_zone";
     case OVS_KEY_ATTR_CT_MARK: return "ct_mark";
     case OVS_KEY_ATTR_CT_LABELS: return "ct_label";
+    case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4: return "ct_tuple4";
+    case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6: return "ct_tuple6";
     case OVS_KEY_ATTR_TUNNEL: return "tunnel";
     case OVS_KEY_ATTR_IN_PORT: return "in_port";
     case OVS_KEY_ATTR_ETHERNET: return "eth";
@@ -1900,6 +1902,8 @@ static const struct attr_len_tbl ovs_flow_key_attr_lens[OVS_KEY_ATTR_MAX + 1] = 
     [OVS_KEY_ATTR_CT_ZONE]   = { .len = 2 },
     [OVS_KEY_ATTR_CT_MARK]   = { .len = 4 },
     [OVS_KEY_ATTR_CT_LABELS] = { .len = sizeof(struct ovs_key_ct_labels) },
+    [OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4] = { .len = sizeof(struct ovs_key_ct_tuple_ipv4) },
+    [OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6] = { .len = sizeof(struct ovs_key_ct_tuple_ipv6) },
 };
 
 /* Returns the correct length of the payload for a flow key attribute of the
@@ -2846,6 +2850,40 @@ format_odp_key_attr(const struct nlattr *a, const struct nlattr *ma,
         const ovs_u128 *mask = ma ? nl_attr_get(ma) : NULL;
 
         format_u128(ds, value, mask, verbose);
+        break;
+    }
+
+    case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV4: {
+        const struct ovs_key_ct_tuple_ipv4 *key = nl_attr_get(a);
+        const struct ovs_key_ct_tuple_ipv4 *mask = ma ? nl_attr_get(ma) : NULL;
+
+        format_ipv4(ds, "src", key->ipv4_src, MASK(mask, ipv4_src), verbose);
+        format_ipv4(ds, "dst", key->ipv4_dst, MASK(mask, ipv4_dst), verbose);
+        format_u8u(ds, "proto", key->ipv4_proto, MASK(mask, ipv4_proto),
+                   verbose);
+        format_be16(ds, "tp_src", key->src_port, MASK(mask, src_port),
+                    verbose);
+        format_be16(ds, "tp_dst", key->dst_port, MASK(mask, dst_port),
+                    verbose);
+        ds_chomp(ds, ',');
+        break;
+    }
+
+    case OVS_KEY_ATTR_CT_ORIG_TUPLE_IPV6: {
+        const struct ovs_key_ct_tuple_ipv6 *key = nl_attr_get(a);
+        const struct ovs_key_ct_tuple_ipv6 *mask = ma ? nl_attr_get(ma) : NULL;
+
+        format_in6_addr(ds, "src", &key->ipv6_src, MASK(mask, ipv6_src),
+                        verbose);
+        format_in6_addr(ds, "dst", &key->ipv6_dst, MASK(mask, ipv6_dst),
+                        verbose);
+        format_u8u(ds, "proto", key->ipv6_proto, MASK(mask, ipv6_proto),
+                   verbose);
+        format_be16(ds, "src_port", key->src_port, MASK(mask, src_port),
+                    verbose);
+        format_be16(ds, "dst_port", key->dst_port, MASK(mask, dst_port),
+                    verbose);
+        ds_chomp(ds, ',');
         break;
     }
 
