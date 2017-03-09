@@ -4798,13 +4798,20 @@ xlate_clone(struct xlate_ctx *ctx, const struct ofpact_nest *oc)
     /* Datapath clone action will make sure the pre clone packets
      * are used for actions after clone. Save and restore
      * ctx->base_flow to reflect this for the openflow pipeline. */
-    struct flow old_base_flow = ctx->base_flow;
     if (ctx->xbridge->support.clone) {
+        struct flow old_base_flow = ctx->base_flow;
         compose_clone_action(ctx, oc);
-    } else {
+        ctx->base_flow = old_base_flow;
+    } else if (ctx->xbridge->support.sample_nesting > 3) {
+        /* Avoid generate sample action if datapath
+         * only allow small number of nesting. Deeper nesting
+         * can cause the datapath to reject the generated flow.  */
+        struct flow old_base_flow = ctx->base_flow;
         compose_clone_action_using_sample(ctx, oc);
+        ctx->base_flow = old_base_flow;
+    } else {
+        do_xlate_actions(oc->actions, ofpact_nest_get_action_len(oc), ctx);
     }
-    ctx->base_flow = old_base_flow;
 
     ofpbuf_uninit(&ctx->action_set);
     ctx->action_set = old_action_set;
