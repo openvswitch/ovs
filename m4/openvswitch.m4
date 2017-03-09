@@ -417,7 +417,7 @@ AC_DEFUN([OVS_CHECK_SPHINX],
   [AC_CACHE_CHECK(
     [for sphinx],
     [ovs_cv_sphinx],
-    [if sphinx-build --version >/dev/null 2>&1; then
+    [if type sphinx-build >/dev/null 2>&1; then
        ovs_cv_sphinx=yes
      else
        ovs_cv_sphinx=no
