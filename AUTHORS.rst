@@ -297,6 +297,7 @@ Torgny Lindberg                 torgny.lindberg@ericsson.com
 Tsvi Slonim                     tsvi@toroki.com
 Tuan Nguyen                     tuan.nguyen@veriksystems.com
 Tyler Coumbes                   coumbes@gmail.com
+Tony van der Peet               tony.vanderpeet@alliedtelesis.co.nz
 Valient Gough                   vgough@pobox.com
 Vivien Bernet-Rollande          vbr@soprive.net
 Wang Sheng-Hui                  shhuiw@gmail.com
