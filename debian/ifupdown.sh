@@ -50,24 +50,24 @@ if [ "${MODE}" = "start" ]; then
                     "${IFACE}" ${IF_OVS_OPTIONS} \
                     ${OVS_EXTRA+-- $OVS_EXTRA}
 
-                ifconfig "${IFACE}" up
+                ip link set "${IFACE}" up
                 ;;
         OVSIntPort)
                 ovs_vsctl -- --may-exist add-port "${IF_OVS_BRIDGE}"\
                     "${IFACE}" ${IF_OVS_OPTIONS} -- set Interface "${IFACE}"\
                     type=internal ${OVS_EXTRA+-- $OVS_EXTRA}
 
-                ifconfig "${IFACE}" up
+                ip link set "${IFACE}" up
                 ;;
         OVSBond)
                 ovs_vsctl -- --fake-iface add-bond "${IF_OVS_BRIDGE}"\
                     "${IFACE}" ${IF_OVS_BONDS} ${IF_OVS_OPTIONS} \
                     ${OVS_EXTRA+-- $OVS_EXTRA}
 
-                ifconfig "${IFACE}" up
+                ip link set "${IFACE}" up
                 for slave in ${IF_OVS_BONDS}
                 do
-                    ifconfig "${slave}" up
+                    ip link set "${IFACE}" up
                 done
                 ;;
         OVSPatchPort)
