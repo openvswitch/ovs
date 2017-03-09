@@ -504,6 +504,9 @@ nx_pull_match_entry(struct ofpbuf *b, bool allow_cookie,
     return 0;
 }
 
+/* Prerequisites will only be checked when 'strict' is 'true'.  This allows
+ * decoding conntrack original direction 5-tuple IP addresses without the
+ * ethertype being present, when decoding metadata only. */
 static enum ofperr
 nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
             struct match *match, ovs_be64 *cookie, ovs_be64 *cookie_mask,
@@ -539,7 +542,7 @@ nx_pull_raw(const uint8_t *p, unsigned int match_len, bool strict,
                 *cookie = value.be64;
                 *cookie_mask = mask.be64;
             }
-        } else if (!mf_are_prereqs_ok(field, &match->flow, NULL)) {
+        } else if (strict && !mf_are_prereqs_ok(field, &match->flow, NULL)) {
             error = OFPERR_OFPBMC_BAD_PREREQ;
         } else if (!mf_is_all_wild(field, &match->wc)) {
             error = OFPERR_OFPBMC_DUP_FIELD;
@@ -607,7 +610,8 @@ nx_pull_match(struct ofpbuf *b, unsigned int match_len, struct match *match,
 }
 
 /* Behaves the same as nx_pull_match(), but skips over unknown NXM headers,
- * instead of failing with an error. */
+ * instead of failing with an error, and does not check for field
+ * prerequisities. */
 enum ofperr
 nx_pull_match_loose(struct ofpbuf *b, unsigned int match_len,
                     struct match *match,
@@ -664,8 +668,9 @@ oxm_pull_match(struct ofpbuf *b, const struct tun_table *tun_table,
     return oxm_pull_match__(b, true, tun_table, match);
 }
 
-/* Behaves the same as oxm_pull_match() with one exception.  Skips over unknown
- * OXM headers instead of failing with an error when they are encountered. */
+/* Behaves the same as oxm_pull_match() with two exceptions.  Skips over
+ * unknown OXM headers instead of failing with an error when they are
+ * encountered, and does not check for field prerequisities. */
 enum ofperr
 oxm_pull_match_loose(struct ofpbuf *b, const struct tun_table *tun_table,
                      struct match *match)
@@ -676,14 +681,16 @@ oxm_pull_match_loose(struct ofpbuf *b, const struct tun_table *tun_table,
 /* Parses the OXM match description in the 'oxm_len' bytes in 'oxm'.  Stores
  * the result in 'match'.
  *
- * Fails with an error when encountering unknown OXM headers.
+ * Returns 0 if successful, otherwise an OpenFlow error code.
  *
- * Returns 0 if successful, otherwise an OpenFlow error code. */
+ * Encountering unknown OXM headers or missing field prerequisites are not
+ * considered as error conditions.
+ */
 enum ofperr
-oxm_decode_match(const void *oxm, size_t oxm_len,
-                 const struct tun_table *tun_table, struct match *match)
+oxm_decode_match_loose(const void *oxm, size_t oxm_len,
+                       const struct tun_table *tun_table, struct match *match)
 {
-    return nx_pull_raw(oxm, oxm_len, true, match, NULL, NULL, tun_table);
+    return nx_pull_raw(oxm, oxm_len, false, match, NULL, NULL, tun_table);
 }
 
 /* Verify an array of OXM TLVs treating value of each TLV as a mask,
