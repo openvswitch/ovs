@@ -88,4 +88,41 @@ static unsigned int rpl_nf_conntrack_in(struct net *net, u_int8_t pf,
 #define nf_conntrack_in rpl_nf_conntrack_in
 #endif /* < 4.10 */
 
+#ifdef HAVE_NF_CONN_TIMER
+
+#ifndef HAVE_NF_CT_DELETE
+#include <net/netfilter/nf_conntrack_timestamp.h>
+#endif
+
+static inline bool rpl_nf_ct_delete(struct nf_conn *ct, u32 portid, int report)
+{
+	if (del_timer(&ct->timeout))
+#ifdef HAVE_NF_CT_DELETE
+		return nf_ct_delete(ct, portid, report);
+#else
+	{
+		struct nf_conn_tstamp *tstamp;
+
+		tstamp = nf_conn_tstamp_find(ct);
+		if (tstamp && tstamp->stop == 0)
+			tstamp->stop = ktime_to_ns(ktime_get_real());
+
+		if (!test_bit(IPS_DYING_BIT, &ct->status) &&
+		    unlikely(nf_conntrack_event(IPCT_DESTROY, ct) < 0)) {
+			/* destroy event was not delivered */
+			nf_ct_delete_from_lists(ct);
+			nf_ct_dying_timeout(ct);
+			return false;
+		}
+		set_bit(IPS_DYING_BIT, &ct->status);
+		nf_ct_delete_from_lists(ct);
+		nf_ct_put(ct);
+		return true;
+	}
+#endif
+	return false;
+}
+#define nf_ct_delete rpl_nf_ct_delete
+#endif /* HAVE_NF_CONN_TIMER */
+
 #endif /* _NF_CONNTRACK_CORE_WRAPPER_H */

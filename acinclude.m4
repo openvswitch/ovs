@@ -525,6 +525,12 @@ AC_DEFUN([OVS_CHECK_LINUX_COMPAT], [
   OVS_FIND_FIELD_IFELSE([$KSRC/include/linux/netfilter_ipv6.h], [nf_ipv6_ops],
                         [fragment.*sock], [OVS_DEFINE([HAVE_NF_IPV6_OPS_FRAGMENT])])
 
+  OVS_FIND_FIELD_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
+                        [nf_conn], [struct timer_list[[ \t]]*timeout],
+                        [OVS_DEFINE([HAVE_NF_CONN_TIMER])])
+  OVS_GREP_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
+                  [nf_ct_delete(], [OVS_DEFINE([HAVE_NF_CT_DELETE])])
+
   OVS_FIND_PARAM_IFELSE([$KSRC/include/net/netfilter/nf_conntrack.h],
                   [nf_ct_tmpl_alloc], [nf_conntrack_zone],
                   [OVS_DEFINE([HAVE_NF_CT_TMPL_ALLOC_TAKES_STRUCT_ZONE])])
