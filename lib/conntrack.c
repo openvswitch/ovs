@@ -239,11 +239,20 @@ conn_not_found(struct conntrack *ct, struct dp_packet *pkt,
 static struct conn *
 process_one(struct conntrack *ct, struct dp_packet *pkt,
             struct conn_lookup_ctx *ctx, uint16_t zone,
-            bool commit, long long now)
+            bool force, bool commit, long long now)
 {
     unsigned bucket = hash_to_bucket(ctx->hash);
     struct conn *conn = ctx->conn;
     uint16_t state = 0;
+
+    /* Delete found entry if in wrong direction. 'force' implies commit. */
+    if (conn && force && ctx->reply) {
+        ovs_list_remove(&conn->exp_node);
+        hmap_remove(&ct->buckets[bucket].connections, &conn->node);
+        atomic_count_dec(&ct->n_conn);
+        delete_conn(conn);
+        conn = NULL;
+    }
 
     if (conn) {
         if (ctx->related) {
@@ -301,7 +310,7 @@ process_one(struct conntrack *ct, struct dp_packet *pkt,
  * 'setlabel' behaves similarly for the connection label.*/
 int
 conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
-                  ovs_be16 dl_type, bool commit, uint16_t zone,
+                  ovs_be16 dl_type, bool force, bool commit, uint16_t zone,
                   const uint32_t *setmark,
                   const struct ovs_key_ct_labels *setlabel,
                   const char *helper)
@@ -364,7 +373,8 @@ conntrack_execute(struct conntrack *ct, struct dp_packet_batch *pkt_batch,
 
             conn_key_lookup(ctb, &ctxs[j], now);
 
-            conn = process_one(ct, pkts[j], &ctxs[j], zone, commit, now);
+            conn = process_one(ct, pkts[j], &ctxs[j], zone, force, commit,
+                               now);
 
             if (conn && setmark) {
                 set_mark(pkts[j], conn, setmark[0], setmark[1]);

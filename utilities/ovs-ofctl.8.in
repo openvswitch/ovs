@@ -1037,6 +1037,18 @@ Commit the connection to the connection tracking module. Information about the
 connection will be stored beyond the lifetime of the packet in the pipeline.
 Some \fBct_state\fR flags are only available for committed connections.
 .RE
+.IP \fBforce\fR
+.RS
+A committed connection always has the directionality of the packet
+that caused the connection to be committed in the first place.  This
+is the ``original direction'' of the connection, and the opposite
+direction is the ``reply direction''.  If a connection is already
+committed, but it is in the wrong direction, \fBforce\fR flag may be
+used in addition to \fBcommit\fR flag to effectively terminate the
+existing connection and start a new one in the current direction.
+This flag has no effect if the original direction of the connection is
+already the same as that of the current packet.
+.RE
 .IP \fBtable=\fInumber\fR
 Fork pipeline processing in two. The original instance of the packet will
 continue processing the current actions list as an untracked packet. An

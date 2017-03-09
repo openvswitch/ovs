@@ -8528,6 +8528,88 @@ udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.
 OVS_VSWITCHD_STOP
 AT_CLEANUP
 
+AT_SETUP([ofproto-dpif - conntrack - force commit])
+OVS_VSWITCHD_START
+
+add_of_ports br0 1 2
+
+AT_CHECK([ovs-appctl vlog/set dpif_netdev:dbg vconn:info ofproto_dpif:info])
+
+dnl Allow new connections on p1->p2, but not on p2->p1.
+AT_DATA([flows.txt], [dnl
+dnl Table 0
+dnl
+table=0,priority=100,arp,action=normal
+table=0,priority=10,in_port=1,udp,action=ct(commit),controller
+table=0,priority=10,in_port=2,udp,action=ct(table=1)
+table=0,priority=1,action=drop
+dnl
+dnl Table 1
+dnl
+table=1,priority=10,in_port=2,ct_state=+est,udp,action=ct(force,commit),controller
+table=1,priority=1,action=drop
+])
+
+AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
+
+AT_CAPTURE_FILE([ofctl_monitor.log])
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+dnl OK, now start a new connection from port 1.
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
+
+dnl Now try a reply from port 2.
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Check this output. We only see the latter two packets, not the first.
+dnl Note that the first packet doesn't have the ct_state bits set. This
+dnl happens because the ct_state field is available only after recirc.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=1,tp_dst=2 udp_csum:e9d6
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=1,ct_tp_dst=2,in_port=2 (via action) data_len=42 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=2,tp_dst=1 udp_csum:e9d6
+])
+
+AT_CHECK([ovs-ofctl monitor br0 65534 invalid_ttl -P nxt_packet_in --detach --no-chdir --pidfile 2> ofctl_monitor.log])
+
+dnl OK, now start a second connection from port 1
+AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=3,dst=4)'])
+
+dnl Now try a reply from port 2.
+AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=4,dst=3)'])
+
+OVS_WAIT_UNTIL([test `wc -l < ofctl_monitor.log` -ge 4])
+OVS_WAIT_UNTIL([ovs-appctl -t ovs-ofctl exit])
+
+dnl Check this output. We should see both packets
+dnl Note that the first packet doesn't have the ct_state bits set. This
+dnl happens because the ct_state field is available only after recirc.
+AT_CHECK([cat ofctl_monitor.log], [0], [dnl
+NXT_PACKET_IN (xid=0x0): cookie=0x0 total_len=42 in_port=1 (via action) data_len=42 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:09,dl_dst=50:54:00:00:00:0a,nw_src=10.1.1.1,nw_dst=10.1.1.2,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=3,tp_dst=4 udp_csum:e9d2
+dnl
+NXT_PACKET_IN (xid=0x0): table_id=1 cookie=0x0 total_len=42 ct_state=est|rpl|trk,ct_nw_src=10.1.1.1,ct_nw_dst=10.1.1.2,ct_nw_proto=17,ct_tp_src=3,ct_tp_dst=4,in_port=2 (via action) data_len=42 (unbuffered)
+udp,vlan_tci=0x0000,dl_src=50:54:00:00:00:0a,dl_dst=50:54:00:00:00:09,nw_src=10.1.1.2,nw_dst=10.1.1.1,nw_tos=0,nw_ecn=0,nw_ttl=64,tp_src=4,tp_dst=3 udp_csum:e9d2
+])
+
+dnl
+dnl Check that the directionality has been changed by force commit.
+dnl
+AT_CHECK([ovs-appctl dpctl/dump-conntrack | sort], [], [dnl
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=2,dport=1),reply=(src=10.1.1.1,dst=10.1.1.2,sport=1,dport=2)
+udp,orig=(src=10.1.1.2,dst=10.1.1.1,sport=4,dport=3),reply=(src=10.1.1.1,dst=10.1.1.2,sport=3,dport=4)
+])
+
+OVS_VSWITCHD_STOP
+AT_CLEANUP
+
 AT_SETUP([ofproto-dpif - conntrack - ipv6])
 OVS_VSWITCHD_START
 
@@ -9032,6 +9114,9 @@ AT_CHECK([ovs-ofctl add-flows br0 flows.txt])
 
 AT_CHECK([ovs-appctl netdev-dummy/receive p1 'in_port(1),eth(src=50:54:00:00:00:09,dst=50:54:00:00:00:0a),eth_type(0x0800),ipv4(src=10.1.1.1,dst=10.1.1.2,proto=17,tos=0,ttl=64,frag=no),udp(src=1,dst=2)'])
 AT_CHECK([ovs-appctl netdev-dummy/receive p2 'in_port(2),eth(src=50:54:00:00:00:0a,dst=50:54:00:00:00:09),eth_type(0x0800),ipv4(src=10.1.1.2,dst=10.1.1.1,proto=17,tos=0,ttl=64,frag=no),udp(src=2,dst=1)'])
+
+# Give time for logs to appear.
+ovs-appctl revalidator/wait
 
 AT_CHECK([cat ovs-vswitchd.log | strip_ufid | filter_flow_install], [0], [dnl
 ct_state(+rpl+trk),ct_label(0x1),recirc_id(0x1),in_port(2),eth_type(0x0800),ipv4(frag=no), actions:1

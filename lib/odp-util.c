@@ -723,6 +723,7 @@ format_odp_ct_nat(struct ds *ds, const struct nlattr *attr)
 
 static const struct nl_policy ovs_conntrack_policy[] = {
     [OVS_CT_ATTR_COMMIT] = { .type = NL_A_FLAG, .optional = true, },
+    [OVS_CT_ATTR_FORCE_COMMIT] = { .type = NL_A_FLAG, .optional = true, },
     [OVS_CT_ATTR_ZONE] = { .type = NL_A_U16, .optional = true, },
     [OVS_CT_ATTR_MARK] = { .type = NL_A_UNSPEC, .optional = true,
                            .min_len = sizeof(uint32_t) * 2 },
@@ -741,7 +742,7 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
     const uint32_t *mark;
     const char *helper;
     uint16_t zone;
-    bool commit;
+    bool commit, force;
     const struct nlattr *nat;
 
     if (!nl_parse_nested(attr, ovs_conntrack_policy, a, ARRAY_SIZE(a))) {
@@ -750,6 +751,7 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
     }
 
     commit = a[OVS_CT_ATTR_COMMIT] ? true : false;
+    force = a[OVS_CT_ATTR_FORCE_COMMIT] ? true : false;
     zone = a[OVS_CT_ATTR_ZONE] ? nl_attr_get_u16(a[OVS_CT_ATTR_ZONE]) : 0;
     mark = a[OVS_CT_ATTR_MARK] ? nl_attr_get(a[OVS_CT_ATTR_MARK]) : NULL;
     label = a[OVS_CT_ATTR_LABELS] ? nl_attr_get(a[OVS_CT_ATTR_LABELS]): NULL;
@@ -757,10 +759,13 @@ format_odp_conntrack_action(struct ds *ds, const struct nlattr *attr)
     nat = a[OVS_CT_ATTR_NAT];
 
     ds_put_format(ds, "ct");
-    if (commit || zone || mark || label || helper || nat) {
+    if (commit || force || zone || mark || label || helper || nat) {
         ds_put_cstr(ds, "(");
         if (commit) {
             ds_put_format(ds, "commit,");
+        }
+        if (force) {
+            ds_put_format(ds, "force_commit,");
         }
         if (zone) {
             ds_put_format(ds, "zone=%"PRIu16",", zone);
@@ -1468,6 +1473,7 @@ parse_conntrack_action(const char *s_, struct ofpbuf *actions)
         const char *helper = NULL;
         size_t helper_len = 0;
         bool commit = false;
+        bool force_commit = false;
         uint16_t zone = 0;
         struct {
             uint32_t value;
@@ -1499,6 +1505,11 @@ find_end:
                 s += strspn(s, delimiters);
                 if (ovs_scan(s, "commit%n", &n)) {
                     commit = true;
+                    s += n;
+                    continue;
+                }
+                if (ovs_scan(s, "force_commit%n", &n)) {
+                    force_commit = true;
                     s += n;
                     continue;
                 }
@@ -1552,10 +1563,15 @@ find_end:
             }
             s++;
         }
+        if (commit && force_commit) {
+            return -EINVAL;
+        }
 
         start = nl_msg_start_nested(actions, OVS_ACTION_ATTR_CT);
         if (commit) {
             nl_msg_put_flag(actions, OVS_CT_ATTR_COMMIT);
+        } else if (force_commit) {
+            nl_msg_put_flag(actions, OVS_CT_ATTR_FORCE_COMMIT);
         }
         if (zone) {
             nl_msg_put_u16(actions, OVS_CT_ATTR_ZONE, zone);

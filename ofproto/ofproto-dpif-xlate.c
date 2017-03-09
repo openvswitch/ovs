@@ -5148,7 +5148,8 @@ compose_conntrack_action(struct xlate_ctx *ctx, struct ofpact_conntrack *ofc)
 
     ct_offset = nl_msg_start_nested(ctx->odp_actions, OVS_ACTION_ATTR_CT);
     if (ofc->flags & NX_CT_F_COMMIT) {
-        nl_msg_put_flag(ctx->odp_actions, OVS_CT_ATTR_COMMIT);
+        nl_msg_put_flag(ctx->odp_actions, ofc->flags & NX_CT_F_FORCE ?
+                        OVS_CT_ATTR_FORCE_COMMIT : OVS_CT_ATTR_COMMIT);
     }
     nl_msg_put_u16(ctx->odp_actions, OVS_CT_ATTR_ZONE, zone);
     put_ct_mark(&ctx->xin->flow, ctx->odp_actions, ctx->wc);

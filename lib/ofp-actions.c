@@ -5267,6 +5267,15 @@ format_DEBUG_RECIRC(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
  *      tracker, and the state of the connection will be stored beyond the
  *      lifetime of packet processing.
  *
+ *      A committed connection always has the directionality of the packet that
+ *      caused the connection to be committed in the first place.  This is the
+ *      "original direction" of the connection, and the opposite direction is
+ *      the "reply direction".  If a connection is already committed, but it is
+ *      then decided that the original direction should be the opposite of the
+ *      existing connection, NX_CT_F_FORCE flag may be used in addition to
+ *      NX_CT_F_COMMIT flag to in effect terminate the existing connection and
+ *      start a new one in the current direction.
+ *
  *      Connections may transition back into the uncommitted state due to
  *      external timers, or due to the contents of packets that are sent to the
  *      connection tracker. This behaviour is outside of the scope of the
@@ -5328,7 +5337,7 @@ format_DEBUG_RECIRC(const struct ofpact_null *a OVS_UNUSED, struct ds *s)
  *
  * Zero or more actions may immediately follow this action. These actions will
  * be executed within the context of the connection tracker, and they require
- * the NX_CT_F_COMMIT flag to be set.
+ * NX_CT_F_COMMIT flag be set.
  */
 struct nx_action_conntrack {
     ovs_be16 type;              /* OFPAT_VENDOR. */
@@ -5393,9 +5402,16 @@ decode_NXAST_RAW_CT(const struct nx_action_conntrack *nac,
 {
     const size_t ct_offset = ofpacts_pull(out);
     struct ofpact_conntrack *conntrack = ofpact_put_CT(out);
-    conntrack->flags = ntohs(nac->flags);
+    int error;
 
-    int error = decode_ct_zone(nac, conntrack, vl_mff_map);
+    conntrack->flags = ntohs(nac->flags);
+    if (conntrack->flags & NX_CT_F_FORCE &&
+        !(conntrack->flags & NX_CT_F_COMMIT)) {
+        error = OFPERR_OFPBAC_BAD_ARGUMENT;
+        goto out;
+    }
+
+    error = decode_ct_zone(nac, conntrack, vl_mff_map);
     if (error) {
         goto out;
     }
@@ -5491,6 +5507,8 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
     while (ofputil_parse_key_value(&arg, &key, &value)) {
         if (!strcmp(key, "commit")) {
             oc->flags |= NX_CT_F_COMMIT;
+        } else if (!strcmp(key, "force")) {
+            oc->flags |= NX_CT_F_FORCE;
         } else if (!strcmp(key, "table")) {
             error = str_to_u8(value, "recirc_table", &oc->recirc_table);
             if (!error && oc->recirc_table == NX_CT_RECIRC_NONE) {
@@ -5536,7 +5554,9 @@ parse_CT(char *arg, struct ofpbuf *ofpacts,
             break;
         }
     }
-
+    if (oc->flags & NX_CT_F_FORCE && !(oc->flags & NX_CT_F_COMMIT)) {
+        error = xasprintf("\"force\" flag requires \"commit\" flag.");
+    }
     ofpact_finish_CT(ofpacts, &oc);
     ofpbuf_push_uninit(ofpacts, ct_offset);
     return error;
@@ -5569,6 +5589,9 @@ format_CT(const struct ofpact_conntrack *a, struct ds *s)
     ds_put_format(s, "%sct(%s", colors.paren, colors.end);
     if (a->flags & NX_CT_F_COMMIT) {
         ds_put_format(s, "%scommit%s,", colors.value, colors.end);
+    }
+    if (a->flags & NX_CT_F_FORCE) {
+        ds_put_format(s, "%sforce%s,", colors.value, colors.end);
     }
     if (a->recirc_table != NX_CT_RECIRC_NONE) {
         ds_put_format(s, "%stable=%s%"PRIu8",",
