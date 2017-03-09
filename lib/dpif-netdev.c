@@ -5126,6 +5126,8 @@ dp_execute_cb(void *aux_, struct dp_packet_batch *packets_,
             enum ovs_ct_attr sub_type = nl_attr_type(b);
 
             switch(sub_type) {
+            case OVS_CT_ATTR_FORCE_COMMIT:
+                /* Not implemented yet. */
             case OVS_CT_ATTR_COMMIT:
                 commit = true;
                 break;

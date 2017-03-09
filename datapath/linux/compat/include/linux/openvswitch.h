@@ -718,6 +718,10 @@ struct ovs_action_push_tnl {
  * mask. For each bit set in the mask, the corresponding bit in the value is
  * copied to the connection tracking label field in the connection.
  * @OVS_CT_ATTR_HELPER: variable length string defining conntrack ALG.
+ * @OVS_CT_ATTR_FORCE_COMMIT: Like %OVS_CT_ATTR_COMMIT, but instead of doing
+ * nothing if the connection is already committed will check that the current
+ * packet is in conntrack entry's original direction.  If directionality does
+ * not match, will delete the existing conntrack entry and create a new one.
  */
 enum ovs_ct_attr {
 	OVS_CT_ATTR_UNSPEC,
@@ -728,6 +732,7 @@ enum ovs_ct_attr {
 	OVS_CT_ATTR_HELPER,     /* netlink helper to assist detection of
 				   related connections. */
 	OVS_CT_ATTR_NAT,        /* Nested OVS_NAT_ATTR_* */
+	OVS_CT_ATTR_FORCE_COMMIT,  /* No argument */
 	__OVS_CT_ATTR_MAX
 };
 
