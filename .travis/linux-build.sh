@@ -52,13 +52,13 @@ function install_kernel()
 function install_dpdk()
 {
     if [ -n "$DPDK_GIT" ]; then
-        git clone $DPDK_GIT dpdk-$1
-        cd dpdk-$1
-        git checkout v$1
+        git clone $DPDK_GIT dpdk-stable-$1
+        cd dpdk-stable-$1
+        git checkout tags/v$1
     else
         wget http://fast.dpdk.org/rel/dpdk-$1.tar.gz
         tar xzvf dpdk-$1.tar.gz > /dev/null
-        cd dpdk-$1
+        cd dpdk-stable-$1
     fi
     find ./ -type f | xargs sed -i 's/max-inline-insns-single=100/max-inline-insns-single=400/'
     echo 'CONFIG_RTE_BUILD_FPIC=y' >>config/common_linuxapp
@@ -80,14 +80,14 @@ fi
 
 if [ "$DPDK" ]; then
     if [ -z "$DPDK_VER" ]; then
-        DPDK_VER="16.11"
+        DPDK_VER="16.11.1"
     fi
     install_dpdk $DPDK_VER
     if [ "$CC" = "clang" ]; then
         # Disregard cast alignment errors until DPDK is fixed
         CFLAGS="$CFLAGS -Wno-cast-align"
     fi
-    EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=./dpdk-$DPDK_VER/build"
+    EXTRA_OPTS="$EXTRA_OPTS --with-dpdk=./dpdk-stable-$DPDK_VER/build"
 elif [ "$CC" != "clang" ]; then
     # DPDK headers currently trigger sparse errors
     SPARSE_FLAGS="$SPARSE_FLAGS -Wsparse-error"
