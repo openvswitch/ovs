@@ -926,7 +926,7 @@ bond_recirculation_account(struct bond *bond)
     }
 }
 
-bool
+static bool
 bond_may_recirc(const struct bond *bond)
 {
     return bond->balance == BM_TCP && bond->recirc_id;
@@ -960,15 +960,25 @@ void
 bond_update_post_recirc_rules(struct bond *bond, uint32_t *recirc_id,
                               uint32_t *hash_basis)
 {
-    ovs_rwlock_wrlock(&rwlock);
-    if (bond_may_recirc(bond)) {
-        *recirc_id = bond->recirc_id;
-        *hash_basis = bond->basis;
-        bond_update_post_recirc_rules__(bond, false);
-    } else {
+    bool may_recirc = bond_may_recirc(bond);
+
+    if (may_recirc) {
+        /* To avoid unnecessary locking, bond_may_recirc() is first
+         * called outside of the 'rwlock'. After acquiring the lock,
+         * check again to make sure bond configuration has not been changed. */
+        ovs_rwlock_wrlock(&rwlock);
+        may_recirc = bond_may_recirc(bond);
+        if (may_recirc) {
+            *recirc_id = bond->recirc_id;
+            *hash_basis = bond->basis;
+            bond_update_post_recirc_rules__(bond, false);
+        }
+        ovs_rwlock_unlock(&rwlock);
+    }
+
+    if (!may_recirc) {
         *recirc_id = *hash_basis = 0;
     }
-    ovs_rwlock_unlock(&rwlock);
 }
 
 
