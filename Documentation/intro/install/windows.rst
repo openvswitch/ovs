@@ -63,7 +63,7 @@ The following explains the steps in some detail.
   We require that you have Python six and pypiwin32 libraries installed.
   The libraries can be installed via pip command:
 
-   .. code-block:: console
+   ::
 
       $ pip install six
       $ pip install pypiwin32
@@ -140,7 +140,7 @@ you pulled the sources directly from an Open vSwitch Git tree or got a
 Git tree snapshot, then run boot.sh in the top source directory to build
 the "configure" script:
 
-.. code-block:: console
+::
 
    $ ./boot.sh
 
@@ -153,7 +153,7 @@ Configure the package by running the configure script.  You should provide some
 configure options to choose the right compiler, linker, libraries, Open vSwitch
 component installation directories, etc. For example:
 
-.. code-block:: console
+::
 
    $ ./configure CC=./build-aux/cccl LD="$(which link)" \
        LIBS="-lws2_32 -liphlpapi -lwbemuuid -lole32 -loleaut32" \
@@ -169,7 +169,7 @@ component installation directories, etc. For example:
 
 To configure with SSL support, add the requisite additional options:
 
-.. code-block:: console
+::
 
    $ ./configure CC=./build-aux/cccl LD="`which link`"  \
        LIBS="-lws2_32 -liphlpapi -lwbemuuid -lole32 -loleaut32" \
@@ -181,7 +181,7 @@ To configure with SSL support, add the requisite additional options:
 
 Finally, to the kernel module also:
 
-.. code-block:: console
+::
 
    $ ./configure CC=./build-aux/cccl LD="`which link`" \
        LIBS="-lws2_32 -liphlpapi -lwbemuuid -lole32 -loleaut32" \
@@ -211,7 +211,7 @@ building on Linux, FreeBSD, or NetBSD.
 
 #. Run make for the ported executables in the top source directory, e.g.:
 
-   .. code-block:: console
+   ::
 
       $ make
 
@@ -225,25 +225,25 @@ building on Linux, FreeBSD, or NetBSD.
       all MinGW sessions and then run the below command from MSVC developers
       command prompt.:
 
-      .. code-block:: doscon
+      ::
 
          > mingw-get upgrade msys-core-bin=1.0.17-1
 
 #. To run all the unit tests in Open vSwitch, one at a time:
 
-   .. code-block:: console
+   ::
 
       $ make check
 
    To run all the unit tests in Open vSwitch, up to 8 in parallel:
 
-   .. code-block:: console
+   ::
 
       $ make check TESTSUITEFLAGS="-j8"
 
 #. To install all the compiled executables on the local machine, run:
 
-   .. code-block:: console
+   ::
 
       $ make install
 
@@ -276,7 +276,7 @@ Now run ``./uninstall.cmd`` to remove the old extension. Once complete, run
 turn on ``TESTSIGNING`` boot option or 'Disable Driver Signature
 Enforcement' during boot.  The following commands can be used:
 
-.. code-block:: doscon
+::
 
    > bcdedit /set LOADOPTIONS DISABLE_INTEGRITY_CHECKS
    > bcdedit /set TESTSIGNING ON
@@ -294,7 +294,7 @@ to work (covered later).
 The command to create a new switch named 'OVS-Extended-Switch' using a physical
 NIC named 'Ethernet 1' is:
 
-.. code-block:: ps1con
+::
 
    PS > New-VMSwitch "OVS-Extended-Switch" -NetAdapterName "Ethernet 1"
 
@@ -307,7 +307,7 @@ In the properties of any switch, you should should now see "Open vSwitch
 Extension" under 'Extensions'.  Click the check box to enable the extension.
 An alternative way to do the same is to run the following command:
 
-.. code-block:: ps1con
+::
 
    PS > Enable-VMSwitchExtension "Open vSwitch Extension" OVS-Extended-Switch
 
@@ -330,7 +330,7 @@ database, ovsdb-server. Each machine on which Open vSwitch is installed should
 run its own copy of ovsdb-server. Before ovsdb-server itself can be started,
 configure a database that it can use:
 
-.. code-block:: doscon
+::
 
    > ovsdb-tool create C:\openvswitch\etc\openvswitch\conf.db \
        C:\openvswitch\usr\share\openvswitch\vswitch.ovsschema
@@ -338,7 +338,7 @@ configure a database that it can use:
 Configure ovsdb-server to use database created above and to listen on a Unix
 domain socket:
 
-.. code-block:: doscon
+::
 
    > ovsdb-server -vfile:info --remote=punix:db.sock --log-file \
        --pidfile --detach
@@ -351,7 +351,7 @@ Initialize the database using ovs-vsctl. This is only necessary the first time
 after you create the database with ovsdb-tool, though running it at any time is
 harmless:
 
-.. code-block:: doscon
+::
 
    > ovs-vsctl --no-wait init
 
@@ -359,14 +359,14 @@ harmless:
 
    If you would later like to terminate the started ovsdb-server, run:
 
-   .. code-block:: doscon
+   ::
 
       > ovs-appctl -t ovsdb-server exit
 
 Start the main Open vSwitch daemon, telling it to connect to the same Unix
 domain socket:
 
-.. code-block:: doscon
+::
 
    > ovs-vswitchd -vfile:info --log-file --pidfile --detach
 
@@ -374,7 +374,7 @@ domain socket:
 
    If you would like to terminate the started ovs-vswitchd, run:
 
-   .. code-block:: doscon
+   ::
 
       > ovs-appctl exit
 
@@ -394,7 +394,7 @@ Add bridges
 Let's start by creating an integration bridge, ``br-int`` and a PIF bridge,
 ``br-pif``:
 
-.. code-block:: doscon
+::
 
    > ovs-vsctl add-br br-int
    > ovs-vsctl add-br br-pif
@@ -408,7 +408,7 @@ Let's start by creating an integration bridge, ``br-int`` and a PIF bridge,
 
 Validate that ports are added by dumping from both ovs-dpctl and ovs-vsctl:
 
-.. code-block:: doscon
+::
 
    > ovs-dpctl show
    system@ovs-system:
@@ -457,7 +457,7 @@ enable them and set the corresponding values to it to make them IP-able.
 
 As a whole example, if we issue the following in a powershell console:
 
-.. code-block:: ps1con
+::
 
     PS > Get-NetAdapter | select Name,InterfaceDescription
     Name                   InterfaceDescription
@@ -476,13 +476,13 @@ We can see that we have a switch(external) created upon adapter name
 'Ethernet0' with the internal ports under name 'br-pif' and 'br-int'. Thus
 resulting into the following ovs-vsctl commands:
 
-.. code-block:: doscon
+::
 
    > ovs-vsctl add-port br-pif Ethernet0
 
 Dumping the ports should show the additional ports that were just added:
 
-.. code-block:: doscon
+::
 
    > ovs-dpctl show
    system@ovs-system:
@@ -525,7 +525,7 @@ is being addressed.  After assigning the name ``ovs-port-a``, the VIF is
 connected back to the Hyper-V switch with name ``OVS-HV-Switch``, which is
 assumed to be the Hyper-V switch with OVS extension enabled.:
 
-.. code-block:: ps1con
+::
 
    PS > import-module .\datapath-windows\misc\OVS.psm1
    PS > $vnic = Get-VMNetworkAdapter <Name of the VM>
@@ -536,13 +536,13 @@ assumed to be the Hyper-V switch with OVS extension enabled.:
 
 Next, add the VIFs to ``br-int``:
 
-.. code-block:: doscon
+::
 
    > ovs-vsctl add-port br-int ovs-port-a
 
 Dumping the ports should show the additional ports that were just added:
 
-.. code-block:: doscon
+::
 
    > ovs-dpctl show
    system@ovs-system:
@@ -582,7 +582,7 @@ found at technet_.
 For example, to set up a switch team combined from ``Ethernet0 2`` and
 ``Ethernet1 2`` named ``external``:
 
-.. code-block:: ps1con
+::
 
    PS > Get-NetAdapter
    Name                      InterfaceDescription
@@ -602,7 +602,7 @@ For example, to set up a switch team combined from ``Ethernet0 2`` and
 
 This will result in a new adapter bound to the host called ``external``:
 
-.. code-block:: ps1con
+::
 
    PS > Get-NetAdapter
    Name                      InterfaceDescription
@@ -617,7 +617,7 @@ This will result in a new adapter bound to the host called ``external``:
 
 Next we will set up the Hyper-V VMSwitch on the new adapter ``external``:
 
-.. code-block:: ps1con
+::
 
    PS > New-VMSwitch -Name external -NetAdapterName external \
         -AllowManagementOS $false
@@ -628,7 +628,7 @@ Under OVS the adapters under the team ``external``, ``Ethernet0 2`` and
 The following example shows how the bridges look with the NICs being
 separated:
 
-.. code-block:: doscon
+::
 
    > ovs-vsctl show
    6cd9481b-c249-4ee3-8692-97b399dd29d8
@@ -653,7 +653,7 @@ Switch VLAN tagging along with patch ports between ``br-int`` and ``br-pif`` is
 used to configure VLAN tagging functionality between two VMs on different
 Hyper-Vs.  To start, add a patch port from ``br-int`` to ``br-pif``:
 
-.. code-block:: doscon
+::
 
    > ovs-vsctl add-port br-int patch-to-pif
    > ovs-vsctl set interface patch-to-pif type=patch \
@@ -661,7 +661,7 @@ Hyper-Vs.  To start, add a patch port from ``br-int`` to ``br-pif``:
 
 Add a patch port from ``br-pif`` to ``br-int``:
 
-.. code-block:: doscon
+::
 
    > ovs-vsctl add-port br-pif patch-to-int
    > ovs-vsctl set interface patch-to-int type=patch \
@@ -669,7 +669,7 @@ Add a patch port from ``br-pif`` to ``br-int``:
 
 Re-Add the VIF ports with the VLAN tag:
 
-.. code-block:: doscon
+::
 
    > ovs-vsctl add-port br-int ovs-port-a tag=900
    > ovs-vsctl add-port br-int ovs-port-b tag=900
@@ -681,7 +681,7 @@ The Windows Open vSwitch implementation support VXLAN and STT tunnels. To add
 tunnels. For example, first add the tunnel port between 172.168.201.101 <->
 172.168.201.102:
 
-.. code-block:: doscon
+::
 
    > ovs-vsctl add-port br-int tun-1
    > ovs-vsctl set Interface tun-1 type=<port-type>
@@ -692,7 +692,7 @@ tunnels. For example, first add the tunnel port between 172.168.201.101 <->
 
 ...and the tunnel port between 172.168.201.101 <-> 172.168.201.105:
 
-.. code-block:: doscon
+::
 
    > ovs-vsctl add-port br-int tun-2
    > ovs-vsctl set Interface tun-2 type=<port-type>
@@ -717,14 +717,14 @@ daemons via ``make install``.
 
 To start, create the database:
 
-.. code-block:: doscon
+::
 
    > ovsdb-tool create C:/openvswitch/etc/openvswitch/conf.db \
        "C:/openvswitch/usr/share/openvswitch/vswitch.ovsschema"
 
 Create the ovsdb-server service and start it:
 
-.. code-block:: doscon
+::
 
    > sc create ovsdb-server \
        binpath="C:/openvswitch/usr/sbin/ovsdb-server.exe \
@@ -739,25 +739,25 @@ Create the ovsdb-server service and start it:
    paths.  You can make sure that the correct path has been registered with the
    Windows services manager by running:
 
-   .. code-block:: doscon
+   ::
 
       > sc qc ovsdb-server
 
 Check that the service is healthy by running:
 
-.. code-block:: doscon
+::
 
    > sc query ovsdb-server
 
 Initialize the database:
 
-.. code-block:: doscon
+::
 
    > ovs-vsctl --no-wait init
 
 Create the ovs-vswitchd service and start it:
 
-.. code-block:: doscon
+::
 
    > sc create ovs-vswitchd \
        binpath="C:/openvswitch/usr/sbin/ovs-vswitchd.exe \
@@ -766,13 +766,13 @@ Create the ovs-vswitchd service and start it:
 
 Check that the service is healthy by running:
 
-.. code-block:: doscon
+::
 
    > sc query ovs-vswitchd
 
 To stop and delete the services, run:
 
-.. code-block:: doscon
+::
 
    > sc stop ovs-vswitchd
    > sc stop ovsdb-server
