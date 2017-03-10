@@ -377,6 +377,8 @@ struct ipam_info {
     uint32_t start_ipv4;
     size_t total_ipv4s;
     unsigned long *allocated_ipv4s; /* A bitmap of allocated IPv4s */
+    bool ipv6_prefix_set;
+    struct in6_addr ipv6_prefix;
 };
 
 /* The 'key' comes from nbs->header_.uuid or nbr->header_.uuid or
@@ -509,6 +511,14 @@ init_ipam_info_for_datapath(struct ovn_datapath *od)
     }
 
     const char *subnet_str = smap_get(&od->nbs->other_config, "subnet");
+    const char *ipv6_prefix = smap_get(&od->nbs->other_config, "ipv6_prefix");
+
+    if (ipv6_prefix) {
+        od->ipam_info = xzalloc(sizeof *od->ipam_info);
+        od->ipam_info->ipv6_prefix_set = ipv6_parse(
+            ipv6_prefix, &od->ipam_info->ipv6_prefix);
+    }
+
     if (!subnet_str) {
         return;
     }
@@ -523,7 +533,9 @@ init_ipam_info_for_datapath(struct ovn_datapath *od)
         return;
     }
 
-    od->ipam_info = xzalloc(sizeof *od->ipam_info);
+    if (!od->ipam_info) {
+        od->ipam_info = xzalloc(sizeof *od->ipam_info);
+    }
     od->ipam_info->start_ipv4 = ntohl(subnet) + 1;
     od->ipam_info->total_ipv4s = ~ntohl(mask);
     od->ipam_info->allocated_ipv4s =
@@ -1022,42 +1034,59 @@ static bool
 ipam_allocate_addresses(struct ovn_datapath *od, struct ovn_port *op,
                         const char *addrspec)
 {
-    if (!od || !op || !op->nbsp) {
+    if (!op->nbsp || !od->ipam_info) {
         return false;
     }
 
-    uint32_t ip = ipam_get_unused_ip(od);
-    if (!ip) {
-        return false;
-    }
-
+    /* Get or generate MAC address. */
     struct eth_addr mac;
-    bool check_mac;
+    bool dynamic_mac;
     int n = 0;
-
     if (ovs_scan(addrspec, ETH_ADDR_SCAN_FMT" dynamic%n",
                  ETH_ADDR_SCAN_ARGS(mac), &n)
         && addrspec[n] == '\0') {
-        check_mac = true;
+        dynamic_mac = false;
     } else {
         uint64_t mac64 = ipam_get_unused_mac();
         if (!mac64) {
             return false;
         }
         eth_addr_from_uint64(mac64, &mac);
-        check_mac = false;
+        dynamic_mac = true;
     }
 
-    /* Add MAC to MACAM and IP to IPAM bitmap if both addresses were allocated
-     * successfully. */
-    ipam_insert_ip(od, ip);
-    ipam_insert_mac(&mac, check_mac);
+    /* Generate IPv4 address, if desirable. */
+    bool dynamic_ip4 = od->ipam_info->allocated_ipv4s != NULL;
+    uint32_t ip4 = dynamic_ip4 ? ipam_get_unused_ip(od) : 0;
 
-    char *new_addr = xasprintf(ETH_ADDR_FMT" "IP_FMT,
-                               ETH_ADDR_ARGS(mac), IP_ARGS(htonl(ip)));
-    nbrec_logical_switch_port_set_dynamic_addresses(op->nbsp, new_addr);
-    free(new_addr);
+    /* Generate IPv6 address, if desirable. */
+    bool dynamic_ip6 = od->ipam_info->ipv6_prefix_set;
+    struct in6_addr ip6;
+    if (dynamic_ip6) {
+        in6_generate_eui64(mac, &od->ipam_info->ipv6_prefix, &ip6);
+    }
 
+    /* If we didn't generate anything, bail out. */
+    if (!dynamic_ip4 && !dynamic_ip6) {
+        return false;
+    }
+
+    /* Save the dynamic addresses. */
+    struct ds new_addr = DS_EMPTY_INITIALIZER;
+    ds_put_format(&new_addr, ETH_ADDR_FMT, ETH_ADDR_ARGS(mac));
+    if (dynamic_ip4 && ip4) {
+        ipam_insert_ip(od, ip4);
+        ds_put_format(&new_addr, " "IP_FMT, IP_ARGS(htonl(ip4)));
+    }
+    if (dynamic_ip6) {
+        char ip6_s[INET6_ADDRSTRLEN + 1];
+        ipv6_string_mapped(ip6_s, &ip6);
+        ds_put_format(&new_addr, " %s", ip6_s);
+    }
+    ipam_insert_mac(&mac, !dynamic_mac);
+    nbrec_logical_switch_port_set_dynamic_addresses(op->nbsp,
+                                                    ds_cstr(&new_addr));
+    ds_destroy(&new_addr);
     return true;
 }
 
@@ -1074,7 +1103,7 @@ build_ipam(struct hmap *datapaths, struct hmap *ports)
      * ports that have the "dynamic" keyword in their addresses column. */
     struct ovn_datapath *od;
     HMAP_FOR_EACH (od, key_node, datapaths) {
-        if (!od->nbs || !od->ipam_info || !od->ipam_info->allocated_ipv4s) {
+        if (!od->nbs || !od->ipam_info) {
             continue;
         }
 

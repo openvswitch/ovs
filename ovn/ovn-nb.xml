@@ -137,12 +137,19 @@
     <group title="IP Address Assignment">
       <p>
         These options control automatic IP address management (IPAM) for ports
-        attached to the logical switch.  To enable IPAM, set <ref
+        attached to the logical switch.  To enable IPAM for IPv4, set <ref
         column="other_config" key="subnet"/> and optionally <ref
-        column="other_config:exclude_ips"/>.  Then, to request dynamic address
-        assignment for a particular port, use the <code>dynamic</code> keyword
-        in the <ref table="Logical_Switch_Port" column="addresses"/> column of
-        the port's <ref table="Logical_Switch_Port"/> row.
+        column="other_config:exclude_ips"/>.  To enable IPAM for IPv6, set
+        <ref column="other_config" key="ipv6_prefix"/>.  IPv4 and IPv6 may
+        be enabled together or separately.
+      </p>
+
+      <p>
+        To request dynamic address assignment for a particular port, use the
+        <code>dynamic</code> keyword in the <ref table="Logical_Switch_Port"
+        column="addresses"/> column of the port's <ref
+        table="Logical_Switch_Port"/> row.  This requests both an IPv4 and an
+        IPv6 address, if IPAM for IPv4 and IPv6 are both enabled.
       </p>
 
       <column name="other_config" key="subnet">
@@ -170,6 +177,23 @@
           <li><code>192.168.0.2 192.168.0.10</code></li>
           <li><code>192.168.0.4 192.168.0.30..192.168.0.60 192.168.0.110..192.168.0.120</code></li>
           <li><code>192.168.0.110..192.168.0.120 192.168.0.25..192.168.0.30 192.168.0.144</code></li>
+        </ul>
+      </column>
+
+      <column name="other_config" key="ipv6_prefix">
+        Set this to an IPv6 prefix to enable <code>ovn-northd</code> to
+        automatically assign IPv6 addresses using this prefix.  The assigned
+        IPv6 address will be generated using the IPv6 prefix and the MAC
+        address (converted to an IEEE EUI64 identifier) of the port.  The IPv6
+        prefix defined here should be a valid IPv6 address ending with
+        <code>::</code>.
+        <p>
+          Examples:
+        </p>
+        <ul>
+          <li><code>aef0::</code></li>
+          <li><code>bef0:1234:a890:5678::</code></li>
+          <li><code>8230:5678::</code></li>
         </ul>
       </column>
     </group>

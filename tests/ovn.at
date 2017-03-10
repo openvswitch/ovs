@@ -4869,14 +4869,14 @@ AT_CHECK([ovn-nbctl get Logical-Switch-Port p27 dynamic_addresses], [0],
 
 ovn-nbctl --wait=sb lsp-add sw2 p28 -- lsp-set-addresses p28 dynamic
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p28 dynamic_addresses], [0],
-     [[[]]
+     ["0a:00:00:00:00:1e"
 ])
 
 # Test that address management does not add duplicate MAC for lsp/lrp peers.
 ovn-nbctl create Logical_Router name=R2
 ovn-nbctl ls-add sw3
 ovn-nbctl lsp-add sw3 p29 -- lsp-set-addresses p29 \
-"0a:00:00:00:00:1e"
+"0a:00:00:00:00:1f"
 ovn-nbctl -- --id=@lrp create Logical_Router_port name=sw3 \
 network="192.168.2.1/24" mac=\"0a:00:00:00:00:1f\" \
 -- add Logical_Router R2 ports @lrp -- lsp-add sw3 rp-sw3 \
@@ -4959,6 +4959,58 @@ AT_CHECK([ovn-nbctl get Logical-Switch-Port p36 dynamic_addresses], [0],
 ovn-nbctl --wait=sb clear logical_switch_port p36 addresses
 AT_CHECK([ovn-nbctl get Logical-Switch-Port p36 dynamic_addresses], [0],
          [[[]]
+])
+
+# Set IPv6 prefix
+ovn-nbctl --wait=sb set Logical-switch sw0 other_config:ipv6_prefix="aef0::"
+ovn-nbctl --wait=sb lsp-add sw0 p37 -- lsp-set-addresses p37 \
+"dynamic"
+
+# With prefix aef0 and mac 0a:00:00:00:00:26, the dynamic IPv6 should be
+# - aef0::800:ff:fe00:26 (EUI64)
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p37 dynamic_addresses], [0],
+     ["0a:00:00:00:00:26 192.168.1.21 aef0::800:ff:fe00:26"
+])
+
+ovn-nbctl --wait=sb ls-add sw4
+ovn-nbctl --wait=sb set Logical-switch sw4 other_config:ipv6_prefix="bef0::"
+ovn-nbctl --wait=sb lsp-add sw4 p38 -- lsp-set-addresses p38 \
+"dynamic"
+
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p38 dynamic_addresses], [0],
+     ["0a:00:00:00:00:27 bef0::800:ff:fe00:27"
+])
+
+ovn-nbctl --wait=sb lsp-add sw4 p39 -- lsp-set-addresses p39 \
+"f0:00:00:00:10:12 dynamic"
+
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p39 dynamic_addresses], [0],
+     ["f0:00:00:00:10:12 bef0::f200:ff:fe00:1012"
+])
+
+# Clear the other_config for sw4. No dynamic ip should be assigned.
+ovn-nbctl --wait=sb clear Logical-switch sw4 other_config
+ovn-nbctl --wait=sb lsp-add sw4 p40 -- lsp-set-addresses p40 \
+"dynamic"
+
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p40 dynamic_addresses], [0],
+         [[[]]
+])
+
+# Test the case where IPv4 addresses are exhausted and IPv6 prefix is set
+ovn-nbctl --wait=sb set Logical-switch sw4 other_config:subnet=192.168.2.0/30 \
+-- set Logical-switch sw4 other_config:ipv6_prefix="bef0::"
+
+# Now p40 should be assigned with dynamic addresses.
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p40 dynamic_addresses], [0],
+         ["0a:00:00:00:00:28 192.168.2.2 bef0::800:ff:fe00:28"
+])
+
+ovn-nbctl --wait=sb lsp-add sw4 p41 -- lsp-set-addresses p41 \
+"dynamic"
+# p41 should not have IPv4 address (as the pool is exhausted).
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p41 dynamic_addresses], [0],
+         ["0a:00:00:00:00:29 bef0::800:ff:fe00:29"
 ])
 
 as ovn-sb
