@@ -4912,6 +4912,55 @@ AT_CHECK([ovn-nbctl get Logical-Switch-Port p31 dynamic_addresses], [0],
      ["fe:dc:ba:98:76:56 192.168.1.18"
 ])
 
+
+# Test the exclude_ips from the IPAM list
+ovn-nbctl --wait=sb set logical_switch sw0 \
+other_config:exclude_ips="192.168.1.19 192.168.1.21 192.168.1.23..192.168.1.50"
+
+ovn-nbctl --wait=sb lsp-add sw0 p32 -- lsp-set-addresses p32 \
+"dynamic"
+# 192.168.1.20 should be assigned as 192.168.1.19 is excluded.
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p32 dynamic_addresses], [0],
+     ["0a:00:00:00:00:21 192.168.1.20"
+])
+
+ovn-nbctl --wait=sb lsp-add sw0 p33 -- lsp-set-addresses p33 \
+"dynamic"
+# 192.168.1.22 should be assigned as 192.168.1.21 is excluded.
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p33 dynamic_addresses], [0],
+     ["0a:00:00:00:00:22 192.168.1.22"
+])
+
+ovn-nbctl --wait=sb lsp-add sw0 p34 -- lsp-set-addresses p34 \
+"dynamic"
+# 192.168.1.51 should be assigned as 192.168.1.23-192.168.1.50 is excluded.
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p34 dynamic_addresses], [0],
+     ["0a:00:00:00:00:23 192.168.1.51"
+])
+
+# Now clear the exclude_ips list. 192.168.1.19 should be assigned.
+ovn-nbctl --wait=sb set Logical-switch sw0 other_config:exclude_ips="invalid"
+ovn-nbctl --wait=sb lsp-add sw0 p35 -- lsp-set-addresses p35 \
+"dynamic"
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p35 dynamic_addresses], [0],
+     ["0a:00:00:00:00:24 192.168.1.19"
+])
+
+# Set invalid data in exclude_ips list. It should be ignored.
+ovn-nbctl --wait=sb set Logical-switch sw0 other_config:exclude_ips="182.168.1.30"
+ovn-nbctl --wait=sb lsp-add sw0 p36 -- lsp-set-addresses p36 \
+"dynamic"
+# 192.168.1.21 should be assigned as that's the next free one.
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p36 dynamic_addresses], [0],
+     ["0a:00:00:00:00:25 192.168.1.21"
+])
+
+# Clear the dynamic addresses assignment request.
+ovn-nbctl --wait=sb clear logical_switch_port p36 addresses
+AT_CHECK([ovn-nbctl get Logical-Switch-Port p36 dynamic_addresses], [0],
+         [[[]]
+])
+
 as ovn-sb
 OVS_APP_EXIT_AND_WAIT([ovsdb-server])
 

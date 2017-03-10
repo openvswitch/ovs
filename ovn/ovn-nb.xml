@@ -134,18 +134,43 @@
       QOS marking rules that apply to packets within the logical switch.
     </column>
 
-    <group title="other_config">
+    <group title="IP Address Assignment">
       <p>
-        Additional configuration options for the logical switch.
+        These options control automatic IP address management (IPAM) for ports
+        attached to the logical switch.  To enable IPAM, set <ref
+        column="other_config" key="subnet"/> and optionally <ref
+        column="other_config:exclude_ips"/>.  Then, to request dynamic address
+        assignment for a particular port, use the <code>dynamic</code> keyword
+        in the <ref table="Logical_Switch_Port" column="addresses"/> column of
+        the port's <ref table="Logical_Switch_Port"/> row.
       </p>
 
       <column name="other_config" key="subnet">
         Set this to an IPv4 subnet, e.g. <code>192.168.0.0/24</code>, to enable
         <code>ovn-northd</code> to automatically assign IP addresses within
-        that subnet.  Use the <code>dynamic</code> keyword in the <ref
-        table="Logical_Switch_Port"/> table's <ref table="Logical_Switch_Port"
-        column="addresses"/> column to request dynamic address assignment for a
-        particular port.
+        that subnet.  
+      </column>
+
+      <column name="other_config" key="exclude_ips">
+        <p>
+          To exclude some addresses from automatic IP address management, set
+          this to a list of the IPv4 addresses or <code>..</code>-delimited
+          ranges to exclude.  The addresses or ranges should be a subset of
+          those in <ref column="other_config" key="subnet"/>.
+        </p>
+        <p>
+          Whether listed or not, <code>ovn-northd</code> will never allocate
+          the first or last address in a subnet, such as 192.168.0.0 or
+          192.168.0.255 in 192.168.0.0/24.
+        </p>
+        <p>
+          Examples:
+        </p>
+        <ul>
+          <li><code>192.168.0.2 192.168.0.10</code></li>
+          <li><code>192.168.0.4 192.168.0.30..192.168.0.60 192.168.0.110..192.168.0.120</code></li>
+          <li><code>192.168.0.110..192.168.0.120 192.168.0.25..192.168.0.30 192.168.0.144</code></li>
+        </ul>
       </column>
     </group>
 

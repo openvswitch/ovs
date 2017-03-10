@@ -13,6 +13,7 @@ Post-v2.7.0
    - New support for multiple VLANs (802.1ad or "QinQ"), including a new
      "dot1q-tunnel" port VLAN mode.
    - OVN:
+     * IPAM for IPv4 can now exclude user-defined addresses from assignment.
      * Make the DHCPv4 router setting optional.
      * Gratuitous ARP for NAT addresses on a distributed logical router.
      * Allow ovn-controller SSL configuration to be obtained from vswitchd

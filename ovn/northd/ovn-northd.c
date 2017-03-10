@@ -372,6 +372,13 @@ port_has_qos_params(const struct smap *opts)
             smap_get(opts, "qos_burst"));
 }
 
+
+struct ipam_info {
+    uint32_t start_ipv4;
+    size_t total_ipv4s;
+    unsigned long *allocated_ipv4s; /* A bitmap of allocated IPv4s */
+};
+
 /* The 'key' comes from nbs->header_.uuid or nbr->header_.uuid or
  * sb->external_ids:logical-switch. */
 struct ovn_datapath {
@@ -394,7 +401,7 @@ struct ovn_datapath {
     bool has_unknown;
 
     /* IPAM data. */
-    struct hmap ipam;
+    struct ipam_info *ipam_info;
 
     /* OVN northd only needs to know about the logical router gateway port for
      * NAT on a distributed router.  This "distributed gateway port" is
@@ -420,21 +427,6 @@ cleanup_macam(struct hmap *macam)
     }
 }
 
-struct ipam_node {
-    struct hmap_node hmap_node;
-    uint32_t ip_addr; /* Allocated IP address. */
-};
-
-static void
-destroy_ipam(struct hmap *ipam)
-{
-    struct ipam_node *node;
-    HMAP_FOR_EACH_POP (node, hmap_node, ipam) {
-        free(node);
-    }
-    hmap_destroy(ipam);
-}
-
 static struct ovn_datapath *
 ovn_datapath_create(struct hmap *datapaths, const struct uuid *key,
                     const struct nbrec_logical_switch *nbs,
@@ -447,7 +439,6 @@ ovn_datapath_create(struct hmap *datapaths, const struct uuid *key,
     od->nbs = nbs;
     od->nbr = nbr;
     hmap_init(&od->port_tnlids);
-    hmap_init(&od->ipam);
     od->port_key_hint = 0;
     hmap_insert(datapaths, &od->key_node, uuid_hash(&od->key));
     return od;
@@ -462,7 +453,10 @@ ovn_datapath_destroy(struct hmap *datapaths, struct ovn_datapath *od)
          * use it. */
         hmap_remove(datapaths, &od->key_node);
         destroy_tnlids(&od->port_tnlids);
-        destroy_ipam(&od->ipam);
+        if (od->ipam_info) {
+            bitmap_free(od->ipam_info->allocated_ipv4s);
+            free(od->ipam_info);
+        }
         free(od->router_ports);
         free(od);
     }
@@ -505,6 +499,87 @@ static bool
 lrouter_is_enabled(const struct nbrec_logical_router *lrouter)
 {
     return !lrouter->enabled || *lrouter->enabled;
+}
+
+static void
+init_ipam_info_for_datapath(struct ovn_datapath *od)
+{
+    if (!od->nbs) {
+        return;
+    }
+
+    const char *subnet_str = smap_get(&od->nbs->other_config, "subnet");
+    if (!subnet_str) {
+        return;
+    }
+
+    ovs_be32 subnet, mask;
+    char *error = ip_parse_masked(subnet_str, &subnet, &mask);
+    if (error || mask == OVS_BE32_MAX || !ip_is_cidr(mask)) {
+        static struct vlog_rate_limit rl
+            = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "bad 'subnet' %s", subnet_str);
+        free(error);
+        return;
+    }
+
+    od->ipam_info = xzalloc(sizeof *od->ipam_info);
+    od->ipam_info->start_ipv4 = ntohl(subnet) + 1;
+    od->ipam_info->total_ipv4s = ~ntohl(mask);
+    od->ipam_info->allocated_ipv4s =
+        bitmap_allocate(od->ipam_info->total_ipv4s);
+
+    /* Mark first IP as taken */
+    bitmap_set1(od->ipam_info->allocated_ipv4s, 0);
+
+    /* Check if there are any reserver IPs (list) to be excluded from IPAM */
+    const char *exclude_ip_list = smap_get(&od->nbs->other_config,
+                                           "exclude_ips");
+    if (!exclude_ip_list) {
+        return;
+    }
+
+    struct lexer lexer;
+    lexer_init(&lexer, exclude_ip_list);
+    /* exclude_ip_list could be in the format -
+    *  "10.0.0.4 10.0.0.10 10.0.0.20..10.0.0.50 10.0.0.100..10.0.0.110".
+    */
+    lexer_get(&lexer);
+    while (lexer.token.type != LEX_T_END) {
+        if (lexer.token.type != LEX_T_INTEGER) {
+            lexer_syntax_error(&lexer, "expecting address");
+            break;
+        }
+        uint32_t start = ntohl(lexer.token.value.ipv4);
+        lexer_get(&lexer);
+
+        uint32_t end = start + 1;
+        if (lexer_match(&lexer, LEX_T_ELLIPSIS)) {
+            if (lexer.token.type != LEX_T_INTEGER) {
+                lexer_syntax_error(&lexer, "expecting address range");
+                break;
+            }
+            end = ntohl(lexer.token.value.ipv4) + 1;
+            lexer_get(&lexer);
+        }
+
+        /* Clamp start...end to fit the subnet. */
+        start = MAX(od->ipam_info->start_ipv4, start);
+        end = MIN(od->ipam_info->start_ipv4 + od->ipam_info->total_ipv4s, end);
+        if (end > start) {
+            bitmap_set_multiple(od->ipam_info->allocated_ipv4s,
+                                start - od->ipam_info->start_ipv4,
+                                end - start, 1);
+        } else {
+            lexer_error(&lexer, "excluded addresses not in subnet");
+        }
+    }
+    if (lexer.error) {
+        static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
+        VLOG_WARN_RL(&rl, "logical switch "UUID_FMT": bad exclude_ips (%s)",
+                     UUID_ARGS(&od->key), lexer.error);
+    }
+    lexer_destroy(&lexer);
 }
 
 static void
@@ -560,6 +635,8 @@ join_datapaths(struct northd_context *ctx, struct hmap *datapaths,
                                      nbs, NULL, NULL);
             ovs_list_push_back(nb_only, &od->list);
         }
+
+        init_ipam_info_for_datapath(od);
     }
 
     const struct nbrec_logical_router *nbr;
@@ -787,24 +864,6 @@ ipam_is_duplicate_mac(struct eth_addr *ea, uint64_t mac64, bool warn)
     return false;
 }
 
-static bool
-ipam_is_duplicate_ip(struct ovn_datapath *od, uint32_t ip, bool warn)
-{
-    struct ipam_node *ipam_node;
-    HMAP_FOR_EACH_WITH_HASH (ipam_node, hmap_node, hash_int(ip, 0),
-                             &od->ipam) {
-        if (ipam_node->ip_addr == ip) {
-            if (warn) {
-                static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(1, 1);
-                VLOG_WARN_RL(&rl, "Duplicate IP set: "IP_FMT,
-                             IP_ARGS(htonl(ip)));
-            }
-            return true;
-        }
-    }
-    return false;
-}
-
 static void
 ipam_insert_mac(struct eth_addr *ea, bool check)
 {
@@ -827,19 +886,17 @@ ipam_insert_mac(struct eth_addr *ea, bool check)
 }
 
 static void
-ipam_insert_ip(struct ovn_datapath *od, uint32_t ip, bool check)
+ipam_insert_ip(struct ovn_datapath *od, uint32_t ip)
 {
-    if (!od) {
+    if (!od || !od->ipam_info || !od->ipam_info->allocated_ipv4s) {
         return;
     }
 
-    if (check && ipam_is_duplicate_ip(od, ip, true)) {
-        return;
+    if (ip >= od->ipam_info->start_ipv4 &&
+        ip < (od->ipam_info->start_ipv4 + od->ipam_info->total_ipv4s)) {
+        bitmap_set1(od->ipam_info->allocated_ipv4s,
+                    ip - od->ipam_info->start_ipv4);
     }
-
-    struct ipam_node *new_ipam_node = xmalloc(sizeof *new_ipam_node);
-    new_ipam_node->ip_addr = ip;
-    hmap_insert(&od->ipam, &new_ipam_node->hmap_node, hash_int(ip, 0));
 }
 
 static void
@@ -861,14 +918,14 @@ ipam_insert_lsp_addresses(struct ovn_datapath *od, struct ovn_port *op,
 
     /* IP is only added to IPAM if the switch's subnet option
      * is set, whereas MAC is always added to MACAM. */
-    if (!smap_get(&od->nbs->other_config, "subnet")) {
+    if (!od->ipam_info || !od->ipam_info->allocated_ipv4s) {
         destroy_lport_addresses(&laddrs);
         return;
     }
 
     for (size_t j = 0; j < laddrs.n_ipv4_addrs; j++) {
         uint32_t ip = ntohl(laddrs.ipv4_addrs[j].addr);
-        ipam_insert_ip(od, ip, true);
+        ipam_insert_ip(od, ip);
     }
 
     destroy_lport_addresses(&laddrs);
@@ -907,7 +964,7 @@ ipam_add_port_addresses(struct ovn_datapath *od, struct ovn_port *op)
 
         for (size_t i = 0; i < lrp_networks.n_ipv4_addrs; i++) {
             uint32_t ip = ntohl(lrp_networks.ipv4_addrs[i].addr);
-            ipam_insert_ip(op->peer->od, ip, true);
+            ipam_insert_ip(op->peer->od, ip);
         }
 
         destroy_lport_addresses(&lrp_networks);
@@ -944,41 +1001,32 @@ ipam_get_unused_mac(void)
 }
 
 static uint32_t
-ipam_get_unused_ip(struct ovn_datapath *od, uint32_t subnet, uint32_t mask)
+ipam_get_unused_ip(struct ovn_datapath *od)
 {
-    if (!od) {
+    if (!od || !od->ipam_info || !od->ipam_info->allocated_ipv4s) {
         return 0;
     }
 
-    uint32_t ip = 0;
-
-    /* Find an unused IP address in subnet. x.x.x.1 is reserved for a
-     * logical router port. */
-    for (uint32_t i = 2; i < ~mask; i++) {
-        uint32_t tentative_ip = subnet + i;
-        if (!ipam_is_duplicate_ip(od, tentative_ip, false)) {
-            ip = tentative_ip;
-            break;
-        }
-    }
-
-    if (!ip) {
+    size_t new_ip_index = bitmap_scan(od->ipam_info->allocated_ipv4s, 0, 0,
+                                      od->ipam_info->total_ipv4s - 1);
+    if (new_ip_index == od->ipam_info->total_ipv4s - 1) {
         static struct vlog_rate_limit rl = VLOG_RATE_LIMIT_INIT(5, 1);
         VLOG_WARN_RL( &rl, "Subnet address space has been exhausted.");
+        return 0;
     }
 
-    return ip;
+    return od->ipam_info->start_ipv4 + new_ip_index;
 }
 
 static bool
 ipam_allocate_addresses(struct ovn_datapath *od, struct ovn_port *op,
-                        const char *addrspec, ovs_be32 subnet, ovs_be32 mask)
+                        const char *addrspec)
 {
     if (!od || !op || !op->nbsp) {
         return false;
     }
 
-    uint32_t ip = ipam_get_unused_ip(od, ntohl(subnet), ntohl(mask));
+    uint32_t ip = ipam_get_unused_ip(od);
     if (!ip) {
         return false;
     }
@@ -1000,9 +1048,9 @@ ipam_allocate_addresses(struct ovn_datapath *od, struct ovn_port *op,
         check_mac = false;
     }
 
-    /* Add MAC/IP to MACAM/IPAM hmaps if both addresses were allocated
+    /* Add MAC to MACAM and IP to IPAM bitmap if both addresses were allocated
      * successfully. */
-    ipam_insert_ip(od, ip, false);
+    ipam_insert_ip(od, ip);
     ipam_insert_mac(&mac, check_mac);
 
     char *new_addr = xasprintf(ETH_ADDR_FMT" "IP_FMT,
@@ -1026,55 +1074,45 @@ build_ipam(struct hmap *datapaths, struct hmap *ports)
      * ports that have the "dynamic" keyword in their addresses column. */
     struct ovn_datapath *od;
     HMAP_FOR_EACH (od, key_node, datapaths) {
-        if (od->nbs) {
-            const char *subnet_str = smap_get(&od->nbs->other_config,
-                                              "subnet");
-            if (!subnet_str) {
+        if (!od->nbs || !od->ipam_info || !od->ipam_info->allocated_ipv4s) {
+            continue;
+        }
+
+        struct ovn_port *op;
+        for (size_t i = 0; i < od->nbs->n_ports; i++) {
+            const struct nbrec_logical_switch_port *nbsp =
+                od->nbs->ports[i];
+
+            if (!nbsp) {
                 continue;
             }
 
-            ovs_be32 subnet, mask;
-            char *error = ip_parse_masked(subnet_str, &subnet, &mask);
-            if (error || mask == OVS_BE32_MAX || !ip_is_cidr(mask)) {
-                static struct vlog_rate_limit rl
-                    = VLOG_RATE_LIMIT_INIT(5, 1);
-                VLOG_WARN_RL(&rl, "bad 'subnet' %s", subnet_str);
-                free(error);
+            op = ovn_port_find(ports, nbsp->name);
+            if (!op || (op->nbsp && op->peer)) {
+                /* Do not allocate addresses for logical switch ports that
+                 * have a peer. */
                 continue;
             }
 
-            struct ovn_port *op;
-            for (size_t i = 0; i < od->nbs->n_ports; i++) {
-                const struct nbrec_logical_switch_port *nbsp =
-                    od->nbs->ports[i];
-
-                if (!nbsp) {
-                    continue;
-                }
-
-                op = ovn_port_find(ports, nbsp->name);
-                if (!op || (op->nbsp && op->peer)) {
-                    /* Do not allocate addresses for logical switch ports that
-                     * have a peer. */
-                    continue;
-                }
-
-                for (size_t j = 0; j < nbsp->n_addresses; j++) {
-                    if (is_dynamic_lsp_address(nbsp->addresses[j])
-                        && !nbsp->dynamic_addresses) {
-                        if (!ipam_allocate_addresses(od, op,
-                                             nbsp->addresses[j], subnet, mask)
-                            || !extract_lsp_addresses(nbsp->dynamic_addresses,
-                                            &op->lsp_addrs[op->n_lsp_addrs])) {
-                            static struct vlog_rate_limit rl
-                                = VLOG_RATE_LIMIT_INIT(1, 1);
-                            VLOG_INFO_RL(&rl, "Failed to allocate address.");
-                        } else {
-                            op->n_lsp_addrs++;
-                        }
-                        break;
+            for (size_t j = 0; j < nbsp->n_addresses; j++) {
+                if (is_dynamic_lsp_address(nbsp->addresses[j])
+                    && !nbsp->dynamic_addresses) {
+                    if (!ipam_allocate_addresses(od, op, nbsp->addresses[j])
+                        || !extract_lsp_addresses(nbsp->dynamic_addresses,
+                                        &op->lsp_addrs[op->n_lsp_addrs])) {
+                        static struct vlog_rate_limit rl
+                            = VLOG_RATE_LIMIT_INIT(1, 1);
+                        VLOG_INFO_RL(&rl, "Failed to allocate address.");
+                    } else {
+                        op->n_lsp_addrs++;
                     }
+                    break;
                 }
+            }
+
+            if (!nbsp->n_addresses && nbsp->dynamic_addresses) {
+                nbrec_logical_switch_port_set_dynamic_addresses(op->nbsp,
+                                                                NULL);
             }
         }
     }
