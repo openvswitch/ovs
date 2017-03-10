@@ -4579,11 +4579,7 @@ xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
         enum ofperr error;
 
         if (ctx->xin->xcache) {
-            struct xc_entry *entry;
-
-            entry = xlate_cache_add_entry(ctx->xin->xcache, XC_LEARN);
-            entry->learn.ofm = xmalloc(sizeof *entry->learn.ofm);
-            ofm = entry->learn.ofm;
+            ofm = xmalloc(sizeof *ofm);
         } else {
             ofm = &ofm__;
         }
@@ -4617,8 +4613,22 @@ xlate_learn_action(struct xlate_ctx *ctx, const struct ofpact_learn *learn)
                                                      &fm, ofm);
         ofpbuf_uninit(&ofpacts);
 
-        if (!error && ctx->xin->allow_side_effects) {
-            error = ofproto_flow_mod_learn(ofm, ctx->xin->xcache != NULL);
+        if (!error) {
+            if (ctx->xin->allow_side_effects) {
+                error = ofproto_flow_mod_learn(ofm, ctx->xin->xcache != NULL);
+            }
+
+            if (ctx->xin->xcache) {
+                struct xc_entry *entry;
+
+                entry = xlate_cache_add_entry(ctx->xin->xcache, XC_LEARN);
+                entry->learn.ofm = ofm;
+                ofm = NULL;
+            }
+        }
+
+        if (ctx->xin->xcache) {
+            free(ofm);
         }
 
         if (error) {
