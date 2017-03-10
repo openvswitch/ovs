@@ -4379,22 +4379,13 @@ learn_min_len(uint16_t header)
     return min_len;
 }
 
-/* Converts 'nal' into a "struct ofpact_learn" and appends that struct to
- * 'ofpacts'.  Returns 0 if successful, otherwise an OFPERR_*. */
 static enum ofperr
-decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
-                       enum ofp_version ofp_version OVS_UNUSED,
-                       const struct vl_mff_map *vl_mff_map,
-                       uint64_t *tlv_bitmap, struct ofpbuf *ofpacts)
+decode_LEARN_common(const struct nx_action_learn *nal,
+                    struct ofpact_learn *learn)
 {
-    struct ofpact_learn *learn;
-    const void *p, *end;
-
     if (nal->pad) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
-
-    learn = ofpact_put_LEARN(ofpacts);
 
     learn->idle_timeout = ntohs(nal->idle_timeout);
     learn->hard_timeout = ntohs(nal->hard_timeout);
@@ -4403,19 +4394,23 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
     learn->table_id = nal->table_id;
     learn->fin_idle_timeout = ntohs(nal->fin_idle_timeout);
     learn->fin_hard_timeout = ntohs(nal->fin_hard_timeout);
-
     learn->flags = ntohs(nal->flags);
-    if (learn->flags & ~(NX_LEARN_F_SEND_FLOW_REM |
-                         NX_LEARN_F_DELETE_LEARNED)) {
-        return OFPERR_OFPBAC_BAD_ARGUMENT;
-    }
 
     if (learn->table_id == 0xff) {
         return OFPERR_OFPBAC_BAD_ARGUMENT;
     }
 
-    end = (char *) nal + ntohs(nal->len);
-    for (p = nal + 1; p != end; ) {
+    return 0;
+}
+
+static enum ofperr
+decode_LEARN_specs(const void *p, const void *end,
+                   const struct vl_mff_map *vl_mff_map, uint64_t *tlv_bitmap,
+                   struct ofpbuf *ofpacts)
+{
+    struct ofpact_learn *learn = ofpacts->header;
+
+    while (p != end) {
         struct ofpact_learn_spec *spec;
         uint16_t header = ntohs(get_be16(&p));
 
@@ -4488,6 +4483,33 @@ decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
     }
 
     return 0;
+}
+
+/* Converts 'nal' into a "struct ofpact_learn" and appends that struct to
+ * 'ofpacts'.  Returns 0 if successful, otherwise an OFPERR_*. */
+static enum ofperr
+decode_NXAST_RAW_LEARN(const struct nx_action_learn *nal,
+                       enum ofp_version ofp_version OVS_UNUSED,
+                       const struct vl_mff_map *vl_mff_map,
+                       uint64_t *tlv_bitmap, struct ofpbuf *ofpacts)
+{
+    struct ofpact_learn *learn;
+    enum ofperr error;
+
+    learn = ofpact_put_LEARN(ofpacts);
+
+    error = decode_LEARN_common(nal, learn);
+    if (error) {
+        return error;
+    }
+
+    if (learn->flags & ~(NX_LEARN_F_SEND_FLOW_REM |
+                         NX_LEARN_F_DELETE_LEARNED)) {
+        return OFPERR_OFPBAC_BAD_ARGUMENT;
+    }
+
+    return decode_LEARN_specs(nal + 1, (char *) nal + ntohs(nal->len),
+                              vl_mff_map, tlv_bitmap, ofpacts);
 }
 
 static void
